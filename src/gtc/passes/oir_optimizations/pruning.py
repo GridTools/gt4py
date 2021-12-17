@@ -33,11 +33,14 @@ class NoFieldAccessPruning(NodeTranslator):
         if not horizontal_executions:
             return NOTHING
         return oir.VerticalLoopSection(
-            interval=node.interval, horizontal_executions=horizontal_executions
+            interval=node.interval, horizontal_executions=horizontal_executions,
+            loc=node.loc,
         )
 
     def visit_VerticalLoop(self, node: oir.VerticalLoop) -> Any:
         sections = self.visit(node.sections)
         if not sections:
             return NOTHING
-        return oir.VerticalLoop(loop_order=node.loop_order, sections=sections, caches=node.caches)
+        return oir.VerticalLoop(
+            loop_order=node.loop_order, sections=sections, caches=node.caches, loc=node.loc,
+        )

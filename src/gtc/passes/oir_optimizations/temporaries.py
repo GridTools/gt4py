@@ -62,6 +62,7 @@ class TemporariesToScalarsBase(NodeTranslator):
                 )
                 for tmp in local_tmps_to_replace
             ],
+            loc=node.loc,
         )
 
     def visit_VerticalLoop(
@@ -88,6 +89,7 @@ class TemporariesToScalarsBase(NodeTranslator):
                 **kwargs,
             ),
             declarations=[d for d in node.declarations if d.name not in tmps_to_replace],
+            loc=node.loc,
         )
 
 

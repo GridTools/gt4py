@@ -64,4 +64,5 @@ class AdjacentLoopMerging(NodeTranslator):
             params=node.params,
             vertical_loops=vertical_loops,
             declarations=node.declarations,
+            loc=node.loc,
         )

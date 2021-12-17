@@ -225,6 +225,7 @@ class OnTheFlyMerging(NodeTranslator):
             next_vls = oir.VerticalLoopSection(
                 interval=last_vls.interval,
                 horizontal_executions=self._merge(last_vls.horizontal_executions, **kwargs),
+                loc=node.loc,
             )
             applied = len(next_vls.horizontal_executions) < len(last_vls.horizontal_executions)
 
@@ -239,6 +240,7 @@ class OnTheFlyMerging(NodeTranslator):
             loop_order=node.loop_order,
             sections=sections,
             caches=[c for c in node.caches if c.name in accessed],
+            loc=node.loc,
         )
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> oir.Stencil:
@@ -264,4 +266,5 @@ class OnTheFlyMerging(NodeTranslator):
             params=node.params,
             vertical_loops=vertical_loops,
             declarations=[d for d in node.declarations if d.name in accessed],
+            loc=node.loc,
         )

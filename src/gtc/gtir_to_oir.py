@@ -70,13 +70,14 @@ class GTIRToOIR(NodeTranslator):
     def visit_ParAssignStmt(
         self, node: gtir.ParAssignStmt, *, mask: oir.Expr = None, ctx: Context, **kwargs: Any
     ) -> None:
-        body = [oir.AssignStmt(left=self.visit(node.left), right=self.visit(node.right))]
+        body = [oir.AssignStmt(left=self.visit(node.left), right=self.visit(node.right), loc=node.loc)]
         if mask is not None:
             body = [oir.MaskStmt(body=body, mask=mask)]
         ctx.add_horizontal_execution(
             oir.HorizontalExecution(
                 body=body,
                 declarations=[],
+                loc=node.loc,
             ),
         )
 
@@ -86,6 +87,7 @@ class GTIRToOIR(NodeTranslator):
             offset=self.visit(node.offset),
             data_index=self.visit(node.data_index),
             dtype=node.dtype,
+            loc=node.loc,
         )
 
     def visit_VariableKOffset(
@@ -94,38 +96,41 @@ class GTIRToOIR(NodeTranslator):
         return oir.VariableKOffset(k=self.visit(node.k))
 
     def visit_ScalarAccess(self, node: gtir.ScalarAccess, **kwargs: Any) -> oir.ScalarAccess:
-        return oir.ScalarAccess(name=node.name, dtype=node.dtype)
+        return oir.ScalarAccess(name=node.name, dtype=node.dtype, loc=node.loc)
 
     def visit_Literal(self, node: gtir.Literal, **kwargs: Any) -> oir.Literal:
         return oir.Literal(value=self.visit(node.value), dtype=node.dtype, kind=node.kind)
 
     def visit_UnaryOp(self, node: gtir.UnaryOp, **kwargs: Any) -> oir.UnaryOp:
-        return oir.UnaryOp(op=node.op, expr=self.visit(node.expr))
+        return oir.UnaryOp(op=node.op, expr=self.visit(node.expr), loc=node.loc)
 
     def visit_BinaryOp(self, node: gtir.BinaryOp, **kwargs: Any) -> oir.BinaryOp:
-        return oir.BinaryOp(op=node.op, left=self.visit(node.left), right=self.visit(node.right))
+        return oir.BinaryOp(op=node.op, left=self.visit(node.left), right=self.visit(node.right), loc=node.loc)
 
     def visit_TernaryOp(self, node: gtir.TernaryOp, **kwargs: Any) -> oir.TernaryOp:
         return oir.TernaryOp(
             cond=self.visit(node.cond),
             true_expr=self.visit(node.true_expr),
             false_expr=self.visit(node.false_expr),
+            loc=node.loc,
         )
 
     def visit_Cast(self, node: gtir.Cast, **kwargs: Any) -> oir.Cast:
-        return oir.Cast(dtype=node.dtype, expr=self.visit(node.expr))
+        return oir.Cast(dtype=node.dtype, expr=self.visit(node.expr), loc=node.loc)
 
     def visit_FieldDecl(self, node: gtir.FieldDecl, **kwargs: Any) -> oir.FieldDecl:
         return oir.FieldDecl(
-            name=node.name, dtype=node.dtype, dimensions=node.dimensions, data_dims=node.data_dims
+            name=node.name, dtype=node.dtype, dimensions=node.dimensions,
+            data_dims=node.data_dims, loc=node.loc,
         )
 
     def visit_ScalarDecl(self, node: gtir.ScalarDecl, **kwargs: Any) -> oir.ScalarDecl:
-        return oir.ScalarDecl(name=node.name, dtype=node.dtype)
+        return oir.ScalarDecl(name=node.name, dtype=node.dtype, loc=node.loc)
 
     def visit_NativeFuncCall(self, node: gtir.NativeFuncCall, **kwargs: Any) -> oir.NativeFuncCall:
         return oir.NativeFuncCall(
-            func=node.func, args=self.visit(node.args), dtype=node.dtype, kind=node.kind
+            func=node.func, args=self.visit(node.args), dtype=node.dtype,
+            kind=node.kind, loc=node.loc,
         )
 
     def visit_FieldIfStmt(
@@ -133,17 +138,22 @@ class GTIRToOIR(NodeTranslator):
     ) -> None:
         mask_field_decl = _create_mask(ctx, f"mask_{id(node)}", self.visit(node.cond))
         current_mask = oir.FieldAccess(
-            name=mask_field_decl.name, offset=CartesianOffset.zero(), dtype=mask_field_decl.dtype
+            name=mask_field_decl.name, offset=CartesianOffset.zero(),
+            dtype=mask_field_decl.dtype, loc=node.loc,
         )
         combined_mask = current_mask
         if mask:
-            combined_mask = oir.BinaryOp(op=LogicalOperator.AND, left=mask, right=combined_mask)
+            combined_mask = oir.BinaryOp(
+                op=LogicalOperator.AND, left=mask, right=combined_mask, loc=node.loc,
+            )
         self.visit(node.true_branch.body, mask=combined_mask, ctx=ctx)
 
         if node.false_branch:
-            combined_mask = oir.UnaryOp(op=UnaryOperator.NOT, expr=current_mask)
+            combined_mask = oir.UnaryOp(op=UnaryOperator.NOT, expr=current_mask, loc=node.loc)
             if mask:
-                combined_mask = oir.BinaryOp(op=LogicalOperator.AND, left=mask, right=combined_mask)
+                combined_mask = oir.BinaryOp(
+                    op=LogicalOperator.AND, left=mask, right=combined_mask, loc=node.loc,
+                )
             self.visit(
                 node.false_branch.body,
                 mask=combined_mask,
@@ -158,13 +168,17 @@ class GTIRToOIR(NodeTranslator):
         current_mask = self.visit(node.cond)
         combined_mask = current_mask
         if mask:
-            combined_mask = oir.BinaryOp(op=LogicalOperator.AND, left=mask, right=current_mask)
+            combined_mask = oir.BinaryOp(
+                op=LogicalOperator.AND, left=mask, right=current_mask, loc=node.loc,
+            )
 
         self.visit(node.true_branch.body, mask=combined_mask, ctx=ctx)
         if node.false_branch:
-            combined_mask = oir.UnaryOp(op=UnaryOperator.NOT, expr=current_mask)
+            combined_mask = oir.UnaryOp(op=UnaryOperator.NOT, expr=current_mask, loc=node.loc)
             if mask:
-                combined_mask = oir.BinaryOp(op=LogicalOperator.AND, left=mask, right=combined_mask)
+                combined_mask = oir.BinaryOp(
+                    op=LogicalOperator.AND, left=mask, right=combined_mask, loc=node.loc,
+                )
             self.visit(
                 node.false_branch.body,
                 mask=combined_mask,
@@ -175,6 +189,7 @@ class GTIRToOIR(NodeTranslator):
         return oir.Interval(
             start=self.visit(node.start),
             end=self.visit(node.end),
+            loc=node.loc,
         )
 
     def visit_VerticalLoop(
@@ -185,7 +200,10 @@ class GTIRToOIR(NodeTranslator):
 
         for temp in node.temporaries:
             ctx.add_decl(
-                oir.Temporary(name=temp.name, dtype=temp.dtype, dimensions=temp.dimensions)
+                oir.Temporary(
+                    name=temp.name, dtype=temp.dtype, dimensions=temp.dimensions,
+                    loc=node.loc,
+                )
             )
 
         return oir.VerticalLoop(
@@ -194,9 +212,11 @@ class GTIRToOIR(NodeTranslator):
                 oir.VerticalLoopSection(
                     interval=self.visit(node.interval, **kwargs),
                     horizontal_executions=ctx.horizontal_executions,
+                    loc=node.loc,
                 )
             ],
             caches=[],
+            loc=node.loc,
         )
 
     def visit_Stencil(self, node: gtir.Stencil, **kwargs: Any) -> oir.Stencil:
@@ -206,4 +226,5 @@ class GTIRToOIR(NodeTranslator):
             params=self.visit(node.params),
             vertical_loops=self.visit(node.vertical_loops, ctx=ctx),
             declarations=ctx.decls,
+            loc=node.loc,
         )
