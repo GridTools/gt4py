@@ -14,6 +14,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 
 from eve import NodeTranslator, SymbolTableTrait
@@ -107,6 +108,7 @@ class GreedyMerging(NodeTranslator):
         )
 
 
+@dataclass
 class OnTheFlyMerging(NodeTranslator):
     """Merges consecutive horizontal executions inside parallel vertical loops by introducing redundant computations.
 
