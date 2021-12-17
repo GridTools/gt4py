@@ -1098,15 +1098,24 @@ class IRMaker(ast.NodeVisitor):
                     else value
                     for value in index
                 ]
+                if len(result.data_index) != len(self.fields[result.name].data_dims):
+                    raise GTScriptSyntaxError(
+                        "Incorrect data index length", loc=gt_ir.Location.from_ast_node(node)
+                    )
+                if any(
+                    int(index.value) >= axis_length
+                    for index, axis_length in zip(
+                        result.data_index, self.fields[result.name].data_dims
+                    )
+                ):
+                    raise GTScriptSyntaxError(
+                        "Data index out of bounds", loc=gt_ir.Location.from_ast_node(node)
+                    )
             else:
                 raise GTScriptSyntaxError(
                     "Unrecognized subscript expression", loc=gt_ir.Location.from_ast_node(node)
                 )
 
-            if len(result.data_index) != len(self.fields[result.name].data_dims):
-                raise GTScriptSyntaxError(
-                    "Incorrect data index length", loc=gt_ir.Location.from_ast_node(node)
-                )
         return result
 
     # -- Expressions nodes --
