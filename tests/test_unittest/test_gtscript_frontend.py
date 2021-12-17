@@ -24,11 +24,12 @@ import pytest
 
 import gt4py.definitions as gt_definitions
 import gt4py.ir as gt_ir
-import gt4py.utils as gt_utils
 from gt4py import gtscript
 from gt4py.frontend import gtscript_frontend as gt_frontend
 from gt4py.gtscript import (
+    IJK,
     PARALLEL,
+    Field,
     I,
     J,
     K,
@@ -859,15 +860,15 @@ class TestReducedDimensions:
         ):
             parse_definition(definition, name=inspect.stack()[0][3], module=self.__class__.__name__)
 
-    def test_lower_dim_temp(self):
+    def test_higher_dim_temp(self):
         def definition(
             field_in: gtscript.Field[gtscript.IJK, np.float_],
             field_out: gtscript.Field[gtscript.IJK, np.float_],
         ):
-            tmp: Field[IJ, np.float_] = 0.0
-            with computation(FORWARD), interval(...):
-                tmp += field_in
-                field_out = tmp
+            tmp: Field[IJK, (np.float_, (2,))] = 0.0
+            with computation(PARALLEL), interval(...):
+                tmp[0, 0, 0][0] = field_in
+                field_out = tmp[0, 0, 0][0]
 
         parse_definition(
             definition,
