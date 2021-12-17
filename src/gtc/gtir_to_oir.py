@@ -14,6 +14,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+from dataclasses import dataclass, field
 from typing import Any, List
 
 from eve import NodeTranslator
@@ -22,6 +23,14 @@ from gtc.common import CartesianOffset, DataType, LogicalOperator, UnaryOperator
 
 
 class GTIRToOIR(NodeTranslator):
+    @dataclass
+    class Context:
+        local_scalars: List[oir.ScalarDecl] = field(default_factory=list)
+        temp_fields: List[oir.FieldDecl] = field(default_factory=list)
+
+        def reset_local_scalars(self):
+            self.local_scalars = []
+
     # --- Exprs ---
     def visit_FieldAccess(self, node: gtir.FieldAccess) -> oir.FieldAccess:
         return oir.FieldAccess(
@@ -94,12 +103,12 @@ class GTIRToOIR(NodeTranslator):
         return stmt
 
     def visit_FieldIfStmt(
-        self, node: gtir.FieldIfStmt, *, mask: oir.Expr = None, **kwargs: Any
+        self, node: gtir.FieldIfStmt, *, mask: oir.Expr = None, ctx: Context, **kwargs: Any
     ) -> List[oir.Stmt]:
         mask_field_decl = oir.Temporary(
             name=f"mask_{id(node)}", dtype=DataType.BOOL, dimensions=(True, True, True)
         )
-        kwargs["temps"] = kwargs.get("temps", []) + [mask_field_decl]
+        ctx.temp_fields.append(mask_field_decl)
         stmts = [
             oir.AssignStmt(
                 left=oir.FieldAccess(
@@ -115,20 +124,20 @@ class GTIRToOIR(NodeTranslator):
         combined_mask = current_mask
         if mask:
             combined_mask = oir.BinaryOp(op=LogicalOperator.AND, left=mask, right=combined_mask)
-        stmts.extend(self.visit(node.true_branch.body, mask=combined_mask, **kwargs))
+        stmts.extend(self.visit(node.true_branch.body, mask=combined_mask, ctx=ctx, **kwargs))
 
         if node.false_branch:
             combined_mask = oir.UnaryOp(op=UnaryOperator.NOT, expr=current_mask)
             if mask:
                 combined_mask = oir.BinaryOp(op=LogicalOperator.AND, left=mask, right=combined_mask)
-            stmts.extend(self.visit(node.false_branch.body, mask=combined_mask, **kwargs))
+            stmts.extend(self.visit(node.false_branch.body, mask=combined_mask, ctx=ctx, **kwargs))
 
         return stmts
 
     # For now we represent ScalarIf (and FieldIf) both as masks on the HorizontalExecution.
     # This is not meant to be set in stone...
     def visit_ScalarIfStmt(
-        self, node: gtir.ScalarIfStmt, *, mask: oir.Expr = None, **kwargs: Any
+        self, node: gtir.ScalarIfStmt, *, mask: oir.Expr = None, ctx: Context, **kwargs: Any
     ) -> List[oir.Stmt]:
         current_mask = self.visit(node.cond)
         combined_mask = current_mask
@@ -140,7 +149,7 @@ class GTIRToOIR(NodeTranslator):
             combined_mask = oir.UnaryOp(op=UnaryOperator.NOT, expr=current_mask)
             if mask:
                 combined_mask = oir.BinaryOp(op=LogicalOperator.AND, left=mask, right=combined_mask)
-            stmts.extend(self.visit(node.false_branch.body, mask=combined_mask, **kwargs))
+            stmts.extend(self.visit(node.false_branch.body, mask=combined_mask, ctx=ctx, **kwargs))
 
         return stmts
 
@@ -152,17 +161,15 @@ class GTIRToOIR(NodeTranslator):
         )
 
     # --- Control flow ---
-    def visit_VerticalLoop(
-        self, node: gtir.VerticalLoop, *, temps: List[oir.Temporary]
-    ) -> oir.VerticalLoop:
+    def visit_VerticalLoop(self, node: gtir.VerticalLoop, *, ctx: Context) -> oir.VerticalLoop:
         horiz_execs: List[oir.HorizontalExecution] = []
         for stmt in node.body:
-            scalars: List[oir.ScalarDecl] = []
-            ret = self.visit(stmt, scalars=scalars, temps=temps)
+            ctx.reset_local_scalars()
+            ret = self.visit(stmt, ctx=ctx)
             stmts = utils.flatten_list([ret] if isinstance(ret, oir.Stmt) else ret)
-            horiz_execs.append(oir.HorizontalExecution(body=stmts, declarations=scalars))
+            horiz_execs.append(oir.HorizontalExecution(body=stmts, declarations=ctx.local_scalars))
 
-        temps += [
+        ctx.temp_fields += [
             oir.Temporary(name=temp.name, dtype=temp.dtype, dimensions=temp.dimensions)
             for temp in node.temporaries
         ]
@@ -177,11 +184,11 @@ class GTIRToOIR(NodeTranslator):
         )
 
     def visit_Stencil(self, node: gtir.Stencil) -> oir.Stencil:
-        temps: List[oir.Temporary] = []
-        vertical_loops = self.visit(node.vertical_loops, temps=temps)
+        ctx = self.Context()
+        vertical_loops = self.visit(node.vertical_loops, ctx=ctx)
         return oir.Stencil(
             name=node.name,
             params=self.visit(node.params),
             vertical_loops=vertical_loops,
-            declarations=temps,
+            declarations=ctx.temp_fields,
         )
