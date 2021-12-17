@@ -980,7 +980,7 @@ class IRMaker(ast.NodeVisitor):
             stmts = [
                 gt_ir.HorizontalIf(
                     intervals=intervals_dict,
-                    body=gt_ir.BlockStmt(stmts=stmts, loc=gt_ir.Location.from_ast_node(node)),
+                    body=gt_ir.BlockStmt(stmts=stmts, loc=loc),
                 )
                 for intervals_dict in intervals_dicts
             ]
@@ -989,7 +989,7 @@ class IRMaker(ast.NodeVisitor):
             interval=interval,
             iteration_order=iteration_order,
             loc=gt_ir.Location.from_ast_node(node),
-            body=gt_ir.BlockStmt(stmts=stmts, loc=gt_ir.Location.from_ast_node(node)),
+            body=gt_ir.BlockStmt(stmts=stmts, loc=loc),
         )
 
     # Visitor methods
@@ -1004,21 +1004,19 @@ class IRMaker(ast.NodeVisitor):
         value = node.value
         if value is None:
             return gt_ir.BuiltinLiteral(
-                value=gt_ir.Builtin.from_value(value), loc=gt_ir.Location.from_ast_node(node)
+                value=gt_ir.Builtin.from_value(value)
             )
         elif isinstance(value, bool):
             return gt_ir.Cast(
                 data_type=gt_ir.DataType.BOOL,
                 expr=gt_ir.BuiltinLiteral(
-                    value=gt_ir.Builtin.from_value(value), loc=gt_ir.Location.from_ast_node(node)
+                    value=gt_ir.Builtin.from_value(value),
                 ),
-                loc=gt_ir.Location.from_ast_node(value),
+                loc=gt_ir.Location.from_ast_node(node),
             )
         elif isinstance(value, numbers.Number):
             data_type = gt_ir.DataType.from_dtype(np.dtype(type(value)))
-            return gt_ir.ScalarLiteral(
-                value=value, data_type=data_type, loc=gt_ir.Location.from_ast_node(node)
-            )
+            return gt_ir.ScalarLiteral(value=value, data_type=data_type)
         else:
             raise GTScriptSyntaxError(
                 f"Unknown constant value found: {value}. Expected boolean or number.",
@@ -1101,7 +1099,6 @@ class IRMaker(ast.NodeVisitor):
                     gt_ir.ScalarLiteral(
                         value=value,
                         data_type=gt_ir.DataType.INT64,
-                        loc=gt_ir.Location.from_ast_node(value),
                     )
                     if isinstance(value, numbers.Integral)
                     else value
@@ -1412,7 +1409,7 @@ class IRMaker(ast.NodeVisitor):
             stmts = list(filter(lambda stmt: isinstance(stmt, gt_ir.Decl), all_stmts))
             body_block = gt_ir.BlockStmt(
                 stmts=list(filter(lambda stmt: not isinstance(stmt, gt_ir.Decl), all_stmts)),
-                loc=gt_ir.Location.from_ast_node(node),
+                loc=loc,
             )
             stmts.extend(
                 [
