@@ -213,11 +213,7 @@ class AxisIntervalParser(gt_meta.ASTPass):
 
         return gt_ir.AxisInterval(start=start, end=end, loc=loc)
 
-    def __init__(
-        self,
-        axis_name: str,
-        loc: Optional[gt_ir.Location] = None,
-    ):
+    def __init__(self, axis_name: str, loc: Optional[gt_ir.Location] = None):
         self.axis_name = axis_name
         self.loc = loc
 
@@ -268,7 +264,7 @@ class AxisIntervalParser(gt_meta.ASTPass):
             return gt_ir.AxisBound(level=level, offset=offset, loc=self.loc)
 
     def visit_Name(self, node: ast.Name) -> gt_ir.VarRef:
-        return gt_ir.VarRef(name=node.id)
+        return gt_ir.VarRef(name=node.id, loc=gt_ir.Location.from_ast_node(node))
 
     def visit_Constant(self, node: ast.Constant) -> Union[int, gtscript.AxisIndex, None]:
         if isinstance(node.value, gtscript.AxisIndex):
@@ -876,8 +872,7 @@ class IRMaker(ast.NodeVisitor):
 
     def _visit_iteration_order_node(self, node: ast.withitem, loc: gt_ir.Location):
         syntax_error = GTScriptSyntaxError(
-            f"Invalid 'computation' specification at line {loc.line} (column {loc.column})",
-            loc=loc,
+            f"Invalid 'computation' specification at line {loc.line} (column {loc.column})", loc=loc
         )
         comp_node = node.context_expr
         if len(comp_node.args) + len(comp_node.keywords) != 1 or any(
@@ -939,8 +934,7 @@ class IRMaker(ast.NodeVisitor):
     def _visit_computation_node(self, node: ast.With) -> gt_ir.ComputationBlock:
         loc = gt_ir.Location.from_ast_node(node)
         syntax_error = GTScriptSyntaxError(
-            f"Invalid 'computation' specification at line {loc.line} (column {loc.column})",
-            loc=loc,
+            f"Invalid 'computation' specification at line {loc.line} (column {loc.column})", loc=loc
         )
 
         # Parse computation specification, i.e. `withItems` nodes
@@ -984,14 +978,18 @@ class IRMaker(ast.NodeVisitor):
 
         if intervals_dicts:
             stmts = [
-                gt_ir.HorizontalIf(intervals=intervals_dict, body=gt_ir.BlockStmt(stmts=stmts))
+                gt_ir.HorizontalIf(
+                    intervals=intervals_dict,
+                    body=gt_ir.BlockStmt(stmts=stmts, loc=gt_ir.Location.from_ast_node(node)),
+                )
                 for intervals_dict in intervals_dicts
             ]
 
         return gt_ir.ComputationBlock(
             interval=interval,
             iteration_order=iteration_order,
-            body=gt_ir.BlockStmt(stmts=stmts),
+            loc=gt_ir.Location.from_ast_node(node),
+            body=gt_ir.BlockStmt(stmts=stmts, loc=gt_ir.Location.from_ast_node(node)),
         )
 
     # Visitor methods
@@ -1005,15 +1003,22 @@ class IRMaker(ast.NodeVisitor):
     ) -> Union[gt_ir.ScalarLiteral, gt_ir.BuiltinLiteral, gt_ir.Cast]:
         value = node.value
         if value is None:
-            return gt_ir.BuiltinLiteral(value=gt_ir.Builtin.from_value(value))
+            return gt_ir.BuiltinLiteral(
+                value=gt_ir.Builtin.from_value(value), loc=gt_ir.Location.from_ast_node(node)
+            )
         elif isinstance(value, bool):
             return gt_ir.Cast(
                 data_type=gt_ir.DataType.BOOL,
-                expr=gt_ir.BuiltinLiteral(value=gt_ir.Builtin.from_value(value)),
+                expr=gt_ir.BuiltinLiteral(
+                    value=gt_ir.Builtin.from_value(value), loc=gt_ir.Location.from_ast_node(node)
+                ),
+                loc=gt_ir.Location.from_ast_node(value),
             )
         elif isinstance(value, numbers.Number):
             data_type = gt_ir.DataType.from_dtype(np.dtype(type(value)))
-            return gt_ir.ScalarLiteral(value=value, data_type=data_type)
+            return gt_ir.ScalarLiteral(
+                value=value, data_type=data_type, loc=gt_ir.Location.from_ast_node(node)
+            )
         else:
             raise GTScriptSyntaxError(
                 f"Unknown constant value found: {value}. Expected boolean or number.",
@@ -1036,7 +1041,7 @@ class IRMaker(ast.NodeVisitor):
                 symbol, self.fields[symbol].axes, loc=gt_ir.Location.from_ast_node(node)
             )
         elif self._is_parameter(symbol):
-            result = gt_ir.VarRef(name=symbol)
+            result = gt_ir.VarRef(name=symbol, loc=gt_ir.Location.from_ast_node(node))
         elif self._is_local_symbol(symbol):
             assert False  # result = gt_ir.VarRef(name=symbol)
         else:
@@ -1093,7 +1098,11 @@ class IRMaker(ast.NodeVisitor):
                     result.offset = {axis: value for axis, value in zip(field_axes, index)}
             elif isinstance(node.value, ast.Subscript):
                 result.data_index = [
-                    gt_ir.ScalarLiteral(value=value, data_type=gt_ir.DataType.INT64)
+                    gt_ir.ScalarLiteral(
+                        value=value,
+                        data_type=gt_ir.DataType.INT64,
+                        loc=gt_ir.Location.from_ast_node(value),
+                    )
                     if isinstance(value, numbers.Integral)
                     else value
                     for value in index
@@ -1112,7 +1121,7 @@ class IRMaker(ast.NodeVisitor):
         if isinstance(arg, numbers.Number):
             result = eval("{op}{arg}".format(op=op.python_symbol, arg=arg))
         else:
-            result = gt_ir.UnaryOpExpr(op=op, arg=arg)
+            result = gt_ir.UnaryOpExpr(op=op, arg=arg, loc=gt_ir.Location.from_ast_node(node))
 
         return result
 
@@ -1129,7 +1138,7 @@ class IRMaker(ast.NodeVisitor):
         op = self.visit(node.op)
         rhs = self.visit(node.right)
         lhs = self.visit(node.left)
-        result = gt_ir.BinOpExpr(op=op, lhs=lhs, rhs=rhs)
+        result = gt_ir.BinOpExpr(op=op, lhs=lhs, rhs=rhs, loc=gt_ir.Location.from_ast_node(node))
 
         return result
 
@@ -1180,7 +1189,7 @@ class IRMaker(ast.NodeVisitor):
         rhs = self.visit(node.values[-1])
         for value in reversed(node.values[:-1]):
             lhs = self.visit(value)
-            rhs = gt_ir.BinOpExpr(op=op, lhs=lhs, rhs=rhs)
+            rhs = gt_ir.BinOpExpr(op=op, lhs=lhs, rhs=rhs, loc=gt_ir.Location.from_ast_node(node))
             res = rhs
 
         return res
@@ -1196,11 +1205,11 @@ class IRMaker(ast.NodeVisitor):
 
         for i in range(len(node.comparators) - 2, -1, -1):
             lhs = self.visit(node.values[i])
-            rhs = gt_ir.BinOpExpr(op=op, lhs=lhs, rhs=rhs)
+            rhs = gt_ir.BinOpExpr(op=op, lhs=lhs, rhs=rhs, loc=gt_ir.Location.from_ast_node(node))
             op = self.visit(node.ops[i])
             args.append(lhs)
 
-        result = gt_ir.BinOpExpr(op=op, lhs=lhs, rhs=rhs)
+        result = gt_ir.BinOpExpr(op=op, lhs=lhs, rhs=rhs, loc=gt_ir.Location.from_ast_node(node))
 
         return result
 
@@ -1237,8 +1246,11 @@ class IRMaker(ast.NodeVisitor):
         result.append(
             gt_ir.If(
                 condition=self.visit(node.test),
-                main_body=gt_ir.BlockStmt(stmts=main_stmts),
-                else_body=gt_ir.BlockStmt(stmts=else_stmts) if else_stmts else None,
+                loc=gt_ir.Location.from_ast_node(node),
+                main_body=gt_ir.BlockStmt(stmts=main_stmts, loc=gt_ir.Location.from_ast_node(node)),
+                else_body=gt_ir.BlockStmt(stmts=else_stmts, loc=gt_ir.Location.from_ast_node(node))
+                if else_stmts
+                else None,
             )
         )
 
@@ -1252,7 +1264,8 @@ class IRMaker(ast.NodeVisitor):
             stmts.extend(self.visit(stmt))
         return gt_ir.While(
             condition=self.visit(node.test),
-            body=gt_ir.BlockStmt(stmts=stmts),
+            loc=gt_ir.Location.from_ast_node(node),
+            body=gt_ir.BlockStmt(stmts=stmts, loc=gt_ir.Location.from_ast_node(node)),
         )
 
     def visit_Call(self, node: ast.Call):
@@ -1340,6 +1353,7 @@ class IRMaker(ast.NodeVisitor):
                     name=name,
                     data_type=gt_ir.DataType.AUTO,
                     axes=gt_ir.Domain.LatLonGrid().axes_names,
+                    loc=gt_ir.Location.from_ast_node(t),
                     # layout_id=t.id,
                     is_api=False,
                 )
@@ -1365,7 +1379,9 @@ class IRMaker(ast.NodeVisitor):
 
         assert len(target) == len(value)
         for left, right in zip(target, value):
-            result.append(gt_ir.Assign(target=left, value=right))
+            result.append(
+                gt_ir.Assign(target=left, value=right, loc=gt_ir.Location.from_ast_node(node))
+            )
 
         return result
 
@@ -1395,7 +1411,8 @@ class IRMaker(ast.NodeVisitor):
             all_stmts = gt_utils.flatten([gt_utils.listify(self.visit(stmt)) for stmt in node.body])
             stmts = list(filter(lambda stmt: isinstance(stmt, gt_ir.Decl), all_stmts))
             body_block = gt_ir.BlockStmt(
-                stmts=list(filter(lambda stmt: not isinstance(stmt, gt_ir.Decl), all_stmts))
+                stmts=list(filter(lambda stmt: not isinstance(stmt, gt_ir.Decl), all_stmts)),
+                loc=gt_ir.Location.from_ast_node(node),
             )
             stmts.extend(
                 [
