@@ -51,7 +51,7 @@ class GreedyMerging(NodeTranslator):
         horizontal_executions = [node.horizontal_executions[0]]
         new_block_extents = [block_extents[id(horizontal_executions[-1])]]
 
-        for this_hexec in node.horizontal_executions:
+        for this_hexec in node.horizontal_executions[1:]:
             last_extent = new_block_extents[-1]
 
             last_writes = (
