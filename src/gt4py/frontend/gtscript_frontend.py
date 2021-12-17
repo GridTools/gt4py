@@ -1103,6 +1103,10 @@ class IRMaker(ast.NodeVisitor):
                     "Unrecognized subscript expression", loc=gt_ir.Location.from_ast_node(node)
                 )
 
+            if len(result.data_index) != len(self.fields[result.name].data_dims):
+                raise GTScriptSyntaxError(
+                    "Incorrect data index length", loc=gt_ir.Location.from_ast_node(node)
+                )
         return result
 
     # -- Expressions nodes --
