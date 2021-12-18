@@ -18,12 +18,13 @@ from abc import ABC, abstractmethod
 from typing import Dict, List, Tuple
 
 import dace.data
+import dace.dtypes
 import dace.properties
 import dace.subsets
 import networkx as nx
 from dace import library
 
-from gtc.common import DataType, LoopOrder, typestr_to_data_type
+from gtc.common import DataType, LoopOrder, typestr_to_data_type, SourceLocation
 from gtc.dace.utils import (
     CartesianIterationSpace,
     OIRFieldRenamer,
@@ -65,6 +66,7 @@ class VerticalLoopLibraryNode(OIRLibraryNode):
         loop_order: LoopOrder = None,
         sections: List[Tuple[Interval, dace.SDFG]] = None,
         caches: List[CacheDesc] = None,
+        oir_node: VerticalLoop = None,
         *args,
         **kwargs,
     ):
@@ -75,6 +77,12 @@ class VerticalLoopLibraryNode(OIRLibraryNode):
             self.caches = caches
 
         super().__init__(name=name, *args, **kwargs)
+
+        if oir_node is not None and oir_node.loc is not None:
+            self.debuginfo = dace.dtypes.DebugInfo(
+                oir_node.loc.line, oir_node.loc.column, oir_node.loc.line,
+                oir_node.loc.column, oir_node.loc.source,
+            )
 
     def validate(self, parent_sdfg: dace.SDFG, parent_state: dace.SDFGState, *args, **kwargs):
 
@@ -99,7 +107,10 @@ class VerticalLoopLibraryNode(OIRLibraryNode):
         super().validate(parent_sdfg, parent_state, *args, **kwargs)
 
     def as_oir(self):
-
+        loc = SourceLocation(
+            self.debuginfo.start_line, self.debuginfo.start_column,
+            self.debuginfo.filename,
+        )
         sections = []
         for interval, sdfg in self.sections:
             horizontal_executions = []
@@ -114,13 +125,16 @@ class VerticalLoopLibraryNode(OIRLibraryNode):
                         OIRFieldRenamer(get_node_name_mapping(state, node)).visit(node.as_oir())
                     )
             sections.append(
-                VerticalLoopSection(interval=interval, horizontal_executions=horizontal_executions)
+                VerticalLoopSection(
+                    interval=interval, horizontal_executions=horizontal_executions, loc=loc
+                )
             )
 
         return VerticalLoop(
             sections=sections,
             loop_order=self.loop_order,
             caches=self.caches,
+            loc=loc,
         )
 
     def __eq__(self, other):
@@ -158,6 +172,7 @@ class HorizontalExecutionLibraryNode(OIRLibraryNode):
         name="unnamed_vloop",
         oir_node: HorizontalExecution = None,
         iteration_space: CartesianIterationSpace = None,
+        debuginfo: dace.dtypes.DebugInfo = None,
         *args,
         **kwargs,
     ):
@@ -167,6 +182,14 @@ class HorizontalExecutionLibraryNode(OIRLibraryNode):
             self.iteration_space = iteration_space
 
         super().__init__(name=name, *args, **kwargs)
+
+        if debuginfo is None and oir_node is not None and oir_node.loc is not None:
+            self.debuginfo = dace.dtypes.DebugInfo(
+                oir_node.loc.line, oir_node.loc.column, oir_node.loc.line,
+                oir_node.loc.column, oir_node.loc.source,
+            )
+        elif debuginfo is not None:
+            self.debuginfo = debuginfo
 
     def as_oir(self):
         return self.oir_node

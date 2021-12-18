@@ -647,6 +647,7 @@ class OirSDFGBuilder(eve.NodeVisitor):
             loop_order=node.loop_order,
             sections=sections,
             caches=node.caches,
+            oir_node=node,
         )
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs):

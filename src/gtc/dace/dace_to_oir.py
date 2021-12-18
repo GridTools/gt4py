@@ -14,7 +14,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 import dace
 import dace.data
@@ -74,7 +74,7 @@ def sdfg_arrays_to_oir_decls(sdfg: dace.SDFG) -> Tuple[List[oir.Decl], List[oir.
     return params, decls
 
 
-def convert(sdfg: dace.SDFG) -> oir.Stencil:
+def convert(sdfg: dace.SDFG, stencil: Optional[oir.Stencil] = None) -> oir.Stencil:
 
     validate_oir_sdfg(sdfg)
 
@@ -90,5 +90,6 @@ def convert(sdfg: dace.SDFG) -> oir.Stencil:
             vertical_loops.append(new_node)
 
     return oir.Stencil(
-        name=sdfg.name, params=params, declarations=decls, vertical_loops=vertical_loops
+        name=sdfg.name, params=params, declarations=decls, vertical_loops=vertical_loops,
+        loc=stencil.loc if stencil is not None else None,
     )
