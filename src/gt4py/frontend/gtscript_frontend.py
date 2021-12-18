@@ -1103,7 +1103,7 @@ class IRMaker(ast.NodeVisitor):
                         "Incorrect data index length", loc=gt_ir.Location.from_ast_node(node)
                     )
                 if any(
-                    int(index.value) >= axis_length
+                    not isinstance(index, gt_ir.ScalarLiteral) or int(index.value) >= axis_length
                     for index, axis_length in zip(
                         result.data_index, self.fields[result.name].data_dims
                     )
