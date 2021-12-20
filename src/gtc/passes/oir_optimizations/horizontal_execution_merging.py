@@ -29,7 +29,7 @@ from .utils import (
 )
 
 
-class GreedyMerging(NodeTranslator):
+class HorizontalExecutionMerging(NodeTranslator):
     contexts = (SymbolTableTrait.symtable_merger,)
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> oir.Stencil:
@@ -55,9 +55,7 @@ class GreedyMerging(NodeTranslator):
         for this_hexec in node.horizontal_executions[1:]:
             last_extent = new_block_extents[-1]
 
-            last_writes = (
-                AccessCollector.apply(horizontal_executions[-1]).cartesian_accesses().write_fields()
-            )
+            last_writes = AccessCollector.apply(horizontal_executions[-1]).write_fields()
             this_offset_reads = {
                 name
                 for name, offsets in AccessCollector.apply(this_hexec).read_offsets().items()
