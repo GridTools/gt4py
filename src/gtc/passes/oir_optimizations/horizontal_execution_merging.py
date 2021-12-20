@@ -30,8 +30,6 @@ from .utils import (
 
 
 class HorizontalExecutionMerging(NodeTranslator):
-    contexts = (SymbolTableTrait.symtable_merger,)
-
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> oir.Stencil:
         all_names = collect_symbol_names(node)
         return self.generic_visit(
@@ -76,6 +74,7 @@ class HorizontalExecutionMerging(NodeTranslator):
                 } & {decl.name for decl in this_hexec.declarations}
                 # Map from old to new scalar names applied to the second horizontal execution
                 scalar_map = {name: new_symbol_name(name) for name in duplicated_locals}
+                locals_symtable = {decl.name: decl for decl in this_hexec.declarations}
 
                 new_body = self.visit(this_hexec.body, scalar_map=scalar_map, **kwargs)
 
@@ -83,7 +82,7 @@ class HorizontalExecutionMerging(NodeTranslator):
                     decl for decl in this_hexec.declarations if decl.name not in duplicated_locals
                 ]
                 this_mapped = [
-                    oir.ScalarDecl(name=scalar_map[name], dtype=kwargs["symbol_table"][name].dtype)
+                    oir.ScalarDecl(name=scalar_map[name], dtype=locals_symtable[name].dtype)
                     for name in duplicated_locals
                 ]
 
