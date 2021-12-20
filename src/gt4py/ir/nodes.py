@@ -211,8 +211,8 @@ class Location(Node):
 
     @classmethod
     def from_ast_node(cls, ast_node, scope="<source>"):
-        lineno = getattr(ast_node, 'lineno', 0)
-        col_offset = getattr(ast_node, 'col_offset', 0)
+        lineno = getattr(ast_node, "lineno", 0)
+        col_offset = getattr(ast_node, "col_offset", 0)
         return cls(line=lineno, column=col_offset + 1, scope=scope)
 
 

@@ -1003,9 +1003,7 @@ class IRMaker(ast.NodeVisitor):
     ) -> Union[gt_ir.ScalarLiteral, gt_ir.BuiltinLiteral, gt_ir.Cast]:
         value = node.value
         if value is None:
-            return gt_ir.BuiltinLiteral(
-                value=gt_ir.Builtin.from_value(value)
-            )
+            return gt_ir.BuiltinLiteral(value=gt_ir.Builtin.from_value(value))
         elif isinstance(value, bool):
             return gt_ir.Cast(
                 data_type=gt_ir.DataType.BOOL,

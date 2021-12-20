@@ -579,7 +579,10 @@ class FillFlushToLocalKCaches(NodeTranslator):
         ]
 
         return oir.VerticalLoop(
-            loop_order=node.loop_order, sections=sections, caches=caches, loc=node.loc,
+            loop_order=node.loop_order,
+            sections=sections,
+            caches=caches,
+            loc=node.loc,
         )
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> oir.Stencil:

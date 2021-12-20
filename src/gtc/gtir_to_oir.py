@@ -70,7 +70,9 @@ class GTIRToOIR(NodeTranslator):
     def visit_ParAssignStmt(
         self, node: gtir.ParAssignStmt, *, mask: oir.Expr = None, ctx: Context, **kwargs: Any
     ) -> None:
-        body = [oir.AssignStmt(left=self.visit(node.left), right=self.visit(node.right), loc=node.loc)]
+        body = [
+            oir.AssignStmt(left=self.visit(node.left), right=self.visit(node.right), loc=node.loc)
+        ]
         if mask is not None:
             body = [oir.MaskStmt(body=body, mask=mask)]
         ctx.add_horizontal_execution(
@@ -105,7 +107,9 @@ class GTIRToOIR(NodeTranslator):
         return oir.UnaryOp(op=node.op, expr=self.visit(node.expr), loc=node.loc)
 
     def visit_BinaryOp(self, node: gtir.BinaryOp, **kwargs: Any) -> oir.BinaryOp:
-        return oir.BinaryOp(op=node.op, left=self.visit(node.left), right=self.visit(node.right), loc=node.loc)
+        return oir.BinaryOp(
+            op=node.op, left=self.visit(node.left), right=self.visit(node.right), loc=node.loc
+        )
 
     def visit_TernaryOp(self, node: gtir.TernaryOp, **kwargs: Any) -> oir.TernaryOp:
         return oir.TernaryOp(
@@ -120,8 +124,11 @@ class GTIRToOIR(NodeTranslator):
 
     def visit_FieldDecl(self, node: gtir.FieldDecl, **kwargs: Any) -> oir.FieldDecl:
         return oir.FieldDecl(
-            name=node.name, dtype=node.dtype, dimensions=node.dimensions,
-            data_dims=node.data_dims, loc=node.loc,
+            name=node.name,
+            dtype=node.dtype,
+            dimensions=node.dimensions,
+            data_dims=node.data_dims,
+            loc=node.loc,
         )
 
     def visit_ScalarDecl(self, node: gtir.ScalarDecl, **kwargs: Any) -> oir.ScalarDecl:
@@ -129,8 +136,11 @@ class GTIRToOIR(NodeTranslator):
 
     def visit_NativeFuncCall(self, node: gtir.NativeFuncCall, **kwargs: Any) -> oir.NativeFuncCall:
         return oir.NativeFuncCall(
-            func=node.func, args=self.visit(node.args), dtype=node.dtype,
-            kind=node.kind, loc=node.loc,
+            func=node.func,
+            args=self.visit(node.args),
+            dtype=node.dtype,
+            kind=node.kind,
+            loc=node.loc,
         )
 
     def visit_FieldIfStmt(
@@ -138,13 +148,18 @@ class GTIRToOIR(NodeTranslator):
     ) -> None:
         mask_field_decl = _create_mask(ctx, f"mask_{id(node)}", self.visit(node.cond))
         current_mask = oir.FieldAccess(
-            name=mask_field_decl.name, offset=CartesianOffset.zero(),
-            dtype=mask_field_decl.dtype, loc=node.loc,
+            name=mask_field_decl.name,
+            offset=CartesianOffset.zero(),
+            dtype=mask_field_decl.dtype,
+            loc=node.loc,
         )
         combined_mask = current_mask
         if mask:
             combined_mask = oir.BinaryOp(
-                op=LogicalOperator.AND, left=mask, right=combined_mask, loc=node.loc,
+                op=LogicalOperator.AND,
+                left=mask,
+                right=combined_mask,
+                loc=node.loc,
             )
         self.visit(node.true_branch.body, mask=combined_mask, ctx=ctx)
 
@@ -152,7 +167,10 @@ class GTIRToOIR(NodeTranslator):
             combined_mask = oir.UnaryOp(op=UnaryOperator.NOT, expr=current_mask, loc=node.loc)
             if mask:
                 combined_mask = oir.BinaryOp(
-                    op=LogicalOperator.AND, left=mask, right=combined_mask, loc=node.loc,
+                    op=LogicalOperator.AND,
+                    left=mask,
+                    right=combined_mask,
+                    loc=node.loc,
                 )
             self.visit(
                 node.false_branch.body,
@@ -169,7 +187,10 @@ class GTIRToOIR(NodeTranslator):
         combined_mask = current_mask
         if mask:
             combined_mask = oir.BinaryOp(
-                op=LogicalOperator.AND, left=mask, right=current_mask, loc=node.loc,
+                op=LogicalOperator.AND,
+                left=mask,
+                right=current_mask,
+                loc=node.loc,
             )
 
         self.visit(node.true_branch.body, mask=combined_mask, ctx=ctx)
@@ -177,7 +198,10 @@ class GTIRToOIR(NodeTranslator):
             combined_mask = oir.UnaryOp(op=UnaryOperator.NOT, expr=current_mask, loc=node.loc)
             if mask:
                 combined_mask = oir.BinaryOp(
-                    op=LogicalOperator.AND, left=mask, right=combined_mask, loc=node.loc,
+                    op=LogicalOperator.AND,
+                    left=mask,
+                    right=combined_mask,
+                    loc=node.loc,
                 )
             self.visit(
                 node.false_branch.body,
@@ -201,7 +225,9 @@ class GTIRToOIR(NodeTranslator):
         for temp in node.temporaries:
             ctx.add_decl(
                 oir.Temporary(
-                    name=temp.name, dtype=temp.dtype, dimensions=temp.dimensions,
+                    name=temp.name,
+                    dtype=temp.dtype,
+                    dimensions=temp.dimensions,
                     loc=node.loc,
                 )
             )

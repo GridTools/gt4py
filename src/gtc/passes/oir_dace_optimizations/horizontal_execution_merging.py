@@ -227,12 +227,9 @@ class GraphMerging(Transformation):
             left, right, self.api_fields
         )
 
-    def apply(self, sdfg: dace.SDFG) -> None:
-        state = sdfg.node(self.state_id)
-        left = self.left(sdfg)
-        right = self.right(sdfg)
-
-        # Merge source locations
+    def _merge_source_locations(
+        self, left: HorizontalExecutionLibraryNode, right: HorizontalExecutionLibraryNode
+    ) -> dtypes.DebugInfo:
         dinfo = dtypes.DebugInfo(0)
         if left.debuginfo:
             dinfo.start_line = left.debuginfo.start_line
@@ -242,6 +239,15 @@ class GraphMerging(Transformation):
             dinfo.start_line = min(right.debuginfo.start_line, dinfo.start_line)
             dinfo.end_line = max(right.debuginfo.end_line, dinfo.end_line)
             dinfo.filename = dinfo.filename or right.debuginfo.filename
+        return dinfo
+
+    def apply(self, sdfg: dace.SDFG) -> None:
+        state = sdfg.node(self.state_id)
+        left = self.left(sdfg)
+        right = self.right(sdfg)
+
+        # Merge source locations
+        dinfo = self._merge_source_locations(left, right)
 
         # merge oir nodes
         res = HorizontalExecutionLibraryNode(

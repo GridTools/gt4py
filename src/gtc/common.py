@@ -15,7 +15,20 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import enum
-from typing import TYPE_CHECKING, Any, ClassVar, Dict, Generic, List, Optional, Tuple, Type, TypeVar, Union, cast
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    ClassVar,
+    Dict,
+    Generic,
+    List,
+    Optional,
+    Tuple,
+    Type,
+    TypeVar,
+    Union,
+    cast,
+)
 
 import numpy as np
 import pydantic
@@ -38,8 +51,10 @@ from eve.type_definitions import SymbolRef
 from eve.typingx import RootValidatorType, RootValidatorValuesType
 from gtc.utils import dimension_flags_to_names, flatten_list
 
+
 if TYPE_CHECKING:
     from gt4py.ir.nodes import Location
+
 
 class GTCPreconditionError(eve_exceptions.EveError, RuntimeError):
     message_template = "GTC pass precondition error: [{info}]"

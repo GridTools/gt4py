@@ -41,7 +41,9 @@ class _GTIRResolveAuto(NodeTranslator):
         ) -> gtir.FieldDecl:
             if node.dtype == DataType.AUTO:
                 dtype = new_symbols[node.name].dtype
-                return gtir.FieldDecl(name=node.name, dtype=dtype, dimensions=node.dimensions, loc=node.loc)
+                return gtir.FieldDecl(
+                    name=node.name, dtype=dtype, dimensions=node.dimensions, loc=node.loc
+                )
             else:
                 return node
 

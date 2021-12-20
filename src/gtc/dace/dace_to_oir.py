@@ -90,6 +90,9 @@ def convert(sdfg: dace.SDFG, stencil: Optional[oir.Stencil] = None) -> oir.Stenc
             vertical_loops.append(new_node)
 
     return oir.Stencil(
-        name=sdfg.name, params=params, declarations=decls, vertical_loops=vertical_loops,
+        name=sdfg.name,
+        params=params,
+        declarations=decls,
+        vertical_loops=vertical_loops,
         loc=stencil.loc if stencil is not None else None,
     )

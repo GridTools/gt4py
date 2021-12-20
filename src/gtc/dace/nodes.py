@@ -24,7 +24,7 @@ import dace.subsets
 import networkx as nx
 from dace import library
 
-from gtc.common import DataType, LoopOrder, typestr_to_data_type, SourceLocation
+from gtc.common import DataType, LoopOrder, SourceLocation, typestr_to_data_type
 from gtc.dace.utils import (
     CartesianIterationSpace,
     OIRFieldRenamer,
@@ -80,8 +80,11 @@ class VerticalLoopLibraryNode(OIRLibraryNode):
 
         if oir_node is not None and oir_node.loc is not None:
             self.debuginfo = dace.dtypes.DebugInfo(
-                oir_node.loc.line, oir_node.loc.column, oir_node.loc.line,
-                oir_node.loc.column, oir_node.loc.source,
+                oir_node.loc.line,
+                oir_node.loc.column,
+                oir_node.loc.line,
+                oir_node.loc.column,
+                oir_node.loc.source,
             )
 
     def validate(self, parent_sdfg: dace.SDFG, parent_state: dace.SDFGState, *args, **kwargs):
@@ -108,7 +111,8 @@ class VerticalLoopLibraryNode(OIRLibraryNode):
 
     def as_oir(self):
         loc = SourceLocation(
-            self.debuginfo.start_line, self.debuginfo.start_column,
+            self.debuginfo.start_line,
+            self.debuginfo.start_column,
             self.debuginfo.filename,
         )
         sections = []
@@ -185,8 +189,11 @@ class HorizontalExecutionLibraryNode(OIRLibraryNode):
 
         if debuginfo is None and oir_node is not None and oir_node.loc is not None:
             self.debuginfo = dace.dtypes.DebugInfo(
-                oir_node.loc.line, oir_node.loc.column, oir_node.loc.line,
-                oir_node.loc.column, oir_node.loc.source,
+                oir_node.loc.line,
+                oir_node.loc.column,
+                oir_node.loc.line,
+                oir_node.loc.column,
+                oir_node.loc.source,
             )
         elif debuginfo is not None:
             self.debuginfo = debuginfo

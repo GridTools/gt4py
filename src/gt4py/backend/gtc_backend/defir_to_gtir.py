@@ -140,9 +140,7 @@ class DefIRToGTIR(IRNodeVisitor):
             loc=common.location_to_source_location(node.loc),
         )
 
-    def visit_ArgumentInfo(
-        self, node: ArgumentInfo, all_params: Dict[str, gtir.Decl]
-    ) -> gtir.Decl:
+    def visit_ArgumentInfo(self, node: ArgumentInfo, all_params: Dict[str, gtir.Decl]) -> gtir.Decl:
         return all_params[node.name]
 
     def visit_ComputationBlock(self, node: ComputationBlock) -> gtir.VerticalLoop:
@@ -160,7 +158,9 @@ class DefIRToGTIR(IRNodeVisitor):
                     )  # see https://github.com/GridTools/gtc/issues/100
                 temporaries.append(
                     gtir.FieldDecl(
-                        name=s.name, dtype=dtype, dimensions=(True, True, True),
+                        name=s.name,
+                        dtype=dtype,
+                        dimensions=(True, True, True),
                         loc=common.location_to_source_location(s.loc),
                     )
                 )
@@ -168,7 +168,8 @@ class DefIRToGTIR(IRNodeVisitor):
                 stmts.append(self.visit(s))
         start, end = self.visit(node.interval)
         interval = gtir.Interval(
-            start=start, end=end,
+            start=start,
+            end=end,
             loc=common.location_to_source_location(node.interval.loc),
         )
         return gtir.VerticalLoop(
@@ -185,7 +186,8 @@ class DefIRToGTIR(IRNodeVisitor):
     def visit_Assign(self, node: Assign) -> gtir.ParAssignStmt:
         assert isinstance(node.target, FieldRef) or isinstance(node.target, VarRef)
         return gtir.ParAssignStmt(
-            left=self.visit(node.target), right=self.visit(node.value),
+            left=self.visit(node.target),
+            right=self.visit(node.value),
             loc=common.location_to_source_location(node.loc),
         )
 
@@ -194,7 +196,8 @@ class DefIRToGTIR(IRNodeVisitor):
 
     def visit_UnaryOpExpr(self, node: UnaryOpExpr) -> gtir.UnaryOp:
         return gtir.UnaryOp(
-            op=self.GT4PY_UNARYOP_TO_GTIR[node.op], expr=self.visit(node.arg),
+            op=self.GT4PY_UNARYOP_TO_GTIR[node.op],
+            expr=self.visit(node.arg),
             loc=common.location_to_source_location(node.loc),
         )
 
@@ -229,7 +232,9 @@ class DefIRToGTIR(IRNodeVisitor):
         raise NotImplementedError(f"BuiltIn.{node.value} not implemented in lowering")
 
     def visit_Cast(self, node: Cast) -> gtir.Cast:
-        return gtir.Cast(dtype=common.DataType(node.data_type.value), expr=self.visit(node.expr), loc=node.loc)
+        return gtir.Cast(
+            dtype=common.DataType(node.data_type.value), expr=self.visit(node.expr), loc=node.loc
+        )
 
     def visit_NativeFuncCall(self, node: NativeFuncCall) -> gtir.NativeFuncCall:
         return gtir.NativeFuncCall(
@@ -294,7 +299,8 @@ class DefIRToGTIR(IRNodeVisitor):
     def visit_VarDecl(self, node: VarDecl):
         # datatype conversion works via same ID
         return gtir.ScalarDecl(
-            name=node.name, dtype=common.DataType(int(node.data_type.value)),
+            name=node.name,
+            dtype=common.DataType(int(node.data_type.value)),
             loc=common.location_to_source_location(node.loc),
         )
 
