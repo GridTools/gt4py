@@ -230,7 +230,7 @@ class GraphMerging(Transformation):
     def _merge_source_locations(
         self, left: HorizontalExecutionLibraryNode, right: HorizontalExecutionLibraryNode
     ) -> dtypes.DebugInfo:
-        dinfo = dtypes.DebugInfo(0)
+        dinfo = dtypes.DebugInfo(1, 1, 1, 1, "<unknown>")
         if left.debuginfo:
             dinfo.start_line = left.debuginfo.start_line
             dinfo.end_line = left.debuginfo.end_line
