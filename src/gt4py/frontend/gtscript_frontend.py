@@ -1105,7 +1105,8 @@ class IRMaker(ast.NodeVisitor):
                         loc=gt_ir.Location.from_ast_node(node),
                     )
                 if any(
-                    isinstance(index, gt_ir.ScalarLiteral) and not (0 <= int(index.value) < axis_length)
+                    isinstance(index, gt_ir.ScalarLiteral)
+                    and not (0 <= int(index.value) < axis_length)
                     for index, axis_length in zip(
                         result.data_index, self.fields[result.name].data_dims
                     )
