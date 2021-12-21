@@ -123,10 +123,11 @@ class WriteBeforeReadTemporariesToScalars(TemporariesToScalarsBase):
     """Replaces temporay fields that are always written before read by scalars."""
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> oir.Stencil:
+        # Does not (yet) support scalarizing temporaries with data_dims
         write_before_read_tmps = {
             symbol
             for symbol, value in kwargs["symtable"].items()
-            if isinstance(value, oir.Temporary)
+            if isinstance(value, oir.Temporary) and not value.data_dims
         }
         horizontal_executions = node.iter_tree().if_isinstance(oir.HorizontalExecution)
 

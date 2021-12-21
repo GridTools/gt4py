@@ -20,7 +20,7 @@ import pytest
 
 from gt4py import gtscript
 from gt4py import testing as gt_testing
-from gt4py.gtscript import FORWARD, PARALLEL, computation, interval
+from gt4py.gtscript import PARALLEL, computation, interval
 
 from ..definitions import INTERNAL_BACKENDS
 from .stencil_definitions import optional_field, two_optional_fields
@@ -307,7 +307,6 @@ class TestHorizontalDiffusionSubroutines2(gt_testing.StencilTestSuite):
     domain_range = [(1, 15), (1, 15), (1, 15)]
     backends = INTERNAL_BACKENDS
     symbols = dict(
-        fwd_diff=gt_testing.global_name(singleton=fwd_diff_op_xy),
         BRANCH=gt_testing.global_name(one_of=(True, False)),
         u=gt_testing.field(in_range=(-10, 10), boundary=[(2, 2), (2, 2), (0, 0)]),
         diffusion=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
@@ -769,38 +768,3 @@ class TestVariableKRead(gt_testing.StencilTestSuite):
 
     def validation(field_in, field_out, index, *, domain, origin):
         field_out[:, :, 1:] = field_in[:, :, (np.arange(field_in.shape[-1]) + index)[1:]]
-
-
-class TestVerticalReduction(gt_testing.StencilTestSuite):
-    dtypes = {
-        "field_in": np.float32,
-        "field_out": np.float32,
-    }
-    domain_range = [(2, 2), (3, 3), (4, 5)]
-    backends = [backend for backend in INTERNAL_BACKENDS if backend.values[0].startswith("gtc:")]
-    symbols = {
-        "field_in": gt_testing.field(
-            in_range=(-10, 10), axes="IJK", boundary=[(0, 0), (0, 0), (0, 0)]
-        ),
-        "field_out": gt_testing.field(
-            in_range=(-10, 10), axes="IJK", boundary=[(0, 0), (0, 0), (0, 0)]
-        ),
-    }
-
-    def definition(field_in, field_out):
-        from __gtscript__ import IJ, Field
-
-        # NOTE: tmp does not need a data_dim but it tests more code paths with it.
-        tmp: Field[IJ, (np.float32, (2,))] = 0.0
-        with computation(FORWARD), interval(...):
-            tmp[0, 0][0] += field_in
-        with computation(PARALLEL), interval(...):
-            field_out = (  # noqa: F841  # local variable 'field_out' is assigned to but never used
-                tmp[0, 0][0]
-            )
-
-    def validation(field_in, field_out, *, domain, origin):
-        tmp = np.sum(field_in, axis=2)[:, :, np.newaxis]
-        field_out[:, :, :] = tmp[
-            :, :, :
-        ]  # noqa: F841  # local variable 'field_out' is assigned to but never used

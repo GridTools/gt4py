@@ -38,6 +38,7 @@ generated_name_pattern = re.compile(r".+_gen_[0-9]+")
 class GenericAccess(Generic[OffsetT]):
     field: str
     offset: OffsetT
+    data_index: List[oir.Expr]
     is_write: bool
 
     @property
@@ -72,6 +73,7 @@ class AccessCollector(NodeVisitor):
             GeneralAccess(
                 field=node.name,
                 offset=(offsets["i"], offsets["j"], offsets["k"]),
+                data_index=node.data_index,
                 is_write=is_write,
             )
         )
@@ -136,6 +138,7 @@ class AccessCollector(NodeVisitor):
                     CartesianAccess(
                         field=acc.field,
                         offset=cast(Tuple[int, int, int], acc.offset),
+                        data_index=acc.data_index,
                         is_write=acc.is_write,
                     )
                     for acc in self._ordered_accesses

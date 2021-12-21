@@ -792,6 +792,13 @@ def get_temp_annotations(
         if value is not None:
             values[name] = value
 
+        if set(decl.axes) != {"I", "J", "K"}:
+            raise GTScriptSyntaxError(
+                f"Invalid temporary definition for {name}. "
+                "Temporaries must have all spatial axes IJK.",
+                loc=gt_ir.Location.from_ast_node(node),
+            )
+
     return annotations, values
 
 
