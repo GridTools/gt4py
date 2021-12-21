@@ -233,7 +233,9 @@ class DefIRToGTIR(IRNodeVisitor):
 
     def visit_Cast(self, node: Cast) -> gtir.Cast:
         return gtir.Cast(
-            dtype=common.DataType(node.data_type.value), expr=self.visit(node.expr), loc=node.loc
+            dtype=common.DataType(node.data_type.value),
+            expr=self.visit(node.expr),
+            loc=common.location_to_source_location(node.loc),
         )
 
     def visit_NativeFuncCall(self, node: NativeFuncCall) -> gtir.NativeFuncCall:

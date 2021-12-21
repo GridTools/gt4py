@@ -111,9 +111,9 @@ class VerticalLoopLibraryNode(OIRLibraryNode):
 
     def as_oir(self):
         loc = SourceLocation(
-            self.debuginfo.start_line,
-            self.debuginfo.start_column,
-            self.debuginfo.filename,
+            self.debuginfo.start_line or 1,
+            self.debuginfo.start_column or 1,
+            self.debuginfo.filename or "<unknown>",
         )
         sections = []
         for interval, sdfg in self.sections:
@@ -135,10 +135,7 @@ class VerticalLoopLibraryNode(OIRLibraryNode):
             )
 
         return VerticalLoop(
-            sections=sections,
-            loop_order=self.loop_order,
-            caches=self.caches,
-            loc=loc,
+            sections=sections, loop_order=self.loop_order, caches=self.caches, loc=loc
         )
 
     def __eq__(self, other):
