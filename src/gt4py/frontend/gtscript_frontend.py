@@ -1100,16 +1100,21 @@ class IRMaker(ast.NodeVisitor):
                 ]
                 if len(result.data_index) != len(self.fields[result.name].data_dims):
                     raise GTScriptSyntaxError(
-                        "Incorrect data index length", loc=gt_ir.Location.from_ast_node(node)
+                        f"Incorrect data index length {len(result.data_index)}. "
+                        f"Invalid data dimension index. Field {result.name} has {len(self.fields[result.name].data_dims)} data dimensions.",
+                        loc=gt_ir.Location.from_ast_node(node),
                     )
                 if any(
-                    isinstance(index, gt_ir.ScalarLiteral) and int(index.value) >= axis_length
+                    isinstance(index, gt_ir.ScalarLiteral)
+                    and not (0 <= int(index.value) < axis_length)
                     for index, axis_length in zip(
                         result.data_index, self.fields[result.name].data_dims
                     )
                 ):
                     raise GTScriptSyntaxError(
-                        "Data index out of bounds", loc=gt_ir.Location.from_ast_node(node)
+                        f"Data index out of bounds. "
+                        f"Found index {result.data_index}, but field {result.name} has {self.fields[result.name].data_dims} data-dimensions",
+                        loc=gt_ir.Location.from_ast_node(node),
                     )
             else:
                 raise GTScriptSyntaxError(
