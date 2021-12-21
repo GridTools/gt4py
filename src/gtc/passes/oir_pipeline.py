@@ -19,9 +19,6 @@ from typing import Callable, Optional, Protocol, Sequence, Type, Union
 
 from eve.visitors import NodeVisitor
 from gtc import oir
-from gtc.passes.oir_dace_optimizations.horizontal_execution_merging import (
-    graph_merge_horizontal_executions,
-)
 from gtc.passes.oir_optimizations.caches import (
     FillFlushToLocalKCaches,
     IJCacheDetection,
@@ -29,7 +26,10 @@ from gtc.passes.oir_optimizations.caches import (
     PruneKCacheFills,
     PruneKCacheFlushes,
 )
-from gtc.passes.oir_optimizations.horizontal_execution_merging import OnTheFlyMerging
+from gtc.passes.oir_optimizations.horizontal_execution_merging import (
+    HorizontalExecutionMerging,
+    OnTheFlyMerging,
+)
 from gtc.passes.oir_optimizations.inlining import MaskInlining
 from gtc.passes.oir_optimizations.mask_stmt_merging import MaskStmtMerging
 from gtc.passes.oir_optimizations.pruning import NoFieldAccessPruning
@@ -70,11 +70,11 @@ class DefaultPipeline(OirPipeline):
     @staticmethod
     def all_steps() -> Sequence[PassT]:
         return [
-            graph_merge_horizontal_executions,
             AdjacentLoopMerging,
+            HorizontalExecutionMerging,
+            OnTheFlyMerging,
             LocalTemporariesToScalars,
             WriteBeforeReadTemporariesToScalars,
-            OnTheFlyMerging,
             MaskStmtMerging,
             MaskInlining,
             NoFieldAccessPruning,
