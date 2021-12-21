@@ -263,10 +263,11 @@ class StencilObject(abc.ABC):
                 field = field_args[name]
                 api_domain_mask = field_info.domain_mask
                 api_domain_ndim = field_info.domain_ndim
+                lower_indices = field_info.boundary.lower_indices.filter_mask(api_domain_mask)
                 upper_indices = field_info.boundary.upper_indices.filter_mask(api_domain_mask)
                 field_origin = Index.from_value(origin[name])
                 field_domain = tuple(
-                    field.shape[i] - (field_origin[i] + upper_indices[i])
+                    max(0, field.shape[i] - (lower_indices[i] + upper_indices[i]))
                     for i in range(api_domain_ndim)
                 )
                 max_domain &= Shape.from_mask(field_domain, api_domain_mask, default=max_size)
@@ -312,6 +313,11 @@ class StencilObject(abc.ABC):
         if not domain <= (max_domain := self._get_max_domain(field_args, origin, squeeze=False)):
             raise ValueError(
                 f"Compute domain too large (provided: {domain}, maximum: {max_domain})"
+            )
+
+        if domain[2] < self.domain_info.min_sequential_axis_size:
+            raise ValueError(
+                f"Compute domain too small. Sequential axis is {domain[2]}, but must be at least {self.domain_info.min_sequential_axis_size}."
             )
 
         # assert compatibility of fields with stencil
@@ -387,9 +393,10 @@ class StencilObject(abc.ABC):
                     )
 
                 spatial_domain = typing.cast(Shape, domain).filter_mask(field_domain_mask)
+                lower_indices = field_info.boundary.lower_indices.filter_mask(field_domain_mask)
                 upper_indices = field_info.boundary.upper_indices.filter_mask(field_domain_mask)
                 min_shape = tuple(
-                    o + d + h for o, d, h in zip(field_domain_origin, spatial_domain, upper_indices)
+                    l + d + h for d, l, h in zip(spatial_domain, lower_indices, upper_indices)
                 )
                 if min_shape > field.shape:
                     raise ValueError(

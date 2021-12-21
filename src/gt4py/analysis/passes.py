@@ -99,31 +99,6 @@ class InitInfoPass(TransformPass):
     def make_k_intervals(transform_data: TransformData) -> List[IntervalInfo]:
         """Determines intervals over which the computation runs."""
         node: gt_ir.StencilDefinition = transform_data.definition_ir
-        transform_data.splitters_var: Optional[str] = None
-        transform_data.min_k_interval_sizes: List[int] = [0]
-
-        # First, look for dynamic splitters variable
-        for computation in node.computations:
-            interval_def = computation.interval
-            for axis_bound in [interval_def.start, interval_def.end]:
-                if isinstance(axis_bound.level, gt_ir.VarRef):
-                    name = axis_bound.level.name
-                    for item in node.parameters:
-                        if item.name == name:
-                            decl = item
-                            break
-                    else:
-                        decl = None
-
-                    if decl is None or decl.length == 0:
-                        raise IntervalSpecificationError(
-                            interval_def,
-                            "Invalid variable reference in interval specification",
-                            loc=axis_bound.loc,
-                        )
-
-                    transform_data.splitters_var = decl.name
-                    transform_data.min_k_interval_sizes = [1] * (decl.length + 1)
 
         # Extract computation intervals
         computation_intervals = []
@@ -133,63 +108,26 @@ class InitInfoPass(TransformPass):
             bounds = [None, None]
 
             for i, axis_bound in enumerate([interval_def.start, interval_def.end]):
-                if isinstance(axis_bound.level, gt_ir.VarRef):
-                    # Dynamic splitters: check existing reference and extract size info
-                    if axis_bound.level.name != transform_data.splitters_var:
-                        raise IntervalSpecificationError(
-                            interval_def,
-                            "Non matching variable reference in interval specification",
-                            loc=axis_bound.loc,
-                        )
+                # Static splitter: extract size info
+                index = (
+                    1 if axis_bound.offset < 0 or axis_bound.level == gt_ir.LevelMarker.END else 0
+                )
+                offset = axis_bound.offset
 
-                    index = axis_bound.level.index + 1
-                    offset = axis_bound.offset
-                    if offset < 0:
-                        index = index - 1
-
-                else:
-                    # Static splitter: extract size info
-                    index = (
-                        transform_data.nk_intervals
-                        if axis_bound.offset < 0 or axis_bound.level == gt_ir.LevelMarker.END
-                        else 0
-                    )
-                    offset = axis_bound.offset
-
-                    if offset < 0 and axis_bound.level != gt_ir.LevelMarker.END:
-                        raise IntervalSpecificationError(
-                            interval_def,
-                            "Invalid offset in interval specification",
-                            loc=axis_bound.loc,
-                        )
-
-                    elif offset > 0 and axis_bound.level != gt_ir.LevelMarker.START:
-                        raise IntervalSpecificationError(
-                            interval_def,
-                            "Invalid offset in interval specification",
-                            loc=axis_bound.loc,
-                        )
-
-                # Update min sizes
-                if not 0 <= index <= transform_data.nk_intervals:
+                if offset < 0 and axis_bound.level != gt_ir.LevelMarker.END:
                     raise IntervalSpecificationError(
                         interval_def,
-                        "Invalid variable reference in interval specification",
+                        "Invalid offset in interval specification",
+                        loc=axis_bound.loc,
+                    )
+                elif offset > 0 and axis_bound.level != gt_ir.LevelMarker.START:
+                    raise IntervalSpecificationError(
+                        interval_def,
+                        "Invalid offset in interval specification",
                         loc=axis_bound.loc,
                     )
 
                 bounds[i] = (index, offset)
-                if index < transform_data.nk_intervals:
-                    transform_data.min_k_interval_sizes[index] = max(
-                        transform_data.min_k_interval_sizes[index], offset
-                    )
-
-            if bounds[0][0] == bounds[1][0] - 1:
-                index = bounds[0][0]
-                min_size = 1 + bounds[0][1] - bounds[1][1]
-                transform_data.min_k_interval_sizes[index] = max(
-                    transform_data.min_k_interval_sizes[index], min_size
-                )
 
             # Create computation intervals
             interval_info = IntervalInfo(*bounds)
@@ -1224,9 +1162,6 @@ class BuildIIRPass(TransformPass):
         self.data = transform_data
         self.iir = transform_data.implementation_ir
 
-        if self.data.splitters_var:
-            self.iir.axis_splitters_var = self.data.splitters_var
-
         # Signature
         self.iir.api_signature = self.data.definition_ir.api_signature
 
@@ -1337,15 +1272,10 @@ class BuildIIRPass(TransformPass):
         for bound in (interval.start, interval.end):
             if bound[0] == 0:
                 axis_bounds.append(gt_ir.AxisBound(level=gt_ir.LevelMarker.START, offset=bound[1]))
-            elif bound[0] == self.data.nk_intervals:
+            elif bound[0] == 1:
                 axis_bounds.append(gt_ir.AxisBound(level=gt_ir.LevelMarker.END, offset=bound[1]))
             else:
-                axis_bounds.append(
-                    gt_ir.AxisBound(
-                        level=gt_ir.VarRef(name=self.data.splitters_var, index=bound[0] - 1),
-                        offset=bound[1],
-                    )
-                )
+                raise ValueError()
 
         result = gt_ir.AxisInterval(start=axis_bounds[0], end=axis_bounds[1])
 
