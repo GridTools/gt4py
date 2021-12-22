@@ -383,7 +383,9 @@ def test_variable_offsets(backend):
             out_field = in_field[0, 0, 1] + in_field[0, 0, index_field + 1]
 
 
-@pytest.mark.parametrize("backend", ALL_BACKENDS)
+@pytest.mark.parametrize(
+    "backend", [backend for backend in ALL_BACKENDS if backend.values[0] != "gtc:dace"]
+)
 def test_variable_offsets_and_while_loop(backend):
     @gtscript.stencil(backend=backend)
     def stencil(
@@ -393,7 +395,7 @@ def test_variable_offsets_and_while_loop(backend):
         qout: gtscript.Field[np.float_],
         lev: gtscript.Field[gtscript.IJ, np.int_],
     ):
-        with computation(FORWARD), interval(...):
+        with computation(FORWARD), interval(0, -1):
             if pe2[0, 0, 1] <= pe1[0, 0, lev]:
                 qout = qin[0, 0, 1]
             else:
