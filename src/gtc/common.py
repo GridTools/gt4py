@@ -817,6 +817,6 @@ def typestr_to_data_type(typestr: str) -> DataType:
 
 
 def location_to_source_location(loc: Optional["Location"]) -> Optional[SourceLocation]:
-    if loc is None:
+    if loc is None or loc.line <= 0 or loc.column <= 0:
         return None
     return SourceLocation(loc.line, loc.column, loc.scope)
