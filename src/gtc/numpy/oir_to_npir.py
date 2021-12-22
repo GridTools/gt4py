@@ -112,9 +112,7 @@ class OirToNpir(NodeTranslator):
         ctx: Optional[ComputationContext] = None,
         **kwargs: Any,
     ) -> npir.HorizontalBlock:
-        return npir.HorizontalBlock(
-            body=self.visit(node.body, ctx=ctx, **kwargs),
-        )
+        return npir.HorizontalBlock(body=self.visit(node.body, ctx=ctx, **kwargs))
 
     def visit_MaskStmt(
         self,
@@ -130,9 +128,7 @@ class OirToNpir(NodeTranslator):
             mask = mask_expr
         else:
             mask_name = f"_mask_{ctx.mask_temp_counter}"
-            mask = npir.VectorTemp(
-                name=mask_name,
-            )
+            mask = npir.VectorTemp(name=mask_name)
             ctx.mask_temp_counter += 1
 
         return npir.MaskBlock(
@@ -147,6 +143,7 @@ class OirToNpir(NodeTranslator):
         *,
         ctx: Optional[ComputationContext] = None,
         mask: Optional[npir.VectorExpression] = None,
+        while_cond: Optional[npir.VectorExpression] = None,
         **kwargs: Any,
     ) -> npir.VectorAssign:
         ctx = ctx or self.ComputationContext()
@@ -154,6 +151,13 @@ class OirToNpir(NodeTranslator):
             kwargs["symtable"].get(node.left.name, None), (oir.Temporary, oir.LocalScalar)
         ):
             ctx.ensure_temp_defined(node.left)
+
+        # NOTE: This logic is fairly specific and will need to be extended for nested whiles
+        if while_cond and not mask:
+            mask = while_cond
+        elif while_cond and mask:
+            mask = npir.VectorLogic(op=common.LogicalOperator.AND, left=while_cond, right=mask)
+
         return npir.VectorAssign(
             left=self.visit(node.left, ctx=ctx, is_lvalue=True, **kwargs),
             right=self.visit(node.right, ctx=ctx, broadcast=True, **kwargs),
@@ -276,7 +280,9 @@ class OirToNpir(NodeTranslator):
             return npir.BroadCast(expr=name, dtype=name.dtype)
         return name
 
-    def visit_While(self, node: oir.While, **kwargs: Any) -> npir.While:
+    def visit_While(
+        self, node: oir.While, *, mask: Optional[npir.VectorExpression] = None, **kwargs: Any
+    ) -> npir.While:
         cond = self.visit(node.cond, **kwargs)
-        body = self.visit(node.body, **kwargs)
+        body = self.visit(node.body, while_cond=cond, **kwargs)
         return npir.While(cond=cond, body=body)

@@ -27,6 +27,11 @@ class Expr(common.Expr):
     pass
 
 
+@eve.utils.noninstantiable
+class Stmt(common.Stmt):
+    pass
+
+
 class Literal(common.Literal, Expr):
     @validator("dtype")
     def is_defined(cls, dtype: common.DataType) -> common.DataType:
@@ -133,20 +138,25 @@ class VectorTernaryOp(common.TernaryOp[VectorExpression], VectorExpression):
     pass
 
 
-class VectorAssign(common.AssignStmt[VectorLValue, VectorExpression], VectorExpression):
+class VectorAssign(common.AssignStmt[VectorLValue, VectorExpression], Stmt):
     left: VectorLValue
     right: VectorExpression
     mask: Optional[VectorExpression]
 
 
-class MaskBlock(common.Stmt):
+class MaskBlock(Stmt):
     mask: VectorExpression
     mask_name: str
-    body: List[VectorAssign]
+    body: List[Stmt]
+
+
+class While(Stmt):
+    cond: VectorExpression
+    body: List[Stmt]
 
 
 class HorizontalBlock(common.LocNode):
-    body: List[Union[VectorAssign, MaskBlock]]
+    body: List[Stmt]
 
 
 class VerticalPass(common.LocNode):
@@ -166,8 +176,3 @@ class Computation(common.LocNode, eve.SymbolTableTrait):
 
 class NativeFuncCall(common.NativeFuncCall[Expr], VectorExpression):
     _dtype_propagation = common.native_func_call_dtype_propagation(strict=True)
-
-
-class While(common.Stmt):
-    cond: VectorLogic
-    body: List[Union[VectorAssign, MaskBlock]]

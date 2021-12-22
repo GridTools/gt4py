@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 from typing import Any, List
 
 from eve import NodeTranslator
-from gtc import gtir, oir, utils
+from gtc import common, gtir, oir, utils
 from gtc.common import CartesianOffset, DataType, LogicalOperator, UnaryOperator
 
 
@@ -91,13 +91,16 @@ class GTIRToOIR(NodeTranslator):
     def visit_While(self, node: gtir.While, *, mask: oir.Expr = None, **kwargs: Any):
         body_stmts = []
         for stmt in node.body:
-            stmt_or_stmts = self.visit(stmt, mask=mask, **kwargs)
+            stmt_or_stmts = self.visit(stmt, **kwargs)
             if isinstance(stmt_or_stmts, oir.Stmt):
                 body_stmts.append(stmt_or_stmts)
             else:
                 body_stmts.extend(stmt_or_stmts)
 
-        stmt = oir.While(cond=self.visit(node.cond), body=body_stmts)
+        cond = self.visit(node.cond)
+        if mask:
+            cond = oir.BinaryOp(op=common.LogicalOperator.AND, left=mask, right=cond)
+        stmt = oir.While(cond=cond, body=body_stmts)
         if mask is not None:
             stmt = oir.MaskStmt(body=[stmt], mask=mask)
         return stmt
