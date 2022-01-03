@@ -100,6 +100,9 @@ class InitInfoPass(TransformPass):
         """Determines intervals over which the computation runs."""
         node: gt_ir.StencilDefinition = transform_data.definition_ir
 
+        min_k_interval_sizes = [0]
+        nk_intervals=1
+
         # Extract computation intervals
         computation_intervals = []
         for computation in node.computations:
@@ -128,10 +131,23 @@ class InitInfoPass(TransformPass):
                     )
 
                 bounds[i] = (index, offset)
+                if index < nk_intervals:
+                    min_k_interval_sizes[index] = max(
+                        min_k_interval_sizes[index], offset
+                    )
+
+            if bounds[0][0] == bounds[1][0] - 1:
+                index = bounds[0][0]
+                min_size = 1 + bounds[0][1] - bounds[1][1]
+                min_k_interval_sizes[index] = max(
+                    min_k_interval_sizes[index], min_size
+                )
 
             # Create computation intervals
             interval_info = IntervalInfo(*bounds)
             computation_intervals.append(interval_info)
+
+        transform_data.min_k_interval_sizes = min_k_interval_sizes
 
         return computation_intervals
 

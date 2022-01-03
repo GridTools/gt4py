@@ -230,8 +230,6 @@ class TransformData:
         Implementation IR with the final implementation of the stencil.
     options : `gt4py.definitions.Options`
         Build options provided by the users.
-    splitters_var : `str`
-        Used in IntervalMaker when parsing variable splitters.
     min_k_interval_sizes : `list` [`int`]
         Used in IntervalMaker for storing the interval sizes.
     symbols : `dict` [`str`, `SymbolInfo`]
@@ -246,6 +244,7 @@ class TransformData:
     implementation_ir = attribute(of=gt_ir.StencilImplementation)
     options = attribute(of=BuildOptions)
 
+    min_k_interval_sizes = attribute(of=ListOf[int], factory=list)
     symbols = attribute(of=DictOf[str, SymbolInfo], factory=dict)
     blocks = attribute(of=ListOf[DomainBlockInfo], factory=list)
 
