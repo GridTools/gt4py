@@ -91,17 +91,20 @@ class HorizontalExecutionMerging(NodeTranslator):
                     declarations=(
                         horizontal_executions[-1].declarations + this_not_duplicated + this_mapped
                     ),
+                    loc=horizontal_executions[-1].loc,
                 )
 
         return oir.VerticalLoopSection(
-            interval=node.interval, horizontal_executions=horizontal_executions
+            interval=node.interval, horizontal_executions=horizontal_executions, loc=node.loc
         )
 
     def visit_ScalarAccess(
         self, node: oir.ScalarAccess, *, scalar_map: Dict[str, str], **kwargs: Any
     ) -> oir.ScalarAccess:
         return oir.ScalarAccess(
-            name=scalar_map[node.name] if node.name in scalar_map else node.name, dtype=node.dtype
+            name=scalar_map[node.name] if node.name in scalar_map else node.name,
+            dtype=node.dtype,
+            loc=node.loc,
         )
 
 
@@ -141,14 +144,16 @@ class OnTheFlyMerging(NodeTranslator):
             offset = self.visit(node.offset, **kwargs)
             key = node.name, (offset.i, offset.j, offset.k)
             if key in offset_symbol_map:
-                return oir.ScalarAccess(name=offset_symbol_map[key], dtype=node.dtype)
+                return oir.ScalarAccess(name=offset_symbol_map[key], dtype=node.dtype, loc=node.loc)
         return self.generic_visit(node, **kwargs)
 
     def visit_ScalarAccess(
         self, node: oir.ScalarAccess, *, scalar_map: Dict[str, str], **kwargs: Any
     ) -> oir.ScalarAccess:
         return oir.ScalarAccess(
-            name=scalar_map[node.name] if node.name in scalar_map else node.name, dtype=node.dtype
+            name=scalar_map[node.name] if node.name in scalar_map else node.name,
+            dtype=node.dtype,
+            loc=node.loc,
         )
 
     def _merge(
@@ -278,6 +283,7 @@ class OnTheFlyMerging(NodeTranslator):
                     scalar_map=scalar_map,
                 ),
                 declarations=declarations,
+                loc=first.loc,
             )
             for offset in read_offsets:
                 merged.body = (
