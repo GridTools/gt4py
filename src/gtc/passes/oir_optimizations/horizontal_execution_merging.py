@@ -101,7 +101,11 @@ class HorizontalExecutionMerging(NodeTranslator):
 
             if reads_with_offset_after_write or last_extent != this_extent:
                 # Cannot merge: simply append to list
-                horizontal_executions.append(this_hexec)
+                horizontal_executions.append(
+                    self.TempHorizontalExecution(
+                        body=this_hexec.body, declarations=this_hexec.declarations
+                    )
+                )
                 new_block_extents.append(this_extent)
             else:
                 # Merge
