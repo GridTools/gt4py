@@ -17,7 +17,7 @@
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 
-from eve import NodeTranslator, SymbolTableTrait
+from eve import Node, NodeTranslator, SymbolTableTrait
 from gt4py.definitions import Extent
 from gtc import common, oir
 
@@ -30,6 +30,41 @@ from .utils import (
 
 
 class HorizontalExecutionMerging(NodeTranslator):
+    class TempHorizontalExecution(Node):
+        # NOTE: This exists because oir.HorizontalExecution has validators that run,
+        # which makes the algorithm in the outer class O(n^2)
+        body: List[oir.Stmt]
+        declarations: List[oir.LocalScalar]
+
+        @classmethod
+        def merge(
+            cls,
+            this,
+            other: oir.HorizontalExecution,
+            visit: Callable[..., oir.HorizontalExecution],
+            new_symbol_name: Callable[[str], str],
+        ):
+            this_names = {decl.name for decl in this.declarations}
+            other_names = {decl.name for decl in other.declarations}
+            duplicated_locals = this_names & other_names
+
+            # Map from old to new scalar names applied to the second horizontal execution
+            scalar_map = {name: new_symbol_name(name) for name in duplicated_locals}
+            locals_symtable = {decl.name: decl for decl in other.declarations}
+
+            this_not_duplicated = [
+                decl for decl in other.declarations if decl.name not in duplicated_locals
+            ]
+            this_mapped = [
+                oir.ScalarDecl(name=scalar_map[name], dtype=locals_symtable[name].dtype)
+                for name in duplicated_locals
+            ]
+
+            return cls(
+                body=this.body + visit(other.body, scalar_map=scalar_map),
+                declarations=this.declarations + this_not_duplicated + this_mapped,
+            )
+
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> oir.Stencil:
         all_names = collect_symbol_names(node)
         return self.generic_visit(
@@ -47,8 +82,13 @@ class HorizontalExecutionMerging(NodeTranslator):
         new_symbol_name: Callable[[str], str],
         **kwargs: Any,
     ) -> oir.VerticalLoopSection:
-        horizontal_executions = [node.horizontal_executions[0]]
-        new_block_extents = [block_extents[id(horizontal_executions[-1])]]
+        horizontal_executions = [
+            self.TempHorizontalExecution(
+                body=node.horizontal_executions[0].body,
+                declarations=node.horizontal_executions[0].declarations,
+            )
+        ]
+        new_block_extents = [block_extents[id(node.horizontal_executions[0])]]
 
         for this_hexec in node.horizontal_executions[1:]:
             last_extent = new_block_extents[-1]
@@ -69,32 +109,16 @@ class HorizontalExecutionMerging(NodeTranslator):
                 new_block_extents.append(this_extent)
             else:
                 # Merge
-                duplicated_locals = {
-                    decl.name for decl in horizontal_executions[-1].declarations
-                } & {decl.name for decl in this_hexec.declarations}
-                # Map from old to new scalar names applied to the second horizontal execution
-                scalar_map = {name: new_symbol_name(name) for name in duplicated_locals}
-                locals_symtable = {decl.name: decl for decl in this_hexec.declarations}
-
-                new_body = self.visit(this_hexec.body, scalar_map=scalar_map, **kwargs)
-
-                this_not_duplicated = [
-                    decl for decl in this_hexec.declarations if decl.name not in duplicated_locals
-                ]
-                this_mapped = [
-                    oir.ScalarDecl(name=scalar_map[name], dtype=locals_symtable[name].dtype)
-                    for name in duplicated_locals
-                ]
-
-                horizontal_executions[-1] = oir.HorizontalExecution(
-                    body=horizontal_executions[-1].body + new_body,
-                    declarations=(
-                        horizontal_executions[-1].declarations + this_not_duplicated + this_mapped
-                    ),
+                horizontal_executions[-1] = self.TempHorizontalExecution.merge(
+                    horizontal_executions[-1], this_hexec, self.visit, new_symbol_name
                 )
 
         return oir.VerticalLoopSection(
-            interval=node.interval, horizontal_executions=horizontal_executions
+            interval=node.interval,
+            horizontal_executions=[
+                oir.HorizontalExecution(body=hexec.body, declarations=hexec.declarations)
+                for hexec in horizontal_executions
+            ],
         )
 
     def visit_ScalarAccess(
