@@ -36,15 +36,13 @@ class HorizontalExecutionMerging(NodeTranslator):
         body: List[oir.Stmt]
         declarations: List[oir.LocalScalar]
 
-        @classmethod
-        def merge(
-            cls,
-            this,
+        def merge_with(
+            self,
             other: oir.HorizontalExecution,
             visit: Callable[..., oir.HorizontalExecution],
             new_symbol_name: Callable[[str], str],
-        ):
-            this_names = {decl.name for decl in this.declarations}
+        ) -> None:
+            this_names = {decl.name for decl in self.declarations}
             other_names = {decl.name for decl in other.declarations}
             duplicated_locals = this_names & other_names
 
@@ -52,18 +50,16 @@ class HorizontalExecutionMerging(NodeTranslator):
             scalar_map = {name: new_symbol_name(name) for name in duplicated_locals}
             locals_symtable = {decl.name: decl for decl in other.declarations}
 
-            this_not_duplicated = [
+            other_not_duplicated = [
                 decl for decl in other.declarations if decl.name not in duplicated_locals
             ]
-            this_mapped = [
+            other_dup_mapped = [
                 oir.ScalarDecl(name=scalar_map[name], dtype=locals_symtable[name].dtype)
                 for name in duplicated_locals
             ]
 
-            return cls(
-                body=this.body + visit(other.body, scalar_map=scalar_map),
-                declarations=this.declarations + this_not_duplicated + this_mapped,
-            )
+            self.body += visit(other.body, scalar_map=scalar_map)
+            self.declarations += other_not_duplicated + other_dup_mapped
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> oir.Stencil:
         all_names = collect_symbol_names(node)
@@ -109,9 +105,7 @@ class HorizontalExecutionMerging(NodeTranslator):
                 new_block_extents.append(this_extent)
             else:
                 # Merge
-                horizontal_executions[-1] = self.TempHorizontalExecution.merge(
-                    horizontal_executions[-1], this_hexec, self.visit, new_symbol_name
-                )
+                horizontal_executions[-1].merge_with(this_hexec, self.visit, new_symbol_name)
 
         return oir.VerticalLoopSection(
             interval=node.interval,
