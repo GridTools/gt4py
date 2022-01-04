@@ -50,7 +50,7 @@ class HorizontalExecutionMerging(NodeTranslator):
             scalar_map = {name: new_symbol_name(name) for name in duplicated_locals}
             locals_symtable = {decl.name: decl for decl in other.declarations}
 
-            other_not_duplicated = [
+            other_no_dup = [
                 decl for decl in other.declarations if decl.name not in duplicated_locals
             ]
             other_dup_mapped = [
@@ -59,7 +59,7 @@ class HorizontalExecutionMerging(NodeTranslator):
             ]
 
             self.body += visit(other.body, scalar_map=scalar_map)
-            self.declarations += other_not_duplicated + other_dup_mapped
+            self.declarations += other_no_dup + other_dup_mapped
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> oir.Stencil:
         all_names = collect_symbol_names(node)
