@@ -14,24 +14,27 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import functools
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, Generic, List, Optional, Set, Tuple, TypeVar, cast
 
 from eve import NodeVisitor
 from eve.concepts import TreeNode
 from eve.traits import SymbolTableTrait
 from eve.utils import XIterable, xiter
+from gt4py.definitions import Extent
 from gtc import oir
 
 
 OffsetT = TypeVar("OffsetT")
 
 GeneralOffsetTuple = Tuple[int, int, Optional[int]]
+HorizontalExtent = Tuple[Tuple[int, int], Tuple[int, int]]
 
 
-digits_at_end_pattern = re.compile(r"[0-9]+$")
-generated_name_pattern = re.compile(r".+_gen_[0-9]+")
+_digits_at_end_pattern = re.compile(r"[0-9]+$")
+_generated_name_pattern = re.compile(r".+_gen_[0-9]+")
 
 
 @dataclass(frozen=True)
@@ -168,9 +171,9 @@ def symbol_name_creator(used_names: Set[str]) -> Callable[[str], str]:
     """
 
     def increment_string_suffix(s: str) -> str:
-        if not generated_name_pattern.match(s):
+        if not _generated_name_pattern.match(s):
             return s + "_gen_0"
-        return digits_at_end_pattern.sub(lambda n: str(int(n.group()) + 1), s)
+        return _digits_at_end_pattern.sub(lambda n: str(int(n.group()) + 1), s)
 
     def new_symbol_name(name: str) -> str:
         while name in used_names:
@@ -188,3 +191,43 @@ def collect_symbol_names(node: TreeNode) -> Set[str]:
         .getattr("symtable_")
         .reduce(lambda names, symtable: names.union(symtable.keys()), init=set())
     )
+
+
+class _HorizontalExecutionExtents(NodeVisitor):
+    @dataclass
+    class Context:
+        # TODO: Remove dependency on gt4py.definitions here
+        field_extents: Dict[str, Extent] = field(default_factory=dict)
+        block_extents: Dict[int, Extent] = field(default_factory=dict)
+
+    def visit_Stencil(self, node: oir.Stencil) -> Dict[int, Extent]:
+        ctx = self.Context()
+        for vloop in reversed(node.vertical_loops):
+            self.visit(vloop, ctx=ctx)
+
+        return ctx.block_extents
+
+    def visit_VerticalLoop(self, node: oir.VerticalLoop, **kwargs: Any) -> None:
+        for section in reversed(node.sections):
+            self.visit(section, **kwargs)
+
+    def visit_HorizontalExecution(self, node: oir.HorizontalExecution, *, ctx: Context) -> None:
+        results = AccessCollector.apply(node).cartesian_accesses()
+        horizontal_extent = functools.reduce(
+            lambda ext, name: ext | ctx.field_extents.get(name, Extent.zeros(ndims=2)),
+            results.write_fields(),
+            Extent.zeros(ndims=2),
+        )
+        ctx.block_extents[id(node)] = horizontal_extent
+
+        for name, accesses in results.read_offsets().items():
+            extent = functools.reduce(
+                lambda ext, off: ext | Extent.from_offset(off[:2]), accesses, Extent.zeros(ndims=2)
+            )
+            ctx.field_extents[name] = ctx.field_extents.get(name, Extent.zeros(ndims=2)).union(
+                horizontal_extent + extent
+            )
+
+
+def compute_horizontal_block_extents(node: oir.Stencil) -> Dict[int, Extent]:
+    return _HorizontalExecutionExtents().visit(node)
