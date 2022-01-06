@@ -489,8 +489,8 @@ def test_read_data_dim_indirect_addressing(backend):
         "gtc:numpy",
         "gtc:gt:cpu_ifirst",
         "gtc:gt:cpu_kfirst",
-        pytest.param("gtc:gt:gpu", marks=[pytest.mark.requires_gpu, pytest.mark.xfail]),
-        pytest.param("gtc:cuda", marks=[pytest.mark.requires_gpu, pytest.mark.xfail]),
+        pytest.param("gtc:gt:gpu", marks=[pytest.mark.requires_gpu]),
+        pytest.param("gtc:cuda", marks=[pytest.mark.requires_gpu]),
         "gtc:dace",
     ],
 )

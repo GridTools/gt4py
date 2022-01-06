@@ -12,11 +12,7 @@ def _iter_field_names(node: Union[gtir.Stencil, gtir.ParAssignStmt]) -> XIterabl
 
 
 class KBoundaryVisitor(NodeVisitor):
-    """
-    For every field compute the boundary in k, e.g. (2, -1) if [k_origin-2, k_origin+k_domain-1] is accessed
-    """
-
-    contexts = (SymbolTableTrait.symtable_merger,)
+    "For every field compute the boundary in k, e.g. (2, -1) if [k_origin-2, k_origin+k_domain-1] is accessed."
 
     def visit_Stencil(self, node: gtir.Stencil, **kwargs: Any) -> Dict[str, Tuple[int, int]]:
         field_boundaries = {name: (-math.inf, -math.inf) for name in _iter_field_names(node)}
@@ -34,7 +30,7 @@ class KBoundaryVisitor(NodeVisitor):
         self,
         node: gtir.FieldAccess,
         vloop: gtir.VerticalLoop,
-        field_boundaries: Dict[str, Tuple[int, int]],
+        field_boundaries: Dict[str, Tuple[Union[float, int], Union[float, int]]],
         include_center_interval: bool,
         **kwargs: Any,
     ):
@@ -63,9 +59,7 @@ def compute_k_boundary(
 
 
 def compute_min_k_size(node: gtir.Stencil, include_center_interval=True) -> int:
-    """
-    Compute the required number of k levels to run a stencil
-    """
+    "Compute the required number of k levels to run a stencil."
     min_size_start = 0
     min_size_end = 0
     for vloop in node.vertical_loops:

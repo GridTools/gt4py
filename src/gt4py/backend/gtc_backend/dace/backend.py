@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING, Dict, Optional, Tuple, Type
 
 import dace
 
-from eve import NodeVisitor, codegen
+from eve import codegen
 from eve.codegen import MakoTemplate as as_mako
 from gt4py import backend as gt_backend
 from gt4py import gt_src_manager
@@ -28,7 +28,6 @@ from gt4py.backend.gtc_backend.common import bindings_main_template, pybuffer_to
 from gt4py.backend.gtc_backend.defir_to_gtir import DefIRToGTIR
 from gt4py.ir import StencilDefinition
 from gtc import gtir, gtir_to_oir
-from gtc.common import LevelMarker
 from gtc.dace.oir_to_dace import OirSDFGBuilder
 from gtc.dace.utils import array_dimensions
 from gtc.passes.gtir_k_boundary import compute_k_boundary
@@ -72,10 +71,6 @@ class GTCDaCeExtGenerator:
             "computation": {"computation.hpp": implementation},
             "bindings": {"bindings" + bindings_ext: bindings},
         }
-
-
-def compute_k_origins(node: gtir.Stencil) -> Dict[str, int]:
-    return {field_name: boundary[0] for field_name, boundary in compute_k_boundary(node).items()}
 
 
 class DaCeComputationCodegen:

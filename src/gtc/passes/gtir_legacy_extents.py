@@ -35,7 +35,7 @@ class LegacyExtentsVisitor(NodeVisitor):
         assign_conditions: Dict[int, List[gtir.FieldAccess]] = field(default_factory=dict)
 
     def visit_Stencil(self, node: gtir.Stencil, *, mask_inwards: bool, **kwargs: Any) -> FIELD_EXT_T:
-        field_extents = {}
+        field_extents: FIELD_EXT_T = {}
         ctx = self.StencilContext()
         for field_if in node.iter_tree().if_isinstance(gtir.FieldIfStmt):
             self.visit(field_if, ctx=ctx)
