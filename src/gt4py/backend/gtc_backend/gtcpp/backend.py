@@ -134,13 +134,20 @@ class GTCppBindingsCodegen(codegen.TemplatedGenerator):
         return generated_code
 
 
-class GTCGTBaseBackend(BaseGTBackend, CLIBackendMixin):
+class GTCGTBaseBackend(BaseGTBackend):  # , CLIBackendMixin):
     options = BaseGTBackend.GT_BACKEND_OPTS
     PYEXT_GENERATOR_CLASS = GTCGTExtGenerator  # type: ignore
     USE_LEGACY_TOOLCHAIN = False
 
     def _generate_extension(self, uses_cuda: bool) -> Tuple[str, str]:
         return self.make_extension(gt_version=2, ir=self.builder.definition_ir, uses_cuda=uses_cuda)
+
+    def generate_bindings(self, language_name: str, ir):
+        if language_name != "fortran":
+            return super().generate_bindings(language_name, ir)
+        print("Generating Fortran bindings")
+        dir_name = f"{self.builder.options.name}_src"
+        return {dir_name: {"bla.f90": "bla"}}
 
     def generate(self) -> Type["StencilObject"]:
         self.check_options(self.builder.options)
