@@ -97,5 +97,5 @@ class LegacyExtentsVisitor(NodeVisitor):
             pa_ctx.assign_extents[node.name] |= extent
 
 
-def compute_legacy_extents(node: gtir.Stencil, mask_inwards=True) -> FIELD_EXT_T:
+def compute_legacy_extents(node: gtir.Stencil, mask_inwards=False) -> FIELD_EXT_T:
     return LegacyExtentsVisitor().visit(node, mask_inwards=mask_inwards)
