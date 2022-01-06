@@ -263,7 +263,6 @@ class StencilObject(abc.ABC):
                 field = field_args[name]
                 api_domain_mask = field_info.domain_mask
                 api_domain_ndim = field_info.domain_ndim
-                lower_indices = field_info.boundary.lower_indices.filter_mask(api_domain_mask)
                 upper_indices = field_info.boundary.upper_indices.filter_mask(api_domain_mask)
                 field_origin = Index.from_value(origin[name])
                 field_domain = tuple(

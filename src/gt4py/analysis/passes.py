@@ -100,8 +100,7 @@ class InitInfoPass(TransformPass):
         """Determines intervals over which the computation runs."""
         node: gt_ir.StencilDefinition = transform_data.definition_ir
 
-        min_k_interval_sizes = [0]
-        nk_intervals=1
+        min_k_interval_size = 0
 
         # Extract computation intervals
         computation_intervals = []
@@ -131,23 +130,23 @@ class InitInfoPass(TransformPass):
                     )
 
                 bounds[i] = (index, offset)
-                if index < nk_intervals:
-                    min_k_interval_sizes[index] = max(
-                        min_k_interval_sizes[index], offset
-                    )
+                if index == 0:
+                    min_k_interval_size = max(min_k_interval_size, offset)
 
             if bounds[0][0] == bounds[1][0] - 1:
                 index = bounds[0][0]
                 min_size = 1 + bounds[0][1] - bounds[1][1]
-                min_k_interval_sizes[index] = max(
-                    min_k_interval_sizes[index], min_size
-                )
+                min_k_interval_size = max(min_k_interval_size, min_size)
 
             # Create computation intervals
             interval_info = IntervalInfo(*bounds)
             computation_intervals.append(interval_info)
 
-        transform_data.min_k_interval_sizes = min_k_interval_sizes
+        # note(tehrengruber): initially min_k_interval_sizes was meant to store the minimal size of the respective
+        #  intervals inbetween axis splitters (for some reason excluding the last interval relative to LevelMarker.END).
+        #  Since dynamic splitters were removed only one interval remains, but we adhere to the old / initial format
+        #  in TransformData here.
+        transform_data.min_k_interval_sizes = [min_k_interval_size]
 
         return computation_intervals
 
