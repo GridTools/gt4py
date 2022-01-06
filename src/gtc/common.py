@@ -655,10 +655,14 @@ class _LvalueDimsValidator(NodeVisitor):
         symtable: Dict[str, Any],
         **kwargs: Any,
     ) -> None:
-        if not isinstance(symtable[node.left.name], self.decl_type):
+        decl = symtable.get(node.left.name, None)
+        if decl is None:
+            raise ValueError("Symbol {} not found.".format(node.left.name))
+        if not isinstance(decl, self.decl_type):
             return None
+
         allowed_flags = self._allowed_flags(loop_order)
-        flags = symtable[node.left.name].dimensions
+        flags = decl.dimensions
         if flags not in allowed_flags:
             dims = dimension_flags_to_names(flags)
             raise ValueError(
