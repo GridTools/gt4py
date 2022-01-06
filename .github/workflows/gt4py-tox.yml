@@ -2,7 +2,7 @@ name: Tox (CPU only)
 
 on:
   schedule:
-    - cron: '30 5 * * *'
+  - cron: '30 5 * * *'
   push:
     branches:
     - master
