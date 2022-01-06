@@ -267,7 +267,7 @@ class StencilObject(abc.ABC):
                 upper_indices = field_info.boundary.upper_indices.filter_mask(api_domain_mask)
                 field_origin = Index.from_value(origin[name])
                 field_domain = tuple(
-                    max(0, field.shape[i] - (lower_indices[i] + upper_indices[i]))
+                    field.shape[i] - (field_origin[i] + upper_indices[i])
                     for i in range(api_domain_ndim)
                 )
                 max_domain &= Shape.from_mask(field_domain, api_domain_mask, default=max_size)
