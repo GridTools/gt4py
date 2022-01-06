@@ -34,7 +34,9 @@ class LegacyExtentsVisitor(NodeVisitor):
     class StencilContext:
         assign_conditions: Dict[int, List[gtir.FieldAccess]] = field(default_factory=dict)
 
-    def visit_Stencil(self, node: gtir.Stencil, *, mask_inwards: bool, **kwargs: Any) -> FIELD_EXT_T:
+    def visit_Stencil(
+        self, node: gtir.Stencil, *, mask_inwards: bool, **kwargs: Any
+    ) -> FIELD_EXT_T:
         field_extents: FIELD_EXT_T = {}
         ctx = self.StencilContext()
         for field_if in node.iter_tree().if_isinstance(gtir.FieldIfStmt):
@@ -48,7 +50,9 @@ class LegacyExtentsVisitor(NodeVisitor):
                 field_extents[name] = Extent.zeros()
             if mask_inwards:
                 # set inward pointing extents to zero
-                field_extents[name] = tuple((min(0, e[0]), max(0, e[1])) for e in field_extents[name])
+                field_extents[name] = tuple(
+                    (min(0, e[0]), max(0, e[1])) for e in field_extents[name]
+                )
         return field_extents
 
     def visit_ParAssignStmt(

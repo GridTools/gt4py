@@ -1,7 +1,7 @@
 import math
-from typing import Any, Dict, Tuple, Union
+from typing import Any, Dict, Tuple, Union, cast
 
-from eve import NodeVisitor, SymbolTableTrait
+from eve import NodeVisitor
 from eve.utils import XIterable
 from gtc import gtir
 from gtc.common import LevelMarker
@@ -12,7 +12,7 @@ def _iter_field_names(node: Union[gtir.Stencil, gtir.ParAssignStmt]) -> XIterabl
 
 
 class KBoundaryVisitor(NodeVisitor):
-    "For every field compute the boundary in k, e.g. (2, -1) if [k_origin-2, k_origin+k_domain-1] is accessed."
+    """For every field compute the boundary in k, e.g. (2, -1) if [k_origin-2, k_origin+k_domain-1] is accessed."""
 
     def visit_Stencil(self, node: gtir.Stencil, **kwargs: Any) -> Dict[str, Tuple[int, int]]:
         field_boundaries = {name: (-math.inf, -math.inf) for name in _iter_field_names(node)}
@@ -24,7 +24,7 @@ class KBoundaryVisitor(NodeVisitor):
                 b[0] if b[0] != -math.inf else 0,
                 b[1] if b[1] != -math.inf else 0,
             )
-        return field_boundaries
+        return cast(Dict[str, Tuple[int, int]], field_boundaries)
 
     def visit_FieldAccess(
         self,
@@ -38,10 +38,12 @@ class KBoundaryVisitor(NodeVisitor):
         interval = vloop.interval
         if not isinstance(node.offset, gtir.VariableKOffset):
             if interval.start.level == LevelMarker.START and (
-                    include_center_interval or interval.end.level == LevelMarker.START):
+                include_center_interval or interval.end.level == LevelMarker.START
+            ):
                 boundary = (max(-interval.start.offset - node.offset.k, boundary[0]), boundary[1])
-            if (include_center_interval or interval.start.level == LevelMarker.END) and \
-                    interval.end.level == LevelMarker.END:
+            if (
+                include_center_interval or interval.start.level == LevelMarker.END
+            ) and interval.end.level == LevelMarker.END:
                 boundary = (boundary[0], max(interval.end.offset + node.offset.k, boundary[1]))
         if node.name in [decl.name for decl in vloop.temporaries] and (
             boundary[0] > 0 or boundary[1] > 0
@@ -59,7 +61,7 @@ def compute_k_boundary(
 
 
 def compute_min_k_size(node: gtir.Stencil, include_center_interval=True) -> int:
-    "Compute the required number of k levels to run a stencil."
+    """Compute the required number of k levels to run a stencil."""
     min_size_start = 0
     min_size_end = 0
     for vloop in node.vertical_loops:
