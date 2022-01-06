@@ -40,14 +40,13 @@ class KBoundaryVisitor(NodeVisitor):
     ):
         boundary = field_boundaries[node.name]
         interval = vloop.interval
-        if interval.start.level == LevelMarker.START and (
-            include_center_interval or interval.end.level == LevelMarker.START
-        ):
-            boundary = (max(-interval.start.offset - node.offset.k, boundary[0]), boundary[1])
-        if (
-            include_center_interval or interval.start.level == LevelMarker.END
-        ) and interval.end.level == LevelMarker.END:
-            boundary = (boundary[0], max(interval.end.offset + node.offset.k, boundary[1]))
+        if not isinstance(node.offset, gtir.VariableKOffset):
+            if interval.start.level == LevelMarker.START and (
+                    include_center_interval or interval.end.level == LevelMarker.START):
+                boundary = (max(-interval.start.offset - node.offset.k, boundary[0]), boundary[1])
+            if (include_center_interval or interval.start.level == LevelMarker.END) and \
+                    interval.end.level == LevelMarker.END:
+                boundary = (boundary[0], max(interval.end.offset + node.offset.k, boundary[1]))
         if node.name in [decl.name for decl in vloop.temporaries] and (
             boundary[0] > 0 or boundary[1] > 0
         ):

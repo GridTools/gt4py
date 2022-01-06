@@ -117,11 +117,16 @@ def get_unused_params_from_gtir(
     ]
 
 
-def make_args_data_from_gtir(pipeline: GtirPipeline) -> ModuleData:
+def make_args_data_from_gtir(pipeline: GtirPipeline, legacy=False) -> ModuleData:
+    """
+    Compute module data containing information about stencil arguments from gtir
+
+    Use `legacy` parameter to ensure equality with values from make_args_data_from_iir.
+    """
     data = ModuleData()
     node = pipeline.full()
-    field_extents = compute_legacy_extents(node)
-    k_boundary = compute_k_boundary(node)
+    field_extents = compute_legacy_extents(node, mask_inwards=legacy)
+    k_boundary = compute_k_boundary(node) if not legacy else (0, 0)
 
     write_fields = (
         node.iter_tree()
