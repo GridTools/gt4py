@@ -47,13 +47,26 @@ class HorizontalExecutionMerging(NodeTranslator):
         new_symbol_name: Callable[[str], str],
         **kwargs: Any,
     ) -> oir.VerticalLoopSection:
-        horizontal_executions = [node.horizontal_executions[0]]
-        new_block_extents = [block_extents[id(horizontal_executions[-1])]]
+        @dataclass
+        class UncheckedHorizontalExecution:
+            # local replacement without type checking for type-checked oir node
+            # required to reach reasonable run times for large node counts
+            body: List[oir.Stmt]
+            declarations: List[oir.LocalScalar]
+
+            def to_oir(self):
+                return oir.HorizontalExecution(body=self.body, declarations=self.declarations)
+
+        def to_unchecked(hexec):
+            return UncheckedHorizontalExecution(body=hexec.body, declarations=hexec.declarations)
+
+        horizontal_executions = [to_unchecked(node.horizontal_executions[0])]
+        new_block_extents = [block_extents[id(node.horizontal_executions[0])]]
+        last_writes = AccessCollector.apply(node.horizontal_executions[0]).write_fields()
 
         for this_hexec in node.horizontal_executions[1:]:
             last_extent = new_block_extents[-1]
 
-            last_writes = AccessCollector.apply(horizontal_executions[-1]).write_fields()
             this_offset_reads = {
                 name
                 for name, offsets in AccessCollector.apply(this_hexec).read_offsets().items()
@@ -65,8 +78,9 @@ class HorizontalExecutionMerging(NodeTranslator):
 
             if reads_with_offset_after_write or last_extent != this_extent:
                 # Cannot merge: simply append to list
-                horizontal_executions.append(this_hexec)
+                horizontal_executions.append(to_unchecked(this_hexec))
                 new_block_extents.append(this_extent)
+                last_writes = AccessCollector.apply(this_hexec).write_fields()
             else:
                 # Merge
                 duplicated_locals = {
@@ -86,15 +100,17 @@ class HorizontalExecutionMerging(NodeTranslator):
                     for name in duplicated_locals
                 ]
 
-                horizontal_executions[-1] = oir.HorizontalExecution(
+                horizontal_executions[-1] = UncheckedHorizontalExecution(
                     body=horizontal_executions[-1].body + new_body,
                     declarations=(
                         horizontal_executions[-1].declarations + this_not_duplicated + this_mapped
                     ),
                 )
+                last_writes |= AccessCollector.apply(new_body).write_fields()
 
         return oir.VerticalLoopSection(
-            interval=node.interval, horizontal_executions=horizontal_executions
+            interval=node.interval,
+            horizontal_executions=[hexec.to_oir() for hexec in horizontal_executions],
         )
 
     def visit_ScalarAccess(
