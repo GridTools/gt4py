@@ -438,16 +438,16 @@ class ExplicitlySyncedGPUStorage(Storage):
         return self._device_field
 
     def to_numpy(self, copy=False):
-        self.synchronize()
+        self.device_to_host()
         if copy:
-            return copy.deepcopy(np.asarray(self))
+            return np.array(self, subok=False)
         return np.asarray(self)
 
-    def to_copy(self, copy=False):
-        self.synchronize()
+    def to_cupy(self, copy=False):
+        self.host_to_device()
         if copy:
-            return copy.deepcopy(cp.asarray(self))
-        return self.view(cp.asarray(self))
+            return cp.array(self)
+        return cp.asarray(self)
 
     def synchronize(self):
         if self._is_host_modified:
