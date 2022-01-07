@@ -874,6 +874,30 @@ class TestDataDimensions:
 
         parse_definition(definition, name=inspect.stack()[0][3], module=self.__class__.__name__)
 
+    def test_syntax_no_datadim(self):
+        def definition(
+            field_in: gtscript.Field[np.float_],
+            field_out: gtscript.Field[gtscript.IJK, (np.float_, (3,))],
+        ):
+            with computation(PARALLEL), interval(...):
+                field_out[0, 0, 0][0] = field_in
+                field_out[0, 0, 0][1] = field_in
+                field_out[0, 0, 0][2] = field_in[0, 0, 0][0]
+
+        with pytest.raises(gt_frontend.GTScriptSyntaxError, match="Incorrect data index length"):
+            parse_definition(definition, name=inspect.stack()[0][3], module=self.__class__.__name__)
+
+    def test_syntax_out_bounds(self):
+        def definition(
+            field_in: gtscript.Field[np.float_],
+            field_out: gtscript.Field[gtscript.IJK, (np.float_, (3,))],
+        ):
+            with computation(PARALLEL), interval(...):
+                field_out[0, 0, 0][3] = field_in[0, 0, 0]
+
+        with pytest.raises(gt_frontend.GTScriptSyntaxError, match="Data index out of bounds"):
+            parse_definition(definition, name=inspect.stack()[0][3], module=self.__class__.__name__)
+
     def test_indirect_access_read(self):
         def definition(
             field_3d: gtscript.Field[np.float_],

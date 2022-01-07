@@ -752,9 +752,17 @@ class IRMaker(ast.NodeVisitor):
             "asin": gt_ir.NativeFunction.ARCSIN,
             "acos": gt_ir.NativeFunction.ARCCOS,
             "atan": gt_ir.NativeFunction.ARCTAN,
+            "sinh": gt_ir.NativeFunction.SINH,
+            "cosh": gt_ir.NativeFunction.COSH,
+            "tanh": gt_ir.NativeFunction.TANH,
+            "asinh": gt_ir.NativeFunction.ARCSINH,
+            "acosh": gt_ir.NativeFunction.ARCCOSH,
+            "atanh": gt_ir.NativeFunction.ARCTANH,
             "sqrt": gt_ir.NativeFunction.SQRT,
             "exp": gt_ir.NativeFunction.EXP,
             "log": gt_ir.NativeFunction.LOG,
+            "gamma": gt_ir.NativeFunction.GAMMA,
+            "cbrt": gt_ir.NativeFunction.CBRT,
             "isfinite": gt_ir.NativeFunction.ISFINITE,
             "isinf": gt_ir.NativeFunction.ISINF,
             "isnan": gt_ir.NativeFunction.ISNAN,
@@ -1090,6 +1098,24 @@ class IRMaker(ast.NodeVisitor):
                     else value
                     for value in index
                 ]
+                if len(result.data_index) != len(self.fields[result.name].data_dims):
+                    raise GTScriptSyntaxError(
+                        f"Incorrect data index length {len(result.data_index)}. "
+                        f"Invalid data dimension index. Field {result.name} has {len(self.fields[result.name].data_dims)} data dimensions.",
+                        loc=gt_ir.Location.from_ast_node(node),
+                    )
+                if any(
+                    isinstance(index, gt_ir.ScalarLiteral)
+                    and not (0 <= int(index.value) < axis_length)
+                    for index, axis_length in zip(
+                        result.data_index, self.fields[result.name].data_dims
+                    )
+                ):
+                    raise GTScriptSyntaxError(
+                        f"Data index out of bounds. "
+                        f"Found index {result.data_index}, but field {result.name} has {self.fields[result.name].data_dims} data-dimensions",
+                        loc=gt_ir.Location.from_ast_node(node),
+                    )
             else:
                 raise GTScriptSyntaxError(
                     "Unrecognized subscript expression", loc=gt_ir.Location.from_ast_node(node)

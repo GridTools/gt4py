@@ -190,7 +190,7 @@ class KCacheDecl(Decl):
     extent: Optional[KExtent]
 
 
-class HorizontalExecution(LocNode):
+class HorizontalExecution(LocNode, SymbolTableTrait):
     body: List[Stmt]
     declarations: List[LocalScalar]
     extent: Optional[IJExtent]

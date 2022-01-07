@@ -160,11 +160,19 @@ class NativeFunction(StrEnum):
     ARCSIN = "arcsin"
     ARCCOS = "arccos"
     ARCTAN = "arctan"
+    SINH = "sinh"
+    COSH = "cosh"
+    TANH = "tanh"
+    ARCSINH = "arcsinh"
+    ARCCOSH = "arccosh"
+    ARCTANH = "arctanh"
 
     SQRT = "sqrt"
     POW = "pow"
     EXP = "exp"
     LOG = "log"
+    GAMMA = "gamma"
+    CBRT = "cbrt"
 
     ISFINITE = "isfinite"
     ISINF = "isinf"
@@ -193,10 +201,18 @@ NativeFunction.IR_OP_TO_NUM_ARGS = {
         NativeFunction.ARCSIN: 1,
         NativeFunction.ARCCOS: 1,
         NativeFunction.ARCTAN: 1,
+        NativeFunction.SINH: 1,
+        NativeFunction.COSH: 1,
+        NativeFunction.TANH: 1,
+        NativeFunction.ARCSINH: 1,
+        NativeFunction.ARCCOSH: 1,
+        NativeFunction.ARCTANH: 1,
         NativeFunction.SQRT: 1,
         NativeFunction.POW: 2,
         NativeFunction.EXP: 1,
         NativeFunction.LOG: 1,
+        NativeFunction.GAMMA: 1,
+        NativeFunction.CBRT: 1,
         NativeFunction.ISFINITE: 1,
         NativeFunction.ISINF: 1,
         NativeFunction.ISNAN: 1,
@@ -639,10 +655,14 @@ class _LvalueDimsValidator(NodeVisitor):
         symtable: Dict[str, Any],
         **kwargs: Any,
     ) -> None:
-        if not isinstance(symtable[node.left.name], self.decl_type):
+        decl = symtable.get(node.left.name, None)
+        if decl is None:
+            raise ValueError("Symbol {} not found.".format(node.left.name))
+        if not isinstance(decl, self.decl_type):
             return None
+
         allowed_flags = self._allowed_flags(loop_order)
-        flags = symtable[node.left.name].dimensions
+        flags = decl.dimensions
         if flags not in allowed_flags:
             dims = dimension_flags_to_names(flags)
             raise ValueError(

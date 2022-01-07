@@ -15,16 +15,68 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from gtc import common, oir
-from gtc.passes.oir_optimizations.horizontal_execution_merging import OnTheFlyMerging
+from gtc.passes.oir_optimizations.horizontal_execution_merging import (
+    HorizontalExecutionMerging,
+    OnTheFlyMerging,
+)
 
 from ...oir_utils import (
     AssignStmtFactory,
+    BinaryOpFactory,
     HorizontalExecutionFactory,
+    LocalScalarFactory,
     NativeFuncCallFactory,
+    ScalarAccessFactory,
     StencilFactory,
     TemporaryFactory,
     VerticalLoopFactory,
 )
+
+
+def test_horiz_exec_merging_read_after_write():
+    testee = StencilFactory(
+        vertical_loops__0__sections__0__horizontal_executions=[
+            HorizontalExecutionFactory(
+                body=[AssignStmtFactory(left__name="tmp", right__name="input")]
+            ),
+            HorizontalExecutionFactory(
+                body=[AssignStmtFactory(left__name="output", right__name="tmp", right__offset__i=1)]
+            ),
+        ],
+        declarations=[TemporaryFactory(name="tmp")],
+    )
+    transformed = HorizontalExecutionMerging().visit(testee)
+    hexecs = transformed.vertical_loops[0].sections[0].horizontal_executions
+    assert len(hexecs) == 2
+
+
+def test_horiz_exec_merging_map_scalar():
+    testee = StencilFactory(
+        vertical_loops__0__sections__0__horizontal_executions=[
+            HorizontalExecutionFactory(
+                body=[
+                    AssignStmtFactory(left__name="stmp", right__name="input", right__offset__i=1),
+                    AssignStmtFactory(left__name="tmp", right__name="stmp"),
+                ],
+                declarations=[LocalScalarFactory(name="stmp")],
+            ),
+            HorizontalExecutionFactory(
+                body=[
+                    AssignStmtFactory(left__name="stmp", right__name="input"),
+                    AssignStmtFactory(
+                        left__name="output",
+                        right=BinaryOpFactory(left__name="stmp", right__name="tmp"),
+                    ),
+                ],
+                declarations=[LocalScalarFactory(name="stmp")],
+            ),
+        ],
+        declarations=[TemporaryFactory(name="tmp")],
+    )
+    transformed = HorizontalExecutionMerging().visit(testee)
+    hexecs = transformed.vertical_loops[0].sections[0].horizontal_executions
+    assert len(hexecs) == 1
+    assert len(hexecs[0].declarations) == 2
 
 
 def test_on_the_fly_merging_basic():
@@ -172,3 +224,43 @@ def test_on_the_fly_merging_repeated():
     transformed = OnTheFlyMerging().visit(testee)
     hexecs = transformed.vertical_loops[0].sections[0].horizontal_executions
     assert len(hexecs) == 2
+
+
+def test_on_the_fly_merging_localscalars():
+    testee = StencilFactory(
+        vertical_loops__0__sections__0__horizontal_executions=[
+            HorizontalExecutionFactory(
+                body=[
+                    AssignStmtFactory(
+                        left=ScalarAccessFactory(name="scalar_tmp"),
+                        right__name="in",
+                    ),
+                    AssignStmtFactory(
+                        left__name="tmp", right=ScalarAccessFactory(name="scalar_tmp")
+                    ),
+                ],
+                declarations=[LocalScalarFactory(name="scalar_tmp")],
+            ),
+            HorizontalExecutionFactory(
+                body=[
+                    AssignStmtFactory(
+                        left=ScalarAccessFactory(name="scalar_tmp"),
+                        right__name="in",
+                        right__offset__i=1,
+                    ),
+                    AssignStmtFactory(
+                        left__name="out",
+                        right=BinaryOpFactory(
+                            left=ScalarAccessFactory(name="scalar_tmp"), right__name="tmp"
+                        ),
+                    ),
+                ],
+                declarations=[LocalScalarFactory(name="scalar_tmp")],
+            ),
+        ],
+        declarations=[TemporaryFactory(name="tmp")],
+    )
+    transformed = OnTheFlyMerging().visit(testee)
+    hexecs = transformed.vertical_loops[0].sections[0].horizontal_executions
+    assert len(hexecs) == 1
+    assert len(hexecs[0].declarations) == 3
