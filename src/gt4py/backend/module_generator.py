@@ -125,8 +125,6 @@ def make_args_data_from_gtir(pipeline: GtirPipeline, legacy=False) -> ModuleData
     """
     data = ModuleData()
     node = pipeline.full()
-    field_extents = compute_legacy_extents(node, mask_inwards=legacy)
-    k_boundary = compute_k_boundary(node) if not legacy else (0, 0)
 
     write_fields = (
         node.iter_tree()
@@ -144,6 +142,10 @@ def make_args_data_from_gtir(pipeline: GtirPipeline, legacy=False) -> ModuleData
     referenced_field_params = [
         param.name for param in node.params if isinstance(param, gtir.FieldDecl)
     ]
+    field_extents = compute_legacy_extents(node, mask_inwards=legacy)
+    k_boundary = (
+        compute_k_boundary(node) if not legacy else {v: (0, 0) for v in referenced_field_params}
+    )
     for name in sorted(referenced_field_params):
         access = AccessKind.NONE
         if name in read_fields:

@@ -50,8 +50,8 @@ class LegacyExtentsVisitor(NodeVisitor):
                 field_extents[name] = Extent.zeros()
             if mask_inwards:
                 # set inward pointing extents to zero
-                field_extents[name] = tuple(
-                    (min(0, e[0]), max(0, e[1])) for e in field_extents[name]
+                field_extents[name] = Extent(
+                    *((min(0, e[0]), max(0, e[1])) for e in field_extents[name])
                 )
         return field_extents
 
