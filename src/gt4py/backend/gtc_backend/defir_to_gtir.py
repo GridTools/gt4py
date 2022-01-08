@@ -15,11 +15,10 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import numbers
-from typing import Any, Dict, List, Optional, Set, Union, cast
+from typing import Any, Dict, List, Optional, Union, cast
 
 import numpy as np
 
-import eve
 from gt4py.ir import IRNodeVisitor
 from gt4py.ir.nodes import (
     ArgumentInfo,
@@ -53,34 +52,6 @@ from gt4py.ir.nodes import (
 )
 from gtc import common, gtir
 from gtc.common import ExprKind
-
-
-class CheckHorizontalRegionAccesses(eve.NodeVisitor):
-    """Ensure that FieldAccess nodes in HorizontalRegions access up-to-date memory."""
-
-    def visit_VerticalLoop(self, node: gtir.VerticalLoop) -> None:
-        self.visit(node.body, fields_set=set())
-
-    def visit_HorizontalRegion(self, node: gtir.HorizontalRegion, *, fields_set: Set[str]) -> None:
-        self.visit(node.block, fields_set=fields_set, inside_region=True)
-
-    def visit_ParAssignStmt(
-        self, node: gtir.FieldAccess, *, fields_set: Set[str], **kwargs
-    ) -> None:
-        self.visit(node.right, fields_set=fields_set, **kwargs)
-        fields_set.add(node.left.name)
-
-    def visit_FieldAccess(
-        self,
-        node: gtir.FieldAccess,
-        *,
-        fields_set: Set[str],
-        inside_region: bool = False,
-    ) -> None:
-        zero_horizontal_offset = node.offset.i == 0 and node.offset.j == 0
-        if inside_region and not zero_horizontal_offset and node.name in fields_set:
-            # This access will potentially read memory that has not been updated yet
-            raise ValueError(f"Race condition detected on read of {node.name}")
 
 
 class DefIRToGTIR(IRNodeVisitor):
@@ -157,9 +128,7 @@ class DefIRToGTIR(IRNodeVisitor):
 
     @classmethod
     def apply(cls, root, **kwargs: Any):
-        stencil = cls().visit(root)
-        CheckHorizontalRegionAccesses().visit(stencil)
-        return stencil
+        return cls().visit(root)
 
     def visit_StencilDefinition(self, node: StencilDefinition) -> gtir.Stencil:
         field_params = {f.name: self.visit(f) for f in node.api_fields}
