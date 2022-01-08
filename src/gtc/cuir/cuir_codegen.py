@@ -83,6 +83,8 @@ class CUIRCodegen(codegen.TemplatedGenerator):
 
     CartesianOffset = as_fmt("{i}_c, {j}_c, {k}_c")
 
+    VariableKOffset = as_fmt("0_c, 0_c, {k}")
+
     BinaryOp = as_fmt("({left} {op} {right})")
 
     UNARY_OPERATOR_TO_CODE = {
@@ -121,10 +123,18 @@ class CUIRCodegen(codegen.TemplatedGenerator):
         NativeFunction.ARCSIN: "std::asin",
         NativeFunction.ARCCOS: "std::acos",
         NativeFunction.ARCTAN: "std::atan",
+        NativeFunction.SINH: "std::sinh",
+        NativeFunction.COSH: "std::cosh",
+        NativeFunction.TANH: "std::tanh",
+        NativeFunction.ARCSINH: "std::asinh",
+        NativeFunction.ARCCOSH: "std::acosh",
+        NativeFunction.ARCTANH: "std::atanh",
         NativeFunction.SQRT: "std::sqrt",
         NativeFunction.POW: "std::pow",
         NativeFunction.EXP: "std::exp",
         NativeFunction.LOG: "std::log",
+        NativeFunction.GAMMA: "std::tgamma",
+        NativeFunction.CBRT: "std::cbrt",
         NativeFunction.ISFINITE: "std::isfinite",
         NativeFunction.ISINF: "std::isinf",
         NativeFunction.ISNAN: "std::isnan",

@@ -400,6 +400,12 @@ class ExprB(Expr):
     clearly_expr_b = ""
 
 
+class ExprC(Expr):
+    dtype: DataType = DataType.INT32
+    kind: ExprKind = ExprKind.FIELD
+    clearly_expr_c = ""
+
+
 class StmtA(Stmt):
     clearly_stmt_a = ""
 
@@ -488,3 +494,12 @@ def test_HorizontalInterval():
             start=common.AxisBound(level=common.LevelMarker.START, offset=0),
             end=common.AxisBound(level=common.LevelMarker.START, offset=-1),
         )
+
+
+def test_VariableKOffset_category():
+    class Testee(common.VariableKOffset[ExprC]):
+        pass
+
+    Testee(k=ExprC())
+    with pytest.raises(ValidationError):
+        Testee(k=ExprA())

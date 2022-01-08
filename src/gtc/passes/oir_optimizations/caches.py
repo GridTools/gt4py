@@ -64,7 +64,7 @@ class IJCacheDetection(NodeTranslator):
         def has_vertical_offset(offsets: Set[Tuple[int, int, int]]) -> bool:
             return any(offset[2] != 0 for offset in offsets)
 
-        accesses = AccessCollector.apply(node).offsets()
+        accesses = AccessCollector.apply(node).cartesian_accesses().offsets()
         cacheable = {
             field
             for field, offsets in accesses.items()
@@ -126,7 +126,7 @@ class KCacheDetection(NodeTranslator):
         def offsets_within_limits(offsets: Set[Tuple[int, int, int]]) -> bool:
             return all(abs(offset[2]) <= self.max_cacheable_offset for offset in offsets)
 
-        accesses = AccessCollector.apply(node).offsets()
+        accesses = AccessCollector.apply(node).cartesian_accesses().offsets()
         cacheable = {
             field
             for field, offsets in accesses.items()
@@ -166,7 +166,7 @@ class PruneKCacheFills(NodeTranslator):
         assert node.loop_order != common.LoopOrder.PARALLEL
 
         def pruneable_fields(section: oir.VerticalLoopSection) -> Set[str]:
-            accesses = AccessCollector.apply(section)
+            accesses = AccessCollector.apply(section).cartesian_accesses()
             offsets = accesses.offsets()
             center_accesses = [a for a in accesses.ordered_accesses() if a.offset == (0, 0, 0)]
 
@@ -200,8 +200,12 @@ class PruneKCacheFills(NodeTranslator):
         # support a k-cache type that only fills on the initial level, so fills are inserted on all
         # levels here.
 
-        first_section_offsets = AccessCollector.apply(node.sections[0]).offsets()
-        last_section_offsets = AccessCollector.apply(node.sections[-1]).offsets()
+        first_section_offsets = (
+            AccessCollector.apply(node.sections[0]).cartesian_accesses().offsets()
+        )
+        last_section_offsets = (
+            AccessCollector.apply(node.sections[-1]).cartesian_accesses().offsets()
+        )
         for field in list(pruneable):
             first_k_offsets = (o[2] for o in first_section_offsets.get(field, {(0, 0, 0)}))
             last_k_offsets = (o[2] for o in last_section_offsets.get(field, {(0, 0, 0)}))
@@ -316,7 +320,7 @@ class FillFlushToLocalKCaches(NodeTranslator):
             """Positive k-offset for forward loops, negative for backward."""
             return offset[2] if loop_order == common.LoopOrder.FORWARD else -offset[2]
 
-        read_offsets = AccessCollector.apply(section).read_offsets()
+        read_offsets = AccessCollector.apply(section).cartesian_accesses().read_offsets()
         return {
             field: (
                 min(directional_k_offset(o) for o in offsets),

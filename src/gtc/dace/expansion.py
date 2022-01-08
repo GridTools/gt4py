@@ -101,10 +101,18 @@ class TaskletCodegen(codegen.TemplatedGenerator):
                 common.NativeFunction.ARCSIN: "asin",
                 common.NativeFunction.ARCCOS: "acos",
                 common.NativeFunction.ARCTAN: "atan",
+                common.NativeFunction.SINH: "dace.math.sinh",
+                common.NativeFunction.COSH: "dace.math.cosh",
+                common.NativeFunction.TANH: "dace.math.tanh",
+                common.NativeFunction.ARCSINH: "asinh",
+                common.NativeFunction.ARCCOSH: "acosh",
+                common.NativeFunction.ARCTANH: "atanh",
                 common.NativeFunction.SQRT: "dace.math.sqrt",
                 common.NativeFunction.POW: "dace.math.pow",
                 common.NativeFunction.EXP: "dace.math.exp",
                 common.NativeFunction.LOG: "dace.math.log",
+                common.NativeFunction.GAMMA: "tgamma",
+                common.NativeFunction.CBRT: "cbrt",
                 common.NativeFunction.ISFINITE: "isfinite",
                 common.NativeFunction.ISINF: "isinf",
                 common.NativeFunction.ISNAN: "isnan",
@@ -352,7 +360,7 @@ class NaiveVerticalLoopExpander(OIRLibraryNodeExpander):
             for ln, _ in section.all_nodes_recursive()
             if isinstance(ln, (HorizontalExecutionLibraryNode, VerticalLoopLibraryNode))
         ):
-            access_collection: AccessCollector.Result = get_access_collection(he)
+            access_collection: AccessCollector.CartesianAccessCollection = get_access_collection(he)
 
             for name, offsets in access_collection.offsets().items():
                 off: Tuple[int, int, int]
@@ -541,7 +549,9 @@ class ParallelNaiveVerticalLoopExpander(NaiveVerticalLoopExpander):
 
 class NaiveHorizontalExecutionExpander(OIRLibraryNodeExpander):
     def get_origins(self):
-        access_collection: AccessCollector.Result = get_access_collection(self.node)
+        access_collection: AccessCollector.CartesianAccessCollection = get_access_collection(
+            self.node
+        )
 
         origins = dict()
         for name, offsets in access_collection.offsets().items():
@@ -561,7 +571,9 @@ class NaiveHorizontalExecutionExpander(OIRLibraryNodeExpander):
 
     def get_innermost_memlets(self):
 
-        access_collection: AccessCollector.Result = get_access_collection(self.node)
+        access_collection: AccessCollector.CartesianAccessCollection = get_access_collection(
+            self.node
+        )
 
         in_memlets = dict()
         for name, offsets in access_collection.read_offsets().items():

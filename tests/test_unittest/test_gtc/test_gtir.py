@@ -40,6 +40,7 @@ from .gtir_utils import (
     ParAssignStmtFactory,
     ScalarAccessFactory,
     StencilFactory,
+    VariableKOffsetFactory,
     VerticalLoopFactory,
 )
 
@@ -134,7 +135,7 @@ def test_no_horizontal_offset_allowed(assign_stmt_with_offset):
 
 
 def test_symbolref_without_decl():
-    with pytest.raises(ValidationError, match=r"Symbols.*not found"):
+    with pytest.raises(ValidationError, match=r"Symbol.*not found"):
         StencilFactory(
             params=[],
             vertical_loops__0__body__0=ParAssignStmtFactory(
@@ -204,3 +205,14 @@ def test_indirect_address_data_dims():
     # ... but others are not
     with pytest.raises(ValueError, match="must be integer expressions"):
         FieldAccessFactory(data_index=[ScalarAccessFactory(dtype=DataType.FLOAT32)])
+
+
+def test_variable_k_offset_in_access():
+    # Integer expressions are OK
+    FieldAccessFactory(offset=VariableKOffsetFactory())
+
+    # ... but others are not
+    with pytest.raises(ValueError, match="must be an integer expression"):
+        FieldAccessFactory(
+            offset=VariableKOffsetFactory(k=FieldAccessFactory(dtype=DataType.FLOAT32))
+        )

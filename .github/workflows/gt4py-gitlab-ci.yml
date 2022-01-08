@@ -2,7 +2,9 @@ name: CI
 on:
   push:
     branches:
-    - '**'
+    - master
+    - trying
+    - staging
 jobs:
   build:
     runs-on: ubuntu-latest

@@ -30,6 +30,7 @@ from gt4py import gt_src_manager
 from gt4py import ir as gt_ir
 from gt4py import utils as gt_utils
 from gt4py.utils import text as gt_text
+from gtc.passes.oir_pipeline import OirPipeline
 
 from . import pyext_builder
 from .module_generator import CUDAPyExtModuleGenerator, PyExtModuleGenerator
@@ -279,9 +280,17 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
         gt_ir.NativeFunction.ARCSIN: "asin",
         gt_ir.NativeFunction.ARCCOS: "acos",
         gt_ir.NativeFunction.ARCTAN: "atan",
+        gt_ir.NativeFunction.SINH: "sinh",
+        gt_ir.NativeFunction.COSH: "cosh",
+        gt_ir.NativeFunction.TANH: "tanh",
+        gt_ir.NativeFunction.ARCSINH: "asinh",
+        gt_ir.NativeFunction.ARCCOSH: "acosh",
+        gt_ir.NativeFunction.ARCTANH: "atanh",
         gt_ir.NativeFunction.SQRT: "sqrt",
         gt_ir.NativeFunction.EXP: "exp",
         gt_ir.NativeFunction.LOG: "log",
+        gt_ir.NativeFunction.GAMMA: "tgamma",
+        gt_ir.NativeFunction.CBRT: "cbrt",
         gt_ir.NativeFunction.ISFINITE: "isfinite",
         gt_ir.NativeFunction.ISINF: "isinf",
         gt_ir.NativeFunction.ISNAN: "isnan",
@@ -671,6 +680,7 @@ class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
         "clean": {"versioning": False, "type": bool},
         "debug_mode": {"versioning": True, "type": bool},
         "verbose": {"versioning": False, "type": bool},
+        "oir_pipeline": {"versioning": True, "type": OirPipeline},
     }
 
     GT_BACKEND_T: str

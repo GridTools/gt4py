@@ -15,15 +15,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import pytest
-from tests.definition_setup import ijk_domain  # noqa: F401
-from tests.definition_setup import (
-    BlockStmt,
-    IterationOrder,
-    TAssign,
-    TComputationBlock,
-    TDefinition,
-    TFieldRef,
-)
 
 from gt4py.backend.gtc_backend.defir_to_gtir import DefIRToGTIR
 from gt4py.ir.nodes import (
@@ -37,6 +28,15 @@ from gt4py.ir.nodes import (
     ScalarLiteral,
 )
 from gtc import common, gtir
+from tests.definition_setup import ijk_domain  # noqa: F401
+from tests.definition_setup import (
+    BlockStmt,
+    IterationOrder,
+    TAssign,
+    TComputationBlock,
+    TDefinition,
+    TFieldRef,
+)
 
 
 @pytest.fixture
@@ -119,6 +119,14 @@ def test_field_ref(defir_to_gtir):
     assert field_access.offset.i == -1
     assert field_access.offset.j == 3
     assert field_access.offset.k == 0
+
+    field_ref = TFieldRef(name="a", offset=(0, 0, TFieldRef(name="index").build())).build()
+    field_access = defir_to_gtir.visit_FieldRef(field_ref)
+    assert isinstance(field_access, gtir.FieldAccess)
+    assert field_access.name == "a"
+
+    assert isinstance(field_access.offset, gtir.VariableKOffset)
+    assert isinstance(field_access.offset.k, gtir.FieldAccess)
 
 
 def test_axis_interval(defir_to_gtir):

@@ -68,10 +68,6 @@ class SymbolTableTrait(concepts.Model):
         values["symtable_"] = cls._collect_symbols(values)
         return values
 
-    def collect_symbols(self) -> None:
-        self.symtable_ = dict()
-        self.symtable_ = self._collect_symbols(self)
-
     @staticmethod
     @contextlib.contextmanager
     def symtable_merger(

@@ -19,7 +19,7 @@ from typing import Tuple
 import factory
 
 from gtc import common
-from gtc.python import npir
+from gtc.numpy import npir
 
 
 class FieldSliceFactory(factory.Factory):

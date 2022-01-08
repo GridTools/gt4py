@@ -16,6 +16,9 @@ def _iter_assigns(node: gtir.Stencil) -> XIterable[gtir.ParAssignStmt]:
     return node.iter_tree().if_isinstance(gtir.ParAssignStmt)
 
 
+FIELD_EXT_T = Dict[str, Extent]
+
+
 class LegacyExtentsVisitor(NodeVisitor):
     @dataclass
     class AssignContext:

@@ -18,7 +18,7 @@ from typing import Any, Callable, Set
 
 import factory
 
-from eve import concepts, traits, type_definitions, visitors
+from eve import concepts, type_definitions, visitors
 from gtc import common
 
 
@@ -35,8 +35,7 @@ def undefined_symbol_list(
                     elif issubclass(type_, type_definitions.SymbolRef):
                         refs.add(getattr(node, name))
 
-            if not isinstance(node, traits.SymbolTableTrait):
-                self.generic_visit(node, symbols=symbols, refs=refs)
+            self.generic_visit(node, symbols=symbols, refs=refs)
 
     def func(obj):
         symbols: Set[str] = set()

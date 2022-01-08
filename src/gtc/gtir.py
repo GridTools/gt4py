@@ -61,11 +61,15 @@ class CartesianOffset(common.CartesianOffset):
     pass
 
 
+class VariableKOffset(common.VariableKOffset[Expr]):
+    pass
+
+
 class ScalarAccess(common.ScalarAccess, Expr):  # type: ignore
     pass
 
 
-class FieldAccess(common.FieldAccess[Expr], Expr):  # type: ignore
+class FieldAccess(common.FieldAccess[Expr, VariableKOffset], Expr):  # type: ignore
     pass
 
 
@@ -92,11 +96,11 @@ class ParAssignStmt(common.AssignStmt[FieldAccess, Expr], Stmt):
             offset_reads = (
                 values["right"]
                 .iter_tree()
-                .if_isinstance(FieldAccess)
+                .filter(_cartesian_fieldaccess)
                 .filter(lambda acc: acc.offset.i != 0 or acc.offset.j != 0)
                 .getattr("name")
                 .to_set()
-            )
+            ) | values["right"].iter_tree().filter(_variablek_fieldaccess).getattr("name").to_set()
             if values["left"].name in offset_reads:
                 raise ValueError("Self-assignment with offset is illegal.")
 
@@ -231,7 +235,7 @@ class VerticalLoop(LocNode):
         def _reads_with_offset(stmts: List[Stmt]) -> Set[str]:
             return (
                 _collection_iter_tree(stmts)
-                .if_isinstance(FieldAccess)
+                .filter(_cartesian_fieldaccess)
                 .filter(
                     lambda acc: acc.offset.i != 0 or acc.offset.j != 0
                 )  # writes always have zero offset
@@ -265,3 +269,11 @@ class Stencil(LocNode, SymbolTableTrait):
 
     _validate_symbol_refs = common.validate_symbol_refs()
     _validate_lvalue_dims = common.validate_lvalue_dims(VerticalLoop, FieldDecl)
+
+
+def _cartesian_fieldaccess(node) -> bool:
+    return isinstance(node, FieldAccess) and not isinstance(node.offset, VariableKOffset)
+
+
+def _variablek_fieldaccess(node) -> bool:
+    return isinstance(node, FieldAccess) and isinstance(node.offset, VariableKOffset)

@@ -14,25 +14,49 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import functools
 import re
-from dataclasses import dataclass
-from typing import Any, Callable, Dict, List, Set, Tuple
+from dataclasses import dataclass, field
+from typing import Any, Callable, Dict, Generic, List, Optional, Set, Tuple, TypeVar, cast
 
 from eve import NodeVisitor
 from eve.concepts import TreeNode
+from eve.traits import SymbolTableTrait
 from eve.utils import XIterable, xiter
+from gt4py.definitions import Extent
 from gtc import oir
 
 
+OffsetT = TypeVar("OffsetT")
+
+GeneralOffsetTuple = Tuple[int, int, Optional[int]]
+HorizontalExtent = Tuple[Tuple[int, int], Tuple[int, int]]
+
+
+_digits_at_end_pattern = re.compile(r"[0-9]+$")
+_generated_name_pattern = re.compile(r".+_gen_[0-9]+")
+
+
 @dataclass(frozen=True)
-class Access:
+class GenericAccess(Generic[OffsetT]):
     field: str
-    offset: Tuple[int, int, int]
+    offset: OffsetT
     is_write: bool
 
     @property
     def is_read(self) -> bool:
         return not self.is_write
+
+
+class CartesianAccess(GenericAccess[Tuple[int, int, int]]):
+    pass
+
+
+class GeneralAccess(GenericAccess[GeneralOffsetTuple]):
+    pass
+
+
+AccessT = TypeVar("AccessT", bound=GenericAccess)
 
 
 class AccessCollector(NodeVisitor):
@@ -42,14 +66,15 @@ class AccessCollector(NodeVisitor):
         self,
         node: oir.FieldAccess,
         *,
-        accesses: List[Access],
+        accesses: List[GeneralAccess],
         is_write: bool,
         **kwargs: Any,
     ) -> None:
+        offsets = node.offset.to_dict()
         accesses.append(
-            Access(
+            GeneralAccess(
                 field=node.name,
-                offset=(node.offset.i, node.offset.j, node.offset.k),
+                offset=(offsets["i"], offsets["j"], offsets["k"]),
                 is_write=is_write,
             )
         )
@@ -67,24 +92,24 @@ class AccessCollector(NodeVisitor):
         self.visit(node.body, **kwargs)
 
     @dataclass
-    class Result:
-        _ordered_accesses: List["Access"]
+    class GenericAccessCollection(Generic[AccessT, OffsetT]):
+        _ordered_accesses: List[AccessT]
 
         @staticmethod
-        def _offset_dict(accesses: XIterable) -> Dict[str, Set[Tuple[int, int, int]]]:
+        def _offset_dict(accesses: XIterable) -> Dict[str, Set[OffsetT]]:
             return accesses.reduceby(
                 lambda acc, x: acc | {x.offset}, "field", init=set(), as_dict=True
             )
 
-        def offsets(self) -> Dict[str, Set[Tuple[int, int, int]]]:
+        def offsets(self) -> Dict[str, Set[OffsetT]]:
             """Get a dictonary, mapping all accessed fields' names to sets of offset tuples."""
             return self._offset_dict(xiter(self._ordered_accesses))
 
-        def read_offsets(self) -> Dict[str, Set[Tuple[int, int, int]]]:
+        def read_offsets(self) -> Dict[str, Set[OffsetT]]:
             """Get a dictonary, mapping read fields' names to sets of offset tuples."""
             return self._offset_dict(xiter(self._ordered_accesses).filter(lambda x: x.is_read))
 
-        def write_offsets(self) -> Dict[str, Set[Tuple[int, int, int]]]:
+        def write_offsets(self) -> Dict[str, Set[OffsetT]]:
             """Get a dictonary, mapping written fields' names to sets of offset tuples."""
             return self._offset_dict(xiter(self._ordered_accesses).filter(lambda x: x.is_write))
 
@@ -100,13 +125,33 @@ class AccessCollector(NodeVisitor):
             """Get a set of all written fields' names."""
             return {acc.field for acc in self._ordered_accesses if acc.is_write}
 
-        def ordered_accesses(self) -> List[Access]:
+        def ordered_accesses(self) -> List[AccessT]:
             """Get a list of ordered accesses."""
             return self._ordered_accesses
 
+    class CartesianAccessCollection(GenericAccessCollection[CartesianAccess, Tuple[int, int, int]]):
+        pass
+
+    class GeneralAccessCollection(GenericAccessCollection[GeneralAccess, GeneralOffsetTuple]):
+        def cartesian_accesses(self) -> "AccessCollector.CartesianAccessCollection":
+            return AccessCollector.CartesianAccessCollection(
+                [
+                    CartesianAccess(
+                        field=acc.field,
+                        offset=cast(Tuple[int, int, int], acc.offset),
+                        is_write=acc.is_write,
+                    )
+                    for acc in self._ordered_accesses
+                    if acc.offset[2] is not None
+                ]
+            )
+
+        def has_variable_access(self) -> bool:
+            return any(acc.offset[2] is None for acc in self._ordered_accesses)
+
     @classmethod
-    def apply(cls, node: TreeNode, **kwargs: Any) -> "Result":
-        result = cls.Result([])
+    def apply(cls, node: TreeNode, **kwargs: Any) -> "AccessCollector.GeneralAccessCollection":
+        result = cls.GeneralAccessCollection([])
         cls().visit(node, accesses=result._ordered_accesses, **kwargs)
         return result
 
@@ -123,9 +168,9 @@ def symbol_name_creator(used_names: Set[str]) -> Callable[[str], str]:
     """
 
     def increment_string_suffix(s: str) -> str:
-        if not s[-1].isnumeric():
-            return s + "0"
-        return re.sub(r"[0-9]+$", lambda n: str(int(n.group()) + 1), s)
+        if not _generated_name_pattern.match(s):
+            return s + "_gen_0"
+        return _digits_at_end_pattern.sub(lambda n: str(int(n.group()) + 1), s)
 
     def new_symbol_name(name: str) -> str:
         while name in used_names:
@@ -134,3 +179,52 @@ def symbol_name_creator(used_names: Set[str]) -> Callable[[str], str]:
         return name
 
     return new_symbol_name
+
+
+def collect_symbol_names(node: TreeNode) -> Set[str]:
+    return (
+        node.iter_tree()
+        .if_isinstance(SymbolTableTrait)
+        .getattr("symtable_")
+        .reduce(lambda names, symtable: names.union(symtable.keys()), init=set())
+    )
+
+
+class _HorizontalExecutionExtents(NodeVisitor):
+    @dataclass
+    class Context:
+        # TODO: Remove dependency on gt4py.definitions here
+        field_extents: Dict[str, Extent] = field(default_factory=dict)
+        block_extents: Dict[int, Extent] = field(default_factory=dict)
+
+    def visit_Stencil(self, node: oir.Stencil) -> Dict[int, Extent]:
+        ctx = self.Context()
+        for vloop in reversed(node.vertical_loops):
+            self.visit(vloop, ctx=ctx)
+
+        return ctx.block_extents
+
+    def visit_VerticalLoop(self, node: oir.VerticalLoop, **kwargs: Any) -> None:
+        for section in reversed(node.sections):
+            self.visit(section, **kwargs)
+
+    def visit_HorizontalExecution(self, node: oir.HorizontalExecution, *, ctx: Context) -> None:
+        results = AccessCollector.apply(node).cartesian_accesses()
+        horizontal_extent = functools.reduce(
+            lambda ext, name: ext | ctx.field_extents.get(name, Extent.zeros(ndims=2)),
+            results.write_fields(),
+            Extent.zeros(ndims=2),
+        )
+        ctx.block_extents[id(node)] = horizontal_extent
+
+        for name, accesses in results.read_offsets().items():
+            extent = functools.reduce(
+                lambda ext, off: ext | Extent.from_offset(off[:2]), accesses, Extent.zeros(ndims=2)
+            )
+            ctx.field_extents[name] = ctx.field_extents.get(name, Extent.zeros(ndims=2)).union(
+                horizontal_extent + extent
+            )
+
+
+def compute_horizontal_block_extents(node: oir.Stencil) -> Dict[int, Extent]:
+    return _HorizontalExecutionExtents().visit(node)
