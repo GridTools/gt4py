@@ -83,13 +83,6 @@ class CheckHorizontalRegionAccesses(eve.NodeVisitor):
             raise ValueError(f"Race condition detected on read of {node.name}")
 
 
-def transform_offset(offset: Dict[str, int]) -> gtir.CartesianOffset:
-    i = offset["I"] if "I" in offset else 0
-    j = offset["J"] if "J" in offset else 0
-    k = offset["K"] if "K" in offset else 0
-    return gtir.CartesianOffset(i=i, j=j, k=k)
-
-
 class DefIRToGTIR(IRNodeVisitor):
 
     GT4PY_ITERATIONORDER_TO_GTIR_LOOPORDER = {
