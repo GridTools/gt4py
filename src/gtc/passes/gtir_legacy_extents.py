@@ -46,8 +46,7 @@ class LegacyExtentsVisitor(NodeVisitor):
         for name in _iter_field_names(node):
             # ensure we have an extent for all fields. note that we do not initialize to zero in the beginning as this
             #  breaks inward pointing extends (i.e. negative boundaries).
-            if name not in field_extents:
-                field_extents[name] = Extent.zeros()
+            field_extents.setdefault(name, Extent.zeros())
             if mask_inwards:
                 # set inward pointing extents to zero
                 field_extents[name] = Extent(

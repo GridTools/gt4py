@@ -1,5 +1,5 @@
 # flake8: noqa: F841
-from typing import Any, Callable, List, Tuple
+from typing import Any, Callable, List, Tuple, TypedDict
 
 import numpy as np
 import pytest
@@ -12,18 +12,19 @@ from gt4py.stencil_builder import StencilBuilder
 from gtc.passes.gtir_k_boundary import compute_k_boundary, compute_min_k_size
 from gtc.passes.gtir_pipeline import prune_unused_parameters
 
+class TestData(TypedDict):
+    definition: Callable
+    k_bounds: Tuple[int, int]
+    min_k_size: int
 
 # populated by test_case decorator
-test_data: List[Tuple[Callable, Any]] = []
-test_data_k_bounds: List[Tuple[Callable, Any]] = []
-test_data_min_k_size: List[Tuple[Callable, Any]] = []
+test_data: List[TestData] = []
 
 
 def register_test_case(**kwargs):
     def _wrapper(definition):
-        globals()["test_data"].append((definition, kwargs))
-        for k, v in kwargs.items():
-            globals()["test_data_" + k].append((definition, v))
+        global test_data
+        test_data.append((definition, kwargs))
         return definition
 
     return _wrapper
@@ -125,7 +126,7 @@ def stencil_with_extent_6(field_a: gs.Field[float], field_b: gs.Field[float]):
         field_a = field_b[0, 0, -5] + field_b[0, 0, 3]
 
 
-@pytest.mark.parametrize("definition,expected_k_bounds", test_data_k_bounds)
+@pytest.mark.parametrize("definition,expected_k_bounds", [(s, d["k_bounds"]) for s, d in test_data])
 def test_k_bounds(definition, expected_k_bounds):
     builder = StencilBuilder(definition, backend=from_name("debug"))
     k_boundary = compute_k_boundary(builder.gtir_pipeline.full(skip=[prune_unused_parameters]))[
@@ -135,7 +136,7 @@ def test_k_bounds(definition, expected_k_bounds):
     assert expected_k_bounds == k_boundary
 
 
-@pytest.mark.parametrize("definition,expected_min_k_size", test_data_min_k_size)
+@pytest.mark.parametrize("definition,expected_min_k_size", [(s, d["min_k_size"]) for s, d in test_data])
 def test_min_k_size(definition, expected_min_k_size):
     builder = StencilBuilder(definition, backend=from_name("debug"))
     min_k_size = compute_min_k_size(builder.gtir_pipeline.full(skip=[prune_unused_parameters]))

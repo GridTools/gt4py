@@ -107,36 +107,25 @@ class InitInfoPass(TransformPass):
         for computation in node.computations:
             # Process current interval definition
             interval_def = computation.interval
-            bounds = [None, None]
+            bounds = (interval_def.start, interval_def.end)
 
-            for i, axis_bound in enumerate([interval_def.start, interval_def.end]):
+            for axis_bound in enumerate(bounds):
                 # Static splitter: extract size info
-                index = (
-                    1 if axis_bound.offset < 0 or axis_bound.level == gt_ir.LevelMarker.END else 0
-                )
+                level = axis_bound.level
                 offset = axis_bound.offset
 
-                if offset < 0 and axis_bound.level != gt_ir.LevelMarker.END:
-                    raise IntervalSpecificationError(
-                        interval_def,
-                        "Invalid offset in interval specification",
-                        loc=axis_bound.loc,
-                    )
-                elif offset > 0 and axis_bound.level != gt_ir.LevelMarker.START:
+                if (offset < 0 and level != gt_ir.LevelMarker.END) or (offset > 0 and level != gt_ir.LevelMarker.START):
                     raise IntervalSpecificationError(
                         interval_def,
                         "Invalid offset in interval specification",
                         loc=axis_bound.loc,
                     )
 
-                bounds[i] = (index, offset)
-                if index == 0:
+                if level == gt_ir.LevelMarker.START:
                     min_k_interval_size = max(min_k_interval_size, offset)
 
-            if bounds[0][0] == bounds[1][0] - 1:
-                index = bounds[0][0]
-                min_size = 1 + bounds[0][1] - bounds[1][1]
-                min_k_interval_size = max(min_k_interval_size, min_size)
+            if bounds[0].level == gt_ir.LevelMarker.START and bounds[1].level == gt_ir.LevelMarker.END:
+                min_k_interval_size = max(min_k_interval_size, 1 + bounds[0].offset - bounds[1].offset)
 
             # Create computation intervals
             interval_info = IntervalInfo(*bounds)

@@ -121,7 +121,7 @@ def make_args_data_from_gtir(pipeline: GtirPipeline, legacy=False) -> ModuleData
     """
     Compute module data containing information about stencil arguments from gtir.
 
-    Use `legacy` parameter to ensure equality with values from make_args_data_from_iir.
+    Use `legacy` parameter to ensure equality with values from :func:`make_args_data_from_iir`.
     """
     data = ModuleData()
     node = pipeline.full()

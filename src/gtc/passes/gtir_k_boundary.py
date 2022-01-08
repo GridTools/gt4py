@@ -1,5 +1,6 @@
 import math
-from typing import Any, Dict, Tuple, Union, cast
+import typing
+from typing import Any, Dict, Tuple, Union
 
 from eve import NodeVisitor
 from eve.utils import XIterable
@@ -24,7 +25,7 @@ class KBoundaryVisitor(NodeVisitor):
                 b[0] if b[0] != -math.inf else 0,
                 b[1] if b[1] != -math.inf else 0,
             )
-        return cast(Dict[str, Tuple[int, int]], field_boundaries)
+        return typing.cast(Dict[str, Tuple[int, int]], field_boundaries)
 
     def visit_FieldAccess(
         self,

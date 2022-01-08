@@ -395,7 +395,7 @@ class StencilObject(abc.ABC):
                 lower_indices = field_info.boundary.lower_indices.filter_mask(field_domain_mask)
                 upper_indices = field_info.boundary.upper_indices.filter_mask(field_domain_mask)
                 min_shape = tuple(
-                    l + d + h for d, l, h in zip(spatial_domain, lower_indices, upper_indices)
+                    l + d + h for l, d, h in zip(lower_indices, spatial_domain, upper_indices)
                 )
                 if min_shape > field.shape:
                     raise ValueError(
