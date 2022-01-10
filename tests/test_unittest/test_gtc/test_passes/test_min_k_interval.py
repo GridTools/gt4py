@@ -12,19 +12,20 @@ from gt4py.stencil_builder import StencilBuilder
 from gtc.passes.gtir_k_boundary import compute_k_boundary, compute_min_k_size
 from gtc.passes.gtir_pipeline import prune_unused_parameters
 
+
 class TestData(TypedDict):
-    definition: Callable
     k_bounds: Tuple[int, int]
     min_k_size: int
 
-# populated by test_case decorator
-test_data: List[TestData] = []
+
+# A list of dictionaries containing a stencil definition and the expected test case outputs
+test_data: List[Tuple[Callable, TestData]] = []
 
 
-def register_test_case(**kwargs):
+def register_test_case(*, k_bounds, min_k_size):
     def _wrapper(definition):
         global test_data
-        test_data.append((definition, kwargs))
+        test_data.append((definition, {"k_bounds": k_bounds, "min_k_size": min_k_size}))
         return definition
 
     return _wrapper
@@ -136,7 +137,9 @@ def test_k_bounds(definition, expected_k_bounds):
     assert expected_k_bounds == k_boundary
 
 
-@pytest.mark.parametrize("definition,expected_min_k_size", [(s, d["min_k_size"]) for s, d in test_data])
+@pytest.mark.parametrize(
+    "definition,expected_min_k_size", [(s, d["min_k_size"]) for s, d in test_data]
+)
 def test_min_k_size(definition, expected_min_k_size):
     builder = StencilBuilder(definition, backend=from_name("debug"))
     min_k_size = compute_min_k_size(builder.gtir_pipeline.full(skip=[prune_unused_parameters]))

@@ -107,14 +107,15 @@ class InitInfoPass(TransformPass):
         for computation in node.computations:
             # Process current interval definition
             interval_def = computation.interval
-            bounds = (interval_def.start, interval_def.end)
 
-            for axis_bound in enumerate(bounds):
+            for axis_bound in (interval_def.start, interval_def.end):
                 # Static splitter: extract size info
                 level = axis_bound.level
                 offset = axis_bound.offset
 
-                if (offset < 0 and level != gt_ir.LevelMarker.END) or (offset > 0 and level != gt_ir.LevelMarker.START):
+                if (offset < 0 and level != gt_ir.LevelMarker.END) or (
+                    offset > 0 and level != gt_ir.LevelMarker.START
+                ):
                     raise IntervalSpecificationError(
                         interval_def,
                         "Invalid offset in interval specification",
@@ -124,12 +125,20 @@ class InitInfoPass(TransformPass):
                 if level == gt_ir.LevelMarker.START:
                     min_k_interval_size = max(min_k_interval_size, offset)
 
-            if bounds[0].level == gt_ir.LevelMarker.START and bounds[1].level == gt_ir.LevelMarker.END:
-                min_k_interval_size = max(min_k_interval_size, 1 + bounds[0].offset - bounds[1].offset)
+            if (
+                interval_def.start.level == gt_ir.LevelMarker.START
+                and interval_def.end.level == gt_ir.LevelMarker.END
+            ):
+                min_k_interval_size = max(
+                    min_k_interval_size, 1 + interval_def.start.offset - interval_def.end.offset
+                )
 
             # Create computation intervals
-            interval_info = IntervalInfo(*bounds)
-            computation_intervals.append(interval_info)
+            bounds = [
+                ((0 if b.level == gt_ir.LevelMarker.START else 1), b.offset)
+                for b in (interval_def.start, interval_def.end)
+            ]
+            computation_intervals.append(IntervalInfo(*bounds))
 
         # note(tehrengruber): initially min_k_interval_sizes was meant to store the minimal size of the respective
         #  intervals inbetween axis splitters (for some reason excluding the last interval relative to LevelMarker.END).
