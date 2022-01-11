@@ -21,10 +21,12 @@ import textwrap
 import types
 from typing import Any, Dict, List, Optional, Tuple, Union
 
+import numpy as np
+
 import gt4py.gtscript as gtscript
 from gt4py.utils import NOTHING
 
-from .nodes import *
+from .nodes import ArgumentInfo, DataType, Domain, FieldDecl, FieldRef
 
 
 # --- Definition IR ---
