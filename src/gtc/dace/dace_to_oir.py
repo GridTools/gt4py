@@ -74,7 +74,7 @@ def sdfg_arrays_to_oir_decls(sdfg: dace.SDFG) -> Tuple[List[oir.Decl], List[oir.
     return params, decls
 
 
-def convert(sdfg: dace.SDFG, stencil: Optional[oir.Stencil] = None) -> oir.Stencil:
+def convert(sdfg: dace.SDFG, loc: Optional[common.SourceLocation] = None) -> oir.Stencil:
 
     validate_oir_sdfg(sdfg)
 
@@ -94,5 +94,5 @@ def convert(sdfg: dace.SDFG, stencil: Optional[oir.Stencil] = None) -> oir.Stenc
         params=params,
         declarations=decls,
         vertical_loops=vertical_loops,
-        loc=stencil.loc if stencil is not None else None,
+        loc=loc if loc is not None else None,
     )
