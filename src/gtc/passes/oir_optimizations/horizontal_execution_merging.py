@@ -54,6 +54,16 @@ class HorizontalExecutionMerging(NodeTranslator):
             body: List[oir.Stmt]
             declarations: List[oir.LocalScalar]
 
+            assert set(oir.HorizontalExecution.__fields__) == {
+                "loc",
+                "symtable_",
+                "body",
+                "declarations",
+            }, (
+                "Unexpected field in oir.HorizontalExecution, "
+                "probably UncheckedHorizontalExecution needs an update"
+            )
+
             @classmethod
             def from_oir(cls, hexec: oir.HorizontalExecution):
                 return cls(body=hexec.body, declarations=hexec.declarations)
