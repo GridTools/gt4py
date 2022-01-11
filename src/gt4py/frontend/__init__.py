@@ -14,10 +14,5 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-# Disable isort to avoid circular imports
-# isort: off
-from .base import *
-
-# isort: on
-
 from . import gtscript_frontend
+from .base import REGISTRY, AnyStencilFunc, Frontend, from_name, register
