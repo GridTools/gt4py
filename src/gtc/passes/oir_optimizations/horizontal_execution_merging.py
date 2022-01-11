@@ -54,13 +54,16 @@ class HorizontalExecutionMerging(NodeTranslator):
             body: List[oir.Stmt]
             declarations: List[oir.LocalScalar]
 
-            def to_oir(self):
+            @classmethod
+            def from_oir(cls, hexec: oir.HorizontalExecution):
+                return cls(body=hexec.body, declarations=hexec.declarations)
+
+            def to_oir(self) -> oir.HorizontalExecution:
                 return oir.HorizontalExecution(body=self.body, declarations=self.declarations)
 
-        def to_unchecked(hexec):
-            return UncheckedHorizontalExecution(body=hexec.body, declarations=hexec.declarations)
-
-        horizontal_executions = [to_unchecked(node.horizontal_executions[0])]
+        horizontal_executions = [
+            UncheckedHorizontalExecution.from_oir(node.horizontal_executions[0])
+        ]
         new_block_extents = [block_extents[id(node.horizontal_executions[0])]]
         last_writes = AccessCollector.apply(node.horizontal_executions[0]).write_fields()
 
@@ -78,7 +81,7 @@ class HorizontalExecutionMerging(NodeTranslator):
 
             if reads_with_offset_after_write or last_extent != this_extent:
                 # Cannot merge: simply append to list
-                horizontal_executions.append(to_unchecked(this_hexec))
+                horizontal_executions.append(UncheckedHorizontalExecution.from_oir(this_hexec))
                 new_block_extents.append(this_extent)
                 last_writes = AccessCollector.apply(this_hexec).write_fields()
             else:
