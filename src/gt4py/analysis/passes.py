@@ -38,7 +38,9 @@ from typing import (
 
 from gt4py import definitions as gt_definitions
 from gt4py import ir as gt_ir
-from gt4py.analysis import (
+from gt4py.definitions import Extent
+
+from .infos import (
     DomainBlockInfo,
     IJBlockInfo,
     IntervalBlockInfo,
@@ -48,7 +50,6 @@ from gt4py.analysis import (
     TransformData,
     TransformPass,
 )
-from gt4py.definitions import Extent
 
 
 MergeableType = TypeVar("MergeableType")
