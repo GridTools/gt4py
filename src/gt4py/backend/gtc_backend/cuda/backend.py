@@ -86,7 +86,7 @@ class GTCCudaBindingsCodegen(codegen.TemplatedGenerator):
             data_ndim = len(node.data_dims)
             sid_ndim = domain_ndim + data_ndim
             if kwargs["external_arg"]:
-                return "py::buffer {name}, std::array<gt::uint_t,{sid_ndim}> {name}_origin".format(
+                return "py::buffer {name}, std::array<gt::int_t,{sid_ndim}> {name}_origin".format(
                     name=node.name,
                     sid_ndim=sid_ndim,
                 )

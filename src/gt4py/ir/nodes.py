@@ -715,7 +715,7 @@ class IterationOrder(enum.Enum):
 
 @attribclass
 class AxisBound(Node):
-    level = attribute(of=UnionOf[LevelMarker, VarRef])
+    level = attribute(of=LevelMarker)
     offset = attribute(of=int, default=0)
     loc = attribute(of=Location, optional=True)
 

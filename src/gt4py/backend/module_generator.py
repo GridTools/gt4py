@@ -27,8 +27,9 @@ import numpy
 
 from gt4py import ir as gt_ir
 from gt4py import utils as gt_utils
-from gt4py.definitions import AccessKind, DomainInfo, FieldInfo, ParameterInfo
+from gt4py.definitions import AccessKind, Boundary, DomainInfo, FieldInfo, ParameterInfo
 from gtc import gtir
+from gtc.passes.gtir_k_boundary import compute_k_boundary, compute_min_k_size
 from gtc.passes.gtir_legacy_extents import compute_legacy_extents
 from gtc.passes.gtir_pipeline import GtirPipeline
 from gtc.utils import dimension_flags_to_names
@@ -116,10 +117,14 @@ def get_unused_params_from_gtir(
     ]
 
 
-def make_args_data_from_gtir(pipeline: GtirPipeline) -> ModuleData:
+def make_args_data_from_gtir(pipeline: GtirPipeline, legacy=False) -> ModuleData:
+    """
+    Compute module data containing information about stencil arguments from gtir.
+
+    Use `legacy` parameter to ensure equality with values from :func:`make_args_data_from_iir`.
+    """
     data = ModuleData()
     node = pipeline.full()
-    field_extents = compute_legacy_extents(node)
 
     write_fields = (
         node.iter_tree()
@@ -137,15 +142,20 @@ def make_args_data_from_gtir(pipeline: GtirPipeline) -> ModuleData:
     referenced_field_params = [
         param.name for param in node.params if isinstance(param, gtir.FieldDecl)
     ]
+    field_extents = compute_legacy_extents(node, mask_inwards=legacy)
+    k_boundary = (
+        compute_k_boundary(node) if not legacy else {v: (0, 0) for v in referenced_field_params}
+    )
     for name in sorted(referenced_field_params):
         access = AccessKind.NONE
         if name in read_fields:
             access |= AccessKind.READ
         if name in write_fields:
             access |= AccessKind.WRITE
+        boundary = Boundary(*field_extents[name].to_boundary()[0:2], k_boundary[name])
         data.field_info[name] = FieldInfo(
             access=access,
-            boundary=field_extents[name].to_boundary(),
+            boundary=boundary,
             axes=tuple(dimension_flags_to_names(node.symtable_[name].dimensions).upper()),
             data_dims=tuple(node.symtable_[name].data_dims),
             dtype=numpy.dtype(node.symtable_[name].dtype.name.lower()),
@@ -334,10 +344,15 @@ class BaseModuleGenerator(abc.ABC):
         """
         parallel_axes = self.builder.definition_ir.domain.parallel_axes or []
         sequential_axis = self.builder.definition_ir.domain.sequential_axis.name
+        if self.builder.backend.USE_LEGACY_TOOLCHAIN:
+            min_sequential_axis_size = 0
+        else:
+            min_sequential_axis_size = compute_min_k_size(self.builder.gtir_pipeline.full())
         domain_info = repr(
             DomainInfo(
                 parallel_axes=tuple(ax.name for ax in parallel_axes),
                 sequential_axis=sequential_axis,
+                min_sequential_axis_size=min_sequential_axis_size,
                 ndim=len(parallel_axes) + (1 if sequential_axis else 0),
             )
         )
