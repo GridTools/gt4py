@@ -17,10 +17,10 @@
 from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple, Type
 
 from eve import codegen
-from gt4py import backend as gt_backend
 from gt4py import gt_src_manager
-from gt4py.backend import BaseGTBackend, CLIBackendMixin
+from gt4py.backend.base import CLIBackendMixin, register
 from gt4py.backend.gt_backends import (
+    BaseGTBackend,
     GTCUDAPyModuleGenerator,
     cuda_is_compatible_layout,
     cuda_is_compatible_type,
@@ -162,7 +162,7 @@ class GTCGTBaseBackend(BaseGTBackend, CLIBackendMixin):
         )
 
 
-@gt_backend.register
+@register
 class GTCGTCpuIfirstBackend(GTCGTBaseBackend):
     """GridTools python backend using gtc."""
 
@@ -181,7 +181,7 @@ class GTCGTCpuIfirstBackend(GTCGTBaseBackend):
         return super()._generate_extension(uses_cuda=False)
 
 
-@gt_backend.register
+@register
 class GTCGTCpuKfirstBackend(GTCGTBaseBackend):
     """GridTools python backend using gtc."""
 
@@ -200,7 +200,7 @@ class GTCGTCpuKfirstBackend(GTCGTBaseBackend):
         return super()._generate_extension(uses_cuda=False)
 
 
-@gt_backend.register
+@register
 class GTCGTGpuBackend(GTCGTBaseBackend):
     """GridTools python backend using gtc."""
 
