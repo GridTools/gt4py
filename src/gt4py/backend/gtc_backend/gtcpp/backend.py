@@ -17,6 +17,8 @@
 from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple, Type
 
 from eve import codegen
+from eve.codegen import JinjaTemplate
+from eve.codegen import MakoTemplate as as_mako
 from gt4py import backend as gt_backend
 from gt4py import gt_src_manager
 from gt4py.backend import BaseGTBackend, CLIBackendMixin
@@ -33,6 +35,7 @@ from gt4py.backend.gt_backends import (
 )
 from gt4py.backend.gtc_backend.common import bindings_main_template, pybuffer_to_sid
 from gt4py.backend.gtc_backend.defir_to_gtir import DefIRToGTIR
+from gt4py.ir.nodes import StencilDefinition
 from gtc import gtir_to_oir
 from gtc.common import DataType
 from gtc.gtcpp import gtcpp, gtcpp_codegen, oir_to_gtcpp
@@ -45,6 +48,17 @@ if TYPE_CHECKING:
     from gt4py.stencil_object import StencilObject
 
 
+def make_gtcpp_ir(definition_ir: StencilDefinition, backend) -> gtcpp.Program:
+    gtir = GtirPipeline(DefIRToGTIR.apply(definition_ir)).full()
+    base_oir = gtir_to_oir.GTIRToOIR().visit(gtir)
+    oir_pipeline = backend.builder.options.backend_opts.get(
+        "oir_pipeline", DefaultPipeline(skip=[FillFlushToLocalKCaches])
+    )
+    oir = oir_pipeline.run(base_oir)
+    gtcpp = oir_to_gtcpp.OIRToGTCpp().visit(oir)
+    return gtcpp
+
+
 class GTCGTExtGenerator:
     def __init__(self, class_name, module_name, backend):
         self.class_name = class_name
@@ -52,13 +66,7 @@ class GTCGTExtGenerator:
         self.backend = backend
 
     def __call__(self, definition_ir) -> Dict[str, Dict[str, str]]:
-        gtir = GtirPipeline(DefIRToGTIR.apply(definition_ir)).full()
-        base_oir = gtir_to_oir.GTIRToOIR().visit(gtir)
-        oir_pipeline = self.backend.builder.options.backend_opts.get(
-            "oir_pipeline", DefaultPipeline(skip=[FillFlushToLocalKCaches])
-        )
-        oir = oir_pipeline.run(base_oir)
-        gtcpp = oir_to_gtcpp.OIRToGTCpp().visit(oir)
+        gtcpp = make_gtcpp_ir(definition_ir, self.backend)
         format_source = self.backend.builder.options.format_source
         implementation = gtcpp_codegen.GTCppCodegen.apply(
             gtcpp, gt_backend_t=self.backend.GT_BACKEND_T, format_source=format_source
@@ -134,6 +142,119 @@ class GTCppBindingsCodegen(codegen.TemplatedGenerator):
         return generated_code
 
 
+class FortranBindingsCodegen(codegen.TemplatedGenerator):
+    def __init__(self):
+        self._unique_index: int = 0
+
+    def unique_index(self) -> int:
+        self._unique_index += 1
+        return self._unique_index
+
+    def visit_DataType(self, dtype: DataType, **kwargs):
+        return gtcpp_codegen.GTCppCodegen().visit_DataType(dtype)
+
+    def visit_FieldDecl(self, node: gtcpp.FieldDecl, **kwargs):
+        backend = kwargs["backend"]
+        if "external_arg" in kwargs:
+            domain_ndim = node.dimensions.count(True)
+            data_ndim = len(node.data_dims)
+            sid_ndim = domain_ndim + data_ndim
+            dtype = self.visit(node.dtype)
+            stride_kind = self.unique_index()
+            if kwargs["external_arg"]:
+                return "gridtools::fortran_array_view<{dtype}, {sid_ndim}, gridtools::integral_constant<int, {stride_kind}>> {name}".format(
+                    name=node.name, sid_ndim=sid_ndim, dtype=dtype, stride_kind=stride_kind
+                )
+            else:
+                return node.name
+
+    def visit_GlobalParamDecl(self, node: gtcpp.GlobalParamDecl, **kwargs):
+        if "external_arg" in kwargs:
+            if kwargs["external_arg"]:
+                return "{dtype} {name}".format(name=node.name, dtype=self.visit(node.dtype))
+            else:
+                return "gridtools::stencil::make_global_parameter({name})".format(name=node.name)
+
+    def visit_Program(self, node: gtcpp.Program, **kwargs):
+        # assert "module_name" in kwargs
+        entry_params = self.visit(node.parameters, external_arg=True, **kwargs)
+        sid_params = self.visit(node.parameters, external_arg=False, **kwargs)
+        return self.generic_visit(
+            node,
+            entry_params=entry_params,
+            sid_params=sid_params,
+            **kwargs,
+        )
+
+    Program = as_mako(
+        """
+        #include "computation.hpp"
+        #include <cpp_bindgen/export.hpp>
+        #include <gridtools/stencil/global_parameter.hpp>
+        #include <gridtools/storage/adapter/fortran_array_view.hpp>
+
+        namespace {
+        void ${name}_impl(unsigned int nx, unsigned int ny, unsigned int nz,
+                    ${','.join(entry_params)}) {
+        auto computation = ${name}({nx, ny, nz});
+        computation(${','.join(sid_params)});
+        }
+        BINDGEN_EXPORT_BINDING_WRAPPED(${3+len(entry_params)}, ${name}, ${name}_impl);
+        } // namespace
+        """
+    )
+
+    @classmethod
+    def apply(cls, root, **kwargs) -> str:
+        generated_code = cls().visit(root, **kwargs)
+        if kwargs.get("format_source", True):
+            generated_code = codegen.format_source("cpp", generated_code, style="LLVM")
+
+        return generated_code
+
+
+def make_cmake_lists(libname, filename):
+    return as_mako(
+        """
+cmake_minimum_required(VERSION 3.16.2)
+
+project(sample LANGUAGES CXX)
+
+include(FetchContent)
+FetchContent_Declare(
+  gridtools
+  GIT_REPOSITORY https://github.com/GridTools/gridtools.git
+  GIT_TAG        master # consider replacing master by a tagged version
+)
+FetchContent_MakeAvailable(gridtools)
+
+FetchContent_Declare(
+  cpp_bindgen
+  GIT_REPOSITORY https://github.com/GridTools/cpp_bindgen.git
+  GIT_TAG        master # consider replacing master by a tagged version
+)
+FetchContent_MakeAvailable(cpp_bindgen)
+
+bindgen_add_library(${libname}_module SOURCES ${filename})
+target_link_libraries(${libname}_module PRIVATE GridTools::stencil_cpu_kfirst)
+
+install_cpp_bindgen_targets(
+  EXPORT ${libname}_targets
+  LIBRARY DESTINATION lib
+  ARCHIVE DESTINATION lib
+  )
+
+install(
+  TARGETS ${libname}_module
+  EXPORT ${libname}_targets
+  LIBRARY DESTINATION lib
+  ARCHIVE DESTINATION lib
+  )
+
+    """
+    ).render_values(libname=libname, filename=filename)
+
+
 class GTCGTBaseBackend(BaseGTBackend):  # , CLIBackendMixin):
     options = BaseGTBackend.GT_BACKEND_OPTS
     PYEXT_GENERATOR_CLASS = GTCGTExtGenerator  # type: ignore
@@ -147,7 +268,12 @@ class GTCGTBaseBackend(BaseGTBackend):  # , CLIBackendMixin):
             return super().generate_bindings(language_name, ir)
         print("Generating Fortran bindings")
         dir_name = f"{self.builder.options.name}_src"
-        return {dir_name: {"bla.f90": "bla"}}
+        return {
+            dir_name: {
+                "bindings.cpp": FortranBindingsCodegen.apply(make_gtcpp_ir(ir, self), backend=self),
+                "CMakeLists.txt": make_cmake_lists(ir.name, "bindings.cpp"),
+            }
+        }
 
     def generate(self) -> Type["StencilObject"]:
         self.check_options(self.builder.options)
