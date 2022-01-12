@@ -87,13 +87,13 @@ class StencilBuilder:
             stencil_class = self.backend.generate()
         return stencil_class
 
-    def generate_computation(self) -> Dict[str, Union[str, Dict]]:
+    def generate_computation(self, ir: Any) -> Dict[str, Union[str, Dict]]:
         """Generate the stencil source code, fail if backend does not support CLI."""
-        return self.cli_backend.generate_computation()
+        return self.cli_backend.generate_computation(ir)
 
-    def generate_bindings(self, targe_language: str) -> Dict[str, Union[str, Dict]]:
+    def generate_bindings(self, target_language: str, ir: Any) -> Dict[str, Union[str, Dict]]:
         """Generate ``target_language`` bindings source, fail if backend does not support CLI."""
-        return self.cli_backend.generate_bindings(targe_language)
+        return self.cli_backend.generate_bindings(target_language, ir)
 
     def with_caching(
         self: "StencilBuilder", caching_strategy_name: str, *args: Any, **kwargs: Any

@@ -194,12 +194,14 @@ class GTScriptBuilder:
         *,
         output_path: Union[str, pathlib.Path],
         backend: Type[CLIBackendMixin],
+        bindings: str,
         silent: bool = False,
     ):
         self.reporter = Reporter(silent)
         self.input_module = self.import_input_module(pathlib.Path(input_path))
         self.output_path = pathlib.Path(output_path)
         self.backend_cls = backend
+        self.bindings = bindings
 
     def import_input_module(self, input_path: pathlib.Path) -> ModuleType:
         input_module = None
@@ -238,8 +240,15 @@ class GTScriptBuilder:
             if build_options:
                 builder.with_changed_options(impl_opts=build_options)
             builder.with_caching("nocaching", output_path=self.output_path)
-            computation_src = builder.generate_computation()
+            if self.backend_cls.name.startswith("gtc:"):
+                ir = builder.definition_ir
+            else:
+                ir = builder.implementation_ir
+            computation_src = builder.generate_computation(ir)
             self.write_computation_src(builder.caching.root_path, computation_src)
+            if self.bindings:
+                bindings_src = builder.generate_bindings(self.bindings, ir)
+                self.write_computation_src(builder.caching.root_path, bindings_src)
 
     def report_stencil_names(self) -> None:
         stencils = list(self.iterate_stencils())
@@ -276,6 +285,13 @@ def list_backends() -> None:
     is_eager=True,
 )
 @click.option(
+    "--bindings",
+    "-x",
+    type=click.Choice(["python", "fortran"]),
+    required=False,
+    help="Choose language bindings",
+)
+@click.option(
     "--output-path",
     "-o",
     default=".",
@@ -296,6 +312,7 @@ def list_backends() -> None:
 )
 def gen(
     backend: Type[CLIBackendMixin],
+    bindings: str,
     output_path: str,
     options: Dict[str, Any],
     input_path: str,
@@ -306,5 +323,6 @@ def gen(
         input_path=input_path,
         output_path=output_path,
         backend=backend,
+        bindings=bindings,
         silent=silent,
     ).generate_stencils(build_options=dict(options))
