@@ -17,7 +17,7 @@
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 
-from eve import NodeTranslator, SymbolTableTrait
+from eve import NodeTranslator, SourceLocation, SymbolTableTrait
 from gt4py.definitions import Extent
 from gtc import common, oir
 
@@ -53,6 +53,7 @@ class HorizontalExecutionMerging(NodeTranslator):
             # required to reach reasonable run times for large node counts
             body: List[oir.Stmt]
             declarations: List[oir.LocalScalar]
+            loc: Optional[SourceLocation]
 
             assert set(oir.HorizontalExecution.__fields__) == {
                 "loc",
@@ -66,10 +67,12 @@ class HorizontalExecutionMerging(NodeTranslator):
 
             @classmethod
             def from_oir(cls, hexec: oir.HorizontalExecution):
-                return cls(body=hexec.body, declarations=hexec.declarations)
+                return cls(body=hexec.body, declarations=hexec.declarations, loc=hexec.loc)
 
             def to_oir(self) -> oir.HorizontalExecution:
-                return oir.HorizontalExecution(body=self.body, declarations=self.declarations)
+                return oir.HorizontalExecution(
+                    body=self.body, declarations=self.declarations, loc=self.loc
+                )
 
         horizontal_executions = [
             UncheckedHorizontalExecution.from_oir(node.horizontal_executions[0])
