@@ -79,6 +79,7 @@ class IJCacheDetection(NodeTranslator):
             sections=node.sections,
             loop_order=node.loop_order,
             caches=caches,
+            loc=node.loc,
         )
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> oir.Stencil:
@@ -142,6 +143,7 @@ class KCacheDetection(NodeTranslator):
             loop_order=node.loop_order,
             sections=node.sections,
             caches=caches,
+            loc=node.loc,
         )
 
 
@@ -227,7 +229,7 @@ class PruneKCacheFlushes(NodeTranslator):
 
     def visit_KCache(self, node: oir.KCache, *, pruneable: Set[str], **kwargs: Any) -> oir.KCache:
         if node.name in pruneable:
-            return oir.KCache(name=node.name, fill=node.fill, flush=False)
+            return oir.KCache(name=node.name, fill=node.fill, flush=False, loc=node.loc)
         return self.generic_visit(node, **kwargs)
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> oir.Stencil:
@@ -252,6 +254,7 @@ class PruneKCacheFlushes(NodeTranslator):
             params=self.visit(node.params, **kwargs),
             vertical_loops=vertical_loops,
             declarations=node.declarations,
+            loc=node.loc,
         )
 
 
@@ -277,6 +280,7 @@ class FillFlushToLocalKCaches(NodeTranslator):
                 data_index=node.data_index,
                 dtype=node.dtype,
                 offset=node.offset,
+                loc=node.loc,
             )
         return node
 
@@ -299,6 +303,7 @@ class FillFlushToLocalKCaches(NodeTranslator):
         return oir.HorizontalExecution(
             body=fills + self.visit(node.body, name_map=name_map, **kwargs) + flushes,
             declarations=node.declarations,
+            loc=node.loc,
         )
 
     @staticmethod
@@ -380,9 +385,12 @@ class FillFlushToLocalKCaches(NodeTranslator):
             oir.VerticalLoopSection(
                 interval=entry_interval,
                 horizontal_executions=FixSymbolNameClashes().visit(section.horizontal_executions),
+                loc=section.loc,
             ),
             oir.VerticalLoopSection(
-                interval=rest_interval, horizontal_executions=section.horizontal_executions
+                interval=rest_interval,
+                horizontal_executions=section.horizontal_executions,
+                loc=section.loc,
             ),
         )
 
@@ -570,7 +578,12 @@ class FillFlushToLocalKCaches(NodeTranslator):
             oir.KCache(name=f, fill=False, flush=False) for f in filling_or_flushing_fields.values()
         ]
 
-        return oir.VerticalLoop(loop_order=node.loop_order, sections=sections, caches=caches)
+        return oir.VerticalLoop(
+            loop_order=node.loop_order,
+            sections=sections,
+            caches=caches,
+            loc=node.loc,
+        )
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> oir.Stencil:
         new_tmps: List[oir.Temporary] = []
@@ -584,4 +597,5 @@ class FillFlushToLocalKCaches(NodeTranslator):
                 **kwargs,
             ),
             declarations=node.declarations + new_tmps,
+            loc=node.loc,
         )

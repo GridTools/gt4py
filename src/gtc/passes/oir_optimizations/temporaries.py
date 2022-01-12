@@ -62,6 +62,7 @@ class TemporariesToScalarsBase(NodeTranslator):
                 )
                 for tmp in local_tmps_to_replace
             ],
+            loc=node.loc,
         )
 
     def visit_VerticalLoop(
@@ -74,6 +75,7 @@ class TemporariesToScalarsBase(NodeTranslator):
             loop_order=node.loop_order,
             sections=self.visit(node.sections, tmps_to_replace=tmps_to_replace, **kwargs),
             caches=[c for c in node.caches if c.name not in tmps_to_replace],
+            loc=node.loc,
         )
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> oir.Stencil:
@@ -88,6 +90,7 @@ class TemporariesToScalarsBase(NodeTranslator):
                 **kwargs,
             ),
             declarations=[d for d in node.declarations if d.name not in tmps_to_replace],
+            loc=node.loc,
         )
 
 
