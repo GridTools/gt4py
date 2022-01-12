@@ -14,6 +14,8 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import time
+
 from gtc import common, oir
 from gtc.passes.oir_optimizations.horizontal_execution_merging import (
     HorizontalExecutionMerging,
@@ -77,6 +79,35 @@ def test_horiz_exec_merging_map_scalar():
     hexecs = transformed.vertical_loops[0].sections[0].horizontal_executions
     assert len(hexecs) == 1
     assert len(hexecs[0].declarations) == 2
+
+
+def test_horiz_exec_merging_complexity():
+    n = 1000
+    testee = StencilFactory(
+        vertical_loops__0__sections__0__horizontal_executions=[
+            HorizontalExecutionFactory(
+                body=[AssignStmtFactory(left__name="tmp0", right__name="input")]
+            )
+        ]
+        + [
+            HorizontalExecutionFactory(
+                body=[AssignStmtFactory(left__name=f"tmp{i + 1}", right__name=f"tmp{i}")]
+            )
+            for i in range(n)
+        ]
+        + [
+            HorizontalExecutionFactory(
+                body=[AssignStmtFactory(left__name="output", right__name=f"tmp{n}")]
+            ),
+        ],
+        declarations=[TemporaryFactory(name=f"tmp{i}") for i in range(n)],
+    )
+    start_time = time.process_time()
+    transformed = HorizontalExecutionMerging().visit(testee)
+    process_time = time.process_time() - start_time
+    assert process_time < 5
+    hexecs = transformed.vertical_loops[0].sections[0].horizontal_executions
+    assert len(hexecs) == 1
 
 
 def test_on_the_fly_merging_basic():
