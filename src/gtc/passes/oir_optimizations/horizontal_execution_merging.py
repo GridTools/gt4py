@@ -17,7 +17,7 @@
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 
-from eve import NodeTranslator, SymbolTableTrait
+from eve import NodeTranslator, SourceLocation, SymbolTableTrait
 from gt4py.definitions import Extent
 from gtc import common, oir
 
@@ -47,13 +47,42 @@ class HorizontalExecutionMerging(NodeTranslator):
         new_symbol_name: Callable[[str], str],
         **kwargs: Any,
     ) -> oir.VerticalLoopSection:
-        horizontal_executions = [node.horizontal_executions[0]]
-        new_block_extents = [block_extents[id(horizontal_executions[-1])]]
+        @dataclass
+        class UncheckedHorizontalExecution:
+            # local replacement without type checking for type-checked oir node
+            # required to reach reasonable run times for large node counts
+            body: List[oir.Stmt]
+            declarations: List[oir.LocalScalar]
+            loc: Optional[SourceLocation]
+
+            assert set(oir.HorizontalExecution.__fields__) == {
+                "loc",
+                "symtable_",
+                "body",
+                "declarations",
+            }, (
+                "Unexpected field in oir.HorizontalExecution, "
+                "probably UncheckedHorizontalExecution needs an update"
+            )
+
+            @classmethod
+            def from_oir(cls, hexec: oir.HorizontalExecution):
+                return cls(body=hexec.body, declarations=hexec.declarations, loc=hexec.loc)
+
+            def to_oir(self) -> oir.HorizontalExecution:
+                return oir.HorizontalExecution(
+                    body=self.body, declarations=self.declarations, loc=self.loc
+                )
+
+        horizontal_executions = [
+            UncheckedHorizontalExecution.from_oir(node.horizontal_executions[0])
+        ]
+        new_block_extents = [block_extents[id(node.horizontal_executions[0])]]
+        last_writes = AccessCollector.apply(node.horizontal_executions[0]).write_fields()
 
         for this_hexec in node.horizontal_executions[1:]:
             last_extent = new_block_extents[-1]
 
-            last_writes = AccessCollector.apply(horizontal_executions[-1]).write_fields()
             this_offset_reads = {
                 name
                 for name, offsets in AccessCollector.apply(this_hexec).read_offsets().items()
@@ -65,8 +94,9 @@ class HorizontalExecutionMerging(NodeTranslator):
 
             if reads_with_offset_after_write or last_extent != this_extent:
                 # Cannot merge: simply append to list
-                horizontal_executions.append(this_hexec)
+                horizontal_executions.append(UncheckedHorizontalExecution.from_oir(this_hexec))
                 new_block_extents.append(this_extent)
+                last_writes = AccessCollector.apply(this_hexec).write_fields()
             else:
                 # Merge
                 duplicated_locals = {
@@ -86,22 +116,28 @@ class HorizontalExecutionMerging(NodeTranslator):
                     for name in duplicated_locals
                 ]
 
-                horizontal_executions[-1] = oir.HorizontalExecution(
+                horizontal_executions[-1] = UncheckedHorizontalExecution(
                     body=horizontal_executions[-1].body + new_body,
                     declarations=(
                         horizontal_executions[-1].declarations + this_not_duplicated + this_mapped
                     ),
+                    loc=horizontal_executions[-1].loc,
                 )
+                last_writes |= AccessCollector.apply(new_body).write_fields()
 
         return oir.VerticalLoopSection(
-            interval=node.interval, horizontal_executions=horizontal_executions
+            interval=node.interval,
+            horizontal_executions=[hexec.to_oir() for hexec in horizontal_executions],
+            loc=node.loc,
         )
 
     def visit_ScalarAccess(
         self, node: oir.ScalarAccess, *, scalar_map: Dict[str, str], **kwargs: Any
     ) -> oir.ScalarAccess:
         return oir.ScalarAccess(
-            name=scalar_map[node.name] if node.name in scalar_map else node.name, dtype=node.dtype
+            name=scalar_map[node.name] if node.name in scalar_map else node.name,
+            dtype=node.dtype,
+            loc=node.loc,
         )
 
 
@@ -141,14 +177,16 @@ class OnTheFlyMerging(NodeTranslator):
             offset = self.visit(node.offset, **kwargs)
             key = node.name, (offset.i, offset.j, offset.k)
             if key in offset_symbol_map:
-                return oir.ScalarAccess(name=offset_symbol_map[key], dtype=node.dtype)
+                return oir.ScalarAccess(name=offset_symbol_map[key], dtype=node.dtype, loc=node.loc)
         return self.generic_visit(node, **kwargs)
 
     def visit_ScalarAccess(
         self, node: oir.ScalarAccess, *, scalar_map: Dict[str, str], **kwargs: Any
     ) -> oir.ScalarAccess:
         return oir.ScalarAccess(
-            name=scalar_map[node.name] if node.name in scalar_map else node.name, dtype=node.dtype
+            name=scalar_map[node.name] if node.name in scalar_map else node.name,
+            dtype=node.dtype,
+            loc=node.loc,
         )
 
     def _merge(
@@ -278,6 +316,7 @@ class OnTheFlyMerging(NodeTranslator):
                     scalar_map=scalar_map,
                 ),
                 declarations=declarations,
+                loc=first.loc,
             )
             for offset in read_offsets:
                 merged.body = (
@@ -305,6 +344,7 @@ class OnTheFlyMerging(NodeTranslator):
             next_vls = oir.VerticalLoopSection(
                 interval=last_vls.interval,
                 horizontal_executions=self._merge(last_vls.horizontal_executions, **kwargs),
+                loc=node.loc,
             )
             applied = len(next_vls.horizontal_executions) < len(last_vls.horizontal_executions)
 
@@ -319,6 +359,7 @@ class OnTheFlyMerging(NodeTranslator):
             loop_order=node.loop_order,
             sections=sections,
             caches=[c for c in node.caches if c.name in accessed],
+            loc=node.loc,
         )
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> oir.Stencil:
@@ -344,4 +385,5 @@ class OnTheFlyMerging(NodeTranslator):
             params=node.params,
             vertical_loops=vertical_loops,
             declarations=[d for d in node.declarations if d.name in accessed],
+            loc=node.loc,
         )

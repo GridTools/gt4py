@@ -237,7 +237,7 @@ class DebugModuleGenerator(BaseModuleGenerator):
         source = """
 class _Accessor:
     def __init__(self, array, origin):
-        self.array = array
+        self.array = array.view(np.ndarray)
         self.origin = origin
 
     def _shift(self, index):

@@ -41,7 +41,9 @@ class _GTIRResolveAuto(NodeTranslator):
         ) -> gtir.FieldDecl:
             if node.dtype == DataType.AUTO:
                 dtype = new_symbols[node.name].dtype
-                return gtir.FieldDecl(name=node.name, dtype=dtype, dimensions=node.dimensions)
+                return gtir.FieldDecl(
+                    name=node.name, dtype=dtype, dimensions=node.dimensions, loc=node.loc
+                )
             else:
                 return node
 
@@ -56,12 +58,13 @@ class _GTIRResolveAuto(NodeTranslator):
             offset=self.visit(node.offset, symtable=symtable, **kwargs),
             data_index=self.visit(node.data_index, symtable=symtable, **kwargs),
             dtype=symtable[node.name].dtype,
+            loc=node.loc,
         )
 
     def visit_ParAssignStmt(self, node: gtir.ParAssignStmt, **kwargs: Any) -> gtir.ParAssignStmt:
         right = self.visit(node.right, **kwargs)
         left = self.visit(node.left, new_dtype=right.dtype, **kwargs)
-        return gtir.ParAssignStmt(left=left, right=right)
+        return gtir.ParAssignStmt(left=left, right=right, loc=node.loc)
 
     def visit_Stencil(self, node: gtir.Stencil, **kwargs: Any) -> gtir.Stencil:
         result = self.generic_visit(node, **kwargs)
@@ -94,12 +97,13 @@ class _GTIRPropagateDtypeToAccess(NodeTranslator):
             offset=self.visit(node.offset, **kwargs),
             data_index=self.visit(node.data_index, **kwargs),
             dtype=kwargs["symtable"][node.name].dtype,
+            loc=node.loc,
         )
 
     def visit_ScalarAccess(
         self, node: gtir.ScalarAccess, *, symtable: Dict[str, Any], **kwargs: Any
     ) -> gtir.ScalarAccess:
-        return gtir.ScalarAccess(name=node.name, dtype=symtable[node.name].dtype)
+        return gtir.ScalarAccess(name=node.name, dtype=symtable[node.name].dtype, loc=node.loc)
 
     def visit_Stencil(self, node: gtir.Stencil, **kwargs: Any) -> gtir.Stencil:
         result: gtir.Stencil = self.generic_visit(node, **kwargs)

@@ -211,7 +211,9 @@ class Location(Node):
 
     @classmethod
     def from_ast_node(cls, ast_node, scope="<source>"):
-        return cls(line=ast_node.lineno, column=ast_node.col_offset + 1, scope=scope)
+        lineno = getattr(ast_node, "lineno", 0)
+        col_offset = getattr(ast_node, "col_offset", 0)
+        return cls(line=lineno, column=col_offset + 1, scope=scope)
 
 
 # ---- IR: domain ----
@@ -715,7 +717,7 @@ class IterationOrder(enum.Enum):
 
 @attribclass
 class AxisBound(Node):
-    level = attribute(of=UnionOf[LevelMarker, VarRef])
+    level = attribute(of=LevelMarker)
     offset = attribute(of=int, default=0)
     loc = attribute(of=Location, optional=True)
 

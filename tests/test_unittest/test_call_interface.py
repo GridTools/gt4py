@@ -209,11 +209,11 @@ def test_default_arguments(backend):
     tmp *= 2
 
     branch_true(arg1, None, arg3, par1=2.0)
-    np.testing.assert_equal(arg1, 14 * np.ones((3, 3, 3)))
+    np.testing.assert_equal(arg1.to_numpy(), 14 * np.ones((3, 3, 3)))
     branch_true(arg1, None, par1=2.0)
-    np.testing.assert_equal(arg1, 196 * np.ones((3, 3, 3)))
+    np.testing.assert_equal(arg1.to_numpy(), 196 * np.ones((3, 3, 3)))
     branch_false(arg1, arg2, arg3, par1=2.0, par3=2.0)
-    np.testing.assert_equal(arg1, 56 * np.ones((3, 3, 3)))
+    np.testing.assert_equal(arg1.to_numpy(), 56 * np.ones((3, 3, 3)))
 
     with pytest.raises((ValueError, AssertionError)):
         branch_false(arg1, arg2, par1=2.0, par3=2.0)
@@ -231,11 +231,11 @@ def test_default_arguments(backend):
     tmp *= 2
 
     branch_true(arg1, arg2=None, par1=2.0, par2=5.0, par3=3.0)
-    np.testing.assert_equal(arg1, 10 * np.ones((3, 3, 3)))
+    np.testing.assert_equal(arg1.to_numpy(), 10 * np.ones((3, 3, 3)))
     branch_true(arg1, arg2=None, par1=2.0, par2=5.0)
-    np.testing.assert_equal(arg1, 100 * np.ones((3, 3, 3)))
+    np.testing.assert_equal(arg1.to_numpy(), 100 * np.ones((3, 3, 3)))
     branch_false(arg1, arg2, arg3, par1=2.0, par2=5.0, par3=3.0)
-    np.testing.assert_equal(arg1, 60 * np.ones((3, 3, 3)))
+    np.testing.assert_equal(arg1.to_numpy(), 60 * np.ones((3, 3, 3)))
 
     with pytest.raises((TypeError, AssertionError)):
         branch_false(arg1, arg2, arg3, par1=2.0, par2=5.0)

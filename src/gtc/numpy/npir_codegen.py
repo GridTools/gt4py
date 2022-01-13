@@ -46,7 +46,8 @@ ORIGIN_CORRECTED_VIEW_CLASS = textwrap.dedent(
     """\
     class ShimmedView:
         def __init__(self, field, offsets):
-            self.field = field
+            # use a numpy array here to avoid dimension reducing slicing of storages, which is prohibited and not needed
+            self.field = field.view(np.ndarray)
             self.offsets = offsets
 
         def shim_key(self, key):
@@ -210,7 +211,7 @@ class NpirCodegen(TemplatedGenerator):
         return self.generic_visit(node, shape=shape, origin=origin, **kwargs)
 
     FieldDecl = FormatTemplate(
-        "{name} = np.reshape({name}, ({shape}))\n_origin_['{name}'] = [{origin}]"
+        "{name} = np.reshape({name}.view(np.ndarray), ({shape}))\n_origin_['{name}'] = [{origin}]"
     )
 
     def visit_VariableKOffset(

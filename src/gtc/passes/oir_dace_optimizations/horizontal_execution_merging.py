@@ -28,7 +28,7 @@ from typing import Dict, List, Optional, Set, Tuple, Union
 import dace
 import dace.subsets
 import networkx as nx
-from dace import SDFGState
+from dace import SDFGState, dtypes
 from dace.properties import Property, make_properties
 from dace.sdfg import graph
 from dace.sdfg.utils import node_path_graph
@@ -227,10 +227,27 @@ class GraphMerging(Transformation):
             left, right, self.api_fields
         )
 
+    def _merge_source_locations(
+        self, left: HorizontalExecutionLibraryNode, right: HorizontalExecutionLibraryNode
+    ) -> dtypes.DebugInfo:
+        dinfo = dtypes.DebugInfo(1, 1, 1, 1, "<unknown>")
+        if left.debuginfo:
+            dinfo.start_line = left.debuginfo.start_line
+            dinfo.end_line = left.debuginfo.end_line
+            dinfo.filename = left.debuginfo.filename
+        if right.debuginfo:
+            dinfo.start_line = min(right.debuginfo.start_line, dinfo.start_line)
+            dinfo.end_line = max(right.debuginfo.end_line, dinfo.end_line)
+            dinfo.filename = dinfo.filename or right.debuginfo.filename
+        return dinfo
+
     def apply(self, sdfg: dace.SDFG) -> None:
         state = sdfg.node(self.state_id)
         left = self.left(sdfg)
         right = self.right(sdfg)
+
+        # Merge source locations
+        dinfo = self._merge_source_locations(left, right)
 
         # merge oir nodes
         res = HorizontalExecutionLibraryNode(
@@ -239,6 +256,7 @@ class GraphMerging(Transformation):
                 declarations=left.as_oir().declarations + right.as_oir().declarations,
             ),
             iteration_space=left.iteration_space,
+            debuginfo=dinfo,
         )
         state.add_node(res)
 

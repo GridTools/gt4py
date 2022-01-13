@@ -660,6 +660,7 @@ class AccessKind(enum.IntFlag):
 class DomainInfo:
     parallel_axes: Tuple[str, ...]
     sequential_axis: str
+    min_sequential_axis_size: int
     ndim: int
 
 
