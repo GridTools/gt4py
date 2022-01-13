@@ -40,7 +40,7 @@ from gtc.passes.oir_optimizations.utils import AccessCollector
 
 
 def _offset_origin(interval: oir.Interval, origin: oir.AxisBound) -> oir.Interval:
-    if origin >= oir.AxisBound.start():
+    if origin.level != LevelMarker.START:
         return interval
     return interval.shifted(-origin.offset)
 
@@ -503,7 +503,7 @@ class StencilOirSDFGBuilder(BaseOirSDFGBuilder):
                     subset = edge.data.subset
                 subset = dace.subsets.union(subset, edge.data.subset)
         subset: dace.subsets.Range
-        k_size = subset.bounding_box_size()[axis_idx]
+        k_size = subset.bounding_box_size()[axis_idx] + subset.ranges[axis_idx][0]
 
         k_sym = dace.symbol("__K")
         k_size_symbolic = dace.symbolic.pystr_to_symbolic(k_size)
@@ -647,6 +647,7 @@ class OirSDFGBuilder(eve.NodeVisitor):
             loop_order=node.loop_order,
             sections=sections,
             caches=node.caches,
+            oir_node=node,
         )
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs):

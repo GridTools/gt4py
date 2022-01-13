@@ -314,6 +314,11 @@ class StencilObject(abc.ABC):
                 f"Compute domain too large (provided: {domain}, maximum: {max_domain})"
             )
 
+        if domain[2] < self.domain_info.min_sequential_axis_size:
+            raise ValueError(
+                f"Compute domain too small. Sequential axis is {domain[2]}, but must be at least {self.domain_info.min_sequential_axis_size}."
+            )
+
         # assert compatibility of fields with stencil
         for name, field_info in self.field_info.items():
             if field_info is not None:
@@ -387,9 +392,10 @@ class StencilObject(abc.ABC):
                     )
 
                 spatial_domain = typing.cast(Shape, domain).filter_mask(field_domain_mask)
+                lower_indices = field_info.boundary.lower_indices.filter_mask(field_domain_mask)
                 upper_indices = field_info.boundary.upper_indices.filter_mask(field_domain_mask)
                 min_shape = tuple(
-                    o + d + h for o, d, h in zip(field_domain_origin, spatial_domain, upper_indices)
+                    lb + d + ub for lb, d, ub in zip(lower_indices, spatial_domain, upper_indices)
                 )
                 if min_shape > field.shape:
                     raise ValueError(

@@ -42,4 +42,4 @@ def optimize_horizontal_executions(
         subgraph.apply_transformations_repeated(
             transformation, validate=False, options=dict(api_fields=api_fields)
         )
-    return dace_to_oir.convert(sdfg)
+    return dace_to_oir.convert(sdfg, stencil.loc)
