@@ -126,7 +126,7 @@ def test_on_the_fly_merging_basic():
     assert not transformed.declarations
 
 
-def test_on_the_fly_merging_without_tmps():
+def test_on_the_fly_merging_with_inter_loop_dependency():
     testee = StencilFactory(
         vertical_loops=[
             VerticalLoopFactory(
