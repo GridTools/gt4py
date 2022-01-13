@@ -320,7 +320,7 @@ def make_module_from_file(qualified_name, file_path, *, public_import=False):
         try:
             return load()
         except ModuleNotFoundError:
-            time.sleep(max(config.cache_settings["load_retry_delay"], 0))
+            time.sleep(max(config.cache_settings["load_retry_delay"], 0) / 1000)
 
     return load()
 
