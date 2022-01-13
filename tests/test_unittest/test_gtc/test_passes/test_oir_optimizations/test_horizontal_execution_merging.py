@@ -126,6 +126,31 @@ def test_on_the_fly_merging_basic():
     assert not transformed.declarations
 
 
+def test_on_the_fly_merging_without_tmps():
+    testee = StencilFactory(
+        vertical_loops=[
+            VerticalLoopFactory(
+                sections__0__horizontal_executions=[
+                    HorizontalExecutionFactory(body=[AssignStmtFactory(left__name="tmp0")]),
+                    HorizontalExecutionFactory(body=[AssignStmtFactory(left__name="tmp1")]),
+                ]
+            ),
+            VerticalLoopFactory(
+                sections__0__horizontal_executions=[
+                    HorizontalExecutionFactory(body=[AssignStmtFactory(right__name="tmp0")]),
+                    HorizontalExecutionFactory(body=[AssignStmtFactory(right__name="tmp1")]),
+                ]
+            ),
+        ],
+        declarations=[TemporaryFactory(name="tmp0"), TemporaryFactory(name="tmp1")],
+    )
+    transformed = OnTheFlyMerging().visit(testee)
+    hexecs0 = transformed.vertical_loops[0].sections[0].horizontal_executions
+    assert len(hexecs0) == 2
+    hexecs1 = transformed.vertical_loops[1].sections[0].horizontal_executions
+    assert len(hexecs1) == 2
+
+
 def test_on_the_fly_merging_with_offsets():
     testee = StencilFactory(
         vertical_loops__0__sections__0__horizontal_executions=[
