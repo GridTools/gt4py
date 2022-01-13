@@ -15,16 +15,16 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import pytest
-from tests.test_unittest.test_gtc.oir_utils import (
-    HorizontalExecutionFactory,
-    MaskStmtFactory,
-    VerticalLoopSectionFactory,
-)
 
 import eve
 from gtc import common
 from gtc.oir import HorizontalMask
 from gtc.passes.oir_optimizations.remove_regions import RemoveUnexecutedRegions
+from tests.test_unittest.test_gtc.oir_utils import (
+    HorizontalExecutionFactory,
+    MaskStmtFactory,
+    VerticalLoopSectionFactory,
+)
 
 
 @pytest.fixture
