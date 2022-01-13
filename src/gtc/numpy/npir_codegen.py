@@ -226,7 +226,13 @@ class NpirCodegen(TemplatedGenerator):
     VariableKOffset = FormatTemplate("var_k_expr({var_offset}, {counter})")
 
     def visit_FieldSlice(
-        self, node: npir.FieldSlice, mask_acc="", *, is_serial=False, **kwargs: Any
+        self,
+        node: npir.FieldSlice,
+        mask_acc: str = "",
+        *,
+        is_serial: bool = False,
+        is_rhs: bool = False,
+        **kwargs: Any,
     ) -> Union[str, Collection[str]]:
 
         offset = [node.i_offset, node.j_offset, node.k_offset]
@@ -238,7 +244,7 @@ class NpirCodegen(TemplatedGenerator):
         if node.data_index:
             offset_str += ", " + ", ".join(self.visit(x, **kwargs) for x in node.data_index)
 
-        if mask_acc and any(off is None for off in offset):
+        if is_rhs and mask_acc and any(off is None for off in offset):
             k_size = "1" if is_serial else "K - k"
             arr_expr = f"np.broadcast_to({node.name}_[{offset_str}], (I - i, J - j, {k_size}))"
         else:
@@ -297,9 +303,9 @@ class NpirCodegen(TemplatedGenerator):
             mask_acc = f"[{self.visit(node.mask, **kwargs)}]"
         if isinstance(node.right, npir.EmptyTemp):
             kwargs["temp_name"] = node.left.name
-        return self.generic_visit(node, mask_acc=mask_acc, **kwargs)
-
-    VectorAssign = FormatTemplate("{left} = {right}")
+        right = self.visit(node.right, mask_acc=mask_acc, is_rhs=True, **kwargs)
+        left = self.visit(node.left, mask_acc=mask_acc, is_rhs=False, **kwargs)
+        return f"{left} = {right}"
 
     VectorArithmetic = FormatTemplate("({left} {op} {right})")
 
