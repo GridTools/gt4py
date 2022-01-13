@@ -279,6 +279,7 @@ class DefIRToGTIR(IRNodeVisitor):
         return gtir.While(
             cond=self.visit(node.condition),
             body=self.visit(node.body),
+            loc=common.location_to_source_location(node.loc),
         )
 
     def visit_VarRef(self, node: VarRef, **kwargs):

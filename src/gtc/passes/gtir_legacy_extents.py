@@ -16,14 +16,9 @@ def _iter_assigns(node: gtir.Stencil) -> XIterable[gtir.ParAssignStmt]:
 
 
 def _ext_from_off(offset: Union[common.CartesianOffset, gtir.VariableKOffset]) -> Extent:
-    all_offsets = offset.to_dict()
-    return Extent(
-        (
-            (min(all_offsets["i"], 0), max(all_offsets["i"], 0)),
-            (min(all_offsets["j"], 0), max(all_offsets["j"], 0)),
-            (0, 0),
-        )
-    )
+    if isinstance(offset, gtir.VariableKOffset):
+        return Extent(((0, 0), (0, 0), (0, 0)))
+    return Extent(((offset.i, offset.i), (offset.j, offset.j), (0, 0)))
 
 
 FIELD_EXT_T = Dict[str, Extent]
