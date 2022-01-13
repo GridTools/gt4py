@@ -383,6 +383,7 @@ def test_variable_offsets(backend):
             out_field = in_field[0, 0, 1] + in_field[0, 0, index_field + 1]
 
 
+# TODO: Enable DaCe
 @pytest.mark.parametrize(
     "backend", [backend for backend in ALL_BACKENDS if backend.values[0] != "gtc:dace"]
 )

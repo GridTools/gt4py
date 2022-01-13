@@ -37,7 +37,7 @@ class FieldAccessFactory(factory.Factory):
 
     name = identifier(gtir.FieldAccess)
     offset = factory.SubFactory(CartesianOffsetFactory)
-    data_index: List[gtir.Expr] = factory.List([])
+    data_index: List[gtir.Expr] = []
     dtype = common.DataType.FLOAT32
 
 
@@ -137,7 +137,7 @@ class VerticalLoopFactory(factory.Factory):
 
     interval = factory.SubFactory(IntervalFactory)
     loop_order = common.LoopOrder.PARALLEL
-    temporaries = []
+    temporaries: List[gtir.FieldDecl] = []
     body = factory.List([factory.SubFactory(ParAssignStmtFactory)])
 
 

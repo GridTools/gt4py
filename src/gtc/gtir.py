@@ -220,7 +220,8 @@ class VerticalLoop(LocNode):
         """
         In the same VerticalLoop a field must not be written and read with a horizontal offset.
 
-        Temporaries don't have this contraint. Backends are required to implement temporaries with block-private halos.
+        Temporaries don't have this contraint. Backends are required to implement
+        them using block-private halos.
         """
         intersec = _written_and_read_with_offset(values["body"])
         non_tmp_fields = {
@@ -258,11 +259,7 @@ def _variablek_fieldaccess(node) -> bool:
 def _written_and_read_with_offset(
     stmts: List[Stmt],
 ) -> RootValidatorValuesType:
-    """
-    In the same VerticalLoop a field must not be written and read with a horizontal offset.
-
-    Temporaries don't have this contraint. Backends are required to implement temporaries with block-private halos.
-    """
+    """Return a list of names that are written to and read with offset."""
     # TODO(havogt): either move to eve or will be removed in the attr-based eve if a List[Node] is represented as a CollectionNode
     @utils.as_xiter
     def _collection_iter_tree(

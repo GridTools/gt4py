@@ -1270,15 +1270,20 @@ class IRMaker(ast.NodeVisitor):
         return result
 
     def visit_While(self, node: ast.While) -> gt_ir.While:
+        loc = gt_ir.Location.from_ast_node(node)
         if node.orelse:
             raise GTScriptSyntaxError("orelse is not supported on while loops")
         stmts = []
         for stmt in node.body:
             stmts.extend(self.visit(stmt))
+            if isinstance(stmts[-1], gt_ir.While):
+                raise GTScriptSyntaxError(
+                    "Nested while loops detected. This is unsupported.", loc=loc
+                )
         return gt_ir.While(
             condition=self.visit(node.test),
             loc=gt_ir.Location.from_ast_node(node),
-            body=gt_ir.BlockStmt(stmts=stmts, loc=gt_ir.Location.from_ast_node(node)),
+            body=gt_ir.BlockStmt(stmts=stmts, loc=loc),
         )
 
     def visit_Call(self, node: ast.Call):

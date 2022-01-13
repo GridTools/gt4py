@@ -152,7 +152,6 @@ class OirToNpir(NodeTranslator):
         ):
             ctx.ensure_temp_defined(node.left)
 
-        # NOTE: This logic is fairly specific and will need to be extended for nested whiles
         if while_cond and not mask:
             mask = while_cond
         elif while_cond and mask:
