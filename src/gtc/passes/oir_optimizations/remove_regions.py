@@ -20,7 +20,7 @@ from typing import Any, Dict, Optional
 
 import eve
 from gt4py.definitions import Extent
-from gtc import oir
+from gtc import common, oir
 from gtc.passes import utils
 
 
@@ -122,6 +122,9 @@ class RemoveUnexecutedRegions(eve.NodeTranslator):
         **kwargs: Any,
     ) -> oir.FieldAccess:
         """Take the union of this access (converted to field extent) with all existing extents."""
+        if not isinstance(node.offset, common.CartesianOffset):
+            return node
+
         extent = utils.extent_from_offset(node.offset)
         accumulated_extent = compute_extent + extent
         ctx.fields_extents[node.name] = ctx.fields_extents.get(node.name, Extent.zeros()).union(

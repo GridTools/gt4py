@@ -17,7 +17,7 @@
 from typing import Set
 
 import eve
-from eve import gtir
+from gtc import gtir
 
 
 class CheckHorizontalRegionAccesses(eve.NodeVisitor):
@@ -42,7 +42,8 @@ class CheckHorizontalRegionAccesses(eve.NodeVisitor):
         fields_set: Set[str],
         inside_region: bool = False,
     ) -> None:
-        zero_horizontal_offset = node.offset.i == 0 and node.offset.j == 0
+        offsets = node.offset.to_dict()
+        zero_horizontal_offset = offsets["i"] == 0 and offsets["j"] == 0
         if inside_region and not zero_horizontal_offset and node.name in fields_set:
             # This access will potentially read memory that has not been updated yet
             raise ValueError(f"Race condition detected on read of {node.name}")

@@ -291,7 +291,13 @@ class NpirCodegen(TemplatedGenerator):
     ) -> Union[str, Collection[str]]:
 
         offset = [node.i_offset, node.j_offset, node.k_offset]
-        domain = list(horiz_rest) + [None] if horiz_rest else [None] * 3
+
+        if horiz_rest:
+            domain = list(horiz_rest) + [None]
+        else:
+            domain = [None] * 3
+        if "bounds" in kwargs:
+            del kwargs["bounds"]
 
         offset_str = ", ".join(
             self.visit(off, bounds=bounds, is_serial=is_serial, **kwargs) if off else ":"

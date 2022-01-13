@@ -117,9 +117,12 @@ def compute_relative_mask(
 
 
 def extent_from_offset(offset: common.CartesianOffset, use_k: bool = True) -> Extent:
-    horizontal = (
-        (min(offset.i, 0), max(offset.i, 0)),
-        (min(offset.j, 0), max(offset.j, 0)),
+    all_offsets = offset.to_dict()
+    horizontal = Extent(
+        (
+            (min(all_offsets["i"], 0), max(all_offsets["i"], 0)),
+            (min(all_offsets["j"], 0), max(all_offsets["j"], 0)),
+        )
     )
 
     if use_k:
