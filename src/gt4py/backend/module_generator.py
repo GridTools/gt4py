@@ -437,13 +437,13 @@ class PyExtModuleGenerator(BaseModuleGenerator):
     and ``_has_effect()`` methods.
     """
 
-    pyext_module_name: str
-    pyext_file_path: str
+    pyext_module_name: Optional[str]
+    pyext_file_path: Optional[str]
 
     def __init__(self):
         super().__init__()
-        self.pyext_module_name = ""
-        self.pyext_file_path = ""
+        self.pyext_module_name = None
+        self.pyext_file_path = None
 
     def __call__(
         self,
@@ -456,13 +456,15 @@ class PyExtModuleGenerator(BaseModuleGenerator):
         return super().__call__(args_data, builder, **kwargs)
 
     def _is_not_empty(self) -> bool:
+        if self.pyext_module_name is None:
+            return False
         if self.builder.backend.USE_LEGACY_TOOLCHAIN:
             return iir_is_not_emtpy(self.builder.implementation_ir)
         return gtir_is_not_emtpy(self.builder.gtir_pipeline)
 
     def generate_imports(self) -> str:
         source = ["from gt4py import utils as gt_utils"]
-        if self._is_not_empty:
+        if self._is_not_empty():
             source.append(
                 textwrap.dedent(
                     f"""
@@ -475,6 +477,8 @@ class PyExtModuleGenerator(BaseModuleGenerator):
         return "\n".join(source)
 
     def _has_effect(self) -> bool:
+        if not self._is_not_empty():
+            return False
         if self.builder.backend.USE_LEGACY_TOOLCHAIN:
             return iir_has_effect(self.builder.implementation_ir)
         return gtir_has_effect(self.builder.gtir_pipeline)
