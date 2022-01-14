@@ -71,6 +71,8 @@ build_settings: Dict[str, Any] = {
 cache_settings: Dict[str, Any] = {
     "dir_name": os.environ.get("GT_CACHE_DIR_NAME", ".gt_cache"),
     "root_path": os.environ.get("GT_CACHE_ROOT", os.path.abspath(".")),
+    "load_retries": os.environ.get("GT_CACHE_LOAD_RETRIES", 3),
+    "load_retry_delay": os.environ.get("GT_CACHE_LOAD_RETRY_DELAY", 100),  # unit miliseconds
 }
 
 code_settings: Dict[str, Any] = {"root_package_name": "_GT_"}
