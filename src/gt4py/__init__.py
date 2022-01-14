@@ -34,4 +34,4 @@ __versioninfo__: Optional[Union[LegacyVersion, Version]] = parse(__version__)
 
 del DistributionNotFound, LegacyVersion, Version, get_distribution, parse
 
-from . import backend, gtscript, storage
+from . import config, gtscript, storage

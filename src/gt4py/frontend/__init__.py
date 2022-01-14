@@ -15,4 +15,4 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from . import gtscript_frontend
-from .base import REGISTRY, AnyStencilFunc, Frontend, from_name, register
+from .base import REGISTRY, Frontend, from_name, register

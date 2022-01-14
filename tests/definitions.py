@@ -25,8 +25,8 @@ import datetime
 
 import pytest
 
-import gt4py.backend as gt_backend
-import gt4py.utils as gt_utils
+from gt4py import backend as gt_backend
+from gt4py import utils as gt_utils
 
 
 def _backend_name_as_param(name):

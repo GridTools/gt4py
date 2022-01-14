@@ -14,7 +14,6 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from . import utils
 from .nodes import (
     Accessor,
     ApplyBlock,
@@ -46,9 +45,6 @@ from .nodes import (
     If,
     IIRNode,
     InvalidBranch,
-    IRNodeInspector,
-    IRNodeMapper,
-    IRNodeVisitor,
     IterationOrder,
     LevelMarker,
     Literal,
@@ -71,7 +67,5 @@ from .nodes import (
     VarDecl,
     VarRef,
     While,
-    dump_ir,
-    iter_attributes,
-    iter_nodes_of_type,
 )
+from .utils import IRNodeInspector, IRNodeMapper, IRNodeVisitor, iter_nodes_of_type
