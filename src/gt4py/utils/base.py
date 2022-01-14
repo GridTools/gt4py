@@ -32,7 +32,7 @@ import time
 import types
 from typing import Any, Sequence, Tuple
 
-from gt4py import config
+from gt4py import config as gt_config
 
 
 NOTHING = object()
@@ -316,11 +316,11 @@ def make_module_from_file(qualified_name, file_path, *, public_import=False):
                     setattr(parent, module_name, module)
         return module
 
-    for i in range(max(config.cache_settings["load_retries"], 0)):
+    for i in range(max(gt_config.cache_settings["load_retries"], 0)):
         try:
             return load()
         except ModuleNotFoundError:
-            time.sleep(max(config.cache_settings["load_retry_delay"], 0) / 1000)
+            time.sleep(max(gt_config.cache_settings["load_retry_delay"], 0) / 1000)
 
     return load()
 
