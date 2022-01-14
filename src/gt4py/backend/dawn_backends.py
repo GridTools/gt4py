@@ -27,16 +27,14 @@ import jinja2
 from dawn4py.serialization import SIR
 from dawn4py.serialization import utils as sir_utils
 
-import gt4py.backend.module_generator
-from gt4py import backend as gt_backend
 from gt4py import definitions as gt_definitions
 from gt4py import gt_src_manager
 from gt4py import ir as gt_ir
 from gt4py import utils as gt_utils
-from gt4py.backend.module_generator import ModuleData
 from gt4py.utils import text as gt_text
 
-from . import pyext_builder
+from . import gt_backends, module_generator, pyext_builder
+from .base import BasePyExtBackend, register
 
 
 if TYPE_CHECKING:
@@ -101,7 +99,7 @@ class FieldInfoCollector(gt_ir.IRNodeVisitor):
 
 class SIRConverter(gt_ir.IRNodeVisitor):
     # mypy is unable to determine the type for some reason
-    OP_TO_CPP = gt_backend.GTPyExtGenerator.OP_TO_CPP  # type: ignore
+    OP_TO_CPP = gt_backends.GTPyExtGenerator.OP_TO_CPP  # type: ignore
 
     @classmethod
     def apply(cls, definition_ir: gt_ir.StencilDefinition) -> Tuple[SIR.SIR, Dict[str, Any]]:
@@ -208,7 +206,7 @@ class SIRConverter(gt_ir.IRNodeVisitor):
 
     def visit_NativeFuncCall(self, node: gt_ir.NativeFuncCall):
         return sir_utils.make_fun_call_expr(
-            "gridtools::dawn::math::" + gt_backend.GTPyExtGenerator.NATIVE_FUNC_TO_CPP[node.func],
+            "gridtools::dawn::math::" + gt_backends.GTPyExtGenerator.NATIVE_FUNC_TO_CPP[node.func],
             [self.visit(arg) for arg in node.args],
         )
 
@@ -317,10 +315,10 @@ for name in dir(dawn4py.CodeGenOptions) + dir(dawn4py.OptimizerOptions):
 _DAWN_BACKEND_OPTIONS = {**_DAWN_BASE_OPTIONS, **_DAWN_TOOLCHAIN_OPTIONS}
 
 
-class DawnPyModuleGenerator(gt4py.backend.module_generator.PyExtModuleGenerator):
+class DawnPyModuleGenerator(module_generator.PyExtModuleGenerator):
     def generate_implementation(self) -> str:
         sources = gt_text.TextBlock(
-            indent_size=gt4py.backend.module_generator.BaseModuleGenerator.TEMPLATE_INDENT_SIZE
+            indent_size=module_generator.BaseModuleGenerator.TEMPLATE_INDENT_SIZE
         )
 
         args = []
@@ -415,7 +413,7 @@ cupy.cuda.Device(0).synchronize()
         return "\n".join([f + "._set_device_modified()" for f in output_field_names])
 
 
-class BaseDawnBackend(gt_backend.BasePyExtBackend):
+class BaseDawnBackend(BasePyExtBackend):
 
     DAWN_BACKEND_NS: ClassVar[str]
     DAWN_BACKEND_NAME: ClassVar[str]
@@ -425,7 +423,7 @@ class BaseDawnBackend(gt_backend.BasePyExtBackend):
 
     MODULE_GENERATOR_CLASS = DawnPyModuleGenerator
 
-    PYEXT_GENERATOR_CLASS = gt_backend.GTPyExtGenerator
+    PYEXT_GENERATOR_CLASS = gt_backends.GTPyExtGenerator
 
     TEMPLATE_DIR = os.path.join(os.path.dirname(__file__), "templates")
     TEMPLATE_FILES = {
@@ -610,8 +608,8 @@ class BaseDawnBackend(gt_backend.BasePyExtBackend):
     @staticmethod
     def make_args_data(
         definition_ir: gt_ir.StencilDefinition, sir_field_info: Dict[str, Any]
-    ) -> ModuleData:
-        data = ModuleData()
+    ) -> module_generator.ModuleData:
+        data = module_generator.ModuleData()
 
         fields = {item.name: item for item in definition_ir.api_fields}
         parameters = {item.name: item for item in definition_ir.parameters}
@@ -639,7 +637,7 @@ class BaseDawnBackend(gt_backend.BasePyExtBackend):
         return data
 
 
-@gt_backend.register
+@register
 class DawnGTX86Backend(BaseDawnBackend):
 
     DAWN_BACKEND_NS = "gt"
@@ -649,14 +647,14 @@ class DawnGTX86Backend(BaseDawnBackend):
     name = "dawn:gtx86"
     options = _DAWN_BACKEND_OPTIONS
     # ignore types because mypy is bugging out on those
-    storage_info = gt_backend.GTX86Backend.storage_info  # type: ignore
-    languages = gt_backend.GTX86Backend.languages  # type: ignore
+    storage_info = gt_backends.GTX86Backend.storage_info  # type: ignore
+    languages = gt_backends.GTX86Backend.languages  # type: ignore
 
     def generate_extension(self, **kwargs: Any) -> Tuple[str, str]:
         return self.make_extension(uses_cuda=False, **kwargs)
 
 
-@gt_backend.register
+@register
 class DawnGTMCBackend(BaseDawnBackend):
 
     DAWN_BACKEND_NS = "gt"
@@ -666,14 +664,14 @@ class DawnGTMCBackend(BaseDawnBackend):
     name = "dawn:gtmc"
     options = _DAWN_BACKEND_OPTIONS
     # ignore types because mypy is bugging out on those
-    storage_info = gt_backend.GTMCBackend.storage_info  # type: ignore
-    languages = gt_backend.GTMCBackend.languages  # type: ignore
+    storage_info = gt_backends.GTMCBackend.storage_info  # type: ignore
+    languages = gt_backends.GTMCBackend.languages  # type: ignore
 
     def generate_extension(self, **kwargs: Any) -> Tuple[str, str]:
         return self.make_extension(uses_cuda=False, **kwargs)
 
 
-@gt_backend.register
+@register
 class DawnGTCUDABackend(BaseDawnBackend):
 
     DAWN_BACKEND_NS = "gt"
@@ -684,14 +682,14 @@ class DawnGTCUDABackend(BaseDawnBackend):
     name = "dawn:gtcuda"
     options = _DAWN_BACKEND_OPTIONS
     # ignore types because mypy is bugging out on those
-    storage_info = gt_backend.GTCUDABackend.storage_info  # type: ignore
-    languages = gt_backend.GTCUDABackend.languages  # type: ignore
+    storage_info = gt_backends.GTCUDABackend.storage_info  # type: ignore
+    languages = gt_backends.GTCUDABackend.languages  # type: ignore
 
     def generate_extension(self, **kwargs: Any) -> Tuple[str, str]:
         return self.make_extension(uses_cuda=True, **kwargs)
 
 
-@gt_backend.register
+@register
 class DawnNaiveBackend(BaseDawnBackend):
 
     DAWN_BACKEND_NS = "cxxnaive"
@@ -701,14 +699,14 @@ class DawnNaiveBackend(BaseDawnBackend):
     name = "dawn:naive"
     options = _DAWN_BACKEND_OPTIONS
     # ignore types because mypy is bugging out on those
-    storage_info = gt_backend.GTX86Backend.storage_info  # type: ignore
-    languages = gt_backend.GTX86Backend.languages  # type: ignore
+    storage_info = gt_backends.GTX86Backend.storage_info  # type: ignore
+    languages = gt_backends.GTX86Backend.languages  # type: ignore
 
     def generate_extension(self, **kwargs: Any) -> Tuple[str, str]:
         return self.make_extension(uses_cuda=False, **kwargs)
 
 
-@gt_backend.register
+@register
 class DawnOptBackend(BaseDawnBackend):
 
     DAWN_BACKEND_NS = "cxxopt"
@@ -718,14 +716,14 @@ class DawnOptBackend(BaseDawnBackend):
     name = "dawn:cxxopt"
     options = _DAWN_BACKEND_OPTIONS
     # ignore types because mypy is bugging out on those
-    storage_info = gt_backend.GTX86Backend.storage_info  # type: ignore
-    languages = gt_backend.GTX86Backend.languages  # type: ignore
+    storage_info = gt_backends.GTX86Backend.storage_info  # type: ignore
+    languages = gt_backends.GTX86Backend.languages  # type: ignore
 
     def generate_extension(self, **kwargs: Any) -> Tuple[str, str]:
         return self.make_extension(uses_cuda=False, **kwargs)
 
 
-@gt_backend.register
+@register
 class DawnCUDABackend(BaseDawnBackend):
 
     DAWN_BACKEND_NS = "cuda"
@@ -736,8 +734,8 @@ class DawnCUDABackend(BaseDawnBackend):
     name = "dawn:cuda"
     options = _DAWN_BACKEND_OPTIONS
     # ignore types because mypy is bugging out on those
-    storage_info = gt_backend.GTCUDABackend.storage_info  # type: ignore
-    languages = gt_backend.GTCUDABackend.languages  # type: ignore
+    storage_info = gt_backends.GTCUDABackend.storage_info  # type: ignore
+    languages = gt_backends.GTCUDABackend.languages  # type: ignore
 
     def generate_extension(self, **kwargs: Any) -> Tuple[str, str]:
         return self.make_extension(uses_cuda=True, **kwargs)
