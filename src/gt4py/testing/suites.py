@@ -164,10 +164,12 @@ class SuiteMeta(type):
                 return combinations
 
         cls_dict["tests"] = []
-        for d in get_dtype_combinations(dtypes):
-            for g in get_globals_combinations(d):
-                for b in backends:
+        for b in backends:
+            if not gt_backend.from_name(b):
+                pytest.skip("Backend is not registered")
 
+            for d in get_dtype_combinations(dtypes):
+                for g in get_globals_combinations(d):
                     cls_dict["tests"].append(
                         dict(
                             backend=b if isinstance(b, str) else b.values[0],
