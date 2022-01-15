@@ -14,6 +14,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+from . import python_generator
 from .base import (
     REGISTRY,
     Backend,
@@ -36,20 +37,3 @@ from .gtc_backend import (
 )
 from .module_generator import BaseModuleGenerator
 from .numpy_backend import NumPyBackend
-
-
-try:
-    import dawn4py
-
-    from .dawn_backends import (
-        DawnCUDABackend,
-        DawnGTCUDABackend,
-        DawnGTMCBackend,
-        DawnGTX86Backend,
-        DawnNaiveBackend,
-        DawnOptBackend,
-    )
-except ImportError:
-    pass  # dawn4py not installed
-
-from . import python_generator
