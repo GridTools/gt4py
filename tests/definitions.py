@@ -77,17 +77,6 @@ OLD_BACKENDS = [
 OLD_INTERNAL_BACKENDS = [
     _backend_name_as_param(name) for name in _INTERNAL_BACKEND_NAMES if not name.startswith("gtc:")
 ]
-DAWN_BACKENDS = [_backend_name_as_param(name) for name in _ALL_BACKEND_NAMES if "dawn:" in name]
-DAWN_CPU_BACKENDS = [
-    _backend_name_as_param(name)
-    for name in _ALL_BACKEND_NAMES
-    if "dawn:" in name and gt_backend.from_name(name).storage_info["device"] == "cpu"
-]
-DAWN_GPU_BACKENDS = [
-    _backend_name_as_param(name)
-    for name in _ALL_BACKEND_NAMES
-    if "dawn:" in name and gt_backend.from_name(name).storage_info["device"] == "gpu"
-]
 
 LEGACY_GRIDTOOLS_BACKENDS = [_backend_name_as_param(name) for name in ("gtx86", "gtmc", "gtcuda")]
 
