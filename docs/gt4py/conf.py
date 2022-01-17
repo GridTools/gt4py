@@ -101,7 +101,7 @@ autodoc_default_options = {
     "special-members": "__call__",
     "undoc-members": True,
 }
-autodoc_mock_imports = ["dawn4py"]
+autodoc_mock_imports = []
 
 # ---- Options for intersphinx extension
 intersphinx_mapping = {

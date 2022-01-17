@@ -101,12 +101,6 @@ BACKEND_ROW_PATTERN_BY_NAME = {
     "gtc:gt:cpu_ifirst": r"^\s*gtc:gt:cpu_ifirst\s*c\+\+\s*python\s*Yes",
     "gtc:gt:cpu_kfirst": r"^\s*gtc:gt:cpu_kfirst\s*c\+\+\s*python\s*Yes",
     "gtc:gt:gpu": r"^\s*gtc:gt:gpu\s*c\+\+\s*python\s*Yes",
-    "dawn:gtx86": r"^\s*dawn:gtx86\s*c\+\+\s*python\s*No",
-    "dawn:gtmc": r"^\s*dawn:gtmc\s*c\+\+\s*python\s*No",
-    "dawn:gtcuda": r"^\s*dawn:gtcuda\s*cuda\s*python\s*No",
-    "dawn:naive": r"^\s*dawn:naive\s*c\+\+\s*python\s*No",
-    "dawn:cxxopt": r"^\s*dawn:cxxopt\s*c\+\+\s*python\s*No",
-    "dawn:cuda": r"^\s*dawn:cuda\s*cuda\s*python\s*No",
     "gtc:numpy": r"^\s*gtc:numpy\s*python\s*python\s*Yes",
     "nocli": r"^\s*nocli\s*\?\s*\?\s*No",
 }

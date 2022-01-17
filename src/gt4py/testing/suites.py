@@ -465,18 +465,11 @@ class StencilTestSuite(metaclass=SuiteMeta):
             if field_info is None:
                 continue
             for i, ax in enumerate("IJK"):
-                if implementation.backend.startswith("dawn"):
-                    assert (
-                        ax not in field_info.axes
-                        or ax == "K"
-                        or field_info.boundary[i] == cls.global_boundaries[name][i]
-                    )
-                else:
-                    assert (
-                        ax not in field_info.axes
-                        or ax == "K"
-                        or field_info.boundary[i] >= cls.global_boundaries[name][i]
-                    )
+                assert (
+                    ax not in field_info.axes
+                    or ax == "K"
+                    or field_info.boundary[i] >= cls.global_boundaries[name][i]
+                )
         test["implementations"].append(implementation)
 
     @classmethod
