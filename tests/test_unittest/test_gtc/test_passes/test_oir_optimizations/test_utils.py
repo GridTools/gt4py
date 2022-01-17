@@ -67,13 +67,13 @@ def test_access_collector():
         "mask": {(-1, -1, 1)},
     }
     ordered_accesses = [
-        GeneralAccess(field="foo", offset=(1, 0, 0), is_write=False),
-        GeneralAccess(field="tmp", offset=(0, 0, 0), is_write=True),
-        GeneralAccess(field="tmp", offset=(0, 0, 0), is_write=False),
-        GeneralAccess(field="bar", offset=(0, 0, 0), is_write=True),
-        GeneralAccess(field="mask", offset=(-1, -1, 1), is_write=False),
-        GeneralAccess(field="tmp", offset=(0, 1, 0), is_write=False),
-        GeneralAccess(field="baz", offset=(0, 0, 0), is_write=True),
+        GeneralAccess(field="foo", offset=(1, 0, 0), in_mask=False, is_write=False),
+        GeneralAccess(field="tmp", offset=(0, 0, 0), in_mask=False, is_write=True),
+        GeneralAccess(field="tmp", offset=(0, 0, 0), in_mask=False, is_write=False),
+        GeneralAccess(field="bar", offset=(0, 0, 0), in_mask=False, is_write=True),
+        GeneralAccess(field="mask", offset=(-1, -1, 1), in_mask=False, is_write=False),
+        GeneralAccess(field="tmp", offset=(0, 1, 0), in_mask=True, is_write=False),
+        GeneralAccess(field="baz", offset=(0, 0, 0), in_mask=True, is_write=True),
     ]
 
     result = AccessCollector.apply(testee)

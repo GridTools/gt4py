@@ -14,8 +14,11 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import base64
+import pickle
 from abc import ABC, abstractmethod
-from typing import Dict, List, Tuple
+from dataclasses import dataclass
+from typing import Dict, List, Tuple, Union
 
 import dace.data
 import dace.dtypes
@@ -24,7 +27,8 @@ import dace.subsets
 import networkx as nx
 from dace import library
 
-from gtc.common import DataType, LoopOrder, SourceLocation, typestr_to_data_type
+from gtc import oir
+from gtc.common import DataType, LoopOrder, SourceLocation, VariableKOffset, typestr_to_data_type
 from gtc.dace.utils import (
     CartesianIterationSpace,
     OIRFieldRenamer,
@@ -40,9 +44,29 @@ class OIRLibraryNode(ABC, dace.nodes.LibraryNode):
     def as_oir(self):
         raise NotImplementedError("Implement in child class.")
 
-    @abstractmethod
-    def __eq__(self, other):
-        raise NotImplementedError("Implement in child class.")
+    # @abstractmethod
+    # def __eq__(self, other):
+    #     raise NotImplementedError("Implement in child class.")
+
+    def to_json(self, parent):
+        protocol = pickle.DEFAULT_PROTOCOL
+        pbytes = pickle.dumps(self, protocol=protocol)
+
+        jsonobj = super().to_json(parent)
+        jsonobj["classpath"] = dace.nodes.full_class_path(self)
+        jsonobj["attributes"]["protocol"] = protocol
+        jsonobj["attributes"]["pickle"] = base64.b64encode(pbytes).decode("utf-8")
+
+        return jsonobj
+
+    @classmethod
+    def from_json(cls, json_obj, context=None):
+        if "attributes" not in json_obj:
+            b64string = json_obj["pickle"]
+        else:
+            b64string = json_obj["attributes"]["pickle"]
+        bytes = base64.b64decode(b64string)
+        return pickle.loads(bytes)
 
 
 @library.node
@@ -54,9 +78,23 @@ class VerticalLoopLibraryNode(OIRLibraryNode):
     sections = dace.properties.ListProperty(
         element_type=Tuple[Interval, dace.SDFG], default=[], allow_none=False
     )
-    caches = dace.properties.ListProperty(
-        element_type=List[CacheDesc], default=[], allow_none=False
+    caches = dace.properties.ListProperty(element_type=CacheDesc, default=[], allow_none=False)
+    default_storage_type = dace.properties.EnumProperty(
+        dtype=dace.StorageType, default=dace.StorageType.Default
     )
+    ijcache_storage_type = dace.properties.EnumProperty(
+        dtype=dace.StorageType, default=dace.StorageType.Default
+    )
+    kcache_storage_type = dace.properties.EnumProperty(
+        dtype=dace.StorageType, default=dace.StorageType.Default
+    )
+    tiling_map_schedule = dace.properties.EnumProperty(
+        dtype=dace.ScheduleType, default=dace.ScheduleType.Default
+    )
+    map_schedule = dace.properties.EnumProperty(
+        dtype=dace.ScheduleType, default=dace.ScheduleType.Default
+    )
+    tile_sizes = dace.properties.ListProperty(element_type=int, default=None, allow_none=True)
 
     _dace_library_name = "oir.VerticalLoop"
 
@@ -138,21 +176,27 @@ class VerticalLoopLibraryNode(OIRLibraryNode):
             sections=sections, loop_order=self.loop_order, caches=self.caches, loc=loc
         )
 
-    def __eq__(self, other):
-        try:
-            assert isinstance(other, VerticalLoopLibraryNode)
-            assert self.loop_order == other.loop_order
-            assert self.caches == other.caches
-            assert len(self.sections) == len(other.sections)
-            for (interval1, he_sdfg1), (interval2, he_sdfg2) in zip(self.sections, other.sections):
-                assert interval1 == interval2
-                assert_sdfg_equal(he_sdfg1, he_sdfg2)
-        except AssertionError:
-            return False
-        return True
+    # def __eq__(self, other):
+    #     try:
+    #         assert isinstance(other, VerticalLoopLibraryNode)
+    #         assert self.loop_order == other.loop_order
+    #         assert self.caches == other.caches
+    #         assert len(self.sections) == len(other.sections)
+    #         for (interval1, he_sdfg1), (interval2, he_sdfg2) in zip(self.sections, other.sections):
+    #             assert interval1 == interval2
+    #             assert_sdfg_equal(he_sdfg1, he_sdfg2)
+    #     except AssertionError:
+    #         return False
+    #     return True
+    #
+    # def __hash__(self):
+    #     return super(OIRLibraryNode, self).__hash__()
 
-    def __hash__(self):
-        return super(OIRLibraryNode, self).__hash__()
+
+@dataclass
+class PreliminaryHorizontalExecution:
+    body: List[oir.Stmt]
+    declarations: List[oir.LocalScalar]
 
 
 @library.node
@@ -160,12 +204,17 @@ class HorizontalExecutionLibraryNode(OIRLibraryNode):
     implementations: Dict[str, dace.library.ExpandTransformation] = {}
     default_implementation = "naive"
 
-    oir_node = dace.properties.DataclassProperty(
-        dtype=HorizontalExecution, default=None, allow_none=True
-    )
+    _oir_node: Union[HorizontalExecution, PreliminaryHorizontalExecution] = None
     iteration_space = dace.properties.Property(
         dtype=CartesianIterationSpace, default=None, allow_none=True
     )
+
+    map_schedule = dace.properties.EnumProperty(
+        dtype=dace.ScheduleType, default=dace.ScheduleType.Default
+    )
+    index_symbols = dace.properties.ListProperty(element_type=str, default=["i", "j", "0"])
+    global_domain_symbols = dace.properties.ListProperty(element_type=str, default=["__I", "__J"])
+
     _dace_library_name = "oir.HorizontalExecution"
 
     def __init__(
@@ -179,11 +228,10 @@ class HorizontalExecutionLibraryNode(OIRLibraryNode):
     ):
         if oir_node is not None:
             name = "HorizontalExecution_" + str(id(oir_node))
-            self.oir_node = oir_node
+            self._oir_node = oir_node
             self.iteration_space = iteration_space
 
         super().__init__(name=name, *args, **kwargs)
-
         if debuginfo is None and oir_node is not None and oir_node.loc is not None:
             self.debuginfo = dace.dtypes.DebugInfo(
                 oir_node.loc.line,
@@ -195,16 +243,33 @@ class HorizontalExecutionLibraryNode(OIRLibraryNode):
         elif debuginfo is not None:
             self.debuginfo = debuginfo
 
+    @property
+    def oir_node(self):
+        return self._oir_node
+
+    def commit_horizontal_execution(self):
+        self._oir_node = HorizontalExecution(
+            body=self._oir_node.body, declarations=self._oir_node.declarations
+        )
+
     def as_oir(self):
+        self.commit_horizontal_execution()
         return self.oir_node
 
     def validate(self, parent_sdfg: dace.SDFG, parent_state: dace.SDFGState, *args, **kwargs):
         get_node_name_mapping(parent_state, self)
 
-    def __eq__(self, other):
-        if not isinstance(other, HorizontalExecutionLibraryNode):
-            return False
-        return self.as_oir() == other.as_oir()
+    # def __eq__(self, other):
+    #     if not isinstance(other, HorizontalExecutionLibraryNode):
+    #         return False
+    #     return self.as_oir() == other.as_oir()
+    #
+    # def __hash__(self):
+    #     return super(OIRLibraryNode, self).__hash__()
 
-    def __hash__(self):
-        return super(OIRLibraryNode, self).__hash__()
+    @property
+    def free_symbols(self):
+        res = super().free_symbols
+        if len(self.oir_node.iter_tree().if_isinstance(VariableKOffset).to_list()) > 0:
+            res.add("k")
+        return res

@@ -15,7 +15,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from abc import ABC, abstractmethod
-from typing import Dict, List, Tuple, Union
+from typing import Dict, List, Optional, Tuple, Union
 
 import dace
 import dace.properties
@@ -27,11 +27,12 @@ from dace.sdfg.graph import MultiConnectorEdge
 
 import eve
 import gtc.oir as oir
-from gtc.common import LevelMarker, data_type_to_typestr
+from gtc.common import LevelMarker, VariableKOffset, data_type_to_typestr
 from gtc.dace.nodes import HorizontalExecutionLibraryNode, VerticalLoopLibraryNode
 from gtc.dace.utils import (
     CartesianIJIndexSpace,
     IntervalMapping,
+    iteration_to_access_space,
     nodes_extent_calculation,
     oir_iteration_space_computation,
 )
@@ -39,8 +40,10 @@ from gtc.oir import FieldDecl, Interval, ScalarDecl, Stencil, Temporary
 from gtc.passes.oir_optimizations.utils import AccessCollector
 
 
-def _offset_origin(interval: oir.Interval, origin: oir.AxisBound) -> oir.Interval:
-    if origin.level != LevelMarker.START:
+def _offset_origin(interval: oir.Interval, origin: Optional[oir.AxisBound]) -> oir.Interval:
+    if origin is None:
+        return interval
+    if origin >= oir.AxisBound.start():
         return interval
     return interval.shifted(-origin.offset)
 
@@ -65,9 +68,29 @@ class BaseOirSDFGBuilder(ABC):
         self._recent_read_acc: Dict[str, dace.nodes.AccessNode] = dict()
 
         self._access_nodes: Dict[str, dace.nodes.AccessNode] = dict()
-        self._access_collection_cache: Dict[int, AccessCollector.CartesianAccessCollection] = dict()
+        self._access_collection_cache: Dict[int, AccessCollector.GeneralAccessCollection] = dict()
         self._source_nodes: Dict[str, dace.nodes.AccessNode] = dict()
         self._delete_candidates: List[MultiConnectorEdge] = list()
+
+        def generate_access_nodes(node):
+            if isinstance(node, VerticalLoopLibraryNode):
+                for _, s in node.sections:
+                    yield from generate_access_nodes(s)
+            elif isinstance(node, dace.SDFG):
+                for n, _ in node.all_nodes_recursive():
+                    if isinstance(n, dace.nodes.LibraryNode):
+                        yield from generate_access_nodes(n)
+            elif isinstance(node, HorizontalExecutionLibraryNode):
+                yield from [
+                    acc.name
+                    for acc in node.oir_node.iter_tree().if_isinstance(oir.FieldAccess)
+                    if isinstance(acc.offset, VariableKOffset)
+                ]
+            else:
+                for n in node:
+                    yield from generate_access_nodes(n)
+
+        self._dynamic_k_fields = set(generate_access_nodes(nodes))
 
     def _access_space_to_subset(self, name, access_space):
         extent = self._extents[name]
@@ -115,9 +138,9 @@ class BaseOirSDFGBuilder(ABC):
 
     def _get_access_collection(
         self, node: "Union[HorizontalExecutionLibraryNode, VerticalLoopLibraryNode, SDFG]"
-    ) -> AccessCollector.CartesianAccessCollection:
+    ) -> AccessCollector.GeneralAccessCollection:
         if isinstance(node, SDFG):
-            res = AccessCollector.CartesianAccessCollection([])
+            res = AccessCollector.GeneralAccessCollection([])
             for node in node.states()[0].nodes():
                 if isinstance(node, (HorizontalExecutionLibraryNode, VerticalLoopLibraryNode)):
                     collection = self._get_access_collection(node)
@@ -127,11 +150,11 @@ class BaseOirSDFGBuilder(ABC):
             if id(node.oir_node) not in self._access_collection_cache:
                 self._access_collection_cache[id(node.oir_node)] = AccessCollector.apply(
                     node.oir_node
-                ).cartesian_accesses()
+                )
             return self._access_collection_cache[id(node.oir_node)]
         else:
             assert isinstance(node, VerticalLoopLibraryNode)
-            res = AccessCollector.CartesianAccessCollection([])
+            res = AccessCollector.GeneralAccessCollection([])
             for _, sdfg in node.sections:
                 collection = self._get_access_collection(sdfg)
                 res._ordered_accesses.extend(collection._ordered_accesses)
@@ -169,14 +192,18 @@ class BaseOirSDFGBuilder(ABC):
         self._recent_write_acc = dict()
 
     def _add_read_edges(
-        self, node, collections: List[Tuple[Interval, AccessCollector.CartesianAccessCollection]]
+        self, node, collections: List[Tuple[Interval, AccessCollector.GeneralAccessCollection]]
     ):
         read_accesses: Dict[str, dace.nodes.AccessNode] = dict()
         for interval, access_collection in collections:
 
             for name in access_collection.read_fields():
                 for offset in access_collection.read_offsets()[name]:
-                    read_interval = interval.shifted(offset[2])
+                    read_interval = (
+                        interval.shifted(offset[2])
+                        if offset[2] is not None
+                        else oir.UnboundedInterval.full()
+                    )
                     for candidate_access in self._get_recent_writes(name, read_interval):
                         if name not in read_accesses or self._are_nodes_ordered(
                             name, read_accesses[name], candidate_access
@@ -187,7 +214,11 @@ class BaseOirSDFGBuilder(ABC):
         for interval, access_collection in collections:
             for name in access_collection.read_fields():
                 for offset in access_collection.read_offsets()[name]:
-                    read_interval = interval.shifted(offset[2])
+                    read_interval = (
+                        interval.shifted(offset[2])
+                        if offset[2] is not None
+                        else oir.UnboundedInterval.full()
+                    )
                     if name not in read_accesses:
                         read_accesses[name] = self._get_source(name)
                     self._set_read(name, read_interval, read_accesses[name])
@@ -197,7 +228,7 @@ class BaseOirSDFGBuilder(ABC):
             self._state.add_edge(recent_access, None, node, "IN_" + name, dace.Memlet())
 
     def _add_write_edges(
-        self, node, collections: List[Tuple[Interval, AccessCollector.CartesianAccessCollection]]
+        self, node, collections: List[Tuple[Interval, AccessCollector.GeneralAccessCollection]]
     ):
         write_accesses = dict()
         for interval, access_collection in collections:
@@ -221,7 +252,7 @@ class BaseOirSDFGBuilder(ABC):
             self._state.add_edge(node, "OUT_" + name, access_node, None, dace.Memlet())
 
     def _add_write_after_write_edges(
-        self, node, collections: List[Tuple[Interval, AccessCollector.CartesianAccessCollection]]
+        self, node, collections: List[Tuple[Interval, AccessCollector.GeneralAccessCollection]]
     ):
         for interval, collection in collections:
             for name in collection.write_fields():
@@ -230,12 +261,16 @@ class BaseOirSDFGBuilder(ABC):
                     self._delete_candidates.append(edge)
 
     def _add_write_after_read_edges(
-        self, node, collections: List[Tuple[Interval, AccessCollector.CartesianAccessCollection]]
+        self, node, collections: List[Tuple[Interval, AccessCollector.GeneralAccessCollection]]
     ):
         for interval, collection in collections:
             for name in collection.read_fields():
                 for offset in collection.read_offsets()[name]:
-                    read_interval = interval.shifted(offset[2])
+                    read_interval = (
+                        interval.shifted(offset[2])
+                        if offset[2] is not None
+                        else oir.UnboundedInterval()
+                    )
                     for dst in self._get_recent_writes(name, read_interval):
                         edge = self._state.add_edge(node, None, dst, None, dace.Memlet())
                         self._delete_candidates.append(edge)
@@ -316,8 +351,18 @@ class BaseOirSDFGBuilder(ABC):
                         name = edge.src.data
                         access_space = access_spaces_input[name]
                         subset_str_k = k_subset_strs_input.get(name, None)
-                        dynamic = isinstance(node, HorizontalExecutionLibraryNode) and any(
-                            isinstance(stmt, oir.MaskStmt) for stmt in node.oir_node.body
+                        dynamic = (
+                            isinstance(node, HorizontalExecutionLibraryNode)
+                            and len(node.oir_node.iter_tree().if_isinstance(oir.MaskStmt).to_list())
+                            > 0
+                        )
+                        dynamic = dynamic or (
+                            isinstance(node, HorizontalExecutionLibraryNode)
+                            and any(
+                                isinstance(acc.offset, VariableKOffset)
+                                for acc in node.oir_node.iter_tree().if_isinstance(oir.FieldAccess)
+                                if acc.name == name
+                            )
                         )
                     elif edge.src_conn is not None:
                         name = edge.dst.data
@@ -328,7 +373,15 @@ class BaseOirSDFGBuilder(ABC):
                         continue
                     subset_strs = self._access_space_to_subset(name, access_space)
                     if subset_str_k is not None:
-                        subset_strs.append(subset_str_k)
+                        if name in self._dynamic_k_fields and isinstance(
+                            node, HorizontalExecutionLibraryNode
+                        ):
+                            subset_strs_k = subset_str_k.split(":")
+                            subset_strs.append(f"k+({subset_strs_k[0]}):k+({subset_strs_k[1]})")
+                        else:
+                            subset_strs.append(subset_str_k)
+                    elif self.get_k_size(name) is not None:
+                        subset_strs.append(f"0:{self.get_k_size(name)}")
                     for dim in decls[name].data_dims:
                         subset_strs.append(f"0:{dim}")
                     edge.data = dace.Memlet.simple(
@@ -392,20 +445,30 @@ class VerticalLoopSectionOirSDFGBuilder(BaseOirSDFGBuilder):
         subsets = dict()
         for edge in self._state.edges():
             if edge.data.data is not None:
+                if "k" in edge.data.subset.free_symbols:
+                    continue
                 if edge.data.data not in subsets:
                     subsets[edge.data.data] = edge.data.subset
                 subsets[edge.data.data] = dace.subsets.union(
                     subsets[edge.data.data], edge.data.subset
                 )
-        return {name: subset.bounding_box_size() for name, subset in subsets.items()}
+        bounding_boxes = {name: subset.bounding_box_size() for name, subset in subsets.items()}
+        origins = {name: [r[0] for r in subset.ranges] for name, subset in subsets.items()}
+        return {
+            name: tuple(b + s for b, s in zip(bounding_boxes[name], origins[name]))
+            for name in bounding_boxes.keys()
+        }
 
     def get_k_size(self, name):
         if not self._axes[name][2]:
             return None
         collection = self._get_access_collection(self._sdfg)
-        min_k = min(o[2] for o in collection.offsets()[name])
-        max_k = max(o[2] for o in collection.offsets()[name])
-        return str(max_k - min_k + 1)
+        min_k = min(o[2] if o[2] is not None else 0 for o in collection.offsets()[name])
+        max_k = max(o[2] if o[2] is not None else 0 for o in collection.offsets()[name])
+        if any(o[2] is None for o in collection.offsets()[name]):
+            return f"({str(max_k - min_k)}) + __K"
+        else:
+            return str(max_k - min_k + 1)
 
     def get_k_subsets(self, node):
         assert isinstance(node, HorizontalExecutionLibraryNode)
@@ -413,18 +476,27 @@ class VerticalLoopSectionOirSDFGBuilder(BaseOirSDFGBuilder):
         write_subsets = dict()
         read_subsets = dict()
         k_origins = dict()
-        for name, offsets in collection.offsets().items():
-            k_origins[name] = -min(o[2] for o in offsets)
+        sdfg_collection = self._get_access_collection(self._sdfg)
+        for name, offsets in sdfg_collection.offsets().items():
+            k_origins[name] = (
+                -min(o[2] for o in offsets) if all(o[2] is not None for o in offsets) else None
+            )
         for name, offsets in collection.read_offsets().items():
             if self._axes[name][2]:
-                read_subsets[name] = "{origin}{min_off:+d}:{origin}{max_off:+d}".format(
-                    origin=k_origins[name],
-                    min_off=min(o[2] for o in offsets),
-                    max_off=max(o[2] for o in offsets) + 1,
-                )
+                if all(o[2] is not None for o in offsets):
+                    read_subsets[name] = "{origin}{min_off:+d}:{origin}{max_off:+d}".format(
+                        origin=k_origins[name],
+                        min_off=min(o[2] for o in offsets),
+                        max_off=max(o[2] for o in offsets) + 1,
+                    )
+                else:
+                    read_subsets[name] = None
         for name in collection.write_fields():
             if self._axes[name][2]:
-                write_subsets[name] = "{origin}:{origin}+1".format(origin=k_origins[name])
+                if k_origins[name] is not None:
+                    write_subsets[name] = "{origin}:{origin}+1".format(origin=k_origins[name])
+                else:
+                    write_subsets[name] = None
         return read_subsets, write_subsets
 
     def add_read_edges(self, node):
@@ -455,16 +527,20 @@ class VerticalLoopSectionOirSDFGBuilder(BaseOirSDFGBuilder):
         iteration_space = node.iteration_space
         assert iteration_space is not None
         collection = self._get_access_collection(node)
-        for name in collection.read_fields():
-            access_space = CartesianIJIndexSpace.from_offset(collection.read_offsets()[name].pop())
-            for offset in collection.read_offsets()[name]:
-                access_space = access_space | CartesianIJIndexSpace.from_offset(offset)
-            input_spaces[name] = access_space.compose(iteration_space)
-        for name in collection.write_fields():
-            access_space = CartesianIJIndexSpace.from_offset(collection.write_offsets()[name].pop())
-            for offset in collection.write_offsets()[name]:
-                access_space = access_space | CartesianIJIndexSpace.from_offset(offset)
-            output_spaces[name] = access_space.compose(iteration_space)
+
+        for acc in collection.read_accesses():
+            extended = iteration_to_access_space(
+                CartesianIJIndexSpace.from_iteration_space(iteration_space), acc
+            )
+            input_spaces.setdefault(acc.field, extended)
+            input_spaces[acc.field] |= extended
+        for acc in collection.write_accesses():
+            extended = iteration_to_access_space(
+                CartesianIJIndexSpace.from_iteration_space(iteration_space), acc
+            )
+            output_spaces.setdefault(acc.field, extended)
+            output_spaces[acc.field] |= extended
+
         return input_spaces, output_spaces
 
 
@@ -507,7 +583,7 @@ class StencilOirSDFGBuilder(BaseOirSDFGBuilder):
 
         k_sym = dace.symbol("__K")
         k_size_symbolic = dace.symbolic.pystr_to_symbolic(k_size)
-        if k_sym in k_size_symbolic.free_symbols and bool(k_size_symbolic >= k_sym):
+        if k_sym in k_size_symbolic.free_symbols and (k_size_symbolic >= k_sym) == True:
             return k_size
         else:
             return "__K"
@@ -518,20 +594,43 @@ class StencilOirSDFGBuilder(BaseOirSDFGBuilder):
         write_intervals = dict()
         read_intervals = dict()
         k_origins = dict()
+        dynamic_read_intervals = dict()
         for interval, sdfg in node.sections:
             collection = self._get_access_collection(sdfg)
             for name, offsets in collection.read_offsets().items():
                 if self._axes[name][2]:
                     for offset in offsets:
-                        read_interval = interval.shifted(offset[2])
+                        k_offset = 0 if offset[2] is None else offset[2]
+                        read_interval = interval.shifted(k_offset)
+                        if offset[2] is None:
+                            dynamic_read_intervals.setdefault(name, interval)
+                            dynamic_read_intervals[name] = Interval(
+                                start=min(dynamic_read_intervals[name].start, interval.start),
+                                end=max(dynamic_read_intervals[name].end, interval.end),
+                            )
                         read_intervals.setdefault(name, read_interval)
-                        read_intervals[name] = Interval(
-                            start=min(read_intervals[name].start, read_interval.start),
-                            end=max(read_intervals[name].end, read_interval.end),
+                        start = (
+                            min(read_intervals[name].start, read_interval.start)
+                            if read_intervals[name].start is not None
+                            and read_interval.start is not None
+                            else None
                         )
-                        k_origins[name] = min(
-                            k_origins.get(name, read_interval.start), read_interval.start
+                        end = (
+                            max(read_intervals[name].end, read_interval.end)
+                            if read_intervals[name].end is not None
+                            and read_interval.end is not None
+                            else None
                         )
+                        read_intervals[name] = oir.UnboundedInterval(
+                            start=start,
+                            end=end,
+                        )
+                        k_origins.setdefault(name, read_interval.start)
+                        if read_interval.start is not None:
+                            if k_origins[name] is None:
+                                k_origins[name] = read_interval.start
+                            else:
+                                k_origins[name] = min(k_origins[name], read_interval.start)
 
             for name in collection.write_fields():
                 if self._axes[name][2]:
@@ -553,12 +652,28 @@ class StencilOirSDFGBuilder(BaseOirSDFGBuilder):
         read_subsets = dict()
         for name, interval in read_intervals.items():
             res_interval = _offset_origin(interval, k_origins[name])
-            read_subsets[name] = "{}{:+d}:{}{:+d}".format(
-                "__K" if res_interval.start.level == LevelMarker.END else "",
-                res_interval.start.offset,
-                "__K" if res_interval.end.level == LevelMarker.END else "",
-                res_interval.end.offset,
-            )
+            if name in dynamic_read_intervals:
+                dyn_interval = dynamic_read_intervals[name]
+                res_interval = Interval(
+                    start=min(res_interval.start, dyn_interval.start),
+                    end=max(res_interval.end, dyn_interval.end),
+                )
+            if res_interval.start is None:
+                interval_start_str = "0"
+            else:
+                interval_start_str = "{}{:+d}".format(
+                    "__K" if res_interval.start.level == LevelMarker.END else "",
+                    res_interval.start.offset,
+                )
+            if res_interval.end is None:
+                interval_end_str = "__K"
+            else:
+                interval_end_str = "{}{:+d}".format(
+                    "__K" if res_interval.end.level == LevelMarker.END else "",
+                    res_interval.end.offset,
+                )
+
+            read_subsets[name] = f"{interval_start_str}:{interval_end_str}"
         return read_subsets, write_subsets
 
     def get_access_spaces(self, node):
@@ -573,30 +688,19 @@ class StencilOirSDFGBuilder(BaseOirSDFGBuilder):
                 iteration_space = n.iteration_space
                 assert iteration_space is not None
                 collection = self._get_access_collection(n)
-                for name in collection.read_fields():
-                    access_space = CartesianIJIndexSpace.from_offset(
-                        collection.read_offsets()[name].pop()
+                for acc in collection.read_accesses():
+                    extended = iteration_to_access_space(
+                        CartesianIJIndexSpace.from_iteration_space(iteration_space), acc
                     )
-                    for offset in collection.read_offsets()[name]:
-                        access_space = access_space | CartesianIJIndexSpace.from_offset(offset)
-                    if name not in input_spaces:
-                        input_spaces[name] = access_space.compose(iteration_space)
-                    else:
-                        input_spaces[name] = input_spaces[name] | access_space.compose(
-                            iteration_space
-                        )
-                for name in collection.write_fields():
-                    access_space = CartesianIJIndexSpace.from_offset(
-                        collection.write_offsets()[name].pop()
+                    input_spaces.setdefault(acc.field, extended)
+                    input_spaces[acc.field] |= extended
+
+                for acc in collection.write_accesses():
+                    extended = iteration_to_access_space(
+                        CartesianIJIndexSpace.from_iteration_space(iteration_space), acc
                     )
-                    for offset in collection.write_offsets()[name]:
-                        access_space = access_space | CartesianIJIndexSpace.from_offset(offset)
-                    if name not in output_spaces:
-                        output_spaces[name] = access_space.compose(iteration_space)
-                    else:
-                        output_spaces[name] = output_spaces[name] | access_space.compose(
-                            iteration_space
-                        )
+                    output_spaces.setdefault(acc.field, extended)
+                    output_spaces[acc.field] |= extended
         return input_spaces, output_spaces
 
     def _get_collection_from_sections(self, sections):

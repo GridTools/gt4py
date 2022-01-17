@@ -20,14 +20,16 @@ from typing import TYPE_CHECKING, Any, Collection, Dict, Iterator, List, Tuple, 
 import dace
 import dace.data
 import networkx as nx
+import numpy as np
 from dace import SDFG, InterstateEdge
 from pydantic import validator
 
 import eve
 import gtc.oir as oir
 from eve.iterators import TraversalOrder, iter_tree
+from gtc import common
 from gtc.common import CartesianOffset, DataType, ExprKind, LevelMarker, typestr_to_data_type
-from gtc.passes.oir_optimizations.utils import AccessCollector
+from gtc.passes.oir_optimizations.utils import AccessCollector, GenericAccess
 
 
 if TYPE_CHECKING:
@@ -84,14 +86,32 @@ def array_dimensions(array: dace.data.Array):
     return dims
 
 
+def replace_strides(arrays, get_layout_map):
+    symbol_mapping = {}
+    for array in arrays:
+        dims = array_dimensions(array)
+        ndata_dims = len(array.shape) - sum(dims)
+        layout = get_layout_map(dims + [True] * ndata_dims)
+        if array.transient:
+            stride = 1
+            for idx in reversed(np.argsort(layout)):
+                symbol = array.strides[idx]
+                size = array.shape[idx]
+                symbol_mapping[str(symbol)] = stride
+                stride *= size
+    return symbol_mapping
+
+
 def get_tasklet_symbol(name, offset, is_target):
     if is_target:
         return f"__{name}"
 
     acc_name = name + "__"
-    suffix = "_".join(
-        var + ("m" if o < 0 else "p") + f"{abs(o):d}" for var, o in zip("ijk", offset) if o != 0
-    )
+    offset_strs = []
+    for var, o in zip("ijk", offset):
+        if o is not None and o != 0:
+            offset_strs.append(var + ("m" if o < 0 else "p") + f"{abs(o):d}")
+    suffix = "_".join(offset_strs)
     if suffix != "":
         acc_name += suffix
     return acc_name
@@ -100,7 +120,9 @@ def get_tasklet_symbol(name, offset, is_target):
 def get_axis_bound_str(axis_bound, var_name):
     from gtc.common import LevelMarker
 
-    if axis_bound.level == LevelMarker.END:
+    if axis_bound is None:
+        return ""
+    elif axis_bound.level == LevelMarker.END:
         return f"{var_name}{axis_bound.offset:+d}"
     else:
         return f"{axis_bound.offset}"
@@ -295,6 +317,37 @@ class CartesianIterationSpace(oir.LocNode):
         )
         return CartesianIterationSpace(i_interval=i_interval, j_interval=j_interval)
 
+    def __and__(self, other: "CartesianIterationSpace") -> "CartesianIterationSpace":
+        i_interval = oir.Interval(
+            start=oir.AxisBound.from_start(
+                max(
+                    self.i_interval.start.offset,
+                    other.i_interval.start.offset,
+                )
+            ),
+            end=oir.AxisBound.from_end(
+                min(
+                    self.i_interval.end.offset,
+                    other.i_interval.end.offset,
+                )
+            ),
+        )
+        j_interval = oir.Interval(
+            start=oir.AxisBound.from_start(
+                max(
+                    self.j_interval.start.offset,
+                    other.j_interval.start.offset,
+                )
+            ),
+            end=oir.AxisBound.from_end(
+                min(
+                    self.j_interval.end.offset,
+                    other.j_interval.end.offset,
+                )
+            ),
+        )
+        return CartesianIterationSpace(i_interval=i_interval, j_interval=j_interval)
+
 
 class CartesianIJIndexSpace(tuple):
     def __new__(cls, *args, **kwargs):
@@ -312,8 +365,49 @@ class CartesianIJIndexSpace(tuple):
     @staticmethod
     def from_offset(offset: Union[Tuple[int, ...], CartesianOffset]) -> "CartesianIJIndexSpace":
         if isinstance(offset, CartesianOffset):
-            return CartesianIJIndexSpace((offset.i, offset.i), (offset.j, offset.j))
-        return CartesianIJIndexSpace(((offset[0], offset[0]), (offset[1], offset[1])))
+            res = ((offset.i, offset.i), (offset.j, offset.j))
+        else:
+            res = ((offset[0], offset[0]), (offset[1], offset[1]))
+
+        return CartesianIJIndexSpace(
+            (
+                (
+                    min(res[0][0], 0),
+                    max(res[0][1], 0),
+                ),
+                (
+                    min(res[1][0], 0),
+                    max(res[1][1], 0),
+                ),
+            )
+        )
+
+    @staticmethod
+    def from_access(access: GenericAccess):
+        if access.region is None:
+            return CartesianIJIndexSpace.from_offset(access.offset)
+
+        res = []
+
+        for interval, off in zip((access.region.i, access.region.j), access.offset[:2]):
+            dim_tuple = [0, 0]
+            if interval.start is not None:
+                if interval.start.level == common.LevelMarker.START:
+                    dim_tuple[0] = min(0, off + interval.start.offset)
+                else:
+                    dim_tuple[0] = 0
+            else:
+                dim_tuple[0] = min(0, off)
+            if interval.end is not None:
+                if interval.end.level == common.LevelMarker.END:
+                    dim_tuple[1] = max(0, off + interval.end.offset)
+                else:
+                    dim_tuple[1] = 0
+            else:
+                dim_tuple[1] = min(0, off)
+            res.append(tuple(dim_tuple))
+
+        return CartesianIJIndexSpace(res)
 
     @staticmethod
     def from_iteration_space(iteration_space: CartesianIterationSpace) -> "CartesianIJIndexSpace":
@@ -347,6 +441,41 @@ class CartesianIJIndexSpace(tuple):
                 (min(self[1][0], other[1][0]), max(self[1][1], other[1][1])),
             )
         )
+
+
+def iteration_to_access_space(iteration_space: CartesianIJIndexSpace, access: GenericAccess):
+    if access.region is None:
+        return CartesianIJIndexSpace.from_access(access).compose(iteration_space)
+
+    res = []
+
+    for region_interval, index_interval, off in zip(
+        (access.region.i, access.region.j),
+        iteration_space,
+        access.offset[:2],
+    ):
+        dim_tuple = list(index_interval)
+
+        if region_interval.start is not None:
+            if region_interval.start.level == common.LevelMarker.START:
+                dim_tuple[0] = min(
+                    0, max(index_interval[0] + off, region_interval.start.offset + off)
+                )
+        else:
+            dim_tuple[0] += min(0, off)
+
+        if region_interval.end is not None:
+            if region_interval.end.level == common.LevelMarker.END:
+
+                dim_tuple[1] = max(
+                    0, min(index_interval[1] + off, region_interval.end.offset + off)
+                )
+        else:
+            dim_tuple[1] += min(0, off)
+
+        res.append(tuple(dim_tuple))
+
+    return CartesianIJIndexSpace(res)
 
 
 def oir_iteration_space_computation(stencil: oir.Stencil) -> Dict[int, CartesianIterationSpace]:
@@ -410,19 +539,20 @@ def oir_field_boundary_computation(stencil: oir.Stencil) -> Dict[str, CartesianI
 
 
 def get_access_collection(
-    node: Union[dace.SDFG, "HorizontalExecutionLibraryNode", "VerticalLoopLibraryNode"]
+    node: Union[dace.SDFG, "HorizontalExecutionLibraryNode", "VerticalLoopLibraryNode"],
+    compensate_regions: bool = False,
 ):
     from gtc.dace.nodes import HorizontalExecutionLibraryNode, VerticalLoopLibraryNode
 
     if isinstance(node, dace.SDFG):
         res = AccessCollector.CartesianAccessCollection([])
-        for node in node.states()[0].nodes():
+        for node, _ in node.all_nodes_recursive():
             if isinstance(node, (HorizontalExecutionLibraryNode, VerticalLoopLibraryNode)):
                 collection = get_access_collection(node)
                 res._ordered_accesses.extend(collection._ordered_accesses)
         return res
     elif isinstance(node, HorizontalExecutionLibraryNode):
-        return AccessCollector.apply(node.oir_node)
+        return AccessCollector.apply(node.oir_node, compensate_regions=compensate_regions)
     else:
         assert isinstance(node, VerticalLoopLibraryNode)
         res = AccessCollector.CartesianAccessCollection([])
@@ -455,24 +585,63 @@ def nodes_extent_calculation(
         access_collection = AccessCollector.apply(node.oir_node)
         iteration_space = node.iteration_space
         if iteration_space is not None:
-            for name, offsets in access_collection.offsets().items():
-                for off in offsets:
-                    access_extent = (
+            for acc in access_collection.ordered_accesses():
+                if acc.region is None:
+
+                    access_extent = [
                         (
-                            iteration_space.i_interval.start.offset + off[0],
-                            iteration_space.i_interval.end.offset + off[0],
+                            min(0, iteration_space.i_interval.start.offset + acc.offset[0]),
+                            max(0, iteration_space.i_interval.end.offset + acc.offset[0]),
                         ),
                         (
-                            iteration_space.j_interval.start.offset + off[1],
-                            iteration_space.j_interval.end.offset + off[1],
+                            min(0, iteration_space.j_interval.start.offset + acc.offset[1]),
+                            max(0, iteration_space.j_interval.end.offset + acc.offset[1]),
                         ),
-                    )
-                    if name not in access_spaces:
-                        access_spaces[name] = access_extent
-                    access_spaces[name] = tuple(
-                        (min(asp[0], ext[0]), max(asp[1], ext[1]))
-                        for asp, ext in zip(access_spaces[name], access_extent)
-                    )
+                    ]
+                else:
+                    access_extent = []
+                    for dim, region_interval, iteration_interval in zip(
+                        (0, 1),
+                        (acc.region.i, acc.region.j),
+                        (iteration_space.i_interval, iteration_space.j_interval),
+                    ):
+                        ext = [0, 0]
+
+                        ext[0] = iteration_interval.start.offset
+                        if region_interval.start is not None:
+                            if region_interval.start.level == common.LevelMarker.START:
+                                # offset = (
+                                #     region_interval.start.offset - iteration_interval.start.offset
+                                # )
+                                ext[0] = max(
+                                    ext[0] + acc.offset[dim],
+                                    region_interval.start.offset + acc.offset[dim],
+                                )
+                        else:
+                            ext[0] += acc.offset[dim]
+                        ext[0] = min(0, ext[0])
+
+                        ext[1] = iteration_interval.end.offset
+                        if region_interval.end is not None:
+                            if region_interval.end.level == common.LevelMarker.END:
+                                # offset = region_interval.end.offset - iteration_interval.end.offset
+                                # ext[1] += acc.offset[dim] + offset
+                                ext[1] = min(
+                                    ext[1] + acc.offset[dim],
+                                    region_interval.end.offset + acc.offset[dim],
+                                )
+                        else:
+                            ext[1] += acc.offset[dim]
+                        ext[1] = max(0, ext[1])
+
+                        access_extent.append(tuple(ext))
+
+                if acc.field not in access_spaces:
+                    access_spaces[acc.field] = tuple(access_extent)
+                access_spaces[acc.field] = tuple(
+                    (min(asp[0], ext[0]), max(asp[1], ext[1]))
+                    for asp, ext in zip(access_spaces[acc.field], access_extent)
+                )
 
     return {
         name: ((-asp[0][0], asp[0][1]), (-asp[1][0], asp[1][1]))
@@ -551,10 +720,10 @@ class IntervalMapping:
     def __setitem__(self, key: oir.Interval, value: Any) -> None:
         if not isinstance(key, oir.Interval):
             raise TypeError("Only OIR intervals supported for method add of IntervalSet.")
-
+        key = oir.UnboundedInterval(start=key.start, end=key.end)
         delete = list()
         for i, (start, end) in enumerate(zip(self.interval_starts, self.interval_ends)):
-            if key.covers(oir.Interval(start=start, end=end)):
+            if key.covers(oir.UnboundedInterval(start=start, end=end)):
                 delete.append(i)
 
         for i in reversed(delete):  # so indices keep validity while deleting
@@ -569,13 +738,13 @@ class IntervalMapping:
             return
 
         for i, (start, end) in enumerate(zip(self.interval_starts, self.interval_ends)):
-            if oir.Interval(start=start, end=end).covers(key):
+            if oir.UnboundedInterval(start=start, end=end).covers(key):
                 self._setitem_subset_of_existing(i, key, value)
                 return
 
         for i, (start, end) in enumerate(zip(self.interval_starts, self.interval_ends)):
             if (
-                key.intersects(oir.Interval(start=start, end=end))
+                key.intersects(oir.UnboundedInterval(start=start, end=end))
                 or start == key.end
                 or end == key.start
             ):
@@ -598,18 +767,42 @@ class IntervalMapping:
             raise TypeError("Only OIR intervals supported for keys of IntervalMapping.")
 
         res = []
+        key = oir.UnboundedInterval(start=key.start, end=key.end)
         for start, end, value in zip(self.interval_starts, self.interval_ends, self.values):
-            if key.intersects(oir.Interval(start=start, end=end)):
+            if key.intersects(oir.UnboundedInterval(start=start, end=end)):
                 res.append(value)
         return res
 
 
+def equal_vl_node(n1: "VerticalLoopLibraryNode", n2: "VerticalLoopLibraryNode"):
+    from gtc.dace.nodes import VerticalLoopLibraryNode
+
+    try:
+        assert isinstance(n2, VerticalLoopLibraryNode)
+        assert n1.loop_order == n2.loop_order
+        assert n1.caches == n2.caches
+        assert len(n1.sections) == len(n2.sections)
+        for (interval1, he_sdfg1), (interval2, he_sdfg2) in zip(n1.sections, n2.sections):
+            assert interval1 == interval2
+            assert_sdfg_equal(he_sdfg1, he_sdfg2)
+    except AssertionError:
+        return False
+    return True
+
+
+def equal_he_node(n1: "HorizontalExecutionLibraryNode", n2: "HorizontalExecutionLibraryNode"):
+    from gtc.dace.nodes import HorizontalExecutionLibraryNode
+
+    try:
+        assert isinstance(n2, HorizontalExecutionLibraryNode)
+        assert n1.as_oir() == n2.as_oir()
+    except AssertionError:
+        return False
+    return True
+
+
 def assert_sdfg_equal(sdfg1: dace.SDFG, sdfg2: dace.SDFG):
-    from gtc.dace.nodes import (
-        HorizontalExecutionLibraryNode,
-        OIRLibraryNode,
-        VerticalLoopLibraryNode,
-    )
+    from gtc.dace.nodes import HorizontalExecutionLibraryNode, VerticalLoopLibraryNode
 
     def edge_match(edge1, edge2):
         edge1 = next(iter(edge1.values()))
@@ -638,8 +831,10 @@ def assert_sdfg_equal(sdfg1: dace.SDFG, sdfg2: dace.SDFG):
                 assert isinstance(n2, dace.nodes.AccessNode)
                 assert n1.access == n2.access
                 assert n1.data == n2.data
-            elif isinstance(n1, OIRLibraryNode):
-                assert n1 == n2
+            elif isinstance(n1, VerticalLoopLibraryNode):
+                assert equal_vl_node(n1, n2)
+            elif isinstance(n1, HorizontalExecutionLibraryNode):
+                assert equal_he_node(n1, n2)
         except AssertionError:
             return False
         return True

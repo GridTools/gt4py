@@ -22,7 +22,7 @@ e.g. stage merging, staged computations to compute-on-the-fly, cache annotations
 """
 
 import sys
-from typing import Any, Dict, List, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 from pydantic import root_validator, validator
 
@@ -135,9 +135,20 @@ class Interval(LocNode):
     @root_validator
     def check(cls, values: Dict[str, Any]) -> Dict[str, Any]:
         start, end = values["start"], values["end"]
-        if start.level == common.LevelMarker.END and end.level == common.LevelMarker.START:
+        if (
+            start is not None
+            and start.level == common.LevelMarker.END
+            and end is not None
+            and end.level == common.LevelMarker.START
+        ):
             raise ValueError("Start level must be smaller or equal end level")
-        if start.level == end.level and not start.offset < end.offset:
+
+        if (
+            start is not None
+            and end is not None
+            and start.level == end.level
+            and not start.offset < end.offset
+        ):
             raise ValueError(
                 "Start offset must be smaller than end offset if start and end levels are equal"
             )
@@ -151,7 +162,9 @@ class Interval(LocNode):
     def intersects(self, other: "Interval") -> bool:
         return not (other.start >= self.end or self.start >= other.end)
 
-    def shifted(self, offset: int) -> "Interval":
+    def shifted(self, offset: Optional[int]) -> "Interval":
+        if offset is None:
+            return UnboundedInterval()
         start = AxisBound(level=self.start.level, offset=self.start.offset + offset)
         end = AxisBound(level=self.end.level, offset=self.end.offset + offset)
         return Interval(start=start, end=end)
@@ -159,6 +172,55 @@ class Interval(LocNode):
     @classmethod
     def full(cls):
         return cls(start=AxisBound.start(), end=AxisBound.end())
+
+
+class UnboundedInterval(Interval):
+    start: Optional[AxisBound] = None
+    end: Optional[AxisBound] = None
+
+    @root_validator
+    def check(cls, values: Dict[str, Any]) -> Dict[str, Any]:
+        values.setdefault("start", None)
+        values.setdefault("end", None)
+        return super().check(values)
+
+    def covers(self, other: "Interval") -> bool:
+        if self.start is None and self.end is None:
+            return True
+        if self.end is None and other.start is not None and other.start >= self.start:
+            return True
+        if self.start is None and other.end is not None and other.end <= self.end:
+            return True
+        # at this point, we know self is actually bounded, so can't cover unbounded intervals
+        if other.start is None or other.end is None:
+            return False
+        return super().covers(other)
+
+    def intersects(self, other: "Interval") -> bool:
+        no_overlap_high = (
+            self.end is not None and other.start is not None and other.start >= self.end
+        )
+        no_overlap_low = (
+            self.start is not None and other.end is not None and self.start >= other.end
+        )
+        return not (no_overlap_low or no_overlap_high)
+
+    def shifted(self, offset: int) -> "Interval":
+        start = (
+            None
+            if self.start is None
+            else AxisBound(level=self.start.level, offset=self.start.offset + offset)
+        )
+        end = (
+            None
+            if self.start is None
+            else AxisBound(level=self.end.level, offset=self.end.offset + offset)
+        )
+        return UnboundedInterval(start=start, end=end)
+
+    @classmethod
+    def full(cls):
+        return cls()
 
 
 class HorizontalExecution(LocNode, SymbolTableTrait):
@@ -312,3 +374,9 @@ class Stencil(LocNode, SymbolTableTrait):
     _validate_dtype_is_set = common.validate_dtype_is_set()
     _validate_symbol_refs = common.validate_symbol_refs()
     _validate_lvalue_dims = common.validate_lvalue_dims(VerticalLoop, FieldDecl)
+
+
+# class AxisIndex(Expr):
+#     axis: str
+#     dtype = common.DataType.INT32
+#     kind = common.ExprKind.SCALAR
