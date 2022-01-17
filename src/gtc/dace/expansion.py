@@ -962,12 +962,7 @@ class BlockVerticalLoopExpander(NaiveVerticalLoopExpander):
             )
         return {k: str(v) for k, v in inner_subsets.items()}
 
-    def device_map(self, nsdfg):
-
-        tile_i_sym = dace.symbol("tile_i", dtype=dace.int32)
-        tile_j_sym = dace.symbol("tile_j", dtype=dace.int32)
-        global_I_sym = dace.symbol("__global_I", dtype=dace.int32)
-        global_J_sym = dace.symbol("__global_J", dtype=dace.int32)
+    def _device_map_add_nodes(self, nsdfg):
 
         self.res_state.add_node(nsdfg)
 
@@ -1024,13 +1019,12 @@ class BlockVerticalLoopExpander(NaiveVerticalLoopExpander):
                 external_memlet=dace.Memlet.simple(name, subset_all),
                 scope_connector=name,
             )
-        nsdfg.symbol_mapping["__I"] = dace.symbolic.pystr_to_symbolic(
-            f"min({tile_sizes[0]}, __I - tile_i )"
-        )
-        nsdfg.symbol_mapping["__J"] = dace.symbolic.pystr_to_symbolic(
-            f"min({tile_sizes[1]}, __J - tile_j )"
-        )
 
+    def _device_map_set_map_ranges(self, nsdfg):
+        tile_i_sym = dace.symbol("tile_i", dtype=dace.int32)
+        tile_j_sym = dace.symbol("tile_j", dtype=dace.int32)
+        global_I_sym = dace.symbol("__global_I", dtype=dace.int32)
+        global_J_sym = dace.symbol("__global_J", dtype=dace.int32)
         state: dace.SDFGState
         access_collection: AccessCollector.Result = get_access_collection(self.node)
         region_fields = {
@@ -1088,6 +1082,20 @@ class BlockVerticalLoopExpander(NaiveVerticalLoopExpander):
                     shape[i] = s
                 array.shape = tuple(shape)
 
+    def _device_map_fix_symbols(self, nsdfg):
+
+        tile_i_sym = dace.symbol("tile_i", dtype=dace.int32)
+        tile_j_sym = dace.symbol("tile_j", dtype=dace.int32)
+        global_I_sym = dace.symbol("__global_I", dtype=dace.int32)
+        global_J_sym = dace.symbol("__global_J", dtype=dace.int32)
+        tile_sizes = self.node.tile_sizes or self.default_tile_sizes
+        nsdfg.symbol_mapping["__I"] = dace.symbolic.pystr_to_symbolic(
+            f"min({tile_sizes[0]}, __I - tile_i )"
+        )
+        nsdfg.symbol_mapping["__J"] = dace.symbolic.pystr_to_symbolic(
+            f"min({tile_sizes[1]}, __J - tile_j )"
+        )
+
         if "tile_i" not in nsdfg.sdfg.symbols:
             nsdfg.sdfg.add_symbol("tile_i", dace.int32)
         if "tile_j" not in nsdfg.sdfg.symbols:
@@ -1119,6 +1127,11 @@ class BlockVerticalLoopExpander(NaiveVerticalLoopExpander):
         nsdfg.symbol_mapping["__global_J"] = dace.symbolic.pystr_to_symbolic("__J")
         nsdfg.symbol_mapping["tile_i"] = tile_i_sym
         nsdfg.symbol_mapping["tile_j"] = tile_j_sym
+
+    def device_map(self, nsdfg):
+        self._device_map_add_nodes(nsdfg)
+        self._device_map_set_map_ranges(nsdfg)
+        self._device_map_fix_symbols(nsdfg)
 
 
 class SequentialBlockLoopExpander(BlockVerticalLoopExpander):
