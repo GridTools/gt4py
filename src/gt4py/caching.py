@@ -23,7 +23,8 @@ import sys
 import types
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
-import gt4py
+from gt4py import config as gt_config
+from gt4py import utils as gt_utils
 from gt4py.definitions import StencilID
 
 
@@ -174,11 +175,11 @@ class JITCachingStrategy(CachingStrategy):
 
     @property
     def root_path(self) -> pathlib.Path:
-        settings = gt4py.config.cache_settings
+        settings = gt_config.cache_settings
         cache_root = pathlib.Path(settings["root_path"]) / settings["dir_name"]
 
         if not cache_root.exists():
-            gt4py.utils.make_dir(str(cache_root), is_cache=True)
+            gt_utils.make_dir(str(cache_root), is_cache=True)
 
         return cache_root
 
@@ -187,7 +188,7 @@ class JITCachingStrategy(CachingStrategy):
         cpython_id = "py{version.major}{version.minor}_{api_version}".format(
             version=sys.version_info, api_version=sys.api_version
         )
-        backend_root = self.root_path / cpython_id / gt4py.utils.slugify(self.builder.backend.name)
+        backend_root = self.root_path / cpython_id / gt_utils.slugify(self.builder.backend.name)
         if not backend_root.exists():
             if not backend_root.parent.exists():
                 backend_root.parent.mkdir(parents=False)
@@ -204,7 +205,7 @@ class JITCachingStrategy(CachingStrategy):
             "backend": self.builder.backend.name,
             "stencil_name": self.builder.stencil_id.qualified_name,
             "stencil_version": self.builder.stencil_id.version,
-            "module_shash": gt4py.utils.shash(self.builder.stencil_source),
+            "module_shash": gt_utils.shash(self.builder.stencil_source),
             **self.builder.backend.extra_cache_info,
         }
 
@@ -231,7 +232,7 @@ class JITCachingStrategy(CachingStrategy):
                 if k in self.builder.backend.extra_cache_validation_keys
             }
             source = self.builder.module_path.read_text()
-            module_shash = gt4py.utils.shash(source)
+            module_shash = gt_utils.shash(source)
 
             if validate_hash:
                 result = (
@@ -293,7 +294,7 @@ class JITCachingStrategy(CachingStrategy):
         # typeignore because attrclass StencilID has generated constructor
         return StencilID(  # type: ignore
             self.builder.options.qualified_name,
-            gt4py.utils.shashed_id(gt4py.utils.shashed_id(fingerprint), self.options_id),
+            gt_utils.shashed_id(gt_utils.shashed_id(fingerprint), self.options_id),
         )
 
     @property
@@ -302,7 +303,7 @@ class JITCachingStrategy(CachingStrategy):
 
     @property
     def module_postfix(self) -> str:
-        backend_name = gt4py.utils.slugify(self.builder.backend.name)
+        backend_name = gt_utils.slugify(self.builder.backend.name)
         id_version = self.stencil_id.version
         return f"__{backend_name}_{id_version}"
 

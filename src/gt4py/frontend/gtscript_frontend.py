@@ -28,12 +28,13 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 import numpy as np
 
 from gt4py import definitions as gt_definitions
-from gt4py import frontend as gt_frontend
 from gt4py import gtscript
 from gt4py import ir as gt_ir
 from gt4py import utils as gt_utils
 from gt4py.utils import NOTHING
 from gt4py.utils import meta as gt_meta
+
+from .base import Frontend, register
 
 
 class GTScriptSyntaxError(gt_definitions.GTSyntaxError):
@@ -1929,8 +1930,8 @@ class GTScriptParser(ast.NodeVisitor):
         return self.definition_ir
 
 
-@gt_frontend.register
-class GTScriptFrontend(gt_frontend.Frontend):
+@register
+class GTScriptFrontend(Frontend):
     name = "gtscript"
 
     @classmethod

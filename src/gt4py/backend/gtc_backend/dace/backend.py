@@ -20,10 +20,9 @@ import dace
 
 from eve import codegen
 from eve.codegen import MakoTemplate as as_mako
-from gt4py import backend as gt_backend
 from gt4py import gt_src_manager
-from gt4py.backend import BaseGTBackend, CLIBackendMixin
-from gt4py.backend.gt_backends import make_x86_layout_map, x86_is_compatible_layout
+from gt4py.backend.base import CLIBackendMixin, register
+from gt4py.backend.gt_backends import BaseGTBackend, make_x86_layout_map, x86_is_compatible_layout
 from gt4py.backend.gtc_backend.common import bindings_main_template, pybuffer_to_sid
 from gt4py.backend.gtc_backend.defir_to_gtir import DefIRToGTIR
 from gt4py.ir import StencilDefinition
@@ -282,7 +281,7 @@ class DaCeBindingsCodegen:
         return formatted_code
 
 
-@gt_backend.register
+@register
 class GTCDaceBackend(BaseGTBackend, CLIBackendMixin):
     """DaCe python backend using gtc."""
 

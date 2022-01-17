@@ -14,25 +14,26 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-# Disable isort to avoid circular imports
-# isort: off
-from .base import *
+from . import python_generator
+from .base import (
+    REGISTRY,
+    Backend,
+    BaseBackend,
+    BasePyExtBackend,
+    CLIBackendMixin,
+    PurePythonBackendCLIMixin,
+    from_name,
+    register,
+)
+from .debug_backend import DebugBackend
+from .gt_backends import GTCUDABackend, GTMCBackend, GTX86Backend
+from .gtc_backend import (
+    GTCCudaBackend,
+    GTCDaceBackend,
+    GTCGTCpuIfirstBackend,
+    GTCGTCpuKfirstBackend,
+    GTCGTGpuBackend,
+    GTCNumpyBackend,
+)
 from .module_generator import BaseModuleGenerator
-from . import python_generator
-
-# isort: on
-
-from .debug_backend import *
-from .gt_backends import *
-from .gtc_backend import *
-from .numpy_backend import *
-
-
-try:
-    import dawn4py
-
-    from .dawn_backends import *
-except ImportError:
-    pass  # dawn4py not installed
-
-from . import python_generator
+from .numpy_backend import NumPyBackend

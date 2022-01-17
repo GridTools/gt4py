@@ -13,65 +13,179 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
+import collections
+import copy
+import operator
+from typing import Generator, Type
 
-import ast
-import inspect
-import numbers
-import textwrap
-import types
-from typing import Any, Dict, List, Optional, Tuple, Union
+from gt4py import utils as gt_utils
 
-import gt4py.gtscript as gtscript
-from gt4py.utils import NOTHING
-
-from .nodes import *
+from .nodes import Node
 
 
-# --- Definition IR ---
-DEFAULT_LAYOUT_ID = "_default_layout_id_"
+def iter_attributes(node: Node):
+    """
+    Yield a tuple of ``(attrib_name, value)`` for each attribute in ``node.attributes``
+    that is present on *node*.
+    """
+    for attrib_name in node.attributes:
+        try:
+            yield attrib_name, getattr(node, attrib_name)
+        except AttributeError:
+            pass
 
 
-def make_field_decl(
-    name: str,
-    dtype=np.float_,
-    masked_axes=None,
-    is_api=True,
-    layout_id=DEFAULT_LAYOUT_ID,
-    loc=None,
-    *,
-    axes_dict=None,
-):
-    axes_dict = axes_dict or {ax.name: ax for ax in Domain.LatLonGrid().axes}
-    masked_axes = masked_axes or []
-    return FieldDecl(
-        name=name,
-        data_type=DataType.from_dtype(dtype),
-        axes=[name for name, axis in axes_dict.items() if name not in masked_axes],
-        is_api=is_api,
-        layout_id=layout_id,
-        loc=loc,
-    )
+class IRNodeVisitor:
+    def visit(self, node: Node, **kwargs):
+        return self._visit(node, **kwargs)
 
+    def _visit(self, node: Node, **kwargs):
+        visitor = self.generic_visit
+        if isinstance(node, Node):
+            for node_class in node.__class__.__mro__:
+                method_name = "visit_" + node_class.__name__
+                if hasattr(self, method_name):
+                    visitor = getattr(self, method_name)
+                    break
 
-def make_field_ref(name: str, offset=(0, 0, 0), *, axes_names=None):
-    axes_names = axes_names or [ax.name for ax in Domain.LatLonGrid().axes]
-    offset = {axes_names[i]: value for i, value in enumerate(offset) if value is not None}
-    return FieldRef(name=name, offset=offset)
+        return visitor(node, **kwargs)
 
-
-def make_api_signature(args_list: list):
-    api_signature = []
-    for item in args_list:
-        if isinstance(item, str):
-            api_signature.append(ArgumentInfo(name=item, is_keyword=False, default=None))
-        elif isinstance(item, tuple):
-            api_signature.append(
-                ArgumentInfo(
-                    name=item[0],
-                    is_keyword=item[1] if len(item) > 1 else False,
-                    default=item[2] if len(item) > 2 else None,
-                )
-            )
+    def generic_visit(self, node: Node, **kwargs):
+        items = []
+        if isinstance(node, (str, bytes, bytearray)):
+            pass
+        elif isinstance(node, collections.abc.Mapping):
+            items = node.items()
+        elif isinstance(node, collections.abc.Iterable):
+            items = enumerate(node)
+        elif isinstance(node, Node):
+            items = iter_attributes(node)
         else:
-            assert isinstance(item, ArgumentInfo), "Invalid api_signature"
-    return api_signature
+            pass
+
+        for key, value in items:
+            self._visit(value, **kwargs)
+
+
+class IRNodeInspector:
+    def visit(self, node: Node):
+        return self._visit((), None, node)
+
+    def _visit(self, path: tuple, node_name: str, node):
+        visitor = self.generic_visit
+        if isinstance(node, Node):
+            for node_class in node.__class__.__mro__:
+                method_name = "visit_" + node_class.__name__
+                if hasattr(self, method_name):
+                    visitor = getattr(self, method_name)
+                    break
+
+        return visitor(path, node_name, node)
+
+    def generic_visit(self, path: tuple, node_name: str, node: Node):
+        items = []
+        if isinstance(node, (str, bytes, bytearray)):
+            pass
+        elif isinstance(node, collections.abc.Mapping):
+            items = node.items()
+        elif isinstance(node, collections.abc.Iterable):
+            items = enumerate(node)
+        elif isinstance(node, Node):
+            items = iter_attributes(node)
+        else:
+            pass
+
+        for key, value in items:
+            self._visit((*path, node_name), key, value)
+
+
+class IRNodeMapper:
+    def visit(self, node: Node):
+        keep_node, new_node = self._visit((), None, node)
+        return new_node if keep_node else None
+
+    def _visit(self, path: tuple, node_name: str, node: Node):
+        visitor = self.generic_visit
+        if isinstance(node, Node):
+            for node_class in node.__class__.__mro__:
+                method_name = "visit_" + node_class.__name__
+                if hasattr(self, method_name):
+                    visitor = getattr(self, method_name)
+                    break
+
+        return visitor(path, node_name, node)
+
+    def generic_visit(self, path: tuple, node_name: str, node: Node):
+        if isinstance(node, (str, bytes, bytearray)):
+            return True, node
+        elif isinstance(node, collections.abc.Iterable):
+            if isinstance(node, collections.abc.Mapping):
+                items = node.items()
+            else:
+                items = enumerate(node)
+            setattr_op = operator.setitem
+            delattr_op = operator.delitem
+        elif isinstance(node, Node):
+            items = iter_attributes(node)
+            setattr_op = setattr
+            delattr_op = delattr
+        else:
+            return True, node
+
+        del_items = []
+        for key, old_value in items:
+            keep_item, new_value = self._visit((*path, node_name), key, old_value)
+            if not keep_item:
+                del_items.append(key)
+            elif new_value != old_value:
+                setattr_op(node, key, new_value)
+        for key in reversed(del_items):  # reversed, so that keys remain valid in sequences
+            delattr_op(node, key)
+
+        return True, node
+
+
+class IRNodeDumper(IRNodeMapper):
+    @classmethod
+    def apply(cls, root_node, *, as_json=False):
+        return cls(as_json=as_json)(root_node)
+
+    def __init__(self, as_json: bool):
+        self.as_json = as_json
+
+    def __call__(self, node):
+        result = self.visit(copy.deepcopy(node))
+        if self.as_json:
+            result = gt_utils.jsonify(result)
+        return result
+
+    def visit_Node(self, path: tuple, node_name: str, node: Node):
+        object_name = node.__class__.__name__.split(".")[-1]
+        keep_node, new_node = self.generic_visit(path, node_name, node)
+        return keep_node, {object_name: new_node.as_dict()}
+
+
+dump_ir = IRNodeDumper.apply
+
+
+def iter_nodes_of_type(root_node: Node, node_type: Type) -> Generator[Node, None, None]:
+    """Yield an iterator over the nodes of node_type inside root_node in DFS order."""
+
+    def recurse(node: Node) -> Generator[Node, None, None]:
+        for key, value in iter_attributes(node):
+            if isinstance(node, collections.abc.Iterable):
+                if isinstance(node, collections.abc.Mapping):
+                    children = node.values()
+                else:
+                    children = node
+            else:
+                children = gt_utils.listify(value)
+
+            for value in children:
+                if isinstance(value, Node):
+                    yield from recurse(value)
+
+            if isinstance(node, node_type):
+                yield node
+
+    yield from recurse(root_node)
