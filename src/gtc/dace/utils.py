@@ -588,7 +588,7 @@ def nodes_extent_calculation(
             for acc in access_collection.ordered_accesses():
                 if acc.region is None:
 
-                    access_extent = [
+                    access_extent: List[Tuple[int, int]] = [
                         (
                             min(0, iteration_space.i_interval.start.offset + acc.offset[0]),
                             max(0, iteration_space.i_interval.end.offset + acc.offset[0]),
@@ -610,9 +610,6 @@ def nodes_extent_calculation(
                         ext[0] = iteration_interval.start.offset
                         if region_interval.start is not None:
                             if region_interval.start.level == common.LevelMarker.START:
-                                # offset = (
-                                #     region_interval.start.offset - iteration_interval.start.offset
-                                # )
                                 ext[0] = max(
                                     ext[0] + acc.offset[dim],
                                     region_interval.start.offset + acc.offset[dim],
@@ -624,8 +621,6 @@ def nodes_extent_calculation(
                         ext[1] = iteration_interval.end.offset
                         if region_interval.end is not None:
                             if region_interval.end.level == common.LevelMarker.END:
-                                # offset = region_interval.end.offset - iteration_interval.end.offset
-                                # ext[1] += acc.offset[dim] + offset
                                 ext[1] = min(
                                     ext[1] + acc.offset[dim],
                                     region_interval.end.offset + acc.offset[dim],
@@ -634,7 +629,7 @@ def nodes_extent_calculation(
                             ext[1] += acc.offset[dim]
                         ext[1] = max(0, ext[1])
 
-                        access_extent.append(tuple(ext))
+                        access_extent.append((ext[0], ext[1]))
 
                 if acc.field not in access_spaces:
                     access_spaces[acc.field] = tuple(access_extent)

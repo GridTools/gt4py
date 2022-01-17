@@ -205,7 +205,9 @@ class UnboundedInterval(Interval):
         )
         return not (no_overlap_low or no_overlap_high)
 
-    def shifted(self, offset: int) -> "Interval":
+    def shifted(self, offset: Optional[int]) -> "Interval":
+        if offset is None:
+            return UnboundedInterval()
         start = (
             None
             if self.start is None
@@ -213,7 +215,7 @@ class UnboundedInterval(Interval):
         )
         end = (
             None
-            if self.start is None
+            if self.end is None
             else AxisBound(level=self.end.level, offset=self.end.offset + offset)
         )
         return UnboundedInterval(start=start, end=end)
@@ -374,9 +376,3 @@ class Stencil(LocNode, SymbolTableTrait):
     _validate_dtype_is_set = common.validate_dtype_is_set()
     _validate_symbol_refs = common.validate_symbol_refs()
     _validate_lvalue_dims = common.validate_lvalue_dims(VerticalLoop, FieldDecl)
-
-
-# class AxisIndex(Expr):
-#     axis: str
-#     dtype = common.DataType.INT32
-#     kind = common.ExprKind.SCALAR

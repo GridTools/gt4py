@@ -21,7 +21,6 @@ import dace.data
 import dace.library
 import dace.subsets
 
-import eve
 import gtc.common as common
 import gtc.oir as oir
 from eve import codegen
@@ -911,9 +910,7 @@ class BlockVerticalLoopExpander(NaiveVerticalLoopExpander):
     default_tile_sizes = (64, 8)
 
     def get_tiled_subset_strs(self, nsdfg, iteration_space):
-        iter_bounds = (iteration_space.i_interval.start, iteration_space.j_interval.start)
         tile_sizes = self.node.tile_sizes or self.default_tile_sizes
-        names = {*nsdfg.in_connectors, *nsdfg.out_connectors}
 
         access_collection = get_access_collection(nsdfg.sdfg)
         region_fields = {
@@ -1118,8 +1115,8 @@ class BlockVerticalLoopExpander(NaiveVerticalLoopExpander):
                 if "__global_J" not in node.sdfg.symbols:
                     node.sdfg.add_symbol("__global_J", dace.int32)
 
-        nsdfg.symbol_mapping["__global_I"] = dace.symbolic.pystr_to_symbolic(f"__I")
-        nsdfg.symbol_mapping["__global_J"] = dace.symbolic.pystr_to_symbolic(f"__J")
+        nsdfg.symbol_mapping["__global_I"] = dace.symbolic.pystr_to_symbolic("__I")
+        nsdfg.symbol_mapping["__global_J"] = dace.symbolic.pystr_to_symbolic("__J")
         nsdfg.symbol_mapping["tile_i"] = tile_i_sym
         nsdfg.symbol_mapping["tile_j"] = tile_j_sym
 

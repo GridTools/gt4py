@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Union
 
 from eve import NodeVisitor
 from eve.utils import XIterable
@@ -173,7 +173,7 @@ class LegacyExtentsVisitor(NodeVisitor):
                     ext[1] = 0
 
                 res_extent.append(ext)
-            res_extent.append((0, 0))
+            res_extent.append([0, 0])
             default_extent = Extent(res_extent)
         else:
             default_extent = Extent.from_offset((node.offset.i, node.offset.j, 0))

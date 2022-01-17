@@ -32,7 +32,6 @@ from gtc.common import DataType, LoopOrder, SourceLocation, VariableKOffset, typ
 from gtc.dace.utils import (
     CartesianIterationSpace,
     OIRFieldRenamer,
-    assert_sdfg_equal,
     dace_dtype_to_typestr,
     get_node_name_mapping,
 )
@@ -43,10 +42,6 @@ class OIRLibraryNode(ABC, dace.nodes.LibraryNode):
     @abstractmethod
     def as_oir(self):
         raise NotImplementedError("Implement in child class.")
-
-    # @abstractmethod
-    # def __eq__(self, other):
-    #     raise NotImplementedError("Implement in child class.")
 
     def to_json(self, parent):
         protocol = pickle.DEFAULT_PROTOCOL
@@ -65,8 +60,8 @@ class OIRLibraryNode(ABC, dace.nodes.LibraryNode):
             b64string = json_obj["pickle"]
         else:
             b64string = json_obj["attributes"]["pickle"]
-        bytes = base64.b64decode(b64string)
-        return pickle.loads(bytes)
+        pbytes = base64.b64decode(b64string)
+        return pickle.loads(pbytes)
 
 
 @library.node
@@ -176,22 +171,6 @@ class VerticalLoopLibraryNode(OIRLibraryNode):
             sections=sections, loop_order=self.loop_order, caches=self.caches, loc=loc
         )
 
-    # def __eq__(self, other):
-    #     try:
-    #         assert isinstance(other, VerticalLoopLibraryNode)
-    #         assert self.loop_order == other.loop_order
-    #         assert self.caches == other.caches
-    #         assert len(self.sections) == len(other.sections)
-    #         for (interval1, he_sdfg1), (interval2, he_sdfg2) in zip(self.sections, other.sections):
-    #             assert interval1 == interval2
-    #             assert_sdfg_equal(he_sdfg1, he_sdfg2)
-    #     except AssertionError:
-    #         return False
-    #     return True
-    #
-    # def __hash__(self):
-    #     return super(OIRLibraryNode, self).__hash__()
-
 
 @dataclass
 class PreliminaryHorizontalExecution:
@@ -258,14 +237,6 @@ class HorizontalExecutionLibraryNode(OIRLibraryNode):
 
     def validate(self, parent_sdfg: dace.SDFG, parent_state: dace.SDFGState, *args, **kwargs):
         get_node_name_mapping(parent_state, self)
-
-    # def __eq__(self, other):
-    #     if not isinstance(other, HorizontalExecutionLibraryNode):
-    #         return False
-    #     return self.as_oir() == other.as_oir()
-    #
-    # def __hash__(self):
-    #     return super(OIRLibraryNode, self).__hash__()
 
     @property
     def free_symbols(self):

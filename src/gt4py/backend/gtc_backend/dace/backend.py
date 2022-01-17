@@ -21,7 +21,6 @@ import numpy as np
 from dace.sdfg.utils import fuse_states, inline_sdfgs
 from dace.transformation.dataflow import MapCollapse
 
-import gt4py.definitions
 from eve import NodeVisitor, codegen
 from eve.codegen import MakoTemplate as as_mako
 from gt4py import gt_src_manager

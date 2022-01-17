@@ -122,7 +122,7 @@ class AccessCollector(NodeVisitor):
             return self._offset_dict(xiter(self._ordered_accesses).filter(lambda x: x.is_read))
 
         def read_accesses(self) -> List[AccessT]:
-            """Get the sub-list of read accesses"""
+            """Get the sub-list of read accesses."""
             return list(xiter(self._ordered_accesses).filter(lambda x: x.is_read))
 
         def write_offsets(self) -> Dict[str, Set[OffsetT]]:
@@ -130,7 +130,7 @@ class AccessCollector(NodeVisitor):
             return self._offset_dict(xiter(self._ordered_accesses).filter(lambda x: x.is_write))
 
         def write_accesses(self) -> List[AccessT]:
-            """Get the sub-list of write accesses"""
+            """Get the sub-list of write accesses."""
             return list(xiter(self._ordered_accesses).filter(lambda x: x.is_write))
 
         def fields(self) -> Set[str]:
