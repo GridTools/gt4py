@@ -210,20 +210,6 @@ def test_backend_option_order(clirunner, simple_stencil, tmp_path):
     """Make sure the order in which --backend and --option are passed does not matter."""
     output_path1 = tmp_path / "backend_first"
     # putting the option after the backend should definitely check against the chosen backend
-    print(
-        clirunner.invoke(
-            cli.gtpyc,
-            [
-                "gen",
-                f"--output-path={output_path1}",
-                "--backend=gtc:numpy",
-                "-O",
-                "ignore_np_errstate=True",
-                str(simple_stencil),
-            ],
-            catch_exceptions=False,
-        ).stdout_bytes
-    )
     assert (
         clirunner.invoke(
             cli.gtpyc,
