@@ -19,7 +19,7 @@ import pytest
 
 from gt4py import gtscript
 from gt4py import storage as gt_storage
-from gt4py.gtscript import __INLINED, BACKWARD, FORWARD, PARALLEL, computation, interval
+from gt4py.gtscript import __INLINED, BACKWARD, FORWARD, PARALLEL, Field, computation, interval
 
 from ..definitions import ALL_BACKENDS, CPU_BACKENDS, INTERNAL_BACKENDS
 from .stencil_definitions import EXTERNALS_REGISTRY as externals_registry
@@ -352,7 +352,10 @@ def test_input_order(backend):
             out_field = in_field * parameter
 
 
-@pytest.mark.parametrize("backend", ALL_BACKENDS)
+# TODO: Enable variable offsets on gtc:dace backend
+@pytest.mark.parametrize(
+    "backend", [backend for backend in ALL_BACKENDS if "dace" not in backend.values[0]]
+)
 def test_variable_offsets(backend):
     @gtscript.stencil(backend=backend)
     def stencil_ij(
