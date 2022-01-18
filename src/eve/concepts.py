@@ -29,6 +29,7 @@ from .type_definitions import NOTHING, IntEnum, Str, StrEnum
 from .typingx import (
     Any,
     AnyNoArgCallable,
+    ClassVar,
     Dict,
     Generator,
     List,
@@ -182,8 +183,8 @@ class BaseNode(pydantic.BaseModel, metaclass=NodeMetaclass):
 
     """
 
-    # __node_impl_fields__: ClassVar[NodeImplFieldMetadataDict]
-    # __node_children__: ClassVar[NodeChildrenMetadataDict]
+    __node_impl_fields__: ClassVar[NodeImplFieldMetadataDict]
+    __node_children__: ClassVar[NodeChildrenMetadataDict]
 
     def iter_impl_fields(self) -> Generator[Tuple[str, Any], None, None]:
         for name in self.__node_impl_fields__.keys():
