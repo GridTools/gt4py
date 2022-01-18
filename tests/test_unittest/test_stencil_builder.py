@@ -46,7 +46,7 @@ def test_setters():
     assert version
 
     # should reset build data, stencil_id particularly should be recomputed
-    builder.with_backend("numpy")
+    builder.with_backend("gtc:numpy")
     assert builder.is_build_data_empty
     assert builder.externals == {"a": 1.0}
     assert builder.backend_data == {}
@@ -72,7 +72,7 @@ def test_setters():
 def test_usage_numpy_caching():
     builder = (
         StencilBuilder(simple_stencil)
-        .with_backend("numpy")
+        .with_backend("gtc:numpy")
         .with_externals({"a": 1.0})
         .with_options(name=simple_stencil.__name__, module=simple_stencil.__module__, rebuild=False)
     )
@@ -96,25 +96,23 @@ def test_usage_numpy_caching():
 def test_usage_numpy_nocaching(tmp_path):
     builder = (
         StencilBuilder(simple_stencil)
-        .with_backend("numpy")
+        .with_backend("gtc:numpy")
         .with_externals({"a": 1.0})
         .with_caching("nocaching", output_path=tmp_path)
         .with_options(name="simple_stencil", module="")
     )
 
     computation_src = builder.generate_computation()
-    assert "simple_stencil.py" in computation_src
+    assert "computation.py" in computation_src
 
     builder.build()
-    assert tmp_path.joinpath("simple_stencil", "simple_stencil.py").exists(), list(
-        tmp_path.iterdir()
-    )
+    assert tmp_path.joinpath("simple_stencil", "computation.py").exists(), list(tmp_path.iterdir())
 
 
 def test_regression_run_analysis_twice(tmp_path):
     builder = (
         StencilBuilder(assign_bool_float)
-        .with_backend("numpy")
+        .with_backend("gtc:numpy")
         .with_externals({"a": 1.0})
         .with_caching("nocaching", output_path=tmp_path)
         .with_options(name="simple_stencil", module="", rebuild=True)

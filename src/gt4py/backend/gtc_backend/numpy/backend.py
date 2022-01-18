@@ -88,6 +88,8 @@ class GTCNumpyBackend(BaseBackend, CLIBackendMixin):
     name = "gtc:numpy"
     options: ClassVar[Dict[str, Any]] = {
         "oir_pipeline": {"versioning": True, "type": OirPipeline},
+        # TODO: Implement this option in source code
+        "ignore_np_errstate": {"versioning": True, "type": bool},
     }
     storage_info = {
         "alignment": 1,

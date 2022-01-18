@@ -69,13 +69,6 @@ INTERNAL_GPU_BACKENDS = [
 
 INTERNAL_BACKENDS = INTERNAL_CPU_BACKENDS + INTERNAL_GPU_BACKENDS
 
-OLD_BACKENDS = [
-    _backend_name_as_param(name) for name in _ALL_BACKEND_NAMES if not name.startswith("gtc:")
-]
-OLD_INTERNAL_BACKENDS = [
-    _backend_name_as_param(name) for name in _INTERNAL_BACKEND_NAMES if not name.startswith("gtc:")
-]
-
 
 @pytest.fixture()
 def id_version():
