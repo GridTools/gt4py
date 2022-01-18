@@ -808,7 +808,6 @@ class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
         return gt_pyext_sources
 
 
-@gt_backend.register
 class GTX86Backend(BaseGTBackend):
 
     GT_BACKEND_T = "x86"
@@ -829,7 +828,6 @@ class GTX86Backend(BaseGTBackend):
         return self.make_extension(uses_cuda=False)
 
 
-@gt_backend.register
 class GTMCBackend(BaseGTBackend):
 
     GT_BACKEND_T = "mc"
@@ -868,7 +866,6 @@ class GTCUDAPyModuleGenerator(CUDAPyExtModuleGenerator):
         return "\n".join([f + "._set_device_modified()" for f in output_field_names])
 
 
-@gt_backend.register
 class GTCUDABackend(BaseGTBackend):
 
     MODULE_GENERATOR_CLASS = GTCUDAPyModuleGenerator

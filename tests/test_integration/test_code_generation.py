@@ -21,7 +21,7 @@ from gt4py import gtscript
 from gt4py import storage as gt_storage
 from gt4py.gtscript import __INLINED, BACKWARD, FORWARD, PARALLEL, computation, interval
 
-from ..definitions import ALL_BACKENDS, CPU_BACKENDS, LEGACY_GRIDTOOLS_BACKENDS, OLD_BACKENDS
+from ..definitions import ALL_BACKENDS, CPU_BACKENDS, OLD_BACKENDS
 from .stencil_definitions import EXTERNALS_REGISTRY as externals_registry
 from .stencil_definitions import REGISTRY as stencil_definitions
 
@@ -445,12 +445,8 @@ def test_write_data_dim_indirect_addressing(backend):
     input_field = gt_storage.ones(backend, default_origin, full_shape, dtype=np.int32)
     output_field = gt_storage.zeros(backend, default_origin, full_shape, dtype=INT32_VEC2)
 
-    if backend in (backend.values[0] for backend in LEGACY_GRIDTOOLS_BACKENDS):
-        with pytest.raises(ValueError):
-            gtscript.stencil(definition=stencil, backend=backend)
-    else:
-        gtscript.stencil(definition=stencil, backend=backend)(input_field, output_field, index := 1)
-        assert output_field[0, 0, 0, index] == 1
+    gtscript.stencil(definition=stencil, backend=backend)(input_field, output_field, index := 1)
+    assert output_field[0, 0, 0, index] == 1
 
 
 @pytest.mark.parametrize("backend", ALL_BACKENDS)
@@ -470,12 +466,8 @@ def test_read_data_dim_indirect_addressing(backend):
     input_field = gt_storage.ones(backend, default_origin, full_shape, dtype=INT32_VEC2)
     output_field = gt_storage.zeros(backend, default_origin, full_shape, dtype=np.int32)
 
-    if backend in (backend.values[0] for backend in LEGACY_GRIDTOOLS_BACKENDS):
-        with pytest.raises(ValueError):
-            gtscript.stencil(definition=stencil, backend=backend)
-    else:
-        gtscript.stencil(definition=stencil, backend=backend)(input_field, output_field, 1)
-        assert output_field[0, 0, 0] == 1
+    gtscript.stencil(definition=stencil, backend=backend)(input_field, output_field, 1)
+    assert output_field[0, 0, 0] == 1
 
 
 @pytest.mark.parametrize(
