@@ -7,7 +7,7 @@ repos:
 #   - id: check-useless-excludes
 
 - repo: https://github.com/pre-commit/pre-commit-hooks
-  rev: v4.0.1
+  rev: v4.1.0
   hooks:
   - id: check-case-conflict
 #  - id: check-json
@@ -75,24 +75,18 @@ repos:
 #     - pygments
 
 - repo: https://github.com/psf/black
-  rev: 21.11b1
+  rev: 21.12b0
   hooks:
   - id: black
     args: [--target-version, py310]
 
-- repo: https://github.com/asottile/seed-isort-config
-  rev: v2.2.0
-  hooks:
-  - id: seed-isort-config
-    args: ['--application-directories=src:tests']
-
 - repo: https://github.com/pre-commit/mirrors-isort
-  rev: v5.9.3
+  rev: v5.10.1
   hooks:
   - id: isort
 
 - repo: https://gitlab.com/PyCQA/flake8
-  rev: 3.9.2
+  rev: 4.0.1
   hooks:
   - id: flake8
     additional_dependencies:
@@ -171,6 +165,7 @@ repos:
   - id: mypy
     exclude: |
       (?x)^(
+      src/functional/ffront/func_to_foast.py | # until mypy supports match
       src/functional/ffront/type_parser.py | # until mypy supports match
       src/functional/ffront/foast_passes/type_deduction.py | # until mypy supports match
       docs/gt4py/conf.py |
