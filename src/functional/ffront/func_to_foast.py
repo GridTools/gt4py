@@ -21,19 +21,16 @@ import inspect
 import symtable
 import textwrap
 import types
-import typing
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from typing import Any, Optional, Union
 
-import numpy as np
-import numpy.typing as npt
-
+from eve import typingx
 from eve.type_definitions import SourceLocation
 from functional import common
 from functional.ffront import fbuiltins
-from functional.ffront import symbol_makers
 from functional.ffront import field_operator_ast as foast
+from functional.ffront import symbol_makers
 from functional.ffront.ast_passes import (
     SingleAssignTargetPass,
     SingleStaticAssignPass,
@@ -63,13 +60,13 @@ def _make_source_definition_from_function(func: Callable) -> SourceDefinition:
     return SourceDefinition(source, filename, starting_line)
 
 
-def _make_closure_refs_from_function(func: Callable) -> SourceDefinition:
+def _make_closure_refs_from_function(func: Callable) -> ClosureRefs:
     nonlocals, globals, inspect_builtins, inspect_unbound = inspect.getclosurevars(func)
     # python builtins returned by getclosurevars() are not ffront.builtins
     unbound = set(inspect_builtins.keys()) | inspect_unbound
     builtins = unbound & set(fbuiltins.ALL_BUILTIN_NAMES)
     unbound -= builtins
-    annotations = typing.get_type_hints(func)
+    annotations = typingx.get_type_hints(func)
 
     return ClosureRefs(nonlocals, globals, annotations, builtins, unbound)
 
@@ -132,10 +129,10 @@ class ClosureRefs:
     nonlocals: dict[str, Any]
     globals: dict[str, Any]  # noqa: A003  # shadowing a python builtin
     annotations: dict[str, Any]
-    builtins: dict[str, Any]
-    unbound: tuple[str, ...]
+    builtins: set[str]
+    unbound: set[str]
 
-    def __iter__(self) -> Iterator[Union[dict[str, Any], tuple[str, ...]]]:
+    def __iter__(self) -> Iterator[Union[dict[str, Any], set[str]]]:
         yield from iter(
             (self.nonlocals, self.globals, self.annotations, self.builtins, self.unbound)
         )
@@ -361,11 +358,25 @@ class FieldOperatorParser(ast.NodeVisitor):
         # -> only store the type here and write an additional checking pass
         if not isinstance(node.target, ast.Name):
             raise self._make_syntax_error(node, message="Can only assign to names!")
+
+        if node.annotation is not None:
+            assert isinstance(
+                node.annotation, ast.Constant
+            ), "Annotations should be ast.Constant(string). Use StringifyAnnotationsPass"
+            global_ns = {**fbuiltins.BUILTINS, **self.closure_refs.globals}
+            local_ns = self.closure_refs.nonlocals
+            annotation = eval(node.annotation.value, global_ns, local_ns)
+            target_type = target_type = symbol_makers.make_symbol_type_from_typing(
+                annotation, global_ns=global_ns, local_ns=local_ns
+            )
+        else:
+            target_type = foast.DeferredSymbolType()
+
         return foast.Assign(
             target=foast.FieldSymbol(
                 id=node.target.id,
                 location=self._make_loc(node.target),
-                type=symbol_makers.make_symbol_type_from_AST_annotation(node.annotation),
+                type=target_type,
             ),
             value=self.visit(node.value) if node.value else None,
             location=self._make_loc(node),
@@ -526,7 +537,7 @@ class FieldOperatorSyntaxError(common.GTSyntaxError):
         end_offset: int = None,
         text: Optional[str] = None,
     ):
-        msg = "Invalid Field Operator Syntax: " + msg
+        msg = f"Invalid Field Operator Syntax: {msg}"
         super().__init__(msg, (filename, lineno, offset, text, end_lineno, end_offset))
 
     @classmethod

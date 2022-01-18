@@ -29,7 +29,6 @@ from .type_definitions import NOTHING, IntEnum, Str, StrEnum
 from .typingx import (
     Any,
     AnyNoArgCallable,
-    ClassVar,
     Dict,
     Generator,
     List,

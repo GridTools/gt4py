@@ -21,6 +21,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import functools
 import inspect
 import sys
@@ -230,10 +231,13 @@ def _collapsable_type_args(*args: Any) -> tuple[bool, tuple]:
         return (False, args)
 
 
+@dataclasses.dataclass
+class CallableKwargsInfo:
+    data: dict[str, Any]
+
+
 @functools.singledispatch
-def get_typing(
-    value: Any, *, convert_typevars: bool = False, annotate_callable_with_extra_args: bool = False
-) -> Any:
+def get_typing(value: Any, *, annotate_callable_kwargs: bool = False) -> Any:
     """Generate a typing definition from a value.
 
     The implementation uses :func:`functools.singledispatch`. Customized or
@@ -289,11 +293,7 @@ def get_typing(
         numbers.Number
 
     """
-    recursive_get = functools.partial(
-        get_typing,
-        convert_typevars=convert_typevars,
-        annotate_callable_with_extra_args=annotate_callable_with_extra_args,
-    )
+    recursive_get = functools.partial(get_typing, annotate_callable_kwargs=annotate_callable_kwargs)
     match value:
         case type():
             return value
@@ -326,57 +326,29 @@ def get_typing(
             vt = values[0] if unique_value_type else Any
             return dict[kt, vt]
 
-        case Callable():
+        case types.FunctionType():
             try:
+                annotations = get_type_hints(value)
+                return_type = annotations.get("return", Any)
+
                 sig = inspect.signature(value)
-                return_type = (
-                    sig.return_annotation
-                    if sig.return_annotation is not inspect.Signature.empty
-                    else Any
-                )
                 arg_types: Union[list, Ellipsis] = []
-                var_args: Optional[str] = None
                 kwonly_arg_types: dict[str, Any] = {}
-                var_kwargs: Optional[str] = None
                 for p in sig.parameters.values():
                     match p.kind:
                         case inspect.Parameter.POSITIONAL_ONLY | inspect.Parameter.POSITIONAL_OR_KEYWORD:
-                            arg_types.append(
-                                p.annotation if p.annotation is not inspect.Signature.empty else Any
-                            )
-                        case inspect.Parameter.VAR_POSITIONAL:
-                            var_args = p.name
+                            arg_types.append(annotations.get(p.name, None) or Any)
                         case inspect.Parameter.KEYWORD_ONLY:
-                            kwonly_arg_types[p.name] = (
-                                p.annotation if p.annotation is not inspect.Signature.empty else Any
-                            )
-                        case inspect.Parameter.VAR_KEYWORD:
-                            var_kwargs = p.name
+                            kwonly_arg_types.append(annotations.get(p.name, None) or Any)
+                        case inspect.Parameter.VAR_POSITIONAL | inspect.Parameter.VAR_KEYWORD:
+                            raise TypeError(f"Variadic callables are not supported")
+
                 result = Callable[arg_types, return_type]
-                if annotate_callable_with_extra_args:
-                    Annotated[
-                        result,
-                        dict(
-                            var_args=var_args,
-                            kwonly_arg_types=kwonly_arg_types,
-                            var_kwargs=var_kwargs,
-                        ),
-                    ]
+                if annotate_callable_kwargs:
+                    result = Annotated[result, CallableKwargsInfo(kwonly_arg_types)]
                 return result
             except:
                 return Callable
 
         case _:
-            # Generic type alias
-            if (origin:=get_origin(value)) is not None:
-                args = tuple(recursive_get(a) for a in get_args(value)
-                return origin[args] if args else origin
-
-            if type(value).__module__ == "typing"
-                # TypeVar
-                if hasattr(value, "__bound__"):  
-                    return value.__bound__ or Any
-                else: 
-                    return value
-
             return type(value)

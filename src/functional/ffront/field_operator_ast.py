@@ -102,8 +102,6 @@ class FieldSymbol(DataSymbol):
 
 class Function(Symbol):
     type: FunctionType  # noqa A003
-    params: list[FieldType]
-    returns: list[FieldType]
 
 
 class Expr(LocatedNode):

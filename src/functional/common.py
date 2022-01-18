@@ -27,7 +27,7 @@ DT = TypeVar("DT", bound="DType")
 
 @dataclass(frozen=True)
 class Dimension:
-    name: str
+    value: str
 
 
 class DType:

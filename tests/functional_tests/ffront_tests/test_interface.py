@@ -21,8 +21,6 @@ Basic Interface Tests
             arctan(), sqrt(), exp(), log(), isfinite(), isinf(), isnan(), floor(), ceil(), trunc()
     - evaluation test cases
 """
-#from __future__ import annotations
-
 import pytest
 
 import functional.ffront.field_operator_ast as foast
@@ -88,7 +86,7 @@ def test_invalid_syntax_error_empty_return():
         FieldOperatorSyntaxError,
         match=(
             r"Invalid Field Operator Syntax: "
-            r"Empty return not allowed \(test_interface.py, line 85\)"
+            r"Empty return not allowed \(test_interface.py, line 83\)"
         ),
     ):
         _ = FieldOperatorParser.apply_to_function(wrong_syntax)
@@ -102,7 +100,7 @@ def test_untyped_arg():
 
     with pytest.raises(
         FieldOperatorSyntaxError,
-        match=r"Untyped parameters not allowed! \(.*\)",
+        match="Untyped parameters not allowed!",
     ):
         _ = FieldOperatorParser.apply_to_function(untyped)
 
@@ -115,7 +113,7 @@ def test_mistyped_arg():
 
     with pytest.raises(
         FieldOperatorTypeError,
-        match=r"Field type requires two arguments, got 0! \(.*\)",
+        match="Field type requires two arguments, got 0!",
     ):
         _ = FieldOperatorParser.apply_to_function(mistyped)
 
@@ -141,7 +139,7 @@ def test_invalid_syntax_no_return():
 
     with pytest.raises(
         FieldOperatorSyntaxError,
-        match=r"Field operator must return a field expression on the last line! \(.*\)",
+        match="Field operator must return a field expression on the last line!",
     ):
         _ = FieldOperatorParser.apply_to_function(no_return)
 
@@ -229,7 +227,7 @@ def test_clashing_annotated_assignment():
         tmp: Field[..., "int64"] = inp
         return tmp
 
-    with pytest.warns(FieldOperatorTypeDeductionError, match=r"type inconsistency"):
+    with pytest.warns(FieldOperatorTypeDeductionError, match="type inconsistency"):
         _ = FieldOperatorParser.apply_to_function(clashing)
 
 
@@ -248,18 +246,18 @@ def test_call():
     )
 
 
-def test_call_expression():
-    def get_identity():
-        return lambda x: x
+# def test_call_expression():
+#     def get_identity():
+#         return lambda x: x
 
-    def call_expr(inp: Field[..., "float64"]):
-        return get_identity()(inp)
+#     def call_expr(inp: Field[..., "float64"]):
+#         return get_identity()(inp)
 
-    with pytest.raises(
-        FieldOperatorSyntaxError,
-        match=r"functions can only be called directly! \(.*\)",
-    ):
-        _ = FieldOperatorParser.apply_to_function(call_expr)
+#     with pytest.raises(
+#         FieldOperatorSyntaxError,
+#         match=r"functions can only be called directly! \(.*\)",
+#     ):
+#         _ = FieldOperatorParser.apply_to_function(call_expr)
 
 
 def test_unary_ops():

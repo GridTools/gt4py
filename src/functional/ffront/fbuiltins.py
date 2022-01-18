@@ -25,3 +25,5 @@ TYPE_BUILTIN_NAMES = [t.__name__ for t in TYPE_BUILTINS]
 MODULE_BUILTIN_NAMES = ["__externals__"]
 
 ALL_BUILTIN_NAMES = TYPE_BUILTIN_NAMES + MODULE_BUILTIN_NAMES
+
+BUILTINS = {name: globals()[name] for name in __all__}

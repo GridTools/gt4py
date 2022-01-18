@@ -12,24 +12,19 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import ast
 import builtins
 import collections.abc
-import inspect
-import sys
+import functools
 import types
 import typing
-from typing import Any, Collection, Optional, Union
+from typing import Any, ForwardRef, Optional, Union
 
 import numpy as np
 import numpy.typing as npt
 
-from eve import NodeTranslator
 from eve import typingx
 from eve.type_definitions import SourceLocation
-
 from functional import common
-from functional.common import GTSyntaxError, GTTypeError
 from functional.ffront import field_operator_ast as foast
 
 
@@ -57,98 +52,104 @@ def make_scalar_kind(dtype: npt.DTypeLike) -> foast.ScalarKind:
         raise common.GTTypeError(f"Non-trivial dtypes like '{dtype}' are not yet supported")
 
 
-def make_symbol_type(value: Any) -> foast.SymbolType:
-    if not (isinstance(value, (type, types.GenericAlias)) or type(value).__module__ == "typing"):
-        value = typingx.get_typing(value)
-    return make_symbol_type_from_typing(value)
+def make_symbol_type_from_typing(
+    value: Any,
+    *,
+    global_ns: Optional[dict[str, Any]] = None,
+    local_ns: Optional[dict[str, Any]] = None,
+) -> foast.SymbolType:
+    recursive_make_symbol = functools.partial(
+        make_symbol_type_from_typing, global_ns=global_ns, local_ns=local_ns
+    )
 
+    # ForwardRef
+    if isinstance(value, str):
+        value = ForwardRef(value)
+    if type(value).__module__ == "typing" and hasattr(value, "__forward_arg__"):
+        try:
+            value = typingx.resolve_type(
+                value, global_ns=global_ns, local_ns=local_ns, allow_partial=False
+            )
+        except Exception as error:
+            raise FieldOperatorTypeError(
+                f"Type annotation ({value}) has undefined forward references!"
+            ) from error
 
-def make_symbol_type_from_typing(value: type) -> foast.SymbolType:
-    if isinstance(value, type) and issubclass(value, (bool, int, float, np.generic)):
-        return foast.ScalarType(kind=make_scalar_kind(value))
+    # Annotated
+    if typing.get_origin(value) is typing.Annotated:
+        value, extra_args = typing.get_args(value)
+        while typing.get_origin(value) is typing.Annotated:
+            value = typing.get_origin(value)
+    else:
+        extra_args = None
 
-    origin = (
+    value_type = (
         typing.get_origin(value)
         if isinstance(value, types.GenericAlias) or type(value).__module__ == "typing"
         else value
     )
     args = typing.get_args(value)
 
-    match origin:
+    match value_type:
+        case type() as t if issubclass(t, (bool, int, float, np.generic)):
+            return foast.ScalarType(kind=make_scalar_kind(value))
+
         case builtins.tuple:
             if not args:
-                raise common.GTTypeError(f"Tuple type requires at least one argument!")
-            return foast.TupleType(types=[make_symbol_type_from_typing(arg) for arg in args])
+                raise FieldOperatorTypeError(
+                    f"Tuple annotation ({value}) requires at least one argument!"
+                )
+            return foast.TupleType(types=[recursive_make_symbol(arg) for arg in args])
 
         case common.Field:
             if len(args) != 2:
-                raise common.GTTypeError(f"Field type requires two arguments, got {len(args)}!")
+                raise FieldOperatorTypeError(f"Field type requires two arguments, got {len(args)}!")
 
             dims: Union[Ellipsis, list[foast.Dimension]] = []
             dim_arg, dtype_arg = args
             if isinstance(dim_arg, list):
                 for d in dim_arg:
                     if not isinstance(d, common.Dimension):
-                        raise common.GTTypeError(f"Invalid field dimension definition '{d}'")
-                    dims.append(foast.Dimension(name=d.name))
+                        raise FieldOperatorTypeError(f"Invalid field dimension definition '{d}'")
+                    dims.append(foast.Dimension(name=d.value))
             elif dim_arg is Ellipsis:
                 dims = dim_arg
             else:
-                raise common.GTTypeError(f"Invalid field type dimensions '{dim_arg}'")
+                raise FieldOperatorTypeError(f"Invalid field type dimensions '{dim_arg}'")
 
-            dtype = make_symbol_type_from_typing(dtype_arg)
+            dtype = recursive_make_symbol(dtype_arg)
             if not isinstance(dtype, foast.ScalarType):
-                raise common.GTTypeError(
+                raise FieldOperatorTypeError(
                     "Field type dtype argument must be a scalar type (got '{dtype}')!"
                 )
             return foast.FieldType(dims=dims, dtype=dtype)
 
         case collections.abc.Callable:
-            return ...
+            arg_types, return_type = args
+            if arg_types in (None, Ellipsis) or return_type is None:
+                raise FieldOperatorTypeError("Not annotated functions are not supported!")
 
-    raise GTTypeError(f"'{value}' type is not supported")
+            if not isinstance(extra_args, typingx.CallableKwargsInfo):
+                raise FieldOperatorTypeError(f"Invalid callable annotations in {value}")
 
+            return foast.FunctionType(
+                args=[recursive_make_symbol(arg) for arg in arg_types],
+                kwargs={
+                    arg: recursive_make_symbol(arg_type)
+                    for arg, arg_type in extra_args.data.items()
+                },
+                returns=recursive_make_symbol(return_type),
+            )
 
-# def make_symbol_type_from_value(value: Any) -> foast.SymbolType:
-#     match value:
-#         case bool() | int() | float() | np.generic():
-#             return foast.ScalarType(kind=make_scalar_kind(type(value)))
-#         case tuple() as tuple_value:
-#             return foast.TupleType(types=[make_symbol_type_from_value(t) for t in tuple_value])
-#         case types.FunctionType():
-#             # TODO (egparedes): recover the function signature from FieldOperator when possible
-#             sig = inspect.signature(value)
-#             if sig.return_annotation is inspect.Signature.empty:
-#                 raise GTTypeError(
-#                     f"Referenced function '{value}' does not contain proper type annotations"
-#                 )
-#             returns = make_symbol_type_from_typing(sig.return_annotation)
-
-#             args = []
-#             kwargs = []
-#             for p in sig.parameters.values():
-#                 if p.annotation is inspect.Signature.empty:
-#                     raise GTTypeError(
-#                         f"Referenced function '{value}' does not contain proper type annotations"
-#                     )
-
-#                 if p.kind in (
-#                     inspect.Parameter.POSITIONAL_ONLY,
-#                     inspect.Parameter.POSITIONAL_OR_KEYWORD,
-#                 ):
-#                     args.append(make_symbol_type_from_typing(p.annotation))
-#                 elif p.kind == inspect.Parameter.KEYWORD_ONLY:
-#                     kwargs.append(make_symbol_type_from_typing(p.annotation))
-
-#             return foast.FunctionType(args=args, kwargs=kwargs, returns=returns)
-#         case _:
-#             raise common.GTTypeError(f"Impossible to map '{value}' value to a SymbolType")
+    raise FieldOperatorTypeError(f"'{value}' type is not supported")
 
 
 def make_symbol_from_value(
     name: str, value: Any, namespace: foast.Namespace, location: SourceLocation
 ) -> foast.Symbol:
-    symbol_type = make_symbol_type(value)
+    if not isinstance(value, type) or type(value).__module__ != "typing":
+        value = typingx.get_typing(value, annotate_callable_kwargs=True)
+    symbol_type = make_symbol_type_from_typing(value)
     if isinstance(symbol_type, foast.DataType):
         return foast.DataSymbol(id=name, type=symbol_type, namespace=namespace, location=location)
     elif isinstance(symbol_type, foast.FunctionType):
@@ -156,28 +157,22 @@ def make_symbol_from_value(
             id=name,
             type=symbol_type,
             namespace=namespace,
-            params=[],
-            returns=[],
             location=location,
         )
     else:
         raise common.GTTypeError(f"Impossible to map '{value}' value to a Symbol")
 
 
-class FieldOperatorTypeError(GTSyntaxError):
+class FieldOperatorTypeError(common.GTTypeError):
     def __init__(
         self,
         msg="",
         *,
-        lineno=0,
-        offset=0,
-        filename=None,
-        end_lineno=None,
-        end_offset=None,
-        text=None,
+        info=None,
     ):
-        msg = "Invalid Type Declaration: " + msg
-        super().__init__(msg, (filename, lineno, offset, text, end_lineno, end_offset))
+        msg = f"Invalid type declaration: {msg}"
+        args = tuple([msg, info] if info else [msg])
+        super().__init__(*args)
 
 
 def _make_type_error(node, msg) -> FieldOperatorTypeError:
