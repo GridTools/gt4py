@@ -284,11 +284,6 @@ class DaCeComputationCodegen:
                     lines = lines[0:i] + lines[i + 1 :]
 
         computations = codegen.format_source("cpp", "\n".join(lines), style="LLVM")
-        if "Min(" in computations:
-            lines = computations.split("\n")
-            pos = lines.index("#include <dace/dace.h>")
-            lines.insert(pos + 1, "#define Min(x, y) ((x) < (y) ? (x) : (y))")
-            computations = "\n".join(lines)
 
         interface = cls.template.definition.render(
             name=sdfg.name,
