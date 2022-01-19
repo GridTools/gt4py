@@ -28,8 +28,11 @@ import json
 import os
 import string
 import sys
+import time
 import types
 from typing import Any, Sequence, Tuple
+
+from gt4py import config as gt_config
 
 
 NOTHING = object()
@@ -287,8 +290,11 @@ def make_module_from_file(qualified_name, file_path, *, public_import=False):
       https://stackoverflow.com/a/43602645
 
     """
-    try:
+
+    def load():
         spec = importlib.util.spec_from_file_location(qualified_name, file_path)
+        if not spec:
+            raise ModuleNotFoundError(f"No module named '{qualified_name}'")
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
         if public_import:
@@ -308,12 +314,15 @@ def make_module_from_file(qualified_name, file_path, *, public_import=False):
                         break
                 else:
                     setattr(parent, module_name, module)
+        return module
 
-    except Exception as e:
-        print(e)
-        module = None
+    for i in range(max(gt_config.cache_settings["load_retries"], 0)):
+        try:
+            return load()
+        except ModuleNotFoundError:
+            time.sleep(max(gt_config.cache_settings["load_retry_delay"], 0) / 1000)
 
-    return module
+    return load()
 
 
 def patch_module(module, member, new_value, *, recursive=True):

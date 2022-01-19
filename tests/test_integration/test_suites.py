@@ -716,7 +716,7 @@ class TestNon3DFields(gt_testing.StencilTestSuite):
         )
 
 
-class TestReadOutsideKInterval(gt_testing.StencilTestSuite):
+class TestReadOutsideKInterval1(gt_testing.StencilTestSuite):
     dtypes = {
         "field_in": np.float64,
         "field_out": np.float64,
@@ -740,6 +740,54 @@ class TestReadOutsideKInterval(gt_testing.StencilTestSuite):
 
     def validation(field_in, field_out, *, domain, origin):
         field_out[:, :, :] = field_in[:, :, 0:-2] + field_in[:, :, 2:]
+
+
+class TestReadOutsideKInterval2(gt_testing.StencilTestSuite):
+    dtypes = {
+        "field_in": np.float64,
+        "field_out": np.float64,
+    }
+    domain_range = [(4, 4), (4, 4), (4, 4)]
+    backends = INTERNAL_BACKENDS
+    symbols = {
+        "field_in": gt_testing.field(
+            in_range=(-10, 10), axes="IJK", boundary=[(0, 0), (0, 0), (0, 1)]
+        ),
+        "field_out": gt_testing.field(
+            in_range=(-10, 10), axes="IJK", boundary=[(0, 0), (0, 0), (0, 0)]
+        ),
+    }
+
+    def definition(field_in, field_out):
+        with computation(PARALLEL), interval(-1, None):
+            field_out = field_in[0, 0, 1]  # noqa: F841  # Local name is assigned to but never used
+
+    def validation(field_in, field_out, *, domain, origin):
+        field_out[:, :, -1] = field_in[:, :, domain[2]]
+
+
+class TestReadOutsideKInterval3(gt_testing.StencilTestSuite):
+    dtypes = {
+        "field_in": np.float64,
+        "field_out": np.float64,
+    }
+    domain_range = [(4, 4), (4, 4), (4, 4)]
+    backends = INTERNAL_BACKENDS
+    symbols = {
+        "field_in": gt_testing.field(
+            in_range=(-10, 10), axes="IJK", boundary=[(0, 0), (0, 0), (1, 0)]
+        ),
+        "field_out": gt_testing.field(
+            in_range=(-10, 10), axes="IJK", boundary=[(0, 0), (0, 0), (0, 0)]
+        ),
+    }
+
+    def definition(field_in, field_out):
+        with computation(PARALLEL), interval(0, 1):
+            field_out = field_in[0, 0, -1]  # noqa: F841  # Local name is assigned to but never used
+
+    def validation(field_in, field_out, *, domain, origin):
+        field_out[:, :, 0] = field_in[:, :, 0]
 
 
 class TestVariableKRead(gt_testing.StencilTestSuite):

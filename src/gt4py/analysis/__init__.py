@@ -14,11 +14,15 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-# Disable isort to avoid circular imports
-# isort: off
-from .infos import *
-
-# isort: on
-
 from . import passes, transformer
+from .infos import (
+    DomainBlockInfo,
+    IJBlockInfo,
+    IntervalBlockInfo,
+    IntervalInfo,
+    StatementInfo,
+    SymbolInfo,
+    TransformData,
+    TransformPass,
+)
 from .transformer import transform

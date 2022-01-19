@@ -17,10 +17,10 @@
 from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple, Type
 
 from eve import codegen
-from gt4py import backend as gt_backend
 from gt4py import gt_src_manager
-from gt4py.backend import BaseGTBackend, CLIBackendMixin
+from gt4py.backend.base import CLIBackendMixin, register
 from gt4py.backend.gt_backends import (
+    BaseGTBackend,
     GTCUDAPyModuleGenerator,
     cuda_is_compatible_layout,
     cuda_is_compatible_type,
@@ -86,7 +86,7 @@ class GTCCudaBindingsCodegen(codegen.TemplatedGenerator):
             data_ndim = len(node.data_dims)
             sid_ndim = domain_ndim + data_ndim
             if kwargs["external_arg"]:
-                return "py::buffer {name}, std::array<gt::uint_t,{sid_ndim}> {name}_origin".format(
+                return "py::buffer {name}, std::array<gt::int_t,{sid_ndim}> {name}_origin".format(
                     name=node.name,
                     sid_ndim=sid_ndim,
                 )
@@ -129,7 +129,7 @@ class GTCCudaBindingsCodegen(codegen.TemplatedGenerator):
         return generated_code
 
 
-@gt_backend.register
+@register
 class GTCCudaBackend(BaseGTBackend, CLIBackendMixin):
     """CUDA backend using gtc."""
 

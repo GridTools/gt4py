@@ -18,7 +18,7 @@ def test_noextents():
 
     builder = StencilBuilder(stencil, backend=from_name("debug"))
     old_ext = builder.implementation_ir.fields_extents
-    legacy_ext = compute_legacy_extents(prepare_gtir(builder))
+    legacy_ext = compute_legacy_extents(prepare_gtir(builder), mask_inwards=True)
 
     for name, ext in old_ext.items():
         assert legacy_ext[name] == ext
@@ -31,7 +31,7 @@ def test_single_pos_offset():
 
     builder = StencilBuilder(stencil, backend=from_name("debug"))
     old_ext = builder.implementation_ir.fields_extents
-    legacy_ext = compute_legacy_extents(prepare_gtir(builder))
+    legacy_ext = compute_legacy_extents(prepare_gtir(builder), mask_inwards=True)
 
     for name, ext in old_ext.items():
         assert legacy_ext[name] == ext
@@ -44,7 +44,7 @@ def test_single_neg_offset():
 
     builder = StencilBuilder(stencil, backend=from_name("debug"))
     old_ext = builder.implementation_ir.fields_extents
-    legacy_ext = compute_legacy_extents(prepare_gtir(builder))
+    legacy_ext = compute_legacy_extents(prepare_gtir(builder), mask_inwards=True)
 
     for name, ext in old_ext.items():
         assert legacy_ext[name] == ext
@@ -57,7 +57,7 @@ def test_single_k_offset():
 
     builder = StencilBuilder(stencil, backend=from_name("debug"))
     old_ext = builder.implementation_ir.fields_extents
-    legacy_ext = compute_legacy_extents(prepare_gtir(builder))
+    legacy_ext = compute_legacy_extents(prepare_gtir(builder), mask_inwards=True)
 
     for name, ext in old_ext.items():
         assert legacy_ext[name] == ext
@@ -75,7 +75,7 @@ def test_offset_chain():
 
     builder = StencilBuilder(stencil, backend=from_name("debug"))
     old_ext = builder.implementation_ir.fields_extents
-    legacy_ext = compute_legacy_extents(prepare_gtir(builder))
+    legacy_ext = compute_legacy_extents(prepare_gtir(builder), mask_inwards=True)
 
     for name, ext in old_ext.items():
         assert legacy_ext[name] == ext
@@ -88,7 +88,7 @@ def test_ij():
 
     builder = StencilBuilder(stencil, backend=from_name("debug"))
     old_ext = builder.implementation_ir.fields_extents
-    legacy_ext = compute_legacy_extents(prepare_gtir(builder))
+    legacy_ext = compute_legacy_extents(prepare_gtir(builder), mask_inwards=True)
 
     for name, ext in old_ext.items():
         assert legacy_ext[name] == ext
@@ -101,7 +101,7 @@ def test_j():
 
     builder = StencilBuilder(stencil, backend=from_name("debug"))
     old_ext = builder.implementation_ir.fields_extents
-    legacy_ext = compute_legacy_extents(prepare_gtir(builder))
+    legacy_ext = compute_legacy_extents(prepare_gtir(builder), mask_inwards=True)
 
     for name, ext in old_ext.items():
         assert legacy_ext[name] == ext
@@ -114,7 +114,7 @@ def test_unreferenced():
 
     builder = StencilBuilder(stencil, backend=from_name("debug"))
     old_ext = builder.implementation_ir.fields_extents
-    legacy_ext = compute_legacy_extents(prepare_gtir(builder))
+    legacy_ext = compute_legacy_extents(prepare_gtir(builder), mask_inwards=True)
 
     for name, ext in old_ext.items():
         assert legacy_ext[name] == ext
@@ -134,7 +134,7 @@ def test_field_if():
 
     builder = StencilBuilder(stencil, backend=from_name("debug"))
     old_ext = builder.implementation_ir.fields_extents
-    legacy_ext = compute_legacy_extents(prepare_gtir(builder))
+    legacy_ext = compute_legacy_extents(prepare_gtir(builder), mask_inwards=True)
 
     for name, ext in old_ext.items():
         assert legacy_ext[name] == ext

@@ -15,7 +15,20 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import enum
-from typing import Any, ClassVar, Dict, Generic, List, Optional, Tuple, Type, TypeVar, Union, cast
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    ClassVar,
+    Dict,
+    Generic,
+    List,
+    Optional,
+    Tuple,
+    Type,
+    TypeVar,
+    Union,
+    cast,
+)
 
 import numpy as np
 import pydantic
@@ -37,6 +50,10 @@ from eve import utils
 from eve.type_definitions import SymbolRef
 from eve.typingx import RootValidatorType, RootValidatorValuesType
 from gtc.utils import dimension_flags_to_names, flatten_list
+
+
+if TYPE_CHECKING:
+    from gt4py.ir.nodes import Location
 
 
 class GTCPreconditionError(eve_exceptions.EveError, RuntimeError):
@@ -655,10 +672,14 @@ class _LvalueDimsValidator(NodeVisitor):
         symtable: Dict[str, Any],
         **kwargs: Any,
     ) -> None:
-        if not isinstance(symtable[node.left.name], self.decl_type):
+        decl = symtable.get(node.left.name, None)
+        if decl is None:
+            raise ValueError("Symbol {} not found.".format(node.left.name))
+        if not isinstance(decl, self.decl_type):
             return None
+
         allowed_flags = self._allowed_flags(loop_order)
-        flags = symtable[node.left.name].dimensions
+        flags = decl.dimensions
         if flags not in allowed_flags:
             dims = dimension_flags_to_names(flags)
             raise ValueError(
@@ -797,3 +818,9 @@ def typestr_to_data_type(typestr: str) -> DataType:
     }
     key = (typestr[1], int(typestr[2:]))
     return table.get(key, DataType.INVALID)  # type: ignore
+
+
+def location_to_source_location(loc: Optional["Location"]) -> Optional[SourceLocation]:
+    if loc is None or loc.line <= 0 or loc.column <= 0:
+        return None
+    return SourceLocation(loc.line, loc.column, loc.scope)

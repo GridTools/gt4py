@@ -25,8 +25,8 @@ import datetime
 
 import pytest
 
-import gt4py.backend as gt_backend
-import gt4py.utils as gt_utils
+from gt4py import backend as gt_backend
+from gt4py import utils as gt_utils
 
 
 def _backend_name_as_param(name):
@@ -76,17 +76,6 @@ OLD_BACKENDS = [
 ]
 OLD_INTERNAL_BACKENDS = [
     _backend_name_as_param(name) for name in _INTERNAL_BACKEND_NAMES if not name.startswith("gtc:")
-]
-DAWN_BACKENDS = [_backend_name_as_param(name) for name in _ALL_BACKEND_NAMES if "dawn:" in name]
-DAWN_CPU_BACKENDS = [
-    _backend_name_as_param(name)
-    for name in _ALL_BACKEND_NAMES
-    if "dawn:" in name and gt_backend.from_name(name).storage_info["device"] == "cpu"
-]
-DAWN_GPU_BACKENDS = [
-    _backend_name_as_param(name)
-    for name in _ALL_BACKEND_NAMES
-    if "dawn:" in name and gt_backend.from_name(name).storage_info["device"] == "gpu"
 ]
 
 LEGACY_GRIDTOOLS_BACKENDS = [_backend_name_as_param(name) for name in ("gtx86", "gtmc", "gtcuda")]

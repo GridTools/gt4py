@@ -62,7 +62,7 @@ def test_stencils_roundtrip(stencil_name):
 
     sdfg_pre = deepcopy(sdfg)
 
-    oir = convert(sdfg)
+    oir = convert(sdfg, oir.loc)
     sdfg_post = OirSDFGBuilder().visit(oir)
     assert_sdfg_equal(sdfg_pre, sdfg_post)
 
@@ -90,7 +90,7 @@ def test_same_node_read_write_not_overlap():
         ]
     )
     sdfg = OirSDFGBuilder().visit(oir)
-    convert(sdfg)
+    convert(sdfg, oir.loc)
 
 
 def test_two_vertical_loops_no_read():
@@ -125,4 +125,4 @@ def test_two_vertical_loops_no_read():
         ]
     )
     sdfg = OirSDFGBuilder().visit(oir_pre)
-    convert(sdfg)
+    convert(sdfg, oir_pre.loc)

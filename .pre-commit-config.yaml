@@ -7,7 +7,7 @@ repos:
 #   - id: check-useless-excludes
 
 - repo: https://github.com/pre-commit/pre-commit-hooks
-  rev: v3.4.0
+  rev: v4.1.0
   hooks:
   - id: check-case-conflict
 #  - id: check-json
@@ -20,7 +20,7 @@ repos:
 #  - id: pretty-format-json
 
 - repo: https://github.com/macisamuele/language-formatters-pre-commit-hooks
-  rev: v2.0.0
+  rev: v2.2.0
   hooks:
   - id: pretty-format-ini
     args: [--autofix]
@@ -75,17 +75,17 @@ repos:
 #     - pygments
 
 - repo: https://github.com/psf/black
-  rev: 20.8b1
+  rev: 21.12b0
   hooks:
   - id: black
 
 - repo: https://github.com/pre-commit/mirrors-isort
-  rev: v5.7.0
+  rev: v5.10.1
   hooks:
   - id: isort
 
 - repo: https://gitlab.com/PyCQA/flake8
-  rev: 3.8.4
+  rev: 4.0.1
   hooks:
   - id: flake8
     additional_dependencies:
@@ -144,13 +144,12 @@ repos:
       tests/test_integration/test_cpp_regression.py |
       tests/test_integration/utils.py |
       tests/test_unittest/test_call_interface.py |
-      tests/test_unittest/test_dawn_backends.py |
       tests/test_unittest/test_gtscript_frontend.py |
       tests/test_unittest/test_storage.py |
       )$
 
 - repo: https://github.com/pre-commit/mirrors-mypy
-  rev: v0.800
+  rev: v0.812
   hooks:
   - id: mypy
     exclude: |
@@ -177,7 +176,6 @@ repos:
       tests/test_unittest/test_call_interface.py |
       tests/test_unittest/test_gtscript_frontend.py |
       tests/test_unittest/test_storage.py |
-      tests/test_unittest/test_dawn_backends.py |
       tests/definition_setup.py |
       tests/test_unittest/test_gtc/test_common.py |
       tests/test_unittest/test_gtc/test_oir.py |
