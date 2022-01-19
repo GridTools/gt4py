@@ -267,10 +267,9 @@ class DaCeComputationCodegen:
             for i, line in enumerate(lines):
                 if line.strip() == f"struct {sdfg.name}_t {{":
                     j = i + 1
-                    while lines[j].strip() != "dace::cuda::Context *gpu_context;":
+                    while lines[j].strip() != "};":
                         j += 1
-
-                    lines = lines[0:i] + lines[j + 2 :]
+                    lines = lines[0:i] + lines[j + 1 :]
                     break
 
             for i, line in enumerate(lines):

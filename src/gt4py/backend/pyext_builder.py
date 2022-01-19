@@ -94,6 +94,7 @@ def get_gt_pyext_build_opts(
             "-arch=sm_{}".format(cuda_arch),
             "-isystem={}".format(gt_include_path),
             "-isystem={}".format(gt_config.build_settings["boost_include_path"]),
+            "-isystem={}".format(os.path.dirname(dace.__file__) + "/runtime/include/"),
             "-DBOOST_PP_VARIADICS",
             "-DBOOST_OPTIONAL_CONFIG_USE_OLD_IMPLEMENTATION_OF_OPTIONAL",
             "-DBOOST_OPTIONAL_USE_OLD_DEFINITION_OF_NONE",
