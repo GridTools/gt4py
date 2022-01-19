@@ -171,7 +171,7 @@ def test_first_vertex_neigh_of_first_edge_neigh_of_cells_fencil(backend):
 
 @fundef
 def sparse_stencil(inp):
-    return reduce(lambda a, b: a + b, 0)(inp)
+    return reduce(lambda a, b: a + b, 0)(deref(inp))
 
 
 def test_sparse_input_field(backend):
@@ -268,7 +268,7 @@ def shift_shift_stencil2(inp):
 
 @fundef
 def shift_sparse_stencil2(inp):
-    return deref(shift(1, 3)(shift(V2E)(inp)))
+    return deref(shift(1)(deref(shift(3)((shift(V2E)(inp))))))
 
 
 def test_shift_sparse_input_field2(backend):

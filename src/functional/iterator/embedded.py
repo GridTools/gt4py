@@ -382,22 +382,129 @@ class MDIterator:
             return _UNDEFINED
 
 
+class TupleIterator:
+    def __init__(self, tup, index, max_neighbors) -> None:
+        self.tup = tup
+        self.index = index
+        self._max_neighbors = max_neighbors
+
+    def shift(self, *offsets):
+        assert all(isinstance(offset, int) for offset in offsets)
+        print(sum(offsets))
+        return TupleIterator(self.tup, self.index + sum(offsets), self._max_neighbors)
+
+    def deref(self):
+        print(self.index)
+        return self.tup[self.index]
+
+    def max_neighbors(self):
+        assert self._max_neighbors is not None
+        return self._max_neighbors
+
+    def is_none(self):
+        return self.index < self._max_neighbors
+
+
+class SparseIterator:
+    def __init__(
+        self, field, pos, sparse_axis, *, incomplete_offsets=None, offset_provider, column_axis=None
+    ) -> None:
+        self.field = field
+        self.pos = pos
+        self.incomplete_offsets = incomplete_offsets or []
+        self.offset_provider = offset_provider
+        self.column_axis = column_axis
+        self.sparse_axis = sparse_axis
+
+    def shift(self, *offsets):
+        complete_offsets, open_offsets = group_offsets(*self.incomplete_offsets, *offsets)
+        return SparseIterator(
+            self.field,
+            shift_position(self.pos, *complete_offsets, offset_provider=self.offset_provider),
+            sparse_axis=self.sparse_axis,
+            incomplete_offsets=open_offsets,
+            offset_provider=self.offset_provider,
+            column_axis=self.column_axis,
+        )
+
+    def max_neighbors(self):
+        assert self.incomplete_offsets
+        assert isinstance(
+            self.offset_provider[self.incomplete_offsets[0].value], NeighborTableOffsetProvider
+        )
+        return self.offset_provider[self.incomplete_offsets[0].value].max_neighbors
+
+    def is_none(self):
+        return self.pos is None
+
+    def deref(self):
+        shifted_pos = self.pos.copy()
+        slice_axis = {self.sparse_axis: slice(None, None, None)}
+        print(self.field.axises)
+        print(shifted_pos)
+        print(slice_axis)
+        print("----")
+        ordered_indices = get_ordered_indices(
+            self.field.axises,
+            shifted_pos,
+            slice_axises=slice_axis,
+        )
+        print(shifted_pos)
+        # del shifted_pos[self.field.axises]
+        print(self.sparse_axis)
+        print(self.offset_provider)
+        print(self.offset_provider[self.sparse_axis.value].max_neighbors)
+        print(ordered_indices)
+        return TupleIterator(
+            self.field[ordered_indices],
+            0,
+            self.offset_provider[self.sparse_axis.value].max_neighbors,
+        )
+
+        # if not all(axis in shifted_pos.keys() for axis in self.field.axises):
+        #     raise IndexError("Iterator position doesn't point to valid location for its field.")
+        # slice_column = {}
+        # if self.column_axis is not None:
+        #     slice_column[self.column_axis] = slice(shifted_pos[self.column_axis], None)
+        #     del shifted_pos[self.column_axis]
+        # ordered_indices = get_ordered_indices(
+        #     self.field.axises,
+        #     shifted_pos,
+        #     slice_axises=slice_column,
+        # )
+        # try:
+        #     return self.field[ordered_indices]
+        # except IndexError:
+        #     return _UNDEFINED
+
+
 def make_in_iterator(inp, pos, offset_provider, *, column_axis):
     sparse_dimensions = [axis for axis in inp.axises if isinstance(axis, Offset)]
     assert len(sparse_dimensions) <= 1  # TODO multiple is not a current use case
     new_pos = pos.copy()
-    for axis in sparse_dimensions:
-        new_pos[axis] = None
+    # for axis in sparse_dimensions:
+    #     new_pos[axis] = None
     if column_axis is not None:
         # if we deal with column stencil the column position is just an offset by which the whole column needs to be shifted
         new_pos[column_axis] = 0
-    return MDIterator(
-        inp,
-        new_pos,
-        incomplete_offsets=[*sparse_dimensions],
-        offset_provider=offset_provider,
-        column_axis=column_axis,
-    )
+
+    if len(sparse_dimensions) > 0:
+        return SparseIterator(
+            inp,
+            new_pos,
+            incomplete_offsets=[*sparse_dimensions],
+            offset_provider=offset_provider,
+            column_axis=column_axis,
+            sparse_axis=sparse_dimensions[0],
+        )
+    else:
+        return MDIterator(
+            inp,
+            new_pos,
+            incomplete_offsets=[*sparse_dimensions],
+            offset_provider=offset_provider,
+            column_axis=column_axis,
+        )
 
 
 builtins.builtin_dispatch.push_key(EMBEDDED)  # makes embedded the default
@@ -439,6 +546,7 @@ class LocatedField:
 def get_ordered_indices(axises, pos, *, slice_axises=None):
     """pos is a dictionary from axis to offset."""  # noqa: D403
     slice_axises = slice_axises or dict()
+    print([*pos.keys(), *slice_axises])
     assert all(axis in [*pos.keys(), *slice_axises] for axis in axises)
     return tuple(pos[axis] if axis in pos else slice_axises[axis] for axis in axises)
 
@@ -462,7 +570,12 @@ def _tupsum(a, b):
         else:
             assert isinstance(t, numbers.Integral)
             second = t
-        start = first + second
+        if first is None:
+            start = second
+        elif second is None:
+            start = first
+        else:
+            start = first + second
         return slice(start, None) if is_slice else start
 
     return tuple(combine_slice(*i) for i in zip(a, b))
@@ -482,6 +595,9 @@ def np_as_located_field(*axises, origin=None):
             a[_tupsum(indices, offsets)] = value
 
         def getter(indices):
+            print("getter")
+            print(indices)
+            print(offsets)
             return a[_tupsum(indices, offsets)]
 
         return LocatedField(getter, axises, setter=setter, array=a.__array__)
