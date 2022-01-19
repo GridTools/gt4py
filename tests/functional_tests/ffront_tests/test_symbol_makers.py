@@ -137,3 +137,36 @@ def test_invalid_symbol_types():
         symbol_makers.make_symbol_type_from_typing(tuple[int, ...])
     with pytest.raises(symbol_makers.FieldOperatorTypeError, match="Unbound tuples"):
         symbol_makers.make_symbol_type_from_typing(typing.Tuple["float", ...])
+
+    # Fields
+    with pytest.raises(symbol_makers.FieldOperatorTypeError, match="Invalid field dimensions"):
+        symbol_makers.make_symbol_type_from_typing(common.Field[int, int])
+    with pytest.raises(symbol_makers.FieldOperatorTypeError, match="Invalid field dimension"):
+        symbol_makers.make_symbol_type_from_typing(common.Field[[int, int], int])
+
+    with pytest.raises(symbol_makers.FieldOperatorTypeError, match="Field dtype argument"):
+        symbol_makers.make_symbol_type_from_typing(common.Field[..., str])
+    with pytest.raises(symbol_makers.FieldOperatorTypeError, match="Field dtype argument"):
+        symbol_makers.make_symbol_type_from_typing(common.Field[..., None])
+
+    # Functions
+    with pytest.raises(
+        symbol_makers.FieldOperatorTypeError, match="Not annotated functions are not supported"
+    ):
+        symbol_makers.make_symbol_type_from_typing(typing.Callable)
+
+    with pytest.raises(symbol_makers.FieldOperatorTypeError, match="Invalid callable annotations"):
+        symbol_makers.make_symbol_type_from_typing(typing.Callable[..., float])
+    with pytest.raises(symbol_makers.FieldOperatorTypeError, match="Invalid callable annotations"):
+        symbol_makers.make_symbol_type_from_typing(typing.Callable[[int], str])
+    with pytest.raises(symbol_makers.FieldOperatorTypeError, match="Invalid callable annotations"):
+        symbol_makers.make_symbol_type_from_typing(typing.Callable[[int], float])
+
+    with pytest.raises(
+        symbol_makers.FieldOperatorTypeError, match="'<class 'str'>' type is not supported"
+    ):
+        symbol_makers.make_symbol_type_from_typing(
+            typing.Annotated[
+                typing.Callable[["float", int], str], typingx.CallableKwargsInfo(data={})
+            ]
+        )
