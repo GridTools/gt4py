@@ -105,13 +105,16 @@ class LocalTemporariesToScalars(TemporariesToScalarsBase):
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> oir.Stencil:
         horizontal_executions = node.iter_tree().if_isinstance(oir.HorizontalExecution)
+        temps_without_data_dims = set(
+            [decl.name for decl in node.declarations if not decl.data_dims]
+        )
         counts: collections.Counter = sum(
             (
                 collections.Counter(
                     horizontal_execution.iter_tree()
                     .if_isinstance(oir.FieldAccess)
                     .getattr("name")
-                    .if_in({tmp.name for tmp in node.declarations})
+                    .if_in(temps_without_data_dims)
                     .to_set()
                 )
                 for horizontal_execution in horizontal_executions
