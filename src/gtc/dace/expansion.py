@@ -501,10 +501,15 @@ class NaiveVerticalLoopExpander(OIRLibraryNodeExpander):
                     for acc in access_collection.ordered_accesses()
                     if acc.field == name
                 ):
+                    k_orig = (
+                        vl_origin[2]
+                        if vl_origin[2] < common.AxisBound.start()
+                        else common.AxisBound.start()
+                    )
                     subset_strs.append(
                         "({kstart})-({global_orig})+({min_off}):({kend})-({global_orig})+({max_off})".format(
                             kstart=get_axis_bound_str(interval.start, "__K"),
-                            global_orig=get_axis_bound_str(vl_origin[2], "__K"),
+                            global_orig=get_axis_bound_str(k_orig, "__K"),
                             min_off=min_k_offsets[name] or 0,
                             kend=get_axis_bound_str(interval.end, "__K"),
                             max_off=max_k_offsets[name] or 0,

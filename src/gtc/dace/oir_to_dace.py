@@ -43,7 +43,7 @@ from gtc.passes.oir_optimizations.utils import AccessCollector
 def _offset_origin(interval: oir.Interval, origin: Optional[oir.AxisBound]) -> oir.Interval:
     if origin is None:
         return interval
-    if origin >= oir.AxisBound.start():
+    if origin.level != LevelMarker.START:
         return interval
     return interval.shifted(-origin.offset)
 

@@ -308,13 +308,14 @@ class DaCeComputationCodegen:
 
     def generate_dace_args(self, gtir, sdfg):
         offset_dict: Dict[str, Tuple[int, int, int]] = {
-            k: (-v[0][0], -v[1][0], -v[2][0]) for k, v in compute_legacy_extents(gtir).items()
+            k: (-v[0][0], -v[1][0], -v[2][0])
+            for k, v in compute_legacy_extents(gtir, mask_inwards=True).items()
         }
         k_origins = {
             field_name: boundary[0] for field_name, boundary in compute_k_boundary(gtir).items()
         }
         for name, origin in k_origins.items():
-            offset_dict[name] = (offset_dict[name][0], offset_dict[name][1], max(0, origin))
+            offset_dict[name] = (offset_dict[name][0], offset_dict[name][1], origin)
 
         symbols = {f"__{var}": f"__{var}" for var in "IJK"}
         for name, array in sdfg.arrays.items():
