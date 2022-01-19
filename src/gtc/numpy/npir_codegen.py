@@ -255,6 +255,7 @@ class NpirCodegen(TemplatedGenerator):
     def visit_EmptyTemp(
         self, node: npir.EmptyTemp, *, temp_name: str, **kwargs
     ) -> Union[str, Collection[str]]:
+        assert all(node.dimensions), "The logic below does not support masked temporaries"
         shape = "_domain_"
         origin = [0, 0, 0]
         if extents := kwargs.get("field_extents", {}).get(temp_name):
