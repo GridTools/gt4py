@@ -97,6 +97,8 @@ class IRNodeInspector:
 
         for key, value in items:
             self._visit((*path, node_name), key, value)
+        else:
+            return node
 
 
 class IRNodeMapper:
