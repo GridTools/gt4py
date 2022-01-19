@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 #
 # GT4Py Project - GridTools Framework
@@ -15,7 +14,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import Generic, TypeVar
+from typing import  TypeVar
 
 import numpy as np
 

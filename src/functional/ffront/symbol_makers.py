@@ -61,11 +61,12 @@ def make_symbol_type_from_typing(
     recursive_make_symbol = functools.partial(
         make_symbol_type_from_typing, global_ns=global_ns, local_ns=local_ns
     )
+    extra_args = ()
 
     # ForwardRef
     if isinstance(value, str):
         value = ForwardRef(value)
-    if type(value).__module__ == "typing" and hasattr(value, "__forward_arg__"):
+    if isinstance(value, ForwardRef):
         try:
             value = typingx.resolve_type(
                 value, global_ns=global_ns, local_ns=local_ns, allow_partial=False
@@ -77,11 +78,11 @@ def make_symbol_type_from_typing(
 
     # Annotated
     if typing.get_origin(value) is typing.Annotated:
-        value, extra_args = typing.get_args(value)
-        while typing.get_origin(value) is typing.Annotated:
-            value = typing.get_origin(value)
-    else:
-        extra_args = None
+        value, *extra_args = typing.get_args(value)
+        if not isinstance(value, collections.abc.Callable):
+            value = typingx.resolve_type(
+                value, global_ns=global_ns, local_ns=local_ns, allow_partial=False
+            )
 
     value_type = (
         typing.get_origin(value)
@@ -129,14 +130,16 @@ def make_symbol_type_from_typing(
             if arg_types in (None, Ellipsis) or return_type is None:
                 raise FieldOperatorTypeError("Not annotated functions are not supported!")
 
-            if not isinstance(extra_args, typingx.CallableKwargsInfo):
+            kwargs_info = [arg for arg in extra_args if isinstance(arg, typingx.CallableKwargsInfo)]
+            if len(kwargs_info) != 1:
                 raise FieldOperatorTypeError(f"Invalid callable annotations in {value}")
+            kwargs_info = kwargs_info[0]
 
             return foast.FunctionType(
                 args=[recursive_make_symbol(arg) for arg in arg_types],
                 kwargs={
                     arg: recursive_make_symbol(arg_type)
-                    for arg, arg_type in extra_args.data.items()
+                    for arg, arg_type in kwargs_info.data.items()
                 },
                 returns=recursive_make_symbol(return_type),
             )
@@ -175,14 +178,14 @@ class FieldOperatorTypeError(common.GTTypeError):
         super().__init__(*args)
 
 
-def _make_type_error(node, msg) -> FieldOperatorTypeError:
-    return FieldOperatorTypeError(
-        msg,
-        lineno=getattr(node, "lineno", None),
-        offset=getattr(node, "col_offset", None),
-        end_lineno=getattr(node, "end_lineno", None),
-        end_offset=getattr(node, "end_offset", None),
-    )
+# def _make_type_error(node, msg) -> FieldOperatorTypeError:
+#     return FieldOperatorTypeError(
+#         msg,
+#         lineno=getattr(node, "lineno", None),
+#         offset=getattr(node, "col_offset", None),
+#         end_lineno=getattr(node, "end_lineno", None),
+#         end_offset=getattr(node, "end_offset", None),
+#     )
 
 
 # class FieldOperatorTypeParser(NodeTranslator):
