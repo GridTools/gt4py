@@ -21,9 +21,9 @@ import pytest
 
 from eve import typingx
 from functional import common
-from functional.ffront.fbuiltins import Field, float64
-from functional.ffront import symbol_makers
 from functional.ffront import field_operator_ast as foast
+from functional.ffront import symbol_makers
+from functional.ffront.fbuiltins import Field, float64
 
 
 class CustomInt32DType:
