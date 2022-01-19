@@ -739,23 +739,29 @@ def parse_annotation(
         tuple_or_name.elts if isinstance(tuple_or_name, ast.Tuple) else tuple_or_name
     )
 
-    if len(dtype_and_axes) > 1:
+    has_axes_and_dtype = len(dtype_and_axes) > 1 and isinstance(dtype_and_axes[0], ast.Constant)
+
+    if has_axes_and_dtype:
         axes = gt_utils.meta.get_qualified_name_from_node(dtype_and_axes[0])
         dtype_node = dtype_and_axes[1]
+    elif len(dtype_and_axes) == 2:
+        axes = "IJK"
+        dtype_node = dtype_and_axes
     elif len(dtype_and_axes) == 1:
         axes = "IJK"
-        dtype_node = dtype_and_axes[1]
+        dtype_node = dtype_and_axes[0]
     else:
         raise GTScriptSyntaxError(f"{type_name} requires at least one argument")
+
+    if isinstance(dtype_node, ast.Tuple):
+        dtype_node = dtype_node.elts
 
     if isinstance(dtype_node, (ast.Name, ast.Attribute)):
         dtype = _parse_dtype(dtype_node)
         data_dims = []
-    elif isinstance(dtype_node, ast.Tuple):
-        dtype = _parse_dtype(dtype_node.elts[0])
-        data_dims = list(ast.literal_eval(dtype_node.elts[1]))
     else:
-        raise NotImplementedError()
+        dtype = _parse_dtype(dtype_node[0])
+        data_dims = list(ast.literal_eval(dtype_node[1]))
 
     decl = gt_ir.FieldDecl(
         name=temp_name,
@@ -1479,8 +1485,8 @@ class IRMaker(ast.NodeVisitor):
 
         for t in node.targets[0].elts if isinstance(node.targets[0], ast.Tuple) else node.targets:
             name, spatial_offset, data_index = self._parse_assign_target(t)
-            is_temporary = name not in {name for name, field in self.fields.items() if field.is_api}
             # NOTE (jdahm): This check has to be disabled in order to assign to data dims in temporaries.
+            # is_temporary = name not in {name for name, field in self.fields.items() if field.is_api}
             # if spatial_offset and is_temporary:
             #     raise GTScriptSyntaxError(
             #         message="No subscript allowed in assignment to temporaries",
