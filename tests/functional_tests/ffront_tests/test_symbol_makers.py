@@ -120,3 +120,20 @@ def test_invalid_scalar_kind():
 )
 def test_make_symbol_type_from_typing(value, expected):
     assert symbol_makers.make_symbol_type_from_typing(value) == expected
+
+
+def test_invalid_symbol_types():
+    # Forward references
+    with pytest.raises(symbol_makers.FieldOperatorTypeError, match="undefined forward references"):
+        symbol_makers.make_symbol_type_from_typing("foo")
+
+    # Tuples
+    with pytest.raises(symbol_makers.FieldOperatorTypeError, match="least one argument"):
+        symbol_makers.make_symbol_type_from_typing(typing.Tuple)
+    with pytest.raises(symbol_makers.FieldOperatorTypeError, match="least one argument"):
+        symbol_makers.make_symbol_type_from_typing(tuple)
+
+    with pytest.raises(symbol_makers.FieldOperatorTypeError, match="Unbound tuples"):
+        symbol_makers.make_symbol_type_from_typing(tuple[int, ...])
+    with pytest.raises(symbol_makers.FieldOperatorTypeError, match="Unbound tuples"):
+        symbol_makers.make_symbol_type_from_typing(typing.Tuple["float", ...])

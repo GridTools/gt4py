@@ -100,6 +100,10 @@ def make_symbol_type_from_typing(
                 raise FieldOperatorTypeError(
                     f"Tuple annotation ({value}) requires at least one argument!"
                 )
+            if Ellipsis in args:
+                raise FieldOperatorTypeError(
+                    f"Unbound tuples ({value}) are not allowed!"
+                )
             return foast.TupleType(types=[recursive_make_symbol(arg) for arg in args])
 
         case common.Field:
@@ -176,121 +180,3 @@ class FieldOperatorTypeError(common.GTTypeError):
         msg = f"Invalid type declaration: {msg}"
         args = tuple([msg, info] if info else [msg])
         super().__init__(*args)
-
-
-# def _make_type_error(node, msg) -> FieldOperatorTypeError:
-#     return FieldOperatorTypeError(
-#         msg,
-#         lineno=getattr(node, "lineno", None),
-#         offset=getattr(node, "col_offset", None),
-#         end_lineno=getattr(node, "end_lineno", None),
-#         end_offset=getattr(node, "end_offset", None),
-#     )
-
-
-# class FieldOperatorTypeParser(NodeTranslator):
-#     """Parse type annotations into FOAST types.
-
-#     It expects to receive the AST node of an annotation.
-
-#     Examples
-#     --------
-#     >>> import ast
-#     >>>
-#     >>> test1 = ast.parse("test1: Field[..., float64]").body[0]
-#     >>> FieldOperatorTypeParser.apply(test1.annotation)  # doctest: +ELLIPSIS
-#     FieldType(dims=Ellipsis, dtype=ScalarType(kind=<ScalarKind.FLOAT64: ...>, shape=None))
-
-#     >>> test2 = ast.parse("test2: Field[['Foo'], 'int32']").body[0]
-#     >>> FieldOperatorTypeParser.apply(test2.annotation)  # doctest: +ELLIPSIS
-#     FieldType(dims=[Dimension(name='Foo')], dtype=ScalarType(kind=<ScalarKind.INT32: ...>, shape=None))
-
-#     >>> test3 = ast.parse("test3: Field['foo', bool]").body[0]
-#     >>> try:
-#     ...     FieldOperatorTypeParser.apply(test3.annotation)
-#     ... except FieldOperatorTypeError as err:
-#     ...     print(err.msg)
-#     Invalid Type Declaration: Field type dimension argument must be list or `...`!
-
-#     >>> test4 = ast.parse("test4: int").body[0]
-#     >>> FieldOperatorTypeParser.apply(test4.annotation)  # doctest: +ELLIPSIS
-#     ScalarType(kind=<ScalarKind.INT32: ...>, shape=None)
-
-#     >>> test5 = ast.parse("test5: tuple[Field[[X, Y, Z], float32], Field[[U, V], int64]]").body[0]
-#     >>> FieldOperatorTypeParser.apply(test5.annotation)  # doctest: +ELLIPSIS
-#     TupleType(types=[FieldType(...), FieldType(...)])
-#     """
-
-#     @classmethod
-#     def apply(cls, node: ast.AST) -> foast.SymbolType:
-#         return cls().visit(node)
-
-#     def visit_Subscript(self, node: ast.Subscript, **kwargs) -> foast.SymbolType:
-#         return self.visit(node.value, argument=node.slice, **kwargs)
-
-#     def visit_Name(
-#         self, node: ast.Name, *, argument: Optional[ast.AST] = None, **kwargs
-#     ) -> Union[foast.SymbolType, str]:
-#         maker = getattr(self, f"make_{node.id}", None)
-#         if maker is None:
-#             # TODO (ricoh): pull in type from external name
-#             return node.id
-#         return maker(argument)
-
-#     def visit_Constant(self, node: ast.Constant, **kwargs) -> Any:
-#         if isinstance(node.value, str) and (maker := getattr(self, f"make_{node.value}", None)):
-#             return maker(argument=None)
-#         else:
-#             return node.value
-
-#     def make_Field(self, argument: ast.Tuple) -> foast.FieldType:
-#         if not isinstance(argument, ast.Tuple) or len(argument.elts) != 2:
-#             nargs = len(getattr(argument, "elts", []))
-#             raise _make_type_error(argument, f"Field type requires two arguments, got {nargs}!")
-
-#         dim_arg, dtype_arg = argument.elts
-
-#         dims: Union[Ellipsis, list[foast.Dimension]] = Ellipsis  # type: ignore[valid-type]
-
-#         match dim_arg:
-#             case ast.Tuple() | ast.List():
-#                 dims = [foast.Dimension(name=self.visit(dim)) for dim in argument.elts[0].elts]
-#             case ast.Ellipsis():
-#                 dims = Ellipsis
-#             case _:
-#                 dims = self.visit(dim_arg)
-#                 if dims is not Ellipsis:
-#                     raise _make_type_error(
-#                         argument.elts[0], "Field type dimension argument must be list or `...`!"
-#                     )
-
-#         dtype = self.visit(dtype_arg)
-#         if not isinstance(dtype, foast.ScalarType):
-#             raise _make_type_error(dtype_arg, "Field type dtype argument must be a scalar type!")
-#         return foast.FieldType(dims=dims, dtype=dtype)
-
-#     def make_Tuple(self, argument: ast.Tuple) -> foast.TupleType:
-#         return foast.TupleType(types=[self.visit(element) for element in argument.elts])
-
-#     make_tuple = make_Tuple
-
-#     def make_int32(self, argument: None = None) -> foast.ScalarType:
-#         return foast.ScalarType(kind=make_scalar_kind("int32"))
-
-#     def make_int64(self, argument: None = None) -> foast.ScalarType:
-#         return foast.ScalarType(kind=make_scalar_kind("int64"))
-
-#     def make_int(self, argument: None = None) -> foast.ScalarType:
-#         return foast.ScalarType(kind=make_scalar_kind("int"))
-
-#     def make_bool(self, argument: None = None) -> foast.ScalarType:
-#         return foast.ScalarType(kind=make_scalar_kind("bool"))
-
-#     def make_float32(self, argument: None = None) -> foast.ScalarType:
-#         return foast.ScalarType(kind=make_scalar_kind("float32"))
-
-#     def make_float64(self, argument: None = None) -> foast.ScalarType:
-#         return foast.ScalarType(kind=make_scalar_kind("float64"))
-
-#     def make_float(self, argument: None = None) -> foast.ScalarType:
-#         return foast.ScalarType(kind=make_scalar_kind("float"))
