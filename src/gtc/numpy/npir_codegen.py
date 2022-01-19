@@ -262,7 +262,8 @@ class NpirCodegen(TemplatedGenerator):
             i_size = f"_dI_ + {sum(boundary[0])}" if node.dimensions[0] else "1"
             j_size = f"_dJ_ + {sum(boundary[1])}" if node.dimensions[1] else "1"
             k_size = "_dK_" if node.dimensions[2] else "1"
-            shape = f"({i_size}, {j_size}, {k_size})"
+            data_dims = "".join([", " + str(axis_length) for axis_length in node.data_dims])
+            shape = f"({i_size}, {j_size}, {k_size}{data_dims})"
             origin[:2] = boundary[0][0], boundary[1][0]
         return self.generic_visit(node, shape=shape, origin=origin, **kwargs)
 

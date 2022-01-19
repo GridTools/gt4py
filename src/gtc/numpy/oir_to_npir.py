@@ -44,11 +44,14 @@ class OirToNpir(NodeTranslator):
             self,
             temp: Union[oir.FieldAccess, npir.FieldSlice],
             dimensions: Optional[Tuple[bool, bool, bool]] = None,
+            data_dims: Optional[Tuple[int, ...]] = None,
         ) -> None:
             if temp.name not in self.temp_defs:
                 self.temp_defs[str(temp.name)] = npir.VectorAssign(
                     left=npir.VectorTemp(name=str(temp.name), dtype=temp.dtype),
-                    right=npir.EmptyTemp(dtype=temp.dtype, dimensions=dimensions),
+                    right=npir.EmptyTemp(
+                        dtype=temp.dtype, dimensions=dimensions, data_dims=data_dims
+                    ),
                 )
 
     contexts = (SymbolTableTrait.symtable_merger,)
@@ -156,7 +159,7 @@ class OirToNpir(NodeTranslator):
         if isinstance(decl, oir.LocalScalar):
             ctx.ensure_temp_defined(node.left)
         elif isinstance(decl, oir.Temporary):
-            ctx.ensure_temp_defined(node.left, decl.dimensions)
+            ctx.ensure_temp_defined(node.left, decl.dimensions, decl.data_dims)
         return npir.VectorAssign(
             left=self.visit(node.left, ctx=ctx, is_lvalue=True, **kwargs),
             right=self.visit(node.right, ctx=ctx, broadcast=True, **kwargs),
