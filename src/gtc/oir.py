@@ -34,7 +34,7 @@ from gtc.common import AxisBound, LocNode
 
 @utils.noninstantiable
 class Expr(common.Expr):
-    pass
+    dtype: Optional[common.DataType]
 
 
 @utils.noninstantiable
