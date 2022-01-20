@@ -61,7 +61,9 @@ def _make_source_definition_from_function(func: Callable) -> SourceDefinition:
 
 
 def _make_closure_refs_from_function(func: Callable) -> ClosureRefs:
-    nonlocals, globals, inspect_builtins, inspect_unbound = inspect.getclosurevars(func)
+    (nonlocals, globals, inspect_builtins, inspect_unbound) = inspect.getclosurevars(  # noqa: A001
+        func
+    )
     # python builtins returned by getclosurevars() are not ffront.builtins
     unbound = set(inspect_builtins.keys()) | inspect_unbound
     builtins = unbound & set(fbuiltins.ALL_BUILTIN_NAMES)

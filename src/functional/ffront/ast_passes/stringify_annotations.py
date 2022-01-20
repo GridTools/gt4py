@@ -29,6 +29,7 @@ class StringifyAnnotationsPass(ast.NodeTransformer):
     Function ``foo()`` in the following example keeps overwriting local variable ``a``
 
     >>> import ast, inspect
+    >>> from ffront.ast_passes.single_static_assign import SingleStaticAssignPass
 
     >>> def foo():
     ...     a = 1
