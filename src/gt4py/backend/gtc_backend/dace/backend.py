@@ -176,8 +176,7 @@ class GTCDaCeExtGenerator:
         )
 
         sources: Dict[str, Dict[str, str]]
-        with dace.config.set_temporary("compiler", "cuda", "max_concurrent_streams", value=-1):
-            implementation = DaCeComputationCodegen.apply(gtir, sdfg)
+        implementation = DaCeComputationCodegen.apply(gtir, sdfg)
 
         bindings = DaCeBindingsCodegen.apply(
             gtir, sdfg, module_name=self.module_name, backend=self.backend
