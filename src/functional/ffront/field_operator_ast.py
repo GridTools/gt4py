@@ -89,7 +89,7 @@ class SymbolName(eve.traits.SymbolName):
 class Symbol(LocatedNode):
     id: SymbolName  # noqa: A003
     type: SymbolType  # noqa A003
-    namespace: Namespace = Namespace.LOCAL
+    namespace: Namespace = Namespace(Namespace.LOCAL)
 
 
 class DataSymbol(Symbol):

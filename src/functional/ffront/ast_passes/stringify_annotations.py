@@ -61,15 +61,21 @@ class StringifyAnnotationsPass(ast.NodeTransformer):
 
     def visit_arg(self, node: ast.arg) -> ast.arg:
         node.annotation = self._stringify_annotation(node.annotation)
-        return self.generic_visit(node)
+        result = self.generic_visit(node)
+        assert isinstance(result, ast.arg)
+        return result
 
     def visit_AnnAssign(self, node: ast.AnnAssign) -> ast.AnnAssign:
         node.annotation = self._stringify_annotation(node.annotation)
-        return self.generic_visit(node)
+        result = self.generic_visit(node)
+        assert isinstance(result, ast.AnnAssign)
+        return result
 
     def visit_FunctionDef(self, node: ast.FunctionDef) -> ast.FunctionDef:
         node.returns = self._stringify_annotation(node.returns)
-        return self.generic_visit(node)
+        result = self.generic_visit(node)
+        assert isinstance(result, ast.FunctionDef)
+        return result
 
     @staticmethod
     def _stringify_annotation(node: Optional[ast.AST]):
