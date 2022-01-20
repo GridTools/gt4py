@@ -117,7 +117,7 @@ def to_device(sdfg: dace.SDFG, device):
                 node.tile_sizes = [8, 8]
 
 
-def expand_and_wrap_sdfg(
+def expand_and_finalize_sdfg(
     gtir: gtir.Stencil, sdfg: dace.SDFG, layout_map
 ) -> dace.SDFG:  # noqa: C901
 
@@ -162,7 +162,7 @@ class GTCDaCeExtGenerator:
 
         to_device(sdfg, self.backend.storage_info["device"])
 
-        sdfg = expand_and_wrap_sdfg(gtir, sdfg, self.backend.storage_info["layout_map"])
+        sdfg = expand_and_finalize_sdfg(gtir, sdfg, self.backend.storage_info["layout_map"])
 
         for tmp_sdfg in sdfg.all_sdfgs_recursive():
             tmp_sdfg.transformation_hist = []
