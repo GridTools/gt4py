@@ -19,7 +19,6 @@ from typing import TYPE_CHECKING, Dict, Optional, Tuple, Type
 import dace
 import numpy as np
 from dace.sdfg.utils import fuse_states, inline_sdfgs
-from dace.transformation.dataflow import MapCollapse
 
 from eve import codegen
 from eve.codegen import MakoTemplate as as_mako
@@ -67,20 +66,6 @@ def post_expand_trafos(sdfg: dace.SDFG):
     while inline_sdfgs(sdfg) or fuse_states(sdfg):
         pass
     sdfg.simplify()
-    state = sdfg.node(0)
-    sdict = state.scope_children()
-    for mapnode in sdict[None]:
-        if not isinstance(mapnode, dace.nodes.MapEntry):
-            continue
-        inner_maps = [n for n in sdict[mapnode] if isinstance(n, dace.nodes.MapEntry)]
-        if len(inner_maps) != 1:
-            continue
-        inner_map = inner_maps[0]
-        if "k" in inner_map.params:
-            res_entry, _ = MapCollapse.apply_to(
-                sdfg, outer_map_entry=mapnode, inner_map_entry=inner_map, save=False, verify=False
-            )
-            res_entry.schedule = mapnode.schedule
 
 
 def expand_and_finalize_sdfg(

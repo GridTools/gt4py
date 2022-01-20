@@ -81,11 +81,6 @@ class VectorExpression(Expr):
     kind = cast(common.ExprKind, common.ExprKind.FIELD)
 
 
-@eve.utils.noninstantiable
-class VectorStmt(common.Stmt):
-    kind = cast(common.ExprKind, common.ExprKind.FIELD)
-
-
 class BroadCast(VectorExpression):
     expr: Expr
     dims: int = 3
@@ -138,26 +133,20 @@ class VectorTernaryOp(common.TernaryOp[VectorExpression], VectorExpression):
     pass
 
 
-class HorizontalMask(common.HorizontalMask, VectorExpression):
-    pass
-
-
-class VectorAssign(common.AssignStmt[VectorLValue, VectorExpression], VectorStmt):
+class VectorAssign(common.AssignStmt[VectorLValue, VectorExpression], VectorExpression):
     left: VectorLValue
     right: VectorExpression
     mask: Optional[VectorExpression]
-    horiz_mask: Optional[HorizontalMask]
 
 
-class MaskBlock(VectorStmt):
+class MaskBlock(common.Stmt):
     mask: VectorExpression
     mask_name: str
     body: List[VectorAssign]
-    horiz_mask: Optional[HorizontalMask]
 
 
 class HorizontalBlock(common.LocNode):
-    body: List[VectorStmt]
+    body: List[Union[VectorAssign, MaskBlock]]
 
 
 class VerticalPass(common.LocNode):

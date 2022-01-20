@@ -245,9 +245,6 @@ class OnTheFlyMerging(NodeTranslator):
             calls = first.iter_tree().if_isinstance(oir.NativeFuncCall).getattr("func")
             return any(call in expensive_calls for call in calls)
 
-        def first_has_horizontal_region() -> bool:
-            return len(first.iter_tree().if_isinstance(oir.HorizontalMask).to_list()) > 0
-
         def first_has_variable_access() -> bool:
             return first_accesses.has_variable_access()
 
@@ -256,7 +253,6 @@ class OnTheFlyMerging(NodeTranslator):
             or first_writes_protected()
             or first_has_large_body()
             or first_has_expensive_function_call()
-            or first_has_horizontal_region()
             or first_has_variable_access()
         ):
             return [first] + self._merge(others, symtable, new_symbol_name, protected_fields)

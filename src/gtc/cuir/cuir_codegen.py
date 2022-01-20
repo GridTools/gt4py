@@ -20,7 +20,7 @@ from eve import codegen, traits
 from eve.codegen import FormatTemplate as as_fmt
 from eve.codegen import MakoTemplate as as_mako
 from eve.concepts import LeafNode
-from gtc.common import BuiltInLiteral, DataType, LevelMarker, LocNode, NativeFunction, UnaryOperator
+from gtc.common import BuiltInLiteral, DataType, LevelMarker, NativeFunction, UnaryOperator
 from gtc.cuir import cuir
 
 
@@ -263,16 +263,6 @@ class CUIRCodegen(codegen.TemplatedGenerator):
             for offset in range(k_cache.extent.k[0], k_cache.extent.k[1] + 1)
         ]
 
-    @classmethod
-    def positional_accesses(cls, node: LocNode) -> Set[str]:
-        return (
-            node.iter_tree()
-            .if_isinstance(cuir.ScalarAccess)
-            .filter(lambda acc: "_pos" in acc.name)
-            .getattr("name")
-            .to_set()
-        )
-
     def visit_VerticalLoop(
         self, node: cuir.VerticalLoop, *, symtable: Dict[str, Any], **kwargs: Any
     ) -> Union[str, Collection[str]]:
@@ -284,10 +274,6 @@ class CUIRCodegen(codegen.TemplatedGenerator):
             .getattr("name", "data_index")
             .map(lambda x: (x[0], len(x[1])))
         }
-
-        pos_accesses = CUIRCodegen.positional_accesses(node)
-        if pos_accesses:
-            fields.update({name: 0 for name in pos_accesses})
 
         return self.generic_visit(
             node,
@@ -304,9 +290,7 @@ class CUIRCodegen(codegen.TemplatedGenerator):
         struct loop_${id(_this_node)}_f {
             sid::ptr_holder_type<Sid> m_ptr_holder;
             sid::strides_type<Sid> m_strides;
-            const int i_size;
-            const int j_size;
-            const int k_size;
+            int k_size;
 
             template <class Validator>
             GT_FUNCTION_DEVICE void operator()(const int _i_block,
@@ -369,14 +353,6 @@ class CUIRCodegen(codegen.TemplatedGenerator):
         """
     )
 
-    def visit_Kernel(self, node: cuir.Kernel, kernel_extents: List[str], **kwargs: Any) -> str:
-        kernel_extents.append(
-            self.visit(
-                cuir.IJExtent.zero().union(*node.iter_tree().if_isinstance(cuir.IJExtent)), **kwargs
-            )
-        )
-        return self.generic_visit(node, **kwargs)
-
     Kernel = as_mako(
         """
         % for vertical_loop in vertical_loops:
@@ -411,25 +387,18 @@ class CUIRCodegen(codegen.TemplatedGenerator):
             return "0"
 
         def loop_fields(vertical_loop: cuir.VerticalLoop) -> Set[str]:
-            fields = (
+            return (
                 vertical_loop.iter_tree().if_isinstance(cuir.FieldAccess).getattr("name").to_set()
             )
-            pos_accesses = CUIRCodegen.positional_accesses(vertical_loop)
-            if pos_accesses:
-                fields.update(set([access.split("(")[0] for access in pos_accesses]))
-            return fields
 
         def ctype(symbol: str) -> str:
             return self.visit(kwargs["symtable"][symbol].dtype, **kwargs)
 
-        kernel_extents: List[str] = []
         return self.generic_visit(
             node,
             max_extent=self.visit(
                 cuir.IJExtent.zero().union(*node.iter_tree().if_isinstance(cuir.IJExtent)), **kwargs
             ),
-            is_positional=CUIRCodegen.positional_accesses(node),
-            kernel_extents=kernel_extents,
             loop_start=loop_start,
             loop_fields=loop_fields,
             ctype=ctype,
@@ -453,9 +422,6 @@ class CUIRCodegen(codegen.TemplatedGenerator):
         #include <gridtools/stencil/common/extent.hpp>
         #include <gridtools/stencil/gpu/launch_kernel.hpp>
         #include <gridtools/stencil/gpu/tmp_storage_sid.hpp>
-        % if is_positional:
-        #include <gridtools/stencil/positional.hpp>
-        % endif
 
         namespace ${name}_impl_{
             using namespace gridtools;
@@ -491,10 +457,6 @@ class CUIRCodegen(codegen.TemplatedGenerator):
                     const int k_size = domain[2];
                     const int i_blocks = (i_size + i_block_size_t() - 1) / i_block_size_t();
                     const int j_blocks = (j_size + j_block_size_t() - 1) / j_block_size_t();
-                    % if is_positional:
-                    auto i_pos = positional<dim::i>();
-                    auto j_pos = positional<dim::j>();
-                    % endif
 
                     % for tmp in temporaries:
                         auto ${tmp} = gpu_backend::make_tmp_storage<${ctype(tmp)}>(
@@ -508,7 +470,7 @@ class CUIRCodegen(codegen.TemplatedGenerator):
                             tmp_alloc);
                     % endfor
 
-                    % for index, kernel in enumerate(_this_node.kernels):
+                    % for kernel in _this_node.kernels:
 
                         // kernel ${id(kernel)}
 
@@ -526,7 +488,7 @@ class CUIRCodegen(codegen.TemplatedGenerator):
                                 >(
 
                             % for field in loop_fields(vertical_loop):
-                                % if field in params or field.endswith("_pos"):
+                                % if field in params:
                                     block(sid::shift_sid_origin(
                                         ${field},
                                         offset_${id(vertical_loop)}
@@ -544,7 +506,7 @@ class CUIRCodegen(codegen.TemplatedGenerator):
                             loop_${id(vertical_loop)}_f<composite_${id(vertical_loop)}_t> loop_${id(vertical_loop)}{
                                 sid::get_origin(composite_${id(vertical_loop)}),
                                 sid::get_strides(composite_${id(vertical_loop)}),
-                                i_size, j_size, k_size
+                                k_size
                             };
 
                         % endfor
@@ -552,7 +514,7 @@ class CUIRCodegen(codegen.TemplatedGenerator):
                         kernel_${id(kernel)}_f<${', '.join(f'decltype(loop_{id(vl)})' for vl in kernel.vertical_loops)}> kernel_${id(kernel)}{
                             ${', '.join(f'loop_{id(vl)}' for vl in kernel.vertical_loops)}
                         };
-                        gpu_backend::launch_kernel<${kernel_extents[index]},
+                        gpu_backend::launch_kernel<${max_extent},
                             i_block_size_t::value, j_block_size_t::value>(
                             i_size,
                             j_size,

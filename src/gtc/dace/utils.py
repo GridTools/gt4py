@@ -27,7 +27,6 @@ from pydantic import validator
 import eve
 import gtc.oir as oir
 from eve.iterators import TraversalOrder, iter_tree
-from gtc import common
 from gtc.common import CartesianOffset, DataType, ExprKind, LevelMarker, typestr_to_data_type
 from gtc.passes.oir_optimizations.utils import AccessCollector, GenericAccess
 
@@ -384,30 +383,7 @@ class CartesianIJIndexSpace(tuple):
 
     @staticmethod
     def from_access(access: GenericAccess):
-        if access.region is None:
-            return CartesianIJIndexSpace.from_offset(access.offset)
-
-        res = []
-
-        for interval, off in zip((access.region.i, access.region.j), access.offset[:2]):
-            dim_tuple = [0, 0]
-            if interval.start is not None:
-                if interval.start.level == common.LevelMarker.START:
-                    dim_tuple[0] = min(0, off + interval.start.offset)
-                else:
-                    dim_tuple[0] = 0
-            else:
-                dim_tuple[0] = min(0, off)
-            if interval.end is not None:
-                if interval.end.level == common.LevelMarker.END:
-                    dim_tuple[1] = max(0, off + interval.end.offset)
-                else:
-                    dim_tuple[1] = 0
-            else:
-                dim_tuple[1] = min(0, off)
-            res.append(tuple(dim_tuple))
-
-        return CartesianIJIndexSpace(res)
+        return CartesianIJIndexSpace.from_offset(access.offset)
 
     @staticmethod
     def from_iteration_space(iteration_space: CartesianIterationSpace) -> "CartesianIJIndexSpace":
@@ -444,38 +420,7 @@ class CartesianIJIndexSpace(tuple):
 
 
 def iteration_to_access_space(iteration_space: CartesianIJIndexSpace, access: GenericAccess):
-    if access.region is None:
-        return CartesianIJIndexSpace.from_access(access).compose(iteration_space)
-
-    res = []
-
-    for region_interval, index_interval, off in zip(
-        (access.region.i, access.region.j),
-        iteration_space,
-        access.offset[:2],
-    ):
-        dim_tuple = list(index_interval)
-
-        if region_interval.start is not None:
-            if region_interval.start.level == common.LevelMarker.START:
-                dim_tuple[0] = min(
-                    0, max(index_interval[0] + off, region_interval.start.offset + off)
-                )
-        else:
-            dim_tuple[0] += min(0, off)
-
-        if region_interval.end is not None:
-            if region_interval.end.level == common.LevelMarker.END:
-
-                dim_tuple[1] = max(
-                    0, min(index_interval[1] + off, region_interval.end.offset + off)
-                )
-        else:
-            dim_tuple[1] += min(0, off)
-
-        res.append(tuple(dim_tuple))
-
-    return CartesianIJIndexSpace(res)
+    return CartesianIJIndexSpace.from_access(access).compose(iteration_space)
 
 
 def oir_iteration_space_computation(stencil: oir.Stencil) -> Dict[int, CartesianIterationSpace]:
@@ -540,7 +485,6 @@ def oir_field_boundary_computation(stencil: oir.Stencil) -> Dict[str, CartesianI
 
 def get_access_collection(
     node: Union[dace.SDFG, "HorizontalExecutionLibraryNode", "VerticalLoopLibraryNode"],
-    compensate_regions: bool = False,
 ):
     from gtc.dace.nodes import HorizontalExecutionLibraryNode, VerticalLoopLibraryNode
 
@@ -552,7 +496,7 @@ def get_access_collection(
                 res._ordered_accesses.extend(collection._ordered_accesses)
         return res
     elif isinstance(node, HorizontalExecutionLibraryNode):
-        return AccessCollector.apply(node.oir_node, compensate_regions=compensate_regions)
+        return AccessCollector.apply(node.oir_node)
     else:
         assert isinstance(node, VerticalLoopLibraryNode)
         res = AccessCollector.CartesianAccessCollection([])
@@ -586,50 +530,22 @@ def nodes_extent_calculation(
         iteration_space = node.iteration_space
         if iteration_space is not None:
             for acc in access_collection.ordered_accesses():
-                if acc.region is None:
+                access_extent = []
+                for dim, iteration_interval in zip(
+                    (0, 1),
+                    (iteration_space.i_interval, iteration_space.j_interval),
+                ):
+                    ext = [0, 0]
 
-                    access_extent: List[Tuple[int, int]] = [
-                        (
-                            min(0, iteration_space.i_interval.start.offset + acc.offset[0]),
-                            max(0, iteration_space.i_interval.end.offset + acc.offset[0]),
-                        ),
-                        (
-                            min(0, iteration_space.j_interval.start.offset + acc.offset[1]),
-                            max(0, iteration_space.j_interval.end.offset + acc.offset[1]),
-                        ),
-                    ]
-                else:
-                    access_extent = []
-                    for dim, region_interval, iteration_interval in zip(
-                        (0, 1),
-                        (acc.region.i, acc.region.j),
-                        (iteration_space.i_interval, iteration_space.j_interval),
-                    ):
-                        ext = [0, 0]
+                    ext[0] = iteration_interval.start.offset
+                    ext[0] += acc.offset[dim]
+                    ext[0] = min(0, ext[0])
 
-                        ext[0] = iteration_interval.start.offset
-                        if region_interval.start is not None:
-                            if region_interval.start.level == common.LevelMarker.START:
-                                ext[0] = max(
-                                    ext[0] + acc.offset[dim],
-                                    region_interval.start.offset + acc.offset[dim],
-                                )
-                        else:
-                            ext[0] += acc.offset[dim]
-                        ext[0] = min(0, ext[0])
+                    ext[1] = iteration_interval.end.offset
+                    ext[1] += acc.offset[dim]
+                    ext[1] = max(0, ext[1])
 
-                        ext[1] = iteration_interval.end.offset
-                        if region_interval.end is not None:
-                            if region_interval.end.level == common.LevelMarker.END:
-                                ext[1] = min(
-                                    ext[1] + acc.offset[dim],
-                                    region_interval.end.offset + acc.offset[dim],
-                                )
-                        else:
-                            ext[1] += acc.offset[dim]
-                        ext[1] = max(0, ext[1])
-
-                        access_extent.append((ext[0], ext[1]))
+                    access_extent.append((ext[0], ext[1]))
 
                 if acc.field not in access_spaces:
                     access_spaces[acc.field] = tuple(access_extent)

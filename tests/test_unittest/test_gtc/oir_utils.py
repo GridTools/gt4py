@@ -20,12 +20,7 @@ import factory
 
 from gtc import common, oir
 
-from .common_utils import (
-    CartesianOffsetFactory,
-    HorizontalMaskFactory,
-    identifier,
-    undefined_symbol_list,
-)
+from .common_utils import CartesianOffsetFactory, identifier, undefined_symbol_list
 
 
 class FieldAccessFactory(factory.Factory):
@@ -125,22 +120,6 @@ class HorizontalExecutionFactory(factory.Factory):
 
     body = factory.List([factory.SubFactory(AssignStmtFactory)])
     declarations: List[oir.LocalScalar] = []
-
-
-class HorizontalSpecializationFactory(factory.Factory):
-    class Meta:
-        model = oir.HorizontalSpecialization
-
-    mask = factory.SubFactory(HorizontalMaskFactory)
-    expr = factory.SubFactory(FieldAccessFactory)
-
-
-class HorizontalSwitchFactory(factory.Factory):
-    class Meta:
-        model = oir.HorizontalSwitch
-
-    values = factory.List([factory.SubFactory(HorizontalSpecializationFactory)])
-    default = factory.SubFactory(LiteralFactory)
 
 
 class IntervalFactory(factory.Factory):

@@ -17,14 +17,13 @@
 import functools
 import textwrap
 from dataclasses import dataclass, field
-from typing import Any, Collection, Dict, Optional, Tuple, Union, cast
+from typing import Any, Collection, Dict, Tuple, Union
 
 from eve.codegen import FormatTemplate, JinjaTemplate, TemplatedGenerator
 from eve.visitors import NodeVisitor
 from gt4py.definitions import Extent
 from gtc import common
 from gtc.numpy import npir
-from gtc.passes import utils
 
 
 __all__ = ["NpirCodegen"]
@@ -86,63 +85,6 @@ ORIGIN_CORRECTED_VIEW_CLASS = textwrap.dedent(
             return self.field.__setitem__(self.shim_key(key), value)
     """
 )
-
-DomainBounds = Tuple[Tuple[str, int], Tuple[str, int]]
-DomainSpec = Tuple[Optional[DomainBounds], Optional[DomainBounds], Optional[DomainBounds]]
-
-
-def get_horizontal_restriction(
-    horiz_mask: npir.HorizontalMask,
-    *,
-    h_lower: Tuple[int, int] = (0, 0),
-    h_upper: Tuple[int, int] = (0, 0),
-    **kwargs: Any,
-) -> Tuple[DomainBounds, DomainBounds]:
-    def base_and_offset(bound: common.AxisBound, axis: str) -> Tuple[str, int]:
-        return (
-            axis.lower() if bound.level == common.LevelMarker.START else axis.upper(),
-            bound.offset,
-        )
-
-    horizontal_extent = Extent(((-h_lower[0], h_upper[0]), (-h_lower[1], h_upper[1]), (0, 0)))
-    rel_mask: Optional[common.HorizontalMask] = utils.compute_relative_mask(
-        horizontal_extent, horiz_mask
-    )
-    assert rel_mask is not None
-    return cast(
-        Tuple[DomainBounds, DomainBounds],
-        tuple(
-            (base_and_offset(interval.start, axis), base_and_offset(interval.end, axis))
-            for axis, interval in (("I", rel_mask.i), ("J", rel_mask.j))
-        ),
-    )
-
-
-def compute_axis_bounds(
-    bounds: Optional[DomainBounds], axis_name: str, offset: int
-) -> Tuple[str, str]:
-    def lpar(offset: int) -> str:
-        return "(" if offset != 0 else ""
-
-    def rpar(offset: int) -> str:
-        return ")" if offset != 0 else ""
-
-    def offset_str(offset: int) -> str:
-        if offset < 0:
-            return f" - {-offset}"
-        elif offset > 0:
-            return f" + {offset}"
-        else:
-            return ""
-
-    if not bounds:
-        bounds = ((axis_name.lower(), 0), (axis_name.upper(), 0))
-    # NOTE(jdahm): This no longer uses a visitor for the NumericalOffsets.
-    loffset = bounds[0][1] + offset
-    lower = lpar(loffset) + f"{bounds[0][0]}{offset_str(loffset)}" + rpar(loffset)
-    uoffset = bounds[1][1] + offset
-    upper = lpar(uoffset) + f"{bounds[1][0]}{offset_str(uoffset)}" + rpar(uoffset)
-    return lower, upper
 
 
 VARIABLE_OFFSET_FUNCTION = textwrap.dedent(
@@ -234,21 +176,23 @@ class NpirCodegen(TemplatedGenerator):
 
     NumericalOffset = FormatTemplate("{op}{delta}")
 
-    def visit_AxisOffset(
-        self,
-        node: npir.AxisOffset,
-        *,
-        bounds: Optional[DomainBounds] = None,
-        **kwargs: Any,
-    ) -> Union[str, Collection[str]]:
+    def visit_AxisOffset(self, node: npir.AxisOffset, **kwargs: Any) -> Union[str, Collection[str]]:
+        offset = self.visit(node.offset)
         axis_name = self.visit(node.axis_name)
-        if node.parallel:
-            lower, upper = compute_axis_bounds(bounds, axis_name, node.offset.value)
-            return f"{lower}:{upper}"
-        else:
-            offset = self.visit(node.offset)
-            lpar, rpar = "()" if offset else ("", "")
-            return f"{lpar}{axis_name.lower()}_{offset}{rpar}:({axis_name.lower()}_{offset} + 1)"
+        lpar, rpar = "()" if offset else ("", "")
+        variant = self.AxisOffset_parallel if node.parallel else self.AxisOffset_serial
+        rendered = variant.render(lpar=lpar, rpar=rpar, axis_name=axis_name, offset=offset)
+        return self.generic_visit(node, parallel_or_serial_variant=rendered, **kwargs)
+
+    AxisOffset_parallel = JinjaTemplate(
+        "{{ lpar }}{{ axis_name | lower }}{{ offset }}{{ rpar }}:{{ lpar }}{{ axis_name | upper }}{{ offset }}{{ rpar }}"
+    )
+
+    AxisOffset_serial = JinjaTemplate(
+        "{{ lpar }}{{ axis_name | lower }}_{{ offset }}{{ rpar }}:({{ axis_name | lower }}_{{ offset}} + 1)"
+    )
+
+    AxisOffset = FormatTemplate("{parallel_or_serial_variant}")
 
     def visit_FieldDecl(self, node: npir.FieldDecl, **kwargs) -> Union[str, Collection[str]]:
         if all(node.dimensions):
@@ -284,41 +228,25 @@ class NpirCodegen(TemplatedGenerator):
     def visit_FieldSlice(
         self,
         node: npir.FieldSlice,
-        mask_acc="",
+        mask_acc: str = "",
         *,
         is_serial: bool = False,
         is_rhs: bool = False,
-        horiz_rest: Optional[DomainSpec] = None,
         **kwargs: Any,
     ) -> Union[str, Collection[str]]:
 
         offset = [node.i_offset, node.j_offset, node.k_offset]
 
-        if horiz_rest:
-            domain = list(horiz_rest) + [None]
-        else:
-            domain = [None] * 3
-        if "bounds" in kwargs:
-            del kwargs["bounds"]
-
         offset_str = ", ".join(
-            self.visit(off, bounds=bounds, is_serial=is_serial, **kwargs) if off else ":"
-            for off, bounds in zip(offset, domain)
+            self.visit(off, is_serial=is_serial, **kwargs) if off else ":" for off in offset
         )
 
         if node.data_index:
             offset_str += ", " + ", ".join(self.visit(x, **kwargs) for x in node.data_index)
 
         if is_rhs and mask_acc and any(off is None for off in offset):
-            axes_bounds = (
-                compute_axis_bounds(bounds, axis_name, 0)
-                for bounds, axis_name in zip(domain, ("I", "J"))
-            )
             k_size = "1" if is_serial else "K - k"
-            broadcast_str = (
-                ",".join([f"{upper}-{lower}" for lower, upper in axes_bounds]) + f", {k_size}"
-            )
-            arr_expr = f"np.broadcast_to({node.name}_[{offset_str}], ({broadcast_str}))"
+            arr_expr = f"np.broadcast_to({node.name}_[{offset_str}], (I - i, J - j, {k_size}))"
         else:
             arr_expr = f"{node.name}_[{offset_str}]"
 
@@ -359,20 +287,17 @@ class NpirCodegen(TemplatedGenerator):
     NativeFuncCall = FormatTemplate("{func}({', '.join(arg for arg in args)})")
 
     def visit_MaskBlock(self, node: npir.MaskBlock, **kwargs) -> Union[str, Collection[str]]:
-        horiz_rest = (
-            get_horizontal_restriction(node.horiz_mask, **kwargs) if node.horiz_mask else None
-        )
         if isinstance(node.mask, npir.FieldSlice):
             mask_def = ""
         elif isinstance(node.mask, npir.BroadCast):
             assert "is_serial" in kwargs
             mask_name = node.mask_name
-            mask = self.visit(node.mask, horiz_rest=horiz_rest, **kwargs)
+            mask = self.visit(node.mask)
             k_size = "1" if kwargs["is_serial"] else "K - k"
             mask_def = f"{mask_name}_ = np.full((I - i, J - j, {k_size}), {mask})\n"
         else:
             mask_name = node.mask_name
-            mask = self.visit(node.mask, horiz_rest=horiz_rest, **kwargs)
+            mask = self.visit(node.mask)
             mask_def = f"{mask_name}_ = {mask}\n"
         return self.generic_visit(node, mask_def=mask_def, **kwargs)
 
@@ -389,19 +314,12 @@ class NpirCodegen(TemplatedGenerator):
         self, node: npir.VectorAssign, **kwargs: Any
     ) -> Union[str, Collection[str]]:
         mask_acc = ""
-        horiz_rest = (
-            get_horizontal_restriction(node.horiz_mask, **kwargs) if node.horiz_mask else None
-        )
         if node.mask:
-            mask_acc = f"[{self.visit(node.mask, horiz_rest=horiz_rest, **kwargs)}]"
+            mask_acc = f"[{self.visit(node.mask, **kwargs)}]"
         if isinstance(node.right, npir.EmptyTemp):
             kwargs["temp_name"] = node.left.name
-        right = self.visit(
-            node.right, mask_acc=mask_acc, horiz_rest=horiz_rest, is_rhs=True, **kwargs
-        )
-        left = self.visit(
-            node.left, mask_acc=mask_acc, horiz_rest=horiz_rest, is_rhs=False, **kwargs
-        )
+        right = self.visit(node.right, mask_acc=mask_acc, is_rhs=True, **kwargs)
+        left = self.visit(node.left, mask_acc=mask_acc, is_rhs=False, **kwargs)
         return f"{left} = {right}"
 
     VectorArithmetic = FormatTemplate("({left} {op} {right})")

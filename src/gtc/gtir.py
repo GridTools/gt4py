@@ -149,15 +149,6 @@ class ScalarIfStmt(common.IfStmt[BlockStmt, Expr], Stmt):
         return cond
 
 
-class HorizontalMask(common.HorizontalMask[Expr], Expr):
-    pass
-
-
-class HorizontalRegion(Stmt):
-    mask: HorizontalMask
-    block: BlockStmt
-
-
 class UnaryOp(common.UnaryOp[Expr], Expr):
     pass
 

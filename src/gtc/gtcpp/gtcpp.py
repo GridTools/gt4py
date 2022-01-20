@@ -57,12 +57,6 @@ class AccessorRef(common.FieldAccess[Expr, VariableKOffset], Expr):  # type: ign
     pass
 
 
-class Positional(Expr):
-    dim: Str
-    dtype = common.DataType.INT32
-    kind = common.ExprKind.SCALAR
-
-
 class BlockStmt(common.BlockStmt[Stmt], Stmt):
     pass
 
@@ -137,12 +131,6 @@ class GTApplyMethod(LocNode):
     interval: GTInterval
     body: List[Stmt]
     local_variables: List[LocalVarDecl]
-
-
-class AxisEndpoint(Expr):
-    axis: int
-    dtype = common.DataType.INT32
-    kind = common.ExprKind.SCALAR
 
 
 @enum.unique
@@ -259,18 +247,12 @@ class GTMultiStage(LocNode):
     caches: List[Cache]
 
 
-class Binding(LocNode):
-    name: SymbolName
-    expr: Expr
-
-
 class GTComputationCall(LocNode, SymbolTableTrait):
     # In the generated C++ code `arguments` represent both the arguments in the call to `run`
     # and the parameters of the function object.
     # We could represent this closer to the C++ code by splitting call and definition of the
     # function object.
     arguments: List[Arg]
-    extra_decls: List[Binding]
     temporaries: List[Temporary]
     multi_stages: List[GTMultiStage]
 

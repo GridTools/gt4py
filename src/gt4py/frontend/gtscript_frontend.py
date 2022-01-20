@@ -252,8 +252,7 @@ class AxisIntervalParser(gt_meta.ASTPass):
                 level = gt_ir.LevelMarker.START if value.index >= 0 else gt_ir.LevelMarker.END
                 offset = value.index + value.offset
             elif value is None:
-                # The maximum an application should use to specify "infinity" is 1*np.iinfo(np.int32).max
-                LARGE_NUM = 5 * np.iinfo(np.int32).max
+                LARGE_NUM = 10000
                 seq_name = gt_ir.Domain.LatLonGrid().sequential_axis.name
                 level = endpt
                 if self.axis_name == seq_name:

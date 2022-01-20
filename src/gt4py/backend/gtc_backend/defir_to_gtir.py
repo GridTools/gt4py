@@ -15,9 +15,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import numbers
-from typing import Any, Dict, List, Optional, Union, cast
-
-import numpy as np
+from typing import Any, Dict, List, Union, cast
 
 from gt4py.ir import IRNodeVisitor
 from gt4py.ir.nodes import (
@@ -32,11 +30,9 @@ from gt4py.ir.nodes import (
     BuiltinLiteral,
     Cast,
     ComputationBlock,
-    Domain,
     Expr,
     FieldDecl,
     FieldRef,
-    HorizontalIf,
     If,
     IterationOrder,
     LevelMarker,
@@ -127,7 +123,7 @@ class DefIRToGTIR(IRNodeVisitor):
     }
 
     @classmethod
-    def apply(cls, root, **kwargs: Any):
+    def apply(cls, root, **kwargs):
         return cls().visit(root)
 
     def visit_StencilDefinition(self, node: StencilDefinition) -> gtir.Stencil:
@@ -184,36 +180,10 @@ class DefIRToGTIR(IRNodeVisitor):
             loc=common.location_to_source_location(node.loc),
         )
 
-    def visit_BlockStmt(self, node: BlockStmt, **kwargs: Any) -> List[gtir.Stmt]:
-        return [self.visit(s, **kwargs) for s in node.stmts]
+    def visit_BlockStmt(self, node: BlockStmt) -> List[gtir.Stmt]:
+        return [self.visit(s) for s in node.stmts]
 
-    def visit_HorizontalIf(self, node: HorizontalIf) -> gtir.HorizontalRegion:
-        def make_bound_or_level(bound: AxisBound, level) -> Optional[common.AxisBound]:
-            if (level == LevelMarker.START and bound.offset <= -np.iinfo(np.int32).max) or (
-                level == LevelMarker.END and bound.offset >= np.iinfo(np.int32).max
-            ):
-                return None
-            else:
-                return common.AxisBound(
-                    level=self.GT4PY_LEVELMARKER_TO_GTIR_LEVELMARKER[bound.level],
-                    offset=bound.offset,
-                )
-
-        axes = {}
-        for axis in Domain.LatLonGrid().parallel_axes:
-            interval = node.intervals[axis.name]
-            axes[axis.name.lower()] = common.HorizontalInterval(
-                start=make_bound_or_level(interval.start, LevelMarker.START),
-                end=make_bound_or_level(interval.end, LevelMarker.END),
-            )
-
-        mask = gtir.HorizontalMask(**axes)
-        return gtir.HorizontalRegion(
-            mask=mask,
-            block=gtir.BlockStmt(body=self.visit(node.body)),
-        )
-
-    def visit_Assign(self, node: Assign, **kwargs: Any) -> gtir.ParAssignStmt:
+    def visit_Assign(self, node: Assign) -> gtir.ParAssignStmt:
         assert isinstance(node.target, FieldRef) or isinstance(node.target, VarRef)
         return gtir.ParAssignStmt(
             left=self.visit(node.target),
@@ -283,13 +253,13 @@ class DefIRToGTIR(IRNodeVisitor):
             loc=common.location_to_source_location(node.loc),
         )
 
-    def visit_If(self, node: If, **kwargs: Any):
+    def visit_If(self, node: If):
         cond = self.visit(node.condition)
         if cond.kind == ExprKind.FIELD:
             return gtir.FieldIfStmt(
                 cond=cond,
-                true_branch=gtir.BlockStmt(body=self.visit(node.main_body, **kwargs)),
-                false_branch=gtir.BlockStmt(body=self.visit(node.else_body, **kwargs))
+                true_branch=gtir.BlockStmt(body=self.visit(node.main_body)),
+                false_branch=gtir.BlockStmt(body=self.visit(node.else_body))
                 if node.else_body
                 else None,
                 loc=common.location_to_source_location(node.loc),
@@ -297,8 +267,8 @@ class DefIRToGTIR(IRNodeVisitor):
         else:
             return gtir.ScalarIfStmt(
                 cond=cond,
-                true_branch=gtir.BlockStmt(body=self.visit(node.main_body, **kwargs)),
-                false_branch=gtir.BlockStmt(body=self.visit(node.else_body, **kwargs))
+                true_branch=gtir.BlockStmt(body=self.visit(node.main_body)),
+                false_branch=gtir.BlockStmt(body=self.visit(node.else_body))
                 if node.else_body
                 else None,
                 loc=common.location_to_source_location(node.loc),

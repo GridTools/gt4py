@@ -14,8 +14,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import functools
-from typing import Any, Callable, List, Optional, Tuple, Union
+from typing import Any, List, Optional, Tuple, Union
 
 from pydantic import validator
 
@@ -47,12 +46,11 @@ class VariableKOffset(common.VariableKOffset[Expr]):
 
 
 class FieldAccess(common.FieldAccess[Expr, VariableKOffset], Expr):  # type: ignore
-    in_horizontal_mask: bool = False
+    pass
 
 
 class IJCacheAccess(common.FieldAccess[Expr, VariableKOffset], Expr):
     ij_cache_is_different_from_field_access = True
-    in_horizontal_mask: bool = False
 
     @validator("offset")
     def zero_k_offset(cls, v: CartesianOffset) -> CartesianOffset:
@@ -155,35 +153,17 @@ class IJExtent(LocNode):
             return cls(i=(0, 0), j=(0, 0))
         return cls(i=(offset.i, offset.i), j=(offset.j, offset.j))
 
-    def _apply(
-        self,
-        other: "IJExtent",
-        *,
-        lower_op: Callable[[int, int], int],
-        upper_op: Callable[[int, int], int],
-    ) -> "IJExtent":
+    def union(*extents: "IJExtent") -> "IJExtent":
         return IJExtent(
-            i=(lower_op(self.i[0], other.i[0]), upper_op(self.i[1], other.i[1])),
-            j=(lower_op(self.j[0], other.j[0]), upper_op(self.j[1], other.j[1])),
+            i=(min(e.i[0] for e in extents), max(e.i[1] for e in extents)),
+            j=(min(e.j[0] for e in extents), max(e.j[1] for e in extents)),
         )
 
     def __add__(self, other: "IJExtent") -> "IJExtent":
-        return self._apply(other, lower_op=lambda x, y: x + y, upper_op=lambda x, y: x + y)
-
-    def __sub__(self, other: "IJExtent") -> "IJExtent":
-        return self._apply(other, lower_op=lambda x, y: x - y, upper_op=lambda x, y: x - y)
-
-    def union(self, *extents: "IJExtent") -> "IJExtent":
-        return functools.reduce(
-            lambda this, other: this._apply(
-                other, lower_op=lambda x, y: min(x, y), upper_op=lambda x, y: max(x, y)
-            ),
-            extents,
-            self,
+        return IJExtent(
+            i=(self.i[0] + other.i[0], self.i[1] + other.i[1]),
+            j=(self.j[0] + other.j[0], self.j[1] + other.j[1]),
         )
-
-    def __or__(self, other: "IJExtent") -> "IJExtent":
-        return self.union(other)
 
 
 class KExtent(LocNode):
@@ -229,7 +209,6 @@ class VerticalLoop(LocNode):
     sections: List[VerticalLoopSection]
     ij_caches: List[IJCacheDecl]
     k_caches: List[KCacheDecl]
-    has_horizontal_masks: bool = False
 
 
 class Kernel(LocNode):

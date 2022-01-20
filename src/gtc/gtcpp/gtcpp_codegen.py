@@ -99,14 +99,6 @@ class GTCppCodegen(codegen.TemplatedGenerator):
 
     Cast = as_fmt("static_cast<{dtype}>({expr})")
 
-    Positional = as_fmt("positional<dim::{dim}>()")
-
-    AxisEndpoint = as_fmt(
-        "gridtools::stencil::make_global_parameter(static_cast<gridtools::int_t>(domain[{axis}]))"
-    )
-
-    Binding = as_fmt("auto {name} = {expr};")
-
     def visit_BuiltInLiteral(self, builtin: BuiltInLiteral, **kwargs: Any) -> str:
         if builtin == BuiltInLiteral.TRUE:
             return "true"
@@ -225,11 +217,13 @@ class GTCppCodegen(codegen.TemplatedGenerator):
         {
             auto grid = make_grid(domain[0], domain[1], axis<1,
                 axis_config::offset_limit<${offset_limit}>>{domain[2]});
+
             auto ${ computation_name } = [](${ ','.join('auto ' + a for a in arguments) }) {
+
                 ${ '\\n'.join(temporaries) }
                 return multi_pass(${ ','.join(multi_stages) });
             };
-            ${'\\n'.join(extra_decls)}
+
             run(${computation_name}, ${gt_backend_t}<>{}, grid, ${','.join(f"std::forward<decltype({arg})>({arg})" for arg in arguments)});
         }
         %endif
@@ -240,8 +234,6 @@ class GTCppCodegen(codegen.TemplatedGenerator):
         """
         #include <gridtools/stencil/${gt_backend_t}.hpp>
         #include <gridtools/stencil/cartesian.hpp>
-        #include <gridtools/stencil/positional.hpp>
-        #include <gridtools/stencil/global_parameter.hpp>
 
         namespace ${ name }_impl_{
             using Domain = std::array<gridtools::uint_t, 3>;

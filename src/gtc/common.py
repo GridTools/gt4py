@@ -15,11 +15,9 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import enum
-import functools
 from typing import (
     TYPE_CHECKING,
     Any,
-    Callable,
     ClassVar,
     Dict,
     Generic,
@@ -340,54 +338,8 @@ class CartesianOffset(Node):
     def to_dict(self) -> Dict[str, int]:
         return {"i": self.i, "j": self.j, "k": self.k}
 
-    def is_zero(self) -> bool:
-        return all(x == 0 for x in self.to_dict().values())
-
     def to_tuple(self) -> Tuple[int, int, int]:
         return self.i, self.j, self.k
-
-
-class IJExtent(LocNode):
-    i: Tuple[int, int]
-    j: Tuple[int, int]
-
-    @classmethod
-    def zero(cls) -> "IJExtent":
-        return cls(i=(0, 0), j=(0, 0))
-
-    @classmethod
-    def from_offset(cls, offset: CartesianOffset) -> "IJExtent":
-        return cls(i=(offset.i, offset.i), j=(offset.j, offset.j))
-
-    def _apply(
-        self,
-        other: "IJExtent",
-        *,
-        lower_op: Callable[[int, int], int],
-        upper_op: Callable[[int, int], int],
-    ) -> "IJExtent":
-        return IJExtent(
-            i=(lower_op(self.i[0], other.i[0]), upper_op(self.i[1], other.i[1])),
-            j=(lower_op(self.j[0], other.j[0]), upper_op(self.j[1], other.j[1])),
-        )
-
-    def __add__(self, other: "IJExtent") -> "IJExtent":
-        return self._apply(other, lower_op=lambda x, y: x + y, upper_op=lambda x, y: x + y)
-
-    def __sub__(self, other: "IJExtent") -> "IJExtent":
-        return self._apply(other, lower_op=lambda x, y: x - y, upper_op=lambda x, y: x - y)
-
-    def union(self, *extents: "IJExtent") -> "IJExtent":
-        return functools.reduce(
-            lambda this, other: this._apply(
-                other, lower_op=lambda x, y: min(x, y), upper_op=lambda x, y: max(x, y)
-            ),
-            extents,
-            self,
-        )
-
-    def __or__(self, other: "IJExtent") -> "IJExtent":
-        return self.union(other)
 
 
 class VariableKOffset(GenericNode, Generic[ExprT]):
@@ -701,7 +653,7 @@ class _LvalueDimsValidator(NodeVisitor):
             raise ValueError(
                 f"Vertical loop type {vertical_loop_type} has no `loop_order` attribute"
             )
-        if decl_type.__annotations__.get("dimensions") != Tuple[bool, bool, bool]:
+        if not decl_type.__annotations__.get("dimensions") is Tuple[bool, bool, bool]:
             raise ValueError(f"Field decl type {decl_type} has no `dimensions` attribute")
         self.vertical_loop_type = vertical_loop_type
         self.decl_type = decl_type
@@ -839,63 +791,6 @@ class AxisBound(Node):
         if not isinstance(other, AxisBound):
             return NotImplemented
         return not self < other
-
-
-class HorizontalInterval(Node):
-    start: Optional[AxisBound]
-    end: Optional[AxisBound]
-
-    @classmethod
-    def full(cls) -> "HorizontalInterval":
-        return cls(start=AxisBound.start(), end=AxisBound.end())
-
-    @root_validator
-    def check_start_before_end(cls, values: RootValidatorValuesType) -> RootValidatorValuesType:
-        def get_offset(bound: Optional[AxisBound], level: LevelMarker) -> Tuple[LevelMarker, int]:
-            if not bound:
-                if level == LevelMarker.START:
-                    return level, -np.iinfo(np.int32).max
-                else:
-                    return level, np.iinfo(np.int32).max
-            else:
-                return bound.level, bound.offset
-
-        start_level, start_offset = get_offset(
-            values["start"], cast(LevelMarker, LevelMarker.START)
-        )
-        end_level, end_offset = get_offset(values["end"], cast(LevelMarker, LevelMarker.END))
-
-        error = ValueError("Start must come strictly before end in an interval")
-
-        level_to_int = {LevelMarker.START: 1, LevelMarker.END: 2}
-        if level_to_int[start_level] == level_to_int[end_level] and start_offset > end_offset:
-            raise error
-        elif level_to_int[start_level] > level_to_int[end_level]:
-            raise error
-
-        return values
-
-    @property
-    def is_single_index(self) -> bool:
-        if self.start is None or self.end is None or self.start.level != self.end.level:
-            return False
-
-        return abs(self.end.offset - self.start.offset) == 1
-
-
-class HorizontalMask(GenericNode, Generic[ExprT]):
-    i: HorizontalInterval
-    j: HorizontalInterval
-    kind = ExprKind.FIELD
-    dtype = DataType.BOOL
-
-    @property
-    def is_single_index(self) -> bool:
-        return self.i.is_single_index and self.j.is_single_index
-
-    @property
-    def intervals(self) -> Tuple[HorizontalInterval, HorizontalInterval]:
-        return (self.i, self.j)
 
 
 def data_type_to_typestr(dtype: DataType) -> str:
