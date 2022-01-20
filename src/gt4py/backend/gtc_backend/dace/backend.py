@@ -21,7 +21,7 @@ import numpy as np
 from dace.sdfg.utils import fuse_states, inline_sdfgs
 from dace.transformation.dataflow import MapCollapse
 
-from eve import NodeVisitor, codegen
+from eve import codegen
 from eve.codegen import MakoTemplate as as_mako
 from gt4py import gt_src_manager
 from gt4py.backend.base import CLIBackendMixin, register
@@ -191,31 +191,20 @@ class GTCDaCeExtGenerator:
         return sources
 
 
-class KOriginsVisitor(NodeVisitor):
-    def visit_Stencil(self, node: gtir.Stencil):
-        k_origins: Dict[str, int] = dict()
-        self.generic_visit(node, k_origins=k_origins)
-        return k_origins
-
-    def visit_VerticalLoop(self, node: gtir.VerticalLoop, **kwargs):
-        self.generic_visit(node, interval=node.interval, **kwargs)
-
-    def visit_FieldAccess(
-        self, node: gtir.FieldAccess, *, k_origins, interval: gtir.Interval
-    ) -> None:
-        if interval.start.level == LevelMarker.START:
-            if not isinstance(node.offset, CartesianOffset):
-                candidate = 0
-            else:
-                candidate = -interval.start.offset - node.offset.k
-            candidate = max(0, candidate)
-        else:
-            candidate = 0
-        k_origins[node.name] = max(k_origins.get(node.name, 0), candidate)
-
-
 def compute_k_origins(node: gtir.Stencil) -> Dict[str, int]:
-    return KOriginsVisitor().visit(node)
+    k_origins: Dict[str, int] = dict()
+    for vl in node.iter_tree().if_isinstance(gtir.VerticalLoop):
+        for acc in vl.iter_tree().if_isinstance(gtir.FieldAccess):
+            if vl.interval.start.level == LevelMarker.START:
+                if not isinstance(acc.offset, CartesianOffset):
+                    candidate = 0
+                else:
+                    candidate = -vl.interval.start.offset - acc.offset.k
+                candidate = max(0, candidate)
+            else:
+                candidate = 0
+            k_origins[acc.name] = max(k_origins.get(acc.name, 0), candidate)
+    return k_origins
 
 
 class DaCeComputationCodegen:
