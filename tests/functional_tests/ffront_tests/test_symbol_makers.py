@@ -139,6 +139,10 @@ def test_invalid_symbol_types():
         symbol_makers.make_symbol_type_from_typing(typing.Tuple["float", ...])
 
     # Fields
+    with pytest.raises(
+        symbol_makers.FieldOperatorTypeError, match="Field type requires two arguments"
+    ):
+        symbol_makers.make_symbol_type_from_typing(common.Field)
     with pytest.raises(symbol_makers.FieldOperatorTypeError, match="Invalid field dimensions"):
         symbol_makers.make_symbol_type_from_typing(common.Field[int, int])
     with pytest.raises(symbol_makers.FieldOperatorTypeError, match="Invalid field dimension"):

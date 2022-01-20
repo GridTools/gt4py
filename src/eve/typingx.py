@@ -294,61 +294,62 @@ def get_typing(value: Any, *, annotate_callable_kwargs: bool = False) -> Any:
 
     """
     recursive_get = functools.partial(get_typing, annotate_callable_kwargs=annotate_callable_kwargs)
-    match value:
-        case type():
-            return value
+    if isinstance(value, type):
+        return value
 
-        case None | types.NoneType:
-            return None
+    elif value in (None, types.NoneType):
+        return None
 
-        case tuple():
-            unique_type, args = _collapsable_type_args(*(recursive_get(item) for item in value))
-            if unique_type and len(args) > 1:
-                return tuple[args[0], ...]
-            elif len(args):
-                return tuple[args]
-            else:
-                return tuple[Any, ...]
+    elif isinstance(value, tuple):
+        unique_type, args = _collapsable_type_args(*(recursive_get(item) for item in value))
+        if unique_type and len(args) > 1:
+            return tuple[args[0], ...]
+        elif len(args):
+            return tuple[args]
+        else:
+            return tuple[Any, ...]
 
-        case list() | set() | frozenset():
-            t = type(value)
-            unique_type, args = _collapsable_type_args(*(recursive_get(item) for item in value))
-            return t[args[0]] if unique_type else t[Any]
+    elif isinstance(value, (list, set, frozenset)):
+        t = type(value)
+        unique_type, args = _collapsable_type_args(*(recursive_get(item) for item in value))
+        return t[args[0]] if unique_type else t[Any]
 
-        case dict():
-            unique_key_type, keys = _collapsable_type_args(
-                *(recursive_get(key) for key in value.keys())
-            )
-            unique_value_type, values = _collapsable_type_args(
-                *(recursive_get(v) for v in value.values())
-            )
-            kt = keys[0] if unique_key_type else Any
-            vt = values[0] if unique_value_type else Any
-            return dict[kt, vt]
+    elif isinstance(value, dict):
+        unique_key_type, keys = _collapsable_type_args(
+            *(recursive_get(key) for key in value.keys())
+        )
+        unique_value_type, values = _collapsable_type_args(
+            *(recursive_get(v) for v in value.values())
+        )
+        kt = keys[0] if unique_key_type else Any
+        vt = values[0] if unique_value_type else Any
+        return dict[kt, vt]
 
-        case types.FunctionType():
-            try:
-                annotations = get_type_hints(value)
-                return_type = annotations.get("return", Any)
+    elif isinstance(value, types.FunctionType):
+        try:
+            annotations = get_type_hints(value)
+            return_type = annotations.get("return", Any)
 
-                sig = inspect.signature(value)
-                arg_types: Union[list, Ellipsis] = []
-                kwonly_arg_types: dict[str, Any] = {}
-                for p in sig.parameters.values():
-                    match p.kind:
-                        case inspect.Parameter.POSITIONAL_ONLY | inspect.Parameter.POSITIONAL_OR_KEYWORD:
-                            arg_types.append(annotations.get(p.name, None) or Any)
-                        case inspect.Parameter.KEYWORD_ONLY:
-                            kwonly_arg_types.append(annotations.get(p.name, None) or Any)
-                        case inspect.Parameter.VAR_POSITIONAL | inspect.Parameter.VAR_KEYWORD:
-                            raise TypeError(f"Variadic callables are not supported")
+            sig = inspect.signature(value)
+            arg_types: Union[list, Ellipsis] = []
+            kwonly_arg_types: dict[str, Any] = {}
+            for p in sig.parameters.values():
+                if p.kind in (
+                    inspect.Parameter.POSITIONAL_ONLY,
+                    inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                ):
+                    arg_types.append(annotations.get(p.name, None) or Any)
+                elif p.kind == inspect.Parameter.KEYWORD_ONLY:
+                    kwonly_arg_types.append(annotations.get(p.name, None) or Any)
+                elif p.kind in (inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD):
+                    raise TypeError(f"Variadic callables are not supported")
 
-                result = Callable[arg_types, return_type]
-                if annotate_callable_kwargs:
-                    result = Annotated[result, CallableKwargsInfo(kwonly_arg_types)]
-                return result
-            except:
-                return Callable
+            result = Callable[arg_types, return_type]
+            if annotate_callable_kwargs:
+                result = Annotated[result, CallableKwargsInfo(kwonly_arg_types)]
+            return result
+        except:
+            return Callable
 
-        case _:
-            return type(value)
+    else:
+        return type(value)

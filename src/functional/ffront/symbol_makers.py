@@ -105,7 +105,10 @@ def make_symbol_type_from_typing(
             return foast.TupleType(types=[recursive_make_symbol(arg) for arg in args])
 
         case common.Field:
-            assert len(args) == 2
+            if (n_args := len(args)) != 2:
+                raise FieldOperatorTypeError(
+                    f"Field type requires two arguments, got {n_args}! ({type_hint})"
+                )
 
             dims: Union[Ellipsis, list[foast.Dimension]] = []
             dim_arg, dtype_arg = args
