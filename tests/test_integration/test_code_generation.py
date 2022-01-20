@@ -494,49 +494,33 @@ def test_read_data_dim_indirect_addressing(backend):
         "gtc:dace",
     ],
 )
-def test_negative_origin_i(backend):
-    @gtscript.stencil(backend=backend)
-    def stencil_i(
-        input_field: gtscript.Field[gtscript.IJK, np.int32],
-        output_field: gtscript.Field[gtscript.IJK, np.int32],
-    ):
-        with computation(PARALLEL), interval(...):
-            output_field = input_field[1, 0, 0]
+class TestNegativeOrigin:
+    def test_negative_origin_i(self, backend):
+        @gtscript.stencil(backend=backend)
+        def stencil_i(
+            input_field: gtscript.Field[gtscript.IJK, np.int32],
+            output_field: gtscript.Field[gtscript.IJK, np.int32],
+        ):
+            with computation(PARALLEL), interval(...):
+                output_field = input_field[1, 0, 0]
 
-    input_field = gt_storage.ones(backend, (0, 0, 0), (1, 1, 1), dtype=np.int32)
-    output_field = gt_storage.zeros(backend, (0, 0, 0), (1, 1, 1), dtype=np.int32)
+        input_field = gt_storage.ones(backend, (0, 0, 0), (1, 1, 1), dtype=np.int32)
+        output_field = gt_storage.zeros(backend, (0, 0, 0), (1, 1, 1), dtype=np.int32)
 
-    stencil_i(input_field, output_field, origin={"input_field": (-1, 0, 0)})
-    assert output_field[0, 0, 0] == 1
+        stencil_i(input_field, output_field, origin={"input_field": (-1, 0, 0)})
+        assert output_field[0, 0, 0] == 1
 
+    def test_negative_origin_k(self, backend):
+        @gtscript.stencil(backend=backend)
+        def stencil_k(
+            input_field: gtscript.Field[gtscript.IJK, np.int32],
+            output_field: gtscript.Field[gtscript.IJK, np.int32],
+        ):
+            with computation(PARALLEL), interval(...):
+                output_field = input_field[0, 0, 1]
 
-@pytest.mark.parametrize(
-    "backend",
-    [
-        pytest.param("debug", marks=[pytest.mark.xfail]),
-        pytest.param("numpy", marks=[pytest.mark.xfail]),
-        pytest.param("gtx86", marks=[pytest.mark.xfail]),
-        pytest.param("gtmc", marks=[pytest.mark.xfail]),
-        pytest.param("gtcuda", marks=[pytest.mark.requires_gpu, pytest.mark.xfail]),
-        "gtc:numpy",
-        "gtc:gt:cpu_ifirst",
-        "gtc:gt:cpu_kfirst",
-        pytest.param("gtc:gt:gpu", marks=[pytest.mark.requires_gpu]),
-        pytest.param("gtc:cuda", marks=[pytest.mark.requires_gpu]),
-        "gtc:dace",
-    ],
-)
-def test_negative_origin_k(backend):
-    @gtscript.stencil(backend=backend)
-    def stencil_k(
-        input_field: gtscript.Field[gtscript.IJK, np.int32],
-        output_field: gtscript.Field[gtscript.IJK, np.int32],
-    ):
-        with computation(PARALLEL), interval(...):
-            output_field = input_field[0, 0, 1]
+        input_field = gt_storage.ones(backend, (0, 0, 0), (1, 1, 1), dtype=np.int32)
+        output_field = gt_storage.zeros(backend, (0, 0, 0), (1, 1, 1), dtype=np.int32)
 
-    input_field = gt_storage.ones(backend, (0, 0, 0), (1, 1, 1), dtype=np.int32)
-    output_field = gt_storage.zeros(backend, (0, 0, 0), (1, 1, 1), dtype=np.int32)
-
-    stencil_k(input_field, output_field, origin={"input_field": (0, 0, -1)})
-    assert output_field[0, 0, 0] == 1
+        stencil_k(input_field, output_field, origin={"input_field": (0, 0, -1)})
+        assert output_field[0, 0, 0] == 1
