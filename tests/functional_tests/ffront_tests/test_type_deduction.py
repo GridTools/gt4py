@@ -16,7 +16,7 @@ import pytest
 
 from functional.common import Dimension
 from functional.ffront import field_operator_ast as foast
-from functional.ffront.builtins import Field, float64, int64
+from functional.ffront.fbuiltins import Field, float64, int64
 from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError
 from functional.ffront.func_to_foast import FieldOperatorParser
 
@@ -28,7 +28,7 @@ def test_unpack_assign():
         tmp_a, tmp_b = (a, b)
         return tmp_a, tmp_b
 
-    parsed = FieldOperatorParser.apply_to_func(unpack_explicit_tuple)
+    parsed = FieldOperatorParser.apply_to_function(unpack_explicit_tuple)
 
     assert parsed.symtable_["tmp_a$0"].type == foast.FieldType(
         dims=Ellipsis, dtype=foast.ScalarType(kind=foast.ScalarKind.FLOAT64, shape=None)
@@ -43,7 +43,7 @@ def test_assign_tuple():
         tmp = a, b
         return tmp
 
-    parsed = FieldOperatorParser.apply_to_func(temp_tuple)
+    parsed = FieldOperatorParser.apply_to_function(temp_tuple)
 
     assert parsed.symtable_["tmp$0"].type == foast.TupleType(
         types=[
@@ -70,13 +70,13 @@ def test_adding_bool():
             r"Field\[\.\.\., dtype=bool\], Field\[\.\.\., dtype=bool\]!"
         ),
     ):
-        _ = FieldOperatorParser.apply_to_func(add_bools)
+        _ = FieldOperatorParser.apply_to_function(add_bools)
 
 
 def test_binop_nonmatching_dims():
     """Binary operations can only work when both fields have the same dimensions."""
-    X = Dimension()
-    Y = Dimension()
+    X = Dimension("X")
+    Y = Dimension("Y")
 
     def nonmatching(a: Field[[X], float64], b: Field[[Y], float64]):
         return a + b
@@ -88,7 +88,7 @@ def test_binop_nonmatching_dims():
             r"Field\[\[X\], dtype=float64\], Field\[\[Y\], dtype=float64\]!"
         ),
     ):
-        _ = FieldOperatorParser.apply_to_func(nonmatching)
+        _ = FieldOperatorParser.apply_to_function(nonmatching)
 
 
 def test_bitopping_float():
@@ -102,7 +102,7 @@ def test_bitopping_float():
             r"Field\[\.\.\., dtype=float64\], Field\[\.\.\., dtype=float64\]!"
         ),
     ):
-        _ = FieldOperatorParser.apply_to_func(float_bitop)
+        _ = FieldOperatorParser.apply_to_function(float_bitop)
 
 
 def test_signing_bool():
@@ -113,7 +113,7 @@ def test_signing_bool():
         FieldOperatorTypeDeductionError,
         match=r"Incompatible type for unary operator '\-': Field\[\.\.\., dtype=bool\]!",
     ):
-        _ = FieldOperatorParser.apply_to_func(sign_bool)
+        _ = FieldOperatorParser.apply_to_function(sign_bool)
 
 
 def test_notting_int():
@@ -124,4 +124,4 @@ def test_notting_int():
         FieldOperatorTypeDeductionError,
         match=r"Incompatible type for unary operator 'not': Field\[\.\.\., dtype=int64\]!",
     ):
-        _ = FieldOperatorParser.apply_to_func(not_int)
+        _ = FieldOperatorParser.apply_to_function(not_int)

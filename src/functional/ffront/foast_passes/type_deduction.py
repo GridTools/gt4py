@@ -86,9 +86,19 @@ class TypeInfo:
         return isinstance(self.type, foast.FieldType) or self.constraint is foast.FieldType
 
     @property
+    def is_scalar(self) -> bool:
+        if self.is_complete:
+            return isinstance(self.type, foast.ScalarType)
+        else:
+            return isinstance(self.constraint, foast.ScalarType)
+        return False
+
+    @property
     def is_arithmetic_compatible(self) -> bool:
         match self.type:
-            case foast.FieldType(dtype=foast.ScalarType(kind=dtype_kind)):
+            case foast.FieldType(dtype=foast.ScalarType(kind=dtype_kind)) | foast.ScalarType(
+                kind=dtype_kind
+            ):
                 if dtype_kind is not foast.ScalarKind.BOOL:
                     return True
         return False
@@ -96,7 +106,9 @@ class TypeInfo:
     @property
     def is_logics_compatible(self) -> bool:
         match self.type:
-            case foast.FieldType(dtype=foast.ScalarType(kind=dtype_kind)):
+            case foast.FieldType(dtype=foast.ScalarType(kind=dtype_kind)) | foast.ScalarType(
+                kind=dtype_kind
+            ):
                 if dtype_kind is foast.ScalarKind.BOOL:
                     return True
         return False
@@ -114,6 +126,26 @@ class TypeInfo:
         return False
 
 
+def dims_promotable(left: TypeInfo, right: TypeInfo) -> bool:
+    if left.is_field_type and right.is_field_type:
+        return left.type.dims == right.type.dims
+    elif left.is_field_type and right.is_scalar:
+        return left.type.dtype == right.type
+    elif left.is_scalar and left.is_field_type:
+        return left.type == right.type.dtype
+    elif left.is_scalar and right.is_scalar:
+        return left.type == right.type
+    return False
+
+
+def dims_promoted(left: TypeInfo, right: TypeInfo) -> TypeInfo:
+    if not dims_promotable(left, right):
+        return None
+    if left.is_scalar and right.is_field_type:
+        return right
+    return left
+
+
 class FieldOperatorTypeDeduction(NodeTranslator):
     """Deduce and check types of FOAST expressions and symbols."""
 
@@ -128,6 +160,7 @@ class FieldOperatorTypeDeduction(NodeTranslator):
             id=node.id,
             params=self.visit(node.params, **kwargs),
             body=self.visit(node.body, **kwargs),
+            closure=self.visit(node.closure, **kwargs),
             location=node.location,
         )
 
@@ -255,10 +288,9 @@ class FieldOperatorTypeDeduction(NodeTranslator):
         if (
             left.is_arithmetic_compatible
             and right.is_arithmetic_compatible
-            and left.type.dtype.kind is right.type.dtype.kind
-            and left.type.dims == right.type.dims
+            and dims_promotable(left, right)
         ):
-            return left.type
+            return dims_promoted(left, right).type
         else:
             raise FieldOperatorTypeDeductionError.from_foast_node(
                 parent,
@@ -278,10 +310,9 @@ class FieldOperatorTypeDeduction(NodeTranslator):
         if (
             left.is_logics_compatible
             and right.is_logics_compatible
-            and left.type.dtype.kind is right.type.dtype.kind
-            and left.type.dims == right.type.dims
+            and dims_promotable(left, right)
         ):
-            return left.type
+            return dims_promoted(left, right).type
         else:
             raise FieldOperatorTypeDeductionError.from_foast_node(
                 parent,

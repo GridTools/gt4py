@@ -14,10 +14,10 @@
 
 from __future__ import annotations
 
+import abc
 from collections.abc import Sequence
 from dataclasses import dataclass
-from types import SimpleNamespace
-from typing import Any, Protocol, TypeVar
+from typing import Any, Generic, TypeVar
 
 
 DimT = TypeVar("DimT", bound="Dimension")
@@ -25,19 +25,28 @@ DimsT = TypeVar("DimsT", bound=Sequence["Dimension"])
 DT = TypeVar("DT", bound="DType")
 
 
+@dataclass(frozen=True)
 class Dimension:
-    ...
+    value: str
 
 
 class DType:
     ...
 
 
-class Field(Protocol[DimsT, DT]):
+class Field(Generic[DimsT, DT]):
     ...
 
 
-class FieldOperator(Protocol):
+@dataclass(frozen=True)
+class GTInfo:
+    definition: Any
+    ir: Any
+
+
+class FieldOperator(abc.ABC):
+    __gt_info__: GTInfo
+
     def __call__(self, *args: Field, **kwds: Field) -> Field | Sequence[Field]:
         ...
 
@@ -46,6 +55,10 @@ class FieldOperator(Protocol):
 class Backend:
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(**kwargs)
+
+    # TODO : proper definition and implementation
+    def generate_operator(self, ir):
+        return ir
 
 
 class GTError:

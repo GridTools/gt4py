@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 #
 # GT4Py Project - GridTools Framework
@@ -14,9 +13,12 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
+
+from typing import TypeVar
+
 import numpy as np
 
-from functional.ffront.builtins import Field, float64
+from functional.ffront.fbuiltins import Field, float64
 from functional.ffront.foast_to_itir import FieldOperatorLowering
 from functional.ffront.func_to_foast import FieldOperatorParser
 from functional.iterator import ir as itir
@@ -75,25 +77,32 @@ def program_from_fop(
     )
 
 
-def program_from_func(func, out_names: list[str], dim: CartesianAxis, size: int) -> itir.Program:
+def program_from_function(
+    func, out_names: list[str], dim: CartesianAxis, size: int
+) -> itir.Program:
     return program_from_fop(
-        node=FieldOperatorLowering.apply(FieldOperatorParser.apply_to_func(func)),
+        node=FieldOperatorLowering.apply(FieldOperatorParser.apply_to_function(func)),
         out_names=out_names,
         dim=dim,
         size=size,
     )
 
 
+DimsType = TypeVar("DimsType")
+DType = TypeVar("DType")
+
+IDim = CartesianAxis("IDim")
+
+
 def test_copy():
     size = 10
-    IDim = CartesianAxis("IDim")
     a = np_as_located_field(IDim)(np.ones((size)))
     b = np_as_located_field(IDim)(np.zeros((size)))
 
     def copy(inp: Field[[IDim], float64]):
         return inp
 
-    program = program_from_func(copy, out_names=["out"], dim=IDim, size=size)
+    program = program_from_function(copy, out_names=["out"], dim=IDim, size=size)
 
     roundtrip.executor(program, a, b, offset_provider={})
 
@@ -102,7 +111,6 @@ def test_copy():
 
 def test_multicopy():
     size = 10
-    IDim = CartesianAxis("IDim")
     a = np_as_located_field(IDim)(np.ones((size)))
     b = np_as_located_field(IDim)(np.ones((size)) * 3)
     c = np_as_located_field(IDim)(np.zeros((size)))
@@ -111,7 +119,7 @@ def test_multicopy():
     def multicopy(inp1: Field[[IDim], float64], inp2: Field[[IDim], float64]):
         return inp1, inp2
 
-    program = program_from_func(multicopy, out_names=["c", "d"], dim=IDim, size=size)
+    program = program_from_function(multicopy, out_names=["c", "d"], dim=IDim, size=size)
     roundtrip.executor(program, a, b, c, d, offset_provider={})
 
     assert np.allclose(a, c)
@@ -120,7 +128,6 @@ def test_multicopy():
 
 def test_arithmetic():
     size = 10
-    IDim = CartesianAxis("IDim")
     a = np_as_located_field(IDim)(np.ones((size)))
     b = np_as_located_field(IDim)(np.ones((size)) * 2)
     c = np_as_located_field(IDim)(np.zeros((size)))
@@ -128,7 +135,7 @@ def test_arithmetic():
     def arithmetic(inp1: Field[[IDim], float64], inp2: Field[[IDim], float64]):
         return inp1 + inp2
 
-    program = program_from_func(arithmetic, out_names=["c"], dim=IDim, size=size)
+    program = program_from_function(arithmetic, out_names=["c"], dim=IDim, size=size)
     roundtrip.executor(program, a, b, c, offset_provider={})
 
     assert np.allclose(a.array() + b.array(), c)
@@ -136,7 +143,6 @@ def test_arithmetic():
 
 def test_bit_logic():
     size = 10
-    IDim = CartesianAxis("IDim")
     a = np_as_located_field(IDim)(np.full((size), True))
     b_data = np.full((size), True)
     b_data[5] = False
@@ -146,7 +152,7 @@ def test_bit_logic():
     def bit_and(inp1: Field[[IDim], bool], inp2: Field[[IDim], bool]):
         return inp1 & inp2
 
-    program = program_from_func(bit_and, out_names=["c"], dim=IDim, size=size)
+    program = program_from_function(bit_and, out_names=["c"], dim=IDim, size=size)
     roundtrip.executor(program, a, b, c, offset_provider={})
 
     assert np.allclose(a.array() & b.array(), c)
@@ -154,14 +160,13 @@ def test_bit_logic():
 
 def test_unary_neg():
     size = 10
-    IDim = CartesianAxis("IDim")
     a = np_as_located_field(IDim)(np.ones((size)))
     b = np_as_located_field(IDim)(np.zeros((size)))
 
     def uneg(inp: Field[[IDim], int]):
         return -inp
 
-    program = program_from_func(uneg, out_names=["b"], dim=IDim, size=size)
+    program = program_from_function(uneg, out_names=["b"], dim=IDim, size=size)
     roundtrip.executor(program, a, b, offset_provider={})
 
     assert np.allclose(b, np.full((size), -1))
@@ -169,7 +174,6 @@ def test_unary_neg():
 
 def test_shift():
     size = 10
-    IDim = CartesianAxis("IDim")
     Ioff = offset("Ioff")
     a = np_as_located_field(IDim)(np.arange(size + 1))
     b = np_as_located_field(IDim)(np.zeros((size)))
@@ -177,7 +181,7 @@ def test_shift():
     def shift_by_one(inp: Field[[IDim], float64]):
         return inp(Ioff[1])
 
-    program = program_from_func(shift_by_one, out_names=["b"], dim=IDim, size=size)
+    program = program_from_function(shift_by_one, out_names=["b"], dim=IDim, size=size)
     roundtrip.executor(program, a, b, offset_provider={"Ioff": IDim})
 
     assert np.allclose(b.array(), np.arange(1, 11))
@@ -186,7 +190,6 @@ def test_shift():
 def test_fold_shifts():
     """Shifting the result of an addition should work by shifting the operands instead."""
     size = 10
-    IDim = CartesianAxis("IDim")
     Ioff = offset("Ioff")
     a = np_as_located_field(IDim)(np.arange(size + 1))
     b = np_as_located_field(IDim)(np.ones((size + 1)) * 2)
@@ -196,7 +199,7 @@ def test_fold_shifts():
         tmp = inp1 + inp2
         return tmp(Ioff[1])
 
-    program = program_from_func(auto_lift, out_names=["c"], dim=IDim, size=size)
+    program = program_from_function(auto_lift, out_names=["c"], dim=IDim, size=size)
     roundtrip.executor(program, a, b, c, offset_provider={"Ioff": IDim})
 
     assert np.allclose(a[1:] + b[1:], c)
