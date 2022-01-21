@@ -166,7 +166,9 @@ def make_symbol_from_value(
 ) -> foast.Symbol:
     if not isinstance(value, type) or type(value).__module__ != "typing":
         value = typingx.get_typing(value, annotate_callable_kwargs=True)
+
     symbol_type = make_symbol_type_from_typing(value)
+
     if isinstance(symbol_type, foast.DataType):
         return foast.DataSymbol(id=name, type=symbol_type, namespace=namespace, location=location)
     elif isinstance(symbol_type, foast.FunctionType):

@@ -98,7 +98,7 @@ def _make_symbol_names_from_source(source: str, filename: str = MISSING_FILENAME
         elif s.is_parameter:
             param_names.add(name)
         else:
-            local_names.add()
+            local_names.add(name)
 
     # symtable returns regular free (or non-local) variables in 'get_frees()' and
     # the free variables introduced with the 'nonlocal' statement in 'get_nonlocals()'
@@ -116,6 +116,29 @@ def _make_symbol_names_from_source(source: str, filename: str = MISSING_FILENAME
 
 @dataclass(frozen=True)
 class SourceDefinition:
+    """
+    A GT4Py source code definition encoded as a string.
+
+    It can be created from an actual function object using :meth:`from_function()`.
+    It also supports unpacking.
+
+
+    Examples
+    -------
+
+    >>> def foo(a):
+    ...     return a
+    >>> src_def = SourceDefinition.from_function(foo)
+    >>> print(src_def)
+    SourceDefinition(source='def foo(a):... starting_line=1)
+
+    >>> source, filename, starting_line = src_def
+    >>> print(source)
+    def foo(a):
+        return a
+    ...
+    """
+
     source: str
     filename: str = MISSING_FILENAME
     starting_line: int = 1
@@ -128,6 +151,13 @@ class SourceDefinition:
 
 @dataclass(frozen=True)
 class ClosureRefs:
+    """
+    Mappings from names used in a Python function to the actual values.
+
+    It can be created from an actual function object using :meth:`from_function()`.
+    It also supports unpacking.
+    """
+
     nonlocals: dict[str, Any]
     globals: dict[str, Any]  # noqa: A003  # shadowing a python builtin
     annotations: dict[str, Any]
@@ -144,6 +174,13 @@ class ClosureRefs:
 
 @dataclass(frozen=True)
 class SymbolNames:
+    """
+    Collection of symbol names used in a function classified by kind.
+
+    It can be created directly from source code using :meth:`from_source()`.
+    It also supports unpacking.
+    """
+
     params: tuple[str, ...]
     locals: tuple[str, ...]  # noqa: A003  # shadowing a python builtin
     imported: tuple[str, ...]
@@ -275,7 +312,9 @@ class FieldOperatorParser(ast.NodeVisitor):
             self.source, self.filename
         )
         if missing_defs := (self.closure_refs.unbound - imported_names):
-            raise self._make_syntax_error(node, message=f"Missing symbol definitions: {missing_defs}")
+            raise self._make_syntax_error(
+                node, message=f"Missing symbol definitions: {missing_defs}"
+            )
 
         # 'SymbolNames.from_source()' uses the symtable module to analyze the isolated source
         # code of the function, and thus all non-local symbols are classified as 'global'.

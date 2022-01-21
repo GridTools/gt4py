@@ -18,7 +18,7 @@ from typing import Optional
 
 class StringifyAnnotationsPass(ast.NodeTransformer):
     """
-    Canonicalize type annotations to string :class:`ast.Constant`.
+    AST pass transforming type annotations to string :class:`ast.Constant`.
 
     Mutates the python AST replacing arbitrary AST subtrees in the annotation
     fields of the supported nodes with its string representation
