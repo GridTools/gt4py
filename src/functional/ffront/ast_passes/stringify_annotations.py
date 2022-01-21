@@ -18,41 +18,31 @@ from typing import Optional
 
 class StringifyAnnotationsPass(ast.NodeTransformer):
     """
-    Rename variables in assignments to avoid overwriting.
+    Canonicalize type annotations to string :class:`ast.Constant`.
 
-    Mutates the python AST, variable names will not be valid python names anymore.
-    This pass must be run before any passes that linearize unpacking assignments.
+    Mutates the python AST replacing arbitrary AST subtrees in the annotation
+    fields of the supported nodes with its string representation
+    using :func:`ast.unparse()`.
 
 
     Example
     -------
-    Function ``foo()`` in the following example keeps overwriting local variable ``a``
 
     >>> import ast, inspect
-    >>> from ffront.ast_passes.single_static_assign import SingleStaticAssignPass
+    >>> from typing import Union
 
-    >>> def foo():
-    ...     a = 1
-    ...     a = 2 + a
-    ...     a = 3 + a
-    ...     return a
+    >>> def foo(a: Union[int, float]) -> float:
+    ...     tmp: Union[int, float] = a + 1
+    ...     result: float = float(tmp)
+    ...     return result
 
-    >>> print(ast.unparse(
-    ...     SingleStaticAssignPass.apply(
-    ...         ast.parse(inspect.getsource(foo))
-    ...     )
-    ... ))
-    def foo():
-        a$0 = 1
-        a$1 = 2 + a$0
-        a$2 = 3 + a$1
-        return a$2
+    >>> ast_node = ast.parse(inspect.getsource(foo))
+    >>> print(ast_node.body[0].args.args[0].annotation)
+    <ast.Subscript object at ...>
 
-    Note that each variable name is assigned only once and never updated / overwritten.
-
-    Note also that after parsing, running the pass and unparsing we get invalid but
-    readable python code. This is ok because this pass is not intended for
-    python-to-python translation.
+    >>> ast_node = StringifyAnnotationsPass.apply(ast_node)
+    >>> print(ast_node.body[0].args.args[0].annotation)
+    <ast.Constant object at ...>
     """
 
     @classmethod
@@ -78,5 +68,5 @@ class StringifyAnnotationsPass(ast.NodeTransformer):
         return result
 
     @staticmethod
-    def _stringify_annotation(node: Optional[ast.AST]):
+    def _stringify_annotation(node: Optional[ast.AST]) -> ast.Constant:
         return ast.Constant(value=ast.unparse(node), kind=None) if node else node

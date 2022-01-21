@@ -178,7 +178,7 @@ class FieldOperatorParser(ast.NodeVisitor):
     >>> float64 = float
     >>> def field_op(inp: Field[..., float64]):
     ...     return inp
-    >>> foast_tree = FieldOperatorParser.apply_to_func(field_op)
+    >>> foast_tree = FieldOperatorParser.apply_to_function(field_op)
     >>> foast_tree  # doctest: +ELLIPSIS
     FieldOperator(..., id='field_op', ...)
     >>> foast_tree.params  # doctest: +ELLIPSIS
@@ -190,12 +190,12 @@ class FieldOperatorParser(ast.NodeVisitor):
     If a syntax error is encountered, it will point to the location in the source code.
 
     >>> def wrong_syntax(inp: Field[..., int]):
-    ...     for i in range(10): # for is not part of the field operator syntax
+    ...     for i in [1, 2, 3]: # for is not part of the field operator syntax
     ...         tmp = inp
     ...     return tmp
     >>>
     >>> try:
-    ...     FieldOperatorParser.apply_to_func(wrong_syntax)
+    ...     FieldOperatorParser.apply_to_function(wrong_syntax)
     ... except FieldOperatorSyntaxError as err:
     ...     print(err.filename)  # doctest: +ELLIPSIS
     ...     print(err.lineno)
@@ -275,7 +275,7 @@ class FieldOperatorParser(ast.NodeVisitor):
             self.source, self.filename
         )
         if missing_defs := (self.closure_refs.unbound - imported_names):
-            raise common.GTValueError(f"Missing reference definitions: {missing_defs}")
+            raise self._make_syntax_error(node, message=f"Missing symbol definitions: {missing_defs}")
 
         # 'SymbolNames.from_source()' uses the symtable module to analyze the isolated source
         # code of the function, and thus all non-local symbols are classified as 'global'.
@@ -299,13 +299,13 @@ class FieldOperatorParser(ast.NodeVisitor):
         )
 
     def visit_Import(self, node: ast.Import, **kwargs) -> None:
-        self._make_syntax_error(
+        raise self._make_syntax_error(
             node, f"Only 'from' imports from {fbuiltins.MODULE_BUILTIN_NAMES} are supported"
         )
 
     def visit_ImportFrom(self, node: ast.ImportFrom, **kwargs) -> None:
         if node.module not in fbuiltins.MODULE_BUILTIN_NAMES:
-            self._make_syntax_error(
+            raise self._make_syntax_error(
                 node, f"Only 'from' imports from {fbuiltins.MODULE_BUILTIN_NAMES} are supported"
             )
 
