@@ -15,7 +15,7 @@
 import ast
 from dataclasses import dataclass, field
 
-from functional.ffront.builtins import TYPE_BUILTIN_NAMES
+from functional.ffront.fbuiltins import TYPE_BUILTIN_NAMES
 
 
 class SingleStaticAssignPass(ast.NodeTransformer):

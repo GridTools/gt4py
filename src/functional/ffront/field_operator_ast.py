@@ -13,11 +13,9 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 
-from __future__ import annotations
-
 import re
 import typing
-from typing import Any, Literal, Optional, Union
+from typing import Literal, Optional, Union
 
 import eve
 from eve import Node
@@ -25,8 +23,10 @@ from eve.traits import SymbolTableTrait
 from eve.type_definitions import IntEnum, SourceLocation, StrEnum, SymbolRef
 
 
-class Dimension(Node):
-    name: str
+class Namespace(StrEnum):
+    LOCAL = "local"
+    CLOSURE = "closure"
+    EXTERNAL = "external"
 
 
 class ScalarKind(IntEnum):
@@ -35,6 +35,10 @@ class ScalarKind(IntEnum):
     INT64 = 64
     FLOAT32 = 1032
     FLOAT64 = 1064
+
+
+class Dimension(Node):
+    name: str
 
 
 class SymbolType(Node):
@@ -85,7 +89,7 @@ class SymbolName(eve.traits.SymbolName):
 class Symbol(LocatedNode):
     id: SymbolName  # noqa: A003
     type: SymbolType  # noqa A003
-    origin: Any = None
+    namespace: Namespace = Namespace(Namespace.LOCAL)
 
 
 class DataSymbol(Symbol):
@@ -98,8 +102,6 @@ class FieldSymbol(DataSymbol):
 
 class Function(Symbol):
     type: FunctionType  # noqa A003
-    params: list[FieldType]
-    returns: list[FieldType]
 
 
 class Expr(LocatedNode):
@@ -171,6 +173,10 @@ class Stmt(LocatedNode):
     ...
 
 
+class ExternalImport(Stmt):
+    symbols: list[Symbol]
+
+
 class Assign(Stmt):
     target: Symbol
     value: Expr
@@ -184,4 +190,4 @@ class FieldOperator(LocatedNode, SymbolTableTrait):
     id: SymbolName  # noqa: A003
     params: list[DataSymbol]
     body: list[Stmt]
-    # externals: list[Symbol]  # noqa
+    closure: list[Symbol]

@@ -15,6 +15,12 @@
 
 from .simple_assign import SingleAssignTargetPass, UnpackedAssignPass
 from .single_static_assign import SingleStaticAssignPass
+from .stringify_annotations import StringifyAnnotationsPass
 
 
-__all__ = ["SingleAssignTargetPass", "SingleStaticAssignPass", "UnpackedAssignPass"]
+__all__ = [
+    "SingleAssignTargetPass",
+    "SingleStaticAssignPass",
+    "StringifyAnnotationsPass",
+    "UnpackedAssignPass",
+]

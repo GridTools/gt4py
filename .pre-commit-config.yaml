@@ -160,13 +160,13 @@ repos:
       )$
 
 - repo: https://github.com/pre-commit/mirrors-mypy
-  rev: v0.910-1
+  rev: v0.931
   hooks:
   - id: mypy
     exclude: |
       (?x)^(
       src/functional/ffront/func_to_foast.py | # until mypy supports match
-      src/functional/ffront/type_parser.py | # until mypy supports match
+      src/functional/ffront/symbol_makers.py | # until mypy supports match
       src/functional/ffront/foast_passes/type_deduction.py | # until mypy supports match
       docs/gt4py/conf.py |
       docs/gtc/conf.py |

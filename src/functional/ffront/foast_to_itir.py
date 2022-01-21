@@ -33,7 +33,7 @@ class AssignResolver(NodeTranslator):
     ...     tmp2 = tmp1
     ...     return tmp2
     >>>
-    >>> fieldop_foast_expr = AssignResolver.apply(FieldOperatorParser.apply_to_func(fieldop).body)
+    >>> fieldop_foast_expr = AssignResolver.apply(FieldOperatorParser.apply_to_function(fieldop).body)
     >>> fieldop_foast_expr  # doctest: +ELLIPSIS
     Return(location=..., value=Name(location=..., id='inp'))
     """
@@ -74,6 +74,8 @@ class FieldOperatorLowering(NodeTranslator):
     """
     Lower FieldOperator AST (FOAST) to Iterator IR (ITIR).
 
+    Examples
+    --------
     >>> from functional.ffront.func_to_foast import FieldOperatorParser
     >>> from functional.common import Field
     >>>
@@ -82,7 +84,7 @@ class FieldOperatorLowering(NodeTranslator):
     >>> def fieldop(inp: Field[..., "float64"]):
     ...    return inp
     >>>
-    >>> parsed = FieldOperatorParser.apply_to_func(fieldop)
+    >>> parsed = FieldOperatorParser.apply_to_function(fieldop)
     >>> lowered = FieldOperatorLowering.apply(parsed)
     >>> type(lowered)
     <class 'functional.iterator.ir.FunctionDefinition'>
