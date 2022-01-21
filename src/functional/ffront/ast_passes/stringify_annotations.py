@@ -13,7 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import ast
-from typing import Optional
+from typing import Any, Optional
 
 
 class StringifyAnnotationsPass(ast.NodeTransformer):
@@ -27,7 +27,6 @@ class StringifyAnnotationsPass(ast.NodeTransformer):
 
     Example
     -------
-
     >>> import ast, inspect
     >>> from typing import Union
 
@@ -68,5 +67,5 @@ class StringifyAnnotationsPass(ast.NodeTransformer):
         return result
 
     @staticmethod
-    def _stringify_annotation(node: Optional[ast.AST]) -> ast.Constant:
+    def _stringify_annotation(node: Optional[ast.AST]) -> Any:
         return ast.Constant(value=ast.unparse(node), kind=None) if node else node

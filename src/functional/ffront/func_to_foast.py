@@ -125,7 +125,6 @@ class SourceDefinition:
 
     Examples
     -------
-
     >>> def foo(a):
     ...     return a
     >>> src_def = SourceDefinition.from_function(foo)
