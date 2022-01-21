@@ -28,9 +28,6 @@ class Namespace(StrEnum):
     CLOSURE = "closure"
     EXTERNAL = "external"
 
-    def __str__(self):
-        return self.name
-
 
 class ScalarKind(IntEnum):
     BOOL = 1

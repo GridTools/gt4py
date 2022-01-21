@@ -43,7 +43,7 @@ from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduc
 MISSING_FILENAME = "<string>"
 
 
-def _make_source_definition_from_function(func: Callable) -> SourceDefinition:
+def make_source_definition_from_function(func: Callable) -> SourceDefinition:
     try:
         filename = inspect.getabsfile(func) or MISSING_FILENAME
         source = textwrap.dedent(inspect.getsource(func))
@@ -60,7 +60,7 @@ def _make_source_definition_from_function(func: Callable) -> SourceDefinition:
     return SourceDefinition(source, filename, starting_line)
 
 
-def _make_closure_refs_from_function(func: Callable) -> ClosureRefs:
+def make_closure_refs_from_function(func: Callable) -> ClosureRefs:
     (nonlocals, globals, inspect_builtins, inspect_unbound) = inspect.getclosurevars(  # noqa: A001
         func
     )
@@ -73,7 +73,7 @@ def _make_closure_refs_from_function(func: Callable) -> ClosureRefs:
     return ClosureRefs(nonlocals, globals, annotations, builtins, unbound)
 
 
-def _make_symbol_names_from_source(source: str, filename: str = MISSING_FILENAME) -> SymbolNames:
+def make_symbol_names_from_source(source: str, filename: str = MISSING_FILENAME) -> SymbolNames:
     try:
         mod_st = symtable.symtable(source, filename, "exec")
     except SyntaxError as err:
@@ -98,7 +98,7 @@ def _make_symbol_names_from_source(source: str, filename: str = MISSING_FILENAME
         elif s.is_parameter:
             param_names.add(name)
         else:
-            local_names.add()
+            local_names.add(name)
 
     # symtable returns regular free (or non-local) variables in 'get_frees()' and
     # the free variables introduced with the 'nonlocal' statement in 'get_nonlocals()'
@@ -116,6 +116,28 @@ def _make_symbol_names_from_source(source: str, filename: str = MISSING_FILENAME
 
 @dataclass(frozen=True)
 class SourceDefinition:
+    """
+    A GT4Py source code definition encoded as a string.
+
+    It can be created from an actual function object using :meth:`from_function()`.
+    It also supports unpacking.
+
+
+    Examples
+    -------
+    >>> def foo(a):
+    ...     return a
+    >>> src_def = SourceDefinition.from_function(foo)
+    >>> print(src_def)
+    SourceDefinition(source='def foo(a):... starting_line=1)
+
+    >>> source, filename, starting_line = src_def
+    >>> print(source)
+    def foo(a):
+        return a
+    ...
+    """
+
     source: str
     filename: str = MISSING_FILENAME
     starting_line: int = 1
@@ -123,11 +145,18 @@ class SourceDefinition:
     def __iter__(self) -> Iterator[tuple[str, ...]]:
         yield from iter((self.source, self.filename, self.starting_line))
 
-    from_function = staticmethod(_make_source_definition_from_function)
+    from_function = staticmethod(make_source_definition_from_function)
 
 
 @dataclass(frozen=True)
 class ClosureRefs:
+    """
+    Mappings from names used in a Python function to the actual values.
+
+    It can be created from an actual function object using :meth:`from_function()`.
+    It also supports unpacking.
+    """
+
     nonlocals: dict[str, Any]
     globals: dict[str, Any]  # noqa: A003  # shadowing a python builtin
     annotations: dict[str, Any]
@@ -139,11 +168,18 @@ class ClosureRefs:
             (self.nonlocals, self.globals, self.annotations, self.builtins, self.unbound)
         )
 
-    from_function = staticmethod(_make_closure_refs_from_function)
+    from_function = staticmethod(make_closure_refs_from_function)
 
 
 @dataclass(frozen=True)
 class SymbolNames:
+    """
+    Collection of symbol names used in a function classified by kind.
+
+    It can be created directly from source code using :meth:`from_source()`.
+    It also supports unpacking.
+    """
+
     params: tuple[str, ...]
     locals: tuple[str, ...]  # noqa: A003  # shadowing a python builtin
     imported: tuple[str, ...]
@@ -157,7 +193,7 @@ class SymbolNames:
     def __iter__(self) -> Iterator[tuple[str, ...]]:
         yield from iter((self.params, self.locals, self.imported, self.nonlocals, self.globals))
 
-    from_source = staticmethod(_make_symbol_names_from_source)
+    from_source = staticmethod(make_symbol_names_from_source)
 
 
 # TODO (ricoh): pass on source locations
@@ -190,7 +226,7 @@ class FieldOperatorParser(ast.NodeVisitor):
     If a syntax error is encountered, it will point to the location in the source code.
 
     >>> def wrong_syntax(inp: Field[..., int]):
-    ...     for i in (1, 2, 3): # for is not part of the field operator syntax
+    ...     for i in [1, 2, 3]: # for is not part of the field operator syntax
     ...         tmp = inp
     ...     return tmp
     >>>
@@ -274,8 +310,11 @@ class FieldOperatorParser(ast.NodeVisitor):
         _, _, imported_names, nonlocal_names, global_names = SymbolNames.from_source(
             self.source, self.filename
         )
+        # TODO(egparedes): raise the exception at the first use of the undefined symbol
         if missing_defs := (self.closure_refs.unbound - imported_names):
-            raise common.GTValueError(f"Missing reference definitions: {missing_defs}")
+            raise self._make_syntax_error(
+                node, message=f"Missing symbol definitions: {missing_defs}"
+            )
 
         # 'SymbolNames.from_source()' uses the symtable module to analyze the isolated source
         # code of the function, and thus all non-local symbols are classified as 'global'.
@@ -299,30 +338,32 @@ class FieldOperatorParser(ast.NodeVisitor):
         )
 
     def visit_Import(self, node: ast.Import, **kwargs) -> None:
-        self._make_syntax_error(
+        raise self._make_syntax_error(
             node, f"Only 'from' imports from {fbuiltins.MODULE_BUILTIN_NAMES} are supported"
         )
 
     def visit_ImportFrom(self, node: ast.ImportFrom, **kwargs) -> None:
         if node.module not in fbuiltins.MODULE_BUILTIN_NAMES:
-            self._make_syntax_error(
+            raise self._make_syntax_error(
                 node, f"Only 'from' imports from {fbuiltins.MODULE_BUILTIN_NAMES} are supported"
             )
 
         symbols = []
-        for alias in node.names:
-            if alias.name not in self.externals_defs:
-                raise self._make_syntax_error(
-                    node, message="Missing imported symbol '{alias.name}'"
+
+        if node.module == fbuiltins.EXTERNALS_MODULE_NAME:
+            for alias in node.names:
+                if alias.name not in self.externals_defs:
+                    raise self._make_syntax_error(
+                        node, message="Missing symbol '{alias.name}' definition in {node.module}}"
+                    )
+                symbols.append(
+                    symbol_makers.make_symbol_from_value(
+                        alias.asname or alias.name,
+                        self.externals_defs[alias.name],
+                        foast.Namespace.EXTERNAL,
+                        location=self._make_loc(node),
+                    )
                 )
-            symbols.append(
-                symbol_makers.make_symbol_from_value(
-                    alias.asname or alias.name,
-                    self.externals_defs[alias.name],
-                    foast.Namespace.EXTERNAL,
-                    location=self._make_loc(node),
-                )
-            )
 
         return foast.ExternalImport(symbols=symbols, location=self._make_loc(node))
 

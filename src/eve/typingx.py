@@ -225,7 +225,7 @@ def resolve_type(
 
 
 def _collapsable_type_args(*args: Any) -> tuple[bool, tuple]:
-    if len(args) and all(args[0] == a for a in args):
+    if args and all(args[0] == a for a in args):
         return (True, args)
     else:
         return (False, args)
@@ -304,7 +304,7 @@ def get_typing(value: Any, *, annotate_callable_kwargs: bool = False) -> Any:
         unique_type, args = _collapsable_type_args(*(recursive_get(item) for item in value))
         if unique_type and len(args) > 1:
             return tuple[args[0], ...]
-        elif len(args):
+        elif args:
             return tuple[args]
         else:
             return tuple[Any, ...]

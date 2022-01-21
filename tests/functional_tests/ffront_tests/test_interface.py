@@ -262,20 +262,6 @@ def test_temp_tuple():
     )
 
 
-# def test_call_expression():
-#     def get_identity():
-#         return lambda x: x
-
-#     def call_expr(inp: Field[..., "float64"]):
-#         return get_identity()(inp)
-
-#     with pytest.raises(
-#         FieldOperatorSyntaxError,
-#         match=r"functions can only be called directly! \(.*\)",
-#     ):
-#         _ = FieldOperatorParser.apply_to_function(call_expr)
-
-
 def test_unary_ops():
     def unary(inp: Field[..., "float64"]):
         tmp = +inp
