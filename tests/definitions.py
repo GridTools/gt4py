@@ -80,6 +80,10 @@ OLD_INTERNAL_BACKENDS = [
 
 LEGACY_GRIDTOOLS_BACKENDS = [_backend_name_as_param(name) for name in ("gtx86", "gtmc", "gtcuda")]
 
+GTC_BACKENDS = [
+    _backend_name_as_param(name) for name in _ALL_BACKEND_NAMES if name.startswith("gtc:")
+]
+
 
 @pytest.fixture()
 def id_version():

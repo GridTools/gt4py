@@ -19,9 +19,15 @@ import pytest
 
 from gt4py import gtscript
 from gt4py import storage as gt_storage
-from gt4py.gtscript import __INLINED, BACKWARD, FORWARD, PARALLEL, computation, interval
+from gt4py.gtscript import __INLINED, BACKWARD, FORWARD, PARALLEL, Field, computation, interval
 
-from ..definitions import ALL_BACKENDS, CPU_BACKENDS, LEGACY_GRIDTOOLS_BACKENDS, OLD_BACKENDS
+from ..definitions import (
+    ALL_BACKENDS,
+    CPU_BACKENDS,
+    GTC_BACKENDS,
+    LEGACY_GRIDTOOLS_BACKENDS,
+    OLD_BACKENDS,
+)
 from .stencil_definitions import EXTERNALS_REGISTRY as externals_registry
 from .stencil_definitions import REGISTRY as stencil_definitions
 
@@ -349,6 +355,19 @@ def test_higher_dimensional_fields(backend):
     np.testing.assert_allclose(mat_field.view(np.ndarray)[1:-1, 1:-1, 1:1], 2.0 + 5.0)
 
     stencil(field, vec_field, mat_field)
+
+
+@pytest.mark.parametrize("backend", GTC_BACKENDS)
+def test_typed_temporary_data_dims(backend):
+    @gtscript.stencil(backend=backend)
+    def stencil(in_field: gtscript.Field[np.float_], out_field: gtscript.Field[np.float_]):
+        tmp: Field[(np.float_, (2,))]
+        with computation(PARALLEL), interval(0, -1):
+            # Please do not actually write this in practice.
+            # This is purely to test the feature.
+            tmp[0, 0, 0][0] = in_field[0, 0, 0]
+            tmp[0, 0, 0][1] = in_field[0, 0, 1]
+            out_field = tmp[0, 0, 0][0] + tmp[0, 0, 0][1]
 
 
 @pytest.mark.parametrize("backend", CPU_BACKENDS)
