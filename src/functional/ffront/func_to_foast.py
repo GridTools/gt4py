@@ -43,7 +43,7 @@ from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduc
 MISSING_FILENAME = "<string>"
 
 
-def _make_source_definition_from_function(func: Callable) -> SourceDefinition:
+def make_source_definition_from_function(func: Callable) -> SourceDefinition:
     try:
         filename = inspect.getabsfile(func) or MISSING_FILENAME
         source = textwrap.dedent(inspect.getsource(func))
@@ -60,7 +60,7 @@ def _make_source_definition_from_function(func: Callable) -> SourceDefinition:
     return SourceDefinition(source, filename, starting_line)
 
 
-def _make_closure_refs_from_function(func: Callable) -> ClosureRefs:
+def make_closure_refs_from_function(func: Callable) -> ClosureRefs:
     (nonlocals, globals, inspect_builtins, inspect_unbound) = inspect.getclosurevars(  # noqa: A001
         func
     )
@@ -73,7 +73,7 @@ def _make_closure_refs_from_function(func: Callable) -> ClosureRefs:
     return ClosureRefs(nonlocals, globals, annotations, builtins, unbound)
 
 
-def _make_symbol_names_from_source(source: str, filename: str = MISSING_FILENAME) -> SymbolNames:
+def make_symbol_names_from_source(source: str, filename: str = MISSING_FILENAME) -> SymbolNames:
     try:
         mod_st = symtable.symtable(source, filename, "exec")
     except SyntaxError as err:
@@ -145,7 +145,7 @@ class SourceDefinition:
     def __iter__(self) -> Iterator[tuple[str, ...]]:
         yield from iter((self.source, self.filename, self.starting_line))
 
-    from_function = staticmethod(_make_source_definition_from_function)
+    from_function = staticmethod(make_source_definition_from_function)
 
 
 @dataclass(frozen=True)
@@ -168,7 +168,7 @@ class ClosureRefs:
             (self.nonlocals, self.globals, self.annotations, self.builtins, self.unbound)
         )
 
-    from_function = staticmethod(_make_closure_refs_from_function)
+    from_function = staticmethod(make_closure_refs_from_function)
 
 
 @dataclass(frozen=True)
@@ -193,7 +193,7 @@ class SymbolNames:
     def __iter__(self) -> Iterator[tuple[str, ...]]:
         yield from iter((self.params, self.locals, self.imported, self.nonlocals, self.globals))
 
-    from_source = staticmethod(_make_symbol_names_from_source)
+    from_source = staticmethod(make_symbol_names_from_source)
 
 
 # TODO (ricoh): pass on source locations
@@ -310,6 +310,7 @@ class FieldOperatorParser(ast.NodeVisitor):
         _, _, imported_names, nonlocal_names, global_names = SymbolNames.from_source(
             self.source, self.filename
         )
+        # TODO(egparedes): raise the exception at the first use of the undefined symbol
         if missing_defs := (self.closure_refs.unbound - imported_names):
             raise self._make_syntax_error(
                 node, message=f"Missing symbol definitions: {missing_defs}"
@@ -348,19 +349,21 @@ class FieldOperatorParser(ast.NodeVisitor):
             )
 
         symbols = []
-        for alias in node.names:
-            if alias.name not in self.externals_defs:
-                raise self._make_syntax_error(
-                    node, message="Missing imported symbol '{alias.name}'"
+
+        if node.module == fbuiltins.EXTERNALS_MODULE_NAME:
+            for alias in node.names:
+                if alias.name not in self.externals_defs:
+                    raise self._make_syntax_error(
+                        node, message="Missing symbol '{alias.name}' definition in {node.module}}"
+                    )
+                symbols.append(
+                    symbol_makers.make_symbol_from_value(
+                        alias.asname or alias.name,
+                        self.externals_defs[alias.name],
+                        foast.Namespace.EXTERNAL,
+                        location=self._make_loc(node),
+                    )
                 )
-            symbols.append(
-                symbol_makers.make_symbol_from_value(
-                    alias.asname or alias.name,
-                    self.externals_defs[alias.name],
-                    foast.Namespace.EXTERNAL,
-                    location=self._make_loc(node),
-                )
-            )
 
         return foast.ExternalImport(symbols=symbols, location=self._make_loc(node))
 

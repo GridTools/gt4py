@@ -182,6 +182,7 @@ def make_symbol_from_value(
         raise common.GTTypeError(f"Impossible to map '{value}' value to a Symbol")
 
 
+# TODO(egparedes): Add source location info (maybe subclassing FieldOperatorSyntaxError)
 class FieldOperatorTypeError(common.GTTypeError):
     def __init__(
         self,
