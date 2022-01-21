@@ -257,7 +257,7 @@ class NpirCodegen(TemplatedGenerator):
     ) -> Union[str, Collection[str]]:
         assert all(node.dimensions), "The logic below does not support masked temporaries"
         shape = "_domain_"
-        origin = [0, 0, 0]
+        origin = [0] * (3 + len(node.data_dims))
         if extents := kwargs.get("field_extents", {}).get(temp_name):
             boundary = extents.to_boundary()
             i_size = f"_dI_ + {sum(boundary[0])}" if node.dimensions[0] else "1"
