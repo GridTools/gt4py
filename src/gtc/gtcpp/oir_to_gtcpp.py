@@ -121,7 +121,7 @@ class OIRToGTCpp(eve.NodeTranslator):
         return gtcpp.Cast(dtype=node.dtype, expr=self.visit(node.expr, **kwargs))
 
     def visit_Temporary(self, node: oir.Temporary, **kwargs: Any) -> gtcpp.Temporary:
-        return gtcpp.Temporary(name=node.name, dtype=node.dtype)
+        return gtcpp.Temporary(name=node.name, dtype=node.dtype, data_dims=node.data_dims)
 
     def visit_VariableKOffset(
         self, node: oir.VariableKOffset, **kwargs: Any
