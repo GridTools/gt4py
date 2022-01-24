@@ -117,7 +117,7 @@ class TypeInfo:
         if self.is_any_type:
             return True
         if self.is_complete:
-            return False
+            return self.type == other.type
         if self.constraint:
             if other.is_complete:
                 return isinstance(other.type, self.constraint)
