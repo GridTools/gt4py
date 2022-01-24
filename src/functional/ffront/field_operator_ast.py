@@ -89,7 +89,7 @@ class FieldType(DataType):
 
     def __str__(self):
         dims = (
-            "..." if self.dims is Ellipsis else "[" + ", ".join(dim.name for dim in self.dims) + "]"
+            "..." if self.dims is Ellipsis else f"[{', '.join(dim.name for dim in self.dims)}]"
         )
         return f"Field[{dims}, dtype={self.dtype}]"
 
