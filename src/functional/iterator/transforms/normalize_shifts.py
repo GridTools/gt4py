@@ -2,17 +2,20 @@ from eve import NodeTranslator
 from functional.iterator import ir
 
 
+def _is_call_to_shift(node):
+    return (
+        isinstance(node, ir.FunCall) and isinstance(node.fun, ir.SymRef) and node.fun.id == "shift"
+    )
+
+
 class NormalizeShifts(NodeTranslator):
     def visit_FunCall(self, node: ir.FunCall):
         node = self.generic_visit(node)
         if (
-            isinstance(node.fun, ir.FunCall)
-            and isinstance(node.fun.fun, ir.SymRef)
-            and node.fun.fun.id == "shift"
+            _is_call_to_shift(node.fun)
             and node.args
             and isinstance(node.args[0], ir.FunCall)
-            and isinstance(node.args[0].fun.fun, ir.SymRef)
-            and node.args[0].fun.fun.id == "shift"
+            and _is_call_to_shift(node.args[0].fun)
         ):
             # shift(args1...)(shift(args2...)(it)) -> shift(args2..., args1...)(it)
             assert len(node.args) == 1
