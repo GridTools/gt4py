@@ -203,8 +203,9 @@ class FortranBindingsCodegen(codegen.TemplatedGenerator):
     @classmethod
     def apply(cls, root, **kwargs) -> str:
         # This is hacky, probably we should keep the full list of parameters (even if unused) down to any backend
-        external_parameters = [cls().visit(p, external_arg=True) for p in root.params]
-        generated_code = cls().visit(
+        generator = cls()
+        external_parameters = [generator.visit(p, external_arg=True) for p in root.params]
+        generated_code = generator.visit(
             GtirPipeline(root).full(), external_parameters=external_parameters, **kwargs
         )
         if kwargs.get("format_source", True):
