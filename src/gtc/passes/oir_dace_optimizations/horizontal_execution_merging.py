@@ -296,8 +296,6 @@ class GraphMerging(SingleStateTransformation):
                     ), "Previously written array now read-only."
                     state.remove_node(acc)
                     res.remove_in_connector("IN_" + acc.label)
-            elif not state.out_edges:
-                acc.access = dace.AccessType.WriteOnly
 
 
 def graph_merge_horizontal_executions(node: oir.Stencil) -> oir.Stencil:
