@@ -241,7 +241,7 @@ def test_lift(backend):
 
 @fundef
 def sparse_shifted_stencil(inp):
-    return deref(shift(0, 2)(shift(V2V)(inp)))
+    return deref(shift(2)(deref(shift(0)(shift(V2V)(inp)))))
 
 
 def test_shift_sparse_input_field(backend):
@@ -267,8 +267,8 @@ def shift_shift_stencil2(inp):
 
 
 @fundef
-def shift_sparse_stencil2(inp):
-    return deref(shift(1)(deref(shift(3)((shift(V2E)(inp))))))
+def shift_sparse_stencil2(inp_sparse):
+    return deref(shift(1)(deref(shift(3)(shift(V2E)(inp_sparse)))))
 
 
 def test_shift_sparse_input_field2(backend):
@@ -302,7 +302,7 @@ def sparse_shifted_stencil_reduce(inp):
     return reduce(sum_, 0)(shift(V2V)(lift(reduce(sum_, 0))(inp)))
 
 
-def test_shift_sparse_input_field(backend):
+def test_shift_sparse_input_field_reduce(backend):
     backend, validate = backend
     inp = np_as_located_field(Vertex, V2V)(v2v_arr)
     out = np_as_located_field(Vertex)(np.zeros([9]))

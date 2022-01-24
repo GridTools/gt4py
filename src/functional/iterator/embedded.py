@@ -101,6 +101,7 @@ def lift(stencil):
 def reduce(fun, init):
     def sten(*iters):
         # TODO: assert check_that_all_iterators_are_compatible(*iters)
+        iters = [builtins.deref(it) if isinstance(it, SparseIterator) else it for it in iters]
         first_it = iters[0]
         n = first_it.max_neighbors()
         res = init
@@ -220,10 +221,6 @@ def domain_iterator(domain):
 
 
 def execute_shift(pos, tag, index, *, offset_provider):
-    if tag in pos and pos[tag] is None:  # sparse field with offset as neighbor dimension
-        new_pos = pos.copy()
-        new_pos[tag] = index
-        return new_pos
     assert tag.value in offset_provider
     offset_implementation = offset_provider[tag.value]
     if isinstance(offset_implementation, CartesianAxis):
@@ -492,7 +489,7 @@ def make_in_iterator(inp, pos, offset_provider, *, column_axis):
         return SparseIterator(
             inp,
             new_pos,
-            incomplete_offsets=[*sparse_dimensions],
+            incomplete_offsets=[],
             offset_provider=offset_provider,
             column_axis=column_axis,
             sparse_axis=sparse_dimensions[0],
@@ -501,7 +498,7 @@ def make_in_iterator(inp, pos, offset_provider, *, column_axis):
         return MDIterator(
             inp,
             new_pos,
-            incomplete_offsets=[*sparse_dimensions],
+            incomplete_offsets=[],
             offset_provider=offset_provider,
             column_axis=column_axis,
         )
