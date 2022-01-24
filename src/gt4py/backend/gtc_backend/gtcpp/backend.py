@@ -17,11 +17,10 @@
 from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple, Type
 
 from eve import codegen
-from eve.codegen import JinjaTemplate
 from eve.codegen import MakoTemplate as as_mako
 from gt4py import backend as gt_backend
 from gt4py import gt_src_manager
-from gt4py.backend import BaseGTBackend, CLIBackendMixin
+from gt4py.backend import BaseGTBackend
 from gt4py.backend.gt_backends import (
     GTCUDAPyModuleGenerator,
     cuda_is_compatible_layout,
@@ -36,7 +35,7 @@ from gt4py.backend.gt_backends import (
 from gt4py.backend.gtc_backend.common import bindings_main_template, pybuffer_to_sid
 from gt4py.backend.gtc_backend.defir_to_gtir import DefIRToGTIR
 from gt4py.ir.nodes import StencilDefinition
-from gtc import gtir_to_oir
+from gtc import gtir, gtir_to_oir
 from gtc.common import DataType
 from gtc.gtcpp import gtcpp, gtcpp_codegen, oir_to_gtcpp
 from gtc.passes.gtir_pipeline import GtirPipeline
@@ -48,8 +47,8 @@ if TYPE_CHECKING:
     from gt4py.stencil_object import StencilObject
 
 
-def make_gtcpp_ir(definition_ir: StencilDefinition, backend) -> gtcpp.Program:
-    gtir = GtirPipeline(DefIRToGTIR.apply(definition_ir)).full()
+def gtir_to_gtcpp(gtir: gtir.Stencil, backend) -> gtcpp.Program:
+    gtir = GtirPipeline(gtir).full()
     base_oir = gtir_to_oir.GTIRToOIR().visit(gtir)
     oir_pipeline = backend.builder.options.backend_opts.get(
         "oir_pipeline", DefaultPipeline(skip=[FillFlushToLocalKCaches])
@@ -66,7 +65,7 @@ class GTCGTExtGenerator:
         self.backend = backend
 
     def __call__(self, definition_ir) -> Dict[str, Dict[str, str]]:
-        gtcpp = make_gtcpp_ir(definition_ir, self.backend)
+        gtcpp = gtir_to_gtcpp(DefIRToGTIR.apply(definition_ir), self.backend)
         format_source = self.backend.builder.options.format_source
         implementation = gtcpp_codegen.GTCppCodegen.apply(
             gtcpp, gt_backend_t=self.backend.GT_BACKEND_T, format_source=format_source
@@ -153,8 +152,7 @@ class FortranBindingsCodegen(codegen.TemplatedGenerator):
     def visit_DataType(self, dtype: DataType, **kwargs):
         return gtcpp_codegen.GTCppCodegen().visit_DataType(dtype)
 
-    def visit_FieldDecl(self, node: gtcpp.FieldDecl, **kwargs):
-        backend = kwargs["backend"]
+    def visit_FieldDecl(self, node: gtir.FieldDecl, **kwargs):
         if "external_arg" in kwargs:
             domain_ndim = node.dimensions.count(True)
             data_ndim = len(node.data_dims)
@@ -168,25 +166,23 @@ class FortranBindingsCodegen(codegen.TemplatedGenerator):
             else:
                 return node.name
 
-    def visit_GlobalParamDecl(self, node: gtcpp.GlobalParamDecl, **kwargs):
+    def visit_ScalarDecl(self, node: gtir.ScalarDecl, **kwargs):
         if "external_arg" in kwargs:
             if kwargs["external_arg"]:
                 return "{dtype} {name}".format(name=node.name, dtype=self.visit(node.dtype))
             else:
                 return "gridtools::stencil::make_global_parameter({name})".format(name=node.name)
 
-    def visit_Program(self, node: gtcpp.Program, **kwargs):
-        # assert "module_name" in kwargs
-        entry_params = self.visit(node.parameters, external_arg=True, **kwargs)
-        sid_params = self.visit(node.parameters, external_arg=False, **kwargs)
+    def visit_Stencil(self, node: gtir.Stencil, *, external_parameters, **kwargs):
+        sid_params = self.visit(node.params, external_arg=False, **kwargs)
         return self.generic_visit(
             node,
-            entry_params=entry_params,
+            entry_params=external_parameters,
             sid_params=sid_params,
             **kwargs,
         )
 
-    Program = as_mako(
+    Stencil = as_mako(
         """
         #include "computation.hpp"
         #include <cpp_bindgen/export.hpp>
@@ -206,7 +202,11 @@ class FortranBindingsCodegen(codegen.TemplatedGenerator):
 
     @classmethod
     def apply(cls, root, **kwargs) -> str:
-        generated_code = cls().visit(root, **kwargs)
+        # This is hacky, probably we should keep the full list of parameters (even if unused) down to any backend
+        external_parameters = [cls().visit(p, external_arg=True) for p in root.params]
+        generated_code = cls().visit(
+            GtirPipeline(root).full(), external_parameters=external_parameters, **kwargs
+        )
         if kwargs.get("format_source", True):
             generated_code = codegen.format_source("cpp", generated_code, style="LLVM")
 
@@ -270,7 +270,7 @@ class GTCGTBaseBackend(BaseGTBackend):  # , CLIBackendMixin):
         dir_name = f"{self.builder.options.name}_src"
         return {
             dir_name: {
-                "bindings.cpp": FortranBindingsCodegen.apply(make_gtcpp_ir(ir, self), backend=self),
+                "bindings.cpp": FortranBindingsCodegen.apply(DefIRToGTIR.apply(ir), backend=self),
                 "CMakeLists.txt": make_cmake_lists(ir.name, "bindings.cpp"),
             }
         }
