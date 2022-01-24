@@ -171,7 +171,8 @@ class FieldOperatorLowering(NodeTranslator):
         return self.visit(AssignResolver.apply(exprs), **kwargs)
 
     def visit_Return(self, node: foast.Return, **kwargs) -> itir.Expr:
-        return self.visit(node.value, **kwargs)
+        result = self.visit(node.value, **kwargs)
+        return result
 
     def visit_FieldSymbol(
         self, node: foast.FieldSymbol, *, symtable: dict[str, foast.Symbol], **kwargs
@@ -188,9 +189,10 @@ class FieldOperatorLowering(NodeTranslator):
     ) -> Union[itir.SymRef, itir.FunCall]:
         # always shift a single field, not a field expression
         if _name_is_field(node) and shift_args:
-            return ItirDerefFactory(
+            result = ItirDerefFactory(
                 args__0=ItirShiftFactory(shift_args=shift_args, args__0=itir.SymRef(id=node.id))
             )
+            return result
         return ItirDerefFactory(args__0=itir.SymRef(id=node.id))
 
     def visit_Subscript(self, node: foast.Subscript, **kwargs) -> itir.FunCall:
@@ -222,6 +224,10 @@ class FieldOperatorLowering(NodeTranslator):
             args=[self.visit(node.left, **kwargs), self.visit(node.right, **kwargs)],
         )
 
+    def visit_Shift(self, node: foast.Shift, **kwargs) -> itir.Expr:
+        shift_args = list(self._gen_shift_args(node.offsets))
+        return self.visit(node.expr, shift_args=shift_args, **kwargs)
+
     def _make_shift_args(
         self, node: foast.Subscript, **kwargs
     ) -> tuple[itir.OffsetLiteral, itir.IntLiteral]:
@@ -236,10 +242,10 @@ class FieldOperatorLowering(NodeTranslator):
             yield offset
 
     def visit_Call(self, node: foast.Call, **kwargs) -> itir.FunCall:
-        # handle (field_expr)( offset[int] ) shift notation
+        #  handle (field_expr)( offset[int] ) shift notation
         if _call_is_shift(node):
             shift_args = list(self._gen_shift_args(node.args))
-            # pass the shift args along and shift each field individually
+            #  pass the shift args along and shift each field individually
             return self.visit(node.func, shift_args=shift_args, **kwargs)
         # handle other function calls
         new_fun = (

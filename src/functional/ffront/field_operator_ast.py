@@ -88,9 +88,7 @@ class FieldType(DataType):
     dtype: ScalarType
 
     def __str__(self):
-        dims = (
-            "..." if self.dims is Ellipsis else f"[{', '.join(dim.name for dim in self.dims)}]"
-        )
+        dims = "..." if self.dims is Ellipsis else f"[{', '.join(dim.name for dim in self.dims)}]"
         return f"Field[{dims}, dtype={self.dtype}]"
 
 
@@ -201,8 +199,13 @@ class Compare(Expr):
 
 
 class Call(Expr):
-    func: Expr
+    func: Name
     args: list[Expr]
+
+
+class Shift(Expr):
+    offsets: list[Subscript]
+    expr: Expr
 
 
 class Stmt(LocatedNode):

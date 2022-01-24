@@ -37,6 +37,7 @@ from functional.ffront.ast_passes import (
     StringifyAnnotationsPass,
     UnpackedAssignPass,
 )
+from functional.ffront.foast_passes.shift_recognition import FieldOperatorShiftRecognition
 from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduction
 
 
@@ -196,8 +197,6 @@ class SymbolNames:
     from_source = staticmethod(make_symbol_names_from_source)
 
 
-# TODO (ricoh): pass on source locations
-# TODO (ricoh): SourceLocation.source <- filename
 @dataclass(frozen=True, kw_only=True)
 class FieldOperatorParser(ast.NodeVisitor):
     """
@@ -294,7 +293,7 @@ class FieldOperatorParser(ast.NodeVisitor):
                 err.lineno = (err.lineno or 1) + starting_line - 1
             raise err
 
-        return FieldOperatorTypeDeduction.apply(result)
+        return FieldOperatorShiftRecognition.apply(FieldOperatorTypeDeduction.apply(result))
 
     @classmethod
     def apply_to_function(
