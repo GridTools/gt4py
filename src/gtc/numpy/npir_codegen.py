@@ -420,8 +420,14 @@ class NpirCodegen(TemplatedGenerator):
                 {% for name in field_params %}{{ name }}_ = ShimmedView({{ name }}, _origin_["{{ name }}"])
                 {% endfor %}# -- end data views --
 
+                {% if ignore_np_errstate %}
+                with np.errstate(divide='ignore', over='ignore', under='ignore', invalid='ignore'):
+                {% else %}
+                with np.errstate():
+                {% endif %}
+
                 {% for pass in vertical_passes %}
-                {{ pass | indent(4) }}
+                {{ pass | indent(8) }}
                 {% endfor %}
 
             {{ var_offset_func }}

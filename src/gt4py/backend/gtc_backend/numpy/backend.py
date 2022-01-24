@@ -111,7 +111,8 @@ class GTCNumpyBackend(BaseBackend, CLIBackendMixin):
             + ".py"
         )
 
-        source = NpirCodegen.apply(self.npir)
+        ignore_np_errstate = self.builder.options.backend_opts.get("ignore_np_errstate", True)
+        source = NpirCodegen.apply(self.npir, ignore_np_errstate=ignore_np_errstate)
         if self.builder.options.format_source:
             source = format_source("python", source)
 
