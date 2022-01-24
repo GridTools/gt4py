@@ -437,26 +437,18 @@ class SparseIterator:
     def deref(self):
         shifted_pos = self.pos.copy()
         slice_axis = {self.sparse_axis: slice(None, None, None)}
-        print(self.field.axises)
-        print(shifted_pos)
-        print(slice_axis)
-        print("----")
         ordered_indices = get_ordered_indices(
             self.field.axises,
             shifted_pos,
             slice_axises=slice_axis,
         )
-        print(shifted_pos)
-        # del shifted_pos[self.field.axises]
-        print(self.sparse_axis)
-        print(self.offset_provider)
-        print(self.offset_provider[self.sparse_axis.value].max_neighbors)
-        print(ordered_indices)
         return TupleIterator(
             self.field[ordered_indices],
             0,
             self.offset_provider[self.sparse_axis.value].max_neighbors,
         )
+
+        # TODO test in combination with column iteration
 
         # if not all(axis in shifted_pos.keys() for axis in self.field.axises):
         #     raise IndexError("Iterator position doesn't point to valid location for its field.")
@@ -479,8 +471,6 @@ def make_in_iterator(inp, pos, offset_provider, *, column_axis):
     sparse_dimensions = [axis for axis in inp.axises if isinstance(axis, Offset)]
     assert len(sparse_dimensions) <= 1  # TODO multiple is not a current use case
     new_pos = pos.copy()
-    # for axis in sparse_dimensions:
-    #     new_pos[axis] = None
     if column_axis is not None:
         # if we deal with column stencil the column position is just an offset by which the whole column needs to be shifted
         new_pos[column_axis] = 0
