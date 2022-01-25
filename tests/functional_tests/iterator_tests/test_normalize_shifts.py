@@ -42,7 +42,6 @@ def test_shifts_with_sparse_deref():
             make_shift(ir.OffsetLiteral(value="offset1"))(
                 make_shift(ir.OffsetLiteral(value="offset2"))(ir.SymRef(id="it"))
             )
-            ]
         )
     )
     expected = make_shift(ir.OffsetLiteral(value="offset0"))(
