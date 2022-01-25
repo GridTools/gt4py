@@ -1,10 +1,16 @@
-name: CI
+name: Daint CI
+
 on:
   push:
     branches:
     - master
     - trying
     - staging
+
+concurrency:
+  group: ${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
