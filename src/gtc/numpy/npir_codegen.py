@@ -228,8 +228,8 @@ class NpirCodegen(TemplatedGenerator):
     def visit_FieldSlice(
         self,
         node: npir.FieldSlice,
-        mask_acc: str = "",
         *,
+        mask_acc: str = "",
         is_serial: bool = False,
         is_rhs: bool = False,
         **kwargs: Any,
@@ -267,9 +267,11 @@ class NpirCodegen(TemplatedGenerator):
 
     EmptyTemp = FormatTemplate("ShimmedView(np.zeros({shape}, dtype={dtype}), {origin})")
 
-    NamedScalar = FormatTemplate("{name}")
+    def visit_NamedScalar(self, node: npir.NamedScalar, *, mask_acc: str = "", **kwargs):
+        return f"{node.name}{mask_acc}"
 
-    VectorTemp = FormatTemplate("{name}_")
+    def visit_VectorTemp(self, node: npir.VectorTemp, *, mask_acc: str = "", **kwargs):
+        return f"{node.name}_{mask_acc}"
 
     def visit_MaskBlock(self, node: npir.MaskBlock, **kwargs) -> Union[str, Collection[str]]:
         if isinstance(node.mask, npir.FieldSlice):
