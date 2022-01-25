@@ -832,13 +832,13 @@ class TestTypedTemporary(gt_testing.StencilTestSuite):
     }
 
     def definition(field_in, field_out):
-        tmp: Field[(np.float32, (2,))] = 0
+        tmp: Field[(np.float32, (2, 2))] = 0
         with computation(PARALLEL):
             with interval(0, -1):
-                tmp[0, 0, 0][0] = field_in[0, 0, 0]
-                tmp[0, 0, 0][1] = field_in[0, 0, 1]
+                tmp[0, 0, 0][0, 0] = field_in[0, 0, 0]
+                tmp[0, 0, 0][1, 0] = field_in[0, 0, 1]
                 field_out = (  # noqa: F841  # local variable 'field_out' is assigned to but never used
-                    tmp[0, 0, 0][0] + tmp[0, 0, 0][1]
+                    tmp[0, 0, 0][0, 0] + tmp[0, 0, 0][1, 0]
                 )
             with interval(-1, None):
                 field_out = (  # noqa: F841  # local variable 'field_out' is assigned to but never used

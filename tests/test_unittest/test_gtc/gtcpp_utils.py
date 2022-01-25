@@ -107,6 +107,8 @@ class GTAccessorFactory(factory.Factory):
     id = factory.Sequence(lambda i: i)  # noqa: A003
     intent = gtcpp.Intent.INOUT
     extent = factory.SubFactory(GTExtentFactory)
+    temporary: bool = True
+    ndim: int = 3
 
 
 class GTParamListFactory(factory.Factory):
