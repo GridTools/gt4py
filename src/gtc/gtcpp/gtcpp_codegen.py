@@ -14,12 +14,13 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import Any, Collection, Union
+from typing import Any, Collection, Dict, Union
 
 from eve import Node, codegen
 from eve.codegen import FormatTemplate as as_fmt
 from eve.codegen import MakoTemplate as as_mako
 from eve.concepts import LeafNode
+from eve.traits import SymbolTableTrait
 from gtc import common
 from gtc.common import BuiltInLiteral, DataType, LoopOrder, NativeFunction, UnaryOperator
 from gtc.gtcpp import gtcpp
@@ -35,6 +36,8 @@ def _offset_limit(root: Node) -> int:
 
 
 class GTCppCodegen(codegen.TemplatedGenerator):
+
+    contexts = (SymbolTableTrait.symtable_merger,)
 
     GTExtent = as_fmt("extent<{i[0]},{i[1]},{j[0]},{j[1]},{k[0]},{k[1]}>")
 
@@ -74,7 +77,9 @@ class GTCppCodegen(codegen.TemplatedGenerator):
 
     AssignStmt = as_fmt("{left} = {right};")
 
-    def visit_AccessorRef(self, accessor_ref: gtcpp.AccessorRef, **kwargs):
+    def visit_AccessorRef(
+        self, accessor_ref: gtcpp.AccessorRef, *, symtable: Dict[str, gtcpp.GTAccessor], **kwargs
+    ):
         if isinstance(accessor_ref.offset, common.CartesianOffset):
             offset = accessor_ref.offset
             if offset.i == offset.j == offset.k == 0 and not accessor_ref.data_index:
@@ -86,8 +91,14 @@ class GTCppCodegen(codegen.TemplatedGenerator):
             k_offset = self.visit(accessor_ref.offset.k, **kwargs)
         else:
             raise TypeError("Unsupported offset type")
-        data_index = "".join(f", {self.visit(d)}" for d in accessor_ref.data_index)
-        return f"eval({accessor_ref.name}({i_offset}, {j_offset}, {k_offset}{data_index}))"
+        if not symtable[accessor_ref.name].temporary or not accessor_ref.data_index:
+            data_index = "".join(f", {self.visit(d)}" for d in accessor_ref.data_index)
+            return f"eval({accessor_ref.name}({i_offset}, {j_offset}, {k_offset}{data_index}))"
+        else:
+            data_index = ""
+            for index in accessor_ref.data_index:
+                data_index += f"[{self.visit(index, **kwargs)}]"
+            return f"eval({accessor_ref.name}({i_offset}, {j_offset}, {k_offset})){data_index}"
 
     LocalAccess = as_fmt("{name}")
 
@@ -193,7 +204,13 @@ class GTCppCodegen(codegen.TemplatedGenerator):
             LoopOrder.BACKWARD: "backward",
         }[looporder]
 
-    Temporary = as_fmt("GT_DECLARE_TMP({dtype}, {name});")
+    def visit_Temporary(self, node: gtcpp.Temporary, **kwargs: Any) -> str:
+        dtype = self.visit(node.dtype, **kwargs)
+        if node.data_dims:
+            for dim in node.data_dims[::-1]:
+                dtype = f"array<{dtype}, {dim}>"
+            dtype = f"({dtype})"
+        return f"GT_DECLARE_TMP({dtype}, {self.visit(node.name, **kwargs)});"
 
     IfStmt = as_mako(
         """if(${cond}) ${true_branch}
@@ -234,11 +251,13 @@ class GTCppCodegen(codegen.TemplatedGenerator):
         """
         #include <gridtools/stencil/${gt_backend_t}.hpp>
         #include <gridtools/stencil/cartesian.hpp>
+        #include <gridtools/common/array.hpp>
 
         namespace ${ name }_impl_{
             using Domain = std::array<gridtools::uint_t, 3>;
             using namespace gridtools::stencil;
             using namespace gridtools::stencil::cartesian;
+            using gridtools::array;
 
             ${'\\n'.join(functors)}
 
