@@ -2,7 +2,6 @@ from functional.iterator import ir
 from functional.iterator.transforms.normalize_shifts import NormalizeShifts
 
 
-# TODO factory
 def make_shift(*offsets):
     def impl(*iters):
         return ir.FunCall(
@@ -43,6 +42,7 @@ def test_shifts_with_sparse_deref():
             make_shift(ir.OffsetLiteral(value="offset1"))(
                 make_shift(ir.OffsetLiteral(value="offset2"))(ir.SymRef(id="it"))
             )
+            ]
         )
     )
     expected = make_shift(ir.OffsetLiteral(value="offset0"))(
