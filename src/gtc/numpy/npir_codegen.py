@@ -271,6 +271,21 @@ class NpirCodegen(TemplatedGenerator):
 
     VectorTemp = FormatTemplate("{name}_")
 
+    def visit_NativeFunction(
+        self, node: common.NativeFunction, **kwargs: Any
+    ) -> Union[str, Collection[str]]:
+        if node == common.NativeFunction.MIN:
+            return "np.minimum"
+        elif node == common.NativeFunction.MAX:
+            return "np.maximum"
+        elif node == common.NativeFunction.POW:
+            return "np.power"
+        elif node == common.NativeFunction.GAMMA:
+            return "scipy.special.gamma"
+        return "np." + self.generic_visit(node, **kwargs)
+
+    NativeFuncCall = FormatTemplate("{func}({', '.join(arg for arg in args)})")
+
     def visit_MaskBlock(self, node: npir.MaskBlock, **kwargs) -> Union[str, Collection[str]]:
         if isinstance(node.mask, npir.FieldSlice):
             mask_def = ""
@@ -385,7 +400,7 @@ class NpirCodegen(TemplatedGenerator):
     )
 
     def visit_Computation(
-        self, node: npir.Computation, **kwargs: Any
+        self, node: npir.Computation, *, ignore_np_errstate: bool = True, **kwargs: Any
     ) -> Union[str, Collection[str]]:
         signature = ["*", *node.params, "_domain_", "_origin_"]
         field_extents, block_extents = ExtentCalculator().visit(node)
@@ -396,6 +411,7 @@ class NpirCodegen(TemplatedGenerator):
             var_offset_func=VARIABLE_OFFSET_FUNCTION,
             field_extents=field_extents,
             block_extents=block_extents,
+            ignore_np_errstate=ignore_np_errstate,
             **kwargs,
         )
 
@@ -438,18 +454,3 @@ class NpirCodegen(TemplatedGenerator):
             """
         )
     )
-
-    def visit_NativeFunction(
-        self, node: common.NativeFunction, **kwargs: Any
-    ) -> Union[str, Collection[str]]:
-        if node == common.NativeFunction.MIN:
-            return "np.minimum"
-        elif node == common.NativeFunction.MAX:
-            return "np.maximum"
-        elif node == common.NativeFunction.POW:
-            return "np.power"
-        elif node == common.NativeFunction.GAMMA:
-            return "scipy.special.gamma"
-        return "np." + self.generic_visit(node, **kwargs)
-
-    NativeFuncCall = FormatTemplate("{func}({', '.join(arg for arg in args)})")
