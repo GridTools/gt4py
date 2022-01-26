@@ -442,13 +442,11 @@ class NpirCodegen(TemplatedGenerator):
                 with np.errstate():
                 {% endif %}
 
-                {% if vertical_passes %}
                 {% for pass in vertical_passes %}
                 {{ pass | indent(8) }}
-                {% endfor %}
                 {% else %}
                     pass
-                {% endif %}
+                {% endfor %}
 
             {{ var_offset_func }}
             """
