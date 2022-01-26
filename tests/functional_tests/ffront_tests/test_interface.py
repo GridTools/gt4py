@@ -25,6 +25,7 @@ import pytest
 
 import functional.ffront.field_operator_ast as foast
 from functional.common import Field
+from functional.ffront.fbuiltins import float32, float64, int64
 from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError
 from functional.ffront.foast_to_itir import FieldOperatorLowering
 from functional.ffront.func_to_foast import FieldOperatorParser, FieldOperatorSyntaxError
@@ -64,10 +65,6 @@ AND = itir.SymRef(id=and_.fun.__name__)
 OR = itir.SymRef(id=or_.fun.__name__)
 
 
-float64 = float
-int64 = int
-
-
 COPY_FUN_DEF = itir.FunctionDefinition(
     id="copy_field",
     params=[itir.Sym(id="inp")],
@@ -86,7 +83,7 @@ def test_invalid_syntax_error_empty_return():
         FieldOperatorSyntaxError,
         match=(
             r"Invalid Field Operator Syntax: "
-            r"Empty return not allowed \(test_interface.py, line 83\)"
+            r"Empty return not allowed \(test_interface.py, line 80\)"
         ),
     ):
         _ = FieldOperatorParser.apply_to_function(wrong_syntax)
@@ -180,7 +177,7 @@ def test_syntax_unpacking():
         fun=itir.SymRef(id="tuple_get"),
         args=[
             itir.FunCall(
-                fun=itir.SymRef(id="make_tuple"),
+                fun=MAKE_TUPLE,
                 args=[
                     itir.FunCall(fun=DEREF, args=[itir.SymRef(id="inp1")]),
                     itir.FunCall(fun=DEREF, args=[itir.SymRef(id="inp2")]),
@@ -227,7 +224,7 @@ def test_clashing_annotated_assignment():
         tmp: Field[..., "int64"] = inp
         return tmp
 
-    with pytest.warns(FieldOperatorTypeDeductionError, match="type inconsistency"):
+    with pytest.raises(FieldOperatorTypeDeductionError, match="type inconsistency"):
         _ = FieldOperatorParser.apply_to_function(clashing)
 
 
@@ -243,6 +240,25 @@ def test_call():
 
     assert lowered.expr == itir.FunCall(
         fun=itir.SymRef(id="identity"), args=[itir.FunCall(fun=DEREF, args=[itir.SymRef(id="inp")])]
+    )
+
+
+def test_temp_tuple():
+    """Returning a temp tuple should work."""
+
+    def temp_tuple(a: Field[..., float64], b: Field[..., int64]):
+        tmp = a, b
+        return tmp
+
+    parsed = FieldOperatorParser.apply_to_function(temp_tuple)
+    lowered = FieldOperatorLowering.apply(parsed)
+
+    assert lowered.expr == itir.FunCall(
+        fun=MAKE_TUPLE,
+        args=[
+            itir.FunCall(fun=DEREF, args=[itir.SymRef(id="a")]),
+            itir.FunCall(fun=DEREF, args=[itir.SymRef(id="b")]),
+        ],
     )
 
 
@@ -500,10 +516,10 @@ def test_closure_symbols():
     nonlocal_float = 2.3
     nonlocal_np_scalar = np.float32(3.4)
 
-    def operator_with_refs(inp: Field[..., "float64"]):
+    def operator_with_refs(inp: Field[..., "float64"], inp2: Field[..., "float32"]):
         a = inp + nonlocal_float
-        b = a + nonlocal_np_scalar
-        return b
+        b = inp2 + nonlocal_np_scalar
+        return a, b
 
     parsed = FieldOperatorParser.apply_to_function(operator_with_refs)
     assert parsed.symtable_["nonlocal_float"].type == foast.ScalarType(
@@ -518,12 +534,12 @@ def test_closure_symbols():
 def test_external_symbols():
     import numpy as np
 
-    def operator_with_externals(inp: Field[..., "float64"]):
+    def operator_with_externals(inp: Field[..., "float64"], inp2: Field[..., "float32"]):
         from __externals__ import ext_float, ext_np_scalar
 
         a = inp + ext_float
-        b = a + ext_np_scalar
-        return b
+        b = inp2 + ext_np_scalar
+        return a, b
 
     parsed = FieldOperatorParser.apply_to_function(
         operator_with_externals,

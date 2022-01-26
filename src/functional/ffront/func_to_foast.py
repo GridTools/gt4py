@@ -37,6 +37,7 @@ from functional.ffront.ast_passes import (
     StringifyAnnotationsPass,
     UnpackedAssignPass,
 )
+from functional.ffront.foast_passes.shift_recognition import FieldOperatorShiftRecognition
 from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduction
 
 
@@ -196,8 +197,6 @@ class SymbolNames:
     from_source = staticmethod(make_symbol_names_from_source)
 
 
-# TODO (ricoh): pass on source locations
-# TODO (ricoh): SourceLocation.source <- filename
 @dataclass(frozen=True, kw_only=True)
 class FieldOperatorParser(ast.NodeVisitor):
     """
@@ -294,7 +293,7 @@ class FieldOperatorParser(ast.NodeVisitor):
                 err.lineno = (err.lineno or 1) + starting_line - 1
             raise err
 
-        return FieldOperatorTypeDeduction.apply(result)
+        return FieldOperatorShiftRecognition.apply(FieldOperatorTypeDeduction.apply(result))
 
     @classmethod
     def apply_to_function(
@@ -377,28 +376,28 @@ class FieldOperatorParser(ast.NodeVisitor):
         return foast.FieldSymbol(id=node.arg, location=self._make_loc(node), type=new_type)
 
     def visit_Assign(self, node: ast.Assign, **kwargs) -> foast.Assign:
-        target = node.targets[0]  # can there be more than one element?
+        target = node.targets[0]  # there is only one element after assignment passes
         if isinstance(target, ast.Tuple):
             raise self._make_syntax_error(node, message="Unpacking not allowed!")
         if not isinstance(target, ast.Name):
             raise self._make_syntax_error(node, message="Can only assign to names!")
         new_value = self.visit(node.value)
+        target_symbol_type = foast.FieldSymbol
+        constraint_type = foast.FieldType
+        if isinstance(new_value, foast.TupleExpr):
+            target_symbol_type = foast.TupleSymbol
+            constraint_type = foast.TupleType
         return foast.Assign(
-            target=foast.FieldSymbol(
+            target=target_symbol_type(
                 id=target.id,
                 location=self._make_loc(target),
-                type=foast.DeferredSymbolType(constraint=foast.FieldType),
+                type=foast.DeferredSymbolType(constraint=constraint_type),
             ),
             value=new_value,
             location=self._make_loc(node),
         )
 
     def visit_AnnAssign(self, node: ast.AnnAssign, **kwargs) -> foast.Assign:
-        # TODO (ricoh): type checking
-        #
-        # if the annotation does not match the inferred type of value
-        # then raise an exception
-        # -> only store the type here and write an additional checking pass
         if not isinstance(node.target, ast.Name):
             raise self._make_syntax_error(node, message="Can only assign to names!")
 

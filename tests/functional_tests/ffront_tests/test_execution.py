@@ -24,7 +24,7 @@ from functional.ffront.func_to_foast import FieldOperatorParser
 from functional.iterator import ir as itir
 from functional.iterator.backends import roundtrip
 from functional.iterator.embedded import np_as_located_field
-from functional.iterator.runtime import CartesianAxis
+from functional.iterator.runtime import CartesianAxis, offset
 
 
 def make_domain(dim_name: str, lower: int, upper: int) -> itir.FunCall:
@@ -77,6 +77,17 @@ def program_from_fop(
     )
 
 
+def program_from_function(
+    func, out_names: list[str], dim: CartesianAxis, size: int
+) -> itir.Program:
+    return program_from_fop(
+        node=FieldOperatorLowering.apply(FieldOperatorParser.apply_to_function(func)),
+        out_names=out_names,
+        dim=dim,
+        size=size,
+    )
+
+
 DimsType = TypeVar("DimsType")
 DType = TypeVar("DType")
 
@@ -91,10 +102,104 @@ def test_copy():
     def copy(inp: Field[[IDim], float64]):
         return inp
 
-    copy_foast = FieldOperatorParser.apply_to_function(copy)
-    copy_fundef = FieldOperatorLowering.apply(copy_foast)
-    copy_program = program_from_fop(node=copy_fundef, out_names=["out"], dim=IDim, size=size)
+    program = program_from_function(copy, out_names=["out"], dim=IDim, size=size)
 
-    roundtrip.executor(copy_program, a, b, offset_provider={})
+    roundtrip.executor(program, a, b, offset_provider={})
 
     assert np.allclose(a, b)
+
+
+def test_multicopy():
+    size = 10
+    a = np_as_located_field(IDim)(np.ones((size)))
+    b = np_as_located_field(IDim)(np.ones((size)) * 3)
+    c = np_as_located_field(IDim)(np.zeros((size)))
+    d = np_as_located_field(IDim)(np.zeros((size)))
+
+    def multicopy(inp1: Field[[IDim], float64], inp2: Field[[IDim], float64]):
+        return inp1, inp2
+
+    program = program_from_function(multicopy, out_names=["c", "d"], dim=IDim, size=size)
+    roundtrip.executor(program, a, b, c, d, offset_provider={})
+
+    assert np.allclose(a, c)
+    assert np.allclose(b, d)
+
+
+def test_arithmetic():
+    size = 10
+    a = np_as_located_field(IDim)(np.ones((size)))
+    b = np_as_located_field(IDim)(np.ones((size)) * 2)
+    c = np_as_located_field(IDim)(np.zeros((size)))
+
+    def arithmetic(inp1: Field[[IDim], float64], inp2: Field[[IDim], float64]):
+        return inp1 + inp2
+
+    program = program_from_function(arithmetic, out_names=["c"], dim=IDim, size=size)
+    roundtrip.executor(program, a, b, c, offset_provider={})
+
+    assert np.allclose(a.array() + b.array(), c)
+
+
+def test_bit_logic():
+    size = 10
+    a = np_as_located_field(IDim)(np.full((size), True))
+    b_data = np.full((size), True)
+    b_data[5] = False
+    b = np_as_located_field(IDim)(b_data)
+    c = np_as_located_field(IDim)(np.full((size), False))
+
+    def bit_and(inp1: Field[[IDim], bool], inp2: Field[[IDim], bool]):
+        return inp1 & inp2
+
+    program = program_from_function(bit_and, out_names=["c"], dim=IDim, size=size)
+    roundtrip.executor(program, a, b, c, offset_provider={})
+
+    assert np.allclose(a.array() & b.array(), c)
+
+
+def test_unary_neg():
+    size = 10
+    a = np_as_located_field(IDim)(np.ones((size)))
+    b = np_as_located_field(IDim)(np.zeros((size)))
+
+    def uneg(inp: Field[[IDim], int]):
+        return -inp
+
+    program = program_from_function(uneg, out_names=["b"], dim=IDim, size=size)
+    roundtrip.executor(program, a, b, offset_provider={})
+
+    assert np.allclose(b, np.full((size), -1))
+
+
+def test_shift():
+    size = 10
+    Ioff = offset("Ioff")
+    a = np_as_located_field(IDim)(np.arange(size + 1))
+    b = np_as_located_field(IDim)(np.zeros((size)))
+
+    def shift_by_one(inp: Field[[IDim], float64]):
+        return inp(Ioff[1])
+
+    program = program_from_function(shift_by_one, out_names=["b"], dim=IDim, size=size)
+    roundtrip.executor(program, a, b, offset_provider={"Ioff": IDim})
+
+    assert np.allclose(b.array(), np.arange(1, 11))
+
+
+def test_fold_shifts():
+    """Shifting the result of an addition should work by shifting the operands instead."""
+    size = 10
+    Ioff = offset("Ioff")
+    a = np_as_located_field(IDim)(np.arange(size + 1))
+    b = np_as_located_field(IDim)(np.ones((size + 1)) * 2)
+    c = np_as_located_field(IDim)(np.zeros((size)))
+
+    def auto_lift(inp1: Field[[IDim], float64], inp2: Field[[IDim], float64]):
+        tmp = inp1 + inp2
+        return tmp(Ioff[1])
+
+    program = program_from_function(auto_lift, out_names=["c"], dim=IDim, size=size)
+    roundtrip.executor(program, a, b, c, offset_provider={"Ioff": IDim})
+
+    assert np.allclose(a[1:] + b[1:], c)

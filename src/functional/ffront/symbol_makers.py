@@ -26,6 +26,7 @@ from eve import typingx
 from eve.type_definitions import SourceLocation
 from functional import common
 from functional.ffront import field_operator_ast as foast
+from functional.iterator import runtime
 
 
 def make_scalar_kind(dtype: npt.DTypeLike) -> foast.ScalarKind:
@@ -157,6 +158,8 @@ def make_symbol_type_from_typing(
             return foast.FunctionType(
                 args=args, kwargs=kwargs, returns=recursive_make_symbol(return_type)
             )
+        case runtime.Offset:
+            return foast.OffsetType()
 
     raise FieldOperatorTypeError(f"'{type_hint}' type is not supported")
 
@@ -178,6 +181,8 @@ def make_symbol_from_value(
             namespace=namespace,
             location=location,
         )
+    elif isinstance(symbol_type, foast.OffsetType):
+        return foast.OffsetSymbol(id=name, type=symbol_type, namespace=namespace, location=location)
     else:
         raise common.GTTypeError(f"Impossible to map '{value}' value to a Symbol")
 
