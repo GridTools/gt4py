@@ -9,17 +9,6 @@
 GT4Py: GridTools for Python
 ===========================
 
-WARNING!
---------
-
-GT4Py is still under development and is in an incomplete state. While
-GT4Py has been proven to work for some basic applications already, we
-are working actively on making GT4Py suitable for more use cases by
-adding features, improving performance as well as reliability and adding
-a thorough documentation. GT4Py will be changing for the time being. New
-features will be implemented, APIs may change and dependencies will be
-added.
-
 
 Description
 -----------
@@ -167,22 +156,3 @@ and then build the docs with:
     cd gt4py/docs
     make html  # run 'make help' for a list of targets
 
-Development roadmap
--------------------
-
-A short overview of the new features and changes planned for the coming
-weeks & months.
-
--  Integration with `Dawn <https://github.com/MeteoSwiss-APN/dawn>`__
-   compiler
--  Update documentation (API reference, tutorial, notebooks and
-   examples)
--  Missing features:
-
-   +  Support for unstructured grids (GTScript extensions)
-   +  Support for run-time values in interval definitions (run-time
-      splitters)
-   +  Support for different field layouts (storages masks)
-   +  Support for OOP-based stencil definitions
-   +  Support for boundary condition functions
-   +  Support for proper function & stencil calls
