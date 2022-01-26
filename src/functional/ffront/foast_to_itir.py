@@ -115,10 +115,6 @@ class ItirShiftFactory(ItirFunCallFactory):
     fun = factory.LazyAttribute(lambda obj: ItirFunCallFactory(name=obj.name, args=obj.shift_args))
 
 
-def _call_is_shift(call: foast.Call) -> bool:
-    return isinstance(call.func.type, foast.FieldType)
-
-
 def _name_is_field(name: foast.Name) -> bool:
     return isinstance(name.type, foast.FieldType)
 
@@ -242,12 +238,6 @@ class FieldOperatorLowering(NodeTranslator):
             yield offset
 
     def visit_Call(self, node: foast.Call, **kwargs) -> itir.FunCall:
-        #  handle (field_expr)( offset[int] ) shift notation
-        if _call_is_shift(node):
-            shift_args = list(self._gen_shift_args(node.args))
-            #  pass the shift args along and shift each field individually
-            return self.visit(node.func, shift_args=shift_args, **kwargs)
-        # handle other function calls
         new_fun = (
             itir.SymRef(id=node.func.id)
             if isinstance(node.func, foast.Name)  # name called, e.g. my_fieldop(a, b)

@@ -11,7 +11,6 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-import warnings
 from dataclasses import dataclass
 from typing import Optional, Type, TypeGuard
 
@@ -117,35 +116,7 @@ class TypeInfo:
         return False
 
 
-def check_type_refinement(node: foast.Expr, new: foast.DataType) -> None:
-    """
-    Check if an expressions's foast type can be updated to the new type safely.
-
-    Raises a warning if safety can not be guaranteed. This warning will be upgraded to an error in the future.
-
-    Examples:
-    ---------
-    >>> check_type_refinement(
-    ...     node=foast.Name(id="a", type=foast.DeferredSymbolType(), location=foast.SourceLocation(1, 1, "<doctest>")),
-    ...     new=foast.FieldType(dims=Ellipsis, dtype=foast.ScalarType(kind=foast.ScalarKind.FLOAT64))
-    ... )
-
-    """
-    old_typeinfo = TypeInfo(node.type)
-    new_typeinfo = TypeInfo(new)
-    if not old_typeinfo.can_be_refined_to(new_typeinfo):
-        warnings.warn(
-            FieldOperatorTypeDeductionError.from_foast_node(
-                node,
-                msg=(
-                    "type inconsistency: expression was deduced to be "
-                    f"of type {new}, instead of the expected type {old_typeinfo.type}"
-                ),
-            )
-        )
-
-
-def dims_broadcast_compatible(left: TypeInfo, right: TypeInfo) -> bool:
+def are_broadcast_compatible(left: TypeInfo, right: TypeInfo) -> bool:
     """
     Check if ``left`` and ``right`` types are compatible after optional broadcasting.
 
@@ -155,10 +126,10 @@ def dims_broadcast_compatible(left: TypeInfo, right: TypeInfo) -> bool:
     Examples:
     ---------
     >>> int_scalar_t = TypeInfo(foast.ScalarType(kind=foast.ScalarKind.INT64))
-    >>> dims_broadcast_compatible(int_scalar_t, int_scalar_t)
+    >>> are_broadcast_compatible(int_scalar_t, int_scalar_t)
     True
     >>> int_field_t = TypeInfo(foast.FieldType(dtype=foast.ScalarType(kind=foast.ScalarKind.INT64), dims=...))
-    >>> dims_broadcast_compatible(int_field_t, int_scalar_t)
+    >>> are_broadcast_compatible(int_field_t, int_scalar_t)
     True
 
     """
@@ -173,7 +144,7 @@ def dims_broadcast_compatible(left: TypeInfo, right: TypeInfo) -> bool:
     return False
 
 
-def dims_broadcasted(left: TypeInfo, right: TypeInfo) -> TypeInfo:
+def broadcast_typeinfos(left: TypeInfo, right: TypeInfo) -> TypeInfo:
     """
     Decide the result type of a binary operation between arguments of ``left`` and ``right`` type.
 
@@ -183,10 +154,10 @@ def dims_broadcasted(left: TypeInfo, right: TypeInfo) -> TypeInfo:
     ---------
     >>> int_scalar_t = TypeInfo(foast.ScalarType(kind=foast.ScalarKind.INT64))
     >>> int_field_t = TypeInfo(foast.FieldType(dtype=foast.ScalarType(kind=foast.ScalarKind.INT64), dims=...))
-    >>> assert dims_broadcasted(int_field_t, int_scalar_t).type == int_field_t.type
+    >>> assert broadcast_typeinfos(int_field_t, int_scalar_t).type == int_field_t.type
 
     """
-    if not dims_broadcast_compatible(left, right):
+    if not are_broadcast_compatible(left, right):
         return None
     if left.is_scalar and right.is_field_type:
         return right
@@ -254,7 +225,14 @@ class FieldOperatorTypeDeduction(NodeTranslator):
     ) -> foast.FieldSymbol:
         symtable = kwargs["symtable"]
         if refine_type:
-            check_type_refinement(node, refine_type)
+            if not TypeInfo(node.type).can_be_refined_to(TypeInfo(refine_type)):
+                raise FieldOperatorTypeDeductionError.from_foast_node(
+                    node,
+                    msg=(
+                        "type inconsistency: expression was deduced to be "
+                        f"of type {refine_type}, instead of the expected type {node.type}"
+                    ),
+                )
             new_node = foast.FieldSymbol(id=node.id, type=refine_type, location=node.location)
             symtable[new_node.id] = new_node
             return new_node
@@ -265,7 +243,14 @@ class FieldOperatorTypeDeduction(NodeTranslator):
     ) -> foast.TupleSymbol:
         symtable = kwargs["symtable"]
         if refine_type:
-            check_type_refinement(node, refine_type)
+            if not TypeInfo(node.type).can_be_refined_to(TypeInfo(refine_type)):
+                raise FieldOperatorTypeDeductionError.from_foast_node(
+                    node,
+                    msg=(
+                        "type inconsistency: expression was deduced to be "
+                        f"of type {refine_type}, instead of the expected type {node.type}"
+                    ),
+                )
             new_node = foast.TupleSymbol(id=node.id, type=refine_type, location=node.location)
             symtable[new_node.id] = new_node
             return new_node
@@ -325,21 +310,6 @@ class FieldOperatorTypeDeduction(NodeTranslator):
                 op, parent=parent, left_type=left_type, right_type=right_type, **kwargs
             )
 
-    def _binop_to_str(self, op: foast.BinaryOperator) -> str:
-        match op:
-            case foast.BinaryOperator.ADD:
-                return "+"
-            case foast.BinaryOperator.SUB:
-                return "-"
-            case foast.BinaryOperator.MULT:
-                return "*"
-            case foast.BinaryOperator.DIV:
-                return "/"
-            case foast.BinaryOperator.BIT_AND:
-                return "&"
-            case foast.BinaryOperator.BIT_OR:
-                return "|"
-
     def _deduce_arithmetic_binop_type(
         self,
         op: foast.BinaryOperator,
@@ -353,13 +323,13 @@ class FieldOperatorTypeDeduction(NodeTranslator):
         if (
             left.is_arithmetic_compatible
             and right.is_arithmetic_compatible
-            and dims_broadcast_compatible(left, right)
+            and are_broadcast_compatible(left, right)
         ):
-            return dims_broadcasted(left, right).type
+            return broadcast_typeinfos(left, right).type
         else:
             raise FieldOperatorTypeDeductionError.from_foast_node(
                 parent,
-                msg=f"Incompatible type(s) for operator '{self._binop_to_str(op)}': {left.type}, {right.type}!",
+                msg=f"Incompatible type(s) for operator '{op}': {left.type}, {right.type}!",
             )
 
     def _deduce_logical_binop_type(
@@ -375,27 +345,27 @@ class FieldOperatorTypeDeduction(NodeTranslator):
         if (
             left.is_logics_compatible
             and right.is_logics_compatible
-            and dims_broadcast_compatible(left, right)
+            and are_broadcast_compatible(left, right)
         ):
-            return dims_broadcasted(left, right).type
+            return broadcast_typeinfos(left, right).type
         else:
             raise FieldOperatorTypeDeductionError.from_foast_node(
                 parent,
-                msg=f"Incompatible type(s) for operator '{self._binop_to_str(op)}': {left.type}, {right.type}!",
+                msg=f"Incompatible type(s) for operator '{op}': {left.type}, {right.type}!",
             )
 
     def visit_UnaryOp(self, node: foast.UnaryOp, **kwargs) -> foast.UnaryOp:
         new_operand = self.visit(node.operand, **kwargs)
-        if not self._unaryop_type_compatible(op=node.op, operand_type=new_operand.type):
+        if not self._is_unaryop_type_compatible(op=node.op, operand_type=new_operand.type):
             raise FieldOperatorTypeDeductionError.from_foast_node(
                 node,
-                msg=f"Incompatible type for unary operator '{self._unaryop_to_str(node.op)}': {new_operand.type}!",
+                msg=f"Incompatible type for unary operator '{node.op}': {new_operand.type}!",
             )
         return foast.UnaryOp(
             op=node.op, operand=new_operand, location=node.location, type=new_operand.type
         )
 
-    def _unaryop_type_compatible(
+    def _is_unaryop_type_compatible(
         self, op: foast.UnaryOperator, operand_type: foast.FieldType
     ) -> bool:
         operand_ti = TypeInfo(operand_type)
@@ -403,15 +373,6 @@ class FieldOperatorTypeDeduction(NodeTranslator):
             return operand_ti.is_arithmetic_compatible
         elif op is foast.UnaryOperator.NOT:
             return operand_ti.is_logics_compatible
-
-    def _unaryop_to_str(self, op: foast.UnaryOperator):
-        match op:
-            case foast.UnaryOperator.UADD:
-                return "+"
-            case foast.UnaryOperator.USUB:
-                return "-"
-            case foast.UnaryOperator.NOT:
-                return "not"
 
     def visit_TupleExpr(self, node: foast.TupleExpr, **kwargs) -> foast.TupleExpr:
         new_elts = self.visit(node.elts, **kwargs)

@@ -224,7 +224,7 @@ def test_clashing_annotated_assignment():
         tmp: Field[..., "int64"] = inp
         return tmp
 
-    with pytest.warns(FieldOperatorTypeDeductionError, match="type inconsistency"):
+    with pytest.raises(FieldOperatorTypeDeductionError, match="type inconsistency"):
         _ = FieldOperatorParser.apply_to_function(clashing)
 
 
@@ -244,7 +244,7 @@ def test_call():
 
 
 def test_temp_tuple():
-    """returning a temp tuple should work."""
+    """Returning a temp tuple should work."""
 
     def temp_tuple(a: Field[..., float64], b: Field[..., int64]):
         tmp = a, b

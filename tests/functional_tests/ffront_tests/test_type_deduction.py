@@ -177,7 +177,7 @@ def test_assign_tuple():
 
 
 def test_adding_bool():
-    """Expect an error (or at least a warnign) when using arithmetic on bools."""
+    """Expect an error when using arithmetic on bools."""
 
     def add_bools(a: Field[..., bool], b: Field[..., bool]):
         return a + b

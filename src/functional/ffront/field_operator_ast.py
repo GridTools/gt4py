@@ -165,6 +165,15 @@ class UnaryOperator(StrEnum):
     USUB = "minus"
     NOT = "not_"
 
+    def __str__(self) -> str:
+        if self is self.UADD:
+            return "+"
+        elif self is self.USUB:
+            return "-"
+        elif self is self.NOT:
+            return "not"
+        return "Unknown UnaryOperator"
+
 
 class UnaryOp(Expr):
     op: UnaryOperator
@@ -178,6 +187,21 @@ class BinaryOperator(StrEnum):
     DIV = "divides"
     BIT_AND = "and_"
     BIT_OR = "or_"
+
+    def __str__(self) -> str:
+        if self is self.ADD:
+            return "+"
+        elif self is self.SUB:
+            return "-"
+        elif self is self.MULT:
+            return "*"
+        elif self is self.DIV:
+            return "/"
+        elif self is self.BIT_AND:
+            return "&"
+        elif self is self.BIT_OR:
+            return "|"
+        return "Unknown BinaryOperator"
 
 
 class BinOp(Expr):
