@@ -45,7 +45,7 @@ def simple_stencil_with_doc(field: Field[float]):  # type: ignore
 def builder():
     """Preconfigure builder so everything but definition has defaults."""
 
-    def make_builder(definition, backend_name="debug", module=None):
+    def make_builder(definition, backend_name="gtc:numpy", module=None):
         """Make a builder instance a definition and default params."""
         return StencilBuilder(
             definition,
@@ -87,10 +87,10 @@ def test_jit_version(builder):
     simple_stencil_same.__name__ = "simple_stencil"
 
     # create builders with jit caching strategy
-    original = builder(simple_stencil, "gtx86").with_caching("jit")
-    duplicate = builder(simple_stencil, "gtx86").with_caching("jit")
-    samebody = builder(simple_stencil_same, "gtx86").with_caching("jit")
-    withdoc = builder(simple_stencil_with_doc, "gtx86").with_caching("jit")
+    original = builder(simple_stencil, "gtc:gt:cpu_kfirst").with_caching("jit")
+    duplicate = builder(simple_stencil, "gtc:gt:cpu_kfirst").with_caching("jit")
+    samebody = builder(simple_stencil_same, "gtc:gt:cpu_kfirst").with_caching("jit")
+    withdoc = builder(simple_stencil_with_doc, "gtc:gt:cpu_kfirst").with_caching("jit")
 
     assert stencil_fingerprints_are_equal(original, duplicate)
     assert not stencil_fingerprints_are_equal(original, samebody)
@@ -117,7 +117,7 @@ def test_jit_version(builder):
 
 
 def test_jit_extrainfo(builder):
-    builder = builder(simple_stencil, "gtx86").with_caching("jit")
+    builder = builder(simple_stencil, "gtc:gt:cpu_kfirst").with_caching("jit")
     builder.backend.generate()
 
     assert "pyext_file_path" in builder.caching.cache_info
@@ -139,28 +139,26 @@ def assert_nocaching_gtcpp_source_file_tree_conforms_to_expectations(root_path, 
     build_path = stencil_path / f"{stencil_name}_pyext_BUILD"
 
     module_path = stencil_path / f"{stencil_name}.py"
-    comp_cpp_path = build_path / "computation.cpp"
     comp_hpp_path = build_path / "computation.hpp"
     comp_bindings_path = build_path / "bindings.cpp"
 
     assert module_path.exists()
-    assert comp_cpp_path.exists()
     assert comp_hpp_path.exists()
     assert comp_bindings_path.exists()
 
 
 def test_nocaching_generate(builder, tmp_path):
     # generate pure python stencil and ensure the module is in the right place
-    builder_d = builder(simple_stencil, backend_name="debug", module="foo_d").with_caching(
+    builder_d = builder(simple_stencil, backend_name="gtc:numpy", module="foo_d").with_caching(
         "nocaching", output_path=tmp_path
     )
     builder_d.backend.generate()
     assert tmp_path.joinpath("foo_d", "foo", "foo.py").exists()
 
     # generate a GT C++ extension stencil and check the locations of the source files
-    builder_g = builder(simple_stencil, backend_name="gtx86", module="foo_g").with_caching(
-        "nocaching", output_path=tmp_path
-    )
+    builder_g = builder(
+        simple_stencil, backend_name="gtc:gt:cpu_kfirst", module="foo_g"
+    ).with_caching("nocaching", output_path=tmp_path)
     builder_g.backend.generate()
 
     assert_nocaching_gtcpp_source_file_tree_conforms_to_expectations(tmp_path / "foo_g", "foo")

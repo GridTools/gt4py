@@ -29,9 +29,6 @@ from gt4py import storage as gt_storage
 from ..definitions import INTERNAL_BACKENDS
 
 
-backend_list = [backend for backend in INTERNAL_BACKENDS if backend.values[0] != "debug"]
-
-
 class TestExecInfo:
     @staticmethod
     def advection_def(
@@ -192,7 +189,7 @@ class TestExecInfo:
                 assert stencil_info["total_run_cpp_time"] > stencil_info["run_cpp_time"]
 
     @given(data=hyp_st.data())
-    @pytest.mark.parametrize("backend", backend_list)
+    @pytest.mark.parametrize("backend", INTERNAL_BACKENDS)
     def test_backcompatibility(self, data, backend):
         # set backend as instance attribute
         self.backend = backend
@@ -235,7 +232,7 @@ class TestExecInfo:
         assert type(self.diffusion).__name__ not in exec_info
 
     @given(data=hyp_st.data())
-    @pytest.mark.parametrize("backend", backend_list)
+    @pytest.mark.parametrize("backend", INTERNAL_BACKENDS)
     def test_aggregate(self, data, backend):
         # set backend as instance attribute
         self.backend = backend
