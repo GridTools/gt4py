@@ -13,7 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 import warnings
 from dataclasses import dataclass
-from typing import Optional, TypeGuard
+from typing import Optional, Type, TypeGuard
 
 import functional.ffront.field_operator_ast as foast
 from eve import NodeTranslator, SymbolTableTrait
@@ -21,6 +21,7 @@ from functional.common import GTSyntaxError
 
 
 def is_complete_symbol_type(fo_type: foast.SymbolType) -> TypeGuard[foast.SymbolType]:
+    """Figure out if the foast type is completely deduced."""
     match fo_type:
         case None:
             return False
@@ -31,36 +32,30 @@ def is_complete_symbol_type(fo_type: foast.SymbolType) -> TypeGuard[foast.Symbol
     return False
 
 
-def check_type_refinement(node: foast.Expr, new: foast.DataType) -> None:
-    old = node.type
-    if old is None:
-        return
-    if is_complete_symbol_type(old):
-        if old != new:
-            warnings.warn(
-                FieldOperatorTypeDeductionError.from_foast_node(
-                    node,
-                    msg=(
-                        "type inconsistency: expression was deduced to be "
-                        f"of type {new}, instead of the expected type {old}"
-                    ),
-                )
-            )
-    elif isinstance(old, foast.DeferredSymbolType) and old.constraint is not None:
-        if not isinstance(new, old.constraint) or isinstance(new, foast.DeferredSymbolType):
-            warnings.warn(
-                FieldOperatorTypeDeductionError.from_foast_node(
-                    node,
-                    msg=(
-                        "type inconsistency: expression was deduced to be "
-                        f"of type {new}, instead a {type(old)} type was expected."
-                    ),
-                )
-            )
-
-
 @dataclass
 class TypeInfo:
+    """
+    Wrapper around foast types for type deduction and compatibility checks.
+
+    Examples:
+    ---------
+    >>> type_a = foast.ScalarType(kind=foast.ScalarKind.FLOAT64)
+    >>> typeinfo_a = TypeInfo(type_a)
+    >>> typeinfo_a.is_complete
+    True
+    >>> typeinfo_a.is_arithmetic_compatible
+    True
+    >>> typeinfo_a.is_logics_compatible
+    False
+    >>> typeinfo_b = TypeInfo(None)
+    >>> typeinfo_b.is_any_type
+    True
+    >>> typeinfo_b.is_arithmetic_compatible
+    False
+    >>> typeinfo_b.can_be_refined_to(typeinfo_a)
+    True
+
+    """
 
     type: foast.SymbolType  # noqa: A003
 
@@ -70,28 +65,24 @@ class TypeInfo:
 
     @property
     def is_any_type(self) -> bool:
-        if self.is_complete:
-            return False
-        return (self.type is None) or (self.type.constraint is None)
+        return (not self.is_complete) and ((self.type is None) or (self.constraint is None))
 
     @property
-    def constraint(self) -> Optional[foast.SymbolType]:
+    def constraint(self) -> Optional[Type[foast.SymbolType]]:
+        """Find the constraint of a deferred type or the class of a complete type."""
         if self.is_complete:
-            return self
-        elif not self.is_any:
-            return self.constraint
+            return self.type.__class__
+        elif self.type:
+            return self.type.constraint
+        return None
 
     @property
     def is_field_type(self) -> bool:
-        return isinstance(self.type, foast.FieldType) or self.constraint is foast.FieldType
+        return issubclass(self.constraint, foast.FieldType) if self.constraint else False
 
     @property
     def is_scalar(self) -> bool:
-        if self.is_complete:
-            return isinstance(self.type, foast.ScalarType)
-        else:
-            return isinstance(self.constraint, foast.ScalarType)
-        return False
+        return issubclass(self.constraint, foast.ScalarType) if self.constraint else False
 
     @property
     def is_arithmetic_compatible(self) -> bool:
@@ -126,7 +117,51 @@ class TypeInfo:
         return False
 
 
-def dims_promotable(left: TypeInfo, right: TypeInfo) -> bool:
+def check_type_refinement(node: foast.Expr, new: foast.DataType) -> None:
+    """
+    Check if an expressions's foast type can be updated to the new type safely.
+
+    Raises a warning if safety can not be guaranteed. This warning will be upgraded to an error in the future.
+
+    Examples:
+    ---------
+    >>> check_type_refinement(
+    ...     node=foast.Name(id="a", type=foast.DeferredSymbolType(), location=foast.SourceLocation(1, 1, "<doctest>")),
+    ...     new=foast.FieldType(dims=Ellipsis, dtype=foast.ScalarType(kind=foast.ScalarKind.FLOAT64))
+    ... )
+
+    """
+    old_typeinfo = TypeInfo(node.type)
+    new_typeinfo = TypeInfo(new)
+    if not old_typeinfo.can_be_refined_to(new_typeinfo):
+        warnings.warn(
+            FieldOperatorTypeDeductionError.from_foast_node(
+                node,
+                msg=(
+                    "type inconsistency: expression was deduced to be "
+                    f"of type {new}, instead of the expected type {old_typeinfo.type}"
+                ),
+            )
+        )
+
+
+def dims_broadcast_compatible(left: TypeInfo, right: TypeInfo) -> bool:
+    """
+    Check if ``left`` and ``right`` types are compatible after optional broadcasting.
+
+    A binary field operation between two arguments can proceed and the result is a field.
+    on top of the dimensions, also the dtypes must match.
+
+    Examples:
+    ---------
+    >>> int_scalar_t = TypeInfo(foast.ScalarType(kind=foast.ScalarKind.INT64))
+    >>> dims_broadcast_compatible(int_scalar_t, int_scalar_t)
+    True
+    >>> int_field_t = TypeInfo(foast.FieldType(dtype=foast.ScalarType(kind=foast.ScalarKind.INT64), dims=...))
+    >>> dims_broadcast_compatible(int_field_t, int_scalar_t)
+    True
+
+    """
     if left.is_field_type and right.is_field_type:
         return left.type.dims == right.type.dims
     elif left.is_field_type and right.is_scalar:
@@ -138,8 +173,20 @@ def dims_promotable(left: TypeInfo, right: TypeInfo) -> bool:
     return False
 
 
-def dims_promoted(left: TypeInfo, right: TypeInfo) -> TypeInfo:
-    if not dims_promotable(left, right):
+def dims_broadcasted(left: TypeInfo, right: TypeInfo) -> TypeInfo:
+    """
+    Decide the result type of a binary operation between arguments of ``left`` and ``right`` type.
+
+    Return None if the two types are not compatible even after broadcasting.
+
+    Examples:
+    ---------
+    >>> int_scalar_t = TypeInfo(foast.ScalarType(kind=foast.ScalarKind.INT64))
+    >>> int_field_t = TypeInfo(foast.FieldType(dtype=foast.ScalarType(kind=foast.ScalarKind.INT64), dims=...))
+    >>> assert dims_broadcasted(int_field_t, int_scalar_t).type == int_field_t.type
+
+    """
+    if not dims_broadcast_compatible(left, right):
         return None
     if left.is_scalar and right.is_field_type:
         return right
@@ -147,7 +194,27 @@ def dims_promoted(left: TypeInfo, right: TypeInfo) -> TypeInfo:
 
 
 class FieldOperatorTypeDeduction(NodeTranslator):
-    """Deduce and check types of FOAST expressions and symbols."""
+    """
+    Deduce and check types of FOAST expressions and symbols.
+
+    Examples:
+    ---------
+    >>> import ast
+    >>> from functional.common import Field
+    >>> from functional.ffront.func_to_foast import FieldOperatorParser, SourceDefinition, ClosureRefs
+    >>> def example(a: "Field[..., float]", b: "Field[..., float]"):
+    ...     return a + b
+
+    >>> sdef = SourceDefinition.from_function(example)
+    >>> cref = ClosureRefs.from_function(example)
+    >>> untyped_fieldop = FieldOperatorParser(
+    ...     source=sdef.source, filename=sdef.filename, starting_line=sdef.starting_line, closure_refs=cref, externals_defs={}
+    ... ).visit(ast.parse(sdef.source).body[0])
+    >>> assert untyped_fieldop.body[0].value.type is None
+
+    >>> typed_fieldop = FieldOperatorTypeDeduction.apply(untyped_fieldop)
+    >>> assert typed_fieldop.body[0].value.type == foast.FieldType(dtype=foast.ScalarType(kind=foast.ScalarKind.FLOAT64), dims=Ellipsis)
+    """
 
     contexts = (SymbolTableTrait.symtable_merger,)
 
@@ -167,10 +234,8 @@ class FieldOperatorTypeDeduction(NodeTranslator):
     def visit_Name(self, node: foast.Name, **kwargs) -> foast.Name:
         symtable = kwargs["symtable"]
         if node.id not in symtable or symtable[node.id].type is None:
-            warnings.warn(  # TODO(ricoh): raise this instead (requires externals)
-                FieldOperatorTypeDeductionError.from_foast_node(
-                    node, msg=f"Undeclared symbol {node.id}"
-                )
+            raise FieldOperatorTypeDeductionError.from_foast_node(
+                node, msg=f"Undeclared symbol {node.id}"
             )
             return node
 
@@ -288,9 +353,9 @@ class FieldOperatorTypeDeduction(NodeTranslator):
         if (
             left.is_arithmetic_compatible
             and right.is_arithmetic_compatible
-            and dims_promotable(left, right)
+            and dims_broadcast_compatible(left, right)
         ):
-            return dims_promoted(left, right).type
+            return dims_broadcasted(left, right).type
         else:
             raise FieldOperatorTypeDeductionError.from_foast_node(
                 parent,
@@ -310,9 +375,9 @@ class FieldOperatorTypeDeduction(NodeTranslator):
         if (
             left.is_logics_compatible
             and right.is_logics_compatible
-            and dims_promotable(left, right)
+            and dims_broadcast_compatible(left, right)
         ):
-            return dims_promoted(left, right).type
+            return dims_broadcasted(left, right).type
         else:
             raise FieldOperatorTypeDeductionError.from_foast_node(
                 parent,
@@ -364,6 +429,8 @@ class FieldOperatorTypeDeduction(NodeTranslator):
 
 
 class FieldOperatorTypeDeductionError(GTSyntaxError, SyntaxWarning):
+    """Exception for problematic type deductions that originate in user code."""
+
     def __init__(
         self,
         msg="",

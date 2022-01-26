@@ -17,8 +17,127 @@ import pytest
 from functional.common import Dimension
 from functional.ffront import field_operator_ast as foast
 from functional.ffront.fbuiltins import Field, float64, int64
-from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError
+from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError, TypeInfo
 from functional.ffront.func_to_foast import FieldOperatorParser
+
+
+def type_info_cases():
+    return [
+        (
+            None,
+            {
+                "is_complete": False,
+                "is_any_type": True,
+                "constraint": None,
+                "is_field_type": False,
+                "is_scalar": False,
+                "is_arithmetic_compatible": False,
+                "is_logics_compatible": False,
+            },
+        ),
+        (
+            foast.DeferredSymbolType(constraint=None),
+            {
+                "is_complete": False,
+                "is_any_type": True,
+                "constraint": None,
+                "is_field_type": False,
+                "is_scalar": False,
+                "is_arithmetic_compatible": False,
+                "is_logics_compatible": False,
+            },
+        ),
+        (
+            foast.DeferredSymbolType(constraint=foast.ScalarType),
+            {
+                "is_complete": False,
+                "is_any_type": False,
+                "constraint": foast.ScalarType,
+                "is_field_type": False,
+                "is_scalar": True,
+                "is_arithmetic_compatible": False,
+                "is_logics_compatible": False,
+            },
+        ),
+        (
+            foast.DeferredSymbolType(constraint=foast.FieldType),
+            {
+                "is_complete": False,
+                "is_any_type": False,
+                "constraint": foast.FieldType,
+                "is_field_type": True,
+                "is_scalar": False,
+                "is_arithmetic_compatible": False,
+                "is_logics_compatible": False,
+            },
+        ),
+        (
+            foast.ScalarType(kind=foast.ScalarKind.INT64),
+            {
+                "is_complete": True,
+                "is_any_type": False,
+                "constraint": foast.ScalarType,
+                "is_field_type": False,
+                "is_scalar": True,
+                "is_arithmetic_compatible": True,
+                "is_logics_compatible": False,
+            },
+        ),
+        (
+            foast.FieldType(dims=Ellipsis, dtype=foast.ScalarType(kind=foast.ScalarKind.BOOL)),
+            {
+                "is_complete": True,
+                "is_any_type": False,
+                "constraint": foast.FieldType,
+                "is_field_type": True,
+                "is_scalar": False,
+                "is_arithmetic_compatible": False,
+                "is_logics_compatible": True,
+            },
+        ),
+    ]
+
+
+@pytest.mark.parametrize("symbol_type,expected", type_info_cases())
+def test_type_info_basic(symbol_type, expected):
+    typeinfo = TypeInfo(symbol_type)
+    for key in expected:
+        assert getattr(typeinfo, key) == expected[key]
+
+
+def test_type_info_refinable_complete_complete():
+    complete_type = foast.ScalarType(kind=foast.ScalarKind.INT64)
+    other_complete_type = foast.ScalarType(kind=foast.ScalarKind.FLOAT64)
+    type_info_a = TypeInfo(complete_type)
+    type_info_b = TypeInfo(other_complete_type)
+    assert type_info_a.can_be_refined_to(TypeInfo(complete_type))
+    assert not type_info_a.can_be_refined_to(type_info_b)
+
+
+def test_type_info_refinable_incomplete_complete():
+    complete_type = TypeInfo(
+        foast.FieldType(dtype=foast.ScalarType(kind=foast.ScalarKind.BOOL), dims=Ellipsis)
+    )
+    assert TypeInfo(None).can_be_refined_to(complete_type)
+    assert TypeInfo(foast.DeferredSymbolType(constraint=None)).can_be_refined_to(complete_type)
+    assert TypeInfo(foast.DeferredSymbolType(constraint=foast.FieldType)).can_be_refined_to(
+        complete_type
+    )
+    assert not TypeInfo(foast.DeferredSymbolType(constraint=foast.OffsetType)).can_be_refined_to(
+        complete_type
+    )
+
+
+def test_type_info_refinable_incomplete_incomplete():
+    target_type = TypeInfo(foast.DeferredSymbolType(constraint=foast.ScalarType))
+    assert TypeInfo(None).can_be_refined_to(target_type)
+    assert TypeInfo(foast.DeferredSymbolType(constraint=None)).can_be_refined_to(target_type)
+    assert TypeInfo(foast.DeferredSymbolType(constraint=foast.ScalarType)).can_be_refined_to(
+        target_type
+    )
+    assert not TypeInfo(foast.DeferredSymbolType(constraint=foast.FieldType)).can_be_refined_to(
+        target_type
+    )
 
 
 def test_unpack_assign():
