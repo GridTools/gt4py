@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 
 from functional.iterator.builtins import *
 from functional.iterator.embedded import np_as_located_field
@@ -19,12 +20,22 @@ KDim = CartesianAxis("KDim")
 
 
 # TODO test all cases
-def test_tuple_output(backend):
-    backend, validate = backend
+@fundef
+def tuple_output1(inp1, inp2):
+    return deref(inp1), deref(inp2)
 
-    @fundef
-    def tuple_output(inp1, inp2):
-        return deref(inp1), deref(inp2)
+
+@fundef
+def tuple_output2(inp1, inp2):
+    return make_tuple(deref(inp1), deref(inp2))
+
+
+@pytest.mark.parametrize(
+    "stencil",
+    [tuple_output1, tuple_output2],
+)
+def test_tuple_output(backend, stencil):
+    backend, validate = backend
 
     shape = [5, 7, 9]
     rng = np.random.default_rng()
@@ -45,7 +56,7 @@ def test_tuple_output(backend):
         JDim: range(0, shape[1]),
         KDim: range(0, shape[2]),
     }
-    tuple_output[dom](inp1, inp2, out=out, offset_provider={}, backend=backend)
+    stencil[dom](inp1, inp2, out=out, offset_provider={}, backend=backend)
     if validate:
         assert np.allclose(inp1, out[0])
         assert np.allclose(inp2, out[1])
