@@ -16,7 +16,6 @@
 
 
 import numpy as np
-import pytest
 
 from gt4py import gtscript
 from gt4py import testing as gt_testing
@@ -624,17 +623,7 @@ class TestNon3DFields(gt_testing.StencilTestSuite):
         "field_out": np.float64,
     }
     domain_range = [(4, 10), (4, 10), (4, 10)]
-    backends = [
-        "debug",
-        "numpy",
-        pytest.param("gtx86", marks=[pytest.mark.xfail]),
-        pytest.param("gtmc", marks=[pytest.mark.xfail]),
-        pytest.param("gtcuda", marks=[pytest.mark.xfail]),
-        "gtc:gt:cpu_ifirst",
-        "gtc:gt:cpu_kfirst",
-        "gtc:gt:gpu",
-        "gtc:dace",
-    ]
+    backends = ["gtc:gt:cpu_ifirst", "gtc:gt:cpu_kfirst", "gtc:gt:gpu", "gtc:dace"]
     symbols = {
         "field_in": gt_testing.field(
             in_range=(-10, 10), axes="K", boundary=[(0, 0), (0, 0), (0, 0)]
