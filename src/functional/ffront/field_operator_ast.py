@@ -1,6 +1,3 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-#
 # GT4Py Project - GridTools Framework
 #
 # Copyright (c) 2014-2021, ETH Zurich
@@ -17,10 +14,68 @@
 
 
 import re
+import typing
+from typing import Literal, Optional, Union
 
 import eve
 from eve import Node
-from eve.type_definitions import SourceLocation, StrEnum, SymbolRef
+from eve.traits import SymbolTableTrait
+from eve.type_definitions import IntEnum, SourceLocation, StrEnum, SymbolRef
+
+
+class Namespace(StrEnum):
+    LOCAL = "local"
+    CLOSURE = "closure"
+    EXTERNAL = "external"
+
+
+class ScalarKind(IntEnum):
+    BOOL = 1
+    INT32 = 32
+    INT64 = 64
+    FLOAT32 = 1032
+    FLOAT64 = 1064
+
+
+class Dimension(Node):
+    name: str
+
+
+class SymbolType(Node):
+    ...
+
+
+class DeferredSymbolType(SymbolType):
+    constraint: typing.Optional[typing.Type[SymbolType]]
+
+
+class SymbolTypeVariable(SymbolType):
+    id: str  # noqa A003
+    bound: typing.Type[SymbolType]
+
+
+class DataType(SymbolType):
+    ...
+
+
+class ScalarType(DataType):
+    kind: ScalarKind
+    shape: Optional[list[int]] = None
+
+
+class TupleType(DataType):
+    types: list[DataType]
+
+
+class FieldType(DataType):
+    dims: Union[list[Dimension], Literal[Ellipsis]]  # type: ignore[valid-type,misc]
+    dtype: ScalarType
+
+
+class FunctionType(SymbolType):
+    args: list[DataType]
+    kwargs: dict[str, DataType]
+    returns: DataType
 
 
 class LocatedNode(Node):
@@ -31,20 +86,35 @@ class SymbolName(eve.traits.SymbolName):
     regex = re.compile(r"^[a-zA-Z_][\w$]*$")
 
 
-class Sym(LocatedNode):
+class Symbol(LocatedNode):
     id: SymbolName  # noqa: A003
+    type: SymbolType  # noqa A003
+    namespace: Namespace = Namespace(Namespace.LOCAL)
+
+
+class DataSymbol(Symbol):
+    type: Union[DataType, DeferredSymbolType]  # noqa A003
+
+
+class FieldSymbol(DataSymbol):
+    type: Union[FieldType, DeferredSymbolType]  # noqa A003
+
+
+class Function(Symbol):
+    type: FunctionType  # noqa A003
 
 
 class Expr(LocatedNode):
-    ...
-
-
-class SymRef(Expr):
-    id: SymbolRef  # noqa: A003
+    type: Optional[SymbolType] = None  # noqa A003
 
 
 class Name(Expr):
-    id: SymbolName  # noqa: A003
+    id: SymbolRef  # noqa: A003
+
+
+class Constant(Expr):
+    value: str
+    dtype: Union[DataType, str]
 
 
 class Subscript(Expr):
@@ -52,7 +122,7 @@ class Subscript(Expr):
     index: int
 
 
-class Tuple(Expr):
+class TupleExpr(Expr):
     elts: list[Expr]
 
 
@@ -103,8 +173,12 @@ class Stmt(LocatedNode):
     ...
 
 
+class ExternalImport(Stmt):
+    symbols: list[Symbol]
+
+
 class Assign(Stmt):
-    target: Name
+    target: Symbol
     value: Expr
 
 
@@ -112,7 +186,8 @@ class Return(Stmt):
     value: Expr
 
 
-class FieldOperator(LocatedNode):
+class FieldOperator(LocatedNode, SymbolTableTrait):
     id: SymbolName  # noqa: A003
-    params: list[Sym]
+    params: list[DataSymbol]
     body: list[Stmt]
+    closure: list[Symbol]

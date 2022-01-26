@@ -1,6 +1,3 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-#
 # GT4Py Project - GridTools Framework
 #
 # Copyright (c) 2014-2021, ETH Zurich

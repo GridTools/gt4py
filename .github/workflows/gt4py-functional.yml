@@ -33,3 +33,4 @@ jobs:
     - name: Test
       run: |
         python -m pytest tests/functional_tests
+        python -m pytest --doctest-modules src/functional/ffront

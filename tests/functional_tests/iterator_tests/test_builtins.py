@@ -2,11 +2,11 @@ from typing import Iterable
 
 import numpy as np
 import pytest
-from tests.functional_tests.iterator_tests.test_hdiff import I
 
 from functional.iterator.builtins import *
 from functional.iterator.embedded import np_as_located_field
 from functional.iterator.runtime import CartesianAxis, closure, fendef, fundef
+from tests.functional_tests.iterator_tests.test_hdiff import I
 
 
 def asarray(*lists):
