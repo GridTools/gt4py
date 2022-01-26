@@ -164,7 +164,7 @@ class FortranBindingsCodegen(codegen.TemplatedGenerator):
                     name=node.name, sid_ndim=sid_ndim, dtype=dtype, stride_kind=stride_kind
                 )
             else:
-                return node.name
+                return f"gridtools::sid::shift_sid_origin({node.name}, gridtools::array<int, 3>{{offset_x, offset_y,offset_z}})"
 
     def visit_ScalarDecl(self, node: gtir.ScalarDecl, **kwargs):
         if "external_arg" in kwargs:
@@ -190,12 +190,12 @@ class FortranBindingsCodegen(codegen.TemplatedGenerator):
         #include <gridtools/storage/adapter/fortran_array_view.hpp>
 
         namespace {
-        void ${name}_impl(unsigned int nx, unsigned int ny, unsigned int nz,
+        void ${name}_impl(int offset_x, int offset_y, int offset_z, unsigned int nx, unsigned int ny, unsigned int nz,
                     ${','.join(entry_params)}) {
         auto computation = ${name}({nx, ny, nz});
         computation(${','.join(sid_params)});
         }
-        BINDGEN_EXPORT_BINDING_WRAPPED(${3+len(entry_params)}, ${name}, ${name}_impl);
+        BINDGEN_EXPORT_BINDING_WRAPPED(${6+len(entry_params)}, ${name}, ${name}_impl);
         } // namespace
         """
     )
