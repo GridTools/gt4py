@@ -602,8 +602,7 @@ def fendef_embedded(fun, *args, **kwargs):  # noqa: 536
                 if not isinstance(out, tuple):
                     out = (out,)
                     r = (r,)
-                # else:
-                #     assert all tuple elements have the same shape
+                # TODO assert all tuple elements have the same shape
                 for tup_index in range(len(out)):
                     if column is None:
                         ordered_indices = get_ordered_indices(out[tup_index].axises, pos)
