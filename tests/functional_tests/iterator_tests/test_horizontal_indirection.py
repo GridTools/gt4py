@@ -31,11 +31,6 @@ def foo(inp, cond):
     return deref(compute_shift(cond)(inp))
 
 
-@fendef
-def fencil(size, inp, cond, out):
-    closure(domain(named_range(IDim, 0, size)), foo, [out], [inp, cond])
-
-
 IDim = CartesianAxis("IDim")
 
 
@@ -50,6 +45,6 @@ def test_simple_indirection():
     for i in range(shape[0]):
         ref[i] = inp[i - 1] if cond[i] < 0 else inp[i + 1]
 
-    fencil(shape[0], inp, cond, out, offset_provider={"I": IDim})
+    foo[domain(named_range(IDim, 0, shape[0]))](inp, cond, out=out, offset_provider={"I": IDim})
 
     assert allclose(ref, out)

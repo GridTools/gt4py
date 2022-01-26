@@ -37,7 +37,7 @@ def fencil(builtin, out, *inps, backend):
 
         @fendef(offset_provider={})
         def fenimpl(domain, arg0, out):
-            closure(domain, sten, [out], [arg0])
+            closure(domain, sten, out, [arg0])
 
     elif len(inps) == 2:
 
@@ -47,7 +47,7 @@ def fencil(builtin, out, *inps, backend):
 
         @fendef(offset_provider={})
         def fenimpl(domain, arg0, arg1, out):
-            closure(domain, sten, [out], [arg0, arg1])
+            closure(domain, sten, out, [arg0, arg1])
 
     elif len(inps) == 3:
 
@@ -57,7 +57,7 @@ def fencil(builtin, out, *inps, backend):
 
         @fendef(offset_provider={})
         def fenimpl(domain, arg0, arg1, arg2, out):
-            closure(domain, sten, [out], [arg0, arg1, arg2])
+            closure(domain, sten, out, [arg0, arg1, arg2])
 
     else:
         raise AssertionError("Add overload")

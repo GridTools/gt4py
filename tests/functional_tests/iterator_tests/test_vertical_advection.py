@@ -93,7 +93,7 @@ def fen_solve_tridiag(i_size, j_size, k_size, a, b, c, d, x):
             named_range(KDim, 0, k_size),
         ),
         solve_tridiag,
-        [x],
+        x,
         [a, b, c, d],
     )
 

@@ -27,16 +27,6 @@ def baz(baz_inp):
     return deref(lift(bar)(baz_inp))
 
 
-@fendef(offset_provider={"I": IDim, "J": JDim})
-def foobarbaz(inp, out, x, y):
-    closure(
-        domain(named_range(IDim, 0, x), named_range(JDim, 0, y)),
-        baz,
-        [out],
-        [inp],
-    )
-
-
 def test_trivial(backend, use_tmps):
     backend, validate = backend
     rng = np.random.default_rng()
@@ -47,7 +37,9 @@ def test_trivial(backend, use_tmps):
     inp_s = np_as_located_field(IDim, JDim, origin={IDim: 0, JDim: 0})(inp[:, :, 0])
     out_s = np_as_located_field(IDim, JDim)(np.zeros_like(inp[:, :, 0]))
 
-    foobarbaz(inp_s, out_s, inp.shape[0], inp.shape[1], backend=backend, use_tmps=use_tmps)
+    baz[domain(named_range(IDim, 0, shape[0]), named_range(JDim, 0, shape[1]))](
+        inp_s, out=out_s, backend=backend, use_tmps=use_tmps, offset_provider={"I": IDim, "J": JDim}
+    )
 
     if validate:
         assert np.allclose(out[:, :, 0], out_s)

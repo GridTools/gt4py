@@ -24,7 +24,7 @@ class ToLispLike(TemplatedGenerator):
         """(
      :domain {domain}
      :stencil {stencil}
-     :outputs {' '.join(outputs)}
+     :output {output}
      :inputs {' '.join(inputs)}
     )
     """

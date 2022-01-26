@@ -44,35 +44,34 @@ def make_domain(dim_name: str, lower: int, upper: int) -> itir.FunCall:
 
 
 def closure_from_fop(
-    node: itir.FunctionDefinition, out_names: list[str], domain: itir.FunCall
+    node: itir.FunctionDefinition, out_name: str, domain: itir.FunCall
 ) -> itir.StencilClosure:
     return itir.StencilClosure(
         stencil=itir.SymRef(id=node.id),
         inputs=[itir.SymRef(id=sym.id) for sym in node.params],
-        outputs=[itir.SymRef(id=name) for name in out_names],
+        output=itir.SymRef(id=out_name),
         domain=domain,
     )
 
 
 def fencil_from_fop(
-    node: itir.FunctionDefinition, out_names: list[str], domain: itir.FunCall
+    node: itir.FunctionDefinition, out_name: str, domain: itir.FunCall
 ) -> itir.FencilDefinition:
-    closure = closure_from_fop(node, out_names=out_names, domain=domain)
+    closure = closure_from_fop(node, out_name=out_name, domain=domain)
     return itir.FencilDefinition(
         id=node.id + "_fencil",
-        params=[itir.Sym(id=inp.id) for inp in closure.inputs]
-        + [itir.Sym(id=out.id) for out in closure.outputs],
+        params=[itir.Sym(id=inp.id) for inp in closure.inputs] + [itir.Sym(id=closure.output.id)],
         closures=[closure],
     )
 
 
 def program_from_fop(
-    node: itir.FunctionDefinition, out_names: list[str], dim: CartesianAxis, size: int
+    node: itir.FunctionDefinition, out_name: str, dim: CartesianAxis, size: int
 ) -> itir.Program:
     domain = make_domain(dim.value, 0, size)
     return itir.Program(
         function_definitions=[node],
-        fencil_definitions=[fencil_from_fop(node, out_names=out_names, domain=domain)],
+        fencil_definitions=[fencil_from_fop(node, out_name=out_name, domain=domain)],
         setqs=[],
     )
 
@@ -93,7 +92,7 @@ def test_copy():
 
     copy_foast = FieldOperatorParser.apply_to_function(copy)
     copy_fundef = FieldOperatorLowering.apply(copy_foast)
-    copy_program = program_from_fop(node=copy_fundef, out_names=["out"], dim=IDim, size=size)
+    copy_program = program_from_fop(node=copy_fundef, out_name="out", dim=IDim, size=size)
 
     roundtrip.executor(copy_program, a, b, offset_provider={})
 

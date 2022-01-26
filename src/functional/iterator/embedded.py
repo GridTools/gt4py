@@ -531,7 +531,7 @@ def fendef_embedded(fun, *args, **kwargs):  # noqa: 536
     assert "offset_provider" in kwargs
 
     @iterator.runtime.closure.register(EMBEDDED)
-    def closure(domain, sten, outs, ins):  # domain is Dict[axis, range]
+    def closure(domain, sten, out_, ins):  # domain is Dict[axis, range]
 
         column = None
         if "column_axis" in kwargs:
@@ -574,6 +574,7 @@ def fendef_embedded(fun, *args, **kwargs):  # noqa: 536
             return impl
 
         for pos in domain_iterator(domain):
+            outs = out_
             ins_iters = list(
                 make_in_iterator(
                     inp,
@@ -584,10 +585,18 @@ def fendef_embedded(fun, *args, **kwargs):  # noqa: 536
                 for inp in ins
             )
             res = sten(*ins_iters)
+
+            if isinstance(res, tuple) != isinstance(out_, (tuple, list)):
+                print(res)
+                print(out_)
+                raise IndexError("Number of return values doesn't match number of output fields.")
             if not isinstance(res, tuple):
                 res = (res,)
-            if not len(res) == len(outs):
-                IndexError("Number of return values doesn't match number of output fields.")
+                outs = (out_,)
+                if len(outs) != len(res):
+                    raise IndexError(
+                        "Number of return values doesn't match number of output fields."
+                    )
 
             for r, out in zip(res, outs):
                 if not isinstance(out, tuple):

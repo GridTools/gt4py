@@ -2,7 +2,7 @@ import numpy as np
 
 from functional.iterator.builtins import *
 from functional.iterator.embedded import np_as_located_field
-from functional.iterator.runtime import CartesianAxis, fundef
+from functional.iterator.runtime import CartesianAxis, closure, fendef, fundef
 
 
 IDim = CartesianAxis("IDim")
@@ -10,20 +10,21 @@ JDim = CartesianAxis("JDim")
 KDim = CartesianAxis("KDim")
 
 # semantics of stencil return that is called from the fencil (after `:` the structure of the output)
-# `return a` -> (a,): [field]
-# `return make_tuple(a)` -> (a,): [field]
-# `return a,b` -> (a,b): [field, field]
+# `return a` -> a: field
+# `return make_tuple(a)` -> (a,): [field] or (field)
+# `return a,b` -> (a,b): [field, field] or (field, field)
 # `return make_tuple(a,b)` -> (a,b): [field, field]
 # `return make_tuple(a), make_tuple(b)` -> ((a,), (b,)): [(field,), (field,)]
 # `return make_tuple(make_tuple(a,b))` -> ((a,b)): [(field,field)]
 
 
+# TODO test all cases
 def test_tuple_output(backend):
     backend, validate = backend
 
     @fundef
     def tuple_output(inp1, inp2):
-        return make_tuple(make_tuple(deref(inp1), deref(inp2)))
+        return deref(inp1), deref(inp2)
 
     shape = [5, 7, 9]
     rng = np.random.default_rng()
