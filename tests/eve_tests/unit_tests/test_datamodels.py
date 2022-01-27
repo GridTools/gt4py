@@ -47,6 +47,8 @@ import pytest_factoryboy as pytfboy
 from eve import datamodels, utils
 
 
+pytest.skip("Skippping until datamodels is upgraded to 3.10", allow_module_level=True)
+
 T = TypeVar("T")
 
 
