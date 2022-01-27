@@ -16,7 +16,7 @@ class RemapSymbolRefs(NodeTranslator):
             expr=self.generic_visit(node.expr, symbol_map=new_symbol_map),
         )
 
-    def generic_visit(self, node: ir.Node, **kwargs: Any):
+    def generic_visit(self, node: ir.Node, **kwargs: Any):  # type: ignore[override]
         assert isinstance(node, ir.SymbolTableTrait) == isinstance(
             node, ir.Lambda
         ), "found unexpected new symbol scope"
@@ -38,7 +38,7 @@ class RenameSymbols(NodeTranslator):
             return ir.SymRef(id=name_map.get(node.id, node.id))
         return node
 
-    def generic_visit(
+    def generic_visit(  # type: ignore[override]
         self, node: ir.Node, *, name_map: Dict[str, str], active: Optional[Set[str]] = None
     ):
         if isinstance(node, ir.SymbolTableTrait):

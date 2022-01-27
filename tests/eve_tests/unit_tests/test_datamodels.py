@@ -675,7 +675,7 @@ def test_field_metadata():
 
 # Test datamodel options
 def test_frozen():
-    import attr
+    import attr  # type: ignore[import] # Missing library stubs for Python 3.10)
 
     @datamodels.datamodel(frozen=True)
     class FrozenModel:

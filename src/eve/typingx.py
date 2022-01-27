@@ -28,7 +28,7 @@ import sys
 import types
 import typing
 from typing import *
-from typing import IO, BinaryIO, TextIO
+from typing import IO, BinaryIO, Dict, FrozenSet, List, Set, TextIO, Tuple
 
 
 AnyCallable = Callable[..., Any]
@@ -224,7 +224,7 @@ def resolve_type(
     return actual_type
 
 
-def _collapsable_type_args(*args: Any) -> tuple[bool, tuple]:
+def _collapse_type_args(*args: Any) -> Tuple[bool, Tuple]:
     if args and all(args[0] == a for a in args):
         return (True, args)
     else:
@@ -233,7 +233,7 @@ def _collapsable_type_args(*args: Any) -> tuple[bool, tuple]:
 
 @dataclasses.dataclass
 class CallableKwargsInfo:
-    data: dict[str, Any]
+    data: Dict[str, Any]
 
 
 @functools.singledispatch
@@ -301,29 +301,25 @@ def get_typing(value: Any, *, annotate_callable_kwargs: bool = False) -> Any:
         return None
 
     elif isinstance(value, tuple):
-        unique_type, args = _collapsable_type_args(*(recursive_get(item) for item in value))
+        unique_type, args = _collapse_type_args(*(recursive_get(item) for item in value))
         if unique_type and len(args) > 1:
-            return tuple[args[0], ...]
+            return Tuple[args[0], ...]
         elif args:
-            return tuple[args]
+            return Tuple[args]
         else:
-            return tuple[Any, ...]
+            return Tuple[Any, ...]
 
     elif isinstance(value, (list, set, frozenset)):
-        t = type(value)
-        unique_type, args = _collapsable_type_args(*(recursive_get(item) for item in value))
-        return t[args[0]] if unique_type else t[Any]
+        t: Union[Type[List], Type[Set], Type[FrozenSet]] = type(value)
+        unique_type, args = _collapse_type_args(*(recursive_get(item) for item in value))
+        return t[args[0]] if unique_type else t[Any]  # type: ignore[index]  # build annotation at runtime
 
     elif isinstance(value, dict):
-        unique_key_type, keys = _collapsable_type_args(
-            *(recursive_get(key) for key in value.keys())
-        )
-        unique_value_type, values = _collapsable_type_args(
-            *(recursive_get(v) for v in value.values())
-        )
+        unique_key_type, keys = _collapse_type_args(*(recursive_get(key) for key in value.keys()))
+        unique_value_type, values = _collapse_type_args(*(recursive_get(v) for v in value.values()))
         kt = keys[0] if unique_key_type else Any
         vt = values[0] if unique_value_type else Any
-        return dict[kt, vt]
+        return Dict[kt, vt]  # type: ignore[valid-type]  # build annotation at runtime
 
     elif isinstance(value, types.FunctionType):
         try:
@@ -331,8 +327,8 @@ def get_typing(value: Any, *, annotate_callable_kwargs: bool = False) -> Any:
             return_type = annotations.get("return", Any)
 
             sig = inspect.signature(value)
-            arg_types: Union[list, Ellipsis] = []
-            kwonly_arg_types: dict[str, Any] = {}
+            arg_types: List = []
+            kwonly_arg_types: Dict[str, Any] = {}
             for p in sig.parameters.values():
                 if p.kind in (
                     inspect.Parameter.POSITIONAL_ONLY,
@@ -340,11 +336,11 @@ def get_typing(value: Any, *, annotate_callable_kwargs: bool = False) -> Any:
                 ):
                     arg_types.append(annotations.get(p.name, None) or Any)
                 elif p.kind == inspect.Parameter.KEYWORD_ONLY:
-                    kwonly_arg_types.append(annotations.get(p.name, None) or Any)
+                    kwonly_arg_types[p.name] = annotations.get(p.name, None) or Any
                 elif p.kind in (inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD):
                     raise TypeError(f"Variadic callables are not supported")
 
-            result = Callable[arg_types, return_type]
+            result: Any = Callable[arg_types, return_type]  # type: ignore[misc]  # build annotation at runtime
             if annotate_callable_kwargs:
                 result = Annotated[result, CallableKwargsInfo(kwonly_arg_types)]
             return result
