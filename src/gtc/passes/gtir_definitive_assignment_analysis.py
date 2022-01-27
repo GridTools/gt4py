@@ -42,9 +42,9 @@ class DefinitiveAssignmentAnalysis(NodeVisitor):
             invalid_accesses.append(node)
 
     @classmethod
-    def apply(cls, gtir_stencil_expr: gtir.Stencil) -> Set[gtir.FieldAccess]:
+    def apply(cls, gtir_stencil_expr: gtir.Stencil) -> List[gtir.FieldAccess]:
         """Execute analysis and return all accesses to undefined symbols."""
-        invalid_accesses: Set[gtir.FieldAccess] = set()
+        invalid_accesses: List[gtir.FieldAccess] = []
         DefinitiveAssignmentAnalysis().visit(
             gtir_stencil_expr,
             alive_vars=set(gtir_stencil_expr.param_names),
