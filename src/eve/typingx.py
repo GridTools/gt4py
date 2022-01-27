@@ -246,51 +246,51 @@ def get_typing(value: Any, *, annotate_callable_kwargs: bool = False) -> Any:
 
     Examples:
         >>> get_typing(3)
-        int
+        <class 'int'>
 
         >>> get_typing((3, "four"))
-        tuple[int, str]
+        typing.Tuple[int, str]
 
         >>> get_typing((3, 4))
-        tuple[int, ...]
+        typing.Tuple[int, ...]
 
         >>> get_typing(frozenset([1, 2, 3]))
         frozenset[int]
 
         >>> get_typing({'a': 0, 'b': 1})
-        dict[str, int]
+        typing.Dict[str, int]
 
         >>> get_typing({'a': 0, 'b': 'B'})
-        dict[str, typing.Any]
+        typing.Dict[str, typing.Any]
 
         >>> get_typing(lambda a, b: a + b)
-        collections.abc.Callable[[typing.Any, typing.Any], typing.Any]
+        typing.Callable[[typing.Any, typing.Any], typing.Any]
 
         >>> def f(a: int, b) -> int: ...
         >>> get_typing(f)
-        collections.abc.Callable[['int', typing.Any], 'int']
+        typing.Callable[[int, typing.Any], int]
 
         >>> def f(a: int, b) -> int: ...
         >>> get_typing(f)
-        collections.abc.Callable[..., 'int']
+        typing.Callable[..., int]
 
-        >>> get_typing(Dict[int, Union[int, float]])
-        dict[int, typing.Union[int, float]]
+        # >>> get_typing(Dict[int, Union[int, float]])
+        # typing.Dict[int, typing.Union[int, float]]
 
-        >>> get_typing(Dict[int, Union[TypeVar("T", bound=int), float]])
-        dict[int, typing.Union[int, float]]
+        # >>> print(get_typing(Dict[int, Union[TypeVar("T", bound=int), float]]))
+        # typing.Dict[int, typing.Union[int, float]]
 
-        >>> get_typing(Dict[int, Union[int, float]], get_origins=False)
-        typing.Dict[int, typing.Union[int, float]]
+        # >>> print(get_typing(Dict[int, Union[int, float]], get_origins=False))
+        # typing.Dict[int, typing.Union[int, float]]
 
         >>> import numbers
         >>> @get_typing.register(int)
-        >>> @get_typing.register(float)
-        >>> @get_typing.register(complex)
-        >>> def _get_typing_number(value, *, get_origins: bool = True):
+        ... @get_typing.register(float)
+        ... @get_typing.register(complex)
+        ... def _get_typing_number(value, *, get_origins: bool = True):
         ...    return numbers.Number
         >>> get_typing(3.4)
-        numbers.Number
+        <class 'numbers.Number'>
 
     """
     recursive_get = functools.partial(get_typing, annotate_callable_kwargs=annotate_callable_kwargs)
