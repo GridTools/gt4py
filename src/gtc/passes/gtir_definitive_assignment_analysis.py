@@ -24,7 +24,9 @@ class DefinitiveAssignmentAnalysis(NodeVisitor):
         self.visit(node.false_branch, alive_vars=false_branch_vars, **kwargs)
         alive_vars.update(true_branch_vars & false_branch_vars)
 
-    def visit_ParAssignStmt(self, node: gtir.ParAssignStmt, *, alive_vars: Set[str], **kwargs) -> None:
+    def visit_ParAssignStmt(
+        self, node: gtir.ParAssignStmt, *, alive_vars: Set[str], **kwargs
+    ) -> None:
         self.visit(node.right, alive_vars=alive_vars, **kwargs)
         alive_vars.add(node.left.name)
 
