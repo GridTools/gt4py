@@ -127,7 +127,7 @@ def daa_8(in_field: Field[float], out_field: Field[float]):
             out_field = tmp
 
 @register_test_case(valid=True)
-def daa_8(in_field: Field[float], cond_field: Field[float], mask: bool, out_field: Field[float]):
+def daa_9(in_field: Field[float], cond_field: Field[float], mask: bool, out_field: Field[float]):
     """Valid stencil with `tmp` defined in all branches of a nested if-elif-else statement"""
     with computation(PARALLEL):
         with interval(...):
@@ -143,7 +143,7 @@ def daa_8(in_field: Field[float], cond_field: Field[float], mask: bool, out_fiel
             out_field = tmp
 
 @register_test_case(valid=False)
-def daa_8(in_field: Field[float], cond_field: Field[float], mask: bool, out_field: Field[float]):
+def daa_10(in_field: Field[float], cond_field: Field[float], mask: bool, out_field: Field[float]):
     """Invalid stencil with `tmp` defined in all, but one branches of a nested if-elif-else statement"""
     with computation(PARALLEL):
         with interval(...):
