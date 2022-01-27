@@ -88,9 +88,6 @@ class StrEnum(str, enum.Enum):
 
     @classmethod
     def _value_validator(cls, v: Any) -> StrEnum:
-        # if we get a string that is a member of this enum use its value
-        if isinstance(v, str) and v in cls.__members__:
-            v = cls[v]
         if isinstance(v, cls):
             return v
         return cls(v)  # throws a ValueError if value is not contained in enum
