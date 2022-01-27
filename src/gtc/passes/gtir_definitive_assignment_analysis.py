@@ -16,6 +16,7 @@ class DefinitiveAssignmentAnalysis(NodeVisitor):
     previous value again). Note that whether a symbols is defined is independent of the actual
     result of the condition.
     """
+
     def visit_IfStmt(self, node: gtir.FieldIfStmt, *, alive_vars: Set[str], **kwargs):
         true_branch_vars = {*alive_vars}
         false_branch_vars = {*alive_vars}
@@ -31,7 +32,7 @@ class DefinitiveAssignmentAnalysis(NodeVisitor):
         self,
         node: gtir.FieldAccess,
         *,
-        alive_vars: [str],
+        alive_vars: Set[str],
         invalid_accesses: List[gtir.FieldAccess],
         **kwargs,
     ):
@@ -54,9 +55,7 @@ analyze = DefinitiveAssignmentAnalysis.apply
 
 
 def check(gtir_stencil_expr: gtir.Stencil):
-    """
-    Execute definitive assignment analysis and warn on errors.
-    """
+    """Execute definitive assignment analysis and warn on errors."""
     invalid_accesses = analyze(gtir_stencil_expr)
     for invalid_access in invalid_accesses:
         warnings.warn(f"`{invalid_access.name}` may be uninitialized.")

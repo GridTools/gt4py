@@ -8,6 +8,7 @@ from gt4py.gtscript import PARALLEL, Field, computation, interval, stencil
 from gt4py.stencil_builder import StencilBuilder
 from gtc.passes import gtir_definitive_assignment_analysis as daa
 
+
 # A list of dictionaries containing a stencil definition and the expected test case outputs
 test_data: List[Tuple[Callable, bool]] = []
 
@@ -113,6 +114,7 @@ def daa_7(in_field: Field[float], out_field: Field[float]):
                 tmp = in_field + 1
             out_field = tmp
 
+
 @register_test_case(valid=True)
 def daa_8(in_field: Field[float], out_field: Field[float]):
     """Valid stencil with `tmp` defined in all three branches of if-elif-else statement"""
@@ -126,6 +128,7 @@ def daa_8(in_field: Field[float], out_field: Field[float]):
                 tmp = in_field + 2
             out_field = tmp
 
+
 @register_test_case(valid=True)
 def daa_9(in_field: Field[float], cond_field: Field[float], mask: bool, out_field: Field[float]):
     """Valid stencil with `tmp` defined in all branches of a nested if-elif-else statement"""
@@ -134,13 +137,14 @@ def daa_9(in_field: Field[float], cond_field: Field[float], mask: bool, out_fiel
             if in_field > 0:
                 tmp = in_field
             elif in_field == 0:
-                if in_field+1 == 0:
+                if in_field + 1 == 0:
                     tmp = in_field + 1
                 else:
                     tmp = in_field + 2
             else:
                 tmp = in_field + 3
             out_field = tmp
+
 
 @register_test_case(valid=False)
 def daa_10(in_field: Field[float], cond_field: Field[float], mask: bool, out_field: Field[float]):
@@ -150,11 +154,12 @@ def daa_10(in_field: Field[float], cond_field: Field[float], mask: bool, out_fie
             if in_field > 0:
                 tmp = in_field
             elif in_field == 0:
-                if in_field+1 == 0:
+                if in_field + 1 == 0:
                     tmp = in_field + 1
             else:
                 tmp = in_field + 3
             out_field = tmp
+
 
 @pytest.mark.parametrize("definition,valid", [(stencil, valid) for stencil, valid in test_data])
 def test_daa(definition, valid):
