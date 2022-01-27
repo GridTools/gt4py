@@ -54,6 +54,13 @@ class SymbolTypeVariable(SymbolType):
     bound: typing.Type[SymbolType]
 
 
+class OffsetType(SymbolType):
+    ...
+
+    def __str__(self):
+        return f"Offset[{self.id}]"
+
+
 class DataType(SymbolType):
     ...
 
@@ -62,20 +69,39 @@ class ScalarType(DataType):
     kind: ScalarKind
     shape: Optional[list[int]] = None
 
+    def __str__(self):
+        kind_str = self.kind.name.lower()
+        if self.shape is None:
+            return kind_str
+        return f"{kind_str}{self.shape}"
+
 
 class TupleType(DataType):
     types: list[DataType]
+
+    def __str__(self):
+        return f"tuple{self.types}"
 
 
 class FieldType(DataType):
     dims: Union[list[Dimension], Literal[Ellipsis]]  # type: ignore[valid-type,misc]
     dtype: ScalarType
 
+    def __str__(self):
+        dims = "..." if self.dims is Ellipsis else f"[{', '.join(dim.name for dim in self.dims)}]"
+        return f"Field[{dims}, dtype={self.dtype}]"
+
 
 class FunctionType(SymbolType):
     args: list[DataType]
     kwargs: dict[str, DataType]
     returns: DataType
+
+    def __str__(self):
+        arg_strs = [str(arg) for arg in self.args]
+        kwarg_strs = [f"{key}: {value}" for key, value in self.kwargs]
+        args_str = ", ".join(*arg_strs, *kwarg_strs)
+        return f"({args_str}) -> {self.returns}"
 
 
 class LocatedNode(Node):
@@ -100,8 +126,16 @@ class FieldSymbol(DataSymbol):
     type: Union[FieldType, DeferredSymbolType]  # noqa A003
 
 
+class TupleSymbol(DataSymbol):
+    type: Union[TupleType, DeferredSymbolType]  # noqa A003
+
+
 class Function(Symbol):
     type: FunctionType  # noqa A003
+
+
+class OffsetSymbol(Symbol):
+    type: OffsetType  # noqa A003
 
 
 class Expr(LocatedNode):
@@ -131,6 +165,15 @@ class UnaryOperator(StrEnum):
     USUB = "minus"
     NOT = "not_"
 
+    def __str__(self) -> str:
+        if self is self.UADD:
+            return "+"
+        elif self is self.USUB:
+            return "-"
+        elif self is self.NOT:
+            return "not"
+        return "Unknown UnaryOperator"
+
 
 class UnaryOp(Expr):
     op: UnaryOperator
@@ -144,6 +187,21 @@ class BinaryOperator(StrEnum):
     DIV = "divides"
     BIT_AND = "and_"
     BIT_OR = "or_"
+
+    def __str__(self) -> str:
+        if self is self.ADD:
+            return "+"
+        elif self is self.SUB:
+            return "-"
+        elif self is self.MULT:
+            return "*"
+        elif self is self.DIV:
+            return "/"
+        elif self is self.BIT_AND:
+            return "&"
+        elif self is self.BIT_OR:
+            return "|"
+        return "Unknown BinaryOperator"
 
 
 class BinOp(Expr):
@@ -167,6 +225,11 @@ class Compare(Expr):
 class Call(Expr):
     func: Name
     args: list[Expr]
+
+
+class Shift(Expr):
+    offsets: list[Subscript]
+    expr: Expr
 
 
 class Stmt(LocatedNode):

@@ -103,6 +103,9 @@ venv.bak/
 # Rope project settings
 .ropeproject
 
+# SpaceVim altfiles settings
+.project_alt.json
+
 # mkdocs documentation
 /site
 
