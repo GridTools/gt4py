@@ -15,7 +15,7 @@
 try:
     from atlas4py import IrregularConnectivity
 except ImportError:
-    IrregularConnectivity = type(None)
+    IrregularConnectivity = None
 
 
 class AtlasTable:
