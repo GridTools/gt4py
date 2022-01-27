@@ -587,8 +587,6 @@ def fendef_embedded(fun, *args, **kwargs):  # noqa: 536
             res = sten(*ins_iters)
 
             if isinstance(res, tuple) != isinstance(out_, (tuple, list)):
-                print(res)
-                print(out_)
                 raise IndexError("Number of return values doesn't match number of output fields.")
             if not isinstance(res, tuple):
                 res = (res,)

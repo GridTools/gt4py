@@ -92,7 +92,6 @@ class CreateGlobalTmps(NodeTranslator):
                 output, call = todos.pop()
                 output_shifts: List[tuple] = shifts.get(output.id, [])
                 domain = self._extend_domain(domain, offset_provider, output_shifts)
-                # for output in outputs:
                 if output.id in {tmp.id for tmp in tmps}:
                     assert output.id not in tmp_domains
                     tmp_domains[output.id] = domain
