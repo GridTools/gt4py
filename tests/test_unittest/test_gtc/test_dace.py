@@ -21,18 +21,19 @@ import pytest
 from gt4py.backend.gtc_backend.defir_to_gtir import DefIRToGTIR
 from gt4py.definitions import BuildOptions
 from gt4py.frontend.gtscript_frontend import GTScriptFrontend
-from gtc.common import AxisBound
+from gtc.common import AxisBound, DataType
 from gtc.dace.dace_to_oir import convert
 from gtc.dace.oir_to_dace import OirSDFGBuilder
 from gtc.dace.utils import assert_sdfg_equal
 from gtc.gtir_to_oir import GTIRToOIR
-from gtc.oir import Interval
+from gtc.oir import Interval, Literal
 from gtc.passes.gtir_pipeline import GtirPipeline
 
 from ...test_integration.stencil_definitions import EXTERNALS_REGISTRY as externals_registry
 from ...test_integration.stencil_definitions import REGISTRY as stencil_registry
 from .oir_utils import (
     AssignStmtFactory,
+    HorizontalExecutionFactory,
     StencilFactory,
     VerticalLoopFactory,
     VerticalLoopSectionFactory,
@@ -61,7 +62,7 @@ def test_stencils_roundtrip(stencil_name):
 
     sdfg_pre = deepcopy(sdfg)
 
-    oir = convert(sdfg)
+    oir = convert(sdfg, oir.loc)
     sdfg_post = OirSDFGBuilder().visit(oir)
     assert_sdfg_equal(sdfg_pre, sdfg_post)
 
@@ -89,4 +90,39 @@ def test_same_node_read_write_not_overlap():
         ]
     )
     sdfg = OirSDFGBuilder().visit(oir)
-    convert(sdfg)
+    convert(sdfg, oir.loc)
+
+
+def test_two_vertical_loops_no_read():
+    oir_pre = StencilFactory(
+        vertical_loops=[
+            VerticalLoopFactory(
+                sections__0=VerticalLoopSectionFactory(
+                    horizontal_executions=[
+                        HorizontalExecutionFactory(
+                            body__0=AssignStmtFactory(
+                                left__name="field",
+                                right=Literal(value="42.0", dtype=DataType.FLOAT32),
+                            )
+                        )
+                    ],
+                    interval__end=AxisBound.from_start(3),
+                ),
+            ),
+            VerticalLoopFactory(
+                sections__0=VerticalLoopSectionFactory(
+                    horizontal_executions=[
+                        HorizontalExecutionFactory(
+                            body__0=AssignStmtFactory(
+                                left__name="field",
+                                right=Literal(value="43.0", dtype=DataType.FLOAT32),
+                            )
+                        )
+                    ],
+                    interval__start=AxisBound.from_start(3),
+                ),
+            ),
+        ]
+    )
+    sdfg = OirSDFGBuilder().visit(oir_pre)
+    convert(sdfg, oir_pre.loc)

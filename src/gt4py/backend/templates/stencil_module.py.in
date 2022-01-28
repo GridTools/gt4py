@@ -31,44 +31,22 @@ gt_default_origin, gt_options
 import time
 
 import numpy as np
+import scipy.special
 from numpy import dtype
 {{ imports }}
 
-from gt4py.stencil_object import AccessKind, Boundary, DomainInfo, FieldInfo, ParameterInfo, StencilObject
+from gt4py.definitions import AccessKind, Boundary, CartesianSpace
+from gt4py.stencil_object import DomainInfo, FieldInfo, ParameterInfo, StencilObject
 
 {{ module_members }}
 
 class {{ class_name }}(StencilObject):
     """
-    {{ docstring | indent(4)}}
+    {{ docstring }}
 
-    Default Parameters
-    ------------------
-    domain : `Sequence` of `int`, optional
-        Shape of the computation domain. If `None`, it will be used the
-        largest feasible domain according to the provided input fields
-        and origin values (`None` by default).
-
-    origin :  `[int * ndims]` or `{'field_name': [int * ndims]}`, optional
-        If a single offset is passed, it will be used for all fields.
-        If a `dict` is passed, there could be an entry for each field.
-        A special key *'_all_'* will represent the value to be used for all
-        the fields not explicitly defined. If `None` is passed or it is
-        not possible to assign a value to some field according to the
-        previous rule, the value will be inferred from the global boundaries
-        of the field. Note that the function checks if the origin values
-        are at least equal to the `global_border` attribute of that field,
-        so a 0-based origin will only be acceptable for fields with
-        a 0-area support region.
-
-    exec_info : `dict`, optional
-        Dictionary used to store information about the stencil execution.
-        (`None` by default). If the dictionary contains the magic key
-        '__aggregate_data' and it evaluates to `True`, the dictionary is
-        populated with the sub-dictionary '{{ class_name }}' containing
-        different performance statistics. These include the stencil calls count,
-        the cumulative time spent in all stencil calls, and the actual time spent
-        in carrying out the computations.
+    The callable interface is the same of the stencil definition function,
+    with some extra keyword arguments. Check :class:`gt4py.StencilObject`
+    for the full specification.
     """
 
 {%- filter indent(width=4) %}

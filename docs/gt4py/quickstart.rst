@@ -88,7 +88,7 @@ over 3 dimensions:
 
     import gt4py.gtscript as gtscript
 
-    backend = "numpy"
+    backend = "gtc:numpy"
 
     @gtscript.stencil(backend=backend)
     def stencil_example(
@@ -128,11 +128,11 @@ function with the ``stencil`` decorator provided by GT4Py.
 The ``stencil`` decorator generates code in Python or C++ depending on the ``backend`` specified by name.
 Currently, the following backends are available:
 
-* ``"debug"``: a slow, yet human-readable python backend
-* ``"numpy"``: a vectorized python backend
-* ``"gtx86"``: a backend based on GridTools code performance-optimized for x86 architecture
-* ``"gtmc"``: a GridTools backend targeting many core architectures
-* ``"gtcuda"``: a GridTools backend targeting GPUs
+* ``"gtc:numpy"``: a vectorized python backend
+* ``"gtc:gt:cpu_kfirst"``: a backend based on GridTools code performance-optimized for x86 architecture
+* ``"gtc:gt:cpu_ifirst"``: a GridTools backend targeting many core architectures
+* ``"gtc:gt:gpu"``: a GridTools backend targeting GPUs
+* ``"gtc:gpu"``: a backend targeting NVIDIA GPUs using CUDA and some GridTools
 
 The decorator further replaces the stencil definition function (here ``stencil_example``) by a callable object that
 can be used as a function to call the generated code which modifies the passed data in place.
@@ -206,6 +206,11 @@ The ``default_origin`` parameter plays two roles:
 
 #. If when calling the stencil, no other `origin` is specified, this value is where the `iteration domain` begins, i.e.
    the grid point with the lowest index where a value is written.
+
+.. note::
+    Slicing a storage with reduced dimension, e.g. `field_a[:, :, 0]`, is not supported. Use `Storage.to_numpy()` to
+    retrieve a slicable array, e.g. `field_a.to_numpy()[:, :, 0]`. If a storage is needed again create a new one
+    from the sliced data.
 
 --------------------------
 Computations and Intervals

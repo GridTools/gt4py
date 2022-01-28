@@ -20,6 +20,7 @@ from eve import Node, codegen
 from eve.codegen import FormatTemplate as as_fmt
 from eve.codegen import MakoTemplate as as_mako
 from eve.concepts import LeafNode
+from gtc import common
 from gtc.common import BuiltInLiteral, DataType, LoopOrder, NativeFunction, UnaryOperator
 from gtc.gtcpp import gtcpp
 
@@ -74,15 +75,19 @@ class GTCppCodegen(codegen.TemplatedGenerator):
     AssignStmt = as_fmt("{left} = {right};")
 
     def visit_AccessorRef(self, accessor_ref: gtcpp.AccessorRef, **kwargs):
-        offset = accessor_ref.offset
-        if offset.i == offset.j == offset.k == 0 and not accessor_ref.data_index:
-            # Skip offsets in the accessor if possible, improves generated code readability and reduces code size for point-wise computations significantly
-            return f"eval({accessor_ref.name}())"
-        return (
-            f"eval({accessor_ref.name}({offset.i}, {offset.j}, {offset.k}"
-            + "".join(f", {self.visit(d)}" for d in accessor_ref.data_index)
-            + "))"
-        )
+        if isinstance(accessor_ref.offset, common.CartesianOffset):
+            offset = accessor_ref.offset
+            if offset.i == offset.j == offset.k == 0 and not accessor_ref.data_index:
+                # Skip offsets in the accessor if possible, improves generated code readability and reduces code size for point-wise computations significantly
+                return f"eval({accessor_ref.name}())"
+            i_offset, j_offset, k_offset = offset.i, offset.j, offset.k
+        elif isinstance(accessor_ref.offset, gtcpp.VariableKOffset):
+            i_offset, j_offset = 0, 0
+            k_offset = self.visit(accessor_ref.offset.k, **kwargs)
+        else:
+            raise TypeError("Unsupported offset type")
+        data_index = "".join(f", {self.visit(d)}" for d in accessor_ref.data_index)
+        return f"eval({accessor_ref.name}({i_offset}, {j_offset}, {k_offset}{data_index}))"
 
     LocalAccess = as_fmt("{name}")
 
@@ -116,10 +121,18 @@ class GTCppCodegen(codegen.TemplatedGenerator):
                 NativeFunction.ARCSIN: "std::asin",
                 NativeFunction.ARCCOS: "std::acos",
                 NativeFunction.ARCTAN: "std::atan",
+                NativeFunction.SINH: "std::sinh",
+                NativeFunction.COSH: "std::cosh",
+                NativeFunction.TANH: "std::tanh",
+                NativeFunction.ARCSINH: "std::asinh",
+                NativeFunction.ARCCOSH: "std::acosh",
+                NativeFunction.ARCTANH: "std::atanh",
                 NativeFunction.SQRT: "std::sqrt",
                 NativeFunction.POW: "std::pow",
                 NativeFunction.EXP: "std::exp",
                 NativeFunction.LOG: "std::log",
+                NativeFunction.GAMMA: "std::tgamma",
+                NativeFunction.CBRT: "std::cbrt",
                 NativeFunction.ISFINITE: "std::isfinite",
                 NativeFunction.ISINF: "std::isinf",
                 NativeFunction.ISNAN: "std::isnan",

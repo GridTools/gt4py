@@ -50,7 +50,8 @@ class FuseKernels(NodeTranslator):
                 kernel.iter_tree()
                 .if_isinstance(cuir.FieldAccess)
                 .filter(
-                    lambda x: x.offset.i != 0 or x.offset.j != 0 or (x.offset.k != 0 and parallel)
+                    lambda x: any(off != 0 for off in x.offset.to_dict().values())
+                    or (x.offset.to_dict()["k"] != 0 and parallel)
                 )
                 .getattr("name")
                 .to_set()

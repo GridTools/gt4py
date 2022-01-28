@@ -17,10 +17,128 @@
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 
-from eve import NodeTranslator, SymbolTableTrait
+from eve import NodeTranslator, SourceLocation, SymbolTableTrait
+from gt4py.definitions import Extent
 from gtc import common, oir
 
-from .utils import AccessCollector, symbol_name_creator
+from .utils import (
+    AccessCollector,
+    collect_symbol_names,
+    compute_horizontal_block_extents,
+    symbol_name_creator,
+)
+
+
+class HorizontalExecutionMerging(NodeTranslator):
+    def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> oir.Stencil:
+        all_names = collect_symbol_names(node)
+        return self.generic_visit(
+            node,
+            block_extents=compute_horizontal_block_extents(node),
+            new_symbol_name=symbol_name_creator(all_names),
+            **kwargs,
+        )
+
+    def visit_VerticalLoopSection(
+        self,
+        node: oir.VerticalLoopSection,
+        *,
+        block_extents: Dict[int, Extent],
+        new_symbol_name: Callable[[str], str],
+        **kwargs: Any,
+    ) -> oir.VerticalLoopSection:
+        @dataclass
+        class UncheckedHorizontalExecution:
+            # local replacement without type checking for type-checked oir node
+            # required to reach reasonable run times for large node counts
+            body: List[oir.Stmt]
+            declarations: List[oir.LocalScalar]
+            loc: Optional[SourceLocation]
+
+            assert set(oir.HorizontalExecution.__fields__) == {
+                "loc",
+                "symtable_",
+                "body",
+                "declarations",
+            }, (
+                "Unexpected field in oir.HorizontalExecution, "
+                "probably UncheckedHorizontalExecution needs an update"
+            )
+
+            @classmethod
+            def from_oir(cls, hexec: oir.HorizontalExecution):
+                return cls(body=hexec.body, declarations=hexec.declarations, loc=hexec.loc)
+
+            def to_oir(self) -> oir.HorizontalExecution:
+                return oir.HorizontalExecution(
+                    body=self.body, declarations=self.declarations, loc=self.loc
+                )
+
+        horizontal_executions = [
+            UncheckedHorizontalExecution.from_oir(node.horizontal_executions[0])
+        ]
+        new_block_extents = [block_extents[id(node.horizontal_executions[0])]]
+        last_writes = AccessCollector.apply(node.horizontal_executions[0]).write_fields()
+
+        for this_hexec in node.horizontal_executions[1:]:
+            last_extent = new_block_extents[-1]
+
+            this_offset_reads = {
+                name
+                for name, offsets in AccessCollector.apply(this_hexec).read_offsets().items()
+                if any(off[0] != 0 or off[1] != 0 for off in offsets)
+            }
+
+            reads_with_offset_after_write = last_writes & this_offset_reads
+            this_extent = block_extents[id(this_hexec)]
+
+            if reads_with_offset_after_write or last_extent != this_extent:
+                # Cannot merge: simply append to list
+                horizontal_executions.append(UncheckedHorizontalExecution.from_oir(this_hexec))
+                new_block_extents.append(this_extent)
+                last_writes = AccessCollector.apply(this_hexec).write_fields()
+            else:
+                # Merge
+                duplicated_locals = {
+                    decl.name for decl in horizontal_executions[-1].declarations
+                } & {decl.name for decl in this_hexec.declarations}
+                # Map from old to new scalar names applied to the second horizontal execution
+                scalar_map = {name: new_symbol_name(name) for name in duplicated_locals}
+                locals_symtable = {decl.name: decl for decl in this_hexec.declarations}
+
+                new_body = self.visit(this_hexec.body, scalar_map=scalar_map, **kwargs)
+
+                this_not_duplicated = [
+                    decl for decl in this_hexec.declarations if decl.name not in duplicated_locals
+                ]
+                this_mapped = [
+                    oir.ScalarDecl(name=scalar_map[name], dtype=locals_symtable[name].dtype)
+                    for name in duplicated_locals
+                ]
+
+                horizontal_executions[-1] = UncheckedHorizontalExecution(
+                    body=horizontal_executions[-1].body + new_body,
+                    declarations=(
+                        horizontal_executions[-1].declarations + this_not_duplicated + this_mapped
+                    ),
+                    loc=horizontal_executions[-1].loc,
+                )
+                last_writes |= AccessCollector.apply(new_body).write_fields()
+
+        return oir.VerticalLoopSection(
+            interval=node.interval,
+            horizontal_executions=[hexec.to_oir() for hexec in horizontal_executions],
+            loc=node.loc,
+        )
+
+    def visit_ScalarAccess(
+        self, node: oir.ScalarAccess, *, scalar_map: Dict[str, str], **kwargs: Any
+    ) -> oir.ScalarAccess:
+        return oir.ScalarAccess(
+            name=scalar_map[node.name] if node.name in scalar_map else node.name,
+            dtype=node.dtype,
+            loc=node.loc,
+        )
 
 
 @dataclass
@@ -59,8 +177,17 @@ class OnTheFlyMerging(NodeTranslator):
             offset = self.visit(node.offset, **kwargs)
             key = node.name, (offset.i, offset.j, offset.k)
             if key in offset_symbol_map:
-                return oir.ScalarAccess(name=offset_symbol_map[key], dtype=node.dtype)
+                return oir.ScalarAccess(name=offset_symbol_map[key], dtype=node.dtype, loc=node.loc)
         return self.generic_visit(node, **kwargs)
+
+    def visit_ScalarAccess(
+        self, node: oir.ScalarAccess, *, scalar_map: Dict[str, str], **kwargs: Any
+    ) -> oir.ScalarAccess:
+        return oir.ScalarAccess(
+            name=scalar_map[node.name] if node.name in scalar_map else node.name,
+            dtype=node.dtype,
+            loc=node.loc,
+        )
 
     def _merge(
         self,
@@ -103,21 +230,34 @@ class OnTheFlyMerging(NodeTranslator):
                 nf.ARCSIN,
                 nf.ARCCOS,
                 nf.ARCTAN,
+                nf.SINH,
+                nf.COSH,
+                nf.TANH,
+                nf.ARCSINH,
+                nf.ARCCOSH,
+                nf.ARCTANH,
                 nf.SQRT,
                 nf.EXP,
                 nf.LOG,
+                nf.GAMMA,
+                nf.CBRT,
             }
             calls = first.iter_tree().if_isinstance(oir.NativeFuncCall).getattr("func")
             return any(call in expensive_calls for call in calls)
+
+        def first_has_variable_access() -> bool:
+            return first_accesses.has_variable_access()
 
         if (
             first_fields_rewritten_later()
             or first_writes_protected()
             or first_has_large_body()
             or first_has_expensive_function_call()
+            or first_has_variable_access()
         ):
             return [first] + self._merge(others, symtable, new_symbol_name, protected_fields)
 
+        first_scalars = {decl.name for decl in first.declarations}
         writes = first_accesses.write_fields()
         others_otf = []
         for horizontal_execution in others:
@@ -126,6 +266,7 @@ class OnTheFlyMerging(NodeTranslator):
                 *(
                     offsets
                     for field, offsets in AccessCollector.apply(horizontal_execution)
+                    .cartesian_accesses()
                     .read_offsets()
                     .items()
                     if field in writes
@@ -136,18 +277,46 @@ class OnTheFlyMerging(NodeTranslator):
                 others_otf.append(horizontal_execution)
                 continue
 
+            duplicated_locals = first_scalars & {
+                decl.name for decl in horizontal_execution.declarations
+            }
+            scalar_map = {name: new_symbol_name(name) for name in duplicated_locals}
+
             offset_symbol_map = {
                 (name, o): new_symbol_name(name) for name in writes for o in read_offsets
             }
 
+            # 4 contributions to the new declarations list
+            combined_symtable = {**symtable, **first.symtable_}
+            decls_from_later = [
+                d for d in horizontal_execution.declarations if d.name not in duplicated_locals
+            ]
+            decls_from_first = [
+                d
+                for d in first.declarations
+                if d not in horizontal_execution.declarations or d.name in duplicated_locals
+            ]
+            decls_renamed_locals_in_later = [
+                oir.LocalScalar(name=new_name, dtype=combined_symtable[old_name].dtype)
+                for old_name, new_name in scalar_map.items()
+            ]
+            new_decls = [
+                oir.LocalScalar(name=new_name, dtype=combined_symtable[old_name].dtype)
+                for (old_name, _), new_name in offset_symbol_map.items()
+            ]
+
+            declarations = (
+                decls_from_later + decls_from_first + decls_renamed_locals_in_later + new_decls
+            )
+
             merged = oir.HorizontalExecution(
-                body=self.visit(horizontal_execution.body, offset_symbol_map=offset_symbol_map),
-                declarations=horizontal_execution.declarations
-                + [
-                    oir.LocalScalar(name=new_name, dtype=symtable[old_name].dtype)
-                    for (old_name, _), new_name in offset_symbol_map.items()
-                ]
-                + [d for d in first.declarations if d not in horizontal_execution.declarations],
+                body=self.visit(
+                    horizontal_execution.body,
+                    offset_symbol_map=offset_symbol_map,
+                    scalar_map=scalar_map,
+                ),
+                declarations=declarations,
+                loc=first.loc,
             )
             for offset in read_offsets:
                 merged.body = (
@@ -155,7 +324,7 @@ class OnTheFlyMerging(NodeTranslator):
                         first.body,
                         shift=offset,
                         offset_symbol_map=offset_symbol_map,
-                        symtable=symtable,
+                        scalar_map={},
                     )
                     + merged.body
                 )
@@ -175,6 +344,7 @@ class OnTheFlyMerging(NodeTranslator):
             next_vls = oir.VerticalLoopSection(
                 interval=last_vls.interval,
                 horizontal_executions=self._merge(last_vls.horizontal_executions, **kwargs),
+                loc=node.loc,
             )
             applied = len(next_vls.horizontal_executions) < len(last_vls.horizontal_executions)
 
@@ -189,27 +359,26 @@ class OnTheFlyMerging(NodeTranslator):
             loop_order=node.loop_order,
             sections=sections,
             caches=[c for c in node.caches if c.name in accessed],
+            loc=node.loc,
         )
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> oir.Stencil:
-        vertical_loops: List[oir.VerticalLoop] = []
         protected_fields = set(n.name for n in node.params)
+        new_symbol_name = symbol_name_creator(collect_symbol_names(node))
+        vertical_loops = []
         for vl in reversed(node.vertical_loops):
-            vertical_loops.insert(
-                0,
-                self.visit(
-                    vl,
-                    new_symbol_name=symbol_name_creator(set(kwargs["symtable"])),
-                    protected_fields=protected_fields,
-                    **kwargs,
-                ),
+            vl = self.visit(
+                vl, new_symbol_name=new_symbol_name, protected_fields=protected_fields, **kwargs
             )
-            access_collection = AccessCollector.apply(vl)
-            protected_fields |= access_collection.fields()
+            vertical_loops.append(vl)
+            protected_fields |= AccessCollector.apply(vl).read_fields()
+        vertical_loops = list(reversed(vertical_loops))
+
         accessed = AccessCollector.apply(vertical_loops).fields()
         return oir.Stencil(
             name=node.name,
             params=node.params,
             vertical_loops=vertical_loops,
             declarations=[d for d in node.declarations if d.name in accessed],
+            loc=node.loc,
         )

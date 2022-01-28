@@ -19,9 +19,9 @@ import pytest
 
 from gt4py import gtscript
 from gt4py import storage as gt_storage
-from gt4py.gtscript import __INLINED, BACKWARD, FORWARD, PARALLEL, computation, interval
+from gt4py.gtscript import __INLINED, BACKWARD, FORWARD, PARALLEL, Field, computation, interval
 
-from ..definitions import ALL_BACKENDS, CPU_BACKENDS, LEGACY_GRIDTOOLS_BACKENDS, OLD_BACKENDS
+from ..definitions import ALL_BACKENDS, CPU_BACKENDS, INTERNAL_BACKENDS
 from .stencil_definitions import EXTERNALS_REGISTRY as externals_registry
 from .stencil_definitions import REGISTRY as stencil_definitions
 
@@ -92,14 +92,10 @@ def test_ignore_np_errstate():
         divide_by_zero(field_a)
 
     # Usual behavior: with the numpy backend there is no error
-    setup_and_run(backend="numpy")
-
-    # Expect warning with debug or numpy + ignore_np_errstate=False
-    with pytest.warns(RuntimeWarning, match="divide by zero encountered"):
-        setup_and_run(backend="debug")
+    setup_and_run(backend="gtc:numpy")
 
     with pytest.warns(RuntimeWarning, match="divide by zero encountered"):
-        setup_and_run(backend="numpy", ignore_np_errstate=False)
+        setup_and_run(backend="gtc:numpy", ignore_np_errstate=False)
 
 
 @pytest.mark.parametrize("backend", CPU_BACKENDS)
@@ -291,11 +287,6 @@ def test_lower_dimensional_inputs_2d_to_3d_forward(backend):
 @pytest.mark.parametrize(
     "backend",
     [
-        "debug",
-        "numpy",
-        pytest.param("gtx86", marks=[pytest.mark.xfail]),
-        pytest.param("gtmc", marks=[pytest.mark.xfail]),
-        pytest.param("gtcuda", marks=[pytest.mark.requires_gpu, pytest.mark.xfail]),
         "gtc:numpy",
         "gtc:gt:cpu_ifirst",
         "gtc:gt:cpu_kfirst",
@@ -361,7 +352,10 @@ def test_input_order(backend):
             out_field = in_field * parameter
 
 
-@pytest.mark.parametrize("backend", OLD_BACKENDS)
+# TODO: Enable variable offsets on gtc:dace backend
+@pytest.mark.parametrize(
+    "backend", [backend for backend in ALL_BACKENDS if "dace" not in backend.values[0]]
+)
 def test_variable_offsets(backend):
     @gtscript.stencil(backend=backend)
     def stencil_ij(
@@ -383,7 +377,7 @@ def test_variable_offsets(backend):
             out_field = in_field[0, 0, 1] + in_field[0, 0, index_field + 1]
 
 
-@pytest.mark.parametrize("backend", OLD_BACKENDS)
+@pytest.mark.skip("While loop not yet supported")
 def test_variable_offsets_and_while_loop(backend):
     @gtscript.stencil(backend=backend)
     def stencil(
@@ -445,12 +439,8 @@ def test_write_data_dim_indirect_addressing(backend):
     input_field = gt_storage.ones(backend, default_origin, full_shape, dtype=np.int32)
     output_field = gt_storage.zeros(backend, default_origin, full_shape, dtype=INT32_VEC2)
 
-    if backend in (backend.values[0] for backend in LEGACY_GRIDTOOLS_BACKENDS):
-        with pytest.raises(ValueError):
-            gtscript.stencil(definition=stencil, backend=backend)
-    else:
-        gtscript.stencil(definition=stencil, backend=backend)(input_field, output_field, index := 1)
-        assert output_field[0, 0, 0, index] == 1
+    gtscript.stencil(definition=stencil, backend=backend)(input_field, output_field, index := 1)
+    assert output_field[0, 0, 0, index] == 1
 
 
 @pytest.mark.parametrize("backend", ALL_BACKENDS)
@@ -470,9 +460,76 @@ def test_read_data_dim_indirect_addressing(backend):
     input_field = gt_storage.ones(backend, default_origin, full_shape, dtype=INT32_VEC2)
     output_field = gt_storage.zeros(backend, default_origin, full_shape, dtype=np.int32)
 
-    if backend in (backend.values[0] for backend in LEGACY_GRIDTOOLS_BACKENDS):
-        with pytest.raises(ValueError):
-            gtscript.stencil(definition=stencil, backend=backend)
-    else:
-        gtscript.stencil(definition=stencil, backend=backend)(input_field, output_field, 1)
+    gtscript.stencil(definition=stencil, backend=backend)(input_field, output_field, 1)
+    assert output_field[0, 0, 0] == 1
+
+
+@pytest.mark.parametrize(
+    "backend",
+    [
+        "gtc:numpy",
+        "gtc:gt:cpu_ifirst",
+        "gtc:gt:cpu_kfirst",
+        pytest.param("gtc:gt:gpu", marks=[pytest.mark.requires_gpu]),
+        pytest.param("gtc:cuda", marks=[pytest.mark.requires_gpu]),
+        "gtc:dace",
+    ],
+)
+def test_negative_origin(backend):
+    def stencil_i(
+        input_field: gtscript.Field[gtscript.IJK, np.int32],
+        output_field: gtscript.Field[gtscript.IJK, np.int32],
+    ):
+        with computation(PARALLEL), interval(...):
+            output_field = input_field[1, 0, 0]
+
+    def stencil_k(
+        input_field: gtscript.Field[gtscript.IJK, np.int32],
+        output_field: gtscript.Field[gtscript.IJK, np.int32],
+    ):
+        with computation(PARALLEL), interval(...):
+            output_field = input_field[0, 0, 1]
+
+    input_field = gt_storage.ones(backend, (0, 0, 0), (1, 1, 1), dtype=np.int32)
+    output_field = gt_storage.zeros(backend, (0, 0, 0), (1, 1, 1), dtype=np.int32)
+
+    for origin, stencil in {(-1, 0, 0): stencil_i, (0, 0, -1): stencil_k}.items():
+        gtscript.stencil(definition=stencil, backend=backend)(
+            input_field, output_field, origin={"input_field": origin}
+        )
         assert output_field[0, 0, 0] == 1
+
+
+@pytest.mark.parametrize("backend", INTERNAL_BACKENDS)
+def test_origin_k_fields(backend):
+    @gtscript.stencil(backend=backend, rebuild=True)
+    def k_to_ijk(outp: Field[np.float64], inp: Field[gtscript.K, np.float64]):
+        with computation(PARALLEL), interval(...):
+            outp = inp
+
+    origin = {"outp": (0, 0, 1), "inp": (2,)}
+    domain = (2, 2, 8)
+
+    data = np.arange(10, dtype=np.float64)
+    inp = gt_storage.from_array(
+        data=data,
+        shape=(10,),
+        default_origin=(0,),
+        dtype=np.float64,
+        mask=[False, False, True],
+        backend=backend,
+    )
+    outp = gt_storage.zeros(
+        shape=(2, 2, 10), default_origin=(0, 0, 0), dtype=np.float64, backend=backend
+    )
+
+    k_to_ijk(outp, inp, origin=origin, domain=domain)
+
+    inp.device_to_host()
+    outp.device_to_host()
+    np.testing.assert_allclose(data, np.asarray(inp))
+    np.testing.assert_allclose(
+        np.broadcast_to(data[2:], shape=(2, 2, 8)), np.asarray(outp)[:, :, 1:-1]
+    )
+    np.testing.assert_allclose(0.0, np.asarray(outp)[:, :, 0])
+    np.testing.assert_allclose(0.0, np.asarray(outp)[:, :, -1])

@@ -48,7 +48,7 @@ def normalize_storage_spec(default_origin, shape, dtype, mask):
             - default_origin: tuple of ints with default origin values for the non-masked dimensions
             - shape: tuple of ints with shape values for the non-masked dimensions
             - dtype: scalar numpy.dtype (non-structured and without subarrays)
-            - backend: backend identifier string (debug, numpy, gtx86, gtmc, gtcuda, ...)
+            - backend: backend identifier string (gtc:numpy, gtc:gt:cpu_kfirst, gtc:gpu, ...)
             - mask: a tuple of bools (at least 3d)
     """
 
@@ -77,8 +77,12 @@ def normalize_storage_spec(default_origin, shape, dtype, mask):
                 f"len(shape)(={len(shape)}) must be equal to len(mask)(={len(mask)}) "
                 f"or the number of 'True' entries in mask '{mask}'."
             )
+
         if sum(mask) < len(shape):
             shape = tuple(int(d) for i, d in enumerate(shape) if mask[i])
+        else:
+            shape = tuple(shape)
+
         if any(i <= 0 for i in shape):
             raise ValueError(f"shape ({shape}) contains non-positive value.")
     else:
@@ -93,8 +97,12 @@ def normalize_storage_spec(default_origin, shape, dtype, mask):
                 f"len(default_origin)(={len(default_origin)}) must be equal to len(mask)(={len(mask)}) "
                 f"or the number of 'True' entries in mask '{mask}'."
             )
+
         if sum(mask) < len(default_origin):
             default_origin = tuple(d for i, d in enumerate(default_origin) if mask[i])
+        else:
+            default_origin = tuple(default_origin)
+
         if any(i < 0 for i in default_origin):
             raise ValueError("default_origin ({}) contains negative value.".format(default_origin))
     else:

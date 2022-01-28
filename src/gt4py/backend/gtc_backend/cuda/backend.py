@@ -17,10 +17,10 @@
 from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple, Type
 
 from eve import codegen
-from gt4py import backend as gt_backend
 from gt4py import gt_src_manager
-from gt4py.backend import BaseGTBackend, CLIBackendMixin
+from gt4py.backend.base import CLIBackendMixin, register
 from gt4py.backend.gt_backends import (
+    BaseGTBackend,
     GTCUDAPyModuleGenerator,
     cuda_is_compatible_layout,
     cuda_is_compatible_type,
@@ -33,7 +33,7 @@ from gtc.common import DataType
 from gtc.cuir import cuir, cuir_codegen, extent_analysis, kernel_fusion, oir_to_cuir
 from gtc.passes.gtir_pipeline import GtirPipeline
 from gtc.passes.oir_optimizations.pruning import NoFieldAccessPruning
-from gtc.passes.oir_pipeline import OirPipeline
+from gtc.passes.oir_pipeline import DefaultPipeline
 
 
 if TYPE_CHECKING:
@@ -48,7 +48,11 @@ class GTCCudaExtGenerator:
 
     def __call__(self, definition_ir) -> Dict[str, Dict[str, str]]:
         gtir = GtirPipeline(DefIRToGTIR.apply(definition_ir)).full()
-        oir = OirPipeline(gtir_to_oir.GTIRToOIR().visit(gtir)).full(skip=[NoFieldAccessPruning])
+        base_oir = gtir_to_oir.GTIRToOIR().visit(gtir)
+        oir_pipeline = self.backend.builder.options.backend_opts.get(
+            "oir_pipeline", DefaultPipeline(skip=[NoFieldAccessPruning])
+        )
+        oir = oir_pipeline.run(base_oir)
         cuir = oir_to_cuir.OIRToCUIR().visit(oir)
         cuir = kernel_fusion.FuseKernels().visit(cuir)
         cuir = extent_analysis.ComputeExtents().visit(cuir)
@@ -82,7 +86,7 @@ class GTCCudaBindingsCodegen(codegen.TemplatedGenerator):
             data_ndim = len(node.data_dims)
             sid_ndim = domain_ndim + data_ndim
             if kwargs["external_arg"]:
-                return "py::buffer {name}, std::array<gt::uint_t,{sid_ndim}> {name}_origin".format(
+                return "py::buffer {name}, std::array<gt::int_t,{sid_ndim}> {name}_origin".format(
                     name=node.name,
                     sid_ndim=sid_ndim,
                 )
@@ -125,7 +129,7 @@ class GTCCudaBindingsCodegen(codegen.TemplatedGenerator):
         return generated_code
 
 
-@gt_backend.register
+@register
 class GTCCudaBackend(BaseGTBackend, CLIBackendMixin):
     """CUDA backend using gtc."""
 

@@ -64,7 +64,7 @@ class IJCacheDetection(NodeTranslator):
         def has_vertical_offset(offsets: Set[Tuple[int, int, int]]) -> bool:
             return any(offset[2] != 0 for offset in offsets)
 
-        accesses = AccessCollector.apply(node).offsets()
+        accesses = AccessCollector.apply(node).cartesian_accesses().offsets()
         cacheable = {
             field
             for field, offsets in accesses.items()
@@ -79,6 +79,7 @@ class IJCacheDetection(NodeTranslator):
             sections=node.sections,
             loop_order=node.loop_order,
             caches=caches,
+            loc=node.loc,
         )
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> oir.Stencil:
@@ -136,7 +137,7 @@ class KCacheDetection(NodeTranslator):
             return True
 
         collection = AccessCollector.apply(node)
-        accesses = collection.offsets()
+        accesses = collection.cartesian_accesses().offsets()
         mask_writes = collection.mask_writes()
 
         cacheable = {
@@ -156,6 +157,7 @@ class KCacheDetection(NodeTranslator):
             loop_order=node.loop_order,
             sections=node.sections,
             caches=caches,
+            loc=node.loc,
         )
 
 
@@ -180,7 +182,7 @@ class PruneKCacheFills(NodeTranslator):
         assert node.loop_order != common.LoopOrder.PARALLEL
 
         def pruneable_fields(section: oir.VerticalLoopSection) -> Set[str]:
-            accesses = AccessCollector.apply(section)
+            accesses = AccessCollector.apply(section).cartesian_accesses()
             offsets = accesses.offsets()
             center_accesses = [a for a in accesses.ordered_accesses() if a.offset == (0, 0, 0)]
 
@@ -214,8 +216,12 @@ class PruneKCacheFills(NodeTranslator):
         # support a k-cache type that only fills on the initial level, so fills are inserted on all
         # levels here.
 
-        first_section_offsets = AccessCollector.apply(node.sections[0]).offsets()
-        last_section_offsets = AccessCollector.apply(node.sections[-1]).offsets()
+        first_section_offsets = (
+            AccessCollector.apply(node.sections[0]).cartesian_accesses().offsets()
+        )
+        last_section_offsets = (
+            AccessCollector.apply(node.sections[-1]).cartesian_accesses().offsets()
+        )
         for field in list(pruneable):
             first_k_offsets = (o[2] for o in first_section_offsets.get(field, {(0, 0, 0)}))
             last_k_offsets = (o[2] for o in last_section_offsets.get(field, {(0, 0, 0)}))
@@ -237,7 +243,7 @@ class PruneKCacheFlushes(NodeTranslator):
 
     def visit_KCache(self, node: oir.KCache, *, pruneable: Set[str], **kwargs: Any) -> oir.KCache:
         if node.name in pruneable:
-            return oir.KCache(name=node.name, fill=node.fill, flush=False)
+            return oir.KCache(name=node.name, fill=node.fill, flush=False, loc=node.loc)
         return self.generic_visit(node, **kwargs)
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> oir.Stencil:
@@ -262,6 +268,7 @@ class PruneKCacheFlushes(NodeTranslator):
             params=self.visit(node.params, **kwargs),
             vertical_loops=vertical_loops,
             declarations=node.declarations,
+            loc=node.loc,
         )
 
 
@@ -287,6 +294,7 @@ class FillFlushToLocalKCaches(NodeTranslator):
                 data_index=node.data_index,
                 dtype=node.dtype,
                 offset=node.offset,
+                loc=node.loc,
             )
         return node
 
@@ -309,6 +317,7 @@ class FillFlushToLocalKCaches(NodeTranslator):
         return oir.HorizontalExecution(
             body=fills + self.visit(node.body, name_map=name_map, **kwargs) + flushes,
             declarations=node.declarations,
+            loc=node.loc,
         )
 
     @staticmethod
@@ -330,7 +339,7 @@ class FillFlushToLocalKCaches(NodeTranslator):
             """Positive k-offset for forward loops, negative for backward."""
             return offset[2] if loop_order == common.LoopOrder.FORWARD else -offset[2]
 
-        read_offsets = AccessCollector.apply(section).read_offsets()
+        read_offsets = AccessCollector.apply(section).cartesian_accesses().read_offsets()
         return {
             field: (
                 min(directional_k_offset(o) for o in offsets),
@@ -390,9 +399,12 @@ class FillFlushToLocalKCaches(NodeTranslator):
             oir.VerticalLoopSection(
                 interval=entry_interval,
                 horizontal_executions=FixSymbolNameClashes().visit(section.horizontal_executions),
+                loc=section.loc,
             ),
             oir.VerticalLoopSection(
-                interval=rest_interval, horizontal_executions=section.horizontal_executions
+                interval=rest_interval,
+                horizontal_executions=section.horizontal_executions,
+                loc=section.loc,
             ),
         )
 
@@ -580,7 +592,12 @@ class FillFlushToLocalKCaches(NodeTranslator):
             oir.KCache(name=f, fill=False, flush=False) for f in filling_or_flushing_fields.values()
         ]
 
-        return oir.VerticalLoop(loop_order=node.loop_order, sections=sections, caches=caches)
+        return oir.VerticalLoop(
+            loop_order=node.loop_order,
+            sections=sections,
+            caches=caches,
+            loc=node.loc,
+        )
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> oir.Stencil:
         new_tmps: List[oir.Temporary] = []
@@ -594,4 +611,5 @@ class FillFlushToLocalKCaches(NodeTranslator):
                 **kwargs,
             ),
             declarations=node.declarations + new_tmps,
+            loc=node.loc,
         )

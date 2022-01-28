@@ -82,6 +82,6 @@ def test_module_data_equivalence():
     builder = StencilBuilder(sample_stencil_with_args)
 
     legacy_module_data = make_args_data_from_iir(builder.implementation_ir)
-    gtc_module_data = make_args_data_from_gtir(builder.gtir_pipeline)
+    gtc_module_data = make_args_data_from_gtir(builder.gtir_pipeline, legacy=True)
 
     assert legacy_module_data == gtc_module_data

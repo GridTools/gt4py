@@ -17,8 +17,8 @@
 import pytest
 
 from gtc import common, oir
-from gtc.python import npir
-from gtc.python.oir_to_npir import OirToNpir
+from gtc.numpy import npir
+from gtc.numpy.oir_to_npir import OirToNpir
 
 from .oir_utils import (
     AssignStmtFactory,

@@ -25,8 +25,8 @@ import datetime
 
 import pytest
 
-import gt4py.backend as gt_backend
-import gt4py.utils as gt_utils
+from gt4py import backend as gt_backend
+from gt4py import utils as gt_utils
 
 
 def _backend_name_as_param(name):
@@ -41,9 +41,7 @@ def make_backend_params(*names):
 
 
 _ALL_BACKEND_NAMES = list(gt_backend.REGISTRY.keys())
-_INTERNAL_BACKEND_NAMES = ["debug", "numpy"] + [
-    name for name in _ALL_BACKEND_NAMES if name.startswith("gt")
-]
+_INTERNAL_BACKEND_NAMES = [name for name in _ALL_BACKEND_NAMES if name.startswith("gt")]
 
 
 CPU_BACKENDS = [
@@ -70,26 +68,6 @@ INTERNAL_GPU_BACKENDS = [
 ]
 
 INTERNAL_BACKENDS = INTERNAL_CPU_BACKENDS + INTERNAL_GPU_BACKENDS
-
-OLD_BACKENDS = [
-    _backend_name_as_param(name) for name in _ALL_BACKEND_NAMES if not name.startswith("gtc:")
-]
-OLD_INTERNAL_BACKENDS = [
-    _backend_name_as_param(name) for name in _INTERNAL_BACKEND_NAMES if not name.startswith("gtc:")
-]
-DAWN_BACKENDS = [_backend_name_as_param(name) for name in _ALL_BACKEND_NAMES if "dawn:" in name]
-DAWN_CPU_BACKENDS = [
-    _backend_name_as_param(name)
-    for name in _ALL_BACKEND_NAMES
-    if "dawn:" in name and gt_backend.from_name(name).storage_info["device"] == "cpu"
-]
-DAWN_GPU_BACKENDS = [
-    _backend_name_as_param(name)
-    for name in _ALL_BACKEND_NAMES
-    if "dawn:" in name and gt_backend.from_name(name).storage_info["device"] == "gpu"
-]
-
-LEGACY_GRIDTOOLS_BACKENDS = [_backend_name_as_param(name) for name in ("gtx86", "gtmc", "gtcuda")]
 
 
 @pytest.fixture()

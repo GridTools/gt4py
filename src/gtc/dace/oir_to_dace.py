@@ -40,7 +40,7 @@ from gtc.passes.oir_optimizations.utils import AccessCollector
 
 
 def _offset_origin(interval: oir.Interval, origin: oir.AxisBound) -> oir.Interval:
-    if origin >= oir.AxisBound.start():
+    if origin.level != LevelMarker.START:
         return interval
     return interval.shifted(-origin.offset)
 
@@ -65,7 +65,7 @@ class BaseOirSDFGBuilder(ABC):
         self._recent_read_acc: Dict[str, dace.nodes.AccessNode] = dict()
 
         self._access_nodes: Dict[str, dace.nodes.AccessNode] = dict()
-        self._access_collection_cache: Dict[int, AccessCollector.Result] = dict()
+        self._access_collection_cache: Dict[int, AccessCollector.CartesianAccessCollection] = dict()
         self._source_nodes: Dict[str, dace.nodes.AccessNode] = dict()
         self._delete_candidates: List[MultiConnectorEdge] = list()
 
@@ -115,9 +115,9 @@ class BaseOirSDFGBuilder(ABC):
 
     def _get_access_collection(
         self, node: "Union[HorizontalExecutionLibraryNode, VerticalLoopLibraryNode, SDFG]"
-    ) -> "AccessCollector.Result":
+    ) -> AccessCollector.CartesianAccessCollection:
         if isinstance(node, SDFG):
-            res = AccessCollector.Result([])
+            res = AccessCollector.CartesianAccessCollection([])
             for node in node.states()[0].nodes():
                 if isinstance(node, (HorizontalExecutionLibraryNode, VerticalLoopLibraryNode)):
                     collection = self._get_access_collection(node)
@@ -127,11 +127,11 @@ class BaseOirSDFGBuilder(ABC):
             if id(node.oir_node) not in self._access_collection_cache:
                 self._access_collection_cache[id(node.oir_node)] = AccessCollector.apply(
                     node.oir_node
-                )
+                ).cartesian_accesses()
             return self._access_collection_cache[id(node.oir_node)]
         else:
             assert isinstance(node, VerticalLoopLibraryNode)
-            res = AccessCollector.Result([])
+            res = AccessCollector.CartesianAccessCollection([])
             for _, sdfg in node.sections:
                 collection = self._get_access_collection(sdfg)
                 res._ordered_accesses.extend(collection._ordered_accesses)
@@ -168,7 +168,9 @@ class BaseOirSDFGBuilder(ABC):
     def _reset_writes(self):
         self._recent_write_acc = dict()
 
-    def _add_read_edges(self, node, collections: List[Tuple[Interval, AccessCollector.Result]]):
+    def _add_read_edges(
+        self, node, collections: List[Tuple[Interval, AccessCollector.CartesianAccessCollection]]
+    ):
         read_accesses: Dict[str, dace.nodes.AccessNode] = dict()
         for interval, access_collection in collections:
 
@@ -194,7 +196,9 @@ class BaseOirSDFGBuilder(ABC):
             node.add_in_connector("IN_" + name)
             self._state.add_edge(recent_access, None, node, "IN_" + name, dace.Memlet())
 
-    def _add_write_edges(self, node, collections: List[Tuple[Interval, AccessCollector.Result]]):
+    def _add_write_edges(
+        self, node, collections: List[Tuple[Interval, AccessCollector.CartesianAccessCollection]]
+    ):
         write_accesses = dict()
         for interval, access_collection in collections:
             for name in access_collection.write_fields():
@@ -217,7 +221,7 @@ class BaseOirSDFGBuilder(ABC):
             self._state.add_edge(node, "OUT_" + name, access_node, None, dace.Memlet())
 
     def _add_write_after_write_edges(
-        self, node, collections: List[Tuple[Interval, AccessCollector.Result]]
+        self, node, collections: List[Tuple[Interval, AccessCollector.CartesianAccessCollection]]
     ):
         for interval, collection in collections:
             for name in collection.write_fields():
@@ -226,7 +230,7 @@ class BaseOirSDFGBuilder(ABC):
                     self._delete_candidates.append(edge)
 
     def _add_write_after_read_edges(
-        self, node, collections: List[Tuple[Interval, AccessCollector.Result]]
+        self, node, collections: List[Tuple[Interval, AccessCollector.CartesianAccessCollection]]
     ):
         for interval, collection in collections:
             for name in collection.read_fields():
@@ -367,6 +371,7 @@ class BaseOirSDFGBuilder(ABC):
     def build(cls, name, stencil: Stencil, nodes: List[dace.nodes.LibraryNode]):
         builder = cls(name, stencil, nodes)
         for n in nodes:
+            builder.add_node(n)
             builder.add_write_after_write_edges(n)
             builder.add_read_edges(n)
             builder.add_write_edges(n)
@@ -498,7 +503,7 @@ class StencilOirSDFGBuilder(BaseOirSDFGBuilder):
                     subset = edge.data.subset
                 subset = dace.subsets.union(subset, edge.data.subset)
         subset: dace.subsets.Range
-        k_size = subset.bounding_box_size()[axis_idx]
+        k_size = subset.bounding_box_size()[axis_idx] + subset.ranges[axis_idx][0]
 
         k_sym = dace.symbol("__K")
         k_size_symbolic = dace.symbolic.pystr_to_symbolic(k_size)
@@ -642,6 +647,7 @@ class OirSDFGBuilder(eve.NodeVisitor):
             loop_order=node.loop_order,
             sections=sections,
             caches=node.caches,
+            oir_node=node,
         )
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs):

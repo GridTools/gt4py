@@ -48,7 +48,11 @@ class ScalarAccess(common.ScalarAccess, Expr):  # type: ignore
     pass
 
 
-class FieldAccess(common.FieldAccess[Expr], Expr):  # type: ignore
+class VariableKOffset(common.VariableKOffset[Expr]):
+    pass
+
+
+class FieldAccess(common.FieldAccess[Expr, VariableKOffset], Expr):  # type: ignore
     pass
 
 
@@ -155,7 +159,7 @@ class Interval(LocNode):
         return cls(start=AxisBound.start(), end=AxisBound.end())
 
 
-class HorizontalExecution(LocNode):
+class HorizontalExecution(LocNode, SymbolTableTrait):
     body: List[Stmt]
     declarations: List[LocalScalar]
 

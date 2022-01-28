@@ -173,8 +173,6 @@ Implementation IR
 
 """
 
-import collections
-import copy
 import enum
 import operator
 import sys
@@ -182,7 +180,6 @@ from typing import Generator, Sequence, Type
 
 import numpy as np
 
-from gt4py import utils as gt_utils
 from gt4py.definitions import AccessKind, CartesianSpace, Extent, Index
 from gt4py.utils.attrib import Any as Any
 from gt4py.utils.attrib import Dict as DictOf
@@ -211,7 +208,9 @@ class Location(Node):
 
     @classmethod
     def from_ast_node(cls, ast_node, scope="<source>"):
-        return cls(line=ast_node.lineno, column=ast_node.col_offset + 1, scope=scope)
+        lineno = getattr(ast_node, "lineno", 0)
+        col_offset = getattr(ast_node, "col_offset", 0)
+        return cls(line=lineno, column=col_offset + 1, scope=scope)
 
 
 # ---- IR: domain ----
@@ -420,28 +419,37 @@ class AxisIndex(Expr):
 
 @enum.unique
 class NativeFunction(enum.Enum):
-    ABS = 1
-    MIN = 2
-    MAX = 3
-    MOD = 4
+    ABS = enum.auto()
+    MIN = enum.auto()
+    MAX = enum.auto()
+    MOD = enum.auto()
 
-    SIN = 5
-    COS = 6
-    TAN = 7
-    ARCSIN = 8
-    ARCCOS = 9
-    ARCTAN = 10
+    SIN = enum.auto()
+    COS = enum.auto()
+    TAN = enum.auto()
+    ARCSIN = enum.auto()
+    ARCCOS = enum.auto()
+    ARCTAN = enum.auto()
 
-    SQRT = 11
-    EXP = 12
-    LOG = 13
+    SINH = enum.auto()
+    COSH = enum.auto()
+    TANH = enum.auto()
+    ARCSINH = enum.auto()
+    ARCCOSH = enum.auto()
+    ARCTANH = enum.auto()
 
-    ISFINITE = 14
-    ISINF = 15
-    ISNAN = 16
-    FLOOR = 17
-    CEIL = 18
-    TRUNC = 19
+    SQRT = enum.auto()
+    EXP = enum.auto()
+    LOG = enum.auto()
+    GAMMA = enum.auto()
+    CBRT = enum.auto()
+
+    ISFINITE = enum.auto()
+    ISINF = enum.auto()
+    ISNAN = enum.auto()
+    FLOOR = enum.auto()
+    CEIL = enum.auto()
+    TRUNC = enum.auto()
 
     @property
     def arity(self):
@@ -459,9 +467,17 @@ NativeFunction.IR_OP_TO_NUM_ARGS = {
     NativeFunction.ARCSIN: 1,
     NativeFunction.ARCCOS: 1,
     NativeFunction.ARCTAN: 1,
+    NativeFunction.SINH: 1,
+    NativeFunction.COSH: 1,
+    NativeFunction.TANH: 1,
+    NativeFunction.ARCSINH: 1,
+    NativeFunction.ARCCOSH: 1,
+    NativeFunction.ARCTANH: 1,
     NativeFunction.SQRT: 1,
     NativeFunction.EXP: 1,
     NativeFunction.LOG: 1,
+    NativeFunction.GAMMA: 1,
+    NativeFunction.CBRT: 1,
     NativeFunction.ISFINITE: 1,
     NativeFunction.ISINF: 1,
     NativeFunction.ISNAN: 1,
@@ -698,7 +714,7 @@ class IterationOrder(enum.Enum):
 
 @attribclass
 class AxisBound(Node):
-    level = attribute(of=UnionOf[LevelMarker, VarRef])
+    level = attribute(of=LevelMarker)
     offset = attribute(of=int, default=0)
     loc = attribute(of=Location, optional=True)
 
@@ -901,172 +917,3 @@ class StencilImplementation(IIRNode):
     def temporary_fields(self):
         result = [f.name for f in self.fields.values() if not f.is_api]
         return result
-
-
-# ---- Helpers ----
-def iter_attributes(node: Node):
-    """
-    Yield a tuple of ``(attrib_name, value)`` for each attribute in ``node.attributes``
-    that is present on *node*.
-    """
-    for attrib_name in node.attributes:
-        try:
-            yield attrib_name, getattr(node, attrib_name)
-        except AttributeError:
-            pass
-
-
-class IRNodeVisitor:
-    def visit(self, node: Node, **kwargs):
-        return self._visit(node, **kwargs)
-
-    def _visit(self, node: Node, **kwargs):
-        visitor = self.generic_visit
-        if isinstance(node, Node):
-            for node_class in node.__class__.__mro__:
-                method_name = "visit_" + node_class.__name__
-                if hasattr(self, method_name):
-                    visitor = getattr(self, method_name)
-                    break
-
-        return visitor(node, **kwargs)
-
-    def generic_visit(self, node: Node, **kwargs):
-        items = []
-        if isinstance(node, (str, bytes, bytearray)):
-            pass
-        elif isinstance(node, collections.abc.Mapping):
-            items = node.items()
-        elif isinstance(node, collections.abc.Iterable):
-            items = enumerate(node)
-        elif isinstance(node, Node):
-            items = iter_attributes(node)
-        else:
-            pass
-
-        for key, value in items:
-            self._visit(value, **kwargs)
-
-
-class IRNodeInspector:
-    def visit(self, node: Node):
-        return self._visit((), None, node)
-
-    def _visit(self, path: tuple, node_name: str, node):
-        visitor = self.generic_visit
-        if isinstance(node, Node):
-            for node_class in node.__class__.__mro__:
-                method_name = "visit_" + node_class.__name__
-                if hasattr(self, method_name):
-                    visitor = getattr(self, method_name)
-                    break
-
-        return visitor(path, node_name, node)
-
-    def generic_visit(self, path: tuple, node_name: str, node: Node):
-        items = []
-        if isinstance(node, (str, bytes, bytearray)):
-            pass
-        elif isinstance(node, collections.abc.Mapping):
-            items = node.items()
-        elif isinstance(node, collections.abc.Iterable):
-            items = enumerate(node)
-        elif isinstance(node, Node):
-            items = iter_attributes(node)
-        else:
-            pass
-
-        for key, value in items:
-            self._visit((*path, node_name), key, value)
-
-
-class IRNodeMapper:
-    def visit(self, node: Node):
-        keep_node, new_node = self._visit((), None, node)
-        return new_node if keep_node else None
-
-    def _visit(self, path: tuple, node_name: str, node: Node):
-        visitor = self.generic_visit
-        if isinstance(node, Node):
-            for node_class in node.__class__.__mro__:
-                method_name = "visit_" + node_class.__name__
-                if hasattr(self, method_name):
-                    visitor = getattr(self, method_name)
-                    break
-
-        return visitor(path, node_name, node)
-
-    def generic_visit(self, path: tuple, node_name: str, node: Node):
-        if isinstance(node, (str, bytes, bytearray)):
-            return True, node
-        elif isinstance(node, collections.abc.Iterable):
-            if isinstance(node, collections.abc.Mapping):
-                items = node.items()
-            else:
-                items = enumerate(node)
-            setattr_op = operator.setitem
-            delattr_op = operator.delitem
-        elif isinstance(node, Node):
-            items = iter_attributes(node)
-            setattr_op = setattr
-            delattr_op = delattr
-        else:
-            return True, node
-
-        del_items = []
-        for key, old_value in items:
-            keep_item, new_value = self._visit((*path, node_name), key, old_value)
-            if not keep_item:
-                del_items.append(key)
-            elif new_value != old_value:
-                setattr_op(node, key, new_value)
-        for key in reversed(del_items):  # reversed, so that keys remain valid in sequences
-            delattr_op(node, key)
-
-        return True, node
-
-
-class IRNodeDumper(IRNodeMapper):
-    @classmethod
-    def apply(cls, root_node, *, as_json=False):
-        return cls(as_json=as_json)(root_node)
-
-    def __init__(self, as_json: bool):
-        self.as_json = as_json
-
-    def __call__(self, node):
-        result = self.visit(copy.deepcopy(node))
-        if self.as_json:
-            result = gt_utils.jsonify(result)
-        return result
-
-    def visit_Node(self, path: tuple, node_name: str, node: Node):
-        object_name = node.__class__.__name__.split(".")[-1]
-        keep_node, new_node = self.generic_visit(path, node_name, node)
-        return keep_node, {object_name: new_node.as_dict()}
-
-
-dump_ir = IRNodeDumper.apply
-
-
-def iter_nodes_of_type(root_node: Node, node_type: Type) -> Generator[Node, None, None]:
-    """Yield an iterator over the nodes of node_type inside root_node in DFS order."""
-
-    def recurse(node: Node) -> Generator[Node, None, None]:
-        for key, value in iter_attributes(node):
-            if isinstance(node, collections.abc.Iterable):
-                if isinstance(node, collections.abc.Mapping):
-                    children = node.values()
-                else:
-                    children = node
-            else:
-                children = gt_utils.listify(value)
-
-            for value in children:
-                if isinstance(value, Node):
-                    yield from recurse(value)
-
-            if isinstance(node, node_type):
-                yield node
-
-    yield from recurse(root_node)

@@ -116,8 +116,7 @@ def test_generate_pre_run(backend_name, mode):
     source = module_generator.generate_pre_run()
 
     if gt_backend.from_name(backend_name).storage_info["device"] == "cpu":
-        if "dawn:" not in backend_name:
-            assert source == ""
+        assert source == ""
     else:
         for key in field_info_val[mode]:
             assert f"{key}.host_to_device()" in source

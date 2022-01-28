@@ -1,8 +1,24 @@
 # -*- coding: utf-8 -*-
+#
+# GT4Py - GridTools4Py - GridTools for Python
+#
+# Copyright (c) 2014-2021, ETH Zurich
+# All rights reserved.
+#
+# This file is part the GT4Py project and the GridTools framework.
+# GT4Py is free software: you can redistribute it and/or modify it under
+# the terms of the GNU General Public License as published by the
+# Free Software Foundation, either version 3 of the License, or any later
+# version. See the LICENSE.txt file at the top-level directory of this
+# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 import pathlib
 from typing import TYPE_CHECKING, Any, Dict, Optional, Type, Union
 
-import gt4py
+import gt4py.caching
+import gt4py.frontend
 from gt4py.backend.gtc_backend.defir_to_gtir import DefIRToGTIR
 from gt4py.definitions import BuildOptions, StencilID
 from gt4py.type_hints import AnnotatedStencilFunc, StencilFunc
@@ -56,7 +72,7 @@ class StencilBuilder:
         self.options = options or BuildOptions(  # type: ignore
             **self.default_options_dict(definition_func)
         )
-        backend = backend or "debug"
+        backend = backend or "gtc:numpy"
         backend = gt4py.backend.from_name(backend) if isinstance(backend, str) else backend
         self.backend: "BackendType" = backend(self)
         self.frontend: "FrontendType" = frontend or gt4py.frontend.from_name("gtscript")

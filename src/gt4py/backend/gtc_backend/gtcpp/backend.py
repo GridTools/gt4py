@@ -17,10 +17,10 @@
 from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple, Type
 
 from eve import codegen
-from gt4py import backend as gt_backend
 from gt4py import gt_src_manager
-from gt4py.backend import BaseGTBackend, CLIBackendMixin
+from gt4py.backend.base import CLIBackendMixin, register
 from gt4py.backend.gt_backends import (
+    BaseGTBackend,
     GTCUDAPyModuleGenerator,
     cuda_is_compatible_layout,
     cuda_is_compatible_type,
@@ -38,7 +38,7 @@ from gtc.common import DataType
 from gtc.gtcpp import gtcpp, gtcpp_codegen, oir_to_gtcpp
 from gtc.passes.gtir_pipeline import GtirPipeline
 from gtc.passes.oir_optimizations.caches import FillFlushToLocalKCaches
-from gtc.passes.oir_pipeline import OirPipeline
+from gtc.passes.oir_pipeline import DefaultPipeline
 
 
 if TYPE_CHECKING:
@@ -53,7 +53,11 @@ class GTCGTExtGenerator:
 
     def __call__(self, definition_ir) -> Dict[str, Dict[str, str]]:
         gtir = GtirPipeline(DefIRToGTIR.apply(definition_ir)).full()
-        oir = OirPipeline(gtir_to_oir.GTIRToOIR().visit(gtir)).full(skip=[FillFlushToLocalKCaches])
+        base_oir = gtir_to_oir.GTIRToOIR().visit(gtir)
+        oir_pipeline = self.backend.builder.options.backend_opts.get(
+            "oir_pipeline", DefaultPipeline(skip=[FillFlushToLocalKCaches])
+        )
+        oir = oir_pipeline.run(base_oir)
         gtcpp = oir_to_gtcpp.OIRToGTCpp().visit(oir)
         format_source = self.backend.builder.options.format_source
         implementation = gtcpp_codegen.GTCppCodegen.apply(
@@ -87,7 +91,7 @@ class GTCppBindingsCodegen(codegen.TemplatedGenerator):
             data_ndim = len(node.data_dims)
             sid_ndim = domain_ndim + data_ndim
             if kwargs["external_arg"]:
-                return "py::buffer {name}, std::array<gt::uint_t,{sid_ndim}> {name}_origin".format(
+                return "py::buffer {name}, std::array<gt::int_t,{sid_ndim}> {name}_origin".format(
                     name=node.name,
                     sid_ndim=sid_ndim,
                 )
@@ -158,7 +162,7 @@ class GTCGTBaseBackend(BaseGTBackend, CLIBackendMixin):
         )
 
 
-@gt_backend.register
+@register
 class GTCGTCpuIfirstBackend(GTCGTBaseBackend):
     """GridTools python backend using gtc."""
 
@@ -177,7 +181,7 @@ class GTCGTCpuIfirstBackend(GTCGTBaseBackend):
         return super()._generate_extension(uses_cuda=False)
 
 
-@gt_backend.register
+@register
 class GTCGTCpuKfirstBackend(GTCGTBaseBackend):
     """GridTools python backend using gtc."""
 
@@ -196,7 +200,7 @@ class GTCGTCpuKfirstBackend(GTCGTBaseBackend):
         return super()._generate_extension(uses_cuda=False)
 
 
-@gt_backend.register
+@register
 class GTCGTGpuBackend(GTCGTBaseBackend):
     """GridTools python backend using gtc."""
 

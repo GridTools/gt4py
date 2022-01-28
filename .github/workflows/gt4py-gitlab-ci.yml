@@ -1,8 +1,11 @@
-name: CI
+name: Daint CI
+
 on:
   push:
     branches:
-    - '**'
+    - master
+    - trying
+    - staging
 jobs:
   build:
     runs-on: ubuntu-latest

@@ -237,7 +237,7 @@ class DebugModuleGenerator(BaseModuleGenerator):
         source = """
 class _Accessor:
     def __init__(self, array, origin):
-        self.array = array
+        self.array = array.view(np.ndarray)
         self.origin = origin
 
     def _shift(self, index):
@@ -281,7 +281,6 @@ def debug_is_compatible_type(field):
     return isinstance(field, np.ndarray)
 
 
-@gt_backend.register
 class DebugBackend(gt_backend.BaseBackend, gt_backend.PurePythonBackendCLIMixin):
     """Pure Python backend, unoptimized for debugging."""
 
