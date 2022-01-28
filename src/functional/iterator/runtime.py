@@ -23,8 +23,8 @@ class CartesianAxis(common.Dimension):
 
 
 # dependency inversion, register fendef for embedded execution or for tracing/parsing here
-fendef_embedded = None
-fendef_codegen = None
+fendef_embedded: Optional[Callable] = None
+fendef_codegen: Optional[Callable] = None
 
 
 def fendef(*dec_args, **dec_kwargs):

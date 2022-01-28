@@ -293,7 +293,7 @@ def register_subclasses(*subclasses: Type) -> Callable[[Type], Type]:
 def noninstantiable(cls: Type) -> Type:
     original_init = cls.__init__
 
-    def _noninstantiable_init(self, *args, **kwargs) -> None:
+    def _noninstantiable_init(self: Any, *args: Any, **kwargs: Any) -> None:
         if self.__class__ is cls:
             raise TypeError(f"Trying to instantiate `{cls.__name__}` non-instantiable class.")
         else:

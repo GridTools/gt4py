@@ -229,15 +229,11 @@ class FieldOperatorParser(ast.NodeVisitor):
     ...         tmp = inp
     ...     return tmp
     >>>
-    >>> try:
+    >>> try:                # doctest: +ELLIPSIS
     ...     FieldOperatorParser.apply_to_function(wrong_syntax)
     ... except FieldOperatorSyntaxError as err:
-    ...     print(err.filename)  # doctest: +ELLIPSIS
-    ...     print(err.lineno)
-    ...     print(err.offset)
-    /...<doctest src.functional.ffront.func_to_foast.FieldOperatorParser[...]>
-    2
-    4
+    ...     print(f"Error at [{err.lineno}, {err.offset}] in {err.filename})")
+    Error at [2, 4] in ...functional.ffront.func_to_foast.FieldOperatorParser[...]>)
     """
 
     source: str

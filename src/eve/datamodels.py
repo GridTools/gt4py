@@ -31,8 +31,8 @@ Notes:
     Since the current implementation uses `attrs <https://www.attrs.org/>`_ internally,
     Data Model classes are also ``attrs`` classes.
 
-Examples:
-    >>> @datamodel
+Examples: (Doctests disabled)
+    <<< @datamodel
     ... class SampleModel:
     ...     name: str
     ...     value: int
@@ -45,7 +45,7 @@ Examples:
     ...             )
 
 
-    >>> class AnotherSampleModel(DataModel):
+    <<< class AnotherSampleModel(DataModel):
     ...     name: str
     ...     friends: List[str]
     ...
@@ -178,28 +178,28 @@ class GenericDataModelAlias(typing._GenericAlias, _root=True):  # type: ignore[c
     :class:`typing.get_origin` or by using the custom :attr:`__class__`
     shortcut provided by this class.
 
-    Examples:
-        >>> from typing import Generic, get_origin
-        >>> @datamodel
+    Examples: (Doctests disabled)
+        <<< from typing import Generic, get_origin
+        <<< @datamodel
         ... class Model(Generic[T]):
         ...     value: T
         ...
-        >>> print(Model.__parameters__)
+        <<< print(Model.__parameters__)
         (~T,)
-        >>> hasattr(Model, '__args__')
+        <<< hasattr(Model, '__args__')
         False
 
-        >>> assert isinstance(Model[int], GenericDataModelAlias)
-        >>> assert issubclass(get_origin(Model[int]), Model)
-        >>> assert Model[int].__class__ is get_origin(Model[int])
-        >>> print(Model[int].__class__.__name__)
+        <<< assert isinstance(Model[int], GenericDataModelAlias)
+        <<< assert issubclass(get_origin(Model[int]), Model)
+        <<< assert Model[int].__class__ is get_origin(Model[int])
+        <<< print(Model[int].__class__.__name__)
         Model__int
 
-        >>> print(Model[int].__parameters__)
+        <<< print(Model[int].__parameters__)
         ()
-        >>> hasattr(Model[int], '__args__')
+        <<< hasattr(Model[int], '__args__')
         True
-        >>> print(Model[int].__args__)
+        <<< print(Model[int].__args__)
         (<class 'int'>,)
 
     Notes:
@@ -882,19 +882,19 @@ def get_fields(
         as_dataclass: If ``True`` (the default is ``False``), field information is returned
             as :class:`dataclass.Field` instances instead of :class:`Attribute`.
 
-    Examples:
-        >>> from typing import List
-        >>> @datamodel
+    Examples: (Doctests disabled)
+        <<< from typing import List
+        <<< @datamodel
         ... class Model:
         ...     amount: int = 1
         ...     name: str
         ...     numbers: List[float]
-        >>> fields(Model)  # doctest:+ELLIPSIS
+        <<< fields(Model)  # doctest:+ELLIPSIS
         FrozenNamespace(amount=Attribute(name='amount', default=1, ...),\
  name=Attribute(name='name', default=NOTHING, ...),\
  numbers=Attribute(name='numbers', default=NOTHING, ...))
 
-        >>> fields(Model, as_dataclass=True)  # doctest:+ELLIPSIS
+        <<< fields(Model, as_dataclass=True)  # doctest:+ELLIPSIS
         (Field(name='amount',type=<class 'int'>,default=1,default_factory=...),\
  Field(name='name',type=<class 'str'>,default=...),\
  Field(name='numbers',type=typing.List[float],default=...))
@@ -932,13 +932,13 @@ def asdict(
         retain_collection_types: Do not convert to ``list`` when encountering an
             attribute whose type is ``tuple`` or ``set``.
 
-    Examples:
-        >>> @datamodel
+    Examples:  (Doctests disabled)
+        <<< @datamodel
         ... class C:
         ...     x: int
         ...     y: int
-        >>> c = C(x=1, y=2)
-        >>> assert asdict(c) == {'x': 1, 'y': 2}
+        <<< c = C(x=1, y=2)
+        <<< assert asdict(c) == {'x': 1, 'y': 2}
     """  # noqa: RST301  # sphinx.napoleon conventions confuse RST validator
     if not is_datamodel(instance) or isinstance(instance, type):
         raise TypeError(f"Invalid datamodel instance: '{instance}'.")
@@ -967,13 +967,13 @@ def astuple(
             encountering an attribute which type is ``tuple``, ``dict``
             or ``set``.
 
-    Examples:
-        >>> @datamodel
+    Examples:  (Doctests disabled)
+        <<< @datamodel
         ... class C:
         ...     x: int
         ...     y: int
-        >>> c = C(x=1, y=2)
-        >>> assert astuple(c) == (1, 2)
+        <<< c = C(x=1, y=2)
+        <<< assert astuple(c) == (1, 2)
     """  # noqa: RST301  # sphinx.napoleon conventions confuse RST validator
     if not is_datamodel(instance) or isinstance(instance, type):
         raise TypeError(f"Invalid datamodel instance: '{instance}'.")
@@ -1159,13 +1159,13 @@ def field(
             only as a third-party extension mechanism. Multiple third-parties can each
             have their own key, to use as a namespace in the metadata.
 
-    Examples:
-        >>> from typing import List
-        >>> @datamodel
+    Examples:  (Doctests disabled)
+        <<< from typing import List
+        <<< @datamodel
         ... class C:
         ...     mylist: List[int] = field(default_factory=lambda : [1, 2, 3])
-        >>> c = C()
-        >>> c.mylist
+        <<< c = C()
+        <<< c.mylist
         [1, 2, 3]
 
     Note:
