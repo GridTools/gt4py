@@ -17,16 +17,17 @@ from typing import Optional, Type, TypeGuard
 import functional.ffront.field_operator_ast as foast
 from eve import NodeTranslator, SymbolTableTrait
 from functional.common import GTSyntaxError
+from functional.ffront import common_types
 
 
-def is_complete_symbol_type(fo_type: foast.SymbolType) -> TypeGuard[foast.SymbolType]:
+def is_complete_symbol_type(fo_type: common_types.SymbolType) -> TypeGuard[common_types.SymbolType]:
     """Figure out if the foast type is completely deduced."""
     match fo_type:
         case None:
             return False
-        case foast.DeferredSymbolType():
+        case common_types.DeferredSymbolType():
             return False
-        case foast.SymbolType():
+        case common_types.SymbolType():
             return True
     return False
 
@@ -38,7 +39,7 @@ class TypeInfo:
 
     Examples:
     ---------
-    >>> type_a = foast.ScalarType(kind=foast.ScalarKind.FLOAT64)
+    >>> type_a = common_types.ScalarType(kind=common_types.ScalarKind.FLOAT64)
     >>> typeinfo_a = TypeInfo(type_a)
     >>> typeinfo_a.is_complete
     True
@@ -56,7 +57,7 @@ class TypeInfo:
 
     """
 
-    type: foast.SymbolType  # noqa: A003
+    type: common_types.SymbolType  # noqa: A003
 
     @property
     def is_complete(self) -> bool:
@@ -67,7 +68,7 @@ class TypeInfo:
         return (not self.is_complete) and ((self.type is None) or (self.constraint is None))
 
     @property
-    def constraint(self) -> Optional[Type[foast.SymbolType]]:
+    def constraint(self) -> Optional[Type[common_types.SymbolType]]:
         """Find the constraint of a deferred type or the class of a complete type."""
         if self.is_complete:
             return self.type.__class__
@@ -77,29 +78,29 @@ class TypeInfo:
 
     @property
     def is_field_type(self) -> bool:
-        return issubclass(self.constraint, foast.FieldType) if self.constraint else False
+        return issubclass(self.constraint, common_types.FieldType) if self.constraint else False
 
     @property
     def is_scalar(self) -> bool:
-        return issubclass(self.constraint, foast.ScalarType) if self.constraint else False
+        return issubclass(self.constraint, common_types.ScalarType) if self.constraint else False
 
     @property
     def is_arithmetic_compatible(self) -> bool:
         match self.type:
-            case foast.FieldType(dtype=foast.ScalarType(kind=dtype_kind)) | foast.ScalarType(
-                kind=dtype_kind
-            ):
-                if dtype_kind is not foast.ScalarKind.BOOL:
+            case common_types.FieldType(
+                dtype=common_types.ScalarType(kind=dtype_kind)
+            ) | common_types.ScalarType(kind=dtype_kind):
+                if dtype_kind is not common_types.ScalarKind.BOOL:
                     return True
         return False
 
     @property
     def is_logics_compatible(self) -> bool:
         match self.type:
-            case foast.FieldType(dtype=foast.ScalarType(kind=dtype_kind)) | foast.ScalarType(
-                kind=dtype_kind
-            ):
-                if dtype_kind is foast.ScalarKind.BOOL:
+            case common_types.FieldType(
+                dtype=common_types.ScalarType(kind=dtype_kind)
+            ) | common_types.ScalarType(kind=dtype_kind):
+                if dtype_kind is common_types.ScalarKind.BOOL:
                     return True
         return False
 
@@ -125,10 +126,11 @@ def are_broadcast_compatible(left: TypeInfo, right: TypeInfo) -> bool:
 
     Examples:
     ---------
-    >>> int_scalar_t = TypeInfo(foast.ScalarType(kind=foast.ScalarKind.INT64))
+    >>> int_scalar_t = TypeInfo(common_types.ScalarType(kind=common_types.ScalarKind.INT64))
     >>> are_broadcast_compatible(int_scalar_t, int_scalar_t)
     True
-    >>> int_field_t = TypeInfo(foast.FieldType(dtype=foast.ScalarType(kind=foast.ScalarKind.INT64), dims=...))
+    >>> int_field_t = TypeInfo(common_types.FieldType(dtype=common_types.ScalarType(kind=common_types.ScalarKind.INT64),
+    ...                         dims=...))
     >>> are_broadcast_compatible(int_field_t, int_scalar_t)
     True
 
@@ -152,8 +154,9 @@ def broadcast_typeinfos(left: TypeInfo, right: TypeInfo) -> TypeInfo:
 
     Examples:
     ---------
-    >>> int_scalar_t = TypeInfo(foast.ScalarType(kind=foast.ScalarKind.INT64))
-    >>> int_field_t = TypeInfo(foast.FieldType(dtype=foast.ScalarType(kind=foast.ScalarKind.INT64), dims=...))
+    >>> int_scalar_t = TypeInfo(common_types.ScalarType(kind=common_types.ScalarKind.INT64))
+    >>> int_field_t = TypeInfo(common_types.FieldType(dtype=common_types.ScalarType(kind=common_types.ScalarKind.INT64),
+    ...                         dims=...))
     >>> assert broadcast_typeinfos(int_field_t, int_scalar_t).type == int_field_t.type
 
     """
@@ -184,7 +187,8 @@ class FieldOperatorTypeDeduction(NodeTranslator):
     >>> assert untyped_fieldop.body[0].value.type is None
 
     >>> typed_fieldop = FieldOperatorTypeDeduction.apply(untyped_fieldop)
-    >>> assert typed_fieldop.body[0].value.type == foast.FieldType(dtype=foast.ScalarType(kind=foast.ScalarKind.FLOAT64), dims=Ellipsis)
+    >>> assert typed_fieldop.body[0].value.type == common_types.FieldType(dtype=common_types.ScalarType(
+    ...     kind=common_types.ScalarKind.FLOAT64), dims=Ellipsis)
     """
 
     contexts = (SymbolTableTrait.symtable_merger,)
@@ -221,7 +225,10 @@ class FieldOperatorTypeDeduction(NodeTranslator):
         return foast.Assign(target=new_target, value=new_value, location=node.location)
 
     def visit_FieldSymbol(
-        self, node: foast.FieldSymbol, refine_type: Optional[foast.FieldType] = None, **kwargs
+        self,
+        node: foast.FieldSymbol,
+        refine_type: Optional[common_types.FieldType] = None,
+        **kwargs,
     ) -> foast.FieldSymbol:
         symtable = kwargs["symtable"]
         if refine_type:
@@ -239,7 +246,10 @@ class FieldOperatorTypeDeduction(NodeTranslator):
         return node
 
     def visit_TupleSymbol(
-        self, node: foast.TupleSymbol, refine_type: Optional[foast.TupleType] = None, **kwargs
+        self,
+        node: foast.TupleSymbol,
+        refine_type: Optional[common_types.TupleType] = None,
+        **kwargs,
     ) -> foast.TupleSymbol:
         symtable = kwargs["symtable"]
         if refine_type:
@@ -261,11 +271,14 @@ class FieldOperatorTypeDeduction(NodeTranslator):
         new_type = None
         if kwargs.get("in_shift", False):
             return foast.Subscript(
-                value=new_value, index=node.index, type=foast.OffsetType(), location=node.location
+                value=new_value,
+                index=node.index,
+                type=common_types.OffsetType(),
+                location=node.location,
             )
         match new_value.type:
-            case foast.TupleType(types=types) | foast.FunctionType(
-                returns=foast.TupleType(types=types)
+            case common_types.TupleType(types=types) | common_types.FunctionType(
+                returns=common_types.TupleType(types=types)
             ):
                 new_type = types[node.index]
             case _:
@@ -292,10 +305,10 @@ class FieldOperatorTypeDeduction(NodeTranslator):
         op: foast.BinaryOperator,
         *,
         parent: foast.BinOp,
-        left_type: foast.SymbolType,
-        right_type: foast.SymbolType,
+        left_type: common_types.SymbolType,
+        right_type: common_types.SymbolType,
         **kwargs,
-    ) -> foast.SymbolType:
+    ) -> common_types.SymbolType:
         if op in [
             foast.BinaryOperator.ADD,
             foast.BinaryOperator.SUB,
@@ -315,10 +328,10 @@ class FieldOperatorTypeDeduction(NodeTranslator):
         op: foast.BinaryOperator,
         *,
         parent: foast.BinOp,
-        left_type: foast.SymbolType,
-        right_type: foast.SymbolType,
+        left_type: common_types.SymbolType,
+        right_type: common_types.SymbolType,
         **kwargs,
-    ) -> foast.SymbolType:
+    ) -> common_types.SymbolType:
         left, right = TypeInfo(left_type), TypeInfo(right_type)
         if (
             left.is_arithmetic_compatible
@@ -337,10 +350,10 @@ class FieldOperatorTypeDeduction(NodeTranslator):
         op: foast.BinaryOperator,
         *,
         parent: foast.BinOp,
-        left_type: foast.SymbolType,
-        right_type: foast.SymbolType,
+        left_type: common_types.SymbolType,
+        right_type: common_types.SymbolType,
         **kwargs,
-    ) -> foast.SymbolType:
+    ) -> common_types.SymbolType:
         left, right = TypeInfo(left_type), TypeInfo(right_type)
         if (
             left.is_logics_compatible
@@ -366,7 +379,7 @@ class FieldOperatorTypeDeduction(NodeTranslator):
         )
 
     def _is_unaryop_type_compatible(
-        self, op: foast.UnaryOperator, operand_type: foast.FieldType
+        self, op: foast.UnaryOperator, operand_type: common_types.FieldType
     ) -> bool:
         operand_ti = TypeInfo(operand_type)
         if op in [foast.UnaryOperator.UADD, foast.UnaryOperator.USUB]:
@@ -376,12 +389,12 @@ class FieldOperatorTypeDeduction(NodeTranslator):
 
     def visit_TupleExpr(self, node: foast.TupleExpr, **kwargs) -> foast.TupleExpr:
         new_elts = self.visit(node.elts, **kwargs)
-        new_type = foast.TupleType(types=[element.type for element in new_elts])
+        new_type = common_types.TupleType(types=[element.type for element in new_elts])
         return foast.TupleExpr(elts=new_elts, type=new_type, location=node.location)
 
     def visit_Call(self, node: foast.Call, **kwargs) -> foast.Call:
         new_func = self.visit(node.func, **kwargs)
-        if isinstance(new_func.type, foast.FieldType):
+        if isinstance(new_func.type, common_types.FieldType):
             new_args = self.visit(node.args, in_shift=True, **kwargs)
             return foast.Call(func=new_func, args=new_args, location=node.location)
         return foast.Call(

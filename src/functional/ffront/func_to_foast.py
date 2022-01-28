@@ -28,7 +28,7 @@ from typing import Any, Optional, Union
 from eve import typingx
 from eve.type_definitions import SourceLocation
 from functional import common
-from functional.ffront import fbuiltins
+from functional.ffront import common_types, fbuiltins
 from functional.ffront import field_operator_ast as foast
 from functional.ffront import symbol_makers
 from functional.ffront.ast_passes import (
@@ -383,15 +383,15 @@ class FieldOperatorParser(ast.NodeVisitor):
             raise self._make_syntax_error(node, message="Can only assign to names!")
         new_value = self.visit(node.value)
         target_symbol_type = foast.FieldSymbol
-        constraint_type = foast.FieldType
+        constraint_type = common_types.FieldType
         if isinstance(new_value, foast.TupleExpr):
             target_symbol_type = foast.TupleSymbol
-            constraint_type = foast.TupleType
+            constraint_type = common_types.TupleType
         return foast.Assign(
             target=target_symbol_type(
                 id=target.id,
                 location=self._make_loc(target),
-                type=foast.DeferredSymbolType(constraint=constraint_type),
+                type=common_types.DeferredSymbolType(constraint=constraint_type),
             ),
             value=new_value,
             location=self._make_loc(node),
@@ -412,7 +412,7 @@ class FieldOperatorParser(ast.NodeVisitor):
                 annotation, global_ns=global_ns, local_ns=local_ns
             )
         else:
-            target_type = foast.DeferredSymbolType()
+            target_type = common_types.DeferredSymbolType()
 
         return foast.Assign(
             target=foast.FieldSymbol(

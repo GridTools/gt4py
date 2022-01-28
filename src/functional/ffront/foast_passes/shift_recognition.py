@@ -15,6 +15,7 @@ from typing import Union
 
 import functional.ffront.field_operator_ast as foast
 from eve import NodeTranslator, SymbolTableTrait
+from functional.ffront import common_types
 
 
 class FieldOperatorShiftRecognition(NodeTranslator):
@@ -27,7 +28,7 @@ class FieldOperatorShiftRecognition(NodeTranslator):
         return cls().visit(node)
 
     def visit_Call(self, node: foast.Call, **kwargs) -> Union[foast.Call, foast.Shift]:
-        if isinstance(node.func.type, foast.FieldType):
+        if isinstance(node.func.type, common_types.FieldType):
             result = foast.Shift(
                 offsets=node.args, expr=node.func, location=node.location, type=node.func.type
             )
