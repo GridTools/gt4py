@@ -13,9 +13,9 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 from typing import Union
 
-from functional.ffront import common_types
 import functional.ffront.field_operator_ast as foast
 from eve import NodeTranslator, SymbolTableTrait
+from functional.ffront import common_types
 
 
 class FieldOperatorShiftRecognition(NodeTranslator):

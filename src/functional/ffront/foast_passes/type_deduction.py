@@ -87,9 +87,9 @@ class TypeInfo:
     @property
     def is_arithmetic_compatible(self) -> bool:
         match self.type:
-            case common_types.FieldType(dtype=common_types.ScalarType(kind=dtype_kind)) | common_types.ScalarType(
-                kind=dtype_kind
-            ):
+            case common_types.FieldType(
+                dtype=common_types.ScalarType(kind=dtype_kind)
+            ) | common_types.ScalarType(kind=dtype_kind):
                 if dtype_kind is not common_types.ScalarKind.BOOL:
                     return True
         return False
@@ -97,9 +97,9 @@ class TypeInfo:
     @property
     def is_logics_compatible(self) -> bool:
         match self.type:
-            case common_types.FieldType(dtype=common_types.ScalarType(kind=dtype_kind)) | common_types.ScalarType(
-                kind=dtype_kind
-            ):
+            case common_types.FieldType(
+                dtype=common_types.ScalarType(kind=dtype_kind)
+            ) | common_types.ScalarType(kind=dtype_kind):
                 if dtype_kind is common_types.ScalarKind.BOOL:
                     return True
         return False
@@ -144,6 +144,7 @@ def are_broadcast_compatible(left: TypeInfo, right: TypeInfo) -> bool:
     elif left.is_scalar and right.is_scalar:
         return left.type == right.type
     return False
+
 
 def broadcast_typeinfos(left: TypeInfo, right: TypeInfo) -> TypeInfo:
     """
@@ -224,7 +225,10 @@ class FieldOperatorTypeDeduction(NodeTranslator):
         return foast.Assign(target=new_target, value=new_value, location=node.location)
 
     def visit_FieldSymbol(
-        self, node: foast.FieldSymbol, refine_type: Optional[common_types.FieldType] = None, **kwargs
+        self,
+        node: foast.FieldSymbol,
+        refine_type: Optional[common_types.FieldType] = None,
+        **kwargs,
     ) -> foast.FieldSymbol:
         symtable = kwargs["symtable"]
         if refine_type:
@@ -242,7 +246,10 @@ class FieldOperatorTypeDeduction(NodeTranslator):
         return node
 
     def visit_TupleSymbol(
-        self, node: foast.TupleSymbol, refine_type: Optional[common_types.TupleType] = None, **kwargs
+        self,
+        node: foast.TupleSymbol,
+        refine_type: Optional[common_types.TupleType] = None,
+        **kwargs,
     ) -> foast.TupleSymbol:
         symtable = kwargs["symtable"]
         if refine_type:
@@ -264,7 +271,10 @@ class FieldOperatorTypeDeduction(NodeTranslator):
         new_type = None
         if kwargs.get("in_shift", False):
             return foast.Subscript(
-                value=new_value, index=node.index, type=common_types.OffsetType(), location=node.location
+                value=new_value,
+                index=node.index,
+                type=common_types.OffsetType(),
+                location=node.location,
             )
         match new_value.type:
             case common_types.TupleType(types=types) | common_types.FunctionType(

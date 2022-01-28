@@ -21,9 +21,9 @@ import pytest
 
 from eve import typingx
 from functional import common
+from functional.ffront import common_types
 from functional.ffront import field_operator_ast as foast
 from functional.ffront import symbol_makers
-from functional.ffront import common_types
 from functional.ffront.fbuiltins import Field, float64
 
 
@@ -88,7 +88,9 @@ def test_invalid_scalar_kind():
         ),
         (
             common.Field[..., float],
-            common_types.FieldType(dims=..., dtype=common_types.ScalarType(kind=common_types.ScalarKind.FLOAT64)),
+            common_types.FieldType(
+                dims=..., dtype=common_types.ScalarType(kind=common_types.ScalarKind.FLOAT64)
+            ),
         ),
         (
             common.Field[[IDim, JDim], float],
@@ -111,8 +113,14 @@ def test_invalid_scalar_kind():
             ),
         ),
         (typing.ForwardRef("float"), common_types.ScalarType(kind=common_types.ScalarKind.FLOAT64)),
-        (typing.Annotated[float, "foo"], common_types.ScalarType(kind=common_types.ScalarKind.FLOAT64)),
-        (typing.Annotated["float", "foo", "bar"], common_types.ScalarType(kind=common_types.ScalarKind.FLOAT64)),
+        (
+            typing.Annotated[float, "foo"],
+            common_types.ScalarType(kind=common_types.ScalarKind.FLOAT64),
+        ),
+        (
+            typing.Annotated["float", "foo", "bar"],
+            common_types.ScalarType(kind=common_types.ScalarKind.FLOAT64),
+        ),
         (
             typing.Annotated[typing.ForwardRef("float"), "foo"],
             common_types.ScalarType(kind=common_types.ScalarKind.FLOAT64),

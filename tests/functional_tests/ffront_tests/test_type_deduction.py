@@ -85,7 +85,9 @@ def type_info_cases():
             },
         ),
         (
-            common_types.FieldType(dims=Ellipsis, dtype=common_types.ScalarType(kind=common_types.ScalarKind.BOOL)),
+            common_types.FieldType(
+                dims=Ellipsis, dtype=common_types.ScalarType(kind=common_types.ScalarKind.BOOL)
+            ),
             {
                 "is_complete": True,
                 "is_any_type": False,
@@ -117,28 +119,32 @@ def test_type_info_refinable_complete_complete():
 
 def test_type_info_refinable_incomplete_complete():
     complete_type = TypeInfo(
-        common_types.FieldType(dtype=common_types.ScalarType(kind=common_types.ScalarKind.BOOL), dims=Ellipsis)
+        common_types.FieldType(
+            dtype=common_types.ScalarType(kind=common_types.ScalarKind.BOOL), dims=Ellipsis
+        )
     )
     assert TypeInfo(None).can_be_refined_to(complete_type)
-    assert TypeInfo(common_types.DeferredSymbolType(constraint=None)).can_be_refined_to(complete_type)
-    assert TypeInfo(common_types.DeferredSymbolType(constraint=common_types.FieldType)).can_be_refined_to(
+    assert TypeInfo(common_types.DeferredSymbolType(constraint=None)).can_be_refined_to(
         complete_type
     )
-    assert not TypeInfo(common_types.DeferredSymbolType(constraint=common_types.OffsetType)).can_be_refined_to(
-        complete_type
-    )
+    assert TypeInfo(
+        common_types.DeferredSymbolType(constraint=common_types.FieldType)
+    ).can_be_refined_to(complete_type)
+    assert not TypeInfo(
+        common_types.DeferredSymbolType(constraint=common_types.OffsetType)
+    ).can_be_refined_to(complete_type)
 
 
 def test_type_info_refinable_incomplete_incomplete():
     target_type = TypeInfo(common_types.DeferredSymbolType(constraint=common_types.ScalarType))
     assert TypeInfo(None).can_be_refined_to(target_type)
     assert TypeInfo(common_types.DeferredSymbolType(constraint=None)).can_be_refined_to(target_type)
-    assert TypeInfo(common_types.DeferredSymbolType(constraint=common_types.ScalarType)).can_be_refined_to(
-        target_type
-    )
-    assert not TypeInfo(common_types.DeferredSymbolType(constraint=common_types.FieldType)).can_be_refined_to(
-        target_type
-    )
+    assert TypeInfo(
+        common_types.DeferredSymbolType(constraint=common_types.ScalarType)
+    ).can_be_refined_to(target_type)
+    assert not TypeInfo(
+        common_types.DeferredSymbolType(constraint=common_types.FieldType)
+    ).can_be_refined_to(target_type)
 
 
 def test_unpack_assign():
@@ -151,10 +157,12 @@ def test_unpack_assign():
     parsed = FieldOperatorParser.apply_to_function(unpack_explicit_tuple)
 
     assert parsed.symtable_["tmp_a$0"].type == common_types.FieldType(
-        dims=Ellipsis, dtype=common_types.ScalarType(kind=common_types.ScalarKind.FLOAT64, shape=None)
+        dims=Ellipsis,
+        dtype=common_types.ScalarType(kind=common_types.ScalarKind.FLOAT64, shape=None),
     )
     assert parsed.symtable_["tmp_b$0"].type == common_types.FieldType(
-        dims=Ellipsis, dtype=common_types.ScalarType(kind=common_types.ScalarKind.FLOAT64, shape=None)
+        dims=Ellipsis,
+        dtype=common_types.ScalarType(kind=common_types.ScalarKind.FLOAT64, shape=None),
     )
 
 
@@ -168,10 +176,12 @@ def test_assign_tuple():
     assert parsed.symtable_["tmp$0"].type == common_types.TupleType(
         types=[
             common_types.FieldType(
-                dims=Ellipsis, dtype=common_types.ScalarType(kind=common_types.ScalarKind.FLOAT64, shape=None)
+                dims=Ellipsis,
+                dtype=common_types.ScalarType(kind=common_types.ScalarKind.FLOAT64, shape=None),
             ),
             common_types.FieldType(
-                dims=Ellipsis, dtype=common_types.ScalarType(kind=common_types.ScalarKind.INT64, shape=None)
+                dims=Ellipsis,
+                dtype=common_types.ScalarType(kind=common_types.ScalarKind.INT64, shape=None),
             ),
         ]
     )

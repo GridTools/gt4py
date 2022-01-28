@@ -125,7 +125,8 @@ def test_return_type():
     parsed = FieldOperatorParser.apply_to_function(rettype)
 
     assert parsed.body[-1].value.type == common_types.FieldType(
-        dims=Ellipsis, dtype=common_types.ScalarType(kind=common_types.ScalarKind.FLOAT64, shape=None)
+        dims=Ellipsis,
+        dtype=common_types.ScalarType(kind=common_types.ScalarKind.FLOAT64, shape=None),
     )
 
 
@@ -199,7 +200,8 @@ def test_temp_assignment():
     parsed = FieldOperatorParser.apply_to_function(copy_field)
 
     assert parsed.symtable_["tmp$0"].type == common_types.FieldType(
-        dims=Ellipsis, dtype=common_types.ScalarType(kind=common_types.ScalarKind.FLOAT64, shape=None)
+        dims=Ellipsis,
+        dtype=common_types.ScalarType(kind=common_types.ScalarKind.FLOAT64, shape=None),
     )
 
     lowered = FieldOperatorLowering.apply(parsed)

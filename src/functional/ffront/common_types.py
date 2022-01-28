@@ -1,9 +1,10 @@
 import typing
-from typing import Optional, Union, Literal
-from eve.type_definitions import IntEnum
 from dataclasses import dataclass
+from typing import Literal, Optional, Union
 
+from eve.type_definitions import IntEnum
 from functional import common as func_common
+
 
 class ScalarKind(IntEnum):
     BOOL = 1
@@ -11,6 +12,7 @@ class ScalarKind(IntEnum):
     INT64 = 64
     FLOAT32 = 1032
     FLOAT64 = 1064
+
 
 class SymbolType:
     @classmethod
@@ -26,7 +28,8 @@ class SymbolType:
 
 @dataclass(frozen=True)
 class DeferredSymbolType(SymbolType):
-    "Dummy used to represent a type not yet inferred"
+    """Dummy used to represent a type not yet inferred."""
+
     constraint: typing.Optional[typing.Type[SymbolType]]
 
 

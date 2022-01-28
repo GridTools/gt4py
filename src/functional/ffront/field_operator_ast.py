@@ -14,14 +14,12 @@
 
 
 import re
-import typing
-from typing import Literal, Optional, Union
+from typing import Optional, Union
 
 import eve
 from eve import Node
 from eve.traits import SymbolTableTrait
-from eve.type_definitions import IntEnum, SourceLocation, StrEnum, SymbolRef
-
+from eve.type_definitions import SourceLocation, StrEnum, SymbolRef
 from functional.ffront import common_types as common_types
 
 

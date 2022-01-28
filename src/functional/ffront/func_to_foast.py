@@ -28,10 +28,9 @@ from typing import Any, Optional, Union
 from eve import typingx
 from eve.type_definitions import SourceLocation
 from functional import common
-from functional.ffront import fbuiltins
+from functional.ffront import common_types, fbuiltins
 from functional.ffront import field_operator_ast as foast
 from functional.ffront import symbol_makers
-from functional.ffront import common_types
 from functional.ffront.ast_passes import (
     SingleAssignTargetPass,
     SingleStaticAssignPass,

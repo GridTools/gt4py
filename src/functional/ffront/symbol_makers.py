@@ -25,8 +25,8 @@ import numpy.typing as npt
 from eve import typingx
 from eve.type_definitions import SourceLocation
 from functional import common
-from functional.ffront import field_operator_ast as foast
 from functional.ffront import common_types
+from functional.ffront import field_operator_ast as foast
 from functional.iterator import runtime
 
 
