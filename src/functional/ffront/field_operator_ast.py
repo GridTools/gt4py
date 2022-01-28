@@ -29,10 +29,6 @@ class Namespace(StrEnum):
     EXTERNAL = "external"
 
 
-class Dimension(Node):
-    name: str
-
-
 class LocatedNode(Node):
     location: SourceLocation
 
