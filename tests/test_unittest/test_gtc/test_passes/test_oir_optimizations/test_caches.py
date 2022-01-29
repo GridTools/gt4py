@@ -94,7 +94,7 @@ def test_k_cache_detection_basic():
             AssignStmtFactory(
                 left__name="foo",
                 right__name="foo",
-                right__offset__k=-1,
+                right__offset__k=1,
             ),
             AssignStmtFactory(
                 left__name="bar",
