@@ -53,7 +53,7 @@ Describe both the positive (e.g., improvement of quality attribute satisfaction,
 * ... 
 
 
-## Other references <!-- optional -->
+## References <!-- optional -->
 
-- [Collection of Architecture Decision Record (ADR) by Joel Parker Henderson](https://github.com/joelparkerhenderson/architecture-decision-record)
+- [Someone - Something](https://someone.com/a-title-about-something)
 - ... 
