@@ -4,10 +4,10 @@ tags: []
 
 # [Title]
 
-**Status**: valid | superseded | deprecated
-**Authors**: Someone Foo (@github_handler)
-**Created**: YYYY-MM-DD
-**Updated**: YYYY-MM-DD
+- **Status**: valid | superseded | deprecated
+- **Authors**: Someone Foo (@github_handler)
+- **Created**: YYYY-MM-DD
+- **Updated**: YYYY-MM-DD
 
 (Wh)Y-statement: In the context of [use case/user story u], facing [concern c] we decided for [option o] and neglected [other options], to achieve [system qualities/desired consequences], accepting [downside/undesired consequences].
 

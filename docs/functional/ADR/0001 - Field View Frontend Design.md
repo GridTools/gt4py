@@ -4,10 +4,10 @@ tags: [frontend]
 
 # Field View Frontend Design
 
-**Status**: valid
-**Authors**: Rico Häaeuselmann (@dropd), Enrique G. Paredes (@egparedes), Till Ehrengruber (@tehrengruber)
-**Created**: 2022-01-31
-**Updated**: 2022-01-31
+- **Status**: valid
+- **Authors**: Rico Häaeuselmann (@dropd), Enrique G. Paredes (@egparedes), Till Ehrengruber (@tehrengruber)
+- **Created**: 2022-01-31
+- **Updated**: 2022-01-31
 
 This document loosely tracks how the pieces of the Field View implementation fit together and which design decisions were deliberate and why.
 
@@ -85,7 +85,7 @@ This step makes use of the type information on expressions, for example to decid
 
 #### What to keep
 ##### Assume FOAST is correct
-As per guiding principle (5), the lowering should not worry if the FOAST is incorrect or invalid. It is the responsibility of the previous parser and passes to sanitize the user code.
+As per guiding principle [[#^goal5 |(5)]], the lowering should not worry if the FOAST is incorrect or invalid. It is the responsibility of the previous parser and passes to sanitize the user code.
 
 #### What could be changed
 ##### Ad-hoc pass management
