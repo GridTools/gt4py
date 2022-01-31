@@ -1,13 +1,15 @@
+---
+tags: []
+---
+
 # [Title]
 
-* Status: [in discussion | accepted | superseded by [ADR-XXXX](XXXX-example.md)] <!-- optional -->
-* Deciders: [list everyone involved in the decision] <!-- optional -->
-* Date: [YYYY-MM-DD when the decision was last updated] <!-- optional -->
+**Status**: valid | superseded | deprecated
+**Authors**: Someone Foo (@github_handler)
+**Created**: YYYY-MM-DD
+**Updated**: YYYY-MM-DD
 
-Related development: [PR #xxx], [Issue #xxx], ... <!-- optional -->
-
-<!-- (Wh)Y-statement: In the context of <use case/user story u>, facing <concern c> we decided for <option o> and neglected <other options>, to achieve <system qualities/desired consequences>, accepting <downside d/undesired consequences>. -->
-
+(Wh)Y-statement: In the context of [use case/user story u], facing [concern c] we decided for [option o] and neglected [other options], to achieve [system qualities/desired consequences], accepting [downside/undesired consequences].
 
 ## Context
 
