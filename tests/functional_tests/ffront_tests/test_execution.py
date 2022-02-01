@@ -184,6 +184,9 @@ def test_shift():
         return inp(Ioff[1])
 
     program = program_from_function(shift_by_one, out_names=["b"], dim=IDim, size=size)
+    from devtools import debug
+
+    debug(program)
     roundtrip.executor(program, a, b, offset_provider={"Ioff": IDim})
 
     assert np.allclose(b.array(), np.arange(1, 11))

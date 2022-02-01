@@ -120,6 +120,8 @@ def _name_is_field(name: foast.Name) -> bool:
     return isinstance(name.type, common_types.FieldType)
 
 
+#  TODO(ricoh): turn every subexpression into a lambda,
+#  lift it, and then call it.
 class FieldOperatorLowering(NodeTranslator):
     """
     Lower FieldOperator AST (FOAST) to Iterator IR (ITIR).
@@ -222,8 +224,24 @@ class FieldOperatorLowering(NodeTranslator):
         )
 
     def visit_Shift(self, node: foast.Shift, **kwargs) -> itir.Expr:
+        # TODO(ricoh): instead, turn the expression into a lambda,
+        # then lift and shift the lambda.
+
         shift_args = list(self._gen_shift_args(node.offsets))
-        return self.visit(node.expr, shift_args=shift_args, **kwargs)
+        #  return self.visit(node.expr, shift_args=shift_args, **kwargs)
+
+        lambda_params = [name for name in node.expr.iter_tree().if_isinstance(foast.Name)]
+
+        expr_lambda = itir.Lambda(
+            params=[itir.Sym(id=name.id) for name in lambda_params],
+            expr=self.visit(node.expr, **kwargs),
+        )
+        lifted_lambda = ItirFunCallFactory(name="lift", args__0=expr_lambda)
+        call_lifted = ItirFunCallFactory(
+            fun=lifted_lambda, args=[itir.SymRef(id=name.id) for name in lambda_params]
+        )
+        shifted_call = ItirShiftFactory(shift_args=shift_args, args__0=call_lifted)
+        return ItirDerefFactory(args__0=shifted_call)
 
     def _make_shift_args(
         self, node: foast.Subscript, **kwargs
