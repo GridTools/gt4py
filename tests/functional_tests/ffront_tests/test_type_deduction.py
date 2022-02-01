@@ -156,11 +156,11 @@ def test_unpack_assign():
 
     parsed = FieldOperatorParser.apply_to_function(unpack_explicit_tuple)
 
-    assert parsed.symtable_["tmp_a$0"].type == common_types.FieldType(
+    assert parsed.symtable_["tmp_a__0"].type == common_types.FieldType(
         dims=Ellipsis,
         dtype=common_types.ScalarType(kind=common_types.ScalarKind.FLOAT64, shape=None),
     )
-    assert parsed.symtable_["tmp_b$0"].type == common_types.FieldType(
+    assert parsed.symtable_["tmp_b__0"].type == common_types.FieldType(
         dims=Ellipsis,
         dtype=common_types.ScalarType(kind=common_types.ScalarKind.FLOAT64, shape=None),
     )
@@ -173,7 +173,7 @@ def test_assign_tuple():
 
     parsed = FieldOperatorParser.apply_to_function(temp_tuple)
 
-    assert parsed.symtable_["tmp$0"].type == common_types.TupleType(
+    assert parsed.symtable_["tmp__0"].type == common_types.TupleType(
         types=[
             common_types.FieldType(
                 dims=Ellipsis,
