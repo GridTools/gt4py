@@ -171,9 +171,11 @@ class FieldOperatorLowering(NodeTranslator):
         result = self.visit(node.value, **kwargs)
         return result
 
-    def visit_FieldSymbol(
-        self, node: foast.FieldSymbol, *, symtable: dict[str, foast.Symbol], **kwargs
+    def visit_Symbol(
+        self, node: foast.Symbol, *, symtable: dict[str, foast.Symbol], **kwargs
     ) -> itir.Sym:
+        if not isinstance(node.type, common_types.FieldType):
+            raise NotImplementedError("Only Field symbols are supported right now.")
         return itir.Sym(id=node.id)
 
     def visit_Name(

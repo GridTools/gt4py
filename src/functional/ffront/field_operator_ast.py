@@ -15,6 +15,7 @@
 
 import re
 from typing import Optional, Union
+from pydantic import validator
 
 import eve
 from eve import Node
@@ -41,26 +42,6 @@ class Symbol(LocatedNode):
     id: SymbolName  # noqa: A003
     type: common_types.SymbolType  # noqa A003
     namespace: Namespace = Namespace(Namespace.LOCAL)
-
-
-class DataSymbol(Symbol):
-    type: Union[common_types.DataType, common_types.DeferredSymbolType]  # noqa A003
-
-
-class FieldSymbol(DataSymbol):
-    type: Union[common_types.FieldType, common_types.DeferredSymbolType]  # noqa A003
-
-
-class TupleSymbol(DataSymbol):
-    type: Union[common_types.TupleType, common_types.DeferredSymbolType]  # noqa A003
-
-
-class Function(Symbol):
-    type: common_types.FunctionType  # noqa A003
-
-
-class OffsetSymbol(Symbol):
-    type: common_types.OffsetType  # noqa A003
 
 
 class Expr(LocatedNode):
@@ -176,6 +157,12 @@ class Return(Stmt):
 
 class FieldOperator(LocatedNode, SymbolTableTrait):
     id: SymbolName  # noqa: A003
-    params: list[DataSymbol]
+    params: list[Symbol]
     body: list[Stmt]
     closure: list[Symbol]
+
+    @validator("params")
+    def validate_params_type(cls, params: list[Symbol]):
+        assert all(
+            isinstance(param.type, (common_types.DeferredSymbolType, common_types.DataType)) for param in params)
+        return params

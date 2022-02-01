@@ -362,14 +362,14 @@ class FieldOperatorParser(ast.NodeVisitor):
 
         return foast.ExternalImport(symbols=symbols, location=self._make_loc(node))
 
-    def visit_arguments(self, node: ast.arguments) -> list[foast.FieldSymbol]:
+    def visit_arguments(self, node: ast.arguments) -> list[foast.Symbol]:
         return [self.visit_arg(arg) for arg in node.args]
 
-    def visit_arg(self, node: ast.arg) -> foast.FieldSymbol:
+    def visit_arg(self, node: ast.arg) -> foast.Symbol:
         if (annotation := self.closure_refs.annotations.get(node.arg, None)) is None:
             raise self._make_syntax_error(node, message="Untyped parameters not allowed!")
         new_type = symbol_makers.make_symbol_type_from_typing(annotation)
-        return foast.FieldSymbol(id=node.arg, location=self._make_loc(node), type=new_type)
+        return foast.Symbol(id=node.arg, location=self._make_loc(node), type=new_type)
 
     def visit_Assign(self, node: ast.Assign, **kwargs) -> foast.Assign:
         target = node.targets[0]  # there is only one element after assignment passes
@@ -378,13 +378,11 @@ class FieldOperatorParser(ast.NodeVisitor):
         if not isinstance(target, ast.Name):
             raise self._make_syntax_error(node, message="Can only assign to names!")
         new_value = self.visit(node.value)
-        target_symbol_type = foast.FieldSymbol
         constraint_type = common_types.FieldType
         if isinstance(new_value, foast.TupleExpr):
-            target_symbol_type = foast.TupleSymbol
             constraint_type = common_types.TupleType
         return foast.Assign(
-            target=target_symbol_type(
+            target=foast.Symbol(
                 id=target.id,
                 location=self._make_loc(target),
                 type=common_types.DeferredSymbolType(constraint=constraint_type),
@@ -411,7 +409,7 @@ class FieldOperatorParser(ast.NodeVisitor):
             target_type = common_types.DeferredSymbolType()
 
         return foast.Assign(
-            target=foast.FieldSymbol(
+            target=foast.Symbol(
                 id=node.target.id,
                 location=self._make_loc(node.target),
                 type=target_type,
