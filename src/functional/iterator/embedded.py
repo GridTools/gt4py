@@ -362,28 +362,40 @@ class MDIterator:
     def is_none(self):
         return self.pos is None
 
+    # This would enable to make the iterator of tuple to be usable as
+    # tuple of iterator (similar to sid::composite)
+    # def __getitem__(self, i):
+    #     if not isinstance(self.field, tuple):
+    #         raise RuntimeError("Cannot index a non-tuple iterator")
+    #     return self.field[i]
+
     def deref(self):
         shifted_pos = self.pos.copy()
+        axises = self.field[0].axises if isinstance(self.field, tuple) else self.field.axises
 
-        if not all(axis in shifted_pos.keys() for axis in self.field.axises):
+        if not all(axis in shifted_pos.keys() for axis in axises):
             raise IndexError("Iterator position doesn't point to valid location for its field.")
         slice_column = {}
         if self.column_axis is not None:
             slice_column[self.column_axis] = slice(shifted_pos[self.column_axis], None)
             del shifted_pos[self.column_axis]
         ordered_indices = get_ordered_indices(
-            self.field.axises,
+            axises,
             shifted_pos,
             slice_axises=slice_column,
         )
         try:
-            return self.field[ordered_indices]
+            if isinstance(self.field, tuple):
+                return tuple(f[ordered_indices] for f in self.field)
+            else:
+                return self.field[ordered_indices]
         except IndexError:
             return _UNDEFINED
 
 
 def make_in_iterator(inp, pos, offset_provider, *, column_axis):
-    sparse_dimensions = [axis for axis in inp.axises if isinstance(axis, Offset)]
+    axises = inp[0].axises if isinstance(inp, tuple) else inp.axises
+    sparse_dimensions = [axis for axis in axises if isinstance(axis, Offset)]
     assert len(sparse_dimensions) <= 1  # TODO multiple is not a current use case
     new_pos = pos.copy()
     for axis in sparse_dimensions:

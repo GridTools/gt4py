@@ -1,3 +1,5 @@
+from typing import Tuple
+
 import numpy as np
 import pytest
 
@@ -60,3 +62,95 @@ def test_tuple_output(backend, stencil):
     if validate:
         assert np.allclose(inp1, out[0])
         assert np.allclose(inp2, out[1])
+
+
+# def toa2aot(inp: Tuple[np.ndarray,...]):
+
+
+@pytest.mark.parametrize(
+    "stencil",
+    [tuple_output1, tuple_output2],
+)
+def test_field_of_tuple_output(backend, stencil):
+    backend, validate = backend
+
+    shape = [5, 7, 9]
+    rng = np.random.default_rng()
+    inp1 = np_as_located_field(IDim, JDim, KDim)(
+        rng.normal(size=(shape[0], shape[1], shape[2])),
+    )
+    inp2 = np_as_located_field(IDim, JDim, KDim)(
+        rng.normal(size=(shape[0], shape[1], shape[2])),
+    )
+
+    out = np_as_located_field(IDim, JDim, KDim)(np.zeros(shape, dtype="f8, f8"))
+
+    dom = {
+        IDim: range(0, shape[0]),
+        JDim: range(0, shape[1]),
+        KDim: range(0, shape[2]),
+    }
+    stencil[dom](inp1, inp2, out=out, offset_provider={}, backend=backend)
+    # if validate:
+    #     assert np.allclose(inp1, out[0])
+    #     assert np.allclose(inp2, out[1])
+
+
+@fundef
+def tuple_input(inp):
+    inp_deref = deref(inp)
+    return tuple_get(0, inp_deref) + tuple_get(1, inp_deref)
+
+
+def test_tuple_field_input(backend):
+    backend, validate = backend
+
+    shape = [5, 7, 9]
+    rng = np.random.default_rng()
+    inp1 = np_as_located_field(IDim, JDim, KDim)(
+        rng.normal(size=(shape[0], shape[1], shape[2])),
+    )
+    inp2 = np_as_located_field(IDim, JDim, KDim)(
+        rng.normal(size=(shape[0], shape[1], shape[2])),
+    )
+
+    out = np_as_located_field(IDim, JDim, KDim)(np.zeros(shape))
+
+    dom = {
+        IDim: range(0, shape[0]),
+        JDim: range(0, shape[1]),
+        KDim: range(0, shape[2]),
+    }
+    tuple_input[dom]((inp1, inp2), out=out, offset_provider={}, backend=backend)
+    if validate:
+        assert np.allclose(np.asarray(inp1) + np.asarray(inp2), out)
+
+
+def test_field_of_tuple_input(backend):
+    backend, validate = backend
+
+    shape = [5, 7, 9]
+    rng = np.random.default_rng()
+
+    inp1 = rng.normal(rng.normal(size=(shape[0], shape[1], shape[2])))
+    inp2 = rng.normal(rng.normal(size=(shape[0], shape[1], shape[2])))
+    inp = np.asarray(list(zip(inp1, inp2)))
+    print(inp)
+    # exit()
+    inp = np.zeros(shape, dtype="f8, f8")
+    for i in range(shape[0]):
+        for j in range(shape[1]):
+            for k in range(shape[2]):
+                inp[i, j, k] = (inp1[i, j, k], inp2[i, j, k])
+
+    inp = np_as_located_field(IDim, JDim, KDim)(inp)
+    out = np_as_located_field(IDim, JDim, KDim)(np.zeros(shape))
+
+    dom = {
+        IDim: range(0, shape[0]),
+        JDim: range(0, shape[1]),
+        KDim: range(0, shape[2]),
+    }
+    tuple_input[dom](inp, out=out, offset_provider={}, backend=backend)
+    if validate:
+        assert np.allclose(np.asarray(inp1) + np.asarray(inp2), out)
