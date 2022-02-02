@@ -16,8 +16,6 @@
 import re
 from typing import Generic, Optional, TypeVar, Union
 
-from pydantic import validator
-
 import eve
 from eve import Node
 from eve.traits import SymbolTableTrait
