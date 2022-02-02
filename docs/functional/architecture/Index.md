@@ -10,7 +10,7 @@ Using ADRs to document the context and the design process of the technical decis
 
 Writing a new ADR is simple:
 
-1. Use the existing [Template](Template.md) as an ice-breaker to start a new ADR file, but modify it and simplify it as much as possible to fit the type of decision being documented.
+1. Use the existing [Template](Template.md) as an ice-breaker to start a new ADR file, but modify it and simplify it as much as possible to fit the type of decision being documented. If extra files (e.g. images) are needed for whatever reason, add them to the `_static/` folder.
 2. Add a link to the new ADR file to the fitting topic in the index section below.
 3. Open a PR to merge the changes into the main branch and let the team know about the new ADR.
 

@@ -16,24 +16,24 @@ This document loosely tracks how the pieces of the Field View implementation fit
 
 Overall we tried to avoid:
 
-1. having more IRs / ASTs than absolutely necessary goal <!-- <div id="goal1"></div>-->
-2. putting more logic than absolutely necessary into IR nodes (and their validators) ^goal2
-3. complex visitor methods (defining many subcases and deep `if-else` trees) ^goal3
+1. having more IRs / ASTs than absolutely necessary goal
+2. putting more logic than absolutely necessary into IR nodes (and their validators)
+3. complex visitor methods (defining many subcases and deep `if-else` trees)
 
 And we tried to achieve:
 
-4. Make all error messages that relate to user code maximally useful from the start ^goal4
-5. Separate parsing (Python -> FOAST) from lowering (FOAST -> Iterator IR) ^goal5
+4. Make all error messages that relate to user code maximally useful from the start
+5. Separate parsing (Python -> FOAST) from lowering (FOAST -> Iterator IR)
 
 In order to achieve that we had to compromise in some aspects like, for example, when it comes to AST / IR nodes having or not having optional attributes.
 
-We tried to avoid [(1)](#goal1) because we have seen in previous projects that a long chain of IRs often leads to bad coupling problems, where a change on one end has to ripple through every IR and lowering along the way. 
+We tried to avoid (1) because we have seen in previous projects that a long chain of IRs often leads to bad coupling problems, where a change on one end has to ripple through every IR and lowering along the way. 
 
-We tried to avoid [[#^goal2|(2)]] partially to avoid merge conflicts, by keeping the logic in passes we could work on them separately and mostly orthogonally. Specifically we wanted to avoid metadata logic (such as type detection rules) in validators because it decreases the visibility of said logic and increases the learning curve for new developers.
+We tried to avoid (2) partially to avoid merge conflicts, by keeping the logic in passes we could work on them separately and mostly orthogonally. Specifically we wanted to avoid metadata logic (such as type detection rules) in validators because it decreases the visibility of said logic and increases the learning curve for new developers.
 
-[[#^goal3|(3)]] just makes for really bad readability and maintainability.
+(3) just makes for really bad readability and maintainability.
 
-In the past [[#^goal4|(4)]] has always been treated as an afterthought and never made it into production. Here we passed all source locations all the way and refer to them in error messages. We test for the presence of correct source locations in tests on purpose.
+In the past (4) has always been treated as an afterthought and never made it into production. Here we passed all source locations all the way and refer to them in error messages. We test for the presence of correct source locations in tests on purpose.
 
 In order to help with maintainability, shallow learning curve and user experience, we decided to catch all compile time errors between the function definition and FOAST. That means the AST and FOAST passes, as well as the parser in between, emit user-level warnings and errors, whenever possible with source location info. This also means if the lowering encounters an invalid FOAST it is not a user error.
 
@@ -85,7 +85,7 @@ This step makes use of the type information on expressions, for example to decid
 
 #### What to keep
 ##### Assume FOAST is correct
-As per guiding principle [[#^goal5 |(5)]], the lowering should not worry if the FOAST is incorrect or invalid. It is the responsibility of the previous parser and passes to sanitize the user code.
+As per guiding principle (5), the lowering should not worry if the FOAST is incorrect or invalid. It is the responsibility of the previous parser and passes to sanitize the user code.
 
 #### What could be changed
 ##### Ad-hoc pass management
