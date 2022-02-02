@@ -24,7 +24,7 @@ __all__ = [
     "scan",
     "is_none",
     "domain",
-    "named_range",
+    "named_range",    
 ]
 
 builtin_dispatch = Dispatcher()

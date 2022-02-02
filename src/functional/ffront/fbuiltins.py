@@ -17,14 +17,25 @@ from numpy import float32, float64, int32, int64
 from functional.common import Field
 
 
-__all__ = ["Field", "float32", "float64", "int32", "int64"]
+__all__ = ["Field", "float32", "float64", "int32", "int64", "nbh_sum"]
 
 TYPE_BUILTINS = [Field, float, float32, float64, int, int32, int64, bool, tuple]
 TYPE_BUILTIN_NAMES = [t.__name__ for t in TYPE_BUILTINS]
 
+class BuiltinFunction:
+    ...
+
+
+class nbh_sum(BuiltinFunction):
+    ...
+
+
+FUN_BUILTINS = [nbh_sum]
+FUN_BUILTIN_NAMES = [f.__name__ for f in FUN_BUILTINS]
+
 EXTERNALS_MODULE_NAME = "__externals__"
 MODULE_BUILTIN_NAMES = [EXTERNALS_MODULE_NAME]
 
-ALL_BUILTIN_NAMES = TYPE_BUILTIN_NAMES + MODULE_BUILTIN_NAMES
+ALL_BUILTIN_NAMES = TYPE_BUILTIN_NAMES + MODULE_BUILTIN_NAMES# + FUN_BUILTIN_NAMES
 
 BUILTINS = {name: globals()[name] for name in __all__}

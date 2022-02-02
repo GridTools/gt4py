@@ -238,7 +238,41 @@ class FieldOperatorLowering(NodeTranslator):
             yield name
             yield offset
 
+    def _extract_fields(self, expr: itir.Expr) -> list[str]:        
+        # TODO: replace with visitor that scrapes expr recursively for all field accesses
+        return [expr.fun.id]
+
+    def _remove_field_accesses(self, expr: itir.Expr) -> itir.Expr:
+        # TODO: replace with visitor that replaces each FunCall(field, arg(Axis)) with just
+        #       SymRef(field)
+        # TODO: how to distinguish FunCall(field, arg(Axis)) from FunCall(actual_fun, arg(Axis))?
+        return itir.SymRef(id = expr.fun.id + "_param")
+
+    def _make_lamba_rhs(self, expr: itir.Expr) -> itir.FunCall:
+        return ItirFunCallFactory(name="plus", args=[itir.SymRef(id = "base"), expr])
+
+    def _make_reduce(self, *args, **kwargs):
+        # check that len(args) is 2 and that there is a kwarg "axis"    
+        red_rhs = self.visit(args[0], **kwargs)
+
+        red_expr = red_rhs[0]
+        red_axis = red_rhs[1].args[0].id
+        
+        rhs_fields = self._extract_fields(red_expr)
+        rhs_fields_sym = [itir.Sym(id=field + "_param") for field in rhs_fields]
+
+        rhs_lambda = itir.Lambda(params=[itir.Sym(id="base")] + rhs_fields_sym, 
+                        expr=self._make_lamba_rhs(self._remove_field_accesses(red_expr)))
+
+        nbh_sum_call = ItirFunCallFactory(name="reduce", args=[rhs_lambda, itir.IntLiteral(value=0.)])               
+        shift_fun = ItirFunCallFactory(fun=ItirFunCallFactory(name="shift",args=[itir.OffsetLiteral(value=red_axis)]), args=[itir.SymRef(id=field) for field in rhs_fields])
+        total_call = ItirFunCallFactory(fun=nbh_sum_call, args=[shift_fun])
+
+        return total_call
+
     def visit_Call(self, node: foast.Call, **kwargs) -> itir.FunCall:
+        if node.func.id == "nbh_sum": #TODO hardcoded string
+            return self._make_reduce(node.args, **kwargs)
         new_fun = (
             itir.SymRef(id=node.func.id)
             if isinstance(node.func, foast.Name)  # name called, e.g. my_fieldop(a, b)

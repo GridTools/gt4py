@@ -306,6 +306,7 @@ class FieldOperatorParser(ast.NodeVisitor):
             self.source, self.filename
         )
         # TODO(egparedes): raise the exception at the first use of the undefined symbol
+
         if missing_defs := (self.closure_refs.unbound - imported_names):
             raise self._make_syntax_error(
                 node, message=f"Missing symbol definitions: {missing_defs}"
@@ -316,7 +317,9 @@ class FieldOperatorParser(ast.NodeVisitor):
         # However, 'closure_refs' comes from inspecting the live function object, which might
         # have not been defined at a global scope, and therefore actual symbol values could appear
         # in both 'closure_refs.globals' and 'self.closure_refs.nonlocals'.
-        defs = self.closure_refs.globals | self.closure_refs.nonlocals
+        defs = (
+            self.closure_refs.globals | self.closure_refs.nonlocals
+        )  # | self.closure_refs.builtins
         closure = [
             symbol_makers.make_symbol_from_value(
                 name, defs[name], foast.Namespace.CLOSURE, self._make_loc(node)
@@ -546,16 +549,21 @@ class FieldOperatorParser(ast.NodeVisitor):
     def visit_Eq(self, node: ast.Eq, **kwargs) -> foast.CompareOperator:
         return foast.CompareOperator.EQ
 
-    def visit_Call(self, node: ast.Call, **kwargs) -> foast.CompareOperator:
+    def visit_Call(self, node: ast.Call, **kwargs) -> foast.Call:
         new_func = self.visit(node.func)
         if not isinstance(new_func, foast.Name):
             raise self._make_syntax_error(
                 node.func, message="functions can only be called directly!"
             )
 
+        args = node.args
+        #TODO: for now, strip the keyword
+        for keyword in node.keywords:
+            args.append(keyword.value)
+
         return foast.Call(
             func=new_func,
-            args=[self.visit(arg) for arg in node.args],
+            args=[self.visit(arg) for arg in args],
             location=self._make_loc(node),
         )
 

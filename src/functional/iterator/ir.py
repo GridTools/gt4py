@@ -101,6 +101,7 @@ class Program(Node, SymbolTableTrait):
             "make_tuple",
             "tuple_get",
             "reduce",
+            "nbh_sum"
             "deref",
             "shift",
             "scan",

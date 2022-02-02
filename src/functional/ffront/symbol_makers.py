@@ -25,7 +25,7 @@ import numpy.typing as npt
 from eve import typingx
 from eve.type_definitions import SourceLocation
 from functional import common
-from functional.ffront import common_types
+from functional.ffront import common_types, fbuiltins
 from functional.ffront import field_operator_ast as foast
 from functional.iterator import runtime
 
@@ -137,6 +137,8 @@ def make_symbol_type_from_typing(
             return common_types.FieldType(dims=dims, dtype=dtype)
 
         case collections.abc.Callable:
+            # if fbuiltins.
+
             if not args:
                 raise FieldOperatorTypeError("Not annotated functions are not supported!")
 
@@ -162,12 +164,19 @@ def make_symbol_type_from_typing(
         case runtime.Offset:
             return common_types.OffsetType()
 
+        case fbuiltins.nbh_sum:
+            return common_types.FunctionType(args=[], kwargs={}, returns=common_types.DeferredSymbolType(constraint=None))
+
     raise FieldOperatorTypeError(f"'{type_hint}' type is not supported")
 
 
 def make_symbol_from_value(
     name: str, value: Any, namespace: foast.Namespace, location: SourceLocation
 ) -> foast.Symbol:
+
+    #if name in fbuiltins.FUN_BUILTIN_NAMES:
+    #    foast.Function(id=name, type=make_symbol_type_from_typing(value))
+
     if not isinstance(value, type) or type(value).__module__ != "typing":
         value = typingx.get_typing(value, annotate_callable_kwargs=True)
 

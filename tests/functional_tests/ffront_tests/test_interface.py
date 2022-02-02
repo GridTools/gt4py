@@ -22,16 +22,18 @@ Basic Interface Tests
     - evaluation test cases
 """
 import pytest
+from typing import Any
 
 import functional.ffront.field_operator_ast as foast
 from functional.common import Field
 from functional.ffront import common_types
-from functional.ffront.fbuiltins import float32, float64, int64
+from functional.ffront.fbuiltins import float32, float64, int64, nbh_sum
 from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError
 from functional.ffront.foast_to_itir import FieldOperatorLowering
 from functional.ffront.func_to_foast import FieldOperatorParser, FieldOperatorSyntaxError
 from functional.ffront.symbol_makers import FieldOperatorTypeError
 from functional.iterator import ir as itir
+from functional.iterator.runtime import CartesianAxis, offset
 from functional.iterator.builtins import (
     and_,
     deref,
@@ -399,7 +401,7 @@ def test_binary_or():
 
 def test_binary_pow():
     def power(inp: Field[..., "float64"]):
-        return inp ** 3
+        return inp**3
 
     with pytest.raises(
         FieldOperatorSyntaxError,
@@ -488,6 +490,56 @@ def test_compare_chain():
         ],
     )
 
+
+Edge = CartesianAxis("Edge")
+V2E = offset("V2E")
+
+
+from devtools import debug
+
+def test_reduction_lowering():
+    def reduction(edge_f: Field[[Edge], "float64"]):
+        return nbh_sum(edge_f(V2E), axis=V2E)
+
+    parsed = FieldOperatorParser.apply_to_function(reduction)
+    lowered = FieldOperatorLowering.apply(parsed)
+
+    # debug(lowered)
+
+    assert lowered.expr == itir.FunCall(
+            fun=itir.FunCall(
+                fun=itir.SymRef(id="reduce"),
+                args=[
+                    itir.Lambda(
+                        params=[
+                            itir.Sym(id='base'),
+                            itir.Sym(id='edge_f_param'),
+                        ],
+                        expr=itir.FunCall(
+                            fun=PLUS,
+                            args=[
+                                itir.SymRef(id='base'),
+                                itir.SymRef(id='edge_f_param'),
+                            ],
+                        ),
+                    ),
+                    itir.IntLiteral(value=0),
+                ],
+            ),
+            args=[
+                itir.FunCall(
+                    fun=itir.FunCall(
+                        fun=itir.SymRef(id='shift'),
+                        args=[
+                            itir.OffsetLiteral(value='V2E'),
+                        ],
+                    ),
+                    args=[
+                        itir.SymRef(id='edge_f'),
+                    ],
+                ),
+            ],
+        )    
 
 def test_bool_and():
     def bool_and(a: Field[..., "bool"], b: Field[..., "bool"]):
