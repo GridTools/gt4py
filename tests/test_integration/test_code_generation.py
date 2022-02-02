@@ -243,9 +243,8 @@ def test_lower_dimensional_masked_2dcond(backend):
         outp: gtscript.Field[gtscript.IJK, np.float_],
     ):
         with computation(FORWARD), interval(...):
-            tmp = inp
             if cond > 0.0:
-                outp = tmp
+                outp = inp
 
     inp = np.random.randn(10, 10)
     outp = np.random.randn(10, 10, 10)

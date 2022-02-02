@@ -14,14 +14,12 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import functools
 import textwrap
 from dataclasses import dataclass, field
-from typing import Any, Collection, Dict, Optional, Set, Tuple, Union
+from typing import Any, Collection, Optional, Set, Tuple, Union
 
 from eve import SymbolTableTrait
 from eve.codegen import FormatTemplate, JinjaTemplate, TemplatedGenerator
-from gt4py.definitions import Extent
 from gtc import common
 from gtc.numpy import npir
 
@@ -47,7 +45,7 @@ ORIGIN_CORRECTED_VIEW_CLASS = textwrap.dedent(
                 + list(range(sum(dimensions), len(field.shape)))
             )
 
-            shape = tuple(field.shape[i] if i is not None else 1 for i in self.idx_to_data)
+            shape = [field.shape[i] if i is not None else 1 for i in self.idx_to_data]
             self.field = np.reshape(field.data, shape).view(np.ndarray)
 
             self.offsets = offsets
@@ -95,17 +93,6 @@ ORIGIN_CORRECTED_VIEW_CLASS = textwrap.dedent(
 )
 
 
-VARIABLE_OFFSET_FUNCTION = textwrap.dedent(
-    """
-    def var_k_expr(expr, levels):
-        k_indices = np.arange(expr.shape[2]) + levels
-        all_nonk_axes = tuple(i for i in range(expr.ndim) if i != 2)
-        expanded_k_indices = np.expand_dims(k_indices, axis=all_nonk_axes)
-        return expanded_k_indices + expr
-    """
-)
-
-
 class NpirCodegen(TemplatedGenerator):
     @dataclass
     class BlockContext:
@@ -138,7 +125,7 @@ class NpirCodegen(TemplatedGenerator):
         "{name} = Field.empty({shape}, ({', '.join(str(off) for off in offset)}, 0))"
     )
 
-    # LocalDecl = FormatTemplate("{name} = {dtype}()")
+    # LocalDecl is purposefully omitted.
 
     VarKOffset = FormatTemplate("lk + {k}")
 
@@ -248,7 +235,6 @@ class NpirCodegen(TemplatedGenerator):
         else:
             default_val = left
 
-        print(node.left, default_val)
         return f"{left} = np.where({mask}, {right}, {default_val})"
 
     VectorArithmetic = FormatTemplate("({left} {op} {right})")

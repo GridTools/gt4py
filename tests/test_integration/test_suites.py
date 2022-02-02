@@ -767,7 +767,7 @@ class TestVariableKRead(gt_testing.StencilTestSuite):
         "field_out": np.float32,
         "index": np.int32,
     }
-    domain_range = [(2, 2), (2, 2), (6, 8)]
+    domain_range = [(2, 2), (2, 2), (2, 8)]
     backends = [backend for backend in INTERNAL_BACKENDS if backend.values[0] not in ["gtc:dace"]]
     symbols = {
         "field_in": gt_testing.field(
