@@ -14,7 +14,7 @@
 
 
 import re
-from typing import Optional, Union
+from typing import Generic, Optional, TypeVar, Union
 
 from pydantic import validator
 
@@ -39,9 +39,12 @@ class SymbolName(eve.traits.SymbolName):
     regex = re.compile(r"^[a-zA-Z_][\w$]*$")
 
 
-class Symbol(LocatedNode):
+SymbolT = TypeVar("SymbolT", bound=common_types.SymbolType)
+
+
+class Symbol(eve.GenericNode, LocatedNode, Generic[SymbolT]):
     id: SymbolName  # noqa: A003
-    type: common_types.SymbolType  # noqa A003
+    type: Union[SymbolT, common_types.DeferredSymbolType]  # noqa A003
     namespace: Namespace = Namespace(Namespace.LOCAL)
 
 
@@ -158,14 +161,6 @@ class Return(Stmt):
 
 class FieldOperator(LocatedNode, SymbolTableTrait):
     id: SymbolName  # noqa: A003
-    params: list[Symbol]
+    params: list[Symbol[common_types.DataType]]
     body: list[Stmt]
     closure: list[Symbol]
-
-    @validator("params")
-    def validate_params_type(cls, params: list[Symbol]):
-        assert all(
-            isinstance(param.type, (common_types.DeferredSymbolType, common_types.DataType))
-            for param in params
-        )
-        return params

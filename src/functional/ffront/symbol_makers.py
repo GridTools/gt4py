@@ -168,8 +168,10 @@ def make_symbol_type_from_typing(
 def make_symbol_from_value(
     name: str, value: Any, namespace: foast.Namespace, location: SourceLocation
 ) -> foast.Symbol:
-    """Make a symbol node from a python value."""
-    assert not isinstance(value, type) and type(value).__module__ != "typing"
+    """Make a symbol node from a Python value."""
+    if isinstance(value, type) or type(value).__module__ == "typing":
+        # we don't have types of types so disallow this
+        raise ValueError("The type of a symbol can not be a type itself.")
     type_ = typingx.get_typing(value, annotate_callable_kwargs=True)
 
     symbol_type = make_symbol_type_from_typing(type_)
