@@ -10,7 +10,7 @@ Using ADRs to document the context and the design process of the technical decis
 
 Writing a new ADR is simple:
 
-1. Use the existing [[Template]] as an ice-breaker to start a new ADR file, but modify it and simplify it as much as possible to fit the type of decision being documented.
+1. Use the existing [Template](Template.md) as an ice-breaker to start a new ADR file, but modify it and simplify it as much as possible to fit the type of decision being documented.
 2. Add a link to the new ADR file to the fitting topic in the index section below.
 3. Open a PR to merge the changes into the main branch and let the team know about the new ADR.
 
@@ -21,7 +21,7 @@ Writing a new ADR is simple:
 _None_
 
 ### Frontend and Parsing #frontend 
-- [[0001 - Field View Frontend Design]]
+- [0001 - Field View Frontend Design](0001-Field_View_Frontend_Design.md)
 
 ### Transformations
 _None_
@@ -40,6 +40,4 @@ _None_
 - [Michael NygADR - Documenting Architecture Decisions](https://cognitect.com/blog/2011/11/15/documenting-architecture-decisions)
 - [ADR on GitHub - Architectural Decision Records](https://adr.github.io/)
 - [Joel Parker Henderson - Collection of Architecture Decision Record (ADR)](https://github.com/joelparkerhenderson/architecture-decision-record)
-
-
 

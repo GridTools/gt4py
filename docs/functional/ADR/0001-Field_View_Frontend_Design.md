@@ -16,7 +16,7 @@ This document loosely tracks how the pieces of the Field View implementation fit
 
 Overall we tried to avoid:
 
-1. having more IRs / ASTs than absolutely necessary ^goal1
+1. having more IRs / ASTs than absolutely necessary goal <!-- <div id="goal1"></div>-->
 2. putting more logic than absolutely necessary into IR nodes (and their validators) ^goal2
 3. complex visitor methods (defining many subcases and deep `if-else` trees) ^goal3
 
@@ -27,7 +27,7 @@ And we tried to achieve:
 
 In order to achieve that we had to compromise in some aspects like, for example, when it comes to AST / IR nodes having or not having optional attributes.
 
-We tried to avoid [[#^goal1 |(1)]] because we have seen in previous projects that a long chain of IRs often leads to bad coupling problems, where a change on one end has to ripple through every IR and lowering along the way. 
+We tried to avoid [(1)](#goal1) because we have seen in previous projects that a long chain of IRs often leads to bad coupling problems, where a change on one end has to ripple through every IR and lowering along the way. 
 
 We tried to avoid [[#^goal2|(2)]] partially to avoid merge conflicts, by keeping the logic in passes we could work on them separately and mostly orthogonally. Specifically we wanted to avoid metadata logic (such as type detection rules) in validators because it decreases the visibility of said logic and increases the learning curve for new developers.
 
