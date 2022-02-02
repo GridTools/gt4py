@@ -217,7 +217,7 @@ class FieldOperatorParser(ast.NodeVisitor):
     >>> foast_tree  # doctest: +ELLIPSIS
     FieldOperator(..., id='field_op', ...)
     >>> foast_tree.params  # doctest: +ELLIPSIS
-    [FieldSymbol(..., id='inp', ...)]
+    [Symbol(..., id='inp', type=FieldType(...), ...)]
     >>> foast_tree.body  # doctest: +ELLIPSIS
     [Return(..., value=Name(..., id='inp'))]
 

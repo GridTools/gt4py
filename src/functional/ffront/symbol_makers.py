@@ -169,13 +169,14 @@ def make_symbol_from_value(
     name: str, value: Any, namespace: foast.Namespace, location: SourceLocation
 ) -> foast.Symbol:
     """Make a symbol node from a python value."""
-
     assert not isinstance(value, type) and type(value).__module__ != "typing"
     type_ = typingx.get_typing(value, annotate_callable_kwargs=True)
 
     symbol_type = make_symbol_type_from_typing(type_)
 
-    if isinstance(symbol_type, (common_types.DataType, common_types.FunctionType, common_types.OffsetType)):
+    if isinstance(
+        symbol_type, (common_types.DataType, common_types.FunctionType, common_types.OffsetType)
+    ):
         return foast.Symbol(id=name, type=symbol_type, namespace=namespace, location=location)
     else:
         raise common.GTTypeError(f"Impossible to map '{value}' value to a Symbol")

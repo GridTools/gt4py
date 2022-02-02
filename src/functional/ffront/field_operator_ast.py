@@ -15,6 +15,7 @@
 
 import re
 from typing import Optional, Union
+
 from pydantic import validator
 
 import eve
@@ -164,5 +165,7 @@ class FieldOperator(LocatedNode, SymbolTableTrait):
     @validator("params")
     def validate_params_type(cls, params: list[Symbol]):
         assert all(
-            isinstance(param.type, (common_types.DeferredSymbolType, common_types.DataType)) for param in params)
+            isinstance(param.type, (common_types.DeferredSymbolType, common_types.DataType))
+            for param in params
+        )
         return params
