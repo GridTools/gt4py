@@ -19,15 +19,63 @@ from typing import List, Optional, Tuple, Union, cast
 from pydantic import validator
 
 import eve
+from gt4py.definitions import Extent
 from gtc import common
 
 
+# --- Misc ---
+class AxisName(eve.StrEnum):
+    I = "I"  # noqa: E741 (ambiguous variable name)
+    J = "J"
+    K = "K"
+
+
+# --- Decls ---
+@eve.utils.noninstantiable
+class Decl(eve.Node):
+    name: eve.SymbolName
+    dtype: common.DataType
+
+
+class LocalDecl(Decl):
+    # Scalar per grid point
+    # Locals never have data_dims
+    pass
+
+
+class FieldDecl(Decl):
+    # General field shared across HorizontalBlocks
+    dimensions: Tuple[bool, bool, bool]
+    data_dims: Tuple[int, ...] = eve.field(default_factory=tuple)
+    extent: Extent
+
+
+class TemporaryDecl(Decl):
+    # Temporary field shared across HorizontalBlocks
+    data_dims: Tuple[int, ...] = eve.field(default_factory=tuple)
+    offset: Tuple[int, int]
+    boundary: Tuple[int, int]
+
+
+class ScalarDecl(Decl):
+    # Defines a scalar parameter argument
+    pass
+
+
+# --- Expressions ---
 @eve.utils.noninstantiable
 class Expr(common.Expr):
     pass
 
 
-class Literal(common.Literal, Expr):
+@eve.utils.noninstantiable
+class VectorLValue(common.LocNode):
+    pass
+
+
+class ScalarLiteral(common.Literal, Expr):
+    kind = cast(common.ExprKind, common.ExprKind.SCALAR)
+
     @validator("dtype")
     def is_defined(cls, dtype: common.DataType) -> common.DataType:
         undefined = [common.DataType.AUTO, common.DataType.DEFAULT, common.DataType.INVALID]
@@ -36,133 +84,104 @@ class Literal(common.Literal, Expr):
         return dtype
 
 
-class Cast(common.Cast[Expr], Expr):
-    pass
+class ScalarCast(common.Cast[Expr], Expr):
+    kind = cast(common.ExprKind, common.ExprKind.SCALAR)
 
 
-class NumericalOffset(eve.Node):
-    value: int
-
-
-class AxisName(eve.StrEnum):
-    I = "I"  # noqa: E741 (ambiguous variable name)
-    J = "J"
-    K = "K"
-
-
-class AxisOffset(eve.Node):
-    offset: NumericalOffset
-    axis_name: AxisName
-    parallel: bool
-
-    @classmethod
-    def from_int(cls, *, axis_name: str, offset: int, parallel: bool) -> "AxisOffset":
-        return cls(axis_name=axis_name, offset=NumericalOffset(value=offset), parallel=parallel)
-
-    @classmethod
-    def i(cls, offset: int, *, parallel: bool = True) -> "AxisOffset":
-        return cls.from_int(axis_name=AxisName.I, offset=offset, parallel=parallel)
-
-    @classmethod
-    def j(cls, offset: int, *, parallel: bool = True) -> "AxisOffset":
-        return cls.from_int(axis_name=AxisName.J, offset=offset, parallel=parallel)
-
-    @classmethod
-    def k(cls, offset: int, *, parallel: bool = False) -> "AxisOffset":
-        return cls.from_int(axis_name=AxisName.K, offset=offset, parallel=parallel)
-
-
-class VariableKOffset(common.VariableKOffset[Expr]):
-    pass
-
-
-@eve.utils.noninstantiable
-class VectorExpression(Expr):
+class VectorCast(common.Cast[Expr], Expr):
     kind = cast(common.ExprKind, common.ExprKind.FIELD)
 
 
-class BroadCast(VectorExpression):
+class Broadcast(Expr):
     expr: Expr
     dims: int = 3
+    kind = cast(common.ExprKind, common.ExprKind.FIELD)
 
 
-class VectorLValue(common.LocNode):
+class VarKOffset(common.VariableKOffset[Expr]):
     pass
 
 
-class FieldDecl(eve.Node):
-    name: eve.SymbolName
-    dtype: common.DataType
-    dimensions: Tuple[bool, bool, bool]
-    data_dims: Tuple[int, ...] = eve.field(default_factory=tuple)
-
-
-class FieldSlice(VectorExpression, VectorLValue):
-    name: str
-    i_offset: Optional[AxisOffset] = None
-    j_offset: Optional[AxisOffset] = None
-    k_offset: Optional[Union[AxisOffset, VariableKOffset]] = None
+class FieldSlice(Expr, VectorLValue):
+    name: eve.SymbolRef
+    i_offset: int
+    j_offset: int
+    k_offset: Union[int, VarKOffset]
     data_index: List[Expr] = []
+    kind = cast(common.ExprKind, common.ExprKind.FIELD)
+
+    @validator("data_index")
+    def data_indices_are_scalar(cls, data_index: List[Expr]) -> List[Expr]:
+        for index in data_index:
+            if index.kind != common.ExprKind.SCALAR:
+                raise ValueError("Data indies must be scalars")
+        return data_index
 
 
-class NamedScalar(common.ScalarAccess, Expr):
-    pass
+class ParamAccess(Expr):
+    name: eve.SymbolRef
+    kind = cast(common.ExprKind, common.ExprKind.SCALAR)
 
 
-class VectorTemp(VectorExpression, VectorLValue):
-    name: common.SymbolRef
+class LocalScalarAccess(Expr, VectorLValue):
+    name: eve.SymbolRef
+    kind = cast(common.ExprKind, common.ExprKind.FIELD)
 
 
-class EmptyTemp(VectorExpression):
-    dtype: common.DataType
-
-
-class VectorArithmetic(common.BinaryOp[VectorExpression], VectorExpression):
+class VectorArithmetic(common.BinaryOp[Expr], Expr):
     op: Union[common.ArithmeticOperator, common.ComparisonOperator]
 
+    _dtype_propagation = common.binary_op_dtype_propagation(strict=True)
 
-class VectorLogic(common.BinaryOp[VectorExpression], VectorExpression):
+
+class VectorLogic(common.BinaryOp[Expr], Expr):
     op: common.LogicalOperator
 
 
-class VectorUnaryOp(common.UnaryOp[VectorExpression], VectorExpression):
+class VectorUnaryOp(common.UnaryOp[Expr], Expr):
     pass
 
 
-class VectorTernaryOp(common.TernaryOp[VectorExpression], VectorExpression):
-    pass
+class VectorTernaryOp(common.TernaryOp[Expr], Expr):
+    _dtype_propagation = common.ternary_op_dtype_propagation(strict=True)
 
 
-class VectorAssign(common.AssignStmt[VectorLValue, VectorExpression], VectorExpression):
+class NativeFuncCall(common.NativeFuncCall[Expr], Expr):
+    _dtype_propagation = common.native_func_call_dtype_propagation(strict=True)
+
+
+# --- Statement ---
+class VectorAssign(common.AssignStmt[VectorLValue, Expr]):
     left: VectorLValue
-    right: VectorExpression
-    mask: Optional[VectorExpression]
+    right: Expr
+    mask: Optional[Expr]
+
+    @validator("right")
+    def right_is_field_kind(cls, right: Expr) -> Expr:
+        if right.kind != common.ExprKind.FIELD:
+            raise ValueError("right is not a common.ExprKind.FIELD")
+        return right
+
+    _dtype_validation = common.assign_stmt_dtype_validation(strict=True)
 
 
-class MaskBlock(common.Stmt):
-    mask: VectorExpression
-    mask_name: str
+# --- Control Flow ---
+class HorizontalBlock(common.LocNode, eve.SymbolTableTrait):
+    declarations: List[LocalDecl]
     body: List[VectorAssign]
-
-
-class HorizontalBlock(common.LocNode):
-    body: List[Union[VectorAssign, MaskBlock]]
+    extent: Extent
 
 
 class VerticalPass(common.LocNode):
     body: List[HorizontalBlock]
-    temp_defs: List[VectorAssign]
     lower: common.AxisBound
     upper: common.AxisBound
     direction: common.LoopOrder
 
 
 class Computation(common.LocNode, eve.SymbolTableTrait):
-    field_decls: List[FieldDecl]
-    field_params: List[str]
-    params: List[str]
+    arguments: List[str]
+    api_field_decls: List[FieldDecl]
+    param_decls: List[ScalarDecl]
+    temp_decls: List[TemporaryDecl]
     vertical_passes: List[VerticalPass]
-
-
-class NativeFuncCall(common.NativeFuncCall[Expr], VectorExpression):
-    _dtype_propagation = common.native_func_call_dtype_propagation(strict=True)
