@@ -5,7 +5,7 @@ tags: [frontend]
 # Field View Frontend Design
 
 - **Status**: valid
-- **Authors**: Rico Häaeuselmann (@dropd), Enrique G. Paredes (@egparedes), Till Ehrengruber (@tehrengruber)
+- **Authors**: Rico Häuselmann (@dropd), Enrique G. Paredes (@egparedes), Till Ehrengruber (@tehrengruber)
 - **Created**: 2022-01-31
 - **Updated**: 2022-01-31
 
