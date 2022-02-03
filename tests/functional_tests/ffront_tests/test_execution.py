@@ -183,10 +183,11 @@ def test_shift():
     def shift_by_one(inp: Field[[IDim], float64]):
         return inp(Ioff[1])
 
-    program = program_from_function(shift_by_one, out_names=["b"], dim=IDim, size=size)
     from devtools import debug
 
-    debug(program)
+    debug(FieldOperatorLowering.apply(FieldOperatorParser.apply_to_function(shift_by_one)))
+
+    program = program_from_function(shift_by_one, out_names=["b"], dim=IDim, size=size)
     roundtrip.executor(program, a, b, offset_provider={"Ioff": IDim})
 
     assert np.allclose(b.array(), np.arange(1, 11))

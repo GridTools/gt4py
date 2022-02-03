@@ -23,12 +23,15 @@ Basic Interface Tests
 """
 import pytest
 
-import functional.ffront.field_operator_ast as foast
 from functional.common import Field
 from functional.ffront import common_types
 from functional.ffront.fbuiltins import float32, float64, int64
 from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError
-from functional.ffront.foast_to_itir import FieldOperatorLowering
+from functional.ffront.foast_to_itir import (
+    FieldOperatorLowering,
+    ItirDerefFactory,
+    ItirLiftedLambdaCallFactory,
+)
 from functional.ffront.func_to_foast import FieldOperatorParser, FieldOperatorSyntaxError
 from functional.ffront.symbol_makers import FieldOperatorTypeError
 from functional.iterator import ir as itir
@@ -40,6 +43,7 @@ from functional.iterator.builtins import (
     greater,
     if_,
     less,
+    lift,
     make_tuple,
     minus,
     multiplies,
@@ -64,6 +68,7 @@ LESS = itir.SymRef(id=less.fun.__name__)
 EQ = itir.SymRef(id=eq.fun.__name__)
 AND = itir.SymRef(id=and_.fun.__name__)
 OR = itir.SymRef(id=or_.fun.__name__)
+LIFT = itir.SymRef(id=lift.fun.__name__)
 
 
 COPY_FUN_DEF = itir.FunctionDefinition(
@@ -84,7 +89,7 @@ def test_invalid_syntax_error_empty_return():
         FieldOperatorSyntaxError,
         match=(
             r"Invalid Field Operator Syntax: "
-            r"Empty return not allowed \(test_interface.py, line 81\)"
+            r"Empty return not allowed \(test_interface.py, line 86\)"
         ),
     ):
         _ = FieldOperatorParser.apply_to_function(wrong_syntax)
@@ -163,11 +168,19 @@ def test_copy_lower():
     parsed = FieldOperatorParser.apply_to_function(copy_field)
     lowered = FieldOperatorLowering.apply(parsed)
     assert lowered == COPY_FUN_DEF
-    assert lowered.expr == COPY_FUN_DEF.expr
+
+    expr = COPY_FUN_DEF.expr
+
+    lifted_expr = ItirLiftedLambdaCallFactory(
+        lambda_expr=itir.Lambda(params=[itir.Sym(id="inp")], expr=expr),
+        args=[itir.SymRef(id="inp")],
+    )
+
+    assert lowered.expr == ItirDerefFactory(args__0=lifted_expr)
 
 
 def test_syntax_unpacking():
-    """For now, only single target assigns are allowed."""
+    """Unpacking assigns should get separated."""
 
     def unpacking(inp1: Field[..., "float64"], inp2: Field[..., "float64"]):
         tmp1, tmp2 = inp1, inp2  # noqa
@@ -175,7 +188,7 @@ def test_syntax_unpacking():
 
     parsed = FieldOperatorParser.apply_to_function(unpacking)
     lowered = FieldOperatorLowering.apply(parsed)
-    assert lowered.expr == itir.FunCall(
+    expr = itir.FunCall(
         fun=itir.SymRef(id="tuple_get"),
         args=[
             itir.FunCall(
@@ -188,6 +201,21 @@ def test_syntax_unpacking():
             itir.IntLiteral(value=0),
         ],
     )
+
+    lifted_tmp1 = ItirLiftedLambdaCallFactory(
+        lambda_expr=itir.Lambda(params=[itir.Sym(id="inp1"), itir.Sym(id="inp2")], expr=expr),
+        args=[itir.SymRef(id="inp1"), itir.SymRef(id="inp2")],
+    )
+
+    lifted_expr = ItirLiftedLambdaCallFactory(
+        lambda_expr=itir.Lambda(
+            params=[itir.Sym(id="tmp1__0")],
+            expr=ItirDerefFactory(args__0=itir.SymRef(id="tmp1__0")),
+        ),
+        args=[lifted_tmp1],
+    )
+
+    assert lowered.expr == ItirDerefFactory(args__0=lifted_expr)
 
 
 def test_temp_assignment():
@@ -207,7 +235,37 @@ def test_temp_assignment():
     lowered = FieldOperatorLowering.apply(parsed)
 
     assert lowered == COPY_FUN_DEF
-    assert lowered.expr == COPY_FUN_DEF.expr
+
+    lifted_tmp = ItirLiftedLambdaCallFactory(
+        lambda_expr=itir.Lambda(
+            params=[itir.Sym(id="inp")], expr=ItirDerefFactory(args__0=itir.SymRef(id="inp"))
+        ),
+        args=[itir.SymRef(id="inp")],
+    )
+
+    lifted_inp__0 = ItirLiftedLambdaCallFactory(
+        lambda_expr=itir.Lambda(
+            params=[itir.Sym(id="tmp__0")], expr=ItirDerefFactory(args__0=itir.SymRef(id="tmp__0"))
+        ),
+        args=[lifted_tmp],
+    )
+
+    lifted_tmp2 = ItirLiftedLambdaCallFactory(
+        lambda_expr=itir.Lambda(
+            params=[itir.Sym(id="inp__0")], expr=ItirDerefFactory(args__0=itir.SymRef(id="inp__0"))
+        ),
+        args=[lifted_inp__0],
+    )
+
+    lifted_expr = ItirLiftedLambdaCallFactory(
+        lambda_expr=itir.Lambda(
+            params=[itir.Sym(id="tmp2__0")],
+            expr=ItirDerefFactory(args__0=itir.SymRef(id="tmp2__0")),
+        ),
+        args=[lifted_tmp2],
+    )
+
+    assert lowered.expr == ItirDerefFactory(args__0=lifted_expr)
 
 
 def test_annotated_assignment():
@@ -219,7 +277,22 @@ def test_annotated_assignment():
     lowered = FieldOperatorLowering.apply(parsed)
 
     assert lowered == COPY_FUN_DEF
-    assert lowered.expr == COPY_FUN_DEF.expr
+
+    lifted_tmp = ItirLiftedLambdaCallFactory(
+        lambda_expr=itir.Lambda(
+            params=[itir.Sym(id="inp")], expr=ItirDerefFactory(args__0=itir.SymRef(id="inp"))
+        ),
+        args=[itir.SymRef(id="inp")],
+    )
+
+    lifted_expr = ItirLiftedLambdaCallFactory(
+        lambda_expr=itir.Lambda(
+            params=[itir.Sym(id="tmp__0")], expr=ItirDerefFactory(args__0=itir.SymRef(id="tmp__0"))
+        ),
+        args=[lifted_tmp],
+    )
+
+    assert lowered.expr == ItirDerefFactory(args__0=lifted_expr)
 
 
 def test_clashing_annotated_assignment():
@@ -241,9 +314,16 @@ def test_call():
     parsed = FieldOperatorParser.apply_to_function(call)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    assert lowered.expr == itir.FunCall(
+    expr = itir.FunCall(
         fun=itir.SymRef(id="identity"), args=[itir.FunCall(fun=DEREF, args=[itir.SymRef(id="inp")])]
     )
+
+    lifted_expr = ItirLiftedLambdaCallFactory(
+        lambda_expr=itir.Lambda(params=[itir.Sym(id="identity"), itir.Sym(id="inp")], expr=expr),
+        args=[itir.SymRef(id="identity"), itir.SymRef(id="inp")],
+    )
+
+    assert lowered.expr == ItirDerefFactory(args__0=lifted_expr)
 
 
 def test_temp_tuple():
@@ -256,13 +336,27 @@ def test_temp_tuple():
     parsed = FieldOperatorParser.apply_to_function(temp_tuple)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    assert lowered.expr == itir.FunCall(
+    expr = itir.FunCall(
         fun=MAKE_TUPLE,
         args=[
             itir.FunCall(fun=DEREF, args=[itir.SymRef(id="a")]),
             itir.FunCall(fun=DEREF, args=[itir.SymRef(id="b")]),
         ],
     )
+
+    lifted_expr = ItirLiftedLambdaCallFactory(
+        lambda_expr=itir.Lambda(params=[itir.Sym(id="a"), itir.Sym(id="b")], expr=expr),
+        args=[itir.SymRef(id="a"), itir.SymRef(id="b")],
+    )
+
+    lifted_return = ItirLiftedLambdaCallFactory(
+        lambda_expr=itir.Lambda(
+            params=[itir.Sym(id="tmp__0")], expr=ItirDerefFactory(args__0=itir.SymRef(id="tmp__0"))
+        ),
+        args=[lifted_expr],
+    )
+
+    assert lowered.expr == ItirDerefFactory(args__0=lifted_return)
 
 
 def test_unary_ops():
@@ -274,19 +368,40 @@ def test_unary_ops():
     parsed = FieldOperatorParser.apply_to_function(unary)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    assert lowered.expr == itir.FunCall(
-        fun=MINUS,
-        args=[
-            itir.IntLiteral(value=0),
-            itir.FunCall(
+    lifted_uplus = ItirLiftedLambdaCallFactory(
+        lambda_expr=itir.Lambda(
+            params=[itir.Sym(id="inp")],
+            expr=itir.FunCall(
                 fun=PLUS,
+                args=[itir.IntLiteral(value=0), ItirDerefFactory(args__0=itir.SymRef(id="inp"))],
+            ),
+        ),
+        args=[itir.SymRef(id="inp")],
+    )
+
+    lifted_uminus = ItirLiftedLambdaCallFactory(
+        lambda_expr=itir.Lambda(
+            params=[itir.Sym(id="tmp__0")],
+            expr=itir.FunCall(
+                fun=MINUS,
                 args=[
                     itir.IntLiteral(value=0),
-                    itir.FunCall(fun=DEREF, args=[itir.SymRef(id="inp")]),
+                    itir.FunCall(fun=DEREF, args=[itir.SymRef(id="tmp__0")]),
                 ],
             ),
-        ],
+        ),
+        args=[lifted_uplus],
     )
+
+    lifted_return = ItirLiftedLambdaCallFactory(
+        lambda_expr=itir.Lambda(
+            params=[itir.Sym(id="tmp__1")],
+            expr=itir.FunCall(fun=DEREF, args=[itir.SymRef(id="tmp__1")]),
+        ),
+        args=[lifted_uminus],
+    )
+
+    assert lowered.expr == itir.FunCall(fun=DEREF, args=[lifted_return])
 
 
 def test_unary_not():
@@ -296,9 +411,14 @@ def test_unary_not():
     parsed = FieldOperatorParser.apply_to_function(unary_not)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    assert lowered.expr == itir.FunCall(
-        fun=NOT, args=[itir.FunCall(fun=DEREF, args=[itir.SymRef(id="cond")])]
+    expr = itir.FunCall(fun=NOT, args=[itir.FunCall(fun=DEREF, args=[itir.SymRef(id="cond")])])
+
+    lifted_expr = ItirLiftedLambdaCallFactory(
+        lambda_expr=itir.Lambda(params=[itir.Sym(id="cond")], expr=expr),
+        args=[itir.SymRef(id="cond")],
     )
+
+    assert lowered.expr == ItirDerefFactory(args__0=lifted_expr)
 
 
 def test_binary_plus():
@@ -308,13 +428,20 @@ def test_binary_plus():
     parsed = FieldOperatorParser.apply_to_function(plus)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    assert lowered.expr == itir.FunCall(
+    expr = itir.FunCall(
         fun=PLUS,
         args=[
             itir.FunCall(fun=DEREF, args=[itir.SymRef(id="a")]),
             itir.FunCall(fun=DEREF, args=[itir.SymRef(id="b")]),
         ],
     )
+
+    lifted_expr = ItirLiftedLambdaCallFactory(
+        lambda_expr=itir.Lambda(params=[itir.Sym(id="a"), itir.Sym(id="b")], expr=expr),
+        args=[itir.SymRef(id="a"), itir.SymRef(id="b")],
+    )
+
+    assert lowered.expr == ItirDerefFactory(args__0=lifted_expr)
 
 
 def test_binary_mult():
@@ -324,13 +451,20 @@ def test_binary_mult():
     parsed = FieldOperatorParser.apply_to_function(mult)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    assert lowered.expr == itir.FunCall(
+    expr = itir.FunCall(
         fun=MULTIPLIES,
         args=[
             itir.FunCall(fun=DEREF, args=[itir.SymRef(id="a")]),
             itir.FunCall(fun=DEREF, args=[itir.SymRef(id="b")]),
         ],
     )
+
+    lifted_expr = ItirLiftedLambdaCallFactory(
+        lambda_expr=itir.Lambda(params=[itir.Sym(id="a"), itir.Sym(id="b")], expr=expr),
+        args=[itir.SymRef(id="a"), itir.SymRef(id="b")],
+    )
+
+    assert lowered.expr == ItirDerefFactory(args__0=lifted_expr)
 
 
 def test_binary_minus():
@@ -340,13 +474,20 @@ def test_binary_minus():
     parsed = FieldOperatorParser.apply_to_function(minus)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    assert lowered.expr == itir.FunCall(
+    expr = itir.FunCall(
         fun=MINUS,
         args=[
             itir.FunCall(fun=DEREF, args=[itir.SymRef(id="a")]),
             itir.FunCall(fun=DEREF, args=[itir.SymRef(id="b")]),
         ],
     )
+
+    lifted_expr = ItirLiftedLambdaCallFactory(
+        lambda_expr=itir.Lambda(params=[itir.Sym(id="a"), itir.Sym(id="b")], expr=expr),
+        args=[itir.SymRef(id="a"), itir.SymRef(id="b")],
+    )
+
+    assert lowered.expr == ItirDerefFactory(args__0=lifted_expr)
 
 
 def test_binary_div():
@@ -356,13 +497,20 @@ def test_binary_div():
     parsed = FieldOperatorParser.apply_to_function(division)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    assert lowered.expr == itir.FunCall(
+    expr = itir.FunCall(
         fun=DIVIDES,
         args=[
             itir.FunCall(fun=DEREF, args=[itir.SymRef(id="a")]),
             itir.FunCall(fun=DEREF, args=[itir.SymRef(id="b")]),
         ],
     )
+
+    lifted_expr = ItirLiftedLambdaCallFactory(
+        lambda_expr=itir.Lambda(params=[itir.Sym(id="a"), itir.Sym(id="b")], expr=expr),
+        args=[itir.SymRef(id="a"), itir.SymRef(id="b")],
+    )
+
+    assert lowered.expr == ItirDerefFactory(args__0=lifted_expr)
 
 
 def test_binary_and():
@@ -372,13 +520,20 @@ def test_binary_and():
     parsed = FieldOperatorParser.apply_to_function(bit_and)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    assert lowered.expr == itir.FunCall(
+    expr = itir.FunCall(
         fun=AND,
         args=[
             itir.FunCall(fun=DEREF, args=[itir.SymRef(id="a")]),
             itir.FunCall(fun=DEREF, args=[itir.SymRef(id="b")]),
         ],
     )
+
+    lifted_expr = ItirLiftedLambdaCallFactory(
+        lambda_expr=itir.Lambda(params=[itir.Sym(id="a"), itir.Sym(id="b")], expr=expr),
+        args=[itir.SymRef(id="a"), itir.SymRef(id="b")],
+    )
+
+    assert lowered.expr == ItirDerefFactory(args__0=lifted_expr)
 
 
 def test_binary_or():
@@ -388,13 +543,20 @@ def test_binary_or():
     parsed = FieldOperatorParser.apply_to_function(bit_or)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    assert lowered.expr == itir.FunCall(
+    expr = itir.FunCall(
         fun=OR,
         args=[
             itir.FunCall(fun=DEREF, args=[itir.SymRef(id="a")]),
             itir.FunCall(fun=DEREF, args=[itir.SymRef(id="b")]),
         ],
     )
+
+    lifted_expr = ItirLiftedLambdaCallFactory(
+        lambda_expr=itir.Lambda(params=[itir.Sym(id="a"), itir.Sym(id="b")], expr=expr),
+        args=[itir.SymRef(id="a"), itir.SymRef(id="b")],
+    )
+
+    assert lowered.expr == ItirDerefFactory(args__0=lifted_expr)
 
 
 def test_binary_pow():
@@ -426,13 +588,20 @@ def test_compare_gt():
     parsed = FieldOperatorParser.apply_to_function(comp_gt)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    assert lowered.expr == itir.FunCall(
+    expr = itir.FunCall(
         fun=GREATER,
         args=[
             itir.FunCall(fun=DEREF, args=[itir.SymRef(id="a")]),
             itir.FunCall(fun=DEREF, args=[itir.SymRef(id="b")]),
         ],
     )
+
+    lifted_expr = ItirLiftedLambdaCallFactory(
+        lambda_expr=itir.Lambda(params=[itir.Sym(id="a"), itir.Sym(id="b")], expr=expr),
+        args=[itir.SymRef(id="a"), itir.SymRef(id="b")],
+    )
+
+    assert lowered.expr == ItirDerefFactory(args__0=lifted_expr)
 
 
 def test_compare_lt():
@@ -442,13 +611,20 @@ def test_compare_lt():
     parsed = FieldOperatorParser.apply_to_function(comp_lt)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    assert lowered.expr == itir.FunCall(
+    expr = itir.FunCall(
         fun=LESS,
         args=[
             itir.FunCall(fun=DEREF, args=[itir.SymRef(id="a")]),
             itir.FunCall(fun=DEREF, args=[itir.SymRef(id="b")]),
         ],
     )
+
+    lifted_expr = ItirLiftedLambdaCallFactory(
+        lambda_expr=itir.Lambda(params=[itir.Sym(id="a"), itir.Sym(id="b")], expr=expr),
+        args=[itir.SymRef(id="a"), itir.SymRef(id="b")],
+    )
+
+    assert lowered.expr == ItirDerefFactory(args__0=lifted_expr)
 
 
 def test_compare_eq():
@@ -458,13 +634,20 @@ def test_compare_eq():
     parsed = FieldOperatorParser.apply_to_function(comp_eq)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    assert lowered.expr == itir.FunCall(
+    expr = itir.FunCall(
         fun=EQ,
         args=[
             itir.FunCall(fun=DEREF, args=[itir.SymRef(id="a")]),
             itir.FunCall(fun=DEREF, args=[itir.SymRef(id="b")]),
         ],
     )
+
+    lifted_expr = ItirLiftedLambdaCallFactory(
+        lambda_expr=itir.Lambda(params=[itir.Sym(id="a"), itir.Sym(id="b")], expr=expr),
+        args=[itir.SymRef(id="a"), itir.SymRef(id="b")],
+    )
+
+    assert lowered.expr == ItirDerefFactory(args__0=lifted_expr)
 
 
 def test_compare_chain():
@@ -474,7 +657,7 @@ def test_compare_chain():
     parsed = FieldOperatorParser.apply_to_function(compare_chain)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    assert lowered.expr == itir.FunCall(
+    expr = itir.FunCall(
         fun=GREATER,
         args=[
             itir.FunCall(fun=DEREF, args=[itir.SymRef(id="a")]),
@@ -487,6 +670,15 @@ def test_compare_chain():
             ),
         ],
     )
+
+    lifted_expr = ItirLiftedLambdaCallFactory(
+        lambda_expr=itir.Lambda(
+            params=[itir.Sym(id="a"), itir.Sym(id="b"), itir.Sym(id="c")], expr=expr
+        ),
+        args=[itir.SymRef(id="a"), itir.SymRef(id="b"), itir.SymRef(id="c")],
+    )
+
+    assert lowered.expr == ItirDerefFactory(args__0=lifted_expr)
 
 
 def test_bool_and():
@@ -515,7 +707,7 @@ def test_bool_or():
 def test_closure_symbols():
     import numpy as np
 
-    nonlocal_unused = 0
+    nonlocal_unused = 0  # noqa: F841
     nonlocal_float = 2.3
     nonlocal_np_scalar = np.float32(3.4)
 

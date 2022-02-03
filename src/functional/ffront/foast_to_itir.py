@@ -22,57 +22,6 @@ from functional.ffront import field_operator_ast as foast
 from functional.iterator import ir as itir
 
 
-class AssignResolver(NodeTranslator):
-    """
-    Inline a sequence of assignments into a final return statement.
-
-    >>> from functional.ffront.func_to_foast import FieldOperatorParser
-    >>> from functional.common import Field
-    >>>
-    >>> float64 = float
-    >>>
-    >>> def fieldop(inp: Field[..., "float64"]):
-    ...     tmp1 = inp
-    ...     tmp2 = tmp1
-    ...     return tmp2
-    >>>
-    >>> fieldop_foast_expr = AssignResolver.apply(FieldOperatorParser.apply_to_function(fieldop).body)
-    >>> fieldop_foast_expr  # doctest: +ELLIPSIS
-    Return(location=..., value=Name(location=..., id='inp'))
-    """
-
-    @classmethod
-    def apply(
-        cls, nodes: list[foast.Expr], *, params: Optional[list[itir.Sym]] = None
-    ) -> foast.Expr:
-        names: dict[str, foast.Expr] = {}
-        parser = cls()
-        for node in nodes[:-1]:
-            names.update(parser.visit(node, names=names))
-        return foast.Return(
-            value=parser.visit(nodes[-1].value, names=names), location=nodes[-1].location
-        )
-
-    def visit_Assign(
-        self,
-        node: foast.Assign,
-        *,
-        names: Optional[dict[str, foast.Expr]] = None,
-    ) -> dict[str, itir.Expr]:
-        return {node.target.id: self.visit(node.value, names=names)}
-
-    def visit_Name(
-        self,
-        node: foast.Name,
-        *,
-        names: Optional[dict[str, foast.Expr]] = None,
-    ):
-        names = names or {}
-        if node.id in names:
-            return names[node.id]
-        return node
-
-
 class ItirSymRefFactory(factory.Factory):
     class Meta:
         model = itir.SymRef
@@ -116,12 +65,19 @@ class ItirShiftFactory(ItirFunCallFactory):
     fun = factory.LazyAttribute(lambda obj: ItirFunCallFactory(name=obj.name, args=obj.shift_args))
 
 
+class ItirLiftedLambdaCallFactory(ItirFunCallFactory):
+    class Params:
+        lambda_expr: Optional[itir.Lambda] = None
+
+    fun = factory.LazyAttribute(  # lifted lambda
+        lambda obj: ItirFunCallFactory(name="lift", args__0=obj.lambda_expr)
+    )
+
+
 def _name_is_field(name: foast.Name) -> bool:
     return isinstance(name.type, common_types.FieldType)
 
 
-#  TODO(ricoh): turn every subexpression into a lambda,
-#  lift it, and then call it.
 class FieldOperatorLowering(NodeTranslator):
     """
     Lower FieldOperator AST (FOAST) to Iterator IR (ITIR).
@@ -144,7 +100,7 @@ class FieldOperatorLowering(NodeTranslator):
     'fieldop'
     >>> lowered.params
     [Sym(id='inp')]
-    >>> lowered.expr
+    >>> lowered.expr.args[0].fun.args[0].expr
     FunCall(fun=SymRef(id='deref'), args=[SymRef(id='inp')])
     """
 
@@ -163,36 +119,62 @@ class FieldOperatorLowering(NodeTranslator):
 
     def body_visit(
         self,
-        exprs: list[foast.Expr],
+        stmts: list[foast.Stmt],
         params: Optional[list[itir.Sym]] = None,
         **kwargs,
     ) -> itir.Expr:
-        return self.visit(AssignResolver.apply(exprs), **kwargs)
+        lambdas: dict[str, itir.Lambda] = {}
+        for stmt in stmts[:-1]:
+            lambdas.update(self.visit(stmt, lambdas=lambdas, **kwargs))
+        return self.visit(stmts[-1], lambdas=lambdas, **kwargs)
+
+    def _make_lifted_lambda_call(self, node: foast.Expr, **kwargs) -> itir.Lambda:
+        param_names = self._make_lambda_param_names(node)
+        lambdas = kwargs.get("lambdas", {})
+        lambda_params = [itir.Sym(id=name.replace("$", "__")) for name in param_names]
+        #  lifted_lambda_args = [itir.SymRef(id=name) for name in param_names if name not in lambdas else lambdas[name]]
+        lifted_lambda_args = []
+        for name in param_names:
+            if name in lambdas:
+                lifted_lambda_args.append(lambdas[name])
+            else:
+                lifted_lambda_args.append(itir.SymRef(id=name))
+
+        return ItirLiftedLambdaCallFactory(
+            lambda_expr=itir.Lambda(params=lambda_params, expr=self.visit(node, **kwargs)),
+            args=lifted_lambda_args,
+        )
+
+    def _make_lambda_param_names(self, node: foast.Expr, **kwargs) -> list[str]:
+        def is_not_offset(expr: foast.Expr) -> bool:
+            return not isinstance(expr.type, common_types.OffsetType)
+
+        return list(node.iter_tree().if_isinstance(foast.Name).filter(is_not_offset).getattr("id"))
+
+    def visit_Assign(self, node: foast.Assign, **kwargs) -> dict[str, itir.FunCall]:
+        return {
+            node.target.id: self._make_lifted_lambda_call(
+                node.value,
+                **kwargs,
+            )
+        }
 
     def visit_Return(self, node: foast.Return, **kwargs) -> itir.Expr:
-        result = self.visit(node.value, **kwargs)
-        return result
+        result = self._make_lifted_lambda_call(
+            node.value,
+            **kwargs,
+        )
+        return ItirDerefFactory(args__0=result)
 
-    def visit_FieldSymbol(
-        self, node: foast.FieldSymbol, *, symtable: dict[str, foast.Symbol], **kwargs
-    ) -> itir.Sym:
+    def visit_FieldSymbol(self, node: foast.FieldSymbol, **kwargs) -> itir.Sym:
         return itir.Sym(id=node.id)
 
     def visit_Name(
         self,
         node: foast.Name,
-        *,
-        symtable: dict[str, foast.Symbol],
-        shift_args: Optional[list[Union[itir.OffsetLiteral, itir.IntLiteral]]] = None,
         **kwargs,
-    ) -> Union[itir.SymRef, itir.FunCall]:
-        # always shift a single field, not a field expression
-        if _name_is_field(node) and shift_args:
-            result = ItirDerefFactory(
-                args__0=ItirShiftFactory(shift_args=shift_args, args__0=itir.SymRef(id=node.id))
-            )
-            return result
-        return ItirDerefFactory(args__0=itir.SymRef(id=node.id))
+    ) -> itir.FunCall:
+        return ItirDerefFactory(args__0=itir.SymRef(id=node.id.replace("$", "__")))
 
     def visit_Subscript(self, node: foast.Subscript, **kwargs) -> itir.FunCall:
         return ItirFunCallFactory(
@@ -223,25 +205,18 @@ class FieldOperatorLowering(NodeTranslator):
             args=[self.visit(node.left, **kwargs), self.visit(node.right, **kwargs)],
         )
 
-    def visit_Shift(self, node: foast.Shift, **kwargs) -> itir.Expr:
-        # TODO(ricoh): instead, turn the expression into a lambda,
-        # then lift and shift the lambda.
-
+    def visit_Shift(self, node: foast.Shift, **kwargs) -> itir.FunCall:
         shift_args = list(self._gen_shift_args(node.offsets))
-        #  return self.visit(node.expr, shift_args=shift_args, **kwargs)
 
-        lambda_params = [name for name in node.expr.iter_tree().if_isinstance(foast.Name)]
-
-        expr_lambda = itir.Lambda(
-            params=[itir.Sym(id=name.id) for name in lambda_params],
-            expr=self.visit(node.expr, **kwargs),
+        return ItirDerefFactory(
+            args__0=ItirShiftFactory(
+                shift_args=shift_args,
+                args__0=self._make_lifted_lambda_call(
+                    node.expr,
+                    **kwargs,
+                ),
+            )
         )
-        lifted_lambda = ItirFunCallFactory(name="lift", args__0=expr_lambda)
-        call_lifted = ItirFunCallFactory(
-            fun=lifted_lambda, args=[itir.SymRef(id=name.id) for name in lambda_params]
-        )
-        shifted_call = ItirShiftFactory(shift_args=shift_args, args__0=call_lifted)
-        return ItirDerefFactory(args__0=shifted_call)
 
     def _make_shift_args(
         self, node: foast.Subscript, **kwargs
@@ -262,7 +237,9 @@ class FieldOperatorLowering(NodeTranslator):
             if isinstance(node.func, foast.Name)  # name called, e.g. my_fieldop(a, b)
             else self.visit(node.func, **kwargs)  # expression called, e.g. local_op[...](a, b)
         )
-        return ItirFunCallFactory(
-            fun=new_fun,
-            args=self.visit(node.args, **kwargs),
+        return ItirDerefFactory(
+            args__0=ItirFunCallFactory(
+                fun=new_fun,
+                args=self.visit(node.args, **kwargs),
+            )
         )
