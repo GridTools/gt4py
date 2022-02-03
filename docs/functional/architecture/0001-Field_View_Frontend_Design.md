@@ -79,11 +79,9 @@ The `.apply` classmethod encodes the required order of AST passes to simplify th
 The `.apply_to_function` classmethod contains also the code to go from a Python function to the required data to call `.apply`. That includes getting the source and source locations as well as the closure data (externals / globals, their types and values). That code could be split off for reuse in other parsers.
 
 ### Field Operator Lowering
-Lowers from FOAST into IteratorIR.
+Lowers from FOAST into IteratorIR. FOAST expressions returning fields are transformed into ITIR expressions returning iterators with an additional `deref` at the very end.
 
 This step makes use of the type information on expressions, for example to decide which names are fields and therefore have to be dereferenced. As of yet, there is no way to pass typing or source location info on to Iterator IR though.
-
-The visitors in the lowering transform FOAST expressions returning fields into ITIR expressions returning scalars. Alternatively one could lower FOAST expressions returning fields into ITIR expressions returning iterators with an additional `deref` at the very end. We chose the former version as visitors return the desired expression in isolation, whereas the latter version requires other visitors to return field expressions, e.g. consider operations of fields with scalars.
 
 #### What to keep
 ##### Assume FOAST is correct
