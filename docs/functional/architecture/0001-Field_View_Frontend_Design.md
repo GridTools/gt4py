@@ -83,6 +83,8 @@ Lowers from FOAST into IteratorIR.
 
 This step makes use of the type information on expressions, for example to decide which names are fields and therefore have to be dereferenced. As of yet, there is no way to pass typing or source location info on to Iterator IR though.
 
+The visitors in the lowering transform FOAST expressions returning fields into ITIR expressions returning scalars. Alternatively one could lower FOAST expressions returning fields into ITIR expressions returning iterators with an additional `deref` at the very end. We chose the former version as visitors return the desired expression in isolation, whereas the latter version requires other visitors to return field expressions, e.g. consider operations of fields with scalars.
+
 #### What to keep
 ##### Assume FOAST is correct
 As per guiding principle (5), the lowering should not worry if the FOAST is incorrect or invalid. It is the responsibility of the previous parser and passes to sanitize the user code.
