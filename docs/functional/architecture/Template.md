@@ -5,7 +5,7 @@ tags: []
 # [Title]
 
 - **Status**: valid | superseded | deprecated
-- **Authors**: Someone Foo (@github_handler)
+- **Authors**: Someone Foo (@github_handle)
 - **Created**: YYYY-MM-DD
 - **Updated**: YYYY-MM-DD
 
