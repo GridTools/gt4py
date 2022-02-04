@@ -17,6 +17,8 @@ from typing import Iterator, Optional, Union
 import factory
 
 from eve import NodeTranslator
+from eve.visitors import NodeVisitor
+import functional
 from functional.ffront import common_types
 from functional.ffront import field_operator_ast as foast
 from functional.iterator import ir as itir
@@ -73,6 +75,15 @@ class AssignResolver(NodeTranslator):
             return names[node.id]
         return node
 
+#TODO test
+class FieldCollector(NodeVisitor):
+    fields = set()
+
+    def visit_FunCall(self, node: itir.FunCall, **kwargs):
+        if not hasattr(functional.iterator.builtins, node.fun.id):
+            self.fields.add(node.fun.id)
+        for arg in node.args:
+            self.visit(arg)
 
 class ItirSymRefFactory(factory.Factory):
     class Meta:
@@ -239,14 +250,14 @@ class FieldOperatorLowering(NodeTranslator):
             yield name
             yield offset
 
-    def _extract_fields(self, expr: itir.Expr) -> list[str]:        
-        # TODO: replace with visitor that scrapes expr recursively for all field accesses
-        return [expr.fun.id]
+    def _extract_fields(self, expr: itir.Expr) -> list[str]:                        
+        fc = FieldCollector()
+        fc.visit(expr)
+        return fc.fields
 
     def _remove_field_accesses(self, expr: itir.Expr) -> itir.Expr:
         # TODO: replace with visitor that replaces each FunCall(field, arg(Axis)) with just
-        #       SymRef(field)
-        # TODO: how to distinguish FunCall(field, arg(Axis)) from FunCall(actual_fun, arg(Axis))?
+        #       SymRef(field)       
         return itir.SymRef(id = expr.fun.id + "_param")
 
     def _make_lamba_rhs(self, expr: itir.Expr) -> itir.FunCall:
@@ -258,9 +269,11 @@ class FieldOperatorLowering(NodeTranslator):
         red_rhs = self.visit(args[0], **kwargs)
 
         red_expr = red_rhs[0]
-        red_axis = red_rhs[1].args[0].id
+        red_axis = red_rhs[1].args[0].id        
         
         rhs_fields = self._extract_fields(red_expr)
+        test = [red_expr.fun.id]
+
         rhs_fields_sym = [itir.Sym(id=field + "_param") for field in rhs_fields]
 
         rhs_lambda = itir.Lambda(params=[itir.Sym(id="base")] + rhs_fields_sym, 
