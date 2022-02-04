@@ -287,11 +287,8 @@ class NpirCodegen(TemplatedGenerator):
         boundary = [upper - lower for lower, upper in zip(lower, upper)]
         shape = _paren_wrap(
             ", ".join(
-                (
-                    [f"_dI_ + {boundary[0]}", f"_dJ_ + {boundary[1]}", "1"]
-                    if is_serial
-                    else ["K - k"]
-                )
+                [f"_dI_ + {boundary[0]}", f"_dJ_ + {boundary[1]}"]
+                + ["1" if is_serial else "K - k"]
                 + ["1"] * (node.dims - 3)
             )
         )
