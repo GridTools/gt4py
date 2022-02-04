@@ -240,7 +240,7 @@ class SourceLocationGroup(pydantic.BaseModel):
         return f"<{context}[{locs}]>"
 
     @validator("locations")
-    def non_empty_tuple(cls, v):
+    def non_empty_tuple(cls, v: Tuple[SourceLocation, ...]) -> Tuple[SourceLocation, ...]:
         if not v:
             raise ValueError("At least one location should be provided")
         return v

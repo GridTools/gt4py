@@ -11,7 +11,11 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from atlas4py import IrregularConnectivity
+
+try:
+    from atlas4py import IrregularConnectivity
+except ImportError:
+    IrregularConnectivity = None
 
 
 class AtlasTable:

@@ -21,6 +21,7 @@ import pytest
 
 from eve import typingx
 from functional import common
+from functional.ffront import common_types
 from functional.ffront import field_operator_ast as foast
 from functional.ffront import symbol_makers
 from functional.ffront.fbuiltins import Field, float64
@@ -39,11 +40,11 @@ JDim = common.Dimension("JDim")
 @pytest.mark.parametrize(
     "value,expected",
     [
-        ("float", foast.ScalarKind.FLOAT64),
-        (float, foast.ScalarKind.FLOAT64),
-        (np.float64, foast.ScalarKind.FLOAT64),
-        (np.dtype(float), foast.ScalarKind.FLOAT64),
-        (CustomInt32DType(), foast.ScalarKind.INT32),
+        ("float", common_types.ScalarKind.FLOAT64),
+        (float, common_types.ScalarKind.FLOAT64),
+        (np.float64, common_types.ScalarKind.FLOAT64),
+        (np.dtype(float), common_types.ScalarKind.FLOAT64),
+        (CustomInt32DType(), common_types.ScalarKind.INT32),
     ],
 )
 def test_valid_scalar_kind(value, expected):
@@ -58,28 +59,28 @@ def test_invalid_scalar_kind():
 @pytest.mark.parametrize(
     "value,expected",
     [
-        (bool, foast.ScalarType(kind=foast.ScalarKind.BOOL)),
-        (np.int32, foast.ScalarType(kind=foast.ScalarKind.INT32)),
-        (float, foast.ScalarType(kind=foast.ScalarKind.FLOAT64)),
-        ("float", foast.ScalarType(kind=foast.ScalarKind.FLOAT64)),
+        (bool, common_types.ScalarType(kind=common_types.ScalarKind.BOOL)),
+        (np.int32, common_types.ScalarType(kind=common_types.ScalarKind.INT32)),
+        (float, common_types.ScalarType(kind=common_types.ScalarKind.FLOAT64)),
+        ("float", common_types.ScalarType(kind=common_types.ScalarKind.FLOAT64)),
         (
             typing.Tuple[int, float],
-            foast.TupleType(
+            common_types.TupleType(
                 types=[
-                    foast.ScalarType(kind=foast.ScalarKind.INT64),
-                    foast.ScalarType(kind=foast.ScalarKind.FLOAT64),
+                    common_types.ScalarType(kind=common_types.ScalarKind.INT64),
+                    common_types.ScalarType(kind=common_types.ScalarKind.FLOAT64),
                 ]
             ),
         ),
         (
             tuple[bool, typing.Tuple[int, float]],
-            foast.TupleType(
+            common_types.TupleType(
                 types=[
-                    foast.ScalarType(kind=foast.ScalarKind.BOOL),
-                    foast.TupleType(
+                    common_types.ScalarType(kind=common_types.ScalarKind.BOOL),
+                    common_types.TupleType(
                         types=[
-                            foast.ScalarType(kind=foast.ScalarKind.INT64),
-                            foast.ScalarType(kind=foast.ScalarKind.FLOAT64),
+                            common_types.ScalarType(kind=common_types.ScalarKind.INT64),
+                            common_types.ScalarType(kind=common_types.ScalarKind.FLOAT64),
                         ]
                     ),
                 ]
@@ -87,34 +88,42 @@ def test_invalid_scalar_kind():
         ),
         (
             common.Field[..., float],
-            foast.FieldType(dims=..., dtype=foast.ScalarType(kind=foast.ScalarKind.FLOAT64)),
+            common_types.FieldType(
+                dims=..., dtype=common_types.ScalarType(kind=common_types.ScalarKind.FLOAT64)
+            ),
         ),
         (
             common.Field[[IDim, JDim], float],
-            foast.FieldType(
-                dims=[foast.Dimension(name="IDim"), foast.Dimension(name="JDim")],
-                dtype=foast.ScalarType(kind=foast.ScalarKind.FLOAT64),
+            common_types.FieldType(
+                dims=[common.Dimension("IDim"), common.Dimension("JDim")],
+                dtype=common_types.ScalarType(kind=common_types.ScalarKind.FLOAT64),
             ),
         ),
         (
             typing.Annotated[
                 typing.Callable[["float", int], int], typingx.CallableKwargsInfo(data={})
             ],
-            foast.FunctionType(
+            common_types.FunctionType(
                 args=[
-                    foast.ScalarType(kind=foast.ScalarKind.FLOAT64),
-                    foast.ScalarType(kind=foast.ScalarKind.INT64),
+                    common_types.ScalarType(kind=common_types.ScalarKind.FLOAT64),
+                    common_types.ScalarType(kind=common_types.ScalarKind.INT64),
                 ],
                 kwargs={},
-                returns=foast.ScalarType(kind=foast.ScalarKind.INT64),
+                returns=common_types.ScalarType(kind=common_types.ScalarKind.INT64),
             ),
         ),
-        (typing.ForwardRef("float"), foast.ScalarType(kind=foast.ScalarKind.FLOAT64)),
-        (typing.Annotated[float, "foo"], foast.ScalarType(kind=foast.ScalarKind.FLOAT64)),
-        (typing.Annotated["float", "foo", "bar"], foast.ScalarType(kind=foast.ScalarKind.FLOAT64)),
+        (typing.ForwardRef("float"), common_types.ScalarType(kind=common_types.ScalarKind.FLOAT64)),
+        (
+            typing.Annotated[float, "foo"],
+            common_types.ScalarType(kind=common_types.ScalarKind.FLOAT64),
+        ),
+        (
+            typing.Annotated["float", "foo", "bar"],
+            common_types.ScalarType(kind=common_types.ScalarKind.FLOAT64),
+        ),
         (
             typing.Annotated[typing.ForwardRef("float"), "foo"],
-            foast.ScalarType(kind=foast.ScalarKind.FLOAT64),
+            common_types.ScalarType(kind=common_types.ScalarKind.FLOAT64),
         ),
     ],
 )

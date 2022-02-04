@@ -15,6 +15,7 @@
 import pytest
 
 from functional.common import Dimension
+from functional.ffront import common_types
 from functional.ffront import field_operator_ast as foast
 from functional.ffront.fbuiltins import Field, float64, int64
 from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError, TypeInfo
@@ -36,7 +37,7 @@ def type_info_cases():
             },
         ),
         (
-            foast.DeferredSymbolType(constraint=None),
+            common_types.DeferredSymbolType(constraint=None),
             {
                 "is_complete": False,
                 "is_any_type": True,
@@ -48,11 +49,11 @@ def type_info_cases():
             },
         ),
         (
-            foast.DeferredSymbolType(constraint=foast.ScalarType),
+            common_types.DeferredSymbolType(constraint=common_types.ScalarType),
             {
                 "is_complete": False,
                 "is_any_type": False,
-                "constraint": foast.ScalarType,
+                "constraint": common_types.ScalarType,
                 "is_field_type": False,
                 "is_scalar": True,
                 "is_arithmetic_compatible": False,
@@ -60,11 +61,11 @@ def type_info_cases():
             },
         ),
         (
-            foast.DeferredSymbolType(constraint=foast.FieldType),
+            common_types.DeferredSymbolType(constraint=common_types.FieldType),
             {
                 "is_complete": False,
                 "is_any_type": False,
-                "constraint": foast.FieldType,
+                "constraint": common_types.FieldType,
                 "is_field_type": True,
                 "is_scalar": False,
                 "is_arithmetic_compatible": False,
@@ -72,11 +73,11 @@ def type_info_cases():
             },
         ),
         (
-            foast.ScalarType(kind=foast.ScalarKind.INT64),
+            common_types.ScalarType(kind=common_types.ScalarKind.INT64),
             {
                 "is_complete": True,
                 "is_any_type": False,
-                "constraint": foast.ScalarType,
+                "constraint": common_types.ScalarType,
                 "is_field_type": False,
                 "is_scalar": True,
                 "is_arithmetic_compatible": True,
@@ -84,11 +85,13 @@ def type_info_cases():
             },
         ),
         (
-            foast.FieldType(dims=Ellipsis, dtype=foast.ScalarType(kind=foast.ScalarKind.BOOL)),
+            common_types.FieldType(
+                dims=Ellipsis, dtype=common_types.ScalarType(kind=common_types.ScalarKind.BOOL)
+            ),
             {
                 "is_complete": True,
                 "is_any_type": False,
-                "constraint": foast.FieldType,
+                "constraint": common_types.FieldType,
                 "is_field_type": True,
                 "is_scalar": False,
                 "is_arithmetic_compatible": False,
@@ -106,8 +109,8 @@ def test_type_info_basic(symbol_type, expected):
 
 
 def test_type_info_refinable_complete_complete():
-    complete_type = foast.ScalarType(kind=foast.ScalarKind.INT64)
-    other_complete_type = foast.ScalarType(kind=foast.ScalarKind.FLOAT64)
+    complete_type = common_types.ScalarType(kind=common_types.ScalarKind.INT64)
+    other_complete_type = common_types.ScalarType(kind=common_types.ScalarKind.FLOAT64)
     type_info_a = TypeInfo(complete_type)
     type_info_b = TypeInfo(other_complete_type)
     assert type_info_a.can_be_refined_to(TypeInfo(complete_type))
@@ -116,28 +119,32 @@ def test_type_info_refinable_complete_complete():
 
 def test_type_info_refinable_incomplete_complete():
     complete_type = TypeInfo(
-        foast.FieldType(dtype=foast.ScalarType(kind=foast.ScalarKind.BOOL), dims=Ellipsis)
+        common_types.FieldType(
+            dtype=common_types.ScalarType(kind=common_types.ScalarKind.BOOL), dims=Ellipsis
+        )
     )
     assert TypeInfo(None).can_be_refined_to(complete_type)
-    assert TypeInfo(foast.DeferredSymbolType(constraint=None)).can_be_refined_to(complete_type)
-    assert TypeInfo(foast.DeferredSymbolType(constraint=foast.FieldType)).can_be_refined_to(
+    assert TypeInfo(common_types.DeferredSymbolType(constraint=None)).can_be_refined_to(
         complete_type
     )
-    assert not TypeInfo(foast.DeferredSymbolType(constraint=foast.OffsetType)).can_be_refined_to(
-        complete_type
-    )
+    assert TypeInfo(
+        common_types.DeferredSymbolType(constraint=common_types.FieldType)
+    ).can_be_refined_to(complete_type)
+    assert not TypeInfo(
+        common_types.DeferredSymbolType(constraint=common_types.OffsetType)
+    ).can_be_refined_to(complete_type)
 
 
 def test_type_info_refinable_incomplete_incomplete():
-    target_type = TypeInfo(foast.DeferredSymbolType(constraint=foast.ScalarType))
+    target_type = TypeInfo(common_types.DeferredSymbolType(constraint=common_types.ScalarType))
     assert TypeInfo(None).can_be_refined_to(target_type)
-    assert TypeInfo(foast.DeferredSymbolType(constraint=None)).can_be_refined_to(target_type)
-    assert TypeInfo(foast.DeferredSymbolType(constraint=foast.ScalarType)).can_be_refined_to(
-        target_type
-    )
-    assert not TypeInfo(foast.DeferredSymbolType(constraint=foast.FieldType)).can_be_refined_to(
-        target_type
-    )
+    assert TypeInfo(common_types.DeferredSymbolType(constraint=None)).can_be_refined_to(target_type)
+    assert TypeInfo(
+        common_types.DeferredSymbolType(constraint=common_types.ScalarType)
+    ).can_be_refined_to(target_type)
+    assert not TypeInfo(
+        common_types.DeferredSymbolType(constraint=common_types.FieldType)
+    ).can_be_refined_to(target_type)
 
 
 def test_unpack_assign():
@@ -149,11 +156,13 @@ def test_unpack_assign():
 
     parsed = FieldOperatorParser.apply_to_function(unpack_explicit_tuple)
 
-    assert parsed.symtable_["tmp_a$0"].type == foast.FieldType(
-        dims=Ellipsis, dtype=foast.ScalarType(kind=foast.ScalarKind.FLOAT64, shape=None)
+    assert parsed.symtable_["tmp_a$0"].type == common_types.FieldType(
+        dims=Ellipsis,
+        dtype=common_types.ScalarType(kind=common_types.ScalarKind.FLOAT64, shape=None),
     )
-    assert parsed.symtable_["tmp_b$0"].type == foast.FieldType(
-        dims=Ellipsis, dtype=foast.ScalarType(kind=foast.ScalarKind.FLOAT64, shape=None)
+    assert parsed.symtable_["tmp_b$0"].type == common_types.FieldType(
+        dims=Ellipsis,
+        dtype=common_types.ScalarType(kind=common_types.ScalarKind.FLOAT64, shape=None),
     )
 
 
@@ -164,13 +173,15 @@ def test_assign_tuple():
 
     parsed = FieldOperatorParser.apply_to_function(temp_tuple)
 
-    assert parsed.symtable_["tmp$0"].type == foast.TupleType(
+    assert parsed.symtable_["tmp$0"].type == common_types.TupleType(
         types=[
-            foast.FieldType(
-                dims=Ellipsis, dtype=foast.ScalarType(kind=foast.ScalarKind.FLOAT64, shape=None)
+            common_types.FieldType(
+                dims=Ellipsis,
+                dtype=common_types.ScalarType(kind=common_types.ScalarKind.FLOAT64, shape=None),
             ),
-            foast.FieldType(
-                dims=Ellipsis, dtype=foast.ScalarType(kind=foast.ScalarKind.INT64, shape=None)
+            common_types.FieldType(
+                dims=Ellipsis,
+                dtype=common_types.ScalarType(kind=common_types.ScalarKind.INT64, shape=None),
             ),
         ]
     )

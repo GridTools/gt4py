@@ -25,6 +25,7 @@ import pytest
 
 import functional.ffront.field_operator_ast as foast
 from functional.common import Field
+from functional.ffront import common_types
 from functional.ffront.fbuiltins import float32, float64, int64
 from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError
 from functional.ffront.foast_to_itir import FieldOperatorLowering
@@ -83,7 +84,7 @@ def test_invalid_syntax_error_empty_return():
         FieldOperatorSyntaxError,
         match=(
             r"Invalid Field Operator Syntax: "
-            r"Empty return not allowed \(test_interface.py, line 80\)"
+            r"Empty return not allowed \(test_interface.py, line 81\)"
         ),
     ):
         _ = FieldOperatorParser.apply_to_function(wrong_syntax)
@@ -123,8 +124,9 @@ def test_return_type():
 
     parsed = FieldOperatorParser.apply_to_function(rettype)
 
-    assert parsed.body[-1].value.type == foast.FieldType(
-        dims=Ellipsis, dtype=foast.ScalarType(kind=foast.ScalarKind.FLOAT64, shape=None)
+    assert parsed.body[-1].value.type == common_types.FieldType(
+        dims=Ellipsis,
+        dtype=common_types.ScalarType(kind=common_types.ScalarKind.FLOAT64, shape=None),
     )
 
 
@@ -197,8 +199,9 @@ def test_temp_assignment():
 
     parsed = FieldOperatorParser.apply_to_function(copy_field)
 
-    assert parsed.symtable_["tmp$0"].type == foast.FieldType(
-        dims=Ellipsis, dtype=foast.ScalarType(kind=foast.ScalarKind.FLOAT64, shape=None)
+    assert parsed.symtable_["tmp$0"].type == common_types.FieldType(
+        dims=Ellipsis,
+        dtype=common_types.ScalarType(kind=common_types.ScalarKind.FLOAT64, shape=None),
     )
 
     lowered = FieldOperatorLowering.apply(parsed)
@@ -522,11 +525,11 @@ def test_closure_symbols():
         return a, b
 
     parsed = FieldOperatorParser.apply_to_function(operator_with_refs)
-    assert parsed.symtable_["nonlocal_float"].type == foast.ScalarType(
-        kind=foast.ScalarKind.FLOAT64, shape=None
+    assert parsed.symtable_["nonlocal_float"].type == common_types.ScalarType(
+        kind=common_types.ScalarKind.FLOAT64, shape=None
     )
-    assert parsed.symtable_["nonlocal_np_scalar"].type == foast.ScalarType(
-        kind=foast.ScalarKind.FLOAT32, shape=None
+    assert parsed.symtable_["nonlocal_np_scalar"].type == common_types.ScalarType(
+        kind=common_types.ScalarKind.FLOAT32, shape=None
     )
     assert "nonlocal_unused" not in parsed.symtable_
 
@@ -545,10 +548,10 @@ def test_external_symbols():
         operator_with_externals,
         externals=dict(ext_float=2.3, ext_np_scalar=np.float32(3.4), ext_unused=0),
     )
-    assert parsed.symtable_["ext_float"].type == foast.ScalarType(
-        kind=foast.ScalarKind.FLOAT64, shape=None
+    assert parsed.symtable_["ext_float"].type == common_types.ScalarType(
+        kind=common_types.ScalarKind.FLOAT64, shape=None
     )
-    assert parsed.symtable_["ext_np_scalar"].type == foast.ScalarType(
-        kind=foast.ScalarKind.FLOAT32, shape=None
+    assert parsed.symtable_["ext_np_scalar"].type == common_types.ScalarType(
+        kind=common_types.ScalarKind.FLOAT32, shape=None
     )
     assert "ext_unused" not in parsed.symtable_

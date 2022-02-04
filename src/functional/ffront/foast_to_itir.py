@@ -17,6 +17,7 @@ from typing import Iterator, Optional, Union
 import factory
 
 from eve import NodeTranslator
+from functional.ffront import common_types
 from functional.ffront import field_operator_ast as foast
 from functional.iterator import ir as itir
 
@@ -116,7 +117,7 @@ class ItirShiftFactory(ItirFunCallFactory):
 
 
 def _name_is_field(name: foast.Name) -> bool:
-    return isinstance(name.type, foast.FieldType)
+    return isinstance(name.type, common_types.FieldType)
 
 
 class FieldOperatorLowering(NodeTranslator):

@@ -14,94 +14,19 @@
 
 
 import re
-import typing
-from typing import Literal, Optional, Union
+from typing import Optional, Union
 
 import eve
 from eve import Node
 from eve.traits import SymbolTableTrait
-from eve.type_definitions import IntEnum, SourceLocation, StrEnum, SymbolRef
+from eve.type_definitions import SourceLocation, StrEnum, SymbolRef
+from functional.ffront import common_types as common_types
 
 
 class Namespace(StrEnum):
     LOCAL = "local"
     CLOSURE = "closure"
     EXTERNAL = "external"
-
-
-class ScalarKind(IntEnum):
-    BOOL = 1
-    INT32 = 32
-    INT64 = 64
-    FLOAT32 = 1032
-    FLOAT64 = 1064
-
-
-class Dimension(Node):
-    name: str
-
-
-class SymbolType(Node):
-    ...
-
-
-class DeferredSymbolType(SymbolType):
-    constraint: typing.Optional[typing.Type[SymbolType]]
-
-
-class SymbolTypeVariable(SymbolType):
-    id: str  # noqa A003
-    bound: typing.Type[SymbolType]
-
-
-class OffsetType(SymbolType):
-    ...
-
-    def __str__(self):
-        return f"Offset[{self.id}]"
-
-
-class DataType(SymbolType):
-    ...
-
-
-class ScalarType(DataType):
-    kind: ScalarKind
-    shape: Optional[list[int]] = None
-
-    def __str__(self):
-        kind_str = self.kind.name.lower()
-        if self.shape is None:
-            return kind_str
-        return f"{kind_str}{self.shape}"
-
-
-class TupleType(DataType):
-    types: list[DataType]
-
-    def __str__(self):
-        return f"tuple{self.types}"
-
-
-class FieldType(DataType):
-    dims: Union[list[Dimension], Literal[Ellipsis]]  # type: ignore[valid-type,misc]
-    dtype: ScalarType
-
-    def __str__(self):
-        dims = "..." if self.dims is Ellipsis else f"[{', '.join(dim.name for dim in self.dims)}]"
-        return f"Field[{dims}, dtype={self.dtype}]"
-
-
-class FunctionType(SymbolType):
-    args: list[DataType]
-    kwargs: dict[str, DataType]
-    returns: DataType
-
-    def __str__(self):
-        arg_strs = [str(arg) for arg in self.args]
-        kwarg_strs = [f"{key}: {value}" for key, value in self.kwargs]
-        args_str = ", ".join(*arg_strs, *kwarg_strs)
-        return f"({args_str}) -> {self.returns}"
 
 
 class LocatedNode(Node):
@@ -114,32 +39,32 @@ class SymbolName(eve.traits.SymbolName):
 
 class Symbol(LocatedNode):
     id: SymbolName  # noqa: A003
-    type: SymbolType  # noqa A003
+    type: common_types.SymbolType  # noqa A003
     namespace: Namespace = Namespace(Namespace.LOCAL)
 
 
 class DataSymbol(Symbol):
-    type: Union[DataType, DeferredSymbolType]  # noqa A003
+    type: Union[common_types.DataType, common_types.DeferredSymbolType]  # noqa A003
 
 
 class FieldSymbol(DataSymbol):
-    type: Union[FieldType, DeferredSymbolType]  # noqa A003
+    type: Union[common_types.FieldType, common_types.DeferredSymbolType]  # noqa A003
 
 
 class TupleSymbol(DataSymbol):
-    type: Union[TupleType, DeferredSymbolType]  # noqa A003
+    type: Union[common_types.TupleType, common_types.DeferredSymbolType]  # noqa A003
 
 
 class Function(Symbol):
-    type: FunctionType  # noqa A003
+    type: common_types.FunctionType  # noqa A003
 
 
 class OffsetSymbol(Symbol):
-    type: OffsetType  # noqa A003
+    type: common_types.OffsetType  # noqa A003
 
 
 class Expr(LocatedNode):
-    type: Optional[SymbolType] = None  # noqa A003
+    type: Optional[common_types.SymbolType] = None  # noqa A003
 
 
 class Name(Expr):
@@ -148,7 +73,7 @@ class Name(Expr):
 
 class Constant(Expr):
     value: str
-    dtype: Union[DataType, str]
+    dtype: Union[common_types.DataType, str]
 
 
 class Subscript(Expr):

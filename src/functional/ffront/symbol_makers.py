@@ -25,11 +25,12 @@ import numpy.typing as npt
 from eve import typingx
 from eve.type_definitions import SourceLocation
 from functional import common
+from functional.ffront import common_types
 from functional.ffront import field_operator_ast as foast
 from functional.iterator import runtime
 
 
-def make_scalar_kind(dtype: npt.DTypeLike) -> foast.ScalarKind:
+def make_scalar_kind(dtype: npt.DTypeLike) -> common_types.ScalarKind:
     try:
         dt = np.dtype(dtype)
     except TypeError as err:
@@ -38,15 +39,15 @@ def make_scalar_kind(dtype: npt.DTypeLike) -> foast.ScalarKind:
     if dt.shape == () and dt.fields is None:
         match dt:
             case np.bool_:
-                return foast.ScalarKind.BOOL
+                return common_types.ScalarKind.BOOL
             case np.int32:
-                return foast.ScalarKind.INT32
+                return common_types.ScalarKind.INT32
             case np.int64:
-                return foast.ScalarKind.INT64
+                return common_types.ScalarKind.INT64
             case np.float32:
-                return foast.ScalarKind.FLOAT32
+                return common_types.ScalarKind.FLOAT32
             case np.float64:
-                return foast.ScalarKind.FLOAT64
+                return common_types.ScalarKind.FLOAT64
             case _:
                 raise common.GTTypeError(f"Impossible to map '{dtype}' value to a ScalarKind")
     else:
@@ -58,7 +59,7 @@ def make_symbol_type_from_typing(
     *,
     global_ns: Optional[dict[str, Any]] = None,
     local_ns: Optional[dict[str, Any]] = None,
-) -> foast.SymbolType:
+) -> common_types.SymbolType:
     recursive_make_symbol = functools.partial(
         make_symbol_type_from_typing, global_ns=global_ns, local_ns=local_ns
     )
@@ -94,7 +95,7 @@ def make_symbol_type_from_typing(
 
     match canonical_type:
         case type() as t if issubclass(t, (bool, int, float, np.generic)):
-            return foast.ScalarType(kind=make_scalar_kind(type_hint))
+            return common_types.ScalarType(kind=make_scalar_kind(type_hint))
 
         case builtins.tuple:
             if not args:
@@ -103,7 +104,7 @@ def make_symbol_type_from_typing(
                 )
             if Ellipsis in args:
                 raise FieldOperatorTypeError(f"Unbound tuples ({type_hint}) are not allowed!")
-            return foast.TupleType(types=[recursive_make_symbol(arg) for arg in args])
+            return common_types.TupleType(types=[recursive_make_symbol(arg) for arg in args])
 
         case common.Field:
             if (n_args := len(args)) != 2:
@@ -111,13 +112,13 @@ def make_symbol_type_from_typing(
                     f"Field type requires two arguments, got {n_args}! ({type_hint})"
                 )
 
-            dims: Union[Ellipsis, list[foast.Dimension]] = []
+            dims: Union[Ellipsis, list[common.Dimension]] = []
             dim_arg, dtype_arg = args
             if isinstance(dim_arg, list):
                 for d in dim_arg:
                     if not isinstance(d, common.Dimension):
                         raise FieldOperatorTypeError(f"Invalid field dimension definition '{d}'")
-                    dims.append(foast.Dimension(name=d.value))
+                    dims.append(d)
             elif dim_arg is Ellipsis:
                 dims = dim_arg
             else:
@@ -129,11 +130,11 @@ def make_symbol_type_from_typing(
                 raise FieldOperatorTypeError(
                     "Field dtype argument must be a scalar type (got '{dtype}')!"
                 ) from error
-            if not isinstance(dtype, foast.ScalarType):
+            if not isinstance(dtype, common_types.ScalarType):
                 raise FieldOperatorTypeError(
                     "Field dtype argument must be a scalar type (got '{dtype}')!"
                 )
-            return foast.FieldType(dims=dims, dtype=dtype)
+            return common_types.FieldType(dims=dims, dtype=dtype)
 
         case collections.abc.Callable:
             if not args:
@@ -155,11 +156,11 @@ def make_symbol_type_from_typing(
                 for arg, arg_type in kwargs_info[0].data.items()
             }
 
-            return foast.FunctionType(
+            return common_types.FunctionType(
                 args=args, kwargs=kwargs, returns=recursive_make_symbol(return_type)
             )
         case runtime.Offset:
-            return foast.OffsetType()
+            return common_types.OffsetType()
 
     raise FieldOperatorTypeError(f"'{type_hint}' type is not supported")
 
@@ -172,16 +173,16 @@ def make_symbol_from_value(
 
     symbol_type = make_symbol_type_from_typing(value)
 
-    if isinstance(symbol_type, foast.DataType):
+    if isinstance(symbol_type, common_types.DataType):
         return foast.DataSymbol(id=name, type=symbol_type, namespace=namespace, location=location)
-    elif isinstance(symbol_type, foast.FunctionType):
+    elif isinstance(symbol_type, common_types.FunctionType):
         return foast.Function(
             id=name,
             type=symbol_type,
             namespace=namespace,
             location=location,
         )
-    elif isinstance(symbol_type, foast.OffsetType):
+    elif isinstance(symbol_type, common_types.OffsetType):
         return foast.OffsetSymbol(id=name, type=symbol_type, namespace=namespace, location=location)
     else:
         raise common.GTTypeError(f"Impossible to map '{value}' value to a Symbol")
