@@ -14,7 +14,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import List
+
 import pytest
 
 from gtc import common, oir
@@ -27,17 +27,17 @@ from .oir_utils import (
     FieldAccessFactory,
     FieldDeclFactory,
     HorizontalExecutionFactory,
+    LocalScalarFactory,
     MaskStmtFactory,
     NativeFuncCallFactory,
     ScalarAccessFactory,
     StencilFactory,
     VerticalLoopFactory,
     VerticalLoopSectionFactory,
-    LocalScalarFactory,
 )
 
 
-def test_stencil_to_computation():
+def test_stencil_to_computation() -> None:
     stencil = StencilFactory(
         name="stencil",
         params=[
@@ -65,34 +65,34 @@ def test_stencil_to_computation():
     assert len(computation.vertical_passes) == 1
 
 
-def test_vertical_loop_to_vertical_passes():
+def test_vertical_loop_to_vertical_passes() -> None:
     vertical_loop = VerticalLoopFactory(sections__0__horizontal_executions=[])
     vertical_passes = OirToNpir().visit(vertical_loop)
 
     assert vertical_passes[0].body == []
 
 
-def test_vertical_loop_section_to_vertical_pass():
+def test_vertical_loop_section_to_vertical_pass() -> None:
     vertical_loop_section = VerticalLoopSectionFactory(horizontal_executions=[])
     vertical_pass = OirToNpir().visit(vertical_loop_section, loop_order=common.LoopOrder.PARALLEL)
 
     assert vertical_pass.body == []
 
 
-def test_horizontal_execution_to_vector_assigns():
+def test_horizontal_execution_to_vector_assigns() -> None:
     horizontal_execution = HorizontalExecutionFactory(body=[])
     horizontal_block = OirToNpir().visit(horizontal_execution)
     assert horizontal_block.body == []
 
 
-def test_mask_stmt_to_assigns():
+def test_mask_stmt_to_assigns() -> None:
     mask_stmt = MaskStmtFactory(body=[AssignStmtFactory()])
     assign_stmts = OirToNpir().visit(mask_stmt)
     assert isinstance(assign_stmts[0].mask, npir.FieldSlice)
     assert len(assign_stmts) == 1
 
 
-def test_mask_propagation():
+def test_mask_propagation() -> None:
     mask_stmt = MaskStmtFactory()
     assign_stmts = OirToNpir().visit(mask_stmt)
     assert assign_stmts[0].mask == OirToNpir().visit(mask_stmt.mask)
@@ -106,7 +106,7 @@ def make_block_and_transform(**kwargs) -> npir.HorizontalBlock:
     return OirToNpir().visit(oir_stencil).vertical_passes[0].body[0]
 
 
-def test_assign_stmt_broadcast():
+def test_assign_stmt_broadcast() -> None:
     block = make_block_and_transform(
         body=[
             AssignStmtFactory(
@@ -121,7 +121,7 @@ def test_assign_stmt_broadcast():
     assert isinstance(v_assign.right, npir.Broadcast)
 
 
-def test_temp_assign():
+def test_temp_assign() -> None:
     block = make_block_and_transform(
         body=[
             AssignStmtFactory(left=FieldAccessFactory(name="a"), right=FieldAccessFactory(name="b"))
@@ -131,13 +131,13 @@ def test_temp_assign():
     assert set(d.name for d in block.declarations) == {"a"}
 
 
-def test_field_access_to_field_slice_cartesian():
+def test_field_access_to_field_slice_cartesian() -> None:
     field_access = FieldAccessFactory(offset__i=-1, offset__j=2, offset__k=0)
     field_slice = OirToNpir().visit(field_access)
     assert (field_slice.i_offset, field_slice.j_offset, field_slice.k_offset) == (-1, 2, 0)
 
 
-def test_field_access_to_field_slice_variablek():
+def test_field_access_to_field_slice_variablek() -> None:
     field_access = FieldAccessFactory(
         offset=oir.VariableKOffset(k=oir.Literal(value="1", dtype=common.DataType.INT32))
     )
@@ -160,11 +160,11 @@ def test_field_access_to_field_slice_variablek():
         ),
     ),
 )
-def test_binary_op_to_npir(oir_node: oir.Expr, npir_type: npir.Expr):
+def test_binary_op_to_npir(oir_node: oir.Expr, npir_type: npir.Expr) -> None:
     assert isinstance(OirToNpir().visit(oir_node), npir_type)
 
 
-def test_literal_broadcast():
+def test_literal_broadcast() -> None:
     result = OirToNpir().visit(
         AssignStmtFactory(
             left__dtype=common.DataType.FLOAT32,
@@ -182,11 +182,13 @@ def test_literal_broadcast():
         (FieldAccessFactory(dtype=common.DataType.INT32), npir.VectorCast),
     ),
 )
-def test_cast(oir_int_expr, npir_type):
+def test_cast(oir_int_expr, npir_type) -> None:
     assert isinstance(
         OirToNpir().visit(oir.Cast(dtype=common.DataType.FLOAT64, expr=oir_int_expr)), npir_type
     )
 
 
-def test_native_func_call():
-    assert isinstance(OirToNpir().visit(NativeFuncCallFactory(args__0=FieldAccessFactory())), npir.NativeFuncCall)
+def test_native_func_call() -> None:
+    assert isinstance(
+        OirToNpir().visit(NativeFuncCallFactory(args__0=FieldAccessFactory())), npir.NativeFuncCall
+    )

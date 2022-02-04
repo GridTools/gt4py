@@ -19,8 +19,10 @@ from typing import List, Optional, Tuple, Union, cast
 from pydantic import validator
 
 import eve
-from gt4py.definitions import Extent
 from gtc import common
+
+
+HorizontalExtent = Tuple[Tuple[int, int], Tuple[int, int]]
 
 
 # --- Misc ---
@@ -37,9 +39,10 @@ class Decl(eve.Node):
     dtype: common.DataType
 
 
-class LocalDecl(Decl):
+class ScalarDecl(Decl):
     # Scalar per grid point
     # Locals never have data_dims
+    # Used for API scalar parameters and oir local scalars
     pass
 
 
@@ -47,7 +50,7 @@ class FieldDecl(Decl):
     # General field shared across HorizontalBlocks
     dimensions: Tuple[bool, bool, bool]
     data_dims: Tuple[int, ...] = eve.field(default_factory=tuple)
-    extent: Extent
+    extent: HorizontalExtent
 
 
 class TemporaryDecl(Decl):
@@ -55,11 +58,6 @@ class TemporaryDecl(Decl):
     data_dims: Tuple[int, ...] = eve.field(default_factory=tuple)
     offset: Tuple[int, int]
     boundary: Tuple[int, int]
-
-
-class ScalarDecl(Decl):
-    # Defines a scalar parameter argument
-    pass
 
 
 # --- Expressions ---
@@ -154,7 +152,7 @@ class NativeFuncCall(common.NativeFuncCall[Expr], Expr):
 class VectorAssign(common.AssignStmt[VectorLValue, Expr]):
     left: VectorLValue
     right: Expr
-    mask: Optional[Expr]
+    mask: Optional[Expr] = None
 
     @validator("right")
     def right_is_field_kind(cls, right: Expr) -> Expr:
@@ -167,9 +165,9 @@ class VectorAssign(common.AssignStmt[VectorLValue, Expr]):
 
 # --- Control Flow ---
 class HorizontalBlock(common.LocNode, eve.SymbolTableTrait):
-    declarations: List[LocalDecl]
+    declarations: List[ScalarDecl]
     body: List[VectorAssign]
-    extent: Extent
+    extent: HorizontalExtent
 
 
 class VerticalPass(common.LocNode):

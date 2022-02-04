@@ -153,13 +153,13 @@ class NpirCodegen(TemplatedGenerator):
             )
         else:
             k = _slice_string("k", offsets[2])
-        decl = kwargs["symtable"][node.name]
         all_args = [_slice_string(ch, offset) for ch, offset in zip(("i", "j"), offsets)] + [k]
-        if isinstance(decl, npir.FieldDecl):
-            args = [axis for i, axis in enumerate(all_args) if decl.dimensions[i]]
+        if node.name in kwargs.get("symtable", {}):
+            decl = kwargs["symtable"][node.name]
+            dimensions = decl.dimensions if isinstance(decl, npir.FieldDecl) else [True] * 3
+            args = [axis for i, axis in enumerate(all_args) if dimensions[i]]
         else:
             args = all_args
-
         access_slice = ", ".join(args + list(data_index))
 
         return f"{node.name}[{access_slice}]"
@@ -215,7 +215,7 @@ class NpirCodegen(TemplatedGenerator):
     NativeFuncCall = FormatTemplate("{func}({', '.join(arg for arg in args)}{mask_arg})")
 
     def visit_VectorAssign(
-        self, node: npir.VectorAssign, ctx: "BlockContext", **kwargs: Any
+        self, node: npir.VectorAssign, *, ctx: "BlockContext", **kwargs: Any
     ) -> Union[str, Collection[str]]:
         left = self.visit(node.left, **kwargs)
         right = self.visit(node.right, **kwargs)
@@ -258,7 +258,13 @@ class NpirCodegen(TemplatedGenerator):
         return "K" if node == common.LevelMarker.END else "k"
 
     def visit_AxisBound(self, node: common.AxisBound, **kwargs: Any) -> Union[str, Collection[str]]:
-        return self.generic_visit(node, voffset=f"{node.offset:+d}", **kwargs)
+        if node.offset > 0:
+            voffset = f" + {node.offset}"
+        elif node.offset == 0:
+            voffset = ""
+        else:
+            voffset = f" - {-node.offset}"
+        return self.generic_visit(node, voffset=voffset, **kwargs)
 
     AxisBound = FormatTemplate("_d{level}_{voffset}")
 
@@ -278,10 +284,14 @@ class NpirCodegen(TemplatedGenerator):
         upper: Tuple[int, int],
         **kwargs: Any,
     ) -> Union[str, Collection[str]]:
-        boundary = [u - l for l, u in zip(lower, upper)]
+        boundary = [upper - lower for lower, upper in zip(lower, upper)]
         shape = _paren_wrap(
             ", ".join(
-                [f"_dI_ + {boundary[0]}", f"_dJ_ + {boundary[1]}", "1" if is_serial else f"K - k"]
+                (
+                    [f"_dI_ + {boundary[0]}", f"_dJ_ + {boundary[1]}", "1"]
+                    if is_serial
+                    else ["K - k"]
+                )
                 + ["1"] * (node.dims - 3)
             )
         )
@@ -309,8 +319,7 @@ class NpirCodegen(TemplatedGenerator):
             k, K = {{ lower }}, {{ upper }}
             {%- if direction %}
             {{ direction }}{% set body_indent = 4 %}{% endif %}
-            {{ lk_stmt | indent(body_indent, first=True) }}
-            {% for hblock in body %}
+            {{ lk_stmt | indent(body_indent, first=True) }}{% for hblock in body %}
             {{ hblock | indent(body_indent, first=True) }}
             {% endfor %}# --- end vertical block ---
             """
@@ -327,7 +336,6 @@ class NpirCodegen(TemplatedGenerator):
     HorizontalBlock = JinjaTemplate(
         textwrap.dedent(
             """\
-
             # --- begin horizontal block --
             i, I = _di_ - {{ lower[0] }}, _dI_ + {{ upper[0] }}
             j, J = _dj_ - {{ lower[1] }}, _dJ_ + {{ upper[1] }}
