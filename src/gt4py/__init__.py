@@ -35,3 +35,4 @@ __versioninfo__: Optional[Union[LegacyVersion, Version]] = parse(__version__)
 del DistributionNotFound, LegacyVersion, Version, get_distribution, parse
 
 from . import config, gtscript, storage
+from .stencil_object import StencilObject
