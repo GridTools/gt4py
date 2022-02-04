@@ -114,11 +114,7 @@ def lift(sten):
 @iterator.builtins.reduce.register(TRACING)
 def reduce(*args):
     return _f("reduce", *args)
-
-# @iterator.builtins.nbh_sum.register(TRACING)
-# def nbh_sum(*args):
-#     return _f("reduce", *args)
-
+    
 @iterator.builtins.scan.register(TRACING)
 def scan(*args):
     return _f("scan", *args)

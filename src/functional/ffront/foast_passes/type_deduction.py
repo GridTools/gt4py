@@ -395,17 +395,8 @@ class FieldOperatorTypeDeduction(NodeTranslator):
 
     def visit_Call(self, node: foast.Call, **kwargs) -> foast.Call:
         new_func = self.visit(node.func, **kwargs)
-        if isinstance(new_func.type, common_types.FieldType):
-
-            # NOTE: this can now be nested; e.g. nbh_sum(edge_f(V2E), axis=V2E)
-            #                                       ^      ^
-            #                                      Call   Call
-            # hence in_shift may already be present in kwargs
-            # c.f. above
-            if "in_shift" in kwargs:
-                new_args = self.visit(node.args, **kwargs)
-            else:
-                new_args = self.visit(node.args, in_shift=True, **kwargs)
+        if isinstance(new_func.type, common_types.FieldType):            
+            new_args = self.visit(node.args, in_shift=True, **kwargs)
 
             return foast.Call(func=new_func, args=new_args, location=node.location)
         return foast.Call(

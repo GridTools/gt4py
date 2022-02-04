@@ -117,27 +117,6 @@ def reduce(fun, init):
 
     return sten
 
-# @builtins.nbh_sum.register(EMBEDDED)
-# def nbh_sum(fun, init):
-#     def sten(*iters):
-#         # TODO: assert check_that_all_iterators_are_compatible(*iters)
-#         first_it = iters[0]
-#         n = first_it.max_neighbors()
-#         res = init
-#         for i in range(n):
-#             # we can check a single argument
-#             # because all arguments share the same pattern
-#             if builtins.deref(builtins.shift(i)(first_it)) is None:
-#                 break
-#             res = fun(
-#                 res,
-#                 *(builtins.deref(builtins.shift(i)(it)) for it in iters),
-#             )
-#         return res
-
-#     return sten    
-
-
 class _None:
     """Dummy object to allow execution of expression containing Nones in non-active path.
 

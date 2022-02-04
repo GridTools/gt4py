@@ -319,7 +319,7 @@ class FieldOperatorParser(ast.NodeVisitor):
         # in both 'closure_refs.globals' and 'self.closure_refs.nonlocals'.
         defs = (
             self.closure_refs.globals | self.closure_refs.nonlocals
-        )  # | self.closure_refs.builtins
+        )
         closure = [
             symbol_makers.make_symbol_from_value(
                 name, defs[name], foast.Namespace.CLOSURE, self._make_loc(node)
@@ -557,7 +557,7 @@ class FieldOperatorParser(ast.NodeVisitor):
             )
 
         args = node.args
-        #TODO: for now, strip the keyword
+        #TODO: for now, strip the keyword (e.g. AXIS=...)
         for keyword in node.keywords:
             args.append(keyword.value)
 

@@ -126,7 +126,8 @@ def test_sum_edges_to_vertices(backend):
 
 @fundef
 def sum_edges_to_vertices_reduce(in_edges):
-    return reduce(lambda a, in_edges_param: a + in_edges_param, 0)(shift(V2E)(in_edges))
+    return reduce(lambda a, b: a + b, 0)(shift(V2E)(in_edges))
+
 
 def test_sum_edges_to_vertices_reduce(backend):
     backend, validate = backend
@@ -139,7 +140,6 @@ def test_sum_edges_to_vertices_reduce(backend):
         out=out,
         backend=backend,
         offset_provider={"V2E": NeighborTableOffsetProvider(v2e_arr, Vertex, Edge, 4)},
-        debug=True
     )
     if validate:
         assert allclose(out, ref)

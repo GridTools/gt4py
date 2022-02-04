@@ -45,6 +45,5 @@ def validate_symbol_refs() -> RootValidatorType:
             raise ValueError("Symbols {} not found.".format(missing_symbols))
 
         return values
-
-    return True
+   
     return pydantic.root_validator(allow_reuse=True, skip_on_failure=True)(_impl)

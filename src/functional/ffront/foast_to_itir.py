@@ -20,6 +20,7 @@ from eve import NodeTranslator
 from functional.ffront import common_types
 from functional.ffront import field_operator_ast as foast
 from functional.iterator import ir as itir
+from functional.ffront.fbuiltins import FUN_BUILTIN_NAMES
 
 
 class AssignResolver(NodeTranslator):
@@ -252,7 +253,8 @@ class FieldOperatorLowering(NodeTranslator):
         return ItirFunCallFactory(name="plus", args=[itir.SymRef(id = "base"), expr])
 
     def _make_reduce(self, *args, **kwargs):
-        # check that len(args) is 2 and that there is a kwarg "axis"    
+        # TODO: perform some validation here? 
+        #       we need a first argument that is an expr and a second one that is an axis
         red_rhs = self.visit(args[0], **kwargs)
 
         red_expr = red_rhs[0]
@@ -271,7 +273,7 @@ class FieldOperatorLowering(NodeTranslator):
         return total_call
 
     def visit_Call(self, node: foast.Call, **kwargs) -> itir.FunCall:
-        if node.func.id == "nbh_sum": #TODO hardcoded string
+        if node.func.id in FUN_BUILTIN_NAMES:
             return self._make_reduce(node.args, **kwargs)
         new_fun = (
             itir.SymRef(id=node.func.id)

@@ -7,11 +7,7 @@ from typing import Any, Callable, Dict, List
 class _fun_dispatcher:
     def __init__(self, dispatcher, fun) -> None:
         self.dispatcher = dispatcher
-        self.fun = fun
-    
-    @property
-    def __name__(self) -> str:
-        return self.fun.__name__
+        self.fun = fun    
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
         if self.dispatcher.key is None:

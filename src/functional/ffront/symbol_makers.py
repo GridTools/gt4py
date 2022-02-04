@@ -136,9 +136,7 @@ def make_symbol_type_from_typing(
                 )
             return common_types.FieldType(dims=dims, dtype=dtype)
 
-        case collections.abc.Callable:
-            # if fbuiltins.
-
+        case collections.abc.Callable:           
             if not args:
                 raise FieldOperatorTypeError("Not annotated functions are not supported!")
 
@@ -173,10 +171,7 @@ def make_symbol_type_from_typing(
 def make_symbol_from_value(
     name: str, value: Any, namespace: foast.Namespace, location: SourceLocation
 ) -> foast.Symbol:
-
-    #if name in fbuiltins.FUN_BUILTIN_NAMES:
-    #    foast.Function(id=name, type=make_symbol_type_from_typing(value))
-
+   
     if not isinstance(value, type) or type(value).__module__ != "typing":
         value = typingx.get_typing(value, annotate_callable_kwargs=True)
 
