@@ -37,6 +37,7 @@ class DType:
 class Field(Generic[DimsT, DT]):
     ...
 
+
 @dataclass(frozen=True)
 class GTInfo:
     definition: Any

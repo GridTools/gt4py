@@ -117,6 +117,7 @@ def reduce(fun, init):
 
     return sten
 
+
 class _None:
     """Dummy object to allow execution of expression containing Nones in non-active path.
 
