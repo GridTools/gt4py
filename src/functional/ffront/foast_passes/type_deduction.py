@@ -240,7 +240,9 @@ class FieldOperatorTypeDeduction(NodeTranslator):
                         f"of type {refine_type}, instead of the expected type {node.type}"
                     ),
                 )
-            new_node = foast.Symbol(id=node.id, type=refine_type, location=node.location)
+            new_node = foast.Symbol[type(refine_type)](
+                id=node.id, type=refine_type, location=node.location
+            )
             symtable[new_node.id] = new_node
             return new_node
         return node

@@ -46,6 +46,16 @@ class Symbol(eve.GenericNode, LocatedNode, Generic[SymbolT]):
     namespace: Namespace = Namespace(Namespace.LOCAL)
 
 
+DataTypeT = TypeVar("DataTypeT", bound=common_types.DataType)
+DataSymbol = Symbol[DataTypeT]
+
+FieldTypeT = TypeVar("FieldTypeT", bound=common_types.FieldType)
+FieldSymbol = Symbol[FieldTypeT]
+
+ScalarTypeT = TypeVar("ScalarTypeT", bound=common_types.ScalarType)
+ScalarSymbol = Symbol[ScalarTypeT]
+
+
 class Expr(LocatedNode):
     type: Optional[common_types.SymbolType] = None  # noqa A003
 
@@ -145,11 +155,11 @@ class Stmt(LocatedNode):
 
 
 class ExternalImport(Stmt):
-    symbols: list[Symbol]
+    symbols: list[DataSymbol]
 
 
 class Assign(Stmt):
-    target: Symbol
+    target: FieldSymbol
     value: Expr
 
 
@@ -159,6 +169,6 @@ class Return(Stmt):
 
 class FieldOperator(LocatedNode, SymbolTableTrait):
     id: SymbolName  # noqa: A003
-    params: list[Symbol[common_types.DataType]]
+    params: list[DataSymbol]
     body: list[Stmt]
-    closure: list[Symbol]
+    closure: list[DataSymbol]

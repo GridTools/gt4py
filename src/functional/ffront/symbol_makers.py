@@ -179,7 +179,9 @@ def make_symbol_from_value(
     if isinstance(
         symbol_type, (common_types.DataType, common_types.FunctionType, common_types.OffsetType)
     ):
-        return foast.Symbol(id=name, type=symbol_type, namespace=namespace, location=location)
+        return foast.Symbol[type(symbol_type)](
+            id=name, type=symbol_type, namespace=namespace, location=location
+        )
     else:
         raise common.GTTypeError(f"Impossible to map '{value}' value to a Symbol")
 
