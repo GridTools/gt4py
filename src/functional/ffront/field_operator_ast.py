@@ -155,7 +155,7 @@ class Stmt(LocatedNode):
 
 
 class ExternalImport(Stmt):
-    symbols: list[DataSymbol]
+    symbols: list[Symbol]
 
 
 class Assign(Stmt):
