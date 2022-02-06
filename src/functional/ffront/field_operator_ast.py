@@ -171,4 +171,4 @@ class FieldOperator(LocatedNode, SymbolTableTrait):
     id: SymbolName  # noqa: A003
     params: list[DataSymbol]
     body: list[Stmt]
-    closure: list[DataSymbol]
+    closure: list[Symbol]
