@@ -226,7 +226,13 @@ class NpirCodegen(TemplatedGenerator):
     VariableKOffset = FormatTemplate("var_k_expr({var_offset}, {counter})")
 
     def visit_FieldSlice(
-        self, node: npir.FieldSlice, mask_acc="", *, is_serial=False, **kwargs: Any
+        self,
+        node: npir.FieldSlice,
+        mask_acc: str = "",
+        *,
+        is_serial: bool = False,
+        is_rhs: bool = False,
+        **kwargs: Any,
     ) -> Union[str, Collection[str]]:
 
         offset = [node.i_offset, node.j_offset, node.k_offset]
@@ -238,7 +244,7 @@ class NpirCodegen(TemplatedGenerator):
         if node.data_index:
             offset_str += ", " + ", ".join(self.visit(x, **kwargs) for x in node.data_index)
 
-        if mask_acc and any(off is None for off in offset):
+        if is_rhs and mask_acc and any(off is None for off in offset):
             k_size = "1" if is_serial else "K - k"
             arr_expr = f"np.broadcast_to({node.name}_[{offset_str}], (I - i, J - j, {k_size}))"
         else:
@@ -264,6 +270,21 @@ class NpirCodegen(TemplatedGenerator):
     NamedScalar = FormatTemplate("{name}")
 
     VectorTemp = FormatTemplate("{name}_")
+
+    def visit_NativeFunction(
+        self, node: common.NativeFunction, **kwargs: Any
+    ) -> Union[str, Collection[str]]:
+        if node == common.NativeFunction.MIN:
+            return "np.minimum"
+        elif node == common.NativeFunction.MAX:
+            return "np.maximum"
+        elif node == common.NativeFunction.POW:
+            return "np.power"
+        elif node == common.NativeFunction.GAMMA:
+            return "scipy.special.gamma"
+        return "np." + self.generic_visit(node, **kwargs)
+
+    NativeFuncCall = FormatTemplate("{func}({', '.join(arg for arg in args)})")
 
     def visit_MaskBlock(self, node: npir.MaskBlock, **kwargs) -> Union[str, Collection[str]]:
         if isinstance(node.mask, npir.FieldSlice):
@@ -297,9 +318,9 @@ class NpirCodegen(TemplatedGenerator):
             mask_acc = f"[{self.visit(node.mask, **kwargs)}]"
         if isinstance(node.right, npir.EmptyTemp):
             kwargs["temp_name"] = node.left.name
-        return self.generic_visit(node, mask_acc=mask_acc, **kwargs)
-
-    VectorAssign = FormatTemplate("{left} = {right}")
+        right = self.visit(node.right, mask_acc=mask_acc, is_rhs=True, **kwargs)
+        left = self.visit(node.left, mask_acc=mask_acc, is_rhs=False, **kwargs)
+        return f"{left} = {right}"
 
     VectorArithmetic = FormatTemplate("({left} {op} {right})")
 
@@ -379,7 +400,7 @@ class NpirCodegen(TemplatedGenerator):
     )
 
     def visit_Computation(
-        self, node: npir.Computation, **kwargs: Any
+        self, node: npir.Computation, *, ignore_np_errstate: bool = True, **kwargs: Any
     ) -> Union[str, Collection[str]]:
         signature = ["*", *node.params, "_domain_", "_origin_"]
         field_extents, block_extents = ExtentCalculator().visit(node)
@@ -390,6 +411,7 @@ class NpirCodegen(TemplatedGenerator):
             var_offset_func=VARIABLE_OFFSET_FUNCTION,
             field_extents=field_extents,
             block_extents=block_extents,
+            ignore_np_errstate=ignore_np_errstate,
             **kwargs,
         )
 
@@ -414,38 +436,19 @@ class NpirCodegen(TemplatedGenerator):
                 {% for name in field_params %}{{ name }}_ = ShimmedView({{ name }}, _origin_["{{ name }}"])
                 {% endfor %}# -- end data views --
 
+                {% if ignore_np_errstate %}
+                with np.errstate(divide='ignore', over='ignore', under='ignore', invalid='ignore'):
+                {% else %}
+                with np.errstate():
+                {% endif %}
+
                 {% for pass in vertical_passes %}
-                {{ pass | indent(4) }}
+                {{ pass | indent(8) }}
+                {% else %}
+                    pass
                 {% endfor %}
 
             {{ var_offset_func }}
-            """
-        )
-    )
-
-    def visit_NativeFunction(
-        self, node: common.NativeFunction, **kwargs: Any
-    ) -> Union[str, Collection[str]]:
-        if node == common.NativeFunction.MIN:
-            return "np.minimum"
-        elif node == common.NativeFunction.MAX:
-            return "np.maximum"
-        elif node == common.NativeFunction.POW:
-            return "np.power"
-        elif node == common.NativeFunction.GAMMA:
-            return "scipy.special.gamma"
-        return "np." + self.generic_visit(node, **kwargs)
-
-    NativeFuncCall = FormatTemplate("{func}({', '.join(arg for arg in args)})")
-
-    While = JinjaTemplate(
-        textwrap.dedent(
-            """\
-            _while_result = {{ cond }}
-            while np.any(_while_result):
-                {% for stmt in body %}{{ stmt }}
-                {% endfor %}
-                _while_result = {{ cond }}
             """
         )
     )

@@ -24,7 +24,6 @@ from __future__ import annotations
 import sys
 import typing
 from typing import *
-from typing import IO, BinaryIO, TextIO
 
 
 AnyCallable = Callable[..., Any]

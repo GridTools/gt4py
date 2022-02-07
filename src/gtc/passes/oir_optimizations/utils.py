@@ -208,9 +208,9 @@ class _HorizontalExecutionExtents(NodeVisitor):
 
         return ctx.block_extents
 
-    def visit_VerticalLoop(self, node: oir.VerticalLoop, **kwargs: Any) -> None:
-        for section in reversed(node.sections):
-            self.visit(section, **kwargs)
+    def visit_VerticalLoopSection(self, node: oir.VerticalLoopSection, **kwargs: Any) -> None:
+        for hexec in reversed(node.horizontal_executions):
+            self.visit(hexec, **kwargs)
 
     def visit_HorizontalExecution(self, node: oir.HorizontalExecution, *, ctx: Context) -> None:
         results = AccessCollector.apply(node).cartesian_accesses()

@@ -16,15 +16,18 @@
 
 import time
 
+from gt4py.definitions import Extent
 from gtc import common, oir
 from gtc.passes.oir_optimizations.horizontal_execution_merging import (
     HorizontalExecutionMerging,
     OnTheFlyMerging,
+    compute_horizontal_block_extents,
 )
 
 from ...oir_utils import (
     AssignStmtFactory,
     BinaryOpFactory,
+    FieldAccessFactory,
     HorizontalExecutionFactory,
     LocalScalarFactory,
     NativeFuncCallFactory,
@@ -33,6 +36,18 @@ from ...oir_utils import (
     TemporaryFactory,
     VerticalLoopFactory,
 )
+
+
+def test_horiz_exec_extents():
+    stencil = StencilFactory(
+        vertical_loops__0__sections__0__horizontal_executions=[
+            HorizontalExecutionFactory(body__0__left__name="tmp"),
+            HorizontalExecutionFactory(body__0__right=FieldAccessFactory(name="tmp", offset__i=1)),
+        ]
+    )
+    hexecs = stencil.vertical_loops[0].sections[0].horizontal_executions
+    block_extents = compute_horizontal_block_extents(stencil)
+    assert block_extents[id(hexecs[0])] == Extent(((0, 1), (0, 0)))
 
 
 def test_horiz_exec_merging_read_after_write():
@@ -124,6 +139,31 @@ def test_on_the_fly_merging_basic():
     assert len(hexecs[0].declarations) == 1
     assert isinstance(hexecs[0].declarations[0], oir.LocalScalar)
     assert not transformed.declarations
+
+
+def test_on_the_fly_merging_with_inter_loop_dependency():
+    testee = StencilFactory(
+        vertical_loops=[
+            VerticalLoopFactory(
+                sections__0__horizontal_executions=[
+                    HorizontalExecutionFactory(body=[AssignStmtFactory(left__name="tmp0")]),
+                    HorizontalExecutionFactory(body=[AssignStmtFactory(left__name="tmp1")]),
+                ]
+            ),
+            VerticalLoopFactory(
+                sections__0__horizontal_executions=[
+                    HorizontalExecutionFactory(body=[AssignStmtFactory(right__name="tmp0")]),
+                    HorizontalExecutionFactory(body=[AssignStmtFactory(right__name="tmp1")]),
+                ]
+            ),
+        ],
+        declarations=[TemporaryFactory(name="tmp0"), TemporaryFactory(name="tmp1")],
+    )
+    transformed = OnTheFlyMerging().visit(testee)
+    hexecs0 = transformed.vertical_loops[0].sections[0].horizontal_executions
+    assert len(hexecs0) == 2
+    hexecs1 = transformed.vertical_loops[1].sections[0].horizontal_executions
+    assert len(hexecs1) == 2
 
 
 def test_on_the_fly_merging_with_offsets():
