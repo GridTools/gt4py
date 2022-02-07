@@ -4,7 +4,7 @@ _local_
 
 ### GT4Py ####
 .gt_cache/
-.gt_cache_pytest_*/
+.gt_cache_pytest*/
 
 ### Python ###
 # Byte-compiled / optimized / DLL files
