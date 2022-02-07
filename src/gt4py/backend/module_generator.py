@@ -466,14 +466,14 @@ class PyExtModuleGenerator(BaseModuleGenerator):
         source = ["from gt4py import utils as gt_utils"]
         if self._is_not_empty():
             assert self.pyext_file_path is not None
-            file_path = "f{{pathlib.Path(__file__).parent.resolve()}}/{}".format(
+            file_path = 'f"{{pathlib.Path(__file__).parent.resolve()}}/{}"'.format(
                 os.path.basename(self.pyext_file_path)
             )
             source.append(
                 textwrap.dedent(
                     f"""
                 pyext_module = gt_utils.make_module_from_file(
-                    "{self.pyext_module_name}", "{file_path}", public_import=True
+                    "{self.pyext_module_name}", {file_path}, public_import=True
                 )
                 """
                 )
