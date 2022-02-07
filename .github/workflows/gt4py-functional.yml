@@ -32,5 +32,10 @@ jobs:
         python -m pip uninstall --yes cytoolz # problem with undefined symbol
     - name: Test
       run: |
-        python -m pytest tests/
-        python -m pytest --doctest-modules src/
+        python -m pytest --cache-clear --cov  tests/
+        python -m pytest --cov --cov-append --doctest-modules src/
+    - name: Archive code coverage results
+      uses: actions/upload-artifact@v2
+      with:
+        name: code-coverage-report
+        path: tests/_reports/
