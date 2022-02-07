@@ -75,15 +75,37 @@ class AssignResolver(NodeTranslator):
             return names[node.id]
         return node
 
-#TODO test
-class FieldCollector(NodeVisitor):
-    fields = set()
 
-    def visit_FunCall(self, node: itir.FunCall, **kwargs):
+class FieldCollector(NodeVisitor):
+    def __init__(self):
+        self._fields = set()
+
+    # matches e.g. field(V2E)
+    def visit_FunCall(self, node: itir.FunCall) -> None:
         if not hasattr(functional.iterator.builtins, node.fun.id):
-            self.fields.add(node.fun.id)
-        for arg in node.args:
-            self.visit(arg)
+            self._fields.add(node.fun.id)
+        else:
+            for arg in node.args:
+                self.visit(arg)
+
+    def visit_SymRef(self, node: itir.SymRef) -> None:
+        self._fields.add(node.id)
+
+    def getFields(self):
+        return list(sorted(self._fields))
+
+
+class FieldAccessCanonicalizer(NodeTranslator):
+    def visit_FunCall(self, node: itir.FunCall):
+        if node.fun.id == "deref":
+            return itir.SymRef(id=node.args[0].id + "_param")
+
+        if not hasattr(functional.iterator.builtins, node.fun.id):
+            return itir.SymRef(id=node.fun.id + "_param")
+
+        new_args = self.visit(node.args)
+        return itir.FunCall(fun=node.fun, args=new_args)
+
 
 class ItirSymRefFactory(factory.Factory):
     class Meta:
@@ -250,40 +272,43 @@ class FieldOperatorLowering(NodeTranslator):
             yield name
             yield offset
 
-    def _extract_fields(self, expr: itir.Expr) -> list[str]:                        
+    def _extract_fields(self, expr: itir.Expr) -> list[str]:
         fc = FieldCollector()
         fc.visit(expr)
-        return fc.fields
+        return fc.getFields()
 
     def _remove_field_accesses(self, expr: itir.Expr) -> itir.Expr:
-        # TODO: replace with visitor that replaces each FunCall(field, arg(Axis)) with just
-        #       SymRef(field)       
-        return itir.SymRef(id = expr.fun.id + "_param")
+        fac = FieldAccessCanonicalizer()
+        expr = fac.visit(expr)
+        return expr
 
     def _make_lamba_rhs(self, expr: itir.Expr) -> itir.FunCall:
-        return ItirFunCallFactory(name="plus", args=[itir.SymRef(id = "base"), expr])
+        return ItirFunCallFactory(name="plus", args=[itir.SymRef(id="base"), expr])
 
     def _make_reduce(self, *args, **kwargs):
-        # TODO: perform some validation here? 
+        # TODO: perform some validation here?
         #       we need a first argument that is an expr and a second one that is an axis
         red_rhs = self.visit(args[0], **kwargs)
 
         red_expr = red_rhs[0]
-        red_axis = red_rhs[1].args[0].id        
-        
+        red_axis = red_rhs[1].args[0].id
+
         rhs_fields = self._extract_fields(red_expr)
-        test = [red_expr.fun.id]
 
-        rhs_fields_sym = [itir.Sym(id=field + "_param") for field in rhs_fields]
+        rhs_lambda = itir.Lambda(
+            params=[itir.Sym(id="base")] + [itir.Sym(id=field + "_param") for field in rhs_fields],
+            expr=self._make_lamba_rhs(self._remove_field_accesses(red_expr)),
+        )
+        shift_fun = ItirFunCallFactory(
+            fun=ItirFunCallFactory(name="shift", args=[itir.OffsetLiteral(value=red_axis)]),
+            args=[itir.SymRef(id=field) for field in rhs_fields],
+        )
+        reduce_call = ItirFunCallFactory(
+            fun=ItirFunCallFactory(name="reduce", args=[rhs_lambda, itir.IntLiteral(value=0.0)]),
+            args=[shift_fun],
+        )
 
-        rhs_lambda = itir.Lambda(params=[itir.Sym(id="base")] + rhs_fields_sym, 
-                        expr=self._make_lamba_rhs(self._remove_field_accesses(red_expr)))
-
-        nbh_sum_call = ItirFunCallFactory(name="reduce", args=[rhs_lambda, itir.IntLiteral(value=0.)])               
-        shift_fun = ItirFunCallFactory(fun=ItirFunCallFactory(name="shift",args=[itir.OffsetLiteral(value=red_axis)]), args=[itir.SymRef(id=field) for field in rhs_fields])
-        total_call = ItirFunCallFactory(fun=nbh_sum_call, args=[shift_fun])
-
-        return total_call
+        return reduce_call
 
     def visit_Call(self, node: foast.Call, **kwargs) -> itir.FunCall:
         if node.func.id in FUN_BUILTIN_NAMES:

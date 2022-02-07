@@ -497,7 +497,8 @@ V2E = offset("V2E")
 
 from devtools import debug
 
-def test_reduction_lowering():
+
+def test_reduction_lowering_simple():
     def reduction(edge_f: Field[[Edge], "float64"]):
         return nbh_sum(edge_f(V2E), axis=V2E)
 
@@ -507,39 +508,89 @@ def test_reduction_lowering():
     # debug(lowered)
 
     assert lowered.expr == itir.FunCall(
-            fun=itir.FunCall(
-                fun=itir.SymRef(id="reduce"),
-                args=[
-                    itir.Lambda(
-                        params=[
-                            itir.Sym(id='base'),
-                            itir.Sym(id='edge_f_param'),
-                        ],
-                        expr=itir.FunCall(
-                            fun=PLUS,
-                            args=[
-                                itir.SymRef(id='base'),
-                                itir.SymRef(id='edge_f_param'),
-                            ],
-                        ),
-                    ),
-                    itir.IntLiteral(value=0),
-                ],
-            ),
+        fun=itir.FunCall(
+            fun=itir.SymRef(id="reduce"),
             args=[
-                itir.FunCall(
-                    fun=itir.FunCall(
-                        fun=itir.SymRef(id='shift'),
+                itir.Lambda(
+                    params=[
+                        itir.Sym(id="base"),
+                        itir.Sym(id="edge_f_param"),
+                    ],
+                    expr=itir.FunCall(
+                        fun=PLUS,
                         args=[
-                            itir.OffsetLiteral(value='V2E'),
+                            itir.SymRef(id="base"),
+                            itir.SymRef(id="edge_f_param"),
                         ],
                     ),
+                ),
+                itir.IntLiteral(value=0),
+            ],
+        ),
+        args=[
+            itir.FunCall(
+                fun=itir.FunCall(
+                    fun=itir.SymRef(id="shift"),
                     args=[
-                        itir.SymRef(id='edge_f'),
+                        itir.OffsetLiteral(value="V2E"),
                     ],
                 ),
+                args=[
+                    itir.SymRef(id="edge_f"),
+                ],
+            ),
+        ],
+    )
+
+
+def test_reduction_lowering_expr():
+    def reduction(e1: Field[[Edge], "float64"], e2: Field[[Edge], "float64"]):
+        return nbh_sum(e1 + e2, axis=V2E)
+
+    parsed = FieldOperatorParser.apply_to_function(reduction)
+    lowered = FieldOperatorLowering.apply(parsed)
+
+    # debug(lowered)
+
+    assert lowered.expr == itir.FunCall(
+        fun=itir.FunCall(
+            fun=itir.SymRef(id="reduce"),
+            args=[
+                itir.Lambda(
+                    params=[itir.Sym(id="base"), itir.Sym(id="e1_param"), itir.Sym(id="e2_param")],
+                    expr=itir.FunCall(
+                        fun=PLUS,
+                        args=[
+                            itir.SymRef(id="base"),
+                            itir.FunCall(
+                                fun=PLUS,
+                                args=[
+                                    itir.SymRef(id="e1_param"),
+                                    itir.SymRef(id="e2_param"),
+                                ],
+                            ),
+                        ],
+                    ),
+                ),
+                itir.IntLiteral(value=0),
             ],
-        )    
+        ),
+        args=[
+            itir.FunCall(
+                fun=itir.FunCall(
+                    fun=itir.SymRef(id="shift"),
+                    args=[
+                        itir.OffsetLiteral(value="V2E"),
+                    ],
+                ),
+                args=[
+                    itir.SymRef(id="e1"),
+                    itir.SymRef(id="e2"),
+                ],
+            ),
+        ],
+    )
+
 
 def test_bool_and():
     def bool_and(a: Field[..., "bool"], b: Field[..., "bool"]):
