@@ -58,6 +58,7 @@ ScalarSymbol = Symbol[ScalarTypeT]
 TupleTypeT = TypeVar("TupleTypeT", bound=common_types.TupleType)
 TupleSymbol = Symbol[TupleTypeT]
 
+
 class Expr(LocatedNode):
     type: Optional[common_types.SymbolType] = None  # noqa A003
 
