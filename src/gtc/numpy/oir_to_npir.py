@@ -163,6 +163,16 @@ class OirToNpir(NodeTranslator):
             right = npir.Broadcast(expr=right, dims=3)
         return npir.VectorAssign(left=left, right=right, mask=mask)
 
+    def visit_While(
+        self, node: oir.While, *, mask: Optional[npir.Expr] = None, **kwargs: Any
+    ) -> npir.While:
+        cond = self.visit(node.cond, mask=mask, **kwargs)
+        if mask:
+            mask = npir.VectorLogic(op=common.LogicalOperator.AND, left=mask, right=cond)
+        else:
+            mask = cond
+        return npir.While(cond=cond, body=self.visit(node.body, mask=mask, **kwargs))
+
     # --- Control Flow ---
     def visit_HorizontalExecution(
         self,
