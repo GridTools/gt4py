@@ -14,7 +14,7 @@ jobs:
     strategy:
       matrix:
         python-version: ["3.10"]
-        tox-env-factors: ["", "atlas"]
+        tox-env-factors: ["base", "atlas"]
 
     steps:
     - uses: actions/checkout@v2
@@ -39,9 +39,8 @@ jobs:
         pyversion_no_dot="${{ matrix.python-version }}"
         pyversion_no_dot="${pyversion_no_dot/./}"
         tox_env_factor="${{ matrix.tox-env-factors }}"
-        if [ ! -z ${tox_env_factor} ]; then tox_env_factor="-${tox_env_factor}"; fi
         pip install tox clang-format
-        tox -r -e py${pyversion_no_dot}${tox_env_factor}
+        tox -r -e py${pyversion_no_dot}-${tox_env_factor}
     - name: Archive code coverage results
       uses: actions/upload-artifact@v2
       with:
