@@ -14,7 +14,7 @@
 
 
 import re
-from typing import Optional, Union
+from typing import Generic, Optional, TypeVar, Union
 
 import eve
 from eve import Node
@@ -37,30 +37,26 @@ class SymbolName(eve.traits.SymbolName):
     regex = re.compile(r"^[a-zA-Z_][\w$]*$")
 
 
-class Symbol(LocatedNode):
+SymbolT = TypeVar("SymbolT", bound=common_types.SymbolType)
+
+
+class Symbol(eve.GenericNode, LocatedNode, Generic[SymbolT]):
     id: SymbolName  # noqa: A003
-    type: common_types.SymbolType  # noqa A003
+    type: Union[SymbolT, common_types.DeferredSymbolType]  # noqa A003
     namespace: Namespace = Namespace(Namespace.LOCAL)
 
 
-class DataSymbol(Symbol):
-    type: Union[common_types.DataType, common_types.DeferredSymbolType]  # noqa A003
+DataTypeT = TypeVar("DataTypeT", bound=common_types.DataType)
+DataSymbol = Symbol[DataTypeT]
 
+FieldTypeT = TypeVar("FieldTypeT", bound=common_types.FieldType)
+FieldSymbol = Symbol[FieldTypeT]
 
-class FieldSymbol(DataSymbol):
-    type: Union[common_types.FieldType, common_types.DeferredSymbolType]  # noqa A003
+ScalarTypeT = TypeVar("ScalarTypeT", bound=common_types.ScalarType)
+ScalarSymbol = Symbol[ScalarTypeT]
 
-
-class TupleSymbol(DataSymbol):
-    type: Union[common_types.TupleType, common_types.DeferredSymbolType]  # noqa A003
-
-
-class Function(Symbol):
-    type: common_types.FunctionType  # noqa A003
-
-
-class OffsetSymbol(Symbol):
-    type: common_types.OffsetType  # noqa A003
+TupleTypeT = TypeVar("TupleTypeT", bound=common_types.TupleType)
+TupleSymbol = Symbol[TupleTypeT]
 
 
 class Expr(LocatedNode):
@@ -166,7 +162,7 @@ class ExternalImport(Stmt):
 
 
 class Assign(Stmt):
-    target: Symbol
+    target: Union[FieldSymbol, TupleSymbol]
     value: Expr
 
 

@@ -168,22 +168,20 @@ def make_symbol_type_from_typing(
 def make_symbol_from_value(
     name: str, value: Any, namespace: foast.Namespace, location: SourceLocation
 ) -> foast.Symbol:
-    if not isinstance(value, type) or type(value).__module__ != "typing":
-        value = typingx.get_typing(value, annotate_callable_kwargs=True)
+    """Make a symbol node from a Python value."""
+    if isinstance(value, type) or type(value).__module__ == "typing":
+        # we don't have types of types so disallow this
+        raise ValueError("The type of a symbol can not be a type itself.")
+    type_ = typingx.get_typing(value, annotate_callable_kwargs=True)
 
-    symbol_type = make_symbol_type_from_typing(value)
+    symbol_type = make_symbol_type_from_typing(type_)
 
-    if isinstance(symbol_type, common_types.DataType):
-        return foast.DataSymbol(id=name, type=symbol_type, namespace=namespace, location=location)
-    elif isinstance(symbol_type, common_types.FunctionType):
-        return foast.Function(
-            id=name,
-            type=symbol_type,
-            namespace=namespace,
-            location=location,
+    if isinstance(
+        symbol_type, (common_types.DataType, common_types.FunctionType, common_types.OffsetType)
+    ):
+        return foast.Symbol[type(symbol_type)](
+            id=name, type=symbol_type, namespace=namespace, location=location
         )
-    elif isinstance(symbol_type, common_types.OffsetType):
-        return foast.OffsetSymbol(id=name, type=symbol_type, namespace=namespace, location=location)
     else:
         raise common.GTTypeError(f"Impossible to map '{value}' value to a Symbol")
 
