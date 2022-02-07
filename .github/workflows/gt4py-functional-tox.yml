@@ -39,6 +39,6 @@ jobs:
         pyversion_no_dot="${{ matrix.python-version }}"
         pyversion_no_dot="${pyversion_no_dot/./}"
         tox_env_factor="${{ matrix.tox-env-factors }}"
-        if [ -n ${tox_env_factor} ]; then tox_env_factor="-${tox_env_factor}"; fi
+        if [ ! -z ${tox_env_factor} ]; then tox_env_factor="-${tox_env_factor}"; fi
         pip install tox clang-format
         tox -r -e py${pyversion_no_dot}${tox_env_factor}
