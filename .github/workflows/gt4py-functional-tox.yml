@@ -42,3 +42,8 @@ jobs:
         if [ ! -z ${tox_env_factor} ]; then tox_env_factor="-${tox_env_factor}"; fi
         pip install tox clang-format
         tox -r -e py${pyversion_no_dot}${tox_env_factor}
+    - name: Archive code coverage results
+      uses: actions/upload-artifact@v2
+      with:
+        name: code-coverage-report
+        path: tests/_reports/
