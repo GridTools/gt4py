@@ -55,6 +55,8 @@ FieldSymbol = Symbol[FieldTypeT]
 ScalarTypeT = TypeVar("ScalarTypeT", bound=common_types.ScalarType)
 ScalarSymbol = Symbol[ScalarTypeT]
 
+TupleTypeT = TypeVar("TupleTypeT", bound=common_types.TupleType)
+TupleSymbol = Symbol[TupleTypeT]
 
 class Expr(LocatedNode):
     type: Optional[common_types.SymbolType] = None  # noqa A003
@@ -159,7 +161,7 @@ class ExternalImport(Stmt):
 
 
 class Assign(Stmt):
-    target: FieldSymbol
+    target: Union[FieldSymbol, TupleSymbol]
     value: Expr
 
 
