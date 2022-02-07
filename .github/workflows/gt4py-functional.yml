@@ -33,7 +33,7 @@ jobs:
     - name: Test
       run: |
         python -m pytest --cache-clear --cov -- tests/
-        python -m pytest --cov --cov-append --doctest-modules -- src/
+        python -m pytest --doctest-modules --cov --cov-append -- src/
     - name: Archive code coverage results
       uses: actions/upload-artifact@v2
       with:
