@@ -51,7 +51,7 @@ class MaskStmtMerging(NodeTranslator):
     # Stmt node types with lists of Stmts within them:
 
     def visit_MaskStmt(self, node: oir.MaskStmt) -> oir.MaskStmt:
-        return oir.MaskStmt(mask=node.mask, body=self._merge(node.body))
+        return oir.MaskStmt(mask=node.mask, body=self._merge(node.body), loc=node.loc)
 
     def visit_While(self, node: oir.While) -> oir.While:
         body_nodes = []

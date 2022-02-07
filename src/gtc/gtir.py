@@ -146,11 +146,7 @@ class ScalarIfStmt(common.IfStmt[BlockStmt, Expr], Stmt):
 
 
 class While(common.While[Stmt, Expr], Stmt):
-    """
-    While loop with a field or scalar expression as condition.
-
-    No special rules apply.
-    """
+    """While loop with a field or scalar expression as condition."""
 
     @validator("body")
     def _no_write_and_read_with_horizontal_offset_all(
