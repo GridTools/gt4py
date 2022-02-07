@@ -41,6 +41,8 @@ if TYPE_CHECKING:
 
 @dataclass
 class ModuleData:
+    # TODO(jdahm): When the legacy backends are removed, these no longer need to be Optional
+    # NOTE: The GTC backends always generate non-None values for these.
     field_info: Dict[str, Optional[FieldInfo]] = field(default_factory=dict)
     parameter_info: Dict[str, Optional[ParameterInfo]] = field(default_factory=dict)
     unreferenced: List[str] = field(default_factory=list)
@@ -172,9 +174,14 @@ def make_args_data_from_gtir(pipeline: GtirPipeline, legacy=False) -> ModuleData
     unref_params = get_unused_params_from_gtir(pipeline)
     for param in sorted(unref_params, key=lambda decl: decl.name):
         if isinstance(param, gtir.FieldDecl):
-            data.field_info[param.name] = None
+            data.field_info[param.name] = FieldInfo(
+                access=AccessKind.NONE,
+                boundary=Boundary.zeros(ndims=2),
+                data_dims=param.data_dims,
+                dtype=param.dtype,
+            )
         elif isinstance(param, gtir.ScalarDecl):
-            data.parameter_info[param.name] = None
+            data.parameter_info[param.name] = ParameterInfo(dtype=param.dtype)
 
     data.unreferenced = [*sorted(param.name for param in unref_params)]
     return data
