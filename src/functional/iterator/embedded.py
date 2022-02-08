@@ -421,11 +421,12 @@ class LocatedField:
     Axis keys can be any objects that are hashable.
     """
 
-    def __init__(self, getter, axises, *, setter=None, array=None):
+    def __init__(self, getter, axises, dtype, *, setter=None, array=None):
         self.getter = getter
         self.axises = axises
         self.setter = setter
         self.array = array
+        self.dtype = dtype
 
     def __getitem__(self, indices):
         indices = tupelize(indices)
@@ -496,7 +497,7 @@ def np_as_located_field(*axises, origin=None):
         def getter(indices):
             return a[_tupsum(indices, offsets)]
 
-        return LocatedField(getter, axises, setter=setter, array=a.__array__)
+        return LocatedField(getter, axises, dtype=a.dtype, setter=setter, array=a.__array__)
 
     return _maker
 
@@ -537,6 +538,77 @@ def shifted_scan_arg(k_pos):
         return ScanArgIterator(it, k_pos=k_pos)
 
     return impl
+
+
+def is_located_field(field) -> bool:
+    return isinstance(field, LocatedField)  # TODO define on concept, not on concrete model
+
+
+def has_uniform_tuple_element(field) -> bool:
+    return field.dtype.fields is not None and all(
+        next(iter(field.dtype.fields))[0] == f[0] for f in iter(field.dtype.fields)
+    )
+
+
+def is_tuple_of_field(field) -> bool:
+    return isinstance(field, tuple) and all(is_located_field(f) for f in field)
+
+
+def is_field_of_tuple(field) -> bool:
+    return is_located_field(field) and has_uniform_tuple_element(field)
+
+
+def can_be_tuple_field(field) -> bool:
+    return is_tuple_of_field(field) or is_field_of_tuple(field)
+
+
+class TupleFieldMeta(type):
+    # @abstractmethod
+    # def __getitem__(self, indices):
+    #     pass
+
+    # @abstractmethod
+    # def __setitem__(self, indices, value):
+    #     pass
+
+    # @classmethod
+    def __instancecheck__(self, arg):
+        return super().__instancecheck__(arg) or is_field_of_tuple(arg)
+
+
+class TupleField(metaclass=TupleFieldMeta):
+    pass
+
+
+class TupleOfFields(TupleField):
+    def __init__(self, data):
+        if not is_tuple_of_field(data):
+            raise TypeError("Can only be instantiated with a tuple of fields")
+        self.data = data
+
+    def __getitem__(self, indices):
+        return tuple(f[indices] for f in self.data)
+
+    def __setitem__(self, indices, value):
+        if not isinstance(value, tuple):
+            raise RuntimeError("Value needs to be tuple.")
+        if len(value) != len(self.data):
+            raise RuntimeError(
+                f"Tuple of incompatible size, expected tuple of len={len(self.data)}, got len={len(value)}"
+            )
+
+        for f, v in zip(self.data, value):
+            f[indices] = v
+
+
+def as_tuple_field(field):
+    assert can_be_tuple_field(field)
+
+    if is_tuple_of_field(field):
+        return TupleOfFields(field)
+
+    assert isinstance(field, TupleField)  # e.g. field of tuple is already TupleField
+    return field
 
 
 def fendef_embedded(fun, *args, **kwargs):  # noqa: 536
