@@ -41,10 +41,8 @@ if TYPE_CHECKING:
 
 @dataclass
 class ModuleData:
-    # TODO(jdahm): When the legacy backends are removed, these no longer need to be Optional
-    # NOTE: The GTC backends always generate non-None values for these.
-    field_info: Dict[str, Optional[FieldInfo]] = field(default_factory=dict)
-    parameter_info: Dict[str, Optional[ParameterInfo]] = field(default_factory=dict)
+    field_info: Dict[str, FieldInfo] = field(default_factory=dict)
+    parameter_info: Dict[str, ParameterInfo] = field(default_factory=dict)
     unreferenced: List[str] = field(default_factory=list)
 
     @property
@@ -80,24 +78,18 @@ def make_args_data_from_iir(implementation_ir: gt_ir.StencilImplementation) -> M
                 access |= AccessKind.READ
             if arg.name in out_fields:
                 access |= AccessKind.WRITE
-            if arg.name not in implementation_ir.unreferenced:
-                field_decl = implementation_ir.fields[arg.name]
-                data.field_info[arg.name] = FieldInfo(
-                    access=access,
-                    boundary=implementation_ir.fields_extents[arg.name].to_boundary(),
-                    axes=tuple(field_decl.axes),
-                    data_dims=tuple(field_decl.data_dims),
-                    dtype=field_decl.data_type.dtype,
-                )
-            else:
-                data.field_info[arg.name] = None
+            field_decl = implementation_ir.fields[arg.name]
+            data.field_info[arg.name] = FieldInfo(
+                access=access,
+                boundary=implementation_ir.fields_extents[arg.name].to_boundary(),
+                axes=tuple(field_decl.axes),
+                data_dims=tuple(field_decl.data_dims),
+                dtype=field_decl.data_type.dtype,
+            )
         else:
-            if arg.name not in implementation_ir.unreferenced:
-                data.parameter_info[arg.name] = ParameterInfo(
-                    dtype=implementation_ir.parameters[arg.name].data_type.dtype
-                )
-            else:
-                data.parameter_info[arg.name] = None
+            data.parameter_info[arg.name] = ParameterInfo(
+                dtype=implementation_ir.parameters[arg.name].data_type.dtype
+            )
 
     data.unreferenced = implementation_ir.unreferenced
 
@@ -176,12 +168,15 @@ def make_args_data_from_gtir(pipeline: GtirPipeline, legacy=False) -> ModuleData
         if isinstance(param, gtir.FieldDecl):
             data.field_info[param.name] = FieldInfo(
                 access=AccessKind.NONE,
-                boundary=Boundary.zeros(ndims=2),
+                boundary=Boundary.zeros(ndims=3),
+                axes=tuple(dimension_flags_to_names(param.dimensions).upper()),
                 data_dims=param.data_dims,
-                dtype=param.dtype,
+                dtype=numpy.dtype(param.dtype.name.lower()),
             )
         elif isinstance(param, gtir.ScalarDecl):
-            data.parameter_info[param.name] = ParameterInfo(dtype=param.dtype)
+            data.parameter_info[param.name] = ParameterInfo(
+                dtype=numpy.dtype(param.dtype.name.lower())
+            )
 
     data.unreferenced = [*sorted(param.name for param in unref_params)]
     return data
