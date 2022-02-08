@@ -420,7 +420,7 @@ class StencilObject(abc.ABC):
 
         # Set an appropriate origin for all fields
         for name, field_info in self.field_info.items():
-            if field_info is not None:
+            if field_info.access != AccessKind.NONE:
                 assert name in field_args, f"Missing value for '{name}' field."
                 field_origin = origin.get(name, None)
 

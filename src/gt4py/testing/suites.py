@@ -29,7 +29,7 @@ from gt4py import backend as gt_backend
 from gt4py import gtscript
 from gt4py import storage as gt_storage
 from gt4py import utils as gt_utils
-from gt4py.definitions import Boundary, CartesianSpace, FieldInfo, Shape
+from gt4py.definitions import AccessKind, Boundary, CartesianSpace, FieldInfo, Shape
 from gt4py.ir.nodes import Index
 from gt4py.stencil_object import StencilObject
 from gt4py.utils import filter_mask, interpolate_mask
@@ -459,7 +459,7 @@ class StencilTestSuite(metaclass=SuiteMeta):
         assert implementation.backend == test["backend"]
 
         for name, field_info in implementation.field_info.items():
-            if field_info is None:
+            if field_info.access == AccessKind.NONE:
                 continue
             for i, ax in enumerate("IJK"):
                 assert (
