@@ -15,6 +15,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import abc
+import itertools
 import numbers
 import os
 import textwrap
@@ -47,13 +48,13 @@ class ModuleData:
 
     @property
     def field_names(self) -> Set[str]:
-        """Set of field names that are referenced."""
-        return {name for name in self.field_info if name not in self.unreferenced}
+        """Set of all field names."""
+        return set(self.field_info.keys())
 
     @property
     def parameter_names(self) -> Set[str]:
-        """Set of parameter names that are referenced."""
-        return {name for name in self.parameter_info if name not in self.unreferenced}
+        """Set of all parameter names."""
+        return set(self.parameter_info.keys())
 
 
 def make_args_data_from_iir(implementation_ir: gt_ir.StencilImplementation) -> ModuleData:
@@ -137,7 +138,11 @@ def make_args_data_from_gtir(pipeline: GtirPipeline, legacy=False) -> ModuleData
     )
 
     read_fields: Set[str] = set()
-    for expr in node.iter_tree().if_isinstance(gtir.ParAssignStmt).getattr("right"):
+    read_exprs = itertools.chain(
+        node.iter_tree().if_isinstance(gtir.ParAssignStmt).getattr("right"),
+        node.iter_tree().if_isinstance(gtir.FieldIfStmt).getattr("cond"),
+    )
+    for expr in read_exprs:
         read_fields |= expr.iter_tree().if_isinstance(gtir.FieldAccess).getattr("name").to_set()
 
     referenced_field_params = [
