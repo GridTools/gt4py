@@ -19,8 +19,8 @@ regular Python functions. GT4Py is part of the GridTools framework, a
 set of libraries and utilities to develop performance portable
 applications in the area of weather and climate.
 
-**NOTE:** this is a development branch for a new experimental version
-of GT4Py working only unstructured meshes and Python 3.10. The more stable
+**NOTE:** this is a development branch for a new and experimental version
+of GT4Py working only with unstructured meshes and Python 3.10. The more stable
 version of GT4Py for cartesian meshes lives in the ``master`` branch.
 
 
@@ -35,7 +35,7 @@ new virtual environment to work on this project.
 Recommended installation using ``tox``
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-If ``tox`` is already installed in your system (``tox`` is available in *PyPI*
+If ``tox`` is already installed in your system (``tox`` is available in PyPI
 and many other package managers), the easiest way to create
 a virtual environment ready for development is::
 
