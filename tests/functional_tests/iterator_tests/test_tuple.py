@@ -133,8 +133,6 @@ def test_field_of_tuple_input(backend):
     inp1 = rng.normal(rng.normal(size=(shape[0], shape[1], shape[2])))
     inp2 = rng.normal(rng.normal(size=(shape[0], shape[1], shape[2])))
     inp = np.asarray(list(zip(inp1, inp2)))
-    print(inp)
-    # exit()
     inp = np.zeros(shape, dtype="f8, f8")
     for i in range(shape[0]):
         for j in range(shape[1]):

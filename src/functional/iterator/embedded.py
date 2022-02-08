@@ -492,6 +492,7 @@ def np_as_located_field(*axises, origin=None):
             offsets = tuple(0 for _ in axises)
 
         def setter(indices, value):
+            indices = tupelize(indices)
             a[_tupsum(indices, offsets)] = value
 
         def getter(indices):

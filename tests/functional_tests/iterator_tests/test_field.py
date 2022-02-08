@@ -8,14 +8,13 @@ def make_located_field(dtype=np.float64):
     return embedded.np_as_located_field("foo", "bar")(np.zeros((1, 1), dtype=dtype))
 
 
-# TODO fix implementation
-# def test_located_field_1d():
-#     foo = embedded.np_as_located_field("foo")(np.zeros((1,)))
+def test_located_field_1d():
+    foo = embedded.np_as_located_field("foo")(np.zeros((1,)))
 
-#     foo[0] = 42
+    foo[0] = 42
 
-#     assert foo.axises[0] == "foo"
-#     assert foo[0] == 42
+    assert foo.axises[0] == "foo"
+    assert foo[0] == 42
 
 
 def test_located_field_2d():
@@ -49,7 +48,7 @@ def test_field_of_tuple():
 
 def test_tuple_of_field():
     tuple_of_fields = embedded.TupleOfFields((make_located_field(), make_located_field()))
-    # assert isinstance(tuple_of_fields, embedded.TupleField)
+    assert isinstance(tuple_of_fields, embedded.TupleField)
 
     tuple_of_fields[0, 0] = (42, 43)
     assert tuple_of_fields[0, 0] == (42, 43)
