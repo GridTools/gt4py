@@ -224,12 +224,12 @@ class FieldOperatorTypeDeduction(NodeTranslator):
         new_target = self.visit(node.target, refine_type=new_value.type, **kwargs)
         return foast.Assign(target=new_target, value=new_value, location=node.location)
 
-    def visit_FieldSymbol(
+    def visit_Symbol(
         self,
-        node: foast.FieldSymbol,
+        node: foast.Symbol,
         refine_type: Optional[common_types.FieldType] = None,
         **kwargs,
-    ) -> foast.FieldSymbol:
+    ) -> foast.Symbol:
         symtable = kwargs["symtable"]
         if refine_type:
             if not TypeInfo(node.type).can_be_refined_to(TypeInfo(refine_type)):
@@ -240,28 +240,9 @@ class FieldOperatorTypeDeduction(NodeTranslator):
                         f"of type {refine_type}, instead of the expected type {node.type}"
                     ),
                 )
-            new_node = foast.FieldSymbol(id=node.id, type=refine_type, location=node.location)
-            symtable[new_node.id] = new_node
-            return new_node
-        return node
-
-    def visit_TupleSymbol(
-        self,
-        node: foast.TupleSymbol,
-        refine_type: Optional[common_types.TupleType] = None,
-        **kwargs,
-    ) -> foast.TupleSymbol:
-        symtable = kwargs["symtable"]
-        if refine_type:
-            if not TypeInfo(node.type).can_be_refined_to(TypeInfo(refine_type)):
-                raise FieldOperatorTypeDeductionError.from_foast_node(
-                    node,
-                    msg=(
-                        "type inconsistency: expression was deduced to be "
-                        f"of type {refine_type}, instead of the expected type {node.type}"
-                    ),
-                )
-            new_node = foast.TupleSymbol(id=node.id, type=refine_type, location=node.location)
+            new_node = foast.Symbol[type(refine_type)](
+                id=node.id, type=refine_type, location=node.location
+            )
             symtable[new_node.id] = new_node
             return new_node
         return node
@@ -277,9 +258,7 @@ class FieldOperatorTypeDeduction(NodeTranslator):
                 location=node.location,
             )
         match new_value.type:
-            case common_types.TupleType(types=types) | common_types.FunctionType(
-                returns=common_types.TupleType(types=types)
-            ):
+            case common_types.TupleType(types=types):
                 new_type = types[node.index]
             case _:
                 raise FieldOperatorTypeDeductionError.from_foast_node(
