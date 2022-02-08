@@ -1,8 +1,8 @@
 |tox| |format|
 
-.. |tox| image:: https://github.com/GridTools/gt4py/workflows/Tox/badge.svg?branch=functional
+.. |tox| image:: https://github.com/GridTools/gt4py/actions/workflows/gt4py-functional-tox.yml/badge.svg?branch=functional
    :alt:
-.. |format| image:: https://github.com/GridTools/gt4py/workflows/Formatting%20&%20compliance/badge.svg?branch=functional
+.. |format| image:: https://github.com/GridTools/gt4py/actions/workflows/gt4py-functional-precommit.yml/badge.svg?branch=functional
    :alt:
 
 
