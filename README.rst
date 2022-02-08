@@ -35,7 +35,7 @@ new virtual environment to work on this project.
 Recommended installation using ``tox``
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-If ``tox`` is already installed in your system (`tox` is available in `PyPI`
+If ``tox`` is already installed in your system (``tox`` is available in *PyPI*
 and many other package managers), the easiest way to create
 a virtual environment ready for development is::
 
