@@ -458,7 +458,6 @@ class StencilTestSuite(metaclass=SuiteMeta):
         assert isinstance(implementation, StencilObject)
         assert implementation.backend == test["backend"]
 
-        # Assert strict equality for Dawn backends
         for name, field_info in implementation.field_info.items():
             if field_info is None:
                 continue
