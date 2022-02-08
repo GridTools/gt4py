@@ -88,7 +88,12 @@ def make_args_data_from_iir(implementation_ir: gt_ir.StencilImplementation) -> M
             )
         else:
             data.parameter_info[arg.name] = ParameterInfo(
-                dtype=implementation_ir.parameters[arg.name].data_type.dtype
+                access=(
+                    AccessKind.NONE
+                    if arg.name in implementation_ir.unreferenced
+                    else AccessKind.READ
+                ),
+                dtype=implementation_ir.parameters[arg.name].data_type.dtype,
             )
 
     data.unreferenced = implementation_ir.unreferenced
@@ -160,7 +165,7 @@ def make_args_data_from_gtir(pipeline: GtirPipeline, legacy=False) -> ModuleData
     ]
     for name in sorted(referenced_scalar_params):
         data.parameter_info[name] = ParameterInfo(
-            dtype=numpy.dtype(node.symtable_[name].dtype.name.lower())
+            access=AccessKind.READ, dtype=numpy.dtype(node.symtable_[name].dtype.name.lower())
         )
 
     unref_params = get_unused_params_from_gtir(pipeline)
@@ -175,7 +180,7 @@ def make_args_data_from_gtir(pipeline: GtirPipeline, legacy=False) -> ModuleData
             )
         elif isinstance(param, gtir.ScalarDecl):
             data.parameter_info[param.name] = ParameterInfo(
-                dtype=numpy.dtype(param.dtype.name.lower())
+                access=AccessKind.NONE, dtype=numpy.dtype(param.dtype.name.lower())
             )
 
     data.unreferenced = [*sorted(param.name for param in unref_params)]

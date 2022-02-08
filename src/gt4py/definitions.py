@@ -700,7 +700,14 @@ class FieldInfo:
 
 @dataclass(frozen=True)
 class ParameterInfo:
+    # NOTE: Parameters are read-only, so the possible values are AccessType.NONE and AccessType.READ.
+    access: AccessKind
     dtype: numpy.dtype
+
+    def __repr__(self):
+        return "ParameterInfo(access=AccessKind.{access}, dtype={dtype})".format(
+            access=self.access.name, dtype=repr(self.dtype)
+        )
 
 
 @attribkwclass
