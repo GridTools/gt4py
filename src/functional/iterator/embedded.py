@@ -552,7 +552,9 @@ def has_uniform_tuple_element(field) -> bool:
 
 
 def is_tuple_of_field(field) -> bool:
-    return isinstance(field, tuple) and all(is_located_field(f) for f in field)
+    return isinstance(field, tuple) and all(
+        is_located_field(f) or is_tuple_of_field(f) for f in field
+    )
 
 
 def is_field_of_tuple(field) -> bool:
@@ -581,28 +583,53 @@ class TupleField(metaclass=TupleFieldMeta):
     pass
 
 
+def _get_axeses(field):
+    if isinstance(field, tuple):
+        return tuple(itertools.chain(*tuple(_get_axeses(f) for f in field)))
+    else:
+        assert is_located_field(field)
+        return (field.axises,)
+
+
+def _build_tuple_result(field, indices):
+    if isinstance(field, tuple):
+        return tuple(_build_tuple_result(f, indices) for f in field)
+    else:
+        assert is_located_field(field)
+        return field[indices]
+
+
+def _tuple_assign(field, value, indices):
+    if isinstance(field, tuple):
+        if len(field) != len(value):
+            raise RuntimeError(
+                f"Tuple of incompatible size, expected tuple of len={len(field)}, got len={len(value)}"
+            )
+        for f, v in zip(field, value):
+            _tuple_assign(f, v, indices)
+    else:
+        assert is_located_field(field)
+        field[indices] = value
+
+
 class TupleOfFields(TupleField):
     def __init__(self, data):
         if not is_tuple_of_field(data):
             raise TypeError("Can only be instantiated with a tuple of fields")
         self.data = data
-        if not all(f.axises == data[0].axises for f in data):
+        axeses = _get_axeses(data)
+        if not all(axises == axeses[0] for axises in axeses):
             raise TypeError("All fields in the tuple need the same axises.")
-        self.axises = data[0].axises
+        self.axises = axeses[0]
 
     def __getitem__(self, indices):
-        return tuple(f[indices] for f in self.data)
+        return _build_tuple_result(self.data, indices)
 
     def __setitem__(self, indices, value):
         if not isinstance(value, tuple):
             raise RuntimeError("Value needs to be tuple.")
-        if len(value) != len(self.data):
-            raise RuntimeError(
-                f"Tuple of incompatible size, expected tuple of len={len(self.data)}, got len={len(value)}"
-            )
 
-        for f, v in zip(self.data, value):
-            f[indices] = v
+        _tuple_assign(self.data, value, indices)
 
 
 def as_tuple_field(field):
@@ -620,6 +647,8 @@ def fendef_embedded(fun, *args, **kwargs):  # noqa: 536
 
     @iterator.runtime.closure.register(EMBEDDED)
     def closure(domain, sten, out, ins):  # domain is Dict[axis, range]
+        if not (is_located_field(out) or can_be_tuple_field(out)):
+            raise TypeError("Out needs to be a located field.")
 
         column = None
         if "column_axis" in kwargs:

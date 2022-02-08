@@ -64,6 +64,93 @@ def test_tuple_output(backend, stencil):
         assert np.allclose(inp2, out[1])
 
 
+def test_tuple_of_field_of_tuple_output(backend):
+    backend, validate = backend
+
+    @fundef
+    def stencil(inp1, inp2, inp3, inp4):
+        return make_tuple(deref(inp1), deref(inp2)), make_tuple(deref(inp3), deref(inp4))
+
+    shape = [5, 7, 9]
+    rng = np.random.default_rng()
+    inp1 = np_as_located_field(IDim, JDim, KDim)(
+        rng.normal(size=(shape[0], shape[1], shape[2])),
+    )
+    inp2 = np_as_located_field(IDim, JDim, KDim)(
+        rng.normal(size=(shape[0], shape[1], shape[2])),
+    )
+    inp3 = np_as_located_field(IDim, JDim, KDim)(
+        rng.normal(size=(shape[0], shape[1], shape[2])),
+    )
+    inp4 = np_as_located_field(IDim, JDim, KDim)(
+        rng.normal(size=(shape[0], shape[1], shape[2])),
+    )
+
+    out_np1 = np.zeros(shape, dtype="f8, f8")
+    out1 = np_as_located_field(IDim, JDim, KDim)(out_np1)
+    out_np2 = np.zeros(shape, dtype="f8, f8")
+    out2 = np_as_located_field(IDim, JDim, KDim)(out_np2)
+    out = (out1, out2)
+
+    dom = {
+        IDim: range(0, shape[0]),
+        JDim: range(0, shape[1]),
+        KDim: range(0, shape[2]),
+    }
+    stencil[dom](inp1, inp2, inp3, inp4, out=out, offset_provider={}, backend=backend)
+    if validate:
+        assert np.allclose(inp1, out_np1[:]["f0"])
+        assert np.allclose(inp2, out_np1[:]["f1"])
+        assert np.allclose(inp3, out_np2[:]["f0"])
+        assert np.allclose(inp4, out_np2[:]["f1"])
+
+
+def test_tuple_of_tuple_of_field_output(backend):
+    backend, validate = backend
+
+    @fundef
+    def stencil(inp1, inp2, inp3, inp4):
+        return make_tuple(deref(inp1), deref(inp2)), make_tuple(deref(inp3), deref(inp4))
+
+    shape = [5, 7, 9]
+    rng = np.random.default_rng()
+    inp1 = np_as_located_field(IDim, JDim, KDim)(
+        rng.normal(size=(shape[0], shape[1], shape[2])),
+    )
+    inp2 = np_as_located_field(IDim, JDim, KDim)(
+        rng.normal(size=(shape[0], shape[1], shape[2])),
+    )
+    inp3 = np_as_located_field(IDim, JDim, KDim)(
+        rng.normal(size=(shape[0], shape[1], shape[2])),
+    )
+    inp4 = np_as_located_field(IDim, JDim, KDim)(
+        rng.normal(size=(shape[0], shape[1], shape[2])),
+    )
+
+    out = (
+        (
+            np_as_located_field(IDim, JDim, KDim)(np.zeros(shape)),
+            np_as_located_field(IDim, JDim, KDim)(np.zeros(shape)),
+        ),
+        (
+            np_as_located_field(IDim, JDim, KDim)(np.zeros(shape)),
+            np_as_located_field(IDim, JDim, KDim)(np.zeros(shape)),
+        ),
+    )
+
+    dom = {
+        IDim: range(0, shape[0]),
+        JDim: range(0, shape[1]),
+        KDim: range(0, shape[2]),
+    }
+    stencil[dom](inp1, inp2, inp3, inp4, out=out, offset_provider={}, backend=backend)
+    if validate:
+        assert np.allclose(inp1, out[0][0])
+        assert np.allclose(inp2, out[0][1])
+        assert np.allclose(inp3, out[1][0])
+        assert np.allclose(inp4, out[1][1])
+
+
 @pytest.mark.parametrize(
     "stencil",
     [tuple_output1, tuple_output2],
