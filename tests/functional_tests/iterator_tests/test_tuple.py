@@ -64,9 +64,6 @@ def test_tuple_output(backend, stencil):
         assert np.allclose(inp2, out[1])
 
 
-# def toa2aot(inp: Tuple[np.ndarray,...]):
-
-
 @pytest.mark.parametrize(
     "stencil",
     [tuple_output1, tuple_output2],
@@ -83,7 +80,8 @@ def test_field_of_tuple_output(backend, stencil):
         rng.normal(size=(shape[0], shape[1], shape[2])),
     )
 
-    out = np_as_located_field(IDim, JDim, KDim)(np.zeros(shape, dtype="f8, f8"))
+    out_np = np.zeros(shape, dtype="f8, f8")
+    out = np_as_located_field(IDim, JDim, KDim)(out_np)
 
     dom = {
         IDim: range(0, shape[0]),
@@ -91,9 +89,9 @@ def test_field_of_tuple_output(backend, stencil):
         KDim: range(0, shape[2]),
     }
     stencil[dom](inp1, inp2, out=out, offset_provider={}, backend=backend)
-    # if validate:
-    #     assert np.allclose(inp1, out[0])
-    #     assert np.allclose(inp2, out[1])
+    if validate:
+        assert np.allclose(inp1, out_np[:]["f0"])
+        assert np.allclose(inp2, out_np[:]["f1"])
 
 
 @fundef
