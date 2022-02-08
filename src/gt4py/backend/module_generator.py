@@ -46,12 +46,14 @@ class ModuleData:
     unreferenced: List[str] = field(default_factory=list)
 
     @property
-    def field_names(self):
-        return self.field_info.keys()
+    def field_names(self) -> Set[str]:
+        """Set of field names that are referenced."""
+        return {name for name in self.field_info if name not in self.unreferenced}
 
     @property
-    def parameter_names(self):
-        return self.parameter_info.keys()
+    def parameter_names(self) -> Set[str]:
+        """Set of parameter names that are referenced."""
+        return {name for name in self.parameter_info if name not in self.unreferenced}
 
 
 def make_args_data_from_iir(implementation_ir: gt_ir.StencilImplementation) -> ModuleData:
