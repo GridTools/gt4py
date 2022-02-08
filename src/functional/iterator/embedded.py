@@ -362,13 +362,6 @@ class MDIterator:
     def is_none(self):
         return self.pos is None
 
-    # This would enable to make the iterator of tuple to be usable as
-    # tuple of iterator (similar to sid::composite) #noqa: E800
-    # def __getitem__(self, i):
-    #     if not isinstance(self.field, tuple):
-    #         raise RuntimeError("Cannot index a non-tuple iterator") #noqa: E800
-    #     return self.field[i] #noqa: E800
-
     def deref(self):
         shifted_pos = self.pos.copy()
         axises = self.field[0].axises if isinstance(self.field, tuple) else self.field.axises
@@ -566,15 +559,6 @@ def can_be_tuple_field(field) -> bool:
 
 
 class TupleFieldMeta(type):
-    # @abstractmethod
-    # def __getitem__(self, indices):
-    #     pass
-
-    # @abstractmethod
-    # def __setitem__(self, indices, value):
-    #     pass
-
-    # @classmethod
     def __instancecheck__(self, arg):
         return super().__instancecheck__(arg) or is_field_of_tuple(arg)
 
