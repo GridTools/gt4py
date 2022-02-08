@@ -40,7 +40,7 @@ and many other package managers), the easiest way to create
 a virtual environment ready for development is::
 
     # Clone the repository
-    git clone https://github.com/gridtools/gt4py.git
+    git clone -b functional https://github.com/gridtools/gt4py.git
     cd gt4py
 
     # Create the development environment in any location (usually `.venv`)
@@ -60,7 +60,7 @@ Installation from scratch
 Alternatively, a development environment can be created from scratch::
 
     # Clone the repository
-    git clone https://github.com/gridtools/gt4py.git
+    git clone -b functional https://github.com/gridtools/gt4py.git
     cd gt4py
 
     # Create a (Python 3.10) virtual environment (usually at `.venv`)
