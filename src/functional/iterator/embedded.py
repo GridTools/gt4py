@@ -502,8 +502,8 @@ def np_as_located_field(*axises, origin=None):
     return _maker
 
 
-def index_field(axis):
-    return LocatedField(lambda index: index[0], (axis,))
+def index_field(axis, dtype=float):
+    return LocatedField(lambda index: index[0], (axis,), dtype)
 
 
 @builtins.shift.register(EMBEDDED)
@@ -585,6 +585,9 @@ class TupleOfFields(TupleField):
         if not is_tuple_of_field(data):
             raise TypeError("Can only be instantiated with a tuple of fields")
         self.data = data
+        if not all(f.axises == data[0].axises for f in data):
+            raise TypeError("All fields in the tuple need the same axises.")
+        self.axises = data[0].axises
 
     def __getitem__(self, indices):
         return tuple(f[indices] for f in self.data)
@@ -615,7 +618,7 @@ def fendef_embedded(fun, *args, **kwargs):  # noqa: 536
     assert "offset_provider" in kwargs
 
     @iterator.runtime.closure.register(EMBEDDED)
-    def closure(domain, sten, out_, ins):  # domain is Dict[axis, range]
+    def closure(domain, sten, out, ins):  # domain is Dict[axis, range]
 
         column = None
         if "column_axis" in kwargs:
@@ -657,8 +660,9 @@ def fendef_embedded(fun, *args, **kwargs):  # noqa: 536
 
             return impl
 
+        out = as_tuple_field(out) if can_be_tuple_field(out) else out
+
         for pos in domain_iterator(domain):
-            outs = out_
             ins_iters = list(
                 make_in_iterator(
                     inp,
@@ -670,31 +674,15 @@ def fendef_embedded(fun, *args, **kwargs):  # noqa: 536
             )
             res = sten(*ins_iters)
 
-            if isinstance(res, tuple) != isinstance(out_, (tuple, list)):
-                raise IndexError("Number of return values doesn't match number of output fields.")
-            if not isinstance(res, tuple):
-                res = (res,)
-                outs = (out_,)
-                if len(outs) != len(res):
-                    raise IndexError(
-                        "Number of return values doesn't match number of output fields."
-                    )
-
-            for r, out in zip(res, outs):
-                if not isinstance(out, tuple):
-                    out = (out,)
-                    r = (r,)
-                # TODO assert all tuple elements have the same shape
-                for tup_index in range(len(out)):
-                    if column is None:
-                        ordered_indices = get_ordered_indices(out[tup_index].axises, pos)
-                        out[tup_index][ordered_indices] = r[tup_index]
-                    else:
-                        colpos = pos.copy()
-                        for k in column.range:
-                            colpos[column.axis] = k
-                            ordered_indices = get_ordered_indices(out[tup_index].axises, colpos)
-                            out[tup_index][ordered_indices] = r[tup_index][k]
+            if column is None:
+                ordered_indices = get_ordered_indices(out.axises, pos)
+                out[ordered_indices] = res
+            else:
+                colpos = pos.copy()
+                for k in column.range:
+                    colpos[column.axis] = k
+                    ordered_indices = get_ordered_indices(out.axises, colpos)
+                    out[ordered_indices] = res[k]
 
     fun(*args)
 
