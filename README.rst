@@ -13,15 +13,15 @@ GT4Py: GridTools for Python
 Description
 -----------
 
-GT4Py is a Python library for generating high performance
-implementations of stencil kernels from a high-level definition using
-regular Python functions. GT4Py is part of the GridTools framework, a
-set of libraries and utilities to develop performance portable
-applications in the area of weather and climate.
+GT4Py is a Python library for generating high performance implementations
+of stencil kernels from a high-level definition using regular Python
+functions. GT4Py is part of the GridTools framework, a set of libraries
+and utilities to develop performance portable applications in the area
+of weather and climate.
 
 **NOTE:** this is a development branch for a new and experimental version
-of GT4Py working only with unstructured meshes and Python 3.10. The more stable
-version of GT4Py for cartesian meshes lives in the ``master`` branch.
+of GT4Py working only with unstructured meshes and Python 3.10. The more
+stable version of GT4Py for cartesian meshes lives in the ``master`` branch.
 
 
 Installation instructions
@@ -30,7 +30,6 @@ Installation instructions
 GT4Py can be installed as a regular Python package using *pip* (or any
 other PEP517 frontend). As usual, we strongly recommended to create a
 new virtual environment to work on this project.
-
 
 Recommended installation using ``tox``
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -53,9 +52,8 @@ a virtual environment ready for development is::
     source .venv/bin/activate
     pytest -v
 
-
 Installation from scratch
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Alternatively, a development environment can be created from scratch::
 
@@ -75,7 +73,60 @@ Alternatively, a development environment can be created from scratch::
     pip install -e .
 
     # Optionally, install atlas4py bindigns directly from the repo
-    # pip install git+https://github.com/GridTools/atlas4py#egg=atlas4py  
+    # pip install git+https://github.com/GridTools/atlas4py#egg=atlas4py
 
     # Finally, check that everything works
     pytest -v
+
+
+Development instructions
+------------------------
+
+After following the installation instructions above, an *editable*  installation
+of the GT4Py package will be active in the virtual environment. In this mode,
+code changes are directly visible since source files are imported directly in
+the environment.
+
+Code quality checks
+~~~~~~~~~~~~~~~~~~~
+
+The ``pre-commit`` framework is used to run several formatting and linting tools.
+It should always be executed locally before opening a PR in the public repository.
+``pre-commit`` can be installed as a *git hook* to automatically check the staged
+changes before commiting::
+
+    # Install pre-commit as a git hook and set up all the tools
+    pre-commit install --install-hooks
+
+Or it can be executed on demand from the command line::
+
+    # Check only the staged changes
+    pre-commit run
+
+    # Check all the files in the repository
+    pre-commit run -a
+
+Testing
+~~~~~~~
+
+GT4Py testing uses the `pytest` framework which comes with an integrated `pytest`
+command tool to run tests easily::
+
+    # Run all tests
+    pytest -v
+
+    # Run only tests in `path/to/test/folder`
+    pytest -v path/to/test/folder
+
+However, the recommended way to run the complete test suite is to use ``tox``
+and select the appropriate test configuration::
+
+    # List all the available test environments
+    tox -a
+
+    # Run test suite in a specific environment
+    tox -e py310-base
+
+``tox`` is configured to generate test coverage reports by default. An `html`
+copy will be written in ``tests/_reports/coverage_html/`` at the end of the run.
+
