@@ -47,19 +47,19 @@ jobs:
         name: code-coverage-report
         path: tests/_reports/
 
-  artefact-upload:
-    # Info: https://smokeshow.helpmanual.io/
-    needs:
-    - tox-tests
-    runs-on: ubuntu-latest
+  # artefact-upload:
+  #   # Info: https://smokeshow.helpmanual.io/
+  #   needs:
+  #   - tox-tests
+  #   runs-on: ubuntu-latest
 
-    steps:
-    - name: install tools
-    - uses: actions/setup-python@v2
-      with:
-        python-version: '3.8'
-        cache: 'pip'
-    - run: pip install smokeshow
+  #   steps:
+  #   - name: install tools
+  #   - uses: actions/setup-python@v2
+  #     with:
+  #       python-version: '3.8'
+  #       cache: 'pip'
+  #   - run: pip install smokeshow
 
   #   - name: get coverage artifacts
   #     uses: actions/download-artifact@v2
