@@ -21,7 +21,7 @@ of weather and climate.
 
 **NOTE:** this is a development branch for a new and experimental version
 of GT4Py working only with unstructured meshes and Python 3.10. The more
-stable version of GT4Py for cartesian meshes lives in the ``master`` branch.
+stable version of GT4Py for Cartesian meshes lives in the ``master`` branch.
 
 
 Installation instructions
