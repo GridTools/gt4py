@@ -16,16 +16,11 @@ from __future__ import annotations
 
 import ast
 import copy
-import functools
-import inspect
-import symtable
 import textwrap
 import types
-from collections.abc import Callable, Iterator
 from dataclasses import dataclass
-from typing import Any, Optional, Union
+from typing import Any, Optional
 
-from eve import typingx
 from eve.type_definitions import SourceLocation
 from functional import common
 from functional.ffront import common_types, fbuiltins
@@ -39,7 +34,7 @@ from functional.ffront.ast_passes import (
 )
 from functional.ffront.foast_passes.shift_recognition import FieldOperatorShiftRecognition
 from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduction
-from functional.ffront.py_lowering_utils import SourceDefinition, ClosureRefs, SymbolNames
+from functional.ffront.py_lowering_utils import ClosureRefs, SourceDefinition, SymbolNames
 
 
 @dataclass(frozen=True, kw_only=True)

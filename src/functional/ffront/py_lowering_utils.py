@@ -26,6 +26,7 @@ from eve import typingx
 from functional import common
 from functional.ffront import fbuiltins
 
+
 MISSING_FILENAME = "<string>"
 
 
