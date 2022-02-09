@@ -67,7 +67,7 @@ def test_multicopy():
 
     reference = mi.deref(
         mi.lift(mi.lambda_("inp1", "inp2")(mi.make_tuple(mi.deref("inp1"), mi.deref("inp2"))))(
-            mi.ref("inp1"), mi.ref("inp2")
+            "inp1", "inp2"
         )
     )
 
@@ -84,7 +84,7 @@ def test_arithmetic():
 
     reference = mi.deref(
         mi.lift(mi.lambda_("inp1", "inp2")(mi.plus(mi.deref("inp1"), mi.deref("inp2"))))(
-            mi.ref("inp1"), mi.ref("inp2")
+            "inp1", "inp2"
         )
     )
 
@@ -117,13 +117,7 @@ def test_temp_assignment():
     lowered = FieldOperatorLowering.apply(parsed)
 
     reference = mi.deref(
-        mi.liftlet("tmp__0", mi.ref("inp"))(
-            mi.deref(
-                mi.liftlet("inp__0", mi.ref("tmp__0"))(
-                    mi.deref(mi.liftlet("tmp2__0", mi.ref("inp__0"))(mi.deref("tmp2__0")))
-                )
-            )
-        )
+        mi.let("tmp__0", "inp")(mi.let("inp__0", "tmp__0")(mi.let("tmp2__0", "inp__0")("tmp2__0")))
     )
 
     assert lowered.expr == reference
@@ -139,18 +133,11 @@ def test_unary_ops():
     lowered = FieldOperatorLowering.apply(parsed)
 
     reference = mi.deref(
-        mi.liftlet(
-            "tmp__0",
-            mi.lift(mi.lambda_("inp")(mi.plus(0, mi.deref("inp"))))(mi.ref("inp")),
-        )(
-            mi.deref(
-                mi.liftlet(
-                    "tmp__1",
-                    mi.lift(mi.lambda_("tmp__0")(mi.minus(0, mi.deref("tmp__0"))))(
-                        mi.ref("tmp__0")
-                    ),
-                )(mi.deref("tmp__1"))
-            )
+        mi.let("tmp__0", mi.lift(mi.lambda_("inp")(mi.plus(0, mi.deref("inp"))))("inp"),)(
+            mi.let(
+                "tmp__1",
+                mi.lift(mi.lambda_("tmp__0")(mi.minus(0, mi.deref("tmp__0"))))("tmp__0"),
+            )("tmp__1")
         )
     )
 
@@ -169,21 +156,17 @@ def test_unpacking():
 
     tuple_expr = mi.lift(
         mi.lambda_("inp1", "inp2")(mi.make_tuple(mi.deref("inp1"), mi.deref("inp2")))
-    )(mi.ref("inp1"), mi.ref("inp2"))
+    )("inp1", "inp2")
 
     tmp1_expr = mi.lift(mi.lambda_("inp1", "inp2")(mi.tuple_get(mi.deref(tuple_expr), 0)))(
-        mi.ref("inp1"), mi.ref("inp2")
+        "inp1", "inp2"
     )
 
     tmp2_expr = mi.lift(mi.lambda_("inp1", "inp2")(mi.tuple_get(mi.deref(tuple_expr), 1)))(
-        mi.ref("inp1"), mi.ref("inp2")
+        "inp1", "inp2"
     )
 
-    reference = mi.deref(
-        mi.liftlet("tmp1__0", tmp1_expr)(
-            mi.deref(mi.liftlet("tmp2__0", tmp2_expr)(mi.deref("tmp1__0")))
-        )
-    )
+    reference = mi.deref(mi.let("tmp1__0", tmp1_expr)(mi.let("tmp2__0", tmp2_expr)("tmp1__0")))
 
     assert lowered.expr == reference
 
@@ -196,7 +179,7 @@ def test_annotated_assignment():
     parsed = FieldOperatorParser.apply_to_function(copy_field)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = mi.deref(mi.liftlet("tmp__0", "inp")(mi.deref("tmp__0")))
+    reference = mi.deref(mi.let("tmp__0", "inp")("tmp__0"))
 
     assert lowered.expr == reference
 
@@ -211,7 +194,7 @@ def test_call():
     parsed = FieldOperatorParser.apply_to_function(call)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = mi.deref(mi.lift(mi.lambda_("inp")(mi.call("identity")("inp")))(mi.ref("inp")))
+    reference = mi.deref(mi.lift(mi.lambda_("inp")(mi.call("identity")("inp")))("inp"))
 
     assert lowered.expr == reference
 
@@ -227,12 +210,10 @@ def test_temp_tuple():
     lowered = FieldOperatorLowering.apply(parsed)
 
     reference = mi.deref(
-        mi.liftlet(
+        mi.let(
             "tmp__0",
-            mi.lift(mi.lambda_("a", "b")(mi.make_tuple(mi.deref("a"), mi.deref("b"))))(
-                mi.ref("a"), mi.ref("b")
-            ),
-        )(mi.deref("tmp__0"))
+            mi.lift(mi.lambda_("a", "b")(mi.make_tuple(mi.deref("a"), mi.deref("b"))))("a", "b"),
+        )("tmp__0")
     )
 
     assert lowered.expr == reference
@@ -245,7 +226,7 @@ def test_unary_not():
     parsed = FieldOperatorParser.apply_to_function(unary_not)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = mi.deref(mi.lift(mi.lambda_("cond")(mi.not_(mi.deref("cond"))))(mi.ref("cond")))
+    reference = mi.deref(mi.lift(mi.lambda_("cond")(mi.not_(mi.deref("cond"))))("cond"))
 
     assert lowered.expr == reference
 
@@ -258,9 +239,7 @@ def test_binary_plus():
     lowered = FieldOperatorLowering.apply(parsed)
 
     reference = mi.deref(
-        mi.lift(mi.lambda_("a", "b")(mi.plus(mi.deref("a"), mi.deref("b"))))(
-            mi.ref("a"), mi.ref("b")
-        )
+        mi.lift(mi.lambda_("a", "b")(mi.plus(mi.deref("a"), mi.deref("b"))))("a", "b")
     )
 
     assert lowered.expr == reference
@@ -274,9 +253,7 @@ def test_binary_mult():
     lowered = FieldOperatorLowering.apply(parsed)
 
     reference = mi.deref(
-        mi.lift(mi.lambda_("a", "b")(mi.multiplies(mi.deref("a"), mi.deref("b"))))(
-            mi.ref("a"), mi.ref("b")
-        )
+        mi.lift(mi.lambda_("a", "b")(mi.multiplies(mi.deref("a"), mi.deref("b"))))("a", "b")
     )
 
     assert lowered.expr == reference
@@ -290,9 +267,7 @@ def test_binary_minus():
     lowered = FieldOperatorLowering.apply(parsed)
 
     reference = mi.deref(
-        mi.lift(mi.lambda_("a", "b")(mi.minus(mi.deref("a"), mi.deref("b"))))(
-            mi.ref("a"), mi.ref("b")
-        )
+        mi.lift(mi.lambda_("a", "b")(mi.minus(mi.deref("a"), mi.deref("b"))))("a", "b")
     )
 
     assert lowered.expr == reference
@@ -306,9 +281,7 @@ def test_binary_div():
     lowered = FieldOperatorLowering.apply(parsed)
 
     reference = mi.deref(
-        mi.lift(mi.lambda_("a", "b")(mi.divides(mi.deref("a"), mi.deref("b"))))(
-            mi.ref("a"), mi.ref("b")
-        )
+        mi.lift(mi.lambda_("a", "b")(mi.divides(mi.deref("a"), mi.deref("b"))))("a", "b")
     )
 
     assert lowered.expr == reference
@@ -322,9 +295,7 @@ def test_binary_and():
     lowered = FieldOperatorLowering.apply(parsed)
 
     reference = mi.deref(
-        mi.lift(mi.lambda_("a", "b")(mi.and_(mi.deref("a"), mi.deref("b"))))(
-            mi.ref("a"), mi.ref("b")
-        )
+        mi.lift(mi.lambda_("a", "b")(mi.and_(mi.deref("a"), mi.deref("b"))))("a", "b")
     )
 
     assert lowered.expr == reference
@@ -338,9 +309,7 @@ def test_binary_or():
     lowered = FieldOperatorLowering.apply(parsed)
 
     reference = mi.deref(
-        mi.lift(mi.lambda_("a", "b")(mi.or_(mi.deref("a"), mi.deref("b"))))(
-            mi.ref("a"), mi.ref("b")
-        )
+        mi.lift(mi.lambda_("a", "b")(mi.or_(mi.deref("a"), mi.deref("b"))))("a", "b")
     )
 
     assert lowered.expr == reference
@@ -354,9 +323,7 @@ def test_compare_gt():
     lowered = FieldOperatorLowering.apply(parsed)
 
     reference = mi.deref(
-        mi.lift(mi.lambda_("a", "b")(mi.greater(mi.deref("a"), mi.deref("b"))))(
-            mi.ref("a"), mi.ref("b")
-        )
+        mi.lift(mi.lambda_("a", "b")(mi.greater(mi.deref("a"), mi.deref("b"))))("a", "b")
     )
 
     assert lowered.expr == reference
@@ -370,9 +337,7 @@ def test_compare_lt():
     lowered = FieldOperatorLowering.apply(parsed)
 
     reference = mi.deref(
-        mi.lift(mi.lambda_("a", "b")(mi.less(mi.deref("a"), mi.deref("b"))))(
-            mi.ref("a"), mi.ref("b")
-        )
+        mi.lift(mi.lambda_("a", "b")(mi.less(mi.deref("a"), mi.deref("b"))))("a", "b")
     )
 
     assert lowered.expr == reference
@@ -386,7 +351,7 @@ def test_compare_eq():
     lowered = FieldOperatorLowering.apply(parsed)
 
     reference = mi.deref(
-        mi.lift(mi.lambda_("a", "b")(mi.eq(mi.deref("a"), mi.deref("b"))))(mi.ref("a"), mi.ref("b"))
+        mi.lift(mi.lambda_("a", "b")(mi.eq(mi.deref("a"), mi.deref("b"))))("a", "b")
     )
 
     assert lowered.expr == reference
@@ -406,12 +371,12 @@ def test_compare_chain():
                     mi.deref("a"),
                     mi.deref(
                         mi.lift(mi.lambda_("b", "c")(mi.greater(mi.deref("b"), mi.deref("c"))))(
-                            mi.ref("b"), mi.ref("c")
+                            "b", "c"
                         )
                     ),
                 )
             )
-        )(mi.ref("a"), mi.ref("b"), mi.ref("c"))
+        )("a", "b", "c")
     )
 
     assert lowered.expr == reference

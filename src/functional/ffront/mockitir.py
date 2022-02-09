@@ -87,7 +87,7 @@ class lambda_:
         self.args = args
 
     def __call__(self, expr):
-        return itir.Lambda(params=[sym(arg) for arg in self.args], expr=expr)
+        return itir.Lambda(params=[sym(arg) for arg in self.args], expr=exprify(expr))
 
 
 class call:
@@ -177,16 +177,14 @@ def lift(expr):
     return call(call("lift")(expr))
 
 
-class liftlet:
+class let:
     """
-    Create a lambda expression equivalent to a let and lift it.
+    Create a lambda expression that works as a let.
 
     Examples
     --------
-    >>> myliftlet = liftlet("a", 1)(plus("a", "a")) # read as let a = 1 in plus(a, a)
-    >>> compare = lift(lambda_("a")(plus("a", "a")))(1)
-    >>> myliftlet == compare
-    True
+    >>> let("a", "b")("a")  # doctest: +ELLIPSIS
+    FunCall(fun=Lambda(params=[Sym(id='a')], expr=SymRef(id='a'), ...), args=[SymRef(id='b')])
     """
 
     def __init__(self, var, init_form):
@@ -194,7 +192,7 @@ class liftlet:
         self.init_form = init_form
 
     def __call__(self, form):
-        return lift(lambda_(self.var)(form))(self.init_form)
+        return call(lambda_(self.var)(form))(self.init_form)
 
 
 def shift(offset, value=None):

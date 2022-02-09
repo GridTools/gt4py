@@ -65,7 +65,7 @@ class FieldOperatorLowering(NodeTranslator):
         current_expr = self.visit(return_stmt, **kwargs)
 
         for assign in assigns[-1::-1]:
-            current_expr = mi.liftlet(*self.visit(assign, **kwargs))(mi.deref(current_expr))
+            current_expr = mi.let(*self.visit(assign, **kwargs))(current_expr)
 
         return mi.deref(current_expr)
 
