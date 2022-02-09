@@ -50,24 +50,16 @@ jobs:
 
   artefact-upload:
     runs-on: ubuntu-latest
+    needs: tox-tests
 
     steps:
-    - name: Install tools
+    - name: Setup Python
       uses: actions/setup-python@v2
       with:
         python-version: "3.8"
-
-  # artefact-upload:
-  #   # needs: tox-tests
-  #   runs-on: ubuntu-latest
-
-  #   steps:
-  #   - name: Install tools
-  #   - uses: actions/setup-python@v2
-  #     with:
-  #       python-version: '3.8'
-  #       cache: 'pip'
-  #   - run: pip install smokeshow
+        cache: "pip"
+    - name: Install tools
+      run: pip install smokeshow
 
   ## Info: https://smokeshow.helpmanual.io/
   #   - name: get coverage artifacts
