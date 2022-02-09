@@ -34,7 +34,7 @@ new virtual environment to work on this project.
 Recommended installation using ``tox``
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-If ``tox`` is already installed in your system (``tox`` is available in PyPI
+If `tox <https://tox.wiki/en/latest/#>`_ is already installed in your system (``tox`` is available in PyPI
 and many other package managers), the easiest way to create
 a virtual environment ready for development is::
 
@@ -72,7 +72,7 @@ Alternatively, a development environment can be created from scratch::
     pip install -r requirements-dev.txt
     pip install -e .
 
-    # Optionally, install atlas4py bindigns directly from the repo
+    # Optionally, install atlas4py bindings directly from the repo
     # pip install git+https://github.com/GridTools/atlas4py#egg=atlas4py
 
     # Finally, check that everything works
@@ -90,7 +90,7 @@ the environment.
 Code quality checks
 ~~~~~~~~~~~~~~~~~~~
 
-The ``pre-commit`` framework is used to run several formatting and linting tools.
+The `pre-commit <https://pre-commit.com/>`_ framework is used to run several formatting and linting tools.
 It should always be executed locally before opening a PR in the public repository.
 ``pre-commit`` can be installed as a *git hook* to automatically check the staged
 changes before commiting::
@@ -109,7 +109,7 @@ Or it can be executed on demand from the command line::
 Testing
 ~~~~~~~
 
-GT4Py testing uses the `pytest` framework which comes with an integrated `pytest`
+GT4Py testing uses the `pytest <https://pytest.org/>`_ framework which comes with an integrated ``pytest``
 command tool to run tests easily::
 
     # Run all tests
@@ -127,6 +127,6 @@ and select the appropriate test configuration::
     # Run test suite in a specific environment
     tox -e py310-base
 
-``tox`` is configured to generate test coverage reports by default. An `html`
+``tox`` is configured to generate test coverage reports by default. An `HTML`
 copy will be written in ``tests/_reports/coverage_html/`` at the end of the run.
 
