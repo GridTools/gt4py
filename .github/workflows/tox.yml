@@ -9,7 +9,7 @@ on:
     - functional
 
 jobs:
-  build:
+  tox-tests:
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -46,3 +46,32 @@ jobs:
       with:
         name: code-coverage-report
         path: tests/_reports/
+
+  artefact-upload:
+    # Info: https://smokeshow.helpmanual.io/
+    needs:
+      - tox-tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: install tools
+      - uses: actions/setup-python@v2
+        with:
+          python-version: '3.8'
+          cache: 'pip'
+      - run: pip install smokeshow
+
+      - name: get coverage artifacts
+        uses: actions/download-artifact@v2
+        with:
+          name: coverage_files
+          path: test/_reports/coverage_html
+
+      - run: smokeshow upload test/_reports/coverage_html
+        env:
+          SMOKESHOW_GITHUB_STATUS_DESCRIPTION: Coverage {coverage-percentage}
+          SMOKESHOW_GITHUB_COVERAGE_THRESHOLD: 75
+          SMOKESHOW_GITHUB_CONTEXT: coverage
+          SMOKESHOW_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SMOKESHOW_GITHUB_PR_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          SMOKESHOW_AUTH_KEY: ${{ secrets.SMOKESHOW_AUTH_KEY }}
