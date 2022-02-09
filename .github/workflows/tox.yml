@@ -68,7 +68,7 @@ jobs:
         path: coverage_html
 
     - name: Upload reports
-      run: smokeshow upload coverage_html
+      run: smokeshow upload coverage_html/*
       env:
         SMOKESHOW_GITHUB_STATUS_DESCRIPTION: Coverage {coverage-percentage}
         SMOKESHOW_GITHUB_COVERAGE_THRESHOLD: 75
