@@ -1,6 +1,7 @@
 import itertools
 import numbers
 from dataclasses import dataclass
+from typing import Tuple
 
 import numpy as np
 
@@ -334,6 +335,14 @@ Undefined._setup_math_operations()
 _UNDEFINED = Undefined()
 
 
+def neighbor_index_mask(offset_instance: NeighborTableOffsetProvider, pos) -> Tuple[int, ...]:
+    assert isinstance(offset_instance, NeighborTableOffsetProvider)
+    return tuple(
+        offset_instance.tbl[pos[offset_instance.origin_axis], i] is not None
+        for i in range(offset_instance.max_neighbors)
+    )
+
+
 class MDIterator:
     def __init__(
         self,
@@ -374,6 +383,9 @@ class MDIterator:
         return self.pos is None
 
     def deref(self):
+        if self.pos is None:
+            return None
+
         shifted_pos = self.pos.copy()
 
         if self.sparse_axis is not None:
@@ -385,9 +397,17 @@ class MDIterator:
                 slice_axises=slice_axis,
             )
             return TupleIterator(
-                self.field[ordered_indices],
+                tuple(
+                    v
+                    for v, m in zip(
+                        self.field[ordered_indices],
+                        neighbor_index_mask(
+                            self.offset_provider[self.sparse_axis.value], shifted_pos
+                        ),
+                    )
+                    if m
+                ),
                 0,
-                self.offset_provider[self.sparse_axis.value].max_neighbors,
             )
 
         if not all(axis in shifted_pos.keys() for axis in self.field.axises):
@@ -408,24 +428,31 @@ class MDIterator:
 
 
 class TupleIterator:
-    def __init__(self, tup, index, max_neighbors) -> None:
+    """
+    Represents an iterator into a tuple.
+
+    Can be shifted with an int. Note that max_neighbors() returns the
+    actual number of elements, i.e. it might be different on a neighboring point
+    of the parten iterator.
+    """
+
+    def __init__(self, tup, index) -> None:
         self.tup = tup
         self.index = index
-        self._max_neighbors = max_neighbors
 
     def shift(self, *offsets):
         assert all(isinstance(offset, int) for offset in offsets)
-        return TupleIterator(self.tup, self.index + sum(offsets), self._max_neighbors)
+        return TupleIterator(self.tup, self.index + sum(offsets))
 
     def deref(self):
-        return self.tup[self.index]
+        return self.tup[self.index] if self.index < len(self.tup) else None
 
     def max_neighbors(self):
-        assert self._max_neighbors is not None
-        return self._max_neighbors
+        """This is actually not max neighbors, but exactly the number of neighbors for this tuple."""
+        return len(self.tup)
 
     def is_none(self):
-        return self.index < self._max_neighbors
+        return self.index >= len(self.tup)
 
 
 def make_in_iterator(inp, pos, offset_provider, *, column_axis):
