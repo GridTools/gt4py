@@ -32,5 +32,5 @@ jobs:
         python -m pip uninstall --yes cytoolz # problem with undefined symbol
     - name: Test
       run: |
-        python -m pytest tests/
-        python -m pytest --doctest-modules src/
+        python -m pytest --cache-clear --cov -v -- tests/
+        python -m pytest --doctest-modules --cov --cov-append -v -- src/
