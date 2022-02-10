@@ -60,13 +60,13 @@ jobs:
       uses: actions/download-artifact@v2
       with:
         name: code-coverage-report
-        path: _reports
+        path: tests/_reports/
 
     - name: Upload to Codecov
       uses: codecov/codecov-action@v2
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
-        files: _reports/coverage.xml
+        files: tests/_reports/coverage.xml
         #flags: unittests # optional
         name: gt4py-functional
         fail_ci_if_error: false # optional (default = false)
@@ -81,7 +81,7 @@ jobs:
       # Info: https://smokeshow.helpmanual.io/
       run: |
         pip install smokeshow
-        smokeshow upload _reports/coverage_html
+        smokeshow upload tests/_reports/coverage_html
       env:
         SMOKESHOW_GITHUB_STATUS_DESCRIPTION: Coverage {coverage-percentage}
         SMOKESHOW_GITHUB_COVERAGE_THRESHOLD: 80
