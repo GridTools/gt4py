@@ -62,7 +62,7 @@ jobs:
         name: code-coverage-report
         path: coverage_html
     - name: Upload to Codecov
-    - uses: codecov/codecov-action@v2
+      uses: codecov/codecov-action@v2
       with:
         files: tests/_reports/coverage.xml
         #flags: unittests # optional
@@ -70,19 +70,19 @@ jobs:
         fail_ci_if_error: false # optional (default = false)
         verbose: true # optional (default = false)
 
-    - name: Setup smokeshow uploads
-      uses: actions/setup-python@v2
-      with:
-        python-version: "3.8"
-    - name: Upload reports to smokeshow
-      # Info: https://smokeshow.helpmanual.io/
-      run: |
-        pip install smokeshow
-        smokeshow upload coverage_html/*
-      env:
-        SMOKESHOW_GITHUB_STATUS_DESCRIPTION: Coverage {coverage-percentage}
-        SMOKESHOW_GITHUB_COVERAGE_THRESHOLD: 70
-        SMOKESHOW_GITHUB_CONTEXT: coverage
-        SMOKESHOW_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        SMOKESHOW_GITHUB_PR_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
-        SMOKESHOW_AUTH_KEY: ${{ secrets.SMOKESHOW_AUTH_KEY }}
+    # - name: Setup smokeshow uploads
+    #   uses: actions/setup-python@v2
+    #   with:
+    #     python-version: "3.8"
+    # - name: Upload reports to smokeshow
+    #   # Info: https://smokeshow.helpmanual.io/
+    #   run: |
+    #     pip install smokeshow
+    #     smokeshow upload coverage_html/*
+    #   env:
+    #     SMOKESHOW_GITHUB_STATUS_DESCRIPTION: Coverage {coverage-percentage}
+    #     SMOKESHOW_GITHUB_COVERAGE_THRESHOLD: 70
+    #     SMOKESHOW_GITHUB_CONTEXT: coverage
+    #     SMOKESHOW_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    #     SMOKESHOW_GITHUB_PR_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+    #     SMOKESHOW_AUTH_KEY: ${{ secrets.SMOKESHOW_AUTH_KEY }}
