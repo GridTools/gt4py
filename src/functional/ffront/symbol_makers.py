@@ -159,13 +159,14 @@ def make_symbol_type_from_typing(
             return common_types.FunctionType(
                 args=args, kwargs=kwargs, returns=recursive_make_symbol(return_type)
             )
-        case runtime.Offset:
+
+        case type() as t if issubclass(t, common.Dimension):
             return common_types.OffsetType()
 
-        case fbuiltins.nbh_sum:
-            return common_types.FunctionType(
-                args=[], kwargs={}, returns=common_types.DeferredSymbolType(constraint=None)
-            )
+        # case fbuiltins.nbh_sum:
+        #     return common_types.FunctionType(
+        #         args=[], kwargs={}, returns=common_types.DeferredSymbolType(constraint=None)
+        #     )
 
     raise FieldOperatorTypeError(f"'{type_hint}' type is not supported")
 
@@ -173,11 +174,17 @@ def make_symbol_type_from_typing(
 def make_symbol_from_value(
     name: str, value: Any, namespace: foast.Namespace, location: SourceLocation
 ) -> foast.Symbol:
+    if isinstance(value, common_types.SymbolType):
+        # Temporary hack for type deductions with shifted fields
+        symbol_type = value
+    elif isinstance(value, runtime.Offset):
+        # Temporary hack for type deductions with shifted fields
+        symbol_type = common_types.OffsetType(source=value.source, target=value.target)
+    else:
+        if not isinstance(value, type) or type(value).__module__ != "typing":
+            value = typingx.get_typing(value, annotate_callable_kwargs=True)
 
-    if not isinstance(value, type) or type(value).__module__ != "typing":
-        value = typingx.get_typing(value, annotate_callable_kwargs=True)
-
-    symbol_type = make_symbol_type_from_typing(value)
+        symbol_type = make_symbol_type_from_typing(value)
 
     if isinstance(symbol_type, common_types.DataType):
         return foast.DataSymbol(id=name, type=symbol_type, namespace=namespace, location=location)

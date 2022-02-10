@@ -317,9 +317,7 @@ class FieldOperatorParser(ast.NodeVisitor):
         # However, 'closure_refs' comes from inspecting the live function object, which might
         # have not been defined at a global scope, and therefore actual symbol values could appear
         # in both 'closure_refs.globals' and 'self.closure_refs.nonlocals'.
-        defs = (
-            self.closure_refs.globals | self.closure_refs.nonlocals
-        )
+        defs = self.closure_refs.globals | self.closure_refs.nonlocals
         closure = [
             symbol_makers.make_symbol_from_value(
                 name, defs[name], foast.Namespace.CLOSURE, self._make_loc(node)
@@ -557,7 +555,15 @@ class FieldOperatorParser(ast.NodeVisitor):
             )
 
         args = node.args
-        #TODO: for now, strip the keyword (e.g. AXIS=...)
+        if new_func.id in fbuiltins.FUN_BUILTIN_NAMES:
+            func_info = getattr(fbuiltins, new_func.id)
+            if not len(args) == len(func_info.args) or any(
+                k.arg not in func_info.kwargs for k in node.keywords
+            ):
+                raise self._make_syntax_error(
+                    node.func, message=f"wrong syntax for function {new_func.id}"
+                )
+
         for keyword in node.keywords:
             args.append(keyword.value)
 

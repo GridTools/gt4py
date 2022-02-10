@@ -493,8 +493,9 @@ def test_compare_chain():
 
 Edge = CartesianAxis("Edge")
 Vertex = CartesianAxis("Vertex")
+Cell = CartesianAxis("Cell")
 V2EDim = CartesianAxis("V2E")
-V2E = offset("V2E")
+V2E = offset("V2E", source=Edge, target=(Vertex, V2EDim))
 
 
 from devtools import debug
@@ -547,7 +548,7 @@ def test_reduction_lowering_simple():
 
 def test_reduction_lowering_expr():
     def reduction(e1: Field[[Edge], "float64"], e2: Field[[Vertex, V2EDim], "float64"]):
-        return nbh_sum(e1(V2E) + e2, axis=V2E)  # need to disable type checking for this to work
+        return nbh_sum(e1(V2E) + e2, axis=V2EDim)  # need to disable type checking for this to work
 
     parsed = FieldOperatorParser.apply_to_function(reduction)
     lowered = FieldOperatorLowering.apply(parsed)

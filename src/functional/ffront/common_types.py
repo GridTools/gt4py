@@ -1,6 +1,6 @@
 import typing
 from dataclasses import dataclass
-from typing import Literal, Optional, Union
+from typing import Literal, Optional, Tuple, Union
 
 from eve.type_definitions import IntEnum
 from functional import common as func_common
@@ -41,7 +41,8 @@ class SymbolTypeVariable(SymbolType):
 
 @dataclass(frozen=True)
 class OffsetType(SymbolType):
-    ...
+    source: Optional[func_common.Dimension] = None
+    target: Optional[Tuple[func_common.Dimension, func_common.Dimension]] = None
 
     def __str__(self):
         return f"Offset[{self.id}]"

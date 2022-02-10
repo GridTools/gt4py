@@ -23,7 +23,11 @@ from functional.ffront.foast_to_itir import FieldOperatorLowering
 from functional.ffront.func_to_foast import FieldOperatorParser
 from functional.iterator import ir as itir
 from functional.iterator.backends import roundtrip
-from functional.iterator.embedded import np_as_located_field, NeighborTableOffsetProvider, index_field
+from functional.iterator.embedded import (
+    np_as_located_field,
+    NeighborTableOffsetProvider,
+    index_field,
+)
 from functional.iterator.runtime import CartesianAxis, offset
 
 
@@ -206,13 +210,15 @@ def test_fold_shifts():
 
     assert np.allclose(a[1:] + b[1:], c)
 
+
 def test_reduction_execution():
     """Testing a trivial neighbor sum"""
     size = 9
 
     Edge = CartesianAxis("Edge")
     Vertex = CartesianAxis("Vertex")
-    V2E = offset("V2E")
+    V2EDim = CartesianAxis("V2E")
+    V2E = offset("V2E", source=Edge, target=(Vertex, V2EDim))
 
     v2e_arr = np.array(
         [
@@ -229,13 +235,18 @@ def test_reduction_execution():
     )
 
     inp = index_field(Edge)
-    out = np_as_located_field(Vertex)(np.zeros([9]))   
+    out = np_as_located_field(Vertex)(np.zeros([9]))
     ref = np.asarray(list(sum(row) for row in v2e_arr))
 
     def reduction(edge_f: Field[[Edge], "float64"]):
-        return nbh_sum(edge_f(V2E), axis=V2E)
+        return nbh_sum(edge_f(V2E), axis=V2EDim)
 
     program = program_from_function(reduction, out_names=["out"], dim=Vertex, size=size)
-    roundtrip.executor(program, inp, out, offset_provider={"V2E": NeighborTableOffsetProvider(v2e_arr, Vertex, Edge, 4)})
+    roundtrip.executor(
+        program,
+        inp,
+        out,
+        offset_provider={"V2E": NeighborTableOffsetProvider(v2e_arr, Vertex, Edge, 4)},
+    )
 
     assert np.allclose(ref, out)

@@ -339,11 +339,11 @@ class FieldOperatorTypeDeduction(NodeTranslator):
             and are_broadcast_compatible(left, right)
         ):
             return broadcast_typeinfos(left, right).type
-        # else: FIXME
-        #     raise FieldOperatorTypeDeductionError.from_foast_node(
-        #         parent,
-        #         msg=f"Incompatible type(s) for operator '{op}': {left.type}, {right.type}!",
-        #     )
+        else:
+            raise FieldOperatorTypeDeductionError.from_foast_node(
+                parent,
+                msg=f"Incompatible type(s) for operator '{op}': {left.type}, {right.type}!",
+            )
 
     def _deduce_logical_binop_type(
         self,
@@ -396,7 +396,21 @@ class FieldOperatorTypeDeduction(NodeTranslator):
         new_func = self.visit(node.func, **kwargs)
         if isinstance(new_func.type, common_types.FieldType):
             new_args = self.visit(node.args, in_shift=True, **kwargs)
-            return foast.Call(func=new_func, args=new_args, location=node.location)
+            source_dim = new_args[0].type.source
+            target_dims = new_args[0].type.target
+            if not source_dim in new_func.type.dims:
+                raise FieldOperatorTypeDeductionError.from_foast_node(
+                    node,
+                    msg=f"Incompatible offset at {new_func.id}: can not shift from {new_args[0].type.source} to {new_func.type.dims[0]}.",
+                )
+            new_dims = []
+            for d in new_func.type.dims:
+                if d != source_dim:
+                    new_dims.append(d)
+                else:
+                    new_dims.extend(target_dims)
+            new_type = common_types.FieldType(dims=new_dims, dtype=new_func.type.dtype)
+            return foast.Call(func=new_func, args=new_args, location=node.location, type=new_type)
         return foast.Call(
             func=new_func, args=self.visit(node.args, **kwargs), location=node.location
         )

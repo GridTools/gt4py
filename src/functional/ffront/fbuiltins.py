@@ -14,7 +14,8 @@
 
 from numpy import float32, float64, int32, int64
 
-from functional.common import Field
+from functional.common import Field, Dimension
+from functional.ffront import common_types
 
 
 __all__ = ["Field", "float32", "float64", "int32", "int64", "nbh_sum"]
@@ -22,16 +23,22 @@ __all__ = ["Field", "float32", "float64", "int32", "int64", "nbh_sum"]
 TYPE_BUILTINS = [Field, float, float32, float64, int, int32, int64, bool, tuple]
 TYPE_BUILTIN_NAMES = [t.__name__ for t in TYPE_BUILTINS]
 
-class BuiltinFunction:
-    ...
+# class BuiltinFunction:
+#     ...
 
 
-class nbh_sum(BuiltinFunction):
-    ...
+# class nbh_sum(BuiltinFunction):
+#     ...
 
 
-FUN_BUILTINS = [nbh_sum]
-FUN_BUILTIN_NAMES = [f.__name__ for f in FUN_BUILTINS]
+# FUN_BUILTINS = [nbh_sum]
+# FUN_BUILTIN_NAMES = [f.__name__ for f in FUN_BUILTINS]
+
+nbh_sum = common_types.FunctionType(
+    args=[common_types.FieldType], kwargs={"axis": Dimension}, returns=common_types.FieldType
+)
+FUN_BUILTIN_NAMES = ["nbh_sum"]
+
 
 EXTERNALS_MODULE_NAME = "__externals__"
 MODULE_BUILTIN_NAMES = [EXTERNALS_MODULE_NAME]
