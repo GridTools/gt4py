@@ -237,7 +237,6 @@ def _remap_temporaries(
 
     for lhs, rhs in _iter_stmt_pairs(stencil, reverse=False):
         lval_symbol = lhs.name if lhs is not None else None
-        print(lval_symbol, symbol_reads_after[id(rhs)], unused_allocated)
         if lval_symbol is not None and lval_symbol in all_symbols:
             if lval_symbol in symbol_to_temp:
                 lhs.name = symbol_to_temp[lval_symbol]
@@ -261,8 +260,6 @@ def _remap_temporaries(
         }
         in_use_allocated = {name for name in in_use_allocated if name in temps_read_after}
 
-        print(in_use_allocated, unused_allocated, symbol_to_temp)
-        print("+++")
         _NameRemapper().visit(rhs, symbol_to_temp=symbol_to_temp)
 
     stencil.declarations = [
