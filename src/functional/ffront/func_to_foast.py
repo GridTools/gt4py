@@ -37,7 +37,6 @@ from functional.ffront.ast_passes import (
     StringifyAnnotationsPass,
     UnpackedAssignPass,
 )
-from functional.ffront.foast_passes.shift_recognition import FieldOperatorShiftRecognition
 from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduction
 
 
@@ -289,7 +288,7 @@ class FieldOperatorParser(ast.NodeVisitor):
                 err.lineno = (err.lineno or 1) + starting_line - 1
             raise err
 
-        return FieldOperatorShiftRecognition.apply(FieldOperatorTypeDeduction.apply(result))
+        return FieldOperatorTypeDeduction.apply(result)
 
     @classmethod
     def apply_to_function(

@@ -15,9 +15,9 @@
 from typing import Optional
 
 from eve import NodeTranslator
-from functional.ffront import common_types
 from functional.ffront import field_operator_ast as foast
 from functional.ffront import mockitir as mi
+from functional.ffront.type_info import TypeInfo
 from functional.iterator import ir as itir
 
 
@@ -71,7 +71,7 @@ class FieldOperatorLowering(NodeTranslator):
 
     def _make_lambda_param_names(self, node: foast.Expr, **kwargs) -> list[str]:
         def is_field(expr: foast.Expr) -> bool:
-            return isinstance(expr.type, common_types.FieldType)
+            return TypeInfo(expr.type).is_field_type
 
         names = list(
             node.iter_tree().if_isinstance(foast.Name).filter(is_field).getattr("id").unique()
@@ -137,13 +137,13 @@ class FieldOperatorLowering(NodeTranslator):
             )
         )(*param_names)
 
-    def visit_Shift(self, node: foast.Shift, **kwargs) -> itir.FunCall:
-        return mi.shift(node.offsets[0].value.id, node.offsets[0].index)(
-            self.visit(node.expr, **kwargs)
-        )
+    def visit_shift(self, node: foast.Call, **kwargs) -> itir.FunCall:
+        return mi.shift(node.args[0].value.id, node.args[0].index)(self.visit(node.func, **kwargs))
 
     def visit_Call(self, node: foast.Call, **kwargs) -> itir.FunCall:
         param_names = self._make_lambda_param_names(node, **kwargs)
+        if TypeInfo(node.func.type).is_field_type:
+            return self.visit_shift(node, **kwargs)
         return mi.lift(
             mi.lambda_(*param_names)(
                 mi.call(self.visit(node.func, **kwargs))(*self.visit(node.args, **kwargs))
