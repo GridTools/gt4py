@@ -15,9 +15,10 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import collections
-from typing import Any, Callable, Dict, Set, Union
+import copy
+from typing import Any, Callable, Dict, List, Optional, Sequence, Set, Union
 
-from eve import NodeTranslator, SymbolTableTrait
+from eve import NodeMutator, NodeTranslator, SymbolTableTrait
 from gtc import oir
 
 from .utils import AccessCollector, collect_symbol_names, symbol_name_creator
@@ -150,3 +151,144 @@ class WriteBeforeReadTemporariesToScalars(TemporariesToScalarsBase):
             }
 
         return super().visit_Stencil(node, tmps_to_replace=write_before_read_tmps, **kwargs)
+
+
+def _iter_stmt_pairs(stencil: oir.Stencil, reverse: bool = False):
+    def _collect_stmts_pairs_rev(stmts: Sequence[oir.Stmt]):
+        pairs = []
+        iterator = reversed(stmts) if reverse else stmts
+        for stmt in iterator:
+            if isinstance(stmt, oir.AssignStmt):
+                pairs.append((stmt.left, stmt.right))
+            elif isinstance(stmt, oir.MaskStmt):
+                pairs.append((None, stmt.mask))
+                pairs.extend(_collect_stmts_pairs_rev(stmt.body))
+            else:
+                raise TypeError("Unrecognized oir.Stmt subtype")
+        return pairs
+
+    for loop in reversed(stencil.vertical_loops) if reverse else stencil.vertical_loops:
+        for section in loop.sections:
+            for hexec in (
+                reversed(section.horizontal_executions)
+                if reverse
+                else section.horizontal_executions
+            ):
+                yield from _collect_stmts_pairs_rev(hexec.body)
+
+
+def _annotate_reads(stencil: oir.Stencil) -> Dict[int, Set[str]]:
+    """
+    For each statement, determines the set of temporary fields that are read at a later stmt.
+
+    Returns
+    -------
+        Dict[int, Set[str]]
+            Map from stmt id to set of temporary fields read at a later stmt.
+    """
+    temporaries = {d.name for d in stencil.declarations}
+
+    reads_after: Dict[int, Set[str]] = {}
+    last_reads: Set[str] = set()
+    for _, rhs in _iter_stmt_pairs(stencil, reverse=True):
+        current_reads: Set[str] = (
+            rhs.iter_tree()
+            .if_isinstance(oir.FieldAccess)
+            .filter(lambda acc: acc.name in temporaries)
+            .getattr("name")
+            .to_set()
+        )
+        reads_after[id(rhs)] = last_reads.copy()
+        last_reads |= current_reads
+
+    return reads_after
+
+
+class _NameRemapper(NodeMutator):
+    def visit_FieldAccess(self, node: oir.FieldAccess, *, symbol_to_temp: Dict[str, str]):
+        if node.name in symbol_to_temp:
+            node.name = symbol_to_temp[node.name]
+        return node
+
+
+def _find_temporary(
+    declarations: List[oir.Temporary], unused_allocated: Set[str], symbol: str
+) -> Optional[str]:
+    """Find a suitable temporary for _remap_temporaries."""
+    lval_decl = next(decl for decl in declarations if decl.name == symbol)
+    for decl in (d for d in declarations if d.name in unused_allocated):
+        if (
+            lval_decl.dtype == decl.dtype
+            and lval_decl.dimensions == decl.dimensions
+            and lval_decl.data_dims == decl.data_dims
+        ):
+            return decl.name
+
+    return None
+
+
+def _remap_temporaries(
+    stencil: oir.Stencil, symbol_reads_after: Dict[int, Set[str]]
+) -> oir.Stencil:
+    all_symbols = {d.name for d in stencil.declarations}
+    in_use_allocated: Set[str] = set()
+    unused_allocated: Set[str] = set()
+    symbol_to_temp: Dict[str, str] = {}
+
+    for lhs, rhs in _iter_stmt_pairs(stencil, reverse=False):
+        lval_symbol = lhs.name if lhs is not None else None
+        print(lval_symbol, symbol_reads_after[id(rhs)], unused_allocated)
+        if lval_symbol is not None and lval_symbol in all_symbols:
+            if lval_symbol in symbol_to_temp:
+                lhs.name = symbol_to_temp[lval_symbol]
+            elif lval_temp := _find_temporary(stencil.declarations, unused_allocated, lval_symbol):
+                unused_allocated.remove(lval_temp)
+                in_use_allocated.add(lval_temp)
+                symbol_to_temp[lval_symbol] = lval_temp
+                lhs.name = lval_temp
+            else:
+                in_use_allocated.add(lval_symbol)
+                symbol_to_temp[lval_symbol] = lval_symbol
+                # lhs.name is up to date
+        else:
+            pass
+
+        temps_read_after = {
+            symbol_to_temp[name] for name in symbol_reads_after[id(rhs)] if name in symbol_to_temp
+        }
+        unused_allocated = unused_allocated | {
+            name for name in in_use_allocated if name not in temps_read_after
+        }
+        in_use_allocated = {name for name in in_use_allocated if name in temps_read_after}
+
+        print(in_use_allocated, unused_allocated, symbol_to_temp)
+        print("+++")
+        _NameRemapper().visit(rhs, symbol_to_temp=symbol_to_temp)
+
+    stencil.declarations = [
+        decl for decl in stencil.declarations if decl.name in set(symbol_to_temp.values())
+    ]
+
+    return stencil
+
+
+def fold_temporary_fields(node: oir.Stencil) -> oir.Stencil:
+    """
+    Re-use oir.Temporary declarations where possible, without reordering statements, to reduce memory pressure.
+
+    Postcondition: The same or fewer temporaries referenced and declarations in stencil.declarations.
+
+    Parameters
+    ----------
+    node `oir.Stencil`
+        The Stencil to be transformed.
+
+    Returns
+    -------
+    oir.Stencil
+        New copy of the stencil, with temporaries folded.
+
+    """
+    new_stencil = copy.deepcopy(node)
+    reads_after = _annotate_reads(new_stencil)
+    return _remap_temporaries(new_stencil, reads_after)

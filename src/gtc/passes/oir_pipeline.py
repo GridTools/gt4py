@@ -36,6 +36,7 @@ from gtc.passes.oir_optimizations.pruning import NoFieldAccessPruning
 from gtc.passes.oir_optimizations.temporaries import (
     LocalTemporariesToScalars,
     WriteBeforeReadTemporariesToScalars,
+    fold_temporary_fields,
 )
 from gtc.passes.oir_optimizations.vertical_loop_merging import AdjacentLoopMerging
 
@@ -75,6 +76,7 @@ class DefaultPipeline(OirPipeline):
             OnTheFlyMerging,
             LocalTemporariesToScalars,
             WriteBeforeReadTemporariesToScalars,
+            fold_temporary_fields,
             MaskStmtMerging,
             MaskInlining,
             NoFieldAccessPruning,

@@ -14,15 +14,19 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+
 from gtc import oir
 from gtc.passes.oir_optimizations.temporaries import (
     LocalTemporariesToScalars,
     WriteBeforeReadTemporariesToScalars,
+    fold_temporary_fields,
 )
 
 from ...oir_utils import (
     AssignStmtFactory,
+    BinaryOpFactory,
     HorizontalExecutionFactory,
+    LiteralFactory,
     StencilFactory,
     TemporaryFactory,
 )
@@ -100,3 +104,58 @@ def test_write_before_read_temporaries_to_scalars():
     assert not isinstance(hexec1.body[0].right, oir.ScalarAccess)
     assert isinstance(hexec1.body[1].left, oir.ScalarAccess)
     assert isinstance(hexec1.body[2].right, oir.ScalarAccess)
+
+
+def test_fold_temporary_fields_simple():
+    stencil = StencilFactory(
+        vertical_loops__0__sections__0__horizontal_executions__0=HorizontalExecutionFactory(
+            body=[
+                AssignStmtFactory(left__name="a", right=LiteralFactory()),
+                AssignStmtFactory(left__name="out1", right__name="a"),
+                AssignStmtFactory(left__name="b", right=LiteralFactory()),
+                AssignStmtFactory(left__name="out2", right__name="b"),
+            ]
+        ),
+        declarations=[TemporaryFactory(name="a"), TemporaryFactory(name="b")],
+    )
+
+    stencil = fold_temporary_fields(stencil)
+    assert len(stencil.declarations) == 1
+
+
+def test_fold_temporary_fields_chain():
+    stencil = StencilFactory(
+        vertical_loops__0__sections__0__horizontal_executions__0=HorizontalExecutionFactory(
+            body=[
+                AssignStmtFactory(left__name="a", right=LiteralFactory()),
+                AssignStmtFactory(left__name="out1", right__name="a"),
+                AssignStmtFactory(
+                    left__name="b", right=BinaryOpFactory(left__name="a", right=LiteralFactory())
+                ),
+                AssignStmtFactory(left__name="out2", right__name="b"),
+            ]
+        ),
+        declarations=[TemporaryFactory(name="a"), TemporaryFactory(name="b")],
+    )
+
+    stencil = fold_temporary_fields(stencil)
+    assert len(stencil.declarations) == 2
+
+
+def test_fold_temporary_fields_ref_later():
+    stencil = StencilFactory(
+        vertical_loops__0__sections__0__horizontal_executions__0=HorizontalExecutionFactory(
+            body=[
+                AssignStmtFactory(left__name="a", right=LiteralFactory()),
+                AssignStmtFactory(left__name="out1", right__name="a"),
+                AssignStmtFactory(left__name="b", right=LiteralFactory()),
+                AssignStmtFactory(
+                    left__name="out2", right=BinaryOpFactory(left__name="a", right__name="b")
+                ),
+            ]
+        ),
+        declarations=[TemporaryFactory(name="a"), TemporaryFactory(name="b")],
+    )
+
+    stencil = fold_temporary_fields(stencil)
+    assert len(stencil.declarations) == 2
