@@ -14,6 +14,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import numpy as np
 import pytest
 
 from gt4py.backend.module_generator import (
@@ -22,6 +23,7 @@ from gt4py.backend.module_generator import (
     make_args_data_from_gtir,
     make_args_data_from_iir,
 )
+from gt4py.definitions import AccessKind, Boundary, FieldInfo, ParameterInfo
 from gt4py.gtscript import PARALLEL, Field, computation, interval
 from gt4py.stencil_builder import StencilBuilder
 
@@ -43,7 +45,19 @@ def sample_builder():
 
 @pytest.fixture
 def sample_args_data():
-    yield ModuleData(field_info={"in_field": None}, parameter_info={"inf_field": None})
+    dtype = np.dtype(np.float_)
+    yield ModuleData(
+        field_info={
+            "in_field": FieldInfo(
+                access=AccessKind.READ_WRITE,
+                boundary=Boundary.zeros(ndims=3),
+                axes=("I", "J", "K"),
+                data_dims=tuple([]),
+                dtype=dtype,
+            )
+        },
+        parameter_info={"param": ParameterInfo(access=AccessKind.READ, dtype=dtype)},
+    )
 
 
 def test_uninitialized_builder(sample_builder, sample_args_data):
