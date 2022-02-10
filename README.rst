@@ -1,6 +1,6 @@
 |tox| |format|
 
-.. |tox| image:: https://github.com/GridTools/gt4py/actions/workflows/tox.yml/badge.svg?branch=functional
+.. |tox| image:: https://github.com/GridTools/gt4py/actions/workflows/test.yml/badge.svg?branch=functional
    :alt:
 .. |format| image:: https://github.com/GridTools/gt4py/actions/workflows/qa.yml/badge.svg?branch=functional
    :alt:
