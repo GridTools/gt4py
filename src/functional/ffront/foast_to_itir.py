@@ -320,17 +320,12 @@ class FieldOperatorLowering(NodeTranslator):
         return ItirFunCallFactory(name="plus", args=[itir.SymRef(id="base"), expr])
 
     def _make_reduce(self, *args, **kwargs) -> itir.FunCall:
-        # TODO: perform some validation here?
-        #       we need a first argument that is an expr and a second one that is an axis
         red_rhs = self.visit(args[0], **kwargs)
-
-        red_expr = red_rhs[0]
-        red_axis = red_rhs[1].args[0].id
 
         # get all fields referenced (technically this could also be external symbols)
         # this assumes that the same field doesn't appear both shifted and not shifted,
         # which should be checked for before the lowering
-        rhs_fields = self._extract_fields(red_expr)
+        rhs_fields = self._extract_fields(red_rhs[0])
 
         # to lower the expr to the lambda expr we need to
         #   - remove derefs
@@ -342,7 +337,7 @@ class FieldOperatorLowering(NodeTranslator):
             + [itir.Sym(id=field.name + "_param") for field in rhs_fields],
             expr=self._make_lamba_rhs(
                 self._rename_sym_refs(
-                    self._remove_field_derefs(self._remove_field_shifts(red_expr)), "_param"
+                    self._remove_field_derefs(self._remove_field_shifts(red_rhs[0])), "_param"
                 )
             ),
         )

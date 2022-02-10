@@ -163,11 +163,6 @@ def make_symbol_type_from_typing(
         case type() as t if issubclass(t, common.Dimension):
             return common_types.OffsetType()
 
-        # case fbuiltins.nbh_sum:
-        #     return common_types.FunctionType(
-        #         args=[], kwargs={}, returns=common_types.DeferredSymbolType(constraint=None)
-        #     )
-
     raise FieldOperatorTypeError(f"'{type_hint}' type is not supported")
 
 

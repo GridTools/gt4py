@@ -23,17 +23,6 @@ __all__ = ["Field", "float32", "float64", "int32", "int64", "nbh_sum"]
 TYPE_BUILTINS = [Field, float, float32, float64, int, int32, int64, bool, tuple]
 TYPE_BUILTIN_NAMES = [t.__name__ for t in TYPE_BUILTINS]
 
-# class BuiltinFunction:
-#     ...
-
-
-# class nbh_sum(BuiltinFunction):
-#     ...
-
-
-# FUN_BUILTINS = [nbh_sum]
-# FUN_BUILTIN_NAMES = [f.__name__ for f in FUN_BUILTINS]
-
 nbh_sum = common_types.FunctionType(
     args=[common_types.FieldType], kwargs={"axis": Dimension}, returns=common_types.FieldType
 )
