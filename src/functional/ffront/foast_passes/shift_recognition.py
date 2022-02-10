@@ -33,4 +33,6 @@ class FieldOperatorShiftRecognition(NodeTranslator):
                 offsets=node.args, expr=node.func, location=node.location, type=node.func.type
             )
             return result
-        return node
+        return foast.Call(
+            func=node.func, args=self.visit(node.args, **kwargs), location=node.location
+        )

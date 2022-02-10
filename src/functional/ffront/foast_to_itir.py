@@ -12,6 +12,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+from ast import Expr, NodeTransformer
 from typing import Iterator, Optional, Union
 
 import factory
@@ -23,6 +24,9 @@ from functional.ffront import common_types
 from functional.ffront import field_operator_ast as foast
 from functional.iterator import ir as itir
 from functional.ffront.fbuiltins import FUN_BUILTIN_NAMES
+from collections import namedtuple
+
+FieldAccess = namedtuple("FieldAccess", ["name", "is_shifted"])
 
 
 class AssignResolver(NodeTranslator):
@@ -79,32 +83,51 @@ class AssignResolver(NodeTranslator):
 class FieldCollector(NodeVisitor):
     def __init__(self):
         self._fields = set()
+        self.in_shift = False
 
-    # matches e.g. field(V2E)
-    def visit_FunCall(self, node: itir.FunCall) -> None:
-        if not hasattr(functional.iterator.builtins, node.fun.id):
-            self._fields.add(node.fun.id)
+    def visit_FunCall(self, node: itir.FunCall, **kwargs) -> None:
+        if isinstance(node.fun, itir.FunCall) and node.fun.fun.id == "shift":
+            self._fields.add(FieldAccess(node.args[0].id, True))
         else:
-            for arg in node.args:
-                self.visit(arg)
+            self.generic_visit(node)
 
-    def visit_SymRef(self, node: itir.SymRef) -> None:
-        self._fields.add(node.id)
+    def visit_SymRef(self, node: itir.SymRef, **kwargs) -> None:
+        if not hasattr(functional.iterator.builtins, node.id):
+            self._fields.add(FieldAccess(node.id, False))
 
     def getFields(self):
         return list(sorted(self._fields))
 
 
-class FieldAccessCanonicalizer(NodeTranslator):
-    def visit_FunCall(self, node: itir.FunCall):
-        if node.fun.id == "deref":
-            return itir.SymRef(id=node.args[0].id + "_param")
+class DerefRemover(NodeTranslator):
+    def visit_FunCall(self, node: itir.FunCall) -> itir.FunCall:
+        if isinstance(node.fun, itir.FunCall):
+            new_args = self.visit(node.args)
+            return itir.FunCall(fun=node.fun, args=new_args)
 
-        if not hasattr(functional.iterator.builtins, node.fun.id):
-            return itir.SymRef(id=node.fun.id + "_param")
+        if node.fun.id == "deref":
+            return node.args[0]
 
         new_args = self.visit(node.args)
         return itir.FunCall(fun=node.fun, args=new_args)
+
+
+class ShiftRemover(NodeTranslator):
+    def visit_FunCall(self, node: itir.FunCall) -> itir.FunCall:
+        if isinstance(node.fun, itir.FunCall) and node.fun.fun.id == "shift":
+            return itir.SymRef(id=node.args[0].id)
+        new_args = self.visit(node.args)
+        return itir.FunCall(fun=node.fun, args=new_args)
+
+
+class SymRefRenamer(NodeTranslator):
+    def __init__(self, suffix: str):
+        self.suffix = suffix
+
+    def visit_SymRef(self, node: itir.SymRef):
+        if not hasattr(functional.iterator.builtins, node.id):
+            return itir.SymRef(id=node.id + self.suffix)
+        return node
 
 
 class ItirSymRefFactory(factory.Factory):
@@ -260,26 +283,37 @@ class FieldOperatorLowering(NodeTranslator):
         return self.visit(node.expr, shift_args=shift_args, **kwargs)
 
     def _make_shift_args(
-        self, node: foast.Subscript, **kwargs
-    ) -> tuple[itir.OffsetLiteral, itir.IntLiteral]:
-        return (itir.OffsetLiteral(value=node.value.id), itir.IntLiteral(value=node.index))
+        self, node: Union[foast.Subscript, foast.Name], **kwargs
+    ) -> Union[tuple[itir.OffsetLiteral, itir.IntLiteral], tuple[itir.OffsetLiteral]]:
+        if isinstance(node, foast.Subscript):
+            return (itir.OffsetLiteral(value=node.value.id), itir.IntLiteral(value=node.index))
+        else:
+            return (itir.OffsetLiteral(value=node.id),)
 
     def _gen_shift_args(
-        self, args: list[foast.Subscript], **kwargs
+        self, args: list[Union[foast.Subscript, foast.Name]], **kwargs
     ) -> Iterator[Union[itir.OffsetLiteral, itir.IntLiteral]]:
         for arg in args:
-            name, offset = self._make_shift_args(arg)
-            yield name
-            yield offset
+            yield from self._make_shift_args(arg)
 
     def _extract_fields(self, expr: itir.Expr) -> list[str]:
         fc = FieldCollector()
         fc.visit(expr)
         return fc.getFields()
 
-    def _remove_field_accesses(self, expr: itir.Expr) -> itir.Expr:
-        fac = FieldAccessCanonicalizer()
-        expr = fac.visit(expr)
+    def _remove_field_shifts(self, expr: itir.Expr) -> itir.Expr:
+        sr = ShiftRemover()
+        expr = sr.visit(expr)
+        return expr
+
+    def _remove_field_derefs(self, expr: itir.Expr) -> itir.Expr:
+        dr = DerefRemover()
+        expr = dr.visit(expr)
+        return expr
+
+    def _rename_sym_refs(self, expr: itir.Expr, suffix: str) -> itir.Expr:
+        rn = SymRefRenamer(suffix)
+        expr = rn.visit(expr)
         return expr
 
     def _make_lamba_rhs(self, expr: itir.Expr) -> itir.FunCall:
@@ -293,19 +327,46 @@ class FieldOperatorLowering(NodeTranslator):
         red_expr = red_rhs[0]
         red_axis = red_rhs[1].args[0].id
 
+        # get all fields referenced (technically this could also be external symbols)
+        # this assumes that the same field doesn't appear both shifted and not shifted,
+        # which should be checked for before the lowering
         rhs_fields = self._extract_fields(red_expr)
 
+        # to lower the expr to the lambda expr we need to
+        #   - remove derefs
+        #   - remove shifts
+        #   - rename the fields being accessed (I think this is not strictly
+        #     needed, but improves readabiltiy)
         rhs_lambda = itir.Lambda(
-            params=[itir.Sym(id="base")] + [itir.Sym(id=field + "_param") for field in rhs_fields],
-            expr=self._make_lamba_rhs(self._remove_field_accesses(red_expr)),
+            params=[itir.Sym(id="base")]
+            + [itir.Sym(id=field.name + "_param") for field in rhs_fields],
+            expr=self._make_lamba_rhs(
+                self._rename_sym_refs(
+                    self._remove_field_derefs(self._remove_field_shifts(red_expr)), "_param"
+                )
+            ),
         )
-        shift_fun = ItirFunCallFactory(
-            fun=ItirFunCallFactory(name="shift", args=[itir.OffsetLiteral(value=red_axis)]),
-            args=[itir.SymRef(id=field) for field in rhs_fields],
-        )
+        # the arguments passed to the lambda are either a symref to the field, or, if the
+        # field is shifted in the original expr, the shifted field, here I'm "reconstructing"
+        # the original shift, using the axis argument. This assumes that verification has been
+        # done, i.e. that all fields that are shifted, are in fact shifted by the given axis
+        lambda_args = []
+        for field in rhs_fields:
+            if field.is_shifted:
+                lambda_args.append(
+                    ItirFunCallFactory(
+                        fun=ItirFunCallFactory(
+                            name="shift", args=[itir.OffsetLiteral(value=red_axis)]
+                        ),
+                        args=[itir.SymRef(id=field.name)],
+                    )
+                )
+            else:
+                lambda_args.append(itir.SymRef(id=field.name))
+
         reduce_call = ItirFunCallFactory(
             fun=ItirFunCallFactory(name="reduce", args=[rhs_lambda, itir.IntLiteral(value=0.0)]),
-            args=[shift_fun],
+            args=lambda_args,
         )
 
         return reduce_call

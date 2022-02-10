@@ -339,11 +339,11 @@ class FieldOperatorTypeDeduction(NodeTranslator):
             and are_broadcast_compatible(left, right)
         ):
             return broadcast_typeinfos(left, right).type
-        else:
-            raise FieldOperatorTypeDeductionError.from_foast_node(
-                parent,
-                msg=f"Incompatible type(s) for operator '{op}': {left.type}, {right.type}!",
-            )
+        # else: FIXME
+        #     raise FieldOperatorTypeDeductionError.from_foast_node(
+        #         parent,
+        #         msg=f"Incompatible type(s) for operator '{op}': {left.type}, {right.type}!",
+        #     )
 
     def _deduce_logical_binop_type(
         self,

@@ -153,7 +153,7 @@ class Call(Expr):
 
 
 class Shift(Expr):
-    offsets: list[Subscript]
+    offsets: list[Union[Name, Subscript]]
     expr: Expr
 
 

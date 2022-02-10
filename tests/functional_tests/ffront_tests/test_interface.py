@@ -492,6 +492,8 @@ def test_compare_chain():
 
 
 Edge = CartesianAxis("Edge")
+Vertex = CartesianAxis("Vertex")
+V2EDim = CartesianAxis("V2E")
 V2E = offset("V2E")
 
 
@@ -544,13 +546,13 @@ def test_reduction_lowering_simple():
 
 
 def test_reduction_lowering_expr():
-    def reduction(e1: Field[[Edge], "float64"], e2: Field[[Edge], "float64"]):
-        return nbh_sum(e1 + e2, axis=V2E)
+    def reduction(e1: Field[[Edge], "float64"], e2: Field[[Vertex, V2EDim], "float64"]):
+        return nbh_sum(e1(V2E) + e2, axis=V2E)  # need to disable type checking for this to work
 
     parsed = FieldOperatorParser.apply_to_function(reduction)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    # debug(lowered)
+    debug(lowered)
 
     assert lowered.expr == itir.FunCall(
         fun=itir.FunCall(
@@ -585,9 +587,9 @@ def test_reduction_lowering_expr():
                 ),
                 args=[
                     itir.SymRef(id="e1"),
-                    itir.SymRef(id="e2"),
                 ],
             ),
+            itir.SymRef(id="e2"),
         ],
     )
 
