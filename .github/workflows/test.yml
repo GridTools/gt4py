@@ -56,6 +56,7 @@ jobs:
     needs: tox-tests
 
     steps:
+    - uses: actions/checkout@v2
     - name: Get coverage artifacts
       uses: actions/download-artifact@v2
       with:
