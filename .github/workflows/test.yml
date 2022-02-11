@@ -77,12 +77,11 @@ jobs:
       uses: actions/setup-python@v2
       with:
         python-version: "3.8"
+      run: pip install smokeshow
 
     - name: Upload reports to smokeshow
-      # Info: https://smokeshow.helpmanual.io/
-      run: |
-        pip install smokeshow
-        smokeshow upload tests/_reports/coverage_html
+        # Info: https://smokeshow.helpmanual.io/
+      run: smokeshow upload tests/_reports/coverage_html
       env:
         SMOKESHOW_GITHUB_STATUS_DESCRIPTION: Coverage {coverage-percentage}
         SMOKESHOW_GITHUB_COVERAGE_THRESHOLD: 80
