@@ -1,0 +1,51 @@
+name: Check tests coverage
+
+on:
+  workflow_run:
+    workflows: [Tests]
+    types: [completed]
+
+permissions:
+  statuses: write
+
+jobs:
+  upload-coverage:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2
+      - name: Get coverage artifacts
+        uses: dawidd6/action-download-artifact@v2
+        with:
+          workflow: tests.yml
+          commit: ${{ github.event.workflow_run.head_sha }}
+          name: code-coverage-report
+          path: tests/_reports/
+
+      - name: Upload to Codecov
+        uses: codecov/codecov-action@v2
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: tests/_reports/coverage.xml
+          #flags: unittests # optional
+          name: gt4py-functional
+          fail_ci_if_error: false # optional (default = false)
+          verbose: true # optional (default = false)
+
+      # Info: https://smokeshow.helpmanual.io/
+      - name: Setup smokeshow uploads
+        uses: actions/setup-python@v2
+        with:
+          python-version: "3.8"
+      - run: pip install smokeshow
+      
+      - name: Upload reports to smokeshow
+        run: smokeshow upload tests/_reports/coverage_html
+        env:
+          SMOKESHOW_GITHUB_STATUS_DESCRIPTION: Coverage {coverage-percentage}
+          SMOKESHOW_GITHUB_COVERAGE_THRESHOLD: 80
+          SMOKESHOW_GITHUB_CONTEXT: coverage
+          SMOKESHOW_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SMOKESHOW_GITHUB_PR_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          SMOKESHOW_AUTH_KEY: ${{ secrets.SMOKESHOW_AUTH_KEY }}
