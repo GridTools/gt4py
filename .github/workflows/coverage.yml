@@ -5,7 +5,7 @@ on:
     workflows: [Tests]
     types: [completed]
     branches:
-    - "functional*"
+    - "**"
 
 permissions:
   statuses: write
