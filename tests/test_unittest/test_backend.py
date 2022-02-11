@@ -21,7 +21,7 @@ import pytest
 
 import gt4py.backend as gt_backend
 from gt4py.backend import REGISTRY as backend_registry
-from gt4py.backend.module_generator import make_args_data_from_gtir, make_args_data_from_iir
+from gt4py.backend.module_generator import make_args_data_from_gtir
 from gt4py.definitions import AccessKind
 from gt4py.gtscript import __INLINED, PARALLEL, Field, computation, interval
 from gt4py.stencil_builder import StencilBuilder
@@ -115,8 +115,7 @@ def test_make_args_data_from_gtir(backend_name, mode):
 def test_generate_pre_run(backend_name, mode):
     backend_cls = backend_registry[backend_name]
     builder = StencilBuilder(stencil_def, backend=backend_cls).with_externals({"MODE": mode})
-    iir = builder.implementation_ir
-    args_data = make_args_data_from_iir(iir)
+    args_data = make_args_data_from_gtir(builder.gtir_pipeline)
 
     module_generator = backend_cls.MODULE_GENERATOR_CLASS()
     module_generator.args_data = args_data
@@ -136,8 +135,7 @@ def test_generate_pre_run(backend_name, mode):
 def test_generate_post_run(backend_name, mode):
     backend_cls = backend_registry[backend_name]
     builder = StencilBuilder(stencil_def, backend=backend_cls).with_externals({"MODE": mode})
-    iir = builder.implementation_ir
-    args_data = make_args_data_from_iir(iir)
+    args_data = make_args_data_from_gtir(builder.gtir_pipeline)
 
     module_generator = backend_cls.MODULE_GENERATOR_CLASS()
     module_generator.args_data = args_data
