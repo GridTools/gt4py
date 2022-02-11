@@ -68,8 +68,8 @@ class SingleStaticAssignPass(ast.NodeTransformer):
 
         def __init__(self, name_counter, separator):
             super().__init__()
-            self.name_counter = name_counter
-            self.separator = separator
+            self.name_counter: dict[str, int] = name_counter
+            self.separator: str = separator
 
         def visit_Name(self, node: ast.Name) -> ast.Name:
             if node.id in self.name_counter:
@@ -82,8 +82,8 @@ class SingleStaticAssignPass(ast.NodeTransformer):
 
     def __init__(self, separator="__"):
         super().__init__()
-        self.name_counter = {}
-        self.separator = separator
+        self.name_counter: dict[str, int] = {}
+        self.separator: str = separator
 
     def _rename(self, node):
         return self.RhsRenamer.apply(self.name_counter, self.separator, node)
