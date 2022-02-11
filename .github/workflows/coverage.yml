@@ -4,6 +4,8 @@ on:
   workflow_run:
     workflows: [Tests]
     types: [completed]
+    branches:
+    - "functional*"
 
 permissions:
   statuses: write
@@ -14,24 +16,24 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v2
-      - name: Get coverage artifacts
-        uses: dawidd6/action-download-artifact@v2
-        with:
-          workflow: tests.yml
-          commit: ${{ github.event.workflow_run.head_sha }}
-          name: code-coverage-report
-          path: tests/_reports/
+    - uses: actions/checkout@v2
+    - name: Get coverage artifacts
+      uses: dawidd6/action-download-artifact@v2
+      with:
+        workflow: tests.yml
+        commit: ${{ github.event.workflow_run.head_sha }}
+        name: code-coverage-report
+        path: tests/_reports/
 
-      - name: Upload to Codecov
-        uses: codecov/codecov-action@v2
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: tests/_reports/coverage.xml
+    - name: Upload to Codecov
+      uses: codecov/codecov-action@v2
+      with:
+        token: ${{ secrets.CODECOV_TOKEN }}
+        files: tests/_reports/coverage.xml
           #flags: unittests # optional
-          name: gt4py-functional
-          fail_ci_if_error: false # optional (default = false)
-          verbose: true # optional (default = false)
+        name: gt4py-functional
+        fail_ci_if_error: false   # optional (default = false)
+        verbose: true   # optional (default = false)
 
       # # Info: https://smokeshow.helpmanual.io/
       # - name: Setup smokeshow uploads
@@ -39,7 +41,6 @@ jobs:
       #   with:
       #     python-version: "3.8"
       # - run: pip install smokeshow
-      
       # - name: Upload reports to smokeshow
       #   run: smokeshow upload tests/_reports/coverage_html
       #   env:
