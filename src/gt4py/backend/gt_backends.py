@@ -849,7 +849,9 @@ class GTMCBackend(BaseGTBackend):
 class GTCUDAPyModuleGenerator(CUDAPyExtModuleGenerator):
     def generate_pre_run(self) -> str:
         field_names = [
-            key for key in self.args_data.field_info if self.args_data.field_info[key] is not None
+            key
+            for key in self.args_data.field_info
+            if self.args_data.field_info[key].access != gt_definitions.AccessKind.NONE
         ]
 
         return "\n".join([f + ".host_to_device()" for f in field_names])
