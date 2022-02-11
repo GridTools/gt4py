@@ -77,7 +77,8 @@ jobs:
       uses: actions/setup-python@v2
       with:
         python-version: "3.8"
-      run: pip install smokeshow
+
+    - run: pip install smokeshow
 
     - name: Upload reports to smokeshow
         # Info: https://smokeshow.helpmanual.io/
