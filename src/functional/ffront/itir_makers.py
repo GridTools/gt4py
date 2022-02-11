@@ -51,19 +51,19 @@ def ref(ref_or_name: Union[str, itir.SymRef]) -> itir.SymRef:
     return itir.SymRef(id=ref_or_name)
 
 
-def exprify(literal_or_expr: Union[str, int, itir.Expr]) -> itir.Expr:
+def ensure_expr(literal_or_expr: Union[str, int, itir.Expr]) -> itir.Expr:
     """
-    Convert into a SymRef or IntLiteral if necessary.
+    Convert literals into a SymRef or IntLiteral and let expressions pass unchanged.
 
     Examples
     --------
-    >>> exprify("a")
+    >>> ensure_expr("a")
     SymRef(id='a')
 
-    >>> exprify(3)
+    >>> ensure_expr(3)
     IntLiteral(value=3)
 
-    >>> exprify(itir.OffsetLiteral(value="i"))
+    >>> ensure_expr(itir.OffsetLiteral(value="i"))
     OffsetLiteral(value='i')
     """
     if isinstance(literal_or_expr, str):
@@ -73,13 +73,13 @@ def exprify(literal_or_expr: Union[str, int, itir.Expr]) -> itir.Expr:
     return literal_or_expr
 
 
-class lambda_:
+class lambda__:
     """
     Create a lambda from params and an expression.
 
     Examples
     --------
-    >>> lambda_("a")(deref("a"))  # doctest: +ELLIPSIS
+    >>> lambda__("a")(deref_("a"))  # doctest: +ELLIPSIS
     Lambda(params=[Sym(id='a')], expr=FunCall(fun=SymRef(id='deref'), args=[SymRef(id='a')]), ...)
     """
 
@@ -87,94 +87,94 @@ class lambda_:
         self.args = args
 
     def __call__(self, expr):
-        return itir.Lambda(params=[sym(arg) for arg in self.args], expr=exprify(expr))
+        return itir.Lambda(params=[sym(arg) for arg in self.args], expr=ensure_expr(expr))
 
 
-class call:
+class call_:
     """
     Create a FunCall from an expression and arguments.
 
     Examples
     --------
-    >>> call("plus")(1, 1)
+    >>> call_("plus")(1, 1)
     FunCall(fun=SymRef(id='plus'), args=[IntLiteral(value=1), IntLiteral(value=1)])
     """
 
     def __init__(self, expr):
-        self.fun = exprify(expr)
+        self.fun = ensure_expr(expr)
 
     def __call__(self, *exprs):
-        return itir.FunCall(fun=self.fun, args=[exprify(expr) for expr in exprs])
+        return itir.FunCall(fun=self.fun, args=[ensure_expr(expr) for expr in exprs])
 
 
-def deref(expr):
+def deref_(expr):
     """Create a deref FunCall, shorthand for ``call("deref")(expr)``."""
-    return call("deref")(expr)
+    return call_("deref")(expr)
 
 
-def plus(left, right):
+def plus_(left, right):
     """Create a plus FunCall, shorthand for ``call("plus")(left, right)``."""
-    return call("plus")(left, right)
+    return call_("plus")(left, right)
 
 
-def minus(left, right):
+def minus_(left, right):
     """Create a minus FunCall, shorthand for ``call("minus")(left, right)``."""
-    return call("minus")(left, right)
+    return call_("minus")(left, right)
 
 
-def multiplies(left, right):
+def multiplies_(left, right):
     """Create a multiplies FunCall, shorthand for ``call("multiplies")(left, right)``."""
-    return call("multiplies")(left, right)
+    return call_("multiplies")(left, right)
 
 
-def divides(left, right):
+def divides_(left, right):
     """Create a divides FunCall, shorthand for ``call("divides")(left, right)``."""
-    return call("divides")(left, right)
+    return call_("divides")(left, right)
 
 
-def and_(left, right):
+def and__(left, right):
     """Create an and_ FunCall, shorthand for ``call("and_")(left, right)``."""
-    return call("and_")(left, right)
+    return call_("and_")(left, right)
 
 
-def or_(left, right):
+def or__(left, right):
     """Create an or_ FunCall, shorthand for ``call("or_")(left, right)``."""
-    return call("or_")(left, right)
+    return call_("or_")(left, right)
 
 
-def greater(left, right):
+def greater_(left, right):
     """Create a greater FunCall, shorthand for ``call("greater")(left, right)``."""
-    return call("greater")(left, right)
+    return call_("greater")(left, right)
 
 
-def less(left, right):
+def less_(left, right):
     """Create a less FunCall, shorthand for ``call("less")(left, right)``."""
-    return call("less")(left, right)
+    return call_("less")(left, right)
 
 
-def eq(left, right):
+def eq_(left, right):
     """Create a eq FunCall, shorthand for ``call("eq")(left, right)``."""
-    return call("eq")(left, right)
+    return call_("eq")(left, right)
 
 
-def not_(expr):
+def not__(expr):
     """Create a not_ FunCall, shorthand for ``call("not_")(expr)``."""
-    return call("not_")(expr)
+    return call_("not_")(expr)
 
 
-def make_tuple(*args):
+def make_tuple_(*args):
     """Create a make_tuple FunCall, shorthand for ``call("make_tuple")(*args)``."""
-    return call("make_tuple")(*args)
+    return call_("make_tuple")(*args)
 
 
-def tuple_get(tuple_expr, index):
+def tuple_get_(tuple_expr, index):
     """Create a tuple_get FunCall, shorthand for ``call("tuple_get")(tuple_expr, index)``."""
-    return call("tuple_get")(tuple_expr, index)
+    return call_("tuple_get")(tuple_expr, index)
 
 
-def lift(expr):
-    """Create a lift FunCall, shorthand for ``call("lift")(expr)``."""
-    return call(call("lift")(expr))
+def lift_(expr):
+    """Create a lift FunCall, shorthand for ``call(call("lift")(expr))``."""
+    return call_(call_("lift")(expr))
 
 
 class let:
@@ -192,24 +192,24 @@ class let:
         self.init_form = init_form
 
     def __call__(self, form):
-        return call(lambda_(self.var)(form))(self.init_form)
+        return call_(lambda__(self.var)(form))(self.init_form)
 
 
-def shift(offset, value=None):
+def shift_(offset, value=None):
     """
     Create a shift call.
 
     Examples
     --------
-    >>> shift("i", 0)("a")
+    >>> shift_("i", 0)("a")
     FunCall(fun=FunCall(fun=SymRef(id='shift'), args=[OffsetLiteral(value='i'), IntLiteral(value=0)]), args=[SymRef(id='a')])
 
-    >>> shift("V2E")("b")
+    >>> shift_("V2E")("b")
     FunCall(fun=FunCall(fun=SymRef(id='shift'), args=[OffsetLiteral(value='V2E')]), args=[SymRef(id='b')])
     """
     offset = itir.OffsetLiteral(value=offset)
     args = [offset]
     if value is not None:
-        value = exprify(value)
+        value = ensure_expr(value)
         args.append(value)
-    return call(call("shift")(*args))
+    return call_(call_("shift")(*args))
