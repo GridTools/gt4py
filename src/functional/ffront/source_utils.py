@@ -20,7 +20,7 @@ import symtable
 import textwrap
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
-from typing import Any, Union
+from typing import Any, Mapping, Union, cast
 
 from eve import typingx
 from functional import common
@@ -74,11 +74,12 @@ def make_symbol_names_from_source(source: str, filename: str = MISSING_FILENAME)
             f"Sources with multiple function definitions are not yet supported (\n{source}\n)"
         )
 
-    func_st = children[0]
+    assert children[0].get_type() == "function"
+    func_st: symtable.Function = cast(symtable.Function, children[0])
 
-    param_names = set()
-    imported_names = set()
-    local_names = set()
+    param_names: set[str] = set()
+    imported_names: set[str] = set()
+    local_names: set[str] = set()
     for name in func_st.get_locals():
         if (s := func_st.lookup(name)).is_imported():
             imported_names.add(name)
@@ -89,7 +90,7 @@ def make_symbol_names_from_source(source: str, filename: str = MISSING_FILENAME)
 
     # symtable returns regular free (or non-local) variables in 'get_frees()' and
     # the free variables introduced with the 'nonlocal' statement in 'get_nonlocals()'
-    nonlocal_names = set(func_st.get_frees()) | set(func_st.get_nonlocals())
+    nonlocal_names = set(func_st.get_frees()) | set(func_st.get_nonlocals())  # type: ignore[attr-defined]
     global_names = set(func_st.get_globals()) - set(fbuiltins.ALL_BUILTIN_NAMES)
 
     return SymbolNames(
@@ -129,8 +130,8 @@ class SourceDefinition:
     filename: str = MISSING_FILENAME
     starting_line: int = 1
 
-    def __iter__(self) -> Iterator[tuple[str, ...]]:
-        yield from iter((self.source, self.filename, self.starting_line))
+    def __iter__(self) -> Iterator[Union[str, int]]:
+        yield from iter((self.source, self.filename, self.starting_line))  # type: ignore[misc]
 
     from_function = staticmethod(make_source_definition_from_function)
 
@@ -144,16 +145,16 @@ class ClosureRefs:
     It also supports unpacking.
     """
 
-    nonlocals: dict[str, Any]
-    globals: dict[str, Any]  # noqa: A003  # shadowing a python builtin
-    annotations: dict[str, Any]
+    nonlocals: Mapping[str, Any]
+    globals: Mapping[str, Any]  # noqa: A003  # shadowing a python builtin
+    annotations: Mapping[str, Any]
     builtins: set[str]
     unbound: set[str]
 
-    def __iter__(self) -> Iterator[Union[dict[str, Any], set[str]]]:
+    def __iter__(self) -> Iterator[Union[Mapping[str, Any], set[str]]]:
         yield from iter(
             (self.nonlocals, self.globals, self.annotations, self.builtins, self.unbound)
-        )
+        )  # type: ignore[misc]
 
     from_function = staticmethod(make_closure_refs_from_function)
 
@@ -167,17 +168,17 @@ class SymbolNames:
     It also supports unpacking.
     """
 
-    params: tuple[str, ...]
-    locals: tuple[str, ...]  # noqa: A003  # shadowing a python builtin
-    imported: tuple[str, ...]
-    nonlocals: tuple[str, ...]
-    globals: tuple[str, ...]  # noqa: A003  # shadowing a python builtin
+    params: set[str]
+    locals: set[str]  # noqa: A003  # shadowing a python builtin
+    imported: set[str]
+    nonlocals: set[str]
+    globals: set[str]  # noqa: A003  # shadowing a python builtin
 
     @functools.cached_property
-    def all_locals(self) -> tuple[str]:
-        return self.params + self.locals + self.imported
+    def all_locals(self) -> set[str]:
+        return self.params | self.locals | self.imported
 
-    def __iter__(self) -> Iterator[tuple[str, ...]]:
+    def __iter__(self) -> Iterator[set[str]]:
         yield from iter((self.params, self.locals, self.imported, self.nonlocals, self.globals))
 
     from_source = staticmethod(make_symbol_names_from_source)

@@ -34,7 +34,7 @@ from functional.ffront.ast_passes import (
 )
 from functional.ffront.foast_passes.shift_recognition import FieldOperatorShiftRecognition
 from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduction
-from functional.ffront.py_lowering_utils import ClosureRefs, SourceDefinition, SymbolNames
+from functional.ffront.source_utils import ClosureRefs, SourceDefinition, SymbolNames
 
 
 @dataclass(frozen=True, kw_only=True)
