@@ -11,8 +11,7 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-from dataclasses import dataclass
-from typing import Optional, Type, TypeGuard
+from typing import Optional
 
 import functional.ffront.field_operator_ast as foast
 from eve import NodeTranslator, SymbolTableTrait
@@ -66,7 +65,6 @@ class FieldOperatorTypeDeduction(NodeTranslator):
             raise FieldOperatorTypeDeductionError.from_foast_node(
                 node, msg=f"Undeclared symbol {node.id}"
             )
-            return node
 
         symbol = symtable[node.id]
         return foast.Name(id=node.id, type=symbol.type, location=node.location)
