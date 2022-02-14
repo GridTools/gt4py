@@ -175,7 +175,8 @@ class FieldOperatorTypeDeduction(NodeTranslator):
     ---------
     >>> import ast
     >>> from functional.common import Field
-    >>> from functional.ffront.func_to_foast import FieldOperatorParser, SourceDefinition, ClosureRefs
+    >>> from functional.ffront.source_utils import SourceDefinition, ClosureRefs
+    >>> from functional.ffront.func_to_foast import FieldOperatorParser
     >>> def example(a: "Field[..., float]", b: "Field[..., float]"):
     ...     return a + b
 
