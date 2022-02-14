@@ -148,11 +148,6 @@ class Call(Expr):
     args: list[Expr]
 
 
-class Shift(Expr):
-    offsets: list[Subscript]
-    expr: Expr
-
-
 class Stmt(LocatedNode):
     ...
 

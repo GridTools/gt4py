@@ -18,8 +18,9 @@ from functional.common import Dimension
 from functional.ffront import common_types
 from functional.ffront import field_operator_ast as foast
 from functional.ffront.fbuiltins import Field, float64, int64
-from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError, TypeInfo
+from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError
 from functional.ffront.func_to_foast import FieldOperatorParser
+from functional.ffront.type_info import TypeInfo
 
 
 def type_info_cases():
@@ -156,11 +157,11 @@ def test_unpack_assign():
 
     parsed = FieldOperatorParser.apply_to_function(unpack_explicit_tuple)
 
-    assert parsed.symtable_["tmp_a$0"].type == common_types.FieldType(
+    assert parsed.symtable_["tmp_a__0"].type == common_types.FieldType(
         dims=Ellipsis,
         dtype=common_types.ScalarType(kind=common_types.ScalarKind.FLOAT64, shape=None),
     )
-    assert parsed.symtable_["tmp_b$0"].type == common_types.FieldType(
+    assert parsed.symtable_["tmp_b__0"].type == common_types.FieldType(
         dims=Ellipsis,
         dtype=common_types.ScalarType(kind=common_types.ScalarKind.FLOAT64, shape=None),
     )
@@ -173,7 +174,7 @@ def test_assign_tuple():
 
     parsed = FieldOperatorParser.apply_to_function(temp_tuple)
 
-    assert parsed.symtable_["tmp$0"].type == common_types.TupleType(
+    assert parsed.symtable_["tmp__0"].type == common_types.TupleType(
         types=[
             common_types.FieldType(
                 dims=Ellipsis,

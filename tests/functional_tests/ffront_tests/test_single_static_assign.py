@@ -26,7 +26,7 @@ def ssaify_string(code: str) -> ast.AST:
 
 
 def test_sequence():
-    """Overwriting the same variable is the simplest case"""
+    """Overwriting the same variable is the simplest case."""
     ssa_ast = ssaify_string(
         """
         tmp = 1
@@ -36,9 +36,9 @@ def test_sequence():
     )
 
     lines = ast.unparse(ssa_ast).split("\n")
-    assert lines[0] == "tmp$0 = 1"
-    assert lines[1] == "tmp$1 = 2"
-    assert lines[2] == "tmp$2 = 3"
+    assert lines[0] == "tmp__0 = 1"
+    assert lines[1] == "tmp__1 = 2"
+    assert lines[2] == "tmp__2 = 3"
 
 
 def test_self_on_rhs():
@@ -50,8 +50,8 @@ def test_self_on_rhs():
         """
     )
     lines = ast.unparse(ssa_ast).split("\n")
-    assert lines[0] == "tmp$0 = 1"
-    assert lines[1] == "tmp$1 = tmp$0 + 1"
+    assert lines[0] == "tmp__0 = 1"
+    assert lines[1] == "tmp__1 = tmp__0 + 1"
 
 
 def test_multi_assign():
@@ -62,7 +62,7 @@ def test_multi_assign():
         """
     )
     lines = ast.unparse(ssa_ast).split("\n")
-    assert lines[0] == "a$0 = a$1 = b$0 = a$2 = b$1 = 1"
+    assert lines[0] == "a__0 = a__1 = b__0 = a__2 = b__1 = 1"
 
 
 def test_external_name_values():
@@ -74,8 +74,8 @@ def test_external_name_values():
         """
     )
     lines = ast.unparse(ssa_ast).split("\n")
-    assert lines[0] == "a$0 = inp"
-    assert lines[1] == "a$1 = a$0 + inp"
+    assert lines[0] == "a__0 = inp"
+    assert lines[1] == "a__1 = a__0 + inp"
 
 
 def test_overwrite_external():
@@ -88,9 +88,9 @@ def test_overwrite_external():
         """
     )
     lines = ast.unparse(ssa_ast).split("\n")
-    assert lines[0] == "a$0 = inp"
-    assert lines[1] == "inp$0 = a$0 + inp"
-    assert lines[2] == "b$0 = inp$0"
+    assert lines[0] == "a__0 = inp"
+    assert lines[1] == "inp__0 = a__0 + inp"
+    assert lines[2] == "b__0 = inp__0"
 
 
 def test_unpacking_swap():
@@ -103,9 +103,9 @@ def test_unpacking_swap():
         """
     )
     lines = ast.unparse(ssa_ast).split("\n")
-    assert lines[0] == "a$0 = 5"
-    assert lines[1] == "b$0 = 1"
-    assert lines[2] == "(b$1, a$1) = (a$0, b$0)"
+    assert lines[0] == "a__0 = 5"
+    assert lines[1] == "b__0 = 1"
+    assert lines[2] == "(b__1, a__1) = (a__0, b__0)"
 
 
 def test_annotated_assign():
@@ -117,7 +117,7 @@ def test_annotated_assign():
             """
         )
     ).splitlines()
-    assert lines[0] == "a$0: int = 5"
+    assert lines[0] == "a__0: int = 5"
 
 
 def test_empty_annotated_assign():
@@ -130,6 +130,6 @@ def test_empty_annotated_assign():
             """
         )
     ).splitlines()
-    assert lines[0] == "a$0 = 0"
-    assert lines[1] == "a$1: int"
-    assert lines[2] == "b$0 = a$0"
+    assert lines[0] == "a__0 = 0"
+    assert lines[1] == "a__1: int"
+    assert lines[2] == "b__0 = a__0"
