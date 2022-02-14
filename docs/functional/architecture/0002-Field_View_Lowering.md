@@ -134,3 +134,7 @@ On the other hand **iterator** view code can represent the same tree or tree sni
 Therefore `functional.ffront.itir_makers` was written to allow direct building of iterator IR tree snippets with syntax that matches iterator view closely and makes the patterns visible. It allows implicit usage of string literals as variable names to increase readability wherever it is unambiguously possible. It does not check the validity of the built snippets by design.
 
 Finally, the improvement in clarity is so striking that these makers are also used in the lowering itself.
+
+## Deferred implementation of tuple returns
+
+In the course of implementing the lowering it turned out that while it is clear what `return a, b` should do in field view, it is not clear how to achieve that by lowering to iterator IR (in general, not specifically with the chosen algorithm). Therefore the tests that return multiple fields have been skipped for now and the lowering makes no special effort to generate valid IR from tuple expressions as return values.
