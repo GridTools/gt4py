@@ -4,7 +4,7 @@ on:
   workflow_run:
     workflows: [Tests]
     #types: [completed]
-    branches: ['functional**']
+    #branches: ['functional**']
 
 permissions:
   statuses: write
@@ -16,13 +16,13 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
-    - name: Get coverage artifacts
-      uses: dawidd6/action-download-artifact@v2
-      with:
-        workflow: tests.yml
-        commit: ${{ github.event.workflow_run.head_sha }}
-        name: code-coverage-report
-        path: tests/_reports/
+    # - name: Get coverage artifacts
+    #   uses: dawidd6/action-download-artifact@v2
+    #   with:
+    #     workflow: tests.yml
+    #     commit: ${{ github.event.workflow_run.head_sha }}
+    #     name: code-coverage-report
+    #     path: tests/_reports/
 
     # - name: Upload to Codecov
     #   uses: codecov/codecov-action@v2
