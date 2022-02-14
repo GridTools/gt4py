@@ -3,7 +3,7 @@ name: Check tests coverage
 on:
   workflow_run:
     workflows: [Tests]
-    types: [completed]
+    #types: [completed]
     branches: ['functional**']
 
 permissions:
