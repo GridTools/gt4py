@@ -1,21 +1,45 @@
-name: Check tests coverage
+name: Upload Previews
 
 on:
   workflow_run:
-    workflows: [Tests]
-    #types: [completed]
-    #branches: ['functional**']
+    workflows: [Tox tests]
+    types: [completed]
 
 permissions:
   statuses: write
 
 jobs:
-  upload-coverage:
-    # if: ${{ github.event.workflow_run.conclusion == 'success' }}
+  upload-previews:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v2
+      - uses: actions/setup-python@v1
+        with:
+          python-version: '3.8'
+
+      - run: pip install smokeshow
+
+
+
+# name: Check tests coverage
+
+# on:
+#   workflow_run:
+#     workflows: [Tests]
+#     #types: [completed]
+#     #branches: ['functional**']
+
+# permissions:
+#   statuses: write
+
+# jobs:
+#   upload-coverage:
+#     # if: ${{ github.event.workflow_run.conclusion == 'success' }}
+#     runs-on: ubuntu-latest
+
+#     steps:
+#     - uses: actions/checkout@v2
     # - name: Get coverage artifacts
     #   uses: dawidd6/action-download-artifact@v2
     #   with:
