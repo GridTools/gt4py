@@ -25,12 +25,13 @@ IDim = CartesianAxis("IDim")
 
 
 def debug_itir(tree):
-    import black
+    """Compare tree snippets while debugging."""
     from devtools import debug
 
+    from eve.codegen import format_python_source
     from functional.iterator.backends.roundtrip import EmbeddedDSL
 
-    debug(black.format_str(EmbeddedDSL.apply(tree), mode=black.Mode()))
+    debug(format_python_source(EmbeddedDSL.apply(tree)))
 
 
 def test_copy():

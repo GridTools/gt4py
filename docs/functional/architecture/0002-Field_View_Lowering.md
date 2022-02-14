@@ -138,3 +138,7 @@ Finally, the improvement in clarity is so striking that these makers are also us
 ## Deferred implementation of tuple returns
 
 In the course of implementing the lowering it turned out that while it is clear what `return a, b` should do in field view, it is not clear how to achieve that by lowering to iterator IR (in general, not specifically with the chosen algorithm). Therefore the tests that return multiple fields have been skipped for now and the lowering makes no special effort to generate valid IR from tuple expressions as return values.
+
+## Temporary variable renaming
+
+Since temporary variables are no longer inlined, the renaming that happens in the SSA pass now goes through into the lowered IR, requiring the new names to be valid `SymbolNames`. This renaming should consequently be checked for and made more robust against user variable name collisions.
