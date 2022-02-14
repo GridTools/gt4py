@@ -180,7 +180,7 @@ def test_unary_neg():
 
 def test_shift():
     size = 10
-    Ioff = offset("Ioff")
+    Ioff = offset("Ioff", source=IDim, target=[IDim, IDim])
     a = np_as_located_field(IDim)(np.arange(size + 1))
     b = np_as_located_field(IDim)(np.zeros((size)))
 
@@ -196,7 +196,7 @@ def test_shift():
 def test_fold_shifts():
     """Shifting the result of an addition should work by shifting the operands instead."""
     size = 10
-    Ioff = offset("Ioff")
+    Ioff = offset("Ioff", source=IDim, target=[IDim, IDim])
     a = np_as_located_field(IDim)(np.arange(size + 1))
     b = np_as_located_field(IDim)(np.ones((size + 1)) * 2)
     c = np_as_located_field(IDim)(np.zeros((size)))

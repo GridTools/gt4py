@@ -212,7 +212,6 @@ class FieldOperatorTypeDeduction(NodeTranslator):
             raise FieldOperatorTypeDeductionError.from_foast_node(
                 node, msg=f"Undeclared symbol {node.id}"
             )
-            return node
 
         symbol = symtable[node.id]
         return foast.Name(id=node.id, type=symbol.type, location=node.location)
@@ -273,7 +272,7 @@ class FieldOperatorTypeDeduction(NodeTranslator):
             return foast.Subscript(
                 value=new_value,
                 index=node.index,
-                type=common_types.OffsetType(),
+                type=new_value.type,
                 location=node.location,
             )
         match new_value.type:
