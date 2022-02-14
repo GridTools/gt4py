@@ -66,19 +66,13 @@ def test_make_args_data_from_iir(backend_name, mode):
 
     for key in args_data.field_info:
         assert key in args_list
-        if key in field_info_val[mode]:
-            assert args_data.field_info[key] is not None
-        else:
-            assert args_data.field_info[key] is None
+        assert args_data.field_info[key] is not None
         assert key not in args_found
         args_found.add(key)
 
     for key in args_data.parameter_info:
         assert key in args_list
-        if key in parameter_info_val[mode]:
-            assert args_data.parameter_info[key] is not None
-        else:
-            assert args_data.parameter_info[key] is None
+        assert args_data.parameter_info[key] is not None
         assert key not in args_found
         args_found.add(key)
 

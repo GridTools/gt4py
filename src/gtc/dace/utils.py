@@ -824,7 +824,6 @@ def assert_sdfg_equal(sdfg1: dace.SDFG, sdfg2: dace.SDFG):
                 raise TypeError
             if isinstance(n1, dace.nodes.AccessNode):
                 assert isinstance(n2, dace.nodes.AccessNode)
-                assert n1.access == n2.access
                 assert n1.data == n2.data
             elif isinstance(n1, VerticalLoopLibraryNode):
                 assert equal_vl_node(n1, n2)

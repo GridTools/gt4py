@@ -16,7 +16,7 @@ def test_noextents():
         with computation(PARALLEL), interval(...):
             field_a = field_b[0, 0, 0]
 
-    builder = StencilBuilder(stencil, backend=from_name("debug"))
+    builder = StencilBuilder(stencil, backend=from_name("gtc:numpy"))
     old_ext = builder.implementation_ir.fields_extents
     legacy_ext = compute_legacy_extents(prepare_gtir(builder), mask_inwards=True)
 
@@ -29,7 +29,7 @@ def test_single_pos_offset():
         with computation(PARALLEL), interval(...):
             field_a = field_b[1, 0, 0]
 
-    builder = StencilBuilder(stencil, backend=from_name("debug"))
+    builder = StencilBuilder(stencil, backend=from_name("gtc:numpy"))
     old_ext = builder.implementation_ir.fields_extents
     legacy_ext = compute_legacy_extents(prepare_gtir(builder), mask_inwards=True)
 
@@ -42,7 +42,7 @@ def test_single_neg_offset():
         with computation(PARALLEL), interval(...):
             field_a = field_b[0, -1, 0]
 
-    builder = StencilBuilder(stencil, backend=from_name("debug"))
+    builder = StencilBuilder(stencil, backend=from_name("gtc:numpy"))
     old_ext = builder.implementation_ir.fields_extents
     legacy_ext = compute_legacy_extents(prepare_gtir(builder), mask_inwards=True)
 
@@ -55,7 +55,7 @@ def test_single_k_offset():
         with computation(PARALLEL), interval(...):
             field_a = field_b[0, 0, 1]
 
-    builder = StencilBuilder(stencil, backend=from_name("debug"))
+    builder = StencilBuilder(stencil, backend=from_name("gtc:numpy"))
     old_ext = builder.implementation_ir.fields_extents
     legacy_ext = compute_legacy_extents(prepare_gtir(builder), mask_inwards=True)
 
@@ -73,7 +73,7 @@ def test_offset_chain():
             tmp = field_b[0, -1, 0] + field_b[0, 1, 0]
             field_a = tmp[0, 0, 0] + tmp[0, 0, -1]
 
-    builder = StencilBuilder(stencil, backend=from_name("debug"))
+    builder = StencilBuilder(stencil, backend=from_name("gtc:numpy"))
     old_ext = builder.implementation_ir.fields_extents
     legacy_ext = compute_legacy_extents(prepare_gtir(builder), mask_inwards=True)
 
@@ -86,7 +86,7 @@ def test_ij():
         with computation(PARALLEL), interval(...):
             field_a = field_b[0, 1]
 
-    builder = StencilBuilder(stencil, backend=from_name("debug"))
+    builder = StencilBuilder(stencil, backend=from_name("gtc:numpy"))
     old_ext = builder.implementation_ir.fields_extents
     legacy_ext = compute_legacy_extents(prepare_gtir(builder), mask_inwards=True)
 
@@ -99,7 +99,7 @@ def test_j():
         with computation(PARALLEL), interval(...):
             field_a = field_b[1] + field_b[-2]
 
-    builder = StencilBuilder(stencil, backend=from_name("debug"))
+    builder = StencilBuilder(stencil, backend=from_name("gtc:numpy"))
     old_ext = builder.implementation_ir.fields_extents
     legacy_ext = compute_legacy_extents(prepare_gtir(builder), mask_inwards=True)
 
@@ -112,7 +112,7 @@ def test_unreferenced():
         with computation(PARALLEL), interval(...):
             field_a = 1.0
 
-    builder = StencilBuilder(stencil, backend=from_name("debug"))
+    builder = StencilBuilder(stencil, backend=from_name("gtc:numpy"))
     old_ext = builder.implementation_ir.fields_extents
     legacy_ext = compute_legacy_extents(prepare_gtir(builder), mask_inwards=True)
 
@@ -132,7 +132,7 @@ def test_field_if():
                 tmp = -field_b[0, 1, 0]
                 field_a = tmp
 
-    builder = StencilBuilder(stencil, backend=from_name("debug"))
+    builder = StencilBuilder(stencil, backend=from_name("gtc:numpy"))
     old_ext = builder.implementation_ir.fields_extents
     legacy_ext = compute_legacy_extents(prepare_gtir(builder), mask_inwards=True)
 
