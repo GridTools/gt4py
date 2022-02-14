@@ -17,7 +17,7 @@ import pytest
 from functional.common import Dimension
 from functional.ffront import common_types
 from functional.ffront import field_operator_ast as foast
-from functional.ffront.common_types_utils import TypeInfo
+from functional.ffront.common_types import TypeInfo
 from functional.ffront.fbuiltins import Field, float64, int64
 from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError
 from functional.ffront.func_to_foast import FieldOperatorParser

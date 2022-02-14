@@ -17,7 +17,6 @@ import functional.ffront.field_operator_ast as foast
 from eve import NodeTranslator, SymbolTableTrait
 from functional.common import GTSyntaxError
 from functional.ffront import common_types
-from functional.ffront import common_types_utils as ct_utils
 
 
 class FieldOperatorTypeDeduction(NodeTranslator):
@@ -71,7 +70,7 @@ class FieldOperatorTypeDeduction(NodeTranslator):
 
     def visit_Assign(self, node: foast.Assign, **kwargs) -> foast.Assign:
         new_value = node.value
-        if not ct_utils.is_complete_symbol_type(node.value.type):
+        if not common_types.is_complete_symbol_type(node.value.type):
             new_value = self.visit(node.value, **kwargs)
         new_target = self.visit(node.target, refine_type=new_value.type, **kwargs)
         return foast.Assign(target=new_target, value=new_value, location=node.location)
@@ -84,7 +83,7 @@ class FieldOperatorTypeDeduction(NodeTranslator):
     ) -> foast.Symbol:
         symtable = kwargs["symtable"]
         if refine_type:
-            if not ct_utils.TypeInfo(node.type).can_be_refined_to(ct_utils.TypeInfo(refine_type)):
+            if not common_types.TypeInfo(node.type).can_be_refined_to(common_types.TypeInfo(refine_type)):
                 raise FieldOperatorTypeDeductionError.from_foast_node(
                     node,
                     msg=(
@@ -163,13 +162,13 @@ class FieldOperatorTypeDeduction(NodeTranslator):
         right_type: common_types.SymbolType,
         **kwargs,
     ) -> common_types.SymbolType:
-        left, right = ct_utils.TypeInfo(left_type), ct_utils.TypeInfo(right_type)
+        left, right = common_types.TypeInfo(left_type), common_types.TypeInfo(right_type)
         if (
             left.is_arithmetic_compatible
             and right.is_arithmetic_compatible
-            and ct_utils.are_broadcast_compatible(left, right)
+            and common_types.are_broadcast_compatible(left, right)
         ):
-            return ct_utils.broadcast_typeinfos(left, right).type
+            return common_types.broadcast_typeinfos(left, right).type
         else:
             raise FieldOperatorTypeDeductionError.from_foast_node(
                 parent,
@@ -185,13 +184,13 @@ class FieldOperatorTypeDeduction(NodeTranslator):
         right_type: common_types.SymbolType,
         **kwargs,
     ) -> common_types.SymbolType:
-        left, right = ct_utils.TypeInfo(left_type), ct_utils.TypeInfo(right_type)
+        left, right = common_types.TypeInfo(left_type), common_types.TypeInfo(right_type)
         if (
             left.is_logics_compatible
             and right.is_logics_compatible
-            and ct_utils.are_broadcast_compatible(left, right)
+            and common_types.are_broadcast_compatible(left, right)
         ):
-            return ct_utils.broadcast_typeinfos(left, right).type
+            return common_types.broadcast_typeinfos(left, right).type
         else:
             raise FieldOperatorTypeDeductionError.from_foast_node(
                 parent,
@@ -212,7 +211,7 @@ class FieldOperatorTypeDeduction(NodeTranslator):
     def _is_unaryop_type_compatible(
         self, op: foast.UnaryOperator, operand_type: common_types.FieldType
     ) -> bool:
-        operand_ti = ct_utils.TypeInfo(operand_type)
+        operand_ti = common_types.TypeInfo(operand_type)
         if op in [foast.UnaryOperator.UADD, foast.UnaryOperator.USUB]:
             return operand_ti.is_arithmetic_compatible
         elif op is foast.UnaryOperator.NOT:
