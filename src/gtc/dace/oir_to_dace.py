@@ -568,7 +568,7 @@ class StencilOirSDFGBuilder(BaseOirSDFGBuilder):
 
         k_sym = dace.symbol("__K")
         k_size_symbolic = dace.symbolic.pystr_to_symbolic(k_size)
-        # this is the right way to check conditions with sympy
+        # this is the right way to check conditions with sympy (therefore the noqa)
         if (
             k_sym in k_size_symbolic.free_symbols
             and (k_size_symbolic >= k_sym)

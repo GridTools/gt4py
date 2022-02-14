@@ -814,7 +814,7 @@ class NaiveHorizontalExecutionExpander(OIRLibraryNodeExpander):
             index_symbols=self.node.index_symbols,
             global_domain_symbols=self.node.global_domain_symbols,
         )
-        tasklet, map_entry, map_exit = self.res_state.add_mapped_tasklet(
+        tasklet, _, _ = self.res_state.add_mapped_tasklet(
             self.node.name + "_tasklet",
             map_ranges=map_ranges,
             inputs=in_memlets,

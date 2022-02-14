@@ -30,7 +30,6 @@ from gt4py.backend.gtc_backend.defir_to_gtir import DefIRToGTIR
 from gt4py.backend.module_generator import make_args_data_from_gtir
 from gt4py.ir import StencilDefinition
 from gtc import gtir, gtir_to_oir
-from gtc.common import CartesianOffset, LevelMarker
 from gtc.dace.oir_to_dace import OirSDFGBuilder
 from gtc.dace.utils import array_dimensions, replace_strides
 from gtc.passes.gtir_k_boundary import compute_k_boundary
@@ -68,9 +67,7 @@ def post_expand_trafos(sdfg: dace.SDFG):
     sdfg.simplify()
 
 
-def expand_and_finalize_sdfg(
-    gtir: gtir.Stencil, sdfg: dace.SDFG, layout_map
-) -> dace.SDFG:  # noqa: C901
+def expand_and_finalize_sdfg(gtir: gtir.Stencil, sdfg: dace.SDFG, layout_map) -> dace.SDFG:
 
     args_data = make_args_data_from_gtir(GtirPipeline(gtir))
 
@@ -138,22 +135,6 @@ class GTCDaCeExtGenerator:
         return sources
 
 
-def compute_k_origins(node: gtir.Stencil) -> Dict[str, int]:
-    k_origins: Dict[str, int] = dict()
-    for vl in node.iter_tree().if_isinstance(gtir.VerticalLoop):
-        for acc in vl.iter_tree().if_isinstance(gtir.FieldAccess):
-            if vl.interval.start.level == LevelMarker.START:
-                if not isinstance(acc.offset, CartesianOffset):
-                    candidate = 0
-                else:
-                    candidate = -vl.interval.start.offset - acc.offset.k
-                candidate = max(0, candidate)
-            else:
-                candidate = 0
-            k_origins[acc.name] = max(k_origins.get(acc.name, 0), candidate)
-    return k_origins
-
-
 class DaCeComputationCodegen:
 
     template = as_mako(
@@ -194,6 +175,7 @@ class DaCeComputationCodegen:
         for i, line in reversed(list(enumerate(lines))):
             if '#include "../../include/hash.h' in line:
                 lines = lines[0:i] + lines[i + 1 :]
+                break
 
         computations = codegen.format_source("cpp", "\n".join(lines), style="LLVM")
 
