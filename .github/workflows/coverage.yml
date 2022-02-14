@@ -4,13 +4,14 @@ on:
   workflow_run:
     workflows: [Tests]
     types: [completed]
+    branches: ['functional**']
 
 permissions:
   statuses: write
 
 jobs:
   upload-coverage:
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    # if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
 
     steps:
@@ -23,15 +24,15 @@ jobs:
         name: code-coverage-report
         path: tests/_reports/
 
-    - name: Upload to Codecov
-      uses: codecov/codecov-action@v2
-      with:
-        token: ${{ secrets.CODECOV_TOKEN }}
-        files: tests/_reports/coverage.xml
-          #flags: unittests # optional
-        name: gt4py-functional
-        fail_ci_if_error: false   # optional (default = false)
-        verbose: true   # optional (default = false)
+    # - name: Upload to Codecov
+    #   uses: codecov/codecov-action@v2
+    #   with:
+    #     token: ${{ secrets.CODECOV_TOKEN }}
+    #     files: tests/_reports/coverage.xml
+    #       #flags: unittests # optional
+    #     name: gt4py-functional
+    #     fail_ci_if_error: false   # optional (default = false)
+    #     verbose: true   # optional (default = false)
 
       # # Info: https://smokeshow.helpmanual.io/
       # - name: Setup smokeshow uploads
