@@ -16,7 +16,7 @@ from typing import Optional
 
 from eve import NodeTranslator
 from functional.ffront import field_operator_ast as foast
-from functional.ffront import itir_makers as mi
+from functional.ffront import itir_makers as im
 from functional.ffront.type_info import TypeInfo
 from functional.iterator import ir as itir
 
@@ -50,7 +50,7 @@ class FieldOperatorLowering(NodeTranslator):
             self.params = params
 
         def __call__(self, expr):
-            return mi.lift_(mi.lambda__(*self.params)(expr))(*self.params)
+            return im.lift_(im.lambda__(*self.params)(expr))(*self.params)
 
     @classmethod
     def apply(cls, node: foast.FieldOperator) -> itir.FunctionDefinition:
@@ -72,9 +72,9 @@ class FieldOperatorLowering(NodeTranslator):
         current_expr = self.visit(return_stmt, **kwargs)
 
         for assign in reversed(assigns):
-            current_expr = mi.let(*self._visit_assign(assign, **kwargs))(current_expr)
+            current_expr = im.let(*self._visit_assign(assign, **kwargs))(current_expr)
 
-        return mi.deref_(current_expr)
+        return im.deref_(current_expr)
 
     def _visit_assign(self, node: foast.Assign, **kwargs) -> tuple[itir.Sym, itir.Expr]:
         sym = self.visit(node.target, **kwargs)
@@ -85,10 +85,10 @@ class FieldOperatorLowering(NodeTranslator):
         return self.visit(node.value)
 
     def visit_Symbol(self, node: foast.Symbol, **kwargs) -> itir.Sym:
-        return mi.sym(node.id)
+        return im.sym(node.id)
 
     def visit_Name(self, node: foast.Name, **kwargs) -> itir.SymRef:
-        return mi.ref(node.id)
+        return im.ref(node.id)
 
     def _lift_lambda(self, node):
         def is_field(expr: foast.Expr) -> bool:
@@ -100,40 +100,40 @@ class FieldOperatorLowering(NodeTranslator):
         return self.lifted_lambda(*param_names)
 
     def visit_Subscript(self, node: foast.Subscript, **kwargs) -> itir.FunCall:
-        return mi.tuple_get_(node.index, self.visit(node.value, **kwargs))
+        return im.tuple_get_(node.index, self.visit(node.value, **kwargs))
 
     def visit_TupleExpr(self, node: foast.TupleExpr, **kwargs) -> itir.FunCall:
-        return mi.make_tuple_(*self.visit(node.elts, **kwargs))
+        return im.make_tuple_(*self.visit(node.elts, **kwargs))
 
     def visit_UnaryOp(self, node: foast.UnaryOp, **kwargs) -> itir.FunCall:
         # TODO(tehrengruber): extend iterator ir to support unary operators
         zero_arg = [itir.IntLiteral(value=0)] if node.op is not foast.UnaryOperator.NOT else []
         return self._lift_lambda(node)(
-            mi.call_(node.op.value)(*[*zero_arg, mi.deref_(self.visit(node.operand, **kwargs))])
+            im.call_(node.op.value)(*[*zero_arg, im.deref_(self.visit(node.operand, **kwargs))])
         )
 
     def visit_BinOp(self, node: foast.BinOp, **kwargs) -> itir.FunCall:
         return self._lift_lambda(node)(
-            mi.call_(node.op.value)(
-                mi.deref_(self.visit(node.left, **kwargs)),
-                mi.deref_(self.visit(node.right, **kwargs)),
+            im.call_(node.op.value)(
+                im.deref_(self.visit(node.left, **kwargs)),
+                im.deref_(self.visit(node.right, **kwargs)),
             )
         )
 
     def visit_Compare(self, node: foast.Compare, **kwargs) -> itir.FunCall:
         return self._lift_lambda(node)(
-            mi.call_(node.op.value)(
-                mi.deref_(self.visit(node.left, **kwargs)),
-                mi.deref_(self.visit(node.right, **kwargs)),
+            im.call_(node.op.value)(
+                im.deref_(self.visit(node.left, **kwargs)),
+                im.deref_(self.visit(node.right, **kwargs)),
             )
         )
 
     def _visit_shift(self, node: foast.Call, **kwargs) -> itir.FunCall:
-        return mi.shift_(node.args[0].value.id, node.args[0].index)(self.visit(node.func, **kwargs))
+        return im.shift_(node.args[0].value.id, node.args[0].index)(self.visit(node.func, **kwargs))
 
     def visit_Call(self, node: foast.Call, **kwargs) -> itir.FunCall:
         if TypeInfo(node.func.type).is_field_type:
             return self._visit_shift(node, **kwargs)
         return self._lift_lambda(node)(
-            mi.call_(self.visit(node.func, **kwargs))(*self.visit(node.args, **kwargs))
+            im.call_(self.visit(node.func, **kwargs))(*self.visit(node.args, **kwargs))
         )

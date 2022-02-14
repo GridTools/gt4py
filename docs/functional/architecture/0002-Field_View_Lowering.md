@@ -33,7 +33,7 @@ The choice of algorithm was guided by:
 
 * Yield correct Iterator IR with as little special-casing as possible
 * As simple and readable to code as possible
-* Avoid passing information down into subtree visitors (as long as that does not clash with simplicity and redability)
+* Avoid passing information down into subtree visitors (as long as that does not clash with simplicity and readability)
 
 ### Algorithm
 
@@ -69,7 +69,7 @@ The let expression ``let VAR = INIT_FORM in FORM`` written out in iterator view 
 
 #### Avoids Subexpression Duplication
 
-One property of this algorithm is that it does not duplicate subexpressions unneccessarily, unlike inlining in cases like the following (lifting of integer literals omitted, see below for more on that):
+One property of this algorithm is that it does not duplicate subexpressions unnecessarily, unlike inlining in cases like the following (lifting of integer literals omitted, see below for more on that):
 
 ```python
 @fieldop
@@ -127,7 +127,7 @@ This would mean complicating the lowering without gaining correctness, and there
 
 ## Iterator IR helpers
 
-While implementing the lowering and specifically the tests for it, it quickly became clear that using the `iterator.ir` nodes directly to build trees and tree snippets leads to extremely verbose code. The scturcure of the patterns got lost in keyword arguments and `FunCalls` of `FunCalls`.
+While implementing the lowering and specifically the tests for it, it quickly became clear that using the `iterator.ir` nodes directly to build trees and tree snippets leads to extremely verbose code. The structure of the patterns got lost in keyword arguments and `FunCalls` of `FunCalls`.
 
 On the other hand **iterator** view code can represent the same tree or tree snippet much more readably with the drawback that there is no way of obtaining the `iterator.ir` nodes tree of such code, without executing it through a backend, which stores the tree as a side effect. Converting iterator IR to iterator view code was also considered but requires executing through a backend with code generation. Executing is not desirable because (a) it requires some boilerplate and (b) it does not allow comparing invalid snippets.
 
