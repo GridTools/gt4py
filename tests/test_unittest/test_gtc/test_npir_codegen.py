@@ -206,9 +206,9 @@ def test_field_definition() -> None:
 
 
 def test_temp_definition() -> None:
-    result = NpirCodegen().visit(TemporaryDeclFactory(name="a", offset=(1, 2), boundary=(3, 4)))
+    result = NpirCodegen().visit(TemporaryDeclFactory(name="a", offset=(1, 2), padding=(3, 4)))
     print(result)
-    assert result == "a = Field.empty((_dI_+3, _dJ_+4, _dK_), (1, 2, 0))"
+    assert result == "a = Field.empty((_dI_ + 3, _dJ_ + 4, _dK_), (1, 2, 0))"
 
 
 def test_vector_arithmetic() -> None:
