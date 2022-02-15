@@ -41,6 +41,7 @@ class AccessKindComputer(NodeVisitor):
         self._visit_Access(node.name, **kwargs)
 
     def visit_FieldAccess(self, node: gtir.FieldAccess, **kwargs: Any) -> None:
+        self.generic_visit(node, **kwargs)
         self._visit_Access(node.name, **kwargs)
 
     def visit_ScalarIfStmt(self, node: gtir.ScalarIfStmt, **kwargs: Any) -> None:
