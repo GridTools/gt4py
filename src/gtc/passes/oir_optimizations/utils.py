@@ -154,13 +154,12 @@ class AccessCollector(NodeVisitor):
                 [
                     CartesianAccess(
                         field=acc.field,
-                        offset=cast(Tuple[int, int, int], acc.offset)
-                        if acc.offset[2] is not None
-                        else (0, 0, 0),
+                        offset=cast(Tuple[int, int, int], acc.offset),
                         is_write=acc.is_write,
                         in_mask=acc.in_mask,
                     )
                     for acc in self._ordered_accesses
+                    if acc.offset[2] is not None
                 ]
             )
 
