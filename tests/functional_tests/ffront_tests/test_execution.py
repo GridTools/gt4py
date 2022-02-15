@@ -17,6 +17,7 @@
 from typing import TypeVar
 
 import numpy as np
+import pytest
 
 from functional.ffront.fbuiltins import Field, float64
 from functional.ffront.foast_to_itir import FieldOperatorLowering
@@ -111,6 +112,7 @@ def test_copy():
     assert np.allclose(a, b)
 
 
+@pytest.mark.skip(reason="no lowering for returning a tuple of fields exists yet.")
 def test_multicopy():
     size = 10
     a = np_as_located_field(IDim)(np.ones((size)))
