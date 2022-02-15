@@ -12,19 +12,81 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from collections import namedtuple
+<<<<<<< HEAD
+from ast import Expr, NodeTransformer
+from typing import Iterator, Optional, Union
+
+import factory
+
+from eve import NodeTranslator
+from eve.visitors import NodeVisitor
+import functional
+from functional.ffront import common_types
+=======
 from typing import Optional
 
-import functional
-from eve import NodeTranslator, NodeVisitor
+from eve import NodeTranslator
+>>>>>>> functional
 from functional.ffront import field_operator_ast as foast
 from functional.ffront import itir_makers as im
-from functional.ffront.fbuiltins import FUN_BUILTIN_NAMES
 from functional.ffront.type_info import TypeInfo
 from functional.iterator import ir as itir
-
+from functional.ffront.fbuiltins import FUN_BUILTIN_NAMES
+from collections import namedtuple
 
 FieldAccess = namedtuple("FieldAccess", ["name", "shift"])
+
+
+<<<<<<< HEAD
+class AssignResolver(NodeTranslator):
+    """
+    Inline a sequence of assignments into a final return statement.
+
+    >>> from functional.ffront.func_to_foast import FieldOperatorParser
+    >>> from functional.common import Field
+    >>>
+    >>> float64 = float
+    >>>
+    >>> def fieldop(inp: Field[..., "float64"]):
+    ...     tmp1 = inp
+    ...     tmp2 = tmp1
+    ...     return tmp2
+    >>>
+    >>> fieldop_foast_expr = AssignResolver.apply(FieldOperatorParser.apply_to_function(fieldop).body)
+    >>> fieldop_foast_expr  # doctest: +ELLIPSIS
+    Return(location=..., value=Name(location=..., id='inp'))
+    """
+
+    @classmethod
+    def apply(
+        cls, nodes: list[foast.Expr], *, params: Optional[list[itir.Sym]] = None
+    ) -> foast.Expr:
+        names: dict[str, foast.Expr] = {}
+        parser = cls()
+        for node in nodes[:-1]:
+            names.update(parser.visit(node, names=names))
+        return foast.Return(
+            value=parser.visit(nodes[-1].value, names=names), location=nodes[-1].location
+        )
+
+    def visit_Assign(
+        self,
+        node: foast.Assign,
+        *,
+        names: Optional[dict[str, foast.Expr]] = None,
+    ) -> dict[str, itir.Expr]:
+        return {node.target.id: self.visit(node.value, names=names)}
+
+    def visit_Name(
+        self,
+        node: foast.Name,
+        *,
+        names: Optional[dict[str, foast.Expr]] = None,
+    ):
+        names = names or {}
+        if node.id in names:
+            return names[node.id]
+        return node
 
 
 class FieldCollector(NodeVisitor):
@@ -35,8 +97,6 @@ class FieldCollector(NodeVisitor):
     def visit_FunCall(self, node: itir.FunCall, **kwargs) -> None:
         if isinstance(node.fun, itir.FunCall) and node.fun.fun.id == "shift":
             self._fields.add(FieldAccess(node.args[0].id, node.fun.args[0]))
-        elif isinstance(node.fun, itir.FunCall) and node.fun.fun.id == "lift":
-            self.generic_visit(node.fun)
         else:
             self.generic_visit(node)
 
@@ -79,6 +139,55 @@ class SymRefRenamer(NodeTranslator):
         return node
 
 
+class ItirSymRefFactory(factory.Factory):
+    class Meta:
+        model = itir.SymRef
+
+
+class ItirFunCallFactory(factory.Factory):
+    """
+    Readability enhancing shortcut for itir.FunCall constructor.
+
+    Usage:
+    ------
+
+    >>> ItirFunCallFactory(name="plus")
+    FunCall(fun=SymRef(id='plus'), args=[])
+    """
+
+    class Meta:
+        model = itir.FunCall
+
+    class Params:
+        name: Optional[str] = None
+
+    fun = factory.LazyAttribute(lambda obj: ItirSymRefFactory(id=obj.name))
+    args = factory.List([])
+
+
+class ItirDerefFactory(ItirFunCallFactory):
+    """Readability enhancing shortcut constructing deref itir builtins."""
+
+    class Params:
+        name = "deref"
+
+
+class ItirShiftFactory(ItirFunCallFactory):
+    """Readability enhancing shortcut constructing shift itir builtins."""
+
+    class Params:
+        name = "shift"
+        shift_args: list[Union[itir.OffsetLiteral, itir.IntLiteral]] = []
+
+    fun = factory.LazyAttribute(lambda obj: ItirFunCallFactory(name=obj.name, args=obj.shift_args))
+
+
+def _name_is_field(name: foast.Name) -> bool:
+    return isinstance(name.type, common_types.FieldType)
+
+
+=======
+>>>>>>> functional
 class FieldOperatorLowering(NodeTranslator):
     """
     Lower FieldOperator AST (FOAST) to Iterator IR (ITIR).
@@ -145,7 +254,7 @@ class FieldOperatorLowering(NodeTranslator):
     def visit_Symbol(self, node: foast.Symbol, **kwargs) -> itir.Sym:
         return im.sym(node.id)
 
-    def visit_Name(self, node: foast.Name, **kwargs) -> itir.Sym:
+    def visit_Name(self, node: foast.Name, **kwargs) -> itir.SymRef:
         return im.ref(node.id)
 
     def _lift_lambda(self, node):
@@ -179,7 +288,6 @@ class FieldOperatorLowering(NodeTranslator):
         )
 
     def visit_Compare(self, node: foast.Compare, **kwargs) -> itir.FunCall:
-
         return self._lift_lambda(node)(
             im.call_(node.op.value)(
                 im.deref_(self.visit(node.left, **kwargs)),
@@ -187,13 +295,24 @@ class FieldOperatorLowering(NodeTranslator):
             )
         )
 
-    def _visit_shift(self, node: foast.Call, **kwargs) -> itir.FunCall:
-        if isinstance(node.args[0], foast.Subscript):
-            return im.shift_(node.args[0].value.id, node.args[0].index)(
-                self.visit(node.func, **kwargs)
-            )
+<<<<<<< HEAD
+    def visit_Shift(self, node: foast.Shift, **kwargs) -> itir.Expr:
+        shift_args = list(self._gen_shift_args(node.offsets))
+        return self.visit(node.expr, shift_args=shift_args, **kwargs)
+
+    def _make_shift_args(
+        self, node: Union[foast.Subscript, foast.Name], **kwargs
+    ) -> Union[tuple[itir.OffsetLiteral, itir.IntLiteral], tuple[itir.OffsetLiteral]]:
+        if isinstance(node, foast.Subscript):
+            return (itir.OffsetLiteral(value=node.value.id), itir.IntLiteral(value=node.index))
         else:
-            return im.shift_(node.args[0].id)(self.visit(node.func, **kwargs))
+            return (itir.OffsetLiteral(value=node.id),)
+
+    def _gen_shift_args(
+        self, args: list[Union[foast.Subscript, foast.Name]], **kwargs
+    ) -> Iterator[Union[itir.OffsetLiteral, itir.IntLiteral]]:
+        for arg in args:
+            yield from self._make_shift_args(arg)
 
     def _extract_fields(self, expr: itir.Expr) -> list[str]:
         fc = FieldCollector()
@@ -215,9 +334,8 @@ class FieldOperatorLowering(NodeTranslator):
         expr = rn.visit(expr)
         return expr
 
-    def _make_lambda_rhs(self, expr: itir.Expr) -> itir.FunCall:
-        #  return ItirFunCallFactory(name="plus", args=[itir.SymRef(id="base"), expr])
-        return im.plus_(im.ref("base"), im.deref_(expr))
+    def _make_lamba_rhs(self, expr: itir.Expr) -> itir.FunCall:
+        return ItirFunCallFactory(name="plus", args=[itir.SymRef(id="base"), expr])
 
     def _make_reduce(self, *args, **kwargs) -> itir.FunCall:
         red_rhs = self.visit(args[0], **kwargs)
@@ -232,47 +350,55 @@ class FieldOperatorLowering(NodeTranslator):
         #   - remove shifts
         #   - rename the fields being accessed (I think this is not strictly
         #     needed, but improves readabiltiy)
-        #  rhs_lambda = itir.Lambda(
-        #      params=[itir.Sym(id="base")]
-        #      + [itir.Sym(id=field.name + "_param") for field in rhs_fields],
-        #      expr=self._make_lambda_rhs(
-        #          self._rename_sym_refs(
-        #              self._remove_field_derefs(self._remove_field_shifts(red_rhs[0])), "_param"
-        #          )
-        #      ),
-        #  )
-        rhs_lambda = im.lambda__("base", *[im.sym(field.name) for field in rhs_fields])(
-            self._make_lambda_rhs(red_rhs[0])
+        rhs_lambda = itir.Lambda(
+            params=[itir.Sym(id="base")]
+            + [itir.Sym(id=field.name + "_param") for field in rhs_fields],
+            expr=self._make_lamba_rhs(
+                self._rename_sym_refs(
+                    self._remove_field_derefs(self._remove_field_shifts(red_rhs[0])), "_param"
+                )
+            ),
         )
         # the arguments passed to the lambda are either a symref to the field, or, if the
         # field is shifted in the original expr, the shifted field
         lambda_args = []
         for field in rhs_fields:
             if field.shift is not None:
-                lambda_args.append(field.name)
-                #  lambda_args.append(
-                #      ItirFunCallFactory(
-                #          fun=ItirFunCallFactory(name="shift", args=[field.shift]),
-                #          args=[itir.SymRef(id=field.name)],
-                #      )
-                #  )
+                lambda_args.append(
+                    ItirFunCallFactory(
+                        fun=ItirFunCallFactory(name="shift", args=[field.shift]),
+                        args=[itir.SymRef(id=field.name)],
+                    )
+                )
             else:
-                #  lambda_args.append(itir.SymRef(id=field.name))
-                lambda_args.append(im.ref(field.name))
+                lambda_args.append(itir.SymRef(id=field.name))
 
-        #  reduce_call = ItirFunCallFactory(
-        #      fun=ItirFunCallFactory(name="reduce", args=[rhs_lambda, itir.IntLiteral(value=0.0)]),
-        #      args=lambda_args,
-        #  )
-        reduce_call = im.lift_(im.call_("reduce")(rhs_lambda, 0))(*lambda_args)
+        reduce_call = ItirFunCallFactory(
+            fun=ItirFunCallFactory(name="reduce", args=[rhs_lambda, itir.IntLiteral(value=0.0)]),
+            args=lambda_args,
+        )
 
         return reduce_call
 
     def visit_Call(self, node: foast.Call, **kwargs) -> itir.FunCall:
+        if node.func.id in FUN_BUILTIN_NAMES:
+            return self._make_reduce(node.args, **kwargs)
+        new_fun = (
+            itir.SymRef(id=node.func.id)
+            if isinstance(node.func, foast.Name)  # name called, e.g. my_fieldop(a, b)
+            else self.visit(node.func, **kwargs)  # expression called, e.g. local_op[...](a, b)
+        )
+        return ItirFunCallFactory(
+            fun=new_fun,
+            args=self.visit(node.args, **kwargs),
+=======
+    def _visit_shift(self, node: foast.Call, **kwargs) -> itir.FunCall:
+        return im.shift_(node.args[0].value.id, node.args[0].index)(self.visit(node.func, **kwargs))
+
+    def visit_Call(self, node: foast.Call, **kwargs) -> itir.FunCall:
         if TypeInfo(node.func.type).is_field_type:
             return self._visit_shift(node, **kwargs)
-        elif node.func.id in FUN_BUILTIN_NAMES:
-            return self._make_reduce(node.args, **kwargs)
         return self._lift_lambda(node)(
             im.call_(self.visit(node.func, **kwargs))(*self.visit(node.args, **kwargs))
+>>>>>>> functional
         )

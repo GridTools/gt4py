@@ -22,14 +22,16 @@ Basic Interface Tests
     - evaluation test cases
 """
 import pytest
+from typing import Any
 
 from functional.common import Field
 from functional.ffront import common_types
-from functional.ffront.fbuiltins import float32, float64, int64
+from functional.ffront.fbuiltins import float32, float64, int64, nbh_sum
 from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError
 from functional.ffront.func_to_foast import FieldOperatorParser, FieldOperatorSyntaxError
 from functional.ffront.symbol_makers import FieldOperatorTypeError
 from functional.iterator import ir as itir
+from functional.iterator.runtime import CartesianAxis, offset
 from functional.iterator.builtins import (
     and_,
     deref,
@@ -77,7 +79,11 @@ def test_invalid_syntax_error_empty_return():
         FieldOperatorSyntaxError,
         match=(
             r"Invalid Field Operator Syntax: "
+<<<<<<< HEAD
             r"Empty return not allowed \(test_interface.py, line \d*\)"
+=======
+            r"Empty return not allowed \(test_interface.py, line 74\)"
+>>>>>>> functional
         ),
     ):
         _ = FieldOperatorParser.apply_to_function(wrong_syntax)
@@ -174,7 +180,7 @@ def test_clashing_annotated_assignment():
 
 def test_binary_pow():
     def power(inp: Field[..., "float64"]):
-        return inp ** 3
+        return inp**3
 
     with pytest.raises(
         FieldOperatorSyntaxError,
@@ -194,6 +200,183 @@ def test_binary_mod():
         _ = FieldOperatorParser.apply_to_function(power)
 
 
+<<<<<<< HEAD
+def test_compare_gt():
+    def comp_gt(a: Field[..., "float64"], b: Field[..., "float64"]):
+        return a > b
+
+    parsed = FieldOperatorParser.apply_to_function(comp_gt)
+    lowered = FieldOperatorLowering.apply(parsed)
+
+    assert lowered.expr == itir.FunCall(
+        fun=GREATER,
+        args=[
+            itir.FunCall(fun=DEREF, args=[itir.SymRef(id="a")]),
+            itir.FunCall(fun=DEREF, args=[itir.SymRef(id="b")]),
+        ],
+    )
+
+
+def test_compare_lt():
+    def comp_lt(a: Field[..., "float64"], b: Field[..., "float64"]):
+        return a < b
+
+    parsed = FieldOperatorParser.apply_to_function(comp_lt)
+    lowered = FieldOperatorLowering.apply(parsed)
+
+    assert lowered.expr == itir.FunCall(
+        fun=LESS,
+        args=[
+            itir.FunCall(fun=DEREF, args=[itir.SymRef(id="a")]),
+            itir.FunCall(fun=DEREF, args=[itir.SymRef(id="b")]),
+        ],
+    )
+
+
+def test_compare_eq():
+    def comp_eq(a: Field[..., "int64"], b: Field[..., "int64"]):
+        return a == b
+
+    parsed = FieldOperatorParser.apply_to_function(comp_eq)
+    lowered = FieldOperatorLowering.apply(parsed)
+
+    assert lowered.expr == itir.FunCall(
+        fun=EQ,
+        args=[
+            itir.FunCall(fun=DEREF, args=[itir.SymRef(id="a")]),
+            itir.FunCall(fun=DEREF, args=[itir.SymRef(id="b")]),
+        ],
+    )
+
+
+def test_compare_chain():
+    def compare_chain(a: Field[..., "float64"], b: Field[..., "float64"], c: Field[..., "float64"]):
+        return a > b > c
+
+    parsed = FieldOperatorParser.apply_to_function(compare_chain)
+    lowered = FieldOperatorLowering.apply(parsed)
+
+    assert lowered.expr == itir.FunCall(
+        fun=GREATER,
+        args=[
+            itir.FunCall(fun=DEREF, args=[itir.SymRef(id="a")]),
+            itir.FunCall(
+                fun=GREATER,
+                args=[
+                    itir.FunCall(fun=DEREF, args=[itir.SymRef(id="b")]),
+                    itir.FunCall(fun=DEREF, args=[itir.SymRef(id="c")]),
+                ],
+            ),
+        ],
+    )
+
+
+Edge = CartesianAxis("Edge")
+Vertex = CartesianAxis("Vertex")
+Cell = CartesianAxis("Cell")
+V2EDim = CartesianAxis("V2E")
+V2E = offset("V2E", source=Edge, target=(Vertex, V2EDim))
+
+
+from devtools import debug
+
+
+def test_reduction_lowering_simple():
+    def reduction(edge_f: Field[[Edge], "float64"]):
+        return nbh_sum(edge_f(V2E), axis=V2E)
+
+    parsed = FieldOperatorParser.apply_to_function(reduction)
+    lowered = FieldOperatorLowering.apply(parsed)
+
+    # debug(lowered)
+
+    assert lowered.expr == itir.FunCall(
+        fun=itir.FunCall(
+            fun=itir.SymRef(id="reduce"),
+            args=[
+                itir.Lambda(
+                    params=[
+                        itir.Sym(id="base"),
+                        itir.Sym(id="edge_f_param"),
+                    ],
+                    expr=itir.FunCall(
+                        fun=PLUS,
+                        args=[
+                            itir.SymRef(id="base"),
+                            itir.SymRef(id="edge_f_param"),
+                        ],
+                    ),
+                ),
+                itir.IntLiteral(value=0),
+            ],
+        ),
+        args=[
+            itir.FunCall(
+                fun=itir.FunCall(
+                    fun=itir.SymRef(id="shift"),
+                    args=[
+                        itir.OffsetLiteral(value="V2E"),
+                    ],
+                ),
+                args=[
+                    itir.SymRef(id="edge_f"),
+                ],
+            ),
+        ],
+    )
+
+
+def test_reduction_lowering_expr():
+    def reduction(e1: Field[[Edge], "float64"], e2: Field[[Vertex, V2EDim], "float64"]):
+        return nbh_sum(e1(V2E) + e2, axis=V2EDim)  # need to disable type checking for this to work
+
+    parsed = FieldOperatorParser.apply_to_function(reduction)
+    lowered = FieldOperatorLowering.apply(parsed)
+
+    debug(lowered)
+
+    assert lowered.expr == itir.FunCall(
+        fun=itir.FunCall(
+            fun=itir.SymRef(id="reduce"),
+            args=[
+                itir.Lambda(
+                    params=[itir.Sym(id="base"), itir.Sym(id="e1_param"), itir.Sym(id="e2_param")],
+                    expr=itir.FunCall(
+                        fun=PLUS,
+                        args=[
+                            itir.SymRef(id="base"),
+                            itir.FunCall(
+                                fun=PLUS,
+                                args=[
+                                    itir.SymRef(id="e1_param"),
+                                    itir.SymRef(id="e2_param"),
+                                ],
+                            ),
+                        ],
+                    ),
+                ),
+                itir.IntLiteral(value=0),
+            ],
+        ),
+        args=[
+            itir.FunCall(
+                fun=itir.FunCall(
+                    fun=itir.SymRef(id="shift"),
+                    args=[
+                        itir.OffsetLiteral(value="V2E"),
+                    ],
+                ),
+                args=[
+                    itir.SymRef(id="e1"),
+                ],
+            ),
+            itir.SymRef(id="e2"),
+        ],
+    )
+
+
+=======
+>>>>>>> functional
 def test_bool_and():
     def bool_and(a: Field[..., "bool"], b: Field[..., "bool"]):
         return a and b

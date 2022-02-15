@@ -13,7 +13,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import ast
-from dataclasses import dataclass, field
 
 from functional.ffront.fbuiltins import TYPE_BUILTIN_NAMES
 
@@ -44,10 +43,10 @@ class SingleStaticAssignPass(ast.NodeTransformer):
     ...     )
     ... ))
     def foo():
-        a$0 = 1
-        a$1 = 2 + a$0
-        a$2 = 3 + a$1
-        return a$2
+        a__0 = 1
+        a__1 = 2 + a__0
+        a__2 = 3 + a__1
+        return a__2
 
     Note that each variable name is assigned only once and never updated / overwritten.
 
@@ -63,55 +62,60 @@ class SingleStaticAssignPass(ast.NodeTransformer):
         Only read from parent visitor state, should not modify.
         """
 
-        def __init__(self, state):
+        @classmethod
+        def apply(cls, name_counter, separator, node):
+            return cls(name_counter, separator).visit(node)
+
+        def __init__(self, name_counter, separator):
             super().__init__()
-            self.state = state
+            self.name_counter: dict[str, int] = name_counter
+            self.separator: str = separator
 
         def visit_Name(self, node: ast.Name) -> ast.Name:
-            if node.id in self.state.name_counter:
-                node.id = f"{node.id}${self.state.name_counter[node.id]}"
+            if node.id in self.name_counter:
+                node.id = f"{node.id}{self.separator}{self.name_counter[node.id]}"
             return node
-
-    @dataclass
-    class State:
-        name_counter: dict[str, int] = field(default_factory=dict)
 
     @classmethod
     def apply(cls, node: ast.AST) -> ast.AST:
         return cls().visit(node)
 
-    def __init__(self):
+    def __init__(self, separator="__"):
         super().__init__()
-        self.state = self.State()
+        self.name_counter: dict[str, int] = {}
+        self.separator: str = separator
+
+    def _rename(self, node):
+        return self.RhsRenamer.apply(self.name_counter, self.separator, node)
 
     def visit_Assign(self, node: ast.Assign) -> ast.Assign:
         # first update rhs names to reference the latest version
-        node.value = self.RhsRenamer(self.state).visit(node.value)
+        node.value = self._rename(node.value)
         # then update lhs to create new names
         node.targets = [self.visit(target) for target in node.targets]
         return node
 
     def visit_Return(self, node: ast.Return) -> ast.Return:
-        node.value = self.RhsRenamer(self.state).visit(node.value) if node.value else None
+        node.value = self._rename(node.value) if node.value else None
         return node
 
     def visit_AnnAssign(self, node: ast.AnnAssign) -> ast.AnnAssign:
         if node.value:
-            node.value = self.RhsRenamer(self.state).visit(node.value)
+            node.value = self._rename(node.value)
             node.target = self.visit(node.target)
         elif isinstance(node.target, ast.Name):
             target_id = node.target.id
             node.target = self.visit(node.target)
-            self.state.name_counter[target_id] -= 1
+            self.name_counter[target_id] -= 1
         return node
 
     def visit_Name(self, node: ast.Name) -> ast.Name:
         if node.id in TYPE_BUILTIN_NAMES:
             return node
-        elif node.id in self.state.name_counter:
-            self.state.name_counter[node.id] += 1
-            node.id = f"{node.id}${self.state.name_counter[node.id]}"
+        elif node.id in self.name_counter:
+            self.name_counter[node.id] += 1
+            node.id = f"{node.id}{self.separator}{self.name_counter[node.id]}"
         else:
-            self.state.name_counter[node.id] = 0
-            node.id = f"{node.id}$0"
+            self.name_counter[node.id] = 0
+            node.id = f"{node.id}{self.separator}0"
         return node

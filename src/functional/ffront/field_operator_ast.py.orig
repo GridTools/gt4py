@@ -148,6 +148,14 @@ class Call(Expr):
     args: list[Expr]
 
 
+<<<<<<< HEAD
+class Shift(Expr):
+    offsets: list[Union[Name, Subscript]]
+    expr: Expr
+
+
+=======
+>>>>>>> functional
 class Stmt(LocatedNode):
     ...
 

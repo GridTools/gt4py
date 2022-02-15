@@ -17,6 +17,7 @@
 from typing import TypeVar
 
 import numpy as np
+import pytest
 
 from functional.ffront.fbuiltins import Field, float64, nbh_sum
 from functional.ffront.foast_to_itir import FieldOperatorLowering
@@ -24,11 +25,21 @@ from functional.ffront.func_to_foast import FieldOperatorParser
 from functional.iterator import ir as itir
 from functional.iterator.backends import roundtrip
 from functional.iterator.embedded import (
-    np_as_located_field,
     NeighborTableOffsetProvider,
     index_field,
+    np_as_located_field,
 )
 from functional.iterator.runtime import CartesianAxis, offset
+
+
+def debug_itir(tree):
+    """Compare tree snippets while debugging."""
+    from devtools import debug
+
+    from eve.codegen import format_python_source
+    from functional.iterator.backends.roundtrip import EmbeddedDSL
+
+    debug(format_python_source(EmbeddedDSL.apply(tree)))
 
 
 def make_domain(dim_name: str, lower: int, upper: int) -> itir.FunCall:
@@ -115,6 +126,7 @@ def test_copy():
     assert np.allclose(a, b)
 
 
+@pytest.mark.skip(reason="no lowering for returning a tuple of fields exists yet.")
 def test_multicopy():
     size = 10
     a = np_as_located_field(IDim)(np.ones((size)))
@@ -242,6 +254,7 @@ def test_reduction_execution():
         return nbh_sum(edge_f(V2E), axis=V2EDim)
 
     program = program_from_function(reduction, out_names=["out"], dim=Vertex, size=size)
+    debug_itir(program)
     roundtrip.executor(
         program,
         inp,

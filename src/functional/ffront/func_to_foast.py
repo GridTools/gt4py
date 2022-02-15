@@ -16,16 +16,11 @@ from __future__ import annotations
 
 import ast
 import copy
-import functools
-import inspect
-import symtable
 import textwrap
 import types
-from collections.abc import Callable, Iterator
 from dataclasses import dataclass
-from typing import Any, Optional, Union
+from typing import Any, Optional
 
-from eve import typingx
 from eve.type_definitions import SourceLocation
 from functional import common
 from functional.ffront import common_types, fbuiltins
@@ -37,164 +32,8 @@ from functional.ffront.ast_passes import (
     StringifyAnnotationsPass,
     UnpackedAssignPass,
 )
-from functional.ffront.foast_passes.shift_recognition import FieldOperatorShiftRecognition
 from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduction
-
-
-MISSING_FILENAME = "<string>"
-
-
-def make_source_definition_from_function(func: Callable) -> SourceDefinition:
-    try:
-        filename = inspect.getabsfile(func) or MISSING_FILENAME
-        source = textwrap.dedent(inspect.getsource(func))
-        starting_line = (
-            inspect.getsourcelines(func)[1] if not filename.endswith(MISSING_FILENAME) else 1
-        )
-    except OSError as err:
-        if filename.endswith(MISSING_FILENAME):
-            message = "Can not create field operator from a function that is not in a source file!"
-        else:
-            message = f"Can not get source code of passed function ({func})"
-        raise ValueError(message) from err
-
-    return SourceDefinition(source, filename, starting_line)
-
-
-def make_closure_refs_from_function(func: Callable) -> ClosureRefs:
-    (nonlocals, globals, inspect_builtins, inspect_unbound) = inspect.getclosurevars(  # noqa: A001
-        func
-    )
-    # python builtins returned by getclosurevars() are not ffront.builtins
-    unbound = set(inspect_builtins.keys()) | inspect_unbound
-    builtins = unbound & set(fbuiltins.ALL_BUILTIN_NAMES)
-    unbound -= builtins
-    annotations = typingx.get_type_hints(func)
-
-    return ClosureRefs(nonlocals, globals, annotations, builtins, unbound)
-
-
-def make_symbol_names_from_source(source: str, filename: str = MISSING_FILENAME) -> SymbolNames:
-    try:
-        mod_st = symtable.symtable(source, filename, "exec")
-    except SyntaxError as err:
-        raise common.GTValueError(
-            f"Unexpected error when parsing provided source code (\n{source}\n)"
-        ) from err
-
-    assert mod_st.get_type() == "module"
-    if len(children := mod_st.get_children()) != 1:
-        raise common.GTValueError(
-            f"Sources with multiple function definitions are not yet supported (\n{source}\n)"
-        )
-
-    func_st = children[0]
-
-    param_names = set()
-    imported_names = set()
-    local_names = set()
-    for name in func_st.get_locals():
-        if (s := func_st.lookup(name)).is_imported():
-            imported_names.add(name)
-        elif s.is_parameter:
-            param_names.add(name)
-        else:
-            local_names.add(name)
-
-    # symtable returns regular free (or non-local) variables in 'get_frees()' and
-    # the free variables introduced with the 'nonlocal' statement in 'get_nonlocals()'
-    nonlocal_names = set(func_st.get_frees()) | set(func_st.get_nonlocals())
-    global_names = set(func_st.get_globals()) - set(fbuiltins.ALL_BUILTIN_NAMES)
-
-    return SymbolNames(
-        params=param_names,
-        locals=local_names,
-        imported=imported_names,
-        nonlocals=nonlocal_names,
-        globals=global_names,
-    )
-
-
-@dataclass(frozen=True)
-class SourceDefinition:
-    """
-    A GT4Py source code definition encoded as a string.
-
-    It can be created from an actual function object using :meth:`from_function()`.
-    It also supports unpacking.
-
-
-    Examples
-    -------
-    >>> def foo(a):
-    ...     return a
-    >>> src_def = SourceDefinition.from_function(foo)
-    >>> print(src_def)
-    SourceDefinition(source='def foo(a):... starting_line=1)
-
-    >>> source, filename, starting_line = src_def
-    >>> print(source)
-    def foo(a):
-        return a
-    ...
-    """
-
-    source: str
-    filename: str = MISSING_FILENAME
-    starting_line: int = 1
-
-    def __iter__(self) -> Iterator[tuple[str, ...]]:
-        yield from iter((self.source, self.filename, self.starting_line))
-
-    from_function = staticmethod(make_source_definition_from_function)
-
-
-@dataclass(frozen=True)
-class ClosureRefs:
-    """
-    Mappings from names used in a Python function to the actual values.
-
-    It can be created from an actual function object using :meth:`from_function()`.
-    It also supports unpacking.
-    """
-
-    nonlocals: dict[str, Any]
-    globals: dict[str, Any]  # noqa: A003  # shadowing a python builtin
-    annotations: dict[str, Any]
-    builtins: set[str]
-    unbound: set[str]
-
-    def __iter__(self) -> Iterator[Union[dict[str, Any], set[str]]]:
-        yield from iter(
-            (self.nonlocals, self.globals, self.annotations, self.builtins, self.unbound)
-        )
-
-    from_function = staticmethod(make_closure_refs_from_function)
-
-
-@dataclass(frozen=True)
-class SymbolNames:
-    """
-    Collection of symbol names used in a function classified by kind.
-
-    It can be created directly from source code using :meth:`from_source()`.
-    It also supports unpacking.
-    """
-
-    params: tuple[str, ...]
-    locals: tuple[str, ...]  # noqa: A003  # shadowing a python builtin
-    imported: tuple[str, ...]
-    nonlocals: tuple[str, ...]
-    globals: tuple[str, ...]  # noqa: A003  # shadowing a python builtin
-
-    @functools.cached_property
-    def all_locals(self) -> tuple[str]:
-        return self.params + self.locals + self.imported
-
-    def __iter__(self) -> Iterator[tuple[str, ...]]:
-        yield from iter((self.params, self.locals, self.imported, self.nonlocals, self.globals))
-
-    from_source = staticmethod(make_symbol_names_from_source)
+from functional.ffront.source_utils import ClosureRefs, SourceDefinition, SymbolNames
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -217,7 +56,7 @@ class FieldOperatorParser(ast.NodeVisitor):
     >>> foast_tree  # doctest: +ELLIPSIS
     FieldOperator(..., id='field_op', ...)
     >>> foast_tree.params  # doctest: +ELLIPSIS
-    [FieldSymbol(..., id='inp', ...)]
+    [Symbol[DataTypeT](..., id='inp', type=FieldType(...), ...)]
     >>> foast_tree.body  # doctest: +ELLIPSIS
     [Return(..., value=Name(..., id='inp'))]
 
@@ -289,7 +128,7 @@ class FieldOperatorParser(ast.NodeVisitor):
                 err.lineno = (err.lineno or 1) + starting_line - 1
             raise err
 
-        return FieldOperatorShiftRecognition.apply(FieldOperatorTypeDeduction.apply(result))
+        return FieldOperatorTypeDeduction.apply(result)
 
     @classmethod
     def apply_to_function(
@@ -363,14 +202,18 @@ class FieldOperatorParser(ast.NodeVisitor):
 
         return foast.ExternalImport(symbols=symbols, location=self._make_loc(node))
 
-    def visit_arguments(self, node: ast.arguments) -> list[foast.FieldSymbol]:
+    def visit_arguments(self, node: ast.arguments) -> list[foast.DataSymbol]:
         return [self.visit_arg(arg) for arg in node.args]
 
-    def visit_arg(self, node: ast.arg) -> foast.FieldSymbol:
+    def visit_arg(self, node: ast.arg) -> foast.DataSymbol:
         if (annotation := self.closure_refs.annotations.get(node.arg, None)) is None:
             raise self._make_syntax_error(node, message="Untyped parameters not allowed!")
         new_type = symbol_makers.make_symbol_type_from_typing(annotation)
-        return foast.FieldSymbol(id=node.arg, location=self._make_loc(node), type=new_type)
+        if not isinstance(new_type, common_types.DataType):
+            raise self._make_syntax_error(
+                node, message="Only arguments of type DataType are allowed."
+            )
+        return foast.DataSymbol(id=node.arg, location=self._make_loc(node), type=new_type)
 
     def visit_Assign(self, node: ast.Assign, **kwargs) -> foast.Assign:
         target = node.targets[0]  # there is only one element after assignment passes
@@ -379,13 +222,11 @@ class FieldOperatorParser(ast.NodeVisitor):
         if not isinstance(target, ast.Name):
             raise self._make_syntax_error(node, message="Can only assign to names!")
         new_value = self.visit(node.value)
-        target_symbol_type = foast.FieldSymbol
         constraint_type = common_types.FieldType
         if isinstance(new_value, foast.TupleExpr):
-            target_symbol_type = foast.TupleSymbol
             constraint_type = common_types.TupleType
         return foast.Assign(
-            target=target_symbol_type(
+            target=foast.FieldSymbol(
                 id=target.id,
                 location=self._make_loc(target),
                 type=common_types.DeferredSymbolType(constraint=constraint_type),
@@ -405,14 +246,14 @@ class FieldOperatorParser(ast.NodeVisitor):
             global_ns = {**fbuiltins.BUILTINS, **self.closure_refs.globals}
             local_ns = self.closure_refs.nonlocals
             annotation = eval(node.annotation.value, global_ns, local_ns)
-            target_type = target_type = symbol_makers.make_symbol_type_from_typing(
+            target_type = symbol_makers.make_symbol_type_from_typing(
                 annotation, global_ns=global_ns, local_ns=local_ns
             )
         else:
             target_type = common_types.DeferredSymbolType()
 
         return foast.Assign(
-            target=foast.FieldSymbol(
+            target=foast.Symbol[common_types.FieldType](
                 id=node.target.id,
                 location=self._make_loc(node.target),
                 type=target_type,
