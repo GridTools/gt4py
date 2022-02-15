@@ -352,10 +352,7 @@ def test_input_order(backend):
             out_field = in_field * parameter
 
 
-# TODO: Enable variable offsets on gtc:dace backend
-@pytest.mark.parametrize(
-    "backend", [backend for backend in ALL_BACKENDS if "dace" not in backend.values[0]]
-)
+@pytest.mark.parametrize("backend", ALL_BACKENDS)
 def test_variable_offsets(backend):
     @gtscript.stencil(backend=backend)
     def stencil_ij(
