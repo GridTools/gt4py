@@ -46,7 +46,9 @@ class ObjectPatternConstructor:
         return ObjectPattern(self.cls, kwargs)
 
 
-def _get_differences_object_pattern(a: ObjectPattern, b: Any, path: str = "") -> Iterator[tuple[str, str]]:
+def _get_differences_object_pattern(
+    a: ObjectPattern, b: Any, path: str = ""
+) -> Iterator[tuple[str, str]]:
     if not isinstance(b, a.cls):
         yield (
             path,
@@ -60,6 +62,7 @@ def _get_differences_object_pattern(a: ObjectPattern, b: Any, path: str = "") ->
                 for diff in get_differences(a.attrs[k], getattr(b, k), path=f"{path}.{k}"):
                     yield diff
 
+
 def _get_differences_list(a: list, b: Any, path: str = "") -> Iterator[tuple[str, str]]:
     if not isinstance(b, list):
         yield (path, f"Expected list, but got {type(b).__name__}")
@@ -70,7 +73,8 @@ def _get_differences_list(a: list, b: Any, path: str = "") -> Iterator[tuple[str
             for diff in get_differences(el_a, el_b, path=f"{path}[{i}]"):
                 yield diff
 
-def _get_differences_dict(a: list, b: Any, path: str = "") -> Iterator[tuple[str, str]]:
+
+def _get_differences_dict(a: dict, b: Any, path: str = "") -> Iterator[tuple[str, str]]:
     if not isinstance(b, dict):
         yield (path, f"Expected dict, but got {type(b).__name__}")
     elif set(a.keys()) != set(b.keys()):
@@ -97,6 +101,7 @@ def _get_differences_dict(a: list, b: Any, path: str = "") -> Iterator[tuple[str
     else:
         for k, v_a, v_b in zip(a.keys(), a.values(), b.values()):
             yield from get_differences(v_a, v_b, path=f'{path}["{k}"]')
+
 
 def get_differences(a: Any, b: Any, path: str = "") -> Iterator[tuple[str, str]]:
     """Compare two objects and return a list of differences.
