@@ -92,12 +92,6 @@ def _get_differences_dict(a: dict, b: Any, path: str = "") -> Iterator[tuple[str
                 path,
                 f"Expected dictionary with keys `{'`, `'.join(map(str, a.keys()))}`, but the following keys are extra: {extra_keys_str}",
             )
-    elif not set(b.keys()).issubset(set(a.keys())):
-        missing_keys_str = "`" + "`, `".join(map(str, set(a.keys()).difference(b.keys()))) + "`"
-        yield (
-            path,
-            f"Expected dictionary with keys `{'`, `'.join(map(str, a.keys()))}`, but the following keys are missing: {missing_keys_str}",
-        )
     else:
         for k, v_a, v_b in zip(a.keys(), a.values(), b.values()):
             yield from get_differences(v_a, v_b, path=f'{path}["{k}"]')
