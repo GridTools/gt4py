@@ -13,65 +13,20 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 
-from __future__ import annotations
-
 import re
-import typing
-from typing import Any, Literal, Optional, Union
+from typing import Generic, Optional, TypeVar, Union
 
 import eve
 from eve import Node
 from eve.traits import SymbolTableTrait
-from eve.type_definitions import IntEnum, SourceLocation, StrEnum, SymbolRef
+from eve.type_definitions import SourceLocation, StrEnum, SymbolRef
+from functional.ffront import common_types as common_types
 
 
-class Dimension(Node):
-    name: str
-
-
-class ScalarKind(IntEnum):
-    BOOL = 1
-    INT32 = 32
-    INT64 = 64
-    FLOAT32 = 1032
-    FLOAT64 = 1064
-
-
-class SymbolType(Node):
-    ...
-
-
-class DeferredSymbolType(SymbolType):
-    constraint: typing.Optional[typing.Type[SymbolType]]
-
-
-class SymbolTypeVariable(SymbolType):
-    id: str  # noqa A003
-    bound: typing.Type[SymbolType]
-
-
-class DataType(SymbolType):
-    ...
-
-
-class ScalarType(DataType):
-    kind: ScalarKind
-    shape: Optional[list[int]] = None
-
-
-class TupleType(DataType):
-    types: list[DataType]
-
-
-class FieldType(DataType):
-    dims: Union[list[Dimension], Literal[Ellipsis]]  # type: ignore[valid-type,misc]
-    dtype: ScalarType
-
-
-class FunctionType(SymbolType):
-    args: list[DataType]
-    kwargs: dict[str, DataType]
-    returns: DataType
+class Namespace(StrEnum):
+    LOCAL = "local"
+    CLOSURE = "closure"
+    EXTERNAL = "external"
 
 
 class LocatedNode(Node):
@@ -82,28 +37,30 @@ class SymbolName(eve.traits.SymbolName):
     regex = re.compile(r"^[a-zA-Z_][\w$]*$")
 
 
-class Symbol(LocatedNode):
+SymbolT = TypeVar("SymbolT", bound=common_types.SymbolType)
+
+
+class Symbol(eve.GenericNode, LocatedNode, Generic[SymbolT]):
     id: SymbolName  # noqa: A003
-    type: SymbolType  # noqa A003
-    origin: Any = None
+    type: Union[SymbolT, common_types.DeferredSymbolType]  # noqa A003
+    namespace: Namespace = Namespace(Namespace.LOCAL)
 
 
-class DataSymbol(Symbol):
-    type: Union[DataType, DeferredSymbolType]  # noqa A003
+DataTypeT = TypeVar("DataTypeT", bound=common_types.DataType)
+DataSymbol = Symbol[DataTypeT]
 
+FieldTypeT = TypeVar("FieldTypeT", bound=common_types.FieldType)
+FieldSymbol = Symbol[FieldTypeT]
 
-class FieldSymbol(DataSymbol):
-    type: Union[FieldType, DeferredSymbolType]  # noqa A003
+ScalarTypeT = TypeVar("ScalarTypeT", bound=common_types.ScalarType)
+ScalarSymbol = Symbol[ScalarTypeT]
 
-
-class Function(Symbol):
-    type: FunctionType  # noqa A003
-    params: list[FieldType]
-    returns: list[FieldType]
+TupleTypeT = TypeVar("TupleTypeT", bound=common_types.TupleType)
+TupleSymbol = Symbol[TupleTypeT]
 
 
 class Expr(LocatedNode):
-    type: Optional[SymbolType] = None  # noqa A003
+    type: Optional[common_types.SymbolType] = None  # noqa A003
 
 
 class Name(Expr):
@@ -112,7 +69,7 @@ class Name(Expr):
 
 class Constant(Expr):
     value: str
-    dtype: Union[DataType, str]
+    dtype: Union[common_types.DataType, str]
 
 
 class Subscript(Expr):
@@ -129,6 +86,15 @@ class UnaryOperator(StrEnum):
     USUB = "minus"
     NOT = "not_"
 
+    def __str__(self) -> str:
+        if self is self.UADD:
+            return "+"
+        elif self is self.USUB:
+            return "-"
+        elif self is self.NOT:
+            return "not"
+        return "Unknown UnaryOperator"
+
 
 class UnaryOp(Expr):
     op: UnaryOperator
@@ -142,6 +108,21 @@ class BinaryOperator(StrEnum):
     DIV = "divides"
     BIT_AND = "and_"
     BIT_OR = "or_"
+
+    def __str__(self) -> str:
+        if self is self.ADD:
+            return "+"
+        elif self is self.SUB:
+            return "-"
+        elif self is self.MULT:
+            return "*"
+        elif self is self.DIV:
+            return "/"
+        elif self is self.BIT_AND:
+            return "&"
+        elif self is self.BIT_OR:
+            return "|"
+        return "Unknown BinaryOperator"
 
 
 class BinOp(Expr):
@@ -171,8 +152,12 @@ class Stmt(LocatedNode):
     ...
 
 
+class ExternalImport(Stmt):
+    symbols: list[Symbol]
+
+
 class Assign(Stmt):
-    target: Symbol
+    target: Union[FieldSymbol, TupleSymbol]
     value: Expr
 
 
@@ -184,4 +169,4 @@ class FieldOperator(LocatedNode, SymbolTableTrait):
     id: SymbolName  # noqa: A003
     params: list[DataSymbol]
     body: list[Stmt]
-    # externals: list[Symbol]  # noqa
+    closure: list[Symbol]

@@ -1,5 +1,6 @@
 import importlib.util
 import tempfile
+from typing import Iterable
 
 from eve import codegen
 from eve.codegen import FormatTemplate as as_fmt
@@ -98,10 +99,12 @@ def executor(ir: Node, *args, **kwargs):
 
     program = EmbeddedDSL.apply(ir)
     wrapper = WrapperGenerator.apply(ir, tmps=tmps)
-    offset_literals = (
+    offset_literals: Iterable[str] = (
         ir.iter_tree().if_isinstance(OffsetLiteral).getattr("value").if_isinstance(str).to_set()
     )
-    axis_literals = ir.iter_tree().if_isinstance(AxisLiteral).getattr("value").to_set()
+    axis_literals: Iterable[str] = (
+        ir.iter_tree().if_isinstance(AxisLiteral).getattr("value").to_set()
+    )
     with tempfile.NamedTemporaryFile(
         mode="w",
         suffix=".py",

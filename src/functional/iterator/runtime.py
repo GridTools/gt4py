@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from typing import Callable, Optional, Union
 
+from functional import common
 from functional.iterator import builtins
 from functional.iterator.builtins import BackendNotSelectedError, builtin_dispatch
 
@@ -8,29 +9,22 @@ from functional.iterator.builtins import BackendNotSelectedError, builtin_dispat
 __all__ = ["offset", "fundef", "fendef", "closure", "CartesianAxis"]
 
 
-@dataclass
+@dataclass(frozen=True)
 class Offset:
     value: Optional[Union[int, str]] = None
-
-    def __hash__(self) -> int:
-        return hash(self.value)
 
 
 def offset(value):
     return Offset(value)
 
 
-@dataclass
-class CartesianAxis:
-    value: str
-
-    def __hash__(self) -> int:
-        return hash(self.value)
+class CartesianAxis(common.Dimension):
+    ...
 
 
 # dependency inversion, register fendef for embedded execution or for tracing/parsing here
-fendef_embedded = None
-fendef_codegen = None
+fendef_embedded: Optional[Callable] = None
+fendef_codegen: Optional[Callable] = None
 
 
 def fendef(*dec_args, **dec_kwargs):

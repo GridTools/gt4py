@@ -12,15 +12,19 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+from numpy import float32, float64, int32, int64
 
-from .simple_assign import SingleAssignTargetPass, UnpackedAssignPass
-from .single_static_assign import SingleStaticAssignPass
-from .stringify_annotations import StringifyAnnotationsPass
+from functional.common import Field
 
 
-__all__ = [
-    "SingleAssignTargetPass",
-    "SingleStaticAssignPass",
-    "StringifyAnnotationsPass",
-    "UnpackedAssignPass",
-]
+__all__ = ["Field", "float32", "float64", "int32", "int64"]
+
+TYPE_BUILTINS = [Field, float, float32, float64, int, int32, int64, bool, tuple]
+TYPE_BUILTIN_NAMES = [t.__name__ for t in TYPE_BUILTINS]
+
+EXTERNALS_MODULE_NAME = "__externals__"
+MODULE_BUILTIN_NAMES = [EXTERNALS_MODULE_NAME]
+
+ALL_BUILTIN_NAMES = TYPE_BUILTIN_NAMES + MODULE_BUILTIN_NAMES
+
+BUILTINS = {name: globals()[name] for name in __all__}
