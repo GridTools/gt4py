@@ -9,11 +9,12 @@ on:
     - functional
 
 jobs:
-  build:
+  tox-tests:
     runs-on: ubuntu-latest
     strategy:
       matrix:
         python-version: ["3.10"]
+        tox-env-factors: ["base", "atlas"]
 
     steps:
     - uses: actions/checkout@v2
@@ -27,7 +28,7 @@ jobs:
         mv boost_1_76_0/boost boost/include/
         echo "BOOST_ROOT=${PWD}/boost" >> $GITHUB_ENV
     - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v1
+      uses: actions/setup-python@v2
       with:
         python-version: ${{ matrix.python-version }}
     - name: Install python dependencies
@@ -37,5 +38,11 @@ jobs:
       run: |
         pyversion_no_dot="${{ matrix.python-version }}"
         pyversion_no_dot="${pyversion_no_dot/./}"
+        tox_env_factor="${{ matrix.tox-env-factors }}"
         pip install tox clang-format
-        tox -r -e py${pyversion_no_dot}
+        tox -r -e py${pyversion_no_dot}-${tox_env_factor}
+    - name: Archive code coverage results
+      uses: actions/upload-artifact@v2
+      with:
+        name: code-coverage-report
+        path: tests/_reports/

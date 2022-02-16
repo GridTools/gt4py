@@ -1,4 +1,4 @@
-name: Formatting & compliance
+name: Quality Assurance
 
 on:
   push:
