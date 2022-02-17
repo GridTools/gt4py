@@ -23,8 +23,12 @@ _None_
 ### Frontend and Parsing #frontend 
 - [0001 - Field View Frontend Design](0001-Field_View_Frontend_Design.md)
 - [0002 - Field View Lowering](0002-Field_View_Lowering.md)
+
+### IR #ir
 - [0003 - Iterator View Tuple Support for Fields](0003-Iterator_View_Tuple_Support_for_Fields.md)
 - [0004 - Lifted Stencils with Tuple Return](0004-Lifted_Stencils_with_Tuple_Return.md)
+
+### Embedded Execution
 
 ### Transformations
 _None_
