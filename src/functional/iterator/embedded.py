@@ -448,7 +448,7 @@ class TupleIterator:
         return self.tup[self.index] if self.index < len(self.tup) else None
 
     def max_neighbors(self):
-        """This is actually not max neighbors, but exactly the number of neighbors for this tuple."""
+        # This is actually not max neighbors, but exactly the number of neighbors for this tuple.
         return len(self.tup)
 
     def is_none(self):
