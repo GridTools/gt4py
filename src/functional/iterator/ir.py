@@ -76,7 +76,7 @@ class Setq(Node):
 class StencilClosure(Node):
     domain: Expr
     stencil: Expr
-    output: SymRef
+    output: Union[SymRef, List[SymRef]]
     inputs: List[SymRef]
 
 

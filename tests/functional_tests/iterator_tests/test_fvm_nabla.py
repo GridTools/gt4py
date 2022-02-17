@@ -55,7 +55,7 @@ def compute_zavgS_fencil(
     closure(
         domain(named_range(Edge, 0, n_edges)),
         compute_zavgS,
-        [out],
+        out,
         [pp, S_M],
     )
 
@@ -115,7 +115,7 @@ def nabla(
     closure(
         domain(named_range(Vertex, 0, n_nodes)),
         pnabla,
-        [out_MXX, out_MYY],
+        (out_MXX, out_MYY),
         [pp, S_MXX, S_MYY, sign, vol],
     )
 
@@ -168,7 +168,7 @@ def compute_zavgS2_fencil(
     closure(
         domain(named_range(Edge, 0, n_edges)),
         compute_zavgS2,
-        [out0, out1],
+        (out0, out1),
         [pp, S_M],
     )
 
@@ -231,6 +231,7 @@ def test_nabla(backend, use_tmps):
         offset_provider={"E2V": e2v, "V2E": v2e},
         backend=backend,
         use_tmps=use_tmps,
+        debug=True,
     )
 
     if validate:
@@ -253,7 +254,7 @@ def nabla2(
     closure(
         domain(named_range(Vertex, 0, n_nodes)),
         compute_pnabla2,
-        [out_MXX, out_MYY],
+        (out_MXX, out_MYY),
         [pp, S, sign, vol],
     )
 
@@ -329,13 +330,13 @@ def nabla_sign(n_nodes, out_MXX, out_MYY, pp, S_MXX, S_MYY, vol, node_index, is_
     closure(
         domain(named_range(Vertex, 0, n_nodes)),
         compute_pnabla_sign,
-        [out_MXX],
+        out_MXX,
         [pp, S_MXX, vol, node_index, is_pole_edge],
     )
     closure(
         domain(named_range(Vertex, 0, n_nodes)),
         compute_pnabla_sign,
-        [out_MYY],
+        out_MYY,
         [pp, S_MYY, vol, node_index, is_pole_edge],
     )
 

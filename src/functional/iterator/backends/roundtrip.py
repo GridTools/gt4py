@@ -8,7 +8,7 @@ from eve.codegen import MakoTemplate as as_mako
 from eve.concepts import Node
 from functional import iterator
 from functional.iterator.backends import backend
-from functional.iterator.ir import AxisLiteral, FencilDefinition, OffsetLiteral
+from functional.iterator.ir import AxisLiteral, FencilDefinition, OffsetLiteral, StencilClosure
 from functional.iterator.transforms import apply_common_transforms
 
 
@@ -24,7 +24,16 @@ class EmbeddedDSL(codegen.TemplatedGenerator):
     StringLiteral = as_fmt("{value}")
     FunCall = as_fmt("{fun}({','.join(args)})")
     Lambda = as_mako("(lambda ${','.join(params)}: ${expr})")
-    StencilClosure = as_mako("closure(${domain}, ${stencil}, ${output}, [${','.join(inputs)}])")
+
+    def visit_StencilClosure(self, node: StencilClosure, **kwargs):
+        output = self.visit(node.output)
+        if isinstance(node.output, list):
+            output = f"({','.join(o for o in output)})"
+        return self.generic_visit(node, transformed_output=output)
+
+    StencilClosure = as_mako(
+        "closure(${domain}, ${stencil}, ${transformed_output}, [${','.join(inputs)}])"
+    )
     FencilDefinition = as_mako(
         """
 @fendef
