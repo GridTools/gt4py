@@ -305,13 +305,9 @@ def verify_and_get_common_dtype(
 
 def compute_kind(values: List[Expr]) -> ExprKind:
     if any(v.kind == ExprKind.FIELD for v in values):
-        return typing.cast(
-            ExprKind, ExprKind.FIELD
-        )  # see https://github.com/GridTools/gtc/issues/100
+        return ExprKind.FIELD
     else:
-        return typing.cast(
-            ExprKind, ExprKind.SCALAR
-        )  # see https://github.com/GridTools/gtc/issues/100
+        return ExprKind.SCALAR
 
 
 class Literal(Node):
@@ -319,9 +315,7 @@ class Literal(Node):
     # maybe it should be Union[float,int,str] etc?
     value: Union[BuiltInLiteral, Str]
     dtype: DataType
-    kind: ExprKind = typing.cast(
-        ExprKind, ExprKind.SCALAR
-    )  # cast shouldn't be required, see https://github.com/GridTools/gtc/issues/100
+    kind: ExprKind = ExprKind.SCALAR
 
 
 StmtT = TypeVar("StmtT", bound=Stmt)

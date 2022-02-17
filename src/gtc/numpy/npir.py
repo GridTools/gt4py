@@ -58,7 +58,15 @@ class FieldDecl(Decl):
 
 
 class TemporaryDecl(Decl):
-    """Temporary field shared across HorizontalBlocks."""
+    """
+    Temporary field shared across HorizontalBlocks.
+
+    Parameters
+    ----------
+    offset: Origin of the temporary field.
+    padding: Buffer added to compute domain as field size.
+
+    """
 
     data_dims: Tuple[int, ...] = eve.field(default_factory=tuple)
     offset: Tuple[int, int]
