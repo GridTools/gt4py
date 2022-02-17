@@ -21,7 +21,6 @@ KDim = CartesianAxis("KDim")
 # `return make_tuple(make_tuple(a,b))` -> ((a,b)): [(field,field)]
 
 
-# TODO test all cases
 @fundef
 def tuple_output1(inp1, inp2):
     return deref(inp1), deref(inp2)
@@ -219,7 +218,6 @@ def test_field_of_tuple_input(backend):
 
     inp1 = rng.normal(rng.normal(size=(shape[0], shape[1], shape[2])))
     inp2 = rng.normal(rng.normal(size=(shape[0], shape[1], shape[2])))
-    inp = np.asarray(list(zip(inp1, inp2)))
     inp = np.zeros(shape, dtype="f8, f8")
     for i in range(shape[0]):
         for j in range(shape[1]):
@@ -237,3 +235,77 @@ def test_field_of_tuple_input(backend):
     tuple_input[dom](inp, out=out, offset_provider={}, backend=backend)
     if validate:
         assert np.allclose(np.asarray(inp1) + np.asarray(inp2), out)
+
+
+@fundef
+def tuple_tuple_input(inp):
+    inp_deref = deref(inp)
+    return (
+        tuple_get(0, tuple_get(0, inp_deref))
+        + tuple_get(1, tuple_get(0, inp_deref))
+        + tuple_get(0, tuple_get(1, inp_deref))
+        + tuple_get(1, tuple_get(1, inp_deref))
+    )
+
+
+def test_tuple_of_field_of_tuple_input(backend):
+    backend, validate = backend
+
+    shape = [5, 7, 9]
+    rng = np.random.default_rng()
+
+    inp1 = rng.normal(rng.normal(size=(shape[0], shape[1], shape[2])))
+    inp2 = rng.normal(rng.normal(size=(shape[0], shape[1], shape[2])))
+    inp = np.zeros(shape, dtype="f8, f8")
+    for i in range(shape[0]):
+        for j in range(shape[1]):
+            for k in range(shape[2]):
+                inp[i, j, k] = (inp1[i, j, k], inp2[i, j, k])
+
+    inp = np_as_located_field(IDim, JDim, KDim)(inp)
+    out = np_as_located_field(IDim, JDim, KDim)(np.zeros(shape))
+
+    dom = {
+        IDim: range(0, shape[0]),
+        JDim: range(0, shape[1]),
+        KDim: range(0, shape[2]),
+    }
+    tuple_tuple_input[dom]((inp, inp), out=out, offset_provider={}, backend=backend)
+    if validate:
+        assert np.allclose(2.0 * (np.asarray(inp1) + np.asarray(inp2)), out)
+
+
+# TODO tuple of tuple currently not supported, needs clean redesign of iterator of tuple
+# def test_tuple_of_tuple_of_field_input(backend):
+#     backend, validate = backend
+
+#     shape = [5, 7, 9]
+#     rng = np.random.default_rng()
+
+#     inp1 = np_as_located_field(IDim, JDim, KDim)(
+#         rng.normal(rng.normal(size=(shape[0], shape[1], shape[2])))
+#     )
+#     inp2 = np_as_located_field(IDim, JDim, KDim)(
+#         rng.normal(rng.normal(size=(shape[0], shape[1], shape[2])))
+#     )
+#     inp3 = np_as_located_field(IDim, JDim, KDim)(
+#         rng.normal(rng.normal(size=(shape[0], shape[1], shape[2])))
+#     )
+#     inp4 = np_as_located_field(IDim, JDim, KDim)(
+#         rng.normal(rng.normal(size=(shape[0], shape[1], shape[2])))
+#     )
+
+#     out = np_as_located_field(IDim, JDim, KDim)(np.zeros(shape))
+
+#     dom = {
+#         IDim: range(0, shape[0]),
+#         JDim: range(0, shape[1]),
+#         KDim: range(0, shape[2]),
+#     }
+#     tuple_tuple_input[dom](
+#         ((inp1, inp2), (inp3, inp4)), out=out, offset_provider={}, backend=backend
+#     )
+#     if validate:
+#         assert np.allclose(
+#             (np.asarray(inp1) + np.asarray(inp2) + np.asarray(inp3) + np.asarray(inp4)), out
+#         )
