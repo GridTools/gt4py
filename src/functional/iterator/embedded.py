@@ -364,6 +364,7 @@ class MDIterator:
 
     def deref(self):
         shifted_pos = self.pos.copy()
+        # TODO(havogt): support nested tuples
         axises = self.field[0].axises if isinstance(self.field, tuple) else self.field.axises
 
         if not all(axis in shifted_pos.keys() for axis in axises):
@@ -387,6 +388,7 @@ class MDIterator:
 
 
 def make_in_iterator(inp, pos, offset_provider, *, column_axis):
+    # TODO(havogt): support nested tuples
     axises = inp[0].axises if isinstance(inp, tuple) else inp.axises
     sparse_dimensions = [axis for axis in axises if isinstance(axis, Offset)]
     assert len(sparse_dimensions) <= 1  # TODO multiple is not a current use case
@@ -564,6 +566,8 @@ class TupleFieldMeta(type):
 
 
 class TupleField(metaclass=TupleFieldMeta):
+    """Allows uniform access to field of tuples and tuple of fields."""
+
     pass
 
 
