@@ -104,8 +104,7 @@ def compute_pnabla2(pp, S_M, sign, vol):
 @fendef
 def nabla(
     n_nodes,
-    out_MXX,
-    out_MYY,
+    out,
     pp,
     S_MXX,
     S_MYY,
@@ -115,7 +114,7 @@ def nabla(
     closure(
         domain(named_range(Vertex, 0, n_nodes)),
         pnabla,
-        (out_MXX, out_MYY),
+        out,
         [pp, S_MXX, S_MYY, sign, vol],
     )
 
@@ -160,15 +159,14 @@ def test_compute_zavgS(backend, use_tmps):
 @fendef
 def compute_zavgS2_fencil(
     n_edges,
-    out0,
-    out1,
+    out,
     pp,
     S_M,
 ):
     closure(
         domain(named_range(Edge, 0, n_edges)),
         compute_zavgS2,
-        (out0, out1),
+        out,
         [pp, S_M],
     )
 
@@ -192,7 +190,7 @@ def test_compute_zavgS2(backend, use_tmps):
 
     e2v = NeighborTableOffsetProvider(AtlasTable(setup.edges2node_connectivity), Edge, Vertex, 2)
 
-    compute_zavgS2_fencil(setup.edges_size, *zavgS, pp, S, offset_provider={"E2V": e2v})
+    compute_zavgS2_fencil(setup.edges_size, zavgS, pp, S, offset_provider={"E2V": e2v})
 
     if validate:
         assert_close(-199755464.25741270, min(zavgS[0]))
@@ -221,8 +219,7 @@ def test_nabla(backend, use_tmps):
 
     nabla(
         setup.nodes_size,
-        pnabla_MXX,
-        pnabla_MYY,
+        (pnabla_MXX, pnabla_MYY),
         pp,
         S_MXX,
         S_MYY,
@@ -244,8 +241,7 @@ def test_nabla(backend, use_tmps):
 @fendef
 def nabla2(
     n_nodes,
-    out_MXX,
-    out_MYY,
+    out,
     pp,
     S,
     sign,
@@ -254,7 +250,7 @@ def nabla2(
     closure(
         domain(named_range(Vertex, 0, n_nodes)),
         compute_pnabla2,
-        (out_MXX, out_MYY),
+        out,
         [pp, S, sign, vol],
     )
 
@@ -280,8 +276,7 @@ def test_nabla2(backend, use_tmps):
 
     nabla2(
         setup.nodes_size,
-        pnabla_MXX,
-        pnabla_MYY,
+        (pnabla_MXX, pnabla_MYY),
         pp,
         S_M,
         sign,
