@@ -22,8 +22,8 @@ from eve.pattern_matching import ObjectPattern as P
 from functional.common import Field, GTTypeError
 from functional.ffront import common_types
 from functional.ffront import program_ast as past
-from functional.ffront.decorator import field_operator, program
-from functional.ffront.func_to_past import ProgramParser
+from functional.ffront.decorator import field_operator, program, raw_itir_stencil
+from functional.ffront.func_to_past import ProgramParser, ProgramSyntaxError
 from functional.ffront.past_passes.type_deduction import ProgramTypeError
 from functional.ffront.past_to_itir import ProgramLowering
 from functional.iterator import ir as itir
@@ -404,3 +404,27 @@ def test_copy_restricted_execution(copy_restrict_program_def):
     copy_restrict_program(in_field, out_field, offset_provider={})
 
     assert np.allclose(out_field_ref, out_field)
+
+
+def test_raw_it_ir_stencil():
+    @raw_itir_stencil
+    def add_self(arg: Field[[IDim], "float64"]) -> Field[[IDim], "float64"]:
+        return itir.FunCall(
+            fun=itir.SymRef(id="plus"),
+            args=[
+                itir.FunCall(fun=itir.SymRef(id="deref"), args=[arg]),
+                itir.FunCall(fun=itir.SymRef(id="deref"), args=[arg]),
+            ],
+        )
+
+    @program
+    def raw_copy_program(in_field: Field[[IDim], "float64"], out_field: Field[[IDim], "float64"]):
+        add_self(in_field, out=out_field)
+
+    size = 10
+    in_field = np_as_located_field(IDim)(np.ones((size)))
+    out_field = np_as_located_field(IDim)(np.zeros((size)))
+
+    raw_copy_program(in_field, out_field, offset_provider={})
+
+    assert np.allclose(2 * in_field.array(), out_field)

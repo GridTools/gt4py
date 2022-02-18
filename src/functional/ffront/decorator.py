@@ -17,6 +17,7 @@ import abc
 import collections
 import dataclasses
 import functools
+import inspect
 import types
 import typing
 from typing import Any, Optional, Protocol
@@ -309,3 +310,38 @@ def field_operator(
         >>> field_op(in_field, out=out_field)  # noqa: F821 # doctest: +SKIP
     """
     return FieldOperator.from_function(definition, externals, backend)
+
+
+@dataclasses.dataclass(frozen=True)
+class RawItIRStencil:
+    itir_node: itir.FunctionDefinition
+    definition: Optional[types.FunctionType] = None
+
+    @classmethod
+    def from_function(cls, definition: types.FunctionType):
+        sig = inspect.signature(definition)
+        if any(
+            param.kind
+            not in [inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD]
+            for param in sig.parameters.values()
+        ):
+            raise GTTypeError("Only positional arguments allowed.")
+        param_decls = [itir.Sym(id=param.name) for param in sig.parameters.values()]
+        param_refs = [itir.SymRef(id=param.name) for param in sig.parameters.values()]
+        body = definition(*param_refs)
+        if not isinstance(body, itir.Expr):
+            raise GTTypeError(f"Expected an ITIR expression, but got `{body}`.")
+        itir_node = itir.FunctionDefinition(id=definition.__name__, params=param_decls, expr=body)
+        return RawItIRStencil(itir_node=itir_node, definition=definition)
+
+    def __gt_itir__(self):
+        return self.itir_node
+
+    def __gt_type__(self):
+        type_ = symbol_makers.make_symbol_type_from_value(self.definition)
+        assert isinstance(type_, ct.FunctionType)
+        return type_
+
+
+def raw_itir_stencil(definition):
+    return RawItIRStencil.from_function(definition)
