@@ -5,8 +5,11 @@ from functional.iterator.transforms.inline_lifts import InlineLifts
 from functional.iterator.transforms.normalize_shifts import NormalizeShifts
 
 
-def apply_common_transforms(ir, use_tmps=False, offset_provider=None, register_tmp=None):
-    ir = InlineFundefs().visit(ir)
+def apply_common_transforms(
+    ir, use_tmps=False, skip_inline_fundefs=False, offset_provider=None, register_tmp=None
+):
+    if not skip_inline_fundefs:
+        ir = InlineFundefs().visit(ir)
     ir = PruneUnreferencedFundefs().visit(ir)
     ir = NormalizeShifts().visit(ir)
     if not use_tmps:
