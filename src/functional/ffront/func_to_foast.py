@@ -392,7 +392,7 @@ class FieldOperatorParser(ast.NodeVisitor):
         new_func = self.visit(node.func)
         if not isinstance(new_func, foast.Name):
             raise self._make_syntax_error(
-                node.func, message="functions can only be called directly!"
+                node.func, message="Functions can only be called directly!"
             )
 
         args = node.args
@@ -402,7 +402,7 @@ class FieldOperatorParser(ast.NodeVisitor):
                 k.arg not in func_info.kwargs for k in node.keywords
             ):
                 raise self._make_syntax_error(
-                    node.func, message=f"wrong syntax for function {new_func.id}"
+                    node.func, message=f"Wrong syntax for function {new_func.id}."
                 )
 
         for keyword in node.keywords:
@@ -410,7 +410,7 @@ class FieldOperatorParser(ast.NodeVisitor):
 
         return foast.Call(
             func=new_func,
-            args=[self.visit(arg) for arg in args],
+            args=[self.visit(arg, **kwargs) for arg in args],
             location=self._make_loc(node),
         )
 

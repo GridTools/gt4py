@@ -208,19 +208,19 @@ def test_shift():
 def test_fold_shifts():
     """Shifting the result of an addition should work."""
     size = 10
-    Ioff = offset("Ioff", source=IDim, target=[IDim, IDim])
+    Ioff = offset("Ioff", source=IDim, target=[IDim])
     a = np_as_located_field(IDim)(np.arange(size + 1))
-    b = np_as_located_field(IDim)(np.ones((size + 1)) * 2)
+    b = np_as_located_field(IDim)(np.ones((size + 2)) * 2)
     c = np_as_located_field(IDim)(np.zeros((size)))
 
     def auto_lift(inp1: Field[[IDim], float64], inp2: Field[[IDim], float64]):
-        tmp = inp1 + inp2
+        tmp = inp1 + inp2(Ioff[1])
         return tmp(Ioff[1])
 
     program = program_from_function(auto_lift, out_names=["c"], dim=IDim, size=size)
     roundtrip.executor(program, a, b, c, offset_provider={"Ioff": IDim})
 
-    assert np.allclose(a[1:] + b[1:], c)
+    assert np.allclose(a[1:] + b[2:], c)
 
 
 def test_reduction_execution():
@@ -255,6 +255,7 @@ def test_reduction_execution():
         return nbh_sum(edge_f_nbh, axis=V2EDim)
 
     program = program_from_function(reduction, out_names=["out"], dim=Vertex, size=size)
+    debug_itir(program)
     roundtrip.executor(
         program,
         inp,

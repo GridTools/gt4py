@@ -385,7 +385,7 @@ def test_reduction_lowering_simple():
         im.let("edge_f_nbh__0", im.shift_("V2E")("edge_f"))(
             im.lift_(
                 im.call_("reduce")(
-                    im.lambda__("base", "edge_f_nbh__0")(im.plus_("base", "edge_f_nbh__0")),
+                    im.lambda__("base", "x")(im.plus_("base", "x")),
                     0,
                 )
             )("edge_f_nbh__0")
@@ -398,28 +398,21 @@ def test_reduction_lowering_simple():
 def test_reduction_lowering_expr():
     def reduction(e1: Field[[Edge], "float64"], e2: Field[[Vertex, V2EDim], "float64"]):
         e1_nbh = e1(V2E)
-        sum_e1_e2 = e1_nbh + e2
-        return nbh_sum(sum_e1_e2, axis=V2EDim)  # need to disable type checking for this to work
+        return nbh_sum(e1_nbh + e2, axis=V2EDim)
 
     parsed = FieldOperatorParser.apply_to_function(reduction)
     lowered = FieldOperatorLowering.apply(parsed)
 
     reference = im.deref_(
         im.let("e1_nbh__0", im.shift_("V2E")("e1"))(
-            im.let(
-                "sum_e1_e2__0",
-                im.lift_(
-                    im.lambda__("e1_nbh__0", "e2")(
-                        im.plus_(im.deref_("e1_nbh__0"), im.deref_("e2"))
-                    )
-                )("e1_nbh__0", "e2"),
-            )(
-                im.lift_(
-                    im.call_("reduce")(
-                        im.lambda__("base", "sum_e1_e2__0")(im.plus_("base", "sum_e1_e2__0")),
-                        0,
-                    )
-                )("sum_e1_e2__0")
+            (
+                im.lift_(im.call_("reduce")(im.lambda__("base", "x")(im.plus_("base", "x")), 0,))(
+                    im.lift_(
+                        im.lambda__("e1_nbh__0", "e2")(
+                            im.plus_(im.deref_("e1_nbh__0"), im.deref_("e2"))
+                        )
+                    )("e1_nbh__0", "e2"),
+                )
             )
         )
     )

@@ -14,8 +14,8 @@
 
 from numpy import float32, float64, int32, int64
 
-from functional.common import Field, Dimension
-from functional.ffront import common_types
+from functional.common import Field
+from functional.ffront import common_types as ct
 
 
 __all__ = ["Field", "float32", "float64", "int32", "int64", "nbh_sum"]
@@ -23,8 +23,10 @@ __all__ = ["Field", "float32", "float64", "int32", "int64", "nbh_sum"]
 TYPE_BUILTINS = [Field, float, float32, float64, int, int32, int64, bool, tuple]
 TYPE_BUILTIN_NAMES = [t.__name__ for t in TYPE_BUILTINS]
 
-nbh_sum = common_types.FunctionType(
-    args=[common_types.FieldType], kwargs={"axis": Dimension}, returns=common_types.FieldType
+nbh_sum = ct.FunctionType(
+    args=[ct.DeferredSymbolType(constraint=ct.FieldType)],
+    kwargs={"axis": ct.ScalarType(kind=ct.ScalarKind.DIMENSION)},
+    returns=ct.DeferredSymbolType(constraint=ct.FieldType),
 )
 FUN_BUILTIN_NAMES = ["nbh_sum"]
 

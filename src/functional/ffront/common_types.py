@@ -12,6 +12,7 @@ class ScalarKind(IntEnum):
     INT64 = 64
     FLOAT32 = 1032
     FLOAT64 = 1064
+    DIMENSION = 2001
 
 
 class SymbolType:
@@ -85,9 +86,9 @@ class FieldType(DataType):
 
 @dataclass(frozen=True)
 class FunctionType(SymbolType):
-    args: list[DataType]
+    args: list[Union[DataType, DeferredSymbolType]]
     kwargs: dict[str, DataType]
-    returns: DataType
+    returns: Union[DataType, DeferredSymbolType]
 
     def __str__(self):
         arg_strs = [str(arg) for arg in self.args]

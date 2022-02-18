@@ -12,40 +12,14 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from collections import namedtuple
 from typing import Optional
 
-import functional
-from eve import NodeTranslator, NodeVisitor
+from eve import NodeTranslator
 from functional.ffront import field_operator_ast as foast
 from functional.ffront import itir_makers as im
 from functional.ffront.fbuiltins import FUN_BUILTIN_NAMES
 from functional.ffront.type_info import TypeInfo
 from functional.iterator import ir as itir
-
-
-FieldAccess = namedtuple("FieldAccess", ["name", "shift"])
-
-
-class FieldCollector(NodeVisitor):
-    def __init__(self):
-        self._fields = set()
-        self.in_shift = False
-
-    def visit_FunCall(self, node: itir.FunCall, **kwargs) -> None:
-        if isinstance(node.fun, itir.FunCall) and node.fun.fun.id == "shift":
-            self._fields.add(FieldAccess(node.args[0].id, node.fun.args[0]))
-        elif isinstance(node.fun, itir.FunCall) and node.fun.fun.id == "lift":
-            self.generic_visit(node.fun)
-        else:
-            self.generic_visit(node)
-
-    def visit_SymRef(self, node: itir.SymRef, **kwargs) -> None:
-        if not hasattr(functional.iterator.builtins, node.id):
-            self._fields.add(FieldAccess(node.id, None))
-
-    def getFields(self):
-        return list(sorted(self._fields))
 
 
 class FieldOperatorLowering(NodeTranslator):
@@ -164,43 +138,19 @@ class FieldOperatorLowering(NodeTranslator):
         else:
             return im.shift_(node.args[0].id)(self.visit(node.func, **kwargs))
 
-    def _extract_fields(self, expr: itir.Expr) -> list[str]:
-        fc = FieldCollector()
-        fc.visit(expr)
-        return fc.getFields()
-
-    def _make_lambda_rhs(self, expr: itir.Expr) -> itir.FunCall:
-        return im.plus_(im.ref("base"), expr)
-
-    def _make_reduce(self, *args, **kwargs) -> itir.FunCall:
-        red_rhs = self.visit(args[0], **kwargs)
-
-        # get all fields referenced (technically this could also be external symbols)
-        # this assumes that the same field doesn't appear both shifted and not shifted,
-        # which should be checked for before the lowering
-        rhs_fields = self._extract_fields(red_rhs[0])
-
-        rhs_lambda = im.lambda__("base", *[im.sym(field.name) for field in rhs_fields])(
-            self._make_lambda_rhs(red_rhs[0])
-        )
-        # the arguments passed to the lambda are either a symref to the field, or, if the
-        # field is shifted in the original expr, the shifted field
-        lambda_args = []
-        for field in rhs_fields:
-            if field.shift is not None:
-                lambda_args.append(field.name)
-            else:
-                lambda_args.append(im.ref(field.name))
-
-        reduce_call = im.lift_(im.call_("reduce")(rhs_lambda, 0))(*lambda_args)
-
-        return reduce_call
+    def _visit_reduce(self, node: foast.Call, **kwargs) -> itir.FunCall:
+        return im.lift_(
+            im.call_("reduce")(
+                im.lambda__("base", "x")(im.plus_("base", "x")),
+                0,
+            )
+        )(self.visit(node.args[0], **kwargs))
 
     def visit_Call(self, node: foast.Call, **kwargs) -> itir.FunCall:
         if TypeInfo(node.func.type).is_field_type:
             return self._visit_shift(node, **kwargs)
         elif node.func.id in FUN_BUILTIN_NAMES:
-            return self._make_reduce(node.args, **kwargs)
+            return self._visit_reduce(node, **kwargs)
         return self._lift_lambda(node)(
             im.call_(self.visit(node.func, **kwargs))(*self.visit(node.args, **kwargs))
         )
