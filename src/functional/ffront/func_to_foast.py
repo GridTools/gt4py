@@ -157,8 +157,11 @@ class FieldOperatorParser(ast.NodeVisitor):
         # in both 'closure_refs.globals' and 'self.closure_refs.nonlocals'.
         defs = self.closure_refs.globals | self.closure_refs.nonlocals
         closure = [
-            symbol_makers.make_symbol_from_value(
-                name, defs[name], foast.Namespace.CLOSURE, self._make_loc(node)
+            foast.Symbol(
+                id=name,
+                type=symbol_makers.make_symbol_type_from_value(defs[name]),
+                namespace=common_types.Namespace.CLOSURE,
+                location=self._make_loc(node),
             )
             for name in global_names | nonlocal_names
         ]
@@ -191,10 +194,12 @@ class FieldOperatorParser(ast.NodeVisitor):
                         node, message="Missing symbol '{alias.name}' definition in {node.module}}"
                     )
                 symbols.append(
-                    symbol_makers.make_symbol_from_value(
-                        alias.asname or alias.name,
-                        self.externals_defs[alias.name],
-                        foast.Namespace.EXTERNAL,
+                    foast.Symbol(
+                        name=alias.asname or alias.name,
+                        type=symbol_makers.make_symbol_type_from_value(
+                            self.externals_defs[alias.name]
+                        ),
+                        namespace=common_types.Namespace.EXTERNAL,
                         location=self._make_loc(node),
                     )
                 )

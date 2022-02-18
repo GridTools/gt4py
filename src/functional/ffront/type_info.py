@@ -10,9 +10,9 @@ from functional.ffront.common_types import (
 )
 
 
-def is_complete_symbol_type(fo_type: SymbolType) -> TypeGuard[SymbolType]:
+def is_complete_symbol_type(sym_type: SymbolType) -> TypeGuard[SymbolType]:
     """Figure out if the foast type is completely deduced."""
-    match fo_type:
+    match sym_type:
         case None:
             return False
         case DeferredSymbolType():

@@ -23,10 +23,8 @@ import numpy as np
 import numpy.typing as npt
 
 from eve import typingx
-from eve.type_definitions import SourceLocation
 from functional import common
 from functional.ffront import common_types
-from functional.ffront import field_operator_ast as foast
 from functional.iterator import runtime
 
 
@@ -156,6 +154,7 @@ def make_symbol_type_from_typing(
                 for arg, arg_type in kwargs_info[0].data.items()
             }
 
+            # todo: print better error when no return type annotation is given
             return common_types.FunctionType(
                 args=args, kwargs=kwargs, returns=recursive_make_symbol(return_type)
             )
@@ -165,28 +164,27 @@ def make_symbol_type_from_typing(
     raise FieldOperatorTypeError(f"'{type_hint}' type is not supported")
 
 
-def make_symbol_from_value(
-    name: str, value: Any, namespace: foast.Namespace, location: SourceLocation
-) -> foast.Symbol:
-    """Make a symbol node from a Python value."""
+def make_symbol_type_from_value(value: Any) -> common_types.SymbolType:
+    """Make a symbol type from a Python value."""
     if isinstance(value, type) or type(value).__module__ == "typing":
         # we don't have types of types so disallow this
         raise ValueError("The type of a symbol can not be a type itself.")
-    type_ = typingx.get_typing(value, annotate_callable_kwargs=True)
-
-    symbol_type = make_symbol_type_from_typing(type_)
+    if hasattr(value, "__gt_type__"):
+        symbol_type = value.__gt_type__()
+    else:
+        type_ = typingx.get_typing(value, annotate_callable_kwargs=True)
+        symbol_type = make_symbol_type_from_typing(type_)
 
     if isinstance(
         symbol_type, (common_types.DataType, common_types.FunctionType, common_types.OffsetType)
     ):
-        return foast.Symbol[type(symbol_type)](
-            id=name, type=symbol_type, namespace=namespace, location=location
-        )
+        return symbol_type
     else:
         raise common.GTTypeError(f"Impossible to map '{value}' value to a Symbol")
 
 
 # TODO(egparedes): Add source location info (maybe subclassing FieldOperatorSyntaxError)
+# TOD(tehrengruber): Find a better name as everything here is not tied to field operators
 class FieldOperatorTypeError(common.GTTypeError):
     def __init__(
         self,
