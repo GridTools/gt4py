@@ -18,6 +18,12 @@ import functools
 import itertools
 from types import SimpleNamespace
 
+import pytest
+
+
+dace = pytest.importorskip("dace")
+
+
 import hypothesis as hyp
 import hypothesis.strategies as hyp_st
 import pytest

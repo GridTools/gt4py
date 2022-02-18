@@ -14,6 +14,11 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import pytest
+
+
+dace = pytest.importorskip("dace")  # noqa: E402 module level import not at top of file
+
 from gtc import common
 from gtc.passes.oir_dace_optimizations.api import optimize_horizontal_executions
 from gtc.passes.oir_dace_optimizations.horizontal_execution_merging import (

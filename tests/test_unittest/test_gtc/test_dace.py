@@ -18,6 +18,9 @@ from copy import deepcopy
 
 import pytest
 
+
+dace = pytest.importorskip("dace")
+
 from gt4py.backend.gtc_backend.defir_to_gtir import DefIRToGTIR
 from gt4py.definitions import BuildOptions
 from gt4py.frontend.gtscript_frontend import GTScriptFrontend
