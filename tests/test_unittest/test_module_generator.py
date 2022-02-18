@@ -89,7 +89,7 @@ def sample_stencil_with_args(
 
 def test_module_data():
     builder = StencilBuilder(sample_stencil_with_args)
-    module_data = make_args_data_from_gtir(builder.gtir, legacy=True)
+    module_data = make_args_data_from_gtir(builder.gtir_pipeline, legacy=True)
 
     assert module_data.field_info["used_io_field"].access == AccessKind.WRITE
     assert module_data.field_info["used_in_field"].access == AccessKind.READ
