@@ -206,7 +206,7 @@ def test_shift():
 
 
 def test_fold_shifts():
-    """Shifting the result of an addition should work by shifting the operands instead."""
+    """Shifting the result of an addition should work."""
     size = 10
     Ioff = offset("Ioff", source=IDim, target=[IDim, IDim])
     a = np_as_located_field(IDim)(np.arange(size + 1))
@@ -224,7 +224,7 @@ def test_fold_shifts():
 
 
 def test_reduction_execution():
-    """Testing a trivial neighbor sum"""
+    """Testing a trivial neighbor sum."""
     size = 9
 
     Edge = CartesianAxis("Edge")
@@ -251,10 +251,10 @@ def test_reduction_execution():
     ref = np.asarray(list(sum(row) for row in v2e_arr))
 
     def reduction(edge_f: Field[[Edge], "float64"]):
-        return nbh_sum(edge_f(V2E), axis=V2EDim)
+        edge_f_nbh = edge_f(V2E)
+        return nbh_sum(edge_f_nbh, axis=V2EDim)
 
     program = program_from_function(reduction, out_names=["out"], dim=Vertex, size=size)
-    debug_itir(program)
     roundtrip.executor(
         program,
         inp,

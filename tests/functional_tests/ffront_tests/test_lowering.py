@@ -95,7 +95,7 @@ def test_arithmetic():
 
 
 def test_shift():
-    Ioff = offset("Ioff")
+    Ioff = offset("Ioff", source=IDim, target=[IDim])
 
     def shift_by_one(inp: Field[[IDim], float64]):
         return inp(Ioff[1])
@@ -375,53 +375,53 @@ def test_compare_chain():
 
 def test_reduction_lowering_simple():
     def reduction(edge_f: Field[[Edge], "float64"]):
-        return nbh_sum(edge_f(V2E), axis=V2E)
+        edge_f_nbh = edge_f(V2E)
+        return nbh_sum(edge_f_nbh, axis=V2E)
 
     parsed = FieldOperatorParser.apply_to_function(reduction)
     lowered = FieldOperatorLowering.apply(parsed)
 
     reference = im.deref_(
-        im.lift_(
-            im.call_("reduce")(
-                im.lambda__("base", "edge_f")(
-                    im.plus_("base", im.deref_(im.shift_("V2E")("edge_f")))
-                ),
-                0,
-            )
-        )("edge_f")
+        im.let("edge_f_nbh__0", im.shift_("V2E")("edge_f"))(
+            im.lift_(
+                im.call_("reduce")(
+                    im.lambda__("base", "edge_f_nbh__0")(im.plus_("base", "edge_f_nbh__0")),
+                    0,
+                )
+            )("edge_f_nbh__0")
+        )
     )
-
-    debug_itir(reference)
-    debug_itir(lowered.expr)
 
     assert lowered.expr == reference
 
 
 def test_reduction_lowering_expr():
     def reduction(e1: Field[[Edge], "float64"], e2: Field[[Vertex, V2EDim], "float64"]):
-        return nbh_sum(e1(V2E) + e2, axis=V2EDim)  # need to disable type checking for this to work
+        e1_nbh = e1(V2E)
+        sum_e1_e2 = e1_nbh + e2
+        return nbh_sum(sum_e1_e2, axis=V2EDim)  # need to disable type checking for this to work
 
     parsed = FieldOperatorParser.apply_to_function(reduction)
     lowered = FieldOperatorLowering.apply(parsed)
 
     reference = im.deref_(
-        im.lift_(
-            im.call_("reduce")(
-                im.lambda__("base", "e1", "e2")(
-                    im.plus_(
-                        "base",
-                        im.deref_(
-                            im.lift_(
-                                im.lambda__("e1", "e2")(
-                                    im.plus_(im.deref_(im.shift_("V2E")("e1")), im.deref_("e2"))
-                                )
-                            )("e1", "e2")
-                        ),
+        im.let("e1_nbh__0", im.shift_("V2E")("e1"))(
+            im.let(
+                "sum_e1_e2__0",
+                im.lift_(
+                    im.lambda__("e1_nbh__0", "e2")(
+                        im.plus_(im.deref_("e1_nbh__0"), im.deref_("e2"))
                     )
-                ),
-                0,
+                )("e1_nbh__0", "e2"),
+            )(
+                im.lift_(
+                    im.call_("reduce")(
+                        im.lambda__("base", "sum_e1_e2__0")(im.plus_("base", "sum_e1_e2__0")),
+                        0,
+                    )
+                )("sum_e1_e2__0")
             )
-        )("e1", "e2")
+        )
     )
 
     assert lowered.expr == reference

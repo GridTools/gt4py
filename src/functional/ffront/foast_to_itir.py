@@ -48,37 +48,6 @@ class FieldCollector(NodeVisitor):
         return list(sorted(self._fields))
 
 
-class DerefRemover(NodeTranslator):
-    def visit_FunCall(self, node: itir.FunCall) -> itir.FunCall:
-        if isinstance(node.fun, itir.FunCall):
-            new_args = self.visit(node.args)
-            return itir.FunCall(fun=node.fun, args=new_args)
-
-        if node.fun.id == "deref":
-            return node.args[0]
-
-        new_args = self.visit(node.args)
-        return itir.FunCall(fun=node.fun, args=new_args)
-
-
-class ShiftRemover(NodeTranslator):
-    def visit_FunCall(self, node: itir.FunCall) -> itir.FunCall:
-        if isinstance(node.fun, itir.FunCall) and node.fun.fun.id == "shift":
-            return itir.SymRef(id=node.args[0].id)
-        new_args = self.visit(node.args)
-        return itir.FunCall(fun=node.fun, args=new_args)
-
-
-class SymRefRenamer(NodeTranslator):
-    def __init__(self, suffix: str):
-        self.suffix = suffix
-
-    def visit_SymRef(self, node: itir.SymRef):
-        if not hasattr(functional.iterator.builtins, node.id):
-            return itir.SymRef(id=node.id + self.suffix)
-        return node
-
-
 class FieldOperatorLowering(NodeTranslator):
     """
     Lower FieldOperator AST (FOAST) to Iterator IR (ITIR).
@@ -200,24 +169,8 @@ class FieldOperatorLowering(NodeTranslator):
         fc.visit(expr)
         return fc.getFields()
 
-    def _remove_field_shifts(self, expr: itir.Expr) -> itir.Expr:
-        sr = ShiftRemover()
-        expr = sr.visit(expr)
-        return expr
-
-    def _remove_field_derefs(self, expr: itir.Expr) -> itir.Expr:
-        dr = DerefRemover()
-        expr = dr.visit(expr)
-        return expr
-
-    def _rename_sym_refs(self, expr: itir.Expr, suffix: str) -> itir.Expr:
-        rn = SymRefRenamer(suffix)
-        expr = rn.visit(expr)
-        return expr
-
     def _make_lambda_rhs(self, expr: itir.Expr) -> itir.FunCall:
-        #  return ItirFunCallFactory(name="plus", args=[itir.SymRef(id="base"), expr])
-        return im.plus_(im.ref("base"), im.deref_(expr))
+        return im.plus_(im.ref("base"), expr)
 
     def _make_reduce(self, *args, **kwargs) -> itir.FunCall:
         red_rhs = self.visit(args[0], **kwargs)
@@ -227,20 +180,6 @@ class FieldOperatorLowering(NodeTranslator):
         # which should be checked for before the lowering
         rhs_fields = self._extract_fields(red_rhs[0])
 
-        # to lower the expr to the lambda expr we need to
-        #   - remove derefs
-        #   - remove shifts
-        #   - rename the fields being accessed (I think this is not strictly
-        #     needed, but improves readabiltiy)
-        #  rhs_lambda = itir.Lambda(
-        #      params=[itir.Sym(id="base")]
-        #      + [itir.Sym(id=field.name + "_param") for field in rhs_fields],
-        #      expr=self._make_lambda_rhs(
-        #          self._rename_sym_refs(
-        #              self._remove_field_derefs(self._remove_field_shifts(red_rhs[0])), "_param"
-        #          )
-        #      ),
-        #  )
         rhs_lambda = im.lambda__("base", *[im.sym(field.name) for field in rhs_fields])(
             self._make_lambda_rhs(red_rhs[0])
         )
@@ -250,20 +189,9 @@ class FieldOperatorLowering(NodeTranslator):
         for field in rhs_fields:
             if field.shift is not None:
                 lambda_args.append(field.name)
-                #  lambda_args.append(
-                #      ItirFunCallFactory(
-                #          fun=ItirFunCallFactory(name="shift", args=[field.shift]),
-                #          args=[itir.SymRef(id=field.name)],
-                #      )
-                #  )
             else:
-                #  lambda_args.append(itir.SymRef(id=field.name))
                 lambda_args.append(im.ref(field.name))
 
-        #  reduce_call = ItirFunCallFactory(
-        #      fun=ItirFunCallFactory(name="reduce", args=[rhs_lambda, itir.IntLiteral(value=0.0)]),
-        #      args=lambda_args,
-        #  )
         reduce_call = im.lift_(im.call_("reduce")(rhs_lambda, 0))(*lambda_args)
 
         return reduce_call

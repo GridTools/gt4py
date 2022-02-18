@@ -157,7 +157,7 @@ class FieldOperatorTypeDeduction(NodeTranslator):
             return foast.Subscript(
                 value=new_value,
                 index=node.index,
-                type=ct.OffsetType(),
+                type=new_value.type,
                 location=node.location,
             )
         match new_value.type:
