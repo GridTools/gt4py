@@ -149,6 +149,13 @@ class ScalarIfStmt(common.IfStmt[BlockStmt, Expr], Stmt):
         return cond
 
 
+class HorizontalMask(Expr):
+    i: common.HorizontalInterval
+    j: common.HorizontalInterval
+    kind = common.ExprKind.FIELD
+    dtype = common.DataType.BOOL
+
+
 class UnaryOp(common.UnaryOp[Expr], Expr):
     pass
 

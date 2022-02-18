@@ -79,6 +79,13 @@ class MaskStmt(Stmt):
         return v
 
 
+class HorizontalMask(Expr):
+    i: common.HorizontalInterval
+    j: common.HorizontalInterval
+    kind = common.ExprKind.FIELD
+    dtype = common.DataType.BOOL
+
+
 class UnaryOp(common.UnaryOp[Expr], Expr):
     pass
 

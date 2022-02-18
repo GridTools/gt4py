@@ -487,3 +487,19 @@ def test_VariableKOffset_category():
     Testee(k=ExprC())
     with pytest.raises(ValidationError):
         Testee(k=ExprA())
+
+
+def test_HorizontalInterval():
+    common.HorizontalInterval(
+        start=common.AxisBound(level=common.LevelMarker.START, offset=-1),
+        end=common.AxisBound(level=common.LevelMarker.START, offset=0),
+    )
+    with pytest.raises(ValidationError):
+        common.HorizontalInterval(
+            start=common.AxisBound(level=common.LevelMarker.END, offset=0),
+            end=common.AxisBound(level=common.LevelMarker.START, offset=-1),
+        )
+        common.HorizontalInterval(
+            start=common.AxisBound(level=common.LevelMarker.START, offset=0),
+            end=common.AxisBound(level=common.LevelMarker.START, offset=-1),
+        )

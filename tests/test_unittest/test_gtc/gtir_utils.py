@@ -20,7 +20,12 @@ import factory
 
 from gtc import common, gtir
 
-from .common_utils import CartesianOffsetFactory, identifier, undefined_symbol_list
+from .common_utils import (
+    CartesianOffsetFactory,
+    HorizontalIntervalFactory,
+    identifier,
+    undefined_symbol_list,
+)
 
 
 class LiteralFactory(factory.Factory):
@@ -71,6 +76,14 @@ class BinaryOpFactory(factory.Factory):
     op = common.ArithmeticOperator.ADD
     left = factory.SubFactory(FieldAccessFactory)
     right = factory.SubFactory(FieldAccessFactory)
+
+
+class HorizontalMaskFactory(factory.Factory):
+    class Meta:
+        model = gtir.HorizontalMask
+
+    i = factory.SubFactory(HorizontalIntervalFactory)
+    j = factory.SubFactory(HorizontalIntervalFactory)
 
 
 class BlockStmtFactory(factory.Factory):

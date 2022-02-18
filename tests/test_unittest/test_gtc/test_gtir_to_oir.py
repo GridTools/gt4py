@@ -26,6 +26,7 @@ from .gtir_utils import (
     BlockStmtFactory,
     FieldAccessFactory,
     FieldIfStmtFactory,
+    HorizontalMaskFactory,
     ScalarIfStmtFactory,
     VariableKOffsetFactory,
 )
@@ -104,4 +105,9 @@ def test_visit_FieldIfStmt_nesting():
 
 def test_visit_ScalarIfStmt():
     testee = ScalarIfStmtFactory()
+    GTIRToOIR().visit(testee, ctx=GTIRToOIR.Context())
+
+
+def test_visit_FieldIf_HorizontalMask():
+    testee = FieldIfStmtFactory(cond=HorizontalMaskFactory())
     GTIRToOIR().visit(testee, ctx=GTIRToOIR.Context())

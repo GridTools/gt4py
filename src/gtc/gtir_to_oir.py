@@ -143,6 +143,9 @@ class GTIRToOIR(NodeTranslator):
             loc=node.loc,
         )
 
+    def visit_HorizontalMask(self, node: gtir.HorizontalMask, **kwargs: Any) -> oir.HorizontalMask:
+        return oir.HorizontalMask(i=node.i, j=node.j)
+
     def visit_FieldIfStmt(
         self, node: gtir.FieldIfStmt, *, mask: oir.Expr = None, ctx: Context, **kwargs: Any
     ) -> None:

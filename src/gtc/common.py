@@ -795,30 +795,18 @@ class HorizontalInterval(Node):
 
     @root_validator
     def check_start_before_end(cls, values: RootValidatorValuesType) -> RootValidatorValuesType:
-        if values["start"] and values["end"]:
-            return values["start"] < values["end"]
-        else:
-            return True
+        if values["start"] and values["end"] and not (values["start"] < values["end"]):
+            raise ValueError(
+                f"End ({values['end']}) is not strictly after start ({values['start']})"
+            )
+
+        return values
 
     def is_single_index(self) -> bool:
         if self.start is None or self.end is None or self.start.level != self.end.level:
             return False
 
         return abs(self.end.offset - self.start.offset) == 1
-
-
-class HorizontalMask(GenericNode, Generic[ExprT]):
-    i: HorizontalInterval
-    j: HorizontalInterval
-    kind = ExprKind.FIELD
-    dtype = DataType.BOOL
-
-    def is_single_index(self) -> bool:
-        return self.i.is_single_index() and self.j.is_single_index()
-
-    @property
-    def intervals(self) -> Tuple[HorizontalInterval, HorizontalInterval]:
-        return (self.i, self.j)
 
 
 def data_type_to_typestr(dtype: DataType) -> str:
