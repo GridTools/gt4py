@@ -14,7 +14,8 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import Any, Dict, List, Optional, Tuple, Union, cast
+import typing
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 from eve.concepts import BaseNode
 from eve.traits import SymbolTableTrait
@@ -34,7 +35,7 @@ class OirToNpir(NodeTranslator):
     def visit_FieldDecl(
         self, node: oir.FieldDecl, *, extents: StencilExtentComputer.Context, **kwargs: Any
     ) -> npir.FieldDecl:
-        extent = cast(npir.HorizontalExtent, extents.fields.get(node.name, ((0, 0), (0, 0))))
+        extent = typing.cast(npir.HorizontalExtent, extents.fields.get(node.name, ((0, 0), (0, 0))))
         return npir.FieldDecl(
             name=node.name,
             dtype=node.dtype,
@@ -53,15 +54,15 @@ class OirToNpir(NodeTranslator):
         self, node: oir.Temporary, *, extents: StencilExtentComputer.Context, **kwargs: Any
     ) -> npir.TemporaryDecl:
         temp_extent = extents.fields[node.name]
-        offset = tuple([-ext[0] for ext in temp_extent])
+        offset = [-ext[0] for ext in temp_extent]
         assert all(off >= 0 for off in offset)
-        boundary = tuple([ext[1] - ext[0] for ext in temp_extent])
+        padding = [ext[1] - ext[0] for ext in temp_extent]
         return npir.TemporaryDecl(
             name=node.name,
             dtype=node.dtype,
             data_dims=node.data_dims,
             offset=offset,
-            boundary=boundary,
+            padding=padding,
         )
 
     # --- Expressions ---
@@ -163,6 +164,7 @@ class OirToNpir(NodeTranslator):
             right = npir.Broadcast(expr=right, dims=3)
         return npir.VectorAssign(left=left, right=right, mask=mask)
 
+    # --- Control Flow ---
     def visit_While(
         self, node: oir.While, *, mask: Optional[npir.Expr] = None, **kwargs: Any
     ) -> npir.While:
@@ -173,7 +175,6 @@ class OirToNpir(NodeTranslator):
             mask = cond
         return npir.While(cond=cond, body=self.visit(node.body, mask=mask, **kwargs))
 
-    # --- Control Flow ---
     def visit_HorizontalExecution(
         self,
         node: oir.HorizontalExecution,

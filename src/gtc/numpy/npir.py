@@ -14,7 +14,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import List, Optional, Tuple, Union, cast
+from typing import List, Optional, Tuple, Union
 
 from pydantic import validator
 
@@ -40,24 +40,37 @@ class Decl(eve.Node):
 
 
 class ScalarDecl(Decl):
-    # Scalar per grid point
-    # Locals never have data_dims
-    # Used for API scalar parameters and oir local scalars
+    """Scalar per grid point.
+
+    Used for API scalar parameters and local scalars. Local scalars never have data_dims.
+
+    """
+
     pass
 
 
 class FieldDecl(Decl):
-    # General field shared across HorizontalBlocks
+    """General field shared across HorizontalBlocks."""
+
     dimensions: Tuple[bool, bool, bool]
     data_dims: Tuple[int, ...] = eve.field(default_factory=tuple)
     extent: HorizontalExtent
 
 
 class TemporaryDecl(Decl):
-    # Temporary field shared across HorizontalBlocks
+    """
+    Temporary field shared across HorizontalBlocks.
+
+    Parameters
+    ----------
+    offset: Origin of the temporary field.
+    padding: Buffer added to compute domain as field size.
+
+    """
+
     data_dims: Tuple[int, ...] = eve.field(default_factory=tuple)
     offset: Tuple[int, int]
-    boundary: Tuple[int, int]
+    padding: Tuple[int, int]
 
 
 # --- Expressions ---
@@ -72,7 +85,7 @@ class VectorLValue(common.LocNode):
 
 
 class ScalarLiteral(common.Literal, Expr):
-    kind = cast(common.ExprKind, common.ExprKind.SCALAR)
+    kind = common.ExprKind.SCALAR
 
     @validator("dtype")
     def is_defined(cls, dtype: common.DataType) -> common.DataType:
@@ -83,17 +96,17 @@ class ScalarLiteral(common.Literal, Expr):
 
 
 class ScalarCast(common.Cast[Expr], Expr):
-    kind = cast(common.ExprKind, common.ExprKind.SCALAR)
+    kind = common.ExprKind.SCALAR
 
 
 class VectorCast(common.Cast[Expr], Expr):
-    kind = cast(common.ExprKind, common.ExprKind.FIELD)
+    kind = common.ExprKind.FIELD
 
 
 class Broadcast(Expr):
     expr: Expr
     dims: int = 3
-    kind = cast(common.ExprKind, common.ExprKind.FIELD)
+    kind = common.ExprKind.FIELD
 
 
 class VarKOffset(common.VariableKOffset[Expr]):
@@ -106,24 +119,24 @@ class FieldSlice(Expr, VectorLValue):
     j_offset: int
     k_offset: Union[int, VarKOffset]
     data_index: List[Expr] = []
-    kind = cast(common.ExprKind, common.ExprKind.FIELD)
+    kind = common.ExprKind.FIELD
 
     @validator("data_index")
     def data_indices_are_scalar(cls, data_index: List[Expr]) -> List[Expr]:
         for index in data_index:
             if index.kind != common.ExprKind.SCALAR:
-                raise ValueError("Data indies must be scalars")
+                raise ValueError("Data indices must be scalars")
         return data_index
 
 
 class ParamAccess(Expr):
     name: eve.SymbolRef
-    kind = cast(common.ExprKind, common.ExprKind.SCALAR)
+    kind = common.ExprKind.SCALAR
 
 
 class LocalScalarAccess(Expr, VectorLValue):
     name: eve.SymbolRef
-    kind = cast(common.ExprKind, common.ExprKind.FIELD)
+    kind = common.ExprKind.FIELD
 
 
 class VectorArithmetic(common.BinaryOp[Expr], Expr):
@@ -154,6 +167,7 @@ class Stmt(eve.Node):
     pass
 
 
+# --- Statement ---
 class VectorAssign(common.AssignStmt[VectorLValue, Expr], Stmt):
     left: VectorLValue
     right: Expr

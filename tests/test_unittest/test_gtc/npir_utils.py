@@ -42,7 +42,7 @@ class TemporaryDeclFactory(factory.Factory):
     name = identifier(npir.TemporaryDecl)
     dtype = common.DataType.FLOAT32
     offset = (0, 0)
-    boundary = (0, 0)
+    padding = (0, 0)
 
 
 class ScalarDeclFactory(factory.Factory):

@@ -27,8 +27,8 @@ from gtc.numpy import npir
 __all__ = ["NpirCodegen"]
 
 
-def _paren_wrap(s: str) -> str:
-    return f"({s})"
+def _dump_sequence(sequence, *, separator=", ", start="(", end=")") -> str:
+    return f"{start}{separator.join(sequence)}{end}"
 
 
 def _slice_string(ch: str, offset: int) -> str:
@@ -46,7 +46,7 @@ ORIGIN_CORRECTED_VIEW_CLASS = textwrap.dedent(
             )
 
             shape = [field.shape[i] if i is not None else 1 for i in self.idx_to_data]
-            self.field = np.reshape(field.data, shape).view(np.ndarray)
+            self.field_view = np.reshape(field.data, shape).view(np.ndarray)
 
             self.offsets = offsets
 
@@ -75,20 +75,20 @@ ORIGIN_CORRECTED_VIEW_CLASS = textwrap.dedent(
                 new_args[:2] = np.broadcast_arrays(
                     np.expand_dims(
                         np.arange(new_args[0].start, new_args[0].stop),
-                        axis=tuple(i for i in range(self.field.ndim) if i != 0)
+                        axis=tuple(i for i in range(self.field_view.ndim) if i != 0)
                     ),
                     np.expand_dims(
                         np.arange(new_args[1].start, new_args[1].stop),
-                        axis=tuple(i for i in range(self.field.ndim) if i != 1)
+                        axis=tuple(i for i in range(self.field_view.ndim) if i != 1)
                     ),
                 )
             return tuple(new_args)
 
         def __getitem__(self, key):
-            return self.field.__getitem__(self.shim_key(key))
+            return self.field_view.__getitem__(self.shim_key(key))
 
         def __setitem__(self, key, value):
-            return self.field.__setitem__(self.shim_key(key), value)
+            return self.field_view.__setitem__(self.shim_key(key), value)
     """
 )
 
@@ -103,26 +103,12 @@ class NpirCodegen(TemplatedGenerator):
 
     contexts = (SymbolTableTrait.symtable_merger,)
 
-    def visit_FieldDecl(self, node: npir.FieldDecl, **kwargs) -> Union[str, Collection[str]]:
-        dims = _paren_wrap(", ".join(["True" if d else "False" for d in node.dimensions]))
-        return self.generic_visit(node, dims=dims, **kwargs)
-
-    FieldDecl = FormatTemplate("{name} = Field({name}, _origin_['{name}'], {dims})")
-
-    def visit_TemporaryDecl(self, node: npir.TemporaryDecl, **kwargs: Any):
-        shape = _paren_wrap(
-            ", ".join(
-                [
-                    f"_d{axis}_{axis_extent:+d}"
-                    for axis, axis_extent in zip(("I", "J", "K"), node.boundary)
-                ]
-                + ["_dK_"]
-            )
-        )
-        return self.generic_visit(node, shape=shape, **kwargs)
+    FieldDecl = FormatTemplate(
+        "{name} = Field({name}, _origin_['{name}'], ({', '.join(dimensions)}))"
+    )
 
     TemporaryDecl = FormatTemplate(
-        "{name} = Field.empty({shape}, ({', '.join(str(off) for off in offset)}, 0))"
+        "{name} = Field.empty((_dI_ + {padding[0]}, _dJ_ + {padding[1]}, _dK_), ({', '.join(offset)}, 0))"
     )
 
     # LocalDecl is purposefully omitted.
@@ -164,9 +150,7 @@ class NpirCodegen(TemplatedGenerator):
 
         return f"{node.name}[{access_slice}]"
 
-    LocalScalarAccess = FormatTemplate("{name}")
-
-    ParamAccess = FormatTemplate("{name}")
+    LocalScalarAccess = ParamAccess = FormatTemplate("{name}")
 
     def visit_DataType(self, node: common.DataType, **kwargs: Any) -> Union[str, Collection[str]]:
         return f"np.{node.name.lower()}"
@@ -285,12 +269,10 @@ class NpirCodegen(TemplatedGenerator):
         **kwargs: Any,
     ) -> Union[str, Collection[str]]:
         boundary = [upper - lower for lower, upper in zip(lower, upper)]
-        shape = _paren_wrap(
-            ", ".join(
-                [f"_dI_ + {boundary[0]}", f"_dJ_ + {boundary[1]}"]
-                + ["1" if is_serial else "K - k"]
-                + ["1"] * (node.dims - 3)
-            )
+        shape = _dump_sequence(
+            [f"_dI_ + {boundary[0]}", f"_dJ_ + {boundary[1]}"]
+            + ["1" if is_serial else "K - k"]
+            + ["1"] * (node.dims - 3)
         )
         return self.generic_visit(
             node, shape=shape, is_serial=is_serial, lower=lower, upper=upper, **kwargs
