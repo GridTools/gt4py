@@ -29,7 +29,7 @@ import numpy as np
 import gt4py.backend as gt_backend
 import gt4py.storage as gt_storage
 import gt4py.utils as gt_utils
-from gt4py.definitions import DomainInfo, FieldInfo, Index, ParameterInfo, Shape
+from gt4py.definitions import AccessKind, DomainInfo, FieldInfo, Index, ParameterInfo, Shape
 
 
 FieldType = Union[gt_storage.storage.Storage, np.ndarray]
@@ -258,7 +258,7 @@ class StencilObject(abc.ABC):
         max_domain = Shape([max_size] * domain_ndim)
 
         for name, field_info in self.field_info.items():
-            if field_info is not None:
+            if field_info.access != AccessKind.NONE:
                 assert field_args.get(name, None) is not None, f"Invalid value for '{name}' field."
                 field = field_args[name]
                 api_domain_mask = field_info.domain_mask
@@ -321,7 +321,7 @@ class StencilObject(abc.ABC):
 
         # assert compatibility of fields with stencil
         for name, field_info in self.field_info.items():
-            if field_info is not None:
+            if field_info.access != AccessKind.NONE:
                 if name not in field_args:
                     raise ValueError(f"Missing value for '{name}' field.")
                 field = field_args[name]
@@ -404,10 +404,10 @@ class StencilObject(abc.ABC):
 
         # assert compatibility of parameters with stencil
         for name, parameter_info in self.parameter_info.items():
-            if parameter_info is not None:
+            if parameter_info.access != AccessKind.NONE:
                 if name not in param_args:
                     raise ValueError(f"Missing value for '{name}' parameter.")
-                if type(parameter := param_args[name]) != parameter_info.dtype:
+                elif type(parameter := param_args[name]) != parameter_info.dtype:
                     raise TypeError(
                         f"The type of parameter '{name}' is '{type(parameter)}' instead of '{parameter_info.dtype}'"
                     )
@@ -420,7 +420,7 @@ class StencilObject(abc.ABC):
 
         # Set an appropriate origin for all fields
         for name, field_info in self.field_info.items():
-            if field_info is not None:
+            if field_info.access != AccessKind.NONE:
                 assert name in field_args, f"Missing value for '{name}' field."
                 field_origin = origin.get(name, None)
 
