@@ -195,7 +195,7 @@ class FieldOperatorParser(ast.NodeVisitor):
                     )
                 symbols.append(
                     foast.Symbol(
-                        name=alias.asname or alias.name,
+                        id=alias.asname or alias.name,
                         type=symbol_makers.make_symbol_type_from_value(
                             self.externals_defs[alias.name]
                         ),
