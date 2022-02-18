@@ -47,7 +47,7 @@ def check_signature(
 
 
 class ProgramTypeDeduction(NodeTranslator):
-    contexts = (SymbolTableTrait.symtable_merger,)
+    contexts = (SymbolTableTrait.symtable_merger,)  # type: ignore[assignment]
 
     @classmethod
     def apply(cls, node: past.Program) -> past.Program:
