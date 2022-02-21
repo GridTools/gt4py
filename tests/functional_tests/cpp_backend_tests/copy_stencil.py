@@ -27,7 +27,7 @@ def copy_fencil(x, y, z, inp, out):
 
 if __name__ == "__main__":
     if len(sys.argv) != 2:
-        raise RuntimeError("Usage: copy_stencil.py <output_file>")
+        raise RuntimeError(f"Usage: {sys.argv[0]} <output_file>")
     output_file = sys.argv[1]
 
     prog = trace(copy_fencil, [None] * 5)

@@ -36,6 +36,7 @@ function(add_fn_codegen_test)
     add_executable(${ARG_NAME} ${ARG_DRIVER_FILE})
     target_link_libraries(${ARG_NAME} fn_naive regression_main)
     target_compile_definitions(${ARG_NAME} PRIVATE GT_FN_NAIVE)
+    add_dependencies(${ARG_NAME} generated_${ARG_NAME})
 
     add_test(NAME ${ARG_NAME} COMMAND $<TARGET_FILE:${ARG_NAME}>)
 endfunction()
@@ -49,6 +50,7 @@ if(BUILD_TESTING)
     
     # generate_computation(NAME copy_stencil SRC_FILE copy_stencil.py)
     add_fn_codegen_test(NAME copy_stencil SRC_FILE copy_stencil.py DRIVER_FILE copy_stencil_driver.cpp)
+    add_fn_codegen_test(NAME anton_lap SRC_FILE anton_lap.py DRIVER_FILE anton_lap_driver.cpp)
 endif()
     
     

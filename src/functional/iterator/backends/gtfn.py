@@ -3,10 +3,13 @@ from typing import Any
 from eve import codegen
 from eve.codegen import FormatTemplate as as_fmt
 from eve.codegen import MakoTemplate as as_mako
+from eve.iterators import iter_tree
 from functional.iterator.backends import backend
 from functional.iterator.ir import FunCall, OffsetLiteral, Program, StencilClosure, SymRef
 from functional.iterator.transforms import apply_common_transforms
 
+
+binary_ops = {"minus": "-", "plus": "+", "muliplies": "*", "divides": "/"}
 
 # TODO test non-transformed code!
 class gtfn(codegen.TemplatedGenerator):
@@ -33,6 +36,21 @@ class gtfn(codegen.TemplatedGenerator):
                     raise RuntimeError(f"expected named_range, got {a.fun.id}")
                 sizes.append(self.visit(a.args[2]))  # TODO start is ignored, and names are ignored
             return f"cartesian_domain({','.join(sizes)})"
+        elif isinstance(node.fun, FunCall) and node.fun.fun.id == "shift":
+            if len(node.fun.args) > 0:
+                return self.generic_visit(
+                    FunCall(fun=node.fun.fun, args=node.args + node.fun.args), **kwargs
+                )
+            else:
+                # get rid of the shift call if there are no offsets, should be a separate pass
+                assert len(node.args) == 1
+                return self.visit(node.args[0])
+            # return {"fun": "shift", "args": self.visit(node.args) + self.visit(node.fun.args)}
+        elif isinstance(node.fun, SymRef) and node.fun.id in binary_ops:
+            assert len(node.args) == 2
+            return (
+                f"({self.visit(node.args[0])} {binary_ops[node.fun.id]} {self.visit(node.args[1])})"
+            )
         return self.generic_visit(node, **kwargs)
 
     FunCall = as_fmt("{fun}({','.join(args)})")
@@ -73,21 +91,41 @@ class gtfn(codegen.TemplatedGenerator):
     """
     )
 
-    def visit_Program(self, node: Program, **kwargs):
-        return self.generic_visit(node, **kwargs)
+    @staticmethod
+    def _collect_offsets(node: Program) -> list[str]:
+        return (
+            iter_tree(node)
+            .if_isinstance(OffsetLiteral)
+            .getattr("value")
+            .if_isinstance(str)
+            .to_set()
+        )
 
-    Program = as_fmt(
+    def visit_Program(self, node: Program, **kwargs):
+        return self.generic_visit(node, offsets=self._collect_offsets(node), **kwargs)
+
+    Program = as_mako(
         """
     #include <gridtools/fn/cartesian2.hpp>
     #include <gridtools/fn/unstructured2.hpp>
     #include <gridtools/fn/backend2/naive.hpp>
 
-    namespace generated{{
+    namespace generated{
     using namespace gridtools;
     using namespace fn;
     using namespace literals;
-    {''.join(function_definitions)} {''.join(fencil_definitions)}
-    }}
+
+
+    //{''.join('struct ' + o + '_t{};' for o in offsets)}
+    //{''.join('constexpr inline ' + o + '_t ' + o + '{};' for o in offsets)}
+    using namespace cartesian;
+    constexpr inline dim::i i = {};
+    constexpr inline dim::j j = {};
+    constexpr inline dim::k k = {};
+
+
+    ${''.join(function_definitions)} ${''.join(fencil_definitions)}
+    }
     """
     )
 
@@ -96,8 +134,8 @@ class gtfn(codegen.TemplatedGenerator):
         transformed = apply_common_transforms(
             root,
             use_tmps=kwargs.get("use_tmps", False),
-            skip_inline_fundefs=True,
             offset_provider=kwargs.get("offset_provider", None),
+            grid_type=kwargs.get("grid_type", None),
         )
         generated_code = super().apply(transformed, **kwargs)
         formatted_code = codegen.format_source("cpp", generated_code, style="LLVM")
