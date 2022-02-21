@@ -50,6 +50,10 @@ class AccessKindComputer(NodeVisitor):
     def visit_FieldIfStmt(self, node: gtir.FieldIfStmt, **kwargs: Any) -> None:
         self._visit_If(node, **kwargs)
 
+    def visit_While(self, node: gtir.While, **kwargs: Any) -> None:
+        self.visit(node.cond, kind=AccessKind.READ, **kwargs)
+        self.visit(node.body, **kwargs)
+
     def visit_ParAssignStmt(self, node: gtir.ParAssignStmt, **kwargs: Any) -> None:
         self.visit(node.right, kind=AccessKind.READ, **kwargs)
         self.visit(node.left, kind=AccessKind.WRITE, **kwargs)
