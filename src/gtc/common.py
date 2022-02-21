@@ -394,6 +394,21 @@ class IfStmt(GenericNode, Generic[StmtT, ExprT]):
         return verify_condition_is_boolean(cls, cond)
 
 
+class While(GenericNode, Generic[StmtT, ExprT]):
+    """
+    Generic while loop.
+
+    Verifies that `cond` is a boolean expr (if `dtype` is set).
+    """
+
+    cond: ExprT
+    body: List[StmtT]
+
+    @validator("cond")
+    def condition_is_boolean(cls, cond: Expr) -> Expr:
+        return verify_condition_is_boolean(cls, cond)
+
+
 class AssignStmt(GenericNode, Generic[TargetT, ExprT]):
     left: TargetT
     right: ExprT

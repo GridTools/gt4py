@@ -180,6 +180,11 @@ class OIRToGTCpp(eve.NodeTranslator):
             true_branch=gtcpp.BlockStmt(body=self.visit(node.body, **kwargs)),
         )
 
+    def visit_While(self, node: oir.While, **kwargs: Any) -> gtcpp.While:
+        return gtcpp.While(
+            cond=self.visit(node.cond, **kwargs), body=self.visit(node.body, **kwargs)
+        )
+
     def visit_HorizontalExecution(
         self,
         node: oir.HorizontalExecution,

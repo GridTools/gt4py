@@ -280,6 +280,23 @@ class NpirCodegen(TemplatedGenerator):
 
     Broadcast = FormatTemplate("np.full({shape}, {expr})")
 
+    While = JinjaTemplate(
+        textwrap.dedent(
+            """\
+            while {{ cond }}:
+                {% for stmt in body %}{{ stmt }}
+                {% endfor %}
+            """
+        )
+    )
+
+    def visit_While(self, node: npir.While, **kwargs: Any) -> str:
+        cond = self.visit(node.cond, **kwargs)
+        body = []
+        for stmt in self.visit(node.body, **kwargs):
+            body.extend(stmt.split("\n"))
+        return self.While.render(cond=cond, body=body)
+
     def visit_VerticalPass(self, node: npir.VerticalPass, **kwargs):
         is_serial = node.direction != common.LoopOrder.PARALLEL
         has_variable_k = bool(node.iter_tree().if_isinstance(npir.VarKOffset).to_list())
@@ -319,7 +336,7 @@ class NpirCodegen(TemplatedGenerator):
             i, I = _di_ - {{ lower[0] }}, _dI_ + {{ upper[0] }}
             j, J = _dj_ - {{ lower[1] }}, _dJ_ + {{ upper[1] }}
 
-            {% for assign in body %}{{ assign }}
+            {% for stmt in body %}{{ stmt }}
             {% endfor -%}
             # --- end horizontal block --
 
