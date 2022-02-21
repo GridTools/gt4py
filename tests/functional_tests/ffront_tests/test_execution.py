@@ -223,44 +223,81 @@ def test_fold_shifts():
     assert np.allclose(a[1:] + b[2:], c)
 
 
-def test_reduction_execution():
-    """Testing a trivial neighbor sum."""
-    size = 9
+class TestReduction:
+    """Reductions can be written in different ways, some are not implemented yet."""
 
-    Edge = CartesianAxis("Edge")
-    Vertex = CartesianAxis("Vertex")
-    V2EDim = CartesianAxis("V2E")
-    V2E = offset("V2E", source=Edge, target=(Vertex, V2EDim))
+    def setup(self):
+        self.size = 9
 
-    v2e_arr = np.array(
-        [
-            [0, 15, 2, 9],  # 0
-            [1, 16, 0, 10],
-            [2, 17, 1, 11],
-            [3, 9, 5, 12],  # 3
-            [4, 10, 3, 13],
-            [5, 11, 4, 14],
-            [6, 12, 8, 15],  # 6
-            [7, 13, 6, 16],
-            [8, 14, 7, 17],
-        ]
-    )
+        self.v2e_arr = np.array(
+            [
+                [0, 15, 2, 9],  # 0
+                [1, 16, 0, 10],
+                [2, 17, 1, 11],
+                [3, 9, 5, 12],  # 3
+                [4, 10, 3, 13],
+                [5, 11, 4, 14],
+                [6, 12, 8, 15],  # 6
+                [7, 13, 6, 16],
+                [8, 14, 7, 17],
+            ]
+        )
 
-    inp = index_field(Edge)
-    out = np_as_located_field(Vertex)(np.zeros([9]))
-    ref = np.asarray(list(sum(row) for row in v2e_arr))
+        self.Edge = CartesianAxis("Edge")
+        self.Vertex = CartesianAxis("Vertex")
+        self.V2EDim = CartesianAxis("V2E")
+        self.V2E = offset("V2E", source=self.Edge, target=(self.Vertex, self.V2EDim))
 
-    def reduction(edge_f: Field[[Edge], "float64"]):
-        edge_f_nbh = edge_f(V2E)
-        return nbh_sum(edge_f_nbh, axis=V2EDim)
+        self.inp = index_field(self.Edge)
+        self.out = np_as_located_field(self.Vertex)(np.zeros([9]))
 
-    program = program_from_function(reduction, out_names=["out"], dim=Vertex, size=size)
-    debug_itir(program)
-    roundtrip.executor(
-        program,
-        inp,
-        out,
-        offset_provider={"V2E": NeighborTableOffsetProvider(v2e_arr, Vertex, Edge, 4)},
-    )
+    def test_reduction_execution(self):
+        """Testing a trivial neighbor sum."""
+        V2EDim = self.V2EDim
+        V2E = self.V2E
 
-    assert np.allclose(ref, out)
+        def reduction(edge_f: Field[[self.Edge], "float64"]):
+            return nbh_sum(edge_f(V2E), axis=V2EDim)
+
+        program = program_from_function(
+            reduction, out_names=["out"], dim=self.Vertex, size=self.size
+        )
+        debug_itir(program)
+        roundtrip.executor(
+            program,
+            self.inp,
+            self.out,
+            offset_provider={
+                "V2E": NeighborTableOffsetProvider(self.v2e_arr, self.Vertex, self.Edge, 4)
+            },
+        )
+
+        ref = np.asarray(list(sum(row) for row in self.v2e_arr))
+        assert np.allclose(ref, self.out)
+
+    #  @pytest.mark.skip(reason="Not yet implemented")
+    def test_reduction_expression(self):
+        """Test reduction with an expression directly inside the call."""
+        V2EDim = self.V2EDim
+        V2E = self.V2E
+
+        def reduce_expr(edge_f: Field[[self.Edge], "float64"]):
+            tmp_nbh_tup = edge_f(V2E), edge_f(V2E)
+            tmp_nbh = tmp_nbh_tup[0]
+            return nbh_sum(edge_f(V2E) + tmp_nbh, axis=V2EDim)
+
+        program = program_from_function(
+            reduce_expr, out_names=["out"], dim=self.Vertex, size=self.size
+        )
+        debug_itir(program)
+        roundtrip.executor(
+            program,
+            self.inp,
+            self.out,
+            offset_provider={
+                "V2E": NeighborTableOffsetProvider(self.v2e_arr, self.Vertex, self.Edge, 4)
+            },
+        )
+
+        ref = np.asarray(list(sum(row) for row in self.v2e_arr)) * 2
+        assert np.allclose(ref, self.out)
