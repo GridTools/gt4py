@@ -106,15 +106,15 @@ class AccessCollector(NodeVisitor):
             )
 
         def offsets(self) -> Dict[str, Set[OffsetT]]:
-            """Get a dictonary, mapping all accessed fields' names to sets of offset tuples."""
+            """Get a dictionary, mapping all accessed fields' names to sets of offset tuples."""
             return self._offset_dict(xiter(self._ordered_accesses))
 
         def read_offsets(self) -> Dict[str, Set[OffsetT]]:
-            """Get a dictonary, mapping read fields' names to sets of offset tuples."""
+            """Get a dictionary, mapping read fields' names to sets of offset tuples."""
             return self._offset_dict(xiter(self._ordered_accesses).filter(lambda x: x.is_read))
 
         def write_offsets(self) -> Dict[str, Set[OffsetT]]:
-            """Get a dictonary, mapping written fields' names to sets of offset tuples."""
+            """Get a dictionary, mapping written fields' names to sets of offset tuples."""
             return self._offset_dict(xiter(self._ordered_accesses).filter(lambda x: x.is_write))
 
         def fields(self) -> Set[str]:
