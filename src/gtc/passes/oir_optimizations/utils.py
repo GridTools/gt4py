@@ -225,6 +225,9 @@ class StencilExtentComputer(NodeVisitor):
                 horizontal_extent + extent
             )
 
+        for name in results.write_fields():
+            ctx.fields.setdefault(name, Extent.zeros(ndims=2))
+
 
 def compute_horizontal_block_extents(node: oir.Stencil) -> Dict[int, Extent]:
     ctx = StencilExtentComputer().visit(node)
