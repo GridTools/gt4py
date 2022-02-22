@@ -491,7 +491,7 @@ class UIDGenerator:
         s = f"{count:0{width}}" if width else f"{count}"
         return f"{prefix}_{s}" if prefix else f"{s}"
 
-    def reset_sequence(self, start: int = 1) -> None:
+    def reset_sequence(self, start: int = 1, *, warn_unsafe: bool = False) -> None:
         """Reset generator counter.
 
         Notes:
@@ -499,8 +499,8 @@ class UIDGenerator:
             IDs are not longer guaranteed to be unique.
 
         """
-        if start < next(self._counter):
-            warnings.warn("Unsafe reset of global UIDGenerator", RuntimeWarning)
+        if warn_unsafe and start < next(self._counter):
+            warnings.warn("Unsafe reset of UIDGenerator ({self})", RuntimeWarning)
         self._counter = itertools.count(start)
 
 
