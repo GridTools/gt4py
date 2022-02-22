@@ -737,7 +737,7 @@ class IRMaker(ast.NodeVisitor):
         self.extra_temp_decls = extra_temp_decls or {}
         self.parsing_context = None
         self.iteration_order = None
-        self.if_decls_stack = []
+        self.decls_stack = []
         gt_ir.NativeFunction.PYTHON_SYMBOL_TO_IR_OP = {
             "abs": gt_ir.NativeFunction.ABS,
             "min": gt_ir.NativeFunction.MIN,
@@ -1237,7 +1237,7 @@ class IRMaker(ast.NodeVisitor):
         return result
 
     def visit_If(self, node: ast.If) -> list:
-        self.if_decls_stack.append([])
+        self.decls_stack.append([])
 
         main_stmts = []
         for stmt in node.body:
@@ -1251,11 +1251,11 @@ class IRMaker(ast.NodeVisitor):
             assert all(isinstance(item, gt_ir.Statement) for item in else_stmts)
 
         result = []
-        if len(self.if_decls_stack) == 1:
-            result.extend(self.if_decls_stack.pop())
-        elif len(self.if_decls_stack) > 1:
-            self.if_decls_stack[-2].extend(self.if_decls_stack[-1])
-            self.if_decls_stack.pop()
+        if len(self.decls_stack) == 1:
+            result.extend(self.decls_stack.pop())
+        elif len(self.decls_stack) > 1:
+            self.decls_stack[-2].extend(self.decls_stack[-1])
+            self.decls_stack.pop()
 
         result.append(
             gt_ir.If(
@@ -1270,17 +1270,28 @@ class IRMaker(ast.NodeVisitor):
 
         return result
 
-    def visit_While(self, node: ast.While) -> gt_ir.While:
-        if node.orelse:
-            raise GTScriptSyntaxError("orelse is not supported on while loops")
-        stmts = []
-        for stmt in node.body:
-            stmts.extend(self.visit(stmt))
-        return gt_ir.While(
-            condition=self.visit(node.test),
-            loc=gt_ir.Location.from_ast_node(node),
-            body=gt_ir.BlockStmt(stmts=stmts, loc=gt_ir.Location.from_ast_node(node)),
-        )
+    def visit_While(self, node: ast.While) -> list:
+        loc = gt_ir.Location.from_ast_node(node)
+
+        self.decls_stack.append([])
+        stmts = gt_utils.flatten([self.visit(stmt) for stmt in node.body])
+        assert all(isinstance(item, gt_ir.Statement) for item in stmts)
+
+        result = [
+            gt_ir.While(
+                condition=self.visit(node.test),
+                loc=gt_ir.Location.from_ast_node(node),
+                body=gt_ir.BlockStmt(stmts=stmts, loc=loc),
+            )
+        ]
+
+        if len(self.decls_stack) == 1:
+            result.extend(self.decls_stack.pop())
+        elif len(self.decls_stack) > 1:
+            self.decls_stack[-2].extend(self.decls_stack[-1])
+            self.decls_stack.pop()
+
+        return result
 
     def visit_Call(self, node: ast.Call):
         native_fcn = gt_ir.NativeFunction.PYTHON_SYMBOL_TO_IR_OP[node.func.id]
@@ -1371,8 +1382,8 @@ class IRMaker(ast.NodeVisitor):
                     # layout_id=t.id,
                     is_api=False,
                 )
-                if len(self.if_decls_stack):
-                    self.if_decls_stack[-1].append(field_decl)
+                if len(self.decls_stack):
+                    self.decls_stack[-1].append(field_decl)
                 else:
                     result.append(field_decl)
                 self.fields[field_decl.name] = field_decl

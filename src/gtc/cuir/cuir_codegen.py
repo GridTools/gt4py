@@ -46,6 +46,14 @@ class CUIRCodegen(codegen.TemplatedGenerator):
         """
     )
 
+    While = as_mako(
+        """
+        while (${cond}) {
+            ${'\\n'.join(body)}
+        }
+        """
+    )
+
     def visit_FieldAccess(self, node: cuir.FieldAccess, **kwargs: Any):
         def maybe_const(s):
             try:

@@ -17,18 +17,17 @@
 from typing import Type
 
 from eve import Node
-from gtc import gtir, gtir_to_oir, oir
-from gtc.common import DataType
+from gtc import oir
 from gtc.gtir_to_oir import GTIRToOIR
 
-from . import oir_utils
 from .gtir_utils import (
-    BlockStmtFactory,
-    FieldAccessFactory,
     FieldIfStmtFactory,
     HorizontalMaskFactory,
+    ParAssignStmtFactory,
     ScalarIfStmtFactory,
+    StencilFactory,
     VariableKOffsetFactory,
+    WhileFactory,
 )
 
 
@@ -40,66 +39,46 @@ def isinstance_and_return(node: Node, expected_type: Type[Node]):
 def test_visit_ParAssignStmt():
     out_name = "out"
     in_name = "in"
-    testee = gtir.ParAssignStmt(
-        left=FieldAccessFactory(name=out_name), right=FieldAccessFactory(name=in_name)
-    )
 
-    ctx = GTIRToOIR.Context()
-    GTIRToOIR().visit(testee, ctx=ctx)
-    result_horizontal_executions = ctx.horizontal_executions
-
-    assert len(result_horizontal_executions) == 1
-    assign = isinstance_and_return(result_horizontal_executions[0].body[0], oir.AssignStmt)
-
+    testee = ParAssignStmtFactory(left__name=out_name, right__name=in_name)
+    assign = GTIRToOIR().visit(testee)
     left = isinstance_and_return(assign.left, oir.FieldAccess)
     right = isinstance_and_return(assign.right, oir.FieldAccess)
     assert left.name == out_name
     assert right.name == in_name
 
 
-def test_create_mask():
-    mask_name = "mask"
-    cond = oir_utils.FieldAccessFactory(dtype=DataType.BOOL)
-    ctx = GTIRToOIR.Context()
-    result_decl = gtir_to_oir._create_mask(ctx, mask_name, cond)
-    result_assign = ctx.horizontal_executions[0]
+def test_visit_gtir_Stencil():
+    out_name = "out"
+    in_name = "in"
 
-    assert isinstance(result_decl, oir.Temporary)
-    assert result_decl.name == mask_name
+    testee = StencilFactory(
+        vertical_loops__0__body__0=ParAssignStmtFactory(left__name=out_name, right__name=in_name)
+    )
+    oir_stencil = GTIRToOIR().visit(testee)
+    hexecs = oir_stencil.vertical_loops[0].sections[0].horizontal_executions
+    assert len(hexecs) == 1
+    assert len(hexecs[0].body) == 1
 
-    horizontal_exec = isinstance_and_return(result_assign, oir.HorizontalExecution)
-    assign = isinstance_and_return(horizontal_exec.body[0], oir.AssignStmt)
-
+    assign = hexecs[0].body[0]
     left = isinstance_and_return(assign.left, oir.FieldAccess)
     right = isinstance_and_return(assign.right, oir.FieldAccess)
-
-    assert left.name == mask_name
-    assert right == cond
-
-
-def test_visit_Assign_VariableKOffset():
-    testee = gtir.ParAssignStmt(
-        left=FieldAccessFactory(), right=FieldAccessFactory(offset=VariableKOffsetFactory())
-    )
-    ctx = GTIRToOIR.Context()
-    GTIRToOIR().visit(testee, ctx=ctx)
-
-    assert len(ctx.horizontal_executions) == 1
-    assert ctx.horizontal_executions[0].iter_tree().if_isinstance(oir.VariableKOffset).to_list()
+    assert left.name == out_name
+    assert right.name == in_name
 
 
 def test_visit_FieldIfStmt():
-    testee = FieldIfStmtFactory(false_branch=BlockStmtFactory())
-    GTIRToOIR().visit(testee, ctx=GTIRToOIR.Context())
+    testee = FieldIfStmtFactory(true_branch__body__0=ParAssignStmtFactory())
+    mask_stmts = GTIRToOIR().visit(testee, ctx=GTIRToOIR.Context())
 
-
-def test_visit_FieldIfStmt_no_else():
-    testee = FieldIfStmtFactory(false_branch=None)
-    GTIRToOIR().visit(testee, ctx=GTIRToOIR.Context())
+    assert len(mask_stmts) == 2
+    assert "mask" in mask_stmts[0].left.name
+    assert testee.cond.name == mask_stmts[0].right.name
+    assert mask_stmts[1].body[0].left.name == testee.true_branch.body[0].left.name
 
 
 def test_visit_FieldIfStmt_nesting():
-    testee = FieldIfStmtFactory(true_branch=BlockStmtFactory(body=[FieldIfStmtFactory()]))
+    testee = FieldIfStmtFactory(true_branch__body__0=FieldIfStmtFactory())
     GTIRToOIR().visit(testee, ctx=GTIRToOIR.Context())
 
 
@@ -111,3 +90,14 @@ def test_visit_ScalarIfStmt():
 def test_visit_FieldIf_HorizontalMask():
     testee = FieldIfStmtFactory(cond=HorizontalMaskFactory())
     GTIRToOIR().visit(testee, ctx=GTIRToOIR.Context())
+
+
+def test_visit_Assign_VariableKOffset():
+    testee = ParAssignStmtFactory(right__offset=VariableKOffsetFactory())
+    assign_stmt = GTIRToOIR().visit(testee)
+    assert assign_stmt.iter_tree().if_isinstance(oir.VariableKOffset).to_list()
+
+
+def test_visit_While():
+    testee = WhileFactory()
+    GTIRToOIR().visit(testee)
