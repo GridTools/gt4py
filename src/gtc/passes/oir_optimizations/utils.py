@@ -231,14 +231,16 @@ class StencilExtentComputer(NodeVisitor):
 
         for name, accesses in results.read_offsets().items():
             extent = functools.reduce(
-                lambda ext, off: ext | Extent.from_offset(off[:2]), accesses, self.zero_extent
+                lambda ext, off: ext | Extent.from_offset(off[:2]),
+                accesses,
+                Extent.from_offset(accesses.pop()[:2]),
             )
-            ctx.fields[name] = ctx.fields.get(name, self.zero_extent).union(
-                horizontal_extent + extent
-            )
+            total_extent = horizontal_extent + extent
+            ctx.fields.setdefault(name, total_extent)
+            ctx.fields[name] |= total_extent
 
         for name in results.write_fields():
-            ctx.fields.setdefault(name, self.zero_extent)
+            ctx.fields.setdefault(name, horizontal_extent)
 
 
 def compute_horizontal_block_extents(node: oir.Stencil, **kwargs: Any) -> Dict[int, Extent]:
