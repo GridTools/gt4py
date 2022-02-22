@@ -799,6 +799,13 @@ class AxisBound(Node):
 
 
 class HorizontalInterval(Node):
+    """Represents an interval of the index space in the horizontal.
+
+    This is separate from `gtir.Interval` because the endpoints may
+    be outside the compute domain.
+
+    """
+
     start: Optional[AxisBound]
     end: Optional[AxisBound]
 
