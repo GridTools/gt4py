@@ -143,10 +143,12 @@ class OIRToCUIR(eve.NodeTranslator):
     def visit_HorizontalExecution(
         self, node: oir.HorizontalExecution, **kwargs: Any
     ) -> cuir.HorizontalExecution:
+        block_extents = kwargs["block_extents"][id(node)]
+        extent = cuir.IJExtent(i=block_extents[0], j=block_extents[1])
         return cuir.HorizontalExecution(
             body=self.visit(node.body, **kwargs),
             declarations=self.visit(node.declarations),
-            extent=kwargs["block_extents"][id(node)],
+            extent=extent,
         )
 
     def visit_VerticalLoopSection(
