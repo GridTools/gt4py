@@ -511,10 +511,14 @@ def test_negative_origin(backend):
         with computation(PARALLEL), interval(...):
             output_field = input_field[0, 0, 1]
 
-    input_field = gt_storage.ones(backend, (0, 0, 0), (1, 1, 1), dtype=np.int32)
-    output_field = gt_storage.zeros(backend, (0, 0, 0), (1, 1, 1), dtype=np.int32)
+    input_field = gt_storage.ones(
+        backend, default_origin=(0, 0, 0), shape=(1, 1, 1), dtype=np.int32
+    )
+    output_field = gt_storage.zeros(
+        backend, default_origin=(0, 0, 0), shape=(1, 1, 1), dtype=np.int32
+    )
 
-    for origin, stencil in {(-1, 0, 0): stencil_i, (0, 0, -1): stencil_k}.items():
+    for origin, stencil in (((-1, 0, 0), stencil_i), ((0, 0, -1), stencil_k)):
         gtscript.stencil(definition=stencil, backend=backend)(
             input_field, output_field, origin={"input_field": origin}
         )
