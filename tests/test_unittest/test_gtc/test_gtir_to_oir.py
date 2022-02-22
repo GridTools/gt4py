@@ -27,7 +27,6 @@ from .gtir_utils import (
     ScalarIfStmtFactory,
     StencilFactory,
     VariableKOffsetFactory,
-    WhileFactory,
 )
 
 
@@ -96,8 +95,3 @@ def test_visit_Assign_VariableKOffset():
     testee = ParAssignStmtFactory(right__offset=VariableKOffsetFactory())
     assign_stmt = GTIRToOIR().visit(testee)
     assert assign_stmt.iter_tree().if_isinstance(oir.VariableKOffset).to_list()
-
-
-def test_visit_While():
-    testee = WhileFactory()
-    GTIRToOIR().visit(testee)
