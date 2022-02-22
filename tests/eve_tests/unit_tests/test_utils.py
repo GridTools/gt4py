@@ -219,39 +219,39 @@ def test_case_style_converter(name_with_cases):
 # -- UIDGenerator --
 class TestUIDGenerator:
     def test_random_id(self):
-        from eve.utils import UIDGenerator
+        from eve.utils import UIDs
 
-        a = UIDGenerator.random_id()
-        b = UIDGenerator.random_id()
-        c = UIDGenerator.random_id()
+        a = UIDs.random_id()
+        b = UIDs.random_id()
+        c = UIDs.random_id()
         assert a != b and a != c and b != c
-        assert UIDGenerator.random_id(prefix="abcde").startswith("abcde")
-        assert len(UIDGenerator.random_id(width=10)) == 10
+        assert UIDs.random_id(prefix="abcde").startswith("abcde")
+        assert len(UIDs.random_id(width=10)) == 10
         with pytest.raises(ValueError, match="Width"):
-            UIDGenerator.random_id(width=-1)
+            UIDs.random_id(width=-1)
         with pytest.raises(ValueError, match="Width"):
-            UIDGenerator.random_id(width=4)
+            UIDs.random_id(width=4)
 
     def test_sequential_id(self):
-        from eve.utils import UIDGenerator
+        from eve.utils import UIDs
 
-        i = UIDGenerator.sequential_id()
-        assert UIDGenerator.sequential_id() != i
-        assert UIDGenerator.sequential_id(prefix="abcde").startswith("abcde")
-        assert len(UIDGenerator.sequential_id(width=10)) == 10
-        assert not UIDGenerator.sequential_id().startswith("0")
+        i = UIDs.sequential_id()
+        assert UIDs.sequential_id() != i
+        assert UIDs.sequential_id(prefix="abcde").startswith("abcde")
+        assert len(UIDs.sequential_id(width=10)) == 10
+        assert not UIDs.sequential_id().startswith("0")
         with pytest.raises(ValueError, match="Width"):
-            UIDGenerator.sequential_id(width=-1)
+            UIDs.sequential_id(width=-1)
 
     def test_reset_sequence(self):
-        from eve.utils import UIDGenerator
+        from eve.utils import UIDs
 
-        i = UIDGenerator.sequential_id()
+        i = UIDs.sequential_id()
         counter = int(i)
-        UIDGenerator.reset_sequence(counter + 1)
-        assert int(UIDGenerator.sequential_id()) == counter + 1
+        UIDs.reset_sequence(counter + 1)
+        assert int(UIDs.sequential_id()) == counter + 1
         with pytest.warns(RuntimeWarning, match="Unsafe reset"):
-            UIDGenerator.reset_sequence(counter)
+            UIDs.reset_sequence(counter)
 
 
 # -- Iterators --
