@@ -31,6 +31,7 @@ from gt4py import definitions as gt_definitions
 from gt4py import gtscript
 from gt4py import ir as gt_ir
 from gt4py import utils as gt_utils
+from gt4py.backend.gtc_backend.defir_to_gtir import DefIRToGTIR
 from gt4py.utils import NOTHING
 from gt4py.utils import meta as gt_meta
 
@@ -1981,8 +1982,9 @@ class GTScriptFrontend(Frontend):
             cls.prepare_stencil_definition(definition, externals)
         translator = GTScriptParser(definition, externals=externals, options=options)
         definition_ir = translator.run()
+        gtir_stencil = DefIRToGTIR.apply(definition_ir)
 
         if options.build_info is not None:
             options.build_info["parse_time"] = time.perf_counter() - start_time
 
-        return definition_ir
+        return gtir_stencil

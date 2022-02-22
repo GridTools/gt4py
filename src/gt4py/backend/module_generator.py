@@ -221,10 +221,10 @@ class BaseModuleGenerator(abc.ABC):
 
         This is unlikely to require overriding.
         """
-        if self.builder.definition_ir.sources is not None:
+        if self.builder.gtir.sources is not None:
             return {
                 key: gt_utils.text.format_source(value, line_length=self.SOURCE_LINE_LENGTH)
-                for key, value in self.builder.definition_ir.sources
+                for key, value in self.builder.gtir.sources
             }
         return {}
 
@@ -234,10 +234,10 @@ class BaseModuleGenerator(abc.ABC):
 
         This is unlikely to require overriding.
         """
-        if self.builder.definition_ir.externals:
+        if self.builder.gtir.externals:
             return {
                 name: repr(value)
-                for name, value in self.builder.definition_ir.externals.items()
+                for name, value in self.builder.gtir.externals.items()
                 if isinstance(value, numbers.Number)
             }
         return {}
@@ -258,23 +258,18 @@ class BaseModuleGenerator(abc.ABC):
         """
         Generate a ``DomainInfo`` constructor call with the correct arguments.
 
-        Might require overriding for module generators of non-cartesian backends.
+        Requires overriding for module generators of non-cartesian backends.
         """
-        parallel_axes = self.builder.definition_ir.domain.parallel_axes or []
-        sequential_axis = self.builder.definition_ir.domain.sequential_axis.name
-        if self.builder.backend.USE_LEGACY_TOOLCHAIN:
-            min_sequential_axis_size = 0
-        else:
-            min_sequential_axis_size = compute_min_k_size(self.builder.gtir_pipeline.full())
-        domain_info = repr(
+        min_sequential_axis_size = compute_min_k_size(self.builder.gtir_pipeline.full())
+        NDIM = 3
+        return repr(
             DomainInfo(
-                parallel_axes=tuple(ax.name for ax in parallel_axes),
-                sequential_axis=sequential_axis,
+                parallel_axes=("I", "J"),
+                sequential_axis="K",
                 min_sequential_axis_size=min_sequential_axis_size,
-                ndim=len(parallel_axes) + (1 if sequential_axis else 0),
+                ndim=NDIM,
             )
         )
-        return domain_info
 
     def generate_module_members(self) -> str:
         """
@@ -300,16 +295,16 @@ class BaseModuleGenerator(abc.ABC):
         """
         args = []
         keyword_args = ["*"]
-        for arg in self.builder.definition_ir.api_signature:
+        for arg in self.builder.gtir.api_signature:
             if arg.is_keyword:
-                if arg.default is not gt_ir.Empty:
+                if arg.default:
                     keyword_args.append(
                         "{name}={default}".format(name=arg.name, default=arg.default)
                     )
                 else:
                     keyword_args.append(arg.name)
             else:
-                if arg.default is not gt_ir.Empty:
+                if arg.default:
                     args.append("{name}={default}".format(name=arg.name, default=arg.default))
                 else:
                     args.append(arg.name)
@@ -406,15 +401,15 @@ class PyExtModuleGenerator(BaseModuleGenerator):
         return gtir_has_effect(self.builder.gtir_pipeline)
 
     def generate_implementation(self) -> str:
-        definition_ir = self.builder.definition_ir
+        ir = self.builder.gtir
         sources = gt_utils.text.TextBlock(indent_size=BaseModuleGenerator.TEMPLATE_INDENT_SIZE)
 
-        args = []
-        api_fields = set(field.name for field in definition_ir.api_fields)
-        for arg in definition_ir.api_signature:
+        params_decls = {decl.name: decl for decl in ir.params}
+        args: List[str] = []
+        for arg in ir.api_signature:
             if arg.name not in self.args_data.unreferenced:
                 args.append(arg.name)
-                if arg.name in api_fields:
+                if isinstance(params_decls.get(arg.name, None), gtir.FieldDecl):
                     args.append("list(_origin_['{}'])".format(arg.name))
 
         # only generate implementation if any multi_stages are present. e.g. if no statement in the

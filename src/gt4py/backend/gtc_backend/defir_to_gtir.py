@@ -30,6 +30,7 @@ from gt4py.ir.nodes import (
     BuiltinLiteral,
     Cast,
     ComputationBlock,
+    Empty,
     Expr,
     FieldDecl,
     FieldRef,
@@ -133,11 +134,22 @@ class DefIRToGTIR(IRNodeVisitor):
         vertical_loops = [self.visit(c) for c in node.computations if c.body.stmts]
         return gtir.Stencil(
             name=node.name,
+            api_signature=[
+                gtir.Argument(
+                    name=f.name,
+                    is_keyword=f.is_keyword,
+                    default=str(f.default) if not isinstance(f.default, type(Empty)) else "",
+                )
+                for f in node.api_signature
+            ],
             params=[
                 self.visit(f, all_params={**field_params, **scalar_params})
                 for f in node.api_signature
             ],
             vertical_loops=vertical_loops,
+            externals=node.externals or {},
+            sources=node.sources or "",
+            docstring=node.docstring,
             loc=common.location_to_source_location(node.loc),
         )
 

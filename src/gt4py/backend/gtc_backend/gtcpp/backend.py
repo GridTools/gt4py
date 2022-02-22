@@ -32,8 +32,7 @@ from gt4py.backend.gt_backends import (
     x86_is_compatible_layout,
 )
 from gt4py.backend.gtc_backend.common import bindings_main_template, pybuffer_to_sid
-from gt4py.backend.gtc_backend.defir_to_gtir import DefIRToGTIR
-from gtc import gtir_to_oir
+from gtc import gtir, gtir_to_oir
 from gtc.common import DataType
 from gtc.gtcpp import gtcpp, gtcpp_codegen, oir_to_gtcpp
 from gtc.passes.gtir_pipeline import GtirPipeline
@@ -51,8 +50,8 @@ class GTCGTExtGenerator:
         self.module_name = module_name
         self.backend = backend
 
-    def __call__(self, definition_ir) -> Dict[str, Dict[str, str]]:
-        gtir = GtirPipeline(DefIRToGTIR.apply(definition_ir)).full()
+    def __call__(self, ir: gtir.Stencil) -> Dict[str, Dict[str, str]]:
+        gtir = GtirPipeline(ir).full()
         base_oir = gtir_to_oir.GTIRToOIR().visit(gtir)
         oir_pipeline = self.backend.builder.options.backend_opts.get(
             "oir_pipeline", DefaultPipeline(skip=[FillFlushToLocalKCaches])
@@ -140,7 +139,7 @@ class GTCGTBaseBackend(BaseGTBackend, CLIBackendMixin):
     USE_LEGACY_TOOLCHAIN = False
 
     def _generate_extension(self, uses_cuda: bool) -> Tuple[str, str]:
-        return self.make_extension(gt_version=2, ir=self.builder.definition_ir, uses_cuda=uses_cuda)
+        return self.make_extension(gt_version=2, ir=self.builder.gtir, uses_cuda=uses_cuda)
 
     def generate(self) -> Type["StencilObject"]:
         self.check_options(self.builder.options)

@@ -24,14 +24,11 @@ from gt4py import gt_src_manager
 from gt4py.backend.base import CLIBackendMixin, register
 from gt4py.backend.gt_backends import BaseGTBackend, make_x86_layout_map, x86_is_compatible_layout
 from gt4py.backend.gtc_backend.common import bindings_main_template, pybuffer_to_sid
-from gt4py.backend.gtc_backend.defir_to_gtir import DefIRToGTIR
-from gt4py.ir import StencilDefinition
 from gtc import gtir, gtir_to_oir
 from gtc.dace.oir_to_dace import OirSDFGBuilder
 from gtc.dace.utils import array_dimensions
 from gtc.passes.gtir_k_boundary import compute_k_boundary
 from gtc.passes.gtir_legacy_extents import compute_legacy_extents
-from gtc.passes.gtir_pipeline import GtirPipeline
 from gtc.passes.oir_optimizations.caches import FillFlushToLocalKCaches
 from gtc.passes.oir_optimizations.inlining import MaskInlining
 from gtc.passes.oir_optimizations.mask_stmt_merging import MaskStmtMerging
@@ -48,9 +45,8 @@ class GTCDaCeExtGenerator:
         self.module_name = module_name
         self.backend = backend
 
-    def __call__(self, definition_ir: StencilDefinition) -> Dict[str, Dict[str, str]]:
-        gtir = GtirPipeline(DefIRToGTIR.apply(definition_ir)).full()
-        base_oir = gtir_to_oir.GTIRToOIR().visit(gtir)
+    def __call__(self, ir: gtir.Stencil) -> Dict[str, Dict[str, str]]:
+        base_oir = gtir_to_oir.GTIRToOIR().visit(ir)
         oir_pipeline = self.backend.builder.options.backend_opts.get(
             "oir_pipeline",
             DefaultPipeline(skip=[MaskStmtMerging, MaskInlining, FillFlushToLocalKCaches]),
@@ -301,7 +297,7 @@ class GTCDaceBackend(BaseGTBackend, CLIBackendMixin):
     USE_LEGACY_TOOLCHAIN = False
 
     def generate_extension(self) -> Tuple[str, str]:
-        return self.make_extension(gt_version=2, ir=self.builder.definition_ir, uses_cuda=False)
+        return self.make_extension(gt_version=2, ir=self.builder.gtir, uses_cuda=False)
 
     def generate(self) -> Type["StencilObject"]:
         self.check_options(self.builder.options)

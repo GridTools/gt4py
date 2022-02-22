@@ -14,6 +14,8 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import copy
+
 from gtc import gtir
 
 
@@ -33,6 +35,7 @@ def prune_unused_parameters(node: gtir.Stencil) -> gtir.Stencil:
         .to_list()
     )
     used_params = list(filter(lambda param: param.name in used_variables, node.params))
-    return gtir.Stencil(
-        name=node.name, params=used_params, vertical_loops=node.vertical_loops, loc=node.loc
-    )
+
+    new_stencil = copy.deepcopy(node)
+    new_stencil.params = used_params
+    return new_stencil

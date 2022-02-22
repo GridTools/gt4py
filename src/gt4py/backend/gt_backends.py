@@ -30,6 +30,7 @@ from gt4py import gt_src_manager
 from gt4py import ir as gt_ir
 from gt4py import utils as gt_utils
 from gt4py.utils import text as gt_text
+from gtc import gtir
 from gtc.passes.oir_pipeline import OirPipeline
 
 from . import pyext_builder
@@ -743,18 +744,19 @@ class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
         pass
 
     def make_extension(
-        self, *, gt_version: int = 1, ir: Any = None, uses_cuda: bool = False
+        self, *, gt_version: int = 1, ir: Optional[gtir.Stencil] = None, uses_cuda: bool = False
     ) -> Tuple[str, str]:
         build_info = self.builder.options.build_info
         if build_info is not None:
             start_time = time.perf_counter()
 
         if not ir:
-            # in the GTC backend, `ir` is the definition_ir
-            ir = self.builder.implementation_ir
+            stencil_ir = self.builder.gtir
+        else:
+            stencil_ir = ir
         # Generate source
         if not self.builder.options._impl_opts.get("disable-code-generation", False):
-            gt_pyext_sources: Dict[str, Any] = self.make_extension_sources(ir=ir)
+            gt_pyext_sources: Dict[str, Any] = self.make_extension_sources(ir=stencil_ir)
             gt_pyext_sources = {**gt_pyext_sources["computation"], **gt_pyext_sources["bindings"]}
         else:
             # Pass NOTHING to the self.builder means try to reuse the source code files
@@ -786,7 +788,7 @@ class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
 
         return result
 
-    def make_extension_sources(self, *, ir) -> Dict[str, Dict[str, str]]:
+    def make_extension_sources(self, *, ir: gtir.Stencil) -> Dict[str, Dict[str, str]]:
         """Generate the source for the stencil independently from use case."""
         if "computation_src" in self.builder.backend_data:
             return self.builder.backend_data["computation_src"]
