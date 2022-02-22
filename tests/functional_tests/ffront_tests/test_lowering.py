@@ -383,7 +383,7 @@ def test_reduction_lowering_simple():
     reference = im.deref_(
         im.lift_(
             im.call_("reduce")(
-                im.lambda__("accum", "edge_f__4")(im.plus_("accum", "edge_f__4")),
+                im.lambda__("accum", "edge_f__0")(im.plus_("accum", "edge_f__0")),
                 0,
             )
         )(im.shift_("V2E")("edge_f"))
@@ -404,8 +404,8 @@ def test_reduction_lowering_expr():
         im.let("e1_nbh__0", im.shift_("V2E")("e1"))(
             im.lift_(
                 im.call_("reduce")(
-                    im.lambda__("accum", "e1_nbh__0__5", "e2__6")(
-                        im.plus_("accum", im.plus_("e1_nbh__0__5", "e2__6"))
+                    im.lambda__("accum", "e1_nbh__0__0", "e2__1")(
+                        im.plus_("accum", im.plus_("e1_nbh__0__0", "e2__1"))
                     ),
                     0,
                 )

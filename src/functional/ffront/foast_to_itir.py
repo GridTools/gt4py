@@ -12,11 +12,11 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import itertools
 from dataclasses import dataclass, field
 from typing import Optional, cast
 
 from eve import NodeTranslator
-from eve.utils import UIDGenerator
 from functional.ffront import field_operator_ast as foast
 from functional.ffront import itir_makers as im
 from functional.ffront.fbuiltins import FUN_BUILTIN_NAMES
@@ -168,10 +168,10 @@ class InsideReductionLowering(FieldOperatorLowering):
     """Variant of the lowering with special rules for inside reductions."""
 
     lambda_params: dict[str, itir.Expr] = field(default_factory=lambda: {})
-    uid_gen: UIDGenerator = UIDGenerator()
+    __counter: itertools.count = field(default_factory=lambda: itertools.count())
 
     def visit_Name(self, node: foast.Name, **kwargs) -> itir.SymRef:
-        uid = f"{node.id}__{self.uid_gen.sequential_id()}"
+        uid = f"{node.id}__{self._sequential_id()}"
         self.lambda_params[uid] = super().visit_Name(node, **kwargs)
         return im.ref(uid)
 
@@ -190,9 +190,12 @@ class InsideReductionLowering(FieldOperatorLowering):
         return im.call_(node.op.value)(*[*zero_arg, self.visit(node.operand, **kwargs)])
 
     def _visit_shift(self, node: foast.Call, **kwargs) -> itir.SymRef:  # type: ignore[override]
-        uid = f"{node.func.id}__{self.uid_gen.sequential_id()}"
+        uid = f"{node.func.id}__{self._sequential_id()}"
         self.lambda_params[uid] = FieldOperatorLowering.apply(node, **kwargs)
         return im.ref(uid)
+
+    def _sequential_id(self):
+        return next(self.__counter)
 
 
 class FieldOperatorLoweringError(Exception):
