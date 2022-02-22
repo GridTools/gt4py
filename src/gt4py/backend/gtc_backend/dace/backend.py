@@ -24,9 +24,10 @@ from gt4py import gt_src_manager
 from gt4py.backend.base import CLIBackendMixin, register
 from gt4py.backend.gt_backends import BaseGTBackend, make_x86_layout_map, x86_is_compatible_layout
 from gt4py.backend.gtc_backend.common import bindings_main_template, pybuffer_to_sid
-from gtc import gtir, gtir_to_oir
+from gtc import gtir
 from gtc.dace.oir_to_dace import OirSDFGBuilder
 from gtc.dace.utils import array_dimensions
+from gtc.gtir_to_oir import GTIRToOIR
 from gtc.passes.gtir_k_boundary import compute_k_boundary
 from gtc.passes.oir_optimizations.caches import FillFlushToLocalKCaches
 from gtc.passes.oir_optimizations.inlining import MaskInlining
@@ -46,7 +47,7 @@ class GTCDaCeExtGenerator:
         self.backend = backend
 
     def __call__(self, ir: gtir.Stencil) -> Dict[str, Dict[str, str]]:
-        base_oir = gtir_to_oir.GTIRToOIR().visit(ir)
+        base_oir = GTIRToOIR().visit(ir)
         oir_pipeline = self.backend.builder.options.backend_opts.get(
             "oir_pipeline",
             DefaultPipeline(skip=[MaskStmtMerging, MaskInlining, FillFlushToLocalKCaches]),
@@ -56,9 +57,9 @@ class GTCDaCeExtGenerator:
         sdfg.expand_library_nodes(recursive=True)
         sdfg.apply_strict_transformations(validate=True)
 
-        implementation = DaCeComputationCodegen.apply(gtir, sdfg)
+        implementation = DaCeComputationCodegen.apply(ir, sdfg)
         bindings = DaCeBindingsCodegen.apply(
-            gtir, sdfg, module_name=self.module_name, backend=self.backend
+            ir, sdfg, module_name=self.module_name, backend=self.backend
         )
 
         bindings_ext = ".cu" if self.backend.GT_BACKEND_T == "gpu" else ".cpp"
@@ -97,7 +98,7 @@ class DaCeComputationCodegen:
         ]
 
     @classmethod
-    def apply(cls, gtir, sdfg: dace.SDFG):
+    def apply(cls, ir: gtir.Stencil, sdfg: dace.SDFG):
         self = cls()
         code_objects = sdfg.generate_code()
         computations = code_objects[[co.title for co in code_objects].index("Frame")].clean_code
@@ -106,7 +107,7 @@ class DaCeComputationCodegen:
         computations = codegen.format_source("cpp", computations, style="LLVM")
         interface = cls.template.definition.render(
             name=sdfg.name,
-            dace_args=self.generate_dace_args(gtir, sdfg),
+            dace_args=self.generate_dace_args(ir, sdfg),
             functor_args=self.generate_functor_args(sdfg),
             tmp_allocs=self.generate_tmp_allocs(sdfg),
         )
@@ -123,15 +124,15 @@ class DaCeComputationCodegen:
     def __init__(self):
         self._unique_index = 0
 
-    def generate_dace_args(self, gtir, sdfg):
-        oir = gtir_to_oir.GTIRToOIR().visit(gtir)
+    def generate_dace_args(self, ir, sdfg):
+        oir = GTIRToOIR().visit(ir)
         field_extents = compute_fields_extents(oir, add_k=True)
 
         offset_dict: Dict[str, Tuple[int, int, int]] = {
             k: (-v[0][0], -v[1][0], -v[2][0]) for k, v in field_extents.items()
         }
         k_origins = {
-            field_name: boundary[0] for field_name, boundary in compute_k_boundary(gtir).items()
+            field_name: boundary[0] for field_name, boundary in compute_k_boundary(ir).items()
         }
         for name, origin in k_origins.items():
             offset_dict[name] = (offset_dict[name][0], offset_dict[name][1], origin)

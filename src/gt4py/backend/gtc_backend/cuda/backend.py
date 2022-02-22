@@ -27,10 +27,11 @@ from gt4py.backend.gt_backends import (
     make_cuda_layout_map,
 )
 from gt4py.backend.gtc_backend.common import bindings_main_template, pybuffer_to_sid
-from gt4py.backend.gtc_backend.defir_to_gtir import DefIRToGTIR
-from gtc import gtir_to_oir
+from gtc import gtir
 from gtc.common import DataType
-from gtc.cuir import cuir, cuir_codegen, extent_analysis, kernel_fusion, oir_to_cuir
+from gtc.cuir import cuir, cuir_codegen, extent_analysis, kernel_fusion
+from gtc.cuir.oir_to_cuir import OIRToCUIR
+from gtc.gtir_to_oir import GTIRToOIR
 from gtc.passes.gtir_pipeline import GtirPipeline
 from gtc.passes.oir_optimizations.pruning import NoFieldAccessPruning
 from gtc.passes.oir_pipeline import DefaultPipeline
@@ -46,14 +47,14 @@ class GTCCudaExtGenerator:
         self.module_name = module_name
         self.backend = backend
 
-    def __call__(self, definition_ir) -> Dict[str, Dict[str, str]]:
-        gtir = GtirPipeline(DefIRToGTIR.apply(definition_ir)).full()
-        base_oir = gtir_to_oir.GTIRToOIR().visit(gtir)
+    def __call__(self, ir: gtir.Stencil) -> Dict[str, Dict[str, str]]:
+        ir = GtirPipeline(ir).full()
+        base_oir = GTIRToOIR().visit(ir)
         oir_pipeline = self.backend.builder.options.backend_opts.get(
             "oir_pipeline", DefaultPipeline(skip=[NoFieldAccessPruning])
         )
         oir = oir_pipeline.run(base_oir)
-        cuir = oir_to_cuir.OIRToCUIR().visit(oir)
+        cuir = OIRToCUIR().visit(oir)
         cuir = kernel_fusion.FuseKernels().visit(cuir)
         cuir = extent_analysis.CacheExtents().visit(cuir)
         format_source = self.backend.builder.options.format_source

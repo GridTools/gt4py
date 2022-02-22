@@ -32,9 +32,11 @@ from gt4py.backend.gt_backends import (
     x86_is_compatible_layout,
 )
 from gt4py.backend.gtc_backend.common import bindings_main_template, pybuffer_to_sid
-from gtc import gtir, gtir_to_oir
+from gtc import gtir
 from gtc.common import DataType
-from gtc.gtcpp import gtcpp, gtcpp_codegen, oir_to_gtcpp
+from gtc.gtcpp import gtcpp, gtcpp_codegen
+from gtc.gtcpp.oir_to_gtcpp import OIRToGTCpp
+from gtc.gtir_to_oir import GTIRToOIR
 from gtc.passes.gtir_pipeline import GtirPipeline
 from gtc.passes.oir_optimizations.caches import FillFlushToLocalKCaches
 from gtc.passes.oir_pipeline import DefaultPipeline
@@ -51,13 +53,13 @@ class GTCGTExtGenerator:
         self.backend = backend
 
     def __call__(self, ir: gtir.Stencil) -> Dict[str, Dict[str, str]]:
-        gtir = GtirPipeline(ir).full()
-        base_oir = gtir_to_oir.GTIRToOIR().visit(gtir)
+        ir = GtirPipeline(ir).full()
+        base_oir = GTIRToOIR().visit(ir)
         oir_pipeline = self.backend.builder.options.backend_opts.get(
             "oir_pipeline", DefaultPipeline(skip=[FillFlushToLocalKCaches])
         )
         oir = oir_pipeline.run(base_oir)
-        gtcpp = oir_to_gtcpp.OIRToGTCpp().visit(oir)
+        gtcpp = OIRToGTCpp().visit(oir)
         format_source = self.backend.builder.options.format_source
         implementation = gtcpp_codegen.GTCppCodegen.apply(
             gtcpp, gt_backend_t=self.backend.GT_BACKEND_T, format_source=format_source
