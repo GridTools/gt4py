@@ -89,13 +89,8 @@ class Stmt(LocatedNode):
     ...
 
 
-class Assign(Stmt):
-    target: Symbol
-    value: Expr
-
-
 class Program(LocatedNode, SymbolTableTrait):
     id: SymbolName  # noqa: A003
     params: list[Symbol[common_types.DataType]]
-    body: list[Union[Expr, Stmt]]
+    body: list[Call]
     closure: list[Symbol]

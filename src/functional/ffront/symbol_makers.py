@@ -72,7 +72,7 @@ def make_symbol_type_from_typing(
                 type_hint, global_ns=global_ns, local_ns=local_ns, allow_partial=False
             )
         except Exception as error:
-            raise FieldOperatorTypeError(
+            raise TypingError(
                 f"Type annotation ({type_hint}) has undefined forward references!"
             ) from error
 
@@ -97,71 +97,63 @@ def make_symbol_type_from_typing(
 
         case builtins.tuple:
             if not args:
-                raise FieldOperatorTypeError(
-                    f"Tuple annotation ({type_hint}) requires at least one argument!"
-                )
+                raise TypingError(f"Tuple annotation ({type_hint}) requires at least one argument!")
             if Ellipsis in args:
-                raise FieldOperatorTypeError(f"Unbound tuples ({type_hint}) are not allowed!")
+                raise TypingError(f"Unbound tuples ({type_hint}) are not allowed!")
             return common_types.TupleType(types=[recursive_make_symbol(arg) for arg in args])
 
         case common.Field:
             if (n_args := len(args)) != 2:
-                raise FieldOperatorTypeError(
-                    f"Field type requires two arguments, got {n_args}! ({type_hint})"
-                )
+                raise TypingError(f"Field type requires two arguments, got {n_args}! ({type_hint})")
 
             dims: Union[Ellipsis, list[common.Dimension]] = []
             dim_arg, dtype_arg = args
             if isinstance(dim_arg, list):
                 for d in dim_arg:
                     if not isinstance(d, common.Dimension):
-                        raise FieldOperatorTypeError(f"Invalid field dimension definition '{d}'")
+                        raise TypingError(f"Invalid field dimension definition '{d}'")
                     dims.append(d)
             elif dim_arg is Ellipsis:
                 dims = dim_arg
             else:
-                raise FieldOperatorTypeError(f"Invalid field dimensions '{dim_arg}'")
+                raise TypingError(f"Invalid field dimensions '{dim_arg}'")
 
             try:
                 dtype = recursive_make_symbol(dtype_arg)
-            except FieldOperatorTypeError as error:
-                raise FieldOperatorTypeError(
+            except TypingError as error:
+                raise TypingError(
                     "Field dtype argument must be a scalar type (got '{dtype}')!"
                 ) from error
             if not isinstance(dtype, common_types.ScalarType):
-                raise FieldOperatorTypeError(
-                    "Field dtype argument must be a scalar type (got '{dtype}')!"
-                )
+                raise TypingError("Field dtype argument must be a scalar type (got '{dtype}')!")
             return common_types.FieldType(dims=dims, dtype=dtype)
 
         case collections.abc.Callable:
             if not args:
-                raise FieldOperatorTypeError("Not annotated functions are not supported!")
+                raise TypingError("Not annotated functions are not supported!")
 
             try:
                 arg_types, return_type = args
                 args = [recursive_make_symbol(arg) for arg in arg_types]
             except Exception as error:
-                raise FieldOperatorTypeError(
-                    f"Invalid callable annotations in {type_hint}"
-                ) from error
+                raise TypingError(f"Invalid callable annotations in {type_hint}") from error
 
             kwargs_info = [arg for arg in extra_args if isinstance(arg, typingx.CallableKwargsInfo)]
             if len(kwargs_info) != 1:
-                raise FieldOperatorTypeError(f"Invalid callable annotations in {type_hint}")
+                raise TypingError(f"Invalid callable annotations in {type_hint}")
             kwargs = {
                 arg: recursive_make_symbol(arg_type)
                 for arg, arg_type in kwargs_info[0].data.items()
             }
 
-            # todo: print better error when no return type annotation is given
+            # TODO(tehrengruber): print better error when no return type annotation is given
             return common_types.FunctionType(
                 args=args, kwargs=kwargs, returns=recursive_make_symbol(return_type)
             )
         case runtime.Offset:
             return common_types.OffsetType()
 
-    raise FieldOperatorTypeError(f"'{type_hint}' type is not supported")
+    raise TypingError(f"'{type_hint}' type is not supported")
 
 
 def make_symbol_type_from_value(value: Any) -> common_types.SymbolType:
@@ -184,8 +176,7 @@ def make_symbol_type_from_value(value: Any) -> common_types.SymbolType:
 
 
 # TODO(egparedes): Add source location info (maybe subclassing FieldOperatorSyntaxError)
-# TOD(tehrengruber): Find a better name as everything here is not tied to field operators
-class FieldOperatorTypeError(common.GTTypeError):
+class TypingError(common.GTTypeError):
     def __init__(
         self,
         msg="",

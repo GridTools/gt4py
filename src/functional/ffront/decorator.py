@@ -11,12 +11,14 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
+import collections
 import dataclasses
+import functools
+import inspect
 import types
-from collections import ChainMap
-from functools import cached_property
 from typing import Any, Optional
 
+from eve.utils import UIDGenerator
 from functional.common import GTTypeError
 from functional.ffront import common_types as ct
 from functional.ffront import field_operator_ast as foast
@@ -32,24 +34,15 @@ from functional.iterator import ir as itir
 from functional.iterator.backend_executor import execute_program
 
 
-uid = 0
+DEFAULT_BACKEND = "roundtrip"
 
 
-def gensym():
-    global uid
-    uid += 1
-    return f"__sym_{uid}"
-
-
-default_backend = "roundtrip"
-
-
-@dataclasses.dataclass
+@dataclasses.dataclass(frozen=True)
 class Program:
     past_node: past.Program
     closure_refs: ClosureRefs
     externals: dict[str, Any]
-    backend: str
+    backend: Optional[str]
     definition: Optional[types.FunctionType] = None
 
     @classmethod
@@ -69,11 +62,7 @@ class Program:
             definition=definition,
         )
 
-    def __post_init__(self):
-        if self.backend is None:
-            self.backend = default_backend
-
-    @cached_property
+    @functools.cached_property
     def itir(self) -> itir.Program:
         if self.externals:
             raise NotImplementedError("Externals are not supported yet.")
@@ -87,18 +76,16 @@ class Program:
             else:
                 raise NotImplementedError("Only function closure vars are allowed currently.")
 
-        vars_ = ChainMap(self.closure_refs.globals, self.closure_refs.nonlocals)
-        if not all(func in vars_ for func in func_names):
-            undef_funcs = [func not in vars_ for func in func_names]
-            raise RuntimeError(f"Reference to undefined symbol(s) `{', '.join(undef_funcs)}`")
-        funcs_lowered = [vars_[func_names].__gt_itir__() for func_names in func_names]
+        vars_ = collections.ChainMap(self.closure_refs.globals, self.closure_refs.nonlocals)
+        if undefined := (set(vars_) - set(func_names)):
+            raise RuntimeError(f"Reference to undefined symbol(s) `{', '.join(undefined)}`")
+        funcs_lowered = [vars_[name].__gt_itir__() for name in func_names]
 
         return itir.Program(
             function_definitions=funcs_lowered, fencil_definitions=[fencil_itir_node], setqs=[]
         )
 
-    def _validate_args(self, *args, **kwargs):
-        # validate signature
+    def _validate_args(self, *args, **kwargs) -> None:
         if len(args) != len(self.past_node.params):
             raise GTTypeError(
                 f"Function takes {len(self.past_node.params)} arguments, but {len(args)} were given."
@@ -106,7 +93,7 @@ class Program:
         if kwargs:
             raise NotImplementedError("Keyword arguments are not supported yet.")
 
-    def __call__(self, *args, offset_provider, **kwargs):
+    def __call__(self, *args, offset_provider, **kwargs) -> None:
         self._validate_args(*args, **kwargs)
 
         # extract size of all field arguments
@@ -117,7 +104,7 @@ class Program:
             for dim_idx in range(0, len(param.type.dims)):
                 size_args.append(args[param_idx].shape[dim_idx])
 
-        backend = self.backend if self.backend else default_backend
+        backend = self.backend if self.backend else DEFAULT_BACKEND
 
         execute_program(
             self.itir, *args, *size_args, **kwargs, offset_provider=offset_provider, backend=backend
@@ -135,19 +122,22 @@ class FieldOperator:
     foast_node: foast.FieldOperator
     closure_refs: ClosureRefs
     externals: dict[str, Any]
-    backend: str  # note: backend is only used if directly called
+    backend: Optional[str]  # note: backend is only used if directly called
     definition: Optional[types.FunctionType] = None
 
     @classmethod
     def from_function(
-        cls, definition: types.FunctionType, externals: Optional[dict] = None, backend: str = None
+        cls,
+        definition: types.FunctionType,
+        externals: Optional[dict] = None,
+        backend: Optional[str] = None,
     ):
         closure_refs = ClosureRefs.from_function(definition)
         foast_node = FieldOperatorParser.apply_to_function(definition)
         return FieldOperator(
             foast_node=foast_node,
             closure_refs=closure_refs,
-            externals={} if externals is None else externals,
+            externals=externals or {},
             backend=backend,
             definition=definition,
         )
@@ -157,7 +147,7 @@ class FieldOperator:
         assert isinstance(type_, ct.FunctionType)
         return type_
 
-    def __gt_itir__(self):
+    def __gt_itir__(self) -> itir.FunctionDefinition:
         return FieldOperatorLowering.apply(self.foast_node)
 
     def as_program(self) -> Program:
@@ -173,7 +163,12 @@ class FieldOperator:
         stencil_sym = past.Symbol(id=name, type=type_, namespace=ct.Namespace.CLOSURE, location=loc)
 
         params_decl = [
-            past.Symbol(id=gensym(), type=arg_type, namespace=ct.Namespace.LOCAL, location=loc)
+            past.Symbol(
+                id=UIDGenerator.sequential_id(prefix="__sym"),
+                type=arg_type,
+                namespace=ct.Namespace.LOCAL,
+                location=loc,
+            )
             for arg_type in type_.args
         ]
         params_ref = [past.Name(id=pdecl.id, location=loc) for pdecl in params_decl]
@@ -200,14 +195,8 @@ class FieldOperator:
 
         # inject stencil as a closure var into program
         #  since ClosureRefs is immutable we have to resort to this rather ugly way of doing a copy
-        closure_refs = ClosureRefs(
-            **{
-                **{
-                    field.name: getattr(self.closure_refs, field.name)
-                    for field in dataclasses.fields(self.closure_refs)
-                },
-                "globals": {**self.closure_refs.globals, name: self},
-            }
+        closure_refs = dataclasses.replace(
+            self.closure_refs, globals={**self.closure_refs.globals, name: self}
         )
 
         return Program(
@@ -217,7 +206,7 @@ class FieldOperator:
             backend=self.backend,
         )
 
-    def __call__(self, *args, out, offset_provider, **kwargs):
+    def __call__(self, *args, out, offset_provider, **kwargs) -> None:
         return self.as_program()(*args, out, offset_provider=offset_provider, **kwargs)
 
 

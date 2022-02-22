@@ -29,6 +29,8 @@ from functional.ffront.source_utils import ClosureRefs, SourceDefinition, Symbol
 
 
 # TODO(tehrengruber): disallow every ast node we don't understand yet
+# TODO(tehrengruber): the parser here duplicates part of the FOAST parser.
+#  revisit when we have some sort of pass manager
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -142,7 +144,7 @@ class ProgramParser(ast.NodeVisitor):
             )
         return past.DataSymbol(id=node.arg, location=self._make_loc(node), type=new_type)
 
-    def visit_Expr(self, node: ast.Expr):
+    def visit_Expr(self, node: ast.Expr) -> past.LocatedNode:
         return self.visit(node.value)
 
     def visit_Name(self, node: ast.Name) -> past.Name:
@@ -184,7 +186,7 @@ class ProgramParser(ast.NodeVisitor):
             location=self._make_loc(node),
         )
 
-    def visit_UnaryOp(self, node: ast.UnaryOp):
+    def visit_UnaryOp(self, node: ast.UnaryOp) -> past.Constant:
         if isinstance(node.op, ast.USub) and isinstance(node.operand, ast.Constant):
             symbol_type = symbol_makers.make_symbol_type_from_value(node.operand.value)
             return past.Constant(

@@ -20,25 +20,34 @@ from functional.ffront import program_ast as past
 from functional.iterator import ir as itir
 
 
-def _size_arg_from_field(field_name: str, dim: int):
+def _size_arg_from_field(field_name: str, dim: int) -> str:
     return f"__{field_name}_size_{dim}"
 
 
 class ProgramLowering(NodeTranslator):
     contexts = (SymbolTableTrait.symtable_merger,)
 
-    def visit_Program(self, node: past.Program, **kwargs):
+    @classmethod
+    def apply(cls, node: past.Program) -> itir.FencilDefinition:
+        return cls().visit(node)
+
+    def _gen_size_params_from_program(self, node: past.Program):
+        """Generate symbols for each field param and dimension."""
+        size_params = []
+        for param in node.params:
+            if isinstance(param.type, common_types.FieldType):
+                for dim_idx in range(0, len(param.type.dims)):
+                    size_params.append(itir.Sym(id=_size_arg_from_field(param.id, dim_idx)))
+        return size_params
+
+    def visit_Program(self, node: past.Program, **kwargs) -> itir.FencilDefinition:
         symtable = kwargs["symtable"]
 
-        # The ITIR does not support dynamically getting the size of a field. As a workaround we add additional
-        #  arguments to the fencil definition containing the size of all fields. The caller of a program is
-        #  (e.g. program decorator) is required to pass these arguments.
-        size_params = [
-            itir.Sym(id=_size_arg_from_field(param.id, dim_idx))
-            for param in node.params
-            if isinstance(param.type, common_types.FieldType)
-            for dim_idx in range(0, len(param.type.dims))
-        ]
+        # The ITIR does not support dynamically getting the size of a field. As
+        #  a workaround we add additional arguments to the fencil definition
+        #  containing the size of all fields. The caller of a program is (e.g.
+        #  program decorator) is required to pass these arguments.
+        size_params = self._gen_size_params_from_program(node)
 
         closures: list[itir.StencilClosure] = []
         for stmt in node.body:
@@ -69,26 +78,37 @@ class ProgramLowering(NodeTranslator):
             outputs=outputs,
         )
 
-    def _visit_slice_index(self, idx: Union[None, past.Constant], *, dim_size: itir.Expr, **kwargs):
-        if idx is None:
-            return itir.IntLiteral(value=0)
-        elif isinstance(idx, past.Constant):
-            if idx.value < 0:
-                return itir.FunCall(
-                    fun=itir.SymRef("minus"), args=[dim_size, self.visit(idx, **kwargs)]
+    def _visit_slice_bound(
+        self, slice_bound: past.Constant, default_value: itir.Expr, dim_size: itir.Expr, **kwargs
+    ) -> itir.Expr:
+        if slice_bound is None:
+            lowered_bound = default_value
+        elif isinstance(slice_bound, past.Constant):
+            assert (
+                isinstance(slice_bound.type, common_types.ScalarType)
+                and slice_bound.type.kind == common_types.ScalarKind.INT64
+            )
+            if slice_bound.value < 0:
+                lowered_bound = itir.FunCall(
+                    fun=itir.SymRef(id="plus"),
+                    args=[dim_size, self.visit(slice_bound, **kwargs)],
                 )
             else:
-                return self.visit(idx, **kwargs)
-        raise RuntimeError("Expected `None` or `past.Constant` node.")
+                lowered_bound = self.visit(slice_bound, **kwargs)
+        else:
+            raise AssertionError("Expected `None` or `past.Constant`.")
+        return lowered_bound
 
     def _visit_stencil_call_out_arg(
         self, node: past.Expr, **kwargs
     ) -> tuple[list[itir.SymRef], itir.FunCall]:
-        # as the ITIR does not support slicing a field we have to do a deeper inspection of the PAST to emulate
-        #  the behaviour
+        # as the ITIR does not support slicing a field we have to do a deeper
+        #  inspection of the PAST to emulate the behaviour
         if isinstance(node, past.Subscript):
             out_field_name: past.Name = node.value
-            if isinstance(node.slice_, past.TupleExpr):
+            if isinstance(node.slice_, past.TupleExpr) and all(
+                isinstance(el, past.Slice) for el in node.slice_.elts
+            ):
                 out_field_slice_: list[past.Slice] = node.slice_.elts
             elif isinstance(node.slice_, past.Slice):
                 out_field_slice_: list[past.Slice] = [node.slice_]
@@ -106,39 +126,8 @@ class ProgramLowering(NodeTranslator):
                 # an expression for the size of a dimension
                 dim_size = itir.SymRef(id=_size_arg_from_field(out_field_name.id, dim_i))
                 # lower bound
-                if slice_.lower is None:
-                    lower = itir.IntLiteral(value=0)
-                elif isinstance(slice_.lower, past.Constant):
-                    assert (
-                        isinstance(slice_.lower.type, common_types.ScalarType)
-                        and slice_.lower.type.kind == common_types.ScalarKind.INT64
-                    )
-                    if slice_.lower.value < 0:
-                        lower = itir.FunCall(
-                            fun=itir.SymRef("plus"),
-                            args=[dim_size, self.visit(slice_.lower, **kwargs)],
-                        )
-                    else:
-                        lower = self.visit(slice_.lower, **kwargs)
-                else:
-                    raise AssertionError()
-                # upper bound
-                if slice_.upper is None:
-                    upper = dim_size
-                elif isinstance(slice_.upper, past.Constant):
-                    assert (
-                        isinstance(slice_.upper.type, common_types.ScalarType)
-                        and slice_.upper.type.kind == common_types.ScalarKind.INT64
-                    )
-                    if slice_.upper.value < 0:
-                        upper = itir.FunCall(
-                            fun=itir.SymRef(id="plus"),
-                            args=[dim_size, self.visit(slice_.upper, **kwargs)],
-                        )
-                    else:
-                        upper = self.visit(slice_.upper, **kwargs)
-                else:
-                    raise AssertionError()
+                lower = self._visit_slice_bound(slice_.lower, itir.IntLiteral(value=0), dim_size)
+                upper = self._visit_slice_bound(slice_.upper, dim_size, dim_size)
 
                 domain_args.append(
                     itir.FunCall(
@@ -170,7 +159,9 @@ class ProgramLowering(NodeTranslator):
             fun=itir.SymRef(id="domain"), args=domain_args
         )
 
-    def visit_Constant(self, node: past.Constant, **kwargs):
+    def visit_Constant(
+        self, node: past.Constant, **kwargs
+    ) -> Union[itir.IntLiteral, itir.FloatLiteral, itir.BoolLiteral]:
         if isinstance(node.type, common_types.ScalarType) and node.type.shape is None:
             match node.type.kind:
                 case common_types.ScalarKind.INT32 | common_types.ScalarKind.INT64:
@@ -186,9 +177,5 @@ class ProgramLowering(NodeTranslator):
 
         raise NotImplementedError("Only scalar literals supported currently.")
 
-    def visit_Name(self, node: past.Name, **kwargs):
+    def visit_Name(self, node: past.Name, **kwargs) -> itir.Sym:
         return itir.Sym(id=node.id)
-
-    @classmethod
-    def apply(cls, node: past.Program) -> itir.FencilDefinition:
-        return cls().visit(node)
