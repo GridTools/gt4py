@@ -19,8 +19,7 @@ from typing import Any, Callable, Dict, Set, Union
 import eve
 from gtc import common, oir
 from gtc.cuir import cuir
-from gtc.passes.oir_optimizations.utils import symbol_name_creator
-from src.gtc.passes.oir_optimizations.utils import compute_horizontal_block_extents
+from gtc.passes.oir_optimizations.utils import compute_horizontal_block_extents, symbol_name_creator
 
 
 class OIRToCUIR(eve.NodeTranslator):
