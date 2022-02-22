@@ -80,6 +80,14 @@ class MaskStmtFactory(factory.Factory):
     body = factory.List([factory.SubFactory(AssignStmtFactory)])
 
 
+class WhileFactory(factory.Factory):
+    class Meta:
+        model = oir.While
+
+    cond = factory.SubFactory(FieldAccessFactory, dtype=common.DataType.BOOL)
+    body = factory.List([factory.SubFactory(AssignStmtFactory)])
+
+
 class NativeFuncCallFactory(factory.Factory):
     class Meta:
         model = oir.NativeFuncCall

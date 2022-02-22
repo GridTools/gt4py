@@ -161,8 +161,14 @@ class NativeFuncCall(common.NativeFuncCall[Expr], Expr):
     _dtype_propagation = common.native_func_call_dtype_propagation(strict=True)
 
 
+# --- Statements ---
+@eve.utils.noninstantiable
+class Stmt(eve.Node):
+    pass
+
+
 # --- Statement ---
-class VectorAssign(common.AssignStmt[VectorLValue, Expr]):
+class VectorAssign(common.AssignStmt[VectorLValue, Expr], Stmt):
     left: VectorLValue
     right: Expr
     mask: Optional[Expr] = None
@@ -176,10 +182,14 @@ class VectorAssign(common.AssignStmt[VectorLValue, Expr]):
     _dtype_validation = common.assign_stmt_dtype_validation(strict=True)
 
 
+class While(common.While[Stmt, Expr], Stmt):
+    pass
+
+
 # --- Control Flow ---
 class HorizontalBlock(common.LocNode, eve.SymbolTableTrait):
     declarations: List[ScalarDecl]
-    body: List[VectorAssign]
+    body: List[Stmt]
     extent: HorizontalExtent
 
 

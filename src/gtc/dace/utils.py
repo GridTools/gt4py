@@ -232,16 +232,19 @@ class CartesianIterationSpace(oir.LocNode):
         )
 
     @staticmethod
-    def from_offset(offset: CartesianOffset) -> "CartesianIterationSpace":
+    def from_offset(
+        offset: Union[CartesianOffset, oir.VariableKOffset]
+    ) -> "CartesianIterationSpace":
 
+        dict_offsets = offset.to_dict()
         return CartesianIterationSpace(
             i_interval=oir.Interval(
-                start=oir.AxisBound.from_start(min(0, offset.i)),
-                end=oir.AxisBound.from_end(max(0, offset.i)),
+                start=oir.AxisBound.from_start(min(0, dict_offsets["i"])),
+                end=oir.AxisBound.from_end(max(0, dict_offsets["i"])),
             ),
             j_interval=oir.Interval(
-                start=oir.AxisBound.from_start(min(0, offset.j)),
-                end=oir.AxisBound.from_end(max(0, offset.j)),
+                start=oir.AxisBound.from_start(min(0, dict_offsets["j"])),
+                end=oir.AxisBound.from_end(max(0, dict_offsets["j"])),
             ),
         )
 
