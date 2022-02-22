@@ -251,7 +251,8 @@ class TestUIDGenerator:
         UIDs.reset_sequence(counter + 1)
         assert int(UIDs.sequential_id()) == counter + 1
         with pytest.warns(RuntimeWarning, match="Unsafe reset"):
-            UIDs.reset_sequence(counter)
+            UIDs.reset_sequence(counter, warn_unsafe=True)
+        UIDs.reset_sequence(counter, warn_unsafe=False)
 
 
 # -- Iterators --
