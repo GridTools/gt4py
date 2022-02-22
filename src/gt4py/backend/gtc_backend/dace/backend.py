@@ -129,7 +129,7 @@ class DaCeComputationCodegen:
 
     def generate_dace_args(self, gtir, sdfg):
         oir = gtir_to_oir.GTIRToOIR().visit(gtir)
-        field_extents = StencilExtentComputer().visit(oir).fields
+        field_extents = StencilExtentComputer(add_k=True).visit(oir).fields
 
         offset_dict: Dict[str, Tuple[int, int, int]] = {
             k: (-v[0][0], -v[1][0], -v[2][0]) for k, v in field_extents.items()
