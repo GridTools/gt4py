@@ -471,7 +471,9 @@ class UIDGenerator:
     """Simple unique id generator using different methods."""
 
     #: Constantly increasing counter for generation of sequential unique ids
-    _counter: Iterator[int] = dataclasses.field(default_factory=itertools.count)
+    _counter: Iterator[int] = dataclasses.field(
+        default_factory=functools.partial(itertools.count, 1)
+    )
 
     def random_id(self, *, prefix: Optional[str] = None, width: int = 8) -> str:
         """Generate a random globally unique id."""
