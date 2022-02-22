@@ -20,8 +20,9 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 from eve.concepts import BaseNode
 from eve.traits import SymbolTableTrait
 from eve.visitors import NodeTranslator
+from gt4py.definitions import Extent
 from gtc import common, oir, utils
-from gtc.passes.oir_optimizations.utils import StencilExtentComputer
+from gtc.passes.oir_optimizations.utils import compute_extents
 
 from . import npir
 
@@ -33,9 +34,9 @@ class OirToNpir(NodeTranslator):
 
     # --- Decls ---
     def visit_FieldDecl(
-        self, node: oir.FieldDecl, *, extents: StencilExtentComputer.Context, **kwargs: Any
+        self, node: oir.FieldDecl, *, field_extents: Dict[str, Extent], **kwargs: Any
     ) -> npir.FieldDecl:
-        extent = typing.cast(npir.HorizontalExtent, extents.fields.get(node.name, ((0, 0), (0, 0))))
+        extent = typing.cast(npir.HorizontalExtent, field_extents.get(node.name, ((0, 0), (0, 0))))
         return npir.FieldDecl(
             name=node.name,
             dtype=node.dtype,
@@ -51,9 +52,9 @@ class OirToNpir(NodeTranslator):
         return npir.ScalarDecl(name=node.name, dtype=node.dtype)
 
     def visit_Temporary(
-        self, node: oir.Temporary, *, extents: StencilExtentComputer.Context, **kwargs: Any
+        self, node: oir.Temporary, *, field_extents: Dict[str, Extent], **kwargs: Any
     ) -> npir.TemporaryDecl:
-        temp_extent = extents.fields[node.name]
+        temp_extent = field_extents[node.name]
         offset = [-ext[0] for ext in temp_extent]
         assert all(off >= 0 for off in offset)
         padding = [ext[1] - ext[0] for ext in temp_extent]
@@ -179,12 +180,12 @@ class OirToNpir(NodeTranslator):
         self,
         node: oir.HorizontalExecution,
         *,
-        extents: Optional[StencilExtentComputer.Context] = None,
+        block_extents: Optional[Dict[int, Extent]] = None,
         **kwargs: Any,
     ) -> npir.HorizontalBlock:
         stmts = utils.flatten_list(self.visit(node.body, **kwargs))
-        if extents:
-            extent = extents.blocks[id(node)]
+        if block_extents:
+            extent = block_extents[id(node)]
         else:
             extent = ((0, 0), (0, 0))
         return npir.HorizontalBlock(
@@ -205,21 +206,23 @@ class OirToNpir(NodeTranslator):
         return self.visit(node.sections, loop_order=node.loop_order, **kwargs)
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> npir.Computation:
-        extents = StencilExtentComputer().visit(node)
+        field_extents, block_extents = compute_extents(node)
 
         arguments = [decl.name for decl in node.params]
         param_decls = [
             self.visit(decl, **kwargs) for decl in node.params if isinstance(decl, oir.ScalarDecl)
         ]
         api_field_decls = [
-            self.visit(decl, extents=extents)
+            self.visit(decl, field_extents=field_extents)
             for decl in node.params
             if isinstance(decl, oir.FieldDecl)
         ]
-        temp_decls = [self.visit(decl, extents=extents, **kwargs) for decl in node.declarations]
+        temp_decls = [
+            self.visit(decl, field_extents=field_extents, **kwargs) for decl in node.declarations
+        ]
 
         vertical_passes = utils.flatten_list(
-            self.visit(node.vertical_loops, extents=extents, **kwargs)
+            self.visit(node.vertical_loops, block_extents=block_extents, **kwargs)
         )
 
         return npir.Computation(

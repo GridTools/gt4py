@@ -19,7 +19,7 @@ from typing import Any, Callable, Dict, Set, Union
 import eve
 from gtc import common, oir
 from gtc.cuir import cuir
-from gtc.passes.oir_optimizations.utils import symbol_name_creator
+from gtc.passes.oir_optimizations.utils import compute_horizontal_block_extents, symbol_name_creator
 
 
 class OIRToCUIR(eve.NodeTranslator):
@@ -143,9 +143,12 @@ class OIRToCUIR(eve.NodeTranslator):
     def visit_HorizontalExecution(
         self, node: oir.HorizontalExecution, **kwargs: Any
     ) -> cuir.HorizontalExecution:
+        block_extents = kwargs["block_extents"][id(node)]
+        extent = cuir.IJExtent(i=block_extents[0], j=block_extents[1])
         return cuir.HorizontalExecution(
             body=self.visit(node.body, **kwargs),
             declarations=self.visit(node.declarations),
+            extent=extent,
         )
 
     def visit_VerticalLoopSection(
@@ -194,11 +197,13 @@ class OIRToCUIR(eve.NodeTranslator):
         )
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> cuir.Program:
+        block_extents = compute_horizontal_block_extents(node)
         accessed_fields: Set[str] = set()
         kernels = self.visit(
             node.vertical_loops,
             new_symbol_name=symbol_name_creator(set(kwargs["symtable"])),
             accessed_fields=accessed_fields,
+            block_extents=block_extents,
             **kwargs,
         )
         temporaries = [self.visit(d) for d in node.declarations if d.name in accessed_fields]

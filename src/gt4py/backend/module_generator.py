@@ -28,11 +28,11 @@ import numpy
 from gt4py import ir as gt_ir
 from gt4py import utils as gt_utils
 from gt4py.definitions import AccessKind, Boundary, DomainInfo, FieldInfo, ParameterInfo
-from gtc import gtir
+from gtc import gtir, gtir_to_oir
 from gtc.passes.gtir_access_kind import compute_access_kinds
 from gtc.passes.gtir_k_boundary import compute_k_boundary, compute_min_k_size
-from gtc.passes.gtir_legacy_extents import compute_legacy_extents
 from gtc.passes.gtir_pipeline import GtirPipeline
+from gtc.passes.oir_optimizations.utils import compute_fields_extents
 from gtc.utils import dimension_flags_to_names
 
 
@@ -57,26 +57,28 @@ class ModuleData:
         return set(self.parameter_info.keys())
 
 
-def make_args_data_from_gtir(pipeline: GtirPipeline, legacy=False) -> ModuleData:
+def make_args_data_from_gtir(pipeline: GtirPipeline) -> ModuleData:
     """
     Compute module data containing information about stencil arguments from gtir.
 
-    Use `legacy` parameter to ensure equality with values from legacy toolchain.
+    This is no longer compatible with the legacy backends.
     """
     data = ModuleData()
-    node = pipeline.full()
 
     # NOTE: pipeline.gtir has not had prune_unused_parameters applied.
     accesses = compute_access_kinds(pipeline.gtir)
-    field_extents = compute_legacy_extents(node, mask_inwards=legacy)
     all_params = pipeline.gtir.params
+
+    node = pipeline.full()
+    oir = gtir_to_oir.GTIRToOIR().visit(node)
+    field_extents = compute_fields_extents(oir)
 
     for decl in (param for param in all_params if isinstance(param, gtir.FieldDecl)):
         access = accesses[decl.name]
         dtype = numpy.dtype(decl.dtype.name.lower())
 
         if access != AccessKind.NONE:
-            k_boundary = compute_k_boundary(node)[decl.name] if not legacy else (0, 0)
+            k_boundary = compute_k_boundary(node)[decl.name]
             boundary = Boundary(*field_extents[decl.name].to_boundary()[0:2], k_boundary)
         else:
             boundary = Boundary.zeros(ndims=3)
