@@ -7,8 +7,23 @@ tags: [frontend]
 - **Status** valid
 - **Authors** Rico Häuselmann (@dropd), Till Ehrengruber (@tehrengruber)
 - **Created** 2022-02-09
-- **Updated** 2022-02-09
+- **Updated** 2022-02-22
 
+## Updates:
+
+### 2022-02-22: Added reduction lowering
+Lowering reductions is not completely straightforward (at the time of writing) because expressions inside a reduction in field view may contain fields shifted to neighbor dimensions.
+
+These are lowered to partially shifted iterators which can not be dereferenced directly. The iterator builtin `reduce` therefore takes an expression which works on values after they have been shifted to a concrete neighbor and dereferenced by the system. Everywhere else it remains easier to lower everything to an iterator expression.
+
+This leads to the following solution, likely subject to change when the behaviour of `reduce` or partially shifted iterators change:
+
+The expression inside the reduction is lowered using a separate `NodeTranslator` instance which
+1) collects shifted (and non-shifted) iterators in the course of the lowering
+2) lowers everything under the assumption that everything is a value and
+3) reinserts the (shifted) iterators as arguments to the `reduce` call.
+
+This solution is proposed also because the special rules for `reduce`, which are likely to change are isolated in this separate lowering parser.
 
 ## Background
 

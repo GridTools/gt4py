@@ -375,21 +375,18 @@ def test_compare_chain():
 
 def test_reduction_lowering_simple():
     def reduction(edge_f: Field[[Edge], "float64"]):
-        edge_f_nbh = edge_f(V2E)
-        return nbh_sum(edge_f_nbh, axis=V2E)
+        return nbh_sum(edge_f(V2E), axis=V2E)
 
     parsed = FieldOperatorParser.apply_to_function(reduction)
     lowered = FieldOperatorLowering.apply(parsed)
 
     reference = im.deref_(
-        im.let("edge_f_nbh__0", im.shift_("V2E")("edge_f"))(
-            im.lift_(
-                im.call_("reduce")(
-                    im.lambda__("base", "x")(im.plus_("base", "x")),
-                    0,
-                )
-            )("edge_f_nbh__0")
-        )
+        im.lift_(
+            im.call_("reduce")(
+                im.lambda__("accum", "edge_f__4")(im.plus_("accum", "edge_f__4")),
+                0,
+            )
+        )(im.shift_("V2E")("edge_f"))
     )
 
     assert lowered.expr == reference
@@ -405,15 +402,14 @@ def test_reduction_lowering_expr():
 
     reference = im.deref_(
         im.let("e1_nbh__0", im.shift_("V2E")("e1"))(
-            (
-                im.lift_(im.call_("reduce")(im.lambda__("base", "x")(im.plus_("base", "x")), 0,))(
-                    im.lift_(
-                        im.lambda__("e1_nbh__0", "e2")(
-                            im.plus_(im.deref_("e1_nbh__0"), im.deref_("e2"))
-                        )
-                    )("e1_nbh__0", "e2"),
+            im.lift_(
+                im.call_("reduce")(
+                    im.lambda__("accum", "e1_nbh__0__5", "e2__6")(
+                        im.plus_("accum", im.plus_("e1_nbh__0__5", "e2__6"))
+                    ),
+                    0,
                 )
-            )
+            )("e1_nbh__0", "e2")
         )
     )
 

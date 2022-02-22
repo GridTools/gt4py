@@ -14,6 +14,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+from collections import namedtuple
 from typing import TypeVar
 
 import numpy as np
@@ -223,81 +224,83 @@ def test_fold_shifts():
     assert np.allclose(a[1:] + b[2:], c)
 
 
-class TestReduction:
-    """Reductions can be written in different ways, some are not implemented yet."""
+@pytest.fixture
+def reduction_setup():
 
-    def setup(self):
-        self.size = 9
+    size = 9
+    edge = CartesianAxis("Edge")
+    vertex = CartesianAxis("Vertex")
+    v2edim = CartesianAxis("V2E")
 
-        self.v2e_arr = np.array(
-            [
-                [0, 15, 2, 9],  # 0
-                [1, 16, 0, 10],
-                [2, 17, 1, 11],
-                [3, 9, 5, 12],  # 3
-                [4, 10, 3, 13],
-                [5, 11, 4, 14],
-                [6, 12, 8, 15],  # 6
-                [7, 13, 6, 16],
-                [8, 14, 7, 17],
-            ]
-        )
+    v2e_arr = np.array(
+        [
+            [0, 15, 2, 9],  # 0
+            [1, 16, 0, 10],
+            [2, 17, 1, 11],
+            [3, 9, 5, 12],  # 3
+            [4, 10, 3, 13],
+            [5, 11, 4, 14],
+            [6, 12, 8, 15],  # 6
+            [7, 13, 6, 16],
+            [8, 14, 7, 17],
+        ]
+    )
 
-        self.Edge = CartesianAxis("Edge")
-        self.Vertex = CartesianAxis("Vertex")
-        self.V2EDim = CartesianAxis("V2E")
-        self.V2E = offset("V2E", source=self.Edge, target=(self.Vertex, self.V2EDim))
+    yield namedtuple(
+        "ReductionSetup",
+        ["size", "Edge", "Vertex", "V2EDim", "V2E", "inp", "out", "v2e_table", "offset_provider"],
+    )(
+        size=9,
+        Edge=edge,
+        Vertex=vertex,
+        V2EDim=v2edim,
+        V2E=offset("V2E", source=edge, target=(vertex, v2edim)),
+        inp=index_field(edge),
+        out=np_as_located_field(vertex)(np.zeros([size])),
+        offset_provider={"V2E": NeighborTableOffsetProvider(v2e_arr, vertex, edge, 4)},
+        v2e_table=v2e_arr,
+    )
 
-        self.inp = index_field(self.Edge)
-        self.out = np_as_located_field(self.Vertex)(np.zeros([9]))
 
-    def test_reduction_execution(self):
-        """Testing a trivial neighbor sum."""
-        V2EDim = self.V2EDim
-        V2E = self.V2E
+def test_reduction_execution(reduction_setup):
+    """Testing a trivial neighbor sum."""
+    rs = reduction_setup
+    V2EDim = rs.V2EDim
+    V2E = rs.V2E
 
-        def reduction(edge_f: Field[[self.Edge], "float64"]):
-            return nbh_sum(edge_f(V2E), axis=V2EDim)
+    def reduction(edge_f: Field[[rs.Edge], "float64"]):
+        return nbh_sum(edge_f(V2E), axis=V2EDim)
 
-        program = program_from_function(
-            reduction, out_names=["out"], dim=self.Vertex, size=self.size
-        )
-        debug_itir(program)
-        roundtrip.executor(
-            program,
-            self.inp,
-            self.out,
-            offset_provider={
-                "V2E": NeighborTableOffsetProvider(self.v2e_arr, self.Vertex, self.Edge, 4)
-            },
-        )
+    program = program_from_function(reduction, out_names=["out"], dim=rs.Vertex, size=rs.size)
+    roundtrip.executor(
+        program,
+        rs.inp,
+        rs.out,
+        offset_provider=rs.offset_provider,
+    )
 
-        ref = np.asarray(list(sum(row) for row in self.v2e_arr))
-        assert np.allclose(ref, self.out)
+    ref = np.sum(rs.v2e_table, axis=1)
+    assert np.allclose(ref, rs.out)
 
-    #  @pytest.mark.skip(reason="Not yet implemented")
-    def test_reduction_expression(self):
-        """Test reduction with an expression directly inside the call."""
-        V2EDim = self.V2EDim
-        V2E = self.V2E
 
-        def reduce_expr(edge_f: Field[[self.Edge], "float64"]):
-            tmp_nbh_tup = edge_f(V2E), edge_f(V2E)
-            tmp_nbh = tmp_nbh_tup[0]
-            return nbh_sum(edge_f(V2E) + tmp_nbh, axis=V2EDim)
+def test_reduction_expression(reduction_setup):
+    """Test reduction with an expression directly inside the call."""
+    rs = reduction_setup
+    V2EDim = rs.V2EDim
+    V2E = rs.V2E
 
-        program = program_from_function(
-            reduce_expr, out_names=["out"], dim=self.Vertex, size=self.size
-        )
-        debug_itir(program)
-        roundtrip.executor(
-            program,
-            self.inp,
-            self.out,
-            offset_provider={
-                "V2E": NeighborTableOffsetProvider(self.v2e_arr, self.Vertex, self.Edge, 4)
-            },
-        )
+    def reduce_expr(edge_f: Field[[rs.Edge], "float64"]):
+        tmp_nbh_tup = edge_f(V2E), edge_f(V2E)
+        tmp_nbh = tmp_nbh_tup[0]
+        return nbh_sum(-edge_f(V2E) * tmp_nbh, axis=V2EDim)
 
-        ref = np.asarray(list(sum(row) for row in self.v2e_arr)) * 2
-        assert np.allclose(ref, self.out)
+    program = program_from_function(reduce_expr, out_names=["out"], dim=rs.Vertex, size=rs.size)
+    roundtrip.executor(
+        program,
+        rs.inp,
+        rs.out,
+        offset_provider=rs.offset_provider,
+    )
+
+    ref = np.sum(-(rs.v2e_table ** 2), axis=1)
+    assert np.allclose(ref, rs.out.array())
