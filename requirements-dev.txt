@@ -27,4 +27,3 @@ sphinx>=3.1
 sphinx_rtd_theme>=0.4
 tox>=3.14
 devtools>=0.6
--r requirements-dev-testpypi.txt
