@@ -42,6 +42,7 @@ class GenericAccess(Generic[OffsetT]):
     field: str
     offset: OffsetT
     is_write: bool
+    horizontal_mask: Optional[oir.HorizontalMask] = None
 
     @property
     def is_read(self) -> bool:
@@ -68,6 +69,7 @@ class AccessCollector(NodeVisitor):
         *,
         accesses: List[GeneralAccess],
         is_write: bool,
+        horizontal_mask: Optional[oir.HorizontalMask] = None,
         **kwargs: Any,
     ) -> None:
         self.generic_visit(node, accesses=accesses, is_write=is_write, **kwargs)
@@ -77,6 +79,7 @@ class AccessCollector(NodeVisitor):
                 field=node.name,
                 offset=(offsets["i"], offsets["j"], offsets["k"]),
                 is_write=is_write,
+                horizontal_mask=horizontal_mask,
             )
         )
 
@@ -90,7 +93,10 @@ class AccessCollector(NodeVisitor):
 
     def visit_MaskStmt(self, node: oir.MaskStmt, **kwargs: Any) -> None:
         self.visit(node.mask, is_write=False, **kwargs)
-        self.visit(node.body, **kwargs)
+        mask_kwargs = (
+            {"horizontal_mask": node.mask} if isinstance(node.mask, oir.HorizontalMask) else {}
+        )
+        self.visit(node.body, **kwargs, **mask_kwargs)
 
     def visit_While(self, node: oir.While, **kwargs: Any) -> None:
         self.visit(node.cond, is_write=False, **kwargs)
