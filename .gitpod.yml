@@ -2,6 +2,7 @@ image:
   file: .gitpod.Dockerfile
 tasks:
 - before: |
+    mkdir -p ~/.cache
     mkdir -p /workspace/.caches/pre-commit
     ln -s /workspace/.caches/pre-commit  ~/.cache/pre-commit  
   init: |
