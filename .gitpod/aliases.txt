@@ -1,0 +1,1 @@
+alias pre-commit="PIP_USER=no pre-commit"
