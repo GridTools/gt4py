@@ -26,6 +26,11 @@ def deref(it):
     return it.deref()
 
 
+@builtins.can_deref.register(EMBEDDED)
+def can_deref(it):
+    return not it.is_none()  # TODO refactor is_none to can_deref in iterator
+
+
 @builtins.if_.register(EMBEDDED)
 def if_(cond, t, f):
     return t if cond else f
@@ -528,7 +533,8 @@ def shifted_scan_arg(k_pos):
 
 
 def fendef_embedded(fun, *args, **kwargs):  # noqa: 536
-    assert "offset_provider" in kwargs
+    if not "offset_provider" in kwargs:
+        raise RuntimeError("offset_provider not provided")
 
     @iterator.runtime.closure.register(EMBEDDED)
     def closure(domain, sten, outs, ins):  # domain is Dict[axis, range]

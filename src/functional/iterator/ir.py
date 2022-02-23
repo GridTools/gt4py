@@ -97,11 +97,12 @@ class Program(Node, SymbolTableTrait):
             "domain",
             "named_range",
             "lift",
-            "is_none",
+            "is_none",  # TODO remove?
             "make_tuple",
             "tuple_get",
             "reduce",
             "deref",
+            "can_deref",
             "shift",
             "scan",
             "plus",

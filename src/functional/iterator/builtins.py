@@ -3,7 +3,7 @@ from functional.iterator.dispatcher import Dispatcher
 
 __all__ = [
     "deref",
-    # "can_deref",  # TODO
+    "can_deref",
     "shift",
     "lift",
     "reduce",
@@ -22,7 +22,7 @@ __all__ = [
     "or_",
     #
     "scan",
-    "is_none",
+    "is_none",  # TODO remove?
     "domain",
     "named_range",
 ]
@@ -37,6 +37,11 @@ class BackendNotSelectedError(RuntimeError):
 
 @builtin_dispatch
 def deref(*args):
+    raise BackendNotSelectedError()
+
+
+@builtin_dispatch
+def can_deref(*args):
     raise BackendNotSelectedError()
 
 
