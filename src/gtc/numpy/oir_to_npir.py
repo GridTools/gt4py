@@ -54,7 +54,7 @@ class OirToNpir(NodeTranslator):
     def visit_Temporary(
         self, node: oir.Temporary, *, field_extents: Dict[str, Extent], **kwargs: Any
     ) -> npir.TemporaryDecl:
-        temp_extent = field_extents[node.name]
+        temp_extent = field_extents[node.name] | Extent.zeros(ndims=2)
         offset = [-ext[0] for ext in temp_extent]
         assert all(off >= 0 for off in offset)
         padding = [ext[1] - ext[0] for ext in temp_extent]
