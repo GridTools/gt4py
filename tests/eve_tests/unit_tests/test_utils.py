@@ -273,7 +273,7 @@ class TestUIDGenerator:
         UIDs.reset_sequence(counter, warn_unsafe=False)
 
         uids = UIDGenerator(warn_unsafe=True).reset_sequence(10)
-        assert uids.warn_unsafe == True
+        assert uids.warn_unsafe is True
         counter = int(uids.sequential_id())
         assert counter == 10
 
