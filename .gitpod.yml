@@ -4,3 +4,6 @@ tasks:
   - init: |
       pip install -e .
       pip install -r requirements-dev.txt
+      PYENV_PYTHON_VERSION=$(python --version | cut -d ' ' -f 2)
+      cp ~/.pyenv/versions/${PYENV_PYTHON_VERSION}/lib/python${PYENV_PYTHON_VERSION:0:3}/site-packages/easy-install.pth /workspace/.pip-modules/lib/python${PYENV_PYTHON_VERSION:0:3}/site-packages/
+      cp ~/.pyenv/versions/${PYENV_PYTHON_VERSION}/lib/python${PYENV_PYTHON_VERSION:0:3}/site-packages/*.egg-link /workspace/.pip-modules/lib/python${PYENV_PYTHON_VERSION:0:3}/site-packages/
