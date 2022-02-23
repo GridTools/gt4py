@@ -1,4 +1,4 @@
-image: gitpod/workspace-python
+image: .gitpod.Dockerfile
 tasks:
   - init: |
       pip install -e .
