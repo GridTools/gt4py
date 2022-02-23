@@ -241,7 +241,7 @@ class TestUIDGenerator:
         assert len(UIDs.sequential_id(width=10)) == 10
 
     def test_sequential_id(self):
-        from eve.utils import UIDs
+        from eve.utils import UIDGenerator, UIDs
 
         i = UIDs.sequential_id()
         assert UIDs.sequential_id() != i
@@ -252,15 +252,17 @@ class TestUIDGenerator:
             UIDs.sequential_id(width=-1)
 
         uids = UIDGenerator(prefix="abcde")
+        assert uids.prefix == "abcde"
         assert uids.sequential_id().startswith("abcde")
         assert uids.sequential_id(prefix="xyz").startswith("xyz")
 
         uids = UIDGenerator(width=12)
+        assert uids.width == 12
         assert len(uids.sequential_id()) == 12
         assert len(UIDs.sequential_id(width=10)) == 10
 
     def test_reset_sequence(self):
-        from eve.utils import UIDs
+        from eve.utils import UIDGenerator, UIDs
 
         i = UIDs.sequential_id()
         counter = int(i)
@@ -270,14 +272,19 @@ class TestUIDGenerator:
             UIDs.reset_sequence(counter, warn_unsafe=True)
         UIDs.reset_sequence(counter, warn_unsafe=False)
 
-        uids = UIDGenerator(warn_unsafe=True)
-        _ = uids.random_id()
-        _ = uids.random_id()
-        _ = uids.random_id()
-        _ = uids.random_id()
+        uids = UIDGenerator(warn_unsafe=True).reset_sequence(10)
+        assert uids.warn_unsafe == True
+        counter = int(uids.sequential_id())
+        assert counter == 10
+
         with pytest.warns(RuntimeWarning, match="Unsafe reset"):
-            uids.reset_sequence(3)
-        UIDs.reset_sequence(counter, warn_unsafe=False)
+            uids.reset_sequence(counter)
+        uids.reset_sequence(counter + 10)
+
+        uids.reset_sequence(1, warn_unsafe=False)
+
+        with pytest.raises(ValueError, match="must be a positive number"):
+            uids.reset_sequence(-1)
 
 
 # -- Iterators --

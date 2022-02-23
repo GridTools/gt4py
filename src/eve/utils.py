@@ -484,6 +484,7 @@ class UIDGenerator:
         width = width or self.width or 8
         if width <= 4:
             raise ValueError(f"Width must be a positive number > 4 ({width} provided).")
+        prefix = prefix or self.prefix
         u = uuid.uuid4()
         s = str(u).replace("-", "")[:width]
         return f"{prefix}_{s}" if prefix else f"{s}"
@@ -493,6 +494,7 @@ class UIDGenerator:
         width = width or self.width
         if width is not None and width < 1:
             raise ValueError(f"Width must be a positive number ({width} provided).")
+        prefix = prefix or self.prefix
         count = next(self._counter)
         s = f"{count:0{width}}" if width else f"{count}"
         return f"{prefix}_{s}" if prefix else f"{s}"
@@ -500,11 +502,18 @@ class UIDGenerator:
     def reset_sequence(self, start: int = 1, *, warn_unsafe: Optional[bool] = None) -> UIDGenerator:
         """Reset generator counter.
 
+        It returns the same instance to allow resetting at initialization:
+
+        Example:
+            >>> generator = UIDGenerator().reset_sequence(3)
+
         Notes:
             If the new start value is lower than the last generated UID, new
             IDs are not longer guaranteed to be unique.
 
         """
+        if start < 0:
+            raise ValueError(f"Starting value must be a positive number ({start} provided).")
         warn_unsafe = warn_unsafe or self.warn_unsafe
         if warn_unsafe and start < next(self._counter):
             warnings.warn("Unsafe reset of UIDGenerator ({self})", RuntimeWarning)
