@@ -1,0 +1,34 @@
+image:
+  file: .gitpod.Dockerfile
+tasks:
+- before: |
+    mkdir -p ~/.cache
+    mkdir -p /workspace/.caches/pre-commit
+    ln -s /workspace/.caches/pre-commit  ~/.cache/pre-commit
+  init: |
+    pip install -e .
+    pip install -r requirements-dev.txt
+    pip install -i https://test.pypi.org/simple/ atlas4py
+    PYENV_PYTHON_VERSION=$(python --version | cut -d ' ' -f 2)
+    cp ~/.pyenv/versions/${PYENV_PYTHON_VERSION}/lib/python${PYENV_PYTHON_VERSION:0:3}/site-packages/easy-install.pth /workspace/.pip-modules/lib/python${PYENV_PYTHON_VERSION:0:3}/site-packages/
+    cp ~/.pyenv/versions/${PYENV_PYTHON_VERSION}/lib/python${PYENV_PYTHON_VERSION:0:3}/site-packages/*.egg-link /workspace/.pip-modules/lib/python${PYENV_PYTHON_VERSION:0:3}/site-packages/
+    pre-commit install --install-hooks
+
+github:
+  prebuilds:
+                # enable for the master/default branch (defaults to true)
+    master: true
+                # enable for all branches in this repo (defaults to false)
+    branches: false
+                        # enable for pull requests coming from this repo (defaults to true)
+    pullRequests: true
+                        # enable for pull requests coming from forks (defaults to false)
+    pullRequestsFromForks: true
+                        # add a check to pull requests (defaults to true)
+    addCheck: true
+                        # add a "Review in Gitpod" button as a comment to pull requests (defaults to false)
+    addComment: false
+                        # add a "Review in Gitpod" button to the pull request's description (defaults to false)
+    addBadge: false
+                        # add a label once the prebuild is ready to pull requests (defaults to false)
+    addLabel: false
