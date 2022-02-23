@@ -1,3 +1,5 @@
+--extra-index-url https://testpypi.python.org/simple
+atlas4py>=0.26
 check-manifest>=0.40
 coverage>=5.0
 darglint>=1.6
