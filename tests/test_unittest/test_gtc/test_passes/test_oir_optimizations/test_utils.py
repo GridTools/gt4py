@@ -14,8 +14,9 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+from gt4py.definitions import Extent
 from gtc.common import DataType
-from gtc.passes.oir_optimizations.utils import AccessCollector, GeneralAccess
+from gtc.passes.oir_optimizations.utils import AccessCollector, GeneralAccess, compute_extents
 
 from ...oir_utils import (
     AssignStmtFactory,
@@ -81,3 +82,26 @@ def test_access_collector():
     assert result.write_offsets() == write_offsets
     assert result.offsets() == offsets
     assert result.ordered_accesses() == ordered_accesses
+
+
+def test_stencil_extents_simple():
+    testee = StencilFactory(
+        vertical_loops__0__sections__0__horizontal_executions=[
+            HorizontalExecutionFactory(
+                body=[AssignStmtFactory(left__name="tmp", right__name="input", right__offset__i=1)]
+            ),
+            HorizontalExecutionFactory(
+                body=[AssignStmtFactory(left__name="output", right__name="tmp", right__offset__i=1)]
+            ),
+        ],
+        declarations__0__name="tmp",
+    )
+
+    field_extents, block_extents = compute_extents(testee)
+
+    assert field_extents["input"] == Extent((1, 2), (0, 0))
+    assert field_extents["output"] == Extent((0, 0), (0, 0))
+
+    hexecs = testee.vertical_loops[0].sections[0].horizontal_executions
+    assert block_extents[id(hexecs[0])] == Extent((0, 1), (0, 0))
+    assert block_extents[id(hexecs[1])] == Extent((0, 0), (0, 0))
