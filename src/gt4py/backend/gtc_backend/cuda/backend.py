@@ -19,13 +19,6 @@ from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple, Type
 from eve import codegen
 from gt4py import gt_src_manager
 from gt4py.backend.base import CLIBackendMixin, register
-from gt4py.backend.gt_backends import (
-    BaseGTBackend,
-    GTCUDAPyModuleGenerator,
-    cuda_is_compatible_layout,
-    cuda_is_compatible_type,
-    make_cuda_layout_map,
-)
 from gt4py.backend.gtc_backend.common import bindings_main_template, pybuffer_to_sid
 from gtc import gtir
 from gtc.common import DataType
@@ -35,6 +28,14 @@ from gtc.gtir_to_oir import GTIRToOIR
 from gtc.passes.gtir_pipeline import GtirPipeline
 from gtc.passes.oir_optimizations.pruning import NoFieldAccessPruning
 from gtc.passes.oir_pipeline import DefaultPipeline
+
+from ..base import (
+    BaseGTBackend,
+    GTCUDAPyModuleGenerator,
+    cuda_is_compatible_layout,
+    cuda_is_compatible_type,
+    make_cuda_layout_map,
+)
 
 
 if TYPE_CHECKING:
