@@ -1035,5 +1035,8 @@ def test_dim_red_slice_copy(backend):
 def test_non_existing_backend():
     with pytest.raises(RuntimeError, match="backend"):
         gt_store.empty(
-            "non_existing_backend", default_origin=[0, 0, 0], shape=[10, 10, 10], dtype=(np.float64, (3,))
+            "non_existing_backend",
+            default_origin=[0, 0, 0],
+            shape=[10, 10, 10],
+            dtype=(np.float64, (3,)),
         )
