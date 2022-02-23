@@ -1,0 +1,5 @@
+image: gitpod/workspace-python
+tasks:
+  - init: |
+      pip install -e .
+      pip install -r requirements-dev.txt
