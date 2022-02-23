@@ -470,14 +470,19 @@ class FrozenNamespace(types.SimpleNamespace, Generic[T]):
 class UIDGenerator:
     """Simple unique id generator using different methods."""
 
+    prefix: Optional[str] = dataclasses.field(default=None, kw_only=True)
+    width: Optional[int] = dataclasses.field(default=None, kw_only=True)
+    warn_unsafe: Optional[bool] = dataclasses.field(default=None, kw_only=True)
+
     #: Constantly increasing counter for generation of sequential unique ids
     _counter: Iterator[int] = dataclasses.field(
-        default_factory=functools.partial(itertools.count, 1)
+        default_factory=functools.partial(itertools.count, 1), init=False
     )
 
-    def random_id(self, *, prefix: Optional[str] = None, width: int = 8) -> str:
+    def random_id(self, *, prefix: Optional[str] = None, width: Optional[int] = None) -> str:
         """Generate a random globally unique id."""
-        if width is not None and width <= 4:
+        width = width or self.width or 8
+        if width <= 4:
             raise ValueError(f"Width must be a positive number > 4 ({width} provided).")
         u = uuid.uuid4()
         s = str(u).replace("-", "")[:width]
@@ -485,13 +490,14 @@ class UIDGenerator:
 
     def sequential_id(self, *, prefix: Optional[str] = None, width: Optional[int] = None) -> str:
         """Generate a sequential unique id (for the current session)."""
+        width = width or self.width
         if width is not None and width < 1:
             raise ValueError(f"Width must be a positive number ({width} provided).")
         count = next(self._counter)
         s = f"{count:0{width}}" if width else f"{count}"
         return f"{prefix}_{s}" if prefix else f"{s}"
 
-    def reset_sequence(self, start: int = 1, *, warn_unsafe: bool = False) -> None:
+    def reset_sequence(self, start: int = 1, *, warn_unsafe: Optional[bool] = None) -> UIDGenerator:
         """Reset generator counter.
 
         Notes:
@@ -499,9 +505,12 @@ class UIDGenerator:
             IDs are not longer guaranteed to be unique.
 
         """
+        warn_unsafe = warn_unsafe or self.warn_unsafe
         if warn_unsafe and start < next(self._counter):
             warnings.warn("Unsafe reset of UIDGenerator ({self})", RuntimeWarning)
         self._counter = itertools.count(start)
+
+        return self
 
 
 UIDs = UIDGenerator()

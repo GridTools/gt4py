@@ -219,7 +219,7 @@ def test_case_style_converter(name_with_cases):
 # -- UIDGenerator --
 class TestUIDGenerator:
     def test_random_id(self):
-        from eve.utils import UIDs
+        from eve.utils import UIDGenerator, UIDs
 
         a = UIDs.random_id()
         b = UIDs.random_id()
@@ -232,6 +232,14 @@ class TestUIDGenerator:
         with pytest.raises(ValueError, match="Width"):
             UIDs.random_id(width=4)
 
+        uids = UIDGenerator(prefix="abcde")
+        assert uids.sequential_id().startswith("abcde")
+        assert uids.sequential_id(prefix="xyz").startswith("xyz")
+
+        uids = UIDGenerator(width=12)
+        assert len(uids.sequential_id()) == 12
+        assert len(UIDs.sequential_id(width=10)) == 10
+
     def test_sequential_id(self):
         from eve.utils import UIDs
 
@@ -243,6 +251,14 @@ class TestUIDGenerator:
         with pytest.raises(ValueError, match="Width"):
             UIDs.sequential_id(width=-1)
 
+        uids = UIDGenerator(prefix="abcde")
+        assert uids.sequential_id().startswith("abcde")
+        assert uids.sequential_id(prefix="xyz").startswith("xyz")
+
+        uids = UIDGenerator(width=12)
+        assert len(uids.sequential_id()) == 12
+        assert len(UIDs.sequential_id(width=10)) == 10
+
     def test_reset_sequence(self):
         from eve.utils import UIDs
 
@@ -252,6 +268,15 @@ class TestUIDGenerator:
         assert int(UIDs.sequential_id()) == counter + 1
         with pytest.warns(RuntimeWarning, match="Unsafe reset"):
             UIDs.reset_sequence(counter, warn_unsafe=True)
+        UIDs.reset_sequence(counter, warn_unsafe=False)
+
+        uids = UIDGenerator(warn_unsafe=True)
+        _ = uids.random_id()
+        _ = uids.random_id()
+        _ = uids.random_id()
+        _ = uids.random_id()
+        with pytest.warns(RuntimeWarning, match="Unsafe reset"):
+            uids.reset_sequence(3)
         UIDs.reset_sequence(counter, warn_unsafe=False)
 
 
