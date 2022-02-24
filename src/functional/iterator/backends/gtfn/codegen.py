@@ -18,7 +18,7 @@ class gtfn_codegen(codegen.TemplatedGenerator):
     AxisLiteral = as_fmt("{value}")
     UnaryExpr = as_fmt("{op}({expr})")
     BinaryExpr = as_fmt("({lhs}{op}{rhs})")
-    TernaryExpr = as_fmt("({cond})?({true_expr}):({false_expr})")
+    TernaryExpr = as_fmt("({cond}?{true_expr}:{false_expr})")
 
     def visit_OffsetLiteral(self, node: OffsetLiteral, **kwargs):
         return node.value if isinstance(node.value, str) else f"{node.value}_c"
