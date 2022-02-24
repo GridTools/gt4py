@@ -16,11 +16,7 @@ GT_REGRESSION_TEST(fn_cartesian_copy, test_environment<>, fn_backend_t) {
   auto out = TypeParam::make_storage();
 
   auto comp = [&, in = TypeParam::make_const_storage(in)] {
-    generated::copy_fencil(
-        at_key<fn::cartesian::dim::i>(TypeParam::fn_cartesian_sizes()),
-        at_key<fn::cartesian::dim::j>(TypeParam::fn_cartesian_sizes()),
-        at_key<fn::cartesian::dim::k>(TypeParam::fn_cartesian_sizes()), in,
-        out);
+    generated::copy_fencil(TypeParam::fn_cartesian_sizes(), in, out);
   };
   comp();
 
