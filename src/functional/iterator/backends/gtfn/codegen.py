@@ -6,7 +6,7 @@ from eve.codegen import MakoTemplate as as_mako
 from eve.iterators import iter_tree
 from functional.iterator.backends import backend
 from functional.iterator.backends.gtfn import gtfn_ir
-from functional.iterator.backends.gtfn.gtfn_ir import FunCall, OffsetLiteral, Program, SymRef
+from functional.iterator.backends.gtfn.gtfn_ir import OffsetLiteral
 from functional.iterator.transforms import apply_common_transforms
 
 
@@ -18,6 +18,7 @@ class gtfn_codegen(codegen.TemplatedGenerator):
     AxisLiteral = as_fmt("{value}")
     UnaryExpr = as_fmt("{op}({expr})")
     BinaryExpr = as_fmt("({lhs}{op}{rhs})")
+    TernaryExpr = as_fmt("({cond})?({true_expr}):({false_expr})")
 
     def visit_OffsetLiteral(self, node: OffsetLiteral, **kwargs):
         return node.value if isinstance(node.value, str) else f"{node.value}_c"
@@ -25,11 +26,12 @@ class gtfn_codegen(codegen.TemplatedGenerator):
     StringLiteral = as_fmt("{value}")
 
     FunCall = as_fmt("{fun}({','.join(args)})")
+    TemplatedFunCall = as_fmt("{fun}<{','.join(template_args)}>({','.join(args)})")
     Lambda = as_mako(
         "[=](${','.join('auto ' + p for p in params)}){return ${expr};}"
     )  # TODO capture
 
-    Backend = as_fmt("make_backend({backend_tag}, domain)")
+    Backend = as_fmt("make_backend({backend_tag}, {domain})")
 
     StencilExecution = as_mako(
         """
@@ -68,8 +70,8 @@ class gtfn_codegen(codegen.TemplatedGenerator):
     using namespace literals;
 
 
-    //{''.join('struct ' + o + '_t{};' for o in offsets)}
-    //{''.join('constexpr inline ' + o + '_t ' + o + '{};' for o in offsets)}
+    ${''.join('struct ' + o + '_t{};' for o in offsets)}
+    ${''.join('constexpr inline ' + o + '_t ' + o + '{};' for o in offsets)}
     using namespace cartesian;
     constexpr inline dim::i i = {};
     constexpr inline dim::j j = {};
@@ -83,14 +85,7 @@ class gtfn_codegen(codegen.TemplatedGenerator):
 
     @classmethod
     def apply(cls, root: gtfn_ir.Program, **kwargs: Any) -> str:
-        transformed = root
-        # transformed = apply_common_transforms(
-        #     transformed,
-        #     use_tmps=kwargs.get("use_tmps", False),
-        #     offset_provider=kwargs.get("offset_provider", None),
-        #     grid_type=kwargs.get("grid_type", None),
-        # )
-        generated_code = super().apply(transformed, **kwargs)
+        generated_code = super().apply(root, **kwargs)
         formatted_code = codegen.format_source("cpp", generated_code, style="LLVM")
         return formatted_code
 

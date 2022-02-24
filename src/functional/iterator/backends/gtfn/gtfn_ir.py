@@ -25,6 +25,12 @@ class BinaryExpr(Expr):
     rhs: Expr
 
 
+class TernaryExpr(Expr):
+    cond: Expr
+    true_expr: Expr
+    false_expr: Expr
+
+
 class BoolLiteral(Expr):
     value: bool
 
@@ -56,6 +62,12 @@ class Lambda(Expr, SymbolTableTrait):
 
 class FunCall(Expr):
     fun: Expr  # VType[Callable]
+    args: List[Expr]
+
+
+class TemplatedFunCall(Expr):
+    fun: Expr  # VType[Callable]
+    template_args: List[Expr]
     args: List[Expr]
 
 
@@ -92,7 +104,18 @@ class FencilDefinition(Node, SymbolTableTrait):
 class Program(Node, SymbolTableTrait):
     function_definitions: List[FunctionDefinition]
     fencil_definitions: List[FencilDefinition]
+    offsets: List[str]
 
-    builtin_functions = list(Sym(id=name) for name in ["deref", "shift"])
+    builtin_functions = list(
+        Sym(id=name)
+        for name in [
+            "deref",
+            "shift",
+            "tuple",
+            "get",
+            "can_deref",
+            "if_",  # TODO remove
+        ]
+    )
 
     _validate_symbol_refs = validate_symbol_refs()

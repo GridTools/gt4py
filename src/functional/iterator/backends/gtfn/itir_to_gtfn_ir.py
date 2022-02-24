@@ -1,28 +1,41 @@
 from devtools import debug
 
-from eve import NodeTranslator
+from eve import NodeTranslator, iter_tree
 from eve.type_definitions import SymbolName
 from functional.iterator import ir as itir
 from functional.iterator.backends.gtfn.gtfn_ir import (
     Backend,
     BinaryExpr,
+    BoolLiteral,
     Expr,
     FencilDefinition,
+    FloatLiteral,
     FunCall,
     FunctionDefinition,
+    IntLiteral,
     Lambda,
     OffsetLiteral,
     Program,
     StencilExecution,
+    StringLiteral,
     Sym,
     SymRef,
+    TemplatedFunCall,
+    TernaryExpr,
     UnaryExpr,
 )
 
 
 class GTFN_lowering(NodeTranslator):
-    _binary_op_map = {"minus": "-", "plus": "+", "multiplies": "*", "divides": "/"}
-    _unary_op_map = {"not": "!"}
+    _binary_op_map = {
+        "minus": "-",
+        "plus": "+",
+        "multiplies": "*",
+        "divides": "/",
+        "and_": "&&",
+        "or_": "||",
+    }
+    _unary_op_map = {"not_": "!"}
 
     def visit_Sym(self, node: itir.Sym, **kwargs) -> Sym:
         return Sym(id=node.id)
@@ -33,6 +46,18 @@ class GTFN_lowering(NodeTranslator):
     def visit_Lambda(self, node: itir.Lambda, **kwargs) -> Lambda:
         debug(node.expr)
         return Lambda(params=self.visit(node.params), expr=self.visit(node.expr))
+
+    def visit_IntLiteral(self, node: itir.IntLiteral, **kwargs):
+        return IntLiteral(value=node.value)
+
+    def visit_StringLiteral(self, node: itir.StringLiteral, **kwargs):
+        return StringLiteral(value=node.value)
+
+    def visit_BoolLiteral(self, node: itir.BoolLiteral, **kwargs):
+        return BoolLiteral(value=node.value)
+
+    def visit_FloatLiteral(self, node: itir.FloatLiteral, **kwargs):
+        return FloatLiteral(value=node.value)
 
     def visit_OffsetLiteral(self, node: itir.OffsetLiteral, **kwargs) -> OffsetLiteral:
         return OffsetLiteral(value=node.value)
@@ -48,6 +73,21 @@ class GTFN_lowering(NodeTranslator):
                     op=self._binary_op_map[node.fun.id],
                     lhs=self.visit(node.args[0]),
                     rhs=self.visit(node.args[1]),
+                )
+            elif node.fun.id == "if_":
+                assert len(node.args) == 3
+                return TernaryExpr(
+                    cond=self.visit(node.args[0]),
+                    true_expr=self.visit(node.args[1]),
+                    false_expr=self.visit(node.args[2]),
+                )
+            elif node.fun.id == "make_tuple":
+                return FunCall(fun=SymRef(id="tuple"), args=self.visit(node.args))
+            elif node.fun.id == "tuple_get":
+                return TemplatedFunCall(
+                    fun=SymRef(id="get"),
+                    template_args=[self.visit(node.args[0])],
+                    args=self.visit(node.args[1:]),
                 )
         elif (
             isinstance(node.fun, itir.FunCall)
@@ -84,8 +124,19 @@ class GTFN_lowering(NodeTranslator):
             executions=self.visit(node.closures),
         )  # TODO
 
+    @staticmethod
+    def _collect_offsets(node: itir.Program) -> list[str]:
+        return (
+            iter_tree(node)
+            .if_isinstance(itir.OffsetLiteral)
+            .getattr("value")
+            .if_isinstance(str)
+            .to_set()
+        )
+
     def visit_Program(self, node: itir.Program, **kwargs) -> Program:
         return Program(
             function_definitions=self.visit(node.function_definitions),
             fencil_definitions=self.visit(node.fencil_definitions),
+            offsets=self._collect_offsets(node),
         )
