@@ -206,7 +206,41 @@ def test_copy_restrict_parsing(copy_restrict_program):
     pattern_node.matches(past_node, raise_=True)
 
 
-def test_copy_lowering(copy_restrict_program):
+def test_copy_lowering(copy_program):
+    past_node = ProgramParser.apply_to_function(copy_program)
+    itir_node = ProgramLowering.apply(past_node)
+    closure_pattern = itir_.StencilClosure(
+        domain=itir_.FunCall(
+            fun=itir_.SymRef(id="domain"),
+            args=[
+                itir_.FunCall(
+                    fun=itir_.SymRef(id="named_range"),
+                    args=[
+                        itir_.AxisLiteral(value="IDim"),
+                        itir_.IntLiteral(value=0),
+                        itir_.SymRef(id="__out_field_size_0"),
+                    ],
+                )
+            ],
+        ),
+        stencil = itir_.SymRef(id="identity"),
+        inputs = [itir_.SymRef(id="in_field")],
+        outputs = [itir_.SymRef(id="out_field")],
+    )
+    fencil_pattern = itir_.FencilDefinition(
+        id="copy_program",
+        params=[
+            itir_.Sym(id="in_field"),
+            itir_.Sym(id="out_field"),
+            itir_.Sym(id="__in_field_size_0"),
+            itir_.Sym(id="__out_field_size_0"),
+        ],
+        closures=[closure_pattern],
+    )
+
+    fencil_pattern.matches(itir_node, raise_=True)
+
+def test_copy_restrict_lowering(copy_restrict_program):
     past_node = ProgramParser.apply_to_function(copy_restrict_program)
     itir_node = ProgramLowering.apply(past_node)
     closure_pattern = itir_.StencilClosure(
