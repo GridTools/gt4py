@@ -22,9 +22,11 @@ class TestNode(Node):
     foo: str
     bar: str
 
+
 class NestedTestNode(Node):
     foo: str
     bar: TestNode
+
 
 test_data: list[tuple[str, Any, Any, list[tuple[str, str]]]] = [
     ("int_equal", 1, 1, []),

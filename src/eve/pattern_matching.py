@@ -20,8 +20,7 @@ from typing import Any, Iterator
 
 @dataclass(frozen=True)
 class ObjectPattern:
-    """
-    Class to pattern match general objects.
+    """Class to pattern match general objects.
 
     A pattern matches an object if it is an instance of the specified
     class and all attributes of the pattern (recursively) match the
@@ -60,7 +59,13 @@ class ObjectPattern:
 
 
 @dataclass(frozen=True)
-class ObjectPatternConstructor:
+class _ObjectPatternConstructor:
+    """Helper class to construct an ObjectPattern.
+
+    This is just an explicit way of doing partial function application
+    and was choosen to improve debuggability.
+    """
+
     cls: type
 
     def __call__(self, **kwargs: Any) -> ObjectPattern:
@@ -147,8 +152,8 @@ class ModuleWrapper:
 
     module: ModuleType
 
-    def __getattr__(self, item: str) -> ObjectPatternConstructor:
+    def __getattr__(self, item: str) -> _ObjectPatternConstructor:
         val = getattr(self.module, item)
         if not inspect.isclass(val):
             raise ValueError("Only classes allowed.")
-        return ObjectPatternConstructor(val)
+        return _ObjectPatternConstructor(val)
