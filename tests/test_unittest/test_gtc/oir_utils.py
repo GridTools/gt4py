@@ -174,7 +174,7 @@ class StencilFactory(factory.Factory):
 
     name = identifier(oir.Stencil)
     vertical_loops = factory.List([factory.SubFactory(VerticalLoopFactory)])
-    declarations = factory.List([factory.SubFactory(TemporaryFactory)])
+    declarations: List[oir.Temporary] = []
     params = undefined_symbol_list(
         lambda name: FieldDeclFactory(name=name), "vertical_loops", "declarations"
     )
