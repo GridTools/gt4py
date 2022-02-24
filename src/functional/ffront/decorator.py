@@ -18,7 +18,7 @@ import types
 import typing
 from typing import Any, Optional, Protocol
 
-from eve.utils import UIDGenerator
+from eve.utils import UIDs
 from functional.common import GTTypeError
 from functional.ffront import common_types as ct
 from functional.ffront import field_operator_ast as foast
@@ -233,7 +233,7 @@ class FieldOperator(GTCallable):
 
         params_decl = [
             past.Symbol(
-                id=UIDGenerator.sequential_id(prefix="__sym"),
+                id=UIDs.sequential_id(prefix="__sym"),
                 type=arg_type,
                 namespace=ct.Namespace.LOCAL,
                 location=loc,
