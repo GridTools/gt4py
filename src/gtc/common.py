@@ -763,12 +763,12 @@ class AxisBound(Node):
         return cls(level=LevelMarker.END, offset=offset)
 
     @classmethod
-    def start(cls) -> "AxisBound":
-        return cls.from_start(0)
+    def start(cls, offset: int = 0) -> "AxisBound":
+        return cls.from_start(offset)
 
     @classmethod
-    def end(cls) -> "AxisBound":
-        return cls.from_end(0)
+    def end(cls, offset: int = 0) -> "AxisBound":
+        return cls.from_end(offset)
 
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, AxisBound):
@@ -810,8 +810,19 @@ class HorizontalInterval(Node):
     end: Optional[AxisBound]
 
     @classmethod
+    def compute_domain(cls, start_offset: int = 0, end_offset: int = 0) -> "HorizontalInterval":
+        return cls(start=AxisBound.start(start_offset), end=AxisBound.end(end_offset))
+
+    @classmethod
     def full(cls) -> "HorizontalInterval":
-        return cls(start=AxisBound.start(), end=AxisBound.end())
+        return cls(start=None, end=None)
+
+    @classmethod
+    def single_index(cls, level: LevelMarker, offset: int) -> "HorizontalInterval":
+        return cls(
+            start=AxisBound(level=level, offset=offset),
+            end=AxisBound(level=level, offset=offset + 1),
+        )
 
     @root_validator
     def check_start_before_end(cls, values: RootValidatorValuesType) -> RootValidatorValuesType:

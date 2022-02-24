@@ -24,14 +24,12 @@ from eve.concepts import TreeNode
 from eve.traits import SymbolTableTrait
 from eve.utils import XIterable, xiter
 from gt4py.definitions import Extent
-from gtc import oir
+from gtc import common, oir
 
 
 OffsetT = TypeVar("OffsetT")
 
 GeneralOffsetTuple = Tuple[int, int, Optional[int]]
-HorizontalExtent = Tuple[Tuple[int, int], Tuple[int, int]]
-
 
 _digits_at_end_pattern = re.compile(r"[0-9]+$")
 _generated_name_pattern = re.compile(r".+_gen_[0-9]+")
@@ -47,6 +45,55 @@ class GenericAccess(Generic[OffsetT]):
     @property
     def is_read(self) -> bool:
         return not self.is_write
+
+    def to_extent(self, horizontal_extent: Extent) -> Optional[Extent]:
+        """
+        Convert the access to an extent provided a horizontal extent for the access.
+
+        This returns None if no overlap exists between the horizontal mask and interval.
+        """
+        offset_as_extent = Extent.from_offset(cast(Tuple[int, int, int], self.offset)[:2])
+        if self.horizontal_mask:
+            mask = self.horizontal_mask
+            diffs = [
+                self._overlap_along_axis(ext, interval)
+                for ext, interval in zip(horizontal_extent, (mask.i, mask.j))
+            ]
+            if not any(d is None for d in diffs):
+                dist_from_edge = Extent(diffs[0], diffs[1])
+                return ((horizontal_extent - dist_from_edge) + offset_as_extent) | Extent.zeros(
+                    ndims=2
+                )
+            else:
+                return None
+        else:
+            return horizontal_extent + offset_as_extent
+
+    @staticmethod
+    def _overlap_along_axis(
+        extent: Tuple[int, int], interval: common.HorizontalInterval
+    ) -> Optional[Tuple[int, int]]:
+        """Return a tuple of the distances to the edge of the compute domain, if overlapping."""
+        if interval.start is not None and interval.start.level == common.LevelMarker.START:
+            start_diff = extent[0] - interval.start.offset
+        else:
+            start_diff = None
+
+        if interval.end is not None and interval.end.level == common.LevelMarker.END:
+            end_diff = extent[1] - interval.end.offset
+        else:
+            end_diff = None
+
+        if start_diff is not None and start_diff > 0 and end_diff is None:
+            if interval.end.offset <= extent[0]:
+                return None
+        elif end_diff is not None and end_diff < 0 and start_diff is None:
+            if interval.start.offset > extent[1]:
+                return None
+
+        start_diff = min(start_diff, 0) if start_diff is not None else -10000
+        end_diff = max(end_diff, 0) if end_diff is not None else 10000
+        return (start_diff, end_diff)
 
 
 class CartesianAccess(GenericAccess[Tuple[int, int, int]]):
