@@ -163,10 +163,10 @@ def program(
     Generate an implementation of a program from a python function object.
 
     Example:
-    >>> @program  # doctest: +SKIP
+    >>> @program  # noqa: F821 # doctest: +SKIP
     ... def program(in_field: Field[..., float64], out_field: Field[..., float64]): # noqa: F821
     ...     field_op(in_field, out=out_field)
-    >>> program(in_field, out=out_field)  # doctest: +SKIP # noqa: F821
+    >>> program(in_field, out=out_field) # noqa: F821 # doctest: +SKIP
     """
     return Program.from_function(definition, externals, backend)
 
@@ -289,6 +289,6 @@ def field_operator(
     >>> @field_operator  # doctest: +SKIP
     ... def field_op(in_field: Field[..., float64]) -> Field[..., float64]: # noqa: F821
     ...     ...
-    >>> field_op(in_field, out=out_field)  # doctest: +SKIP # noqa: F821
+    >>> field_op(in_field, out=out_field)  # noqa: F821 # doctest: +SKIP
     """
     return FieldOperator.from_function(definition, externals, backend)
