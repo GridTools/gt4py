@@ -161,8 +161,10 @@ def test_stencil_extents_region(mask, offset, access_extent):
     testee = StencilFactory(
         vertical_loops__0__sections__0__horizontal_executions=[
             HorizontalExecutionFactory(
+                body=[AssignStmtFactory(left__name="tmp", right__name="input")]
+            ),
+            HorizontalExecutionFactory(
                 body=[
-                    AssignStmtFactory(left__name="tmp", right__name="input"),
                     MaskStmtFactory(
                         mask=mask,
                         body=[
@@ -182,11 +184,13 @@ def test_stencil_extents_region(mask, offset, access_extent):
 
     block_extents = compute_horizontal_block_extents(testee)
     hexecs = testee.vertical_loops[0].sections[0].horizontal_executions
-    accesses = AccessCollector.apply(hexecs[0].body[1])
-    input_access = next(iter(acc for acc in accesses.ordered_accesses() if acc.field == "input"))
+    mask_read_accesses = AccessCollector.apply(hexecs[1].body[0])
+    input_access = next(
+        iter(acc for acc in mask_read_accesses.ordered_accesses() if acc.field == "input")
+    )
 
     block_extent = ((0, 1), (0, 0))
-    assert block_extents[id(hexecs[0])] == block_extent
+    assert block_extents[id(hexecs[1])] == block_extent
     if access_extent is not None:
         assert input_access.to_extent(Extent(block_extent)) == access_extent
     else:

@@ -276,6 +276,17 @@ class StencilExtentComputer(NodeVisitor):
     def visit_HorizontalExecution(self, node: oir.HorizontalExecution, *, ctx: Context) -> None:
         results = AccessCollector.apply(node)
         horizontal_extent = self.zero_extent
+
+        for acc in results.ordered_accesses():
+            extent = acc.to_extent(horizontal_extent)
+            if extent is not None and acc.is_write:
+                horizontal_extent |= extent
+
+        # The reduce below has the effect that it computes the effective
+        # extent of the horizontal execution if it were to execute.
+        # In other words, this always generates a horizontal extent,
+        # even if the block does not execute any statements because
+        # they're masked.
         horizontal_extent = functools.reduce(
             lambda ext, name: ext | ctx.fields.get(name, self.zero_extent),
             results.write_fields(),
