@@ -16,7 +16,8 @@ import dataclasses
 import functools
 import inspect
 import types
-from typing import Any, Optional
+import typing
+from typing import Any, Optional, Protocol
 
 from eve.utils import UIDGenerator
 from functional.common import GTTypeError
@@ -37,8 +38,45 @@ from functional.iterator.backend_executor import execute_program
 DEFAULT_BACKEND = "roundtrip"
 
 
+@typing.runtime_checkable
+class GTCallable(Protocol):
+    """Protocol (abstract base class) defining the interface for callables.
+
+    Direct subclasses of this base class only need to implement the
+    abstract methods to be callable from inside a program or from other
+    callables.
+    """
+    def __gt_type__(self) -> ct.FunctionType:
+        """Returns symbol type, i.e. signature and return type.
+
+        The type is used internally to populate the closure vars of the
+        various dialects root nodes (i.e. FOAST Field Operator, PAST Program)"""
+        ...
+
+    def __gt_itir__(self) -> itir.FunctionDefinition:
+        """Return iterator IR function definition representing the callable.
+
+        Used internally by the Program decorator to populate the function
+        definitions of the iterator IR."""
+        ...
+
+
+# TODO(tehrengruber): make program a GTCallable and implement calling programs from programs
 @dataclasses.dataclass(frozen=True)
 class Program:
+    """Construct a program object from a PAST node.
+
+    A call to the resulting object executes the program as expressed
+    by the PAST node.
+
+    Attributes:
+        past_node: The node representing the program.
+        closure_refs: Mapping from names referenced in the program to the
+            actual values.
+        externals: Dictionary of externals.
+        backend: The backend to be used for code generation.
+        definition: The python function object corresponding to the PAST node.
+    """
     past_node: past.Program
     closure_refs: ClosureRefs
     externals: dict[str, Any]
@@ -79,10 +117,10 @@ class Program:
         vars_ = collections.ChainMap(self.closure_refs.globals, self.closure_refs.nonlocals)
         if undefined := (set(vars_) - set(func_names)):
             raise RuntimeError(f"Reference to undefined symbol(s) `{', '.join(undefined)}`")
-        funcs_lowered = [vars_[name].__gt_itir__() for name in func_names]
+        lowered_funcs = [vars_[name].__gt_itir__() for name in func_names]
 
         return itir.Program(
-            function_definitions=funcs_lowered, fencil_definitions=[fencil_itir_node], setqs=[]
+            function_definitions=lowered_funcs, fencil_definitions=[fencil_itir_node], setqs=[]
         )
 
     def _validate_args(self, *args, **kwargs) -> None:
@@ -114,11 +152,34 @@ class Program:
 def program(
     definition: types.FunctionType, externals: Optional[dict] = None, backend: Optional[str] = None
 ) -> Program:
+    """
+    Generate an implementation of a program from a python function object.
+
+    Example:
+    >>> @program  # doctest: +SKIP
+    ... def program(in_field: Field[..., "float64"], out_field: Field[..., "float64"]):
+    ...     field_op(in_field, out=out_field)
+    >>> program(in_field, out=out_field)  # doctest: +SKIP
+    """
     return Program.from_function(definition, externals, backend)
 
 
 @dataclasses.dataclass(frozen=True)
-class FieldOperator:
+class FieldOperator(GTCallable):
+    """Construct a field operator object from a PAST node.
+
+    A call to the resulting object executes the field operator as expressed
+    by the FOAST node and with the signature as if it would appear inside
+    a program.
+
+    Attributes:
+        foast_node: The node representing the field operator.
+        closure_refs: Mapping from names referenced in the program to the
+            actual values.
+        externals: Dictionary of externals.
+        backend: The backend to be used for code generation.
+        definition: The python function object corresponding to the PAST node.
+    """
     foast_node: foast.FieldOperator
     closure_refs: ClosureRefs
     externals: dict[str, Any]
@@ -213,4 +274,13 @@ class FieldOperator:
 def field_operator(
     definition: types.FunctionType, externals: Optional[dict] = None, backend: Optional[str] = None
 ) -> FieldOperator:
+    """
+    Generate an implementation of the field operator from a python function object.
+
+    Example:
+    >>> @field_operator  # doctest: +SKIP
+    ... def field_op(in_field: Field[..., "float64"]) -> Field[..., "float64"]:
+    ...     ...
+    >>> field_op(in_field, out=out_field)  # doctest: +SKIP
+    """
     return FieldOperator.from_function(definition, externals, backend)

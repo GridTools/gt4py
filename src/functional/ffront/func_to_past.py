@@ -16,6 +16,7 @@ from __future__ import annotations
 import ast
 import textwrap
 import types
+import collections
 from dataclasses import dataclass
 from typing import Any, Optional
 
@@ -26,101 +27,33 @@ from functional.ffront import program_ast as past
 from functional.ffront import symbol_makers
 from functional.ffront.past_passes.type_deduction import ProgramTypeDeduction
 from functional.ffront.source_utils import ClosureRefs, SourceDefinition, SymbolNames
+from functional.ffront.dialect_parser import DialectParser
 
 
 # TODO(tehrengruber): disallow every ast node we don't understand yet
 # TODO(tehrengruber): the parser here duplicates part of the FOAST parser.
-#  revisit when we have some sort of pass manager
+#  Both parsers enhance the input python ast and output IR. Revisit when
+#  we have some sort of pass manager
 
 
 @dataclass(frozen=True, kw_only=True)
-class ProgramParser(ast.NodeVisitor):
+class ProgramParser(DialectParser):
     """Parse program definition from Python source code into PAST."""
 
-    source: str
-    filename: str
-    starting_line: int
-    closure_refs: ClosureRefs
-    externals_defs: dict[str, Any]
-
-    def _make_loc(self, node: ast.AST) -> SourceLocation:
-        loc = SourceLocation.from_AST(node, source=self.filename)
-        return SourceLocation(
-            line=loc.line + self.starting_line - 1,
-            column=loc.column,
-            source=loc.source,
-            end_line=loc.end_line + self.starting_line - 1,
-            end_column=loc.end_column,
-        )
-
-    def _make_syntax_error(self, node: ast.AST, *, message: str = "") -> ProgramSyntaxError:
-        err = ProgramSyntaxError.from_AST(
-            node, msg=message, filename=self.filename, text=self.source
-        )
-        err.lineno = (err.lineno or 1) + self.starting_line - 1
-        return err
-
     @classmethod
-    def apply(
-        cls,
-        source_definition: SourceDefinition,
-        closure_refs: ClosureRefs,
-        externals_defs: Optional[dict[str, Any]] = None,
-    ) -> past.Program:
-        source, filename, starting_line = source_definition
-        try:
-            definition_ast = ast.parse(textwrap.dedent(source)).body[0]
-            untyped_past_node = cls(
-                source=source,
-                filename=filename,
-                starting_line=starting_line,
-                closure_refs=closure_refs,
-                externals_defs=externals_defs,
-            ).visit(definition_ast)
-            result = ProgramTypeDeduction.apply(untyped_past_node)
-        except SyntaxError as err:
-            if not err.filename:
-                err.filename = filename
-            if not isinstance(err, ProgramSyntaxError):
-                err.lineno = (err.lineno or 1) + starting_line - 1
-            raise err
-
-        return result
-
-    @classmethod
-    def apply_to_function(
-        cls,
-        func: types.FunctionType,
-        externals: Optional[dict[str, Any]] = None,
-    ) -> past.Program:
-        source_definition = SourceDefinition.from_function(func)
-        closure_refs = ClosureRefs.from_function(func)
-        return cls.apply(source_definition, closure_refs, externals)
+    def _postprocess_dialect_ast(cls, output_node: past.Program) -> past.Program:
+        return ProgramTypeDeduction.apply(output_node)
 
     def visit_FunctionDef(self, node: ast.FunctionDef) -> past.Program:
-        _, _, imported_names, nonlocal_names, global_names = SymbolNames.from_source(
-            self.source, self.filename
-        )
-        # TODO(egparedes): raise the exception at the first use of the undefined symbol
-        if missing_defs := (self.closure_refs.unbound - imported_names):
-            raise self._make_syntax_error(
-                node, message=f"Missing symbol definitions: {missing_defs}"
-            )
-
-        # 'SymbolNames.from_source()' uses the symtable module to analyze the isolated source
-        # code of the function, and thus all non-local symbols are classified as 'global'.
-        # However, 'closure_refs' comes from inspecting the live function object, which might
-        # have not been defined at a global scope, and therefore actual symbol values could appear
-        # in both 'closure_refs.globals' and 'self.closure_refs.nonlocals'.
-        defs = self.closure_refs.globals | self.closure_refs.nonlocals
+        vars_ = collections.ChainMap(self.closure_refs.globals, self.closure_refs.nonlocals)
         closure = [
             past.Symbol(
                 id=name,
-                type=symbol_makers.make_symbol_type_from_value(defs[name]),
+                type=symbol_makers.make_symbol_type_from_value(val),
                 namespace=common_types.Namespace.CLOSURE,
                 location=self._make_loc(node),
             )
-            for name in global_names | nonlocal_names
+            for name, val in vars_.items()
         ]
 
         return past.Program(
@@ -136,12 +69,10 @@ class ProgramParser(ast.NodeVisitor):
 
     def visit_arg(self, node: ast.arg) -> past.DataSymbol:
         if (annotation := self.closure_refs.annotations.get(node.arg, None)) is None:
-            raise self._make_syntax_error(node, message="Untyped parameters not allowed!")
+            raise ProgramSyntaxError.from_AST(node, msg="Untyped parameters not allowed!")
         new_type = symbol_makers.make_symbol_type_from_typing(annotation)
         if not isinstance(new_type, common_types.DataType):
-            raise self._make_syntax_error(
-                node, message="Only arguments of type DataType are allowed."
-            )
+            raise ProgramSyntaxError.from_AST(node, msg="Only arguments of type DataType are allowed.")
         return past.DataSymbol(id=node.arg, location=self._make_loc(node), type=new_type)
 
     def visit_Expr(self, node: ast.Expr) -> past.LocatedNode:
@@ -153,9 +84,7 @@ class ProgramParser(ast.NodeVisitor):
     def visit_Call(self, node: ast.Call) -> past.Call:
         new_func = self.visit(node.func)
         if not isinstance(new_func, past.Name):
-            raise self._make_syntax_error(
-                node.func, message="Functions can only be called directly!"
-            )
+            raise ProgramSyntaxError.from_AST(node, msg="Functions can only be called directly!")
 
         return past.Call(
             func=new_func,
@@ -192,7 +121,7 @@ class ProgramParser(ast.NodeVisitor):
             return past.Constant(
                 value=-node.operand.value, type=symbol_type, location=self._make_loc(node)
             )
-        raise self._make_syntax_error(node, "Unary operators can only be used on literals.")
+        raise ProgramSyntaxError.from_AST(node, msg="Unary operators can only be used on literals.")
 
     def visit_Constant(self, node: ast.Constant) -> past.Constant:
         symbol_type = symbol_makers.make_symbol_type_from_value(node.value)

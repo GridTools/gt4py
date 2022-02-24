@@ -76,8 +76,8 @@ class ProgramTypeDeduction(NodeTranslator):
     def visit_Name(self, node: past.Name, **kwargs) -> past.Name:
         symtable = kwargs["symtable"]
         if node.id not in symtable or symtable[node.id].type is None:
-            raise ProgramTypeError.from_foast_node(
-                node, msg=f"Undeclared or untyped symbol {node.id}."
+            raise ProgramTypeError.from_past_node(
+                node, msg=f"Undeclared or untyped symbol `{node.id}`."
             )
 
         return past.Name(id=node.id, type=symtable[node.id].type, location=node.location)
@@ -97,11 +97,10 @@ class ProgramTypeError(GTTypeError):
         end_offset=None,
         text=None,
     ):
-        msg = "Could not deduce type: " + msg
         super().__init__(msg, (filename, lineno, offset, text, end_lineno, end_offset))
 
     @classmethod
-    def from_foast_node(
+    def from_past_node(
         cls,
         node: past.LocatedNode,
         *,

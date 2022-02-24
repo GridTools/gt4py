@@ -19,12 +19,38 @@ from functional.ffront import common_types
 from functional.ffront import program_ast as past
 from functional.iterator import ir as itir
 
-
 def _size_arg_from_field(field_name: str, dim: int) -> str:
     return f"__{field_name}_size_{dim}"
 
 
 class ProgramLowering(NodeTranslator):
+    """
+    Lower Program AST (PAST) to Iterator IR (ITIR).
+
+    Examples
+    --------
+    >>> from functional.ffront.func_to_past import ProgramParser
+    >>> from functional.iterator.runtime import CartesianAxis, offset
+    >>> from functional.common import Field
+    >>>
+    >>> float64 = float
+    >>> IDim = CartesianAxis("IDim")
+    >>> Ioff = offset("Ioff")
+    >>>
+    >>> def fieldop(inp: Field[[IDim], "float64"]) -> Field[[IDim], "float64"]:
+    ...    ...
+    >>> def program(inp: Field[[IDim], "float64"], out: Field[[IDim], "float64"]):
+    ...    fieldop(inp, out=out)
+    >>>
+    >>> parsed = ProgramParser.apply_to_function(program)
+    >>> lowered = ProgramLowering.apply(parsed)
+    >>> type(lowered)
+    <class 'functional.iterator.ir.FencilDefinition'>
+    >>> lowered.id
+    'program'
+    >>> lowered.params
+    [Sym(id='inp'), Sym(id='out'), Sym(id='__inp_size_0'), Sym(id='__out_size_0')]
+    """
     contexts = (SymbolTableTrait.symtable_merger,)
 
     @classmethod
