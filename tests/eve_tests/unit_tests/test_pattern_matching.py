@@ -7,17 +7,6 @@ from eve import Node
 from eve.pattern_matching import ModuleWrapper, ObjectPattern, get_differences
 
 
-class TestData(TypedDict):
-    name: str
-    a: Any
-    b: Any
-    expected_diff: list[tuple[str, str]]
-
-
-def register_test_case(name, a, b, expected_diff):
-    test_data.append((name, {"a": a, "b": b, "expected_diff": expected_diff}))
-
-
 class TestNode(Node):
     foo: str
     bar: str
