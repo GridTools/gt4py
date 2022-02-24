@@ -94,7 +94,7 @@ def test_stencil_extents_simple():
                 body=[AssignStmtFactory(left__name="output", right__name="tmp", right__offset__i=1)]
             ),
         ],
-        declarations__0__name="tmp",
+        declarations=[TemporaryFactory(name="tmp")],
     )
 
     field_extents, block_extents = compute_extents(testee)
