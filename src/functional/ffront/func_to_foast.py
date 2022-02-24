@@ -15,27 +15,24 @@
 from __future__ import annotations
 
 import ast
-import copy
-import textwrap
-import types
-from dataclasses import dataclass
-from typing import Any, Optional
 import collections
+import copy
 
-from eve.type_definitions import SourceLocation
-from functional import common
 from functional.ffront import common_types, fbuiltins
 from functional.ffront import field_operator_ast as foast
 from functional.ffront import symbol_makers
-from functional.ffront.dialect_parser import DialectParser
 from functional.ffront.ast_passes import (
     SingleAssignTargetPass,
     SingleStaticAssignPass,
     StringifyAnnotationsPass,
     UnpackedAssignPass,
 )
+from functional.ffront.dialect_parser import DialectParser, DialectSyntaxError
 from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduction
-from functional.ffront.source_utils import ClosureRefs, SourceDefinition, SymbolNames
+
+
+class FieldOperatorSyntaxError(DialectSyntaxError):
+    dialect_name = "Field Operator"
 
 
 class FieldOperatorParser(DialectParser[foast.FieldOperator]):
@@ -76,13 +73,15 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
     Error at [2, 4] in ...functional.ffront.func_to_foast.FieldOperatorParser[...]>)
     """
 
+    syntax_error_cls = FieldOperatorSyntaxError
+
     @classmethod
     def _preprocess_definition_ast(cls, definition_ast: ast.AST) -> ast.AST:
-        sa = StringifyAnnotationsPass.apply(definition_ast)
-        ssa = SingleStaticAssignPass.apply(sa)
+        sta = StringifyAnnotationsPass.apply(definition_ast)
+        ssa = SingleStaticAssignPass.apply(sta)
         sat = SingleAssignTargetPass.apply(ssa)
         las = UnpackedAssignPass.apply(sat)
-        return definition_ast
+        return las
 
     @classmethod
     def _postprocess_dialect_ast(cls, dialect_ast: foast.FieldOperator) -> foast.FieldOperator:
@@ -341,37 +340,3 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
 
     def generic_visit(self, node) -> None:
         raise self._make_syntax_error(node)
-
-
-class FieldOperatorSyntaxError(common.GTSyntaxError):
-    def __init__(
-        self,
-        msg="",
-        *,
-        lineno: int = 0,
-        offset: int = 0,
-        filename: Optional[str] = None,
-        end_lineno: int = None,
-        end_offset: int = None,
-        text: Optional[str] = None,
-    ):
-        msg = f"Invalid Field Operator Syntax: {msg}"
-        super().__init__(msg, (filename, lineno, offset, text, end_lineno, end_offset))
-
-    @classmethod
-    def from_AST(
-        cls,
-        node: ast.AST,
-        *,
-        msg: str = "",
-        filename: Optional[str] = None,
-        text: Optional[str] = None,
-    ):
-        return cls(
-            msg,
-            lineno=node.lineno,
-            offset=node.col_offset,
-            filename=filename,
-            end_lineno=node.end_lineno,
-            end_offset=node.end_col_offset,
-        )

@@ -14,31 +14,26 @@
 from __future__ import annotations
 
 import ast
-import textwrap
-import types
 import collections
 from dataclasses import dataclass
-from typing import Any, Optional
 
-from eve.type_definitions import SourceLocation
 from functional import common
 from functional.ffront import common_types
 from functional.ffront import program_ast as past
 from functional.ffront import symbol_makers
-from functional.ffront.past_passes.type_deduction import ProgramTypeDeduction
-from functional.ffront.source_utils import ClosureRefs, SourceDefinition, SymbolNames
 from functional.ffront.dialect_parser import DialectParser
+from functional.ffront.past_passes.type_deduction import ProgramTypeDeduction
 
 
-# TODO(tehrengruber): disallow every ast node we don't understand yet
-# TODO(tehrengruber): the parser here duplicates part of the FOAST parser.
-#  Both parsers enhance the input python ast and output IR. Revisit when
-#  we have some sort of pass manager
+class ProgramSyntaxError(common.GTSyntaxError):
+    dialect_name = "Program"
 
 
 @dataclass(frozen=True, kw_only=True)
 class ProgramParser(DialectParser[past.Program]):
     """Parse program definition from Python source code into PAST."""
+
+    syntax_error_cls = ProgramSyntaxError
 
     @classmethod
     def _postprocess_dialect_ast(cls, output_node: past.Program) -> past.Program:
@@ -69,10 +64,12 @@ class ProgramParser(DialectParser[past.Program]):
 
     def visit_arg(self, node: ast.arg) -> past.DataSymbol:
         if (annotation := self.closure_refs.annotations.get(node.arg, None)) is None:
-            raise ProgramSyntaxError.from_AST(node, msg="Untyped parameters not allowed!")
+            raise self._make_syntax_error(node, message="Untyped parameters not allowed!")
         new_type = symbol_makers.make_symbol_type_from_typing(annotation)
         if not isinstance(new_type, common_types.DataType):
-            raise ProgramSyntaxError.from_AST(node, msg="Only arguments of type DataType are allowed.")
+            raise self._make_syntax_error(
+                node, message="Only arguments of type DataType are allowed."
+            )
         return past.DataSymbol(id=node.arg, location=self._make_loc(node), type=new_type)
 
     def visit_Expr(self, node: ast.Expr) -> past.LocatedNode:
@@ -84,7 +81,7 @@ class ProgramParser(DialectParser[past.Program]):
     def visit_Call(self, node: ast.Call) -> past.Call:
         new_func = self.visit(node.func)
         if not isinstance(new_func, past.Name):
-            raise ProgramSyntaxError.from_AST(node, msg="Functions can only be called directly!")
+            raise self._make_syntax_error(node, msg="Functions can only be called directly!")
 
         return past.Call(
             func=new_func,
@@ -121,42 +118,11 @@ class ProgramParser(DialectParser[past.Program]):
             return past.Constant(
                 value=-node.operand.value, type=symbol_type, location=self._make_loc(node)
             )
-        raise ProgramSyntaxError.from_AST(node, msg="Unary operators can only be used on literals.")
+        raise self._make_syntax_error(node, message="Unary operators can only be used on literals.")
 
     def visit_Constant(self, node: ast.Constant) -> past.Constant:
         symbol_type = symbol_makers.make_symbol_type_from_value(node.value)
         return past.Constant(value=node.value, type=symbol_type, location=self._make_loc(node))
 
-
-class ProgramSyntaxError(common.GTSyntaxError):
-    def __init__(
-        self,
-        msg="",
-        *,
-        lineno: int = 0,
-        offset: int = 0,
-        filename: Optional[str] = None,
-        end_lineno: int = None,
-        end_offset: int = None,
-        text: Optional[str] = None,
-    ):
-        msg = f"Invalid Program Syntax: {msg}"
-        super().__init__(msg, (filename, lineno, offset, text, end_lineno, end_offset))
-
-    @classmethod
-    def from_AST(
-        cls,
-        node: ast.AST,
-        *,
-        msg: str = "",
-        filename: Optional[str] = None,
-        text: Optional[str] = None,
-    ):
-        return cls(
-            msg,
-            lineno=node.lineno,
-            offset=node.col_offset,
-            filename=filename,
-            end_lineno=node.end_lineno,
-            end_offset=node.end_col_offset,
-        )
+    def generic_visit(self, node) -> None:
+        raise self._make_syntax_error(node)

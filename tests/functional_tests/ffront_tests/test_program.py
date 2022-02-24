@@ -25,8 +25,9 @@ from functional.ffront.func_to_past import ProgramParser
 from functional.ffront.past_passes.type_deduction import ProgramTypeError
 from functional.ffront.past_to_itir import ProgramLowering
 from functional.iterator import ir as itir
-from functional.iterator.embedded import index_field, np_as_located_field
+from functional.iterator.embedded import np_as_located_field
 from functional.iterator.runtime import CartesianAxis, offset
+
 
 float64 = float
 IDim = CartesianAxis("IDim")
@@ -35,17 +36,21 @@ Ioff = offset("Ioff")
 past_ = pattern_matching.ModuleWrapper(past)
 itir_ = pattern_matching.ModuleWrapper(itir)
 
+
 @pytest.fixture
 def identity():
     @field_operator
     def identity(in_field: Field[[IDim], "float64"]) -> Field[[IDim], "float64"]:
         return in_field
+
     return identity
+
 
 @pytest.fixture
 def copy_program(identity):
     def copy_program(in_field: Field[[IDim], "float64"], out_field: Field[[IDim], "float64"]):
         identity(in_field, out=out_field)
+
     return copy_program
 
 
@@ -58,13 +63,17 @@ def double_copy_program(identity):
     ):
         identity(in_field, out=intermediate_field)
         identity(intermediate_field, out=out_field)
+
     return double_copy_program
 
 
 @pytest.fixture
 def copy_restrict_program(identity):
-    def copy_restrict_program(in_field: Field[[IDim], "float64"], out_field: Field[[IDim], "float64"]):
+    def copy_restrict_program(
+        in_field: Field[[IDim], "float64"], out_field: Field[[IDim], "float64"]
+    ):
         identity(in_field, out=out_field[1:2])
+
     return copy_restrict_program
 
 
@@ -74,18 +83,19 @@ def invalid_call_sig_program(identity):
         in_field: Field[[IDim], "float64"], out_field: Field[[IDim], "float64"]
     ):
         identity(in_field, out_field)
+
     return invalid_call_sig_program
 
 
 @pytest.fixture
 def invalid_out_slice_dims_program(identity):
-    def invalid_out_slice_dims_program(in_field: Field[[IDim], "float64"], out_field: Field[[IDim], "float64"]):
+    def invalid_out_slice_dims_program(
+        in_field: Field[[IDim], "float64"], out_field: Field[[IDim], "float64"]
+    ):
         identity(in_field, out=out_field[1:2, 3:4])
+
     return invalid_out_slice_dims_program
 
-#@program
-#def invalid_program_signature(in_field: Field[..., "float64"], out_field: Field[..., "float64"]):
-#    field_op(in_field, out=out_field)
 
 def test_copy_parsing(copy_program):
     past_node = ProgramParser.apply_to_function(copy_program)
@@ -107,7 +117,7 @@ def test_copy_parsing(copy_program):
                 kwargs={"out": past_.Name(id="out_field")},
             )
         ],
-        location=past_.SourceLocation(line=47, source=__file__),
+        location=past_.SourceLocation(line=51, source=__file__),
     )
     assert pattern_node.matches(past_node, raise_=True)
 
@@ -223,9 +233,9 @@ def test_copy_lowering(copy_program):
                 )
             ],
         ),
-        stencil = itir_.SymRef(id="identity"),
-        inputs = [itir_.SymRef(id="in_field")],
-        outputs = [itir_.SymRef(id="out_field")],
+        stencil=itir_.SymRef(id="identity"),
+        inputs=[itir_.SymRef(id="in_field")],
+        outputs=[itir_.SymRef(id="out_field")],
     )
     fencil_pattern = itir_.FencilDefinition(
         id="copy_program",
@@ -239,6 +249,7 @@ def test_copy_lowering(copy_program):
     )
 
     fencil_pattern.matches(itir_node, raise_=True)
+
 
 def test_copy_restrict_lowering(copy_restrict_program):
     past_node = ProgramParser.apply_to_function(copy_restrict_program)

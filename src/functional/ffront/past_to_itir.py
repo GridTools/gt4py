@@ -19,6 +19,7 @@ from functional.ffront import common_types
 from functional.ffront import program_ast as past
 from functional.iterator import ir as itir
 
+
 def _size_arg_from_field(field_name: str, dim: int) -> str:
     return f"__{field_name}_size_{dim}"
 
@@ -51,6 +52,7 @@ class ProgramLowering(NodeTranslator):
     >>> lowered.params
     [Sym(id='inp'), Sym(id='out'), Sym(id='__inp_size_0'), Sym(id='__out_size_0')]
     """
+
     contexts = (SymbolTableTrait.symtable_merger,)
 
     @classmethod

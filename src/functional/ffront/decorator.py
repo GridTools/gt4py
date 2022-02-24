@@ -14,7 +14,6 @@
 import collections
 import dataclasses
 import functools
-import inspect
 import types
 import typing
 from typing import Any, Optional, Protocol
@@ -46,18 +45,21 @@ class GTCallable(Protocol):
     abstract methods to be callable from inside a program or from other
     callables.
     """
+
     def __gt_type__(self) -> ct.FunctionType:
-        """Returns symbol type, i.e. signature and return type.
+        """Return symbol type, i.e. signature and return type.
 
         The type is used internally to populate the closure vars of the
-        various dialects root nodes (i.e. FOAST Field Operator, PAST Program)"""
+        various dialects root nodes (i.e. FOAST Field Operator, PAST Program)
+        """
         ...
 
     def __gt_itir__(self) -> itir.FunctionDefinition:
         """Return iterator IR function definition representing the callable.
 
         Used internally by the Program decorator to populate the function
-        definitions of the iterator IR."""
+        definitions of the iterator IR.
+        """
         ...
 
 
@@ -77,6 +79,7 @@ class Program:
         backend: The backend to be used for code generation.
         definition: The python function object corresponding to the PAST node.
     """
+
     past_node: past.Program
     closure_refs: ClosureRefs
     externals: dict[str, Any]
@@ -118,7 +121,9 @@ class Program:
         if undefined := (set(vars_) - set(func_names)):
             raise RuntimeError(f"Reference to undefined symbol(s) `{', '.join(undefined)}`.")
         if not_callable := [name for name in func_names if not isinstance(vars_[name], GTCallable)]:
-            raise RuntimeError(f"The following function(s) are not valid GTCallables `{', '.join(not_callable)}`.")
+            raise RuntimeError(
+                f"The following function(s) are not valid GTCallables `{', '.join(not_callable)}`."
+            )
         lowered_funcs = [vars_[name].__gt_itir__() for name in func_names]
 
         return itir.Program(
@@ -159,9 +164,9 @@ def program(
 
     Example:
     >>> @program  # doctest: +SKIP
-    ... def program(in_field: Field[..., "float64"], out_field: Field[..., "float64"]):
+    ... def program(in_field: Field[..., float64], out_field: Field[..., float64]): # noqa: F821
     ...     field_op(in_field, out=out_field)
-    >>> program(in_field, out=out_field)  # doctest: +SKIP
+    >>> program(in_field, out=out_field)  # doctest: +SKIP # noqa: F821
     """
     return Program.from_function(definition, externals, backend)
 
@@ -182,6 +187,7 @@ class FieldOperator(GTCallable):
         backend: The backend to be used for code generation.
         definition: The python function object corresponding to the PAST node.
     """
+
     foast_node: foast.FieldOperator
     closure_refs: ClosureRefs
     externals: dict[str, Any]
@@ -281,8 +287,8 @@ def field_operator(
 
     Example:
     >>> @field_operator  # doctest: +SKIP
-    ... def field_op(in_field: Field[..., "float64"]) -> Field[..., "float64"]:
+    ... def field_op(in_field: Field[..., float64]) -> Field[..., float64]: # noqa: F821
     ...     ...
-    >>> field_op(in_field, out=out_field)  # doctest: +SKIP
+    >>> field_op(in_field, out=out_field)  # doctest: +SKIP # noqa: F821
     """
     return FieldOperator.from_function(definition, externals, backend)
