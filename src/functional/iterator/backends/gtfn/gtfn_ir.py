@@ -19,6 +19,12 @@ class UnaryExpr(Expr):
     expr: Expr
 
 
+class BinaryExpr(Expr):
+    op: str
+    lhs: Expr
+    rhs: Expr
+
+
 class BoolLiteral(Expr):
     value: bool
 
@@ -36,10 +42,7 @@ class StringLiteral(Expr):
 
 
 class OffsetLiteral(Expr):
-    # Takes into account the change to offset=(tag,value)
-    # TODO upstream the change
-    tag: str
-    value: int
+    value: Union[int, str]
 
 
 class SymRef(Expr):
@@ -90,11 +93,6 @@ class Program(Node, SymbolTableTrait):
     function_definitions: List[FunctionDefinition]
     fencil_definitions: List[FencilDefinition]
 
-    builtin_functions = list(
-        Sym(id=name)
-        for name in [
-            "deref",
-        ]
-    )
+    builtin_functions = list(Sym(id=name) for name in ["deref", "shift"])
 
     _validate_symbol_refs = validate_symbol_refs()

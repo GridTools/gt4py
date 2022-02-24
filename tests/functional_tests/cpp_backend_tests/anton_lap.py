@@ -1,6 +1,7 @@
 import sys
 
 from functional.iterator.backends import gtfn
+from functional.iterator.backends.gtfn.backend import generate
 from functional.iterator.builtins import *
 from functional.iterator.runtime import CartesianAxis, closure, fundef, offset
 from functional.iterator.tracing import trace
@@ -37,10 +38,9 @@ KDim = CartesianAxis("KDim")
 
 
 # @fendef(offset_provider={"i": IDim, "j": JDim})
-def lap_fencil(x, y, z, out, inp):
+def lap_fencil(domain, out, inp):
     closure(
-        domain(named_range(IDim, 0, x), named_range(JDim, 0, y), named_range(KDim, 0, z)),
-        # domain(named_range(IDim, 1, x + 1), named_range(JDim, 1, y + 2), named_range(KDim, 0, z)), TODO allow start != 0
+        domain,
         lap,
         [out],
         [inp],
@@ -64,8 +64,8 @@ if __name__ == "__main__":
         raise RuntimeError(f"Usage: {sys.argv[0]} <output_file>")
     output_file = sys.argv[1]
 
-    prog = trace(lap_fencil, [None] * 5)
-    generated_code = gtfn.gtfn.apply(prog, grid_type="Cartesian")
+    prog = trace(lap_fencil, [None] * 3)
+    generated_code = generate(prog)
 
     with open(output_file, "w+") as output:
         output.write(generated_code)

@@ -3,7 +3,6 @@
 
 #include "build/generated_anton_lap.hpp" // TODO
 #include <gridtools/common/integral_constant.hpp>
-#include <gridtools/sid/concept.hpp>
 #include <gridtools/sid/sid_shift_origin.hpp>
 
 #include <fn_select.hpp>
@@ -20,7 +19,7 @@ TEST(fn_lap, fn_backend_t) {
   for (int i = 0; i < 10; ++i)
     for (int j = 0; j < 10; ++j)
       for (int k = 0; k < 3; ++k)
-        in[i][j][k] = 1; // std::rand();
+        in[i][j][k] = std::rand();
 
   auto expected = [&](auto i, auto j, auto k) {
     return in[i + 1][j][k] + in[i - 1][j][k] + in[i][j + 1][k] +
@@ -35,18 +34,14 @@ TEST(fn_lap, fn_backend_t) {
   auto shifted_in = sid::shift_sid_origin(in, origin_shift);
   auto shifted_actual = sid::shift_sid_origin(actual, origin_shift);
 
-  generated::lap_fencil(8, 8, 3, shifted_actual, shifted_in);
-  auto const ori = sid::get_origin(shifted_in)();
-  sid::shift(ori,
-             sid::get_stride<cartesian::dim::j>(sid::get_strides(shifted_in)),
-             -1_c);
-  std::cout << *ori << std::endl;
+  auto domain = cartesian_domain(8, 8, 3);
+
+  generated::lap_fencil(domain, shifted_actual, shifted_in);
 
   for (int i = 1; i < 9; ++i)
     for (int j = 1; j < 9; ++j)
       for (int k = 0; k < 3; ++k)
-        EXPECT_DOUBLE_EQ(actual[i][j][k], 1)
-            // EXPECT_DOUBLE_EQ(actual[i][j][k], expected(i, j, k))
+        EXPECT_DOUBLE_EQ(actual[i][j][k], expected(i, j, k))
             << "i=" << i << ", j=" << j << ", k=" << k;
 }
 

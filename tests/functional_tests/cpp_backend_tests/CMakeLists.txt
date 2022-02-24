@@ -51,6 +51,7 @@ if(BUILD_TESTING)
     # generate_computation(NAME copy_stencil SRC_FILE copy_stencil.py)
     add_fn_codegen_test(NAME copy_stencil SRC_FILE copy_stencil.py DRIVER_FILE copy_stencil_driver.cpp)
     add_fn_codegen_test(NAME anton_lap SRC_FILE anton_lap.py DRIVER_FILE anton_lap_driver.cpp)
+    add_fn_codegen_test(NAME fvm_nabla SRC_FILE fvm_nabla.py DRIVER_FILE fvm_nabla_driver.cpp)
 endif()
     
     

@@ -5,10 +5,13 @@ from eve.type_definitions import SymbolName
 from functional.iterator import ir as itir
 from functional.iterator.backends.gtfn.gtfn_ir import (
     Backend,
+    BinaryExpr,
     Expr,
     FencilDefinition,
     FunCall,
     FunctionDefinition,
+    Lambda,
+    OffsetLiteral,
     Program,
     StencilExecution,
     Sym,
@@ -18,8 +21,8 @@ from functional.iterator.backends.gtfn.gtfn_ir import (
 
 
 class GTFN_lowering(NodeTranslator):
-    _binary_op_map = {}
-    _unary_op_map = {}
+    _binary_op_map = {"minus": "-", "plus": "+", "multiplies": "*", "divides": "/"}
+    _unary_op_map = {"not": "!"}
 
     def visit_Sym(self, node: itir.Sym, **kwargs) -> Sym:
         return Sym(id=node.id)
@@ -27,13 +30,35 @@ class GTFN_lowering(NodeTranslator):
     def visit_SymRef(self, node: itir.SymRef, **kwargs) -> SymRef:
         return SymRef(id=node.id)
 
+    def visit_Lambda(self, node: itir.Lambda, **kwargs) -> Lambda:
+        debug(node.expr)
+        return Lambda(params=self.visit(node.params), expr=self.visit(node.expr))
+
+    def visit_OffsetLiteral(self, node: itir.OffsetLiteral, **kwargs) -> OffsetLiteral:
+        return OffsetLiteral(value=node.value)
+
     def visit_FunCall(self, node: itir.FunCall, **kwargs) -> Expr:
         if isinstance(node.fun, itir.SymRef):
             if node.fun.id in self._unary_op_map:
                 assert len(node.args) == 1
                 return UnaryExpr(op=self._unary_op_map[node.fun.id], expr=self.visit(node.args[0]))
-            else:
-                return FunCall(fun=self.visit(node.fun), args=self.visit(node.args))
+            elif node.fun.id in self._binary_op_map:
+                assert len(node.args) == 2
+                return BinaryExpr(
+                    op=self._binary_op_map[node.fun.id],
+                    lhs=self.visit(node.args[0]),
+                    rhs=self.visit(node.args[1]),
+                )
+        elif (
+            isinstance(node.fun, itir.FunCall)
+            and isinstance(node.fun.fun, itir.SymRef)
+            and node.fun.fun.id == "shift"
+        ):
+            assert len(node.args) == 1
+            return FunCall(
+                fun=self.visit(node.fun.fun), args=self.visit(node.args) + self.visit(node.fun.args)
+            )
+        return FunCall(fun=self.visit(node.fun), args=self.visit(node.args))
 
     def visit_FunctionDefinition(
         self, node: itir.FunctionDefinition, **kwargs

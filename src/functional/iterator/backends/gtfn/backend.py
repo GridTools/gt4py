@@ -1,4 +1,3 @@
-# backends.gtfn.codegen.gtfn as gtfn_codegen
 import functional.iterator.ir as itir
 from eve import codegen
 from functional.iterator.backends import backend
@@ -21,4 +20,4 @@ def generate(program: itir.Program, **kwargs) -> str:
     return formatted_code
 
 
-backend.register_backend("gtfn", lambda prog, *args, **kwargs: print(gtfn.apply(prog, **kwargs)))
+backend.register_backend("gtfn", lambda prog, *args, **kwargs: print(generate(prog, **kwargs)))

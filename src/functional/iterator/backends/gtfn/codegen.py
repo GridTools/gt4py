@@ -16,61 +16,18 @@ class gtfn_codegen(codegen.TemplatedGenerator):
     IntLiteral = as_fmt("{value}")
     FloatLiteral = as_fmt("{value}")
     AxisLiteral = as_fmt("{value}")
-    UnaryExpr = as_fmt("{op}{expr}")
+    UnaryExpr = as_fmt("{op}({expr})")
+    BinaryExpr = as_fmt("({lhs}{op}{rhs})")
 
-    # def visit_OffsetLiteral(self, node: OffsetLiteral, **kwargs):
-    #     return node.value if isinstance(node.value, str) else f"{node.value}_c"
+    def visit_OffsetLiteral(self, node: OffsetLiteral, **kwargs):
+        return node.value if isinstance(node.value, str) else f"{node.value}_c"
 
     StringLiteral = as_fmt("{value}")
 
-    # def visit_FunCall(self, node: FunCall, **kwargs):
-    #     if isinstance(node.fun, SymRef) and node.fun.id == "domain":
-    #         sizes = []
-    #         for a in node.args:
-    #             if not (
-    #                 isinstance(a, FunCall)
-    #                 and isinstance(a.fun, SymRef)
-    #                 and a.fun.id == "named_range"
-    #             ):
-    #                 raise RuntimeError(f"expected named_range, got {a.fun.id}")
-    #             sizes.append(self.visit(a.args[2]))  # TODO start is ignored, and names are ignored
-    #         return f"cartesian_domain({','.join(sizes)})"
-    #     elif isinstance(node.fun, FunCall) and node.fun.fun.id == "shift":
-    #         if len(node.fun.args) > 0:
-    #             return self.generic_visit(
-    #                 FunCall(fun=node.fun.fun, args=node.args + node.fun.args), **kwargs
-    #             )
-    #         else:
-    #             # get rid of the shift call if there are no offsets, should be a separate pass
-    #             assert len(node.args) == 1
-    #             return self.visit(node.args[0])
-    #         # return {"fun": "shift", "args": self.visit(node.args) + self.visit(node.fun.args)}
-    #     elif isinstance(node.fun, SymRef) and node.fun.id in binary_ops:
-    #         assert len(node.args) == 2
-    #         return (
-    #             f"({self.visit(node.args[0])} {binary_ops[node.fun.id]} {self.visit(node.args[1])})"
-    #         )
-    #     return self.generic_visit(node, **kwargs)
-
     FunCall = as_fmt("{fun}({','.join(args)})")
-    # Lambda = as_mako(
-    #     "[=](${','.join('auto ' + p for p in params)}){return ${expr};}"
-    # )  # TODO capture
-
-    # def visit_StencilClosure(self, node: StencilClosure, **kwargs):
-    #     if not isinstance(node.stencil, SymRef):
-    #         raise NotImplementedError(
-    #             "Stencil is required to be a SymRef, cannot use arbitrary expressions."
-    #         )
-    #     stencil_instantiation = self.visit(node.stencil) + "{}"
-    #     return self.generic_visit(node, stencil_instantiation=stencil_instantiation, **kwargs)
-
-    # StencilClosure = as_mako(
-    #     """
-    #     [](auto &&executor, ${','.join('auto & ' + o for o in outputs)}, ${','.join('auto const & ' + i for i in inputs)}) {
-    #         executor().arg(${outputs[0]})${''.join('.arg('+i+')' for i in inputs)}.assign(0_c, ${stencil_instantiation}, 1_c /*TODO*/);
-    #     }(make_backend(gridtools::fn::backend::naive()/*TODO*/, ${domain}).stencil_executor(), ${outputs[0]}, ${','.join(inputs)});"""
-    # )
+    Lambda = as_mako(
+        "[=](${','.join('auto ' + p for p in params)}){return ${expr};}"
+    )  # TODO capture
 
     Backend = as_fmt("make_backend({backend_tag}, domain)")
 
@@ -98,19 +55,6 @@ class gtfn_codegen(codegen.TemplatedGenerator):
         };
     """
     )
-
-    # @staticmethod
-    # def _collect_offsets(node: Program) -> list[str]:
-    #     return (
-    #         iter_tree(node)
-    #         .if_isinstance(OffsetLiteral)
-    #         .getattr("value")
-    #         .if_isinstance(str)
-    #         .to_set()
-    #     )
-
-    # def visit_Program(self, node: Program, **kwargs):
-    #     return self.generic_visit(node, offsets=self._collect_offsets(node), **kwargs)
 
     Program = as_mako(
         """
