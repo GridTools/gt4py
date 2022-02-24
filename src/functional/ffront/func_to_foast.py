@@ -20,12 +20,14 @@ import textwrap
 import types
 from dataclasses import dataclass
 from typing import Any, Optional
+import collections
 
 from eve.type_definitions import SourceLocation
 from functional import common
 from functional.ffront import common_types, fbuiltins
 from functional.ffront import field_operator_ast as foast
 from functional.ffront import symbol_makers
+from functional.ffront.dialect_parser import DialectParser
 from functional.ffront.ast_passes import (
     SingleAssignTargetPass,
     SingleStaticAssignPass,
@@ -36,8 +38,7 @@ from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduc
 from functional.ffront.source_utils import ClosureRefs, SourceDefinition, SymbolNames
 
 
-@dataclass(frozen=True, kw_only=True)
-class FieldOperatorParser(ast.NodeVisitor):
+class FieldOperatorParser(DialectParser[foast.FieldOperator]):
     """
     Parse field operator function definition from source code into FOAST.
 
@@ -75,95 +76,28 @@ class FieldOperatorParser(ast.NodeVisitor):
     Error at [2, 4] in ...functional.ffront.func_to_foast.FieldOperatorParser[...]>)
     """
 
-    source: str
-    filename: str
-    starting_line: int
-    closure_refs: ClosureRefs
-    externals_defs: dict[str, Any]
-
-    def _make_loc(self, node: ast.AST) -> SourceLocation:
-        loc = SourceLocation.from_AST(node, source=self.filename)
-        return SourceLocation(
-            line=loc.line + self.starting_line - 1,
-            column=loc.column,
-            source=loc.source,
-            end_line=loc.end_line + self.starting_line - 1,
-            end_column=loc.end_column,
-        )
-
-    def _make_syntax_error(self, node: ast.AST, *, message: str = "") -> FieldOperatorSyntaxError:
-        err = FieldOperatorSyntaxError.from_AST(
-            node, msg=message, filename=self.filename, text=self.source
-        )
-        err.lineno = (err.lineno or 1) + self.starting_line - 1
-        return err
+    @classmethod
+    def _preprocess_definition_ast(cls, definition_ast: ast.AST) -> ast.AST:
+        sa = StringifyAnnotationsPass.apply(definition_ast)
+        ssa = SingleStaticAssignPass.apply(sa)
+        sat = SingleAssignTargetPass.apply(ssa)
+        las = UnpackedAssignPass.apply(sat)
+        return definition_ast
 
     @classmethod
-    def apply(
-        cls,
-        source_definition: SourceDefinition,
-        closure_refs: ClosureRefs,
-        externals_defs: Optional[dict[str, Any]] = None,
-    ) -> foast.FieldOperator:
-        source, filename, starting_line = source_definition
-        result = None
-        try:
-            definition_ast = StringifyAnnotationsPass.apply(
-                ast.parse(textwrap.dedent(source)).body[0]
-            )
-            ssa = SingleStaticAssignPass.apply(definition_ast)
-            sat = SingleAssignTargetPass.apply(ssa)
-            las = UnpackedAssignPass.apply(sat)
-            result = cls(
-                source=source,
-                filename=filename,
-                starting_line=starting_line,
-                closure_refs=closure_refs,
-                externals_defs=externals_defs,
-            ).visit(las)
-        except SyntaxError as err:
-            if not err.filename:
-                err.filename = filename
-            if not isinstance(err, FieldOperatorSyntaxError):
-                err.lineno = (err.lineno or 1) + starting_line - 1
-            raise err
-
-        return FieldOperatorTypeDeduction.apply(result)
-
-    @classmethod
-    def apply_to_function(
-        cls,
-        func: types.FunctionType,
-        externals: Optional[dict[str, Any]] = None,
-    ) -> foast.FieldOperator:
-        source_definition = SourceDefinition.from_function(func)
-        closure_refs = ClosureRefs.from_function(func)
-        return cls.apply(source_definition, closure_refs, externals)
+    def _postprocess_dialect_ast(cls, dialect_ast: foast.FieldOperator) -> foast.FieldOperator:
+        return FieldOperatorTypeDeduction.apply(dialect_ast)
 
     def visit_FunctionDef(self, node: ast.FunctionDef, **kwargs) -> foast.FieldOperator:
-        _, _, imported_names, nonlocal_names, global_names = SymbolNames.from_source(
-            self.source, self.filename
-        )
-        # TODO(egparedes): raise the exception at the first use of the undefined symbol
-        if missing_defs := (self.closure_refs.unbound - imported_names):
-            raise self._make_syntax_error(
-                node, message=f"Missing symbol definitions: {missing_defs}"
-            )
-
-        # 'SymbolNames.from_source()' uses the symtable module to analyze the isolated source
-        # code of the function, and thus all non-local symbols are classified as 'global'.
-        # However, 'closure_refs' comes from inspecting the live function object, which might
-        # have not been defined at a global scope, and therefore actual symbol values could appear
-        # in both 'closure_refs.globals' and 'self.closure_refs.nonlocals'.
-        defs = self.closure_refs.globals | self.closure_refs.nonlocals
+        vars_ = collections.ChainMap(self.closure_refs.globals, self.closure_refs.nonlocals)
         closure = [
             foast.Symbol(
                 id=name,
-                type=symbol_makers.make_symbol_type_from_value(defs[name]),
+                type=symbol_makers.make_symbol_type_from_value(val),
                 namespace=common_types.Namespace.CLOSURE,
                 location=self._make_loc(node),
             )
-            for name in global_names | nonlocal_names
+            for name, val in vars_.items()
         ]
 
         return foast.FieldOperator(

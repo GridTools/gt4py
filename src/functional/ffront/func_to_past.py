@@ -37,7 +37,7 @@ from functional.ffront.dialect_parser import DialectParser
 
 
 @dataclass(frozen=True, kw_only=True)
-class ProgramParser(DialectParser):
+class ProgramParser(DialectParser[past.Program]):
     """Parse program definition from Python source code into PAST."""
 
     @classmethod

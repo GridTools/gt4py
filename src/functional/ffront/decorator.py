@@ -116,7 +116,9 @@ class Program:
 
         vars_ = collections.ChainMap(self.closure_refs.globals, self.closure_refs.nonlocals)
         if undefined := (set(vars_) - set(func_names)):
-            raise RuntimeError(f"Reference to undefined symbol(s) `{', '.join(undefined)}`")
+            raise RuntimeError(f"Reference to undefined symbol(s) `{', '.join(undefined)}`.")
+        if not_callable := [name for name in func_names if not isinstance(vars_[name], GTCallable)]:
+            raise RuntimeError(f"The following function(s) are not valid GTCallables `{', '.join(not_callable)}`.")
         lowered_funcs = [vars_[name].__gt_itir__() for name in func_names]
 
         return itir.Program(
