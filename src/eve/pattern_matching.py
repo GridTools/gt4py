@@ -26,18 +26,19 @@ class ObjectPattern:
     class and all attributes of the pattern (recursively) match the
     objects attributes.
 
-    >>> class Foo:
-    ...    def __init__(self):
-    ...        self.bar = 1
-    ...        self.baz = 2
-    >>> assert ObjectPattern(Foo, {"bar": 1}).match(Foo())
+    Examples:
+        >>> class Foo:
+        ...    def __init__(self, bar, baz):
+        ...        self.bar = bar
+        ...        self.baz = baz
+        >>> assert ObjectPattern(Foo, {"bar": 1}).match(Foo(1, 2))
     """
 
     cls: type
-    attrs: dict[str, Any]
+    fields: dict[str, Any]
 
-    def match(self, other: Any, raise_exception: bool = False) -> bool:
-        """Return if object pattern matches `other` using :func:`get_differences`.
+    def match(self, other: Any, *, raise_exception: bool = False) -> bool:
+        """Return ``True`` if object pattern matches ``other`` using :func:`get_differences`.
 
         If `raise_exception` is specified raises an exception with all differences
         found.
@@ -54,7 +55,7 @@ class ObjectPattern:
         return next(get_differences(self, other), None) is None
 
     def __str__(self) -> str:
-        attrs_str = ", ".join([f"{str(k)}={str(v)}" for k, v in self.attrs.items()])
+        attrs_str = ", ".join([f"{str(k)}={str(v)}" for k, v in self.fields.items()])
         return f"{self.cls.__name__}({attrs_str})"
 
 
@@ -62,8 +63,8 @@ class ObjectPattern:
 class _ObjectPatternConstructor:
     """Helper class to construct an ObjectPattern.
 
-    This is just an explicit way of doing partial function application
-    and was choosen to improve debuggability.
+    This is just an explicit way of doing partial function application and was
+    choosen to improve debuggability.
     """
 
     cls: type
@@ -76,12 +77,14 @@ class _ObjectPatternConstructor:
 def get_differences(a: Any, b: Any, path: str = "") -> Iterator[tuple[str, str]]:
     """Compare two objects and return a list of differences.
 
-    If the arguments are lists or dictionaries comparison is recursively per item. Objects are compared
-    using equality operator or if the left-hand-side is an `ObjectPattern` its type and attributes
-    are compared to the right-hand-side object. Only the attributes of the `ObjectPattern` are used
-    for comparison, disregarding potential additional attributes of the right-hand-side.
+    If the arguments are lists or dictionaries comparison is recursively per
+    item. Objects are compared using equality operator or if the left-hand-side
+    is an `ObjectPattern` its type and attributes are compared to the
+    right-hand-side object. Only the attributes of the `ObjectPattern` are used
+    for comparison, disregarding potential additional attributes of the
+    right-hand-side.
     """
-    if type(a) != type(b):
+    if type(a) is not type(b):
         yield (path, f"Expected a value of type {type(a).__name__}, but got {type(b).__name__}")
     elif a != b:
         yield (path, f"Values are not equal. `{a}` != `{b}`")
@@ -95,11 +98,11 @@ def _(a: ObjectPattern, b: Any, path: str = "") -> Iterator[tuple[str, str]]:
             f"Expected an instance of class {a.cls.__name__}, but got {type(b).__name__}",
         )
     else:
-        for k in a.attrs.keys():
+        for k in a.fields.keys():
             if not hasattr(b, k):
                 yield (path, f"Value has no attribute {k}.")
             else:
-                yield from get_differences(a.attrs[k], getattr(b, k), path=f"{path}.{k}")
+                yield from get_differences(a.fields[k], getattr(b, k), path=f"{path}.{k}")
 
 
 @get_differences.register
@@ -110,8 +113,7 @@ def _(a: list, b: Any, path: str = "") -> Iterator[tuple[str, str]]:
         yield (path, f"Expected list of length {len(a)}, but got length {len(b)}")
     else:
         for i, (el_a, el_b) in enumerate(zip(a, b)):
-            for diff in get_differences(el_a, el_b, path=f"{path}[{i}]"):
-                yield diff
+            yield from get_differences(el_a, el_b, path=f"{path}[{i}]")
 
 
 @get_differences.register
@@ -125,29 +127,33 @@ def _(a: dict, b: Any, path: str = "") -> Iterator[tuple[str, str]]:
             missing_keys_str = "`" + "`, `".join(map(str, a_min_b)) + "`"
             yield (
                 path,
-                f"Expected dictionary with keys `{'`, `'.join(map(str, a.keys()))}`, but the following keys are missing: {missing_keys_str}",
+                f"Expected dictionary with keys `{'`, `'.join(map(str, a.keys()))}`, "
+                f"but the following keys are missing: {missing_keys_str}",
             )
         if b_min_a:
             extra_keys_str = "`" + "`, `".join(map(str, b_min_a)) + "`"
             yield (
                 path,
-                f"Expected dictionary with keys `{'`, `'.join(map(str, a.keys()))}`, but the following keys are extra: {extra_keys_str}",
+                f"Expected dictionary with keys `{'`, `'.join(map(str, a.keys()))}`, "
+                f"but the following keys are extra: {extra_keys_str}",
             )
     else:
         for k, v_a, v_b in zip(a.keys(), a.values(), b.values()):
             yield from get_differences(v_a, v_b, path=f'{path}["{k}"]')
 
 
+# TODO(tehrengruber): The ModuleWrapper has some magic with it that could be
+#  confusing to the user. Do we really want this? Should we maybe use
+#  something more in the line of `P[foo_ir.Foo](...)`
 @dataclass(frozen=True)
 class ModuleWrapper:
-    """
-    Small wrapper to conveniently create `ObjectPattern`s for classes of a module.
+    """Small wrapper to conveniently create `ObjectPattern`s for classes of a module.
 
-    Example:
-    >>> import foo_ir  # doctest: +SKIP
-    >>> foo_ir_ = ModuleWrapper(foo_ir)  # doctest: +SKIP
-    >>> assert foo_ir_.Foo(bar="baz").match(foo_ir.Foo(bar="baz", foo="bar"))  # doctest: +SKIP
-    >>> assert not foo_ir_.Foo(bar="bar").match(foo_ir.Foo(bar="baz", foo="bar"))  # doctest: +SKIP
+    Examples:
+        >>> import foo_ir  # doctest: +SKIP
+        >>> foo_ir_ = ModuleWrapper(foo_ir)  # doctest: +SKIP
+        >>> assert foo_ir_.Foo(bar="baz").match(foo_ir.Foo(bar="baz", foo="bar"))  # doctest: +SKIP
+        >>> assert not foo_ir_.Foo(bar="bar").match(foo_ir.Foo(bar="baz", foo="bar"))  # doctest: +SKIP
     """
 
     module: ModuleType

@@ -1,5 +1,5 @@
 import types
-from typing import Any, TypedDict
+from typing import Any
 
 import pytest
 
