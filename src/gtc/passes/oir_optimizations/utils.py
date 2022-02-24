@@ -275,6 +275,7 @@ class StencilExtentComputer(NodeVisitor):
 
     def visit_HorizontalExecution(self, node: oir.HorizontalExecution, *, ctx: Context) -> None:
         results = AccessCollector.apply(node)
+        horizontal_extent = self.zero_extent
         horizontal_extent = functools.reduce(
             lambda ext, name: ext | ctx.fields.get(name, self.zero_extent),
             results.write_fields(),
@@ -282,18 +283,13 @@ class StencilExtentComputer(NodeVisitor):
         )
         ctx.blocks[id(node)] = horizontal_extent
 
-        for name, accesses in results.read_offsets().items():
-            extent = functools.reduce(
-                lambda ext, off: ext | Extent.from_offset(off[:2]),
-                accesses,
-                Extent.from_offset(accesses.pop()[:2]),
-            )
-            total_extent = horizontal_extent + extent
-            ctx.fields.setdefault(name, total_extent)
-            ctx.fields[name] |= total_extent
-
-        for name in results.write_fields():
-            ctx.fields.setdefault(name, horizontal_extent)
+        for acc in results.ordered_accesses():
+            extent = acc.to_extent(horizontal_extent)
+            if extent is not None:
+                if acc.is_write:
+                    ctx.fields.setdefault(acc.field, horizontal_extent)
+                else:
+                    ctx.fields[acc.field] = ctx.fields.get(acc.field, extent) | extent
 
 
 def compute_horizontal_block_extents(node: oir.Stencil, **kwargs: Any) -> Dict[int, Extent]:
