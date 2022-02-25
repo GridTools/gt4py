@@ -19,6 +19,12 @@ def _execute_cmake():
     return cmake_proc.wait() == 0
 
 
+def _execute_build():
+    build = ["cmake", "--build", _build_dir(), "--parallel", str(len(os.sched_getaffinity(0)))]
+    build_proc = subprocess.Popen(build)
+    return build_proc.wait() == 0
+
+
 def _execute_ctest():
     ctest = "ctest"
     ctest_proc = subprocess.Popen(ctest, cwd=_build_dir())
@@ -27,4 +33,5 @@ def _execute_ctest():
 
 def test_driver():
     assert _execute_cmake()
+    assert _execute_build()
     assert _execute_ctest()
