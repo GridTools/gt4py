@@ -16,77 +16,35 @@ def compute_zavgS(pp, S_M):
     return make_tuple(tuple_get(0, deref(S_M)) * zavg, tuple_get(1, deref(S_M)) * zavg)
 
 
+def _unroll_reduce(binop, init, n):
+    def impl(fun):
+        acc = init
+        for i in range(n):
+            acc = binop(acc, fun(i))
+        return acc
+
+    return impl
+
+
 @fundef
 def compute_pnabla(pp, S_M, sign, vol):
     zavgS = lift(compute_zavgS)(pp, S_M)
 
-    init_0 = if_(
-        can_deref(shift(V2E, 0)(zavgS)),
-        tuple_get(0, deref(shift(V2E, 0)(zavgS))) * tuple_get(0, deref(sign)),
-        0,
-    )
-    init_1 = if_(
-        can_deref(shift(V2E, 0)(zavgS)),
-        tuple_get(1, deref(shift(V2E, 0)(zavgS))) * tuple_get(0, deref(sign)),
-        0,
+    def step(zavgS, sign, tuple_index, neigh_index, prev):
+        return if_(
+            can_deref(shift(V2E, neigh_index)(zavgS)),
+            tuple_get(tuple_index, deref(shift(V2E, neigh_index)(zavgS)))
+            * tuple_get(neigh_index, deref(sign))
+            + prev,
+            prev,
+        )
+
+    pnabla_M = make_tuple(
+        _unroll_reduce(lambda a, b: a + b, 0.0, 6)(lambda i: step(zavgS, sign, 0, i, 0.0)),
+        _unroll_reduce(lambda a, b: a + b, 0.0, 6)(lambda i: step(zavgS, sign, 1, i, 0.0)),
     )
 
-    state_0_0 = if_(
-        can_deref(shift(V2E, 1)(zavgS)),
-        tuple_get(0, deref(shift(V2E, 1)(zavgS))) * tuple_get(1, deref(sign)) + init_0,
-        init_0,
-    )
-    state_0_1 = if_(
-        can_deref(shift(V2E, 1)(zavgS)),
-        tuple_get(1, deref(shift(V2E, 1)(zavgS))) * tuple_get(1, deref(sign)) + init_1,
-        init_1,
-    )
-
-    state_1_0 = if_(
-        can_deref(shift(V2E, 2)(zavgS)),
-        tuple_get(0, deref(shift(V2E, 2)(zavgS))) * tuple_get(2, deref(sign)) + state_0_0,
-        state_0_0,
-    )
-    state_1_1 = if_(
-        can_deref(shift(V2E, 2)(zavgS)),
-        tuple_get(1, deref(shift(V2E, 2)(zavgS))) * tuple_get(2, deref(sign)) + state_0_1,
-        state_0_1,
-    )
-
-    state_2_0 = if_(
-        can_deref(shift(V2E, 3)(zavgS)),
-        tuple_get(0, deref(shift(V2E, 3)(zavgS))) * tuple_get(3, deref(sign)) + state_1_0,
-        state_1_0,
-    )
-    state_2_1 = if_(
-        can_deref(shift(V2E, 3)(zavgS)),
-        tuple_get(1, deref(shift(V2E, 3)(zavgS))) * tuple_get(3, deref(sign)) + state_1_1,
-        state_1_1,
-    )
-
-    state_3_0 = if_(
-        can_deref(shift(V2E, 4)(zavgS)),
-        tuple_get(0, deref(shift(V2E, 4)(zavgS))) * tuple_get(4, deref(sign)) + state_2_0,
-        state_2_0,
-    )
-    state_3_1 = if_(
-        can_deref(shift(V2E, 4)(zavgS)),
-        tuple_get(1, deref(shift(V2E, 4)(zavgS))) * tuple_get(4, deref(sign)) + state_2_1,
-        state_2_1,
-    )
-
-    state_4_0 = if_(
-        can_deref(shift(V2E, 5)(zavgS)),
-        tuple_get(0, deref(shift(V2E, 5)(zavgS))) * tuple_get(5, deref(sign)) + state_3_0,
-        state_3_0,
-    )
-    state_4_1 = if_(
-        can_deref(shift(V2E, 5)(zavgS)),
-        tuple_get(1, deref(shift(V2E, 5)(zavgS))) * tuple_get(5, deref(sign)) + state_3_1,
-        state_3_1,
-    )
-
-    return make_tuple(state_4_0 / deref(vol), state_4_1 / deref(vol))
+    return make_tuple(tuple_get(0, pnabla_M) / deref(vol), tuple_get(1, pnabla_M) / deref(vol))
 
 
 def zavgS_fencil(edge_domain, out, pp, S_M):
