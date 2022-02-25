@@ -19,7 +19,17 @@ import pytest
 
 from gt4py import gtscript
 from gt4py import storage as gt_storage
-from gt4py.gtscript import __INLINED, BACKWARD, FORWARD, PARALLEL, Field, computation, interval
+from gt4py.gtscript import (
+    __INLINED,
+    BACKWARD,
+    FORWARD,
+    IJK,
+    PARALLEL,
+    Field,
+    K,
+    computation,
+    interval,
+)
 
 from ..definitions import ALL_BACKENDS, CPU_BACKENDS, INTERNAL_BACKENDS
 from .stencil_definitions import EXTERNALS_REGISTRY as externals_registry
@@ -382,23 +392,61 @@ def test_variable_offsets(backend):
     "backend", [backend for backend in ALL_BACKENDS if backend.values[0] != "gtc:dace"]
 )
 def test_variable_offsets_and_while_loop(backend):
+    nz = 100
+    dz = dt = 1.2
+
     @gtscript.stencil(backend=backend)
     def stencil(
-        pe1: gtscript.Field[np.float_],
-        pe2: gtscript.Field[np.float_],
-        qin: gtscript.Field[np.float_],
-        qout: gtscript.Field[np.float_],
-        lev: gtscript.Field[gtscript.IJ, np.int_],
+        Nr: Field[IJK, np.float_],
+        v_n: Field[IJK, np.float_],
+        s_nv: Field[IJK, np.float_],
+        indK: Field[K, np.int_],
+        kk: Field[IJK, np.int_],
     ):
-        with computation(FORWARD), interval(0, -1):
-            if pe2[0, 0, 1] <= pe1[0, 0, lev]:
-                qout = qin[0, 0, 1]
-            else:
-                qsum = pe1[0, 0, lev + 1] - pe2[0, 0, lev]
-                while pe1[0, 0, lev + 1] < pe2[0, 0, 1]:
-                    qsum += qin[0, 0, lev] / (pe2[0, 0, 1] - pe1[0, 0, lev])
-                    lev = lev + 1
-                qout = qsum / (pe2[0, 0, 1] - pe2)
+        with computation(PARALLEL), interval(...):
+            dz_loc = 0.0
+            kk = 0
+
+            while indK + kk <= nz - 1:
+                if dz_loc < -v_n[0, 0, kk] * dt:
+                    s_nv[0, 0, 0] += Nr[0, 0, kk] * min(dz, -dz_loc - v_n[0, 0, kk] * dt)
+                kk += 1
+                dz_loc += dz
+
+    shape = (2, 2, nz)
+    rng = np.random.default_rng(seed=42)
+
+    Nr = gt_storage.from_array(
+        rng.exponential(1e7, size=shape), dtype=np.float_, backend=backend, default_origin=(0, 0, 0)
+    )
+    v_n = gt_storage.from_array(
+        (-1) * rng.uniform(high=100.0, size=shape),
+        dtype=np.float_,
+        backend=backend,
+        default_origin=(0, 0, 0),
+    )
+    s_nv = gt_storage.zeros(
+        shape=shape,
+        dtype=np.float_,
+        backend=backend,
+        default_origin=(0, 0, 0),
+    )
+
+    indK = gt_storage.from_array(
+        np.arange(nz),
+        dtype=np.int_,
+        backend=backend,
+        default_origin=(0,),
+        mask=(False, False, True),
+    )
+    kk = gt_storage.zeros(
+        shape=shape,
+        dtype=np.int_,
+        backend=backend,
+        default_origin=(0, 0, 0),
+    )
+
+    stencil(Nr, v_n, s_nv, indK, kk)
 
 
 # TODO: Enable DaCe
