@@ -24,9 +24,7 @@ class EmbeddedDSL(codegen.TemplatedGenerator):
     StringLiteral = as_fmt("{value}")
     FunCall = as_fmt("{fun}({','.join(args)})")
     Lambda = as_mako("(lambda ${','.join(params)}: ${expr})")
-    StencilClosure = as_mako(
-        "closure(${domain}, ${stencil}, [${','.join(outputs)}], [${','.join(inputs)}])"
-    )
+    StencilClosure = as_mako("closure(${domain}, ${stencil}, ${output}, [${','.join(inputs)}])")
     FencilDefinition = as_mako(
         """
 @fendef

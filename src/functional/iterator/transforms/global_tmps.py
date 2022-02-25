@@ -74,7 +74,7 @@ class CreateGlobalTmps(NodeTranslator):
                 tmps.append(ir.Sym(id=ref.id))
                 assert len(arg.fun.args) == 1
                 unlifted = ir.FunCall(fun=arg.fun.args[0], args=arg.args)
-                todos.append(([ref], unlifted))
+                todos.append((ref, unlifted))
                 return ref
             raise AssertionError()
 
@@ -84,22 +84,21 @@ class CreateGlobalTmps(NodeTranslator):
             assert isinstance(closure.stencil, ir.Lambda)
             wrapped_stencil = ir.FunCall(fun=closure.stencil, args=closure.inputs)
             popped_stencil = PopupTmps().visit(wrapped_stencil)
-            todos = [(closure.outputs, popped_stencil)]
+            todos = [(closure.output, popped_stencil)]
 
             shifts: Dict[str, List[tuple]] = dict()
             domain = closure.domain
             while todos:
-                outputs, call = todos.pop()
-                output_shifts: List[tuple] = sum((shifts.get(o.id, []) for o in outputs), [])
+                output, call = todos.pop()
+                output_shifts: List[tuple] = shifts.get(output.id, [])
                 domain = self._extend_domain(domain, offset_provider, output_shifts)
-                for output in outputs:
-                    if output.id in {tmp.id for tmp in tmps}:
-                        assert output.id not in tmp_domains
-                        tmp_domains[output.id] = domain
+                if output.id in {tmp.id for tmp in tmps}:
+                    assert output.id not in tmp_domains
+                    tmp_domains[output.id] = domain
                 closure = ir.StencilClosure(
                     domain=domain,
                     stencil=call.fun,
-                    outputs=outputs,
+                    output=output,
                     inputs=[handle_arg(arg) for arg in call.args],
                 )
                 local_shifts: Dict[str, List[tuple]] = dict()

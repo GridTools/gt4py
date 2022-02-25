@@ -55,7 +55,7 @@ def compute_zavgS_fencil(
     closure(
         domain(named_range(Edge, 0, n_edges)),
         compute_zavgS,
-        [out],
+        out,
         [pp, S_M],
     )
 
@@ -69,29 +69,53 @@ def compute_pnabla(pp, S_M, sign, vol):
     return pnabla_M / deref(vol)
 
 
+@fundef
+def pnabla(pp, S_MXX, S_MYY, sign, vol):
+    return make_tuple(compute_pnabla(pp, S_MXX, sign, vol), compute_pnabla(pp, S_MYY, sign, vol))
+
+
+@fundef
+def compute_zavgS2(pp, S_M):
+    zavg = 0.5 * (deref(shift(E2V, 0)(pp)) + deref(shift(E2V, 1)(pp)))
+    s = deref(S_M)
+    return make_tuple(tuple_get(0, s) * zavg, tuple_get(1, s) * zavg)
+
+
+@fundef
+def tuple_dot_fun(acc, zavgS, sign):
+    return make_tuple(
+        tuple_get(0, acc) + tuple_get(0, zavgS) * sign,
+        tuple_get(1, acc) + tuple_get(1, zavgS) * sign,
+    )
+
+
+@fundef
+def tuple_dot(a, b):
+    return reduce(tuple_dot_fun, make_tuple(0.0, 0.0))(a, b)
+
+
+@fundef
+def compute_pnabla2(pp, S_M, sign, vol):
+    zavgS = lift(compute_zavgS2)(pp, S_M)
+    pnabla_M = tuple_dot(shift(V2E)(zavgS), sign)
+    return make_tuple(tuple_get(0, pnabla_M) / deref(vol), tuple_get(1, pnabla_M) / deref(vol))
+
+
 @fendef
 def nabla(
     n_nodes,
-    out_MXX,
-    out_MYY,
+    out,
     pp,
     S_MXX,
     S_MYY,
     sign,
     vol,
 ):
-    # TODO replace by single stencil which returns tuple
     closure(
         domain(named_range(Vertex, 0, n_nodes)),
-        compute_pnabla,
-        [out_MXX],
-        [pp, S_MXX, sign, vol],
-    )
-    closure(
-        domain(named_range(Vertex, 0, n_nodes)),
-        compute_pnabla,
-        [out_MYY],
-        [pp, S_MYY, sign, vol],
+        pnabla,
+        out,
+        [pp, S_MXX, S_MYY, sign, vol],
     )
 
 
@@ -132,6 +156,50 @@ def test_compute_zavgS(backend, use_tmps):
         assert_close(1000788897.3202186, max(zavgS))
 
 
+@fendef
+def compute_zavgS2_fencil(
+    n_edges,
+    out,
+    pp,
+    S_M,
+):
+    closure(
+        domain(named_range(Edge, 0, n_edges)),
+        compute_zavgS2,
+        out,
+        [pp, S_M],
+    )
+
+
+def test_compute_zavgS2(backend, use_tmps):
+    if use_tmps:
+        pytest.xfail("use_tmps currently only supported for cartesian")
+    backend, validate = backend
+    setup = nabla_setup()
+
+    pp = np_as_located_field(Vertex)(setup.input_field)
+
+    S = np_as_located_field(Edge)(
+        np.array([(a, b) for a, b in zip(*(setup.S_fields[0], setup.S_fields[1]))], dtype="d,d")
+    )
+
+    zavgS = (
+        np_as_located_field(Edge)(np.zeros((setup.edges_size))),
+        np_as_located_field(Edge)(np.zeros((setup.edges_size))),
+    )
+
+    e2v = NeighborTableOffsetProvider(AtlasTable(setup.edges2node_connectivity), Edge, Vertex, 2)
+
+    compute_zavgS2_fencil(setup.edges_size, zavgS, pp, S, offset_provider={"E2V": e2v})
+
+    if validate:
+        assert_close(-199755464.25741270, min(zavgS[0]))
+        assert_close(388241977.58389181, max(zavgS[0]))
+
+        assert_close(-1000788897.3202186, min(zavgS[1]))
+        assert_close(1000788897.3202186, max(zavgS[1]))
+
+
 def test_nabla(backend, use_tmps):
     if use_tmps:
         pytest.xfail("use_tmps currently only supported for cartesian")
@@ -151,11 +219,66 @@ def test_nabla(backend, use_tmps):
 
     nabla(
         setup.nodes_size,
-        pnabla_MXX,
-        pnabla_MYY,
+        (pnabla_MXX, pnabla_MYY),
         pp,
         S_MXX,
         S_MYY,
+        sign,
+        vol,
+        offset_provider={"E2V": e2v, "V2E": v2e},
+        backend=backend,
+        use_tmps=use_tmps,
+        debug=True,
+    )
+
+    if validate:
+        assert_close(-3.5455427772566003e-003, min(pnabla_MXX))
+        assert_close(3.5455427772565435e-003, max(pnabla_MXX))
+        assert_close(-3.3540113705465301e-003, min(pnabla_MYY))
+        assert_close(3.3540113705465301e-003, max(pnabla_MYY))
+
+
+@fendef
+def nabla2(
+    n_nodes,
+    out,
+    pp,
+    S,
+    sign,
+    vol,
+):
+    closure(
+        domain(named_range(Vertex, 0, n_nodes)),
+        compute_pnabla2,
+        out,
+        [pp, S, sign, vol],
+    )
+
+
+def test_nabla2(backend, use_tmps):
+    if use_tmps:
+        pytest.xfail("use_tmps currently only supported for cartesian")
+    backend, validate = backend
+    setup = nabla_setup()
+
+    sign = np_as_located_field(Vertex, V2E)(setup.sign_field)
+    pp = np_as_located_field(Vertex)(setup.input_field)
+    S_M = np_as_located_field(Edge)(
+        np.array([(a, b) for a, b in zip(*(setup.S_fields[0], setup.S_fields[1]))], dtype="d,d")
+    )
+    vol = np_as_located_field(Vertex)(setup.vol_field)
+
+    pnabla_MXX = np_as_located_field(Vertex)(np.zeros((setup.nodes_size)))
+    pnabla_MYY = np_as_located_field(Vertex)(np.zeros((setup.nodes_size)))
+
+    e2v = NeighborTableOffsetProvider(AtlasTable(setup.edges2node_connectivity), Edge, Vertex, 2)
+    v2e = NeighborTableOffsetProvider(AtlasTable(setup.nodes2edge_connectivity), Vertex, Edge, 7)
+
+    nabla2(
+        setup.nodes_size,
+        (pnabla_MXX, pnabla_MYY),
+        pp,
+        S_M,
         sign,
         vol,
         offset_provider={"E2V": e2v, "V2E": v2e},
@@ -202,13 +325,13 @@ def nabla_sign(n_nodes, out_MXX, out_MYY, pp, S_MXX, S_MYY, vol, node_index, is_
     closure(
         domain(named_range(Vertex, 0, n_nodes)),
         compute_pnabla_sign,
-        [out_MXX],
+        out_MXX,
         [pp, S_MXX, vol, node_index, is_pole_edge],
     )
     closure(
         domain(named_range(Vertex, 0, n_nodes)),
         compute_pnabla_sign,
-        [out_MYY],
+        out_MYY,
         [pp, S_MYY, vol, node_index, is_pole_edge],
     )
 
