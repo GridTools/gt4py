@@ -283,7 +283,7 @@ class NpirCodegen(TemplatedGenerator):
     While = JinjaTemplate(
         textwrap.dedent(
             """\
-            while {{ cond }}:
+            while np.any({{ cond }}):
                 {% for stmt in body %}{{ stmt }}
                 {% endfor %}
             """
