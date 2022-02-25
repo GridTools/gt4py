@@ -57,7 +57,6 @@ class InlineLifts(NodeTranslator):
                 return res
             elif self._is_shift_lift(node.args[0]):
                 # can_deref(shift(...)(lift(f)(args...)) -> and(can_deref(shift(...)(arg[0])), and(can_deref(shift(...)(arg[1])), ...))
-                # f = node.args[0].args[0].fun.args[0]
                 shift = node.args[0].fun
                 args = node.args[0].args[0].args
                 res = ir.FunCall(
