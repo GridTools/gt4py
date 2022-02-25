@@ -4,7 +4,6 @@ from eve import codegen
 from eve.codegen import FormatTemplate as as_fmt
 from eve.codegen import MakoTemplate as as_mako
 from functional.iterator.backends import backend
-from functional.iterator.backends.gtfn import gtfn_ir
 from functional.iterator.backends.gtfn.gtfn_ir import GridType, OffsetLiteral, Program
 
 
@@ -87,7 +86,7 @@ class gtfn_codegen(codegen.TemplatedGenerator):
     )
 
     @classmethod
-    def apply(cls, root: gtfn_ir.Program, **kwargs: Any) -> str:
+    def apply(cls, root: Any, **kwargs: Any) -> str:
         generated_code = super().apply(root, **kwargs)
         formatted_code = codegen.format_source("cpp", generated_code, style="LLVM")
         return formatted_code

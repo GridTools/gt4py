@@ -22,6 +22,7 @@ class FoldCartesianShifts(NodeTranslator):
                         last_inserted_tag = o
                 elif isinstance(o, ir.OffsetLiteral) and isinstance(o.value, int):
                     if accumulate:
+                        assert isinstance(new_offsets[-1].value, int)
                         new_value = new_offsets[-1].value + o.value
                         if new_value == 0:
                             new_offsets.pop()
