@@ -21,14 +21,8 @@ from typing import Any, Dict
 from eve.visitors import NodeVisitor
 from gt4py.definitions import AccessKind, Extent
 from gtc import oir
-from gtc.passes.oir_optimizations.utils import GeneralAccess, compute_horizontal_block_extents
-
-
-def horizontal_mask_overlaps_block_extent(mask: oir.HorizontalMask, block_extent: Extent) -> bool:
-    return all(
-        GeneralAccess._overlap_along_axis(axis_extent, interval) is not None
-        for axis_extent, interval in zip(block_extent, mask.intervals)
-    )
+from gtc.passes.oir_masks import mask_overlap_with_extent
+from gtc.passes.oir_optimizations.utils import compute_horizontal_block_extents
 
 
 class AccessKindComputer(NodeVisitor):
@@ -64,7 +58,7 @@ class AccessKindComputer(NodeVisitor):
         else:
             mask = None
 
-        if (mask and horizontal_mask_overlaps_block_extent(mask, horizontal_extent)) or not mask:
+        if (mask and mask_overlap_with_extent(mask, horizontal_extent)) or not mask:
             # Could pass horizontal_extent for more analysis capability.
             self.visit(node.mask, kind=AccessKind.READ, **kwargs)
             self.visit(node.body, **kwargs)

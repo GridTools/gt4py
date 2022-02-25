@@ -19,6 +19,7 @@ import pytest
 from gt4py.definitions import Extent
 from gtc import common, oir
 from gtc.common import DataType
+from gtc.passes.oir_masks import _overlap_along_axis
 from gtc.passes.oir_optimizations.utils import (
     AccessCollector,
     GeneralAccess,
@@ -116,14 +117,12 @@ def test_stencil_extents_simple():
 
 
 def test_access_overlap_along_axis():
-    assert GeneralAccess._overlap_along_axis(
-        (0, 0), common.HorizontalInterval.compute_domain()
-    ) == (0, 0)
-    assert GeneralAccess._overlap_along_axis(
+    assert _overlap_along_axis((0, 0), common.HorizontalInterval.compute_domain()) == (0, 0)
+    assert _overlap_along_axis(
         (0, 0), common.HorizontalInterval.compute_domain(start_offset=-1, end_offset=1)
     ) == (0, 0)
 
-    assert GeneralAccess._overlap_along_axis(
+    assert _overlap_along_axis(
         (0, 0), common.HorizontalInterval.single_index(common.LevelMarker.START, 2)
     ) == (-2, 0)
 

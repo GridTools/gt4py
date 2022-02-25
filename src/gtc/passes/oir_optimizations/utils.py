@@ -14,7 +14,6 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import functools
 import re
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, Generic, List, Optional, Set, Tuple, TypeVar, cast
@@ -24,7 +23,8 @@ from eve.concepts import TreeNode
 from eve.traits import SymbolTableTrait
 from eve.utils import XIterable, xiter
 from gt4py.definitions import Extent
-from gtc import common, oir
+from gtc import oir
+from gtc.passes.oir_masks import mask_overlap_with_extent
 
 
 OffsetT = TypeVar("OffsetT")
@@ -53,47 +53,14 @@ class GenericAccess(Generic[OffsetT]):
         This returns None if no overlap exists between the horizontal mask and interval.
         """
         offset_as_extent = Extent.from_offset(cast(Tuple[int, int, int], self.offset)[:2])
+        zeros = Extent.zeros(ndims=2)
         if self.horizontal_mask:
-            mask = self.horizontal_mask
-            diffs = [
-                self._overlap_along_axis(ext, interval)
-                for ext, interval in zip(horizontal_extent, (mask.i, mask.j))
-            ]
-            if not any(d is None for d in diffs):
-                dist_from_edge = Extent(diffs[0], diffs[1])
-                return ((horizontal_extent - dist_from_edge) + offset_as_extent) | Extent.zeros(
-                    ndims=2
-                )
+            if dist_from_edge := mask_overlap_with_extent(self.horizontal_mask, horizontal_extent):
+                return ((horizontal_extent - dist_from_edge) + offset_as_extent) | zeros
             else:
                 return None
         else:
             return horizontal_extent + offset_as_extent
-
-    @staticmethod
-    def _overlap_along_axis(
-        extent: Tuple[int, int], interval: common.HorizontalInterval
-    ) -> Optional[Tuple[int, int]]:
-        """Return a tuple of the distances to the edge of the compute domain, if overlapping."""
-        if interval.start is not None and interval.start.level == common.LevelMarker.START:
-            start_diff = extent[0] - interval.start.offset
-        else:
-            start_diff = None
-
-        if interval.end is not None and interval.end.level == common.LevelMarker.END:
-            end_diff = extent[1] - interval.end.offset
-        else:
-            end_diff = None
-
-        if start_diff is not None and start_diff > 0 and end_diff is None:
-            if interval.end.offset <= extent[0]:
-                return None
-        elif end_diff is not None and end_diff < 0 and start_diff is None:
-            if interval.start.offset > extent[1]:
-                return None
-
-        start_diff = min(start_diff, 0) if start_diff is not None else -10000
-        end_diff = max(end_diff, 0) if end_diff is not None else 10000
-        return (start_diff, end_diff)
 
 
 class CartesianAccess(GenericAccess[Tuple[int, int, int]]):
@@ -275,23 +242,10 @@ class StencilExtentComputer(NodeVisitor):
 
     def visit_HorizontalExecution(self, node: oir.HorizontalExecution, *, ctx: Context) -> None:
         results = AccessCollector.apply(node)
+
         horizontal_extent = self.zero_extent
-
-        for acc in results.ordered_accesses():
-            extent = acc.to_extent(horizontal_extent)
-            if extent is not None and acc.is_write:
-                horizontal_extent |= extent
-
-        # The reduce below has the effect that it computes the effective
-        # extent of the horizontal execution if it were to execute.
-        # In other words, this always generates a horizontal extent,
-        # even if the block does not execute any statements because
-        # they're masked.
-        horizontal_extent = functools.reduce(
-            lambda ext, name: ext | ctx.fields.get(name, self.zero_extent),
-            results.write_fields(),
-            self.zero_extent,
-        )
+        for acc in (acc for acc in results.ordered_accesses() if acc.is_write):
+            horizontal_extent |= ctx.fields.setdefault(acc.field, self.zero_extent)
         ctx.blocks[id(node)] = horizontal_extent
 
         for acc in results.ordered_accesses():
@@ -302,7 +256,7 @@ class StencilExtentComputer(NodeVisitor):
             if acc.is_write:
                 ctx.fields.setdefault(acc.field, horizontal_extent)
             else:
-                ctx.fields[acc.field] = ctx.fields.get(acc.field, extent) | extent
+                ctx.fields[acc.field] = ctx.fields.get(acc.field, self.zero_extent) | extent
 
 
 def compute_horizontal_block_extents(node: oir.Stencil, **kwargs: Any) -> Dict[int, Extent]:
