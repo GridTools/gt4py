@@ -15,7 +15,9 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import numbers
-from typing import Any, Dict, List, Tuple, Union, cast
+from typing import Any, Dict, List, Optional, Tuple, Union, cast
+
+import numpy as np
 
 from gt4py.ir import IRNodeVisitor
 from gt4py.ir.nodes import (
@@ -33,6 +35,7 @@ from gt4py.ir.nodes import (
     Expr,
     FieldDecl,
     FieldRef,
+    HorizontalIf,
     If,
     IterationOrder,
     LevelMarker,
@@ -274,6 +277,32 @@ class DefIRToGTIR(IRNodeVisitor):
                 else None,
                 loc=common.location_to_source_location(node.loc),
             )
+
+    def visit_HorizontalIf(self, node: HorizontalIf) -> gtir.FieldIfStmt:
+        def make_bound_or_level(bound: AxisBound, level) -> Optional[common.AxisBound]:
+            if (level == LevelMarker.START and bound.offset <= -np.iinfo(np.int32).max) or (
+                level == LevelMarker.END and bound.offset >= np.iinfo(np.int32).max
+            ):
+                return None
+            else:
+                return common.AxisBound(
+                    level=self.GT4PY_LEVELMARKER_TO_GTIR_LEVELMARKER[bound.level],
+                    offset=bound.offset,
+                )
+
+        axes = {
+            axis.lower(): common.HorizontalInterval(
+                start=make_bound_or_level(node.intervals[axis].start, LevelMarker.START),
+                end=make_bound_or_level(node.intervals[axis].end, LevelMarker.END),
+            )
+            for axis in ("I", "J")
+        }
+
+        return gtir.FieldIfStmt(
+            cond=gtir.HorizontalMask(**axes),
+            true_branch=BlockStmt(stmts=self.visit(node.body)),
+            false_branch=None,
+        )
 
     def visit_While(self, node: While) -> gtir.While:
         return gtir.While(
