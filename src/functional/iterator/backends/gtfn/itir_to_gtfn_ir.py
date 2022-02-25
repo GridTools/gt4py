@@ -110,7 +110,6 @@ class GTFN_lowering(NodeTranslator):
 
     def visit_StencilClosure(self, node: itir.StencilClosure, **kwargs) -> StencilExecution:
         backend = Backend(domain=self.visit(node.domain), backend_tag="backend::naive{}")  # TODO
-        debug(self.visit(node.stencil))
         return StencilExecution(
             backend=backend,
             stencil=self.visit(node.stencil),
@@ -126,7 +125,7 @@ class GTFN_lowering(NodeTranslator):
         )
 
     @staticmethod
-    def _collect_offsets(node: itir.Program) -> list[str]:
+    def _collect_offsets(node: itir.Program) -> set[str]:
         return (
             iter_tree(node)
             .if_isinstance(itir.OffsetLiteral)

@@ -1,3 +1,4 @@
+from copy import copy
 from typing import Any, Dict, Set
 
 from eve import NOTHING, NodeTranslator
@@ -14,7 +15,13 @@ class InlineFundefs(NodeTranslator):
         return self.generic_visit(node)
 
     def visit_Program(self, node: ir.Program):
-        return self.generic_visit(node, symtable=node.symtable_)
+        # inline only into fundefs, but not into the stencil_closure
+        fundefs = map(
+            lambda f: self.generic_visit(f, symtable=node.symtable_), node.function_definitions
+        )
+        new_program = copy(node)
+        new_program.function_definitions = list(fundefs)
+        return new_program
 
 
 class PruneUnreferencedFundefs(NodeTranslator):

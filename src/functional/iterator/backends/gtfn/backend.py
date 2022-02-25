@@ -12,7 +12,7 @@ def generate(program: itir.Program, *, grid_type: str, **kwargs) -> str:
         program,
         use_tmps=kwargs.get("use_tmps", False),
         offset_provider=kwargs.get("offset_provider", None),
-        grid_type=kwargs.get("grid_type", None),
+        grid_type=grid_type,
     )
     gtfn_ir = GTFN_lowering().visit(transformed, grid_type=grid_type)
     generated_code = gtfn_codegen.apply(gtfn_ir, **kwargs)
