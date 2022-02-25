@@ -21,7 +21,7 @@ def fencil(output, input):
     closure(
         domain(named_range(I_loc, 0, 1), named_range(J_loc, 0, 1)),
         foo,
-        [output],
+        output,
         [input],
     )
 
@@ -31,7 +31,7 @@ def fencil_swapped(output, input):
     closure(
         domain(named_range(I_loc, 0, 1), named_range(J_loc, 0, 1)),
         foo,
-        [output],
+        output,
         [input],
     )
 
@@ -63,7 +63,7 @@ def delay_complete_shift_fencil(output, input):
     closure(
         domain(named_range(I_loc, 0, 1), named_range(J_loc, 0, 1)),
         delay_complete_shift,
-        [output],
+        output,
         [input],
     )
 

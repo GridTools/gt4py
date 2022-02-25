@@ -87,7 +87,7 @@ class FundefDispatcher:
                             )
                         )
                     )
-                closure(dom, self, [out], [*inps])
+                closure(dom, self, out, [*inps])
 
             impl(out, *args, **kwargs)
 

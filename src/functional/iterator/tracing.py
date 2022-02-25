@@ -242,7 +242,11 @@ def trace_function_call(fun, *, args=None):
     if args is None:
         args = (_s(param) for param in inspect.signature(fun).parameters.keys())
     body = fun(*list(args))
-    return make_node(body) if body is not None else None
+
+    if isinstance(body, tuple):
+        return _f("make_tuple", *tuple(make_node(b) for b in body))
+    else:
+        return make_node(body) if body is not None else None
 
 
 def lambdadef(fun):
@@ -300,13 +304,13 @@ class Tracer:
 
 
 @iterator.runtime.closure.register(TRACING)
-def closure(domain, stencil, outputs, inputs):
+def closure(domain, stencil, output, inputs):
     stencil(*list(_s(param) for param in inspect.signature(stencil).parameters.keys()))
     Tracer.add_closure(
         StencilClosure(
             domain=domain,
             stencil=make_node(stencil),
-            outputs=outputs,
+            output=output,
             inputs=inputs,
         )
     )

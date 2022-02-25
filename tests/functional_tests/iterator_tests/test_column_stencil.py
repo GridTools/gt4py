@@ -24,7 +24,7 @@ def fencil(i_size, k_size, inp, out):
     closure(
         domain(named_range(IDim, 0, i_size), named_range(KDim, 0, k_size)),
         multiply_stencil,
-        [out],
+        out,
         [inp],
     )
 
@@ -91,7 +91,7 @@ def ksum_fencil(i_size, k_size, inp, out):
     closure(
         domain(named_range(IDim, 0, i_size), named_range(KDim, 0, k_size)),
         ksum,
-        [out],
+        out,
         [inp],
     )
 
@@ -130,7 +130,7 @@ def ksum_back_fencil(i_size, k_size, inp, out):
     closure(
         domain(named_range(IDim, 0, i_size), named_range(KDim, 0, k_size)),
         ksum_back,
-        [out],
+        out,
         [inp],
     )
 
