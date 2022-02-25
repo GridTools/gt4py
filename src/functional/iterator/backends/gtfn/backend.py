@@ -6,7 +6,7 @@ from functional.iterator.backends.gtfn.itir_to_gtfn_ir import GTFN_lowering
 from functional.iterator.transforms.common import apply_common_transforms
 
 
-def generate(program: itir.Program, **kwargs) -> str:
+def generate(program: itir.Program, *, grid_type: str, **kwargs) -> str:
     transformed = program
     transformed = apply_common_transforms(
         program,
@@ -14,7 +14,7 @@ def generate(program: itir.Program, **kwargs) -> str:
         offset_provider=kwargs.get("offset_provider", None),
         grid_type=kwargs.get("grid_type", None),
     )
-    gtfn_ir = GTFN_lowering().visit(transformed)
+    gtfn_ir = GTFN_lowering().visit(transformed, grid_type=grid_type)
     generated_code = gtfn_codegen.apply(gtfn_ir, **kwargs)
     formatted_code = codegen.format_source("cpp", generated_code, style="LLVM")
     return formatted_code

@@ -1,9 +1,16 @@
+import enum
 from typing import List, Union
 
 from eve import Node
 from eve.traits import SymbolName, SymbolTableTrait
-from eve.type_definitions import SymbolRef
+from eve.type_definitions import StrEnum, SymbolRef
 from functional.iterator.util.sym_validation import validate_symbol_refs
+
+
+@enum.unique
+class GridType(StrEnum):
+    Cartesian = "Cartesian"
+    Unstructured = "unstructured"
 
 
 class Sym(Node):  # helper
@@ -105,6 +112,7 @@ class Program(Node, SymbolTableTrait):
     function_definitions: List[FunctionDefinition]
     fencil_definitions: List[FencilDefinition]
     offsets: List[str]
+    grid_type: GridType
 
     builtin_functions = list(
         Sym(id=name)

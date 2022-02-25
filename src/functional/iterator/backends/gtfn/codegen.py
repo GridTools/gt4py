@@ -6,7 +6,7 @@ from eve.codegen import MakoTemplate as as_mako
 from eve.iterators import iter_tree
 from functional.iterator.backends import backend
 from functional.iterator.backends.gtfn import gtfn_ir
-from functional.iterator.backends.gtfn.gtfn_ir import OffsetLiteral
+from functional.iterator.backends.gtfn.gtfn_ir import GridType, OffsetLiteral, Program
 from functional.iterator.transforms import apply_common_transforms
 
 
@@ -58,6 +58,9 @@ class gtfn_codegen(codegen.TemplatedGenerator):
     """
     )
 
+    def visit_Program(self, node: Program, **kwargs):
+        return self.generic_visit(node, is_cartesian=node.grid_type == GridType.Cartesian, **kwargs)
+
     Program = as_mako(
         """
     #include <gridtools/fn/cartesian2.hpp>
@@ -70,13 +73,15 @@ class gtfn_codegen(codegen.TemplatedGenerator):
     using namespace literals;
 
 
-    ${''.join('struct ' + o + '_t{};' for o in offsets)}
-    ${''.join('constexpr inline ' + o + '_t ' + o + '{};' for o in offsets)}
-    using namespace cartesian;
-    constexpr inline dim::i i = {};
-    constexpr inline dim::j j = {};
-    constexpr inline dim::k k = {};
-
+    % if is_cartesian:
+        using namespace cartesian;
+        constexpr inline dim::i i = {};
+        constexpr inline dim::j j = {};
+        constexpr inline dim::k k = {};
+    % else:
+        ${''.join('struct ' + o + '_t{};' for o in offsets)}
+        ${''.join('constexpr inline ' + o + '_t ' + o + '{};' for o in offsets)}
+    % endif
 
     ${''.join(function_definitions)} ${''.join(fencil_definitions)}
     }

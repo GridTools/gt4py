@@ -12,6 +12,7 @@ from functional.iterator.backends.gtfn.gtfn_ir import (
     FloatLiteral,
     FunCall,
     FunctionDefinition,
+    GridType,
     IntLiteral,
     Lambda,
     OffsetLiteral,
@@ -122,7 +123,7 @@ class GTFN_lowering(NodeTranslator):
             id=SymbolName(node.id),
             params=self.visit(node.params),
             executions=self.visit(node.closures),
-        )  # TODO
+        )
 
     @staticmethod
     def _collect_offsets(node: itir.Program) -> list[str]:
@@ -134,9 +135,13 @@ class GTFN_lowering(NodeTranslator):
             .to_set()
         )
 
-    def visit_Program(self, node: itir.Program, **kwargs) -> Program:
+    def visit_Program(self, node: itir.Program, *, grid_type: str, **kwargs) -> Program:
+        grid_type = (
+            GridType.Cartesian if grid_type.lower() == "cartesian" else GridType.Unstructured
+        )
         return Program(
             function_definitions=self.visit(node.function_definitions),
             fencil_definitions=self.visit(node.fencil_definitions),
             offsets=self._collect_offsets(node),
+            grid_type=grid_type,
         )
