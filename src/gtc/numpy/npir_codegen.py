@@ -72,6 +72,8 @@ ORIGIN_CORRECTED_VIEW_CLASS = textwrap.dedent(
                         new_args.append(idx + offset)
             if not isinstance(new_args[2], (numbers.Integral, slice)):
                 assert isinstance(new_args[0], slice) and isinstance(new_args[1], slice)
+                if np.max(new_args[2]) >= self.field_view.shape[2] or np.min(new_args[2]) < 0:
+                    new_args[2] = np.clip(new_args[2].copy(), 0, self.field_view.shape[2]-1)
                 new_args[:2] = np.broadcast_arrays(
                     np.expand_dims(
                         np.arange(new_args[0].start, new_args[0].stop),
