@@ -113,7 +113,7 @@ class GTFN_lowering(NodeTranslator):
         return StencilExecution(
             backend=backend,
             stencil=self.visit(node.stencil),
-            output=self.visit(node.outputs[0]),
+            output=self.visit(node.output),
             inputs=self.visit(node.inputs),
         )
 

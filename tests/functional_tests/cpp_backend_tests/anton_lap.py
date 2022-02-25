@@ -37,26 +37,13 @@ JDim = CartesianAxis("JDim")
 KDim = CartesianAxis("KDim")
 
 
-# @fendef(offset_provider={"i": IDim, "j": JDim})
 def lap_fencil(domain, out, inp):
     closure(
         domain,
         lap,
-        [out],
+        out,
         [inp],
     )
-
-
-# def naive_lap(inp):
-#     shape = [inp.shape[0] - 2, inp.shape[1] - 2, inp.shape[2]]
-#     out = np.zeros(shape)
-#     for i in range(shape[0]):
-#         for j in range(shape[1]):
-#             for k in range(0, shape[2]):
-#                 out[i, j, k] = -4 * inp[i, j, k] + (
-#                     inp[i + 1, j, k] + inp[i - 1, j, k] + inp[i, j + 1, k] + inp[i, j - 1, k]
-#                 )
-#     return out
 
 
 if __name__ == "__main__":

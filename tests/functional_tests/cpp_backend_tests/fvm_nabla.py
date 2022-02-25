@@ -51,7 +51,7 @@ def zavgS_fencil(edge_domain, out, pp, S_M):
     closure(
         edge_domain,
         compute_zavgS,
-        [out],
+        out,
         [pp, S_M],
     )
 
@@ -60,7 +60,7 @@ def nabla_fencil(vertex_domain, out, pp, S_M, sign, vol):
     closure(
         vertex_domain,
         compute_pnabla,
-        [out],
+        out,
         [pp, S_M, sign, vol],
     )
 

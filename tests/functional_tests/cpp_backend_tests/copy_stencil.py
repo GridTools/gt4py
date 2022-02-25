@@ -20,7 +20,7 @@ def copy_fencil(domain, inp, out):
     closure(
         domain,
         copy_stencil,
-        [out],
+        out,
         [inp],
     )
 
