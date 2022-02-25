@@ -253,10 +253,10 @@ class StencilExtentComputer(NodeVisitor):
             if extent is None:
                 continue
 
-            if acc.is_write:
-                ctx.fields.setdefault(acc.field, horizontal_extent)
+            if acc.field in ctx.fields:
+                ctx.fields[acc.field] = ctx.fields[acc.field] | extent
             else:
-                ctx.fields[acc.field] = ctx.fields.get(acc.field, self.zero_extent) | extent
+                ctx.fields[acc.field] = extent
 
 
 def compute_horizontal_block_extents(node: oir.Stencil, **kwargs: Any) -> Dict[int, Extent]:

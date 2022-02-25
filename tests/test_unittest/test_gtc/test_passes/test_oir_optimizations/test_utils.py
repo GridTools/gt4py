@@ -122,9 +122,12 @@ def test_access_overlap_along_axis():
         (0, 0), common.HorizontalInterval.compute_domain(start_offset=-1, end_offset=1)
     ) == (0, 0)
 
-    assert _overlap_along_axis(
+    overlap = _overlap_along_axis(
         (0, 0), common.HorizontalInterval.single_index(common.LevelMarker.START, 2)
-    ) == (-2, 0)
+    )
+
+    assert overlap[0] == -2
+    assert overlap[1] > 100
 
 
 @pytest.mark.parametrize(
