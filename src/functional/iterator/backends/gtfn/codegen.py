@@ -3,11 +3,9 @@ from typing import Any
 from eve import codegen
 from eve.codegen import FormatTemplate as as_fmt
 from eve.codegen import MakoTemplate as as_mako
-from eve.iterators import iter_tree
 from functional.iterator.backends import backend
 from functional.iterator.backends.gtfn import gtfn_ir
 from functional.iterator.backends.gtfn.gtfn_ir import GridType, OffsetLiteral, Program
-from functional.iterator.transforms import apply_common_transforms
 
 
 class gtfn_codegen(codegen.TemplatedGenerator):
@@ -95,4 +93,6 @@ class gtfn_codegen(codegen.TemplatedGenerator):
         return formatted_code
 
 
-backend.register_backend("gtfn", lambda prog, *args, **kwargs: print(gtfn.apply(prog, **kwargs)))
+backend.register_backend(
+    "gtfn", lambda prog, *args, **kwargs: print(gtfn_codegen.apply(prog, **kwargs))
+)

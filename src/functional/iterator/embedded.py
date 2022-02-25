@@ -533,7 +533,7 @@ def shifted_scan_arg(k_pos):
 
 
 def fendef_embedded(fun, *args, **kwargs):  # noqa: 536
-    if not "offset_provider" in kwargs:
+    if "offset_provider" not in kwargs:
         raise RuntimeError("offset_provider not provided")
 
     @iterator.runtime.closure.register(EMBEDDED)
