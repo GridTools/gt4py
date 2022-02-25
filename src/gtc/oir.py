@@ -87,6 +87,10 @@ class HorizontalMask(Expr):
     kind = common.ExprKind.FIELD
     dtype = common.DataType.BOOL
 
+    @property
+    def intervals(self) -> Tuple[common.HorizontalInterval, common.HorizontalInterval]:
+        return (self.i, self.j)
+
 
 class UnaryOp(common.UnaryOp[Expr], Expr):
     pass
