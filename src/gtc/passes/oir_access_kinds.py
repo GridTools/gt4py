@@ -40,12 +40,6 @@ class AccessKindComputer(NodeVisitor):
         elif name not in access:
             access[name] = kind
 
-    def _visit_Mask(self, node: oir.MaskStmt, **kwargs: Any) -> None:
-        self.visit(node.mask, kind=AccessKind.READ, **kwargs)
-        self.visit(node.true_branch, **kwargs)
-        if node.false_branch:
-            self.visit(node.false_branch, **kwargs)
-
     def visit_ScalarAccess(self, node: oir.ScalarAccess, **kwargs: Any) -> None:
         self._visit_Access(node.name, **kwargs)
 
@@ -72,7 +66,8 @@ class AccessKindComputer(NodeVisitor):
 
         if (mask and horizontal_mask_overlaps_block_extent(mask, horizontal_extent)) or not mask:
             # Could pass horizontal_extent for more analysis capability.
-            self._visit_Mask(node, **kwargs)
+            self.visit(node.mask, kind=AccessKind.READ, **kwargs)
+            self.visit(node.body, **kwargs)
 
     def visit_HorizontalExecution(self, node: oir.HorizontalExecution, **kwargs: Any) -> None:
         self.generic_visit(node, horizontal_extent=kwargs["block_extents"][id(node)], **kwargs)
