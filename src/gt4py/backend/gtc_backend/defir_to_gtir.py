@@ -300,7 +300,7 @@ class DefIRToGTIR(IRNodeVisitor):
 
         return gtir.FieldIfStmt(
             cond=gtir.HorizontalMask(**axes),
-            true_branch=BlockStmt(stmts=self.visit(node.body)),
+            true_branch=gtir.BlockStmt(body=self.visit(node.body)),
             false_branch=None,
         )
 
