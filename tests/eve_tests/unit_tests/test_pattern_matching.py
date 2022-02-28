@@ -4,7 +4,7 @@ from typing import Any
 import pytest
 
 from eve import Node
-from eve.pattern_matching import ModuleWrapper, ObjectPattern, get_differences
+from eve.pattern_matching import ObjectPattern, get_differences
 
 
 class TestNode(Node):
@@ -68,25 +68,25 @@ test_data: list[tuple[str, Any, Any, list[tuple[str, str]]]] = [
     ),
     (
         "node_pattern_match",
-        ObjectPattern(TestNode, {"bar": "baz"}),
+        ObjectPattern(TestNode, bar="baz"),
         TestNode(bar="baz", foo="bar"),
         [],
     ),
     (
         "node_pattern_no_match",
-        ObjectPattern(TestNode, {"bar": "bar"}),
+        ObjectPattern(TestNode, bar="bar"),
         TestNode(bar="baz", foo="bar"),
         [("a.bar", "Values are not equal. `bar` != `baz`")],
     ),
     (
         "nested_node_pattern_match",
-        ObjectPattern(NestedTestNode, {"bar": ObjectPattern(TestNode, {"foo": "baz"})}),
+        ObjectPattern(NestedTestNode, bar=ObjectPattern(TestNode, foo="baz")),
         NestedTestNode(foo="bar", bar=TestNode(bar="baz", foo="baz")),
         [],
     ),
     (
         "nested_node_pattern_no_match",
-        ObjectPattern(NestedTestNode, {"bar": ObjectPattern(TestNode, {"foo": "bar"})}),
+        ObjectPattern(NestedTestNode, bar=ObjectPattern(TestNode, foo="bar")),
         NestedTestNode(foo="bar", bar=TestNode(bar="baz", foo="baz")),
         [("a.bar.foo", "Values are not equal. `bar` != `baz`")],
     ),
@@ -97,12 +97,3 @@ test_data: list[tuple[str, Any, Any, list[tuple[str, str]]]] = [
 def test_all(name, a, b, expected_diff):
     diff = list(get_differences(a, b, path="a"))
     assert diff == expected_diff
-
-
-def test_module_wrapper():
-    test_mod = types.ModuleType("test_mod")
-    test_mod.TestNode = TestNode
-    test_mod_ = ModuleWrapper(test_mod)
-
-    assert test_mod_.TestNode(bar="baz").match(test_mod.TestNode(bar="baz", foo="bar"))
-    assert not test_mod_.TestNode(bar="bar").match(test_mod.TestNode(bar="baz", foo="bar"))

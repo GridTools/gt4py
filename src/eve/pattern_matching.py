@@ -18,7 +18,6 @@ from types import ModuleType
 from typing import Any, Iterator
 
 
-@dataclass(frozen=True)
 class ObjectPattern:
     """Class to pattern match general objects.
 
@@ -31,11 +30,15 @@ class ObjectPattern:
         ...    def __init__(self, bar, baz):
         ...        self.bar = bar
         ...        self.baz = baz
-        >>> assert ObjectPattern(Foo, {"bar": 1}).match(Foo(1, 2))
+        >>> assert ObjectPattern(Foo, bar=1).match(Foo(1, 2))
     """
 
     cls: type
     fields: dict[str, Any]
+
+    def __init__(self, cls: type, **fields):
+        self.cls = cls
+        self.fields = fields
 
     def match(self, other: Any, *, raise_exception: bool = False) -> bool:
         """Return ``True`` if object pattern matches ``other`` using :func:`get_differences`.
@@ -140,26 +143,3 @@ def _(a: dict, b: Any, path: str = "") -> Iterator[tuple[str, str]]:
     else:
         for k, v_a, v_b in zip(a.keys(), a.values(), b.values()):
             yield from get_differences(v_a, v_b, path=f'{path}["{k}"]')
-
-
-# TODO(tehrengruber): The ModuleWrapper has some magic with it that could be
-#  confusing to the user. Do we really want this? Should we maybe use
-#  something more in the line of `P[foo_ir.Foo](...)`
-@dataclass(frozen=True)
-class ModuleWrapper:
-    """Small wrapper to conveniently create `ObjectPattern`s for classes of a module.
-
-    Examples:
-        >>> import foo_ir  # doctest: +SKIP
-        >>> foo_ir_ = ModuleWrapper(foo_ir)  # doctest: +SKIP
-        >>> assert foo_ir_.Foo(bar="baz").match(foo_ir.Foo(bar="baz", foo="bar"))  # doctest: +SKIP
-        >>> assert not foo_ir_.Foo(bar="bar").match(foo_ir.Foo(bar="baz", foo="bar"))  # doctest: +SKIP
-    """
-
-    module: ModuleType
-
-    def __getattr__(self, item: str) -> _ObjectPatternConstructor:
-        val = getattr(self.module, item)
-        if not inspect.isclass(val):
-            raise ValueError("Only classes allowed.")
-        return _ObjectPatternConstructor(val)
