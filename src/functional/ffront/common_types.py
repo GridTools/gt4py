@@ -2,7 +2,7 @@ import typing
 from dataclasses import dataclass
 from typing import Literal, Optional, Union
 
-from eve.type_definitions import IntEnum
+from eve.type_definitions import IntEnum, StrEnum
 from functional import common as func_common
 
 
@@ -12,6 +12,12 @@ class ScalarKind(IntEnum):
     INT64 = 64
     FLOAT32 = 1032
     FLOAT64 = 1064
+
+
+class Namespace(StrEnum):
+    LOCAL = "local"
+    CLOSURE = "closure"
+    EXTERNAL = "external"
 
 
 class SymbolType:
@@ -37,6 +43,17 @@ class DeferredSymbolType(SymbolType):
 class SymbolTypeVariable(SymbolType):
     id: str  # noqa A003
     bound: typing.Type[SymbolType]
+
+
+@dataclass(frozen=True)
+class VoidType(SymbolType):
+    """
+    Return type of a function without return values.
+
+    Note: only useful for stateful dialects.
+    """
+
+    ...
 
 
 @dataclass(frozen=True)
@@ -86,10 +103,10 @@ class FieldType(DataType):
 class FunctionType(SymbolType):
     args: list[DataType]
     kwargs: dict[str, DataType]
-    returns: DataType
+    returns: Union[DataType, VoidType]
 
     def __str__(self):
         arg_strs = [str(arg) for arg in self.args]
-        kwarg_strs = [f"{key}: {value}" for key, value in self.kwargs]
-        args_str = ", ".join(*arg_strs, *kwarg_strs)
+        kwarg_strs = [f"{key}: {value}" for key, value in self.kwargs.items()]
+        args_str = ", ".join((*arg_strs, *kwarg_strs))
         return f"({args_str}) -> {self.returns}"

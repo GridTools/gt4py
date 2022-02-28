@@ -66,7 +66,7 @@ def fencil_from_fop(
     )
 
 
-# todo(tehrengruber): dim and size are implicitly given bys out_names. Get values from there
+# TODO(tehrengruber): dim and size are implicitly given bys out_names. Get values from there
 def program_from_fop(
     node: itir.FunctionDefinition, out_name: str, dim: CartesianAxis, size: int
 ) -> itir.Program:
@@ -78,7 +78,7 @@ def program_from_fop(
     )
 
 
-# todo(tehrengruber): dim and size are implicitly given bys out_names. Get values from there
+# TODO(tehrengruber): dim and size are implicitly given bys out_names. Get values from there
 def program_from_function(
     func, dim: CartesianAxis, size: int, out_name: str = "foo"
 ) -> itir.Program:

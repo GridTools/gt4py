@@ -11,10 +11,11 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
+from typing import Optional
 
 import pytest
 
-from functional.common import Dimension
+from functional.common import Dimension, GTTypeError
 from functional.ffront import common_types
 from functional.ffront import field_operator_ast as foast
 from functional.ffront.fbuiltins import Field, float64, int64
@@ -23,7 +24,7 @@ from functional.ffront.func_to_foast import FieldOperatorParser
 from functional.ffront.type_info import TypeInfo
 
 
-def type_info_cases():
+def type_info_cases() -> list[tuple[Optional[common_types.SymbolType], dict]]:
     return [
         (
             None,
@@ -35,6 +36,7 @@ def type_info_cases():
                 "is_scalar": False,
                 "is_arithmetic_compatible": False,
                 "is_logics_compatible": False,
+                "is_callable": False,
             },
         ),
         (
@@ -47,6 +49,7 @@ def type_info_cases():
                 "is_scalar": False,
                 "is_arithmetic_compatible": False,
                 "is_logics_compatible": False,
+                "is_callable": False,
             },
         ),
         (
@@ -59,6 +62,7 @@ def type_info_cases():
                 "is_scalar": True,
                 "is_arithmetic_compatible": False,
                 "is_logics_compatible": False,
+                "is_callable": False,
             },
         ),
         (
@@ -71,6 +75,7 @@ def type_info_cases():
                 "is_scalar": False,
                 "is_arithmetic_compatible": False,
                 "is_logics_compatible": False,
+                "is_callable": False,
             },
         ),
         (
@@ -83,6 +88,7 @@ def type_info_cases():
                 "is_scalar": True,
                 "is_arithmetic_compatible": True,
                 "is_logics_compatible": False,
+                "is_callable": False,
             },
         ),
         (
@@ -97,8 +103,60 @@ def type_info_cases():
                 "is_scalar": False,
                 "is_arithmetic_compatible": False,
                 "is_logics_compatible": True,
+                "is_callable": False,
             },
         ),
+    ]
+
+
+def type_info_is_callable_for_args_cases():
+    # reuse all the other test cases
+    not_callable = [
+        (symbol_type, [], {}, [r"Expected a function type, but got "])
+        for symbol_type, attributes in type_info_cases()
+        if not attributes["is_callable"]
+    ]
+
+    bool_type = common_types.ScalarType(kind=common_types.ScalarKind.BOOL)
+    float_type = common_types.ScalarType(kind=common_types.ScalarKind.FLOAT64)
+    nullary_func_type = common_types.FunctionType(
+        args=[], kwargs={}, returns=common_types.VoidType()
+    )
+    unary_func_type = common_types.FunctionType(
+        args=[bool_type], kwargs={}, returns=common_types.VoidType()
+    )
+    kwarg_func_type = common_types.FunctionType(
+        args=[], kwargs={"foo": bool_type}, returns=common_types.VoidType()
+    )
+
+    return [
+        # func_type, args, kwargs, expected incompatibilities
+        *not_callable,
+        (nullary_func_type, [], {}, []),
+        (nullary_func_type, [bool_type], {}, [r"Function takes 0 arguments, but 1 were given."]),
+        (
+            nullary_func_type,
+            [],
+            {"foo": bool_type},
+            [r"Got unexpected keyword argument\(s\) `foo`."],
+        ),
+        (unary_func_type, [], {}, [r"Function takes 1 arguments, but 0 were given."]),
+        (unary_func_type, [bool_type], {}, []),
+        (
+            unary_func_type,
+            [float_type],
+            {},
+            [r"Expected 0-th argument to be of type bool, but got float64."],
+        ),
+        (kwarg_func_type, [], {}, [r"Missing required keyword argument\(s\) `foo`."]),
+        (kwarg_func_type, [], {"foo": bool_type}, []),
+        (
+            kwarg_func_type,
+            [],
+            {"foo": float_type},
+            [r"Expected keyword argument foo to be of type bool, but got float64."],
+        ),
+        (kwarg_func_type, [], {"bar": bool_type}, ["Got unexpected keyword argument\(s\) `bar`."]),
     ]
 
 
@@ -146,6 +204,27 @@ def test_type_info_refinable_incomplete_incomplete():
     assert not TypeInfo(
         common_types.DeferredSymbolType(constraint=common_types.FieldType)
     ).can_be_refined_to(target_type)
+
+
+@pytest.mark.parametrize("func_type,args,kwargs,expected", type_info_is_callable_for_args_cases())
+def test_type_info_is_callable_for_args_cases(
+    func_type: common_types.SymbolType,
+    args: list[common_types.SymbolType],
+    kwargs: dict[str, common_types.SymbolType],
+    expected: list,
+):
+    typeinfo = TypeInfo(func_type)
+    is_callable = len(expected) == 0
+    assert typeinfo.is_callable_for_args(args, kwargs) == is_callable
+
+    if len(expected) > 0:
+        with pytest.raises(
+            GTTypeError,
+        ) as exc_info:
+            typeinfo.is_callable_for_args(args, kwargs, raise_exception=True)
+
+        for expected_msg in expected:
+            assert exc_info.match(expected_msg)
 
 
 def test_unpack_assign():

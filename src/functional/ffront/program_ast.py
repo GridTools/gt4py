@@ -12,15 +12,14 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-
 import re
-from typing import Generic, Optional, TypeVar, Union
+from typing import Any, Generic, Literal, Optional, TypeVar, Union
 
 import eve
 from eve import Node
 from eve.traits import SymbolTableTrait
-from eve.type_definitions import SourceLocation, StrEnum, SymbolRef
-from functional.ffront import common_types as common_types
+from eve.type_definitions import SourceLocation, SymbolRef
+from functional.ffront import common_types
 
 
 class LocatedNode(Node):
@@ -61,106 +60,37 @@ class Name(Expr):
     id: SymbolRef  # noqa: A003
 
 
-class Constant(Expr):
-    value: str
-    dtype: Union[common_types.DataType, str]
+class Call(Expr):
+    func: Name
+    args: list[Expr]
+    kwargs: dict[str, Expr]
 
 
 class Subscript(Expr):
-    value: Expr
-    index: int
+    value: Name
+    slice_: Expr
 
 
 class TupleExpr(Expr):
     elts: list[Expr]
 
 
-class UnaryOperator(StrEnum):
-    UADD = "plus"
-    USUB = "minus"
-    NOT = "not_"
-
-    def __str__(self) -> str:
-        if self is self.UADD:
-            return "+"
-        elif self is self.USUB:
-            return "-"
-        elif self is self.NOT:
-            return "not"
-        return "Unknown UnaryOperator"
+class Constant(Expr):
+    value: Any  # TODO(tehrengruber): be more restrictive
 
 
-class UnaryOp(Expr):
-    op: UnaryOperator
-    operand: Expr
-
-
-class BinaryOperator(StrEnum):
-    ADD = "plus"
-    SUB = "minus"
-    MULT = "multiplies"
-    DIV = "divides"
-    BIT_AND = "and_"
-    BIT_OR = "or_"
-
-    def __str__(self) -> str:
-        if self is self.ADD:
-            return "+"
-        elif self is self.SUB:
-            return "-"
-        elif self is self.MULT:
-            return "*"
-        elif self is self.DIV:
-            return "/"
-        elif self is self.BIT_AND:
-            return "&"
-        elif self is self.BIT_OR:
-            return "|"
-        return "Unknown BinaryOperator"
-
-
-class BinOp(Expr):
-    op: BinaryOperator
-    left: Expr
-    right: Expr
-
-
-class CompareOperator(StrEnum):
-    GT = "greater"
-    LT = "less"
-    EQ = "eq"
-
-
-class Compare(Expr):
-    op: CompareOperator
-    left: Expr
-    right: Expr
-
-
-class Call(Expr):
-    func: Name
-    args: list[Expr]
+class Slice(Expr):
+    lower: Optional[Constant]
+    upper: Optional[Constant]
+    step: Literal[None]
 
 
 class Stmt(LocatedNode):
     ...
 
 
-class ExternalImport(Stmt):
-    symbols: list[Symbol]
-
-
-class Assign(Stmt):
-    target: Union[FieldSymbol, TupleSymbol]
-    value: Expr
-
-
-class Return(Stmt):
-    value: Expr
-
-
-class FieldOperator(LocatedNode, SymbolTableTrait):
+class Program(LocatedNode, SymbolTableTrait):
     id: SymbolName  # noqa: A003
-    params: list[DataSymbol]
-    body: list[Stmt]
+    params: list[Symbol[common_types.DataType]]
+    body: list[Call]
     closure: list[Symbol]
