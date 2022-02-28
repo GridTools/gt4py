@@ -11,10 +11,7 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-import inspect
-from dataclasses import dataclass
 from functools import singledispatch
-from types import ModuleType
 from typing import Any, Iterator
 
 
@@ -36,7 +33,7 @@ class ObjectPattern:
     cls: type
     fields: dict[str, Any]
 
-    def __init__(self, cls: type, **fields):
+    def __init__(self, cls: type, **fields: Any):
         self.cls = cls
         self.fields = fields
 
@@ -60,20 +57,6 @@ class ObjectPattern:
     def __str__(self) -> str:
         attrs_str = ", ".join([f"{str(k)}={str(v)}" for k, v in self.fields.items()])
         return f"{self.cls.__name__}({attrs_str})"
-
-
-@dataclass(frozen=True)
-class _ObjectPatternConstructor:
-    """Helper class to construct an ObjectPattern.
-
-    This is just an explicit way of doing partial function application and was
-    choosen to improve debuggability.
-    """
-
-    cls: type
-
-    def __call__(self, **kwargs: Any) -> ObjectPattern:
-        return ObjectPattern(self.cls, kwargs)
 
 
 @singledispatch
