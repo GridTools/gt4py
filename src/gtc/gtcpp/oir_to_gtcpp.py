@@ -71,6 +71,22 @@ def _extract_accessors(node: eve.Node) -> List[gtcpp.GTAccessor]:
     ]
 
 
+def _make_axis_offset_expr(
+    bound: common.AxisBound,
+    axis_index: int,
+    axis_length_accessor: Callable[[int], gtcpp.AccessorRef],
+) -> gtcpp.Expr:
+    if bound.level == common.LevelMarker.END:
+        base = axis_length_accessor(axis_index)
+        return gtcpp.BinaryOp(
+            op=common.ArithmeticOperator.ADD,
+            left=base,
+            right=gtcpp.Literal(value=str(bound.offset), dtype=common.DataType.INT32),
+        )
+    else:
+        return gtcpp.Literal(value=str(bound.offset), dtype=common.DataType.INT32)
+
+
 class SymbolNameCreator(Protocol):
     def __call__(self, name: str) -> str:
         ...
@@ -103,31 +119,27 @@ class OIRToGTCpp(eve.NodeTranslator):
             self.arguments.update(arguments)
             return self
 
-        def make_positional(self, axis: int) -> gtcpp.AccessorRef:
-            positional = self.positionals.setdefault(
-                axis,
-                gtcpp.Positional(
-                    name=self.create_symbol_name(f"ax{axis}_ind"),
-                    axis_name=["I", "J", "K"][axis].lower(),
-                ),
-            )
+        @staticmethod
+        def _make_scalar_accessor(name: str) -> gtcpp.AccessorRef:
             return gtcpp.AccessorRef(
-                name=positional.name,
+                name=name,
                 offset=CartesianOffset.zero(),
                 kind=ExprKind.SCALAR,
                 dtype=common.DataType.INT32,
             )
 
+        def make_positional(self, axis: int) -> gtcpp.AccessorRef:
+            axis_name = ["I", "J", "K"][axis].lower()
+            name = self.create_symbol_name(f"ax{axis}_ind")
+            positional = self.positionals.setdefault(
+                axis, gtcpp.Positional(name=name, axis_name=axis_name)
+            )
+            return self._make_scalar_accessor(positional.name)
+
         def make_length(self, axis: int) -> gtcpp.AccessorRef:
-            length = self.axis_lengths.setdefault(
-                axis, gtcpp.AxisLength(name=self.create_symbol_name(f"ax{axis}_len"), axis=axis)
-            )
-            return gtcpp.AccessorRef(
-                name=length.name,
-                offset=CartesianOffset.zero(),
-                kind=ExprKind.SCALAR,
-                dtype=common.DataType.INT32,
-            )
+            name = self.create_symbol_name(f"ax{axis}_len")
+            length = self.axis_lengths.setdefault(axis, gtcpp.AxisLength(name=name, axis=axis))
+            return self._make_scalar_accessor(length.name)
 
         @property
         def extra_args(self) -> List[gtcpp.ComputationDecl]:
@@ -209,22 +221,6 @@ class OIRToGTCpp(eve.NodeTranslator):
             to_level=self.visit(node.end, is_start=False),
         )
 
-    def _make_axis_offset_expr(
-        self,
-        bound: common.AxisBound,
-        axis_index: int,
-        axis_length_accessor: Callable[[int], gtcpp.AccessorRef],
-    ) -> gtcpp.Expr:
-        if bound.level == common.LevelMarker.END:
-            base = axis_length_accessor(axis_index)
-            return gtcpp.BinaryOp(
-                op=common.ArithmeticOperator.ADD,
-                left=base,
-                right=gtcpp.Literal(value=str(bound.offset), dtype=common.DataType.INT32),
-            )
-        else:
-            return gtcpp.Literal(value=str(bound.offset), dtype=common.DataType.INT32)
-
     def visit_HorizontalMask(
         self, node: oir.HorizontalMask, *, comp_ctx: "GTComputationContext", **kwargs: Any
     ) -> gtcpp.Expr:
@@ -234,23 +230,23 @@ class OIRToGTCpp(eve.NodeTranslator):
                 (common.ComparisonOperator.GE, common.ComparisonOperator.LT),
                 (interval.start, interval.end),
             ):
-                if endpt is not None:
-                    mask_expr.append(
-                        gtcpp.BinaryOp(
-                            op=op,
-                            left=comp_ctx.make_positional(axis_index),
-                            right=self._make_axis_offset_expr(
-                                endpt, axis_index, comp_ctx.make_length
-                            ),
-                        )
+                if endpt is None:
+                    continue
+                mask_expr.append(
+                    gtcpp.BinaryOp(
+                        op=op,
+                        left=comp_ctx.make_positional(axis_index),
+                        right=_make_axis_offset_expr(endpt, axis_index, comp_ctx.make_length),
                     )
-        if mask_expr:
-            return functools.reduce(
+                )
+        return (
+            functools.reduce(
                 lambda a, b: gtcpp.BinaryOp(op=common.LogicalOperator.AND, left=a, right=b),
                 mask_expr,
             )
-        else:
-            return gtcpp.Literal(value=common.BuiltInLiteral.TRUE, dtype=common.DataType.BOOL)
+            if mask_expr
+            else gtcpp.Literal(value=common.BuiltInLiteral.TRUE, dtype=common.DataType.BOOL)
+        )
 
     def visit_AssignStmt(self, node: oir.AssignStmt, **kwargs: Any) -> gtcpp.AssignStmt:
         assert "symtable" in kwargs
