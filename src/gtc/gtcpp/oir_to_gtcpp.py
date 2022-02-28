@@ -14,16 +14,19 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import functools
 import itertools
 from dataclasses import dataclass, field
-from typing import Any, List, Set, Union
+from typing import Any, Callable, Dict, List, Set, Union
 
 from devtools import debug  # noqa: F401
+from typing_extensions import Protocol
 
 import eve
 from gtc import common, oir
-from gtc.common import CartesianOffset
+from gtc.common import CartesianOffset, ExprKind
 from gtc.gtcpp import gtcpp
+from gtc.passes.oir_optimizations.utils import collect_symbol_names, symbol_name_creator
 
 
 # - Each HorizontalExecution is a Functor (and a Stage)
@@ -68,6 +71,11 @@ def _extract_accessors(node: eve.Node) -> List[gtcpp.GTAccessor]:
     ]
 
 
+class SymbolNameCreator(Protocol):
+    def __call__(self, name: str) -> str:
+        ...
+
+
 class OIRToGTCpp(eve.NodeTranslator):
     @dataclass
     class ProgramContext:
@@ -79,8 +87,11 @@ class OIRToGTCpp(eve.NodeTranslator):
 
     @dataclass
     class GTComputationContext:
+        create_symbol_name: SymbolNameCreator
         temporaries: List[gtcpp.Temporary] = field(default_factory=list)
         arguments: Set[gtcpp.Arg] = field(default_factory=set)
+        positionals: Dict[int, gtcpp.Positional] = field(default_factory=dict)
+        axis_lengths: Dict[int, gtcpp.AxisLength] = field(default_factory=dict)
 
         def add_temporaries(
             self, temporaries: List[gtcpp.Temporary]
@@ -91,6 +102,36 @@ class OIRToGTCpp(eve.NodeTranslator):
         def add_arguments(self, arguments: Set[gtcpp.Arg]) -> "OIRToGTCpp.GTComputationContext":
             self.arguments.update(arguments)
             return self
+
+        def make_positional(self, axis: int) -> gtcpp.AccessorRef:
+            positional = self.positionals.setdefault(
+                axis,
+                gtcpp.Positional(
+                    name=self.create_symbol_name(f"ax{axis}_ind"),
+                    axis_name=["I", "J", "K"][axis].lower(),
+                ),
+            )
+            return gtcpp.AccessorRef(
+                name=positional.name,
+                offset=CartesianOffset.zero(),
+                kind=ExprKind.SCALAR,
+                dtype=common.DataType.INT32,
+            )
+
+        def make_length(self, axis: int) -> gtcpp.AccessorRef:
+            length = self.axis_lengths.setdefault(
+                axis, gtcpp.AxisLength(name=self.create_symbol_name(f"ax{axis}_len"), axis=axis)
+            )
+            return gtcpp.AccessorRef(
+                name=length.name,
+                offset=CartesianOffset.zero(),
+                kind=ExprKind.SCALAR,
+                dtype=common.DataType.INT32,
+            )
+
+        @property
+        def extra_args(self) -> List[gtcpp.ComputationDecl]:
+            return list(self.positionals.values()) + list(self.axis_lengths.values())
 
     contexts = (eve.SymbolTableTrait.symtable_merger,)
 
@@ -168,6 +209,49 @@ class OIRToGTCpp(eve.NodeTranslator):
             to_level=self.visit(node.end, is_start=False),
         )
 
+    def _make_axis_offset_expr(
+        self,
+        bound: common.AxisBound,
+        axis_index: int,
+        axis_length_accessor: Callable[[int], gtcpp.AccessorRef],
+    ) -> gtcpp.Expr:
+        if bound.level == common.LevelMarker.END:
+            base = axis_length_accessor(axis_index)
+            return gtcpp.BinaryOp(
+                op=common.ArithmeticOperator.ADD,
+                left=base,
+                right=gtcpp.Literal(value=str(bound.offset), dtype=common.DataType.INT32),
+            )
+        else:
+            return gtcpp.Literal(value=str(bound.offset), dtype=common.DataType.INT32)
+
+    def visit_HorizontalMask(
+        self, node: oir.HorizontalMask, *, comp_ctx: "GTComputationContext", **kwargs: Any
+    ) -> gtcpp.Expr:
+        mask_expr: List[gtcpp.Expr] = []
+        for axis_index, interval in enumerate(node.intervals):
+            for op, endpt in zip(
+                (common.ComparisonOperator.GE, common.ComparisonOperator.LT),
+                (interval.start, interval.end),
+            ):
+                if endpt is not None:
+                    mask_expr.append(
+                        gtcpp.BinaryOp(
+                            op=op,
+                            left=comp_ctx.make_positional(axis_index),
+                            right=self._make_axis_offset_expr(
+                                endpt, axis_index, comp_ctx.make_length
+                            ),
+                        )
+                    )
+        if mask_expr:
+            return functools.reduce(
+                lambda a, b: gtcpp.BinaryOp(op=common.LogicalOperator.AND, left=a, right=b),
+                mask_expr,
+            )
+        else:
+            return gtcpp.Literal(value=common.BuiltInLiteral.TRUE, dtype=common.DataType.BOOL)
+
     def visit_AssignStmt(self, node: oir.AssignStmt, **kwargs: Any) -> gtcpp.AssignStmt:
         assert "symtable" in kwargs
         return gtcpp.AssignStmt(
@@ -189,15 +273,15 @@ class OIRToGTCpp(eve.NodeTranslator):
         self,
         node: oir.HorizontalExecution,
         *,
-        prog_ctx: ProgramContext,
-        comp_ctx: GTComputationContext,
+        prog_ctx: "ProgramContext",
+        comp_ctx: "GTComputationContext",
         interval: gtcpp.GTInterval,
         **kwargs: Any,
     ) -> gtcpp.GTStage:
         assert "symtable" in kwargs
         apply_method = gtcpp.GTApplyMethod(
             interval=self.visit(interval, **kwargs),
-            body=self.visit(node.body, **kwargs),
+            body=self.visit(node.body, comp_ctx=comp_ctx, **kwargs),
             local_variables=self.visit(node.declarations, **kwargs),
         )
         accessors = _extract_accessors(apply_method)
@@ -218,7 +302,7 @@ class OIRToGTCpp(eve.NodeTranslator):
                 applies=[apply_method],
                 param_list=gtcpp.GTParamList(accessors=accessors),
             )
-        ),
+        )
 
         return gtcpp.GTStage(functor=functor_name, args=stage_args)
 
@@ -266,20 +350,20 @@ class OIRToGTCpp(eve.NodeTranslator):
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> gtcpp.Program:
         prog_ctx = self.ProgramContext()
-        comp_ctx = self.GTComputationContext()
+        comp_ctx = self.GTComputationContext(
+            create_symbol_name=symbol_name_creator(collect_symbol_names(node))
+        )
 
         assert all([isinstance(decl, oir.Temporary) for decl in node.declarations])
         comp_ctx.add_temporaries(self.visit(node.declarations))
 
         multi_stages = self.visit(
-            node.vertical_loops,
-            prog_ctx=prog_ctx,
-            comp_ctx=comp_ctx,
-            **kwargs,
+            node.vertical_loops, prog_ctx=prog_ctx, comp_ctx=comp_ctx, **kwargs
         )
 
         gt_computation = gtcpp.GTComputationCall(
             arguments=comp_ctx.arguments,
+            extra_args=comp_ctx.extra_args,
             temporaries=comp_ctx.temporaries,
             multi_stages=multi_stages,
         )

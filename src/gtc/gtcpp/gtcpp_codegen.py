@@ -91,6 +91,12 @@ class GTCppCodegen(codegen.TemplatedGenerator):
 
     LocalAccess = as_fmt("{name}")
 
+    Positional = as_fmt("auto {name} = positional<dim::{axis_name}>();")
+
+    AxisLength = as_fmt(
+        "auto {name} = gridtools::stencil::make_global_parameter(static_cast<gridtools::int_t>(domain[{axis}]));"
+    )
+
     BinaryOp = as_fmt("({left} {op} {right})")
 
     UnaryOp = as_fmt("({op}{expr})")
@@ -226,6 +232,7 @@ class GTCppCodegen(codegen.TemplatedGenerator):
                 return multi_pass(${ ','.join(multi_stages) });
             };
 
+            ${'\\n'.join(extra_args)}
             run(${computation_name}, ${gt_backend_t}<>{}, grid, ${','.join(f"std::forward<decltype({arg})>({arg})" for arg in arguments)});
         }
         %endif
@@ -236,6 +243,8 @@ class GTCppCodegen(codegen.TemplatedGenerator):
         """
         #include <gridtools/stencil/${gt_backend_t}.hpp>
         #include <gridtools/stencil/cartesian.hpp>
+        #include <gridtools/stencil/positional.hpp>
+        #include <gridtools/stencil/global_parameter.hpp>
 
         namespace ${ name }_impl_{
             using Domain = std::array<gridtools::uint_t, 3>;

@@ -106,10 +106,6 @@ class Temporary(LocNode):
     dtype: common.DataType
 
 
-class GTGrid(LocNode):
-    pass
-
-
 class GTLevel(LocNode):
     splitter: int
     offset: int
@@ -219,6 +215,20 @@ class GlobalParamDecl(ApiParamDecl):
     pass
 
 
+class ComputationDecl(LocNode):
+    name: SymbolName
+    dtype = common.DataType.INT32
+    kind = common.ExprKind.SCALAR
+
+
+class Positional(ComputationDecl):
+    axis_name: Str
+
+
+class AxisLength(ComputationDecl):
+    axis: int
+
+
 class GTStage(LocNode):
     functor: SymbolRef
     # `args` are SymbolRefs to GTComputation `arguments` (interpreted as parameters)
@@ -257,6 +267,7 @@ class GTComputationCall(LocNode, SymbolTableTrait):
     # We could represent this closer to the C++ code by splitting call and definition of the
     # function object.
     arguments: List[Arg]
+    extra_args: List[ComputationDecl]
     temporaries: List[Temporary]
     multi_stages: List[GTMultiStage]
 
