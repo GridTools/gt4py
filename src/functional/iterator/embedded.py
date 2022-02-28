@@ -364,26 +364,33 @@ class MDIterator:
 
     def deref(self):
         shifted_pos = self.pos.copy()
+        # TODO(havogt): support nested tuples
+        axises = self.field[0].axises if isinstance(self.field, tuple) else self.field.axises
 
-        if not all(axis in shifted_pos.keys() for axis in self.field.axises):
+        if not all(axis in shifted_pos.keys() for axis in axises):
             raise IndexError("Iterator position doesn't point to valid location for its field.")
         slice_column = {}
         if self.column_axis is not None:
             slice_column[self.column_axis] = slice(shifted_pos[self.column_axis], None)
             del shifted_pos[self.column_axis]
         ordered_indices = get_ordered_indices(
-            self.field.axises,
+            axises,
             shifted_pos,
             slice_axises=slice_column,
         )
         try:
-            return self.field[ordered_indices]
+            if isinstance(self.field, tuple):
+                return tuple(f[ordered_indices] for f in self.field)
+            else:
+                return self.field[ordered_indices]
         except IndexError:
             return _UNDEFINED
 
 
 def make_in_iterator(inp, pos, offset_provider, *, column_axis):
-    sparse_dimensions = [axis for axis in inp.axises if isinstance(axis, Offset)]
+    # TODO(havogt): support nested tuples
+    axises = inp[0].axises if isinstance(inp, tuple) else inp.axises
+    sparse_dimensions = [axis for axis in axises if isinstance(axis, Offset)]
     assert len(sparse_dimensions) <= 1  # TODO multiple is not a current use case
     new_pos = pos.copy()
     for axis in sparse_dimensions:
@@ -409,11 +416,12 @@ class LocatedField:
     Axis keys can be any objects that are hashable.
     """
 
-    def __init__(self, getter, axises, *, setter=None, array=None):
+    def __init__(self, getter, axises, dtype, *, setter=None, array=None):
         self.getter = getter
         self.axises = axises
         self.setter = setter
         self.array = array
+        self.dtype = dtype
 
     def __getitem__(self, indices):
         indices = tupelize(indices)
@@ -479,18 +487,19 @@ def np_as_located_field(*axises, origin=None):
             offsets = tuple(0 for _ in axises)
 
         def setter(indices, value):
+            indices = tupelize(indices)
             a[_tupsum(indices, offsets)] = value
 
         def getter(indices):
             return a[_tupsum(indices, offsets)]
 
-        return LocatedField(getter, axises, setter=setter, array=a.__array__)
+        return LocatedField(getter, axises, dtype=a.dtype, setter=setter, array=a.__array__)
 
     return _maker
 
 
-def index_field(axis):
-    return LocatedField(lambda index: index[0], (axis,))
+def index_field(axis, dtype=float):
+    return LocatedField(lambda index: index[0], (axis,), dtype)
 
 
 @builtins.shift.register(EMBEDDED)
@@ -527,11 +536,107 @@ def shifted_scan_arg(k_pos):
     return impl
 
 
+def is_located_field(field) -> bool:
+    return isinstance(field, LocatedField)  # TODO define on concept, not on concrete model
+
+
+def has_uniform_tuple_element(field) -> bool:
+    return field.dtype.fields is not None and all(
+        next(iter(field.dtype.fields))[0] == f[0] for f in iter(field.dtype.fields)
+    )
+
+
+def is_tuple_of_field(field) -> bool:
+    return isinstance(field, tuple) and all(
+        is_located_field(f) or is_tuple_of_field(f) for f in field
+    )
+
+
+def is_field_of_tuple(field) -> bool:
+    return is_located_field(field) and has_uniform_tuple_element(field)
+
+
+def can_be_tuple_field(field) -> bool:
+    return is_tuple_of_field(field) or is_field_of_tuple(field)
+
+
+class TupleFieldMeta(type):
+    def __instancecheck__(self, arg):
+        return super().__instancecheck__(arg) or is_field_of_tuple(arg)
+
+
+class TupleField(metaclass=TupleFieldMeta):
+    """Allows uniform access to field of tuples and tuple of fields."""
+
+    pass
+
+
+def _get_axeses(field):
+    if isinstance(field, tuple):
+        return tuple(itertools.chain(*tuple(_get_axeses(f) for f in field)))
+    else:
+        assert is_located_field(field)
+        return (field.axises,)
+
+
+def _build_tuple_result(field, indices):
+    if isinstance(field, tuple):
+        return tuple(_build_tuple_result(f, indices) for f in field)
+    else:
+        assert is_located_field(field)
+        return field[indices]
+
+
+def _tuple_assign(field, value, indices):
+    if isinstance(field, tuple):
+        if len(field) != len(value):
+            raise RuntimeError(
+                f"Tuple of incompatible size, expected tuple of len={len(field)}, got len={len(value)}"
+            )
+        for f, v in zip(field, value):
+            _tuple_assign(f, v, indices)
+    else:
+        assert is_located_field(field)
+        field[indices] = value
+
+
+class TupleOfFields(TupleField):
+    def __init__(self, data):
+        if not is_tuple_of_field(data):
+            raise TypeError("Can only be instantiated with a tuple of fields")
+        self.data = data
+        axeses = _get_axeses(data)
+        if not all(axises == axeses[0] for axises in axeses):
+            raise TypeError("All fields in the tuple need the same axises.")
+        self.axises = axeses[0]
+
+    def __getitem__(self, indices):
+        return _build_tuple_result(self.data, indices)
+
+    def __setitem__(self, indices, value):
+        if not isinstance(value, tuple):
+            raise RuntimeError("Value needs to be tuple.")
+
+        _tuple_assign(self.data, value, indices)
+
+
+def as_tuple_field(field):
+    assert can_be_tuple_field(field)
+
+    if is_tuple_of_field(field):
+        return TupleOfFields(field)
+
+    assert isinstance(field, TupleField)  # e.g. field of tuple is already TupleField
+    return field
+
+
 def fendef_embedded(fun, *args, **kwargs):  # noqa: 536
     assert "offset_provider" in kwargs
 
     @iterator.runtime.closure.register(EMBEDDED)
-    def closure(domain, sten, outs, ins):  # domain is Dict[axis, range]
+    def closure(domain, sten, out, ins):  # domain is Dict[axis, range]
+        if not (is_located_field(out) or can_be_tuple_field(out)):
+            raise TypeError("Out needs to be a located field.")
 
         column = None
         if "column_axis" in kwargs:
@@ -554,21 +659,26 @@ def fendef_embedded(fun, *args, **kwargs):  # noqa: 536
                 state = init
                 if state is None:
                     state = _None()
-                cols = []
+                col = []
                 for i in _range:
                     state = scan_pass(
                         state, *map(shifted_scan_arg(i), iters)
                     )  # more generic scan returns state and result as 2 different things
-                    cols.append([*tupelize(state)])
-
-                cols = tuple(map(np.asarray, (map(list, zip(*cols)))))
-                # transpose to get tuple of columns as np array
+                    col.append(state)
 
                 if not is_forward:
-                    cols = tuple(map(np.flip, cols))
-                return cols
+                    col = np.flip(col)
+
+                if isinstance(col[0], tuple):
+                    # transpose to get tuple of columns as np array
+                    # TODO assert all entries in col have the same tuple size
+                    col = tuple(map(np.asarray, (map(list, zip(*col)))))
+
+                return col
 
             return impl
+
+        out = as_tuple_field(out) if can_be_tuple_field(out) else out
 
         for pos in domain_iterator(domain):
             ins_iters = list(
@@ -581,21 +691,16 @@ def fendef_embedded(fun, *args, **kwargs):  # noqa: 536
                 for inp in ins
             )
             res = sten(*ins_iters)
-            if not isinstance(res, tuple):
-                res = (res,)
-            if not len(res) == len(outs):
-                IndexError("Number of return values doesn't match number of output fields.")
 
-            for r, out in zip(res, outs):
-                if column is None:
-                    ordered_indices = get_ordered_indices(out.axises, pos)
-                    out[ordered_indices] = r
-                else:
-                    colpos = pos.copy()
-                    for k in column.range:
-                        colpos[column.axis] = k
-                        ordered_indices = get_ordered_indices(out.axises, colpos)
-                        out[ordered_indices] = r[k]
+            if column is None:
+                ordered_indices = get_ordered_indices(out.axises, pos)
+                out[ordered_indices] = res
+            else:
+                colpos = pos.copy()
+                for k in column.range:
+                    colpos[column.axis] = k
+                    ordered_indices = get_ordered_indices(out.axises, colpos)
+                    out[ordered_indices] = res[k]
 
     fun(*args)
 
