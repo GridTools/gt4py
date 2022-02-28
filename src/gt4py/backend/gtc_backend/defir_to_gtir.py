@@ -17,8 +17,6 @@
 import numbers
 from typing import Any, Dict, List, Optional, Tuple, Union, cast
 
-import numpy as np
-
 from gt4py.ir import IRNodeVisitor
 from gt4py.ir.nodes import (
     ArgumentInfo,
@@ -280,8 +278,8 @@ class DefIRToGTIR(IRNodeVisitor):
 
     def visit_HorizontalIf(self, node: HorizontalIf) -> gtir.FieldIfStmt:
         def make_bound_or_level(bound: AxisBound, level) -> Optional[common.AxisBound]:
-            if (level == LevelMarker.START and bound.offset <= -np.iinfo(np.int32).max) or (
-                level == LevelMarker.END and bound.offset >= np.iinfo(np.int32).max
+            if (level == LevelMarker.START and bound.offset <= -10000) or (
+                level == LevelMarker.END and bound.offset >= 10000
             ):
                 return None
             else:
