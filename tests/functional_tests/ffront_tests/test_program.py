@@ -137,7 +137,8 @@ def test_copy_parsing(copy_program_def):
             P(past.Symbol, id="out_field", type=field_type),
         ],
         body=[
-            P(past.Call,
+            P(
+                past.Call,
                 func=P(past.Name, id="identity"),
                 args=[P(past.Name, id="in_field")],
                 kwargs={"out": P(past.Name, id="out_field")},
@@ -155,7 +156,8 @@ def test_double_copy_parsing(double_copy_program_def):
         dims=[IDim],
         dtype=common_types.ScalarType(kind=common_types.ScalarKind.FLOAT64, shape=None),
     )
-    pattern_node = P(past.Program,
+    pattern_node = P(
+        past.Program,
         id="double_copy_program",
         params=[
             P(past.Symbol, id="in_field", type=field_type),
@@ -163,12 +165,14 @@ def test_double_copy_parsing(double_copy_program_def):
             P(past.Symbol, id="out_field", type=field_type),
         ],
         body=[
-            P(past.Call,
+            P(
+                past.Call,
                 func=P(past.Name, id="identity"),
                 args=[P(past.Name, id="in_field")],
                 kwargs={"out": P(past.Name, id="intermediate_field")},
             ),
-            P(past.Call,
+            P(
+                past.Call,
                 func=P(past.Name, id="identity"),
                 args=[P(past.Name, id="intermediate_field")],
                 kwargs={"out": P(past.Name, id="out_field")},
@@ -234,20 +238,26 @@ def test_copy_restrict_parsing(copy_restrict_program_def):
         dims=[IDim],
         dtype=common_types.ScalarType(kind=common_types.ScalarKind.FLOAT64, shape=None),
     )
-    slice_pattern_node = P(past.Slice, lower=P(past.Constant, value=1), upper=P(past.Constant, value=2))
-    pattern_node = P(past.Program,
+    slice_pattern_node = P(
+        past.Slice, lower=P(past.Constant, value=1), upper=P(past.Constant, value=2)
+    )
+    pattern_node = P(
+        past.Program,
         id="copy_restrict_program",
         params=[
             P(past.Symbol, id="in_field", type=field_type),
             P(past.Symbol, id="out_field", type=field_type),
         ],
         body=[
-            P(past.Call,
+            P(
+                past.Call,
                 func=P(past.Name, id="identity"),
                 args=[P(past.Name, id="in_field")],
                 kwargs={
-                    "out": P(past.Subscript,
-                        value=P(past.Name, id="out_field"), slice_=slice_pattern_node
+                    "out": P(
+                        past.Subscript,
+                        value=P(past.Name, id="out_field"),
+                        slice_=slice_pattern_node,
                     )
                 },
             )
@@ -260,11 +270,14 @@ def test_copy_restrict_parsing(copy_restrict_program_def):
 def test_copy_lowering(copy_program_def):
     past_node = ProgramParser.apply_to_function(copy_program_def)
     itir_node = ProgramLowering.apply(past_node)
-    closure_pattern = P(itir.StencilClosure,
-        domain=P(itir.FunCall,
+    closure_pattern = P(
+        itir.StencilClosure,
+        domain=P(
+            itir.FunCall,
             fun=P(itir.SymRef, id="domain"),
             args=[
-                P(itir.FunCall,
+                P(
+                    itir.FunCall,
                     fun=P(itir.SymRef, id="named_range"),
                     args=[
                         P(itir.AxisLiteral, value="IDim"),
@@ -278,7 +291,8 @@ def test_copy_lowering(copy_program_def):
         inputs=[P(itir.SymRef, id="in_field")],
         output=P(itir.SymRef, id="out_field"),
     )
-    fencil_pattern = P(itir.FencilDefinition,
+    fencil_pattern = P(
+        itir.FencilDefinition,
         id="copy_program",
         params=[
             P(itir.Sym, id="in_field"),
@@ -295,11 +309,14 @@ def test_copy_lowering(copy_program_def):
 def test_copy_restrict_lowering(copy_restrict_program_def):
     past_node = ProgramParser.apply_to_function(copy_restrict_program_def)
     itir_node = ProgramLowering.apply(past_node)
-    closure_pattern = P(itir.StencilClosure,
-        domain=P(itir.FunCall,
+    closure_pattern = P(
+        itir.StencilClosure,
+        domain=P(
+            itir.FunCall,
             fun=P(itir.SymRef, id="domain"),
             args=[
-                P(itir.FunCall,
+                P(
+                    itir.FunCall,
                     fun=P(itir.SymRef, id="named_range"),
                     args=[
                         P(itir.AxisLiteral, value="IDim"),
@@ -308,9 +325,10 @@ def test_copy_restrict_lowering(copy_restrict_program_def):
                     ],
                 )
             ],
-        )
+        ),
     )
-    fencil_pattern = P(itir.FencilDefinition,
+    fencil_pattern = P(
+        itir.FencilDefinition,
         id="copy_restrict_program",
         params=[
             P(itir.Sym, id="in_field"),

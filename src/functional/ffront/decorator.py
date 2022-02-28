@@ -69,14 +69,12 @@ class GTCallable(Protocol):
         """
         ...
 
-
-    # TODO(tehrengruber): For embedded execution a call method and for "truely"
-    #  embedded execution arguably also a `from_function` method is required.
-    #  Since field operators currently have a `__gt_type__` with a Field return
-    #  value, but it's `__call__` method being void (result via out arg) there
-    #  is no good / consistent definition on what signature a protocol
-    #  implementer is expected to provide. Skipping for now.
-    #__call__: Callable
+    # TODO(tehrengruber): For embedded execution a `__call__` method and for
+    #  "truely" embedded execution arguably also a `from_function` method is
+    #  required. Since field operators currently have a `__gt_type__` with a
+    #  Field return value, but it's `__call__` method being void (result via
+    #  out arg) there is no good / consistent definition on what signature a
+    #  protocol implementer is expected to provide. Skipping for now.
 
 
 # TODO(tehrengruber): Decide if and how programs can call other programs. As a
