@@ -18,7 +18,7 @@ import re
 import numpy as np
 import pytest
 
-from eve import pattern_matching
+from eve.pattern_matching import ObjectPattern as P
 from functional.common import Field, GTTypeError
 from functional.ffront import common_types
 from functional.ffront import program_ast as past
@@ -34,9 +34,6 @@ from functional.iterator.runtime import CartesianAxis, offset
 float64 = float
 IDim = CartesianAxis("IDim")
 Ioff = offset("Ioff")
-
-past_ = pattern_matching.ModuleWrapper(past)
-itir_ = pattern_matching.ModuleWrapper(itir)
 
 
 # TODO(tehrengruber): Improve test structure. Identity needs to be decorated
@@ -132,20 +129,21 @@ def test_copy_parsing(copy_program_def):
         dims=[IDim],
         dtype=common_types.ScalarType(kind=common_types.ScalarKind.FLOAT64, shape=None),
     )
-    pattern_node = past_.Program(
+    pattern_node = P(
+        past.Program,
         id="copy_program",
         params=[
-            past_.Symbol(id="in_field", type=field_type),
-            past_.Symbol(id="out_field", type=field_type),
+            P(past.Symbol, id="in_field", type=field_type),
+            P(past.Symbol, id="out_field", type=field_type),
         ],
         body=[
-            past_.Call(
-                func=past_.Name(id="identity"),
-                args=[past_.Name(id="in_field")],
-                kwargs={"out": past_.Name(id="out_field")},
+            P(past.Call,
+                func=P(past.Name, id="identity"),
+                args=[P(past.Name, id="in_field")],
+                kwargs={"out": P(past.Name, id="out_field")},
             )
         ],
-        location=past_.SourceLocation(line=60, source=__file__),
+        location=P(past.SourceLocation, line=57, source=__file__),
     )
     assert pattern_node.match(past_node, raise_exception=True)
 
@@ -157,23 +155,23 @@ def test_double_copy_parsing(double_copy_program_def):
         dims=[IDim],
         dtype=common_types.ScalarType(kind=common_types.ScalarKind.FLOAT64, shape=None),
     )
-    pattern_node = past_.Program(
+    pattern_node = P(past.Program,
         id="double_copy_program",
         params=[
-            past_.Symbol(id="in_field", type=field_type),
-            past_.Symbol(id="intermediate_field", type=field_type),
-            past_.Symbol(id="out_field", type=field_type),
+            P(past.Symbol, id="in_field", type=field_type),
+            P(past.Symbol, id="intermediate_field", type=field_type),
+            P(past.Symbol, id="out_field", type=field_type),
         ],
         body=[
-            past_.Call(
-                func=past_.Name(id="identity"),
-                args=[past_.Name(id="in_field")],
-                kwargs={"out": past_.Name(id="intermediate_field")},
+            P(past.Call,
+                func=P(past.Name, id="identity"),
+                args=[P(past.Name, id="in_field")],
+                kwargs={"out": P(past.Name, id="intermediate_field")},
             ),
-            past_.Call(
-                func=past_.Name(id="identity"),
-                args=[past_.Name(id="intermediate_field")],
-                kwargs={"out": past_.Name(id="out_field")},
+            P(past.Call,
+                func=P(past.Name, id="identity"),
+                args=[P(past.Name, id="intermediate_field")],
+                kwargs={"out": P(past.Name, id="out_field")},
             ),
         ],
     )
@@ -236,20 +234,20 @@ def test_copy_restrict_parsing(copy_restrict_program_def):
         dims=[IDim],
         dtype=common_types.ScalarType(kind=common_types.ScalarKind.FLOAT64, shape=None),
     )
-    slice_pattern_node = past_.Slice(lower=past_.Constant(value=1), upper=past_.Constant(value=2))
-    pattern_node = past_.Program(
+    slice_pattern_node = P(past.Slice, lower=P(past.Constant, value=1), upper=P(past.Constant, value=2))
+    pattern_node = P(past.Program,
         id="copy_restrict_program",
         params=[
-            past_.Symbol(id="in_field", type=field_type),
-            past_.Symbol(id="out_field", type=field_type),
+            P(past.Symbol, id="in_field", type=field_type),
+            P(past.Symbol, id="out_field", type=field_type),
         ],
         body=[
-            past_.Call(
-                func=past_.Name(id="identity"),
-                args=[past_.Name(id="in_field")],
+            P(past.Call,
+                func=P(past.Name, id="identity"),
+                args=[P(past.Name, id="in_field")],
                 kwargs={
-                    "out": past_.Subscript(
-                        value=past_.Name(id="out_field"), slice_=slice_pattern_node
+                    "out": P(past.Subscript,
+                        value=P(past.Name, id="out_field"), slice_=slice_pattern_node
                     )
                 },
             )
@@ -262,31 +260,31 @@ def test_copy_restrict_parsing(copy_restrict_program_def):
 def test_copy_lowering(copy_program_def):
     past_node = ProgramParser.apply_to_function(copy_program_def)
     itir_node = ProgramLowering.apply(past_node)
-    closure_pattern = itir_.StencilClosure(
-        domain=itir_.FunCall(
-            fun=itir_.SymRef(id="domain"),
+    closure_pattern = P(itir.StencilClosure,
+        domain=P(itir.FunCall,
+            fun=P(itir.SymRef, id="domain"),
             args=[
-                itir_.FunCall(
-                    fun=itir_.SymRef(id="named_range"),
+                P(itir.FunCall,
+                    fun=P(itir.SymRef, id="named_range"),
                     args=[
-                        itir_.AxisLiteral(value="IDim"),
-                        itir_.IntLiteral(value=0),
-                        itir_.SymRef(id="__out_field_size_0"),
+                        P(itir.AxisLiteral, value="IDim"),
+                        P(itir.IntLiteral, value=0),
+                        P(itir.SymRef, id="__out_field_size_0"),
                     ],
                 )
             ],
         ),
-        stencil=itir_.SymRef(id="identity"),
-        inputs=[itir_.SymRef(id="in_field")],
-        output=itir_.SymRef(id="out_field"),
+        stencil=P(itir.SymRef, id="identity"),
+        inputs=[P(itir.SymRef, id="in_field")],
+        output=P(itir.SymRef, id="out_field"),
     )
-    fencil_pattern = itir_.FencilDefinition(
+    fencil_pattern = P(itir.FencilDefinition,
         id="copy_program",
         params=[
-            itir_.Sym(id="in_field"),
-            itir_.Sym(id="out_field"),
-            itir_.Sym(id="__in_field_size_0"),
-            itir_.Sym(id="__out_field_size_0"),
+            P(itir.Sym, id="in_field"),
+            P(itir.Sym, id="out_field"),
+            P(itir.Sym, id="__in_field_size_0"),
+            P(itir.Sym, id="__out_field_size_0"),
         ],
         closures=[closure_pattern],
     )
@@ -297,28 +295,28 @@ def test_copy_lowering(copy_program_def):
 def test_copy_restrict_lowering(copy_restrict_program_def):
     past_node = ProgramParser.apply_to_function(copy_restrict_program_def)
     itir_node = ProgramLowering.apply(past_node)
-    closure_pattern = itir_.StencilClosure(
-        domain=itir_.FunCall(
-            fun=itir_.SymRef(id="domain"),
+    closure_pattern = P(itir.StencilClosure,
+        domain=P(itir.FunCall,
+            fun=P(itir.SymRef, id="domain"),
             args=[
-                itir_.FunCall(
-                    fun=itir_.SymRef(id="named_range"),
+                P(itir.FunCall,
+                    fun=P(itir.SymRef, id="named_range"),
                     args=[
-                        itir_.AxisLiteral(value="IDim"),
-                        itir_.IntLiteral(value=1),
-                        itir_.IntLiteral(value=2),
+                        P(itir.AxisLiteral, value="IDim"),
+                        P(itir.IntLiteral, value=1),
+                        P(itir.IntLiteral, value=2),
                     ],
                 )
             ],
         )
     )
-    fencil_pattern = itir_.FencilDefinition(
+    fencil_pattern = P(itir.FencilDefinition,
         id="copy_restrict_program",
         params=[
-            itir_.Sym(id="in_field"),
-            itir_.Sym(id="out_field"),
-            itir_.Sym(id="__in_field_size_0"),
-            itir_.Sym(id="__out_field_size_0"),
+            P(itir.Sym, id="in_field"),
+            P(itir.Sym, id="out_field"),
+            P(itir.Sym, id="__in_field_size_0"),
+            P(itir.Sym, id="__out_field_size_0"),
         ],
         closures=[closure_pattern],
     )
