@@ -267,7 +267,7 @@ class GTComputationCall(LocNode, SymbolTableTrait):
     # We could represent this closer to the C++ code by splitting call and definition of the
     # function object.
     arguments: List[Arg]
-    extra_args: List[ComputationDecl]
+    extra_decls: List[ComputationDecl]
     temporaries: List[Temporary]
     multi_stages: List[GTMultiStage]
 

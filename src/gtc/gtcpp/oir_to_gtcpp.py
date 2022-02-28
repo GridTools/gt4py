@@ -142,7 +142,7 @@ class OIRToGTCpp(eve.NodeTranslator):
             return self._make_scalar_accessor(length.name)
 
         @property
-        def extra_args(self) -> List[gtcpp.ComputationDecl]:
+        def extra_decls(self) -> List[gtcpp.ComputationDecl]:
             return list(self.positionals.values()) + list(self.axis_lengths.values())
 
     contexts = (eve.SymbolTableTrait.symtable_merger,)
@@ -359,7 +359,7 @@ class OIRToGTCpp(eve.NodeTranslator):
 
         gt_computation = gtcpp.GTComputationCall(
             arguments=comp_ctx.arguments,
-            extra_args=comp_ctx.extra_args,
+            extra_decls=comp_ctx.extra_decls,
             temporaries=comp_ctx.temporaries,
             multi_stages=multi_stages,
         )

@@ -232,7 +232,7 @@ class GTCppCodegen(codegen.TemplatedGenerator):
                 return multi_pass(${ ','.join(multi_stages) });
             };
 
-            ${'\\n'.join(extra_args)}
+            ${'\\n'.join(extra_decls)}
             run(${computation_name}, ${gt_backend_t}<>{}, grid, ${','.join(f"std::forward<decltype({arg})>({arg})" for arg in arguments)});
         }
         %endif
