@@ -32,7 +32,7 @@ from gtc.passes.oir_optimizations.horizontal_execution_merging import (
 )
 from gtc.passes.oir_optimizations.inlining import MaskInlining
 from gtc.passes.oir_optimizations.mask_stmt_merging import MaskStmtMerging
-from gtc.passes.oir_optimizations.pruning import NoFieldAccessPruning
+from gtc.passes.oir_optimizations.pruning import NoFieldAccessPruning, UnreachableStmtPruning
 from gtc.passes.oir_optimizations.temporaries import (
     LocalTemporariesToScalars,
     WriteBeforeReadTemporariesToScalars,
@@ -77,6 +77,7 @@ class DefaultPipeline(OirPipeline):
             WriteBeforeReadTemporariesToScalars,
             MaskStmtMerging,
             MaskInlining,
+            UnreachableStmtPruning,
             NoFieldAccessPruning,
             IJCacheDetection,
             KCacheDetection,

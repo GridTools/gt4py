@@ -14,10 +14,13 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import Any
+from typing import Any, Dict
 
 from eve import NOTHING, NodeTranslator
+from gt4py.definitions import Extent
 from gtc import oir
+from gtc.passes.oir_masks import mask_overlap_with_extent
+from gtc.passes.oir_optimizations.utils import compute_horizontal_block_extents
 
 
 class NoFieldAccessPruning(NodeTranslator):
@@ -48,3 +51,23 @@ class NoFieldAccessPruning(NodeTranslator):
             caches=node.caches,
             loc=node.loc,
         )
+
+
+class UnreachableStmtPruning(NodeTranslator):
+    def visit_Stencil(self, node: oir.Stencil) -> oir.Stencil:
+        block_extents = compute_horizontal_block_extents(node)
+        return self.generic_visit(node, block_extents=block_extents)
+
+    def visit_HorizontalExecution(
+        self, node: oir.HorizontalExecution, *, block_extents: Dict[int, Extent]
+    ) -> oir.HorizontalExecution:
+        return self.generic_visit(node, block_extent=block_extents[id(node)])
+
+    def visit_MaskStmt(self, node: oir.MaskStmt, *, block_extent: Extent) -> Any:
+        try:
+            horizontal_mask = next(iter(node.mask.iter_tree().if_isinstance(oir.HorizontalMask)))
+        except StopIteration:
+            return node
+
+        overlap = mask_overlap_with_extent(horizontal_mask, block_extent)
+        return NOTHING if overlap is None else node
