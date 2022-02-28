@@ -161,6 +161,8 @@ def make_symbol_type_from_value(value: Any) -> common_types.SymbolType:
     if isinstance(value, type) or type(value).__module__ == "typing":
         # we don't have types of types so disallow this
         raise ValueError("The type of a symbol can not be a type itself.")
+    # TODO(tehrengruber): What we expect here currently is a GTCallable. Maybe
+    #  we should check for the protocol in the future?
     if hasattr(value, "__gt_type__"):
         symbol_type = value.__gt_type__()
     else:

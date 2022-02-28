@@ -15,7 +15,7 @@ from eve import NodeTranslator, SymbolTableTrait
 from functional.common import GTTypeError
 from functional.ffront import common_types as ct
 from functional.ffront import program_ast as past
-from functional.ffront.type_info import check_signature
+from functional.ffront.type_info import TypeInfo
 
 
 class ProgramTypeDeduction(NodeTranslator):
@@ -56,18 +56,17 @@ class ProgramTypeDeduction(NodeTranslator):
                 returns=ct.VoidType(),
             )
 
-        sig_diffs = list(
-            check_signature(
-                func_type,
+        try:
+            func_typeinfo = TypeInfo(func_type)
+            func_typeinfo.is_callable_for_args(
                 [arg.type for arg in args],
                 {name: expr.type for name, expr in kwargs.items()},
+                raise_exception=True,
             )
-        )
-        if len(sig_diffs) > 0:
-            raise ProgramTypeError(
-                f"Invalid call to `{node.func.id}`:\n"
-                + ("\n".join([f"  - {diff}" for diff in sig_diffs]))
-            )
+        except GTTypeError as ex:
+            raise ProgramTypeError.from_past_node(
+                node, msg=f"Invalid call to `{node.func.id}`."
+            ) from ex
 
         return past.Call(
             func=func, args=args, kwargs=kwargs, type=func_type.returns, location=node.location

@@ -47,7 +47,11 @@ class SymbolTypeVariable(SymbolType):
 
 @dataclass(frozen=True)
 class VoidType(SymbolType):
-    """Return type of a function without return values."""
+    """
+    Return type of a function without return values.
+
+    Note: only useful for stateful dialects.
+    """
 
     ...
 
@@ -103,6 +107,6 @@ class FunctionType(SymbolType):
 
     def __str__(self):
         arg_strs = [str(arg) for arg in self.args]
-        kwarg_strs = [f"{key}: {value}" for key, value in self.kwargs]
+        kwarg_strs = [f"{key}: {value}" for key, value in self.kwargs.items()]
         args_str = ", ".join((*arg_strs, *kwarg_strs))
         return f"({args_str}) -> {self.returns}"

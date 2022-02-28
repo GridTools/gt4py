@@ -13,6 +13,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # TODO(tehrengruber): All field operators and programs should be executable
 #  as is at some point. Adopt tests to also run on the regular python objects.
+import re
+
 import numpy as np
 import pytest
 
@@ -37,9 +39,14 @@ past_ = pattern_matching.ModuleWrapper(past)
 itir_ = pattern_matching.ModuleWrapper(itir)
 
 
+# TODO(tehrengruber): Improve test structure. Identity needs to be decorated
+#  in order to be used inside a program. This is unfortunate as a bug inside
+#  the decorator may result in failing tests before the actual test is run.
+#  A better way would be to first test everything field operator related,
+#  including the decorator and then continue with program tests that then
+#  can safely use the field operator decorator inside the fixtures.
 @pytest.fixture
-def identity():
-    @field_operator
+def identity_def():
     def identity(in_field: Field[[IDim], "float64"]) -> Field[[IDim], "float64"]:
         return in_field
 
@@ -47,7 +54,9 @@ def identity():
 
 
 @pytest.fixture
-def copy_program(identity):
+def copy_program_def(identity_def):
+    identity = field_operator(identity_def)
+
     def copy_program(in_field: Field[[IDim], "float64"], out_field: Field[[IDim], "float64"]):
         identity(in_field, out=out_field)
 
@@ -55,7 +64,9 @@ def copy_program(identity):
 
 
 @pytest.fixture
-def double_copy_program(identity):
+def double_copy_program_def(identity_def):
+    identity = field_operator(identity_def)
+
     def double_copy_program(
         in_field: Field[[IDim], "float64"],
         intermediate_field: Field[[IDim], "float64"],
@@ -68,7 +79,9 @@ def double_copy_program(identity):
 
 
 @pytest.fixture
-def copy_restrict_program(identity):
+def copy_restrict_program_def(identity_def):
+    identity = field_operator(identity_def)
+
     def copy_restrict_program(
         in_field: Field[[IDim], "float64"], out_field: Field[[IDim], "float64"]
     ):
@@ -78,7 +91,9 @@ def copy_restrict_program(identity):
 
 
 @pytest.fixture
-def invalid_call_sig_program(identity):
+def invalid_call_sig_program_def(identity_def):
+    identity = field_operator(identity_def)
+
     def invalid_call_sig_program(
         in_field: Field[[IDim], "float64"], out_field: Field[[IDim], "float64"]
     ):
@@ -88,7 +103,9 @@ def invalid_call_sig_program(identity):
 
 
 @pytest.fixture
-def invalid_out_slice_dims_program(identity):
+def invalid_out_slice_dims_program_def(identity_def):
+    identity = field_operator(identity_def)
+
     def invalid_out_slice_dims_program(
         in_field: Field[[IDim], "float64"], out_field: Field[[IDim], "float64"]
     ):
@@ -97,8 +114,19 @@ def invalid_out_slice_dims_program(identity):
     return invalid_out_slice_dims_program
 
 
-def test_copy_parsing(copy_program):
-    past_node = ProgramParser.apply_to_function(copy_program)
+def test_identity_fo_execution(identity_def):
+    size = 10
+    in_field = np_as_located_field(IDim)(np.ones((size)))
+    out_field = np_as_located_field(IDim)(np.zeros((size)))
+    identity = field_operator(identity_def)
+
+    identity(in_field, out=out_field, offset_provider={})
+
+    assert np.allclose(in_field, out_field)
+
+
+def test_copy_parsing(copy_program_def):
+    past_node = ProgramParser.apply_to_function(copy_program_def)
 
     field_type = common_types.FieldType(
         dims=[IDim],
@@ -117,13 +145,13 @@ def test_copy_parsing(copy_program):
                 kwargs={"out": past_.Name(id="out_field")},
             )
         ],
-        location=past_.SourceLocation(line=51, source=__file__),
+        location=past_.SourceLocation(line=58, source=__file__),
     )
-    assert pattern_node.matches(past_node, raise_=True)
+    assert pattern_node.match(past_node, raise_exception=True)
 
 
-def test_double_copy_parsing(double_copy_program):
-    past_node = ProgramParser.apply_to_function(double_copy_program)
+def test_double_copy_parsing(double_copy_program_def):
+    past_node = ProgramParser.apply_to_function(double_copy_program_def)
 
     field_type = common_types.FieldType(
         dims=[IDim],
@@ -149,10 +177,12 @@ def test_double_copy_parsing(double_copy_program):
             ),
         ],
     )
-    assert pattern_node.matches(past_node, raise_=True)
+    assert pattern_node.match(past_node, raise_exception=True)
 
 
-def test_undefined_field_program(identity):
+def test_undefined_field_program(identity_def):
+    identity = field_operator(identity_def)
+
     def undefined_field_program(in_field: Field[[IDim], "float64"]):
         identity(in_field, out=out_field)
 
@@ -164,7 +194,9 @@ def test_undefined_field_program(identity):
 
 
 @pytest.mark.xfail
-def test_inout_prohibited():
+def test_inout_prohibited(identity_def):
+    identity = field_operator(identity_def)
+
     def inout_field_program(inout_field: Field[[IDim], "float64"]):
         identity(inout_field, out=inout_field)
 
@@ -175,19 +207,30 @@ def test_inout_prohibited():
         ProgramLowering.apply(ProgramParser.apply_to_function(inout_field_program))
 
 
-def test_invalid_call_sig_program(invalid_call_sig_program):
+def test_invalid_call_sig_program(invalid_call_sig_program_def):
     with pytest.raises(
         GTTypeError,
     ) as exc_info:
-        ProgramLowering.apply(ProgramParser.apply_to_function(invalid_call_sig_program))
+        ProgramLowering.apply(ProgramParser.apply_to_function(invalid_call_sig_program_def))
 
     assert exc_info.match("Invalid call to `identity`")
-    assert exc_info.match("Function takes 1 arguments, but 2 were given.")
-    assert exc_info.match("Missing required keyword argument\(s\) `out`")
+    # TODO(tehrengruber): find a better way to test this
+    assert (
+        re.search(
+            "Function takes 1 arguments, but 2 were given.", exc_info.value.__context__.args[0]
+        )
+        is not None
+    )
+    assert (
+        re.search(
+            "Missing required keyword argument\(s\) `out`", exc_info.value.__context__.args[0]
+        )
+        is not None
+    )
 
 
-def test_copy_restrict_parsing(copy_restrict_program):
-    past_node = ProgramParser.apply_to_function(copy_restrict_program)
+def test_copy_restrict_parsing(copy_restrict_program_def):
+    past_node = ProgramParser.apply_to_function(copy_restrict_program_def)
 
     field_type = common_types.FieldType(
         dims=[IDim],
@@ -213,11 +256,11 @@ def test_copy_restrict_parsing(copy_restrict_program):
         ],
     )
 
-    pattern_node.matches(past_node, raise_=True)
+    pattern_node.match(past_node, raise_exception=True)
 
 
-def test_copy_lowering(copy_program):
-    past_node = ProgramParser.apply_to_function(copy_program)
+def test_copy_lowering(copy_program_def):
+    past_node = ProgramParser.apply_to_function(copy_program_def)
     itir_node = ProgramLowering.apply(past_node)
     closure_pattern = itir_.StencilClosure(
         domain=itir_.FunCall(
@@ -248,11 +291,11 @@ def test_copy_lowering(copy_program):
         closures=[closure_pattern],
     )
 
-    fencil_pattern.matches(itir_node, raise_=True)
+    fencil_pattern.match(itir_node, raise_exception=True)
 
 
-def test_copy_restrict_lowering(copy_restrict_program):
-    past_node = ProgramParser.apply_to_function(copy_restrict_program)
+def test_copy_restrict_lowering(copy_restrict_program_def):
+    past_node = ProgramParser.apply_to_function(copy_restrict_program_def)
     itir_node = ProgramLowering.apply(past_node)
     closure_pattern = itir_.StencilClosure(
         domain=itir_.FunCall(
@@ -280,7 +323,7 @@ def test_copy_restrict_lowering(copy_restrict_program):
         closures=[closure_pattern],
     )
 
-    fencil_pattern.matches(itir_node, raise_=True)
+    fencil_pattern.match(itir_node, raise_exception=True)
 
 
 def test_shift_by_one_execution():
@@ -310,48 +353,38 @@ def test_shift_by_one_execution():
     assert np.allclose(out_field, out_field_ref)
 
 
-def test_copy_execution(copy_program):
+def test_copy_execution(copy_program_def):
     size = 10
     in_field = np_as_located_field(IDim)(np.ones((size)))
     out_field = np_as_located_field(IDim)(np.zeros((size)))
-    copy_program = program(copy_program)
+    copy_program = program(copy_program_def)
 
     copy_program(in_field, out_field, offset_provider={})
 
     assert np.allclose(in_field, out_field)
 
 
-def test_double_copy_execution(double_copy_program):
+def test_double_copy_execution(double_copy_program_def):
     size = 10
     in_field = np_as_located_field(IDim)(np.ones((size)))
     intermediate_field = np_as_located_field(IDim)(np.zeros((size)))
     out_field = np_as_located_field(IDim)(np.zeros((size)))
-    double_copy_program = program(double_copy_program)
+    double_copy_program = program(double_copy_program_def)
 
     double_copy_program(in_field, intermediate_field, out_field, offset_provider={})
 
     assert np.allclose(in_field, out_field)
 
 
-def test_copy_restricted_execution(copy_restrict_program):
+def test_copy_restricted_execution(copy_restrict_program_def):
     size = 10
     in_field = np_as_located_field(IDim)(np.ones((size)))
     out_field = np_as_located_field(IDim)(np.zeros((size)))
     out_field_ref = np_as_located_field(IDim)(
         np.array([1 if i in range(1, 2) else 0 for i in range(0, size)])
     )
-    copy_restrict_program = program(copy_restrict_program)
+    copy_restrict_program = program(copy_restrict_program_def)
 
     copy_restrict_program(in_field, out_field, offset_provider={})
 
     assert np.allclose(out_field_ref, out_field)
-
-
-def test_identity_fo_execution(identity):
-    size = 10
-    in_field = np_as_located_field(IDim)(np.ones((size)))
-    out_field = np_as_located_field(IDim)(np.zeros((size)))
-
-    identity(in_field, out=out_field, offset_provider={})
-
-    assert np.allclose(in_field, out_field)

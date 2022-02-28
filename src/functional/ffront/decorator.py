@@ -11,6 +11,9 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
+# TODO(tehrengruber): This file contains to many different components. Split
+#  into components for each dialect.
+import abc
 import collections
 import dataclasses
 import functools
@@ -39,23 +42,27 @@ DEFAULT_BACKEND = "roundtrip"
 
 @typing.runtime_checkable
 class GTCallable(Protocol):
-    """Protocol (abstract base class) defining the interface for callables.
+    """
+    Typing Protocol (abstract base class) defining the interface for subroutines.
 
-    Direct subclasses of this base class only need to implement the
-    abstract methods to be callable from inside a program or from other
-    callables.
+    Any class implementing the methods defined in this protocol can be called
+    from ``ffront`` programs or operators.
     """
 
+    @abc.abstractmethod
     def __gt_type__(self) -> ct.FunctionType:
-        """Return symbol type, i.e. signature and return type.
+        """
+        Return symbol type, i.e. signature and return type.
 
         The type is used internally to populate the closure vars of the
         various dialects root nodes (i.e. FOAST Field Operator, PAST Program)
         """
         ...
 
+    @abc.abstractmethod
     def __gt_itir__(self) -> itir.FunctionDefinition:
-        """Return iterator IR function definition representing the callable.
+        """
+        Return iterator IR function definition representing the callable.
 
         Used internally by the Program decorator to populate the function
         definitions of the iterator IR.
@@ -63,10 +70,12 @@ class GTCallable(Protocol):
         ...
 
 
-# TODO(tehrengruber): make program a GTCallable and implement calling programs from programs
+# TODO(tehrengruber): Decide if and how programs can call other programs. As a
+#  result Program could become a GTCallable.
 @dataclasses.dataclass(frozen=True)
 class Program:
-    """Construct a program object from a PAST node.
+    """
+    Construct a program object from a PAST node.
 
     A call to the resulting object executes the program as expressed
     by the PAST node.
@@ -77,7 +86,7 @@ class Program:
             actual values.
         externals: Dictionary of externals.
         backend: The backend to be used for code generation.
-        definition: The python function object corresponding to the PAST node.
+        definition: The Python function object corresponding to the PAST node.
     """
 
     past_node: past.Program
@@ -95,7 +104,7 @@ class Program:
     ):
         closure_refs = ClosureRefs.from_function(definition)
         past_node = ProgramParser.apply_to_function(definition)
-        return Program(
+        return cls(
             past_node=past_node,
             closure_refs=closure_refs,
             externals={} if externals is None else externals,
@@ -160,20 +169,21 @@ def program(
     definition: types.FunctionType, externals: Optional[dict] = None, backend: Optional[str] = None
 ) -> Program:
     """
-    Generate an implementation of a program from a python function object.
+    Generate an implementation of a program from a Python function object.
 
-    Example:
-    >>> @program  # noqa: F821 # doctest: +SKIP
-    ... def program(in_field: Field[..., float64], out_field: Field[..., float64]): # noqa: F821
-    ...     field_op(in_field, out=out_field)
-    >>> program(in_field, out=out_field) # noqa: F821 # doctest: +SKIP
+    Examples:
+        >>> @program  # noqa: F821 # doctest: +SKIP
+        ... def program(in_field: Field[..., float64], out_field: Field[..., float64]): # noqa: F821
+        ...     field_op(in_field, out=out_field)
+        >>> program(in_field, out=out_field) # noqa: F821 # doctest: +SKIP
     """
     return Program.from_function(definition, externals, backend)
 
 
 @dataclasses.dataclass(frozen=True)
 class FieldOperator(GTCallable):
-    """Construct a field operator object from a PAST node.
+    """
+    Construct a field operator object from a PAST node.
 
     A call to the resulting object executes the field operator as expressed
     by the FOAST node and with the signature as if it would appear inside
@@ -185,7 +195,7 @@ class FieldOperator(GTCallable):
             actual values.
         externals: Dictionary of externals.
         backend: The backend to be used for code generation.
-        definition: The python function object corresponding to the PAST node.
+        definition: The Python function object corresponding to the PAST node.
     """
 
     foast_node: foast.FieldOperator
@@ -203,7 +213,7 @@ class FieldOperator(GTCallable):
     ):
         closure_refs = ClosureRefs.from_function(definition)
         foast_node = FieldOperatorParser.apply_to_function(definition)
-        return FieldOperator(
+        return cls(
             foast_node=foast_node,
             closure_refs=closure_refs,
             externals=externals or {},
@@ -283,12 +293,12 @@ def field_operator(
     definition: types.FunctionType, externals: Optional[dict] = None, backend: Optional[str] = None
 ) -> FieldOperator:
     """
-    Generate an implementation of the field operator from a python function object.
+    Generate an implementation of the field operator from a Python function object.
 
-    Example:
-    >>> @field_operator  # doctest: +SKIP
-    ... def field_op(in_field: Field[..., float64]) -> Field[..., float64]: # noqa: F821
-    ...     ...
-    >>> field_op(in_field, out=out_field)  # noqa: F821 # doctest: +SKIP
+    Examples:
+        >>> @field_operator  # doctest: +SKIP
+        ... def field_op(in_field: Field[..., float64]) -> Field[..., float64]: # noqa: F821
+        ...     ...
+        >>> field_op(in_field, out=out_field)  # noqa: F821 # doctest: +SKIP
     """
     return FieldOperator.from_function(definition, externals, backend)

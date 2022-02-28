@@ -24,6 +24,29 @@ from functional import common
 from functional.ffront.source_utils import ClosureRefs, SourceDefinition, SymbolNames
 
 
+def _assert_source_invariants(source_definition: SourceDefinition, closure_refs: ClosureRefs):
+    """
+    Validate information contained in the source agrees with our expectations.
+
+    No error should ever originate from this function. This is merely double
+    checking what is already done using ast nodes in the visitor.
+    """
+    source, filename, starting_line = source_definition
+    _, _, imported_names, nonlocal_names, global_names = SymbolNames.from_source(source, filename)
+    if missing_defs := (closure_refs.unbound - imported_names):
+        raise AssertionError(f"Missing symbol definitions: {missing_defs}")
+
+    # 'SymbolNames.from_source()' uses the symtable module to analyze the isolated source
+    # code of the function, and thus all non-local symbols are classified as 'global'.
+    # However, 'closure_refs' comes from inspecting the live function object, which might
+    # have not been defined at a global scope, and therefore actual symbol values could appear
+    # in both 'closure_refs.globals' and 'self.closure_refs.nonlocals'.
+    if not set(closure_refs.globals) | set(closure_refs.nonlocals.keys()) == (
+        global_names | nonlocal_names
+    ):
+        raise AssertionError("ClosureRefs do not agree with information from symtable module.")
+
+
 DialectRootT = TypeVar("DialectRootT")
 
 
@@ -58,8 +81,12 @@ class DialectParser(ast.NodeVisitor, Generic[DialectRootT]):
                     externals_defs=externals or {},
                 ).visit(definition_ast)
             )
-            cls._assert_source_invariants(source_definition, closure_refs)
+            if __debug__:
+                _assert_source_invariants(source_definition, closure_refs)
         except SyntaxError as err:
+            # TODO(tehrengruber): Instead of enhancing the exception here and
+            #  having source information in the instance we could preprocess
+            #  the ast and offset the line numbers there.
             if not err.filename:
                 err.filename = filename
             if not isinstance(err, DialectSyntaxError):
@@ -67,32 +94,6 @@ class DialectParser(ast.NodeVisitor, Generic[DialectRootT]):
             raise err
 
         return output_ast
-
-    @classmethod
-    def _assert_source_invariants(
-        cls, source_definition: SourceDefinition, closure_refs: ClosureRefs
-    ):
-        """Validate information contained in the source agrees with our expectations.
-
-        No error should ever originate from this function. This is merely double
-        checking what is already done using ast nodes in the visitor.
-        """
-        source, filename, starting_line = source_definition
-        _, _, imported_names, nonlocal_names, global_names = SymbolNames.from_source(
-            source, filename
-        )
-        if missing_defs := (closure_refs.unbound - imported_names):
-            raise AssertionError(f"Missing symbol definitions: {missing_defs}")
-
-        # 'SymbolNames.from_source()' uses the symtable module to analyze the isolated source
-        # code of the function, and thus all non-local symbols are classified as 'global'.
-        # However, 'closure_refs' comes from inspecting the live function object, which might
-        # have not been defined at a global scope, and therefore actual symbol values could appear
-        # in both 'closure_refs.globals' and 'self.closure_refs.nonlocals'.
-        if not set(closure_refs.globals) | set(closure_refs.nonlocals.keys()) == (
-            global_names | nonlocal_names
-        ):
-            raise AssertionError("ClosureRefs do not agree with information from symtable module.")
 
     @classmethod
     def _preprocess_definition_ast(cls, definition_ast: ast.AST) -> ast.AST:
