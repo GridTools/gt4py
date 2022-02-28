@@ -145,7 +145,7 @@ def test_copy_parsing(copy_program_def):
                 kwargs={"out": past_.Name(id="out_field")},
             )
         ],
-        location=past_.SourceLocation(line=58, source=__file__),
+        location=past_.SourceLocation(line=60, source=__file__),
     )
     assert pattern_node.match(past_node, raise_exception=True)
 
@@ -278,7 +278,7 @@ def test_copy_lowering(copy_program_def):
         ),
         stencil=itir_.SymRef(id="identity"),
         inputs=[itir_.SymRef(id="in_field")],
-        outputs=[itir_.SymRef(id="out_field")],
+        output=itir_.SymRef(id="out_field"),
     )
     fencil_pattern = itir_.FencilDefinition(
         id="copy_program",

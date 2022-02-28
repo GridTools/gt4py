@@ -97,13 +97,13 @@ class ProgramLowering(NodeTranslator):
     def _visit_stencil_call(self, node: past.Call, **kwargs) -> itir.StencilClosure:
         assert isinstance(node.kwargs["out"].type, common_types.FieldType)
 
-        outputs, domain = self._visit_stencil_call_out_arg(node.kwargs["out"], **kwargs)
+        output, domain = self._visit_stencil_call_out_arg(node.kwargs["out"], **kwargs)
 
         return itir.StencilClosure(
             domain=domain,
             stencil=itir.SymRef(id=node.func.id),
             inputs=[self.visit(arg, **kwargs) for arg in node.args],
-            outputs=outputs,
+            output=output,
         )
 
     def _visit_slice_bound(
@@ -129,7 +129,7 @@ class ProgramLowering(NodeTranslator):
 
     def _visit_stencil_call_out_arg(
         self, node: past.Expr, **kwargs
-    ) -> tuple[list[itir.SymRef], itir.FunCall]:
+    ) -> tuple[itir.SymRef, itir.FunCall]:
         # as the ITIR does not support slicing a field we have to do a deeper
         #  inspection of the PAST to emulate the behaviour
         if isinstance(node, past.Subscript):
@@ -183,7 +183,7 @@ class ProgramLowering(NodeTranslator):
                 "Unexpected `out` argument. Must be a `past.Subscript` or `past.Name` node."
             )
 
-        return [self.visit(out_field_name, **kwargs)], itir.FunCall(
+        return self.visit(out_field_name, **kwargs), itir.FunCall(
             fun=itir.SymRef(id="domain"), args=domain_args
         )
 
