@@ -21,7 +21,7 @@ import functools
 import numbers
 import operator
 from dataclasses import dataclass
-from typing import Tuple
+from typing import Literal, Tuple, Union
 
 import numpy
 
@@ -700,8 +700,7 @@ class FieldInfo:
 
 @dataclass(frozen=True)
 class ParameterInfo:
-    # NOTE: Parameters are read-only, so the possible values are AccessType.NONE and AccessType.READ.
-    access: AccessKind
+    access: Union[Literal[AccessKind.NONE], Literal[AccessKind.READ]]
     dtype: numpy.dtype
 
     def __repr__(self):

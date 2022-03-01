@@ -99,6 +99,10 @@ class NativeFuncCall(common.NativeFuncCall[Expr], Expr):
     _dtype_propagation = common.native_func_call_dtype_propagation(strict=True)
 
 
+class While(common.While[Stmt, Expr], Stmt):
+    pass
+
+
 class Decl(LocNode):
     name: SymbolName
     dtype: common.DataType
@@ -249,7 +253,7 @@ class VerticalLoopSection(LocNode):
 class VerticalLoop(LocNode):
     loop_order: common.LoopOrder
     sections: List[VerticalLoopSection]
-    caches: List[CacheDesc]
+    caches: List[CacheDesc] = []
 
     @validator("sections")
     def nonempty_loop(cls, v: List[VerticalLoopSection]) -> List[VerticalLoopSection]:

@@ -4,7 +4,7 @@ from typing import Any, Dict, List, Union
 from eve import NodeVisitor
 from eve.utils import XIterable
 from gt4py.definitions import Extent
-from gtc import gtir
+from gtc import common, gtir
 
 
 def _iter_field_names(node: Union[gtir.Stencil, gtir.ParAssignStmt]) -> XIterable[gtir.FieldAccess]:
@@ -15,7 +15,7 @@ def _iter_assigns(node: gtir.Stencil) -> XIterable[gtir.ParAssignStmt]:
     return node.iter_tree().if_isinstance(gtir.ParAssignStmt)
 
 
-def _ext_from_off(offset: Union[gtir.CartesianOffset, gtir.VariableKOffset]) -> Extent:
+def _ext_from_off(offset: Union[common.CartesianOffset, gtir.VariableKOffset]) -> Extent:
     if isinstance(offset, gtir.VariableKOffset):
         return Extent(((0, 0), (0, 0), (0, 0)))
     return Extent(((offset.i, offset.i), (offset.j, offset.j), (0, 0)))

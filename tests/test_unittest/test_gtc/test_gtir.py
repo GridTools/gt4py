@@ -18,7 +18,7 @@ import pytest
 from pydantic.error_wrappers import ValidationError
 
 from eve import SourceLocation
-from gtc.common import ArithmeticOperator, DataType, LevelMarker, LoopOrder
+from gtc.common import ArithmeticOperator, ComparisonOperator, DataType, LevelMarker, LoopOrder
 from gtc.gtir import (
     AxisBound,
     Decl,
@@ -42,6 +42,7 @@ from .gtir_utils import (
     StencilFactory,
     VariableKOffsetFactory,
     VerticalLoopFactory,
+    WhileFactory,
 )
 
 
@@ -205,6 +206,35 @@ def test_indirect_address_data_dims():
     # ... but others are not
     with pytest.raises(ValueError, match="must be integer expressions"):
         FieldAccessFactory(data_index=[ScalarAccessFactory(dtype=DataType.FLOAT32)])
+
+
+def test_while_without_boolean_condition():
+    with pytest.raises(ValueError, match=r"Condition in.*must be boolean."):
+        WhileFactory(
+            cond=BinaryOpFactory(
+                left__name="foo",
+                right__name="bar",
+            ),
+            dtype=DataType.FLOAT32,
+        )
+
+
+def test_while_with_accumulated_extents():
+    with pytest.raises(
+        ValueError, match=r"Illegal write and read with horizontal offset detected for.*"
+    ):
+        WhileFactory(
+            cond=BinaryOpFactory(
+                left__name="a",
+                right__name="b",
+                op=ComparisonOperator.LT,
+                dtype=DataType.BOOL,
+            ),
+            body=[
+                ParAssignStmtFactory(left__name="a", right__name="b", right__offset__i=1),
+                ParAssignStmtFactory(left__name="b", right__name="a"),
+            ],
+        )
 
 
 def test_variable_k_offset_in_access():

@@ -69,9 +69,15 @@ class KCacheAccess(common.FieldAccess[Expr, VariableKOffset], Expr):
     k_cache_is_different_from_field_access = True
 
     @validator("offset")
-    def zero_ij_offset(cls, v: CartesianOffset) -> CartesianOffset:
+    def has_no_ij_offset(cls, v: Union[CartesianOffset, VariableKOffset]) -> CartesianOffset:
         if not v.i == v.j == 0:
             raise ValueError("No ij-offset allowed")
+        return v
+
+    @validator("offset")
+    def not_variable_offset(cls, v: Union[CartesianOffset, VariableKOffset]) -> CartesianOffset:
+        if isinstance(v, VariableKOffset):
+            raise ValueError("Cannot k-cache a variable k offset")
         return v
 
     @validator("data_index")
@@ -90,6 +96,10 @@ class AssignStmt(
 class MaskStmt(Stmt):
     mask: Expr
     body: List[Stmt]
+
+
+class While(common.While[Stmt, Expr], Stmt):
+    pass
 
 
 class UnaryOp(common.UnaryOp[Expr], Expr):

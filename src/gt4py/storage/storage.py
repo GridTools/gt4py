@@ -29,7 +29,13 @@ from gt4py import backend as gt_backend
 from . import utils as storage_utils
 
 
+def _error_on_invalid_backend(backend):
+    if not backend in gt_backend.REGISTRY:
+        raise RuntimeError(f"Backend '{backend}' is not registered.")
+
+
 def empty(backend, default_origin, shape, dtype, mask=None, *, managed_memory=False):
+    _error_on_invalid_backend(backend)
     if gt_backend.from_name(backend).storage_info["device"] == "gpu":
         if managed_memory:
             storage_t = GPUStorage
@@ -137,8 +143,7 @@ class Storage(np.ndarray):
             default_origin, shape, dtype, mask
         )
 
-        if not backend in gt_backend.REGISTRY:
-            ValueError("Backend must be in {}.".format(gt_backend.REGISTRY))
+        _error_on_invalid_backend(backend)
 
         alignment = gt_backend.from_name(backend).storage_info["alignment"]
         layout_map = gt_backend.from_name(backend).storage_info["layout_map"](mask)

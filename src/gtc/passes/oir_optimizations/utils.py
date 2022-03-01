@@ -95,6 +95,10 @@ class AccessCollector(NodeVisitor):
         self.visit(node.mask, is_write=False, **kwargs)
         self.visit(node.body, in_mask=True, **kwargs)
 
+    def visit_While(self, node: oir.While, **kwargs: Any) -> None:
+        self.visit(node.cond, is_write=False, **kwargs)
+        self.visit(node.body, **kwargs)
+
     @dataclass
     class GenericAccessCollection(Generic[AccessT, OffsetT]):
         _ordered_accesses: List[AccessT]
@@ -106,11 +110,11 @@ class AccessCollector(NodeVisitor):
             )
 
         def offsets(self) -> Dict[str, Set[OffsetT]]:
-            """Get a dictonary, mapping all accessed fields' names to sets of offset tuples."""
+            """Get a dictionary, mapping all accessed fields' names to sets of offset tuples."""
             return self._offset_dict(xiter(self._ordered_accesses))
 
         def read_offsets(self) -> Dict[str, Set[OffsetT]]:
-            """Get a dictonary, mapping read fields' names to sets of offset tuples."""
+            """Get a dictionary, mapping read fields' names to sets of offset tuples."""
             return self._offset_dict(xiter(self._ordered_accesses).filter(lambda x: x.is_read))
 
         def read_accesses(self) -> List[AccessT]:
@@ -118,7 +122,7 @@ class AccessCollector(NodeVisitor):
             return list(xiter(self._ordered_accesses).filter(lambda x: x.is_read))
 
         def write_offsets(self) -> Dict[str, Set[OffsetT]]:
-            """Get a dictonary, mapping written fields' names to sets of offset tuples."""
+            """Get a dictionary, mapping written fields' names to sets of offset tuples."""
             return self._offset_dict(xiter(self._ordered_accesses).filter(lambda x: x.is_write))
 
         def write_accesses(self) -> List[AccessT]:
@@ -208,19 +212,19 @@ def collect_symbol_names(node: TreeNode) -> Set[str]:
     )
 
 
-class _HorizontalExecutionExtents(NodeVisitor):
+class StencilExtentComputer(NodeVisitor):
     @dataclass
     class Context:
         # TODO: Remove dependency on gt4py.definitions here
-        field_extents: Dict[str, Extent] = field(default_factory=dict)
-        block_extents: Dict[int, Extent] = field(default_factory=dict)
+        fields: Dict[str, Extent] = field(default_factory=dict)
+        blocks: Dict[int, Extent] = field(default_factory=dict)
 
-    def visit_Stencil(self, node: oir.Stencil) -> Dict[int, Extent]:
+    def visit_Stencil(self, node: oir.Stencil) -> "Context":
         ctx = self.Context()
         for vloop in reversed(node.vertical_loops):
             self.visit(vloop, ctx=ctx)
 
-        return ctx.block_extents
+        return ctx
 
     def visit_VerticalLoopSection(self, node: oir.VerticalLoopSection, **kwargs: Any) -> None:
         for hexec in reversed(node.horizontal_executions):
@@ -229,20 +233,21 @@ class _HorizontalExecutionExtents(NodeVisitor):
     def visit_HorizontalExecution(self, node: oir.HorizontalExecution, *, ctx: Context) -> None:
         results = AccessCollector.apply(node).cartesian_accesses()
         horizontal_extent = functools.reduce(
-            lambda ext, name: ext | ctx.field_extents.get(name, Extent.zeros(ndims=2)),
+            lambda ext, name: ext | ctx.fields.get(name, Extent.zeros(ndims=2)),
             results.write_fields(),
             Extent.zeros(ndims=2),
         )
-        ctx.block_extents[id(node)] = horizontal_extent
+        ctx.blocks[id(node)] = horizontal_extent
 
         for name, accesses in results.read_offsets().items():
             extent = functools.reduce(
                 lambda ext, off: ext | Extent.from_offset(off[:2]), accesses, Extent.zeros(ndims=2)
             )
-            ctx.field_extents[name] = ctx.field_extents.get(name, Extent.zeros(ndims=2)).union(
+            ctx.fields[name] = ctx.fields.get(name, Extent.zeros(ndims=2)).union(
                 horizontal_extent + extent
             )
 
 
 def compute_horizontal_block_extents(node: oir.Stencil) -> Dict[int, Extent]:
-    return _HorizontalExecutionExtents().visit(node)
+    ctx = StencilExtentComputer().visit(node)
+    return ctx.blocks

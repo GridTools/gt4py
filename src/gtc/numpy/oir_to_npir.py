@@ -14,264 +14,218 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import itertools
 import typing
-from collections import OrderedDict
-from dataclasses import dataclass, field
-from typing import Any, List, Optional, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
+from eve.concepts import BaseNode
 from eve.traits import SymbolTableTrait
 from eve.visitors import NodeTranslator
+from gtc import common, oir, utils
+from gtc.passes.oir_optimizations.utils import StencilExtentComputer
 
-from .. import common, oir
 from . import npir
 
 
 class OirToNpir(NodeTranslator):
     """Lower from optimizable IR (OIR) to numpy IR (NPIR)."""
 
-    @dataclass
-    class ComputationContext:
-        """Top Level Context."""
-
-        temp_defs: typing.OrderedDict[str, npir.VectorAssign] = field(
-            default_factory=lambda: OrderedDict({})
-        )
-
-        mask_temp_counter: int = 0
-
-        def ensure_temp_defined(self, temp: Union[oir.FieldAccess, npir.FieldSlice]) -> None:
-            if temp.name not in self.temp_defs:
-                self.temp_defs[str(temp.name)] = npir.VectorAssign(
-                    left=npir.VectorTemp(name=str(temp.name), dtype=temp.dtype),
-                    right=npir.EmptyTemp(dtype=temp.dtype),
-                )
-
     contexts = (SymbolTableTrait.symtable_merger,)
 
-    def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> npir.Computation:
-        ctx = self.ComputationContext()
-        vertical_passes = list(
-            itertools.chain(
-                *[self.visit(vloop, ctx=ctx, **kwargs) for vloop in node.vertical_loops]
-            )
-        )
-        field_names: List[str] = []
-        scalar_names: List[str] = []
-        field_decls: List[npir.FieldDecl] = []
-        for decl in node.params:
-            if isinstance(decl, oir.FieldDecl):
-                field_names.append(str(decl.name))
-                field_decls.append(self.visit(decl))
-            else:
-                scalar_names.append(decl.name)
-        return npir.Computation(
-            field_decls=field_decls,
-            field_params=field_names,
-            params=[decl.name for decl in node.params],
-            vertical_passes=vertical_passes,
+    # --- Decls ---
+    def visit_FieldDecl(
+        self, node: oir.FieldDecl, *, extents: StencilExtentComputer.Context, **kwargs: Any
+    ) -> npir.FieldDecl:
+        extent = typing.cast(npir.HorizontalExtent, extents.fields.get(node.name, ((0, 0), (0, 0))))
+        return npir.FieldDecl(
+            name=node.name,
+            dtype=node.dtype,
+            dimensions=node.dimensions,
+            data_dims=node.data_dims,
+            extent=extent,
         )
 
-    def visit_VerticalLoop(self, node: oir.VerticalLoop, **kwargs) -> List[npir.VerticalPass]:
-        return self.visit(node.sections, v_caches=node.caches, loop_order=node.loop_order, **kwargs)
+    def visit_ScalarDecl(self, node: oir.ScalarDecl, **kwargs: Any) -> npir.ScalarDecl:
+        return npir.ScalarDecl(name=node.name, dtype=node.dtype)
 
-    def visit_VerticalLoopSection(
-        self,
-        node: oir.VerticalLoopSection,
-        *,
-        loop_order: common.LoopOrder,
-        ctx: Optional[ComputationContext] = None,
-        v_caches: List[oir.CacheDesc] = None,
-        **kwargs: Any,
-    ) -> npir.VerticalPass:
-        ctx = ctx or self.ComputationContext()
-        defined_temps = set(ctx.temp_defs.keys())
-        kwargs.update(
-            {
-                "parallel_k": True if loop_order == common.LoopOrder.PARALLEL else False,
-                "lower_k": node.interval.start,
-                "upper_k": node.interval.end,
-            }
-        )
-        body = self.visit(node.horizontal_executions, ctx=ctx, **kwargs)
-        undef_temps = [
-            temp_def for name, temp_def in ctx.temp_defs.items() if name not in defined_temps
-        ]
-        return npir.VerticalPass(
-            body=body,
-            temp_defs=undef_temps,
-            lower=self.visit(node.interval.start, ctx=ctx, **kwargs),
-            upper=self.visit(node.interval.end, ctx=ctx, **kwargs),
-            direction=self.visit(loop_order, ctx=ctx, **kwargs),
+    def visit_LocalScalar(self, node: oir.LocalScalar, **kwargs: Any) -> npir.ScalarDecl:
+        return npir.ScalarDecl(name=node.name, dtype=node.dtype)
+
+    def visit_Temporary(
+        self, node: oir.Temporary, *, extents: StencilExtentComputer.Context, **kwargs: Any
+    ) -> npir.TemporaryDecl:
+        temp_extent = extents.fields[node.name]
+        offset = [-ext[0] for ext in temp_extent]
+        assert all(off >= 0 for off in offset)
+        padding = [ext[1] - ext[0] for ext in temp_extent]
+        return npir.TemporaryDecl(
+            name=node.name,
+            dtype=node.dtype,
+            data_dims=node.data_dims,
+            offset=offset,
+            padding=padding,
         )
 
-    def visit_HorizontalExecution(
-        self,
-        node: oir.HorizontalExecution,
-        *,
-        ctx: Optional[ComputationContext] = None,
-        **kwargs: Any,
-    ) -> npir.HorizontalBlock:
-        return npir.HorizontalBlock(
-            body=self.visit(node.body, ctx=ctx, **kwargs),
-        )
+    # --- Expressions ---
+    def visit_Literal(self, node: oir.Literal, **kwargs: Any) -> npir.ScalarLiteral:
+        assert node.kind == common.ExprKind.SCALAR
+        return npir.ScalarLiteral(value=node.value, dtype=node.dtype, kind=node.kind)
 
-    def visit_MaskStmt(
-        self,
-        node: oir.MaskStmt,
-        *,
-        ctx: ComputationContext,
-        parallel_k: bool,
-        **kwargs,
-    ) -> npir.MaskBlock:
-        mask_expr = self.visit(node.mask, ctx=ctx, parallel_k=parallel_k, broadcast=True, **kwargs)
-        if isinstance(mask_expr, npir.FieldSlice):
-            mask_name = mask_expr.name
-            mask = mask_expr
+    def visit_ScalarAccess(
+        self, node: oir.ScalarAccess, *, symtable: Dict[str, oir.Decl], **kwargs: Any
+    ) -> Union[npir.ParamAccess, npir.LocalScalarAccess]:
+        assert node.kind == common.ExprKind.SCALAR
+        if isinstance(symtable[node.name], oir.LocalScalar):
+            return npir.LocalScalarAccess(name=node.name)
         else:
-            mask_name = f"_mask_{ctx.mask_temp_counter}"
-            mask = npir.VectorTemp(
-                name=mask_name,
-            )
-            ctx.mask_temp_counter += 1
+            return npir.ParamAccess(name=node.name)
 
-        return npir.MaskBlock(
-            mask=mask_expr,
-            mask_name=mask_name,
-            body=self.visit(node.body, ctx=ctx, parallel_k=parallel_k, mask=mask, **kwargs),
-        )
+    def visit_CartesianOffset(
+        self, node: common.CartesianOffset, **kwargs: Any
+    ) -> Tuple[int, int, int]:
+        return node.i, node.j, node.k
 
-    def visit_AssignStmt(
-        self,
-        node: oir.AssignStmt,
-        *,
-        ctx: Optional[ComputationContext] = None,
-        mask: Optional[npir.VectorExpression] = None,
-        **kwargs: Any,
-    ) -> npir.VectorAssign:
-        ctx = ctx or self.ComputationContext()
-        if isinstance(
-            kwargs["symtable"].get(node.left.name, None), (oir.Temporary, oir.LocalScalar)
-        ):
-            ctx.ensure_temp_defined(node.left)
-        return npir.VectorAssign(
-            left=self.visit(node.left, ctx=ctx, is_lvalue=True, **kwargs),
-            right=self.visit(node.right, ctx=ctx, broadcast=True, **kwargs),
-            mask=mask,
-        )
+    def visit_VariableKOffset(
+        self, node: oir.VariableKOffset, **kwargs: Any
+    ) -> Tuple[int, int, BaseNode]:
+        return 0, 0, npir.VarKOffset(k=self.visit(node.k, **kwargs))
 
-    def visit_Cast(
-        self,
-        node: oir.Cast,
-        *,
-        ctx: Optional[ComputationContext] = None,
-        broadcast: bool = False,
-        **kwargs: Any,
-    ) -> Union[npir.Cast, npir.BroadCast]:
-        cast = npir.Cast(
-            dtype=self.visit(node.dtype, ctx=ctx, **kwargs),
-            expr=self.visit(node.expr, ctx=ctx, broadcast=False, **kwargs),
-        )
-        if broadcast:
-            return npir.BroadCast(expr=cast, dtype=node.dtype)
-        return cast
-
-    def visit_FieldAccess(
-        self,
-        node: oir.FieldAccess,
-        *,
-        ctx: ComputationContext,
-        parallel_k: bool,
-        **kwargs: Any,
-    ) -> npir.FieldSlice:
-        dims = (
-            decl.dimensions if (decl := kwargs["symtable"].get(node.name)) else (True, True, True)
-        )
-        if isinstance(node.offset, common.CartesianOffset):
-            i_offset = npir.AxisOffset.i(node.offset.i) if dims[0] else None
-            j_offset = npir.AxisOffset.j(node.offset.j) if dims[1] else None
-            k_offset = npir.AxisOffset.k(node.offset.k, parallel=parallel_k) if dims[2] else None
-        else:
-            i_offset = npir.AxisOffset.i(0)
-            j_offset = npir.AxisOffset.j(0)
-            k_offset = npir.VariableKOffset(
-                k=self.visit(node.offset.k, ctx=ctx, parallel_k=parallel_k, **kwargs)
-            )
+    def visit_FieldAccess(self, node: oir.FieldAccess, **kwargs: Any) -> npir.FieldSlice:
+        i_offset, j_offset, k_offset = self.visit(node.offset, **kwargs)
+        data_index = [self.visit(index, **kwargs) for index in node.data_index]
         return npir.FieldSlice(
-            name=str(node.name),
+            name=node.name,
             i_offset=i_offset,
             j_offset=j_offset,
             k_offset=k_offset,
-            data_index=self.visit(node.data_index, ctx=ctx, parallel_k=parallel_k, **kwargs),
-        )
-
-    def visit_FieldDecl(self, node: oir.FieldDecl, **kwargs: Any) -> npir.FieldDecl:
-        return npir.FieldDecl(
-            name=node.name,
-            dtype=self.visit(node.dtype),
-            dimensions=node.dimensions,
-            data_dims=node.data_dims,
-        )
-
-    def visit_BinaryOp(
-        self, node: oir.BinaryOp, *, ctx: Optional[ComputationContext] = None, **kwargs: Any
-    ) -> Union[npir.VectorArithmetic, npir.VectorLogic]:
-        kwargs["broadcast"] = True
-        left = self.visit(node.left, ctx=ctx, **kwargs)
-        right = self.visit(node.right, ctx=ctx, **kwargs)
-
-        if isinstance(node.op, common.LogicalOperator):
-            return npir.VectorLogic(op=node.op, left=left, right=right)
-
-        return npir.VectorArithmetic(
-            op=node.op,
-            left=left,
-            right=right,
+            data_index=data_index,
+            dtype=node.dtype,
         )
 
     def visit_UnaryOp(self, node: oir.UnaryOp, **kwargs: Any) -> npir.VectorUnaryOp:
-        kwargs["broadcast"] = True
         return npir.VectorUnaryOp(op=node.op, expr=self.visit(node.expr, **kwargs))
 
-    def visit_TernaryOp(self, node: oir.TernaryOp, **kwargs: Any) -> npir.VectorTernaryOp:
-        kwargs["broadcast"] = True
+    def visit_BinaryOp(
+        self, node: oir.BinaryOp, **kwargs: Any
+    ) -> Union[npir.VectorArithmetic, npir.VectorLogic]:
+        args = dict(
+            op=node.op,
+            left=self.visit(node.left, **kwargs),
+            right=self.visit(node.right, **kwargs),
+        )
+        if isinstance(node.op, common.LogicalOperator):
+            return npir.VectorLogic(**args)
+        else:
+            return npir.VectorArithmetic(**args)
 
+    def visit_TernaryOp(self, node: oir.TernaryOp, **kwargs: Any) -> npir.VectorTernaryOp:
         return npir.VectorTernaryOp(
             cond=self.visit(node.cond, **kwargs),
             true_expr=self.visit(node.true_expr, **kwargs),
             false_expr=self.visit(node.false_expr, **kwargs),
         )
 
-    def visit_NativeFuncCall(self, node: oir.NativeFuncCall, **kwargs: Any) -> npir.NativeFuncCall:
-        kwargs["broadcast"] = True
-        return npir.NativeFuncCall(
-            func=self.visit(node.func, **kwargs),
-            args=self.visit(node.args, **kwargs),
+    def visit_Cast(self, node: oir.Cast, **kwargs: Any) -> Union[npir.VectorCast, npir.ScalarCast]:
+        expr = self.visit(node.expr, **kwargs)
+        args = dict(dtype=node.dtype, expr=expr)
+        return (
+            npir.VectorCast(**args)
+            if expr.kind == common.ExprKind.FIELD
+            else npir.ScalarCast(**args)
         )
 
-    def visit_Literal(
-        self, node: oir.Literal, *, broadcast: bool = False, **kwargs: Any
-    ) -> Union[npir.Literal, npir.BroadCast]:
-        literal = npir.Literal(value=self.visit(node.value, **kwargs), dtype=node.dtype)
-        if broadcast:
-            return npir.BroadCast(expr=literal, dtype=node.dtype)
-        return literal
+    def visit_NativeFuncCall(self, node: oir.NativeFuncCall, **kwargs: Any) -> npir.NativeFuncCall:
+        return npir.NativeFuncCall(
+            func=self.visit(node.func, **kwargs), args=self.visit(node.args, **kwargs)
+        )
 
-    def visit_ScalarAccess(
+    # --- Statements ---
+    def visit_MaskStmt(
         self,
-        node: oir.ScalarAccess,
+        node: oir.MaskStmt,
         *,
-        broadcast: bool = False,
-        ctx: Optional[ComputationContext] = None,
+        mask: Optional[npir.Expr] = None,
         **kwargs: Any,
-    ) -> Union[npir.BroadCast, npir.NamedScalar]:
-        ctx = ctx or self.ComputationContext()
-        if node.name in ctx.temp_defs:
-            name = npir.VectorTemp(name=self.visit(node.name, **kwargs))
+    ) -> List[npir.VectorAssign]:
+        mask_expr = self.visit(node.mask, **kwargs)
+        if mask:
+            mask_expr = npir.VectorLogic(op=common.LogicalOperator.AND, left=mask, right=mask_expr)
+        return self.visit(node.body, mask=mask_expr, **kwargs)
+
+    def visit_AssignStmt(
+        self,
+        node: oir.AssignStmt,
+        *,
+        mask: Optional[npir.Expr] = None,
+        **kwargs: Any,
+    ) -> npir.VectorAssign:
+        left = self.visit(node.left, **kwargs)
+        right = self.visit(node.right, **kwargs)
+        if right.kind == common.ExprKind.SCALAR:
+            right = npir.Broadcast(expr=right, dims=3)
+        return npir.VectorAssign(left=left, right=right, mask=mask)
+
+    # --- Control Flow ---
+    def visit_While(
+        self, node: oir.While, *, mask: Optional[npir.Expr] = None, **kwargs: Any
+    ) -> npir.While:
+        cond = self.visit(node.cond, mask=mask, **kwargs)
+        if mask:
+            mask = npir.VectorLogic(op=common.LogicalOperator.AND, left=mask, right=cond)
         else:
-            name = npir.NamedScalar(
-                name=self.visit(node.name, **kwargs), dtype=self.visit(node.dtype, **kwargs)
-            )
-        if broadcast:
-            return npir.BroadCast(expr=name, dtype=name.dtype)
-        return name
+            mask = cond
+        return npir.While(cond=cond, body=self.visit(node.body, mask=mask, **kwargs))
+
+    def visit_HorizontalExecution(
+        self,
+        node: oir.HorizontalExecution,
+        *,
+        extents: Optional[StencilExtentComputer.Context] = None,
+        **kwargs: Any,
+    ) -> npir.HorizontalBlock:
+        stmts = utils.flatten_list(self.visit(node.body, **kwargs))
+        if extents:
+            extent = extents.blocks[id(node)]
+        else:
+            extent = ((0, 0), (0, 0))
+        return npir.HorizontalBlock(
+            declarations=self.visit(node.declarations, **kwargs), body=stmts, extent=extent
+        )
+
+    def visit_VerticalLoopSection(
+        self, node: oir.VerticalLoopSection, *, loop_order: common.LoopOrder, **kwargs: Any
+    ) -> npir.VerticalPass:
+        return npir.VerticalPass(
+            body=self.visit(node.horizontal_executions, **kwargs),
+            lower=node.interval.start,
+            upper=node.interval.end,
+            direction=loop_order,
+        )
+
+    def visit_VerticalLoop(self, node: oir.VerticalLoop, **kwargs: Any) -> List[npir.VerticalPass]:
+        return self.visit(node.sections, loop_order=node.loop_order, **kwargs)
+
+    def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> npir.Computation:
+        extents = StencilExtentComputer().visit(node)
+
+        arguments = [decl.name for decl in node.params]
+        param_decls = [
+            self.visit(decl, **kwargs) for decl in node.params if isinstance(decl, oir.ScalarDecl)
+        ]
+        api_field_decls = [
+            self.visit(decl, extents=extents)
+            for decl in node.params
+            if isinstance(decl, oir.FieldDecl)
+        ]
+        temp_decls = [self.visit(decl, extents=extents, **kwargs) for decl in node.declarations]
+
+        vertical_passes = utils.flatten_list(
+            self.visit(node.vertical_loops, extents=extents, **kwargs)
+        )
+
+        return npir.Computation(
+            arguments=arguments,
+            api_field_decls=api_field_decls,
+            param_decls=param_decls,
+            temp_decls=temp_decls,
+            vertical_passes=vertical_passes,
+        )
