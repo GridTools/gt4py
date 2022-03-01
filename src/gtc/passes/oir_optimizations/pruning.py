@@ -14,9 +14,10 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import Any, Dict
+from typing import Any, Dict, Generator
 
-from eve import NOTHING, NodeTranslator
+from eve import NOTHING, NodeTranslator, utils
+from eve.iterators import TreeIterationItem
 from gt4py.definitions import Extent
 from gtc import oir
 from gtc.passes.oir_masks import mask_overlap_with_extent
@@ -61,11 +62,29 @@ class UnreachableStmtPruning(NodeTranslator):
     def visit_HorizontalExecution(
         self, node: oir.HorizontalExecution, *, block_extents: Dict[int, Extent]
     ) -> oir.HorizontalExecution:
-        return self.generic_visit(node, block_extent=block_extents[id(node)])
+        return self.generic_visit(node, scalar_exprs={}, block_extent=block_extents[id(node)])
 
-    def visit_MaskStmt(self, node: oir.MaskStmt, *, block_extent: Extent) -> Any:
+    def visit_AssignStmt(
+        self, node: oir.ScalarAccess, *, scalar_exprs: Dict[str, oir.Expr], **kwargs: Any
+    ) -> oir.AssignStmt:
+        scalar_exprs[node.left.name] = node.right
+        return node
+
+    def visit_MaskStmt(
+        self, node: oir.MaskStmt, *, scalar_exprs: Dict[str, oir.Expr], block_extent: Extent
+    ) -> Any:
+        @utils.as_xiter
+        def _iter_tree(mask) -> Generator[TreeIterationItem, None, None]:
+            scalar_sub_exprs = (
+                scalar_exprs[name]
+                for name in mask.iter_tree().if_isinstance(oir.ScalarAccess).getattr("name")
+                if name in scalar_exprs
+            )
+            for elem in (mask, *scalar_sub_exprs):
+                yield from elem.iter_tree()
+
         try:
-            horizontal_mask = next(iter(node.mask.iter_tree().if_isinstance(oir.HorizontalMask)))
+            horizontal_mask = next(iter(_iter_tree(node.mask).if_isinstance(oir.HorizontalMask)))
         except StopIteration:
             return node
 

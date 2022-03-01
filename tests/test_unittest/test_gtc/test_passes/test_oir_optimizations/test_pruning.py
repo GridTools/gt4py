@@ -14,6 +14,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+from gtc import common
 from gtc.common import HorizontalInterval, LevelMarker
 from gtc.oir import HorizontalMask
 from gtc.passes.oir_optimizations.pruning import NoFieldAccessPruning, UnreachableStmtPruning
@@ -84,11 +85,16 @@ def test_unreachable_stmt_pruning():
                         ),
                         body=[AssignStmtFactory(left__name=out_name, right=LiteralFactory())],
                     ),
-                    MaskStmtFactory(
-                        mask=HorizontalMask(
+                    AssignStmtFactory(
+                        left__name="mask0",
+                        left__dtype=common.DataType.BOOL,
+                        right=HorizontalMask(
                             i=HorizontalInterval.single_index(LevelMarker.END, 1),
                             j=HorizontalInterval.full(),
                         ),
+                    ),
+                    MaskStmtFactory(
+                        mask=ScalarAccessFactory(name="mask0", dtype=common.DataType.BOOL),
                         body=[AssignStmtFactory(left__name=out_name, right=LiteralFactory())],
                     ),
                     MaskStmtFactory(
@@ -111,4 +117,4 @@ def test_unreachable_stmt_pruning():
     )
 
     stencil = UnreachableStmtPruning().visit(testee)
-    assert len(stencil.vertical_loops[0].sections[0].horizontal_executions[1].body) == 2
+    assert len(stencil.vertical_loops[0].sections[0].horizontal_executions[1].body) == 3
