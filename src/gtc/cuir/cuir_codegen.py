@@ -298,7 +298,9 @@ class CUIRCodegen(codegen.TemplatedGenerator):
         struct loop_${id(_this_node)}_f {
             sid::ptr_holder_type<Sid> m_ptr_holder;
             sid::strides_type<Sid> m_strides;
-            int k_size;
+            const int i_size;
+            const int j_size;
+            const int k_size;
 
             template <class Validator>
             GT_FUNCTION_DEVICE void operator()(const int _i_block,
@@ -414,6 +416,8 @@ class CUIRCodegen(codegen.TemplatedGenerator):
             **kwargs,
         )
 
+    Positional = as_fmt("auto {name} = positional<dim::{axis_name}>();")
+
     Program = as_mako(
         """#include <algorithm>
         #include <array>
@@ -430,6 +434,9 @@ class CUIRCodegen(codegen.TemplatedGenerator):
         #include <gridtools/stencil/common/extent.hpp>
         #include <gridtools/stencil/gpu/launch_kernel.hpp>
         #include <gridtools/stencil/gpu/tmp_storage_sid.hpp>
+        % if positionals:
+        #include <gridtools/stencil/positional.hpp>
+        % endif
 
         namespace ${name}_impl_{
             using namespace gridtools;
@@ -465,6 +472,10 @@ class CUIRCodegen(codegen.TemplatedGenerator):
                     const int k_size = domain[2];
                     const int i_blocks = (i_size + i_block_size_t() - 1) / i_block_size_t();
                     const int j_blocks = (j_size + j_block_size_t() - 1) / j_block_size_t();
+
+                    % for decl in positionals:
+                    ${decl}
+                    % endfor
 
                     % for tmp in temporaries:
                         auto ${tmp} = gpu_backend::make_tmp_storage<${ctype(tmp)}>(
@@ -514,6 +525,8 @@ class CUIRCodegen(codegen.TemplatedGenerator):
                             loop_${id(vertical_loop)}_f<composite_${id(vertical_loop)}_t> loop_${id(vertical_loop)}{
                                 sid::get_origin(composite_${id(vertical_loop)}),
                                 sid::get_strides(composite_${id(vertical_loop)}),
+                                i_size,
+                                j_size,
                                 k_size
                             };
 

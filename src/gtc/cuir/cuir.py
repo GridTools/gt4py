@@ -25,7 +25,7 @@ from gtc.common import AxisBound, CartesianOffset, DataType, LocNode, LoopOrder
 
 @utils.noninstantiable
 class Expr(common.Expr):
-    dtype: common.DataType
+    dtype: Optional[common.DataType]
 
 
 @utils.noninstantiable
@@ -149,6 +149,11 @@ class Temporary(Decl):
     pass
 
 
+class Positional(Decl):
+    axis_name: str
+    dtype = DataType.INT32
+
+
 class IJExtent(LocNode):
     i: Tuple[int, int]
     j: Tuple[int, int]
@@ -237,5 +242,6 @@ class Kernel(LocNode):
 class Program(LocNode, SymbolTableTrait):
     name: Str
     params: List[Decl]
+    positionals: List[Positional]
     temporaries: List[Temporary]
     kernels: List[Kernel]

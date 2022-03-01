@@ -14,15 +14,55 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import Any, Callable, Dict, Set, Union
+import functools
+from dataclasses import dataclass, field
+from typing import Any, Dict, List, Set, Union
+
+from typing_extensions import Protocol
 
 import eve
 from gtc import common, oir
 from gtc.cuir import cuir
-from gtc.passes.oir_optimizations.utils import compute_horizontal_block_extents, symbol_name_creator
+from gtc.passes.oir_optimizations.utils import (
+    collect_symbol_names,
+    compute_horizontal_block_extents,
+    symbol_name_creator,
+)
+
+
+class SymbolNameCreator(Protocol):
+    def __call__(self, name: str) -> str:
+        ...
+
+
+def _make_axis_offset_expr(bound: common.AxisBound, axis_index: int) -> cuir.Expr:
+    if bound.level == common.LevelMarker.END:
+        base = "{}_size".format(["i", "j"][axis_index])
+        return cuir.BinaryOp(
+            op=common.ArithmeticOperator.ADD,
+            left=base,
+            right=cuir.Literal(value=str(bound.offset), dtype=common.DataType.INT32),
+        )
+    else:
+        return cuir.Literal(value=str(bound.offset), dtype=common.DataType.INT32)
 
 
 class OIRToCUIR(eve.NodeTranslator):
+    @dataclass
+    class Context:
+        new_symbol_name: SymbolNameCreator
+        accessed_fields: Set[str] = field(default_factory=set)
+        positionals: Dict[int, cuir.Positional] = field(default_factory=dict)
+
+        def make_positional(self, axis: int) -> cuir.ScalarAccess:
+            positional = self.positionals.setdefault(
+                axis,
+                cuir.Positional(
+                    name=self.new_symbol_name(f"ax{axis}_ind"), axis_name=["I", "J", "K"][axis]
+                ),
+            )
+            return cuir.ScalarAccess(name=positional.name, dtype=common.DataType.INT32)
+
     contexts = (eve.SymbolTableTrait.symtable_merger,)
 
     def visit_Literal(self, node: oir.Literal, **kwargs: Any) -> cuir.Literal:
@@ -51,9 +91,36 @@ class OIRToCUIR(eve.NodeTranslator):
         return cuir.Temporary(name=node.name, dtype=node.dtype)
 
     def visit_VariableKOffset(
-        self, node: common.VariableKOffset, **kwargs: Any
+        self, node: cuir.VariableKOffset, **kwargs: Any
     ) -> cuir.VariableKOffset:
         return cuir.VariableKOffset(k=self.visit(node.k, **kwargs))
+
+    def visit_HorizontalMask(
+        self, node: oir.HorizontalMask, *, ctx: "Context", **kwargs: Any
+    ) -> cuir.Expr:
+        mask_expr: List[cuir.Expr] = []
+        for axis_index, interval in enumerate(node.intervals):
+            for op, endpt in zip(
+                (common.ComparisonOperator.GE, common.ComparisonOperator.LT),
+                (interval.start, interval.end),
+            ):
+                if endpt is None:
+                    continue
+                mask_expr.append(
+                    cuir.BinaryOp(
+                        op=op,
+                        left=ctx.make_positional(axis_index),
+                        right=_make_axis_offset_expr(endpt, axis_index),
+                    )
+                )
+        return (
+            functools.reduce(
+                lambda a, b: cuir.BinaryOp(op=common.LogicalOperator.AND, left=a, right=b),
+                mask_expr,
+            )
+            if mask_expr
+            else cuir.Literal(value=common.BuiltInLiteral.TRUE, dtype=common.DataType.BOOL)
+        )
 
     def visit_FieldAccess(
         self,
@@ -61,21 +128,21 @@ class OIRToCUIR(eve.NodeTranslator):
         *,
         ij_caches: Dict[str, cuir.IJCacheDecl],
         k_caches: Dict[str, cuir.KCacheDecl],
-        accessed_fields: Set[str],
+        ctx: "Context",
         **kwargs: Any,
     ) -> Union[cuir.FieldAccess, cuir.IJCacheAccess, cuir.KCacheAccess]:
         data_index = self.visit(
             node.data_index,
             ij_caches=ij_caches,
             k_caches=k_caches,
-            accessed_fields=accessed_fields,
+            accessed_fields=ctx.accessed_fields,
             **kwargs,
         )
         offset = self.visit(
             node.offset,
             ij_caches=ij_caches,
             k_caches=k_caches,
-            accessed_fields=accessed_fields,
+            accessed_fields=ctx.accessed_fields,
             **kwargs,
         )
         if node.name in ij_caches:
@@ -92,7 +159,7 @@ class OIRToCUIR(eve.NodeTranslator):
                 dtype=node.dtype,
                 data_index=data_index,
             )
-        accessed_fields.add(node.name)
+        ctx.accessed_fields.add(node.name)
         return cuir.FieldAccess(
             name=node.name,
             offset=offset,
@@ -165,17 +232,17 @@ class OIRToCUIR(eve.NodeTranslator):
         node: oir.VerticalLoop,
         *,
         symtable: Dict[str, Any],
-        new_symbol_name: Callable[[str], str],
+        ctx: "Context",
         **kwargs: Any,
     ) -> cuir.Kernel:
         assert not any(c.fill or c.flush for c in node.caches if isinstance(c, oir.KCache))
         ij_caches = {
-            c.name: cuir.IJCacheDecl(name=new_symbol_name(c.name), dtype=symtable[c.name].dtype)
+            c.name: cuir.IJCacheDecl(name=ctx.new_symbol_name(c.name), dtype=symtable[c.name].dtype)
             for c in node.caches
             if isinstance(c, oir.IJCache)
         }
         k_caches = {
-            c.name: cuir.KCacheDecl(name=new_symbol_name(c.name), dtype=symtable[c.name].dtype)
+            c.name: cuir.KCacheDecl(name=ctx.new_symbol_name(c.name), dtype=symtable[c.name].dtype)
             for c in node.caches
             if isinstance(c, oir.KCache)
         }
@@ -188,6 +255,7 @@ class OIRToCUIR(eve.NodeTranslator):
                         ij_caches=ij_caches,
                         k_caches=k_caches,
                         symtable=symtable,
+                        ctx=ctx,
                         **kwargs,
                     ),
                     ij_caches=list(ij_caches.values()),
@@ -198,18 +266,18 @@ class OIRToCUIR(eve.NodeTranslator):
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> cuir.Program:
         block_extents = compute_horizontal_block_extents(node)
-        accessed_fields: Set[str] = set()
+        ctx = self.Context(new_symbol_name=symbol_name_creator(collect_symbol_names(node)))
         kernels = self.visit(
             node.vertical_loops,
-            new_symbol_name=symbol_name_creator(set(kwargs["symtable"])),
-            accessed_fields=accessed_fields,
+            ctx=ctx,
             block_extents=block_extents,
             **kwargs,
         )
-        temporaries = [self.visit(d) for d in node.declarations if d.name in accessed_fields]
+        temporaries = [self.visit(d) for d in node.declarations if d.name in ctx.accessed_fields]
         return cuir.Program(
             name=node.name,
             params=self.visit(node.params),
+            positionals=list(ctx.positionals.values()),
             temporaries=temporaries,
             kernels=kernels,
         )

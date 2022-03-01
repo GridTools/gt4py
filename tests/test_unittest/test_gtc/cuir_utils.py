@@ -14,6 +14,8 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+from typing import List
+
 import factory
 
 from gtc.cuir import cuir
@@ -124,5 +126,6 @@ class ProgramFactory(factory.Factory):
     params = undefined_symbol_list(
         lambda name: FieldDeclFactory(name=name), "kernels", "temporaries"
     )
+    positionals: List[cuir.Positional] = []
     temporaries = factory.List([])
     kernels = factory.List([factory.SubFactory(KernelFactory)])
