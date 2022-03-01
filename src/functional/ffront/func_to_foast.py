@@ -337,3 +337,6 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
             args=[self.visit(arg) for arg in node.args],
             location=self._make_loc(node),
         )
+
+    def generic_visit(self, node) -> None:
+        raise self._make_syntax_error(node)

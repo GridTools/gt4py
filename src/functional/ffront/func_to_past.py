@@ -123,3 +123,6 @@ class ProgramParser(DialectParser[past.Program]):
     def visit_Constant(self, node: ast.Constant) -> past.Constant:
         symbol_type = symbol_makers.make_symbol_type_from_value(node.value)
         return past.Constant(value=node.value, type=symbol_type, location=self._make_loc(node))
+
+    def generic_visit(self, node) -> None:
+        raise self._make_syntax_error(node)
