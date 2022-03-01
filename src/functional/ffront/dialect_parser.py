@@ -113,6 +113,12 @@ class DialectParser(ast.NodeVisitor, Generic[DialectRootT]):
         closure_refs = ClosureRefs.from_function(func)
         return cls.apply(source_definition, closure_refs, externals)
 
+    def generic_visit(self, node: ast.AST) -> None:
+        raise self._make_syntax_error(
+            node,
+            message=f"Nodes of type {type(node).__module__}.{type(node).__name__} not supported in dialect.",
+        )
+
     def _make_loc(self, node: ast.AST) -> SourceLocation:
         loc = SourceLocation.from_AST(node, source=self.filename)
         return SourceLocation(
@@ -125,8 +131,9 @@ class DialectParser(ast.NodeVisitor, Generic[DialectRootT]):
 
     def _make_syntax_error(self, node: ast.AST, *, message: str = "") -> DialectSyntaxError:
         err = self.syntax_error_cls.from_AST(
-            node, msg=message, filename=self.filename, text=self.source, starting_line=self.starting_line
+            node, msg=message, filename=self.filename, text=self.source
         )
+        err.lineno = (err.lineno or 1) + self.starting_line - 1
         return err
 
 
@@ -144,7 +151,7 @@ class DialectSyntaxError(common.GTSyntaxError):
         end_offset: int = None,
         text: Optional[str] = None,
     ):
-        msg = f"Invalid {self.dialect_name} Syntax (`{filename}`:{lineno}): {msg}"
+        msg = f"Invalid {self.dialect_name} Syntax: {msg}"
         super().__init__(msg, (filename, lineno, offset, text, end_lineno, end_offset))
 
     @classmethod
@@ -155,13 +162,10 @@ class DialectSyntaxError(common.GTSyntaxError):
         msg: str = "",
         filename: Optional[str] = None,
         text: Optional[str] = None,
-        # TODO(tehrengruber): remove when we preprocessed the ast to have the
-        #  correct line numbers)
-        starting_line = 0,
     ):
         return cls(
             msg,
-            lineno=(node.lineno or 1) + starting_line - 1,
+            lineno=node.lineno,
             offset=node.col_offset,
             filename=filename,
             end_lineno=node.end_lineno,
