@@ -125,9 +125,8 @@ class DialectParser(ast.NodeVisitor, Generic[DialectRootT]):
 
     def _make_syntax_error(self, node: ast.AST, *, message: str = "") -> DialectSyntaxError:
         err = self.syntax_error_cls.from_AST(
-            node, msg=message, filename=self.filename, text=self.source
+            node, msg=message, filename=self.filename, text=self.source, starting_line=self.starting_line
         )
-        err.lineno = (err.lineno or 1) + self.starting_line - 1
         return err
 
 
@@ -145,7 +144,7 @@ class DialectSyntaxError(common.GTSyntaxError):
         end_offset: int = None,
         text: Optional[str] = None,
     ):
-        msg = f"Invalid {self.dialect_name} Syntax: {msg}"
+        msg = f"Invalid {self.dialect_name} Syntax (`{filename}`:{lineno}): {msg}"
         super().__init__(msg, (filename, lineno, offset, text, end_lineno, end_offset))
 
     @classmethod
@@ -156,10 +155,13 @@ class DialectSyntaxError(common.GTSyntaxError):
         msg: str = "",
         filename: Optional[str] = None,
         text: Optional[str] = None,
+        # TODO(tehrengruber): remove when we preprocessed the ast to have the
+        #  correct line numbers)
+        starting_line = 0,
     ):
         return cls(
             msg,
-            lineno=node.lineno,
+            lineno=(node.lineno or 1) + starting_line - 1,
             offset=node.col_offset,
             filename=filename,
             end_lineno=node.end_lineno,
