@@ -17,7 +17,6 @@ import ast
 import collections
 from dataclasses import dataclass
 
-from functional import common
 from functional.ffront import common_types
 from functional.ffront import program_ast as past
 from functional.ffront import symbol_makers
