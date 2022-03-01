@@ -275,12 +275,22 @@ class FieldOperatorTypeDeduction(NodeTranslator):
         return foast.TupleExpr(elts=new_elts, type=new_type, location=node.location)
 
     def visit_Call(self, node: foast.Call, **kwargs) -> foast.Call:
+        # TODO(tehrengruber): check type is complete
         new_func = self.visit(node.func, **kwargs)
+
         if isinstance(new_func.type, ct.FieldType):
             new_args = self.visit(node.args, in_shift=True, **kwargs)
             return foast.Call(func=new_func, args=new_args, location=node.location)
-        return foast.Call(
-            func=new_func, args=self.visit(node.args, **kwargs), location=node.location
+        elif isinstance(new_func.type, ct.FunctionType):
+            return foast.Call(
+                func=new_func, args=self.visit(node.args, **kwargs),
+                type=new_func.type.returns,
+                location=node.location
+            )
+
+        raise FieldOperatorTypeDeductionError.from_foast_node(
+            node,
+            msg=f"Objects of type '{new_func.type}' are not callable.",
         )
 
 

@@ -36,10 +36,9 @@ from functional.ffront.past_to_itir import ProgramLowering
 from functional.ffront.source_utils import ClosureRefs
 from functional.iterator import ir as itir
 from functional.iterator.backend_executor import execute_program
-
+from functional.iterator.runtime import Offset
 
 DEFAULT_BACKEND = "roundtrip"
-
 
 @typing.runtime_checkable
 class GTCallable(Protocol):
@@ -49,6 +48,9 @@ class GTCallable(Protocol):
     Any class implementing the methods defined in this protocol can be called
     from ``ffront`` programs or operators.
     """
+
+    def __gt_closure_refs__(self) -> Optional[ClosureRefs]:
+        return None
 
     @abc.abstractmethod
     def __gt_type__(self) -> ct.FunctionType:
@@ -120,6 +122,26 @@ class Program:
             definition=definition,
         )
 
+    def _lowered_funcs_from_closureref(self, closure_refs: ClosureRefs) -> list[itir.FunctionDefinition]:
+        lowered_funcs = []
+
+        vars_ = collections.ChainMap(closure_refs.globals,
+                                     closure_refs.nonlocals)
+        for name, val in vars_.items():
+            # With respect to the frontend offsets are singleton types, i.e.
+            #  they do not store any runtime information, but only type
+            #  information. As such we do not need their value.
+            if isinstance(val, Offset):
+                continue
+            if not isinstance(val, GTCallable):
+                raise NotImplementedError(
+                    "Only function closure vars are allowed currently.")
+            lowered_funcs.append(val.__gt_itir__())
+            # if the closure ref has closure refs by itself, also add them
+            if val.__gt_closure_refs__():
+                lowered_funcs.extend(self._lowered_funcs_from_closureref(val.__gt_closure_refs__()))
+        return lowered_funcs
+
     @functools.cached_property
     def itir(self) -> itir.Program:
         if self.externals:
@@ -132,22 +154,28 @@ class Program:
             if isinstance(closure_var.type, ct.FunctionType):
                 func_names.append(closure_var.id)
             else:
-                raise NotImplementedError("Only function closure vars are allowed currently.")
+                raise NotImplementedError(
+                    "Only function closure vars are allowed currently.")
 
-        vars_ = collections.ChainMap(self.closure_refs.globals, self.closure_refs.nonlocals)
+        vars_ = collections.ChainMap(self.closure_refs.globals,
+                                     self.closure_refs.nonlocals)
         if undefined := (set(vars_) - set(func_names)):
-            raise RuntimeError(f"Reference to undefined symbol(s) `{', '.join(undefined)}`.")
-        if not_callable := [name for name in func_names if not isinstance(vars_[name], GTCallable)]:
+            raise RuntimeError(
+                f"Reference to undefined symbol(s) `{', '.join(undefined)}`.")
+        if not_callable := [name for name in func_names if
+                            not isinstance(vars_[name], GTCallable)]:
             raise RuntimeError(
                 f"The following function(s) are not valid GTCallables `{', '.join(not_callable)}`."
             )
-        lowered_funcs = [vars_[name].__gt_itir__() for name in func_names]
+
+        lowered_funcs = self._lowered_funcs_from_closureref(self.closure_refs)
 
         return itir.Program(
             function_definitions=lowered_funcs, fencil_definitions=[fencil_itir_node], setqs=[]
         )
 
     def _validate_args(self, *args, **kwargs) -> None:
+        # TODO(tehrengruber): better error messages
         if len(args) != len(self.past_node.params):
             raise GTTypeError(
                 f"Function takes {len(self.past_node.params)} arguments, but {len(args)} were given."
@@ -237,6 +265,9 @@ class FieldOperator(GTCallable):
     def __gt_itir__(self) -> itir.FunctionDefinition:
         return FieldOperatorLowering.apply(self.foast_node)
 
+    def __gt_closure_refs__(self) -> ClosureRefs:
+        return self.closure_refs
+
     def as_program(self) -> Program:
         if any(param.id == "out" for param in self.foast_node.params):
             raise Exception(
@@ -313,7 +344,7 @@ def field_operator(
 
 
 @dataclasses.dataclass(frozen=True)
-class RawItIRStencil:
+class RawItIRStencil(GTCallable):
     itir_node: itir.FunctionDefinition
     definition: Optional[types.FunctionType] = None
 
