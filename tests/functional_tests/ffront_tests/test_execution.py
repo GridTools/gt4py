@@ -60,47 +60,46 @@ def make_domain(dim_name: str, lower: int, upper: int) -> itir.FunCall:
 
 
 def closure_from_fop(
-    node: itir.FunctionDefinition, out_names: list[str], domain: itir.FunCall
+    node: itir.FunctionDefinition, out_name: str, domain: itir.FunCall
 ) -> itir.StencilClosure:
     return itir.StencilClosure(
         stencil=itir.SymRef(id=node.id),
         inputs=[itir.SymRef(id=sym.id) for sym in node.params],
-        outputs=[itir.SymRef(id=name) for name in out_names],
+        output=itir.SymRef(id=out_name),
         domain=domain,
     )
 
 
 def fencil_from_fop(
-    node: itir.FunctionDefinition, out_names: list[str], domain: itir.FunCall
+    node: itir.FunctionDefinition, out_name: str, domain: itir.FunCall
 ) -> itir.FencilDefinition:
-    closure = closure_from_fop(node, out_names=out_names, domain=domain)
+    closure = closure_from_fop(node, out_name=out_name, domain=domain)
     return itir.FencilDefinition(
         id=node.id + "_fencil",
-        params=[itir.Sym(id=inp.id) for inp in closure.inputs]
-        + [itir.Sym(id=out.id) for out in closure.outputs],
+        params=[itir.Sym(id=inp.id) for inp in closure.inputs] + [itir.Sym(id=closure.output.id)],
         closures=[closure],
     )
 
 
-# todo(tehrengruber): dim and size are implicitly given bys out_names. Get values from there
+# TODO(tehrengruber): dim and size are implicitly given bys out_names. Get values from there
 def program_from_fop(
-    node: itir.FunctionDefinition, out_names: list[str], dim: CartesianAxis, size: int
+    node: itir.FunctionDefinition, out_name: str, dim: CartesianAxis, size: int
 ) -> itir.Program:
     domain = make_domain(dim.value, 0, size)
     return itir.Program(
         function_definitions=[node],
-        fencil_definitions=[fencil_from_fop(node, out_names=out_names, domain=domain)],
+        fencil_definitions=[fencil_from_fop(node, out_name=out_name, domain=domain)],
         setqs=[],
     )
 
 
-# todo(tehrengruber): dim and size are implicitly given bys out_names. Get values from there
+# TODO(tehrengruber): dim and size are implicitly given bys out_names. Get values from there
 def program_from_function(
-    func, out_names: list[str], dim: CartesianAxis, size: int
+    func, dim: CartesianAxis, size: int, out_name: str = "foo"
 ) -> itir.Program:
     return program_from_fop(
         node=FieldOperatorLowering.apply(FieldOperatorParser.apply_to_function(func)),
-        out_names=out_names,
+        out_name=out_name,
         dim=dim,
         size=size,
     )
@@ -120,7 +119,7 @@ def test_copy():
     def copy(inp: Field[[IDim], float64]):
         return inp
 
-    program = program_from_function(copy, out_names=["out"], dim=IDim, size=size)
+    program = program_from_function(copy, dim=IDim, size=size)
 
     roundtrip.executor(program, a, b, offset_provider={})
 
@@ -138,8 +137,8 @@ def test_multicopy():
     def multicopy(inp1: Field[[IDim], float64], inp2: Field[[IDim], float64]):
         return inp1, inp2
 
-    program = program_from_function(multicopy, out_names=["c", "d"], dim=IDim, size=size)
-    roundtrip.executor(program, a, b, c, d, offset_provider={})
+    program = program_from_function(multicopy, dim=IDim, size=size)
+    roundtrip.executor(program, a, b, (c, d), offset_provider={})
 
     assert np.allclose(a, c)
     assert np.allclose(b, d)
@@ -154,7 +153,7 @@ def test_arithmetic():
     def arithmetic(inp1: Field[[IDim], float64], inp2: Field[[IDim], float64]):
         return inp1 + inp2
 
-    program = program_from_function(arithmetic, out_names=["c"], dim=IDim, size=size)
+    program = program_from_function(arithmetic, dim=IDim, size=size)
     roundtrip.executor(program, a, b, c, offset_provider={})
 
     assert np.allclose(a.array() + b.array(), c)
@@ -171,7 +170,7 @@ def test_bit_logic():
     def bit_and(inp1: Field[[IDim], bool], inp2: Field[[IDim], bool]):
         return inp1 & inp2
 
-    program = program_from_function(bit_and, out_names=["c"], dim=IDim, size=size)
+    program = program_from_function(bit_and, dim=IDim, size=size)
     roundtrip.executor(program, a, b, c, offset_provider={})
 
     assert np.allclose(a.array() & b.array(), c)
@@ -185,7 +184,7 @@ def test_unary_neg():
     def uneg(inp: Field[[IDim], int]):
         return -inp
 
-    program = program_from_function(uneg, out_names=["b"], dim=IDim, size=size)
+    program = program_from_function(uneg, dim=IDim, size=size)
     roundtrip.executor(program, a, b, offset_provider={})
 
     assert np.allclose(b, np.full((size), -1))
@@ -193,14 +192,14 @@ def test_unary_neg():
 
 def test_shift():
     size = 10
-    Ioff = offset("Ioff", source=IDim, target=[IDim, IDim])
+    Ioff = offset("Ioff", source=IDim, target=[IDim])
     a = np_as_located_field(IDim)(np.arange(size + 1))
     b = np_as_located_field(IDim)(np.zeros((size)))
 
     def shift_by_one(inp: Field[[IDim], float64]):
         return inp(Ioff[1])
 
-    program = program_from_function(shift_by_one, out_names=["b"], dim=IDim, size=size)
+    program = program_from_function(shift_by_one, dim=IDim, size=size)
     roundtrip.executor(program, a, b, offset_provider={"Ioff": IDim})
 
     assert np.allclose(b.array(), np.arange(1, 11))
@@ -218,7 +217,7 @@ def test_fold_shifts():
         tmp = inp1 + inp2(Ioff[1])
         return tmp(Ioff[1])
 
-    program = program_from_function(auto_lift, out_names=["c"], dim=IDim, size=size)
+    program = program_from_function(auto_lift, dim=IDim, size=size)
     roundtrip.executor(program, a, b, c, offset_provider={"Ioff": IDim})
 
     assert np.allclose(a[1:] + b[2:], c)
@@ -271,7 +270,7 @@ def test_reduction_execution(reduction_setup):
     def reduction(edge_f: Field[[rs.Edge], "float64"]):
         return nbh_sum(edge_f(V2E), axis=V2EDim)
 
-    program = program_from_function(reduction, out_names=["out"], dim=rs.Vertex, size=rs.size)
+    program = program_from_function(reduction, dim=rs.Vertex, size=rs.size)
     roundtrip.executor(
         program,
         rs.inp,
@@ -294,7 +293,7 @@ def test_reduction_expression(reduction_setup):
         tmp_nbh = tmp_nbh_tup[0]
         return nbh_sum(-edge_f(V2E) * tmp_nbh, axis=V2EDim)
 
-    program = program_from_function(reduce_expr, out_names=["out"], dim=rs.Vertex, size=rs.size)
+    program = program_from_function(reduce_expr, dim=rs.Vertex, size=rs.size)
     roundtrip.executor(
         program,
         rs.inp,

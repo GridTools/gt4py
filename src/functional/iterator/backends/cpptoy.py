@@ -23,9 +23,7 @@ class ToyCpp(codegen.TemplatedGenerator):
     Lambda = as_mako(
         "[=](${','.join('auto ' + p for p in params)}){return ${expr};}"
     )  # TODO capture
-    StencilClosure = as_mako(
-        "closure(${domain}, ${stencil}, out(${','.join(outputs)}), ${','.join(inputs)})"
-    )
+    StencilClosure = as_mako("closure(${domain}, ${stencil}, out(${output}), ${','.join(inputs)})")
     FencilDefinition = as_mako(
         """
     auto ${id} = [](${','.join('auto&& ' + p for p in params)}){

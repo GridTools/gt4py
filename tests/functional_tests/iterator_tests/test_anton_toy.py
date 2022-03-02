@@ -39,7 +39,7 @@ def fencil(x, y, z, out, inp):
     closure(
         domain(named_range(IDim, 0, x), named_range(JDim, 0, y), named_range(KDim, 0, z)),
         lap,
-        [out],
+        out,
         [inp],
     )
 
@@ -66,15 +66,7 @@ def test_anton_toy(backend, use_tmps):
     out = np_as_located_field(IDim, JDim, KDim)(np.zeros(shape))
     ref = naive_lap(inp)
 
-    fencil(
-        shape[0],
-        shape[1],
-        shape[2],
-        out,
-        inp,
-        backend=backend,
-        use_tmps=use_tmps,
-    )
+    fencil(shape[0], shape[1], shape[2], out, inp, backend=backend, use_tmps=use_tmps)
 
     if validate:
         assert np.allclose(out, ref)

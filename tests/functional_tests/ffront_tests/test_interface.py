@@ -28,7 +28,7 @@ from functional.ffront import common_types
 from functional.ffront.fbuiltins import float32, float64, int64
 from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError
 from functional.ffront.func_to_foast import FieldOperatorParser, FieldOperatorSyntaxError
-from functional.ffront.symbol_makers import FieldOperatorTypeError
+from functional.ffront.symbol_makers import TypingError
 from functional.iterator import ir as itir
 from functional.iterator.builtins import (
     and_,
@@ -103,7 +103,7 @@ def test_mistyped_arg():
         return inp
 
     with pytest.raises(
-        FieldOperatorTypeError,
+        TypingError,
         match="Field type requires two arguments, got 0!",
     ):
         _ = FieldOperatorParser.apply_to_function(mistyped)

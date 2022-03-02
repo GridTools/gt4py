@@ -130,8 +130,10 @@ class SourceDefinition:
     filename: str = MISSING_FILENAME
     starting_line: int = 1
 
-    def __iter__(self) -> Iterator[Union[str, int]]:
-        yield from iter((self.source, self.filename, self.starting_line))  # type: ignore[misc]
+    def __iter__(self) -> Iterator:
+        yield self.source
+        yield self.filename
+        yield self.starting_line
 
     from_function = staticmethod(make_source_definition_from_function)
 
@@ -152,9 +154,11 @@ class ClosureRefs:
     unbound: set[str]
 
     def __iter__(self) -> Iterator[Union[Mapping[str, Any], set[str]]]:
-        yield from iter(
-            (self.nonlocals, self.globals, self.annotations, self.builtins, self.unbound)
-        )  # type: ignore[misc]
+        yield self.nonlocals
+        yield self.globals
+        yield self.annotations
+        yield self.builtins
+        yield self.unbound
 
     from_function = staticmethod(make_closure_refs_from_function)
 
@@ -179,6 +183,10 @@ class SymbolNames:
         return self.params | self.locals | self.imported
 
     def __iter__(self) -> Iterator[set[str]]:
-        yield from iter((self.params, self.locals, self.imported, self.nonlocals, self.globals))
+        yield self.params
+        yield self.locals
+        yield self.imported
+        yield self.nonlocals
+        yield self.globals
 
     from_source = staticmethod(make_symbol_names_from_source)

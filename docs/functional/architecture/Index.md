@@ -4,7 +4,7 @@ This document contains links to all _Architecture Decision Record_ (ADR) documen
 
 
 ## Writing ADRs
-New ADRs should be written at the time when significant decisions for the project are taken, and they should capture both the final decision and the thought process that led to it. Basically, they should explain why a feature is built the current way and not some other way. Note that even if the reasons might look simple for the author, it could be complicated for others to understand the choosen option without the proper context.
+New ADRs should be written at the time when significant decisions for the project are taken, and they should capture both the final decision and the thought process that led to it. Basically, they should explain why a feature is built the current way and not some other way. Note that even if the reasons might look simple for the author, it could be complicated for others to understand the chosen option without the proper context.
 
 Using ADRs to document the context and the design process of the technical decisions gives other team members more information about how the framework components work and how they fit within the whole design.  In the long term, it also helps the decision maker to recall the forces driving his decisions.
 
@@ -22,6 +22,13 @@ _None_
 
 ### Frontend and Parsing #frontend 
 - [0001 - Field View Frontend Design](0001-Field_View_Frontend_Design.md)
+- [0002 - Field View Lowering](0002-Field_View_Lowering.md)
+
+### IR #ir
+- [0003 - Iterator View Tuple Support for Fields](0003-Iterator_View_Tuple_Support_for_Fields.md)
+- [0004 - Lifted Stencils with Tuple Return](0004-Lifted_Stencils_with_Tuple_Return.md)
+
+### Embedded Execution
 
 ### Transformations
 _None_
@@ -40,4 +47,3 @@ _None_
 - [Michael NygADR - Documenting Architecture Decisions](https://cognitect.com/blog/2011/11/15/documenting-architecture-decisions)
 - [ADR on GitHub - Architectural Decision Records](https://adr.github.io/)
 - [Joel Parker Henderson - Collection of Architecture Decision Record (ADR)](https://github.com/joelparkerhenderson/architecture-decision-record)
-

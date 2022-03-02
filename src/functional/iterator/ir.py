@@ -79,7 +79,7 @@ class Setq(Node):
 class StencilClosure(Node):
     domain: Expr
     stencil: Expr
-    outputs: List[SymRef]
+    output: SymRef  # we could consider Expr for cases like make_tuple(out0,out1)
     inputs: List[SymRef]
 
 

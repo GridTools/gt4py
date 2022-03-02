@@ -1,8 +1,8 @@
 import typing
 from dataclasses import dataclass
-from typing import Literal, Optional, Tuple, Union
+from typing import Literal, Optional, Union
 
-from eve.type_definitions import IntEnum
+from eve.type_definitions import IntEnum, StrEnum
 from functional import common as func_common
 
 
@@ -13,6 +13,12 @@ class ScalarKind(IntEnum):
     FLOAT32 = 1032
     FLOAT64 = 1064
     DIMENSION = 2001
+
+
+class Namespace(StrEnum):
+    LOCAL = "local"
+    CLOSURE = "closure"
+    EXTERNAL = "external"
 
 
 class SymbolType:
@@ -41,9 +47,20 @@ class SymbolTypeVariable(SymbolType):
 
 
 @dataclass(frozen=True)
+class VoidType(SymbolType):
+    """
+    Return type of a function without return values.
+
+    Note: only useful for stateful dialects.
+    """
+
+    ...
+
+
+@dataclass(frozen=True)
 class OffsetType(SymbolType):
     source: Optional[func_common.Dimension] = None
-    target: Optional[Tuple[func_common.Dimension, func_common.Dimension]] = None
+    target: Optional[tuple[func_common.Dimension, func_common.Dimension]] = None
 
     def __str__(self):
         return f"Offset[{self.id}]"
@@ -88,10 +105,10 @@ class FieldType(DataType):
 class FunctionType(SymbolType):
     args: list[Union[DataType, DeferredSymbolType]]
     kwargs: dict[str, DataType]
-    returns: Union[DataType, DeferredSymbolType]
+    returns: Union[DataType, DeferredSymbolType, VoidType]
 
     def __str__(self):
         arg_strs = [str(arg) for arg in self.args]
-        kwarg_strs = [f"{key}: {value}" for key, value in self.kwargs]
-        args_str = ", ".join(*arg_strs, *kwarg_strs)
+        kwarg_strs = [f"{key}: {value}" for key, value in self.kwargs.items()]
+        args_str = ", ".join((*arg_strs, *kwarg_strs))
         return f"({args_str}) -> {self.returns}"
