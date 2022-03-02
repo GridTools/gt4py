@@ -62,25 +62,25 @@ class UnreachableStmtPruning(NodeTranslator):
     def visit_HorizontalExecution(
         self, node: oir.HorizontalExecution, *, block_extents: Dict[int, Extent]
     ) -> oir.HorizontalExecution:
-        return self.generic_visit(node, scalar_exprs={}, block_extent=block_extents[id(node)])
+        return self.generic_visit(node, local_assigns={}, block_extent=block_extents[id(node)])
 
     def visit_AssignStmt(
-        self, node: oir.ScalarAccess, *, scalar_exprs: Dict[str, oir.Expr], **kwargs: Any
+        self, node: oir.ScalarAccess, *, local_assigns: Dict[str, oir.Expr], **kwargs: Any
     ) -> oir.AssignStmt:
-        scalar_exprs[node.left.name] = node.right
+        local_assigns[node.left.name] = node.right
         return node
 
     def visit_MaskStmt(
-        self, node: oir.MaskStmt, *, scalar_exprs: Dict[str, oir.Expr], block_extent: Extent
+        self, node: oir.MaskStmt, *, local_assigns: Dict[str, oir.Expr], block_extent: Extent
     ) -> Any:
         @utils.as_xiter
         def _iter_tree(mask) -> Generator[TreeIterationItem, None, None]:
-            scalar_sub_exprs = (
-                scalar_exprs[name]
+            sub_exprs = (
+                local_assigns[name]
                 for name in mask.iter_tree().if_isinstance(oir.ScalarAccess).getattr("name")
-                if name in scalar_exprs
+                if name in local_assigns
             )
-            for elem in (mask, *scalar_sub_exprs):
+            for elem in (mask, *sub_exprs):
                 yield from elem.iter_tree()
 
         try:
