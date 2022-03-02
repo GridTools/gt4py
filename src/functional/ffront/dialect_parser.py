@@ -113,6 +113,12 @@ class DialectParser(ast.NodeVisitor, Generic[DialectRootT]):
         closure_refs = ClosureRefs.from_function(func)
         return cls.apply(source_definition, closure_refs, externals)
 
+    def generic_visit(self, node: ast.AST) -> None:
+        raise self._make_syntax_error(
+            node,
+            message=f"Nodes of type {type(node).__module__}.{type(node).__qualname__} not supported in dialect.",
+        )
+
     def _make_loc(self, node: ast.AST) -> SourceLocation:
         loc = SourceLocation.from_AST(node, source=self.filename)
         return SourceLocation(
