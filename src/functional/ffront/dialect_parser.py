@@ -116,7 +116,7 @@ class DialectParser(ast.NodeVisitor, Generic[DialectRootT]):
     def generic_visit(self, node: ast.AST) -> None:
         raise self._make_syntax_error(
             node,
-            message=f"Nodes of type {type(node).__module__}.{type(node).__name__} not supported in dialect.",
+            message=f"Nodes of type {type(node).__module__}.{type(node).__qualname__} not supported in dialect.",
         )
 
     def _make_loc(self, node: ast.AST) -> SourceLocation:
