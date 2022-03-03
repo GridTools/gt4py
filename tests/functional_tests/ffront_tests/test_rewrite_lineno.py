@@ -29,8 +29,8 @@ def test_rewrite_lineno():
     new_ast_node = RewriteLineNumbers.apply(ast_node, starting_line)
     expected_pattern = P(
         ast.FunctionDef,
-        args=P(ast.arguments, args=[P(ast.arg, lineno=8)]),
-        body=[P(ast.Return, value=P(ast.BinOp, op=P(ast.Pow, lineno=9), lineno=9))],
-        lineno=8,
+        args=P(ast.arguments, args=[P(ast.arg, lineno=22)]),
+        body=[P(ast.Return, value=P(ast.BinOp, op=P(ast.Pow, lineno=23), lineno=23))],
+        lineno=22,
     )
     expected_pattern.match(new_ast_node, raise_exception=True)
