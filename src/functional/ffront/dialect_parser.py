@@ -152,4 +152,5 @@ class DialectSyntaxError(common.GTSyntaxError):
             filename=filename,
             end_lineno=node.end_lineno if hasattr(node, "end_lineno") else None,
             end_offset=node.end_col_offset if hasattr(node, "end_col_offset") else None,
+            text=text,
         )
