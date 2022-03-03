@@ -63,11 +63,11 @@ class ProgramParser(DialectParser[past.Program]):
 
     def visit_arg(self, node: ast.arg) -> past.DataSymbol:
         if (annotation := self.closure_refs.annotations.get(node.arg, None)) is None:
-            raise self._make_syntax_error(node, message="Untyped parameters not allowed!")
+            raise ProgramSyntaxError.from_AST(node, msg="Untyped parameters not allowed!")
         new_type = symbol_makers.make_symbol_type_from_typing(annotation)
         if not isinstance(new_type, common_types.DataType):
-            raise self._make_syntax_error(
-                node, message="Only arguments of type DataType are allowed."
+            raise ProgramSyntaxError.from_AST(
+                node, msg="Only arguments of type DataType are allowed."
             )
         return past.DataSymbol(id=node.arg, location=self._make_loc(node), type=new_type)
 
@@ -80,7 +80,7 @@ class ProgramParser(DialectParser[past.Program]):
     def visit_Call(self, node: ast.Call) -> past.Call:
         new_func = self.visit(node.func)
         if not isinstance(new_func, past.Name):
-            raise self._make_syntax_error(node, msg="Functions can only be called directly!")
+            raise ProgramSyntaxError.from_AST(node, msg="Functions can only be called directly!")
 
         return past.Call(
             func=new_func,
@@ -117,7 +117,7 @@ class ProgramParser(DialectParser[past.Program]):
             return past.Constant(
                 value=-node.operand.value, type=symbol_type, location=self._make_loc(node)
             )
-        raise self._make_syntax_error(node, message="Unary operators can only be used on literals.")
+        raise ProgramSyntaxError.from_AST(node, msg="Unary operators can only be used on literals.")
 
     def visit_Constant(self, node: ast.Constant) -> past.Constant:
         symbol_type = symbol_makers.make_symbol_type_from_value(node.value)
