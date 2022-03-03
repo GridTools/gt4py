@@ -80,7 +80,7 @@ def test_unreachable_stmt_pruning():
                 body=[
                     MaskStmtFactory(
                         mask=HorizontalMask(
-                            i=HorizontalInterval.single_index(LevelMarker.START, 0),
+                            i=HorizontalInterval.at_endpt(LevelMarker.START, 0),
                             j=HorizontalInterval.full(),
                         ),
                         body=[AssignStmtFactory(left__name=out_name, right=LiteralFactory())],
@@ -89,7 +89,7 @@ def test_unreachable_stmt_pruning():
                         left__name="mask0",
                         left__dtype=common.DataType.BOOL,
                         right=HorizontalMask(
-                            i=HorizontalInterval.single_index(LevelMarker.END, 1),
+                            i=HorizontalInterval.at_endpt(LevelMarker.END, 1),
                             j=HorizontalInterval.full(),
                         ),
                     ),
@@ -100,14 +100,14 @@ def test_unreachable_stmt_pruning():
                     MaskStmtFactory(
                         mask=HorizontalMask(
                             i=HorizontalInterval.full(),
-                            j=HorizontalInterval.single_index(LevelMarker.START, -1),
+                            j=HorizontalInterval.at_endpt(LevelMarker.START, -1),
                         ),
                         body=[AssignStmtFactory(left__name=out_name, right=LiteralFactory())],
                     ),
                     MaskStmtFactory(
                         mask=HorizontalMask(
                             i=HorizontalInterval.full(),
-                            j=HorizontalInterval.single_index(LevelMarker.END, 0),
+                            j=HorizontalInterval.at_endpt(LevelMarker.END, 0),
                         ),
                         body=[AssignStmtFactory(left__name=out_name, right=LiteralFactory())],
                     ),

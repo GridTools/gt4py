@@ -14,9 +14,10 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import numbers
 import textwrap
 from dataclasses import dataclass, field
-from typing import Any, Collection, Optional, Set, Tuple, Union
+from typing import Any, Collection, List, Optional, Set, Tuple, Union, cast
 
 from eve import SymbolTableTrait
 from eve.codegen import FormatTemplate, JinjaTemplate, TemplatedGenerator
@@ -31,8 +32,42 @@ def _dump_sequence(sequence, *, separator=", ", start="(", end=")") -> str:
     return f"{start}{separator.join(sequence)}{end}"
 
 
-def _slice_string(ch: str, offset: int) -> str:
-    return f"{ch}{offset:+d}:{ch.upper()}{offset:+d}" if offset != 0 else f"{ch}:{ch.upper()}"
+def _slice_string(ch: str, offset: int, interval: Tuple[common.AxisBound, common.AxisBound]) -> str:
+    start_ch = ch if interval[0].level == common.LevelMarker.START else ch.upper()
+    end_ch = ch if interval[1].level == common.LevelMarker.START else ch.upper()
+
+    start_offset = interval[0].offset + offset
+    end_offset = interval[1].offset + offset
+
+    start_expr = f"{start_ch}{start_offset:+d}" if start_offset != 0 else f"{start_ch}"
+    end_expr = f"{end_ch}{end_offset:+d}" if end_offset != 0 else f"{end_ch}"
+
+    return f"{start_expr}:{end_expr}"
+
+
+def _make_slice_access(
+    offset: Tuple[Optional[int], Optional[int], Union[str, Optional[int]]],
+    interval: npir.HorizontalMask,
+    is_serial: bool,
+) -> List[str]:
+    axes: List[str] = []
+
+    if offset[0] is not None:
+        axes.append(_slice_string("i", offset[0], (interval.i.start, interval.i.end)))
+    if offset[1] is not None:
+        axes.append(_slice_string("j", offset[1], (interval.j.start, interval.j.end)))
+
+    if isinstance(offset[2], numbers.Number):
+        if not is_serial:
+            axes.append(
+                _slice_string("k", offset[2], (common.AxisBound.start(), common.AxisBound.end()))
+            )
+        else:
+            axes.append(f"k_{offset[2]:+d}:k_{offset[2]+1:+d}")
+    elif isinstance(offset[2], str):
+        axes.append(offset[2])
+
+    return axes
 
 
 ORIGIN_CORRECTED_VIEW_CLASS = textwrap.dedent(
@@ -51,7 +86,7 @@ ORIGIN_CORRECTED_VIEW_CLASS = textwrap.dedent(
             self.offsets = offsets
 
         @classmethod
-        def empty(cls, shape, offset):
+        def empty(cls, shape, offset = (0, 0, 0)):
             return cls(np.empty(shape), offset, (True, True, True))
 
         def shim_key(self, key):
@@ -111,41 +146,36 @@ class NpirCodegen(TemplatedGenerator):
         "{name} = Field.empty((_dI_ + {padding[0]}, _dJ_ + {padding[1]}, _dK_), ({', '.join(offset)}, 0))"
     )
 
-    # LocalDecl is purposefully omitted.
-
     VarKOffset = FormatTemplate("lk + {k}")
 
-    def visit_FieldSlice(
-        self,
-        node: npir.FieldSlice,
-        *,
-        is_serial: bool = False,
-        **kwargs: Any,
-    ) -> Union[str, Collection[str]]:
-        offsets = [node.i_offset, node.j_offset] + [
-            self.visit(node.k_offset, is_serial=is_serial, **kwargs)
+    def visit_FieldSlice(self, node: npir.FieldSlice, **kwargs: Any) -> Union[str, Collection[str]]:
+        k_offset = (
+            self.visit(node.k_offset, **kwargs)
             if isinstance(node.k_offset, npir.VarKOffset)
             else node.k_offset
-        ]
-        data_index = self.visit(node.data_index, is_serial=is_serial, inside_slice=True, **kwargs)
+        )
+        offsets = (node.i_offset, node.j_offset, k_offset)
 
-        if isinstance(offsets[2], str):
-            k = offsets[2]
-        elif is_serial:
-            ko = offsets[2]
-            k = "k_{}:k_{}".format(
-                f"{ko:+d}" if ko != 0 else "",
-                f"{ko+1:+d}" if ko + 1 != 0 else "",
-            )
-        else:
-            k = _slice_string("k", offsets[2])
-        all_args = [_slice_string(ch, offset) for ch, offset in zip(("i", "j"), offsets)] + [k]
+        # To determine: when is the symbol name not in the symtable?
         if node.name in kwargs.get("symtable", {}):
             decl = kwargs["symtable"][node.name]
             dimensions = decl.dimensions if isinstance(decl, npir.FieldDecl) else [True] * 3
-            args = [axis for i, axis in enumerate(all_args) if dimensions[i]]
-        else:
-            args = all_args
+            offsets = cast(
+                Tuple[Optional[int], Optional[int], Optional[Union[str, int]]],
+                tuple(off if has_dim else None for has_dim, off in zip(dimensions, offsets)),
+            )
+
+        horizontal_mask = kwargs.get("horizontal_mask", None)
+        if horizontal_mask is None:
+            horizontal_mask = npir.HorizontalMask(
+                i=common.HorizontalInterval.compute_domain(),
+                j=common.HorizontalInterval.compute_domain(),
+            )
+
+        args = _make_slice_access(offsets, horizontal_mask, kwargs["is_serial"])
+        print(node.name, offsets, args)
+        data_index = self.visit(node.data_index, inside_slice=True, **kwargs)
+
         access_slice = ", ".join(args + list(data_index))
 
         return f"{node.name}[{access_slice}]"
@@ -201,12 +231,12 @@ class NpirCodegen(TemplatedGenerator):
     def visit_VectorAssign(
         self, node: npir.VectorAssign, *, ctx: "BlockContext", **kwargs: Any
     ) -> Union[str, Collection[str]]:
-        left = self.visit(node.left, **kwargs)
-        right = self.visit(node.right, **kwargs)
+        left = self.visit(node.left, horizontal_mask=node.horizontal_mask, **kwargs)
+        right = self.visit(node.right, horizontal_mask=node.horizontal_mask, **kwargs)
         if not node.mask:
             return f"{left} = {right}"
 
-        mask = self.visit(node.mask, **kwargs)
+        mask = self.visit(node.mask, horizontal_mask=node.horizontal_mask, **kwargs)
         if (
             isinstance(node.left, npir.LocalScalarAccess)
             and node.left.name not in ctx.locals_declared
@@ -278,7 +308,7 @@ class NpirCodegen(TemplatedGenerator):
             node, shape=shape, is_serial=is_serial, lower=lower, upper=upper, **kwargs
         )
 
-    Broadcast = FormatTemplate("np.full({shape}, {expr})")
+    Broadcast = FormatTemplate("{expr}")
 
     While = JinjaTemplate(
         textwrap.dedent(

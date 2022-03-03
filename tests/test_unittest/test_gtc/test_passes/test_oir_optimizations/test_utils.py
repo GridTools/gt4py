@@ -19,7 +19,7 @@ import pytest
 from gt4py.definitions import Extent
 from gtc import common, oir
 from gtc.common import DataType
-from gtc.passes.oir_masks import _overlap_along_axis
+from gtc.passes.oir_masks import _overlap_along_axis, compute_relative_mask
 from gtc.passes.oir_optimizations.utils import (
     AccessCollector,
     GeneralAccess,
@@ -123,7 +123,7 @@ def test_access_overlap_along_axis():
     ) == (0, 0)
 
     overlap = _overlap_along_axis(
-        (0, 0), common.HorizontalInterval.single_index(common.LevelMarker.START, 2)
+        (0, 0), common.HorizontalInterval.at_endpt(common.LevelMarker.START, 2)
     )
 
     assert overlap[0] == -2
@@ -135,7 +135,7 @@ def test_access_overlap_along_axis():
     (
         (
             oir.HorizontalMask(
-                i=common.HorizontalInterval.single_index(common.LevelMarker.END, 1),
+                i=common.HorizontalInterval.at_endpt(common.LevelMarker.END, 1),
                 j=common.HorizontalInterval.full(),
             ),
             1,
@@ -143,7 +143,7 @@ def test_access_overlap_along_axis():
         ),
         (
             oir.HorizontalMask(
-                i=common.HorizontalInterval.single_index(common.LevelMarker.END, 1),
+                i=common.HorizontalInterval.at_endpt(common.LevelMarker.END, 1),
                 j=common.HorizontalInterval.full(),
             ),
             -1,
@@ -151,7 +151,7 @@ def test_access_overlap_along_axis():
         ),
         (
             oir.HorizontalMask(
-                i=common.HorizontalInterval.single_index(common.LevelMarker.END, 2),
+                i=common.HorizontalInterval.at_endpt(common.LevelMarker.END, 2),
                 j=common.HorizontalInterval.full(),
             ),
             0,
@@ -197,3 +197,31 @@ def test_stencil_extents_region(mask, offset, access_extent):
         assert input_access.to_extent(Extent(block_extent)) == access_extent
     else:
         assert input_access.to_extent(Extent(block_extent)) is None
+
+
+def test_compute_relative_mask():
+    relative_mask = compute_relative_mask(
+        Extent.zeros(ndims=2),
+        oir.HorizontalMask(
+            i=common.HorizontalInterval.compute_domain(start_offset=-1, end_offset=1),
+            j=common.HorizontalInterval.full(),
+        ),
+    )
+
+    assert relative_mask.i == common.HorizontalInterval.compute_domain()
+    assert relative_mask.j == common.HorizontalInterval.compute_domain()
+
+    relative_mask = compute_relative_mask(
+        Extent.zeros(ndims=2),
+        oir.HorizontalMask(
+            i=common.HorizontalInterval.at_endpt(
+                level=common.LevelMarker.START, start_offset=-2, end_offset=3
+            ),
+            j=common.HorizontalInterval.full(),
+        ),
+    )
+
+    assert relative_mask.i == common.HorizontalInterval.at_endpt(
+        level=common.LevelMarker.START, start_offset=0, end_offset=3
+    )
+    assert relative_mask.j == common.HorizontalInterval.full()

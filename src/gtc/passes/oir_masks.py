@@ -96,10 +96,10 @@ def _compute_relative_interval(
 
 def compute_relative_mask(extent: Extent, mask: oir.HorizontalMask) -> Optional[oir.HorizontalMask]:
     """
-    Output a HorizontalMask that is relative to the extent instead of the compute domain (Extent.zeros).
+    Output a HorizontalMask that is relative to and always inside the extent instead of the compute domain.
 
     This is used in the numpy backend to compute HorizontalMask bounds relative to
-    the start/end bounds of each axis in the HorizontalBlock.
+    the start/end bounds of the horizontal axes.
 
     """
     i_interval = _compute_relative_interval(extent[0], mask.i)
