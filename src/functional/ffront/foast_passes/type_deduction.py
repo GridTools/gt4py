@@ -86,7 +86,7 @@ class FieldOperatorTypeDeduction(NodeTranslator):
     >>> sdef = SourceDefinition.from_function(example)
     >>> cref = ClosureRefs.from_function(example)
     >>> untyped_fieldop = FieldOperatorParser(
-    ...     source=sdef.source, filename=sdef.filename, starting_line=sdef.starting_line, closure_refs=cref, externals_defs={}
+    ...     source_definition=sdef, closure_refs=cref, externals_defs={}
     ... ).visit(ast.parse(sdef.source).body[0])
     >>> assert untyped_fieldop.body[0].value.type is None
 
