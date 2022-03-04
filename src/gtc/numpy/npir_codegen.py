@@ -32,17 +32,24 @@ def _dump_sequence(sequence, *, separator=", ", start="(", end=")") -> str:
     return f"{start}{separator.join(sequence)}{end}"
 
 
+def _offset_to_str(offset: int) -> str:
+    if offset > 0:
+        return f" + {offset}"
+    elif offset < 0:
+        return f" - {-offset}"
+    else:
+        return ""
+
+
 def _slice_string(ch: str, offset: int, interval: Tuple[common.AxisBound, common.AxisBound]) -> str:
     start_ch = ch if interval[0].level == common.LevelMarker.START else ch.upper()
     end_ch = ch if interval[1].level == common.LevelMarker.START else ch.upper()
 
-    start_offset = interval[0].offset + offset
-    end_offset = interval[1].offset + offset
-
-    start_expr = f"{start_ch}{start_offset:+d}" if start_offset != 0 else f"{start_ch}"
-    end_expr = f"{end_ch}{end_offset:+d}" if end_offset != 0 else f"{end_ch}"
-
-    return f"{start_expr}:{end_expr}"
+    return (
+        f"{start_ch}{_offset_to_str(interval[0].offset + offset)}"
+        ":"
+        f"{end_ch}{_offset_to_str(interval[1].offset + offset)}"
+    )
 
 
 def _make_slice_access(
@@ -58,12 +65,13 @@ def _make_slice_access(
         axes.append(_slice_string("j", offset[1], (interval.j.start, interval.j.end)))
 
     if isinstance(offset[2], numbers.Number):
-        if not is_serial:
-            axes.append(
-                _slice_string("k", offset[2], (common.AxisBound.start(), common.AxisBound.end()))
-            )
-        else:
-            axes.append(f"k_{offset[2]:+d}:k_{offset[2]+1:+d}")
+        bounds = (
+            (common.AxisBound.start(), common.AxisBound.start(offset=1))
+            if is_serial
+            else (common.AxisBound.start(), common.AxisBound.end())
+        )
+        k_str = "k_" if is_serial else "k"
+        axes.append(_slice_string(k_str, offset[2], bounds))
     elif isinstance(offset[2], str):
         axes.append(offset[2])
 
@@ -173,7 +181,6 @@ class NpirCodegen(TemplatedGenerator):
             )
 
         args = _make_slice_access(offsets, horizontal_mask, kwargs["is_serial"])
-        print(node.name, offsets, args)
         data_index = self.visit(node.data_index, inside_slice=True, **kwargs)
 
         access_slice = ", ".join(args + list(data_index))
@@ -288,25 +295,6 @@ class NpirCodegen(TemplatedGenerator):
         elif node is common.LoopOrder.BACKWARD:
             return "for k_ in range(K-1, k-1, -1):"
         return ""
-
-    def visit_Broadcast(
-        self,
-        node: npir.Broadcast,
-        *,
-        is_serial: bool,
-        lower: Tuple[int, int],
-        upper: Tuple[int, int],
-        **kwargs: Any,
-    ) -> Union[str, Collection[str]]:
-        boundary = [upper - lower for lower, upper in zip(lower, upper)]
-        shape = _dump_sequence(
-            [f"_dI_ + {boundary[0]}", f"_dJ_ + {boundary[1]}"]
-            + ["1" if is_serial else "K - k"]
-            + ["1"] * (node.dims - 3)
-        )
-        return self.generic_visit(
-            node, shape=shape, is_serial=is_serial, lower=lower, upper=upper, **kwargs
-        )
 
     Broadcast = FormatTemplate("{expr}")
 

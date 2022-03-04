@@ -17,6 +17,7 @@
 
 import pytest
 
+from gt4py.definitions import Extent
 from gtc import common, oir
 from gtc.numpy import npir
 from gtc.numpy.oir_to_npir import OirToNpir
@@ -87,14 +88,14 @@ def test_horizontal_execution_to_vector_assigns() -> None:
 
 def test_mask_stmt_to_assigns() -> None:
     mask_stmt = MaskStmtFactory(body=[AssignStmtFactory()])
-    assign_stmts = OirToNpir().visit(mask_stmt)
+    assign_stmts = OirToNpir().visit(mask_stmt, extent=Extent.zeros(ndims=2), local_assigns={})
     assert isinstance(assign_stmts[0].mask, npir.FieldSlice)
     assert len(assign_stmts) == 1
 
 
 def test_mask_propagation() -> None:
     mask_stmt = MaskStmtFactory()
-    assign_stmts = OirToNpir().visit(mask_stmt)
+    assign_stmts = OirToNpir().visit(mask_stmt, extent=Extent.zeros(ndims=2), local_assigns={})
     assert assign_stmts[0].mask == OirToNpir().visit(mask_stmt.mask)
 
 
@@ -169,7 +170,8 @@ def test_literal_broadcast() -> None:
         AssignStmtFactory(
             left__dtype=common.DataType.FLOAT32,
             right=oir.Literal(value="42", dtype=common.DataType.FLOAT32),
-        )
+        ),
+        local_assigns={},
     )
     assert isinstance(result.right, npir.Broadcast)
     assert (result.right.expr.value, result.right.expr.dtype) == ("42", common.DataType.FLOAT32)

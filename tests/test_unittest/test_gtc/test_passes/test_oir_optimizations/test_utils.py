@@ -224,4 +224,4 @@ def test_compute_relative_mask():
     assert relative_mask.i == common.HorizontalInterval.at_endpt(
         level=common.LevelMarker.START, start_offset=0, end_offset=3
     )
-    assert relative_mask.j == common.HorizontalInterval.full()
+    assert relative_mask.j == common.HorizontalInterval.compute_domain()
