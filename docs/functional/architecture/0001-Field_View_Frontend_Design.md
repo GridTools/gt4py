@@ -44,7 +44,7 @@ There exist two dialects right now. The FOAST and PAST. We will in the following
 
 #### What to keep
 ##### Type hierarchy and type info in expressions
-Symbols as well as expressions must have a type in all dialects. This deviates from the Python AST because all dialects are statically types. The types have their own hierarchy of `eve` nodes. It also allows for the type info to be associated with source locations easily -> better debugging experience.
+Symbols as well as expressions must have a type in all dialects. This deviates from the Python AST because all dialects are statically typed. The types have their own hierarchy of `eve` nodes. It also allows for the type info to be associated with source locations easily -> better debugging experience.
 
 ##### Source locations
 All nodes that represent code must hold the location of that code.
@@ -57,9 +57,7 @@ The symbol types in all dialects are implemented as simple dataclasses to ensure
 
 #### What could be changed
 ##### Ad-hoc pass management
-The `DialectParser` has ended up being the main entry point for running all required passes to create a dialect AST that can be lowered to Iterator IR. This is not by design but simply because it was convenient. This is expected to change if a general pass manager is ever implemented.
-
-The `._preprocess_definition_ast` classmethod encodes the required order of AST passes to simplify the Python AST before parsing. These simplifications allow the visitor methods to be less complex than otherwise possible.
+The `DialectParser` has ended up being the main entry point for running all required passes to create a dialect AST that can be lowered to Iterator IR. This is not by design but simply because it was convenient. This is expected to change if a general pass manager is ever implemented. The two abstract class methods `._preprocess_definition_ast` and `._postprocess_definition_ast` encode the required order of AST passes.
 
 ### Field Operator AST (FOAST)
 Essentially this is a Field Operator flavoured Python AST dialect. The tree structure follows the supported subset of Python AST. It uses the symbol table concept from `eve` because it was at the time a ready to use way of keeping track of type information, and names of temporaries.
@@ -85,10 +83,6 @@ This step makes use of the type information on expressions, for example to decid
 #### What to keep
 ##### Assume FOAST is correct
 As per guiding principle (5), the lowering should not worry if the FOAST is incorrect or invalid. It is the responsibility of the previous parser and passes to sanitize the user code.
-
-#### What could be changed
-##### Ad-hoc pass management
-Since this lowering goes from a statement based AST to a functional IR, all the statements in the AST have to be inlined. This happens in one of the visitor methods currently which calls a FOAST pass, which is perhaps not ideal.
 
 ### Program AST (PAST)
 
