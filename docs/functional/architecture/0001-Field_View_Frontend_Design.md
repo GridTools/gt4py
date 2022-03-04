@@ -88,6 +88,10 @@ As per guiding principle (5), the lowering should not worry if the FOAST is inco
 
 The Program AST is a stateful dialect whose main purpose is to apply operators to fields and storing the result on another field. In the future it could be extended to also support control flow (loops, conditionals).
 
+#### What could be changed
+
+The syntax to call field operators feels unnatural as their signature suggests they return a Field, but instead after decorating they return nothing and have an additional argument `out`.
+
 #### Similarities to FOAST
 
 The PAST is an independent dialect and (code-wise) only shares symbol types with the FOAST. This was a deliberate choice as there is currently no good way to share nodes and we wanted to allow changing each of the dialects independently until they become stable. Nonetheless nodes that exist in both dialects should stay in sync so that they could be generalized in the future.
