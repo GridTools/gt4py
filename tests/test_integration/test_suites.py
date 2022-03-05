@@ -19,7 +19,7 @@ import numpy as np
 
 from gt4py import gtscript
 from gt4py import testing as gt_testing
-from gt4py.gtscript import PARALLEL, computation, interval
+from gt4py.gtscript import PARALLEL, I, J, computation, horizontal, interval, region
 
 from ..definitions import INTERNAL_BACKENDS
 from .stencil_definitions import optional_field, two_optional_fields
@@ -787,3 +787,41 @@ class TestVariableKRead(gt_testing.StencilTestSuite):
 
     def validation(field_in, field_out, index, *, domain, origin):
         field_out[:, :, 1:] = field_in[:, :, (np.arange(field_in.shape[-1]) + index)[1:]]
+
+
+class TestHorizontalRegions(gt_testing.StencilTestSuite):
+    dtypes = {
+        "field_in": np.float32,
+        "field_out": np.float32,
+    }
+    domain_range = [(4, 4), (4, 4), (2, 2)]
+    backends = [backend for backend in INTERNAL_BACKENDS if backend.values[0] not in ["gtc:dace"]]
+    symbols = {
+        "field_in": gt_testing.field(
+            in_range=(-10, 10), axes="IJK", boundary=[(0, 0), (0, 0), (0, 0)]
+        ),
+        "field_out": gt_testing.field(
+            in_range=(-10, 10), axes="IJK", boundary=[(0, 0), (0, 0), (0, 0)]
+        ),
+    }
+
+    def definition(field_in, field_out):
+        with computation(PARALLEL), interval(...):
+            field_out = (  # noqa: F841  # local variable 'field_out' is assigned to but never used
+                field_in
+            )
+            with horizontal(region[I[0], :], region[I[-1], :]):
+                field_out = (  # noqa: F841  # local variable 'field_out' is assigned to but never used
+                    field_in + 1.0
+                )
+            with horizontal(region[:, J[0]], region[:, J[-1]]):
+                field_out = (  # noqa: F841  # local variable 'field_out' is assigned to but never used
+                    field_in - 1.0
+                )
+
+    def validation(field_in, field_out, *, domain, origin):
+        field_out[:, :, :] = field_in[:, :, :]
+        field_out[0, :, :] = field_in[0, :, :] + 1.0
+        field_out[-1, :, :] = field_in[-1, :, :] + 1.0
+        field_out[:, 0, :] = field_in[:, 0, :] - 1.0
+        field_out[:, -1, :] = field_in[:, -1, :] - 1.0
