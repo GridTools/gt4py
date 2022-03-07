@@ -153,7 +153,7 @@ def test_field_slice(is_serial: bool) -> None:
         assert match.group("ku") == "k_ " + int_to_str(k_offset + 1)
     else:
         assert match.group("kl") == "k " + int_to_str(k_offset)
-    assert match.group("ku") == "K " + int_to_str(k_offset)
+        assert match.group("ku") == "K " + int_to_str(k_offset)
 
 
 def test_native_function() -> None:
