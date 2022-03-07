@@ -393,37 +393,25 @@ def test_variable_offsets(backend):
 )
 def test_variable_offsets_and_while_loop(backend):
     nz = 100
-    dz = dt = 1.2
 
     @gtscript.stencil(backend=backend)
     def stencil(
         Nr: Field[IJK, np.float_],
-        v_n: Field[IJK, np.float_],
         s_nv: Field[IJK, np.float_],
         indK: Field[K, np.int_],
         kk: Field[IJK, np.int_],
     ):
         with computation(PARALLEL), interval(...):
-            dz_loc = 0.0
             kk = 0
-
-            while indK + kk <= nz - 1:
-                if dz_loc < -v_n[0, 0, kk] * dt:
-                    s_nv[0, 0, 0] += Nr[0, 0, kk] * min(dz, -dz_loc - v_n[0, 0, kk] * dt)
+            while indK + kk <= nz:
+                s_nv += Nr[0, 0, kk]
                 kk += 1
-                dz_loc += dz
 
     shape = (2, 2, nz)
     rng = np.random.default_rng(seed=42)
 
     Nr = gt_storage.from_array(
         rng.exponential(1e7, size=shape), dtype=np.float_, backend=backend, default_origin=(0, 0, 0)
-    )
-    v_n = gt_storage.from_array(
-        (-1) * rng.uniform(high=100.0, size=shape),
-        dtype=np.float_,
-        backend=backend,
-        default_origin=(0, 0, 0),
     )
     s_nv = gt_storage.zeros(
         shape=shape,
@@ -446,7 +434,7 @@ def test_variable_offsets_and_while_loop(backend):
         default_origin=(0, 0, 0),
     )
 
-    stencil(Nr, v_n, s_nv, indK, kk)
+    stencil(Nr, s_nv, indK, kk)
 
 
 # TODO: Enable DaCe
