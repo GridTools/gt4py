@@ -88,10 +88,4 @@ class gtfn_codegen(codegen.TemplatedGenerator):
     @classmethod
     def apply(cls, root: Any, **kwargs: Any) -> str:
         generated_code = super().apply(root, **kwargs)
-        formatted_code = codegen.format_source("cpp", generated_code, style="LLVM")
-        return formatted_code
-
-
-backend.register_backend(
-    "gtfn", lambda prog, *args, **kwargs: print(gtfn_codegen.apply(prog, **kwargs))
-)
+        return generated_code
