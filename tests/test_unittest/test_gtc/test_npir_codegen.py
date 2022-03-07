@@ -124,11 +124,11 @@ def test_field_slice(is_serial: bool) -> None:
 
     def int_to_str(i):
         if i > 0:
-            return "+" + str(i)
+            return f"+ {i}"
         elif i == 0:
             return ""
         else:
-            return str(i)
+            return f"- {-i}"
 
     field_slice = FieldSliceFactory(
         name="a",
@@ -140,7 +140,7 @@ def test_field_slice(is_serial: bool) -> None:
     result = NpirCodegen().visit(field_slice, is_serial=is_serial)
     print(result)
     match = re.match(
-        r"(?P<name>\w+)\[i(?P<il>.*):I(?P<iu>.*),\s*j(?P<jl>.*):J(?P<ju>.*),\s*(?P<kl>.*):(?P<ku>.*)\]",
+        r"(?P<name>\w+)\[i\s*(?P<il>.*):I\s*(?P<iu>.*),\s*j\s*(?P<jl>.*):J\s*(?P<ju>.*),\s*(?P<kl>.*):(?P<ku>.*)\]",
         result,
     )
     assert match
@@ -149,11 +149,11 @@ def test_field_slice(is_serial: bool) -> None:
     assert match.group("jl") == match.group("ju") == int_to_str(j_offset)
 
     if is_serial:
-        assert match.group("kl") == "k_" + int_to_str(k_offset)
-        assert match.group("ku") == "k_" + int_to_str(k_offset + 1)
+        assert match.group("kl") == "k_ " + int_to_str(k_offset)
+        assert match.group("ku") == "k_ " + int_to_str(k_offset + 1)
     else:
-        assert match.group("kl") == "k" + int_to_str(k_offset)
-        assert match.group("ku") == "K" + int_to_str(k_offset)
+        assert match.group("kl") == "k " + int_to_str(k_offset)
+    assert match.group("ku") == "K " + int_to_str(k_offset)
 
 
 def test_native_function() -> None:
@@ -246,6 +246,7 @@ def test_assign_with_mask_local() -> None:
             left=LocalScalarAccessFactory(name="tmp"),
             mask=FieldSliceFactory(name="mask1", dtype=common.DataType.BOOL),
         ),
+        is_serial=False,
         ctx=NpirCodegen.BlockContext(),
         symtable={"tmp": ScalarDeclFactory(name="tmp", dtype=common.DataType.INT32)},
     )
