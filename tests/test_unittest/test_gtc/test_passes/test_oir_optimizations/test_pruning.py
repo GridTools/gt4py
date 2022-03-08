@@ -85,7 +85,7 @@ def test_unreachable_stmt_pruning():
                     ),
                     HorizontalRestrictionFactory(
                         mask=HorizontalMask(
-                            i=HorizontalInterval.single_index(LevelMarker.END, 1),
+                            i=HorizontalInterval.at_endpt(LevelMarker.END, 1),
                             j=HorizontalInterval.full(),
                         ),
                         body=[AssignStmtFactory(left__name=out_name, right=LiteralFactory())],
