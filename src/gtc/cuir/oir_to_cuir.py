@@ -95,11 +95,9 @@ class OIRToCUIR(eve.NodeTranslator):
     ) -> cuir.VariableKOffset:
         return cuir.VariableKOffset(k=self.visit(node.k, **kwargs))
 
-    def visit_HorizontalMask(
-        self, node: oir.HorizontalMask, *, ctx: "Context", **kwargs: Any
-    ) -> cuir.Expr:
+    def _mask_to_expr(self, mask: common.HorizontalMask, ctx: "Context") -> cuir.Expr:
         mask_expr: List[cuir.Expr] = []
-        for axis_index, interval in enumerate(node.intervals):
+        for axis_index, interval in enumerate(mask.intervals):
             for op, endpt in zip(
                 (common.ComparisonOperator.GE, common.ComparisonOperator.LT),
                 (interval.start, interval.end),
@@ -120,6 +118,14 @@ class OIRToCUIR(eve.NodeTranslator):
             )
             if mask_expr
             else cuir.Literal(value=common.BuiltInLiteral.TRUE, dtype=common.DataType.BOOL)
+        )
+
+    def visit_HorizontalRestriction(
+        self, node: oir.HorizontalRestriction, **kwargs: Any
+    ) -> cuir.Expr:
+        mask = self._mask_to_expr(node.mask, kwargs["ctx"])
+        return cuir.IfStmt(
+            cond=mask, true_branch=cuir.BlockStmt(body=self.visit(node.body, **kwargs))
         )
 
     def visit_FieldAccess(

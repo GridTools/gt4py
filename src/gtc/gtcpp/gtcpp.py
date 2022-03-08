@@ -73,7 +73,7 @@ class AssignStmt(common.AssignStmt[Union[LocalAccess, AccessorRef], Expr], Stmt)
     _dtype_validation = common.assign_stmt_dtype_validation(strict=True)
 
 
-class IfStmt(common.IfStmt[Stmt, Expr], Stmt):
+class IfStmt(common.IfStmt[BlockStmt, Expr], Stmt):
     pass
 
 

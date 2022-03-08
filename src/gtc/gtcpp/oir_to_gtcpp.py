@@ -221,11 +221,11 @@ class OIRToGTCpp(eve.NodeTranslator):
             to_level=self.visit(node.end, is_start=False),
         )
 
-    def visit_HorizontalMask(
-        self, node: oir.HorizontalMask, *, comp_ctx: "GTComputationContext", **kwargs: Any
+    def _mask_to_expr(
+        self, mask: common.HorizontalMask, comp_ctx: "GTComputationContext"
     ) -> gtcpp.Expr:
         mask_expr: List[gtcpp.Expr] = []
-        for axis_index, interval in enumerate(node.intervals):
+        for axis_index, interval in enumerate(mask.intervals):
             for op, endpt in zip(
                 (common.ComparisonOperator.GE, common.ComparisonOperator.LT),
                 (interval.start, interval.end),
@@ -246,6 +246,14 @@ class OIRToGTCpp(eve.NodeTranslator):
             )
             if mask_expr
             else gtcpp.Literal(value=common.BuiltInLiteral.TRUE, dtype=common.DataType.BOOL)
+        )
+
+    def visit_HorizontalRestriction(
+        self, node: oir.HorizontalRestriction, **kwargs: Any
+    ) -> gtcpp.IfStmt:
+        mask = self._mask_to_expr(node.mask, kwargs["comp_ctx"])
+        return gtcpp.IfStmt(
+            cond=mask, true_branch=gtcpp.BlockStmt(body=self.visit(node.body, **kwargs))
         )
 
     def visit_AssignStmt(self, node: oir.AssignStmt, **kwargs: Any) -> gtcpp.AssignStmt:

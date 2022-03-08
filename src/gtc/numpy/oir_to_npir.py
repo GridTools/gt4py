@@ -15,16 +15,15 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import typing
-from typing import Any, Dict, Generator, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 from eve.concepts import BaseNode
-from eve.iterators import TreeIterationItem
 from eve.traits import SymbolTableTrait
-from eve.utils import as_xiter
+from eve.type_definitions import NOTHING
 from eve.visitors import NodeTranslator
 from gt4py.definitions import Extent
 from gtc import common, oir, utils
-from gtc.passes.oir_masks import compute_relative_mask
+from gtc.passes.horizontal_masks import compute_relative_mask
 from gtc.passes.oir_optimizations.utils import compute_extents
 
 from . import npir
@@ -142,56 +141,19 @@ class OirToNpir(NodeTranslator):
             func=self.visit(node.func, **kwargs), args=self.visit(node.args, **kwargs)
         )
 
-    def visit_HorizontalMask(self, node: oir.HorizontalMask, **kwargs: Any) -> npir.Expr:
-        return npir.ScalarLiteral(value=common.BuiltInLiteral.TRUE, dtype=common.DataType.BOOL)
-
     # --- Statements ---
     def visit_MaskStmt(
         self,
         node: oir.MaskStmt,
         *,
-        extent: Extent,
         mask: Optional[npir.Expr] = None,
         **kwargs: Any,
     ) -> List[npir.VectorAssign]:
-        @as_xiter
-        def _iter_tree(mask: oir.Expr) -> Generator[TreeIterationItem, None, None]:
-            local_assigns = kwargs["local_assigns"]
-            sub_exprs = (
-                local_assigns[name]
-                for name in mask.iter_tree().if_isinstance(oir.ScalarAccess).getattr("name")
-                if name in local_assigns
-            )
-            for elem in (mask, *sub_exprs):
-                yield from elem.iter_tree()
-
-        try:
-            absolute_mask = next(iter(_iter_tree(node.mask).if_isinstance(oir.HorizontalMask)))
-            # Lower to npir.HorizontalMask relative to horizontal execution extent
-            relative_mask = compute_relative_mask(extent, absolute_mask)
-            horizontal_mask: Optional[oir.HorizontalMask] = npir.HorizontalMask(
-                i=relative_mask.i, j=relative_mask.j
-            )
-        except StopIteration:
-            horizontal_mask = None
-
         mask_expr = self.visit(node.mask, **kwargs)
         if mask:
             mask_expr = npir.VectorLogic(op=common.LogicalOperator.AND, left=mask, right=mask_expr)
 
-        # --- Quick optimization: remove the mask entirely if mask_expr is only a horizontal mask. ---
-        mask_is_hmask = (
-            isinstance(mask_expr, npir.ScalarLiteral)
-            and mask_expr.value == common.BuiltInLiteral.TRUE
-        )
-        mask_is_indirect_hmask = isinstance(mask_expr, npir.LocalScalarAccess) and isinstance(
-            kwargs["local_assigns"].get(mask_expr.name, None), oir.HorizontalMask
-        )
-        if mask_is_hmask or mask_is_indirect_hmask:
-            mask_expr = None
-        # ---
-
-        return self.visit(node.body, horizontal_mask=horizontal_mask, mask=mask_expr, **kwargs)
+        return self.visit(node.body, mask=mask_expr, **kwargs)
 
     def visit_AssignStmt(
         self,
@@ -201,14 +163,12 @@ class OirToNpir(NodeTranslator):
         horizontal_mask: Optional[npir.HorizontalMask] = None,
         **kwargs: Any,
     ) -> npir.VectorAssign:
-        kwargs["local_assigns"][node.left.name] = node.right
         left = self.visit(node.left, **kwargs)
         right = self.visit(node.right, **kwargs)
         if right.kind == common.ExprKind.SCALAR:
             right = npir.Broadcast(expr=right, dims=3)
         return npir.VectorAssign(left=left, right=right, mask=mask, horizontal_mask=horizontal_mask)
 
-    # --- Control Flow ---
     def visit_While(
         self, node: oir.While, *, mask: Optional[npir.Expr] = None, **kwargs: Any
     ) -> npir.While:
@@ -217,8 +177,22 @@ class OirToNpir(NodeTranslator):
             mask = npir.VectorLogic(op=common.LogicalOperator.AND, left=mask, right=cond)
         else:
             mask = cond
-        return npir.While(cond=cond, body=self.visit(node.body, mask=mask, **kwargs))
+        return npir.While(
+            cond=cond, body=utils.flatten_list(self.visit(node.body, mask=mask, **kwargs))
+        )
 
+    def visit_HorizontalRestriction(
+        self, node: oir.HorizontalRestriction, *, extent: Extent, **kwargs: Any
+    ) -> Any:
+        horizontal_mask = compute_relative_mask(extent, node.mask)
+        if horizontal_mask:
+            return utils.flatten_list(
+                self.visit(node.body, horizontal_mask=horizontal_mask, **kwargs)
+            )
+        else:
+            return NOTHING
+
+    # --- Control Flow ---
     def visit_HorizontalExecution(
         self,
         node: oir.HorizontalExecution,
@@ -230,7 +204,7 @@ class OirToNpir(NodeTranslator):
             extent = block_extents[id(node)]
         else:
             extent = ((0, 0), (0, 0))
-        stmts = utils.flatten_list(self.visit(node.body, local_assigns={}, extent=extent, **kwargs))
+        stmts = utils.flatten_list(self.visit(node.body, extent=extent, **kwargs))
         return npir.HorizontalBlock(
             declarations=self.visit(node.declarations, **kwargs), body=stmts, extent=extent
         )

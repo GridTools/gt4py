@@ -14,11 +14,10 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from gtc.common import HorizontalInterval, LevelMarker, LoopOrder
+from gtc.common import HorizontalInterval, HorizontalMask, LevelMarker, LoopOrder
 from gtc.gtcpp import gtcpp
 from gtc.gtcpp.gtcpp_codegen import GTCppCodegen
 from gtc.gtcpp.oir_to_gtcpp import OIRToGTCpp
-from gtc.oir import HorizontalMask
 
 from .oir_utils import (
     AssignStmtFactory,
