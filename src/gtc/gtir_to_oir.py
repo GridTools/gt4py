@@ -92,8 +92,10 @@ class GTIRToOIR(NodeTranslator):
             loc=node.loc,
         )
 
-    def visit_HorizontalMask(self, node: gtir.HorizontalMask, **kwargs: Any) -> oir.HorizontalMask:
-        return oir.HorizontalMask(i=node.i, j=node.j)
+    def visit_HorizontalRestriction(
+        self, node: gtir.HorizontalRestriction, **kwargs: Any
+    ) -> oir.HorizontalRestriction:
+        return oir.HorizontalRestriction(mask=node.mask, stmts=self.visit(node.stmts, **kwargs))
 
     # --- Stmts ---
     def visit_ParAssignStmt(

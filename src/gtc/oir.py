@@ -79,17 +79,8 @@ class MaskStmt(Stmt):
         return v
 
 
-class HorizontalMask(Expr):
-    """Expr to represent a convex portion of the horizontal iteration space."""
-
-    i: common.HorizontalInterval
-    j: common.HorizontalInterval
-    kind = common.ExprKind.FIELD
-    dtype = common.DataType.BOOL
-
-    @property
-    def intervals(self) -> Tuple[common.HorizontalInterval, common.HorizontalInterval]:
-        return (self.i, self.j)
+class HorizontalRestriction(common.HorizontalRestriction[Stmt], Stmt):
+    pass
 
 
 class UnaryOp(common.UnaryOp[Expr], Expr):

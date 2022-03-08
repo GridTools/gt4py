@@ -840,6 +840,24 @@ class HorizontalInterval(Node):
         return abs(self.end.offset - self.start.offset) == 1
 
 
+class HorizontalMask(LocNode):
+    """Expr to represent a convex portion of the horizontal iteration space."""
+
+    i: HorizontalInterval
+    j: HorizontalInterval
+
+    @property
+    def intervals(self) -> Tuple[HorizontalInterval, HorizontalInterval]:
+        return (self.i, self.j)
+
+
+class HorizontalRestriction(GenericNode, Generic[StmtT]):
+    """A specialization of the horizontal space."""
+
+    mask: HorizontalMask
+    body: List[StmtT]
+
+
 def data_type_to_typestr(dtype: DataType) -> str:
 
     table = {

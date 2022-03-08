@@ -17,7 +17,7 @@
 from typing import Optional, Tuple
 
 from gt4py.definitions import Extent
-from gtc import common, oir
+from gtc import common
 
 
 def _overlap_along_axis(
@@ -47,7 +47,7 @@ def _overlap_along_axis(
 
 
 def mask_overlap_with_extent(
-    mask: oir.HorizontalMask, horizontal_extent: Extent
+    mask: common.HorizontalMask, horizontal_extent: Extent
 ) -> Optional[Extent]:
     """Compute an overlap extent between a mask and horizontal extent."""
     diffs = [
@@ -94,7 +94,9 @@ def _compute_relative_interval(
     )
 
 
-def compute_relative_mask(extent: Extent, mask: oir.HorizontalMask) -> Optional[oir.HorizontalMask]:
+def compute_relative_mask(
+    extent: Extent, mask: common.HorizontalMask
+) -> Optional[common.HorizontalMask]:
     """
     Output a HorizontalMask that is relative to the extent instead of the compute domain (Extent.zeros).
 
@@ -105,4 +107,4 @@ def compute_relative_mask(extent: Extent, mask: oir.HorizontalMask) -> Optional[
     i_interval = _compute_relative_interval(extent[0], mask.i)
     j_interval = _compute_relative_interval(extent[1], mask.j)
 
-    return oir.HorizontalMask(i=i_interval, j=j_interval) if i_interval and j_interval else None
+    return common.HorizontalMask(i=i_interval, j=j_interval) if i_interval and j_interval else None

@@ -23,8 +23,8 @@ from eve.concepts import TreeNode
 from eve.traits import SymbolTableTrait
 from eve.utils import XIterable, xiter
 from gt4py.definitions import Extent
-from gtc import oir
-from gtc.passes.oir_masks import mask_overlap_with_extent
+from gtc import common, oir
+from gtc.passes.horizontal_masks import mask_overlap_with_extent
 
 
 OffsetT = TypeVar("OffsetT")
@@ -40,7 +40,7 @@ class GenericAccess(Generic[OffsetT]):
     field: str
     offset: OffsetT
     is_write: bool
-    horizontal_mask: Optional[oir.HorizontalMask] = None
+    horizontal_mask: Optional[common.HorizontalMask] = None
 
     @property
     def is_read(self) -> bool:
@@ -83,7 +83,7 @@ class AccessCollector(NodeVisitor):
         *,
         accesses: List[GeneralAccess],
         is_write: bool,
-        horizontal_mask: Optional[oir.HorizontalMask] = None,
+        horizontal_mask: Optional[common.HorizontalMask] = None,
         **kwargs: Any,
     ) -> None:
         self.generic_visit(node, accesses=accesses, is_write=is_write, **kwargs)
@@ -107,14 +107,14 @@ class AccessCollector(NodeVisitor):
 
     def visit_MaskStmt(self, node: oir.MaskStmt, **kwargs: Any) -> None:
         self.visit(node.mask, is_write=False, **kwargs)
-        mask_kwargs = (
-            {"horizontal_mask": node.mask} if isinstance(node.mask, oir.HorizontalMask) else {}
-        )
-        self.visit(node.body, **kwargs, **mask_kwargs)
+        self.visit(node.body, **kwargs)
 
     def visit_While(self, node: oir.While, **kwargs: Any) -> None:
         self.visit(node.cond, is_write=False, **kwargs)
         self.visit(node.body, **kwargs)
+
+    def visit_HorizontalRestriction(self, node: oir.HorizontalRestriction, **kwargs: Any) -> None:
+        self.visit(node.body, horizontal_mask=node.mask, **kwargs)
 
     @dataclass
     class GenericAccessCollection(Generic[AccessT, OffsetT]):

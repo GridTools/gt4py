@@ -17,9 +17,9 @@
 import pytest
 
 from gt4py.definitions import Extent
-from gtc import common, oir
+from gtc import common
 from gtc.common import DataType
-from gtc.passes.oir_masks import _overlap_along_axis
+from gtc.passes.horizontal_masks import _overlap_along_axis
 from gtc.passes.oir_optimizations.utils import (
     AccessCollector,
     GeneralAccess,
@@ -31,6 +31,7 @@ from ...oir_utils import (
     AssignStmtFactory,
     FieldAccessFactory,
     HorizontalExecutionFactory,
+    HorizontalRestrictionFactory,
     MaskStmtFactory,
     StencilFactory,
     TemporaryFactory,
@@ -134,7 +135,7 @@ def test_access_overlap_along_axis():
     "mask,offset,access_extent",
     (
         (
-            oir.HorizontalMask(
+            common.HorizontalMask(
                 i=common.HorizontalInterval.single_index(common.LevelMarker.END, 1),
                 j=common.HorizontalInterval.full(),
             ),
@@ -142,7 +143,7 @@ def test_access_overlap_along_axis():
             ((0, 2), (0, 0)),
         ),
         (
-            oir.HorizontalMask(
+            common.HorizontalMask(
                 i=common.HorizontalInterval.single_index(common.LevelMarker.END, 1),
                 j=common.HorizontalInterval.full(),
             ),
@@ -150,7 +151,7 @@ def test_access_overlap_along_axis():
             ((0, 0), (0, 0)),
         ),
         (
-            oir.HorizontalMask(
+            common.HorizontalMask(
                 i=common.HorizontalInterval.single_index(common.LevelMarker.END, 2),
                 j=common.HorizontalInterval.full(),
             ),
@@ -167,7 +168,7 @@ def test_stencil_extents_region(mask, offset, access_extent):
             ),
             HorizontalExecutionFactory(
                 body=[
-                    MaskStmtFactory(
+                    HorizontalRestrictionFactory(
                         mask=mask,
                         body=[
                             AssignStmtFactory(
