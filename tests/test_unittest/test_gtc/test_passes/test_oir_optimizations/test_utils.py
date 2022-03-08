@@ -124,7 +124,7 @@ def test_access_overlap_along_axis():
     ) == (0, 0)
 
     overlap = _overlap_along_axis(
-        (0, 0), common.HorizontalInterval.single_index(common.LevelMarker.START, 2)
+        (0, 0), common.HorizontalInterval.at_endpt(common.LevelMarker.START, 2)
     )
 
     assert overlap[0] == -2
@@ -136,7 +136,7 @@ def test_access_overlap_along_axis():
     (
         (
             common.HorizontalMask(
-                i=common.HorizontalInterval.single_index(common.LevelMarker.END, 1),
+                i=common.HorizontalInterval.at_endpt(common.LevelMarker.END, 1),
                 j=common.HorizontalInterval.full(),
             ),
             1,
@@ -144,7 +144,7 @@ def test_access_overlap_along_axis():
         ),
         (
             common.HorizontalMask(
-                i=common.HorizontalInterval.single_index(common.LevelMarker.END, 1),
+                i=common.HorizontalInterval.at_endpt(common.LevelMarker.END, 1),
                 j=common.HorizontalInterval.full(),
             ),
             -1,
@@ -152,7 +152,7 @@ def test_access_overlap_along_axis():
         ),
         (
             common.HorizontalMask(
-                i=common.HorizontalInterval.single_index(common.LevelMarker.END, 2),
+                i=common.HorizontalInterval.at_endpt(common.LevelMarker.END, 2),
                 j=common.HorizontalInterval.full(),
             ),
             0,

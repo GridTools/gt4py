@@ -297,8 +297,8 @@ class DefIRToGTIR(IRNodeVisitor):
         }
 
         return gtir.HorizontalRestriction(
-            cond=common.HorizontalMask(**axes),
-            stmts=self.visit(node.body),
+            mask=common.HorizontalMask(**axes),
+            body=self.visit(node.body),
         )
 
     def visit_While(self, node: While) -> gtir.While:

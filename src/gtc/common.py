@@ -818,10 +818,14 @@ class HorizontalInterval(Node):
         return cls(start=None, end=None)
 
     @classmethod
-    def single_index(cls, level: LevelMarker, offset: int) -> "HorizontalInterval":
+    def at_endpt(
+        cls, level: LevelMarker, start_offset: int, end_offset: Optional[int] = None
+    ) -> "HorizontalInterval":
+        if end_offset is None:
+            end_offset = start_offset + 1
         return cls(
-            start=AxisBound(level=level, offset=offset),
-            end=AxisBound(level=level, offset=offset + 1),
+            start=AxisBound(level=level, offset=start_offset),
+            end=AxisBound(level=level, offset=end_offset),
         )
 
     @root_validator
