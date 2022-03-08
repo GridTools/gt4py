@@ -14,13 +14,12 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import Any, Dict, Generator
+from typing import Any, Dict
 
-from eve import NOTHING, NodeTranslator, utils
-from eve.iterators import TreeIterationItem
+from eve import NOTHING, NodeTranslator
 from gt4py.definitions import Extent
 from gtc import oir
-from gtc.passes.oir_masks import mask_overlap_with_extent
+from gtc.passes.horizontal_masks import mask_overlap_with_extent
 from gtc.passes.oir_optimizations.utils import compute_horizontal_block_extents
 
 
@@ -62,31 +61,10 @@ class UnreachableStmtPruning(NodeTranslator):
     def visit_HorizontalExecution(
         self, node: oir.HorizontalExecution, *, block_extents: Dict[int, Extent]
     ) -> oir.HorizontalExecution:
-        return self.generic_visit(node, local_assigns={}, block_extent=block_extents[id(node)])
+        return self.generic_visit(node, block_extent=block_extents[id(node)])
 
-    def visit_AssignStmt(
-        self, node: oir.ScalarAccess, *, local_assigns: Dict[str, oir.Expr], **kwargs: Any
-    ) -> oir.AssignStmt:
-        local_assigns[node.left.name] = node.right
-        return node
-
-    def visit_MaskStmt(
-        self, node: oir.MaskStmt, *, local_assigns: Dict[str, oir.Expr], block_extent: Extent
+    def visit_HorizontalRestriction(
+        self, node: oir.HorizontalRestriction, *, block_extent: Extent, **kwargs: Any
     ) -> Any:
-        @utils.as_xiter
-        def _iter_tree(mask) -> Generator[TreeIterationItem, None, None]:
-            sub_exprs = (
-                local_assigns[name]
-                for name in mask.iter_tree().if_isinstance(oir.ScalarAccess).getattr("name")
-                if name in local_assigns
-            )
-            for elem in (mask, *sub_exprs):
-                yield from elem.iter_tree()
-
-        try:
-            horizontal_mask = next(iter(_iter_tree(node.mask).if_isinstance(oir.HorizontalMask)))
-        except StopIteration:
-            return node
-
-        overlap = mask_overlap_with_extent(horizontal_mask, block_extent)
+        overlap = mask_overlap_with_extent(node.mask, block_extent)
         return NOTHING if overlap is None else node

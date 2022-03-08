@@ -61,3 +61,11 @@ class CartesianOffsetFactory(factory.Factory):
     i = 0
     j = 0
     k = 0
+
+
+class HorizontalMaskFactory(factory.Factory):
+    class Meta:
+        model = common.HorizontalMask
+
+    i = common.HorizontalInterval.full()
+    j = common.HorizontalInterval.full()

@@ -21,7 +21,7 @@ from typing import Any, Dict
 from eve.visitors import NodeVisitor
 from gt4py.definitions import AccessKind, Extent
 from gtc import oir
-from gtc.passes.oir_masks import mask_overlap_with_extent
+from gtc.passes.horizontal_masks import mask_overlap_with_extent
 from gtc.passes.oir_optimizations.utils import compute_horizontal_block_extents
 
 
@@ -49,19 +49,18 @@ class AccessKindComputer(NodeVisitor):
         self.visit(node.right, kind=AccessKind.READ, **kwargs)
         self.visit(node.left, kind=AccessKind.WRITE, **kwargs)
 
+    def visit_HorizontalRestriction(
+        self, node: oir.HorizontalRestriction, *, horizontal_extent: Extent, **kwargs: Any
+    ) -> None:
+        if mask_overlap_with_extent(node.mask, horizontal_extent):
+            self.visit(node.mask, kind=AccessKind.READ, **kwargs)
+            self.visit(node.body, **kwargs)
+
     def visit_MaskStmt(
         self, node: oir.MaskStmt, *, horizontal_extent: Extent, **kwargs: Any
     ) -> None:
-        if masks := node.mask.iter_tree().if_isinstance(oir.HorizontalMask).to_list():
-            # Masks cannot be nested, so this is always valid.
-            mask = masks[0]
-        else:
-            mask = None
-
-        if (mask and mask_overlap_with_extent(mask, horizontal_extent)) or not mask:
-            # Could pass horizontal_extent for more analysis capability.
-            self.visit(node.mask, kind=AccessKind.READ, **kwargs)
-            self.visit(node.body, **kwargs)
+        self.visit(node.mask, kind=AccessKind.READ, **kwargs)
+        self.visit(node.body, **kwargs)
 
     def visit_HorizontalExecution(self, node: oir.HorizontalExecution, **kwargs: Any) -> None:
         self.generic_visit(node, horizontal_extent=kwargs["block_extents"][id(node)], **kwargs)

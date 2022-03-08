@@ -296,10 +296,9 @@ class DefIRToGTIR(IRNodeVisitor):
             for axis in ("I", "J")
         }
 
-        return gtir.FieldIfStmt(
-            cond=gtir.HorizontalMask(**axes),
-            true_branch=gtir.BlockStmt(body=self.visit(node.body)),
-            false_branch=None,
+        return gtir.HorizontalRestriction(
+            cond=common.HorizontalMask(**axes),
+            stmts=self.visit(node.body),
         )
 
     def visit_While(self, node: While) -> gtir.While:

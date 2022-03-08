@@ -145,13 +145,8 @@ class ScalarIfStmt(common.IfStmt[BlockStmt, Expr], Stmt):
         return cond
 
 
-class HorizontalMask(Expr):
-    """Expr to represent a convex portion of the horizontal iteration space."""
-
-    i: common.HorizontalInterval
-    j: common.HorizontalInterval
-    kind = common.ExprKind.FIELD
-    dtype = common.DataType.BOOL
+class HorizontalRestriction(common.HorizontalRestriction[Stmt], Stmt):
+    pass
 
 
 class While(common.While[Stmt, Expr], Stmt):
