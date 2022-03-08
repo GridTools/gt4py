@@ -826,9 +826,9 @@ class HorizontalInterval(Node):
 
     @root_validator
     def check_start_before_end(cls, values: RootValidatorValuesType) -> RootValidatorValuesType:
-        if values["start"] and values["end"] and not (values["start"] < values["end"]):
+        if values["start"] and values["end"] and not (values["start"] <= values["end"]):
             raise ValueError(
-                f"End ({values['end']}) is not strictly after start ({values['start']})"
+                f"End ({values['end']}) is not after or equal to start ({values['start']})"
             )
 
         return values
