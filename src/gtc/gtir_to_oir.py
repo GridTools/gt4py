@@ -92,11 +92,6 @@ class GTIRToOIR(NodeTranslator):
             loc=node.loc,
         )
 
-    def visit_HorizontalRestriction(
-        self, node: gtir.HorizontalRestriction, **kwargs: Any
-    ) -> oir.HorizontalRestriction:
-        return oir.HorizontalRestriction(mask=node.mask, body=self.visit(node.body, **kwargs))
-
     # --- Stmts ---
     def visit_ParAssignStmt(
         self, node: gtir.ParAssignStmt, *, mask: oir.Expr = None, **kwargs: Any
@@ -106,6 +101,19 @@ class GTIRToOIR(NodeTranslator):
             # Wrap inside MaskStmt
             stmt = oir.MaskStmt(body=[stmt], mask=mask, loc=node.loc)
         return stmt
+
+    def visit_HorizontalRestriction(
+        self, node: gtir.HorizontalRestriction, **kwargs: Any
+    ) -> oir.HorizontalRestriction:
+        body_stmts = []
+        for stmt in node.body:
+            stmt_or_stmts = self.visit(stmt, **kwargs)
+            if isinstance(stmt_or_stmts, oir.Stmt):
+                body_stmts.append(stmt_or_stmts)
+            else:
+                body_stmts.extend(stmt_or_stmts)
+
+        return oir.HorizontalRestriction(mask=node.mask, body=body_stmts)
 
     def visit_While(self, node: gtir.While, *, mask: oir.Expr = None, **kwargs: Any):
         body_stmts = []

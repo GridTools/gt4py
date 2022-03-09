@@ -23,6 +23,7 @@ from gtc.passes.oir_optimizations.temporaries import (
 from ...oir_utils import (
     AssignStmtFactory,
     HorizontalExecutionFactory,
+    HorizontalRestrictionFactory,
     StencilFactory,
     TemporaryFactory,
 )
@@ -100,3 +101,24 @@ def test_write_before_read_temporaries_to_scalars():
     assert not isinstance(hexec1.body[0].right, oir.ScalarAccess)
     assert isinstance(hexec1.body[1].left, oir.ScalarAccess)
     assert isinstance(hexec1.body[2].right, oir.ScalarAccess)
+
+
+def test_write_before_read_temporaries_to_scalars_horizontal_restriction():
+    testee = StencilFactory(
+        vertical_loops__0__sections__0__horizontal_executions=[
+            HorizontalExecutionFactory(
+                body=[
+                    AssignStmtFactory(left__name="tmp1"),
+                    HorizontalRestrictionFactory(body=[AssignStmtFactory(left__name="tmp1")]),
+                    AssignStmtFactory(left__name="foo", right__name="tmp1"),
+                ]
+            ),
+        ],
+        declarations=[
+            TemporaryFactory(name="tmp1"),
+        ],
+    )
+    transformed = WriteBeforeReadTemporariesToScalars().visit(testee)
+    hexec0 = transformed.vertical_loops[0].sections[0].horizontal_executions[0]
+    assert len(transformed.declarations) == 1
+    assert len(hexec0.declarations) == 0
