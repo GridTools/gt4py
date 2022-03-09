@@ -26,6 +26,17 @@ from .utils import AccessCollector, collect_symbol_names, symbol_name_creator
 class TemporariesToScalarsBase(NodeTranslator):
     contexts = (SymbolTableTrait.symtable_merger,)
 
+    def _assigned_in_horizontal_restrictions(self, stencil: oir.Stencil) -> Set[str]:
+        assigned_in_hrestricts: Set[str] = set()
+        for horizontal_restriction in stencil.iter_tree().if_isinstance(oir.HorizontalRestriction):
+            assigned_in_hrestricts |= {
+                ref.name
+                for ref in horizontal_restriction.iter_tree()
+                .if_isinstance(oir.AssignStmt)
+                .getattr("left")
+            }
+        return assigned_in_hrestricts
+
     def visit_FieldAccess(
         self, node: oir.FieldAccess, *, tmps_name_map: Dict[str, str], **kwargs: Any
     ) -> Union[oir.FieldAccess, oir.ScalarAccess]:
@@ -101,6 +112,10 @@ class LocalTemporariesToScalars(TemporariesToScalarsBase):
     2. Replaces corresponding FieldAccess nodes by ScalarAccess nodes.
     3. Removes matching temporaries from VerticalLoop declarations.
     4. Add matching temporaries to HorizontalExecution declarations.
+
+    Note that temporaries used in horizontal regions in a single horizontal execution
+    may not be scalarized.
+
     """
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> oir.Stencil:
@@ -118,12 +133,21 @@ class LocalTemporariesToScalars(TemporariesToScalarsBase):
             ),
             collections.Counter(),
         )
-        local_tmps = {tmp for tmp, count in counts.items() if count == 1}
+
+        assigned_in_hrestricts = self._assigned_in_horizontal_restrictions(node)
+        local_tmps = {
+            tmp for tmp, count in counts.items() if count == 1 and tmp not in assigned_in_hrestricts
+        }
         return super().visit_Stencil(node, tmps_to_replace=local_tmps, **kwargs)
 
 
 class WriteBeforeReadTemporariesToScalars(TemporariesToScalarsBase):
-    """Replaces temporay fields that are always written before read by scalars."""
+    """Replaces temporay fields that are always written before read by scalars.
+
+    Note that temporaries used in horizontal regions in a single horizontal execution
+    may not be scalarized.
+
+    """
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> oir.Stencil:
         write_before_read_tmps = {
@@ -149,4 +173,5 @@ class WriteBeforeReadTemporariesToScalars(TemporariesToScalarsBase):
                 tmp for tmp in write_before_read_tmps if write_before_read(tmp)
             }
 
-        return super().visit_Stencil(node, tmps_to_replace=write_before_read_tmps, **kwargs)
+        tmps_to_replace = write_before_read_tmps - self._assigned_in_horizontal_restrictions(node)
+        return super().visit_Stencil(node, tmps_to_replace=tmps_to_replace, **kwargs)
