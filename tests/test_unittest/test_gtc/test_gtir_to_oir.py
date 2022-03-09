@@ -23,6 +23,7 @@ from gtc.gtir_to_oir import GTIRToOIR
 from .gtir_utils import (
     FieldIfStmtFactory,
     HorizontalMaskFactory,
+    HorizontalRestrictionFactory,
     ParAssignStmtFactory,
     ScalarIfStmtFactory,
     StencilFactory,
@@ -86,8 +87,8 @@ def test_visit_ScalarIfStmt():
     GTIRToOIR().visit(testee, ctx=GTIRToOIR.Context())
 
 
-def test_visit_FieldIf_HorizontalMask():
-    testee = FieldIfStmtFactory(cond=HorizontalMaskFactory())
+def test_visit_HorizontalRestriction_HorizontalMask():
+    testee = HorizontalRestrictionFactory(mask=HorizontalMaskFactory())
     GTIRToOIR().visit(testee, ctx=GTIRToOIR.Context())
 
 
