@@ -21,8 +21,8 @@ from gtc.gtcpp.oir_to_gtcpp import OIRToGTCpp
 
 from .oir_utils import (
     AssignStmtFactory,
+    HorizontalRestrictionFactory,
     LiteralFactory,
-    MaskStmtFactory,
     StencilFactory,
     VariableKOffsetFactory,
     VerticalLoopFactory,
@@ -37,28 +37,28 @@ def test_horizontal_mask():
     testee = StencilFactory(
         vertical_loops__0__sections__0__horizontal_executions__0__body=[
             AssignStmtFactory(left__name=out_name, right__name=in_name),
-            MaskStmtFactory(
+            HorizontalRestrictionFactory(
                 mask=HorizontalMask(
                     i=HorizontalInterval.at_endpt(LevelMarker.START, 0),
                     j=HorizontalInterval.full(),
                 ),
                 body=[AssignStmtFactory(left__name=out_name, right=LiteralFactory())],
             ),
-            MaskStmtFactory(
+            HorizontalRestrictionFactory(
                 mask=HorizontalMask(
                     i=HorizontalInterval.at_endpt(LevelMarker.END, 0),
                     j=HorizontalInterval.full(),
                 ),
                 body=[AssignStmtFactory(left__name=out_name, right=LiteralFactory())],
             ),
-            MaskStmtFactory(
+            HorizontalRestrictionFactory(
                 mask=HorizontalMask(
                     i=HorizontalInterval.full(),
                     j=HorizontalInterval.at_endpt(LevelMarker.START, 0),
                 ),
                 body=[AssignStmtFactory(left__name=out_name, right=LiteralFactory())],
             ),
-            MaskStmtFactory(
+            HorizontalRestrictionFactory(
                 mask=HorizontalMask(
                     i=HorizontalInterval.full(),
                     j=HorizontalInterval.at_endpt(LevelMarker.END, 0),
