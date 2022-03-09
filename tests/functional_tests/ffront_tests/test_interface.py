@@ -67,22 +67,6 @@ LIFT = itir.SymRef(id=lift.fun.__name__)
 
 
 # --- Parsing ---
-def test_invalid_syntax_error_empty_return():
-    """Field operator syntax errors point to the file, line and column."""
-
-    def wrong_syntax(inp: Field[..., "float64"]):
-        return
-
-    with pytest.raises(
-        FieldOperatorSyntaxError,
-        match=(
-            r"Invalid Field Operator Syntax: "
-            r"Empty return not allowed \(test_interface.py, line 74\)"
-        ),
-    ):
-        _ = FieldOperatorParser.apply_to_function(wrong_syntax)
-
-
 def test_untyped_arg():
     """Field operator parameters must be type annotated."""
 
@@ -214,6 +198,15 @@ def test_bool_or():
         match=(r"`or` operator not allowed!"),
     ):
         _ = FieldOperatorParser.apply_to_function(bool_or)
+
+
+def test_shift():
+    Offset = 0  # for parsing it doesn't matter what this object is
+
+    def shifts(a: Field[..., "bool"]):
+        return a(Offset[1]) + a(Offset[-1])  # TODO we should test these cases separate
+
+    _ = FieldOperatorParser.apply_to_function(shifts)
 
 
 # --- External symbols ---

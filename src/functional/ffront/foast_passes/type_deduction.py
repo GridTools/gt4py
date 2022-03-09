@@ -215,6 +215,11 @@ class FieldOperatorTypeDeduction(NodeTranslator):
         **kwargs,
     ) -> ct.SymbolType:
         left, right = TypeInfo(left_type), TypeInfo(right_type)
+
+        # TODO decide on if we support non-strict type checking
+        if left.type is None or right.type is None:
+            return None
+
         if (
             left.is_arithmetic_compatible
             and right.is_arithmetic_compatible
