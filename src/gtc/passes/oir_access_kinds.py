@@ -56,9 +56,7 @@ class AccessKindComputer(NodeVisitor):
             self.visit(node.mask, kind=AccessKind.READ, **kwargs)
             self.visit(node.body, **kwargs)
 
-    def visit_MaskStmt(
-        self, node: oir.MaskStmt, *, horizontal_extent: Extent, **kwargs: Any
-    ) -> None:
+    def visit_MaskStmt(self, node: oir.MaskStmt, **kwargs: Any) -> None:
         self.visit(node.mask, kind=AccessKind.READ, **kwargs)
         self.visit(node.body, **kwargs)
 
