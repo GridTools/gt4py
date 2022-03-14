@@ -94,7 +94,7 @@ class GTCppCodegen(codegen.TemplatedGenerator):
     Positional = as_fmt("auto {name} = positional<dim::{axis_name}>();")
 
     AxisLength = as_fmt(
-        "auto {name} = gridtools::stencil::make_global_parameter(static_cast<gridtools::int_t>(domain[{axis}]));"
+        "auto {name} = make_global_parameter(static_cast<gridtools::int_t>(domain[{axis}]));"
     )
 
     BinaryOp = as_fmt("({left} {op} {right})")
