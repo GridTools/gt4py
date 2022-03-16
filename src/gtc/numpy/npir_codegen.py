@@ -369,8 +369,8 @@ class NpirCodegen(TemplatedGenerator):
         textwrap.dedent(
             """\
             # --- begin horizontal block --
-            i, I = _di_ + {{ -mlower[0] }}, _dI_ + {{ upper[0] }}
-            j, J = _dj_ + {{ -mlower[1] }}, _dJ_ + {{ upper[1] }}
+            i, I = _di_ - {{ -mlower[0] }}, _dI_ + {{ upper[0] }}
+            j, J = _dj_ - {{ -mlower[1] }}, _dJ_ + {{ upper[1] }}
             {% for decl in declarations %}{{ decl }}
             {% endfor %}
 
