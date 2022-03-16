@@ -100,8 +100,8 @@ ORIGIN_CORRECTED_VIEW_CLASS = textwrap.dedent(
             self.offsets = offsets
 
         @classmethod
-        def empty(cls, shape, offset = (0, 0, 0)):
-            return cls(np.empty(shape), offset, (True, True, True))
+        def empty(cls, shape, dtype, offset):
+            return cls(np.empty(shape, dtype=dtype), offset, (True, True, True))
 
         def shim_key(self, key):
             new_args = []
@@ -157,11 +157,11 @@ class NpirCodegen(TemplatedGenerator):
     )
 
     TemporaryDecl = FormatTemplate(
-        "{name} = Field.empty((_dI_ + {padding[0]}, _dJ_ + {padding[1]}, _dK_), ({', '.join(offset)}, 0))"
+        "{name} = Field.empty((_dI_ + {padding[0]}, _dJ_ + {padding[1]}, _dK_), {dtype}, ({', '.join(offset)}, 0))"
     )
 
-    ScalarDecl = FormatTemplate(
-        "{name} = Field.empty((_dI_ + {upper[0] + mlower[0]}, _dJ_ + {upper[1] + mlower[1]}, {ksize}), ({', '.join(str(l) for l in mlower)}, 0))"
+    LocalScalarDecl = FormatTemplate(
+        "{name} = Field.empty((_dI_ + {upper[0] + mlower[0]}, _dJ_ + {upper[1] + mlower[1]}, _dK_), {dtype}, ({', '.join(str(l) for l in mlower)}, 0))"
     )
 
     VarKOffset = FormatTemplate("lk + {k}")
@@ -335,7 +335,6 @@ class NpirCodegen(TemplatedGenerator):
         return self.generic_visit(
             node,
             is_serial=is_serial,
-            ksize="_dK_" if not is_serial else "1",
             has_variable_k=has_variable_k,
             **kwargs,
         )

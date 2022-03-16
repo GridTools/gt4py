@@ -51,7 +51,7 @@ class OirToNpir(NodeTranslator):
         return npir.ScalarDecl(name=node.name, dtype=node.dtype)
 
     def visit_LocalScalar(self, node: oir.LocalScalar, **kwargs: Any) -> npir.ScalarDecl:
-        return npir.ScalarDecl(name=node.name, dtype=node.dtype)
+        return npir.LocalScalarDecl(name=node.name, dtype=node.dtype)
 
     def visit_Temporary(
         self, node: oir.Temporary, *, field_extents: Dict[str, Extent], **kwargs: Any

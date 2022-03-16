@@ -42,7 +42,17 @@ class Decl(eve.Node):
 class ScalarDecl(Decl):
     """Scalar per grid point.
 
-    Used for API scalar parameters and local scalars. Local scalars never have data_dims.
+    Used for API scalar parameters. Local scalars never have data_dims.
+
+    """
+
+    pass
+
+
+class LocalScalarDecl(Decl):
+    """Scalar per grid point.
+
+    Used for API scalar parameters. Local scalars never have data_dims.
 
     """
 
@@ -205,7 +215,7 @@ class While(common.While[Stmt, Expr], Stmt):
 
 # --- Control Flow ---
 class HorizontalBlock(common.LocNode, eve.SymbolTableTrait):
-    declarations: List[ScalarDecl]
+    declarations: List[LocalScalarDecl]
     body: List[Stmt]
     extent: HorizontalExtent
 
