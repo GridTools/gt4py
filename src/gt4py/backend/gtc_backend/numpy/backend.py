@@ -29,7 +29,6 @@ from gtc.numpy import npir
 from gtc.numpy.npir_codegen import NpirCodegen
 from gtc.numpy.oir_to_npir import OirToNpir
 from gtc.passes.oir_optimizations.caches import (
-    FillFlushToLocalKCaches,
     IJCacheDetection,
     KCacheDetection,
     PruneKCacheFills,
@@ -140,7 +139,6 @@ class GTCNumpyBackend(BaseBackend, CLIBackendMixin):
                     KCacheDetection,
                     PruneKCacheFills,
                     PruneKCacheFlushes,
-                    FillFlushToLocalKCaches,
                 ]
             ),
         )
