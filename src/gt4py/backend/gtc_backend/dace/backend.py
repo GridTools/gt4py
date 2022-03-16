@@ -31,7 +31,6 @@ from gtc.dace.oir_to_dace import OirSDFGBuilder
 from gtc.dace.utils import array_dimensions
 from gtc.passes.gtir_k_boundary import compute_k_boundary
 from gtc.passes.gtir_pipeline import GtirPipeline
-from gtc.passes.oir_optimizations.caches import FillFlushToLocalKCaches
 from gtc.passes.oir_optimizations.inlining import MaskInlining
 from gtc.passes.oir_optimizations.mask_stmt_merging import MaskStmtMerging
 from gtc.passes.oir_optimizations.utils import compute_fields_extents
@@ -53,7 +52,7 @@ class GTCDaCeExtGenerator:
         base_oir = gtir_to_oir.GTIRToOIR().visit(gtir)
         oir_pipeline = self.backend.builder.options.backend_opts.get(
             "oir_pipeline",
-            DefaultPipeline(skip=[MaskStmtMerging, MaskInlining, FillFlushToLocalKCaches]),
+            DefaultPipeline(skip=[MaskStmtMerging, MaskInlining]),
         )
         oir = oir_pipeline.run(base_oir)
         sdfg = OirSDFGBuilder().visit(oir)
