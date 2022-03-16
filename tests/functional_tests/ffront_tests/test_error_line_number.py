@@ -4,7 +4,7 @@ from functional.common import Field
 from functional.ffront.func_to_foast import FieldOperatorParser, FieldOperatorSyntaxError
 
 
-# NOTE: This test tests includes the current filename and the line number of the marked statement
+# NOTE: This test is sensitive to filename and the line number of the marked statement
 
 
 def test_invalid_syntax_error_empty_return():
