@@ -216,7 +216,7 @@ class FieldOperatorTypeDeduction(NodeTranslator):
     ) -> ct.SymbolType:
         left, right = TypeInfo(left_type), TypeInfo(right_type)
 
-        # TODO decide on if we support non-strict type checking
+        # if one type is `None` (not deduced, generic), we propagate `None`
         if left.type is None or right.type is None:
             return None
 
