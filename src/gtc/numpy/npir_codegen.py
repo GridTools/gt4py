@@ -161,7 +161,7 @@ class NpirCodegen(TemplatedGenerator):
     )
 
     LocalScalarDecl = FormatTemplate(
-        "{name} = Field.empty((_dI_ + {upper[0] + mlower[0]}, _dJ_ + {upper[1] + mlower[1]}, {ksize}), {dtype}, ({', '.join(str(l) for l in mlower)}, 0))"
+        "{name} = Field.empty((_dI_ + {upper[0] + lower[0]}, _dJ_ + {upper[1] + lower[1]}, {ksize}), {dtype}, ({', '.join(str(l) for l in lower)}, 0))"
     )
 
     VarKOffset = FormatTemplate("lk + {k}")
@@ -363,18 +363,16 @@ class NpirCodegen(TemplatedGenerator):
     def visit_HorizontalBlock(
         self, node: npir.HorizontalBlock, **kwargs: Any
     ) -> Union[str, Collection[str]]:
-        mlower = (node.extent[0][0], node.extent[1][0])
+        lower = (-node.extent[0][0], -node.extent[1][0])
         upper = (node.extent[0][1], node.extent[1][1])
-        return self.generic_visit(
-            node, mlower=mlower, upper=upper, ctx=self.BlockContext(), **kwargs
-        )
+        return self.generic_visit(node, lower=lower, upper=upper, ctx=self.BlockContext(), **kwargs)
 
     HorizontalBlock = JinjaTemplate(
         textwrap.dedent(
             """\
             # --- begin horizontal block --
-            i, I = _di_ - {{ -mlower[0] }}, _dI_ + {{ upper[0] }}
-            j, J = _dj_ - {{ -mlower[1] }}, _dJ_ + {{ upper[1] }}
+            i, I = _di_ - {{ lower[0] }}, _dI_ + {{ upper[0] }}
+            j, J = _dj_ - {{ lower[1] }}, _dJ_ + {{ upper[1] }}
             {% for decl in declarations %}{{ decl }}
             {% endfor %}
 
