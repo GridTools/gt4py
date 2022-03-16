@@ -161,7 +161,7 @@ class NpirCodegen(TemplatedGenerator):
     )
 
     LocalScalarDecl = FormatTemplate(
-        "{name} = Field.empty((_dI_ + {upper[0] + mlower[0]}, _dJ_ + {upper[1] + mlower[1]}, _dK_), {dtype}, ({', '.join(str(l) for l in mlower)}, 0))"
+        "{name} = Field.empty((_dI_ + {upper[0] + mlower[0]}, _dJ_ + {upper[1] + mlower[1]}, {ksize}), {dtype}, ({', '.join(str(l) for l in mlower)}, 0))"
     )
 
     VarKOffset = FormatTemplate("lk + {k}")
@@ -199,6 +199,8 @@ class NpirCodegen(TemplatedGenerator):
         **kwargs: Any,
     ) -> Union[str, Collection[str]]:
         args = _make_slice_access((0, 0, 0), is_serial, horizontal_mask)
+        if is_serial:
+            args[2] = ":"
         return f"{node.name}[{', '.join(args)}]"
 
     ParamAccess = FormatTemplate("{name}")
@@ -336,6 +338,8 @@ class NpirCodegen(TemplatedGenerator):
             node,
             is_serial=is_serial,
             has_variable_k=has_variable_k,
+            ksize="_dK_" if not is_serial else "1",
+            lk_stmt="lk = " + ("k_" if is_serial else "np.arange(k, K)[np.newaxis, np.newaxis, :]"),
             **kwargs,
         )
 
@@ -347,7 +351,7 @@ class NpirCodegen(TemplatedGenerator):
             {%- if direction %}
             {{ direction }}{% set body_indent = 4 %}{% endif %}
             {% if has_variable_k %}
-            lk = {% if is_serial %}k_{% else %}np.arange(k, K)[np.newaxis, np.newaxis, :]{% endif %}
+            {{ lk_stmt | indent(body_indent, first=True) }}
             {% endif -%}
             {% for hblock in body %}
             {{ hblock | indent(body_indent, first=True) }}
