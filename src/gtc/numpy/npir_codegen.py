@@ -54,10 +54,16 @@ def _slice_string(ch: str, offset: int, interval: Tuple[common.AxisBound, common
 
 def _make_slice_access(
     offset: Tuple[Optional[int], Optional[int], Union[str, Optional[int]]],
-    interval: npir.HorizontalMask,
     is_serial: bool,
+    interval: Optional[npir.HorizontalMask] = None,
 ) -> List[str]:
     axes: List[str] = []
+
+    if interval is None:
+        interval = npir.HorizontalMask(
+            i=common.HorizontalInterval.compute_domain(),
+            j=common.HorizontalInterval.compute_domain(),
+        )
 
     if offset[0] is not None:
         axes.append(_slice_string("i", offset[0], (interval.i.start, interval.i.end)))
@@ -154,6 +160,10 @@ class NpirCodegen(TemplatedGenerator):
         "{name} = Field.empty((_dI_ + {padding[0]}, _dJ_ + {padding[1]}, _dK_), ({', '.join(offset)}, 0))"
     )
 
+    ScalarDecl = FormatTemplate(
+        "{name} = Field.empty((_dI_ + {upper[0] + mlower[0]}, _dJ_ + {upper[1] + mlower[1]}, {ksize}), ({', '.join(str(l) for l in mlower)}, 0))"
+    )
+
     VarKOffset = FormatTemplate("lk + {k}")
 
     def visit_FieldSlice(self, node: npir.FieldSlice, **kwargs: Any) -> Union[str, Collection[str]]:
@@ -173,21 +183,25 @@ class NpirCodegen(TemplatedGenerator):
                 tuple(off if has_dim else None for has_dim, off in zip(dimensions, offsets)),
             )
 
-        horizontal_mask = kwargs.get("horizontal_mask", None)
-        if horizontal_mask is None:
-            horizontal_mask = npir.HorizontalMask(
-                i=common.HorizontalInterval.compute_domain(),
-                j=common.HorizontalInterval.compute_domain(),
-            )
-
-        args = _make_slice_access(offsets, horizontal_mask, kwargs["is_serial"])
+        args = _make_slice_access(offsets, kwargs["is_serial"], kwargs.get("horizontal_mask"))
         data_index = self.visit(node.data_index, inside_slice=True, **kwargs)
 
         access_slice = ", ".join(args + list(data_index))
 
         return f"{node.name}[{access_slice}]"
 
-    LocalScalarAccess = ParamAccess = FormatTemplate("{name}")
+    def visit_LocalScalarAccess(
+        self,
+        node: npir.LocalScalarAccess,
+        *,
+        is_serial: bool,
+        horizontal_mask: Optional[npir.HorizontalMask] = None,
+        **kwargs: Any,
+    ) -> Union[str, Collection[str]]:
+        args = _make_slice_access((0, 0, 0), is_serial, horizontal_mask)
+        return f"{node.name}[{', '.join(args)}]"
+
+    ParamAccess = FormatTemplate("{name}")
 
     def visit_DataType(self, node: common.DataType, **kwargs: Any) -> Union[str, Collection[str]]:
         return f"np.{node.name.lower()}"
@@ -318,13 +332,13 @@ class NpirCodegen(TemplatedGenerator):
     def visit_VerticalPass(self, node: npir.VerticalPass, **kwargs):
         is_serial = node.direction != common.LoopOrder.PARALLEL
         has_variable_k = bool(node.iter_tree().if_isinstance(npir.VarKOffset).to_list())
-        if has_variable_k:
-            lk_stmt = "lk = {}".format(
-                "k_" if is_serial else "np.arange(k, K)[np.newaxis, np.newaxis, :]"
-            )
-        else:
-            lk_stmt = ""
-        return self.generic_visit(node, is_serial=is_serial, lk_stmt=lk_stmt, **kwargs)
+        return self.generic_visit(
+            node,
+            is_serial=is_serial,
+            ksize="_dK_" if not is_serial else "1",
+            has_variable_k=has_variable_k,
+            **kwargs,
+        )
 
     VerticalPass = JinjaTemplate(
         textwrap.dedent(
@@ -333,7 +347,10 @@ class NpirCodegen(TemplatedGenerator):
             k, K = {{ lower }}, {{ upper }}
             {%- if direction %}
             {{ direction }}{% set body_indent = 4 %}{% endif %}
-            {{ lk_stmt | indent(body_indent, first=True) }}{% for hblock in body %}
+            {% if has_variable_k %}
+            lk = {% if is_serial %}k_{% else %}np.arange(k, K)[np.newaxis, np.newaxis, :]{% endif %}
+            {% endif -%}
+            {% for hblock in body %}
             {{ hblock | indent(body_indent, first=True) }}
             {% endfor %}# --- end vertical block ---
             """
@@ -343,16 +360,20 @@ class NpirCodegen(TemplatedGenerator):
     def visit_HorizontalBlock(
         self, node: npir.HorizontalBlock, **kwargs: Any
     ) -> Union[str, Collection[str]]:
-        lower = [-node.extent[0][0], -node.extent[1][0]]
-        upper = [node.extent[0][1], node.extent[1][1]]
-        return self.generic_visit(node, lower=lower, upper=upper, ctx=self.BlockContext(), **kwargs)
+        mlower = (node.extent[0][0], node.extent[1][0])
+        upper = (node.extent[0][1], node.extent[1][1])
+        return self.generic_visit(
+            node, mlower=mlower, upper=upper, ctx=self.BlockContext(), **kwargs
+        )
 
     HorizontalBlock = JinjaTemplate(
         textwrap.dedent(
             """\
             # --- begin horizontal block --
-            i, I = _di_ - {{ lower[0] }}, _dI_ + {{ upper[0] }}
-            j, J = _dj_ - {{ lower[1] }}, _dJ_ + {{ upper[1] }}
+            i, I = _di_ + {{ -mlower[0] }}, _dI_ + {{ upper[0] }}
+            j, J = _dj_ + {{ -mlower[1] }}, _dJ_ + {{ upper[1] }}
+            {% for decl in declarations %}{{ decl }}
+            {% endfor %}
 
             {% for stmt in body %}{{ stmt }}
             {% endfor -%}
