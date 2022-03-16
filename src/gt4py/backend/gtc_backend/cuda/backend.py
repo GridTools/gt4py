@@ -57,7 +57,6 @@ class GTCCudaExtGenerator:
         oir = FillFlushToLocalKCaches().visit(oir)
         cuir = oir_to_cuir.OIRToCUIR().visit(oir)
         cuir = kernel_fusion.FuseKernels().visit(cuir)
-        cuir = extent_analysis.ComputeExtents().visit(cuir)
         cuir = extent_analysis.CacheExtents().visit(cuir)
         format_source = self.backend.builder.options.format_source
         implementation = cuir_codegen.CUIRCodegen.apply(cuir, format_source=format_source)
