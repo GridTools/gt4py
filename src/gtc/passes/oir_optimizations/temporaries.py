@@ -163,6 +163,9 @@ def _iter_stmt_pairs(stencil: oir.Stencil, reverse: bool = False):
             elif isinstance(stmt, oir.MaskStmt):
                 pairs.append((None, stmt.mask))
                 pairs.extend(_collect_stmts_pairs_rev(stmt.body))
+            elif isinstance(stmt, oir.While):
+                pairs.append((None, stmt.cond))
+                pairs.extend(_collect_stmts_pairs_rev(stmt.body))
             else:
                 raise TypeError("Unrecognized oir.Stmt subtype")
         return pairs
@@ -249,8 +252,6 @@ def _remap_temporaries(
                 in_use_allocated.add(lval_symbol)
                 symbol_to_temp[lval_symbol] = lval_symbol
                 # lhs.name is up to date
-        else:
-            pass
 
         temps_read_after = {
             symbol_to_temp[name] for name in symbol_reads_after[id(rhs)] if name in symbol_to_temp
