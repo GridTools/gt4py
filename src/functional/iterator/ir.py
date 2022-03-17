@@ -86,35 +86,35 @@ class FencilDefinition(Node, SymbolTableTrait):
     closures: List[StencilClosure]
 
 
+BUILTIN_FUNCTIONS = [
+    "domain",
+    "named_range",
+    "lift",
+    "is_none",
+    "make_tuple",
+    "tuple_get",
+    "reduce",
+    "deref",
+    "shift",
+    "scan",
+    "plus",
+    "minus",
+    "multiplies",
+    "divides",
+    "eq",
+    "less",
+    "greater",
+    "if_",
+    "not_",
+    "and_",
+    "or_",
+]
+
+
 class Program(Node, SymbolTableTrait):
     function_definitions: List[FunctionDefinition]
     fencil_definitions: List[FencilDefinition]
     setqs: List[Setq]
 
-    builtin_functions = list(
-        Sym(id=name)
-        for name in [
-            "domain",
-            "named_range",
-            "lift",
-            "is_none",
-            "make_tuple",
-            "tuple_get",
-            "reduce",
-            "deref",
-            "shift",
-            "scan",
-            "plus",
-            "minus",
-            "multiplies",
-            "divides",
-            "eq",
-            "less",
-            "greater",
-            "if_",
-            "not_",
-            "and_",
-            "or_",
-        ]
-    )
+    builtin_functions = [Sym(id=name) for name in BUILTIN_FUNCTIONS]
     _validate_symbol_refs = validate_symbol_refs()
