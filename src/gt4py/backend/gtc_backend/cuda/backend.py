@@ -150,7 +150,7 @@ class GTCCudaBackend(BaseGTBackend, CLIBackendMixin):
     USE_LEGACY_TOOLCHAIN = False
 
     def generate_extension(self, **kwargs: Any) -> Tuple[str, str]:
-        return self.make_extension(gt_version=2, ir=self.builder.definition_ir, uses_cuda=True)
+        return self.make_extension(ir=self.builder.definition_ir, uses_cuda=True)
 
     def generate(self) -> Type["StencilObject"]:
         self.check_options(self.builder.options)

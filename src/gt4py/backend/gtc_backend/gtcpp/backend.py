@@ -26,7 +26,6 @@ from gtc.gtcpp import gtcpp, gtcpp_codegen
 from gtc.gtcpp.oir_to_gtcpp import OIRToGTCpp
 from gtc.gtir_to_oir import GTIRToOIR
 from gtc.passes.gtir_pipeline import GtirPipeline
-from gtc.passes.oir_optimizations.caches import FillFlushToLocalKCaches
 from gtc.passes.oir_pipeline import DefaultPipeline
 
 from ..base import (
@@ -57,7 +56,7 @@ class GTCGTExtGenerator:
         ir = GtirPipeline(ir).full()
         base_oir = GTIRToOIR().visit(ir)
         oir_pipeline = self.backend.builder.options.backend_opts.get(
-            "oir_pipeline", DefaultPipeline(skip=[FillFlushToLocalKCaches])
+            "oir_pipeline", DefaultPipeline()
         )
         oir = oir_pipeline.run(base_oir)
         gtcpp = OIRToGTCpp().visit(oir)
@@ -142,7 +141,7 @@ class GTCGTBaseBackend(BaseGTBackend, CLIBackendMixin):
     USE_LEGACY_TOOLCHAIN = False
 
     def _generate_extension(self, uses_cuda: bool) -> Tuple[str, str]:
-        return self.make_extension(gt_version=2, ir=self.builder.gtir, uses_cuda=uses_cuda)
+        return self.make_extension(ir=self.builder.gtir, uses_cuda=uses_cuda)
 
     def generate(self) -> Type["StencilObject"]:
         self.check_options(self.builder.options)
