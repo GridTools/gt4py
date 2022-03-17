@@ -183,14 +183,13 @@ def test_vector_assign(left, is_serial: bool) -> None:
     )
     left_str, right_str = result.split(" = ")
 
-    k_str_left = "k_:k_ + 1" if is_serial else "k:K"
+    if isinstance(left, npir.FieldSlice):
+        k_str_left = "k_:k_ + 1" if is_serial else "k:K"
+    else:
+        k_str_left = ":" if is_serial else "k:K"
     k_str_right = "k_ - 1:k_" if is_serial else "k - 1:K - 1"
 
-    if isinstance(left, npir.FieldSlice):
-        assert left_str == f"left[i:I, j:J, {k_str_left}]"
-    else:
-        assert left_str == "left"
-
+    assert left_str == f"left[i:I, j:J, {k_str_left}]"
     assert right_str == f"right[i:I, j:J, {k_str_right}]"
 
 
@@ -201,9 +200,27 @@ def test_field_definition() -> None:
 
 
 def test_temp_definition() -> None:
-    result = NpirCodegen().visit(TemporaryDeclFactory(name="a", offset=(1, 2), padding=(3, 4)))
+    result = NpirCodegen().visit(
+        TemporaryDeclFactory(name="a", offset=(1, 2), padding=(3, 4), dtype=common.DataType.FLOAT32)
+    )
     print(result)
-    assert result == "a = Field.empty((_dI_ + 3, _dJ_ + 4, _dK_), (1, 2, 0))"
+    assert result == "a = Field.empty((_dI_ + 3, _dJ_ + 4, _dK_), np.float32, (1, 2, 0))"
+
+
+def test_local_scalar_decl() -> None:
+    result = NpirCodegen().visit(
+        HorizontalBlockFactory(
+            declarations=[npir.LocalScalarDecl(name="scalar", dtype=common.DataType.FLOAT32)],
+            body=[],
+            extent=((-1, 1), (-1, 1)),
+        ),
+        ksize="_dK_",
+    )
+    print(result)
+    assert (
+        "scalar = Field.empty((_dI_ + 2, _dJ_ + 2, _dK_), np.float32, (1, 1, 0))"
+        in result.split("\n")
+    )
 
 
 def test_vector_arithmetic() -> None:
@@ -251,7 +268,12 @@ def test_assign_with_mask_local() -> None:
         symtable={"tmp": ScalarDeclFactory(name="tmp", dtype=common.DataType.INT32)},
     )
     print(result)
-    assert re.match(r"tmp = np.where\(mask1.*, np.int32\(\)\)", result) is not None
+    assert (
+        re.match(
+            r"tmp\[i:I, j:J, k:K\] = np.where\(mask1\[i:I, j:J, k:K\], .*, np.int32\(\)\)", result
+        )
+        is not None
+    )
 
 
 def test_horizontal_block() -> None:
