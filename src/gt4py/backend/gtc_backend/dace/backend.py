@@ -24,6 +24,7 @@ from gt4py import gt_src_manager
 from gt4py.backend.base import CLIBackendMixin, register
 from gt4py.backend.gtc_backend.base import (
     BaseGTBackend,
+    GeneratorClass,
     make_x86_layout_map,
     x86_is_compatible_layout,
 )
@@ -43,7 +44,7 @@ if TYPE_CHECKING:
     from gt4py.stencil_object import StencilObject
 
 
-class GTCDaCeExtGenerator:
+class GTCDaCeExtGenerator(GeneratorClass):
     def __init__(self, class_name, module_name, backend):
         self.class_name = class_name
         self.module_name = module_name

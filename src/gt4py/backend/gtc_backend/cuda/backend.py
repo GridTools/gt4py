@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple, Type
 from eve import codegen
 from gt4py import gt_src_manager
 from gt4py.backend.base import CLIBackendMixin, register
+from gt4py.backend.gtc_backend.base import GeneratorClass
 from gt4py.backend.gtc_backend.common import bindings_main_template, pybuffer_to_sid
 from gtc import gtir
 from gtc.common import DataType
@@ -42,7 +43,7 @@ if TYPE_CHECKING:
     from gt4py.stencil_object import StencilObject
 
 
-class GTCCudaExtGenerator:
+class GTCCudaExtGenerator(GeneratorClass):
     def __init__(self, class_name, module_name, backend):
         self.class_name = class_name
         self.module_name = module_name

@@ -675,6 +675,13 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
 
 
 class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
+    """
+    Legacy backend version of the BaseGTBackend.
+
+    NOTE: This is a different version of gt4py.backend.gtc_backend.base.BaseGTBackend
+    and should be removed in a further refactor.
+
+    """
 
     GT_BACKEND_OPTS = {
         "add_profile_info": {"versioning": True, "type": bool},
