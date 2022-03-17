@@ -39,11 +39,11 @@ if TYPE_CHECKING:
     from gt4py.storage.storage import Storage
 
 
-def iir_is_not_emtpy(implementation_ir: gt_ir.StencilImplementation) -> bool:
+def iir_is_not_empty(implementation_ir: gt_ir.StencilImplementation) -> bool:
     return bool(implementation_ir.multi_stages)
 
 
-def gtir_is_not_emtpy(pipeline: GtirPipeline) -> bool:
+def gtir_is_not_empty(pipeline: GtirPipeline) -> bool:
     node = pipeline.full()
     return bool(node.iter_tree().if_isinstance(gtir.ParAssignStmt).to_list())
 
@@ -87,8 +87,8 @@ class PyExtModuleGenerator(BaseModuleGenerator):
         if self.pyext_module_name is None:
             return False
         if self.builder.backend.USE_LEGACY_TOOLCHAIN:
-            return iir_is_not_emtpy(self.builder.implementation_ir)
-        return gtir_is_not_emtpy(self.builder.gtir_pipeline)
+            return iir_is_not_empty(self.builder.implementation_ir)
+        return gtir_is_not_empty(self.builder.gtir_pipeline)
 
     def generate_imports(self) -> str:
         source = ["from gt4py import utils as gt_utils"]
