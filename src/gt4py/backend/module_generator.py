@@ -17,7 +17,6 @@
 import abc
 import numbers
 import os
-import textwrap
 from dataclasses import dataclass, field
 from inspect import getdoc
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set
@@ -25,7 +24,6 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set
 import jinja2
 import numpy
 
-from gt4py import ir as gt_ir
 from gt4py import utils as gt_utils
 from gt4py.definitions import AccessKind, Boundary, DomainInfo, FieldInfo, ParameterInfo
 from gtc import gtir, gtir_to_oir
@@ -324,131 +322,3 @@ class BaseModuleGenerator(abc.ABC):
     def generate_post_run(self) -> str:
         """Additional code to be run just after the run method (implementation) is called."""
         return ""
-
-
-def iir_is_not_emtpy(implementation_ir: gt_ir.StencilImplementation) -> bool:
-    return bool(implementation_ir.multi_stages)
-
-
-def gtir_is_not_emtpy(pipeline: GtirPipeline) -> bool:
-    node = pipeline.full()
-    return bool(node.iter_tree().if_isinstance(gtir.ParAssignStmt).to_list())
-
-
-def iir_has_effect(implementation_ir: gt_ir.StencilImplementation) -> bool:
-    return bool(implementation_ir.has_effect)
-
-
-def gtir_has_effect(pipeline: GtirPipeline) -> bool:
-    return True
-
-
-class PyExtModuleGenerator(BaseModuleGenerator):
-    """
-    Module Generator for use with backends that generate c++ python extensions.
-
-    Will either use ImplementationIR or GTIR depending on the backend's USE_LEGACY_TOOLCHAIN
-    class attribute. Using with other IRs requires subclassing and overriding ``_is_not_empty()``
-    and ``_has_effect()`` methods.
-    """
-
-    pyext_module_name: Optional[str]
-    pyext_file_path: Optional[str]
-
-    def __init__(self):
-        super().__init__()
-        self.pyext_module_name = None
-        self.pyext_file_path = None
-
-    def __call__(
-        self,
-        args_data: ModuleData,
-        builder: Optional["StencilBuilder"] = None,
-        **kwargs: Any,
-    ) -> str:
-        self.pyext_module_name = kwargs["pyext_module_name"]
-        self.pyext_file_path = kwargs["pyext_file_path"]
-        return super().__call__(args_data, builder, **kwargs)
-
-    def _is_not_empty(self) -> bool:
-        if self.pyext_module_name is None:
-            return False
-        if self.builder.backend.USE_LEGACY_TOOLCHAIN:
-            return iir_is_not_emtpy(self.builder.implementation_ir)
-        return gtir_is_not_emtpy(self.builder.gtir_pipeline)
-
-    def generate_imports(self) -> str:
-        source = ["from gt4py import utils as gt_utils"]
-        if self._is_not_empty():
-            assert self.pyext_file_path is not None
-            file_path = 'f"{{pathlib.Path(__file__).parent.resolve()}}/{}"'.format(
-                os.path.basename(self.pyext_file_path)
-            )
-            source.append(
-                textwrap.dedent(
-                    f"""
-                pyext_module = gt_utils.make_module_from_file(
-                    "{self.pyext_module_name}", {file_path}, public_import=True
-                )
-                """
-                )
-            )
-        return "\n".join(source)
-
-    def _has_effect(self) -> bool:
-        if not self._is_not_empty():
-            return False
-        if self.builder.backend.USE_LEGACY_TOOLCHAIN:
-            return iir_has_effect(self.builder.implementation_ir)
-        return gtir_has_effect(self.builder.gtir_pipeline)
-
-    def generate_implementation(self) -> str:
-        ir = self.builder.gtir
-        sources = gt_utils.text.TextBlock(indent_size=BaseModuleGenerator.TEMPLATE_INDENT_SIZE)
-
-        params_decls = {decl.name: decl for decl in ir.params}
-        args: List[str] = []
-        for arg in ir.api_signature:
-            if arg.name not in self.args_data.unreferenced:
-                args.append(arg.name)
-                if isinstance(params_decls.get(arg.name, None), gtir.FieldDecl):
-                    args.append("list(_origin_['{}'])".format(arg.name))
-
-        # only generate implementation if any multi_stages are present. e.g. if no statement in the
-        # stencil has any effect on the API fields, this may not be the case since they could be
-        # pruned.
-        if self._has_effect():
-            source = textwrap.dedent(
-                f"""
-                # Load or generate a GTComputation object for the current domain size
-                pyext_module.run_computation({",".join(["list(_domain_)", *args, "exec_info"])})
-                """
-            )
-            sources.extend(source.splitlines())
-        else:
-            sources.extend("\n")
-
-        return sources.text
-
-
-class CUDAPyExtModuleGenerator(PyExtModuleGenerator):
-    def generate_implementation(self) -> str:
-        source = super().generate_implementation()
-        if self.builder.options.backend_opts.get("device_sync", True):
-            source += textwrap.dedent(
-                """
-                    cupy.cuda.Device(0).synchronize()
-                """
-            )
-        return source
-
-    def generate_imports(self) -> str:
-        source = (
-            textwrap.dedent(
-                """
-                import cupy
-                """
-            )
-            + super().generate_imports()
-        )
-        return source

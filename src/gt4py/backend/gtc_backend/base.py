@@ -16,6 +16,7 @@
 
 
 import abc
+import os
 import textwrap
 import time
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Type, Union
@@ -23,16 +24,137 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Type, Union
 import numpy as np
 
 from gt4py import backend as gt_backend
+from gt4py import ir as gt_ir
 from gt4py import utils as gt_utils
-from gt4py.backend.module_generator import CUDAPyExtModuleGenerator, PyExtModuleGenerator
+from gt4py.backend.module_generator import BaseModuleGenerator, ModuleData
 from gt4py.definitions import AccessKind
 from gtc import gtir
+from gtc.passes.gtir_pipeline import GtirPipeline
 from gtc.passes.oir_pipeline import OirPipeline
 
 
 if TYPE_CHECKING:
+    from gt4py.stencil_builder import StencilBuilder
     from gt4py.stencil_object import StencilObject
     from gt4py.storage.storage import Storage
+
+
+def iir_is_not_emtpy(implementation_ir: gt_ir.StencilImplementation) -> bool:
+    return bool(implementation_ir.multi_stages)
+
+
+def gtir_is_not_emtpy(pipeline: GtirPipeline) -> bool:
+    node = pipeline.full()
+    return bool(node.iter_tree().if_isinstance(gtir.ParAssignStmt).to_list())
+
+
+def iir_has_effect(implementation_ir: gt_ir.StencilImplementation) -> bool:
+    return bool(implementation_ir.has_effect)
+
+
+def gtir_has_effect(pipeline: GtirPipeline) -> bool:
+    return True
+
+
+class PyExtModuleGenerator(BaseModuleGenerator):
+    """
+    Module Generator for use with backends that generate c++ python extensions.
+
+    Will either use ImplementationIR or GTIR depending on the backend's USE_LEGACY_TOOLCHAIN
+    class attribute. Using with other IRs requires subclassing and overriding ``_is_not_empty()``
+    and ``_has_effect()`` methods.
+    """
+
+    pyext_module_name: Optional[str]
+    pyext_file_path: Optional[str]
+
+    def __init__(self):
+        super().__init__()
+        self.pyext_module_name = None
+        self.pyext_file_path = None
+
+    def __call__(
+        self,
+        args_data: ModuleData,
+        builder: Optional["StencilBuilder"] = None,
+        **kwargs: Any,
+    ) -> str:
+        self.pyext_module_name = kwargs["pyext_module_name"]
+        self.pyext_file_path = kwargs["pyext_file_path"]
+        return super().__call__(args_data, builder, **kwargs)
+
+    def _is_not_empty(self) -> bool:
+        if self.pyext_module_name is None:
+            return False
+        if self.builder.backend.USE_LEGACY_TOOLCHAIN:
+            return iir_is_not_emtpy(self.builder.implementation_ir)
+        return gtir_is_not_emtpy(self.builder.gtir_pipeline)
+
+    def generate_imports(self) -> str:
+        source = ["from gt4py import utils as gt_utils"]
+        if self._is_not_empty():
+            assert self.pyext_file_path is not None
+            file_path = 'f"{{pathlib.Path(__file__).parent.resolve()}}/{}"'.format(
+                os.path.basename(self.pyext_file_path)
+            )
+            source.append(
+                textwrap.dedent(
+                    f"""
+                pyext_module = gt_utils.make_module_from_file(
+                    "{self.pyext_module_name}", {file_path}, public_import=True
+                )
+                """
+                )
+            )
+        return "\n".join(source)
+
+    def _has_effect(self) -> bool:
+        if not self._is_not_empty():
+            return False
+        if self.builder.backend.USE_LEGACY_TOOLCHAIN:
+            return iir_has_effect(self.builder.implementation_ir)
+        return gtir_has_effect(self.builder.gtir_pipeline)
+
+    def generate_implementation(self) -> str:
+        ir = self.builder.gtir
+        sources = gt_utils.text.TextBlock(indent_size=BaseModuleGenerator.TEMPLATE_INDENT_SIZE)
+
+        params_decls = {decl.name: decl for decl in ir.params}
+        args: List[str] = []
+        for arg in ir.api_signature:
+            if arg.name not in self.args_data.unreferenced:
+                args.append(arg.name)
+                if isinstance(params_decls.get(arg.name, None), gtir.FieldDecl):
+                    args.append("list(_origin_['{}'])".format(arg.name))
+
+        # only generate implementation if any multi_stages are present. e.g. if no statement in the
+        # stencil has any effect on the API fields, this may not be the case since they could be
+        # pruned.
+        if self._has_effect():
+            source = textwrap.dedent(
+                f"""
+                # Load or generate a GTComputation object for the current domain size
+                pyext_module.run_computation({",".join(["list(_domain_)", *args, "exec_info"])})
+                """
+            )
+            sources.extend(source.splitlines())
+        else:
+            sources.extend("\n")
+
+        return sources.text
+
+
+class GeneratorClass:
+    TEMPLATE_FILES: Dict[str, str]
+
+    @abc.abstractmethod
+    def __init__(self, class_name: str, module_name: str, backend: str):
+        pass
+
+    @abc.abstractmethod
+    def __call__(self, ir: gtir.Stencil) -> Dict[str, Dict[str, str]]:
+        """Return a dict with the keys 'computation' and 'bindings' to dicts of filenames to source."""
+        pass
 
 
 class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
@@ -47,9 +169,9 @@ class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
 
     GT_BACKEND_T: str
 
-    MODULE_GENERATOR_CLASS = gt_backend.module_generator.PyExtModuleGenerator
+    MODULE_GENERATOR_CLASS = PyExtModuleGenerator
 
-    PYEXT_GENERATOR_CLASS = None
+    PYEXT_GENERATOR_CLASS: Type[GeneratorClass]
 
     @abc.abstractmethod
     def generate(self) -> Type["StencilObject"]:

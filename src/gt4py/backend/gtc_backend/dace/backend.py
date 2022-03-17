@@ -22,7 +22,11 @@ from eve import codegen
 from eve.codegen import MakoTemplate as as_mako
 from gt4py import gt_src_manager
 from gt4py.backend.base import CLIBackendMixin, register
-from gt4py.backend.gt_backends import BaseGTBackend, make_x86_layout_map, x86_is_compatible_layout
+from gt4py.backend.gtc_backend.base import (
+    BaseGTBackend,
+    make_x86_layout_map,
+    x86_is_compatible_layout,
+)
 from gt4py.backend.gtc_backend.common import bindings_main_template, pybuffer_to_sid
 from gtc import gtir
 from gtc.dace.oir_to_dace import OirSDFGBuilder
@@ -300,7 +304,7 @@ class GTCDaceBackend(BaseGTBackend, CLIBackendMixin):
     USE_LEGACY_TOOLCHAIN = False
 
     def generate_extension(self) -> Tuple[str, str]:
-        return self.make_extension(gt_version=2, ir=self.builder.gtir, uses_cuda=False)
+        return self.make_extension(ir=self.builder.gtir, uses_cuda=False)
 
     def generate(self) -> Type["StencilObject"]:
         self.check_options(self.builder.options)
