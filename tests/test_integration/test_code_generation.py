@@ -401,6 +401,34 @@ def test_variable_offsets_and_while_loop(backend):
                 qout = qsum / (pe2[0, 0, 1] - pe2)
 
 
+@pytest.mark.parametrize("backend", ["gtc:numpy"])
+def test_while_loop_outside_k(backend):
+    nk = 4
+    shape = (2, 2, nk)
+    default_origin = (0, 0, 0)
+
+    @gtscript.stencil(backend=backend)
+    def stencil(
+        indk: gtscript.Field[gtscript.K, np.int_],
+        kk: gtscript.Field[gtscript.IJK, np.int_],
+        input: gtscript.Field[gtscript.IJK, np.int_],
+        output: gtscript.Field[gtscript.IJK, np.int_],
+    ):
+        with computation(PARALLEL), interval(...):
+            kk = 0
+            while indk + kk <= nk - 1:
+                kk += 1
+                output = input[0, 0, kk]
+
+    indk = gt_storage.from_array(
+        np.arange(nk, dtype=np.int_), backend, (0,), mask=(False, False, True)
+    )
+    kk = gt_storage.zeros(backend, default_origin, shape, np.int_)
+    input_storage = gt_storage.ones(backend, default_origin, shape, np.int_)
+    output_storage = gt_storage.empty(backend, default_origin, shape, np.int_)
+    stencil(indk, kk, input_storage, output_storage)
+
+
 # TODO: Enable DaCe
 @pytest.mark.parametrize(
     "backend", [backend for backend in ALL_BACKENDS if backend.values[0] != "gtc:dace"]
