@@ -108,10 +108,10 @@ class GTIRToOIR(NodeTranslator):
         body_stmts = []
         for stmt in node.body:
             stmt_or_stmts = self.visit(stmt, **kwargs)
-            if isinstance(stmt_or_stmts, oir.Stmt):
-                body_stmts.append(stmt_or_stmts)
-            else:
-                body_stmts.extend(stmt_or_stmts)
+            stmts = utils.flatten_list(
+                [stmt_or_stmts] if isinstance(stmt_or_stmts, oir.Stmt) else stmt_or_stmts
+            )
+            body_stmts.extend(stmts)
 
         return oir.HorizontalRestriction(mask=node.mask, body=body_stmts)
 
