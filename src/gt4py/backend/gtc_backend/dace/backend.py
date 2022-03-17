@@ -30,11 +30,10 @@ from gtc import gtir, gtir_to_oir
 from gtc.dace.oir_to_dace import OirSDFGBuilder
 from gtc.dace.utils import array_dimensions
 from gtc.passes.gtir_k_boundary import compute_k_boundary
-from gtc.passes.gtir_legacy_extents import compute_legacy_extents
 from gtc.passes.gtir_pipeline import GtirPipeline
-from gtc.passes.oir_optimizations.caches import FillFlushToLocalKCaches
 from gtc.passes.oir_optimizations.inlining import MaskInlining
 from gtc.passes.oir_optimizations.mask_stmt_merging import MaskStmtMerging
+from gtc.passes.oir_optimizations.utils import compute_fields_extents
 from gtc.passes.oir_pipeline import DefaultPipeline
 
 
@@ -53,7 +52,7 @@ class GTCDaCeExtGenerator:
         base_oir = gtir_to_oir.GTIRToOIR().visit(gtir)
         oir_pipeline = self.backend.builder.options.backend_opts.get(
             "oir_pipeline",
-            DefaultPipeline(skip=[MaskStmtMerging, MaskInlining, FillFlushToLocalKCaches]),
+            DefaultPipeline(skip=[MaskStmtMerging, MaskInlining]),
         )
         oir = oir_pipeline.run(base_oir)
         sdfg = OirSDFGBuilder().visit(oir)
@@ -128,8 +127,11 @@ class DaCeComputationCodegen:
         self._unique_index = 0
 
     def generate_dace_args(self, gtir, sdfg):
+        oir = gtir_to_oir.GTIRToOIR().visit(gtir)
+        field_extents = compute_fields_extents(oir, add_k=True)
+
         offset_dict: Dict[str, Tuple[int, int, int]] = {
-            k: (-v[0][0], -v[1][0], -v[2][0]) for k, v in compute_legacy_extents(gtir).items()
+            k: (-v[0][0], -v[1][0], -v[2][0]) for k, v in field_extents.items()
         }
         k_origins = {
             field_name: boundary[0] for field_name, boundary in compute_k_boundary(gtir).items()
