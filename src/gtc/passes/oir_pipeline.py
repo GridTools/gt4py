@@ -20,7 +20,6 @@ from typing import Callable, Optional, Protocol, Sequence, Type, Union
 from eve.visitors import NodeVisitor
 from gtc import oir
 from gtc.passes.oir_optimizations.caches import (
-    FillFlushToLocalKCaches,
     IJCacheDetection,
     KCacheDetection,
     PruneKCacheFills,
@@ -84,7 +83,6 @@ class DefaultPipeline(OirPipeline):
             KCacheDetection,
             PruneKCacheFills,
             PruneKCacheFlushes,
-            FillFlushToLocalKCaches,
         ]
 
     @property

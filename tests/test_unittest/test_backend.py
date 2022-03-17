@@ -14,16 +14,18 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import inspect
 from typing import Any, Dict
 
+import numpy as np
 import pytest
 
 import gt4py.backend as gt_backend
 from gt4py.backend import REGISTRY as backend_registry
-from gt4py.backend.module_generator import make_args_data_from_gtir, make_args_data_from_iir
+from gt4py.backend.module_generator import make_args_data_from_gtir
+from gt4py.definitions import AccessKind
 from gt4py.gtscript import __INLINED, PARALLEL, Field, computation, interval
 from gt4py.stencil_builder import StencilBuilder
+from gtc import gtir, utils
 
 from ..definitions import ALL_BACKENDS, CPU_BACKENDS, GPU_BACKENDS
 
@@ -55,52 +57,57 @@ unreferenced_val = {0: ("pb", "fb", "pc", "fc"), 1: ("pc", "fc"), 2: ()}
 
 @pytest.mark.parametrize("backend_name", ALL_BACKENDS)
 @pytest.mark.parametrize("mode", (0, 1, 2))
-def test_make_args_data_from_iir(backend_name, mode):
-    backend_cls = backend_registry[backend_name]
-    builder = StencilBuilder(stencil_def, backend=backend_cls).with_externals({"MODE": mode})
-    iir = builder.implementation_ir
-    args_data = make_args_data_from_iir(iir)
-
-    args_list = set(inspect.signature(stencil_def).parameters.keys())
-    args_found = set()
-
-    for key in args_data.field_info:
-        assert key in args_list
-        if key in field_info_val[mode]:
-            assert args_data.field_info[key] is not None
-        else:
-            assert args_data.field_info[key] is None
-        assert key not in args_found
-        args_found.add(key)
-
-    for key in args_data.parameter_info:
-        assert key in args_list
-        if key in parameter_info_val[mode]:
-            assert args_data.parameter_info[key] is not None
-        else:
-            assert args_data.parameter_info[key] is None
-        assert key not in args_found
-        args_found.add(key)
-
-    for key in args_data.unreferenced:
-        assert key in args_list
-        assert key not in field_info_val[mode]
-        assert key not in parameter_info_val[mode]
-        assert key in unreferenced_val[mode]
-        assert key in args_found
-
-
-@pytest.mark.parametrize("backend_name", ALL_BACKENDS)
-@pytest.mark.parametrize("mode", (0, 1, 2))
 def test_make_args_data_from_gtir(backend_name, mode):
     backend_cls = backend_registry[backend_name]
     builder = StencilBuilder(stencil_def, backend=backend_cls).with_externals({"MODE": mode})
     args_data = make_args_data_from_gtir(builder.gtir_pipeline)
-    iir_args_data = make_args_data_from_iir(builder.implementation_ir)
 
-    assert args_data.field_info == iir_args_data.field_info
-    assert args_data.parameter_info == iir_args_data.parameter_info
-    assert args_data.unreferenced == iir_args_data.unreferenced
+    assert set(args_data.unreferenced) == set(unreferenced_val[mode])
+
+    field_info_from_gtir = {
+        (
+            p.name,
+            np.dtype(p.dtype.name.lower()),
+            utils.dimension_flags_to_names(p.dimensions).upper(),
+            p.data_dims,
+        )
+        for p in builder.gtir.params
+        if isinstance(p, gtir.FieldDecl)
+    }
+    field_info_from_args_data = {
+        (name, d.dtype, "".join(d.axes), d.data_dims)
+        for name, d in args_data.field_info.items()
+        if name not in args_data.unreferenced
+    }
+    assert field_info_from_gtir == field_info_from_args_data
+
+    param_info_from_gtir = {
+        (p.name, np.dtype(p.dtype.name.lower()))
+        for p in builder.gtir.params
+        if isinstance(p, gtir.ScalarDecl)
+    }
+    param_info_from_args_data = {
+        (name, d.dtype)
+        for name, d in args_data.parameter_info.items()
+        if name not in args_data.unreferenced
+    }
+    assert param_info_from_gtir == param_info_from_args_data
+
+    for name, field_info in args_data.field_info.items():
+        if name == "out":
+            access = AccessKind.WRITE
+        elif name in field_info_val[mode]:
+            access = AccessKind.READ
+        else:
+            access = AccessKind.NONE
+        assert field_info.access == access
+
+    for name, param_info in args_data.parameter_info.items():
+        if name in parameter_info_val[mode]:
+            access = AccessKind.READ
+        else:
+            access = AccessKind.NONE
+        assert param_info.access == access
 
 
 @pytest.mark.parametrize("backend_name", ALL_BACKENDS)
@@ -108,8 +115,7 @@ def test_make_args_data_from_gtir(backend_name, mode):
 def test_generate_pre_run(backend_name, mode):
     backend_cls = backend_registry[backend_name]
     builder = StencilBuilder(stencil_def, backend=backend_cls).with_externals({"MODE": mode})
-    iir = builder.implementation_ir
-    args_data = make_args_data_from_iir(iir)
+    args_data = make_args_data_from_gtir(builder.gtir_pipeline)
 
     module_generator = backend_cls.MODULE_GENERATOR_CLASS()
     module_generator.args_data = args_data
@@ -129,8 +135,7 @@ def test_generate_pre_run(backend_name, mode):
 def test_generate_post_run(backend_name, mode):
     backend_cls = backend_registry[backend_name]
     builder = StencilBuilder(stencil_def, backend=backend_cls).with_externals({"MODE": mode})
-    iir = builder.implementation_ir
-    args_data = make_args_data_from_iir(iir)
+    args_data = make_args_data_from_gtir(builder.gtir_pipeline)
 
     module_generator = backend_cls.MODULE_GENERATOR_CLASS()
     module_generator.args_data = args_data
@@ -149,10 +154,7 @@ def test_device_sync_option(backend_name, mode, device_sync):
     backend_cls = backend_registry[backend_name]
     builder = StencilBuilder(stencil_def, backend=backend_cls).with_externals({"MODE": mode})
     builder.options.backend_opts["device_sync"] = device_sync
-    if backend_cls.USE_LEGACY_TOOLCHAIN:
-        args_data = make_args_data_from_iir(builder.implementation_ir)
-    else:
-        args_data = make_args_data_from_gtir(builder.gtir_pipeline)
+    args_data = make_args_data_from_gtir(builder.gtir_pipeline)
     module_generator = backend_cls.MODULE_GENERATOR_CLASS()
     source = module_generator(
         args_data,

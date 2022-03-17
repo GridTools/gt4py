@@ -20,7 +20,7 @@ import os
 import textwrap
 from dataclasses import dataclass, field
 from inspect import getdoc
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set
 
 import jinja2
 import numpy
@@ -28,10 +28,11 @@ import numpy
 from gt4py import ir as gt_ir
 from gt4py import utils as gt_utils
 from gt4py.definitions import AccessKind, Boundary, DomainInfo, FieldInfo, ParameterInfo
-from gtc import gtir
+from gtc import gtir, gtir_to_oir
+from gtc.passes.gtir_access_kind import compute_access_kinds
 from gtc.passes.gtir_k_boundary import compute_k_boundary, compute_min_k_size
-from gtc.passes.gtir_legacy_extents import compute_legacy_extents
 from gtc.passes.gtir_pipeline import GtirPipeline
+from gtc.passes.oir_optimizations.utils import compute_fields_extents
 from gtc.utils import dimension_flags_to_names
 
 
@@ -41,142 +42,61 @@ if TYPE_CHECKING:
 
 @dataclass
 class ModuleData:
-    field_info: Dict[str, Optional[FieldInfo]] = field(default_factory=dict)
-    parameter_info: Dict[str, Optional[ParameterInfo]] = field(default_factory=dict)
+    field_info: Dict[str, FieldInfo] = field(default_factory=dict)
+    parameter_info: Dict[str, ParameterInfo] = field(default_factory=dict)
     unreferenced: List[str] = field(default_factory=list)
 
     @property
-    def field_names(self):
-        return self.field_info.keys()
+    def field_names(self) -> Set[str]:
+        """Set of all field names."""
+        return set(self.field_info.keys())
 
     @property
-    def parameter_names(self):
-        return self.parameter_info.keys()
+    def parameter_names(self) -> Set[str]:
+        """Set of all parameter names."""
+        return set(self.parameter_info.keys())
 
 
-def make_args_data_from_iir(implementation_ir: gt_ir.StencilImplementation) -> ModuleData:
-    data = ModuleData()
-
-    # Collect access type per field
-    in_fields = set()
-    out_fields = set()
-    for ms in implementation_ir.multi_stages:
-        for sg in ms.groups:
-            for st in sg.stages:
-                for acc in st.accessors:
-                    if isinstance(acc, gt_ir.FieldAccessor) and bool(acc.intent & AccessKind.WRITE):
-                        out_fields.add(acc.symbol)
-                    elif isinstance(acc, gt_ir.FieldAccessor) and bool(
-                        acc.intent & AccessKind.READ
-                    ):
-                        in_fields.add(acc.symbol)
-
-    for arg in implementation_ir.api_signature:
-        if arg.name in implementation_ir.fields:
-            access = AccessKind.NONE
-            if arg.name in in_fields:
-                access |= AccessKind.READ
-            if arg.name in out_fields:
-                access |= AccessKind.WRITE
-            if arg.name not in implementation_ir.unreferenced:
-                field_decl = implementation_ir.fields[arg.name]
-                data.field_info[arg.name] = FieldInfo(
-                    access=access,
-                    boundary=implementation_ir.fields_extents[arg.name].to_boundary(),
-                    axes=tuple(field_decl.axes),
-                    data_dims=tuple(field_decl.data_dims),
-                    dtype=field_decl.data_type.dtype,
-                )
-            else:
-                data.field_info[arg.name] = None
-        else:
-            if arg.name not in implementation_ir.unreferenced:
-                data.parameter_info[arg.name] = ParameterInfo(
-                    dtype=implementation_ir.parameters[arg.name].data_type.dtype
-                )
-            else:
-                data.parameter_info[arg.name] = None
-
-    data.unreferenced = implementation_ir.unreferenced
-
-    return data
-
-
-def get_unused_params_from_gtir(
-    pipeline: GtirPipeline,
-) -> List[Union[gtir.FieldDecl, gtir.ScalarDecl]]:
-    node = pipeline.gtir
-    field_names = {
-        param.name for param in node.params if isinstance(param, (gtir.FieldDecl, gtir.ScalarDecl))
-    }
-    used_field_names = (
-        node.iter_tree().if_isinstance(gtir.FieldAccess, gtir.ScalarAccess).getattr("name").to_set()
-    )
-    return [
-        param for param in node.params if param.name in field_names.difference(used_field_names)
-    ]
-
-
-def make_args_data_from_gtir(pipeline: GtirPipeline, legacy=False) -> ModuleData:
+def make_args_data_from_gtir(pipeline: GtirPipeline) -> ModuleData:
     """
     Compute module data containing information about stencil arguments from gtir.
 
-    Use `legacy` parameter to ensure equality with values from :func:`make_args_data_from_iir`.
+    This is no longer compatible with the legacy backends.
     """
     data = ModuleData()
+
+    # NOTE: pipeline.gtir has not had prune_unused_parameters applied.
+    accesses = compute_access_kinds(pipeline.gtir)
+    all_params = pipeline.gtir.params
+
     node = pipeline.full()
+    oir = gtir_to_oir.GTIRToOIR().visit(node)
+    field_extents = compute_fields_extents(oir)
 
-    write_fields = (
-        node.iter_tree()
-        .if_isinstance(gtir.ParAssignStmt)
-        .getattr("left")
-        .if_isinstance(gtir.FieldAccess)
-        .getattr("name")
-        .to_set()
-    )
+    for decl in (param for param in all_params if isinstance(param, gtir.FieldDecl)):
+        access = accesses[decl.name]
+        dtype = numpy.dtype(decl.dtype.name.lower())
 
-    read_fields: Set[str] = set()
-    for expr in node.iter_tree().if_isinstance(gtir.ParAssignStmt).getattr("right"):
-        read_fields |= expr.iter_tree().if_isinstance(gtir.FieldAccess).getattr("name").to_set()
+        if access != AccessKind.NONE:
+            k_boundary = compute_k_boundary(node)[decl.name]
+            boundary = Boundary(*field_extents[decl.name].to_boundary()[0:2], k_boundary)
+        else:
+            boundary = Boundary.zeros(ndims=3)
 
-    referenced_field_params = [
-        param.name for param in node.params if isinstance(param, gtir.FieldDecl)
-    ]
-    field_extents = compute_legacy_extents(node, mask_inwards=legacy)
-    k_boundary = (
-        compute_k_boundary(node) if not legacy else {v: (0, 0) for v in referenced_field_params}
-    )
-    for name in sorted(referenced_field_params):
-        access = AccessKind.NONE
-        if name in read_fields:
-            access |= AccessKind.READ
-        if name in write_fields:
-            access |= AccessKind.WRITE
-        boundary = Boundary(*field_extents[name].to_boundary()[0:2], k_boundary[name])
-        data.field_info[name] = FieldInfo(
+        data.field_info[decl.name] = FieldInfo(
             access=access,
             boundary=boundary,
-            axes=tuple(dimension_flags_to_names(node.symtable_[name].dimensions).upper()),
-            data_dims=tuple(node.symtable_[name].data_dims),
-            dtype=numpy.dtype(node.symtable_[name].dtype.name.lower()),
+            axes=tuple(dimension_flags_to_names(decl.dimensions).upper()),
+            data_dims=tuple(decl.data_dims),
+            dtype=dtype,
         )
 
-    referenced_scalar_params = [
-        param.name for param in node.params if param.name not in referenced_field_params
-    ]
-    for name in sorted(referenced_scalar_params):
-        data.parameter_info[name] = ParameterInfo(
-            dtype=numpy.dtype(node.symtable_[name].dtype.name.lower())
-        )
+    for decl in (param for param in all_params if isinstance(param, gtir.ScalarDecl)):
+        access = accesses[decl.name]
+        dtype = numpy.dtype(decl.dtype.name.lower())
+        data.parameter_info[decl.name] = ParameterInfo(access=access, dtype=dtype)
 
-    unref_params = get_unused_params_from_gtir(pipeline)
-    for param in sorted(unref_params, key=lambda decl: decl.name):
-        if isinstance(param, gtir.FieldDecl):
-            data.field_info[param.name] = None
-        elif isinstance(param, gtir.ScalarDecl):
-            data.parameter_info[param.name] = None
-
-    data.unreferenced = [*sorted(param.name for param in unref_params)]
+    data.unreferenced = [*sorted(name for name in accesses if accesses[name] == AccessKind.NONE)]
     return data
 
 
@@ -465,11 +385,15 @@ class PyExtModuleGenerator(BaseModuleGenerator):
     def generate_imports(self) -> str:
         source = ["from gt4py import utils as gt_utils"]
         if self._is_not_empty():
+            assert self.pyext_file_path is not None
+            file_path = 'f"{{pathlib.Path(__file__).parent.resolve()}}/{}"'.format(
+                os.path.basename(self.pyext_file_path)
+            )
             source.append(
                 textwrap.dedent(
                     f"""
                 pyext_module = gt_utils.make_module_from_file(
-                    "{self.pyext_module_name}", "{self.pyext_file_path}", public_import=True
+                    "{self.pyext_module_name}", {file_path}, public_import=True
                 )
                 """
                 )

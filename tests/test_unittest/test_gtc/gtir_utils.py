@@ -77,7 +77,7 @@ class BlockStmtFactory(factory.Factory):
     class Meta:
         model = gtir.BlockStmt
 
-    body = []
+    body: List[gtir.Stmt] = factory.List([factory.SubFactory(ParAssignStmtFactory)])
 
 
 class FieldIfStmtFactory(factory.Factory):
@@ -96,6 +96,14 @@ class ScalarIfStmtFactory(factory.Factory):
     cond = factory.SubFactory(ScalarAccessFactory, dtype=common.DataType.BOOL)
     true_branch = factory.SubFactory(BlockStmtFactory)
     false_branch = None
+
+
+class WhileFactory(factory.Factory):
+    class Meta:
+        model = gtir.While
+
+    cond = factory.SubFactory(FieldAccessFactory, dtype=common.DataType.BOOL)
+    body = factory.List([factory.SubFactory(ParAssignStmtFactory)])
 
 
 class IntervalFactory(factory.Factory):
@@ -129,7 +137,7 @@ class VerticalLoopFactory(factory.Factory):
 
     interval = factory.SubFactory(IntervalFactory)
     loop_order = common.LoopOrder.PARALLEL
-    temporaries = []
+    temporaries: List[gtir.FieldDecl] = []
     body = factory.List([factory.SubFactory(ParAssignStmtFactory)])
 
 

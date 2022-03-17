@@ -21,15 +21,21 @@ from typing import Iterator, Optional, Set
 import numpy as np
 import pytest
 
-from gt4py.definitions import Extent
 from gtc import common
 from gtc.numpy import npir
 from gtc.numpy.npir_codegen import NpirCodegen
 
 from .npir_utils import (
+    ComputationFactory,
     FieldDeclFactory,
     FieldSliceFactory,
+    HorizontalBlockFactory,
+    LocalScalarAccessFactory,
     NativeFuncCallFactory,
+    ParamAccessFactory,
+    ScalarDeclFactory,
+    TemporaryDeclFactory,
+    VectorArithmeticFactory,
     VectorAssignFactory,
     VerticalPassFactory,
 )
@@ -55,6 +61,11 @@ def other_dtype(defined_dtype) -> Iterator[Optional[common.DataType]]:
     yield other
 
 
+@pytest.fixture(params=[True, False])
+def is_serial(request):
+    yield request.param
+
+
 def test_datatype() -> None:
     result = NpirCodegen().visit(common.DataType.FLOAT64)
     print(result)
@@ -62,70 +73,94 @@ def test_datatype() -> None:
     assert match
 
 
-def test_literal(defined_dtype: common.DataType) -> None:
-    result = NpirCodegen().visit(npir.Literal(dtype=defined_dtype, value="42"))
+def test_scalarliteral(defined_dtype: common.DataType) -> None:
+    result = NpirCodegen().visit(npir.ScalarLiteral(dtype=defined_dtype, value="42"))
     print(result)
     match = re.match(r"np.(\w*?)\(42\)", result)
     assert match
     assert match.groups()[0] == defined_dtype.name.lower()
 
 
-def test_broadcast_literal(defined_dtype: common.DataType) -> None:
-    result = NpirCodegen().visit(npir.BroadCast(expr=npir.Literal(dtype=defined_dtype, value="42")))
+def test_broadcast_literal(defined_dtype: common.DataType, is_serial: bool) -> None:
+    result = NpirCodegen().visit(
+        npir.Broadcast(expr=npir.ScalarLiteral(dtype=defined_dtype, value="42")),
+        is_serial=is_serial,
+        lower=(0, 0),
+        upper=(0, 0),
+    )
     print(result)
-    match = re.match(r"np.(\w*?)\(42\)", result)
+    match = re.match(
+        r"np\.full\(\(_dI_\s*\+\s*(?P<iext>\d+)\s*,\s*_dJ_\s*\+\s*(?P<jext>\d+)\s*,\s*(?P<kbounds>[^\)]+)\),\s*np\.(?P<dtype>\w+)\(42\)\)",
+        result,
+    )
     assert match
-    assert match.groups()[0] == defined_dtype.name.lower()
+    assert tuple(match.group(ext) for ext in ("iext", "jext")) == ("0", "0")
+    assert match.group("kbounds") == "1" if is_serial else "K - k"
+    assert match.group("dtype") == defined_dtype.name.lower()
 
 
-def test_cast(defined_dtype: common.DataType, other_dtype: common.DataType) -> None:
+def test_scalar_cast(defined_dtype: common.DataType, other_dtype: common.DataType) -> None:
     result = NpirCodegen().visit(
-        npir.Cast(dtype=other_dtype, expr=npir.Literal(dtype=defined_dtype, value="42"))
+        npir.ScalarCast(dtype=other_dtype, expr=npir.ScalarLiteral(dtype=defined_dtype, value="42"))
     )
     print(result)
-    match = re.match(r"^np.(\w*?)\(np.(\w*)\(42\), dtype=np.(\w*)\)", result)
+    match = re.match(r"np\.(?P<other_dtype>\w*)\(np.(?P<defined_dtype>\w*)\(42\)\)", result)
     assert match
-    assert match.groups()[0] == "array"
-    assert match.groups()[1] == defined_dtype.name.lower()
-    assert match.groups()[2] == other_dtype.name.lower()
+    assert match.group("defined_dtype") == defined_dtype.name.lower()
+    assert match.group("other_dtype") == other_dtype.name.lower()
 
 
-def test_parallel_offset() -> None:
-    result = NpirCodegen().visit(npir.AxisOffset.i(-3))
-    print(result)
-    assert result == "(i - 3):(I - 3)"
-
-
-def test_parallel_offset_zero() -> None:
-    result = NpirCodegen().visit(npir.AxisOffset.j(0))
-    print(result)
-    assert result == "j:J"
-
-
-def test_sequential_offset() -> None:
-    result = NpirCodegen().visit(npir.AxisOffset.k(5))
-    print(result)
-    assert result == "(k_ + 5):(k_ + 5 + 1)"
-
-
-def test_sequential_offset_zero() -> None:
-    result = NpirCodegen().visit(npir.AxisOffset.k(0))
-    print(result)
-    assert result == "k_:(k_ + 1)"
-
-
-def test_field_slice_sequential_k() -> None:
+def test_vector_cast(defined_dtype: common.DataType, other_dtype: common.DataType) -> None:
     result = NpirCodegen().visit(
-        FieldSliceFactory(name="a_field", parallel_k=False, offsets=(-1, 0, 4))
+        npir.VectorCast(
+            dtype=other_dtype,
+            expr=npir.FieldSlice(name="a", i_offset=0, j_offset=0, k_offset=0, dtype=defined_dtype),
+        )
     )
-    assert result == "a_field_[(i - 1):(I - 1), j:J, (k_ + 4):(k_ + 4 + 1)]"
+    print(result)
+    match = re.match(r"(?P<name>\w+)\[.*]\.astype\(np\.(?P<dtype>\w+)\)", result)
+    assert match
+    assert match.group("name") == "a"
+    assert match.group("dtype") == other_dtype.name.lower()
 
 
-def test_field_slice_parallel_k() -> None:
-    result = NpirCodegen().visit(
-        FieldSliceFactory(name="another_field", parallel_k=True, offsets=(0, 0, -3))
+def test_field_slice(is_serial: bool) -> None:
+    i_offset = 0
+    j_offset = -2
+    k_offset = 4
+
+    def int_to_str(i):
+        if i > 0:
+            return "+" + str(i)
+        elif i == 0:
+            return ""
+        else:
+            return str(i)
+
+    field_slice = FieldSliceFactory(
+        name="a",
+        i_offset=i_offset,
+        j_offset=j_offset,
+        k_offset=k_offset,
+        dtype=common.DataType.INT32,
     )
-    assert result == "another_field_[i:I, j:J, (k - 3):(K - 3)]"
+    result = NpirCodegen().visit(field_slice, is_serial=is_serial)
+    print(result)
+    match = re.match(
+        r"(?P<name>\w+)\[i(?P<il>.*):I(?P<iu>.*),\s*j(?P<jl>.*):J(?P<ju>.*),\s*(?P<kl>.*):(?P<ku>.*)\]",
+        result,
+    )
+    assert match
+    assert match.group("name") == "a"
+    assert match.group("il") == match.group("iu") == int_to_str(i_offset)
+    assert match.group("jl") == match.group("ju") == int_to_str(j_offset)
+
+    if is_serial:
+        assert match.group("kl") == "k_" + int_to_str(k_offset)
+        assert match.group("ku") == "k_" + int_to_str(k_offset + 1)
+    else:
+        assert match.group("kl") == "k" + int_to_str(k_offset)
+        assert match.group("ku") == "K" + int_to_str(k_offset)
 
 
 def test_native_function() -> None:
@@ -134,37 +169,46 @@ def test_native_function() -> None:
             func=common.NativeFunction.MIN,
             args=[
                 FieldSliceFactory(name="a"),
-                FieldSliceFactory(name="b"),
+                ParamAccessFactory(name="p"),
             ],
         )
     )
-    assert result == "np.minimum(a_[i:I, j:J, k_:(k_ + 1)], b_[i:I, j:J, k_:(k_ + 1)])"
+    print(result)
+    match = re.match(r"np.minimum\(a\[.*\],\s*p\)", result)
+    assert match
 
 
-def test_vector_assign() -> None:
+@pytest.mark.parametrize(
+    "left", (FieldSliceFactory(name="left"), LocalScalarAccessFactory(name="left"))
+)
+def test_vector_assign(left, is_serial: bool) -> None:
     result = NpirCodegen().visit(
-        VectorAssignFactory(
-            left__name="a",
-            right__name="b",
-        )
+        VectorAssignFactory(left=left, right=FieldSliceFactory(name="right")),
+        ctx=NpirCodegen.BlockContext(),
+        is_serial=is_serial,
     )
-    assert result == "a_[i:I, j:J, k_:(k_ + 1)] = b_[i:I, j:J, k_:(k_ + 1)]"
+    left_str, right_str = result.split(" = ")
+
+    k_str = "k_:k_+1" if is_serial else "k:K"
+
+    if isinstance(left, npir.FieldSlice):
+        assert left_str == "left[i:I, j:J, " + k_str + "]"
+    else:
+        assert left_str == "left"
+
+    assert right_str == "right[i:I, j:J, " + k_str + "]"
+
+
+def test_field_definition() -> None:
+    result = NpirCodegen().visit(FieldDeclFactory(name="a", dimensions=(True, True, False)))
+    print(result)
+    assert result == "a = Field(a, _origin_['a'], (True, True, False))"
 
 
 def test_temp_definition() -> None:
-    result = NpirCodegen().visit(VectorAssignFactory(temp_init=True, temp_name="a"))
-    assert result == "a_ = ShimmedView(np.zeros(_domain_, dtype=np.int64), [0, 0, 0])"
-
-
-def test_temp_with_extent_definition() -> None:
-    result = NpirCodegen().visit(
-        VectorAssignFactory(temp_init=True, temp_name="a"),
-        field_extents={"a": Extent((0, 1), (-2, 3))},
-    )
-    assert (
-        result
-        == "a_ = ShimmedView(np.zeros((_dI_ + 1, _dJ_ + 5, _dK_), dtype=np.int64), [0, 2, 0])"
-    )
+    result = NpirCodegen().visit(TemporaryDeclFactory(name="a", offset=(1, 2), padding=(3, 4)))
+    print(result)
+    assert result == "a = Field.empty((_dI_ + 3, _dJ_ + 4, _dK_), (1, 2, 0))"
 
 
 def test_vector_arithmetic() -> None:
@@ -173,9 +217,10 @@ def test_vector_arithmetic() -> None:
             left=FieldSliceFactory(name="a"),
             right=FieldSliceFactory(name="b"),
             op=common.ArithmeticOperator.ADD,
-        )
+        ),
+        is_serial=False,
     )
-    assert result == "(a_[i:I, j:J, k_:(k_ + 1)] + b_[i:I, j:J, k_:(k_ + 1)])"
+    assert result == "(a[i:I, j:J, k:K] + b[i:I, j:J, k:K])"
 
 
 def test_vector_unary_op() -> None:
@@ -183,77 +228,40 @@ def test_vector_unary_op() -> None:
         npir.VectorUnaryOp(
             expr=FieldSliceFactory(name="a"),
             op=common.UnaryOperator.NEG,
-        )
+        ),
+        is_serial=False,
     )
-    assert result == "(-(a_[i:I, j:J, k_:(k_ + 1)]))"
+    assert result == "(-(a[i:I, j:J, k:K]))"
 
 
 def test_vector_unary_not() -> None:
     result = NpirCodegen().visit(
         npir.VectorUnaryOp(
-            expr=FieldSliceFactory(name="a"),
             op=common.UnaryOperator.NOT,
+            expr=FieldSliceFactory(name="mask", dtype=common.DataType.BOOL),
         )
     )
-    assert result == "(np.bitwise_not(a_[i:I, j:J, k_:(k_ + 1)]))"
+    assert result == "(np.bitwise_not(mask[i:I, j:J, k:K]))"
 
 
-def test_numerical_offset_pos() -> None:
-    result = NpirCodegen().visit(npir.NumericalOffset(value=1))
-    assert result == " + 1"
-
-
-def test_numerical_offset_neg() -> None:
-    result = NpirCodegen().visit(npir.NumericalOffset(value=-1))
-    assert result == " - 1"
-
-
-def test_numerical_offset_zero() -> None:
-    result = NpirCodegen().visit(npir.NumericalOffset(value=0))
-    assert result == ""
-
-
-def test_mask_block_slice_mask() -> None:
+def test_assign_with_mask_local() -> None:
     result = NpirCodegen().visit(
-        npir.MaskBlock(body=[], mask=FieldSliceFactory(name="mask1"), mask_name="mask1")
-    )
-    assert result == ""
-
-
-def test_mask_block_broadcast() -> None:
-    result = NpirCodegen().visit(
-        npir.MaskBlock(
-            body=[],
-            mask=npir.BroadCast(
-                expr=npir.Literal(dtype=common.DataType.BOOL, value=common.BuiltInLiteral.TRUE)
-            ),
-            mask_name="mask1",
+        VectorAssignFactory(
+            left=LocalScalarAccessFactory(name="tmp"),
+            mask=FieldSliceFactory(name="mask1", dtype=common.DataType.BOOL),
         ),
-        is_serial=False,
+        ctx=NpirCodegen.BlockContext(),
+        symtable={"tmp": ScalarDeclFactory(name="tmp", dtype=common.DataType.INT32)},
     )
-    assert result == "mask1_ = np.full((I - i, J - j, K - k), np.bool(True))\n"
-
-
-def test_mask_block_other() -> None:
-    result = NpirCodegen().visit(
-        npir.MaskBlock(
-            body=[],
-            mask=npir.VectorLogic(
-                op=common.LogicalOperator.AND,
-                left=FieldSliceFactory(name="a"),
-                right=FieldSliceFactory(name="b"),
-            ),
-            mask_name="mask1",
-        )
-    )
-    assert result.startswith("mask1_ = np.bitwise_and(a_[i:I")
+    print(result)
+    assert re.match(r"tmp = np.where\(mask1.*, np.int32\(\)\)", result) is not None
 
 
 def test_horizontal_block() -> None:
-    result = NpirCodegen().visit(npir.HorizontalBlock(body=[]))
+    result = NpirCodegen().visit(HorizontalBlockFactory()).strip("\n")
     print(result)
     match = re.match(
-        r"(#.*?\n)?i, I = _di_ - 0, _dI_ \+ 0\nj, J = _dj_ - 0, _dJ_ \+ 0\n",
+        r"#.*\n" r"i, I = _di_ - 0, _dI_ \+ 0\n" r"j, J = _dj_ - 0, _dJ_ \+ 0\n",
         result,
         re.MULTILINE,
     )
@@ -263,8 +271,6 @@ def test_horizontal_block() -> None:
 def test_vertical_pass_seq() -> None:
     result = NpirCodegen().visit(
         VerticalPassFactory(
-            temp_defs=[],
-            body=[],
             lower=common.AxisBound.from_start(offset=1),
             upper=common.AxisBound.from_end(offset=-2),
             direction=common.LoopOrder.FORWARD,
@@ -272,7 +278,7 @@ def test_vertical_pass_seq() -> None:
     )
     print(result)
     match = re.match(
-        (r"(#.*?\n)?" r"k, K = _dk_ \+ 1, _dK_ - 2\n" r"for k_ in range\(k, K\):\n"),
+        (r"#.*\n" r"+k, K = _dk_ \+ 1, _dK_ - 2\n" r"for k_ in range\(k, K\):\n"),
         result,
         re.MULTILINE,
     )
@@ -280,7 +286,7 @@ def test_vertical_pass_seq() -> None:
 
 
 def test_vertical_pass_par() -> None:
-    result = NpirCodegen().visit(VerticalPassFactory(body=[], temp_defs=[]))
+    result = NpirCodegen().visit(VerticalPassFactory(direction=common.LoopOrder.PARALLEL))
     print(result)
     match = re.match(
         (r"(#.*?\n)?" r"k, K = _dk_, _dK_\n"),
@@ -290,80 +296,24 @@ def test_vertical_pass_par() -> None:
     assert match
 
 
-def test_verticall_pass_start_start_forward() -> None:
-    result = NpirCodegen().visit(
-        VerticalPassFactory(
-            body=[],
-            temp_defs=[],
-            upper=common.AxisBound.from_start(offset=5),
-            direction=common.LoopOrder.FORWARD,
-        )
-    )
-    print(result)
-    match = re.match(
-        r"(#.*?\n)?k, K = _dk_, _dk_ \+ 5\nfor k_ in range\(k, K\):\n",
-        result,
-        re.MULTILINE,
-    )
-    assert match
-
-
-def test_verticall_pass_end_end_backward() -> None:
-    result = NpirCodegen().visit(
-        VerticalPassFactory(
-            body=[],
-            temp_defs=[],
-            lower=common.AxisBound.from_end(offset=-4),
-            upper=common.AxisBound.from_end(offset=-1),
-            direction=common.LoopOrder.BACKWARD,
-        )
-    )
-    print(result)
-    match = re.match(
-        r"(#.*?\n)?k, K = _dK_ \- 4, _dK_ \- 1\nfor k_ in range\(K-1, k-1, -1\):\n",
-        result,
-        re.MULTILINE,
-    )
-    assert match
-
-
-def test_vertical_pass_temp_def() -> None:
-    result = NpirCodegen().visit(
-        VerticalPassFactory(
-            temp_defs=[
-                VectorAssignFactory(temp_init=True, temp_name="a"),
-            ],
-            body=[],
-            lower=common.AxisBound.from_end(offset=-4),
-            upper=common.AxisBound.from_end(offset=-1),
-            direction=common.LoopOrder.BACKWARD,
-        )
-    )
-    print(result)
-    match = re.match(
-        r"(#.*?\n)?a_ = ShimmedView\(np.zeros\(_domain_, dtype=np.int64\), \[0, 0, 0\]\)\nk, K = _dK_ \- 4, _dK_ \- 1\nfor k_ in range\(K-1, k-1, -1\):\n",
-        result,
-        re.MULTILINE,
-    )
-    assert match
-
-
 def test_computation() -> None:
     result = NpirCodegen().visit(
-        npir.Computation(
-            params=[],
-            field_params=[],
-            field_decls=[],
-            vertical_passes=[],
-        ),
+        ComputationFactory(
+            vertical_passes__0__body__0__body__0=VectorAssignFactory(
+                left__name="a", right__name="b"
+            )
+        )
     )
     print(result)
     match = re.match(
         (
+            r"import numbers\n"
+            r"from typing import Tuple\n+"
             r"import numpy as np\n"
-            r"import scipy.special\n"
-            r"import numbers\n+"
-            r"def run\(\*, _domain_, _origin_\):\n"
+            r"import scipy.special\n+"
+            r"class Field:\n"
+            r"(.*\n)+"
+            r"def run\(\*, a, b, _domain_, _origin_\):\n"
             r"\n?"
             r"(    .*?\n)*"
         ),
@@ -374,62 +324,16 @@ def test_computation() -> None:
 
 
 def test_full_computation_valid(tmp_path) -> None:
-    result = NpirCodegen.apply(
-        npir.Computation(
-            params=["f1", "f2", "f3", "s1"],
-            field_params=["f1", "f2", "f3"],
-            field_decls=[
-                FieldDeclFactory(name="f1"),
-                FieldDeclFactory(name="f2"),
-                FieldDeclFactory(name="f3"),
-            ],
-            vertical_passes=[
-                VerticalPassFactory(
-                    temp_defs=[],
-                    body=[
-                        npir.HorizontalBlock(
-                            body=[
-                                VectorAssignFactory(
-                                    left=FieldSliceFactory(name="f1", parallel_k=True),
-                                    right=npir.VectorArithmetic(
-                                        op=common.ArithmeticOperator.MUL,
-                                        left=FieldSliceFactory(
-                                            name="f2", parallel_k=True, offsets=(-2, -2, 0)
-                                        ),
-                                        right=FieldSliceFactory(
-                                            name="f3", parallel_k=True, offsets=(0, 3, 1)
-                                        ),
-                                    ),
-                                ),
-                            ],
-                        ),
-                    ],
-                ),
-                VerticalPassFactory(
-                    lower=common.AxisBound.from_start(offset=1),
-                    upper=common.AxisBound.from_end(offset=-3),
-                    direction=common.LoopOrder.BACKWARD,
-                    temp_defs=[],
-                    body=[
-                        npir.HorizontalBlock(
-                            body=[
-                                VectorAssignFactory(
-                                    left__name="f2",
-                                    right=npir.VectorArithmetic(
-                                        op=common.ArithmeticOperator.ADD,
-                                        left=FieldSliceFactory(name="f2", parallel_k=False),
-                                        right=FieldSliceFactory(
-                                            name="f2", parallel_k=False, offsets=(0, 0, 1)
-                                        ),
-                                    ),
-                                ),
-                            ],
-                        )
-                    ],
-                ),
-            ],
+    computation = ComputationFactory(
+        vertical_passes__0__body__0__body__0=VectorAssignFactory(
+            left__name="a",
+            right=VectorArithmeticFactory(
+                left__name="b", right=ParamAccessFactory(name="p"), op=common.ArithmeticOperator.ADD
+            ),
         ),
+        param_decls=[ScalarDeclFactory(name="p")],
     )
+    result = NpirCodegen().visit(computation)
     print(result)
     mod_path = tmp_path / "npir_codegen_1.py"
     mod_path.write_text(result)
@@ -437,26 +341,14 @@ def test_full_computation_valid(tmp_path) -> None:
     sys.path.append(str(tmp_path))
     import npir_codegen_1 as mod
 
-    f1 = np.zeros((10, 10, 10))
-    f2 = np.ones_like(f1) * 3
-    f3 = np.ones_like(f1) * 2
-    s1 = 5
+    a = np.zeros((10, 10, 10))
+    b = np.ones_like(a) * 3
+    p = 2
     mod.run(
-        f1=f1,
-        f2=f2,
-        f3=f3,
-        s1=s1,
+        a=a,
+        b=b,
+        p=p,
         _domain_=(8, 5, 9),
-        _origin_={"f1": (2, 2, 0), "f2": (2, 2, 0), "f3": (2, 2, 0)},
+        _origin_={"a": (1, 1, 0), "b": (0, 0, 0)},
     )
-    assert (f1[2:, 2:-3, 0:-1] == 6).all()
-    assert (f1[0:2, :, :] == 0).all()
-    assert (f1[:, 0:2, :] == 0).all()
-    assert (f1[:, -3:, :] == 0).all()
-    assert (f1[:, :, -1:] == 0).all()
-
-    exp_f2 = np.ones((10)) * 3
-    # Remember that reversed ranges still include the first (higher) argument and exclude the
-    # second. Thus range(-4, 0, -1) contains the same indices as range(1, -3).
-    exp_f2[-4:0:-1] = np.cumsum(exp_f2[1:-3])
-    assert (f2[3, 3, :] == exp_f2[:]).all()
+    assert (a[1:9, 1:6, 0:9] == 5).all()
