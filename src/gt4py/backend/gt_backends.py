@@ -35,7 +35,7 @@ from gtc import gtir
 from gtc.passes.oir_pipeline import OirPipeline
 
 from . import pyext_builder
-from .module_generator import PyExtModuleGenerator
+from .gtc_backend.base import PyExtModuleGenerator
 
 
 if TYPE_CHECKING:

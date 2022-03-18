@@ -132,6 +132,10 @@ class DefIRToGTIR(IRNodeVisitor):
         field_params = {f.name: self.visit(f) for f in node.api_fields}
         scalar_params = {p.name: self.visit(p) for p in node.parameters}
         vertical_loops = [self.visit(c) for c in node.computations if c.body.stmts]
+        if node.externals is not None:
+            externals = {name: str(value) for name, value in node.externals.items()}
+        else:
+            externals = {}
         return gtir.Stencil(
             name=node.name,
             api_signature=[
@@ -147,7 +151,7 @@ class DefIRToGTIR(IRNodeVisitor):
                 for f in node.api_signature
             ],
             vertical_loops=vertical_loops,
-            externals=node.externals or {},
+            externals=externals,
             sources=node.sources or "",
             docstring=node.docstring,
             loc=common.location_to_source_location(node.loc),

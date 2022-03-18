@@ -241,12 +241,12 @@ class Stencil(LocNode, SymbolTableTrait):
     api_signature: List[Argument]
     params: List[Decl]
     vertical_loops: List[VerticalLoop]
-    externals: Dict[str, Any]
+    externals: Dict[str, str]
     sources: Optional[Dict[str, str]]
     docstring: Str
 
     @property
-    def param_names(self) -> List:
+    def param_names(self) -> List[str]:
         return [p.name for p in self.params]
 
     _validate_symbol_refs = common.validate_symbol_refs()
