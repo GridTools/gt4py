@@ -687,11 +687,11 @@ class TemplatedGenerator(NodeVisitor):
                     )
                 except TemplateRenderingError as e:
                     # Raise a new exception with extra information keeping the original cause
+                    e.info["node"] = node
                     raise TemplateRenderingError(
                         f"Error in '{key}' template when rendering node '{node}'.\n"
                         + getattr(e, "message", str(e)),
                         **e.info,
-                        node=node,
                     ) from e.__cause__
 
         elif isinstance(node, (list, tuple, collections.abc.Set)) or (
