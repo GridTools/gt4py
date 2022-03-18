@@ -46,6 +46,13 @@ UNDEFINED_DTYPES = {common.DataType.INVALID, common.DataType.AUTO, common.DataTy
 DEFINED_DTYPES: Set[common.DataType] = set(common.DataType) - UNDEFINED_DTYPES  # type: ignore
 
 
+def match_dtype(result, dtype) -> None:
+    if dtype not in {common.DataType.BOOL}:
+        assert result == f"np.{dtype.name.lower()}"
+    else:
+        assert result == dtype.name.lower()
+
+
 @pytest.fixture(params=DEFINED_DTYPES)
 def defined_dtype(request) -> Iterator[common.DataType]:
     yield request.param
@@ -76,9 +83,9 @@ def test_datatype() -> None:
 def test_scalarliteral(defined_dtype: common.DataType) -> None:
     result = NpirCodegen().visit(npir.ScalarLiteral(dtype=defined_dtype, value="42"))
     print(result)
-    match = re.match(r"np.(\w*?)\(42\)", result)
+    match = re.match(r"(.+?)\(42\)", result)
     assert match
-    assert match.groups()[0] == defined_dtype.name.lower()
+    match_dtype(match.groups()[0], defined_dtype)
 
 
 def test_broadcast_literal(defined_dtype: common.DataType, is_serial: bool) -> None:
@@ -90,13 +97,13 @@ def test_broadcast_literal(defined_dtype: common.DataType, is_serial: bool) -> N
     )
     print(result)
     match = re.match(
-        r"np\.full\(\(_dI_\s*\+\s*(?P<iext>\d+)\s*,\s*_dJ_\s*\+\s*(?P<jext>\d+)\s*,\s*(?P<kbounds>[^\)]+)\),\s*np\.(?P<dtype>\w+)\(42\)\)",
+        r"np\.full\(\(_dI_\s*\+\s*(?P<iext>\d+)\s*,\s*_dJ_\s*\+\s*(?P<jext>\d+)\s*,\s*(?P<kbounds>[^\)]+)\),\s*(?P<dtype>.+)\(42\)\)",
         result,
     )
     assert match
     assert tuple(match.group(ext) for ext in ("iext", "jext")) == ("0", "0")
     assert match.group("kbounds") == "1" if is_serial else "K - k"
-    assert match.group("dtype") == defined_dtype.name.lower()
+    match_dtype(match.group("dtype"), defined_dtype)
 
 
 def test_scalar_cast(defined_dtype: common.DataType, other_dtype: common.DataType) -> None:
@@ -104,10 +111,10 @@ def test_scalar_cast(defined_dtype: common.DataType, other_dtype: common.DataTyp
         npir.ScalarCast(dtype=other_dtype, expr=npir.ScalarLiteral(dtype=defined_dtype, value="42"))
     )
     print(result)
-    match = re.match(r"np\.(?P<other_dtype>\w*)\(np.(?P<defined_dtype>\w*)\(42\)\)", result)
+    match = re.match(r"(?P<other_dtype>.+)\((?P<defined_dtype>.+)\(42\)\)", result)
     assert match
-    assert match.group("defined_dtype") == defined_dtype.name.lower()
-    assert match.group("other_dtype") == other_dtype.name.lower()
+    match_dtype(match.group("defined_dtype"), defined_dtype)
+    match_dtype(match.group("other_dtype"), other_dtype)
 
 
 def test_vector_cast(defined_dtype: common.DataType, other_dtype: common.DataType) -> None:
@@ -118,10 +125,10 @@ def test_vector_cast(defined_dtype: common.DataType, other_dtype: common.DataTyp
         )
     )
     print(result)
-    match = re.match(r"(?P<name>\w+)\[.*]\.astype\(np\.(?P<dtype>\w+)\)", result)
+    match = re.match(r"(?P<name>\w+)\[.*]\.astype\((?P<dtype>.+)\)", result)
     assert match
     assert match.group("name") == "a"
-    assert match.group("dtype") == other_dtype.name.lower()
+    match_dtype(match.group("dtype"), other_dtype)
 
 
 def test_field_slice(is_serial: bool) -> None:
