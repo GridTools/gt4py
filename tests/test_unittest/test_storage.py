@@ -30,7 +30,7 @@ import gt4py.storage.utils as gt_storage_utils
 from gt4py.gtscript import PARALLEL, Field, computation, interval, stencil
 from gt4py.storage.storage import GPUStorage
 
-from ..definitions import ALL_BACKENDS, CPU_BACKENDS, GPU_BACKENDS
+from ..definitions import CPU_BACKENDS, GPU_BACKENDS
 
 
 # ---- Hypothesis strategies ----
@@ -932,6 +932,31 @@ def test_managed_memory():
 
 
 @pytest.mark.requires_gpu
+def test_sum_gpu():
+    i1 = 3
+    i2 = 4
+    jslice = slice(3, 4, None)
+    shape = (5, 5, 5)
+    q1 = gt_store.from_array(
+        cp.zeros(shape),
+        backend="gtcuda",
+        dtype=np.float64,
+        default_origin=(0, 0, 0),
+        shape=shape,
+    )
+
+    q2 = gt_store.from_array(
+        cp.ones(shape),
+        backend="gtcuda",
+        dtype=np.float64,
+        default_origin=(0, 0, 0),
+        shape=shape,
+    )
+
+    q1[i1 : i2 + 1, jslice, 0] = cp.sum(q2[i1 : i2 + 1, jslice, :], axis=2)
+
+
+@pytest.mark.requires_gpu
 def test_auto_sync_storage():
 
     # make sure no storages are modified to begin with, e.g. by other tests.
@@ -1021,15 +1046,6 @@ def test_slice_gpu():
 
     assert view_start > storage_start
     assert view_end < storage_end
-
-
-@pytest.mark.parametrize("backend", ALL_BACKENDS)
-def test_dim_red_slice_copy(backend):
-    arr = gt_store.empty(
-        backend, default_origin=[0, 0, 0], shape=[10, 10, 10], dtype=(np.float64, (3,))
-    )
-    with pytest.raises(RuntimeError, match="slicing storages is not supported"):
-        s = arr[:, :, 0]
 
 
 def test_non_existing_backend():

@@ -134,7 +134,7 @@ class Storage(np.ndarray):
 
         mask: list of bools or list of spatial axes
             in a list of bools, ``False`` entries indicate that the corresponding dimension is masked, i.e. the storage
-            has reduced dimension and reading and writing from offsets along this axis access the same element.
+            has reduced dimension and reading and writing from offsets along this axis acces the same element.
             In a list of spatial axes (IJK), a boolean mask will be generated with ``True`` entries for all
             dimensions except for the missing spatial axes names.
         """
@@ -211,11 +211,6 @@ class Storage(np.ndarray):
                 if not isinstance(obj, Storage) and not isinstance(obj, _ViewableNdarray):
                     raise RuntimeError(
                         "Meta information can not be inferred when creating Storage views from other classes than Storage."
-                    )
-                if self.ndim != obj.ndim and self.ndim != 0:
-                    raise RuntimeError(
-                        "Dimension reducing slicing storages is not supported. Use `Storage.to_numpy()` to retrieve a "
-                        "slicable numpy array and create a new storage from it with proper metadata if neccessary."
                     )
                 self.__dict__ = {**obj.__dict__, **self.__dict__}
                 self.is_stencil_view = False
@@ -385,12 +380,7 @@ class CPUStorage(Storage):
 
     @property
     def data(self):
-        return np.asarray(self)
-
-    def to_numpy(self, copy=False):
-        if copy:
-            return copy.deepcopy(self.data)
-        return self.data
+        return self.view(np.ndarray)
 
     def copy(self):
         res = super().copy()
@@ -441,18 +431,6 @@ class ExplicitlySyncedGPUStorage(Storage):
     @property
     def data(self):
         return self._device_field
-
-    def to_numpy(self, copy=False):
-        self.device_to_host()
-        if copy:
-            return np.array(self, subok=False)
-        return np.asarray(self)
-
-    def to_cupy(self, copy=False):
-        self.host_to_device()
-        if copy:
-            return cp.array(self)
-        return cp.asarray(self)
 
     def synchronize(self):
         if self._is_host_modified:

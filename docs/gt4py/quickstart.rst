@@ -207,11 +207,6 @@ The ``default_origin`` parameter plays two roles:
 #. If when calling the stencil, no other `origin` is specified, this value is where the `iteration domain` begins, i.e.
    the grid point with the lowest index where a value is written.
 
-.. note::
-    Slicing a storage with reduced dimension, e.g. `field_a[:, :, 0]`, is not supported. Use `Storage.to_numpy()` to
-    retrieve a slicable array, e.g. `field_a.to_numpy()[:, :, 0]`. If a storage is needed again create a new one
-    from the sliced data.
-
 --------------------------
 Computations and Intervals
 --------------------------
