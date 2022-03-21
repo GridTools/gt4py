@@ -24,13 +24,13 @@ import pytest
 dace = pytest.importorskip("dace")
 
 
-import hypothesis as hyp
-import hypothesis.strategies as hyp_st
-import pytest
+import hypothesis as hyp  # noqa: E402
+import hypothesis.strategies as hyp_st  # noqa: E402
+import pytest  # noqa: E402
 
-from gtc.common import LevelMarker
-from gtc.dace.utils import IntervalMapping
-from gtc.oir import AxisBound, Interval
+from gtc.common import LevelMarker  # noqa: E402
+from gtc.dace.utils import IntervalMapping  # noqa: E402
+from gtc.oir import AxisBound, Interval  # noqa: E402
 
 
 @functools.lru_cache(maxsize=None)

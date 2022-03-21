@@ -21,20 +21,22 @@ import pytest
 
 dace = pytest.importorskip("dace")
 
-from gt4py.backend.gtc_backend.defir_to_gtir import DefIRToGTIR
-from gt4py.definitions import BuildOptions
-from gt4py.frontend.gtscript_frontend import GTScriptFrontend
-from gtc.common import AxisBound, DataType
-from gtc.dace.dace_to_oir import convert
-from gtc.dace.oir_to_dace import OirSDFGBuilder
-from gtc.dace.utils import assert_sdfg_equal
-from gtc.gtir_to_oir import GTIRToOIR
-from gtc.oir import Interval, Literal
-from gtc.passes.gtir_pipeline import GtirPipeline
+from gt4py.backend.gtc_backend.defir_to_gtir import DefIRToGTIR  # noqa: E402
+from gt4py.definitions import BuildOptions  # noqa: E402
+from gt4py.frontend.gtscript_frontend import GTScriptFrontend  # noqa: E402
+from gtc.common import AxisBound, DataType  # noqa: E402
+from gtc.dace.dace_to_oir import convert  # noqa: E402
+from gtc.dace.oir_to_dace import OirSDFGBuilder  # noqa: E402
+from gtc.dace.utils import assert_sdfg_equal  # noqa: E402
+from gtc.gtir_to_oir import GTIRToOIR  # noqa: E402
+from gtc.oir import Interval, Literal  # noqa: E402
+from gtc.passes.gtir_pipeline import GtirPipeline  # noqa: E402
 
-from ...test_integration.stencil_definitions import EXTERNALS_REGISTRY as externals_registry
-from ...test_integration.stencil_definitions import REGISTRY as stencil_registry
-from .oir_utils import (
+from ...test_integration.stencil_definitions import (  # noqa: E402
+    EXTERNALS_REGISTRY as externals_registry,
+)
+from ...test_integration.stencil_definitions import REGISTRY as stencil_registry  # noqa: E402
+from .oir_utils import (  # noqa: E402
     AssignStmtFactory,
     HorizontalExecutionFactory,
     StencilFactory,

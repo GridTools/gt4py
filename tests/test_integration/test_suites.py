@@ -21,7 +21,7 @@ from gt4py import gtscript
 from gt4py import testing as gt_testing
 from gt4py.gtscript import PARALLEL, computation, interval
 
-from ..definitions import ALL_BACKENDS, INTERNAL_BACKENDS
+from ..definitions import INTERNAL_BACKENDS
 from .stencil_definitions import optional_field, two_optional_fields
 
 
