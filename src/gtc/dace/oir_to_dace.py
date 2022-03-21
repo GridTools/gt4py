@@ -118,9 +118,9 @@ class BaseOirSDFGBuilder(ABC):
     ) -> AccessCollector.CartesianAccessCollection:
         if isinstance(node, SDFG):
             res = AccessCollector.CartesianAccessCollection([])
-            for node in node.states()[0].nodes():
-                if isinstance(node, (HorizontalExecutionLibraryNode, VerticalLoopLibraryNode)):
-                    collection = self._get_access_collection(node)
+            for n in node.states()[0].nodes():
+                if isinstance(n, (HorizontalExecutionLibraryNode, VerticalLoopLibraryNode)):
+                    collection = self._get_access_collection(n)
                     res._ordered_accesses.extend(collection._ordered_accesses)
             return res
         elif isinstance(node, HorizontalExecutionLibraryNode):
