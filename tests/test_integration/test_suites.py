@@ -21,7 +21,7 @@ from gt4py import gtscript
 from gt4py import testing as gt_testing
 from gt4py.gtscript import PARALLEL, computation, interval
 
-from ..definitions import INTERNAL_BACKENDS
+from ..definitions import ALL_BACKENDS, INTERNAL_BACKENDS
 from .stencil_definitions import optional_field, two_optional_fields
 
 
@@ -604,7 +604,7 @@ class TestNon3DFields(gt_testing.StencilTestSuite):
         "field_out": np.float64,
     }
     domain_range = [(4, 10), (4, 10), (4, 10)]
-    backends = ["gtc:gt:cpu_ifirst", "gtc:gt:cpu_kfirst", "gtc:gt:gpu", "gtc:dace"]
+    backends = ALL_BACKENDS
     symbols = {
         "field_in": gt_testing.field(
             in_range=(-10, 10), axes="K", boundary=[(0, 0), (0, 0), (0, 0)]

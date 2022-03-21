@@ -284,17 +284,7 @@ def test_lower_dimensional_inputs_2d_to_3d_forward(backend):
     assert np.allclose(np.asarray(outp_f), np.asarray(inp_f)[:, :, np.newaxis])
 
 
-@pytest.mark.parametrize(
-    "backend",
-    [
-        "gtc:numpy",
-        "gtc:gt:cpu_ifirst",
-        "gtc:gt:cpu_kfirst",
-        pytest.param("gtc:gt:gpu", marks=[pytest.mark.requires_gpu, pytest.mark.xfail]),
-        pytest.param("gtc:cuda", marks=[pytest.mark.requires_gpu, pytest.mark.xfail]),
-        "gtc:dace",
-    ],
-)
+@pytest.mark.parametrize("backend", ALL_BACKENDS)
 def test_higher_dimensional_fields(backend):
     FLOAT64_VEC2 = (np.float64, (2,))
     FLOAT64_MAT22 = (np.float64, (2, 2))
@@ -464,17 +454,7 @@ def test_read_data_dim_indirect_addressing(backend):
     assert output_field[0, 0, 0] == 1
 
 
-@pytest.mark.parametrize(
-    "backend",
-    [
-        "gtc:numpy",
-        "gtc:gt:cpu_ifirst",
-        "gtc:gt:cpu_kfirst",
-        pytest.param("gtc:gt:gpu", marks=[pytest.mark.requires_gpu]),
-        pytest.param("gtc:cuda", marks=[pytest.mark.requires_gpu]),
-        "gtc:dace",
-    ],
-)
+@pytest.mark.parametrize("backend", ALL_BACKENDS)
 def test_negative_origin(backend):
     def stencil_i(
         input_field: gtscript.Field[gtscript.IJK, np.int32],
