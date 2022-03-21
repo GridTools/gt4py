@@ -15,7 +15,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import numbers
-from typing import Any, Dict, List, Union, cast
+from typing import Any, Dict, List, Tuple, Union, cast
 
 from gt4py.ir import IRNodeVisitor
 from gt4py.ir.nodes import (
@@ -45,6 +45,7 @@ from gt4py.ir.nodes import (
     UnaryOpExpr,
     VarDecl,
     VarRef,
+    While,
 )
 from gtc import common, gtir
 from gtc.common import ExprKind
@@ -245,7 +246,7 @@ class DefIRToGTIR(IRNodeVisitor):
             loc=common.location_to_source_location(node.loc),
         )
 
-    def visit_FieldRef(self, node: FieldRef):
+    def visit_FieldRef(self, node: FieldRef) -> gtir.FieldAccess:
         return gtir.FieldAccess(
             name=node.name,
             offset=self.transform_offset(node.offset),
@@ -253,7 +254,7 @@ class DefIRToGTIR(IRNodeVisitor):
             loc=common.location_to_source_location(node.loc),
         )
 
-    def visit_If(self, node: If):
+    def visit_If(self, node: If) -> Union[gtir.FieldIfStmt, gtir.ScalarIfStmt]:
         cond = self.visit(node.condition)
         if cond.kind == ExprKind.FIELD:
             return gtir.FieldIfStmt(
@@ -274,19 +275,26 @@ class DefIRToGTIR(IRNodeVisitor):
                 loc=common.location_to_source_location(node.loc),
             )
 
+    def visit_While(self, node: While) -> gtir.While:
+        return gtir.While(
+            cond=self.visit(node.condition),
+            body=self.visit(node.body),
+            loc=common.location_to_source_location(node.loc),
+        )
+
     def visit_VarRef(self, node: VarRef, **kwargs):
         return gtir.ScalarAccess(name=node.name, loc=common.location_to_source_location(node.loc))
 
-    def visit_AxisInterval(self, node: AxisInterval):
+    def visit_AxisInterval(self, node: AxisInterval) -> Tuple[gtir.AxisBound, gtir.AxisBound]:
         return self.visit(node.start), self.visit(node.end)
 
-    def visit_AxisBound(self, node: AxisBound):
+    def visit_AxisBound(self, node: AxisBound) -> gtir.AxisBound:
         # TODO(havogt) add support VarRef
         return gtir.AxisBound(
             level=self.GT4PY_LEVELMARKER_TO_GTIR_LEVELMARKER[node.level], offset=node.offset
         )
 
-    def visit_FieldDecl(self, node: FieldDecl):
+    def visit_FieldDecl(self, node: FieldDecl) -> gtir.FieldDecl:
         dimension_names = ["I", "J", "K"]
         dimensions = [dim in node.axes for dim in dimension_names]
         # datatype conversion works via same ID
@@ -298,7 +306,7 @@ class DefIRToGTIR(IRNodeVisitor):
             loc=common.location_to_source_location(node.loc),
         )
 
-    def visit_VarDecl(self, node: VarDecl):
+    def visit_VarDecl(self, node: VarDecl) -> gtir.ScalarDecl:
         # datatype conversion works via same ID
         return gtir.ScalarDecl(
             name=node.name,
@@ -308,10 +316,10 @@ class DefIRToGTIR(IRNodeVisitor):
 
     def transform_offset(
         self, offset: Dict[str, Union[int, Expr]], **kwargs: Any
-    ) -> Union[gtir.CartesianOffset, gtir.VariableKOffset]:
+    ) -> Union[common.CartesianOffset, gtir.VariableKOffset]:
         k_val = offset.get("K", 0)
         if isinstance(k_val, numbers.Integral):
-            return gtir.CartesianOffset(i=offset.get("I", 0), j=offset.get("J", 0), k=k_val)
+            return common.CartesianOffset(i=offset.get("I", 0), j=offset.get("J", 0), k=k_val)
         elif isinstance(k_val, Expr):
             return gtir.VariableKOffset(k=self.visit(k_val, **kwargs))
         else:

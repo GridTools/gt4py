@@ -203,6 +203,8 @@ class GTCppCodegen(codegen.TemplatedGenerator):
         """
     )
 
+    While = as_mako("while(${cond}) {${''.join(body)}}")
+
     BlockStmt = as_mako("{${''.join(body)}}")
 
     def visit_GTComputationCall(

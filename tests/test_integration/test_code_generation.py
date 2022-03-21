@@ -367,7 +367,10 @@ def test_variable_offsets(backend):
             out_field = in_field[0, 0, 1] + in_field[0, 0, index_field + 1]
 
 
-@pytest.mark.skip("While loop not yet supported")
+# TODO: Enable DaCe
+@pytest.mark.parametrize(
+    "backend", [backend for backend in ALL_BACKENDS if backend.values[0] != "gtc:dace"]
+)
 def test_variable_offsets_and_while_loop(backend):
     @gtscript.stencil(backend=backend)
     def stencil(
@@ -377,7 +380,7 @@ def test_variable_offsets_and_while_loop(backend):
         qout: gtscript.Field[np.float_],
         lev: gtscript.Field[gtscript.IJ, np.int_],
     ):
-        with computation(FORWARD), interval(...):
+        with computation(FORWARD), interval(0, -1):
             if pe2[0, 0, 1] <= pe1[0, 0, lev]:
                 qout = qin[0, 0, 1]
             else:
@@ -386,6 +389,24 @@ def test_variable_offsets_and_while_loop(backend):
                     qsum += qin[0, 0, lev] / (pe2[0, 0, 1] - pe1[0, 0, lev])
                     lev = lev + 1
                 qout = qsum / (pe2[0, 0, 1] - pe2)
+
+
+# TODO: Enable DaCe
+@pytest.mark.parametrize(
+    "backend", [backend for backend in ALL_BACKENDS if backend.values[0] != "gtc:dace"]
+)
+def test_nested_while_loop(backend):
+    @gtscript.stencil(backend=backend)
+    def stencil(
+        field_a: gtscript.Field[np.float_],
+        field_b: gtscript.Field[np.int_],
+    ):
+        with computation(PARALLEL), interval(...):
+            while field_a < 1:
+                add = 0
+                while field_a + field_b < 1:
+                    add += 1
+                field_a += add
 
 
 @pytest.mark.parametrize("backend", ALL_BACKENDS)
@@ -470,10 +491,14 @@ def test_negative_origin(backend):
         with computation(PARALLEL), interval(...):
             output_field = input_field[0, 0, 1]
 
-    input_field = gt_storage.ones(backend, (0, 0, 0), (1, 1, 1), dtype=np.int32)
-    output_field = gt_storage.zeros(backend, (0, 0, 0), (1, 1, 1), dtype=np.int32)
+    input_field = gt_storage.ones(
+        backend, default_origin=(0, 0, 0), shape=(1, 1, 1), dtype=np.int32
+    )
+    output_field = gt_storage.zeros(
+        backend, default_origin=(0, 0, 0), shape=(1, 1, 1), dtype=np.int32
+    )
 
-    for origin, stencil in {(-1, 0, 0): stencil_i, (0, 0, -1): stencil_k}.items():
+    for origin, stencil in (((-1, 0, 0), stencil_i), ((0, 0, -1), stencil_k)):
         gtscript.stencil(definition=stencil, backend=backend)(
             input_field, output_field, origin={"input_field": origin}
         )

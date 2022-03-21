@@ -12,6 +12,7 @@ repos:
   - id: check-case-conflict
 #  - id: check-json
   - id: check-merge-conflict
+    exclude_types: [rst]
   - id: check-toml
   - id: check-yaml
   - id: debug-statements
