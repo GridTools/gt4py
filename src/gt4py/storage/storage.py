@@ -14,6 +14,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import itertools
 from typing import Dict
 
 import numpy as np
@@ -25,6 +26,7 @@ except ImportError:
     cp = None
 
 from gt4py import backend as gt_backend
+from gt4py import utils as gt_utils
 
 from . import utils as storage_utils
 
@@ -214,6 +216,15 @@ class Storage(np.ndarray):
                     )
                 self.__dict__ = {**obj.__dict__, **self.__dict__}
                 self.is_stencil_view = False
+                if hasattr(obj, "_new_index"):
+                    index_iter = itertools.chain(
+                        obj._new_index, [slice(None, None)] * (len(obj.mask) - len(obj._new_index))
+                    )
+                    sliced_indices = (isinstance(x, slice) for x in index_iter)
+                    self._mask = obj.mask and gt_utils.interpolate_mask(
+                        sliced_indices, obj.mask, False
+                    )
+                    delattr(obj, "_new_index")
                 if not hasattr(obj, "default_origin"):
                     self.is_stencil_view = True
                 elif self._is_consistent(obj):
@@ -302,6 +313,7 @@ class GPUStorage(Storage):
 
     def __getitem__(self, item):
         self.device_to_host()
+        self._new_index = gt_utils.listify(item)
         return super().__getitem__(item)
 
     def __setitem__(self, key, value):
@@ -387,6 +399,10 @@ class CPUStorage(Storage):
         res[...] = self
         return res
 
+    def __getitem__(self, item):
+        self._new_index = gt_utils.listify(item)
+        return super().__getitem__(item)
+
 
 class ExplicitlySyncedGPUStorage(Storage):
     class SyncState:
@@ -452,6 +468,7 @@ class ExplicitlySyncedGPUStorage(Storage):
     def __getitem__(self, item):
         if self._is_device_modified:
             self.device_to_host()
+        self._new_index = gt_utils.listify(item)
         return super().__getitem__(item)
 
     @property
@@ -542,7 +559,6 @@ class ExplicitlySyncedGPUStorage(Storage):
         return res
 
     def _finalize_view(self, base):
-
         if self.shape != base.shape or self.strides != base.strides:
             offset = (self.ctypes.data - base.ctypes.data) + (
                 self._device_field.data.ptr - self._device_raw_buffer.data.ptr
