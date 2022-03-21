@@ -419,9 +419,9 @@ def get_access_collection(
 
     if isinstance(node, dace.SDFG):
         res = AccessCollector.CartesianAccessCollection([])
-        for node in node.states()[0].nodes():
-            if isinstance(node, (HorizontalExecutionLibraryNode, VerticalLoopLibraryNode)):
-                collection = get_access_collection(node)
+        for state_node in node.states()[0].nodes():
+            if isinstance(state_node, (HorizontalExecutionLibraryNode, VerticalLoopLibraryNode)):
+                collection = get_access_collection(state_node)
                 res._ordered_accesses.extend(collection._ordered_accesses)
         return res
     elif isinstance(node, HorizontalExecutionLibraryNode):
