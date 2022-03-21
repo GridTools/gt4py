@@ -258,21 +258,6 @@ class BaseOirSDFGBuilder(ABC):
         self.add_subsets()
         self.add_arrays()
 
-        for acc in (n for n in self._state.nodes() if isinstance(n, dace.nodes.AccessNode)):
-            is_write = len(self._state.in_edges(acc)) > 0 and all(
-                edge.data.data is not None for edge in self._state.in_edges(acc)
-            )
-            is_read = len(self._state.out_edges(acc)) > 0 and all(
-                edge.data.data is not None for edge in self._state.out_edges(acc)
-            )
-            if is_read and is_write:
-                acc.access = dace.AccessType.ReadWrite
-            elif is_read:
-                acc.access = dace.AccessType.ReadOnly
-            else:
-                assert is_write
-                acc.access = dace.AccessType.WriteOnly
-
     def _get_sdfg(self):
         self.finalize()
         return self._sdfg
