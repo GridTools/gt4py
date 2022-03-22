@@ -241,11 +241,13 @@ class TaskletCodegen(codegen.TemplatedGenerator):
                 mask_str = f"if {cond_str}:"
                 indent = "    "
         body_code = self.visit(node.body, **kwargs)
+        body_code = [line for block in body_code for line in block.split("\n")]
         body_code = [indent + b for b in body_code]
         return "\n".join([mask_str] + body_code)
 
     def visit_While(self, node: oir.While, **kwargs):
         body = self.visit(node.body, **kwargs)
+        body = [line for block in body for line in block.split("\n")]
         cond = self.visit(node.cond, is_target=False, **kwargs)
         indent = " " * 4
         delim = f"\n{indent}"
@@ -700,7 +702,25 @@ class NaiveHorizontalExecutionExpander(OIRLibraryNodeExpander):
             for assign in stmt.iter_tree().if_isinstance(oir.AssignStmt)
             for acc in assign.left.iter_tree().if_isinstance(oir.FieldAccess)
         }
-
+        dynamic_accesses |= {
+            get_tasklet_symbol(acc.name, acc.offset.to_tuple(), is_target=False)
+            for whilestmt in self.node.oir_node.iter_tree().if_isinstance(oir.While)
+            for acc in whilestmt.cond.iter_tree().if_isinstance(oir.FieldAccess)
+        }
+        dynamic_accesses |= {
+            get_tasklet_symbol(acc.name, acc.offset.to_tuple(), is_target=False)
+            for whilestmt in self.node.oir_node.iter_tree().if_isinstance(oir.While)
+            for stmt in whilestmt.body
+            for assign in stmt.iter_tree().if_isinstance(oir.AssignStmt)
+            for acc in assign.right.iter_tree().if_isinstance(oir.FieldAccess)
+        }
+        dynamic_accesses |= {
+            get_tasklet_symbol(acc.name, acc.offset.to_tuple(), is_target=True)
+            for whilestmt in self.node.oir_node.iter_tree().if_isinstance(oir.While)
+            for stmt in whilestmt.body
+            for assign in stmt.iter_tree().if_isinstance(oir.AssignStmt)
+            for acc in assign.left.iter_tree().if_isinstance(oir.FieldAccess)
+        }
         dynamic_accesses |= {
             get_tasklet_symbol(acc.name, acc.offset.to_tuple(), is_target=False)
             for assign in self.node.oir_node.iter_tree().if_isinstance(oir.AssignStmt)
