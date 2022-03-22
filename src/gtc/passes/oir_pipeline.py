@@ -94,6 +94,9 @@ class DefaultPipeline(OirPipeline):
     def __repr__(self) -> str:
         return str([step.__name__ for step in self.steps])
 
+    def __eq__(self, other):
+        return isinstance(other, DefaultPipeline) and self.skip == other.skip
+
     def run(self, oir: oir.Stencil) -> oir.Stencil:
         for step in self.steps:
             if isinstance(step, type) and issubclass(step, NodeVisitor):
