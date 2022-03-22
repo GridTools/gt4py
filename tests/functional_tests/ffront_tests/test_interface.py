@@ -200,15 +200,6 @@ def test_bool_or():
         _ = FieldOperatorParser.apply_to_function(bool_or)
 
 
-def test_shift():
-    Offset = 0  # for parsing it doesn't matter what this object is
-
-    def shifts(a: Field[..., "bool"]):
-        return a(Offset[1]) + a(Offset[-1])  # TODO we should test these cases separate
-
-    _ = FieldOperatorParser.apply_to_function(shifts)
-
-
 # --- External symbols ---
 def test_closure_symbols():
     import numpy as np
