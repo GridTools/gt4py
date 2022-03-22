@@ -253,16 +253,19 @@ class CartesianIterationSpace(oir.LocNode):
         )
 
     @staticmethod
-    def from_offset(offset: CartesianOffset) -> "CartesianIterationSpace":
+    def from_offset(
+        offset: Union[CartesianOffset, oir.VariableKOffset]
+    ) -> "CartesianIterationSpace":
 
+        dict_offsets = offset.to_dict()
         return CartesianIterationSpace(
             i_interval=oir.Interval(
-                start=oir.AxisBound.from_start(min(0, offset.i)),
-                end=oir.AxisBound.from_end(max(0, offset.i)),
+                start=oir.AxisBound.from_start(min(0, dict_offsets["i"])),
+                end=oir.AxisBound.from_end(max(0, dict_offsets["i"])),
             ),
             j_interval=oir.Interval(
-                start=oir.AxisBound.from_start(min(0, offset.j)),
-                end=oir.AxisBound.from_end(max(0, offset.j)),
+                start=oir.AxisBound.from_start(min(0, dict_offsets["j"])),
+                end=oir.AxisBound.from_end(max(0, dict_offsets["j"])),
             ),
         )
 
@@ -490,9 +493,9 @@ def get_access_collection(
 
     if isinstance(node, dace.SDFG):
         res = AccessCollector.CartesianAccessCollection([])
-        for node, _ in node.all_nodes_recursive():
-            if isinstance(node, (HorizontalExecutionLibraryNode, VerticalLoopLibraryNode)):
-                collection = get_access_collection(node)
+        for n, _ in node.all_nodes_recursive():
+            if isinstance(n, (HorizontalExecutionLibraryNode, VerticalLoopLibraryNode)):
+                collection = get_access_collection(n)
                 res._ordered_accesses.extend(collection._ordered_accesses)
         return res
     elif isinstance(node, HorizontalExecutionLibraryNode):

@@ -57,10 +57,6 @@ class Literal(common.Literal, Expr):  # type: ignore
     pass
 
 
-class CartesianOffset(common.CartesianOffset):
-    pass
-
-
 class VariableKOffset(common.VariableKOffset[Expr]):
     pass
 
@@ -149,6 +145,19 @@ class ScalarIfStmt(common.IfStmt[BlockStmt, Expr], Stmt):
         return cond
 
 
+class While(common.While[Stmt, Expr], Stmt):
+    """While loop with a field or scalar expression as condition."""
+
+    @validator("body")
+    def _no_write_and_read_with_horizontal_offset_all(
+        cls, body: List[Stmt]
+    ) -> RootValidatorValuesType:
+        """In a while loop all variables must not be written and read with a horizontal offset."""
+        if names := _written_and_read_with_offset(body):
+            raise ValueError(f"Illegal write and read with horizontal offset detected for {names}.")
+        return body
+
+
 class UnaryOp(common.UnaryOp[Expr], Expr):
     pass
 
@@ -201,43 +210,16 @@ class VerticalLoop(LocNode):
     body: List[Stmt]
 
     @root_validator(skip_on_failure=True)
-    def no_write_and_read_with_horizontal_offset(
+    def _no_write_and_read_with_horizontal_offset(
         cls, values: RootValidatorValuesType
     ) -> RootValidatorValuesType:
         """
         In the same VerticalLoop a field must not be written and read with a horizontal offset.
 
-        Temporaries don't have this contraint. Backends are required to implement temporaries with block-private halos.
+        Temporaries don't have this contraint. Backends are required to implement
+        them using block-private halos.
         """
-        # TODO(havogt): either move to eve or will be removed in the attr-based eve if a List[Node] is represented as a CollectionNode
-        @utils.as_xiter
-        def _collection_iter_tree(
-            collection: List[Node],
-        ) -> Generator[TreeIterationItem, None, None]:
-            for elem in collection:
-                yield from elem.iter_tree()
-
-        def _writes(stmts: List[Stmt]) -> Set[str]:
-            result = set()
-            for left in _collection_iter_tree(stmts).if_isinstance(ParAssignStmt).getattr("left"):
-                result |= left.iter_tree().if_isinstance(FieldAccess).getattr("name").to_set()
-            return result
-
-        def _reads_with_offset(stmts: List[Stmt]) -> Set[str]:
-            return (
-                _collection_iter_tree(stmts)
-                .filter(_cartesian_fieldaccess)
-                .filter(
-                    lambda acc: acc.offset.i != 0 or acc.offset.j != 0
-                )  # writes always have zero offset
-                .getattr("name")
-                .to_set()
-            )
-
-        writes = _writes(values["body"])
-        reads_with_offset = _reads_with_offset(values["body"])
-
-        intersec = writes.intersection(reads_with_offset)
+        intersec = _written_and_read_with_offset(values["body"])
         non_tmp_fields = {
             acc for acc in intersec if acc not in {tmp.name for tmp in values["temporaries"]}
         }
@@ -268,3 +250,37 @@ def _cartesian_fieldaccess(node) -> bool:
 
 def _variablek_fieldaccess(node) -> bool:
     return isinstance(node, FieldAccess) and isinstance(node.offset, VariableKOffset)
+
+
+def _written_and_read_with_offset(
+    stmts: List[Stmt],
+) -> RootValidatorValuesType:
+    """Return a list of names that are written to and read with offset."""
+    # TODO(havogt): either move to eve or will be removed in the attr-based eve if a List[Node] is represented as a CollectionNode
+    @utils.as_xiter
+    def _collection_iter_tree(
+        collection: List[Node],
+    ) -> Generator[TreeIterationItem, None, None]:
+        for elem in collection:
+            yield from elem.iter_tree()
+
+    def _writes(stmts: List[Stmt]) -> Set[str]:
+        result = set()
+        for left in _collection_iter_tree(stmts).if_isinstance(ParAssignStmt).getattr("left"):
+            result |= left.iter_tree().if_isinstance(FieldAccess).getattr("name").to_set()
+        return result
+
+    def _reads_with_offset(stmts: List[Stmt]) -> Set[str]:
+        return (
+            _collection_iter_tree(stmts)
+            .filter(_cartesian_fieldaccess)
+            .filter(
+                lambda acc: acc.offset.i != 0 or acc.offset.j != 0
+            )  # writes always have zero offset
+            .getattr("name")
+            .to_set()
+        )
+
+    writes = _writes(stmts)
+    reads_with_offset = _reads_with_offset(stmts)
+    return writes & reads_with_offset

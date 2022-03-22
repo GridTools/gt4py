@@ -244,6 +244,13 @@ class TaskletCodegen(codegen.TemplatedGenerator):
         body_code = [indent + b for b in body_code]
         return "\n".join([mask_str] + body_code)
 
+    def visit_While(self, node: oir.While, **kwargs):
+        body = self.visit(node.body, **kwargs)
+        cond = self.visit(node.cond, is_target=False, **kwargs)
+        indent = " " * 4
+        delim = f"\n{indent}"
+        return f"while {cond}:\n{indent}{delim.join(body)}"
+
     @classmethod
     def apply(cls, node: oir.HorizontalExecution, **kwargs: Any) -> str:
         if not isinstance(node, oir.HorizontalExecution):
@@ -534,6 +541,7 @@ class SequentialNaiveVerticalLoopExpander(NaiveVerticalLoopExpander):
             in_accesses = dict()
             out_accesses = dict()
             in_subsets, out_subsets = self.get_mapped_subsets_dicts(interval, section)
+            state: dace.SDFGState
             for acc, state in (
                 (n, s)
                 for n, s in section.all_nodes_recursive()

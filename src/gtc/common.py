@@ -15,6 +15,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import enum
+import typing
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -27,7 +28,6 @@ from typing import (
     Type,
     TypeVar,
     Union,
-    cast,
 )
 
 import numpy as np
@@ -248,8 +248,8 @@ class LevelMarker(StrEnum):
 
 @enum.unique
 class ExprKind(IntEnum):
-    SCALAR = 0
-    FIELD = 1
+    SCALAR: "ExprKind" = typing.cast("ExprKind", enum.auto())
+    FIELD: "ExprKind" = typing.cast("ExprKind", enum.auto())
 
 
 class LocNode(Node):
@@ -305,9 +305,9 @@ def verify_and_get_common_dtype(
 
 def compute_kind(values: List[Expr]) -> ExprKind:
     if any(v.kind == ExprKind.FIELD for v in values):
-        return cast(ExprKind, ExprKind.FIELD)  # see https://github.com/GridTools/gtc/issues/100
+        return ExprKind.FIELD
     else:
-        return cast(ExprKind, ExprKind.SCALAR)  # see https://github.com/GridTools/gtc/issues/100
+        return ExprKind.SCALAR
 
 
 class Literal(Node):
@@ -315,9 +315,7 @@ class Literal(Node):
     # maybe it should be Union[float,int,str] etc?
     value: Union[BuiltInLiteral, Str]
     dtype: DataType
-    kind: ExprKind = cast(
-        ExprKind, ExprKind.SCALAR
-    )  # cast shouldn't be required, see https://github.com/GridTools/gtc/issues/100
+    kind: ExprKind = ExprKind.SCALAR
 
 
 StmtT = TypeVar("StmtT", bound=Stmt)
@@ -398,6 +396,21 @@ class IfStmt(GenericNode, Generic[StmtT, ExprT]):
     cond: ExprT
     true_branch: StmtT
     false_branch: Optional[StmtT]
+
+    @validator("cond")
+    def condition_is_boolean(cls, cond: Expr) -> Expr:
+        return verify_condition_is_boolean(cls, cond)
+
+
+class While(GenericNode, Generic[StmtT, ExprT]):
+    """
+    Generic while loop.
+
+    Verifies that `cond` is a boolean expr (if `dtype` is set).
+    """
+
+    cond: ExprT
+    body: List[StmtT]
 
     @validator("cond")
     def condition_is_boolean(cls, cond: Expr) -> Expr:
