@@ -136,7 +136,7 @@ class Storage(np.ndarray):
 
         mask: list of bools or list of spatial axes
             in a list of bools, ``False`` entries indicate that the corresponding dimension is masked, i.e. the storage
-            has reduced dimension and reading and writing from offsets along this axis acces the same element.
+            has reduced dimension and reading and writing from offsets along this axis access the same element.
             In a list of spatial axes (IJK), a boolean mask will be generated with ``True`` entries for all
             dimensions except for the missing spatial axes names.
         """
