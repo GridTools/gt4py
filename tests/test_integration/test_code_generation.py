@@ -506,8 +506,12 @@ class TestNegativeOrigin:
             with computation(PARALLEL), interval(...):
                 output_field = input_field[1, 0, 0]
 
-        input_field = gt_storage.ones(backend, (0, 0, 0), (1, 1, 1), dtype=np.int32)
-        output_field = gt_storage.zeros(backend, (0, 0, 0), (1, 1, 1), dtype=np.int32)
+        input_field = gt_storage.ones(
+            backend, default_origin=(0, 0, 0), shape=(1, 1, 1), dtype=np.int32
+        )
+        output_field = gt_storage.zeros(
+            backend, default_origin=(0, 0, 0), shape=(1, 1, 1), dtype=np.int32
+        )
 
         stencil_i(input_field, output_field, origin={"input_field": (-1, 0, 0)})
         assert output_field[0, 0, 0] == 1

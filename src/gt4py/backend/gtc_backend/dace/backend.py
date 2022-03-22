@@ -202,7 +202,7 @@ class DaCeComputationCodegen:
         field_extents = compute_fields_extents(oir, add_k=True)
 
         offset_dict: Dict[str, Tuple[int, int, int]] = {
-            k: (-v[0][0], -v[1][0], -v[2][0]) for k, v in field_extents.items()
+            k: (max(-v[0][0], 0), -v[1][0], -v[2][0]) for k, v in field_extents.items()
         }
         k_origins = {
             field_name: boundary[0] for field_name, boundary in compute_k_boundary(gtir).items()
