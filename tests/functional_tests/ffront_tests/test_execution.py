@@ -74,7 +74,6 @@ def program_from_fop(
     return itir.Program(
         function_definitions=[node],
         fencil_definitions=[fencil_from_fop(node, out_name=out_name, domain=domain)],
-        setqs=[],
     )
 
 

@@ -46,7 +46,6 @@
   (string-append
     "ir.Program(function_definitions=" (as-list gt->py (cadr expr))
     ", fencil_definitions=" (as-list gt-fencil->py (cddr expr))
-    ", setqs=[]"
     ")\n"))
 
 (define (gt-fencil->py expr)

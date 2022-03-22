@@ -68,11 +68,6 @@ class FunctionDefinition(Node, SymbolTableTrait):
         return hash(self.id)
 
 
-class Setq(Node):
-    id: SymbolName  # noqa: A003
-    expr: Expr
-
-
 class StencilClosure(Node):
     domain: Expr
     stencil: Expr
@@ -114,7 +109,6 @@ BUILTIN_FUNCTIONS = [
 class Program(Node, SymbolTableTrait):
     function_definitions: List[FunctionDefinition]
     fencil_definitions: List[FencilDefinition]
-    setqs: List[Setq]
 
     builtin_functions = [Sym(id=name) for name in BUILTIN_FUNCTIONS]
     _validate_symbol_refs = validate_symbol_refs()

@@ -90,7 +90,6 @@ class ToIrTransformer(lark.Transformer):
                 return ir.Program(
                     function_definitions=elements[1],
                     fencil_definitions=elements[2:],
-                    setqs=[],
                 )
             if elements[0].id == "gt-stencil-closure":
                 return ir.StencilClosure(
