@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING, Any, Collection, Dict, Iterator, List, Tuple, 
 import dace
 import dace.data
 import networkx as nx
+import numpy as np
 from dace import SDFG, InterstateEdge
 from pydantic import validator
 
@@ -82,6 +83,22 @@ def array_dimensions(array: dace.data.Array):
         for k in "IJK"
     ]
     return dims
+
+
+def replace_strides(arrays, get_layout_map):
+    symbol_mapping = {}
+    for array in arrays:
+        dims = array_dimensions(array)
+        ndata_dims = len(array.shape) - sum(dims)
+        layout = get_layout_map(dims + [True] * ndata_dims)
+        if array.transient:
+            stride = 1
+            for idx in reversed(np.argsort(layout)):
+                symbol = array.strides[idx]
+                size = array.shape[idx]
+                symbol_mapping[str(symbol)] = stride
+                stride *= size
+    return symbol_mapping
 
 
 def get_tasklet_symbol(name, offset, is_target):
@@ -419,9 +436,9 @@ def get_access_collection(
 
     if isinstance(node, dace.SDFG):
         res = AccessCollector.CartesianAccessCollection([])
-        for node in node.states()[0].nodes():
-            if isinstance(node, (HorizontalExecutionLibraryNode, VerticalLoopLibraryNode)):
-                collection = get_access_collection(node)
+        for n in node.states()[0].nodes():
+            if isinstance(n, (HorizontalExecutionLibraryNode, VerticalLoopLibraryNode)):
+                collection = get_access_collection(n)
                 res._ordered_accesses.extend(collection._ordered_accesses)
         return res
     elif isinstance(node, HorizontalExecutionLibraryNode):
@@ -639,7 +656,6 @@ def assert_sdfg_equal(sdfg1: dace.SDFG, sdfg2: dace.SDFG):
                 raise TypeError
             if isinstance(n1, dace.nodes.AccessNode):
                 assert isinstance(n2, dace.nodes.AccessNode)
-                assert n1.access == n2.access
                 assert n1.data == n2.data
             elif isinstance(n1, OIRLibraryNode):
                 assert n1 == n2

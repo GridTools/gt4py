@@ -463,13 +463,16 @@ class SequentialNaiveVerticalLoopExpander(NaiveVerticalLoopExpander):
             in_accesses = dict()
             out_accesses = dict()
             in_subsets, out_subsets = self.get_mapped_subsets_dicts(interval, section)
-            for acc in (
-                n for n, _ in section.all_nodes_recursive() if isinstance(n, dace.nodes.AccessNode)
+            state: dace.SDFGState
+            for acc, state in (
+                (n, s)
+                for n, s in section.all_nodes_recursive()
+                if isinstance(n, dace.nodes.AccessNode)
             ):
-                if acc.access != dace.AccessType.WriteOnly:
+                if acc.has_reads(state):
                     if acc.data not in in_accesses:
                         in_accesses[acc.data] = loop_state.add_read(acc.data)
-                if acc.access != dace.AccessType.ReadOnly:
+                if acc.has_writes(state):
                     if acc.data not in out_accesses:
                         out_accesses[acc.data] = loop_state.add_write(acc.data)
             nsdfg = loop_state.add_nested_sdfg(
@@ -499,19 +502,22 @@ class ParallelNaiveVerticalLoopExpander(NaiveVerticalLoopExpander):
 
             interval_str = get_interval_range_str(interval, "__K")
             map_entry, map_exit = self.res_state.add_map(
-                section.name + "_map", ndrange={"k": interval_str}
+                section.name + "_map",
+                ndrange={"k": interval_str},
             )
 
             section_inputs = set()
             section_outputs = set()
-            for acc in (
-                n for n, _ in section.all_nodes_recursive() if isinstance(n, dace.nodes.AccessNode)
+            for acc, state in (
+                (n, s)
+                for n, s in section.all_nodes_recursive()
+                if isinstance(n, dace.nodes.AccessNode)
             ):
-                if acc.access != dace.AccessType.WriteOnly:
+                if acc.has_reads(state):
                     if acc.data not in in_accesses:
                         in_accesses[acc.data] = self.res_state.add_read(acc.data)
                     section_inputs.add(acc.data)
-                if acc.access != dace.AccessType.ReadOnly:
+                if acc.has_writes(state):
                     if acc.data not in out_accesses:
                         out_accesses[acc.data] = self.res_state.add_write(acc.data)
                     section_outputs.add(acc.data)
