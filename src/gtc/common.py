@@ -341,8 +341,6 @@ class CartesianOffset(Node):
 
 
 class VariableKOffset(GenericNode, Generic[ExprT]):
-    i: int = 0
-    j: int = 0
     k: ExprT
 
     def to_dict(self) -> Dict[str, Optional[int]]:
@@ -356,6 +354,14 @@ class VariableKOffset(GenericNode, Generic[ExprT]):
         if k.dtype is not None and not k.dtype.isinteger():
             raise ValueError("Variable vertical index must be an integer expression")
         return k
+
+    @property
+    def i(self):
+        return 0
+
+    @property
+    def j(self):
+        return 0
 
 
 class ScalarAccess(LocNode):

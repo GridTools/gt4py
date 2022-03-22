@@ -43,7 +43,7 @@ if TYPE_CHECKING:
     from gt4py.stencil_object import StencilObject
 
 
-def specialize_transient_strides(sdfg: dace.SDFG, layout_map):
+def _specialize_transient_strides(sdfg: dace.SDFG, layout_map):
     repldict = replace_strides(
         [array for array in sdfg.arrays.values() if array.transient],
         layout_map,
@@ -60,13 +60,13 @@ def specialize_transient_strides(sdfg: dace.SDFG, layout_map):
             sdfg.remove_symbol(k)
 
 
-def post_expand_trafos(sdfg: dace.SDFG):
+def _post_expand_trafos(sdfg: dace.SDFG):
     while inline_sdfgs(sdfg) or fuse_states(sdfg):
         pass
     sdfg.simplify()
 
 
-def expand_and_finalize_sdfg(gtir: gtir.Stencil, sdfg: dace.SDFG, layout_map) -> dace.SDFG:
+def _expand_and_finalize_sdfg(gtir: gtir.Stencil, sdfg: dace.SDFG, layout_map) -> dace.SDFG:
 
     args_data = make_args_data_from_gtir(GtirPipeline(gtir))
 
@@ -80,8 +80,8 @@ def expand_and_finalize_sdfg(gtir: gtir.Stencil, sdfg: dace.SDFG, layout_map) ->
         if array.transient:
             array.lifetime = dace.AllocationLifetime.Persistent
     sdfg.expand_library_nodes(recursive=True)
-    specialize_transient_strides(sdfg, layout_map=layout_map)
-    post_expand_trafos(sdfg)
+    _specialize_transient_strides(sdfg, layout_map=layout_map)
+    _post_expand_trafos(sdfg)
 
     return sdfg
 
@@ -107,7 +107,7 @@ class GTCDaCeExtGenerator:
         oir = oir_pipeline.run(base_oir)
         sdfg = OirSDFGBuilder().visit(oir)
 
-        sdfg = expand_and_finalize_sdfg(gtir, sdfg, self.backend.storage_info["layout_map"])
+        sdfg = _expand_and_finalize_sdfg(gtir, sdfg, self.backend.storage_info["layout_map"])
 
         for tmp_sdfg in sdfg.all_sdfgs_recursive():
             tmp_sdfg.transformation_hist = []
@@ -169,11 +169,9 @@ class DaCeComputationCodegen:
         self = cls()
         code_objects = sdfg.generate_code()
         computations = code_objects[[co.title for co in code_objects].index("Frame")].clean_code
-        lines = computations.split("\n")
-        for i, line in reversed(list(enumerate(lines))):
-            if '#include "../../include/hash.h' in line:
-                lines = lines[0:i] + lines[i + 1 :]
-                break
+        lines = filter(
+            lambda l: '#include "../../include/hash.h"' not in l, computations.split("\n")
+        )
 
         computations = codegen.format_source("cpp", "\n".join(lines), style="LLVM")
 
@@ -202,7 +200,7 @@ class DaCeComputationCodegen:
         field_extents = compute_fields_extents(oir, add_k=True)
 
         offset_dict: Dict[str, Tuple[int, int, int]] = {
-            k: (max(-v[0][0], 0), -v[1][0], -v[2][0]) for k, v in field_extents.items()
+            k: (max(-v[0][0], 0), max(-v[1][0], 0), -v[2][0]) for k, v in field_extents.items()
         }
         k_origins = {
             field_name: boundary[0] for field_name, boundary in compute_k_boundary(gtir).items()

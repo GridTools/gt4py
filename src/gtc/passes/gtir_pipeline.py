@@ -38,12 +38,7 @@ class GtirPipeline:
         self._cache: Dict[Tuple[PASS_T, ...], gtir.Stencil] = {}
 
     def steps(self) -> Sequence[PASS_T]:
-        return [
-            check_assignments,
-            prune_unused_parameters,
-            resolve_dtype,
-            upcast,
-        ]
+        return [check_assignments, prune_unused_parameters, resolve_dtype, upcast]
 
     def apply(self, steps: Sequence[PASS_T]) -> gtir.Stencil:
         result = self.gtir

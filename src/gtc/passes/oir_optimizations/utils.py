@@ -42,7 +42,6 @@ class GenericAccess(Generic[OffsetT]):
     field: str
     offset: OffsetT
     is_write: bool
-    in_mask: bool = False
 
     @property
     def is_read(self) -> bool:
@@ -69,7 +68,6 @@ class AccessCollector(NodeVisitor):
         *,
         accesses: List[GeneralAccess],
         is_write: bool,
-        in_mask=False,
         **kwargs: Any,
     ) -> None:
         self.generic_visit(node, accesses=accesses, is_write=is_write, **kwargs)
@@ -79,7 +77,6 @@ class AccessCollector(NodeVisitor):
                 field=node.name,
                 offset=(offsets["i"], offsets["j"], offsets["k"]),
                 is_write=is_write,
-                in_mask=in_mask,
             )
         )
 
@@ -94,7 +91,7 @@ class AccessCollector(NodeVisitor):
     def visit_MaskStmt(self, node: oir.MaskStmt, **kwargs: Any) -> None:
 
         self.visit(node.mask, is_write=False, **kwargs)
-        self.visit(node.body, in_mask=True, **kwargs)
+        self.visit(node.body, **kwargs)
 
     def visit_While(self, node: oir.While, **kwargs: Any) -> None:
         self.visit(node.cond, is_write=False, **kwargs)
@@ -142,10 +139,6 @@ class AccessCollector(NodeVisitor):
             """Get a set of all written fields' names."""
             return {acc.field for acc in self._ordered_accesses if acc.is_write}
 
-        def mask_writes(self) -> Set[str]:
-            """Get a set of all fields' names written in mask statements."""
-            return {acc.field for acc in self._ordered_accesses if acc.is_write and acc.in_mask}
-
         def ordered_accesses(self) -> List[AccessT]:
             """Get a list of ordered accesses."""
             return self._ordered_accesses
@@ -161,7 +154,6 @@ class AccessCollector(NodeVisitor):
                         field=acc.field,
                         offset=cast(Tuple[int, int, int], acc.offset),
                         is_write=acc.is_write,
-                        in_mask=acc.in_mask,
                     )
                     for acc in self._ordered_accesses
                     if acc.offset[2] is not None
@@ -175,7 +167,6 @@ class AccessCollector(NodeVisitor):
     def apply(cls, node: TreeNode, **kwargs: Any) -> "AccessCollector.GeneralAccessCollection":
         result = cls.GeneralAccessCollection([])
         cls().visit(node, accesses=result._ordered_accesses, **kwargs)
-
         return result
 
 
