@@ -359,3 +359,43 @@ def test_full_computation_valid(tmp_path) -> None:
         _origin_={"a": (1, 1, 0), "b": (0, 0, 0)},
     )
     assert (a[1:9, 1:6, 0:9] == 5).all()
+
+
+def test_variable_read_outside_bounds(tmp_path) -> None:
+    """While loops can cause variable K reads to go outside the bounds of K.
+
+    This tests whether that is appropriately clipped to support that case by constructing
+    `a = b[0, 0, index]` where the read is outside bounds.
+
+    """
+    computation = ComputationFactory(
+        vertical_passes__0__body__0__body__0=VectorAssignFactory(
+            left__name="a",
+            right=FieldSliceFactory(
+                name="b",
+                k_offset=npir.VarKOffset(
+                    k=FieldSliceFactory(name="index", dtype=common.DataType.INT32)
+                ),
+            ),
+        ),
+    )
+
+    result = NpirCodegen().visit(computation)
+    print(result)
+    mod_path = tmp_path / "npir_codegen_2.py"
+    mod_path.write_text(result)
+
+    sys.path.append(str(tmp_path))
+    import npir_codegen_2 as mod
+
+    a = np.empty((2, 2, 5))
+    b = np.ones_like(a) * 3
+    index = np.ones_like(a, dtype=np.int_)
+
+    mod.run(
+        a=a,
+        b=b,
+        index=index,
+        _domain_=a.shape,
+        _origin_={"a": (0, 0, 0), "b": (0, 0, 0), "index": (0, 0, 0)},
+    )

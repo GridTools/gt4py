@@ -174,7 +174,9 @@ class OirToNpir(NodeTranslator):
             mask = npir.VectorLogic(op=common.LogicalOperator.AND, left=mask, right=cond)
         else:
             mask = cond
-        return npir.While(cond=cond, body=self.visit(node.body, mask=mask, **kwargs))
+        return npir.While(
+            cond=cond, body=utils.flatten_list(self.visit(node.body, mask=mask, **kwargs))
+        )
 
     def visit_HorizontalExecution(
         self,
