@@ -17,7 +17,6 @@ class ToLispLike(TemplatedGenerator):
         """
     {''.join(function_definitions)}
     {''.join(fencil_definitions)}
-    {''.join(setqs)}
     """
     )
     StencilClosure = as_fmt(
