@@ -193,7 +193,7 @@ class GraphMerging(SingleStateTransformation):
         graph: SDFGState,
         expr_index: int,
         sdfg: dace.SDFG,
-        permissive: bool = False,
+        permissive: bool = True,
     ) -> bool:
         left = self.left
         right = self.right
@@ -241,7 +241,6 @@ class GraphMerging(SingleStateTransformation):
         return dinfo
 
     def apply(self, state, sdfg: dace.SDFG) -> None:
-        state = sdfg.node(self.state_id)
         left = self.left
         right = self.right
 
