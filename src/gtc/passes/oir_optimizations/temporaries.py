@@ -26,17 +26,6 @@ from .utils import AccessCollector, collect_symbol_names, symbol_name_creator
 class TemporariesToScalarsBase(NodeTranslator):
     contexts = (SymbolTableTrait.symtable_merger,)
 
-    def _assigned_in_horizontal_restrictions(self, stencil: oir.Stencil) -> Set[str]:
-        assigned_in_hrestricts: Set[str] = set()
-        for horizontal_restriction in stencil.iter_tree().if_isinstance(oir.HorizontalRestriction):
-            assigned_in_hrestricts |= {
-                ref.name
-                for ref in horizontal_restriction.iter_tree()
-                .if_isinstance(oir.AssignStmt)
-                .getattr("left")
-            }
-        return assigned_in_hrestricts
-
     def visit_FieldAccess(
         self, node: oir.FieldAccess, *, tmps_name_map: Dict[str, str], **kwargs: Any
     ) -> Union[oir.FieldAccess, oir.ScalarAccess]:
@@ -134,10 +123,7 @@ class LocalTemporariesToScalars(TemporariesToScalarsBase):
             collections.Counter(),
         )
 
-        assigned_in_hrestricts = self._assigned_in_horizontal_restrictions(node)
-        local_tmps = {
-            tmp for tmp, count in counts.items() if count == 1 and tmp not in assigned_in_hrestricts
-        }
+        local_tmps = {tmp for tmp, count in counts.items() if count == 1}
         return super().visit_Stencil(node, tmps_to_replace=local_tmps, **kwargs)
 
 
@@ -173,5 +159,4 @@ class WriteBeforeReadTemporariesToScalars(TemporariesToScalarsBase):
                 tmp for tmp in write_before_read_tmps if write_before_read(tmp)
             }
 
-        tmps_to_replace = write_before_read_tmps - self._assigned_in_horizontal_restrictions(node)
-        return super().visit_Stencil(node, tmps_to_replace=tmps_to_replace, **kwargs)
+        return super().visit_Stencil(node, tmps_to_replace=write_before_read_tmps, **kwargs)
