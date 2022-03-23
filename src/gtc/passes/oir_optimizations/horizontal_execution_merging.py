@@ -248,12 +248,16 @@ class OnTheFlyMerging(NodeTranslator):
         def first_has_variable_access() -> bool:
             return first_accesses.has_variable_access()
 
+        def first_has_horizontal_restriction() -> bool:
+            return any(first.iter_tree().if_isinstance(oir.HorizontalRestriction))
+
         if (
             first_fields_rewritten_later()
             or first_writes_protected()
             or first_has_large_body()
             or first_has_expensive_function_call()
             or first_has_variable_access()
+            or first_has_horizontal_restriction()
         ):
             return [first] + self._merge(others, symtable, new_symbol_name, protected_fields)
 

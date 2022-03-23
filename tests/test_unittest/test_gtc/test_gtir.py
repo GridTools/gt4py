@@ -37,8 +37,10 @@ from .gtir_utils import (
     FieldAccessFactory,
     FieldDeclFactory,
     FieldIfStmtFactory,
+    HorizontalMaskFactory,
     ParAssignStmtFactory,
     ScalarAccessFactory,
+    ScalarIfStmtFactory,
     StencilFactory,
     VariableKOffsetFactory,
     VerticalLoopFactory,
@@ -246,3 +248,8 @@ def test_variable_k_offset_in_access():
         FieldAccessFactory(
             offset=VariableKOffsetFactory(k=FieldAccessFactory(dtype=DataType.FLOAT32))
         )
+
+
+def test_visit_ScalarIf_HorizontalMask_fail():
+    with pytest.raises(Exception):
+        ScalarIfStmtFactory(cond=HorizontalMaskFactory())

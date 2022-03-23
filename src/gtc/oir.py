@@ -79,6 +79,10 @@ class MaskStmt(Stmt):
         return v
 
 
+class HorizontalRestriction(common.HorizontalRestriction[Stmt], Stmt):
+    pass
+
+
 class UnaryOp(common.UnaryOp[Expr], Expr):
     pass
 
