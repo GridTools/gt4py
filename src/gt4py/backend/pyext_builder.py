@@ -120,7 +120,7 @@ def get_gt_pyext_build_opts(
 
     if dace_path := get_dace_module_path():
         extra_compile_args["cxx"].append(
-            "-isystem={}".format(os.path.join(dace_path, "runtime/include"))
+            "-isystem{}".format(os.path.join(dace_path, "runtime/include"))
         )
 
     if add_profile_info:
