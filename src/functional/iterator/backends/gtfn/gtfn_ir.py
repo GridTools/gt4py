@@ -13,6 +13,12 @@ class GridType(StrEnum):
     Unstructured = "unstructured"
 
 
+@enum.unique
+class FnBackendType(StrEnum):
+    Gpu = "gpu"
+    Naive = "naive"
+
+
 class Sym(Node):  # helper
     id: SymbolName  # noqa: A003
 
@@ -113,6 +119,7 @@ class Program(Node, SymbolTableTrait):
     fencil_definitions: List[FencilDefinition]
     offsets: List[str]
     grid_type: GridType
+    backend_type: FnBackendType
 
     builtin_functions = list(
         Sym(id=name)

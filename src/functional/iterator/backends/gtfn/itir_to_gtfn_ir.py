@@ -10,6 +10,7 @@ from functional.iterator.backends.gtfn.gtfn_ir import (
     Expr,
     FencilDefinition,
     FloatLiteral,
+    FnBackendType,
     FunCall,
     FunctionDefinition,
     GridType,
@@ -134,7 +135,19 @@ class GTFN_lowering(NodeTranslator):
             .to_set()
         )
 
-    def visit_Program(self, node: itir.Program, *, grid_type: str, **kwargs) -> Program:
+    @staticmethod
+    def backend_as_enum(backend: str) -> FnBackendType:
+        backend_lower = backend.lower()
+        if backend_lower == "gpu":
+            return FnBackendType.Gpu
+        elif backend_lower == "naive":
+            return FnBackendType.Naive
+        else:
+            raise ValueError("Unknown fn backend")
+
+    def visit_Program(
+        self, node: itir.Program, *, grid_type: str, fn_backend: str, **kwargs
+    ) -> Program:
         grid_type = (
             GridType.Cartesian if grid_type.lower() == "cartesian" else GridType.Unstructured
         )
@@ -143,4 +156,5 @@ class GTFN_lowering(NodeTranslator):
             fencil_definitions=self.visit(node.fencil_definitions),
             offsets=self._collect_offsets(node),
             grid_type=grid_type,
+            backend_type=self.backend_as_enum(fn_backend),
         )

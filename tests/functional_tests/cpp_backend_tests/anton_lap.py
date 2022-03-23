@@ -52,7 +52,7 @@ if __name__ == "__main__":
     output_file = sys.argv[1]
 
     prog = trace(lap_fencil, [None] * 3)
-    generated_code = generate(prog, grid_type="Cartesian")
+    generated_code = generate(prog, grid_type="Cartesian", fn_backend="naive")
 
     with open(output_file, "w+") as output:
         output.write(generated_code)

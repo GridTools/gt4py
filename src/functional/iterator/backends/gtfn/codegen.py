@@ -55,13 +55,16 @@ class gtfn_codegen(codegen.TemplatedGenerator):
     )
 
     def visit_Program(self, node: Program, **kwargs):
-        return self.generic_visit(node, is_cartesian=node.grid_type == GridType.Cartesian, **kwargs)
+        grid_type_str = "cartesian" if node.grid_type == GridType.Cartesian else "unstructured"
+        is_cartesian = node.grid_type == GridType.Cartesian
+        return self.generic_visit(
+            node, is_cartesian=is_cartesian, grid_type_str=grid_type_str, **kwargs
+        )
 
     Program = as_mako(
         """
-    #include <gridtools/fn/cartesian2.hpp>
-    #include <gridtools/fn/unstructured2.hpp>
-    #include <gridtools/fn/backend2/naive.hpp>
+    #include <gridtools/fn/${grid_type_str}2.hpp>
+    #include <gridtools/fn/backend2/${backend_type}.hpp>
 
     namespace generated{
     using namespace gridtools;

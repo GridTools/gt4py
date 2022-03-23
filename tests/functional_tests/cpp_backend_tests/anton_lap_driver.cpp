@@ -34,7 +34,7 @@ TEST(fn_lap, fn_backend_t) {
   auto shifted_in = sid::shift_sid_origin(in, origin_shift);
   auto shifted_actual = sid::shift_sid_origin(actual, origin_shift);
 
-  auto domain = cartesian_domain(8, 8, 3);
+  auto domain = cartesian_domain(std::tuple{8, 8, 3});
 
   generated::lap_fencil(domain, shifted_actual, shifted_in);
 
