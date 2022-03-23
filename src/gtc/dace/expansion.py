@@ -14,7 +14,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import Any, Dict, List, Sequence, Set, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 
 import dace
 import dace.data
@@ -48,7 +48,7 @@ def _get_offset_subset_str(origin, offset, nonflat_dimensions, symbols: Sequence
     return subset_strs
 
 
-def _get_offset_suffix(node: Tuple[int, int, int]):
+def _get_offset_suffix(node: Tuple[int, int, Optional[int]]):
     res = []
     if node[0] != 0:
         res.append(f'i{"m" if node[0] < 0 else "p"}{abs(node[0]):d}')
@@ -79,7 +79,7 @@ class TaskletCodegen(codegen.TemplatedGenerator):
         idx_syms = list(index_symbols)
         if node.name in variable_k_fields:
             idx_syms[2] = "k"
-        offset_for_suffix = list(node.offset.to_tuple())
+        offset_for_suffix = list(node.offset.to_dict()[k] for k in "ijk")
         if node.name in variable_k_fields:
             offset_for_suffix[2] = 0
         elif is_target or node.name in targets:
@@ -98,7 +98,7 @@ class TaskletCodegen(codegen.TemplatedGenerator):
                     offset_for_suffix,
                     is_target,
                 )
-                offset = list(node.offset.to_tuple())
+                offset = list(node.offset.to_dict()[k] for k in "ijk")
                 if isinstance(node.offset, common.VariableKOffset):
                     varoffset = self.visit(
                         node.offset.k,
@@ -127,10 +127,10 @@ class TaskletCodegen(codegen.TemplatedGenerator):
         return name + offset_str
 
     def visit_CartesianOffset(self, node: common.CartesianOffset):
-        return _get_offset_suffix(node.to_tuple())
+        return _get_offset_suffix((node.i, node.j, node.k))
 
     def visit_VariableKOffset(self, node: common.VariableKOffset):
-        return _get_offset_suffix(node.to_tuple())
+        return _get_offset_suffix((0, 0, node.k))
 
     def visit_AssignStmt(self, node: oir.AssignStmt, **kwargs):
         right = self.visit(node.right, is_target=False, **kwargs)
@@ -688,47 +688,51 @@ class NaiveHorizontalExecutionExpander(OIRLibraryNodeExpander):
             for acc in self.node.oir_node.iter_tree().if_isinstance(oir.FieldAccess)
             if isinstance(acc.offset, common.VariableKOffset)
         }
+
+        def acc_to_offset_tuple(acc):
+            return tuple(acc.offset.to_dict()[k] for k in "ijk")
+
         dynamic_accesses = {
-            get_tasklet_symbol(acc.name, acc.offset.to_tuple(), is_target=False)
+            get_tasklet_symbol(acc.name, acc_to_offset_tuple(acc), is_target=False)
             for maskstmt in self.node.oir_node.iter_tree().if_isinstance(oir.MaskStmt)
             for stmt in maskstmt.body
             for assign in stmt.iter_tree().if_isinstance(oir.AssignStmt)
             for acc in assign.right.iter_tree().if_isinstance(oir.FieldAccess)
         }
         dynamic_accesses |= {
-            get_tasklet_symbol(acc.name, acc.offset.to_tuple(), is_target=True)
+            get_tasklet_symbol(acc.name, acc_to_offset_tuple(acc), is_target=True)
             for maskstmt in self.node.oir_node.iter_tree().if_isinstance(oir.MaskStmt)
             for stmt in maskstmt.body
             for assign in stmt.iter_tree().if_isinstance(oir.AssignStmt)
             for acc in assign.left.iter_tree().if_isinstance(oir.FieldAccess)
         }
         dynamic_accesses |= {
-            get_tasklet_symbol(acc.name, acc.offset.to_tuple(), is_target=False)
+            get_tasklet_symbol(acc.name, acc_to_offset_tuple(acc), is_target=False)
             for whilestmt in self.node.oir_node.iter_tree().if_isinstance(oir.While)
             for acc in whilestmt.cond.iter_tree().if_isinstance(oir.FieldAccess)
         }
         dynamic_accesses |= {
-            get_tasklet_symbol(acc.name, acc.offset.to_tuple(), is_target=False)
+            get_tasklet_symbol(acc.name, acc_to_offset_tuple(acc), is_target=False)
             for whilestmt in self.node.oir_node.iter_tree().if_isinstance(oir.While)
             for stmt in whilestmt.body
             for assign in stmt.iter_tree().if_isinstance(oir.AssignStmt)
             for acc in assign.right.iter_tree().if_isinstance(oir.FieldAccess)
         }
         dynamic_accesses |= {
-            get_tasklet_symbol(acc.name, acc.offset.to_tuple(), is_target=True)
+            get_tasklet_symbol(acc.name, acc_to_offset_tuple(acc), is_target=True)
             for whilestmt in self.node.oir_node.iter_tree().if_isinstance(oir.While)
             for stmt in whilestmt.body
             for assign in stmt.iter_tree().if_isinstance(oir.AssignStmt)
             for acc in assign.left.iter_tree().if_isinstance(oir.FieldAccess)
         }
         dynamic_accesses |= {
-            get_tasklet_symbol(acc.name, acc.offset.to_tuple(), is_target=False)
+            get_tasklet_symbol(acc.name, acc_to_offset_tuple(acc), is_target=False)
             for assign in self.node.oir_node.iter_tree().if_isinstance(oir.AssignStmt)
             for acc in assign.right.iter_tree().if_isinstance(oir.FieldAccess)
             if isinstance(acc.offset, common.VariableKOffset)
         }
         dynamic_accesses |= {
-            get_tasklet_symbol(acc.name, acc.offset.to_tuple(), is_target=True)
+            get_tasklet_symbol(acc.name, acc_to_offset_tuple(acc), is_target=True)
             for assign in self.node.oir_node.iter_tree().if_isinstance(oir.AssignStmt)
             for acc in assign.right.iter_tree().if_isinstance(oir.FieldAccess)
             if isinstance(acc.offset, common.VariableKOffset)

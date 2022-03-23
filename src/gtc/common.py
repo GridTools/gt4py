@@ -336,9 +336,6 @@ class CartesianOffset(Node):
     def to_dict(self) -> Dict[str, int]:
         return {"i": self.i, "j": self.j, "k": self.k}
 
-    def to_tuple(self) -> Tuple[int, int, int]:
-        return self.i, self.j, self.k
-
 
 class VariableKOffset(GenericNode, Generic[ExprT]):
     k: ExprT
@@ -346,22 +343,11 @@ class VariableKOffset(GenericNode, Generic[ExprT]):
     def to_dict(self) -> Dict[str, Optional[int]]:
         return {"i": 0, "j": 0, "k": None}
 
-    def to_tuple(self) -> Tuple[int, int, Optional[int]]:
-        return self.i, self.j, None
-
     @validator("k")
     def offset_expr_is_int(cls, k: Expr) -> List[Expr]:
         if k.dtype is not None and not k.dtype.isinteger():
             raise ValueError("Variable vertical index must be an integer expression")
         return k
-
-    @property
-    def i(self):
-        return 0
-
-    @property
-    def j(self):
-        return 0
 
 
 class ScalarAccess(LocNode):
