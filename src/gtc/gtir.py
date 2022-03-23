@@ -145,6 +145,10 @@ class ScalarIfStmt(common.IfStmt[BlockStmt, Expr], Stmt):
         return cond
 
 
+class HorizontalRestriction(common.HorizontalRestriction[Stmt], Stmt):
+    pass
+
+
 class While(common.While[Stmt, Expr], Stmt):
     """While loop with a field or scalar expression as condition."""
 

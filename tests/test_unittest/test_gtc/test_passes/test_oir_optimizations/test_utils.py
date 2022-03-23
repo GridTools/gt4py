@@ -14,14 +14,24 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import pytest
+
 from gt4py.definitions import Extent
+from gtc import common
 from gtc.common import DataType
-from gtc.passes.oir_optimizations.utils import AccessCollector, GeneralAccess, compute_extents
+from gtc.passes.horizontal_masks import _overlap_along_axis
+from gtc.passes.oir_optimizations.utils import (
+    AccessCollector,
+    GeneralAccess,
+    compute_extents,
+    compute_horizontal_block_extents,
+)
 
 from ...oir_utils import (
     AssignStmtFactory,
     FieldAccessFactory,
     HorizontalExecutionFactory,
+    HorizontalRestrictionFactory,
     MaskStmtFactory,
     StencilFactory,
     TemporaryFactory,
@@ -105,3 +115,86 @@ def test_stencil_extents_simple():
     hexecs = testee.vertical_loops[0].sections[0].horizontal_executions
     assert block_extents[id(hexecs[0])] == Extent((0, 1), (0, 0))
     assert block_extents[id(hexecs[1])] == Extent((0, 0), (0, 0))
+
+
+def test_access_overlap_along_axis():
+    assert _overlap_along_axis((0, 0), common.HorizontalInterval.compute_domain()) == (0, 0)
+    assert _overlap_along_axis(
+        (0, 0), common.HorizontalInterval.compute_domain(start_offset=-1, end_offset=1)
+    ) == (0, 0)
+
+    overlap = _overlap_along_axis(
+        (0, 0), common.HorizontalInterval.at_endpt(common.LevelMarker.START, 2)
+    )
+
+    assert overlap[0] == -2
+    assert overlap[1] > 100
+
+
+@pytest.mark.parametrize(
+    "mask,offset,access_extent",
+    (
+        (
+            common.HorizontalMask(
+                i=common.HorizontalInterval.at_endpt(common.LevelMarker.END, 1),
+                j=common.HorizontalInterval.full(),
+            ),
+            1,
+            ((0, 2), (0, 0)),
+        ),
+        (
+            common.HorizontalMask(
+                i=common.HorizontalInterval.at_endpt(common.LevelMarker.END, 1),
+                j=common.HorizontalInterval.full(),
+            ),
+            -1,
+            ((0, 0), (0, 0)),
+        ),
+        (
+            common.HorizontalMask(
+                i=common.HorizontalInterval.at_endpt(common.LevelMarker.END, 2),
+                j=common.HorizontalInterval.full(),
+            ),
+            0,
+            None,
+        ),
+    ),
+)
+def test_stencil_extents_region(mask, offset, access_extent):
+    testee = StencilFactory(
+        vertical_loops__0__sections__0__horizontal_executions=[
+            HorizontalExecutionFactory(
+                body=[AssignStmtFactory(left__name="tmp", right__name="input")]
+            ),
+            HorizontalExecutionFactory(
+                body=[
+                    HorizontalRestrictionFactory(
+                        mask=mask,
+                        body=[
+                            AssignStmtFactory(
+                                left__name="tmp", right__name="input", right__offset__i=offset
+                            )
+                        ],
+                    ),
+                ]
+            ),
+            HorizontalExecutionFactory(
+                body=[AssignStmtFactory(left__name="output", right__name="tmp", right__offset__i=1)]
+            ),
+        ],
+        declarations=[TemporaryFactory(name="tmp")],
+    )
+
+    block_extents = compute_horizontal_block_extents(testee)
+    hexecs = testee.vertical_loops[0].sections[0].horizontal_executions
+    mask_read_accesses = AccessCollector.apply(hexecs[1].body[0])
+    input_access = next(
+        iter(acc for acc in mask_read_accesses.ordered_accesses() if acc.field == "input")
+    )
+
+    block_extent = ((0, 1), (0, 0))
+    assert block_extents[id(hexecs[1])] == block_extent
+    if access_extent is not None:
+        assert input_access.to_extent(Extent(block_extent)) == access_extent
+    else:
+        assert input_access.to_extent(Extent(block_extent)) is None

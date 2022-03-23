@@ -54,7 +54,7 @@ class OirToNpir(NodeTranslator):
     def visit_Temporary(
         self, node: oir.Temporary, *, field_extents: Dict[str, Extent], **kwargs: Any
     ) -> npir.TemporaryDecl:
-        temp_extent = field_extents[node.name] | Extent.zeros(ndims=2)
+        temp_extent = field_extents[node.name]
         offset = [-ext[0] for ext in temp_extent]
         assert all(off >= 0 for off in offset)
         padding = [ext[1] - ext[0] for ext in temp_extent]
@@ -174,7 +174,9 @@ class OirToNpir(NodeTranslator):
             mask = npir.VectorLogic(op=common.LogicalOperator.AND, left=mask, right=cond)
         else:
             mask = cond
-        return npir.While(cond=cond, body=self.visit(node.body, mask=mask, **kwargs))
+        return npir.While(
+            cond=cond, body=utils.flatten_list(self.visit(node.body, mask=mask, **kwargs))
+        )
 
     def visit_HorizontalExecution(
         self,

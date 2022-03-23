@@ -71,18 +71,24 @@ ORIGIN_CORRECTED_VIEW_CLASS = textwrap.dedent(
                     else:
                         new_args.append(idx + offset)
             if not isinstance(new_args[2], (numbers.Integral, slice)):
-                assert isinstance(new_args[0], slice) and isinstance(new_args[1], slice)
-                new_args[:2] = np.broadcast_arrays(
-                    np.expand_dims(
-                        np.arange(new_args[0].start, new_args[0].stop),
-                        axis=tuple(i for i in range(self.field_view.ndim) if i != 0)
-                    ),
-                    np.expand_dims(
-                        np.arange(new_args[1].start, new_args[1].stop),
-                        axis=tuple(i for i in range(self.field_view.ndim) if i != 1)
-                    ),
-                )
+                new_args = self.broadcast_and_clip_variable_k(new_args)
             return tuple(new_args)
+
+        def broadcast_and_clip_variable_k(self, new_args: tuple):
+            assert isinstance(new_args[0], slice) and isinstance(new_args[1], slice)
+            if np.max(new_args[2]) >= self.field_view.shape[2] or np.min(new_args[2]) < 0:
+                new_args[2] = np.clip(new_args[2].copy(), 0, self.field_view.shape[2]-1)
+            new_args[:2] = np.broadcast_arrays(
+                np.expand_dims(
+                    np.arange(new_args[0].start, new_args[0].stop),
+                    axis=tuple(i for i in range(self.field_view.ndim) if i != 0)
+                ),
+                np.expand_dims(
+                    np.arange(new_args[1].start, new_args[1].stop),
+                    axis=tuple(i for i in range(self.field_view.ndim) if i != 1)
+                ),
+            )
+            return new_args
 
         def __getitem__(self, key):
             return self.field_view.__getitem__(self.shim_key(key))
@@ -153,7 +159,11 @@ class NpirCodegen(TemplatedGenerator):
     LocalScalarAccess = ParamAccess = FormatTemplate("{name}")
 
     def visit_DataType(self, node: common.DataType, **kwargs: Any) -> Union[str, Collection[str]]:
-        return f"np.{node.name.lower()}"
+        # `np.bool` is a deprecated alias for the builtin `bool` or `np.bool_`.
+        if node not in {common.DataType.BOOL}:
+            return f"np.{node.name.lower()}"
+        else:
+            return node.name.lower()
 
     def visit_BuiltInLiteral(
         self, node: common.BuiltInLiteral, **kwargs
@@ -283,7 +293,7 @@ class NpirCodegen(TemplatedGenerator):
     While = JinjaTemplate(
         textwrap.dedent(
             """\
-            while {{ cond }}:
+            while np.any({{ cond }}):
                 {% for stmt in body %}{{ stmt }}
                 {% endfor %}
             """

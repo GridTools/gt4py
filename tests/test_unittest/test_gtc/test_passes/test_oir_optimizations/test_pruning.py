@@ -14,11 +14,13 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from gtc.passes.oir_optimizations.pruning import NoFieldAccessPruning
+from gtc.common import HorizontalInterval, HorizontalMask, LevelMarker
+from gtc.passes.oir_optimizations.pruning import NoFieldAccessPruning, UnreachableStmtPruning
 
 from ...oir_utils import (
     AssignStmtFactory,
     HorizontalExecutionFactory,
+    HorizontalRestrictionFactory,
     LiteralFactory,
     LocalScalarFactory,
     ScalarAccessFactory,
@@ -60,3 +62,52 @@ def test_no_field_access_pruning():
     transformed = NoFieldAccessPruning().visit(testee)
     assert len(transformed.vertical_loops) == 1
     assert len(transformed.vertical_loops[0].sections[0].horizontal_executions) == 1
+
+
+def test_unreachable_stmt_pruning():
+    out_name = "out_field"
+    in_name = "in_field"
+    testee = StencilFactory(
+        vertical_loops__0__sections__0__horizontal_executions=[
+            HorizontalExecutionFactory(
+                body=[
+                    AssignStmtFactory(left__name=out_name, right__name=in_name),
+                ]
+            ),
+            HorizontalExecutionFactory(
+                body=[
+                    HorizontalRestrictionFactory(
+                        mask=HorizontalMask(
+                            i=HorizontalInterval.at_endpt(LevelMarker.START, 0),
+                            j=HorizontalInterval.full(),
+                        ),
+                        body=[AssignStmtFactory(left__name=out_name, right=LiteralFactory())],
+                    ),
+                    HorizontalRestrictionFactory(
+                        mask=HorizontalMask(
+                            i=HorizontalInterval.at_endpt(LevelMarker.END, 1),
+                            j=HorizontalInterval.full(),
+                        ),
+                        body=[AssignStmtFactory(left__name=out_name, right=LiteralFactory())],
+                    ),
+                    HorizontalRestrictionFactory(
+                        mask=HorizontalMask(
+                            i=HorizontalInterval.full(),
+                            j=HorizontalInterval.at_endpt(LevelMarker.START, -1),
+                        ),
+                        body=[AssignStmtFactory(left__name=out_name, right=LiteralFactory())],
+                    ),
+                    HorizontalRestrictionFactory(
+                        mask=HorizontalMask(
+                            i=HorizontalInterval.full(),
+                            j=HorizontalInterval.at_endpt(LevelMarker.END, 0),
+                        ),
+                        body=[AssignStmtFactory(left__name=out_name, right=LiteralFactory())],
+                    ),
+                ]
+            ),
+        ]
+    )
+
+    stencil = UnreachableStmtPruning().visit(testee)
+    assert len(stencil.vertical_loops[0].sections[0].horizontal_executions[1].body) == 2

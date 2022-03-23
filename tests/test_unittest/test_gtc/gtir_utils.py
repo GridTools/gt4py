@@ -21,7 +21,12 @@ import factory
 from eve import Str
 from gtc import common, gtir
 
-from .common_utils import CartesianOffsetFactory, identifier, undefined_symbol_list
+from .common_utils import (
+    CartesianOffsetFactory,
+    HorizontalMaskFactory,
+    identifier,
+    undefined_symbol_list,
+)
 
 
 class LiteralFactory(factory.Factory):
@@ -97,6 +102,14 @@ class ScalarIfStmtFactory(factory.Factory):
     cond = factory.SubFactory(ScalarAccessFactory, dtype=common.DataType.BOOL)
     true_branch = factory.SubFactory(BlockStmtFactory)
     false_branch = None
+
+
+class HorizontalRestrictionFactory(factory.Factory):
+    class Meta:
+        model = gtir.HorizontalRestriction
+
+    mask = factory.SubFactory(HorizontalMaskFactory)
+    body: List[gtir.Stmt] = factory.List([factory.SubFactory(ParAssignStmtFactory)])
 
 
 class WhileFactory(factory.Factory):

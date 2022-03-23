@@ -20,7 +20,12 @@ import factory
 
 from gtc import common, oir
 
-from .common_utils import CartesianOffsetFactory, identifier, undefined_symbol_list
+from .common_utils import (
+    CartesianOffsetFactory,
+    HorizontalMaskFactory,
+    identifier,
+    undefined_symbol_list,
+)
 
 
 class FieldAccessFactory(factory.Factory):
@@ -78,6 +83,14 @@ class MaskStmtFactory(factory.Factory):
 
     mask = factory.SubFactory(FieldAccessFactory, dtype=common.DataType.BOOL)
     body = factory.List([factory.SubFactory(AssignStmtFactory)])
+
+
+class HorizontalRestrictionFactory(factory.Factory):
+    class Meta:
+        model = oir.HorizontalRestriction
+
+    mask = factory.SubFactory(HorizontalMaskFactory)
+    body: List[oir.Stmt] = factory.List([factory.SubFactory(AssignStmtFactory)])
 
 
 class WhileFactory(factory.Factory):

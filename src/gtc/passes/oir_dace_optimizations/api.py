@@ -16,7 +16,7 @@
 
 import warnings
 
-from dace.transformation.transformation import Transformation
+from dace.transformation.transformation import SingleStateTransformation
 
 from gtc import oir
 from gtc.dace import dace_to_oir
@@ -29,7 +29,7 @@ def has_variable_access(stencil: oir.Stencil) -> bool:
 
 
 def optimize_horizontal_executions(
-    stencil: oir.Stencil, transformation: Transformation
+    stencil: oir.Stencil, transformation: SingleStateTransformation
 ) -> oir.Stencil:
     if has_variable_access(stencil):
         warnings.warn(

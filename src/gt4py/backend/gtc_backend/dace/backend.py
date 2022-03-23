@@ -31,7 +31,7 @@ from gt4py.backend.gtc_backend.base import (
 from gt4py.backend.gtc_backend.common import bindings_main_template, pybuffer_to_sid
 from gtc import gtir
 from gtc.dace.oir_to_dace import OirSDFGBuilder
-from gtc.dace.utils import array_dimensions
+from gtc.dace.utils import array_dimensions, replace_strides
 from gtc.gtir_to_oir import GTIRToOIR
 from gtc.passes.gtir_k_boundary import compute_k_boundary
 from gtc.passes.oir_optimizations.inlining import MaskInlining
@@ -42,6 +42,23 @@ from gtc.passes.oir_pipeline import DefaultPipeline
 
 if TYPE_CHECKING:
     from gt4py.stencil_object import StencilObject
+
+
+def specialize_transient_strides(sdfg: dace.SDFG, layout_map):
+    repldict = replace_strides(
+        [array for array in sdfg.arrays.values() if array.transient],
+        layout_map,
+    )
+    sdfg.replace_dict(repldict)
+    for state in sdfg.nodes():
+        for node in state.nodes():
+            if isinstance(node, dace.nodes.NestedSDFG):
+                for k, v in repldict.items():
+                    if k in node.symbol_mapping:
+                        node.symbol_mapping[k] = v
+    for k in repldict.keys():
+        if k in sdfg.symbols:
+            sdfg.remove_symbol(k)
 
 
 class GTCDaCeExtGenerator(GeneratorClass):
@@ -59,6 +76,7 @@ class GTCDaCeExtGenerator(GeneratorClass):
         oir = oir_pipeline.run(base_oir)
         sdfg = OirSDFGBuilder().visit(oir)
         sdfg.expand_library_nodes(recursive=True)
+        specialize_transient_strides(sdfg, layout_map=self.backend.storage_info["layout_map"])
         sdfg.apply_strict_transformations(validate=True)
 
         implementation = DaCeComputationCodegen.apply(ir, sdfg)
@@ -95,9 +113,11 @@ class DaCeComputationCodegen:
         fmt = "dace_handle.{name} = allocate(allocator, gt::meta::lazy::id<{dtype}>(), {size})();"
         return [
             fmt.format(
-                name=f"__{sdfg.sdfg_id}_{name}", dtype=array.dtype.ctype, size=array.total_size
+                name=f"__{array_sdfg.sdfg_id}_{name}",
+                dtype=array.dtype.ctype,
+                size=array.total_size,
             )
-            for name, array in sdfg.arrays.items()
+            for array_sdfg, name, array in sdfg.arrays_recursive()
             if array.transient and array.lifetime == dace.AllocationLifetime.Persistent
         ]
 
@@ -143,11 +163,7 @@ class DaCeComputationCodegen:
 
         symbols = {f"__{var}": f"__{var}" for var in "IJK"}
         for name, array in sdfg.arrays.items():
-            if array.transient:
-                symbols[f"__{name}_K_stride"] = "1"
-                symbols[f"__{name}_J_stride"] = str(array.shape[2])
-                symbols[f"__{name}_I_stride"] = str(array.shape[1] * array.shape[2])
-            else:
+            if not array.transient:
                 dims = [dim for dim, select in zip("IJK", array_dimensions(array)) if select]
                 data_ndim = len(array.shape) - len(dims)
 
