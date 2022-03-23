@@ -15,16 +15,17 @@ def tridiag_forward(state, a, b, c, d):
 
 
 @fundef
-def tridiag_backward(x_kp1, cp, dp):
-    return deref(dp) - deref(cp) * x_kp1
+def tridiag_backward(x_kp1, cpdp):
+    cpdpv = deref(cpdp)
+    cp = tuple_get(0, cpdpv)
+    dp = tuple_get(1, cpdpv)
+    return dp - cp * x_kp1
 
 
 @fundef
 def solve_tridiag(a, b, c, d):
-    tup = lift(scan(tridiag_forward, True, make_tuple(0.0, 0.0)))(a, b, c, d)
-    cp = tuple_get(0, tup)
-    dp = tuple_get(1, tup)
-    return scan(tridiag_backward, False, 0.0)(cp, dp)
+    cpdp = lift(scan(tridiag_forward, True, make_tuple(0.0, 0.0)))(a, b, c, d)
+    return scan(tridiag_backward, False, 0.0)(cpdp)
 
 
 @pytest.fixture
