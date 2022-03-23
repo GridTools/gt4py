@@ -3,7 +3,6 @@ from typing import Any
 from eve import codegen
 from eve.codegen import FormatTemplate as as_fmt
 from eve.codegen import MakoTemplate as as_mako
-from functional.iterator.backends import backend
 from functional.iterator.backends.gtfn.gtfn_ir import GridType, OffsetLiteral, Program
 
 
