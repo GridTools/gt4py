@@ -18,7 +18,6 @@ import abc
 import functools
 import numbers
 import os
-import textwrap
 import time
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Type, Union
 
@@ -35,7 +34,7 @@ from gtc import gtir
 from gtc.passes.oir_pipeline import OirPipeline
 
 from . import pyext_builder
-from .gtc_backend.base import PyExtModuleGenerator
+from .gtc_backend.base import CUDAPyExtModuleGenerator, PyExtModuleGenerator
 
 
 if TYPE_CHECKING:
@@ -854,29 +853,6 @@ class GTMCBackend(BaseGTBackend):
 
     def generate_extension(self, **kwargs: Any) -> Tuple[str, str]:
         return self.make_extension(uses_cuda=False)
-
-
-class CUDAPyExtModuleGenerator(PyExtModuleGenerator):
-    def generate_implementation(self) -> str:
-        source = super().generate_implementation()
-        if self.builder.options.backend_opts.get("device_sync", True):
-            source += textwrap.dedent(
-                """
-                    cupy.cuda.Device(0).synchronize()
-                """
-            )
-        return source
-
-    def generate_imports(self) -> str:
-        source = (
-            textwrap.dedent(
-                """
-                import cupy
-                """
-            )
-            + super().generate_imports()
-        )
-        return source
 
 
 class GTCUDAPyModuleGenerator(CUDAPyExtModuleGenerator):
