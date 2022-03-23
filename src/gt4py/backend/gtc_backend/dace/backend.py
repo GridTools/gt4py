@@ -23,8 +23,8 @@ from eve.codegen import MakoTemplate as as_mako
 from gt4py import gt_src_manager
 from gt4py.backend.base import CLIBackendMixin, register
 from gt4py.backend.gtc_backend.base import (
+    BackendCodegen,
     BaseGTBackend,
-    GeneratorClass,
     make_x86_layout_map,
     x86_is_compatible_layout,
 )
@@ -61,7 +61,7 @@ def specialize_transient_strides(sdfg: dace.SDFG, layout_map):
             sdfg.remove_symbol(k)
 
 
-class GTCDaCeExtGenerator(GeneratorClass):
+class GTCDaCeExtGenerator(BackendCodegen):
     def __init__(self, class_name, module_name, backend):
         self.class_name = class_name
         self.module_name = module_name

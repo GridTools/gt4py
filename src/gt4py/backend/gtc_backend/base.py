@@ -144,7 +144,7 @@ class PyExtModuleGenerator(BaseModuleGenerator):
         return sources.text
 
 
-class GeneratorClass:
+class BackendCodegen:
     TEMPLATE_FILES: Dict[str, str]
 
     @abc.abstractmethod
@@ -171,7 +171,7 @@ class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
 
     MODULE_GENERATOR_CLASS = PyExtModuleGenerator
 
-    PYEXT_GENERATOR_CLASS: Type[GeneratorClass]
+    PYEXT_GENERATOR_CLASS: Type[BackendCodegen]
 
     @abc.abstractmethod
     def generate(self) -> Type["StencilObject"]:
