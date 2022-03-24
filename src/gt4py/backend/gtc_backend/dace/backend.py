@@ -24,13 +24,14 @@ from eve import codegen
 from eve.codegen import MakoTemplate as as_mako
 from gt4py import gt_src_manager
 from gt4py.backend.base import CLIBackendMixin, register
-from gt4py.backend.gtc_backend.base import (
+from gt4py.backend.gtc_backend.common import (
     BackendCodegen,
     BaseGTBackend,
     PyExtModuleGenerator,
+    bindings_main_template,
     make_x86_layout_map,
+    pybuffer_to_sid,
 )
-from gt4py.backend.gtc_backend.common import bindings_main_template, pybuffer_to_sid
 from gt4py.backend.module_generator import make_args_data_from_gtir
 from gtc import gtir
 from gtc.dace.oir_to_dace import OirSDFGBuilder

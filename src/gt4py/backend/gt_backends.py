@@ -34,7 +34,7 @@ from gtc import gtir
 from gtc.passes.oir_pipeline import OirPipeline
 
 from . import pyext_builder
-from .gtc_backend.base import CUDAPyExtModuleGenerator, PyExtModuleGenerator
+from .gtc_backend.common import CUDAPyExtModuleGenerator, PyExtModuleGenerator
 
 
 if TYPE_CHECKING:
@@ -678,7 +678,7 @@ class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
     """
     Legacy backend version of the BaseGTBackend.
 
-    NOTE: This is a different version of gt4py.backend.gtc_backend.base.BaseGTBackend
+    NOTE: This is a different version of gt4py.backend.gtc_backend.common.BaseGTBackend
     and should be removed in a further refactor.
 
     """
