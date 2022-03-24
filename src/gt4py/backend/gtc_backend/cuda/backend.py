@@ -19,8 +19,7 @@ from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple, Type
 from eve import codegen
 from gt4py import gt_src_manager
 from gt4py.backend.base import CLIBackendMixin, register
-from gt4py.backend.gtc_backend.base import BackendCodegen
-from gt4py.backend.gtc_backend.common import bindings_main_template, pybuffer_to_sid
+from gt4py.backend.gtc_backend.common import BackendCodegen, bindings_main_template, pybuffer_to_sid
 from gtc import gtir
 from gtc.common import DataType
 from gtc.cuir import cuir, cuir_codegen, extent_analysis, kernel_fusion
@@ -30,7 +29,7 @@ from gtc.passes.gtir_pipeline import GtirPipeline
 from gtc.passes.oir_optimizations.pruning import NoFieldAccessPruning
 from gtc.passes.oir_pipeline import DefaultPipeline
 
-from ..base import (
+from ..common import (
     BaseGTBackend,
     GTCUDAPyModuleGenerator,
     cuda_is_compatible_layout,

@@ -106,6 +106,7 @@ class AccessCollector(NodeVisitor):
         self.visit(node.left, is_write=True, **kwargs)
 
     def visit_MaskStmt(self, node: oir.MaskStmt, **kwargs: Any) -> None:
+
         self.visit(node.mask, is_write=False, **kwargs)
         self.visit(node.body, **kwargs)
 
@@ -134,9 +135,17 @@ class AccessCollector(NodeVisitor):
             """Get a dictionary, mapping read fields' names to sets of offset tuples."""
             return self._offset_dict(xiter(self._ordered_accesses).filter(lambda x: x.is_read))
 
+        def read_accesses(self) -> List[AccessT]:
+            """Get the sub-list of read accesses."""
+            return list(xiter(self._ordered_accesses).filter(lambda x: x.is_read))
+
         def write_offsets(self) -> Dict[str, Set[OffsetT]]:
             """Get a dictionary, mapping written fields' names to sets of offset tuples."""
             return self._offset_dict(xiter(self._ordered_accesses).filter(lambda x: x.is_write))
+
+        def write_accesses(self) -> List[AccessT]:
+            """Get the sub-list of write accesses."""
+            return list(xiter(self._ordered_accesses).filter(lambda x: x.is_write))
 
         def fields(self) -> Set[str]:
             """Get a set of all accessed fields' names."""
