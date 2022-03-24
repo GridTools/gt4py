@@ -768,7 +768,7 @@ class TestVariableKRead(gt_testing.StencilTestSuite):
         "index": np.int32,
     }
     domain_range = [(2, 2), (2, 2), (2, 8)]
-    backends = [backend for backend in INTERNAL_BACKENDS if backend.values[0] not in ["gtc:dace"]]
+    backends = INTERNAL_BACKENDS
     symbols = {
         "field_in": gt_testing.field(
             in_range=(-10, 10), axes="IJK", boundary=[(0, 0), (0, 0), (0, 0)]
@@ -787,3 +787,62 @@ class TestVariableKRead(gt_testing.StencilTestSuite):
 
     def validation(field_in, field_out, index, *, domain, origin):
         field_out[:, :, 1:] = field_in[:, :, (np.arange(field_in.shape[-1]) + index)[1:]]
+
+
+class TestVariableKAndReadOutside(gt_testing.StencilTestSuite):
+    dtypes = {
+        "field_in": np.float64,
+        "field_out": np.float64,
+        "index": np.int32,
+    }
+    domain_range = [(2, 2), (2, 2), (2, 8)]
+    # exclude "numpy" due to #624
+    backends = [backend for backend in INTERNAL_BACKENDS if backend.values[0] != "numpy"]
+    symbols = {
+        "field_in": gt_testing.field(
+            in_range=(0.1, 10), axes="IJK", boundary=[(0, 0), (0, 0), (1, 0)]
+        ),
+        "field_out": gt_testing.field(
+            in_range=(0.1, 10), axes="IJK", boundary=[(0, 0), (0, 0), (0, 0)]
+        ),
+        "index": gt_testing.field(in_range=(-1, 0), axes="K", boundary=[(0, 0), (0, 0), (0, 0)]),
+    }
+
+    def definition(field_in, field_out, index):
+        with computation(PARALLEL), interval(1, None):
+            field_out[0, 0, 0] = (
+                field_in[0, 0, index]  # noqa: F841  # Local name is assigned to but never used
+                + field_in[0, 0, -2]
+            )
+
+    def validation(field_in, field_out, index, *, domain, origin):
+        idx = 1 + (np.arange(domain[-1]) + index)[1:]
+        field_out[:, :, 1:] = field_in[:, :, idx]
+        field_out[:, :, 1:] += field_in[:, :, :-2]
+
+
+class TestDiagonalKOffset(gt_testing.StencilTestSuite):
+    dtypes = {
+        "field_in": np.float64,
+        "field_out": np.float64,
+    }
+    domain_range = [(2, 2), (2, 2), (2, 8)]
+    backends = INTERNAL_BACKENDS
+    symbols = {
+        "field_in": gt_testing.field(
+            in_range=(0.1, 10), axes="IJK", boundary=[(0, 0), (1, 0), (0, 1)]
+        ),
+        "field_out": gt_testing.field(
+            in_range=(0.1, 10), axes="IJK", boundary=[(0, 0), (0, 0), (0, 0)]
+        ),
+    }
+
+    def definition(field_in, field_out):
+        with computation(PARALLEL), interval(...):
+            field_out = field_in[0, 0, 1]
+        with computation(PARALLEL), interval(0, -1):
+            field_out += field_in[0, -1, 1]
+
+    def validation(field_in, field_out, *, domain, origin):
+        field_out[:, :, :] = field_in[:, 1:, 1:]
+        field_out[:, :, :-1] += field_in[:, :-1, 1:-1]

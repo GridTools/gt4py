@@ -15,6 +15,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import warnings
+from typing import List, Union
 
 from dace.transformation.transformation import SingleStateTransformation
 
@@ -29,7 +30,8 @@ def has_variable_access(stencil: oir.Stencil) -> bool:
 
 
 def optimize_horizontal_executions(
-    stencil: oir.Stencil, transformation: SingleStateTransformation
+    stencil: oir.Stencil,
+    transformation: Union[SingleStateTransformation, List[SingleStateTransformation]],
 ) -> oir.Stencil:
     if has_variable_access(stencil):
         warnings.warn(
