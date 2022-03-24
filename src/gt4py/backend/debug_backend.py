@@ -21,6 +21,11 @@ import numpy as np
 from gt4py import backend as gt_backend
 from gt4py import definitions as gt_definitions
 from gt4py import ir as gt_ir
+from gt4py.backend.gtc_backend.common import (
+    debug_is_compatible_layout,
+    debug_is_compatible_type,
+    debug_layout,
+)
 from gt4py.utils import text as gt_text
 
 from .module_generator import BaseModuleGenerator
@@ -265,20 +270,6 @@ import math
             + super().generate_imports()
         )
         return source
-
-
-def debug_layout(mask):
-    ctr = iter(range(sum(mask)))
-    layout = [next(ctr) if m else None for m in mask]
-    return tuple(layout)
-
-
-def debug_is_compatible_layout(field):
-    return sum(field.shape) > 0
-
-
-def debug_is_compatible_type(field):
-    return isinstance(field, np.ndarray)
 
 
 class DebugBackend(gt_backend.BaseBackend, gt_backend.PurePythonBackendCLIMixin):

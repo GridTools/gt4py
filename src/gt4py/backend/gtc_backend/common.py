@@ -400,6 +400,20 @@ class GTCUDAPyModuleGenerator(CUDAPyExtModuleGenerator):
         return "\n".join([f + "._set_device_modified()" for f in output_field_names])
 
 
+def debug_layout(mask):
+    ctr = iter(range(sum(mask)))
+    layout = [next(ctr) if m else None for m in mask]
+    return tuple(layout)
+
+
+def debug_is_compatible_layout(field):
+    return sum(field.shape) > 0
+
+
+def debug_is_compatible_type(field):
+    return isinstance(field, np.ndarray)
+
+
 def make_x86_layout_map(mask: Tuple[int, ...]) -> Tuple[Optional[int], ...]:
     ctr = iter(range(sum(mask)))
     if len(mask) < 3:
