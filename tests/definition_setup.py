@@ -19,8 +19,6 @@ from typing import Any, Iterator, List, Set, Tuple, Union
 
 import pytest
 
-from gt4py.analysis import TransformData
-from gt4py.definitions import BuildOptions
 from gt4py.ir.nodes import (
     ArgumentInfo,
     Assign,
@@ -163,14 +161,6 @@ class TDefinition(TObject):
             computations=[block.build() for block in self.children],
             docstring=self.docstring,
             loc=self.loc,
-        )
-
-    def build_transform(self):
-        definition = self.build()
-        return TransformData(
-            definition_ir=definition,
-            implementation_ir=init_implementation_from_definition(definition),
-            options=BuildOptions(name=self.name, module=__name__),
         )
 
 

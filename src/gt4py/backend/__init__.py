@@ -14,7 +14,6 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from . import python_generator
 from .base import (
     REGISTRY,
     Backend,
