@@ -29,9 +29,9 @@ from gt4py import ir as gt_ir
 from gt4py import utils as gt_utils
 from gt4py.definitions import AccessKind, Boundary, DomainInfo, FieldInfo, ParameterInfo
 from gtc import gtir, gtir_to_oir
-from gtc.passes.gtir_access_kind import compute_access_kinds
 from gtc.passes.gtir_k_boundary import compute_k_boundary, compute_min_k_size
 from gtc.passes.gtir_pipeline import GtirPipeline
+from gtc.passes.oir_access_kinds import compute_access_kinds
 from gtc.passes.oir_optimizations.utils import compute_fields_extents
 from gtc.utils import dimension_flags_to_names
 
@@ -66,12 +66,12 @@ def make_args_data_from_gtir(pipeline: GtirPipeline) -> ModuleData:
     data = ModuleData()
 
     # NOTE: pipeline.gtir has not had prune_unused_parameters applied.
-    accesses = compute_access_kinds(pipeline.gtir)
     all_params = pipeline.gtir.params
 
     node = pipeline.full()
     oir = gtir_to_oir.GTIRToOIR().visit(node)
     field_extents = compute_fields_extents(oir)
+    accesses = compute_access_kinds(oir)
 
     for decl in (param for param in all_params if isinstance(param, gtir.FieldDecl)):
         access = accesses[decl.name]

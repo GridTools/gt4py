@@ -27,7 +27,7 @@ from gt4py.frontend.gtscript_frontend import GTScriptFrontend  # noqa: E402
 from gtc.common import AxisBound, DataType  # noqa: E402
 from gtc.dace.dace_to_oir import convert  # noqa: E402
 from gtc.dace.oir_to_dace import OirSDFGBuilder  # noqa: E402
-from gtc.dace.utils import assert_sdfg_equal  # noqa: E402
+from gtc.dace.utils import is_sdfg_equal  # noqa: E402
 from gtc.gtir_to_oir import GTIRToOIR  # noqa: E402
 from gtc.oir import Interval, Literal  # noqa: E402
 from gtc.passes.gtir_pipeline import GtirPipeline  # noqa: E402
@@ -69,7 +69,7 @@ def test_stencils_roundtrip(stencil_name):
 
     oir = convert(sdfg, oir.loc)
     sdfg_post = OirSDFGBuilder().visit(oir)
-    assert_sdfg_equal(sdfg_pre, sdfg_post)
+    assert is_sdfg_equal(sdfg_pre, sdfg_post)
 
 
 def test_same_node_read_write_not_overlap():

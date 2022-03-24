@@ -342,10 +342,7 @@ def test_input_order(backend):
             out_field = in_field * parameter
 
 
-# TODO: Enable variable offsets on gtc:dace backend
-@pytest.mark.parametrize(
-    "backend", [backend for backend in ALL_BACKENDS if "dace" not in backend.values[0]]
-)
+@pytest.mark.parametrize("backend", ALL_BACKENDS)
 def test_variable_offsets(backend):
     @gtscript.stencil(backend=backend)
     def stencil_ij(
@@ -367,10 +364,7 @@ def test_variable_offsets(backend):
             out_field = in_field[0, 0, 1] + in_field[0, 0, index_field + 1]
 
 
-# TODO: Enable DaCe
-@pytest.mark.parametrize(
-    "backend", [backend for backend in ALL_BACKENDS if backend.values[0] != "gtc:dace"]
-)
+@pytest.mark.parametrize("backend", ALL_BACKENDS)
 def test_variable_offsets_and_while_loop(backend):
     @gtscript.stencil(backend=backend)
     def stencil(
@@ -476,32 +470,43 @@ def test_read_data_dim_indirect_addressing(backend):
 
 
 @pytest.mark.parametrize("backend", ALL_BACKENDS)
-def test_negative_origin(backend):
-    def stencil_i(
-        input_field: gtscript.Field[gtscript.IJK, np.int32],
-        output_field: gtscript.Field[gtscript.IJK, np.int32],
-    ):
-        with computation(PARALLEL), interval(...):
-            output_field = input_field[1, 0, 0]
+class TestNegativeOrigin:
+    def test_negative_origin_i(self, backend):
+        @gtscript.stencil(backend=backend)
+        def stencil_i(
+            input_field: gtscript.Field[gtscript.IJK, np.int32],
+            output_field: gtscript.Field[gtscript.IJK, np.int32],
+        ):
+            with computation(PARALLEL), interval(...):
+                output_field = input_field[1, 0, 0]
 
-    def stencil_k(
-        input_field: gtscript.Field[gtscript.IJK, np.int32],
-        output_field: gtscript.Field[gtscript.IJK, np.int32],
-    ):
-        with computation(PARALLEL), interval(...):
-            output_field = input_field[0, 0, 1]
-
-    input_field = gt_storage.ones(
-        backend, default_origin=(0, 0, 0), shape=(1, 1, 1), dtype=np.int32
-    )
-    output_field = gt_storage.zeros(
-        backend, default_origin=(0, 0, 0), shape=(1, 1, 1), dtype=np.int32
-    )
-
-    for origin, stencil in (((-1, 0, 0), stencil_i), ((0, 0, -1), stencil_k)):
-        gtscript.stencil(definition=stencil, backend=backend)(
-            input_field, output_field, origin={"input_field": origin}
+        input_field = gt_storage.ones(
+            backend, default_origin=(0, 0, 0), shape=(1, 1, 1), dtype=np.int32
         )
+        output_field = gt_storage.zeros(
+            backend, default_origin=(0, 0, 0), shape=(1, 1, 1), dtype=np.int32
+        )
+
+        stencil_i(input_field, output_field, origin={"input_field": (-1, 0, 0)})
+        assert output_field[0, 0, 0] == 1
+
+    def test_negative_origin_k(self, backend):
+        @gtscript.stencil(backend=backend)
+        def stencil_k(
+            input_field: gtscript.Field[gtscript.IJK, np.int32],
+            output_field: gtscript.Field[gtscript.IJK, np.int32],
+        ):
+            with computation(PARALLEL), interval(...):
+                output_field = input_field[0, 0, 1]
+
+        input_field = gt_storage.ones(
+            backend, default_origin=(0, 0, 0), shape=(1, 1, 1), dtype=np.int32
+        )
+        output_field = gt_storage.zeros(
+            backend, default_origin=(0, 0, 0), shape=(1, 1, 1), dtype=np.int32
+        )
+
+        stencil_k(input_field, output_field, origin={"input_field": (0, 0, -1)})
         assert output_field[0, 0, 0] == 1
 
 
