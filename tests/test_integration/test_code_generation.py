@@ -319,7 +319,8 @@ def test_higher_dimensional_fields(backend):
     field = gt_storage.ones(backend, default_origin, full_shape, dtype=np.float64)
     assert field.shape == full_shape[:]
 
-    vec_field = 2.0 * gt_storage.ones(backend, default_origin, full_shape, dtype=FLOAT64_VEC2)
+    vec_field = gt_storage.ones(backend, default_origin, full_shape, dtype=FLOAT64_VEC2)
+    vec_field[:] = 2.0
     assert vec_field.shape[:-1] == full_shape
 
     mat_field = gt_storage.ones(backend, default_origin, full_shape, dtype=FLOAT64_MAT22)
