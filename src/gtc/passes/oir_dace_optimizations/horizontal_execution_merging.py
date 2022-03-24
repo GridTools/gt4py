@@ -240,10 +240,11 @@ class GraphMerging(SingleStateTransformation):
             dinfo.filename = dinfo.filename or right.debuginfo.filename
         return dinfo
 
-    def apply(self, state, sdfg: dace.SDFG) -> None:
+    def apply(self, state: dace.SDFGState, sdfg: dace.SDFG) -> None:
+
+        state = sdfg.node(self.state_id)
         left = self.left
         right = self.right
-
         # Merge source locations
         dinfo = self._merge_source_locations(left, right)
 
