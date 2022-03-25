@@ -390,8 +390,8 @@ class NaiveVerticalLoopExpander(OIRLibraryNodeExpander):
                     off: Tuple[int, int]
                     for off in offsets:
                         origin = (
-                            -off[0] - he.iteration_space.i_interval.start.offset,
-                            -off[1] - he.iteration_space.j_interval.start.offset,
+                            -off[0] - he.extent[0][0],
+                            -off[1] - he.extent[1][0],
                         )
                         if name not in origins:
                             origins[name] = origin
@@ -437,8 +437,8 @@ class NaiveVerticalLoopExpander(OIRLibraryNodeExpander):
                 off: Tuple[int, int, int]
                 for off in offsets:
                     origin = (
-                        -off[0] - he.iteration_space.i_interval.start.offset,
-                        -off[1] - he.iteration_space.j_interval.start.offset,
+                        -off[0] - he.extent[0][0],
+                        -off[1] - he.extent[1][0],
                     )
                     if name not in section_origins:
                         section_origins[name] = origin
@@ -672,8 +672,8 @@ class NaiveHorizontalExecutionExpander(OIRLibraryNodeExpander):
 
         for name, origin in origins.items():
             origins[name] = (
-                -origin[0] - self.node.iteration_space.i_interval.start.offset,
-                -origin[1] - self.node.iteration_space.j_interval.start.offset,
+                -origin[0] - self.node.extent[0][0],
+                -origin[1] - self.node.extent[1][0],
                 -origin[2],
             )
         return origins
@@ -795,9 +795,17 @@ class NaiveHorizontalExecutionExpander(OIRLibraryNodeExpander):
         in_memlets, out_memlets = self.get_innermost_memlets()
         from collections import OrderedDict
 
+        j_interval = oir.Interval(
+            start=oir.AxisBound.from_start(self.node.extent[1][0]),
+            end=oir.AxisBound.from_end(self.node.extent[1][1]),
+        )
+        i_interval = oir.Interval(
+            start=oir.AxisBound.from_start(self.node.extent[0][0]),
+            end=oir.AxisBound.from_end(self.node.extent[0][1]),
+        )
         map_ranges = OrderedDict(
-            j=get_interval_range_str(self.node.iteration_space.j_interval, "__J"),
-            i=get_interval_range_str(self.node.iteration_space.i_interval, "__I"),
+            j=get_interval_range_str(j_interval, "__J"),
+            i=get_interval_range_str(i_interval, "__I"),
         )
         inputs = [name[len("IN_") :] for name in self.node.in_connectors]
         outputs = [name[len("OUT_") :] for name in self.node.out_connectors]
