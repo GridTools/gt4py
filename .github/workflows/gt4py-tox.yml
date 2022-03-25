@@ -23,7 +23,7 @@ jobs:
         backends: [internal-cpu,with-externals-cpu]
         exclude:
           - python-version: 3.8
-          - backends: internal
+            backends: internal
 
 
     steps:
@@ -50,4 +50,4 @@ jobs:
         pyversion_no_dot=${pyversion_no_dot//./}
         pyversion_no_dot=${pyversion_no_dot:0:2}
         pip install tox clang-format
-        tox -r -e py${pyversion_no_dot}-{{ matrix.backends }}
+        tox -r -e py${pyversion_no_dot}-${{ matrix.backends }}
