@@ -35,7 +35,7 @@ def get_dace_module_path() -> Optional[str]:
         import dace
 
         return os.path.dirname(dace.__file__)
-    except:
+    except ImportError:
         return None
 
 
