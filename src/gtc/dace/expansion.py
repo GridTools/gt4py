@@ -26,6 +26,7 @@ import gtc.oir as oir
 from eve import codegen
 from eve.codegen import FormatTemplate as as_fmt
 from eve.codegen import MakoTemplate as as_mako
+from gt4py.definitions import Extent
 from gtc.common import LoopOrder
 from gtc.dace.nodes import HorizontalExecutionLibraryNode, VerticalLoopLibraryNode
 from gtc.dace.utils import (
@@ -376,7 +377,7 @@ class NaiveVerticalLoopExpander(OIRLibraryNodeExpander):
 
     def get_ij_origins(self):
 
-        origins: Dict[str, Tuple[int, int]] = {}
+        extents: Dict[str, Extent] = {}
 
         for _, section in self.node.sections:
             for he in (
@@ -386,20 +387,15 @@ class NaiveVerticalLoopExpander(OIRLibraryNodeExpander):
             ):
                 access_collection = get_access_collection(he)
 
-                for name, offsets in access_collection.offsets().items():
-                    off: Tuple[int, int]
-                    for off in offsets:
-                        origin = (
-                            -off[0] - he.extent[0][0],
-                            -off[1] - he.extent[1][0],
-                        )
-                        if name not in origins:
-                            origins[name] = origin
-                        origins[name] = (
-                            max(origins[name][0], origin[0]),
-                            max(origins[name][1], origin[1]),
-                        )
-        return origins
+                for acc in access_collection.ordered_accesses():
+                    extent = acc.to_extent(he.extent)
+                    extents.setdefault(acc.field, extent)
+                    extents[acc.field] |= extent
+
+        return {
+            name: (-extent.lower_indices[0], -extent.lower_indices[1])
+            for name, extent in extents.items()
+        }
 
     def get_k_origins(self):
         k_origs: Dict[str, oir.AxisBound] = {}
@@ -652,30 +648,21 @@ class ParallelNaiveVerticalLoopExpander(NaiveVerticalLoopExpander):
 
 class NaiveHorizontalExecutionExpander(OIRLibraryNodeExpander):
     def get_origins(self):
-        access_collection: AccessCollector.CartesianAccessCollection = get_access_collection(
-            self.node
-        )
+        access_collection = get_access_collection(self.node)
 
-        origins = dict()
+        ij_extents: Dict[str, Extent] = {}
         for acc in access_collection.ordered_accesses():
-            offset = [min(acc.offset[0], 0), min(acc.offset[1], 0), acc.offset[2]]
+            extent = acc.to_extent(self.node.extent) | Extent.zeros(2)
+            ij_extents.setdefault(acc.field, extent)
+            ij_extents[acc.field] |= extent
 
-            if offset[2] is None:
-                offset[2] = 0
-
-            origins.setdefault(acc.field, offset)
-            origins[acc.field] = (
-                min(origins[acc.field][0], offset[0]),
-                min(origins[acc.field][1], offset[1]),
-                min(origins[acc.field][2], offset[2]),
+        origins = {}
+        for name, ij_extent in ij_extents.items():
+            k_origin = min(
+                off[2] if off[2] is not None else 0 for off in access_collection.offsets()[name]
             )
+            origins[name] = (-ij_extent.lower_indices[0], -ij_extent.lower_indices[1], -k_origin)
 
-        for name, origin in origins.items():
-            origins[name] = (
-                -origin[0] - self.node.extent[0][0],
-                -origin[1] - self.node.extent[1][0],
-                -origin[2],
-            )
         return origins
 
     def get_innermost_memlets(self):
