@@ -29,11 +29,17 @@ from .debug_backend import DebugBackend
 from .gt_backends import GTCUDABackend, GTMCBackend, GTX86Backend
 from .gtc_backend import (
     GTCCudaBackend,
-    GTCDaceBackend,
     GTCGTCpuIfirstBackend,
     GTCGTCpuKfirstBackend,
     GTCGTGpuBackend,
     GTCNumpyBackend,
 )
+
+
+try:
+    from .gtc_backend import GTCDaceBackend
+except ImportError:
+    pass
+
 from .module_generator import BaseModuleGenerator
 from .numpy_backend import NumPyBackend

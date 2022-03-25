@@ -22,11 +22,12 @@ from gtc.gtir_to_oir import GTIRToOIR
 
 from .gtir_utils import (
     FieldIfStmtFactory,
+    HorizontalMaskFactory,
+    HorizontalRestrictionFactory,
     ParAssignStmtFactory,
     ScalarIfStmtFactory,
     StencilFactory,
     VariableKOffsetFactory,
-    WhileFactory,
 )
 
 
@@ -86,12 +87,12 @@ def test_visit_ScalarIfStmt():
     GTIRToOIR().visit(testee, ctx=GTIRToOIR.Context())
 
 
+def test_visit_HorizontalRestriction_HorizontalMask():
+    testee = HorizontalRestrictionFactory(mask=HorizontalMaskFactory())
+    GTIRToOIR().visit(testee, ctx=GTIRToOIR.Context())
+
+
 def test_visit_Assign_VariableKOffset():
     testee = ParAssignStmtFactory(right__offset=VariableKOffsetFactory())
     assign_stmt = GTIRToOIR().visit(testee)
     assert assign_stmt.iter_tree().if_isinstance(oir.VariableKOffset).to_list()
-
-
-def test_visit_While():
-    testee = WhileFactory()
-    GTIRToOIR().visit(testee)
