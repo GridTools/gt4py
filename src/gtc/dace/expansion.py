@@ -419,7 +419,7 @@ class NaiveVerticalLoopExpander(OIRLibraryNodeExpander):
 
         in_subsets = dict()
         out_subsets = dict()
-        section_origins: Dict[str, Tuple[int, int]] = dict()
+        ij_extents: Dict[str, Extent] = dict()
         min_k_offsets: Dict[str, int] = dict()
         max_k_offsets: Dict[str, int] = dict()
         for he in (
@@ -429,25 +429,20 @@ class NaiveVerticalLoopExpander(OIRLibraryNodeExpander):
         ):
             access_collection: AccessCollector.CartesianAccessCollection = get_access_collection(he)
 
-            for name, offsets in access_collection.offsets().items():
-                off: Tuple[int, int, int]
-                for off in offsets:
-                    origin = (
-                        -off[0] - he.extent[0][0],
-                        -off[1] - he.extent[1][0],
-                    )
-                    if name not in section_origins:
-                        section_origins[name] = origin
-                    section_origins[name] = (
-                        max(0, section_origins[name][0], origin[0]),
-                        max(0, section_origins[name][1], origin[1]),
-                    )
+            for acc in access_collection.ordered_accesses():
+                extent = acc.to_extent(he.extent) | Extent.zeros(2)
+                ij_extents.setdefault(acc.field, extent)
+                ij_extents[acc.field] |= extent
 
-                    min_k_offsets.setdefault(name, off[2] or 0)
-                    min_k_offsets[name] = min(min_k_offsets[name], off[2] or 0)
+                min_k_offsets.setdefault(acc.field, acc.offset[2] or 0)
+                min_k_offsets[acc.field] = min(min_k_offsets[acc.field], acc.offset[2] or 0)
 
-                    max_k_offsets.setdefault(name, off[2] or 0)
-                    max_k_offsets[name] = max(max_k_offsets[name], off[2] or 0)
+                max_k_offsets.setdefault(acc.field, acc.offset[2] or 0)
+                max_k_offsets[acc.field] = max(max_k_offsets[acc.field], acc.offset[2] or 0)
+        section_origins: Dict[str, Tuple[int, int]] = {
+            name: (-extent.lower_indices[0], -extent.lower_indices[1])
+            for name, extent in ij_extents.items()
+        }
 
         access_collection = get_access_collection(section)
         for name, section_origin in section_origins.items():
