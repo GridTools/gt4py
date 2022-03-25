@@ -220,10 +220,10 @@ class Storage(np.ndarray):
                     index_iter = itertools.chain(
                         obj._new_index, [slice(None, None)] * (len(obj.mask) - len(obj._new_index))
                     )
-                    sliced_indices = (isinstance(x, slice) for x in index_iter)
-                    self._mask = obj.mask and gt_utils.interpolate_mask(
-                        sliced_indices, obj.mask, False
+                    interpolated_mask = gt_utils.interpolate_mask(
+                        (isinstance(x, slice) for x in index_iter), obj.mask, False
                     )
+                    self._mask = tuple(x & y for x, y in zip(obj.mask, interpolated_mask))
                     delattr(obj, "_new_index")
                 if not hasattr(obj, "default_origin"):
                     self.is_stencil_view = True
