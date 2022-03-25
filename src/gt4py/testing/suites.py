@@ -164,10 +164,9 @@ class SuiteMeta(type):
                 return combinations
 
         cls_dict["tests"] = []
-        for d in get_dtype_combinations(dtypes):
-            for g in get_globals_combinations(d):
-                for b in backends:
-
+        for b in backends:
+            for d in get_dtype_combinations(dtypes):
+                for g in get_globals_combinations(d):
                     cls_dict["tests"].append(
                         dict(
                             backend=b if isinstance(b, str) else b.values[0],
@@ -329,6 +328,14 @@ class SuiteMeta(type):
             dtypes = {tuple(cls_dict["symbols"].keys()): dtypes}
         cls_dict["dtypes"] = standardize_dtype_dict(dtypes)
         cls_dict["ndims"] = len(cls_dict["domain_range"])
+
+        # Filter out unsupported backends
+        cls_dict["backends"] = [
+            backend
+            for backend in cls_dict["backends"]
+            if gt_backend.from_name(backend if isinstance(backend, str) else backend.values[0])
+            is not None
+        ]
 
         cls._validate_new_args(cls_name, cls_dict)
 
