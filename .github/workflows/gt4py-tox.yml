@@ -23,7 +23,7 @@ jobs:
         backends: [internal-cpu,with-externals-cpu]
         exclude:
           - python-version: 3.8
-            backends: internal
+            backends: internal-cpu
 
 
     steps:
