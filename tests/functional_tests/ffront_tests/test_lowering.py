@@ -104,6 +104,21 @@ def test_shift():
     assert lowered.expr == reference
 
 
+def test_negative_shift():
+    Ioff = offset("Ioff")
+
+    def shift_by_one(inp: Field[[IDim], float64]):
+        return inp(Ioff[-1])
+
+    # ast_passes
+    parsed = FieldOperatorParser.apply_to_function(shift_by_one)
+    lowered = FieldOperatorLowering.apply(parsed)
+
+    reference = im.deref_(im.shift_("Ioff", -1)("inp"))
+
+    assert lowered.expr == reference
+
+
 def test_temp_assignment():
     def copy_field(inp: Field[..., "float64"]):
         tmp = inp
