@@ -20,6 +20,11 @@ jobs:
     strategy:
       matrix:
         python-version: [3.8, 3.9.7]
+        backends: [internal-cpu,with-externals-cpu]
+        exclude:
+          - python-version: 3.8
+          - backends: internal
+
 
     steps:
     - uses: actions/checkout@v2
@@ -45,4 +50,4 @@ jobs:
         pyversion_no_dot=${pyversion_no_dot//./}
         pyversion_no_dot=${pyversion_no_dot:0:2}
         pip install tox clang-format
-        tox -r -e py${pyversion_no_dot}-internal-cpu
+        tox -r -e py${pyversion_no_dot}-{{ matrix.backends }}
