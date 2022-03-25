@@ -939,7 +939,7 @@ def test_sum_gpu():
     shape = (5, 5, 5)
     q1 = gt_store.from_array(
         cp.zeros(shape),
-        backend="gtcuda",
+        backend="gtc:gt:gpu",
         dtype=np.float64,
         default_origin=(0, 0, 0),
         shape=shape,
@@ -947,7 +947,7 @@ def test_sum_gpu():
 
     q2 = gt_store.from_array(
         cp.ones(shape),
-        backend="gtcuda",
+        backend="gtc:gt:gpu",
         dtype=np.float64,
         default_origin=(0, 0, 0),
         shape=shape,
