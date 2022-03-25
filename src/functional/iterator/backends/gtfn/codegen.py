@@ -27,7 +27,7 @@ class gtfn_codegen(codegen.TemplatedGenerator):
         "[=](${','.join('auto ' + p for p in params)}){return ${expr};}"
     )  # TODO capture
 
-    Backend = as_fmt("make_backend({backend_tag}, {domain})")
+    Backend = as_fmt("make_backend(backend, {domain})")
 
     StencilExecution = as_mako(
         """
@@ -37,7 +37,7 @@ class gtfn_codegen(codegen.TemplatedGenerator):
 
     FencilDefinition = as_mako(
         """
-    inline auto ${id} = [](${','.join('auto&& ' + p for p in params)}){
+    inline auto ${id} = [](auto backend, ${','.join('auto&& ' + p for p in params)}){
         ${'\\n'.join(executions)}
     };
     """
@@ -64,7 +64,6 @@ class gtfn_codegen(codegen.TemplatedGenerator):
     Program = as_mako(
         """
     #include <gridtools/fn/${grid_type_str}2.hpp>
-    #include <gridtools/fn/backend2/${backend_type}.hpp>
 
     namespace generated{
     using namespace gridtools;

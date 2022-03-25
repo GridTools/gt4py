@@ -3,6 +3,7 @@
 
 #include "build/generated_fvm_nabla.hpp" // TODO
 #include <gridtools/common/integral_constant.hpp>
+#include <gridtools/fn/backend2/naive.hpp>
 #include <gridtools/sid/concept.hpp>
 #include <gridtools/sid/sid_shift_origin.hpp>
 
@@ -67,7 +68,7 @@ TEST(unstructured, nabla) {
   auto edge_domain = unstructured_domain(
       (int)n_edges, (int)K, e2v_conn); // TODO fn should use sizes constructor
 
-  generated::zavgS_fencil(edge_domain, actual_zavg, pp, s);
+  generated::zavgS_fencil(backend::naive{}, edge_domain, actual_zavg, pp, s);
 
   for (int h = 0; h < n_edges; ++h)
     for (int v = 0; v < K; ++v)
@@ -82,7 +83,8 @@ TEST(unstructured, nabla) {
       unstructured_domain((int)n_vertices, (int)K, e2v_conn, v2e_conn);
 
   tuple<double, double> actual[n_vertices][K] = {};
-  generated::nabla_fencil(vertex_domain, actual, pp, s, sign, vol);
+  generated::nabla_fencil(backend::naive{}, vertex_domain, actual, pp, s, sign,
+                          vol);
 
   for (int h = 0; h < n_vertices; ++h)
     for (int v = 0; v < K; ++v)

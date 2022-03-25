@@ -3,6 +3,7 @@
 
 #include "build/generated_anton_lap.hpp" // TODO
 #include <gridtools/common/integral_constant.hpp>
+#include <gridtools/fn/backend2/naive.hpp>
 #include <gridtools/sid/sid_shift_origin.hpp>
 
 #include <fn_select.hpp>
@@ -36,7 +37,7 @@ TEST(fn_lap, fn_backend_t) {
 
   auto domain = cartesian_domain(std::tuple{8, 8, 3});
 
-  generated::lap_fencil(domain, shifted_actual, shifted_in);
+  generated::lap_fencil(backend::naive{}, domain, shifted_actual, shifted_in);
 
   for (int i = 1; i < 9; ++i)
     for (int j = 1; j < 9; ++j)

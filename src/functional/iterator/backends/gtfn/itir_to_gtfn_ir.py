@@ -10,7 +10,6 @@ from functional.iterator.backends.gtfn.gtfn_ir import (
     Expr,
     FencilDefinition,
     FloatLiteral,
-    FnBackendType,
     FunCall,
     FunctionDefinition,
     GridType,
@@ -110,12 +109,12 @@ class GTFN_lowering(NodeTranslator):
         )
 
     def visit_StencilClosure(self, node: itir.StencilClosure, **kwargs) -> StencilExecution:
-        backend = Backend(domain=self.visit(node.domain), backend_tag="backend::naive{}")  # TODO
+        backend = Backend(domain=self.visit(node.domain))
         return StencilExecution(
-            backend=backend,
             stencil=self.visit(node.stencil),
             output=self.visit(node.output),
             inputs=self.visit(node.inputs),
+            backend=backend,
         )
 
     def visit_FencilDefinition(self, node: itir.FencilDefinition, **kwargs) -> FencilDefinition:
@@ -135,16 +134,6 @@ class GTFN_lowering(NodeTranslator):
             .to_set()
         )
 
-    @staticmethod
-    def backend_as_enum(backend: str) -> FnBackendType:
-        backend_lower = backend.lower()
-        if backend_lower == "gpu":
-            return FnBackendType.Gpu
-        elif backend_lower == "naive":
-            return FnBackendType.Naive
-        else:
-            raise ValueError("Unknown fn backend")
-
     def visit_Program(
         self, node: itir.Program, *, grid_type: str, fn_backend: str, **kwargs
     ) -> Program:
@@ -156,5 +145,4 @@ class GTFN_lowering(NodeTranslator):
             fencil_definitions=self.visit(node.fencil_definitions),
             offsets=self._collect_offsets(node),
             grid_type=grid_type,
-            backend_type=self.backend_as_enum(fn_backend),
         )

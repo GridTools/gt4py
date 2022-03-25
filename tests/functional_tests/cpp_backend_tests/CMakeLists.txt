@@ -2,6 +2,19 @@ cmake_minimum_required(VERSION 3.16.2)
 
 project(cpp_backend_tests_driver LANGUAGES CXX)
 
+set(BACKEND NOTFOUND CACHE STRING "fn backend")
+set_property(CACHE BACKEND PROPERTY STRINGS "NOTFOUND;naive;gpu")
+
+if(NOT BACKEND)
+    message(FATAL_ERROR "No backend selected")
+else()
+    message(STATUS "Testing backend \"${BACKEND}\"")
+endif()
+
+if(BACKEND STREQUAL "gpu")
+    enable_language(CUDA)
+endif() 
+
 include(FetchContent)
 FetchContent_Declare(GridTools
     GIT_REPOSITORY https://github.com/fthaler/gridtools.git
