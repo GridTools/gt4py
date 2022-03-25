@@ -134,9 +134,7 @@ class GTFN_lowering(NodeTranslator):
             .to_set()
         )
 
-    def visit_Program(
-        self, node: itir.Program, *, grid_type: str, fn_backend: str, **kwargs
-    ) -> Program:
+    def visit_Program(self, node: itir.Program, *, grid_type: str, **kwargs) -> Program:
         grid_type = (
             GridType.Cartesian if grid_type.lower() == "cartesian" else GridType.Unstructured
         )
