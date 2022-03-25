@@ -20,7 +20,7 @@ jobs:
     strategy:
       matrix:
         python-version: [3.8, 3.9.7]
-        backends: [internal-cpu, with-externals-cpu]
+        backends: [internal-cpu, all-cpu]
         exclude:
         - python-version: 3.8
           backends: internal-cpu
