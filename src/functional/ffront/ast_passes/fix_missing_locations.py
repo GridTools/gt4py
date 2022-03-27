@@ -32,10 +32,7 @@ class FixMissingLocations(ast.NodeTransformer):
     _parent_node: ast.AST
 
     @classmethod
-    def apply(
-        cls,
-        node: ast.AST
-    ):
+    def apply(cls, node: ast.AST):
         return cls(_parent_node=node).visit(node)
 
     def generic_visit(self, node: ast.AST):
