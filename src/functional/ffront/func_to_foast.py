@@ -218,8 +218,9 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
         try:
             index = self._match_index(node.slice)
         except ValueError:
-            raise FieldOperatorSyntaxError.from_AST(node,
-                                                    msg="""Only index is supported in subscript!""")
+            raise FieldOperatorSyntaxError.from_AST(
+                node, msg="""Only index is supported in subscript!"""
+            )
 
         return foast.Subscript(
             value=self.visit(node.value),

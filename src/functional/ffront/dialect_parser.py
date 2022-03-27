@@ -83,6 +83,10 @@ class DialectParser(ast.NodeVisitor, Generic[DialectRootT]):
             if __debug__:
                 _assert_source_invariants(source_definition, closure_refs)
         except SyntaxError as err:
+            # The ast nodes do not contain information about the path of the
+            #  source file or its contents. We add this information here so
+            #  that raising an error using :func:`DialectSyntaxError.from_AST`
+            #  does not require passing the information on every invocation.
             if not err.filename:
                 err.filename = filename
             if not err.text:
