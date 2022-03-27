@@ -21,7 +21,7 @@ from typing import Any, ClassVar, Generic, Optional, Type, TypeVar
 
 from eve.type_definitions import SourceLocation
 from functional import common
-from functional.ffront.ast_passes.rewrite_lineno import RewriteLineNumbers
+from functional.ffront.ast_passes.fix_missing_locations import FixMissingLocations
 from functional.ffront.source_utils import ClosureRefs, SourceDefinition, SymbolNames
 
 
@@ -71,7 +71,7 @@ class DialectParser(ast.NodeVisitor, Generic[DialectRootT]):
         try:
             raw_ast = ast.parse(textwrap.dedent(source)).body[0]
             definition_ast = cls._preprocess_definition_ast(
-                RewriteLineNumbers.apply(raw_ast, starting_line)
+                ast.increment_lineno(FixMissingLocations.apply(raw_ast), starting_line-1)
             )
             output_ast = cls._postprocess_dialect_ast(
                 cls(

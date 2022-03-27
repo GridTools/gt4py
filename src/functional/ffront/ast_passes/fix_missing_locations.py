@@ -12,54 +12,36 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 import ast
-import copy
 import dataclasses
 
 
 @dataclasses.dataclass(kw_only=True)
-class RewriteLineNumbers(ast.NodeTransformer):
+class FixMissingLocations(ast.NodeTransformer):
     """
-    AST pass transforming line numbers by adding a fixed offset.
+    AST pass adding source information to every node.
 
-    This pass is useful to make line numbers consistent with the source file
-    an AST node originated from.
+    While most nodes of the Python AST have source information (lineno,
+    col_offset, end_lineno, end_col_offset) after parsing, some nodes, e.g.
+    :class:`ast.Pow`, do not. This pass adds this information, taking it from
+    the parent node.
+
+    Note that :func:`ast.fix_missing_locations` only adds source information to
+    some ast nodes and is hence not a replacement for this pass.
     """
-
-    starting_line: int
-    inherit_from_parent: bool
 
     _parent_node: ast.AST
 
     @classmethod
     def apply(
         cls,
-        node: ast.AST,
-        starting_line: int,
-        *,
-        inherit_from_parent: bool = True,
-        inplace: bool = False,
+        node: ast.AST
     ):
-        """
-        Add fixed offset to all line numbers in an AST node.
-
-        Arguments:
-            node:
-            starting_line: The offset added to each nodes linenumber.
-
-        Keyword arguments:
-            inherit_from_parent: If a node has no line number information use
-                the information of a parent node.
-            inplace: Inplace modifications to the original ``node``.
-        """
-        return cls(
-            starting_line=starting_line, inherit_from_parent=inherit_from_parent, _parent_node=node
-        ).visit(node if inplace else copy.deepcopy(node))
+        return cls(_parent_node=node).visit(node)
 
     def generic_visit(self, node: ast.AST):
         if hasattr(node, "lineno") and node.lineno:
-            node.lineno = node.lineno + self.starting_line - 1
             self._parent_node = node
-        elif self.inherit_from_parent:
+        else:
             node.lineno = self._parent_node.lineno
             node.col_offset = self._parent_node.col_offset
             # the end positions are optional according to
