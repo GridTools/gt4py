@@ -215,6 +215,11 @@ class FieldOperatorTypeDeduction(NodeTranslator):
         **kwargs,
     ) -> ct.SymbolType:
         left, right = TypeInfo(left_type), TypeInfo(right_type)
+
+        # if one type is `None` (not deduced, generic), we propagate `None`
+        if left.type is None or right.type is None:
+            return None
+
         if (
             left.is_arithmetic_compatible
             and right.is_arithmetic_compatible

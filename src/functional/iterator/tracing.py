@@ -345,7 +345,7 @@ def trace(fun, args):
             params=list(Sym(id=param) for param in param_names),
             closures=Tracer.closures,
         )
-        return Program(function_definitions=Tracer.fundefs, fencil_definitions=[fencil], setqs=[])
+        return Program(function_definitions=Tracer.fundefs, fencil_definitions=[fencil])
 
 
 def fendef_tracing(fun, *args, **kwargs):

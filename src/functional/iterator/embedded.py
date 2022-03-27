@@ -670,11 +670,10 @@ def fendef_embedded(fun, *args, **kwargs):  # noqa: 536
                     col = np.flip(col)
 
                 if isinstance(col[0], tuple):
-                    # transpose to get tuple of columns as np array
-                    # TODO assert all entries in col have the same tuple size
-                    col = tuple(map(np.asarray, (map(list, zip(*col)))))
+                    dtype = ", ".join(np.dtype(type(c)).str for c in col[0])
+                    return np.asarray(col, dtype=dtype)
 
-                return col
+                return np.asarray(col)
 
             return impl
 

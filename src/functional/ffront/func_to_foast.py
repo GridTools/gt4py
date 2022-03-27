@@ -199,11 +199,32 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
             location=self._make_loc(node),
         )
 
+    @staticmethod
+    def _match_index(node: ast.expr) -> int:
+        if isinstance(node, ast.Constant):
+            return node.value
+        if (
+            isinstance(node, ast.UnaryOp)
+            and isinstance(node.op, ast.unaryop)
+            and isinstance(node.operand, ast.Constant)
+        ):
+            if isinstance(node.op, ast.USub):
+                return -node.operand.value
+            if isinstance(node.op, ast.UAdd):
+                return node.operand.value
+        raise ValueError(f"Not an index: {node}")
+
     def visit_Subscript(self, node: ast.Subscript, **kwargs) -> foast.Subscript:
-        if not isinstance(node.slice, ast.Constant):
-            raise FieldOperatorSyntaxError.from_AST(node, msg="Subscript slicing not allowed!")
+        try:
+            index = self._match_index(node.slice)
+        except ValueError:
+            raise FieldOperatorSyntaxError.from_AST(node,
+                                                    msg="""Only index is supported in subscript!""")
+
         return foast.Subscript(
-            value=self.visit(node.value), index=node.slice.value, location=self._make_loc(node)
+            value=self.visit(node.value),
+            index=index,
+            location=self._make_loc(node),
         )
 
     def visit_Tuple(self, node: ast.Tuple, **kwargs) -> foast.TupleExpr:
