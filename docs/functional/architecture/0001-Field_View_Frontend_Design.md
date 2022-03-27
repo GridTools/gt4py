@@ -53,7 +53,7 @@ All nodes that represent code must hold the location of that code.
 In some cases there are Python constructs which would directly map to a function call in the iterator model (such as binary operators). It was chosen to still represent them as binary operators to keep the analogy to Python AST and clearly separate parsing and lowering. The correspondence between Python and dialect AST also means it would be relatively easy to "unparse" the dialect AST into valid Python code for debugging.
 
 ##### Symbol types are not dialect nodes
-The symbol types in all dialects are implemented as simple dataclasses to ensure compatibility and reusability between different IRs. They are just _leaf_ nodes (not recursed into during tree traverslas) describing which kind of symbol is defined in an IR node.
+The symbol types in all dialects are implemented as simple dataclasses to ensure compatibility and reusability between different IRs. They are just _leaf_ nodes (not recursed into during tree traversals) describing which kind of symbol is defined in an IR node.
 
 #### What could be changed
 ##### Ad-hoc pass management
