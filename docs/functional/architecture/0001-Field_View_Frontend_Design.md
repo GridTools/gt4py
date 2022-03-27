@@ -112,7 +112,7 @@ The lowering contains some complex logic to emulate slicing of fields in order t
 ### Decorators (@program, @field_operator)
 
 #### What to keep
-The decorators are designed to be constructed from the root node of their respective dialect contrary to a python function object. This decision has been made to allow programmatically generating instances thereof.
+The decorators are designed to be constructed from the root node of their respective dialect contrary to a Python function object. This decision has been made to allow programmatically generating instances thereof.
 
 The Program decorator is not aware of the concept of a FieldOperator but instead uses a generic mechanism (`GTCallable`) to inject functions into the resulting ITIR. This allows to keep the the various decorators independent from each other and avoids coupling the typing system (which is conceptually on a lower level), to them (e.g. `make_symbol_type_from_value` uses the `__gt_type__` method).
 
