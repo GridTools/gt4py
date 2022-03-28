@@ -658,8 +658,11 @@ class _LvalueDimsValidator(NodeVisitor):
             raise ValueError(
                 f"Vertical loop type {vertical_loop_type} has no `loop_order` attribute"
             )
-        if not decl_type.__annotations__.get("dimensions") is Tuple[bool, bool, bool]:
-            raise ValueError(f"Field decl type {decl_type} has no `dimensions` attribute")
+        if not decl_type.__annotations__.get("dimensions") == Tuple[bool, bool, bool]:
+            raise ValueError(
+                f"Field decl type {decl_type} must have a `dimensions` "
+                "attribute of type `Tuple[bool, bool, bool]`."
+            )
         self.vertical_loop_type = vertical_loop_type
         self.decl_type = decl_type
 
