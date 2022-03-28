@@ -15,10 +15,10 @@ import pytest
 
 from functional.common import Field
 from functional.ffront import itir_makers as im
-from functional.ffront.fbuiltins import float64, int64, nbh_sum
+from functional.ffront.fbuiltins import float64, fvoffset, int64, neighbor_sum
 from functional.ffront.foast_to_itir import FieldOperatorLowering
 from functional.ffront.func_to_foast import FieldOperatorParser
-from functional.iterator.runtime import CartesianAxis, offset
+from functional.iterator.runtime import CartesianAxis
 
 
 IDim = CartesianAxis("IDim")
@@ -26,7 +26,7 @@ Edge = CartesianAxis("Edge")
 Vertex = CartesianAxis("Vertex")
 Cell = CartesianAxis("Cell")
 V2EDim = CartesianAxis("V2E")
-V2E = offset("V2E", source=Edge, target=(Vertex, V2EDim))
+V2E = fvoffset("V2E", source=Edge, target=(Vertex, V2EDim))
 
 
 def debug_itir(tree):
@@ -95,7 +95,7 @@ def test_arithmetic():
 
 
 def test_shift():
-    Ioff = offset("Ioff", source=IDim, target=[IDim])
+    Ioff = fvoffset("Ioff", source=IDim, target=[IDim])
 
     def shift_by_one(inp: Field[[IDim], float64]):
         return inp(Ioff[1])
@@ -375,7 +375,7 @@ def test_compare_chain():
 
 def test_reduction_lowering_simple():
     def reduction(edge_f: Field[[Edge], "float64"]):
-        return nbh_sum(edge_f(V2E), axis=V2E)
+        return neighbor_sum(edge_f(V2E), axis=V2E)
 
     parsed = FieldOperatorParser.apply_to_function(reduction)
     lowered = FieldOperatorLowering.apply(parsed)
@@ -395,7 +395,7 @@ def test_reduction_lowering_simple():
 def test_reduction_lowering_expr():
     def reduction(e1: Field[[Edge], "float64"], e2: Field[[Vertex, V2EDim], "float64"]):
         e1_nbh = e1(V2E)
-        return nbh_sum(e1_nbh + e2, axis=V2EDim)
+        return neighbor_sum(e1_nbh + e2, axis=V2EDim)
 
     parsed = FieldOperatorParser.apply_to_function(reduction)
     lowered = FieldOperatorLowering.apply(parsed)

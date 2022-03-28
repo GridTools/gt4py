@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Callable, Optional, Tuple, Union
+from typing import Callable, Optional, Union
 
 from functional import common
 from functional.iterator import builtins
@@ -12,12 +12,10 @@ __all__ = ["offset", "fundef", "fendef", "closure", "CartesianAxis"]
 @dataclass(frozen=True)
 class Offset:
     value: Optional[Union[int, str]] = None
-    source: Optional[common.Dimension] = None
-    target: Optional[Tuple[common.Dimension, common.Dimension]] = None
 
 
-def offset(value, source=None, target=None):
-    return Offset(value, source, target)
+def offset(value):
+    return Offset(value)
 
 
 class CartesianAxis(common.Dimension):

@@ -20,7 +20,7 @@ from typing import TypeVar
 import numpy as np
 import pytest
 
-from functional.ffront.fbuiltins import Field, float64, nbh_sum
+from functional.ffront.fbuiltins import Field, float64, fvoffset, neighbor_sum
 from functional.ffront.foast_to_itir import FieldOperatorLowering
 from functional.ffront.func_to_foast import FieldOperatorParser
 from functional.iterator import ir as itir
@@ -30,7 +30,7 @@ from functional.iterator.embedded import (
     index_field,
     np_as_located_field,
 )
-from functional.iterator.runtime import CartesianAxis, offset
+from functional.iterator.runtime import CartesianAxis
 
 
 def debug_itir(tree):
@@ -192,7 +192,7 @@ def test_unary_neg():
 
 def test_shift():
     size = 10
-    Ioff = offset("Ioff", source=IDim, target=[IDim])
+    Ioff = fvoffset("Ioff", source=IDim, target=[IDim])
     a = np_as_located_field(IDim)(np.arange(size + 1))
     b = np_as_located_field(IDim)(np.zeros((size)))
 
@@ -208,7 +208,7 @@ def test_shift():
 def test_fold_shifts():
     """Shifting the result of an addition should work."""
     size = 10
-    Ioff = offset("Ioff", source=IDim, target=[IDim])
+    Ioff = fvoffset("Ioff", source=IDim, target=[IDim])
     a = np_as_located_field(IDim)(np.arange(size + 1))
     b = np_as_located_field(IDim)(np.ones((size + 2)) * 2)
     c = np_as_located_field(IDim)(np.zeros((size)))
@@ -253,7 +253,7 @@ def reduction_setup():
         Edge=edge,
         Vertex=vertex,
         V2EDim=v2edim,
-        V2E=offset("V2E", source=edge, target=(vertex, v2edim)),
+        V2E=fvoffset("V2E", source=edge, target=(vertex, v2edim)),
         inp=index_field(edge),
         out=np_as_located_field(vertex)(np.zeros([size])),
         offset_provider={"V2E": NeighborTableOffsetProvider(v2e_arr, vertex, edge, 4)},
@@ -268,7 +268,7 @@ def test_reduction_execution(reduction_setup):
     V2E = rs.V2E
 
     def reduction(edge_f: Field[[rs.Edge], "float64"]):
-        return nbh_sum(edge_f(V2E), axis=V2EDim)
+        return neighbor_sum(edge_f(V2E), axis=V2EDim)
 
     program = program_from_function(reduction, dim=rs.Vertex, size=rs.size)
     roundtrip.executor(
@@ -291,7 +291,7 @@ def test_reduction_expression(reduction_setup):
     def reduce_expr(edge_f: Field[[rs.Edge], "float64"]):
         tmp_nbh_tup = edge_f(V2E), edge_f(V2E)
         tmp_nbh = tmp_nbh_tup[0]
-        return nbh_sum(-edge_f(V2E) * tmp_nbh, axis=V2EDim)
+        return neighbor_sum(-edge_f(V2E) * tmp_nbh, axis=V2EDim)
 
     program = program_from_function(reduce_expr, dim=rs.Vertex, size=rs.size)
     roundtrip.executor(

@@ -74,6 +74,17 @@ def ensure_expr(literal_or_expr: Union[str, int, itir.Expr]) -> itir.Expr:
 
 
 def ensure_offset(str_or_offset: Union[str, itir.OffsetLiteral]) -> itir.OffsetLiteral:
+    """
+    Convert python literals into an OffsetLiteral and let OffsetLiterals pass unchanged.
+
+    Examples
+    --------
+    >>> ensure_offset("V2E")
+    OffsetLiteral(value='V2E')
+
+    >>> ensure_offset(itir.OffsetLiteral(value="J"))
+    OffsetLiteral(value='J')
+    """
     if isinstance(str_or_offset, str):
         return itir.OffsetLiteral(value=str_or_offset)
     return str_or_offset

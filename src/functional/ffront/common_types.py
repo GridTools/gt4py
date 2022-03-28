@@ -60,7 +60,7 @@ class VoidType(SymbolType):
 @dataclass(frozen=True)
 class OffsetType(SymbolType):
     source: Optional[func_common.Dimension] = None
-    target: Optional[tuple[func_common.Dimension, func_common.Dimension]] = None
+    target: Optional[tuple[func_common.Dimension, ...]] = None
 
     def __str__(self):
         return f"Offset[{self.id}]"

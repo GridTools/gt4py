@@ -25,7 +25,6 @@ import numpy.typing as npt
 from eve import typingx
 from functional import common
 from functional.ffront import common_types as ct
-from functional.iterator import runtime
 
 
 def make_scalar_kind(dtype: npt.DTypeLike) -> ct.ScalarKind:
@@ -159,21 +158,14 @@ def make_symbol_type_from_typing(
 
 def make_symbol_type_from_value(value: Any) -> ct.SymbolType:
     """Make a symbol node from a Python value."""
-    if isinstance(value, ct.SymbolType):
-        # Temporary hack for type deductions with shifted fields
-        symbol_type = value
-    elif isinstance(value, runtime.Offset):
-        # Temporary hack for type deductions with shifted fields
-        symbol_type = ct.OffsetType(source=value.source, target=value.target)
-    else:
-        # TODO(tehrengruber): What we expect here currently is a GTCallable. Maybe
-        #  we should check for the protocol in the future?
-        if hasattr(value, "__gt_type__"):
-            symbol_type = value.__gt_type__()
+    # TODO(tehrengruber): What we expect here currently is a GTCallable. Maybe
+    #  we should check for the protocol in the future?
+    if hasattr(value, "__gt_type__"):
+        symbol_type = value.__gt_type__()
 
-        else:
-            type_ = typingx.get_typing(value, annotate_callable_kwargs=True)
-            symbol_type = make_symbol_type_from_typing(type_)
+    else:
+        type_ = typingx.get_typing(value, annotate_callable_kwargs=True)
+        symbol_type = make_symbol_type_from_typing(type_)
 
     if isinstance(symbol_type, (ct.DataType, ct.FunctionType, ct.OffsetType)):
         return symbol_type

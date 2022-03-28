@@ -109,13 +109,14 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
 
     def visit_Import(self, node: ast.Import, **kwargs) -> None:
         raise self._make_syntax_error(
-            node, f"Only 'from' imports from {fbuiltins.MODULE_BUILTIN_NAMES} are supported"
+            node, message=f"Only 'from' imports from {fbuiltins.MODULE_BUILTIN_NAMES} are supported"
         )
 
-    def visit_ImportFrom(self, node: ast.ImportFrom, **kwargs) -> None:
+    def visit_ImportFrom(self, node: ast.ImportFrom, **kwargs) -> foast.ExternalImport:
         if node.module not in fbuiltins.MODULE_BUILTIN_NAMES:
             raise self._make_syntax_error(
-                node, f"Only 'from' imports from {fbuiltins.MODULE_BUILTIN_NAMES} are supported"
+                node,
+                message=f"Only 'from' imports from {fbuiltins.MODULE_BUILTIN_NAMES} are supported",
             )
 
         symbols = []
@@ -334,7 +335,7 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
 
         args = node.args
         if new_func.id in fbuiltins.FUN_BUILTIN_NAMES:
-            func_info = getattr(fbuiltins, new_func.id)
+            func_info = getattr(fbuiltins, new_func.id).__gt_type__()
             if not len(args) == len(func_info.args) or any(
                 k.arg not in func_info.kwargs for k in node.keywords
             ):
