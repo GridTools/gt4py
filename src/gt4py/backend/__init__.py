@@ -27,10 +27,16 @@ from .base import (
 )
 from .gtc_backend import (
     GTCCudaBackend,
-    GTCDaceBackend,
     GTCGTCpuIfirstBackend,
     GTCGTCpuKfirstBackend,
     GTCGTGpuBackend,
     GTCNumpyBackend,
 )
+
+
+try:
+    from .gtc_backend import GTCDaceBackend
+except ImportError:
+    pass
+
 from .module_generator import BaseModuleGenerator

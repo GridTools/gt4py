@@ -14,14 +14,19 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from gtc import common
-from gtc.passes.oir_dace_optimizations.api import optimize_horizontal_executions
-from gtc.passes.oir_dace_optimizations.horizontal_execution_merging import (
+import pytest
+
+
+dace = pytest.importorskip("dace")  # noqa: E402 module level import not at top of file
+
+from gtc import common  # noqa: E402
+from gtc.passes.oir_dace_optimizations.api import optimize_horizontal_executions  # noqa: E402
+from gtc.passes.oir_dace_optimizations.horizontal_execution_merging import (  # noqa: E402
     GraphMerging,
     graph_merge_horizontal_executions,
 )
 
-from ..oir_utils import (
+from ..oir_utils import (  # noqa: E402
     AssignStmtFactory,
     FieldAccessFactory,
     HorizontalExecutionFactory,
