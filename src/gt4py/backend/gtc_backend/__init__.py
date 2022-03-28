@@ -14,17 +14,16 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from .cuda.backend import GTCCudaBackend
-from .dace.backend import GTCDaceBackend
-from .gtcpp.backend import GTCGTCpuIfirstBackend, GTCGTCpuKfirstBackend, GTCGTGpuBackend
-from .numpy.backend import GTCNumpyBackend
+from .cuda.backend import GTCCudaBackend  # noqa: F401
+from .gtcpp.backend import (  # noqa: F401
+    GTCGTCpuIfirstBackend,
+    GTCGTCpuKfirstBackend,
+    GTCGTGpuBackend,
+)
+from .numpy.backend import GTCNumpyBackend  # noqa: F401
 
 
-__all__ = [
-    "GTCCudaBackend",
-    "GTCDaceBackend",
-    "GTCGTCpuIfirstBackend",
-    "GTCGTCpuKfirstBackend",
-    "GTCGTGpuBackend",
-    "GTCNumpyBackend",
-]
+try:
+    from .dace.backend import GTCDaceBackend  # noqa: F401
+except ImportError:
+    pass

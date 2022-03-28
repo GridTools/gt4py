@@ -77,8 +77,8 @@ def _expand_and_finalize_sdfg(ir: gtir.Stencil, sdfg: dace.SDFG, layout_map) -> 
 
     # stencils without effect
     if all(info is None for info in args_data.field_info.values()):
-        sdfg = dace.SDFG(gtir.name)
-        sdfg.add_state(gtir.name)
+        sdfg = dace.SDFG(ir.name)
+        sdfg.add_state(ir.name)
         return sdfg
 
     for array in sdfg.arrays.values():
@@ -281,7 +281,7 @@ class DaCeBindingsCodegen:
 
     mako_template = bindings_main_template()
 
-    def generate_entry_params(self, gtir: gtir.Stencil, sdfg: dace.SDFG):
+    def generate_entry_params(self, ir: gtir.Stencil, sdfg: dace.SDFG):
         res = {}
         import dace.data
 
@@ -296,7 +296,7 @@ class DaCeBindingsCodegen:
             elif name in sdfg.symbols and not name.startswith("__"):
                 assert name in sdfg.symbols
                 res[name] = "{dtype} {name}".format(dtype=sdfg.symbols[name].ctype, name=name)
-        return list(res[node.name] for node in gtir.params if node.name in res)
+        return list(res[node.name] for node in ir.params if node.name in res)
 
     def generate_sid_params(self, sdfg: dace.SDFG):
         res = []
@@ -331,12 +331,12 @@ class DaCeBindingsCodegen:
             res.append(name)
         return res
 
-    def generate_sdfg_bindings(self, gtir, sdfg, module_name):
+    def generate_sdfg_bindings(self, ir: gtir.Stencil, sdfg, module_name):
 
         return self.mako_template.render_values(
             name=sdfg.name,
             module_name=module_name,
-            entry_params=self.generate_entry_params(gtir, sdfg),
+            entry_params=self.generate_entry_params(ir, sdfg),
             sid_params=self.generate_sid_params(sdfg),
         )
 

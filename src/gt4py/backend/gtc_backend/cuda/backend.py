@@ -26,6 +26,7 @@ from gtc.cuir import cuir, cuir_codegen, extent_analysis, kernel_fusion
 from gtc.cuir.oir_to_cuir import OIRToCUIR
 from gtc.gtir_to_oir import GTIRToOIR
 from gtc.passes.gtir_pipeline import GtirPipeline
+from gtc.passes.oir_optimizations.caches import FillFlushToLocalKCaches
 from gtc.passes.oir_optimizations.pruning import NoFieldAccessPruning
 from gtc.passes.oir_pipeline import DefaultPipeline
 
@@ -55,6 +56,7 @@ class GTCCudaExtGenerator(BackendCodegen):
             "oir_pipeline", DefaultPipeline(skip=[NoFieldAccessPruning])
         )
         oir = oir_pipeline.run(base_oir)
+        oir = FillFlushToLocalKCaches().visit(oir)
         cuir = OIRToCUIR().visit(oir)
         cuir = kernel_fusion.FuseKernels().visit(cuir)
         cuir = extent_analysis.CacheExtents().visit(cuir)
