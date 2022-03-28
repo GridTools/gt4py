@@ -13,7 +13,9 @@ endif()
 
 if(BACKEND STREQUAL "gpu")
     enable_language(CUDA)
+    set(is_gpu ON)
 endif() 
+string(TOUPPER ${BACKEND} backend_upper_case)
 
 include(FetchContent)
 FetchContent_Declare(GridTools
@@ -47,8 +49,11 @@ function(add_fn_codegen_test)
     
     generate_computation(NAME ${ARG_NAME} SRC_FILE ${ARG_SRC_FILE})
     add_executable(${ARG_NAME} ${ARG_DRIVER_FILE})
-    target_link_libraries(${ARG_NAME} fn_naive regression_main)
-    target_compile_definitions(${ARG_NAME} PRIVATE GT_FN_NAIVE)
+    target_link_libraries(${ARG_NAME} fn_${BACKEND} regression_main)
+    target_compile_definitions(${ARG_NAME} PRIVATE GT_FN_${backend_upper_case})
+    if(is_gpu)
+        gridtools_setup_target(${ARG_NAME} CUDA_ARCH sm_75) #TODO
+    endif()
     add_dependencies(${ARG_NAME} generated_${ARG_NAME})
 
     add_test(NAME ${ARG_NAME} COMMAND $<TARGET_FILE:${ARG_NAME}>)
@@ -61,7 +66,6 @@ if(BUILD_TESTING)
     include(cmake/FetchGoogleTest.cmake)
     fetch_googletest()
     
-    # generate_computation(NAME copy_stencil SRC_FILE copy_stencil.py)
     add_fn_codegen_test(NAME copy_stencil SRC_FILE copy_stencil.py DRIVER_FILE copy_stencil_driver.cpp)
     add_fn_codegen_test(NAME anton_lap SRC_FILE anton_lap.py DRIVER_FILE anton_lap_driver.cpp)
     add_fn_codegen_test(NAME fvm_nabla SRC_FILE fvm_nabla.py DRIVER_FILE fvm_nabla_driver.cpp)
