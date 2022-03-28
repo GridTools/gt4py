@@ -28,14 +28,23 @@ TYPE_BUILTINS = [Field, float, float32, float64, int, int32, int64, bool, tuple]
 TYPE_BUILTIN_NAMES = [t.__name__ for t in TYPE_BUILTINS]
 
 
-def neighbor_sum(*args, **kwargs):
-    """Sum-reduce a neighborhood (empty placeholder)."""
+@dataclass()
+class BuiltInFunction:
+    __gt_type: ct.FunctionType
+
+    def __call__(self, *args, **kwargs):
+        """Act as an empty place holder for the built in function."""
+
+    def __gt_type__(self):
+        return self.__gt_type
 
 
-neighbor_sum.__gt_type__ = lambda: ct.FunctionType(  # type: ignore [attr-defined]  # monkey patching
-    args=[ct.DeferredSymbolType(constraint=ct.FieldType)],
-    kwargs={"axis": ct.ScalarType(kind=ct.ScalarKind.DIMENSION)},
-    returns=ct.DeferredSymbolType(constraint=ct.FieldType),
+neighbor_sum = BuiltInFunction(
+    ct.FunctionType(
+        args=[ct.DeferredSymbolType(constraint=ct.FieldType)],
+        kwargs={"axis": ct.ScalarType(kind=ct.ScalarKind.DIMENSION)},
+        returns=ct.DeferredSymbolType(constraint=ct.FieldType),
+    )
 )
 
 
