@@ -140,7 +140,7 @@ class Program:
             itir_node = val.__gt_itir__()
             if itir_node.id != name:
                 raise RuntimeError(
-                    f"Name of the closure reference and the function it holds do not match."
+                    "Name of the closure reference and the function it holds do not match."
                 )
             lowered_funcs.append(itir_node)
             # if the closure ref has closure refs by itself, also add them
