@@ -71,11 +71,6 @@ class FunctionDefinition(Node, SymbolTableTrait):
         return hash(self.id)
 
 
-class Setq(Node):
-    id: SymbolName  # noqa: A003
-    expr: Expr
-
-
 class StencilClosure(Node):
     domain: Expr
     stencil: Expr
@@ -92,7 +87,6 @@ class FencilDefinition(Node, SymbolTableTrait):
 class Program(Node, SymbolTableTrait):
     function_definitions: List[FunctionDefinition]
     fencil_definitions: List[FencilDefinition]
-    setqs: List[Setq]
 
     builtin_functions = list(
         Sym(id=name)

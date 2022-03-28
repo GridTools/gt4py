@@ -200,7 +200,7 @@ class ProgramLowering(NodeTranslator):
                     return itir.BoolLiteral(value=node.value)
                 case _:
                     raise NotImplementedError(
-                        "Scalars of kind {node.type.kind} not supported currently."
+                        f"Scalars of kind {node.type.kind} not supported currently."
                     )
 
         raise NotImplementedError("Only scalar literals supported currently.")
