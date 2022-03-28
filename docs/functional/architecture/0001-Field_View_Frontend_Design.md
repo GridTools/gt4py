@@ -106,7 +106,7 @@ __Field operator out argument slicing__
 The lowering contains some complex logic to emulate slicing of fields in order to restrict the output domain of a field operator call. This contradics guiding principle (3) and should be removed in the future. The concept of specifying the domain for Field operators was not investigated during the frontend design as we concentrated on the beautified iterator dialect where the output domain is explicitly given when lifting a local operator to a field operator. The alternative to also explicitly specify the domain for calls to field operators was rejected as it:
 - would require introducing significantly more syntax in order to specify domains, which was not only infeasible to implement in time, but there also didn't exist an accepted syntax to do so.
 - no intuitive syntax was found to do this
-  - `field_operator(in_field, out=out_field, domain=output_domain)`: Possible, but 
+  - `field_operator(in_field, out=out_field, domain=output_domain)`: Possible, but rather verbose.
   - `field_operator[output_domain](in_field, out=out_field)` This syntax is already used to create a field operator from a local operator.
 
 ### Decorators (@program, @field_operator)
@@ -118,4 +118,4 @@ The Program decorator is not aware of the concept of a FieldOperator but instead
 
 #### What could be changed
 
-The GTCallable interface it no stable and was born as an ad-hoc concept to fullfil the requirements noted above. In particular the fact that it mixes types, i.e. a concept only found in the frontend, with the untyped iterator IR is not ideal. This leads to the strange situation, where the result of executing the ITIR, i.e. a stencil call, of a Field operator is a value, while the type suggests a Field return value and a call to the decorated function returns nothing.
+The GTCallable interface is not stable and was born as an ad-hoc concept to fullfil the requirements noted above. In particular the fact that it mixes types, i.e. a concept only found in the frontend, with the untyped iterator IR is not ideal. This leads to the strange situation, where the result of executing the ITIR, i.e. a stencil call, of a Field operator is a value, while the type suggests a Field return value and a call to the decorated function returns nothing.
