@@ -137,7 +137,12 @@ class Program:
                 continue
             if not isinstance(val, GTCallable):
                 raise NotImplementedError("Only function closure vars are allowed currently.")
-            lowered_funcs.append(val.__gt_itir__())
+            itir_node = val.__gt_itir__()
+            if itir_node.id != name:
+                raise RuntimeError(
+                    f"Name of the closure reference and the function it holds do not match."
+                )
+            lowered_funcs.append(itir_node)
             # if the closure ref has closure refs by itself, also add them
             if val.__gt_closure_refs__():
                 lowered_funcs.extend(self._lowered_funcs_from_closureref(val.__gt_closure_refs__()))
