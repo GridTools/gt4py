@@ -53,7 +53,7 @@ All nodes that represent code must hold the location of that code.
 In some cases there are Python constructs which would directly map to a function call in the iterator model (such as binary operators). It was chosen to still represent them as binary operators to keep the analogy to Python AST and clearly separate parsing and lowering. The correspondence between Python and dialect AST also means it would be relatively easy to "unparse" the dialect AST into valid Python code for debugging.
 
 ##### Symbol types are not dialect nodes
-The symbol types in all dialects are implemented as simple dataclasses to ensure compatibility and reusability between different IRs. They are just _leaf_ nodes (not recursed into during tree traverslas) describing which kind of symbol is defined in an IR node.
+The symbol types in all dialects are implemented as simple dataclasses to ensure compatibility and reusability between different IRs. They are just _leaf_ nodes (not recursed into during tree traversals) describing which kind of symbol is defined in an IR node.
 
 #### What could be changed
 ##### Ad-hoc pass management
@@ -112,7 +112,7 @@ The lowering contains some complex logic to emulate slicing of fields in order t
 ### Decorators (@program, @field_operator)
 
 #### What to keep
-The decorators are designed to be constructed from the root node of their respective dialect contrary to a python function object. This decision has been made to allow programmatically generating instances thereof.
+The decorators are designed to be constructed from the root node of their respective dialect contrary to a Python function object. This decision has been made to allow programmatically generating instances thereof.
 
 The Program decorator is not aware of the concept of a FieldOperator but instead uses a generic mechanism (`GTCallable`) to inject functions into the resulting ITIR. This allows to keep the the various decorators independent from each other and avoids coupling the typing system (which is conceptually on a lower level), to them (e.g. `make_symbol_type_from_value` uses the `__gt_type__` method).
 
