@@ -154,7 +154,7 @@ class DialectSyntaxError(common.GTSyntaxError):
             lineno=node.lineno,
             offset=node.col_offset,
             filename=filename,
-            end_lineno=node.end_lineno if hasattr(node, "end_lineno") else None,
-            end_offset=node.end_col_offset if hasattr(node, "end_col_offset") else None,
+            end_lineno=getattr(node, "end_lineno", None),
+            end_offset=getattr(node, "end_col_offset", None),
             text=text,
         )
