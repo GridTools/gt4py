@@ -15,20 +15,19 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import re
-from typing import TYPE_CHECKING, Any, Collection, Dict, Iterator, List, Tuple, Union
+from typing import TYPE_CHECKING, Any, Collection, Dict, Iterator, List, Union
 
 import dace
 import dace.data
 import networkx as nx
 import numpy as np
 from dace import SDFG, InterstateEdge
-from pydantic import validator
 
 import eve
 import gtc.oir as oir
-from eve.iterators import TraversalOrder, iter_tree
-from gtc.common import CartesianOffset, DataType, ExprKind, LevelMarker, typestr_to_data_type
-from gtc.passes.oir_optimizations.utils import AccessCollector, GenericAccess
+from gt4py.definitions import Extent
+from gtc.common import DataType, typestr_to_data_type
+from gtc.passes.oir_optimizations.utils import AccessCollector
 
 
 if TYPE_CHECKING:
@@ -230,262 +229,6 @@ def get_node_name_mapping(state: dace.SDFGState, node: dace.nodes.LibraryNode):
     return name_mapping
 
 
-class CartesianIterationSpace(oir.LocNode):
-    i_interval: oir.Interval
-    j_interval: oir.Interval
-
-    @validator("i_interval", "j_interval")
-    def minimum_domain(cls, v: oir.Interval) -> oir.Interval:
-        if (
-            v.start.level != LevelMarker.START
-            or v.start.offset > 0
-            or v.end.level != LevelMarker.END
-            or v.end.offset < 0
-        ):
-            raise ValueError("iteration space must include the whole domain")
-        return v
-
-    @staticmethod
-    def domain() -> "CartesianIterationSpace":
-        return CartesianIterationSpace(
-            i_interval=oir.Interval(start=oir.AxisBound.start(), end=oir.AxisBound.end()),
-            j_interval=oir.Interval(start=oir.AxisBound.start(), end=oir.AxisBound.end()),
-        )
-
-    @staticmethod
-    def from_offset(
-        offset: Union[CartesianOffset, oir.VariableKOffset]
-    ) -> "CartesianIterationSpace":
-
-        dict_offsets = offset.to_dict()
-        return CartesianIterationSpace(
-            i_interval=oir.Interval(
-                start=oir.AxisBound.from_start(min(0, dict_offsets["i"])),
-                end=oir.AxisBound.from_end(max(0, dict_offsets["i"])),
-            ),
-            j_interval=oir.Interval(
-                start=oir.AxisBound.from_start(min(0, dict_offsets["j"])),
-                end=oir.AxisBound.from_end(max(0, dict_offsets["j"])),
-            ),
-        )
-
-    def compose(self, other: "CartesianIterationSpace") -> "CartesianIterationSpace":
-        i_interval = oir.Interval(
-            start=oir.AxisBound.from_start(
-                self.i_interval.start.offset + other.i_interval.start.offset,
-            ),
-            end=oir.AxisBound.from_end(
-                self.i_interval.end.offset + other.i_interval.end.offset,
-            ),
-        )
-        j_interval = oir.Interval(
-            start=oir.AxisBound.from_start(
-                self.j_interval.start.offset + other.j_interval.start.offset,
-            ),
-            end=oir.AxisBound.from_end(
-                self.j_interval.end.offset + other.j_interval.end.offset,
-            ),
-        )
-        return CartesianIterationSpace(i_interval=i_interval, j_interval=j_interval)
-
-    def __or__(self, other: "CartesianIterationSpace") -> "CartesianIterationSpace":
-        i_interval = oir.Interval(
-            start=oir.AxisBound.from_start(
-                min(
-                    self.i_interval.start.offset,
-                    other.i_interval.start.offset,
-                )
-            ),
-            end=oir.AxisBound.from_end(
-                max(
-                    self.i_interval.end.offset,
-                    other.i_interval.end.offset,
-                )
-            ),
-        )
-        j_interval = oir.Interval(
-            start=oir.AxisBound.from_start(
-                min(
-                    self.j_interval.start.offset,
-                    other.j_interval.start.offset,
-                )
-            ),
-            end=oir.AxisBound.from_end(
-                max(
-                    self.j_interval.end.offset,
-                    other.j_interval.end.offset,
-                )
-            ),
-        )
-        return CartesianIterationSpace(i_interval=i_interval, j_interval=j_interval)
-
-    def __and__(self, other: "CartesianIterationSpace") -> "CartesianIterationSpace":
-        i_interval = oir.Interval(
-            start=oir.AxisBound.from_start(
-                max(
-                    self.i_interval.start.offset,
-                    other.i_interval.start.offset,
-                )
-            ),
-            end=oir.AxisBound.from_end(
-                min(
-                    self.i_interval.end.offset,
-                    other.i_interval.end.offset,
-                )
-            ),
-        )
-        j_interval = oir.Interval(
-            start=oir.AxisBound.from_start(
-                max(
-                    self.j_interval.start.offset,
-                    other.j_interval.start.offset,
-                )
-            ),
-            end=oir.AxisBound.from_end(
-                min(
-                    self.j_interval.end.offset,
-                    other.j_interval.end.offset,
-                )
-            ),
-        )
-        return CartesianIterationSpace(i_interval=i_interval, j_interval=j_interval)
-
-
-class CartesianIJIndexSpace(tuple):
-    def __new__(cls, *args, **kwargs):
-        return super(CartesianIJIndexSpace, cls).__new__(cls, *args, **kwargs)
-
-    def __init__(self, *args, **kwargs):
-        msg = "CartesianIJIndexSpace must be a pair of pairs of integers."
-        if not len(self) == 2:
-            raise ValueError(msg)
-        if not all(len(v) == 2 for v in self):
-            raise ValueError(msg)
-        if not all(isinstance(v[0], int) and isinstance(v[1], int) for v in self):
-            raise ValueError(msg)
-
-    @staticmethod
-    def from_offset(offset: Union[Tuple[int, ...], CartesianOffset]) -> "CartesianIJIndexSpace":
-        if isinstance(offset, CartesianOffset):
-            res = ((offset.i, offset.i), (offset.j, offset.j))
-        else:
-            res = ((offset[0], offset[0]), (offset[1], offset[1]))
-
-        return CartesianIJIndexSpace(
-            (
-                (
-                    min(res[0][0], 0),
-                    max(res[0][1], 0),
-                ),
-                (
-                    min(res[1][0], 0),
-                    max(res[1][1], 0),
-                ),
-            )
-        )
-
-    @staticmethod
-    def from_access(access: GenericAccess):
-        return CartesianIJIndexSpace.from_offset(access.offset)
-
-    @staticmethod
-    def from_iteration_space(iteration_space: CartesianIterationSpace) -> "CartesianIJIndexSpace":
-        return CartesianIJIndexSpace(
-            (
-                (iteration_space.i_interval.start.offset, iteration_space.i_interval.end.offset),
-                (iteration_space.j_interval.start.offset, iteration_space.j_interval.end.offset),
-            )
-        )
-
-    def compose(
-        self, other: Union["CartesianIterationSpace", "CartesianIJIndexSpace"]
-    ) -> "CartesianIJIndexSpace":
-        if isinstance(other, CartesianIterationSpace):
-            other = CartesianIJIndexSpace.from_iteration_space(other)
-        return CartesianIJIndexSpace(
-            (
-                (self[0][0] + other[0][0], (self[0][1] + other[0][1])),
-                (self[1][0] + other[1][0], (self[1][1] + other[1][1])),
-            )
-        )
-
-    def __or__(
-        self, other: Union["CartesianIterationSpace", "CartesianIJIndexSpace"]
-    ) -> "CartesianIJIndexSpace":
-        if isinstance(other, CartesianIterationSpace):
-            other = CartesianIJIndexSpace.from_iteration_space(other)
-        return CartesianIJIndexSpace(
-            (
-                (min(self[0][0], other[0][0]), max(self[0][1], other[0][1])),
-                (min(self[1][0], other[1][0]), max(self[1][1], other[1][1])),
-            )
-        )
-
-
-def iteration_to_access_space(iteration_space: CartesianIJIndexSpace, access: GenericAccess):
-    return CartesianIJIndexSpace.from_access(access).compose(iteration_space)
-
-
-def oir_iteration_space_computation(stencil: oir.Stencil) -> Dict[int, CartesianIterationSpace]:
-    iteration_spaces = dict()
-
-    offsets: Dict[str, List[CartesianOffset]] = dict()
-    outputs = set()
-    access_spaces: Dict[str, CartesianIterationSpace] = dict()
-    # reversed pre_order traversal is post-order but the last nodes per node come first.
-    # this is not possible with visitors unless a (reverseed) visit is implemented for every node
-    for node in reversed(list(iter_tree(stencil, traversal_order=TraversalOrder.PRE_ORDER))):
-        if isinstance(node, oir.FieldAccess):
-            if node.name not in offsets:
-                offsets[node.name] = list()
-            offsets[node.name].append(node.offset)
-        elif isinstance(node, oir.AssignStmt):
-            if node.left.kind == ExprKind.FIELD:
-                outputs.add(node.left.name)
-        elif isinstance(node, oir.HorizontalExecution):
-            iteration_spaces[id(node)] = CartesianIterationSpace.domain()
-            for name in outputs:
-                access_space = access_spaces.get(name, CartesianIterationSpace.domain())
-                iteration_spaces[id(node)] = iteration_spaces[id(node)] | access_space
-            for name in offsets:
-                access_space = CartesianIterationSpace.domain()
-                for offset in offsets[name]:
-                    access_space = access_space | CartesianIterationSpace.from_offset(offset)
-                accumulated_extent = iteration_spaces[id(node)].compose(access_space)
-                access_spaces[name] = (
-                    access_spaces.get(name, CartesianIterationSpace.domain()) | accumulated_extent
-                )
-
-            offsets = dict()
-            outputs = set()
-
-    return iteration_spaces
-
-
-def oir_field_boundary_computation(stencil: oir.Stencil) -> Dict[str, CartesianIterationSpace]:
-    offsets: Dict[str, List[CartesianOffset]] = dict()
-    access_spaces: Dict[str, CartesianIterationSpace] = dict()
-    iteration_spaces = oir_iteration_space_computation(stencil)
-    for node in iter_tree(stencil, traversal_order=TraversalOrder.POST_ORDER):
-        if isinstance(node, oir.FieldAccess):
-            if node.name not in offsets:
-                offsets[node.name] = list()
-            offsets[node.name].append(node.offset)
-        elif isinstance(node, oir.HorizontalExecution):
-            if iteration_spaces.get(id(node), None) is not None:
-                for name in offsets:
-                    access_space = CartesianIterationSpace.domain()
-                    for offset in offsets[name]:
-                        access_space = access_space | CartesianIterationSpace.from_offset(offset)
-                    access_spaces[name] = access_spaces.get(
-                        name, CartesianIterationSpace.domain()
-                    ) | (iteration_spaces[id(node)].compose(access_space))
-
-            offsets = dict()
-
-    return access_spaces
-
-
 def get_access_collection(
     node: Union[dace.SDFG, "HorizontalExecutionLibraryNode", "VerticalLoopLibraryNode"],
 ):
@@ -511,8 +254,8 @@ def get_access_collection(
 
 def nodes_extent_calculation(
     nodes: Collection[Union["VerticalLoopLibraryNode", "HorizontalExecutionLibraryNode"]]
-) -> Dict[str, Tuple[Tuple[int, int], Tuple[int, int]]]:
-    access_spaces: Dict[str, Tuple[Tuple[int, int], ...]] = dict()
+) -> Dict[str, Extent]:
+    field_extents: Dict[str, Extent] = dict()
     inner_nodes = []
     from gtc.dace.nodes import HorizontalExecutionLibraryNode, VerticalLoopLibraryNode
 
@@ -530,37 +273,14 @@ def nodes_extent_calculation(
             inner_nodes.append(node)
     for node in inner_nodes:
         access_collection = AccessCollector.apply(node.oir_node)
-        iteration_space = node.iteration_space
-        if iteration_space is not None:
+        block_extent = node.extent
+        if block_extent is not None:
             for acc in access_collection.ordered_accesses():
-                access_extent = []
-                for dim, iteration_interval in zip(
-                    (0, 1),
-                    (iteration_space.i_interval, iteration_space.j_interval),
-                ):
-                    ext = [0, 0]
+                offset_extent = acc.to_extent(block_extent) | Extent.zeros(2)
+                field_extents.setdefault(acc.field, offset_extent)
+                field_extents[acc.field] |= offset_extent
 
-                    ext[0] = iteration_interval.start.offset
-                    ext[0] += acc.offset[dim]
-                    ext[0] = min(0, ext[0])
-
-                    ext[1] = iteration_interval.end.offset
-                    ext[1] += acc.offset[dim]
-                    ext[1] = max(0, ext[1])
-
-                    access_extent.append((ext[0], ext[1]))
-
-                if acc.field not in access_spaces:
-                    access_spaces[acc.field] = tuple(access_extent)
-                access_spaces[acc.field] = tuple(
-                    (min(asp[0], ext[0]), max(asp[1], ext[1]))
-                    for asp, ext in zip(access_spaces[acc.field], access_extent)
-                )
-
-    return {
-        name: ((-asp[0][0], asp[0][1]), (-asp[1][0], asp[1][1]))
-        for name, asp in access_spaces.items()
-    }
+    return field_extents
 
 
 def iter_vertical_loop_section_sub_sdfgs(graph: SDFG) -> Iterator[SDFG]:
