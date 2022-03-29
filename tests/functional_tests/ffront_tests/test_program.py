@@ -23,7 +23,7 @@ from functional.common import Field, GTTypeError
 from functional.ffront import common_types
 from functional.ffront import program_ast as past
 from functional.ffront.decorator import field_operator, program
-from functional.ffront.fbuiltins import fvoffset
+from functional.ffront.fbuiltins import FieldOffset
 from functional.ffront.func_to_past import ProgramParser
 from functional.ffront.past_passes.type_deduction import ProgramTypeError
 from functional.ffront.past_to_itir import ProgramLowering
@@ -34,7 +34,7 @@ from functional.iterator.runtime import CartesianAxis
 
 float64 = float
 IDim = CartesianAxis("IDim")
-Ioff = fvoffset("Ioff", source=IDim, target=[IDim])
+Ioff = FieldOffset("Ioff", source=IDim, target=[IDim])
 
 
 # TODO(tehrengruber): Improve test structure. Identity needs to be decorated

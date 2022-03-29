@@ -20,7 +20,7 @@ from typing import TypeVar
 import numpy as np
 import pytest
 
-from functional.ffront.fbuiltins import Field, float64, fvoffset, neighbor_sum
+from functional.ffront.fbuiltins import Field, FieldOffset, float64, neighbor_sum
 from functional.ffront.foast_to_itir import FieldOperatorLowering
 from functional.ffront.func_to_foast import FieldOperatorParser
 from functional.iterator import ir as itir
@@ -191,7 +191,7 @@ def test_unary_neg():
 
 def test_shift():
     size = 10
-    Ioff = fvoffset("Ioff", source=IDim, target=[IDim])
+    Ioff = FieldOffset("Ioff", source=IDim, target=[IDim])
     a = np_as_located_field(IDim)(np.arange(size + 1))
     b = np_as_located_field(IDim)(np.zeros((size)))
 
@@ -207,7 +207,7 @@ def test_shift():
 def test_fold_shifts():
     """Shifting the result of an addition should work."""
     size = 10
-    Ioff = fvoffset("Ioff", source=IDim, target=[IDim])
+    Ioff = FieldOffset("Ioff", source=IDim, target=[IDim])
     a = np_as_located_field(IDim)(np.arange(size + 1))
     b = np_as_located_field(IDim)(np.ones((size + 2)) * 2)
     c = np_as_located_field(IDim)(np.zeros((size)))
@@ -252,7 +252,7 @@ def reduction_setup():
         Edge=edge,
         Vertex=vertex,
         V2EDim=v2edim,
-        V2E=fvoffset("V2E", source=edge, target=(vertex, v2edim)),
+        V2E=FieldOffset("V2E", source=edge, target=(vertex, v2edim)),
         inp=index_field(edge),
         out=np_as_located_field(vertex)(np.zeros([size])),
         offset_provider={"V2E": NeighborTableOffsetProvider(v2e_arr, vertex, edge, 4)},

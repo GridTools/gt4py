@@ -2,7 +2,7 @@ import numpy as np
 
 from functional.common import Field
 from functional.ffront.decorator import field_operator, program
-from functional.ffront.fbuiltins import fvoffset
+from functional.ffront.fbuiltins import FieldOffset
 from functional.iterator.embedded import np_as_located_field
 from functional.iterator.runtime import CartesianAxis
 
@@ -10,8 +10,8 @@ from functional.iterator.runtime import CartesianAxis
 IDim = CartesianAxis("IDim")
 JDim = CartesianAxis("JDim")
 
-Ioff = fvoffset("Ioff", source=IDim, target=(IDim,))
-Joff = fvoffset("Joff", source=JDim, target=(JDim,))
+Ioff = FieldOffset("Ioff", source=IDim, target=(IDim,))
+Joff = FieldOffset("Joff", source=JDim, target=(JDim,))
 
 
 @field_operator

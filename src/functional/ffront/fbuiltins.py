@@ -63,14 +63,9 @@ BUILTINS = {name: globals()[name] for name in __all__}
 # potentially in ``functional.common``, which requires lifting of
 # ``ffront.common_types`` into ``functional``.
 @dataclass(frozen=True)
-class FVOffset(runtime.Offset):
+class FieldOffset(runtime.Offset):
     source: Optional[Dimension] = None
     target: Optional[tuple[Dimension, ...]] = None
 
     def __gt_type__(self):
         return ct.OffsetType(source=self.source, target=self.target)
-
-
-# TODO(ricoh): same applies as for FVOffset above
-def fvoffset(value, source=None, target=None):
-    return FVOffset(value, source, target)
