@@ -78,12 +78,12 @@ def test_column_stencil_with_k_origin(backend, use_tmps):
 
 @fundef
 def sum_scanpass(state, inp):
-    return if_(is_none(state), deref(inp), state + deref(inp))
+    return state + deref(inp)
 
 
 @fundef
 def ksum(inp):
-    return scan(sum_scanpass, True, None)(inp)
+    return scan(sum_scanpass, True, 0.0)(inp)
 
 
 @fendef(column_axis=KDim)
@@ -97,8 +97,6 @@ def ksum_fencil(i_size, k_size, inp, out):
 
 
 def test_ksum_scan(backend, use_tmps):
-    if use_tmps:
-        pytest.xfail("use_tmps currently not supported for scans")
     backend, validate = backend
     shape = [1, 7]
     inp = np_as_located_field(IDim, KDim)(np.asarray([list(range(7))]))
@@ -122,7 +120,7 @@ def test_ksum_scan(backend, use_tmps):
 
 @fundef
 def ksum_back(inp):
-    return scan(sum_scanpass, False, None)(inp)
+    return scan(sum_scanpass, False, 0.0)(inp)
 
 
 @fendef(column_axis=KDim)
@@ -136,8 +134,6 @@ def ksum_back_fencil(i_size, k_size, inp, out):
 
 
 def test_ksum_back_scan(backend, use_tmps):
-    if use_tmps:
-        pytest.xfail("use_tmps currently not supported for scans")
     backend, validate = backend
     shape = [1, 7]
     inp = np_as_located_field(IDim, KDim)(np.asarray([list(range(7))]))

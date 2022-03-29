@@ -15,20 +15,25 @@ class PopupTmps(NodeTranslator):
             and node.fun.fun.id == "lift"
         ):
             # lifted lambda call
-            assert len(node.fun.args) == 1 and isinstance(node.fun.args[0], ir.Lambda)
+            assert len(node.fun.args) == 1
             assert lifts is not None
 
             nested_lifts: Dict[str, ir.Node] = dict()
             res = self.generic_visit(node, lifts=nested_lifts)
+            lambda_fun = res.fun.args[0]
+            if isinstance(lambda_fun, ir.FunCall):
+                if isinstance(lambda_fun.fun, ir.SymRef) and lambda_fun.fun.id == "scan":
+                    lambda_fun = lambda_fun.args[0]
+            assert isinstance(lambda_fun, ir.Lambda)
+
             # TODO: avoid possible symbol name clashes
             symbol = f"t{self._counter}"
             self._counter += 1
 
-            symbol_map = {param.id: arg for param, arg in zip(res.fun.args[0].params, res.args)}
+            symbol_map = {param.id: arg for param, arg in zip(lambda_fun.params, res.args)}
             new_args = [
                 RemapSymbolRefs().visit(arg, symbol_map=symbol_map) for arg in nested_lifts.values()
             ]
-            assert len(res.fun.args[0].params) == len(res.args + new_args)
             call = ir.FunCall(fun=res.fun, args=res.args + new_args)
 
             # return existing definition if the same expression was lifted before

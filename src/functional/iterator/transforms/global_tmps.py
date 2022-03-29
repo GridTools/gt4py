@@ -4,6 +4,7 @@ from eve import NodeTranslator
 from functional.iterator import ir
 from functional.iterator.runtime import CartesianAxis
 from functional.iterator.transforms.collect_shifts import CollectShifts
+from functional.iterator.transforms.common_type_deduction import CommonTypeDeduction
 from functional.iterator.transforms.popup_tmps import PopupTmps
 
 
@@ -102,19 +103,44 @@ class CreateGlobalTmps(NodeTranslator):
                     inputs=[handle_arg(arg) for arg in call.args],
                 )
                 local_shifts: Dict[str, List[tuple]] = dict()
-                CollectShifts().visit(closure.stencil, shifts=local_shifts)
-                input_map = {
-                    param.id: arg.id for param, arg in zip(closure.stencil.params, closure.inputs)
-                }
-                for k, v in local_shifts.items():
-                    shifts.setdefault(input_map[k], []).extend(v)
+                lambda_fun = closure.stencil
+                if (
+                    isinstance(lambda_fun, ir.FunCall)
+                    and isinstance(lambda_fun.fun, ir.SymRef)
+                    and lambda_fun.fun.id == "scan"
+                ):
+                    lambda_fun = lambda_fun.args[0]
+                elif (
+                    isinstance(lambda_fun, ir.Lambda)
+                    and isinstance(lambda_fun.expr, ir.FunCall)
+                    and isinstance(lambda_fun.expr.fun, ir.FunCall)
+                    and isinstance(lambda_fun.expr.fun.fun, ir.SymRef)
+                    and lambda_fun.expr.fun.fun.id == "scan"
+                ):
+                    lambda_fun = lambda_fun.expr.fun.args[0]
+                CollectShifts().visit(lambda_fun, shifts=local_shifts)
+                # TODO: fix
+                # TODO: input_map = {
+                # TODO:     param.id: arg.id for param, arg in zip(lambda_fun.params, closure.inputs)
+                # TODO: }
+                # TODO: for k, v in local_shifts.items():
+                # TODO:     shifts.setdefault(input_map[k], []).extend(v)
                 closures.append(closure)
+
+        fencil = ir.FencilDefinition(
+            id=node.id, params=node.params + tmps, closures=list(reversed(closures))
+        )
+
+        argtypes = CommonTypeDeduction.apply(fencil)
+        argnames = [p.id for p in fencil.params]
 
         assert {tmp.id for tmp in tmps} == set(tmp_domains.keys())
         if register_tmp is not None:
             for tmp, domain in tmp_domains.items():
-                register_tmp(tmp, domain)
+                dtype = argtypes[argnames.index(tmp)]
+                if isinstance(dtype, int):
+                    # index of first argument with the same dtype
+                    dtype = argtypes.index(dtype)
+                register_tmp(fencil.id, tmp, domain, dtype)
 
-        return ir.FencilDefinition(
-            id=node.id, params=node.params + tmps, closures=list(reversed(closures))
-        )
+        return fencil

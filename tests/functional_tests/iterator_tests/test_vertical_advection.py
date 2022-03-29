@@ -66,8 +66,6 @@ def fen_solve_tridiag(i_size, j_size, k_size, a, b, c, d, x):
 
 
 def test_tridiag(tridiag_reference, backend, use_tmps):
-    if use_tmps:
-        pytest.xfail("use_tmps currently not supported for scans")
     backend, validate = backend
     a, b, c, d, x = tridiag_reference
     shape = a.shape

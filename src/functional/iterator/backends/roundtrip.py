@@ -2,6 +2,8 @@ import importlib.util
 import tempfile
 from typing import Iterable
 
+import numpy as np
+
 from eve import codegen
 from eve.codegen import FormatTemplate as as_fmt
 from eve.codegen import MakoTemplate as as_mako
@@ -51,8 +53,16 @@ class WrapperGenerator(EmbeddedDSL):
         params = self.visit(node.params)
         non_tmp_params = [param for param in params if param not in tmps]
 
+        def np_dtype(dtype):
+            if isinstance(dtype, int):
+                return params[dtype] + ".dtype"
+            if isinstance(dtype, tuple):
+                return "np.dtype([" + ", ".join(f"('', {np_dtype(d)})" for d in dtype) + "])"
+                return np.dtype([("", np_dtype(d)) for d in dtype])
+            return f"np.dtype({dtype})"
+
         body = []
-        for tmp, domain in tmps.items():
+        for tmp, (domain, dtype) in tmps.items():
             axis_literals = [named_range.args[0].value for named_range in domain.args]
             origin = (
                 "{"
@@ -71,7 +81,7 @@ class WrapperGenerator(EmbeddedDSL):
                 + ")"
             )
             body.append(
-                f"{tmp} = np_as_located_field({','.join(axis_literals)}, origin={origin})(np.full({shape}, np.nan))"
+                f"{tmp} = np_as_located_field({','.join(axis_literals)}, origin={origin})(np.empty({shape}, dtype={np_dtype(dtype)}))"
             )
 
         body.append(f"{node.id}({','.join(params)}, **kwargs)")
@@ -88,8 +98,8 @@ def executor(ir: Node, *args, **kwargs):
 
     tmps = dict()
 
-    def register_tmp(tmp, domain):
-        tmps[tmp] = domain
+    def register_tmp(fencil_name, tmp, domain, dtype):
+        tmps[tmp] = (domain, dtype)
 
     ir = apply_common_transforms(
         ir, use_tmps=use_tmps, offset_provider=kwargs["offset_provider"], register_tmp=register_tmp

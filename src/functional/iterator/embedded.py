@@ -670,7 +670,7 @@ def fendef_embedded(fun, *args, **kwargs):  # noqa: 536
                     col = np.flip(col)
 
                 if isinstance(col[0], tuple):
-                    dtype = ", ".join(np.dtype(type(c)).str for c in col[0])
+                    dtype = np.dtype([("", type(c)) for c in col[0]])
                     return np.asarray(col, dtype=dtype)
 
                 return np.asarray(col)
