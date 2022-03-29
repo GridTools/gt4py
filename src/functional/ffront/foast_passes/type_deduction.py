@@ -78,15 +78,15 @@ class FieldOperatorTypeDeduction(NodeTranslator):
     ---------
     >>> import ast
     >>> from functional.common import Field
-    >>> from functional.ffront.source_utils import SourceDefinition, ClosureRefs
+    >>> from functional.ffront.source_utils import SourceDefinition, CapturedVars
     >>> from functional.ffront.func_to_foast import FieldOperatorParser
     >>> def example(a: "Field[..., float]", b: "Field[..., float]"):
     ...     return a + b
 
     >>> sdef = SourceDefinition.from_function(example)
-    >>> cref = ClosureRefs.from_function(example)
+    >>> cref = CapturedVars.from_function(example)
     >>> untyped_fieldop = FieldOperatorParser(
-    ...     source=sdef.source, filename=sdef.filename, starting_line=sdef.starting_line, closure_refs=cref, externals_defs={}
+    ...     source=sdef.source, filename=sdef.filename, starting_line=sdef.starting_line, captured_vars=cref, externals_defs={}
     ... ).visit(ast.parse(sdef.source).body[0])
     >>> assert untyped_fieldop.body[0].value.type is None
 
