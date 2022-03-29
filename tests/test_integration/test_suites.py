@@ -604,7 +604,7 @@ class TestNon3DFields(gt_testing.StencilTestSuite):
         "field_out": np.float64,
     }
     domain_range = [(4, 10), (4, 10), (4, 10)]
-    backends = INTERNAL_BACKENDS
+    backends = ["gtc:gt:cpu_ifirst", "gtc:gt:cpu_kfirst", "gtc:gt:gpu", "gtc:dace"]
     symbols = {
         "field_in": gt_testing.field(
             in_range=(-10, 10), axes="K", boundary=[(0, 0), (0, 0), (0, 0)]
@@ -854,7 +854,7 @@ class TestHorizontalRegions(gt_testing.StencilTestSuite):
         "field_out": np.float32,
     }
     domain_range = [(4, 4), (4, 4), (2, 2)]
-    backends = [backend for backend in INTERNAL_BACKENDS if backend.values[0] not in ["gtc:dace"]]
+    backends = INTERNAL_BACKENDS
     symbols = {
         "field_in": gt_testing.field(
             in_range=(-10, 10), axes="IJK", boundary=[(0, 0), (0, 0), (0, 0)]

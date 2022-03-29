@@ -73,6 +73,7 @@ class TaskletCodegen(codegen.TemplatedGenerator):
         nonflat_dimensions,
         is_target,
         targets,
+        region_fields,
         variable_k_fields,
         index_symbols,
         **kwargs,
@@ -81,6 +82,9 @@ class TaskletCodegen(codegen.TemplatedGenerator):
         if node.name in variable_k_fields:
             idx_syms[2] = "k"
         offset_for_suffix = list(node.offset.to_dict()[k] for k in "ijk")
+        if node.name in region_fields:
+            offset_for_suffix[0] = 0
+            offset_for_suffix[1] = 0
         if node.name in variable_k_fields:
             offset_for_suffix[2] = 0
         elif is_target or node.name in targets:
@@ -89,11 +93,15 @@ class TaskletCodegen(codegen.TemplatedGenerator):
             node.name, offset_for_suffix, (node.name in targets and self.visit(node.offset) == "")
         )
 
-        if node.name not in variable_k_fields and not node.data_index:
+        if (
+            node.name not in region_fields
+            and node.name not in variable_k_fields
+            and not node.data_index
+        ):
             offset_str = ""
         else:
             offset_strs = []
-            if node.name in variable_k_fields:
+            if node.name in region_fields or node.name in variable_k_fields:
                 acc_name = get_tasklet_symbol(
                     node.name,
                     offset_for_suffix,
@@ -105,6 +113,7 @@ class TaskletCodegen(codegen.TemplatedGenerator):
                         node.offset.k,
                         targets=targets,
                         is_target=False,
+                        region_fields=region_fields,
                         variable_k_fields=variable_k_fields,
                         index_symbols=index_symbols,
                         context_dimensions=context_dimensions,
@@ -253,6 +262,37 @@ class TaskletCodegen(codegen.TemplatedGenerator):
         indent = " " * 4
         delim = f"\n{indent}"
         return f"while {cond}:\n{indent}{delim.join(body)}"
+
+    def visit_HorizontalRestriction(self, node: oir.HorizontalRestriction, **kwargs):
+        mask_str = ""
+        indent = ""
+        if node.mask is not None:
+            cond_str = self.visit(node.mask, is_target=False, **kwargs)
+            if cond_str:
+                mask_str = f"if {cond_str}:"
+                indent = "    "
+        body_code = self.visit(node.body, **kwargs)
+        body_code = [line for block in body_code for line in block.split("\n")]
+        body_code = [indent + b for b in body_code]
+        return "\n".join([mask_str] + body_code)
+
+    def visit_HorizontalMask(
+        self, node: oir.HorizontalRestriction, *, index_symbols, global_domain_symbols, **kwargs
+    ):
+        clauses: List[str] = []
+        imin = get_axis_bound_str(node.i.start, global_domain_symbols[0])
+        if imin:
+            clauses.append(f"{index_symbols[0]} >= {imin}")
+        imax = get_axis_bound_str(node.i.end, global_domain_symbols[0])
+        if imax:
+            clauses.append(f"{index_symbols[0]} < {imax}")
+        jmin = get_axis_bound_str(node.j.start, global_domain_symbols[1])
+        if jmin:
+            clauses.append(f"{index_symbols[1]} >= {jmin}")
+        jmax = get_axis_bound_str(node.j.end, global_domain_symbols[1])
+        if jmax:
+            clauses.append(f"{index_symbols[1]} < {jmax}")
+        return " and ".join(clauses)
 
     @classmethod
     def apply(cls, node: oir.HorizontalExecution, **kwargs: Any) -> str:
@@ -665,6 +705,11 @@ class NaiveHorizontalExecutionExpander(OIRLibraryNodeExpander):
         access_collection: AccessCollector.CartesianAccessCollection = get_access_collection(
             self.node
         )
+        region_accesses = {
+            acc.field
+            for acc in access_collection.ordered_accesses()
+            if acc.horizontal_mask is not None
+        }
         variable_k_accesses = {
             acc.name
             for acc in self.node.oir_node.iter_tree().if_isinstance(oir.FieldAccess)
@@ -676,14 +721,18 @@ class NaiveHorizontalExecutionExpander(OIRLibraryNodeExpander):
 
         dynamic_accesses = {
             get_tasklet_symbol(acc.name, acc_to_offset_tuple(acc), is_target=False)
-            for maskstmt in self.node.oir_node.iter_tree().if_isinstance(oir.MaskStmt)
+            for maskstmt in self.node.oir_node.iter_tree().if_isinstance(
+                oir.MaskStmt, oir.HorizontalRestriction
+            )
             for stmt in maskstmt.body
             for assign in stmt.iter_tree().if_isinstance(oir.AssignStmt)
             for acc in assign.right.iter_tree().if_isinstance(oir.FieldAccess)
         }
         dynamic_accesses |= {
             get_tasklet_symbol(acc.name, acc_to_offset_tuple(acc), is_target=True)
-            for maskstmt in self.node.oir_node.iter_tree().if_isinstance(oir.MaskStmt)
+            for maskstmt in self.node.oir_node.iter_tree().if_isinstance(
+                oir.MaskStmt, oir.HorizontalRestriction
+            )
             for stmt in maskstmt.body
             for assign in stmt.iter_tree().if_isinstance(oir.AssignStmt)
             for acc in assign.left.iter_tree().if_isinstance(oir.FieldAccess)
@@ -733,8 +782,12 @@ class NaiveHorizontalExecutionExpander(OIRLibraryNodeExpander):
 
             for offset in offsets:
                 idx_subset_strs = _get_offset_subset_str(origin, offset, dimensions)
-                subset_strs = idx_subset_strs[: (sum(dimensions[:2]))]
-                ij_offs = list(offset[:2])
+                if name in region_accesses:
+                    subset_strs = dynamic_subset_strs[: sum(dimensions[:2])]
+                    ij_offs = [0, 0]
+                else:
+                    subset_strs = idx_subset_strs[: (sum(dimensions[:2]))]
+                    ij_offs = list(offset[:2])
                 if name in variable_k_accesses:
                     acc_name = get_tasklet_symbol(name, ij_offs + [0], is_target=False)
                     subset_strs.append(dynamic_subset_strs[sum(dimensions[:2])])
@@ -748,7 +801,9 @@ class NaiveHorizontalExecutionExpander(OIRLibraryNodeExpander):
                 in_memlets[acc_name] = dace.memlet.Memlet.simple(
                     name,
                     ",".join(subset_strs),
-                    dynamic=name in variable_k_accesses or acc_name in dynamic_accesses,
+                    dynamic=name in region_accesses
+                    or name in variable_k_accesses
+                    or acc_name in dynamic_accesses,
                 )
 
         out_memlets = dict()
@@ -763,7 +818,13 @@ class NaiveHorizontalExecutionExpander(OIRLibraryNodeExpander):
             data_dims = self.parent_sdfg.arrays[name].shape[sum(dimensions) :]
             idx_subset_strs = _get_offset_subset_str(self.origins[name], (0, 0, 0), dimensions)
             idx_subset_strs.extend(f"0:{dim}" for dim in data_dims)
-            subset_strs = idx_subset_strs
+            if name in region_accesses:
+                subset_strs = (
+                    dynamic_subset_strs[: sum(dimensions[:2])]
+                    + idx_subset_strs[sum(dimensions[:2]) :]
+                )
+            else:
+                subset_strs = idx_subset_strs
 
             acc_name = "__" + name
             out_memlets[acc_name] = dace.memlet.Memlet.simple(
@@ -824,6 +885,11 @@ class NaiveHorizontalExecutionExpander(OIRLibraryNodeExpander):
                 nonflat_dimensions[f"__{name}"] = out_dims
 
         access_collection: AccessCollector.Result = get_access_collection(self.node)
+        region_fields = {
+            acc.field
+            for acc in access_collection.ordered_accesses()
+            if acc.horizontal_mask is not None
+        }
         variable_k_fields = {
             acc.field for acc in access_collection.ordered_accesses() if acc.offset[2] is None
         }
@@ -832,6 +898,7 @@ class NaiveHorizontalExecutionExpander(OIRLibraryNodeExpander):
             context_dimensions=dimensions,
             nonflat_dimensions=nonflat_dimensions,
             origins=self.origins,
+            region_fields=region_fields,
             variable_k_fields=variable_k_fields,
             index_symbols=self.node.index_symbols,
             global_domain_symbols=self.node.global_domain_symbols,
