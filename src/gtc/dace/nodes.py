@@ -27,14 +27,10 @@ import dace.subsets
 import networkx as nx
 from dace import library
 
+from gt4py.definitions import Extent
 from gtc import oir
 from gtc.common import DataType, LoopOrder, SourceLocation, VariableKOffset, typestr_to_data_type
-from gtc.dace.utils import (
-    CartesianIterationSpace,
-    OIRFieldRenamer,
-    dace_dtype_to_typestr,
-    get_node_name_mapping,
-)
+from gtc.dace.utils import OIRFieldRenamer, dace_dtype_to_typestr, get_node_name_mapping
 from gtc.oir import CacheDesc, HorizontalExecution, Interval, VerticalLoop, VerticalLoopSection
 
 
@@ -184,9 +180,7 @@ class HorizontalExecutionLibraryNode(OIRLibraryNode):
     default_implementation = "naive"
 
     _oir_node: Union[HorizontalExecution, PreliminaryHorizontalExecution] = None
-    iteration_space = dace.properties.Property(
-        dtype=CartesianIterationSpace, default=None, allow_none=True
-    )
+    extent = dace.properties.Property(dtype=Extent, default=None, allow_none=True)
 
     map_schedule = dace.properties.EnumProperty(
         dtype=dace.ScheduleType, default=dace.ScheduleType.Default
@@ -200,7 +194,7 @@ class HorizontalExecutionLibraryNode(OIRLibraryNode):
         self,
         name="unnamed_vloop",
         oir_node: HorizontalExecution = None,
-        iteration_space: CartesianIterationSpace = None,
+        extent: Extent = None,
         debuginfo: dace.dtypes.DebugInfo = None,
         *args,
         **kwargs,
@@ -208,7 +202,7 @@ class HorizontalExecutionLibraryNode(OIRLibraryNode):
         if oir_node is not None:
             name = "HorizontalExecution_" + str(id(oir_node))
             self._oir_node = oir_node
-            self.iteration_space = iteration_space
+            self.extent = extent
 
         super().__init__(name=name, *args, **kwargs)
         if debuginfo is None and oir_node is not None and oir_node.loc is not None:
