@@ -130,6 +130,34 @@ def test_access_overlap_along_axis():
     assert overlap[0] == -2
     assert overlap[1] > 100
 
+    assert (
+        _overlap_along_axis(
+            (0, 0), common.HorizontalInterval.at_endpt(common.LevelMarker.START, -4)
+        )
+        is None
+    )
+
+    assert (
+        _overlap_along_axis((0, 0), common.HorizontalInterval.at_endpt(common.LevelMarker.END, 4))
+        is None
+    )
+
+    overlap = _overlap_along_axis(
+        (-1, 1),
+        common.HorizontalInterval.at_endpt(common.LevelMarker.START, start_offset=-4, end_offset=4),
+    )
+
+    assert overlap[0] == 0
+    assert overlap[1] > 100
+
+    overlap = _overlap_along_axis(
+        (-1, 1),
+        common.HorizontalInterval.at_endpt(common.LevelMarker.END, start_offset=-4, end_offset=4),
+    )
+
+    assert overlap[0] < -100
+    assert overlap[1] == 0
+
 
 @pytest.mark.parametrize(
     "mask,offset,access_extent",
