@@ -14,18 +14,33 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+from collections import namedtuple
 from typing import TypeVar
 
 import numpy as np
 import pytest
 
-from functional.ffront.fbuiltins import Field, float64
+from functional.ffront.fbuiltins import Field, FieldOffset, float64, neighbor_sum
 from functional.ffront.foast_to_itir import FieldOperatorLowering
 from functional.ffront.func_to_foast import FieldOperatorParser
 from functional.iterator import ir as itir
 from functional.iterator.backends import roundtrip
-from functional.iterator.embedded import np_as_located_field
-from functional.iterator.runtime import CartesianAxis, offset
+from functional.iterator.embedded import (
+    NeighborTableOffsetProvider,
+    index_field,
+    np_as_located_field,
+)
+from functional.iterator.runtime import CartesianAxis
+
+
+def debug_itir(tree):
+    """Compare tree snippets while debugging."""
+    from devtools import debug
+
+    from eve.codegen import format_python_source
+    from functional.iterator.backends.roundtrip import EmbeddedDSL
+
+    debug(format_python_source(EmbeddedDSL.apply(tree)))
 
 
 def make_domain(dim_name: str, lower: int, upper: int) -> itir.FunCall:
@@ -176,7 +191,7 @@ def test_unary_neg():
 
 def test_shift():
     size = 10
-    Ioff = offset("Ioff")
+    Ioff = FieldOffset("Ioff", source=IDim, target=[IDim])
     a = np_as_located_field(IDim)(np.arange(size + 1))
     b = np_as_located_field(IDim)(np.zeros((size)))
 
@@ -190,18 +205,100 @@ def test_shift():
 
 
 def test_fold_shifts():
-    """Shifting the result of an addition should work by shifting the operands instead."""
+    """Shifting the result of an addition should work."""
     size = 10
-    Ioff = offset("Ioff")
+    Ioff = FieldOffset("Ioff", source=IDim, target=[IDim])
     a = np_as_located_field(IDim)(np.arange(size + 1))
-    b = np_as_located_field(IDim)(np.ones((size + 1)) * 2)
+    b = np_as_located_field(IDim)(np.ones((size + 2)) * 2)
     c = np_as_located_field(IDim)(np.zeros((size)))
 
     def auto_lift(inp1: Field[[IDim], float64], inp2: Field[[IDim], float64]):
-        tmp = inp1 + inp2
+        tmp = inp1 + inp2(Ioff[1])
         return tmp(Ioff[1])
 
     program = program_from_function(auto_lift, dim=IDim, size=size)
     roundtrip.executor(program, a, b, c, offset_provider={"Ioff": IDim})
 
-    assert np.allclose(a[1:] + b[1:], c)
+    assert np.allclose(a[1:] + b[2:], c)
+
+
+@pytest.fixture
+def reduction_setup():
+
+    size = 9
+    edge = CartesianAxis("Edge")
+    vertex = CartesianAxis("Vertex")
+    v2edim = CartesianAxis("V2E")
+
+    v2e_arr = np.array(
+        [
+            [0, 15, 2, 9],  # 0
+            [1, 16, 0, 10],
+            [2, 17, 1, 11],
+            [3, 9, 5, 12],  # 3
+            [4, 10, 3, 13],
+            [5, 11, 4, 14],
+            [6, 12, 8, 15],  # 6
+            [7, 13, 6, 16],
+            [8, 14, 7, 17],
+        ]
+    )
+
+    yield namedtuple(
+        "ReductionSetup",
+        ["size", "Edge", "Vertex", "V2EDim", "V2E", "inp", "out", "v2e_table", "offset_provider"],
+    )(
+        size=9,
+        Edge=edge,
+        Vertex=vertex,
+        V2EDim=v2edim,
+        V2E=FieldOffset("V2E", source=edge, target=(vertex, v2edim)),
+        inp=index_field(edge),
+        out=np_as_located_field(vertex)(np.zeros([size])),
+        offset_provider={"V2E": NeighborTableOffsetProvider(v2e_arr, vertex, edge, 4)},
+        v2e_table=v2e_arr,
+    )
+
+
+def test_reduction_execution(reduction_setup):
+    """Testing a trivial neighbor sum."""
+    rs = reduction_setup
+    V2EDim = rs.V2EDim
+    V2E = rs.V2E
+
+    def reduction(edge_f: Field[[rs.Edge], "float64"]):
+        return neighbor_sum(edge_f(V2E), axis=V2EDim)
+
+    program = program_from_function(reduction, dim=rs.Vertex, size=rs.size)
+    roundtrip.executor(
+        program,
+        rs.inp,
+        rs.out,
+        offset_provider=rs.offset_provider,
+    )
+
+    ref = np.sum(rs.v2e_table, axis=1)
+    assert np.allclose(ref, rs.out)
+
+
+def test_reduction_expression(reduction_setup):
+    """Test reduction with an expression directly inside the call."""
+    rs = reduction_setup
+    V2EDim = rs.V2EDim
+    V2E = rs.V2E
+
+    def reduce_expr(edge_f: Field[[rs.Edge], "float64"]):
+        tmp_nbh_tup = edge_f(V2E), edge_f(V2E)
+        tmp_nbh = tmp_nbh_tup[0]
+        return neighbor_sum(-edge_f(V2E) * tmp_nbh, axis=V2EDim)
+
+    program = program_from_function(reduce_expr, dim=rs.Vertex, size=rs.size)
+    roundtrip.executor(
+        program,
+        rs.inp,
+        rs.out,
+        offset_provider=rs.offset_provider,
+    )
+
+    ref = np.sum(-(rs.v2e_table**2), axis=1)
+    assert np.allclose(ref, rs.out.array())

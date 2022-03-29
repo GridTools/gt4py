@@ -23,17 +23,18 @@ from functional.common import Field, GTTypeError
 from functional.ffront import common_types
 from functional.ffront import program_ast as past
 from functional.ffront.decorator import field_operator, program
+from functional.ffront.fbuiltins import FieldOffset
 from functional.ffront.func_to_past import ProgramParser
 from functional.ffront.past_passes.type_deduction import ProgramTypeError
 from functional.ffront.past_to_itir import ProgramLowering
 from functional.iterator import ir as itir
 from functional.iterator.embedded import np_as_located_field
-from functional.iterator.runtime import CartesianAxis, offset
+from functional.iterator.runtime import CartesianAxis
 
 
 float64 = float
 IDim = CartesianAxis("IDim")
-Ioff = offset("Ioff")
+Ioff = FieldOffset("Ioff", source=IDim, target=[IDim])
 
 
 # TODO(tehrengruber): Improve test structure. Identity needs to be decorated
@@ -144,7 +145,7 @@ def test_copy_parsing(copy_program_def):
                 kwargs={"out": P(past.Name, id="out_field")},
             )
         ],
-        location=P(past.SourceLocation, line=57, source=__file__),
+        location=P(past.SourceLocation, line=58, source=__file__),
     )
     assert pattern_node.match(past_node, raise_exception=True)
 
