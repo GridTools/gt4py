@@ -158,7 +158,7 @@ def test_clashing_annotated_assignment():
 
 def test_binary_pow():
     def power(inp: Field[..., "float64"]):
-        return inp ** 3
+        return inp**3
 
     with pytest.raises(
         FieldOperatorSyntaxError,

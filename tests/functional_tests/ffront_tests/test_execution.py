@@ -300,5 +300,5 @@ def test_reduction_expression(reduction_setup):
         offset_provider=rs.offset_provider,
     )
 
-    ref = np.sum(-(rs.v2e_table ** 2), axis=1)
+    ref = np.sum(-(rs.v2e_table**2), axis=1)
     assert np.allclose(ref, rs.out.array())
