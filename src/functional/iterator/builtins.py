@@ -20,7 +20,6 @@ __all__ = [
     "not_",
     "and_",
     "or_",
-    #
     "scan",
     "is_none",
     "domain",

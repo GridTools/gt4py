@@ -15,13 +15,18 @@ import pytest
 
 from functional.common import Field
 from functional.ffront import itir_makers as im
-from functional.ffront.fbuiltins import float64, int64
+from functional.ffront.fbuiltins import FieldOffset, float64, int64, neighbor_sum
 from functional.ffront.foast_to_itir import FieldOperatorLowering
 from functional.ffront.func_to_foast import FieldOperatorParser
-from functional.iterator.runtime import CartesianAxis, offset
+from functional.iterator.runtime import CartesianAxis
 
 
 IDim = CartesianAxis("IDim")
+Edge = CartesianAxis("Edge")
+Vertex = CartesianAxis("Vertex")
+Cell = CartesianAxis("Cell")
+V2EDim = CartesianAxis("V2E")
+V2E = FieldOffset("V2E", source=Edge, target=(Vertex, V2EDim))
 
 
 def debug_itir(tree):
@@ -90,7 +95,7 @@ def test_arithmetic():
 
 
 def test_shift():
-    Ioff = offset("Ioff")
+    Ioff = FieldOffset("Ioff", source=IDim, target=[IDim])
 
     def shift_by_one(inp: Field[[IDim], float64]):
         return inp(Ioff[1])
@@ -105,7 +110,7 @@ def test_shift():
 
 
 def test_negative_shift():
-    Ioff = offset("Ioff")
+    Ioff = FieldOffset("Ioff", source=IDim, target=[IDim])
 
     def shift_by_one(inp: Field[[IDim], float64]):
         return inp(Ioff[-1])
@@ -378,6 +383,49 @@ def test_compare_chain():
                 )
             )
         )("a", "b", "c")
+    )
+
+    assert lowered.expr == reference
+
+
+def test_reduction_lowering_simple():
+    def reduction(edge_f: Field[[Edge], "float64"]):
+        return neighbor_sum(edge_f(V2E), axis=V2E)
+
+    parsed = FieldOperatorParser.apply_to_function(reduction)
+    lowered = FieldOperatorLowering.apply(parsed)
+
+    reference = im.deref_(
+        im.lift_(
+            im.call_("reduce")(
+                im.lambda__("accum", "edge_f__0")(im.plus_("accum", "edge_f__0")),
+                0,
+            )
+        )(im.shift_("V2E")("edge_f"))
+    )
+
+    assert lowered.expr == reference
+
+
+def test_reduction_lowering_expr():
+    def reduction(e1: Field[[Edge], "float64"], e2: Field[[Vertex, V2EDim], "float64"]):
+        e1_nbh = e1(V2E)
+        return neighbor_sum(e1_nbh + e2, axis=V2EDim)
+
+    parsed = FieldOperatorParser.apply_to_function(reduction)
+    lowered = FieldOperatorLowering.apply(parsed)
+
+    reference = im.deref_(
+        im.let("e1_nbh__0", im.shift_("V2E")("e1"))(
+            im.lift_(
+                im.call_("reduce")(
+                    im.lambda__("accum", "e1_nbh__0__0", "e2__1")(
+                        im.plus_("accum", im.plus_("e1_nbh__0__0", "e2__1"))
+                    ),
+                    0,
+                )
+            )("e1_nbh__0", "e2")
+        )
     )
 
     assert lowered.expr == reference

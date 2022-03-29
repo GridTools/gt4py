@@ -2,15 +2,16 @@ import numpy as np
 
 from functional.common import Field
 from functional.ffront.decorator import field_operator, program
+from functional.ffront.fbuiltins import FieldOffset
 from functional.iterator.embedded import np_as_located_field
-from functional.iterator.runtime import CartesianAxis, offset
+from functional.iterator.runtime import CartesianAxis
 
 
 IDim = CartesianAxis("IDim")
 JDim = CartesianAxis("JDim")
 
-Ioff = offset("Ioff")
-Joff = offset("Joff")
+Ioff = FieldOffset("Ioff", source=IDim, target=(IDim,))
+Joff = FieldOffset("Joff", source=JDim, target=(JDim,))
 
 
 @field_operator
@@ -59,7 +60,7 @@ def lap_ref(inp):
 def test_ffront_lap():
     shape = (20, 20)
     as_ij = np_as_located_field(IDim, JDim)
-    input = as_ij(np.fromfunction(lambda x, y: x ** 2 + y ** 2, shape))
+    input = as_ij(np.fromfunction(lambda x, y: x**2 + y**2, shape))
     a4 = as_ij(np.ones(shape) * -4.0)  # TODO support scalar field
 
     result_lap = as_ij(np.zeros_like(input))

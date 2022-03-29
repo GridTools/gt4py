@@ -109,13 +109,14 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
 
     def visit_Import(self, node: ast.Import, **kwargs) -> None:
         raise self._make_syntax_error(
-            node, f"Only 'from' imports from {fbuiltins.MODULE_BUILTIN_NAMES} are supported"
+            node, message=f"Only 'from' imports from {fbuiltins.MODULE_BUILTIN_NAMES} are supported"
         )
 
-    def visit_ImportFrom(self, node: ast.ImportFrom, **kwargs) -> None:
+    def visit_ImportFrom(self, node: ast.ImportFrom, **kwargs) -> foast.ExternalImport:
         if node.module not in fbuiltins.MODULE_BUILTIN_NAMES:
             raise self._make_syntax_error(
-                node, f"Only 'from' imports from {fbuiltins.MODULE_BUILTIN_NAMES} are supported"
+                node,
+                message=f"Only 'from' imports from {fbuiltins.MODULE_BUILTIN_NAMES} are supported",
             )
 
         symbols = []
@@ -345,15 +346,28 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
     def visit_Eq(self, node: ast.Eq, **kwargs) -> foast.CompareOperator:
         return foast.CompareOperator.EQ
 
-    def visit_Call(self, node: ast.Call, **kwargs) -> foast.CompareOperator:
+    def visit_Call(self, node: ast.Call, **kwargs) -> foast.Call:
         new_func = self.visit(node.func)
         if not isinstance(new_func, foast.Name):
             raise self._make_syntax_error(
-                node.func, message="functions can only be called directly!"
+                node.func, message="Functions can only be called directly!"
             )
+
+        args = node.args
+        if new_func.id in fbuiltins.FUN_BUILTIN_NAMES:
+            func_info = getattr(fbuiltins, new_func.id).__gt_type__()
+            if not len(args) == len(func_info.args) or any(
+                k.arg not in func_info.kwargs for k in node.keywords
+            ):
+                raise self._make_syntax_error(
+                    node.func, message=f"Wrong syntax for function {new_func.id}."
+                )
+
+        for keyword in node.keywords:
+            args.append(keyword.value)
 
         return foast.Call(
             func=new_func,
-            args=[self.visit(arg) for arg in node.args],
+            args=[self.visit(arg, **kwargs) for arg in args],
             location=self._make_loc(node),
         )
