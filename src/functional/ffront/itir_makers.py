@@ -75,7 +75,7 @@ def ensure_expr(literal_or_expr: Union[str, int, itir.Expr]) -> itir.Expr:
 
 def ensure_offset(str_or_offset: Union[str, itir.OffsetLiteral]) -> itir.OffsetLiteral:
     """
-    Convert python literals into an OffsetLiteral and let OffsetLiterals pass unchanged.
+    Convert Python literals into an OffsetLiteral and let OffsetLiterals pass unchanged.
 
     Examples
     --------
