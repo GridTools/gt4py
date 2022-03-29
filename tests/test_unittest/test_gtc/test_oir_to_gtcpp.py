@@ -99,4 +99,4 @@ def test_variable_offset_accessor():
     gtcpp_program = OIRToGTCpp().visit(oir_stencil)
     code = GTCppCodegen.apply(gtcpp_program, gt_backend_t="cpu_ifirst")
     print(code)
-    match(code, fr"eval\({out_name}\(\)\) = eval\({in_name}\(0, 0, eval\({index_name}\(\)\)\)\)")
+    match(code, rf"eval\({out_name}\(\)\) = eval\({in_name}\(0, 0, eval\({index_name}\(\)\)\)\)")
