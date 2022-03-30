@@ -108,13 +108,13 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
         )
 
     def visit_Import(self, node: ast.Import, **kwargs) -> None:
-        raise self._make_syntax_error(
+        raise FieldOperatorSyntaxError.from_AST(
             node, message=f"Only 'from' imports from {fbuiltins.MODULE_BUILTIN_NAMES} are supported"
         )
 
     def visit_ImportFrom(self, node: ast.ImportFrom, **kwargs) -> foast.ExternalImport:
         if node.module not in fbuiltins.MODULE_BUILTIN_NAMES:
-            raise self._make_syntax_error(
+            raise FieldOperatorSyntaxError.from_AST(
                 node,
                 message=f"Only 'from' imports from {fbuiltins.MODULE_BUILTIN_NAMES} are supported",
             )
@@ -124,8 +124,8 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
         if node.module == fbuiltins.EXTERNALS_MODULE_NAME:
             for alias in node.names:
                 if alias.name not in self.externals_defs:
-                    raise self._make_syntax_error(
-                        node, message="Missing symbol '{alias.name}' definition in {node.module}}"
+                    raise FieldOperatorSyntaxError.from_AST(
+                        node, msg=f"Missing symbol '{alias.name}' definition in {node.module}"
                     )
                 symbols.append(
                     foast.Symbol(
@@ -145,20 +145,20 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
 
     def visit_arg(self, node: ast.arg) -> foast.DataSymbol:
         if (annotation := self.closure_refs.annotations.get(node.arg, None)) is None:
-            raise self._make_syntax_error(node, message="Untyped parameters not allowed!")
+            raise FieldOperatorSyntaxError.from_AST(node, msg="Untyped parameters not allowed!")
         new_type = symbol_makers.make_symbol_type_from_typing(annotation)
         if not isinstance(new_type, common_types.DataType):
-            raise self._make_syntax_error(
-                node, message="Only arguments of type DataType are allowed."
+            raise FieldOperatorSyntaxError.from_AST(
+                node, msg="Only arguments of type DataType are allowed."
             )
         return foast.DataSymbol(id=node.arg, location=self._make_loc(node), type=new_type)
 
     def visit_Assign(self, node: ast.Assign, **kwargs) -> foast.Assign:
         target = node.targets[0]  # there is only one element after assignment passes
         if isinstance(target, ast.Tuple):
-            raise self._make_syntax_error(node, message="Unpacking not allowed!")
+            raise FieldOperatorSyntaxError.from_AST(node, msg="Unpacking not allowed!")
         if not isinstance(target, ast.Name):
-            raise self._make_syntax_error(node, message="Can only assign to names!")
+            raise FieldOperatorSyntaxError.from_AST(node, msg="Can only assign to names!")
         new_value = self.visit(node.value)
         constraint_type = common_types.FieldType
         if isinstance(new_value, foast.TupleExpr):
@@ -175,7 +175,7 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
 
     def visit_AnnAssign(self, node: ast.AnnAssign, **kwargs) -> foast.Assign:
         if not isinstance(node.target, ast.Name):
-            raise self._make_syntax_error(node, message="Can only assign to names!")
+            raise FieldOperatorSyntaxError.from_AST(node, msg="Can only assign to names!")
 
         if node.annotation is not None:
             assert isinstance(
@@ -219,7 +219,9 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
         try:
             index = self._match_index(node.slice)
         except ValueError:
-            raise self._make_syntax_error(node, message="""Only index is supported in subscript!""")
+            raise FieldOperatorSyntaxError.from_AST(
+                node, msg="""Only index is supported in subscript!"""
+            )
 
         return foast.Subscript(
             value=self.visit(node.value),
@@ -234,13 +236,13 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
 
     def visit_Return(self, node: ast.Return, **kwargs) -> foast.Return:
         if not node.value:
-            raise self._make_syntax_error(node, message="Empty return not allowed")
+            raise FieldOperatorSyntaxError.from_AST(node, msg="Empty return not allowed")
         return foast.Return(value=self.visit(node.value), location=self._make_loc(node))
 
     def visit_stmt_list(self, nodes: list[ast.stmt]) -> list[foast.Expr]:
         if not isinstance(last_node := nodes[-1], ast.Return):
-            raise self._make_syntax_error(
-                last_node, message="Field operator must return a field expression on the last line!"
+            raise FieldOperatorSyntaxError.from_AST(
+                last_node, msg="Field operator must return a field expression on the last line!"
             )
         return [self.visit(node) for node in nodes]
 
@@ -262,13 +264,7 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
         return foast.UnaryOperator.NOT
 
     def visit_BinOp(self, node: ast.BinOp, **kwargs) -> foast.BinOp:
-        new_op = None
-        try:
-            new_op = self.visit(node.op)
-        except FieldOperatorSyntaxError as err:
-            err.lineno = node.lineno
-            err.offset = node.col_offset
-            raise err
+        new_op = self.visit(node.op)
         return foast.BinOp(
             op=new_op,
             left=self.visit(node.left),
@@ -289,14 +285,10 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
         return foast.BinaryOperator.DIV
 
     def visit_Pow(self, node: ast.Pow, **kwargs) -> None:
-        raise FieldOperatorSyntaxError(
-            msg="`**` operator not supported!",
-        )
+        raise FieldOperatorSyntaxError.from_AST(node, msg="`**` operator not supported!")
 
     def visit_Mod(self, node: ast.Mod, **kwargs) -> None:
-        raise FieldOperatorSyntaxError(
-            msg="`%` operator not supported!",
-        )
+        raise FieldOperatorSyntaxError.from_AST(node, msg="`%` operator not supported!")
 
     def visit_BitAnd(self, node: ast.BitAnd, **kwargs) -> foast.BinaryOperator:
         return foast.BinaryOperator.BIT_AND
@@ -305,18 +297,7 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
         return foast.BinaryOperator.BIT_OR
 
     def visit_BoolOp(self, node: ast.BoolOp, **kwargs) -> None:
-        try:
-            self.visit(node.op)
-        except FieldOperatorSyntaxError as err:
-            err.lineno = node.lineno
-            err.offset = node.col_offset
-            raise err
-
-    def visit_And(self, node: ast.And, **kwargs) -> None:
-        raise FieldOperatorSyntaxError(msg="`and` operator not allowed!")
-
-    def visit_Or(self, node: ast.Or, **kwargs) -> None:
-        raise FieldOperatorSyntaxError(msg="`or` operator not allowed!")
+        raise FieldOperatorSyntaxError.from_AST(node, msg="`and`/`or` operator not allowed!")
 
     def visit_Compare(self, node: ast.Compare, **kwargs) -> foast.Compare:
         if len(node.comparators) == 1:
@@ -349,8 +330,8 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
     def visit_Call(self, node: ast.Call, **kwargs) -> foast.Call:
         new_func = self.visit(node.func)
         if not isinstance(new_func, foast.Name):
-            raise self._make_syntax_error(
-                node.func, message="Functions can only be called directly!"
+            raise FieldOperatorSyntaxError.from_AST(
+                node, msg="Functions can only be called directly!"
             )
 
         args = node.args
@@ -359,8 +340,8 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
             if not len(args) == len(func_info.args) or any(
                 k.arg not in func_info.kwargs for k in node.keywords
             ):
-                raise self._make_syntax_error(
-                    node.func, message=f"Wrong syntax for function {new_func.id}."
+                raise FieldOperatorSyntaxError.from_AST(
+                    node, message=f"Wrong syntax for function {new_func.id}."
                 )
 
         for keyword in node.keywords:

@@ -83,11 +83,11 @@ class FieldOperatorTypeDeduction(NodeTranslator):
     >>> def example(a: "Field[..., float]", b: "Field[..., float]"):
     ...     return a + b
 
-    >>> sdef = SourceDefinition.from_function(example)
-    >>> cref = ClosureRefs.from_function(example)
+    >>> src_def = SourceDefinition.from_function(example)
+    >>> closure_refs = ClosureRefs.from_function(example)
     >>> untyped_fieldop = FieldOperatorParser(
-    ...     source=sdef.source, filename=sdef.filename, starting_line=sdef.starting_line, closure_refs=cref, externals_defs={}
-    ... ).visit(ast.parse(sdef.source).body[0])
+    ...     source_definition=src_def, closure_refs=closure_refs, externals_defs={}
+    ... ).visit(ast.parse(src_def.source).body[0])
     >>> assert untyped_fieldop.body[0].value.type is None
 
     >>> typed_fieldop = FieldOperatorTypeDeduction.apply(untyped_fieldop)

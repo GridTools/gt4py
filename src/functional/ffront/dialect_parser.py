@@ -17,10 +17,11 @@ import ast
 import textwrap
 import types
 from dataclasses import dataclass
-from typing import Any, ClassVar, Generic, Optional, Type, TypeVar, cast
+from typing import Any, ClassVar, Generic, Optional, Type, TypeVar
 
 from eve.type_definitions import SourceLocation
 from functional import common
+from functional.ffront.ast_passes.fix_missing_locations import FixMissingLocations
 from functional.ffront.source_utils import ClosureRefs, SourceDefinition, SymbolNames
 
 
@@ -52,9 +53,7 @@ DialectRootT = TypeVar("DialectRootT")
 
 @dataclass(frozen=True, kw_only=True)
 class DialectParser(ast.NodeVisitor, Generic[DialectRootT]):
-    source: str
-    filename: str
-    starting_line: int
+    source_definition: SourceDefinition
     closure_refs: ClosureRefs
     externals_defs: dict[str, Any]
 
@@ -67,16 +66,16 @@ class DialectParser(ast.NodeVisitor, Generic[DialectRootT]):
         closure_refs: ClosureRefs,
         externals: Optional[dict[str, Any]] = None,
     ) -> DialectRootT:
+
         source, filename, starting_line = source_definition
         try:
+            raw_ast = ast.parse(textwrap.dedent(source)).body[0]
             definition_ast = cls._preprocess_definition_ast(
-                ast.parse(textwrap.dedent(source)).body[0]
+                ast.increment_lineno(FixMissingLocations.apply(raw_ast), starting_line - 1)
             )
             output_ast = cls._postprocess_dialect_ast(
                 cls(
-                    source=source,
-                    filename=filename,
-                    starting_line=starting_line,
+                    source_definition=source_definition,
                     closure_refs=closure_refs,
                     externals_defs=externals or {},
                 ).visit(definition_ast)
@@ -84,13 +83,14 @@ class DialectParser(ast.NodeVisitor, Generic[DialectRootT]):
             if __debug__:
                 _assert_source_invariants(source_definition, closure_refs)
         except SyntaxError as err:
-            # TODO(tehrengruber): Instead of enhancing the exception here and
-            #  having source information in the instance we could preprocess
-            #  the ast and offset the line numbers there.
+            # The ast nodes do not contain information about the path of the
+            #  source file or its contents. We add this information here so
+            #  that raising an error using :func:`DialectSyntaxError.from_AST`
+            #  does not require passing the information on every invocation.
             if not err.filename:
                 err.filename = filename
-            if not isinstance(err, DialectSyntaxError):
-                err.lineno = (err.lineno or 1) + starting_line - 1
+            if not err.text:
+                err.text = source
             raise err
 
         return output_ast
@@ -114,27 +114,13 @@ class DialectParser(ast.NodeVisitor, Generic[DialectRootT]):
         return cls.apply(source_definition, closure_refs, externals)
 
     def generic_visit(self, node: ast.AST) -> None:
-        raise self._make_syntax_error(
+        raise self.syntax_error_cls.from_AST(
             node,
-            message=f"Nodes of type {type(node).__module__}.{type(node).__qualname__} not supported in dialect.",
+            msg=f"Nodes of type {type(node).__module__}.{type(node).__qualname__} not supported in dialect.",
         )
 
     def _make_loc(self, node: ast.AST) -> SourceLocation:
-        loc = SourceLocation.from_AST(node, source=self.filename)
-        return SourceLocation(
-            line=loc.line + self.starting_line - 1,
-            column=loc.column,
-            source=loc.source,
-            end_line=cast(int, loc.end_line) + self.starting_line - 1,
-            end_column=loc.end_column,
-        )
-
-    def _make_syntax_error(self, node: ast.AST, *, message: str = "") -> DialectSyntaxError:
-        err = self.syntax_error_cls.from_AST(
-            node, msg=message, filename=self.filename, text=self.source
-        )
-        err.lineno = (err.lineno or 1) + self.starting_line - 1
-        return err
+        return SourceLocation.from_AST(node, source=self.source_definition.filename)
 
 
 class DialectSyntaxError(common.GTSyntaxError):
@@ -168,6 +154,7 @@ class DialectSyntaxError(common.GTSyntaxError):
             lineno=node.lineno,
             offset=node.col_offset,
             filename=filename,
-            end_lineno=node.end_lineno,
-            end_offset=node.end_col_offset,
+            end_lineno=getattr(node, "end_lineno", None),
+            end_offset=getattr(node, "end_col_offset", None),
+            text=text,
         )
