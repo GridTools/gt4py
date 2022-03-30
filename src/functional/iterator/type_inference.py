@@ -67,21 +67,6 @@ class ValTupleVar(DType, VarMixin):
 
 
 @datatype
-class ValVar(DType, VarMixin):
-    idx: int
-    kind: DType = field(default_factory=Var.fresh)
-    dtype: DType = field(default_factory=Var.fresh)
-    size: DType = field(default_factory=Var.fresh)
-
-
-@datatype
-class FunVar(DType, VarMixin):
-    idx: int
-    args: DType
-    ret: DType
-
-
-@datatype
 class Column(DType):
     ...
 
@@ -119,11 +104,7 @@ class TypeInferrer(NodeTranslator):
             dtype = Var.fresh()
             size = Var.fresh()
             return Fun(Tuple((Val(Iterator(), dtype, size),)), Val(Value(), dtype, size))
-            return Fun(
-                Tuple((ValVar.fresh(Iterator(), dtype, size),)), ValVar.fresh(Value(), dtype, size)
-            )
         if node.id in ("plus", "minus", "multiplies", "divides"):
-            v = ValVar.fresh(Value())
             v = Val(Value())
             return Fun(Tuple((v, v)), v)
         if node.id in ("eq", "less", "greater"):
@@ -144,12 +125,9 @@ class TypeInferrer(NodeTranslator):
             args = ValTupleVar(Iterator())
             dtype = Var.fresh()
             size = Var.fresh()
-            stencil_ret = ValVar.fresh(Value(), dtype, size)
-            lifted_ret = ValVar.fresh(Iterator(), dtype, size)
             stencil_ret = Val(Value(), dtype, size)
             lifted_ret = Val(Iterator(), dtype, size)
             return Fun(Tuple((Fun(args, stencil_ret),)), Fun(args, lifted_ret))
-            return Fun(Tuple((FunVar.fresh(args, stencil_ret),)), FunVar.fresh(args, lifted_ret))
         if node.id == "reduce":
             dtypes = Var.fresh()
             size = Var.fresh()
@@ -174,15 +152,12 @@ class TypeInferrer(NodeTranslator):
 
     def visit_BoolLiteral(self, node, *, constraints, symtypes):
         return Val(Value(), BOOL_DTYPE)
-        return ValVar.fresh(Value(), BOOL_DTYPE)
 
     def visit_IntLiteral(self, node, *, constraints, symtypes):
         return Val(Value(), INT_DTYPE)
-        return ValVar.fresh(Value(), INT_DTYPE)
 
     def visit_FloatLiteral(self, node, *, constraints, symtypes):
         return Val(Value(), FLOAT_DTYPE)
-        return ValVar.fresh(Value(), FLOAT_DTYPE)
 
     def visit_Lambda(self, node, *, constraints, symtypes):
         ptypes = {p.id: Var.fresh() for p in node.params}
@@ -228,16 +203,12 @@ def rename(s, t):
     def r(x):
         if x == s:
             return t
-        if isinstance(x, ValVar):
-            return ValVar(x.idx, r(x.kind), r(x.dtype), r(x.size))
         if isinstance(x, (Var, Column, Scalar, Primitive, Value, Iterator)):
             return x
         if isinstance(x, Val):
             return Val(r(x.kind), r(x.dtype), r(x.size))
         if isinstance(x, Fun):
             return Fun(r(x.args), r(x.ret))
-        if isinstance(x, FunVar):
-            return FunVar(x.idx, r(x.args), r(x.ret))
         if isinstance(x, Tuple):
             return Tuple(tuple(r(e) for e in x.elems))
         if isinstance(x, PartialTupleVar):
@@ -267,10 +238,6 @@ def rename(s, t):
 def fv(x):
     if isinstance(x, Var):
         return {x}
-    if isinstance(x, ValVar):
-        return {x} | fv(x.kind) | fv(x.dtype) | fv(x.size)
-    if isinstance(x, FunVar):
-        return {x} | fv(x.args) | fv(x.ret)
     if isinstance(x, ValTupleVar):
         return {x} | fv(x.kind) | fv(x.dtypes) | fv(x.size)
     if isinstance(x, Val):
@@ -284,69 +251,69 @@ def fv(x):
     raise AssertionError()
 
 
+def handle_constraint(constraint, dtype, constraints):
+    s, t = constraint
+    if s == t:
+        return dtype, constraints
+
+    if isinstance(s, Var):
+        assert s not in fv(t)
+        r = rename(s, t)
+        dtype = r(dtype)
+        constraints = r(constraints)
+        return dtype, constraints
+
+    if isinstance(s, Fun) and isinstance(t, Fun):
+        constraints.add((s.args, t.args))
+        constraints.add((s.ret, t.ret))
+        return dtype, constraints
+
+    if isinstance(s, Val) and isinstance(t, Val):
+        constraints.add((s.kind, t.kind))
+        constraints.add((s.dtype, t.dtype))
+        constraints.add((s.size, t.size))
+        return dtype, constraints
+
+    if isinstance(s, Tuple) and isinstance(t, Tuple):
+        if len(s.elems) != len(t.elems):
+            raise TypeError(f"Can not satisfy constraint {s} = {t}")
+        for c in zip(s.elems, t.elems):
+            constraints.add(c)
+        return dtype, constraints
+
+    if isinstance(s, PartialTupleVar) and isinstance(t, Tuple):
+        for i, x in s.elems:
+            constraints.add((x, t.elems[i]))
+        return dtype, constraints
+
+    if isinstance(s, PrefixTupleVar) and isinstance(t, Tuple):
+        assert s not in fv(t)
+        r = rename(s, t)
+        dtype = r(dtype)
+        constraints = r(constraints)
+        constraints.add((s.prefix, t.elems[0]))
+        constraints.add((s.others, Tuple(t.elems[1:])))
+        return dtype, constraints
+
+    if isinstance(s, ValTupleVar) and isinstance(t, Tuple):
+        assert s not in fv(t)
+        r = rename(s, t)
+        dtype = r(dtype)
+        constraints = r(constraints)
+        s_expanded = Tuple(tuple(Val(s.kind, Var.fresh(), s.size) for _ in t.elems))
+        constraints.add((s.dtypes, Tuple(tuple(e.dtype for e in s_expanded.elems))))
+        constraints.add((s_expanded, t))
+        return dtype, constraints
+
+
 def unify(dtype, constraints):
     while constraints:
-        s, t = constraints.pop()
-        if s == t:
-            continue
-        elif isinstance(s, Var) and s not in fv(t):
-            r = rename(s, t)
-            dtype = r(dtype)
-            constraints = r(constraints)
-        elif isinstance(t, Var) and t not in fv(s):
-            r = rename(t, s)
-            dtype = r(dtype)
-            constraints = r(constraints)
-        elif isinstance(s, Fun) and isinstance(t, Fun):
-            constraints.add((s.args, t.args))
-            constraints.add((s.ret, t.ret))
-        elif isinstance(s, Val) and isinstance(t, Val):
-            constraints.add((s.kind, t.kind))
-            constraints.add((s.dtype, t.dtype))
-            constraints.add((s.size, t.size))
-        elif isinstance(s, ValVar) and isinstance(t, ValVar):
-            assert s not in fv(t) and t not in fv(s)
-            r = rename(s, t)
-            dtype = r(dtype)
-            constraints = r(constraints)
-            constraints.add((s.kind, t.kind))
-            constraints.add((s.dtype, t.dtype))
-            constraints.add((s.size, t.size))
-        elif isinstance(s, Tuple) and isinstance(t, Tuple):
-            if len(s.elems) != len(t.elems):
-                raise TypeError(f"Can not satisfy constraint {s} = {t}")
-            for c in zip(s.elems, t.elems):
-                constraints.add(c)
-        elif isinstance(s, FunVar) and isinstance(t, Fun):
-            assert s not in fv(t)
-            r = rename(s, t)
-            dtype = r(dtype)
-            constraints = r(constraints)
-            constraints.add((s.args, t.args))
-            constraints.add((s.ret, t.ret))
-        elif isinstance(s, PartialTupleVar) and isinstance(t, Tuple):
-            for i, x in s.elems:
-                constraints.add((x, t.elems[i]))
-        elif isinstance(s, Tuple) and isinstance(t, PartialTupleVar):
-            for i, x in t.elems:
-                constraints.add((x, s.elems[i]))
-        elif isinstance(s, PrefixTupleVar) and isinstance(t, Tuple):
-            assert s not in fv(t)
-            r = rename(s, t)
-            dtype = r(dtype)
-            constraints = r(constraints)
-            constraints.add((s.prefix, t.elems[0]))
-            constraints.add((s.others, Tuple(t.elems[1:])))
-        elif isinstance(s, ValTupleVar) and isinstance(t, Tuple):
-            assert s not in fv(t)
-            r = rename(s, t)
-            dtype = r(dtype)
-            constraints = r(constraints)
-            s_expanded = Tuple(tuple(Val(s.kind, Var.fresh(), s.size) for _ in t.elems))
-            constraints.add((s.dtypes, Tuple(tuple(e.dtype for e in s_expanded.elems))))
-            constraints.add((s_expanded, t))
-        else:
-            raise AssertionError()
+        c = constraints.pop()
+        r = handle_constraint(c, dtype, constraints)
+        if not r:
+            r = handle_constraint(c[::-1], dtype, constraints)
+        assert r
+        dtype, constraints = r
 
     return dtype
 
