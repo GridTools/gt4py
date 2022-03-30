@@ -184,7 +184,7 @@ def test_bool_and():
 
     with pytest.raises(
         FieldOperatorSyntaxError,
-        match=(r"`and` operator not allowed!"),
+        match=(r"`and`/`or` operator not allowed!"),
     ):
         _ = FieldOperatorParser.apply_to_function(bool_and)
 
@@ -195,7 +195,7 @@ def test_bool_or():
 
     with pytest.raises(
         FieldOperatorSyntaxError,
-        match=(r"`or` operator not allowed!"),
+        match=(r"`and`/`or` operator not allowed!"),
     ):
         _ = FieldOperatorParser.apply_to_function(bool_or)
 
