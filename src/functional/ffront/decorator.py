@@ -274,7 +274,7 @@ class FieldOperator(GTCallable):
                     location=loc,
                 )
             ],
-            closure=[stencil_sym],
+            captured_vars=[stencil_sym],
             location=loc,
         )
         past_node = ProgramTypeDeduction.apply(untyped_past_node)

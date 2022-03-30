@@ -89,7 +89,7 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
 
     def visit_FunctionDef(self, node: ast.FunctionDef, **kwargs) -> foast.FieldOperator:
         vars_ = collections.ChainMap(self.captured_vars.globals, self.captured_vars.nonlocals)
-        closure = [
+        captured_vars = [
             foast.Symbol(
                 id=name,
                 type=symbol_makers.make_symbol_type_from_value(val),
@@ -103,7 +103,7 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
             id=node.name,
             params=self.visit(node.args),
             body=self.visit_stmt_list(node.body),
-            closure=closure,
+            captured_vars=captured_vars,
             location=self._make_loc(node),
         )
 

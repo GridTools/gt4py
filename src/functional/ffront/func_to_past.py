@@ -40,7 +40,7 @@ class ProgramParser(DialectParser[past.Program]):
 
     def visit_FunctionDef(self, node: ast.FunctionDef) -> past.Program:
         vars_ = collections.ChainMap(self.captured_vars.globals, self.captured_vars.nonlocals)
-        closure = [
+        captured_vars = [
             past.Symbol(
                 id=name,
                 type=symbol_makers.make_symbol_type_from_value(val),
@@ -54,7 +54,7 @@ class ProgramParser(DialectParser[past.Program]):
             id=node.name,
             params=self.visit(node.args),
             body=[self.visit(node) for node in node.body],
-            closure=closure,
+            captured_vars=captured_vars,
             location=self._make_loc(node),
         )
 
