@@ -33,9 +33,9 @@ from functional.ffront.func_to_past import ProgramParser
 from functional.ffront.past_passes.type_deduction import ProgramTypeDeduction
 from functional.ffront.past_to_itir import ProgramLowering
 from functional.ffront.source_utils import CapturedVars
+from functional.ffront.fbuiltins import FieldOffset
 from functional.iterator import ir as itir
 from functional.iterator.backend_executor import execute_program
-from functional.iterator.runtime import Offset
 
 
 DEFAULT_BACKEND = "roundtrip"
@@ -129,7 +129,7 @@ class Program:
             definition=definition,
         )
 
-    def _lowered_funcs_from_closureref(
+    def _lowered_funcs_from_captured_vars(
         self, captured_vars: CapturedVars
     ) -> list[itir.FunctionDefinition]:
         lowered_funcs = []
@@ -139,7 +139,7 @@ class Program:
             # With respect to the frontend offsets are singleton types, i.e.
             #  they do not store any runtime information, but only type
             #  information. As such we do not need their value.
-            if isinstance(value, Offset):
+            if isinstance(value, FieldOffset):
                 continue
             if not isinstance(value, GTCallable):
                 raise NotImplementedError("Only function closure vars are allowed currently.")
@@ -152,7 +152,7 @@ class Program:
             # if the closure ref has closure refs by itself, also add them
             if value.__gt_captured_vars__():
                 lowered_funcs.extend(
-                    self._lowered_funcs_from_closureref(value.__gt_captured_vars__())
+                    self._lowered_funcs_from_captured_vars(value.__gt_captured_vars__())
                 )
         return lowered_funcs
 
@@ -178,7 +178,7 @@ class Program:
                 f"The following function(s) are not valid GTCallables `{', '.join(not_callable)}`."
             )
 
-        lowered_funcs = self._lowered_funcs_from_closureref(self.captured_vars)
+        lowered_funcs = self._lowered_funcs_from_captured_vars(self.captured_vars)
 
         return itir.Program(
             function_definitions=lowered_funcs, fencil_definitions=[fencil_itir_node]
