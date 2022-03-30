@@ -1,3 +1,19 @@
+# -*- coding: utf-8 -*-
+#
+# GTC Toolchain - GT4Py Project - GridTools Framework
+#
+# Copyright (c) 2014-2021, ETH Zurich
+# All rights reserved.
+#
+# This file is part of the GT4Py project and the GridTools framework.
+# GT4Py is free software: you can redistribute it and/or modify it under
+# the terms of the GNU General Public License as published by the
+# Free Software Foundation, either version 3 of the License, or any later
+# version. See the LICENSE.txt file at the top-level directory of this
+# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 import math
 import typing
 from typing import Any, Dict, Tuple, Union
@@ -15,17 +31,28 @@ def _iter_field_names(node: Union[gtir.Stencil, gtir.ParAssignStmt]) -> XIterabl
 class KBoundaryVisitor(NodeVisitor):
     """For every field compute the boundary in k, e.g. (2, -1) if [k_origin-2, k_origin+k_domain-1] is accessed."""
 
-    def visit_Stencil(self, node: gtir.Stencil, **kwargs: Any) -> Dict[str, Tuple[int, int]]:
+    def visit_Stencil(
+        self, node: gtir.Stencil, *, include_center_interval: bool = False, **kwargs: Any
+    ) -> Dict[str, Tuple[int, int]]:
         field_boundaries = {name: (-math.inf, -math.inf) for name in _iter_field_names(node)}
-        for vloop in node.vertical_loops:
-            self.generic_visit(vloop.body, vloop=vloop, field_boundaries=field_boundaries, **kwargs)
+        self.generic_visit(
+            node,
+            field_boundaries=field_boundaries,
+            include_center_interval=include_center_interval,
+            **kwargs,
+        )
+
         # if there is no left or right boundary set to zero
         for name, b in field_boundaries.items():
             field_boundaries[name] = (
                 b[0] if b[0] != -math.inf else 0,
                 b[1] if b[1] != -math.inf else 0,
             )
+
         return typing.cast(Dict[str, Tuple[int, int]], field_boundaries)
+
+    def visit_VerticalLoop(self, node: gtir.VerticalLoop, **kwargs: Any) -> None:
+        self.generic_visit(node, vloop=node, **kwargs)
 
     def visit_FieldAccess(
         self,
@@ -34,7 +61,7 @@ class KBoundaryVisitor(NodeVisitor):
         field_boundaries: Dict[str, Tuple[Union[float, int], Union[float, int]]],
         include_center_interval: bool,
         **kwargs: Any,
-    ):
+    ) -> None:
         boundary = field_boundaries[node.name]
         interval = vloop.interval
         if not isinstance(node.offset, gtir.VariableKOffset):
