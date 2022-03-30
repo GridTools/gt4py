@@ -8,11 +8,15 @@ class InlineLambdas(NodeTranslator):
         node = self.generic_visit(node)
         if isinstance(node.fun, ir.Lambda):
             assert len(node.fun.params) == len(node.args)
-            refs = set.union(
-                *(
-                    arg.iter_tree().if_isinstance(ir.SymRef).getattr("id").to_set()
-                    for arg in node.args
+            refs = (
+                set.union(
+                    *(
+                        arg.iter_tree().if_isinstance(ir.SymRef).getattr("id").to_set()
+                        for arg in node.args
+                    )
                 )
+                if len(node.args) > 0
+                else set()
             )
             syms = node.fun.expr.iter_tree().if_isinstance(ir.Sym).getattr("id").to_set()
             clashes = refs & syms

@@ -109,13 +109,14 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
 
     def visit_Import(self, node: ast.Import, **kwargs) -> None:
         raise self._make_syntax_error(
-            node, f"Only 'from' imports from {fbuiltins.MODULE_BUILTIN_NAMES} are supported"
+            node, message=f"Only 'from' imports from {fbuiltins.MODULE_BUILTIN_NAMES} are supported"
         )
 
-    def visit_ImportFrom(self, node: ast.ImportFrom, **kwargs) -> None:
+    def visit_ImportFrom(self, node: ast.ImportFrom, **kwargs) -> foast.ExternalImport:
         if node.module not in fbuiltins.MODULE_BUILTIN_NAMES:
             raise self._make_syntax_error(
-                node, f"Only 'from' imports from {fbuiltins.MODULE_BUILTIN_NAMES} are supported"
+                node,
+                message=f"Only 'from' imports from {fbuiltins.MODULE_BUILTIN_NAMES} are supported",
             )
 
         symbols = []
@@ -199,11 +200,31 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
             location=self._make_loc(node),
         )
 
+    @staticmethod
+    def _match_index(node: ast.expr) -> int:
+        if isinstance(node, ast.Constant):
+            return node.value
+        if (
+            isinstance(node, ast.UnaryOp)
+            and isinstance(node.op, ast.unaryop)
+            and isinstance(node.operand, ast.Constant)
+        ):
+            if isinstance(node.op, ast.USub):
+                return -node.operand.value
+            if isinstance(node.op, ast.UAdd):
+                return node.operand.value
+        raise ValueError(f"Not an index: {node}")
+
     def visit_Subscript(self, node: ast.Subscript, **kwargs) -> foast.Subscript:
-        if not isinstance(node.slice, ast.Constant):
-            raise self._make_syntax_error(node, message="""Subscript slicing not allowed!""")
+        try:
+            index = self._match_index(node.slice)
+        except ValueError:
+            raise self._make_syntax_error(node, message="""Only index is supported in subscript!""")
+
         return foast.Subscript(
-            value=self.visit(node.value), index=node.slice.value, location=self._make_loc(node)
+            value=self.visit(node.value),
+            index=index,
+            location=self._make_loc(node),
         )
 
     def visit_Tuple(self, node: ast.Tuple, **kwargs) -> foast.TupleExpr:
@@ -325,18 +346,28 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
     def visit_Eq(self, node: ast.Eq, **kwargs) -> foast.CompareOperator:
         return foast.CompareOperator.EQ
 
-    def visit_Call(self, node: ast.Call, **kwargs) -> foast.CompareOperator:
+    def visit_Call(self, node: ast.Call, **kwargs) -> foast.Call:
         new_func = self.visit(node.func)
         if not isinstance(new_func, foast.Name):
             raise self._make_syntax_error(
-                node.func, message="functions can only be called directly!"
+                node.func, message="Functions can only be called directly!"
             )
+
+        args = node.args
+        if new_func.id in fbuiltins.FUN_BUILTIN_NAMES:
+            func_info = getattr(fbuiltins, new_func.id).__gt_type__()
+            if not len(args) == len(func_info.args) or any(
+                k.arg not in func_info.kwargs for k in node.keywords
+            ):
+                raise self._make_syntax_error(
+                    node.func, message=f"Wrong syntax for function {new_func.id}."
+                )
+
+        for keyword in node.keywords:
+            args.append(keyword.value)
 
         return foast.Call(
             func=new_func,
-            args=[self.visit(arg) for arg in node.args],
+            args=[self.visit(arg, **kwargs) for arg in args],
             location=self._make_loc(node),
         )
-
-    def generic_visit(self, node) -> None:
-        raise self._make_syntax_error(node)

@@ -143,7 +143,7 @@ class Program:
         lowered_funcs = [vars_[name].__gt_itir__() for name in func_names]
 
         return itir.Program(
-            function_definitions=lowered_funcs, fencil_definitions=[fencil_itir_node], setqs=[]
+            function_definitions=lowered_funcs, fencil_definitions=[fencil_itir_node]
         )
 
     def _validate_args(self, *args, **kwargs) -> None:
