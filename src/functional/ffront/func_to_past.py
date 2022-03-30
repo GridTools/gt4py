@@ -39,8 +39,8 @@ class ProgramParser(DialectParser[past.Program]):
         return ProgramTypeDeduction.apply(output_node)
 
     def visit_FunctionDef(self, node: ast.FunctionDef) -> past.Program:
-        vars_ = collections.ChainMap(self.closure_refs.globals, self.closure_refs.nonlocals)
-        closure = [
+        vars_ = collections.ChainMap(self.captured_vars.globals, self.captured_vars.nonlocals)
+        captured_vars = [
             past.Symbol(
                 id=name,
                 type=symbol_makers.make_symbol_type_from_value(val),
@@ -54,7 +54,7 @@ class ProgramParser(DialectParser[past.Program]):
             id=node.name,
             params=self.visit(node.args),
             body=[self.visit(node) for node in node.body],
-            closure=closure,
+            captured_vars=captured_vars,
             location=self._make_loc(node),
         )
 
@@ -62,7 +62,7 @@ class ProgramParser(DialectParser[past.Program]):
         return [self.visit_arg(arg) for arg in node.args]
 
     def visit_arg(self, node: ast.arg) -> past.DataSymbol:
-        if (annotation := self.closure_refs.annotations.get(node.arg, None)) is None:
+        if (annotation := self.captured_vars.annotations.get(node.arg, None)) is None:
             raise ProgramSyntaxError.from_AST(node, msg="Untyped parameters not allowed!")
         new_type = symbol_makers.make_symbol_type_from_typing(annotation)
         if not isinstance(new_type, common_types.DataType):

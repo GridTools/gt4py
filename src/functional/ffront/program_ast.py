@@ -93,4 +93,4 @@ class Program(LocatedNode, SymbolTableTrait):
     id: SymbolName  # noqa: A003
     params: list[Symbol[common_types.DataType]]
     body: list[Call]
-    closure: list[Symbol]
+    captured_vars: list[Symbol]
