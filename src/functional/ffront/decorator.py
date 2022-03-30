@@ -127,9 +127,9 @@ class Program:
         fencil_itir_node = ProgramLowering.apply(self.past_node)
 
         func_names = []
-        for closure_var in self.past_node.closure:
-            if isinstance(closure_var.type, ct.FunctionType):
-                func_names.append(closure_var.id)
+        for captured_var in self.past_node.captured_vars:
+            if isinstance(captured_var.type, ct.FunctionType):
+                func_names.append(captured_var.id)
             else:
                 raise NotImplementedError("Only function closure vars are allowed currently.")
 
