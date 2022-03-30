@@ -73,6 +73,23 @@ def ensure_expr(literal_or_expr: Union[str, int, itir.Expr]) -> itir.Expr:
     return literal_or_expr
 
 
+def ensure_offset(str_or_offset: Union[str, itir.OffsetLiteral]) -> itir.OffsetLiteral:
+    """
+    Convert Python literals into an OffsetLiteral and let OffsetLiterals pass unchanged.
+
+    Examples
+    --------
+    >>> ensure_offset("V2E")
+    OffsetLiteral(value='V2E')
+
+    >>> ensure_offset(itir.OffsetLiteral(value="J"))
+    OffsetLiteral(value='J')
+    """
+    if isinstance(str_or_offset, str):
+        return itir.OffsetLiteral(value=str_or_offset)
+    return str_or_offset
+
+
 class lambda__:
     """
     Create a lambda from params and an expression.
@@ -207,7 +224,7 @@ def shift_(offset, value=None):
     >>> shift_("V2E")("b")
     FunCall(fun=FunCall(fun=SymRef(id='shift'), args=[OffsetLiteral(value='V2E')]), args=[SymRef(id='b')])
     """
-    offset = itir.OffsetLiteral(value=offset)
+    offset = ensure_offset(offset)
     args = [offset]
     if value is not None:
         value = ensure_expr(value)

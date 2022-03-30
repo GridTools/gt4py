@@ -157,7 +157,7 @@ class FieldOperatorTypeDeduction(NodeTranslator):
             return foast.Subscript(
                 value=new_value,
                 index=node.index,
-                type=ct.OffsetType(),
+                type=new_value.type,
                 location=node.location,
             )
         match new_value.type:
@@ -283,7 +283,21 @@ class FieldOperatorTypeDeduction(NodeTranslator):
         new_func = self.visit(node.func, **kwargs)
         if isinstance(new_func.type, ct.FieldType):
             new_args = self.visit(node.args, in_shift=True, **kwargs)
-            return foast.Call(func=new_func, args=new_args, location=node.location)
+            source_dim = new_args[0].type.source
+            target_dims = new_args[0].type.target
+            if source_dim not in new_func.type.dims:
+                raise FieldOperatorTypeDeductionError.from_foast_node(
+                    node,
+                    msg=f"Incompatible offset at {new_func.id}: can not shift from {new_args[0].type.source} to {new_func.type.dims[0]}.",
+                )
+            new_dims = []
+            for d in new_func.type.dims:
+                if d != source_dim:
+                    new_dims.append(d)
+                else:
+                    new_dims.extend(target_dims)
+            new_type = ct.FieldType(dims=new_dims, dtype=new_func.type.dtype)
+            return foast.Call(func=new_func, args=new_args, location=node.location, type=new_type)
         return foast.Call(
             func=new_func, args=self.visit(node.args, **kwargs), location=node.location
         )

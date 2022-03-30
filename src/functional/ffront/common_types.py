@@ -12,6 +12,7 @@ class ScalarKind(IntEnum):
     INT64 = 64
     FLOAT32 = 1032
     FLOAT64 = 1064
+    DIMENSION = 2001
 
 
 class Namespace(StrEnum):
@@ -58,7 +59,8 @@ class VoidType(SymbolType):
 
 @dataclass(frozen=True)
 class OffsetType(SymbolType):
-    ...
+    source: Optional[func_common.Dimension] = None
+    target: Optional[tuple[func_common.Dimension, ...]] = None
 
     def __str__(self):
         return f"Offset[{self.id}]"
@@ -101,9 +103,9 @@ class FieldType(DataType):
 
 @dataclass(frozen=True)
 class FunctionType(SymbolType):
-    args: list[DataType]
+    args: list[Union[DataType, DeferredSymbolType]]
     kwargs: dict[str, DataType]
-    returns: Union[DataType, VoidType]
+    returns: Union[DataType, DeferredSymbolType, VoidType]
 
     def __str__(self):
         arg_strs = [str(arg) for arg in self.args]
