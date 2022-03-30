@@ -88,8 +88,8 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
         return FieldOperatorTypeDeduction.apply(dialect_ast)
 
     def visit_FunctionDef(self, node: ast.FunctionDef, **kwargs) -> foast.FieldOperator:
-        vars_ = collections.ChainMap(self.closure_refs.globals, self.closure_refs.nonlocals)
-        closure = [
+        vars_ = collections.ChainMap(self.captured_vars.globals, self.captured_vars.nonlocals)
+        captured_vars = [
             foast.Symbol(
                 id=name,
                 type=symbol_makers.make_symbol_type_from_value(val),
@@ -103,7 +103,7 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
             id=node.name,
             params=self.visit(node.args),
             body=self.visit_stmt_list(node.body),
-            closure=closure,
+            captured_vars=captured_vars,
             location=self._make_loc(node),
         )
 
@@ -144,7 +144,7 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
         return [self.visit_arg(arg) for arg in node.args]
 
     def visit_arg(self, node: ast.arg) -> foast.DataSymbol:
-        if (annotation := self.closure_refs.annotations.get(node.arg, None)) is None:
+        if (annotation := self.captured_vars.annotations.get(node.arg, None)) is None:
             raise FieldOperatorSyntaxError.from_AST(node, msg="Untyped parameters not allowed!")
         new_type = symbol_makers.make_symbol_type_from_typing(annotation)
         if not isinstance(new_type, common_types.DataType):
@@ -181,8 +181,8 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
             assert isinstance(
                 node.annotation, ast.Constant
             ), "Annotations should be ast.Constant(string). Use StringifyAnnotationsPass"
-            global_ns = {**fbuiltins.BUILTINS, **self.closure_refs.globals}
-            local_ns = self.closure_refs.nonlocals
+            global_ns = {**fbuiltins.BUILTINS, **self.captured_vars.globals}
+            local_ns = self.captured_vars.nonlocals
             annotation = eval(node.annotation.value, global_ns, local_ns)
             target_type = symbol_makers.make_symbol_type_from_typing(
                 annotation, global_ns=global_ns, local_ns=local_ns

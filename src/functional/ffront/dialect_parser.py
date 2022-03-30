@@ -22,10 +22,10 @@ from typing import Any, ClassVar, Generic, Optional, Type, TypeVar
 from eve.type_definitions import SourceLocation
 from functional import common
 from functional.ffront.ast_passes.fix_missing_locations import FixMissingLocations
-from functional.ffront.source_utils import ClosureRefs, SourceDefinition, SymbolNames
+from functional.ffront.source_utils import CapturedVars, SourceDefinition, SymbolNames
 
 
-def _assert_source_invariants(source_definition: SourceDefinition, closure_refs: ClosureRefs):
+def _assert_source_invariants(source_definition: SourceDefinition, captured_vars: CapturedVars):
     """
     Validate information contained in the source agrees with our expectations.
 
@@ -34,18 +34,18 @@ def _assert_source_invariants(source_definition: SourceDefinition, closure_refs:
     """
     source, filename, starting_line = source_definition
     _, _, imported_names, nonlocal_names, global_names = SymbolNames.from_source(source, filename)
-    if missing_defs := (closure_refs.unbound - imported_names):
+    if missing_defs := (captured_vars.unbound - imported_names):
         raise AssertionError(f"Missing symbol definitions: {missing_defs}")
 
     # 'SymbolNames.from_source()' uses the symtable module to analyze the isolated source
     # code of the function, and thus all non-local symbols are classified as 'global'.
-    # However, 'closure_refs' comes from inspecting the live function object, which might
+    # However, 'captured_vars' comes from inspecting the live function object, which might
     # have not been defined at a global scope, and therefore actual symbol values could appear
-    # in both 'closure_refs.globals' and 'self.closure_refs.nonlocals'.
-    if not set(closure_refs.globals) | set(closure_refs.nonlocals.keys()) == (
+    # in both 'captured_vars.globals' and 'self.captured_vars.nonlocals'.
+    if not set(captured_vars.globals) | set(captured_vars.nonlocals.keys()) == (
         global_names | nonlocal_names
     ):
-        raise AssertionError("ClosureRefs do not agree with information from symtable module.")
+        raise AssertionError("CapturedVars do not agree with information from symtable module.")
 
 
 DialectRootT = TypeVar("DialectRootT")
@@ -54,7 +54,7 @@ DialectRootT = TypeVar("DialectRootT")
 @dataclass(frozen=True, kw_only=True)
 class DialectParser(ast.NodeVisitor, Generic[DialectRootT]):
     source_definition: SourceDefinition
-    closure_refs: ClosureRefs
+    captured_vars: CapturedVars
     externals_defs: dict[str, Any]
 
     syntax_error_cls: ClassVar[Type[DialectSyntaxError]]
@@ -63,7 +63,7 @@ class DialectParser(ast.NodeVisitor, Generic[DialectRootT]):
     def apply(
         cls,
         source_definition: SourceDefinition,
-        closure_refs: ClosureRefs,
+        captured_vars: CapturedVars,
         externals: Optional[dict[str, Any]] = None,
     ) -> DialectRootT:
 
@@ -76,12 +76,12 @@ class DialectParser(ast.NodeVisitor, Generic[DialectRootT]):
             output_ast = cls._postprocess_dialect_ast(
                 cls(
                     source_definition=source_definition,
-                    closure_refs=closure_refs,
+                    captured_vars=captured_vars,
                     externals_defs=externals or {},
                 ).visit(definition_ast)
             )
             if __debug__:
-                _assert_source_invariants(source_definition, closure_refs)
+                _assert_source_invariants(source_definition, captured_vars)
         except SyntaxError as err:
             # The ast nodes do not contain information about the path of the
             #  source file or its contents. We add this information here so
@@ -110,8 +110,8 @@ class DialectParser(ast.NodeVisitor, Generic[DialectRootT]):
         externals: Optional[dict[str, Any]] = None,
     ) -> DialectRootT:
         source_definition = SourceDefinition.from_function(func)
-        closure_refs = ClosureRefs.from_function(func)
-        return cls.apply(source_definition, closure_refs, externals)
+        captured_vars = CapturedVars.from_function(func)
+        return cls.apply(source_definition, captured_vars, externals)
 
     def generic_visit(self, node: ast.AST) -> None:
         raise self.syntax_error_cls.from_AST(
