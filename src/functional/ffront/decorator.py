@@ -27,13 +27,13 @@ from functional.ffront import common_types as ct
 from functional.ffront import field_operator_ast as foast
 from functional.ffront import program_ast as past
 from functional.ffront import symbol_makers
+from functional.ffront.fbuiltins import FieldOffset
 from functional.ffront.foast_to_itir import FieldOperatorLowering
 from functional.ffront.func_to_foast import FieldOperatorParser
 from functional.ffront.func_to_past import ProgramParser
 from functional.ffront.past_passes.type_deduction import ProgramTypeDeduction
 from functional.ffront.past_to_itir import ProgramLowering
 from functional.ffront.source_utils import CapturedVars
-from functional.ffront.fbuiltins import FieldOffset
 from functional.iterator import ir as itir
 from functional.iterator.backend_executor import execute_program
 
