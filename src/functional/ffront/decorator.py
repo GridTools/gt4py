@@ -52,7 +52,7 @@ class GTCallable(Protocol):
 
     def __gt_captured_vars__(self) -> Optional[CapturedVars]:
         """
-        Return all variables referenced inside the callable.
+        Return all external variables referenced inside the callable.
 
         Note that in addition to the callable itself all captured variables
         are also lowered such that they can be used.
