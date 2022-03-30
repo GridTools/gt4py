@@ -331,7 +331,7 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
         new_func = self.visit(node.func)
         if not isinstance(new_func, foast.Name):
             raise FieldOperatorSyntaxError.from_AST(
-                node, msg="functions can only be called directly!"
+                node, msg="Functions can only be called directly!"
             )
 
         args = node.args
