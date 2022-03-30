@@ -50,7 +50,13 @@ class GTCallable(Protocol):
     from ``ffront`` programs or operators.
     """
 
-    def __gt_closure_refs__(self) -> Optional[ClosureRefs]:
+    def __gt_captured_vars__(self) -> Optional[CapturedVars]:
+        """
+        Return all variables referenced inside the callable.
+
+        Note that in addition to the callable itself all captured variables
+        are also lowered such that they can be used.
+        """
         return None
 
     @abc.abstractmethod
@@ -124,28 +130,28 @@ class Program:
         )
 
     def _lowered_funcs_from_closureref(
-        self, closure_refs: ClosureRefs
+        self, captured_vars: CapturedVars
     ) -> list[itir.FunctionDefinition]:
         lowered_funcs = []
 
-        vars_ = collections.ChainMap(closure_refs.globals, closure_refs.nonlocals)
-        for name, val in vars_.items():
+        vars_ = collections.ChainMap(captured_vars.globals, captured_vars.nonlocals)
+        for name, value in vars_.items():
             # With respect to the frontend offsets are singleton types, i.e.
             #  they do not store any runtime information, but only type
             #  information. As such we do not need their value.
-            if isinstance(val, Offset):
+            if isinstance(value, Offset):
                 continue
-            if not isinstance(val, GTCallable):
+            if not isinstance(value, GTCallable):
                 raise NotImplementedError("Only function closure vars are allowed currently.")
-            itir_node = val.__gt_itir__()
+            itir_node = value.__gt_itir__()
             if itir_node.id != name:
                 raise RuntimeError(
                     "Name of the closure reference and the function it holds do not match."
                 )
             lowered_funcs.append(itir_node)
             # if the closure ref has closure refs by itself, also add them
-            if val.__gt_closure_refs__():
-                lowered_funcs.extend(self._lowered_funcs_from_closureref(val.__gt_closure_refs__()))
+            if value.__gt_captured_vars__():
+                lowered_funcs.extend(self._lowered_funcs_from_closureref(value.__gt_captured_vars__()))
         return lowered_funcs
 
     @functools.cached_property
@@ -267,7 +273,7 @@ class FieldOperator(GTCallable):
     def __gt_itir__(self) -> itir.FunctionDefinition:
         return FieldOperatorLowering.apply(self.foast_node)
 
-    def __gt_closure_refs__(self) -> ClosureRefs:
+    def __gt_captured_vars__(self) -> ClosureRefs:
         return self.closure_refs
 
     def as_program(self) -> Program:
