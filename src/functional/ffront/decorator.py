@@ -55,7 +55,7 @@ class GTCallable(Protocol):
         Return all external variables referenced inside the callable.
 
         Note that in addition to the callable itself all captured variables
-        are also lowered such that they can be used.
+        are also lowered such that they can be used in the lowered callable.
         """
         return None
 
