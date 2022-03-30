@@ -38,8 +38,9 @@ def are_broadcast_compatible(left: TypeInfo, right: TypeInfo) -> bool:
     True
 
     """
-    if left.is_field_type and right.is_field_type:
-        return left.type.dims == right.type.dims
+    are_fields = [left.is_field_type, right.is_field_type]
+    if all(are_fields):
+        return left.type.dims == right.type.dims or not all([left.type.dims, right.type.dims])
     elif left.is_field_type and right.is_scalar:
         return left.type.dtype == right.type
     elif left.is_scalar and left.is_field_type:

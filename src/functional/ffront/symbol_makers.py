@@ -121,7 +121,7 @@ def make_symbol_type_from_typing(
                 dtype = recursive_make_symbol(dtype_arg)
             except TypingError as error:
                 raise TypingError(
-                    "Field dtype argument must be a scalar type (got '{dtype}')!"
+                    f"Field dtype argument must be a scalar type (got '{dtype_arg}')!"
                 ) from error
             if not isinstance(dtype, ct.ScalarType):
                 raise TypingError("Field dtype argument must be a scalar type (got '{dtype}')!")

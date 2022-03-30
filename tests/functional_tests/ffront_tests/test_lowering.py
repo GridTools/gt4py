@@ -15,7 +15,15 @@ import pytest
 
 from functional.common import Field
 from functional.ffront import itir_makers as im
-from functional.ffront.fbuiltins import FieldOffset, float64, int64, neighbor_sum
+from functional.ffront.fbuiltins import (
+    FieldOffset,
+    float64,
+    float64_,
+    int32,
+    int32_,
+    int64,
+    neighbor_sum,
+)
 from functional.ffront.foast_to_itir import FieldOperatorLowering
 from functional.ffront.func_to_foast import FieldOperatorParser
 from functional.iterator.runtime import CartesianAxis
@@ -246,6 +254,37 @@ def test_binary_plus():
 
     reference = im.deref_(
         im.lift_(im.lambda__("a", "b")(im.plus_(im.deref_("a"), im.deref_("b"))))("a", "b")
+    )
+
+    assert lowered.expr == reference
+
+
+def test_add_scalar_literal_to_field():
+    def scalar_plus_field(a: Field[..., "float64"]) -> Field[..., "float64"]:
+        return float64_("4.0") + a
+
+    parsed = FieldOperatorParser.apply_to_function(scalar_plus_field)
+    lowered = FieldOperatorLowering.apply(parsed)
+
+    reference = im.deref_(im.lift_(im.lambda__("a")(im.plus_(im.float_(4.0), im.deref_("a"))))("a"))
+
+    assert lowered.expr == reference
+
+
+def test_add_scalar_literals():
+    def scalar_plus_scalar(a: Field[..., "int32"]) -> Field[..., "int32"]:
+        tmp = int32_(1) + int32_(1)
+        return a + tmp
+
+    parsed = FieldOperatorParser.apply_to_function(scalar_plus_scalar)
+    lowered = FieldOperatorLowering.apply(parsed)
+
+    reference = im.let("tmp", im.lift_(im.lambda__()(im.plus_(im.int_(1), im.int_(1))))())(
+        im.deref_(
+            im.lift_(im.lambda__("a", "tmp")(im.plus_(im.deref_("a"), im.deref_("tmp"))))(
+                "a", "tmp"
+            )
+        )
     )
 
     assert lowered.expr == reference

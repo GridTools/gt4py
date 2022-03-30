@@ -346,7 +346,7 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
     def visit_Eq(self, node: ast.Eq, **kwargs) -> foast.CompareOperator:
         return foast.CompareOperator.EQ
 
-    def visit_Call(self, node: ast.Call, **kwargs) -> foast.Call:
+    def visit_Call(self, node: ast.Call, **kwargs) -> foast.Call | foast.Constant:
         new_func = self.visit(node.func)
         if not isinstance(new_func, foast.Name):
             raise self._make_syntax_error(
@@ -365,6 +365,22 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
 
         for keyword in node.keywords:
             args.append(keyword.value)
+
+        print(new_func.id)
+
+        if (
+            new_func.id in fbuiltins.FUN_BUILTIN_NAMES
+            and new_func.id.replace("_", "") in fbuiltins.TYPE_BUILTIN_NAMES
+        ):
+            dtype = common_types.ScalarType(
+                kind=getattr(common_types.ScalarKind, new_func.id.replace("_", "").upper())
+            )
+            return foast.Constant(
+                value=str(node.args[0].value),
+                dtype=dtype,
+                location=self._make_loc(node),
+                type=common_types.FieldType(dims=[], dtype=dtype),
+            )
 
         return foast.Call(
             func=new_func,

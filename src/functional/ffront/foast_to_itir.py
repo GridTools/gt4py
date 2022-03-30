@@ -19,7 +19,7 @@ from typing import Optional, cast
 from eve import NodeTranslator
 from functional.ffront import field_operator_ast as foast
 from functional.ffront import itir_makers as im
-from functional.ffront.fbuiltins import FUN_BUILTIN_NAMES
+from functional.ffront.fbuiltins import FUN_BUILTIN_NAMES, float32, float64, int32, int64
 from functional.ffront.type_info import TypeInfo
 from functional.iterator import ir as itir
 
@@ -157,10 +157,26 @@ class FieldOperatorLowering(NodeTranslator):
         if TypeInfo(node.func.type).is_field_type:
             return self._visit_shift(node, **kwargs)
         elif node.func.id in FUN_BUILTIN_NAMES:
-            return self._visit_reduce(node, **kwargs)
+            visitor = getattr(self, f"_visit_{node.func.id}")
+            return visitor(node, **kwargs)
         return self._lift_lambda(node)(
             im.call_(self.visit(node.func, **kwargs))(*self.visit(node.args, **kwargs))
         )
+
+    def _visit_neighbor_sum(self, node: foast.Call, **kwargs) -> itir.FunCall:
+        return self._visit_reduce(node, **kwargs)
+
+    def _visit_float32(self, node: foast.Call, **kwargs) -> itir.FloatLiteral:
+        return itir.FloatLiteral(value=float32(node.value))
+
+    def _visit_float64(self, node: foast.Call, **kwargs) -> itir.FloatLiteral:
+        return itir.FloatLiteral(value=float64(node.value))
+
+    def _visit_int32(self, node: foast.Call, **kwargs) -> itir.IntLiteral:
+        return itir.FloatLiteral(value=int32(node.value))
+
+    def _visit_int64(self, node: foast.Call, **kwargs) -> itir.IntLiteral:
+        return itir.FloatLiteral(value=int64(node.value))
 
 
 @dataclass
