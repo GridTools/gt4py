@@ -405,3 +405,26 @@ def test_copy_restricted_execution(copy_restrict_program_def):
     copy_restrict_program(in_field, out_field, offset_provider={})
 
     assert np.allclose(out_field_ref, out_field)
+
+
+def test_calling_fo_from_fo_execution(identity_def):
+    size = 10
+    in_field = np_as_located_field(IDim)(2 * np.ones((size)))
+    out_field = np_as_located_field(IDim)(np.zeros((size)))
+    out_field_ref = np_as_located_field(IDim)(2 * 2 * 2 * np.ones((size)))
+
+    @field_operator
+    def pow_two(field: Field[[IDim], "float64"]) -> Field[[IDim], "float64"]:
+        return field * field
+
+    @field_operator
+    def pow_three(field: Field[[IDim], "float64"]) -> Field[[IDim], "float64"]:
+        return field * pow_two(field)
+
+    @program
+    def fo_from_fo_program(in_field: Field[[IDim], "float64"], out_field: Field[[IDim], "float64"]):
+        pow_three(in_field, out=out_field)
+
+    fo_from_fo_program(in_field, out_field, offset_provider={})
+
+    assert np.allclose(out_field, out_field_ref)
