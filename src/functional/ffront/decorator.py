@@ -151,7 +151,9 @@ class Program:
             lowered_funcs.append(itir_node)
             # if the closure ref has closure refs by itself, also add them
             if value.__gt_captured_vars__():
-                lowered_funcs.extend(self._lowered_funcs_from_closureref(value.__gt_captured_vars__()))
+                lowered_funcs.extend(
+                    self._lowered_funcs_from_closureref(value.__gt_captured_vars__())
+                )
         return lowered_funcs
 
     @functools.cached_property
@@ -176,7 +178,7 @@ class Program:
                 f"The following function(s) are not valid GTCallables `{', '.join(not_callable)}`."
             )
 
-        lowered_funcs = self._lowered_funcs_from_closureref(self.closure_refs)
+        lowered_funcs = self._lowered_funcs_from_closureref(self.captured_vars)
 
         return itir.Program(
             function_definitions=lowered_funcs, fencil_definitions=[fencil_itir_node]
@@ -273,8 +275,8 @@ class FieldOperator(GTCallable):
     def __gt_itir__(self) -> itir.FunctionDefinition:
         return FieldOperatorLowering.apply(self.foast_node)
 
-    def __gt_captured_vars__(self) -> ClosureRefs:
-        return self.closure_refs
+    def __gt_captured_vars__(self) -> CapturedVars:
+        return self.captured_vars
 
     def as_program(self) -> Program:
         if any(param.id == "out" for param in self.foast_node.params):
