@@ -47,7 +47,7 @@ class PrefixTupleVar(DType, VarMixin):
 
 @datatype
 class Fun(DType):
-    args: tuple[DType, ...]
+    args: DType
     ret: DType
 
 
@@ -89,6 +89,11 @@ class Value(DType):
 @datatype
 class Iterator(DType):
     ...
+
+
+def children(dtype):
+    for f in fields(dtype):
+        yield f.name, getattr(dtype, f.name)
 
 
 BOOL_DTYPE = Primitive("bool")  # type: ignore [call-arg]
@@ -203,52 +208,33 @@ def rename(s, t):
     def r(x):
         if x == s:
             return t
-        if isinstance(x, (Var, Column, Scalar, Primitive, Value, Iterator)):
-            return x
-        if isinstance(x, Val):
-            return Val(r(x.kind), r(x.dtype), r(x.size))
-        if isinstance(x, Fun):
-            return Fun(r(x.args), r(x.ret))
-        if isinstance(x, Tuple):
-            return Tuple(tuple(r(e) for e in x.elems))
-        if isinstance(x, PartialTupleVar):
-            return PartialTupleVar(x.idx, tuple((i, r(e)) for i, e in x.elems))
-        if isinstance(x, PrefixTupleVar):
-            prefix = r(x.prefix)
-            others = r(x.others)
-            if isinstance(others, Tuple):
-                return Tuple((prefix,) + others.elems)
-            return PrefixTupleVar(x.idx, r(x.prefix), r(x.others))
-        if isinstance(x, ValTupleVar):
-            kind = r(x.kind)
-            dtypes = r(x.dtypes)
-            size = r(x.size)
-            if isinstance(dtypes, Tuple):
-                return Tuple(tuple(Val(kind, d, size) for d in dtypes.elems))
-            return ValTupleVar(x.idx, kind, dtypes, size)
-        if isinstance(x, tuple):
-            return tuple(r(xi) for xi in x)
-        if isinstance(x, set):
-            return {r(xi) for xi in x}
-        raise AssertionError()
+        if isinstance(x, DType):
+            res = type(x)(**{k: r(v) for k, v in children(x)})
+            if isinstance(res, ValTupleVar) and isinstance(res.dtypes, Tuple):
+                # convert a ValTupleVar to a Tuple if it is fully resolved
+                return Tuple(tuple(Val(res.kind, d, res.size) for d in res.dtypes.elems))
+            if isinstance(res, PrefixTupleVar) and isinstance(res.others, Tuple):
+                # convert a PrefixTupleVar to a Tuple if it is fully resolved
+                return Tuple((res.prefix,) + res.others.elems)
+            return res
+        if isinstance(x, (tuple, set)):
+            return type(x)(r(v) for v in x)
+        assert isinstance(x, (str, int))
+        return x
 
     return r
 
 
-def fv(x):
-    if isinstance(x, Var):
-        return {x}
-    if isinstance(x, ValTupleVar):
-        return {x} | fv(x.kind) | fv(x.dtypes) | fv(x.size)
-    if isinstance(x, Val):
-        return fv(x.kind) | fv(x.dtype) | fv(x.size)
-    if isinstance(x, Fun):
-        return fv(x.args) | fv(x.ret)
-    if isinstance(x, Tuple):
-        return set().union(*(fv(elem) for elem in x.elems))
-    if isinstance(x, (Column, Scalar, Primitive, Value, Iterator)):
-        return set()
-    raise AssertionError()
+def free_variables(x):
+    if isinstance(x, DType):
+        res = set().union(*(free_variables(v) for _, v in children(x)))
+        if isinstance(x, VarMixin):
+            res.add(x)
+        return res
+    if isinstance(x, tuple):
+        return set().union(*(free_variables(v) for v in x))
+    assert isinstance(x, (str, int))
+    return set()
 
 
 def handle_constraint(constraint, dtype, constraints):
@@ -257,7 +243,7 @@ def handle_constraint(constraint, dtype, constraints):
         return dtype, constraints
 
     if isinstance(s, Var):
-        assert s not in fv(t)
+        assert s not in free_variables(t)
         r = rename(s, t)
         dtype = r(dtype)
         constraints = r(constraints)
@@ -287,7 +273,7 @@ def handle_constraint(constraint, dtype, constraints):
         return dtype, constraints
 
     if isinstance(s, PrefixTupleVar) and isinstance(t, Tuple):
-        assert s not in fv(t)
+        assert s not in free_variables(t)
         r = rename(s, t)
         dtype = r(dtype)
         constraints = r(constraints)
@@ -296,7 +282,7 @@ def handle_constraint(constraint, dtype, constraints):
         return dtype, constraints
 
     if isinstance(s, ValTupleVar) and isinstance(t, Tuple):
-        assert s not in fv(t)
+        assert s not in free_variables(t)
         r = rename(s, t)
         dtype = r(dtype)
         constraints = r(constraints)
@@ -323,7 +309,7 @@ def reindex_vars(dtype):
 
     def r(x):
         if isinstance(x, DType):
-            values = {f.name: r(getattr(x, f.name)) for f in fields(x)}
+            values = {k: r(v) for k, v in children(x)}
             if isinstance(x, VarMixin):
                 values["idx"] = index_map.setdefault(x.idx, len(index_map))
             return type(x)(**values)
@@ -342,3 +328,39 @@ def infer(expr, symtypes=None):
     dtype = TypeInferrer().visit(expr, constraints=constraints, symtypes=symtypes)
     unified = unify(dtype, constraints)
     return reindex_vars(unified)
+
+
+def pretty_str(x):
+    if isinstance(x, VarMixin):
+        subscripts = "₀₁₂₃₄₅₆₇₈₉"
+        return "T" + "".join(subscripts[int(d)] for d in str(x.idx))
+    if isinstance(x, Tuple):
+        return "(" + ", ".join(pretty_str(e) for e in x.elems) + ")"
+    if isinstance(x, PartialTupleVar):
+        s = ""
+        if x.elems:
+            e = dict(x.elems)
+            for i in range(max(e) + 1):
+                s += (pretty_str(e[i]) if i in e else "…") + ", "
+        return "(" + s + "…)"
+    if isinstance(x, PrefixTupleVar):
+        return "((" + pretty_str(x.prefix) + ",) + " + pretty_str(x.others) + ")"
+    if isinstance(x, Fun):
+        return pretty_str(x.args) + " → " + pretty_str(x.ret)
+    if isinstance(x, Val):
+        if x.size == Column():
+            s = "ᶜ"
+        elif x.size == Scalar():
+            s = "ˢ"
+        else:
+            assert isinstance(x.size, Var)
+            superscripts = "⁰¹²³⁴⁵⁶⁷⁸⁹"
+            s = "".join(superscripts[int(d)] for d in str(x.size.idx))
+        if x.kind == Iterator():
+            return "It" + "[" + pretty_str(x.dtype) + "]" + s
+        if x.kind == Value():
+            return pretty_str(x.dtype) + s
+        return "MaybeIt" + "[" + pretty_str(x.dtype) + "]" + s
+    if isinstance(x, Primitive):
+        return x.name
+    raise AssertionError()

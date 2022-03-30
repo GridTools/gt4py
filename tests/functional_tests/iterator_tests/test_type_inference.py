@@ -7,6 +7,7 @@ def test_sym_ref():
     expected = ti.Var(0)
     inferred = ti.infer(testee)
     assert inferred == expected
+    assert ti.pretty_str(inferred) == "T₀"
 
 
 def test_bool_literal():
@@ -14,6 +15,7 @@ def test_bool_literal():
     expected = ti.Val(ti.Value(), ti.Primitive("bool"), ti.Var(0))
     inferred = ti.infer(testee)
     assert inferred == expected
+    assert ti.pretty_str(inferred) == "bool⁰"
 
 
 def test_int_literal():
@@ -21,6 +23,7 @@ def test_int_literal():
     expected = ti.Val(ti.Value(), ti.Primitive("int"), ti.Var(0))
     inferred = ti.infer(testee)
     assert inferred == expected
+    assert ti.pretty_str(inferred) == "int⁰"
 
 
 def test_float_literal():
@@ -28,6 +31,7 @@ def test_float_literal():
     expected = ti.Val(ti.Value(), ti.Primitive("float"), ti.Var(0))
     inferred = ti.infer(testee)
     assert inferred == expected
+    assert ti.pretty_str(inferred) == "float⁰"
 
 
 def test_deref():
@@ -38,6 +42,7 @@ def test_deref():
     )
     inferred = ti.infer(testee)
     assert inferred == expected
+    assert ti.pretty_str(inferred) == "(It[T₀]¹) → T₀¹"
 
 
 def test_deref_call():
@@ -45,6 +50,7 @@ def test_deref_call():
     expected = ti.Val(ti.Value(), ti.Var(0), ti.Var(1))
     inferred = ti.infer(testee)
     assert inferred == expected
+    assert ti.pretty_str(inferred) == "T₀¹"
 
 
 def test_lambda():
@@ -52,6 +58,7 @@ def test_lambda():
     expected = ti.Fun(ti.Tuple((ti.Var(0),)), ti.Var(0))
     inferred = ti.infer(testee)
     assert inferred == expected
+    assert ti.pretty_str(inferred) == "(T₀) → T₀"
 
 
 def test_plus():
@@ -60,6 +67,7 @@ def test_plus():
     expected = ti.Fun(ti.Tuple((t, t)), t)
     inferred = ti.infer(testee)
     assert inferred == expected
+    assert ti.pretty_str(inferred) == "(T₀¹, T₀¹) → T₀¹"
 
 
 def test_eq():
@@ -68,6 +76,7 @@ def test_eq():
     expected = ti.Fun(ti.Tuple((t, t)), ti.Val(ti.Value(), ti.Primitive("bool"), ti.Var(1)))
     inferred = ti.infer(testee)
     assert inferred == expected
+    assert ti.pretty_str(inferred) == "(T₀¹, T₀¹) → bool¹"
 
 
 def test_if():
@@ -77,6 +86,7 @@ def test_if():
     expected = ti.Fun(ti.Tuple((c, t, t)), t)
     inferred = ti.infer(testee)
     assert inferred == expected
+    assert ti.pretty_str(inferred) == "(bool⁰, T₁⁰, T₁⁰) → T₁⁰"
 
 
 def test_not():
@@ -85,6 +95,7 @@ def test_not():
     expected = ti.Fun(ti.Tuple((t,)), t)
     inferred = ti.infer(testee)
     assert inferred == expected
+    assert ti.pretty_str(inferred) == "(bool⁰) → bool⁰"
 
 
 def test_and():
@@ -93,6 +104,7 @@ def test_and():
     expected = ti.Fun(ti.Tuple((t, t)), t)
     inferred = ti.infer(testee)
     assert inferred == expected
+    assert ti.pretty_str(inferred) == "(bool⁰, bool⁰) → bool⁰"
 
 
 def test_lift():
@@ -103,6 +115,7 @@ def test_lift():
     )
     inferred = ti.infer(testee)
     assert inferred == expected
+    assert ti.pretty_str(inferred) == "(It[T₀]¹) → It[T₀]¹"
 
 
 def test_lifted_call():
@@ -113,6 +126,7 @@ def test_lifted_call():
     expected = ti.Val(ti.Iterator(), ti.Var(0), ti.Var(1))
     inferred = ti.infer(testee)
     assert inferred == expected
+    assert ti.pretty_str(inferred) == "It[T₀]¹"
 
 
 def test_make_tuple():
@@ -125,6 +139,7 @@ def test_make_tuple():
     )
     inferred = ti.infer(testee)
     assert inferred == expected
+    assert ti.pretty_str(inferred) == "(bool, float, T₀)¹"
 
 
 def test_tuple_get():
@@ -141,6 +156,7 @@ def test_tuple_get():
     expected = ti.Val(ti.Value(), ti.Primitive("float"), ti.Var(0))
     inferred = ti.infer(testee)
     assert inferred == expected
+    assert ti.pretty_str(inferred) == "float⁰"
 
 
 def test_reduce():
@@ -168,6 +184,7 @@ def test_reduce():
     )
     inferred = ti.infer(testee)
     assert inferred == expected
+    assert ti.pretty_str(inferred) == "(It[int]⁰, It[int]⁰) → int⁰"
 
 
 def test_scan():
@@ -198,6 +215,7 @@ def test_scan():
     )
     inferred = ti.infer(testee)
     assert inferred == expected
+    assert ti.pretty_str(inferred) == "(It[int]ᶜ, It[int]ᶜ) → intᶜ"
 
 
 def test_shift():
@@ -208,3 +226,4 @@ def test_shift():
     )
     inferred = ti.infer(testee)
     assert inferred == expected
+    assert ti.pretty_str(inferred) == "(It[T₀]¹) → It[T₀]¹"
