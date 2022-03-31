@@ -47,8 +47,8 @@ class PrefixTupleVar(DType, VarMixin):
 
 @datatype
 class Fun(DType):
-    args: DType
-    ret: DType
+    args: DType = field(default_factory=Var.fresh)
+    ret: DType = field(default_factory=Var.fresh)
 
 
 @datatype
@@ -89,6 +89,30 @@ class Value(DType):
 @datatype
 class Iterator(DType):
     ...
+
+
+@datatype
+class Closure(DType):
+    output: DType
+    inputs: DType
+
+
+@datatype
+class FunDef(DType):
+    name: str
+    fun: DType
+
+
+@datatype
+class Fencil(DType):
+    name: str
+    params: DType
+
+
+@datatype
+class Program(DType):
+    fundefs: DType
+    fencils: DType
 
 
 def children(dtype):
@@ -153,6 +177,7 @@ class TypeInferrer(NodeTranslator):
             return Fun(Tuple((f, fwd, acc)), ret)
 
         assert node.id not in ir.BUILTINS
+        # TODO: remove?
         return Var.fresh()
 
     def visit_BoolLiteral(self, node, *, constraints, symtypes):
@@ -202,6 +227,52 @@ class TypeInferrer(NodeTranslator):
         ret = Var.fresh()
         constraints.add((fun, Fun(args, ret)))
         return ret
+
+    def visit_FunctionDefinition(self, node, *, constraints, symtypes):
+        if node.id in symtypes:
+            raise TypeError(f"Multiple definitions of symbol {node.id}")
+
+        fun = self.visit(
+            ir.Lambda(params=node.params, expr=node.expr),
+            constraints=constraints,
+            symtypes=symtypes,
+        )
+        constraints.add((fun, Fun()))
+        return FunDef(node.id, fun)
+
+    def visit_StencilClosure(self, node, *, constraints, symtypes):
+        # TODO: check domain?
+        stencil = self.visit(node.stencil, constraints=constraints, symtypes=symtypes)
+        output = self.visit(node.output, constraints=constraints, symtypes=symtypes)
+        inputs = Tuple(tuple(self.visit(node.inputs, constraints=constraints, symtypes=symtypes)))
+        output_dtype = Var.fresh()
+        constraints.add((output, Val(Iterator(), output_dtype, Column())))
+        constraints.add((stencil, Fun(inputs, Val(Value(), output_dtype, Column()))))
+        return Closure(output, inputs)
+
+    def visit_FencilDefinition(self, node, *, constraints, symtypes):
+        params = {p.id: Var.fresh() for p in node.params}
+        self.visit(node.closures, constraints=constraints, symtypes=symtypes | params)
+        return Fencil(node.id, Tuple(tuple(params[p.id] for p in node.params)))
+
+    def visit_Program(self, node, constraints, symtypes):
+        def funtypes():
+            ftypes = []
+            fmap = dict()
+            # TODO: order by dependencies? Or is this done before?
+            for f in node.function_definitions:
+                f = self.visit(f, constraints=constraints, symtypes=symtypes | fmap)
+                ftypes.append(f)
+                fmap[f.name] = f.fun
+            return Tuple(tuple(ftypes)), fmap
+
+        fencils = []
+        for f in node.fencil_definitions:
+            fencils.append(
+                self.visit(f, constraints=constraints, symtypes=symtypes | funtypes()[1])
+            )
+
+        return Program(funtypes()[0], Tuple(tuple(fencils)))
 
 
 def rename(s, t):
@@ -359,10 +430,13 @@ def infer(expr, symtypes=None):
     return reindex_vars(unified)
 
 
-def pretty_str(x):
-    if isinstance(x, VarMixin):
-        subscripts = "₀₁₂₃₄₅₆₇₈₉"
-        return "T" + "".join(subscripts[int(d)] for d in str(x.idx))
+def pretty_str(x):  # noqa: C901
+    def subscript(i):
+        return "".join("₀₁₂₃₄₅₆₇₈₉"[int(d)] for d in str(i))
+
+    def superscript(i):
+        return "".join("⁰¹²³⁴⁵⁶⁷⁸⁹"[int(d)] for d in str(i))
+
     if isinstance(x, Tuple):
         return "(" + ", ".join(pretty_str(e) for e in x.elems) + ")"
     if isinstance(x, PartialTupleVar):
@@ -371,7 +445,7 @@ def pretty_str(x):
             e = dict(x.elems)
             for i in range(max(e) + 1):
                 s += (pretty_str(e[i]) if i in e else "…") + ", "
-        return "(" + s + "…)"
+        return "(" + s + "…)" + subscript(x.idx)
     if isinstance(x, PrefixTupleVar):
         return "((" + pretty_str(x.prefix) + ",) + " + pretty_str(x.others) + ")"
     if isinstance(x, Fun):
@@ -383,8 +457,7 @@ def pretty_str(x):
             s = "ˢ"
         else:
             assert isinstance(x.size, Var)
-            superscripts = "⁰¹²³⁴⁵⁶⁷⁸⁹"
-            s = "".join(superscripts[int(d)] for d in str(x.size.idx))
+            s = superscript(x.size.idx)
         if x.kind == Iterator():
             return "It" + "[" + pretty_str(x.dtype) + "]" + s
         if x.kind == Value():
@@ -392,4 +465,20 @@ def pretty_str(x):
         return "MaybeIt" + "[" + pretty_str(x.dtype) + "]" + s
     if isinstance(x, Primitive):
         return x.name
+    if isinstance(x, FunDef):
+        return x.name + " :: " + pretty_str(x.fun)
+    if isinstance(x, Closure):
+        return pretty_str(x.inputs) + " ⇒ " + pretty_str(x.output)
+    if isinstance(x, Fencil):
+        return x.name + pretty_str(x.params)
+    if isinstance(x, Program):
+        return (
+            "{["
+            + ", ".join(pretty_str(f) for f in x.fundefs.elems)
+            + "], ["
+            + ", ".join(pretty_str(f) for f in x.fencils.elems)
+            + "]}"
+        )
+    if isinstance(x, VarMixin):
+        return "T" + subscript(x.idx)
     raise AssertionError()
