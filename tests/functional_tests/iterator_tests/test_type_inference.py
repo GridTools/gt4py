@@ -241,9 +241,28 @@ def test_function_definition():
     assert ti.pretty_str(inferred) == "f :: (T₀) → T₀"
 
 
+CARTESIAN_DOMAIN = ir.FunCall(
+    fun=ir.SymRef(id="domain"),
+    args=[
+        ir.FunCall(
+            fun=ir.SymRef(id="named_range"),
+            args=[ir.AxisLiteral(value="IDim"), ir.IntLiteral(value=0), ir.SymRef(id="i")],
+        ),
+        ir.FunCall(
+            fun=ir.SymRef(id="named_range"),
+            args=[ir.AxisLiteral(value="JDim"), ir.IntLiteral(value=0), ir.SymRef(id="j")],
+        ),
+        ir.FunCall(
+            fun=ir.SymRef(id="named_range"),
+            args=[ir.AxisLiteral(value="KDim"), ir.IntLiteral(value=0), ir.SymRef(id="k")],
+        ),
+    ],
+)
+
+
 def test_stencil_closure():
     testee = ir.StencilClosure(
-        domain=ir.SymRef(id="x"),
+        domain=CARTESIAN_DOMAIN,
         stencil=ir.SymRef(id="deref"),
         output=ir.SymRef(id="out"),
         inputs=[ir.SymRef(id="inp")],
@@ -260,16 +279,24 @@ def test_stencil_closure():
 def test_fencil_definition():
     testee = ir.FencilDefinition(
         id="f",
-        params=[ir.Sym(id="dom"), ir.Sym(id="a"), ir.Sym(id="b"), ir.Sym(id="c"), ir.Sym(id="d")],
+        params=[
+            ir.Sym(id="i"),
+            ir.Sym(id="j"),
+            ir.Sym(id="k"),
+            ir.Sym(id="a"),
+            ir.Sym(id="b"),
+            ir.Sym(id="c"),
+            ir.Sym(id="d"),
+        ],
         closures=[
             ir.StencilClosure(
-                domain=ir.SymRef(id="dom"),
+                domain=CARTESIAN_DOMAIN,
                 stencil=ir.SymRef(id="deref"),
                 output=ir.SymRef(id="b"),
                 inputs=[ir.SymRef(id="a")],
             ),
             ir.StencilClosure(
-                domain=ir.SymRef(id="dom"),
+                domain=CARTESIAN_DOMAIN,
                 stencil=ir.SymRef(id="deref"),
                 output=ir.SymRef(id="d"),
                 inputs=[ir.SymRef(id="c")],
@@ -280,17 +307,19 @@ def test_fencil_definition():
         "f",
         ti.Tuple(
             (
-                ti.Var(0),
+                ti.Val(ti.Value(), ti.Primitive("int"), ti.Scalar()),
+                ti.Val(ti.Value(), ti.Primitive("int"), ti.Scalar()),
+                ti.Val(ti.Value(), ti.Primitive("int"), ti.Scalar()),
+                ti.Val(ti.Iterator(), ti.Var(0), ti.Column()),
+                ti.Val(ti.Iterator(), ti.Var(0), ti.Column()),
                 ti.Val(ti.Iterator(), ti.Var(1), ti.Column()),
                 ti.Val(ti.Iterator(), ti.Var(1), ti.Column()),
-                ti.Val(ti.Iterator(), ti.Var(2), ti.Column()),
-                ti.Val(ti.Iterator(), ti.Var(2), ti.Column()),
             )
         ),
     )
     inferred = ti.infer(testee)
     assert inferred == expected
-    assert ti.pretty_str(inferred) == "f(T₀, It[T₁]ᶜ, It[T₁]ᶜ, It[T₂]ᶜ, It[T₂]ᶜ)"
+    assert ti.pretty_str(inferred) == "f(intˢ, intˢ, intˢ, It[T₀]ᶜ, It[T₀]ᶜ, It[T₁]ᶜ, It[T₁]ᶜ)"
 
 
 def test_program():
@@ -306,7 +335,9 @@ def test_program():
         ir.FencilDefinition(
             id="foo",
             params=[
-                ir.Sym(id="dom"),
+                ir.Sym(id="i"),
+                ir.Sym(id="j"),
+                ir.Sym(id="k"),
                 ir.Sym(id="a"),
                 ir.Sym(id="b"),
                 ir.Sym(id="c"),
@@ -314,13 +345,13 @@ def test_program():
             ],
             closures=[
                 ir.StencilClosure(
-                    domain=ir.SymRef(id="dom"),
+                    domain=CARTESIAN_DOMAIN,
                     stencil=ir.SymRef(id="g"),
                     output=ir.SymRef(id="b"),
                     inputs=[ir.SymRef(id="a")],
                 ),
                 ir.StencilClosure(
-                    domain=ir.SymRef(id="dom"),
+                    domain=CARTESIAN_DOMAIN,
                     stencil=ir.SymRef(id="deref"),
                     output=ir.SymRef(id="d"),
                     inputs=[ir.SymRef(id="c")],
@@ -329,10 +360,10 @@ def test_program():
         ),
         ir.FencilDefinition(
             id="bar",
-            params=[ir.Sym(id="dom"), ir.Sym(id="x"), ir.Sym(id="y")],
+            params=[ir.Sym(id="i"), ir.Sym(id="j"), ir.Sym(id="k"), ir.Sym(id="x"), ir.Sym(id="y")],
             closures=[
                 ir.StencilClosure(
-                    domain=ir.SymRef(id="dom"),
+                    domain=CARTESIAN_DOMAIN,
                     stencil=ir.Lambda(
                         params=[ir.Sym(id="y")],
                         expr=ir.FunCall(
@@ -366,11 +397,13 @@ def test_program():
                     "foo",
                     ti.Tuple(
                         (
-                            ti.Var(3),
+                            ti.Val(ti.Value(), ti.Primitive("int"), ti.Scalar()),
+                            ti.Val(ti.Value(), ti.Primitive("int"), ti.Scalar()),
+                            ti.Val(ti.Value(), ti.Primitive("int"), ti.Scalar()),
+                            ti.Val(ti.Iterator(), ti.Var(3), ti.Column()),
+                            ti.Val(ti.Iterator(), ti.Var(3), ti.Column()),
                             ti.Val(ti.Iterator(), ti.Var(4), ti.Column()),
                             ti.Val(ti.Iterator(), ti.Var(4), ti.Column()),
-                            ti.Val(ti.Iterator(), ti.Var(5), ti.Column()),
-                            ti.Val(ti.Iterator(), ti.Var(5), ti.Column()),
                         )
                     ),
                 ),
@@ -378,9 +411,11 @@ def test_program():
                     "bar",
                     ti.Tuple(
                         (
-                            ti.Var(6),
-                            ti.Val(ti.Iterator(), ti.Var(7), ti.Column()),
-                            ti.Val(ti.Iterator(), ti.Var(7), ti.Column()),
+                            ti.Val(ti.Value(), ti.Primitive("int"), ti.Scalar()),
+                            ti.Val(ti.Value(), ti.Primitive("int"), ti.Scalar()),
+                            ti.Val(ti.Value(), ti.Primitive("int"), ti.Scalar()),
+                            ti.Val(ti.Iterator(), ti.Var(5), ti.Column()),
+                            ti.Val(ti.Iterator(), ti.Var(5), ti.Column()),
                         )
                     ),
                 ),
@@ -391,5 +426,5 @@ def test_program():
     assert inferred == expected
     assert (
         ti.pretty_str(inferred)
-        == "{[f :: (T₀) → T₀, g :: (It[T₁]²) → T₁²], [foo(T₃, It[T₄]ᶜ, It[T₄]ᶜ, It[T₅]ᶜ, It[T₅]ᶜ), bar(T₆, It[T₇]ᶜ, It[T₇]ᶜ)]}"
+        == "{[f :: (T₀) → T₀, g :: (It[T₁]²) → T₁²], [foo(intˢ, intˢ, intˢ, It[T₃]ᶜ, It[T₃]ᶜ, It[T₄]ᶜ, It[T₄]ᶜ), bar(intˢ, intˢ, intˢ, It[T₅]ᶜ, It[T₅]ᶜ)]}"
     )

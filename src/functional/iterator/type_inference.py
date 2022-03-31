@@ -67,6 +67,14 @@ class ValTupleVar(DType, VarMixin):
 
 
 @datatype
+class UniformValTupleVar(DType, VarMixin):
+    idx: int
+    kind: DType = field(default_factory=Var.fresh)
+    dtype: DType = field(default_factory=Var.fresh)
+    size: DType = field(default_factory=Var.fresh)
+
+
+@datatype
 class Column(DType):
     ...
 
@@ -123,6 +131,9 @@ def children(dtype):
 BOOL_DTYPE = Primitive("bool")  # type: ignore [call-arg]
 INT_DTYPE = Primitive("int")  # type: ignore [call-arg]
 FLOAT_DTYPE = Primitive("float")  # type: ignore [call-arg]
+AXIS_DTYPE = Primitive("axis")  # type: ignore [call-arg]
+NAMED_RANGE_DTYPE = Primitive("named_range")  # type: ignore [call-arg]
+DOMAIN_DTYPE = Primitive("domain")  # type: ignore [call-arg]
 
 
 class TypeInferrer(NodeTranslator):
@@ -175,6 +186,20 @@ class TypeInferrer(NodeTranslator):
             f = Fun(f_args, acc)
             ret = Fun(ret_args, Val(Value(), acc.dtype, Column()))
             return Fun(Tuple((f, fwd, acc)), ret)
+        if node.id == "domain":
+            args = UniformValTupleVar.fresh(Value(), NAMED_RANGE_DTYPE, Scalar())
+            ret = Val(Value(), DOMAIN_DTYPE, Scalar())
+            return Fun(args, ret)
+        if node.id == "named_range":
+            args = Tuple(
+                (
+                    Val(Value(), AXIS_DTYPE, Scalar()),
+                    Val(Value(), INT_DTYPE, Scalar()),
+                    Val(Value(), INT_DTYPE, Scalar()),
+                )
+            )
+            ret = Val(Value(), NAMED_RANGE_DTYPE, Scalar())
+            return Fun(args, ret)
 
         assert node.id not in ir.BUILTINS
         # TODO: remove?
@@ -188,6 +213,9 @@ class TypeInferrer(NodeTranslator):
 
     def visit_FloatLiteral(self, node, *, constraints, symtypes):
         return Val(Value(), FLOAT_DTYPE)
+
+    def visit_AxisLiteral(self, node, *, constraints, symtypes):
+        return Val(Value(), AXIS_DTYPE, Scalar())
 
     def visit_Lambda(self, node, *, constraints, symtypes):
         ptypes = {p.id: Var.fresh() for p in node.params}
@@ -241,11 +269,12 @@ class TypeInferrer(NodeTranslator):
         return FunDef(node.id, fun)
 
     def visit_StencilClosure(self, node, *, constraints, symtypes):
-        # TODO: check domain?
+        domain = self.visit(node.domain, constraints=constraints, symtypes=symtypes)
         stencil = self.visit(node.stencil, constraints=constraints, symtypes=symtypes)
         output = self.visit(node.output, constraints=constraints, symtypes=symtypes)
         inputs = Tuple(tuple(self.visit(node.inputs, constraints=constraints, symtypes=symtypes)))
         output_dtype = Var.fresh()
+        constraints.add((domain, Val(Value(), Primitive("domain"), Scalar())))
         constraints.add((output, Val(Iterator(), output_dtype, Column())))
         constraints.add((stencil, Fun(inputs, Val(Value(), output_dtype, Column()))))
         return Closure(output, inputs)
@@ -388,6 +417,22 @@ def handle_constraint(constraint, dtype, constraints):  # noqa: C901
         assert s not in free_variables(t) and t not in free_variables(s)
         constraints.add((s.kind, t.kind))
         constraints.add((s.dtypes, t.dtypes))
+        constraints.add((s.size, t.size))
+        return dtype, constraints
+
+    if isinstance(s, UniformValTupleVar) and isinstance(t, Tuple):
+        assert s not in free_variables(t)
+        r = rename(s, t)
+        dtype = r(dtype)
+        constraints = r(constraints)
+        elem_dtype = Val(s.kind, s.dtype, s.size)
+        for e in t.elems:
+            constraints.add((e, elem_dtype))
+        return dtype, constraints
+
+    if isinstance(s, UniformValTupleVar) and isinstance(t, UniformValTupleVar):
+        constraints.add((s.kind, t.kind))
+        constraints.add((s.dtype, t.dtype))
         constraints.add((s.size, t.size))
         return dtype, constraints
 
