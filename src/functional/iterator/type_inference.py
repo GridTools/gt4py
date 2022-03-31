@@ -39,8 +39,7 @@ class PartialTupleVar(DType, VarMixin):
 
 
 @datatype
-class PrefixTupleVar(DType, VarMixin):
-    idx: int
+class PrefixTuple(DType):
     prefix: DType
     others: DType
 
@@ -59,8 +58,7 @@ class Val(DType):
 
 
 @datatype
-class ValTupleVar(DType, VarMixin):
-    idx: int
+class ValTuple(DType):
     kind: DType = field(default_factory=Var.fresh)
     dtypes: DType = field(default_factory=Var.fresh)
     size: DType = field(default_factory=Var.fresh)
@@ -162,7 +160,7 @@ class TypeInferrer(NodeTranslator):
             c = Val(Value(), BOOL_DTYPE, v.size)
             return Fun(Tuple((c, v, v)), v)
         if node.id == "lift":
-            args = ValTupleVar.fresh(Iterator())
+            args = ValTuple(Iterator())
             dtype = Var.fresh()
             size = Var.fresh()
             stencil_ret = Val(Value(), dtype, size)
@@ -172,8 +170,8 @@ class TypeInferrer(NodeTranslator):
             dtypes = Var.fresh()
             size = Var.fresh()
             acc = Val(Value(), Var.fresh(), size)
-            f_args = PrefixTupleVar.fresh(acc, ValTupleVar.fresh(Value(), dtypes, size))
-            ret_args = ValTupleVar.fresh(Iterator(), dtypes, size)
+            f_args = PrefixTuple(acc, ValTuple(Value(), dtypes, size))
+            ret_args = ValTuple(Iterator(), dtypes, size)
             f = Fun(f_args, acc)
             ret = Fun(ret_args, acc)
             return Fun(Tuple((f, acc)), ret)
@@ -181,8 +179,8 @@ class TypeInferrer(NodeTranslator):
             dtypes = Var.fresh()
             fwd = Val(Value(), BOOL_DTYPE, Scalar())
             acc = Val(Value(), Var.fresh(), Scalar())
-            f_args = PrefixTupleVar.fresh(acc, ValTupleVar.fresh(Iterator(), dtypes, Scalar()))
-            ret_args = ValTupleVar.fresh(Iterator(), dtypes, Column())
+            f_args = PrefixTuple(acc, ValTuple(Iterator(), dtypes, Scalar()))
+            ret_args = ValTuple(Iterator(), dtypes, Column())
             f = Fun(f_args, acc)
             ret = Fun(ret_args, Val(Value(), acc.dtype, Column()))
             return Fun(Tuple((f, fwd, acc)), ret)
@@ -312,11 +310,11 @@ def rename(s, t):
             return t
         if isinstance(x, DType):
             res = type(x)(**{k: r(v) for k, v in children(x)})
-            if isinstance(res, ValTupleVar) and isinstance(res.dtypes, Tuple):
-                # convert a ValTupleVar to a Tuple if it is fully resolved
+            if isinstance(res, ValTuple) and isinstance(res.dtypes, Tuple):
+                # convert a ValTuple to a Tuple if it is fully resolved
                 return Tuple(tuple(Val(res.kind, d, res.size) for d in res.dtypes.elems))
-            if isinstance(res, PrefixTupleVar) and isinstance(res.others, Tuple):
-                # convert a PrefixTupleVar to a Tuple if it is fully resolved
+            if isinstance(res, PrefixTuple) and isinstance(res.others, Tuple):
+                # convert a PrefixTuple to a Tuple if it is fully resolved
                 return Tuple((res.prefix,) + res.others.elems)
             return res
         if isinstance(x, (tuple, set)):
@@ -390,32 +388,25 @@ def handle_constraint(constraint, dtype, constraints):  # noqa: C901
         constraints = r(constraints)
         return dtype, constraints
 
-    if isinstance(s, PrefixTupleVar) and isinstance(t, Tuple):
+    if isinstance(s, PrefixTuple) and isinstance(t, Tuple):
         assert s not in free_variables(t)
-        r = rename(s, t)
-        dtype = r(dtype)
-        constraints = r(constraints)
         constraints.add((s.prefix, t.elems[0]))
         constraints.add((s.others, Tuple(t.elems[1:])))
         return dtype, constraints
 
-    if isinstance(s, PrefixTupleVar) and isinstance(t, PrefixTupleVar):
+    if isinstance(s, PrefixTuple) and isinstance(t, PrefixTuple):
         assert s not in free_variables(t) and t not in free_variables(s)
         constraints.add((s.prefix, t.prefix))
         constraints.add((s.others, t.others))
         return dtype, constraints
 
-    if isinstance(s, ValTupleVar) and isinstance(t, Tuple):
-        assert s not in free_variables(t)
-        r = rename(s, t)
-        dtype = r(dtype)
-        constraints = r(constraints)
+    if isinstance(s, ValTuple) and isinstance(t, Tuple):
         s_expanded = Tuple(tuple(Val(s.kind, Var.fresh(), s.size) for _ in t.elems))
         constraints.add((s.dtypes, Tuple(tuple(e.dtype for e in s_expanded.elems))))
         constraints.add((s_expanded, t))
         return dtype, constraints
 
-    if isinstance(s, ValTupleVar) and isinstance(t, ValTupleVar):
+    if isinstance(s, ValTuple) and isinstance(t, ValTuple):
         assert s not in free_variables(t) and t not in free_variables(s)
         constraints.add((s.kind, t.kind))
         constraints.add((s.dtypes, t.dtypes))
@@ -493,7 +484,7 @@ def pretty_str(x):  # noqa: C901
             for i in range(max(e) + 1):
                 s += (pretty_str(e[i]) if i in e else "…") + ", "
         return "(" + s + "…)" + subscript(x.idx)
-    if isinstance(x, PrefixTupleVar):
+    if isinstance(x, PrefixTuple):
         return "((" + pretty_str(x.prefix) + ",) + " + pretty_str(x.others) + ")"
     if isinstance(x, Fun):
         return pretty_str(x.args) + " → " + pretty_str(x.ret)
