@@ -180,6 +180,22 @@ def test_tuple_get():
     assert ti.pretty_str(inferred) == "float⁰"
 
 
+def test_tuple_get_in_lambda():
+    testee = ir.Lambda(
+        params=[ir.Sym(id="x")],
+        expr=ir.FunCall(
+            fun=ir.SymRef(id="tuple_get"), args=[ir.IntLiteral(value=1), ir.SymRef(id="x")]
+        ),
+    )
+    expected = ti.Fun(
+        ti.Tuple((ti.Val(ti.Var(0), ti.PartialTupleVar(2, ((1, ti.Var(1)),)), ti.Var(3)),)),
+        ti.Val(ti.Var(0), ti.Var(1), ti.Var(3)),
+    )
+    inferred = ti.infer(testee)
+    assert inferred == expected
+    assert ti.pretty_str(inferred) == "(ItOrVal[(…, T₁, …)₂]³) → ItOrVal[T₁]³"
+
+
 def test_reduce():
     reduction_f = ir.Lambda(
         params=[ir.Sym(id="acc"), ir.Sym(id="x"), ir.Sym(id="y")],
