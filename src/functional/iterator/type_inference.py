@@ -485,6 +485,13 @@ def pretty_str(x):  # noqa: C901
         assert isinstance(size, Var)
         return superscript(size.idx)
 
+    def fmt_dtype(kind, dtype_str):
+        if kind == Value():
+            return dtype_str
+        if kind == Iterator():
+            return "It[" + dtype_str + "]"
+        return "ItOrVal[" + dtype_str + "]"
+
     if isinstance(x, Tuple):
         return "(" + ", ".join(pretty_str(e) for e in x.elems) + ")"
     if isinstance(x, PartialTupleVar):
@@ -499,12 +506,7 @@ def pretty_str(x):  # noqa: C901
     if isinstance(x, Fun):
         return pretty_str(x.args) + " → " + pretty_str(x.ret)
     if isinstance(x, Val):
-        s = fmt_size(x.size)
-        if x.kind == Iterator():
-            return "It" + "[" + pretty_str(x.dtype) + "]" + s
-        if x.kind == Value():
-            return pretty_str(x.dtype) + s
-        return "ItOrVal" + "[" + pretty_str(x.dtype) + "]" + s
+        return fmt_dtype(x.kind, pretty_str(x.dtype) + fmt_size(x.size))
     if isinstance(x, Primitive):
         return x.name
     if isinstance(x, FunDef):
@@ -523,15 +525,7 @@ def pretty_str(x):  # noqa: C901
         )
     if isinstance(x, ValTuple):
         assert isinstance(x.dtypes, Var)
-        s = fmt_size(x.size)
-        d = subscript(x.dtypes.idx)
-        if x.kind == Iterator():
-            v = "It[T]"
-        elif x.kind == Value():
-            v = "T"
-        else:
-            v = "ItOrVal[T]"
-        return "(" + v + s + ", …)" + d
+        return "(" + fmt_dtype(x.kind, "T" + fmt_size(x.size)) + ", …)" + subscript(x.dtypes.idx)
     if isinstance(x, VarMixin):
         return "T" + subscript(x.idx)
     raise AssertionError()
