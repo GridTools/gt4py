@@ -108,6 +108,27 @@ def test_and():
 
 
 def test_lift():
+    testee = ir.SymRef(id="lift")
+    expected = ti.Fun(
+        ti.Tuple(
+            (
+                ti.Fun(
+                    ti.ValTuple(ti.Iterator(), ti.Var(0), ti.Var(1)),
+                    ti.Val(ti.Value(), ti.Var(2), ti.Var(1)),
+                ),
+            )
+        ),
+        ti.Fun(
+            ti.ValTuple(ti.Iterator(), ti.Var(0), ti.Var(1)),
+            ti.Val(ti.Iterator(), ti.Var(2), ti.Var(1)),
+        ),
+    )
+    inferred = ti.infer(testee)
+    assert inferred == expected
+    assert ti.pretty_str(inferred) == "((It[T]¹, …)₀ → T₂¹) → (It[T]¹, …)₀ → It[T₂]¹"
+
+
+def test_lift_application():
     testee = ir.FunCall(fun=ir.SymRef(id="lift"), args=[ir.SymRef(id="deref")])
     expected = ti.Fun(
         ti.Tuple((ti.Val(ti.Iterator(), ti.Var(0), ti.Var(1)),)),
