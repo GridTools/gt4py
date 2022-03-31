@@ -154,7 +154,7 @@ class CommonTypeDeduction(NodeTranslator):
                 x, y = self.visit(node.args, constraints=constraints, symtypes=symtypes)
                 constraints.add((x, y))
                 return x
-            elif node.fun.id == "eq":
+            elif node.fun.id in ("eq", "greater", "less"):
                 x, y = self.visit(node.args, constraints=constraints, symtypes=symtypes)
                 constraints.add((x, y))
                 return BOOL_TYPE
