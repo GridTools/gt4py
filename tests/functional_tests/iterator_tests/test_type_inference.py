@@ -188,21 +188,25 @@ def test_reduce():
 
 
 def test_scan():
-    reduction_f = ir.Lambda(
+    scan_f = ir.Lambda(
         params=[ir.Sym(id="acc"), ir.Sym(id="x"), ir.Sym(id="y")],
         expr=ir.FunCall(
             fun=ir.SymRef(id="plus"),
             args=[
                 ir.SymRef(id="acc"),
                 ir.FunCall(
-                    fun=ir.SymRef(id="multiplies"), args=[ir.SymRef(id="x"), ir.SymRef(id="y")]
+                    fun=ir.SymRef(id="multiplies"),
+                    args=[
+                        ir.FunCall(fun=ir.SymRef(id="deref"), args=[ir.SymRef(id="x")]),
+                        ir.FunCall(fun=ir.SymRef(id="deref"), args=[ir.SymRef(id="y")]),
+                    ],
                 ),
             ],
         ),
     )
     testee = ir.FunCall(
         fun=ir.SymRef(id="scan"),
-        args=[reduction_f, ir.BoolLiteral(value=True), ir.IntLiteral(value=0)],
+        args=[scan_f, ir.BoolLiteral(value=True), ir.IntLiteral(value=0)],
     )
     expected = ti.Fun(
         ti.Tuple(

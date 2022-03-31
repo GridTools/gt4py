@@ -146,7 +146,7 @@ class TypeInferrer(NodeTranslator):
             dtypes = Var.fresh()
             fwd = Val(Value(), BOOL_DTYPE, Scalar())
             acc = Val(Value(), Var.fresh(), Scalar())
-            f_args = PrefixTupleVar.fresh(acc, ValTupleVar.fresh(Value(), dtypes, Scalar()))
+            f_args = PrefixTupleVar.fresh(acc, ValTupleVar.fresh(Iterator(), dtypes, Scalar()))
             ret_args = ValTupleVar.fresh(Iterator(), dtypes, Column())
             f = Fun(f_args, acc)
             ret = Fun(ret_args, Val(Value(), acc.dtype, Column()))
@@ -237,7 +237,7 @@ def free_variables(x):
     return set()
 
 
-def handle_constraint(constraint, dtype, constraints):
+def handle_constraint(constraint, dtype, constraints):  # noqa: C901
     s, t = constraint
     if s == t:
         return dtype, constraints
@@ -268,8 +268,24 @@ def handle_constraint(constraint, dtype, constraints):
         return dtype, constraints
 
     if isinstance(s, PartialTupleVar) and isinstance(t, Tuple):
+        assert s not in free_variables(t)
         for i, x in s.elems:
             constraints.add((x, t.elems[i]))
+        return dtype, constraints
+
+    if isinstance(s, PartialTupleVar) and isinstance(t, PartialTupleVar):
+        assert s not in free_variables(t) and t not in free_variables(s)
+        se = dict(s.elems)
+        te = dict(t.elems)
+        for i in set(se) & set(te):
+            constraints.add((se[i], te[i]))
+        combined = PartialTupleVar.fresh(tuple((se | te).items()))
+        r = rename(s, combined)
+        dtype = r(dtype)
+        constraints = r(constraints)
+        r = rename(t, combined)
+        dtype = r(dtype)
+        constraints = r(constraints)
         return dtype, constraints
 
     if isinstance(s, PrefixTupleVar) and isinstance(t, Tuple):
@@ -281,6 +297,12 @@ def handle_constraint(constraint, dtype, constraints):
         constraints.add((s.others, Tuple(t.elems[1:])))
         return dtype, constraints
 
+    if isinstance(s, PrefixTupleVar) and isinstance(t, PrefixTupleVar):
+        assert s not in free_variables(t) and t not in free_variables(s)
+        constraints.add((s.prefix, t.prefix))
+        constraints.add((s.others, t.others))
+        return dtype, constraints
+
     if isinstance(s, ValTupleVar) and isinstance(t, Tuple):
         assert s not in free_variables(t)
         r = rename(s, t)
@@ -289,6 +311,13 @@ def handle_constraint(constraint, dtype, constraints):
         s_expanded = Tuple(tuple(Val(s.kind, Var.fresh(), s.size) for _ in t.elems))
         constraints.add((s.dtypes, Tuple(tuple(e.dtype for e in s_expanded.elems))))
         constraints.add((s_expanded, t))
+        return dtype, constraints
+
+    if isinstance(s, ValTupleVar) and isinstance(t, ValTupleVar):
+        assert s not in free_variables(t) and t not in free_variables(s)
+        constraints.add((s.kind, t.kind))
+        constraints.add((s.dtypes, t.dtypes))
+        constraints.add((s.size, t.size))
         return dtype, constraints
 
 
