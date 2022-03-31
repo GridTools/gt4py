@@ -436,7 +436,9 @@ def unify(dtype, constraints):
         r = handle_constraint(c, dtype, constraints)
         if not r:
             r = handle_constraint(c[::-1], dtype, constraints)
-        assert r
+
+        if not r:
+            raise TypeError(f"Can not satisfy constraint: {c[0]} ≡ {c[1]}")
         dtype, constraints = r
 
     return dtype
