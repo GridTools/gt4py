@@ -1,1 +1,1 @@
-from . import cpptoy, double_roundtrip, lisp, roundtrip  # noqa F401
+from . import cpptoy, double_roundtrip, lisp, roundtrip, type_check  # noqa F401
