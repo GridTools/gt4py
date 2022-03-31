@@ -127,7 +127,7 @@ class TypeInferrer(NodeTranslator):
             c = Val(Value(), BOOL_DTYPE, v.size)
             return Fun(Tuple((c, v, v)), v)
         if node.id == "lift":
-            args = ValTupleVar(Iterator())
+            args = ValTupleVar.fresh(Iterator())
             dtype = Var.fresh()
             size = Var.fresh()
             stencil_ret = Val(Value(), dtype, size)
