@@ -202,7 +202,6 @@ class TypeInferrer(NodeTranslator):
             return Fun(args, ret)
 
         assert node.id not in ir.BUILTINS
-        # TODO: remove?
         return Var.fresh()
 
     def visit_BoolLiteral(self, node, *, constraints, symtypes):
