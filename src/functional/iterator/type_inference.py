@@ -216,6 +216,9 @@ class TypeInferrer(NodeTranslator):
     def visit_AxisLiteral(self, node, *, constraints, symtypes):
         return Val(Value(), AXIS_DTYPE, Scalar())
 
+    def visit_OffsetLiteral(self, node, *, constraints, symtypes):
+        return Var.fresh()
+
     def visit_Lambda(self, node, *, constraints, symtypes):
         ptypes = {p.id: Var.fresh() for p in node.params}
         ret = self.visit(node.expr, constraints=constraints, symtypes=symtypes | ptypes)
