@@ -59,17 +59,15 @@ def test_copy():
     assert lowered.expr == im.deref_("inp")
 
 
-@pytest.mark.skip(reason="Constant-to-field promotion not enabled yet.")
-@pytest.mark.skip(reason="Iterator IR does not allow arg-less lambdas yet.")
-def test_constant():
-    def constant():
-        return 5
+def test_scalar_arg():
+    def constant(some_num: int64):
+        return some_num
 
     # ast_passes
     parsed = FieldOperatorParser.apply_to_function(constant)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    assert lowered.expr == im.deref_(im.lift_(im.lambda__()(5)))
+    assert lowered.expr == im.deref_(im.lift_(im.lambda__()("some_num"))())
 
 
 def test_multicopy():
@@ -266,7 +264,13 @@ def test_add_scalar_literal_to_field():
     parsed = FieldOperatorParser.apply_to_function(scalar_plus_field)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.deref_(im.lift_(im.lambda__("a")(im.plus_(im.float_(4.0), im.deref_("a"))))("a"))
+    reference = im.deref_(
+        im.lift_(
+            im.lambda__("a")(
+                im.plus_(im.deref_(im.lift_(im.lambda__()(im.float_(4.0)))()), im.deref_("a"))
+            )
+        )("a")
+    )
 
     assert lowered.expr == reference
 
@@ -279,10 +283,20 @@ def test_add_scalar_literals():
     parsed = FieldOperatorParser.apply_to_function(scalar_plus_scalar)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.let("tmp", im.lift_(im.lambda__()(im.plus_(im.int_(1), im.int_(1))))())(
-        im.deref_(
-            im.lift_(im.lambda__("a", "tmp")(im.plus_(im.deref_("a"), im.deref_("tmp"))))(
-                "a", "tmp"
+    reference = im.deref_(
+        im.let(
+            "tmp__0",
+            im.lift_(
+                im.lambda__()(
+                    im.plus_(
+                        im.deref_(im.lift_(im.lambda__()(im.int_(1)))()),
+                        im.deref_(im.lift_(im.lambda__()(im.int_(1)))()),
+                    )
+                )
+            )(),
+        )(
+            im.lift_(im.lambda__("a", "tmp__0")(im.plus_(im.deref_("a"), im.deref_("tmp__0"))))(
+                "a", "tmp__0"
             )
         )
     )

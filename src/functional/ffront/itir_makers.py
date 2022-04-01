@@ -230,3 +230,11 @@ def shift_(offset, value=None):
         value = ensure_expr(value)
         args.append(value)
     return call_(call_("shift")(*args))
+
+
+def float_(value: float):
+    return itir.FloatLiteral(value=value)
+
+
+def int_(value: int):
+    return itir.IntLiteral(value=value)

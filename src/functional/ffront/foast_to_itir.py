@@ -17,6 +17,7 @@ from dataclasses import dataclass, field
 from typing import Optional, cast
 
 from eve import NodeTranslator
+from functional.ffront import common_types as ct
 from functional.ffront import field_operator_ast as foast
 from functional.ffront import itir_makers as im
 from functional.ffront.fbuiltins import FUN_BUILTIN_NAMES, float32, float64, int32, int64
@@ -93,6 +94,8 @@ class FieldOperatorLowering(NodeTranslator):
         return im.sym(node.id)
 
     def visit_Name(self, node: foast.Name, **kwargs) -> itir.SymRef:
+        if TypeInfo(node.type).is_scalar:
+            return im.lift_(im.lambda__()(im.ref(node.id)))()
         return im.ref(node.id)
 
     def _lift_lambda(self, node):
@@ -166,17 +169,20 @@ class FieldOperatorLowering(NodeTranslator):
     def _visit_neighbor_sum(self, node: foast.Call, **kwargs) -> itir.FunCall:
         return self._visit_reduce(node, **kwargs)
 
-    def _visit_float32(self, node: foast.Call, **kwargs) -> itir.FloatLiteral:
-        return itir.FloatLiteral(value=float32(node.value))
-
-    def _visit_float64(self, node: foast.Call, **kwargs) -> itir.FloatLiteral:
-        return itir.FloatLiteral(value=float64(node.value))
-
-    def _visit_int32(self, node: foast.Call, **kwargs) -> itir.IntLiteral:
-        return itir.FloatLiteral(value=int32(node.value))
-
-    def _visit_int64(self, node: foast.Call, **kwargs) -> itir.IntLiteral:
-        return itir.FloatLiteral(value=int64(node.value))
+    def visit_Constant(self, node: foast.Constant, **kwargs) -> itir.IntLiteral | itir.FloatLiteral:
+        result = None
+        match node.dtype.kind:
+            case ct.ScalarKind.FLOAT32:
+                result = im.float_(float32(node.value))
+            case ct.ScalarKind.FLOAT64:
+                result = im.float_(float64(node.value))
+            case ct.ScalarKind.INT32:
+                result = im.int_(int32(node.value))
+            case ct.ScalarKind.INT64:
+                result = im.int_(int64(node.value))
+        if not result:
+            raise FieldOperatorLoweringError(f"Unsupported scalar type: {node.dtype}")
+        return im.lift_(im.lambda__()(result))()
 
 
 @dataclass
