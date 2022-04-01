@@ -78,13 +78,13 @@ def offsets_match(
     return not conflicting
 
 
-def iteration_space_compatible(
+def extents_compatible(
     left: HorizontalExecutionLibraryNode,
     right: HorizontalExecutionLibraryNode,
     api_fields: Set[str],
 ):
 
-    if left.iteration_space == right.iteration_space:
+    if left.extent == right.extent:
         return True
 
     for conn_name in set(left.out_connectors) | set(right.out_connectors):
@@ -222,9 +222,7 @@ class GraphMerging(SingleStateTransformation):
         if len(protected_intermediate_names & output_names) > 0:
             return False
 
-        return offsets_match(left, right) and iteration_space_compatible(
-            left, right, self.api_fields
-        )
+        return offsets_match(left, right) and extents_compatible(left, right, self.api_fields)
 
     def _merge_source_locations(
         self, left: HorizontalExecutionLibraryNode, right: HorizontalExecutionLibraryNode
@@ -254,7 +252,7 @@ class GraphMerging(SingleStateTransformation):
                 body=left.as_oir().body + right.as_oir().body,
                 declarations=left.as_oir().declarations + right.as_oir().declarations,
             ),
-            iteration_space=left.iteration_space,
+            extent=left.extent,
             debuginfo=dinfo,
         )
         state.add_node(res)

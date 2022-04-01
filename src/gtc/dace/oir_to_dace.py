@@ -27,15 +27,10 @@ from dace.sdfg.graph import MultiConnectorEdge
 
 import eve
 import gtc.oir as oir
+from gt4py.definitions import Extent
 from gtc.common import LevelMarker, VariableKOffset, data_type_to_typestr
 from gtc.dace.nodes import HorizontalExecutionLibraryNode, VerticalLoopLibraryNode
-from gtc.dace.utils import (
-    CartesianIJIndexSpace,
-    IntervalMapping,
-    iteration_to_access_space,
-    nodes_extent_calculation,
-    oir_iteration_space_computation,
-)
+from gtc.dace.utils import IntervalMapping, nodes_extent_calculation
 from gtc.oir import FieldDecl, Interval, ScalarDecl, Stencil, Temporary
 from gtc.passes.oir_optimizations.utils import AccessCollector
 
@@ -92,20 +87,19 @@ class BaseOirSDFGBuilder(ABC):
 
         self._dynamic_k_fields = set(generate_access_nodes(nodes))
 
-    def _access_space_to_subset(self, name, access_space):
-        extent = self._extents[name]
-        origin = (extent[0][0], extent[1][0])
+    def _field_extent_to_subset(self, name, field_extent):
+        origin = (-self._extents[name][0][0], -self._extents[name][1][0])
         subsets = []
         if self._axes[name][0]:
             subsets.append(
                 "{start}:__I{end:+d}".format(
-                    start=origin[0] + access_space[0][0], end=origin[0] + access_space[0][1]
+                    start=origin[0] + field_extent[0][0], end=origin[0] + field_extent[0][1]
                 )
             )
         if self._axes[name][1]:
             subsets.append(
                 "{start}:__J{end:+d}".format(
-                    start=origin[1] + access_space[1][0], end=origin[1] + access_space[1][1]
+                    start=origin[1] + field_extent[1][0], end=origin[1] + field_extent[1][1]
                 )
             )
         return subsets
@@ -329,12 +323,12 @@ class BaseOirSDFGBuilder(ABC):
         decls = {decl.name: decl for decl in self._stencil.params + self._stencil.declarations}
         for node in self._state.nodes():
             if isinstance(node, dace.nodes.LibraryNode):
-                access_spaces_input, access_spaces_output = self.get_access_spaces(node)
+                input_extents, output_extents = self.get_field_extents(node)
                 k_subset_strs_input, k_subset_strs_output = self.get_k_subsets(node)
                 for edge in self._state.in_edges(node) + self._state.out_edges(node):
                     if edge.dst_conn is not None:
                         name = edge.src.data
-                        access_space = access_spaces_input[name]
+                        access_extent = input_extents[name]
                         subset_str_k = k_subset_strs_input.get(name, None)
                         dynamic = (
                             isinstance(node, HorizontalExecutionLibraryNode)
@@ -351,12 +345,12 @@ class BaseOirSDFGBuilder(ABC):
                         )
                     elif edge.src_conn is not None:
                         name = edge.dst.data
-                        access_space = access_spaces_output[name]
+                        access_extent = output_extents[name]
                         subset_str_k = k_subset_strs_output.get(name, None)
                         dynamic = False
                     else:
                         continue
-                    subset_strs = self._access_space_to_subset(name, access_space)
+                    subset_strs = self._field_extent_to_subset(name, access_extent)
                     if subset_str_k is not None:
                         if name in self._dynamic_k_fields and isinstance(
                             node, HorizontalExecutionLibraryNode
@@ -398,7 +392,7 @@ class BaseOirSDFGBuilder(ABC):
         pass
 
     @abstractmethod
-    def get_access_spaces(self, node):
+    def get_field_extents(self, node):
         pass
 
     @abstractmethod
@@ -504,29 +498,25 @@ class VerticalLoopSectionOirSDFGBuilder(BaseOirSDFGBuilder):
             node, [(interval, self._get_access_collection(node))]
         )
 
-    def get_access_spaces(self, node):
+    def get_field_extents(self, node):
         assert isinstance(node, HorizontalExecutionLibraryNode)
-        input_spaces = dict()
-        output_spaces = dict()
+        input_extents = dict()
+        output_extents = dict()
 
-        iteration_space = node.iteration_space
-        assert iteration_space is not None
+        block_extent: Extent = node.extent
+        assert block_extent is not None
         collection = self._get_access_collection(node)
 
         for acc in collection.read_accesses():
-            extended = iteration_to_access_space(
-                CartesianIJIndexSpace.from_iteration_space(iteration_space), acc
-            )
-            input_spaces.setdefault(acc.field, extended)
-            input_spaces[acc.field] |= extended
+            extent = acc.to_extent(block_extent) | Extent.zeros(2)
+            input_extents.setdefault(acc.field, extent)
+            input_extents[acc.field] |= extent
         for acc in collection.write_accesses():
-            extended = iteration_to_access_space(
-                CartesianIJIndexSpace.from_iteration_space(iteration_space), acc
-            )
-            output_spaces.setdefault(acc.field, extended)
-            output_spaces[acc.field] |= extended
+            extent = acc.to_extent(block_extent) | Extent.zeros(2)
+            output_extents.setdefault(acc.field, extent)
+            output_extents[acc.field] |= extent
 
-        return input_spaces, output_spaces
+        return input_extents, output_extents
 
 
 class StencilOirSDFGBuilder(BaseOirSDFGBuilder):
@@ -538,10 +528,10 @@ class StencilOirSDFGBuilder(BaseOirSDFGBuilder):
                 continue
             shape = []
             if self._axes[name][0]:
-                di = self._extents[name][0][1] + self._extents[name][0][0]
+                di = self._extents[name].frame_size[0]
                 shape.append(f"__I{di:+d}")
             if self._axes[name][1]:
-                dj = self._extents[name][1][1] + self._extents[name][1][0]
+                dj = self._extents[name].frame_size[1]
                 shape.append(f"__J{dj:+d}")
             if self._axes[name][2]:
                 shape.append(self.get_k_size(name))
@@ -666,32 +656,27 @@ class StencilOirSDFGBuilder(BaseOirSDFGBuilder):
             read_subsets[name] = f"{interval_start_str}:{interval_end_str}"
         return read_subsets, write_subsets
 
-    def get_access_spaces(self, node):
+    def get_field_extents(self, node):
         assert isinstance(node, VerticalLoopLibraryNode)
-        input_spaces = dict()
-        output_spaces = dict()
+        input_extents = dict()
+        output_extents = dict()
         for _, sdfg in node.sections:
             for n in sdfg.states()[0].nodes():
 
                 if not isinstance(n, HorizontalExecutionLibraryNode):
                     continue
-                iteration_space = n.iteration_space
-                assert iteration_space is not None
+                block_extent = n.extent
+                assert block_extent is not None
                 collection = self._get_access_collection(n)
                 for acc in collection.read_accesses():
-                    extended = iteration_to_access_space(
-                        CartesianIJIndexSpace.from_iteration_space(iteration_space), acc
-                    )
-                    input_spaces.setdefault(acc.field, extended)
-                    input_spaces[acc.field] |= extended
-
+                    extent = acc.to_extent(block_extent) | Extent.zeros(2)
+                    input_extents.setdefault(acc.field, extent)
+                    input_extents[acc.field] |= extent
                 for acc in collection.write_accesses():
-                    extended = iteration_to_access_space(
-                        CartesianIJIndexSpace.from_iteration_space(iteration_space), acc
-                    )
-                    output_spaces.setdefault(acc.field, extended)
-                    output_spaces[acc.field] |= extended
-        return input_spaces, output_spaces
+                    extent = acc.to_extent(block_extent) | Extent.zeros(2)
+                    output_extents.setdefault(acc.field, extent)
+                    output_extents[acc.field] |= extent
+        return input_extents, output_extents
 
     def _get_collection_from_sections(self, sections):
         res = []
@@ -718,13 +703,11 @@ class StencilOirSDFGBuilder(BaseOirSDFGBuilder):
 
 
 class OirSDFGBuilder(eve.NodeVisitor):
-    def visit_HorizontalExecution(
-        self, node: oir.HorizontalExecution, *, iteration_spaces, **kwargs
-    ):
+    def visit_HorizontalExecution(self, node: oir.HorizontalExecution, *, block_extents, **kwargs):
         return HorizontalExecutionLibraryNode(
             name=f"HorizontalExecution_{id(node)}",
             oir_node=node,
-            iteration_space=iteration_spaces[id(node)],
+            extent=block_extents[id(node)],
         )
 
     def visit_VerticalLoopSection(self, node: oir.VerticalLoopSection, **kwargs):
@@ -745,9 +728,11 @@ class OirSDFGBuilder(eve.NodeVisitor):
         )
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs):
-        iteration_spaces = oir_iteration_space_computation(node)
+        from gtc.passes.oir_optimizations.utils import compute_horizontal_block_extents
+
+        block_extents = compute_horizontal_block_extents(node)
         library_nodes = [
-            self.visit(vl, stencil=node, iteration_spaces=iteration_spaces, **kwargs)
+            self.visit(vl, stencil=node, block_extents=block_extents, **kwargs)
             for vl in node.vertical_loops
         ]
         return StencilOirSDFGBuilder.build(node.name, node, library_nodes)
