@@ -115,7 +115,6 @@ class VectorCast(common.Cast[Expr], Expr):
 
 class Broadcast(Expr):
     expr: Expr
-    dims: int = 3
     kind = common.ExprKind.FIELD
 
 
@@ -171,23 +170,6 @@ class NativeFuncCall(common.NativeFuncCall[Expr], Expr):
     _dtype_propagation = common.native_func_call_dtype_propagation(strict=True)
 
 
-class HorizontalMask(Expr):
-    """
-    Represents a convex portion of the horizontal iteration space.
-
-    Note that in npir the mask is relative to the horizontal execution bounds.
-    """
-
-    i: common.HorizontalInterval
-    j: common.HorizontalInterval
-    kind = common.ExprKind.FIELD
-    dtype = common.DataType.BOOL
-
-    @property
-    def intervals(self) -> Tuple[common.HorizontalInterval, common.HorizontalInterval]:
-        return (self.i, self.j)
-
-
 # --- Statements ---
 @eve.utils.noninstantiable
 class Stmt(eve.Node):
@@ -197,8 +179,7 @@ class Stmt(eve.Node):
 class VectorAssign(common.AssignStmt[VectorLValue, Expr], Stmt):
     left: VectorLValue
     right: Expr
-    mask: Optional[Expr] = None
-    horizontal_mask: Optional[HorizontalMask] = None
+    horizontal_mask: Optional[common.HorizontalMask] = None
 
     @validator("right")
     def right_is_field_kind(cls, right: Expr) -> Expr:
@@ -215,7 +196,6 @@ class While(common.While[Stmt, Expr], Stmt):
 
 # --- Control Flow ---
 class HorizontalBlock(common.LocNode, eve.SymbolTableTrait):
-    declarations: List[LocalScalarDecl]
     body: List[Stmt]
     extent: HorizontalExtent
 

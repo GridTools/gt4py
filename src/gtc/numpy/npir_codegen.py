@@ -55,12 +55,12 @@ def _slice_string(ch: str, offset: int, interval: Tuple[common.AxisBound, common
 def _make_slice_access(
     offset: Tuple[Optional[int], Optional[int], Union[str, Optional[int]]],
     is_serial: bool,
-    interval: Optional[npir.HorizontalMask] = None,
+    interval: Optional[common.HorizontalMask] = None,
 ) -> List[str]:
     axes: List[str] = []
 
     if interval is None:
-        interval = npir.HorizontalMask(
+        interval = common.HorizontalMask(
             i=common.HorizontalInterval.compute_domain(),
             j=common.HorizontalInterval.compute_domain(),
         )
@@ -201,7 +201,7 @@ class NpirCodegen(TemplatedGenerator):
         node: npir.LocalScalarAccess,
         *,
         is_serial: bool,
-        horizontal_mask: Optional[npir.HorizontalMask] = None,
+        horizontal_mask: Optional[common.HorizontalMask] = None,
         **kwargs: Any,
     ) -> Union[str, Collection[str]]:
         args = _make_slice_access((0, 0, 0), is_serial, horizontal_mask)
@@ -266,23 +266,7 @@ class NpirCodegen(TemplatedGenerator):
     ) -> Union[str, Collection[str]]:
         left = self.visit(node.left, horizontal_mask=node.horizontal_mask, **kwargs)
         right = self.visit(node.right, horizontal_mask=node.horizontal_mask, **kwargs)
-        if not node.mask:
-            return f"{left} = {right}"
-
-        mask = self.visit(node.mask, horizontal_mask=node.horizontal_mask, **kwargs)
-        if (
-            isinstance(node.left, npir.LocalScalarAccess)
-            and node.left.name not in ctx.locals_declared
-        ):
-            # Note: Have seen that LocalScalarAccess on LHS with dtype = None.
-            # Until that is solved can get the dtype from the symtable.
-            dtype = kwargs["symtable"][node.left.name].dtype
-            default_val = f"{self.visit(dtype, **kwargs)}()"
-            ctx.add_declared(node.left.name)
-        else:
-            default_val = left
-
-        return f"{left} = np.where({mask}, {right}, {default_val})"
+        return f"{left} = {right}"
 
     VectorArithmetic = FormatTemplate("({left} {op} {right})")
 
@@ -383,8 +367,6 @@ class NpirCodegen(TemplatedGenerator):
             # --- begin horizontal block --
             i, I = _di_ - {{ lower[0] }}, _dI_ + {{ upper[0] }}
             j, J = _dj_ - {{ lower[1] }}, _dJ_ + {{ upper[1] }}
-            {% for decl in declarations %}{{ decl }}
-            {% endfor %}
 
             {% for stmt in body %}{{ stmt }}
             {% endfor -%}
