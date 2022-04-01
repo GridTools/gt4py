@@ -5,7 +5,9 @@ from functional.iterator import ir
 from functional.iterator.runtime import CartesianAxis
 from functional.iterator.transforms.collect_shifts import CollectShifts
 from functional.iterator.transforms.common_type_deduction import CommonTypeDeduction
+from functional.iterator.transforms.eta_reduction import EtaReduction
 from functional.iterator.transforms.popup_tmps import PopupTmps
+from functional.iterator.transforms.prune_closure_inputs import PruneClosureInputs
 
 
 class CreateGlobalTmps(NodeTranslator):
@@ -96,11 +98,15 @@ class CreateGlobalTmps(NodeTranslator):
                 if output.id in {tmp.id for tmp in tmps}:
                     assert output.id not in tmp_domains
                     tmp_domains[output.id] = domain
-                closure = ir.StencilClosure(
-                    domain=domain,
-                    stencil=call.fun,
-                    output=output,
-                    inputs=[handle_arg(arg) for arg in call.args],
+                closure = EtaReduction().visit(
+                    PruneClosureInputs().visit(
+                        ir.StencilClosure(
+                            domain=domain,
+                            stencil=call.fun,
+                            output=output,
+                            inputs=[handle_arg(arg) for arg in call.args],
+                        )
+                    )
                 )
                 local_shifts: Dict[str, List[tuple]] = dict()
                 lambda_fun = closure.stencil
@@ -110,14 +116,6 @@ class CreateGlobalTmps(NodeTranslator):
                     and lambda_fun.fun.id == "scan"
                 ):
                     lambda_fun = lambda_fun.args[0]
-                elif (
-                    isinstance(lambda_fun, ir.Lambda)
-                    and isinstance(lambda_fun.expr, ir.FunCall)
-                    and isinstance(lambda_fun.expr.fun, ir.FunCall)
-                    and isinstance(lambda_fun.expr.fun.fun, ir.SymRef)
-                    and lambda_fun.expr.fun.fun.id == "scan"
-                ):
-                    lambda_fun = lambda_fun.expr.fun.args[0]
                 CollectShifts().visit(lambda_fun, shifts=local_shifts)
                 # TODO: fix
                 # TODO: input_map = {
