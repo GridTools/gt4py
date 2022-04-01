@@ -193,7 +193,7 @@ def test_tuple_get_in_lambda():
     )
     inferred = ti.infer(testee)
     assert inferred == expected
-    assert ti.pretty_str(inferred) == "(ItOrVal[(…, T₁, …)₂³]) → ItOrVal[T₁³]"
+    assert ti.pretty_str(inferred) == "(ItOrVal₀[(…, T₁, …)₂³]) → ItOrVal₀[T₁³]"
 
 
 def test_reduce():

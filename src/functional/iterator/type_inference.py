@@ -490,7 +490,8 @@ def pretty_str(x):  # noqa: C901
             return dtype_str
         if kind == Iterator():
             return "It[" + dtype_str + "]"
-        return "ItOrVal[" + dtype_str + "]"
+        assert isinstance(kind, Var)
+        return "ItOrVal" + subscript(kind.idx) + "[" + dtype_str + "]"
 
     if isinstance(x, Tuple):
         return "(" + ", ".join(pretty_str(e) for e in x.elems) + ")"
@@ -502,7 +503,7 @@ def pretty_str(x):  # noqa: C901
                 s += (pretty_str(e[i]) if i in e else "…") + ", "
         return "(" + s + "…)" + subscript(x.idx)
     if isinstance(x, PrefixTuple):
-        return "((" + pretty_str(x.prefix) + ",) + " + pretty_str(x.others) + ")"
+        return pretty_str(x.prefix) + ":" + pretty_str(x.others)
     if isinstance(x, Fun):
         return pretty_str(x.args) + " → " + pretty_str(x.ret)
     if isinstance(x, Val):
