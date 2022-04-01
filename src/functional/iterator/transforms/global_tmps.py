@@ -108,22 +108,25 @@ class CreateGlobalTmps(NodeTranslator):
                         )
                     )
                 )
+                closures.append(closure)
                 local_shifts: Dict[str, List[tuple]] = dict()
                 lambda_fun = closure.stencil
-                if (
+                if isinstance(lambda_fun, ir.SymRef):
+                    assert lambda_fun.id == "deref"
+                    continue
+                elif (
                     isinstance(lambda_fun, ir.FunCall)
                     and isinstance(lambda_fun.fun, ir.SymRef)
                     and lambda_fun.fun.id == "scan"
                 ):
                     lambda_fun = lambda_fun.args[0]
+                    params = lambda_fun.params[1:]
+                else:
+                    params = lambda_fun.params
                 CollectShifts().visit(lambda_fun, shifts=local_shifts)
-                # TODO: fix
-                # TODO: input_map = {
-                # TODO:     param.id: arg.id for param, arg in zip(lambda_fun.params, closure.inputs)
-                # TODO: }
-                # TODO: for k, v in local_shifts.items():
-                # TODO:     shifts.setdefault(input_map[k], []).extend(v)
-                closures.append(closure)
+                input_map = {param.id: arg.id for param, arg in zip(params, closure.inputs)}
+                for k, v in local_shifts.items():
+                    shifts.setdefault(input_map[k], []).extend(v)
 
         fencil = ir.FencilDefinition(
             id=node.id, params=node.params + tmps, closures=list(reversed(closures))
