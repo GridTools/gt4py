@@ -49,19 +49,19 @@ class GTCCudaExtGenerator(BackendCodegen):
         self.module_name = module_name
         self.backend = backend
 
-    def __call__(self, ir: gtir.Stencil) -> Dict[str, Dict[str, str]]:
-        ir = GtirPipeline(ir).full()
-        base_oir = GTIRToOIR().visit(ir)
+    def __call__(self, stencil_ir: gtir.Stencil) -> Dict[str, Dict[str, str]]:
+        stencil_ir = GtirPipeline(stencil_ir).full()
+        base_o_ir = GTIRToOIR().visit(stencil_ir)
         oir_pipeline = self.backend.builder.options.backend_opts.get(
             "oir_pipeline", DefaultPipeline(skip=[NoFieldAccessPruning])
         )
-        oir = oir_pipeline.run(base_oir)
-        oir = FillFlushToLocalKCaches().visit(oir)
-        cuir = OIRToCUIR().visit(oir)
-        cuir = kernel_fusion.FuseKernels().visit(cuir)
-        cuir = extent_analysis.CacheExtents().visit(cuir)
+        o_ir = oir_pipeline.run(base_o_ir)
+        o_ir = FillFlushToLocalKCaches().visit(o_ir)
+        cu_ir = OIRToCUIR().visit(o_ir)
+        cu_ir = kernel_fusion.FuseKernels().visit(cu_ir)
+        cu_ir = extent_analysis.CacheExtents().visit(cu_ir)
         format_source = self.backend.builder.options.format_source
-        implementation = cuir_codegen.CUIRCodegen.apply(cuir, format_source=format_source)
+        implementation = cuir_codegen.CUIRCodegen.apply(cu_ir, format_source=format_source)
         bindings = GTCCudaBindingsCodegen.apply(
             cuir, module_name=self.module_name, backend=self.backend, format_source=format_source
         )
@@ -152,7 +152,7 @@ class GTCCudaBackend(BaseGTBackend, CLIBackendMixin):
     USE_LEGACY_TOOLCHAIN = False
 
     def generate_extension(self, **kwargs: Any) -> Tuple[str, str]:
-        return self.make_extension(ir=self.builder.definition_ir, uses_cuda=True)
+        return self.make_extension(stencil_ir=self.builder.definition_ir, uses_cuda=True)
 
     def generate(self) -> Type["StencilObject"]:
         self.check_options(self.builder.options)

@@ -97,16 +97,16 @@ class GTCDaCeExtGenerator(BackendCodegen):
         self.module_name = module_name
         self.backend = backend
 
-    def __call__(self, ir: gtir.Stencil) -> Dict[str, Dict[str, str]]:
-        base_oir = GTIRToOIR().visit(ir)
+    def __call__(self, stencil_ir: gtir.Stencil) -> Dict[str, Dict[str, str]]:
+        base_oir = GTIRToOIR().visit(stencil_ir)
         oir_pipeline = self.backend.builder.options.backend_opts.get(
             "oir_pipeline",
             DefaultPipeline(skip=[MaskInlining]),
         )
-        oir = oir_pipeline.run(base_oir)
-        sdfg = OirSDFGBuilder().visit(oir)
+        o_ir = oir_pipeline.run(base_oir)
+        sdfg = OirSDFGBuilder().visit(o_ir)
 
-        sdfg = _expand_and_finalize_sdfg(ir, sdfg, self.backend.storage_info["layout_map"])
+        sdfg = _expand_and_finalize_sdfg(stencil_ir, sdfg, self.backend.storage_info["layout_map"])
 
         for tmp_sdfg in sdfg.all_sdfgs_recursive():
             tmp_sdfg.transformation_hist = []
@@ -120,10 +120,10 @@ class GTCDaCeExtGenerator(BackendCodegen):
         )
 
         sources: Dict[str, Dict[str, str]]
-        implementation = DaCeComputationCodegen.apply(ir, sdfg)
+        implementation = DaCeComputationCodegen.apply(stencil_ir, sdfg)
 
         bindings = DaCeBindingsCodegen.apply(
-            ir, sdfg, module_name=self.module_name, backend=self.backend
+            stencil_ir, sdfg, module_name=self.module_name, backend=self.backend
         )
 
         sources = {
@@ -369,7 +369,7 @@ class GTCDaceBackend(BaseGTBackend, CLIBackendMixin):
     USE_LEGACY_TOOLCHAIN = False
 
     def generate_extension(self) -> Tuple[str, str]:
-        return self.make_extension(ir=self.builder.gtir, uses_cuda=False)
+        return self.make_extension(stencil_ir=self.builder.gtir, uses_cuda=False)
 
     def generate(self) -> Type["StencilObject"]:
         self.check_options(self.builder.options)

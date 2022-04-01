@@ -2008,6 +2008,10 @@ class GTScriptFrontend(Frontend):
             cls.prepare_stencil_definition(definition, externals)
         translator = GTScriptParser(definition, externals=externals, options=options)
         definition_ir = translator.run()
+
+        # GTIR only supports LatLonGrids
+        if definition_ir.domain != gt_ir.Domain.LatLonGrid():
+            raise TypeError("GTIR does not support grids other than LatLong.")
         gtir_stencil = DefIRToGTIR.apply(definition_ir)
 
         if options.build_info is not None:

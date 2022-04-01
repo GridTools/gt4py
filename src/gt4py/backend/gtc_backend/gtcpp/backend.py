@@ -54,18 +54,21 @@ class GTCGTExtGenerator(BackendCodegen):
 
     def __call__(self, ir: gtir.Stencil) -> Dict[str, Dict[str, str]]:
         ir = GtirPipeline(ir).full()
-        base_oir = GTIRToOIR().visit(ir)
+        base_o_ir = GTIRToOIR().visit(ir)
         oir_pipeline = self.backend.builder.options.backend_opts.get(
             "oir_pipeline", DefaultPipeline()
         )
-        oir = oir_pipeline.run(base_oir)
-        gtcpp = OIRToGTCpp().visit(oir)
+        o_ir = oir_pipeline.run(base_o_ir)
+        gtcpp_ir = OIRToGTCpp().visit(o_ir)
         format_source = self.backend.builder.options.format_source
         implementation = gtcpp_codegen.GTCppCodegen.apply(
-            gtcpp, gt_backend_t=self.backend.GT_BACKEND_T, format_source=format_source
+            gtcpp_ir, gt_backend_t=self.backend.GT_BACKEND_T, format_source=format_source
         )
         bindings = GTCppBindingsCodegen.apply(
-            gtcpp, module_name=self.module_name, backend=self.backend, format_source=format_source
+            gtcpp_ir,
+            module_name=self.module_name,
+            backend=self.backend,
+            format_source=format_source,
         )
         bindings_ext = ".cu" if self.backend.GT_BACKEND_T == "gpu" else ".cpp"
         return {
@@ -141,7 +144,7 @@ class GTCGTBaseBackend(BaseGTBackend, CLIBackendMixin):
     USE_LEGACY_TOOLCHAIN = False
 
     def _generate_extension(self, uses_cuda: bool) -> Tuple[str, str]:
-        return self.make_extension(ir=self.builder.gtir, uses_cuda=uses_cuda)
+        return self.make_extension(stencil_ir=self.builder.gtir, uses_cuda=uses_cuda)
 
     def generate(self) -> Type["StencilObject"]:
         self.check_options(self.builder.options)
