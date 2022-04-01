@@ -194,3 +194,24 @@ def test_native_func_call() -> None:
     assert isinstance(
         OirToNpir().visit(NativeFuncCallFactory(args__0=FieldAccessFactory())), npir.NativeFuncCall
     )
+
+
+def test_local_scalar_to_npir_temp() -> None:
+    stencil = StencilFactory(
+        name="stencil",
+        vertical_loops__0__sections__0__horizontal_executions__0=HorizontalExecutionFactory(
+            body=[
+                AssignStmtFactory(
+                    left=ScalarAccessFactory(name="tmp"), right=FieldAccessFactory(name="a")
+                ),
+                AssignStmtFactory(
+                    left=FieldAccessFactory(name="b"), right=ScalarAccessFactory(name="tmp")
+                ),
+            ],
+            declarations=[LocalScalarFactory(name="tmp")],
+        ),
+    )
+    computation = OirToNpir().visit(stencil)
+
+    # Check that it lowered the local scalar to a temporary field in npir.
+    assert "tmp" in {decl.name for decl in computation.temp_decls}

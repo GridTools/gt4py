@@ -214,22 +214,6 @@ def test_temp_definition() -> None:
     assert result == "a = Field.empty((_dI_ + 3, _dJ_ + 4, _dK_), np.float32, (1, 2, 0))"
 
 
-def test_local_scalar_decl() -> None:
-    result = NpirCodegen().visit(
-        HorizontalBlockFactory(
-            declarations=[npir.LocalScalarDecl(name="scalar", dtype=common.DataType.FLOAT32)],
-            body=[],
-            extent=((-1, 1), (-1, 1)),
-        ),
-        ksize="_dK_",
-    )
-    print(result)
-    assert (
-        "scalar = Field.empty((_dI_ + 2, _dJ_ + 2, _dK_), np.float32, (1, 1, 0))"
-        in result.split("\n")
-    )
-
-
 def test_vector_arithmetic() -> None:
     result = NpirCodegen().visit(
         npir.VectorArithmetic(
@@ -262,25 +246,6 @@ def test_vector_unary_not() -> None:
         is_serial=False,
     )
     assert result == "(np.bitwise_not(mask[i:I, j:J, k:K]))"
-
-
-def test_assign_with_mask_local() -> None:
-    result = NpirCodegen().visit(
-        VectorAssignFactory(
-            left=LocalScalarAccessFactory(name="tmp"),
-            mask=FieldSliceFactory(name="mask1", dtype=common.DataType.BOOL),
-        ),
-        is_serial=False,
-        ctx=NpirCodegen.BlockContext(),
-        symtable={"tmp": ScalarDeclFactory(name="tmp", dtype=common.DataType.INT32)},
-    )
-    print(result)
-    assert (
-        re.match(
-            r"tmp\[i:I, j:J, k:K\] = np.where\(mask1\[i:I, j:J, k:K\], .*, np.int32\(\)\)", result
-        )
-        is not None
-    )
 
 
 def test_horizontal_block() -> None:

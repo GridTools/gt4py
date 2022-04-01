@@ -93,7 +93,7 @@ class VectorAssignFactory(factory.Factory):
 
     left = factory.SubFactory(FieldSliceFactory)
     right = factory.SubFactory(FieldSliceFactory)
-    mask: Optional[npir.Expr] = None
+    horizontal_mask: Optional[common.HorizontalMask] = None
 
 
 class VectorArithmeticFactory(factory.Factory):
@@ -109,7 +109,6 @@ class HorizontalBlockFactory(factory.Factory):
     class Meta:
         model = npir.HorizontalBlock
 
-    declarations: List[npir.ScalarDecl] = []
     body = factory.List([factory.SubFactory(VectorAssignFactory)])
     extent: npir.HorizontalExtent = ((0, 0), (0, 0))
 
