@@ -42,7 +42,7 @@ def test_deref():
     )
     inferred = ti.infer(testee)
     assert inferred == expected
-    assert ti.pretty_str(inferred) == "(It[T₀]¹) → T₀¹"
+    assert ti.pretty_str(inferred) == "(It[T₀¹]) → T₀¹"
 
 
 def test_deref_call():
@@ -108,6 +108,27 @@ def test_and():
 
 
 def test_lift():
+    testee = ir.SymRef(id="lift")
+    expected = ti.Fun(
+        ti.Tuple(
+            (
+                ti.Fun(
+                    ti.ValTuple(ti.Iterator(), ti.Var(0), ti.Var(1)),
+                    ti.Val(ti.Value(), ti.Var(2), ti.Var(1)),
+                ),
+            )
+        ),
+        ti.Fun(
+            ti.ValTuple(ti.Iterator(), ti.Var(0), ti.Var(1)),
+            ti.Val(ti.Iterator(), ti.Var(2), ti.Var(1)),
+        ),
+    )
+    inferred = ti.infer(testee)
+    assert inferred == expected
+    assert ti.pretty_str(inferred) == "((It[T¹], …)₀ → T₂¹) → (It[T¹], …)₀ → It[T₂¹]"
+
+
+def test_lift_application():
     testee = ir.FunCall(fun=ir.SymRef(id="lift"), args=[ir.SymRef(id="deref")])
     expected = ti.Fun(
         ti.Tuple((ti.Val(ti.Iterator(), ti.Var(0), ti.Var(1)),)),
@@ -115,7 +136,7 @@ def test_lift():
     )
     inferred = ti.infer(testee)
     assert inferred == expected
-    assert ti.pretty_str(inferred) == "(It[T₀]¹) → It[T₀]¹"
+    assert ti.pretty_str(inferred) == "(It[T₀¹]) → It[T₀¹]"
 
 
 def test_lifted_call():
@@ -126,7 +147,7 @@ def test_lifted_call():
     expected = ti.Val(ti.Iterator(), ti.Var(0), ti.Var(1))
     inferred = ti.infer(testee)
     assert inferred == expected
-    assert ti.pretty_str(inferred) == "It[T₀]¹"
+    assert ti.pretty_str(inferred) == "It[T₀¹]"
 
 
 def test_make_tuple():
@@ -159,6 +180,22 @@ def test_tuple_get():
     assert ti.pretty_str(inferred) == "float⁰"
 
 
+def test_tuple_get_in_lambda():
+    testee = ir.Lambda(
+        params=[ir.Sym(id="x")],
+        expr=ir.FunCall(
+            fun=ir.SymRef(id="tuple_get"), args=[ir.IntLiteral(value=1), ir.SymRef(id="x")]
+        ),
+    )
+    expected = ti.Fun(
+        ti.Tuple((ti.Val(ti.Var(0), ti.PartialTupleVar(2, ((1, ti.Var(1)),)), ti.Var(3)),)),
+        ti.Val(ti.Var(0), ti.Var(1), ti.Var(3)),
+    )
+    inferred = ti.infer(testee)
+    assert inferred == expected
+    assert ti.pretty_str(inferred) == "(ItOrVal₀[(…, T₁, …)₂³]) → ItOrVal₀[T₁³]"
+
+
 def test_reduce():
     reduction_f = ir.Lambda(
         params=[ir.Sym(id="acc"), ir.Sym(id="x"), ir.Sym(id="y")],
@@ -184,7 +221,7 @@ def test_reduce():
     )
     inferred = ti.infer(testee)
     assert inferred == expected
-    assert ti.pretty_str(inferred) == "(It[int]⁰, It[int]⁰) → int⁰"
+    assert ti.pretty_str(inferred) == "(It[int⁰], It[int⁰]) → int⁰"
 
 
 def test_scan():
@@ -219,7 +256,7 @@ def test_scan():
     )
     inferred = ti.infer(testee)
     assert inferred == expected
-    assert ti.pretty_str(inferred) == "(It[int]ᶜ, It[int]ᶜ) → intᶜ"
+    assert ti.pretty_str(inferred) == "(It[intᶜ], It[intᶜ]) → intᶜ"
 
 
 def test_shift():
@@ -230,7 +267,7 @@ def test_shift():
     )
     inferred = ti.infer(testee)
     assert inferred == expected
-    assert ti.pretty_str(inferred) == "(It[T₀]¹) → It[T₀]¹"
+    assert ti.pretty_str(inferred) == "(It[T₀¹]) → It[T₀¹]"
 
 
 def test_function_definition():
@@ -273,7 +310,7 @@ def test_stencil_closure():
     )
     inferred = ti.infer(testee)
     assert inferred == expected
-    assert ti.pretty_str(inferred) == "(It[T₀]ᶜ) ⇒ It[T₀]ᶜ"
+    assert ti.pretty_str(inferred) == "(It[T₀ᶜ]) ⇒ It[T₀ᶜ]"
 
 
 def test_fencil_definition():
@@ -319,7 +356,7 @@ def test_fencil_definition():
     )
     inferred = ti.infer(testee)
     assert inferred == expected
-    assert ti.pretty_str(inferred) == "f(intˢ, intˢ, intˢ, It[T₀]ᶜ, It[T₀]ᶜ, It[T₁]ᶜ, It[T₁]ᶜ)"
+    assert ti.pretty_str(inferred) == "f(intˢ, intˢ, intˢ, It[T₀ᶜ], It[T₀ᶜ], It[T₁ᶜ], It[T₁ᶜ])"
 
 
 def test_program():
@@ -426,5 +463,5 @@ def test_program():
     assert inferred == expected
     assert (
         ti.pretty_str(inferred)
-        == "{[f :: (T₀) → T₀, g :: (It[T₁]²) → T₁²], [foo(intˢ, intˢ, intˢ, It[T₃]ᶜ, It[T₃]ᶜ, It[T₄]ᶜ, It[T₄]ᶜ), bar(intˢ, intˢ, intˢ, It[T₅]ᶜ, It[T₅]ᶜ)]}"
+        == "{[f :: (T₀) → T₀, g :: (It[T₁²]) → T₁²], [foo(intˢ, intˢ, intˢ, It[T₃ᶜ], It[T₃ᶜ], It[T₄ᶜ], It[T₄ᶜ]), bar(intˢ, intˢ, intˢ, It[T₅ᶜ], It[T₅ᶜ])]}"
     )

@@ -78,7 +78,7 @@ class TypeInfo:
 
     """
 
-    type: SymbolType  # noqa: A003
+    type: Optional[SymbolType]  # noqa: A003
 
     @property
     def is_complete(self) -> bool:

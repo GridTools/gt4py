@@ -23,17 +23,18 @@ from functional.common import Field, GTTypeError
 from functional.ffront import common_types
 from functional.ffront import program_ast as past
 from functional.ffront.decorator import field_operator, program
+from functional.ffront.fbuiltins import FieldOffset
 from functional.ffront.func_to_past import ProgramParser
 from functional.ffront.past_passes.type_deduction import ProgramTypeError
 from functional.ffront.past_to_itir import ProgramLowering
 from functional.iterator import ir as itir
 from functional.iterator.embedded import np_as_located_field
-from functional.iterator.runtime import CartesianAxis, offset
+from functional.iterator.runtime import CartesianAxis
 
 
 float64 = float
 IDim = CartesianAxis("IDim")
-Ioff = offset("Ioff")
+Ioff = FieldOffset("Ioff", source=IDim, target=[IDim])
 
 
 # TODO(tehrengruber): Improve test structure. Identity needs to be decorated
@@ -144,7 +145,7 @@ def test_copy_parsing(copy_program_def):
                 kwargs={"out": P(past.Name, id="out_field")},
             )
         ],
-        location=P(past.SourceLocation, line=57, source=__file__),
+        location=P(past.SourceLocation, line=58, source=__file__),
     )
     assert pattern_node.match(past_node, raise_exception=True)
 
@@ -404,3 +405,26 @@ def test_copy_restricted_execution(copy_restrict_program_def):
     copy_restrict_program(in_field, out_field, offset_provider={})
 
     assert np.allclose(out_field_ref, out_field)
+
+
+def test_calling_fo_from_fo_execution(identity_def):
+    size = 10
+    in_field = np_as_located_field(IDim)(2 * np.ones((size)))
+    out_field = np_as_located_field(IDim)(np.zeros((size)))
+    out_field_ref = np_as_located_field(IDim)(2 * 2 * 2 * np.ones((size)))
+
+    @field_operator
+    def pow_two(field: Field[[IDim], "float64"]) -> Field[[IDim], "float64"]:
+        return field * field
+
+    @field_operator
+    def pow_three(field: Field[[IDim], "float64"]) -> Field[[IDim], "float64"]:
+        return field * pow_two(field)
+
+    @program
+    def fo_from_fo_program(in_field: Field[[IDim], "float64"], out_field: Field[[IDim], "float64"]):
+        pow_three(in_field, out=out_field)
+
+    fo_from_fo_program(in_field, out_field, offset_provider={})
+
+    assert np.allclose(out_field, out_field_ref)
