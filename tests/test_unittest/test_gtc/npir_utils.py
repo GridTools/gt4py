@@ -77,6 +77,7 @@ class LocalScalarAccessFactory(factory.Factory):
         model = npir.LocalScalarAccess
 
     name = identifier(npir.LocalScalarAccess)
+    dtype = common.DataType.FLOAT32
 
 
 class NativeFuncCallFactory(factory.Factory):
@@ -111,6 +112,7 @@ class HorizontalBlockFactory(factory.Factory):
 
     body = factory.List([factory.SubFactory(VectorAssignFactory)])
     extent: npir.HorizontalExtent = ((0, 0), (0, 0))
+    declarations: List[npir.LocalScalarDecl] = []
 
 
 class VerticalPassFactory(factory.Factory):

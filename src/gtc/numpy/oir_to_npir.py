@@ -15,7 +15,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import typing
-from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 from eve.concepts import BaseNode
@@ -30,30 +29,8 @@ from gtc.passes.oir_optimizations.utils import compute_extents
 from . import npir
 
 
-def _all_local_scalars_are_unique_type(stencil: oir.Stencil) -> bool:
-    all_declarations = utils.flatten_list(
-        stencil.iter_tree().if_isinstance(oir.HorizontalExecution).getattr("declarations").to_list()
-    )
-
-    name_to_dtype: Dict[str, common.DataType] = {}
-    for decl in all_declarations:
-        if decl.name in name_to_dtype:
-            if decl.dtype != name_to_dtype[decl.name]:
-                return False
-        else:
-            name_to_dtype[decl.name] = decl.dtype
-
-    return True
-
-
 class OirToNpir(NodeTranslator):
     """Lower from optimizable IR (OIR) to numpy IR (NPIR)."""
-
-    @dataclass
-    class LocalScalarTemp:
-        name: str
-        dtype: common.DataType
-        extent: Extent
 
     contexts = (SymbolTableTrait.symtable_merger,)
 
@@ -101,11 +78,9 @@ class OirToNpir(NodeTranslator):
     ) -> Union[npir.ParamAccess, npir.LocalScalarAccess]:
         assert node.kind == common.ExprKind.SCALAR
         if isinstance(symtable[node.name], oir.LocalScalar):
-            return npir.FieldSlice(
-                name=node.name, i_offset=0, j_offset=0, k_offset=0, dtype=node.dtype
-            )
+            return npir.LocalScalarAccess(name=node.name, dtype=symtable[node.name].dtype)
         else:
-            return npir.ParamAccess(name=node.name)
+            return npir.ParamAccess(name=node.name, dtype=symtable[node.name].dtype)
 
     def visit_CartesianOffset(
         self, node: common.CartesianOffset, **kwargs: Any
@@ -225,7 +200,6 @@ class OirToNpir(NodeTranslator):
         self,
         node: oir.HorizontalExecution,
         *,
-        local_scalar_temps: Dict[str, "OirToNpir.LocalScalarTemp"],
         block_extents: Optional[Dict[int, Extent]] = None,
         **kwargs: Any,
     ) -> npir.HorizontalBlock:
@@ -234,15 +208,10 @@ class OirToNpir(NodeTranslator):
         else:
             extent = ((0, 0), (0, 0))
 
-        for decl in node.declarations:
-            if decl.name not in local_scalar_temps:
-                local_scalar_temps[decl.name] = self.LocalScalarTemp(
-                    name=decl.name, dtype=decl.dtype, extent=extent
-                )
-            else:
-                local_scalar_temps[decl.name].extent |= extent
         stmts = utils.flatten_list(self.visit(node.body, extent=extent, **kwargs))
-        return npir.HorizontalBlock(body=stmts, extent=extent)
+        return npir.HorizontalBlock(
+            body=stmts, extent=extent, declarations=self.visit(node.declarations, **kwargs)
+        )
 
     def visit_VerticalLoopSection(
         self, node: oir.VerticalLoopSection, *, loop_order: common.LoopOrder, **kwargs: Any
@@ -258,11 +227,6 @@ class OirToNpir(NodeTranslator):
         return self.visit(node.sections, loop_order=node.loop_order, **kwargs)
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> npir.Computation:
-        if not _all_local_scalars_are_unique_type(node):
-            raise TypeError(
-                "Local scalars exist with different types and same name. "
-                "The gtc:numpy backend currently assumes this is not the case."
-            )
         field_extents, block_extents = compute_extents(node)
 
         arguments = [decl.name for decl in node.params]
@@ -278,32 +242,18 @@ class OirToNpir(NodeTranslator):
             self.visit(decl, field_extents=field_extents, **kwargs) for decl in node.declarations
         ]
 
-        local_scalar_temps: Dict[str, "OirToNpir.LocalScalarTemp"] = {}
-
         vertical_passes = utils.flatten_list(
             self.visit(
                 node.vertical_loops,
                 block_extents=block_extents,
-                local_scalar_temps=local_scalar_temps,
                 **kwargs,
             )
         )
-
-        # Convert all local scalars to temporaries
-        temps_from_local_scalars = [
-            npir.TemporaryDecl(
-                name=d.name,
-                offset=(max(-d.extent[0][0], 0), max(-d.extent[1][0], 0)),
-                padding=(d.extent[0][1] - d.extent[0][0], d.extent[1][1] - d.extent[1][0]),
-                dtype=d.dtype,
-            )
-            for d in local_scalar_temps.values()
-        ]
 
         return npir.Computation(
             arguments=arguments,
             api_field_decls=api_field_decls,
             param_decls=param_decls,
-            temp_decls=temp_decls + temps_from_local_scalars,
+            temp_decls=temp_decls,
             vertical_passes=vertical_passes,
         )

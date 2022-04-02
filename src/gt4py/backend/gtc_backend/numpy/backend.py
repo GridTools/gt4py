@@ -28,6 +28,7 @@ from gtc.gtir_to_oir import GTIRToOIR
 from gtc.numpy import npir
 from gtc.numpy.npir_codegen import NpirCodegen
 from gtc.numpy.oir_to_npir import OirToNpir
+from gtc.numpy.scalars_to_temps import ScalarsToTemporaries
 from gtc.passes.oir_optimizations.caches import (
     IJCacheDetection,
     KCacheDetection,
@@ -143,7 +144,9 @@ class GTCNumpyBackend(BaseBackend, CLIBackendMixin):
             ),
         )
         oir = oir_pipeline.run(base_oir)
-        return OirToNpir().visit(oir)
+        base_npir = OirToNpir().visit(oir)
+        npir = ScalarsToTemporaries().visit(base_npir)
+        return npir
 
     @property
     def npir(self) -> npir.Computation:

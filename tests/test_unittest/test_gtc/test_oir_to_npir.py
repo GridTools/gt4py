@@ -88,15 +88,15 @@ def test_horizontal_execution_to_vector_assigns() -> None:
 
 def test_mask_stmt_to_assigns() -> None:
     mask_stmt = MaskStmtFactory(body=[AssignStmtFactory()])
-    assign_stmts = OirToNpir().visit(mask_stmt, extent=Extent.zeros(ndims=2), local_assigns={})
-    assert isinstance(assign_stmts[0].mask, npir.FieldSlice)
+    assign_stmts = OirToNpir().visit(mask_stmt, extent=Extent.zeros(ndims=2))
+    assert isinstance(assign_stmts[0].right.cond, npir.FieldSlice)
     assert len(assign_stmts) == 1
 
 
 def test_mask_propagation() -> None:
     mask_stmt = MaskStmtFactory()
-    assign_stmts = OirToNpir().visit(mask_stmt, extent=Extent.zeros(ndims=2), local_assigns={})
-    assert assign_stmts[0].mask == OirToNpir().visit(mask_stmt.mask)
+    assign_stmts = OirToNpir().visit(mask_stmt, extent=Extent.zeros(ndims=2))
+    assert assign_stmts[0].right.cond == OirToNpir().visit(mask_stmt.mask)
 
 
 def make_block_and_transform(**kwargs) -> npir.HorizontalBlock:
@@ -194,24 +194,3 @@ def test_native_func_call() -> None:
     assert isinstance(
         OirToNpir().visit(NativeFuncCallFactory(args__0=FieldAccessFactory())), npir.NativeFuncCall
     )
-
-
-def test_local_scalar_to_npir_temp() -> None:
-    stencil = StencilFactory(
-        name="stencil",
-        vertical_loops__0__sections__0__horizontal_executions__0=HorizontalExecutionFactory(
-            body=[
-                AssignStmtFactory(
-                    left=ScalarAccessFactory(name="tmp"), right=FieldAccessFactory(name="a")
-                ),
-                AssignStmtFactory(
-                    left=FieldAccessFactory(name="b"), right=ScalarAccessFactory(name="tmp")
-                ),
-            ],
-            declarations=[LocalScalarFactory(name="tmp")],
-        ),
-    )
-    computation = OirToNpir().visit(stencil)
-
-    # Check that it lowered the local scalar to a temporary field in npir.
-    assert "tmp" in {decl.name for decl in computation.temp_decls}

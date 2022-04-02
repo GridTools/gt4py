@@ -198,6 +198,7 @@ class While(common.While[Stmt, Expr], Stmt):
 class HorizontalBlock(common.LocNode, eve.SymbolTableTrait):
     body: List[Stmt]
     extent: HorizontalExtent
+    declarations: List[LocalScalarDecl]
 
 
 class VerticalPass(common.LocNode):
