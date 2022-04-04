@@ -18,6 +18,7 @@ from typing import List, Optional, Tuple, Union, cast
 
 import factory
 
+from gt4py.definitions import Extent
 from gtc import common
 from gtc.numpy import npir
 
@@ -31,7 +32,7 @@ class FieldDeclFactory(factory.Factory):
     name = identifier(npir.FieldDecl)
     dimensions = (True, True, True)
     data_dims: Tuple[int] = cast(Tuple[int], tuple())
-    extent: npir.HorizontalExtent = ((0, 0), (0, 0))
+    extent: Extent = Extent.zeros(ndims=2)
     dtype = common.DataType.FLOAT32
 
 
@@ -111,7 +112,7 @@ class HorizontalBlockFactory(factory.Factory):
         model = npir.HorizontalBlock
 
     body = factory.List([factory.SubFactory(VectorAssignFactory)])
-    extent: npir.HorizontalExtent = ((0, 0), (0, 0))
+    extent: Extent = Extent.zeros(ndims=2)
     declarations: List[npir.LocalScalarDecl] = []
 
 

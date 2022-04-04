@@ -14,7 +14,6 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import typing
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 from eve.concepts import BaseNode
@@ -38,7 +37,7 @@ class OirToNpir(NodeTranslator):
     def visit_FieldDecl(
         self, node: oir.FieldDecl, *, field_extents: Dict[str, Extent], **kwargs: Any
     ) -> npir.FieldDecl:
-        extent = typing.cast(npir.HorizontalExtent, field_extents.get(node.name, ((0, 0), (0, 0))))
+        extent = field_extents.get(node.name, Extent.zeros(ndims=2))
         return npir.FieldDecl(
             name=node.name,
             dtype=node.dtype,
@@ -206,7 +205,7 @@ class OirToNpir(NodeTranslator):
         if block_extents:
             extent = block_extents[id(node)]
         else:
-            extent = ((0, 0), (0, 0))
+            extent = Extent.zeros(ndims=2)
 
         stmts = utils.flatten_list(self.visit(node.body, extent=extent, **kwargs))
         return npir.HorizontalBlock(
