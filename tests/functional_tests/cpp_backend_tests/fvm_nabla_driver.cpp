@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
 #include <iostream>
 
-#include "build/generated_fvm_nabla.hpp" // TODO
+#include GENERATED_FILE
 #include <gridtools/common/integral_constant.hpp>
 #include <gridtools/fn/backend2/naive.hpp>
 #include <gridtools/sid/concept.hpp>
@@ -9,7 +9,6 @@
 
 #include "simple_mesh.hpp"
 #include <fn_select.hpp>
-// #include <test_environment.hpp>
 
 namespace {
 using namespace gridtools;

@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
 #include <iostream>
 
-#include "build/generated_anton_lap.hpp" // TODO
+#include GENERATED_FILE
 #include <gridtools/common/integral_constant.hpp>
 #include <gridtools/fn/backend2/naive.hpp>
 #include <gridtools/sid/sid_shift_origin.hpp>

@@ -26,15 +26,14 @@ FetchContent_MakeAvailable(GridTools)
 
 function(generate_computation)
     set(options)
-    set(oneValueArgs NAME SRC_FILE)
+    set(oneValueArgs NAME SRC_FILE GENERATED_FILENAME)
     set(multiValueArgs)
     cmake_parse_arguments(ARG "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
 
-    set(STENCIL_IMPL_SOURCE ${CMAKE_CURRENT_BINARY_DIR}/generated_${ARG_NAME}.hpp)
-    add_custom_command(OUTPUT ${STENCIL_IMPL_SOURCE}
-        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/${ARG_SRC_FILE} ${STENCIL_IMPL_SOURCE} 
+    add_custom_command(OUTPUT ${ARG_GENERATED_FILENAME}
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/${ARG_SRC_FILE} ${ARG_GENERATED_FILENAME} 
         DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/${ARG_INPUT})
-    add_custom_target(generated_${ARG_NAME} DEPENDS ${STENCIL_IMPL_SOURCE})
+    add_custom_target(generated_${ARG_NAME} DEPENDS ${ARG_GENERATED_FILENAME})
 endfunction()
     
 add_library(regression_main ${gridtools_SOURCE_DIR}/tests/src/regression_main.cpp)
@@ -47,10 +46,12 @@ function(add_fn_codegen_test)
     set(multiValueArgs)
     cmake_parse_arguments(ARG "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
     
-    generate_computation(NAME ${ARG_NAME} SRC_FILE ${ARG_SRC_FILE})
+    set(STENCIL_IMPL_SOURCE ${CMAKE_CURRENT_BINARY_DIR}/generated_${ARG_NAME}.hpp)
+    generate_computation(NAME ${ARG_NAME} SRC_FILE ${ARG_SRC_FILE} GENERATED_FILENAME ${STENCIL_IMPL_SOURCE})
     add_executable(${ARG_NAME} ${ARG_DRIVER_FILE})
     target_link_libraries(${ARG_NAME} fn_${BACKEND} regression_main)
     target_compile_definitions(${ARG_NAME} PRIVATE GT_FN_${backend_upper_case})
+    target_compile_definitions(${ARG_NAME} PRIVATE GENERATED_FILE=\"${STENCIL_IMPL_SOURCE}\")
     if(is_gpu)
         gridtools_setup_target(${ARG_NAME} CUDA_ARCH sm_75) #TODO
     endif()

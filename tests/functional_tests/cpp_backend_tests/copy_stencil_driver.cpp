@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 
-#include "build/generated_copy_stencil.hpp" // TODO
+#include GENERATED_FILE
 
 #include <fn_select.hpp>
 #include <gridtools/fn/backend2/naive.hpp>
