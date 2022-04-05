@@ -18,7 +18,8 @@ import ast
 import collections
 import copy
 
-from functional.ffront import common_types, fbuiltins
+from functional.ffront import common_types as ct
+from functional.ffront import fbuiltins
 from functional.ffront import field_operator_ast as foast
 from functional.ffront import symbol_makers
 from functional.ffront.ast_passes import (
@@ -29,6 +30,7 @@ from functional.ffront.ast_passes import (
 )
 from functional.ffront.dialect_parser import DialectParser, DialectSyntaxError
 from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduction
+from functional.ffront.type_info import TypeInfo
 
 
 class FieldOperatorSyntaxError(DialectSyntaxError):
@@ -93,7 +95,7 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
             foast.Symbol(
                 id=name,
                 type=symbol_makers.make_symbol_type_from_value(val),
-                namespace=common_types.Namespace.CLOSURE,
+                namespace=ct.Namespace.CLOSURE,
                 location=self._make_loc(node),
             )
             for name, val in vars_.items()
@@ -133,7 +135,7 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
                         type=symbol_makers.make_symbol_type_from_value(
                             self.externals_defs[alias.name]
                         ),
-                        namespace=common_types.Namespace.EXTERNAL,
+                        namespace=ct.Namespace.EXTERNAL,
                         location=self._make_loc(node),
                     )
                 )
@@ -147,7 +149,7 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
         if (annotation := self.closure_refs.annotations.get(node.arg, None)) is None:
             raise self._make_syntax_error(node, message="Untyped parameters not allowed!")
         new_type = symbol_makers.make_symbol_type_from_typing(annotation)
-        if not isinstance(new_type, common_types.DataType):
+        if not isinstance(new_type, ct.DataType):
             raise self._make_syntax_error(
                 node, message="Only arguments of type DataType are allowed."
             )
@@ -160,14 +162,16 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
         if not isinstance(target, ast.Name):
             raise self._make_syntax_error(node, message="Can only assign to names!")
         new_value = self.visit(node.value)
-        constraint_type = common_types.FieldType
+        constraint_type = ct.DataType
         if isinstance(new_value, foast.TupleExpr):
-            constraint_type = common_types.TupleType
+            constraint_type = ct.TupleType
+        if TypeInfo(new_value.type).is_scalar:
+            constraint_type = ct.ScalarType
         return foast.Assign(
             target=foast.FieldSymbol(
                 id=target.id,
                 location=self._make_loc(target),
-                type=common_types.DeferredSymbolType(constraint=constraint_type),
+                type=ct.DeferredSymbolType(constraint=constraint_type),
             ),
             value=new_value,
             location=self._make_loc(node),
@@ -188,10 +192,10 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
                 annotation, global_ns=global_ns, local_ns=local_ns
             )
         else:
-            target_type = common_types.DeferredSymbolType()
+            target_type = ct.DeferredSymbolType()
 
         return foast.Assign(
-            target=foast.Symbol[common_types.FieldType](
+            target=foast.Symbol[ct.FieldType](
                 id=node.target.id,
                 location=self._make_loc(node.target),
                 type=target_type,
@@ -346,7 +350,7 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
     def visit_Eq(self, node: ast.Eq, **kwargs) -> foast.CompareOperator:
         return foast.CompareOperator.EQ
 
-    def visit_Call(self, node: ast.Call, **kwargs) -> foast.Call | foast.Constant:
+    def visit_Call(self, node: ast.Call, **kwargs) -> foast.Call:
         new_func = self.visit(node.func)
         if not isinstance(new_func, foast.Name):
             raise self._make_syntax_error(
@@ -366,24 +370,21 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
         for keyword in node.keywords:
             args.append(keyword.value)
 
-        print(new_func.id)
-
-        if (
-            new_func.id in fbuiltins.FUN_BUILTIN_NAMES
-            and new_func.id.replace("_", "") in fbuiltins.TYPE_BUILTIN_NAMES
-        ):
-            dtype = common_types.ScalarType(
-                kind=getattr(common_types.ScalarKind, new_func.id.replace("_", "").upper())
-            )
-            return foast.Constant(
-                value=str(node.args[0].value),
-                dtype=dtype,
-                location=self._make_loc(node),
-                type=common_types.FieldType(dims=[], dtype=dtype),
-            )
-
         return foast.Call(
             func=new_func,
             args=[self.visit(arg, **kwargs) for arg in args],
             location=self._make_loc(node),
         )
+
+    def visit_Constant(self, node: ast.Constant, **kwargs) -> foast.Constant:
+        dtype = None
+        match node.value:
+            case int():
+                dtype = ct.ScalarType(kind=ct.ScalarKind.INT64)
+            case float():
+                dtype = ct.ScalarType(kind=ct.ScalarKind.FLOAT64)
+            case bool():
+                dtype = ct.ScalarType(kind=ct.ScalarKind.BOOL)
+            case str():
+                dtype = ct.ScalarType(kind=ct.ScalarKind.STRING)
+        return foast.Constant(value=str(node.value), dtype=dtype, location=self._make_loc(node))

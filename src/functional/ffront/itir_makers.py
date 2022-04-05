@@ -238,3 +238,7 @@ def float_(value: float):
 
 def int_(value: int):
     return itir.IntLiteral(value=value)
+
+
+def bool_(value: bool):
+    return itir.BoolLiteral(value=value)

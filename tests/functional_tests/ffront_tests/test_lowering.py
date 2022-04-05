@@ -60,14 +60,18 @@ def test_copy():
 
 
 def test_scalar_arg():
-    def constant(some_num: int64):
-        return some_num
+    def constant_arg(bar: Field[..., int64], alpha: int64) -> Field[..., int64]:
+        return alpha * bar
 
     # ast_passes
-    parsed = FieldOperatorParser.apply_to_function(constant)
+    parsed = FieldOperatorParser.apply_to_function(constant_arg)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    assert lowered.expr == im.deref_(im.lift_(im.lambda__()("some_num"))())
+    reference = im.deref_(
+        im.lift_(im.lambda__("bar")(im.multiplies_("alpha", im.deref_("bar"))))("bar")
+    )
+
+    assert lowered.expr == reference
 
 
 def test_multicopy():
@@ -259,18 +263,12 @@ def test_binary_plus():
 
 def test_add_scalar_literal_to_field():
     def scalar_plus_field(a: Field[..., "float64"]) -> Field[..., "float64"]:
-        return float64_("4.0") + a
+        return 2.0 + a
 
     parsed = FieldOperatorParser.apply_to_function(scalar_plus_field)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.deref_(
-        im.lift_(
-            im.lambda__("a")(
-                im.plus_(im.deref_(im.lift_(im.lambda__()(im.float_(4.0)))()), im.deref_("a"))
-            )
-        )("a")
-    )
+    reference = im.deref_(im.lift_(im.lambda__("a")(im.plus_(im.float_(2.0), im.deref_("a"))))("a"))
 
     assert lowered.expr == reference
 
@@ -286,20 +284,15 @@ def test_add_scalar_literals():
     reference = im.deref_(
         im.let(
             "tmp__0",
-            im.lift_(
-                im.lambda__()(
-                    im.plus_(
-                        im.deref_(im.lift_(im.lambda__()(im.int_(1)))()),
-                        im.deref_(im.lift_(im.lambda__()(im.int_(1)))()),
-                    )
-                )
-            )(),
-        )(
-            im.lift_(im.lambda__("a", "tmp__0")(im.plus_(im.deref_("a"), im.deref_("tmp__0"))))(
-                "a", "tmp__0"
-            )
-        )
+            im.plus_(
+                im.int_(1),
+                im.int_(1),
+            ),
+        )(im.lift_(im.lambda__("a")(im.plus_(im.deref_("a"), "tmp__0")))("a"))
     )
+
+    debug_itir(lowered.expr)
+    debug_itir(reference)
 
     assert lowered.expr == reference
 

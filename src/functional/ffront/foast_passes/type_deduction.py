@@ -43,7 +43,7 @@ def are_broadcast_compatible(left: TypeInfo, right: TypeInfo) -> bool:
         return left.type.dims == right.type.dims or not all([left.type.dims, right.type.dims])
     elif left.is_field_type and right.is_scalar:
         return left.type.dtype == right.type
-    elif left.is_scalar and left.is_field_type:
+    elif left.is_scalar and right.is_field_type:
         return left.type == right.type.dtype
     elif left.is_scalar and right.is_scalar:
         return left.type == right.type
@@ -126,6 +126,7 @@ class FieldOperatorTypeDeduction(NodeTranslator):
         if not is_complete_symbol_type(node.value.type):
             new_value = self.visit(node.value, **kwargs)
         new_target = self.visit(node.target, refine_type=new_value.type, **kwargs)
+        print(new_target.type)
         return foast.Assign(target=new_target, value=new_value, location=node.location)
 
     def visit_Symbol(
@@ -300,7 +301,10 @@ class FieldOperatorTypeDeduction(NodeTranslator):
             new_type = ct.FieldType(dims=new_dims, dtype=new_func.type.dtype)
             return foast.Call(func=new_func, args=new_args, location=node.location, type=new_type)
         return foast.Call(
-            func=new_func, args=self.visit(node.args, **kwargs), location=node.location
+            func=new_func,
+            args=self.visit(node.args, **kwargs),
+            location=node.location,
+            type=new_func.type.returns,
         )
 
 

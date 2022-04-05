@@ -13,7 +13,7 @@ from functional.ffront.common_types import (
 )
 
 
-def is_complete_symbol_type(sym_type: SymbolType) -> TypeGuard[SymbolType]:
+def is_complete_symbol_type(sym_type: Optional[SymbolType]) -> TypeGuard[SymbolType]:
     """Figure out if the foast type is completely deduced."""
     match sym_type:
         case None:
@@ -100,6 +100,10 @@ class TypeInfo:
     @property
     def is_field_type(self) -> bool:
         return issubclass(self.constraint, FieldType) if self.constraint else False
+
+    @property
+    def is_scalar_field(self) -> bool:
+        return getattr(self.type, "dims", None) == []
 
     @property
     def is_scalar(self) -> bool:

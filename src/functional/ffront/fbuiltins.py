@@ -43,14 +43,14 @@ class ConstantConstructor(BuiltInFunction):
     def __init__(self, constructor):
         super().__init__(
             ct.FunctionType(
-                args=[ct.DeferredSymbolType(constraint=None)],
+                args=[ct.DeferredSymbolType(constraint=ct.ScalarType)],
                 kwargs={},
-                returns=ct.DeferredSymbolType(constraint=ct.FieldType),
+                returns=ct.ScalarType(kind=getattr(ct.ScalarKind, constructor.__name__.upper())),
             )
         )
         self.constructor = constructor
 
-    def __call__(self, value: str, *args, **kwargs):
+    def __call__(self, value: str, *args, **kwargs):  # type: ignore [override]
         return self.constructor(value)
 
     @property
