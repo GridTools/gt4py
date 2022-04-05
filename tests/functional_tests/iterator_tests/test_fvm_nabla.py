@@ -138,6 +138,8 @@ def test_compute_zavgS(backend, use_tmps):
         pp,
         S_MXX,
         offset_provider={"E2V": e2v},
+        backend=backend,
+        use_tmps=use_tmps,
     )
 
     if validate:
@@ -150,6 +152,8 @@ def test_compute_zavgS(backend, use_tmps):
         pp,
         S_MYY,
         offset_provider={"E2V": e2v},
+        backend=backend,
+        use_tmps=use_tmps,
     )
     if validate:
         assert_close(-1000788897.3202186, min(zavgS))
@@ -190,7 +194,15 @@ def test_compute_zavgS2(backend, use_tmps):
 
     e2v = NeighborTableOffsetProvider(AtlasTable(setup.edges2node_connectivity), Edge, Vertex, 2)
 
-    compute_zavgS2_fencil(setup.edges_size, zavgS, pp, S, offset_provider={"E2V": e2v})
+    compute_zavgS2_fencil(
+        setup.edges_size,
+        zavgS,
+        pp,
+        S,
+        offset_provider={"E2V": e2v},
+        backend=backend,
+        use_tmps=use_tmps,
+    )
 
     if validate:
         assert_close(-199755464.25741270, min(zavgS[0]))
