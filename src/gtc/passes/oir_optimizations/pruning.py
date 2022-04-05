@@ -23,6 +23,15 @@ from gtc.passes.horizontal_masks import mask_overlap_with_extent
 from gtc.passes.oir_optimizations.utils import compute_horizontal_block_extents
 
 
+def prune_unused_parameters(node: oir.Stencil) -> oir.Stencil:
+    """Remove unused parameters from the oir.Stencil."""
+    used_variables = (
+        node.iter_tree().if_isinstance(oir.FieldAccess, oir.ScalarAccess).getattr("name").to_list()
+    )
+    used_params = list(filter(lambda param: param.name in used_variables, node.params))
+    return node.copy(update={"params": used_params})
+
+
 class NoFieldAccessPruning(NodeTranslator):
     def visit_HorizontalExecution(self, node: oir.HorizontalExecution) -> Any:
         try:

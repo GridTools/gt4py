@@ -135,6 +135,14 @@ class FieldDeclFactory(factory.Factory):
     dimensions = (True, True, True)
 
 
+class ScalarDeclFactory(factory.Factory):
+    class Meta:
+        model = oir.ScalarDecl
+
+    name = identifier(oir.ScalarDecl)
+    dtype = common.DataType.FLOAT32
+
+
 class HorizontalExecutionFactory(factory.Factory):
     class Meta:
         model = oir.HorizontalExecution

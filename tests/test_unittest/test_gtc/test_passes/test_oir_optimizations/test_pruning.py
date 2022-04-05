@@ -15,18 +15,58 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from gtc.common import HorizontalInterval, HorizontalMask, LevelMarker
-from gtc.passes.oir_optimizations.pruning import NoFieldAccessPruning, UnreachableStmtPruning
+from gtc.passes.oir_optimizations.pruning import (
+    NoFieldAccessPruning,
+    UnreachableStmtPruning,
+    prune_unused_parameters,
+)
 
 from ...oir_utils import (
     AssignStmtFactory,
+    FieldDeclFactory,
     HorizontalExecutionFactory,
     HorizontalRestrictionFactory,
     LiteralFactory,
     LocalScalarFactory,
     ScalarAccessFactory,
+    ScalarDeclFactory,
     StencilFactory,
     VerticalLoopFactory,
 )
+
+
+def test_all_parameters_used():
+    field_param = FieldDeclFactory()
+    scalar_param = ScalarDeclFactory()
+    testee = StencilFactory(
+        params=[field_param, scalar_param],
+        vertical_loops__0__sections__0__horizontal_executions__0__body=[
+            AssignStmtFactory(left__name=field_param.name, right__name=scalar_param.name)
+        ],
+    )
+    expected_params = [field_param, scalar_param]
+
+    result = prune_unused_parameters(testee)
+
+    assert expected_params == result.params
+
+
+def test_unused_are_removed():
+    field_param = FieldDeclFactory()
+    unused_field_param = FieldDeclFactory()
+    scalar_param = ScalarDeclFactory()
+    unused_scalar_param = ScalarDeclFactory()
+    testee = StencilFactory(
+        params=[field_param, unused_field_param, scalar_param, unused_scalar_param],
+        vertical_loops__0__sections__0__horizontal_executions__0__body=[
+            AssignStmtFactory(left__name=field_param.name, right__name=scalar_param.name)
+        ],
+    )
+    expected_params = [field_param, scalar_param]
+
+    result = prune_unused_parameters(testee)
+
+    assert expected_params == result.params
 
 
 def test_no_field_access_pruning():

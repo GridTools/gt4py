@@ -284,8 +284,7 @@ class VerticalLoop(LocNode):
 
 class Stencil(LocNode, SymbolTableTrait):
     name: Str
-    # TODO: fix to be List[Union[ScalarDecl, FieldDecl]]
-    params: List[Decl]
+    params: List[Union[FieldDecl, ScalarDecl]]
     vertical_loops: List[VerticalLoop]
     declarations: List[Temporary]
 

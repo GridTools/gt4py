@@ -10,7 +10,6 @@ from gt4py.backend import from_name
 from gt4py.gtscript import PARALLEL, computation, interval, stencil
 from gt4py.stencil_builder import StencilBuilder
 from gtc.passes.gtir_k_boundary import compute_k_boundary, compute_min_k_size
-from gtc.passes.gtir_pipeline import prune_unused_parameters
 
 
 class TestData(TypedDict):
@@ -130,9 +129,7 @@ def stencil_with_extent_6(field_a: gs.Field[float], field_b: gs.Field[float]):
 @pytest.mark.parametrize("definition,expected_k_bounds", [(s, d["k_bounds"]) for s, d in test_data])
 def test_k_bounds(definition, expected_k_bounds):
     builder = StencilBuilder(definition, backend=from_name("gtc:numpy"))
-    k_boundary = compute_k_boundary(builder.gtir_pipeline.full(skip=[prune_unused_parameters]))[
-        "field_b"
-    ]
+    k_boundary = compute_k_boundary(builder.gtir_pipeline.full())["field_b"]
 
     assert expected_k_bounds == k_boundary
 
@@ -142,7 +139,7 @@ def test_k_bounds(definition, expected_k_bounds):
 )
 def test_min_k_size(definition, expected_min_k_size):
     builder = StencilBuilder(definition, backend=from_name("gtc:numpy"))
-    min_k_size = compute_min_k_size(builder.gtir_pipeline.full(skip=[prune_unused_parameters]))
+    min_k_size = compute_min_k_size(builder.gtir_pipeline.full())
 
     assert expected_min_k_size == min_k_size
 
