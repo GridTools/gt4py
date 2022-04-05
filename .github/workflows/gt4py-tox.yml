@@ -49,5 +49,5 @@ jobs:
         pyversion_no_dot=${{ matrix.python-version }}
         pyversion_no_dot=${pyversion_no_dot//./}
         pyversion_no_dot=${pyversion_no_dot:0:2}
-        pip install tox clang-format
+        pip install tox
         tox -r -e py${pyversion_no_dot}-${{ matrix.backends }}

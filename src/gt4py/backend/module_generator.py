@@ -18,7 +18,6 @@ import abc
 import numbers
 import os
 from dataclasses import dataclass, field
-from inspect import getdoc
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set
 
 import jinja2
@@ -205,7 +204,7 @@ class BaseModuleGenerator(abc.ABC):
         The output should be least based on the stencil definition's docstring,
         if one exists.
         """
-        return getdoc(self.builder.definition) or ""
+        return self.builder.gtir.docstring or ""
 
     def generate_backend_name(self) -> str:
         """
@@ -261,13 +260,12 @@ class BaseModuleGenerator(abc.ABC):
         Requires overriding for module generators of non-cartesian backends.
         """
         min_sequential_axis_size = compute_min_k_size(self.builder.gtir_pipeline.full())
-        NDIM = 3
         return repr(
             DomainInfo(
                 parallel_axes=("I", "J"),
                 sequential_axis="K",
                 min_sequential_axis_size=min_sequential_axis_size,
-                ndim=NDIM,
+                ndim=3,
             )
         )
 

@@ -245,9 +245,9 @@ class Stencil(LocNode, SymbolTableTrait):
     api_signature: List[Argument]
     params: List[Decl]
     vertical_loops: List[VerticalLoop]
-    externals: Dict[str, str]
+    externals: Dict[str, Literal]
     sources: Optional[Dict[str, str]]
-    docstring: Str
+    docstring: Optional[Str]
 
     @property
     def param_names(self) -> List[str]:

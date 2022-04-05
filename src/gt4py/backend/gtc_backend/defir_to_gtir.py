@@ -53,6 +53,21 @@ from gtc import common, gtir
 from gtc.common import ExprKind
 
 
+def _make_literal(v: numbers.Number) -> gtir.Literal:
+    value: Union[BuiltinLiteral, str]
+    if issubclass(type(v), bool):
+        dtype = common.DataType.BOOL
+        value = common.BuiltInLiteral.TRUE if v else common.BuiltInLiteral.FALSE
+    else:
+        dtype = (
+            common.DataType.INT64
+            if (cast(float, v) / 1.0).is_integer()
+            else common.DataType.FLOAT64
+        )
+        value = str(v)
+    return gtir.Literal(dtype=dtype, value=value)
+
+
 class DefIRToGTIR(IRNodeVisitor):
 
     GT4PY_ITERATIONORDER_TO_GTIR_LOOPORDER = {
@@ -134,7 +149,11 @@ class DefIRToGTIR(IRNodeVisitor):
         scalar_params = {p.name: self.visit(p) for p in node.parameters}
         vertical_loops = [self.visit(c) for c in node.computations if c.body.stmts]
         if node.externals is not None:
-            externals = {name: str(value) for name, value in node.externals.items()}
+            externals = {
+                name: _make_literal(value)
+                for name, value in node.externals.items()
+                if isinstance(value, numbers.Number)
+            }
         else:
             externals = {}
         return gtir.Stencil(

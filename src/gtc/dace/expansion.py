@@ -26,6 +26,7 @@ import gtc.oir as oir
 from eve import codegen
 from eve.codegen import FormatTemplate as as_fmt
 from eve.codegen import MakoTemplate as as_mako
+from gt4py.definitions import Extent
 from gtc.common import LoopOrder
 from gtc.dace.nodes import HorizontalExecutionLibraryNode, VerticalLoopLibraryNode
 from gtc.dace.utils import (
@@ -376,7 +377,7 @@ class NaiveVerticalLoopExpander(OIRLibraryNodeExpander):
 
     def get_ij_origins(self):
 
-        origins: Dict[str, Tuple[int, int]] = {}
+        extents: Dict[str, Extent] = {}
 
         for _, section in self.node.sections:
             for he in (
@@ -386,20 +387,15 @@ class NaiveVerticalLoopExpander(OIRLibraryNodeExpander):
             ):
                 access_collection = get_access_collection(he)
 
-                for name, offsets in access_collection.offsets().items():
-                    off: Tuple[int, int]
-                    for off in offsets:
-                        origin = (
-                            -off[0] - he.iteration_space.i_interval.start.offset,
-                            -off[1] - he.iteration_space.j_interval.start.offset,
-                        )
-                        if name not in origins:
-                            origins[name] = origin
-                        origins[name] = (
-                            max(origins[name][0], origin[0]),
-                            max(origins[name][1], origin[1]),
-                        )
-        return origins
+                for acc in access_collection.ordered_accesses():
+                    extent = acc.to_extent(he.extent)
+                    extents.setdefault(acc.field, extent)
+                    extents[acc.field] |= extent
+
+        return {
+            name: (-extent.lower_indices[0], -extent.lower_indices[1])
+            for name, extent in extents.items()
+        }
 
     def get_k_origins(self):
         k_origs: Dict[str, oir.AxisBound] = {}
@@ -423,7 +419,7 @@ class NaiveVerticalLoopExpander(OIRLibraryNodeExpander):
 
         in_subsets = dict()
         out_subsets = dict()
-        section_origins: Dict[str, Tuple[int, int]] = dict()
+        ij_extents: Dict[str, Extent] = dict()
         min_k_offsets: Dict[str, int] = dict()
         max_k_offsets: Dict[str, int] = dict()
         for he in (
@@ -433,25 +429,20 @@ class NaiveVerticalLoopExpander(OIRLibraryNodeExpander):
         ):
             access_collection: AccessCollector.CartesianAccessCollection = get_access_collection(he)
 
-            for name, offsets in access_collection.offsets().items():
-                off: Tuple[int, int, int]
-                for off in offsets:
-                    origin = (
-                        -off[0] - he.iteration_space.i_interval.start.offset,
-                        -off[1] - he.iteration_space.j_interval.start.offset,
-                    )
-                    if name not in section_origins:
-                        section_origins[name] = origin
-                    section_origins[name] = (
-                        max(0, section_origins[name][0], origin[0]),
-                        max(0, section_origins[name][1], origin[1]),
-                    )
+            for acc in access_collection.ordered_accesses():
+                extent = acc.to_extent(he.extent) | Extent.zeros(2)
+                ij_extents.setdefault(acc.field, extent)
+                ij_extents[acc.field] |= extent
 
-                    min_k_offsets.setdefault(name, off[2] or 0)
-                    min_k_offsets[name] = min(min_k_offsets[name], off[2] or 0)
+                min_k_offsets.setdefault(acc.field, acc.offset[2] or 0)
+                min_k_offsets[acc.field] = min(min_k_offsets[acc.field], acc.offset[2] or 0)
 
-                    max_k_offsets.setdefault(name, off[2] or 0)
-                    max_k_offsets[name] = max(max_k_offsets[name], off[2] or 0)
+                max_k_offsets.setdefault(acc.field, acc.offset[2] or 0)
+                max_k_offsets[acc.field] = max(max_k_offsets[acc.field], acc.offset[2] or 0)
+        section_origins: Dict[str, Tuple[int, int]] = {
+            name: (-extent.lower_indices[0], -extent.lower_indices[1])
+            for name, extent in ij_extents.items()
+        }
 
         access_collection = get_access_collection(section)
         for name, section_origin in section_origins.items():
@@ -652,30 +643,21 @@ class ParallelNaiveVerticalLoopExpander(NaiveVerticalLoopExpander):
 
 class NaiveHorizontalExecutionExpander(OIRLibraryNodeExpander):
     def get_origins(self):
-        access_collection: AccessCollector.CartesianAccessCollection = get_access_collection(
-            self.node
-        )
+        access_collection = get_access_collection(self.node)
 
-        origins = dict()
+        ij_extents: Dict[str, Extent] = {}
         for acc in access_collection.ordered_accesses():
-            offset = [min(acc.offset[0], 0), min(acc.offset[1], 0), acc.offset[2]]
+            extent = acc.to_extent(self.node.extent) | Extent.zeros(2)
+            ij_extents.setdefault(acc.field, extent)
+            ij_extents[acc.field] |= extent
 
-            if offset[2] is None:
-                offset[2] = 0
-
-            origins.setdefault(acc.field, offset)
-            origins[acc.field] = (
-                min(origins[acc.field][0], offset[0]),
-                min(origins[acc.field][1], offset[1]),
-                min(origins[acc.field][2], offset[2]),
+        origins = {}
+        for name, ij_extent in ij_extents.items():
+            k_origin = min(
+                off[2] if off[2] is not None else 0 for off in access_collection.offsets()[name]
             )
+            origins[name] = (-ij_extent.lower_indices[0], -ij_extent.lower_indices[1], -k_origin)
 
-        for name, origin in origins.items():
-            origins[name] = (
-                -origin[0] - self.node.iteration_space.i_interval.start.offset,
-                -origin[1] - self.node.iteration_space.j_interval.start.offset,
-                -origin[2],
-            )
         return origins
 
     def get_innermost_memlets(self):
@@ -795,9 +777,17 @@ class NaiveHorizontalExecutionExpander(OIRLibraryNodeExpander):
         in_memlets, out_memlets = self.get_innermost_memlets()
         from collections import OrderedDict
 
+        j_interval = oir.Interval(
+            start=oir.AxisBound.from_start(self.node.extent[1][0]),
+            end=oir.AxisBound.from_end(self.node.extent[1][1]),
+        )
+        i_interval = oir.Interval(
+            start=oir.AxisBound.from_start(self.node.extent[0][0]),
+            end=oir.AxisBound.from_end(self.node.extent[0][1]),
+        )
         map_ranges = OrderedDict(
-            j=get_interval_range_str(self.node.iteration_space.j_interval, "__J"),
-            i=get_interval_range_str(self.node.iteration_space.i_interval, "__I"),
+            j=get_interval_range_str(j_interval, "__J"),
+            i=get_interval_range_str(i_interval, "__I"),
         )
         inputs = [name[len("IN_") :] for name in self.node.in_connectors]
         outputs = [name[len("OUT_") :] for name in self.node.out_connectors]
