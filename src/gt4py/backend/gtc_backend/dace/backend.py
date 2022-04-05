@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, Dict, Optional, Tuple, Type
 import dace
 import numpy as np
 from dace.sdfg.utils import fuse_states, inline_sdfgs
+from dace.serialize import dumps
 
 from eve import codegen
 from eve.codegen import MakoTemplate as as_mako
@@ -130,6 +131,7 @@ class GTCDaCeExtGenerator:
         sources = {
             "computation": {"computation.hpp": implementation},
             "bindings": {"bindings.cpp": bindings},
+            "info": {self.backend.builder.module_name + ".sdfg": dumps(sdfg.to_json())},
         }
         return sources
 
@@ -348,6 +350,36 @@ class DaCeBindingsCodegen:
         return formatted_code
 
 
+class DaCePyExtModuleGenerator(PyExtModuleGenerator):
+    def generate_imports(self):
+        res = super().generate_imports()
+        return res + "\nimport dace\nimport copy"
+
+    def generate_class_members(self):
+        res = super().generate_class_members()
+        filepath = self.builder.module_path.joinpath(
+            os.path.dirname(self.builder.module_path),
+            self.builder.module_name + "_pyext_BUILD",
+            self.builder.module_name + ".sdfg",
+        )
+        res += """
+_sdfg = None
+
+def __new__(cls, *args, **kwargs):
+    res = super().__new__(cls, *args, **kwargs)
+    cls._sdfg = dace.SDFG.from_file('{filepath}')
+    return res
+
+@property
+def sdfg(self) -> dace.SDFG:
+    return copy.deepcopy(self._sdfg)
+
+""".format(
+            filepath=filepath
+        )
+        return res
+
+
 @register
 class GTCDaceBackend(BaseGTBackend, CLIBackendMixin):
     """DaCe python backend using gtc."""
@@ -363,7 +395,7 @@ class GTCDaceBackend(BaseGTBackend, CLIBackendMixin):
         "is_compatible_type": lambda x: isinstance(x, np.ndarray),
     }
 
-    MODULE_GENERATOR_CLASS = PyExtModuleGenerator
+    MODULE_GENERATOR_CLASS = DaCePyExtModuleGenerator
 
     options = BaseGTBackend.GT_BACKEND_OPTS
     PYEXT_GENERATOR_CLASS = GTCDaCeExtGenerator  # type: ignore
