@@ -43,13 +43,15 @@ if TYPE_CHECKING:
 
 class GTCModuleGenerator(BaseModuleGenerator):
     def generate_imports(self) -> str:
-        comp_file = f"{self.builder.caching.module_prefix}computation{self.builder.caching.module_postfix}.py"
+        comp_pkg = (
+            self.builder.caching.module_prefix + "computation" + self.builder.caching.module_postfix
+        )
         return "\n".join(
             [
                 *super().generate_imports().splitlines(),
                 "import pathlib",
                 "from gt4py.utils import make_module_from_file",
-                f'computation = make_module_from_file("computation", pathlib.Path(__file__).parent / "{comp_file}")',
+                f'computation = make_module_from_file("{comp_pkg}", pathlib.Path(__file__).parent / "{comp_pkg}.py")',
             ]
         )
 
