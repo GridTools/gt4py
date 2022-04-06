@@ -27,12 +27,13 @@ from functional.ffront import common_types as ct
 from functional.ffront import field_operator_ast as foast
 from functional.ffront import program_ast as past
 from functional.ffront import symbol_makers
+from functional.ffront.fbuiltins import FieldOffset
 from functional.ffront.foast_to_itir import FieldOperatorLowering
 from functional.ffront.func_to_foast import FieldOperatorParser
 from functional.ffront.func_to_past import ProgramParser
 from functional.ffront.past_passes.type_deduction import ProgramTypeDeduction
 from functional.ffront.past_to_itir import ProgramLowering
-from functional.ffront.source_utils import ClosureRefs
+from functional.ffront.source_utils import CapturedVars
 from functional.iterator import ir as itir
 from functional.iterator.backend_executor import execute_program
 
@@ -48,6 +49,15 @@ class GTCallable(Protocol):
     Any class implementing the methods defined in this protocol can be called
     from ``ffront`` programs or operators.
     """
+
+    def __gt_captured_vars__(self) -> Optional[CapturedVars]:
+        """
+        Return all external variables referenced inside the callable.
+
+        Note that in addition to the callable itself all captured variables
+        are also lowered such that they can be used in the lowered callable.
+        """
+        return None
 
     @abc.abstractmethod
     def __gt_type__(self) -> ct.FunctionType:
@@ -89,7 +99,7 @@ class Program:
 
     Attributes:
         past_node: The node representing the program.
-        closure_refs: Mapping from names referenced in the program to the
+        captured_vars: Mapping from names referenced in the program to the
             actual values.
         externals: Dictionary of externals.
         backend: The backend to be used for code generation.
@@ -97,7 +107,7 @@ class Program:
     """
 
     past_node: past.Program
-    closure_refs: ClosureRefs
+    captured_vars: CapturedVars
     externals: dict[str, Any]
     backend: Optional[str]
     definition: Optional[types.FunctionType] = None
@@ -109,15 +119,42 @@ class Program:
         externals: Optional[dict] = None,
         backend: Optional[str] = None,
     ):
-        closure_refs = ClosureRefs.from_function(definition)
+        captured_vars = CapturedVars.from_function(definition)
         past_node = ProgramParser.apply_to_function(definition)
         return cls(
             past_node=past_node,
-            closure_refs=closure_refs,
+            captured_vars=captured_vars,
             externals={} if externals is None else externals,
             backend=backend,
             definition=definition,
         )
+
+    def _lowered_funcs_from_captured_vars(
+        self, captured_vars: CapturedVars
+    ) -> list[itir.FunctionDefinition]:
+        lowered_funcs = []
+
+        vars_ = collections.ChainMap(captured_vars.globals, captured_vars.nonlocals)
+        for name, value in vars_.items():
+            # With respect to the frontend offsets are singleton types, i.e.
+            #  they do not store any runtime information, but only type
+            #  information. As such we do not need their value.
+            if isinstance(value, FieldOffset):
+                continue
+            if not isinstance(value, GTCallable):
+                raise NotImplementedError("Only function closure vars are allowed currently.")
+            itir_node = value.__gt_itir__()
+            if itir_node.id != name:
+                raise RuntimeError(
+                    "Name of the closure reference and the function it holds do not match."
+                )
+            lowered_funcs.append(itir_node)
+            # if the closure ref has closure refs by itself, also add them
+            if value.__gt_captured_vars__():
+                lowered_funcs.extend(
+                    self._lowered_funcs_from_captured_vars(value.__gt_captured_vars__())
+                )
+        return lowered_funcs
 
     @functools.cached_property
     def itir(self) -> itir.Program:
@@ -127,26 +164,28 @@ class Program:
         fencil_itir_node = ProgramLowering.apply(self.past_node)
 
         func_names = []
-        for closure_var in self.past_node.closure:
-            if isinstance(closure_var.type, ct.FunctionType):
-                func_names.append(closure_var.id)
+        for captured_var in self.past_node.captured_vars:
+            if isinstance(captured_var.type, ct.FunctionType):
+                func_names.append(captured_var.id)
             else:
                 raise NotImplementedError("Only function closure vars are allowed currently.")
 
-        vars_ = collections.ChainMap(self.closure_refs.globals, self.closure_refs.nonlocals)
+        vars_ = collections.ChainMap(self.captured_vars.globals, self.captured_vars.nonlocals)
         if undefined := (set(vars_) - set(func_names)):
             raise RuntimeError(f"Reference to undefined symbol(s) `{', '.join(undefined)}`.")
         if not_callable := [name for name in func_names if not isinstance(vars_[name], GTCallable)]:
             raise RuntimeError(
                 f"The following function(s) are not valid GTCallables `{', '.join(not_callable)}`."
             )
-        lowered_funcs = [vars_[name].__gt_itir__() for name in func_names]
+
+        lowered_funcs = self._lowered_funcs_from_captured_vars(self.captured_vars)
 
         return itir.Program(
             function_definitions=lowered_funcs, fencil_definitions=[fencil_itir_node]
         )
 
     def _validate_args(self, *args, **kwargs) -> None:
+        # TODO(tehrengruber): better error messages
         if len(args) != len(self.past_node.params):
             raise GTTypeError(
                 f"Function takes {len(self.past_node.params)} arguments, but {len(args)} were given."
@@ -198,7 +237,7 @@ class FieldOperator(GTCallable):
 
     Attributes:
         foast_node: The node representing the field operator.
-        closure_refs: Mapping from names referenced in the program to the
+        captured_vars: Mapping from names referenced in the program to the
             actual values.
         externals: Dictionary of externals.
         backend: The backend to be used for code generation.
@@ -206,7 +245,7 @@ class FieldOperator(GTCallable):
     """
 
     foast_node: foast.FieldOperator
-    closure_refs: ClosureRefs
+    captured_vars: CapturedVars
     externals: dict[str, Any]
     backend: Optional[str]  # note: backend is only used if directly called
     definition: Optional[types.FunctionType] = None
@@ -218,11 +257,11 @@ class FieldOperator(GTCallable):
         externals: Optional[dict] = None,
         backend: Optional[str] = None,
     ):
-        closure_refs = ClosureRefs.from_function(definition)
+        captured_vars = CapturedVars.from_function(definition)
         foast_node = FieldOperatorParser.apply_to_function(definition)
         return cls(
             foast_node=foast_node,
-            closure_refs=closure_refs,
+            captured_vars=captured_vars,
             externals=externals or {},
             backend=backend,
             definition=definition,
@@ -235,6 +274,9 @@ class FieldOperator(GTCallable):
 
     def __gt_itir__(self) -> itir.FunctionDefinition:
         return FieldOperatorLowering.apply(self.foast_node)
+
+    def __gt_captured_vars__(self) -> CapturedVars:
+        return self.captured_vars
 
     def as_program(self) -> Program:
         if any(param.id == "out" for param in self.foast_node.params):
@@ -274,20 +316,20 @@ class FieldOperator(GTCallable):
                     location=loc,
                 )
             ],
-            closure=[stencil_sym],
+            captured_vars=[stencil_sym],
             location=loc,
         )
         past_node = ProgramTypeDeduction.apply(untyped_past_node)
 
         # inject stencil as a closure var into program
-        #  since ClosureRefs is immutable we have to resort to this rather ugly way of doing a copy
-        closure_refs = dataclasses.replace(
-            self.closure_refs, globals={**self.closure_refs.globals, name: self}
+        #  since CapturedVars is immutable we have to resort to this rather ugly way of doing a copy
+        captured_vars = dataclasses.replace(
+            self.captured_vars, globals={**self.captured_vars.globals, name: self}
         )
 
         return Program(
             past_node=past_node,
-            closure_refs=closure_refs,
+            captured_vars=captured_vars,
             externals=self.externals,
             backend=self.backend,
         )

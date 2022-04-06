@@ -79,16 +79,16 @@ class FieldOperatorTypeDeduction(NodeTranslator):
     ---------
     >>> import ast
     >>> from functional.common import Field
-    >>> from functional.ffront.source_utils import SourceDefinition, ClosureRefs
+    >>> from functional.ffront.source_utils import SourceDefinition, CapturedVars
     >>> from functional.ffront.func_to_foast import FieldOperatorParser
     >>> def example(a: "Field[..., float]", b: "Field[..., float]"):
     ...     return a + b
 
-    >>> sdef = SourceDefinition.from_function(example)
-    >>> cref = ClosureRefs.from_function(example)
+    >>> source_definition = SourceDefinition.from_function(example)
+    >>> captured_vars = CapturedVars.from_function(example)
     >>> untyped_fieldop = FieldOperatorParser(
-    ...     source=sdef.source, filename=sdef.filename, starting_line=sdef.starting_line, closure_refs=cref, externals_defs={}
-    ... ).visit(ast.parse(sdef.source).body[0])
+    ...     source_definition=source_definition, captured_vars=captured_vars, externals_defs={}
+    ... ).visit(ast.parse(source_definition.source).body[0])
     >>> assert untyped_fieldop.body[0].value.type is None
 
     >>> typed_fieldop = FieldOperatorTypeDeduction.apply(untyped_fieldop)
@@ -107,7 +107,7 @@ class FieldOperatorTypeDeduction(NodeTranslator):
             id=node.id,
             params=self.visit(node.params, **kwargs),
             body=self.visit(node.body, **kwargs),
-            closure=self.visit(node.closure, **kwargs),
+            captured_vars=self.visit(node.captured_vars, **kwargs),
             location=node.location,
         )
 
@@ -126,7 +126,6 @@ class FieldOperatorTypeDeduction(NodeTranslator):
         if not is_complete_symbol_type(node.value.type):
             new_value = self.visit(node.value, **kwargs)
         new_target = self.visit(node.target, refine_type=new_value.type, **kwargs)
-        print(new_target.type)
         return foast.Assign(target=new_target, value=new_value, location=node.location)
 
     def visit_Symbol(
@@ -282,7 +281,9 @@ class FieldOperatorTypeDeduction(NodeTranslator):
         return foast.TupleExpr(elts=new_elts, type=new_type, location=node.location)
 
     def visit_Call(self, node: foast.Call, **kwargs) -> foast.Call:
+        # TODO(tehrengruber): check type is complete
         new_func = self.visit(node.func, **kwargs)
+
         if isinstance(new_func.type, ct.FieldType):
             new_args = self.visit(node.args, in_shift=True, **kwargs)
             source_dim = new_args[0].type.source
@@ -300,11 +301,17 @@ class FieldOperatorTypeDeduction(NodeTranslator):
                     new_dims.extend(target_dims)
             new_type = ct.FieldType(dims=new_dims, dtype=new_func.type.dtype)
             return foast.Call(func=new_func, args=new_args, location=node.location, type=new_type)
-        return foast.Call(
-            func=new_func,
-            args=self.visit(node.args, **kwargs),
-            location=node.location,
-            type=new_func.type.returns,
+        elif isinstance(new_func.type, ct.FunctionType):
+            return foast.Call(
+                func=new_func,
+                args=self.visit(node.args, **kwargs),
+                location=node.location,
+                type=new_func.type.returns,
+            )
+
+        raise FieldOperatorTypeDeductionError.from_foast_node(
+            node,
+            msg=f"Objects of type '{new_func.type}' are not callable.",
         )
 
 

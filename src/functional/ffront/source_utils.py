@@ -47,7 +47,7 @@ def make_source_definition_from_function(func: Callable) -> SourceDefinition:
     return SourceDefinition(source, filename, starting_line)
 
 
-def make_closure_refs_from_function(func: Callable) -> ClosureRefs:
+def make_captured_vars_from_function(func: Callable) -> CapturedVars:
     (nonlocals, globals, inspect_builtins, inspect_unbound) = inspect.getclosurevars(  # noqa: A001
         func
     )
@@ -57,7 +57,7 @@ def make_closure_refs_from_function(func: Callable) -> ClosureRefs:
     unbound -= builtins
     annotations = typingx.get_type_hints(func)
 
-    return ClosureRefs(nonlocals, globals, annotations, builtins, unbound)
+    return CapturedVars(nonlocals, globals, annotations, builtins, unbound)
 
 
 def make_symbol_names_from_source(source: str, filename: str = MISSING_FILENAME) -> SymbolNames:
@@ -139,12 +139,16 @@ class SourceDefinition:
 
 
 @dataclass(frozen=True)
-class ClosureRefs:
+class CapturedVars:
     """
-    Mappings from names used in a Python function to the actual values.
+    Mappings from external names used in a function to the actual values.
 
-    It can be created from an actual function object using :meth:`from_function()`.
-    It also supports unpacking.
+    It can be created from an actual Python function object using
+    :meth:`from_function()`. It also supports unpacking.
+
+    .. note::
+        To avoid a name conflict with :class:`inspect.ClosureVars` we use a
+        different name here.
     """
 
     nonlocals: Mapping[str, Any]
@@ -160,7 +164,7 @@ class ClosureRefs:
         yield self.builtins
         yield self.unbound
 
-    from_function = staticmethod(make_closure_refs_from_function)
+    from_function = staticmethod(make_captured_vars_from_function)
 
 
 @dataclass(frozen=True)
