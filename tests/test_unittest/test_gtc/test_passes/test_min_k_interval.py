@@ -212,4 +212,4 @@ def stencil_with_invalid_temporary_access_end(field_a: gs.Field[float], field_b:
 def test_invalid_temporary_access(definition):
     builder = StencilBuilder(definition, backend=from_name("gtc:numpy"))
     with pytest.raises(TypeError, match="Invalid access with offset in k to temporary field tmp."):
-        k_boundary = compute_k_boundary(builder.gtir_pipeline.full(skip=[prune_unused_parameters]))
+        k_boundary = compute_k_boundary(builder.gtir_pipeline.full())

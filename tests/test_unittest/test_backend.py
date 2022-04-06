@@ -75,9 +75,7 @@ def test_make_args_data_from_gtir(backend_name, mode):
         if isinstance(p, gtir.FieldDecl)
     }
     field_info_from_args_data = {
-        (name, d.dtype, "".join(d.axes), d.data_dims)
-        for name, d in args_data.field_info.items()
-        if name not in args_data.unreferenced
+        (name, d.dtype, "".join(d.axes), d.data_dims) for name, d in args_data.field_info.items()
     }
     assert field_info_from_gtir == field_info_from_args_data
 
@@ -86,11 +84,7 @@ def test_make_args_data_from_gtir(backend_name, mode):
         for p in builder.gtir.params
         if isinstance(p, gtir.ScalarDecl)
     }
-    param_info_from_args_data = {
-        (name, d.dtype)
-        for name, d in args_data.parameter_info.items()
-        if name not in args_data.unreferenced
-    }
+    param_info_from_args_data = {(name, d.dtype) for name, d in args_data.parameter_info.items()}
     assert param_info_from_gtir == param_info_from_args_data
 
     for name, field_info in args_data.field_info.items():
