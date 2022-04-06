@@ -342,6 +342,20 @@ def test_binary_and():
     assert lowered.expr == reference
 
 
+def test_scalar_and():
+    def scalar_and(a: Field[..., "bool"]):
+        return a & False
+
+    parsed = FieldOperatorParser.apply_to_function(scalar_and)
+    lowered = FieldOperatorLowering.apply(parsed)
+
+    reference = im.deref_(
+        im.lift_(im.lambda__("a")(im.and__(im.deref_("a"), im.bool_(False))))("a")
+    )
+
+    assert lowered.expr == reference
+
+
 def test_binary_or():
     def bit_or(a: Field[..., "bool"], b: Field[..., "bool"]):
         return a | b
