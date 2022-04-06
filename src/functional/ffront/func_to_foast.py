@@ -153,6 +153,8 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
             raise FieldOperatorSyntaxError.from_AST(
                 node, msg="Only arguments of type DataType are allowed."
             )
+        if TypeInfo(new_type).is_scalar:
+            new_type = ct.FieldType(dims=[], dtype=new_type)
         return foast.DataSymbol(id=node.arg, location=self._make_loc(node), type=new_type)
 
     def visit_Assign(self, node: ast.Assign, **kwargs) -> foast.Assign:
