@@ -49,14 +49,9 @@ class GTCModuleGenerator(BaseModuleGenerator):
         return "\n".join(
             [
                 *super().generate_imports().splitlines(),
-                "import sys",
                 "import pathlib",
-                "import numpy",
-                "path_backup = sys.path.copy()",
-                "sys.path.append(str(pathlib.Path(__file__).parent))",
-                f"import {comp_pkg} as computation",
-                "sys.path = path_backup",
-                "del path_backup",
+                "from gt4py.utils import make_module_from_file",
+                f'computation = make_module_from_file("{comp_pkg}", pathlib.Path(__file__).parent / "{comp_pkg}.py")',
             ]
         )
 
