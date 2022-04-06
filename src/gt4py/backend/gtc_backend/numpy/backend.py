@@ -24,6 +24,7 @@ from gt4py.backend.gtc_backend.common import (
     debug_is_compatible_type,
     debug_layout,
 )
+from gt4py.backend.module_generator import make_args_data_from_gtir
 from gtc.gtir_to_oir import GTIRToOIR
 from gtc.numpy import npir
 from gtc.numpy.npir_codegen import NpirCodegen
@@ -61,7 +62,12 @@ class GTCModuleGenerator(BaseModuleGenerator):
         )
 
     def generate_implementation(self) -> str:
-        params = [f"{p.name}={p.name}" for p in self.builder.gtir.params]
+        args_data = make_args_data_from_gtir(self.builder.gtir_pipeline)
+        params = [
+            f"{p.name}={p.name}"
+            for p in self.builder.gtir.params
+            if p.name not in args_data.unreferenced
+        ]
         params.extend(["_domain_=_domain_", "_origin_=_origin_"])
         return f"computation.run({', '.join(params)})"
 
