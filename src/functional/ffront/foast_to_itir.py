@@ -90,7 +90,6 @@ class FieldOperatorLowering(NodeTranslator):
 
     def _visit_assign(self, node: foast.Assign, **kwargs) -> tuple[itir.Sym, itir.Expr]:
         sym = self.visit(node.target, **kwargs)
-        print(node.value.type)
         to_value = TypeInfo(node.value.type).is_scalar
         expr = self.visit(node.value, to_value=to_value, **kwargs)
         return sym, expr
@@ -121,7 +120,7 @@ class FieldOperatorLowering(NodeTranslator):
     def visit_Subscript(
         self, node: foast.Subscript, *, to_value: bool = False, **kwargs
     ) -> itir.FunCall:
-        typeinfo = TypeInfo(node.value.type.types[node.index])
+        typeinfo = TypeInfo(TypeInfo(node.value.type).element_types[node.index])
         result = im.tuple_get_(node.index, self.visit(node.value, **kwargs))
         if typeinfo.is_scalar and not to_value:
             return im.lift_(im.lambda__()(result))()
@@ -228,7 +227,7 @@ class FieldOperatorLowering(NodeTranslator):
                 result = im.int_(int32(node.value))
             case ct.ScalarType(kind=ct.ScalarKind.INT64) | "int64":
                 result = im.int_(int64(node.value))
-            case ct.ScalarKind(kind=ct.ScalarKind.BOOL) | "bool":
+            case ct.ScalarType(kind=ct.ScalarKind.BOOL) | "bool":
                 value = False if node.value == "False" else node.value
                 result = im.bool_(bool(value))
         if not result:

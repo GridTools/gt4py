@@ -309,6 +309,9 @@ class FieldOperatorTypeDeduction(NodeTranslator):
             msg=f"Objects of type '{new_func.type}' are not callable.",
         )
 
+    def visit_Constant(self, node: foast.Constant, **kwargs) -> foast.Constant:
+        return node
+
 
 class FieldOperatorTypeDeductionError(GTSyntaxError, SyntaxWarning):
     """Exception for problematic type deductions that originate in user code."""

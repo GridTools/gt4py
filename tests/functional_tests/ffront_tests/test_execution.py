@@ -150,12 +150,12 @@ def test_arithmetic():
     c = np_as_located_field(IDim)(np.zeros((size)))
 
     def arithmetic(inp1: Field[[IDim], float64], inp2: Field[[IDim], float64]):
-        return inp1 + inp2
+        return (inp1 + inp2) * 2.0
 
     program = program_from_function(arithmetic, dim=IDim, size=size)
     roundtrip.executor(program, a, b, c, offset_provider={})
 
-    assert np.allclose(a.array() + b.array(), c)
+    assert np.allclose((a.array() + b.array()) * 2.0, c)
 
 
 def test_bit_logic():
@@ -167,7 +167,7 @@ def test_bit_logic():
     c = np_as_located_field(IDim)(np.full((size), False))
 
     def bit_and(inp1: Field[[IDim], bool], inp2: Field[[IDim], bool]):
-        return inp1 & inp2
+        return inp1 & inp2 & True
 
     program = program_from_function(bit_and, dim=IDim, size=size)
     roundtrip.executor(program, a, b, c, offset_provider={})
@@ -257,7 +257,7 @@ def reduction_setup():
         out=np_as_located_field(vertex)(np.zeros([size])),
         offset_provider={"V2E": NeighborTableOffsetProvider(v2e_arr, vertex, edge, 4)},
         v2e_table=v2e_arr,
-    )
+    )  # type: ignore
 
 
 def test_reduction_execution(reduction_setup):
@@ -266,7 +266,7 @@ def test_reduction_execution(reduction_setup):
     V2EDim = rs.V2EDim
     V2E = rs.V2E
 
-    def reduction(edge_f: Field[[rs.Edge], "float64"]):
+    def reduction(edge_f: Field[[rs.Edge], "float64"]):  # type: ignore
         return neighbor_sum(edge_f(V2E), axis=V2EDim)
 
     program = program_from_function(reduction, dim=rs.Vertex, size=rs.size)
@@ -287,7 +287,7 @@ def test_reduction_expression(reduction_setup):
     V2EDim = rs.V2EDim
     V2E = rs.V2E
 
-    def reduce_expr(edge_f: Field[[rs.Edge], "float64"]):
+    def reduce_expr(edge_f: Field[[rs.Edge], "float64"]):  # type: ignore
         tmp_nbh_tup = edge_f(V2E), edge_f(V2E)
         tmp_nbh = tmp_nbh_tup[0]
         return neighbor_sum(-edge_f(V2E) * tmp_nbh, axis=V2EDim)

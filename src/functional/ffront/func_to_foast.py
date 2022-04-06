@@ -363,14 +363,11 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
         )
 
     def visit_Constant(self, node: ast.Constant, **kwargs) -> foast.Constant:
-        dtype = None
-        match node.value:
-            case int():
-                dtype = ct.ScalarType(kind=ct.ScalarKind.INT64)
-            case float():
-                dtype = ct.ScalarType(kind=ct.ScalarKind.FLOAT64)
-            case bool():
-                dtype = ct.ScalarType(kind=ct.ScalarKind.BOOL)
-            case str():
-                dtype = ct.ScalarType(kind=ct.ScalarKind.STRING)
-        return foast.Constant(value=str(node.value), dtype=dtype, location=self._make_loc(node))
+        dtype = symbol_makers.make_symbol_type_from_value(node.value)
+        if not dtype:
+            raise FieldOperatorSyntaxError.from_AST(
+                node, msg="Constants of type {type(node.value)} are not permitted"
+            )
+        return foast.Constant(
+            value=str(node.value), dtype=dtype, location=self._make_loc(node), type=dtype
+        )

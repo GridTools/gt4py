@@ -3,12 +3,14 @@ from typing import Iterator, Optional, Type, TypeGuard, cast
 
 from functional.common import GTTypeError
 from functional.ffront.common_types import (
+    DataType,
     DeferredSymbolType,
     FieldType,
     FunctionType,
     ScalarKind,
     ScalarType,
     SymbolType,
+    TupleType,
     VoidType,
 )
 
@@ -146,6 +148,12 @@ class TypeInfo:
         if self.is_complete and self.is_field_type:
             return cast(FieldType, self.type).dtype
         return None
+
+    @property
+    def element_types(self) -> list[DataType]:
+        if isinstance(self.type, TupleType):
+            return self.type.types
+        return []
 
     def is_callable_for_args(
         self,
