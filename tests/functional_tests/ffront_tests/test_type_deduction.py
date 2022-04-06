@@ -17,8 +17,7 @@ import pytest
 
 from functional.common import Dimension, GTTypeError
 from functional.ffront import common_types as ct
-from functional.ffront import field_operator_ast as foast
-from functional.ffront.fbuiltins import Field, FieldOffset, float64, int64, neighbor_sum
+from functional.ffront.fbuiltins import Field, float32, float32_, float64, float64_, int64
 from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError
 from functional.ffront.func_to_foast import FieldOperatorParser
 from functional.ffront.type_info import TypeInfo
@@ -331,3 +330,14 @@ def test_scalar_arg():
     assert parsed.params[1].type == ct.FieldType(
         dims=[], dtype=ct.ScalarType(kind=ct.ScalarKind.INT64)
     )
+
+
+def test_mismatched_literals():
+    def mismatched_lit() -> Field[..., "float32"]:
+        return float32_(1.0) + float64_(1.0)
+
+    with pytest.raises(
+        FieldOperatorTypeDeductionError,
+        match=(r"Incompatible type\(s\) for operator '\+': float32, float64"),
+    ):
+        _ = FieldOperatorParser.apply_to_function(mismatched_lit)
