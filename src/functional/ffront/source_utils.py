@@ -20,7 +20,7 @@ import symtable
 import textwrap
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
-from typing import Any, Mapping, Union, cast
+from typing import Any, Union, cast
 
 from eve import typingx
 from functional import common
@@ -57,7 +57,7 @@ def make_captured_vars_from_function(func: Callable) -> CapturedVars:
     unbound -= builtins
     annotations = typingx.get_type_hints(func)
 
-    return CapturedVars(nonlocals, globals, annotations, builtins, unbound)
+    return CapturedVars(dict(nonlocals), dict(globals), dict(annotations), builtins, unbound)
 
 
 def make_symbol_names_from_source(source: str, filename: str = MISSING_FILENAME) -> SymbolNames:
@@ -151,13 +151,13 @@ class CapturedVars:
         different name here.
     """
 
-    nonlocals: Mapping[str, Any]
-    globals: Mapping[str, Any]  # noqa: A003  # shadowing a python builtin
-    annotations: Mapping[str, Any]
+    nonlocals: dict[str, Any]
+    globals: dict[str, Any]  # noqa: A003  # shadowing a python builtin
+    annotations: dict[str, Any]
     builtins: set[str]
     unbound: set[str]
 
-    def __iter__(self) -> Iterator[Union[Mapping[str, Any], set[str]]]:
+    def __iter__(self) -> Iterator[Union[dict[str, Any], set[str]]]:
         yield self.nonlocals
         yield self.globals
         yield self.annotations

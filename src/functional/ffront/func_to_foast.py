@@ -17,6 +17,7 @@ from __future__ import annotations
 import ast
 import collections
 import copy
+from typing import Any, Mapping, Type
 
 from functional.ffront import common_types as ct
 from functional.ffront import fbuiltins
@@ -30,7 +31,7 @@ from functional.ffront.ast_passes import (
 )
 from functional.ffront.dialect_parser import DialectParser, DialectSyntaxError
 from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduction
-from functional.ffront.type_info import TypeInfo
+from functional.ffront.type_info import TypeInfo, is_complete_scalar_type
 
 
 class FieldOperatorSyntaxError(DialectSyntaxError):
@@ -90,8 +91,10 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
         return FieldOperatorTypeDeduction.apply(dialect_ast)
 
     def visit_FunctionDef(self, node: ast.FunctionDef, **kwargs) -> foast.FieldOperator:
-        vars_ = collections.ChainMap(self.captured_vars.globals, self.captured_vars.nonlocals)
-        captured_vars = [
+        vars_: Mapping[str, Any] = collections.ChainMap(
+            self.captured_vars.globals, self.captured_vars.nonlocals
+        )
+        captured_vars: list[foast.Symbol] = [
             foast.Symbol(
                 id=name,
                 type=symbol_makers.make_symbol_type_from_value(val),
@@ -121,7 +124,7 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
                 msg=f"Only 'from' imports from {fbuiltins.MODULE_BUILTIN_NAMES} are supported",
             )
 
-        symbols = []
+        symbols: list[foast.Symbol] = []
 
         if node.module == fbuiltins.EXTERNALS_MODULE_NAME:
             for alias in node.names:
@@ -153,7 +156,7 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
             raise FieldOperatorSyntaxError.from_AST(
                 node, msg="Only arguments of type DataType are allowed."
             )
-        if TypeInfo(new_type).is_scalar:
+        if is_complete_scalar_type(new_type):
             new_type = ct.FieldType(dims=[], dtype=new_type)
         return foast.DataSymbol(id=node.arg, location=self._make_loc(node), type=new_type)
 
@@ -164,7 +167,7 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
         if not isinstance(target, ast.Name):
             raise FieldOperatorSyntaxError.from_AST(node, msg="Can only assign to names!")
         new_value = self.visit(node.value)
-        constraint_type = ct.DataType
+        constraint_type: Type[ct.DataType] = ct.DataType
         if isinstance(new_value, foast.TupleExpr):
             constraint_type = ct.TupleType
         if TypeInfo(new_value.type).is_scalar:

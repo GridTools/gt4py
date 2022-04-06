@@ -11,19 +11,9 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-import pytest
-
 from functional.common import Field
 from functional.ffront import itir_makers as im
-from functional.ffront.fbuiltins import (
-    FieldOffset,
-    float64,
-    float64_,
-    int32,
-    int32_,
-    int64,
-    neighbor_sum,
-)
+from functional.ffront.fbuiltins import FieldOffset, float64, int32, int32_, int64, neighbor_sum
 from functional.ffront.foast_to_itir import FieldOperatorLowering
 from functional.ffront.func_to_foast import FieldOperatorParser
 from functional.iterator.runtime import CartesianAxis
