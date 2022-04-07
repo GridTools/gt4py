@@ -19,6 +19,7 @@ from gtc.passes.oir_optimizations.pruning import NoFieldAccessPruning, Unreachab
 
 from ...oir_utils import (
     AssignStmtFactory,
+    FieldAccessFactory,
     HorizontalExecutionFactory,
     HorizontalRestrictionFactory,
     LiteralFactory,
@@ -58,6 +59,40 @@ def test_no_field_access_pruning():
                 ]
             ),
         ]
+    )
+    transformed = NoFieldAccessPruning().visit(testee)
+    assert len(transformed.vertical_loops) == 1
+    assert len(transformed.vertical_loops[0].sections[0].horizontal_executions) == 1
+
+
+def test_no_field_write_access_pruning():
+    testee = StencilFactory(
+        vertical_loops=[
+            VerticalLoopFactory(
+                sections__0__horizontal_executions=[
+                    HorizontalExecutionFactory(
+                        body=[
+                            AssignStmtFactory(
+                                left=FieldAccessFactory(name="foo"), right=LiteralFactory()
+                            )
+                        ],
+                    ),
+                ]
+            ),
+            VerticalLoopFactory(
+                sections__0__horizontal_executions=[
+                    HorizontalExecutionFactory(
+                        body=[
+                            AssignStmtFactory(
+                                left=ScalarAccessFactory(name="bar"),
+                                right=FieldAccessFactory(name="foo"),
+                            )
+                        ],
+                        declarations=[LocalScalarFactory(name="bar")],
+                    ),
+                ]
+            ),
+        ],
     )
     transformed = NoFieldAccessPruning().visit(testee)
     assert len(transformed.vertical_loops) == 1
