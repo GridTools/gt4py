@@ -352,10 +352,14 @@ class DaCeBindingsCodegen:
 
 class DaCePyExtModuleGenerator(PyExtModuleGenerator):
     def generate_imports(self):
-        return """
-import dace
-import copy
-from gt4py.backend.dace.stencil_object import DaCeStencilObject"""
+        return "\n".join(
+            [
+                *super().generate_imports().splitlines(),
+                "import dace",
+                "import copy",
+                "from gt4py.backend.dace.stencil_object import DaCeStencilObject",
+            ]
+        )
 
     def generate_base_class_name(self):
         return "DaCeStencilObject"
