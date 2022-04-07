@@ -53,9 +53,27 @@ def split_closures(node: ir.FencilDefinition):
     ), [tmp.id for tmp in tmps]
 
 
+def _collect_stencil_shifts(stencil, return_params=False):
+    if isinstance(stencil, ir.FunCall) and stencil.fun == ir.SymRef(id="scan"):
+        # get params of scan function, but ignore accumulator
+        fun = stencil.args[0]
+        params = fun.params[1:]
+    else:
+        assert isinstance(stencil, ir.Lambda)
+        fun = stencil
+        params = fun.params
+    shifts: dict[str, list[tuple]] = dict()
+    CollectShifts().visit(fun, shifts=shifts)
+    if return_params:
+        return shifts, params
+    return shifts
+
+
 def update_cartesian_domains(node: ir.FencilDefinition, offset_provider):
     def extend(domain, shifts):
         assert isinstance(domain, ir.FunCall) and domain.fun == ir.SymRef(id="domain")
+        if not shifts:
+            return domain
         assert all(isinstance(axis, CartesianAxis) for axis in offset_provider.values())
 
         offset_limits = {k: (0, 0) for k in offset_provider.keys()}
@@ -122,21 +140,62 @@ def update_cartesian_domains(node: ir.FencilDefinition, offset_provider):
         if closure.stencil == ir.SymRef(id="deref"):
             continue
 
-        local_shifts: dict[str, list[tuple]] = dict()
-        if isinstance(closure.stencil, ir.FunCall) and closure.stencil.fun == ir.SymRef(id="scan"):
-            # get params of scan function, but ignore accumulator
-            fun = closure.stencil.args[0]
-            params = fun.params[1:]
-        else:
-            assert isinstance(closure.stencil, ir.Lambda)
-            fun = closure.stencil
-            params = fun.params
-        CollectShifts().visit(fun, shifts=local_shifts)
+        local_shifts, params = _collect_stencil_shifts(closure.stencil, return_params=True)
         input_map = {param.id: inp.id for param, inp in zip(params, closure.inputs)}
         for param, shift in local_shifts.items():
             shifts.setdefault(input_map[param], []).extend(shift)
 
     return ir.FencilDefinition(id=node.id, params=node.params, closures=list(reversed(closures)))
+
+
+def update_unstructured_domains(node: ir.FencilDefinition, offset_provider):
+    known_domains = {
+        closure.output.id: closure.domain
+        for closure in node.closures
+        if closure.domain != AUTO_DOMAIN
+    }
+
+    closures = []
+    for closure in node.closures:
+        if closure.domain == AUTO_DOMAIN:
+            if closure.stencil == ir.SymRef(id="deref"):
+                domain = known_domains[closure.inputs[0].id]
+            else:
+                shifts = _collect_stencil_shifts(closure.stencil)
+                first_connectivity = {c[0].value for s in shifts.values() for c in s if c}
+                if not first_connectivity:
+                    # for now we assume that all inputs have the same domain
+                    assert all(
+                        known_domains[inp.id] == known_domains[closure.inputs[0].id]
+                        for inp in closure.inputs
+                    )
+                    domain = known_domains[closure.inputs[0].id]
+                else:
+                    assert len(first_connectivity) == 1
+                    conn = offset_provider[next(iter(first_connectivity))]
+                    axis = conn.origin_axis
+                    size = conn.tbl.shape[0]
+                    domain = ir.FunCall(
+                        fun=ir.SymRef(id="domain"),
+                        args=[
+                            ir.FunCall(
+                                fun=ir.SymRef(id="named_range"),
+                                args=[
+                                    ir.AxisLiteral(value=axis.value),
+                                    ir.IntLiteral(value=0),
+                                    ir.IntLiteral(value=size),
+                                ],
+                            )
+                        ],
+                    )
+
+            known_domains[closure.output.id] = domain
+            closure = ir.StencilClosure(
+                domain=domain, stencil=closure.stencil, output=closure.output, inputs=closure.inputs
+            )
+
+        closures.append(closure)
+    return ir.FencilDefinition(id=node.id, params=node.params, closures=closures)
 
 
 def collect_tmps_info(node: ir.FencilDefinition, tmps):
@@ -177,7 +236,10 @@ class CreateGlobalTmps(NodeTranslator):
         node, tmps = split_closures(node)
         node = PruneClosureInputs().visit(node)
         node = EtaReduction().visit(node)
-        node = update_cartesian_domains(node, offset_provider)
+        if all(isinstance(o, CartesianAxis) for o in offset_provider.values()):
+            node = update_cartesian_domains(node, offset_provider)
+        else:
+            node = update_unstructured_domains(node, offset_provider)
         if register_tmp is not None:
             infos = collect_tmps_info(node, tmps)
             for tmp, (domain, dtype) in infos.items():
