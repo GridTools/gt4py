@@ -140,6 +140,7 @@ class BaseModuleGenerator(abc.ABC):
             imports=self.generate_imports(),
             module_members=self.generate_module_members(),
             class_name=self.generate_class_name(),
+            base_class=self.generate_base_class_name(),
             class_members=self.generate_class_members(),
             docstring=self.generate_docstring(),
             gt_backend=self.generate_backend_name(),
@@ -187,7 +188,7 @@ class BaseModuleGenerator(abc.ABC):
 
     def generate_imports(self) -> str:
         """Generate import statements and related code for the stencil class module."""
-        return ""
+        return "from gt4py.stencil_object import StencilObject"
 
     def generate_class_name(self) -> str:
         """
@@ -197,6 +198,9 @@ class BaseModuleGenerator(abc.ABC):
         the builder object (see default implementation).
         """
         return self.builder.class_name
+
+    def generate_base_class_name(self) -> str:
+        return "StencilObject"
 
     def generate_docstring(self) -> str:
         """

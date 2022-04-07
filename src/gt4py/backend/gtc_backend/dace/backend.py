@@ -352,8 +352,13 @@ class DaCeBindingsCodegen:
 
 class DaCePyExtModuleGenerator(PyExtModuleGenerator):
     def generate_imports(self):
-        res = super().generate_imports()
-        return res + "\nimport dace\nimport copy"
+        return """
+import dace
+import copy
+from gt4py.backend.dace.stencil_object import DaCeStencilObject"""
+
+    def generate_base_class_name(self):
+        return "DaCeStencilObject"
 
     def generate_class_members(self):
         res = super().generate_class_members()
@@ -362,21 +367,7 @@ class DaCePyExtModuleGenerator(PyExtModuleGenerator):
             self.builder.module_name + "_pyext_BUILD",
             self.builder.module_name + ".sdfg",
         )
-        res += """
-_sdfg = None
-
-def __new__(cls, *args, **kwargs):
-    res = super().__new__(cls, *args, **kwargs)
-    cls._sdfg = dace.SDFG.from_file('{filepath}')
-    return res
-
-@property
-def sdfg(self) -> dace.SDFG:
-    return copy.deepcopy(self._sdfg)
-
-""".format(
-            filepath=filepath
-        )
+        res += f'\nSDFG_PATH = "{filepath}"\n'.format(filepath=filepath)
         return res
 
 
