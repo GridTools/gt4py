@@ -35,7 +35,7 @@ from functional.ffront.past_passes.type_deduction import ProgramTypeDeduction
 from functional.ffront.past_to_itir import ProgramLowering
 from functional.ffront.source_utils import CapturedVars
 from functional.iterator import ir as itir
-from functional.iterator.backend_executor import execute_program
+from functional.iterator.backend_executor import execute_fencil
 
 
 DEFAULT_BACKEND = "roundtrip"
@@ -202,7 +202,7 @@ class Program:
 
         backend = self.backend if self.backend else DEFAULT_BACKEND
 
-        execute_program(
+        execute_fencil(
             self.itir, *args, *size_args, **kwargs, offset_provider=offset_provider, backend=backend
         )
 

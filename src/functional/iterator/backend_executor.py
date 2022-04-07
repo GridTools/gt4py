@@ -4,7 +4,7 @@ from functional.iterator.backends import backend
 from functional.iterator.ir import FencilDefinition
 
 
-def execute_program(fencil: FencilDefinition, *args, **kwargs):
+def execute_fencil(fencil: FencilDefinition, *args, **kwargs):
     assert "backend" in kwargs
 
     if "debug" in kwargs and kwargs["debug"]:
