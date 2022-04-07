@@ -32,6 +32,7 @@ class ProgramLowering(NodeTranslator):
     --------
     >>> from functional.ffront.func_to_past import ProgramParser
     >>> from functional.iterator.runtime import CartesianAxis, offset
+    >>> from functional.iterator import ir
     >>> from functional.common import Field
     >>>
     >>> float64 = float
@@ -44,7 +45,12 @@ class ProgramLowering(NodeTranslator):
     ...    fieldop(inp, out=out)
     >>>
     >>> parsed = ProgramParser.apply_to_function(program)
-    >>> lowered = ProgramLowering.apply(parsed)
+    >>> fieldop_def = ir.FunctionDefinition(
+    ...     id="fieldop",
+    ...     params=[ir.Sym(id="inp")],
+    ...     expr=ir.FunCall(fun=ir.SymRef(id="deref"), args=[ir.SymRef(id="inp")])
+    ... )
+    >>> lowered = ProgramLowering.apply(parsed, function_definitions=[fieldop_def])
     >>> type(lowered)
     <class 'functional.iterator.ir.FencilDefinition'>
     >>> lowered.id
