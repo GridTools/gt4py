@@ -26,6 +26,12 @@ class PopupTmps(NodeTranslator):
                     lambda_fun = lambda_fun.args[0]
             assert isinstance(lambda_fun, ir.Lambda)
 
+            symrefs = lambda_fun.iter_tree().if_isinstance(ir.SymRef).getattr("id").to_set()
+            captured = symrefs - {p.id for p in lambda_fun.params} - ir.BUILTINS
+            if captured:
+                lifts |= nested_lifts
+                return res
+
             # TODO: avoid possible symbol name clashes
             symbol = f"t{self._counter}"
             self._counter += 1
