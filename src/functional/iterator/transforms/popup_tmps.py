@@ -59,6 +59,9 @@ class PopupTmps(NodeTranslator):
             ]
             assert len(res.fun.params) == len(res.args + new_args)
             return ir.FunCall(fun=res.fun, args=res.args + new_args)
+        elif node.fun == ir.SymRef(id="reduce"):
+            # protect reduction function from possible modification
+            return node
 
         return self.generic_visit(node, lifts=lifts)
 
