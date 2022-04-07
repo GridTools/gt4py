@@ -120,8 +120,6 @@ def nabla(
 
 
 def test_compute_zavgS(backend, use_tmps):
-    if use_tmps:
-        pytest.xfail("use_tmps currently only supported for cartesian")
     backend, validate = backend
     setup = nabla_setup()
 
@@ -176,8 +174,6 @@ def compute_zavgS2_fencil(
 
 
 def test_compute_zavgS2(backend, use_tmps):
-    if use_tmps:
-        pytest.xfail("use_tmps currently only supported for cartesian")
     backend, validate = backend
     setup = nabla_setup()
 
@@ -213,8 +209,6 @@ def test_compute_zavgS2(backend, use_tmps):
 
 
 def test_nabla(backend, use_tmps):
-    if use_tmps:
-        pytest.xfail("use_tmps currently only supported for cartesian")
     backend, validate = backend
     setup = nabla_setup()
 
@@ -268,8 +262,6 @@ def nabla2(
 
 
 def test_nabla2(backend, use_tmps):
-    if use_tmps:
-        pytest.xfail("use_tmps currently only supported for cartesian")
     backend, validate = backend
     setup = nabla_setup()
 
@@ -349,9 +341,6 @@ def nabla_sign(n_nodes, out_MXX, out_MYY, pp, S_MXX, S_MYY, vol, node_index, is_
 
 
 def test_nabla_sign(backend, use_tmps):
-    if use_tmps:
-        pytest.xfail("use_tmps currently only supported for cartesian")
-
     backend, validate = backend
     setup = nabla_setup()
 
