@@ -94,7 +94,6 @@ class Program(Node, SymbolTableTrait):
             "domain",
             "named_range",
             "lift",
-            "is_none",
             "make_tuple",
             "tuple_get",
             "reduce",
