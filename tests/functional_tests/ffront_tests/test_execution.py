@@ -302,3 +302,21 @@ def test_reduction_expression(reduction_setup):
 
     ref = np.sum(-(rs.v2e_table**2), axis=1)
     assert np.allclose(ref, rs.out.array())
+
+
+def test_tuples():
+    size = 10
+    a = np_as_located_field(IDim)(np.ones((size)))
+    b = np_as_located_field(IDim)(np.ones((size)) * 2)
+    c = np_as_located_field(IDim)(np.zeros((size)))
+
+    def tuples(inp1: Field[[IDim], float64], inp2: Field[[IDim], float64]):
+        inps = inp1, inp2
+        scalars = 1.3, 5.0, 3.4
+        return (inps[0] * scalars[0] + inps[1] * scalars[1]) * scalars[2]
+
+    program = program_from_function(tuples, dim=IDim, size=size)
+
+    roundtrip.executor(program, a, b, c, offset_provider={})
+
+    assert np.allclose((a.array() * 1.3 + b.array() * 5.0) * 3.4, c)

@@ -129,7 +129,14 @@ class FieldOperatorLowering(NodeTranslator):
         return result
 
     def visit_TupleExpr(self, node: foast.TupleExpr, **kwargs) -> itir.FunCall:
-        return im.make_tuple_(*self.visit(node.elts, **kwargs))
+        kwargs.pop("to_value", None)
+        to_value_list = [TypeInfo(element.type).is_scalar for element in node.elts]
+        return im.make_tuple_(
+            *(
+                self.visit(element, to_value=to_value_list[i], **kwargs)
+                for i, element in enumerate(node.elts)
+            )
+        )
 
     def visit_UnaryOp(
         self, node: foast.UnaryOp, *, to_value: bool = False, **kwargs
