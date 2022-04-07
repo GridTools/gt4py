@@ -361,9 +361,7 @@ def test_nabla_sign(backend, use_tmps):
         index_field(Vertex),
         is_pole_edge,
         offset_provider={"E2V": e2v, "V2E": v2e},
-        # backend=backend,
-        backend="roundtrip",
-        debug=True,
+        backend=backend,
         use_tmps=use_tmps,
     )
 
