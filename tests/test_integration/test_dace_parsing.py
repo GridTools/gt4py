@@ -1,12 +1,14 @@
 import re
 
-import dace
 import hypothesis.strategies as hyp_st
 import numpy as np
 import pytest
 
 from gt4py import gtscript
 from gt4py.gtscript import PARALLEL, computation, interval
+
+
+dace = pytest.importorskip("dace")
 
 
 @pytest.fixture
@@ -202,7 +204,7 @@ def test_optional_arg_provide_aot():
         inp: dace.float64[inp.shape],  # type: ignore
         outp: dace.float64[outp.shape],  # type: ignore
         unused_field: dace.float64[unused_field.shape],  # type: ignore
-        unused_par: dace.float64,
+        unused_par: dace.float64,  # type: ignore
     ):
         frozen_stencil(inp=inp, unused_field=unused_field, outp=outp, unused_par=unused_par)
 
