@@ -150,6 +150,7 @@ def scalar_value_st(dtype, min_value, max_value, allow_nan=False):
             max_value,
             allow_infinity=allow_infinity,
             allow_nan=allow_nan,
+            allow_subnormal=False,
             width=dtype.itemsize * 8,
         )
     elif issubclass(dtype.type, numbers.Integral):
