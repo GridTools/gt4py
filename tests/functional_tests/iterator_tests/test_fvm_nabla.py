@@ -299,20 +299,14 @@ def test_nabla2(backend, use_tmps):
 
 @fundef
 def sign(node_indices, is_pole_edge):
-    node_index = deref(node_indices)
+    def impl(node_indices2, is_pole_edge):
+        return if_(
+            or_(deref(is_pole_edge), eq(deref(node_indices), deref(shift(E2V, 0)(node_indices2)))),
+            1.0,
+            -1.0,
+        )
 
-    @fundef
-    def sign_impl(node_index):
-        def impl2(node_indices, is_pole_edge):
-            return if_(
-                or_(deref(is_pole_edge), eq(node_index, deref(shift(E2V, 0)(node_indices)))),
-                1.0,
-                -1.0,
-            )
-
-        return impl2
-
-    return shift(V2E)(lift(sign_impl(node_index))(node_indices, is_pole_edge))
+    return shift(V2E)(lift(impl)(node_indices, is_pole_edge))
 
 
 @fundef
