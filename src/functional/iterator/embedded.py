@@ -107,7 +107,12 @@ def reduce(fun, init):
         for i in range(n):
             # we can check a single argument
             # because all arguments share the same pattern
-            if builtins.deref(builtins.shift(i)(first_it)) is None:
+            shifted_first_it = builtins.shift(i)(first_it)
+            if (
+                hasattr(shifted_first_it, "pos")
+                and shifted_first_it.pos is None
+                or builtins.deref(shifted_first_it) is None
+            ):
                 break
             res = fun(
                 res,
