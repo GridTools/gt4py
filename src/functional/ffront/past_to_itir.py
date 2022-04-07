@@ -56,8 +56,8 @@ class ProgramLowering(NodeTranslator):
     contexts = (SymbolTableTrait.symtable_merger,)
 
     @classmethod
-    def apply(cls, node: past.Program) -> itir.FencilDefinition:
-        return cls().visit(node)
+    def apply(cls, node: past.Program, **kwargs) -> itir.FencilDefinition:
+        return cls().visit(node, **kwargs)
 
     def _gen_size_params_from_program(self, node: past.Program):
         """Generate symbols for each field param and dimension."""
@@ -70,6 +70,7 @@ class ProgramLowering(NodeTranslator):
 
     def visit_Program(self, node: past.Program, **kwargs) -> itir.FencilDefinition:
         symtable = kwargs["symtable"]
+        function_definitions = kwargs["function_definitions"]
 
         # The ITIR does not support dynamically getting the size of a field. As
         #  a workaround we add additional arguments to the fencil definition
@@ -90,6 +91,7 @@ class ProgramLowering(NodeTranslator):
 
         return itir.FencilDefinition(
             id=node.id,
+            function_definitions=function_definitions,
             params=[itir.Sym(id=inp.id) for inp in node.params] + size_params,
             closures=closures,
         )

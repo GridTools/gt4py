@@ -268,9 +268,18 @@ def test_copy_restrict_parsing(copy_restrict_program_def):
     pattern_node.match(past_node, raise_exception=True)
 
 
+function_definitions = [
+    itir.FunctionDefinition(
+        id="identity",
+        params=[itir.Sym(id="x")],
+        expr=itir.FunCall(fun=itir.SymRef(id="deref"), args=[itir.SymRef(id="x")]),
+    )
+]
+
+
 def test_copy_lowering(copy_program_def):
     past_node = ProgramParser.apply_to_function(copy_program_def)
-    itir_node = ProgramLowering.apply(past_node)
+    itir_node = ProgramLowering.apply(past_node, function_definitions=function_definitions)
     closure_pattern = P(
         itir.StencilClosure,
         domain=P(
@@ -309,7 +318,7 @@ def test_copy_lowering(copy_program_def):
 
 def test_copy_restrict_lowering(copy_restrict_program_def):
     past_node = ProgramParser.apply_to_function(copy_restrict_program_def)
-    itir_node = ProgramLowering.apply(past_node)
+    itir_node = ProgramLowering.apply(past_node, function_definitions=function_definitions)
     closure_pattern = P(
         itir.StencilClosure,
         domain=P(

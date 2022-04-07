@@ -157,11 +157,9 @@ class Program:
         return lowered_funcs
 
     @functools.cached_property
-    def itir(self) -> itir.Program:
+    def itir(self) -> itir.FencilDefinition:
         if self.externals:
             raise NotImplementedError("Externals are not supported yet.")
-
-        fencil_itir_node = ProgramLowering.apply(self.past_node)
 
         func_names = []
         for captured_var in self.past_node.captured_vars:
@@ -180,9 +178,7 @@ class Program:
 
         lowered_funcs = self._lowered_funcs_from_captured_vars(self.captured_vars)
 
-        return itir.Program(
-            function_definitions=lowered_funcs, fencil_definitions=[fencil_itir_node]
-        )
+        return ProgramLowering.apply(self.past_node, function_definitions=lowered_funcs)
 
     def _validate_args(self, *args, **kwargs) -> None:
         # TODO(tehrengruber): better error messages
