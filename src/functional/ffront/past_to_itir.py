@@ -74,10 +74,9 @@ class ProgramLowering(NodeTranslator):
                     size_params.append(itir.Sym(id=_size_arg_from_field(param.id, dim_idx)))
         return size_params
 
-    def visit_Program(self, node: past.Program, **kwargs) -> itir.FencilDefinition:
-        symtable = kwargs["symtable"]
-        function_definitions = kwargs["function_definitions"]
-
+    def visit_Program(
+        self, node: past.Program, *, symtable, function_definitions, **kwargs
+    ) -> itir.FencilDefinition:
         # The ITIR does not support dynamically getting the size of a field. As
         #  a workaround we add additional arguments to the fencil definition
         #  containing the size of all fields. The caller of a program is (e.g.
