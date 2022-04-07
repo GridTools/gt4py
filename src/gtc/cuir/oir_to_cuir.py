@@ -141,14 +141,14 @@ class OIRToCUIR(eve.NodeTranslator):
             node.data_index,
             ij_caches=ij_caches,
             k_caches=k_caches,
-            accessed_fields=ctx.accessed_fields,
+            ctx=ctx,
             **kwargs,
         )
         offset = self.visit(
             node.offset,
             ij_caches=ij_caches,
             k_caches=k_caches,
-            accessed_fields=ctx.accessed_fields,
+            ctx=ctx,
             **kwargs,
         )
         if node.name in ij_caches:
