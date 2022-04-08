@@ -31,12 +31,6 @@ def to_value(node: foast.LocatedNode) -> Callable[[itir.Expr], itir.Expr]:
     return lambda x: x
 
 
-def to_iterator(node: foast.LocatedNode) -> Callable[[itir.Expr], itir.Expr]:
-    if TypeInfo(node.type).is_scalar:
-        return lambda x: im.lift_(im.lambda__()(x))()
-    return lambda x: x
-
-
 class FieldOperatorLowering(NodeTranslator):
     """
     Lower FieldOperator AST (FOAST) to Iterator IR (ITIR).
@@ -133,10 +127,10 @@ class FieldOperatorLowering(NodeTranslator):
     def visit_UnaryOp(self, node: foast.UnaryOp, **kwargs) -> itir.FunCall:
         # TODO(tehrengruber): extend iterator ir to support unary operators
         zero_arg = [itir.IntLiteral(value=0)] if node.op is not foast.UnaryOperator.NOT else []
-        value = im.call_(node.op.value)(
+        result = im.call_(node.op.value)(
             *[*zero_arg, to_value(node.operand)(self.visit(node.operand, **kwargs))]
         )
-        return self._lift_if_field(node)(value)
+        return self._lift_if_field(node)(result)
 
     def visit_BinOp(self, node: foast.BinOp, **kwargs) -> itir.FunCall:
         result = im.call_(node.op.value)(
@@ -146,11 +140,11 @@ class FieldOperatorLowering(NodeTranslator):
         return self._lift_if_field(node)(result)
 
     def visit_Compare(self, node: foast.Compare, **kwargs) -> itir.FunCall:
-        value = im.call_(node.op.value)(
+        result = im.call_(node.op.value)(
             to_value(node.left)(self.visit(node.left, **kwargs)),
             to_value(node.left)(self.visit(node.right, **kwargs)),
         )
-        return self._lift_if_field(node)(value)
+        return self._lift_if_field(node)(result)
 
     def _visit_shift(self, node: foast.Call, **kwargs) -> itir.FunCall:
         result = None
