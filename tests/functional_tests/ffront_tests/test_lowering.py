@@ -283,6 +283,9 @@ def test_add_scalar_literals():
         )(im.lift_(im.lambda__("a")(im.plus_(im.deref_("a"), "tmp__0")))("a"))
     )
 
+    debug_itir(lowered.expr)
+    debug_itir(reference)
+
     assert lowered.expr == reference
 
 
