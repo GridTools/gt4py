@@ -50,7 +50,7 @@ class ProgramLowering(NodeTranslator):
     ...     params=[ir.Sym(id="inp")],
     ...     expr=ir.FunCall(fun=ir.SymRef(id="deref"), args=[ir.SymRef(id="inp")])
     ... )
-    >>> lowered = ProgramLowering.apply(parsed, function_definitions=[fieldop_def])
+    >>> lowered = ProgramLowering.apply(parsed, [fieldop_def])
     >>> type(lowered)
     <class 'functional.iterator.ir.FencilDefinition'>
     >>> lowered.id
@@ -62,8 +62,10 @@ class ProgramLowering(NodeTranslator):
     contexts = (SymbolTableTrait.symtable_merger,)
 
     @classmethod
-    def apply(cls, node: past.Program, **kwargs) -> itir.FencilDefinition:
-        return cls().visit(node, **kwargs)
+    def apply(
+        cls, node: past.Program, function_definitions: list[itir.FunctionDefinition]
+    ) -> itir.FencilDefinition:
+        return cls().visit(node, function_definitions=function_definitions)
 
     def _gen_size_params_from_program(self, node: past.Program):
         """Generate symbols for each field param and dimension."""
