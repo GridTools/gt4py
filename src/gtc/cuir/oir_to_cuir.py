@@ -37,7 +37,9 @@ class SymbolNameCreator(Protocol):
 
 def _make_axis_offset_expr(bound: common.AxisBound, axis_index: int) -> cuir.Expr:
     if bound.level == common.LevelMarker.END:
-        base = cuir.ScalarAccess(name="{}_size".format(["i", "j"][axis_index]), dtype=common.DataType.INT32)
+        base = cuir.ScalarAccess(
+            name="{}_size".format(["i", "j"][axis_index]), dtype=common.DataType.INT32
+        )
         return cuir.BinaryOp(
             op=common.ArithmeticOperator.ADD,
             left=base,
