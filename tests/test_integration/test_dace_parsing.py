@@ -5,6 +5,7 @@ import numpy as np
 import pytest
 
 from gt4py import gtscript
+from gt4py import storage as gt_storage
 from gt4py.gtscript import PARALLEL, computation, interval
 
 
@@ -40,15 +41,12 @@ def test_basic():
     inp = 7.0
 
     @dace.function
-    def call_frozen_stencil():
+    def call_stencil_object():
         defn(outp, par=inp)
 
-    call_frozen_stencil()
+    call_stencil_object()
 
-    assert np.allclose(
-        outp,
-        7.0,
-    )
+    assert np.allclose(outp, 7.0)
 
 
 @pytest.mark.parametrize("domain", [(0, 2, 3), (3, 3, 3), (1, 1, 1)])
@@ -90,10 +88,10 @@ def test_origin_offsetting_nofrozen(dace_stencil, domain, outp_origin):
     origin = {"inp": (0, 0, 0), "outp": outp_origin}
 
     @dace.program
-    def call_frozen_stencil():
+    def call_stencil_object():
         dace_stencil(inp=inp, outp=outp, domain=domain, origin=origin)
 
-    call_frozen_stencil()
+    call_stencil_object()
 
     assert np.allclose(inp, 7.0)
     assert np.allclose(
@@ -132,14 +130,7 @@ def test_optional_arg_noprovide():
     call_frozen_stencil()
 
     assert np.allclose(inp, 7.0)
-    assert np.allclose(
-        outp[
-            2:5,
-            2:5,
-            :,
-        ],
-        7.0,
-    )
+    assert np.allclose(outp[2:5, 2:5, :], 7.0)
     assert np.sum(outp, axis=(0, 1, 2)) == 90 * 7.0
 
 
@@ -169,14 +160,7 @@ def test_optional_arg_provide():
     call_frozen_stencil()
 
     assert np.allclose(inp, 7.0)
-    assert np.allclose(
-        outp[
-            2:5,
-            2:5,
-            :,
-        ],
-        7.0,
-    )
+    assert np.allclose(outp[2:5, 2:5, :], 7.0)
     assert np.sum(outp, axis=(0, 1, 2)) == 90 * 7.0
 
 
@@ -211,14 +195,7 @@ def test_optional_arg_provide_aot():
     csdfg = call_frozen_stencil.compile()
     csdfg(inp=inp, outp=outp, unused_field=unused_field, unused_par=7.0)
     assert np.allclose(inp, 7.0)
-    assert np.allclose(
-        outp[
-            2:5,
-            2:5,
-            :,
-        ],
-        7.0,
-    )
+    assert np.allclose(outp[2:5, 2:5, :], 7.0)
     assert np.sum(outp, axis=(0, 1, 2)) == 90 * 7.0
 
 
@@ -246,3 +223,25 @@ def test_nondace_raises():
         ),
     ):
         call_frozen_stencil()
+
+
+def test_gt4py_storage():
+    @gtscript.stencil(backend="gtc:dace")
+    def defn(outp: gtscript.Field[np.float64], par: np.float64):
+        with computation(PARALLEL), interval(...):
+            outp = par  # noqa F841: local variable 'outp' is assigned to but never used
+
+    outp = gt_storage.zeros(
+        dtype=np.float64, shape=(10, 10, 10), default_origin=(0, 0, 0), backend="gtc:dace"
+    )
+
+    inp = np.float_(7.0)
+
+    @dace.function
+    def call_stencil_object():
+        defn(outp, par=inp)
+
+    with dace.config.set_temporary("compiler", "allow_view_arguments", value=True):
+        call_stencil_object()
+
+    assert np.allclose(np.asarray(outp), 7.0)
