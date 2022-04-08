@@ -56,14 +56,19 @@ class OIRToCUIR(eve.NodeTranslator):
         accessed_fields: Set[str] = field(default_factory=set)
         positionals: Dict[int, cuir.Positional] = field(default_factory=dict)
 
-        def make_positional(self, axis: int) -> cuir.ScalarAccess:
+        def make_positional(self, axis: int) -> cuir.FieldAccess:
+            axis_name = ["i", "j", "k"][axis]
             positional = self.positionals.setdefault(
                 axis,
                 cuir.Positional(
-                    name=self.new_symbol_name(f"ax{axis}_ind"), axis_name=["I", "J", "K"][axis]
+                    name=self.new_symbol_name(f"axis_{axis_name}_index"), axis_name=axis_name
                 ),
             )
-            return cuir.ScalarAccess(name=positional.name, dtype=common.DataType.INT32)
+            return cuir.FieldAccess(
+                name=positional.name,
+                offset=common.CartesianOffset.zero(),
+                dtype=common.DataType.INT32,
+            )
 
     contexts = (eve.SymbolTableTrait.symtable_merger,)
 
@@ -100,19 +105,28 @@ class OIRToCUIR(eve.NodeTranslator):
     def _mask_to_expr(self, mask: common.HorizontalMask, ctx: "Context") -> cuir.Expr:
         mask_expr: List[cuir.Expr] = []
         for axis_index, interval in enumerate(mask.intervals):
-            for op, endpt in zip(
-                (common.ComparisonOperator.GE, common.ComparisonOperator.LT),
-                (interval.start, interval.end),
-            ):
-                if endpt is None:
-                    continue
+            if interval.is_single_index():
                 mask_expr.append(
                     cuir.BinaryOp(
-                        op=op,
+                        op=common.ComparisonOperator.EQ,
                         left=ctx.make_positional(axis_index),
-                        right=_make_axis_offset_expr(endpt, axis_index),
+                        right=_make_axis_offset_expr(interval.start, axis_index),
                     )
                 )
+            else:
+                for op, endpt in zip(
+                    (common.ComparisonOperator.GE, common.ComparisonOperator.LT),
+                    (interval.start, interval.end),
+                ):
+                    if endpt is None:
+                        continue
+                    mask_expr.append(
+                        cuir.BinaryOp(
+                            op=op,
+                            left=ctx.make_positional(axis_index),
+                            right=_make_axis_offset_expr(endpt, axis_index),
+                        )
+                    )
         return (
             functools.reduce(
                 lambda a, b: cuir.BinaryOp(op=common.LogicalOperator.AND, left=a, right=b),

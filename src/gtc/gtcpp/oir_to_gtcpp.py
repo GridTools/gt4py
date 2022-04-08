@@ -226,19 +226,30 @@ class OIRToGTCpp(eve.NodeTranslator):
     ) -> gtcpp.Expr:
         mask_expr: List[gtcpp.Expr] = []
         for axis_index, interval in enumerate(mask.intervals):
-            for op, endpt in zip(
-                (common.ComparisonOperator.GE, common.ComparisonOperator.LT),
-                (interval.start, interval.end),
-            ):
-                if endpt is None:
-                    continue
+            if interval.is_single_index():
                 mask_expr.append(
                     gtcpp.BinaryOp(
-                        op=op,
+                        op=common.ComparisonOperator.EQ,
                         left=comp_ctx.make_positional(axis_index),
-                        right=_make_axis_offset_expr(endpt, axis_index, comp_ctx.make_length),
+                        right=_make_axis_offset_expr(
+                            interval.start, axis_index, comp_ctx.make_length
+                        ),
                     )
                 )
+            else:
+                for op, endpt in zip(
+                    (common.ComparisonOperator.GE, common.ComparisonOperator.LT),
+                    (interval.start, interval.end),
+                ):
+                    if endpt is None:
+                        continue
+                    mask_expr.append(
+                        gtcpp.BinaryOp(
+                            op=op,
+                            left=comp_ctx.make_positional(axis_index),
+                            right=_make_axis_offset_expr(endpt, axis_index, comp_ctx.make_length),
+                        )
+                    )
         return (
             functools.reduce(
                 lambda a, b: gtcpp.BinaryOp(op=common.LogicalOperator.AND, left=a, right=b),
