@@ -12,6 +12,15 @@ from gt4py.gtscript import PARALLEL, computation, interval
 dace = pytest.importorskip("dace")
 
 
+pytestmark = pytest.mark.usefixtures("dace_env")
+
+
+@pytest.fixture(scope="module")
+def dace_env():
+    with dace.config.set_temporary("compiler", "cpu", "args", value=""):
+        yield
+
+
 @pytest.fixture
 def dace_stencil():
     @gtscript.stencil(backend="gtc:dace")
