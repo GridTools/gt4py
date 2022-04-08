@@ -217,13 +217,17 @@ class Storage(np.ndarray):
                 self.__dict__ = {**obj.__dict__, **self.__dict__}
                 self.is_stencil_view = False
                 if hasattr(obj, "_new_index"):
-                    index_iter = itertools.chain(
-                        obj._new_index, [slice(None, None)] * (len(obj.mask) - len(obj._new_index))
-                    )
-                    interpolated_mask = gt_utils.interpolate_mask(
-                        (isinstance(x, slice) for x in index_iter), obj.mask, False
-                    )
-                    self._mask = tuple(x & y for x, y in zip(obj.mask, interpolated_mask))
+                    if any(not isinstance(x, slice) for x in obj._new_index) and not isinstance(
+                        obj._new_index[0], np.ndarray
+                    ):
+                        index_iter = itertools.chain(
+                            obj._new_index,
+                            [slice(None, None)] * (len(obj.mask) - len(obj._new_index)),
+                        )
+                        interpolated_mask = gt_utils.interpolate_mask(
+                            (isinstance(x, slice) for x in index_iter), obj.mask, False
+                        )
+                        self._mask = tuple(x & y for x, y in zip(obj.mask, interpolated_mask))
                     delattr(obj, "_new_index")
                 if not hasattr(obj, "default_origin"):
                     self.is_stencil_view = True
