@@ -118,13 +118,17 @@ class FieldOperatorLowering(NodeTranslator):
         return self.lifted_lambda(*param_names)
 
     def visit_Subscript(self, node: foast.Subscript, **kwargs) -> itir.FunCall:
-        result = im.tuple_get_(node.index, self.visit(node.value, **kwargs))
-        return result
+        return im.tuple_get_(node.index, self.visit(node.value, **kwargs))
 
     def visit_TupleExpr(self, node: foast.TupleExpr, **kwargs) -> itir.FunCall:
         return im.make_tuple_(
             *(self.visit(element, **kwargs) for i, element in enumerate(node.elts))
         )
+
+    def _lift_if_field(self, node: foast.LocatedNode) -> Callable[[itir.Expr], itir.Expr]:
+        if TypeInfo(node.type).is_scalar:
+            return lambda x: x
+        return self._lift_lambda(node)
 
     def visit_UnaryOp(self, node: foast.UnaryOp, **kwargs) -> itir.FunCall:
         # TODO(tehrengruber): extend iterator ir to support unary operators
@@ -133,11 +137,6 @@ class FieldOperatorLowering(NodeTranslator):
             *[*zero_arg, to_value(node.operand)(self.visit(node.operand, **kwargs))]
         )
         return self._lift_if_field(node)(value)
-
-    def _lift_if_field(self, node: foast.LocatedNode) -> Callable[[itir.Expr], itir.Expr]:
-        if TypeInfo(node.type).is_scalar:
-            return lambda x: x
-        return self._lift_lambda(node)
 
     def visit_BinOp(self, node: foast.BinOp, **kwargs) -> itir.FunCall:
         result = im.call_(node.op.value)(
@@ -181,7 +180,7 @@ class FieldOperatorLowering(NodeTranslator):
             visitor = getattr(self, f"_visit_{node.func.id}")
             return visitor(node, **kwargs)
         result = im.call_(self.visit(node.func, **kwargs))(*self.visit(node.args, **kwargs))
-        return self._lift_lambda(node)(result)
+        return self._lift_if_field(node)(result)
 
     def _visit_neighbor_sum(self, node: foast.Call, **kwargs) -> itir.FunCall:
         return self._visit_reduce(node, **kwargs)

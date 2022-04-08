@@ -283,9 +283,6 @@ def test_add_scalar_literals():
         )(im.lift_(im.lambda__("a")(im.plus_(im.deref_("a"), "tmp__0")))("a"))
     )
 
-    debug_itir(lowered.expr)
-    debug_itir(reference)
-
     assert lowered.expr == reference
 
 
@@ -369,6 +366,18 @@ def test_binary_or():
     reference = im.deref_(
         im.lift_(im.lambda__("a", "b")(im.or__(im.deref_("a"), im.deref_("b"))))("a", "b")
     )
+
+    assert lowered.expr == reference
+
+
+def test_compare_scalars():
+    def comp_scalars():
+        return 3 > 4
+
+    parsed = FieldOperatorParser.apply_to_function(comp_scalars)
+    lowered = FieldOperatorLowering.apply(parsed)
+
+    reference = im.deref_(im.lift_(im.lambda__()(im.greater_(im.int_(3), im.int_(4))))())
 
     assert lowered.expr == reference
 
@@ -462,7 +471,7 @@ def test_reduction_lowering_simple():
 def test_reduction_lowering_expr():
     def reduction(e1: Field[[Edge], "float64"], e2: Field[[Vertex, V2EDim], "float64"]):
         e1_nbh = e1(V2E)
-        return neighbor_sum(e1_nbh + e2, axis=V2EDim)
+        return neighbor_sum(1.1 * (e1_nbh + e2), axis=V2EDim)
 
     parsed = FieldOperatorParser.apply_to_function(reduction)
     lowered = FieldOperatorLowering.apply(parsed)
@@ -472,7 +481,10 @@ def test_reduction_lowering_expr():
             im.lift_(
                 im.call_("reduce")(
                     im.lambda__("accum", "e1_nbh__0__0", "e2__1")(
-                        im.plus_("accum", im.plus_("e1_nbh__0__0", "e2__1"))
+                        im.plus_(
+                            "accum",
+                            im.multiplies_(im.float_(1.1), im.plus_("e1_nbh__0__0", "e2__1")),
+                        )
                     ),
                     0,
                 )

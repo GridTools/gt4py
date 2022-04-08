@@ -290,7 +290,7 @@ def test_reduction_expression(reduction_setup):
     def reduce_expr(edge_f: Field[[rs.Edge], "float64"]):  # type: ignore
         tmp_nbh_tup = edge_f(V2E), edge_f(V2E)
         tmp_nbh = tmp_nbh_tup[0]
-        return neighbor_sum(-edge_f(V2E) * tmp_nbh, axis=V2EDim)
+        return neighbor_sum(-edge_f(V2E) * tmp_nbh * 2.0, axis=V2EDim)
 
     program = program_from_function(reduce_expr, dim=rs.Vertex, size=rs.size)
     roundtrip.executor(
@@ -300,7 +300,7 @@ def test_reduction_expression(reduction_setup):
         offset_provider=rs.offset_provider,
     )
 
-    ref = np.sum(-(rs.v2e_table**2), axis=1)
+    ref = np.sum(-(rs.v2e_table**2) * 2, axis=1)
     assert np.allclose(ref, rs.out.array())
 
 
