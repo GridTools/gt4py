@@ -129,3 +129,4 @@ class ProgramFactory(factory.Factory):
     positionals: List[cuir.Positional] = []
     temporaries = factory.List([])
     kernels = factory.List([factory.SubFactory(KernelFactory)])
+    axis_sizes = cuir.axis_size_decls()

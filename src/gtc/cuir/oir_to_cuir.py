@@ -286,9 +286,4 @@ class OIRToCUIR(eve.NodeTranslator):
             positionals=list(ctx.positionals.values()),
             temporaries=temporaries,
             kernels=kernels,
-            axis_sizes=[
-                cuir.ScalarDecl(name="i_size", dtype=common.DataType.INT32),
-                cuir.ScalarDecl(name="j_size", dtype=common.DataType.INT32),
-                cuir.ScalarDecl(name="k_size", dtype=common.DataType.INT32),
-            ],
         )

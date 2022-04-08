@@ -239,10 +239,18 @@ class Kernel(LocNode):
         return v
 
 
+def axis_size_decls() -> List[ScalarDecl]:
+    return [
+        ScalarDecl(name="i_size", dtype=common.DataType.INT32),
+        ScalarDecl(name="j_size", dtype=common.DataType.INT32),
+        ScalarDecl(name="k_size", dtype=common.DataType.INT32),
+    ]
+
+
 class Program(LocNode, SymbolTableTrait):
     name: Str
     params: List[Decl]
     positionals: List[Positional]
     temporaries: List[Temporary]
     kernels: List[Kernel]
-    axis_sizes: List[Decl]
+    axis_sizes: List[ScalarDecl] = axis_size_decls()
