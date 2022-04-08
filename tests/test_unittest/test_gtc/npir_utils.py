@@ -18,6 +18,7 @@ from typing import List, Optional, Tuple, Union, cast
 
 import factory
 
+from gt4py.definitions import Extent
 from gtc import common
 from gtc.numpy import npir
 
@@ -31,7 +32,7 @@ class FieldDeclFactory(factory.Factory):
     name = identifier(npir.FieldDecl)
     dimensions = (True, True, True)
     data_dims: Tuple[int] = cast(Tuple[int], tuple())
-    extent: npir.HorizontalExtent = ((0, 0), (0, 0))
+    extent: Extent = Extent.zeros(ndims=2)
     dtype = common.DataType.FLOAT32
 
 
@@ -77,6 +78,7 @@ class LocalScalarAccessFactory(factory.Factory):
         model = npir.LocalScalarAccess
 
     name = identifier(npir.LocalScalarAccess)
+    dtype = common.DataType.FLOAT32
 
 
 class NativeFuncCallFactory(factory.Factory):
@@ -93,7 +95,7 @@ class VectorAssignFactory(factory.Factory):
 
     left = factory.SubFactory(FieldSliceFactory)
     right = factory.SubFactory(FieldSliceFactory)
-    mask: Optional[npir.Expr] = None
+    horizontal_mask: Optional[common.HorizontalMask] = None
 
 
 class VectorArithmeticFactory(factory.Factory):
@@ -109,9 +111,9 @@ class HorizontalBlockFactory(factory.Factory):
     class Meta:
         model = npir.HorizontalBlock
 
-    declarations: List[npir.ScalarDecl] = []
     body = factory.List([factory.SubFactory(VectorAssignFactory)])
-    extent: npir.HorizontalExtent = ((0, 0), (0, 0))
+    extent: Extent = Extent.zeros(ndims=2)
+    declarations: List[npir.LocalScalarDecl] = []
 
 
 class VerticalPassFactory(factory.Factory):

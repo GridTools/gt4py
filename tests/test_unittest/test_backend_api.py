@@ -82,7 +82,9 @@ def test_generate_bindings(backend, tmp_path):
         # standalone python computation module imported by stencil module
         result = builder.backend.generate_bindings("python")
         assert "init_1.py" in result
-        assert re.search(r"import computation", result["init_1.py"], re.MULTILINE)
+        assert re.search(
+            r"computation = make_module_from_file\(.*\)", result["init_1.py"], re.MULTILINE
+        )
     else:
         # assumption: only gt backends support python bindings for other languages than python
         if backend.name.startswith("gtc:"):

@@ -19,10 +19,8 @@ from typing import List, Optional, Tuple, Union
 from pydantic import validator
 
 import eve
+from gt4py.definitions import Extent
 from gtc import common
-
-
-HorizontalExtent = Tuple[Tuple[int, int], Tuple[int, int]]
 
 
 # --- Misc ---
@@ -42,7 +40,17 @@ class Decl(eve.Node):
 class ScalarDecl(Decl):
     """Scalar per grid point.
 
-    Used for API scalar parameters and local scalars. Local scalars never have data_dims.
+    Used for API scalar parameters. Local scalars never have data_dims.
+
+    """
+
+    pass
+
+
+class LocalScalarDecl(Decl):
+    """Scalar per grid point.
+
+    Used for API scalar parameters. Local scalars never have data_dims.
 
     """
 
@@ -54,7 +62,7 @@ class FieldDecl(Decl):
 
     dimensions: Tuple[bool, bool, bool]
     data_dims: Tuple[int, ...] = eve.field(default_factory=tuple)
-    extent: HorizontalExtent
+    extent: Extent
 
 
 class TemporaryDecl(Decl):
@@ -105,7 +113,6 @@ class VectorCast(common.Cast[Expr], Expr):
 
 class Broadcast(Expr):
     expr: Expr
-    dims: int = 3
     kind = common.ExprKind.FIELD
 
 
@@ -167,11 +174,10 @@ class Stmt(eve.Node):
     pass
 
 
-# --- Statement ---
 class VectorAssign(common.AssignStmt[VectorLValue, Expr], Stmt):
     left: VectorLValue
     right: Expr
-    mask: Optional[Expr] = None
+    horizontal_mask: Optional[common.HorizontalMask] = None
 
     @validator("right")
     def right_is_field_kind(cls, right: Expr) -> Expr:
@@ -188,9 +194,9 @@ class While(common.While[Stmt, Expr], Stmt):
 
 # --- Control Flow ---
 class HorizontalBlock(common.LocNode, eve.SymbolTableTrait):
-    declarations: List[ScalarDecl]
     body: List[Stmt]
-    extent: HorizontalExtent
+    extent: Extent
+    declarations: List[LocalScalarDecl]
 
 
 class VerticalPass(common.LocNode):
