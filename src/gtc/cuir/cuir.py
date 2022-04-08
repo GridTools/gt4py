@@ -245,3 +245,4 @@ class Program(LocNode, SymbolTableTrait):
     positionals: List[Positional]
     temporaries: List[Temporary]
     kernels: List[Kernel]
+    axis_sizes: List[Decl]

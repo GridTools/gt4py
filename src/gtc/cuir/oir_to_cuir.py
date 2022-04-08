@@ -37,7 +37,7 @@ class SymbolNameCreator(Protocol):
 
 def _make_axis_offset_expr(bound: common.AxisBound, axis_index: int) -> cuir.Expr:
     if bound.level == common.LevelMarker.END:
-        base = "{}_size".format(["i", "j"][axis_index])
+        base = cuir.ScalarAccess(name="{}_size".format(["i", "j"][axis_index]), dtype=common.DataType.INT32)
         return cuir.BinaryOp(
             op=common.ArithmeticOperator.ADD,
             left=base,
@@ -284,4 +284,9 @@ class OIRToCUIR(eve.NodeTranslator):
             positionals=list(ctx.positionals.values()),
             temporaries=temporaries,
             kernels=kernels,
+            axis_sizes=[
+                cuir.ScalarDecl(name="i_size", dtype=common.DataType.INT32),
+                cuir.ScalarDecl(name="j_size", dtype=common.DataType.INT32),
+                cuir.ScalarDecl(name="k_size", dtype=common.DataType.INT32),
+            ],
         )
