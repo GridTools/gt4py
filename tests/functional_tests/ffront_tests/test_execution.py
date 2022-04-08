@@ -70,7 +70,7 @@ def closure_from_fop(
     )
 
 
-# TODO(tehrengruber): dim and size are implicitly given bys out_names. Get values from there
+# TODO(tehrengruber): dim and size are implicitly given by out_names. Get values from there
 def fencil_from_fop(
     node: itir.FunctionDefinition, out_name: str, dim: CartesianAxis, size: int
 ) -> itir.FencilDefinition:
