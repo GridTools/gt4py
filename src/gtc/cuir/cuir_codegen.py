@@ -298,9 +298,9 @@ class CUIRCodegen(codegen.TemplatedGenerator):
         struct loop_${id(_this_node)}_f {
             sid::ptr_holder_type<Sid> m_ptr_holder;
             sid::strides_type<Sid> m_strides;
-            const int i_size;
-            const int j_size;
-            const int k_size;
+            int i_size;
+            int j_size;
+            int k_size;
 
             template <class Validator>
             GT_FUNCTION_DEVICE void operator()(const int _i_block,
