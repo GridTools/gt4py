@@ -85,7 +85,6 @@ BUILTINS = {
     "domain",
     "named_range",
     "lift",
-    "is_none",
     "make_tuple",
     "tuple_get",
     "reduce",

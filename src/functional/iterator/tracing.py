@@ -121,11 +121,6 @@ def scan(*args):
     return _f("scan", *args)
 
 
-@iterator.builtins.is_none.register(TRACING)
-def is_none(*args):
-    return _f("is_none", *args)
-
-
 @iterator.builtins.make_tuple.register(TRACING)
 def make_tuple(*args):
     return _f("make_tuple", *args)
