@@ -122,11 +122,9 @@ class OIRToCUIR(eve.NodeTranslator):
 
     def visit_HorizontalRestriction(
         self, node: oir.HorizontalRestriction, **kwargs: Any
-    ) -> cuir.Expr:
+    ) -> cuir.MaskStmt:
         mask = self._mask_to_expr(node.mask, kwargs["ctx"])
-        return cuir.IfStmt(
-            cond=mask, true_branch=cuir.BlockStmt(body=self.visit(node.body, **kwargs))
-        )
+        return cuir.MaskStmt(mask=mask, body=self.visit(node.body, **kwargs))
 
     def visit_FieldAccess(
         self,
