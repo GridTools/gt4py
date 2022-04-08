@@ -118,49 +118,6 @@ def reduce(fun, init):
     return sten
 
 
-class _None:
-    """Dummy object to allow execution of expression containing Nones in non-active path.
-
-    E.g.
-    `if_(is_none(state), 42, 42+state)`
-    here 42+state needs to be evaluatable even if is_none(state)
-
-    TODO: all possible arithmetic operations
-    """
-
-    def __add__(self, other):
-        return _None()
-
-    def __radd__(self, other):
-        return _None()
-
-    def __sub__(self, other):
-        return _None()
-
-    def __rsub__(self, other):
-        return _None()
-
-    def __mul__(self, other):
-        return _None()
-
-    def __rmul__(self, other):
-        return _None()
-
-    def __truediv__(self, other):
-        return _None()
-
-    def __rtruediv__(self, other):
-        return _None()
-
-    def __getitem__(self, i):
-        return _None()
-
-
-@builtins.is_none.register(EMBEDDED)
-def is_none(arg):
-    return isinstance(arg, _None)
-
-
 @builtins.domain.register(EMBEDDED)
 def domain(*args):
     return dict(args)
@@ -657,8 +614,6 @@ def fendef_embedded(fun, *args, **kwargs):  # noqa: 536
                     _range = reversed(_range)
 
                 state = init
-                if state is None:
-                    state = _None()
                 col = []
                 for i in _range:
                     state = scan_pass(
