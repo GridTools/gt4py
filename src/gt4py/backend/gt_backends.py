@@ -18,6 +18,7 @@ import abc
 import functools
 import numbers
 import os
+import pathlib
 import time
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Type, Union
 
@@ -754,8 +755,8 @@ class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
             ir = self.builder.implementation_ir
         # Generate source
         if not self.builder.options._impl_opts.get("disable-code-generation", False):
-            gt_pyext_sources: Dict[str, Any] = self.make_extension_sources(ir=ir)
-            gt_pyext_sources = {**gt_pyext_sources["computation"], **gt_pyext_sources["bindings"]}
+            gt_pyext_files: Dict[str, Any] = self.make_extension_sources(ir=ir)
+            gt_pyext_sources = {**gt_pyext_files["computation"], **gt_pyext_files["bindings"]}
         else:
             # Pass NOTHING to the self.builder means try to reuse the source code files
             gt_pyext_sources = {
@@ -766,7 +767,9 @@ class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
             next_time = time.perf_counter()
             build_info["codegen_time"] = next_time - start_time
             start_time = next_time
-
+        pyext_build_path = pathlib.Path(
+            os.path.relpath(self.pyext_build_dir_path, pathlib.Path.cwd())
+        )
         # Build extension module
         pyext_opts = dict(
             verbose=self.builder.options.backend_opts.get("verbose", False),
@@ -780,6 +783,10 @@ class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
         )
 
         result = self.build_extension_module(gt_pyext_sources, pyext_opts, uses_cuda=uses_cuda)
+
+        for filename, content in gt_pyext_files.get("info", {}).items():
+            with open(pyext_build_path / filename, "w+") as handle:
+                handle.write(content)
 
         if build_info is not None:
             build_info["build_time"] = time.perf_counter() - start_time

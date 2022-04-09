@@ -508,6 +508,10 @@ class _FieldDescriptor:
         else:
             self.data_dims = data_dims
 
+    def __descriptor__(self):
+        # Ignore, use JIT
+        return None
+
     def __repr__(self):
         args = f"dtype={repr(self.dtype)}, axes={repr(self.axes)}, data_dims={repr(self.data_dims)}"
         return f"_FieldDescriptor({args})"
