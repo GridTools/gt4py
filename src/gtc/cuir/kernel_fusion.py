@@ -74,5 +74,9 @@ class FuseKernels(NodeTranslator):
             previous_parallel = parallel
 
         return cuir.Program(
-            name=node.name, params=node.params, temporaries=node.temporaries, kernels=kernels
+            name=node.name,
+            params=node.params,
+            positionals=node.positionals,
+            temporaries=node.temporaries,
+            kernels=kernels,
         )
