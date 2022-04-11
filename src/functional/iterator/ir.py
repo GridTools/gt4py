@@ -26,6 +26,11 @@ class FloatLiteral(Expr):
     value: float  # TODO other float types
 
 
+class NumberLiteral(Expr):
+    value: str
+    type: str
+
+
 class StringLiteral(Expr):
     value: str
 

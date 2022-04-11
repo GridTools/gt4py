@@ -17,6 +17,7 @@ import functional.ffront.field_operator_ast as foast
 from eve import NodeTranslator, SymbolTableTrait
 from functional.common import GTSyntaxError
 from functional.ffront import common_types as ct
+from functional.ffront import fbuiltins
 from functional.ffront.type_info import TypeInfo, is_complete_symbol_type
 
 
@@ -278,6 +279,8 @@ class FieldOperatorTypeDeduction(NodeTranslator):
     def visit_Call(self, node: foast.Call, **kwargs) -> foast.Call:
         # TODO(tehrengruber): check type is complete
         new_func = self.visit(node.func, **kwargs)
+        if new_func.id in fbuiltins.TYPE_BUILTIN_NAMES:
+            new_func.type = node.func.type
 
         if isinstance(new_func.type, ct.FieldType):
             new_args = self.visit(node.args, in_shift=True, **kwargs)

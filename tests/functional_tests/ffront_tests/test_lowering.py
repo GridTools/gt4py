@@ -13,7 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 from functional.common import Field
 from functional.ffront import itir_makers as im
-from functional.ffront.fbuiltins import FieldOffset, float64, int32, int32_, int64, neighbor_sum
+from functional.ffront.fbuiltins import FieldOffset, float64, int32, int64, neighbor_sum
 from functional.ffront.foast_to_itir import FieldOperatorLowering
 from functional.ffront.func_to_foast import FieldOperatorParser
 from functional.iterator.runtime import CartesianAxis
@@ -260,14 +260,16 @@ def test_add_scalar_literal_to_field():
     parsed = FieldOperatorParser.apply_to_function(scalar_plus_field)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.deref_(im.lift_(im.lambda__("a")(im.plus_(im.float_(2.0), im.deref_("a"))))("a"))
+    reference = im.deref_(
+        im.lift_(im.lambda__("a")(im.plus_(im.number_("float64", "2.0"), im.deref_("a"))))("a")
+    )
 
     assert lowered.expr == reference
 
 
 def test_add_scalar_literals():
     def scalar_plus_scalar(a: Field[..., "int32"]) -> Field[..., "int32"]:
-        tmp = int32_(1) + int32_(1)
+        tmp = int32(1) + int32(1)
         return a + tmp
 
     parsed = FieldOperatorParser.apply_to_function(scalar_plus_scalar)
@@ -277,8 +279,8 @@ def test_add_scalar_literals():
         im.let(
             "tmp__0",
             im.plus_(
-                im.int_(1),
-                im.int_(1),
+                im.number_("int32", "1"),
+                im.number_("int32", "1"),
             ),
         )(im.lift_(im.lambda__("a")(im.plus_(im.deref_("a"), "tmp__0")))("a"))
     )
@@ -377,7 +379,9 @@ def test_compare_scalars():
     parsed = FieldOperatorParser.apply_to_function(comp_scalars)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.deref_(im.lift_(im.lambda__()(im.greater_(im.int_(3), im.int_(4))))())
+    reference = im.deref_(
+        im.lift_(im.lambda__()(im.greater_(im.number_("int64", "3"), im.number_("int64", "4"))))()
+    )
 
     assert lowered.expr == reference
 
@@ -483,7 +487,9 @@ def test_reduction_lowering_expr():
                     im.lambda__("accum", "e1_nbh__0__0", "e2__1")(
                         im.plus_(
                             "accum",
-                            im.multiplies_(im.float_(1.1), im.plus_("e1_nbh__0__0", "e2__1")),
+                            im.multiplies_(
+                                im.number_("float64", "1.1"), im.plus_("e1_nbh__0__0", "e2__1")
+                            ),
                         )
                     ),
                     0,

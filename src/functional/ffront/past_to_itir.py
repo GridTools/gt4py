@@ -154,7 +154,9 @@ class ProgramLowering(NodeTranslator):
                 # an expression for the size of a dimension
                 dim_size = itir.SymRef(id=_size_arg_from_field(out_field_name.id, dim_i))
                 # lower bound
-                lower = self._visit_slice_bound(slice_.lower, itir.IntLiteral(value=0), dim_size)
+                lower = self._visit_slice_bound(
+                    slice_.lower, itir.NumberLiteral(value="0", type="int"), dim_size
+                )
                 upper = self._visit_slice_bound(slice_.upper, dim_size, dim_size)
 
                 domain_args.append(
@@ -171,7 +173,7 @@ class ProgramLowering(NodeTranslator):
                     fun=itir.SymRef(id="named_range"),
                     args=[
                         itir.AxisLiteral(value=dim.value),
-                        itir.IntLiteral(value=0),
+                        itir.NumberLiteral(value="0", type="int"),
                         # here we use the artificial size arguments added to the fencil
                         itir.SymRef(id=_size_arg_from_field(out_field_name.id, dim_idx)),
                     ],
@@ -189,13 +191,15 @@ class ProgramLowering(NodeTranslator):
 
     def visit_Constant(
         self, node: past.Constant, **kwargs
-    ) -> Union[itir.IntLiteral, itir.FloatLiteral, itir.BoolLiteral]:
+    ) -> Union[itir.NumberLiteral, itir.BoolLiteral]:
         if isinstance(node.type, common_types.ScalarType) and node.type.shape is None:
             match node.type.kind:
                 case common_types.ScalarKind.INT32 | common_types.ScalarKind.INT64:
-                    return itir.IntLiteral(value=node.value)
-                case common_types.ScalarKind.FLOAT32 | common_types.ScalarKind.FLOAT64:
-                    return itir.FloatLiteral(value=node.value)
+                    return itir.NumberLiteral(value=str(node.value), type="int")
+                case common_types.ScalarKind.FLOAT32:
+                    return itir.NumberLiteral(value=str(node.value), type="float32")
+                case common_types.ScalarKind.FLOAT64:
+                    return itir.FloatLiteral(value=str(node.value), type="float64")
                 case common_types.ScalarKind.BOOL:
                     return itir.BoolLiteral(value=node.value)
                 case _:

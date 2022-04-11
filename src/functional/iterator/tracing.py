@@ -9,12 +9,11 @@ from functional.iterator.ir import (
     BoolLiteral,
     Expr,
     FencilDefinition,
-    FloatLiteral,
     FunCall,
     FunctionDefinition,
-    IntLiteral,
     Lambda,
     NoneLiteral,
+    NumberLiteral,
     OffsetLiteral,
     Program,
     StencilClosure,
@@ -222,9 +221,9 @@ def make_node(o):
     if isinstance(o, bool):
         return BoolLiteral(value=o)
     if isinstance(o, int):
-        return IntLiteral(value=o)
+        return NumberLiteral(value=str(o), type="int")
     if isinstance(o, float):
-        return FloatLiteral(value=o)
+        return NumberLiteral(value=str(o), type="float")
     if isinstance(o, CartesianAxis):
         return AxisLiteral(value=o.value)
     if isinstance(o, tuple):

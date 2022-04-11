@@ -17,7 +17,7 @@ from __future__ import annotations
 import ast
 import collections
 import copy
-from typing import Any, Mapping, Type
+from typing import Any, Mapping, Type, cast
 
 from functional.ffront import common_types as ct
 from functional.ffront import fbuiltins
@@ -352,6 +352,19 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
                 raise FieldOperatorSyntaxError.from_AST(
                     node, msg=f"Wrong syntax for function {new_func.id}."
                 )
+        if new_func.id in fbuiltins.TYPE_BUILTIN_NAMES:
+            global_ns = {**fbuiltins.BUILTINS, **self.captured_vars.globals}
+            local_ns = self.captured_vars.nonlocals
+            new_func.type = ct.FunctionType(
+                args=[ct.DeferredSymbolType(constraint=ct.ScalarType)],
+                kwargs={},
+                returns=cast(
+                    ct.DataType,
+                    symbol_makers.make_symbol_type_from_typing(
+                        new_func.id, global_ns=global_ns, local_ns=local_ns
+                    ),
+                ),
+            )
 
         for keyword in node.keywords:
             args.append(keyword.value)
