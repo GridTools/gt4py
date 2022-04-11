@@ -739,7 +739,9 @@ def parse_annotation(
         tuple_or_name.elts if isinstance(tuple_or_name, ast.Tuple) else tuple_or_name
     )
 
-    has_axes_and_dtype = len(dtype_and_axes) > 1 and isinstance(dtype_and_axes[0], ast.Constant)
+    has_axes_and_dtype = len(dtype_and_axes) > 1 and isinstance(
+        dtype_and_axes[0], (ast.Constant, ast.Name)
+    )
 
     if has_axes_and_dtype:
         axes = gt_utils.meta.get_qualified_name_from_node(dtype_and_axes[0])
