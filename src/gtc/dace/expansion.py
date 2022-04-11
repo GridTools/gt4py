@@ -328,28 +328,33 @@ class TaskletCodegen(codegen.TemplatedGenerator):
     def visit_Tasklet(self, node: dcir.Tasklet, **kwargs):
         return "\n".join(self.visit(node.stmts, targets=set(), **kwargs))
 
-    def visit_MaskStmt(self, node: oir.MaskStmt, **kwargs):
+    def _visit_conditional(self, node: Union[oir.MaskStmt, oir.HorizontalRestriction], **kwargs):
         mask_str = ""
         indent = ""
         if node.mask is not None:
             mask_str = f"if {self.visit(node.mask, is_target=False, **kwargs)}:"
-            indent = "    "
-        body_code = self.visit(node.body, **kwargs)
+            indent = " " * 4
+        body_code = [
+            line for block in self.visit(node.body, **kwargs) for line in block.split("\n")
+        ]
         body_code = [indent + b for b in body_code]
         return "\n".join([mask_str] + body_code)
 
-    def visit_While(self, node: oir.While, **kwargs: Any):
-        body = self.visit(node.body, **kwargs)
-        body = [line for block in body for line in block.split("\n")]
+    def visit_MaskStmt(self, node: oir.MaskStmt, **kwargs):
+        return self._visit_conditional(node, **kwargs)
+
+    def visit_HorizontalRestriction(self, node: oir.HorizontalRestriction, **kwargs):
+        return self._visit_conditional(node, **kwargs)
+
+    def visit_While(self, node: oir.While, **kwargs):
         cond = self.visit(node.cond, is_target=False, **kwargs)
-        init = "num_iter = 0"
-        max_iter = 1000
-        cond += f" and (num_iter < {max_iter})"
-        body.append("num_iter += 1")
+        while_str = f"while {cond}:"
         indent = " " * 4
-        delim = f"\n{indent}"
-        code_as_str = f"{init}\nwhile {cond}:\n{indent}{delim.join(body)}"
-        return code_as_str
+        body_code = [
+            line for block in self.visit(node.body, **kwargs) for line in block.split("\n")
+        ]
+        body_code = [indent + b for b in body_code]
+        return "\n".join([while_str] + body_code)
 
     def visit_HorizontalMask(self, node: common.HorizontalMask, **kwargs):
         clauses: List[str] = []
@@ -367,31 +372,11 @@ class TaskletCodegen(codegen.TemplatedGenerator):
             clauses.append(f"{dcir.Axis.J.iteration_symbol()} < {jmax}")
         return " and ".join(clauses)
 
-    class RemoveCastInIndexVisitor(eve.NodeTranslator):
-        def visit_FieldAccess(self, node: oir.FieldAccess):
-            if node.data_index:
-                return self.generic_visit(node, in_idx=True)
-            else:
-                return self.generic_visit(node)
-
-        def visit_Cast(self, node: oir.Cast, in_idx=False):
-            if in_idx:
-                return node.expr
-            else:
-                return node
-
-        def visit_Literal(self, node: oir.Cast, in_idx=False):
-            if in_idx:
-                return node
-            else:
-                return oir.Cast(dtype=node.dtype, expr=node)
-
     @classmethod
     def apply(cls, node: oir.HorizontalExecution, **kwargs: Any) -> str:
-        preprocessed_node = cls.RemoveCastInIndexVisitor().visit(node)
         if not isinstance(node, oir.HorizontalExecution):
             raise ValueError("apply() requires oir.HorizontalExecution node")
-        generated_code = super().apply(preprocessed_node)
+        generated_code = super().apply(node)
         formatted_code = codegen.format_source("python", generated_code)
         return formatted_code
 
