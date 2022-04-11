@@ -220,8 +220,7 @@ class TaskletCodegen(codegen.TemplatedGenerator):
         offset_strs = []
         for axis in field_decl.axes():
             if axis == dcir.Axis.K:
-                raw_idx = axis.iteration_symbol() + f"+({self.visit(node.k, **kwargs)})"
-                index_str = f"max(0,min({field_decl.access_info.grid_subset.intervals[axis].size},{raw_idx}))"
+                index_str = f"{axis.iteration_symbol()} + ({self.visit(node.k, **kwargs)})"
                 offset_strs.append(index_str)
             else:
                 offset_strs.append(axis.iteration_symbol())

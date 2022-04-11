@@ -277,10 +277,11 @@ class DaCeComputationCodegen:
         field_extents = compute_fields_extents(oir, add_k=True)
 
         offset_dict: Dict[str, Tuple[int, int, int]] = {
-            k: (max(-v[0][0], 0), max(-v[1][0], 0), -v[2][0]) for k, v in field_extents.items()
+            k: (max(-v[0][0], 0), max(-v[1][0], 0), 0) for k, v in field_extents.items()
         }
         k_origins = {
-            field_name: boundary[0] for field_name, boundary in compute_k_boundary(gtir).items()
+            field_name: max(boundary[0], 0)
+            for field_name, boundary in compute_k_boundary(gtir).items()
         }
         for name, origin in k_origins.items():
             offset_dict[name] = (offset_dict[name][0], offset_dict[name][1], origin)
@@ -477,7 +478,6 @@ def layout_maker_factory(base_layout):
 class BaseGTCDaceBackend(BaseGTBackend, CLIBackendMixin):
 
     GT_BACKEND_T = "dace"
-    languages = {"computation": "c++", "bindings": ["python"]}
 
     options = BaseGTBackend.GT_BACKEND_OPTS
     PYEXT_GENERATOR_CLASS = GTCDaCeExtGenerator  # type: ignore
@@ -507,10 +507,9 @@ class BaseGTCDaceBackend(BaseGTBackend, CLIBackendMixin):
 
 
 @register
-class GTCDaceBackend(BaseGTCDaceBackend):
+class GTCDaceCPUBackend(BaseGTCDaceBackend):
 
     name = "gtc:dace:cpu"
-    GT_BACKEND_T = "dace"
     languages = {"computation": "c++", "bindings": ["python"]}
     storage_info = {
         "alignment": 1,
@@ -529,8 +528,7 @@ class GTCDaceGPUBackend(BaseGTCDaceBackend):
     """DaCe python backend using gtc."""
 
     name = "gtc:dace:gpu"
-    GT_BACKEND_T = "dace"
-    languages = {"computation": "c++", "bindings": ["python"]}
+    languages = {"computation": "cuda", "bindings": ["python"]}
     storage_info = {
         "alignment": 32,
         "device": "gpu",
