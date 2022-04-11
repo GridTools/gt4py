@@ -183,7 +183,7 @@ class PyExtModuleGenerator(BaseModuleGenerator):
         return gtir_is_not_empty(self.builder.gtir_pipeline)
 
     def generate_imports(self) -> str:
-        source = ["from gt4py import utils as gt_utils"]
+        source = [*super().generate_imports().splitlines(), "from gt4py import utils as gt_utils"]
         if self._is_not_empty():
             assert self.pyext_file_path is not None
             file_path = 'f"{{pathlib.Path(__file__).parent.resolve()}}/{}"'.format(
