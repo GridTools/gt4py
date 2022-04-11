@@ -103,8 +103,8 @@ class GTCDaCeExtGenerator(BackendCodegen):
             "oir_pipeline",
             DefaultPipeline(skip=[MaskInlining]),
         )
-        o_ir = oir_pipeline.run(base_oir)
-        sdfg = OirSDFGBuilder().visit(o_ir)
+        oir_node = oir_pipeline.run(base_oir)
+        sdfg = OirSDFGBuilder().visit(oir_node)
 
         sdfg = _expand_and_finalize_sdfg(stencil_ir, sdfg, self.backend.storage_info["layout_map"])
 

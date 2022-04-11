@@ -51,17 +51,17 @@ class GTCCudaExtGenerator(BackendCodegen):
 
     def __call__(self, stencil_ir: gtir.Stencil) -> Dict[str, Dict[str, str]]:
         stencil_ir = GtirPipeline(stencil_ir).full()
-        base_o_ir = GTIRToOIR().visit(stencil_ir)
+        base_oir = GTIRToOIR().visit(stencil_ir)
         oir_pipeline = self.backend.builder.options.backend_opts.get(
             "oir_pipeline", DefaultPipeline(skip=[NoFieldAccessPruning])
         )
-        o_ir = oir_pipeline.run(base_o_ir)
-        o_ir = FillFlushToLocalKCaches().visit(o_ir)
-        cu_ir = OIRToCUIR().visit(o_ir)
-        cu_ir = kernel_fusion.FuseKernels().visit(cu_ir)
-        cu_ir = extent_analysis.CacheExtents().visit(cu_ir)
+        oir_node = oir_pipeline.run(base_oir)
+        oir_node = FillFlushToLocalKCaches().visit(oir_node)
+        cuir_node = OIRToCUIR().visit(oir_node)
+        cuir_node = kernel_fusion.FuseKernels().visit(cuir_node)
+        cuir_node = extent_analysis.CacheExtents().visit(cuir_node)
         format_source = self.backend.builder.options.format_source
-        implementation = cuir_codegen.CUIRCodegen.apply(cu_ir, format_source=format_source)
+        implementation = cuir_codegen.CUIRCodegen.apply(cuir_node, format_source=format_source)
         bindings = GTCCudaBindingsCodegen.apply(
             cuir, module_name=self.module_name, backend=self.backend, format_source=format_source
         )
