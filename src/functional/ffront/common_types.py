@@ -2,6 +2,8 @@ import typing
 from dataclasses import dataclass
 from typing import Literal, Optional, Union
 
+import numpy as np
+
 from eve.type_definitions import IntEnum, StrEnum
 from functional import common as func_common
 
@@ -10,6 +12,7 @@ class ScalarKind(IntEnum):
     BOOL = 1
     INT32 = 32
     INT64 = 64
+    INT = INT64 if np.int_ == np.int64 else INT32
     FLOAT32 = 1032
     FLOAT64 = 1064
     DIMENSION = 2001

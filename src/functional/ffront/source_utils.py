@@ -18,6 +18,7 @@ import functools
 import inspect
 import symtable
 import textwrap
+import os
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from typing import Any, Mapping, Union, cast
@@ -32,7 +33,7 @@ MISSING_FILENAME = "<string>"
 
 def make_source_definition_from_function(func: Callable) -> SourceDefinition:
     try:
-        filename = inspect.getabsfile(func) or MISSING_FILENAME
+        filename = os.path.realpath(inspect.getabsfile(func)) or MISSING_FILENAME
         source = textwrap.dedent(inspect.getsource(func))
         starting_line = (
             inspect.getsourcelines(func)[1] if not filename.endswith(MISSING_FILENAME) else 1
