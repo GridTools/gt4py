@@ -25,7 +25,6 @@ from gt4py.backend.gtc_backend.defir_to_gtir import DefIRToGTIR  # noqa: E402
 from gt4py.definitions import BuildOptions  # noqa: E402
 from gt4py.frontend.gtscript_frontend import GTScriptFrontend  # noqa: E402
 from gtc.common import AxisBound, DataType  # noqa: E402
-from gtc.dace.dace_to_oir import convert  # noqa: E402
 from gtc.dace.oir_to_dace import OirSDFGBuilder  # noqa: E402
 from gtc.gtir_to_oir import GTIRToOIR  # noqa: E402
 from gtc.oir import Interval, Literal  # noqa: E402

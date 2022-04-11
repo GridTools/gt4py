@@ -16,7 +16,5 @@
 
 # need to import expansion so that implementation of expansion is registered
 from .expansion import StencilComputationExpansion
-from .nodes import VerticalLoopLibraryNode
 
-
-__all__ = ["VerticalLoopLibraryNode"]
+__all__ = []
