@@ -958,21 +958,22 @@ class StencilComputation(library.LibraryNode):
                     (
                         acc.name
                         for acc in he.iter_tree().if_isinstance(oir.FieldAccess)
-                        if acc.offset.i != 0
+                        if acc.offset.to_dict["i"] != 0
                     )
                 )
                 j_offset_fields = set(
                     (
                         acc.name
                         for acc in he.iter_tree().if_isinstance(oir.FieldAccess)
-                        if acc.offset.j != 0
+                        if acc.offset.to_dict["j"] != 0
                     )
                 )
                 k_offset_fields = set(
                     (
                         acc.name
                         for acc in he.iter_tree().if_isinstance(oir.FieldAccess)
-                        if isinstance(acc.offset, oir.VariableKOffset) or acc.offset.k != 0
+                        if isinstance(acc.offset, oir.VariableKOffset)
+                        or acc.offset.to_dict()["k"] != 0
                     )
                 )
                 modified_fields = (

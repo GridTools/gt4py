@@ -351,7 +351,7 @@ class TaskletCodegen(codegen.TemplatedGenerator):
         code_as_str = f"{init}\nwhile {cond}:\n{indent}{delim.join(body)}"
         return code_as_str
 
-    def visit_HorizontalMask(self, node: oir.HorizontalMask, **kwargs):
+    def visit_HorizontalMask(self, node: common.HorizontalMask, **kwargs):
         clauses: List[str] = []
         imin = get_axis_bound_str(node.i.start, dcir.Axis.I.domain_symbol())
         if imin:

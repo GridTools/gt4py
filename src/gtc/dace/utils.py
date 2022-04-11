@@ -275,16 +275,18 @@ class CartesianIterationSpace(oir.LocNode):
         )
 
     @staticmethod
-    def from_offset(offset: CartesianOffset) -> "CartesianIterationSpace":
+    def from_offset(
+        offset: Union[CartesianOffset, oir.VariableKOffset]
+    ) -> "CartesianIterationSpace":
 
         return CartesianIterationSpace(
             i_interval=oir.Interval(
-                start=oir.AxisBound.from_start(min(0, offset.i)),
-                end=oir.AxisBound.from_end(max(0, offset.i)),
+                start=oir.AxisBound.from_start(min(0, offset.to_dict()["i"])),
+                end=oir.AxisBound.from_end(max(0, offset.to_dict()["i"])),
             ),
             j_interval=oir.Interval(
-                start=oir.AxisBound.from_start(min(0, offset.j)),
-                end=oir.AxisBound.from_end(max(0, offset.j)),
+                start=oir.AxisBound.from_start(min(0, offset.to_dict()["j"])),
+                end=oir.AxisBound.from_end(max(0, offset.to_dict()["j"])),
             ),
         )
 
@@ -1022,7 +1024,7 @@ class AccessInfoCollector(NodeVisitor):
         self.visit(node.left, is_write=True, **kwargs)
 
     def visit_MaskStmt(self, node: oir.MaskStmt, *, is_conditional=False, **kwargs):
-        regions = node.mask.iter_tree().if_isinstance(oir.HorizontalMask).to_list()
+        regions = node.mask.iter_tree().if_isinstance(common.HorizontalMask).to_list()
 
         self.visit(node.mask, is_conditional=is_conditional, **kwargs)
         self.visit(node.body, is_conditional=True, regions=regions, **kwargs)
@@ -1032,7 +1034,7 @@ class AccessInfoCollector(NodeVisitor):
 
     @staticmethod
     def _global_grid_subset(
-        regions: List[oir.HorizontalMask],
+        regions: List[common.HorizontalMask],
         he_grid: "dcir.GridSubset",
         offset: List[Optional[int]],
     ):
@@ -1084,7 +1086,7 @@ class AccessInfoCollector(NodeVisitor):
     ):
         from gtc import daceir as dcir
 
-        offset = list(offset_node.to_tuple())
+        offset = list(offset_node.to_dict()[k] for k in "ijk")
         if isinstance(offset_node, oir.VariableKOffset):
             variable_offset_axes = [dcir.Axis.K]
         else:
@@ -1444,7 +1446,7 @@ def remove_horizontal_region(node, axis):
     return HorizontalMaskRemover().visit(intervals_removed)
 
 
-def mask_includes_inner_domain(mask: oir.HorizontalMask):
+def mask_includes_inner_domain(mask: common.HorizontalMask):
     for interval in mask.intervals:
         if interval.start is None and interval.end is None:
             return True
