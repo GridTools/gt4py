@@ -15,6 +15,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple, Union
 
 import dace
@@ -24,13 +25,27 @@ import networkx as nx
 import numpy as np
 from dace import SDFG
 from dace.sdfg.graph import MultiConnectorEdge
+from dace.sdfg.utils import fuse_states
 
 import eve
 import gtc.oir as oir
 from gt4py.definitions import Extent
 from gtc.common import LevelMarker, VariableKOffset, data_type_to_typestr
-from gtc.dace.nodes import HorizontalExecutionLibraryNode, VerticalLoopLibraryNode
-from gtc.dace.utils import IntervalMapping, nodes_extent_calculation
+from gtc.dace.nodes import (
+    HorizontalExecutionLibraryNode,
+    StencilComputation,
+    VerticalLoopLibraryNode,
+)
+from gtc.dace.utils import (
+    CartesianIJIndexSpace,
+    DaceStrMaker,
+    IntervalMapping,
+    compute_horizontal_block_extents,
+    data_type_to_dace_typeclass,
+    iteration_to_access_space,
+    nodes_extent_calculation,
+    oir_iteration_space_computation,
+)
 from gtc.oir import FieldDecl, Interval, ScalarDecl, Stencil, Temporary
 from gtc.passes.oir_optimizations.utils import AccessCollector
 
@@ -38,7 +53,7 @@ from gtc.passes.oir_optimizations.utils import AccessCollector
 def _offset_origin(interval: oir.Interval, origin: Optional[oir.AxisBound]) -> oir.Interval:
     if origin is None:
         return interval
-    if origin.level != LevelMarker.START:
+    if origin >= oir.AxisBound.start():
         return interval
     return interval.shifted(-origin.offset)
 
@@ -49,6 +64,7 @@ class BaseOirSDFGBuilder(ABC):
     def __init__(self, name, stencil: Stencil, nodes):
         self._stencil = stencil
         self._sdfg = SDFG(name)
+        self._stencil_name = name
         self._state = self._sdfg.add_state(name + "_state")
         self._extents = nodes_extent_calculation(nodes)
 
@@ -87,19 +103,20 @@ class BaseOirSDFGBuilder(ABC):
 
         self._dynamic_k_fields = set(generate_access_nodes(nodes))
 
-    def _field_extent_to_subset(self, name, field_extent):
-        origin = (-self._extents[name][0][0], -self._extents[name][1][0])
+    def _access_space_to_subset(self, name, access_space):
+        extent = self._extents[name]
+        origin = (extent[0][0], extent[1][0])
         subsets = []
         if self._axes[name][0]:
             subsets.append(
                 "{start}:__I{end:+d}".format(
-                    start=origin[0] + field_extent[0][0], end=origin[0] + field_extent[0][1]
+                    start=origin[0] + access_space[0][0], end=origin[0] + access_space[0][1]
                 )
             )
         if self._axes[name][1]:
             subsets.append(
                 "{start}:__J{end:+d}".format(
-                    start=origin[1] + field_extent[1][0], end=origin[1] + field_extent[1][1]
+                    start=origin[1] + access_space[1][0], end=origin[1] + access_space[1][1]
                 )
             )
         return subsets
@@ -135,7 +152,14 @@ class BaseOirSDFGBuilder(ABC):
     ) -> AccessCollector.GeneralAccessCollection:
         if isinstance(node, SDFG):
             res = AccessCollector.GeneralAccessCollection([])
-            for n, _ in node.all_nodes_recursive():
+            for node in node.states()[0].nodes():
+                if isinstance(node, (HorizontalExecutionLibraryNode, VerticalLoopLibraryNode)):
+                    collection = self._get_access_collection(node)
+                    res._ordered_accesses.extend(collection._ordered_accesses)
+            return res
+        elif isinstance(node, list):
+            res = AccessCollector.GeneralAccessCollection([])
+            for n in node:
                 if isinstance(n, (HorizontalExecutionLibraryNode, VerticalLoopLibraryNode)):
                     collection = self._get_access_collection(n)
                     res._ordered_accesses.extend(collection._ordered_accesses)
@@ -218,8 +242,8 @@ class BaseOirSDFGBuilder(ABC):
                     self._set_read(name, read_interval, read_accesses[name])
 
         for name, recent_access in read_accesses.items():
-            node.add_in_connector("IN_" + name)
-            self._state.add_edge(recent_access, None, node, "IN_" + name, dace.Memlet())
+            node.add_in_connector("__in_" + name)
+            self._state.add_edge(recent_access, None, node, "__in_" + name, dace.Memlet())
 
     def _add_write_edges(
         self, node, collections: List[Tuple[Interval, AccessCollector.GeneralAccessCollection]]
@@ -242,8 +266,8 @@ class BaseOirSDFGBuilder(ABC):
                 self._set_write(name, interval, write_accesses[name])
 
         for name, access_node in write_accesses.items():
-            node.add_out_connector("OUT_" + name)
-            self._state.add_edge(node, "OUT_" + name, access_node, None, dace.Memlet())
+            node.add_out_connector("__out_" + name)
+            self._state.add_edge(node, "__out_" + name, access_node, None, dace.Memlet())
 
     def _add_write_after_write_edges(
         self, node, collections: List[Tuple[Interval, AccessCollector.GeneralAccessCollection]]
@@ -299,8 +323,8 @@ class BaseOirSDFGBuilder(ABC):
             if isinstance(decl, ScalarDecl):
                 self._sdfg.add_symbol(name, stype=dtype)
             else:
-                if name not in self._get_access_collection(self._sdfg).offsets():
-                    continue
+                # if name not in self._get_access_collection(self._sdfg).offsets():
+                #     continue
                 assert name in self._dtypes
                 strides = tuple(
                     dace.symbolic.pystr_to_symbolic(f"__{name}_{var}_stride")
@@ -310,29 +334,39 @@ class BaseOirSDFGBuilder(ABC):
                     dace.symbolic.pystr_to_symbolic(f"__{name}_d{dim}_stride")
                     for dim, _ in enumerate(decl.data_dims)
                 )
+                default_shape = [
+                    f"__axis" for idx, axis in enumerate("IJK") if decl.dimensions[idx]
+                ] + [d for d in decl.data_dims]
+
                 self._sdfg.add_array(
                     name,
                     dtype=dtype,
-                    shape=shapes[name],
+                    shape=shapes.get(name, default_shape),
                     strides=strides,
                     transient=isinstance(decl, Temporary) and self.has_transients,
-                    lifetime=dace.AllocationLifetime.Persistent,
+                    lifetime=dace.AllocationLifetime.Persistent
+                    if isinstance(decl, Temporary)
+                    else dace.AllocationLifetime.Scope,
                 )
 
     def add_subsets(self):
         decls = {decl.name: decl for decl in self._stencil.params + self._stencil.declarations}
         for node in self._state.nodes():
             if isinstance(node, dace.nodes.LibraryNode):
-                input_extents, output_extents = self.get_field_extents(node)
+                access_spaces_input, access_spaces_output = self.get_access_spaces(node)
                 k_subset_strs_input, k_subset_strs_output = self.get_k_subsets(node)
                 for edge in self._state.in_edges(node) + self._state.out_edges(node):
                     if edge.dst_conn is not None:
                         name = edge.src.data
-                        access_extent = input_extents[name]
+                        access_space = access_spaces_input[name]
                         subset_str_k = k_subset_strs_input.get(name, None)
                         dynamic = (
                             isinstance(node, HorizontalExecutionLibraryNode)
-                            and len(node.oir_node.iter_tree().if_isinstance(oir.MaskStmt).to_list())
+                            and len(
+                                node.oir_node.iter_tree()
+                                .if_isinstance(oir.MaskStmt, oir.While, oir.For)
+                                .to_list()
+                            )
                             > 0
                         )
                         dynamic = dynamic or (
@@ -345,12 +379,12 @@ class BaseOirSDFGBuilder(ABC):
                         )
                     elif edge.src_conn is not None:
                         name = edge.dst.data
-                        access_extent = output_extents[name]
+                        access_space = access_spaces_output[name]
                         subset_str_k = k_subset_strs_output.get(name, None)
                         dynamic = False
                     else:
                         continue
-                    subset_strs = self._field_extent_to_subset(name, access_extent)
+                    subset_strs = self._access_space_to_subset(name, access_space)
                     if subset_str_k is not None:
                         if name in self._dynamic_k_fields and isinstance(
                             node, HorizontalExecutionLibraryNode
@@ -392,7 +426,7 @@ class BaseOirSDFGBuilder(ABC):
         pass
 
     @abstractmethod
-    def get_field_extents(self, node):
+    def get_access_spaces(self, node):
         pass
 
     @abstractmethod
@@ -498,25 +532,29 @@ class VerticalLoopSectionOirSDFGBuilder(BaseOirSDFGBuilder):
             node, [(interval, self._get_access_collection(node))]
         )
 
-    def get_field_extents(self, node):
+    def get_access_spaces(self, node):
         assert isinstance(node, HorizontalExecutionLibraryNode)
-        input_extents = dict()
-        output_extents = dict()
+        input_spaces = dict()
+        output_spaces = dict()
 
-        block_extent: Extent = node.extent
-        assert block_extent is not None
+        iteration_space = node.iteration_space
+        assert iteration_space is not None
         collection = self._get_access_collection(node)
 
         for acc in collection.read_accesses():
-            extent = acc.to_extent(block_extent) | Extent.zeros(2)
-            input_extents.setdefault(acc.field, extent)
-            input_extents[acc.field] |= extent
+            extended = iteration_to_access_space(
+                CartesianIJIndexSpace.from_iteration_space(iteration_space), acc
+            )
+            input_spaces.setdefault(acc.field, extended)
+            input_spaces[acc.field] |= extended
         for acc in collection.write_accesses():
-            extent = acc.to_extent(block_extent) | Extent.zeros(2)
-            output_extents.setdefault(acc.field, extent)
-            output_extents[acc.field] |= extent
+            extended = iteration_to_access_space(
+                CartesianIJIndexSpace.from_iteration_space(iteration_space), acc
+            )
+            output_spaces.setdefault(acc.field, extended)
+            output_spaces[acc.field] |= extended
 
-        return input_extents, output_extents
+        return input_spaces, output_spaces
 
 
 class StencilOirSDFGBuilder(BaseOirSDFGBuilder):
@@ -528,10 +566,12 @@ class StencilOirSDFGBuilder(BaseOirSDFGBuilder):
                 continue
             shape = []
             if self._axes[name][0]:
-                di = self._extents[name].frame_size[0]
+                extent = self._extents.get(name, Extent.zeros(2))
+                di = extent[0][1] + extent[0][0]
                 shape.append(f"__I{di:+d}")
             if self._axes[name][1]:
-                dj = self._extents[name].frame_size[1]
+                extent = self._extents.get(name, Extent.zeros(2))
+                dj = extent[1][1] + extent[1][0]
                 shape.append(f"__J{dj:+d}")
             if self._axes[name][2]:
                 shape.append(self.get_k_size(name))
@@ -554,16 +594,13 @@ class StencilOirSDFGBuilder(BaseOirSDFGBuilder):
                     subset = edge.data.subset
                 subset = dace.subsets.union(subset, edge.data.subset)
         subset: dace.subsets.Range
+        if subset is None:
+            return "__K"
         k_size = subset.bounding_box_size()[axis_idx] + subset.ranges[axis_idx][0]
 
         k_sym = dace.symbol("__K")
         k_size_symbolic = dace.symbolic.pystr_to_symbolic(k_size)
-        # this is the right way to check conditions with sympy (therefore the noqa)
-        if (
-            k_sym in k_size_symbolic.free_symbols
-            and (k_size_symbolic >= k_sym)
-            == True  # noqa: E712  # comparison to True should be 'if cond is True:' or 'if cond:'
-        ):
+        if k_sym in k_size_symbolic.free_symbols and (k_size_symbolic >= k_sym) == True:
             return k_size
         else:
             return "__K"
@@ -656,27 +693,32 @@ class StencilOirSDFGBuilder(BaseOirSDFGBuilder):
             read_subsets[name] = f"{interval_start_str}:{interval_end_str}"
         return read_subsets, write_subsets
 
-    def get_field_extents(self, node):
+    def get_access_spaces(self, node):
         assert isinstance(node, VerticalLoopLibraryNode)
-        input_extents = dict()
-        output_extents = dict()
+        input_spaces = dict()
+        output_spaces = dict()
         for _, sdfg in node.sections:
             for n in sdfg.states()[0].nodes():
 
                 if not isinstance(n, HorizontalExecutionLibraryNode):
                     continue
-                block_extent = n.extent
-                assert block_extent is not None
+                iteration_space = n.iteration_space
+                assert iteration_space is not None
                 collection = self._get_access_collection(n)
                 for acc in collection.read_accesses():
-                    extent = acc.to_extent(block_extent) | Extent.zeros(2)
-                    input_extents.setdefault(acc.field, extent)
-                    input_extents[acc.field] |= extent
+                    extended = iteration_to_access_space(
+                        CartesianIJIndexSpace.from_iteration_space(iteration_space), acc
+                    )
+                    input_spaces.setdefault(acc.field, extended)
+                    input_spaces[acc.field] |= extended
+
                 for acc in collection.write_accesses():
-                    extent = acc.to_extent(block_extent) | Extent.zeros(2)
-                    output_extents.setdefault(acc.field, extent)
-                    output_extents[acc.field] |= extent
-        return input_extents, output_extents
+                    extended = iteration_to_access_space(
+                        CartesianIJIndexSpace.from_iteration_space(iteration_space), acc
+                    )
+                    output_spaces.setdefault(acc.field, extended)
+                    output_spaces[acc.field] |= extended
+        return input_spaces, output_spaces
 
     def _get_collection_from_sections(self, sections):
         res = []
@@ -702,37 +744,151 @@ class StencilOirSDFGBuilder(BaseOirSDFGBuilder):
         return self._add_write_after_read_edges(node, collections)
 
 
-class OirSDFGBuilder(eve.NodeVisitor):
-    def visit_HorizontalExecution(self, node: oir.HorizontalExecution, *, block_extents, **kwargs):
+class OirAnalysisSDFGBuilder(eve.NodeVisitor):
+    def visit_HorizontalExecution(
+        self, node: oir.HorizontalExecution, *, stencil_name, iteration_spaces, **kwargs
+    ):
         return HorizontalExecutionLibraryNode(
-            name=f"HorizontalExecution_{id(node)}",
+            name=f"{stencil_name}_HorizontalExecution_{id(node)}",
             oir_node=node,
-            extent=block_extents[id(node)],
+            iteration_space=iteration_spaces[id(node)],
         )
 
-    def visit_VerticalLoopSection(self, node: oir.VerticalLoopSection, **kwargs):
-        library_nodes = [self.visit(he, **kwargs) for he in node.horizontal_executions]
+    def visit_VerticalLoopSection(self, node: oir.VerticalLoopSection, *, stencil_name, **kwargs):
+        library_nodes = [
+            self.visit(he, stencil_name=stencil_name, **kwargs) for he in node.horizontal_executions
+        ]
         sdfg = VerticalLoopSectionOirSDFGBuilder.build(
-            f"VerticalLoopSection_{id(node)}", kwargs["stencil"], library_nodes
+            f"{stencil_name}_VerticalLoopSection_{id(node)}", kwargs["stencil"], library_nodes
         )
         return node.interval, sdfg
 
-    def visit_VerticalLoop(self, node: oir.VerticalLoop, **kwargs):
-        sections = [self.visit(section, **kwargs) for section in node.sections]
+    def visit_VerticalLoop(self, node: oir.VerticalLoop, *, stencil_name, **kwargs):
+        sections = [
+            self.visit(section, stencil_name=stencil_name, **kwargs) for section in node.sections
+        ]
         return VerticalLoopLibraryNode(
-            name=f"VerticalLoop_{id(node)}",
+            name=f"{stencil_name}_VerticalLoop_{id(node)}",
             loop_order=node.loop_order,
             sections=sections,
             caches=node.caches,
-            oir_node=node,
         )
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs):
-        from gtc.passes.oir_optimizations.utils import compute_horizontal_block_extents
-
-        block_extents = compute_horizontal_block_extents(node)
+        iteration_spaces = oir_iteration_space_computation(node)
         library_nodes = [
-            self.visit(vl, stencil=node, block_extents=block_extents, **kwargs)
+            self.visit(
+                vl,
+                stencil=node,
+                stencil_name=node.name,
+                iteration_spaces=iteration_spaces,
+                **kwargs,
+            )
             for vl in node.vertical_loops
         ]
         return StencilOirSDFGBuilder.build(node.name, node, library_nodes)
+
+
+class OirSDFGBuilder(eve.NodeVisitor):
+    @dataclass
+    class Context:
+        sdfg: dace.SDFG
+        last_state: dace.SDFGState
+        dace_str_maker: DaceStrMaker
+        declarations: Dict[str, oir.Decl]
+
+    def visit_VerticalLoop(
+        self, node: oir.VerticalLoop, *, block_extents, ctx: "OirSDFGBuilder.Context", **kwargs
+    ):
+        declarations = {
+            acc.name: ctx.declarations[acc.name]
+            for acc in node.iter_tree().if_isinstance(oir.FieldAccess, oir.ScalarAccess)
+            if acc.name in ctx.declarations
+        }
+        library_node = StencilComputation(
+            name=f"{ctx.sdfg.name}_computation_{id(node)}",
+            extents=block_extents,
+            declarations=declarations,
+            oir_node=node,
+        )
+
+        state = ctx.sdfg.add_state()
+        ctx.sdfg.add_edge(ctx.last_state, state, dace.InterstateEdge())
+        ctx.last_state = state
+
+        state.add_node(library_node)
+
+        access_collection = AccessCollector.apply(node)
+
+        for field in access_collection.read_fields():
+            access_node = state.add_access(field)
+            library_node.add_in_connector("__in_" + field)
+            subset_str = ctx.dace_str_maker.make_input_subset_str(node, field)
+            state.add_edge(
+                access_node,
+                None,
+                library_node,
+                "__in_" + field,
+                dace.Memlet.simple(field, subset_str=subset_str),
+            )
+        for field in access_collection.write_fields():
+            access_node = state.add_access(field)
+            library_node.add_out_connector("__out_" + field)
+            subset_str = ctx.dace_str_maker.make_output_subset_str(node, field)
+            state.add_edge(
+                library_node,
+                "__out_" + field,
+                access_node,
+                None,
+                dace.Memlet.simple(field, subset_str=subset_str),
+            )
+
+        return
+
+    def visit_Stencil(self, node: oir.Stencil, **kwargs):
+        sdfg = dace.SDFG(node.name)
+        state = sdfg.add_state(is_start_state=True)
+
+        block_extents = compute_horizontal_block_extents(node)
+        ctx = OirSDFGBuilder.Context(
+            sdfg=sdfg,
+            last_state=state,
+            dace_str_maker=DaceStrMaker(node),
+            declarations={decl.name: decl for decl in node.params + node.declarations},
+        )
+        for param in node.params:
+            if isinstance(param, oir.FieldDecl):
+                dim_strs = [d for i, d in enumerate("IJK") if param.dimensions[i]] + [
+                    f"d{d}" for d in range(len(param.data_dims))
+                ]
+                sdfg.add_array(
+                    param.name,
+                    shape=ctx.dace_str_maker.make_shape(param.name),
+                    strides=[
+                        dace.symbolic.pystr_to_symbolic(f"__{param.name}_{dim}_stride")
+                        for dim in dim_strs
+                    ],
+                    dtype=data_type_to_dace_typeclass(param.dtype),
+                    transient=False,
+                )
+            else:
+                sdfg.add_symbol(param.name, stype=data_type_to_dace_typeclass(param.dtype))
+
+        for decl in node.declarations:
+            dim_strs = [d for i, d in enumerate("IJK") if decl.dimensions[i]] + [
+                f"d{d}" for d in range(len(decl.data_dims))
+            ]
+            sdfg.add_array(
+                decl.name,
+                shape=ctx.dace_str_maker.make_shape(decl.name),
+                strides=[
+                    dace.symbolic.pystr_to_symbolic(f"__{decl.name}_{dim}_stride")
+                    for dim in dim_strs
+                ],
+                dtype=data_type_to_dace_typeclass(decl.dtype),
+                transient=True,
+            )
+        self.generic_visit(node, ctx=ctx, block_extents=block_extents)
+        # fuse_states(sdfg, permissive=False, progress=False)
+        ctx.sdfg.validate()
+        return ctx.sdfg
