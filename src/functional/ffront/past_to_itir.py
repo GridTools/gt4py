@@ -123,7 +123,7 @@ class ProgramLowering(NodeTranslator):
         elif isinstance(slice_bound, past.Constant):
             assert (
                 isinstance(slice_bound.type, common_types.ScalarType)
-                and slice_bound.type.kind == common_types.ScalarKind.INT64
+                and (slice_bound.type.kind == common_types.ScalarKind.INT64 or slice_bound.type.kind == common_types.ScalarKind.INT32)
             )
             if slice_bound.value < 0:
                 lowered_bound = itir.FunCall(
