@@ -129,7 +129,7 @@ def stencil_with_extent_6(field_a: gs.Field[float], field_b: gs.Field[float]):
 
 @pytest.mark.parametrize("definition,expected_k_bounds", [(s, d["k_bounds"]) for s, d in test_data])
 def test_k_bounds(definition, expected_k_bounds):
-    builder = StencilBuilder(definition, backend=from_name("debug"))
+    builder = StencilBuilder(definition, backend=from_name("gtc:numpy"))
     k_boundary = compute_k_boundary(builder.gtir_pipeline.full(skip=[prune_unused_parameters]))[
         "field_b"
     ]
@@ -141,7 +141,7 @@ def test_k_bounds(definition, expected_k_bounds):
     "definition,expected_min_k_size", [(s, d["min_k_size"]) for s, d in test_data]
 )
 def test_min_k_size(definition, expected_min_k_size):
-    builder = StencilBuilder(definition, backend=from_name("debug"))
+    builder = StencilBuilder(definition, backend=from_name("gtc:numpy"))
     min_k_size = compute_min_k_size(builder.gtir_pipeline.full(skip=[prune_unused_parameters]))
 
     assert expected_min_k_size == min_k_size
@@ -213,6 +213,6 @@ def stencil_with_invalid_temporary_access_end(field_a: gs.Field[float], field_b:
     [stencil_with_invalid_temporary_access_start, stencil_with_invalid_temporary_access_end],
 )
 def test_invalid_temporary_access(definition):
-    builder = StencilBuilder(definition, backend=from_name("debug"))
+    builder = StencilBuilder(definition, backend=from_name("gtc:numpy"))
     with pytest.raises(TypeError, match="Invalid access with offset in k to temporary field tmp."):
         k_boundary = compute_k_boundary(builder.gtir_pipeline.full(skip=[prune_unused_parameters]))

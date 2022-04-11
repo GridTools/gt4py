@@ -114,6 +114,13 @@ class KCacheDetection(NodeTranslator):
         ):
             return self.generic_visit(node, **kwargs)
 
+        all_accesses = AccessCollector.apply(node)
+        fields_with_variable_reads = {
+            field
+            for field, offsets in all_accesses.offsets().items()
+            if any(off[2] is None for off in offsets)
+        }
+
         def accessed_more_than_once(offsets: Set[Any]) -> bool:
             return len(offsets) > 1
 
@@ -127,11 +134,15 @@ class KCacheDetection(NodeTranslator):
         def offsets_within_limits(offsets: Set[Tuple[int, int, int]]) -> bool:
             return all(abs(offset[2]) <= self.max_cacheable_offset for offset in offsets)
 
-        accesses = AccessCollector.apply(node).cartesian_accesses().offsets()
+        def has_variable_offset_reads(field: str) -> bool:
+            return field in fields_with_variable_reads
+
+        accesses = all_accesses.cartesian_accesses().offsets()
         cacheable = {
             field
             for field, offsets in accesses.items()
             if not already_cached(field)
+            and not has_variable_offset_reads(field)
             and accessed_more_than_once(offsets)
             and not has_horizontal_offset(offsets)
             and offsets_within_limits(offsets)

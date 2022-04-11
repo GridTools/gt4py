@@ -361,7 +361,7 @@ def make_simple_node_with_abstract_collections(
     fixed: bool = False,
 ) -> SimpleNodeWithAbstractCollections:
     int_value = make_int_value(fixed=fixed)
-    int_sequence = make_collection_value(int, collection_type=tuple, length=3)
+    int_sequence = make_collection_value(int, collection_type=list, length=3)
     str_set = make_collection_value(str, set, length=3)
     str_to_int_mapping = make_mapping_value(key_type=str, value_type=int, length=3)
 

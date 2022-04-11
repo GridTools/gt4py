@@ -173,8 +173,6 @@ Development roadmap
 A short overview of the new features and changes planned for the coming
 weeks & months.
 
--  Integration with `Dawn <https://github.com/MeteoSwiss-APN/dawn>`__
-   compiler
 -  Update documentation (API reference, tutorial, notebooks and
    examples)
 -  Missing features:

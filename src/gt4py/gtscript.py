@@ -30,7 +30,6 @@ import numpy as np
 
 from gt4py import definitions as gt_definitions
 from gt4py.lazy_stencil import LazyStencil
-from gt4py.stencil_builder import StencilBuilder
 
 
 # GTScript builtins
@@ -349,7 +348,7 @@ def lazy_stencil(
             Defers the generation step until the last moment and allows syntax checking independently.
             Also gives access to a more fine grained generate / build process.
     """
-    from gt4py import frontend
+    from gt4py.stencil_builder import StencilBuilder
 
     def _decorator(func):
         _set_arg_dtypes(func, dtypes or {})
@@ -508,6 +507,10 @@ class _FieldDescriptor:
                 self.data_dims = tuple(data_dims)
         else:
             self.data_dims = data_dims
+
+    def __descriptor__(self):
+        # Ignore, use JIT
+        return None
 
     def __repr__(self):
         args = f"dtype={repr(self.dtype)}, axes={repr(self.axes)}, data_dims={repr(self.data_dims)}"

@@ -29,7 +29,7 @@ from gt4py import backend as gt_backend
 from gt4py import gtscript
 from gt4py import storage as gt_storage
 from gt4py import utils as gt_utils
-from gt4py.definitions import Boundary, CartesianSpace, FieldInfo, Shape
+from gt4py.definitions import AccessKind, Boundary, CartesianSpace, FieldInfo, Shape
 from gt4py.ir.nodes import Index
 from gt4py.stencil_object import StencilObject
 from gt4py.utils import filter_mask, interpolate_mask
@@ -164,10 +164,9 @@ class SuiteMeta(type):
                 return combinations
 
         cls_dict["tests"] = []
-        for d in get_dtype_combinations(dtypes):
-            for g in get_globals_combinations(d):
-                for b in backends:
-
+        for b in backends:
+            for d in get_dtype_combinations(dtypes):
+                for g in get_globals_combinations(d):
                     cls_dict["tests"].append(
                         dict(
                             backend=b if isinstance(b, str) else b.values[0],
@@ -330,6 +329,14 @@ class SuiteMeta(type):
         cls_dict["dtypes"] = standardize_dtype_dict(dtypes)
         cls_dict["ndims"] = len(cls_dict["domain_range"])
 
+        # Filter out unsupported backends
+        cls_dict["backends"] = [
+            backend
+            for backend in cls_dict["backends"]
+            if gt_backend.from_name(backend if isinstance(backend, str) else backend.values[0])
+            is not None
+        ]
+
         cls._validate_new_args(cls_name, cls_dict)
 
         # Extract input and parameter names
@@ -458,9 +465,8 @@ class StencilTestSuite(metaclass=SuiteMeta):
         assert isinstance(implementation, StencilObject)
         assert implementation.backend == test["backend"]
 
-        # Assert strict equality for Dawn backends
         for name, field_info in implementation.field_info.items():
-            if field_info is None:
+            if field_info.access == AccessKind.NONE:
                 continue
             for i, ax in enumerate("IJK"):
                 assert (

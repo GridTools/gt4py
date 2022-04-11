@@ -37,7 +37,6 @@ from gtc import gtir_to_oir
 from gtc.common import DataType
 from gtc.gtcpp import gtcpp, gtcpp_codegen, oir_to_gtcpp
 from gtc.passes.gtir_pipeline import GtirPipeline
-from gtc.passes.oir_optimizations.caches import FillFlushToLocalKCaches
 from gtc.passes.oir_pipeline import DefaultPipeline
 
 
@@ -55,7 +54,7 @@ class GTCGTExtGenerator:
         gtir = GtirPipeline(DefIRToGTIR.apply(definition_ir)).full()
         base_oir = gtir_to_oir.GTIRToOIR().visit(gtir)
         oir_pipeline = self.backend.builder.options.backend_opts.get(
-            "oir_pipeline", DefaultPipeline(skip=[FillFlushToLocalKCaches])
+            "oir_pipeline", DefaultPipeline()
         )
         oir = oir_pipeline.run(base_oir)
         gtcpp = oir_to_gtcpp.OIRToGTCpp().visit(oir)

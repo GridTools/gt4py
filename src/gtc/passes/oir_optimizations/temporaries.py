@@ -101,6 +101,10 @@ class LocalTemporariesToScalars(TemporariesToScalarsBase):
     2. Replaces corresponding FieldAccess nodes by ScalarAccess nodes.
     3. Removes matching temporaries from VerticalLoop declarations.
     4. Add matching temporaries to HorizontalExecution declarations.
+
+    Note that temporaries used in horizontal regions in a single horizontal execution
+    may not be scalarized.
+
     """
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> oir.Stencil:
@@ -121,12 +125,18 @@ class LocalTemporariesToScalars(TemporariesToScalarsBase):
             ),
             collections.Counter(),
         )
+
         local_tmps = {tmp for tmp, count in counts.items() if count == 1}
         return super().visit_Stencil(node, tmps_to_replace=local_tmps, **kwargs)
 
 
 class WriteBeforeReadTemporariesToScalars(TemporariesToScalarsBase):
-    """Replaces temporay fields that are always written before read by scalars."""
+    """Replaces temporay fields that are always written before read by scalars.
+
+    Note that temporaries used in horizontal regions in a single horizontal execution
+    may not be scalarized.
+
+    """
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> oir.Stencil:
         # Does not (yet) support scalarizing temporaries with data_dims
@@ -147,7 +157,11 @@ class WriteBeforeReadTemporariesToScalars(TemporariesToScalarsBase):
                     return True
                 if offsets[tmp] != {(0, 0, 0)}:
                     return False
-                return next(o.is_write for o in ordered_accesses if o.field == tmp)
+                return next(
+                    o.is_write and o.horizontal_mask is None
+                    for o in ordered_accesses
+                    if o.field == tmp
+                )
 
             write_before_read_tmps = {
                 tmp for tmp in write_before_read_tmps if write_before_read(tmp)

@@ -18,6 +18,7 @@ import pathlib
 from typing import TYPE_CHECKING, Any, Dict, Optional, Type, Union
 
 import gt4py.caching
+import gt4py.frontend
 from gt4py.backend.gtc_backend.defir_to_gtir import DefIRToGTIR
 from gt4py.definitions import BuildOptions, StencilID
 from gt4py.type_hints import AnnotatedStencilFunc, StencilFunc
@@ -71,7 +72,7 @@ class StencilBuilder:
         self.options = options or BuildOptions(  # type: ignore
             **self.default_options_dict(definition_func)
         )
-        backend = backend or "debug"
+        backend = backend or "gtc:numpy"
         backend = gt4py.backend.from_name(backend) if isinstance(backend, str) else backend
         self.backend: "BackendType" = backend(self)
         self.frontend: "FrontendType" = frontend or gt4py.frontend.from_name("gtscript")

@@ -73,7 +73,11 @@ class AssignStmt(common.AssignStmt[Union[LocalAccess, AccessorRef], Expr], Stmt)
     _dtype_validation = common.assign_stmt_dtype_validation(strict=True)
 
 
-class IfStmt(common.IfStmt[Stmt, Expr], Stmt):
+class IfStmt(common.IfStmt[BlockStmt, Expr], Stmt):
+    pass
+
+
+class While(common.While[Stmt, Expr], Stmt):
     pass
 
 
@@ -101,10 +105,6 @@ class Temporary(LocNode):
     name: SymbolName
     dtype: common.DataType
     data_dims: Tuple[int, ...] = field(default_factory=tuple)
-
-
-class GTGrid(LocNode):
-    pass
 
 
 class GTLevel(LocNode):
@@ -149,7 +149,7 @@ class GTExtent(LocNode):
     def zero(cls) -> "GTExtent":
         return cls(i=(0, 0), j=(0, 0), k=(0, 0))
 
-    def __add__(self, offset: common.CartesianOffset) -> "GTExtent":
+    def __add__(self, offset: Union[common.CartesianOffset, VariableKOffset]) -> "GTExtent":
         if isinstance(offset, common.CartesianOffset):
             return GTExtent(
                 i=(min(self.i[0], offset.i), max(self.i[1], offset.i)),
@@ -217,6 +217,20 @@ class GlobalParamDecl(ApiParamDecl):
     pass
 
 
+class ComputationDecl(LocNode):
+    name: SymbolName
+    dtype = common.DataType.INT32
+    kind = common.ExprKind.SCALAR
+
+
+class Positional(ComputationDecl):
+    axis_name: Str
+
+
+class AxisLength(ComputationDecl):
+    axis: int
+
+
 class GTStage(LocNode):
     functor: SymbolRef
     # `args` are SymbolRefs to GTComputation `arguments` (interpreted as parameters)
@@ -255,6 +269,7 @@ class GTComputationCall(LocNode, SymbolTableTrait):
     # We could represent this closer to the C++ code by splitting call and definition of the
     # function object.
     arguments: List[Arg]
+    extra_decls: List[ComputationDecl]
     temporaries: List[Temporary]
     multi_stages: List[GTMultiStage]
 

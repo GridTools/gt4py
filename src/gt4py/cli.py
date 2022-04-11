@@ -41,9 +41,9 @@ class BackendChoice(click.Choice):
     -------
     .. code-block: bash
 
-        $ cmd --backend="debug"
+        $ cmd --backend="gtc:numpy"
 
-    gets converted to :py:class:`gt4py.backend.debug_backend.DebugBackend`.
+    gets converted to :py:class:`gt4py.backend.GTCNumpyBackend`.
     """
 
     name = "backend"

@@ -565,7 +565,6 @@ def numpy_is_compatible_type(field: Any) -> bool:
     return isinstance(field, np.ndarray)
 
 
-@gt_backend.register
 class NumPyBackend(gt_backend.BaseBackend, gt_backend.PurePythonBackendCLIMixin):
     """Pure Python backend using NumPy for faster computations than the debug backend.
 

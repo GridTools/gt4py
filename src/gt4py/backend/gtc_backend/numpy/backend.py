@@ -28,8 +28,8 @@ from gtc.gtir_to_oir import GTIRToOIR
 from gtc.numpy import npir
 from gtc.numpy.npir_codegen import NpirCodegen
 from gtc.numpy.oir_to_npir import OirToNpir
+from gtc.numpy.scalars_to_temps import ScalarsToTemporaries
 from gtc.passes.oir_optimizations.caches import (
-    FillFlushToLocalKCaches,
     IJCacheDetection,
     KCacheDetection,
     PruneKCacheFills,
@@ -50,14 +50,9 @@ class GTCModuleGenerator(BaseModuleGenerator):
         return "\n".join(
             [
                 *super().generate_imports().splitlines(),
-                "import sys",
                 "import pathlib",
-                "import numpy",
-                "path_backup = sys.path.copy()",
-                "sys.path.append(str(pathlib.Path(__file__).parent))",
-                f"import {comp_pkg} as computation",
-                "sys.path = path_backup",
-                "del path_backup",
+                "from gt4py.utils import make_module_from_file",
+                f'computation = make_module_from_file("{comp_pkg}", pathlib.Path(__file__).parent / "{comp_pkg}.py")',
             ]
         )
 
@@ -88,6 +83,8 @@ class GTCNumpyBackend(BaseBackend, CLIBackendMixin):
     name = "gtc:numpy"
     options: ClassVar[Dict[str, Any]] = {
         "oir_pipeline": {"versioning": True, "type": OirPipeline},
+        # TODO: Implement this option in source code
+        "ignore_np_errstate": {"versioning": True, "type": bool},
     }
     storage_info = {
         "alignment": 1,
@@ -109,7 +106,8 @@ class GTCNumpyBackend(BaseBackend, CLIBackendMixin):
             + ".py"
         )
 
-        source = NpirCodegen.apply(self.npir)
+        ignore_np_errstate = self.builder.options.backend_opts.get("ignore_np_errstate", True)
+        source = NpirCodegen.apply(self.npir, ignore_np_errstate=ignore_np_errstate)
         if self.builder.options.format_source:
             source = format_source("python", source)
 
@@ -137,12 +135,13 @@ class GTCNumpyBackend(BaseBackend, CLIBackendMixin):
                     KCacheDetection,
                     PruneKCacheFills,
                     PruneKCacheFlushes,
-                    FillFlushToLocalKCaches,
                 ]
             ),
         )
         oir = oir_pipeline.run(base_oir)
-        return OirToNpir().visit(oir)
+        base_npir = OirToNpir().visit(oir)
+        npir = ScalarsToTemporaries().visit(base_npir)
+        return npir
 
     @property
     def npir(self) -> npir.Computation:

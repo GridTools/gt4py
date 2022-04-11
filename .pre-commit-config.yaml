@@ -12,6 +12,7 @@ repos:
   - id: check-case-conflict
 #  - id: check-json
   - id: check-merge-conflict
+    exclude_types: [rst]
   - id: check-toml
   - id: check-yaml
   - id: debug-statements
@@ -75,7 +76,7 @@ repos:
 #     - pygments
 
 - repo: https://github.com/psf/black
-  rev: 21.12b0
+  rev: 22.3.0
   hooks:
   - id: black
 

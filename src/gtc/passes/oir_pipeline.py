@@ -20,7 +20,6 @@ from typing import Callable, Optional, Protocol, Sequence, Type, Union
 from eve.visitors import NodeVisitor
 from gtc import oir
 from gtc.passes.oir_optimizations.caches import (
-    FillFlushToLocalKCaches,
     IJCacheDetection,
     KCacheDetection,
     PruneKCacheFills,
@@ -32,7 +31,7 @@ from gtc.passes.oir_optimizations.horizontal_execution_merging import (
 )
 from gtc.passes.oir_optimizations.inlining import MaskInlining
 from gtc.passes.oir_optimizations.mask_stmt_merging import MaskStmtMerging
-from gtc.passes.oir_optimizations.pruning import NoFieldAccessPruning
+from gtc.passes.oir_optimizations.pruning import NoFieldAccessPruning, UnreachableStmtPruning
 from gtc.passes.oir_optimizations.temporaries import (
     LocalTemporariesToScalars,
     WriteBeforeReadTemporariesToScalars,
@@ -77,12 +76,12 @@ class DefaultPipeline(OirPipeline):
             WriteBeforeReadTemporariesToScalars,
             MaskStmtMerging,
             MaskInlining,
+            UnreachableStmtPruning,
             NoFieldAccessPruning,
             IJCacheDetection,
             KCacheDetection,
             PruneKCacheFills,
             PruneKCacheFlushes,
-            FillFlushToLocalKCaches,
         ]
 
     @property
@@ -94,6 +93,9 @@ class DefaultPipeline(OirPipeline):
 
     def __repr__(self) -> str:
         return str([step.__name__ for step in self.steps])
+
+    def __eq__(self, other):
+        return isinstance(other, DefaultPipeline) and self.skip == other.skip
 
     def run(self, oir: oir.Stencil) -> oir.Stencil:
         for step in self.steps:

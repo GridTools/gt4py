@@ -15,6 +15,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import enum
+import typing
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -27,7 +28,6 @@ from typing import (
     Type,
     TypeVar,
     Union,
-    cast,
 )
 
 import numpy as np
@@ -248,8 +248,8 @@ class LevelMarker(StrEnum):
 
 @enum.unique
 class ExprKind(IntEnum):
-    SCALAR = 0
-    FIELD = 1
+    SCALAR: "ExprKind" = typing.cast("ExprKind", enum.auto())
+    FIELD: "ExprKind" = typing.cast("ExprKind", enum.auto())
 
 
 class LocNode(Node):
@@ -305,9 +305,9 @@ def verify_and_get_common_dtype(
 
 def compute_kind(values: List[Expr]) -> ExprKind:
     if any(v.kind == ExprKind.FIELD for v in values):
-        return cast(ExprKind, ExprKind.FIELD)  # see https://github.com/GridTools/gtc/issues/100
+        return ExprKind.FIELD
     else:
-        return cast(ExprKind, ExprKind.SCALAR)  # see https://github.com/GridTools/gtc/issues/100
+        return ExprKind.SCALAR
 
 
 class Literal(Node):
@@ -315,9 +315,7 @@ class Literal(Node):
     # maybe it should be Union[float,int,str] etc?
     value: Union[BuiltInLiteral, Str]
     dtype: DataType
-    kind: ExprKind = cast(
-        ExprKind, ExprKind.SCALAR
-    )  # cast shouldn't be required, see https://github.com/GridTools/gtc/issues/100
+    kind: ExprKind = ExprKind.SCALAR
 
 
 StmtT = TypeVar("StmtT", bound=Stmt)
@@ -390,6 +388,21 @@ class IfStmt(GenericNode, Generic[StmtT, ExprT]):
     cond: ExprT
     true_branch: StmtT
     false_branch: Optional[StmtT]
+
+    @validator("cond")
+    def condition_is_boolean(cls, cond: Expr) -> Expr:
+        return verify_condition_is_boolean(cls, cond)
+
+
+class While(GenericNode, Generic[StmtT, ExprT]):
+    """
+    Generic while loop.
+
+    Verifies that `cond` is a boolean expr (if `dtype` is set).
+    """
+
+    cond: ExprT
+    body: List[StmtT]
 
     @validator("cond")
     def condition_is_boolean(cls, cond: Expr) -> Expr:
@@ -645,8 +658,11 @@ class _LvalueDimsValidator(NodeVisitor):
             raise ValueError(
                 f"Vertical loop type {vertical_loop_type} has no `loop_order` attribute"
             )
-        if not decl_type.__annotations__.get("dimensions") is Tuple[bool, bool, bool]:
-            raise ValueError(f"Field decl type {decl_type} has no `dimensions` attribute")
+        if not decl_type.__annotations__.get("dimensions") == Tuple[bool, bool, bool]:
+            raise ValueError(
+                f"Field decl type {decl_type} must have a `dimensions` "
+                "attribute of type `Tuple[bool, bool, bool]`."
+            )
         self.vertical_loop_type = vertical_loop_type
         self.decl_type = decl_type
 
@@ -750,12 +766,12 @@ class AxisBound(Node):
         return cls(level=LevelMarker.END, offset=offset)
 
     @classmethod
-    def start(cls) -> "AxisBound":
-        return cls.from_start(0)
+    def start(cls, offset: int = 0) -> "AxisBound":
+        return cls.from_start(offset)
 
     @classmethod
-    def end(cls) -> "AxisBound":
-        return cls.from_end(0)
+    def end(cls, offset: int = 0) -> "AxisBound":
+        return cls.from_end(offset)
 
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, AxisBound):
@@ -783,6 +799,70 @@ class AxisBound(Node):
         if not isinstance(other, AxisBound):
             return NotImplemented
         return not self < other
+
+
+class HorizontalInterval(Node):
+    """Represents an interval of the index space in the horizontal.
+
+    This is separate from `gtir.Interval` because the endpoints may
+    be outside the compute domain.
+
+    """
+
+    start: Optional[AxisBound]
+    end: Optional[AxisBound]
+
+    @classmethod
+    def compute_domain(cls, start_offset: int = 0, end_offset: int = 0) -> "HorizontalInterval":
+        return cls(start=AxisBound.start(start_offset), end=AxisBound.end(end_offset))
+
+    @classmethod
+    def full(cls) -> "HorizontalInterval":
+        return cls(start=None, end=None)
+
+    @classmethod
+    def at_endpt(
+        cls, level: LevelMarker, start_offset: int, end_offset: Optional[int] = None
+    ) -> "HorizontalInterval":
+        if end_offset is None:
+            end_offset = start_offset + 1
+        return cls(
+            start=AxisBound(level=level, offset=start_offset),
+            end=AxisBound(level=level, offset=end_offset),
+        )
+
+    @root_validator
+    def check_start_before_end(cls, values: RootValidatorValuesType) -> RootValidatorValuesType:
+        if values["start"] and values["end"] and not (values["start"] <= values["end"]):
+            raise ValueError(
+                f"End ({values['end']}) is not after or equal to start ({values['start']})"
+            )
+
+        return values
+
+    def is_single_index(self) -> bool:
+        if self.start is None or self.end is None or self.start.level != self.end.level:
+            return False
+
+        return abs(self.end.offset - self.start.offset) == 1
+
+
+class HorizontalMask(LocNode):
+    """Expr to represent a convex portion of the horizontal iteration space."""
+
+    i: HorizontalInterval
+    j: HorizontalInterval
+
+    @property
+    def intervals(self) -> Tuple[HorizontalInterval, HorizontalInterval]:
+        return (self.i, self.j)
+
+
+class HorizontalRestriction(GenericNode, Generic[StmtT]):
+    """A specialization of the horizontal space."""
+
+    mask: HorizontalMask
+    body: List[StmtT]
 
 
 def data_type_to_typestr(dtype: DataType) -> str:

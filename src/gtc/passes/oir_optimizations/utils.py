@@ -14,7 +14,6 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import functools
 import re
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, Generic, List, Optional, Set, Tuple, TypeVar, cast
@@ -24,14 +23,13 @@ from eve.concepts import TreeNode
 from eve.traits import SymbolTableTrait
 from eve.utils import XIterable, xiter
 from gt4py.definitions import Extent
-from gtc import oir
+from gtc import common, oir
+from gtc.passes.horizontal_masks import mask_overlap_with_extent
 
 
 OffsetT = TypeVar("OffsetT")
 
 GeneralOffsetTuple = Tuple[int, int, Optional[int]]
-HorizontalExtent = Tuple[Tuple[int, int], Tuple[int, int]]
-
 
 _digits_at_end_pattern = re.compile(r"[0-9]+$")
 _generated_name_pattern = re.compile(r".+_gen_[0-9]+")
@@ -43,10 +41,27 @@ class GenericAccess(Generic[OffsetT]):
     offset: OffsetT
     data_index: List[oir.Expr]
     is_write: bool
+    horizontal_mask: Optional[common.HorizontalMask] = None
 
     @property
     def is_read(self) -> bool:
         return not self.is_write
+
+    def to_extent(self, horizontal_extent: Extent) -> Optional[Extent]:
+        """
+        Convert the access to an extent provided a horizontal extent for the access.
+
+        This returns None if no overlap exists between the horizontal mask and interval.
+        """
+        offset_as_extent = Extent.from_offset(cast(Tuple[int, int, int], self.offset)[:2])
+        zeros = Extent.zeros(ndims=2)
+        if self.horizontal_mask:
+            if dist_from_edge := mask_overlap_with_extent(self.horizontal_mask, horizontal_extent):
+                return ((horizontal_extent - dist_from_edge) + offset_as_extent) | zeros
+            else:
+                return None
+        else:
+            return horizontal_extent + offset_as_extent
 
 
 class CartesianAccess(GenericAccess[Tuple[int, int, int]]):
@@ -69,8 +84,10 @@ class AccessCollector(NodeVisitor):
         *,
         accesses: List[GeneralAccess],
         is_write: bool,
+        horizontal_mask: Optional[common.HorizontalMask] = None,
         **kwargs: Any,
     ) -> None:
+        self.generic_visit(node, accesses=accesses, is_write=is_write, **kwargs)
         offsets = node.offset.to_dict()
         accesses.append(
             GeneralAccess(
@@ -78,6 +95,7 @@ class AccessCollector(NodeVisitor):
                 offset=(offsets["i"], offsets["j"], offsets["k"]),
                 data_index=node.data_index,
                 is_write=is_write,
+                horizontal_mask=horizontal_mask,
             )
         )
 
@@ -90,8 +108,16 @@ class AccessCollector(NodeVisitor):
         self.visit(node.left, is_write=True, **kwargs)
 
     def visit_MaskStmt(self, node: oir.MaskStmt, **kwargs: Any) -> None:
+
         self.visit(node.mask, is_write=False, **kwargs)
         self.visit(node.body, **kwargs)
+
+    def visit_While(self, node: oir.While, **kwargs: Any) -> None:
+        self.visit(node.cond, is_write=False, **kwargs)
+        self.visit(node.body, **kwargs)
+
+    def visit_HorizontalRestriction(self, node: oir.HorizontalRestriction, **kwargs: Any) -> None:
+        self.visit(node.body, horizontal_mask=node.mask, **kwargs)
 
     @dataclass
     class GenericAccessCollection(Generic[AccessT, OffsetT]):
@@ -104,16 +130,24 @@ class AccessCollector(NodeVisitor):
             )
 
         def offsets(self) -> Dict[str, Set[OffsetT]]:
-            """Get a dictonary, mapping all accessed fields' names to sets of offset tuples."""
+            """Get a dictionary, mapping all accessed fields' names to sets of offset tuples."""
             return self._offset_dict(xiter(self._ordered_accesses))
 
         def read_offsets(self) -> Dict[str, Set[OffsetT]]:
-            """Get a dictonary, mapping read fields' names to sets of offset tuples."""
+            """Get a dictionary, mapping read fields' names to sets of offset tuples."""
             return self._offset_dict(xiter(self._ordered_accesses).filter(lambda x: x.is_read))
 
+        def read_accesses(self) -> List[AccessT]:
+            """Get the sub-list of read accesses."""
+            return list(xiter(self._ordered_accesses).filter(lambda x: x.is_read))
+
         def write_offsets(self) -> Dict[str, Set[OffsetT]]:
-            """Get a dictonary, mapping written fields' names to sets of offset tuples."""
+            """Get a dictionary, mapping written fields' names to sets of offset tuples."""
             return self._offset_dict(xiter(self._ordered_accesses).filter(lambda x: x.is_write))
+
+        def write_accesses(self) -> List[AccessT]:
+            """Get the sub-list of write accesses."""
+            return list(xiter(self._ordered_accesses).filter(lambda x: x.is_write))
 
         def fields(self) -> Set[str]:
             """Get a set of all accessed fields' names."""
@@ -193,41 +227,62 @@ def collect_symbol_names(node: TreeNode) -> Set[str]:
     )
 
 
-class _HorizontalExecutionExtents(NodeVisitor):
+class StencilExtentComputer(NodeVisitor):
     @dataclass
     class Context:
         # TODO: Remove dependency on gt4py.definitions here
-        field_extents: Dict[str, Extent] = field(default_factory=dict)
-        block_extents: Dict[int, Extent] = field(default_factory=dict)
+        fields: Dict[str, Extent] = field(default_factory=dict)
+        blocks: Dict[int, Extent] = field(default_factory=dict)
 
-    def visit_Stencil(self, node: oir.Stencil) -> Dict[int, Extent]:
+    def __init__(self, add_k: bool = False):
+        self.add_k = add_k
+        self.zero_extent = Extent.zeros(ndims=2)
+
+    def visit_Stencil(self, node: oir.Stencil) -> "Context":
         ctx = self.Context()
         for vloop in reversed(node.vertical_loops):
             self.visit(vloop, ctx=ctx)
 
-        return ctx.block_extents
+        if self.add_k:
+            ctx.fields = {name: Extent(*extent, (0, 0)) for name, extent in ctx.fields.items()}
 
-    def visit_VerticalLoop(self, node: oir.VerticalLoop, **kwargs: Any) -> None:
-        for section in reversed(node.sections):
-            self.visit(section, **kwargs)
+        return ctx
+
+    def visit_VerticalLoopSection(self, node: oir.VerticalLoopSection, **kwargs: Any) -> None:
+        for hexec in reversed(node.horizontal_executions):
+            self.visit(hexec, **kwargs)
 
     def visit_HorizontalExecution(self, node: oir.HorizontalExecution, *, ctx: Context) -> None:
-        results = AccessCollector.apply(node).cartesian_accesses()
-        horizontal_extent = functools.reduce(
-            lambda ext, name: ext | ctx.field_extents.get(name, Extent.zeros(ndims=2)),
-            results.write_fields(),
-            Extent.zeros(ndims=2),
-        )
-        ctx.block_extents[id(node)] = horizontal_extent
+        results = AccessCollector.apply(node)
 
-        for name, accesses in results.read_offsets().items():
-            extent = functools.reduce(
-                lambda ext, off: ext | Extent.from_offset(off[:2]), accesses, Extent.zeros(ndims=2)
-            )
-            ctx.field_extents[name] = ctx.field_extents.get(name, Extent.zeros(ndims=2)).union(
-                horizontal_extent + extent
-            )
+        horizontal_extent = self.zero_extent
+        for access in (acc for acc in results.ordered_accesses() if acc.is_write):
+            horizontal_extent |= ctx.fields.setdefault(access.field, self.zero_extent)
+        ctx.blocks[id(node)] = horizontal_extent
+
+        for access in results.ordered_accesses():
+            extent = access.to_extent(horizontal_extent)
+            if extent is None:
+                continue
+
+            if access.field in ctx.fields:
+                ctx.fields[access.field] = ctx.fields[access.field] | extent
+            else:
+                ctx.fields[access.field] = extent
 
 
-def compute_horizontal_block_extents(node: oir.Stencil) -> Dict[int, Extent]:
-    return _HorizontalExecutionExtents().visit(node)
+def compute_horizontal_block_extents(node: oir.Stencil, **kwargs: Any) -> Dict[int, Extent]:
+    ctx = StencilExtentComputer(**kwargs).visit(node)
+    return ctx.blocks
+
+
+def compute_fields_extents(node: oir.Stencil, **kwargs: Any) -> Dict[str, Extent]:
+    ctx = StencilExtentComputer(**kwargs).visit(node)
+    return ctx.fields
+
+
+def compute_extents(
+    node: oir.Stencil, **kwargs: Any
+) -> Tuple[Dict[str, Extent], Dict[int, Extent]]:
+    ctx = StencilExtentComputer(**kwargs).visit(node)
+    return ctx.fields, ctx.blocks

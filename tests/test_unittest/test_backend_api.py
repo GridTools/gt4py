@@ -43,10 +43,7 @@ def test_generate_computation(backend, tmp_path):
     builder = StencilBuilder(init_1, backend=backend).with_caching(
         "nocaching", output_path=tmp_path / __name__ / "generate_computation"
     )
-    if backend.name.startswith("gtc:") and (backend.name != "gtc:numpy"):
-        result = builder.backend.generate_computation(ir=builder.definition_ir)
-    else:
-        result = builder.backend.generate_computation()
+    result = builder.backend.generate_computation()
 
     # python backends only need to generate one module, either the stencil module...
     py_result = backend.languages["computation"] == "python" and "init_1.py" in result
@@ -85,7 +82,9 @@ def test_generate_bindings(backend, tmp_path):
         # standalone python computation module imported by stencil module
         result = builder.backend.generate_bindings("python")
         assert "init_1.py" in result
-        assert re.search(r"import computation", result["init_1.py"], re.MULTILINE)
+        assert re.search(
+            r"computation = make_module_from_file\(.*\)", result["init_1.py"], re.MULTILINE
+        )
     else:
         # assumption: only gt backends support python bindings for other languages than python
         if backend.name.startswith("gtc:"):

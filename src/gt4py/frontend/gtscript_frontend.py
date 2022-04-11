@@ -24,7 +24,7 @@ import sys
 import textwrap
 import time
 import types
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
 import numpy as np
 
@@ -849,6 +849,18 @@ def make_init_computation(
     )
 
 
+def _find_accesses_with_offsets(node: gt_ir.Node) -> Set[str]:
+    names: Set[str] = set()
+
+    class FindRefs(gt_ir.IRNodeVisitor):
+        def visit_FieldRef(self, node: gt_ir.FieldAccessor) -> None:
+            if node.offset.get("I", 0) != 0 or node.offset.get("J", 0) != 0:
+                names.add(node.name)
+
+    FindRefs().visit(node)
+    return names
+
+
 @enum.unique
 class ParsingContext(enum.Enum):
     CONTROL_FLOW = 1
@@ -880,7 +892,9 @@ class IRMaker(ast.NodeVisitor):
         self.temp_decls = temp_decls or {}
         self.parsing_context = None
         self.iteration_order = None
-        self.if_decls_stack = []
+        self.decls_stack = []
+        self.parsing_horizontal_region = False
+        self.written_vars: Set[str] = set()
         gt_ir.NativeFunction.PYTHON_SYMBOL_TO_IR_OP = {
             "abs": gt_ir.NativeFunction.ABS,
             "min": gt_ir.NativeFunction.MIN,
@@ -1379,7 +1393,7 @@ class IRMaker(ast.NodeVisitor):
         return result
 
     def visit_If(self, node: ast.If) -> list:
-        self.if_decls_stack.append([])
+        self.decls_stack.append([])
 
         main_stmts = []
         for stmt in node.body:
@@ -1393,11 +1407,11 @@ class IRMaker(ast.NodeVisitor):
             assert all(isinstance(item, gt_ir.Statement) for item in else_stmts)
 
         result = []
-        if len(self.if_decls_stack) == 1:
-            result.extend(self.if_decls_stack.pop())
-        elif len(self.if_decls_stack) > 1:
-            self.if_decls_stack[-2].extend(self.if_decls_stack[-1])
-            self.if_decls_stack.pop()
+        if len(self.decls_stack) == 1:
+            result.extend(self.decls_stack.pop())
+        elif len(self.decls_stack) > 1:
+            self.decls_stack[-2].extend(self.decls_stack[-1])
+            self.decls_stack.pop()
 
         result.append(
             gt_ir.If(
@@ -1412,17 +1426,28 @@ class IRMaker(ast.NodeVisitor):
 
         return result
 
-    def visit_While(self, node: ast.While) -> gt_ir.While:
-        if node.orelse:
-            raise GTScriptSyntaxError("orelse is not supported on while loops")
-        stmts = []
-        for stmt in node.body:
-            stmts.extend(self.visit(stmt))
-        return gt_ir.While(
-            condition=self.visit(node.test),
-            loc=gt_ir.Location.from_ast_node(node),
-            body=gt_ir.BlockStmt(stmts=stmts, loc=gt_ir.Location.from_ast_node(node)),
-        )
+    def visit_While(self, node: ast.While) -> list:
+        loc = gt_ir.Location.from_ast_node(node)
+
+        self.decls_stack.append([])
+        stmts = gt_utils.flatten([self.visit(stmt) for stmt in node.body])
+        assert all(isinstance(item, gt_ir.Statement) for item in stmts)
+
+        result = [
+            gt_ir.While(
+                condition=self.visit(node.test),
+                loc=gt_ir.Location.from_ast_node(node),
+                body=gt_ir.BlockStmt(stmts=stmts, loc=loc),
+            )
+        ]
+
+        if len(self.decls_stack) == 1:
+            result.extend(self.decls_stack.pop())
+        elif len(self.decls_stack) > 1:
+            self.decls_stack[-2].extend(self.decls_stack[-1])
+            self.decls_stack.pop()
+
+        return result
 
     def visit_Call(self, node: ast.Call):
         native_fcn = gt_ir.NativeFunction.PYTHON_SYMBOL_TO_IR_OP[node.func.id]
@@ -1517,11 +1542,14 @@ class IRMaker(ast.NodeVisitor):
                         loc=gt_ir.Location.from_ast_node(t),
                     )
 
-                if len(self.if_decls_stack):
-                    self.if_decls_stack[-1].append(field_decl)
+                if len(self.decls_stack):
+                    self.decls_stack[-1].append(field_decl)
                 else:
                     result.append(field_decl)
                 self.fields[field_decl.name] = field_decl
+
+            if not self.parsing_horizontal_region:
+                self.written_vars.add(name)
 
             axes = self.fields[name].axes
             par_axes_names = [axis.name for axis in gt_ir.Domain.LatLonGrid().parallel_axes]
@@ -1567,13 +1595,22 @@ class IRMaker(ast.NodeVisitor):
             if any(isinstance(child_node, ast.With) for child_node in node.body):
                 raise GTScriptSyntaxError("Cannot nest `with` node inside horizontal region")
 
+            self.parsing_horizontal_region = True
             intervals_dicts = self._visit_with_horizontal(node.items[0], loc)
             all_stmts = gt_utils.flatten([gt_utils.listify(self.visit(stmt)) for stmt in node.body])
+            self.parsing_horizontal_region = False
             stmts = list(filter(lambda stmt: isinstance(stmt, gt_ir.Decl), all_stmts))
             body_block = gt_ir.BlockStmt(
                 stmts=list(filter(lambda stmt: not isinstance(stmt, gt_ir.Decl), all_stmts)),
                 loc=loc,
             )
+            names = _find_accesses_with_offsets(body_block)
+            written_then_offset = names.intersection(self.written_vars)
+            if written_then_offset:
+                raise GTScriptSyntaxError(
+                    "The following variables are"
+                    f"written before being referenced with an offset in a horizontal region: {', '.join(written_then_offset)}"
+                )
             stmts.extend(
                 [
                     gt_ir.HorizontalIf(intervals=intervals_dict, body=body_block)

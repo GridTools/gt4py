@@ -25,7 +25,7 @@ from gtc.common import AxisBound, CartesianOffset, DataType, LocNode, LoopOrder
 
 @utils.noninstantiable
 class Expr(common.Expr):
-    dtype: common.DataType
+    dtype: Optional[common.DataType]
 
 
 @utils.noninstantiable
@@ -69,9 +69,15 @@ class KCacheAccess(common.FieldAccess[Expr, VariableKOffset], Expr):
     k_cache_is_different_from_field_access = True
 
     @validator("offset")
-    def zero_ij_offset(cls, v: CartesianOffset) -> CartesianOffset:
+    def has_no_ij_offset(cls, v: Union[CartesianOffset, VariableKOffset]) -> CartesianOffset:
         if not v.i == v.j == 0:
             raise ValueError("No ij-offset allowed")
+        return v
+
+    @validator("offset")
+    def not_variable_offset(cls, v: Union[CartesianOffset, VariableKOffset]) -> CartesianOffset:
+        if isinstance(v, VariableKOffset):
+            raise ValueError("Cannot k-cache a variable k offset")
         return v
 
     @validator("data_index")
@@ -90,6 +96,10 @@ class AssignStmt(
 class MaskStmt(Stmt):
     mask: Expr
     body: List[Stmt]
+
+
+class While(common.While[Stmt, Expr], Stmt):
+    pass
 
 
 class UnaryOp(common.UnaryOp[Expr], Expr):
@@ -137,6 +147,11 @@ class LocalScalar(Decl):
 
 class Temporary(Decl):
     pass
+
+
+class Positional(Decl):
+    axis_name: str
+    dtype = DataType.INT32
 
 
 class IJExtent(LocNode):
@@ -224,8 +239,18 @@ class Kernel(LocNode):
         return v
 
 
+def axis_size_decls() -> List[ScalarDecl]:
+    return [
+        ScalarDecl(name="i_size", dtype=common.DataType.INT32),
+        ScalarDecl(name="j_size", dtype=common.DataType.INT32),
+        ScalarDecl(name="k_size", dtype=common.DataType.INT32),
+    ]
+
+
 class Program(LocNode, SymbolTableTrait):
     name: Str
     params: List[Decl]
+    positionals: List[Positional]
     temporaries: List[Temporary]
     kernels: List[Kernel]
+    axis_sizes: List[ScalarDecl] = axis_size_decls()

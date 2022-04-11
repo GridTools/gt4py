@@ -13,34 +13,79 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-
+import os
 from typing import TYPE_CHECKING, Dict, Optional, Tuple, Type
 
 import dace
+import numpy as np
+from dace.sdfg.utils import fuse_states, inline_sdfgs
+from dace.serialize import dumps
 
 import gt4py.utils as gt_utils
 from eve import codegen
 from eve.codegen import MakoTemplate as as_mako
 from gt4py import gt_src_manager
 from gt4py.backend.base import CLIBackendMixin, register
-from gt4py.backend.gt_backends import BaseGTBackend, make_x86_layout_map, x86_is_compatible_layout
+from gt4py.backend.gt_backends import BaseGTBackend, PyExtModuleGenerator, make_x86_layout_map
 from gt4py.backend.gtc_backend.common import bindings_main_template, pybuffer_to_sid
 from gt4py.backend.gtc_backend.defir_to_gtir import DefIRToGTIR
+from gt4py.backend.module_generator import make_args_data_from_gtir
 from gt4py.ir import StencilDefinition
 from gtc import gtir, gtir_to_oir
 from gtc.dace.oir_to_dace import OirSDFGBuilder
-from gtc.dace.utils import array_dimensions
+from gtc.dace.utils import array_dimensions, replace_strides
 from gtc.passes.gtir_k_boundary import compute_k_boundary
-from gtc.passes.gtir_legacy_extents import compute_legacy_extents
 from gtc.passes.gtir_pipeline import GtirPipeline
-from gtc.passes.oir_optimizations.caches import FillFlushToLocalKCaches
 from gtc.passes.oir_optimizations.inlining import MaskInlining
-from gtc.passes.oir_optimizations.mask_stmt_merging import MaskStmtMerging
+from gtc.passes.oir_optimizations.utils import compute_fields_extents
 from gtc.passes.oir_pipeline import DefaultPipeline
 
 
 if TYPE_CHECKING:
     from gt4py.stencil_object import StencilObject
+
+
+def _specialize_transient_strides(sdfg: dace.SDFG, layout_map):
+    repldict = replace_strides(
+        [array for array in sdfg.arrays.values() if array.transient],
+        layout_map,
+    )
+    sdfg.replace_dict(repldict)
+    for state in sdfg.nodes():
+        for node in state.nodes():
+            if isinstance(node, dace.nodes.NestedSDFG):
+                for k, v in repldict.items():
+                    if k in node.symbol_mapping:
+                        node.symbol_mapping[k] = v
+    for k in repldict.keys():
+        if k in sdfg.symbols:
+            sdfg.remove_symbol(k)
+
+
+def _post_expand_trafos(sdfg: dace.SDFG):
+    while inline_sdfgs(sdfg) or fuse_states(sdfg):
+        pass
+    sdfg.simplify()
+
+
+def _expand_and_finalize_sdfg(gtir: gtir.Stencil, sdfg: dace.SDFG, layout_map) -> dace.SDFG:
+
+    args_data = make_args_data_from_gtir(GtirPipeline(gtir))
+
+    # stencils without effect
+    if all(info is None for info in args_data.field_info.values()):
+        sdfg = dace.SDFG(gtir.name)
+        sdfg.add_state(gtir.name)
+        return sdfg
+
+    for array in sdfg.arrays.values():
+        if array.transient:
+            array.lifetime = dace.AllocationLifetime.Persistent
+    sdfg.expand_library_nodes(recursive=True)
+    _specialize_transient_strides(sdfg, layout_map=layout_map)
+    _post_expand_trafos(sdfg)
+
+    return sdfg
 
 
 class GTCDaCeExtGenerator:
@@ -50,27 +95,46 @@ class GTCDaCeExtGenerator:
         self.backend = backend
 
     def __call__(self, definition_ir: StencilDefinition) -> Dict[str, Dict[str, str]]:
+        default_pipeline = DefaultPipeline(
+            skip=[
+                MaskInlining,
+            ]
+        )
         gtir = GtirPipeline(DefIRToGTIR.apply(definition_ir)).full()
         base_oir = gtir_to_oir.GTIRToOIR().visit(gtir)
         oir_pipeline = self.backend.builder.options.backend_opts.get(
             "oir_pipeline",
-            DefaultPipeline(skip=[MaskStmtMerging, MaskInlining, FillFlushToLocalKCaches]),
+            default_pipeline,
         )
         oir = oir_pipeline.run(base_oir)
         sdfg = OirSDFGBuilder().visit(oir)
-        sdfg.expand_library_nodes(recursive=True)
-        sdfg.apply_strict_transformations(validate=True)
 
+        sdfg = _expand_and_finalize_sdfg(gtir, sdfg, self.backend.storage_info["layout_map"])
+
+        for tmp_sdfg in sdfg.all_sdfgs_recursive():
+            tmp_sdfg.transformation_hist = []
+            tmp_sdfg.orig_sdfg = None
+
+        sdfg.save(
+            self.backend.builder.module_path.joinpath(
+                os.path.dirname(self.backend.builder.module_path),
+                self.backend.builder.module_name + ".sdfg",
+            )
+        )
+
+        sources: Dict[str, Dict[str, str]]
         implementation = DaCeComputationCodegen.apply(gtir, sdfg)
+
         bindings = DaCeBindingsCodegen.apply(
             gtir, sdfg, module_name=self.module_name, backend=self.backend
         )
 
-        bindings_ext = ".cu" if self.backend.GT_BACKEND_T == "gpu" else ".cpp"
-        return {
+        sources = {
             "computation": {"computation.hpp": implementation},
-            "bindings": {"bindings" + bindings_ext: bindings},
+            "bindings": {"bindings.cpp": bindings},
+            "info": {self.backend.builder.module_name + ".sdfg": dumps(sdfg.to_json())},
         }
+        return sources
 
 
 class DaCeComputationCodegen:
@@ -95,9 +159,11 @@ class DaCeComputationCodegen:
         fmt = "dace_handle.{name} = allocate(allocator, gt::meta::lazy::id<{dtype}>(), {size})();"
         return [
             fmt.format(
-                name=f"__{sdfg.sdfg_id}_{name}", dtype=array.dtype.ctype, size=array.total_size
+                name=f"__{array_sdfg.sdfg_id}_{name}",
+                dtype=array.dtype.ctype,
+                size=array.total_size,
             )
-            for name, array in sdfg.arrays.items()
+            for array_sdfg, name, array in sdfg.arrays_recursive()
             if array.transient and array.lifetime == dace.AllocationLifetime.Persistent
         ]
 
@@ -106,9 +172,12 @@ class DaCeComputationCodegen:
         self = cls()
         code_objects = sdfg.generate_code()
         computations = code_objects[[co.title for co in code_objects].index("Frame")].clean_code
-        lines = computations.split("\n")
-        computations = "\n".join(lines[0:2] + lines[3:])  # remove import of not generated file
-        computations = codegen.format_source("cpp", computations, style="LLVM")
+        lines = filter(
+            lambda l: '#include "../../include/hash.h"' not in l, computations.split("\n")
+        )
+
+        computations = codegen.format_source("cpp", "\n".join(lines), style="LLVM")
+
         interface = cls.template.definition.render(
             name=sdfg.name,
             dace_args=self.generate_dace_args(gtir, sdfg),
@@ -120,6 +189,7 @@ class DaCeComputationCodegen:
                              #include <gridtools/stencil/cartesian.hpp>
                              namespace gt = gridtools;
                              {computations}
+
                              {interface}
                              """
         formatted_code = codegen.format_source("cpp", generated_code, style="LLVM")
@@ -129,8 +199,11 @@ class DaCeComputationCodegen:
         self._unique_index = 0
 
     def generate_dace_args(self, gtir, sdfg):
+        oir = gtir_to_oir.GTIRToOIR().visit(gtir)
+        field_extents = compute_fields_extents(oir, add_k=True)
+
         offset_dict: Dict[str, Tuple[int, int, int]] = {
-            k: (-v[0][0], -v[1][0], -v[2][0]) for k, v in compute_legacy_extents(gtir).items()
+            k: (max(-v[0][0], 0), max(-v[1][0], 0), -v[2][0]) for k, v in field_extents.items()
         }
         k_origins = {
             field_name: boundary[0] for field_name, boundary in compute_k_boundary(gtir).items()
@@ -294,6 +367,31 @@ class DaCeBindingsCodegen:
         return formatted_code
 
 
+class DaCePyExtModuleGenerator(PyExtModuleGenerator):
+    def generate_imports(self):
+        return "\n".join(
+            [
+                *super().generate_imports().splitlines(),
+                "import dace",
+                "import copy",
+                "from gt4py.backend.dace.stencil_object import DaCeStencilObject",
+            ]
+        )
+
+    def generate_base_class_name(self):
+        return "DaCeStencilObject"
+
+    def generate_class_members(self):
+        res = super().generate_class_members()
+        filepath = self.builder.module_path.joinpath(
+            os.path.dirname(self.builder.module_path),
+            self.builder.module_name + "_pyext_BUILD",
+            self.builder.module_name + ".sdfg",
+        )
+        res += f'\nSDFG_PATH = "{filepath}"\n'.format(filepath=filepath)
+        return res
+
+
 @register
 class GTCDaceBackend(BaseGTBackend, CLIBackendMixin):
     """DaCe python backend using gtc."""
@@ -305,9 +403,11 @@ class GTCDaceBackend(BaseGTBackend, CLIBackendMixin):
         "alignment": 1,
         "device": "cpu",
         "layout_map": make_x86_layout_map,
-        "is_compatible_layout": x86_is_compatible_layout,
-        "is_compatible_type": x86_is_compatible_layout,
+        "is_compatible_layout": lambda x: True,
+        "is_compatible_type": lambda x: isinstance(x, np.ndarray),
     }
+
+    MODULE_GENERATOR_CLASS = DaCePyExtModuleGenerator
 
     options = BaseGTBackend.GT_BACKEND_OPTS
     PYEXT_GENERATOR_CLASS = GTCDaCeExtGenerator  # type: ignore

@@ -49,7 +49,10 @@ from .definition_setup import (
 
 
 # Setup cache folder
-pytest_gt_cache_dir = mkdtemp(prefix=".gt_cache_pytest_", dir=gt_config.cache_settings["root_path"])
+if not (pytest_gt_cache_dir := os.environ.get("GT_CACHE_PYTEST_DIR", None)):
+    pytest_gt_cache_dir = mkdtemp(
+        prefix=".gt_cache_pytest_", dir=gt_config.cache_settings["root_path"]
+    )
 
 
 def pytest_sessionstart():

@@ -25,7 +25,7 @@ from click.testing import CliRunner
 from gt4py import backend, cli
 from gt4py.backend.base import CLIBackendMixin
 
-from ..definitions import OLD_INTERNAL_BACKENDS
+from ..definitions import INTERNAL_BACKENDS
 
 
 @pytest.fixture
@@ -36,7 +36,7 @@ def clirunner():
 
 @pytest.fixture(
     params=[
-        *OLD_INTERNAL_BACKENDS,  # gtc backends require definition ir as input, for now we skip the tests
+        *INTERNAL_BACKENDS,  # gtc backends require definition ir as input, for now we skip the tests
         pytest.param(
             "nocli",
         ),
@@ -93,14 +93,11 @@ def nocli_backend(scope="module"):
 
 
 BACKEND_ROW_PATTERN_BY_NAME = {
-    "debug": r"^\s*debug\s*python\s*Yes",
-    "numpy": r"^\s*numpy\s*python\s*Yes",
-    "gtx86": r"^\s*gtx86\s*c\+\+\s*python\s*Yes",
-    "gtmc": r"^\s*gtmc\s*c\+\+\s*python\s*Yes",
-    "gtcuda": r"^\s*gtcuda\s*cuda\s*python\s*Yes",
+    "gtc:cuda": r"^\s*gtc:cuda\s*cuda\s*python\s*Yes",
+    "gtc:dace": r"^\s*gtc:dace\s*c\+\+\s*python\s*Yes",
     "gtc:gt:cpu_ifirst": r"^\s*gtc:gt:cpu_ifirst\s*c\+\+\s*python\s*Yes",
     "gtc:gt:cpu_kfirst": r"^\s*gtc:gt:cpu_kfirst\s*c\+\+\s*python\s*Yes",
-    "gtc:gt:gpu": r"^\s*gtc:gt:gpu\s*c\+\+\s*python\s*Yes",
+    "gtc:gt:gpu": r"^\s*gtc:gt:gpu\s*cuda\s*python\s*Yes",
     "gtc:numpy": r"^\s*gtc:numpy\s*python\s*python\s*Yes",
     "nocli": r"^\s*nocli\s*\?\s*\?\s*No",
 }
@@ -131,7 +128,7 @@ def test_gen_silent(clirunner, simple_stencil, tmp_path):
         cli.gtpyc,
         [
             "gen",
-            "--backend=debug",
+            "--backend=gtc:numpy",
             "--output-path",
             str(tmp_path / "test_gen_silent"),
             "--silent",
@@ -146,7 +143,7 @@ def test_gen_silent(clirunner, simple_stencil, tmp_path):
 
 def test_gen_missing_arg(clirunner):
     """Test for error if no input path argument is passed to gen."""
-    result = clirunner.invoke(cli.gtpyc, ["gen", "--backend=debug"])
+    result = clirunner.invoke(cli.gtpyc, ["gen", "--backend=gtc:numpy"])
 
     assert result.exit_code == 2
     assert "Missing argument 'INPUT_PATH'." in result.output
@@ -195,18 +192,19 @@ def test_gen_enabled_backend_choice(
         assert result.exit_code == 0
 
 
-def test_gen_gtx86(clirunner, simple_stencil, tmp_path):
+def test_gen_gtc_cpu(clirunner, simple_stencil, tmp_path):
     """Only generate the c++ files."""
-    output_path = tmp_path / "test_gen_gtx86"
+    output_path = tmp_path / "test_gen_gtc_cpu"
     result = clirunner.invoke(
         cli.gtpyc,
-        ["gen", f"--output-path={output_path}", "--backend=gtx86", str(simple_stencil)],
+        ["gen", f"--output-path={output_path}", "--backend=gtc:gt:cpu_kfirst", str(simple_stencil)],
         catch_exceptions=False,
     )
     assert result.exit_code == 0
     src_path = output_path / "init_1_src"
     src_files = [path.name for path in src_path.iterdir()]
-    assert set(["computation.hpp", "computation.cpp"]) == set(src_files), result.output
+    print(src_files)
+    assert ["computation.hpp"] == src_files, result.output
 
 
 def test_backend_option_order(clirunner, simple_stencil, tmp_path):
@@ -219,7 +217,7 @@ def test_backend_option_order(clirunner, simple_stencil, tmp_path):
             [
                 "gen",
                 f"--output-path={output_path1}",
-                "--backend=numpy",
+                "--backend=gtc:numpy",
                 "-O",
                 "ignore_np_errstate=True",
                 str(simple_stencil),
@@ -237,7 +235,7 @@ def test_backend_option_order(clirunner, simple_stencil, tmp_path):
                 f"--output-path={output_path1}",
                 "-O",
                 "ignore_np_errstate=True",
-                "--backend=numpy",
+                "--backend=gtc:numpy",
                 str(simple_stencil),
             ],
             catch_exceptions=False,
@@ -248,7 +246,7 @@ def test_backend_option_order(clirunner, simple_stencil, tmp_path):
 
 def test_write_computation_src(tmp_path, simple_stencil):
     builder = cli.GTScriptBuilder(
-        simple_stencil, output_path=tmp_path, backend=backend.from_name("debug")
+        simple_stencil, output_path=tmp_path, backend=backend.from_name("gtc:numpy")
     )
     toplevel = "test_write_computation_src"
     test_src = {

@@ -14,14 +14,11 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import numpy as np
 import pytest
 
-from gt4py.backend.module_generator import (
-    BaseModuleGenerator,
-    ModuleData,
-    make_args_data_from_gtir,
-    make_args_data_from_iir,
-)
+from gt4py.backend.module_generator import BaseModuleGenerator, ModuleData, make_args_data_from_gtir
+from gt4py.definitions import AccessKind, Boundary, FieldInfo, ParameterInfo
 from gt4py.gtscript import PARALLEL, Field, computation, interval
 from gt4py.stencil_builder import StencilBuilder
 
@@ -43,7 +40,19 @@ def sample_builder():
 
 @pytest.fixture
 def sample_args_data():
-    yield ModuleData(field_info={"in_field": None}, parameter_info={"inf_field": None})
+    dtype = np.dtype(np.float_)
+    yield ModuleData(
+        field_info={
+            "in_field": FieldInfo(
+                access=AccessKind.READ_WRITE,
+                boundary=Boundary.zeros(ndims=3),
+                axes=("I", "J", "K"),
+                data_dims=tuple([]),
+                dtype=dtype,
+            )
+        },
+        parameter_info={"param": ParameterInfo(access=AccessKind.READ, dtype=dtype)},
+    )
 
 
 def test_uninitialized_builder(sample_builder, sample_args_data):
@@ -78,10 +87,13 @@ def sample_stencil_with_args(
         used_io_field = used_in_field[1, 0, 0] + used_scalar  # type: ignore
 
 
-def test_module_data_equivalence():
+def test_module_data():
     builder = StencilBuilder(sample_stencil_with_args)
+    module_data = make_args_data_from_gtir(builder.gtir_pipeline)
 
-    legacy_module_data = make_args_data_from_iir(builder.implementation_ir)
-    gtc_module_data = make_args_data_from_gtir(builder.gtir_pipeline, legacy=True)
+    assert module_data.field_info["used_io_field"].access == AccessKind.WRITE
+    assert module_data.field_info["used_in_field"].access == AccessKind.READ
+    assert module_data.field_info["unused_field"].access == AccessKind.NONE
 
-    assert legacy_module_data == gtc_module_data
+    assert module_data.parameter_info["used_scalar"].access == AccessKind.READ
+    assert module_data.parameter_info["unused_scalar"].access == AccessKind.NONE

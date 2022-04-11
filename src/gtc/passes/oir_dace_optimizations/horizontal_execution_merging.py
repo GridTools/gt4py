@@ -29,10 +29,10 @@ import dace
 import dace.subsets
 import networkx as nx
 from dace import SDFGState, dtypes
-from dace.properties import Property, make_properties
+from dace.properties import SetProperty, make_properties
 from dace.sdfg import graph
 from dace.sdfg.utils import node_path_graph
-from dace.transformation.transformation import PatternNode, Transformation
+from dace.transformation.transformation import PatternNode, SingleStateTransformation
 
 from gtc import oir
 from gtc.dace.nodes import HorizontalExecutionLibraryNode
@@ -78,13 +78,13 @@ def offsets_match(
     return not conflicting
 
 
-def iteration_space_compatible(
+def extents_compatible(
     left: HorizontalExecutionLibraryNode,
     right: HorizontalExecutionLibraryNode,
     api_fields: Set[str],
 ):
 
-    if left.iteration_space == right.iteration_space:
+    if left.extent == right.extent:
         return True
 
     for conn_name in set(left.out_connectors) | set(right.out_connectors):
@@ -167,12 +167,11 @@ def optional_node(pattern_node: PatternNode, sdfg: dace.SDFG) -> Optional[dace.n
     return node
 
 
-@dace.registry.autoregister_params(singlestate=True)
 @make_properties
-class GraphMerging(Transformation):
+class GraphMerging(SingleStateTransformation):
 
-    api_fields = Property(
-        dtype=set,
+    api_fields = SetProperty(
+        str,
         desc="Set of field names that are parameters to the parent stencil",
     )
 
@@ -192,13 +191,13 @@ class GraphMerging(Transformation):
     def can_be_applied(
         self,
         graph: SDFGState,
-        candidate: Dict[str, dace.nodes.Node],
         expr_index: int,
         sdfg: dace.SDFG,
-        strict: bool = False,
+        permissive: bool = True,
     ) -> bool:
-        left = self.left(sdfg)
-        right = self.right(sdfg)
+        left = self.left
+        right = self.right
+
         if expr_index >= 2:
             if nx.has_path(graph.nx, right, left):
                 return False
@@ -223,9 +222,7 @@ class GraphMerging(Transformation):
         if len(protected_intermediate_names & output_names) > 0:
             return False
 
-        return offsets_match(left, right) and iteration_space_compatible(
-            left, right, self.api_fields
-        )
+        return offsets_match(left, right) and extents_compatible(left, right, self.api_fields)
 
     def _merge_source_locations(
         self, left: HorizontalExecutionLibraryNode, right: HorizontalExecutionLibraryNode
@@ -241,11 +238,11 @@ class GraphMerging(Transformation):
             dinfo.filename = dinfo.filename or right.debuginfo.filename
         return dinfo
 
-    def apply(self, sdfg: dace.SDFG) -> None:
-        state = sdfg.node(self.state_id)
-        left = self.left(sdfg)
-        right = self.right(sdfg)
+    def apply(self, state: dace.SDFGState, sdfg: dace.SDFG) -> None:
 
+        state = sdfg.node(self.state_id)
+        left = self.left
+        right = self.right
         # Merge source locations
         dinfo = self._merge_source_locations(left, right)
 
@@ -255,7 +252,7 @@ class GraphMerging(Transformation):
                 body=left.as_oir().body + right.as_oir().body,
                 declarations=left.as_oir().declarations + right.as_oir().declarations,
             ),
-            iteration_space=left.iteration_space,
+            extent=left.extent,
             debuginfo=dinfo,
         )
         state.add_node(res)
@@ -298,8 +295,6 @@ class GraphMerging(Transformation):
                     ), "Previously written array now read-only."
                     state.remove_node(acc)
                     res.remove_in_connector("IN_" + acc.label)
-            elif not state.out_edges:
-                acc.access = dace.AccessType.WriteOnly
 
 
 def graph_merge_horizontal_executions(node: oir.Stencil) -> oir.Stencil:
