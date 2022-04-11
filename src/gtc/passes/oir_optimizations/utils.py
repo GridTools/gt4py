@@ -14,8 +14,9 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import dataclasses
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Callable, Dict, Generic, List, Optional, Set, Tuple, TypeVar, cast
 
 from eve import NodeVisitor
@@ -39,8 +40,8 @@ _generated_name_pattern = re.compile(r".+_gen_[0-9]+")
 class GenericAccess(Generic[OffsetT]):
     field: str
     offset: OffsetT
-    data_index: List[oir.Expr]
     is_write: bool
+    data_index: List[oir.Expr] = dataclasses.field(default_factory=list)
     horizontal_mask: Optional[common.HorizontalMask] = None
 
     @property
@@ -231,8 +232,8 @@ class StencilExtentComputer(NodeVisitor):
     @dataclass
     class Context:
         # TODO: Remove dependency on gt4py.definitions here
-        fields: Dict[str, Extent] = field(default_factory=dict)
-        blocks: Dict[int, Extent] = field(default_factory=dict)
+        fields: Dict[str, Extent] = dataclasses.field(default_factory=dict)
+        blocks: Dict[int, Extent] = dataclasses.field(default_factory=dict)
 
     def __init__(self, add_k: bool = False):
         self.add_k = add_k
