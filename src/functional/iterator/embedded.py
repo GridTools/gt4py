@@ -389,6 +389,24 @@ def make_in_iterator(inp, pos, offset_provider, *, column_axis):
 builtins.builtin_dispatch.push_key(EMBEDDED)  # makes embedded the default
 
 
+class ConstantField:
+    def __init__(self, value):
+        self.value = value
+
+    def __getitem__(self, indices):
+        return self.value
+
+    def __setitem__(self, indices, value):
+        raise TypeError("__setitem__ not supported for this field")
+
+    def __array__(self):
+        raise TypeError("__array__ not supported for this field")
+
+    @property
+    def shape(self):
+        raise TypeError("`shape` not supported for this field")
+
+
 class LocatedField:
     """A Field with named dimensions/axises.
 

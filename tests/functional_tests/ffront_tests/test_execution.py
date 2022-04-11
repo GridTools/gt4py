@@ -26,6 +26,7 @@ from functional.ffront.func_to_foast import FieldOperatorParser
 from functional.iterator import ir as itir
 from functional.iterator.backends import roundtrip
 from functional.iterator.embedded import (
+    ConstantField,
     NeighborTableOffsetProvider,
     index_field,
     np_as_located_field,
@@ -314,3 +315,25 @@ def test_reduction_expression(reduction_setup):
 
     ref = np.sum(-(rs.v2e_table**2) * 2, axis=1)
     assert np.allclose(ref, rs.out.array())
+
+
+def test_scalar_arg():
+    """Test scalar argument being turned into 0-dim field."""
+    Vertex = CartesianAxis("Vertex")
+    size = 5
+    inp = ConstantField(5.0)
+    out = np_as_located_field(Vertex)(np.zeros([size]))
+
+    def scalar_arg(scalar_f: float64):
+        return scalar_f + 1.0
+
+    program = program_from_function(scalar_arg, dim=Vertex, size=size)
+    roundtrip.executor(
+        program,
+        inp,
+        out,
+        offset_provider={},
+    )
+
+    ref = np.full([size], 6.0)
+    assert np.allclose(ref, out.array())
