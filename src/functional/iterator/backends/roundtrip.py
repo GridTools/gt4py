@@ -1,4 +1,5 @@
 import importlib.util
+import os
 import tempfile
 from typing import Iterable
 
@@ -103,7 +104,7 @@ def executor(ir: Node, *args, **kwargs):
     with tempfile.NamedTemporaryFile(
         mode="w",
         suffix=".py",
-        delete=not debug,
+        delete=False,
     ) as tmp:
         if debug:
             print(tmp.name)
@@ -122,11 +123,15 @@ from functional.iterator.embedded import np_as_located_field
         tmp.write("\n")
         tmp.write(program)
         tmp.write(wrapper)
-        tmp.flush()
+        tmp.close()
 
-        spec = importlib.util.spec_from_file_location("module.name", tmp.name)
-        foo = importlib.util.module_from_spec(spec)  # type: ignore
-        spec.loader.exec_module(foo)  # type: ignore
+        try:
+            spec = importlib.util.spec_from_file_location("module.name", tmp.name)
+            foo = importlib.util.module_from_spec(spec)  # type: ignore
+            spec.loader.exec_module(foo)  # type: ignore
+        finally:
+            if not debug:
+                os.remove(tmp.name)
 
         fencil_name = ir.id
         fencil = getattr(foo, fencil_name + "_wrapper")
