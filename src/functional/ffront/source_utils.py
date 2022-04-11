@@ -16,9 +16,9 @@ from __future__ import annotations
 
 import functools
 import inspect
+import os
 import symtable
 import textwrap
-import os
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from typing import Any, Mapping, Union, cast
