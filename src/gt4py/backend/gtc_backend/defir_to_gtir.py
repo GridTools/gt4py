@@ -59,10 +59,15 @@ def _make_literal(v: numbers.Number) -> gtir.Literal:
         dtype = common.DataType.BOOL
         value = common.BuiltInLiteral.TRUE if v else common.BuiltInLiteral.FALSE
     else:
-        # NOTE: How can we check other dtypes?
-        if (cast(float, v) / 1.0).is_integer():
+        if isinstance(v, int):
+            # note: could be extended to support 32 bit integers by checking the values magnitude
             dtype = common.DataType.INT64
+        elif isinstance(v, float):
+            dtype = common.DataType.FLOAT64
         else:
+            print(
+                f"Warning: Only INT64 and FLOAT64 literals are supported currently. Implicitly upcasting `{v}` to FLOAT64"
+            )
             dtype = common.DataType.FLOAT64
         value = str(v)
     return gtir.Literal(dtype=dtype, value=value)
