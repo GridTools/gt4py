@@ -17,7 +17,7 @@ import pytest
 
 from functional.common import Dimension, GTTypeError
 from functional.ffront import common_types as ct
-from functional.ffront.fbuiltins import Field, float32, float32_, float64, float64_, int64
+from functional.ffront.fbuiltins import Field, float32, float64, int64
 from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError
 from functional.ffront.func_to_foast import FieldOperatorParser
 from functional.ffront.type_info import TypeInfo
@@ -147,7 +147,7 @@ def type_info_is_callable_for_args_cases():
             {"foo": float_type},
             [r"Expected keyword argument foo to be of type bool, but got float64."],
         ),
-        (kwarg_func_type, [], {"bar": bool_type}, ["Got unexpected keyword argument\(s\) `bar`."]),
+        (kwarg_func_type, [], {"bar": bool_type}, [r"Got unexpected keyword argument\(s\) `bar`."]),
     ]
 
 
@@ -334,7 +334,7 @@ def test_scalar_arg():
 
 def test_mismatched_literals():
     def mismatched_lit() -> Field[..., "float32"]:
-        return float32_(1.0) + float64_(1.0)
+        return float32("1.0") + float64("1.0")
 
     with pytest.raises(
         FieldOperatorTypeDeductionError,

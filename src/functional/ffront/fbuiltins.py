@@ -13,7 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from dataclasses import dataclass
-from typing import Any, Callable, Optional
+from typing import Optional
 
 from numpy import float32, float64, int32, int64
 
@@ -23,6 +23,10 @@ from functional.iterator import runtime
 
 
 __all__ = ["Field", "float32", "float64", "int32", "int64", "neighbor_sum"]
+
+
+TYPE_BUILTINS = [Field, float, float32, float64, int, int32, int64, bool, tuple]
+TYPE_BUILTIN_NAMES = [t.__name__ for t in TYPE_BUILTINS]
 
 
 @dataclass
@@ -36,38 +40,6 @@ class BuiltInFunction:
         return self.__gt_type
 
 
-@dataclass
-class ConstantConstructor(BuiltInFunction):
-    constructor: Callable[[str], Any]
-
-    def __init__(self, constructor):
-        super().__init__(
-            ct.FunctionType(
-                args=[ct.DeferredSymbolType(constraint=ct.ScalarType)],
-                kwargs={},
-                returns=ct.ScalarType(kind=getattr(ct.ScalarKind, constructor.__name__.upper())),
-            )
-        )
-        self.constructor = constructor
-
-    def __call__(self, value: str, *args, **kwargs):  # type: ignore [override]
-        return self.constructor(value)
-
-    @property
-    def __name__(self):
-        return self.constructor.__name__
-
-
-float32_ = ConstantConstructor(constructor=float32)
-float64_ = ConstantConstructor(constructor=float64)
-int32_ = ConstantConstructor(constructor=int32)
-int64_ = ConstantConstructor(constructor=int64)
-
-
-TYPE_BUILTINS = [Field, float, float32, float64, int, int32, int64, bool, tuple]
-TYPE_BUILTIN_NAMES = [t.__name__ for t in TYPE_BUILTINS]
-
-
 neighbor_sum = BuiltInFunction(
     ct.FunctionType(
         args=[ct.DeferredSymbolType(constraint=ct.FieldType)],
@@ -77,7 +49,7 @@ neighbor_sum = BuiltInFunction(
 )
 
 
-FUN_BUILTIN_NAMES = ["neighbor_sum", "float32_", "float64_", "int32_", "int64_"]
+FUN_BUILTIN_NAMES = ["neighbor_sum"]
 
 
 EXTERNALS_MODULE_NAME = "__externals__"

@@ -312,7 +312,7 @@ def test_tuples():
 
     def tuples(inp1: Field[[IDim], float64], inp2: Field[[IDim], float64]):
         inps = inp1, inp2
-        scalars = 1.3, 5.0, 3.4
+        scalars = 1.3, float64(5.0), float64("3.4")
         return (inps[0] * scalars[0] + inps[1] * scalars[1]) * scalars[2]
 
     program = program_from_function(tuples, dim=IDim, size=size)

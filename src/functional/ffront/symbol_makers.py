@@ -45,6 +45,8 @@ def make_scalar_kind(dtype: npt.DTypeLike) -> ct.ScalarKind:
                 return ct.ScalarKind.FLOAT32
             case np.float64:
                 return ct.ScalarKind.FLOAT64
+            case np.str:
+                return ct.ScalarKind.STRING
             case _:
                 raise common.GTTypeError(f"Impossible to map '{dtype}' value to a ScalarKind")
     else:
@@ -91,7 +93,7 @@ def make_symbol_type_from_typing(
     args = typing.get_args(type_hint)
 
     match canonical_type:
-        case type() as t if issubclass(t, (bool, int, float, np.generic)):
+        case type() as t if issubclass(t, (bool, int, float, np.generic, str)):
             return ct.ScalarType(kind=make_scalar_kind(type_hint))
 
         case builtins.tuple:
@@ -123,7 +125,7 @@ def make_symbol_type_from_typing(
                 raise TypingError(
                     f"Field dtype argument must be a scalar type (got '{dtype_arg}')!"
                 ) from error
-            if not isinstance(dtype, ct.ScalarType):
+            if not isinstance(dtype, ct.ScalarType) or dtype.kind == ct.ScalarKind.STRING:
                 raise TypingError("Field dtype argument must be a scalar type (got '{dtype}')!")
             return ct.FieldType(dims=dims, dtype=dtype)
 
