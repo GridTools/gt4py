@@ -43,12 +43,14 @@ def _assert_source_invariants(source_definition: SourceDefinition, captured_vars
     # However, 'captured_vars' comes from inspecting the live function object, which might
     # have not been defined at a global scope, and therefore actual symbol values could appear
     # in both 'captured_vars.globals' and 'self.captured_vars.nonlocals'.
-    if (
-        not (set(captured_vars.globals) | set(captured_vars.nonlocals.keys()))
-        .difference((global_names | nonlocal_names))
-        .issubset(set(fbuiltins.TYPE_BUILTIN_NAMES))
-    ):
-        raise AssertionError("CapturedVars do not agree with information from symtable module.")
+    if not (
+        diff := (set(captured_vars.globals) | set(captured_vars.nonlocals.keys())).difference(
+            (global_names | nonlocal_names)
+        )
+    ).issubset(set(fbuiltins.TYPE_BUILTIN_NAMES) | {"__builtins__"}):
+        raise AssertionError(
+            f"CapturedVars do not agree with information from symtable module. {diff}"
+        )
 
 
 DialectRootT = TypeVar("DialectRootT")

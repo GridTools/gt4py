@@ -336,38 +336,75 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
     def visit_Eq(self, node: ast.Eq, **kwargs) -> foast.CompareOperator:
         return foast.CompareOperator.EQ
 
+    def _verify_builtin_function(self, node: ast.Call):
+        func_name = self._func_name(node)
+        func_info = getattr(fbuiltins, func_name).__gt_type__()
+        if not len(node.args) == len(func_info.args):
+            raise FieldOperatorSyntaxError.from_AST(
+                node,
+                msg=f"{func_name}() expected {len(func_info.args)} positional arguments, {len(node.args)} given!",
+            )
+        elif unexpected_kwargs := set(k.arg for k in node.keywords) - set(func_info.kwargs):
+            raise FieldOperatorSyntaxError.from_AST(
+                node,
+                msg=f"{self._func_name(node)}() got unexpected keyword arguments: {unexpected_kwargs}!",
+            )
+
+    def _verify_builtin_type_constructor(self, node: ast.Call):
+        if not len(node.args) == 1:
+            raise FieldOperatorSyntaxError.from_AST(
+                node,
+                msg=f"{self._func_name(node)}() expected 1 positional argument, {len(node.args)} given!",
+            )
+        elif node.keywords:
+            unexpected_kwargs = set(k.arg for k in node.keywords)
+            raise FieldOperatorSyntaxError.from_AST(
+                node,
+                msg=f"{self._func_name(node)}() got unexpected keyword arguments: {unexpected_kwargs}!",
+            )
+
+    def _builtin_type_constructor_type_override(self, node: ast.Call):
+        global_ns = self.captured_vars.globals
+        local_ns = self.captured_vars.nonlocals
+        return ct.FunctionType(
+            args=[ct.DeferredSymbolType(constraint=ct.ScalarType)],
+            kwargs={},
+            returns=cast(
+                ct.DataType,
+                symbol_makers.make_symbol_type_from_typing(
+                    self._func_name(node), global_ns=global_ns, local_ns=local_ns
+                ),
+            ),
+        )
+
+    def _func_name(self, node: ast.Call) -> str:
+        func = node.func
+        if isinstance(func, ast.Name):
+            return func.id
+        return ""
+
     def visit_Call(self, node: ast.Call, **kwargs) -> foast.Call:
-        new_func = self.visit(node.func)
-        if not isinstance(new_func, foast.Name):
+        if not isinstance(node.func, ast.Name):
             raise FieldOperatorSyntaxError.from_AST(
                 node, msg="Functions can only be called directly!"
             )
 
-        args = node.args
-        if new_func.id in fbuiltins.FUN_BUILTIN_NAMES:
-            func_info = getattr(fbuiltins, new_func.id).__gt_type__()
-            if not len(args) == len(func_info.args) or any(
-                k.arg not in func_info.kwargs for k in node.keywords
-            ):
-                raise FieldOperatorSyntaxError.from_AST(
-                    node, msg=f"Wrong syntax for function {new_func.id}."
-                )
-        if new_func.id in fbuiltins.TYPE_BUILTIN_NAMES:
-            global_ns = {**fbuiltins.BUILTINS, **self.captured_vars.globals}
-            local_ns = self.captured_vars.nonlocals
-            new_func.type = ct.FunctionType(
-                args=[ct.DeferredSymbolType(constraint=ct.ScalarType)],
-                kwargs={},
-                returns=cast(
-                    ct.DataType,
-                    symbol_makers.make_symbol_type_from_typing(
-                        new_func.id, global_ns=global_ns, local_ns=local_ns
-                    ),
-                ),
-            )
+        func_name = self._func_name(node)
+        type_override = None
 
+        if func_name in fbuiltins.FUN_BUILTIN_NAMES:
+            self._verify_builtin_function(node)
+        if func_name in fbuiltins.TYPE_BUILTIN_NAMES:
+            self._verify_builtin_type_constructor(node)
+            type_override = self._builtin_type_constructor_type_override(node)
+
+        args = node.args.copy()
         for keyword in node.keywords:
             args.append(keyword.value)
+
+        new_func = self.visit(node.func, **kwargs)
+        if type_override:
+            new_func.type = type_override
 
         return foast.Call(
             func=new_func,
