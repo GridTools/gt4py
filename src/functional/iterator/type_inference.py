@@ -11,10 +11,14 @@ datatype = functools.partial(dataclass, frozen=True, slots=True)
 class VarMixin:
     _counter = -1
 
+    @staticmethod
+    def fresh_index():
+        VarMixin._counter += 1
+        return VarMixin._counter
+
     @classmethod
     def fresh(cls, *args):
-        VarMixin._counter += 1
-        return cls(VarMixin._counter, *args)
+        return cls(VarMixin.fresh_index(), *args)
 
 
 @datatype
@@ -116,9 +120,33 @@ class Fencil(DType):
     params: DType
 
 
+@datatype
+class LetPolymorphic(DType):
+    dtype: DType
+
+
 def children(dtype):
     for f in fields(dtype):
         yield f.name, getattr(dtype, f.name)
+
+
+def freshen(dtype):
+    index_map = dict()
+
+    def r(x):
+        if isinstance(x, DType):
+            values = {k: r(v) for k, v in children(x)}
+            if isinstance(x, VarMixin):
+                values["idx"] = index_map.setdefault(x.idx, VarMixin.fresh_index())
+            return type(x)(**values)
+        if isinstance(x, tuple):
+            return tuple(r(xi) for xi in x)
+        assert isinstance(x, (str, int))
+        return x
+
+    res = r(dtype)
+    print(pretty_str(dtype), pretty_str(res))
+    return res
 
 
 BOOL_DTYPE = Primitive("bool")  # type: ignore [call-arg]
@@ -132,7 +160,10 @@ DOMAIN_DTYPE = Primitive("domain")  # type: ignore [call-arg]
 class TypeInferrer(NodeTranslator):
     def visit_SymRef(self, node, *, constraints, symtypes):
         if node.id in symtypes:
-            return symtypes[node.id]
+            res = symtypes[node.id]
+            if isinstance(res, LetPolymorphic):
+                return freshen(res.dtype)
+            return res
         if node.id == "deref":
             dtype = Var.fresh()
             size = Var.fresh()
@@ -280,9 +311,11 @@ class TypeInferrer(NodeTranslator):
             fmap = dict()
             # TODO: order by dependencies? Or is this done before?
             for f in node.function_definitions:
-                f = self.visit(f, constraints=constraints, symtypes=symtypes | fmap)
+                c = constraints.copy()
+                f = self.visit(f, constraints=c, symtypes=symtypes | fmap)
+                f = unify(f, c)
                 ftypes.append(f)
-                fmap[f.name] = f.fun
+                fmap[f.name] = LetPolymorphic(f.fun)
             return Tuple(tuple(ftypes)), fmap
 
         params = {p.id: Var.fresh() for p in node.params}
