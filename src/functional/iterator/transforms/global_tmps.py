@@ -116,5 +116,8 @@ class CreateGlobalTmps(NodeTranslator):
                 register_tmp(tmp, domain)
 
         return ir.FencilDefinition(
-            id=node.id, params=node.params + tmps, closures=list(reversed(closures))
+            id=node.id,
+            function_definitions=node.function_definitions,
+            params=node.params + tmps,
+            closures=list(reversed(closures)),
         )
