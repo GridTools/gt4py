@@ -19,7 +19,16 @@ from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple, Type
 from eve import codegen
 from gt4py import gt_src_manager
 from gt4py.backend.base import CLIBackendMixin, register
-from gt4py.backend.gt_backends import (
+from gt4py.backend.gtc_backend.common import BackendCodegen, bindings_main_template, pybuffer_to_sid
+from gtc import gtir
+from gtc.common import DataType
+from gtc.gtcpp import gtcpp, gtcpp_codegen
+from gtc.gtcpp.oir_to_gtcpp import OIRToGTCpp
+from gtc.gtir_to_oir import GTIRToOIR
+from gtc.passes.gtir_pipeline import GtirPipeline
+from gtc.passes.oir_pipeline import DefaultPipeline
+
+from ..common import (
     BaseGTBackend,
     GTCUDAPyModuleGenerator,
     cuda_is_compatible_layout,
@@ -31,39 +40,35 @@ from gt4py.backend.gt_backends import (
     mc_is_compatible_layout,
     x86_is_compatible_layout,
 )
-from gt4py.backend.gtc_backend.common import bindings_main_template, pybuffer_to_sid
-from gt4py.backend.gtc_backend.defir_to_gtir import DefIRToGTIR
-from gtc import gtir_to_oir
-from gtc.common import DataType
-from gtc.gtcpp import gtcpp, gtcpp_codegen, oir_to_gtcpp
-from gtc.passes.gtir_pipeline import GtirPipeline
-from gtc.passes.oir_pipeline import DefaultPipeline
 
 
 if TYPE_CHECKING:
     from gt4py.stencil_object import StencilObject
 
 
-class GTCGTExtGenerator:
+class GTCGTExtGenerator(BackendCodegen):
     def __init__(self, class_name, module_name, backend):
         self.class_name = class_name
         self.module_name = module_name
         self.backend = backend
 
-    def __call__(self, definition_ir) -> Dict[str, Dict[str, str]]:
-        gtir = GtirPipeline(DefIRToGTIR.apply(definition_ir)).full()
-        base_oir = gtir_to_oir.GTIRToOIR().visit(gtir)
+    def __call__(self, stencil_ir: gtir.Stencil) -> Dict[str, Dict[str, str]]:
+        stencil_ir = GtirPipeline(stencil_ir).full()
+        base_oir = GTIRToOIR().visit(stencil_ir)
         oir_pipeline = self.backend.builder.options.backend_opts.get(
             "oir_pipeline", DefaultPipeline()
         )
-        oir = oir_pipeline.run(base_oir)
-        gtcpp = oir_to_gtcpp.OIRToGTCpp().visit(oir)
+        oir_node = oir_pipeline.run(base_oir)
+        gtcpp_ir = OIRToGTCpp().visit(oir_node)
         format_source = self.backend.builder.options.format_source
         implementation = gtcpp_codegen.GTCppCodegen.apply(
-            gtcpp, gt_backend_t=self.backend.GT_BACKEND_T, format_source=format_source
+            gtcpp_ir, gt_backend_t=self.backend.GT_BACKEND_T, format_source=format_source
         )
         bindings = GTCppBindingsCodegen.apply(
-            gtcpp, module_name=self.module_name, backend=self.backend, format_source=format_source
+            gtcpp_ir,
+            module_name=self.module_name,
+            backend=self.backend,
+            format_source=format_source,
         )
         bindings_ext = ".cu" if self.backend.GT_BACKEND_T == "gpu" else ".cpp"
         return {
@@ -139,7 +144,7 @@ class GTCGTBaseBackend(BaseGTBackend, CLIBackendMixin):
     USE_LEGACY_TOOLCHAIN = False
 
     def _generate_extension(self, uses_cuda: bool) -> Tuple[str, str]:
-        return self.make_extension(gt_version=2, ir=self.builder.definition_ir, uses_cuda=uses_cuda)
+        return self.make_extension(stencil_ir=self.builder.gtir, uses_cuda=uses_cuda)
 
     def generate(self) -> Type["StencilObject"]:
         self.check_options(self.builder.options)

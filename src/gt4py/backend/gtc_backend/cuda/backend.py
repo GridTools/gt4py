@@ -19,49 +19,54 @@ from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple, Type
 from eve import codegen
 from gt4py import gt_src_manager
 from gt4py.backend.base import CLIBackendMixin, register
-from gt4py.backend.gt_backends import (
+from gt4py.backend.gtc_backend.common import BackendCodegen, bindings_main_template, pybuffer_to_sid
+from gtc import gtir
+from gtc.common import DataType
+from gtc.cuir import cuir, cuir_codegen, extent_analysis, kernel_fusion
+from gtc.cuir.oir_to_cuir import OIRToCUIR
+from gtc.gtir_to_oir import GTIRToOIR
+from gtc.passes.gtir_pipeline import GtirPipeline
+from gtc.passes.oir_optimizations.caches import FillFlushToLocalKCaches
+from gtc.passes.oir_optimizations.pruning import NoFieldAccessPruning
+from gtc.passes.oir_pipeline import DefaultPipeline
+
+from ..common import (
     BaseGTBackend,
     GTCUDAPyModuleGenerator,
     cuda_is_compatible_layout,
     cuda_is_compatible_type,
     make_cuda_layout_map,
 )
-from gt4py.backend.gtc_backend.common import bindings_main_template, pybuffer_to_sid
-from gt4py.backend.gtc_backend.defir_to_gtir import DefIRToGTIR
-from gtc import gtir_to_oir
-from gtc.common import DataType
-from gtc.cuir import cuir, cuir_codegen, extent_analysis, kernel_fusion, oir_to_cuir
-from gtc.passes.gtir_pipeline import GtirPipeline
-from gtc.passes.oir_optimizations.caches import FillFlushToLocalKCaches
-from gtc.passes.oir_optimizations.pruning import NoFieldAccessPruning
-from gtc.passes.oir_pipeline import DefaultPipeline
 
 
 if TYPE_CHECKING:
     from gt4py.stencil_object import StencilObject
 
 
-class GTCCudaExtGenerator:
+class GTCCudaExtGenerator(BackendCodegen):
     def __init__(self, class_name, module_name, backend):
         self.class_name = class_name
         self.module_name = module_name
         self.backend = backend
 
-    def __call__(self, definition_ir) -> Dict[str, Dict[str, str]]:
-        gtir = GtirPipeline(DefIRToGTIR.apply(definition_ir)).full()
-        base_oir = gtir_to_oir.GTIRToOIR().visit(gtir)
+    def __call__(self, stencil_ir: gtir.Stencil) -> Dict[str, Dict[str, str]]:
+        stencil_ir = GtirPipeline(stencil_ir).full()
+        base_oir = GTIRToOIR().visit(stencil_ir)
         oir_pipeline = self.backend.builder.options.backend_opts.get(
             "oir_pipeline", DefaultPipeline(skip=[NoFieldAccessPruning])
         )
-        oir = oir_pipeline.run(base_oir)
-        oir = FillFlushToLocalKCaches().visit(oir)
-        cuir = oir_to_cuir.OIRToCUIR().visit(oir)
-        cuir = kernel_fusion.FuseKernels().visit(cuir)
-        cuir = extent_analysis.CacheExtents().visit(cuir)
+        oir_node = oir_pipeline.run(base_oir)
+        oir_node = FillFlushToLocalKCaches().visit(oir_node)
+        cuir_node = OIRToCUIR().visit(oir_node)
+        cuir_node = kernel_fusion.FuseKernels().visit(cuir_node)
+        cuir_node = extent_analysis.CacheExtents().visit(cuir_node)
         format_source = self.backend.builder.options.format_source
-        implementation = cuir_codegen.CUIRCodegen.apply(cuir, format_source=format_source)
+        implementation = cuir_codegen.CUIRCodegen.apply(cuir_node, format_source=format_source)
         bindings = GTCCudaBindingsCodegen.apply(
-            cuir, module_name=self.module_name, backend=self.backend, format_source=format_source
+            cuir_node,
+            module_name=self.module_name,
+            backend=self.backend,
+            format_source=format_source,
         )
         return {
             "computation": {"computation.hpp": implementation},
@@ -150,7 +155,7 @@ class GTCCudaBackend(BaseGTBackend, CLIBackendMixin):
     USE_LEGACY_TOOLCHAIN = False
 
     def generate_extension(self, **kwargs: Any) -> Tuple[str, str]:
-        return self.make_extension(gt_version=2, ir=self.builder.definition_ir, uses_cuda=True)
+        return self.make_extension(stencil_ir=self.builder.gtir, uses_cuda=True)
 
     def generate(self) -> Type["StencilObject"]:
         self.check_options(self.builder.options)
