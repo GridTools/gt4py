@@ -79,7 +79,6 @@ repos:
   rev: 22.3.0
   hooks:
   - id: black
-    additional_dependencies: ['click==8.0.4']
 
 - repo: https://github.com/pre-commit/mirrors-isort
   rev: v5.10.1

@@ -317,9 +317,6 @@ class Literal(Node):
     dtype: DataType
     kind: ExprKind = ExprKind.SCALAR
 
-    def __repr__(self) -> str:
-        return str(self.value)
-
 
 StmtT = TypeVar("StmtT", bound=Stmt)
 ExprT = TypeVar("ExprT", bound=Expr)
