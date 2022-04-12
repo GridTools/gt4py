@@ -29,7 +29,7 @@ jobs:
              archive_format: 'zip',
           });
           let fs = require('fs');
-          fs.writeFileSync(`${process.env.GITHUB_WORKSPACE}/pr_number.zip`, Buffer.from(download.data));
+          fs.writeFileSync(`${process.env.GITHUB_WORKSPACE}/' + 'artifact.name.zip`, Buffer.from(download.data));
 
     - name: 'Unzip coverage XML'
       run: unzip coverage_*.zip
@@ -38,6 +38,6 @@ jobs:
       uses: codecov/codecov-action@v2
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
-        files: coverage*.xml
+        files: coverage_*.xml
         name: gt4py-functional
         fail_ci_if_error: false
