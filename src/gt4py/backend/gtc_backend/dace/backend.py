@@ -179,9 +179,10 @@ class GTCDaCeExtGenerator:
             gtir, sdfg, module_name=self.module_name, backend=self.backend
         )
 
+        bindings_ext = "cu" if self.backend.storage_info["device"] == "gpu" else "cpp"
         sources = {
             "computation": {"computation.hpp": implementation},
-            "bindings": {"bindings.cpp": bindings},
+            "bindings": {f"bindings.{bindings_ext}": bindings},
             "info": {self.backend.builder.module_name + ".sdfg": dumps(sdfg.to_json())},
         }
         return sources
@@ -218,25 +219,37 @@ class DaCeComputationCodegen:
         ]
 
     @staticmethod
-    def _postprocess_dace_code(computations, is_gpu):
-        filter_lines = {'#include "../../include/hash.h"'}
+    def _postprocess_dace_code(code_objects, is_gpu):
+        lines = code_objects[[co.title for co in code_objects].index("Frame")].clean_code.split(
+            "\n"
+        )
 
-        def keep_line(line):
-            if line.strip() in filter_lines:
-                return False
-            if line.strip().startswith("DACE_EXPORTED") and line.endswith(");"):
-                return False
-            return True
-
-        lines = list(filter(lambda l: keep_line(l), computations.split("\n")))
         if is_gpu:
+            regex = re.compile("struct [a-zA-Z_][a-zA-Z0-9_]*_t {")
             for i, line in enumerate(lines):
-                if re.match("struct ^[a-zA-Z_][a-zA-Z0-9_]*$_t {{", line.strip()):
+                if regex.match(line.strip()):
                     j = i + 1
                     while "};" not in lines[j].strip():
                         j += 1
                     lines = lines[0:i] + lines[j + 1 :]
                     break
+            for i, line in enumerate(lines):
+                if "#include <dace/dace.h>" in line:
+                    cuda_code = [co.clean_code for co in code_objects if co.title == "CUDA"][0]
+                    lines = lines[0:i] + cuda_code.split("\n") + lines[i + 1 :]
+                    break
+
+        def keep_line(line):
+            line = line.strip()
+            if line == '#include "../../include/hash.h"':
+                return False
+            if line.startswith("DACE_EXPORTED") and line.endswith(");"):
+                return False
+            if line == "#include <cuda_runtime.h>":
+                return False
+            return True
+
+        lines = filter(keep_line, lines)
         return codegen.format_source("cpp", "\n".join(lines), style="LLVM")
 
     @classmethod
@@ -246,10 +259,9 @@ class DaCeComputationCodegen:
             "compiler", "cuda", "max_concurrent_streams", value=-1
         ), dace.config.set_temporary("compiler", "cpu", "openmp_sections", value=False):
             code_objects = sdfg.generate_code()
-        computations = code_objects[[co.title for co in code_objects].index("Frame")].clean_code
         is_gpu = "CUDA" in {co.title for co in code_objects}
 
-        computations = cls._postprocess_dace_code(computations, is_gpu)
+        computations = cls._postprocess_dace_code(code_objects, is_gpu)
 
         interface = cls.template.definition.render(
             name=sdfg.name,
@@ -261,6 +273,7 @@ class DaCeComputationCodegen:
         generated_code = f"""#include <gridtools/sid/sid_shift_origin.hpp>
                              #include <gridtools/sid/allocator.hpp>
                              #include <gridtools/stencil/cartesian.hpp>
+                             {"#include <gridtools/common/cuda_util.hpp>" if is_gpu else ""}
                              namespace gt = gridtools;
                              {computations}
 
@@ -484,7 +497,11 @@ class BaseGTCDaceBackend(BaseGTBackend, CLIBackendMixin):
     USE_LEGACY_TOOLCHAIN = False
 
     def generate_extension(self) -> Tuple[str, str]:
-        return self.make_extension(gt_version=2, ir=self.builder.definition_ir, uses_cuda=False)
+        return self.make_extension(
+            gt_version=2,
+            ir=self.builder.definition_ir,
+            uses_cuda=self.storage_info["device"] == "gpu",
+        )
 
     def generate(self) -> Type["StencilObject"]:
         self.check_options(self.builder.options)

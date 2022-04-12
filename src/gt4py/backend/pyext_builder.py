@@ -122,6 +122,9 @@ def get_gt_pyext_build_opts(
         extra_compile_args["cxx"].append(
             "-isystem{}".format(os.path.join(dace_path, "runtime/include"))
         )
+        extra_compile_args["nvcc"].append(
+            "-isystem={}".format(os.path.join(dace_path, "runtime/include"))
+        )
 
     if add_profile_info:
         profile_flags = ["-pg"]
