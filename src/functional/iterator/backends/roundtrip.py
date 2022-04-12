@@ -15,8 +15,7 @@ from functional.iterator.transforms import apply_common_transforms
 class EmbeddedDSL(codegen.TemplatedGenerator):
     Sym = as_fmt("{id}")
     SymRef = as_fmt("{id}")
-    BoolLiteral = as_fmt("{value}")
-    NumberLiteral = as_fmt("{value}")
+    Literal = as_fmt("{value}")
     NoneLiteral = as_fmt("None")
     OffsetLiteral = as_fmt("{value}")
     AxisLiteral = as_fmt("{value}")

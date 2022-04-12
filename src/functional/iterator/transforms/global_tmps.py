@@ -45,7 +45,7 @@ class CreateGlobalTmps(NodeTranslator):
                             fun=ir.SymRef(id="plus"),
                             args=[
                                 lower_bound,
-                                ir.NumberLiteral(value=str(lower_offset), type="int"),
+                                ir.Literal(value=str(lower_offset), type="int"),
                             ],
                         )
                         if lower_offset
@@ -54,7 +54,7 @@ class CreateGlobalTmps(NodeTranslator):
                             fun=ir.SymRef(id="plus"),
                             args=[
                                 upper_bound,
-                                ir.NumberLiteral(value=str(upper_offset), type="int"),
+                                ir.Literal(value=str(upper_offset), type="int"),
                             ],
                         )
                         if upper_offset

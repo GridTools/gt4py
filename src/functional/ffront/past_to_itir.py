@@ -155,7 +155,7 @@ class ProgramLowering(NodeTranslator):
                 dim_size = itir.SymRef(id=_size_arg_from_field(out_field_name.id, dim_i))
                 # lower bound
                 lower = self._visit_slice_bound(
-                    slice_.lower, itir.NumberLiteral(value="0", type="int"), dim_size
+                    slice_.lower, itir.Literal(value="0", type="int"), dim_size
                 )
                 upper = self._visit_slice_bound(slice_.upper, dim_size, dim_size)
 
@@ -173,7 +173,7 @@ class ProgramLowering(NodeTranslator):
                     fun=itir.SymRef(id="named_range"),
                     args=[
                         itir.AxisLiteral(value=dim.value),
-                        itir.NumberLiteral(value="0", type="int"),
+                        itir.Literal(value="0", type="int"),
                         # here we use the artificial size arguments added to the fencil
                         itir.SymRef(id=_size_arg_from_field(out_field_name.id, dim_idx)),
                     ],
@@ -189,23 +189,17 @@ class ProgramLowering(NodeTranslator):
             fun=itir.SymRef(id="domain"), args=domain_args
         )
 
-    def visit_Constant(
-        self, node: past.Constant, **kwargs
-    ) -> Union[itir.NumberLiteral, itir.BoolLiteral]:
+    def visit_Constant(self, node: past.Constant, **kwargs) -> Union[itir.Literal]:
         if isinstance(node.type, common_types.ScalarType) and node.type.shape is None:
             match node.type.kind:
-                case common_types.ScalarKind.INT32 | common_types.ScalarKind.INT64:
-                    return itir.NumberLiteral(value=str(node.value), type="int")
-                case common_types.ScalarKind.FLOAT32:
-                    return itir.NumberLiteral(value=str(node.value), type="float32")
-                case common_types.ScalarKind.FLOAT64:
-                    return itir.FloatLiteral(value=str(node.value), type="float64")
-                case common_types.ScalarKind.BOOL:
-                    return itir.BoolLiteral(value=node.value)
-                case _:
+                case common_types.ScalarKind.STRING:
                     raise NotImplementedError(
                         f"Scalars of kind {node.type.kind} not supported currently."
                     )
+            typename = node.type.kind.name.lower()
+            if typename.startswith("int"):
+                typename = "int"
+            return itir.Literal(value=str(node.value), type=typename)
 
         raise NotImplementedError("Only scalar literals supported currently.")
 

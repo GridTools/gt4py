@@ -261,7 +261,7 @@ def test_add_scalar_literal_to_field():
     lowered = FieldOperatorLowering.apply(parsed)
 
     reference = im.deref_(
-        im.lift_(im.lambda__("a")(im.plus_(im.number_("float64", "2.0"), im.deref_("a"))))("a")
+        im.lift_(im.lambda__("a")(im.plus_(im.literal_("2.0", "float64"), im.deref_("a"))))("a")
     )
 
     assert lowered.expr == reference
@@ -269,8 +269,8 @@ def test_add_scalar_literal_to_field():
 
 def test_add_scalar_literals():
     def scalar_plus_scalar(a: Field[..., "int32"]) -> Field[..., "int32"]:
-        tmp = int32(1) + int32(1)
-        return a + tmp
+        tmp = 1 + int64("1")
+        return a + int32(tmp)  # casting
 
     parsed = FieldOperatorParser.apply_to_function(scalar_plus_scalar)
     lowered = FieldOperatorLowering.apply(parsed)
@@ -279,8 +279,8 @@ def test_add_scalar_literals():
         im.let(
             "tmp__0",
             im.plus_(
-                im.number_("int32", "1"),
-                im.number_("int32", "1"),
+                im.literal_("1", "int64"),
+                im.literal_("1", "int64"),
             ),
         )(im.lift_(im.lambda__("a")(im.plus_(im.deref_("a"), "tmp__0")))("a"))
     )
@@ -352,7 +352,7 @@ def test_scalar_and():
     lowered = FieldOperatorLowering.apply(parsed)
 
     reference = im.deref_(
-        im.lift_(im.lambda__("a")(im.and__(im.deref_("a"), im.bool_(False))))("a")
+        im.lift_(im.lambda__("a")(im.and__(im.deref_("a"), im.literal_("False", "bool"))))("a")
     )
 
     assert lowered.expr == reference
@@ -380,7 +380,7 @@ def test_compare_scalars():
     lowered = FieldOperatorLowering.apply(parsed)
 
     reference = im.deref_(
-        im.lift_(im.lambda__()(im.greater_(im.number_("int64", "3"), im.number_("int64", "4"))))()
+        im.lift_(im.lambda__()(im.greater_(im.literal_("3", "int64"), im.literal_("4", "int64"))))()
     )
 
     assert lowered.expr == reference
@@ -488,7 +488,7 @@ def test_reduction_lowering_expr():
                         im.plus_(
                             "accum",
                             im.multiplies_(
-                                im.number_("float64", "1.1"), im.plus_("e1_nbh__0__0", "e2__1")
+                                im.literal_("1.1", "float64"), im.plus_("e1_nbh__0__0", "e2__1")
                             ),
                         )
                     ),

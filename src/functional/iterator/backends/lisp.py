@@ -9,9 +9,8 @@ from functional.iterator.transforms import apply_common_transforms
 class ToLispLike(TemplatedGenerator):
     Sym = as_fmt("{id}")
     FunCall = as_fmt("({fun} {' '.join(args)})")
-    NumberLiteral = as_fmt("{value}")
+    Literal = as_fmt("{value}")
     OffsetLiteral = as_fmt("{value}")
-    StringLiteral = as_fmt("{value}")
     SymRef = as_fmt("{id}")
     Program = as_fmt(
         """

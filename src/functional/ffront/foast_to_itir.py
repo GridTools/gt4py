@@ -127,9 +127,7 @@ class FieldOperatorLowering(NodeTranslator):
     def visit_UnaryOp(self, node: foast.UnaryOp, **kwargs) -> itir.FunCall:
         # TODO(tehrengruber): extend iterator ir to support unary operators
         zero_arg = (
-            [itir.NumberLiteral(value="0", type="int")]
-            if node.op is not foast.UnaryOperator.NOT
-            else []
+            [itir.Literal(value="0", type="int")] if node.op is not foast.UnaryOperator.NOT else []
         )
         result = im.call_(node.op.value)(
             *[*zero_arg, to_value(node.operand)(self.visit(node.operand, **kwargs))]
@@ -185,30 +183,16 @@ class FieldOperatorLowering(NodeTranslator):
     def _visit_neighbor_sum(self, node: foast.Call, **kwargs) -> itir.FunCall:
         return self._visit_reduce(node, **kwargs)
 
-    def _visit_type_constr(self, node: foast.Call, **kwargs) -> itir.NumberLiteral:
+    def _visit_type_constr(self, node: foast.Call, **kwargs) -> itir.Literal:
         if isinstance(node.args[0], foast.Constant):
-            return im.number_(node.func.id, str(node.args[0].value))
+            return im.literal_(str(node.args[0].value), node.func.id)
         return self.visit(node.args[0], **kwargs)
 
-    def visit_Constant(
-        self, node: foast.Constant, **kwargs
-    ) -> itir.NumberLiteral | itir.BoolLiteral:
-        result = None
-        match node.dtype:
-            case ct.ScalarType(kind=ct.ScalarKind.FLOAT32) | "float32":
-                result = im.number_("float32", str(node.value))
-            case ct.ScalarType(kind=ct.ScalarKind.FLOAT64) | "float64":
-                result = im.number_("float64", str(node.value))
-            case ct.ScalarType(kind=ct.ScalarKind.INT32) | "int32":
-                result = im.number_("int32", str(node.value))
-            case ct.ScalarType(kind=ct.ScalarKind.INT64) | "int64":
-                result = im.number_("int64", str(node.value))
-            case ct.ScalarType(kind=ct.ScalarKind.BOOL) | "bool":
-                value = False if node.value == "False" else node.value
-                result = im.bool_(bool(value))
-        if not result:
-            raise FieldOperatorLoweringError(f"Unsupported scalar type: {node.dtype}")
-        return result
+    def visit_Constant(self, node: foast.Constant, **kwargs) -> itir.Literal:
+        if isinstance(node.type, ct.ScalarType) and not node.type.shape:
+            typename = node.type.kind.name.lower()
+            return im.literal_(str(node.value), typename)
+        raise FieldOperatorLoweringError(f"Unsupported scalar type: {node.dtype}")
 
 
 @dataclass
@@ -239,9 +223,7 @@ class InsideReductionLowering(FieldOperatorLowering):
         self, node: foast.UnaryOp, *, to_value: bool = False, **kwargs
     ) -> itir.FunCall:
         zero_arg = (
-            [itir.NumberLiteral(value="0", type="int")]
-            if node.op is not foast.UnaryOperator.NOT
-            else []
+            [itir.Literal(value="0", type="int")] if node.op is not foast.UnaryOperator.NOT else []
         )
         return im.call_(node.op.value)(*[*zero_arg, self.visit(node.operand, **kwargs)])
 
