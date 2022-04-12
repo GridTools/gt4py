@@ -1,4 +1,7 @@
-from eve import NodeTranslator
+from typing import Any, Optional
+
+from eve import Node, NodeTranslator
+from eve.traits import SymbolTableTrait
 from functional.iterator import ir, type_inference
 from functional.iterator.runtime import CartesianAxis
 from functional.iterator.transforms.collect_shifts import CollectShifts
@@ -10,7 +13,19 @@ from functional.iterator.transforms.prune_closure_inputs import PruneClosureInpu
 AUTO_DOMAIN = ir.SymRef(id="_gtmp_auto_domain")
 
 
-def split_closures(node: ir.FencilDefinition):
+class Temporary(Node):
+    id: ir.SymbolName  # noqa: A003
+    domain: Optional[ir.Expr] = None
+    dtype: Optional[Any] = None
+
+
+class FencilWithTemporaries(Node, SymbolTableTrait):
+    fencil: ir.FencilDefinition
+    params: list[ir.Sym]
+    tmps: list[Temporary]
+
+
+def split_closures(node: ir.FencilDefinition) -> FencilWithTemporaries:
     tmps: list[ir.SymRef] = []
 
     def handle_arg(arg):
@@ -48,12 +63,16 @@ def split_closures(node: ir.FencilDefinition):
             closures.append(closure)
             domain = AUTO_DOMAIN
 
-    return ir.FencilDefinition(
-        id=node.id,
-        function_definitions=node.function_definitions,
-        params=node.params + tmps + [ir.Sym(id="_gtmp_auto_domain")],
-        closures=list(reversed(closures)),
-    ), [tmp.id for tmp in tmps]
+    return FencilWithTemporaries(
+        fencil=ir.FencilDefinition(
+            id=node.id,
+            function_definitions=node.function_definitions,
+            params=node.params + tmps + [ir.Sym(id="_gtmp_auto_domain")],
+            closures=list(reversed(closures)),
+        ),
+        params=node.params,
+        tmps=[Temporary(id=tmp.id) for tmp in tmps],
+    )
 
 
 def _collect_stencil_shifts(stencil, return_params=False):
@@ -72,7 +91,7 @@ def _collect_stencil_shifts(stencil, return_params=False):
     return shifts
 
 
-def update_cartesian_domains(node: ir.FencilDefinition, offset_provider):
+def update_cartesian_domains(node: FencilWithTemporaries, offset_provider) -> FencilWithTemporaries:
     def extend(domain, shifts):
         assert isinstance(domain, ir.FunCall) and domain.fun == ir.SymRef(id="domain")
         if not shifts:
@@ -127,7 +146,7 @@ def update_cartesian_domains(node: ir.FencilDefinition, offset_provider):
     closures = []
     shifts: dict[str, list[tuple]] = dict()
     domain = None
-    for closure in reversed(node.closures):
+    for closure in reversed(node.fencil.closures):
         if closure.domain == AUTO_DOMAIN:
             output_shifts = shifts.get(closure.output.id, [])
             domain = extend(domain, output_shifts)
@@ -148,23 +167,27 @@ def update_cartesian_domains(node: ir.FencilDefinition, offset_provider):
         for param, shift in local_shifts.items():
             shifts.setdefault(input_map[param], []).extend(shift)
 
-    return ir.FencilDefinition(
-        id=node.id,
-        function_definitions=node.function_definitions,
-        params=node.params[:-1],
-        closures=list(reversed(closures)),
+    return FencilWithTemporaries(
+        fencil=ir.FencilDefinition(
+            id=node.fencil.id,
+            function_definitions=node.fencil.function_definitions,
+            params=node.fencil.params[:-1],
+            closures=list(reversed(closures)),
+        ),
+        params=node.params,
+        tmps=node.tmps,
     )
 
 
-def update_unstructured_domains(node: ir.FencilDefinition, offset_provider):
+def update_unstructured_domains(node: FencilWithTemporaries, offset_provider):
     known_domains = {
         closure.output.id: closure.domain
-        for closure in node.closures
+        for closure in node.fencil.closures
         if closure.domain != AUTO_DOMAIN
     }
 
     closures = []
-    for closure in node.closures:
+    for closure in node.fencil.closures:
         if closure.domain == AUTO_DOMAIN:
             if closure.stencil == ir.SymRef(id="deref"):
                 domain = known_domains[closure.inputs[0].id]
@@ -203,17 +226,24 @@ def update_unstructured_domains(node: ir.FencilDefinition, offset_provider):
             )
 
         closures.append(closure)
-    return ir.FencilDefinition(
-        id=node.id,
-        function_definitions=node.function_definitions,
-        params=node.params[:-1],
-        closures=closures,
+    return FencilWithTemporaries(
+        fencil=ir.FencilDefinition(
+            id=node.fencil.id,
+            function_definitions=node.fencil.function_definitions,
+            params=node.fencil.params[:-1],
+            closures=closures,
+        ),
+        params=node.params,
+        tmps=node.tmps,
     )
 
 
-def collect_tmps_info(node: ir.FencilDefinition, tmps):
+def collect_tmps_info(node: FencilWithTemporaries):
+    tmps = {tmp.id for tmp in node.tmps}
     domains = {
-        closure.output.id: closure.domain for closure in node.closures if closure.output.id in tmps
+        closure.output.id: closure.domain
+        for closure in node.fencil.closures
+        if closure.output.id in tmps
     }
 
     def convert_type(dtype):
@@ -228,12 +258,12 @@ def collect_tmps_info(node: ir.FencilDefinition, tmps):
         assert isinstance(dtype, type_inference.Tuple)
         return tuple(convert_type(e) for e in dtype.elems)
 
-    fencil_type = type_inference.infer(node)
+    fencil_type = type_inference.infer(node.fencil)
     assert isinstance(fencil_type, type_inference.Fencil)
     assert isinstance(fencil_type.params, type_inference.Tuple)
     all_types = []
     types = dict()
-    for param, dtype in zip(node.params, fencil_type.params.elems):
+    for param, dtype in zip(node.fencil.params, fencil_type.params.elems):
         assert isinstance(dtype, type_inference.Val)
         all_types.append(convert_type(dtype.dtype))
         if param.id in tmps:
@@ -241,20 +271,24 @@ def collect_tmps_info(node: ir.FencilDefinition, tmps):
             t = all_types[-1]
             types[param.id] = all_types.index(t) if isinstance(t, int) else t
 
-    return {tmp: (domains[tmp], types[tmp]) for tmp in tmps}
+    return FencilWithTemporaries(
+        fencil=node.fencil,
+        params=node.params,
+        tmps=[
+            Temporary(id=tmp.id, domain=domains[tmp.id], dtype=types[tmp.id]) for tmp in node.tmps
+        ],
+    )
 
 
 class CreateGlobalTmps(NodeTranslator):
-    def visit_FencilDefinition(self, node: ir.FencilDefinition, *, offset_provider, register_tmp):
-        node, tmps = split_closures(node)
+    def visit_FencilDefinition(
+        self, node: ir.FencilDefinition, *, offset_provider
+    ) -> FencilWithTemporaries:
+        node = split_closures(node)
         node = PruneClosureInputs().visit(node)
         node = EtaReduction().visit(node)
         if all(isinstance(o, CartesianAxis) for o in offset_provider.values()):
             node = update_cartesian_domains(node, offset_provider)
         else:
             node = update_unstructured_domains(node, offset_provider)
-        if register_tmp is not None:
-            infos = collect_tmps_info(node, tmps)
-            for tmp, (domain, dtype) in infos.items():
-                register_tmp(node.id, tmp, domain, dtype)
-        return node
+        return collect_tmps_info(node)
