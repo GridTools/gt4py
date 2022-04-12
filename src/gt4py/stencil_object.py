@@ -82,6 +82,21 @@ class FrozenStencil:
         if exec_info is not None:
             exec_info["call_run_end_time"] = time.perf_counter()
 
+    def __sdfg__(self, **kwargs):
+        raise TypeError(
+            f'Only dace backends are supported in DaCe-orchestrated programs. (found "{self.stencil_object.backend}")'
+        )
+
+    def __sdfg_signature__(self):
+        raise TypeError(
+            f'Only dace backends are supported in DaCe-orchestrated programs. (found "{self.stencil_object.backend}")'
+        )
+
+    def __sdfg_closure__(self, *args, **kwargs):
+        raise TypeError(
+            f'Only dace backends are supported in DaCe-orchestrated programs. (found "{self.stencil_object.backend}")'
+        )
+
 
 class StencilObject(abc.ABC):
     """Generic singleton implementation of a stencil callable.
@@ -545,3 +560,18 @@ class StencilObject(abc.ABC):
             None
         """
         type(self)._domain_origin_cache.clear()
+
+    def __sdfg__(self, **kwargs):
+        raise TypeError(
+            f'Only dace backends are supported in DaCe-orchestrated programs. (found "{self.backend}")'
+        )
+
+    def __sdfg_signature__(self):
+        raise TypeError(
+            f'Only dace backends are supported in DaCe-orchestrated programs. (found "{self.backend}")'
+        )
+
+    def __sdfg_closure__(self, *args, **kwargs):
+        raise TypeError(
+            f'Only dace backends are supported in DaCe-orchestrated programs. (found "{self.backend}")'
+        )

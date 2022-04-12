@@ -71,14 +71,14 @@ def _post_expand_trafos(sdfg: dace.SDFG):
     sdfg.simplify()
 
 
-def _expand_and_finalize_sdfg(ir: gtir.Stencil, sdfg: dace.SDFG, layout_map) -> dace.SDFG:
+def _expand_and_finalize_sdfg(stencil_ir: gtir.Stencil, sdfg: dace.SDFG, layout_map) -> dace.SDFG:
 
-    args_data = make_args_data_from_gtir(GtirPipeline(ir))
+    args_data = make_args_data_from_gtir(GtirPipeline(stencil_ir))
 
     # stencils without effect
     if all(info is None for info in args_data.field_info.values()):
-        sdfg = dace.SDFG(ir.name)
-        sdfg.add_state(ir.name)
+        sdfg = dace.SDFG(stencil_ir.name)
+        sdfg.add_state(stencil_ir.name)
         return sdfg
 
     for array in sdfg.arrays.values():
@@ -103,8 +103,8 @@ class GTCDaCeExtGenerator(BackendCodegen):
             "oir_pipeline",
             DefaultPipeline(skip=[MaskInlining]),
         )
-        o_ir = oir_pipeline.run(base_oir)
-        sdfg = OirSDFGBuilder().visit(o_ir)
+        oir_node = oir_pipeline.run(base_oir)
+        sdfg = OirSDFGBuilder().visit(oir_node)
 
         sdfg = _expand_and_finalize_sdfg(stencil_ir, sdfg, self.backend.storage_info["layout_map"])
 
@@ -164,7 +164,7 @@ class DaCeComputationCodegen:
         ]
 
     @classmethod
-    def apply(cls, ir: gtir.Stencil, sdfg: dace.SDFG):
+    def apply(cls, stencil_ir: gtir.Stencil, sdfg: dace.SDFG):
         self = cls()
         code_objects = sdfg.generate_code()
         computations = code_objects[[co.title for co in code_objects].index("Frame")].clean_code
@@ -176,7 +176,7 @@ class DaCeComputationCodegen:
 
         interface = cls.template.definition.render(
             name=sdfg.name,
-            dace_args=self.generate_dace_args(ir, sdfg),
+            dace_args=self.generate_dace_args(stencil_ir, sdfg),
             functor_args=self.generate_functor_args(sdfg),
             tmp_allocs=self.generate_tmp_allocs(sdfg),
         )
@@ -281,7 +281,7 @@ class DaCeBindingsCodegen:
 
     mako_template = bindings_main_template()
 
-    def generate_entry_params(self, ir: gtir.Stencil, sdfg: dace.SDFG):
+    def generate_entry_params(self, stencil_ir: gtir.Stencil, sdfg: dace.SDFG):
         res = {}
         import dace.data
 
@@ -296,7 +296,7 @@ class DaCeBindingsCodegen:
             elif name in sdfg.symbols and not name.startswith("__"):
                 assert name in sdfg.symbols
                 res[name] = "{dtype} {name}".format(dtype=sdfg.symbols[name].ctype, name=name)
-        return list(res[node.name] for node in ir.params if node.name in res)
+        return list(res[node.name] for node in stencil_ir.params if node.name in res)
 
     def generate_sid_params(self, sdfg: dace.SDFG):
         res = []
@@ -331,20 +331,45 @@ class DaCeBindingsCodegen:
             res.append(name)
         return res
 
-    def generate_sdfg_bindings(self, ir: gtir.Stencil, sdfg, module_name):
+    def generate_sdfg_bindings(self, stencil_ir: gtir.Stencil, sdfg, module_name):
 
         return self.mako_template.render_values(
             name=sdfg.name,
             module_name=module_name,
-            entry_params=self.generate_entry_params(ir, sdfg),
+            entry_params=self.generate_entry_params(stencil_ir, sdfg),
             sid_params=self.generate_sid_params(sdfg),
         )
 
     @classmethod
-    def apply(cls, ir: gtir.Stencil, sdfg: dace.SDFG, module_name: str, *, backend) -> str:
-        generated_code = cls(backend).generate_sdfg_bindings(ir, sdfg, module_name=module_name)
+    def apply(cls, stencil_ir: gtir.Stencil, sdfg: dace.SDFG, module_name: str, *, backend) -> str:
+        generated_code = cls(backend).generate_sdfg_bindings(
+            stencil_ir, sdfg, module_name=module_name
+        )
         formatted_code = codegen.format_source("cpp", generated_code, style="LLVM")
         return formatted_code
+
+
+class DaCePyExtModuleGenerator(PyExtModuleGenerator):
+    def generate_imports(self):
+        return "\n".join(
+            [
+                *super().generate_imports().splitlines(),
+                "import dace",
+                "import copy",
+                "from gt4py.backend.dace.stencil_object import DaCeStencilObject",
+            ]
+        )
+
+    def generate_base_class_name(self):
+        return "DaCeStencilObject"
+
+    def generate_class_members(self):
+        res = super().generate_class_members()
+        filepath = self.builder.module_path.joinpath(
+            os.path.dirname(self.builder.module_path), self.builder.module_name + ".sdfg"
+        )
+        res += f'\nSDFG_PATH = "{filepath}"\n'
+        return res
 
 
 @register
@@ -362,7 +387,7 @@ class GTCDaceBackend(BaseGTBackend, CLIBackendMixin):
         "is_compatible_type": lambda x: isinstance(x, np.ndarray),
     }
 
-    MODULE_GENERATOR_CLASS = PyExtModuleGenerator
+    MODULE_GENERATOR_CLASS = DaCePyExtModuleGenerator
 
     options = BaseGTBackend.GT_BACKEND_OPTS
     PYEXT_GENERATOR_CLASS = GTCDaCeExtGenerator  # type: ignore

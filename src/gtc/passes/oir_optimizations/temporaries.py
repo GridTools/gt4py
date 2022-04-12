@@ -153,7 +153,11 @@ class WriteBeforeReadTemporariesToScalars(TemporariesToScalarsBase):
                     return True
                 if offsets[tmp] != {(0, 0, 0)}:
                     return False
-                return next(o.is_write for o in ordered_accesses if o.field == tmp)
+                return next(
+                    o.is_write and o.horizontal_mask is None
+                    for o in ordered_accesses
+                    if o.field == tmp
+                )
 
             write_before_read_tmps = {
                 tmp for tmp in write_before_read_tmps if write_before_read(tmp)

@@ -52,14 +52,14 @@ class GTCGTExtGenerator(BackendCodegen):
         self.module_name = module_name
         self.backend = backend
 
-    def __call__(self, ir: gtir.Stencil) -> Dict[str, Dict[str, str]]:
-        ir = GtirPipeline(ir).full()
-        base_o_ir = GTIRToOIR().visit(ir)
+    def __call__(self, stencil_ir: gtir.Stencil) -> Dict[str, Dict[str, str]]:
+        stencil_ir = GtirPipeline(stencil_ir).full()
+        base_oir = GTIRToOIR().visit(stencil_ir)
         oir_pipeline = self.backend.builder.options.backend_opts.get(
             "oir_pipeline", DefaultPipeline()
         )
-        o_ir = oir_pipeline.run(base_o_ir)
-        gtcpp_ir = OIRToGTCpp().visit(o_ir)
+        oir_node = oir_pipeline.run(base_oir)
+        gtcpp_ir = OIRToGTCpp().visit(oir_node)
         format_source = self.backend.builder.options.format_source
         implementation = gtcpp_codegen.GTCppCodegen.apply(
             gtcpp_ir, gt_backend_t=self.backend.GT_BACKEND_T, format_source=format_source

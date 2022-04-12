@@ -28,6 +28,7 @@ from gtc.gtir_to_oir import GTIRToOIR
 from gtc.numpy import npir
 from gtc.numpy.npir_codegen import NpirCodegen
 from gtc.numpy.oir_to_npir import OirToNpir
+from gtc.numpy.scalars_to_temps import ScalarsToTemporaries
 from gtc.passes.oir_optimizations.caches import (
     IJCacheDetection,
     KCacheDetection,
@@ -49,14 +50,9 @@ class GTCModuleGenerator(BaseModuleGenerator):
         return "\n".join(
             [
                 *super().generate_imports().splitlines(),
-                "import sys",
                 "import pathlib",
-                "import numpy",
-                "path_backup = sys.path.copy()",
-                "sys.path.append(str(pathlib.Path(__file__).parent))",
-                f"import {comp_pkg} as computation",
-                "sys.path = path_backup",
-                "del path_backup",
+                "from gt4py.utils import make_module_from_file",
+                f'computation = make_module_from_file("{comp_pkg}", pathlib.Path(__file__).parent / "{comp_pkg}.py")',
             ]
         )
 
@@ -130,7 +126,7 @@ class GTCNumpyBackend(BaseBackend, CLIBackendMixin):
         return self.make_module()
 
     def _make_npir(self) -> npir.Computation:
-        base_o_ir = GTIRToOIR().visit(self.builder.gtir)
+        base_oir = GTIRToOIR().visit(self.builder.gtir)
         oir_pipeline = self.builder.options.backend_opts.get(
             "oir_pipeline",
             DefaultPipeline(
@@ -142,8 +138,10 @@ class GTCNumpyBackend(BaseBackend, CLIBackendMixin):
                 ]
             ),
         )
-        o_ir = oir_pipeline.run(base_o_ir)
-        return OirToNpir().visit(o_ir)
+        oir_node = oir_pipeline.run(base_oir)
+        base_npir = OirToNpir().visit(oir_node)
+        npir_node = ScalarsToTemporaries().visit(base_npir)
+        return npir_node
 
     @property
     def npir(self) -> npir.Computation:

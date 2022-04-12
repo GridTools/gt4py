@@ -55,15 +55,20 @@ from gtc.common import ExprKind
 
 def _make_literal(v: numbers.Number) -> gtir.Literal:
     value: Union[BuiltinLiteral, str]
-    if issubclass(type(v), bool):
+    if isinstance(v, bool):
         dtype = common.DataType.BOOL
         value = common.BuiltInLiteral.TRUE if v else common.BuiltInLiteral.FALSE
     else:
-        dtype = (
-            common.DataType.INT64
-            if (cast(float, v) / 1.0).is_integer()
-            else common.DataType.FLOAT64
-        )
+        if isinstance(v, int):
+            # note: could be extended to support 32 bit integers by checking the values magnitude
+            dtype = common.DataType.INT64
+        elif isinstance(v, float):
+            dtype = common.DataType.FLOAT64
+        else:
+            print(
+                f"Warning: Only INT64 and FLOAT64 literals are supported currently. Implicitly upcasting `{v}` to FLOAT64"
+            )
+            dtype = common.DataType.FLOAT64
         value = str(v)
     return gtir.Literal(dtype=dtype, value=value)
 
