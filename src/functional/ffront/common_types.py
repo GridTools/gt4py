@@ -12,7 +12,7 @@ class ScalarKind(IntEnum):
     BOOL = 1
     INT32 = 32
     INT64 = 64
-    INT = INT64 if np.int_ == np.int64 else INT32
+    INT = INT32 if np.int_ == np.int32 else INT64
     FLOAT32 = 1032
     FLOAT64 = 1064
     DIMENSION = 2001
