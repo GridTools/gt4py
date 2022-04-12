@@ -202,16 +202,13 @@ class CommonTypeDeduction(NodeTranslator):
         constraints.add((symtypes[node.output.id], out))
 
     def visit_FencilDefinition(self, node):
+        if node.function_definitions:
+            raise TypeError("Can only handle inlined functions")
         symtypes = {param.id: TypeVar.fresh() for param in node.params}
         constraints = set()
         self.visit(node.closures, constraints=constraints, symtypes=symtypes)
         symtypes = unify(symtypes, constraints)
         return tuple(symtypes[param.id] for param in node.params)
-
-    def visit_Program(self, node):
-        if node.function_definitions:
-            raise TypeError("Can only handle inlined functions")
-        return {f.id: self.visit(f) for f in node.fencil_definitions}
 
     @classmethod
     def apply(cls, node):

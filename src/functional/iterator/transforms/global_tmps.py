@@ -49,7 +49,10 @@ def split_closures(node: ir.FencilDefinition):
             domain = AUTO_DOMAIN
 
     return ir.FencilDefinition(
-        id=node.id, params=node.params + tmps, closures=list(reversed(closures))
+        id=node.id,
+        function_definitions=node.function_definitions,
+        params=node.params + tmps + [ir.Sym(id="_gtmp_auto_domain")],
+        closures=list(reversed(closures)),
     ), [tmp.id for tmp in tmps]
 
 
@@ -145,7 +148,12 @@ def update_cartesian_domains(node: ir.FencilDefinition, offset_provider):
         for param, shift in local_shifts.items():
             shifts.setdefault(input_map[param], []).extend(shift)
 
-    return ir.FencilDefinition(id=node.id, params=node.params, closures=list(reversed(closures)))
+    return ir.FencilDefinition(
+        id=node.id,
+        function_definitions=node.function_definitions,
+        params=node.params[:-1],
+        closures=list(reversed(closures)),
+    )
 
 
 def update_unstructured_domains(node: ir.FencilDefinition, offset_provider):
@@ -195,7 +203,12 @@ def update_unstructured_domains(node: ir.FencilDefinition, offset_provider):
             )
 
         closures.append(closure)
-    return ir.FencilDefinition(id=node.id, params=node.params, closures=closures)
+    return ir.FencilDefinition(
+        id=node.id,
+        function_definitions=node.function_definitions,
+        params=node.params[:-1],
+        closures=closures,
+    )
 
 
 def collect_tmps_info(node: ir.FencilDefinition, tmps):

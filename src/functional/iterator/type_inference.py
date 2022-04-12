@@ -112,13 +112,8 @@ class FunDef(DType):
 @datatype
 class Fencil(DType):
     name: str
-    params: DType
-
-
-@datatype
-class Program(DType):
     fundefs: DType
-    fencils: DType
+    params: DType
 
 
 def children(dtype):
@@ -280,11 +275,6 @@ class TypeInferrer(NodeTranslator):
         return Closure(output, inputs)
 
     def visit_FencilDefinition(self, node, *, constraints, symtypes):
-        params = {p.id: Var.fresh() for p in node.params}
-        self.visit(node.closures, constraints=constraints, symtypes=symtypes | params)
-        return Fencil(node.id, Tuple(tuple(params[p.id] for p in node.params)))
-
-    def visit_Program(self, node, constraints, symtypes):
         def funtypes():
             ftypes = []
             fmap = dict()
@@ -295,13 +285,11 @@ class TypeInferrer(NodeTranslator):
                 fmap[f.name] = f.fun
             return Tuple(tuple(ftypes)), fmap
 
-        fencils = []
-        for f in node.fencil_definitions:
-            fencils.append(
-                self.visit(f, constraints=constraints, symtypes=symtypes | funtypes()[1])
-            )
-
-        return Program(funtypes()[0], Tuple(tuple(fencils)))
+        params = {p.id: Var.fresh() for p in node.params}
+        self.visit(
+            node.closures, constraints=constraints, symtypes=symtypes | funtypes()[1] | params
+        )
+        return Fencil(node.id, funtypes()[0], Tuple(tuple(params[p.id] for p in node.params)))
 
 
 def rename(s, t):
@@ -515,14 +503,12 @@ def pretty_str(x):  # noqa: C901
     if isinstance(x, Closure):
         return pretty_str(x.inputs) + " ⇒ " + pretty_str(x.output)
     if isinstance(x, Fencil):
-        return x.name + pretty_str(x.params)
-    if isinstance(x, Program):
         return (
-            "{["
-            + ", ".join(pretty_str(f) for f in x.fundefs.elems)
-            + "], ["
-            + ", ".join(pretty_str(f) for f in x.fencils.elems)
-            + "]}"
+            "{"
+            + "".join(pretty_str(f) + ", " for f in x.fundefs.elems)
+            + x.name
+            + pretty_str(x.params)
+            + "}"
         )
     if isinstance(x, ValTuple):
         assert isinstance(x.dtypes, Var)

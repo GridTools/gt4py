@@ -19,7 +19,7 @@ def test_simple():
     nodes = trace(fencil, [None] * 3)
 
     testee = CommonTypeDeduction.apply(nodes)
-    expected = {"fencil": (0, 0, 0)}
+    expected = (0, 0, 0)
     assert testee == expected
 
 
@@ -30,7 +30,7 @@ def test_conditional():
     nodes = trace(fencil, [None] * 4)
 
     testee = CommonTypeDeduction.apply(nodes)
-    expected = {"fencil": ("bool", 0, 0, 0)}
+    expected = ("bool", 0, 0, 0)
     assert testee == expected
 
 
@@ -41,7 +41,7 @@ def test_lift():
     nodes = trace(fencil, [None] * 2)
 
     testee = CommonTypeDeduction.apply(nodes)
-    expected = {"fencil": (0, 0)}
+    expected = (0, 0)
     assert testee == expected
 
 
@@ -51,7 +51,7 @@ def test_scan():
 
     nodes = trace(fencil, [None] * 2)
     testee = CommonTypeDeduction.apply(nodes)
-    expected = {"fencil": ("float", "float")}
+    expected = ("float", "float")
     assert testee == expected
 
 
@@ -61,7 +61,7 @@ def test_make_tuple():
 
     nodes = trace(fencil, [None] * 3)
     testee = CommonTypeDeduction.apply(nodes)
-    expected = {"fencil": (0, 1, (0, 1))}
+    expected = (0, 1, (0, 1))
     assert testee == expected
 
 
@@ -71,5 +71,5 @@ def test_tuple_get():
 
     nodes = trace(fencil, [None] * 2)
     testee = CommonTypeDeduction.apply(nodes)
-    expected = {"fencil": ((0, 1), 1)}
+    expected = ((0, 1), 1)
     assert testee == expected

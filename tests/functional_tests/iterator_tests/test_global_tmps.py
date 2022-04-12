@@ -10,6 +10,7 @@ from functional.iterator.transforms.global_tmps import (
 def test_split_closures():
     testee = ir.FencilDefinition(
         id="f",
+        function_definitions=[],
         params=[ir.Sym(id="d"), ir.Sym(id="inp"), ir.Sym(id="out")],
         closures=[
             ir.StencilClosure(
@@ -63,12 +64,14 @@ def test_split_closures():
 
     expected = ir.FencilDefinition(
         id="f",
+        function_definitions=[],
         params=[
             ir.Sym(id="d"),
             ir.Sym(id="inp"),
             ir.Sym(id="out"),
             ir.Sym(id="_gtmp_0"),
             ir.Sym(id="_gtmp_1"),
+            ir.Sym(id="_gtmp_auto_domain"),
         ],
         closures=[
             ir.StencilClosure(
@@ -122,6 +125,7 @@ def test_split_closures():
 def test_update_cartesian_domains():
     testee = ir.FencilDefinition(
         id="f",
+        function_definitions=[],
         params=[
             ir.Sym(id="i"),
             ir.Sym(id="j"),
@@ -130,6 +134,7 @@ def test_update_cartesian_domains():
             ir.Sym(id="out"),
             ir.Sym(id="_gtmp_0"),
             ir.Sym(id="_gtmp_1"),
+            ir.Sym(id="_gtmp_auto_domain"),
         ],
         closures=[
             ir.StencilClosure(
@@ -187,6 +192,7 @@ def test_update_cartesian_domains():
     )
     expected = ir.FencilDefinition(
         id="f",
+        function_definitions=[],
         params=[
             ir.Sym(id="i"),
             ir.Sym(id="j"),
@@ -336,6 +342,7 @@ def test_collect_tmps_info():
     )
     testee = ir.FencilDefinition(
         id="f",
+        function_definitions=[],
         params=[
             ir.Sym(id="i"),
             ir.Sym(id="j"),

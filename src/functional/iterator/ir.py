@@ -75,12 +75,6 @@ class StencilClosure(Node):
     inputs: List[SymRef]
 
 
-class FencilDefinition(Node, SymbolTableTrait):
-    id: SymbolName  # noqa: A003
-    params: List[Sym]
-    closures: List[StencilClosure]
-
-
 BUILTINS = {
     "domain",
     "named_range",
@@ -105,9 +99,12 @@ BUILTINS = {
 }
 
 
-class Program(Node, SymbolTableTrait):
+class FencilDefinition(Node, SymbolTableTrait):
+    id: SymbolName  # noqa: A003
     function_definitions: List[FunctionDefinition]
-    fencil_definitions: List[FencilDefinition]
+    params: List[Sym]
+    closures: List[StencilClosure]
 
     builtin_functions = [Sym(id=name) for name in BUILTINS]
+
     _validate_symbol_refs = validate_symbol_refs()
