@@ -9,9 +9,11 @@ from eve.codegen import FormatTemplate as as_fmt
 from eve.codegen import MakoTemplate as as_mako
 from eve.concepts import Node
 from functional import iterator
+from functional.iterator import ir
 from functional.iterator.backends import backend
-from functional.iterator.ir import AxisLiteral, FencilDefinition, OffsetLiteral
+from functional.iterator.ir import AxisLiteral, OffsetLiteral
 from functional.iterator.transforms import apply_common_transforms
+from functional.iterator.transforms.global_tmps import FencilWithTemporaries
 
 
 class EmbeddedDSL(codegen.TemplatedGenerator):
@@ -43,10 +45,55 @@ def ${id}(${','.join(params)}):
     """
     )
 
+    # extension required by global_tmps
+    def visit_FencilWithTemporaries(self, node, **kwargs):
+        params = self.visit(node.params)
+
+        def np_dtype(dtype):
+            if isinstance(dtype, int):
+                return params[dtype] + ".dtype"
+            if isinstance(dtype, tuple):
+                return "np.dtype([" + ", ".join(f"('', {np_dtype(d)})" for d in dtype) + "])"
+                return np.dtype([("", np_dtype(d)) for d in dtype])
+            return f"np.dtype({dtype})"
+
+        tmps = "\n    ".join(self.visit(node.tmps, np_dtype=np_dtype))
+        args = ", ".join(params + [tmp.id for tmp in node.tmps])
+        params = ", ".join(params)
+        fencil = self.visit(node.fencil)
+        return (
+            fencil
+            + "\n"
+            + f"def {node.fencil.id}_wrapper({params}, **kwargs):\n    "
+            + tmps
+            + f"\n    {node.fencil.id}({args}, **kwargs)\n"
+        )
+
+    def visit_Temporary(self, node, *, np_dtype, **kwargs):
+        assert isinstance(node.domain, ir.FunCall) and node.domain.fun == ir.SymRef(id="domain")
+        domain_ranges = node.domain.args
+        assert all(
+            isinstance(r, ir.FunCall) and r.fun == ir.SymRef(id="named_range")
+            for r in domain_ranges
+        )
+        axes = ", ".join(r.args[0].value for r in domain_ranges)
+        origin = (
+            "{"
+            + ", ".join(f"{r.args[0].value}: -{self.visit(r.args[1])}" for r in domain_ranges)
+            + "}"
+        )
+        shape = (
+            "("
+            + ", ".join(f"{self.visit(r.args[2])}-{self.visit(r.args[1])}" for r in domain_ranges)
+            + ")"
+        )
+        dtype = np_dtype(node.dtype)
+        return f"{node.id} = np_as_located_field({axes}, origin={origin})(np.empty({shape}, dtype={dtype}))"
+
 
 # TODO this wrapper should be replaced by an extension of the IR
 class WrapperGenerator(EmbeddedDSL):
-    def visit_FencilDefinition(self, node: FencilDefinition, *, tmps):
+    def visit_FencilDefinition(self, node: ir.FencilDefinition, *, tmps):
         params = self.visit(node.params)
         non_tmp_params = [param for param in params if param not in tmps]
 
@@ -91,6 +138,7 @@ _BACKEND_NAME = "roundtrip"
 
 def executor(ir: Node, *args, **kwargs):
     debug = "debug" in kwargs and kwargs["debug"] is True
+    debug = True
     use_tmps = "use_tmps" in kwargs and kwargs["use_tmps"] is True
 
     tmps = dict()
@@ -98,12 +146,9 @@ def executor(ir: Node, *args, **kwargs):
     def register_tmp(fencil_name, tmp, domain, dtype):
         tmps[tmp] = (domain, dtype)
 
-    ir = apply_common_transforms(
-        ir, use_tmps=use_tmps, offset_provider=kwargs["offset_provider"], register_tmp=register_tmp
-    )
+    ir = apply_common_transforms(ir, use_tmps=use_tmps, offset_provider=kwargs["offset_provider"])
 
     program = EmbeddedDSL.apply(ir)
-    wrapper = WrapperGenerator.apply(ir, tmps=tmps)
     offset_literals: Iterable[str] = (
         ir.iter_tree().if_isinstance(OffsetLiteral).getattr("value").if_isinstance(str).to_set()
     )
@@ -131,15 +176,14 @@ from functional.iterator.embedded import np_as_located_field
         tmp.write("\n".join(axis_literals))
         tmp.write("\n")
         tmp.write(program)
-        tmp.write(wrapper)
         tmp.flush()
 
         spec = importlib.util.spec_from_file_location("module.name", tmp.name)
         foo = importlib.util.module_from_spec(spec)  # type: ignore
         spec.loader.exec_module(foo)  # type: ignore
 
-        fencil_name = ir.id
-        fencil = getattr(foo, fencil_name + "_wrapper")
+        fencil_name = ir.fencil.id + "_wrapper" if isinstance(ir, FencilWithTemporaries) else ir.id
+        fencil = getattr(foo, fencil_name)
         assert "offset_provider" in kwargs
 
         new_kwargs = {}
