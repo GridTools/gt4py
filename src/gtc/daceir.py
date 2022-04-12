@@ -245,8 +245,6 @@ class TileInterval(Node):
     def overapproximated_size(self):
         return "{tile_size}{halo_size:+d}".format(
             tile_size=self.tile_size,
-            domain_limit=self.domain_limit,
-            tile_symbol=self.axis.tile_symbol(),
             halo_size=self.end_offset - self.start_offset,
         )
 
@@ -428,26 +426,6 @@ class GridSubset(Node):
             else:
                 res_intervals[axis] = interval
         return GridSubset(intervals=res_intervals)
-
-    # def untile(self, tile_axes: List[Axis]):
-    #     res_intervals = dict()
-    #     for axis, interval in self.intervals.items():
-    #         if isinstance(interval, TileInterval) and axis in tile_axes:
-    #             res_intervals[axis] = DomainInterval(
-    #                 start=AxisBound(
-    #                     axis=axis,
-    #                     level=common.LevelMarker.START,
-    #                     offset=interval.start_offset,
-    #                 ),
-    #                 end=AxisBound(
-    #                     axis=axis,
-    #                     level=common.LevelMarker.END,
-    #                     offset=interval.end_offset,
-    #                 ),
-    #             )
-    #         else:
-    #             res_intervals[axis] = interval
-    #     return GridSubset(intervals=res_intervals)
 
     def union(self, other):
         assert list(self.axes()) == list(other.axes())

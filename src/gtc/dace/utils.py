@@ -20,7 +20,6 @@ from typing import TYPE_CHECKING, Any, Collection, Dict, Iterator, List, Optiona
 
 import dace
 import dace.data
-import networkx as nx
 import numpy as np
 from dace import SDFG, InterstateEdge
 from pydantic import validator
@@ -813,79 +812,6 @@ class IntervalMapping:
         return res
 
 
-def assert_sdfg_equal(sdfg1: dace.SDFG, sdfg2: dace.SDFG) -> bool:
-    from gtc.dace.nodes import (
-        HorizontalExecutionLibraryNode,
-        OIRLibraryNode,
-        VerticalLoopLibraryNode,
-    )
-
-    def edge_match(edge1, edge2) -> bool:
-        edge1 = next(iter(edge1.values()))
-        edge2 = next(iter(edge2.values()))
-        if edge1["src_conn"] is not None:
-            if edge2["src_conn"] is None or edge1["src_conn"] != edge2["src_conn"]:
-                return False
-        elif edge2["src_conn"] is not None:
-            return False
-
-        if edge1["data"] != edge2["data"] or edge1["data"].data != edge2["data"].data:
-            return False
-
-        return True
-
-    def node_match(n1, n2) -> bool:
-        n1 = n1["node"]
-        n2 = n2["node"]
-        if not isinstance(
-            n1,
-            (
-                dace.nodes.AccessNode,
-                VerticalLoopLibraryNode,
-                HorizontalExecutionLibraryNode,
-            ),
-        ):
-            raise TypeError
-
-        if isinstance(n1, dace.nodes.AccessNode):
-            if (
-                not isinstance(n2, dace.nodes.AccessNode)
-                or n1.access != n2.access
-                or n1.data != n2.data
-            ):
-                return False
-        elif isinstance(n1, OIRLibraryNode):
-            if n1 != n2:
-                return False
-
-        return True
-
-    if len(sdfg1.states()) != 1 or len(sdfg2.states()) != 1:
-        return False
-    state1 = sdfg1.states()[0]
-    state2 = sdfg2.states()[0]
-
-    # SDFGState.nx does not contain any node info in the networkx node attrs (but does for edges),
-    # so we add it here manually.
-    nx.set_node_attributes(state1.nx, {n: n for n in state1.nx.nodes}, "node")
-    nx.set_node_attributes(state2.nx, {n: n for n in state2.nx.nodes}, "node")
-
-    if not nx.is_isomorphic(state1.nx, state2.nx, edge_match=edge_match, node_match=node_match):
-        return False
-
-    for name in sdfg1.arrays.keys():
-        if (
-            not isinstance(sdfg1.arrays[name], type(sdfg2.arrays[name]))
-            or not isinstance(sdfg2.arrays[name], type(sdfg1.arrays[name]))
-            or sdfg1.arrays[name].dtype != sdfg2.arrays[name].dtype
-            or sdfg1.arrays[name].transient != sdfg2.arrays[name].transient
-            or sdfg1.arrays[name].shape != sdfg2.arrays[name].shape
-        ):
-            return False
-
-    return True
-
-
 def axes_list_from_flags(flags):
     from gtc import daceir as dcir
 
@@ -1092,7 +1018,6 @@ class AccessInfoCollector(NodeVisitor):
         else:
             variable_offset_axes = []
 
-        k_interval = grid_subset.intervals[dcir.Axis.K]
         global_subset = self._global_grid_subset(regions, he_grid, offset)
         intervals = dict()
         for axis in axes:
@@ -1218,21 +1143,6 @@ def get_access_info_from_stencil_computation_sdfg(sdfg):
     from gtc.dace.nodes import StencilComputation
 
     nodes = [n for n, _ in sdfg.all_nodes_recursive() if isinstance(n, StencilComputation)]
-    # decls = {
-    #     name: decl
-    #     for node in nodes
-    #     for name, decl in node.declarations,
-    #     if isinstance(decl, oir.FieldDecl)
-    # }
-    # block_extents = dict()
-    #
-    # for node in nodes:
-    #     for i, section in enumerate(node.oir_node.sections):
-    #         for j, he in enumerate(section.horizontal_executions):
-    #             block_extents[id(he)] = node.extents[j * len(node.oir_node.sections) + i]
-    #
-    #
-    # block_extents = lambda he: block_extents[id(he)]
     res_access_infos = dict()
     for node in nodes:
         access_infos = compute_dcir_access_infos(
@@ -1522,6 +1432,6 @@ def split_horizontal_exeuctions_regions(node: "StencilComputation"):
     )
     ctr = 0
     for i, section in enumerate(node.oir_node.sections):
-        for j, he in enumerate(section.horizontal_executions):
+        for j in range(len(section.horizontal_executions)):
             node.extents[j * len(node.oir_node.sections) + i] = extents[ctr]
             ctr += 1

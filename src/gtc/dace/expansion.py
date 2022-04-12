@@ -16,7 +16,6 @@
 import copy
 import dataclasses
 from dataclasses import dataclass
-from types import SimpleNamespace
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import dace
@@ -26,27 +25,15 @@ import dace.subsets
 import numpy as np
 import sympy
 
-import eve
 import gtc.common as common
 import gtc.oir as oir
 from eve import NodeTranslator, NodeVisitor, codegen
 from eve.codegen import FormatTemplate as as_fmt
-from eve.codegen import MakoTemplate as as_mako
 from eve.iterators import iter_tree
 from gt4py import definitions as gt_def
 from gt4py.definitions import Extent
 from gtc import daceir as dcir
-from gtc.dace.nodes import (
-    Loop,
-    Map,
-    Sections,
-    Stages,
-    StencilComputation,
-    get_expansion_order_axis,
-    get_expansion_order_index,
-    is_domain_loop,
-    is_domain_map,
-)
+from gtc.dace.nodes import Loop, Map, Sections, Stages, StencilComputation
 from gtc.dace.utils import get_axis_bound_str, get_tasklet_symbol
 from gtc.passes.oir_optimizations.utils import AccessCollector
 
@@ -578,9 +565,6 @@ class DaCeIRBuilder(NodeTranslator):
         expansion_specification: List[str],
         **kwargs,
     ):
-
-        # from .utils import flatten_list
-
         sections_idx, stages_idx = [
             idx
             for idx, item in enumerate(expansion_specification)
@@ -696,9 +680,8 @@ class DaCeIRBuilder(NodeTranslator):
         iteration_ctx: "DaCeIRBuilder.IterationContext",
         **kwargs,
     ):
-        from .utils import union_node_access_infos, union_node_grid_subsets, untile_access_info_dict
+        from .utils import union_node_access_infos, untile_access_info_dict
 
-        # grid_subset = union_node_grid_subsets(list(scope_nodes))
         grid_subset = iteration_ctx.grid_subset
         read_accesses, write_accesses, _ = union_node_access_infos(list(scope_nodes))
         scope_nodes = self.to_dataflow(scope_nodes, global_ctx=global_ctx)
@@ -803,7 +786,7 @@ class DaCeIRBuilder(NodeTranslator):
         iteration_ctx: "DaCeIRBuilder.IterationContext",
         **kwargs,
     ):
-        from .utils import union_node_access_infos, union_node_grid_subsets, untile_access_info_dict
+        from .utils import union_node_access_infos, union_node_grid_subsets
 
         grid_subset = union_node_grid_subsets(list(scope_nodes))
         read_accesses, write_accesses, _ = union_node_access_infos(list(scope_nodes))
@@ -1389,7 +1372,6 @@ class StencilComputationSDFGBuilder(NodeVisitor):
         sdfg_ctx.add_state()
         read_nodes = dict()
         write_nodes = dict()
-        intermediate_nodes = dict()
 
         for src_name, dst_name in node.name_map.items():
             if src_name not in node.read_accesses:
@@ -1492,6 +1474,40 @@ class StencilComputationExpansion(dace.library.ExpandTransformation):
         return result
 
     @staticmethod
+    def fix_context(nsdfg, node: "StencilComputation", parent_state, daceir):
+
+        for in_edge in parent_state.in_edges(node):
+            assert in_edge.dst_conn.startswith("__in_")
+            in_edge.dst_conn = in_edge.dst_conn[len("__in_") :]
+        for out_edge in parent_state.out_edges(node):
+            assert out_edge.src_conn.startswith("__out_")
+            out_edge.src_conn = out_edge.src_conn[len("__out_") :]
+
+        subsets = dict()
+        for edge in parent_state.in_edges(node):
+            subsets[edge.dst_conn] = edge.data.subset
+        for edge in parent_state.out_edges(node):
+            subsets[edge.src_conn] = dace.subsets.union(
+                edge.data.subset, subsets.get(edge.src_conn, edge.data.subset)
+            )
+        for edge in parent_state.in_edges(node):
+            edge.data.subset = copy.deepcopy(subsets[edge.dst_conn])
+        for edge in parent_state.out_edges(node):
+            edge.data.subset = copy.deepcopy(subsets[edge.src_conn])
+
+        symbol_mapping = StencilComputationExpansion._solve_for_domain(
+            {
+                name: decl
+                for name, decl in daceir.field_decls.items()
+                if name in daceir.read_accesses or name in daceir.write_accesses
+            },
+            subsets,
+        )
+        if "__K" in nsdfg.sdfg.free_symbols and "__K" not in symbol_mapping:
+            symbol_mapping["__K"] = 0
+        nsdfg.symbol_mapping.update({**symbol_mapping, **node.symbol_mapping})
+
+    @staticmethod
     def expansion(
         node: "StencilComputation", parent_state: dace.SDFGState, parent_sdfg: dace.SDFG
     ) -> dace.nodes.NestedSDFG:
@@ -1539,52 +1555,7 @@ class StencilComputationExpansion(dace.library.ExpandTransformation):
         finally:
             iteration_ctx.clear()
 
-        from .daceir_passes import MakeLocalCaches
-
-        cached_loops = [
-            item
-            for item in node.expansion_specification
-            if isinstance(item, Loop) and len(item.localcache_fields) > 0
-        ]
-        if len(cached_loops) > 0:
-            localcache_infos = dict()
-            for item in cached_loops:
-                localcache_infos[item.axis] = SimpleNamespace(
-                    fields=item.localcache_fields,
-                    storage=item.storage,
-                )
-            daceir = MakeLocalCaches().visit(daceir, localcache_infos=localcache_infos)
-
         nsdfg = StencilComputationSDFGBuilder().visit(daceir)
-
-        for in_edge in parent_state.in_edges(node):
-            assert in_edge.dst_conn.startswith("__in_")
-            in_edge.dst_conn = in_edge.dst_conn[len("__in_") :]
-        for out_edge in parent_state.out_edges(node):
-            assert out_edge.src_conn.startswith("__out_")
-            out_edge.src_conn = out_edge.src_conn[len("__out_") :]
-
-        subsets = dict()
-        for edge in parent_state.in_edges(node):
-            subsets[edge.dst_conn] = edge.data.subset
-        for edge in parent_state.out_edges(node):
-            subsets[edge.src_conn] = dace.subsets.union(
-                edge.data.subset, subsets.get(edge.src_conn, edge.data.subset)
-            )
-        for edge in parent_state.in_edges(node):
-            edge.data.subset = copy.deepcopy(subsets[edge.dst_conn])
-        for edge in parent_state.out_edges(node):
-            edge.data.subset = copy.deepcopy(subsets[edge.src_conn])
-        symbol_mapping = StencilComputationExpansion._solve_for_domain(
-            {
-                name: decl
-                for name, decl in daceir.field_decls.items()
-                if name in daceir.read_accesses or name in daceir.write_accesses
-            },
-            subsets,
-        )
-        if "__K" in nsdfg.sdfg.free_symbols and "__K" not in symbol_mapping:
-            symbol_mapping["__K"] = 0
-        nsdfg.symbol_mapping.update({**symbol_mapping, **node.symbol_mapping})
+        StencilComputationExpansion.fix_context(nsdfg, node, parent_state, daceir)
 
         return nsdfg

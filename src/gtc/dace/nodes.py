@@ -17,17 +17,15 @@
 import base64
 import copy
 import pickle
-from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from dataclasses import field as dataclass_field
 from itertools import combinations, permutations, product
-from typing import Dict, List, Optional, Set, Tuple, Union
+from typing import Dict, List, Optional, Set
 
 import dace.data
 import dace.dtypes
 import dace.properties
 import dace.subsets
-import networkx as nx
 import numpy as np
 from dace import library
 
@@ -35,23 +33,8 @@ from gt4py.definitions import Extent
 from gtc import common
 from gtc import daceir as dcir
 from gtc import oir
-from gtc.common import DataType, LoopOrder, VariableKOffset, typestr_to_data_type
-from gtc.dace.utils import (
-    CartesianIterationSpace,
-    OIRFieldRenamer,
-    dace_dtype_to_typestr,
-    get_node_name_mapping,
-    mask_includes_inner_domain,
-)
-from gtc.oir import (
-    CacheDesc,
-    Decl,
-    FieldDecl,
-    HorizontalExecution,
-    Interval,
-    VerticalLoop,
-    VerticalLoopSection,
-)
+from gtc.dace.utils import mask_includes_inner_domain
+from gtc.oir import Decl, FieldDecl, VerticalLoop, VerticalLoopSection
 
 
 def get_expansion_order_axis(item):
@@ -90,7 +73,6 @@ def get_expansion_order_index(expansion_order, axis):
 def _is_expansion_order_implemented(expansion_specification):
 
     # TODO: Could have single IJ map with predicates in K, e.g. also for tiling??
-    seen_sections = False
     for item in expansion_specification:
         if isinstance(item, Sections):
             break
@@ -296,7 +278,6 @@ def _populate_schedules(self, expansion_specification):
         return
     assert all(isinstance(es, (ExpansionItem, Iteration)) for es in expansion_specification)
     is_outermost = True
-    is_inside = False
 
     if hasattr(self, "_device"):
         if self.device == dace.DeviceType.GPU:

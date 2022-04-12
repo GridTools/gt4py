@@ -14,37 +14,21 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict
 
 import dace
 import dace.properties
 import dace.subsets
-import networkx as nx
-import numpy as np
-from dace import SDFG
-from dace.sdfg.graph import MultiConnectorEdge
-from dace.sdfg.utils import fuse_states
 
 import eve
 import gtc.oir as oir
-from gt4py.definitions import Extent
-from gtc.common import LevelMarker, VariableKOffset, data_type_to_typestr
-from gtc.dace.nodes import (
-    StencilComputation,
-)
+from gtc.dace.nodes import StencilComputation
 from gtc.dace.utils import (
-    CartesianIJIndexSpace,
     DaceStrMaker,
-    IntervalMapping,
     compute_horizontal_block_extents,
     data_type_to_dace_typeclass,
-    iteration_to_access_space,
-    nodes_extent_calculation,
-    oir_iteration_space_computation,
 )
-from gtc.oir import FieldDecl, Interval, ScalarDecl, Stencil, Temporary
 from gtc.passes.oir_optimizations.utils import AccessCollector
 
 
@@ -148,6 +132,5 @@ class OirSDFGBuilder(eve.NodeVisitor):
                 transient=True,
             )
         self.generic_visit(node, ctx=ctx, block_extents=block_extents)
-        # fuse_states(sdfg, permissive=False, progress=False)
         ctx.sdfg.validate()
         return ctx.sdfg
