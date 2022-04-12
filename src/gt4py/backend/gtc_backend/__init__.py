@@ -24,6 +24,6 @@ from .numpy.backend import GTCNumpyBackend  # noqa: F401
 
 
 try:
-    from .dace.backend import GTCDaceBackend  # noqa: F401
+    from .dace.backend import GTCDaceCPUBackend, GTCDaceGPUBackend  # noqa: F401
 except ImportError:
     pass

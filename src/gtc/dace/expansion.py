@@ -16,7 +16,7 @@
 import copy
 import dataclasses
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import Any, Callable, ClassVar, Dict, List, Optional, Tuple, Union
 
 import dace
 import dace.data
@@ -29,7 +29,6 @@ import gtc.common as common
 import gtc.oir as oir
 from eve import NodeTranslator, NodeVisitor, codegen
 from eve.codegen import FormatTemplate as as_fmt
-from eve.iterators import iter_tree
 from gt4py import definitions as gt_def
 from gt4py.definitions import Extent
 from gtc import daceir as dcir
@@ -37,12 +36,7 @@ from gtc.dace.nodes import Loop, Map, Sections, Stages, StencilComputation
 from gtc.dace.utils import get_axis_bound_str, get_tasklet_symbol
 from gtc.passes.oir_optimizations.utils import AccessCollector
 
-from .utils import (
-    compute_dcir_access_infos,
-    make_subset_str,
-    remove_horizontal_region,
-    split_horizontal_exeuctions_regions,
-)
+from .utils import compute_dcir_access_infos, make_subset_str
 
 
 def make_access_subset_dict(
@@ -399,7 +393,7 @@ class DaCeIRBuilder(NodeTranslator):
     @dataclass
     class IterationContext:
         grid_subset: dcir.GridSubset
-        _context_stack = list()
+        _context_stack: ClassVar[List["DaCeIRBuilder.IterationContext"]] = list()
 
         @classmethod
         def init(cls, *args, **kwargs):
@@ -537,8 +531,8 @@ class DaCeIRBuilder(NodeTranslator):
             read_accesses=tasklet_read_accesses,
             write_accesses=tasklet_write_accesses,
             name_map={
-                k: k
-                for k in set().union(tasklet_read_accesses.keys(), tasklet_write_accesses.keys())
+                name: name
+                for name in set(tasklet_read_accesses.keys()) | set(tasklet_write_accesses.keys())
             },
         )
 
@@ -710,51 +704,6 @@ class DaCeIRBuilder(NodeTranslator):
                     )
                 )
             else:
-
-                if (
-                    axis in dcir.Axis.horizontal_axes()
-                    and isinstance(interval, dcir.DomainInterval)
-                    and all(
-                        isinstance(stmt, oir.MaskStmt)
-                        and isinstance(stmt.mask, common.HorizontalMask)
-                        for tasklet in iter_tree(scope_nodes).if_isinstance(dcir.Tasklet)
-                        for stmt in tasklet.stmts
-                    )
-                    and len(
-                        set(
-                            (
-                                None
-                                if mask.intervals[axis.to_idx()].start is None
-                                else mask.intervals[axis.to_idx()].start.level,
-                                None
-                                if mask.intervals[axis.to_idx()].start is None
-                                else mask.intervals[axis.to_idx()].start.offset,
-                                None
-                                if mask.intervals[axis.to_idx()].end is None
-                                else mask.intervals[axis.to_idx()].end.level,
-                                None
-                                if mask.intervals[axis.to_idx()].end is None
-                                else mask.intervals[axis.to_idx()].end.offset,
-                            )
-                            for mask in iter_tree(scope_nodes).if_isinstance(common.HorizontalMask)
-                        )
-                    )
-                    == 1
-                ):
-                    horizontal_mask_interval = next(
-                        iter(
-                            (
-                                mask.intervals[axis.to_idx()]
-                                for mask in iter_tree(scope_nodes).if_isinstance(
-                                    common.HorizontalMask
-                                )
-                            )
-                        )
-                    )
-                    interval = dcir.DomainInterval.intersection(
-                        axis, horizontal_mask_interval, interval
-                    )
-                    scope_nodes = remove_horizontal_region(scope_nodes, axis)
                 assert iteration.kind == "contiguous"
                 read_accesses = {
                     key: access_info.apply_iteration(dcir.GridSubset.from_interval(interval, axis))
@@ -1200,8 +1149,10 @@ class StencilComputationSDFGBuilder(NodeVisitor):
         node_ctx: "StencilComputationSDFGBuilder.NodeContext",
         sdfg_ctx: "StencilComputationSDFGBuilder.SDFGContext",
     ):
-        ndranges = [self.visit(index_range) for index_range in node.index_ranges]
-        ndranges = {k: v for ndrange in ndranges for k, v in ndrange.items()}
+
+        ndranges = {
+            k: v for index_range in node.index_ranges for k, v in self.visit(index_range).items()
+        }
         name = sdfg_ctx.sdfg.label + "".join(ndranges.keys()) + "_map"
         map_entry, map_exit = sdfg_ctx.state.add_map(
             name=name,
@@ -1392,8 +1343,8 @@ class StencilComputationSDFGBuilder(NodeVisitor):
             if src_name == dst_name:
                 tmp_name = sdfg_ctx.sdfg.temp_data_name()
                 intermediate_access = sdfg_ctx.state.add_access(tmp_name)
-                stride = 1
-                strides = []
+                stride: Union[int, str] = 1
+                strides: List[Union[int, str]] = []
                 for s in reversed(node.read_accesses[src_name].overapproximated_shape):
                     strides = [stride, *strides]
                     stride = f"({stride}) * ({s})"
@@ -1511,7 +1462,6 @@ class StencilComputationExpansion(dace.library.ExpandTransformation):
     def expansion(
         node: "StencilComputation", parent_state: dace.SDFGState, parent_sdfg: dace.SDFG
     ) -> dace.nodes.NestedSDFG:
-        split_horizontal_exeuctions_regions(node)
         start, end = (
             node.oir_node.sections[0].interval.start,
             node.oir_node.sections[0].interval.end,

@@ -15,9 +15,11 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 # need to import expansion so that implementation of expansion is registered
+from typing import Any, List
+
 from .expansion import (  # noqa: F401 '.expansion.StencilComputationExpansion' imported but unused
     StencilComputationExpansion,
 )
 
 
-__all__ = []
+__all__: List[Any] = []

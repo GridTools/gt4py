@@ -545,7 +545,8 @@ class StencilComputation(library.LibraryNode):
         super().__init__(name=name, *args, **kwargs)
 
         if oir_node is not None:
-
+            assert extents is not None
+            assert declarations is not None
             extents_dict = dict()
             for i, section in enumerate(oir_node.sections):
                 for j, he in enumerate(section.horizontal_executions):

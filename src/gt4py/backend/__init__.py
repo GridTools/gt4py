@@ -37,7 +37,7 @@ from .gtc_backend import (
 
 
 try:
-    from .gtc_backend import GTCDaceBackend
+    from .gtc_backend import GTCDaceCPUBackend, GTCDaceGPUBackend
 except ImportError:
     pass
 
