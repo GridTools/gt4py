@@ -19,8 +19,8 @@ from typing import Any, Dict, Union
 
 from gt4py import utils as gt_utils
 from gt4py.definitions import BuildOptions, StencilID
-from gt4py.ir import StencilDefinition
 from gt4py.type_hints import AnnotatedStencilFunc, StencilFunc
+from gtc import gtir
 
 
 REGISTRY = gt_utils.Registry()
@@ -54,7 +54,7 @@ class Frontend(abc.ABC):
     @abc.abstractmethod
     def generate(
         cls, definition: AnyStencilFunc, externals: Dict[str, Any], options: BuildOptions
-    ) -> StencilDefinition:
+    ) -> gtir.Stencil:
         pass
 
     @classmethod

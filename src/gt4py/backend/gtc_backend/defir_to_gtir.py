@@ -30,6 +30,7 @@ from gt4py.ir.nodes import (
     BuiltinLiteral,
     Cast,
     ComputationBlock,
+    Empty,
     Expr,
     FieldDecl,
     FieldRef,
@@ -50,6 +51,26 @@ from gt4py.ir.nodes import (
 )
 from gtc import common, gtir
 from gtc.common import ExprKind
+
+
+def _make_literal(v: numbers.Number) -> gtir.Literal:
+    value: Union[BuiltinLiteral, str]
+    if isinstance(v, bool):
+        dtype = common.DataType.BOOL
+        value = common.BuiltInLiteral.TRUE if v else common.BuiltInLiteral.FALSE
+    else:
+        if isinstance(v, int):
+            # note: could be extended to support 32 bit integers by checking the values magnitude
+            dtype = common.DataType.INT64
+        elif isinstance(v, float):
+            dtype = common.DataType.FLOAT64
+        else:
+            print(
+                f"Warning: Only INT64 and FLOAT64 literals are supported currently. Implicitly upcasting `{v}` to FLOAT64"
+            )
+            dtype = common.DataType.FLOAT64
+        value = str(v)
+    return gtir.Literal(dtype=dtype, value=value)
 
 
 class DefIRToGTIR(IRNodeVisitor):
@@ -132,13 +153,32 @@ class DefIRToGTIR(IRNodeVisitor):
         field_params = {f.name: self.visit(f) for f in node.api_fields}
         scalar_params = {p.name: self.visit(p) for p in node.parameters}
         vertical_loops = [self.visit(c) for c in node.computations if c.body.stmts]
+        if node.externals is not None:
+            externals = {
+                name: _make_literal(value)
+                for name, value in node.externals.items()
+                if isinstance(value, numbers.Number)
+            }
+        else:
+            externals = {}
         return gtir.Stencil(
             name=node.name,
+            api_signature=[
+                gtir.Argument(
+                    name=f.name,
+                    is_keyword=f.is_keyword,
+                    default=str(f.default) if not isinstance(f.default, type(Empty)) else "",
+                )
+                for f in node.api_signature
+            ],
             params=[
                 self.visit(f, all_params={**field_params, **scalar_params})
                 for f in node.api_signature
             ],
             vertical_loops=vertical_loops,
+            externals=externals,
+            sources=node.sources or "",
+            docstring=node.docstring,
             loc=common.location_to_source_location(node.loc),
         )
 

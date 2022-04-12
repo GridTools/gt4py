@@ -31,10 +31,11 @@ from gt4py import gt_src_manager
 from gt4py import ir as gt_ir
 from gt4py import utils as gt_utils
 from gt4py.utils import text as gt_text
+from gtc import gtir
 from gtc.passes.oir_pipeline import OirPipeline
 
 from . import pyext_builder
-from .module_generator import CUDAPyExtModuleGenerator, PyExtModuleGenerator
+from .gtc_backend.common import CUDAPyExtModuleGenerator, PyExtModuleGenerator
 
 
 if TYPE_CHECKING:
@@ -675,6 +676,13 @@ class GTPyExtGenerator(gt_ir.IRNodeVisitor):
 
 
 class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
+    """
+    Legacy backend version of the BaseGTBackend.
+
+    NOTE: This is a different version of gt4py.backend.gtc_backend.common.BaseGTBackend
+    and should be removed in a further refactor.
+
+    """
 
     GT_BACKEND_OPTS = {
         "add_profile_info": {"versioning": True, "type": bool},
@@ -720,18 +728,18 @@ class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
 
     def generate_computation(self) -> Dict[str, Union[str, Dict]]:
         dir_name = f"{self.builder.options.name}_src"
-        src_files = self.make_extension_sources(ir=self.builder.definition_ir)
+        src_files = self.make_extension_sources(stencil_ir=self.builder.gtir)
         return {dir_name: src_files["computation"]}
 
     def generate_bindings(
-        self, language_name: str, *, ir: Any = None
+        self, language_name: str, *, stencil_ir: Optional[gtir.Stencil] = None
     ) -> Dict[str, Union[str, Dict]]:
-        if not ir:
-            ir = self.builder.implementation_ir
+        if not stencil_ir:
+            stencil_ir = self.builder.gtir
         if language_name != "python":
             return super().generate_bindings(language_name)
         dir_name = f"{self.builder.options.name}_src"
-        src_files = self.make_extension_sources(ir=ir)
+        src_files = self.make_extension_sources(stencil_ir=stencil_ir)
         return {dir_name: src_files["bindings"]}
 
     @abc.abstractmethod
@@ -744,18 +752,21 @@ class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
         pass
 
     def make_extension(
-        self, *, gt_version: int = 1, ir: Any = None, uses_cuda: bool = False
+        self,
+        *,
+        gt_version: int = 1,
+        stencil_ir: Optional[gtir.Stencil] = None,
+        uses_cuda: bool = False,
     ) -> Tuple[str, str]:
         build_info = self.builder.options.build_info
         if build_info is not None:
             start_time = time.perf_counter()
 
-        if not ir:
-            # in the GTC backend, `ir` is the definition_ir
-            ir = self.builder.implementation_ir
+        if not stencil_ir:
+            stencil_ir = self.builder.gtir
         # Generate source
         if not self.builder.options._impl_opts.get("disable-code-generation", False):
-            gt_pyext_files: Dict[str, Any] = self.make_extension_sources(ir=ir)
+            gt_pyext_files: Dict[str, Any] = self.make_extension_sources(stencil_ir=stencil_ir)
             gt_pyext_sources = {**gt_pyext_files["computation"], **gt_pyext_files["bindings"]}
         else:
             # Pass NOTHING to the self.builder means try to reuse the source code files
@@ -793,7 +804,7 @@ class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
 
         return result
 
-    def make_extension_sources(self, *, ir) -> Dict[str, Dict[str, str]]:
+    def make_extension_sources(self, *, stencil_ir: gtir.Stencil) -> Dict[str, Dict[str, str]]:
         """Generate the source for the stencil independently from use case."""
         if "computation_src" in self.builder.backend_data:
             return self.builder.backend_data["computation_src"]
@@ -804,7 +815,7 @@ class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
             else f"{self.builder.options.name}_pyext"
         )
         gt_pyext_generator = self.PYEXT_GENERATOR_CLASS(class_name, module_name, self)
-        gt_pyext_sources = gt_pyext_generator(ir)
+        gt_pyext_sources = gt_pyext_generator(stencil_ir)
         final_ext = ".cu" if self.languages and self.languages["computation"] == "cuda" else ".cpp"
         comp_src = gt_pyext_sources["computation"]
         for key in [k for k in comp_src.keys() if k.endswith(".src")]:

@@ -109,7 +109,7 @@ def test_usage_numpy_nocaching(tmp_path):
     assert tmp_path.joinpath("simple_stencil", "computation.py").exists(), list(tmp_path.iterdir())
 
 
-def test_regression_run_analysis_twice(tmp_path):
+def test_regression_run_gtir_pipeline_twice(tmp_path):
     builder = (
         StencilBuilder(assign_bool_float)
         .with_backend("gtc:numpy")
@@ -119,6 +119,5 @@ def test_regression_run_analysis_twice(tmp_path):
     )
 
     # property caching should not reevaluate the analysis pipeline as a side effect.
-    ir = builder.implementation_ir
-    # this raises an error if the analysis pipeline is reevaluated:
-    assert ir is builder.implementation_ir
+    ir = builder.gtir_pipeline.full()
+    assert ir is builder.gtir_pipeline.full()

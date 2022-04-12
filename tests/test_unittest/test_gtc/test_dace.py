@@ -21,7 +21,6 @@ import pytest
 
 dace = pytest.importorskip("dace")
 
-from gt4py.backend.gtc_backend.defir_to_gtir import DefIRToGTIR  # noqa: E402
 from gt4py.definitions import BuildOptions  # noqa: E402
 from gt4py.frontend.gtscript_frontend import GTScriptFrontend  # noqa: E402
 from gtc.common import AxisBound, DataType  # noqa: E402
@@ -50,11 +49,10 @@ def stencil_def_to_oir(stencil_def, externals):
     build_options = BuildOptions(
         name=stencil_def.__name__, module=__name__, rebuild=True, backend_opts={}, build_info=None
     )
-    definition_ir = GTScriptFrontend.generate(
-        stencil_def, externals=externals, options=build_options
-    )
-    gtir = GtirPipeline(DefIRToGTIR.apply(definition_ir)).full()
-    return GTIRToOIR().visit(gtir)
+    gtir_stencil = GtirPipeline(
+        GTScriptFrontend.generate(stencil_def, externals=externals, options=build_options)
+    ).full()
+    return GTIRToOIR().visit(gtir_stencil)
 
 
 @pytest.mark.parametrize("stencil_name", stencil_registry.keys())

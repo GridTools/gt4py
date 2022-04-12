@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, Dict, Type, Union, cast
 
 from eve.codegen import format_source
 from gt4py.backend.base import BaseBackend, BaseModuleGenerator, CLIBackendMixin, register
-from gt4py.backend.debug_backend import (
+from gt4py.backend.gtc_backend.common import (
     debug_is_compatible_layout,
     debug_is_compatible_type,
     debug_layout,
@@ -138,10 +138,10 @@ class GTCNumpyBackend(BaseBackend, CLIBackendMixin):
                 ]
             ),
         )
-        oir = oir_pipeline.run(base_oir)
-        base_npir = OirToNpir().visit(oir)
-        npir = ScalarsToTemporaries().visit(base_npir)
-        return npir
+        oir_node = oir_pipeline.run(base_oir)
+        base_npir = OirToNpir().visit(oir_node)
+        npir_node = ScalarsToTemporaries().visit(base_npir)
+        return npir_node
 
     @property
     def npir(self) -> npir.Computation:

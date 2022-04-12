@@ -27,7 +27,7 @@ Analysis is required to generate valid code (complying with the parallel model)
 - `FieldIfStmt` expansion to comply with the parallel model
 """
 
-from typing import Any, Generator, List, Set, Tuple
+from typing import Any, Dict, Generator, List, Optional, Set, Tuple
 
 from pydantic import validator
 from pydantic.class_validators import root_validator
@@ -234,14 +234,23 @@ class VerticalLoop(LocNode):
         return values
 
 
+class Argument(Node):
+    name: Str
+    is_keyword: bool
+    default: Str
+
+
 class Stencil(LocNode, SymbolTableTrait):
     name: Str
-    # TODO(havogt) deal with gtscript externals
+    api_signature: List[Argument]
     params: List[Decl]
     vertical_loops: List[VerticalLoop]
+    externals: Dict[str, Literal]
+    sources: Optional[Dict[str, str]]
+    docstring: Optional[Str]
 
     @property
-    def param_names(self) -> List:
+    def param_names(self) -> List[str]:
         return [p.name for p in self.params]
 
     _validate_symbol_refs = common.validate_symbol_refs()
