@@ -18,7 +18,8 @@ jobs:
         os: ["ubuntu-latest", "windows-latest", "macos-latest"]
 
     runs-on: ${{ matrix.os }}
-
+    env:
+      COVERAGE_FILE_NAME: coverage_${{ matrix.os }}_${{ matrix.python-version }}_${{ matrix.tox-env-factors }}
     steps:
     - uses: actions/checkout@v2
 
@@ -40,9 +41,10 @@ jobs:
         tox_env_factor="${{ matrix.tox-env-factors }}"
         pip install tox clang-format
         tox -r -e py${pyversion_no_dot}-${tox_env_factor}
+        mv coverage.xml "${COVERAGE_FILE_NAME}.xml"
 
     - name: Archive code coverage results
       uses: actions/upload-artifact@v2
       with:
-        name: coverage_${{ matrix.os }}_${{ matrix.python-version }}_${{ matrix.tox-env-factors }}
-        path: coverage.xml
+        name: ${{ env.COVERAGE_FILE_NAME }}
+        path: ${{ env.COVERAGE_FILE_NAME }}.xml
