@@ -434,9 +434,8 @@ def test_fencil_definition_with_function_definitions():
                 ti.Val(ti.Iterator(), ti.Var(3), ti.Column()),
                 ti.Val(ti.Iterator(), ti.Var(4), ti.Column()),
                 ti.Val(ti.Iterator(), ti.Var(4), ti.Column()),
-                # TODO: proper let-polymorphism
-                ti.Val(ti.Iterator(), ti.Var(3), ti.Column()),
-                ti.Val(ti.Iterator(), ti.Var(3), ti.Column()),
+                ti.Val(ti.Iterator(), ti.Var(5), ti.Column()),
+                ti.Val(ti.Iterator(), ti.Var(5), ti.Column()),
             )
         ),
     )
@@ -444,5 +443,5 @@ def test_fencil_definition_with_function_definitions():
     assert inferred == expected
     assert (
         ti.pretty_str(inferred)
-        == "{f :: (T₀) → T₀, g :: (It[T₁²]) → T₁², foo(intˢ, intˢ, intˢ, It[T₃ᶜ], It[T₃ᶜ], It[T₄ᶜ], It[T₄ᶜ], It[T₃ᶜ], It[T₃ᶜ])}"
+        == "{f :: (T₀) → T₀, g :: (It[T₁²]) → T₁², foo(intˢ, intˢ, intˢ, It[T₃ᶜ], It[T₃ᶜ], It[T₄ᶜ], It[T₄ᶜ], It[T₅ᶜ], It[T₅ᶜ])}"
     )
