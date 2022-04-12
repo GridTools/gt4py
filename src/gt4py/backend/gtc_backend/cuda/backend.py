@@ -63,7 +63,10 @@ class GTCCudaExtGenerator(BackendCodegen):
         format_source = self.backend.builder.options.format_source
         implementation = cuir_codegen.CUIRCodegen.apply(cuir_node, format_source=format_source)
         bindings = GTCCudaBindingsCodegen.apply(
-            cuir_node, module_name=self.module_name, backend=self.backend, format_source=format_source
+            cuir_node,
+            module_name=self.module_name,
+            backend=self.backend,
+            format_source=format_source,
         )
         return {
             "computation": {"computation.hpp": implementation},
