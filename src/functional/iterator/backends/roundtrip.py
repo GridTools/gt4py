@@ -71,66 +71,16 @@ def ${id}(${','.join(params)}):
 
     def visit_Temporary(self, node, *, np_dtype, **kwargs):
         assert isinstance(node.domain, ir.FunCall) and node.domain.fun == ir.SymRef(id="domain")
-        domain_ranges = node.domain.args
         assert all(
             isinstance(r, ir.FunCall) and r.fun == ir.SymRef(id="named_range")
-            for r in domain_ranges
+            for r in node.domain.args
         )
-        axes = ", ".join(r.args[0].value for r in domain_ranges)
-        origin = (
-            "{"
-            + ", ".join(f"{r.args[0].value}: -{self.visit(r.args[1])}" for r in domain_ranges)
-            + "}"
-        )
-        shape = (
-            "("
-            + ", ".join(f"{self.visit(r.args[2])}-{self.visit(r.args[1])}" for r in domain_ranges)
-            + ")"
-        )
+        domain_ranges = [self.visit(r.args) for r in node.domain.args]
+        axes = ", ".join(label for label, _, _ in domain_ranges)
+        origin = "{" + ", ".join(f"{label}: -{start}" for label, start, _ in domain_ranges) + "}"
+        shape = "(" + ", ".join(f"{stop}-{start}" for _, start, stop in domain_ranges) + ")"
         dtype = np_dtype(node.dtype)
         return f"{node.id} = np_as_located_field({axes}, origin={origin})(np.empty({shape}, dtype={dtype}))"
-
-
-# TODO this wrapper should be replaced by an extension of the IR
-class WrapperGenerator(EmbeddedDSL):
-    def visit_FencilDefinition(self, node: ir.FencilDefinition, *, tmps):
-        params = self.visit(node.params)
-        non_tmp_params = [param for param in params if param not in tmps]
-
-        def np_dtype(dtype):
-            if isinstance(dtype, int):
-                return params[dtype] + ".dtype"
-            if isinstance(dtype, tuple):
-                return "np.dtype([" + ", ".join(f"('', {np_dtype(d)})" for d in dtype) + "])"
-                return np.dtype([("", np_dtype(d)) for d in dtype])
-            return f"np.dtype({dtype})"
-
-        body = []
-        for tmp, (domain, dtype) in tmps.items():
-            axis_literals = [named_range.args[0].value for named_range in domain.args]
-            origin = (
-                "{"
-                + ", ".join(
-                    f"{named_range.args[0].value}: -{self.visit(named_range.args[1])}"
-                    for named_range in domain.args
-                )
-                + "}"
-            )
-            shape = (
-                "("
-                + ", ".join(
-                    f"{self.visit(named_range.args[2])}-{self.visit(named_range.args[1])}"
-                    for named_range in domain.args
-                )
-                + ")"
-            )
-            body.append(
-                f"{tmp} = np_as_located_field({','.join(axis_literals)}, origin={origin})(np.empty({shape}, dtype={np_dtype(dtype)}))"
-            )
-
-        body.append(f"{node.id}({','.join(params)}, **kwargs)")
-        body_str = "\n    ".join(body)
-        return f"\ndef {node.id}_wrapper({','.join(non_tmp_params)}, **kwargs):\n    {body_str}\n"
 
 
 _BACKEND_NAME = "roundtrip"
@@ -140,11 +90,6 @@ def executor(ir: Node, *args, **kwargs):
     debug = "debug" in kwargs and kwargs["debug"] is True
     debug = True
     use_tmps = "use_tmps" in kwargs and kwargs["use_tmps"] is True
-
-    tmps = dict()
-
-    def register_tmp(fencil_name, tmp, domain, dtype):
-        tmps[tmp] = (domain, dtype)
 
     ir = apply_common_transforms(ir, use_tmps=use_tmps, offset_provider=kwargs["offset_provider"])
 
