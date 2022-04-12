@@ -78,39 +78,36 @@ class StencilClosure(Node):
     inputs: List[SymRef]
 
 
+BUILTINS = {
+    "domain",
+    "named_range",
+    "lift",
+    "make_tuple",
+    "tuple_get",
+    "reduce",
+    "deref",
+    "shift",
+    "scan",
+    "plus",
+    "minus",
+    "multiplies",
+    "divides",
+    "eq",
+    "less",
+    "greater",
+    "if_",
+    "not_",
+    "and_",
+    "or_",
+}
+
+
 class FencilDefinition(Node, SymbolTableTrait):
     id: SymbolName  # noqa: A003
+    function_definitions: List[FunctionDefinition]
     params: List[Sym]
     closures: List[StencilClosure]
 
+    builtin_functions = [Sym(id=name) for name in BUILTINS]
 
-class Program(Node, SymbolTableTrait):
-    function_definitions: List[FunctionDefinition]
-    fencil_definitions: List[FencilDefinition]
-
-    builtin_functions = list(
-        Sym(id=name)
-        for name in [
-            "domain",
-            "named_range",
-            "lift",
-            "make_tuple",
-            "tuple_get",
-            "reduce",
-            "deref",
-            "shift",
-            "scan",
-            "plus",
-            "minus",
-            "multiplies",
-            "divides",
-            "eq",
-            "less",
-            "greater",
-            "if_",
-            "not_",
-            "and_",
-            "or_",
-        ]
-    )
     _validate_symbol_refs = validate_symbol_refs()

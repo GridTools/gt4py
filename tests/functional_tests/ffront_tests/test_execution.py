@@ -70,33 +70,25 @@ def closure_from_fop(
     )
 
 
+# TODO(tehrengruber): dim and size are implicitly given by out_names. Get values from there
 def fencil_from_fop(
-    node: itir.FunctionDefinition, out_name: str, domain: itir.FunCall
+    node: itir.FunctionDefinition, out_name: str, dim: CartesianAxis, size: int
 ) -> itir.FencilDefinition:
+    domain = make_domain(dim.value, 0, size)
     closure = closure_from_fop(node, out_name=out_name, domain=domain)
     return itir.FencilDefinition(
         id=node.id + "_fencil",
+        function_definitions=[node],
         params=[itir.Sym(id=inp.id) for inp in closure.inputs] + [itir.Sym(id=closure.output.id)],
         closures=[closure],
     )
 
 
 # TODO(tehrengruber): dim and size are implicitly given bys out_names. Get values from there
-def program_from_fop(
-    node: itir.FunctionDefinition, out_name: str, dim: CartesianAxis, size: int
-) -> itir.Program:
-    domain = make_domain(dim.value, 0, size)
-    return itir.Program(
-        function_definitions=[node],
-        fencil_definitions=[fencil_from_fop(node, out_name=out_name, domain=domain)],
-    )
-
-
-# TODO(tehrengruber): dim and size are implicitly given bys out_names. Get values from there
-def program_from_function(
+def fencil_from_function(
     func, dim: CartesianAxis, size: int, out_name: str = "foo"
-) -> itir.Program:
-    return program_from_fop(
+) -> itir.FencilDefinition:
+    return fencil_from_fop(
         node=FieldOperatorLowering.apply(FieldOperatorParser.apply_to_function(func)),
         out_name=out_name,
         dim=dim,
@@ -118,9 +110,9 @@ def test_copy():
     def copy(inp: Field[[IDim], float64]):
         return inp
 
-    program = program_from_function(copy, dim=IDim, size=size)
+    fencil = fencil_from_function(copy, dim=IDim, size=size)
 
-    roundtrip.executor(program, a, b, offset_provider={})
+    roundtrip.executor(fencil, a, b, offset_provider={})
 
     assert np.allclose(a, b)
 
@@ -136,8 +128,8 @@ def test_multicopy():
     def multicopy(inp1: Field[[IDim], float64], inp2: Field[[IDim], float64]):
         return inp1, inp2
 
-    program = program_from_function(multicopy, dim=IDim, size=size)
-    roundtrip.executor(program, a, b, (c, d), offset_provider={})
+    fencil = fencil_from_function(multicopy, dim=IDim, size=size)
+    roundtrip.executor(fencil, a, b, (c, d), offset_provider={})
 
     assert np.allclose(a, c)
     assert np.allclose(b, d)
@@ -152,8 +144,8 @@ def test_arithmetic():
     def arithmetic(inp1: Field[[IDim], float64], inp2: Field[[IDim], float64]):
         return inp1 + inp2
 
-    program = program_from_function(arithmetic, dim=IDim, size=size)
-    roundtrip.executor(program, a, b, c, offset_provider={})
+    fencil = fencil_from_function(arithmetic, dim=IDim, size=size)
+    roundtrip.executor(fencil, a, b, c, offset_provider={})
 
     assert np.allclose(a.array() + b.array(), c)
 
@@ -169,8 +161,8 @@ def test_bit_logic():
     def bit_and(inp1: Field[[IDim], bool], inp2: Field[[IDim], bool]):
         return inp1 & inp2
 
-    program = program_from_function(bit_and, dim=IDim, size=size)
-    roundtrip.executor(program, a, b, c, offset_provider={})
+    fencil = fencil_from_function(bit_and, dim=IDim, size=size)
+    roundtrip.executor(fencil, a, b, c, offset_provider={})
 
     assert np.allclose(a.array() & b.array(), c)
 
@@ -183,8 +175,8 @@ def test_unary_neg():
     def uneg(inp: Field[[IDim], int]):
         return -inp
 
-    program = program_from_function(uneg, dim=IDim, size=size)
-    roundtrip.executor(program, a, b, offset_provider={})
+    fencil = fencil_from_function(uneg, dim=IDim, size=size)
+    roundtrip.executor(fencil, a, b, offset_provider={})
 
     assert np.allclose(b, np.full((size), -1))
 
@@ -198,8 +190,8 @@ def test_shift():
     def shift_by_one(inp: Field[[IDim], float64]):
         return inp(Ioff[1])
 
-    program = program_from_function(shift_by_one, dim=IDim, size=size)
-    roundtrip.executor(program, a, b, offset_provider={"Ioff": IDim})
+    fencil = fencil_from_function(shift_by_one, dim=IDim, size=size)
+    roundtrip.executor(fencil, a, b, offset_provider={"Ioff": IDim})
 
     assert np.allclose(b.array(), np.arange(1, 11))
 
@@ -216,8 +208,8 @@ def test_fold_shifts():
         tmp = inp1 + inp2(Ioff[1])
         return tmp(Ioff[1])
 
-    program = program_from_function(auto_lift, dim=IDim, size=size)
-    roundtrip.executor(program, a, b, c, offset_provider={"Ioff": IDim})
+    fencil = fencil_from_function(auto_lift, dim=IDim, size=size)
+    roundtrip.executor(fencil, a, b, c, offset_provider={"Ioff": IDim})
 
     assert np.allclose(a[1:] + b[2:], c)
 
@@ -269,9 +261,9 @@ def test_reduction_execution(reduction_setup):
     def reduction(edge_f: Field[[rs.Edge], "float64"]):
         return neighbor_sum(edge_f(V2E), axis=V2EDim)
 
-    program = program_from_function(reduction, dim=rs.Vertex, size=rs.size)
+    fencil = fencil_from_function(reduction, dim=rs.Vertex, size=rs.size)
     roundtrip.executor(
-        program,
+        fencil,
         rs.inp,
         rs.out,
         offset_provider=rs.offset_provider,
@@ -292,9 +284,9 @@ def test_reduction_expression(reduction_setup):
         tmp_nbh = tmp_nbh_tup[0]
         return neighbor_sum(-edge_f(V2E) * tmp_nbh, axis=V2EDim)
 
-    program = program_from_function(reduce_expr, dim=rs.Vertex, size=rs.size)
+    fencil = fencil_from_function(reduce_expr, dim=rs.Vertex, size=rs.size)
     roundtrip.executor(
-        program,
+        fencil,
         rs.inp,
         rs.out,
         offset_provider=rs.offset_provider,

@@ -3,7 +3,7 @@ from typing import List
 
 from eve import Node
 from functional import iterator
-from functional.iterator.backend_executor import execute_program
+from functional.iterator.backend_executor import execute_fencil
 from functional.iterator.ir import (
     AxisLiteral,
     BoolLiteral,
@@ -16,7 +16,6 @@ from functional.iterator.ir import (
     Lambda,
     NoneLiteral,
     OffsetLiteral,
-    Program,
     StencilClosure,
     Sym,
     SymRef,
@@ -335,17 +334,17 @@ def trace(fun, args):
         param_names = _make_param_names(fun, args)
         trace_function_call(fun, args=(_s(p) for p in param_names))
 
-        fencil = FencilDefinition(
+        return FencilDefinition(
             id=fun.__name__,
+            function_definitions=Tracer.fundefs,
             params=list(Sym(id=param) for param in param_names),
             closures=Tracer.closures,
         )
-        return Program(function_definitions=Tracer.fundefs, fencil_definitions=[fencil])
 
 
 def fendef_tracing(fun, *args, **kwargs):
-    prog = trace(fun, args=args)
-    execute_program(prog, *args, **kwargs)
+    fencil = trace(fun, args=args)
+    execute_fencil(fencil, *args, **kwargs)
 
 
 iterator.runtime.fendef_codegen = fendef_tracing

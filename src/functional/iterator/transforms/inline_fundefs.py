@@ -13,7 +13,7 @@ class InlineFundefs(NodeTranslator):
             )
         return self.generic_visit(node)
 
-    def visit_Program(self, node: ir.Program):
+    def visit_FencilDefinition(self, node: ir.FencilDefinition):
         return self.generic_visit(node, symtable=node.symtable_)
 
 
@@ -29,7 +29,7 @@ class PruneUnreferencedFundefs(NodeTranslator):
         referenced.add(node.id)
         return node
 
-    def visit_Program(self, node: ir.Program):
+    def visit_FencilDefinition(self, node: ir.FencilDefinition):
         referenced: Set[str] = set()
         self.generic_visit(node, referenced=referenced, second_pass=False)
         return self.generic_visit(node, referenced=referenced, second_pass=True)
