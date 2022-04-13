@@ -362,6 +362,11 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
                 node,
                 msg=f"{self._func_name(node)}() got unexpected keyword arguments: {unexpected_kwargs}!",
             )
+        elif not isinstance(node.args[0], ast.Constant):
+            raise FieldOperatorSyntaxError.from_AST(
+                node,
+                msg=f"{self._func_name(node)}() only takes literal arguments!",
+            )
 
     def _builtin_type_constructor_type_override(self, node: ast.Call):
         global_ns = self.captured_vars.globals

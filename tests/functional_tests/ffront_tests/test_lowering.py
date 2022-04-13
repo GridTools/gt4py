@@ -269,8 +269,8 @@ def test_add_scalar_literal_to_field():
 
 def test_add_scalar_literals():
     def scalar_plus_scalar(a: Field[..., "int32"]) -> Field[..., "int32"]:
-        tmp = 1 + int64("1")
-        return a + int32(tmp)  # casting
+        tmp = int32(1) + int32("1")
+        return a + tmp
 
     parsed = FieldOperatorParser.apply_to_function(scalar_plus_scalar)
     lowered = FieldOperatorLowering.apply(parsed)
@@ -279,8 +279,8 @@ def test_add_scalar_literals():
         im.let(
             "tmp__0",
             im.plus_(
-                im.literal_("1", "int64"),
-                im.literal_("1", "int64"),
+                im.literal_("1", "int32"),
+                im.literal_("1", "int32"),
             ),
         )(im.lift_(im.lambda__("a")(im.plus_(im.deref_("a"), "tmp__0")))("a"))
     )
