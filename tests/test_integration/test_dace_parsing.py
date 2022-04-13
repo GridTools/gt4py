@@ -24,9 +24,10 @@ def dace_env():
         / gt4py.config.cache_settings["dir_name"]
         / "dacecache"
     )
-    with dace.config.set_temporary("compiler", "cpu", "args", value=""), dace.config.set_temporary(
-        "compiler", "allow_view_arguments", value=True
-    ), dace.config.set_temporary("default_build_folder", value=gt_cache_path):
+    with dace.config.temporary_config():
+        dace.config.Config.set("compiler", "cpu", "args", value="")
+        dace.config.Config.set("compiler", "allow_view_arguments", value=True)
+        dace.config.Config.set("default_build_folder", value=gt_cache_path)
         yield
 
 
