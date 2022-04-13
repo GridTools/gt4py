@@ -2,6 +2,7 @@ from eve import NodeTranslator
 from functional.iterator import ir
 
 
+# replacements for builtin binary operations
 BINARY_OPS = {
     "plus": "+",
     "minus": "-",
@@ -14,12 +15,14 @@ BINARY_OPS = {
     "or_": "or",
 }
 
+# replacements for builtin unary operations
 UNARY_OPS = {
     "deref": "*",
     "lift": "↑",
     "not_": "not ",
 }
 
+# precedence of binary operations
 BINARY_PRECEDENCE = {
     "or": 2,
     "and": 3,
@@ -32,12 +35,14 @@ BINARY_PRECEDENCE = {
     "/": 6,
 }
 
+# precedence of unary operations
 UNARY_PRECEDENCE = {
     "not ": 7,
     "*": 7,
     "↑": 7,
 }
 
+# precedence of other operations
 OTHER_PRECEDENCE = {
     "lambda": 0,
     "if": 1,
@@ -134,12 +139,14 @@ class PrettyPrinter(NodeTranslator):
     def visit_FunCall(self, node, *, prec):
         if isinstance(node.fun, ir.SymRef):
             if node.fun.id in BINARY_OPS and len(node.args) == 2:
+                # replacing binary ops plus(x, y) → x + y etc.
                 op = BINARY_OPS[node.fun.id]
                 lhs, rhs = self.visit(node.args, prec=BINARY_PRECEDENCE[op])
                 h = _hmerge(lhs, [" " + op + " "], rhs)
                 v = _vmerge(lhs, _hmerge([op + " "], rhs))
                 return _prec_parens(_optimum(h, v), prec, BINARY_PRECEDENCE[op])
             if node.fun.id in UNARY_OPS and len(node.args) == 1:
+                # replacing unary ops deref(x) → *x etc.
                 op = UNARY_OPS[node.fun.id]
                 if (
                     op == "*"
@@ -149,7 +156,7 @@ class PrettyPrinter(NodeTranslator):
                     and node.args[0].fun.args
                     and isinstance(node.args[0].args[0], ir.SymRef)
                 ):
-                    # short deref(shift(offsets...)(sym)) → sym[offsets...]
+                    # deref(shift(offsets...)(sym)) → sym[offsets...]
                     assert len(node.args[0].args) == 1
                     expr = self.visit(node.args[0].args[0], prec=OTHER_PRECEDENCE["call"])
                     shifts = self.visit(node.args[0].fun.args, prec=0)
@@ -158,17 +165,21 @@ class PrettyPrinter(NodeTranslator):
                 res = _hmerge([op], self.visit(node.args[0], prec=UNARY_PRECEDENCE[op]))
                 return _prec_parens(res, prec, UNARY_PRECEDENCE[op])
             if node.fun.id == "tuple_get" and len(node.args) == 2:
+                # tuple_get(i, x) → x[i]
                 idx, tup = self.visit(node.args, prec=OTHER_PRECEDENCE["call"])
                 res = _hmerge(tup, ["["], idx, ["]"])
                 return _prec_parens(res, prec, OTHER_PRECEDENCE["call"])
             if node.fun.id == "named_range" and len(node.args) == 3:
+                # named_range(dim, start, stop) → dim: [star, stop)
                 dim, start, end = self.visit(node.args, prec=0)
                 res = _hmerge(dim, [": ["], start, [", "], end, [")"])
                 return _prec_parens(res, prec, OTHER_PRECEDENCE["call"])
             if node.fun.id == "domain" and len(node.args) >= 1:
+                # domain(x, y) → {x × y}
                 args = self.visit(node.args, prec=OTHER_PRECEDENCE["call"])
                 return _hmerge(["{"], *_hinterleave(args, " × "), ["}"])
             if node.fun.id == "if_" and len(node.args) == 3:
+                # if_(x, y, z) → if x then y else z
                 ifb, thenb, elseb = self.visit(node.args, prec=OTHER_PRECEDENCE["if"])
                 hblocks = _hmerge(["if "], ifb, [" then "], thenb, [" else "], elseb)
                 vblocks = _vmerge(
@@ -187,6 +198,7 @@ class PrettyPrinter(NodeTranslator):
             args = _optimum(hargs, vargs)
 
         if node.fun == ir.SymRef(id="make_tuple"):
+            # make_tuple(args...) → {args...}
             htup = _hmerge(["{"], args, ["}"])
             vtup = _vmerge(["{"], _indent(args), ["}"])
             return _optimum(htup, vtup)
