@@ -454,9 +454,7 @@ class DaCePyModuleGenerator(PyExtModuleGenerator):
         res = super().generate_class_members()
 
         filepath = self.builder.module_path.joinpath(
-            os.path.dirname(self.builder.module_path),
-            self.builder.module_name + "_pyext_BUILD",
-            self.builder.module_name + ".sdfg",
+            os.path.dirname(self.builder.module_path), self.builder.module_name + ".sdfg"
         )
         res += f'\nSDFG_PATH = "{filepath}"\n'
         return res
