@@ -68,12 +68,9 @@ class CreateGlobalTmps(NodeTranslator):
         else:
             raise RuntimeError("Expected a stencil")
 
-    def visit_Program(self, node: ir.Program, **kwargs):
-        return self.generic_visit(node, symtable=node.symtable_, **kwargs)
+    def visit_FencilDefinition(self, node: ir.FencilDefinition, *, offset_provider, register_tmp):
+        symtable = node.symtable_
 
-    def visit_FencilDefinition(
-        self, node: ir.FencilDefinition, *, offset_provider, register_tmp, symtable
-    ):
         tmps: List[ir.Sym] = []
 
         def handle_arg(arg):

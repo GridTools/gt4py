@@ -104,12 +104,8 @@ class StencilExecution(Node):
 class FencilDefinition(Node, SymbolTableTrait):
     id: SymbolName  # noqa: A003
     params: List[Sym]
-    executions: List[StencilExecution]
-
-
-class Program(Node, SymbolTableTrait):
     function_definitions: List[FunctionDefinition]
-    fencil_definitions: List[FencilDefinition]
+    executions: List[StencilExecution]
     offsets: List[str]
     grid_type: GridType
 

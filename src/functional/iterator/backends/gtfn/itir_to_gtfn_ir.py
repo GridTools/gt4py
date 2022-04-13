@@ -16,7 +16,6 @@ from functional.iterator.backends.gtfn.gtfn_ir import (
     IntLiteral,
     Lambda,
     OffsetLiteral,
-    Program,
     StencilExecution,
     StringLiteral,
     Sym,
@@ -117,15 +116,8 @@ class GTFN_lowering(NodeTranslator):
             backend=backend,
         )
 
-    def visit_FencilDefinition(self, node: itir.FencilDefinition, **kwargs) -> FencilDefinition:
-        return FencilDefinition(
-            id=SymbolName(node.id),
-            params=self.visit(node.params),
-            executions=self.visit(node.closures),
-        )
-
     @staticmethod
-    def _collect_offsets(node: itir.Program) -> set[str]:
+    def _collect_offsets(node: itir.FencilDefinition) -> set[str]:
         return (
             iter_tree(node)
             .if_isinstance(itir.OffsetLiteral)
@@ -134,13 +126,17 @@ class GTFN_lowering(NodeTranslator):
             .to_set()
         )
 
-    def visit_Program(self, node: itir.Program, *, grid_type: str, **kwargs) -> Program:
+    def visit_FencilDefinition(
+        self, node: itir.FencilDefinition, *, grid_type: str, **kwargs
+    ) -> FencilDefinition:
         grid_type = (
             GridType.Cartesian if grid_type.lower() == "cartesian" else GridType.Unstructured
         )
-        return Program(
-            function_definitions=self.visit(node.function_definitions),
-            fencil_definitions=self.visit(node.fencil_definitions),
-            offsets=self._collect_offsets(node),
+        return FencilDefinition(
+            id=SymbolName(node.id),
+            params=self.visit(node.params),
+            executions=self.visit(node.closures),
             grid_type=grid_type,
+            offsets=self._collect_offsets(node),
+            function_definitions=self.visit(node.function_definitions),
         )

@@ -37,9 +37,9 @@ JDim = CartesianAxis("JDim")
 KDim = CartesianAxis("KDim")
 
 
-def lap_fencil(domain, out, inp):
+def lap_fencil(dom, out, inp):
     closure(
-        domain,
+        dom,
         lap,
         out,
         [inp],

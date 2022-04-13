@@ -61,22 +61,22 @@ TEST(unstructured, nabla) {
     return res;
   };
 
-  tuple<double, double> actual_zavg[n_edges][K] = {};
-
   auto e2v_conn = connectivity<generated::E2V_t>(&e2v[0]);
-  auto edge_domain =
-      unstructured_domain(std::tuple(n_edges, K), {},
-                          e2v_conn); // TODO fn should use sizes constructor
 
-  generated::zavgS_fencil(backend::naive{}, edge_domain, actual_zavg, pp, s);
+  // tuple<double, double> actual_zavg[n_edges][K] = {};
+  // auto edge_domain =
+  //     unstructured_domain(std::tuple(n_edges, K), {},
+  //                         e2v_conn); // TODO fn should use sizes constructor
 
-  for (int h = 0; h < n_edges; ++h)
-    for (int v = 0; v < K; ++v)
-      tuple_util::for_each(
-          [](auto actual, auto expected) {
-            EXPECT_DOUBLE_EQ(actual, expected);
-          },
-          actual_zavg[h][v], zavg(h, v));
+  // generated::zavgS_fencil(backend::naive{}, edge_domain, actual_zavg, pp, s);
+
+  // for (int h = 0; h < n_edges; ++h)
+  //   for (int v = 0; v < K; ++v)
+  //     tuple_util::for_each(
+  //         [](auto actual, auto expected) {
+  //           EXPECT_DOUBLE_EQ(actual, expected);
+  //         },
+  //         actual_zavg[h][v], zavg(h, v));
 
   auto v2e_conn = connectivity<generated::V2E_t>(&v2e[0]);
   auto vertex_domain =

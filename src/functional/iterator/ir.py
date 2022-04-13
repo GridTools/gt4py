@@ -86,6 +86,7 @@ BUILTINS = {
     "tuple_get",
     "reduce",
     "deref",
+    "can_deref",
     "shift",
     "scan",
     "plus",

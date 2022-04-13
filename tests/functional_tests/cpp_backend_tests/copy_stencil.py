@@ -16,9 +16,9 @@ def copy_stencil(inp):
     return deref(inp)
 
 
-def copy_fencil(domain, inp, out):
+def copy_fencil(dom, inp, out):
     closure(
-        domain,
+        dom,
         copy_stencil,
         out,
         [inp],

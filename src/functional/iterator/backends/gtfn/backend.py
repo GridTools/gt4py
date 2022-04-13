@@ -6,7 +6,7 @@ from functional.iterator.backends.gtfn.itir_to_gtfn_ir import GTFN_lowering
 from functional.iterator.transforms.common import apply_common_transforms
 
 
-def generate(program: itir.Program, *, grid_type: str, **kwargs) -> str:
+def generate(program: itir.FencilDefinition, *, grid_type: str, **kwargs) -> str:
     transformed = program
     transformed = apply_common_transforms(
         program,
