@@ -1,9 +1,11 @@
+import pathlib
 import re
 
 import hypothesis.strategies as hyp_st
 import numpy as np
 import pytest
 
+import gt4py.config
 from gt4py import gtscript
 from gt4py import storage as gt_storage
 from gt4py.gtscript import PARALLEL, computation, interval
@@ -17,9 +19,14 @@ pytestmark = pytest.mark.usefixtures("dace_env")
 
 @pytest.fixture(scope="module")
 def dace_env():
+    gt_cache_path = (
+        pathlib.Path(gt4py.config.cache_settings["root_path"])
+        / gt4py.config.cache_settings["dir_name"]
+        / "dacecache"
+    )
     with dace.config.set_temporary("compiler", "cpu", "args", value=""), dace.config.set_temporary(
         "compiler", "allow_view_arguments", value=True
-    ):
+    ), dace.config.set_temporary("default_build_folder", value=gt_cache_path):
         yield
 
 
