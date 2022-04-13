@@ -95,7 +95,6 @@ class GTCNumpyBackend(BaseBackend, CLIBackendMixin):
     }
     languages = {"computation": "python", "bindings": ["python"]}
     MODULE_GENERATOR_CLASS = GTCModuleGenerator
-    USE_LEGACY_TOOLCHAIN = False
     GTIR_KEY = "gtc:gtir"
 
     def generate_computation(self) -> Dict[str, Union[str, Dict]]:

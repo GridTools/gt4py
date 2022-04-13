@@ -19,7 +19,7 @@ from typing import Any, Iterator, List, Set, Tuple, Union
 
 import pytest
 
-from gt4py.ir.nodes import (
+from gt4py.frontend.nodes import (
     ArgumentInfo,
     Assign,
     Axis,

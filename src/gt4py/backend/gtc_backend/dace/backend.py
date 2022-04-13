@@ -387,7 +387,6 @@ class GTCDaceBackend(BaseGTBackend, CLIBackendMixin):
 
     options = BaseGTBackend.GT_BACKEND_OPTS
     PYEXT_GENERATOR_CLASS = GTCDaCeExtGenerator  # type: ignore
-    USE_LEGACY_TOOLCHAIN = False
 
     def generate_extension(self) -> Tuple[str, str]:
         return self.make_extension(stencil_ir=self.builder.gtir, uses_cuda=False)
