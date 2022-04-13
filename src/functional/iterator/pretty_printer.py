@@ -16,7 +16,8 @@ BINARY_OPS = {
 
 UNARY_OPS = {
     "deref": "*",
-    "not_": "not",
+    "lift": "↑",
+    "not_": "not ",
 }
 
 BINARY_PRECEDENCE = {
@@ -32,8 +33,9 @@ BINARY_PRECEDENCE = {
 }
 
 UNARY_PRECEDENCE = {
-    "not": 7,
+    "not ": 7,
     "*": 7,
+    "↑": 7,
 }
 
 OTHER_PRECEDENCE = {
@@ -74,11 +76,11 @@ def _cost(block: list[str]):
     )
 
 
-def _optimal(a: list[str], b: list[str]):
+def _optimum(a: list[str], b: list[str]):
     return a if _cost(a) < _cost(b) else b
 
 
-def _prec_parens(block: list[str], prec, op_prec):
+def _prec_parens(block: list[str], prec: int, op_prec: int):
     if prec > op_prec:
         return _hmerge(["("], block, [")"])
     return block
@@ -110,20 +112,19 @@ class PrettyPrinter(NodeTranslator):
         params = self.visit(node.params, prec=0)
         expr = self.visit(node.expr, prec=0)
 
+        start, bridge = ["λ("], [") → "]
         if not params:
-            params = ["λ() → "]
+            params = _hmerge(start, bridge)
         else:
             hparams = _hmerge(
-                ["λ("], *(_hmerge(param, [", "]) for param in params[:-1]), params[-1], [") → "]
+                start, *(_hmerge(param, [", "]) for param in params[:-1]), params[-1], bridge
             )
-            vparams = _vmerge(
-                ["λ("], *(_indent(_hmerge(param, [", "])) for param in params), [") → "]
-            )
-            params = _optimal(hparams, vparams)
+            vparams = _vmerge(start, *(_indent(_hmerge(param, [", "])) for param in params), bridge)
+            params = _optimum(hparams, vparams)
 
         hbody = _hmerge(params, expr)
         vbody = _vmerge(params, _indent(expr))
-        return _prec_parens(_optimal(hbody, vbody), prec, OTHER_PRECEDENCE["lambda"])
+        return _prec_parens(_optimum(hbody, vbody), prec, OTHER_PRECEDENCE["lambda"])
 
     def visit_FunCall(self, node, *, prec):
         if isinstance(node.fun, ir.SymRef):
@@ -132,7 +133,7 @@ class PrettyPrinter(NodeTranslator):
                 lhs, rhs = self.visit(node.args, prec=BINARY_PRECEDENCE[op])
                 h = _hmerge(lhs, [" " + op + " "], rhs)
                 v = _vmerge(lhs, _hmerge([op + " "], rhs))
-                return _prec_parens(_optimal(h, v), prec, BINARY_PRECEDENCE[op])
+                return _prec_parens(_optimum(h, v), prec, BINARY_PRECEDENCE[op])
             if node.fun.id in UNARY_OPS and len(node.args) == 1:
                 op = UNARY_OPS[node.fun.id]
                 if (
@@ -151,7 +152,7 @@ class PrettyPrinter(NodeTranslator):
                         expr, ["["], *(_hmerge(s, [", "]) for s in shifts[:-1]), shifts[-1], ["]"]
                     )
                     return _prec_parens(res, prec, OTHER_PRECEDENCE["call"])
-                res = _hmerge(["*"], self.visit(node.args[0], prec=UNARY_PRECEDENCE[op]))
+                res = _hmerge([op], self.visit(node.args[0], prec=UNARY_PRECEDENCE[op]))
                 return _prec_parens(res, prec, UNARY_PRECEDENCE[op])
             if node.fun.id == "tuple_get" and len(node.args) == 2:
                 idx, tup = self.visit(node.args, prec=OTHER_PRECEDENCE["call"])
@@ -166,14 +167,14 @@ class PrettyPrinter(NodeTranslator):
                 tokens = [None] * (2 * len(args) - 1)
                 tokens[::2] = args
                 tokens[1::2] = [[" × "]] * (len(args) - 1)
-                return _prec_parens(_hmerge(*tokens), prec, OTHER_PRECEDENCE["call"])
+                return _hmerge(["{"], *tokens, ["}"])
             if node.fun.id == "if_" and len(node.args) == 3:
                 ifb, thenb, elseb = self.visit(node.args, prec=OTHER_PRECEDENCE["if"])
                 hblocks = _hmerge(["if "], ifb, [" then "], thenb, [" else "], elseb)
                 vblocks = _vmerge(
                     _hmerge(["if   "], ifb), _hmerge(["then "], thenb), _hmerge(["else "], elseb)
                 )
-                return _prec_parens(_optimal(hblocks, vblocks), prec, OTHER_PRECEDENCE["if"])
+                return _prec_parens(_optimum(hblocks, vblocks), prec, OTHER_PRECEDENCE["if"])
 
         fun = self.visit(node.fun, prec=OTHER_PRECEDENCE["call"])
         args = self.visit(node.args, prec=0)
@@ -183,40 +184,38 @@ class PrettyPrinter(NodeTranslator):
         else:
             hargs = _hmerge(*(_hmerge(arg, [", "]) for arg in args[:-1]), args[-1])
             vargs = _vmerge(*(_hmerge(arg, [","]) for arg in args[:-1]), args[-1])
-            args = _optimal(hargs, vargs)
+            args = _optimum(hargs, vargs)
 
         if node.fun == ir.SymRef(id="make_tuple"):
             htup = _hmerge(["{"], args, ["}"])
             vtup = _vmerge(["{"], _indent(args), ["}"])
-            return _optimal(htup, vtup)
+            return _optimum(htup, vtup)
 
         hfun = _hmerge(fun, ["("], args, [")"])
         vfun = _vmerge(_hmerge(fun, ["("]), _indent(args), [")"])
-        return _prec_parens(_optimal(hfun, vfun), prec, OTHER_PRECEDENCE["call"])
+        return _prec_parens(_optimum(hfun, vfun), prec, OTHER_PRECEDENCE["call"])
 
     def visit_FunctionDefinition(self, node, prec):
         assert prec == 0
         params = self.visit(node.params, prec=0)
         expr = self.visit(node.expr, prec=0)
 
-        head = [node.id + " = λ("]
+        start, bridge = [node.id + " = λ("], [") → "]
         if not params:
-            params = head
+            params = start
         else:
             hparams = _hmerge(
-                head,
+                start,
                 *(_hmerge(param, [", "]) for param in params[:-1]),
                 params[-1],
-                [") → "],
+                bridge,
             )
-            vparams = _vmerge(
-                head, *(_indent(_hmerge(param, [", "])) for param in params), [") → "]
-            )
-            params = _optimal(hparams, vparams)
+            vparams = _vmerge(start, *(_indent(_hmerge(param, [", "])) for param in params), bridge)
+            params = _optimum(hparams, vparams)
 
         hbody = _hmerge(params, expr)
         vbody = _vmerge(params, _indent(expr))
-        return _optimal(hbody, vbody)
+        return _optimum(hbody, vbody)
 
     def visit_StencilClosure(self, node, *, prec):
         assert prec == 0
@@ -227,14 +226,14 @@ class PrettyPrinter(NodeTranslator):
 
         hinputs = _hmerge(["("], *(_hmerge(inp, [", "]) for inp in inputs[:-1]), inputs[-1], [")"])
         vinputs = _vmerge(["("], *(_indent(_hmerge(inp, [", "])) for inp in inputs), [")"])
-        inputs = _optimal(hinputs, vinputs)
+        inputs = _optimum(hinputs, vinputs)
 
         head = _hmerge(output, [" ← "])
         foot = _hmerge(inputs, [" @ "], domain)
 
         h = _hmerge(head, ["("], stencil, [")"], foot)
         v = _vmerge(_hmerge(head, ["("]), _indent(_indent(stencil)), _indent(_hmerge([")"], foot)))
-        return _optimal(h, v)
+        return _optimum(h, v)
 
     def visit_FencilDefinition(self, node, *, prec):
         assert prec == 0
@@ -248,7 +247,7 @@ class PrettyPrinter(NodeTranslator):
         vparams = _vmerge(
             [node.id + "("], *(_indent(_hmerge(param, [", "])) for param in params), [") {"]
         )
-        params = _optimal(hparams, vparams)
+        params = _optimum(hparams, vparams)
 
         function_definitions = _vmerge(*function_definitions)
         closures = _vmerge(*closures)
@@ -257,7 +256,7 @@ class PrettyPrinter(NodeTranslator):
 
     @classmethod
     def apply(cls, node):
-        return "\n".join(cls().visit(node, prec=0)) + "\n"
+        return "\n".join(cls().visit(node, prec=0))
 
 
 pretty_str = PrettyPrinter.apply
