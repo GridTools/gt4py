@@ -17,6 +17,7 @@
 
 import abc
 import os
+import pathlib
 import textwrap
 import time
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Type, Union
@@ -304,11 +305,13 @@ class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
         if not stencil_ir:
             stencil_ir = self.builder.gtir
         # Generate source
+        gt_pyext_files: Dict[str, Any]
         if not self.builder.options._impl_opts.get("disable-code-generation", False):
-            gt_pyext_sources: Dict[str, Any] = self.make_extension_sources(stencil_ir=stencil_ir)
-            gt_pyext_sources = {**gt_pyext_sources["computation"], **gt_pyext_sources["bindings"]}
+            gt_pyext_files = self.make_extension_sources(stencil_ir=stencil_ir)
+            gt_pyext_sources = {**gt_pyext_files["computation"], **gt_pyext_files["bindings"]}
         else:
             # Pass NOTHING to the self.builder means try to reuse the source code files
+            gt_pyext_files = {}
             gt_pyext_sources = {
                 key: gt_utils.NOTHING for key in self.PYEXT_GENERATOR_CLASS.TEMPLATE_FILES.keys()
             }
@@ -332,6 +335,12 @@ class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
 
         result = self.build_extension_module(gt_pyext_sources, pyext_opts, uses_cuda=uses_cuda)
 
+        for filename, content in gt_pyext_files.get("info", {}).items():
+            stencil_cache_dir = pathlib.Path(
+                os.path.relpath(self.builder.module_path.parent, pathlib.Path.cwd())
+            )
+            with open(stencil_cache_dir / filename, "w+") as handle:
+                handle.write(content)
         if build_info is not None:
             build_info["build_time"] = time.perf_counter() - start_time
 
