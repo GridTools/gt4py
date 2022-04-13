@@ -12,6 +12,8 @@ class ScalarKind(IntEnum):
     BOOL = 1
     INT32 = 32
     INT64 = 64
+    # Python's "int" type in the Python AST should be mapped to ScalarKind.INT in our ASTs. The size, as
+    # determined by numpy, varies by platform. (Size is the same as C's "long" type.)
     INT = INT32 if np.int_ == np.int32 else INT64
     FLOAT32 = 1032
     FLOAT64 = 1064
