@@ -107,20 +107,12 @@ class GTCDaCeExtGenerator(BackendCodegen):
         oir_node = oir_pipeline.run(base_oir)
         sdfg = OirSDFGBuilder().visit(oir_node)
 
-        unexpanded_sdfg_json = dumps(sdfg.to_json())
-
-        sdfg = _expand_and_finalize_sdfg(stencil_ir, sdfg, self.backend.storage_info["layout_map"])
-
         for tmp_sdfg in sdfg.all_sdfgs_recursive():
             tmp_sdfg.transformation_hist = []
             tmp_sdfg.orig_sdfg = None
+        unexpanded_sdfg_json = dumps(sdfg.to_json())
 
-        sdfg.save(
-            self.backend.builder.module_path.joinpath(
-                os.path.dirname(self.backend.builder.module_path),
-                self.backend.builder.module_name + ".sdfg",
-            )
-        )
+        sdfg = _expand_and_finalize_sdfg(stencil_ir, sdfg, self.backend.storage_info["layout_map"])
 
         sources: Dict[str, Dict[str, str]]
         implementation = DaCeComputationCodegen.apply(stencil_ir, sdfg)
