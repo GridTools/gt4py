@@ -409,6 +409,7 @@ class DaCeBindingsCodegen:
                 domain_dim_flags=domain_dim_flags,
                 data_ndim=data_ndim,
                 stride_kind_index=self.unique_index(),
+                check_layout=False,
                 backend=self.backend,
             )
 

@@ -170,7 +170,7 @@ def allocate(default_origin, shape, layout_map, dtype, alignment_bytes, allocate
     if field.ndim > 0:
         field.strides = strides
         field = field[tuple(slice(0, s, None) for s in shape)]
-    return raw_buffer, field
+    return raw_buffer, field, alignment_offset
 
 
 def allocate_gpu_unmanaged(default_origin, shape, layout_map, dtype, alignment_bytes):
@@ -209,17 +209,24 @@ def allocate_gpu_unmanaged(default_origin, shape, layout_map, dtype, alignment_b
         field = field[tuple(slice(0, s, None) for s in shape)]
 
     allocation_mismatch = int((device_raw_buffer.data.ptr % alignment_bytes) / itemsize)
-    alignment_offset = (halo_offset - allocation_mismatch) % items_per_alignment
+    device_alignment_offset = (halo_offset - allocation_mismatch) % items_per_alignment
 
     device_field = as_strided(
-        device_raw_buffer[alignment_offset : alignment_offset + padded_size],
+        device_raw_buffer[device_alignment_offset : device_alignment_offset + padded_size],
         shape=padded_shape,
         strides=strides,
     )
     if device_field.ndim > 0:
         device_field = device_field[tuple(slice(0, s, None) for s in shape)]
 
-    return raw_buffer, field, device_raw_buffer, device_field
+    return (
+        raw_buffer,
+        field,
+        alignment_offset,
+        device_raw_buffer,
+        device_field,
+        device_alignment_offset,
+    )
 
 
 def allocate_cpu(default_origin, shape, layout_map, dtype, alignment_bytes):
