@@ -3,8 +3,8 @@ name: Coverage
 on:
   workflow_run:
     workflows: [Tests]
-    types:
-    - completed
+    types: [completed]
+    branches: [functional]
 
 jobs:
   download:
