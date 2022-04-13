@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, Dict, Optional, Tuple, Type
 import dace
 import numpy as np
 from dace.sdfg.utils import fuse_states, inline_sdfgs
+from dace.serialize import dumps
 
 from eve import codegen
 from eve.codegen import MakoTemplate as as_mako
@@ -108,16 +109,10 @@ class GTCDaCeExtGenerator(BackendCodegen):
 
         sdfg = _expand_and_finalize_sdfg(stencil_ir, sdfg, self.backend.storage_info["layout_map"])
 
+        # strip history from SDFG for faster save/load
         for tmp_sdfg in sdfg.all_sdfgs_recursive():
             tmp_sdfg.transformation_hist = []
             tmp_sdfg.orig_sdfg = None
-
-        sdfg.save(
-            self.backend.builder.module_path.joinpath(
-                os.path.dirname(self.backend.builder.module_path),
-                self.backend.builder.module_name + ".sdfg",
-            )
-        )
 
         sources: Dict[str, Dict[str, str]]
         implementation = DaCeComputationCodegen.apply(stencil_ir, sdfg)
@@ -129,6 +124,7 @@ class GTCDaCeExtGenerator(BackendCodegen):
         sources = {
             "computation": {"computation.hpp": implementation},
             "bindings": {"bindings.cpp": bindings},
+            "info": {self.backend.builder.module_name + ".sdfg": dumps(sdfg.to_json())},
         }
         return sources
 
