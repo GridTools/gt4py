@@ -66,6 +66,20 @@ def test_prec_parens():
     assert pp._prec_parens(a, 42, 0) == ["(This is", " block ‘a’.)"]
 
 
+def test_hinterleave():
+    blocks = [["a", "a"], ["b"], ["c"]]
+    expected = [["a", "a,"], ["b,"], ["c"]]
+    actual = list(pp._hinterleave(blocks, ","))
+    assert actual == expected
+
+
+def test_hinterleave_indented():
+    blocks = [["a", "a"], ["b"], ["c"]]
+    expected = [["  a", "  a,"], ["  b,"], ["  c"]]
+    actual = list(pp._hinterleave(blocks, ",", indent=True))
+    assert actual == expected
+
+
 def test_lambda():
     testee = ir.Lambda(params=[ir.Sym(id="x")], expr=ir.SymRef(id="x"))
     expected = "λ(x) → x"

@@ -86,6 +86,13 @@ def _prec_parens(block: list[str], prec: int, op_prec: int):
     return block
 
 
+def _hinterleave(blocks: list[list[str]], sep: str, *, indent: bool = False):
+    do_indent = _indent if indent else lambda x: x
+    for block in blocks[:-1]:
+        yield do_indent(_hmerge(block, [sep]))
+    yield do_indent(blocks[-1])
+
+
 class PrettyPrinter(NodeTranslator):
     def visit_Sym(self, node, *, prec):
         return [node.id]
@@ -116,10 +123,8 @@ class PrettyPrinter(NodeTranslator):
         if not params:
             params = _hmerge(start, bridge)
         else:
-            hparams = _hmerge(
-                start, *(_hmerge(param, [", "]) for param in params[:-1]), params[-1], bridge
-            )
-            vparams = _vmerge(start, *(_indent(_hmerge(param, [", "])) for param in params), bridge)
+            hparams = _hmerge(start, *_hinterleave(params, ", "), bridge)
+            vparams = _vmerge(start, *_hinterleave(params, ",", indent=True), bridge)
             params = _optimum(hparams, vparams)
 
         hbody = _hmerge(params, expr)
@@ -148,9 +153,7 @@ class PrettyPrinter(NodeTranslator):
                     assert len(node.args[0].args) == 1
                     expr = self.visit(node.args[0].args[0], prec=OTHER_PRECEDENCE["call"])
                     shifts = self.visit(node.args[0].fun.args, prec=0)
-                    res = _hmerge(
-                        expr, ["["], *(_hmerge(s, [", "]) for s in shifts[:-1]), shifts[-1], ["]"]
-                    )
+                    res = _hmerge(expr, ["["], *_hinterleave(shifts, ", "), ["]"])
                     return _prec_parens(res, prec, OTHER_PRECEDENCE["call"])
                 res = _hmerge([op], self.visit(node.args[0], prec=UNARY_PRECEDENCE[op]))
                 return _prec_parens(res, prec, UNARY_PRECEDENCE[op])
@@ -164,10 +167,7 @@ class PrettyPrinter(NodeTranslator):
                 return _prec_parens(res, prec, OTHER_PRECEDENCE["call"])
             if node.fun.id == "domain" and len(node.args) >= 1:
                 args = self.visit(node.args, prec=OTHER_PRECEDENCE["call"])
-                tokens = [None] * (2 * len(args) - 1)
-                tokens[::2] = args
-                tokens[1::2] = [[" × "]] * (len(args) - 1)
-                return _hmerge(["{"], *tokens, ["}"])
+                return _hmerge(["{"], *_hinterleave(args, " × "), ["}"])
             if node.fun.id == "if_" and len(node.args) == 3:
                 ifb, thenb, elseb = self.visit(node.args, prec=OTHER_PRECEDENCE["if"])
                 hblocks = _hmerge(["if "], ifb, [" then "], thenb, [" else "], elseb)
@@ -182,8 +182,8 @@ class PrettyPrinter(NodeTranslator):
         if not args:
             args = [""]
         else:
-            hargs = _hmerge(*(_hmerge(arg, [", "]) for arg in args[:-1]), args[-1])
-            vargs = _vmerge(*(_hmerge(arg, [","]) for arg in args[:-1]), args[-1])
+            hargs = _hmerge(*_hinterleave(args, ", "))
+            vargs = _vmerge(*_hinterleave(args, ","))
             args = _optimum(hargs, vargs)
 
         if node.fun == ir.SymRef(id="make_tuple"):
@@ -202,15 +202,10 @@ class PrettyPrinter(NodeTranslator):
 
         start, bridge = [node.id + " = λ("], [") → "]
         if not params:
-            params = start
+            params = _hmerge(start, bridge)
         else:
-            hparams = _hmerge(
-                start,
-                *(_hmerge(param, [", "]) for param in params[:-1]),
-                params[-1],
-                bridge,
-            )
-            vparams = _vmerge(start, *(_indent(_hmerge(param, [", "])) for param in params), bridge)
+            hparams = _hmerge(start, *_hinterleave(params, ", "), bridge)
+            vparams = _vmerge(start, *_hinterleave(params, ",", indent=True), bridge)
             params = _optimum(hparams, vparams)
 
         hbody = _hmerge(params, expr)
@@ -224,8 +219,8 @@ class PrettyPrinter(NodeTranslator):
         output = self.visit(node.output, prec=0)
         inputs = self.visit(node.inputs, prec=0)
 
-        hinputs = _hmerge(["("], *(_hmerge(inp, [", "]) for inp in inputs[:-1]), inputs[-1], [")"])
-        vinputs = _vmerge(["("], *(_indent(_hmerge(inp, [", "])) for inp in inputs), [")"])
+        hinputs = _hmerge(["("], *_hinterleave(inputs, ", "), [")"])
+        vinputs = _vmerge(["("], *_hinterleave(inputs, ",", indent=True), [")"])
         inputs = _optimum(hinputs, vinputs)
 
         head = _hmerge(output, [" ← "])
@@ -241,12 +236,8 @@ class PrettyPrinter(NodeTranslator):
         closures = self.visit(node.closures, prec=0)
         params = self.visit(node.params, prec=0)
 
-        hparams = _hmerge(
-            [node.id + "("], *(_hmerge(param, [", "]) for param in params[:-1]), params[-1], [") {"]
-        )
-        vparams = _vmerge(
-            [node.id + "("], *(_indent(_hmerge(param, [", "])) for param in params), [") {"]
-        )
+        hparams = _hmerge([node.id + "("], *_hinterleave(params, ", "), [") {"])
+        vparams = _vmerge([node.id + "("], *_hinterleave(params, ",", indent=True), [") {"])
         params = _optimum(hparams, vparams)
 
         function_definitions = _vmerge(*function_definitions)
