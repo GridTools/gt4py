@@ -80,8 +80,11 @@ SOFT_MAX_LINE_LENGTH = 100
 def _cost(block: list[str]):
     max_line_length = max(len(line) for line in block)
     return (
+        # preferring blocks of fewer lines:
         len(block)
+        # strongly preferring blocks with lines not longer than SOFT_MAX_LINE_LENGTH:
         + max(max_line_length - SOFT_MAX_LINE_LENGTH, 0) * 100
+        # preferring blocks with lines of uniform length:
         + sum(max_line_length - len(line) for line in block)
     )
 
