@@ -18,24 +18,22 @@ jobs:
         os: ["ubuntu-latest", "windows-latest", "macos-latest"]
 
     runs-on: ${{ matrix.os }}
-    env:
-      COVERAGE_FILE_NAME: coverage_${{ matrix.os }}_${{ matrix.python-version }}_${{ matrix.tox-env-factors }}
     steps:
     - uses: actions/checkout@v2
 
-    - name: Set up Python ${{ matrix.python-version }}
+    - name: "Set up Python ${{ matrix.python-version }}"
       uses: actions/setup-python@v2
       with:
         python-version: ${{ matrix.python-version }}
 
-    - name: Install python dependencies
+    - name: "Install python dependencies"
       shell: bash
       run: |
         python -m pip install --upgrade pip setuptools wheel
 
-    - name: Test using tox
+    - name: "Run tests"
       shell: bash
-      run: |
+      run: |-
         pyversion_no_dot="${{ matrix.python-version }}"
         pyversion_no_dot="${pyversion_no_dot/./}"
         tox_env_factor="${{ matrix.tox-env-factors }}"
