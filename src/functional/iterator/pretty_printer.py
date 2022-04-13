@@ -2,6 +2,9 @@
 
 Inspired by P. Yelland, “A New Approach to Optimal Code Formatting”, 2015
 """
+from __future__ import annotations
+
+from collections.abc import Iterable, Sequence
 
 from eve import NodeTranslator
 from functional.iterator import ir
@@ -55,8 +58,8 @@ OTHER_PRECEDENCE = {
 }
 
 
-def _hmerge(*blocks: list[str]):
-    def impl(a, b):
+def _hmerge(*blocks: list[str]) -> list[str]:
+    def impl(a: list[str], b: list[str]) -> list[str]:
         spaces = len(a[-1]) * " "
         return a[:-1] + [a[-1] + b[0]] + [spaces + line for line in b[1:]]
 
@@ -66,18 +69,18 @@ def _hmerge(*blocks: list[str]):
     return res
 
 
-def _vmerge(*blocks: list[str]):
+def _vmerge(*blocks: list[str]) -> list[str]:
     return sum(blocks, [])
 
 
-def _indent(block: list[str]):
+def _indent(block: list[str]) -> list[str]:
     return ["  " + line for line in block]
 
 
 SOFT_MAX_LINE_LENGTH = 100
 
 
-def _cost(block: list[str]):
+def _cost(block: list[str]) -> int:
     max_line_length = max(len(line) for line in block)
     return (
         # preferring blocks of fewer lines:
@@ -89,17 +92,19 @@ def _cost(block: list[str]):
     )
 
 
-def _optimum(a: list[str], b: list[str]):
+def _optimum(a: list[str], b: list[str]) -> list[str]:
     return a if _cost(a) < _cost(b) else b
 
 
-def _prec_parens(block: list[str], prec: int, op_prec: int):
+def _prec_parens(block: list[str], prec: int, op_prec: int) -> list[str]:
     if prec > op_prec:
         return _hmerge(["("], block, [")"])
     return block
 
 
-def _hinterleave(blocks: list[list[str]], sep: str, *, indent: bool = False):
+def _hinterleave(
+    blocks: Sequence[list[str]], sep: str, *, indent: bool = False
+) -> Iterable[list[str]]:
     do_indent = _indent if indent else lambda x: x
     for block in blocks[:-1]:
         yield do_indent(_hmerge(block, [sep]))
@@ -107,28 +112,28 @@ def _hinterleave(blocks: list[list[str]], sep: str, *, indent: bool = False):
 
 
 class PrettyPrinter(NodeTranslator):
-    def visit_Sym(self, node, *, prec):
+    def visit_Sym(self, node: ir.Sym, *, prec: int) -> list[str]:
         return [node.id]
 
-    def visit_BoolLiteral(self, node, *, prec):
+    def visit_BoolLiteral(self, node: ir.BoolLiteral, *, prec: int) -> list[str]:
         return [str(node.value)]
 
-    def visit_IntLiteral(self, node, *, prec):
+    def visit_IntLiteral(self, node: ir.IntLiteral, *, prec: int) -> list[str]:
         return [str(node.value)]
 
-    def visit_FloatLiteral(self, node, *, prec):
+    def visit_FloatLiteral(self, node: ir.FloatLiteral, *, prec: int) -> list[str]:
         return [str(node.value)]
 
-    def visit_OffsetLiteral(self, node, *, prec):
+    def visit_OffsetLiteral(self, node: ir.OffsetLiteral, *, prec: int) -> list[str]:
         return [str(node.value)]
 
-    def visit_AxisLiteral(self, node, *, prec):
+    def visit_AxisLiteral(self, node: ir.AxisLiteral, *, prec: int) -> list[str]:
         return [str(node.value)]
 
-    def visit_SymRef(self, node, *, prec):
+    def visit_SymRef(self, node: ir.SymRef, *, prec: int) -> list[str]:
         return [node.id]
 
-    def visit_Lambda(self, node, *, prec):
+    def visit_Lambda(self, node: ir.Lambda, *, prec: int) -> list[str]:
         params = self.visit(node.params, prec=0)
         expr = self.visit(node.expr, prec=0)
 
@@ -144,7 +149,7 @@ class PrettyPrinter(NodeTranslator):
         vbody = _vmerge(params, _indent(expr))
         return _prec_parens(_optimum(hbody, vbody), prec, OTHER_PRECEDENCE["lambda"])
 
-    def visit_FunCall(self, node, *, prec):
+    def visit_FunCall(self, node: ir.FunCall, *, prec: int) -> list[str]:
         if isinstance(node.fun, ir.SymRef):
             if node.fun.id in BINARY_OPS and len(node.args) == 2:
                 # replacing binary ops plus(x, y) → x + y etc.
@@ -215,7 +220,7 @@ class PrettyPrinter(NodeTranslator):
         vfun = _vmerge(_hmerge(fun, ["("]), _indent(args), [")"])
         return _prec_parens(_optimum(hfun, vfun), prec, OTHER_PRECEDENCE["call"])
 
-    def visit_FunctionDefinition(self, node, prec):
+    def visit_FunctionDefinition(self, node: ir.FunctionDefinition, prec: int) -> list[str]:
         assert prec == 0
         params = self.visit(node.params, prec=0)
         expr = self.visit(node.expr, prec=0)
@@ -232,7 +237,7 @@ class PrettyPrinter(NodeTranslator):
         vbody = _vmerge(params, _indent(expr))
         return _optimum(hbody, vbody)
 
-    def visit_StencilClosure(self, node, *, prec):
+    def visit_StencilClosure(self, node: ir.StencilClosure, *, prec: int) -> list[str]:
         assert prec == 0
         domain = self.visit(node.domain, prec=0)
         stencil = self.visit(node.stencil, prec=0)
@@ -250,7 +255,7 @@ class PrettyPrinter(NodeTranslator):
         v = _vmerge(_hmerge(head, ["("]), _indent(_indent(stencil)), _indent(_hmerge([")"], foot)))
         return _optimum(h, v)
 
-    def visit_FencilDefinition(self, node, *, prec):
+    def visit_FencilDefinition(self, node: ir.FencilDefinition, *, prec: int) -> list[str]:
         assert prec == 0
         function_definitions = self.visit(node.function_definitions, prec=0)
         closures = self.visit(node.closures, prec=0)
@@ -266,12 +271,12 @@ class PrettyPrinter(NodeTranslator):
         return _vmerge(params, _indent(function_definitions), _indent(closures), ["}"])
 
     @classmethod
-    def apply(cls, node):
+    def apply(cls, node: ir.Node) -> str:
         return "\n".join(cls().visit(node, prec=0))
 
 
 pretty_str = PrettyPrinter.apply
 
 
-def pretty_print(x):
+def pretty_print(x: ir.Node) -> None:
     print(pretty_str(x))
