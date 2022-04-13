@@ -12,6 +12,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+from builtins import bool, float, int
 from dataclasses import dataclass
 from typing import Optional
 
@@ -22,7 +23,7 @@ from functional.ffront import common_types as ct
 from functional.iterator import runtime
 
 
-__all__ = ["Field", "float32", "float64", "int32", "int64", "neighbor_sum"]
+__all__ = ["Field", "float", "float32", "float64", "int", "int32", "int64", "bool", "neighbor_sum"]
 
 
 TYPE_BUILTINS = [Field, float, float32, float64, int, int32, int64, bool, tuple]

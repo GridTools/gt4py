@@ -11,9 +11,11 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
+from builtins import bool, float, int
+
 from functional.common import Field
 from functional.ffront import itir_makers as im
-from functional.ffront.fbuiltins import FieldOffset, float64, int32, int64, neighbor_sum
+from functional.ffront.fbuiltins import FieldOffset, float32, float64, int32, int64, neighbor_sum
 from functional.ffront.foast_to_itir import FieldOperatorLowering
 from functional.ffront.func_to_foast import FieldOperatorParser
 from functional.iterator.runtime import CartesianAxis
@@ -495,6 +497,81 @@ def test_reduction_lowering_expr():
                     0,
                 )
             )("e1_nbh__0", "e2")
+        )
+    )
+
+    assert lowered.expr == reference
+
+
+def test_builtin_int_constructors():
+    def int_constrs():
+        return 1, int(1), int32(1), int64(1), int("1"), int32("1"), int64("1")
+
+    parsed = FieldOperatorParser.apply_to_function(int_constrs)
+    lowered = FieldOperatorLowering.apply(parsed)
+
+    reference = im.deref_(
+        im.make_tuple_(
+            im.literal_("1", "int64"),
+            im.literal_("1", "int"),
+            im.literal_("1", "int32"),
+            im.literal_("1", "int64"),
+            im.literal_("1", "int"),
+            im.literal_("1", "int32"),
+            im.literal_("1", "int64"),
+        )
+    )
+
+    assert lowered.expr == reference
+
+
+def test_builtin_float_constructors():
+    def float_constrs():
+        return (
+            0.1,
+            float(0.1),
+            float32(0.1),
+            float64(0.1),
+            float(".1"),
+            float32(".1"),
+            float64(".1"),
+        )
+
+    parsed = FieldOperatorParser.apply_to_function(float_constrs)
+    lowered = FieldOperatorLowering.apply(parsed)
+
+    reference = im.deref_(
+        im.make_tuple_(
+            im.literal_("0.1", "float64"),
+            im.literal_("0.1", "float"),
+            im.literal_("0.1", "float32"),
+            im.literal_("0.1", "float64"),
+            im.literal_(".1", "float"),
+            im.literal_(".1", "float32"),
+            im.literal_(".1", "float64"),
+        )
+    )
+
+    assert lowered.expr == reference
+
+
+def test_builtin_bool_constructors():
+    def bool_constrs():
+        return True, False, bool(True), bool(False), bool(0), bool(5), bool("True"), bool("False")
+
+    parsed = FieldOperatorParser.apply_to_function(bool_constrs)
+    lowered = FieldOperatorLowering.apply(parsed)
+
+    reference = im.deref_(
+        im.make_tuple_(
+            im.literal_(str(True), "bool"),
+            im.literal_(str(False), "bool"),
+            im.literal_(str(True), "bool"),
+            im.literal_(str(False), "bool"),
+            im.literal_(str(bool(0)), "bool"),
+            im.literal_(str(bool(5)), "bool"),
+            im.literal_(str(bool("True")), "bool"),
+            im.literal_(str(bool("False")), "bool"),
         )
     )
 
