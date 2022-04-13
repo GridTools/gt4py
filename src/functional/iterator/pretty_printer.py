@@ -180,9 +180,9 @@ class PrettyPrinter(NodeTranslator):
                 res = _hmerge(dim, [": ["], start, [", "], end, [")"])
                 return _prec_parens(res, prec, OTHER_PRECEDENCE["call"])
             if node.fun.id == "domain" and len(node.args) >= 1:
-                # domain(x, y) → {x × y}
+                # domain(x, y, ...) → { x × y × ... }
                 args = self.visit(node.args, prec=OTHER_PRECEDENCE["call"])
-                return _hmerge(["{"], *_hinterleave(args, " × "), ["}"])
+                return _hmerge(["{ "], *_hinterleave(args, " × "), [" }"])
             if node.fun.id == "if_" and len(node.args) == 3:
                 # if_(x, y, z) → if x then y else z
                 ifb, thenb, elseb = self.visit(node.args, prec=OTHER_PRECEDENCE["if"])
