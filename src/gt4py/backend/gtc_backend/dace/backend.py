@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, Dict, Optional, Tuple, Type
 import dace
 import numpy as np
 from dace.sdfg.utils import fuse_states, inline_sdfgs
+from dace.serialize import dumps
 
 from eve import codegen
 from eve.codegen import MakoTemplate as as_mako
@@ -106,6 +107,8 @@ class GTCDaCeExtGenerator(BackendCodegen):
         oir_node = oir_pipeline.run(base_oir)
         sdfg = OirSDFGBuilder().visit(oir_node)
 
+        unexpanded_sdfg_json = dumps(sdfg.to_json())
+
         sdfg = _expand_and_finalize_sdfg(stencil_ir, sdfg, self.backend.storage_info["layout_map"])
 
         for tmp_sdfg in sdfg.all_sdfgs_recursive():
@@ -129,6 +132,7 @@ class GTCDaCeExtGenerator(BackendCodegen):
         sources = {
             "computation": {"computation.hpp": implementation},
             "bindings": {"bindings.cpp": bindings},
+            "info": {self.backend.builder.module_name + ".sdfg": unexpanded_sdfg_json},
         }
         return sources
 
