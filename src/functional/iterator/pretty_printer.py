@@ -289,9 +289,9 @@ class PrettyPrinter(NodeTranslator):
         return "\n".join(cls(indent=indent, width=width).visit(node, prec=0))
 
 
-def pretty_str(x: ir.Node, indent: int = DEFAULT_INDENT, width: int = DEFAULT_WIDTH) -> str:
+def pformat(x: ir.Node, indent: int = DEFAULT_INDENT, width: int = DEFAULT_WIDTH) -> str:
     return PrettyPrinter.apply(x, indent, width)
 
 
-def pretty_print(x: ir.Node) -> None:
-    print(pretty_str(x))
+def pprint(x: ir.Node) -> None:
+    print(pformat(x))

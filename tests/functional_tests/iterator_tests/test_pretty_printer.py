@@ -1,5 +1,5 @@
 from functional.iterator import ir
-from functional.iterator.pretty_printer import PrettyPrinter, pretty_str
+from functional.iterator.pretty_printer import PrettyPrinter, pformat
 
 
 def test_hmerge():
@@ -83,7 +83,7 @@ def test_hinterleave_indented():
 def test_lambda():
     testee = ir.Lambda(params=[ir.Sym(id="x")], expr=ir.SymRef(id="x"))
     expected = "λ(x) → x"
-    actual = pretty_str(testee)
+    actual = pformat(testee)
     assert actual == expected
 
 
@@ -105,28 +105,28 @@ def test_arithmetic():
         ],
     )
     expected = "(1 + 2) * 3 / 4"
-    actual = pretty_str(testee)
+    actual = pformat(testee)
     assert actual == expected
 
 
 def test_deref():
     testee = ir.FunCall(fun=ir.SymRef(id="deref"), args=[ir.SymRef(id="x")])
     expected = "*x"
-    actual = pretty_str(testee)
+    actual = pformat(testee)
     assert actual == expected
 
 
 def test_lift():
     testee = ir.FunCall(fun=ir.SymRef(id="lift"), args=[ir.SymRef(id="x")])
     expected = "↑x"
-    actual = pretty_str(testee)
+    actual = pformat(testee)
     assert actual == expected
 
 
 def test_not():
     testee = ir.FunCall(fun=ir.SymRef(id="not_"), args=[ir.SymRef(id="x")])
     expected = "not x"
-    actual = pretty_str(testee)
+    actual = pformat(testee)
     assert actual == expected
 
 
@@ -144,7 +144,7 @@ def test_shifted_deref():
         ],
     )
     expected = "x[I, 1]"
-    actual = pretty_str(testee)
+    actual = pformat(testee)
     assert actual == expected
 
 
@@ -153,14 +153,14 @@ def test_tuple_get():
         fun=ir.SymRef(id="tuple_get"), args=[ir.IntLiteral(value=42), ir.SymRef(id="x")]
     )
     expected = "x[42]"
-    actual = pretty_str(testee)
+    actual = pformat(testee)
     assert actual == expected
 
 
 def test_make_tuple():
     testee = ir.FunCall(fun=ir.SymRef(id="make_tuple"), args=[ir.SymRef(id="x"), ir.SymRef(id="y")])
     expected = "{x, y}"
-    actual = pretty_str(testee)
+    actual = pformat(testee)
     assert actual == expected
 
 
@@ -170,7 +170,7 @@ def test_named_range():
         args=[ir.AxisLiteral(value="IDim"), ir.SymRef(id="x"), ir.SymRef(id="y")],
     )
     expected = "IDim: [x, y)"
-    actual = pretty_str(testee)
+    actual = pformat(testee)
     assert actual == expected
 
 
@@ -180,7 +180,7 @@ def test_domain():
         args=[ir.SymRef(id="x"), ir.SymRef(id="y")],
     )
     expected = "{ x × y }"
-    actual = pretty_str(testee)
+    actual = pformat(testee)
     assert actual == expected
 
 
@@ -190,7 +190,7 @@ def test_if_short():
         args=[ir.SymRef(id="x"), ir.SymRef(id="y"), ir.SymRef(id="z")],
     )
     expected = "if x then y else z"
-    actual = pretty_str(testee)
+    actual = pformat(testee)
     assert actual == expected
 
 
@@ -206,7 +206,7 @@ def test_if_long():
         ],
     )
     expected = "if   very_loooooooooooooooooooong_condition_to_force_a_line_break_and_test_alignment_of_branches\nthen y\nelse z"
-    actual = pretty_str(testee)
+    actual = pformat(testee)
     assert actual == expected
 
 
@@ -216,7 +216,7 @@ def test_fun_call():
         args=[ir.SymRef(id="x")],
     )
     expected = "f(x)"
-    actual = pretty_str(testee)
+    actual = pformat(testee)
     assert actual == expected
 
 
@@ -226,14 +226,14 @@ def test_lambda_call():
         args=[ir.SymRef(id="x")],
     )
     expected = "(λ(x) → x)(x)"
-    actual = pretty_str(testee)
+    actual = pformat(testee)
     assert actual == expected
 
 
 def test_function_definition():
     testee = ir.FunctionDefinition(id="f", params=[ir.Sym(id="x")], expr=ir.SymRef(id="x"))
     expected = "f = λ(x) → x"
-    actual = pretty_str(testee)
+    actual = pformat(testee)
     assert actual == expected
 
 
@@ -245,7 +245,7 @@ def test_stencil_closure():
         inputs=[ir.SymRef(id="x")],
     )
     expected = "y ← (deref)(x) @ d"
-    actual = pretty_str(testee)
+    actual = pformat(testee)
     assert actual == expected
 
 
@@ -265,6 +265,6 @@ def test_fencil_definition():
             )
         ],
     )
-    actual = pretty_str(testee)
+    actual = pformat(testee)
     expected = "f(d, x, y) {\n  g = λ(x) → x\n  y ← (deref)(x) @ d\n}"
     assert actual == expected
