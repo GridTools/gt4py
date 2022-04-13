@@ -1,42 +1,44 @@
 name: Coverage
 
 on:
-  workflow_run:
-    workflows: [Tests]
-    types: [requested]
+  push:
+    branches:
+    - functional
+  pull_request:
+    branches:
+    - functional
 
 jobs:
-  download:
+  coverage:
     runs-on: ubuntu-latest
+    env:
+      PY_VERSION: "3.10"
+      TOX_ENV_FACTORS: "base"
     steps:
-    - name: 'Download coverage XML'
-      uses: actions/github-script@v6
-      with:
-        script: |
-          let allArtifacts = await github.rest.actions.listWorkflowRunArtifacts({
-             owner: context.repo.owner,
-             repo: context.repo.repo,
-             run_id: context.payload.workflow_run.id,
-          });
-          let matchArtifact = allArtifacts.data.artifacts.filter((artifact) => {
-            return artifact.name.startsWith("coverage_")
-          })[0];
-          let download = await github.rest.actions.downloadArtifact({
-             owner: context.repo.owner,
-             repo: context.repo.repo,
-             artifact_id: matchArtifact.id,
-             archive_format: 'zip',
-          });
-          let fs = require('fs');
-          fs.writeFileSync(`${process.env.GITHUB_WORKSPACE}/' + 'artifact.name.zip`, Buffer.from(download.data));
+    - uses: actions/checkout@v2
 
-    - name: 'Unzip coverage XML'
-      run: unzip coverage_*.zip
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v2
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Install python dependencies
+      shell: bash
+      run: |
+        python -m pip install --upgrade pip setuptools wheel
+
+    - name: Test using tox
+      shell: bash
+      run: |
+        pyversion_no_dot="${{ env.PY_VERSION }}"
+        pyversion_no_dot="${pyversion_no_dot/./}"
+        tox_env_factor="${{ env.TOX_ENV_FACTORS }}"
+        pip install tox clang-format
+        tox -r -e py${pyversion_no_dot}-${tox_env_factor}
 
     - name: 'Upload to codecov.io'
       uses: codecov/codecov-action@v2
       with:
-        token: ${{ secrets.CODECOV_TOKEN }}
-        files: coverage_*.xml
+        files: coverage.xml
         name: gt4py-functional
         fail_ci_if_error: false

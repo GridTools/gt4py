@@ -41,10 +41,3 @@ jobs:
         tox_env_factor="${{ matrix.tox-env-factors }}"
         pip install tox clang-format
         tox -r -e py${pyversion_no_dot}-${tox_env_factor}
-        mv coverage.xml "${COVERAGE_FILE_NAME}.xml"
-
-    - name: Archive code coverage results
-      uses: actions/upload-artifact@v2
-      with:
-        name: ${{ env.COVERAGE_FILE_NAME }}
-        path: ${{ env.COVERAGE_FILE_NAME }}.xml
