@@ -1,5 +1,4 @@
 import textwrap
-from typing import Any
 
 import lark
 
@@ -27,17 +26,6 @@ class ToLisp(TemplatedGenerator):
     FencilDefinition = as_fmt(
         "(gt-fencil {id} ({' '.join(function_definitions)}) ({' '.join(params)}) {''.join(closures)})"
     )
-
-    @classmethod
-    def apply(cls, root, **kwargs: Any) -> str:
-        generated_code = super().apply(root, **kwargs)
-        try:
-            from yasi import indent_code
-
-            indented = indent_code(generated_code, "--dialect lisp")
-            return "".join(indented["indented_code"])
-        except ImportError:
-            return generated_code
 
 
 ir_to_lisp = ToLisp.apply
