@@ -8,57 +8,24 @@ from functional.iterator.runtime import *
 
 @fundef
 def tridiag_forward(state, a, b, c, d):
-    # not tracable
-    # if is_none(state):
-    #     cp_k = deref(c) / deref(b)
-    #     dp_k = deref(d) / deref(b)
-    # else:
-    #     cp_km1, dp_km1 = state
-    #     cp_k = deref(c) / (deref(b) - deref(a) * cp_km1)
-    #     dp_k = (deref(d) - deref(a) * dp_km1) / (deref(b) - deref(a) * cp_km1)
-    # return make_tuple(cp_k, dp_k)
-
-    # variant a
-    # return if_(
-    #     is_none(state),
-    #     make_tuple(deref(c) / deref(b), deref(d) / deref(b)),
-    #     make_tuple(
-    #         deref(c) / (deref(b) - deref(a) * tuple_get(0, state)),
-    #         (deref(d) - deref(a) * tuple_get(1, state))
-    #         / (deref(b) - deref(a) * tuple_get(0, state)),
-    #     ),
-    # )
-
-    # variant b
-    def initial():
-        return make_tuple(deref(c) / deref(b), deref(d) / deref(b))
-
-    def step():
-        return make_tuple(
-            deref(c) / (deref(b) - deref(a) * tuple_get(0, state)),
-            (deref(d) - deref(a) * tuple_get(1, state))
-            / (deref(b) - deref(a) * tuple_get(0, state)),
-        )
-
-    return if_(is_none(state), initial, step)()
+    return make_tuple(
+        deref(c) / (deref(b) - deref(a) * tuple_get(0, state)),
+        (deref(d) - deref(a) * tuple_get(1, state)) / (deref(b) - deref(a) * tuple_get(0, state)),
+    )
 
 
 @fundef
-def tridiag_backward(x_kp1, cp, dp):
-    # if is_none(x_kp1):
-    #     x_k = deref(dp)
-    # else:
-    #     x_k = deref(dp) - deref(cp) * x_kp1
-    # return x_k
-    return if_(is_none(x_kp1), deref(dp), deref(dp) - deref(cp) * x_kp1)
+def tridiag_backward(x_kp1, cpdp):
+    cpdpv = deref(cpdp)
+    cp = tuple_get(0, cpdpv)
+    dp = tuple_get(1, cpdpv)
+    return dp - cp * x_kp1
 
 
 @fundef
 def solve_tridiag(a, b, c, d):
-    tup = lift(scan(tridiag_forward, True, None))(a, b, c, d)
-    cp = tuple_get(0, tup)
-    dp = tuple_get(1, tup)
-    return scan(tridiag_backward, False, None)(cp, dp)
+    cpdp = lift(scan(tridiag_forward, True, make_tuple(0.0, 0.0)))(a, b, c, d)
+    return scan(tridiag_backward, False, 0.0)(cpdp)
 
 
 @pytest.fixture

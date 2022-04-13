@@ -23,9 +23,10 @@ class ToLisp(TemplatedGenerator):
     Lambda = as_fmt("(gt-lambda ({' '.join(params)}) {expr})")
     FunCall = as_fmt("({fun} {' '.join(args)})")
     FunctionDefinition = as_fmt("(gt-function {id} ({' '.join(params)}) {expr})")
-    Program = as_fmt("(gt-program ({''.join(function_definitions)}) {''.join(fencil_definitions)})")
     StencilClosure = as_fmt("(gt-stencil-closure {domain} {stencil} {output} {' '.join(inputs)})")
-    FencilDefinition = as_fmt("(gt-fencil {id} ({' '.join(params)}) {''.join(closures)})")
+    FencilDefinition = as_fmt(
+        "(gt-fencil {id} ({' '.join(function_definitions)}) ({' '.join(params)}) {''.join(closures)})"
+    )
 
     @classmethod
     def apply(cls, root, **kwargs: Any) -> str:
@@ -86,11 +87,6 @@ class ToIrTransformer(lark.Transformer):
                     params=[ir.Sym(id=p.id) for p in elements[2]],
                     expr=to_funcall(elements[3]),
                 )
-            if elements[0].id == "gt-program":
-                return ir.Program(
-                    function_definitions=elements[1],
-                    fencil_definitions=elements[2:],
-                )
             if elements[0].id == "gt-stencil-closure":
                 return ir.StencilClosure(
                     domain=to_funcall(elements[1]),
@@ -101,8 +97,9 @@ class ToIrTransformer(lark.Transformer):
             if elements[0].id == "gt-fencil":
                 return ir.FencilDefinition(
                     id=elements[1].id,
-                    params=[ir.Sym(id=p.id) for p in elements[2]],
-                    closures=list(elements[3:]),
+                    function_definitions=elements[2],
+                    params=[ir.Sym(id=p.id) for p in elements[3]],
+                    closures=list(elements[4:]),
                 )
         return elements
 
@@ -139,7 +136,7 @@ def lisp_to_ir_using_lisp(lisp_str):
     scm_script = pathlib.Path(__file__).parent.absolute() / "lisp_to_ir.scm"
     python_code = subprocess.run(
         ["scheme", "--quiet", "--load", scm_script],
-        input=lisp_str,
+        input="#!no-fold-case\n" + lisp_str,
         capture_output=True,
         check=True,
         encoding="ascii",

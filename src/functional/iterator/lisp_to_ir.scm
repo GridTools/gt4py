@@ -1,3 +1,5 @@
+#!no-fold-case
+
 (define builtins
   '(domain
     named_range
@@ -32,7 +34,6 @@
 (define (tagged-list? x) (and (list? x) (symbol? (car x))))
 (define (tagged-with? sym x) (and (tagged-list? x) (equal? sym (car x))))
 
-(define (gt-program? x) (tagged-with? 'gt-program x))
 (define (gt-fencil? x) (tagged-with? 'gt-fencil x))
 (define (gt-function? x) (tagged-with? 'gt-function x))
 (define (gt-stencil-closure? x) (tagged-with? 'gt-stencil-closure x))
@@ -42,17 +43,12 @@
 (define (gt-none? x) (equal? 'gt-none x))
 (define (gt-builtin? x) (member x builtins))
 
-(define (gt-program->py expr)
-  (string-append
-    "ir.Program(function_definitions=" (as-list gt->py (cadr expr))
-    ", fencil_definitions=" (as-list gt-fencil->py (cddr expr))
-    ")\n"))
-
 (define (gt-fencil->py expr)
   (string-append
     "ir.FencilDefinition(id=" (sym->pystr (cadr expr))
-    ", params=" (as-list sym->py (caddr expr))
-    ", closures=" (as-list gt-stencil-closure->py (cdddr expr))
+    ", function_definitions=" (as-list gt->py (caddr expr))
+    ", params=" (as-list sym->py (cadddr expr))
+    ", closures=" (as-list gt-stencil-closure->py (cddddr expr))
     ")"))
 
 (define (gt-function->py expr)
@@ -130,7 +126,6 @@
         ((real? expr) (real->py expr))
         ((gt-none? expr) (gt-none->py expr))
         ((symbol? expr) (symref->py expr))
-        ((gt-program? expr) (gt-program->py expr))
         ((gt-fencil? expr) (gt-fencil->py expr))
         ((gt-function? expr) (gt-function->py expr))
         ((gt-stencil-closure? expr) (gt-stencil-closure->py expr))

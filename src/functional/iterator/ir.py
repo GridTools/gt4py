@@ -37,6 +37,9 @@ class NoneLiteral(Expr):
 class OffsetLiteral(Expr):
     value: Union[int, str]
 
+    def __hash__(self):
+        return self.value.__hash__()
+
 
 class AxisLiteral(Expr):
     value: str
@@ -75,17 +78,10 @@ class StencilClosure(Node):
     inputs: List[SymRef]
 
 
-class FencilDefinition(Node, SymbolTableTrait):
-    id: SymbolName  # noqa: A003
-    params: List[Sym]
-    closures: List[StencilClosure]
-
-
-BUILTIN_FUNCTIONS = [
+BUILTINS = {
     "domain",
     "named_range",
     "lift",
-    "is_none",
     "make_tuple",
     "tuple_get",
     "reduce",
@@ -103,12 +99,15 @@ BUILTIN_FUNCTIONS = [
     "not_",
     "and_",
     "or_",
-]
+}
 
 
-class Program(Node, SymbolTableTrait):
+class FencilDefinition(Node, SymbolTableTrait):
+    id: SymbolName  # noqa: A003
     function_definitions: List[FunctionDefinition]
-    fencil_definitions: List[FencilDefinition]
+    params: List[Sym]
+    closures: List[StencilClosure]
 
-    builtin_functions = [Sym(id=name) for name in BUILTIN_FUNCTIONS]
+    builtin_functions = [Sym(id=name) for name in BUILTINS]
+
     _validate_symbol_refs = validate_symbol_refs()

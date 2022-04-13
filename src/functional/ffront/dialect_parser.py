@@ -17,14 +17,15 @@ import ast
 import textwrap
 import types
 from dataclasses import dataclass
-from typing import Any, ClassVar, Generic, Optional, Type, TypeVar, cast
+from typing import Any, ClassVar, Generic, Optional, Type, TypeVar
 
 from eve.type_definitions import SourceLocation
 from functional import common
-from functional.ffront.source_utils import ClosureRefs, SourceDefinition, SymbolNames
+from functional.ffront.ast_passes.fix_missing_locations import FixMissingLocations
+from functional.ffront.source_utils import CapturedVars, SourceDefinition, SymbolNames
 
 
-def _assert_source_invariants(source_definition: SourceDefinition, closure_refs: ClosureRefs):
+def _assert_source_invariants(source_definition: SourceDefinition, captured_vars: CapturedVars):
     """
     Validate information contained in the source agrees with our expectations.
 
@@ -33,18 +34,18 @@ def _assert_source_invariants(source_definition: SourceDefinition, closure_refs:
     """
     source, filename, starting_line = source_definition
     _, _, imported_names, nonlocal_names, global_names = SymbolNames.from_source(source, filename)
-    if missing_defs := (closure_refs.unbound - imported_names):
+    if missing_defs := (captured_vars.unbound - imported_names):
         raise AssertionError(f"Missing symbol definitions: {missing_defs}")
 
     # 'SymbolNames.from_source()' uses the symtable module to analyze the isolated source
     # code of the function, and thus all non-local symbols are classified as 'global'.
-    # However, 'closure_refs' comes from inspecting the live function object, which might
+    # However, 'captured_vars' comes from inspecting the live function object, which might
     # have not been defined at a global scope, and therefore actual symbol values could appear
-    # in both 'closure_refs.globals' and 'self.closure_refs.nonlocals'.
-    if not set(closure_refs.globals) | set(closure_refs.nonlocals.keys()) == (
+    # in both 'captured_vars.globals' and 'self.captured_vars.nonlocals'.
+    if not set(captured_vars.globals) | set(captured_vars.nonlocals.keys()) == (
         global_names | nonlocal_names
     ):
-        raise AssertionError("ClosureRefs do not agree with information from symtable module.")
+        raise AssertionError("CapturedVars do not agree with information from symtable module.")
 
 
 DialectRootT = TypeVar("DialectRootT")
@@ -52,10 +53,8 @@ DialectRootT = TypeVar("DialectRootT")
 
 @dataclass(frozen=True, kw_only=True)
 class DialectParser(ast.NodeVisitor, Generic[DialectRootT]):
-    source: str
-    filename: str
-    starting_line: int
-    closure_refs: ClosureRefs
+    source_definition: SourceDefinition
+    captured_vars: CapturedVars
     externals_defs: dict[str, Any]
 
     syntax_error_cls: ClassVar[Type[DialectSyntaxError]]
@@ -64,33 +63,34 @@ class DialectParser(ast.NodeVisitor, Generic[DialectRootT]):
     def apply(
         cls,
         source_definition: SourceDefinition,
-        closure_refs: ClosureRefs,
+        captured_vars: CapturedVars,
         externals: Optional[dict[str, Any]] = None,
     ) -> DialectRootT:
+
         source, filename, starting_line = source_definition
         try:
+            raw_ast = ast.parse(textwrap.dedent(source)).body[0]
             definition_ast = cls._preprocess_definition_ast(
-                ast.parse(textwrap.dedent(source)).body[0]
+                ast.increment_lineno(FixMissingLocations.apply(raw_ast), starting_line - 1)
             )
             output_ast = cls._postprocess_dialect_ast(
                 cls(
-                    source=source,
-                    filename=filename,
-                    starting_line=starting_line,
-                    closure_refs=closure_refs,
+                    source_definition=source_definition,
+                    captured_vars=captured_vars,
                     externals_defs=externals or {},
                 ).visit(definition_ast)
             )
             if __debug__:
-                _assert_source_invariants(source_definition, closure_refs)
+                _assert_source_invariants(source_definition, captured_vars)
         except SyntaxError as err:
-            # TODO(tehrengruber): Instead of enhancing the exception here and
-            #  having source information in the instance we could preprocess
-            #  the ast and offset the line numbers there.
+            # The ast nodes do not contain information about the path of the
+            #  source file or its contents. We add this information here so
+            #  that raising an error using :func:`DialectSyntaxError.from_AST`
+            #  does not require passing the information on every invocation.
             if not err.filename:
                 err.filename = filename
-            if not isinstance(err, DialectSyntaxError):
-                err.lineno = (err.lineno or 1) + starting_line - 1
+            if not err.text:
+                err.text = source
             raise err
 
         return output_ast
@@ -110,31 +110,17 @@ class DialectParser(ast.NodeVisitor, Generic[DialectRootT]):
         externals: Optional[dict[str, Any]] = None,
     ) -> DialectRootT:
         source_definition = SourceDefinition.from_function(func)
-        closure_refs = ClosureRefs.from_function(func)
-        return cls.apply(source_definition, closure_refs, externals)
+        captured_vars = CapturedVars.from_function(func)
+        return cls.apply(source_definition, captured_vars, externals)
 
     def generic_visit(self, node: ast.AST) -> None:
-        raise self._make_syntax_error(
+        raise self.syntax_error_cls.from_AST(
             node,
-            message=f"Nodes of type {type(node).__module__}.{type(node).__qualname__} not supported in dialect.",
+            msg=f"Nodes of type {type(node).__module__}.{type(node).__qualname__} not supported in dialect.",
         )
 
     def _make_loc(self, node: ast.AST) -> SourceLocation:
-        loc = SourceLocation.from_AST(node, source=self.filename)
-        return SourceLocation(
-            line=loc.line + self.starting_line - 1,
-            column=loc.column,
-            source=loc.source,
-            end_line=cast(int, loc.end_line) + self.starting_line - 1,
-            end_column=loc.end_column,
-        )
-
-    def _make_syntax_error(self, node: ast.AST, *, message: str = "") -> DialectSyntaxError:
-        err = self.syntax_error_cls.from_AST(
-            node, msg=message, filename=self.filename, text=self.source
-        )
-        err.lineno = (err.lineno or 1) + self.starting_line - 1
-        return err
+        return SourceLocation.from_AST(node, source=self.source_definition.filename)
 
 
 class DialectSyntaxError(common.GTSyntaxError):
@@ -168,6 +154,7 @@ class DialectSyntaxError(common.GTSyntaxError):
             lineno=node.lineno,
             offset=node.col_offset,
             filename=filename,
-            end_lineno=node.end_lineno,
-            end_offset=node.end_col_offset,
+            end_lineno=getattr(node, "end_lineno", None),
+            end_offset=getattr(node, "end_col_offset", None),
+            text=text,
         )

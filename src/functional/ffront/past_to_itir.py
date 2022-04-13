@@ -32,6 +32,7 @@ class ProgramLowering(NodeTranslator):
     --------
     >>> from functional.ffront.func_to_past import ProgramParser
     >>> from functional.iterator.runtime import CartesianAxis, offset
+    >>> from functional.iterator import ir
     >>> from functional.common import Field
     >>>
     >>> float64 = float
@@ -44,7 +45,12 @@ class ProgramLowering(NodeTranslator):
     ...    fieldop(inp, out=out)
     >>>
     >>> parsed = ProgramParser.apply_to_function(program)
-    >>> lowered = ProgramLowering.apply(parsed)
+    >>> fieldop_def = ir.FunctionDefinition(
+    ...     id="fieldop",
+    ...     params=[ir.Sym(id="inp")],
+    ...     expr=ir.FunCall(fun=ir.SymRef(id="deref"), args=[ir.SymRef(id="inp")])
+    ... )
+    >>> lowered = ProgramLowering.apply(parsed, [fieldop_def])
     >>> type(lowered)
     <class 'functional.iterator.ir.FencilDefinition'>
     >>> lowered.id
@@ -56,8 +62,10 @@ class ProgramLowering(NodeTranslator):
     contexts = (SymbolTableTrait.symtable_merger,)
 
     @classmethod
-    def apply(cls, node: past.Program) -> itir.FencilDefinition:
-        return cls().visit(node)
+    def apply(
+        cls, node: past.Program, function_definitions: list[itir.FunctionDefinition]
+    ) -> itir.FencilDefinition:
+        return cls().visit(node, function_definitions=function_definitions)
 
     def _gen_size_params_from_program(self, node: past.Program):
         """Generate symbols for each field param and dimension."""
@@ -68,9 +76,9 @@ class ProgramLowering(NodeTranslator):
                     size_params.append(itir.Sym(id=_size_arg_from_field(param.id, dim_idx)))
         return size_params
 
-    def visit_Program(self, node: past.Program, **kwargs) -> itir.FencilDefinition:
-        symtable = kwargs["symtable"]
-
+    def visit_Program(
+        self, node: past.Program, *, symtable, function_definitions, **kwargs
+    ) -> itir.FencilDefinition:
         # The ITIR does not support dynamically getting the size of a field. As
         #  a workaround we add additional arguments to the fencil definition
         #  containing the size of all fields. The caller of a program is (e.g.
@@ -90,6 +98,7 @@ class ProgramLowering(NodeTranslator):
 
         return itir.FencilDefinition(
             id=node.id,
+            function_definitions=function_definitions,
             params=[itir.Sym(id=inp.id) for inp in node.params] + size_params,
             closures=closures,
         )
