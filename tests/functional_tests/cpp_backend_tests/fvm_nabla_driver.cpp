@@ -64,8 +64,9 @@ TEST(unstructured, nabla) {
   tuple<double, double> actual_zavg[n_edges][K] = {};
 
   auto e2v_conn = connectivity<generated::E2V_t>(&e2v[0]);
-  auto edge_domain = unstructured_domain(
-      (int)n_edges, (int)K, e2v_conn); // TODO fn should use sizes constructor
+  auto edge_domain =
+      unstructured_domain(std::tuple(n_edges, K), {},
+                          e2v_conn); // TODO fn should use sizes constructor
 
   generated::zavgS_fencil(backend::naive{}, edge_domain, actual_zavg, pp, s);
 
@@ -79,7 +80,7 @@ TEST(unstructured, nabla) {
 
   auto v2e_conn = connectivity<generated::V2E_t>(&v2e[0]);
   auto vertex_domain =
-      unstructured_domain((int)n_vertices, (int)K, e2v_conn, v2e_conn);
+      unstructured_domain(std::tuple(n_vertices, K), {}, e2v_conn, v2e_conn);
 
   tuple<double, double> actual[n_vertices][K] = {};
   generated::nabla_fencil(backend::naive{}, vertex_domain, actual, pp, s, sign,
