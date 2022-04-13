@@ -88,7 +88,6 @@ _BACKEND_NAME = "roundtrip"
 
 def executor(ir: Node, *args, **kwargs):
     debug = "debug" in kwargs and kwargs["debug"] is True
-    debug = True
     use_tmps = "use_tmps" in kwargs and kwargs["use_tmps"] is True
 
     ir = apply_common_transforms(ir, use_tmps=use_tmps, offset_provider=kwargs["offset_provider"])
