@@ -23,14 +23,11 @@ import numpy as np
 import numpy.typing as npt
 
 from eve import typingx
-from eve.type_definitions import SourceLocation
 from functional import common
-from functional.ffront import common_types
-from functional.ffront import field_operator_ast as foast
-from functional.iterator import runtime
+from functional.ffront import common_types as ct
 
 
-def make_scalar_kind(dtype: npt.DTypeLike) -> common_types.ScalarKind:
+def make_scalar_kind(dtype: npt.DTypeLike) -> ct.ScalarKind:
     try:
         dt = np.dtype(dtype)
     except TypeError as err:
@@ -39,15 +36,15 @@ def make_scalar_kind(dtype: npt.DTypeLike) -> common_types.ScalarKind:
     if dt.shape == () and dt.fields is None:
         match dt:
             case np.bool_:
-                return common_types.ScalarKind.BOOL
+                return ct.ScalarKind.BOOL
             case np.int32:
-                return common_types.ScalarKind.INT32
+                return ct.ScalarKind.INT32
             case np.int64:
-                return common_types.ScalarKind.INT64
+                return ct.ScalarKind.INT64
             case np.float32:
-                return common_types.ScalarKind.FLOAT32
+                return ct.ScalarKind.FLOAT32
             case np.float64:
-                return common_types.ScalarKind.FLOAT64
+                return ct.ScalarKind.FLOAT64
             case _:
                 raise common.GTTypeError(f"Impossible to map '{dtype}' value to a ScalarKind")
     else:
@@ -59,7 +56,7 @@ def make_symbol_type_from_typing(
     *,
     global_ns: Optional[dict[str, Any]] = None,
     local_ns: Optional[dict[str, Any]] = None,
-) -> common_types.SymbolType:
+) -> ct.SymbolType:
     recursive_make_symbol = functools.partial(
         make_symbol_type_from_typing, global_ns=global_ns, local_ns=local_ns
     )
@@ -74,7 +71,7 @@ def make_symbol_type_from_typing(
                 type_hint, global_ns=global_ns, local_ns=local_ns, allow_partial=False
             )
         except Exception as error:
-            raise FieldOperatorTypeError(
+            raise TypingError(
                 f"Type annotation ({type_hint}) has undefined forward references!"
             ) from error
 
@@ -95,99 +92,89 @@ def make_symbol_type_from_typing(
 
     match canonical_type:
         case type() as t if issubclass(t, (bool, int, float, np.generic)):
-            return common_types.ScalarType(kind=make_scalar_kind(type_hint))
+            return ct.ScalarType(kind=make_scalar_kind(type_hint))
 
         case builtins.tuple:
             if not args:
-                raise FieldOperatorTypeError(
-                    f"Tuple annotation ({type_hint}) requires at least one argument!"
-                )
+                raise TypingError(f"Tuple annotation ({type_hint}) requires at least one argument!")
             if Ellipsis in args:
-                raise FieldOperatorTypeError(f"Unbound tuples ({type_hint}) are not allowed!")
-            return common_types.TupleType(types=[recursive_make_symbol(arg) for arg in args])
+                raise TypingError(f"Unbound tuples ({type_hint}) are not allowed!")
+            return ct.TupleType(types=[recursive_make_symbol(arg) for arg in args])
 
         case common.Field:
             if (n_args := len(args)) != 2:
-                raise FieldOperatorTypeError(
-                    f"Field type requires two arguments, got {n_args}! ({type_hint})"
-                )
+                raise TypingError(f"Field type requires two arguments, got {n_args}! ({type_hint})")
 
             dims: Union[Ellipsis, list[common.Dimension]] = []
             dim_arg, dtype_arg = args
             if isinstance(dim_arg, list):
                 for d in dim_arg:
                     if not isinstance(d, common.Dimension):
-                        raise FieldOperatorTypeError(f"Invalid field dimension definition '{d}'")
+                        raise TypingError(f"Invalid field dimension definition '{d}'")
                     dims.append(d)
             elif dim_arg is Ellipsis:
                 dims = dim_arg
             else:
-                raise FieldOperatorTypeError(f"Invalid field dimensions '{dim_arg}'")
+                raise TypingError(f"Invalid field dimensions '{dim_arg}'")
 
             try:
                 dtype = recursive_make_symbol(dtype_arg)
-            except FieldOperatorTypeError as error:
-                raise FieldOperatorTypeError(
+            except TypingError as error:
+                raise TypingError(
                     "Field dtype argument must be a scalar type (got '{dtype}')!"
                 ) from error
-            if not isinstance(dtype, common_types.ScalarType):
-                raise FieldOperatorTypeError(
-                    "Field dtype argument must be a scalar type (got '{dtype}')!"
-                )
-            return common_types.FieldType(dims=dims, dtype=dtype)
+            if not isinstance(dtype, ct.ScalarType):
+                raise TypingError("Field dtype argument must be a scalar type (got '{dtype}')!")
+            return ct.FieldType(dims=dims, dtype=dtype)
 
         case collections.abc.Callable:
             if not args:
-                raise FieldOperatorTypeError("Not annotated functions are not supported!")
+                raise TypingError("Not annotated functions are not supported!")
 
             try:
                 arg_types, return_type = args
                 args = [recursive_make_symbol(arg) for arg in arg_types]
             except Exception as error:
-                raise FieldOperatorTypeError(
-                    f"Invalid callable annotations in {type_hint}"
-                ) from error
+                raise TypingError(f"Invalid callable annotations in {type_hint}") from error
 
             kwargs_info = [arg for arg in extra_args if isinstance(arg, typingx.CallableKwargsInfo)]
             if len(kwargs_info) != 1:
-                raise FieldOperatorTypeError(f"Invalid callable annotations in {type_hint}")
+                raise TypingError(f"Invalid callable annotations in {type_hint}")
             kwargs = {
                 arg: recursive_make_symbol(arg_type)
                 for arg, arg_type in kwargs_info[0].data.items()
             }
 
-            return common_types.FunctionType(
+            # TODO(tehrengruber): print better error when no return type annotation is given
+            return ct.FunctionType(
                 args=args, kwargs=kwargs, returns=recursive_make_symbol(return_type)
             )
-        case runtime.Offset:
-            return common_types.OffsetType()
 
-    raise FieldOperatorTypeError(f"'{type_hint}' type is not supported")
+        case type() as t if issubclass(t, common.Dimension):
+            return ct.OffsetType()
+
+    raise TypingError(f"'{type_hint}' type is not supported")
 
 
-def make_symbol_from_value(
-    name: str, value: Any, namespace: foast.Namespace, location: SourceLocation
-) -> foast.Symbol:
+def make_symbol_type_from_value(value: Any) -> ct.SymbolType:
     """Make a symbol node from a Python value."""
-    if isinstance(value, type) or type(value).__module__ == "typing":
-        # we don't have types of types so disallow this
-        raise ValueError("The type of a symbol can not be a type itself.")
-    type_ = typingx.get_typing(value, annotate_callable_kwargs=True)
+    # TODO(tehrengruber): What we expect here currently is a GTCallable. Maybe
+    #  we should check for the protocol in the future?
+    if hasattr(value, "__gt_type__"):
+        symbol_type = value.__gt_type__()
 
-    symbol_type = make_symbol_type_from_typing(type_)
+    else:
+        type_ = typingx.get_typing(value, annotate_callable_kwargs=True)
+        symbol_type = make_symbol_type_from_typing(type_)
 
-    if isinstance(
-        symbol_type, (common_types.DataType, common_types.FunctionType, common_types.OffsetType)
-    ):
-        return foast.Symbol[type(symbol_type)](
-            id=name, type=symbol_type, namespace=namespace, location=location
-        )
+    if isinstance(symbol_type, (ct.DataType, ct.FunctionType, ct.OffsetType)):
+        return symbol_type
     else:
         raise common.GTTypeError(f"Impossible to map '{value}' value to a Symbol")
 
 
 # TODO(egparedes): Add source location info (maybe subclassing FieldOperatorSyntaxError)
-class FieldOperatorTypeError(common.GTTypeError):
+class TypingError(common.GTTypeError):
     def __init__(
         self,
         msg="",

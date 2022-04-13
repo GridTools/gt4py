@@ -14,14 +14,13 @@ class InlineFundefs(NodeTranslator):
             )
         return self.generic_visit(node)
 
-    def visit_Program(self, node: ir.Program):
-        # inline only into fundefs, but not into the stencil_closure
+    def visit_FencilDefinition(self, node: ir.FencilDefinition):
         fundefs = map(
             lambda f: self.generic_visit(f, symtable=node.symtable_), node.function_definitions
         )
-        new_program = copy(node)
-        new_program.function_definitions = list(fundefs)
-        return new_program
+        new_fencil = copy(node)
+        new_fencil.function_definitions = list(fundefs)
+        return new_fencil
 
 
 class PruneUnreferencedFundefs(NodeTranslator):
@@ -36,7 +35,7 @@ class PruneUnreferencedFundefs(NodeTranslator):
         referenced.add(node.id)
         return node
 
-    def visit_Program(self, node: ir.Program):
+    def visit_FencilDefinition(self, node: ir.FencilDefinition):
         referenced: Set[str] = set()
         self.generic_visit(node, referenced=referenced, second_pass=False)
         return self.generic_visit(node, referenced=referenced, second_pass=True)

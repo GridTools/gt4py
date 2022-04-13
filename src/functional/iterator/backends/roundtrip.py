@@ -27,6 +27,7 @@ class EmbeddedDSL(codegen.TemplatedGenerator):
     StencilClosure = as_mako("closure(${domain}, ${stencil}, ${output}, [${','.join(inputs)}])")
     FencilDefinition = as_mako(
         """
+${''.join(function_definitions)}
 @fendef
 def ${id}(${','.join(params)}):
     ${'\\n    '.join(closures)}
@@ -38,10 +39,6 @@ def ${id}(${','.join(params)}):
 def ${id}(${','.join(params)}):
     return ${expr}
     """
-    )
-    Program = as_fmt(
-        """
-{''.join(function_definitions)} {''.join(fencil_definitions)}"""
     )
 
 
@@ -131,7 +128,7 @@ from functional.iterator.embedded import np_as_located_field
         foo = importlib.util.module_from_spec(spec)  # type: ignore
         spec.loader.exec_module(foo)  # type: ignore
 
-        fencil_name = ir.fencil_definitions[0].id
+        fencil_name = ir.id
         fencil = getattr(foo, fencil_name + "_wrapper")
         assert "offset_provider" in kwargs
 

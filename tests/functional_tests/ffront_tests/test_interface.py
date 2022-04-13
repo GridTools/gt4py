@@ -28,7 +28,7 @@ from functional.ffront import common_types
 from functional.ffront.fbuiltins import float32, float64, int64
 from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError
 from functional.ffront.func_to_foast import FieldOperatorParser, FieldOperatorSyntaxError
-from functional.ffront.symbol_makers import FieldOperatorTypeError
+from functional.ffront.symbol_makers import TypingError
 from functional.iterator import ir as itir
 from functional.iterator.builtins import (
     and_,
@@ -67,22 +67,6 @@ LIFT = itir.SymRef(id=lift.fun.__name__)
 
 
 # --- Parsing ---
-def test_invalid_syntax_error_empty_return():
-    """Field operator syntax errors point to the file, line and column."""
-
-    def wrong_syntax(inp: Field[..., "float64"]):
-        return
-
-    with pytest.raises(
-        FieldOperatorSyntaxError,
-        match=(
-            r"Invalid Field Operator Syntax: "
-            r"Empty return not allowed \(test_interface.py, line 74\)"
-        ),
-    ):
-        _ = FieldOperatorParser.apply_to_function(wrong_syntax)
-
-
 def test_untyped_arg():
     """Field operator parameters must be type annotated."""
 
@@ -103,7 +87,7 @@ def test_mistyped_arg():
         return inp
 
     with pytest.raises(
-        FieldOperatorTypeError,
+        TypingError,
         match="Field type requires two arguments, got 0!",
     ):
         _ = FieldOperatorParser.apply_to_function(mistyped)
@@ -174,7 +158,7 @@ def test_clashing_annotated_assignment():
 
 def test_binary_pow():
     def power(inp: Field[..., "float64"]):
-        return inp ** 3
+        return inp**3
 
     with pytest.raises(
         FieldOperatorSyntaxError,
@@ -200,7 +184,7 @@ def test_bool_and():
 
     with pytest.raises(
         FieldOperatorSyntaxError,
-        match=(r"`and` operator not allowed!"),
+        match=(r"`and`/`or` operator not allowed!"),
     ):
         _ = FieldOperatorParser.apply_to_function(bool_and)
 
@@ -211,7 +195,7 @@ def test_bool_or():
 
     with pytest.raises(
         FieldOperatorSyntaxError,
-        match=(r"`or` operator not allowed!"),
+        match=(r"`and`/`or` operator not allowed!"),
     ):
         _ = FieldOperatorParser.apply_to_function(bool_or)
 

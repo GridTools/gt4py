@@ -12,11 +12,14 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import Optional
+import itertools
+from dataclasses import dataclass, field
+from typing import Optional, cast
 
 from eve import NodeTranslator
 from functional.ffront import field_operator_ast as foast
 from functional.ffront import itir_makers as im
+from functional.ffront.fbuiltins import FUN_BUILTIN_NAMES
 from functional.ffront.type_info import TypeInfo
 from functional.iterator import ir as itir
 
@@ -53,7 +56,7 @@ class FieldOperatorLowering(NodeTranslator):
             return im.lift_(im.lambda__(*self.params)(expr))(*self.params)
 
     @classmethod
-    def apply(cls, node: foast.FieldOperator) -> itir.FunctionDefinition:
+    def apply(cls, node: foast.LocatedNode) -> itir.Expr:
         return cls().visit(node)
 
     def visit_FieldOperator(self, node: foast.FieldOperator, **kwargs) -> itir.FunctionDefinition:
@@ -72,7 +75,9 @@ class FieldOperatorLowering(NodeTranslator):
         current_expr = self.visit(return_stmt, **kwargs)
 
         for assign in reversed(assigns):
-            current_expr = im.let(*self._visit_assign(assign, **kwargs))(current_expr)
+            current_expr = im.let(*self._visit_assign(cast(foast.Assign, assign), **kwargs))(
+                current_expr
+            )
 
         return im.deref_(current_expr)
 
@@ -121,6 +126,7 @@ class FieldOperatorLowering(NodeTranslator):
         )
 
     def visit_Compare(self, node: foast.Compare, **kwargs) -> itir.FunCall:
+
         return self._lift_lambda(node)(
             im.call_(node.op.value)(
                 im.deref_(self.visit(node.left, **kwargs)),
@@ -129,11 +135,68 @@ class FieldOperatorLowering(NodeTranslator):
         )
 
     def _visit_shift(self, node: foast.Call, **kwargs) -> itir.FunCall:
-        return im.shift_(node.args[0].value.id, node.args[0].index)(self.visit(node.func, **kwargs))
+        match node.args[0]:
+            case foast.Subscript(value=foast.Name(id=offset_name), index=int(offset_index)):
+                return im.shift_(offset_name, offset_index)(self.visit(node.func, **kwargs))
+            case foast.Name(id=offset_name):
+                return im.shift_(offset_name)(self.visit(node.func, **kwargs))
+        raise FieldOperatorLoweringError("Unexpected shift arguments!")
+
+    def _visit_reduce(self, node: foast.Call, **kwargs) -> itir.FunCall:
+        lowering = InsideReductionLowering()
+        expr = lowering.visit(node.args[0], **kwargs)
+        params = list(lowering.lambda_params.items())
+        return im.lift_(
+            im.call_("reduce")(
+                im.lambda__("accum", *(param[0] for param in params))(im.plus_("accum", expr)),
+                0,
+            )
+        )(*(param[1] for param in params))
 
     def visit_Call(self, node: foast.Call, **kwargs) -> itir.FunCall:
         if TypeInfo(node.func.type).is_field_type:
             return self._visit_shift(node, **kwargs)
+        elif node.func.id in FUN_BUILTIN_NAMES:
+            return self._visit_reduce(node, **kwargs)
         return self._lift_lambda(node)(
             im.call_(self.visit(node.func, **kwargs))(*self.visit(node.args, **kwargs))
         )
+
+
+@dataclass
+class InsideReductionLowering(FieldOperatorLowering):
+    """Variant of the lowering with special rules for inside reductions."""
+
+    lambda_params: dict[str, itir.Expr] = field(default_factory=lambda: {})
+    __counter: itertools.count = field(default_factory=lambda: itertools.count())
+
+    def visit_Name(self, node: foast.Name, **kwargs) -> itir.SymRef:
+        uid = f"{node.id}__{self._sequential_id()}"
+        self.lambda_params[uid] = super().visit_Name(node, **kwargs)
+        return im.ref(uid)
+
+    def visit_BinOp(self, node: foast.BinOp, **kwargs) -> itir.FunCall:
+        return im.call_(node.op.value)(
+            self.visit(node.left, **kwargs), self.visit(node.right, **kwargs)
+        )
+
+    def visit_Compare(self, node: foast.Compare, **kwargs) -> itir.FunCall:
+        return im.call_(node.op.value)(
+            self.visit(node.left, **kwargs), self.visit(node.right, **kwargs)
+        )
+
+    def visit_UnaryOp(self, node: foast.UnaryOp, **kwargs) -> itir.FunCall:
+        zero_arg = [itir.IntLiteral(value=0)] if node.op is not foast.UnaryOperator.NOT else []
+        return im.call_(node.op.value)(*[*zero_arg, self.visit(node.operand, **kwargs)])
+
+    def _visit_shift(self, node: foast.Call, **kwargs) -> itir.SymRef:  # type: ignore[override]
+        uid = f"{node.func.id}__{self._sequential_id()}"
+        self.lambda_params[uid] = FieldOperatorLowering.apply(node, **kwargs)
+        return im.ref(uid)
+
+    def _sequential_id(self):
+        return next(self.__counter)
+
+
+class FieldOperatorLoweringError(Exception):
+    ...

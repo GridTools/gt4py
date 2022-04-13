@@ -26,6 +26,7 @@ class ToyCpp(codegen.TemplatedGenerator):
     StencilClosure = as_mako("closure(${domain}, ${stencil}, out(${output}), ${','.join(inputs)})")
     FencilDefinition = as_mako(
         """
+    ${''.join(function_definitions)}
     auto ${id} = [](${','.join('auto&& ' + p for p in params)}){
         fencil(${'\\n'.join(closures)});
     };
@@ -38,7 +39,6 @@ class ToyCpp(codegen.TemplatedGenerator):
         };
     """
     )
-    Program = as_fmt("{''.join(function_definitions)} {''.join(fencil_definitions)}")
 
     @classmethod
     def apply(cls, root, **kwargs: Any) -> str:

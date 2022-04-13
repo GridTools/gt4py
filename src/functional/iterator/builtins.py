@@ -20,9 +20,7 @@ __all__ = [
     "not_",
     "and_",
     "or_",
-    #
     "scan",
-    "is_none",  # TODO remove?
     "domain",
     "named_range",
 ]
@@ -62,11 +60,6 @@ def reduce(*args):
 
 @builtin_dispatch
 def scan(*args):
-    raise BackendNotSelectedError()
-
-
-@builtin_dispatch
-def is_none(*args):
     raise BackendNotSelectedError()
 
 

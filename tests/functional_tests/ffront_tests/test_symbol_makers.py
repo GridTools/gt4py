@@ -133,51 +133,47 @@ def test_make_symbol_type_from_typing(value, expected):
 
 def test_invalid_symbol_types():
     # Forward references
-    with pytest.raises(symbol_makers.FieldOperatorTypeError, match="undefined forward references"):
+    with pytest.raises(symbol_makers.TypingError, match="undefined forward references"):
         symbol_makers.make_symbol_type_from_typing("foo")
 
     # Tuples
-    with pytest.raises(symbol_makers.FieldOperatorTypeError, match="least one argument"):
+    with pytest.raises(symbol_makers.TypingError, match="least one argument"):
         symbol_makers.make_symbol_type_from_typing(typing.Tuple)
-    with pytest.raises(symbol_makers.FieldOperatorTypeError, match="least one argument"):
+    with pytest.raises(symbol_makers.TypingError, match="least one argument"):
         symbol_makers.make_symbol_type_from_typing(tuple)
 
-    with pytest.raises(symbol_makers.FieldOperatorTypeError, match="Unbound tuples"):
+    with pytest.raises(symbol_makers.TypingError, match="Unbound tuples"):
         symbol_makers.make_symbol_type_from_typing(tuple[int, ...])
-    with pytest.raises(symbol_makers.FieldOperatorTypeError, match="Unbound tuples"):
+    with pytest.raises(symbol_makers.TypingError, match="Unbound tuples"):
         symbol_makers.make_symbol_type_from_typing(typing.Tuple["float", ...])
 
     # Fields
-    with pytest.raises(
-        symbol_makers.FieldOperatorTypeError, match="Field type requires two arguments"
-    ):
+    with pytest.raises(symbol_makers.TypingError, match="Field type requires two arguments"):
         symbol_makers.make_symbol_type_from_typing(common.Field)
-    with pytest.raises(symbol_makers.FieldOperatorTypeError, match="Invalid field dimensions"):
+    with pytest.raises(symbol_makers.TypingError, match="Invalid field dimensions"):
         symbol_makers.make_symbol_type_from_typing(common.Field[int, int])
-    with pytest.raises(symbol_makers.FieldOperatorTypeError, match="Invalid field dimension"):
+    with pytest.raises(symbol_makers.TypingError, match="Invalid field dimension"):
         symbol_makers.make_symbol_type_from_typing(common.Field[[int, int], int])
 
-    with pytest.raises(symbol_makers.FieldOperatorTypeError, match="Field dtype argument"):
+    with pytest.raises(symbol_makers.TypingError, match="Field dtype argument"):
         symbol_makers.make_symbol_type_from_typing(common.Field[..., str])
-    with pytest.raises(symbol_makers.FieldOperatorTypeError, match="Field dtype argument"):
+    with pytest.raises(symbol_makers.TypingError, match="Field dtype argument"):
         symbol_makers.make_symbol_type_from_typing(common.Field[..., None])
 
     # Functions
     with pytest.raises(
-        symbol_makers.FieldOperatorTypeError, match="Not annotated functions are not supported"
+        symbol_makers.TypingError, match="Not annotated functions are not supported"
     ):
         symbol_makers.make_symbol_type_from_typing(typing.Callable)
 
-    with pytest.raises(symbol_makers.FieldOperatorTypeError, match="Invalid callable annotations"):
+    with pytest.raises(symbol_makers.TypingError, match="Invalid callable annotations"):
         symbol_makers.make_symbol_type_from_typing(typing.Callable[..., float])
-    with pytest.raises(symbol_makers.FieldOperatorTypeError, match="Invalid callable annotations"):
+    with pytest.raises(symbol_makers.TypingError, match="Invalid callable annotations"):
         symbol_makers.make_symbol_type_from_typing(typing.Callable[[int], str])
-    with pytest.raises(symbol_makers.FieldOperatorTypeError, match="Invalid callable annotations"):
+    with pytest.raises(symbol_makers.TypingError, match="Invalid callable annotations"):
         symbol_makers.make_symbol_type_from_typing(typing.Callable[[int], float])
 
-    with pytest.raises(
-        symbol_makers.FieldOperatorTypeError, match="'<class 'str'>' type is not supported"
-    ):
+    with pytest.raises(symbol_makers.TypingError, match="'<class 'str'>' type is not supported"):
         symbol_makers.make_symbol_type_from_typing(
             typing.Annotated[
                 typing.Callable[["float", int], str], typingx.CallableKwargsInfo(data={})
