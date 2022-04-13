@@ -151,16 +151,17 @@ class PrettyPrinter(NodeTranslator):
 
     def visit_FunCall(self, node: ir.FunCall, *, prec: int) -> list[str]:
         if isinstance(node.fun, ir.SymRef):
-            if node.fun.id in BINARY_OPS and len(node.args) == 2:
+            fun_name = node.fun.id
+            if fun_name in BINARY_OPS and len(node.args) == 2:
                 # replacing binary ops plus(x, y) → x + y etc.
-                op = BINARY_OPS[node.fun.id]
+                op = BINARY_OPS[fun_name]
                 lhs, rhs = self.visit(node.args, prec=BINARY_PRECEDENCE[op])
                 h = _hmerge(lhs, [" " + op + " "], rhs)
                 v = _vmerge(lhs, _hmerge([op + " "], rhs))
                 return _prec_parens(_optimum(h, v), prec, BINARY_PRECEDENCE[op])
-            if node.fun.id in UNARY_OPS and len(node.args) == 1:
+            if fun_name in UNARY_OPS and len(node.args) == 1:
                 # replacing unary ops deref(x) → *x etc.
-                op = UNARY_OPS[node.fun.id]
+                op = UNARY_OPS[fun_name]
                 if (
                     op == "*"
                     and isinstance(node.args[0], ir.FunCall)
@@ -177,21 +178,21 @@ class PrettyPrinter(NodeTranslator):
                     return _prec_parens(res, prec, OTHER_PRECEDENCE["call"])
                 res = _hmerge([op], self.visit(node.args[0], prec=UNARY_PRECEDENCE[op]))
                 return _prec_parens(res, prec, UNARY_PRECEDENCE[op])
-            if node.fun.id == "tuple_get" and len(node.args) == 2:
+            if fun_name == "tuple_get" and len(node.args) == 2:
                 # tuple_get(i, x) → x[i]
                 idx, tup = self.visit(node.args, prec=OTHER_PRECEDENCE["call"])
                 res = _hmerge(tup, ["["], idx, ["]"])
                 return _prec_parens(res, prec, OTHER_PRECEDENCE["call"])
-            if node.fun.id == "named_range" and len(node.args) == 3:
+            if fun_name == "named_range" and len(node.args) == 3:
                 # named_range(dim, start, stop) → dim: [star, stop)
                 dim, start, end = self.visit(node.args, prec=0)
                 res = _hmerge(dim, [": ["], start, [", "], end, [")"])
                 return _prec_parens(res, prec, OTHER_PRECEDENCE["call"])
-            if node.fun.id == "domain" and len(node.args) >= 1:
+            if fun_name == "domain" and len(node.args) >= 1:
                 # domain(x, y, ...) → { x × y × ... }
                 args = self.visit(node.args, prec=OTHER_PRECEDENCE["call"])
                 return _hmerge(["{ "], *_hinterleave(args, " × "), [" }"])
-            if node.fun.id == "if_" and len(node.args) == 3:
+            if fun_name == "if_" and len(node.args) == 3:
                 # if_(x, y, z) → if x then y else z
                 ifb, thenb, elseb = self.visit(node.args, prec=OTHER_PRECEDENCE["if"])
                 hblocks = _hmerge(["if "], ifb, [" then "], thenb, [" else "], elseb)
