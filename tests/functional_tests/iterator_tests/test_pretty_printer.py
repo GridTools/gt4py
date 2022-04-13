@@ -1,5 +1,5 @@
 from functional.iterator import ir
-from functional.iterator import pretty_printer as pp
+from functional.iterator.pretty_printer import PrettyPrinter, pretty_str
 
 
 def test_hmerge():
@@ -12,7 +12,7 @@ def test_hmerge():
         "           block ‘b’. This is",
         "                      block ‘c’. ",
     ]
-    actual = pp._hmerge(a, b, c)
+    actual = PrettyPrinter()._hmerge(a, b, c)
     assert actual == expected
 
 
@@ -28,62 +28,62 @@ def test_vmerge():
         "This is",
         "block ‘c’.",
     ]
-    actual = pp._vmerge(a, b, c)
+    actual = PrettyPrinter()._vmerge(a, b, c)
     assert actual == expected
 
 
 def test_indent():
     a = ["This is", "block ‘a’."]
     expected = ["  This is", "  block ‘a’."]
-    actual = pp._indent(a)
+    actual = PrettyPrinter()._indent(a)
     assert actual == expected
 
 
 def test_cost():
-    assert pp._cost(["This is a single line."]) < pp._cost(
+    assert PrettyPrinter()._cost(["This is a single line."]) < PrettyPrinter()._cost(
         ["These are", "multiple", "short", "lines."]
     )
-    assert pp._cost(["This is a short line."]) < pp._cost(
+    assert PrettyPrinter()._cost(["This is a short line."]) < PrettyPrinter()._cost(
         [
             "This is a very long line; longer than the maximum allowed line length. "
             "So it should get a penalty for its length."
         ]
     )
-    assert pp._cost(["Equal length!", "Equal length!", "Equal length!"]) < pp._cost(
-        ["Unequal length.", "Short…", "Looooooooooooooooooong…"]
-    )
+    assert PrettyPrinter()._cost(
+        ["Equal length!", "Equal length!", "Equal length!"]
+    ) < PrettyPrinter()._cost(["Unequal length.", "Short…", "Looooooooooooooooooong…"])
 
 
 def test_optimum():
-    assert pp._optimum(
+    assert PrettyPrinter()._optimum(
         ["This is a single line."], ["These are", "multiple", "short", "lines."]
     ) == ["This is a single line."]
 
 
 def test_prec_parens():
     a = ["This is", "block ‘a’."]
-    assert pp._prec_parens(a, 42, 42) == a
-    assert pp._prec_parens(a, 42, 0) == ["(This is", " block ‘a’.)"]
+    assert PrettyPrinter()._prec_parens(a, 42, 42) == a
+    assert PrettyPrinter()._prec_parens(a, 42, 0) == ["(This is", " block ‘a’.)"]
 
 
 def test_hinterleave():
     blocks = [["a", "a"], ["b"], ["c"]]
     expected = [["a", "a,"], ["b,"], ["c"]]
-    actual = list(pp._hinterleave(blocks, ","))
+    actual = list(PrettyPrinter()._hinterleave(blocks, ","))
     assert actual == expected
 
 
 def test_hinterleave_indented():
     blocks = [["a", "a"], ["b"], ["c"]]
     expected = [["  a", "  a,"], ["  b,"], ["  c"]]
-    actual = list(pp._hinterleave(blocks, ",", indent=True))
+    actual = list(PrettyPrinter()._hinterleave(blocks, ",", indent=True))
     assert actual == expected
 
 
 def test_lambda():
     testee = ir.Lambda(params=[ir.Sym(id="x")], expr=ir.SymRef(id="x"))
     expected = "λ(x) → x"
-    actual = pp.pretty_str(testee)
+    actual = pretty_str(testee)
     assert actual == expected
 
 
@@ -105,28 +105,28 @@ def test_arithmetic():
         ],
     )
     expected = "(1 + 2) * 3 / 4"
-    actual = pp.pretty_str(testee)
+    actual = pretty_str(testee)
     assert actual == expected
 
 
 def test_deref():
     testee = ir.FunCall(fun=ir.SymRef(id="deref"), args=[ir.SymRef(id="x")])
     expected = "*x"
-    actual = pp.pretty_str(testee)
+    actual = pretty_str(testee)
     assert actual == expected
 
 
 def test_lift():
     testee = ir.FunCall(fun=ir.SymRef(id="lift"), args=[ir.SymRef(id="x")])
     expected = "↑x"
-    actual = pp.pretty_str(testee)
+    actual = pretty_str(testee)
     assert actual == expected
 
 
 def test_not():
     testee = ir.FunCall(fun=ir.SymRef(id="not_"), args=[ir.SymRef(id="x")])
     expected = "not x"
-    actual = pp.pretty_str(testee)
+    actual = pretty_str(testee)
     assert actual == expected
 
 
@@ -144,7 +144,7 @@ def test_shifted_deref():
         ],
     )
     expected = "x[I, 1]"
-    actual = pp.pretty_str(testee)
+    actual = pretty_str(testee)
     assert actual == expected
 
 
@@ -153,14 +153,14 @@ def test_tuple_get():
         fun=ir.SymRef(id="tuple_get"), args=[ir.IntLiteral(value=42), ir.SymRef(id="x")]
     )
     expected = "x[42]"
-    actual = pp.pretty_str(testee)
+    actual = pretty_str(testee)
     assert actual == expected
 
 
 def test_make_tuple():
     testee = ir.FunCall(fun=ir.SymRef(id="make_tuple"), args=[ir.SymRef(id="x"), ir.SymRef(id="y")])
     expected = "{x, y}"
-    actual = pp.pretty_str(testee)
+    actual = pretty_str(testee)
     assert actual == expected
 
 
@@ -170,7 +170,7 @@ def test_named_range():
         args=[ir.AxisLiteral(value="IDim"), ir.SymRef(id="x"), ir.SymRef(id="y")],
     )
     expected = "IDim: [x, y)"
-    actual = pp.pretty_str(testee)
+    actual = pretty_str(testee)
     assert actual == expected
 
 
@@ -180,7 +180,7 @@ def test_domain():
         args=[ir.SymRef(id="x"), ir.SymRef(id="y")],
     )
     expected = "{ x × y }"
-    actual = pp.pretty_str(testee)
+    actual = pretty_str(testee)
     assert actual == expected
 
 
@@ -190,7 +190,7 @@ def test_if_short():
         args=[ir.SymRef(id="x"), ir.SymRef(id="y"), ir.SymRef(id="z")],
     )
     expected = "if x then y else z"
-    actual = pp.pretty_str(testee)
+    actual = pretty_str(testee)
     assert actual == expected
 
 
@@ -206,7 +206,7 @@ def test_if_long():
         ],
     )
     expected = "if   very_loooooooooooooooooooong_condition_to_force_a_line_break_and_test_alignment_of_branches\nthen y\nelse z"
-    actual = pp.pretty_str(testee)
+    actual = pretty_str(testee)
     assert actual == expected
 
 
@@ -216,7 +216,7 @@ def test_fun_call():
         args=[ir.SymRef(id="x")],
     )
     expected = "f(x)"
-    actual = pp.pretty_str(testee)
+    actual = pretty_str(testee)
     assert actual == expected
 
 
@@ -226,14 +226,14 @@ def test_lambda_call():
         args=[ir.SymRef(id="x")],
     )
     expected = "(λ(x) → x)(x)"
-    actual = pp.pretty_str(testee)
+    actual = pretty_str(testee)
     assert actual == expected
 
 
 def test_function_definition():
     testee = ir.FunctionDefinition(id="f", params=[ir.Sym(id="x")], expr=ir.SymRef(id="x"))
     expected = "f = λ(x) → x"
-    actual = pp.pretty_str(testee)
+    actual = pretty_str(testee)
     assert actual == expected
 
 
@@ -245,7 +245,7 @@ def test_stencil_closure():
         inputs=[ir.SymRef(id="x")],
     )
     expected = "y ← (deref)(x) @ d"
-    actual = pp.pretty_str(testee)
+    actual = pretty_str(testee)
     assert actual == expected
 
 
@@ -265,6 +265,6 @@ def test_fencil_definition():
             )
         ],
     )
-    actual = pp.pretty_str(testee)
+    actual = pretty_str(testee)
     expected = "f(d, x, y) {\n  g = λ(x) → x\n  y ← (deref)(x) @ d\n}"
     assert actual == expected

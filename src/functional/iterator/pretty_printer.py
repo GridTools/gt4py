@@ -58,60 +58,61 @@ OTHER_PRECEDENCE = {
 }
 
 
-def _hmerge(*blocks: list[str]) -> list[str]:
-    def impl(a: list[str], b: list[str]) -> list[str]:
-        spaces = len(a[-1]) * " "
-        return a[:-1] + [a[-1] + b[0]] + [spaces + line for line in b[1:]]
-
-    res = blocks[0]
-    for b in blocks[1:]:
-        res = impl(res, b)
-    return res
-
-
-def _vmerge(*blocks: list[str]) -> list[str]:
-    return sum(blocks, [])
-
-
-def _indent(block: list[str]) -> list[str]:
-    return ["  " + line for line in block]
-
-
-SOFT_MAX_LINE_LENGTH = 100
-
-
-def _cost(block: list[str]) -> int:
-    max_line_length = max(len(line) for line in block)
-    return (
-        # preferring blocks of fewer lines:
-        len(block)
-        # strongly preferring blocks with lines not longer than SOFT_MAX_LINE_LENGTH:
-        + max(max_line_length - SOFT_MAX_LINE_LENGTH, 0) * 100
-        # preferring blocks with lines of uniform length:
-        + sum(max_line_length - len(line) for line in block)
-    )
-
-
-def _optimum(a: list[str], b: list[str]) -> list[str]:
-    return a if _cost(a) < _cost(b) else b
-
-
-def _prec_parens(block: list[str], prec: int, op_prec: int) -> list[str]:
-    if prec > op_prec:
-        return _hmerge(["("], block, [")"])
-    return block
-
-
-def _hinterleave(
-    blocks: Sequence[list[str]], sep: str, *, indent: bool = False
-) -> Iterable[list[str]]:
-    do_indent = _indent if indent else lambda x: x
-    for block in blocks[:-1]:
-        yield do_indent(_hmerge(block, [sep]))
-    yield do_indent(blocks[-1])
+DEFAULT_INDENT = 2
+DEFAULT_WIDTH = 100
 
 
 class PrettyPrinter(NodeTranslator):
+    def __init__(self, indent: int = DEFAULT_INDENT, width: int = DEFAULT_WIDTH):
+        super().__init__()
+        self.indent = indent
+        self.width = width
+
+    @staticmethod
+    def _hmerge(*blocks: list[str]) -> list[str]:
+        def impl(a: list[str], b: list[str]) -> list[str]:
+            spaces = len(a[-1]) * " "
+            return a[:-1] + [a[-1] + b[0]] + [spaces + line for line in b[1:]]
+
+        res = blocks[0]
+        for b in blocks[1:]:
+            res = impl(res, b)
+        return res
+
+    @staticmethod
+    def _vmerge(*blocks: list[str]) -> list[str]:
+        return sum(blocks, [])
+
+    def _prec_parens(self, block: list[str], prec: int, op_prec: int) -> list[str]:
+        if prec > op_prec:
+            return self._hmerge(["("], block, [")"])
+        return block
+
+    def _indent(self, block: list[str]) -> list[str]:
+        return [" " * self.indent + line for line in block]
+
+    def _cost(self, block: list[str]) -> int:
+        max_line_length = max(len(line) for line in block)
+        return (
+            # preferring blocks of fewer lines:
+            len(block)
+            # strongly preferring blocks with lines not longer than self.width:
+            + max(max_line_length - self.width, 0) * 100
+            # preferring blocks with lines of uniform length:
+            + sum(max_line_length - len(line) for line in block)
+        )
+
+    def _optimum(self, a: list[str], b: list[str]) -> list[str]:
+        return a if self._cost(a) < self._cost(b) else b
+
+    def _hinterleave(
+        self, blocks: Sequence[list[str]], sep: str, *, indent: bool = False
+    ) -> Iterable[list[str]]:
+        do_indent = self._indent if indent else lambda x: x
+        for block in blocks[:-1]:
+            yield do_indent(self._hmerge(block, [sep]))
+        yield do_indent(blocks[-1])
+
     def visit_Sym(self, node: ir.Sym, *, prec: int) -> list[str]:
         return [node.id]
 
@@ -139,15 +140,15 @@ class PrettyPrinter(NodeTranslator):
 
         start, bridge = ["λ("], [") → "]
         if not params:
-            params = _hmerge(start, bridge)
+            params = self._hmerge(start, bridge)
         else:
-            hparams = _hmerge(start, *_hinterleave(params, ", "), bridge)
-            vparams = _vmerge(start, *_hinterleave(params, ",", indent=True), bridge)
-            params = _optimum(hparams, vparams)
+            hparams = self._hmerge(start, *self._hinterleave(params, ", "), bridge)
+            vparams = self._vmerge(start, *self._hinterleave(params, ",", indent=True), bridge)
+            params = self._optimum(hparams, vparams)
 
-        hbody = _hmerge(params, expr)
-        vbody = _vmerge(params, _indent(expr))
-        return _prec_parens(_optimum(hbody, vbody), prec, OTHER_PRECEDENCE["lambda"])
+        hbody = self._hmerge(params, expr)
+        vbody = self._vmerge(params, self._indent(expr))
+        return self._prec_parens(self._optimum(hbody, vbody), prec, OTHER_PRECEDENCE["lambda"])
 
     def visit_FunCall(self, node: ir.FunCall, *, prec: int) -> list[str]:
         if isinstance(node.fun, ir.SymRef):
@@ -156,9 +157,9 @@ class PrettyPrinter(NodeTranslator):
                 # replacing binary ops plus(x, y) → x + y etc.
                 op = BINARY_OPS[fun_name]
                 lhs, rhs = self.visit(node.args, prec=BINARY_PRECEDENCE[op])
-                h = _hmerge(lhs, [" " + op + " "], rhs)
-                v = _vmerge(lhs, _hmerge([op + " "], rhs))
-                return _prec_parens(_optimum(h, v), prec, BINARY_PRECEDENCE[op])
+                h = self._hmerge(lhs, [" " + op + " "], rhs)
+                v = self._vmerge(lhs, self._hmerge([op + " "], rhs))
+                return self._prec_parens(self._optimum(h, v), prec, BINARY_PRECEDENCE[op])
             if fun_name in UNARY_OPS and len(node.args) == 1:
                 # replacing unary ops deref(x) → *x etc.
                 op = UNARY_OPS[fun_name]
@@ -174,32 +175,36 @@ class PrettyPrinter(NodeTranslator):
                     assert len(node.args[0].args) == 1
                     expr = self.visit(node.args[0].args[0], prec=OTHER_PRECEDENCE["call"])
                     shifts = self.visit(node.args[0].fun.args, prec=0)
-                    res = _hmerge(expr, ["["], *_hinterleave(shifts, ", "), ["]"])
-                    return _prec_parens(res, prec, OTHER_PRECEDENCE["call"])
-                res = _hmerge([op], self.visit(node.args[0], prec=UNARY_PRECEDENCE[op]))
-                return _prec_parens(res, prec, UNARY_PRECEDENCE[op])
+                    res = self._hmerge(expr, ["["], *self._hinterleave(shifts, ", "), ["]"])
+                    return self._prec_parens(res, prec, OTHER_PRECEDENCE["call"])
+                res = self._hmerge([op], self.visit(node.args[0], prec=UNARY_PRECEDENCE[op]))
+                return self._prec_parens(res, prec, UNARY_PRECEDENCE[op])
             if fun_name == "tuple_get" and len(node.args) == 2:
                 # tuple_get(i, x) → x[i]
                 idx, tup = self.visit(node.args, prec=OTHER_PRECEDENCE["call"])
-                res = _hmerge(tup, ["["], idx, ["]"])
-                return _prec_parens(res, prec, OTHER_PRECEDENCE["call"])
+                res = self._hmerge(tup, ["["], idx, ["]"])
+                return self._prec_parens(res, prec, OTHER_PRECEDENCE["call"])
             if fun_name == "named_range" and len(node.args) == 3:
                 # named_range(dim, start, stop) → dim: [star, stop)
                 dim, start, end = self.visit(node.args, prec=0)
-                res = _hmerge(dim, [": ["], start, [", "], end, [")"])
-                return _prec_parens(res, prec, OTHER_PRECEDENCE["call"])
+                res = self._hmerge(dim, [": ["], start, [", "], end, [")"])
+                return self._prec_parens(res, prec, OTHER_PRECEDENCE["call"])
             if fun_name == "domain" and len(node.args) >= 1:
                 # domain(x, y, ...) → { x × y × ... }
                 args = self.visit(node.args, prec=OTHER_PRECEDENCE["call"])
-                return _hmerge(["{ "], *_hinterleave(args, " × "), [" }"])
+                return self._hmerge(["{ "], *self._hinterleave(args, " × "), [" }"])
             if fun_name == "if_" and len(node.args) == 3:
                 # if_(x, y, z) → if x then y else z
                 ifb, thenb, elseb = self.visit(node.args, prec=OTHER_PRECEDENCE["if"])
-                hblocks = _hmerge(["if "], ifb, [" then "], thenb, [" else "], elseb)
-                vblocks = _vmerge(
-                    _hmerge(["if   "], ifb), _hmerge(["then "], thenb), _hmerge(["else "], elseb)
+                hblocks = self._hmerge(["if "], ifb, [" then "], thenb, [" else "], elseb)
+                vblocks = self._vmerge(
+                    self._hmerge(["if   "], ifb),
+                    self._hmerge(["then "], thenb),
+                    self._hmerge(["else "], elseb),
                 )
-                return _prec_parens(_optimum(hblocks, vblocks), prec, OTHER_PRECEDENCE["if"])
+                return self._prec_parens(
+                    self._optimum(hblocks, vblocks), prec, OTHER_PRECEDENCE["if"]
+                )
 
         fun = self.visit(node.fun, prec=OTHER_PRECEDENCE["call"])
         args = self.visit(node.args, prec=0)
@@ -207,19 +212,19 @@ class PrettyPrinter(NodeTranslator):
         if not args:
             args = [""]
         else:
-            hargs = _hmerge(*_hinterleave(args, ", "))
-            vargs = _vmerge(*_hinterleave(args, ","))
-            args = _optimum(hargs, vargs)
+            hargs = self._hmerge(*self._hinterleave(args, ", "))
+            vargs = self._vmerge(*self._hinterleave(args, ","))
+            args = self._optimum(hargs, vargs)
 
         if node.fun == ir.SymRef(id="make_tuple"):
             # make_tuple(args...) → {args...}
-            htup = _hmerge(["{"], args, ["}"])
-            vtup = _vmerge(["{"], _indent(args), ["}"])
-            return _optimum(htup, vtup)
+            htup = self._hmerge(["{"], args, ["}"])
+            vtup = self._vmerge(["{"], self._indent(args), ["}"])
+            return self._optimum(htup, vtup)
 
-        hfun = _hmerge(fun, ["("], args, [")"])
-        vfun = _vmerge(_hmerge(fun, ["("]), _indent(args), [")"])
-        return _prec_parens(_optimum(hfun, vfun), prec, OTHER_PRECEDENCE["call"])
+        hfun = self._hmerge(fun, ["("], args, [")"])
+        vfun = self._vmerge(self._hmerge(fun, ["("]), self._indent(args), [")"])
+        return self._prec_parens(self._optimum(hfun, vfun), prec, OTHER_PRECEDENCE["call"])
 
     def visit_FunctionDefinition(self, node: ir.FunctionDefinition, prec: int) -> list[str]:
         assert prec == 0
@@ -228,15 +233,15 @@ class PrettyPrinter(NodeTranslator):
 
         start, bridge = [node.id + " = λ("], [") → "]
         if not params:
-            params = _hmerge(start, bridge)
+            params = self._hmerge(start, bridge)
         else:
-            hparams = _hmerge(start, *_hinterleave(params, ", "), bridge)
-            vparams = _vmerge(start, *_hinterleave(params, ",", indent=True), bridge)
-            params = _optimum(hparams, vparams)
+            hparams = self._hmerge(start, *self._hinterleave(params, ", "), bridge)
+            vparams = self._vmerge(start, *self._hinterleave(params, ",", indent=True), bridge)
+            params = self._optimum(hparams, vparams)
 
-        hbody = _hmerge(params, expr)
-        vbody = _vmerge(params, _indent(expr))
-        return _optimum(hbody, vbody)
+        hbody = self._hmerge(params, expr)
+        vbody = self._vmerge(params, self._indent(expr))
+        return self._optimum(hbody, vbody)
 
     def visit_StencilClosure(self, node: ir.StencilClosure, *, prec: int) -> list[str]:
         assert prec == 0
@@ -245,16 +250,20 @@ class PrettyPrinter(NodeTranslator):
         output = self.visit(node.output, prec=0)
         inputs = self.visit(node.inputs, prec=0)
 
-        hinputs = _hmerge(["("], *_hinterleave(inputs, ", "), [")"])
-        vinputs = _vmerge(["("], *_hinterleave(inputs, ",", indent=True), [")"])
-        inputs = _optimum(hinputs, vinputs)
+        hinputs = self._hmerge(["("], *self._hinterleave(inputs, ", "), [")"])
+        vinputs = self._vmerge(["("], *self._hinterleave(inputs, ",", indent=True), [")"])
+        inputs = self._optimum(hinputs, vinputs)
 
-        head = _hmerge(output, [" ← "])
-        foot = _hmerge(inputs, [" @ "], domain)
+        head = self._hmerge(output, [" ← "])
+        foot = self._hmerge(inputs, [" @ "], domain)
 
-        h = _hmerge(head, ["("], stencil, [")"], foot)
-        v = _vmerge(_hmerge(head, ["("]), _indent(_indent(stencil)), _indent(_hmerge([")"], foot)))
-        return _optimum(h, v)
+        h = self._hmerge(head, ["("], stencil, [")"], foot)
+        v = self._vmerge(
+            self._hmerge(head, ["("]),
+            self._indent(self._indent(stencil)),
+            self._indent(self._hmerge([")"], foot)),
+        )
+        return self._optimum(h, v)
 
     def visit_FencilDefinition(self, node: ir.FencilDefinition, *, prec: int) -> list[str]:
         assert prec == 0
@@ -262,21 +271,26 @@ class PrettyPrinter(NodeTranslator):
         closures = self.visit(node.closures, prec=0)
         params = self.visit(node.params, prec=0)
 
-        hparams = _hmerge([node.id + "("], *_hinterleave(params, ", "), [") {"])
-        vparams = _vmerge([node.id + "("], *_hinterleave(params, ",", indent=True), [") {"])
-        params = _optimum(hparams, vparams)
+        hparams = self._hmerge([node.id + "("], *self._hinterleave(params, ", "), [") {"])
+        vparams = self._vmerge(
+            [node.id + "("], *self._hinterleave(params, ",", indent=True), [") {"]
+        )
+        params = self._optimum(hparams, vparams)
 
-        function_definitions = _vmerge(*function_definitions)
-        closures = _vmerge(*closures)
+        function_definitions = self._vmerge(*function_definitions)
+        closures = self._vmerge(*closures)
 
-        return _vmerge(params, _indent(function_definitions), _indent(closures), ["}"])
+        return self._vmerge(
+            params, self._indent(function_definitions), self._indent(closures), ["}"]
+        )
 
     @classmethod
-    def apply(cls, node: ir.Node) -> str:
-        return "\n".join(cls().visit(node, prec=0))
+    def apply(cls, node: ir.Node, indent: int = DEFAULT_INDENT, width: int = DEFAULT_WIDTH) -> str:
+        return "\n".join(cls(indent=indent, width=width).visit(node, prec=0))
 
 
-pretty_str = PrettyPrinter.apply
+def pretty_str(x: ir.Node, indent: int = DEFAULT_INDENT, width: int = DEFAULT_WIDTH) -> str:
+    return PrettyPrinter.apply(x, indent, width)
 
 
 def pretty_print(x: ir.Node) -> None:
