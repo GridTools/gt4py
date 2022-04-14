@@ -164,11 +164,11 @@ class PrettyPrinter(NodeTranslator):
                     and node.args[0].fun.args
                     and isinstance(node.args[0].args[0], ir.SymRef)
                 ):
-                    # deref(shift(offsets...)(sym)) → sym[offsets...]
+                    # deref(shift(offsets...)(sym)) → sym⟨offsets...⟩
                     assert len(node.args[0].args) == 1
                     expr = self.visit(node.args[0].args[0], prec=PRECEDENCE["__call__"])
                     shifts = self.visit(node.args[0].fun.args, prec=0)
-                    res = self._hmerge(expr, ["["], *self._hinterleave(shifts, ", "), ["]"])
+                    res = self._hmerge(expr, ["⟨"], *self._hinterleave(shifts, ", "), ["⟩"])
                     return self._prec_parens(res, prec, PRECEDENCE["__call__"])
                 res = self._hmerge([op], self.visit(node.args[0], prec=PRECEDENCE[fun_name]))
                 return self._prec_parens(res, prec, PRECEDENCE[fun_name])

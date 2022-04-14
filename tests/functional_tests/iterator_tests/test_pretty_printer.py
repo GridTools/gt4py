@@ -162,7 +162,7 @@ def test_shifted_deref():
             )
         ],
     )
-    expected = "x[I, 1]"
+    expected = "x⟨I, 1⟩"
     actual = pformat(testee)
     assert actual == expected
 
