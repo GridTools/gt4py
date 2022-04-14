@@ -72,9 +72,7 @@ def _specialize_transient_strides(sdfg: dace.SDFG, layout_map):
 def _to_device(sdfg: dace.SDFG, device):
     if device == "gpu":
         for array in sdfg.arrays.values():
-            array.storage = (
-                dace.StorageType.GPU_Global if not array.transient else dace.StorageType.GPU_Global
-            )
+            array.storage = dace.StorageType.GPU_Global
         for node, _ in sdfg.all_nodes_recursive():
             if isinstance(node, StencilComputation):
                 node.device = dace.DeviceType.GPU
@@ -533,4 +531,4 @@ class GTCDaceGPUBackend(BaseGTCDaceBackend):
     }
 
     def generate_extension(self) -> Tuple[str, str]:
-        return self.make_extension(stencil_ir=self.builder.gtir, uses_cuda=False)
+        return self.make_extension(stencil_ir=self.builder.gtir, uses_cuda=True)
