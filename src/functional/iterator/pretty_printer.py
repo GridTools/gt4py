@@ -5,13 +5,14 @@ Inspired by P. Yelland, “A New Approach to Optimal Code Formatting”, 2015
 from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
+from typing import Final
 
 from eve import NodeTranslator
 from functional.iterator import ir
 
 
 # replacements for builtin binary operations
-BINARY_OPS = {
+BINARY_OPS: Final = {
     "plus": "+",
     "minus": "-",
     "multiplies": "×",
@@ -24,14 +25,14 @@ BINARY_OPS = {
 }
 
 # replacements for builtin unary operations
-UNARY_OPS = {
+UNARY_OPS: Final = {
     "deref": "·",
     "lift": "↑",
     "not_": "¬",
 }
 
 # operator precedence
-PRECEDENCE = {
+PRECEDENCE: Final = {
     "__lambda__": 0,
     "if_": 1,
     "or_": 2,
@@ -51,8 +52,8 @@ PRECEDENCE = {
 }
 
 
-DEFAULT_INDENT = 2
-DEFAULT_WIDTH = 100
+DEFAULT_INDENT: Final = 2
+DEFAULT_WIDTH: Final = 100
 
 
 class PrettyPrinter(NodeTranslator):
