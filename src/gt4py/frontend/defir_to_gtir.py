@@ -17,6 +17,7 @@
 import numbers
 from typing import Any, Dict, List, Optional, Tuple, Union, cast
 
+from gt4py.frontend.node_util import IRNodeVisitor, location_to_source_location
 from gt4py.frontend.nodes import (
     ArgumentInfo,
     Assign,
@@ -48,7 +49,6 @@ from gt4py.frontend.nodes import (
     VarRef,
     While,
 )
-from gt4py.frontend.utils import IRNodeVisitor, location_to_source_location
 from gtc import common, gtir
 from gtc.common import ExprKind
 

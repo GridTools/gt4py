@@ -16,7 +16,7 @@
 
 import pytest
 
-from gt4py.backend.gtc_backend.defir_to_gtir import DefIRToGTIR
+from gt4py.frontend.defir_to_gtir import DefIRToGTIR
 from gt4py.frontend.nodes import (
     AxisBound,
     AxisInterval,
