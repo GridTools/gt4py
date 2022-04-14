@@ -14,7 +14,7 @@ from functional.iterator import ir
 BINARY_OPS = {
     "plus": "+",
     "minus": "-",
-    "multiplies": "*",
+    "multiplies": "×",
     "divides": "/",
     "eq": "==",
     "less": "<",

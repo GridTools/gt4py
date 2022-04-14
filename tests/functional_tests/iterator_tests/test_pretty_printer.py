@@ -104,7 +104,7 @@ def test_arithmetic():
             ir.IntLiteral(value=4),
         ],
     )
-    expected = "(1 + 2) * 3 / 4"
+    expected = "(1 + 2) × 3 / 4"
     actual = pformat(testee)
     assert actual == expected
 
