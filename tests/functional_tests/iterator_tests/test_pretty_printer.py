@@ -149,20 +149,12 @@ def test_bool_arithmetic():
     assert actual == expected
 
 
-def test_shifted_deref():
+def test_shift():
     testee = ir.FunCall(
-        fun=ir.SymRef(id="deref"),
-        args=[
-            ir.FunCall(
-                fun=ir.FunCall(
-                    fun=ir.SymRef(id="shift"),
-                    args=[ir.OffsetLiteral(value="I"), ir.OffsetLiteral(value=1)],
-                ),
-                args=[ir.SymRef(id="x")],
-            )
-        ],
+        fun=ir.SymRef(id="shift"),
+        args=[ir.OffsetLiteral(value="I"), ir.OffsetLiteral(value=1)],
     )
-    expected = "x⟨I, 1⟩"
+    expected = "⟨I, 1⟩"
     actual = pformat(testee)
     assert actual == expected
 

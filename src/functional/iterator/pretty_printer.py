@@ -156,20 +156,6 @@ class PrettyPrinter(NodeTranslator):
             if fun_name in UNARY_OPS and len(node.args) == 1:
                 # replacing unary ops: deref(x) → ·x etc.
                 op = UNARY_OPS[fun_name]
-                if (
-                    fun_name == "deref"
-                    and isinstance(node.args[0], ir.FunCall)
-                    and isinstance(node.args[0].fun, ir.FunCall)
-                    and node.args[0].fun.fun == ir.SymRef(id="shift")
-                    and node.args[0].fun.args
-                    and isinstance(node.args[0].args[0], ir.SymRef)
-                ):
-                    # deref(shift(offsets...)(sym)) → sym⟨offsets...⟩
-                    assert len(node.args[0].args) == 1
-                    expr = self.visit(node.args[0].args[0], prec=PRECEDENCE["__call__"])
-                    shifts = self.visit(node.args[0].fun.args, prec=0)
-                    res = self._hmerge(expr, ["⟨"], *self._hinterleave(shifts, ", "), ["⟩"])
-                    return self._prec_parens(res, prec, PRECEDENCE["__call__"])
                 res = self._hmerge([op], self.visit(node.args[0], prec=PRECEDENCE[fun_name]))
                 return self._prec_parens(res, prec, PRECEDENCE[fun_name])
             if fun_name == "tuple_get" and len(node.args) == 2:
@@ -177,6 +163,9 @@ class PrettyPrinter(NodeTranslator):
                 idx, tup = self.visit(node.args, prec=PRECEDENCE[fun_name])
                 res = self._hmerge(tup, ["["], idx, ["]"])
                 return self._prec_parens(res, prec, PRECEDENCE[fun_name])
+            if fun_name == "shift":
+                shifts = self.visit(node.args, prec=0)
+                return self._hmerge(["⟨"], *self._hinterleave(shifts, ", "), ["⟩"])
             if fun_name == "named_range" and len(node.args) == 3:
                 # named_range(dim, start, stop) → dim: [star, stop)
                 dim, start, end = self.visit(node.args, prec=0)
