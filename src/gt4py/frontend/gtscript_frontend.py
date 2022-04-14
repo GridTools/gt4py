@@ -31,7 +31,7 @@ from gt4py import definitions as gt_definitions
 from gt4py import gtscript
 from gt4py import utils as gt_utils
 from gt4py.backend.gtc_backend.defir_to_gtir import DefIRToGTIR
-from gt4py.frontend import nodes
+from gt4py.frontend import nodes, utils
 from gt4py.utils import NOTHING
 from gt4py.utils import meta as gt_meta
 
@@ -710,7 +710,7 @@ class CompiledIfInliner(ast.NodeTransformer):
 def _find_accesses_with_offsets(node: nodes.Node) -> Set[str]:
     names: Set[str] = set()
 
-    class FindRefs(nodes.IRNodeVisitor):
+    class FindRefs(utils.IRNodeVisitor):
         def visit_FieldRef(self, node: nodes.FieldAccessor) -> None:
             if node.offset.get("I", 0) != 0 or node.offset.get("J", 0) != 0:
                 names.add(node.name)

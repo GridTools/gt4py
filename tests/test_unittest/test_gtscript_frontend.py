@@ -909,9 +909,7 @@ class TestDataDimensions:
         def_ir = parse_definition(
             definition, name=inspect.stack()[0][3], module=self.__class__.__name__
         )
-        assert isinstance(
-            def_ir.computations[0].body.stmts[0].value.data_index[0], nodes.nodes.VarRef
-        )
+        assert isinstance(def_ir.computations[0].body.stmts[0].value.data_index[0], nodes.VarRef)
 
     def test_indirect_access_write(self):
         def definition(
@@ -925,9 +923,7 @@ class TestDataDimensions:
         def_ir = parse_definition(
             definition, name=inspect.stack()[0][3], module=self.__class__.__name__
         )
-        assert isinstance(
-            def_ir.computations[0].body.stmts[0].target.data_index[0], nodes.nodes.VarRef
-        )
+        assert isinstance(def_ir.computations[0].body.stmts[0].target.data_index[0], nodes.VarRef)
 
 
 class TestImports:
