@@ -165,7 +165,7 @@ class PrettyPrinter(NodeTranslator):
                 return self._prec_parens(res, prec, PRECEDENCE[fun_name])
             if fun_name == "shift":
                 shifts = self.visit(node.args, prec=0)
-                return self._hmerge(["⟨"], *self._hinterleave(shifts, ", "), ["⟩"])
+                return self._hmerge(["⟪"], *self._hinterleave(shifts, ", "), ["⟫"])
             if fun_name == "named_range" and len(node.args) == 3:
                 # named_range(dim, start, stop) → dim: [star, stop)
                 dim, start, end = self.visit(node.args, prec=0)

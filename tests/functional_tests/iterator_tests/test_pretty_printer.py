@@ -154,7 +154,7 @@ def test_shift():
         fun=ir.SymRef(id="shift"),
         args=[ir.OffsetLiteral(value="I"), ir.OffsetLiteral(value=1)],
     )
-    expected = "⟨I, 1⟩"
+    expected = "⟪I, 1⟫"
     actual = pformat(testee)
     assert actual == expected
 
