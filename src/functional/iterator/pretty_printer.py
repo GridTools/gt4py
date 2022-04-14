@@ -57,10 +57,10 @@ DEFAULT_WIDTH: Final = 100
 
 
 class PrettyPrinter(NodeTranslator):
-    def __init__(self, indent: int = DEFAULT_INDENT, width: int = DEFAULT_WIDTH):
+    def __init__(self, indent: int = DEFAULT_INDENT, width: int = DEFAULT_WIDTH) -> None:
         super().__init__()
-        self.indent = indent
-        self.width = width
+        self.indent: int = indent
+        self.width: int = width
 
     @staticmethod
     def _hmerge(*blocks: list[str]) -> list[str]:
@@ -274,5 +274,5 @@ def pformat(x: ir.Node, indent: int = DEFAULT_INDENT, width: int = DEFAULT_WIDTH
     return PrettyPrinter.apply(x, indent, width)
 
 
-def pprint(x: ir.Node) -> None:
-    print(pformat(x))
+def pprint(x: ir.Node, indent: int = DEFAULT_INDENT, width: int = DEFAULT_WIDTH) -> None:
+    print(pformat(x, indent, width))
