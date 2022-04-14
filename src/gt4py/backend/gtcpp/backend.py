@@ -149,7 +149,7 @@ class GTCGTBaseBackend(BaseGTBackend, CLIBackendMixin):
         self.check_options(self.builder.options)
 
         # Generate the Python binary extension (checking if GridTools sources are installed)
-        if not gt_src_manager.has_gt_sources(2) and not gt_src_manager.install_gt_sources(2):
+        if not gt_src_manager.has_gt_sources() and not gt_src_manager.install_gt_sources():
             raise RuntimeError("Missing GridTools sources.")
 
         pyext_module_name: Optional[str]

@@ -31,7 +31,7 @@ from .cuir_utils import KernelFactory, ProgramFactory
 from .utils import match
 
 
-if not gt_src_manager.has_gt_sources(2) and not gt_src_manager.install_gt_sources(2):
+if not gt_src_manager.has_gt_sources() and not gt_src_manager.install_gt_sources():
     raise RuntimeError("Missing GridTools sources.")
 
 
