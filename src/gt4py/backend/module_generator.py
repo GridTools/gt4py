@@ -105,7 +105,7 @@ class BaseModuleGenerator(abc.ABC):
     ORIGIN_ARG_NAME = "_origin_"
     SPLITTERS_NAME = "_splitters_"
 
-    TEMPLATE_PATH = os.path.join(os.path.dirname(__file__), "stencil_module.py.in")
+    TEMPLATE_PATH = os.path.join(os.path.dirname(__file__), "templates", "stencil_module.py.in")
 
     _builder: Optional["StencilBuilder"]
     args_data: ModuleData
