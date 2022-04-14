@@ -19,15 +19,15 @@ BINARY_OPS = {
     "eq": "==",
     "less": "<",
     "greater": ">",
-    "and_": "and",
-    "or_": "or",
+    "and_": "∧",
+    "or_": "∨",
 }
 
 # replacements for builtin unary operations
 UNARY_OPS = {
     "deref": "*",
     "lift": "↑",
-    "not_": "not ",
+    "not_": "¬",
 }
 
 # operator precedence
