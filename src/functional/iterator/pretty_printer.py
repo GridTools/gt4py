@@ -25,7 +25,7 @@ BINARY_OPS = {
 
 # replacements for builtin unary operations
 UNARY_OPS = {
-    "deref": "*",
+    "deref": "·",
     "lift": "↑",
     "not_": "¬",
 }
@@ -157,7 +157,7 @@ class PrettyPrinter(NodeTranslator):
                 # replacing unary ops deref(x) → *x etc.
                 op = UNARY_OPS[fun_name]
                 if (
-                    op == "*"
+                    fun_name == "deref"
                     and isinstance(node.args[0], ir.FunCall)
                     and isinstance(node.args[0].fun, ir.FunCall)
                     and node.args[0].fun.fun == ir.SymRef(id="shift")

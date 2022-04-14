@@ -111,7 +111,7 @@ def test_arithmetic():
 
 def test_deref():
     testee = ir.FunCall(fun=ir.SymRef(id="deref"), args=[ir.SymRef(id="x")])
-    expected = "*x"
+    expected = "·x"
     actual = pformat(testee)
     assert actual == expected
 
