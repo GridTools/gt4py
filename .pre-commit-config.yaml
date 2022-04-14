@@ -123,15 +123,6 @@ repos:
       src/gt4py/utils/attrib.py |
       src/gt4py/utils/meta.py |
       tests/conftest.py |
-      tests/_disabled/test_iir/iir_stencil_definitions.py |
-      tests/_disabled/test_iir/test_code_generation.py |
-      tests/_disabled/test_iir/test_cpp_regression.py |
-      tests/_disabled/test_iir/test_validation.py |
-      tests/_disabled/test_iir/utils.py |
-      tests/_disabled/test_def_ir/test_cpp_regression.py |
-      tests/_disabled/test_def_ir/test_ir_transformation.py |
-      tests/_disabled/test_def_ir/def_ir_stencil_definitions.py |
-      tests/_disabled/test_def_ir/utils.py |
       tests/test_integration/stencil_definitions.py |
       tests/test_integration/test_code_generation.py |
       tests/test_integration/test_cpp_regression.py |
@@ -156,13 +147,13 @@ repos:
       src/gt4py/frontend/node_util.py |
       src/gt4py/utils/meta.py |
       tests/definitions.py |
+      tests/definition_setup.py |
       tests/eve_tests/definitions.py |
       tests/test_integration/stencil_definitions.py |
       tests/test_integration/test_code_generation.py |
       tests/test_unittest/test_call_interface.py |
       tests/test_unittest/test_gtscript_frontend.py |
       tests/test_unittest/test_storage.py |
-      tests/definition_setup.py |
       tests/test_unittest/test_gtc/test_common.py |
       tests/test_unittest/test_gtc/test_oir.py |
       tests/test_unittest/test_gtc/gtir_utils.py |

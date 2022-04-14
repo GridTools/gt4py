@@ -37,7 +37,6 @@ from gt4py.frontend.nodes import (
     Location,
     ScalarLiteral,
     StencilDefinition,
-    StencilImplementation,
 )
 
 
@@ -67,23 +66,6 @@ def ij_offset(request):
 
 def make_offset(offset: Tuple[int, int, Union[int, Expr]]):
     return {"I": offset[0], "J": offset[1], "K": offset[2]}
-
-
-def init_implementation_from_definition(definition: StencilDefinition) -> StencilImplementation:
-    return StencilImplementation(
-        name=definition.name,
-        api_signature=[],
-        domain=definition.domain,
-        fields={},
-        parameters={},
-        multi_stages=[],
-        fields_extents={},
-        unreferenced=[],
-        axis_splitters_var=None,
-        externals=definition.externals,
-        sources=definition.sources,
-        docstring=definition.docstring,
-    )
 
 
 class TObject:
