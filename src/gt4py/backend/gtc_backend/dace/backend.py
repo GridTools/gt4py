@@ -39,7 +39,7 @@ from gt4py.backend.module_generator import make_args_data_from_gtir
 from gtc import common, gtir
 from gtc.dace.nodes import StencilComputation
 from gtc.dace.oir_to_dace import OirSDFGBuilder
-from gtc.dace.utils import array_dimensions, replace_strides
+from gtc.dace.utils import array_dimensions, layout_maker_factory, replace_strides
 from gtc.gtir_to_oir import GTIRToOIR
 from gtc.passes.gtir_k_boundary import compute_k_boundary
 from gtc.passes.gtir_pipeline import GtirPipeline
@@ -251,9 +251,9 @@ class DaCeComputationCodegen:
     @classmethod
     def apply(cls, stencil_ir: gtir.Stencil, sdfg: dace.SDFG):
         self = cls()
-        with dace.config.set_temporary(
-            "compiler", "cuda", "max_concurrent_streams", value=-1
-        ), dace.config.set_temporary("compiler", "cpu", "openmp_sections", value=False):
+        with dace.config.temporary_config():
+            dace.config.Config.set("compiler", "cuda", "max_concurrent_streams", value=-1)
+            dace.config.Config.set("compiler", "cpu", "openmp_sections", value=False)
             code_objects = sdfg.generate_code()
         is_gpu = "CUDA" in {co.title for co in code_objects}
 
@@ -438,7 +438,7 @@ class DaCeBindingsCodegen:
         return formatted_code
 
 
-class DaCePyModuleGenerator(PyExtModuleGenerator):
+class DaCePyExtModuleGenerator(PyExtModuleGenerator):
     def generate_imports(self):
         return "\n".join(
             [
@@ -454,7 +454,6 @@ class DaCePyModuleGenerator(PyExtModuleGenerator):
 
     def generate_class_members(self):
         res = super().generate_class_members()
-
         filepath = self.builder.module_path.joinpath(
             os.path.dirname(self.builder.module_path), self.builder.module_name + ".sdfg"
         )
@@ -462,28 +461,8 @@ class DaCePyModuleGenerator(PyExtModuleGenerator):
         return res
 
 
-class DaCeCUDAPyModuleGenerator(DaCePyModuleGenerator, GTCUDAPyModuleGenerator):
+class DaCeCUDAPyExtModuleGenerator(DaCePyExtModuleGenerator, GTCUDAPyModuleGenerator):
     pass
-
-
-def layout_maker_factory(base_layout):
-    def layout_maker(mask):
-        ranks = []
-        for m, l in zip(mask, base_layout):
-            if m:
-                ranks.append(l)
-        if len(mask) > 3:
-            if base_layout[2] == 2:
-                ranks.extend(3 + c for c in range(len(mask) - 3))
-            else:
-                ranks.extend(-c for c in range(len(mask) - 3))
-
-        res_layout = [0] * len(ranks)
-        for i, idx in enumerate(np.argsort(ranks)):
-            res_layout[idx] = i
-        return tuple(res_layout)
-
-    return layout_maker
 
 
 class BaseGTCDaceBackend(BaseGTBackend, CLIBackendMixin):
@@ -493,11 +472,6 @@ class BaseGTCDaceBackend(BaseGTBackend, CLIBackendMixin):
     options = BaseGTBackend.GT_BACKEND_OPTS
     PYEXT_GENERATOR_CLASS = GTCDaCeExtGenerator  # type: ignore
     USE_LEGACY_TOOLCHAIN = False
-
-    def generate_extension(self) -> Tuple[str, str]:
-        return self.make_extension(
-            stencil_ir=self.builder.gtir, uses_cuda=self.storage_info["device"] == "gpu"
-        )
 
     def generate(self) -> Type["StencilObject"]:
         self.check_options(self.builder.options)
@@ -531,9 +505,12 @@ class GTCDaceCPUBackend(BaseGTCDaceBackend):
         "is_compatible_layout": lambda x: True,
         "is_compatible_type": lambda x: isinstance(x, np.ndarray),
     }
-    MODULE_GENERATOR_CLASS = DaCePyModuleGenerator
+    MODULE_GENERATOR_CLASS = DaCePyExtModuleGenerator
 
     options = BaseGTBackend.GT_BACKEND_OPTS
+
+    def generate_extension(self) -> Tuple[str, str]:
+        return self.make_extension(stencil_ir=self.builder.gtir, uses_cuda=False)
 
 
 @register
@@ -549,8 +526,11 @@ class GTCDaceGPUBackend(BaseGTCDaceBackend):
         "is_compatible_layout": lambda x: True,
         "is_compatible_type": cuda_is_compatible_type,
     }
+    MODULE_GENERATOR_CLASS = DaCeCUDAPyExtModuleGenerator
     options = {
         **BaseGTBackend.GT_BACKEND_OPTS,
         "device_sync": {"versioning": True, "type": bool},
     }
-    MODULE_GENERATOR_CLASS = DaCeCUDAPyModuleGenerator
+
+    def generate_extension(self) -> Tuple[str, str]:
+        return self.make_extension(stencil_ir=self.builder.gtir, uses_cuda=False)

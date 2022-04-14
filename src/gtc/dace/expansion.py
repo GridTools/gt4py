@@ -1474,7 +1474,7 @@ class StencilComputationExpansion(dace.library.ExpandTransformation):
             start=dcir.AxisBound(axis=dcir.Axis.K, level=start.level, offset=start.offset),
             end=dcir.AxisBound(axis=dcir.Axis.K, level=end.level, offset=end.offset),
         )
-        overall_extent = Extent.zeros(ndims=3)
+        overall_extent = Extent.zeros(2)
         for he in node.oir_node.iter_tree().if_isinstance(oir.HorizontalExecution):
             overall_extent = overall_extent.union(node.get_extents(he))
 

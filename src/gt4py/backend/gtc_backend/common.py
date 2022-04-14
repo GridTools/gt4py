@@ -66,7 +66,7 @@ def pybuffer_to_sid(
     as_sid = "as_cuda_sid" if backend.storage_info["device"] == "gpu" else "as_sid"
 
     sid_def = """gt::{as_sid}<{ctype}, {sid_ndim},
-    gt::integral_constant<int, {unique_index}>{unit_stride_dim}>({name})""".format(
+        gt::integral_constant<int, {unique_index}>{unit_stride_dim}>({name})""".format(
         name=name,
         ctype=ctype,
         unique_index=stride_kind_index,

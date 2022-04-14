@@ -51,11 +51,7 @@ def empty(backend, default_origin, shape, dtype, mask=None, *, managed_memory=Fa
         storage_t = CPUStorage
 
     return storage_t(
-        shape=shape,
-        dtype=dtype,
-        backend=backend,
-        default_origin=default_origin,
-        mask=mask,
+        shape=shape, dtype=dtype, backend=backend, default_origin=default_origin, mask=mask
     )
 
 
@@ -86,14 +82,7 @@ def zeros(backend, default_origin, shape, dtype, mask=None, *, managed_memory=Fa
 
 
 def from_array(
-    data,
-    backend,
-    default_origin,
-    shape=None,
-    dtype=None,
-    mask=None,
-    *,
-    managed_memory=False,
+    data, backend, default_origin, shape=None, dtype=None, mask=None, *, managed_memory=False
 ):
     is_cupy_array = cp is not None and isinstance(data, cp.ndarray)
     xp = cp if is_cupy_array else np

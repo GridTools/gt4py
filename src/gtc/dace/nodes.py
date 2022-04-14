@@ -227,7 +227,7 @@ def _populate_strides(self, expansion_specification):
 
                     if hasattr(self, "_tile_sizes"):
                         if self.extents is not None and it.axis.to_idx() < 2:
-                            extent = Extent.zeros(3)
+                            extent = Extent.zeros(2)
                             for he_extent in self.extents.values():
                                 extent = extent.union(he_extent)
                             extent = extent[it.axis.to_idx()]

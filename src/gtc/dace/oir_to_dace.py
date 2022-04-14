@@ -24,12 +24,8 @@ import dace.subsets
 import eve
 import gtc.oir as oir
 from gtc.dace.nodes import StencilComputation
-from gtc.dace.utils import (
-    DaceStrMaker,
-    compute_horizontal_block_extents,
-    data_type_to_dace_typeclass,
-)
-from gtc.passes.oir_optimizations.utils import AccessCollector
+from gtc.dace.utils import DaceStrMaker, data_type_to_dace_typeclass
+from gtc.passes.oir_optimizations.utils import AccessCollector, compute_horizontal_block_extents
 
 
 class OirSDFGBuilder(eve.NodeVisitor):
