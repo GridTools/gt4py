@@ -94,7 +94,8 @@ def nocli_backend(scope="module"):
 
 BACKEND_ROW_PATTERN_BY_NAME = {
     "gtc:cuda": r"^\s*gtc:cuda\s*cuda\s*python\s*Yes",
-    "gtc:dace": r"^\s*gtc:dace\s*c\+\+\s*python\s*Yes",
+    "gtc:dace:cpu": r"^\s*gtc:dace:cpu\s*c\+\+\s*python\s*Yes",
+    "gtc:dace:gpu": r"^\s*gtc:dace:gpu\s*cuda\s*python\s*Yes",
     "gtc:gt:cpu_ifirst": r"^\s*gtc:gt:cpu_ifirst\s*c\+\+\s*python\s*Yes",
     "gtc:gt:cpu_kfirst": r"^\s*gtc:gt:cpu_kfirst\s*c\+\+\s*python\s*Yes",
     "gtc:gt:gpu": r"^\s*gtc:gt:gpu\s*cuda\s*python\s*Yes",
