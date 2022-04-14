@@ -25,7 +25,7 @@ from eve import codegen
 from eve.codegen import MakoTemplate as as_mako
 from gt4py import gt_src_manager
 from gt4py.backend.base import CLIBackendMixin, register
-from gt4py.backend.gtc_backend.common import (
+from gt4py.backend.gtc_common import (
     BackendCodegen,
     BaseGTBackend,
     PyExtModuleGenerator,

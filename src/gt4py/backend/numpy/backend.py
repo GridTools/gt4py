@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, Dict, Type, Union, cast
 
 from eve.codegen import format_source
 from gt4py.backend.base import BaseBackend, BaseModuleGenerator, CLIBackendMixin, register
-from gt4py.backend.gtc_backend.common import (
+from gt4py.backend.gtc_common import (
     debug_is_compatible_layout,
     debug_is_compatible_type,
     debug_layout,
