@@ -997,7 +997,7 @@ class BlockVerticalLoopExpander(NaiveVerticalLoopExpander):
         for _, section in self.node.sections:
             for node, _ in section.all_nodes_recursive():
                 if isinstance(node, HorizontalExecutionLibraryNode):
-                    extent_bounding_box = extent_bounding_box | node.extent
+                    extent_bounding_box = extent_bounding_box & node.extent
 
         j_interval = oir.Interval(
             start=oir.AxisBound.from_start(extent_bounding_box[1][0]),

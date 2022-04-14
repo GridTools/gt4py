@@ -156,7 +156,7 @@ def test_stage_merger_induced_interval_block_reordering(backend):
 
 @pytest.mark.parametrize("backend", ALL_BACKENDS)
 def test_lower_dimensional_inputs(backend):
-    @gtscript.stencil(backend=backend)
+    @gtscript.stencil(backend=backend, debug_mode=True, verbose=True)
     def stencil(
         field_3d: gtscript.Field[gtscript.IJK, np.float_],
         field_2d: gtscript.Field[gtscript.IJ, np.float_],
