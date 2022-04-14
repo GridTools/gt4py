@@ -147,14 +147,14 @@ class PrettyPrinter(NodeTranslator):
         if isinstance(node.fun, ir.SymRef):
             fun_name = node.fun.id
             if fun_name in BINARY_OPS and len(node.args) == 2:
-                # replacing binary ops plus(x, y) → x + y etc.
+                # replacing binary ops: plus(x, y) → x + y etc.
                 op = BINARY_OPS[fun_name]
                 lhs, rhs = self.visit(node.args, prec=PRECEDENCE[fun_name])
                 h = self._hmerge(lhs, [" " + op + " "], rhs)
                 v = self._vmerge(lhs, self._hmerge([op + " "], rhs))
                 return self._prec_parens(self._optimum(h, v), prec, PRECEDENCE[fun_name])
             if fun_name in UNARY_OPS and len(node.args) == 1:
-                # replacing unary ops deref(x) → *x etc.
+                # replacing unary ops: deref(x) → ·x etc.
                 op = UNARY_OPS[fun_name]
                 if (
                     fun_name == "deref"
