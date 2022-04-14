@@ -490,3 +490,23 @@ def is_sdfg_equal(sdfg1: dace.SDFG, sdfg2: dace.SDFG):
         ):
             return False
     return True
+
+
+def layout_maker_factory(base_layout):
+    def layout_maker(mask):
+        ranks = []
+        for m, l in zip(mask, base_layout):
+            if m:
+                ranks.append(l)
+        if len(mask) > 3:
+            if base_layout[2] == 2:
+                ranks.extend(3 + c for c in range(len(mask) - 3))
+            else:
+                ranks.extend(-c for c in range(len(mask) - 3))
+
+        res_layout = [0] * len(ranks)
+        for i, idx in enumerate(np.argsort(ranks)):
+            res_layout[idx] = i
+        return tuple(res_layout)
+
+    return layout_maker
