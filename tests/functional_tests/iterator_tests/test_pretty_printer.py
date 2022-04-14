@@ -123,9 +123,28 @@ def test_lift():
     assert actual == expected
 
 
-def test_not():
-    testee = ir.FunCall(fun=ir.SymRef(id="not_"), args=[ir.SymRef(id="x")])
-    expected = "not x"
+def test_bool_arithmetic():
+    testee = ir.FunCall(
+        fun=ir.SymRef(id="not_"),
+        args=[
+            ir.FunCall(
+                fun=ir.SymRef(id="or_"),
+                args=[
+                    ir.FunCall(fun=ir.SymRef(id="not_"), args=[ir.SymRef(id="a")]),
+                    ir.FunCall(
+                        fun=ir.SymRef(id="and_"),
+                        args=[
+                            ir.SymRef(id="b"),
+                            ir.FunCall(
+                                fun=ir.SymRef(id="or_"), args=[ir.SymRef(id="c"), ir.SymRef(id="d")]
+                            ),
+                        ],
+                    ),
+                ],
+            )
+        ],
+    )
+    expected = "¬(¬a ∨ b ∧ (c ∨ d))"
     actual = pformat(testee)
     assert actual == expected
 
