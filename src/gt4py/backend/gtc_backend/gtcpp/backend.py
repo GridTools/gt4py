@@ -169,7 +169,7 @@ class GTCGTBaseBackend(BaseGTBackend, CLIBackendMixin):
 class GTCGTCpuIfirstBackend(GTCGTBaseBackend):
     """GridTools python backend using gtc."""
 
-    name = "gtc:gt:cpu_ifirst"
+    name = "gt:cpu_ifirst"
     GT_BACKEND_T = "cpu_ifirst"
     languages = {"computation": "c++", "bindings": ["python"]}
     storage_info = {
@@ -188,7 +188,7 @@ class GTCGTCpuIfirstBackend(GTCGTBaseBackend):
 class GTCGTCpuKfirstBackend(GTCGTBaseBackend):
     """GridTools python backend using gtc."""
 
-    name = "gtc:gt:cpu_kfirst"
+    name = "gt:cpu_kfirst"
     GT_BACKEND_T = "cpu_kfirst"
     languages = {"computation": "c++", "bindings": ["python"]}
     storage_info = {
@@ -208,7 +208,7 @@ class GTCGTGpuBackend(GTCGTBaseBackend):
     """GridTools python backend using gtc."""
 
     MODULE_GENERATOR_CLASS = GTCUDAPyModuleGenerator
-    name = "gtc:gt:gpu"
+    name = "gt:gpu"
     GT_BACKEND_T = "gpu"
     languages = {"computation": "cuda", "bindings": ["python"]}
     options = {**BaseGTBackend.GT_BACKEND_OPTS, "device_sync": {"versioning": True, "type": bool}}

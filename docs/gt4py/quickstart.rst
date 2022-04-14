@@ -88,7 +88,7 @@ over 3 dimensions:
 
     import gt4py.gtscript as gtscript
 
-    backend = "gtc:numpy"
+    backend = "numpy"
 
     @gtscript.stencil(backend=backend)
     def stencil_example(
@@ -128,10 +128,10 @@ function with the ``stencil`` decorator provided by GT4Py.
 The ``stencil`` decorator generates code in Python or C++ depending on the ``backend`` specified by name.
 Currently, the following backends are available:
 
-* ``"gtc:numpy"``: a vectorized python backend
-* ``"gtc:gt:cpu_kfirst"``: a backend based on GridTools code performance-optimized for x86 architecture
-* ``"gtc:gt:cpu_ifirst"``: a GridTools backend targeting many core architectures
-* ``"gtc:gt:gpu"``: a GridTools backend targeting GPUs
+* ``"numpy"``: a vectorized python backend
+* ``"gt:cpu_kfirst"``: a backend based on GridTools code performance-optimized for x86 architecture
+* ``"gt:cpu_ifirst"``: a GridTools backend targeting many core architectures
+* ``"gt:gpu"``: a GridTools backend targeting GPUs
 * ``"gtc:gpu"``: a backend targeting NVIDIA GPUs using CUDA and some GridTools
 
 The decorator further replaces the stencil definition function (here ``stencil_example``) by a callable object that

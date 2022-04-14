@@ -139,7 +139,7 @@ class GTCCudaBindingsCodegen(codegen.TemplatedGenerator):
 class GTCCudaBackend(BaseGTBackend, CLIBackendMixin):
     """CUDA backend using gtc."""
 
-    name = "gtc:cuda"
+    name = "cuda"
     options = {**BaseGTBackend.GT_BACKEND_OPTS, "device_sync": {"versioning": True, "type": bool}}
     languages = {"computation": "cuda", "bindings": ["python"]}
     storage_info = {

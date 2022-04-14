@@ -249,7 +249,7 @@ def test_optional_arg_provide_aot():
 
 
 def test_nondace_raises():
-    @gtscript.stencil(backend="gtc:numpy")
+    @gtscript.stencil(backend="numpy")
     def numpy_stencil(inp: gtscript.Field[np.float64], outp: gtscript.Field[np.float64]):
         with computation(PARALLEL), interval(...):
             outp = inp  # noqa F841: local variable 'outp' is assigned to but never used
@@ -272,7 +272,7 @@ def test_nondace_raises():
     with pytest.raises(
         TypeError,
         match=re.escape(
-            "Only dace backends are supported in DaCe-orchestrated programs." ' (found "gtc:numpy")'
+            "Only dace backends are supported in DaCe-orchestrated programs." ' (found "numpy")'
         ),
     ):
         call_frozen_stencil()

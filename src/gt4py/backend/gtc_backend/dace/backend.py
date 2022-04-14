@@ -372,7 +372,7 @@ class DaCePyExtModuleGenerator(PyExtModuleGenerator):
 class GTCDaceBackend(BaseGTBackend, CLIBackendMixin):
     """DaCe python backend using gtc."""
 
-    name = "gtc:dace"
+    name = "dace"
     GT_BACKEND_T = "dace"
     languages = {"computation": "c++", "bindings": ["python"]}
     storage_info = {

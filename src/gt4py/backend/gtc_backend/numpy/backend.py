@@ -80,7 +80,7 @@ def recursive_write(root_path: pathlib.Path, tree: Dict[str, Union[str, dict]]):
 class GTCNumpyBackend(BaseBackend, CLIBackendMixin):
     """NumPy backend using gtc."""
 
-    name = "gtc:numpy"
+    name = "numpy"
     options: ClassVar[Dict[str, Any]] = {
         "oir_pipeline": {"versioning": True, "type": OirPipeline},
         # TODO: Implement this option in source code
