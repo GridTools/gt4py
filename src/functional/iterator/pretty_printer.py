@@ -266,7 +266,7 @@ class PrettyPrinter(NodeTranslator):
         )
 
     @classmethod
-    def apply(cls, node: ir.Node, indent: int = DEFAULT_INDENT, width: int = DEFAULT_WIDTH) -> str:
+    def apply(cls, node: ir.Node, indent: int, width: int) -> str:
         return "\n".join(cls(indent=indent, width=width).visit(node, prec=0))
 
 
