@@ -163,6 +163,7 @@ class GTCDaCeExtGenerator(BackendCodegen):
         _to_device(sdfg, self.backend.storage_info["device"])
         sdfg = _expand_and_finalize_sdfg(stencil_ir, sdfg, self.backend.storage_info["layout_map"])
 
+        # strip history from SDFG for faster save/load
         for tmp_sdfg in sdfg.all_sdfgs_recursive():
             tmp_sdfg.transformation_hist = []
             tmp_sdfg.orig_sdfg = None

@@ -308,8 +308,9 @@ class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
         if not stencil_ir:
             stencil_ir = self.builder.gtir
         # Generate source
+        gt_pyext_files: Dict[str, Any]
         if not self.builder.options._impl_opts.get("disable-code-generation", False):
-            gt_pyext_files: Dict[str, Any] = self.make_extension_sources(stencil_ir=stencil_ir)
+            gt_pyext_files = self.make_extension_sources(stencil_ir=stencil_ir)
             gt_pyext_sources = {**gt_pyext_files["computation"], **gt_pyext_files["bindings"]}
         else:
             # Pass NOTHING to the self.builder means try to reuse the source code files
