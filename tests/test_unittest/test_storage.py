@@ -115,7 +115,7 @@ def test_allocate_cpu(param_dict):
     shape = param_dict["shape"]
     layout_map = param_dict["layout_order"]
 
-    raw_buffer, field = gt_storage_utils.allocate_cpu(
+    raw_buffer, field, _ = gt_storage_utils.allocate_cpu(
         default_origin, shape, layout_map, dtype, alignment_bytes
     )
 
@@ -179,7 +179,7 @@ def test_allocate_gpu(param_dict):
     shape = param_dict["shape"]
     layout_map = param_dict["layout_order"]
 
-    raw_buffer, field = gt_storage_utils.allocate_gpu(
+    raw_buffer, field, _ = gt_storage_utils.allocate_gpu(
         default_origin, shape, layout_map, dtype, alignment_bytes
     )
 
@@ -239,7 +239,14 @@ def test_allocate_gpu_unmanaged(param_dict):
     default_origin = param_dict["default_origin"]
     shape = param_dict["shape"]
     layout_map = param_dict["layout_order"]
-    raw_buffer, field, device_raw_buffer, device_field = gt_storage_utils.allocate_gpu_unmanaged(
+    (
+        raw_buffer,
+        field,
+        _,
+        device_raw_buffer,
+        device_field,
+        _,
+    ) = gt_storage_utils.allocate_gpu_unmanaged(
         default_origin, shape, layout_map, dtype, alignment_bytes
     )
 
