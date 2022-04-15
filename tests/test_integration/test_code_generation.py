@@ -388,7 +388,7 @@ def test_variable_offsets_and_while_loop(backend):
 
 # TODO: Enable DaCe
 @pytest.mark.parametrize(
-    "backend", [backend for backend in ALL_BACKENDS if backend.values[0] != "gtc:dace"]
+    "backend", [backend for backend in ALL_BACKENDS if backend.values[0] != "dace"]
 )
 def test_nested_while_loop(backend):
     @gtscript.stencil(backend=backend)
