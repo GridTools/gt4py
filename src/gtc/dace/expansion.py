@@ -14,7 +14,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
+from typing import Any, ClassVar, Dict, List, Optional, Sequence, Set, Tuple
 
 import dace
 import dace.data
@@ -382,13 +382,13 @@ class OIRLibraryNodeExpander:
             outputs=out_connectors,
         )
 
-    def add_nodes_and_edges(self):
+    def _add_nodes_and_edges(self):
         raise NotImplementedError("Implement in Subclass")
 
     def expand(self):
         self.add_arrays()
 
-        self.add_nodes_and_edges()
+        self._add_nodes_and_edges()
         res = self.fix_context_memlets_and_get_nsdfg()
 
         # inherit symbols from parent sdfg
@@ -555,7 +555,7 @@ class SequentialNaiveVerticalLoopExpander(NaiveVerticalLoopExpander):
             increment_expr = "k+1"
         return initialize_expr, condition_expr, increment_expr
 
-    def add_nodes_and_edges(self):
+    def _add_nodes_and_edges(self):
 
         recent_state = self.res_state
         self.res_sdfg.add_symbol("k", stype=dace.int32)
@@ -611,7 +611,7 @@ class SequentialNaiveVerticalLoopExpander(NaiveVerticalLoopExpander):
 
 
 class ParallelNaiveVerticalLoopExpander(NaiveVerticalLoopExpander):
-    def add_nodes_and_edges(self):
+    def _add_nodes_and_edges(self):
         # for each section
         # acc -> map over k -> nsdfg with HE's
         in_accesses = dict()
@@ -834,7 +834,7 @@ class NaiveHorizontalExecutionExpander(OIRLibraryNodeExpander):
             )
         return in_memlets, out_memlets
 
-    def add_nodes_and_edges(self):
+    def _add_nodes_and_edges(self):
         in_memlets, out_memlets = self.get_innermost_memlets()
         from collections import OrderedDict
 
@@ -928,10 +928,10 @@ class NaiveHorizontalExecutionExpander(OIRLibraryNodeExpander):
 
 class BlockVerticalLoopExpander(NaiveVerticalLoopExpander):
 
-    default_tile_sizes = (64, 8)
+    DEFAULT_TILE_SIZE: ClassVar[Tuple[int, int]] = (64, 8)
 
-    def get_tiled_subset_strs(self, nsdfg, extent):
-        tile_sizes = self.node.tile_sizes or self.default_tile_sizes
+    def _get_tiled_subset_strs(self, nsdfg: dace.nodes.NestedSDFG) -> Dict[str, str]:
+        tile_sizes = self.node.tile_sizes or self.DEFAULT_TILE_SIZE
 
         access_collection = get_access_collection(nsdfg.sdfg)
         region_fields = {
@@ -957,7 +957,7 @@ class BlockVerticalLoopExpander(NaiveVerticalLoopExpander):
         for name, subset in inner_subsets.items():
             if name in region_fields:
                 continue
-            array: dace.data.Array = nsdfg.sdfg.arrays[name]
+            array = nsdfg.sdfg.arrays[name]
             dims = array_dimensions(array)
             if dims[0]:
                 irange = list(subset.ranges[0])
@@ -978,14 +978,14 @@ class BlockVerticalLoopExpander(NaiveVerticalLoopExpander):
                 subset.ranges[1] = tuple(jrange)
         for name, subset in inner_subsets.items():
 
-            array: dace.data.Array = nsdfg.sdfg.arrays[name]
+            array = nsdfg.sdfg.arrays[name]
             dims = array_dimensions(array)
             inner_subsets[name] = dace.subsets.Range(
                 subset.ranges + [(0, s - 1, 1) for s in array.shape[sum(dims[:2]) :]]
             )
         return {k: str(v) for k, v in inner_subsets.items()}
 
-    def _device_map_add_nodes(self, nsdfg):
+    def _device_map_add_nodes(self, nsdfg: dace.nodes.NestedSDFG):
 
         self.res_state.add_node(nsdfg)
 
@@ -1010,7 +1010,7 @@ class BlockVerticalLoopExpander(NaiveVerticalLoopExpander):
 
         i_range = get_interval_range_str(i_interval, "__I")
         j_range = get_interval_range_str(j_interval, "__J")
-        tile_sizes = self.node.tile_sizes or self.default_tile_sizes
+        tile_sizes = self.node.tile_sizes or self.DEFAULT_TILE_SIZE
         from collections import OrderedDict
 
         ndrange = OrderedDict(
@@ -1021,7 +1021,7 @@ class BlockVerticalLoopExpander(NaiveVerticalLoopExpander):
         map_entry, map_exit = self.res_state.add_map(
             self.node.name + "_device_map", ndrange, schedule=self.node.tiling_map_schedule
         )
-        subset_strs = self.get_tiled_subset_strs(nsdfg, extent_bounding_box)
+        subset_strs = self._get_tiled_subset_strs(nsdfg)
         if not nsdfg.in_connectors:
             self.res_state.add_edge(map_entry, None, nsdfg, None, dace.Memlet())
         for name in nsdfg.in_connectors:
@@ -1051,7 +1051,7 @@ class BlockVerticalLoopExpander(NaiveVerticalLoopExpander):
                 scope_connector=name,
             )
 
-    def _device_map_set_map_ranges(self, nsdfg):
+    def _device_map_set_map_ranges(self, nsdfg: dace.nodes.NestedSDFG):
         tile_i_sym = dace.symbol("tile_i", dtype=dace.int32)
         tile_j_sym = dace.symbol("tile_j", dtype=dace.int32)
         global_I_sym = dace.symbol("__global_I", dtype=dace.int32)
@@ -1119,13 +1119,13 @@ class BlockVerticalLoopExpander(NaiveVerticalLoopExpander):
                     shape[i] = s
                 array.shape = tuple(shape)
 
-    def _device_map_fix_symbols(self, nsdfg):
+    def _device_map_fix_symbols(self, nsdfg: dace.nodes.NestedSDFG):
 
         tile_i_sym = dace.symbol("tile_i", dtype=dace.int32)
         tile_j_sym = dace.symbol("tile_j", dtype=dace.int32)
         global_I_sym = dace.symbol("__global_I", dtype=dace.int32)
         global_J_sym = dace.symbol("__global_J", dtype=dace.int32)
-        tile_sizes = self.node.tile_sizes or self.default_tile_sizes
+        tile_sizes = self.node.tile_sizes or self.DEFAULT_TILE_SIZE
         nsdfg.symbol_mapping["__I"] = dace.symbolic.pystr_to_symbolic(
             f"min({tile_sizes[0]}, __I - tile_i )"
         )
@@ -1165,27 +1165,27 @@ class BlockVerticalLoopExpander(NaiveVerticalLoopExpander):
         nsdfg.symbol_mapping["tile_i"] = tile_i_sym
         nsdfg.symbol_mapping["tile_j"] = tile_j_sym
 
-    def device_map(self, nsdfg):
+    def _device_map(self, nsdfg: dace.nodes.NestedSDFG):
         self._device_map_add_nodes(nsdfg)
         self._device_map_set_map_ranges(nsdfg)
         self._device_map_fix_symbols(nsdfg)
 
 
 class SequentialBlockLoopExpander(BlockVerticalLoopExpander):
-    def add_nodes_and_edges(self):
+    def _add_nodes_and_edges(self):
         inner_expander = SequentialNaiveVerticalLoopExpander(
             self.node, self.parent_state, self.parent_sdfg, fix_context_memlets=False
         )
         res_nsdfg = inner_expander.expand()
-        self.device_map(res_nsdfg)
+        self._device_map(res_nsdfg)
 
 
 class ParallelBlockLoopExpander(BlockVerticalLoopExpander):
-    def add_nodes_and_edges(self):
+    def _add_nodes_and_edges(self):
         res = ParallelNaiveVerticalLoopExpander(
             self.node, self.parent_state, self.parent_sdfg, fix_context_memlets=False
         ).expand()
-        self.device_map(res)
+        self._device_map(res)
 
 
 @dace.library.register_expansion(VerticalLoopLibraryNode, "naive")

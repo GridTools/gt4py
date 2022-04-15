@@ -29,6 +29,7 @@ from eve.codegen import MakoTemplate as as_mako
 from gt4py import backend as gt_backend
 from gt4py import ir as gt_ir
 from gt4py import utils as gt_utils
+from gt4py.backend import Backend
 from gt4py.backend.module_generator import BaseModuleGenerator, ModuleData
 from gt4py.definitions import AccessKind
 from gtc import gtir
@@ -57,8 +58,8 @@ def pybuffer_to_sid(
     domain_dim_flags: Tuple[bool, bool, bool],
     data_ndim: int,
     stride_kind_index: int,
+    backend: Backend,
     check_layout: bool = True,
-    backend,
 ):
     domain_ndim = domain_dim_flags.count(True)
     sid_ndim = domain_ndim + data_ndim
