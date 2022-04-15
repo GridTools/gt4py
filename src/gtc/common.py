@@ -16,19 +16,7 @@
 
 import enum
 import typing
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    ClassVar,
-    Dict,
-    Generic,
-    List,
-    Optional,
-    Tuple,
-    Type,
-    TypeVar,
-    Union,
-)
+from typing import Any, ClassVar, Dict, Generic, List, Optional, Tuple, Type, TypeVar, Union
 
 import numpy as np
 import pydantic
@@ -50,10 +38,6 @@ from eve import utils
 from eve.type_definitions import SymbolRef
 from eve.typingx import RootValidatorType, RootValidatorValuesType
 from gtc.utils import dimension_flags_to_names, flatten_list
-
-
-if TYPE_CHECKING:
-    from gt4py.ir.nodes import Location
 
 
 class GTCPreconditionError(eve_exceptions.EveError, RuntimeError):
@@ -898,9 +882,3 @@ def typestr_to_data_type(typestr: str) -> DataType:
     }
     key = (typestr[1], int(typestr[2:]))
     return table.get(key, DataType.INVALID)  # type: ignore
-
-
-def location_to_source_location(loc: Optional["Location"]) -> Optional[SourceLocation]:
-    if loc is None or loc.line <= 0 or loc.column <= 0:
-        return None
-    return SourceLocation(loc.line, loc.column, loc.scope)

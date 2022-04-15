@@ -69,7 +69,8 @@ def _specialize_transient_strides(sdfg: dace.SDFG, layout_map):
             sdfg.remove_symbol(k)
 
 
-def _to_device(sdfg: dace.SDFG, device):
+def _to_device(sdfg: dace.SDFG, device: str) -> None:
+    """Update sdfg in place."""
     if device == "gpu":
         for array in sdfg.arrays.values():
             array.storage = (
@@ -81,8 +82,6 @@ def _to_device(sdfg: dace.SDFG, device):
 
 
 def _pre_expand_trafos(sdfg: dace.SDFG):
-    while inline_sdfgs(sdfg) or fuse_states(sdfg):
-        pass
     sdfg.simplify()
     for node, _ in sdfg.all_nodes_recursive():
         if isinstance(node, StencilComputation):
@@ -471,7 +470,6 @@ class BaseGTCDaceBackend(BaseGTBackend, CLIBackendMixin):
 
     options = BaseGTBackend.GT_BACKEND_OPTS
     PYEXT_GENERATOR_CLASS = GTCDaCeExtGenerator  # type: ignore
-    USE_LEGACY_TOOLCHAIN = False
 
     def generate(self) -> Type["StencilObject"]:
         self.check_options(self.builder.options)
@@ -533,4 +531,4 @@ class GTCDaceGPUBackend(BaseGTCDaceBackend):
     }
 
     def generate_extension(self) -> Tuple[str, str]:
-        return self.make_extension(stencil_ir=self.builder.gtir, uses_cuda=False)
+        return self.make_extension(stencil_ir=self.builder.gtir, uses_cuda=True)

@@ -16,7 +16,7 @@
 
 import re
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple, Union
 
 import dace
 import dace.data
@@ -588,8 +588,8 @@ def mask_includes_inner_domain(mask: common.HorizontalMask):
     return False
 
 
-def layout_maker_factory(base_layout):
-    def layout_maker(mask):
+def layout_maker_factory(base_layout: Tuple[int, ...]) -> Callable[[List[bool]], Tuple[int, ...]]:
+    def layout_maker(mask: List[bool]) -> Tuple[int, ...]:
         ranks = []
         for m, l in zip(mask, base_layout):
             if m:

@@ -27,8 +27,8 @@ import numpy as np
 import gtc.utils as gtc_utils
 from eve.codegen import MakoTemplate as as_mako
 from gt4py import backend as gt_backend
-from gt4py import ir as gt_ir
 from gt4py import utils as gt_utils
+from gt4py.backend import Backend
 from gt4py.backend.module_generator import BaseModuleGenerator, ModuleData
 from gt4py.definitions import AccessKind
 from gtc import gtir
@@ -57,8 +57,8 @@ def pybuffer_to_sid(
     domain_dim_flags: Tuple[bool, bool, bool],
     data_ndim: int,
     stride_kind_index: int,
+    backend: Backend,
     check_layout: bool = True,
-    backend,
 ):
     domain_ndim = domain_dim_flags.count(True)
     sid_ndim = domain_ndim + data_ndim
@@ -135,17 +135,9 @@ def bindings_main_template():
     )
 
 
-def iir_is_not_empty(implementation_ir: gt_ir.StencilImplementation) -> bool:
-    return bool(implementation_ir.multi_stages)
-
-
 def gtir_is_not_empty(pipeline: GtirPipeline) -> bool:
     node = pipeline.full()
     return bool(node.iter_tree().if_isinstance(gtir.ParAssignStmt).to_list())
-
-
-def iir_has_effect(implementation_ir: gt_ir.StencilImplementation) -> bool:
-    return bool(implementation_ir.has_effect)
 
 
 def gtir_has_effect(pipeline: GtirPipeline) -> bool:
@@ -153,13 +145,7 @@ def gtir_has_effect(pipeline: GtirPipeline) -> bool:
 
 
 class PyExtModuleGenerator(BaseModuleGenerator):
-    """
-    Module Generator for use with backends that generate c++ python extensions.
-
-    Will either use ImplementationIR or GTIR depending on the backend's USE_LEGACY_TOOLCHAIN
-    class attribute. Using with other IRs requires subclassing and overriding ``_is_not_empty()``
-    and ``_has_effect()`` methods.
-    """
+    """Module Generator for use with backends that generate c++ python extensions."""
 
     pyext_module_name: Optional[str]
     pyext_file_path: Optional[str]
@@ -182,8 +168,6 @@ class PyExtModuleGenerator(BaseModuleGenerator):
     def _is_not_empty(self) -> bool:
         if self.pyext_module_name is None:
             return False
-        if self.builder.backend.USE_LEGACY_TOOLCHAIN:
-            return iir_is_not_empty(self.builder.implementation_ir)
         return gtir_is_not_empty(self.builder.gtir_pipeline)
 
     def generate_imports(self) -> str:
@@ -207,8 +191,6 @@ class PyExtModuleGenerator(BaseModuleGenerator):
     def _has_effect(self) -> bool:
         if not self._is_not_empty():
             return False
-        if self.builder.backend.USE_LEGACY_TOOLCHAIN:
-            return iir_has_effect(self.builder.implementation_ir)
         return gtir_has_effect(self.builder.gtir_pipeline)
 
     def generate_implementation(self) -> str:

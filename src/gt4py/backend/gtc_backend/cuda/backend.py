@@ -152,7 +152,6 @@ class GTCCudaBackend(BaseGTBackend, CLIBackendMixin):
     PYEXT_GENERATOR_CLASS = GTCCudaExtGenerator  # type: ignore
     MODULE_GENERATOR_CLASS = GTCUDAPyModuleGenerator
     GT_BACKEND_T = "gpu"
-    USE_LEGACY_TOOLCHAIN = False
 
     def generate_extension(self, **kwargs: Any) -> Tuple[str, str]:
         return self.make_extension(stencil_ir=self.builder.gtir, uses_cuda=True)
