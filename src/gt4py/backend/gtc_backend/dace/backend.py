@@ -70,7 +70,7 @@ def _specialize_transient_strides(sdfg: dace.SDFG, layout_map):
 
 
 def _to_device(sdfg: dace.SDFG, device: str) -> None:
-    """Updates sdfg in place."""
+    """Update sdfg in place."""
     if device == "gpu":
         for array in sdfg.arrays.values():
             array.storage = dace.StorageType.GPU_Global
