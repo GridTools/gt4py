@@ -23,10 +23,9 @@ import numpy as np
 import pytest
 
 import gt4py.definitions as gt_definitions
-import gt4py.ir as gt_ir
-import gt4py.utils as gt_utils
 from gt4py import gtscript
 from gt4py.frontend import gtscript_frontend as gt_frontend
+from gt4py.frontend import nodes
 from gt4py.gtscript import (
     PARALLEL,
     I,
@@ -206,7 +205,7 @@ class TestInlinedExternals:
         )
 
         stmt = def_ir.computations[0].body.stmts[0]
-        assert isinstance(stmt.value, gt_ir.ScalarLiteral) and stmt.value.value == 0
+        assert isinstance(stmt.value, nodes.ScalarLiteral) and stmt.value.value == 0
 
     @pytest.mark.parametrize("value_type", [str, dict, list])
     def test_wrong_value(self, value_type):
@@ -341,11 +340,11 @@ class TestIntervalSyntax:
             definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
         )
         loc = def_ir.computations[0].interval.loc
-        assert def_ir.computations[0].interval.start == gt_ir.AxisBound(
-            level=gt_ir.LevelMarker.START, offset=0, loc=loc
+        assert def_ir.computations[0].interval.start == nodes.AxisBound(
+            level=nodes.LevelMarker.START, offset=0, loc=loc
         )
-        assert def_ir.computations[0].interval.end == gt_ir.AxisBound(
-            level=gt_ir.LevelMarker.START, offset=1, loc=loc
+        assert def_ir.computations[0].interval.end == nodes.AxisBound(
+            level=nodes.LevelMarker.START, offset=1, loc=loc
         )
 
     def test_none(self):
@@ -357,11 +356,11 @@ class TestIntervalSyntax:
             definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
         )
         loc = def_ir.computations[0].interval.loc
-        assert def_ir.computations[0].interval.start == gt_ir.AxisBound(
-            level=gt_ir.LevelMarker.START, offset=1, loc=loc
+        assert def_ir.computations[0].interval.start == nodes.AxisBound(
+            level=nodes.LevelMarker.START, offset=1, loc=loc
         )
-        assert def_ir.computations[0].interval.end == gt_ir.AxisBound(
-            level=gt_ir.LevelMarker.END, offset=0, loc=loc
+        assert def_ir.computations[0].interval.end == nodes.AxisBound(
+            level=nodes.LevelMarker.END, offset=0, loc=loc
         )
 
     def test_externals(self):
@@ -382,11 +381,11 @@ class TestIntervalSyntax:
                 module=self.__class__.__name__,
             )
             loc = def_ir.computations[0].interval.loc
-            assert def_ir.computations[0].interval.start == gt_ir.AxisBound(
-                level=gt_ir.LevelMarker.START, offset=3, loc=loc
+            assert def_ir.computations[0].interval.start == nodes.AxisBound(
+                level=nodes.LevelMarker.START, offset=3, loc=loc
             )
-            assert def_ir.computations[0].interval.end == gt_ir.AxisBound(
-                level=gt_ir.LevelMarker.END, offset=-1, loc=loc
+            assert def_ir.computations[0].interval.end == nodes.AxisBound(
+                level=nodes.LevelMarker.END, offset=-1, loc=loc
             )
 
     def test_axisinterval(self):
@@ -398,11 +397,11 @@ class TestIntervalSyntax:
             definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
         )
         loc = def_ir.computations[0].interval.loc
-        assert def_ir.computations[0].interval.start == gt_ir.AxisBound(
-            level=gt_ir.LevelMarker.START, offset=1, loc=loc
+        assert def_ir.computations[0].interval.start == nodes.AxisBound(
+            level=nodes.LevelMarker.START, offset=1, loc=loc
         )
-        assert def_ir.computations[0].interval.end == gt_ir.AxisBound(
-            level=gt_ir.LevelMarker.END, offset=-1, loc=loc
+        assert def_ir.computations[0].interval.end == nodes.AxisBound(
+            level=nodes.LevelMarker.END, offset=-1, loc=loc
         )
 
     def test_error_none(self):
@@ -491,7 +490,7 @@ class TestRegions:
         )
 
         assert len(def_ir.computations) == 1
-        assert isinstance(def_ir.computations[0].body.stmts[0], gt_ir.HorizontalIf)
+        assert isinstance(def_ir.computations[0].body.stmts[0], nodes.HorizontalIf)
 
     def test_one_interval_only_single(self):
         def stencil(in_f: gtscript.Field[np.float_]):
@@ -522,7 +521,7 @@ class TestRegions:
         assert len(def_ir.computations) == 1
         assert (
             def_ir.computations[0].body.stmts[0].intervals["I"].start.level
-            == gt_ir.LevelMarker.START
+            == nodes.LevelMarker.START
         )
         assert def_ir.computations[0].body.stmts[0].intervals["I"].start.offset == 1
         assert def_ir.computations[0].body.stmts[0].intervals["I"].is_single_index
@@ -910,9 +909,7 @@ class TestDataDimensions:
         def_ir = parse_definition(
             definition, name=inspect.stack()[0][3], module=self.__class__.__name__
         )
-        assert isinstance(
-            def_ir.computations[0].body.stmts[0].value.data_index[0], gt_ir.nodes.VarRef
-        )
+        assert isinstance(def_ir.computations[0].body.stmts[0].value.data_index[0], nodes.VarRef)
 
     def test_indirect_access_write(self):
         def definition(
@@ -926,9 +923,7 @@ class TestDataDimensions:
         def_ir = parse_definition(
             definition, name=inspect.stack()[0][3], module=self.__class__.__name__
         )
-        assert isinstance(
-            def_ir.computations[0].body.stmts[0].target.data_index[0], gt_ir.nodes.VarRef
-        )
+        assert isinstance(def_ir.computations[0].body.stmts[0].target.data_index[0], nodes.VarRef)
 
 
 class TestImports:
