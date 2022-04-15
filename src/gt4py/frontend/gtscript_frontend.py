@@ -711,7 +711,7 @@ def _find_accesses_with_offsets(node: nodes.Node) -> Set[str]:
     names: Set[str] = set()
 
     class FindRefs(node_util.IRNodeVisitor):
-        def visit_FieldRef(self, node: nodes.FieldAccessor) -> None:
+        def visit_FieldRef(self, node: nodes.FieldRef) -> None:
             if node.offset.get("I", 0) != 0 or node.offset.get("J", 0) != 0:
                 names.add(node.name)
 
