@@ -42,7 +42,7 @@ if TYPE_CHECKING:
     from gt4py.stencil_object import StencilObject
 
 
-class GTCModuleGenerator(BaseModuleGenerator):
+class ModuleGenerator(BaseModuleGenerator):
     def generate_imports(self) -> str:
         comp_pkg = (
             self.builder.caching.module_prefix + "computation" + self.builder.caching.module_postfix
@@ -62,8 +62,8 @@ class GTCModuleGenerator(BaseModuleGenerator):
         return f"computation.run({', '.join(params)})"
 
     @property
-    def backend(self) -> "GTCNumpyBackend":
-        return cast(GTCNumpyBackend, self.builder.backend)
+    def backend(self) -> "NumpyBackend":
+        return cast(NumpyBackend, self.builder.backend)
 
 
 def recursive_write(root_path: pathlib.Path, tree: Dict[str, Union[str, dict]]):
@@ -77,7 +77,7 @@ def recursive_write(root_path: pathlib.Path, tree: Dict[str, Union[str, dict]]):
 
 
 @register
-class GTCNumpyBackend(BaseBackend, CLIBackendMixin):
+class NumpyBackend(BaseBackend, CLIBackendMixin):
     """NumPy backend using gtc."""
 
     name = "numpy"
@@ -94,7 +94,7 @@ class GTCNumpyBackend(BaseBackend, CLIBackendMixin):
         "is_compatible_type": debug_is_compatible_type,
     }
     languages = {"computation": "python", "bindings": ["python"]}
-    MODULE_GENERATOR_CLASS = GTCModuleGenerator
+    MODULE_GENERATOR_CLASS = ModuleGenerator
     GTIR_KEY = "gtc:gtir"
 
     def generate_computation(self) -> Dict[str, Union[str, Dict]]:

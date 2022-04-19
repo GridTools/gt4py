@@ -129,7 +129,7 @@ def _expand_and_finalize_sdfg(stencil_ir: gtir.Stencil, sdfg: dace.SDFG, layout_
     return sdfg
 
 
-class GTCDaCeExtGenerator(BackendCodegen):
+class DaCeExtGenerator(BackendCodegen):
     def __init__(self, class_name, module_name, backend):
         self.class_name = class_name
         self.module_name = module_name
@@ -448,12 +448,12 @@ class DaCeCUDAPyExtModuleGenerator(DaCePyExtModuleGenerator, GTCUDAPyModuleGener
     pass
 
 
-class BaseGTCDaceBackend(BaseGTBackend, CLIBackendMixin):
+class BaseDaceBackend(BaseGTBackend, CLIBackendMixin):
 
     GT_BACKEND_T = "dace"
 
     options = BaseGTBackend.GT_BACKEND_OPTS
-    PYEXT_GENERATOR_CLASS = GTCDaCeExtGenerator  # type: ignore
+    PYEXT_GENERATOR_CLASS = DaCeExtGenerator  # type: ignore
 
     def generate(self) -> Type["StencilObject"]:
         self.check_options(self.builder.options)
@@ -476,7 +476,7 @@ class BaseGTCDaceBackend(BaseGTBackend, CLIBackendMixin):
 
 
 @register
-class GTCDaceCPUBackend(BaseGTCDaceBackend):
+class DaceCPUBackend(BaseDaceBackend):
 
     name = "dace:cpu"
     languages = {"computation": "c++", "bindings": ["python"]}
@@ -496,7 +496,7 @@ class GTCDaceCPUBackend(BaseGTCDaceBackend):
 
 
 @register
-class GTCDaceGPUBackend(BaseGTCDaceBackend):
+class DaceGPUBackend(BaseDaceBackend):
     """DaCe python backend using gtc."""
 
     name = "dace:gpu"

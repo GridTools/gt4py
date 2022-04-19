@@ -43,7 +43,7 @@ if TYPE_CHECKING:
     from gt4py.stencil_object import StencilObject
 
 
-class GTCCudaExtGenerator(BackendCodegen):
+class CudaExtGenerator(BackendCodegen):
     def __init__(self, class_name, module_name, backend):
         self.class_name = class_name
         self.module_name = module_name
@@ -62,7 +62,7 @@ class GTCCudaExtGenerator(BackendCodegen):
         cuir_node = extent_analysis.CacheExtents().visit(cuir_node)
         format_source = self.backend.builder.options.format_source
         implementation = cuir_codegen.CUIRCodegen.apply(cuir_node, format_source=format_source)
-        bindings = GTCCudaBindingsCodegen.apply(
+        bindings = CudaBindingsCodegen.apply(
             cuir_node,
             module_name=self.module_name,
             backend=self.backend,
@@ -74,7 +74,7 @@ class GTCCudaExtGenerator(BackendCodegen):
         }
 
 
-class GTCCudaBindingsCodegen(codegen.TemplatedGenerator):
+class CudaBindingsCodegen(codegen.TemplatedGenerator):
     def __init__(self, backend):
         self.backend = backend
         self._unique_index: int = 0
@@ -136,7 +136,7 @@ class GTCCudaBindingsCodegen(codegen.TemplatedGenerator):
 
 
 @register
-class GTCCudaBackend(BaseGTBackend, CLIBackendMixin):
+class CudaBackend(BaseGTBackend, CLIBackendMixin):
     """CUDA backend using gtc."""
 
     name = "cuda"
@@ -149,7 +149,7 @@ class GTCCudaBackend(BaseGTBackend, CLIBackendMixin):
         "is_compatible_layout": cuda_is_compatible_layout,
         "is_compatible_type": cuda_is_compatible_type,
     }
-    PYEXT_GENERATOR_CLASS = GTCCudaExtGenerator  # type: ignore
+    PYEXT_GENERATOR_CLASS = CudaExtGenerator  # type: ignore
     MODULE_GENERATOR_CLASS = GTCUDAPyModuleGenerator
     GT_BACKEND_T = "gpu"
 

@@ -46,7 +46,7 @@ if TYPE_CHECKING:
     from gt4py.stencil_object import StencilObject
 
 
-class GTCGTExtGenerator(BackendCodegen):
+class GTExtGenerator(BackendCodegen):
     def __init__(self, class_name, module_name, backend):
         self.class_name = class_name
         self.module_name = module_name
@@ -138,9 +138,9 @@ class GTCppBindingsCodegen(codegen.TemplatedGenerator):
         return generated_code
 
 
-class GTCGTBaseBackend(BaseGTBackend, CLIBackendMixin):
+class GTBaseBackend(BaseGTBackend, CLIBackendMixin):
     options = BaseGTBackend.GT_BACKEND_OPTS
-    PYEXT_GENERATOR_CLASS = GTCGTExtGenerator  # type: ignore
+    PYEXT_GENERATOR_CLASS = GTExtGenerator  # type: ignore
 
     def _generate_extension(self, uses_cuda: bool) -> Tuple[str, str]:
         return self.make_extension(stencil_ir=self.builder.gtir, uses_cuda=uses_cuda)
@@ -166,7 +166,7 @@ class GTCGTBaseBackend(BaseGTBackend, CLIBackendMixin):
 
 
 @register
-class GTCGTCpuIfirstBackend(GTCGTBaseBackend):
+class GTCpuIfirstBackend(GTBaseBackend):
     """GridTools python backend using gtc."""
 
     name = "gt:cpu_ifirst"
@@ -185,7 +185,7 @@ class GTCGTCpuIfirstBackend(GTCGTBaseBackend):
 
 
 @register
-class GTCGTCpuKfirstBackend(GTCGTBaseBackend):
+class GTCpuKfirstBackend(GTBaseBackend):
     """GridTools python backend using gtc."""
 
     name = "gt:cpu_kfirst"
@@ -204,7 +204,7 @@ class GTCGTCpuKfirstBackend(GTCGTBaseBackend):
 
 
 @register
-class GTCGTGpuBackend(GTCGTBaseBackend):
+class GTGpuBackend(GTBaseBackend):
     """GridTools python backend using gtc."""
 
     MODULE_GENERATOR_CLASS = GTCUDAPyModuleGenerator
