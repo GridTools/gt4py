@@ -32,7 +32,8 @@ from eve.codegen import FormatTemplate as as_fmt
 from gt4py import definitions as gt_def
 from gt4py.definitions import Extent
 from gtc import daceir as dcir
-from gtc.dace.nodes import Loop, Map, Sections, Stages, StencilComputation
+from gtc.dace.expansion_specification import Loop, Map, Sections, Stages
+from gtc.dace.nodes import StencilComputation
 from gtc.dace.utils import get_axis_bound_str, get_tasklet_symbol
 from gtc.passes.oir_optimizations.utils import AccessCollector
 

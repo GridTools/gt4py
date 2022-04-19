@@ -13,3 +13,8 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
+
+try:
+    from .backend import GTCDaceCPUBackend, GTCDaceGPUBackend
+except ImportError:
+    pass

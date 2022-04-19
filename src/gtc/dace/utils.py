@@ -571,23 +571,6 @@ def collect_toplevel_iteration_nodes(
     return collection
 
 
-def mask_includes_inner_domain(mask: common.HorizontalMask):
-    for interval in mask.intervals:
-        if interval.start is None and interval.end is None:
-            return True
-        elif interval.start is None and interval.end.level == common.LevelMarker.END:
-            return True
-        elif interval.end is None and interval.start.level == common.LevelMarker.START:
-            return True
-        elif (
-            interval.start is not None
-            and interval.end is not None
-            and interval.start.level != interval.end.level
-        ):
-            return True
-    return False
-
-
 def layout_maker_factory(base_layout: Tuple[int, ...]) -> Callable[[List[bool]], Tuple[int, ...]]:
     def layout_maker(mask: List[bool]) -> Tuple[int, ...]:
         ranks = []

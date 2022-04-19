@@ -24,6 +24,7 @@ from .base import (
     from_name,
     register,
 )
+
 from .gtc_backend import (
     GTCCudaBackend,
     GTCGTCpuIfirstBackend,
@@ -34,7 +35,7 @@ from .gtc_backend import (
 
 
 try:
-    from .gtc_backend import GTCDaceCPUBackend, GTCDaceGPUBackend
+    from .gtc_backend.dace import GTCDaceCPUBackend, GTCDaceGPUBackend
 except ImportError:
     pass
 
