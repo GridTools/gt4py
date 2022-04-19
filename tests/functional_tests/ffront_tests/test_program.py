@@ -13,6 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # TODO(tehrengruber): All field operators and programs should be executable
 #  as is at some point. Adopt tests to also run on the regular python objects.
+import pathlib
 import re
 
 import numpy as np
@@ -154,7 +155,7 @@ def test_copy_parsing(copy_program_def):
                 kwargs={"out": P(past.Name, id="out_field")},
             )
         ],
-        location=P(past.SourceLocation, line=58, source=__file__),
+        location=P(past.SourceLocation, line=59, source=str(pathlib.Path(__file__).resolve())),
     )
     assert pattern_node.match(past_node, raise_exception=True)
 
