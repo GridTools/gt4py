@@ -27,11 +27,11 @@ from .base import (
 
 
 try:
-    from .dace.backend import DaceCPUBackend, DaceGPUBackend
+    from .dace_backend import DaceCPUBackend, DaceGPUBackend
 except ImportError:
     pass
 
-from .cuda.backend import CudaBackend  # noqa: F401
-from .gtcpp.backend import GTCpuIfirstBackend, GTCpuKfirstBackend, GTGpuBackend  # noqa: F401
+from .cuda_backend import CudaBackend  # noqa: F401
+from .gtcpp_backend import GTCpuIfirstBackend, GTCpuKfirstBackend, GTGpuBackend  # noqa: F401
 from .module_generator import BaseModuleGenerator
-from .numpy.backend import NumpyBackend  # noqa: F401
+from .numpy_backend import NumpyBackend  # noqa: F401

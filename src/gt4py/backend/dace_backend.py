@@ -428,7 +428,7 @@ class DaCePyExtModuleGenerator(PyExtModuleGenerator):
                 *super().generate_imports().splitlines(),
                 "import dace",
                 "import copy",
-                "from gt4py.backend.dace.stencil_object import DaCeStencilObject",
+                "from gt4py.backend.dace_stencil_object import DaCeStencilObject",
             ]
         )
 
