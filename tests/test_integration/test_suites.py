@@ -604,7 +604,7 @@ class TestNon3DFields(gt_testing.StencilTestSuite):
         "field_out": np.float64,
     }
     domain_range = [(4, 10), (4, 10), (4, 10)]
-    backends = ["gt:cpu_ifirst", "gt:cpu_kfirst", "gt:gpu", "dace"]
+    backends = ["gt:cpu_ifirst", "gt:cpu_kfirst", "gt:gpu", "dace:cpu", "dace:gpu"]
     symbols = {
         "field_in": gt_testing.field(
             in_range=(-10, 10), axes="K", boundary=[(0, 0), (0, 0), (0, 0)]

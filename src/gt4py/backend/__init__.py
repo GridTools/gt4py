@@ -27,7 +27,7 @@ from .base import (
 
 
 try:
-    from .dace.backend import GTCDaceBackend
+    from .dace.backend import GTCDaceCPUBackend, GTCDaceGPUBackend
 except ImportError:
     pass
 

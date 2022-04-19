@@ -28,6 +28,7 @@ import gtc.utils as gtc_utils
 from eve.codegen import MakoTemplate as as_mako
 from gt4py import backend as gt_backend
 from gt4py import utils as gt_utils
+from gt4py.backend import Backend
 from gt4py.backend.module_generator import BaseModuleGenerator, ModuleData
 from gt4py.definitions import AccessKind
 from gtc import gtir
@@ -56,21 +57,24 @@ def pybuffer_to_sid(
     domain_dim_flags: Tuple[bool, bool, bool],
     data_ndim: int,
     stride_kind_index: int,
-    backend,
+    backend: Backend,
+    check_layout: bool = True,
 ):
     domain_ndim = domain_dim_flags.count(True)
     sid_ndim = domain_ndim + data_ndim
 
-    as_sid = "as_cuda_sid" if backend.GT_BACKEND_T == "gpu" else "as_sid"
+    as_sid = "as_cuda_sid" if backend.storage_info["device"] == "gpu" else "as_sid"
 
     sid_def = """gt::{as_sid}<{ctype}, {sid_ndim},
-        gt::integral_constant<int, {unique_index}>, {unit_stride_dim}>({name})""".format(
+        gt::integral_constant<int, {unique_index}>{unit_stride_dim}>({name})""".format(
         name=name,
         ctype=ctype,
         unique_index=stride_kind_index,
         sid_ndim=sid_ndim,
         as_sid=as_sid,
-        unit_stride_dim=_get_unit_stride_dim(backend, domain_dim_flags, data_ndim),
+        unit_stride_dim=f", {_get_unit_stride_dim(backend, domain_dim_flags, data_ndim)}"
+        if check_layout
+        else "",
     )
     sid_def = "gt::sid::shift_sid_origin({sid_def}, {name}_origin)".format(
         sid_def=sid_def,
