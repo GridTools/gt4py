@@ -19,6 +19,7 @@ import os
 
 import gt4py
 import gt4py.utils as gt_utils
+from gt4py import config as gt_config
 from gt4py import gt_src_manager
 from gt4py.backend import pyext_builder
 
@@ -28,13 +29,18 @@ GT4PY_INSTALLATION_PATH = os.path.dirname(inspect.getabsfile(gt4py))
 EXTERNAL_SRC_PATH = os.path.join(GT4PY_INSTALLATION_PATH, "_external_src")
 
 
-assert gt_src_manager.has_gt_sources() or gt_src_manager.install_gt_sources()
+assert gt_src_manager.has_gt_sources(major_version=2) or gt_src_manager.install_gt_sources(
+    major_version=2
+)
 
 
 def compile_reference():
     current_dir = os.path.dirname(__file__)
-    build_opts = pyext_builder.get_gt_pyext_build_opts()
-    build_opts["include_dirs"].append(EXTERNAL_SRC_PATH)
+    build_opts = pyext_builder.get_gt_pyext_build_opts().copy()
+    gt2_include_path = gt_config.build_settings["gt2_include_path"]
+    build_opts["include_dirs"].extend(
+        [gt2_include_path, os.path.join(gt2_include_path, "..", "tests")]
+    )
 
     build_opts.setdefault("extra_compile_args", [])
     build_opts["extra_compile_args"].append("-Wno-sign-compare")
@@ -48,3 +54,7 @@ def compile_reference():
         **build_opts,
     )
     return gt_utils.make_module_from_file(*reference_names)
+
+
+if __name__ == "__main__":
+    compile_reference()
