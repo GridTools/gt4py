@@ -1,4 +1,5 @@
 import importlib.util
+import pathlib
 import tempfile
 from typing import Iterable
 
@@ -100,53 +101,55 @@ def executor(ir: Node, *args, **kwargs):
     axis_literals: Iterable[str] = (
         ir.iter_tree().if_isinstance(AxisLiteral).getattr("value").to_set()
     )
-    with tempfile.NamedTemporaryFile(
-        mode="w",
-        suffix=".py",
-        delete=not debug,
-    ) as tmp:
-        if debug:
-            print(tmp.name)
-        header = """
+
+    header = """
 import numpy as np
 from functional.iterator.builtins import *
 from functional.iterator.runtime import *
 from functional.iterator.embedded import np_as_located_field
 """
+
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as source_file:
+        source_file_name = source_file.name
+        if debug:
+            print(source_file_name)
         offset_literals = [f'{o} = offset("{o}")' for o in offset_literals]
         axis_literals = [f'{o} = CartesianAxis("{o}")' for o in axis_literals]
-        tmp.write(header)
-        tmp.write("\n".join(offset_literals))
-        tmp.write("\n")
-        tmp.write("\n".join(axis_literals))
-        tmp.write("\n")
-        tmp.write(program)
-        tmp.write(wrapper)
-        tmp.flush()
+        source_file.write(header)
+        source_file.write("\n".join(offset_literals))
+        source_file.write("\n")
+        source_file.write("\n".join(axis_literals))
+        source_file.write("\n")
+        source_file.write(program)
+        source_file.write(wrapper)
 
-        spec = importlib.util.spec_from_file_location("module.name", tmp.name)
+    try:
+        spec = importlib.util.spec_from_file_location("module.name", source_file_name)
         foo = importlib.util.module_from_spec(spec)  # type: ignore
         spec.loader.exec_module(foo)  # type: ignore
+    finally:
+        if not debug:
+            pathlib.Path(source_file_name).unlink(missing_ok=True)
 
-        fencil_name = ir.id
-        fencil = getattr(foo, fencil_name + "_wrapper")
-        assert "offset_provider" in kwargs
+    fencil_name = ir.id
+    fencil = getattr(foo, fencil_name + "_wrapper")
+    assert "offset_provider" in kwargs
 
-        new_kwargs = {}
-        new_kwargs["offset_provider"] = kwargs["offset_provider"]
-        if "column_axis" in kwargs:
-            new_kwargs["column_axis"] = kwargs["column_axis"]
+    new_kwargs = {}
+    new_kwargs["offset_provider"] = kwargs["offset_provider"]
+    if "column_axis" in kwargs:
+        new_kwargs["column_axis"] = kwargs["column_axis"]
 
-        if "dispatch_backend" not in kwargs:
-            iterator.builtins.builtin_dispatch.push_key("embedded")
-            fencil(*args, **new_kwargs)
-            iterator.builtins.builtin_dispatch.pop_key()
-        else:
-            fencil(
-                *args,
-                **new_kwargs,
-                backend=kwargs["dispatch_backend"],
-            )
+    if "dispatch_backend" not in kwargs:
+        iterator.builtins.builtin_dispatch.push_key("embedded")
+        fencil(*args, **new_kwargs)
+        iterator.builtins.builtin_dispatch.pop_key()
+    else:
+        fencil(
+            *args,
+            **new_kwargs,
+            backend=kwargs["dispatch_backend"],
+        )
 
 
 backend.register_backend(_BACKEND_NAME, executor)
