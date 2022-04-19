@@ -24,17 +24,18 @@ import inspect as _inspect
 import sys as _sys
 import types as _types
 import typing as _typing
-# Definitions in 'typing_extensions' take priority over those in 'typing'
-from typing import *
 
-from typing_extensions import *
+# Definitions in 'typing_extensions' take priority over those in 'typing'
+from typing import *  # noqa: F403
+
+from typing_extensions import *  # noqa: F403
 
 from .python_info import IS_PYTHON_AT_LEAST_3_9
 
 
 if IS_PYTHON_AT_LEAST_3_9:
     # Standard library already supports PEP 585 (Type Hinting Generics In Standard Collections)
-    from builtins import (  # isort:skip
+    from builtins import (  # isort:skip  # noqa: F401
         tuple as Tuple,
         list as List,
         dict as Dict,
@@ -42,14 +43,14 @@ if IS_PYTHON_AT_LEAST_3_9:
         frozenset as FrozenSet,
         type as Type,
     )
-    from collections import (  # isort:skip
+    from collections import (  # isort:skip  # noqa: F401
         ChainMap as ChainMap,
         Counter as Counter,
         OrderedDict as OrderedDict,
         defaultdict as defaultdict,
         deque as deque,
     )
-    from collections.abc import (  # isort:skip
+    from collections.abc import (  # isort:skip  # noqa: F401
         AsyncGenerator as AsyncGenerator,
         AsyncIterable as AsyncIterable,
         AsyncIterator as AsyncIterator,
@@ -72,11 +73,13 @@ if IS_PYTHON_AT_LEAST_3_9:
         Reversible as Reversible,
         Sequence as Sequence,
     )
-    from collections.abc import Set as AbstractSet  # isort:skip
-    from collections.abc import ValuesView as ValuesView  # isort:skip
-    from contextlib import AbstractAsyncContextManager as AsyncContextManager  # isort:skip
-    from contextlib import AbstractContextManager as ContextManager  # isort:skip
-    from re import Match as Match, Pattern as Pattern  # isort:skip
+    from collections.abc import Set as AbstractSet  # isort:skip  # noqa: F401
+    from collections.abc import ValuesView as ValuesView  # isort:skip  # noqa: F401
+    from contextlib import (
+        AbstractAsyncContextManager as AsyncContextManager,
+    )  # isort:skip  # noqa: F401
+    from contextlib import AbstractContextManager as ContextManager  # isort:skip  # noqa: F401
+    from re import Match as Match, Pattern as Pattern  # isort:skip  # noqa: F401
 
 
 # These fallbacks are useful for public symbols not exported by default.
@@ -123,6 +126,8 @@ FrozenList: TypeAlias = Tuple[_T_co, ...]
 NoArgsCallable = Callable[[], Any]
 
 # Typing of annotations
+_GenericAliasType: Type = _types.GenericAlias if IS_PYTHON_AT_LEAST_3_9 else _typing._GenericAlias
+
 _TypingGenericAliasType: TypeAlias = (
     Union[_types.GenericAlias, _typing._BaseGenericAlias]
     if IS_PYTHON_AT_LEAST_3_9
@@ -138,9 +143,10 @@ SourceTypingAnnotation = Union[str, TypingAnnotation]
 RootValidatorValuesType = Dict[str, Any]
 RootValidatorType = Callable[[Type, RootValidatorValuesType], RootValidatorValuesType]
 
+
 # Third party protocols
 class DevToolsPrettyPrintable(Protocol):
-    """Used by python-devtools: https://python-devtools.helpmanual.io/"""
+    """Used by python-devtools (https://python-devtools.helpmanual.io/)."""
 
     def __pretty__(self, fmt: Callable[[Any], Any], **kwargs: Any) -> Generator[Any, None, None]:
         ...
@@ -222,16 +228,10 @@ def eval_forward_ref(
         globalns: globals dict used in the evaluation of the annotations.
         localns: locals dict used in the evaluation of the annotations.
 
-    Keyword Arguments:
-        allow_partial: if ``True``, the resolution is allowed to fail and
-            a :class:`typing.ForwardRef` will be returned.
-
     Examples:
-        >>> import typing
-        >>> resolve_type(
-        ...     typing.Dict[typing.ForwardRef('str'), 'typing.Tuple["int", typing.ForwardRef("float")]']
-        ... )
-        typing.Dict[str, typing.Tuple[int, float]]
+        >>> from typing import Dict, Tuple
+        >>> eval_forward_ref('Dict[str, Tuple[int, float]]')
+        dict[str, tuple[int, float]]
 
     """
     actual_type = ForwardRef(ref) if isinstance(ref, str) else ref
@@ -267,7 +267,9 @@ class CallableKwargsInfo:
 
 
 @_functools.singledispatch
-def reveal_type(value: Any, *, annotate_callable_kwargs: bool = False) -> Any:
+def reveal_type(
+    value: Any, *, annotate_callable_kwargs: bool = False
+) -> Any:  # noqa: C901  # function too complex
     """Generate a typing definition from a value.
 
     The implementation uses :func:`functools.singledispatch`. Customized or
@@ -275,51 +277,51 @@ def reveal_type(value: Any, *, annotate_callable_kwargs: bool = False) -> Any:
     implementations.
 
     Examples:
-        >>> get_typing(3)
+        >>> reveal_type(3)
         <class 'int'>
 
-        >>> get_typing((3, "four"))
-        typing.Tuple[int, str]
+        >>> reveal_type((3, "four"))
+        tuple[int, str]
 
-        >>> get_typing((3, 4))
-        typing.Tuple[int, ...]
+        >>> reveal_type((3, 4))
+        tuple[int, ...]
 
-        >>> get_typing(frozenset([1, 2, 3]))
+        >>> reveal_type(frozenset([1, 2, 3]))
         frozenset[int]
 
-        >>> get_typing({'a': 0, 'b': 1})
-        typing.Dict[str, int]
+        >>> reveal_type({'a': 0, 'b': 1})
+        dict[str, int]
 
-        >>> get_typing({'a': 0, 'b': 'B'})
-        typing.Dict[str, typing.Any]
+        >>> reveal_type({'a': 0, 'b': 'B'})
+        dict[str, typing.Any]
 
-        >>> get_typing(lambda a, b: a + b)
-        typing.Callable[[typing.Any, typing.Any], typing.Any]
-
-        >>> def f(a: int, b) -> int: ...
-        >>> get_typing(f)
-        typing.Callable[[int, typing.Any], int]
+        >>> reveal_type(lambda a, b: a + b)
+        collections.abc.Callable[[typing.Any, typing.Any], typing.Any]
 
         >>> def f(a: int, b) -> int: ...
-        >>> get_typing(f)
-        typing.Callable[..., int]
+        >>> reveal_type(f)
+        collections.abc.Callable[[int, typing.Any], int]
 
-        # >>> get_typing(Dict[int, Union[int, float]])
+        >>> def f(a: int, b) -> int: ...
+        >>> reveal_type(f)
+        collections.abc.Callable[..., int]
+
+        # >>> reveal_type(Dict[int, Union[int, float]])
         # typing.Dict[int, typing.Union[int, float]]
 
-        # >>> print(get_typing(Dict[int, Union[TypeVar("T", bound=int), float]]))
+        # >>> print(reveal_type(Dict[int, Union[TypeVar("T", bound=int), float]]))
         # typing.Dict[int, typing.Union[int, float]]
 
-        # >>> print(get_typing(Dict[int, Union[int, float]], get_origins=False))
+        # >>> print(reveal_type(Dict[int, Union[int, float]], get_origins=False))
         # typing.Dict[int, typing.Union[int, float]]
 
         >>> import numbers
-        >>> @get_typing.register(int)
-        ... @get_typing.register(float)
-        ... @get_typing.register(complex)
-        ... def _get_typing_number(value, *, get_origins: bool = True):
+        >>> @reveal_type.register(int)
+        ... @reveal_type.register(float)
+        ... @reveal_type.register(complex)
+        ... def _reveal_type_number(value, *, get_origins: bool = True):
         ...    return numbers.Number
-        >>> get_typing(3.4)
+        >>> reveal_type(3.4)
         <class 'numbers.Number'>
 
     """
@@ -335,23 +337,23 @@ def reveal_type(value: Any, *, annotate_callable_kwargs: bool = False) -> Any:
     elif isinstance(value, tuple):
         unique_type, args = _collapse_type_args(*(recursive_get(item) for item in value))
         if unique_type and len(args) > 1:
-            return Tuple[args[0], ...]
+            return _GenericAliasType(tuple, (args[0], ...))
         elif args:
-            return Tuple[args]
+            return _GenericAliasType(tuple, args)
         else:
-            return Tuple[Any, ...]
+            return _GenericAliasType(tuple, (Any, ...))
 
     elif isinstance(value, (list, set, frozenset)):
         t: Union[Type[List], Type[Set], Type[FrozenSet]] = type(value)
         unique_type, args = _collapse_type_args(*(recursive_get(item) for item in value))
-        return t[args[0]] if unique_type else t[Any]  # type: ignore[index]  # build annotation at runtime
+        return _GenericAliasType(t, args[0] if unique_type else t[Any])
 
     elif isinstance(value, dict):
         unique_key_type, keys = _collapse_type_args(*(recursive_get(key) for key in value.keys()))
         unique_value_type, values = _collapse_type_args(*(recursive_get(v) for v in value.values()))
         kt = keys[0] if unique_key_type else Any
         vt = values[0] if unique_value_type else Any
-        return Dict[kt, vt]  # type: ignore[valid-type]  # build annotation at runtime
+        return _GenericAliasType(dict, (kt, vt))
 
     elif isinstance(value, _types.FunctionType):
         try:
@@ -370,7 +372,7 @@ def reveal_type(value: Any, *, annotate_callable_kwargs: bool = False) -> Any:
                 elif p.kind == _inspect.Parameter.KEYWORD_ONLY:
                     kwonly_arg_types[p.name] = annotations.get(p.name, None) or Any
                 elif p.kind in (_inspect.Parameter.VAR_POSITIONAL, _inspect.Parameter.VAR_KEYWORD):
-                    raise TypeError(f"Variadic callables are not supported")
+                    raise TypeError("Variadic callables are not supported")
 
             result: Any = Callable[arg_types, return_type]  # type: ignore[misc]  # build annotation at runtime
             if annotate_callable_kwargs:
