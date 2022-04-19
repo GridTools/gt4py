@@ -46,13 +46,13 @@ from boltons.strutils import (  # noqa: F401
 )
 from boltons.typeutils import classproperty  # noqa: F401
 
-from .type_definitions import NOTHING
-from .typingx import (
+from . import python_info
+from .extended_typing import (
     Any,
-    AnyCallable,
     Callable,
     Collection,
     Dict,
+    Final,
     Generic,
     Iterable,
     Iterator,
@@ -65,6 +65,7 @@ from .typingx import (
     TypeVar,
     Union,
 )
+from .type_definitions import NOTHING
 
 
 try:
@@ -291,17 +292,27 @@ def register_subclasses(*subclasses: Type) -> Callable[[Type], Type]:
     return _decorator
 
 
-def noninstantiable(cls: Type) -> Type:
-    original_init = cls.__init__
+_T = TypeVar("_T")
 
-    def _noninstantiable_init(self: Any, *args: Any, **kwargs: Any) -> None:
-        if self.__class__ is cls:
+
+def non_instantiable(cls: Type[_T]) -> Type[_T]:
+    original_new = cls.__dict__.get("__new__")
+
+    def _non_instantiable_new(current_cls: Type[_T], *args: Any, **kwargs: Any) -> None:
+        if current_cls is cls:
             raise TypeError(f"Trying to instantiate `{cls.__name__}` non-instantiable class.")
-        else:
-            original_init(self, *args, **kwargs)
+        elif original_new is not None:
+            original_new(current_cls, *args, **kwargs)
 
-    cls.__init__ = _noninstantiable_init
+    cls.__new__ = _non_instantiable_new
+    cls.__non_instantiable__ = True
+
     return cls
+
+
+def is_non_instantiable(cls: Type[_T]) -> bool:
+    """Return True if `model` is a non instantiable class."""
+    return "__non_instantiable__" in cls.__dict__
 
 
 def shash(*args: Any, hash_algorithm: Optional[Any] = None) -> str:
@@ -456,6 +467,9 @@ class FrozenNamespace(types.SimpleNamespace, Generic[T]):
     def __setattr__(self, _name: str, _value: T) -> None:
         raise TypeError(f"Trying to modify immutable '{self.__class__.__name__}' instance.")
 
+    def __hash__(self) -> int:
+        return hash(tuple(self.__dict__.items()))
+
     def items(self) -> Iterable[Tuple[str, T]]:
         return self.__dict__.items()
 
@@ -466,13 +480,23 @@ class FrozenNamespace(types.SimpleNamespace, Generic[T]):
         return self.__dict__.values()
 
 
+if python_info.IS_PYTHON_AT_LEAST_3_10:
+    field_: Final = dataclasses.field
+else:
+
+    @typing.final
+    @functools.wraps(dataclasses.field)
+    def field_(*, kw_only=None, **kwargs):
+        return dataclasses.field(**kwargs)
+
+
 @dataclasses.dataclass
 class UIDGenerator:
     """Simple unique id generator using different methods."""
 
-    prefix: Optional[str] = dataclasses.field(default=None, kw_only=True)
-    width: Optional[int] = dataclasses.field(default=None, kw_only=True)
-    warn_unsafe: Optional[bool] = dataclasses.field(default=None, kw_only=True)
+    prefix: Optional[str] = field_(default=None, kw_only=True)
+    width: Optional[int] = field_(default=None, kw_only=True)
+    warn_unsafe: Optional[bool] = field_(default=None, kw_only=True)
 
     #: Constantly increasing counter for generation of sequential unique ids
     _counter: Iterator[int] = dataclasses.field(
@@ -514,9 +538,10 @@ class UIDGenerator:
         """
         if start < 0:
             raise ValueError(f"Starting value must be a positive number ({start} provided).")
-        warn_unsafe = warn_unsafe or self.warn_unsafe
+        if warn_unsafe is None:
+            warn_unsafe = self.warn_unsafe
         if warn_unsafe and start < next(self._counter):
-            warnings.warn("Unsafe reset of UIDGenerator ({self})", RuntimeWarning)
+            warnings.warn("Unsafe reset of UIDGenerator ({self})")
         self._counter = itertools.count(start)
 
         return self
@@ -562,7 +587,7 @@ class XIterable(Iterable[T]):
     def __iter__(self) -> Iterator[T]:
         return self.iterator
 
-    def map(self, func: AnyCallable) -> XIterable[Any]:  # noqa  # A003: shadowing a python builtin
+    def map(self, func: Callable) -> XIterable[Any]:  # noqa  # A003: shadowing a python builtin
         """Apply a callable to every iterator element.
 
         Equivalent to ``map(func, self)``.

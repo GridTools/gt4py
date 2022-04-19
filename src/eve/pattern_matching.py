@@ -11,8 +11,15 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
+
+"""Basic pattern matching utilities."""
+
+
+from __future__ import annotations
+
 from functools import singledispatch
-from typing import Any, Iterator
+
+from .extended_typing import Any, Iterator
 
 
 class ObjectPattern:

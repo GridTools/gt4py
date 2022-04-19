@@ -19,7 +19,7 @@
 
 from __future__ import annotations
 
-from .typingx import Any, Dict
+from .extended_typing import Any, Dict
 
 
 class EveError:
