@@ -37,6 +37,9 @@ class NoneLiteral(Expr):
 class OffsetLiteral(Expr):
     value: Union[int, str]
 
+    def __hash__(self):
+        return self.value.__hash__()
+
 
 class AxisLiteral(Expr):
     value: str
@@ -71,7 +74,7 @@ class FunctionDefinition(Node, SymbolTableTrait):
 class StencilClosure(Node):
     domain: Expr
     stencil: Expr
-    output: SymRef
+    output: SymRef  # we could consider Expr for cases like make_tuple(out0,out1)
     inputs: List[SymRef]
 
 
