@@ -24,10 +24,6 @@ try:
     import cupy as cp
 except ImportError:
     cp = None
-try:
-    import dace
-except ImportError:
-    dace = None
 
 from gt4py import backend as gt_backend
 from gt4py import utils as gt_utils
@@ -222,8 +218,7 @@ class Storage(np.ndarray):
                 self.is_stencil_view = False
                 if hasattr(obj, "_new_index"):
                     index_iter = itertools.chain(
-                        obj._new_index,
-                        [slice(None, None)] * (len(obj.mask) - len(obj._new_index)),
+                        obj._new_index, [slice(None, None)] * (len(obj.mask) - len(obj._new_index))
                     )
                     interpolated_mask = gt_utils.interpolate_mask(
                         (isinstance(x, slice) for x in index_iter), obj.mask, False
@@ -270,23 +265,6 @@ class Storage(np.ndarray):
     def __iconcat__(self, other):
         raise NotImplementedError("Concatenation of Storages is not supported")
 
-    def __descriptor__(self):
-        storage = (
-            dace.StorageType.GPU_Global
-            if hasattr(self, "__cuda_array_interface__")
-            else dace.StorageType.CPU_Heap
-        )
-        descriptor = dace.data.Array(
-            shape=self.shape,
-            strides=[s // self.itemsize for s in self.strides],
-            dtype=dace.typeclass(str(self.dtype)),
-            storage=storage,
-            total_size=self._raw_buffer.size,
-            start_offset=getattr(self, "_device_alignment_offset", self._alignment_offset),
-        )
-        descriptor.default_origin = self.default_origin
-        return descriptor
-
 
 class GPUStorage(Storage):
     _modified_storages: Dict[int, "GPUStorage"] = dict()
@@ -294,13 +272,12 @@ class GPUStorage(Storage):
     @classmethod
     def _construct(cls, backend, dtype, default_origin, shape, alignment, layout_map):
 
-        (raw_buffer, field, alignment_offset) = storage_utils.allocate_gpu(
+        (raw_buffer, field) = storage_utils.allocate_gpu(
             default_origin, shape, layout_map, dtype, alignment * dtype.itemsize
         )
         obj = field.view(_ViewableNdarray)
         obj = obj.view(GPUStorage)
         obj._raw_buffer = raw_buffer
-        obj._alignment_offset = alignment_offset
         obj.default_origin = default_origin
         return obj
 
@@ -394,13 +371,12 @@ class CPUStorage(Storage):
 
     @classmethod
     def _construct(cls, backend, dtype, default_origin, shape, alignment, layout_map):
-        (raw_buffer, field, alignment_offset) = storage_utils.allocate_cpu(
+        (raw_buffer, field) = storage_utils.allocate_cpu(
             default_origin, shape, layout_map, dtype, alignment * dtype.itemsize
         )
         obj = field.view(_ViewableNdarray)
         obj = obj.view(CPUStorage)
         obj._raw_buffer = raw_buffer
-        obj._alignment_offset = alignment_offset
         obj.default_origin = default_origin
         return obj
 
@@ -454,20 +430,16 @@ class ExplicitlySyncedGPUStorage(Storage):
         (
             raw_buffer,
             field,
-            alignment_offset,
             device_raw_buffer,
             device_field,
-            device_alignment_offset,
         ) = storage_utils.allocate_gpu_unmanaged(
             default_origin, shape, layout_map, dtype, alignment * dtype.itemsize
         )
         obj = field.view(_ViewableNdarray)
         obj = obj.view(ExplicitlySyncedGPUStorage)
         obj._raw_buffer = raw_buffer
-        obj._alignment_offset = alignment_offset
         obj._device_field = device_field
         obj._device_raw_buffer = device_raw_buffer
-        obj._device_alignment_offset = device_alignment_offset
         obj.default_origin = default_origin
 
         return obj
