@@ -48,7 +48,7 @@ def normalize_storage_spec(default_origin, shape, dtype, mask):
             - default_origin: tuple of ints with default origin values for the non-masked dimensions
             - shape: tuple of ints with shape values for the non-masked dimensions
             - dtype: scalar numpy.dtype (non-structured and without subarrays)
-            - backend: backend identifier string (numpy, gt:cpu_kfirst, gtc:gpu, ...)
+            - backend: backend identifier string (numpy, gt:cpu_kfirst, gt:gpu, ...)
             - mask: a tuple of bools (at least 3d)
     """
 
