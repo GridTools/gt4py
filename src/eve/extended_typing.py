@@ -78,7 +78,6 @@ if IS_PYTHON_AT_LEAST_3_9:
     from contextlib import (  # isort:skip  # noqa: F401
         AbstractAsyncContextManager as AsyncContextManager,
     )
-
     from contextlib import AbstractContextManager as ContextManager  # isort:skip  # noqa: F401
     from re import Match as Match, Pattern as Pattern  # isort:skip  # noqa: F401
 
