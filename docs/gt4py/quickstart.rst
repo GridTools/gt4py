@@ -77,7 +77,7 @@ and ``field_c``) to be combined:
                 for k in range(nz):
                     result[i, j, k] = field_a[i, j, k] - (1 - alpha) * (
                             field_b[i, j, k] - weight * field_c[i, j, k]
-                        )
+                    )
 
 To express this calculation using GTScript, we create a function and use the DSL syntax to represent the loop
 over 3 dimensions:
