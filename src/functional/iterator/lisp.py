@@ -1,4 +1,5 @@
 import textwrap
+from typing import Union, cast
 
 import lark
 
@@ -52,27 +53,30 @@ GRAMMAR = r"""
 
 @lark.v_args(inline=True)
 class ToIrTransformer(lark.Transformer):
-    def selist(self, *elements):
-        def to_funcall(elems):
+    def selist(self, *elements: Union[ir.Node, tuple]) -> Union[ir.Node, tuple]:
+        def to_funcall(elems: Union[ir.Node, tuple]) -> ir.Node:
             if not isinstance(elems, tuple):
                 return elems
             return ir.FunCall(fun=to_funcall(elems[0]), args=[to_funcall(e) for e in elems[1:]])
 
         if elements and isinstance(elements[0], ir.SymRef):
             if elements[0].id == "gt-offset":
-                return ir.OffsetLiteral(
-                    value=elements[1].id if hasattr(elements[1], "id") else elements[1].value
-                )
+                assert isinstance(elements[1], (ir.IntLiteral, ir.StringLiteral))
+                return ir.OffsetLiteral(value=elements[1].value)
             if elements[0].id == "gt-axis":
+                assert isinstance(elements[1], ir.StringLiteral)
                 return ir.AxisLiteral(value=elements[1].value)
             if elements[0].id == "gt-lambda":
+                params = cast(tuple[ir.SymRef], elements[1])
                 return ir.Lambda(
-                    params=[ir.Sym(id=p.id) for p in elements[1]], expr=to_funcall(elements[2])
+                    params=[ir.Sym(id=p.id) for p in params], expr=to_funcall(elements[2])
                 )
             if elements[0].id == "gt-function":
+                assert isinstance(elements[1], ir.SymRef)
+                params = cast(tuple[ir.SymRef], elements[2])
                 return ir.FunctionDefinition(
                     id=elements[1].id,
-                    params=[ir.Sym(id=p.id) for p in elements[2]],
+                    params=params,
                     expr=to_funcall(elements[3]),
                 )
             if elements[0].id == "gt-stencil-closure":
@@ -83,45 +87,48 @@ class ToIrTransformer(lark.Transformer):
                     inputs=list(elements[4:]),
                 )
             if elements[0].id == "gt-fencil":
+                assert isinstance(elements[1], ir.SymRef)
+                params = cast(tuple[ir.SymRef], elements[3])
                 return ir.FencilDefinition(
                     id=elements[1].id,
                     function_definitions=elements[2],
-                    params=[ir.Sym(id=p.id) for p in elements[3]],
+                    params=params,
                     closures=list(elements[4:]),
                 )
         return elements
 
-    def BOOL(self, value):
+    def BOOL(self, value: lark.Token) -> ir.BoolLiteral:
         return ir.BoolLiteral(value=value.value == "#t")
 
-    def ID(self, value):
+    def ID(self, value: lark.Token) -> Union[ir.NoneLiteral, ir.SymRef]:
         if value.value == "gt-none":
             return ir.NoneLiteral()
         return ir.SymRef(id=value.value)
 
-    def ESCAPED_STRING(self, value):
+    def ESCAPED_STRING(self, value: lark.Token) -> ir.StringLiteral:
         return ir.StringLiteral(value=value.value[1:-1])
 
-    def INTEGER(self, value):
+    def INTEGER(self, value: lark.Token) -> ir.IntLiteral:
         return ir.IntLiteral(value=int(value.value))
 
-    def FLOAT(self, value):
+    def FLOAT(self, value: lark.Token) -> ir.FloatLiteral:
         return ir.FloatLiteral(value=float(value.value))
 
-    def SYM(self, value):
+    def SYM(self, value: lark.Token) -> ir.SymRef:
         return ir.SymRef(id=value.value[1:])
 
 
-def lisp_to_ir(lisp_str):
+def lisp_to_ir(lisp_str: str) -> ir.Node:
     parser = lark.Lark(GRAMMAR, parser="lalr", transformer=ToIrTransformer())
-    return parser.parse(lisp_str)
+    return cast(ir.Node, parser.parse(lisp_str))
 
 
-def lisp_to_ir_using_lisp(lisp_str):
+def lisp_to_ir_using_lisp(lisp_str: str) -> ir.Node:
     import pathlib
     import subprocess
 
     scm_script = pathlib.Path(__file__).parent.absolute() / "lisp_to_ir.scm"
+    # Currently expecting GNU/MIT scheme
     python_code = subprocess.run(
         ["scheme", "--quiet", "--load", scm_script],
         input="#!no-fold-case\n" + lisp_str,
@@ -134,7 +141,7 @@ def lisp_to_ir_using_lisp(lisp_str):
 
 @lark.v_args(inline=True)
 class PrettyFormatter(lark.Transformer):
-    def selist(self, *elements):
+    def selist(self, *elements: str) -> str:
         single_line = "(" + " ".join(elements) + ")"
         maxlen = 100
         first_break = single_line.find("\n")
@@ -142,19 +149,19 @@ class PrettyFormatter(lark.Transformer):
             return "(\n" + "\n".join(textwrap.indent(e, "  ") for e in elements) + "\n)"
         return single_line
 
-    def CNAME(self, value):
+    def CNAME(self, value: lark.Token) -> str:
         return value.value
 
-    def ESCAPED_STRING(self, value):
+    def ESCAPED_STRING(self, value: lark.Token) -> str:
         return value.value
 
-    def SIGNED_INT(self, value):
+    def SIGNED_INT(self, value: lark.Token) -> str:
         return value.value
 
-    def SIGNED_FLOAT(self, value):
+    def SIGNED_FLOAT(self, value: lark.Token) -> str:
         return value.value
 
 
-def pretty_format(lisp_str):
+def pretty_format(lisp_str: str) -> str:
     parser = lark.Lark(GRAMMAR, parser="lalr", transformer=PrettyFormatter())
-    return parser.parse(lisp_str)
+    return cast(str, parser.parse(lisp_str))
