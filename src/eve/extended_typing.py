@@ -75,9 +75,10 @@ if IS_PYTHON_AT_LEAST_3_9:
     )
     from collections.abc import Set as AbstractSet  # isort:skip  # noqa: F401
     from collections.abc import ValuesView as ValuesView  # isort:skip  # noqa: F401
-    from contextlib import (
+    from contextlib import (  # isort:skip  # noqa: F401
         AbstractAsyncContextManager as AsyncContextManager,
-    )  # isort:skip  # noqa: F401
+    )
+
     from contextlib import AbstractContextManager as ContextManager  # isort:skip  # noqa: F401
     from re import Match as Match, Pattern as Pattern  # isort:skip  # noqa: F401
 
