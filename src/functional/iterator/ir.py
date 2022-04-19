@@ -1,9 +1,16 @@
 from typing import List, Union
 
-from eve import Node
+import eve
 from eve.traits import SymbolName, SymbolTableTrait
 from eve.type_definitions import SymbolRef
 from functional.iterator.util.sym_validation import validate_symbol_refs
+
+
+class Node(eve.Node):
+    def __str__(self):
+        from functional.iterator.pretty_printer import pformat
+
+        return pformat(self)
 
 
 class Sym(Node):  # helper
