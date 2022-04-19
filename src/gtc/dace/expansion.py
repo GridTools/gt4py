@@ -496,7 +496,8 @@ class DaCeIRBuilder(NodeTranslator):
         k_interval,
         **kwargs,
     ):
-        extent = global_ctx.block_extents(node)
+        # skip type checking due to https://github.com/python/mypy/issues/5485
+        extent = global_ctx.block_extents(node)  # type: ignore
         decls = [self.visit(decl) for decl in node.declarations]
         stmts = [self.visit(stmt) for stmt in node.body]
 
