@@ -23,7 +23,7 @@ from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from typing import Any, Mapping, Union, cast
 
-from eve import extended_typing as  xtyping
+from eve import extended_typing as xtyping
 from functional import common
 from functional.ffront import fbuiltins
 
