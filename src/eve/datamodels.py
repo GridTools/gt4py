@@ -60,29 +60,24 @@ from __future__ import annotations
 import abc
 import collections
 import dataclasses
-import functools
 import sys
-import types
 import typing
 import warnings
 
 import attr
-import attrs
 
 from eve import extended_typing as xtyping
-from eve import python_info, utils
+from eve import utils
 from eve.extended_typing import (
     Any,
     Callable,
     ClassVar,
     Dict,
-    Final,
     ForwardRef,
     Generator,
     List,
     Literal,
     Mapping,
-    NamedTuple,
     Optional,
     Protocol,
     Sequence,
@@ -97,6 +92,23 @@ from eve.type_definitions import NOTHING
 # Typing
 T = TypeVar("T")
 V = TypeVar("V")
+T_contra = TypeVar("T_contra", contravariant=True)
+V_co = TypeVar("V_co", covariant=True)
+
+
+class NonDataDescriptor(Protocol[T_contra, V_co]):
+    @typing.overload
+    def __get__(self, _instance: None, _owner_type: Type[T_contra]) -> NonDataDescriptor:
+        ...
+
+    @typing.overload
+    def __get__(self, _instance: T_contra, _owner_type: Optional[Type[T_contra]] = None) -> V_co:
+        ...
+
+
+class DataDescriptor(NonDataDescriptor[T_contra, V], Protocol):
+    def __set__(self, _instance: T, _value: V) -> None:
+        ...
 
 
 class _AttrClassTp(Protocol):
