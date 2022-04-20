@@ -30,10 +30,8 @@ from typing import *  # noqa: F403
 
 from typing_extensions import *  # type: ignore[misc]  # noqa: F403
 
-from .python_info import IS_PYTHON_AT_LEAST_3_9
 
-
-if IS_PYTHON_AT_LEAST_3_9:
+if _sys.version_info >= (3, 9):
     # Standard library already supports PEP 585 (Type Hinting Generics In Standard Collections)
     from builtins import (  # type: ignore[misc]  # isort:skip
         tuple as Tuple,

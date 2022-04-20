@@ -28,6 +28,7 @@ import itertools
 import operator
 import pickle
 import re
+import sys
 import types
 import typing
 import uuid
@@ -46,7 +47,6 @@ from boltons.strutils import (  # noqa: F401
 )
 from boltons.typeutils import classproperty  # noqa: F401
 
-from . import python_info
 from .extended_typing import (
     Any,
     Callable,
@@ -480,7 +480,7 @@ class FrozenNamespace(types.SimpleNamespace, Generic[T]):
         return self.__dict__.values()
 
 
-if python_info.IS_PYTHON_AT_LEAST_3_10:
+if sys.version_info >= (3, 10):
     field_: Final = dataclasses.field
 else:
 

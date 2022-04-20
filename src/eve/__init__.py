@@ -19,8 +19,7 @@
 The internal dependencies between modules are the following (each line depends
 on some of the previous ones):
 
-  - python_info, version  (no dependencies)
-  - extended_typing
+  - extended_typing (no dependencies)
   - exceptions, pattern_matching, type_definitions
   - datamodels, utils
   - concepts <-> iterators  (circular dependency only inside methods, it should be safe)
