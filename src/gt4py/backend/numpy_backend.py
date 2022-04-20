@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, Dict, Type, Union, cast
 
 from eve.codegen import format_source
 from gt4py.backend.base import BaseBackend, BaseModuleGenerator, CLIBackendMixin, register
-from gt4py.backend.gtc_backend.common import (
+from gt4py.backend.gtc_common import (
     debug_is_compatible_layout,
     debug_is_compatible_type,
     debug_layout,
@@ -42,7 +42,7 @@ if TYPE_CHECKING:
     from gt4py.stencil_object import StencilObject
 
 
-class GTCModuleGenerator(BaseModuleGenerator):
+class ModuleGenerator(BaseModuleGenerator):
     def generate_imports(self) -> str:
         comp_pkg = (
             self.builder.caching.module_prefix + "computation" + self.builder.caching.module_postfix
@@ -62,8 +62,8 @@ class GTCModuleGenerator(BaseModuleGenerator):
         return f"computation.run({', '.join(params)})"
 
     @property
-    def backend(self) -> "GTCNumpyBackend":
-        return cast(GTCNumpyBackend, self.builder.backend)
+    def backend(self) -> "NumpyBackend":
+        return cast(NumpyBackend, self.builder.backend)
 
 
 def recursive_write(root_path: pathlib.Path, tree: Dict[str, Union[str, dict]]):
@@ -77,10 +77,10 @@ def recursive_write(root_path: pathlib.Path, tree: Dict[str, Union[str, dict]]):
 
 
 @register
-class GTCNumpyBackend(BaseBackend, CLIBackendMixin):
+class NumpyBackend(BaseBackend, CLIBackendMixin):
     """NumPy backend using gtc."""
 
-    name = "gtc:numpy"
+    name = "numpy"
     options: ClassVar[Dict[str, Any]] = {
         "oir_pipeline": {"versioning": True, "type": OirPipeline},
         # TODO: Implement this option in source code
@@ -94,7 +94,7 @@ class GTCNumpyBackend(BaseBackend, CLIBackendMixin):
         "is_compatible_type": debug_is_compatible_type,
     }
     languages = {"computation": "python", "bindings": ["python"]}
-    MODULE_GENERATOR_CLASS = GTCModuleGenerator
+    MODULE_GENERATOR_CLASS = ModuleGenerator
     GTIR_KEY = "gtc:gtir"
 
     def generate_computation(self) -> Dict[str, Union[str, Dict]]:

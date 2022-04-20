@@ -468,7 +468,7 @@ def test_masked_storage_cpu(param_dict):
         default_origin=default_origin,
         shape=shape,
         mask=mask,
-        backend="gtc:gt:cpu_kfirst",
+        backend="gt:cpu_kfirst",
     )
     assert sum(store.mask) == store.ndim
     assert sum(store.mask) == len(store.data.shape)
@@ -487,7 +487,7 @@ def test_masked_storage_gpu(param_dict):
         default_origin=default_origin,
         shape=shape,
         mask=mask,
-        backend="gtc:gt:gpu",
+        backend="gt:gpu",
     )
     assert sum(store.mask) == store.ndim
     assert sum(store.mask) == len(store.data.shape)
@@ -496,7 +496,7 @@ def test_masked_storage_gpu(param_dict):
 def test_masked_storage_asserts():
     default_origin = (1, 1, 1)
     shape = (2, 2, 2)
-    backend = "gtc:gt:cpu_kfirst"
+    backend = "gt:cpu_kfirst"
 
     with pytest.raises(ValueError):
         gt_store.empty(
@@ -521,12 +521,12 @@ def run_test_slices(backend):
 
 
 def test_slices_cpu():
-    run_test_slices(backend="gtc:gt:cpu_ifirst")
+    run_test_slices(backend="gt:cpu_ifirst")
 
 
 @pytest.mark.requires_gpu
 def test_slices_gpu():
-    run_test_slices(backend="gtc:gt:gpu")
+    run_test_slices(backend="gt:gpu")
 
     import cupy as cp
 
@@ -534,7 +534,7 @@ def test_slices_gpu():
     shape = (10, 10, 10)
     array = cp.random.randn(*shape)
     stor = gt_store.from_array(
-        array, backend="gtc:gt:gpu", dtype=np.float64, default_origin=default_origin, shape=shape
+        array, backend="gt:gpu", dtype=np.float64, default_origin=default_origin, shape=shape
     )
     sliced = stor[::2, ::2, ::2]
     # assert (sliced == array[::2, ::2, ::2]).all()
@@ -546,10 +546,10 @@ def test_slices_gpu():
     shape = (10, 10, 10)
     array = cp.random.randn(*shape)
     stor = gt_store.from_array(
-        array, backend="gtc:gt:gpu", dtype=np.float64, default_origin=default_origin, shape=shape
+        array, backend="gt:gpu", dtype=np.float64, default_origin=default_origin, shape=shape
     )
     ref = gt_store.from_array(
-        array, backend="gtc:gt:gpu", dtype=np.float64, default_origin=default_origin, shape=shape
+        array, backend="gt:gpu", dtype=np.float64, default_origin=default_origin, shape=shape
     )
     # assert (sliced == array[::2, ::2, ::2]).all()
     stor[::2, ::2, ::2] = ref[::2, ::2, ::2]
@@ -561,7 +561,7 @@ def test_slices_gpu():
     shape = (10, 10, 10)
     array = cp.random.randn(*shape)
     stor = gt_store.from_array(
-        array, backend="gtc:gt:gpu", dtype=np.float64, default_origin=default_origin, shape=shape
+        array, backend="gt:gpu", dtype=np.float64, default_origin=default_origin, shape=shape
     )
     ref = copy.deepcopy(stor)
     # assert (sliced == array[::2, ::2, ::2]).all()
@@ -574,7 +574,7 @@ def test_slices_gpu():
     array = cp.random.randn(*shape)
     stor = gt_store.from_array(
         array,
-        backend="gtc:gt:gpu",
+        backend="gt:gpu",
         dtype=np.float64,
         default_origin=default_origin,
         shape=shape,
@@ -582,7 +582,7 @@ def test_slices_gpu():
     )
     ref = gt_store.from_array(
         array,
-        backend="gtc:gt:gpu",
+        backend="gt:gpu",
         dtype=np.float64,
         default_origin=default_origin,
         shape=shape,
@@ -599,7 +599,7 @@ def test_slices_gpu():
     array = cp.random.randn(*shape)
     stor = gt_store.from_array(
         array,
-        backend="gtc:gt:gpu",
+        backend="gt:gpu",
         dtype=np.float64,
         default_origin=default_origin,
         shape=shape,
@@ -616,7 +616,7 @@ def test_slices_gpu():
     array = cp.random.randn(*shape)
     stor = gt_store.from_array(
         array,
-        backend="gtc:gt:gpu",
+        backend="gt:gpu",
         dtype=np.float64,
         default_origin=default_origin,
         shape=shape,
@@ -624,7 +624,7 @@ def test_slices_gpu():
     )
     ref = gt_store.from_array(
         array,
-        backend="gtc:gt:gpu",
+        backend="gt:gpu",
         dtype=np.float64,
         default_origin=default_origin,
         shape=shape,
@@ -634,7 +634,7 @@ def test_slices_gpu():
     stor[::2, ::2, ::2] = ref[::2, ::2, ::2] + ref[::2, ::2, ::2]
 
 
-def test_transpose(backend="gtc:numpy"):
+def test_transpose(backend="numpy"):
     default_origin = (1, 1, 1)
     shape = (10, 10, 10)
     array = np.random.randn(*shape)
@@ -686,7 +686,7 @@ def test_copy_cpu(method, backend):
 
 @pytest.mark.requires_gpu
 @pytest.mark.parametrize("method", ["deepcopy", "copy_method"])
-def test_copy_gpu(method, backend="gtc:gt:gpu"):
+def test_copy_gpu(method, backend="gt:gpu"):
     default_origin = (1, 1, 1)
     shape = (10, 10, 10)
     stor = gt_store.from_array(
@@ -716,7 +716,7 @@ def test_copy_gpu(method, backend="gtc:gt:gpu"):
 
 @pytest.mark.requires_gpu
 @pytest.mark.parametrize("method", ["deepcopy", "copy_method"])
-def test_deepcopy_gpu_unmanaged(method, backend="gtc:gt:gpu"):
+def test_deepcopy_gpu_unmanaged(method, backend="gt:gpu"):
     default_origin = (1, 1, 1)
     shape = (10, 10, 10)
     stor = gt_store.from_array(
@@ -800,13 +800,13 @@ def test_view_cpu(backend):
 
 @pytest.mark.requires_gpu
 def test_view_gpu():
-    run_test_view(backend="gtc:gt:gpu")
+    run_test_view(backend="gt:gpu")
 
 
 class TestNumpyPatch:
     def test_asarray(self):
         storage = gt_store.from_array(
-            np.random.randn(5, 5, 5), default_origin=(1, 1, 1), backend="gtc:gt:cpu_ifirst"
+            np.random.randn(5, 5, 5), default_origin=(1, 1, 1), backend="gt:cpu_ifirst"
         )
 
         class NDArraySub(np.ndarray):
@@ -851,7 +851,7 @@ class TestNumpyPatch:
 
     def test_array(self):
         storage = gt_store.from_array(
-            np.random.randn(5, 5, 5), default_origin=(1, 1, 1), backend="gtc:gt:cpu_ifirst"
+            np.random.randn(5, 5, 5), default_origin=(1, 1, 1), backend="gt:cpu_ifirst"
         )
 
         class NDArraySub(np.ndarray):
@@ -898,7 +898,7 @@ class TestNumpyPatch:
 def test_cuda_array_interface():
     storage = gt_store.from_array(
         cp.random.randn(5, 5, 5),
-        backend="gtc:gt:gpu",
+        backend="gt:gpu",
         dtype=np.float64,
         default_origin=(1, 1, 1),
         shape=(5, 5, 5),
@@ -946,7 +946,7 @@ def test_sum_gpu():
     shape = (5, 5, 5)
     q1 = gt_store.from_array(
         cp.zeros(shape),
-        backend="gtc:gt:gpu",
+        backend="gt:gpu",
         dtype=np.float64,
         default_origin=(0, 0, 0),
         shape=shape,
@@ -954,7 +954,7 @@ def test_sum_gpu():
 
     q2 = gt_store.from_array(
         cp.ones(shape),
-        backend="gtc:gt:gpu",
+        backend="gt:gpu",
         dtype=np.float64,
         default_origin=(0, 0, 0),
         shape=shape,
@@ -970,7 +970,7 @@ def test_auto_sync_storage():
     cp.cuda.Device(0).synchronize()
     GPUStorage._modified_storages.clear()
 
-    BACKEND = "gtc:gt:gpu"
+    BACKEND = "gt:gpu"
 
     @stencil(backend=BACKEND, device_sync=False)
     def swap_stencil(
@@ -1033,7 +1033,7 @@ def test_auto_sync_storage():
 @pytest.mark.requires_gpu
 def test_slice_gpu():
     stor = gt_store.ones(
-        backend="gtc:gt:gpu",
+        backend="gt:gpu",
         managed_memory=False,
         shape=(10, 10, 10),
         default_origin=(0, 0, 0),

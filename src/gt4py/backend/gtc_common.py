@@ -261,14 +261,14 @@ class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
         return {dir_name: src_files["computation"]}
 
     def generate_bindings(
-        self, language_name: str, *, ir: Any = None
+        self, language_name: str, *, stencil_ir: gtir.Stencil = None
     ) -> Dict[str, Union[str, Dict]]:
-        if not ir:
-            ir = self.builder.gtir
+        if not stencil_ir:
+            stencil_ir = self.builder.gtir
         if language_name != "python":
             return super().generate_bindings(language_name)
         dir_name = f"{self.builder.options.name}_src"
-        src_files = self.make_extension_sources(stencil_ir=ir)
+        src_files = self.make_extension_sources(stencil_ir=stencil_ir)
         return {dir_name: src_files["bindings"]}
 
     @abc.abstractmethod

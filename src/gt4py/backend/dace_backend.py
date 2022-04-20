@@ -26,7 +26,7 @@ from eve import codegen
 from eve.codegen import MakoTemplate as as_mako
 from gt4py import gt_src_manager
 from gt4py.backend.base import CLIBackendMixin, register
-from gt4py.backend.gtc_backend.common import (
+from gt4py.backend.gtc_common import (
     BackendCodegen,
     BaseGTBackend,
     GTCUDAPyModuleGenerator,
@@ -129,7 +129,7 @@ def _expand_and_finalize_sdfg(stencil_ir: gtir.Stencil, sdfg: dace.SDFG, layout_
     return sdfg
 
 
-class GTCDaCeExtGenerator(BackendCodegen):
+class DaCeExtGenerator(BackendCodegen):
     def __init__(self, class_name, module_name, backend):
         self.class_name = class_name
         self.module_name = module_name
@@ -428,7 +428,7 @@ class DaCePyExtModuleGenerator(PyExtModuleGenerator):
                 *super().generate_imports().splitlines(),
                 "import dace",
                 "import copy",
-                "from gt4py.backend.dace.stencil_object import DaCeStencilObject",
+                "from gt4py.backend.dace_stencil_object import DaCeStencilObject",
             ]
         )
 
@@ -448,18 +448,18 @@ class DaCeCUDAPyExtModuleGenerator(DaCePyExtModuleGenerator, GTCUDAPyModuleGener
     pass
 
 
-class BaseGTCDaceBackend(BaseGTBackend, CLIBackendMixin):
+class BaseDaceBackend(BaseGTBackend, CLIBackendMixin):
 
     GT_BACKEND_T = "dace"
 
     options = BaseGTBackend.GT_BACKEND_OPTS
-    PYEXT_GENERATOR_CLASS = GTCDaCeExtGenerator  # type: ignore
+    PYEXT_GENERATOR_CLASS = DaCeExtGenerator  # type: ignore
 
     def generate(self) -> Type["StencilObject"]:
         self.check_options(self.builder.options)
 
         # Generate the Python binary extension (checking if GridTools sources are installed)
-        if not gt_src_manager.has_gt_sources(2) and not gt_src_manager.install_gt_sources(2):
+        if not gt_src_manager.has_gt_sources() and not gt_src_manager.install_gt_sources():
             raise RuntimeError("Missing GridTools sources.")
 
         pyext_module_name: Optional[str]
@@ -476,9 +476,9 @@ class BaseGTCDaceBackend(BaseGTBackend, CLIBackendMixin):
 
 
 @register
-class GTCDaceCPUBackend(BaseGTCDaceBackend):
+class DaceCPUBackend(BaseDaceBackend):
 
-    name = "gtc:dace:cpu"
+    name = "dace:cpu"
     languages = {"computation": "c++", "bindings": ["python"]}
     storage_info = {
         "alignment": 1,
@@ -496,10 +496,10 @@ class GTCDaceCPUBackend(BaseGTCDaceBackend):
 
 
 @register
-class GTCDaceGPUBackend(BaseGTCDaceBackend):
+class DaceGPUBackend(BaseDaceBackend):
     """DaCe python backend using gtc."""
 
-    name = "gtc:dace:gpu"
+    name = "dace:gpu"
     languages = {"computation": "cuda", "bindings": ["python"]}
     storage_info = {
         "alignment": 32,
