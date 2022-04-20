@@ -238,32 +238,28 @@ class InsideReductionLowering(FieldOperatorLowering):
     lambda_params: dict[str, itir.Expr] = field(default_factory=lambda: {})
     __counter: itertools.count = field(default_factory=lambda: itertools.count())
 
-    def visit_Name(self, node: foast.Name, *, to_value: bool = False, **kwargs) -> itir.SymRef:
+    def visit_Name(self, node: foast.Name, **kwargs) -> itir.SymRef:
         uid = f"{node.id}__{self._sequential_id()}"
         self.lambda_params[uid] = super().visit_Name(node, **kwargs)
         return im.ref(uid)
 
-    def visit_BinOp(self, node: foast.BinOp, *, to_value: bool = False, **kwargs) -> itir.FunCall:
+    def visit_BinOp(self, node: foast.BinOp, **kwargs) -> itir.FunCall:
         return im.call_(node.op.value)(
             self.visit(node.left, **kwargs), self.visit(node.right, **kwargs)
         )
 
-    def visit_Compare(
-        self, node: foast.Compare, *, to_value: bool = False, **kwargs
-    ) -> itir.FunCall:
+    def visit_Compare(self, node: foast.Compare, **kwargs) -> itir.FunCall:
         return im.call_(node.op.value)(
             self.visit(node.left, **kwargs), self.visit(node.right, **kwargs)
         )
 
-    def visit_UnaryOp(
-        self, node: foast.UnaryOp, *, to_value: bool = False, **kwargs
-    ) -> itir.FunCall:
+    def visit_UnaryOp(self, node: foast.UnaryOp, **kwargs) -> itir.FunCall:
         zero_arg = (
             [itir.Literal(value="0", type="int")] if node.op is not foast.UnaryOperator.NOT else []
         )
         return im.call_(node.op.value)(*[*zero_arg, self.visit(node.operand, **kwargs)])
 
-    def _visit_shift(self, node: foast.Call, *, to_value: bool = False, **kwargs) -> itir.SymRef:  # type: ignore[override]
+    def _visit_shift(self, node: foast.Call, **kwargs) -> itir.SymRef:  # type: ignore[override]
         uid = f"{node.func.id}__{self._sequential_id()}"
         self.lambda_params[uid] = FieldOperatorLowering.apply(node)
         return im.ref(uid)
