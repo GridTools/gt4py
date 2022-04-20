@@ -1070,7 +1070,7 @@ class TestDescriptor:
     @staticmethod
     def ravel_with_padding(array):
 
-        if cp is not None and isinstance(array, cp.ndarray):
+        if hasattr(array, "__cuda_array_interface__"):
             interface = dict(array.__cuda_array_interface__)
         else:
             interface = dict(array.__array_interface__)
@@ -1083,7 +1083,7 @@ class TestDescriptor:
         interface["shape"] = (total_size,)
         interface["strides"] = (min(array.strides),)
 
-        if cp is not None and isinstance(array, cp.ndarray):
+        if hasattr(array, "__cuda_array_interface__"):
             return cp.asarray(SimpleNamespace(__cuda_array_interface__=interface))
         else:
             return np.asarray(SimpleNamespace(__array_interface__=interface))
