@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple, Type
 from eve import codegen
 from gt4py import gt_src_manager
 from gt4py.backend.base import CLIBackendMixin, register
-from gt4py.backend.gtc_backend.common import BackendCodegen, bindings_main_template, pybuffer_to_sid
+from gt4py.backend.gtc_common import BackendCodegen, bindings_main_template, pybuffer_to_sid
 from gtc import gtir
 from gtc.common import DataType
 from gtc.cuir import cuir, cuir_codegen, extent_analysis, kernel_fusion
@@ -30,7 +30,7 @@ from gtc.passes.oir_optimizations.caches import FillFlushToLocalKCaches
 from gtc.passes.oir_optimizations.pruning import NoFieldAccessPruning
 from gtc.passes.oir_pipeline import DefaultPipeline
 
-from ..common import (
+from .gtc_common import (
     BaseGTBackend,
     GTCUDAPyModuleGenerator,
     cuda_is_compatible_layout,
@@ -43,7 +43,7 @@ if TYPE_CHECKING:
     from gt4py.stencil_object import StencilObject
 
 
-class GTCCudaExtGenerator(BackendCodegen):
+class CudaExtGenerator(BackendCodegen):
     def __init__(self, class_name, module_name, backend):
         self.class_name = class_name
         self.module_name = module_name
@@ -62,7 +62,7 @@ class GTCCudaExtGenerator(BackendCodegen):
         cuir_node = extent_analysis.CacheExtents().visit(cuir_node)
         format_source = self.backend.builder.options.format_source
         implementation = cuir_codegen.CUIRCodegen.apply(cuir_node, format_source=format_source)
-        bindings = GTCCudaBindingsCodegen.apply(
+        bindings = CudaBindingsCodegen.apply(
             cuir_node,
             module_name=self.module_name,
             backend=self.backend,
@@ -74,7 +74,7 @@ class GTCCudaExtGenerator(BackendCodegen):
         }
 
 
-class GTCCudaBindingsCodegen(codegen.TemplatedGenerator):
+class CudaBindingsCodegen(codegen.TemplatedGenerator):
     def __init__(self, backend):
         self.backend = backend
         self._unique_index: int = 0
@@ -136,10 +136,10 @@ class GTCCudaBindingsCodegen(codegen.TemplatedGenerator):
 
 
 @register
-class GTCCudaBackend(BaseGTBackend, CLIBackendMixin):
+class CudaBackend(BaseGTBackend, CLIBackendMixin):
     """CUDA backend using gtc."""
 
-    name = "gtc:cuda"
+    name = "cuda"
     options = {**BaseGTBackend.GT_BACKEND_OPTS, "device_sync": {"versioning": True, "type": bool}}
     languages = {"computation": "cuda", "bindings": ["python"]}
     storage_info = {
@@ -149,7 +149,7 @@ class GTCCudaBackend(BaseGTBackend, CLIBackendMixin):
         "is_compatible_layout": cuda_is_compatible_layout,
         "is_compatible_type": cuda_is_compatible_type,
     }
-    PYEXT_GENERATOR_CLASS = GTCCudaExtGenerator  # type: ignore
+    PYEXT_GENERATOR_CLASS = CudaExtGenerator  # type: ignore
     MODULE_GENERATOR_CLASS = GTCUDAPyModuleGenerator
     GT_BACKEND_T = "gpu"
 
@@ -160,7 +160,7 @@ class GTCCudaBackend(BaseGTBackend, CLIBackendMixin):
         self.check_options(self.builder.options)
 
         # Generate the Python binary extension (checking if GridTools sources are installed)
-        if not gt_src_manager.has_gt_sources(2) and not gt_src_manager.install_gt_sources(2):
+        if not gt_src_manager.has_gt_sources() and not gt_src_manager.install_gt_sources():
             raise RuntimeError("Missing GridTools sources.")
 
         pyext_module_name: Optional[str]

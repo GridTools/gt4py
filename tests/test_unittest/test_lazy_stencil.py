@@ -63,7 +63,7 @@ def test_lazy_stencil():
     )
     lazy_s = LazyStencil(builder)
 
-    assert lazy_s.backend.name == "gtc:numpy"
+    assert lazy_s.backend.name == "numpy"
 
 
 def test_lazy_syntax_check(frontend, backend):

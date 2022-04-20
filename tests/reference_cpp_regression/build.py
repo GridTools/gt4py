@@ -29,9 +29,7 @@ GT4PY_INSTALLATION_PATH = os.path.dirname(inspect.getabsfile(gt4py))
 EXTERNAL_SRC_PATH = os.path.join(GT4PY_INSTALLATION_PATH, "_external_src")
 
 
-assert gt_src_manager.has_gt_sources(major_version=2) or gt_src_manager.install_gt_sources(
-    major_version=2
-)
+assert gt_src_manager.has_gt_sources() or gt_src_manager.install_gt_sources()
 
 
 def compile_reference():

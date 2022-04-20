@@ -33,7 +33,7 @@ def dace_env():
 
 @pytest.fixture
 def dace_stencil():
-    @gtscript.stencil(backend="gtc:dace:cpu")
+    @gtscript.stencil(backend="dace:cpu")
     def defn(inp: gtscript.Field[np.float64], outp: gtscript.Field[np.float64]):
         with computation(PARALLEL), interval(...):
             outp = inp  # noqa F841: local variable 'outp' is assigned to but never used
@@ -50,13 +50,13 @@ def tuple_st(min_value, max_value):
 
 
 def test_basic():
-    @gtscript.stencil(backend="gtc:dace:cpu")
+    @gtscript.stencil(backend="dace:cpu")
     def defn(outp: gtscript.Field[np.float64], par: np.float64):
         with computation(PARALLEL), interval(...):
             outp = par  # noqa F841: local variable 'outp' is assigned to but never used
 
     outp = gt_storage.zeros(
-        dtype=np.float64, shape=(10, 10, 10), default_origin=(0, 0, 0), backend="gtc:dace:cpu"
+        dtype=np.float64, shape=(10, 10, 10), default_origin=(0, 0, 0), backend="dace:cpu"
     )
 
     inp = 7.0
@@ -79,14 +79,10 @@ def test_origin_offsetting_frozen(dace_stencil, domain, outp_origin):
     )
 
     inp = gt_storage.from_array(
-        data=7.0,
-        dtype=np.float64,
-        shape=(10, 10, 10),
-        default_origin=(0, 0, 0),
-        backend="gtc:dace:cpu",
+        data=7.0, dtype=np.float64, shape=(10, 10, 10), default_origin=(0, 0, 0), backend="dace:cpu"
     )
     outp = gt_storage.zeros(
-        dtype=np.float64, shape=(10, 10, 10), default_origin=(0, 0, 0), backend="gtc:dace:cpu"
+        dtype=np.float64, shape=(10, 10, 10), default_origin=(0, 0, 0), backend="dace:cpu"
     )
 
     @dace.program
@@ -112,14 +108,10 @@ def test_origin_offsetting_frozen(dace_stencil, domain, outp_origin):
 def test_origin_offsetting_nofrozen(dace_stencil, domain, outp_origin):
 
     inp = gt_storage.from_array(
-        data=7.0,
-        dtype=np.float64,
-        shape=(10, 10, 10),
-        default_origin=(0, 0, 0),
-        backend="gtc:dace:cpu",
+        data=7.0, dtype=np.float64, shape=(10, 10, 10), default_origin=(0, 0, 0), backend="dace:cpu"
     )
     outp = gt_storage.zeros(
-        dtype=np.float64, shape=(10, 10, 10), default_origin=(0, 0, 0), backend="gtc:dace:cpu"
+        dtype=np.float64, shape=(10, 10, 10), default_origin=(0, 0, 0), backend="dace:cpu"
     )
 
     origin = {"inp": (0, 0, 0), "outp": outp_origin}
@@ -143,7 +135,7 @@ def test_origin_offsetting_nofrozen(dace_stencil, domain, outp_origin):
 
 
 def test_optional_arg_noprovide():
-    @gtscript.stencil(backend="gtc:dace:cpu")
+    @gtscript.stencil(backend="dace:cpu")
     def stencil(
         inp: gtscript.Field[np.float64],
         outp: gtscript.Field[np.float64],
@@ -158,14 +150,10 @@ def test_optional_arg_noprovide():
     )
 
     inp = gt_storage.from_array(
-        data=7.0,
-        dtype=np.float64,
-        shape=(10, 10, 10),
-        default_origin=(0, 0, 0),
-        backend="gtc:dace:cpu",
+        data=7.0, dtype=np.float64, shape=(10, 10, 10), default_origin=(0, 0, 0), backend="dace:cpu"
     )
     outp = gt_storage.zeros(
-        dtype=np.float64, shape=(10, 10, 10), default_origin=(0, 0, 0), backend="gtc:dace:cpu"
+        dtype=np.float64, shape=(10, 10, 10), default_origin=(0, 0, 0), backend="dace:cpu"
     )
 
     @dace.program
@@ -180,7 +168,7 @@ def test_optional_arg_noprovide():
 
 
 def test_optional_arg_provide():
-    @gtscript.stencil(backend="gtc:dace:cpu")
+    @gtscript.stencil(backend="dace:cpu")
     def stencil(
         inp: gtscript.Field[np.float64],
         unused_field: gtscript.Field[np.float64],
@@ -195,17 +183,13 @@ def test_optional_arg_provide():
     )
 
     inp = gt_storage.from_array(
-        data=7.0,
-        dtype=np.float64,
-        shape=(10, 10, 10),
-        default_origin=(0, 0, 0),
-        backend="gtc:dace:cpu",
+        data=7.0, dtype=np.float64, shape=(10, 10, 10), default_origin=(0, 0, 0), backend="dace:cpu"
     )
     outp = gt_storage.zeros(
-        dtype=np.float64, shape=(10, 10, 10), default_origin=(0, 0, 0), backend="gtc:dace:cpu"
+        dtype=np.float64, shape=(10, 10, 10), default_origin=(0, 0, 0), backend="dace:cpu"
     )
     unused_field = gt_storage.zeros(
-        dtype=np.float64, shape=(10, 10, 10), default_origin=(0, 0, 0), backend="gtc:dace:cpu"
+        dtype=np.float64, shape=(10, 10, 10), default_origin=(0, 0, 0), backend="dace:cpu"
     )
 
     @dace.program
@@ -220,7 +204,7 @@ def test_optional_arg_provide():
 
 
 def test_optional_arg_provide_aot():
-    @gtscript.stencil(backend="gtc:dace:cpu")
+    @gtscript.stencil(backend="dace:cpu")
     def stencil(
         inp: gtscript.Field[np.float64],
         unused_field: gtscript.Field[np.float64],
@@ -235,17 +219,13 @@ def test_optional_arg_provide_aot():
     )
 
     inp = gt_storage.from_array(
-        data=7.0,
-        dtype=np.float64,
-        shape=(10, 10, 10),
-        default_origin=(0, 0, 0),
-        backend="gtc:dace:cpu",
+        data=7.0, dtype=np.float64, shape=(10, 10, 10), default_origin=(0, 0, 0), backend="dace:cpu"
     )
     outp = gt_storage.zeros(
-        dtype=np.float64, shape=(10, 10, 10), default_origin=(0, 0, 0), backend="gtc:dace:cpu"
+        dtype=np.float64, shape=(10, 10, 10), default_origin=(0, 0, 0), backend="dace:cpu"
     )
     unused_field = gt_storage.zeros(
-        dtype=np.float64, shape=(10, 10, 10), default_origin=(0, 0, 0), backend="gtc:dace:cpu"
+        dtype=np.float64, shape=(10, 10, 10), default_origin=(0, 0, 0), backend="dace:cpu"
     )
 
     @dace.program
@@ -265,7 +245,7 @@ def test_optional_arg_provide_aot():
 
 
 def test_nondace_raises():
-    @gtscript.stencil(backend="gtc:numpy")
+    @gtscript.stencil(backend="numpy")
     def numpy_stencil(inp: gtscript.Field[np.float64], outp: gtscript.Field[np.float64]):
         with computation(PARALLEL), interval(...):
             outp = inp  # noqa F841: local variable 'outp' is assigned to but never used
@@ -275,14 +255,10 @@ def test_nondace_raises():
     )
 
     inp = gt_storage.from_array(
-        data=7.0,
-        dtype=np.float64,
-        shape=(10, 10, 10),
-        default_origin=(0, 0, 0),
-        backend="gtc:dace:cpu",
+        data=7.0, dtype=np.float64, shape=(10, 10, 10), default_origin=(0, 0, 0), backend="dace:cpu"
     )
     outp = gt_storage.zeros(
-        dtype=np.float64, shape=(10, 10, 10), default_origin=(0, 0, 0), backend="gtc:dace:cpu"
+        dtype=np.float64, shape=(10, 10, 10), default_origin=(0, 0, 0), backend="dace:cpu"
     )
 
     @dace.program
@@ -292,7 +268,7 @@ def test_nondace_raises():
     with pytest.raises(
         TypeError,
         match=re.escape(
-            "Only dace backends are supported in DaCe-orchestrated programs." ' (found "gtc:numpy")'
+            "Only dace backends are supported in DaCe-orchestrated programs." ' (found "numpy")'
         ),
     ):
         call_frozen_stencil()
