@@ -31,14 +31,9 @@ def dace_env():
         yield
 
 
-@pytest.fixture(
-    params=[
-        "dace:cpu",
-        pytest.param("dace:gpu", marks=[pytest.mark.requires_gpu]),
-    ]
-)
-def dace_stencil(request):
-    @gtscript.stencil(backend=request.param)
+@pytest.fixture
+def dace_stencil():
+    @gtscript.stencil(backend="dace:cpu")
     def defn(inp: gtscript.Field[np.float64], outp: gtscript.Field[np.float64]):
         with computation(PARALLEL), interval(...):
             outp = inp  # noqa F841: local variable 'outp' is assigned to but never used
@@ -54,127 +49,93 @@ def tuple_st(min_value, max_value):
     )
 
 
-@pytest.mark.parametrize(
-    "backend",
-    ["dace:cpu", pytest.param("dace:gpu", marks=[pytest.mark.requires_gpu])],
-)
-def test_basic(backend):
-    @gtscript.stencil(backend=backend)
+def test_basic():
+    @gtscript.stencil(backend="dace:cpu")
     def defn(outp: gtscript.Field[np.float64], par: np.float64):
         with computation(PARALLEL), interval(...):
             outp = par  # noqa F841: local variable 'outp' is assigned to but never used
 
     outp = gt_storage.zeros(
-        dtype=np.float64, shape=(10, 10, 10), default_origin=(0, 0, 0), backend=backend
+        dtype=np.float64, shape=(10, 10, 10), default_origin=(0, 0, 0), backend="dace:cpu"
     )
 
     inp = 7.0
 
-    outp.host_to_device()
+    @dace.function
+    def call_stencil_object():
+        defn(outp, par=inp)
 
-    @dace.program(device=dace.DeviceType.GPU if "gpu" in backend else dace.DeviceType.CPU)
-    def call_stencil_object(locoutp, locinp):
-        defn(locoutp, par=locinp)
+    call_stencil_object()
 
-    call_stencil_object(locoutp=outp, locinp=inp)
-    if hasattr(outp, "_set_device_modified"):
-        outp._set_device_modified()
-    outp.device_to_host()
     assert np.allclose(outp, 7.0)
 
 
 @pytest.mark.parametrize("domain", [(0, 2, 3), (3, 3, 3), (1, 1, 1)])
 @pytest.mark.parametrize("outp_origin", [(0, 0, 0), (7, 7, 7), (2, 2, 0)])
 def test_origin_offsetting_frozen(dace_stencil, domain, outp_origin):
-    backend = dace_stencil.backend
+
     frozen_stencil = dace_stencil.freeze(
         domain=domain, origin={"inp": (0, 0, 0), "outp": outp_origin}
     )
+
     inp = gt_storage.from_array(
-        data=7.0,
-        dtype=np.float64,
-        shape=(10, 10, 10),
-        default_origin=(0, 0, 0),
-        backend=backend,
+        data=7.0, dtype=np.float64, shape=(10, 10, 10), default_origin=(0, 0, 0), backend="dace:cpu"
     )
-
     outp = gt_storage.zeros(
-        dtype=np.float64, shape=(10, 10, 10), default_origin=(0, 0, 0), backend=backend
+        dtype=np.float64, shape=(10, 10, 10), default_origin=(0, 0, 0), backend="dace:cpu"
     )
 
-    inp.host_to_device()
-    outp.host_to_device()
-
-    @dace.program(device=dace.DeviceType.GPU if "gpu" in backend else dace.DeviceType.CPU)
+    @dace.program
     def call_frozen_stencil():
         frozen_stencil(inp=inp, outp=outp)
 
     call_frozen_stencil()
 
-    getattr(outp, "_set_device_modified", lambda: None)()
-    outp.device_to_host()
-
     assert np.allclose(inp, 7.0)
-
     assert np.allclose(
-        np.asarray(outp)[
+        outp[
             outp_origin[0] : outp_origin[0] + domain[0],
             outp_origin[1] : outp_origin[1] + domain[1],
             outp_origin[2] : outp_origin[2] + domain[2],
         ],
         7.0,
     )
-
-    assert np.sum(np.asarray(outp), axis=(0, 1, 2)) == np.prod(domain) * 7.0
+    assert np.sum(outp, axis=(0, 1, 2)) == np.prod(domain) * 7.0
 
 
 @pytest.mark.parametrize("domain", [(0, 2, 3), (3, 3, 3), (1, 1, 1)])
 @pytest.mark.parametrize("outp_origin", [(0, 0, 0), (7, 7, 7), (2, 2, 0)])
 def test_origin_offsetting_nofrozen(dace_stencil, domain, outp_origin):
-    backend = dace_stencil.backend
+
     inp = gt_storage.from_array(
-        data=7.0,
-        dtype=np.float64,
-        shape=(10, 10, 10),
-        default_origin=(0, 0, 0),
-        backend=backend,
+        data=7.0, dtype=np.float64, shape=(10, 10, 10), default_origin=(0, 0, 0), backend="dace:cpu"
     )
     outp = gt_storage.zeros(
-        dtype=np.float64, shape=(10, 10, 10), default_origin=(0, 0, 0), backend=backend
+        dtype=np.float64, shape=(10, 10, 10), default_origin=(0, 0, 0), backend="dace:cpu"
     )
 
     origin = {"inp": (0, 0, 0), "outp": outp_origin}
 
-    inp.host_to_device()
-    outp.host_to_device()
-
-    @dace.program(device=dace.DeviceType.GPU if "gpu" in backend else dace.DeviceType.CPU)
+    @dace.program
     def call_stencil_object():
         dace_stencil(inp=inp, outp=outp, domain=domain, origin=origin)
 
     call_stencil_object()
 
-    getattr(outp, "_set_device_modified", lambda: None)()
-    outp.device_to_host()
-
     assert np.allclose(inp, 7.0)
     assert np.allclose(
-        np.asarray(outp)[
+        outp[
             outp_origin[0] : outp_origin[0] + domain[0],
             outp_origin[1] : outp_origin[1] + domain[1],
             outp_origin[2] : outp_origin[2] + domain[2],
         ],
         7.0,
     )
-    assert np.sum(np.asarray(outp), axis=(0, 1, 2)) == np.prod(domain) * 7.0
+    assert np.sum(outp, axis=(0, 1, 2)) == np.prod(domain) * 7.0
 
 
-@pytest.mark.parametrize(
-    "backend",
-    ["dace:cpu", pytest.param("dace:gpu", marks=[pytest.mark.requires_gpu])],
-)
-def test_optional_arg_noprovide(backend):
-    @gtscript.stencil(backend=backend)
+def test_optional_arg_noprovide():
+    @gtscript.stencil(backend="dace:cpu")
     def stencil(
         inp: gtscript.Field[np.float64],
         outp: gtscript.Field[np.float64],
@@ -185,43 +146,29 @@ def test_optional_arg_noprovide(backend):
             outp = inp  # noqa F841: local variable 'outp' is assigned to but never used
 
     frozen_stencil = stencil.freeze(
-        domain=(3, 3, 10),
-        origin={"inp": (2, 2, 0), "outp": (2, 2, 0), "unused_field": (0, 0, 0)},
+        domain=(3, 3, 10), origin={"inp": (2, 2, 0), "outp": (2, 2, 0), "unused_field": (0, 0, 0)}
     )
 
     inp = gt_storage.from_array(
-        data=7.0,
-        dtype=np.float64,
-        shape=(10, 10, 10),
-        default_origin=(0, 0, 0),
-        backend=backend,
+        data=7.0, dtype=np.float64, shape=(10, 10, 10), default_origin=(0, 0, 0), backend="dace:cpu"
     )
     outp = gt_storage.zeros(
-        dtype=np.float64, shape=(10, 10, 10), default_origin=(0, 0, 0), backend=backend
+        dtype=np.float64, shape=(10, 10, 10), default_origin=(0, 0, 0), backend="dace:cpu"
     )
-    inp.host_to_device()
-    outp.host_to_device()
 
-    @dace.program(device=dace.DeviceType.GPU if "gpu" in backend else dace.DeviceType.CPU)
+    @dace.program
     def call_frozen_stencil():
         frozen_stencil(inp=inp, outp=outp)
 
     call_frozen_stencil()
 
-    getattr(outp, "_set_device_modified", lambda: None)()
-    outp.device_to_host()
-
     assert np.allclose(inp, 7.0)
-    assert np.allclose(np.asarray(outp)[2:5, 2:5, :], 7.0)
-    assert np.sum(np.asarray(outp), axis=(0, 1, 2)) == 90 * 7.0
+    assert np.allclose(outp[2:5, 2:5, :], 7.0)
+    assert np.sum(outp, axis=(0, 1, 2)) == 90 * 7.0
 
 
-@pytest.mark.parametrize(
-    "backend",
-    ["dace:cpu", pytest.param("dace:gpu", marks=[pytest.mark.requires_gpu])],
-)
-def test_optional_arg_provide(backend):
-    @gtscript.stencil(backend=backend)
+def test_optional_arg_provide():
+    @gtscript.stencil(backend="dace:cpu")
     def stencil(
         inp: gtscript.Field[np.float64],
         unused_field: gtscript.Field[np.float64],
@@ -232,46 +179,32 @@ def test_optional_arg_provide(backend):
             outp = inp  # noqa F841: local variable 'outp' is assigned to but never used
 
     frozen_stencil = stencil.freeze(
-        domain=(3, 3, 10),
-        origin={"inp": (2, 2, 0), "outp": (2, 2, 0), "unused_field": (0, 0, 0)},
+        domain=(3, 3, 10), origin={"inp": (2, 2, 0), "outp": (2, 2, 0), "unused_field": (0, 0, 0)}
     )
 
     inp = gt_storage.from_array(
-        data=7.0,
-        dtype=np.float64,
-        shape=(10, 10, 10),
-        default_origin=(0, 0, 0),
-        backend=backend,
+        data=7.0, dtype=np.float64, shape=(10, 10, 10), default_origin=(0, 0, 0), backend="dace:cpu"
     )
     outp = gt_storage.zeros(
-        dtype=np.float64, shape=(10, 10, 10), default_origin=(0, 0, 0), backend=backend
+        dtype=np.float64, shape=(10, 10, 10), default_origin=(0, 0, 0), backend="dace:cpu"
     )
     unused_field = gt_storage.zeros(
-        dtype=np.float64, shape=(10, 10, 10), default_origin=(0, 0, 0), backend=backend
+        dtype=np.float64, shape=(10, 10, 10), default_origin=(0, 0, 0), backend="dace:cpu"
     )
-    inp.host_to_device()
-    outp.host_to_device()
 
-    @dace.program(device=dace.DeviceType.GPU if "gpu" in backend else dace.DeviceType.CPU)
+    @dace.program
     def call_frozen_stencil():
         frozen_stencil(inp=inp, unused_field=unused_field, outp=outp, unused_par=7.0)
 
     call_frozen_stencil()
 
-    getattr(outp, "_set_device_modified", lambda: None)()
-    outp.device_to_host()
-
     assert np.allclose(inp, 7.0)
-    assert np.allclose(np.asarray(outp)[2:5, 2:5, :], 7.0)
-    assert np.sum(np.asarray(outp), axis=(0, 1, 2)) == 90 * 7.0
+    assert np.allclose(outp[2:5, 2:5, :], 7.0)
+    assert np.sum(outp, axis=(0, 1, 2)) == 90 * 7.0
 
 
-@pytest.mark.parametrize(
-    "backend",
-    ["dace:cpu", pytest.param("dace:gpu", marks=[pytest.mark.requires_gpu])],
-)
-def test_optional_arg_provide_aot(backend):
-    @gtscript.stencil(backend=backend)
+def test_optional_arg_provide_aot():
+    @gtscript.stencil(backend="dace:cpu")
     def stencil(
         inp: gtscript.Field[np.float64],
         unused_field: gtscript.Field[np.float64],
@@ -282,65 +215,37 @@ def test_optional_arg_provide_aot(backend):
             outp = inp  # noqa F841: local variable 'outp' is assigned to but never used
 
     frozen_stencil = stencil.freeze(
-        domain=(3, 3, 10),
-        origin={"inp": (2, 2, 0), "outp": (2, 2, 0), "unused_field": (0, 0, 0)},
+        domain=(3, 3, 10), origin={"inp": (2, 2, 0), "outp": (2, 2, 0), "unused_field": (0, 0, 0)}
     )
 
     inp = gt_storage.from_array(
-        data=7.0,
-        dtype=np.float64,
-        shape=(10, 10, 10),
-        default_origin=(0, 0, 0),
-        backend=backend,
+        data=7.0, dtype=np.float64, shape=(10, 10, 10), default_origin=(0, 0, 0), backend="dace:cpu"
     )
     outp = gt_storage.zeros(
-        dtype=np.float64, shape=(10, 10, 10), default_origin=(0, 0, 0), backend=backend
+        dtype=np.float64, shape=(10, 10, 10), default_origin=(0, 0, 0), backend="dace:cpu"
     )
     unused_field = gt_storage.zeros(
-        dtype=np.float64, shape=(10, 10, 10), default_origin=(0, 0, 0), backend=backend
+        dtype=np.float64, shape=(10, 10, 10), default_origin=(0, 0, 0), backend="dace:cpu"
     )
-    inp.host_to_device()
-    outp.host_to_device()
 
-    storage = dace.StorageType.GPU_Global if "gpu" in backend else dace.StorageType.CPU_Heap
-
-    @dace.program(device=dace.DeviceType.GPU if "gpu" in backend else dace.DeviceType.CPU)
+    @dace.program
     def call_frozen_stencil(
-        inp: dace.data.Array(
-            shape=inp.shape,
-            strides=tuple(s // inp.itemsize for s in inp.strides),
-            dtype=dace.float64,
-            storage=storage,
-        ),
-        outp: dace.data.Array(
-            shape=outp.shape,
-            strides=tuple(s // outp.itemsize for s in outp.strides),
-            dtype=dace.float64,
-            storage=storage,
-        ),
-        unused_field: dace.data.Array(
-            shape=unused_field.shape,
-            strides=tuple(s // unused_field.itemsize for s in unused_field.strides),
-            dtype=dace.float64,
-            storage=storage,
-        ),  # type: ignore
+        inp: dace.float64[inp.shape],  # type: ignore
+        outp: dace.float64[outp.shape],  # type: ignore
+        unused_field: dace.float64[unused_field.shape],  # type: ignore
         unused_par: dace.float64,  # type: ignore
     ):
         frozen_stencil(inp=inp, unused_field=unused_field, outp=outp, unused_par=unused_par)
 
     csdfg = call_frozen_stencil.compile()
     csdfg(inp=inp, outp=outp, unused_field=unused_field, unused_par=7.0)
-
-    getattr(outp, "_set_device_modified", lambda: None)()
-    outp.device_to_host()
-
     assert np.allclose(inp, 7.0)
-    assert np.allclose(np.asarray(outp)[2:5, 2:5, :], 7.0)
-    assert np.sum(np.asarray(outp), axis=(0, 1, 2)) == 90 * 7.0
+    assert np.allclose(outp[2:5, 2:5, :], 7.0)
+    assert np.sum(outp, axis=(0, 1, 2)) == 90 * 7.0
 
 
 def test_nondace_raises():
-    @gtscript.stencil(backend="gtc:numpy")
+    @gtscript.stencil(backend="numpy")
     def numpy_stencil(inp: gtscript.Field[np.float64], outp: gtscript.Field[np.float64]):
         with computation(PARALLEL), interval(...):
             outp = inp  # noqa F841: local variable 'outp' is assigned to but never used
@@ -350,17 +255,10 @@ def test_nondace_raises():
     )
 
     inp = gt_storage.from_array(
-        data=7.0,
-        dtype=np.float64,
-        shape=(10, 10, 10),
-        default_origin=(0, 0, 0),
-        backend="gtc:numpy",
+        data=7.0, dtype=np.float64, shape=(10, 10, 10), default_origin=(0, 0, 0), backend="dace:cpu"
     )
     outp = gt_storage.zeros(
-        dtype=np.float64,
-        shape=(10, 10, 10),
-        default_origin=(0, 0, 0),
-        backend="gtc:numpy",
+        dtype=np.float64, shape=(10, 10, 10), default_origin=(0, 0, 0), backend="dace:cpu"
     )
 
     @dace.program
@@ -370,7 +268,7 @@ def test_nondace_raises():
     with pytest.raises(
         TypeError,
         match=re.escape(
-            "Only dace backends are supported in DaCe-orchestrated programs." ' (found "gtc:numpy")'
+            "Only dace backends are supported in DaCe-orchestrated programs." ' (found "numpy")'
         ),
     ):
         call_frozen_stencil()
