@@ -38,7 +38,7 @@ from ..definitions import CPU_BACKENDS, GPU_BACKENDS
 try:
     import dace
 except ImportError:
-    pass
+    dace = None
 
 # ---- Hypothesis strategies ----
 @hyp_st.composite
