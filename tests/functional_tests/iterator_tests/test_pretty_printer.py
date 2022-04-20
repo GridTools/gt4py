@@ -109,6 +109,31 @@ def test_arithmetic():
     assert actual == expected
 
 
+def test_associativity():
+    testee = ir.FunCall(
+        fun=ir.SymRef(id="plus"),
+        args=[
+            ir.FunCall(
+                fun=ir.SymRef(id="plus"),
+                args=[
+                    ir.IntLiteral(value=1),
+                    ir.IntLiteral(value=2),
+                ],
+            ),
+            ir.FunCall(
+                fun=ir.SymRef(id="plus"),
+                args=[
+                    ir.IntLiteral(value=3),
+                    ir.IntLiteral(value=4),
+                ],
+            ),
+        ],
+    )
+    expected = "1 + 2 + (3 + 4)"
+    actual = pformat(testee)
+    assert actual == expected
+
+
 def test_deref():
     testee = ir.FunCall(fun=ir.SymRef(id="deref"), args=[ir.SymRef(id="x")])
     expected = "·x"

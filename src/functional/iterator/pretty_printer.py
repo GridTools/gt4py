@@ -150,7 +150,8 @@ class PrettyPrinter(NodeTranslator):
             if fun_name in BINARY_OPS and len(node.args) == 2:
                 # replacing binary ops: plus(x, y) → x + y etc.
                 op = BINARY_OPS[fun_name]
-                lhs, rhs = self.visit(node.args, prec=PRECEDENCE[fun_name])
+                lhs = self.visit(node.args[0], prec=PRECEDENCE[fun_name])
+                rhs = self.visit(node.args[1], prec=PRECEDENCE[fun_name] + 1)
                 h = self._hmerge(lhs, [" " + op + " "], rhs)
                 v = self._vmerge(lhs, self._hmerge([op + " "], rhs))
                 return self._prec_parens(self._optimum(h, v), prec, PRECEDENCE[fun_name])
