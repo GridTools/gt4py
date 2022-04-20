@@ -176,7 +176,7 @@ class PrettyPrinter(NodeTranslator):
             if fun_name == "domain" and len(node.args) >= 1:
                 # domain(x, y, ...) → { x × y × ... }
                 args = self.visit(node.args, prec=PRECEDENCE["__call__"])
-                return self._hmerge(["{ "], *self._hinterleave(args, " × "), [" }"])
+                return self._hmerge(["⟨ "], *self._hinterleave(args, ", "), [" ⟩"])
             if fun_name == "if_" and len(node.args) == 3:
                 # if_(x, y, z) → if x then y else z
                 ifb, thenb, elseb = self.visit(node.args, prec=PRECEDENCE["if_"])

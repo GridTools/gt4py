@@ -222,7 +222,7 @@ def test_domain():
         fun=ir.SymRef(id="domain"),
         args=[ir.SymRef(id="x"), ir.SymRef(id="y")],
     )
-    expected = "{ x × y }"
+    expected = "⟨ x, y ⟩"
     actual = pformat(testee)
     assert actual == expected
 
