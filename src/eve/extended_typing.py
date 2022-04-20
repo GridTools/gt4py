@@ -267,9 +267,9 @@ class CallableKwargsInfo:
 
 
 @_functools.singledispatch
-def reveal_type(
+def reveal_type(  # noqa: C901  # function too complex
     value: Any, *, annotate_callable_kwargs: bool = False
-) -> Any:  # noqa: C901  # function too complex
+) -> Any:
     """Generate a typing definition from a value.
 
     The implementation uses :func:`functools.singledispatch`. Customized or
@@ -306,14 +306,8 @@ def reveal_type(
         >>> reveal_type(f)
         collections.abc.Callable[..., int]
 
-        # >>> reveal_type(Dict[int, Union[int, float]])
-        # typing.Dict[int, typing.Union[int, float]]
-
-        # >>> print(reveal_type(Dict[int, Union[TypeVar("T", bound=int), float]]))
-        # typing.Dict[int, typing.Union[int, float]]
-
-        # >>> print(reveal_type(Dict[int, Union[int, float]], get_origins=False))
-        # typing.Dict[int, typing.Union[int, float]]
+        >>> reveal_type(Dict[int, Union[int, float]])
+        dict[int, typing.Union[int, float]]
 
         >>> import numbers
         >>> @reveal_type.register(int)
@@ -331,7 +325,7 @@ def reveal_type(
     if isinstance(value, type):
         return value
 
-    elif value in (None, _types.NoneType):
+    elif value in (None, type(None)):
         return None
 
     elif isinstance(value, tuple):

@@ -304,8 +304,8 @@ def non_instantiable(cls: Type[_T]) -> Type[_T]:
         elif original_new is not None:
             original_new(current_cls, *args, **kwargs)
 
-    cls.__new__ = _non_instantiable_new
-    cls.__non_instantiable__ = True
+    cls.__new__ = _non_instantiable_new  # type: ignore[assignment]
+    cls.__non_instantiable__ = True  # type: ignore[attr-defined]
 
     return cls
 
@@ -467,7 +467,7 @@ class FrozenNamespace(types.SimpleNamespace, Generic[T]):
     def __setattr__(self, _name: str, _value: T) -> None:
         raise TypeError(f"Trying to modify immutable '{self.__class__.__name__}' instance.")
 
-    def __hash__(self) -> int:
+    def __hash__(self) -> int:  # type: ignore[override]
         return hash(tuple(self.__dict__.items()))
 
     def items(self) -> Iterable[Tuple[str, T]]:
@@ -484,9 +484,8 @@ if python_info.IS_PYTHON_AT_LEAST_3_10:
     field_: Final = dataclasses.field
 else:
 
-    @typing.final
     @functools.wraps(dataclasses.field)
-    def field_(*, kw_only=None, **kwargs):
+    def field_(*, kw_only: Optional[bool] = None, **kwargs: Any) -> dataclasses.Field:
         return dataclasses.field(**kwargs)
 
 
