@@ -91,12 +91,12 @@ class ToIrTransformer(lark.Transformer):
         return ir.FloatLiteral(value=float(value.value))
 
     def OFFSET_LITERAL(self, value: lark.Token) -> ir.OffsetLiteral:
-        value = value.value[:-1]
+        v: Union[int, str] = value.value[:-1]
         try:
-            value = int(value)
+            v = int(value)
         except ValueError:
             pass
-        return ir.OffsetLiteral(value=value)
+        return ir.OffsetLiteral(value=v)
 
     def ID_NAME(self, value: lark.Token) -> str:
         return value.value
@@ -104,76 +104,76 @@ class ToIrTransformer(lark.Transformer):
     def AXIS_NAME(self, value: lark.Token) -> ir.AxisLiteral:
         return ir.AxisLiteral(value=value.value)
 
-    def lam(self, *args):
+    def lam(self, *args: ir.Node) -> ir.Lambda:
         *params, expr = args
         return ir.Lambda(params=params, expr=expr)
 
-    def bool_and(self, lhs, rhs):
+    def bool_and(self, lhs: ir.Expr, rhs: ir.Expr) -> ir.FunCall:
         return ir.FunCall(fun=ir.SymRef(id="and_"), args=[lhs, rhs])
 
-    def bool_or(self, lhs, rhs):
+    def bool_or(self, lhs: ir.Expr, rhs: ir.Expr) -> ir.FunCall:
         return ir.FunCall(fun=ir.SymRef(id="or_"), args=[lhs, rhs])
 
-    def bool_not(self, arg):
+    def bool_not(self, arg: ir.Expr) -> ir.FunCall:
         return ir.FunCall(fun=ir.SymRef(id="not_"), args=[arg])
 
-    def plus(self, lhs, rhs):
+    def plus(self, lhs: ir.Expr, rhs: ir.Expr) -> ir.FunCall:
         return ir.FunCall(fun=ir.SymRef(id="plus"), args=[lhs, rhs])
 
-    def minus(self, lhs, rhs):
+    def minus(self, lhs: ir.Expr, rhs: ir.Expr) -> ir.FunCall:
         return ir.FunCall(fun=ir.SymRef(id="minus"), args=[lhs, rhs])
 
-    def multiplies(self, lhs, rhs):
+    def multiplies(self, lhs: ir.Expr, rhs: ir.Expr) -> ir.FunCall:
         return ir.FunCall(fun=ir.SymRef(id="multiplies"), args=[lhs, rhs])
 
-    def divides(self, lhs, rhs):
+    def divides(self, lhs: ir.Expr, rhs: ir.Expr) -> ir.FunCall:
         return ir.FunCall(fun=ir.SymRef(id="divides"), args=[lhs, rhs])
 
-    def eq(self, lhs, rhs):
+    def eq(self, lhs: ir.Expr, rhs: ir.Expr) -> ir.FunCall:
         return ir.FunCall(fun=ir.SymRef(id="eq"), args=[lhs, rhs])
 
-    def greater(self, lhs, rhs):
+    def greater(self, lhs: ir.Expr, rhs: ir.Expr) -> ir.FunCall:
         return ir.FunCall(fun=ir.SymRef(id="greater"), args=[lhs, rhs])
 
-    def less(self, lhs, rhs):
+    def less(self, lhs: ir.Expr, rhs: ir.Expr) -> ir.FunCall:
         return ir.FunCall(fun=ir.SymRef(id="less"), args=[lhs, rhs])
 
-    def deref(self, arg):
+    def deref(self, arg: ir.Expr) -> ir.FunCall:
         return ir.FunCall(fun=ir.SymRef(id="deref"), args=[arg])
 
-    def lift(self, arg):
+    def lift(self, arg: ir.Expr) -> ir.FunCall:
         return ir.FunCall(fun=ir.SymRef(id="lift"), args=[arg])
 
-    def shift(self, *offsets):
+    def shift(self, *offsets: ir.Expr) -> ir.FunCall:
         return ir.FunCall(fun=ir.SymRef(id="shift"), args=offsets)
 
-    def tuple_get(self, tup, idx):
+    def tuple_get(self, tup: ir.Expr, idx: ir.IntLiteral) -> ir.FunCall:
         return ir.FunCall(fun=ir.SymRef(id="tuple_get"), args=[idx, tup])
 
-    def make_tuple(self, *args):
+    def make_tuple(self, *args: ir.Expr) -> ir.FunCall:
         return ir.FunCall(fun=ir.SymRef(id="make_tuple"), args=args)
 
-    def named_range(self, name, start, end):
+    def named_range(self, name: ir.AxisLiteral, start: ir.Expr, end: ir.Expr) -> ir.FunCall:
         return ir.FunCall(fun=ir.SymRef(id="named_range"), args=[name, start, end])
 
-    def domain(self, *ranges):
+    def domain(self, *ranges: ir.Expr) -> ir.FunCall:
         return ir.FunCall(fun=ir.SymRef(id="domain"), args=ranges)
 
-    def ifthenelse(self, condition, then, otherwise):
+    def ifthenelse(self, condition: ir.Expr, then: ir.Expr, otherwise: ir.Expr) -> ir.FunCall:
         return ir.FunCall(fun=ir.SymRef(id="if_"), args=[condition, then, otherwise])
 
-    def call(self, fun, *args):
+    def call(self, fun: ir.Expr, *args: ir.Expr) -> ir.FunCall:
         return ir.FunCall(fun=fun, args=args)
 
-    def function_definition(self, *args):
+    def function_definition(self, *args: ir.Node) -> ir.FunctionDefinition:
         fid, *params, expr = args
         return ir.FunctionDefinition(id=fid, params=params, expr=expr)
 
-    def stencil_closure(self, *args):
+    def stencil_closure(self, *args: ir.Expr) -> ir.StencilClosure:
         output, stencil, *inputs, domain = args
         return ir.StencilClosure(domain=domain, stencil=stencil, output=output, inputs=inputs)
 
-    def fencil_definition(self, fid, *args):
+    def fencil_definition(self, fid: str, *args: ir.Node) -> ir.FencilDefinition:
         params = []
         function_definitions = []
         closures = []
@@ -189,7 +189,7 @@ class ToIrTransformer(lark.Transformer):
             id=fid, function_definitions=function_definitions, params=params, closures=closures
         )
 
-    def start(self, arg):
+    def start(self, arg: ir.Node) -> ir.Node:
         return arg
 
 
