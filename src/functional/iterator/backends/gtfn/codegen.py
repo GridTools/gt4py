@@ -31,7 +31,7 @@ class gtfn_codegen(codegen.TemplatedGenerator):
 
     StencilExecution = as_mako(
         """
-        ${backend}.stencil_executor()().arg(${output})${''.join('.arg('+i+')' for i in inputs)}.assign(0_c, ${stencil}(), ${','.join(str(i)+'_c' for i in range(1,len(inputs)+1))});
+        ${backend}.stencil_executor()().arg(${output})${''.join('.arg('+i+')' for i in inputs)}.assign(0_c, ${stencil}(), ${','.join(str(i)+'_c' for i in range(1,len(inputs)+1))}).execute();
         """
     )
 
