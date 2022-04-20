@@ -19,6 +19,7 @@ class Sym(Node):  # helper
     id: SymbolName  # noqa: A003
 
 
+@noninstantiable
 class Expr(Node):
     ...
 
