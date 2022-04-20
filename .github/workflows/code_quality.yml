@@ -1,4 +1,4 @@
-name: Quality Assurance
+name: Code quality
 
 on:
   push:
@@ -17,12 +17,12 @@ jobs:
       uses: actions/setup-python@v3
       with:
         python-version: "3.10"
-    - name: Install dependencies
+    - name: "Install dependencies"
       run: |
         python -m pip install --upgrade pip
         python -m pip install $(cat ./requirements-dev.txt | grep pre-commit)
         pre-commit install-hooks
-    - name: Run checks
+    - name: "Run checks"
       run: |
         python -m pip list
         pre-commit run --all-files
