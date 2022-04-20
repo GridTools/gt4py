@@ -13,6 +13,8 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
+from types import SimpleNamespace
+
 import hypothesis as hyp
 import hypothesis.strategies as hyp_st
 import numpy as np
@@ -22,7 +24,7 @@ import pytest
 try:
     import cupy as cp
 except ImportError:
-    pass
+    cp = None
 
 import gt4py.backend as gt_backend
 import gt4py.storage as gt_store
@@ -32,6 +34,11 @@ from gt4py.storage.storage import GPUStorage
 
 from ..definitions import CPU_BACKENDS, GPU_BACKENDS
 
+
+try:
+    import dace
+except ImportError:
+    pass
 
 # ---- Hypothesis strategies ----
 @hyp_st.composite
@@ -1056,3 +1063,83 @@ def test_non_existing_backend():
             shape=[10, 10, 10],
             dtype=(np.float64, (3,)),
         )
+
+
+@pytest.mark.skipif(dace is None, reason="Storage __descriptor__ depends on dace.")
+class TestDescriptor:
+    @staticmethod
+    def ravel_with_padding(array):
+
+        if cp is not None and isinstance(array, cp.ndarray):
+            interface = dict(array.__cuda_array_interface__)
+        else:
+            interface = dict(array.__array_interface__)
+
+        assert interface.get("offset", 0) == 0 and interface["data"] is not None
+
+        total_size = int(
+            int(np.array([array.shape]) @ np.array([array.strides]).T) // array.itemsize
+        )
+        interface["shape"] = (total_size,)
+        interface["strides"] = (min(array.strides),)
+
+        if cp is not None and isinstance(array, cp.ndarray):
+            return cp.asarray(SimpleNamespace(__cuda_array_interface__=interface))
+        else:
+            return np.asarray(SimpleNamespace(__array_interface__=interface))
+
+    @pytest.mark.parametrize(
+        "backend",
+        [
+            "gtc:dace:cpu",
+            pytest.param("gtc:dace:gpu", marks=[pytest.mark.requires_gpu]),
+        ],
+    )
+    def test_device(self, backend):
+        backend_cls = gt_backend.from_name(backend)
+        stor = gt_store.ones(
+            backend=backend,
+            managed_memory=False,
+            shape=(3, 7, 13),
+            default_origin=(1, 2, 3),
+            dtype=np.float64,
+        )
+        descriptor: dace.data.Array = stor.__descriptor__()
+        if backend_cls.storage_info["device"] == "gpu":
+            assert descriptor.storage == dace.StorageType.GPU_Global
+        else:
+            assert descriptor.storage == dace.StorageType.CPU_Heap
+
+    @pytest.mark.parametrize(
+        "backend",
+        [
+            "gtc:dace:cpu",
+            pytest.param("gtc:dace:gpu", marks=[pytest.mark.requires_gpu]),
+        ],
+    )
+    def test_start_offset(self, backend):
+        backend_cls = gt_backend.from_name(backend)
+        default_origin = (1, 2, 3)
+        stor = gt_store.ones(
+            backend=backend,
+            managed_memory=False,
+            shape=(3, 7, 13),
+            default_origin=default_origin,
+            dtype=np.float64,
+        )
+        descriptor: dace.data.Array = stor.__descriptor__()
+        raveled = TestDescriptor.ravel_with_padding(stor)[descriptor.start_offset :]
+        if backend_cls.storage_info["device"] == "gpu":
+            assert raveled.data.ptr % (backend_cls.storage_info["alignment"] * stor.itemsize) == 0
+            assert (
+                backend_cls.storage_info["alignment"] == 1
+                or stor.data.ptr % (backend_cls.storage_info["alignment"] * stor.itemsize) != 0
+            )
+        else:
+            assert (
+                raveled.ctypes.data % (backend_cls.storage_info["alignment"] * stor.itemsize) == 0
+            )
+            assert (
+                backend_cls.storage_info["alignment"] == 1
+                or stor.ctypes.data % (backend_cls.storage_info["alignment"] * stor.itemsize) != 0
+            )
