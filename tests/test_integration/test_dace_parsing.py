@@ -33,8 +33,8 @@ def dace_env():
 
 @pytest.fixture(
     params=[
-        "gtc:dace:cpu",
-        pytest.param("gtc:dace:gpu", marks=[pytest.mark.requires_gpu]),
+        "dace:cpu",
+        pytest.param("dace:gpu", marks=[pytest.mark.requires_gpu]),
     ]
 )
 def dace_stencil(request):
@@ -56,7 +56,7 @@ def tuple_st(min_value, max_value):
 
 @pytest.mark.parametrize(
     "backend",
-    ["gtc:dace:cpu", pytest.param("gtc:dace:gpu", marks=[pytest.mark.requires_gpu])],
+    ["dace:cpu", pytest.param("dace:gpu", marks=[pytest.mark.requires_gpu])],
 )
 def test_basic(backend):
     @gtscript.stencil(backend=backend)
@@ -171,7 +171,7 @@ def test_origin_offsetting_nofrozen(dace_stencil, domain, outp_origin):
 
 @pytest.mark.parametrize(
     "backend",
-    ["gtc:dace:cpu", pytest.param("gtc:dace:gpu", marks=[pytest.mark.requires_gpu])],
+    ["dace:cpu", pytest.param("dace:gpu", marks=[pytest.mark.requires_gpu])],
 )
 def test_optional_arg_noprovide(backend):
     @gtscript.stencil(backend=backend)
@@ -218,7 +218,7 @@ def test_optional_arg_noprovide(backend):
 
 @pytest.mark.parametrize(
     "backend",
-    ["gtc:dace:cpu", pytest.param("gtc:dace:gpu", marks=[pytest.mark.requires_gpu])],
+    ["dace:cpu", pytest.param("dace:gpu", marks=[pytest.mark.requires_gpu])],
 )
 def test_optional_arg_provide(backend):
     @gtscript.stencil(backend=backend)
@@ -268,7 +268,7 @@ def test_optional_arg_provide(backend):
 
 @pytest.mark.parametrize(
     "backend",
-    ["gtc:dace:cpu", pytest.param("gtc:dace:gpu", marks=[pytest.mark.requires_gpu])],
+    ["dace:cpu", pytest.param("dace:gpu", marks=[pytest.mark.requires_gpu])],
 )
 def test_optional_arg_provide_aot(backend):
     @gtscript.stencil(backend=backend)

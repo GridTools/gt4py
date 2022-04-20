@@ -18,7 +18,7 @@ def test_masked_vector_assignment():
     from gt4py.gtscript import FORWARD, IJ, Field, computation, interval, stencil
     from gt4py.storage import ones
 
-    BACKEND = "gtc:numpy"
+    BACKEND = "numpy"
     dtype = np.float64
 
     @stencil(BACKEND)

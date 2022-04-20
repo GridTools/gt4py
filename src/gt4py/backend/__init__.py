@@ -25,18 +25,13 @@ from .base import (
     register,
 )
 
-from .gtc_backend import (
-    GTCCudaBackend,
-    GTCGTCpuIfirstBackend,
-    GTCGTCpuKfirstBackend,
-    GTCGTGpuBackend,
-    GTCNumpyBackend,
-)
-
 
 try:
-    from .gtc_backend.dace import GTCDaceCPUBackend, GTCDaceGPUBackend
+    from .dace_backend import DaceCPUBackend, DaceGPUBackend
 except ImportError:
     pass
 
+from .cuda_backend import CudaBackend  # noqa: F401
+from .gtcpp_backend import GTCpuIfirstBackend, GTCpuKfirstBackend, GTGpuBackend  # noqa: F401
 from .module_generator import BaseModuleGenerator
+from .numpy_backend import NumpyBackend  # noqa: F401
