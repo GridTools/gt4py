@@ -185,7 +185,7 @@ def get_partial_type_hints(
     localns: Optional[Dict[str, Any]] = None,
     include_extras: bool = False,
 ) -> Dict[str, Union[Type, ForwardRef]]:
-    """Return a dictionary with type hints (with undefined names as forward references) for a function, method, module or class object.
+    """Return a dictionary with type hints (using forward refs for undefined names) for a function, method, module or class object.
 
     For each member type hint in the object a :class:`typing.ForwarRef` instance will be
     returned if some names in the string annotation have not been found.

@@ -16,8 +16,6 @@
 
 """Version specification."""
 
-# flake8: noqa
-# TODO(egparedes): Set up proper versioning scheme after migrating repo to new location
 
 from __future__ import annotations
 
@@ -27,11 +25,12 @@ from typing import Final, Optional, Union
 from packaging.version import LegacyVersion, Version, parse
 
 
-# try:
-#     __version__: str = version("gt4py-functional")
-# except PackageNotFoundError:
-#     __version__ = "X.X.X.unknown"
+# TODO(egparedes): Set up proper versioning scheme after migrating repo to new location
+try:
+    _version: str = version("gt4py-functional")
+except PackageNotFoundError:
+    _version = "X.X.X.unknown"
 
-__version__: Final = "0.0.1.dev1"
 
+__version__: Final = _version
 __versioninfo__: Final[Optional[Union[LegacyVersion, Version]]] = parse(__version__)

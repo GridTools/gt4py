@@ -14,6 +14,8 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+"""Constant information about the current interpreter."""
+
 from __future__ import annotations
 
 import sys
