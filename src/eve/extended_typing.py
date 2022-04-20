@@ -35,7 +35,7 @@ from .python_info import IS_PYTHON_AT_LEAST_3_9
 
 if IS_PYTHON_AT_LEAST_3_9:
     # Standard library already supports PEP 585 (Type Hinting Generics In Standard Collections)
-    from builtins import (  # type: ignore[misc]  # isort:skip  # noqa: F401
+    from builtins import (  # type: ignore[misc]  # isort:skip
         tuple as Tuple,
         list as List,
         dict as Dict,
@@ -43,14 +43,14 @@ if IS_PYTHON_AT_LEAST_3_9:
         frozenset as FrozenSet,
         type as Type,
     )
-    from collections import (  # isort:skip  # noqa: F401
+    from collections import (  # isort:skip
         ChainMap as ChainMap,
         Counter as Counter,
         OrderedDict as OrderedDict,
         defaultdict as defaultdict,
         deque as deque,
     )
-    from collections.abc import (  # isort:skip  # noqa: F401
+    from collections.abc import (  # isort:skip
         AsyncGenerator as AsyncGenerator,
         AsyncIterable as AsyncIterable,
         AsyncIterator as AsyncIterator,
@@ -73,13 +73,13 @@ if IS_PYTHON_AT_LEAST_3_9:
         Reversible as Reversible,
         Sequence as Sequence,
     )
-    from collections.abc import Set as AbstractSet  # isort:skip  # noqa: F401
-    from collections.abc import ValuesView as ValuesView  # isort:skip  # noqa: F401
-    from contextlib import (  # isort:skip  # noqa: F401
+    from collections.abc import Set as AbstractSet  # isort:skip
+    from collections.abc import ValuesView as ValuesView  # isort:skip
+    from contextlib import (  # isort:skip
         AbstractAsyncContextManager as AsyncContextManager,
     )
-    from contextlib import AbstractContextManager as ContextManager  # isort:skip  # noqa: F401
-    from re import Match as Match, Pattern as Pattern  # isort:skip  # noqa: F401
+    from contextlib import AbstractContextManager as ContextManager  # isort:skip
+    from re import Match as Match, Pattern as Pattern  # isort:skip
 
 
 # These fallbacks are useful for public symbols not exported by default.
@@ -125,14 +125,21 @@ _T_co = TypeVar("_T_co", covariant=True)
 FrozenList: TypeAlias = Tuple[_T_co, ...]
 NoArgsCallable = Callable[[], Any]
 
+
 # Typing annotations
-SolvedTypingAnnotation = Union[Type, _types.GenericAlias, _types.GenericAlias, _typing._SpecialForm]
+if IS_PYTHON_AT_LEAST_3_9:
+    SolvedTypingAnnotation = Union[
+        Type, _types.GenericAlias, _typing._BaseGenericAlias, _typing._SpecialForm  # type: ignore
+    ]
+else:
+    SolvedTypingAnnotation = Union[Type, _typing._GenericAlias, _typing._SpecialForm]  # type: ignore
+
 TypingAnnotation = Union[ForwardRef, SolvedTypingAnnotation]
 SourceTypingAnnotation = Union[str, TypingAnnotation]
 
 _TypingSpecialFormType = _typing._SpecialForm
 _GenericAliasType: Final[Type] = (
-    _types.GenericAlias if IS_PYTHON_AT_LEAST_3_9 else _typing._GenericAlias  # type: ignore[attr-defined]
+    _types.GenericAlias if IS_PYTHON_AT_LEAST_3_9 else _typing._GenericAlias  # type: ignore[attr-defined]  # _GenericAlias is private
 )
 
 
