@@ -125,7 +125,7 @@ NoArgsCallable = Callable[[], Any]
 
 
 # Typing annotations
-if IS_PYTHON_AT_LEAST_3_9:
+if _sys.version_info >= (3, 9):
     SolvedTypingAnnotation = Union[
         Type, _types.GenericAlias, _typing._BaseGenericAlias, _typing._SpecialForm  # type: ignore
     ]
@@ -137,7 +137,7 @@ SourceTypingAnnotation = Union[str, TypingAnnotation]
 
 _TypingSpecialFormType = _typing._SpecialForm
 _GenericAliasType: Final[Type] = (
-    _types.GenericAlias if IS_PYTHON_AT_LEAST_3_9 else _typing._GenericAlias  # type: ignore[attr-defined]  # _GenericAlias is private
+    _types.GenericAlias if _sys.version_info >= (3, 9) else _typing._GenericAlias  # type: ignore[attr-defined]  # _GenericAlias is private
 )
 
 
