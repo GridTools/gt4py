@@ -37,22 +37,19 @@ class KBoundaryVisitor(NodeVisitor):
     ):
         boundary = field_boundaries[node.name]
         interval = vloop.interval
-        k_offset = node.offset.to_dict()["k"] or 0
-
-        if interval.start.level == LevelMarker.START and (
-            include_center_interval or interval.end.level == LevelMarker.START
-        ):
-            boundary = (max(-interval.start.offset - k_offset, boundary[0]), boundary[1])
-        if (
-            include_center_interval or interval.start.level == LevelMarker.END
-        ) and interval.end.level == LevelMarker.END:
-            boundary = (boundary[0], max(interval.end.offset + k_offset, boundary[1]))
-
+        if not isinstance(node.offset, gtir.VariableKOffset):
+            if interval.start.level == LevelMarker.START and (
+                include_center_interval or interval.end.level == LevelMarker.START
+            ):
+                boundary = (max(-interval.start.offset - node.offset.k, boundary[0]), boundary[1])
+            if (
+                include_center_interval or interval.start.level == LevelMarker.END
+            ) and interval.end.level == LevelMarker.END:
+                boundary = (boundary[0], max(interval.end.offset + node.offset.k, boundary[1]))
         if node.name in [decl.name for decl in vloop.temporaries] and (
             boundary[0] > 0 or boundary[1] > 0
         ):
             raise TypeError(f"Invalid access with offset in k to temporary field {node.name}.")
-
         assert node.name in field_boundaries
         field_boundaries[node.name] = boundary
 
