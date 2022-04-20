@@ -193,9 +193,7 @@ class ToIrTransformer(lark.Transformer):
         return arg
 
 
-def pparse(pretty_str: str, start=None) -> ir.Node:
-    if start is None:
-        start = "expr"
+def pparse(pretty_str: str) -> ir.Node:
     parser = lark.Lark(GRAMMAR, parser="earley")
     tree = parser.parse(pretty_str)
     return ToIrTransformer(visit_tokens=True).transform(tree)
