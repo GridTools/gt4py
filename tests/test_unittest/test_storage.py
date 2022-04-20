@@ -1091,8 +1091,8 @@ class TestDescriptor:
     @pytest.mark.parametrize(
         "backend",
         [
-            "gtc:dace:cpu",
-            pytest.param("gtc:dace:gpu", marks=[pytest.mark.requires_gpu]),
+            "dace:cpu",
+            pytest.param("dace:gpu", marks=[pytest.mark.requires_gpu]),
         ],
     )
     def test_device(self, backend):
@@ -1113,8 +1113,8 @@ class TestDescriptor:
     @pytest.mark.parametrize(
         "backend",
         [
-            "gtc:dace:cpu",
-            pytest.param("gtc:dace:gpu", marks=[pytest.mark.requires_gpu]),
+            "dace:cpu",
+            pytest.param("dace:gpu", marks=[pytest.mark.requires_gpu]),
         ],
     )
     def test_start_offset(self, backend):
