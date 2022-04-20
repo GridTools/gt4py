@@ -87,6 +87,13 @@ def test_lambda():
     assert actual == expected
 
 
+def test_offset_literal():
+    testee = ir.OffsetLiteral(value="I")
+    expected = "Iₒ"
+    actual = pformat(testee)
+    assert actual == expected
+
+
 def test_arithmetic():
     testee = ir.FunCall(
         fun=ir.SymRef(id="divides"),
@@ -179,7 +186,7 @@ def test_shift():
         fun=ir.SymRef(id="shift"),
         args=[ir.OffsetLiteral(value="I"), ir.OffsetLiteral(value=1)],
     )
-    expected = "⟪I, 1⟫"
+    expected = "⟪Iₒ, 1ₒ⟫"
     actual = pformat(testee)
     assert actual == expected
 

@@ -120,7 +120,7 @@ class PrettyPrinter(NodeTranslator):
         return [str(node.value)]
 
     def visit_OffsetLiteral(self, node: ir.OffsetLiteral, *, prec: int) -> list[str]:
-        return [str(node.value)]
+        return [str(node.value) + "ₒ"]
 
     def visit_AxisLiteral(self, node: ir.AxisLiteral, *, prec: int) -> list[str]:
         return [str(node.value)]
