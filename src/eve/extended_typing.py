@@ -28,14 +28,14 @@ import typing as _typing
 # Definitions in 'typing_extensions' take priority over those in 'typing'
 from typing import *  # noqa: F403
 
-from typing_extensions import *  # noqa: F403
+from typing_extensions import *  # type: ignore[misc]  # noqa: F403
 
 from .python_info import IS_PYTHON_AT_LEAST_3_9
 
 
 if IS_PYTHON_AT_LEAST_3_9:
     # Standard library already supports PEP 585 (Type Hinting Generics In Standard Collections)
-    from builtins import (  # isort:skip  # noqa: F401
+    from builtins import (  # type: ignore[misc]  # isort:skip  # noqa: F401
         tuple as Tuple,
         list as List,
         dict as Dict,
@@ -112,7 +112,7 @@ def __dir__() -> List[str]:
         import typing_extensions
 
         orig_dir = typing.__dir__()
-        self_func.__cached_dir = orig_dir + [
+        self_func.__cached_dir = [*orig_dir] + [
             name for name in typing_extensions.__dir__() if name not in orig_dir
         ]
 
@@ -125,19 +125,16 @@ _T_co = TypeVar("_T_co", covariant=True)
 FrozenList: TypeAlias = Tuple[_T_co, ...]
 NoArgsCallable = Callable[[], Any]
 
-# Typing of annotations
-_GenericAliasType: Type = _types.GenericAlias if IS_PYTHON_AT_LEAST_3_9 else _typing._GenericAlias
-
-_TypingGenericAliasType: TypeAlias = (
-    Union[_types.GenericAlias, _typing._BaseGenericAlias]
-    if IS_PYTHON_AT_LEAST_3_9
-    else _typing._GenericAlias
-)
+# Typing annotations
+SolvedTypingAnnotation = Union[Type, _types.GenericAlias, _types.GenericAlias, _typing._SpecialForm]
+TypingAnnotation = Union[ForwardRef, SolvedTypingAnnotation]
+SourceTypingAnnotation = Union[str, TypingAnnotation]
 
 _TypingSpecialFormType = _typing._SpecialForm
+_GenericAliasType: Final[Type] = (
+    _types.GenericAlias if IS_PYTHON_AT_LEAST_3_9 else _typing._GenericAlias  # type: ignore[attr-defined]
+)
 
-TypingAnnotation = Union[Type, ForwardRef, _TypingGenericAliasType, _TypingSpecialFormType]
-SourceTypingAnnotation = Union[str, TypingAnnotation]
 
 # TODO(egparedes): remove these types only needed from pydantic models
 RootValidatorValuesType = Dict[str, Any]
@@ -221,7 +218,7 @@ def eval_forward_ref(
     localns: Optional[Dict[str, Any]] = None,
     *,
     include_extras: bool = False,
-) -> Type:
+) -> SolvedTypingAnnotation:
     """Resolve forward references in type annotations.
 
     Arguments:
@@ -236,8 +233,8 @@ def eval_forward_ref(
     """
     actual_type = ForwardRef(ref) if isinstance(ref, str) else ref
 
-    def _f():
-        ...
+    def _f() -> None:
+        pass
 
     _f.__annotations__ = {"ref": actual_type}
 
@@ -249,6 +246,7 @@ def eval_forward_ref(
         safe_localns = {"typing": _sys.modules[__name__], "NoneType": type(None)}
 
     actual_type = get_type_hints(_f, globalns, safe_localns, include_extras=include_extras)["ref"]
+    assert not isinstance(actual_type, ForwardRef)
 
     return actual_type
 
@@ -340,7 +338,7 @@ def reveal_type(  # noqa: C901  # function too complex
     elif isinstance(value, (list, set, frozenset)):
         t: Union[Type[List], Type[Set], Type[FrozenSet]] = type(value)
         unique_type, args = _collapse_type_args(*(recursive_get(item) for item in value))
-        return _GenericAliasType(t, args[0] if unique_type else t[Any])
+        return _GenericAliasType(t, args[0] if unique_type else Any)
 
     elif isinstance(value, dict):
         unique_key_type, keys = _collapse_type_args(*(recursive_get(key) for key in value.keys()))
