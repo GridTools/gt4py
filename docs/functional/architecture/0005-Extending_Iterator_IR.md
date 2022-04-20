@@ -1,5 +1,5 @@
 ---
-tags: [iterator]
+tags: [general]
 ---
 
 # Extending Iterator IR
