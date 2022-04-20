@@ -52,7 +52,7 @@ def test_copy():
 
 
 def test_scalar_arg():
-    def constant_arg(bar: Field[..., int64], alpha: int64) -> Field[..., int64]:
+    def constant_arg(bar: Field[[IDim], int64], alpha: int64) -> Field[[IDim], int64]:
         return alpha * bar
 
     # ast_passes
@@ -256,7 +256,7 @@ def test_binary_plus():
 
 
 def test_add_scalar_literal_to_field():
-    def scalar_plus_field(a: Field[..., "float64"]) -> Field[..., "float64"]:
+    def scalar_plus_field(a: Field[[IDim], "float64"]) -> Field[[IDim], "float64"]:
         return 2.0 + a
 
     parsed = FieldOperatorParser.apply_to_function(scalar_plus_field)
@@ -270,7 +270,7 @@ def test_add_scalar_literal_to_field():
 
 
 def test_add_scalar_literals():
-    def scalar_plus_scalar(a: Field[..., "int32"]) -> Field[..., "int32"]:
+    def scalar_plus_scalar(a: Field[[IDim], "int32"]) -> Field[[IDim], "int32"]:
         tmp = int32(1) + int32("1")
         return a + tmp
 
@@ -347,7 +347,7 @@ def test_binary_and():
 
 
 def test_scalar_and():
-    def scalar_and(a: Field[..., "bool"]):
+    def scalar_and(a: Field[[IDim], "bool"]) -> Field[[IDim], "bool"]:
         return a & False
 
     parsed = FieldOperatorParser.apply_to_function(scalar_and)
@@ -375,7 +375,7 @@ def test_binary_or():
 
 
 def test_compare_scalars():
-    def comp_scalars():
+    def comp_scalars() -> Field[[], bool]:
         return 3 > 4
 
     parsed = FieldOperatorParser.apply_to_function(comp_scalars)
@@ -429,7 +429,9 @@ def test_compare_eq():
 
 
 def test_compare_chain():
-    def compare_chain(a: Field[..., "float64"], b: Field[..., "float64"], c: Field[..., "float64"]):
+    def compare_chain(
+        a: Field[[IDim], "float64"], b: Field[[IDim], "float64"], c: Field[[IDim], "float64"]
+    ) -> Field[[IDim], bool]:
         return a > b > c
 
     parsed = FieldOperatorParser.apply_to_function(compare_chain)
@@ -506,7 +508,7 @@ def test_reduction_lowering_expr():
 
 
 def test_builtin_int_constructors():
-    def int_constrs():
+    def int_constrs() -> tuple[Field[[], int], ...]:
         return 1, int(1), int32(1), int64(1), int("1"), int32("1"), int64("1")
 
     parsed = FieldOperatorParser.apply_to_function(int_constrs)
@@ -526,7 +528,7 @@ def test_builtin_int_constructors():
 
 
 def test_builtin_float_constructors():
-    def float_constrs():
+    def float_constrs() -> tuple[Field[[], float], ...]:
         return (
             0.1,
             float(0.1),
@@ -554,7 +556,7 @@ def test_builtin_float_constructors():
 
 
 def test_builtin_bool_constructors():
-    def bool_constrs():
+    def bool_constrs() -> tuple[Field[[], bool], ...]:
         return True, False, bool(True), bool(False), bool(0), bool(5), bool("True"), bool("False")
 
     parsed = FieldOperatorParser.apply_to_function(bool_constrs)

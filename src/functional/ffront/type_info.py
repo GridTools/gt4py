@@ -110,10 +110,6 @@ class TypeInfo:
         return issubclass(self.constraint, FieldType) if self.constraint else False
 
     @property
-    def is_scalar_field(self) -> bool:
-        return getattr(self.type, "dims", None) == []
-
-    @property
     def is_scalar(self) -> bool:
         return issubclass(self.constraint, ScalarType) if self.constraint else False
 

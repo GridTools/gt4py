@@ -228,7 +228,9 @@ def test_tuples():
     b = np_as_located_field(IDim)(np.ones((size)) * 2)
     c = np_as_located_field(IDim)(np.zeros((size)))
 
-    def tuples(inp1: Field[[IDim], float64], inp2: Field[[IDim], float64]):
+    def tuples(
+        inp1: Field[[IDim], float64], inp2: Field[[IDim], float64]
+    ) -> Field[[IDim], float64]:
         inps = inp1, inp2
         scalars = 1.3, float64(5.0), float64("3.4")
         return (inps[0] * scalars[0] + inps[1] * scalars[1]) * scalars[2]
