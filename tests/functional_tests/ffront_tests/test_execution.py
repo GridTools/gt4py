@@ -214,7 +214,7 @@ def test_fold_shifts():
     assert np.allclose(a[1:] + b[2:], c)
 
 
-def test_tuples(pff_fixture):
+def test_tuples():
     size = 10
     a = np_as_located_field(IDim)(np.ones((size)))
     b = np_as_located_field(IDim)(np.ones((size)) * 2)
