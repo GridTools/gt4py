@@ -37,7 +37,7 @@ Sketch:
 - Foreach `fundef`, the signature of the wrapped function is extracted, then it is invoked with `Sym` nodes as arguments.
 - Expressions involving an `Expr` node (e.g. `Sym`) are converted to appropriate builtin calls, e.g. `4. + Sym(id='foo')` is converted to `FunCall(fun=SymRef(id='plus'), args=...)`
 - In appropriate places values are converted to nodes, see `make_node()`.
-- Finally the IR tree will be passed to `execute_program()` in `backend_executor.py` which will generator code for the program (and execute, if appropriate).
+- Finally the IR tree will be passed to `execute_fencil()` in `backend_executor.py` which will generator code for the program (and execute, if appropriate).
 
 ## Backends
 

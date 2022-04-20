@@ -12,12 +12,6 @@ class ToLispLike(TemplatedGenerator):
     Literal = as_fmt("{value}")
     OffsetLiteral = as_fmt("{value}")
     SymRef = as_fmt("{id}")
-    Program = as_fmt(
-        """
-    {''.join(function_definitions)}
-    {''.join(fencil_definitions)}
-    """
-    )
     StencilClosure = as_fmt(
         """(
      :domain {domain}
@@ -28,7 +22,9 @@ class ToLispLike(TemplatedGenerator):
     """
     )
     FencilDefinition = as_fmt(
-        """(defen {id}({' '.join(params)})
+        """
+        ({' '.join(function_definitions)})
+        (defen {id}({' '.join(params)})
         {''.join(closures)})
         """
     )
