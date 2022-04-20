@@ -214,7 +214,7 @@ def test_fold_shifts():
     assert np.allclose(a[1:] + b[2:], c)
 
 
-def test_tuples():
+def test_tuples(pff_fixture):
     size = 10
     a = np_as_located_field(IDim)(np.ones((size)))
     b = np_as_located_field(IDim)(np.ones((size)) * 2)
@@ -227,9 +227,9 @@ def test_tuples():
         scalars = 1.3, float64(5.0), float64("3.4")
         return (inps[0] * scalars[0] + inps[1] * scalars[1]) * scalars[2]
 
-    program = program_from_function(tuples, dim=IDim, size=size)
+    fencil = fencil_from_function(tuples, dim=IDim, size=size)
 
-    roundtrip.executor(program, a, b, c, offset_provider={})
+    roundtrip.executor(fencil, a, b, c, offset_provider={})
 
     assert np.allclose((a.array() * 1.3 + b.array() * 5.0) * 3.4, c)
 
