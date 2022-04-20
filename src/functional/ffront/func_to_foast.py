@@ -170,7 +170,7 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
         constraint_type: Type[ct.DataType] = ct.DataType
         if isinstance(new_value, foast.TupleExpr):
             constraint_type = ct.TupleType
-        if TypeInfo(new_value.type).is_scalar:
+        elif TypeInfo(new_value.type).is_scalar:
             constraint_type = ct.ScalarType
         return foast.Assign(
             target=foast.FieldSymbol(
@@ -426,7 +426,7 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
         dtype = symbol_makers.make_symbol_type_from_value(node.value)
         if not dtype:
             raise FieldOperatorSyntaxError.from_AST(
-                node, msg="Constants of type {type(node.value)} are not permitted"
+                node, msg=f"Constants of type {type(node.value)} are not permitted"
             )
         return foast.Constant(
             value=str(node.value), dtype=dtype, location=self._make_loc(node), type=dtype
