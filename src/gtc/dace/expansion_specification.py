@@ -2,7 +2,7 @@ import copy
 from dataclasses import dataclass
 from dataclasses import field as dataclass_field
 from itertools import combinations, permutations, product
-from typing import TYPE_CHECKING, List, Optional, Set
+from typing import TYPE_CHECKING, List, Optional, Set, Tuple, Union
 
 import dace
 
@@ -595,7 +595,7 @@ def _k_inside_dims(node: "StencilComputation"):
                     if isinstance(acc.offset, oir.VariableKOffset) or acc.offset.to_dict()["k"] != 0
                 )
             )
-            modified_fields = (
+            modified_fields: Set[str] = (
                 he.iter_tree()
                 .if_isinstance(oir.AssignStmt)
                 .getattr("left")
@@ -621,7 +621,7 @@ def _k_inside_stages(node: "StencilComputation"):
         return True
 
     for section in node.oir_node.sections:
-        modified_fields = set()
+        modified_fields: Set[str] = set()
         for he in section.horizontal_executions:
             if modified_fields:
                 ahead_acc = list()
@@ -655,13 +655,13 @@ def _k_inside_stages(node: "StencilComputation"):
 
 def valid_expansion_orders(node: "StencilComputation"):
     optionals = {"TileI", "TileJ", "TileK"}
-    required = {
+    required: Set[Union[Tuple[str, ...], str]] = {
         ("KMap", "KLoop", "CachedKLoop"),  # tuple represents "one of",
         ("JMap", "JLoop", "CachedJLoop"),
         ("IMap", "ILoop", "CachedILoop"),
     }
-    prepends = []
-    appends = []
+    prepends: List[str] = []
+    appends: List[str] = []
     if len(node.oir_node.sections) > 1:
         required.add("Sections")
     else:

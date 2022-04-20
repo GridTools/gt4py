@@ -15,9 +15,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import base64
-import copy
 import pickle
-from typing import Dict, List, Optional, Set
+from typing import Dict
 
 import dace.data
 import dace.dtypes
