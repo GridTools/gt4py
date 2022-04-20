@@ -11,7 +11,7 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-from typing import Optional
+from typing import Any, Optional
 
 import functional.ffront.field_operator_ast as foast
 from eve import NodeTranslator, SymbolTableTrait
@@ -63,6 +63,41 @@ def broadcast_typeinfos(left: TypeInfo, right: TypeInfo) -> Optional[TypeInfo]:
     if left.is_scalar and right.is_field_type:
         return right
     return left
+
+
+def boolified_typeinfo(typeinfo: TypeInfo):
+    """
+    Create a new symbol type from a TypeInfo, replacing the data type with ``bool``.
+
+    Examples:
+    ---------
+    >>> from functional.common import Dimension
+    >>> scalar_t = TypeInfo(ct.ScalarType(kind=ct.ScalarKind.FLOAT64))
+    >>> print(boolified_typeinfo(scalar_t).type)
+    bool
+
+    >>> field_t = TypeInfo(ct.FieldType(dims=[Dimension(value="I")], dtype=ct.ScalarType(kind=ct.ScalarKind)))
+    >>> print(boolified_typeinfo(field_t).type)
+    Field[[I], dtype=bool]
+
+    >>> deferred_t = TypeInfo(ct.DeferredSymbolType(constraint=ct.FieldType))
+    >>> print(boolified_typeinfo(deferred_t).type)
+    Field[..., dtype=bool]
+    """
+    type_class = typeinfo.constraint
+    if not type_class:
+        return None
+    kwargs: dict[str, Any] = {}
+    kwargs["dtype"] = ct.ScalarType(
+        kind=ct.ScalarKind.BOOL, shape=typeinfo.dtype.shape if typeinfo.dtype else None
+    )
+    if typeinfo.is_field_type:
+        kwargs["dims"] = typeinfo.dims if typeinfo.dims is not None else ...
+    elif typeinfo.is_scalar:
+        return TypeInfo(kwargs["dtype"])
+    else:
+        return None
+    return TypeInfo(type_class(**kwargs))
 
 
 class FieldOperatorTypeDeduction(NodeTranslator):
@@ -175,6 +210,33 @@ class FieldOperatorTypeDeduction(NodeTranslator):
         )
         return foast.BinOp(
             op=node.op, left=new_left, right=new_right, location=node.location, type=new_type
+        )
+
+    def visit_Compare(self, node: foast.Compare, **kwargs) -> foast.Compare:
+        new_left = self.visit(node.left, **kwargs)
+        new_right = self.visit(node.right, **kwargs)
+        new_type = self._deduce_compare_type(node, new_left.type, new_right.type)
+        return foast.Compare(
+            op=node.op, left=new_left, right=new_right, location=node.location, type=new_type
+        )
+
+    def _deduce_compare_type(
+        self, node: foast.Compare, left_type: ct.SymbolType, right_type: ct.SymbolType, **kwargs
+    ) -> Optional[ct.SymbolType]:
+        left_info = TypeInfo(left_type)
+        right_info = TypeInfo(right_type)
+        if any([not i.is_arithmetic_compatible for i in [left_info, right_info]]):
+            raise FieldOperatorTypeDeductionError.from_foast_node(
+                node,
+                msg=f"Incompatible type(s) for operator '{node.op}': {left_info.type}, {right_info.type}!",
+            )
+        if result := broadcast_typeinfos(
+            boolified_typeinfo(left_info), boolified_typeinfo(right_info)
+        ):
+            return result.type
+        raise FieldOperatorTypeDeductionError.from_foast_node(
+            node,
+            msg=f"Incompatible type(s) for operator '{node.op}': {left_info.type}, {right_info.type}!",
         )
 
     def _deduce_binop_type(

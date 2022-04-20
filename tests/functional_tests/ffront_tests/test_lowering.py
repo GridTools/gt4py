@@ -381,9 +381,7 @@ def test_compare_scalars():
     parsed = FieldOperatorParser.apply_to_function(comp_scalars)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.deref_(
-        im.lift_(im.lambda__()(im.greater_(im.literal_("3", "int64"), im.literal_("4", "int64"))))()
-    )
+    reference = im.greater_(im.literal_("3", "int64"), im.literal_("4", "int64"))
 
     assert lowered.expr == reference
 
@@ -440,8 +438,12 @@ def test_compare_chain():
     reference = im.deref_(
         im.lift_(
             im.lambda__("a", "b", "c")(
-                im.greater_(
-                    im.deref_("a"),
+                im.and__(
+                    im.deref_(
+                        im.lift_(
+                            im.lambda__("a", "b")(im.greater_(im.deref_("a"), im.deref_("b")))
+                        )("a", "b")
+                    ),
                     im.deref_(
                         im.lift_(
                             im.lambda__("b", "c")(im.greater_(im.deref_("b"), im.deref_("c")))
@@ -510,16 +512,14 @@ def test_builtin_int_constructors():
     parsed = FieldOperatorParser.apply_to_function(int_constrs)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.deref_(
-        im.make_tuple_(
-            im.literal_("1", "int64"),
-            im.literal_("1", "int"),
-            im.literal_("1", "int32"),
-            im.literal_("1", "int64"),
-            im.literal_("1", "int"),
-            im.literal_("1", "int32"),
-            im.literal_("1", "int64"),
-        )
+    reference = im.make_tuple_(
+        im.literal_("1", "int64"),
+        im.literal_("1", "int"),
+        im.literal_("1", "int32"),
+        im.literal_("1", "int64"),
+        im.literal_("1", "int"),
+        im.literal_("1", "int32"),
+        im.literal_("1", "int64"),
     )
 
     assert lowered.expr == reference
@@ -540,16 +540,14 @@ def test_builtin_float_constructors():
     parsed = FieldOperatorParser.apply_to_function(float_constrs)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.deref_(
-        im.make_tuple_(
-            im.literal_("0.1", "float64"),
-            im.literal_("0.1", "float"),
-            im.literal_("0.1", "float32"),
-            im.literal_("0.1", "float64"),
-            im.literal_(".1", "float"),
-            im.literal_(".1", "float32"),
-            im.literal_(".1", "float64"),
-        )
+    reference = im.make_tuple_(
+        im.literal_("0.1", "float64"),
+        im.literal_("0.1", "float"),
+        im.literal_("0.1", "float32"),
+        im.literal_("0.1", "float64"),
+        im.literal_(".1", "float"),
+        im.literal_(".1", "float32"),
+        im.literal_(".1", "float64"),
     )
 
     assert lowered.expr == reference
@@ -562,17 +560,15 @@ def test_builtin_bool_constructors():
     parsed = FieldOperatorParser.apply_to_function(bool_constrs)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.deref_(
-        im.make_tuple_(
-            im.literal_(str(True), "bool"),
-            im.literal_(str(False), "bool"),
-            im.literal_(str(True), "bool"),
-            im.literal_(str(False), "bool"),
-            im.literal_(str(bool(0)), "bool"),
-            im.literal_(str(bool(5)), "bool"),
-            im.literal_(str(bool("True")), "bool"),
-            im.literal_(str(bool("False")), "bool"),
-        )
+    reference = im.make_tuple_(
+        im.literal_(str(True), "bool"),
+        im.literal_(str(False), "bool"),
+        im.literal_(str(True), "bool"),
+        im.literal_(str(False), "bool"),
+        im.literal_(str(bool(0)), "bool"),
+        im.literal_(str(bool(5)), "bool"),
+        im.literal_(str(bool("True")), "bool"),
+        im.literal_(str(bool("False")), "bool"),
     )
 
     assert lowered.expr == reference

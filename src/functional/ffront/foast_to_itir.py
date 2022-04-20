@@ -27,7 +27,38 @@ from functional.iterator import ir as itir
 
 
 def to_value(node: foast.LocatedNode) -> Callable[[itir.Expr], itir.Expr]:
-    if TypeInfo(node.type).is_field_type:
+    """
+    Either ``deref_`` or noop callable depending on the input node.
+
+    Input node must have a scalar or field type.
+    If the lowered input node will represent an iterator expression, return ``deref_``.
+    Otherwise return a noop callable.
+
+    Examples:
+    ---------
+    >>> from functional.ffront.func_to_foast import FieldOperatorParser
+    >>> from functional.ffront.fbuiltins import float64
+    >>> from functional.common import Field
+    >>> def foo(a: Field[..., "float64"]):
+    ...    b = 5
+    ...    return a, b
+
+    >>> parsed = FieldOperatorParser.apply_to_function(foo)
+    >>> field_a, scalar_b = parsed.body[-1].value.elts
+    >>> to_value(field_a)(im.ref("a"))
+    FunCall(fun=SymRef(id='deref'), args=[SymRef(id='a')])
+    >>> to_value(scalar_b)(im.ref("a"))
+    SymRef(id='a')
+    """
+    typeinfo = TypeInfo(node.type)
+    assert (
+        typeinfo.is_scalar
+        or typeinfo.is_field_type
+        or (typeinfo.is_complete and typeinfo.constraint is ct.TupleType)
+    )
+    if typeinfo.is_field_type:
+        return im.deref_
+    elif typeinfo.constraint is ct.TupleType and TypeInfo(typeinfo.type.types[0]).is_field_type:
         return im.deref_
     return lambda x: x
 
@@ -39,9 +70,8 @@ class FieldOperatorLowering(NodeTranslator):
     Examples
     --------
     >>> from functional.ffront.func_to_foast import FieldOperatorParser
+    >>> from functional.ffront.fbuiltins import float64
     >>> from functional.common import Field
-    >>>
-    >>> float64 = float
     >>>
     >>> def fieldop(inp: Field[..., "float64"]):
     ...    return inp
@@ -87,7 +117,7 @@ class FieldOperatorLowering(NodeTranslator):
                 current_expr
             )
 
-        return im.deref_(current_expr)
+        return to_value(return_stmt.value)(current_expr)
 
     def _visit_assign(self, node: foast.Assign, **kwargs) -> tuple[itir.Sym, itir.Expr]:
         sym = self.visit(node.target, **kwargs)
@@ -121,7 +151,9 @@ class FieldOperatorLowering(NodeTranslator):
         )
 
     def _lift_if_field(self, node: foast.LocatedNode) -> Callable[[itir.Expr], itir.Expr]:
-        if TypeInfo(node.type).is_scalar:
+        typeinfo = TypeInfo(node.type)
+        assert typeinfo.is_scalar or typeinfo.is_field_type
+        if typeinfo.is_scalar:
             return lambda x: x
         return self._lift_lambda(node)
 

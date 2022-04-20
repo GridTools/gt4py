@@ -320,9 +320,14 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
         smaller_node.comparators = node.comparators[1:]
         smaller_node.ops = node.ops[1:]
         smaller_node.left = node.comparators[0]
-        return foast.Compare(
-            op=self.visit(node.ops[0]),
-            left=self.visit(node.left),
+        return foast.BinOp(
+            op=foast.BinaryOperator.BIT_AND,
+            left=foast.Compare(
+                op=self.visit(node.ops[0]),
+                left=self.visit(node.left),
+                right=self.visit(node.comparators[0]),
+                location=self._make_loc(node),
+            ),
             right=self.visit(smaller_node),
             location=self._make_loc(node),
         )
