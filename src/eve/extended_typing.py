@@ -230,8 +230,8 @@ def eval_forward_ref(
 
     Examples:
         >>> from typing import Dict, Tuple
-        >>> eval_forward_ref('Dict[str, Tuple[int, float]]')
-        dict[str, tuple[int, float]]
+        >>> print("Result:", eval_forward_ref('Dict[str, Tuple[int, float]]'))
+        Result: ...ict[str, ...uple[int, float]]
 
     """
     actual_type = ForwardRef(ref) if isinstance(ref, str) else ref
@@ -295,19 +295,19 @@ def reveal_type(  # noqa: C901  # function too complex
         >>> reveal_type({'a': 0, 'b': 'B'})
         dict[str, typing.Any]
 
-        >>> reveal_type(lambda a, b: a + b)
-        collections.abc.Callable[[typing.Any, typing.Any], typing.Any]
+        >>> print("Result:", reveal_type(lambda a, b: a + b))
+        Result: ...Callable[[typing.Any, typing.Any], typing.Any]
 
         >>> def f(a: int, b) -> int: ...
-        >>> reveal_type(f)
-        collections.abc.Callable[[int, typing.Any], int]
+        >>> print("Result:", reveal_type(f))
+        Result: ...Callable[[int, typing.Any], int]
 
         >>> def f(a: int, b) -> int: ...
-        >>> reveal_type(f)
-        collections.abc.Callable[..., int]
+        >>> print("Result:", reveal_type(f))
+        Result: ...Callable[..., int]
 
-        >>> reveal_type(Dict[int, Union[int, float]])
-        dict[int, typing.Union[int, float]]
+        >>> print("Result:", reveal_type(Dict[int, Union[int, float]]))
+        Result: ...ict[int, typing.Union[int, float]]
 
         >>> import numbers
         >>> @reveal_type.register(int)
@@ -374,6 +374,9 @@ def reveal_type(  # noqa: C901  # function too complex
             return result
         except Exception:
             return Callable
+
+    elif isinstance(value, (_GenericAliasType, _TypingSpecialFormType)):
+        return value
 
     else:
         return type(value)
