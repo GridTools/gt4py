@@ -211,7 +211,7 @@ class PrettyPrinter(NodeTranslator):
     def visit_FunctionDefinition(self, node: ir.FunctionDefinition, prec: int) -> list[str]:
         assert prec == 0
         params = self.visit(node.params, prec=0)
-        expr = self.visit(node.expr, prec=0)
+        expr = self._hmerge(self.visit(node.expr, prec=0), [";"])
 
         start, bridge = [node.id + " = λ("], [") → "]
         if not params:
@@ -237,7 +237,7 @@ class PrettyPrinter(NodeTranslator):
         inputs = self._optimum(hinputs, vinputs)
 
         head = self._hmerge(output, [" ← "])
-        foot = self._hmerge(inputs, [" @ "], domain)
+        foot = self._hmerge(inputs, [" @ "], domain, [";"])
 
         h = self._hmerge(head, ["("], stencil, [")"], foot)
         v = self._vmerge(

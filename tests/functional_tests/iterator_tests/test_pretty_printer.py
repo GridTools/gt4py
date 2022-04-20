@@ -275,7 +275,7 @@ def test_lambda_call():
 
 def test_function_definition():
     testee = ir.FunctionDefinition(id="f", params=[ir.Sym(id="x")], expr=ir.SymRef(id="x"))
-    expected = "f = λ(x) → x"
+    expected = "f = λ(x) → x;"
     actual = pformat(testee)
     assert actual == expected
 
@@ -287,7 +287,7 @@ def test_stencil_closure():
         output=ir.SymRef(id="y"),
         inputs=[ir.SymRef(id="x")],
     )
-    expected = "y ← (deref)(x) @ d"
+    expected = "y ← (deref)(x) @ d;"
     actual = pformat(testee)
     assert actual == expected
 
@@ -309,5 +309,5 @@ def test_fencil_definition():
         ],
     )
     actual = pformat(testee)
-    expected = "f(d, x, y) {\n  g = λ(x) → x\n  y ← (deref)(x) @ d\n}"
+    expected = "f(d, x, y) {\n  g = λ(x) → x;\n  y ← (deref)(x) @ d;\n}"
     assert actual == expected
