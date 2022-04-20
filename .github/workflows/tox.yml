@@ -46,3 +46,25 @@ jobs:
       with:
         name: code-coverage-report
         path: tests/_reports/
+
+  tox-eve-tests:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.8", "3.9"]
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v2
+      with:
+        python-version: ${{ matrix.python-version }}
+    - name: Install python dependencies
+      run: |
+        python -m pip install --upgrade pip setuptools wheel
+    - name: Test eve with tox
+      run: |
+        pyversion_no_dot="${{ matrix.python-version }}"
+        pyversion_no_dot="${pyversion_no_dot/./}"
+        pip install tox
+        tox -r -e eve-py${pyversion_no_dot}
