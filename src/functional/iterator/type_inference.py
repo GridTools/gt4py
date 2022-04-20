@@ -145,7 +145,6 @@ def freshen(dtype):
         return x
 
     res = r(dtype)
-    print(pretty_str(dtype), pretty_str(res))
     return res
 
 
