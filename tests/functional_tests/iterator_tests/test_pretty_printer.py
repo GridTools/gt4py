@@ -98,7 +98,7 @@ def test_arithmetic():
                         fun=ir.SymRef(id="plus"),
                         args=[
                             ir.Literal(value="1", type="int"),
-                            ir.IntLiteral(value="2", type="int"),
+                            ir.Literal(value="2", type="int"),
                         ],
                     ),
                     ir.Literal(value="3", type="int"),
