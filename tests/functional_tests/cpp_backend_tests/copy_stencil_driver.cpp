@@ -3,7 +3,6 @@
 #include GENERATED_FILE
 
 #include <fn_select.hpp>
-#include <gridtools/fn/backend2/naive.hpp>
 #include <test_environment.hpp>
 
 namespace {

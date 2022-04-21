@@ -19,8 +19,8 @@ string(TOUPPER ${BACKEND} backend_upper_case)
 
 include(FetchContent)
 FetchContent_Declare(GridTools
-    GIT_REPOSITORY https://github.com/fthaler/gridtools.git
-    GIT_TAG        fn-frontend
+    GIT_REPOSITORY https://github.com/GridTools/gridtools.git
+    GIT_TAG        master
 )
 FetchContent_MakeAvailable(GridTools)
 
@@ -51,6 +51,7 @@ function(add_fn_codegen_test)
     add_executable(${ARG_NAME} ${ARG_DRIVER_FILE})
     target_link_libraries(${ARG_NAME} fn_${BACKEND} regression_main)
     target_compile_definitions(${ARG_NAME} PRIVATE GT_FN_${backend_upper_case})
+    target_compile_definitions(${ARG_NAME} PRIVATE GT_FN_BACKEND=${BACKEND})
     target_compile_definitions(${ARG_NAME} PRIVATE GENERATED_FILE=\"${STENCIL_IMPL_SOURCE}\")
     if(is_gpu)
         gridtools_setup_target(${ARG_NAME} CUDA_ARCH sm_75) #TODO
