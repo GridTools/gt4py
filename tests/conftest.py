@@ -14,27 +14,8 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""GlobalDecl configuration of test generation and execution (with Hypothesis and pytest)
-"""
-
-import os
-import shutil
-
-import hypothesis as hyp
-import pytest
+"""GlobalDecl configuration of test generation and execution using pytest."""
 
 
 # Ignore hidden folders and disabled tests
 collect_ignore_glob = [".*", "_disabled*"]
-
-
-def pytest_configure(config):
-    # HealthCheck.too_slow causes more trouble than good -- especially in CIs.
-    hyp.settings.register_profile(
-        "slow", hyp.settings(suppress_health_check=[hyp.HealthCheck.too_slow], deadline=None)
-    )
-    config.addinivalue_line(
-        "markers",
-        "requires_gpu: mark tests that require a Nvidia GPU (assume cupy and cudatoolkit are installed)",
-    )
-    hyp.settings.load_profile("slow")
