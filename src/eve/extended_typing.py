@@ -322,6 +322,8 @@ def reveal_type(  # noqa: C901  # function too complex
         ...    return numbers.Number
         >>> extended_reveal_type(3.4)
         <class 'numbers.Number'>
+        >>> reveal_type(3.4)
+        <class 'float'>
 
     """
     recursive_get = _functools.partial(
