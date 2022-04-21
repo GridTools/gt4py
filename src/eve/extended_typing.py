@@ -316,7 +316,7 @@ def reveal_type(  # noqa: C901  # function too complex
         >>> @reveal_type.register(int)
         ... @reveal_type.register(float)
         ... @reveal_type.register(complex)
-        ... def _reveal_type_number(value, *, get_origins: bool = True):
+        ... def _reveal_type_number(value, *, annotate_callable_kwargs: bool = False):
         ...    return numbers.Number
         >>> reveal_type(3.4)
         <class 'numbers.Number'>

@@ -140,8 +140,8 @@ def unique_data_items(request):
     ]
 
 
-def test_non_instantiable_class():
-    @eve.utils.non_instantiable
+def test_noninstantiable_class():
+    @eve.utils.noninstantiable
     class NonInstantiableClass(pydantic.BaseModel):
         param: int
 
@@ -150,14 +150,16 @@ def test_non_instantiable_class():
     ):
         NonInstantiableClass(param=0)
 
-    assert eve.utils.is_non_instantiable(NonInstantiableClass)
+    assert eve.utils.is_noninstantiable(NonInstantiableClass)
 
     class InstantiableSubclass(NonInstantiableClass):
         pass
 
-    InstantiableSubclass(param=0)
+    instance = InstantiableSubclass(param=0)
+    assert isinstance(instance, InstantiableSubclass)
+    assert isinstance(instance, NonInstantiableClass)
 
-    assert not eve.utils.is_non_instantiable(InstantiableSubclass)
+    assert not eve.utils.is_noninstantiable(InstantiableSubclass)
 
 
 @pytest.fixture(

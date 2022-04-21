@@ -295,24 +295,24 @@ def register_subclasses(*subclasses: Type) -> Callable[[Type], Type]:
 _T = TypeVar("_T")
 
 
-def non_instantiable(cls: Type[_T]) -> Type[_T]:
-    original_new = cls.__dict__.get("__new__")
+def noninstantiable(cls: Type[_T]) -> Type[_T]:
+    original_init = cls.__init__
 
-    def _non_instantiable_new(current_cls: Type[_T], *args: Any, **kwargs: Any) -> None:
-        if current_cls is cls:
+    def _noninstantiable_init(self: _T, *args: Any, **kwargs: Any) -> None:
+        if self.__class__ is cls:
             raise TypeError(f"Trying to instantiate `{cls.__name__}` non-instantiable class.")
-        elif original_new is not None:
-            original_new(current_cls, *args, **kwargs)
+        else:
+            original_init(self, *args, **kwargs)
 
-    cls.__new__ = _non_instantiable_new  # type: ignore[assignment]
-    cls.__non_instantiable__ = True  # type: ignore[attr-defined]
+    cls.__init__ = _noninstantiable_init  # type: ignore[assignment]
+    cls.__noninstantiable__ = True  # type: ignore[attr-defined]
 
     return cls
 
 
-def is_non_instantiable(cls: Type[_T]) -> bool:
-    """Return True if `model` is a non instantiable class."""
-    return "__non_instantiable__" in cls.__dict__
+def is_noninstantiable(cls: Type[_T]) -> bool:
+    """Return True if `model` is a non-instantiable class."""
+    return "__noninstantiable__" in cls.__dict__
 
 
 def shash(*args: Any, hash_algorithm: Optional[Any] = None) -> str:
