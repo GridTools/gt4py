@@ -1133,7 +1133,9 @@ class TestDescriptor:
             assert raveled.data.ptr % (backend_cls.storage_info["alignment"] * stor.itemsize) == 0
             assert (
                 backend_cls.storage_info["alignment"] == 1
-                or stor.data.ptr % (backend_cls.storage_info["alignment"] * stor.itemsize) != 0
+                or cp.asarray(stor).data.ptr
+                % (backend_cls.storage_info["alignment"] * stor.itemsize)
+                != 0
             )
         else:
             assert (
