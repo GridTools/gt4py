@@ -91,11 +91,7 @@ def test_origin_offsetting_frozen(dace_stencil, domain, outp_origin):
         domain=domain, origin={"inp": (0, 0, 0), "outp": outp_origin}
     )
     inp = gt_storage.from_array(
-        data=7.0,
-        dtype=np.float64,
-        shape=(10, 10, 10),
-        default_origin=(0, 0, 0),
-        backend=backend,
+        data=7.0, dtype=np.float64, shape=(10, 10, 10), default_origin=(0, 0, 0), backend=backend
     )
 
     outp = gt_storage.zeros(
@@ -133,11 +129,7 @@ def test_origin_offsetting_frozen(dace_stencil, domain, outp_origin):
 def test_origin_offsetting_nofrozen(dace_stencil, domain, outp_origin):
     backend = dace_stencil.backend
     inp = gt_storage.from_array(
-        data=7.0,
-        dtype=np.float64,
-        shape=(10, 10, 10),
-        default_origin=(0, 0, 0),
-        backend=backend,
+        data=7.0, dtype=np.float64, shape=(10, 10, 10), default_origin=(0, 0, 0), backend=backend
     )
     outp = gt_storage.zeros(
         dtype=np.float64, shape=(10, 10, 10), default_origin=(0, 0, 0), backend=backend
@@ -190,11 +182,7 @@ def test_optional_arg_noprovide(backend):
     )
 
     inp = gt_storage.from_array(
-        data=7.0,
-        dtype=np.float64,
-        shape=(10, 10, 10),
-        default_origin=(0, 0, 0),
-        backend=backend,
+        data=7.0, dtype=np.float64, shape=(10, 10, 10), default_origin=(0, 0, 0), backend=backend
     )
     outp = gt_storage.zeros(
         dtype=np.float64, shape=(10, 10, 10), default_origin=(0, 0, 0), backend=backend
@@ -237,11 +225,7 @@ def test_optional_arg_provide(backend):
     )
 
     inp = gt_storage.from_array(
-        data=7.0,
-        dtype=np.float64,
-        shape=(10, 10, 10),
-        default_origin=(0, 0, 0),
-        backend=backend,
+        data=7.0, dtype=np.float64, shape=(10, 10, 10), default_origin=(0, 0, 0), backend=backend
     )
     outp = gt_storage.zeros(
         dtype=np.float64, shape=(10, 10, 10), default_origin=(0, 0, 0), backend=backend
@@ -287,11 +271,7 @@ def test_optional_arg_provide_aot(backend):
     )
 
     inp = gt_storage.from_array(
-        data=7.0,
-        dtype=np.float64,
-        shape=(10, 10, 10),
-        default_origin=(0, 0, 0),
-        backend=backend,
+        data=7.0, dtype=np.float64, shape=(10, 10, 10), default_origin=(0, 0, 0), backend=backend
     )
     outp = gt_storage.zeros(
         dtype=np.float64, shape=(10, 10, 10), default_origin=(0, 0, 0), backend=backend
