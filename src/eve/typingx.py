@@ -291,6 +291,8 @@ def get_typing(value: Any, *, annotate_callable_kwargs: bool = False) -> Any:
         ...    return numbers.Number
         >>> get_typing(3.4)
         <class 'numbers.Number'>
+        >>> # undoing the change
+        >>> get_typing.register(int)(get_typing.register(float)(get_typing.register(complex)(get_typing)))
 
     """
     recursive_get = functools.partial(get_typing, annotate_callable_kwargs=annotate_callable_kwargs)
