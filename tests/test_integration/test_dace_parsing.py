@@ -77,9 +77,7 @@ def test_basic(backend):
         defn(locoutp, par=locinp)
 
     call_stencil_object(locoutp=outp, locinp=inp)
-    if hasattr(outp, "_set_device_modified"):
-        outp._set_device_modified()
-    outp.device_to_host()
+    outp.device_to_host(force=True)
     assert np.allclose(outp, 7.0)
 
 
@@ -107,8 +105,7 @@ def test_origin_offsetting_frozen(dace_stencil, domain, outp_origin):
 
     call_frozen_stencil()
 
-    getattr(outp, "_set_device_modified", lambda: None)()
-    outp.device_to_host()
+    outp.device_to_host(force=True)
 
     assert np.allclose(inp, 7.0)
 
@@ -146,8 +143,7 @@ def test_origin_offsetting_nofrozen(dace_stencil, domain, outp_origin):
 
     call_stencil_object()
 
-    getattr(outp, "_set_device_modified", lambda: None)()
-    outp.device_to_host()
+    outp.device_to_host(force=True)
 
     assert np.allclose(inp, 7.0)
     assert np.allclose(
@@ -196,8 +192,7 @@ def test_optional_arg_noprovide(backend):
 
     call_frozen_stencil()
 
-    getattr(outp, "_set_device_modified", lambda: None)()
-    outp.device_to_host()
+    outp.device_to_host(force=True)
 
     assert np.allclose(inp, 7.0)
     assert np.allclose(np.asarray(outp)[2:5, 2:5, :], 7.0)
@@ -242,8 +237,7 @@ def test_optional_arg_provide(backend):
 
     call_frozen_stencil()
 
-    getattr(outp, "_set_device_modified", lambda: None)()
-    outp.device_to_host()
+    outp.device_to_host(force=True)
 
     assert np.allclose(inp, 7.0)
     assert np.allclose(np.asarray(outp)[2:5, 2:5, :], 7.0)
@@ -311,8 +305,7 @@ def test_optional_arg_provide_aot(backend):
     csdfg = call_frozen_stencil.compile()
     csdfg(inp=inp, outp=outp, unused_field=unused_field, unused_par=7.0)
 
-    getattr(outp, "_set_device_modified", lambda: None)()
-    outp.device_to_host()
+    outp.device_to_host(force=True)
 
     assert np.allclose(inp, 7.0)
     assert np.allclose(np.asarray(outp)[2:5, 2:5, :], 7.0)
