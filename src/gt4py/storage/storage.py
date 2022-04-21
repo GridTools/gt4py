@@ -269,27 +269,33 @@ class Storage(np.ndarray):
     def device_to_host(self, force=False):
         pass
 
-    def __descriptor__(self) -> "dace.data.Array":
-        storage = (
-            dace.StorageType.GPU_Global
-            if hasattr(self, "__cuda_array_interface__")
-            else dace.StorageType.CPU_Heap
-        )
-        start_offset = (
-            int(np.array([self.default_origin]) @ np.array([self.strides]).T) // self.itemsize
-        )
-        total_size = int(int(np.array([self.shape]) @ np.array([self.strides]).T) // self.itemsize)
-        start_offset = start_offset % gt_backend.from_name(self.backend).storage_info["alignment"]
-        descriptor = dace.data.Array(
-            shape=self.shape,
-            strides=[s // self.itemsize for s in self.strides],
-            dtype=dace.typeclass(str(self.dtype)),
-            storage=storage,
-            total_size=total_size,
-            start_offset=start_offset,
-        )
-        descriptor.default_origin = self.default_origin
-        return descriptor
+    if dace is not None:
+
+        def __descriptor__(self) -> "dace.data.Array":
+            storage = (
+                dace.StorageType.GPU_Global
+                if hasattr(self, "__cuda_array_interface__")
+                else dace.StorageType.CPU_Heap
+            )
+            start_offset = (
+                int(np.array([self.default_origin]) @ np.array([self.strides]).T) // self.itemsize
+            )
+            total_size = int(
+                int(np.array([self.shape]) @ np.array([self.strides]).T) // self.itemsize
+            )
+            start_offset = (
+                start_offset % gt_backend.from_name(self.backend).storage_info["alignment"]
+            )
+            descriptor = dace.data.Array(
+                shape=self.shape,
+                strides=[s // self.itemsize for s in self.strides],
+                dtype=dace.typeclass(str(self.dtype)),
+                storage=storage,
+                total_size=total_size,
+                start_offset=start_offset,
+            )
+            descriptor.default_origin = self.default_origin
+            return descriptor
 
     def __iconcat__(self, other):
         raise NotImplementedError("Concatenation of Storages is not supported")
