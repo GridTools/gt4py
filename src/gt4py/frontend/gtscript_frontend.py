@@ -878,7 +878,6 @@ class IRMaker(ast.NodeVisitor):
         local_symbols: dict,
         *,
         domain: nodes.Domain,
-        extra_temp_decls: dict,
         temp_decls: Optional[Dict[str, nodes.FieldDecl]] = None,
     ):
         fields = fields or {}
@@ -893,7 +892,6 @@ class IRMaker(ast.NodeVisitor):
         self.parameters = parameters
         self.local_symbols = local_symbols
         self.domain = domain or nodes.Domain.LatLonGrid()
-        self.extra_temp_decls = extra_temp_decls or {}
         self.temp_decls = temp_decls or {}
         self.parsing_context = None
         self.iteration_order = None
@@ -1257,7 +1255,7 @@ class IRMaker(ast.NodeVisitor):
                     result.offset = {axis: value for axis, value in zip(field_axes, index)}
             elif isinstance(node.value, ast.Subscript):
                 result.data_index = [
-                    nodes.ScalarLiteral(value=value, data_type=nodes.DataType.IN32)
+                    nodes.ScalarLiteral(value=value, data_type=nodes.DataType.INT32)
                     if isinstance(value, numbers.Integral)
                     else value
                     for value in index
