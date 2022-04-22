@@ -335,10 +335,10 @@ def reveal_type(  # noqa: C901  # function is complex but well organized in inde
     if value in (None, type(None)):
         return None
 
-    elif isinstance(value, type):
+    if isinstance(value, type):
         return Type[value]
 
-    elif isinstance(value, tuple):
+    if isinstance(value, tuple):
         unique_type, args = _collapse_type_args(*(_reveal(item) for item in value))
         if unique_type and len(args) > 1:
             return _GenericAliasType(tuple, (args[0], ...))
@@ -347,19 +347,19 @@ def reveal_type(  # noqa: C901  # function is complex but well organized in inde
         else:
             return _GenericAliasType(tuple, (Any, ...))
 
-    elif isinstance(value, (list, set, frozenset)):
+    if isinstance(value, (list, set, frozenset)):
         t: Union[Type[List], Type[Set], Type[FrozenSet]] = type(value)
         unique_type, args = _collapse_type_args(*(_reveal(item) for item in value))
         return _GenericAliasType(t, args[0] if unique_type else Any)
 
-    elif isinstance(value, dict):
+    if isinstance(value, dict):
         unique_key_type, keys = _collapse_type_args(*(_reveal(key) for key in value.keys()))
         unique_value_type, values = _collapse_type_args(*(_reveal(v) for v in value.values()))
         kt = keys[0] if unique_key_type else Any
         vt = values[0] if unique_value_type else Any
         return _GenericAliasType(dict, (kt, vt))
 
-    elif isinstance(value, _types.FunctionType):
+    if isinstance(value, _types.FunctionType):
         try:
             annotations = get_type_hints(value)
             return_type = _reveal(annotations.get("return", Any))
@@ -385,5 +385,4 @@ def reveal_type(  # noqa: C901  # function is complex but well organized in inde
         except Exception:
             return Callable
 
-    else:
-        return type(value)
+    return type(value)
