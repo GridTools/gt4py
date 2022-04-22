@@ -26,7 +26,7 @@ import operator
 
 from . import concepts, iterators, utils
 from .concepts import NOTHING
-from .typingx import (
+from .extended_typing import (
     Any,
     Callable,
     ClassVar,

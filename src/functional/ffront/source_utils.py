@@ -23,7 +23,7 @@ from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from typing import Any, Mapping, Union, cast
 
-from eve import typingx
+from eve import extended_typing as xtyping
 from functional import common
 from functional.ffront import fbuiltins
 
@@ -56,7 +56,7 @@ def make_captured_vars_from_function(func: Callable) -> CapturedVars:
     unbound = set(inspect_builtins.keys()) | inspect_unbound
     builtins = unbound & set(fbuiltins.ALL_BUILTIN_NAMES)
     unbound -= builtins
-    annotations = typingx.get_type_hints(func)
+    annotations = xtyping.get_type_hints(func)
 
     return CapturedVars(nonlocals, globals, annotations, builtins, unbound)
 

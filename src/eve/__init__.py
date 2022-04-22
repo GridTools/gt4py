@@ -19,9 +19,9 @@
 The internal dependencies between modules are the following (each line depends
 on some of the previous ones):
 
-  - typingx  (no dependencies)
-  - exceptions, type_definitions
-  - utils
+  - extended_typing (no dependencies)
+  - exceptions, pattern_matching, type_definitions
+  - datamodels, utils
   - concepts <-> iterators  (circular dependency only inside methods, it should be safe)
   - traits, visitors
   - codegen

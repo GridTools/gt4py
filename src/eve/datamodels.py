@@ -63,7 +63,12 @@ import dataclasses
 import sys
 import typing
 import warnings
-from typing import (
+
+import attr
+
+from eve import extended_typing as xtyping
+from eve import utils
+from eve.extended_typing import (
     Any,
     Callable,
     ClassVar,
@@ -81,17 +86,29 @@ from typing import (
     TypeVar,
     Union,
 )
-
-import attr
-
-from eve import typingx, utils
-from eve.concepts import NOTHING
-from eve.typingx import NonDataDescriptor
+from eve.type_definitions import NOTHING
 
 
 # Typing
 T = TypeVar("T")
 V = TypeVar("V")
+T_contra = TypeVar("T_contra", contravariant=True)
+V_co = TypeVar("V_co", covariant=True)
+
+
+class NonDataDescriptor(Protocol[T_contra, V_co]):
+    @typing.overload
+    def __get__(self, _instance: None, _owner_type: Type[T_contra]) -> NonDataDescriptor:
+        ...
+
+    @typing.overload
+    def __get__(self, _instance: T_contra, _owner_type: Optional[Type[T_contra]] = None) -> V_co:
+        ...
+
+
+class DataDescriptor(NonDataDescriptor[T_contra, V], Protocol):
+    def __set__(self, _instance: T, _value: V) -> None:
+        ...
 
 
 class _AttrClassTp(Protocol):
@@ -641,13 +658,13 @@ def _make_datamodel(
         cls.__annotations__ = {}
     annotations = cls.__dict__["__annotations__"]
     mro_bases: Tuple[Type, ...] = cls.__mro__[1:]
-    canonicalized_annotations = typingx.get_canonical_type_hints(cls)
+    partial_annotations = xtyping.get_partial_type_hints(cls)
 
     # Create attrib definitions with automatic type validators (and converters)
     # for the annotated fields. The original annotations are used for iteration
     # since the resolved annotations may also contain superclasses' annotations
     for key in annotations:
-        type_hint = annotations[key] = canonicalized_annotations[key]
+        type_hint = annotations[key] = partial_annotations[key]
         if typing.get_origin(type_hint) is not ClassVar:
             type_validator = strict_type_attrs_validator(type_hint)
             if key not in cls.__dict__:
@@ -670,7 +687,7 @@ def _make_datamodel(
     # All fields should be annotated with type hints
     for key, value in cls.__dict__.items():
         if isinstance(value, attr._make._CountingAttr) and (  # type: ignore[attr-defined]  # attr._make is not visible for mypy
-            key not in annotations or typing.get_origin(canonicalized_annotations[key]) is ClassVar
+            key not in annotations or typing.get_origin(partial_annotations[key]) is ClassVar
         ):
             raise TypeError(f"Missing type annotation in '{key}' field.")
 
@@ -825,7 +842,7 @@ def _make_concrete_with_cache(
             concrete_cls,
             **{
                 name: getattr(params, name)
-                for name in ("repr", "eq", "order", "unsafe_hash", "frozen", "instantiable")
+                for name in ("repr", "eq", "order", "unsafe_hash", "frozen")
             },
         )
 
@@ -987,14 +1004,14 @@ def astuple(
 
 def update_forward_refs(
     model: Union[DataModelTp, Type[DataModelTp]],
-    local_ns: Optional[Dict[str, Any]] = None,
+    localns: Optional[Dict[str, Any]] = None,
     *,
     fields: Optional[List[str]] = None,
 ) -> None:
     """Update Data Model class meta-information replacing forwarded type annotations with actual types.
 
     Arguments:
-        local_ns: locals dict used in the evaluation of the annotations
+        localns: locals dict used in the evaluation of the annotations
             (globals are automatically taken from model.__module__).
 
     Keyword Arguments:
@@ -1016,11 +1033,8 @@ def update_forward_refs(
         for field_name in fields:
             field_attr = getattr(datamodel_fields_ns, field_name)
             if "ForwardRef(" in repr(field_attr.type):
-                actual_type = typingx.resolve_type(
-                    field_attr.type,
-                    sys.modules[model.__module__].__dict__,
-                    local_ns,
-                    allow_partial=False,
+                actual_type = xtyping.resolve_type(
+                    field_attr.type, sys.modules[model.__module__].__dict__, localns
                 )
                 new_attr = field_attr.evolve(type=actual_type)
                 object.__setattr__(datamodel_fields_ns, field_name, new_attr)
