@@ -17,7 +17,7 @@ When you should and when you shouldn't add an extension to Iterator IR.
 Iterator IR is the central structure of the Declarative GT4Py, it is the interface between frontend and backend, and the target of (most) optimizations.
 IR elements and the interactions with each other need to be well understood and well documented.
 
-Therefore, if it can be avoided, the IR should not be extended. Instead, required features can be implemented first in the backend where they are needed. If later, we discover, the features are needed in several backends, they can be promoted to the IR.
+Therefore, if it can be avoided, the IR should not be extended. Instead, required features can be implemented first in the backend where they are needed. If later we discover the features are needed in several backends, they can be promoted to the IR.
 
 ### Example 
 
