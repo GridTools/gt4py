@@ -127,10 +127,17 @@ NoArgsCallable = Callable[[], Any]
 # Typing annotations
 if _sys.version_info >= (3, 9):
     SolvedTypingAnnotation = Union[
-        Type, _types.GenericAlias, _typing._BaseGenericAlias, _typing._SpecialForm  # type: ignore
+        Type,
+        _types.GenericAlias,
+        _typing._BaseGenericAlias,  # type: ignore[name-defined]  # _BaseGenericAlias is private
+        _typing._SpecialForm,
     ]
 else:
-    SolvedTypingAnnotation = Union[Type, _typing._GenericAlias, _typing._SpecialForm]  # type: ignore
+    SolvedTypingAnnotation = Union[  # type: ignore[misc]  # mypy consider this assignment a redefinition
+        Type,
+        _typing._GenericAlias,  # type: ignore[attr-defined]  # _GenericAlias is private
+        _typing._SpecialForm,
+    ]
 
 TypingAnnotation = Union[ForwardRef, SolvedTypingAnnotation]
 SourceTypingAnnotation = Union[str, TypingAnnotation]
@@ -159,12 +166,6 @@ def is_protocol(tp: type) -> bool:
     """Check if a type is a Protocol definition."""
     this_module = _sys.modules[is_protocol.__module__]
     return isinstance(tp, this_module._ProtocolMeta) and tp.__bases__[-1] is this_module.Protocol
-
-
-def is_namedtuple(tp: type) -> bool:
-    """Check if a type is a NamedTuple class."""
-    this_module = _sys.modules[is_namedtuple.__module__]
-    return isinstance(tp, this_module.NamedTupleMeta)
 
 
 def get_partial_type_hints(
@@ -269,7 +270,7 @@ class CallableKwargsInfo:
     data: Dict[str, Any]
 
 
-def reveal_type(  # noqa: C901  # function too complex
+def reveal_type(  # noqa: C901  # function is complex but well organized in independent cases
     value: Any,
     *,
     annotate_callable_kwargs: bool = False,
@@ -326,17 +327,19 @@ def reveal_type(  # noqa: C901  # function too complex
         <class 'float'>
 
     """
-    recursive_get = _functools.partial(
-        reveal_type, annotate_callable_kwargs=annotate_callable_kwargs
-    )
-    if isinstance(value, type):
+    _reveal = _functools.partial(reveal_type, annotate_callable_kwargs=annotate_callable_kwargs)
+
+    if isinstance(value, (_GenericAliasType, _TypingSpecialFormType)):
         return value
 
-    elif value in (None, type(None)):
+    if value in (None, type(None)):
         return None
 
+    elif isinstance(value, type):
+        return Type[value]
+
     elif isinstance(value, tuple):
-        unique_type, args = _collapse_type_args(*(recursive_get(item) for item in value))
+        unique_type, args = _collapse_type_args(*(_reveal(item) for item in value))
         if unique_type and len(args) > 1:
             return _GenericAliasType(tuple, (args[0], ...))
         elif args:
@@ -346,12 +349,12 @@ def reveal_type(  # noqa: C901  # function too complex
 
     elif isinstance(value, (list, set, frozenset)):
         t: Union[Type[List], Type[Set], Type[FrozenSet]] = type(value)
-        unique_type, args = _collapse_type_args(*(recursive_get(item) for item in value))
+        unique_type, args = _collapse_type_args(*(_reveal(item) for item in value))
         return _GenericAliasType(t, args[0] if unique_type else Any)
 
     elif isinstance(value, dict):
-        unique_key_type, keys = _collapse_type_args(*(recursive_get(key) for key in value.keys()))
-        unique_value_type, values = _collapse_type_args(*(recursive_get(v) for v in value.values()))
+        unique_key_type, keys = _collapse_type_args(*(_reveal(key) for key in value.keys()))
+        unique_value_type, values = _collapse_type_args(*(_reveal(v) for v in value.values()))
         kt = keys[0] if unique_key_type else Any
         vt = values[0] if unique_value_type else Any
         return _GenericAliasType(dict, (kt, vt))
@@ -359,7 +362,7 @@ def reveal_type(  # noqa: C901  # function too complex
     elif isinstance(value, _types.FunctionType):
         try:
             annotations = get_type_hints(value)
-            return_type = annotations.get("return", Any)
+            return_type = _reveal(annotations.get("return", Any))
 
             sig = _inspect.signature(value)
             arg_types: List = []
@@ -375,15 +378,12 @@ def reveal_type(  # noqa: C901  # function too complex
                 elif p.kind in (_inspect.Parameter.VAR_POSITIONAL, _inspect.Parameter.VAR_KEYWORD):
                     raise TypeError("Variadic callables are not supported")
 
-            result: Any = Callable[arg_types, return_type]  # type: ignore[misc]  # build annotation at runtime
+            result: Any = Callable[arg_types, return_type]  # type: ignore[misc]  # explicitly build annotation at runtime
             if annotate_callable_kwargs:
                 result = Annotated[result, CallableKwargsInfo(kwonly_arg_types)]
             return result
         except Exception:
             return Callable
-
-    elif isinstance(value, (_GenericAliasType, _TypingSpecialFormType)):
-        return value
 
     else:
         return type(value)
