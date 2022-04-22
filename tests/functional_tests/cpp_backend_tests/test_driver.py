@@ -39,8 +39,17 @@ def _execute_ctest(backend_str: str):
     return ctest_proc.wait() == 0
 
 
-@pytest.mark.parametrize("backend_str", ["naive", "gpu"])
-def test_driver(backend_str):
+backends = ["naive"]
+try:
+    import cupy  # TODO actually cupy is not the requirement but a CUDA compiler...
+
+    backends.append("gpu")
+except ImportError:
+    pass
+
+
+@pytest.mark.parametrize("backend_str", backends)
+def test_driver_cpp_backends(backend_str):
     assert _execute_cmake(backend_str)
     assert _execute_build(backend_str)
     assert _execute_ctest(backend_str)
