@@ -56,7 +56,7 @@ class gtfn_codegen(codegen.TemplatedGenerator):
 
     FencilDefinition = as_mako(
         """
-    #include <gridtools/fn/${grid_type_str}2.hpp>
+    #include <gridtools/fn/${grid_type_str}.hpp>
 
     namespace generated{
     using namespace gridtools;
