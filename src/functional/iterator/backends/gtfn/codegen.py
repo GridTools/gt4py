@@ -74,7 +74,7 @@ class gtfn_codegen(codegen.TemplatedGenerator):
         ${''.join('constexpr inline ' + o + '_t ' + o + '{};' for o in offsets)}
     % endif
 
-    ${''.join(function_definitions)} 
+    ${''.join(function_definitions)}
 
     inline auto ${id} = [](auto backend, ${','.join('auto&& ' + p for p in params)}){
         ${'\\n'.join(executions)}
