@@ -69,7 +69,7 @@ class LazyStencil:
 
     def check_syntax(self) -> None:
         """Create the gtscript IR for the stencil, failing on syntax errors."""
-        if not self.builder.definition_ir:
+        if not self.builder.gtir:
             raise RuntimeError("Frontend did not raise a syntax error but did not generate IR.")
 
     def __call__(self, *args: Any, **kwargs: Any) -> None:

@@ -16,11 +16,12 @@
 import collections
 import copy
 import operator
-from typing import Generator, Type
+from typing import Generator, Optional, Type
 
 from gt4py import utils as gt_utils
+from gtc import common
 
-from .nodes import Node
+from .nodes import Location, Node
 
 
 def iter_attributes(node: Node):
@@ -191,3 +192,9 @@ def iter_nodes_of_type(root_node: Node, node_type: Type) -> Generator[Node, None
                 yield node
 
     yield from recurse(root_node)
+
+
+def location_to_source_location(loc: Optional[Location]) -> Optional[common.SourceLocation]:
+    if loc is None or loc.line <= 0 or loc.column <= 0:
+        return None
+    return common.SourceLocation(loc.line, loc.column, loc.scope)

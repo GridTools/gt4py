@@ -17,7 +17,7 @@
 import ast
 
 from gt4py.frontend.gtscript_frontend import IRMaker
-from gt4py.ir.nodes import BinaryOperator, BinOpExpr
+from gt4py.frontend.nodes import BinaryOperator, BinOpExpr
 
 
 def test_AugAssign():

@@ -14,7 +14,6 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from . import python_generator
 from .base import (
     REGISTRY,
     Backend,
@@ -25,21 +24,14 @@ from .base import (
     from_name,
     register,
 )
-from .debug_backend import DebugBackend
-from .gt_backends import GTCUDABackend, GTMCBackend, GTX86Backend
-from .gtc_backend import (
-    GTCCudaBackend,
-    GTCGTCpuIfirstBackend,
-    GTCGTCpuKfirstBackend,
-    GTCGTGpuBackend,
-    GTCNumpyBackend,
-)
 
 
 try:
-    from .gtc_backend import GTCDaceBackend
+    from .dace_backend import DaceCPUBackend, DaceGPUBackend
 except ImportError:
     pass
 
+from .cuda_backend import CudaBackend  # noqa: F401
+from .gtcpp_backend import GTCpuIfirstBackend, GTCpuKfirstBackend, GTGpuBackend  # noqa: F401
 from .module_generator import BaseModuleGenerator
-from .numpy_backend import NumPyBackend
+from .numpy_backend import NumpyBackend  # noqa: F401

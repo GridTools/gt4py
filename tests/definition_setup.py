@@ -19,9 +19,7 @@ from typing import Any, Iterator, List, Set, Tuple, Union
 
 import pytest
 
-from gt4py.analysis import TransformData
-from gt4py.definitions import BuildOptions
-from gt4py.ir.nodes import (
+from gt4py.frontend.nodes import (
     ArgumentInfo,
     Assign,
     Axis,
@@ -39,7 +37,6 @@ from gt4py.ir.nodes import (
     Location,
     ScalarLiteral,
     StencilDefinition,
-    StencilImplementation,
 )
 
 
@@ -69,23 +66,6 @@ def ij_offset(request):
 
 def make_offset(offset: Tuple[int, int, Union[int, Expr]]):
     return {"I": offset[0], "J": offset[1], "K": offset[2]}
-
-
-def init_implementation_from_definition(definition: StencilDefinition) -> StencilImplementation:
-    return StencilImplementation(
-        name=definition.name,
-        api_signature=[],
-        domain=definition.domain,
-        fields={},
-        parameters={},
-        multi_stages=[],
-        fields_extents={},
-        unreferenced=[],
-        axis_splitters_var=None,
-        externals=definition.externals,
-        sources=definition.sources,
-        docstring=definition.docstring,
-    )
 
 
 class TObject:
@@ -163,14 +143,6 @@ class TDefinition(TObject):
             computations=[block.build() for block in self.children],
             docstring=self.docstring,
             loc=self.loc,
-        )
-
-    def build_transform(self):
-        definition = self.build()
-        return TransformData(
-            definition_ir=definition,
-            implementation_ir=init_implementation_from_definition(definition),
-            options=BuildOptions(name=self.name, module=__name__),
         )
 
 

@@ -80,7 +80,7 @@ class ScalarsToTemporaries(NodeTranslator):
         if not _all_local_scalars_are_unique_type(node):
             raise TypeError(
                 "Local scalars exist with different types and same name. "
-                "The gtc:numpy backend currently assumes this is not the case."
+                "The numpy backend currently assumes this is not the case."
             )
 
         temps_from_scalars: Dict[str, Temporary] = {}

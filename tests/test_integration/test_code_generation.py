@@ -92,10 +92,10 @@ def test_ignore_np_errstate():
         divide_by_zero(field_a)
 
     # Usual behavior: with the numpy backend there is no error
-    setup_and_run(backend="gtc:numpy")
+    setup_and_run(backend="numpy")
 
     with pytest.warns(RuntimeWarning, match="divide by zero encountered"):
-        setup_and_run(backend="gtc:numpy", ignore_np_errstate=False)
+        setup_and_run(backend="numpy", ignore_np_errstate=False)
 
 
 @pytest.mark.parametrize("backend", CPU_BACKENDS)
@@ -386,10 +386,7 @@ def test_variable_offsets_and_while_loop(backend):
                 qout = qsum / (pe2[0, 0, 1] - pe2)
 
 
-# TODO: Enable DaCe
-@pytest.mark.parametrize(
-    "backend", [backend for backend in ALL_BACKENDS if backend.values[0] != "gtc:dace"]
-)
+@pytest.mark.parametrize("backend", ALL_BACKENDS)
 def test_nested_while_loop(backend):
     @gtscript.stencil(backend=backend)
     def stencil(

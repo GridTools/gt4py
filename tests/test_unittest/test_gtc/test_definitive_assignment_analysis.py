@@ -174,6 +174,6 @@ def test_daa(definition, valid):
 
 @pytest.mark.parametrize("definition", [stencil for stencil, valid in test_data if not valid])
 def test_daa_warn(definition):
-    backend = "gtc:gt:cpu_ifirst"
+    backend = "gt:cpu_ifirst"
     with pytest.warns(UserWarning, match="`tmp` may be uninitialized."):
         stencil(backend, definition)

@@ -17,8 +17,8 @@
 import numbers
 from typing import Any, Dict, List, Optional, Tuple, Union, cast
 
-from gt4py.ir import IRNodeVisitor
-from gt4py.ir.nodes import (
+from gt4py.frontend.node_util import IRNodeVisitor, location_to_source_location
+from gt4py.frontend.nodes import (
     ArgumentInfo,
     Assign,
     AxisBound,
@@ -30,6 +30,7 @@ from gt4py.ir.nodes import (
     BuiltinLiteral,
     Cast,
     ComputationBlock,
+    Empty,
     Expr,
     FieldDecl,
     FieldRef,
@@ -61,6 +62,26 @@ def convert_dtype(data_type) -> common.DataType:
             common.DataType, common.DataType.FLOAT64
         )  # see https://github.com/GridTools/gtc/issues/100
     return dtype
+
+
+def _make_literal(v: numbers.Number) -> gtir.Literal:
+    value: Union[BuiltinLiteral, str]
+    if isinstance(v, bool):
+        dtype = common.DataType.BOOL
+        value = common.BuiltInLiteral.TRUE if v else common.BuiltInLiteral.FALSE
+    else:
+        if isinstance(v, int):
+            # note: could be extended to support 32 bit integers by checking the values magnitude
+            dtype = common.DataType.INT64
+        elif isinstance(v, float):
+            dtype = common.DataType.FLOAT64
+        else:
+            print(
+                f"Warning: Only INT64 and FLOAT64 literals are supported currently. Implicitly upcasting `{v}` to FLOAT64"
+            )
+            dtype = common.DataType.FLOAT64
+        value = str(v)
+    return gtir.Literal(dtype=dtype, value=value)
 
 
 class DefIRToGTIR(IRNodeVisitor):
@@ -143,14 +164,33 @@ class DefIRToGTIR(IRNodeVisitor):
         field_params = {f.name: self.visit(f) for f in node.api_fields}
         scalar_params = {p.name: self.visit(p) for p in node.parameters}
         vertical_loops = [self.visit(c) for c in node.computations if c.body.stmts]
+        if node.externals is not None:
+            externals = {
+                name: _make_literal(value)
+                for name, value in node.externals.items()
+                if isinstance(value, numbers.Number)
+            }
+        else:
+            externals = {}
         return gtir.Stencil(
             name=node.name,
+            api_signature=[
+                gtir.Argument(
+                    name=f.name,
+                    is_keyword=f.is_keyword,
+                    default=str(f.default) if not isinstance(f.default, type(Empty)) else "",
+                )
+                for f in node.api_signature
+            ],
             params=[
                 self.visit(f, all_params={**field_params, **scalar_params})
                 for f in node.api_signature
             ],
             vertical_loops=vertical_loops,
-            loc=common.location_to_source_location(node.loc),
+            externals=externals,
+            sources=node.sources or "",
+            docstring=node.docstring,
+            loc=location_to_source_location(node.loc),
         )
 
     def visit_ArgumentInfo(self, node: ArgumentInfo, all_params: Dict[str, gtir.Decl]) -> gtir.Decl:
@@ -169,14 +209,14 @@ class DefIRToGTIR(IRNodeVisitor):
         interval = gtir.Interval(
             start=start,
             end=end,
-            loc=common.location_to_source_location(node.interval.loc),
+            loc=location_to_source_location(node.interval.loc),
         )
         return gtir.VerticalLoop(
             interval=interval,
             loop_order=self.GT4PY_ITERATIONORDER_TO_GTIR_LOOPORDER[node.iteration_order],
             body=stmts,
             temporaries=temporaries,
-            loc=common.location_to_source_location(node.loc),
+            loc=location_to_source_location(node.loc),
         )
 
     def visit_BlockStmt(self, node: BlockStmt) -> List[gtir.Stmt]:
@@ -187,7 +227,7 @@ class DefIRToGTIR(IRNodeVisitor):
         return gtir.ParAssignStmt(
             left=self.visit(node.target),
             right=self.visit(node.value),
-            loc=common.location_to_source_location(node.loc),
+            loc=location_to_source_location(node.loc),
         )
 
     def visit_ScalarLiteral(self, node: ScalarLiteral) -> gtir.Literal:
@@ -197,7 +237,7 @@ class DefIRToGTIR(IRNodeVisitor):
         return gtir.UnaryOp(
             op=self.GT4PY_UNARYOP_TO_GTIR[node.op],
             expr=self.visit(node.arg),
-            loc=common.location_to_source_location(node.loc),
+            loc=location_to_source_location(node.loc),
         )
 
     def visit_BinOpExpr(self, node: BinOpExpr) -> Union[gtir.BinaryOp, gtir.NativeFuncCall]:
@@ -205,13 +245,13 @@ class DefIRToGTIR(IRNodeVisitor):
             return gtir.NativeFuncCall(
                 func=common.NativeFunction[node.op.name],
                 args=[self.visit(node.lhs), self.visit(node.rhs)],
-                loc=common.location_to_source_location(node.loc),
+                loc=location_to_source_location(node.loc),
             )
         return gtir.BinaryOp(
             left=self.visit(node.lhs),
             right=self.visit(node.rhs),
             op=self.GT4PY_OP_TO_GTIR_OP[node.op],
-            loc=common.location_to_source_location(node.loc),
+            loc=location_to_source_location(node.loc),
         )
 
     def visit_TernaryOpExpr(self, node: TernaryOpExpr) -> gtir.TernaryOp:
@@ -219,7 +259,7 @@ class DefIRToGTIR(IRNodeVisitor):
             cond=self.visit(node.condition),
             true_expr=self.visit(node.then_expr),
             false_expr=self.visit(node.else_expr),
-            loc=common.location_to_source_location(node.loc),
+            loc=location_to_source_location(node.loc),
         )
 
     def visit_BuiltinLiteral(self, node: BuiltinLiteral) -> gtir.Literal:  # type: ignore[return]
@@ -234,14 +274,14 @@ class DefIRToGTIR(IRNodeVisitor):
         return gtir.Cast(
             dtype=common.DataType(node.data_type.value),
             expr=self.visit(node.expr),
-            loc=common.location_to_source_location(node.loc),
+            loc=location_to_source_location(node.loc),
         )
 
     def visit_NativeFuncCall(self, node: NativeFuncCall) -> gtir.NativeFuncCall:
         return gtir.NativeFuncCall(
             func=self.GT4PY_NATIVE_FUNC_TO_GTIR[node.func],
             args=[self.visit(arg) for arg in node.args],
-            loc=common.location_to_source_location(node.loc),
+            loc=location_to_source_location(node.loc),
         )
 
     def visit_FieldRef(self, node: FieldRef) -> gtir.FieldAccess:
@@ -249,7 +289,7 @@ class DefIRToGTIR(IRNodeVisitor):
             name=node.name,
             offset=self.transform_offset(node.offset),
             data_index=[self.visit(index) for index in node.data_index],
-            loc=common.location_to_source_location(node.loc),
+            loc=location_to_source_location(node.loc),
         )
 
     def visit_If(self, node: If) -> Union[gtir.FieldIfStmt, gtir.ScalarIfStmt]:
@@ -261,7 +301,7 @@ class DefIRToGTIR(IRNodeVisitor):
                 false_branch=gtir.BlockStmt(body=self.visit(node.else_body))
                 if node.else_body
                 else None,
-                loc=common.location_to_source_location(node.loc),
+                loc=location_to_source_location(node.loc),
             )
         else:
             return gtir.ScalarIfStmt(
@@ -270,7 +310,7 @@ class DefIRToGTIR(IRNodeVisitor):
                 false_branch=gtir.BlockStmt(body=self.visit(node.else_body))
                 if node.else_body
                 else None,
-                loc=common.location_to_source_location(node.loc),
+                loc=location_to_source_location(node.loc),
             )
 
     def visit_HorizontalIf(self, node: HorizontalIf) -> gtir.FieldIfStmt:
@@ -302,11 +342,11 @@ class DefIRToGTIR(IRNodeVisitor):
         return gtir.While(
             cond=self.visit(node.condition),
             body=self.visit(node.body),
-            loc=common.location_to_source_location(node.loc),
+            loc=location_to_source_location(node.loc),
         )
 
     def visit_VarRef(self, node: VarRef, **kwargs):
-        return gtir.ScalarAccess(name=node.name, loc=common.location_to_source_location(node.loc))
+        return gtir.ScalarAccess(name=node.name, loc=location_to_source_location(node.loc))
 
     def visit_AxisInterval(self, node: AxisInterval) -> Tuple[gtir.AxisBound, gtir.AxisBound]:
         return self.visit(node.start), self.visit(node.end)
@@ -326,7 +366,7 @@ class DefIRToGTIR(IRNodeVisitor):
             dtype=convert_dtype(node.data_type.value),
             dimensions=dimensions,
             data_dims=node.data_dims,
-            loc=common.location_to_source_location(node.loc),
+            loc=location_to_source_location(node.loc),
         )
 
     def visit_VarDecl(self, node: VarDecl) -> gtir.ScalarDecl:
@@ -334,7 +374,7 @@ class DefIRToGTIR(IRNodeVisitor):
         return gtir.ScalarDecl(
             name=node.name,
             dtype=convert_dtype(node.data_type.value),
-            loc=common.location_to_source_location(node.loc),
+            loc=location_to_source_location(node.loc),
         )
 
     def transform_offset(

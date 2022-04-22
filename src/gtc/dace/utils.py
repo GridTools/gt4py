@@ -15,7 +15,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import re
-from typing import TYPE_CHECKING, Any, Collection, Dict, Iterator, List, Union
+from typing import TYPE_CHECKING, Any, Callable, Collection, Dict, Iterator, List, Tuple, Union
 
 import dace
 import dace.data
@@ -490,3 +490,23 @@ def is_sdfg_equal(sdfg1: dace.SDFG, sdfg2: dace.SDFG):
         ):
             return False
     return True
+
+
+def layout_maker_factory(base_layout: Tuple[int, ...]) -> Callable[[List[bool]], Tuple[int, ...]]:
+    def layout_maker(mask: List[bool]) -> Tuple[int, ...]:
+        ranks = []
+        for m, l in zip(mask, base_layout):
+            if m:
+                ranks.append(l)
+        if len(mask) > 3:
+            if base_layout[2] == 2:
+                ranks.extend(3 + c for c in range(len(mask) - 3))
+            else:
+                ranks.extend(-c for c in range(len(mask) - 3))
+
+        res_layout = [0] * len(ranks)
+        for i, idx in enumerate(np.argsort(ranks)):
+            res_layout[idx] = i
+        return tuple(res_layout)
+
+    return layout_maker

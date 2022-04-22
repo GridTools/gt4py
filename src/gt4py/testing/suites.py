@@ -30,7 +30,7 @@ from gt4py import gtscript
 from gt4py import storage as gt_storage
 from gt4py import utils as gt_utils
 from gt4py.definitions import AccessKind, Boundary, CartesianSpace, FieldInfo, Shape
-from gt4py.ir.nodes import Index
+from gt4py.frontend.nodes import Index
 from gt4py.stencil_object import StencilObject
 from gt4py.utils import filter_mask, interpolate_mask
 
