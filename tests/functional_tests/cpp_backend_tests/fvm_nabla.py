@@ -70,9 +70,8 @@ if __name__ == "__main__":
         raise RuntimeError(f"Usage: {sys.argv[0]} <output_file>")
     output_file = sys.argv[1]
 
-    # prog_0 = trace(zavgS_fencil, [None] * 6)
+    # prog = trace(zavgS_fencil, [None] * 6)
     prog = trace(nabla_fencil, [None] * 6)
-    # prog.fencil_definitions.append(prog_0.fencil_definitions[0])
     generated_code = generate(prog, grid_type="unstructured")
 
     with open(output_file, "w+") as output:

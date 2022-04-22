@@ -1,97 +1,118 @@
 #include <gtest/gtest.h>
-#include <iostream>
 
 #include GENERATED_FILE
-#include <gridtools/common/integral_constant.hpp>
-#include <gridtools/fn/backend2/naive.hpp>
-#include <gridtools/sid/concept.hpp>
-#include <gridtools/sid/sid_shift_origin.hpp>
 
-#include "simple_mesh.hpp"
 #include <fn_select.hpp>
+#include <test_environment.hpp>
 
 namespace {
 using namespace gridtools;
 using namespace fn;
 using namespace literals;
 
-TEST(unstructured, nabla) {
-  using namespace simple_mesh;
-  constexpr auto K = 3_c;
-  constexpr auto n_v2e = 6_c;
+// copied from gridtools::fn test
+constexpr inline auto pp = [](int vertex, int k) { return (vertex + k) % 19; };
+constexpr inline auto sign = [](int vertex) {
+  return array<int, 6>{0, 1, vertex % 2, 1, (vertex + 1) % 2, 0};
+};
+constexpr inline auto vol = [](int vertex) { return vertex % 13 + 1; };
+constexpr inline auto s = [](int edge, int k) {
+  return tuple((edge + k) % 17, (edge + k) % 7);
+};
 
-  double pp[n_vertices][K];
-  for (auto &ppp : pp)
-    for (auto &p : ppp)
-      p = rand() % 100;
-
-  std::array<int, n_v2e> sign[n_vertices];
-  for (auto &&ss : sign)
-    for (auto &s : ss)
-      s = rand() % 2 ? 1 : -1;
-
-  double vol[n_vertices];
-  for (auto &v : vol)
-    v = rand() % 2 + 1;
-
-  tuple<double, double> s[n_edges][K];
-  for (auto &ss : s)
-    for (auto &sss : ss)
-      sss = {rand() % 100, rand() % 100};
-
-  auto zavg = [&](int edge, int k) -> std::array<double, 2> {
-    auto tmp = 0.;
-    for (auto vertex : e2v[edge])
-      tmp += pp[vertex][k];
-    tmp /= 2;
-    return {tmp * get<0>(s[edge][k]), tmp * get<1>(s[edge][k])};
+constexpr inline auto zavg = [](auto const &e2v) {
+  return [&e2v](int edge, int k) {
+    double tmp = 0.0;
+    for (int neighbor = 0; neighbor < 2; ++neighbor)
+      tmp += pp(e2v(edge)[neighbor], k);
+    tmp /= 2.0;
+    return tuple{tmp * get<0>(s(edge, k)), tmp * get<1>(s(edge, k))};
   };
+};
 
-  auto expected = [&](int vertex, int k) {
-    auto res = std::array{0., 0.};
-    for (int i = 0; i != 2; ++i) {
-      for (int j = 0; j != n_v2e; ++j) {
-        auto edge = v2e[vertex][j];
-        if (edge == -1)
-          break;
-        res[i] += zavg(edge, k)[i] * sign[vertex][j];
+constexpr inline auto make_zavg_expected = [](auto const &mesh) {
+  return [e2v_table = mesh.e2v_table()](int edge, int k) {
+    auto e2v = e2v_table->const_host_view();
+    return zavg(e2v)(edge, k);
+  };
+};
+
+constexpr inline auto expected = [](auto const &v2e, auto const &e2v) {
+  return [&v2e, zavg = zavg(e2v)](int vertex, int k) {
+    auto res = tuple(0.0, 0.0);
+    for (int neighbor = 0; neighbor < 6; ++neighbor) {
+      int edge = v2e(vertex)[neighbor];
+      if (edge != -1) {
+        get<0>(res) += get<0>(zavg(edge, k)) * sign(vertex)[neighbor];
+        get<1>(res) += get<1>(zavg(edge, k)) * sign(vertex)[neighbor];
       }
-      res[i] /= vol[vertex];
     }
+    get<0>(res) /= vol(vertex);
+    get<1>(res) /= vol(vertex);
     return res;
   };
+};
 
-  auto e2v_conn = connectivity<generated::E2V_t>(&e2v[0]);
+constexpr inline auto make_expected = [](auto const &mesh) {
+  return [v2e_table = mesh.v2e_table(),
+          e2v_table = mesh.e2v_table()](int vertex, int k) {
+    auto v2e = v2e_table->const_host_view();
+    auto e2v = e2v_table->const_host_view();
+    return expected(v2e, e2v)(vertex, k);
+  };
+};
 
-  // tuple<double, double> actual_zavg[n_edges][K] = {};
-  // auto edge_domain =
-  //     unstructured_domain(std::tuple(n_edges, K), {},
-  //                         e2v_conn); // TODO fn should use sizes constructor
+// GT_REGRESSION_TEST(unstructured_zavg, test_environment<>, fn_backend_t) {
+//   using float_t = typename TypeParam::float_t;
 
-  // generated::zavgS_fencil(backend::naive{}, edge_domain, actual_zavg, pp, s);
+//   auto mesh = TypeParam::fn_unstructured_mesh();
+//   auto actual = mesh.template make_storage<tuple<float_t, float_t>>(
+//       mesh.nedges(), mesh.nlevels());
 
-  // for (int h = 0; h < n_edges; ++h)
-  //   for (int v = 0; v < K; ++v)
-  //     tuple_util::for_each(
-  //         [](auto actual, auto expected) {
-  //           EXPECT_DOUBLE_EQ(actual, expected);
-  //         },
-  //         actual_zavg[h][v], zavg(h, v));
+//   auto pp_ = mesh.make_const_storage(pp, mesh.nvertices(), mesh.nlevels());
+//   auto s_ = mesh.template make_const_storage<tuple<float_t, float_t>>(
+//       s, mesh.nedges(), mesh.nlevels());
 
-  auto v2e_conn = connectivity<generated::V2E_t>(&v2e[0]);
-  auto vertex_domain =
-      unstructured_domain(std::tuple(n_vertices, K), {}, e2v_conn, v2e_conn);
+//   auto e2v_conn =
+//       connectivity<generated::E2V_t>(mesh.e2v_table()->get_const_target_ptr());
+//   auto edge_domain =
+//       unstructured_domain({mesh.nedges(), mesh.nlevels()}, {}, e2v_conn);
 
-  tuple<double, double> actual[n_vertices][K] = {};
-  generated::nabla_fencil(backend::naive{}, vertex_domain, actual, pp, s, sign,
-                          vol);
+//   generated::zavgS_fencil(fn_backend_t{}, edge_domain, actual, pp_, s_);
 
-  for (int h = 0; h < n_vertices; ++h)
-    for (int v = 0; v < K; ++v)
-      tuple_util::for_each(
-          [](auto actual, auto expected) {
-            EXPECT_DOUBLE_EQ(actual, expected);
-          },
-          actual[h][v], expected(h, v));
+//   auto expected = make_zavg_expected(mesh);
+//   TypeParam::verify(expected, actual);
+// }
+
+GT_REGRESSION_TEST(unstructured_nabla, test_environment<>, fn_backend_t) {
+  using float_t = typename TypeParam::float_t;
+
+  auto mesh = TypeParam::fn_unstructured_mesh();
+  auto actual = mesh.template make_storage<tuple<float_t, float_t>>(
+      mesh.nvertices(), mesh.nlevels());
+
+  auto pp_ = mesh.make_const_storage(pp, mesh.nvertices(), mesh.nlevels());
+  auto sign_ = mesh.template make_const_storage<array<float_t, 6>>(
+      sign, mesh.nvertices());
+  auto vol_ = mesh.make_const_storage(vol, mesh.nvertices());
+  auto s_ = mesh.template make_const_storage<tuple<float_t, float_t>>(
+      s, mesh.nedges(), mesh.nlevels());
+
+  auto v2e_tbl = mesh.v2e_table();
+  auto v2e_conn =
+      connectivity<generated::V2E_t>(v2e_tbl->get_const_target_ptr());
+
+  auto e2v_tbl = mesh.e2v_table();
+  auto e2v_conn =
+      connectivity<generated::E2V_t>(e2v_tbl->get_const_target_ptr());
+  auto vertex_domain = unstructured_domain({mesh.nvertices(), mesh.nlevels()},
+                                           {}, v2e_conn, e2v_conn);
+
+  generated::nabla_fencil(fn_backend_t{}, vertex_domain, actual, pp_, s_, sign_,
+                          vol_);
+
+  auto expected = make_expected(mesh);
+  TypeParam::verify(expected, actual);
 }
+
 } // namespace
