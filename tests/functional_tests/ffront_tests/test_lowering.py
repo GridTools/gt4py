@@ -13,17 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 from functional.common import Field
 from functional.ffront import itir_makers as im
-from functional.ffront.fbuiltins import (
-    FieldOffset,
-    bool,
-    float,
-    float32,
-    float64,
-    int,
-    int32,
-    int64,
-    neighbor_sum,
-)
+from functional.ffront.fbuiltins import FieldOffset, float32, float64, int32, int64, neighbor_sum
 from functional.ffront.foast_to_itir import FieldOperatorLowering
 from functional.ffront.func_to_foast import FieldOperatorParser
 from functional.iterator.runtime import CartesianAxis
