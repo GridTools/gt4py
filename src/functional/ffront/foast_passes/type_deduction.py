@@ -372,6 +372,10 @@ class FieldOperatorTypeDeduction(NodeTranslator):
         )
 
     def visit_Constant(self, node: foast.Constant, **kwargs) -> foast.Constant:
+        if not node.type:
+            raise FieldOperatorTypeDeductionError.from_foast_node(
+                node, msg=f"Found a literal with unrecognized type {node.type}."
+            )
         return node
 
 

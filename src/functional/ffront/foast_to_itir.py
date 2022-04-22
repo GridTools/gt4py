@@ -26,6 +26,14 @@ from functional.ffront.type_info import TypeInfo
 from functional.iterator import ir as itir
 
 
+def can_be_value_or_iterator(typeinfo: TypeInfo):
+    return (
+        typeinfo.is_scalar
+        or typeinfo.is_field_type
+        or (typeinfo.is_complete and typeinfo.constraint is ct.TupleType)
+    )
+
+
 def to_value(node: foast.LocatedNode) -> Callable[[itir.Expr], itir.Expr]:
     """
     Either ``deref_`` or noop callable depending on the input node.
@@ -51,11 +59,7 @@ def to_value(node: foast.LocatedNode) -> Callable[[itir.Expr], itir.Expr]:
     SymRef(id='a')
     """
     typeinfo = TypeInfo(node.type)
-    assert (
-        typeinfo.is_scalar
-        or typeinfo.is_field_type
-        or (typeinfo.is_complete and typeinfo.constraint is ct.TupleType)
-    )
+    assert can_be_value_or_iterator(typeinfo)
     if typeinfo.is_field_type:
         return im.deref_
     elif typeinfo.constraint is ct.TupleType and TypeInfo(typeinfo.type.types[0]).is_field_type:
@@ -146,9 +150,7 @@ class FieldOperatorLowering(NodeTranslator):
         return im.tuple_get_(node.index, self.visit(node.value, **kwargs))
 
     def visit_TupleExpr(self, node: foast.TupleExpr, **kwargs) -> itir.FunCall:
-        return im.make_tuple_(
-            *(self.visit(element, **kwargs) for i, element in enumerate(node.elts))
-        )
+        return im.make_tuple_(*self.visit(node.elts, **kwargs))
 
     def _lift_if_field(self, node: foast.LocatedNode) -> Callable[[itir.Expr], itir.Expr]:
         typeinfo = TypeInfo(node.type)
@@ -159,27 +161,32 @@ class FieldOperatorLowering(NodeTranslator):
 
     def visit_UnaryOp(self, node: foast.UnaryOp, **kwargs) -> itir.FunCall:
         # TODO(tehrengruber): extend iterator ir to support unary operators
-        zero_arg = (
-            [itir.Literal(value="0", type="int")] if node.op is not foast.UnaryOperator.NOT else []
+        if node.op is foast.UnaryOperator.NOT:
+            return self._lift_if_field(node)(
+                im.call_(node.op.value)(to_value(node.operand)(self.visit(node.operand, **kwargs)))
+            )
+        return self._lift_if_field(node)(
+            im.call_(node.op.value)(
+                im.literal_("0", "int"),
+                to_value(node.operand)(self.visit(node.operand, **kwargs)),
+            )
         )
-        result = im.call_(node.op.value)(
-            *[*zero_arg, to_value(node.operand)(self.visit(node.operand, **kwargs))]
-        )
-        return self._lift_if_field(node)(result)
 
     def visit_BinOp(self, node: foast.BinOp, **kwargs) -> itir.FunCall:
-        result = im.call_(node.op.value)(
-            to_value(node.left)(self.visit(node.left, **kwargs)),
-            to_value(node.right)(self.visit(node.right, **kwargs)),
+        return self._lift_if_field(node)(
+            im.call_(node.op.value)(
+                to_value(node.left)(self.visit(node.left, **kwargs)),
+                to_value(node.right)(self.visit(node.right, **kwargs)),
+            )
         )
-        return self._lift_if_field(node)(result)
 
     def visit_Compare(self, node: foast.Compare, **kwargs) -> itir.FunCall:
-        result = im.call_(node.op.value)(
-            to_value(node.left)(self.visit(node.left, **kwargs)),
-            to_value(node.left)(self.visit(node.right, **kwargs)),
+        return self._lift_if_field(node)(
+            im.call_(node.op.value)(
+                to_value(node.left)(self.visit(node.left, **kwargs)),
+                to_value(node.left)(self.visit(node.right, **kwargs)),
+            )
         )
-        return self._lift_if_field(node)(result)
 
     def _visit_shift(self, node: foast.Call, **kwargs) -> itir.FunCall:
         match node.args[0]:
@@ -193,11 +200,12 @@ class FieldOperatorLowering(NodeTranslator):
         lowering = InsideReductionLowering()
         expr = lowering.visit(node.args[0], **kwargs)
         params = list(lowering.lambda_params.items())
-        result = im.call_("reduce")(
-            im.lambda__("accum", *(param[0] for param in params))(im.plus_("accum", expr)),
-            0,
-        )
-        return im.lift_(result)(*(param[1] for param in params))
+        return im.lift_(
+            im.call_("reduce")(
+                im.lambda__("accum", *(param[0] for param in params))(im.plus_("accum", expr)),
+                0,
+            )
+        )(*(param[1] for param in params))
 
     def visit_Call(self, node: foast.Call, **kwargs) -> itir.FunCall:
         if TypeInfo(node.func.type).is_field_type:
@@ -207,8 +215,9 @@ class FieldOperatorLowering(NodeTranslator):
             return visitor(node, **kwargs)
         elif node.func.id in TYPE_BUILTIN_NAMES:
             return self._visit_type_constr(node, **kwargs)
-        result = im.call_(self.visit(node.func, **kwargs))(*self.visit(node.args, **kwargs))
-        return self._lift_if_field(node)(result)
+        return self._lift_if_field(node)(
+            im.call_(self.visit(node.func, **kwargs))(*self.visit(node.args, **kwargs))
+        )
 
     def _visit_neighbor_sum(self, node: foast.Call, **kwargs) -> itir.FunCall:
         return self._visit_reduce(node, **kwargs)
@@ -222,7 +231,7 @@ class FieldOperatorLowering(NodeTranslator):
             if target_type is bool and source_type is not bool:
                 return im.literal_(str(bool(source_type(node.args[0].value))), node.func.id)
             return im.literal_(node.args[0].value, node.func.id)
-        return self.visit(node.args[0], **kwargs)
+        raise FieldOperatorLoweringError(f"Encountered a type cast, which is not supported: {node}")
 
     def visit_Constant(self, node: foast.Constant, **kwargs) -> itir.Literal:
         if isinstance(node.type, ct.ScalarType) and not node.type.shape:
@@ -254,10 +263,10 @@ class InsideReductionLowering(FieldOperatorLowering):
         )
 
     def visit_UnaryOp(self, node: foast.UnaryOp, **kwargs) -> itir.FunCall:
-        zero_arg = (
-            [itir.Literal(value="0", type="int")] if node.op is not foast.UnaryOperator.NOT else []
-        )
-        return im.call_(node.op.value)(*[*zero_arg, self.visit(node.operand, **kwargs)])
+        if node.op is foast.UnaryOperator.NOT:
+            return im.call_(node.op.value)(self.visit(node.operand, **kwargs))
+
+        return im.call_(node.op.value)(im.literal_("0", "int"), self.visit(node.operand, **kwargs))
 
     def _visit_shift(self, node: foast.Call, **kwargs) -> itir.SymRef:  # type: ignore[override]
         uid = f"{node.func.id}__{self._sequential_id()}"

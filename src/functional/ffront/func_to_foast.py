@@ -347,7 +347,15 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
     def visit_BoolOp(self, node: ast.BoolOp, **kwargs) -> None:
         raise FieldOperatorSyntaxError.from_AST(node, msg="`and`/`or` operator not allowed!")
 
+    def _ast_compare_chain_rhs(self, compare: ast.Compare) -> ast.Compare:
+        rhs = copy.copy(compare)
+        rhs.comparators = compare.comparators[1:]
+        rhs.ops = compare.ops[1:]
+        rhs.left = compare.comparators[0]
+        return rhs
+
     def visit_Compare(self, node: ast.Compare, **kwargs) -> foast.Compare:
+        # single comparison case a <op> b
         if len(node.comparators) == 1:
             return foast.Compare(
                 op=self.visit(node.ops[0]),
@@ -355,19 +363,26 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
                 right=self.visit(node.comparators[0]),
                 location=self._make_loc(node),
             )
-        smaller_node = copy.copy(node)
-        smaller_node.comparators = node.comparators[1:]
-        smaller_node.ops = node.ops[1:]
-        smaller_node.left = node.comparators[0]
+        # comparison chain case, need to turn
+        # a <op1> b <op2> c ... into (a <op1> b) and (b <op2> c ...)
+        # the right hand side is then visited recursively
+
+        # create the lhs: a <op1> b
+        left_branch = foast.Compare(
+            op=self.visit(node.ops[0]),
+            left=self.visit(node.left),
+            right=self.visit(node.comparators[0]),
+            location=self._make_loc(node),
+        )
+
+        # recursively create the rhs: b <op2> c ...
+        right_branch = self.visit(self._ast_compare_chain_rhs(node))
+
+        # lhs and rhs
         return foast.BinOp(
             op=foast.BinaryOperator.BIT_AND,
-            left=foast.Compare(
-                op=self.visit(node.ops[0]),
-                left=self.visit(node.left),
-                right=self.visit(node.comparators[0]),
-                location=self._make_loc(node),
-            ),
-            right=self.visit(smaller_node),
+            left=left_branch,
+            right=right_branch,
             location=self._make_loc(node),
         )
 
@@ -435,10 +450,8 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
         for keyword in node.keywords:
             args.append(keyword.value)
 
-        new_func = self.visit(node.func, **kwargs)
-
         return foast.Call(
-            func=new_func,
+            func=self.visit(node.func, **kwargs),
             args=[self.visit(arg, **kwargs) for arg in args],
             location=self._make_loc(node),
         )
