@@ -28,10 +28,16 @@ from functional.ffront import common_types as ct
 
 
 def make_scalar_kind(dtype: npt.DTypeLike) -> ct.ScalarKind:
-    try:
-        dt = np.dtype(dtype)
-    except TypeError as err:
-        raise common.GTTypeError(f"Invalid scalar type definition ({dtype})") from err
+    # make int & float precision platform independent.
+    if dtype is builtins.int:
+        dt = np.dtype("int64")
+    elif dtype is builtins.float:
+        dt = np.dtype("float64")
+    else:
+        try:
+            dt = np.dtype(dtype)
+        except TypeError as err:
+            raise common.GTTypeError(f"Invalid scalar type definition ({dtype})") from err
 
     if dt.shape == () and dt.fields is None:
         match dt:

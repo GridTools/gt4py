@@ -92,7 +92,7 @@ def make_symbol_names_from_source(source: str, filename: str = MISSING_FILENAME)
     # symtable returns regular free (or non-local) variables in 'get_frees()' and
     # the free variables introduced with the 'nonlocal' statement in 'get_nonlocals()'
     nonlocal_names = set(func_st.get_frees()) | set(func_st.get_nonlocals())  # type: ignore[attr-defined]
-    global_names = set(func_st.get_globals()) - set(fbuiltins.ALL_BUILTIN_NAMES)
+    global_names = set(func_st.get_globals())
 
     return SymbolNames(
         params=param_names,

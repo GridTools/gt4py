@@ -283,17 +283,6 @@ def get_typing(value: Any, *, annotate_callable_kwargs: bool = False) -> Any:
         # >>> print(get_typing(Dict[int, Union[int, float]], get_origins=False))
         # typing.Dict[int, typing.Union[int, float]]
 
-        >>> import numbers
-        >>> @get_typing.register(int)
-        ... @get_typing.register(float)
-        ... @get_typing.register(complex)
-        ... def _get_typing_number(value, *, get_origins: bool = True):
-        ...    return numbers.Number
-        >>> get_typing(3.4)
-        <class 'numbers.Number'>
-        >>> # undoing the change
-        >>> get_typing.register(int)(get_typing.register(float)(get_typing.register(complex)(get_typing)))
-
     """
     recursive_get = functools.partial(get_typing, annotate_callable_kwargs=annotate_callable_kwargs)
     if isinstance(value, type):

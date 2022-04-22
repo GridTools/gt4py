@@ -21,7 +21,6 @@ from typing import Any, ClassVar, Generic, Optional, Type, TypeVar
 
 from eve.type_definitions import SourceLocation
 from functional import common
-from functional.ffront import fbuiltins
 from functional.ffront.ast_passes.fix_missing_locations import FixMissingLocations
 from functional.ffront.source_utils import CapturedVars, SourceDefinition, SymbolNames
 
@@ -43,11 +42,11 @@ def _assert_source_invariants(source_definition: SourceDefinition, captured_vars
     # However, 'captured_vars' comes from inspecting the live function object, which might
     # have not been defined at a global scope, and therefore actual symbol values could appear
     # in both 'captured_vars.globals' and 'self.captured_vars.nonlocals'.
-    if not (
-        diff := (set(captured_vars.globals) | set(captured_vars.nonlocals.keys())).difference(
-            (global_names | nonlocal_names)
-        )
-    ).issubset(set(fbuiltins.TYPE_BUILTIN_NAMES) | {"__builtins__"}):
+    if (
+        diff := (set(captured_vars.globals) | set(captured_vars.nonlocals))
+        - (global_names | nonlocal_names)
+        - {"__builtins__"}
+    ):
         raise AssertionError(
             f"CapturedVars do not agree with information from symtable module. {diff}"
         )

@@ -15,10 +15,12 @@
 from __future__ import annotations
 
 import ast
+import builtins
 import collections
 import copy
 from typing import Any, Mapping, Type, cast
 
+import eve
 from functional.ffront import common_types as ct
 from functional.ffront import fbuiltins
 from functional.ffront import field_operator_ast as foast
@@ -90,25 +92,62 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
     def _postprocess_dialect_ast(cls, dialect_ast: foast.FieldOperator) -> foast.FieldOperator:
         return FieldOperatorTypeDeduction.apply(dialect_ast)
 
+    def _builtin_type_constructor_symbols(
+        self, captured_vars: Mapping[str, Any], location: eve.SourceLocation
+    ):
+        result: list[foast.Symbol] = []
+        skipped_types = {"tuple"}
+        python_type_builtins = {
+            name: getattr(builtins, name)
+            for name in set(fbuiltins.TYPE_BUILTIN_NAMES) - skipped_types
+            if hasattr(builtins, name)
+        }
+        captured_type_builtins = {
+            name: value
+            for name, value in captured_vars.items()
+            if name in fbuiltins.TYPE_BUILTIN_NAMES and value is getattr(fbuiltins, name)
+        }
+        to_be_inserted = python_type_builtins | captured_type_builtins
+        for name, value in to_be_inserted.items():
+            result.append(
+                foast.Symbol(
+                    id=name,
+                    type=ct.FunctionType(
+                        args=[ct.DeferredSymbolType(constraint=ct.ScalarType)],
+                        kwargs={},
+                        returns=cast(ct.DataType, symbol_makers.make_symbol_type_from_value(value)),
+                    ),
+                    namespace=ct.Namespace.CLOSURE,
+                    location=location,
+                )
+            )
+
+        return result, to_be_inserted.keys()
+
     def visit_FunctionDef(self, node: ast.FunctionDef, **kwargs) -> foast.FieldOperator:
-        vars_: Mapping[str, Any] = collections.ChainMap(
+        captured_vars: Mapping[str, Any] = collections.ChainMap(
             self.captured_vars.globals, self.captured_vars.nonlocals
         )
-        captured_vars: list[foast.Symbol] = [
-            foast.Symbol(
-                id=name,
-                type=symbol_makers.make_symbol_type_from_value(val),
-                namespace=ct.Namespace.CLOSURE,
-                location=self._make_loc(node),
+        captured_symbols, skip_names = self._builtin_type_constructor_symbols(
+            captured_vars, self._make_loc(node)
+        )
+        for name, val in captured_vars.items():
+            if name in skip_names:
+                continue
+            captured_symbols.append(
+                foast.Symbol(
+                    id=name,
+                    type=symbol_makers.make_symbol_type_from_value(val),
+                    namespace=ct.Namespace.CLOSURE,
+                    location=self._make_loc(node),
+                )
             )
-            for name, val in vars_.items()
-        ]
 
         return foast.FieldOperator(
             id=node.name,
             params=self.visit(node.args),
             body=self.visit_stmt_list(node.body),
-            captured_vars=captured_vars,
+            captured_vars=captured_symbols,
             location=self._make_loc(node),
         )
 
@@ -373,20 +412,6 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
                 msg=f"{self._func_name(node)}() only takes literal arguments!",
             )
 
-    def _builtin_type_constructor_type_override(self, node: ast.Call):
-        global_ns = self.captured_vars.globals
-        local_ns = self.captured_vars.nonlocals
-        return ct.FunctionType(
-            args=[ct.DeferredSymbolType(constraint=ct.ScalarType)],
-            kwargs={},
-            returns=cast(
-                ct.DataType,
-                symbol_makers.make_symbol_type_from_typing(
-                    self._func_name(node), global_ns=global_ns, local_ns=local_ns
-                ),
-            ),
-        )
-
     def _func_name(self, node: ast.Call) -> str:
         func = node.func
         if isinstance(func, ast.Name):
@@ -400,21 +425,17 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
             )
 
         func_name = self._func_name(node)
-        type_override = None
 
         if func_name in fbuiltins.FUN_BUILTIN_NAMES:
             self._verify_builtin_function(node)
         if func_name in fbuiltins.TYPE_BUILTIN_NAMES:
             self._verify_builtin_type_constructor(node)
-            type_override = self._builtin_type_constructor_type_override(node)
 
         args = node.args.copy()
         for keyword in node.keywords:
             args.append(keyword.value)
 
         new_func = self.visit(node.func, **kwargs)
-        if type_override:
-            new_func.type = type_override
 
         return foast.Call(
             func=new_func,

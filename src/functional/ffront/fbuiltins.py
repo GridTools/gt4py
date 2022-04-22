@@ -61,7 +61,7 @@ ALL_BUILTIN_NAMES = TYPE_BUILTIN_NAMES + MODULE_BUILTIN_NAMES
 BUILTINS = {name: globals()[name] for name in __all__}
 
 
-# TODO(ricoh): This should probably be reunified with ``iterator.runtime.Offset``
+# TODO(ricoh): This should be reunified with ``iterator.runtime.Offset``
 # potentially in ``functional.common``, which requires lifting of
 # ``ffront.common_types`` into ``functional``.
 @dataclass(frozen=True)
