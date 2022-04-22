@@ -67,7 +67,7 @@ def test_invalid_scalar_kind():
             typing.Tuple[int, float],
             common_types.TupleType(
                 types=[
-                    common_types.ScalarType(kind=common_types.ScalarKind.INT64),
+                    common_types.ScalarType(kind=common_types.ScalarKind.INT),
                     common_types.ScalarType(kind=common_types.ScalarKind.FLOAT64),
                 ]
             ),
@@ -79,7 +79,7 @@ def test_invalid_scalar_kind():
                     common_types.ScalarType(kind=common_types.ScalarKind.BOOL),
                     common_types.TupleType(
                         types=[
-                            common_types.ScalarType(kind=common_types.ScalarKind.INT64),
+                            common_types.ScalarType(kind=common_types.ScalarKind.INT),
                             common_types.ScalarType(kind=common_types.ScalarKind.FLOAT64),
                         ]
                     ),
@@ -106,10 +106,10 @@ def test_invalid_scalar_kind():
             common_types.FunctionType(
                 args=[
                     common_types.ScalarType(kind=common_types.ScalarKind.FLOAT64),
-                    common_types.ScalarType(kind=common_types.ScalarKind.INT64),
+                    common_types.ScalarType(kind=common_types.ScalarKind.INT),
                 ],
                 kwargs={},
-                returns=common_types.ScalarType(kind=common_types.ScalarKind.INT64),
+                returns=common_types.ScalarType(kind=common_types.ScalarKind.INT),
             ),
         ),
         (typing.ForwardRef("float"), common_types.ScalarType(kind=common_types.ScalarKind.FLOAT64)),

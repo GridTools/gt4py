@@ -1,15 +1,25 @@
 from typing import List, Union
 
-from eve import Node
+import eve
 from eve.traits import SymbolName, SymbolTableTrait
 from eve.type_definitions import SymbolRef
+from eve.utils import noninstantiable
 from functional.iterator.util.sym_validation import validate_symbol_refs
+
+
+@noninstantiable
+class Node(eve.Node):
+    def __str__(self):
+        from functional.iterator.pretty_printer import pformat
+
+        return pformat(self)
 
 
 class Sym(Node):  # helper
     id: SymbolName  # noqa: A003
 
 
+@noninstantiable
 class Expr(Node):
     ...
 
