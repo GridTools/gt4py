@@ -283,7 +283,7 @@ class DaCeComputationCodegen:
         symbols = {f"__{var}": f"__{var}" for var in "IJK"}
         for name, array in sdfg.arrays.items():
             if array.transient:
-                decl = gtir.symtable_[name]
+                decl = ir.symtable_[name]
                 layout_map = make_x86_layout_map(
                     tuple([1 if d else 0 for d in decl.dimensions] + [1] * len(decl.data_dims))
                 )
