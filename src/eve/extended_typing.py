@@ -187,7 +187,8 @@ def get_partial_type_hints(
     """Return a dictionary with type hints (using forward refs for undefined names) for a function, method, module or class object.
 
     For each member type hint in the object a :class:`typing.ForwarRef` instance will be
-    returned if some names in the string annotation have not been found.
+    returned if some names in the string annotation have not been found. For additional
+    information see :func:`typing.get_type_hints`.
     """
     if getattr(obj, "__no_type_check__", None):
         return {}
@@ -230,6 +231,9 @@ def eval_forward_ref(
     Arguments:
         globalns: globals dict used in the evaluation of the annotations.
         localns: locals dict used in the evaluation of the annotations.
+
+    Keyword Arguments:
+        include_extras: if ``True``, ``Annotated`` hints will preserve the annotation.
 
     Examples:
         >>> from typing import Dict, Tuple
@@ -274,8 +278,15 @@ def reveal_type(  # noqa: C901  # function is complex but well organized in inde
     value: Any,
     *,
     annotate_callable_kwargs: bool = False,
+    none_as_type: bool = True,
 ) -> TypingAnnotation:
     """Generate a typing definition from a value.
+
+    Keyword Arguments:
+        annotate_callable_kwargs: if ``True``, ``Callable``s will be returned as
+            a ``Annotated[Callable, CallableKwargsInfo]`` hint, where :class:`CallableKwargsInfo`
+            contains the inferred typings for the keyword arguments, if any.
+        none_as_type:  if ``True``, ``None`` hints will be transformed to ``type(None)``.
 
     Examples:
         >>> reveal_type(3)
@@ -333,7 +344,7 @@ def reveal_type(  # noqa: C901  # function is complex but well organized in inde
         return value
 
     if value in (None, type(None)):
-        return None
+        return type(None) if none_as_type else None
 
     if isinstance(value, type):
         return Type[value]
@@ -362,7 +373,7 @@ def reveal_type(  # noqa: C901  # function is complex but well organized in inde
     if isinstance(value, _types.FunctionType):
         try:
             annotations = get_type_hints(value)
-            return_type = _reveal(annotations.get("return", Any))
+            return_type = annotations.get("return", Any)
 
             sig = _inspect.signature(value)
             arg_types: List = []

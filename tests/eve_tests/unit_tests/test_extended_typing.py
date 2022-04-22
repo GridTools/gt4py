@@ -162,8 +162,10 @@ def test_eval_forward_ref():
 def test_reveal_type():
     assert xtyping.reveal_type(3) == int
 
-    assert xtyping.reveal_type(None) is None
-    assert xtyping.reveal_type(type(None)) is None
+    assert xtyping.reveal_type(None) is type(None)  # noqa: E721  # do not compare types
+    assert xtyping.reveal_type(type(None)) is type(None)  # noqa: E721  # do not compare types
+    assert xtyping.reveal_type(None, none_as_type=False) is None
+    assert xtyping.reveal_type(type(None), none_as_type=False) is None
 
     assert xtyping.reveal_type(Dict[str, int]) == Dict[str, int]
 
@@ -188,7 +190,7 @@ def test_reveal_type():
     def f2(a: int, b: float) -> None:
         ...
 
-    assert xtyping.reveal_type(f2) == Callable[[int, float], None]
+    assert xtyping.reveal_type(f2) == Callable[[int, float], type(None)]
 
     def f3(
         a: Dict[Tuple[str, ...], List[int]],
@@ -212,14 +214,10 @@ def test_reveal_type():
     def f4(a: int, b: float, *, foo: Tuple[str, ...] = ()) -> None:
         ...
 
-    assert xtyping.reveal_type(f4) == Callable[[int, float], None]
-
-    def f4(a: int, b: float, *, foo: Tuple[str, ...] = ()) -> None:
-        ...
-
+    assert xtyping.reveal_type(f4) == Callable[[int, float], type(None)]
     assert (
         xtyping.reveal_type(f4, annotate_callable_kwargs=True)
         == Annotated[
-            Callable[[int, float], None], xtyping.CallableKwargsInfo({"foo": Tuple[str, ...]})
+            Callable[[int, float], type(None)], xtyping.CallableKwargsInfo({"foo": Tuple[str, ...]})
         ]
     )
