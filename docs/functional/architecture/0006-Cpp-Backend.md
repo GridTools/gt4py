@@ -7,11 +7,11 @@ tags: [backend]
 - **Status**: valid 
 - **Authors**: Hannes Vogt (@havogt)
 - **Created**: 2022-02-18
-- **Updated**: 2022-02-18
+- **Updated**: 2022-04-22
 
 Overview of C++ backend decisions.
 
-## Canonicalization
+## General
 
 The backend will not be able to transform the IR, therefore any patterns that need IR transformations need to happen before C++ code generation.
 
@@ -23,9 +23,17 @@ The following built-ins require to be presented in a canonicalized form
 
 ## Decisions
 
+### GTFN IR
+
+We introduce an IR which is close to the generated code.
+It is different to Iterator IR in the following:
+- no `lift` built-in
+- allows allocation of temporaries
+- Iterator IR built-ins are replaced by the corresponding C++ operator, e.g. `plus(a,b)` -> `a+b`
+
 ### Scan
 
-Scan needs to be presented in canonicalized form, the canonicalized form will be specified elsewhere.
+Scan need to be canonicalized for the lowering to GTFN IR. The canonicalized form will be described elsewhere.
 
 ### Lift
 
@@ -68,5 +76,5 @@ def unrolled_reduce(a,b):
 
 The IR, when presented to the C++ backend must have the following properties:
 - `scan` canonicalized
-- no `lift`
+- `lift` that are interpreted as temporaries are canonicalized, no other (inline) `lift`s
 - no `reduce`
