@@ -1,4 +1,3 @@
-from copy import copy
 from typing import Any, Dict, Set
 
 from eve import NOTHING, NodeTranslator
@@ -15,12 +14,7 @@ class InlineFundefs(NodeTranslator):
         return self.generic_visit(node)
 
     def visit_FencilDefinition(self, node: ir.FencilDefinition):
-        fundefs = map(
-            lambda f: self.generic_visit(f, symtable=node.symtable_), node.function_definitions
-        )
-        new_fencil = copy(node)
-        new_fencil.function_definitions = list(fundefs)
-        return new_fencil
+        return self.generic_visit(node, symtable=node.symtable_)
 
 
 class PruneUnreferencedFundefs(NodeTranslator):

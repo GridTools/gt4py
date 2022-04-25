@@ -44,7 +44,6 @@ class GTFN_lowering(NodeTranslator):
         return SymRef(id=node.id)
 
     def visit_Lambda(self, node: itir.Lambda, **kwargs) -> Lambda:
-        debug(node.expr)
         return Lambda(params=self.visit(node.params), expr=self.visit(node.expr))
 
     def visit_IntLiteral(self, node: itir.IntLiteral, **kwargs):
