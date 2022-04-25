@@ -28,7 +28,7 @@ def deref(it):
 
 @builtins.can_deref.register(EMBEDDED)
 def can_deref(it):
-    return not it.is_none()  # TODO refactor is_none to can_deref in iterator
+    return it.can_deref()
 
 
 @builtins.if_.register(EMBEDDED)
@@ -86,10 +86,17 @@ def lift(stencil):
                 )
                 return args[0].offset_provider[open_offsets[0].value].max_neighbors
 
-            def deref(self):
-                shifted_args = tuple(map(lambda arg: arg.shift(*self.offsets), args))
+            def _shifted_args(self):
+                return tuple(map(lambda arg: arg.shift(*self.offsets), args))
 
-                if any(shifted_arg.is_none() for shifted_arg in shifted_args):
+            def can_deref(self):
+                shifted_args = self._shifted_args()
+                return all(shifted_arg.can_deref() for shifted_arg in shifted_args)
+
+            def deref(self):
+                shifted_args = self._shifted_args()
+
+                if not self.can_deref():
                     return None
 
                 if self.elem is None:
@@ -321,8 +328,8 @@ class MDIterator:
         )
         return self.offset_provider[self.incomplete_offsets[0].value].max_neighbors
 
-    def is_none(self):
-        return self.pos is None
+    def can_deref(self):
+        return self.pos is not None
 
     def deref(self):
         shifted_pos = self.pos.copy()
@@ -486,6 +493,9 @@ class ScanArgIterator:
 
     def deref(self):
         return self.wrapped_iter.deref()[self.k_pos]
+
+    def can_deref(self):
+        return self.wrapped_iter.can_deref()
 
     def shift(self, *offsets):
         return ScanArgIterator(self.wrapped_iter, offsets=[*offsets, *self.offsets])
