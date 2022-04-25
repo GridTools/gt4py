@@ -5,7 +5,6 @@ from functional.iterator.backends.gtfn.backend import generate
 from functional.iterator.builtins import *
 from functional.iterator.runtime import CartesianAxis, closure, fundef, offset
 from functional.iterator.tracing import trace
-from functional.iterator.transforms.common import apply_common_transforms
 
 
 @fundef
