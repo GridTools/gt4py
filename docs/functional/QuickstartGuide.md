@@ -140,7 +140,8 @@ cell_neighbours_of_edges = np.array([
     [4, 5]
 ])
 
-offset_provider={"E2C": NeighborTableOffsetProvider(cell_neighbours_of_edges, EdgeDim, CellDim, 2)}
+e2c_neighbor_table = NeighborTableOffsetProvider(cell_neighbours_of_edges, EdgeDim, CellDim, 2)
+offset_provider={"E2C": e2c_neighbor_table}
 ```
 
 Let's create a field on the cells and fill it with some values:
@@ -150,7 +151,7 @@ Let's create a field on the cells and fill it with some values:
 cell_values = np_as_located_field(CellDim)(np.array([1.0, 1.0, 2.0, 3.0, 5.0, 8.0]))
 ```
 
-#### Get value of 0th adjacent cell
+#### Using adjacencies in field operators
 
 The field operator `nearest_cell_to_edge` returns a field on the edges. The `E2C` field offset is used to map edge iterators to cell iterators using the connectivity matrix, and the cell iterator is used to extract the value from the cell field that's provided as input argument to the field operator. Note how `E2C` maps one edge iterator to two cell iterators (due to an edge having up to two cell neighbors). In this example, we take the 0th neighboring cell, but in the next one we will sum up the values of all neighboring cells.
 
@@ -176,7 +177,7 @@ After running the code, we should see the following values assigned to the edges
 
 +++
 
-#### Get the sum of the two cells adjacent to edges
+#### Using reductions on adjacencies
 
 This is very similar to the previous example, but instead of getting value of the 0th cell neighbor of an edge, we are going to sum all the neighboring cells. This is done by replacing the `E2C[0]` accessor by a `neighbor_sum` operation on the `E2C` field offset.
 
@@ -191,7 +192,7 @@ def run_sum_adjacent_cells(cells : Field[[CellDim], float32], out : Field[[EdgeD
     
 result_edge_sums = np_as_located_field(EdgeDim)(np.zeros(shape=(12,)))
 
-run_sum_adjacent_cells(cell_values, result_edge_sums, offset_provider=offset_provider)
+#run_sum_adjacent_cells(cell_values, result_edge_sums, offset_provider=offset_provider)
 
 print("sum of adjacent cells: {}".format(np.asarray(result_edge_sums)))
 ```
@@ -205,12 +206,117 @@ The results should be unchanged for the border edges, but the inner edge should 
 Follow-up to averages:
 - calculate the average of edges around a cell for each cell
 
-```{code-cell} ipython3
++++
 
+#### Using fields on connectivities, combining connectivities
+
+This example similar to a structured grid laplacian kernel, where the average of the neighboring cells is subtracted from the current cell. In the case of our unstructured trianglular mesh, we will subtract the average of the cells that share an edge with our current cell.
+
+Ultimately, we want to know the cell neighbors of cells. There are two way to go about this:
+1. define an all-new cell-to-cell connectivity
+2. define a cell-to-edge connectivity in addition to the edge-to-cell connectivity that we already have
+
+Although defining cell-to-cell connectivity directly is simpler, we will choose the second approach to see how one can go from cell to the nearby edges, and from the nearby edges to the nearby cells, in turn reached cell neighbors of cells.
+
+Let us start by defining the cell-to-edge connectivity. The 6-by-3 matrix below lists the 3 adjacent edges for each of the 6 cells:
+
+```{code-cell} ipython3
+C2EDim = CartesianAxis("C2E")
+C2E = FieldOffset("C2E", source=EdgeDim, target=(CellDim, C2EDim))
+
+edge_neighbors_of_cells = np.array([
+    [0, 6, 7],
+    [7, 8, 9],
+    [1, 2, 8],
+    [3, 9, 10],
+    [4, 10, 11],
+    [5, 6, 11],
+])
+
+c2e_neighbor_table = NeighborTableOffsetProvider(edge_neighbors_of_cells, CellDim, EdgeDim, 3)
 ```
 
-```{code-cell} ipython3
+To understand the procedure of combining the cell-to-edge and edge-to-cell connectivities, let's calculate the pseudo-laplacian by hand for cell index 3.
 
+Cell index 3 has two neighbors: cell 1 and cell 4. The three cells contains the values 3, 1, 5, respectively. Therefore, the pseudo-laplacian will be 2*3 - (1 + 5) = 0.
+
+Unfortunately, in absence of the cell-to-cell connectivities, we don't know that cells 1 and 4 are the neighbors of cell 3. However, based on the cell-to-edge connectivities, we do know that edges 3, 9 and 10 are adjacent to cell 3. Based on the edge-to-cell connectivities, we also know that edge 9 has cells 1 and 3 adjacent to it. With this information we can associate the difference \*(cell 1) - \*(cell 3) = 1 - 3 = -2 to edge 9. We could have also done \*(cell 3) - \*(cell 1), which would make the result +2. Similarly, we can calculate this difference for edge 10, which is ±2. Since edge 3 has only one cell adjacent to it, we won't calculate the difference, we will simply assume it's zero.
+
+Now knowing the differences on all three edges adjacent to our chosen cell, we simply have to add the differences up: 0 - 2 + 2 = 0 -- the same value that we calculated by simply looking at the grid.
+
+However, there are still two problems to tackle:
+1. To **figure out the sign** in the sum of the three over-edge differences, we have to know if the difference on the edge was calculated with our target cell as first or second operand to the subtraction. We will record this information in a field over the cell-to-edge connectivity. This field will therefore have the cells as first dimension and the cell-to-edge axis as second, represented by a 6x3 matrix of -1s and +1s for the sign.
+
+```{code-cell} ipython3
+edge_difference_polarity = np.array([
+    [1, 1, 1],   # cell 0
+    [-1, 1, 1],  # cell 1
+    [1, 1, -1],  # cell 2
+    [1, -1, 1],  # cell 3
+    [1, -1, 1],  # cell 4
+    [1, -1, -1], # cell 5
+])
+```
+
+2. To make sure that **border edges get a difference of zero**, we will slightly modify the edge-to-cell connectivity matrix so that border edges list the single cells they are attached to twice. This will results in us calculating the difference on edge 3 as \*(cell 3) - \*(cell 3) = 0. The modified edge-to-cell connectivity matrix is as follows:
+
+```{code-cell} ipython3
+cell_neighbours_of_edges_mod = np.array([
+    [0, 0], # edge 0
+    [2, 2], # edge 1
+    [2, 2], # edge 2
+    [3, 3], # edge 3
+    [4, 4], # edge 4
+    [5, 5], # edge 5
+    [0, 5], # edge 6
+    [0, 1], # edge 7
+    [1, 2], # edge 8
+    [1, 3], # edge 9
+    [3, 4], # edge 10
+    [4, 5]  # edge 11
+])
+```
+
+Let us use the matrices above to declare the connectivities and the fields:
+
+```{code-cell} ipython3
+e2c_neighbor_table_mod = NeighborTableOffsetProvider(cell_neighbours_of_edges_mod, EdgeDim, CellDim, 2)
+
+edge_difference_polarity_field = np_as_located_field(CellDim, C2EDim)(edge_difference_polarity)
+
+offset_provider={"E2C": e2c_neighbor_table_mod, "C2E": c2e_neighbor_table}
+```
+
+With all the connectivities and auxiliary data defined, we can write the corresponding field operator:
+
+```{code-cell} ipython3
+@field_operator
+def edge_differences(cells : Field[[CellDim], float32]) -> Field[[EdgeDim], float32]:        
+    return cells(E2C[0]) - cells(E2C[1])
+
+@field_operator
+def sum_differences(differences : Field[[EdgeDim], float32],
+                    polarities : Field[[CellDim, C2EDim], float32]) -> Field[[CellDim], float32]:        
+    return differences(C2E[0]) + differences(C2E[1]) + differences(C2E[2])
+
+@program
+def run_pseudo_laplacian(cells : Field[[CellDim], float32], 
+                         polarities : Field[[CellDim, C2EDim], float32],
+                         diffs : Field[[EdgeDim], float32],
+                         out : Field[[CellDim], float32]):
+    edge_differences(cells, out=diffs)
+    sum_differences(diffs, polarities, out=out)
+
+result_edge_diffs = np_as_located_field(EdgeDim)(np.zeros(shape=(12,)))
+result_pseudo_lap = np_as_located_field(CellDim)(np.zeros(shape=(6,)))
+
+run_pseudo_laplacian(cell_values,
+                     edge_difference_polarity_field,
+                     result_edge_diffs,
+                     result_pseudo_lap,
+                     offset_provider=offset_provider)
+
+print("sum of adjacent cells: {}".format(np.asarray(result_pseudo_lap)))
 ```
 
 ## Examples
