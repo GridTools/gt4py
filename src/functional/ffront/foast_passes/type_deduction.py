@@ -15,12 +15,12 @@ from typing import Any, Optional
 
 import functional.ffront.field_operator_ast as foast
 from eve import NodeTranslator, SymbolTableTrait
-from functional.common import GTSyntaxError
+from functional.common import GTSyntaxError, GTTypeError
 from functional.ffront import common_types as ct
-from functional.ffront.type_info import TypeInfo, is_complete_symbol_type
+from functional.ffront import type_info
 
 
-def are_broadcast_compatible(left: TypeInfo, right: TypeInfo) -> bool:
+def are_broadcast_compatible(left: SymbolType, right: SymbolType) -> bool:
     """
     Check if ``left`` and ``right`` types are compatible after optional broadcasting.
 
@@ -29,16 +29,16 @@ def are_broadcast_compatible(left: TypeInfo, right: TypeInfo) -> bool:
 
     Examples:
     ---------
-    >>> int_scalar_t = TypeInfo(ct.ScalarType(kind=ct.ScalarKind.INT64))
+    >>> int_scalar_t = ct.ScalarType(kind=ct.ScalarKind.INT64))
     >>> are_broadcast_compatible(int_scalar_t, int_scalar_t)
     True
-    >>> int_field_t = TypeInfo(ct.FieldType(dtype=ct.ScalarType(kind=ct.ScalarKind.INT64),
-    ...                         dims=...))
+    >>> int_field_t = ct.FieldType(dtype=ct.ScalarType(kind=ct.ScalarKind.INT64), dims=...)
     >>> are_broadcast_compatible(int_field_t, int_scalar_t)
     True
 
     """
-    if all([left.dims, right.dims]) and left.dims != right.dims:
+    dims = [type_info.extract_dims(t) for t in (left, right)]
+    if all(dims) and dims[0] != dims[1]:
         return False
     return left.dtype == right.dtype
 
@@ -64,7 +64,7 @@ def broadcast_typeinfos(left: TypeInfo, right: TypeInfo) -> Optional[TypeInfo]:
     return left
 
 
-def boolified_typeinfo(typeinfo: TypeInfo):
+def boolified_type(symbol_type: ct.FieldType | ct.ScalarType | ct.DeferredSymbolType) -> ct.ScalarType | ct.FieldType:
     """
     Create a new symbol type from a TypeInfo, replacing the data type with ``bool``.
 
@@ -83,20 +83,21 @@ def boolified_typeinfo(typeinfo: TypeInfo):
     >>> print(boolified_typeinfo(deferred_t).type)
     Field[..., dtype=bool]
     """
-    type_class = typeinfo.constraint
-    if not type_class:
-        return None
-    kwargs: dict[str, Any] = {}
-    kwargs["dtype"] = ct.ScalarType(
-        kind=ct.ScalarKind.BOOL, shape=typeinfo.dtype.shape if typeinfo.dtype else None
+    shape = None
+    if type_info.is_concrete(symbol_type):
+        shape = type_info.extract_dtype(symbol_type).shape
+    scalar_bool = ct.ScalarType(
+        kind=ct.ScalarKind.BOOL, shape=shape
     )
-    if typeinfo.is_field_type:
-        kwargs["dims"] = typeinfo.dims if typeinfo.dims is not None else ...
-    elif typeinfo.is_scalar:
-        return TypeInfo(kwargs["dtype"])
-    else:
-        return None
-    return TypeInfo(type_class(**kwargs))
+    type_class = type_info.type_class(symbol_type)
+    if type_class is ct.ScalarType:
+        return scalar_bool
+    elif type_class is ct.FieldType:
+        return ct.FieldType(
+            dtype = scalar_bool
+            dims = type_info.extract_dims(symbol_type)
+        )
+    raise GTTypeError(f"Can not boolify type {symbol_type}!")
 
 
 class FieldOperatorTypeDeduction(NodeTranslator):
@@ -162,9 +163,9 @@ class FieldOperatorTypeDeduction(NodeTranslator):
         refine_type: Optional[ct.FieldType] = None,
         **kwargs,
     ) -> foast.Symbol:
-        symtable = kwargs["symtable"]
+        #  symtable = kwargs["symtable"]
         if refine_type:
-            if not TypeInfo(node.type).can_be_refined_to(TypeInfo(refine_type)):
+            if not type_info.can_concretize(node.type, to_type=refine_type):
                 raise FieldOperatorTypeDeductionError.from_foast_node(
                     node,
                     msg=(
@@ -175,7 +176,7 @@ class FieldOperatorTypeDeduction(NodeTranslator):
             new_node: foast.Symbol = foast.Symbol(
                 id=node.id, type=refine_type, location=node.location
             )
-            symtable[new_node.id] = new_node
+            #  symtable[new_node.id] = new_node
             return new_node
         return node
 
@@ -222,9 +223,7 @@ class FieldOperatorTypeDeduction(NodeTranslator):
     def _deduce_compare_type(
         self, node: foast.Compare, left_type: ct.SymbolType, right_type: ct.SymbolType, **kwargs
     ) -> Optional[ct.SymbolType]:
-        left_info = TypeInfo(left_type)
-        right_info = TypeInfo(right_type)
-        if any([not i.is_arithmetic_compatible for i in [left_info, right_info]]):
+        if any([not type_info.is_arithmetic(i) for i in [left_type, right_type]]):
             raise FieldOperatorTypeDeductionError.from_foast_node(
                 node,
                 msg=f"Incompatible type(s) for operator '{node.op}': {left_info.type}, {right_info.type}!",

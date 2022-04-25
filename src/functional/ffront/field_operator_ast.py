@@ -54,7 +54,7 @@ TupleSymbol = Symbol[TupleTypeT]
 
 
 class Expr(LocatedNode):
-    type: Optional[common_types.SymbolType] = None  # noqa A003
+    type: common_types.SymbolType = common_types.DeferredSymbolType(constraint=None)  # noqa A003
 
 
 class Name(Expr):

@@ -1,7 +1,9 @@
+import enum
 from dataclasses import dataclass
 from typing import Iterator, Optional, Type, TypeGuard, cast
 
-from functional.common import GTTypeError
+from functional.common import Dimension, GTTypeError
+from functional.ffront import common_types as ct
 from functional.ffront.common_types import (
     DataType,
     DeferredSymbolType,
@@ -15,21 +17,13 @@ from functional.ffront.common_types import (
 )
 
 
-def is_complete_symbol_type(sym_type: Optional[SymbolType]) -> TypeGuard[SymbolType]:
+def is_concrete(symbol_type: SymbolType) -> TypeGuard[SymbolType]:
     """Figure out if the foast type is completely deduced."""
-    match sym_type:
-        case None:
-            return False
+    match symbol_type:
         case DeferredSymbolType():
             return False
         case SymbolType():
             return True
-    return False
-
-
-def is_complete_scalar_type(sym_type: Optional[SymbolType]) -> TypeGuard[ScalarType]:
-    if isinstance(sym_type, ScalarType):
-        return True
     return False
 
 
@@ -61,7 +55,93 @@ def function_signature_incompatibilities(
             yield f"Expected keyword argument {kwarg} to be of type {func_type.kwargs[kwarg]}, but got {kwargs[kwarg]}."
 
 
-@dataclass
+class TypeKind(enum.Enum):
+    FIELD: 0
+    SCALAR: 1
+    UNKNOWN: 2
+
+
+class UnknownDtype:
+    ...
+
+
+def type_kind(symbol_type: SymbolType) -> TypeKind:
+    match symbol_type:
+        case DeferredSymbolType(constraint=None):
+            return TypeKind.UNKNOWN
+        case TupleType(types as subtypes):
+            if subtypes:
+                return type_kind(subtypes[0])
+        case FunctionType(returns as returntype):
+            return type_kind(returntype)
+
+    match type_class(symbol_type):
+        case ct.FieldType:
+            return TypeKind.FIELD
+        case ct.ScalarType:
+            return TypeKind.SCALAR
+
+    return TypeKind.UNKNOWN
+
+
+def type_class(symbol_type: SymbolType) -> Type[SymbolType]:
+    match symbol_type:
+        case DeferredSymbolType(constraint):
+            if constraint is None:
+                raise GTTypeError(f"No type information available!")
+            return constraint
+        case SymbolType() as concrete_type:
+            return concrete_type.__class__
+    raise GTTypeError(f"Invalid type for TypeInfo: requires {SymbolType}, got {type(self.type)}!")
+
+
+def extract_dtype(symbol_type: SymbolType) -> ct.ScalarType:
+    match symbol_type:
+        case ct.FieldType(dtype):
+            return dtype
+        case ct.ScalarType() as dtype:
+            return dtype
+        case ct.FunctionType(returns=ct.FieldType(dtype)):
+            return dtype
+        case ct.FunctionType(returns=ct.ScalarType() as dtype):
+            return dtype
+    raise GTTypeError(f"Can not extract data type from {symbol_type}!")
+
+
+def is_arithmetic(symbol_type: SymbolType) -> bool:
+    if not isinstance(symbol_type, ScalarType):
+        return False
+    elif symbol_type.kind in [ct.ScalarKind.INT32, ct.ScalarKind.INT64, ct.ScalarKind.FLOAT32, ct.ScalarKind.FLOAT64]:
+        return True
+    return False
+    
+
+def is_locical(symbol_type: SymbolType) -> bool:
+    if isinstance(symbol_type, ScalarType):
+        return symbol_type.kind is ct.ScalarKind.BOOL
+    return False
+
+
+def extract_dims(symbol_type: SymbolType) -> list[Dimension]:
+    match symbol_type:
+        case ct.ScalarType():
+            return []
+        case ct.FieldType(dims):
+            return dims
+    raise GTTypeError(f"Can not extract dimensions from {symbol_type}!")
+
+
+def can_concretize(symbol_type: SymbolType, to_type: SymbolType) -> SymbolType:
+    if is_concrete(symbol_type):
+        return symbol_type == to_type
+    elif symbol_type.constraint == type_class(to_type) or symbol_type.constraint is None:
+        return True
+    return False
+
+
+def can_broadcast()
+
+
 class TypeInfo:
     """
     Wrapper around foast types for type deduction and compatibility checks.
@@ -70,7 +150,7 @@ class TypeInfo:
     ---------
     >>> type_a = ScalarType(kind=ScalarKind.FLOAT64)
     >>> typeinfo_a = TypeInfo(type_a)
-    >>> typeinfo_a.is_complete
+    >>> typeinfo_a.is_concrete
     True
     >>> typeinfo_a.is_arithmetic_compatible
     True
@@ -86,70 +166,11 @@ class TypeInfo:
 
     """
 
-    type: Optional[SymbolType]  # noqa: A003
-
-    @property
-    def is_complete(self) -> bool:
-        return is_complete_symbol_type(self.type)
-
-    @property
-    def is_any_type(self) -> bool:
-        return (not self.is_complete) and ((self.type is None) or (self.constraint is None))
-
-    @property
-    def constraint(self) -> Optional[Type[SymbolType]]:
-        """Find the constraint of a deferred type or the class of a complete type."""
-        if self.is_complete:
-            return cast(SymbolType, self.type).__class__
-        elif self.type:
-            return cast(DeferredSymbolType, self.type).constraint
-        return None
-
-    @property
-    def is_field_type(self) -> bool:
-        return issubclass(self.constraint, FieldType) if self.constraint else False
-
-    @property
-    def is_scalar(self) -> bool:
-        return issubclass(self.constraint, ScalarType) if self.constraint else False
-
-    @property
-    def is_arithmetic_compatible(self) -> bool:
-        match self.type:
-            case FieldType(dtype=ScalarType(kind=dtype_kind)) | ScalarType(kind=dtype_kind):
-                if dtype_kind is not ScalarKind.BOOL:
-                    return True
-        return False
-
-    @property
-    def is_logics_compatible(self) -> bool:
-        match self.type:
-            case FieldType(dtype=ScalarType(kind=dtype_kind)) | ScalarType(kind=dtype_kind):
-                if dtype_kind is ScalarKind.BOOL:
-                    return True
-        return False
+    type: ct.SymbolType  # noqa: A003
 
     @property
     def is_callable(self) -> bool:
         return isinstance(self.type, FunctionType)
-
-    @property
-    def dims(self) -> Optional[list]:
-        return getattr(self.type, "dims", None)
-
-    @property
-    def dtype(self) -> Optional[ScalarType]:
-        if self.is_complete and self.is_scalar:
-            return cast(ScalarType, self.type)
-        if self.is_complete and self.is_field_type:
-            return cast(FieldType, self.type).dtype
-        return None
-
-    @property
-    def element_types(self) -> list[DataType]:
-        if isinstance(self.type, TupleType):
-            return self.type.types
-        return []
 
     def is_callable_for_args(
         self,
@@ -199,10 +220,10 @@ class TypeInfo:
     def can_be_refined_to(self, other: "TypeInfo") -> bool:
         if self.is_any_type:
             return True
-        if self.is_complete:
+        if self.is_concrete:
             return self.type == other.type
         if self.constraint:
-            if other.is_complete:
+            if other.is_concrete:
                 return isinstance(other.type, self.constraint)
             elif other.constraint:
                 return self.constraint is other.constraint
