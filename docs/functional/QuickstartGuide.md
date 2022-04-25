@@ -29,6 +29,9 @@ Examples could be:
     - Main concepts: fields, field operators, programs, reductions
 - Realistic example: diffusion, advection, solve some simple PDE on a 2D grid
 
+TODO:
+explain scalar types of fields: https://github.com/GridTools/gt4py/pull/711
+
 +++
 
 ## Installation
@@ -68,8 +71,8 @@ grid_shape = (num_cells, num_layers)
 
 a_value = 2.0
 b_value = 3.0
-a = np_as_located_field(CellDim, KDim)(np.full(shape=grid_shape, fill_value=a_value))
-b = np_as_located_field(CellDim, KDim)(np.full(shape=grid_shape, fill_value=b_value))
+a = np_as_located_field(CellDim, KDim)(np.full(shape=grid_shape, fill_value=a_value, dtype=np.float32))
+b = np_as_located_field(CellDim, KDim)(np.full(shape=grid_shape, fill_value=b_value, dtype=np.float32))
 ```
 
 To define operations involving one or more fields, GT4Py allows us to declare *field operators*. Field operators are pure functions (i.e. functions without side effects) that take immutable `Field`s as arguments and output another `Field` as a result. Field operators must be declared with the `@field_operator` decorator, and are allowed to use a certain subset of the Python syntax.
@@ -149,7 +152,7 @@ cell_values = np_as_located_field(CellDim)(np.array([1.0, 1.0, 2.0, 3.0, 5.0, 8.
 
 #### Get value of 0th adjacent cell
 
-The field operator `nearest_cell_to_edge` uses the 
+The field operator `nearest_cell_to_edge` returns a field on the edges. The `E2C` field offset is used to map edge iterators to cell iterators using the connectivity matrix, and the cell iterator is used to extract the value from the cell field that's provided as input argument to the field operator. Note how `E2C` maps one edge iterator to two cell iterators (due to an edge having up to two cell neighbors). In this example, we take the 0th neighboring cell, but in the next one we will sum up the values of all neighboring cells.
 
 ```{code-cell} ipython3
 @field_operator
@@ -167,13 +170,15 @@ run_nearest_cell_to_edge(cell_values, result_edge_values, offset_provider=offset
 print("0th adjacent cell's value: {}".format(np.asarray(result_edge_values)))
 ```
 
-The results should be the following:
+After running the code, we should see the following values assigned to the edges:
 
 ![nearest_cell_values](connectivity_edge_0th_cell.svg)
 
 +++
 
-#### Get the average of the two cells adjacent to an edge
+#### Get the sum of the two cells adjacent to edges
+
+This is very similar to the previous example, but instead of getting value of the 0th cell neighbor of an edge, we are going to sum all the neighboring cells. This is done by replacing the `E2C[0]` accessor by a `neighbor_sum` operation on the `E2C` field offset.
 
 ```{code-cell} ipython3
 @field_operator
@@ -191,10 +196,22 @@ run_sum_adjacent_cells(cell_values, result_edge_sums, offset_provider=offset_pro
 print("sum of adjacent cells: {}".format(np.asarray(result_edge_sums)))
 ```
 
+The results should be unchanged for the border edges, but the inner edge should be the following:
+
+![cell_values](connectivity_edge_cell_sum.svg)
+
++++
+
 Follow-up to averages:
 - calculate the average of edges around a cell for each cell
 
-+++
+```{code-cell} ipython3
+
+```
+
+```{code-cell} ipython3
+
+```
 
 ## Examples
 
