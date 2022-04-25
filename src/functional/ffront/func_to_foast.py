@@ -24,7 +24,7 @@ import eve
 from functional.ffront import common_types as ct
 from functional.ffront import fbuiltins
 from functional.ffront import field_operator_ast as foast
-from functional.ffront import symbol_makers
+from functional.ffront import symbol_makers, type_info
 from functional.ffront.ast_passes import (
     SingleAssignTargetPass,
     SingleStaticAssignPass,
@@ -33,7 +33,6 @@ from functional.ffront.ast_passes import (
 )
 from functional.ffront.dialect_parser import DialectParser, DialectSyntaxError
 from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduction
-from functional.ffront.type_info import TypeInfo, is_complete_scalar_type
 
 
 class FieldOperatorSyntaxError(DialectSyntaxError):
@@ -197,8 +196,11 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
             raise FieldOperatorSyntaxError.from_AST(
                 node, msg="Only arguments of type DataType are allowed."
             )
-        if is_complete_scalar_type(new_type):
-            new_type = ct.FieldType(dims=[], dtype=new_type)
+        if (
+            type_info.is_concrete(new_type)
+            and type_info.type_kind(new_type) is type_info.TypeKind.SCALAR
+        ):
+            new_type = ct.FieldType(dims=[], dtype=type_info.extract_dtype(new_type))
         return foast.DataSymbol(id=node.arg, location=self._make_loc(node), type=new_type)
 
     def visit_Assign(self, node: ast.Assign, **kwargs) -> foast.Assign:
@@ -211,7 +213,7 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
         constraint_type: Type[ct.DataType] = ct.DataType
         if isinstance(new_value, foast.TupleExpr):
             constraint_type = ct.TupleType
-        elif TypeInfo(new_value.type).is_scalar:
+        elif type_info.type_kind(new_value.type) is type_info.TypeKind.SCALAR:
             constraint_type = ct.ScalarType
         return foast.Assign(
             target=foast.FieldSymbol(
