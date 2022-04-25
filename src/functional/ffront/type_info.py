@@ -50,11 +50,24 @@ class TypeKind(enum.Enum):
     UNKNOWN = 2
 
 
-class UnknownDtype:
-    ...
-
-
 def type_kind(symbol_type: ct.SymbolType) -> TypeKind:
+    """
+    Determine whether ``symbol_type`` is scalar, field or unknown.
+
+    Examples:
+    ---------
+    >>> type_kind(ct.DeferredSymbolType(constraint=None)).name
+    'UNKNOWN'
+
+    >>> type_kind(ct.ScalarType(kind=ct.ScalarKind.BOOL)).name
+    'SCALAR'
+
+    >>> type_kind(ct.FunctionType(args=[], kwargs={}, returns=ct.FieldType(dims=[], dtype=ct.ScalarType(kind=ct.ScalarKind.INT32)))).name
+    'FIELD'
+
+    >>> type_kind(ct.TupleType(types=[ct.ScalarType(kind=ct.ScalarKind.FLOAT64)])).name
+    'SCALAR'
+    """
     match symbol_type:
         case ct.DeferredSymbolType(constraint=None):
             return TypeKind.UNKNOWN
@@ -74,6 +87,20 @@ def type_kind(symbol_type: ct.SymbolType) -> TypeKind:
 
 
 def type_class(symbol_type: ct.SymbolType) -> Type[ct.SymbolType]:
+    """
+    Determine which class should be used to create a compatible concrete type.
+
+    Examples:
+    ---------
+    >>> type_class(ct.DeferredSymbolType(constraint=ct.ScalarType)).__name__
+    'ScalarType'
+
+    >>> type_class(ct.FieldType(dims=[], dtype=ct.ScalarType(kind=ct.ScalarKind.BOOL))).__name__
+    'FieldType'
+
+    >>> type_class(ct.TupleType(types=[])).__name__
+    'TupleType'
+    """
     match symbol_type:
         case ct.DeferredSymbolType(constraint):
             if constraint is None:
