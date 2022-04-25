@@ -140,18 +140,26 @@ def unique_data_items(request):
     ]
 
 
-def test_instantiate_noninstantiable_class():
+def test_noninstantiable_class():
     @eve.utils.noninstantiable
-    class TestClass(pydantic.BaseModel):
+    class NonInstantiableClass(pydantic.BaseModel):
         param: int
 
-    with pytest.raises(TypeError, match="Trying to instantiate `TestClass` non-instantiable class"):
-        TestClass(param=0)
+    with pytest.raises(
+        TypeError, match="Trying to instantiate `NonInstantiableClass` non-instantiable class"
+    ):
+        NonInstantiableClass(param=0)
 
-    class Another(TestClass):
+    assert eve.utils.is_noninstantiable(NonInstantiableClass)
+
+    class InstantiableSubclass(NonInstantiableClass):
         pass
 
-    Another(param=0)
+    instance = InstantiableSubclass(param=0)
+    assert isinstance(instance, InstantiableSubclass)
+    assert isinstance(instance, NonInstantiableClass)
+
+    assert not eve.utils.is_noninstantiable(InstantiableSubclass)
 
 
 @pytest.fixture(
@@ -262,26 +270,37 @@ class TestUIDGenerator:
         assert len(UIDs.sequential_id(width=10)) == 10
 
     def test_reset_sequence(self):
+        import warnings
+
         from eve.utils import UIDGenerator, UIDs
 
         i = UIDs.sequential_id()
         counter = int(i)
-        UIDs.reset_sequence(counter + 1)
-        assert int(UIDs.sequential_id()) == counter + 1
-        with pytest.warns(RuntimeWarning, match="Unsafe reset"):
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+
+            UIDs.reset_sequence(counter + 10)
+            assert int(UIDs.sequential_id()) == counter + 10
+
+            UIDs.reset_sequence(counter + 1, warn_unsafe=False)
+
+        with pytest.warns(UserWarning, match="Unsafe reset"):
             UIDs.reset_sequence(counter, warn_unsafe=True)
-        UIDs.reset_sequence(counter, warn_unsafe=False)
 
-        uids = UIDGenerator(warn_unsafe=True).reset_sequence(10)
-        assert uids.warn_unsafe is True
-        counter = int(uids.sequential_id())
-        assert counter == 10
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
 
-        with pytest.warns(RuntimeWarning, match="Unsafe reset"):
-            uids.reset_sequence(counter)
-        uids.reset_sequence(counter + 10)
+            uids = UIDGenerator(warn_unsafe=True).reset_sequence(10)
+            counter = int(uids.sequential_id())
+            assert uids.warn_unsafe is True
+            assert counter == 10
 
-        uids.reset_sequence(1, warn_unsafe=False)
+            uids.reset_sequence(counter + 10)
+            uids.reset_sequence(1, warn_unsafe=False)
+
+        uids.reset_sequence(10, warn_unsafe=False)
+        with pytest.warns(UserWarning, match="Unsafe reset"):
+            uids.reset_sequence(1)
 
         with pytest.raises(ValueError, match="must be a positive number"):
             uids.reset_sequence(-1)
