@@ -1,4 +1,4 @@
-from typing import Dict, List, Union
+from typing import Dict, List
 
 from eve import NodeTranslator
 from functional.iterator import ir
@@ -59,18 +59,7 @@ class CreateGlobalTmps(NodeTranslator):
 
         return ir.FunCall(fun=domain.fun, args=named_ranges)
 
-    @staticmethod
-    def get_stencil_params(node: Union[ir.Lambda, ir.SymRef, ir.FunctionDefinition], symtable):
-        if isinstance(node, (ir.Lambda, ir.FunctionDefinition)):
-            return node.params
-        elif isinstance(node, ir.SymRef) and node.id in symtable:
-            return symtable[node.id].params
-        else:
-            raise RuntimeError("Expected a stencil")
-
     def visit_FencilDefinition(self, node: ir.FencilDefinition, *, offset_provider, register_tmp):
-        symtable = node.symtable_
-
         tmps: List[ir.Sym] = []
 
         def handle_arg(arg):
@@ -92,7 +81,7 @@ class CreateGlobalTmps(NodeTranslator):
         closures = []
         tmp_domains = dict()
         for closure in reversed(node.closures):
-            stencil_params = self.get_stencil_params(closure.stencil, symtable)
+            assert isinstance(closure.stencil, ir.Lambda)
             wrapped_stencil = ir.FunCall(fun=closure.stencil, args=closure.inputs)
             popped_stencil = PopupTmps().visit(wrapped_stencil)
             todos = [(closure.output, popped_stencil)]
@@ -114,7 +103,9 @@ class CreateGlobalTmps(NodeTranslator):
                 )
                 local_shifts: Dict[str, List[tuple]] = dict()
                 CollectShifts().visit(closure.stencil, shifts=local_shifts)
-                input_map = {param.id: arg.id for param, arg in zip(stencil_params, closure.inputs)}
+                input_map = {
+                    param.id: arg.id for param, arg in zip(closure.stencil.params, closure.inputs)
+                }
                 for k, v in local_shifts.items():
                     shifts.setdefault(input_map[k], []).extend(v)
                 closures.append(closure)
