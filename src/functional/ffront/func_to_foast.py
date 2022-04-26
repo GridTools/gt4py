@@ -430,10 +430,7 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
             )
 
     def _func_name(self, node: ast.Call) -> str:
-        func = node.func
-        if isinstance(func, ast.Name):
-            return func.id
-        return ""
+        return node.func.id  # type: ignore[attr-defined]  # We want this to fail if the attribute does not exist unexpectedly.
 
     def visit_Call(self, node: ast.Call, **kwargs) -> foast.Call:
         if not isinstance(node.func, ast.Name):
