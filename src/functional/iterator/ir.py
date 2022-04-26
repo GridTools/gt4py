@@ -47,9 +47,6 @@ class NoneLiteral(Expr):
 class OffsetLiteral(Expr):
     value: Union[int, str]
 
-    def __hash__(self):
-        return self.value.__hash__()
-
 
 class AxisLiteral(Expr):
     value: str
@@ -73,12 +70,6 @@ class FunctionDefinition(Node, SymbolTableTrait):
     id: SymbolName  # noqa: A003
     params: List[Sym]
     expr: Expr
-
-    def __eq__(self, other):
-        return isinstance(other, FunctionDefinition) and self.id == other.id
-
-    def __hash__(self):
-        return hash(self.id)
 
 
 class StencilClosure(Node):
