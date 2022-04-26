@@ -127,7 +127,7 @@ class GTFN_lowering(NodeTranslator):
         self, node: itir.FencilDefinition, *, grid_type: str, **kwargs
     ) -> FencilDefinition:
         grid_type = (
-            GridType.Cartesian if grid_type.lower() == "cartesian" else GridType.Unstructured
+            GridType.CARTESIAN if grid_type.lower() == "cartesian" else GridType.UNSTRUCTURED
         )
         return FencilDefinition(
             id=SymbolName(node.id),

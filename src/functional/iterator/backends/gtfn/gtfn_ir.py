@@ -9,8 +9,8 @@ from functional.iterator.util.sym_validation import validate_symbol_refs
 
 @enum.unique
 class GridType(StrEnum):
-    Cartesian = "Cartesian"
-    Unstructured = "unstructured"
+    CARTESIAN = "cartesian"
+    UNSTRUCTURED = "unstructured"
 
 
 class Sym(Node):  # helper

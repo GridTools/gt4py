@@ -5,7 +5,7 @@ from functional.iterator import ir
 
 def extract_function(node: ir.Node, new_name: str) -> Tuple[ir.SymRef, ir.FunctionDefinition]:
     """
-    Extracts a node into a FunctionDefinition.
+    Extract a node into a FunctionDefinition.
 
     Currently only supports extracting Lambdas, but could be extended to other nodes.
     """
