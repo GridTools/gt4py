@@ -77,6 +77,7 @@ class GTFNCodegen(codegen.TemplatedGenerator):
 
 
     % if is_cartesian:
+        // TODO allow non-default names
         using namespace cartesian;
         constexpr inline dim::i i = {};
         constexpr inline dim::j j = {};

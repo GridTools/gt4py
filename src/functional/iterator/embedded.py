@@ -121,7 +121,7 @@ def reduce(fun, init):
         for i in range(n):
             # we can check a single argument
             # because all arguments share the same pattern
-            if builtins.deref(builtins.shift(i)(first_it)) is None:
+            if not builtins.can_deref(builtins.shift(i)(first_it)):
                 break
             res = fun(
                 res,
@@ -499,7 +499,7 @@ class ScanArgIterator:
         self.k_pos = k_pos
 
     def deref(self):
-        if not self.can_deref:
+        if not self.can_deref():
             return _UNDEFINED
         return self.wrapped_iter.deref()[self.k_pos]
 
