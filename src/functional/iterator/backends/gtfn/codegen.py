@@ -72,8 +72,8 @@ class GTFNCodegen(codegen.TemplatedGenerator):
         constexpr inline dim::j j = {};
         constexpr inline dim::k k = {};
     % else:
-        ${''.join('struct ' + o + '_t{};' for o in offsets)}
-        ${''.join('constexpr inline ' + o + '_t ' + o + '{};' for o in offsets)}
+        ${''.join('struct ' + o + '_t{};' for o in offset_declarations)}
+        ${''.join('constexpr inline ' + o + '_t ' + o + '{};' for o in offset_declarations)}
     % endif
 
     ${''.join(function_definitions)}

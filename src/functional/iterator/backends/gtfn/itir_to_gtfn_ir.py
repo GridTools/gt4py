@@ -85,10 +85,7 @@ class GTFN_lowering(NodeTranslator):
                     template_args=[self.visit(node.args[0])],
                     args=self.visit(node.args[1:]),
                 )
-        elif (
-            isinstance(node.fun, itir.FunCall)
-            and node.fun.fun == itir.SymRef(id="shift")
-        ):
+        elif isinstance(node.fun, itir.FunCall) and node.fun.fun == itir.SymRef(id="shift"):
             assert len(node.args) == 1
             return FunCall(
                 fun=self.visit(node.fun.fun), args=self.visit(node.args) + self.visit(node.fun.args)
@@ -130,6 +127,6 @@ class GTFN_lowering(NodeTranslator):
             params=self.visit(node.params),
             executions=self.visit(node.closures),
             grid_type=grid_type,
-            offsets=self._collect_offsets(node),
+            offset_declarations=self._collect_offsets(node),
             function_definitions=self.visit(node.function_definitions),
         )

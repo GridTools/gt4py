@@ -96,7 +96,7 @@ class FencilDefinition(Node, SymbolTableTrait):
     params: List[Sym]
     function_definitions: List[FunctionDefinition]
     executions: List[StencilExecution]
-    offsets: List[str]
+    offset_declarations: List[str]
     grid_type: GridType
 
     builtin_functions = list(
