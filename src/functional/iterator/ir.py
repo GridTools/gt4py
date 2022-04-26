@@ -1,15 +1,25 @@
 from typing import List, Union
 
-from eve import Node
+import eve
 from eve.traits import SymbolName, SymbolTableTrait
 from eve.type_definitions import SymbolRef
+from eve.utils import noninstantiable
 from functional.iterator.util.sym_validation import validate_symbol_refs
+
+
+@noninstantiable
+class Node(eve.Node):
+    def __str__(self):
+        from functional.iterator.pretty_printer import pformat
+
+        return pformat(self)
 
 
 class Sym(Node):  # helper
     id: SymbolName  # noqa: A003
 
 
+@noninstantiable
 class Expr(Node):
     ...
 
@@ -37,9 +47,6 @@ class NoneLiteral(Expr):
 class OffsetLiteral(Expr):
     value: Union[int, str]
 
-    def __hash__(self):
-        return self.value.__hash__()
-
 
 class AxisLiteral(Expr):
     value: str
@@ -63,12 +70,6 @@ class FunctionDefinition(Node, SymbolTableTrait):
     id: SymbolName  # noqa: A003
     params: List[Sym]
     expr: Expr
-
-    def __eq__(self, other):
-        return isinstance(other, FunctionDefinition) and self.id == other.id
-
-    def __hash__(self):
-        return hash(self.id)
 
 
 class StencilClosure(Node):

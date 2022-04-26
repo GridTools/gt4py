@@ -22,8 +22,8 @@ from __future__ import annotations
 import collections.abc
 
 from . import concepts, utils
+from .extended_typing import Any, Generator, Iterable, List, Optional, Tuple, Union
 from .type_definitions import Enum
-from .typingx import Any, Generator, Iterable, List, Optional, Tuple, Union
 
 
 try:

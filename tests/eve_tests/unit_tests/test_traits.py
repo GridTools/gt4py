@@ -22,7 +22,7 @@ from typing import ChainMap
 import pytest
 
 import eve
-from eve.typingx import List
+from eve.extended_typing import List
 
 from .. import definitions
 

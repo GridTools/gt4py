@@ -19,7 +19,7 @@ import typing
 import numpy as np
 import pytest
 
-from eve import typingx
+from eve import extended_typing as xtyping
 from functional import common
 from functional.ffront import common_types
 from functional.ffront import field_operator_ast as foast
@@ -101,7 +101,7 @@ def test_invalid_scalar_kind():
         ),
         (
             typing.Annotated[
-                typing.Callable[["float", int], int], typingx.CallableKwargsInfo(data={})
+                typing.Callable[["float", int], int], xtyping.CallableKwargsInfo(data={})
             ],
             common_types.FunctionType(
                 args=[
@@ -176,6 +176,6 @@ def test_invalid_symbol_types():
     with pytest.raises(symbol_makers.TypingError, match="'<class 'str'>' type is not supported"):
         symbol_makers.make_symbol_type_from_typing(
             typing.Annotated[
-                typing.Callable[["float", int], str], typingx.CallableKwargsInfo(data={})
+                typing.Callable[["float", int], str], xtyping.CallableKwargsInfo(data={})
             ]
         )
