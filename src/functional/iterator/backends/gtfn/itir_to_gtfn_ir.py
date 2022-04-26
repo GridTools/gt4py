@@ -81,7 +81,7 @@ class GTFN_lowering(NodeTranslator):
                 return FunCall(fun=SymRef(id="tuple"), args=self.visit(node.args))
             elif node.fun.id == "tuple_get":
                 return TemplatedFunCall(
-                    fun=SymRef(id="tuple_util::get"),
+                    fun=SymRef(id="get"),
                     template_args=[self.visit(node.args[0])],
                     args=self.visit(node.args[1:]),
                 )

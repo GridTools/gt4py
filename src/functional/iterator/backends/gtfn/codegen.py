@@ -1,16 +1,27 @@
+from ast import Str
 from typing import Any
 
 from eve import codegen
 from eve.codegen import FormatTemplate as as_fmt
 from eve.codegen import MakoTemplate as as_mako
-from functional.iterator.backends.gtfn.gtfn_ir import FencilDefinition, GridType, OffsetLiteral
+from functional.iterator.backends.gtfn.gtfn_ir import (
+    FencilDefinition,
+    GridType,
+    OffsetLiteral,
+    SymRef,
+)
 
 
 class GTFNCodegen(codegen.TemplatedGenerator):
     _grid_type_str = {GridType.CARTESIAN: "cartesian", GridType.UNSTRUCTURED: "unstructured"}
 
     Sym = as_fmt("{id}")
-    SymRef = as_fmt("{id}")
+
+    def visit_SymRef(self, node: SymRef, **kwargs) -> str:
+        if node.id == "get":
+            return "tuple_util::get"
+        return node.id
+
     IntLiteral = as_fmt("{value}")
     FloatLiteral = as_fmt("{value}")
     AxisLiteral = as_fmt("{value}")
