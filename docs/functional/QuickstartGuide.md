@@ -114,28 +114,38 @@ run_add(a, b, result, offset_provider={})
 print("{} + {} = {} ± {}".format(a_value, b_value, np.average(np.asarray(result)), np.std(np.asarray(result))))
 ```
 
-### Unstructured grids and connectivity
+### Unstructured meshes and connectivity
 
-When using unstructured grids, we have to define adjacency between nodes, cells and edges manually. In this section, we will create the mesh illustrated below and we will do some calculations with fields over the edges and cells of this mesh.
+When using unstructured meshes, we have to define connectivity between nodes, cells and edges manually. In this section, we will use the mesh illustrated below and we will do some calculations with fields over the edges and cells of this mesh.
 
 ![grid_topo](connectivity_numbered_grid.svg)
 
 The <span style="color: #C02020">faces</span> and the <span style="color: #0080FF">edges</span> of the mesh have been numbered with zero-based indices.
 
-#### Define grid and connectivity
++++
 
-We are going to use two fields: one on the cells of the grid, and on the edges. Both fields will have only one dimension, declared as `CellDim` for the field on the cells and `EdgeDim` for the field on the edges.
+#### Define fields and connectivity
 
-Furthermore, we will define the edge-to-cell connectivity that tells us which cells are neighbours to a particular edge. The connectivity is thus defined with a matrix where each line corresponds to an edge, and has 2 entries for the two cells to the side of that edge. (Missing neighbors for boundary edges are filled with -1.)
-
-The *field offset* `E2C` is used inside the field operator to indicate that we want to access the cells neighboring the edges. The *offset provider* forwards the actual connectivity matrix to the field operator.
+We are going to use two types of fields: fields over the cells and fields over the edges of the mesh. The two types of fields will be over the dimensions *Cell* and *Edge* declared below:
 
 ```{code-cell} ipython3
 CellDim = CartesianAxis("Cell")
 EdgeDim = CartesianAxis("Edge")
-E2CDim = CartesianAxis("E2C")
-E2C = FieldOffset("E2C", source=CellDim, target=(EdgeDim, E2CDim))
+```
 
+Now we can declare a field over the 6 cells of the mesh which contains the following values:
+![cell_values](connectivity_cell_field.svg)
+
+```{code-cell} ipython3
+cell_values = np_as_located_field(CellDim)(np.array([1.0, 1.0, 2.0, 3.0, 5.0, 8.0]))
+```
+
+In addition to the fields, we will define the edge-to-cell connectivity that tells us which cells are neighbours to a particular edge. The corresponding connectivity matrix consists of 12 entries for the 12 edges of the mesh, with each entry containing the index of the two cells adjacent to the current edge. Missing neighbors for boundary edges are filled with -1.
+
+**TODO** explain sparse fields somehow
+The *field offset* `E2C` is used inside the field operator to indicate that we want to access the cells neighboring the edges. The *offset provider* forwards the actual connectivity matrix to the field operator.
+
+```{code-cell} ipython3
 cell_neighbours_of_edges = np.array([
     [0, -1],
     [2, -1],
@@ -151,15 +161,11 @@ cell_neighbours_of_edges = np.array([
     [4, 5]
 ])
 
+E2CDim = CartesianAxis("E2C")
+E2C = FieldOffset("E2C", source=CellDim, target=(EdgeDim, E2CDim))
 e2c_neighbor_table = NeighborTableOffsetProvider(cell_neighbours_of_edges, EdgeDim, CellDim, 2)
+
 offset_provider={"E2C": e2c_neighbor_table}
-```
-
-Let's create a field on the cells and fill it with some values:
-![cell_values](connectivity_cell_field.svg)
-
-```{code-cell} ipython3
-cell_values = np_as_located_field(CellDim)(np.array([1.0, 1.0, 2.0, 3.0, 5.0, 8.0]))
 ```
 
 #### Using adjacencies in field operators
