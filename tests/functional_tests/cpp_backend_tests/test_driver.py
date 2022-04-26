@@ -15,7 +15,7 @@ def _build_dir(backend_dir: str):
 
 def _execute_cmake(backend_str: str):
     build_dir = _build_dir(backend_str)
-    os.makedirs(build_dir, exist_ok=True)
+    build_dir.mkdir(exist_ok=True)
     cmake = ["cmake", "-B", build_dir, f"-DBACKEND={backend_str}"]
     cmake_proc = subprocess.run(cmake, cwd=_source_dir())
     cmake_proc.check_returncode()
