@@ -14,7 +14,7 @@ tags: [frontend]
 ### 2022-04-08: Added scalar literal support
 The rationale that "any FOAST node should be lowered to an ITIR iterator expression" has changed to
 
-> Any non-scalar FOAST Node should be lowered to an ITIR iterator expression, Scalar FOAST nodes should be lowered to an ITIR value expression.
+> Any non-scalar FOAST Node should be lowered to an ITIR iterator expression. Scalar FOAST nodes should be lowered to an ITIR value expression.
 
 #### Consequences
 
