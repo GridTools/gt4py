@@ -15,7 +15,6 @@ from functional.iterator.backends.gtfn.gtfn_ir import (
     Lambda,
     OffsetLiteral,
     StencilExecution,
-    StringLiteral,
     Sym,
     SymRef,
     TemplatedFunCall,
@@ -26,10 +25,13 @@ from functional.iterator.backends.gtfn.gtfn_ir import (
 
 class GTFN_lowering(NodeTranslator):
     _binary_op_map = {
-        "minus": "-",
         "plus": "+",
+        "minus": "-",
         "multiplies": "*",
         "divides": "/",
+        "eq": "==",
+        "less": "<",
+        "greater": ">",
         "and_": "&&",
         "or_": "||",
     }
@@ -46,9 +48,6 @@ class GTFN_lowering(NodeTranslator):
 
     def visit_IntLiteral(self, node: itir.IntLiteral, **kwargs):
         return IntLiteral(value=node.value)
-
-    def visit_StringLiteral(self, node: itir.StringLiteral, **kwargs):
-        return StringLiteral(value=node.value)
 
     def visit_BoolLiteral(self, node: itir.BoolLiteral, **kwargs):
         return BoolLiteral(value=node.value)

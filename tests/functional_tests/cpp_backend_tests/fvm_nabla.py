@@ -70,7 +70,7 @@ if __name__ == "__main__":
         raise RuntimeError(f"Usage: {sys.argv[0]} <output_file>")
     output_file = sys.argv[1]
 
-    # prog = trace(zavgS_fencil, [None] * 6)
+    # prog = trace(zavgS_fencil, [None] * 4) # TODO allow generating of 2 fencils
     prog = trace(nabla_fencil, [None] * 6)
     generated_code = generate(prog, grid_type="unstructured")
 

@@ -18,7 +18,6 @@ class ToyCpp(codegen.TemplatedGenerator):
     def visit_OffsetLiteral(self, node: OffsetLiteral, **kwargs):
         return node.value if isinstance(node.value, str) else f"{node.value}_c"
 
-    StringLiteral = as_fmt("{value}")
     FunCall = as_fmt("{fun}({','.join(args)})")
     Lambda = as_mako(
         "[=](${','.join('auto ' + p for p in params)}){return ${expr};}"

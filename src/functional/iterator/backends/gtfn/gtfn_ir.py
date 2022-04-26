@@ -50,10 +50,6 @@ class FloatLiteral(Expr):
     value: float  # TODO other float types
 
 
-class StringLiteral(Expr):
-    value: str
-
-
 class OffsetLiteral(Expr):
     value: Union[int, str]
 
@@ -111,7 +107,6 @@ class FencilDefinition(Node, SymbolTableTrait):
             "tuple",
             "get",
             "can_deref",
-            "if_",  # TODO remove
         ]
     )
 

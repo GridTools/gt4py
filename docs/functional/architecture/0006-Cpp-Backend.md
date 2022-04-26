@@ -17,7 +17,7 @@ The backend will not be able to transform the IR, therefore any patterns that ne
 
 The following built-ins require to be presented in a canonicalized form
 - `scan`
-- `lift` if interpreted as temporary.
+- `lift` if interpreted as temporary (see below).
 
 **The implication is that the C++ backend can only support a subset of the Iterator IR specification.**
 

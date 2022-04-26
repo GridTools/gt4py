@@ -6,7 +6,9 @@ from eve.codegen import MakoTemplate as as_mako
 from functional.iterator.backends.gtfn.gtfn_ir import FencilDefinition, GridType, OffsetLiteral
 
 
-class gtfn_codegen(codegen.TemplatedGenerator):
+class GTFNCodegen(codegen.TemplatedGenerator):
+    _grid_type_str = {GridType.CARTESIAN: "cartesian", GridType.UNSTRUCTURED: "unstructured"}
+
     Sym = as_fmt("{id}")
     SymRef = as_fmt("{id}")
     IntLiteral = as_fmt("{value}")
@@ -18,8 +20,6 @@ class gtfn_codegen(codegen.TemplatedGenerator):
 
     def visit_OffsetLiteral(self, node: OffsetLiteral, **kwargs):
         return node.value if isinstance(node.value, str) else f"{node.value}_c"
-
-    StringLiteral = as_fmt("{value}")
 
     FunCall = as_fmt("{fun}({','.join(args)})")
     TemplatedFunCall = as_fmt("{fun}<{','.join(template_args)}>({','.join(args)})")
@@ -48,10 +48,12 @@ class gtfn_codegen(codegen.TemplatedGenerator):
     )
 
     def visit_FencilDefinition(self, node: FencilDefinition, **kwargs):
-        grid_type_str = "cartesian" if node.grid_type == GridType.CARTESIAN else "unstructured"
         is_cartesian = node.grid_type == GridType.CARTESIAN
         return self.generic_visit(
-            node, is_cartesian=is_cartesian, grid_type_str=grid_type_str, **kwargs
+            node,
+            is_cartesian=is_cartesian,
+            grid_type_str=self._grid_type_str[node.grid_type],
+            **kwargs,
         )
 
     FencilDefinition = as_mako(

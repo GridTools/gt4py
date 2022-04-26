@@ -11,7 +11,6 @@ class ToLispLike(TemplatedGenerator):
     FunCall = as_fmt("({fun} {' '.join(args)})")
     IntLiteral = as_fmt("{value}")
     OffsetLiteral = as_fmt("{value}")
-    StringLiteral = as_fmt("{value}")
     SymRef = as_fmt("{id}")
     StencilClosure = as_fmt(
         """(

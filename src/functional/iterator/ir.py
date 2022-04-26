@@ -36,10 +36,6 @@ class FloatLiteral(Expr):
     value: float  # TODO other float types
 
 
-class StringLiteral(Expr):
-    value: str
-
-
 class NoneLiteral(Expr):
     _none_literal: int = 0
 
