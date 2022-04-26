@@ -94,10 +94,12 @@ def lift(stencil):
                 return all(shifted_arg.can_deref() for shifted_arg in shifted_args)
 
             def deref(self):
-                shifted_args = self._shifted_args()
-
                 if not self.can_deref():
-                    return None
+                    # this can legally happen in cases like `if_(can_deref(lifted), deref(lifted), 42.)`
+                    # because both branches will be eagerly executed
+                    return _UNDEFINED
+
+                shifted_args = self._shifted_args()
 
                 if self.elem is None:
                     return stencil(*shifted_args)
@@ -332,6 +334,11 @@ class MDIterator:
         return self.pos is not None
 
     def deref(self):
+        if not self.can_deref():
+            # this can legally happen in cases like `if_(can_deref(inp), deref(inp), 42.)`
+            # because both branches will be eagerly executed
+            return _UNDEFINED
+
         shifted_pos = self.pos.copy()
         # TODO(havogt): support nested tuples
         axises = self.field[0].axises if isinstance(self.field, tuple) else self.field.axises
@@ -492,6 +499,8 @@ class ScanArgIterator:
         self.k_pos = k_pos
 
     def deref(self):
+        if not self.can_deref:
+            return _UNDEFINED
         return self.wrapped_iter.deref()[self.k_pos]
 
     def can_deref(self):
