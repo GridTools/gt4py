@@ -48,8 +48,8 @@ class gtfn_codegen(codegen.TemplatedGenerator):
     )
 
     def visit_FencilDefinition(self, node: FencilDefinition, **kwargs):
-        grid_type_str = "cartesian" if node.grid_type == GridType.Cartesian else "unstructured"
-        is_cartesian = node.grid_type == GridType.Cartesian
+        grid_type_str = "cartesian" if node.grid_type == GridType.CARTESIAN else "unstructured"
+        is_cartesian = node.grid_type == GridType.CARTESIAN
         return self.generic_visit(
             node, is_cartesian=is_cartesian, grid_type_str=grid_type_str, **kwargs
         )
