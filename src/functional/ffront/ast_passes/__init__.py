@@ -16,6 +16,7 @@
 from .simple_assign import SingleAssignTargetPass, UnpackedAssignPass
 from .single_static_assign import SingleStaticAssignPass
 from .stringify_annotations import StringifyAnnotationsPass
+from .unchain_compares import UnchainComparesPass
 
 
 __all__ = [
@@ -23,4 +24,5 @@ __all__ = [
     "SingleStaticAssignPass",
     "StringifyAnnotationsPass",
     "UnpackedAssignPass",
+    "UnchainComparesPass",
 ]

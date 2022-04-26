@@ -17,7 +17,6 @@ from __future__ import annotations
 import ast
 import builtins
 import collections
-import copy
 from typing import Any, Callable, Iterable, Mapping, Type, cast
 
 import eve
@@ -29,6 +28,7 @@ from functional.ffront.ast_passes import (
     SingleAssignTargetPass,
     SingleStaticAssignPass,
     StringifyAnnotationsPass,
+    UnchainComparesPass,
     UnpackedAssignPass,
 )
 from functional.ffront.dialect_parser import DialectParser, DialectSyntaxError
@@ -86,7 +86,8 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
         ssa = SingleStaticAssignPass.apply(sta)
         sat = SingleAssignTargetPass.apply(ssa)
         las = UnpackedAssignPass.apply(sat)
-        return las
+        ucc = UnchainComparesPass.apply(las)
+        return ucc
 
     @classmethod
     def _postprocess_dialect_ast(cls, dialect_ast: foast.FieldOperator) -> foast.FieldOperator:
@@ -204,7 +205,9 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
     def visit_Assign(self, node: ast.Assign, **kwargs) -> foast.Assign:
         target = node.targets[0]  # there is only one element after assignment passes
         if isinstance(target, ast.Tuple):
-            raise FieldOperatorSyntaxError.from_AST(node, msg="Unpacking not allowed!")
+            raise FieldOperatorSyntaxError.from_AST(
+                node, msg="Unpacking not allowed, run a preprocessing pass!"
+            )
         if not isinstance(target, ast.Name):
             raise FieldOperatorSyntaxError.from_AST(node, msg="Can only assign to names!")
         new_value = self.visit(node.value)
@@ -349,42 +352,15 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
     def visit_BoolOp(self, node: ast.BoolOp, **kwargs) -> None:
         raise FieldOperatorSyntaxError.from_AST(node, msg="`and`/`or` operator not allowed!")
 
-    def _ast_compare_chain_rhs(self, compare: ast.Compare) -> ast.Compare:
-        rhs = copy.copy(compare)
-        rhs.comparators = compare.comparators[1:]
-        rhs.ops = compare.ops[1:]
-        rhs.left = compare.comparators[0]
-        return rhs
-
     def visit_Compare(self, node: ast.Compare, **kwargs) -> foast.Compare:
-        # single comparison case a <op> b
-        if len(node.comparators) == 1:
-            return foast.Compare(
-                op=self.visit(node.ops[0]),
-                left=self.visit(node.left),
-                right=self.visit(node.comparators[0]),
-                location=self._make_loc(node),
+        if len(node.ops) != 1 or len(node.comparators) != 1:
+            raise FieldOperatorSyntaxError.from_AST(
+                node, msg="Comparison chains not allowed, run a preprocessing pass!"
             )
-        # comparison chain case, need to turn
-        # a <op1> b <op2> c ... into (a <op1> b) and (b <op2> c ...)
-        # the right hand side is then visited recursively
-
-        # create the lhs: a <op1> b
-        left_branch = foast.Compare(
+        return foast.Compare(
             op=self.visit(node.ops[0]),
             left=self.visit(node.left),
             right=self.visit(node.comparators[0]),
-            location=self._make_loc(node),
-        )
-
-        # recursively create the rhs: b <op2> c ...
-        right_branch = self.visit(self._ast_compare_chain_rhs(node))
-
-        # lhs and rhs
-        return foast.BinOp(
-            op=foast.BinaryOperator.BIT_AND,
-            left=left_branch,
-            right=right_branch,
             location=self._make_loc(node),
         )
 

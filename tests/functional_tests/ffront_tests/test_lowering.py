@@ -54,7 +54,7 @@ def test_scalar_arg():
         return alpha * bar
 
     # ast_passes
-    parsed = FieldOperatorParser.apply_to_function(constant_arg)
+    parsed = FieldOperatorParser.apply_to_function(scalar_arg)
     lowered = FieldOperatorLowering.apply(parsed)
 
     reference = im.deref_(
