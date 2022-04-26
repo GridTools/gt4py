@@ -37,16 +37,17 @@ explain scalar types of fields: https://github.com/GridTools/gt4py/pull/711
 ## Installation
 
 GT4Py is distributed as a Python package and can be installed directly from GitHub:
-
-```{code-cell} ipython3
-#! pip install git+https://github.com/gridtools/gt4py.git@functional
+```bash
+pip install git+https://github.com/gridtools/gt4py.git@functional
 ```
+
++++
 
 ## Concepts
 
-### Basics
+### Fields, field operators, programs
 
-Before we start, let's import the most important parts of GT4Py which we are going to use throughout this document:
+Before introducing the main concepts, let us import a few things from GT4Py. These are all the constructs that will be used throughout the *concepts* section of this guide.
 
 ```{code-cell} ipython3
 import numpy as np
@@ -57,9 +58,13 @@ from functional.ffront.decorator import field_operator, program
 from functional.iterator.embedded import np_as_located_field, NeighborTableOffsetProvider
 ```
 
-GT4Py uses so-called *fields* to represent multi-dimensional arrays. In this example, we are going to work with two-dimensional fields: one dimension for an unstructured horizontal grid, and another dimension for vertical layers. The dimensions are declared as a `CartesianAxis` in GT4Py.
+#### Fields
 
-The fields themselves are best created using utility functions such as `np_as_located_field` that converts `numpy` arrays into GT4Py `Field`s. The code below creates two fields, both with 5 cells in the horizontal grid and 6 vertical layers, with all the 5\*6=30 values set to 2.0 for one fields and 3.0 for the other field.
+In GT4Py, multi-dimensional data is represented by *fields*. In the snippet below, we are declaring a two-dimensional field: one of the two axes is called *Cell*, while the other axis is called *K*. Both axes have to be declared as a `CartesianAxis`in GT4Py.
+
+Conceptually, the *Cell* axis could represent an array of cells that form an unstructured grid to cover a surface, while the *K* axis could represent an array of arrays of cells to add vertical layering over the surface.
+
+The fields themselves can be created using utility functions such as `np_as_located_field` that converts `numpy` arrays into GT4Py `Field`s. The code below creates two fields, both with 5 cells in the horizontal grid and 6 vertical layers, with all the 5\*6=30 values set to 2.0 for one field and 3.0 for the other field.
 
 ```{code-cell} ipython3
 CellDim = CartesianAxis("Cell")
@@ -75,7 +80,11 @@ a = np_as_located_field(CellDim, KDim)(np.full(shape=grid_shape, fill_value=a_va
 b = np_as_located_field(CellDim, KDim)(np.full(shape=grid_shape, fill_value=b_value, dtype=np.float32))
 ```
 
-To define operations involving one or more fields, GT4Py allows us to declare *field operators*. Field operators are pure functions (i.e. functions without side effects) that take immutable `Field`s as arguments and output another `Field` as a result. Field operators must be declared with the `@field_operator` decorator, and are allowed to use a certain subset of the Python syntax.
+#### Field operators
+
+In GT4Py, *field operators* are pure functions (i.e. functions without side effects) that take immutable `Field`s as arguments and output another `Field` as a result. Field operators are used to implement mathematical operations on fields. They must be declared with the `@field_operator` decorator, and are allowed to use a certain subset of the Python syntax.
+
+The field operator below takes two fields as arguments, and returns the elementwise sum of the fields.
 
 ```{code-cell} ipython3
 @field_operator
@@ -83,6 +92,8 @@ def add(a : Field[[CellDim, KDim], float32],
         b : Field[[CellDim, KDim], float32]) -> Field[[CellDim, KDim], float32]:
     return a + b
 ```
+
+#### Programs
 
 *Programs* are similar to fields operators, but they allow mutability of the arguments. Programs must be declared with the `@program` decorator and are allowed to use a different subset of the Python syntax compared to field operators. Programs are used to call and chain field operators:
 
@@ -94,7 +105,7 @@ def run_add(a : Field[[CellDim, KDim], float32],
     add(a, b, out=out)
 ```
 
-To add the two fields elementwise, we can execute the program we just declared. The expectation is that every cell of the resulting field will be 2+3=5.
+Executing the program like a regular Python function will sum the two fields. The expectation is that every cell of the resulting field will be 2+3=5.
 
 ```{code-cell} ipython3
 result = np_as_located_field(CellDim, KDim)(np.zeros(shape=grid_shape))
@@ -105,7 +116,7 @@ print("{} + {} = {} ± {}".format(a_value, b_value, np.average(np.asarray(result
 
 ### Unstructured grids and connectivity
 
-When using unstructured grids, we have to define adjacency between nodes, cells and edges manually. In this section, we will create the mesh illustrated below and we will do some calculations with fields on this mesh.
+When using unstructured grids, we have to define adjacency between nodes, cells and edges manually. In this section, we will create the mesh illustrated below and we will do some calculations with fields over the edges and cells of this mesh.
 
 ![grid_topo](connectivity_numbered_grid.svg)
 
@@ -115,7 +126,7 @@ The <span style="color: #C02020">faces</span> and the <span style="color: #0080F
 
 We are going to use two fields: one on the cells of the grid, and on the edges. Both fields will have only one dimension, declared as `CellDim` for the field on the cells and `EdgeDim` for the field on the edges.
 
-Furthermore, we will define the edge-to-cell connectivity that tells us which cells are neighbours to a particular edge. The connectivity is thus defined with a matrix where each line corresponds to an edge, and has 2 entries for the two cells to the side of that edge. (Missing neighbors are filled with -1.)
+Furthermore, we will define the edge-to-cell connectivity that tells us which cells are neighbours to a particular edge. The connectivity is thus defined with a matrix where each line corresponds to an edge, and has 2 entries for the two cells to the side of that edge. (Missing neighbors for boundary edges are filled with -1.)
 
 The *field offset* `E2C` is used inside the field operator to indicate that we want to access the cells neighboring the edges. The *offset provider* forwards the actual connectivity matrix to the field operator.
 
@@ -256,6 +267,8 @@ edge_difference_polarity = np.array([
     [1, -1, 1],  # cell 4
     [1, -1, -1], # cell 5
 ])
+
+edge_difference_polarity_field = np_as_located_field(CellDim, C2EDim)(edge_difference_polarity)
 ```
 
 2. To make sure that **border edges get a difference of zero**, we will slightly modify the edge-to-cell connectivity matrix so that border edges list the single cells they are attached to twice. This will results in us calculating the difference on edge 3 as \*(cell 3) - \*(cell 3) = 0. The modified edge-to-cell connectivity matrix is as follows:
@@ -275,15 +288,13 @@ cell_neighbours_of_edges_mod = np.array([
     [3, 4], # edge 10
     [4, 5]  # edge 11
 ])
+
+e2c_neighbor_table_mod = NeighborTableOffsetProvider(cell_neighbours_of_edges_mod, EdgeDim, CellDim, 2)
 ```
 
-Let us use the matrices above to declare the connectivities and the fields:
+Note that the offset provider now needs to have both connectivities:
 
 ```{code-cell} ipython3
-e2c_neighbor_table_mod = NeighborTableOffsetProvider(cell_neighbours_of_edges_mod, EdgeDim, CellDim, 2)
-
-edge_difference_polarity_field = np_as_located_field(CellDim, C2EDim)(edge_difference_polarity)
-
 offset_provider={"E2C": e2c_neighbor_table_mod, "C2E": c2e_neighbor_table}
 ```
 
@@ -298,9 +309,10 @@ def edge_differences(cells : Field[[CellDim], float32]) -> Field[[EdgeDim], floa
 def sum_differences(differences : Field[[EdgeDim], float32],
                     polarities : Field[[CellDim, C2EDim], float32]) -> Field[[CellDim], float32]:        
     return differences(C2E[0]) + differences(C2E[1]) + differences(C2E[2])
+    # return differences(C2E[0]) + differences(C2E[1]) + differences(C2E[2])
 
 @program
-def run_pseudo_laplacian(cells : Field[[CellDim], float32], 
+def run_pseudo_laplacian(cells : Field[[CellDim], float32],
                          polarities : Field[[CellDim, C2EDim], float32],
                          diffs : Field[[EdgeDim], float32],
                          out : Field[[CellDim], float32]):
@@ -316,7 +328,7 @@ run_pseudo_laplacian(cell_values,
                      result_pseudo_lap,
                      offset_provider=offset_provider)
 
-print("sum of adjacent cells: {}".format(np.asarray(result_pseudo_lap)))
+print("pseudo-laplacian: {}".format(np.asarray(result_pseudo_lap)))
 ```
 
 ## Examples
