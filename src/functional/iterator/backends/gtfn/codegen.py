@@ -1,4 +1,3 @@
-from ast import Str
 from typing import Any
 
 from eve import codegen
