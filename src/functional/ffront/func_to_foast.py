@@ -18,7 +18,7 @@ import ast
 import builtins
 import collections
 import copy
-from typing import Any, Mapping, Type, cast
+from typing import Any, Callable, Iterable, Mapping, Type, cast
 
 import eve
 from functional.ffront import common_types as ct
@@ -94,10 +94,10 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
 
     def _builtin_type_constructor_symbols(
         self, captured_vars: Mapping[str, Any], location: eve.SourceLocation
-    ):
+    ) -> tuple[list[foast.Symbol], Iterable[str]]:
         result: list[foast.Symbol] = []
         skipped_types = {"tuple"}
-        python_type_builtins = {
+        python_type_builtins: dict[str, Callable[[Any], Any]] = {
             name: getattr(builtins, name)
             for name in set(fbuiltins.TYPE_BUILTIN_NAMES) - skipped_types
             if hasattr(builtins, name)

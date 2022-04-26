@@ -514,10 +514,10 @@ def test_builtin_int_constructors():
 
     reference = im.make_tuple_(
         im.literal_("1", "int64"),
-        im.literal_("1", "int"),
+        im.literal_("1", "int64"),
         im.literal_("1", "int32"),
         im.literal_("1", "int64"),
-        im.literal_("1", "int"),
+        im.literal_("1", "int64"),
         im.literal_("1", "int32"),
         im.literal_("1", "int64"),
     )
@@ -542,10 +542,10 @@ def test_builtin_float_constructors():
 
     reference = im.make_tuple_(
         im.literal_("0.1", "float64"),
-        im.literal_("0.1", "float"),
+        im.literal_("0.1", "float64"),
         im.literal_("0.1", "float32"),
         im.literal_("0.1", "float64"),
-        im.literal_(".1", "float"),
+        im.literal_(".1", "float64"),
         im.literal_(".1", "float32"),
         im.literal_(".1", "float64"),
     )
