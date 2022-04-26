@@ -1,5 +1,5 @@
 check-manifest>=0.40
-cmake>=3.16
+cmake>=3.18.1
 coverage>=5.0
 darglint>=1.6
 devtools>=0.6
