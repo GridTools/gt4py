@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.16.2)
+cmake_minimum_required(VERSION 3.18.1)
 
 project(cpp_backend_tests_driver LANGUAGES CXX)
 

@@ -83,12 +83,6 @@ class FunctionDefinition(Node, SymbolTableTrait):
     params: List[Sym]
     expr: Expr
 
-    def __eq__(self, other):
-        return isinstance(other, FunctionDefinition) and self.id == other.id
-
-    def __hash__(self):
-        return hash(self.id)
-
 
 class Backend(Node):
     domain: SymRef

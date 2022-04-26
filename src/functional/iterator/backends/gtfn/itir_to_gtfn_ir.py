@@ -1,5 +1,3 @@
-from devtools import debug
-
 from eve import NodeTranslator, iter_tree
 from eve.type_definitions import SymbolName
 from functional.iterator import ir as itir

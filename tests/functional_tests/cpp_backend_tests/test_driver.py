@@ -10,7 +10,7 @@ def _source_dir():
 
 
 def _build_dir(backend_dir: str):
-    return os.path.join(_source_dir(), f"build_{backend_dir}")
+    return _source_dir().joinpath(f"build_{backend_dir}")
 
 
 def _execute_cmake(backend_str: str):

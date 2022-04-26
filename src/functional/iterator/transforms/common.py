@@ -13,7 +13,7 @@ def add_fundef(root: ir.FencilDefinition, fundef: ir.FunctionDefinition) -> ir.F
 
 def replace_node(root: eve.Node, src: eve.Node, dst: eve.Node) -> eve.Node:
     class ReplaceNode(eve.NodeTranslator):
-        def visit(self, node: eve.Node):
+        def visit_Node(self, node: eve.Node) -> eve.Node:
             if node is src:
                 return dst
             return self.generic_visit(node)

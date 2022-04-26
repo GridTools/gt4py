@@ -8,8 +8,7 @@ class InlineLifts(NodeTranslator):
         return (
             isinstance(node, ir.FunCall)
             and isinstance(node.fun, ir.FunCall)
-            and isinstance(node.fun.fun, ir.SymRef)
-            and node.fun.fun.id == "lift"
+            and node.fun.fun == ir.SymRef(id="lift")
         )
 
     @staticmethod
@@ -17,17 +16,15 @@ class InlineLifts(NodeTranslator):
         return (
             isinstance(node, ir.FunCall)
             and isinstance(node.fun, ir.FunCall)
-            and isinstance(node.fun.fun, ir.SymRef)
-            and node.fun.fun.id == "shift"
+            and node.fun.fun == ir.SymRef(id="shift")
             and isinstance(node.args[0], ir.FunCall)
             and isinstance(node.args[0].fun, ir.FunCall)
-            and isinstance(node.args[0].fun.fun, ir.SymRef)
-            and node.args[0].fun.fun.id == "lift"
+            and node.args[0].fun.fun == ir.SymRef(id="lift")
         )
 
     def visit_FunCall(self, node: ir.FunCall):
         node = self.generic_visit(node)
-        if isinstance(node.fun, ir.SymRef) and node.fun.id == "deref":
+        if node.fun == ir.SymRef(id="deref"):
             assert len(node.args) == 1
             if self._is_lift(node.args[0]):
                 # deref(lift(f)(args...)) -> f(args...)
@@ -42,7 +39,8 @@ class InlineLifts(NodeTranslator):
                 args = node.args[0].args[0].args
                 res = ir.FunCall(fun=f, args=[ir.FunCall(fun=shift, args=[arg]) for arg in args])
                 return res
-        if isinstance(node.fun, ir.SymRef) and node.fun.id == "can_deref":
+        if node.fun == ir.SymRef(id="can_deref"):
+            # TODO(havogt): this `can_deref` transformation doesn't look into lifted functions, this need to be changed to be 100% compliant
             assert len(node.args) == 1
             if self._is_lift(node.args[0]):
                 # can_deref(lift(f)(args...)) -> and(can_deref(arg[0]), and(can_deref(arg[1]), ...))
