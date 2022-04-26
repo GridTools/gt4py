@@ -10,6 +10,9 @@ from functional.iterator.transforms.pass_manager import apply_common_transforms
 
 
 def extract_fundefs_from_closures(program: itir.FencilDefinition) -> itir.FencilDefinition:
+    # TODO this would not work if the SymRef is a ref to a builtin, e.g. `deref`.
+    # We should adapt this filter and add support for extracting builtins in `extract_function`,
+    # which requires type information for the builtins.
     inlined_stencils = (
         program.iter_tree()
         .if_isinstance(itir.StencilClosure)
