@@ -50,7 +50,7 @@ def test_copy():
 
 
 def test_scalar_arg():
-    def constant_arg(bar: Field[[IDim], int64], alpha: int64) -> Field[[IDim], int64]:
+    def scalar_arg(bar: Field[[IDim], int64], alpha: int64) -> Field[[IDim], int64]:
         return alpha * bar
 
     # ast_passes
