@@ -88,8 +88,7 @@ class GTFN_lowering(NodeTranslator):
                 )
         elif (
             isinstance(node.fun, itir.FunCall)
-            and isinstance(node.fun.fun, itir.SymRef)
-            and node.fun.fun.id == "shift"
+            and node.fun.fun == itir.SymRef(id="shift")
         ):
             assert len(node.args) == 1
             return FunCall(
@@ -101,7 +100,7 @@ class GTFN_lowering(NodeTranslator):
         self, node: itir.FunctionDefinition, **kwargs
     ) -> FunctionDefinition:
         return FunctionDefinition(
-            id=SymbolName(node.id), params=self.visit(node.params), expr=self.visit(node.expr)
+            id=node.id, params=self.visit(node.params), expr=self.visit(node.expr)
         )
 
     def visit_StencilClosure(self, node: itir.StencilClosure, **kwargs) -> StencilExecution:
@@ -126,9 +125,7 @@ class GTFN_lowering(NodeTranslator):
     def visit_FencilDefinition(
         self, node: itir.FencilDefinition, *, grid_type: str, **kwargs
     ) -> FencilDefinition:
-        grid_type = (
-            GridType.CARTESIAN if grid_type.lower() == "cartesian" else GridType.UNSTRUCTURED
-        )
+        grid_type = getattr(GridType, grid_type.upper())
         return FencilDefinition(
             id=SymbolName(node.id),
             params=self.visit(node.params),
