@@ -16,15 +16,14 @@ from typing import Optional
 import pytest
 
 from functional.common import Dimension, GTTypeError
-from functional.ffront import common_types
-from functional.ffront import field_operator_ast as foast
-from functional.ffront.fbuiltins import Field, FieldOffset, float64, int64, neighbor_sum
+from functional.ffront import common_types as ct
+from functional.ffront.fbuiltins import Field, float32, float64, int64
 from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError
 from functional.ffront.func_to_foast import FieldOperatorParser
 from functional.ffront.type_info import TypeInfo
 
 
-def type_info_cases() -> list[tuple[Optional[common_types.SymbolType], dict]]:
+def type_info_cases() -> list[tuple[Optional[ct.SymbolType], dict]]:
     return [
         (
             None,
@@ -40,7 +39,7 @@ def type_info_cases() -> list[tuple[Optional[common_types.SymbolType], dict]]:
             },
         ),
         (
-            common_types.DeferredSymbolType(constraint=None),
+            ct.DeferredSymbolType(constraint=None),
             {
                 "is_complete": False,
                 "is_any_type": True,
@@ -53,11 +52,11 @@ def type_info_cases() -> list[tuple[Optional[common_types.SymbolType], dict]]:
             },
         ),
         (
-            common_types.DeferredSymbolType(constraint=common_types.ScalarType),
+            ct.DeferredSymbolType(constraint=ct.ScalarType),
             {
                 "is_complete": False,
                 "is_any_type": False,
-                "constraint": common_types.ScalarType,
+                "constraint": ct.ScalarType,
                 "is_field_type": False,
                 "is_scalar": True,
                 "is_arithmetic_compatible": False,
@@ -66,11 +65,11 @@ def type_info_cases() -> list[tuple[Optional[common_types.SymbolType], dict]]:
             },
         ),
         (
-            common_types.DeferredSymbolType(constraint=common_types.FieldType),
+            ct.DeferredSymbolType(constraint=ct.FieldType),
             {
                 "is_complete": False,
                 "is_any_type": False,
-                "constraint": common_types.FieldType,
+                "constraint": ct.FieldType,
                 "is_field_type": True,
                 "is_scalar": False,
                 "is_arithmetic_compatible": False,
@@ -79,11 +78,11 @@ def type_info_cases() -> list[tuple[Optional[common_types.SymbolType], dict]]:
             },
         ),
         (
-            common_types.ScalarType(kind=common_types.ScalarKind.INT64),
+            ct.ScalarType(kind=ct.ScalarKind.INT64),
             {
                 "is_complete": True,
                 "is_any_type": False,
-                "constraint": common_types.ScalarType,
+                "constraint": ct.ScalarType,
                 "is_field_type": False,
                 "is_scalar": True,
                 "is_arithmetic_compatible": True,
@@ -92,13 +91,11 @@ def type_info_cases() -> list[tuple[Optional[common_types.SymbolType], dict]]:
             },
         ),
         (
-            common_types.FieldType(
-                dims=Ellipsis, dtype=common_types.ScalarType(kind=common_types.ScalarKind.BOOL)
-            ),
+            ct.FieldType(dims=Ellipsis, dtype=ct.ScalarType(kind=ct.ScalarKind.BOOL)),
             {
                 "is_complete": True,
                 "is_any_type": False,
-                "constraint": common_types.FieldType,
+                "constraint": ct.FieldType,
                 "is_field_type": True,
                 "is_scalar": False,
                 "is_arithmetic_compatible": False,
@@ -117,17 +114,11 @@ def type_info_is_callable_for_args_cases():
         if not attributes["is_callable"]
     ]
 
-    bool_type = common_types.ScalarType(kind=common_types.ScalarKind.BOOL)
-    float_type = common_types.ScalarType(kind=common_types.ScalarKind.FLOAT64)
-    nullary_func_type = common_types.FunctionType(
-        args=[], kwargs={}, returns=common_types.VoidType()
-    )
-    unary_func_type = common_types.FunctionType(
-        args=[bool_type], kwargs={}, returns=common_types.VoidType()
-    )
-    kwarg_func_type = common_types.FunctionType(
-        args=[], kwargs={"foo": bool_type}, returns=common_types.VoidType()
-    )
+    bool_type = ct.ScalarType(kind=ct.ScalarKind.BOOL)
+    float_type = ct.ScalarType(kind=ct.ScalarKind.FLOAT64)
+    nullary_func_type = ct.FunctionType(args=[], kwargs={}, returns=ct.VoidType())
+    unary_func_type = ct.FunctionType(args=[bool_type], kwargs={}, returns=ct.VoidType())
+    kwarg_func_type = ct.FunctionType(args=[], kwargs={"foo": bool_type}, returns=ct.VoidType())
 
     return [
         # func_type, args, kwargs, expected incompatibilities
@@ -156,7 +147,7 @@ def type_info_is_callable_for_args_cases():
             {"foo": float_type},
             [r"Expected keyword argument foo to be of type bool, but got float64."],
         ),
-        (kwarg_func_type, [], {"bar": bool_type}, ["Got unexpected keyword argument\(s\) `bar`."]),
+        (kwarg_func_type, [], {"bar": bool_type}, [r"Got unexpected keyword argument\(s\) `bar`."]),
     ]
 
 
@@ -168,8 +159,8 @@ def test_type_info_basic(symbol_type, expected):
 
 
 def test_type_info_refinable_complete_complete():
-    complete_type = common_types.ScalarType(kind=common_types.ScalarKind.INT64)
-    other_complete_type = common_types.ScalarType(kind=common_types.ScalarKind.FLOAT64)
+    complete_type = ct.ScalarType(kind=ct.ScalarKind.INT64)
+    other_complete_type = ct.ScalarType(kind=ct.ScalarKind.FLOAT64)
     type_info_a = TypeInfo(complete_type)
     type_info_b = TypeInfo(other_complete_type)
     assert type_info_a.can_be_refined_to(TypeInfo(complete_type))
@@ -178,39 +169,31 @@ def test_type_info_refinable_complete_complete():
 
 def test_type_info_refinable_incomplete_complete():
     complete_type = TypeInfo(
-        common_types.FieldType(
-            dtype=common_types.ScalarType(kind=common_types.ScalarKind.BOOL), dims=Ellipsis
-        )
+        ct.FieldType(dtype=ct.ScalarType(kind=ct.ScalarKind.BOOL), dims=Ellipsis)
     )
     assert TypeInfo(None).can_be_refined_to(complete_type)
-    assert TypeInfo(common_types.DeferredSymbolType(constraint=None)).can_be_refined_to(
+    assert TypeInfo(ct.DeferredSymbolType(constraint=None)).can_be_refined_to(complete_type)
+    assert TypeInfo(ct.DeferredSymbolType(constraint=ct.FieldType)).can_be_refined_to(complete_type)
+    assert not TypeInfo(ct.DeferredSymbolType(constraint=ct.OffsetType)).can_be_refined_to(
         complete_type
     )
-    assert TypeInfo(
-        common_types.DeferredSymbolType(constraint=common_types.FieldType)
-    ).can_be_refined_to(complete_type)
-    assert not TypeInfo(
-        common_types.DeferredSymbolType(constraint=common_types.OffsetType)
-    ).can_be_refined_to(complete_type)
 
 
 def test_type_info_refinable_incomplete_incomplete():
-    target_type = TypeInfo(common_types.DeferredSymbolType(constraint=common_types.ScalarType))
+    target_type = TypeInfo(ct.DeferredSymbolType(constraint=ct.ScalarType))
     assert TypeInfo(None).can_be_refined_to(target_type)
-    assert TypeInfo(common_types.DeferredSymbolType(constraint=None)).can_be_refined_to(target_type)
-    assert TypeInfo(
-        common_types.DeferredSymbolType(constraint=common_types.ScalarType)
-    ).can_be_refined_to(target_type)
-    assert not TypeInfo(
-        common_types.DeferredSymbolType(constraint=common_types.FieldType)
-    ).can_be_refined_to(target_type)
+    assert TypeInfo(ct.DeferredSymbolType(constraint=None)).can_be_refined_to(target_type)
+    assert TypeInfo(ct.DeferredSymbolType(constraint=ct.ScalarType)).can_be_refined_to(target_type)
+    assert not TypeInfo(ct.DeferredSymbolType(constraint=ct.FieldType)).can_be_refined_to(
+        target_type
+    )
 
 
 @pytest.mark.parametrize("func_type,args,kwargs,expected", type_info_is_callable_for_args_cases())
 def test_type_info_is_callable_for_args_cases(
-    func_type: common_types.SymbolType,
-    args: list[common_types.SymbolType],
-    kwargs: dict[str, common_types.SymbolType],
+    func_type: ct.SymbolType,
+    args: list[ct.SymbolType],
+    kwargs: dict[str, ct.SymbolType],
     expected: list,
 ):
     typeinfo = TypeInfo(func_type)
@@ -236,13 +219,13 @@ def test_unpack_assign():
 
     parsed = FieldOperatorParser.apply_to_function(unpack_explicit_tuple)
 
-    assert parsed.symtable_["tmp_a__0"].type == common_types.FieldType(
+    assert parsed.symtable_["tmp_a__0"].type == ct.FieldType(
         dims=Ellipsis,
-        dtype=common_types.ScalarType(kind=common_types.ScalarKind.FLOAT64, shape=None),
+        dtype=ct.ScalarType(kind=ct.ScalarKind.FLOAT64, shape=None),
     )
-    assert parsed.symtable_["tmp_b__0"].type == common_types.FieldType(
+    assert parsed.symtable_["tmp_b__0"].type == ct.FieldType(
         dims=Ellipsis,
-        dtype=common_types.ScalarType(kind=common_types.ScalarKind.FLOAT64, shape=None),
+        dtype=ct.ScalarType(kind=ct.ScalarKind.FLOAT64, shape=None),
     )
 
 
@@ -253,15 +236,15 @@ def test_assign_tuple():
 
     parsed = FieldOperatorParser.apply_to_function(temp_tuple)
 
-    assert parsed.symtable_["tmp__0"].type == common_types.TupleType(
+    assert parsed.symtable_["tmp__0"].type == ct.TupleType(
         types=[
-            common_types.FieldType(
+            ct.FieldType(
                 dims=Ellipsis,
-                dtype=common_types.ScalarType(kind=common_types.ScalarKind.FLOAT64, shape=None),
+                dtype=ct.ScalarType(kind=ct.ScalarKind.FLOAT64, shape=None),
             ),
-            common_types.FieldType(
+            ct.FieldType(
                 dims=Ellipsis,
-                dtype=common_types.ScalarType(kind=common_types.ScalarKind.INT64, shape=None),
+                dtype=ct.ScalarType(kind=ct.ScalarKind.INT64, shape=None),
             ),
         ]
     )
@@ -335,3 +318,26 @@ def test_notting_int():
         match=r"Incompatible type for unary operator 'not': Field\[\.\.\., dtype=int64\]!",
     ):
         _ = FieldOperatorParser.apply_to_function(not_int)
+
+
+def test_scalar_arg():
+    def scalar_arg(bar: Field[..., int64], alpha: int64) -> Field[..., int64]:
+        return alpha * bar
+
+    parsed = FieldOperatorParser.apply_to_function(scalar_arg)
+
+    assert parsed.params[1].id == "alpha"
+    assert parsed.params[1].type == ct.FieldType(
+        dims=[], dtype=ct.ScalarType(kind=ct.ScalarKind.INT64)
+    )
+
+
+def test_mismatched_literals():
+    def mismatched_lit() -> Field[..., "float32"]:
+        return float32("1.0") + float64("1.0")
+
+    with pytest.raises(
+        FieldOperatorTypeDeductionError,
+        match=(r"Incompatible type\(s\) for operator '\+': float32, float64"),
+    ):
+        _ = FieldOperatorParser.apply_to_function(mismatched_lit)

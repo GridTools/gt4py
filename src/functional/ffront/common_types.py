@@ -18,6 +18,7 @@ class ScalarKind(IntEnum):
     FLOAT32 = 1032
     FLOAT64 = 1064
     DIMENSION = 2001
+    STRING = 3001
 
 
 class Namespace(StrEnum):

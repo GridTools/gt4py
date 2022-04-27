@@ -15,20 +15,25 @@
 from __future__ import annotations
 
 import ast
+import builtins
 import collections
-import copy
+from typing import Any, Callable, Iterable, Mapping, Type, cast
 
-from functional.ffront import common_types, fbuiltins
+import eve
+from functional.ffront import common_types as ct
+from functional.ffront import fbuiltins
 from functional.ffront import field_operator_ast as foast
 from functional.ffront import symbol_makers
 from functional.ffront.ast_passes import (
     SingleAssignTargetPass,
     SingleStaticAssignPass,
     StringifyAnnotationsPass,
+    UnchainComparesPass,
     UnpackedAssignPass,
 )
 from functional.ffront.dialect_parser import DialectParser, DialectSyntaxError
 from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduction
+from functional.ffront.type_info import TypeInfo, is_complete_scalar_type
 
 
 class FieldOperatorSyntaxError(DialectSyntaxError):
@@ -81,45 +86,87 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
         ssa = SingleStaticAssignPass.apply(sta)
         sat = SingleAssignTargetPass.apply(ssa)
         las = UnpackedAssignPass.apply(sat)
-        return las
+        ucc = UnchainComparesPass.apply(las)
+        return ucc
 
     @classmethod
     def _postprocess_dialect_ast(cls, dialect_ast: foast.FieldOperator) -> foast.FieldOperator:
         return FieldOperatorTypeDeduction.apply(dialect_ast)
 
-    def visit_FunctionDef(self, node: ast.FunctionDef, **kwargs) -> foast.FieldOperator:
-        vars_ = collections.ChainMap(self.captured_vars.globals, self.captured_vars.nonlocals)
-        captured_vars = [
-            foast.Symbol(
-                id=name,
-                type=symbol_makers.make_symbol_type_from_value(val),
-                namespace=common_types.Namespace.CLOSURE,
-                location=self._make_loc(node),
+    def _builtin_type_constructor_symbols(
+        self, captured_vars: Mapping[str, Any], location: eve.SourceLocation
+    ) -> tuple[list[foast.Symbol], Iterable[str]]:
+        result: list[foast.Symbol] = []
+        skipped_types = {"tuple"}
+        python_type_builtins: dict[str, Callable[[Any], Any]] = {
+            name: getattr(builtins, name)
+            for name in set(fbuiltins.TYPE_BUILTIN_NAMES) - skipped_types
+            if hasattr(builtins, name)
+        }
+        captured_type_builtins = {
+            name: value
+            for name, value in captured_vars.items()
+            if name in fbuiltins.TYPE_BUILTIN_NAMES and value is getattr(fbuiltins, name)
+        }
+        to_be_inserted = python_type_builtins | captured_type_builtins
+        for name, value in to_be_inserted.items():
+            result.append(
+                foast.Symbol(
+                    id=name,
+                    type=ct.FunctionType(
+                        args=[ct.DeferredSymbolType(constraint=ct.ScalarType)],
+                        kwargs={},
+                        returns=cast(
+                            ct.DataType, symbol_makers.make_symbol_type_from_typing(value)
+                        ),
+                    ),
+                    namespace=ct.Namespace.CLOSURE,
+                    location=location,
+                )
             )
-            for name, val in vars_.items()
-        ]
+
+        return result, to_be_inserted.keys()
+
+    def visit_FunctionDef(self, node: ast.FunctionDef, **kwargs) -> foast.FieldOperator:
+        captured_vars: Mapping[str, Any] = collections.ChainMap(
+            self.captured_vars.globals, self.captured_vars.nonlocals
+        )
+        captured_symbols, skip_names = self._builtin_type_constructor_symbols(
+            captured_vars, self._make_loc(node)
+        )
+        for name, val in captured_vars.items():
+            if name in skip_names:
+                continue
+            captured_symbols.append(
+                foast.Symbol(
+                    id=name,
+                    type=symbol_makers.make_symbol_type_from_value(val),
+                    namespace=ct.Namespace.CLOSURE,
+                    location=self._make_loc(node),
+                )
+            )
 
         return foast.FieldOperator(
             id=node.name,
             params=self.visit(node.args),
             body=self.visit_stmt_list(node.body),
-            captured_vars=captured_vars,
+            captured_vars=captured_symbols,
             location=self._make_loc(node),
         )
 
     def visit_Import(self, node: ast.Import, **kwargs) -> None:
         raise FieldOperatorSyntaxError.from_AST(
-            node, message=f"Only 'from' imports from {fbuiltins.MODULE_BUILTIN_NAMES} are supported"
+            node, msg=f"Only 'from' imports from {fbuiltins.MODULE_BUILTIN_NAMES} are supported"
         )
 
     def visit_ImportFrom(self, node: ast.ImportFrom, **kwargs) -> foast.ExternalImport:
         if node.module not in fbuiltins.MODULE_BUILTIN_NAMES:
             raise FieldOperatorSyntaxError.from_AST(
                 node,
-                message=f"Only 'from' imports from {fbuiltins.MODULE_BUILTIN_NAMES} are supported",
+                msg=f"Only 'from' imports from {fbuiltins.MODULE_BUILTIN_NAMES} are supported",
             )
 
-        symbols = []
+        symbols: list[foast.Symbol] = []
 
         if node.module == fbuiltins.EXTERNALS_MODULE_NAME:
             for alias in node.names:
@@ -133,7 +180,7 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
                         type=symbol_makers.make_symbol_type_from_value(
                             self.externals_defs[alias.name]
                         ),
-                        namespace=common_types.Namespace.EXTERNAL,
+                        namespace=ct.Namespace.EXTERNAL,
                         location=self._make_loc(node),
                     )
                 )
@@ -147,27 +194,33 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
         if (annotation := self.captured_vars.annotations.get(node.arg, None)) is None:
             raise FieldOperatorSyntaxError.from_AST(node, msg="Untyped parameters not allowed!")
         new_type = symbol_makers.make_symbol_type_from_typing(annotation)
-        if not isinstance(new_type, common_types.DataType):
+        if not isinstance(new_type, ct.DataType):
             raise FieldOperatorSyntaxError.from_AST(
                 node, msg="Only arguments of type DataType are allowed."
             )
+        if is_complete_scalar_type(new_type):
+            new_type = ct.FieldType(dims=[], dtype=new_type)
         return foast.DataSymbol(id=node.arg, location=self._make_loc(node), type=new_type)
 
     def visit_Assign(self, node: ast.Assign, **kwargs) -> foast.Assign:
         target = node.targets[0]  # there is only one element after assignment passes
         if isinstance(target, ast.Tuple):
-            raise FieldOperatorSyntaxError.from_AST(node, msg="Unpacking not allowed!")
+            raise FieldOperatorSyntaxError.from_AST(
+                node, msg="Unpacking not allowed, run a preprocessing pass!"
+            )
         if not isinstance(target, ast.Name):
             raise FieldOperatorSyntaxError.from_AST(node, msg="Can only assign to names!")
         new_value = self.visit(node.value)
-        constraint_type = common_types.FieldType
+        constraint_type: Type[ct.DataType] = ct.DataType
         if isinstance(new_value, foast.TupleExpr):
-            constraint_type = common_types.TupleType
+            constraint_type = ct.TupleType
+        elif TypeInfo(new_value.type).is_scalar:
+            constraint_type = ct.ScalarType
         return foast.Assign(
             target=foast.FieldSymbol(
                 id=target.id,
                 location=self._make_loc(target),
-                type=common_types.DeferredSymbolType(constraint=constraint_type),
+                type=ct.DeferredSymbolType(constraint=constraint_type),
             ),
             value=new_value,
             location=self._make_loc(node),
@@ -188,10 +241,10 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
                 annotation, globalns=globalns, localns=localns
             )
         else:
-            target_type = common_types.DeferredSymbolType()
+            target_type = ct.DeferredSymbolType()
 
         return foast.Assign(
-            target=foast.Symbol[common_types.FieldType](
+            target=foast.Symbol[ct.FieldType](
                 id=node.target.id,
                 location=self._make_loc(node.target),
                 type=target_type,
@@ -300,21 +353,14 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
         raise FieldOperatorSyntaxError.from_AST(node, msg="`and`/`or` operator not allowed!")
 
     def visit_Compare(self, node: ast.Compare, **kwargs) -> foast.Compare:
-        if len(node.comparators) == 1:
-            return foast.Compare(
-                op=self.visit(node.ops[0]),
-                left=self.visit(node.left),
-                right=self.visit(node.comparators[0]),
-                location=self._make_loc(node),
+        if len(node.ops) != 1 or len(node.comparators) != 1:
+            raise FieldOperatorSyntaxError.from_AST(
+                node, msg="Comparison chains not allowed, run a preprocessing pass!"
             )
-        smaller_node = copy.copy(node)
-        smaller_node.comparators = node.comparators[1:]
-        smaller_node.ops = node.ops[1:]
-        smaller_node.left = node.comparators[0]
         return foast.Compare(
             op=self.visit(node.ops[0]),
             left=self.visit(node.left),
-            right=self.visit(smaller_node),
+            right=self.visit(node.comparators[0]),
             location=self._make_loc(node),
         )
 
@@ -327,28 +373,70 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
     def visit_Eq(self, node: ast.Eq, **kwargs) -> foast.CompareOperator:
         return foast.CompareOperator.EQ
 
+    def _verify_builtin_function(self, node: ast.Call):
+        func_name = self._func_name(node)
+        func_info = getattr(fbuiltins, func_name).__gt_type__()
+        if not len(node.args) == len(func_info.args):
+            raise FieldOperatorSyntaxError.from_AST(
+                node,
+                msg=f"{func_name}() expected {len(func_info.args)} positional arguments, {len(node.args)} given!",
+            )
+        elif unexpected_kwargs := set(k.arg for k in node.keywords) - set(func_info.kwargs):
+            raise FieldOperatorSyntaxError.from_AST(
+                node,
+                msg=f"{self._func_name(node)}() got unexpected keyword arguments: {unexpected_kwargs}!",
+            )
+
+    def _verify_builtin_type_constructor(self, node: ast.Call):
+        if not len(node.args) == 1:
+            raise FieldOperatorSyntaxError.from_AST(
+                node,
+                msg=f"{self._func_name(node)}() expected 1 positional argument, {len(node.args)} given!",
+            )
+        elif node.keywords:
+            unexpected_kwargs = set(k.arg for k in node.keywords)
+            raise FieldOperatorSyntaxError.from_AST(
+                node,
+                msg=f"{self._func_name(node)}() got unexpected keyword arguments: {unexpected_kwargs}!",
+            )
+        elif not isinstance(node.args[0], ast.Constant):
+            raise FieldOperatorSyntaxError.from_AST(
+                node,
+                msg=f"{self._func_name(node)}() only takes literal arguments!",
+            )
+
+    def _func_name(self, node: ast.Call) -> str:
+        return node.func.id  # type: ignore[attr-defined]  # We want this to fail if the attribute does not exist unexpectedly.
+
     def visit_Call(self, node: ast.Call, **kwargs) -> foast.Call:
-        new_func = self.visit(node.func)
-        if not isinstance(new_func, foast.Name):
+        if not isinstance(node.func, ast.Name):
             raise FieldOperatorSyntaxError.from_AST(
                 node, msg="Functions can only be called directly!"
             )
 
-        args = node.args
-        if new_func.id in fbuiltins.FUN_BUILTIN_NAMES:
-            func_info = getattr(fbuiltins, new_func.id).__gt_type__()
-            if not len(args) == len(func_info.args) or any(
-                k.arg not in func_info.kwargs for k in node.keywords
-            ):
-                raise FieldOperatorSyntaxError.from_AST(
-                    node, message=f"Wrong syntax for function {new_func.id}."
-                )
+        func_name = self._func_name(node)
 
+        if func_name in fbuiltins.FUN_BUILTIN_NAMES:
+            self._verify_builtin_function(node)
+        if func_name in fbuiltins.TYPE_BUILTIN_NAMES:
+            self._verify_builtin_type_constructor(node)
+
+        args = node.args.copy()
         for keyword in node.keywords:
             args.append(keyword.value)
 
         return foast.Call(
-            func=new_func,
+            func=self.visit(node.func, **kwargs),
             args=[self.visit(arg, **kwargs) for arg in args],
             location=self._make_loc(node),
+        )
+
+    def visit_Constant(self, node: ast.Constant, **kwargs) -> foast.Constant:
+        dtype = symbol_makers.make_symbol_type_from_value(node.value)
+        if not dtype:
+            raise FieldOperatorSyntaxError.from_AST(
+                node, msg=f"Constants of type {type(node.value)} are not permitted"
+            )
+        return foast.Constant(
+            value=str(node.value), dtype=dtype, location=self._make_loc(node), type=dtype
         )

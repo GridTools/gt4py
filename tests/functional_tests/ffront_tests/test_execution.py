@@ -51,8 +51,8 @@ def make_domain(dim_name: str, lower: int, upper: int) -> itir.FunCall:
                 fun=itir.SymRef(id="named_range"),
                 args=[
                     itir.AxisLiteral(value=dim_name),
-                    itir.IntLiteral(value=lower),
-                    itir.IntLiteral(value=upper),
+                    itir.Literal(value=lower, type="int"),
+                    itir.Literal(value=upper, type="int"),
                 ],
             )
         ],
@@ -142,12 +142,12 @@ def test_arithmetic():
     c = np_as_located_field(IDim)(np.zeros((size)))
 
     def arithmetic(inp1: Field[[IDim], float64], inp2: Field[[IDim], float64]):
-        return inp1 + inp2
+        return (inp1 + inp2) * 2.0
 
     fencil = fencil_from_function(arithmetic, dim=IDim, size=size)
     roundtrip.executor(fencil, a, b, c, offset_provider={})
 
-    assert np.allclose(a.array() + b.array(), c)
+    assert np.allclose((a.array() + b.array()) * 2.0, c)
 
 
 def test_bit_logic():
@@ -159,7 +159,7 @@ def test_bit_logic():
     c = np_as_located_field(IDim)(np.full((size), False))
 
     def bit_and(inp1: Field[[IDim], bool], inp2: Field[[IDim], bool]):
-        return inp1 & inp2
+        return inp1 & inp2 & True
 
     fencil = fencil_from_function(bit_and, dim=IDim, size=size)
     roundtrip.executor(fencil, a, b, c, offset_provider={})
@@ -214,6 +214,26 @@ def test_fold_shifts():
     assert np.allclose(a[1:] + b[2:], c)
 
 
+def test_tuples():
+    size = 10
+    a = np_as_located_field(IDim)(np.ones((size)))
+    b = np_as_located_field(IDim)(np.ones((size)) * 2)
+    c = np_as_located_field(IDim)(np.zeros((size)))
+
+    def tuples(
+        inp1: Field[[IDim], float64], inp2: Field[[IDim], float64]
+    ) -> Field[[IDim], float64]:
+        inps = inp1, inp2
+        scalars = 1.3, float64(5.0), float64("3.4")
+        return (inps[0] * scalars[0] + inps[1] * scalars[1]) * scalars[2]
+
+    fencil = fencil_from_function(tuples, dim=IDim, size=size)
+
+    roundtrip.executor(fencil, a, b, c, offset_provider={})
+
+    assert np.allclose((a.array() * 1.3 + b.array() * 5.0) * 3.4, c)
+
+
 @pytest.fixture
 def reduction_setup():
 
@@ -249,7 +269,7 @@ def reduction_setup():
         out=np_as_located_field(vertex)(np.zeros([size])),
         offset_provider={"V2E": NeighborTableOffsetProvider(v2e_arr, vertex, edge, 4)},
         v2e_table=v2e_arr,
-    )
+    )  # type: ignore
 
 
 def test_reduction_execution(reduction_setup):
@@ -258,7 +278,7 @@ def test_reduction_execution(reduction_setup):
     V2EDim = rs.V2EDim
     V2E = rs.V2E
 
-    def reduction(edge_f: Field[[rs.Edge], "float64"]):
+    def reduction(edge_f: Field[[rs.Edge], "float64"]):  # type: ignore
         return neighbor_sum(edge_f(V2E), axis=V2EDim)
 
     fencil = fencil_from_function(reduction, dim=rs.Vertex, size=rs.size)
@@ -279,10 +299,10 @@ def test_reduction_expression(reduction_setup):
     V2EDim = rs.V2EDim
     V2E = rs.V2E
 
-    def reduce_expr(edge_f: Field[[rs.Edge], "float64"]):
+    def reduce_expr(edge_f: Field[[rs.Edge], "float64"]):  # type: ignore
         tmp_nbh_tup = edge_f(V2E), edge_f(V2E)
         tmp_nbh = tmp_nbh_tup[0]
-        return neighbor_sum(-edge_f(V2E) * tmp_nbh, axis=V2EDim)
+        return neighbor_sum(-edge_f(V2E) * tmp_nbh * 2.0, axis=V2EDim)
 
     fencil = fencil_from_function(reduce_expr, dim=rs.Vertex, size=rs.size)
     roundtrip.executor(
@@ -292,5 +312,5 @@ def test_reduction_expression(reduction_setup):
         offset_provider=rs.offset_provider,
     )
 
-    ref = np.sum(-(rs.v2e_table**2), axis=1)
+    ref = np.sum(-(rs.v2e_table**2) * 2, axis=1)
     assert np.allclose(ref, rs.out.array())

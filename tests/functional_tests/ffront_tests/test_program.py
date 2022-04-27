@@ -292,7 +292,7 @@ def test_copy_lowering(copy_program_def, itir_identity_fundef):
                     fun=P(itir.SymRef, id="named_range"),
                     args=[
                         P(itir.AxisLiteral, value="IDim"),
-                        P(itir.IntLiteral, value=0),
+                        P(itir.Literal, value="0", type="int"),
                         P(itir.SymRef, id="__out_field_size_0"),
                     ],
                 )
@@ -331,8 +331,8 @@ def test_copy_restrict_lowering(copy_restrict_program_def, itir_identity_fundef)
                     fun=P(itir.SymRef, id="named_range"),
                     args=[
                         P(itir.AxisLiteral, value="IDim"),
-                        P(itir.IntLiteral, value=1),
-                        P(itir.IntLiteral, value=2),
+                        P(itir.Literal, value="1", type="int"),
+                        P(itir.Literal, value="2", type="int"),
                     ],
                 )
             ],

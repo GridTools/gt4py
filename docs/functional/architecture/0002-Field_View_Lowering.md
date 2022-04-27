@@ -11,6 +11,17 @@ tags: [frontend]
 
 ## Updates:
 
+### 2022-04-08: Added scalar literal support
+The rationale that "any FOAST node should be lowered to an ITIR iterator expression" has changed to
+
+> Any non-scalar FOAST Node should be lowered to an ITIR iterator expression. Scalar FOAST nodes should be lowered to an ITIR value expression.
+
+#### Consequences
+
+The lowering of parent nodes now has to deal with two kinds of expressions. In practice this means in some visitor methods, lowered child nodes have to be dereferenced if and only if they are iterator expressions. This is achieved via a `to_value` function, which takes a FOAST node and returns `deref` or a noop depending on the type of the FOAST node (which determines whether the node is lowered to iterator or value). The returned callable can then be used with the lowered node to achieve the desired effect.
+
+Since the lowering currently does not have a usecase for lifting lowered child nodes if they are value expressions, the corresponding `to_iterator` method has been omitted. It can be introduced at a later time, if a usecase for it is found, it should be analogous to `to_value` and therefore easy to implement (in about four lines).
+
 ### 2022-02-22: Added reduction lowering
 Lowering reductions is not completely straightforward (at the time of writing) because expressions inside a reduction in field view may contain fields shifted to neighbor dimensions.
 

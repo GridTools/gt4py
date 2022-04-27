@@ -1,19 +1,21 @@
 from dataclasses import dataclass
-from typing import Iterator, Optional, Type, TypeGuard
+from typing import Iterator, Optional, Type, TypeGuard, cast
 
 from functional.common import GTTypeError
 from functional.ffront.common_types import (
+    DataType,
     DeferredSymbolType,
     FieldType,
     FunctionType,
     ScalarKind,
     ScalarType,
     SymbolType,
+    TupleType,
     VoidType,
 )
 
 
-def is_complete_symbol_type(sym_type: SymbolType) -> TypeGuard[SymbolType]:
+def is_complete_symbol_type(sym_type: Optional[SymbolType]) -> TypeGuard[SymbolType]:
     """Figure out if the foast type is completely deduced."""
     match sym_type:
         case None:
@@ -22,6 +24,12 @@ def is_complete_symbol_type(sym_type: SymbolType) -> TypeGuard[SymbolType]:
             return False
         case SymbolType():
             return True
+    return False
+
+
+def is_complete_scalar_type(sym_type: Optional[SymbolType]) -> TypeGuard[ScalarType]:
+    if isinstance(sym_type, ScalarType):
+        return True
     return False
 
 
@@ -92,9 +100,9 @@ class TypeInfo:
     def constraint(self) -> Optional[Type[SymbolType]]:
         """Find the constraint of a deferred type or the class of a complete type."""
         if self.is_complete:
-            return self.type.__class__
+            return cast(SymbolType, self.type).__class__
         elif self.type:
-            return self.type.constraint
+            return cast(DeferredSymbolType, self.type).constraint
         return None
 
     @property
@@ -124,6 +132,24 @@ class TypeInfo:
     @property
     def is_callable(self) -> bool:
         return isinstance(self.type, FunctionType)
+
+    @property
+    def dims(self) -> Optional[list]:
+        return getattr(self.type, "dims", None)
+
+    @property
+    def dtype(self) -> Optional[ScalarType]:
+        if self.is_complete and self.is_scalar:
+            return cast(ScalarType, self.type)
+        if self.is_complete and self.is_field_type:
+            return cast(FieldType, self.type).dtype
+        return None
+
+    @property
+    def element_types(self) -> list[DataType]:
+        if isinstance(self.type, TupleType):
+            return self.type.types
+        return []
 
     def is_callable_for_args(
         self,
@@ -158,13 +184,13 @@ class TypeInfo:
                 raise GTTypeError(f"Expected a function type, but got `{self.type}`.")
             return False
 
-        errors = function_signature_incompatibilities(self.type, args, kwargs)
+        errors = function_signature_incompatibilities(cast(FunctionType, self.type), args, kwargs)
         if raise_exception:
-            errors = list(errors)
-            if len(errors) > 0:
+            error_list = list(errors)
+            if len(error_list) > 0:
                 raise GTTypeError(
                     f"Invalid call to function of type `{self.type}`:\n"
-                    + ("\n".join([f"  - {error}" for error in errors]))
+                    + ("\n".join([f"  - {error}" for error in error_list]))
                 )
             return True
 
