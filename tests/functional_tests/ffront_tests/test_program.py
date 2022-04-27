@@ -13,6 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # TODO(tehrengruber): All field operators and programs should be executable
 #  as is at some point. Adopt tests to also run on the regular python objects.
+import pathlib
 import re
 
 import numpy as np
@@ -112,6 +113,15 @@ def invalid_out_slice_dims_program_def(identity_def):
     return invalid_out_slice_dims_program
 
 
+@pytest.fixture
+def itir_identity_fundef():
+    return itir.FunctionDefinition(
+        id="identity",
+        params=[itir.Sym(id="x")],
+        expr=itir.FunCall(fun=itir.SymRef(id="deref"), args=[itir.SymRef(id="x")]),
+    )
+
+
 def test_identity_fo_execution(identity_def):
     size = 10
     in_field = np_as_located_field(IDim)(np.ones((size)))
@@ -145,7 +155,7 @@ def test_copy_parsing(copy_program_def):
                 kwargs={"out": P(past.Name, id="out_field")},
             )
         ],
-        location=P(past.SourceLocation, line=58, source=__file__),
+        location=P(past.SourceLocation, line=59, source=str(pathlib.Path(__file__).resolve())),
     )
     assert pattern_node.match(past_node, raise_exception=True)
 
@@ -268,9 +278,9 @@ def test_copy_restrict_parsing(copy_restrict_program_def):
     pattern_node.match(past_node, raise_exception=True)
 
 
-def test_copy_lowering(copy_program_def):
+def test_copy_lowering(copy_program_def, itir_identity_fundef):
     past_node = ProgramParser.apply_to_function(copy_program_def)
-    itir_node = ProgramLowering.apply(past_node)
+    itir_node = ProgramLowering.apply(past_node, function_definitions=[itir_identity_fundef])
     closure_pattern = P(
         itir.StencilClosure,
         domain=P(
@@ -282,7 +292,7 @@ def test_copy_lowering(copy_program_def):
                     fun=P(itir.SymRef, id="named_range"),
                     args=[
                         P(itir.AxisLiteral, value="IDim"),
-                        P(itir.IntLiteral, value=0),
+                        P(itir.Literal, value="0", type="int"),
                         P(itir.SymRef, id="__out_field_size_0"),
                     ],
                 )
@@ -307,9 +317,9 @@ def test_copy_lowering(copy_program_def):
     fencil_pattern.match(itir_node, raise_exception=True)
 
 
-def test_copy_restrict_lowering(copy_restrict_program_def):
+def test_copy_restrict_lowering(copy_restrict_program_def, itir_identity_fundef):
     past_node = ProgramParser.apply_to_function(copy_restrict_program_def)
-    itir_node = ProgramLowering.apply(past_node)
+    itir_node = ProgramLowering.apply(past_node, function_definitions=[itir_identity_fundef])
     closure_pattern = P(
         itir.StencilClosure,
         domain=P(
@@ -321,8 +331,8 @@ def test_copy_restrict_lowering(copy_restrict_program_def):
                     fun=P(itir.SymRef, id="named_range"),
                     args=[
                         P(itir.AxisLiteral, value="IDim"),
-                        P(itir.IntLiteral, value=1),
-                        P(itir.IntLiteral, value=2),
+                        P(itir.Literal, value="1", type="int"),
+                        P(itir.Literal, value="2", type="int"),
                     ],
                 )
             ],

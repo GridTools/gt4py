@@ -1,4 +1,5 @@
 import importlib.util
+import pathlib
 import tempfile
 from typing import Iterable
 
@@ -15,18 +16,16 @@ from functional.iterator.transforms import apply_common_transforms
 class EmbeddedDSL(codegen.TemplatedGenerator):
     Sym = as_fmt("{id}")
     SymRef = as_fmt("{id}")
-    BoolLiteral = as_fmt("{value}")
-    IntLiteral = as_fmt("{value}")
-    FloatLiteral = as_fmt("{value}")
+    Literal = as_fmt("{value}")
     NoneLiteral = as_fmt("None")
     OffsetLiteral = as_fmt("{value}")
     AxisLiteral = as_fmt("{value}")
-    StringLiteral = as_fmt("{value}")
     FunCall = as_fmt("{fun}({','.join(args)})")
     Lambda = as_mako("(lambda ${','.join(params)}: ${expr})")
     StencilClosure = as_mako("closure(${domain}, ${stencil}, ${output}, [${','.join(inputs)}])")
     FencilDefinition = as_mako(
         """
+${''.join(function_definitions)}
 @fendef
 def ${id}(${','.join(params)}):
     ${'\\n    '.join(closures)}
@@ -38,10 +37,6 @@ def ${id}(${','.join(params)}):
 def ${id}(${','.join(params)}):
     return ${expr}
     """
-    )
-    Program = as_fmt(
-        """
-{''.join(function_definitions)} {''.join(fencil_definitions)}"""
     )
 
 
@@ -103,53 +98,55 @@ def executor(ir: Node, *args, **kwargs):
     axis_literals: Iterable[str] = (
         ir.iter_tree().if_isinstance(AxisLiteral).getattr("value").to_set()
     )
-    with tempfile.NamedTemporaryFile(
-        mode="w",
-        suffix=".py",
-        delete=not debug,
-    ) as tmp:
-        if debug:
-            print(tmp.name)
-        header = """
+
+    header = """
 import numpy as np
 from functional.iterator.builtins import *
 from functional.iterator.runtime import *
 from functional.iterator.embedded import np_as_located_field
 """
+
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as source_file:
+        source_file_name = source_file.name
+        if debug:
+            print(source_file_name)
         offset_literals = [f'{o} = offset("{o}")' for o in offset_literals]
         axis_literals = [f'{o} = CartesianAxis("{o}")' for o in axis_literals]
-        tmp.write(header)
-        tmp.write("\n".join(offset_literals))
-        tmp.write("\n")
-        tmp.write("\n".join(axis_literals))
-        tmp.write("\n")
-        tmp.write(program)
-        tmp.write(wrapper)
-        tmp.flush()
+        source_file.write(header)
+        source_file.write("\n".join(offset_literals))
+        source_file.write("\n")
+        source_file.write("\n".join(axis_literals))
+        source_file.write("\n")
+        source_file.write(program)
+        source_file.write(wrapper)
 
-        spec = importlib.util.spec_from_file_location("module.name", tmp.name)
+    try:
+        spec = importlib.util.spec_from_file_location("module.name", source_file_name)
         foo = importlib.util.module_from_spec(spec)  # type: ignore
         spec.loader.exec_module(foo)  # type: ignore
+    finally:
+        if not debug:
+            pathlib.Path(source_file_name).unlink(missing_ok=True)
 
-        fencil_name = ir.fencil_definitions[0].id
-        fencil = getattr(foo, fencil_name + "_wrapper")
-        assert "offset_provider" in kwargs
+    fencil_name = ir.id
+    fencil = getattr(foo, fencil_name + "_wrapper")
+    assert "offset_provider" in kwargs
 
-        new_kwargs = {}
-        new_kwargs["offset_provider"] = kwargs["offset_provider"]
-        if "column_axis" in kwargs:
-            new_kwargs["column_axis"] = kwargs["column_axis"]
+    new_kwargs = {}
+    new_kwargs["offset_provider"] = kwargs["offset_provider"]
+    if "column_axis" in kwargs:
+        new_kwargs["column_axis"] = kwargs["column_axis"]
 
-        if "dispatch_backend" not in kwargs:
-            iterator.builtins.builtin_dispatch.push_key("embedded")
-            fencil(*args, **new_kwargs)
-            iterator.builtins.builtin_dispatch.pop_key()
-        else:
-            fencil(
-                *args,
-                **new_kwargs,
-                backend=kwargs["dispatch_backend"],
-            )
+    if "dispatch_backend" not in kwargs:
+        iterator.builtins.builtin_dispatch.push_key("embedded")
+        fencil(*args, **new_kwargs)
+        iterator.builtins.builtin_dispatch.pop_key()
+    else:
+        fencil(
+            *args,
+            **new_kwargs,
+            backend=kwargs["dispatch_backend"],
+        )
 
 
 backend.register_backend(_BACKEND_NAME, executor)

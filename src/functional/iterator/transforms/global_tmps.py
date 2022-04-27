@@ -43,13 +43,19 @@ class CreateGlobalTmps(NodeTranslator):
                         axis_literal,
                         ir.FunCall(
                             fun=ir.SymRef(id="plus"),
-                            args=[lower_bound, ir.IntLiteral(value=lower_offset)],
+                            args=[
+                                lower_bound,
+                                ir.Literal(value=str(lower_offset), type="int"),
+                            ],
                         )
                         if lower_offset
                         else lower_bound,
                         ir.FunCall(
                             fun=ir.SymRef(id="plus"),
-                            args=[upper_bound, ir.IntLiteral(value=upper_offset)],
+                            args=[
+                                upper_bound,
+                                ir.Literal(value=str(upper_offset), type="int"),
+                            ],
                         )
                         if upper_offset
                         else upper_bound,
@@ -127,5 +133,8 @@ class CreateGlobalTmps(NodeTranslator):
                 register_tmp(tmp, domain)
 
         return ir.FencilDefinition(
-            id=node.id, params=node.params + tmps, closures=list(reversed(closures))
+            id=node.id,
+            function_definitions=node.function_definitions,
+            params=node.params + tmps,
+            closures=list(reversed(closures)),
         )

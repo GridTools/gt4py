@@ -12,6 +12,7 @@ def use_tmps(request):
         (None, True),
         ("lisp", False),
         ("cpptoy", False),
+        ("pretty_print", False),
         ("roundtrip", True),
         ("double_roundtrip", True),
     ],

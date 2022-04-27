@@ -4,8 +4,12 @@ import numpy as np
 import pytest
 
 from functional.iterator.builtins import *
-from functional.iterator.embedded import np_as_located_field
-from functional.iterator.runtime import CartesianAxis, closure, fendef, fundef
+from functional.iterator.embedded import (
+    NeighborTableOffsetProvider,
+    index_field,
+    np_as_located_field,
+)
+from functional.iterator.runtime import CartesianAxis, closure, fendef, fundef, offset
 
 from .test_hdiff import I
 
@@ -37,8 +41,8 @@ def fencil(builtin, out, *inps, backend):
             return builtin(deref(arg0))
 
         @fendef(offset_provider={})
-        def fenimpl(domain, arg0, out):
-            closure(domain, sten, out, [arg0])
+        def fenimpl(dom, arg0, out):
+            closure(dom, sten, out, [arg0])
 
     elif len(inps) == 2:
 
@@ -47,8 +51,8 @@ def fencil(builtin, out, *inps, backend):
             return builtin(deref(arg0), deref(arg1))
 
         @fendef(offset_provider={})
-        def fenimpl(domain, arg0, arg1, out):
-            closure(domain, sten, out, [arg0, arg1])
+        def fenimpl(dom, arg0, arg1, out):
+            closure(dom, sten, out, [arg0, arg1])
 
     elif len(inps) == 3:
 
@@ -57,8 +61,8 @@ def fencil(builtin, out, *inps, backend):
             return builtin(deref(arg0), deref(arg1), deref(arg2))
 
         @fendef(offset_provider={})
-        def fenimpl(domain, arg0, arg1, arg2, out):
-            closure(domain, sten, out, [arg0, arg1, arg2])
+        def fenimpl(dom, arg0, arg1, arg2, out):
+            closure(dom, sten, out, [arg0, arg1, arg2])
 
     else:
         raise AssertionError("Add overload")
@@ -102,3 +106,78 @@ def test_arithmetic_and_logical_builtins(backend, builtin, inputs, expected):
 
     if validate:
         assert np.allclose(np.asarray(out), expected)
+
+
+Neighbor = offset("Neighbor")
+
+
+@fundef
+def _can_deref(inp):
+    shifted = shift(Neighbor, 0)(inp)
+    return if_(can_deref(shifted), deref(shifted), -1)
+
+
+@fundef
+def _can_deref_lifted(inp):
+    def foo(a):
+        return deref(a)
+
+    shifted = shift(Neighbor, 0)(lift(foo)(inp))
+    return if_(can_deref(shifted), deref(shifted), -1)
+
+
+@pytest.mark.parametrize("stencil", [_can_deref, _can_deref_lifted])
+def test_can_deref(backend, stencil):
+    backend, validate = backend
+
+    Node = CartesianAxis("Node")
+
+    inp = np_as_located_field(Node)(np.ones((1,)))
+    out = np_as_located_field(Node)(np.asarray([0]))
+
+    no_neighbor_tbl = NeighborTableOffsetProvider(np.array([[None]]), Node, Node, 1)
+    stencil[{Node: range(1)}](
+        inp, out=out, offset_provider={"Neighbor": no_neighbor_tbl}, backend=backend
+    )
+
+    if validate:
+        assert np.allclose(np.asarray(out), -1.0)
+
+    a_neighbor_tbl = NeighborTableOffsetProvider(np.array([[0]]), Node, Node, 1)
+    stencil[{Node: range(1)}](
+        inp, out=out, offset_provider={"Neighbor": a_neighbor_tbl}, backend=backend
+    )
+
+    if validate:
+        assert np.allclose(np.asarray(out), 1.0)
+
+
+# def test_can_deref_lifted(backend):
+#     backend, validate = backend
+
+#     Neighbor = offset("Neighbor")
+#     Node = CartesianAxis("Node")
+
+#     @fundef
+#     def _can_deref(inp):
+#         shifted = shift(Neighbor, 0)(inp)
+#         return if_(can_deref(shifted), 1, -1)
+
+#     inp = np_as_located_field(Node)(np.zeros((1,)))
+#     out = np_as_located_field(Node)(np.asarray([0]))
+
+#     no_neighbor_tbl = NeighborTableOffsetProvider(np.array([[None]]), Node, Node, 1)
+#     _can_deref[{Node: range(1)}](
+#         inp, out=out, offset_provider={"Neighbor": no_neighbor_tbl}, backend=backend
+#     )
+
+#     if validate:
+#         assert np.allclose(np.asarray(out), -1.0)
+
+#     a_neighbor_tbl = NeighborTableOffsetProvider(np.array([[0]]), Node, Node, 1)
+#     _can_deref[{Node: range(1)}](
+#         inp, out=out, offset_provider={"Neighbor": a_neighbor_tbl}, backend=backend
+#     )
+
+#     if validate:
+#         assert np.allclose(np.asarray(out), 1.0)

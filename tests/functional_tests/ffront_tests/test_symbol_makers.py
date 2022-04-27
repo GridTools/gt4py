@@ -19,7 +19,7 @@ import typing
 import numpy as np
 import pytest
 
-from eve import typingx
+from eve import extended_typing as xtyping
 from functional import common
 from functional.ffront import common_types
 from functional.ffront import field_operator_ast as foast
@@ -67,7 +67,7 @@ def test_invalid_scalar_kind():
             typing.Tuple[int, float],
             common_types.TupleType(
                 types=[
-                    common_types.ScalarType(kind=common_types.ScalarKind.INT64),
+                    common_types.ScalarType(kind=common_types.ScalarKind.INT),
                     common_types.ScalarType(kind=common_types.ScalarKind.FLOAT64),
                 ]
             ),
@@ -79,7 +79,7 @@ def test_invalid_scalar_kind():
                     common_types.ScalarType(kind=common_types.ScalarKind.BOOL),
                     common_types.TupleType(
                         types=[
-                            common_types.ScalarType(kind=common_types.ScalarKind.INT64),
+                            common_types.ScalarType(kind=common_types.ScalarKind.INT),
                             common_types.ScalarType(kind=common_types.ScalarKind.FLOAT64),
                         ]
                     ),
@@ -101,15 +101,15 @@ def test_invalid_scalar_kind():
         ),
         (
             typing.Annotated[
-                typing.Callable[["float", int], int], typingx.CallableKwargsInfo(data={})
+                typing.Callable[["float", int], int], xtyping.CallableKwargsInfo(data={})
             ],
             common_types.FunctionType(
                 args=[
                     common_types.ScalarType(kind=common_types.ScalarKind.FLOAT64),
-                    common_types.ScalarType(kind=common_types.ScalarKind.INT64),
+                    common_types.ScalarType(kind=common_types.ScalarKind.INT),
                 ],
                 kwargs={},
-                returns=common_types.ScalarType(kind=common_types.ScalarKind.INT64),
+                returns=common_types.ScalarType(kind=common_types.ScalarKind.INT),
             ),
         ),
         (typing.ForwardRef("float"), common_types.ScalarType(kind=common_types.ScalarKind.FLOAT64)),
@@ -172,10 +172,3 @@ def test_invalid_symbol_types():
         symbol_makers.make_symbol_type_from_typing(typing.Callable[[int], str])
     with pytest.raises(symbol_makers.TypingError, match="Invalid callable annotations"):
         symbol_makers.make_symbol_type_from_typing(typing.Callable[[int], float])
-
-    with pytest.raises(symbol_makers.TypingError, match="'<class 'str'>' type is not supported"):
-        symbol_makers.make_symbol_type_from_typing(
-            typing.Annotated[
-                typing.Callable[["float", int], str], typingx.CallableKwargsInfo(data={})
-            ]
-        )
