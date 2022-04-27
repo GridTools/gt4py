@@ -42,12 +42,10 @@ def are_broadcast_compatible(left: TypeInfo, right: TypeInfo) -> bool:
     both_dims_given &= left.dims is not Ellipsis
     both_dims_given &= right.dims is not Ellipsis
     if both_dims_given and any(
-        [
-            ldim != rdim
-            for ldim, rdim in zip(
-                left.dims, right.dims  # type: ignore[arg-type]  # we know they are lists here
-            )
-        ]
+        ldim != rdim
+        for ldim, rdim in zip(
+            left.dims, right.dims  # type: ignore[arg-type]  # we know they are lists here
+        )
     ):
         return False
     return left.dtype == right.dtype
