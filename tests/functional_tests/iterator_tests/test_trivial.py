@@ -27,7 +27,7 @@ def baz(baz_inp):
     return deref(lift(bar)(baz_inp))
 
 
-def test_trivial(backend, use_tmps):
+def test_trivial(backend, lift_mode):
     backend, validate = backend
     rng = np.random.default_rng()
     inp = rng.uniform(size=(5, 7, 9))
@@ -38,7 +38,11 @@ def test_trivial(backend, use_tmps):
     out_s = np_as_located_field(IDim, JDim)(np.zeros_like(inp[:, :, 0]))
 
     baz[domain(named_range(IDim, 0, shape[0]), named_range(JDim, 0, shape[1]))](
-        inp_s, out=out_s, backend=backend, use_tmps=use_tmps, offset_provider={"I": IDim, "J": JDim}
+        inp_s,
+        out=out_s,
+        backend=backend,
+        lift_mode=lift_mode,
+        offset_provider={"I": IDim, "J": JDim},
     )
 
     if validate:
@@ -58,7 +62,7 @@ def fen_direct_deref(i_size, j_size, out, inp):
     )
 
 
-def test_direct_deref(backend, use_tmps):
+def test_direct_deref(backend, lift_mode):
     backend, validate = backend
     rng = np.random.default_rng()
     inp = rng.uniform(size=(5, 7))
@@ -68,7 +72,7 @@ def test_direct_deref(backend, use_tmps):
     out_s = np_as_located_field(IDim, JDim)(np.zeros_like(inp))
 
     fen_direct_deref(
-        *out.shape, out_s, inp_s, backend=backend, use_tmps=use_tmps, offset_provider=dict()
+        *out.shape, out_s, inp_s, backend=backend, lift_mode=lift_mode, offset_provider=dict()
     )
 
     if validate:

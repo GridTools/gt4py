@@ -54,7 +54,7 @@ def hdiff(inp, coeff, out, x, y):
     )
 
 
-def test_hdiff(hdiff_reference, backend, use_tmps):
+def test_hdiff(hdiff_reference, backend, lift_mode):
     backend, validate = backend
     inp, coeff, out = hdiff_reference
     shape = (out.shape[0], out.shape[1])
@@ -63,7 +63,7 @@ def test_hdiff(hdiff_reference, backend, use_tmps):
     coeff_s = np_as_located_field(IDim, JDim)(coeff[:, :, 0])
     out_s = np_as_located_field(IDim, JDim)(np.zeros_like(coeff[:, :, 0]))
 
-    hdiff(inp_s, coeff_s, out_s, shape[0], shape[1], backend=backend, use_tmps=use_tmps)
+    hdiff(inp_s, coeff_s, out_s, shape[0], shape[1], backend=backend, lift_mode=lift_mode)
 
     if validate:
         assert np.allclose(out[:, :, 0], out_s)

@@ -119,7 +119,7 @@ def nabla(
     )
 
 
-def test_compute_zavgS(backend, use_tmps):
+def test_compute_zavgS(backend, lift_mode):
     backend, validate = backend
     setup = nabla_setup()
 
@@ -137,7 +137,7 @@ def test_compute_zavgS(backend, use_tmps):
         S_MXX,
         offset_provider={"E2V": e2v},
         backend=backend,
-        use_tmps=use_tmps,
+        lift_mode=lift_mode,
     )
 
     if validate:
@@ -151,7 +151,7 @@ def test_compute_zavgS(backend, use_tmps):
         S_MYY,
         offset_provider={"E2V": e2v},
         backend=backend,
-        use_tmps=use_tmps,
+        lift_mode=lift_mode,
     )
     if validate:
         assert_close(-1000788897.3202186, min(zavgS))
@@ -173,7 +173,7 @@ def compute_zavgS2_fencil(
     )
 
 
-def test_compute_zavgS2(backend, use_tmps):
+def test_compute_zavgS2(backend, lift_mode):
     backend, validate = backend
     setup = nabla_setup()
 
@@ -197,7 +197,7 @@ def test_compute_zavgS2(backend, use_tmps):
         S,
         offset_provider={"E2V": e2v},
         backend=backend,
-        use_tmps=use_tmps,
+        lift_mode=lift_mode,
     )
 
     if validate:
@@ -208,7 +208,7 @@ def test_compute_zavgS2(backend, use_tmps):
         assert_close(1000788897.3202186, max(zavgS[1]))
 
 
-def test_nabla(backend, use_tmps):
+def test_nabla(backend, lift_mode):
     backend, validate = backend
     setup = nabla_setup()
 
@@ -233,8 +233,7 @@ def test_nabla(backend, use_tmps):
         vol,
         offset_provider={"E2V": e2v, "V2E": v2e},
         backend=backend,
-        use_tmps=use_tmps,
-        debug=True,
+        lift_mode=lift_mode,
     )
 
     if validate:
@@ -261,7 +260,7 @@ def nabla2(
     )
 
 
-def test_nabla2(backend, use_tmps):
+def test_nabla2(backend, lift_mode):
     backend, validate = backend
     setup = nabla_setup()
 
@@ -287,7 +286,7 @@ def test_nabla2(backend, use_tmps):
         vol,
         offset_provider={"E2V": e2v, "V2E": v2e},
         backend=backend,
-        use_tmps=use_tmps,
+        lift_mode=lift_mode,
     )
 
     if validate:
@@ -334,7 +333,7 @@ def nabla_sign(n_nodes, out_MXX, out_MYY, pp, S_MXX, S_MYY, vol, node_index, is_
     )
 
 
-def test_nabla_sign(backend, use_tmps):
+def test_nabla_sign(backend, lift_mode):
     backend, validate = backend
     setup = nabla_setup()
 
@@ -362,7 +361,7 @@ def test_nabla_sign(backend, use_tmps):
         is_pole_edge,
         offset_provider={"E2V": e2v, "V2E": v2e},
         backend=backend,
-        use_tmps=use_tmps,
+        lift_mode=lift_mode,
     )
 
     if validate:

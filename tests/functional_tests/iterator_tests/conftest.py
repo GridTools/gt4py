@@ -1,8 +1,17 @@
 import pytest
 
+from functional.iterator.transforms.common import LiftMode
 
-@pytest.fixture(params=[False, True], ids=lambda p: f"use_tmps={p}")
-def use_tmps(request):
+
+@pytest.fixture(
+    params=[
+        LiftMode.FORCE_INLINE,
+        LiftMode.FORCE_TEMPORARIES,
+        LiftMode.SIMPLE_HEURISTIC,
+    ],
+    ids=lambda p: f"lift_mode={p}",
+)
+def lift_mode(request):
     return request.param
 
 

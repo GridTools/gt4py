@@ -44,7 +44,7 @@ class ToyCpp(codegen.TemplatedGenerator):
     def apply(cls, root, **kwargs: Any) -> str:
         transformed = apply_common_transforms(
             root,
-            use_tmps=kwargs.get("use_tmps", False),
+            lift_mode=kwargs.get("lift_mode"),
             offset_provider=kwargs.get("offset_provider", None),
         )
         generated_code = super().apply(transformed, **kwargs)

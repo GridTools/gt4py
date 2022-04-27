@@ -29,7 +29,7 @@ def fencil(i_size, k_size, inp, out):
     )
 
 
-def test_column_stencil(backend, use_tmps):
+def test_column_stencil(backend, lift_mode):
     backend, validate = backend
     shape = [5, 7]
     inp = np_as_located_field(IDim, KDim)(
@@ -46,14 +46,14 @@ def test_column_stencil(backend, use_tmps):
         out,
         offset_provider={"I": IDim, "K": KDim},
         backend=backend,
-        use_tmps=use_tmps,
+        lift_mode=lift_mode,
     )
 
     if validate:
         assert np.allclose(ref, out)
 
 
-def test_column_stencil_with_k_origin(backend, use_tmps):
+def test_column_stencil_with_k_origin(backend, lift_mode):
     backend, validate = backend
     shape = [5, 7]
     raw_inp = np.fromfunction(lambda i, k: i * 10 + k, [shape[0] + 1, shape[1] + 2])
@@ -69,7 +69,7 @@ def test_column_stencil_with_k_origin(backend, use_tmps):
         out,
         offset_provider={"I": IDim, "K": KDim},
         backend=backend,
-        use_tmps=use_tmps,
+        lift_mode=lift_mode,
     )
 
     if validate:
@@ -96,7 +96,7 @@ def ksum_fencil(i_size, k_size, inp, out):
     )
 
 
-def test_ksum_scan(backend, use_tmps):
+def test_ksum_scan(backend, lift_mode):
     backend, validate = backend
     shape = [1, 7]
     inp = np_as_located_field(IDim, KDim)(np.asarray([list(range(7))]))
@@ -111,7 +111,7 @@ def test_ksum_scan(backend, use_tmps):
         out,
         offset_provider={"I": IDim, "K": KDim},
         backend=backend,
-        use_tmps=use_tmps,
+        lift_mode=lift_mode,
     )
 
     if validate:
@@ -133,7 +133,7 @@ def ksum_back_fencil(i_size, k_size, inp, out):
     )
 
 
-def test_ksum_back_scan(backend, use_tmps):
+def test_ksum_back_scan(backend, lift_mode):
     backend, validate = backend
     shape = [1, 7]
     inp = np_as_located_field(IDim, KDim)(np.asarray([list(range(7))]))
@@ -148,7 +148,7 @@ def test_ksum_back_scan(backend, use_tmps):
         out,
         offset_provider={"I": IDim, "K": KDim},
         backend=backend,
-        use_tmps=use_tmps,
+        lift_mode=lift_mode,
     )
 
     if validate:

@@ -7,7 +7,7 @@ from functional.iterator.transforms.global_tmps import FencilWithTemporaries
 def check(root, *args, **kwargs):
     print(type_inference.pretty_str(type_inference.infer(root)))
     transformed = apply_common_transforms(
-        root, use_tmps=kwargs.get("use_tmps", False), offset_provider=kwargs["offset_provider"]
+        root, lift_mode=kwargs.get("lift_mode"), offset_provider=kwargs["offset_provider"]
     )
     if isinstance(transformed, FencilWithTemporaries):
         transformed = transformed.fencil

@@ -89,9 +89,9 @@ _BACKEND_NAME = "roundtrip"
 
 def executor(ir: Node, *args, **kwargs):
     debug = "debug" in kwargs and kwargs["debug"] is True
-    use_tmps = "use_tmps" in kwargs and kwargs["use_tmps"] is True
+    lift_mode = "lift_mode" in kwargs and kwargs["lift_mode"] is True
 
-    ir = apply_common_transforms(ir, use_tmps=use_tmps, offset_provider=kwargs["offset_provider"])
+    ir = apply_common_transforms(ir, lift_mode=lift_mode, offset_provider=kwargs["offset_provider"])
 
     program = EmbeddedDSL.apply(ir)
     offset_literals: Iterable[str] = (

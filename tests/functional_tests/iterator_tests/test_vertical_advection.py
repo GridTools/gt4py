@@ -65,7 +65,7 @@ def fen_solve_tridiag(i_size, j_size, k_size, a, b, c, d, x):
     )
 
 
-def test_tridiag(tridiag_reference, backend, use_tmps):
+def test_tridiag(tridiag_reference, backend, lift_mode):
     backend, validate = backend
     a, b, c, d, x = tridiag_reference
     shape = a.shape
@@ -88,7 +88,7 @@ def test_tridiag(tridiag_reference, backend, use_tmps):
         offset_provider={},
         column_axis=KDim,
         backend=backend,
-        use_tmps=use_tmps,
+        lift_mode=lift_mode,
     )
 
     if validate:
