@@ -39,8 +39,8 @@ def are_broadcast_compatible(left: TypeInfo, right: TypeInfo) -> bool:
 
     """
     both_dims_given = bool(left.dims and right.dims)
-    both_dims_given &= left.dims != GenericDimensions()
-    both_dims_given &= right.dims != GenericDimensions()
+    both_dims_given &= not isinstance(left.dims, GenericDimensions)
+    both_dims_given &= not isinstance(right.dims, GenericDimensions)
     if both_dims_given and any(
         ldim != rdim
         for ldim, rdim in zip(
