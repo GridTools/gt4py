@@ -14,11 +14,14 @@ EMBEDDED = "embedded"
 
 
 class NeighborTableOffsetProvider:
-    def __init__(self, tbl, origin_axis, neighbor_axis, max_neighbors) -> None:
+    def __init__(
+        self, tbl, origin_axis, neighbor_axis, max_neighbors, has_skip_values=True
+    ) -> None:
         self.tbl = tbl
         self.origin_axis = origin_axis
         self.neighbor_axis = neighbor_axis
         self.max_neighbors = max_neighbors
+        self.has_skip_values = has_skip_values
 
 
 @builtins.deref.register(EMBEDDED)
