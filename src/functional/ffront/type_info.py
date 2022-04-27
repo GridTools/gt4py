@@ -134,7 +134,7 @@ class TypeInfo:
         return isinstance(self.type, FunctionType)
 
     @property
-    def dims(self) -> Optional[list | Ellipsis]:  # type: ignore[valid-type]  # valid type or not, it can be returned here
+    def dims(self) -> Optional[list]:  # can also be Ellipsis
         return getattr(self.type, "dims", None)
 
     @property
