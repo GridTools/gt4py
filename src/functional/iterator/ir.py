@@ -9,7 +9,7 @@ from functional.iterator.util.sym_validation import validate_symbol_refs
 
 @noninstantiable
 class Node(eve.Node):
-    def __str__(self):
+    def __str__(self) -> str:
         from functional.iterator.pretty_printer import pformat
 
         return pformat(self)
@@ -76,6 +76,7 @@ BUILTINS = {
     "tuple_get",
     "reduce",
     "deref",
+    "can_deref",
     "shift",
     "scan",
     "plus",

@@ -103,6 +103,11 @@ def deref(arg):
     return _f("deref", arg)
 
 
+@iterator.builtins.can_deref.register(TRACING)
+def can_deref(arg):
+    return _f("can_deref", arg)
+
+
 @iterator.builtins.lift.register(TRACING)
 def lift(sten):
     return _f("lift", sten)

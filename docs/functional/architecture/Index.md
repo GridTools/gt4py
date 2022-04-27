@@ -34,7 +34,7 @@ Writing a new ADR is simple:
 _None_
 
 ### Backends and Code Generation
-_None_
+- [0006 - C++ Backend](0006-Cpp-Backend.md)
 
 ### Miscellanea
 _None_
