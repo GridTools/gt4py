@@ -17,7 +17,7 @@ import functional.ffront.field_operator_ast as foast
 from eve import NodeTranslator, SymbolTableTrait
 from functional.common import GTSyntaxError
 from functional.ffront import common_types as ct
-from functional.ffront.type_info import TypeInfo, is_complete_symbol_type
+from functional.ffront.type_info import GenericDimensions, TypeInfo, is_complete_symbol_type
 
 
 def are_broadcast_compatible(left: TypeInfo, right: TypeInfo) -> bool:
@@ -39,8 +39,8 @@ def are_broadcast_compatible(left: TypeInfo, right: TypeInfo) -> bool:
 
     """
     both_dims_given = bool(left.dims and right.dims)
-    both_dims_given &= left.dims is not Ellipsis
-    both_dims_given &= right.dims is not Ellipsis
+    both_dims_given &= left.dims != GenericDimensions()
+    both_dims_given &= right.dims != GenericDimensions()
     if both_dims_given and any(
         ldim != rdim
         for ldim, rdim in zip(
@@ -69,7 +69,7 @@ def broadcast_typeinfos(left: TypeInfo, right: TypeInfo) -> Optional[TypeInfo]:
         return None
     if left.is_scalar and right.is_field_type:
         return right
-    elif left.dims and right.dims and len(right.dims) > len(left.dims):
+    if left.dims and right.dims and len(right.dims) > len(left.dims):
         return right
     return left
 

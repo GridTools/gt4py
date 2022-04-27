@@ -15,6 +15,13 @@ from functional.ffront.common_types import (
 )
 
 
+class GenericDimensions:
+    """Sentry for generic dimensions to be returned instead of `Ellipsis`."""
+
+    def __len__(self):
+        return 0
+
+
 def is_complete_symbol_type(sym_type: Optional[SymbolType]) -> TypeGuard[SymbolType]:
     """Figure out if the foast type is completely deduced."""
     match sym_type:
@@ -134,8 +141,9 @@ class TypeInfo:
         return isinstance(self.type, FunctionType)
 
     @property
-    def dims(self) -> Optional[list]:  # can also be Ellipsis
-        return getattr(self.type, "dims", None)
+    def dims(self) -> Optional[list | GenericDimensions]:
+        result = getattr(self.type, "dims", None)
+        return result if result is not Ellipsis else GenericDimensions()
 
     @property
     def dtype(self) -> Optional[ScalarType]:
