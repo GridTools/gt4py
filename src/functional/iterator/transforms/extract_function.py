@@ -1,9 +1,7 @@
-from typing import Tuple
-
 from functional.iterator import ir
 
 
-def extract_function(node: ir.Node, new_name: str) -> Tuple[ir.SymRef, ir.FunctionDefinition]:
+def extract_function(node: ir.Node, new_name: str) -> tuple[ir.SymRef, ir.FunctionDefinition]:
     """
     Extract a node into a FunctionDefinition.
 
