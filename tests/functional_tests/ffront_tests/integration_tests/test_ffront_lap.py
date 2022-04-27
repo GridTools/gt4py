@@ -72,7 +72,7 @@ def lap_ref(inp):
 def test_ffront_lap():
     shape = (20, 20)
     as_ij = np_as_located_field(IDim, JDim)
-    input = as_ij(np.fromfunction(lambda x, y: x ** 2 + y ** 2, shape))
+    input = as_ij(np.fromfunction(lambda x, y: x**2 + y**2, shape))
     a4 = as_ij(np.ones(shape) * -4.0)  # TODO support scalar field
 
     result_lap = as_ij(np.zeros_like(input))
