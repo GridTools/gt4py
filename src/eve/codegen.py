@@ -38,7 +38,7 @@ from mako import template as mako_tpl
 
 from . import exceptions, utils
 from .concepts import BaseNode, CollectionNode, LeafNode, Node, TreeNode
-from .typingx import (
+from .extended_typing import (
     Any,
     Callable,
     ClassVar,

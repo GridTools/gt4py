@@ -43,9 +43,6 @@ class NoneLiteral(Expr):
 class OffsetLiteral(Expr):
     value: Union[int, str]
 
-    def __hash__(self):
-        return self.value.__hash__()
-
 
 class AxisLiteral(Expr):
     value: str
