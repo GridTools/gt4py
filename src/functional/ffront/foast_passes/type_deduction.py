@@ -38,7 +38,17 @@ def are_broadcast_compatible(left: TypeInfo, right: TypeInfo) -> bool:
     True
 
     """
-    if all([left.dims, right.dims]) and left.dims != right.dims:
+    both_dims_given = bool(left.dims and right.dims)
+    both_dims_given &= left.dims is not Ellipsis
+    both_dims_given &= right.dims is not Ellipsis
+    if both_dims_given and any(
+        [
+            ldim != rdim
+            for ldim, rdim in zip(
+                left.dims, right.dims  # type: ignore[arg-type]  # we know they are lists here
+            )
+        ]
+    ):
         return False
     return left.dtype == right.dtype
 
@@ -60,6 +70,8 @@ def broadcast_typeinfos(left: TypeInfo, right: TypeInfo) -> Optional[TypeInfo]:
     if not are_broadcast_compatible(left, right):
         return None
     if left.is_scalar and right.is_field_type:
+        return right
+    elif left.dims and right.dims and len(right.dims) > len(left.dims):
         return right
     return left
 

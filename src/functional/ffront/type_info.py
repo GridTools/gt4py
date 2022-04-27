@@ -135,7 +135,10 @@ class TypeInfo:
 
     @property
     def dims(self) -> Optional[list]:
-        return getattr(self.type, "dims", None)
+        result = getattr(self.type, "dims", None)
+        if result is Ellipsis:
+            return []
+        return result
 
     @property
     def dtype(self) -> Optional[ScalarType]:
