@@ -88,6 +88,10 @@ class ProgramLowering(NodeTranslator):
         closures: list[itir.StencilClosure] = []
         for stmt in node.body:
             if isinstance(stmt, past.Call) and isinstance(
+                symtable[stmt.func.id].type, common_types.UnknownFunctionType
+            ):
+                closures.append(self._visit_stencil_call(stmt, **kwargs))
+            elif isinstance(stmt, past.Call) and isinstance(
                 symtable[stmt.func.id].type.returns, common_types.FieldType
             ):
                 closures.append(self._visit_stencil_call(stmt, **kwargs))

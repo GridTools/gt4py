@@ -3,7 +3,7 @@ import sys
 from functional.iterator.backends.gtfn.backend import generate
 from functional.iterator.builtins import *
 from functional.iterator.runtime import closure, fundef, offset
-from functional.iterator.tracing import trace
+from functional.iterator.tracing import trace_fendef
 
 
 E2V = offset("E2V")
@@ -71,7 +71,7 @@ if __name__ == "__main__":
     output_file = sys.argv[1]
 
     # prog = trace(zavgS_fencil, [None] * 4) # TODO allow generating of 2 fencils
-    prog = trace(nabla_fencil, [None] * 6)
+    prog = trace_fendef(nabla_fencil, [None] * 6)
     generated_code = generate(prog, grid_type="unstructured")
 
     with open(output_file, "w+") as output:

@@ -48,6 +48,15 @@ class ProgramTypeDeduction(NodeTranslator):
         func_type = func.type
         # functions returning fields in a program are implicitly converted into
         #  stencil closures. Change function signature accordingly
+        if isinstance(func.type, ct.UnknownFunctionType):
+            return past.Call(
+                func=func,
+                args=args,
+                kwargs=kwargs,
+                type=ct.VoidType(),  # TODO
+                location=node.location,
+            )
+
         if isinstance(func.type.returns, ct.FieldType):
             assert "out" not in func.type.kwargs
             func_type = ct.FunctionType(

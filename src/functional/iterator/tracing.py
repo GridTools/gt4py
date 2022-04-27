@@ -332,7 +332,7 @@ def _make_param_names(fun, args):
     return param_names
 
 
-def trace(fun, args):
+def trace_fendef(fun, args):
     with Tracer() as _:
         param_names = _make_param_names(fun, args)
         trace_function_call(fun, args=(_s(p) for p in param_names))
@@ -345,8 +345,15 @@ def trace(fun, args):
         )
 
 
+def trace_fundef(fun):
+    with Tracer() as _:
+        trace_function_call(fun)
+        assert len(Tracer.fundefs) == 1
+        return Tracer.fundefs[0]
+
+
 def fendef_tracing(fun, *args, **kwargs):
-    fencil = trace(fun, args=args)
+    fencil = trace_fendef(fun, args=args)
     execute_fencil(fencil, *args, **kwargs)
 
 

@@ -36,6 +36,8 @@ from functional.ffront.past_to_itir import ProgramLowering
 from functional.ffront.source_utils import CapturedVars
 from functional.iterator import ir as itir
 from functional.iterator.backend_executor import execute_fencil
+from functional.iterator.runtime import FundefDispatcher
+from functional.iterator.tracing import trace_fundef
 
 
 DEFAULT_BACKEND = "roundtrip"
@@ -141,6 +143,9 @@ class Program:
             #  information. As such we do not need their value.
             if isinstance(value, FieldOffset):
                 continue
+            if isinstance(value, FundefDispatcher):
+                lowered_funcs.append(trace_fundef(value))
+                continue
             if not isinstance(value, GTCallable):
                 raise NotImplementedError("Only function closure vars are allowed currently.")
             itir_node = value.__gt_itir__()
@@ -163,7 +168,7 @@ class Program:
 
         func_names = []
         for captured_var in self.past_node.captured_vars:
-            if isinstance(captured_var.type, ct.FunctionType):
+            if isinstance(captured_var.type, (ct.FunctionType, ct.UnknownFunctionType)):
                 func_names.append(captured_var.id)
             else:
                 raise NotImplementedError("Only function closure vars are allowed currently.")
@@ -171,7 +176,11 @@ class Program:
         vars_ = collections.ChainMap(self.captured_vars.globals, self.captured_vars.nonlocals)
         if undefined := (set(vars_) - set(func_names)):
             raise RuntimeError(f"Reference to undefined symbol(s) `{', '.join(undefined)}`.")
-        if not_callable := [name for name in func_names if not isinstance(vars_[name], GTCallable)]:
+        if not_callable := [
+            name
+            for name in func_names
+            if not isinstance(vars_[name], (GTCallable, FundefDispatcher))
+        ]:
             raise RuntimeError(
                 f"The following function(s) are not valid GTCallables `{', '.join(not_callable)}`."
             )

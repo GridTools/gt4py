@@ -365,6 +365,13 @@ class FieldOperatorTypeDeduction(NodeTranslator):
                 location=node.location,
                 type=new_func.type.returns,
             )
+        elif isinstance(new_func.type, ct.UnknownFunctionType):
+            return foast.Call(
+                func=new_func,
+                args=self.visit(node.args, **kwargs),
+                location=node.location,
+                type=ct.FieldType(dims=[], dtype=ct.ScalarType(kind=ct.ScalarKind.FLOAT32)),  # TODO
+            )
 
         raise FieldOperatorTypeDeductionError.from_foast_node(
             node,

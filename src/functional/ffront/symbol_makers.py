@@ -25,6 +25,8 @@ import numpy.typing as npt
 from eve import extended_typing as xtyping
 from functional import common
 from functional.ffront import common_types as ct
+from functional.iterator.runtime import FundefDispatcher
+from functional.iterator.tracing import trace_fundef
 
 
 def make_scalar_kind(dtype: npt.DTypeLike) -> ct.ScalarKind:
@@ -167,11 +169,15 @@ def make_symbol_type_from_value(value: Any) -> ct.SymbolType:
     if hasattr(value, "__gt_type__"):
         symbol_type = value.__gt_type__()
 
+    elif isinstance(value, FundefDispatcher):
+        symbol_type = ct.UnknownFunctionType()
     else:
         type_ = xtyping.reveal_type(value, annotate_callable_kwargs=True)
         symbol_type = make_symbol_type_from_typing(type_)
 
-    if isinstance(symbol_type, (ct.DataType, ct.FunctionType, ct.OffsetType)):
+    if isinstance(
+        symbol_type, (ct.DataType, ct.FunctionType, ct.OffsetType, ct.UnknownFunctionType)
+    ):
         return symbol_type
     else:
         raise common.GTTypeError(f"Impossible to map '{value}' value to a Symbol")
