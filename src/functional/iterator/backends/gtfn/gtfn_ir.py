@@ -40,7 +40,7 @@ class TernaryExpr(Expr):
 
 class Literal(Expr):
     value: str
-    type: str
+    type: str  # noqa: A003
 
 
 class OffsetLiteral(Expr):

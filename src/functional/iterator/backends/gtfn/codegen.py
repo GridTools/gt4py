@@ -24,7 +24,7 @@ class GTFNCodegen(codegen.TemplatedGenerator):
 
     @staticmethod
     def asfloat(value: str) -> str:
-        if not "." in value:
+        if "." not in value and "e" not in value and "E" not in value:
             return f"{value}."
         return value
 
