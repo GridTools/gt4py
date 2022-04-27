@@ -6,15 +6,13 @@ from functional.iterator import ir as itir
 from functional.iterator.backends.gtfn.gtfn_ir import (
     Backend,
     BinaryExpr,
-    BoolLiteral,
     Expr,
     FencilDefinition,
-    FloatLiteral,
     FunCall,
     FunctionDefinition,
     GridType,
-    IntLiteral,
     Lambda,
+    Literal,
     OffsetLiteral,
     StencilExecution,
     Sym,
@@ -48,14 +46,8 @@ class GTFN_lowering(NodeTranslator):
     def visit_Lambda(self, node: itir.Lambda, **kwargs: Any) -> Lambda:
         return Lambda(params=self.visit(node.params), expr=self.visit(node.expr))
 
-    def visit_IntLiteral(self, node: itir.IntLiteral, **kwargs: Any) -> IntLiteral:
-        return IntLiteral(value=node.value)
-
-    def visit_BoolLiteral(self, node: itir.BoolLiteral, **kwargs: Any) -> BoolLiteral:
-        return BoolLiteral(value=node.value)
-
-    def visit_FloatLiteral(self, node: itir.FloatLiteral, **kwargs: Any) -> FloatLiteral:
-        return FloatLiteral(value=node.value)
+    def visit_Literal(self, node: itir.Literal, **kwargs: Any) -> Literal:
+        return Literal(value=node.value, type=node.type)
 
     def visit_OffsetLiteral(self, node: itir.OffsetLiteral, **kwargs: Any) -> OffsetLiteral:
         return OffsetLiteral(value=node.value)

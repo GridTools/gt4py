@@ -6,6 +6,7 @@ from eve.codegen import MakoTemplate as as_mako
 from functional.iterator.backends.gtfn.gtfn_ir import (
     FencilDefinition,
     GridType,
+    Literal,
     OffsetLiteral,
     SymRef,
 )
@@ -21,9 +22,23 @@ class GTFNCodegen(codegen.TemplatedGenerator):
             return "tuple_util::get"
         return node.id
 
-    IntLiteral = as_fmt("{value}")
-    FloatLiteral = as_fmt("{value}")
-    AxisLiteral = as_fmt("{value}")
+    @staticmethod
+    def asfloat(value: str) -> str:
+        if not "." in value:
+            return f"{value}."
+        return value
+
+    def visit_Literal(self, node: Literal, **kwargs: Any) -> str:
+        if node.type == "int":
+            return node.value
+        elif node.type == "float":
+            return f"{self.asfloat(node.value)}f"
+        elif node.type == "double":
+            return self.asfloat(node.value)
+        elif node.type == "bool":
+            return node.value.lower()
+        return node.value
+
     UnaryExpr = as_fmt("{op}({expr})")
     BinaryExpr = as_fmt("({lhs}{op}{rhs})")
     TernaryExpr = as_fmt("({cond}?{true_expr}:{false_expr})")
