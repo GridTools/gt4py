@@ -1,3 +1,5 @@
+from typing import Any
+
 from eve import NodeTranslator, iter_tree
 from eve.type_definitions import SymbolName
 from functional.iterator import ir as itir
@@ -37,28 +39,28 @@ class GTFN_lowering(NodeTranslator):
     }
     _unary_op_map = {"not_": "!"}
 
-    def visit_Sym(self, node: itir.Sym, **kwargs) -> Sym:
+    def visit_Sym(self, node: itir.Sym, **kwargs: Any) -> Sym:
         return Sym(id=node.id)
 
-    def visit_SymRef(self, node: itir.SymRef, **kwargs) -> SymRef:
+    def visit_SymRef(self, node: itir.SymRef, **kwargs: Any) -> SymRef:
         return SymRef(id=node.id)
 
-    def visit_Lambda(self, node: itir.Lambda, **kwargs) -> Lambda:
+    def visit_Lambda(self, node: itir.Lambda, **kwargs: Any) -> Lambda:
         return Lambda(params=self.visit(node.params), expr=self.visit(node.expr))
 
-    def visit_IntLiteral(self, node: itir.IntLiteral, **kwargs):
+    def visit_IntLiteral(self, node: itir.IntLiteral, **kwargs: Any) -> IntLiteral:
         return IntLiteral(value=node.value)
 
-    def visit_BoolLiteral(self, node: itir.BoolLiteral, **kwargs):
+    def visit_BoolLiteral(self, node: itir.BoolLiteral, **kwargs: Any) -> BoolLiteral:
         return BoolLiteral(value=node.value)
 
-    def visit_FloatLiteral(self, node: itir.FloatLiteral, **kwargs):
+    def visit_FloatLiteral(self, node: itir.FloatLiteral, **kwargs: Any) -> FloatLiteral:
         return FloatLiteral(value=node.value)
 
-    def visit_OffsetLiteral(self, node: itir.OffsetLiteral, **kwargs) -> OffsetLiteral:
+    def visit_OffsetLiteral(self, node: itir.OffsetLiteral, **kwargs: Any) -> OffsetLiteral:
         return OffsetLiteral(value=node.value)
 
-    def visit_FunCall(self, node: itir.FunCall, **kwargs) -> Expr:
+    def visit_FunCall(self, node: itir.FunCall, **kwargs: Any) -> Expr:
         if isinstance(node.fun, itir.SymRef):
             if node.fun.id in self._unary_op_map:
                 assert len(node.args) == 1
@@ -93,13 +95,13 @@ class GTFN_lowering(NodeTranslator):
         return FunCall(fun=self.visit(node.fun), args=self.visit(node.args))
 
     def visit_FunctionDefinition(
-        self, node: itir.FunctionDefinition, **kwargs
+        self, node: itir.FunctionDefinition, **kwargs: Any
     ) -> FunctionDefinition:
         return FunctionDefinition(
             id=node.id, params=self.visit(node.params), expr=self.visit(node.expr)
         )
 
-    def visit_StencilClosure(self, node: itir.StencilClosure, **kwargs) -> StencilExecution:
+    def visit_StencilClosure(self, node: itir.StencilClosure, **kwargs: Any) -> StencilExecution:
         backend = Backend(domain=self.visit(node.domain))
         return StencilExecution(
             stencil=self.visit(node.stencil),
@@ -119,7 +121,7 @@ class GTFN_lowering(NodeTranslator):
         )
 
     def visit_FencilDefinition(
-        self, node: itir.FencilDefinition, *, grid_type: str, **kwargs
+        self, node: itir.FencilDefinition, *, grid_type: str, **kwargs: Any
     ) -> FencilDefinition:
         grid_type = getattr(GridType, grid_type.upper())
         return FencilDefinition(

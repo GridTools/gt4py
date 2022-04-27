@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Collection, Union
 
 from eve import codegen
 from eve.codegen import FormatTemplate as as_fmt
@@ -16,7 +16,7 @@ class GTFNCodegen(codegen.TemplatedGenerator):
 
     Sym = as_fmt("{id}")
 
-    def visit_SymRef(self, node: SymRef, **kwargs) -> str:
+    def visit_SymRef(self, node: SymRef, **kwargs: Any) -> str:
         if node.id == "get":
             return "tuple_util::get"
         return node.id
@@ -28,7 +28,7 @@ class GTFNCodegen(codegen.TemplatedGenerator):
     BinaryExpr = as_fmt("({lhs}{op}{rhs})")
     TernaryExpr = as_fmt("({cond}?{true_expr}:{false_expr})")
 
-    def visit_OffsetLiteral(self, node: OffsetLiteral, **kwargs):
+    def visit_OffsetLiteral(self, node: OffsetLiteral, **kwargs: Any) -> str:
         return node.value if isinstance(node.value, str) else f"{node.value}_c"
 
     FunCall = as_fmt("{fun}({','.join(args)})")
@@ -57,7 +57,9 @@ class GTFNCodegen(codegen.TemplatedGenerator):
     """
     )
 
-    def visit_FencilDefinition(self, node: FencilDefinition, **kwargs):
+    def visit_FencilDefinition(
+        self, node: FencilDefinition, **kwargs: Any
+    ) -> Union[str, Collection[str]]:
         is_cartesian = node.grid_type == GridType.CARTESIAN
         return self.generic_visit(
             node,

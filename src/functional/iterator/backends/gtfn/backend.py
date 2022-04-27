@@ -1,3 +1,5 @@
+from typing import Any
+
 import functional.iterator.ir as itir
 from eve import codegen
 from eve.utils import UIDs
@@ -28,7 +30,7 @@ def extract_fundefs_from_closures(program: itir.FencilDefinition) -> itir.Fencil
     return program
 
 
-def generate(program: itir.FencilDefinition, *, grid_type: str, **kwargs) -> str:
+def generate(program: itir.FencilDefinition, *, grid_type: str, **kwargs: Any) -> str:
     transformed = program
     transformed = apply_common_transforms(
         program,
