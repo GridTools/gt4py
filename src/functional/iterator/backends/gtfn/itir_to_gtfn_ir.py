@@ -52,6 +52,11 @@ class GTFN_lowering(NodeTranslator):
     def visit_OffsetLiteral(self, node: itir.OffsetLiteral, **kwargs: Any) -> OffsetLiteral:
         return OffsetLiteral(value=node.value)
 
+    def visit_AxisLiteral(self, node: itir.AxisLiteral, **kwargs: Any) -> Literal:
+        return Literal(
+            value="NOT_SUPPORTED", type="axis_literal"
+        )  # TODO(havogt) decide if domain is part of the IR
+
     def visit_FunCall(self, node: itir.FunCall, **kwargs: Any) -> Expr:
         if isinstance(node.fun, itir.SymRef):
             if node.fun.id in self._unary_op_map:

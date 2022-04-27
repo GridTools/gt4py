@@ -11,7 +11,7 @@ def use_tmps(request):
         # (backend, do_validate)
         (None, True),
         ("lisp", False),
-        ("cpptoy", False),
+        ("gtfn", False),
         ("pretty_print", False),
         ("roundtrip", True),
         ("double_roundtrip", True),
