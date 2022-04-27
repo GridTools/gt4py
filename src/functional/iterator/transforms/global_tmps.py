@@ -3,6 +3,7 @@ from typing import Any, Optional
 from eve import Node, NodeTranslator
 from eve.traits import SymbolTableTrait
 from functional.iterator import ir, type_inference
+from functional.iterator.pretty_printer import PrettyPrinter
 from functional.iterator.runtime import CartesianAxis
 from functional.iterator.transforms.collect_shifts import CollectShifts
 from functional.iterator.transforms.eta_reduction import EtaReduction
@@ -23,6 +24,54 @@ class FencilWithTemporaries(Node, SymbolTableTrait):
     fencil: ir.FencilDefinition
     params: list[ir.Sym]
     tmps: list[Temporary]
+
+
+def pformat_Temporary(printer: PrettyPrinter, node: Temporary, *, prec: int) -> list[str]:
+    start, end = [node.id + " = temporary("], [");"]
+    args = []
+    if node.domain is not None:
+        args.append(printer._hmerge(["domain="], printer.visit(node.domain, prec=0)))
+    if node.dtype is not None:
+        args.append(printer._hmerge(["dtype="], [str(node.dtype)]))
+    hargs = printer._hmerge(*printer._hinterleave(args, ", "))
+    vargs = printer._vmerge(*printer._hinterleave(args, ","))
+    oargs = printer._optimum(hargs, vargs)
+    h = printer._hmerge(start, oargs, end)
+    v = printer._vmerge(start, printer._indent(oargs), end)
+    return printer._optimum(h, v)
+
+
+def pformat_FencilWithTemporaries(
+    printer: PrettyPrinter, node: FencilWithTemporaries, *, prec: int
+) -> list[str]:
+    assert prec == 0
+    params = printer.visit(node.params, prec=0)
+    fencil = printer.visit(node.fencil, prec=0)
+    tmps = printer.visit(node.tmps, prec=0)
+    args = params + [[tmp.id] for tmp in node.tmps]
+
+    hparams = printer._hmerge([node.fencil.id + "("], *printer._hinterleave(params, ", "), [") {"])
+    vparams = printer._vmerge(
+        [node.fencil.id + "("], *printer._hinterleave(params, ",", indent=True), [") {"]
+    )
+    params = printer._optimum(hparams, vparams)
+
+    hargs = printer._hmerge(*printer._hinterleave(args, ", "))
+    vargs = printer._vmerge(*printer._hinterleave(args, ","))
+    args = printer._optimum(hargs, vargs)
+
+    fencil = printer._hmerge(fencil, [";"])
+
+    hcall = printer._hmerge([node.fencil.id + "("], args, [");"])
+    vcall = printer._vmerge(printer._hmerge([node.fencil.id + "("]), printer._indent(args), [");"])
+    call = printer._optimum(hcall, vcall)
+
+    body = printer._vmerge(*tmps, fencil, call)
+    return printer._vmerge(params, printer._indent(body), ["}"])
+
+
+PrettyPrinter.visit_Temporary = pformat_Temporary  # type: ignore
+PrettyPrinter.visit_FencilWithTemporaries = pformat_FencilWithTemporaries  # type: ignore
 
 
 def split_closures(node: ir.FencilDefinition) -> FencilWithTemporaries:
