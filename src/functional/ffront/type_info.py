@@ -15,6 +15,7 @@ from functional.ffront.common_types import (
 )
 
 
+@dataclass(frozen=True)
 class GenericDimensions:
     """Sentry for generic dimensions to be returned instead of `Ellipsis`."""
 
