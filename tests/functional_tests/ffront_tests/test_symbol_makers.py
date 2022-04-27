@@ -172,10 +172,3 @@ def test_invalid_symbol_types():
         symbol_makers.make_symbol_type_from_typing(typing.Callable[[int], str])
     with pytest.raises(symbol_makers.TypingError, match="Invalid callable annotations"):
         symbol_makers.make_symbol_type_from_typing(typing.Callable[[int], float])
-
-    with pytest.raises(symbol_makers.TypingError, match="'<class 'str'>' type is not supported"):
-        symbol_makers.make_symbol_type_from_typing(
-            typing.Annotated[
-                typing.Callable[["float", int], str], xtyping.CallableKwargsInfo(data={})
-            ]
-        )

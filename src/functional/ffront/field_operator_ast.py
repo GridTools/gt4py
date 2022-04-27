@@ -151,7 +151,7 @@ class ExternalImport(Stmt):
 
 
 class Assign(Stmt):
-    target: Union[FieldSymbol, TupleSymbol]
+    target: Union[FieldSymbol, TupleSymbol, ScalarSymbol]
     value: Expr
 
 

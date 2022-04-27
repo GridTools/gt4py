@@ -11,14 +11,12 @@ from functional.iterator.transforms import apply_common_transforms
 class ToyCpp(codegen.TemplatedGenerator):
     Sym = as_fmt("{id}")
     SymRef = as_fmt("{id}")
-    IntLiteral = as_fmt("{value}")
-    FloatLiteral = as_fmt("{value}")
+    Literal = as_fmt("{value}")
     AxisLiteral = as_fmt("{value}")
 
     def visit_OffsetLiteral(self, node: OffsetLiteral, **kwargs):
         return node.value if isinstance(node.value, str) else f"{node.value}_c"
 
-    StringLiteral = as_fmt("{value}")
     FunCall = as_fmt("{fun}({','.join(args)})")
     Lambda = as_mako(
         "[=](${','.join('auto ' + p for p in params)}){return ${expr};}"

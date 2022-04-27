@@ -11,11 +11,9 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-import pytest
-
 from functional.common import Field
 from functional.ffront import itir_makers as im
-from functional.ffront.fbuiltins import FieldOffset, float64, int64, neighbor_sum
+from functional.ffront.fbuiltins import FieldOffset, float32, float64, int32, int64, neighbor_sum
 from functional.ffront.foast_to_itir import FieldOperatorLowering
 from functional.ffront.func_to_foast import FieldOperatorParser
 from functional.iterator.runtime import CartesianAxis
@@ -51,17 +49,21 @@ def test_copy():
     assert lowered.expr == im.deref_("inp")
 
 
-@pytest.mark.skip(reason="Constant-to-field promotion not enabled yet.")
-@pytest.mark.skip(reason="Iterator IR does not allow arg-less lambdas yet.")
-def test_constant():
-    def constant():
-        return 5
+def test_scalar_arg():
+    def scalar_arg(bar: Field[[IDim], int64], alpha: int64) -> Field[[IDim], int64]:
+        return alpha * bar
 
     # ast_passes
-    parsed = FieldOperatorParser.apply_to_function(constant)
+    parsed = FieldOperatorParser.apply_to_function(scalar_arg)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    assert lowered.expr == im.deref_(im.lift_(im.lambda__()(5)))
+    reference = im.deref_(
+        im.lift_(im.lambda__("alpha", "bar")(im.multiplies_(im.deref_("alpha"), im.deref_("bar"))))(
+            "alpha", "bar"
+        )
+    )
+
+    assert lowered.expr == reference
 
 
 def test_multicopy():
@@ -251,6 +253,41 @@ def test_binary_plus():
     assert lowered.expr == reference
 
 
+def test_add_scalar_literal_to_field():
+    def scalar_plus_field(a: Field[[IDim], "float64"]) -> Field[[IDim], "float64"]:
+        return 2.0 + a
+
+    parsed = FieldOperatorParser.apply_to_function(scalar_plus_field)
+    lowered = FieldOperatorLowering.apply(parsed)
+
+    reference = im.deref_(
+        im.lift_(im.lambda__("a")(im.plus_(im.literal_("2.0", "float64"), im.deref_("a"))))("a")
+    )
+
+    assert lowered.expr == reference
+
+
+def test_add_scalar_literals():
+    def scalar_plus_scalar(a: Field[[IDim], "int32"]) -> Field[[IDim], "int32"]:
+        tmp = int32(1) + int32("1")
+        return a + tmp
+
+    parsed = FieldOperatorParser.apply_to_function(scalar_plus_scalar)
+    lowered = FieldOperatorLowering.apply(parsed)
+
+    reference = im.deref_(
+        im.let(
+            "tmp__0",
+            im.plus_(
+                im.literal_("1", "int32"),
+                im.literal_("1", "int32"),
+            ),
+        )(im.lift_(im.lambda__("a")(im.plus_(im.deref_("a"), "tmp__0")))("a"))
+    )
+
+    assert lowered.expr == reference
+
+
 def test_binary_mult():
     def mult(a: Field[..., "float64"], b: Field[..., "float64"]):
         return a * b
@@ -307,6 +344,20 @@ def test_binary_and():
     assert lowered.expr == reference
 
 
+def test_scalar_and():
+    def scalar_and(a: Field[[IDim], "bool"]) -> Field[[IDim], "bool"]:
+        return a & False
+
+    parsed = FieldOperatorParser.apply_to_function(scalar_and)
+    lowered = FieldOperatorLowering.apply(parsed)
+
+    reference = im.deref_(
+        im.lift_(im.lambda__("a")(im.and__(im.deref_("a"), im.literal_("False", "bool"))))("a")
+    )
+
+    assert lowered.expr == reference
+
+
 def test_binary_or():
     def bit_or(a: Field[..., "bool"], b: Field[..., "bool"]):
         return a | b
@@ -317,6 +368,18 @@ def test_binary_or():
     reference = im.deref_(
         im.lift_(im.lambda__("a", "b")(im.or__(im.deref_("a"), im.deref_("b"))))("a", "b")
     )
+
+    assert lowered.expr == reference
+
+
+def test_compare_scalars():
+    def comp_scalars() -> Field[[], bool]:
+        return 3 > 4
+
+    parsed = FieldOperatorParser.apply_to_function(comp_scalars)
+    lowered = FieldOperatorLowering.apply(parsed)
+
+    reference = im.greater_(im.literal_("3", "int64"), im.literal_("4", "int64"))
 
     assert lowered.expr == reference
 
@@ -364,7 +427,9 @@ def test_compare_eq():
 
 
 def test_compare_chain():
-    def compare_chain(a: Field[..., "float64"], b: Field[..., "float64"], c: Field[..., "float64"]):
+    def compare_chain(
+        a: Field[[IDim], "float64"], b: Field[[IDim], "float64"], c: Field[[IDim], "float64"]
+    ) -> Field[[IDim], bool]:
         return a > b > c
 
     parsed = FieldOperatorParser.apply_to_function(compare_chain)
@@ -373,8 +438,12 @@ def test_compare_chain():
     reference = im.deref_(
         im.lift_(
             im.lambda__("a", "b", "c")(
-                im.greater_(
-                    im.deref_("a"),
+                im.and__(
+                    im.deref_(
+                        im.lift_(
+                            im.lambda__("a", "b")(im.greater_(im.deref_("a"), im.deref_("b")))
+                        )("a", "b")
+                    ),
                     im.deref_(
                         im.lift_(
                             im.lambda__("b", "c")(im.greater_(im.deref_("b"), im.deref_("c")))
@@ -410,7 +479,7 @@ def test_reduction_lowering_simple():
 def test_reduction_lowering_expr():
     def reduction(e1: Field[[Edge], "float64"], e2: Field[[Vertex, V2EDim], "float64"]):
         e1_nbh = e1(V2E)
-        return neighbor_sum(e1_nbh + e2, axis=V2EDim)
+        return neighbor_sum(1.1 * (e1_nbh + e2), axis=V2EDim)
 
     parsed = FieldOperatorParser.apply_to_function(reduction)
     lowered = FieldOperatorLowering.apply(parsed)
@@ -420,12 +489,86 @@ def test_reduction_lowering_expr():
             im.lift_(
                 im.call_("reduce")(
                     im.lambda__("accum", "e1_nbh__0__0", "e2__1")(
-                        im.plus_("accum", im.plus_("e1_nbh__0__0", "e2__1"))
+                        im.plus_(
+                            "accum",
+                            im.multiplies_(
+                                im.literal_("1.1", "float64"), im.plus_("e1_nbh__0__0", "e2__1")
+                            ),
+                        )
                     ),
                     0,
                 )
             )("e1_nbh__0", "e2")
         )
+    )
+
+    assert lowered.expr == reference
+
+
+def test_builtin_int_constructors():
+    def int_constrs() -> tuple[Field[[], int], ...]:
+        return 1, int(1), int32(1), int64(1), int("1"), int32("1"), int64("1")
+
+    parsed = FieldOperatorParser.apply_to_function(int_constrs)
+    lowered = FieldOperatorLowering.apply(parsed)
+
+    reference = im.make_tuple_(
+        im.literal_("1", "int64"),
+        im.literal_("1", "int64"),
+        im.literal_("1", "int32"),
+        im.literal_("1", "int64"),
+        im.literal_("1", "int64"),
+        im.literal_("1", "int32"),
+        im.literal_("1", "int64"),
+    )
+
+    assert lowered.expr == reference
+
+
+def test_builtin_float_constructors():
+    def float_constrs() -> tuple[Field[[], float], ...]:
+        return (
+            0.1,
+            float(0.1),
+            float32(0.1),
+            float64(0.1),
+            float(".1"),
+            float32(".1"),
+            float64(".1"),
+        )
+
+    parsed = FieldOperatorParser.apply_to_function(float_constrs)
+    lowered = FieldOperatorLowering.apply(parsed)
+
+    reference = im.make_tuple_(
+        im.literal_("0.1", "float64"),
+        im.literal_("0.1", "float64"),
+        im.literal_("0.1", "float32"),
+        im.literal_("0.1", "float64"),
+        im.literal_(".1", "float64"),
+        im.literal_(".1", "float32"),
+        im.literal_(".1", "float64"),
+    )
+
+    assert lowered.expr == reference
+
+
+def test_builtin_bool_constructors():
+    def bool_constrs() -> tuple[Field[[], bool], ...]:
+        return True, False, bool(True), bool(False), bool(0), bool(5), bool("True"), bool("False")
+
+    parsed = FieldOperatorParser.apply_to_function(bool_constrs)
+    lowered = FieldOperatorLowering.apply(parsed)
+
+    reference = im.make_tuple_(
+        im.literal_(str(True), "bool"),
+        im.literal_(str(False), "bool"),
+        im.literal_(str(True), "bool"),
+        im.literal_(str(False), "bool"),
+        im.literal_(str(bool(0)), "bool"),
+        im.literal_(str(bool(5)), "bool"),
+        im.literal_(str(bool("True")), "bool"),
+        im.literal_(str(bool("False")), "bool"),
     )
 
     assert lowered.expr == reference

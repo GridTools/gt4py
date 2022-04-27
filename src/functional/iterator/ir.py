@@ -24,20 +24,9 @@ class Expr(Node):
     ...
 
 
-class BoolLiteral(Expr):
-    value: bool
-
-
-class IntLiteral(Expr):
-    value: int
-
-
-class FloatLiteral(Expr):
-    value: float  # TODO other float types
-
-
-class StringLiteral(Expr):
+class Literal(Expr):
     value: str
+    type: str  # noqa: A003
 
 
 class NoneLiteral(Expr):

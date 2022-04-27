@@ -6,14 +6,12 @@ from functional import iterator
 from functional.iterator.backend_executor import execute_fencil
 from functional.iterator.ir import (
     AxisLiteral,
-    BoolLiteral,
     Expr,
     FencilDefinition,
-    FloatLiteral,
     FunCall,
     FunctionDefinition,
-    IntLiteral,
     Lambda,
+    Literal,
     NoneLiteral,
     OffsetLiteral,
     StencilClosure,
@@ -214,11 +212,11 @@ def make_node(o):
     if isinstance(o, iterator.runtime.Offset):
         return OffsetLiteral(value=o.value)
     if isinstance(o, bool):
-        return BoolLiteral(value=o)
+        return Literal(value=str(o), type="bool")
     if isinstance(o, int):
-        return IntLiteral(value=o)
+        return Literal(value=str(o), type="int")
     if isinstance(o, float):
-        return FloatLiteral(value=o)
+        return Literal(value=str(o), type="float")
     if isinstance(o, CartesianAxis):
         return AxisLiteral(value=o.value)
     if isinstance(o, tuple):
