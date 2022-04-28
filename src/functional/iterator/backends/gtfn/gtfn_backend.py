@@ -7,7 +7,7 @@ from functional.iterator.backends.backend import register_backend
 from functional.iterator.backends.gtfn.codegen import GTFNCodegen
 from functional.iterator.backends.gtfn.itir_to_gtfn_ir import GTFN_lowering
 from functional.iterator.embedded import NeighborTableOffsetProvider
-from functional.iterator.transforms.common import add_fundef, replace_node
+from functional.iterator.transforms.common import add_fundefs, replace_nodes
 from functional.iterator.transforms.extract_function import extract_function
 from functional.iterator.transforms.pass_manager import apply_common_transforms
 
@@ -21,13 +21,18 @@ def extract_fundefs_from_closures(program: itir.FencilDefinition) -> itir.Fencil
         .if_isinstance(itir.StencilClosure)
         .getattr("stencil")
         .if_not_isinstance(itir.SymRef)
+        .to_list()
     )
 
-    for stencil in inlined_stencils:
-        ref, fundef = extract_function(stencil, f"{program.id}_stencil_{UIDs.sequential_id()}")
-        program = add_fundef(program, fundef)
-        program = replace_node(program, stencil, ref)
+    extracted = [
+        extract_function(stencil, f"{program.id}_stencil_{UIDs.sequential_id()}")
+        for stencil in inlined_stencils
+    ]
 
+    program = add_fundefs(program, [fundef for _, fundef in extracted])
+    program = replace_nodes(
+        program, {id(stencil): ref for stencil, (ref, _) in zip(inlined_stencils, extracted)}
+    )
     return program
 
 
