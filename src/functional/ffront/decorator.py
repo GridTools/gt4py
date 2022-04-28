@@ -144,7 +144,7 @@ class Program:
             if isinstance(value, FieldOffset):
                 continue
             if isinstance(value, FundefDispatcher):
-                lowered_funcs.append(trace_fundef(value))
+                lowered_funcs.extend(trace_fundef(value))
                 continue
             if not isinstance(value, GTCallable):
                 raise NotImplementedError("Only function closure vars are allowed currently.")

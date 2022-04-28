@@ -210,6 +210,10 @@ def make_node(o):
     if isinstance(o, Node):
         return o
     if callable(o):
+        if hasattr(o, "__gt_itir__"):
+            fun = o.__gt_itir__()  # TODO need GTCallable in common to decouple from field view
+            Tracer.fundefs.append(fun)
+            return _s(fun.id)
         if o.__name__ == "<lambda>":
             return lambdadef(o)
         if hasattr(o, "__code__") and o.__code__.co_flags & inspect.CO_NESTED:
@@ -348,8 +352,7 @@ def trace_fendef(fun, args):
 def trace_fundef(fun):
     with Tracer() as _:
         trace_function_call(fun)
-        assert len(Tracer.fundefs) == 1
-        return Tracer.fundefs[0]
+        return Tracer.fundefs
 
 
 def fendef_tracing(fun, *args, **kwargs):
