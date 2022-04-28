@@ -1,26 +1,27 @@
 #!no-fold-case
 
 (define builtins
-  '(domain
-    named_range
-    lift
-    make_tuple
-    tuple_get
-    reduce
+  '(and_
+    can_deref
     deref
-    shift
-    scan
-    plus
-    minus
-    multiplies
     divides
+    domain
     eq
-    less
     greater
     if_
+    less
+    lift
+    make_tuple
+    minus
+    multiplies
+    named_range
     not_
-    and_
     or_
+    plus
+    reduce
+    scan
+    shift
+    tuple_get
 ))
 
 (define (as-list f x) (let ((g (lambda (x) (string-append (f x) ", "))))
