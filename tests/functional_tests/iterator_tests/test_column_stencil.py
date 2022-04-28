@@ -100,6 +100,8 @@ def test_ksum_scan(backend, use_tmps):
     if use_tmps:
         pytest.xfail("use_tmps currently not supported for scans")
     backend, validate = backend
+    if backend == "gtfn":
+        pytest.xfail("gtfn does not yet support scans")
     shape = [1, 7]
     inp = np_as_located_field(IDim, KDim)(np.asarray([list(range(7))]))
     out = np_as_located_field(IDim, KDim)(np.zeros(shape))
@@ -139,6 +141,8 @@ def test_ksum_back_scan(backend, use_tmps):
     if use_tmps:
         pytest.xfail("use_tmps currently not supported for scans")
     backend, validate = backend
+    if backend == "gtfn":
+        pytest.xfail("gtfn does not yet support scans")
     shape = [1, 7]
     inp = np_as_located_field(IDim, KDim)(np.asarray([list(range(7))]))
     out = np_as_located_field(IDim, KDim)(np.zeros(shape))
