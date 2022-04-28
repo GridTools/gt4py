@@ -22,7 +22,6 @@ def apply_common_transforms(
     ir = InlineLambdas().visit(ir)
     ir = NormalizeShifts().visit(ir)
     if unroll_reduce:
-        assert offset_provider is not None
         for _ in range(10):
             unrolled = UnrollReduce().visit(ir, offset_provider=offset_provider)
             if unrolled == ir:
