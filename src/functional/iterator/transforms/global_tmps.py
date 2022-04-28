@@ -87,7 +87,18 @@ class CreateGlobalTmps(NodeTranslator):
         closures = []
         tmp_domains = dict()
         for closure in reversed(node.closures):
-            assert isinstance(closure.stencil, ir.Lambda)
+            if not isinstance(closure.stencil, ir.Lambda):
+                if not isinstance(closure.stencil, ir.SymRef) or closure.stencil.id != "deref":
+                    raise NotImplementedError()
+                closure = ir.StencilClosure(
+                    domain=closure.domain,
+                    stencil=ir.Lambda(
+                        params=[ir.Sym(id="x")],
+                        expr=ir.FunCall(fun=closure.stencil, args=[ir.SymRef(id="x")]),
+                    ),
+                    output=closure.output,
+                    inputs=closure.inputs,
+                )
             wrapped_stencil = ir.FunCall(fun=closure.stencil, args=closure.inputs)
             popped_stencil = PopupTmps().visit(wrapped_stencil)
             todos = [(closure.output, popped_stencil)]

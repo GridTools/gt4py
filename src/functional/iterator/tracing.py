@@ -306,13 +306,17 @@ class Tracer:
 
 @iterator.runtime.closure.register(TRACING)
 def closure(domain, stencil, output, inputs):
-    if not hasattr(stencil, "__gt_itir__"):  # trace only if stencil is not a GTCallable
-        stencil(*list(_s(param) for param in inspect.signature(stencil).parameters.keys()))
-
+    if hasattr(stencil, "__gt_itir__"):
+        stencil = make_node(stencil)
+    elif stencil.__name__ in iterator.builtins.__all__:
+        stencil = _s(stencil.__name__)
+    else:
+        stencil(*(_s(param) for param in inspect.signature(stencil).parameters))
+        stencil = make_node(stencil)
     Tracer.add_closure(
         StencilClosure(
             domain=domain,
-            stencil=make_node(stencil),
+            stencil=stencil,
             output=output,
             inputs=inputs,
         )
