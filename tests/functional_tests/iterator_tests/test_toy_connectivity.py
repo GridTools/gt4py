@@ -171,7 +171,7 @@ def test_first_vertex_neigh_of_first_edge_neigh_of_cells_fencil(backend):
 
 @fundef
 def sparse_stencil(non_sparse, inp):
-    return reduce(lambda a, b: a + b, 0)(shift(V2E)(non_sparse), inp)
+    return reduce(lambda a, b, c: a + c, 0)(shift(V2E)(non_sparse), inp)
 
 
 def test_sparse_input_field(backend):
@@ -199,12 +199,14 @@ V2V = offset("V2V")
 
 def test_sparse_input_field_v2v(backend):
     backend, validate = backend
+    non_sparse = np_as_located_field(Edge)(np.zeros(9))
     inp = np_as_located_field(Vertex, V2V)(v2v_arr)
     out = np_as_located_field(Vertex)(np.zeros([9]))
 
     ref = np.asarray(list(sum(row) for row in v2v_arr))
 
     sparse_stencil[{Vertex: range(0, 9)}](
+        non_sparse,
         inp,
         out=out,
         backend=backend,
