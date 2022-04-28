@@ -11,7 +11,7 @@ def apply_common_transforms(
     use_tmps=False,
     offset_provider=None,
     register_tmp=None,
-    unroll_reduce=True,  # TODO maybe default to False
+    unroll_reduce=False,
 ):
     ir = InlineFundefs().visit(ir)
     ir = PruneUnreferencedFundefs().visit(ir)
