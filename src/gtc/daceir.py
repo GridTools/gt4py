@@ -591,6 +591,14 @@ class FieldAccessInfo(Node):
             variable_offset_axes=self.variable_offset_axes,
         )
 
+    def restricted_to_index(self, axis: Axis, extent: Tuple[int, int]):
+        return FieldAccessInfo(
+            grid_subset=self.grid_subset.restricted_to_index(axis=axis, extent=extent),
+            global_grid_subset=self.global_grid_subset,
+            dynamic_access=self.dynamic_access,
+            variable_offset_axes=self.variable_offset_axes,
+        )
+
 
 class Memlet(Node):
     field: SymbolRef

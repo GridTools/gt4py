@@ -1,6 +1,6 @@
 import itertools
 from dataclasses import dataclass
-from typing import Any, Callable, ClassVar, Dict, List, Set, Union
+from typing import Any, ClassVar, Dict, List, Set, Union
 
 import dace
 import dace.data
@@ -27,75 +27,64 @@ from gtc.dace.utils import (
 )
 
 
-def get_tasklet_inout_memlets(node: oir.HorizontalExecution, *, get_outputs, global_ctx, **kwargs):
+def _access_iter(node: oir.HorizontalExecution, get_outputs: bool):
+    if get_outputs:
+        xiter = eve.utils.xiter(
+            itertools.chain(
+                *node.iter_tree().if_isinstance(oir.AssignStmt).getattr("left").map(iter_tree)
+            )
+        )
+    else:
+        xiter = eve.utils.xiter(
+            itertools.chain(
+                *node.iter_tree().if_isinstance(oir.AssignStmt).getattr("right").map(iter_tree),
+                *node.iter_tree().if_isinstance(oir.While).getattr("cond").map(iter_tree),
+                *node.iter_tree().if_isinstance(oir.MaskStmt).getattr("mask").map(iter_tree),
+            )
+        )
+
+    yield from (
+        xiter.if_isinstance(oir.FieldAccess)
+        .map(
+            lambda acc: (
+                acc.name,
+                acc.offset,
+                get_tasklet_symbol(acc.name, acc.offset, is_target=get_outputs),
+            )
+        )
+        .unique(key=lambda x: x[2])
+    )
+
+
+def _get_tasklet_inout_memlets(node: oir.HorizontalExecution, *, get_outputs, global_ctx, **kwargs):
 
     access_infos = compute_dcir_access_infos(
         node,
-        block_extents=global_ctx.block_extents,
+        block_extents=global_ctx.library_node.get_extents,
         oir_decls=global_ctx.library_node.declarations,
         collect_read=not get_outputs,
         collect_write=get_outputs,
         **kwargs,
     )
 
-    def make_access_iter():
-        if get_outputs:
-            return eve.utils.xiter(
-                itertools.chain(
-                    *node.iter_tree().if_isinstance(oir.AssignStmt).getattr("left").map(iter_tree)
-                )
-            )
-        else:
-            return eve.utils.xiter(
-                itertools.chain(
-                    *node.iter_tree().if_isinstance(oir.AssignStmt).getattr("right").map(iter_tree),
-                    *node.iter_tree().if_isinstance(oir.While).getattr("cond").map(iter_tree),
-                    *node.iter_tree().if_isinstance(oir.MaskStmt).getattr("mask").map(iter_tree),
-                )
-            )
-
     res = list()
-    for name, info in access_infos.items():
-        if info.variable_offset_axes:
-            tasklet_symbol = get_tasklet_symbol(name, None, is_target=get_outputs)
-            res.append(
-                dcir.Memlet(
-                    field=name,
-                    connector=tasklet_symbol,
-                    access_info=info,
-                    is_read=not get_outputs,
-                    is_write=get_outputs,
+    for name, offset, tasklet_symbol in _access_iter(node, get_outputs=get_outputs):
+        access_info = access_infos[name]
+        if not access_info.variable_offset_axes:
+            offset_dict = offset.to_dict()
+            for axis in access_info.axes():
+                access_info = access_info.restricted_to_index(
+                    axis, extent=(offset_dict[axis.lower()], offset_dict[axis.lower()])
                 )
-            )
-        else:
-            for offset, tasklet_symbol in (
-                make_access_iter()
-                .if_isinstance(oir.FieldAccess)
-                .filter(lambda x: x.name == name)
-                .getattr("offset")
-                .map(lambda off: (off, get_tasklet_symbol(name, off, is_target=get_outputs)))
-                .unique(key=lambda x: x[1])
-            ):
-                offset_dict = offset.to_dict()
-                intervals = {
-                    axis: dcir.IndexWithExtent.from_axis(
-                        axis, extent=(offset_dict[axis.lower()], offset_dict[axis.lower()])
-                    )
-                    for axis in info.axes()
-                }
-                res.append(
-                    dcir.Memlet(
-                        field=name,
-                        connector=tasklet_symbol,
-                        access_info=dcir.FieldAccessInfo(
-                            global_grid_subset=info.global_grid_subset,
-                            grid_subset=dcir.GridSubset(intervals=intervals),
-                            dynamic_access=info.dynamic_access,
-                        ),
-                        is_read=not get_outputs,
-                        is_write=get_outputs,
-                    )
-                )
+
+        memlet = dcir.Memlet(
+            field=name,
+            connector=tasklet_symbol,
+            access_info=access_info,
+            is_read=not get_outputs,
+            is_write=get_outputs,
+        )
+        res.append(memlet)
     return res
 
 
@@ -103,7 +92,6 @@ class DaCeIRBuilder(NodeTranslator):
     @dataclass
     class GlobalContext:
         library_node: StencilComputation
-        block_extents: Callable[[oir.HorizontalExecution], Extent]
         arrays: Dict[str, dace.data.Data]
 
         def get_dcir_decls(self, access_infos):
@@ -325,21 +313,22 @@ class DaCeIRBuilder(NodeTranslator):
         *,
         global_ctx: "DaCeIRBuilder.GlobalContext",
         iteration_ctx: "DaCeIRBuilder.IterationContext",
-        expansion_specification,
         loop_order,
         k_interval,
         **kwargs,
     ):
         # skip type checking due to https://github.com/python/mypy/issues/5485
-        extent = global_ctx.block_extents(node)  # type: ignore
+        extent = global_ctx.library_node.get_extents(node)  # type: ignore
         decls = [self.visit(decl, **kwargs) for decl in node.declarations]
         targets: Set[str] = set()
         stmts = [self.visit(stmt, targets=targets, **kwargs) for stmt in node.body]
 
         stages_idx = next(
-            idx for idx, item in enumerate(expansion_specification) if isinstance(item, Stages)
+            idx
+            for idx, item in enumerate(global_ctx.library_node.expansion_specification)
+            if isinstance(item, Stages)
         )
-        expansion_items = expansion_specification[stages_idx + 1 :]
+        expansion_items = global_ctx.library_node.expansion_specification[stages_idx + 1 :]
 
         iteration_ctx = iteration_ctx.push_axes_extents(
             {k: v for k, v in zip(dcir.Axis.horizontal_axes(), extent)}
@@ -348,7 +337,7 @@ class DaCeIRBuilder(NodeTranslator):
 
         assert iteration_ctx.grid_subset == dcir.GridSubset.single_gridpoint()
 
-        read_memlets = get_tasklet_inout_memlets(
+        read_memlets = _get_tasklet_inout_memlets(
             node,
             get_outputs=False,
             global_ctx=global_ctx,
@@ -356,7 +345,7 @@ class DaCeIRBuilder(NodeTranslator):
             k_interval=k_interval,
         )
 
-        write_memlets = get_tasklet_inout_memlets(
+        write_memlets = _get_tasklet_inout_memlets(
             node,
             get_outputs=True,
             global_ctx=global_ctx,
@@ -390,15 +379,16 @@ class DaCeIRBuilder(NodeTranslator):
         loop_order,
         iteration_ctx: "DaCeIRBuilder.IterationContext",
         global_ctx: "DaCeIRBuilder.GlobalContext",
-        expansion_specification: List[str],
         **kwargs,
     ):
         sections_idx, stages_idx = [
             idx
-            for idx, item in enumerate(expansion_specification)
+            for idx, item in enumerate(global_ctx.library_node.expansion_specification)
             if isinstance(item, (Sections, Stages))
         ]
-        expansion_items = expansion_specification[sections_idx + 1 : stages_idx]
+        expansion_items = global_ctx.library_node.expansion_specification[
+            sections_idx + 1 : stages_idx
+        ]
 
         iteration_ctx = iteration_ctx.push_interval(
             dcir.Axis.K, node.interval
@@ -408,7 +398,6 @@ class DaCeIRBuilder(NodeTranslator):
             node.horizontal_executions,
             iteration_ctx=iteration_ctx,
             global_ctx=global_ctx,
-            expansion_specification=expansion_specification,
             loop_order=loop_order,
             k_interval=node.interval,
             **kwargs,
@@ -676,73 +665,95 @@ class DaCeIRBuilder(NodeTranslator):
         node: oir.VerticalLoop,
         *,
         global_ctx: "DaCeIRBuilder.GlobalContext",
-        iteration_ctx: "DaCeIRBuilder.IterationContext",
-        expansion_specification,
         **kwargs,
     ):
-
-        var_offset_fields = set(
-            acc.name
-            for acc in node.iter_tree().if_isinstance(oir.FieldAccess)
-            if isinstance(acc.offset, oir.VariableKOffset)
+        start, end = (
+            node.sections[0].interval.start,
+            node.sections[0].interval.end,
         )
-        sections_idx = next(
-            idx for idx, item in enumerate(expansion_specification) if isinstance(item, Sections)
-        )
-        expansion_items = expansion_specification[:sections_idx]
-        iteration_ctx = iteration_ctx.push_expansion_items(expansion_items)
 
-        sections = flatten_list(
-            self.generic_visit(
-                node.sections,
-                loop_order=node.loop_order,
-                global_ctx=global_ctx,
-                iteration_ctx=iteration_ctx,
-                expansion_specification=expansion_specification,
-                var_offset_fields=var_offset_fields,
-                **kwargs,
+        overall_interval = dcir.DomainInterval(
+            start=dcir.AxisBound(axis=dcir.Axis.K, level=start.level, offset=start.offset),
+            end=dcir.AxisBound(axis=dcir.Axis.K, level=end.level, offset=end.offset),
+        )
+        overall_extent = Extent.zeros(2)
+        for he in node.iter_tree().if_isinstance(oir.HorizontalExecution):
+            overall_extent = overall_extent.union(global_ctx.library_node.get_extents(he))
+
+        iteration_ctx = DaCeIRBuilder.IterationContext.init(
+            grid_subset=dcir.GridSubset.from_gt4py_extent(overall_extent).set_interval(
+                axis=dcir.Axis.K, interval=overall_interval
             )
         )
-        if node.loop_order != common.LoopOrder.PARALLEL:
-            sections = [self.to_state(s, grid_subset=iteration_ctx.grid_subset) for s in sections]
-        computations = sections
-        for item in reversed(expansion_items):
-            iteration_ctx = iteration_ctx.pop()
-            computations = self._process_iteration_item(
-                scope=computations,
-                item=item,
-                iteration_ctx=iteration_ctx,
-                global_ctx=global_ctx,
+        try:
+            var_offset_fields = set(
+                acc.name
+                for acc in node.iter_tree().if_isinstance(oir.FieldAccess)
+                if isinstance(acc.offset, oir.VariableKOffset)
             )
+            sections_idx = next(
+                idx
+                for idx, item in enumerate(global_ctx.library_node.expansion_specification)
+                if isinstance(item, Sections)
+            )
+            expansion_items = global_ctx.library_node.expansion_specification[:sections_idx]
+            iteration_ctx = iteration_ctx.push_expansion_items(expansion_items)
 
-        read_memlets, write_memlets, field_memlets = union_inout_memlets(computations)
+            sections = flatten_list(
+                self.generic_visit(
+                    node.sections,
+                    loop_order=node.loop_order,
+                    global_ctx=global_ctx,
+                    iteration_ctx=iteration_ctx,
+                    var_offset_fields=var_offset_fields,
+                    **kwargs,
+                )
+            )
+            if node.loop_order != common.LoopOrder.PARALLEL:
+                sections = [
+                    self.to_state(s, grid_subset=iteration_ctx.grid_subset) for s in sections
+                ]
+            computations = sections
+            for item in reversed(expansion_items):
+                iteration_ctx = iteration_ctx.pop()
+                computations = self._process_iteration_item(
+                    scope=computations,
+                    item=item,
+                    iteration_ctx=iteration_ctx,
+                    global_ctx=global_ctx,
+                )
 
-        declared_symbols = set(
-            n.name for n in node.iter_tree().if_isinstance(oir.ScalarDecl, oir.LocalScalar)
-        )
-        symbols = dict()
-        for acc in node.iter_tree().if_isinstance(oir.ScalarAccess):
-            if acc.name not in declared_symbols:
-                declared_symbols.add(acc.name)
-                symbols[acc.name] = acc.dtype
-        for axis in dcir.Axis.dims_3d():
-            if axis.domain_symbol() not in declared_symbols:
-                declared_symbols.add(axis.domain_symbol())
-                symbols[axis.domain_symbol()] = common.DataType.INT32
-        field_decls = global_ctx.get_dcir_decls(
-            {memlet.field: memlet.access_info for memlet in field_memlets}
-        )
-        for name in field_decls.keys():
-            for s in global_ctx.arrays[name].strides:
-                for sym in dace.symbolic.symlist(s).values():
-                    symbols[str(sym)] = common.DataType.INT32
-        read_fields = set(memlet.field for memlet in read_memlets)
-        write_fields = set(memlet.field for memlet in write_memlets)
-        return dcir.StateMachine(
-            label=global_ctx.library_node.label,
-            states=self.to_state(computations, grid_subset=iteration_ctx.grid_subset),
-            field_decls=field_decls,
-            read_memlets=[memlet for memlet in field_memlets if memlet.field in read_fields],
-            write_memlets=[memlet for memlet in field_memlets if memlet.field in write_fields],
-            symbols=symbols,
-        )
+            read_memlets, write_memlets, field_memlets = union_inout_memlets(computations)
+
+            declared_symbols = set(
+                n.name for n in node.iter_tree().if_isinstance(oir.ScalarDecl, oir.LocalScalar)
+            )
+            symbols = dict()
+            for acc in node.iter_tree().if_isinstance(oir.ScalarAccess):
+                if acc.name not in declared_symbols:
+                    declared_symbols.add(acc.name)
+                    symbols[acc.name] = acc.dtype
+            for axis in dcir.Axis.dims_3d():
+                if axis.domain_symbol() not in declared_symbols:
+                    declared_symbols.add(axis.domain_symbol())
+                    symbols[axis.domain_symbol()] = common.DataType.INT32
+            field_decls = global_ctx.get_dcir_decls(
+                {memlet.field: memlet.access_info for memlet in field_memlets}
+            )
+            for name in field_decls.keys():
+                for s in global_ctx.arrays[name].strides:
+                    for sym in dace.symbolic.symlist(s).values():
+                        symbols[str(sym)] = common.DataType.INT32
+            read_fields = set(memlet.field for memlet in read_memlets)
+            write_fields = set(memlet.field for memlet in write_memlets)
+            res = dcir.StateMachine(
+                label=global_ctx.library_node.label,
+                states=self.to_state(computations, grid_subset=iteration_ctx.grid_subset),
+                field_decls=field_decls,
+                read_memlets=[memlet for memlet in field_memlets if memlet.field in read_fields],
+                write_memlets=[memlet for memlet in field_memlets if memlet.field in write_fields],
+                symbols=symbols,
+            )
+        finally:
+            iteration_ctx.clear()
+        return res

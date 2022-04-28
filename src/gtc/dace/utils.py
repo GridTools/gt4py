@@ -397,11 +397,9 @@ def make_subset_str(
             clamped_context_info = clamped_context_info.clamp_full_axis(axis)
 
     for axis in clamped_access_info.axes():
-        context_strs = clamped_context_info.grid_subset.intervals[axis].idx_range
-        subset_strs = clamped_access_info.grid_subset.intervals[axis].idx_range
-        res_strs.append(
-            f"({subset_strs[0]})-({context_strs[0]}):({subset_strs[1]})-({context_strs[0]})"
-        )
+        context_start, _ = clamped_context_info.grid_subset.intervals[axis].idx_range
+        subset_start, subset_end = clamped_access_info.grid_subset.intervals[axis].idx_range
+        res_strs.append(f"({subset_start})-({context_start}):({subset_end})-({context_start})")
     res_strs.extend(f"0:{dim}" for dim in data_dims)
     return ",".join(res_strs)
 
