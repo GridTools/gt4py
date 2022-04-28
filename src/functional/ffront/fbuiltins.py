@@ -12,6 +12,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+from builtins import bool, float, int
 from dataclasses import dataclass
 from typing import Optional
 
@@ -24,11 +25,12 @@ from functional.iterator import runtime
 
 __all__ = ["Field", "float32", "float64", "int32", "int64", "neighbor_sum"]
 
-TYPE_BUILTINS = [Field, float, float32, float64, int, int32, int64, bool, tuple]
+
+TYPE_BUILTINS = [Field, bool, int, int32, int64, float, float32, float64, tuple]
 TYPE_BUILTIN_NAMES = [t.__name__ for t in TYPE_BUILTINS]
 
 
-@dataclass()
+@dataclass
 class BuiltInFunction:
     __gt_type: ct.FunctionType
 
@@ -56,10 +58,10 @@ MODULE_BUILTIN_NAMES = [EXTERNALS_MODULE_NAME]
 
 ALL_BUILTIN_NAMES = TYPE_BUILTIN_NAMES + MODULE_BUILTIN_NAMES
 
-BUILTINS = {name: globals()[name] for name in __all__}
+BUILTINS = {name: globals()[name] for name in __all__ + ["bool", "int", "float"]}
 
 
-# TODO(ricoh): This should probably be reunified with ``iterator.runtime.Offset``
+# TODO(ricoh): This should be reunified with ``iterator.runtime.Offset``
 # potentially in ``functional.common``, which requires lifting of
 # ``ffront.common_types`` into ``functional``.
 @dataclass(frozen=True)

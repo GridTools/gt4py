@@ -53,7 +53,7 @@ def ref(ref_or_name: Union[str, itir.SymRef]) -> itir.SymRef:
 
 def ensure_expr(literal_or_expr: Union[str, int, itir.Expr]) -> itir.Expr:
     """
-    Convert literals into a SymRef or IntLiteral and let expressions pass unchanged.
+    Convert literals into a SymRef or Literal and let expressions pass unchanged.
 
     Examples
     --------
@@ -61,7 +61,7 @@ def ensure_expr(literal_or_expr: Union[str, int, itir.Expr]) -> itir.Expr:
     SymRef(id='a')
 
     >>> ensure_expr(3)
-    IntLiteral(value=3)
+    Literal(value='3', type='int')
 
     >>> ensure_expr(itir.OffsetLiteral(value="i"))
     OffsetLiteral(value='i')
@@ -69,7 +69,7 @@ def ensure_expr(literal_or_expr: Union[str, int, itir.Expr]) -> itir.Expr:
     if isinstance(literal_or_expr, str):
         return ref(literal_or_expr)
     elif isinstance(literal_or_expr, int):
-        return itir.IntLiteral(value=literal_or_expr)
+        return itir.Literal(value=str(literal_or_expr), type="int")
     return literal_or_expr
 
 
@@ -114,7 +114,7 @@ class call_:
     Examples
     --------
     >>> call_("plus")(1, 1)
-    FunCall(fun=SymRef(id='plus'), args=[IntLiteral(value=1), IntLiteral(value=1)])
+    FunCall(fun=SymRef(id='plus'), args=[Literal(value='1', type='int'), Literal(value='1', type='int')])
     """
 
     def __init__(self, expr):
@@ -219,7 +219,7 @@ def shift_(offset, value=None):
     Examples
     --------
     >>> shift_("i", 0)("a")
-    FunCall(fun=FunCall(fun=SymRef(id='shift'), args=[OffsetLiteral(value='i'), IntLiteral(value=0)]), args=[SymRef(id='a')])
+    FunCall(fun=FunCall(fun=SymRef(id='shift'), args=[OffsetLiteral(value='i'), Literal(value='0', type='int')]), args=[SymRef(id='a')])
 
     >>> shift_("V2E")("b")
     FunCall(fun=FunCall(fun=SymRef(id='shift'), args=[OffsetLiteral(value='V2E')]), args=[SymRef(id='b')])
@@ -230,3 +230,7 @@ def shift_(offset, value=None):
         value = ensure_expr(value)
         args.append(value)
     return call_(call_("shift")(*args))
+
+
+def literal_(value: str, typename: str):
+    return itir.Literal(value=value, type=typename)

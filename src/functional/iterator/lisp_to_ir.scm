@@ -4,7 +4,6 @@
   '(domain
     named_range
     lift
-    is_none
     make_tuple
     tuple_get
     reduce
@@ -38,6 +37,7 @@
 (define (gt-function? x) (tagged-with? 'gt-function x))
 (define (gt-stencil-closure? x) (tagged-with? 'gt-stencil-closure x))
 (define (gt-lambda? x) (tagged-with? 'gt-lambda x))
+(define (gt-literal? x) (tagged-with? 'gt-literal x))
 (define (gt-offset? x) (tagged-with? 'gt-offset x))
 (define (gt-axis? x) (tagged-with? 'gt-axis x))
 (define (gt-none? x) (equal? 'gt-none x))
@@ -83,6 +83,13 @@
     "fun=" (gt->py (car expr))
     ", args=" (as-list gt->py (cdr expr))
     ")"))
+
+(define (gt-literal->py expr)
+  (string-append
+    "ir.Literal("
+    "value='" (cadr expr)
+    "', type='" (caddr expr)
+    "')"))
 
 (define (gt-offset->py expr)
   (string-append
@@ -131,6 +138,7 @@
         ((gt-stencil-closure? expr) (gt-stencil-closure->py expr))
         ((gt-builtin? expr) (gt-builtin->py expr))
         ((gt-lambda? expr) (gt-lambda->py expr))
+        ((gt-literal? expr) (gt-literal->py expr))
         ((gt-offset? expr) (gt-offset->py expr))
         ((gt-axis? expr) (gt-axis->py expr))
         (else (gt-call->py expr))))

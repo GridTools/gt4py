@@ -21,9 +21,9 @@ import symtable
 import textwrap
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
-from typing import Any, Mapping, Union, cast
+from typing import Any, Union, cast
 
-from eve import typingx
+from eve import extended_typing as xtyping
 from functional import common
 from functional.ffront import fbuiltins
 
@@ -56,9 +56,9 @@ def make_captured_vars_from_function(func: Callable) -> CapturedVars:
     unbound = set(inspect_builtins.keys()) | inspect_unbound
     builtins = unbound & set(fbuiltins.ALL_BUILTIN_NAMES)
     unbound -= builtins
-    annotations = typingx.get_type_hints(func)
+    annotations = xtyping.get_type_hints(func)
 
-    return CapturedVars(nonlocals, globals, annotations, builtins, unbound)
+    return CapturedVars(dict(nonlocals), dict(globals), dict(annotations), builtins, unbound)
 
 
 def make_symbol_names_from_source(source: str, filename: str = MISSING_FILENAME) -> SymbolNames:
@@ -92,7 +92,7 @@ def make_symbol_names_from_source(source: str, filename: str = MISSING_FILENAME)
     # symtable returns regular free (or non-local) variables in 'get_frees()' and
     # the free variables introduced with the 'nonlocal' statement in 'get_nonlocals()'
     nonlocal_names = set(func_st.get_frees()) | set(func_st.get_nonlocals())  # type: ignore[attr-defined]
-    global_names = set(func_st.get_globals()) - set(fbuiltins.ALL_BUILTIN_NAMES)
+    global_names = set(func_st.get_globals())
 
     return SymbolNames(
         params=param_names,
@@ -152,13 +152,13 @@ class CapturedVars:
         different name here.
     """
 
-    nonlocals: Mapping[str, Any]
-    globals: Mapping[str, Any]  # noqa: A003  # shadowing a python builtin
-    annotations: Mapping[str, Any]
+    nonlocals: dict[str, Any]
+    globals: dict[str, Any]  # noqa: A003  # shadowing a python builtin
+    annotations: dict[str, Any]
     builtins: set[str]
     unbound: set[str]
 
-    def __iter__(self) -> Iterator[Union[Mapping[str, Any], set[str]]]:
+    def __iter__(self) -> Iterator[Union[dict[str, Any], set[str]]]:
         yield self.nonlocals
         yield self.globals
         yield self.annotations

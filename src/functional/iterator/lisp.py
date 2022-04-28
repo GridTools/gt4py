@@ -10,11 +10,7 @@ from functional.iterator import ir
 
 class ToLisp(TemplatedGenerator):
     Sym = as_fmt("{id}")
-    BoolLiteral = as_fmt("{'#t' if value == 'True' else '#f'}")
-    IntLiteral = as_fmt("{value}")
-    FloatLiteral = as_fmt("{value}")
-    StringLiteral = as_fmt('"{value}"')
-    NoneLiteral = as_fmt("gt-none")
+    Literal = as_fmt('(gt-literal "{value}" "{type}")')
     OffsetLiteral = as_fmt(
         "(gt-offset {'\"' + value + '\"' if isinstance(_this_node.value, str) else value})"
     )
@@ -60,12 +56,15 @@ class ToIrTransformer(lark.Transformer):
             return ir.FunCall(fun=to_funcall(elems[0]), args=[to_funcall(e) for e in elems[1:]])
 
         if elements and isinstance(elements[0], ir.SymRef):
+            if elements[0].id == "gt-literal":
+                assert all(isinstance(e, str) for e in elements[1:])
+                return ir.Literal(value=elements[1], type=elements[2])
             if elements[0].id == "gt-offset":
-                assert isinstance(elements[1], (ir.IntLiteral, ir.StringLiteral))
-                return ir.OffsetLiteral(value=elements[1].value)
+                assert isinstance(elements[1], (int, str))
+                return ir.OffsetLiteral(value=elements[1])
             if elements[0].id == "gt-axis":
-                assert isinstance(elements[1], ir.StringLiteral)
-                return ir.AxisLiteral(value=elements[1].value)
+                assert isinstance(elements[1], str)
+                return ir.AxisLiteral(value=elements[1])
             if elements[0].id == "gt-lambda":
                 params = cast(tuple[ir.SymRef], elements[1])
                 return ir.Lambda(
@@ -97,22 +96,22 @@ class ToIrTransformer(lark.Transformer):
                 )
         return elements
 
-    def BOOL(self, value: lark.Token) -> ir.BoolLiteral:
-        return ir.BoolLiteral(value=value.value == "#t")
+    def BOOL(self, value: lark.Token) -> bool:
+        return value.value == "#t"
 
     def ID(self, value: lark.Token) -> Union[ir.NoneLiteral, ir.SymRef]:
         if value.value == "gt-none":
             return ir.NoneLiteral()
         return ir.SymRef(id=value.value)
 
-    def ESCAPED_STRING(self, value: lark.Token) -> ir.StringLiteral:
-        return ir.StringLiteral(value=value.value[1:-1])
+    def ESCAPED_STRING(self, value: lark.Token) -> str:
+        return value.value[1:-1]
 
-    def INTEGER(self, value: lark.Token) -> ir.IntLiteral:
-        return ir.IntLiteral(value=int(value.value))
+    def INTEGER(self, value: lark.Token) -> int:
+        return int(value.value)
 
-    def FLOAT(self, value: lark.Token) -> ir.FloatLiteral:
-        return ir.FloatLiteral(value=float(value.value))
+    def FLOAT(self, value: lark.Token) -> float:
+        return float(value.value)
 
     def SYM(self, value: lark.Token) -> ir.SymRef:
         return ir.SymRef(id=value.value[1:])

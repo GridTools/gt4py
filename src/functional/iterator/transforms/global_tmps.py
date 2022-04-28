@@ -43,13 +43,19 @@ class CreateGlobalTmps(NodeTranslator):
                         axis_literal,
                         ir.FunCall(
                             fun=ir.SymRef(id="plus"),
-                            args=[lower_bound, ir.IntLiteral(value=lower_offset)],
+                            args=[
+                                lower_bound,
+                                ir.Literal(value=str(lower_offset), type="int"),
+                            ],
                         )
                         if lower_offset
                         else lower_bound,
                         ir.FunCall(
                             fun=ir.SymRef(id="plus"),
-                            args=[upper_bound, ir.IntLiteral(value=upper_offset)],
+                            args=[
+                                upper_bound,
+                                ir.Literal(value=str(upper_offset), type="int"),
+                            ],
                         )
                         if upper_offset
                         else upper_bound,
@@ -81,7 +87,18 @@ class CreateGlobalTmps(NodeTranslator):
         closures = []
         tmp_domains = dict()
         for closure in reversed(node.closures):
-            assert isinstance(closure.stencil, ir.Lambda)
+            if not isinstance(closure.stencil, ir.Lambda):
+                if not isinstance(closure.stencil, ir.SymRef) or closure.stencil.id != "deref":
+                    raise NotImplementedError()
+                closure = ir.StencilClosure(
+                    domain=closure.domain,
+                    stencil=ir.Lambda(
+                        params=[ir.Sym(id="x")],
+                        expr=ir.FunCall(fun=closure.stencil, args=[ir.SymRef(id="x")]),
+                    ),
+                    output=closure.output,
+                    inputs=closure.inputs,
+                )
             wrapped_stencil = ir.FunCall(fun=closure.stencil, args=closure.inputs)
             popped_stencil = PopupTmps().visit(wrapped_stencil)
             todos = [(closure.output, popped_stencil)]
