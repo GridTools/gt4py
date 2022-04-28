@@ -26,6 +26,7 @@ import eve
 import gtc.oir as oir
 from eve import NodeVisitor
 from gtc import common
+from gtc import daceir as dcir
 from gtc.common import CartesianOffset, data_type_to_typestr
 from gtc.passes.oir_optimizations.utils import AccessCollector, compute_horizontal_block_extents
 
@@ -72,13 +73,15 @@ def get_tasklet_symbol(name, offset, is_target):
         return f"__{name}"
 
     acc_name = name + "__"
-    offset_strs = []
-    for var, o in zip("ijk", offset):
-        if o is not None and o != 0:
-            offset_strs.append(var + ("m" if o < 0 else "p") + f"{abs(o):d}")
-    suffix = "_".join(offset_strs)
-    if suffix != "":
-        acc_name += suffix
+    if offset is not None:
+        offset_strs = []
+        for axis in dcir.Axis.dims_3d():
+            off = offset.to_dict()[axis.lower()]
+            if off is not None and off != 0:
+                offset_strs.append(axis.lower() + ("m" if off < 0 else "p") + f"{abs(off):d}")
+        suffix = "_".join(offset_strs)
+        if suffix != "":
+            acc_name += suffix
     return acc_name
 
 
@@ -279,7 +282,7 @@ class AccessInfoCollector(NodeVisitor):
             res[axis] = dcir.DomainInterval.intersection(
                 axis, iteration_interval, mask_interval
             ).shifted(offset[axis.to_idx()])
-        return dcir.GridSubset(intervals=res)
+            return dcir.GridSubset(intervals=res)
 
     def _make_access_info(
         self,
@@ -481,12 +484,14 @@ class DaceStrMaker:
         return make_subset_str(global_access_info, local_access_info, self.decls[field].data_dims)
 
 
-def untile_access_info_dict(access_infos: Dict[str, "dcir.FieldAccessInfo"], axes):
-
-    res_infos = dict()
-    for name, access_info in access_infos.items():
-        res_infos[name] = access_info.untile(axes)
-    return res_infos
+#
+# def untile_access_info_dict(access_infos: Dict[str, "dcir.FieldAccessInfo"], axes):
+#
+#     res_infos = dict()
+#     for name, access_info in access_infos.items():
+#         res_infos[name] = access_info.untile(axes)
+#     return res_infos
+#
 
 
 def union_node_grid_subsets(nodes: List[eve.Node]):
@@ -500,40 +505,33 @@ def union_node_grid_subsets(nodes: List[eve.Node]):
     return grid_subset
 
 
-def union_node_access_infos(nodes: List[eve.Node]):
+def _union_memlets(*memlets: List["dcir.Memlet"]) -> List["dcir.Memlet"]:
+    res = dict()
+    for memlet in memlets:
+        res[memlet.field] = memlet.union(res.get(memlet.field, memlet))
+    return list(res.values())
+
+
+def union_inout_memlets(nodes: List[eve.Node]):
     from gtc import daceir as dcir
 
-    read_accesses: Dict[str, dcir.FieldAccessInfo] = dict()
-    write_accesses: Dict[str, dcir.FieldAccessInfo] = dict()
+    read_memlets: List[dcir.Memlet] = list()
+    write_memlets: List[dcir.Memlet] = list()
     for node in collect_toplevel_computation_nodes(nodes):
-        read_accesses.update(
-            {
-                name: access_info.union(read_accesses.get(name, access_info))
-                for name, access_info in node.read_accesses.items()
-            }
-        )
-        write_accesses.update(
-            {
-                name: access_info.union(write_accesses.get(name, access_info))
-                for name, access_info in node.write_accesses.items()
-            }
-        )
+        read_memlets = _union_memlets(*read_memlets, *node.read_memlets)
+        write_memlets = _union_memlets(*write_memlets, *node.write_memlets)
 
-    return (
-        read_accesses,
-        write_accesses,
-        union_access_info_dicts(read_accesses, write_accesses),
-    )
+    return (read_memlets, write_memlets, _union_memlets(*read_memlets, *write_memlets))
 
 
-def union_access_info_dicts(
-    first_infos: Dict[str, "dcir.FieldAccessInfo"],
-    second_infos: Dict[str, "dcir.FieldAccessInfo"],
-):
-    res = dict(first_infos)
-    for key, access_info in second_infos.items():
-        res[key] = access_info.union(first_infos.get(key, access_info))
-    return res
+# def union_access_info_dicts(
+#     first_infos: Dict[str, "dcir.FieldAccessInfo"],
+#     second_infos: Dict[str, "dcir.FieldAccessInfo"],
+# ):
+#     res = dict(first_infos)
+#     for key, access_info in second_infos.items():
+#         res[key] = access_info.union(first_infos.get(key, access_info))
+#     return res
 
 
 def flatten_list(list_or_node: Union[List[Any], eve.Node]):

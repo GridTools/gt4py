@@ -1,14 +1,24 @@
-from typing import Dict, List, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import dace
+from pydantic import validator
 
-from eve import Int, IntEnum, Node, Str, StrEnum
+from eve import Int, IntEnum, Node, Str, StrEnum, SymbolRef, utils
 from gt4py import definitions as gt_def
 from gtc import common, oir
 from gtc.common import LocNode
-from gtc.oir import LocalScalar, Stmt
 
 from .dace.utils import get_axis_bound_diff_str, get_axis_bound_str
+
+
+@utils.noninstantiable
+class Expr(common.Expr):
+    dtype: Optional[common.DataType]
+
+
+@utils.noninstantiable
+class Stmt(common.Stmt):
+    pass
 
 
 class Axis(StrEnum):
@@ -316,8 +326,13 @@ class GridSubset(Node):
                 yield axis, self.intervals[axis]
 
     @classmethod
-    def single_gridpoint(cls):
-        return cls(intervals={axis: IndexWithExtent.from_axis(axis) for axis in Axis.dims_3d()})
+    def single_gridpoint(cls, offset=(0, 0, 0)):
+        return cls(
+            intervals={
+                axis: IndexWithExtent.from_axis(axis, extent=(offset[i], offset[i]))
+                for i, axis in enumerate(Axis.dims_3d())
+            }
+        )
 
     @property
     def shape(self):
@@ -545,12 +560,16 @@ class FieldAccessInfo(Node):
             start=AxisBound(level=common.LevelMarker.START, offset=0, axis=axis),
             end=AxisBound(level=common.LevelMarker.END, offset=0, axis=axis),
         )
+        res_interval = DomainInterval.union(
+            full_interval,
+            self.global_grid_subset.intervals.get(axis, full_interval),
+        )
         if isinstance(interval, DomainInterval):
-            interval_union = DomainInterval.union(interval, full_interval)
+            interval_union = DomainInterval.union(interval, res_interval)
             grid_subset.intervals[axis] = interval_union
         else:
-            grid_subset.intervals[axis] = full_interval
-            grid_subset = grid_subset.set_interval(axis, full_interval)
+            grid_subset.intervals[axis] = res_interval
+            grid_subset = grid_subset.set_interval(axis, res_interval)
         return FieldAccessInfo(
             grid_subset=grid_subset,
             dynamic_access=self.dynamic_access,
@@ -573,9 +592,53 @@ class FieldAccessInfo(Node):
         )
 
 
-class FieldDecl(Node):
-    name: Str
+class Memlet(Node):
+    field: SymbolRef
+    access_info: FieldAccessInfo
+    connector: SymbolRef
+    is_read: bool
+    is_write: bool
+
+    def union(self, other):
+        assert self.field == other.field
+        return Memlet(
+            field=self.field,
+            access_info=self.access_info.union(other.access_info),
+            connector=self.field,
+            is_read=self.is_read or other.is_read,
+            is_write=self.is_write or other.is_write,
+        )
+
+    def remove_read(self):
+        return Memlet(
+            field=self.field,
+            access_info=self.access_info,
+            connector=self.connector,
+            is_read=False,
+            is_write=self.is_write,
+        )
+
+    def remove_write(self):
+        return Memlet(
+            field=self.field,
+            access_info=self.access_info,
+            connector=self.connector,
+            is_read=self.is_read,
+            is_write=False,
+        )
+
+
+class Decl(LocNode):
+    name: SymbolRef
     dtype: common.DataType
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        if type(self) is Decl:
+            raise TypeError("Trying to instantiate `Decl` abstract class.")
+        super().__init__(*args, **kwargs)
+
+
+class FieldDecl(Decl):
     strides: List[Union[Int, Str]]
     data_dims: List[Int]
     access_info: FieldAccessInfo
@@ -606,10 +669,104 @@ class FieldDecl(Node):
         )
 
 
+class Literal(common.Literal, Expr):
+    pass
+
+
+class ScalarAccess(common.ScalarAccess, Expr):
+    name: SymbolRef
+
+
+class VariableKOffset(common.VariableKOffset[Expr]):
+    pass
+
+
+class IndexAccess(common.FieldAccess, Expr):
+    offset: Optional[Union[common.CartesianOffset, VariableKOffset]]
+
+
+class AssignStmt(common.AssignStmt[Union[ScalarAccess, IndexAccess], Expr], Stmt):
+
+    _dtype_validation = common.assign_stmt_dtype_validation(strict=True)
+
+
+class MaskStmt(Stmt):
+    mask: Expr
+    body: List[Stmt]
+
+    @validator("mask")
+    def mask_is_boolean_field_expr(cls, v: Expr) -> Expr:
+        if v.dtype != common.DataType.BOOL:
+            raise ValueError("Mask must be a boolean expression.")
+        return v
+
+
+class HorizontalRestriction(common.HorizontalRestriction[Stmt], Stmt):
+    pass
+
+
+class UnaryOp(common.UnaryOp[Expr], Expr):
+    pass
+
+
+class BinaryOp(common.BinaryOp[Expr], Expr):
+    _dtype_propagation = common.binary_op_dtype_propagation(strict=True)
+
+
+class TernaryOp(common.TernaryOp[Expr], Expr):
+    _dtype_propagation = common.ternary_op_dtype_propagation(strict=True)
+
+
+class Cast(common.Cast[Expr], Expr):  # type: ignore
+    pass
+
+
+class NativeFuncCall(common.NativeFuncCall[Expr], Expr):
+    _dtype_propagation = common.native_func_call_dtype_propagation(strict=True)
+
+
+class While(common.While[Stmt, Expr], Stmt):
+    pass
+
+
+class ScalarDecl(Decl):
+    pass
+
+
+class Temporary(FieldDecl):
+    pass
+
+
 class ComputationNode(Node):
     # mapping connector names to tuple of field name and access info
-    read_accesses: Dict[str, FieldAccessInfo]
-    write_accesses: Dict[str, FieldAccessInfo]
+    read_memlets: List[Memlet]
+    write_memlets: List[Memlet]
+
+    @validator("read_memlets", "write_memlets")
+    def unique_connectors(cls, node: List[Memlet]):
+        conns = dict()
+        for memlet in node:
+            conns.setdefault(memlet.field, set())
+            if memlet.connector in conns[memlet.field]:
+                raise ValueError(f"Found multiple Memlets for connector '{memlet.connector}'")
+            conns[memlet.field].add(memlet.connector)
+        return node
+
+    @property
+    def read_fields(self):
+        return set(ml.field for ml in self.read_memlets)
+
+    @property
+    def write_fields(self):
+        return set(ml.field for ml in self.write_memlets)
+
+    @property
+    def input_connectors(self):
+        return set(ml.connector for ml in self.read_memlets)
+
+    @property
+    def output_connectors(self):
+        return set(ml.connector for ml in self.write_memlets)
 
 
 class IterationNode(Node):
@@ -617,15 +774,17 @@ class IterationNode(Node):
 
 
 class NestedSDFGNode(ComputationNode):
-    field_decls: Dict[str, FieldDecl]
-    symbols: Dict[str, common.DataType]
-    name_map: Dict[str, str]
+    field_decls: Dict[SymbolRef, FieldDecl]
+    symbols: Dict[SymbolRef, common.DataType]
 
 
-class Tasklet(IterationNode, ComputationNode, LocNode):
+class LocalScalar(ScalarDecl):
+    pass
+
+
+class Tasklet(ComputationNode, IterationNode):
     stmts: List[Union[LocalScalar, Stmt]]
     grid_subset: GridSubset = GridSubset.single_gridpoint()
-    name_map: Dict[str, str]
 
 
 class DomainMap(ComputationNode, IterationNode):
@@ -638,20 +797,17 @@ class ComputationState(IterationNode):
     computations: List[Union[Tasklet, DomainMap]]
 
 
-class CopyState(ComputationNode, IterationNode):
-    name_map: Dict[str, str]
-
-
 class DomainLoop(IterationNode, ComputationNode):
     axis: Axis
     index_range: Range
-    loop_states: List[Union[ComputationState, CopyState, "DomainLoop"]]
+    loop_states: List[Union[ComputationState, "DomainLoop"]]
 
 
 class StateMachine(NestedSDFGNode):
-    label: str
-    states: List[Union[DomainLoop, CopyState, ComputationState]]
+    label: SymbolRef
+    states: List[Union[DomainLoop, ComputationState]]
 
 
+# There are circular type references with string placeholders. These statements let pydantic resolve those.
 DomainMap.update_forward_refs()
 DomainLoop.update_forward_refs()

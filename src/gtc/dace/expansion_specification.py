@@ -330,7 +330,8 @@ def _populate_schedules(self, expansion_specification):
                 if isinstance(es, Map):
                     if es.schedule is None:
                         if is_outermost:
-                            es.schedule = dace.ScheduleType.CPU_Multicore
+                            # es.schedule = dace.ScheduleType.CPU_Multicore
+                            es.schedule = dace.ScheduleType.Sequential
                             is_outermost = False
                         else:
                             es.schedule = dace.ScheduleType.Default

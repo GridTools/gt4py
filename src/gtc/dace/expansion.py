@@ -15,8 +15,9 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 import copy
 import dataclasses
+import itertools
 from dataclasses import dataclass
-from typing import Any, Callable, ClassVar, Dict, List, Optional, Tuple, Union
+from typing import Any, Callable, ClassVar, Dict, List, Optional, Set, Tuple, Union
 
 import dace
 import dace.data
@@ -25,10 +26,13 @@ import dace.subsets
 import numpy as np
 import sympy
 
+import eve
+import eve.utils
 import gtc.common as common
 import gtc.oir as oir
-from eve import NodeTranslator, NodeVisitor, codegen
+from eve import NodeTranslator, NodeVisitor, SymbolRef, codegen
 from eve.codegen import FormatTemplate as as_fmt
+from eve.iterators import iter_tree
 from gt4py import definitions as gt_def
 from gt4py.definitions import Extent
 from gtc import daceir as dcir
@@ -71,148 +75,140 @@ def make_access_subset_dict(
     return {axis: res[axis] for axis in axes}
 
 
-def make_read_accesses(node: common.Node, *, global_ctx, **kwargs):
-    return compute_dcir_access_infos(
+def get_tasklet_inout_memlets(node: oir.HorizontalExecution, *, get_outputs, global_ctx, **kwargs):
+
+    access_infos = compute_dcir_access_infos(
         node,
         block_extents=global_ctx.block_extents,
         oir_decls=global_ctx.library_node.declarations,
-        collect_read=True,
-        collect_write=False,
+        collect_read=not get_outputs,
+        collect_write=get_outputs,
         **kwargs,
     )
 
+    def make_access_iter():
+        if get_outputs:
+            return eve.utils.xiter(
+                itertools.chain(
+                    *node.iter_tree().if_isinstance(oir.AssignStmt).getattr("left").map(iter_tree)
+                )
+            )
+        else:
+            return eve.utils.xiter(
+                itertools.chain(
+                    *node.iter_tree().if_isinstance(oir.AssignStmt).getattr("right").map(iter_tree),
+                    *node.iter_tree().if_isinstance(oir.While).getattr("cond").map(iter_tree),
+                    *node.iter_tree().if_isinstance(oir.MaskStmt).getattr("mask").map(iter_tree),
+                )
+            )
 
-def make_write_accesses(node: common.Node, *, global_ctx, **kwargs):
-    return compute_dcir_access_infos(
-        node,
-        block_extents=global_ctx.block_extents,
-        oir_decls=global_ctx.library_node.declarations,
-        collect_read=False,
-        collect_write=True,
-        **kwargs,
-    )
+    res = list()
+    for name, info in access_infos.items():
+        if info.variable_offset_axes:
+            tasklet_symbol = get_tasklet_symbol(name, None, is_target=get_outputs)
+            res.append(
+                dcir.Memlet(
+                    field=name,
+                    connector=tasklet_symbol,
+                    access_info=info,
+                    is_read=not get_outputs,
+                    is_write=get_outputs,
+                )
+            )
+        else:
+            for offset, tasklet_symbol in (
+                make_access_iter()
+                .if_isinstance(oir.FieldAccess)
+                .filter(lambda x: x.name == name)
+                .getattr("offset")
+                .map(
+                    lambda offset: (offset, get_tasklet_symbol(name, offset, is_target=get_outputs))
+                )
+                .unique(key=lambda x: x[1])
+            ):
+                offset_dict = offset.to_dict()
+                intervals = {
+                    axis: dcir.IndexWithExtent.from_axis(
+                        axis, extent=(offset_dict[axis.lower()], offset_dict[axis.lower()])
+                    )
+                    for axis in info.axes()
+                }
+                res.append(
+                    dcir.Memlet(
+                        field=name,
+                        connector=tasklet_symbol,
+                        access_info=dcir.FieldAccessInfo(
+                            global_grid_subset=info.global_grid_subset,
+                            grid_subset=dcir.GridSubset(intervals=intervals),
+                            dynamic_access=info.dynamic_access,
+                        ),
+                        is_read=not get_outputs,
+                        is_write=get_outputs,
+                    )
+                )
+    return res
 
 
 class TaskletCodegen(codegen.TemplatedGenerator):
 
     ScalarAccess = as_fmt("{name}")
 
-    def visit_FieldAccess(
-        self,
-        node: oir.FieldAccess,
-        *,
-        is_target,
-        targets,
-        read_accesses: Dict[str, dcir.FieldAccessInfo],
-        write_accesses: Dict[str, dcir.FieldAccessInfo],
-        sdfg_ctx: "StencilComputationSDFGBuilder.SDFGContext",
-        **kwargs,
-    ):
-        field_decl = sdfg_ctx.field_decls[node.name]
-        is_offset_nil = (
-            isinstance(node.offset, common.CartesianOffset)
-            and self.visit(node.offset, is_dynamic_offset=False, field_decl=field_decl) == ""
-        )
-
-        if is_target or (node.name in targets and is_offset_nil):
-            access_info = write_accesses[node.name]
-            is_dynamic_offset = len(access_info.variable_offset_axes) > 0
-        else:
-            access_info = read_accesses[node.name]
-            is_dynamic_offset = len(access_info.variable_offset_axes) > 0
-
-        if is_target or (node.name in targets and (is_offset_nil or is_dynamic_offset)):
-            targets.add(node.name)
-            name = "__" + node.name
-        elif is_dynamic_offset:
-            name = node.name + "__"
-        else:
-            name = (
-                node.name
-                + "__"
-                + self.visit(
-                    node.offset,
-                    is_dynamic_offset=False,
-                    is_target=is_target,
-                    targets=targets,
-                    field_decl=field_decl,
-                    access_info=access_info,
-                    sdfg_ctx=sdfg_ctx,
-                    read_accesses=read_accesses,
-                    write_accesses=write_accesses,
-                )
-            )
-        if node.data_index or is_dynamic_offset:
-            offset_str = "["
-            if is_dynamic_offset:
-                offset_str += self.visit(
-                    node.offset,
-                    is_dynamic_offset=True,
-                    is_target=is_target,
-                    targets=targets,
-                    field_decl=field_decl,
-                    access_info=access_info,
-                    sdfg_ctx=sdfg_ctx,
-                    read_accesses=read_accesses,
-                    write_accesses=write_accesses,
-                )
-            if node.data_index:
-                offset_str += ",".join(self.visit(node.data_index))
-            offset_str += "]"
-        else:
-            offset_str = ""
-        return name + offset_str
-
-    def visit_CartesianOffset(
-        self,
-        node: common.CartesianOffset,
-        *,
-        is_dynamic_offset,
-        field_decl,
-        access_info=None,
-        **kwargs,
-    ):
-        if is_dynamic_offset:
-            return self.visit_VariableKOffset(
-                node,
-                is_dynamic_offset=is_dynamic_offset,
-                field_decl=field_decl,
-                access_info=access_info,
-                **kwargs,
-            )
-        else:
-            res = []
-            if node.i != 0:
-                res.append(f'i{"m" if node.i<0 else "p"}{abs(node.i):d}')
-            if node.j != 0:
-                res.append(f'j{"m" if node.j<0 else "p"}{abs(node.j):d}')
-            if node.k != 0:
-                res.append(f'k{"m" if node.k<0 else "p"}{abs(node.k):d}')
-            return "_".join(res)
-
-    def visit_VariableKOffset(
+    def _visit_offset(
         self,
         node: Union[oir.VariableKOffset, common.CartesianOffset],
         *,
-        is_dynamic_offset,
-        field_decl: dcir.FieldDecl,
+        access_info: dcir.FieldAccessInfo,
+        decl: dcir.FieldDecl,
         **kwargs,
     ):
-        assert is_dynamic_offset
-        offset_strs = []
-        for axis in field_decl.axes():
-            if axis == dcir.Axis.K:
-                index_str = f"{axis.iteration_symbol()} + ({self.visit(node.k, **kwargs)})"
-                offset_strs.append(index_str)
+        int_sizes = []
+        for i, axis in enumerate(access_info.axes()):
+            memlet_shape = access_info.shape
+            if (
+                str(memlet_shape[i]).isnumeric()
+                and axis not in decl.access_info.variable_offset_axes
+            ):
+                int_sizes.append(int(memlet_shape[i]))
             else:
-                offset_strs.append(axis.iteration_symbol())
-        res: dace.subsets.Range = StencilComputationSDFGBuilder._add_origin(
-            field_decl.access_info, ",".join(offset_strs), add_for_variable=True
-        )
-        res.ranges = [res.ranges[list(field_decl.axes()).index(dcir.Axis.K)]]
-        return str(res)
+                int_sizes.append(None)
+        str_offset = [
+            self.visit(off, **kwargs) for off in (node.to_dict()["i"], node.to_dict()["j"], node.k)
+        ]
+        str_offset = [
+            f"{axis.iteration_symbol()} + {str_offset[axis.to_idx()]}"
+            for i, axis in enumerate(access_info.axes())
+        ]
 
-    def visit_AssignStmt(self, node: oir.AssignStmt, **kwargs):
+        res: dace.subsets.Range = StencilComputationSDFGBuilder._add_origin(
+            decl.access_info, ",".join(str_offset), add_for_variable=True
+        )
+        return str(dace.subsets.Range([r for i, r in enumerate(res.ranges) if int_sizes[i] != 1]))
+
+    def visit_CartesianOffset(self, node: common.CartesianOffset, **kwargs):
+        return self._visit_offset(node, **kwargs)
+
+    def visit_VariableKOffset(self, node: common.CartesianOffset, **kwargs):
+        return self._visit_offset(node, **kwargs)
+
+    def visit_IndexAccess(self, node: dcir.IndexAccess, *, is_target, sdfg_ctx, **kwargs):
+
+        memlets = kwargs["write_memlets" if is_target else "read_memlets"]
+        memlet = next(mem for mem in memlets if mem.connector == node.name)
+
+        index_strs = []
+        if node.offset is not None:
+            index_strs.append(
+                self.visit(
+                    node.offset,
+                    decl=sdfg_ctx.field_decls[memlet.field],
+                    access_info=memlet.access_info,
+                    **kwargs,
+                )
+            )
+        index_strs.extend(self.visit(idx, sdfg_ctx=sdfg_ctx, **kwargs) for idx in node.data_index)
+        return f"{node.name}[{','.join(index_strs)}]"
+
+    def visit_AssignStmt(self, node: dcir.AssignStmt, **kwargs):
         right = self.visit(node.right, is_target=False, **kwargs)
         left = self.visit(node.left, is_target=True, **kwargs)
         return f"{left} = {right}"
@@ -270,8 +266,7 @@ class TaskletCodegen(codegen.TemplatedGenerator):
             raise NotImplementedError("Not implemented NativeFunction encountered.") from error
 
     def visit_NativeFuncCall(self, call: common.NativeFuncCall, **kwargs: Any) -> str:
-        if call.func == common.NativeFunction.POW:
-            return f"{self.visit(call.args[0], **kwargs)} ** {self.visit(call.args[1], **kwargs)}"
+        # TODO: Unroll integer POW
         return f"{self.visit(call.func, **kwargs)}({','.join([self.visit(a, **kwargs) for a in call.args])})"
 
     def visit_DataType(self, dtype: common.DataType, **kwargs: Any) -> str:
@@ -307,13 +302,13 @@ class TaskletCodegen(codegen.TemplatedGenerator):
     LocalScalar = as_fmt("{name}: {dtype}")
 
     def visit_Tasklet(self, node: dcir.Tasklet, **kwargs):
-        return "\n".join(self.visit(node.stmts, targets=set(), **kwargs))
+        return "\n".join(self.visit(node.stmts, **kwargs))
 
     def _visit_conditional(self, node: Union[oir.MaskStmt, oir.HorizontalRestriction], **kwargs):
         mask_str = ""
         indent = ""
         if node.mask is not None:
-            mask_str = f"if {self.visit(node.mask, is_target=False, **kwargs)}:"
+            mask_str = f"if {self.visit(node.mask, **kwargs)}:"
             indent = " " * 4
         body_code = [
             line for block in self.visit(node.body, **kwargs) for line in block.split("\n")
@@ -486,6 +481,102 @@ class DaCeIRBuilder(NodeTranslator):
             while cls._context_stack:
                 del cls._context_stack[-1]
 
+    def visit_Literal(self, node: oir.Literal, **kwargs: Any) -> dcir.Literal:
+        return dcir.Literal(value=node.value, dtype=node.dtype)
+
+    def visit_UnaryOp(self, node: oir.UnaryOp, **kwargs: Any) -> dcir.UnaryOp:
+        return dcir.UnaryOp(op=node.op, expr=self.visit(node.expr, **kwargs), dtype=node.dtype)
+
+    def visit_BinaryOp(self, node: oir.BinaryOp, **kwargs: Any) -> dcir.BinaryOp:
+        return dcir.BinaryOp(
+            op=node.op,
+            left=self.visit(node.left, **kwargs),
+            right=self.visit(node.right, **kwargs),
+            dtype=node.dtype,
+        )
+
+    def visit_HorizontalRestriction(
+        self, node: oir.HorizontalRestriction, **kwargs: Any
+    ) -> dcir.HorizontalRestriction:
+        return dcir.HorizontalRestriction(mask=node.mask, body=self.visit(node.body, **kwargs))
+
+    def visit_VariableKOffset(self, node: oir.VariableKOffset, **kwargs):
+        return dcir.VariableKOffset(k=self.visit(node.k, **kwargs))
+
+    def visit_FieldAccess(
+        self,
+        node: oir.FieldAccess,
+        *,
+        is_target: bool,
+        targets: Set[SymbolRef],
+        var_offset_fields: Set[SymbolRef],
+        **kwargs: Any,
+    ) -> Union[dcir.IndexAccess, dcir.ScalarAccess]:
+        if node.name in var_offset_fields:
+            res = dcir.IndexAccess(
+                name=node.name + "__",
+                offset=self.visit(
+                    node.offset,
+                    is_target=False,
+                    targets=targets,
+                    var_offset_fields=var_offset_fields,
+                    **kwargs,
+                ),
+                data_index=node.data_index,
+                dtype=node.dtype,
+            )
+        else:
+            is_target = is_target or (
+                node.name in targets and node.offset == common.CartesianOffset.zero()
+            )
+            name = get_tasklet_symbol(node.name, node.offset, is_target=is_target)
+            if node.data_index:
+                res = dcir.IndexAccess(
+                    name=name, offset=None, data_index=node.data_index, dtype=node.dtype
+                )
+            else:
+                res = dcir.ScalarAccess(name=name, dtype=node.dtype)
+        if is_target:
+            targets.add(node.name)
+        return res
+
+    def visit_ScalarAccess(self, node: oir.ScalarAccess, **kwargs: Any) -> dcir.ScalarAccess:
+        return dcir.ScalarAccess(name=node.name, dtype=node.dtype)
+
+    def visit_AssignStmt(self, node: oir.AssignStmt, *, targets, **kwargs: Any) -> dcir.AssignStmt:
+        # the visiting order matters here, since targets must not contain the target symbols from the left visit
+        right = self.visit(node.right, is_target=False, targets=targets, **kwargs)
+        left = self.visit(node.left, is_target=True, targets=targets, **kwargs)
+        return dcir.AssignStmt(left=left, right=right)
+
+    def visit_MaskStmt(self, node: oir.MaskStmt, **kwargs: Any) -> dcir.MaskStmt:
+        return dcir.MaskStmt(
+            mask=self.visit(node.mask, is_target=False, **kwargs),
+            body=self.visit(node.body, **kwargs),
+        )
+
+    def visit_While(self, node: oir.While, **kwargs: Any) -> dcir.While:
+        return dcir.While(
+            cond=self.visit(node.cond, is_target=False, **kwargs),
+            body=self.visit(node.body, **kwargs),
+        )
+
+    def visit_Cast(self, node: oir.Cast, **kwargs: Any) -> dcir.Cast:
+        return dcir.Cast(dtype=node.dtype, expr=self.visit(node.expr, **kwargs))
+
+    def visit_NativeFuncCall(self, node: oir.NativeFuncCall, **kwargs: Any) -> dcir.NativeFuncCall:
+        return dcir.NativeFuncCall(
+            func=node.func, args=self.visit(node.args, **kwargs), dtype=node.dtype
+        )
+
+    def visit_TernaryOp(self, node: oir.TernaryOp, **kwargs: Any) -> dcir.TernaryOp:
+        return dcir.TernaryOp(
+            cond=self.visit(node.cond, **kwargs),
+            true_expr=self.visit(node.true_expr, **kwargs),
+            false_expr=self.visit(node.false_expr, **kwargs),
+            dtype=node.dtype,
+        )
+
     def visit_HorizontalExecution(
         self,
         node: oir.HorizontalExecution,
@@ -499,8 +590,9 @@ class DaCeIRBuilder(NodeTranslator):
     ):
         # skip type checking due to https://github.com/python/mypy/issues/5485
         extent = global_ctx.block_extents(node)  # type: ignore
-        decls = [self.visit(decl) for decl in node.declarations]
-        stmts = [self.visit(stmt) for stmt in node.body]
+        decls = [self.visit(decl, **kwargs) for decl in node.declarations]
+        targets = set()
+        stmts = [self.visit(stmt, targets=targets, **kwargs) for stmt in node.body]
 
         stages_idx = next(
             idx for idx, item in enumerate(expansion_specification) if isinstance(item, Stages)
@@ -514,15 +606,17 @@ class DaCeIRBuilder(NodeTranslator):
 
         assert iteration_ctx.grid_subset == dcir.GridSubset.single_gridpoint()
 
-        tasklet_read_accesses = make_read_accesses(
+        read_memlets = get_tasklet_inout_memlets(
             node,
+            get_outputs=False,
             global_ctx=global_ctx,
             grid_subset=iteration_ctx.grid_subset,
             k_interval=k_interval,
         )
 
-        tasklet_write_accesses = make_write_accesses(
+        write_memlets = get_tasklet_inout_memlets(
             node,
+            get_outputs=True,
             global_ctx=global_ctx,
             grid_subset=iteration_ctx.grid_subset,
             k_interval=k_interval,
@@ -530,12 +624,8 @@ class DaCeIRBuilder(NodeTranslator):
 
         dcir_node = dcir.Tasklet(
             stmts=decls + stmts,
-            read_accesses=tasklet_read_accesses,
-            write_accesses=tasklet_write_accesses,
-            name_map={
-                name: name
-                for name in set(tasklet_read_accesses.keys()) | set(tasklet_write_accesses.keys())
-            },
+            read_memlets=read_memlets,
+            write_memlets=write_memlets,
         )
 
         for item in reversed(expansion_items):
@@ -616,9 +706,9 @@ class DaCeIRBuilder(NodeTranslator):
         elif not all(isinstance(n, (dcir.ComputationState, dcir.DomainLoop)) for n in nodes):
             raise ValueError("Can't mix dataflow and state nodes on same level.")
 
-        from .utils import union_node_access_infos
+        from .utils import union_inout_memlets
 
-        read_accesses, write_accesses, field_accesses = union_node_access_infos(nodes)
+        read_memlets, write_memlets, field_memlets = union_inout_memlets(nodes)
 
         declared_symbols = set(
             n.name
@@ -627,8 +717,8 @@ class DaCeIRBuilder(NodeTranslator):
         )
         symbols = dict()
 
-        for name in field_accesses.keys():
-            for s in global_ctx.arrays[name].strides:
+        for memlet in field_memlets:
+            for s in global_ctx.arrays[memlet.field].strides:
                 for sym in dace.symbolic.symlist(s).values():
                     symbols[str(sym)] = common.DataType.INT32
         for node in nodes:
@@ -642,17 +732,34 @@ class DaCeIRBuilder(NodeTranslator):
                 declared_symbols.add(axis.domain_symbol())
                 symbols[axis.domain_symbol()] = common.DataType.INT32
 
+        for acc in iter_tree(nodes).if_isinstance(dcir.ScalarAccess):
+            if (
+                acc.name in global_ctx.library_node.declarations
+                and acc.name not in declared_symbols
+            ):
+                declared_symbols.add(acc.name)
+                symbols[acc.name] = global_ctx.library_node.declarations[acc.name].dtype
+        field_decls = global_ctx.get_dcir_decls(
+            {memlet.field: memlet.access_info for memlet in field_memlets}
+        )
+        read_fields = set(memlet.field for memlet in read_memlets)
+        write_fields = set(memlet.field for memlet in write_memlets)
+        read_memlets = [
+            memlet.remove_write() for memlet in field_memlets if memlet.field in read_fields
+        ]
+        write_memlets = [
+            memlet.remove_read() for memlet in field_memlets if memlet.field in write_fields
+        ]
         return [
             dcir.StateMachine(
                 label=global_ctx.library_node.label,
-                field_decls=global_ctx.get_dcir_decls(field_accesses),
+                field_decls=field_decls,
                 symbols=symbols,
                 # NestedSDFG must have same shape on input and output, matching corresponding
                 # nsdfg.sdfg's array shape
-                read_accesses={key: field_accesses[key] for key in read_accesses.keys()},
-                write_accesses={key: field_accesses[key] for key in write_accesses.keys()},
+                read_memlets=read_memlets,
+                write_memlets=write_memlets,
                 states=nodes,
-                name_map={key: key for key in field_accesses.keys()},
             )
         ]
 
@@ -676,10 +783,11 @@ class DaCeIRBuilder(NodeTranslator):
         iteration_ctx: "DaCeIRBuilder.IterationContext",
         **kwargs,
     ):
-        from .utils import union_node_access_infos, untile_access_info_dict
+        # from .utils import union_node_access_infos, untile_access_info_dict
+        from .utils import union_inout_memlets
 
         grid_subset = iteration_ctx.grid_subset
-        read_accesses, write_accesses, _ = union_node_access_infos(list(scope_nodes))
+        read_memlets, write_memlets, _ = union_inout_memlets(list(scope_nodes))
         scope_nodes = self.to_dataflow(scope_nodes, global_ctx=global_ctx)
 
         ranges = []
@@ -707,14 +815,31 @@ class DaCeIRBuilder(NodeTranslator):
                 )
             else:
                 assert iteration.kind == "contiguous"
-                read_accesses = {
-                    key: access_info.apply_iteration(dcir.GridSubset.from_interval(interval, axis))
-                    for key, access_info in read_accesses.items()
-                }
-                write_accesses = {
-                    key: access_info.apply_iteration(dcir.GridSubset.from_interval(interval, axis))
-                    for key, access_info in write_accesses.items()
-                }
+                read_memlets = [
+                    dcir.Memlet(
+                        field=memlet.field,
+                        connector=memlet.connector,
+                        access_info=memlet.access_info.apply_iteration(
+                            dcir.GridSubset.from_interval(interval, axis)
+                        ),
+                        is_read=True,
+                        is_write=False,
+                    )
+                    for memlet in read_memlets
+                ]
+
+                write_memlets = [
+                    dcir.Memlet(
+                        field=memlet.field,
+                        connector=memlet.connector,
+                        access_info=memlet.access_info.apply_iteration(
+                            dcir.GridSubset.from_interval(interval, axis)
+                        ),
+                        is_read=False,
+                        is_write=True,
+                    )
+                    for memlet in write_memlets
+                ]
                 ranges.append(dcir.Range.from_axis_and_interval(axis, interval))
 
         return [
@@ -722,8 +847,8 @@ class DaCeIRBuilder(NodeTranslator):
                 computations=scope_nodes,
                 index_ranges=ranges,
                 schedule=dcir.MapSchedule.from_dace_schedule(item.schedule),
-                read_accesses=read_accesses,
-                write_accesses=write_accesses,
+                read_memlets=read_memlets,
+                write_memlets=write_memlets,
                 grid_subset=grid_subset,
             )
         ]
@@ -737,10 +862,10 @@ class DaCeIRBuilder(NodeTranslator):
         iteration_ctx: "DaCeIRBuilder.IterationContext",
         **kwargs,
     ):
-        from .utils import union_node_access_infos, union_node_grid_subsets
+        from .utils import union_inout_memlets, union_node_grid_subsets
 
         grid_subset = union_node_grid_subsets(list(scope_nodes))
-        read_accesses, write_accesses, _ = union_node_access_infos(list(scope_nodes))
+        read_memlets, write_memlets, _ = union_inout_memlets(list(scope_nodes))
         scope_nodes = self.to_state(scope_nodes, grid_subset=grid_subset)
 
         ranges = []
@@ -751,18 +876,31 @@ class DaCeIRBuilder(NodeTranslator):
             raise NotImplementedError("Tiling as a state machine not implemented.")
         else:
             assert item.kind == "contiguous"
-            read_accesses = {
-                key: access_info
-                if key.startswith("__local_")
-                else access_info.apply_iteration(dcir.GridSubset.from_interval(interval, axis))
-                for key, access_info in read_accesses.items()
-            }
-            write_accesses = {
-                key: access_info
-                if key.startswith("__local_")
-                else access_info.apply_iteration(dcir.GridSubset.from_interval(interval, axis))
-                for key, access_info in write_accesses.items()
-            }
+            read_memlets = [
+                dcir.Memlet(
+                    field=memlet.field,
+                    connector=memlet.connector,
+                    access_info=memlet.access_info.apply_iteration(
+                        dcir.GridSubset.from_interval(interval, axis)
+                    ),
+                    is_read=True,
+                    is_write=False,
+                )
+                for memlet in read_memlets
+            ]
+
+            write_memlets = [
+                dcir.Memlet(
+                    field=memlet.field,
+                    connector=memlet.connector,
+                    access_info=memlet.access_info.apply_iteration(
+                        dcir.GridSubset.from_interval(interval, axis)
+                    ),
+                    is_read=False,
+                    is_write=True,
+                )
+                for memlet in write_memlets
+            ]
 
             if isinstance(interval, oir.Interval):
                 start, end = (
@@ -785,8 +923,8 @@ class DaCeIRBuilder(NodeTranslator):
                 axis=axis,
                 loop_states=scope_nodes,
                 index_range=index_range,
-                read_accesses=read_accesses,
-                write_accesses=write_accesses,
+                read_memlets=read_memlets,
+                write_memlets=write_memlets,
                 grid_subset=grid_subset,
             )
         ]
@@ -808,8 +946,13 @@ class DaCeIRBuilder(NodeTranslator):
         expansion_specification,
         **kwargs,
     ):
-        from .utils import flatten_list, union_node_access_infos
+        from .utils import flatten_list, union_inout_memlets
 
+        var_offset_fields = set(
+            acc.name
+            for acc in node.iter_tree().if_isinstance(oir.FieldAccess)
+            if isinstance(acc.offset, oir.VariableKOffset)
+        )
         sections_idx = next(
             idx for idx, item in enumerate(expansion_specification) if isinstance(item, Sections)
         )
@@ -823,6 +966,7 @@ class DaCeIRBuilder(NodeTranslator):
                 global_ctx=global_ctx,
                 iteration_ctx=iteration_ctx,
                 expansion_specification=expansion_specification,
+                var_offset_fields=var_offset_fields,
                 **kwargs,
             )
         )
@@ -838,7 +982,7 @@ class DaCeIRBuilder(NodeTranslator):
                 global_ctx=global_ctx,
             )
 
-        read_accesses, write_accesses, field_accesses = union_node_access_infos(computations)
+        read_memlets, write_memlets, field_memlets = union_inout_memlets(computations)
 
         declared_symbols = set(
             n.name for n in node.iter_tree().if_isinstance(oir.ScalarDecl, oir.LocalScalar)
@@ -852,19 +996,22 @@ class DaCeIRBuilder(NodeTranslator):
             if axis.domain_symbol() not in declared_symbols:
                 declared_symbols.add(axis.domain_symbol())
                 symbols[axis.domain_symbol()] = common.DataType.INT32
-        for name in global_ctx.get_dcir_decls(field_accesses).keys():
+        field_decls = global_ctx.get_dcir_decls(
+            {memlet.field: memlet.access_info for memlet in field_memlets}
+        )
+        for name in field_decls.keys():
             for s in global_ctx.arrays[name].strides:
                 for sym in dace.symbolic.symlist(s).values():
                     symbols[str(sym)] = common.DataType.INT32
-
+        read_fields = set(memlet.field for memlet in read_memlets)
+        write_fields = set(memlet.field for memlet in write_memlets)
         return dcir.StateMachine(
             label=global_ctx.library_node.label,
             states=self.to_state(computations, grid_subset=iteration_ctx.grid_subset),
-            field_decls=global_ctx.get_dcir_decls(field_accesses),
-            read_accesses={key: field_accesses[key] for key in read_accesses.keys()},
-            write_accesses={key: field_accesses[key] for key in write_accesses.keys()},
+            field_decls=field_decls,
+            read_memlets=[memlet for memlet in field_memlets if memlet.field in read_fields],
+            write_memlets=[memlet for memlet in field_memlets if memlet.field in write_fields],
             symbols=symbols,
-            name_map={key: key for key in field_accesses.keys()},
         )
 
 
@@ -940,73 +1087,6 @@ class StencilComputationSDFGBuilder(NodeVisitor):
             )
 
     @staticmethod
-    def _get_memlets(
-        node: dcir.ComputationNode,
-        *,
-        with_prefix: bool = True,
-        sdfg_ctx: "StencilComputationSDFGBuilder.SDFGContext",
-        node_ctx: "StencilComputationSDFGBuilder.NodeContext",
-    ):
-        if with_prefix:
-            prefix = "IN_"
-        else:
-            prefix = ""
-        in_memlets = dict()
-        for field, access_info in node.read_accesses.items():
-            field_decl = sdfg_ctx.field_decls[field]
-            in_memlets[prefix + field] = dace.Memlet.simple(
-                field,
-                subset_str=make_subset_str(
-                    field_decl.access_info, access_info, field_decl.data_dims
-                ),
-                dynamic=access_info.is_dynamic,
-            )
-
-        if with_prefix:
-            prefix = "OUT_"
-        else:
-            prefix = ""
-        out_memlets = dict()
-        for field, access_info in node.write_accesses.items():
-            field_decl = sdfg_ctx.field_decls[field]
-            out_memlets[prefix + field] = dace.Memlet.simple(
-                field,
-                subset_str=make_subset_str(
-                    field_decl.access_info, access_info, field_decl.data_dims
-                ),
-                dynamic=access_info.is_dynamic,
-            )
-
-        return in_memlets, out_memlets
-
-    @staticmethod
-    def _add_edges(
-        entry_node: dace.nodes.Node,
-        exit_node: dace.nodes.Node,
-        *,
-        sdfg_ctx: "StencilComputationSDFGBuilder.SDFGContext",
-        node_ctx: "StencilComputationSDFGBuilder.NodeContext",
-        in_memlets: Dict[str, dace.Memlet],
-        out_memlets: Dict[str, dace.Memlet],
-    ):
-        for conn, memlet in in_memlets.items():
-            sdfg_ctx.state.add_edge(
-                *node_ctx.input_node_and_conns[memlet.data], entry_node, conn, memlet
-            )
-        if not in_memlets and None in node_ctx.input_node_and_conns:
-            sdfg_ctx.state.add_edge(
-                *node_ctx.input_node_and_conns[None], entry_node, None, dace.Memlet()
-            )
-        for conn, memlet in out_memlets.items():
-            sdfg_ctx.state.add_edge(
-                exit_node, conn, *node_ctx.output_node_and_conns[memlet.data], memlet
-            )
-        if not out_memlets and None in node_ctx.output_node_and_conns:
-            sdfg_ctx.state.add_edge(
-                exit_node, None, *node_ctx.output_node_and_conns[None], dace.Memlet()
-            )
-
-    @staticmethod
     def _add_origin(
         access_info: dcir.FieldAccessInfo,
         subset: Union[dace.subsets.Range, str],
@@ -1038,11 +1118,63 @@ class StencilComputationSDFGBuilder(NodeVisitor):
                     origin_strs.append(f"-({interval.value}{interval.extent[0]:+d})")
 
         sym = dace.symbolic.pystr_to_symbolic
-        res_ranges = [
-            (sym(f"({rng[0]})+({orig})"), sym(f"({rng[1]})+({orig})"), rng[2])
-            for rng, orig in zip(subset.ranges, origin_strs)
-        ]
+        res_ranges = []
+        for i, axis in enumerate(access_info.axes()):
+            rng = subset.ranges[i]
+            orig = origin_strs[axis.to_idx()]
+            res_ranges.append((sym(f"({rng[0]})+({orig})"), sym(f"({rng[1]})+({orig})"), rng[2]))
         return dace.subsets.Range(res_ranges)
+
+    def visit_Memlet(
+        self,
+        node: dcir.Memlet,
+        *,
+        scope_node: dcir.ComputationNode,
+        sdfg_ctx: "StencilComputationSDFGBuilder.SDFGContext",
+        node_ctx: "StencilComputationSDFGBuilder.NodeContext",
+        connector_prefix="",
+    ):
+        field_decl = sdfg_ctx.field_decls[node.field]
+        memlet = dace.Memlet.simple(
+            node.field,
+            subset_str=make_subset_str(
+                field_decl.access_info, node.access_info, field_decl.data_dims
+            ),
+            dynamic=field_decl.is_dynamic,
+        )
+        if node.is_read:
+            sdfg_ctx.state.add_edge(
+                *node_ctx.input_node_and_conns[memlet.data],
+                scope_node,
+                connector_prefix + node.connector,
+                memlet,
+            )
+        if node.is_write:
+            sdfg_ctx.state.add_edge(
+                scope_node,
+                connector_prefix + node.connector,
+                *node_ctx.output_node_and_conns[memlet.data],
+                memlet,
+            )
+
+    @classmethod
+    def _add_empty_edges(
+        cls,
+        entry_node: dace.nodes.Node,
+        exit_node: dace.nodes.Node,
+        *,
+        sdfg_ctx: "StencilComputationSDFGBuilder.SDFGContext",
+        node_ctx: "StencilComputationSDFGBuilder.NodeContext",
+    ):
+
+        if not sdfg_ctx.state.in_degree(entry_node) and None in node_ctx.input_node_and_conns:
+            sdfg_ctx.state.add_edge(
+                *node_ctx.input_node_and_conns[None], entry_node, None, dace.Memlet()
+            )
+        if not sdfg_ctx.state.out_degree(exit_node) and None in node_ctx.output_node_and_conns:
+            sdfg_ctx.state.add_edge(
+                exit_node, None, *node_ctx.output_node_and_conns[None], dace.Memlet()
+            )
 
     def visit_Tasklet(
         self,
@@ -1053,92 +1185,23 @@ class StencilComputationSDFGBuilder(NodeVisitor):
     ):
         code = TaskletCodegen().visit(
             node,
-            read_accesses={node.name_map[k]: v for k, v in node.read_accesses.items()},
-            write_accesses={node.name_map[k]: v for k, v in node.write_accesses.items()},
+            read_memlets=node.read_memlets,
+            write_memlets=node.write_memlets,
             sdfg_ctx=sdfg_ctx,
         )
-        access_collection = AccessCollector.apply(node)
-        in_memlets = dict()
-        for array_name, access_info in node.read_accesses.items():
-            field = node.name_map[array_name]
-            field_decl = sdfg_ctx.field_decls[array_name]
-            for offset in access_collection.read_offsets()[field]:
-                conn_name = get_tasklet_symbol(field, offset, is_target=False)
-                subset_strs = []
-                for axis in access_info.axes():
-                    if axis in access_info.variable_offset_axes:
-                        full_size = (
-                            field_decl.access_info.clamp_full_axis(axis)
-                            .grid_subset.intervals[axis]
-                            .size
-                        )
-                        subset_strs.append(f"0:{full_size}")
-                    else:
-                        subset_strs.append(axis.iteration_symbol() + f"{offset[axis.to_idx()]:+d}")
-                subset_str = ",".join(subset_strs)
-                subset_str = str(
-                    StencilComputationSDFGBuilder._add_origin(
-                        access_info=field_decl.access_info, subset=subset_str
-                    )
-                )
-                if sdfg_ctx.field_decls[field].data_dims:
-                    subset_str += "," + ",".join(
-                        f"0:{dim}" for dim in sdfg_ctx.field_decls[field].data_dims
-                    )
-                in_memlets[conn_name] = dace.Memlet.simple(
-                    array_name,
-                    subset_str=subset_str,
-                    dynamic=access_info.is_dynamic,
-                )
-
-        out_memlets = dict()
-        for array_name, access_info in node.write_accesses.items():
-            field = node.name_map[array_name]
-            field_decl = sdfg_ctx.field_decls[array_name]
-            conn_name = get_tasklet_symbol(field, (0, 0, 0), is_target=True)
-            subset_strs = []
-            for axis in access_info.axes():
-                if axis in access_info.variable_offset_axes:
-                    full_size = (
-                        field_decl.access_info.clamp_full_axis(axis)
-                        .grid_subset.intervals[axis]
-                        .tile_size
-                    )
-                    subset_strs.append(f"0:{full_size}")
-                else:
-                    subset_strs.append(axis.iteration_symbol())
-            subset_str = ",".join(subset_strs)
-            subset_str = str(
-                StencilComputationSDFGBuilder._add_origin(
-                    access_info=field_decl.access_info, subset=subset_str
-                )
-            )
-            if sdfg_ctx.field_decls[field].data_dims:
-                subset_str += "," + ",".join(
-                    f"0:{dim}" for dim in sdfg_ctx.field_decls[field].data_dims
-                )
-            out_memlets[conn_name] = dace.Memlet.simple(
-                array_name,
-                subset_str=subset_str,
-                dynamic=access_info.is_dynamic,
-            )
 
         tasklet = dace.nodes.Tasklet(
             label=f"{sdfg_ctx.sdfg.label}_Tasklet",
             code=code,
-            inputs={inp for inp in in_memlets.keys()},
-            outputs={outp for outp in out_memlets.keys()},
+            inputs=set(memlet.connector for memlet in node.read_memlets),
+            outputs=set(memlet.connector for memlet in node.write_memlets),
         )
-
         sdfg_ctx.state.add_node(tasklet)
 
-        StencilComputationSDFGBuilder._add_edges(
-            tasklet,
-            tasklet,
-            sdfg_ctx=sdfg_ctx,
-            in_memlets=in_memlets,
-            out_memlets=out_memlets,
-            node_ctx=node_ctx,
+        self.visit(node.read_memlets, scope_node=tasklet, sdfg_ctx=sdfg_ctx, node_ctx=node_ctx)
+        self.visit(node.write_memlets, scope_node=tasklet, sdfg_ctx=sdfg_ctx, node_ctx=node_ctx)
+        StencilComputationSDFGBuilder._add_empty_edges(
+            tasklet, tasklet, sdfg_ctx=sdfg_ctx, node_ctx=node_ctx
         )
 
     def visit_Range(self, node: dcir.Range, **kwargs):
@@ -1169,11 +1232,11 @@ class StencilComputationSDFGBuilder(NodeVisitor):
             output_node_and_conns: Dict[
                 Optional[str], Tuple[dace.nodes.Node, Optional[str]]
             ] = dict()
-            for field in scope_node.read_accesses.keys():
+            for field in set(memlet.field for memlet in scope_node.read_memlets):
                 map_entry.add_in_connector("IN_" + field)
                 map_entry.add_out_connector("OUT_" + field)
                 input_node_and_conns[field] = (map_entry, "OUT_" + field)
-            for field in scope_node.write_accesses.keys():
+            for field in set(memlet.field for memlet in scope_node.write_memlets):
                 map_exit.add_in_connector("IN_" + field)
                 map_exit.add_out_connector("OUT_" + field)
                 output_node_and_conns[field] = (map_exit, "IN_" + field)
@@ -1187,15 +1250,22 @@ class StencilComputationSDFGBuilder(NodeVisitor):
             )
             self.visit(scope_node, sdfg_ctx=sdfg_ctx, node_ctx=inner_node_ctx)
 
-        in_memlets, out_memlets = self._get_memlets(node, sdfg_ctx=sdfg_ctx, node_ctx=node_ctx)
-
-        self._add_edges(
-            map_entry,
-            map_exit,
-            node_ctx=node_ctx,
+        self.visit(
+            node.read_memlets,
+            scope_node=map_entry,
             sdfg_ctx=sdfg_ctx,
-            in_memlets=in_memlets,
-            out_memlets=out_memlets,
+            node_ctx=node_ctx,
+            connector_prefix="IN_",
+        )
+        self.visit(
+            node.write_memlets,
+            scope_node=map_exit,
+            sdfg_ctx=sdfg_ctx,
+            node_ctx=node_ctx,
+            connector_prefix="OUT_",
+        )
+        StencilComputationSDFGBuilder._add_empty_edges(
+            map_entry, map_exit, sdfg_ctx=sdfg_ctx, node_ctx=node_ctx
         )
 
     def visit_DomainLoop(
@@ -1222,12 +1292,18 @@ class StencilComputationSDFGBuilder(NodeVisitor):
         write_acc_and_conn: Dict[Optional[str], Tuple[dace.nodes.Node, Optional[str]]] = dict()
         for computation in node.computations:
             assert isinstance(computation, dcir.ComputationNode)
-            for field in computation.read_accesses.keys():
-                if field not in read_acc_and_conn:
-                    read_acc_and_conn[field] = (sdfg_ctx.state.add_access(field), None)
-            for field in computation.write_accesses.keys():
-                if field not in write_acc_and_conn:
-                    write_acc_and_conn[field] = (sdfg_ctx.state.add_access(field), None)
+            for memlet in computation.read_memlets:
+                if memlet.field not in read_acc_and_conn:
+                    read_acc_and_conn[memlet.field] = (
+                        sdfg_ctx.state.add_access(memlet.field),
+                        None,
+                    )
+            for memlet in computation.write_memlets:
+                if memlet.field not in write_acc_and_conn:
+                    write_acc_and_conn[memlet.field] = (
+                        sdfg_ctx.state.add_access(memlet.field),
+                        None,
+                    )
             node_ctx = StencilComputationSDFGBuilder.NodeContext(
                 input_node_and_conns=read_acc_and_conn,
                 output_node_and_conns=write_acc_and_conn,
@@ -1245,7 +1321,7 @@ class StencilComputationSDFGBuilder(NodeVisitor):
         sdfg = dace.SDFG(node.label)
         state = sdfg.add_state()
         symbol_mapping = {}
-        for axis in [dcir.Axis.I, dcir.Axis.J, dcir.Axis.K]:
+        for axis in dcir.Axis.dims_3d():
             sdfg.add_symbol(axis.domain_symbol(), stype=dace.int32)
             symbol_mapping[axis.domain_symbol()] = dace.symbol(
                 axis.domain_symbol(), dtype=dace.int32
@@ -1254,27 +1330,21 @@ class StencilComputationSDFGBuilder(NodeVisitor):
             nsdfg = sdfg_ctx.state.add_nested_sdfg(
                 sdfg=sdfg,
                 parent=None,
-                inputs=set(node.name_map[k] for k in node.read_accesses.keys()),
-                outputs=set(node.name_map[k] for k in node.write_accesses.keys()),
+                inputs=node.input_connectors,
+                outputs=node.output_connectors,
                 symbol_mapping=symbol_mapping,
             )
-            in_memlets, out_memlets = StencilComputationSDFGBuilder._get_memlets(
-                node, with_prefix=False, sdfg_ctx=sdfg_ctx, node_ctx=node_ctx
-            )
-            StencilComputationSDFGBuilder._add_edges(
-                nsdfg,
-                nsdfg,
-                sdfg_ctx=sdfg_ctx,
-                node_ctx=node_ctx,
-                in_memlets={node.name_map[k]: v for k, v in in_memlets.items()},
-                out_memlets={node.name_map[k]: v for k, v in out_memlets.items()},
+            self.visit(node.read_memlets, scope_node=nsdfg, sdfg_ctx=sdfg_ctx, node_ctx=node_ctx)
+            self.visit(node.write_memlets, scope_node=nsdfg, sdfg_ctx=sdfg_ctx, node_ctx=node_ctx)
+            StencilComputationSDFGBuilder._add_empty_edges(
+                nsdfg, nsdfg, sdfg_ctx=sdfg_ctx, node_ctx=node_ctx
             )
         else:
             nsdfg = dace.nodes.NestedSDFG(
                 label=sdfg.label,
                 sdfg=sdfg,
-                inputs=set(node.read_accesses.keys()),
-                outputs=set(node.write_accesses.keys()),
+                inputs=set(memlet.connector for memlet in node.read_memlets),
+                outputs=set(memlet.connector for memlet in node.write_memlets),
                 symbol_mapping=symbol_mapping,
             )
 
@@ -1285,15 +1355,17 @@ class StencilComputationSDFGBuilder(NodeVisitor):
         )
 
         for name, decl in node.field_decls.items():
+            non_transients = set(
+                memlet.connector for memlet in node.read_memlets + node.write_memlets
+            )
+            assert len(decl.shape) == len(decl.strides)
             inner_sdfg_ctx.sdfg.add_array(
                 name,
-                shape=decl.shape
-                if not name.startswith("__local_")
-                else decl.access_info.overapproximated_shape,
+                shape=decl.shape,
                 strides=[dace.symbolic.pystr_to_symbolic(s) for s in decl.strides],
                 dtype=np.dtype(common.data_type_to_typestr(decl.dtype)).type,
                 storage=decl.storage.to_dace_storage(),
-                transient=(name not in set(node.name_map.values())),
+                transient=name not in non_transients,
             )
         for symbol, dtype in node.symbols.items():
             if symbol not in inner_sdfg_ctx.sdfg.symbols:
@@ -1314,78 +1386,6 @@ class StencilComputationSDFGBuilder(NodeVisitor):
             nsdfg.symbol_mapping.setdefault(str(sym), dace.symbol(sym, dtype=dace.int32))
 
         return nsdfg
-
-    def visit_CopyState(
-        self,
-        node: dcir.CopyState,
-        *,
-        sdfg_ctx: "StencilComputationSDFGBuilder.SDFGContext",
-        **kwargs,
-    ):
-        sdfg_ctx.add_state()
-        read_nodes = dict()
-        write_nodes = dict()
-
-        for src_name, dst_name in node.name_map.items():
-            if src_name not in node.read_accesses:
-                continue
-            src_decl = sdfg_ctx.field_decls[src_name]
-            src_subset = make_subset_str(
-                src_decl.access_info, node.read_accesses[src_name], src_decl.data_dims
-            )
-            dst_decl = sdfg_ctx.field_decls[dst_name]
-            dst_subset = make_subset_str(
-                dst_decl.access_info, node.write_accesses[dst_name], dst_decl.data_dims
-            )
-
-            if src_name not in read_nodes:
-                read_nodes[src_name] = sdfg_ctx.state.add_access(src_name)
-            if dst_name not in write_nodes:
-                write_nodes[dst_name] = sdfg_ctx.state.add_access(dst_name)
-            if src_name == dst_name:
-                tmp_name = sdfg_ctx.sdfg.temp_data_name()
-                intermediate_access = sdfg_ctx.state.add_access(tmp_name)
-                stride: Union[int, str] = 1
-                strides: List[Union[int, str]] = []
-                for s in reversed(node.read_accesses[src_name].overapproximated_shape):
-                    strides = [stride, *strides]
-                    stride = f"({stride}) * ({s})"
-
-                field_decl = sdfg_ctx.field_decls[src_name]
-                sdfg_ctx.sdfg.add_array(
-                    name=tmp_name,
-                    shape=node.read_accesses[src_name].overapproximated_shape,
-                    strides=[dace.symbolic.pystr_to_symbolic(s) for s in strides],
-                    dtype=np.dtype(common.data_type_to_typestr(field_decl.dtype)).type,
-                    transient=True,
-                )
-                tmp_subset = make_subset_str(
-                    node.read_accesses[src_name],
-                    node.read_accesses[src_name],
-                    src_decl.data_dims,
-                )
-                sdfg_ctx.state.add_edge(
-                    read_nodes[src_name],
-                    None,
-                    intermediate_access,
-                    None,
-                    dace.Memlet(data=src_name, subset=src_subset, other_subset=tmp_subset),
-                )
-                sdfg_ctx.state.add_edge(
-                    intermediate_access,
-                    None,
-                    write_nodes[dst_name],
-                    None,
-                    dace.Memlet(data=tmp_name, subset=tmp_subset, other_subset=dst_subset),
-                )
-            else:
-                sdfg_ctx.state.add_edge(
-                    read_nodes[src_name],
-                    None,
-                    write_nodes[dst_name],
-                    None,
-                    dace.Memlet(data=src_name, subset=src_subset, other_subset=dst_subset),
-                )
 
 
 @dace.library.register_expansion(StencilComputation, "default")
@@ -1452,7 +1452,8 @@ class StencilComputationExpansion(dace.library.ExpandTransformation):
             {
                 name: decl
                 for name, decl in daceir.field_decls.items()
-                if name in daceir.read_accesses or name in daceir.write_accesses
+                if name
+                in set(memlet.field for memlet in daceir.read_memlets + daceir.write_memlets)
             },
             subsets,
         )
