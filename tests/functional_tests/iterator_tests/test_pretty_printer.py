@@ -126,15 +126,15 @@ def test_associativity():
             ir.FunCall(
                 fun=ir.SymRef(id="plus"),
                 args=[
-                    ir.IntLiteral(value=1),
-                    ir.IntLiteral(value=2),
+                    ir.Literal(value="1", type="int"),
+                    ir.Literal(value="2", type="int"),
                 ],
             ),
             ir.FunCall(
                 fun=ir.SymRef(id="plus"),
                 args=[
-                    ir.IntLiteral(value=3),
-                    ir.IntLiteral(value=4),
+                    ir.Literal(value="3", type="int"),
+                    ir.Literal(value="4", type="int"),
                 ],
             ),
         ],

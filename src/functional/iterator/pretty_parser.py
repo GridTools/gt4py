@@ -77,18 +77,16 @@ class ToIrTransformer(lark.Transformer):
     def SYM(self, value: lark.Token) -> ir.Sym:
         return ir.Sym(id=value.value)
 
-    def SYM_REF(self, value: lark.Token) -> Union[ir.SymRef, ir.BoolLiteral]:
-        if value.value == "True":
-            return ir.BoolLiteral(value=True)
-        if value.value == "False":
-            return ir.BoolLiteral(value=False)
+    def SYM_REF(self, value: lark.Token) -> Union[ir.SymRef, ir.Literal]:
+        if value.value in ("True", "False"):
+            return ir.Literal(value=value.value, type="bool")
         return ir.SymRef(id=value.value)
 
-    def INT_LITERAL(self, value: lark.Token) -> ir.IntLiteral:
-        return ir.IntLiteral(value=int(value.value))
+    def INT_LITERAL(self, value: lark.Token) -> ir.Literal:
+        return ir.Literal(value=value.value, type="int")
 
-    def FLOAT_LITERAL(self, value: lark.Token) -> ir.FloatLiteral:
-        return ir.FloatLiteral(value=float(value.value))
+    def FLOAT_LITERAL(self, value: lark.Token) -> ir.Literal:
+        return ir.Literal(value=value.value, type="float")
 
     def OFFSET_LITERAL(self, value: lark.Token) -> ir.OffsetLiteral:
         v: Union[int, str] = value.value[:-1]
@@ -147,7 +145,7 @@ class ToIrTransformer(lark.Transformer):
     def shift(self, *offsets: ir.Expr) -> ir.FunCall:
         return ir.FunCall(fun=ir.SymRef(id="shift"), args=offsets)
 
-    def tuple_get(self, tup: ir.Expr, idx: ir.IntLiteral) -> ir.FunCall:
+    def tuple_get(self, tup: ir.Expr, idx: ir.Literal) -> ir.FunCall:
         return ir.FunCall(fun=ir.SymRef(id="tuple_get"), args=[idx, tup])
 
     def make_tuple(self, *args: ir.Expr) -> ir.FunCall:
