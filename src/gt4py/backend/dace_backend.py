@@ -87,17 +87,14 @@ def _pre_expand_trafos(sdfg: dace.SDFG):
                 expansion_priority = []
                 expansion_priority.extend(
                     [
-                        ["Sections", "Stages", "K", "J", "I"],
                         ["TileJ", "TileI", "Sections", "KMap", "Stages", "JMap", "IMap"],
                     ]
                 )
             else:
                 expansion_priority = [
-                    ["J", "I", "Sections", "Stages", "K"],
                     ["TileJ", "TileI", "Sections", "KLoop", "Stages", "JMap", "IMap"],
                 ]
             for exp in expansion_priority:
-
                 try:
                     node.expansion_specification = exp
                     print("used", exp)

@@ -16,7 +16,7 @@
 
 import re
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import dace
 import dace.data
@@ -29,10 +29,6 @@ from gtc import common
 from gtc import daceir as dcir
 from gtc.common import CartesianOffset, data_type_to_typestr
 from gtc.passes.oir_optimizations.utils import AccessCollector, compute_horizontal_block_extents
-
-
-if TYPE_CHECKING:
-    from gtc import daceir as dcir
 
 
 def array_dimensions(array: dace.data.Array):
@@ -112,8 +108,6 @@ def get_axis_bound_diff_str(axis_bound1, axis_bound2, var_name: str):
 
 
 def axes_list_from_flags(flags):
-    from gtc import daceir as dcir
-
     return [ax for f, ax in zip(flags, dcir.Axis.dims_3d()) if f]
 
 
@@ -149,8 +143,6 @@ class AccessInfoCollector(NodeVisitor):
         grid_subset=None,
         **kwargs: Any,
     ) -> Dict[str, "dcir.FieldAccessInfo"]:
-        from gtc import daceir as dcir
-
         inner_ctx = self.Context(
             axes=ctx.axes,
         )
@@ -193,8 +185,6 @@ class AccessInfoCollector(NodeVisitor):
         grid_subset=None,
         **kwargs,
     ) -> Dict[str, "dcir.FieldAccessInfo"]:
-        from gtc import daceir as dcir
-
         horizontal_extent = block_extents(node)
 
         inner_ctx = self.Context(
@@ -247,8 +237,6 @@ class AccessInfoCollector(NodeVisitor):
         he_grid: "dcir.GridSubset",
         offset: List[Optional[int]],
     ):
-        from gtc import daceir as dcir
-
         res: Dict[
             dcir.Axis,
             Union[dcir.DomainInterval, dcir.TileInterval, dcir.IndexWithExtent],
@@ -282,7 +270,7 @@ class AccessInfoCollector(NodeVisitor):
             res[axis] = dcir.DomainInterval.intersection(
                 axis, iteration_interval, mask_interval
             ).shifted(offset[axis.to_idx()])
-            return dcir.GridSubset(intervals=res)
+        return dcir.GridSubset(intervals=res)
 
     def _make_access_info(
         self,
@@ -293,8 +281,6 @@ class AccessInfoCollector(NodeVisitor):
         he_grid,
         grid_subset,
     ):
-        from gtc import daceir as dcir
-
         offset = list(offset_node.to_dict()[k] for k in "ijk")
         if isinstance(offset_node, oir.VariableKOffset):
             variable_offset_axes = [dcir.Axis.K]
@@ -371,8 +357,6 @@ def compute_dcir_access_infos(
     include_full_domain=False,
     **kwargs,
 ) -> Dict[str, "dcir.FieldAccessInfo"]:
-    from gtc import daceir as dcir
-
     if block_extents is None:
         assert isinstance(oir_node, oir.Stencil)
         block_extents = compute_horizontal_block_extents(oir_node)
@@ -443,8 +427,6 @@ class DaceStrMaker:
         self.access_collection = AccessCollector.apply(stencil)
 
     def make_shape(self, field):
-        from gtc import daceir as dcir
-
         if field not in self.access_infos:
             return [
                 axis.domain_symbol()
@@ -484,14 +466,19 @@ class DaceStrMaker:
         return make_subset_str(global_access_info, local_access_info, self.decls[field].data_dims)
 
 
-#
-# def untile_access_info_dict(access_infos: Dict[str, "dcir.FieldAccessInfo"], axes):
-#
-#     res_infos = dict()
-#     for name, access_info in access_infos.items():
-#         res_infos[name] = access_info.untile(axes)
-#     return res_infos
-#
+def untile_memlets(memlets: List["dcir.Memlet"], axes):
+    res_memlets = list()
+    for memlet in memlets:
+        res_memlets.append(
+            dcir.Memlet(
+                field=memlet.field,
+                access_info=memlet.access_info.untile(axes),
+                connector=memlet.connector,
+                is_read=memlet.is_read,
+                is_write=memlet.is_write,
+            )
+        )
+    return res_memlets
 
 
 def union_node_grid_subsets(nodes: List[eve.Node]):
@@ -505,16 +492,14 @@ def union_node_grid_subsets(nodes: List[eve.Node]):
     return grid_subset
 
 
-def _union_memlets(*memlets: List["dcir.Memlet"]) -> List["dcir.Memlet"]:
-    res = dict()
+def _union_memlets(*memlets: "dcir.Memlet") -> List["dcir.Memlet"]:
+    res: Dict[str, dcir.Memlet] = dict()
     for memlet in memlets:
         res[memlet.field] = memlet.union(res.get(memlet.field, memlet))
     return list(res.values())
 
 
 def union_inout_memlets(nodes: List[eve.Node]):
-    from gtc import daceir as dcir
-
     read_memlets: List[dcir.Memlet] = list()
     write_memlets: List[dcir.Memlet] = list()
     for node in collect_toplevel_computation_nodes(nodes):
@@ -522,16 +507,6 @@ def union_inout_memlets(nodes: List[eve.Node]):
         write_memlets = _union_memlets(*write_memlets, *node.write_memlets)
 
     return (read_memlets, write_memlets, _union_memlets(*read_memlets, *write_memlets))
-
-
-# def union_access_info_dicts(
-#     first_infos: Dict[str, "dcir.FieldAccessInfo"],
-#     second_infos: Dict[str, "dcir.FieldAccessInfo"],
-# ):
-#     res = dict(first_infos)
-#     for key, access_info in second_infos.items():
-#         res[key] = access_info.union(first_infos.get(key, access_info))
-#     return res
 
 
 def flatten_list(list_or_node: Union[List[Any], eve.Node]):
@@ -544,8 +519,6 @@ def flatten_list(list_or_node: Union[List[Any], eve.Node]):
 def collect_toplevel_computation_nodes(
     list_or_node: Union[List[Any], eve.Node]
 ) -> List["dcir.ComputationNode"]:
-    from gtc import daceir as dcir
-
     class ComputationNodeCollector(eve.NodeVisitor):
         def visit_ComputationNode(self, node: dcir.ComputationNode, *, collection: List):
             collection.append(node)
@@ -558,8 +531,6 @@ def collect_toplevel_computation_nodes(
 def collect_toplevel_iteration_nodes(
     list_or_node: Union[List[Any], eve.Node]
 ) -> List["dcir.IterationNode"]:
-    from gtc import daceir as dcir
-
     class IterationNodeCollector(eve.NodeVisitor):
         def visit_IterationNode(self, node: dcir.IterationNode, *, collection: List):
             collection.append(node)

@@ -744,7 +744,7 @@ class ComputationNode(Node):
 
     @validator("read_memlets", "write_memlets")
     def unique_connectors(cls, node: List[Memlet]):
-        conns = dict()
+        conns: Dict[SymbolRef, SymbolRef] = dict()
         for memlet in node:
             conns.setdefault(memlet.field, set())
             if memlet.connector in conns[memlet.field]:

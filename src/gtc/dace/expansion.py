@@ -39,7 +39,6 @@ from gtc import daceir as dcir
 from gtc.dace.expansion_specification import Loop, Map, Sections, Stages
 from gtc.dace.nodes import StencilComputation
 from gtc.dace.utils import get_axis_bound_str, get_tasklet_symbol
-from gtc.passes.oir_optimizations.utils import AccessCollector
 
 from .utils import compute_dcir_access_infos, make_subset_str
 
@@ -121,9 +120,7 @@ def get_tasklet_inout_memlets(node: oir.HorizontalExecution, *, get_outputs, glo
                 .if_isinstance(oir.FieldAccess)
                 .filter(lambda x: x.name == name)
                 .getattr("offset")
-                .map(
-                    lambda offset: (offset, get_tasklet_symbol(name, offset, is_target=get_outputs))
-                )
+                .map(lambda off: (off, get_tasklet_symbol(name, off, is_target=get_outputs)))
                 .unique(key=lambda x: x[1])
             ):
                 offset_dict = offset.to_dict()
@@ -161,7 +158,7 @@ class TaskletCodegen(codegen.TemplatedGenerator):
         decl: dcir.FieldDecl,
         **kwargs,
     ):
-        int_sizes = []
+        int_sizes: List[Optional[int]] = []
         for i, axis in enumerate(access_info.axes()):
             memlet_shape = access_info.shape
             if (
@@ -591,7 +588,7 @@ class DaCeIRBuilder(NodeTranslator):
         # skip type checking due to https://github.com/python/mypy/issues/5485
         extent = global_ctx.block_extents(node)  # type: ignore
         decls = [self.visit(decl, **kwargs) for decl in node.declarations]
-        targets = set()
+        targets: Set[str] = set()
         stmts = [self.visit(stmt, targets=targets, **kwargs) for stmt in node.body]
 
         stages_idx = next(
@@ -783,8 +780,7 @@ class DaCeIRBuilder(NodeTranslator):
         iteration_ctx: "DaCeIRBuilder.IterationContext",
         **kwargs,
     ):
-        # from .utils import union_node_access_infos, untile_access_info_dict
-        from .utils import union_inout_memlets
+        from .utils import union_inout_memlets, untile_memlets
 
         grid_subset = iteration_ctx.grid_subset
         read_memlets, write_memlets, _ = union_inout_memlets(list(scope_nodes))
@@ -796,8 +792,8 @@ class DaCeIRBuilder(NodeTranslator):
             interval = iteration_ctx.grid_subset.intervals[axis]
             grid_subset = grid_subset.set_interval(axis, interval)
             if iteration.kind == "tiling":
-                read_accesses = untile_access_info_dict(read_accesses, axes=[axis])
-                write_accesses = untile_access_info_dict(write_accesses, axes=[axis])
+                read_memlets = untile_memlets(read_memlets, axes=[axis])
+                write_memlets = untile_memlets(write_memlets, axes=[axis])
                 if axis == dcir.Axis.K:
                     start, end = interval.start, interval.end
                 else:
