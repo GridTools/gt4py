@@ -212,7 +212,7 @@ def make_node(o):
     if callable(o):
         if hasattr(o, "__gt_itir__"):
             fun = o.__gt_itir__()  # TODO need GTCallable in common to decouple from field view
-            Tracer.fundefs.append(fun)
+            Tracer.add_fundef(fun)
             return _s(fun.id)
         if o.__name__ == "<lambda>":
             return lambdadef(o)
@@ -306,7 +306,9 @@ class Tracer:
 
 @iterator.runtime.closure.register(TRACING)
 def closure(domain, stencil, output, inputs):
-    stencil(*list(_s(param) for param in inspect.signature(stencil).parameters.keys()))
+    if not hasattr(stencil, "__gt_itir__"):  # trace only if stencil is not a GTCallable
+        stencil(*list(_s(param) for param in inspect.signature(stencil).parameters.keys()))
+
     Tracer.add_closure(
         StencilClosure(
             domain=domain,
