@@ -1,6 +1,6 @@
 ### Custom ####
 _build
-_local_
+_local
 
 ### GT4Py ####
 .gt_cache/
@@ -21,7 +21,7 @@ __pycache__/
 
 # Distribution / packaging
 .Python
-build/
+build*/
 develop-eggs/
 dist/
 downloads/
@@ -86,6 +86,8 @@ target/
 .python-version
 
 # Environments
+.env*
+.venv*
 *.env
 *.venv
 env/

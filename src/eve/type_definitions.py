@@ -36,7 +36,7 @@ from pydantic import StrictInt as Int  # noqa: F401
 from pydantic import StrictStr as Str
 from pydantic.types import ConstrainedStr
 
-from .typingx import Any, Callable, Generator, Optional, Tuple, Type, Union
+from .extended_typing import Any, Callable, Generator, Optional, Tuple, Type, Union
 
 
 #: Marker value used to avoid confusion with `None`

@@ -25,14 +25,13 @@ import pydantic
 import pydantic.generics
 
 from . import iterators, utils
-from .type_definitions import NOTHING, IntEnum, Str, StrEnum
-from .typingx import (
+from .extended_typing import (
     Any,
-    AnyNoArgCallable,
     ClassVar,
     Dict,
     Generator,
     List,
+    NoArgsCallable,
     Optional,
     Set,
     Tuple,
@@ -41,6 +40,7 @@ from .typingx import (
     Union,
     no_type_check,
 )
+from .type_definitions import NOTHING, IntEnum, Str, StrEnum
 
 
 # -- Fields --
@@ -75,7 +75,7 @@ _EVE_METADATA_KEY = "_EVE_META_"
 def field(
     default: Any = NOTHING,
     *,
-    default_factory: Optional[AnyNoArgCallable] = None,
+    default_factory: Optional[NoArgsCallable] = None,
     kind: Optional[FieldKind] = None,
     constraints: Optional[FieldConstraintsDict] = None,
     schema_config: Dict[str, Any] = None,

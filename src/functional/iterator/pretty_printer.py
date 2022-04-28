@@ -110,13 +110,7 @@ class PrettyPrinter(NodeTranslator):
     def visit_Sym(self, node: ir.Sym, *, prec: int) -> list[str]:
         return [node.id]
 
-    def visit_BoolLiteral(self, node: ir.BoolLiteral, *, prec: int) -> list[str]:
-        return [str(node.value)]
-
-    def visit_IntLiteral(self, node: ir.IntLiteral, *, prec: int) -> list[str]:
-        return [str(node.value)]
-
-    def visit_FloatLiteral(self, node: ir.FloatLiteral, *, prec: int) -> list[str]:
+    def visit_Literal(self, node: ir.Literal, *, prec: int) -> list[str]:
         return [str(node.value)]
 
     def visit_OffsetLiteral(self, node: ir.OffsetLiteral, *, prec: int) -> list[str]:
