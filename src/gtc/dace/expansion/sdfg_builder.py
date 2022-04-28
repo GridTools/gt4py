@@ -132,7 +132,7 @@ class StencilComputationSDFGBuilder(NodeVisitor):
         sdfg_ctx: "StencilComputationSDFGBuilder.SDFGContext",
         node_ctx: "StencilComputationSDFGBuilder.NodeContext",
     ):
-        code = TaskletCodegen().visit(
+        code = TaskletCodegen.apply(
             node,
             read_memlets=node.read_memlets,
             write_memlets=node.write_memlets,

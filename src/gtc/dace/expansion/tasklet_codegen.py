@@ -6,7 +6,6 @@ import dace.library
 import dace.subsets
 
 import gtc.common as common
-import gtc.oir as oir
 from eve import codegen
 from eve.codegen import FormatTemplate as as_fmt
 from gtc import daceir as dcir
@@ -20,7 +19,7 @@ class TaskletCodegen(codegen.TemplatedGenerator):
 
     def _visit_offset(
         self,
-        node: Union[oir.VariableKOffset, common.CartesianOffset],
+        node: Union[dcir.VariableKOffset, common.CartesianOffset],
         *,
         access_info: dcir.FieldAccessInfo,
         decl: dcir.FieldDecl,
@@ -169,54 +168,51 @@ class TaskletCodegen(codegen.TemplatedGenerator):
     def visit_Tasklet(self, node: dcir.Tasklet, **kwargs):
         return "\n".join(self.visit(node.stmts, **kwargs))
 
-    def _visit_conditional(self, node: Union[oir.MaskStmt, oir.HorizontalRestriction], **kwargs):
+    def _visit_conditional(
+        self,
+        cond: Optional[Union[dcir.Expr, common.HorizontalMask]],
+        body: List[dcir.Stmt],
+        keyword,
+        **kwargs,
+    ):
         mask_str = ""
         indent = ""
-        if node.mask is not None:
-            mask_str = f"if {self.visit(node.mask, **kwargs)}:"
+        if cond is not None:
+            mask_str = f"{keyword} {self.visit(cond, is_target=False, **kwargs)}:"
             indent = " " * 4
-        body_code = [
-            line for block in self.visit(node.body, **kwargs) for line in block.split("\n")
-        ]
+        body_code = [line for block in self.visit(body, **kwargs) for line in block.split("\n")]
         body_code = [indent + b for b in body_code]
         return "\n".join([mask_str] + body_code)
 
-    def visit_MaskStmt(self, node: oir.MaskStmt, **kwargs):
-        return self._visit_conditional(node, **kwargs)
+    def visit_MaskStmt(self, node: dcir.MaskStmt, **kwargs):
+        return self._visit_conditional(cond=node.mask, body=node.body, keyword="if", **kwargs)
 
-    def visit_HorizontalRestriction(self, node: oir.HorizontalRestriction, **kwargs):
-        return self._visit_conditional(node, **kwargs)
+    def visit_HorizontalRestriction(self, node: dcir.HorizontalRestriction, **kwargs):
+        return self._visit_conditional(cond=node.mask, body=node.body, keyword="if", **kwargs)
 
-    def visit_While(self, node: oir.While, **kwargs):
-        cond = self.visit(node.cond, is_target=False, **kwargs)
-        while_str = f"while {cond}:"
-        indent = " " * 4
-        body_code = [
-            line for block in self.visit(node.body, **kwargs) for line in block.split("\n")
-        ]
-        body_code = [indent + b for b in body_code]
-        return "\n".join([while_str] + body_code)
+    def visit_While(self, node: dcir.While, **kwargs):
+        return self._visit_conditional(cond=node.cond, body=node.body, keyword="while", **kwargs)
 
     def visit_HorizontalMask(self, node: common.HorizontalMask, **kwargs):
         clauses: List[str] = []
-        imin = get_axis_bound_str(node.i.start, dcir.Axis.I.domain_symbol())
-        if imin:
-            clauses.append(f"{dcir.Axis.I.iteration_symbol()} >= {imin}")
-        imax = get_axis_bound_str(node.i.end, dcir.Axis.I.domain_symbol())
-        if imax:
-            clauses.append(f"{dcir.Axis.I.iteration_symbol()} < {imax}")
-        jmin = get_axis_bound_str(node.j.start, dcir.Axis.J.domain_symbol())
-        if jmin:
-            clauses.append(f"{dcir.Axis.J.iteration_symbol()} >= {jmin}")
-        jmax = get_axis_bound_str(node.j.end, dcir.Axis.J.domain_symbol())
-        if jmax:
-            clauses.append(f"{dcir.Axis.J.iteration_symbol()} < {jmax}")
+
+        for axis, interval in zip(dcir.Axis.horizontal_axes(), node.intervals):
+            it_sym, dom_sym = axis.iteration_symbol(), axis.domain_symbol()
+
+            min_val = get_axis_bound_str(interval.start, dom_sym)
+            max_val = get_axis_bound_str(interval.end, dom_sym)
+
+            if min_val:
+                clauses.append(f"{it_sym} >= {min_val}")
+            if max_val:
+                clauses.append(f"{it_sym} < {max_val}")
+
         return " and ".join(clauses)
 
     @classmethod
-    def apply(cls, node: oir.HorizontalExecution, **kwargs: Any) -> str:
-        if not isinstance(node, oir.HorizontalExecution):
-            raise ValueError("apply() requires oir.HorizontalExecution node")
-        generated_code = super().apply(node)
+    def apply(cls, node: dcir.Tasklet, **kwargs: Any) -> str:
+        if not isinstance(node, dcir.Tasklet):
+            raise ValueError("apply() requires dcir.Tasklet node")
+        generated_code = super().apply(node, **kwargs)
         formatted_code = codegen.format_source("python", generated_code)
         return formatted_code
