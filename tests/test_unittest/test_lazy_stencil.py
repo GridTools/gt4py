@@ -24,7 +24,7 @@ from gt4py.gtscript import PARALLEL, Field, computation, interval
 from gt4py.lazy_stencil import LazyStencil
 from gt4py.stencil_builder import StencilBuilder
 
-from ..definitions import INTERNAL_BACKENDS
+from ..definitions import ALL_BACKENDS
 
 
 def copy_stencil_definition(out_f: Field[float], in_f: Field[float]):  # type: ignore
@@ -46,7 +46,7 @@ def frontend(request):
     yield gt4py.frontend.from_name(request.param)
 
 
-@pytest.fixture(params=INTERNAL_BACKENDS)
+@pytest.fixture(params=ALL_BACKENDS)
 def backend_name(request):
     yield request.param
 
