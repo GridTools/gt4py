@@ -12,7 +12,7 @@ import gtc.common as common
 from eve import NodeVisitor
 from gtc import daceir as dcir
 from gtc.dace.expansion.tasklet_codegen import TaskletCodegen
-from gtc.dace.utils import make_subset_str
+from gtc.dace.utils import get_axis_bound_str, make_subset_str
 
 
 class StencilComputationSDFGBuilder(NodeVisitor):
@@ -154,7 +154,15 @@ class StencilComputationSDFGBuilder(NodeVisitor):
         )
 
     def visit_Range(self, node: dcir.Range, **kwargs):
-        return node.to_ndrange()
+        if isinstance(node.start, dcir.AxisBound):
+            start = get_axis_bound_str(node.start, node.start.axis.domain_symbol())
+        else:
+            start = str(node.start)
+        if isinstance(node.end, dcir.AxisBound):
+            end = get_axis_bound_str(node.end, node.end.axis.domain_symbol())
+        else:
+            end = str(node.end)
+        return {node.var: f"{start}:{end}:{node.stride}"}
 
     def visit_DomainMap(
         self,

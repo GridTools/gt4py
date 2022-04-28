@@ -284,17 +284,6 @@ class Range(Node):
     end: Union[Str, Int, AxisBound]
     stride: Union[Str, Int] = 1
 
-    def to_ndrange(self):
-        if isinstance(self.start, AxisBound):
-            start = get_axis_bound_str(self.start, self.start.axis.domain_symbol())
-        else:
-            start = str(self.start)
-        if isinstance(self.end, AxisBound):
-            end = get_axis_bound_str(self.end, self.end.axis.domain_symbol())
-        else:
-            end = str(self.end)
-        return {self.var: f"{start}:{end}:{self.stride}"}
-
     @classmethod
     def from_axis_and_interval(
         cls, axis: Axis, interval: Union[DomainInterval, TileInterval], stride=1
