@@ -21,7 +21,7 @@ from gt4py import gtscript
 from gt4py import storage as gt_storage
 from gt4py.gtscript import __INLINED, BACKWARD, FORWARD, PARALLEL, Field, computation, interval
 
-from ..definitions import ALL_BACKENDS, CPU_BACKENDS, INTERNAL_BACKENDS
+from ..definitions import ALL_BACKENDS, CPU_BACKENDS
 from .stencil_definitions import EXTERNALS_REGISTRY as externals_registry
 from .stencil_definitions import REGISTRY as stencil_definitions
 
@@ -508,7 +508,7 @@ class TestNegativeOrigin:
         assert output_field[0, 0, 0] == 1
 
 
-@pytest.mark.parametrize("backend", INTERNAL_BACKENDS)
+@pytest.mark.parametrize("backend", ALL_BACKENDS)
 def test_origin_k_fields(backend):
     @gtscript.stencil(backend=backend, rebuild=True)
     def k_to_ijk(outp: Field[np.float64], inp: Field[gtscript.K, np.float64]):
