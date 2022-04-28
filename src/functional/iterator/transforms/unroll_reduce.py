@@ -28,12 +28,12 @@ class UnrollReduce(NodeTranslator):
         )
 
     @staticmethod
-    def _wrap_can_deref(prev: ir.Expr, next: ir.Expr, i: int, arg: ir.Expr):
+    def _wrap_can_deref(prev: ir.Expr, current: ir.Expr, i: int, arg: ir.Expr):
         can_deref = ir.FunCall(
             fun=ir.SymRef(id="can_deref"),
             args=[UnrollReduce._make_shift([ir.OffsetLiteral(value=i)], arg)],
         )
-        return UnrollReduce._make_if(can_deref, next, prev)
+        return UnrollReduce._make_if(can_deref, current, prev)
 
     @staticmethod
     def _make_step(prev: ir.Expr, i: int, fun: ir.Expr, args: list[ir.Expr]):
@@ -51,8 +51,9 @@ class UnrollReduce(NodeTranslator):
         )
 
     def visit_FunCall(self, node: ir.FunCall, **kwargs):
+        node = self.generic_visit(node, **kwargs)
         if not self._is_reduce(node):
-            return self.generic_visit(node, **kwargs)
+            return node
 
         offset_provider = kwargs["offset_provider"]
         last_offset = self._get_last_offset(node.args[0])

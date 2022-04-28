@@ -23,7 +23,16 @@ def apply_common_transforms(
     ir = NormalizeShifts().visit(ir)
     if unroll_reduce:
         assert offset_provider is not None
-        ir = UnrollReduce().visit(ir, offset_provider=offset_provider)
+        for _ in range(10):
+            unrolled = UnrollReduce().visit(ir, offset_provider=offset_provider)
+            if unrolled == ir:
+                break
+            ir = unrolled
+            ir = NormalizeShifts().visit(ir)
+            if not use_tmps:
+                ir = InlineLifts().visit(ir)
+        else:
+            raise RuntimeError("Reduction unrolling failed")
     if use_tmps:
         assert offset_provider is not None
         ir = CreateGlobalTmps().visit(
