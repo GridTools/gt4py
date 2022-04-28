@@ -302,11 +302,15 @@ class Tracer:
 
 @iterator.runtime.closure.register(TRACING)
 def closure(domain, stencil, output, inputs):
-    stencil(*list(_s(param) for param in inspect.signature(stencil).parameters.keys()))
+    if stencil.__name__ in iterator.builtins.__all__:
+        stencil = _s(stencil.__name__)
+    else:
+        stencil(*(_s(param) for param in inspect.signature(stencil).parameters))
+        stencil = make_node(stencil)
     Tracer.add_closure(
         StencilClosure(
             domain=domain,
-            stencil=make_node(stencil),
+            stencil=stencil,
             output=output,
             inputs=inputs,
         )
