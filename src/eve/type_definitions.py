@@ -28,12 +28,17 @@ import boltons.typeutils
 import pydantic
 import xxhash
 from boltons.typeutils import classproperty  # noqa: F401
-from pydantic import validator  # noqa
-from pydantic import NegativeFloat, NegativeInt, PositiveFloat, PositiveInt  # noqa
-from pydantic import StrictBool as Bool  # noqa: F401
-from pydantic import StrictFloat as Float  # noqa: F401
-from pydantic import StrictInt as Int  # noqa: F401
-from pydantic import StrictStr as Str
+from pydantic import validator  # noqa: F401
+from pydantic import (  # noqa: F401
+    NegativeFloat,
+    NegativeInt,
+    PositiveFloat,
+    PositiveInt,
+    StrictBool as Bool,
+    StrictFloat as Float,
+    StrictInt as Int,
+    StrictStr as Str,
+)
 from pydantic.types import ConstrainedStr
 
 from .extended_typing import Any, Callable, Generator, Optional, Tuple, Type, Union

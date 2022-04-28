@@ -1,8 +1,7 @@
 from typing import Any
 
 from eve import codegen
-from eve.codegen import FormatTemplate as as_fmt
-from eve.codegen import MakoTemplate as as_mako
+from eve.codegen import FormatTemplate as as_fmt, MakoTemplate as as_mako
 from functional.iterator.backends import backend
 from functional.iterator.ir import OffsetLiteral
 from functional.iterator.transforms import apply_common_transforms

@@ -20,10 +20,12 @@ import collections
 from typing import Any, Callable, Iterable, Mapping, Type, cast
 
 import eve
-from functional.ffront import common_types as ct
-from functional.ffront import fbuiltins
-from functional.ffront import field_operator_ast as foast
-from functional.ffront import symbol_makers
+from functional.ffront import (
+    common_types as ct,
+    fbuiltins,
+    field_operator_ast as foast,
+    symbol_makers,
+)
 from functional.ffront.ast_passes import (
     SingleAssignTargetPass,
     SingleStaticAssignPass,

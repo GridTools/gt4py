@@ -1,8 +1,7 @@
 from typing import Any, Collection, Union
 
 from eve import codegen
-from eve.codegen import FormatTemplate as as_fmt
-from eve.codegen import MakoTemplate as as_mako
+from eve.codegen import FormatTemplate as as_fmt, MakoTemplate as as_mako
 from functional.iterator.backends.gtfn.gtfn_ir import (
     FencilDefinition,
     GridType,
