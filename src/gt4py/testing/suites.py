@@ -457,7 +457,6 @@ class StencilTestSuite(metaclass=SuiteMeta):
             name=cls.__module__ + f".{test['suite']}_{backend_slug}_{test['test_id']}",
             rebuild=True,
             externals=externals_dict,
-            debug_mode=True,
         )
 
         for k, v in externals_dict.items():
