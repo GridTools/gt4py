@@ -222,18 +222,23 @@ class AccessInfoCollector(NodeVisitor):
         self.visit(node.right, is_write=False, **kwargs)
         self.visit(node.left, is_write=True, **kwargs)
 
+    def visit_HorizontalRestriction(
+        self, node: oir.HorizontalRestriction, *, is_conditional=False, **kwargs
+    ):
+        self.visit(node.mask, is_conditional=is_conditional, **kwargs)
+        self.visit(node.body, is_conditional=True, region=node.mask, **kwargs)
+
     def visit_MaskStmt(self, node: oir.MaskStmt, *, is_conditional=False, **kwargs):
-        regions = node.mask.iter_tree().if_isinstance(common.HorizontalMask).to_list()
 
         self.visit(node.mask, is_conditional=is_conditional, **kwargs)
-        self.visit(node.body, is_conditional=True, regions=regions, **kwargs)
+        self.visit(node.body, is_conditional=True, **kwargs)
 
     def visit_While(self, node: oir.While, *, is_conditional=False, **kwargs):
         self.generic_visit(node, is_conditional=True, **kwargs)
 
     @staticmethod
     def _global_grid_subset(
-        regions: List[common.HorizontalMask],
+        region: common.HorizontalMask,
         he_grid: "dcir.GridSubset",
         offset: List[Optional[int]],
     ):
@@ -241,26 +246,23 @@ class AccessInfoCollector(NodeVisitor):
             dcir.Axis,
             Union[dcir.DomainInterval, dcir.TileInterval, dcir.IndexWithExtent],
         ] = dict()
-        if regions is not None:
-            for mask in regions:
-                for axis, oir_interval in zip(dcir.Axis.horizontal_axes(), mask.intervals):
-                    start = (
-                        oir_interval.start
-                        if oir_interval.start is not None
-                        else he_grid.intervals[axis].start
-                    )
-                    end = (
-                        oir_interval.end
-                        if oir_interval.end is not None
-                        else he_grid.intervals[axis].end
-                    )
-                    dcir_interval = dcir.DomainInterval(
-                        start=dcir.AxisBound.from_common(axis, start),
-                        end=dcir.AxisBound.from_common(axis, end),
-                    )
-                    res[axis] = dcir.DomainInterval.union(
-                        dcir_interval, res.get(axis, dcir_interval)
-                    )
+        if region is not None:
+            for axis, oir_interval in zip(dcir.Axis.horizontal_axes(), region.intervals):
+                start = (
+                    oir_interval.start
+                    if oir_interval.start is not None
+                    else he_grid.intervals[axis].start
+                )
+                end = (
+                    oir_interval.end
+                    if oir_interval.end is not None
+                    else he_grid.intervals[axis].end
+                )
+                dcir_interval = dcir.DomainInterval(
+                    start=dcir.AxisBound.from_common(axis, start),
+                    end=dcir.AxisBound.from_common(axis, end),
+                )
+                res[axis] = dcir.DomainInterval.union(dcir_interval, res.get(axis, dcir_interval))
         if dcir.Axis.K in he_grid.intervals:
             off = offset[dcir.Axis.K.to_idx()] or 0
             res[dcir.Axis.K] = he_grid.intervals[dcir.Axis.K].shifted(off)
@@ -277,7 +279,7 @@ class AccessInfoCollector(NodeVisitor):
         offset_node: Union[CartesianOffset, oir.VariableKOffset],
         axes,
         is_conditional,
-        regions,
+        region,
         he_grid,
         grid_subset,
     ):
@@ -287,7 +289,7 @@ class AccessInfoCollector(NodeVisitor):
         else:
             variable_offset_axes = []
 
-        global_subset = self._global_grid_subset(regions, he_grid, offset)
+        global_subset = self._global_grid_subset(region, he_grid, offset)
         intervals = dict()
         for axis in axes:
             if axis in variable_offset_axes:
@@ -304,7 +306,7 @@ class AccessInfoCollector(NodeVisitor):
         return dcir.FieldAccessInfo(
             grid_subset=grid_subset,
             global_grid_subset=global_subset,
-            dynamic_access=len(variable_offset_axes) > 0 or is_conditional or bool(regions),
+            dynamic_access=len(variable_offset_axes) > 0 or is_conditional or region is not None,
             variable_offset_axes=variable_offset_axes,
         )
 
@@ -315,7 +317,7 @@ class AccessInfoCollector(NodeVisitor):
         is_write: bool = False,
         ctx: "AccessInfoCollector.Context",
         is_conditional=False,
-        regions=None,
+        region=None,
         he_grid,
         grid_subset,
         **kwargs,
@@ -325,7 +327,7 @@ class AccessInfoCollector(NodeVisitor):
             is_conditional=is_conditional,
             ctx=ctx,
             is_write=False,
-            regions=regions,
+            region=region,
             he_grid=he_grid,
             grid_subset=grid_subset,
             **kwargs,
@@ -338,7 +340,7 @@ class AccessInfoCollector(NodeVisitor):
             node.offset,
             axes=ctx.axes[node.name],
             is_conditional=is_conditional,
-            regions=regions,
+            region=region,
             he_grid=he_grid,
             grid_subset=grid_subset,
         )
