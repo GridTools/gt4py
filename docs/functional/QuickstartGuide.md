@@ -43,11 +43,18 @@ pip install git+https://github.com/gridtools/gt4py.git@functional
 
 +++
 
-## Concepts
+## Programming GT4Py
 
-### Fields, field operators, programs
 
-Before introducing the main concepts, let us import a few things from GT4Py. These are all the constructs that will be used throughout the *concepts* section of this guide.
+### Basic structure of GT4Py apps
+
+In this section, we will write a simple GT4Py application that adds two arrays. The goal is to understand how data is stored in GT4Py and how the data-parallel operations on it can be expressed.
+
++++
+
+#### Importing features
+
+The following snippet imports the most commonly used functionality from GT4Py. These are all that's needed to run all the code snippets below. Numpy is also needed for the examples in this guide.
 
 ```{code-cell} ipython3
 import numpy as np
@@ -58,13 +65,10 @@ from functional.ffront.decorator import field_operator, program
 from functional.iterator.embedded import np_as_located_field, NeighborTableOffsetProvider
 ```
 
-#### Fields
+#### Storing data
 
-In GT4Py, multi-dimensional data is represented by *fields*. In the snippet below, we are declaring a two-dimensional field: one of the two axes is called *Cell*, while the other axis is called *K*. Both axes have to be declared as a `CartesianAxis`in GT4Py.
-
-Conceptually, the *Cell* axis could represent an array of cells that form an unstructured grid to cover a surface, while the *K* axis could represent an array of arrays of cells to add vertical layering over the surface.
-
-The fields themselves can be created using utility functions such as `np_as_located_field` that converts `numpy` arrays into GT4Py `Field`s. The code below creates two fields, both with 5 cells in the horizontal grid and 6 vertical layers, with all the 5\*6=30 values set to 2.0 for one field and 3.0 for the other field.
+In GT4Py, *fields* defined over one or more *dimensions* are used to represent array-like data. As seen in the following code snippet, the dimensions are defined as a `CartesianAxis`, whereas the fields are created with helper functions such as 
+`np_as_located_field`. The 2D fields used in this section are defined over the *cell* and *K* dimensions, and have a size of 5 cells by 6 Ks.
 
 ```{code-cell} ipython3
 CellDim = CartesianAxis("Cell")
@@ -80,11 +84,11 @@ a = np_as_located_field(CellDim, KDim)(np.full(shape=grid_shape, fill_value=a_va
 b = np_as_located_field(CellDim, KDim)(np.full(shape=grid_shape, fill_value=b_value, dtype=np.float32))
 ```
 
-#### Field operators
+#### Data-parallel operations
 
-In GT4Py, *field operators* are pure functions (i.e. functions without side effects) that take immutable `Field`s as arguments and output another `Field` as a result. Field operators are used to implement mathematical operations on fields. They must be declared with the `@field_operator` decorator, and are allowed to use a certain subset of the Python syntax.
+In GT4Py, operations are done on entire fields at a time as opposed to looping over all elements of a field one by one. The operations can be defined inside *field operators*, which much like a function that takes some immutable fields as arguments and returns another field as result. Field operators can only use a subset of the Python syntax.
 
-The field operator below takes two fields as arguments, and returns the elementwise sum of the fields.
+This field operator return the sum of two fields:
 
 ```{code-cell} ipython3
 @field_operator
@@ -93,9 +97,16 @@ def add(a : Field[[CellDim, KDim], float32],
     return a + b
 ```
 
-#### Programs
+Running the field operator should give us a `result` of which all the elements are equal to 2+3=5:
 
-*Programs* are similar to fields operators, but they allow mutability of the arguments. Programs must be declared with the `@program` decorator and are allowed to use a different subset of the Python syntax compared to field operators. Programs are used to call and chain field operators:
+```{code-cell} ipython3
+result = np_as_located_field(CellDim, KDim)(np.zeros(shape=grid_shape))
+add(a, b, out=result, offset_provider={})
+
+print("{} + {} = {} ± {}".format(a_value, b_value, np.average(np.asarray(result)), np.std(np.asarray(result))))
+```
+
+*Programs* are similar to fields operators, but they allow mutability of the arguments and use a different subset of the Python syntax. Programs are used to call and chain field operators:
 
 ```{code-cell} ipython3
 @program
@@ -105,7 +116,7 @@ def run_add(a : Field[[CellDim, KDim], float32],
     add(a, b, out=out)
 ```
 
-Executing the program like a regular Python function will sum the two fields. The expectation is that every cell of the resulting field will be 2+3=5.
+Executing the program should give us the same result as calling the field operator directly:
 
 ```{code-cell} ipython3
 result = np_as_located_field(CellDim, KDim)(np.zeros(shape=grid_shape))
@@ -114,39 +125,47 @@ run_add(a, b, result, offset_provider={})
 print("{} + {} = {} ± {}".format(a_value, b_value, np.average(np.asarray(result)), np.std(np.asarray(result))))
 ```
 
-### Unstructured meshes and connectivity
+### Unstructured meshes and connectivities
 
-When using unstructured meshes, we have to define connectivity between nodes, cells and edges manually. In this section, we will use the mesh illustrated below and we will do some calculations with fields over the edges and cells of this mesh.
+In this section, we will write an application that performs a laplacian-like operation on an unstructured mesh. Similar to the laplacian on regular grids, we will define the *pseudo-laplacian* as $n$ times the number value of the current cell minus the sum of the values of the $n$ neighboring cells.
 
-![grid_topo](connectivity_numbered_grid.svg)
-
-The <span style="color: #C02020">faces</span> and the <span style="color: #0080FF">edges</span> of the mesh have been numbered with zero-based indices.
+We will calculate the pseudo-laplacian by adding up the differences over all the edges of a cell. An *edge difference* is defined as the difference between the two cells neighboring the edge.
 
 +++
 
-#### Define fields and connectivity
+#### Defining the mesh and the connectivities
 
-We are going to use two types of fields: fields over the cells and fields over the edges of the mesh. The two types of fields will be over the dimensions *Cell* and *Edge* declared below:
+Consider the following mesh, of which the <span style="color: #C02020">cells</span> and the <span style="color: #0080FF">edges</span> have been numbered:
+
+![grid_topo](connectivity_numbered_grid.svg)
+
++++
+
+To store the values inside the cells, we are going to need a field over the cells of the mesh. This field will have one dimension, *Cell*, and it will have a size of six. We will also assign the values of the cells right away:
 
 ```{code-cell} ipython3
 CellDim = CartesianAxis("Cell")
-EdgeDim = CartesianAxis("Edge")
-```
-
-Now we can declare a field over the 6 cells of the mesh which contains the following values:
-![cell_values](connectivity_cell_field.svg)
-
-```{code-cell} ipython3
 cell_values = np_as_located_field(CellDim)(np.array([1.0, 1.0, 2.0, 3.0, 5.0, 8.0]))
 ```
 
-In addition to the fields, we will define the edge-to-cell connectivity that tells us which cells are neighbours to a particular edge. The corresponding connectivity matrix consists of 12 entries for the 12 edges of the mesh, with each entry containing the index of the two cells adjacent to the current edge. Missing neighbors for boundary edges are filled with -1.
+| ![cell_values](connectivity_cell_field.svg) | 
+|:--:| 
+| *Cell values* |
 
-**TODO** explain sparse fields somehow
-The *field offset* `E2C` is used inside the field operator to indicate that we want to access the cells neighboring the edges. The *offset provider* forwards the actual connectivity matrix to the field operator.
+
++++
+
+Storing values on edges is analogous to storing values in cells:
 
 ```{code-cell} ipython3
-cell_neighbours_of_edges = np.array([
+EdgeDim = CartesianAxis("Edge")
+edge_values = np_as_located_field(EdgeDim)(np.zeros((12,)))
+```
+
+In addition to the cells and edges, we will also define the connectivities: one table for the edges reachable from a cell and another table for the cells reachable form an edge. The $i$th entry of the connectivity table contains the indices of the <span style="color: #C02020">cells</span> (<span style="color: #0080FF">edges</span>) adjacent to the $i$th <span style="color: #0080FF">edge<span> (<span style="color: #C02020">cell</span>). The connectivity tables for the mesh above are:
+
+```{code-cell} ipython3
+edge_to_cell_table = np.array([
     [0, -1],
     [2, -1],
     [2, -1],
@@ -161,36 +180,50 @@ cell_neighbours_of_edges = np.array([
     [4, 5]
 ])
 
-E2CDim = CartesianAxis("E2C")
-E2C = FieldOffset("E2C", source=CellDim, target=(EdgeDim, E2CDim))
-e2c_neighbor_table = NeighborTableOffsetProvider(cell_neighbours_of_edges, EdgeDim, CellDim, 2)
-
-offset_provider={"E2C": e2c_neighbor_table}
+cell_to_edge_table = np.array([
+    [0, 6, 7],
+    [7, 8, 9],
+    [1, 2, 8],
+    [3, 9, 10],
+    [4, 10, 11],
+    [5, 6, 11],
+])
 ```
 
-#### Using adjacencies in field operators
+#### Using connectivities in field operators
 
-The field operator `nearest_cell_to_edge` returns a field on the edges. The `E2C` field offset is used to map edge iterators to cell iterators using the connectivity matrix, and the cell iterator is used to extract the value from the cell field that's provided as input argument to the field operator. Note how `E2C` maps one edge iterator to two cell iterators (due to an edge having up to two cell neighbors). In this example, we take the 0th neighboring cell, but in the next one we will sum up the values of all neighboring cells.
+*Field offsets* can be used to create a field on <span style="color: #0080FF">edges</span> *from* a field on <span style="color: #C02020">cells</span> using a connectivity table from <span style="color: #0080FF">edges</span> *to* <span style="color: #C02020">cells</span>. The mapping is done by sampling the field on <span style="color: #C02020">cells</span> by the indices given in the <span style="color: #0080FF">edge</span>-to-<span style="color: #C02020">cell</span> connectivity table.
+
+```{code-cell} ipython3
+E2CDim = CartesianAxis("E2C")
+E2C = FieldOffset("E2C", source=CellDim, target=(EdgeDim, E2CDim))
+```
+
+While the field offset only specifies the source and target of the mapping, the actual connectivity table is provided through an *offset provider*:
+
+```{code-cell} ipython3
+E2C_offset_provider = NeighborTableOffsetProvider(edge_to_cell_table, EdgeDim, CellDim, 2)
+```
+
+The field operator below uses the field offset to create a field on the edges from the field on cells by using the $0$th element in the edge-to-cell connectivity table. Notice how the offset provider is passed to the program execution.
 
 ```{code-cell} ipython3
 @field_operator
-def nearest_cell_to_edge(cells : Field[[CellDim], float32]) -> Field[[EdgeDim], float32]:
-    return cells(E2C[0])
+def nearest_cell_to_edge(cell_values : Field[[CellDim], float32]) -> Field[[EdgeDim], float32]:
+    return cell_values(E2C[0])
 
 @program
-def run_nearest_cell_to_edge(cells : Field[[CellDim], float32], out : Field[[EdgeDim], float32]):
-    nearest_cell_to_edge(cells, out=out)
+def run_nearest_cell_to_edge(cell_values : Field[[CellDim], float32], out : Field[[EdgeDim], float32]):
+    nearest_cell_to_edge(cell_values, out=out)
     
-result_edge_values = np_as_located_field(EdgeDim)(np.zeros(shape=(12,)))
+run_nearest_cell_to_edge(cell_values, edge_values, offset_provider={"E2C": E2C_offset_provider})
 
-run_nearest_cell_to_edge(cell_values, result_edge_values, offset_provider=offset_provider)
-
-print("0th adjacent cell's value: {}".format(np.asarray(result_edge_values)))
+print("0th adjacent cell's value: {}".format(np.asarray(edge_values)))
 ```
 
-After running the code, we should see the following values assigned to the edges:
-
-![nearest_cell_values](connectivity_edge_0th_cell.svg)
+| ![nearest_cell_values](connectivity_edge_0th_cell.svg) |
+|:--:| 
+| *Resulting edge values* |
 
 +++
 
