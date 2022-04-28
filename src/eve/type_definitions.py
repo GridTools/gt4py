@@ -28,8 +28,8 @@ import boltons.typeutils
 import pydantic
 import xxhash
 from boltons.typeutils import classproperty  # noqa: F401
-from pydantic import validator  # noqa
-from pydantic import (  # noqa; noqa: F401
+from pydantic import validator  # noqa: F401
+from pydantic import (  # noqa: F401
     NegativeFloat,
     NegativeInt,
     PositiveFloat,

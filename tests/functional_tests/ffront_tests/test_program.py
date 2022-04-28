@@ -154,7 +154,7 @@ def test_copy_parsing(copy_program_def):
                 kwargs={"out": P(past.Name, id="out_field")},
             )
         ],
-        location=P(past.SourceLocation, line=59, source=str(pathlib.Path(__file__).resolve())),
+        location=P(past.SourceLocation, line=58, source=str(pathlib.Path(__file__).resolve())),
     )
     assert pattern_node.match(past_node, raise_exception=True)
 
