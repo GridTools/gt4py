@@ -9,7 +9,7 @@ from functional.iterator.transforms import LiftMode
         LiftMode.FORCE_TEMPORARIES,
         LiftMode.SIMPLE_HEURISTIC,
     ],
-    ids=lambda p: f"lift_mode={p}",
+    ids=lambda p: f"lift_mode={p.name}",
 )
 def lift_mode(request):
     return request.param

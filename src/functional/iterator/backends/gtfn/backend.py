@@ -34,7 +34,7 @@ def generate(program: itir.FencilDefinition, *, grid_type: str, **kwargs: Any) -
     transformed = program
     transformed = apply_common_transforms(
         program,
-        use_tmps=kwargs.get("use_tmps", False),
+        lift_mode=kwargs.get("lift_mode"),
         offset_provider=kwargs.get("offset_provider", None),
     )
     transformed = extract_fundefs_from_closures(transformed)
