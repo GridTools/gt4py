@@ -17,10 +17,12 @@ from dataclasses import dataclass, field
 from typing import Callable, Optional, cast
 
 from eve import NodeTranslator
-from functional.ffront import common_types as ct
-from functional.ffront import fbuiltins
-from functional.ffront import field_operator_ast as foast
-from functional.ffront import itir_makers as im
+from functional.ffront import (
+    common_types as ct,
+    fbuiltins,
+    field_operator_ast as foast,
+    itir_makers as im,
+)
 from functional.ffront.fbuiltins import FUN_BUILTIN_NAMES, TYPE_BUILTIN_NAMES
 from functional.ffront.type_info import TypeInfo
 from functional.iterator import ir as itir
