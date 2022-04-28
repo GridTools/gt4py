@@ -21,8 +21,7 @@ import pytest
 
 from eve.pattern_matching import ObjectPattern as P
 from functional.common import Field, GTTypeError
-from functional.ffront import common_types
-from functional.ffront import program_ast as past
+from functional.ffront import common_types, program_ast as past
 from functional.ffront.decorator import field_operator, program
 from functional.ffront.fbuiltins import FieldOffset
 from functional.ffront.func_to_past import ProgramParser
