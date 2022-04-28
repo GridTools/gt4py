@@ -796,8 +796,7 @@ class TestVariableKAndReadOutside(gt_testing.StencilTestSuite):
         "index": np.int32,
     }
     domain_range = [(2, 2), (2, 2), (2, 8)]
-    # exclude "numpy" due to #624
-    backends = [backend for backend in ALL_BACKENDS if backend.values[0] != "numpy"]
+    backends = ALL_BACKENDS
     symbols = {
         "field_in": gt_testing.field(
             in_range=(0.1, 10), axes="IJK", boundary=[(0, 0), (0, 0), (1, 0)]
