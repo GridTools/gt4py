@@ -6,14 +6,12 @@ from functional import iterator
 from functional.iterator.backend_executor import execute_fencil
 from functional.iterator.ir import (
     AxisLiteral,
-    BoolLiteral,
     Expr,
     FencilDefinition,
-    FloatLiteral,
     FunCall,
     FunctionDefinition,
-    IntLiteral,
     Lambda,
+    Literal,
     NoneLiteral,
     OffsetLiteral,
     StencilClosure,
@@ -103,6 +101,11 @@ def _f(fun, *args):
 @iterator.builtins.deref.register(TRACING)
 def deref(arg):
     return _f("deref", arg)
+
+
+@iterator.builtins.can_deref.register(TRACING)
+def can_deref(arg):
+    return _f("can_deref", arg)
 
 
 @iterator.builtins.lift.register(TRACING)
@@ -214,11 +217,11 @@ def make_node(o):
     if isinstance(o, iterator.runtime.Offset):
         return OffsetLiteral(value=o.value)
     if isinstance(o, bool):
-        return BoolLiteral(value=o)
+        return Literal(value=str(o), type="bool")
     if isinstance(o, int):
-        return IntLiteral(value=o)
+        return Literal(value=str(o), type="int")
     if isinstance(o, float):
-        return FloatLiteral(value=o)
+        return Literal(value=str(o), type="float")
     if isinstance(o, CartesianAxis):
         return AxisLiteral(value=o.value)
     if isinstance(o, tuple):

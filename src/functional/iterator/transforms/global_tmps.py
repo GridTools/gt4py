@@ -151,6 +151,7 @@ def update_cartesian_domains(node: FencilWithTemporaries, offset_provider) -> Fe
         for shift in shifts:
             offsets = {k: 0 for k in offset_provider.keys()}
             for k, v in zip(shift[0::2], shift[1::2]):
+                assert isinstance(v, ir.OffsetLiteral) and isinstance(v.value, int)
                 offsets[k.value] += v.value
             for k, v in offsets.items():
                 old_min, old_max = offset_limits[k]
@@ -176,13 +177,13 @@ def update_cartesian_domains(node: FencilWithTemporaries, offset_provider) -> Fe
                         axis_literal,
                         ir.FunCall(
                             fun=ir.SymRef(id="plus"),
-                            args=[lower_bound, ir.IntLiteral(value=lower_offset)],
+                            args=[lower_bound, ir.Literal(value=str(lower_offset), type="int")],
                         )
                         if lower_offset
                         else lower_bound,
                         ir.FunCall(
                             fun=ir.SymRef(id="plus"),
-                            args=[upper_bound, ir.IntLiteral(value=upper_offset)],
+                            args=[upper_bound, ir.Literal(value=str(upper_offset), type="int")],
                         )
                         if upper_offset
                         else upper_bound,
@@ -262,8 +263,8 @@ def update_unstructured_domains(node: FencilWithTemporaries, offset_provider):
                                 fun=ir.SymRef(id="named_range"),
                                 args=[
                                     ir.AxisLiteral(value=axis.value),
-                                    ir.IntLiteral(value=0),
-                                    ir.IntLiteral(value=size),
+                                    ir.Literal(value="0", type="int"),
+                                    ir.Literal(value=str(size), type="int"),
                                 ],
                             )
                         ],

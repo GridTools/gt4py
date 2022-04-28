@@ -11,7 +11,7 @@ def test_sym_ref():
 
 
 def test_bool_literal():
-    testee = ir.BoolLiteral(value=False)
+    testee = ir.Literal(value="False", type="bool")
     expected = ti.Val(ti.Value(), ti.Primitive("bool"), ti.Var(0))
     inferred = ti.infer(testee)
     assert inferred == expected
@@ -19,7 +19,7 @@ def test_bool_literal():
 
 
 def test_int_literal():
-    testee = ir.IntLiteral(value=False)
+    testee = ir.Literal(value="3", type="int")
     expected = ti.Val(ti.Value(), ti.Primitive("int"), ti.Var(0))
     inferred = ti.infer(testee)
     assert inferred == expected
@@ -27,7 +27,7 @@ def test_int_literal():
 
 
 def test_float_literal():
-    testee = ir.FloatLiteral(value=False)
+    testee = ir.Literal(value="3.0", type="float")
     expected = ti.Val(ti.Value(), ti.Primitive("float"), ti.Var(0))
     inferred = ti.infer(testee)
     assert inferred == expected
@@ -153,7 +153,11 @@ def test_lifted_call():
 def test_make_tuple():
     testee = ir.FunCall(
         fun=ir.SymRef(id="make_tuple"),
-        args=[ir.BoolLiteral(value=True), ir.FloatLiteral(value=42.0), ir.SymRef(id="x")],
+        args=[
+            ir.Literal(value="True", type="bool"),
+            ir.Literal(value="42.0", type="float"),
+            ir.SymRef(id="x"),
+        ],
     )
     expected = ti.Val(
         ti.Value(), ti.Tuple((ti.Primitive("bool"), ti.Primitive("float"), ti.Var(0))), ti.Var(1)
@@ -167,10 +171,13 @@ def test_tuple_get():
     testee = ir.FunCall(
         fun=ir.SymRef(id="tuple_get"),
         args=[
-            ir.IntLiteral(value=1),
+            ir.Literal(value="1", type="int"),
             ir.FunCall(
                 fun=ir.SymRef(id="make_tuple"),
-                args=[ir.BoolLiteral(value=True), ir.FloatLiteral(value=42.0)],
+                args=[
+                    ir.Literal(value="True", type="bool"),
+                    ir.Literal(value="42.0", type="float"),
+                ],
             ),
         ],
     )
@@ -184,7 +191,8 @@ def test_tuple_get_in_lambda():
     testee = ir.Lambda(
         params=[ir.Sym(id="x")],
         expr=ir.FunCall(
-            fun=ir.SymRef(id="tuple_get"), args=[ir.IntLiteral(value=1), ir.SymRef(id="x")]
+            fun=ir.SymRef(id="tuple_get"),
+            args=[ir.Literal(value="1", type="int"), ir.SymRef(id="x")],
         ),
     )
     expected = ti.Fun(
@@ -209,7 +217,9 @@ def test_reduce():
             ],
         ),
     )
-    testee = ir.FunCall(fun=ir.SymRef(id="reduce"), args=[reduction_f, ir.IntLiteral(value=0)])
+    testee = ir.FunCall(
+        fun=ir.SymRef(id="reduce"), args=[reduction_f, ir.Literal(value="0", type="int")]
+    )
     expected = ti.Fun(
         ti.Tuple(
             (
@@ -243,7 +253,7 @@ def test_scan():
     )
     testee = ir.FunCall(
         fun=ir.SymRef(id="scan"),
-        args=[scan_f, ir.BoolLiteral(value=True), ir.IntLiteral(value=0)],
+        args=[scan_f, ir.Literal(value="True", type="bool"), ir.Literal(value="0", type="int")],
     )
     expected = ti.Fun(
         ti.Tuple(
@@ -260,7 +270,9 @@ def test_scan():
 
 
 def test_shift():
-    testee = ir.FunCall(fun=ir.SymRef(id="shift"), args=[ir.SymRef(id="i"), ir.IntLiteral(value=1)])
+    testee = ir.FunCall(
+        fun=ir.SymRef(id="shift"), args=[ir.SymRef(id="i"), ir.Literal(value="1", type="int")]
+    )
     expected = ti.Fun(
         ti.Tuple((ti.Val(ti.Iterator(), ti.Var(0), ti.Var(1)),)),
         ti.Val(ti.Iterator(), ti.Var(0), ti.Var(1)),
@@ -283,15 +295,27 @@ CARTESIAN_DOMAIN = ir.FunCall(
     args=[
         ir.FunCall(
             fun=ir.SymRef(id="named_range"),
-            args=[ir.AxisLiteral(value="IDim"), ir.IntLiteral(value=0), ir.SymRef(id="i")],
+            args=[
+                ir.AxisLiteral(value="IDim"),
+                ir.Literal(value="0", type="int"),
+                ir.SymRef(id="i"),
+            ],
         ),
         ir.FunCall(
             fun=ir.SymRef(id="named_range"),
-            args=[ir.AxisLiteral(value="JDim"), ir.IntLiteral(value=0), ir.SymRef(id="j")],
+            args=[
+                ir.AxisLiteral(value="JDim"),
+                ir.Literal(value="0", type="int"),
+                ir.SymRef(id="j"),
+            ],
         ),
         ir.FunCall(
             fun=ir.SymRef(id="named_range"),
-            args=[ir.AxisLiteral(value="KDim"), ir.IntLiteral(value=0), ir.SymRef(id="k")],
+            args=[
+                ir.AxisLiteral(value="KDim"),
+                ir.Literal(value="0", type="int"),
+                ir.SymRef(id="k"),
+            ],
         ),
     ],
 )

@@ -19,8 +19,8 @@ def scan():
                     ],
                 ),
             ),
-            ir.BoolLiteral(value=True),
-            ir.FloatLiteral(value=0.0),
+            ir.Literal(value="True", type="bool"),
+            ir.Literal(value="0.0", type="float"),
         ],
     )
 

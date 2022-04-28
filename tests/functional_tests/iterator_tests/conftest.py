@@ -1,6 +1,6 @@
 import pytest
 
-from functional.iterator.transforms.common import LiftMode
+from functional.iterator.transforms import LiftMode
 
 
 @pytest.fixture(

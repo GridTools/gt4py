@@ -14,14 +14,57 @@
 
 import itertools
 from dataclasses import dataclass, field
-from typing import Optional, cast
+from typing import Callable, Optional, cast
 
 from eve import NodeTranslator
+from functional.ffront import common_types as ct
+from functional.ffront import fbuiltins
 from functional.ffront import field_operator_ast as foast
 from functional.ffront import itir_makers as im
-from functional.ffront.fbuiltins import FUN_BUILTIN_NAMES
+from functional.ffront.fbuiltins import FUN_BUILTIN_NAMES, TYPE_BUILTIN_NAMES
 from functional.ffront.type_info import TypeInfo
 from functional.iterator import ir as itir
+
+
+def can_be_value_or_iterator(typeinfo: TypeInfo):
+    return (
+        typeinfo.is_scalar
+        or typeinfo.is_field_type
+        or (typeinfo.is_complete and typeinfo.constraint is ct.TupleType)
+    )
+
+
+def to_value(node: foast.LocatedNode) -> Callable[[itir.Expr], itir.Expr]:
+    """
+    Either ``deref_`` or noop callable depending on the input node.
+
+    Input node must have a scalar or field type.
+    If the lowered input node will represent an iterator expression, return ``deref_``.
+    Otherwise return a noop callable.
+
+    Examples:
+    ---------
+    >>> from functional.ffront.func_to_foast import FieldOperatorParser
+    >>> from functional.ffront.fbuiltins import float64
+    >>> from functional.common import Field
+    >>> def foo(a: Field[..., "float64"]):
+    ...    b = 5
+    ...    return a, b
+
+    >>> parsed = FieldOperatorParser.apply_to_function(foo)
+    >>> field_a, scalar_b = parsed.body[-1].value.elts
+    >>> to_value(field_a)(im.ref("a"))
+    FunCall(fun=SymRef(id='deref'), args=[SymRef(id='a')])
+    >>> to_value(scalar_b)(im.ref("a"))
+    SymRef(id='a')
+    """
+    typeinfo = TypeInfo(node.type)
+    assert can_be_value_or_iterator(typeinfo)
+    if typeinfo.is_field_type:
+        return im.deref_
+    elif typeinfo.constraint is ct.TupleType and TypeInfo(typeinfo.type.types[0]).is_field_type:
+        return im.deref_
+    return lambda x: x
 
 
 class FieldOperatorLowering(NodeTranslator):
@@ -31,9 +74,8 @@ class FieldOperatorLowering(NodeTranslator):
     Examples
     --------
     >>> from functional.ffront.func_to_foast import FieldOperatorParser
+    >>> from functional.ffront.fbuiltins import float64
     >>> from functional.common import Field
-    >>>
-    >>> float64 = float
     >>>
     >>> def fieldop(inp: Field[..., "float64"]):
     ...    return inp
@@ -79,7 +121,7 @@ class FieldOperatorLowering(NodeTranslator):
                 current_expr
             )
 
-        return im.deref_(current_expr)
+        return to_value(return_stmt.value)(current_expr)
 
     def _visit_assign(self, node: foast.Assign, **kwargs) -> tuple[itir.Sym, itir.Expr]:
         sym = self.visit(node.target, **kwargs)
@@ -87,7 +129,7 @@ class FieldOperatorLowering(NodeTranslator):
         return sym, expr
 
     def visit_Return(self, node: foast.Return, **kwargs) -> itir.Expr:
-        return self.visit(node.value)
+        return self.visit(node.value, **kwargs)
 
     def visit_Symbol(self, node: foast.Symbol, **kwargs) -> itir.Sym:
         return im.sym(node.id)
@@ -110,27 +152,39 @@ class FieldOperatorLowering(NodeTranslator):
     def visit_TupleExpr(self, node: foast.TupleExpr, **kwargs) -> itir.FunCall:
         return im.make_tuple_(*self.visit(node.elts, **kwargs))
 
+    def _lift_if_field(self, node: foast.LocatedNode) -> Callable[[itir.Expr], itir.Expr]:
+        typeinfo = TypeInfo(node.type)
+        assert typeinfo.is_scalar or typeinfo.is_field_type
+        if typeinfo.is_scalar:
+            return lambda x: x
+        return self._lift_lambda(node)
+
     def visit_UnaryOp(self, node: foast.UnaryOp, **kwargs) -> itir.FunCall:
         # TODO(tehrengruber): extend iterator ir to support unary operators
-        zero_arg = [itir.IntLiteral(value=0)] if node.op is not foast.UnaryOperator.NOT else []
-        return self._lift_lambda(node)(
-            im.call_(node.op.value)(*[*zero_arg, im.deref_(self.visit(node.operand, **kwargs))])
+        if node.op is foast.UnaryOperator.NOT:
+            return self._lift_if_field(node)(
+                im.call_(node.op.value)(to_value(node.operand)(self.visit(node.operand, **kwargs)))
+            )
+        return self._lift_if_field(node)(
+            im.call_(node.op.value)(
+                im.literal_("0", "int"),
+                to_value(node.operand)(self.visit(node.operand, **kwargs)),
+            )
         )
 
     def visit_BinOp(self, node: foast.BinOp, **kwargs) -> itir.FunCall:
-        return self._lift_lambda(node)(
+        return self._lift_if_field(node)(
             im.call_(node.op.value)(
-                im.deref_(self.visit(node.left, **kwargs)),
-                im.deref_(self.visit(node.right, **kwargs)),
+                to_value(node.left)(self.visit(node.left, **kwargs)),
+                to_value(node.right)(self.visit(node.right, **kwargs)),
             )
         )
 
     def visit_Compare(self, node: foast.Compare, **kwargs) -> itir.FunCall:
-
-        return self._lift_lambda(node)(
+        return self._lift_if_field(node)(
             im.call_(node.op.value)(
-                im.deref_(self.visit(node.left, **kwargs)),
-                im.deref_(self.visit(node.right, **kwargs)),
+                to_value(node.left)(self.visit(node.left, **kwargs)),
+                to_value(node.left)(self.visit(node.right, **kwargs)),
             )
         )
 
@@ -157,10 +211,33 @@ class FieldOperatorLowering(NodeTranslator):
         if TypeInfo(node.func.type).is_field_type:
             return self._visit_shift(node, **kwargs)
         elif node.func.id in FUN_BUILTIN_NAMES:
-            return self._visit_reduce(node, **kwargs)
-        return self._lift_lambda(node)(
+            visitor = getattr(self, f"_visit_{node.func.id}")
+            return visitor(node, **kwargs)
+        elif node.func.id in TYPE_BUILTIN_NAMES:
+            return self._visit_type_constr(node, **kwargs)
+        return self._lift_if_field(node)(
             im.call_(self.visit(node.func, **kwargs))(*self.visit(node.args, **kwargs))
         )
+
+    def _visit_neighbor_sum(self, node: foast.Call, **kwargs) -> itir.FunCall:
+        return self._visit_reduce(node, **kwargs)
+
+    def _visit_type_constr(self, node: foast.Call, **kwargs) -> itir.Literal:
+        if isinstance(node.args[0], foast.Constant):
+            target_type = fbuiltins.BUILTINS[node.type.kind.name.lower()]
+            source_type = {**fbuiltins.BUILTINS, "string": str}[
+                node.args[0].dtype.kind.name.lower()
+            ]
+            if target_type is bool and source_type is not bool:
+                return im.literal_(str(bool(source_type(node.args[0].value))), node.func.id)
+            return im.literal_(node.args[0].value, node.type.kind.name.lower())
+        raise FieldOperatorLoweringError(f"Encountered a type cast, which is not supported: {node}")
+
+    def visit_Constant(self, node: foast.Constant, **kwargs) -> itir.Literal:
+        if isinstance(node.type, ct.ScalarType) and not node.type.shape:
+            typename = node.type.kind.name.lower()
+            return im.literal_(str(node.value), typename)
+        raise FieldOperatorLoweringError(f"Unsupported scalar type: {node.dtype}")
 
 
 @dataclass
@@ -186,12 +263,14 @@ class InsideReductionLowering(FieldOperatorLowering):
         )
 
     def visit_UnaryOp(self, node: foast.UnaryOp, **kwargs) -> itir.FunCall:
-        zero_arg = [itir.IntLiteral(value=0)] if node.op is not foast.UnaryOperator.NOT else []
-        return im.call_(node.op.value)(*[*zero_arg, self.visit(node.operand, **kwargs)])
+        if node.op is foast.UnaryOperator.NOT:
+            return im.call_(node.op.value)(self.visit(node.operand, **kwargs))
+
+        return im.call_(node.op.value)(im.literal_("0", "int"), self.visit(node.operand, **kwargs))
 
     def _visit_shift(self, node: foast.Call, **kwargs) -> itir.SymRef:  # type: ignore[override]
         uid = f"{node.func.id}__{self._sequential_id()}"
-        self.lambda_params[uid] = FieldOperatorLowering.apply(node, **kwargs)
+        self.lambda_params[uid] = FieldOperatorLowering.apply(node)
         return im.ref(uid)
 
     def _sequential_id(self):

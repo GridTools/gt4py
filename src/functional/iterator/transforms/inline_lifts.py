@@ -13,32 +13,73 @@ class InlineLifts(NodeTranslator):
         else:
             self.predicate = predicate
 
-    def visit_FunCall(self, node: ir.FunCall) -> ir.FunCall:
-        if isinstance(node.fun, ir.SymRef) and node.fun.id == "deref":
+    @staticmethod
+    def _is_lift(node: ir.Node):
+        return (
+            isinstance(node, ir.FunCall)
+            and isinstance(node.fun, ir.FunCall)
+            and node.fun.fun == ir.SymRef(id="lift")
+        )
+
+    @staticmethod
+    def _is_shift_lift(node: ir.FunCall):
+        return (
+            isinstance(node, ir.FunCall)
+            and isinstance(node.fun, ir.FunCall)
+            and node.fun.fun == ir.SymRef(id="shift")
+            and isinstance(node.args[0], ir.FunCall)
+            and isinstance(node.args[0].fun, ir.FunCall)
+            and node.args[0].fun.fun == ir.SymRef(id="lift")
+        )
+
+    def visit_FunCall(self, node: ir.FunCall):
+        if node.fun == ir.SymRef(id="deref"):
             assert len(node.args) == 1
-            if (
-                isinstance(node.args[0], ir.FunCall)
-                and isinstance(node.args[0].fun, ir.FunCall)
-                and node.args[0].fun.fun == ir.SymRef(id="lift")
-                and self.predicate(node.args[0].fun)
-            ):
+            if self._is_lift(node.args[0]) and self.predicate(node.args[0].fun):
                 # deref(lift(f)(args...)) -> f(args...)
                 assert len(node.args[0].fun.args) == 1
                 f = self.visit(node.args[0].fun.args[0])
                 args = self.visit(node.args[0].args)
                 return ir.FunCall(fun=f, args=args)
-            elif (
-                isinstance(node.args[0], ir.FunCall)
-                and isinstance(node.args[0].fun, ir.FunCall)
-                and node.args[0].fun.fun == ir.SymRef(id="shift")
-                and isinstance(node.args[0].args[0], ir.FunCall)
-                and isinstance(node.args[0].args[0].fun, ir.FunCall)
-                and node.args[0].args[0].fun.fun == ir.SymRef(id="lift")
-                and self.predicate(node.args[0].args[0].fun)
-            ):
+            elif self._is_shift_lift(node.args[0]) and self.predicate(node.args[0].args[0].fun):
                 # deref(shift(...)(lift(f)(args...)) -> f(shift(...)(args)...)
                 f = self.visit(node.args[0].args[0].fun.args[0])
                 shift = self.visit(node.args[0].fun)
                 args = self.visit(node.args[0].args[0].args)
                 return ir.FunCall(fun=f, args=[ir.FunCall(fun=shift, args=[arg]) for arg in args])
+        if node.fun == ir.SymRef(id="can_deref"):
+            # TODO(havogt): this `can_deref` transformation doesn't look into lifted functions, this need to be changed to be 100% compliant
+            assert len(node.args) == 1
+            if self._is_lift(node.args[0]) and self.predicate(node.args[0].fun):
+                # can_deref(lift(f)(args...)) -> and(can_deref(arg[0]), and(can_deref(arg[1]), ...))
+                assert len(node.args[0].fun.args) == 1
+                args = self.visit(node.args[0].args)
+                res = ir.FunCall(fun=ir.SymRef(id="can_deref"), args=[args[0]])
+                for arg in args[1:]:
+                    res = ir.FunCall(
+                        fun=ir.SymRef(id="and_"),
+                        args=[res, ir.FunCall(fun=ir.SymRef(id="can_deref"), args=[arg])],
+                    )
+                return res
+            elif self._is_shift_lift(node.args[0]) and self.predicate(node.args[0].args[0].fun):
+                # can_deref(shift(...)(lift(f)(args...)) -> and(can_deref(shift(...)(arg[0])), and(can_deref(shift(...)(arg[1])), ...))
+                shift = self.visit(node.args[0].fun)
+                args = self.visit(node.args[0].args[0].args)
+                res = ir.FunCall(
+                    fun=ir.SymRef(id="can_deref"),
+                    args=[ir.FunCall(fun=shift, args=[args[0]])],
+                )
+                for arg in args[1:]:
+                    res = ir.FunCall(
+                        fun=ir.SymRef(id="and_"),
+                        args=[
+                            res,
+                            ir.FunCall(
+                                fun=ir.SymRef(id="can_deref"),
+                                args=[ir.FunCall(fun=shift, args=[arg])],
+                            ),
+                        ],
+                    )
+                return res
+
         return self.generic_visit(node)

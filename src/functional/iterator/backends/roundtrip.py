@@ -20,13 +20,10 @@ from functional.iterator.transforms.global_tmps import FencilWithTemporaries
 class EmbeddedDSL(codegen.TemplatedGenerator):
     Sym = as_fmt("{id}")
     SymRef = as_fmt("{id}")
-    BoolLiteral = as_fmt("{value}")
-    IntLiteral = as_fmt("{value}")
-    FloatLiteral = as_fmt("{value}")
+    Literal = as_fmt("{value}")
     NoneLiteral = as_fmt("None")
     OffsetLiteral = as_fmt("{value}")
     AxisLiteral = as_fmt("{value}")
-    StringLiteral = as_fmt("{value}")
     FunCall = as_fmt("{fun}({','.join(args)})")
     Lambda = as_mako("(lambda ${','.join(params)}: ${expr})")
     StencilClosure = as_mako("closure(${domain}, ${stencil}, ${output}, [${','.join(inputs)}])")
@@ -56,7 +53,7 @@ def ${id}(${','.join(params)}):
             if isinstance(dtype, tuple):
                 return "np.dtype([" + ", ".join(f"('', {np_dtype(d)})" for d in dtype) + "])"
                 return np.dtype([("", np_dtype(d)) for d in dtype])
-            return f"np.dtype({dtype})"
+            return f"np.dtype('{dtype}')"
 
         tmps = "\n    ".join(self.visit(node.tmps, np_dtype=np_dtype))
         args = ", ".join(params + [tmp.id for tmp in node.tmps])
@@ -89,7 +86,7 @@ _BACKEND_NAME = "roundtrip"
 
 def executor(ir: Node, *args, **kwargs):
     debug = "debug" in kwargs and kwargs["debug"] is True
-    lift_mode = "lift_mode" in kwargs and kwargs["lift_mode"] is True
+    lift_mode = kwargs.get("lift_mode")
 
     ir = apply_common_transforms(ir, lift_mode=lift_mode, offset_provider=kwargs["offset_provider"])
 

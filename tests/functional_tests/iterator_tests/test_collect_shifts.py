@@ -25,7 +25,8 @@ def test_trivial():
 def test_reduce():
     testee = ir.FunCall(
         fun=ir.FunCall(
-            fun=ir.SymRef(id="reduce"), args=[ir.SymRef(id="plus"), ir.FloatLiteral(value=0.0)]
+            fun=ir.SymRef(id="reduce"),
+            args=[ir.SymRef(id="plus"), ir.Literal(value="0.0", type="float")],
         ),
         args=[
             ir.FunCall(

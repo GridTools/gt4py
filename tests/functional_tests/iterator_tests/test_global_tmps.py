@@ -166,7 +166,7 @@ def test_update_cartesian_domains():
                                 fun=ir.SymRef(id="named_range"),
                                 args=[
                                     ir.AxisLiteral(value=a),
-                                    ir.IntLiteral(value=0),
+                                    ir.Literal(value="0", type="int"),
                                     ir.SymRef(id=s),
                                 ],
                             )
@@ -230,10 +230,10 @@ def test_update_cartesian_domains():
                                 fun=ir.SymRef(id="named_range"),
                                 args=[
                                     ir.AxisLiteral(value="IDim"),
-                                    ir.IntLiteral(value=0),
+                                    ir.Literal(value="0", type="int"),
                                     ir.FunCall(
                                         fun=ir.SymRef(id="plus"),
-                                        args=[ir.SymRef(id="i"), ir.IntLiteral(value=1)],
+                                        args=[ir.SymRef(id="i"), ir.Literal(value="1", type="int")],
                                     ),
                                 ],
                             )
@@ -243,7 +243,7 @@ def test_update_cartesian_domains():
                                 fun=ir.SymRef(id="named_range"),
                                 args=[
                                     ir.AxisLiteral(value=a),
-                                    ir.IntLiteral(value=0),
+                                    ir.Literal(value="0", type="int"),
                                     ir.SymRef(id=s),
                                 ],
                             )
@@ -268,10 +268,10 @@ def test_update_cartesian_domains():
                                 fun=ir.SymRef(id="named_range"),
                                 args=[
                                     ir.AxisLiteral(value="IDim"),
-                                    ir.IntLiteral(value=0),
+                                    ir.Literal(value="0", type="int"),
                                     ir.FunCall(
                                         fun=ir.SymRef(id="plus"),
-                                        args=[ir.SymRef(id="i"), ir.IntLiteral(value=1)],
+                                        args=[ir.SymRef(id="i"), ir.Literal(value="1", type="int")],
                                     ),
                                 ],
                             )
@@ -281,7 +281,7 @@ def test_update_cartesian_domains():
                                 fun=ir.SymRef(id="named_range"),
                                 args=[
                                     ir.AxisLiteral(value=a),
-                                    ir.IntLiteral(value=0),
+                                    ir.Literal(value="0", type="int"),
                                     ir.SymRef(id=s),
                                 ],
                             )
@@ -300,7 +300,7 @@ def test_update_cartesian_domains():
                                 fun=ir.SymRef(id="named_range"),
                                 args=[
                                     ir.AxisLiteral(value=a),
-                                    ir.IntLiteral(value=0),
+                                    ir.Literal(value="0", type="int"),
                                     ir.SymRef(id=s),
                                 ],
                             )
@@ -354,10 +354,10 @@ def test_collect_tmps_info():
                 fun=ir.SymRef(id="named_range"),
                 args=[
                     ir.AxisLiteral(value="IDim"),
-                    ir.IntLiteral(value=0),
+                    ir.Literal(value="0", type="int"),
                     ir.FunCall(
                         fun=ir.SymRef(id="plus"),
-                        args=[ir.SymRef(id="i"), ir.IntLiteral(value=1)],
+                        args=[ir.SymRef(id="i"), ir.Literal(value="1", type="int")],
                     ),
                 ],
             )
@@ -367,7 +367,7 @@ def test_collect_tmps_info():
                 fun=ir.SymRef(id="named_range"),
                 args=[
                     ir.AxisLiteral(value=a),
-                    ir.IntLiteral(value=0),
+                    ir.Literal(value="0", type="int"),
                     ir.SymRef(id=s),
                 ],
             )
@@ -414,7 +414,7 @@ def test_collect_tmps_info():
                                 fun=ir.SymRef(id="named_range"),
                                 args=[
                                     ir.AxisLiteral(value=a),
-                                    ir.IntLiteral(value=0),
+                                    ir.Literal(value="0", type="int"),
                                     ir.SymRef(id=s),
                                 ],
                             )

@@ -167,6 +167,10 @@ class TypeInferrer(NodeTranslator):
             dtype = Var.fresh()
             size = Var.fresh()
             return Fun(Tuple((Val(Iterator(), dtype, size),)), Val(Value(), dtype, size))
+        if node.id == "can_deref":
+            dtype = Var.fresh()
+            size = Var.fresh()
+            return Fun(Tuple((Val(Iterator(), dtype, size),)), Val(Value(), BOOL_DTYPE, size))
         if node.id in ("plus", "minus", "multiplies", "divides"):
             v = Val(Value())
             return Fun(Tuple((v, v)), v)
@@ -227,14 +231,8 @@ class TypeInferrer(NodeTranslator):
         assert node.id not in ir.BUILTINS
         return Var.fresh()
 
-    def visit_BoolLiteral(self, node, *, constraints, symtypes):
-        return Val(Value(), BOOL_DTYPE)
-
-    def visit_IntLiteral(self, node, *, constraints, symtypes):
-        return Val(Value(), INT_DTYPE)
-
-    def visit_FloatLiteral(self, node, *, constraints, symtypes):
-        return Val(Value(), FLOAT_DTYPE)
+    def visit_Literal(self, node, *, constraints, symtypes):
+        return Val(Value(), Primitive(node.type))
 
     def visit_AxisLiteral(self, node, *, constraints, symtypes):
         return Val(Value(), AXIS_DTYPE, Scalar())
@@ -260,9 +258,9 @@ class TypeInferrer(NodeTranslator):
             if node.fun.id == "tuple_get":
                 if len(node.args) != 2:
                     raise TypeError("tuple_get requires exactly two arguments")
-                if not isinstance(node.args[0], ir.IntLiteral):
+                if not isinstance(node.args[0], ir.Literal) or node.args[0].type != "int":
                     raise TypeError("The first argument to tuple_get must be a literal int")
-                idx = node.args[0].value
+                idx = int(node.args[0].value)
                 tup = self.visit(node.args[1], constraints=constraints, symtypes=symtypes)
                 kind = Var.fresh()
                 elem = Var.fresh()

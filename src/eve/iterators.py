@@ -54,7 +54,7 @@ def generic_iter_children(
     elif isinstance(node, (list, tuple)) or (
         isinstance(node, collections.abc.Sequence) and not isinstance(node, (str, bytes))
     ):
-        return enumerate(node) if with_keys else iter(node)
+        return enumerate(node) if with_keys else iter(node)  # type: ignore  # the condition is too complex for mypy to recognize node is iterable at this point
     elif isinstance(node, (set, collections.abc.Set)):
         return zip(node, node) if with_keys else iter(node)  # type: ignore  # problems with iter(Set)
     elif isinstance(node, (dict, collections.abc.Mapping)):
