@@ -25,7 +25,7 @@ import pytest
 
 from functional.common import Field
 from functional.ffront import common_types
-from functional.ffront.fbuiltins import float32, float64, int64
+from functional.ffront.fbuiltins import float32, float64, int32, int64
 from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError
 from functional.ffront.func_to_foast import FieldOperatorParser, FieldOperatorSyntaxError
 from functional.ffront.symbol_makers import TypingError
@@ -198,6 +198,15 @@ def test_bool_or():
         match=(r"`and`/`or` operator not allowed!"),
     ):
         _ = FieldOperatorParser.apply_to_function(bool_or)
+
+
+def test_scalar_cast():
+    def cast_scalar_temp():
+        tmp = int64(1)
+        return int32(tmp)
+
+    with pytest.raises(FieldOperatorSyntaxError, match=(r"only takes literal arguments!")):
+        _ = FieldOperatorParser.apply_to_function(cast_scalar_temp)
 
 
 # --- External symbols ---

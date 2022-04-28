@@ -26,6 +26,11 @@ def deref(it):
     return it.deref()
 
 
+@builtins.can_deref.register(EMBEDDED)
+def can_deref(it):
+    return it.can_deref()
+
+
 @builtins.if_.register(EMBEDDED)
 def if_(cond, t, f):
     return t if cond else f
@@ -81,11 +86,20 @@ def lift(stencil):
                 )
                 return args[0].offset_provider[open_offsets[0].value].max_neighbors
 
-            def deref(self):
-                shifted_args = tuple(map(lambda arg: arg.shift(*self.offsets), args))
+            def _shifted_args(self):
+                return tuple(map(lambda arg: arg.shift(*self.offsets), args))
 
-                if any(shifted_arg.is_none() for shifted_arg in shifted_args):
-                    return None
+            def can_deref(self):
+                shifted_args = self._shifted_args()
+                return all(shifted_arg.can_deref() for shifted_arg in shifted_args)
+
+            def deref(self):
+                if not self.can_deref():
+                    # this can legally happen in cases like `if_(can_deref(lifted), deref(lifted), 42.)`
+                    # because both branches will be eagerly executed
+                    return _UNDEFINED
+
+                shifted_args = self._shifted_args()
 
                 if self.elem is None:
                     return stencil(*shifted_args)
@@ -107,7 +121,7 @@ def reduce(fun, init):
         for i in range(n):
             # we can check a single argument
             # because all arguments share the same pattern
-            if builtins.deref(builtins.shift(i)(first_it)) is None:
+            if not builtins.can_deref(builtins.shift(i)(first_it)):
                 break
             res = fun(
                 res,
@@ -316,10 +330,15 @@ class MDIterator:
         )
         return self.offset_provider[self.incomplete_offsets[0].value].max_neighbors
 
-    def is_none(self):
-        return self.pos is None
+    def can_deref(self):
+        return self.pos is not None
 
     def deref(self):
+        if not self.can_deref():
+            # this can legally happen in cases like `if_(can_deref(inp), deref(inp), 42.)`
+            # because both branches will be eagerly executed
+            return _UNDEFINED
+
         shifted_pos = self.pos.copy()
         # TODO(havogt): support nested tuples
         axises = self.field[0].axises if isinstance(self.field, tuple) else self.field.axises
@@ -480,7 +499,12 @@ class ScanArgIterator:
         self.k_pos = k_pos
 
     def deref(self):
+        if not self.can_deref():
+            return _UNDEFINED
         return self.wrapped_iter.deref()[self.k_pos]
+
+    def can_deref(self):
+        return self.wrapped_iter.can_deref()
 
     def shift(self, *offsets):
         return ScanArgIterator(self.wrapped_iter, offsets=[*offsets, *self.offsets])
@@ -588,7 +612,8 @@ def as_tuple_field(field):
 
 
 def fendef_embedded(fun, *args, **kwargs):  # noqa: 536
-    assert "offset_provider" in kwargs
+    if "offset_provider" not in kwargs:
+        raise RuntimeError("offset_provider not provided")
 
     @iterator.runtime.closure.register(EMBEDDED)
     def closure(domain, sten, out, ins):  # domain is Dict[axis, range]
