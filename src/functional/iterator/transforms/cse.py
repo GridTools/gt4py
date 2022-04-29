@@ -9,8 +9,8 @@ class CollectSubexpressions(NodeVisitor):
     def visit_Lambda(self, node: ir.Lambda, *, subexprs: Counter):
         self.generic_visit(node, subexprs=subexprs)
 
+        # filter out subexpressions that reference lambda parameters
         params = {p.id for p in node.params}
-
         for expr in list(subexprs.keys()):
             refs = expr.iter_tree().if_isinstance(ir.SymRef).getattr("id").to_set()
             if refs & params:
@@ -20,6 +20,7 @@ class CollectSubexpressions(NodeVisitor):
 
     def visit_FunCall(self, node: ir.Lambda, *, subexprs: Counter):
         self.generic_visit(node, subexprs=subexprs)
+        # do not collect (and thus deduplicate in CSE) shift(offsets…) calls
         if node.fun == ir.SymRef(id="shift"):
             return
         subexprs[node] += 1
