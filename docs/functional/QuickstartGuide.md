@@ -127,9 +127,15 @@ print("{} + {} = {} ± {}".format(a_value, b_value, np.average(np.asarray(result
 
 ### Unstructured meshes and connectivities
 
-In this section, we will write an application that performs a laplacian-like operation on an unstructured mesh. Similar to the laplacian on regular grids, we will define the *pseudo-laplacian* as $n$ times the number value of the current cell minus the sum of the values of the $n$ neighboring cells.
+In this section, we will write an application that performs a laplacian-like operation on an unstructured mesh. Similar to the laplacian on regular grids, we will define the *pseudo-laplacian* as $n$ times the value of the current cell minus the sum of the values of the $n$ neighboring cells. For example, if cell \#1 has two neighbors, cell \#5 and \#8, the pseudo-laplacian for cell \#1 would be $2\cdot \text{value_of}(\text{cell}_1) - (\text{value_of}(\text{cell}_5) + \text{value_of}(\text{cell}_8))$.
 
-We will calculate the pseudo-laplacian by adding up the differences over all the edges of a cell. An *edge difference* is defined as the difference between the two cells neighboring the edge.
+We will calculate the pseudo-laplacian by adding up the differences over all the edges of a cell, where an *edge difference* is defined as the difference between the two cells neighboring the edge. Using the edge differences, the pseudo-laplacian for cell \#1 would be $\text{edge_diff}_{1,5} + \text{edge_diff}_{1,8} = (\text{value_of}(\text{cell}_1) - \text{value_of}(\text{cell}_5)) + (\text{value_of}(\text{cell}_1) - \text{value_of}(\text{cell}_8))$.
+
+This section is broken down into smaller parts to introduce concepts required for the pseudo-laplacian bit by bit:
+- defining the mesh and the connectivities between cells and edges
+- learning to apply connectivities to field operators
+- learning to use reduction on connected entities
+- implementing the actual pseudo-laplacian
 
 +++
 
@@ -151,7 +157,6 @@ cell_values = np_as_located_field(CellDim)(np.array([1.0, 1.0, 2.0, 3.0, 5.0, 8.
 | ![cell_values](connectivity_cell_field.svg) | 
 |:--:| 
 | *Cell values* |
-
 
 +++
 
@@ -227,9 +232,9 @@ print("0th adjacent cell's value: {}".format(np.asarray(edge_values)))
 
 +++
 
-#### Using reductions on adjacencies
+#### Reductions on connectivities
 
-This is very similar to the previous example, but instead of getting value of the 0th cell neighbor of an edge, we are going to sum all the neighboring cells. This is done by replacing the `E2C[0]` accessor by a `neighbor_sum` operation on the `E2C` field offset.
+Similarly to the previous example, we will also output a field on edges. This time, however, instead of taking the $0$th column out of the ad-hoc map, we will sum the elements alongside the `E2CDim`. For this, we can use the `neighbor_sum` builtin function of GT4Py:
 
 ```{code-cell} ipython3
 @field_operator
@@ -240,65 +245,37 @@ def sum_adjacent_cells(cells : Field[[CellDim], float32]) -> Field[[EdgeDim], fl
 def run_sum_adjacent_cells(cells : Field[[CellDim], float32], out : Field[[EdgeDim], float32]):
     sum_adjacent_cells(cells, out=out)
     
-result_edge_sums = np_as_located_field(EdgeDim)(np.zeros(shape=(12,)))
+#run_sum_adjacent_cells(cell_values, edge_values, offset_provider=offset_provider)
 
-#run_sum_adjacent_cells(cell_values, result_edge_sums, offset_provider=offset_provider)
-
-print("sum of adjacent cells: {}".format(np.asarray(result_edge_sums)))
+print("sum of adjacent cells: {}".format(np.asarray(edge_values)))
 ```
 
-The results should be unchanged for the border edges, but the inner edge should be the following:
+The results should be unchanged for the border edges, but the inner edges should be the following:
 
 ![cell_values](connectivity_edge_cell_sum.svg)
 
 +++
 
-Follow-up to averages:
-- calculate the average of edges around a cell for each cell
+#### Implementing the pseudo-laplacian by combining the above
 
-+++
-
-#### Using fields on connectivities, combining connectivities
-
-This example similar to a structured grid laplacian kernel, where the average of the neighboring cells is subtracted from the current cell. In the case of our unstructured trianglular mesh, we will subtract the average of the cells that share an edge with our current cell.
-
-Ultimately, we want to know the cell neighbors of cells. There are two way to go about this:
-1. define an all-new cell-to-cell connectivity
-2. define a cell-to-edge connectivity in addition to the edge-to-cell connectivity that we already have
-
-Although defining cell-to-cell connectivity directly is simpler, we will choose the second approach to see how one can go from cell to the nearby edges, and from the nearby edges to the nearby cells, in turn reached cell neighbors of cells.
-
-Let us start by defining the cell-to-edge connectivity. The 6-by-3 matrix below lists the 3 adjacent edges for each of the 6 cells:
+As explained in the section outline, we will need the cell-to-edge connectivities as well. We have already constructed the connectivity table, so now we only have to define the local dimension, the field offset and the offset provider that describe how to use the connectivity matrix. This is analogous to the definitions before:
 
 ```{code-cell} ipython3
 C2EDim = CartesianAxis("C2E")
 C2E = FieldOffset("C2E", source=EdgeDim, target=(CellDim, C2EDim))
 
-edge_neighbors_of_cells = np.array([
-    [0, 6, 7],
-    [7, 8, 9],
-    [1, 2, 8],
-    [3, 9, 10],
-    [4, 10, 11],
-    [5, 6, 11],
-])
-
-c2e_neighbor_table = NeighborTableOffsetProvider(edge_neighbors_of_cells, CellDim, EdgeDim, 3)
+C2E_offset_provider = NeighborTableOffsetProvider(cell_to_edge_table, CellDim, EdgeDim, 3)
 ```
 
-To understand the procedure of combining the cell-to-edge and edge-to-cell connectivities, let's calculate the pseudo-laplacian by hand for cell index 3.
+**Sign of edge differences:**
 
-Cell index 3 has two neighbors: cell 1 and cell 4. The three cells contains the values 3, 1, 5, respectively. Therefore, the pseudo-laplacian will be 2*3 - (1 + 5) = 0.
+Revisiting the example from the beginning of the section, except now with the actual mesh, we can calculate the pseudo-laplacian for cell \#1 by the following equation:
+$$\text{plap}(cell_1) = -\text{edge_diff}_{0,1} + \text{edge_diff}_{1,2} + \text{edge_diff}_{1,3}$$
 
-Unfortunately, in absence of the cell-to-cell connectivities, we don't know that cells 1 and 4 are the neighbors of cell 3. However, based on the cell-to-edge connectivities, we do know that edges 3, 9 and 10 are adjacent to cell 3. Based on the edge-to-cell connectivities, we also know that edge 9 has cells 1 and 3 adjacent to it. With this information we can associate the difference \*(cell 1) - \*(cell 3) = 1 - 3 = -2 to edge 9. We could have also done \*(cell 3) - \*(cell 1), which would make the result +2. Similarly, we can calculate this difference for edge 10, which is ±2. Since edge 3 has only one cell adjacent to it, we won't calculate the difference, we will simply assume it's zero.
-
-Now knowing the differences on all three edges adjacent to our chosen cell, we simply have to add the differences up: 0 - 2 + 2 = 0 -- the same value that we calculated by simply looking at the grid.
-
-However, there are still two problems to tackle:
-1. To **figure out the sign** in the sum of the three over-edge differences, we have to know if the difference on the edge was calculated with our target cell as first or second operand to the subtraction. We will record this information in a field over the cell-to-edge connectivity. This field will therefore have the cells as first dimension and the cell-to-edge axis as second, represented by a 6x3 matrix of -1s and +1s for the sign.
+Notice how $\text{edge_diff}_{0,1}$ is actually subtracted from the sum rather than added because the edge to cell connectivity table lists cell \#1 as the second argument rather than the first. To fix this, we will need a table that has 3 elements for every cell to tell the sign of the differences:
 
 ```{code-cell} ipython3
-edge_difference_polarity = np.array([
+edge_difference_signs = np.array([
     [1, 1, 1],   # cell 0
     [-1, 1, 1],  # cell 1
     [1, 1, -1],  # cell 2
@@ -307,10 +284,12 @@ edge_difference_polarity = np.array([
     [1, -1, -1], # cell 5
 ])
 
-edge_difference_polarity_field = np_as_located_field(CellDim, C2EDim)(edge_difference_polarity)
+edge_difference_sign_field = np_as_located_field(CellDim, C2EDim)(edge_difference_signs)
 ```
 
-2. To make sure that **border edges get a difference of zero**, we will slightly modify the edge-to-cell connectivity matrix so that border edges list the single cells they are attached to twice. This will results in us calculating the difference on edge 3 as \*(cell 3) - \*(cell 3) = 0. The modified edge-to-cell connectivity matrix is as follows:
+**Difference on border edges:**
+
+We cannot actually calculate an edge difference on border edges, because they only have one cell neighbor. For the calculation of the pseudo-laplacian, we want to consider border edges to have a difference of zero. We can achieve this by modifying the edge to cell connectivity so that for border edges, the single neighbor cell is listed twice. This way, as we subtract the value of that single cell from itself, we will get zero. The modified table is the following:
 
 ```{code-cell} ipython3
 cell_neighbours_of_edges_mod = np.array([
@@ -328,16 +307,10 @@ cell_neighbours_of_edges_mod = np.array([
     [4, 5]  # edge 11
 ])
 
-e2c_neighbor_table_mod = NeighborTableOffsetProvider(cell_neighbours_of_edges_mod, EdgeDim, CellDim, 2)
+E2C_offset_provider_mod = NeighborTableOffsetProvider(cell_neighbours_of_edges_mod, EdgeDim, CellDim, 2)
 ```
 
-Note that the offset provider now needs to have both connectivities:
-
-```{code-cell} ipython3
-offset_provider={"E2C": e2c_neighbor_table_mod, "C2E": c2e_neighbor_table}
-```
-
-With all the connectivities and auxiliary data defined, we can write the corresponding field operator:
+**TODO**: The code:
 
 ```{code-cell} ipython3
 @field_operator
@@ -348,7 +321,6 @@ def edge_differences(cells : Field[[CellDim], float32]) -> Field[[EdgeDim], floa
 def sum_differences(differences : Field[[EdgeDim], float32],
                     polarities : Field[[CellDim, C2EDim], float32]) -> Field[[CellDim], float32]:        
     return differences(C2E[0]) + differences(C2E[1]) + differences(C2E[2])
-    # return differences(C2E[0]) + differences(C2E[1]) + differences(C2E[2])
 
 @program
 def run_pseudo_laplacian(cells : Field[[CellDim], float32],
@@ -362,49 +334,14 @@ result_edge_diffs = np_as_located_field(EdgeDim)(np.zeros(shape=(12,)))
 result_pseudo_lap = np_as_located_field(CellDim)(np.zeros(shape=(6,)))
 
 run_pseudo_laplacian(cell_values,
-                     edge_difference_polarity_field,
+                     edge_difference_sign_field,
                      result_edge_diffs,
                      result_pseudo_lap,
-                     offset_provider=offset_provider)
+                     offset_provider={"E2C": E2C_offset_provider_mod, "C2E": C2E_offset_provider})
 
 print("pseudo-laplacian: {}".format(np.asarray(result_pseudo_lap)))
 ```
 
-## Examples
-
-+++
-
-### Space derivatives
-
 ```{code-cell} ipython3
-@field_operator
-def ddx():
-    pass
 
-@program
-def compute_ddx():
-    pass
-
-get_ddx()
-```
-
-### Diffusion
-
-```{code-cell} ipython3
-@field_operator
-def op1():
-    pass
-
-@field_operator
-def op1():
-    pass
-
-@program
-def diffuse():
-    pass
-
-timestep = 0.01
-endtime = 5
-for time in range(0:endtime:timestep):
-    diffuse()
 ```
