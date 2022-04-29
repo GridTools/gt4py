@@ -1,3 +1,4 @@
+from functional.iterator.transforms.cse import CSE
 from functional.iterator.transforms.global_tmps import CreateGlobalTmps
 from functional.iterator.transforms.inline_fundefs import InlineFundefs, PruneUnreferencedFundefs
 from functional.iterator.transforms.inline_lambdas import InlineLambdas
@@ -12,6 +13,7 @@ def apply_common_transforms(
     offset_provider=None,
     register_tmp=None,
     unroll_reduce=False,
+    cse=False,
 ):
     ir = InlineFundefs().visit(ir)
     ir = PruneUnreferencedFundefs().visit(ir)
@@ -37,4 +39,6 @@ def apply_common_transforms(
         ir = CreateGlobalTmps().visit(
             ir, offset_provider=offset_provider, register_tmp=register_tmp
         )
+    if cse:
+        ir = CSE().visit(ir)
     return ir

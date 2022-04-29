@@ -42,6 +42,7 @@ def generate(program: itir.FencilDefinition, *, grid_type: str, **kwargs: Any) -
         use_tmps=kwargs.get("use_tmps", False),
         offset_provider=kwargs.get("offset_provider", None),
         unroll_reduce=True,
+        cse=True,
     )
     transformed = extract_fundefs_from_closures(transformed)
     gtfn_ir = GTFN_lowering().visit(transformed, grid_type=grid_type)
