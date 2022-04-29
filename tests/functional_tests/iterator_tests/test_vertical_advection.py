@@ -69,6 +69,8 @@ def test_tridiag(tridiag_reference, backend, use_tmps):
     if use_tmps:
         pytest.xfail("use_tmps currently not supported for scans")
     backend, validate = backend
+    if backend == "gtfn":
+        pytest.xfail("gtfn does not yet support scans")
     a, b, c, d, x = tridiag_reference
     shape = a.shape
     as_3d_field = np_as_located_field(IDim, JDim, KDim)
