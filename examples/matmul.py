@@ -87,10 +87,18 @@ out_field = gt.storage.zeros(
 coeff = 2.0
 
 @gtscript.function
-def mult_coeff(vec_1, vec_2):
+def mult_coeff(matrix, vec_1, out):
+    a = matrix[0,0] * vec_1[0] + matrix[0,1] * vec_1[1]
+    b = matrix[1,0] * vec_1[0] + matrix[1,1] * vec_1[1]
+
+    out[0] = a
+    out[1] = b
+    return 1
+
+@gtscript.function
+def tmp_func():
     tmp: gtscript.Field[(np.float64, (2,))] =  0
     return tmp
-
 
 @gtscript.stencil(backend=backend, **backend_opts)
 def test_stencil(
@@ -99,10 +107,12 @@ def test_stencil(
         out_vec: gtscript.Field[dtype_field],
         c: float
 ):
-    # tmp: gtscript.Field[(np.float64, (2,))] =  vec_1
     with computation(PARALLEL), interval(...):
-        out_vec = mult_coeff(vec_1, vec_2)
-        # out_vec = tmp
+        out_vec = mult_coeff(vec_1, vec_2)[1:3] 
+        # out_vec = tmp_func()
+
+test_stencil(in_field_1, in_field_2, out_field, coeff)
+print(f'{coeff = }\n{in_field_1 = }\n{in_field_2 = }\n{out_field = }')
 
 # @gtscript.stencil(backend=backend, **backend_opts)
 # def test_stencil(
@@ -133,6 +143,3 @@ def test_stencil(
 
 
 
-
-test_stencil(in_field_1, in_field_2, out_field, coeff)
-print(f'{coeff = }\n{in_field_1 = }\n{in_field_2 = }\n{out_field = }')
