@@ -177,8 +177,8 @@ class TaskletCodegen(codegen.TemplatedGenerator):
     ):
         mask_str = ""
         indent = ""
-        if cond is not None:
-            mask_str = f"{keyword} {self.visit(cond, is_target=False, **kwargs)}:"
+        if cond is not None and (cond_str := self.visit(cond, is_target=False, **kwargs)):
+            mask_str = f"{keyword} {cond_str}:"
             indent = " " * 4
         body_code = [line for block in self.visit(body, **kwargs) for line in block.split("\n")]
         body_code = [indent + b for b in body_code]
