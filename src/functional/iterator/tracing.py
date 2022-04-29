@@ -18,7 +18,7 @@ from functional.iterator.ir import (
     Sym,
     SymRef,
 )
-from functional.iterator.runtime import CartesianAxis
+from functional.iterator.runtime import CartesianAxis, FundefDispatcher
 
 
 TRACING = "tracing"
@@ -205,15 +205,25 @@ def less(*args):
     return _f("less", *args)
 
 
+def make_node_from_fieldop(fieldop):
+    fun = fieldop.__gt_itir__()  # TODO need GTCallable in common to decouple from field view
+    Tracer.add_fundef(fun)
+    # TODO(havogt): the following is super hacked to get all referenced functions either
+    for c in fieldop.__gt_captured_vars__().globals.values():  # if they are fieldoperators
+        if hasattr(c, "__gt_itir__"):
+            make_node(c)
+        elif isinstance(c, FundefDispatcher):  # or if they are fundefs
+            c(*(_s(param) for param in inspect.signature(c).parameters))
+    return _s(fun.id)
+
+
 # helpers
 def make_node(o):
     if isinstance(o, Node):
         return o
     if callable(o):
         if hasattr(o, "__gt_itir__"):
-            fun = o.__gt_itir__()  # TODO need GTCallable in common to decouple from field view
-            Tracer.add_fundef(fun)
-            return _s(fun.id)
+            return make_node_from_fieldop(o)
         if o.__name__ == "<lambda>":
             return lambdadef(o)
         if hasattr(o, "__code__") and o.__code__.co_flags & inspect.CO_NESTED:

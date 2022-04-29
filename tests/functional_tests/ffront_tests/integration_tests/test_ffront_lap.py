@@ -206,8 +206,8 @@ def test_ffront_lap(prog):
         lapflapi_program,
         lapilapi_fencil,
         lapilapf_fencil,
-        # lapflapi_fencil, #TODO: collect referenced functions
-        # lapflapf_fencil,
+        lapflapi_fencil,
+        lapflapf_fencil,
     ],
 )
 def test_ffront_laplap(prog):
