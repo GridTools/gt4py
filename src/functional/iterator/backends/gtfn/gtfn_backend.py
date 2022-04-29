@@ -48,8 +48,8 @@ def generate(program: itir.FencilDefinition, *, grid_type: str, **kwargs: Any) -
     gtfn_ir = GTFN_lowering().visit(transformed, grid_type=grid_type)
     generated_code = GTFNCodegen.apply(gtfn_ir, **kwargs)
     return generated_code
-    # TODO: re-enable clang-format once we have CSE
-    # slow: return codegen.format_source("cpp", generated_code, style="LLVM")
+    # TODO: re-enable clang-format once we have sorted out hanging process
+    # on FVM nabla: return codegen.format_source("cpp", generated_code, style="LLVM")
 
 
 def _guess_grid_type(**kwargs):
