@@ -337,7 +337,9 @@ class GridSubset(Node):
         return GridSubset(intervals=intervals)
 
     def set_interval(
-        self, axis: Axis, interval: Union[DomainInterval, IndexWithExtent, oir.Interval]
+        self,
+        axis: Axis,
+        interval: Union[DomainInterval, IndexWithExtent, TileInterval, oir.Interval],
     ) -> "GridSubset":
         if isinstance(interval, oir.Interval):
             interval = DomainInterval(

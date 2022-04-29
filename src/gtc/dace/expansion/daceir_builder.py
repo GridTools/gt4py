@@ -1,6 +1,6 @@
 import itertools
 from dataclasses import dataclass
-from typing import Any, ClassVar, Dict, List, Set, Union
+from typing import Any, Dict, Optional, Set, Union
 
 import dace
 import dace.data
@@ -119,18 +119,14 @@ class DaCeIRBuilder(NodeTranslator):
     @dataclass
     class IterationContext:
         grid_subset: dcir.GridSubset
-        _context_stack: ClassVar[List["DaCeIRBuilder.IterationContext"]] = list()
+        parent: Optional["DaCeIRBuilder.IterationContext"]
 
         @classmethod
         def init(cls, *args, **kwargs):
-            assert len(cls._context_stack) == 0
-            res = cls(*args, **kwargs)
-            cls._context_stack.append(res)
+            res = cls(*args, parent=None, **kwargs)
             return res
 
-        @classmethod
-        def push_axes_extents(cls, axes_extents):
-            self = cls._context_stack[-1]
+        def push_axes_extents(self, axes_extents):
             res = self.grid_subset
             for axis, extent in axes_extents.items():
                 if isinstance(res.intervals[axis], dcir.DomainInterval):
@@ -153,26 +149,17 @@ class DaCeIRBuilder(NodeTranslator):
                     )
                     res = res.set_interval(axis, tile_interval)
                 # if is IndexWithExtent, do nothing.
-            res = DaCeIRBuilder.IterationContext(
-                grid_subset=res,
-            )
+            return DaCeIRBuilder.IterationContext(grid_subset=res, parent=self)
 
-            cls._context_stack.append(res)
-            return res
-
-        @classmethod
-        def push_interval(cls, axis: dcir.Axis, interval: Union[dcir.DomainInterval, oir.Interval]):
-            self = cls._context_stack[-1]
-            res = DaCeIRBuilder.IterationContext(
+        def push_interval(
+            self, axis: dcir.Axis, interval: Union[dcir.DomainInterval, oir.Interval]
+        ):
+            return DaCeIRBuilder.IterationContext(
                 grid_subset=self.grid_subset.set_interval(axis, interval),
+                parent=self,
             )
 
-            cls._context_stack.append(res)
-            return res
-
-        @classmethod
-        def push_expansion_item(cls, item):
-            self = cls._context_stack[-1]
+        def push_expansion_item(self, item):
 
             if not isinstance(item, (Map, Loop)):
                 raise ValueError
@@ -189,27 +176,16 @@ class DaCeIRBuilder(NodeTranslator):
                     grid_subset = grid_subset.tile(tile_sizes={axis: it.stride})
                 else:
                     grid_subset = grid_subset.restricted_to_index(axis)
-            res = DaCeIRBuilder.IterationContext(grid_subset=grid_subset)
+            return DaCeIRBuilder.IterationContext(grid_subset=grid_subset, parent=self)
 
-            cls._context_stack.append(res)
-            return res
-
-        @classmethod
-        def push_expansion_items(cls, items):
-            res = cls._context_stack[-1]
+        def push_expansion_items(self, items):
+            res = self
             for item in items:
-                res = cls.push_expansion_item(item)
+                res = res.push_expansion_item(item)
             return res
 
-        @classmethod
-        def pop(cls):
-            del cls._context_stack[-1]
-            return cls._context_stack[-1]
-
-        @classmethod
-        def clear(cls):
-            while cls._context_stack:
-                del cls._context_stack[-1]
+        def pop(self):
+            return self.parent
 
     def visit_Literal(self, node: oir.Literal, **kwargs: Any) -> dcir.Literal:
         return dcir.Literal(value=node.value, dtype=node.dtype)
@@ -685,75 +661,72 @@ class DaCeIRBuilder(NodeTranslator):
                 axis=dcir.Axis.K, interval=overall_interval
             )
         )
-        try:
-            var_offset_fields = set(
-                acc.name
-                for acc in node.iter_tree().if_isinstance(oir.FieldAccess)
-                if isinstance(acc.offset, oir.VariableKOffset)
-            )
-            sections_idx = next(
-                idx
-                for idx, item in enumerate(global_ctx.library_node.expansion_specification)
-                if isinstance(item, Sections)
-            )
-            expansion_items = global_ctx.library_node.expansion_specification[:sections_idx]
-            iteration_ctx = iteration_ctx.push_expansion_items(expansion_items)
 
-            sections = flatten_list(
-                self.generic_visit(
-                    node.sections,
-                    loop_order=node.loop_order,
-                    global_ctx=global_ctx,
-                    iteration_ctx=iteration_ctx,
-                    var_offset_fields=var_offset_fields,
-                    **kwargs,
-                )
-            )
-            if node.loop_order != common.LoopOrder.PARALLEL:
-                sections = [
-                    self.to_state(s, grid_subset=iteration_ctx.grid_subset) for s in sections
-                ]
-            computations = sections
-            for item in reversed(expansion_items):
-                iteration_ctx = iteration_ctx.pop()
-                computations = self._process_iteration_item(
-                    scope=computations,
-                    item=item,
-                    iteration_ctx=iteration_ctx,
-                    global_ctx=global_ctx,
-                )
+        var_offset_fields = set(
+            acc.name
+            for acc in node.iter_tree().if_isinstance(oir.FieldAccess)
+            if isinstance(acc.offset, oir.VariableKOffset)
+        )
+        sections_idx = next(
+            idx
+            for idx, item in enumerate(global_ctx.library_node.expansion_specification)
+            if isinstance(item, Sections)
+        )
+        expansion_items = global_ctx.library_node.expansion_specification[:sections_idx]
+        iteration_ctx = iteration_ctx.push_expansion_items(expansion_items)
 
-            read_memlets, write_memlets, field_memlets = union_inout_memlets(computations)
+        sections = flatten_list(
+            self.generic_visit(
+                node.sections,
+                loop_order=node.loop_order,
+                global_ctx=global_ctx,
+                iteration_ctx=iteration_ctx,
+                var_offset_fields=var_offset_fields,
+                **kwargs,
+            )
+        )
+        if node.loop_order != common.LoopOrder.PARALLEL:
+            sections = [self.to_state(s, grid_subset=iteration_ctx.grid_subset) for s in sections]
+        computations = sections
+        for item in reversed(expansion_items):
+            iteration_ctx = iteration_ctx.pop()
+            computations = self._process_iteration_item(
+                scope=computations,
+                item=item,
+                iteration_ctx=iteration_ctx,
+                global_ctx=global_ctx,
+            )
 
-            declared_symbols = set(
-                n.name for n in node.iter_tree().if_isinstance(oir.ScalarDecl, oir.LocalScalar)
-            )
-            symbols = dict()
-            for acc in node.iter_tree().if_isinstance(oir.ScalarAccess):
-                if acc.name not in declared_symbols:
-                    declared_symbols.add(acc.name)
-                    symbols[acc.name] = acc.dtype
-            for axis in dcir.Axis.dims_3d():
-                if axis.domain_symbol() not in declared_symbols:
-                    declared_symbols.add(axis.domain_symbol())
-                    symbols[axis.domain_symbol()] = common.DataType.INT32
-            field_decls = global_ctx.get_dcir_decls(
-                {memlet.field: memlet.access_info for memlet in field_memlets}
-            )
-            for name in field_decls.keys():
-                for s in global_ctx.arrays[name].strides:
-                    for sym in dace.symbolic.symlist(s).values():
-                        symbols[str(sym)] = common.DataType.INT32
-            read_fields = set(memlet.field for memlet in read_memlets)
-            write_fields = set(memlet.field for memlet in write_memlets)
-            res = dcir.StateMachine(
-                label=global_ctx.library_node.label,
-                states=self.to_state(computations, grid_subset=iteration_ctx.grid_subset),
-                field_decls=field_decls,
-                read_memlets=[memlet for memlet in field_memlets if memlet.field in read_fields],
-                write_memlets=[memlet for memlet in field_memlets if memlet.field in write_fields],
-                symbols=symbols,
-            )
-        finally:
-            iteration_ctx.clear()
+        read_memlets, write_memlets, field_memlets = union_inout_memlets(computations)
+
+        declared_symbols = set(
+            n.name for n in node.iter_tree().if_isinstance(oir.ScalarDecl, oir.LocalScalar)
+        )
+        symbols = dict()
+        for acc in node.iter_tree().if_isinstance(oir.ScalarAccess):
+            if acc.name not in declared_symbols:
+                declared_symbols.add(acc.name)
+                symbols[acc.name] = acc.dtype
+        for axis in dcir.Axis.dims_3d():
+            if axis.domain_symbol() not in declared_symbols:
+                declared_symbols.add(axis.domain_symbol())
+                symbols[axis.domain_symbol()] = common.DataType.INT32
+        field_decls = global_ctx.get_dcir_decls(
+            {memlet.field: memlet.access_info for memlet in field_memlets}
+        )
+        for name in field_decls.keys():
+            for s in global_ctx.arrays[name].strides:
+                for sym in dace.symbolic.symlist(s).values():
+                    symbols[str(sym)] = common.DataType.INT32
+        read_fields = set(memlet.field for memlet in read_memlets)
+        write_fields = set(memlet.field for memlet in write_memlets)
+        res = dcir.StateMachine(
+            label=global_ctx.library_node.label,
+            states=self.to_state(computations, grid_subset=iteration_ctx.grid_subset),
+            field_decls=field_decls,
+            read_memlets=[memlet for memlet in field_memlets if memlet.field in read_fields],
+            write_memlets=[memlet for memlet in field_memlets if memlet.field in write_fields],
+            symbols=symbols,
+        )
+
         return res
