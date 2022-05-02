@@ -43,7 +43,6 @@ def make_backend_params(*names):
 
 
 _ALL_BACKEND_NAMES = list(gt_backend.REGISTRY.keys())
-_INTERNAL_BACKEND_NAMES = [name for name in _ALL_BACKEND_NAMES if name.startswith("gt")]
 
 
 CPU_BACKENDS = [
