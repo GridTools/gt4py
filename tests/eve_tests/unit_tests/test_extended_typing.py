@@ -17,7 +17,11 @@
 
 from __future__ import annotations
 
+import collections.abc
+import sys
 import typing
+
+import pytest
 
 from eve import extended_typing as xtyping
 from eve.extended_typing import (
@@ -28,10 +32,73 @@ from eve.extended_typing import (
     ForwardRef,
     FrozenSet,
     List,
+    Mapping,
+    Sequence,
     Set,
     Tuple,
     Type,
+    TypeVar,
 )
+
+
+@pytest.mark.parametrize("t", (int, float, dict, tuple, frozenset, collections.abc.Mapping))
+def test_is_actual_valid_type(t):
+    assert xtyping.is_actual_type(t)
+
+
+@pytest.mark.parametrize(
+    "t",
+    (
+        Tuple[int],
+        Tuple[int, ...],
+        Tuple[int, int],
+        Dict[str],
+        Dict[str, float],
+        Mapping[int, float],
+    ),
+)
+def test_is_actual_wrong_type(t):
+    assert not xtyping.is_actual_type(t)
+
+
+@pytest.mark.parametrize(
+    "x", [int, float, complex, str, tuple, frozenset, 1, -2.0, "foo", (), (1, 3.0)]
+)
+def test_is_hashable(x):
+    assert xtyping.is_hashable(x)
+
+
+@pytest.mark.parametrize("x", [(list, list(), (1, []), dict())])
+def test_is_not_hashable(x):
+    assert not xtyping.is_hashable(x)
+
+
+@pytest.mark.parametrize(
+    "t",
+    [
+        int,
+        str,
+        float,
+        tuple,
+        Tuple,
+        Tuple[int],
+        Tuple[int, ...],
+        Tuple[Tuple[int, ...], ...],
+        FrozenSet,
+        Type,
+        type(None),
+        None,
+    ],
+)
+def test_is_hashable_type(t):
+    assert xtyping.is_hashable_type(t)
+
+
+@pytest.mark.parametrize(
+    "t", [dict, Dict, Dict[str, int], Sequence[int], List[str], Any, TypeVar("T")]
+)
+def test_is_not_hashable_type(t):
+    assert not xtyping.is_hashable_type(t)
 
 
 def test_is_protocol():
@@ -221,3 +288,11 @@ def test_infer_type():
             Callable[[int, float], type(None)], xtyping.CallableKwargsInfo({"foo": Tuple[str, ...]})
         ]
     )
+
+
+# @pytest.mark.parametrize(["hint","changes","expected"], [(list, list(), (1, []), dict())])
+# def test_replace_types():
+#     hint = Dict[int, float]
+
+#     assert xtyping.replace_types(hint, {int: float}) == Dict[float, float]
+#     assert xtyping.replace_types(hint, {float: int}) == Dict[int, int]

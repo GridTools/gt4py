@@ -21,6 +21,7 @@ from __future__ import annotations
 import dataclasses as _dataclasses
 import functools as _functools
 import inspect as _inspect
+import pprint as _pprint
 import sys as _sys
 import types as _types
 import typing as _typing
@@ -28,8 +29,8 @@ import typing as _typing
 # Definitions in 'typing_extensions' take priority over those in 'typing'
 from typing import *  # noqa: F403
 
+import frozendict as _frozendict
 from typing_extensions import *  # type: ignore[misc]  # noqa: F403
-
 
 if _sys.version_info >= (3, 9):
     # Standard library already supports PEP 585 (Type Hinting Generics In Standard Collections)
@@ -119,38 +120,72 @@ def __dir__() -> List[str]:
 
 # Common type aliases
 _T_co = TypeVar("_T_co", covariant=True)
-
+_T_contra = TypeVar("_T_contra", contravariant=True)
 FrozenList: TypeAlias = Tuple[_T_co, ...]
+FrozenDict: TypeAlias = _frozendict.frozendict[_T_contra, _T_co]
+
 NoArgsCallable = Callable[[], Any]
 
 
 # Typing annotations
 if _sys.version_info >= (3, 9):
-    SolvedTypingAnnotation = Union[
+    SolvedTypeAnnotation = Union[
         Type,
-        _types.GenericAlias,
-        _typing._BaseGenericAlias,  # type: ignore[name-defined]  # _BaseGenericAlias is private
         _typing._SpecialForm,
+        _types.GenericAlias,
+        _typing._BaseGenericAlias,  # type: ignore[name-defined]  # _BaseGenericAlias is not exported in stub
     ]
 else:
-    SolvedTypingAnnotation = Union[  # type: ignore[misc]  # mypy consider this assignment a redefinition
+    SolvedTypeAnnotation = Union[  # type: ignore[misc]  # mypy consider this assignment a redefinition
         Type,
-        _typing._GenericAlias,  # type: ignore[attr-defined]  # _GenericAlias is private
         _typing._SpecialForm,
+        _typing._GenericAlias,  # type: ignore[attr-defined]  # _GenericAlias is not exported in stub
     ]
 
-TypingAnnotation = Union[ForwardRef, SolvedTypingAnnotation]
-SourceTypingAnnotation = Union[str, TypingAnnotation]
+TypeAnnotation = Union[ForwardRef, SolvedTypeAnnotation]
+SourceTypeAnnotation = Union[str, TypeAnnotation]
 
-_TypingSpecialFormType = _typing._SpecialForm
-_GenericAliasType: Final[Type] = (
-    _types.GenericAlias if _sys.version_info >= (3, 9) else _typing._GenericAlias  # type: ignore[attr-defined]  # _GenericAlias is private
+StdGenericAliasType: Final[Type] = (
+    _types.GenericAlias if _sys.version_info >= (3, 9) else _typing._GenericAlias  # type: ignore[attr-defined]  # _GenericAlias is not exported in stub
 )
 
 
-# TODO(egparedes): remove these types only needed from pydantic models
-RootValidatorValuesType = Dict[str, Any]
-RootValidatorType = Callable[[Type, RootValidatorValuesType], RootValidatorValuesType]
+_TypingSpecialFormType: Final[Type] = _typing._SpecialForm
+_TypingGenericAliasType: Final[Type] = (
+    _typing._BaseGenericAlias if _sys.version_info >= (3, 9) else _typing._GenericAlias
+)
+
+
+# Standard Python protocols
+_C = TypeVar("_C")
+_V = TypeVar("_V")
+
+
+class NonDataDescriptor(Protocol[_C, _V]):
+    @overload
+    def __get__(
+        self, _instance: Literal[None], _owner_type: Optional[Type[_C]] = None
+    ) -> NonDataDescriptor[_C, _V]:
+        ...
+
+    @overload
+    def __get__(  # noqa: F811  # redefinion of unused member
+        self, _instance: _C, _owner_type: Optional[Type[_C]] = None
+    ) -> _V:
+        ...
+
+    def __get__(  # noqa: F811  # redefinion of unused member
+        self, _instance: Optional[_C], _owner_type: Optional[Type[_C]] = None
+    ) -> _V | NonDataDescriptor[_C, _V]:
+        ...
+
+
+class DataDescriptor(NonDataDescriptor[_C, _V], Protocol):
+    def __set__(self, _instance: _C, _value: _V) -> None:
+        ...
+
+    def __delete__(self, _instance: _C) -> None:
+        ...
 
 
 # Third party protocols
@@ -162,10 +197,100 @@ class DevToolsPrettyPrintable(Protocol):
 
 
 # Extra functionality
-def is_protocol(tp: type) -> bool:
+if _sys.version_info >= (3, 9):
+
+    def is_actual_type(obj: Any) -> TypeGuard[Type]:
+        """Check if an object is an actual type and not a GenericAlias.
+
+        This is needed because since Python 3.9: ``isinstance(types.GenericAlias(),  type) is True``.
+        """
+        return isinstance(obj, type) and not isinstance(obj, _types.GenericAlias)
+
+else:
+
+    def is_actual_type(obj: Any) -> TypeGuard[Type]:
+        """Check if an object is an actual type and not a GenericAlias.
+
+        This is only needed for Python >= 3.9, where ``isinstance(types.GenericAlias(),  type) is True``.
+        """
+        return isinstance(obj, type)
+
+
+_T = TypeVar("_T")
+
+
+def get_actual_type(obj: _T) -> Type[_T]:
+    return _TypingGenericAliasType if isinstance(obj, _TypingGenericAliasType) else type(obj)
+
+
+def _has_custom_hash(type_: Type) -> bool:
+    return type_.__hash__ is not None and type_.__hash__ != object.__hash__
+
+
+def is_hashable(obj: Any) -> TypeGuard[Hashable]:
+    """Check if an object is hashable (by value)."""
+    if obj in (None, type):
+        return True
+
+    obj_type = obj if isinstance(obj, type) else type(obj)
+    if _has_custom_hash(obj_type):
+        try:
+            hash(obj)
+            return True
+        except Exception:
+            pass
+
+    return False
+
+
+def is_hashable_type(
+    type_annotation: TypeAnnotation,
+    *,
+    globalns: Optional[Dict[str, Any]] = None,
+    localns: Optional[Dict[str, Any]] = None,
+) -> bool:
+    """Check if a type annotation describes a hashable (by value) type."""
+    if is_actual_type(type_annotation):
+        assert not get_args(type_annotation)
+        return True if type_annotation in (type, type(None)) else _has_custom_hash(type_annotation)
+
+    if isinstance(type_annotation, TypeVar):
+        if type_annotation.__bound__:
+            return is_hashable_type(type_annotation.__bound__)
+        if type_annotation.__constraints__:
+            return all(is_hashable_type(c) for c in type_annotation.__constraints__)
+        return False
+
+    if isinstance(type_annotation, ForwardRef):
+        return is_hashable_type(
+            eval_forward_ref(type_annotation, globalns=globalns, localns=localns)
+        )
+
+    if type_annotation is Any:
+        return False
+
+    # Generic types
+    origin_type = get_origin(type_annotation)
+    type_args = get_args(type_annotation)
+
+    if origin_type is Literal:
+        return True
+
+    if origin_type is Union:
+        return all(is_hashable_type(t) for t in type_args)
+
+    if isinstance(origin_type, type) and is_hashable_type(origin_type):
+        return all(is_hashable_type(t) for t in type_args if t != Ellipsis)
+
+    return type_annotation is None
+
+
+def is_protocol(type_: Type) -> bool:
     """Check if a type is a Protocol definition."""
     this_module = _sys.modules[is_protocol.__module__]
-    return isinstance(tp, this_module._ProtocolMeta) and tp.__bases__[-1] is this_module.Protocol
+    return (
+        isinstance(type_, this_module._ProtocolMeta) and type_.__bases__[-1] is this_module.Protocol
+    )
 
 
 def get_partial_type_hints(
@@ -225,12 +350,12 @@ def eval_forward_ref(
     localns: Optional[Dict[str, Any]] = None,
     *,
     include_extras: bool = False,
-) -> SolvedTypingAnnotation:
+) -> SolvedTypeAnnotation:
     """Resolve forward references in type annotations.
 
     Arguments:
-        globalns: globals dict used in the evaluation of the annotations.
-        localns: locals dict used in the evaluation of the annotations.
+        globalns: globals ``dict`` used in the evaluation of the annotations.
+        localns: locals ``dict`` used in the evaluation of the annotations.
 
     Keyword Arguments:
         include_extras: if ``True``, ``Annotated`` hints will preserve the annotation.
@@ -279,7 +404,7 @@ def infer_type(  # noqa: C901  # function is complex but well organized in indep
     *,
     annotate_callable_kwargs: bool = False,
     none_as_type: bool = True,
-) -> TypingAnnotation:
+) -> TypeAnnotation:
     """Generate a typing definition from a value.
 
     Keyword Arguments:
@@ -340,7 +465,7 @@ def infer_type(  # noqa: C901  # function is complex but well organized in indep
     """
     _reveal = _functools.partial(infer_type, annotate_callable_kwargs=annotate_callable_kwargs)
 
-    if isinstance(value, (_GenericAliasType, _TypingSpecialFormType)):
+    if isinstance(value, (StdGenericAliasType, _TypingSpecialFormType)):
         return value
 
     if value in (None, type(None)):
@@ -352,23 +477,23 @@ def infer_type(  # noqa: C901  # function is complex but well organized in indep
     if isinstance(value, tuple):
         unique_type, args = _collapse_type_args(*(_reveal(item) for item in value))
         if unique_type and len(args) > 1:
-            return _GenericAliasType(tuple, (args[0], ...))
+            return StdGenericAliasType(tuple, (args[0], ...))
         elif args:
-            return _GenericAliasType(tuple, args)
+            return StdGenericAliasType(tuple, args)
         else:
-            return _GenericAliasType(tuple, (Any, ...))
+            return StdGenericAliasType(tuple, (Any, ...))
 
     if isinstance(value, (list, set, frozenset)):
         t: Union[Type[List], Type[Set], Type[FrozenSet]] = type(value)
         unique_type, args = _collapse_type_args(*(_reveal(item) for item in value))
-        return _GenericAliasType(t, args[0] if unique_type else Any)
+        return StdGenericAliasType(t, args[0] if unique_type else Any)
 
     if isinstance(value, dict):
         unique_key_type, keys = _collapse_type_args(*(_reveal(key) for key in value.keys()))
         unique_value_type, values = _collapse_type_args(*(_reveal(v) for v in value.values()))
         kt = keys[0] if unique_key_type else Any
         vt = values[0] if unique_value_type else Any
-        return _GenericAliasType(dict, (kt, vt))
+        return StdGenericAliasType(dict, (kt, vt))
 
     if isinstance(value, _types.FunctionType):
         try:
@@ -397,3 +522,41 @@ def infer_type(  # noqa: C901  # function is complex but well organized in indep
             return Callable
 
     return type(value)
+
+
+def replace_types(type_annotation: TypeAnnotation, changes: Dict[type, type]) -> TypeAnnotation:
+    if is_actual_type(type_annotation):
+        return changes.get(type_annotation, type_annotation)
+
+    if isinstance(type_annotation, TypeVar):
+        new_bound = changes.get(old_bound := type_annotation.__bound__, type_annotation.__bound__)
+
+        old_constraints = type_annotation.__constraints__
+        new_constraints = tuple(changes.get(c, c) for c in old_constraints)
+
+        if new_bound != old_bound or new_constraints != old_constraints:
+            return TypeVar(
+                type_annotation.__name__,
+                new_constraints,
+                bound=new_bound,
+                covariant=type_annotation.__covariant__,
+                contravariant=type_annotation.__contravariant__,
+            )
+        else:
+            return type_annotation
+
+    # Generic and parametrized type hints
+    type_args = get_args(type_annotation)
+    new_args = tuple(replace_types(arg, changes) for arg in type_args) if type_args else tuple()
+
+    if new_args != type_args:
+        origin_type = get_origin(type_annotation)
+        if isinstance(origin_type, type):
+            # Alias of generic type
+            alias_type = get_actual_type(type_annotation)
+            return alias_type(changes.get(origin_type, origin_type), new_args)
+
+        if isinstance(type_annotation, _TypingGenericAliasType):
+            type_annotation.copy_with(new_args)
+
+    return type_annotation

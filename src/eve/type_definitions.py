@@ -24,11 +24,11 @@ import enum
 import functools
 import re
 
-import boltons.typeutils
 import pydantic
 import xxhash
-from boltons.typeutils import classproperty  # noqa: F401
-from pydantic import validator  # noqa: F401
+from boltons.typeutils import classproperty as classproperty  # noqa: F401
+from frozendict import frozendict as frozendict  # noqa: F401
+from pydantic import validator  # noqa
 from pydantic import (  # noqa: F401
     NegativeFloat,
     NegativeInt,
@@ -41,12 +41,21 @@ from pydantic import (  # noqa: F401
 )
 from pydantic.types import ConstrainedStr
 
-from .extended_typing import Any, Callable, Generator, Optional, Tuple, Type, Union
+from .extended_typing import Any, Callable, Generator, NoReturn, Optional, Tuple, Type, Union, final
+
+
+@final
+class NothingType(type):
+    def __bool__(cls) -> bool:
+        return False
 
 
 #: Marker value used to avoid confusion with `None`
 #: (specially in contexts where `None` could be a valid value)
-NOTHING = boltons.typeutils.make_sentinel(name="NOTHING", var_name="NOTHING")
+@final
+class NOTHING(metaclass=NothingType):
+    def __new__(cls: type) -> NoReturn:  # type: ignore[misc]  # should return an instance
+        raise TypeError(f"{cls.__name__} is used as a sentinel value and cannot be instantiated.")
 
 
 #: Typing definitions for `__get_validators__()` methods
