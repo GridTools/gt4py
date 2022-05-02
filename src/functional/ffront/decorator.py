@@ -29,7 +29,7 @@ from functional.ffront import (
     program_ast as past,
     symbol_makers,
 )
-from functional.ffront.fbuiltins import FieldOffset
+from functional.ffront.fbuiltins import BuiltInFunction, FieldOffset
 from functional.ffront.foast_to_itir import FieldOperatorLowering
 from functional.ffront.func_to_foast import FieldOperatorParser
 from functional.ffront.func_to_past import ProgramParser
@@ -38,7 +38,7 @@ from functional.ffront.past_to_itir import ProgramLowering
 from functional.ffront.source_utils import CapturedVars
 from functional.iterator import ir as itir
 from functional.iterator.backend_executor import execute_fencil
-from functional.iterator.embedded import ConstantField
+from functional.iterator.embedded import CartesianAxis, ConstantField
 
 
 DEFAULT_BACKEND = "roundtrip"
@@ -142,7 +142,9 @@ class Program:
             # With respect to the frontend offsets are singleton types, i.e.
             #  they do not store any runtime information, but only type
             #  information. As such we do not need their value.
-            if isinstance(value, FieldOffset):
+            if isinstance(value, (FieldOffset, CartesianAxis)):
+                continue
+            if isinstance(value, (BuiltInFunction, type)):
                 continue
             if not isinstance(value, GTCallable):
                 raise NotImplementedError("Only function closure vars are allowed currently.")
