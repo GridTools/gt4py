@@ -28,8 +28,10 @@ from .base import (
 
 try:
     from .dace_backend import DaceCPUBackend, DaceGPUBackend
-except ImportError:
-    pass
+except ImportError as error:
+    assert "dace" in str(error)
+    # raise
+    # pass
 
 from .cuda_backend import CudaBackend  # noqa: F401
 from .gtcpp_backend import GTCpuIfirstBackend, GTCpuKfirstBackend, GTGpuBackend  # noqa: F401
