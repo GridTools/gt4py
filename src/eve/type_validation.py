@@ -489,7 +489,7 @@ def simple_type_validator(
     required: bool = True,
     **kwargs: Any,
 ) -> None:
-    """A simple :class:`TypeValidator` implementation.
+    """Check that value verifies a type definition (a simple :class:`TypeValidator` implementation).
 
     Check :class:`TypeValidator` and :class:`SimpleTypeValidatorFactory` for details.
 

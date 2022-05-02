@@ -32,6 +32,7 @@ from typing import *  # noqa: F403
 import frozendict as _frozendict
 from typing_extensions import *  # type: ignore[misc]  # noqa: F403
 
+
 if _sys.version_info >= (3, 9):
     # Standard library already supports PEP 585 (Type Hinting Generics In Standard Collections)
     from builtins import (  # type: ignore[misc]  # isort:skip
@@ -120,9 +121,16 @@ def __dir__() -> List[str]:
 
 # Common type aliases
 _T_co = TypeVar("_T_co", covariant=True)
-_T_contra = TypeVar("_T_contra", contravariant=True)
 FrozenList: TypeAlias = Tuple[_T_co, ...]
-FrozenDict: TypeAlias = _frozendict.frozendict[_T_contra, _T_co]
+
+_T_contra = TypeVar("_T_contra", contravariant=True)
+if _sys.version_info >= (3, 9):
+    FrozenDict: TypeAlias = _frozendict.frozendict[_T_contra, _T_co]
+else:
+
+    class FrozenDict(_frozendict.frozendict, Generic[_T_contra, _T_co]):  # type: ignore[no-redef]  # mypy consider this a redefinition
+        ...
+
 
 NoArgsCallable = Callable[[], Any]
 
@@ -152,7 +160,7 @@ StdGenericAliasType: Final[Type] = (
 
 _TypingSpecialFormType: Final[Type] = _typing._SpecialForm
 _TypingGenericAliasType: Final[Type] = (
-    _typing._BaseGenericAlias if _sys.version_info >= (3, 9) else _typing._GenericAlias
+    _typing._BaseGenericAlias if _sys.version_info >= (3, 9) else _typing._GenericAlias  # type: ignore[attr-defined]  # _BaseGenericAlias is not exported in stub
 )
 
 

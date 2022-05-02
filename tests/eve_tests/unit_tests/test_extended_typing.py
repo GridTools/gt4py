@@ -18,7 +18,6 @@
 from __future__ import annotations
 
 import collections.abc
-import sys
 import typing
 
 import pytest
@@ -52,7 +51,7 @@ def test_is_actual_valid_type(t):
         Tuple[int],
         Tuple[int, ...],
         Tuple[int, int],
-        Dict[str],
+        Dict[str, Any],
         Dict[str, float],
         Mapping[int, float],
     ),
@@ -288,11 +287,3 @@ def test_infer_type():
             Callable[[int, float], type(None)], xtyping.CallableKwargsInfo({"foo": Tuple[str, ...]})
         ]
     )
-
-
-# @pytest.mark.parametrize(["hint","changes","expected"], [(list, list(), (1, []), dict())])
-# def test_replace_types():
-#     hint = Dict[int, float]
-
-#     assert xtyping.replace_types(hint, {int: float}) == Dict[float, float]
-#     assert xtyping.replace_types(hint, {float: int}) == Dict[int, int]
