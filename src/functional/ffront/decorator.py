@@ -137,8 +137,8 @@ class Program:
     ) -> list[itir.FunctionDefinition]:
         lowered_funcs = []
 
-        vars_ = collections.ChainMap(captured_vars.globals, captured_vars.nonlocals)
-        for name, value in vars_.items():
+        all_captured_vars = collections.ChainMap(captured_vars.globals, captured_vars.nonlocals)
+        for name, value in all_captured_vars.items():
             # With respect to the frontend offsets are singleton types, i.e.
             #  they do not store any runtime information, but only type
             #  information. As such we do not need their value.
@@ -153,9 +153,9 @@ class Program:
                 )
             lowered_funcs.append(itir_node)
             # if the closure ref has closure refs by itself, also add them
-            if value.__gt_captured_vars__():
+            if captured_vars_from_value := value.__gt_captured_vars__():
                 lowered_funcs.extend(
-                    self._lowered_funcs_from_captured_vars(value.__gt_captured_vars__())
+                    self._lowered_funcs_from_captured_vars(captured_vars_from_value)
                 )
         return lowered_funcs
 
@@ -171,10 +171,14 @@ class Program:
             else:
                 raise NotImplementedError("Only function closure vars are allowed currently.")
 
-        vars_ = collections.ChainMap(self.captured_vars.globals, self.captured_vars.nonlocals)
-        if undefined := (set(vars_) - set(func_names)):
+        all_captured_vars = collections.ChainMap(
+            self.captured_vars.globals, self.captured_vars.nonlocals
+        )
+        if undefined := (set(all_captured_vars) - set(func_names)):
             raise RuntimeError(f"Reference to undefined symbol(s) `{', '.join(undefined)}`.")
-        if not_callable := [name for name in func_names if not isinstance(vars_[name], GTCallable)]:
+        if not_callable := [
+            name for name in func_names if not isinstance(all_captured_vars[name], GTCallable)
+        ]:
             raise RuntimeError(
                 f"The following function(s) are not valid GTCallables `{', '.join(not_callable)}`."
             )
@@ -196,7 +200,7 @@ class Program:
         self._validate_args(*args, **kwargs)
 
         # extract size of all field arguments
-        size_args = []
+        size_args: list[Optional[tuple[int, ...]]] = []
         rewritten_args = list(args)
         for param_idx, param in enumerate(self.past_node.params):
             if isinstance(param.type, ct.ScalarType):
@@ -307,9 +311,11 @@ class FieldOperator(GTCallable):
         loc = self.foast_node.location
 
         type_ = self.__gt_type__()
-        stencil_sym = past.Symbol(id=name, type=type_, namespace=ct.Namespace.CLOSURE, location=loc)
+        stencil_sym: past.Symbol = past.Symbol(
+            id=name, type=type_, namespace=ct.Namespace.CLOSURE, location=loc
+        )
 
-        params_decl = [
+        params_decl: list[past.Symbol] = [
             past.Symbol(
                 id=UIDs.sequential_id(prefix="__sym"),
                 type=arg_type,
@@ -319,7 +325,7 @@ class FieldOperator(GTCallable):
             for arg_type in type_.args
         ]
         params_ref = [past.Name(id=pdecl.id, location=loc) for pdecl in params_decl]
-        out_sym = past.Symbol(
+        out_sym: past.Symbol = past.Symbol(
             id="out", type=type_.returns, namespace=ct.Namespace.LOCAL, location=loc
         )
         out_ref = past.Name(id="out", location=loc)
