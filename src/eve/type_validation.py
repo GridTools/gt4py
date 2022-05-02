@@ -37,11 +37,15 @@ from .extended_typing import (
     Type,
     TypeAnnotation,
     TypeVar,
+    Union,
+    final,
+    overload,
+    runtime_checkable,
 )
 
 
 # Protocols
-@xtyping.runtime_checkable
+@runtime_checkable
 class TypeValidator(Protocol):
     @abc.abstractmethod
     def __call__(
@@ -96,9 +100,9 @@ class FixedTypeValidator(Protocol):
         ...
 
 
-@xtyping.runtime_checkable
+@runtime_checkable
 class TypeValidatorFactory(Protocol):
-    @xtyping.overload
+    @overload
     def __call__(
         self,
         type_annotation: TypeAnnotation,
@@ -111,7 +115,7 @@ class TypeValidatorFactory(Protocol):
     ) -> FixedTypeValidator:
         ...
 
-    @xtyping.overload
+    @overload
     def __call__(  # noqa: F811  # redefinion of unused member
         self,
         type_annotation: TypeAnnotation,
@@ -119,7 +123,7 @@ class TypeValidatorFactory(Protocol):
         *,
         globalns: Optional[Dict[str, Any]] = None,
         localns: Optional[Dict[str, Any]] = None,
-        required: bool = True,
+        required: bool,
         **kwargs: Any,
     ) -> Optional[FixedTypeValidator]:
         ...
@@ -147,7 +151,7 @@ class TypeValidatorFactory(Protocol):
 
 
 # Implementations
-@xtyping.final
+@final
 @dataclasses.dataclass(frozen=True)
 class SimpleTypeValidatorFactory(TypeValidatorFactory):
     """A simple :class:`TypeValidatorFactory` implementation.
@@ -158,7 +162,7 @@ class SimpleTypeValidatorFactory(TypeValidatorFactory):
         strict_int (bool): do not accept ``bool`` values as ``int`` (default: ``True``).
     """
 
-    @xtyping.overload
+    @overload
     def __call__(
         self,
         type_annotation: TypeAnnotation,
@@ -171,7 +175,7 @@ class SimpleTypeValidatorFactory(TypeValidatorFactory):
     ) -> FixedTypeValidator:
         ...
 
-    @xtyping.overload
+    @overload
     def __call__(  # noqa: F811  # redefinion of unused member
         self,
         type_annotation: TypeAnnotation,
@@ -230,7 +234,7 @@ class SimpleTypeValidatorFactory(TypeValidatorFactory):
             origin_type = xtyping.get_origin(type_annotation)
             type_args = xtyping.get_args(type_annotation)
 
-            if origin_type is xtyping.Literal:
+            if origin_type is Literal:
                 if len(type_args) == 1:
                     return self.make_is_literal(name, type_args[0])
                 else:
@@ -240,7 +244,7 @@ class SimpleTypeValidatorFactory(TypeValidatorFactory):
                         error_type=TypeError,
                     )
 
-            if origin_type is xtyping.Union:
+            if origin_type is Union:
                 has_none = False
                 validators = []
                 for t in type_args:
