@@ -392,6 +392,7 @@ builtins.builtin_dispatch.push_key(EMBEDDED)  # makes embedded the default
 class ConstantField:
     def __init__(self, value):
         self.value = value
+        self.axises = []
 
     def __getitem__(self, indices):
         return self.value

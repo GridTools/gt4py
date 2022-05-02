@@ -20,13 +20,13 @@ from typing import TypeVar
 import numpy as np
 import pytest
 
+from functional.ffront.decorator import field_operator, program
 from functional.ffront.fbuiltins import Field, FieldOffset, float64, neighbor_sum
 from functional.ffront.foast_to_itir import FieldOperatorLowering
 from functional.ffront.func_to_foast import FieldOperatorParser
 from functional.iterator import ir as itir
 from functional.iterator.backends import roundtrip
 from functional.iterator.embedded import (
-    ConstantField,
     NeighborTableOffsetProvider,
     index_field,
     np_as_located_field,
@@ -321,19 +321,45 @@ def test_scalar_arg():
     """Test scalar argument being turned into 0-dim field."""
     Vertex = CartesianAxis("Vertex")
     size = 5
-    inp = ConstantField(5.0)
+    inp = 5.0
     out = np_as_located_field(Vertex)(np.zeros([size]))
 
-    def scalar_arg(scalar_f: float64):
-        return scalar_f + 1.0
+    @field_operator
+    def scalar_arg(scalar_inp: float64) -> Field[[Vertex], float64]:
+        return scalar_inp + 1.0
 
-    program = program_from_function(scalar_arg, dim=Vertex, size=size)
-    roundtrip.executor(
-        program,
-        inp,
-        out,
-        offset_provider={},
-    )
+    @program(backend="roundtrip")
+    def scalar_arg_prog(scalar_inp: float64, out: Field[[Vertex], float64]) -> None:
+        scalar_arg(scalar_inp, out=out)
+
+    scalar_arg_prog(inp, out, offset_provider={})
 
     ref = np.full([size], 6.0)
+    assert np.allclose(ref, out.array())
+
+
+def test_scalar_arg_with_field():
+    Edge = CartesianAxis("Edge")
+    EdgeOffset = FieldOffset("EdgeOffset", source=Edge, target=[Edge])
+    size = 5
+    inp = index_field(Edge)
+    factor = 3
+    out = np_as_located_field(Edge)(np.zeros([size]))
+
+    @field_operator
+    def scalar_and_field_args(
+        inp: Field[[Edge], float64], factor: float64
+    ) -> Field[[Edge], float64]:
+        tmp = factor * inp
+        return tmp(EdgeOffset[1])
+
+    @program(backend="roundtrip")
+    def sca_fi_prog(
+        out: Field[[Edge], float64], inp: Field[[Edge], float64], factor: float64
+    ) -> None:
+        scalar_and_field_args(inp, factor, out=out)
+
+    sca_fi_prog(out, inp, factor, offset_provider={"EdgeOffset": Edge})
+
+    ref = np.arange(1, size + 1) * factor
     assert np.allclose(ref, out.array())

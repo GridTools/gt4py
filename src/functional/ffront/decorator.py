@@ -19,7 +19,7 @@ import dataclasses
 import functools
 import types
 import typing
-from typing import Any, Optional, Protocol
+from typing import Any, Callable, Optional, Protocol
 
 from eve.utils import UIDs
 from functional.common import GTTypeError
@@ -38,6 +38,7 @@ from functional.ffront.past_to_itir import ProgramLowering
 from functional.ffront.source_utils import CapturedVars
 from functional.iterator import ir as itir
 from functional.iterator.backend_executor import execute_fencil
+from functional.iterator.embedded import ConstantField
 
 
 DEFAULT_BACKEND = "roundtrip"
@@ -191,37 +192,57 @@ class Program:
         if kwargs:
             raise NotImplementedError("Keyword arguments are not supported yet.")
 
-    def __call__(self, *args, offset_provider, **kwargs) -> None:
+    def __call__(self, *args, offset_provider, backend=None, **kwargs) -> None:
         self._validate_args(*args, **kwargs)
 
         # extract size of all field arguments
         size_args = []
+        rewritten_args = list(args)
         for param_idx, param in enumerate(self.past_node.params):
+            if isinstance(param.type, ct.ScalarType):
+                rewritten_args[param_idx] = ConstantField(args[param_idx])
             if not isinstance(param.type, ct.FieldType):
+                continue
+            if args[param_idx].array is None:
+                size_args.append(None)
                 continue
             for dim_idx in range(0, len(param.type.dims)):
                 size_args.append(args[param_idx].shape[dim_idx])
 
-        backend = self.backend if self.backend else DEFAULT_BACKEND
+        if not backend:
+            backend = self.backend if self.backend else DEFAULT_BACKEND
 
         execute_fencil(
-            self.itir, *args, *size_args, **kwargs, offset_provider=offset_provider, backend=backend
+            self.itir,
+            *rewritten_args,
+            *size_args,
+            **kwargs,
+            offset_provider=offset_provider,
+            backend=backend,
         )
 
 
 def program(
-    definition: types.FunctionType, externals: Optional[dict] = None, backend: Optional[str] = None
-) -> Program:
-    """
-    Generate an implementation of a program from a Python function object.
+    definition: Optional[types.FunctionType] = None,
+    *,
+    externals: Optional[dict] = None,
+    backend: Optional[str] = None,
+) -> Callable[[types.FunctionType], Program] | Program:
+    def program_inner(definition: types.FunctionType) -> Program:
+        """
+        Generate an implementation of a program from a Python function object.
 
-    Examples:
-        >>> @program  # noqa: F821 # doctest: +SKIP
-        ... def program(in_field: Field[..., float64], out_field: Field[..., float64]): # noqa: F821
-        ...     field_op(in_field, out=out_field)
-        >>> program(in_field, out=out_field) # noqa: F821 # doctest: +SKIP
-    """
-    return Program.from_function(definition, externals, backend)
+        Examples:
+            >>> @program  # noqa: F821 # doctest: +SKIP
+            ... def program(in_field: Field[..., float64], out_field: Field[..., float64]): # noqa: F821
+            ...     field_op(in_field, out=out_field)
+            >>> program(in_field, out=out_field) # noqa: F821 # doctest: +SKIP
+        """
+        return Program.from_function(definition, externals, backend)
+
+    if definition:
+        return program_inner(definition)
+    return program_inner
 
 
 @dataclasses.dataclass(frozen=True)
