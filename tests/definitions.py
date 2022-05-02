@@ -38,10 +38,6 @@ def _backend_name_as_param(name):
     return pytest.param(name, marks=marks)
 
 
-def make_backend_params(*names):
-    return map(_backend_name_as_param, names)
-
-
 _ALL_BACKEND_NAMES = list(gt_backend.REGISTRY.keys())
 
 
