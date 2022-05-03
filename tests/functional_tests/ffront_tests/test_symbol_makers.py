@@ -21,9 +21,7 @@ import pytest
 
 from eve import extended_typing as xtyping
 from functional import common
-from functional.ffront import common_types
-from functional.ffront import field_operator_ast as foast
-from functional.ffront import symbol_makers
+from functional.ffront import common_types, field_operator_ast as foast, symbol_makers
 from functional.ffront.fbuiltins import Field, float64
 
 

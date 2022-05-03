@@ -13,8 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 from eve import NodeTranslator, SymbolTableTrait
 from functional.common import GTTypeError
-from functional.ffront import common_types as ct
-from functional.ffront import program_ast as past
+from functional.ffront import common_types as ct, program_ast as past
 from functional.ffront.type_info import TypeInfo
 
 

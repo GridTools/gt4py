@@ -21,8 +21,7 @@ import pytest
 
 from eve.pattern_matching import ObjectPattern as P
 from functional.common import Field, GTTypeError
-from functional.ffront import common_types
-from functional.ffront import program_ast as past
+from functional.ffront import common_types, program_ast as past
 from functional.ffront.decorator import field_operator, program
 from functional.ffront.fbuiltins import FieldOffset
 from functional.ffront.func_to_past import ProgramParser
@@ -155,7 +154,7 @@ def test_copy_parsing(copy_program_def):
                 kwargs={"out": P(past.Name, id="out_field")},
             )
         ],
-        location=P(past.SourceLocation, line=59, source=str(pathlib.Path(__file__).resolve())),
+        location=P(past.SourceLocation, line=58, source=str(pathlib.Path(__file__).resolve())),
     )
     assert pattern_node.match(past_node, raise_exception=True)
 

@@ -18,8 +18,7 @@ from typing import Optional
 import functional.ffront.field_operator_ast as foast
 from eve import NodeTranslator, SymbolTableTrait
 from functional.common import GTSyntaxError, GTTypeError
-from functional.ffront import common_types as ct
-from functional.ffront import type_info
+from functional.ffront import common_types as ct, type_info
 
 
 def boolified_type(symbol_type: ct.SymbolType) -> ct.ScalarType | ct.FieldType:

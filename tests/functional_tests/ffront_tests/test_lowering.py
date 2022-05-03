@@ -50,11 +50,11 @@ def test_copy():
 
 
 def test_scalar_arg():
-    def constant_arg(bar: Field[[IDim], int64], alpha: int64) -> Field[[IDim], int64]:
+    def scalar_arg(bar: Field[[IDim], int64], alpha: int64) -> Field[[IDim], int64]:
         return alpha * bar
 
     # ast_passes
-    parsed = FieldOperatorParser.apply_to_function(constant_arg)
+    parsed = FieldOperatorParser.apply_to_function(scalar_arg)
     lowered = FieldOperatorLowering.apply(parsed)
 
     reference = im.deref_(
@@ -514,10 +514,10 @@ def test_builtin_int_constructors():
 
     reference = im.make_tuple_(
         im.literal_("1", "int64"),
-        im.literal_("1", "int"),
+        im.literal_("1", "int64"),
         im.literal_("1", "int32"),
         im.literal_("1", "int64"),
-        im.literal_("1", "int"),
+        im.literal_("1", "int64"),
         im.literal_("1", "int32"),
         im.literal_("1", "int64"),
     )
@@ -542,10 +542,10 @@ def test_builtin_float_constructors():
 
     reference = im.make_tuple_(
         im.literal_("0.1", "float64"),
-        im.literal_("0.1", "float"),
+        im.literal_("0.1", "float64"),
         im.literal_("0.1", "float32"),
         im.literal_("0.1", "float64"),
-        im.literal_(".1", "float"),
+        im.literal_(".1", "float64"),
         im.literal_(".1", "float32"),
         im.literal_(".1", "float64"),
     )

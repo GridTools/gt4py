@@ -16,8 +16,7 @@ from typing import Optional
 import pytest
 
 from functional.common import Dimension, GTTypeError
-from functional.ffront import common_types as ct
-from functional.ffront import type_info
+from functional.ffront import common_types as ct, type_info
 from functional.ffront.fbuiltins import Field, float32, float64, int64
 from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError
 from functional.ffront.func_to_foast import FieldOperatorParser

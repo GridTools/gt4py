@@ -17,11 +17,13 @@ from dataclasses import dataclass, field
 from typing import Callable, Optional, cast
 
 from eve import NodeTranslator
-from functional.ffront import common_types as ct
-from functional.ffront import fbuiltins
-from functional.ffront import field_operator_ast as foast
-from functional.ffront import itir_makers as im
-from functional.ffront import type_info
+from functional.ffront import (
+    common_types as ct,
+    fbuiltins,
+    field_operator_ast as foast,
+    itir_makers as im,
+    type_info,
+)
 from functional.ffront.fbuiltins import FUN_BUILTIN_NAMES, TYPE_BUILTIN_NAMES
 from functional.iterator import ir as itir
 
@@ -216,13 +218,13 @@ class FieldOperatorLowering(NodeTranslator):
 
     def _visit_type_constr(self, node: foast.Call, **kwargs) -> itir.Literal:
         if isinstance(node.args[0], foast.Constant):
-            target_type = fbuiltins.BUILTINS[node.func.id]
+            target_type = fbuiltins.BUILTINS[node.type.kind.name.lower()]
             source_type = {**fbuiltins.BUILTINS, "string": str}[
                 node.args[0].dtype.kind.name.lower()
             ]
             if target_type is bool and source_type is not bool:
                 return im.literal_(str(bool(source_type(node.args[0].value))), node.func.id)
-            return im.literal_(node.args[0].value, node.func.id)
+            return im.literal_(node.args[0].value, node.type.kind.name.lower())
         raise FieldOperatorLoweringError(f"Encountered a type cast, which is not supported: {node}")
 
     def visit_Constant(self, node: foast.Constant, **kwargs) -> itir.Literal:

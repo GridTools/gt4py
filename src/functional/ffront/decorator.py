@@ -23,10 +23,12 @@ from typing import Any, Optional, Protocol
 
 from eve.utils import UIDs
 from functional.common import GTTypeError
-from functional.ffront import common_types as ct
-from functional.ffront import field_operator_ast as foast
-from functional.ffront import program_ast as past
-from functional.ffront import symbol_makers
+from functional.ffront import (
+    common_types as ct,
+    field_operator_ast as foast,
+    program_ast as past,
+    symbol_makers,
+)
 from functional.ffront.fbuiltins import FieldOffset
 from functional.ffront.foast_to_itir import FieldOperatorLowering
 from functional.ffront.func_to_foast import FieldOperatorParser

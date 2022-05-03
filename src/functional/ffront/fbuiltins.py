@@ -26,7 +26,7 @@ from functional.iterator import runtime
 __all__ = ["Field", "float32", "float64", "int32", "int64", "neighbor_sum"]
 
 
-TYPE_BUILTINS = [Field, float, float32, float64, int, int32, int64, bool, tuple]
+TYPE_BUILTINS = [Field, bool, int, int32, int64, float, float32, float64, tuple]
 TYPE_BUILTIN_NAMES = [t.__name__ for t in TYPE_BUILTINS]
 
 
@@ -58,7 +58,7 @@ MODULE_BUILTIN_NAMES = [EXTERNALS_MODULE_NAME]
 
 ALL_BUILTIN_NAMES = TYPE_BUILTIN_NAMES + MODULE_BUILTIN_NAMES
 
-BUILTINS = {name: globals()[name] for name in __all__ + ["int", "float", "bool"]}
+BUILTINS = {name: globals()[name] for name in __all__ + ["bool", "int", "float"]}
 
 
 # TODO(ricoh): This should be reunified with ``iterator.runtime.Offset``
