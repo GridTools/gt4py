@@ -14,9 +14,9 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-# need to import expansion so that implementation of expansion is registered
 from typing import Any, List
 
+# need to import expansion so that implementation of expansion is registered
 from .expansion.expansion import (  # noqa: F401 '.expansion.StencilComputationExpansion' imported but unused
     StencilComputationExpansion,
 )
