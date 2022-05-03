@@ -39,7 +39,6 @@ from .extended_typing import (
     TypeVar,
     Union,
     cast,
-    final,
     overload,
     runtime_checkable,
 )
@@ -152,7 +151,6 @@ class TypeValidatorFactory(Protocol):
 
 
 # Implementations
-@final
 @dataclasses.dataclass(frozen=True)
 class SimpleTypeValidatorFactory(TypeValidatorFactory):
     """A simple :class:`TypeValidatorFactory` implementation.
