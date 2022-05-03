@@ -24,14 +24,8 @@ from .base import (
     from_name,
     register,
 )
-
-
-try:
-    from .dace_backend import DaceCPUBackend, DaceGPUBackend
-except ImportError:
-    pass
-
 from .cuda_backend import CudaBackend  # noqa: F401
+from .dace_backend import DaceCPUBackend, DaceGPUBackend
 from .gtcpp_backend import GTCpuIfirstBackend, GTCpuKfirstBackend, GTGpuBackend  # noqa: F401
 from .module_generator import BaseModuleGenerator
 from .numpy_backend import NumpyBackend  # noqa: F401
