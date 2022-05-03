@@ -22,7 +22,7 @@ import gt4py.gtscript as gtscript
 import gt4py.storage as gt_storage
 from gt4py.gtscript import Field, K
 
-from ..definitions import INTERNAL_BACKENDS, INTERNAL_CPU_BACKENDS
+from ..definitions import ALL_BACKENDS, CPU_BACKENDS
 
 
 def base_stencil(
@@ -162,7 +162,7 @@ def avg_stencil(in_field: Field[np.float64], out_field: Field[np.float64]):  # t
         )
 
 
-@pytest.mark.parametrize("backend", INTERNAL_CPU_BACKENDS)
+@pytest.mark.parametrize("backend", CPU_BACKENDS)
 def test_default_arguments(backend):
     branch_true = gtscript.stencil(
         backend=backend, definition=a_stencil, externals={"BRANCH": True}, rebuild=True
@@ -216,7 +216,7 @@ def test_default_arguments(backend):
         branch_false(arg1, arg2, arg3, par1=2.0, par2=5.0)
 
 
-@pytest.mark.parametrize("backend", INTERNAL_CPU_BACKENDS)
+@pytest.mark.parametrize("backend", CPU_BACKENDS)
 def test_halo_checks(backend):
     stencil = gtscript.stencil(definition=avg_stencil, backend=backend)
 
@@ -443,7 +443,7 @@ class TestDataDimensions:
             )
 
 
-@pytest.mark.parametrize("backend", INTERNAL_BACKENDS)
+@pytest.mark.parametrize("backend", ALL_BACKENDS)
 def test_origin_unchanged(backend):
     @gtscript.stencil(backend=backend)
     def calc_damp(outp: Field[float], inp: Field[K, float]):
