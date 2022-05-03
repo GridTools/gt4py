@@ -65,8 +65,6 @@ class SampleDataClass:
 # Each item should be a tuple like:
 #   ( annotation: Any, valid_values: Sequence, wrong_values: Sequence,
 #     globalns: Optional[Dict[str, Any]], localns: Optional[Dict[str, Any]] )
-
-
 SAMPLE_TYPE_DEFINITIONS: List[
     Tuple[Any, Sequence, Sequence, Optional[Dict[str, Any]], Optional[Dict[str, Any]]]
 ] = [
