@@ -60,7 +60,6 @@ Nx, Ny = 1, 1
 # dtype_field = dtype
 
 n = 2
-<<<<<<< HEAD
 m = 3
 n_dtype = (dtype, (n,))
 m_dtype = (dtype, (m,))
@@ -84,33 +83,39 @@ in_field_1 = gt.storage.from_array(
     data= n_field,
     backend = backend,
     dtype=n_dtype,
-=======
-dtype_field = (dtype, (n,))
+)
 
-in_np = np.arange(n)
+n_field = np.arange(n)
+
+
+matrix_np = np.arange(n*m).reshape(n, m)
+
+
+matrix = gt.storage.from_array(
+    data= matrix_np,
+    backend = backend,
+    dtype=dtype_matrix,
+    shape=(Nx, Ny, 1), # todo: maybe try 2D
+    default_origin=(0, 0, 0))
 
 in_field_1 = gt.storage.from_array(
-    data= in_np,
+    data= n_field,
     backend = backend,
     dtype=dtype_field,
->>>>>>> 109f883 (intial ops working)
     shape=(Nx, Ny, 1), # todo: maybe try 2D
     default_origin=(0, 0, 0))
 
 in_field_2 = 3 * gt.storage.ones(
     backend=backend,
-<<<<<<< HEAD
     dtype=m_dtype,
-=======
-    dtype=dtype_field,
->>>>>>> 109f883 (intial ops working)
+    dtype=m_dtype,
     shape=(Nx, Ny, 1), # todo: maybe try 2D
     default_origin=(0, 0, 0))
 
 
 out_field = gt.storage.zeros(
     backend=backend,
-    dtype=dtype_field,
+    dtype=n_dtype,
     shape=(Nx, Ny, 1), # todo: maybe try 2D
     default_origin=(0, 0, 0))
 
