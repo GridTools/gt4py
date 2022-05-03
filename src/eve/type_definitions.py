@@ -43,6 +43,7 @@ from pydantic.types import ConstrainedStr
 
 from .extended_typing import Any, Callable, Generator, NoReturn, Optional, Tuple, Type, Union, final
 
+
 frozenlist = tuple
 
 
