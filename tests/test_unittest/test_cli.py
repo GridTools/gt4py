@@ -25,7 +25,7 @@ from click.testing import CliRunner
 from gt4py import backend, cli
 from gt4py.backend.base import CLIBackendMixin
 
-from ..definitions import INTERNAL_BACKENDS
+from ..definitions import ALL_BACKENDS
 
 
 @pytest.fixture
@@ -36,7 +36,7 @@ def clirunner():
 
 @pytest.fixture(
     params=[
-        *INTERNAL_BACKENDS,  # gtc backends require definition ir as input, for now we skip the tests
+        *ALL_BACKENDS,  # gtc backends require definition ir as input, for now we skip the tests
         pytest.param(
             "nocli",
         ),

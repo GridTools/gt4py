@@ -68,6 +68,10 @@ def pytest_configure(config):
         "markers",
         "requires_gpu: mark tests that require a Nvidia GPU (assume cupy and cudatoolkit are installed)",
     )
+    config.addinivalue_line(
+        "markers",
+        "requires_dace: mark tests that require dace in the python environment",
+    )
     hyp.settings.load_profile("slow")
 
 
