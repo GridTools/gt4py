@@ -23,11 +23,12 @@ import ast
 import enum
 import functools
 import re
+import sys
 
 import pydantic
 import xxhash
 from boltons.typeutils import classproperty as classproperty  # noqa: F401
-from frozendict import frozendict as frozendict  # noqa: F401
+from frozendict import frozendict as _frozendict  # noqa: F401
 from pydantic import validator  # noqa
 from pydantic import (  # noqa: F401
     NegativeFloat,
@@ -41,10 +42,23 @@ from pydantic import (  # noqa: F401
 )
 from pydantic.types import ConstrainedStr
 
-from .extended_typing import Any, Callable, Generator, NoReturn, Optional, Tuple, Type, Union, final
+from . import extended_typing as xtyping
+from .extended_typing import (
+    Any,
+    Callable,
+    Final,
+    Generator,
+    NoReturn,
+    Optional,
+    Tuple,
+    Type,
+    Union,
+    final,
+)
 
 
-frozenlist = tuple
+frozenlist: Final = tuple
+frozendict: Final = _frozendict if sys.version_info >= (3, 9) else xtyping.FrozenDict
 
 
 @final
