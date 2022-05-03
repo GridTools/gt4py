@@ -121,13 +121,14 @@ def __dir__() -> List[str]:
 
 # Common type aliases
 _T_co = TypeVar("_T_co", covariant=True)
-_T_contra = TypeVar("_T_contra", contravariant=True)
 FrozenList: TypeAlias = Tuple[_T_co, ...]
+
+_T_contra = TypeVar("_T_contra", contravariant=True)
 if _sys.version_info >= (3, 9):
     FrozenDict: TypeAlias = _frozendict.frozendict[_T_contra, _T_co]
 else:
 
-    class FrozenDict(_frozendict.frozendict, Generic[_T_contra, _T_co]):  # type: ignore[no-redef]  # mypy consider this  a redefinition
+    class FrozenDict(_frozendict.frozendict, Generic[_T_contra, _T_co]):  # type: ignore[no-redef]  # mypy consider this a redefinition
         ...
 
 
@@ -529,41 +530,3 @@ def infer_type(  # noqa: C901  # function is complex but well organized in indep
             return Callable
 
     return type(value)
-
-
-def replace_types(type_annotation: TypeAnnotation, changes: Dict[type, type]) -> TypeAnnotation:
-    if is_actual_type(type_annotation):
-        return changes.get(type_annotation, type_annotation)
-
-    if isinstance(type_annotation, TypeVar):
-        new_bound = changes.get(old_bound := type_annotation.__bound__, type_annotation.__bound__)
-
-        old_constraints = type_annotation.__constraints__
-        new_constraints = tuple(changes.get(c, c) for c in old_constraints)
-
-        if new_bound != old_bound or new_constraints != old_constraints:
-            return TypeVar(
-                type_annotation.__name__,
-                new_constraints,
-                bound=new_bound,
-                covariant=type_annotation.__covariant__,
-                contravariant=type_annotation.__contravariant__,
-            )
-        else:
-            return type_annotation
-
-    # Generic and parametrized type hints
-    type_args = get_args(type_annotation)
-    new_args = tuple(replace_types(arg, changes) for arg in type_args) if type_args else tuple()
-
-    if new_args != type_args:
-        origin_type = get_origin(type_annotation)
-        if isinstance(origin_type, type):
-            # Alias of generic type
-            alias_type = get_actual_type(type_annotation)
-            return alias_type(changes.get(origin_type, origin_type), new_args)
-
-        if isinstance(type_annotation, _TypingGenericAliasType):
-            type_annotation.copy_with(new_args)
-
-    return type_annotation

@@ -38,6 +38,7 @@ from .extended_typing import (
     TypeAnnotation,
     TypeVar,
     Union,
+    cast,
     final,
     overload,
     runtime_checkable,
@@ -108,9 +109,9 @@ class TypeValidatorFactory(Protocol):
         type_annotation: TypeAnnotation,
         name: Optional[str] = None,
         *,
+        required: Literal[True] = True,
         globalns: Optional[Dict[str, Any]] = None,
         localns: Optional[Dict[str, Any]] = None,
-        required: Literal[True] = True,
         **kwargs: Any,
     ) -> FixedTypeValidator:
         ...
@@ -121,9 +122,9 @@ class TypeValidatorFactory(Protocol):
         type_annotation: TypeAnnotation,
         name: Optional[str] = None,
         *,
+        required: bool = True,
         globalns: Optional[Dict[str, Any]] = None,
         localns: Optional[Dict[str, Any]] = None,
-        required: bool,
         **kwargs: Any,
     ) -> Optional[FixedTypeValidator]:
         ...
@@ -134,9 +135,9 @@ class TypeValidatorFactory(Protocol):
         type_annotation: TypeAnnotation,
         name: Optional[str] = None,
         *,
+        required: bool = True,
         globalns: Optional[Dict[str, Any]] = None,
         localns: Optional[Dict[str, Any]] = None,
-        required: bool = True,
         **kwargs: Any,
     ) -> Optional[FixedTypeValidator]:
         """Protocol for :class:`FixedTypeValidator`s.
@@ -168,9 +169,9 @@ class SimpleTypeValidatorFactory(TypeValidatorFactory):
         type_annotation: TypeAnnotation,
         name: Optional[str] = None,
         *,
+        required: Literal[True] = True,
         globalns: Optional[Dict[str, Any]] = None,
         localns: Optional[Dict[str, Any]] = None,
-        required: Literal[True] = True,
         **kwargs: Any,
     ) -> FixedTypeValidator:
         ...
@@ -181,9 +182,9 @@ class SimpleTypeValidatorFactory(TypeValidatorFactory):
         type_annotation: TypeAnnotation,
         name: Optional[str] = None,
         *,
+        required: bool = True,
         globalns: Optional[Dict[str, Any]] = None,
         localns: Optional[Dict[str, Any]] = None,
-        required: bool = True,
         **kwargs: Any,
     ) -> Optional[FixedTypeValidator]:
         ...
@@ -193,9 +194,9 @@ class SimpleTypeValidatorFactory(TypeValidatorFactory):
         type_annotation: TypeAnnotation,
         name: Optional[str] = None,
         *,
+        required: bool = True,
         globalns: Optional[Dict[str, Any]] = None,
         localns: Optional[Dict[str, Any]] = None,
-        required: bool = True,
         **kwargs: Any,
     ) -> Optional[FixedTypeValidator]:
         if name is None:
@@ -478,8 +479,8 @@ class SimpleTypeValidatorFactory(TypeValidatorFactory):
 
 
 #: Public (with optional cache) entry point for :class:`SimpleTypeValidatorFactory`.
-simple_type_validator_factory: Final = utils.optional_lru_cache(
-    SimpleTypeValidatorFactory(), typed=True
+simple_type_validator_factory: Final = cast(
+    TypeValidatorFactory, utils.optional_lru_cache(SimpleTypeValidatorFactory(), typed=True)
 )
 
 
@@ -500,7 +501,7 @@ def simple_type_validator(
     Keyword Arguments:
         strict_int (bool): do not accept ``bool`` values as ``int`` (default: ``True``).
     """
-    type_validator = simple_type_validator_factory(
+    type_validator: Optional[FixedTypeValidator] = simple_type_validator_factory(
         type_annotation, name=name, globalns=globalns, localns=localns, required=required, **kwargs
     )
     if type_validator is not None:

@@ -236,13 +236,13 @@ def optional_lru_cache(
 
 
 @overload
-def optional_lru_cache(
+def optional_lru_cache(  # noqa: F811  # redefinition of unused function
     func: Callable[_P, _T], *, maxsize: Optional[int] = 128, typed: bool = False
 ) -> Callable[_P, _T]:
     ...
 
 
-def optional_lru_cache(
+def optional_lru_cache(  # noqa: F811  # redefinition of unused function
     func: Optional[Callable[_P, _T]] = None, *, maxsize: Optional[int] = 128, typed: bool = False
 ) -> Union[Callable[_P, _T], Callable[[Callable[_P, _T]], Callable[_P, _T]]]:
     """Wrap :func:`functools.lru_cache` to fall back to the original function if arguments are not hashable.
