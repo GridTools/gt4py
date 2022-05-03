@@ -514,6 +514,9 @@ class BinaryOperator(enum.Enum):
     POW = 5
     MOD = 6
 
+    MATMULT = 8
+    MATMULTTRANS = 9
+
     AND = 11
     OR = 12
 
@@ -523,6 +526,7 @@ class BinaryOperator(enum.Enum):
     LE = 24
     GT = 25
     GE = 26
+
 
     @property
     def python_op(self):

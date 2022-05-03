@@ -32,9 +32,10 @@ from gt4py import definitions as gt_definitions
 from gt4py import gtscript
 from gt4py import utils as gt_utils
 from gt4py.frontend import node_util, nodes
-from gt4py.frontend.defir_to_gtir import DefIRToGTIR
+from gt4py.frontend.defir_to_gtir import DefIRToGTIR, UnVectorisation, UnRoller
 from gt4py.utils import NOTHING
 from gt4py.utils import meta as gt_meta
+
 
 from .base import Frontend, register
 
@@ -417,6 +418,8 @@ class ReturnReplacer(gt_utils.meta.ASTTransformPass):
             )
 
 
+
+
 class CallInliner(ast.NodeTransformer):
     """Inlines calls to gtscript.function calls.
 
@@ -775,12 +778,23 @@ def parse_annotation(
     )
 
     if hasattr(node, "value") and node.value is not None:
-        if not isinstance(node.value, ast.Constant):
-            raise GTScriptSyntaxError("Initializer values can only be scalars")
-        value = node.value.value
-        value_expr = nodes.ScalarLiteral(
-            value=value, data_type=nodes.DataType.from_dtype(type(value))
-        )
+        # if not isinstance(node.value, ast.Constant):
+        #     raise GTScriptSyntaxError("Initializer values can only be scalars")
+        if isinstance(node.value, ast.Constant):
+            value = node.value.value
+            value_expr = nodes.ScalarLiteral(
+                value=value, data_type=nodes.DataType.from_dtype(type(value))
+            )
+        elif isinstance(node.value, ast.Name):
+            name = node.value.id
+            axes = decl.axes
+            # literal_index = [
+            #     nodes.ScalarLiteral(value=decl.data_dims[0], data_type=nodes.DataType.INT32)
+            # ]
+            loc = decl.loc
+            value_expr = nodes.FieldRef.at_center(
+                name=name, axes=axes, data_index=[], loc=loc
+            )
     else:
         value_expr = None
 
@@ -828,17 +842,32 @@ def make_init_computation(
         stmts.append(decl)
         if decl.data_dims:
             for index in itertools.product(*(range(i) for i in decl.data_dims)):
-                literal_index = [
-                    nodes.ScalarLiteral(value=i, data_type=nodes.DataType.INT32) for i in index
-                ]
-                stmts.append(
-                    nodes.Assign(
-                        target=nodes.FieldRef.at_center(
-                            name, axes=decl.axes, data_index=literal_index
-                        ),
-                        value=temp_inits[name],
+                if isinstance(temp_inits[name], nodes.ScalarLiteral):
+                    literal_index = [
+                        nodes.ScalarLiteral(value=i, data_type=nodes.DataType.INT32) for i in index
+                    ]
+                    stmts.append(
+                        nodes.Assign(
+                            target=nodes.FieldRef.at_center(
+                                name, axes=decl.axes, data_index=literal_index
+                            ),
+                            value=temp_inits[name],
+                        )
                     )
-                )
+                elif isinstance(temp_inits[name], nodes.FieldRef):
+                    literal_index = [
+                        nodes.ScalarLiteral(value=i, data_type=nodes.DataType.INT32) for i in index
+                    ]
+                    temp_inits[name].data_index = literal_index
+                    stmts.append(
+                        nodes.Assign(
+                            target=nodes.FieldRef.at_center(
+                                name, axes=decl.axes, data_index=literal_index
+                            ),
+                            value=temp_inits[name],
+                        )
+                    )
+
         else:
             stmts.append(
                 nodes.Assign(
@@ -1330,6 +1359,12 @@ class IRMaker(ast.NodeVisitor):
 
     def visit_Pow(self, node: ast.Pow) -> nodes.BinaryOperator:
         return nodes.BinaryOperator.POW
+
+    def visit_MatMult(self, node: ast.MatMult) -> nodes.BinaryOperator:
+        return nodes.BinaryOperator.MATMULT
+
+    def visit_MatMultTrans(self, node: ast.MatMult) -> nodes.BinaryOperator:
+        return nodes.BinaryOperator.MATMULTTRANS
 
     def visit_And(self, node: ast.And) -> nodes.BinaryOperator:
         return nodes.BinaryOperator.AND
@@ -2124,6 +2159,8 @@ class GTScriptParser(ast.NodeVisitor):
             docstring=inspect.getdoc(self.definition) or "",
             loc=nodes.Location.from_ast_node(self.ast_root.body[0]),
         )
+
+        self.definition_ir = UnVectorisation.apply(self.definition_ir)
 
         return self.definition_ir
 

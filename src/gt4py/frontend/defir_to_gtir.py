@@ -15,7 +15,11 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import numbers
+from statistics import multimode
 from typing import Any, Dict, List, Optional, Tuple, Union, cast
+import copy
+import itertools
+from xml.dom import INDEX_SIZE_ERR
 
 from gt4py.frontend.node_util import IRNodeVisitor, location_to_source_location
 from gt4py.frontend.nodes import (
@@ -30,6 +34,10 @@ from gt4py.frontend.nodes import (
     BuiltinLiteral,
     Cast,
     ComputationBlock,
+
+    DataType,
+    Location,
+
     Empty,
     Expr,
     FieldDecl,
@@ -51,7 +59,7 @@ from gt4py.frontend.nodes import (
 )
 from gtc import common, gtir
 from gtc.common import ExprKind
-from gt4py.frontend.nodes import DataType
+
 
 
 def convert_dtype(data_type) -> common.DataType:
@@ -83,6 +91,152 @@ def _make_literal(v: numbers.Number) -> gtir.Literal:
             dtype = common.DataType.FLOAT64
         value = str(v)
     return gtir.Literal(dtype=dtype, value=value)
+
+class UnVectorisation(IRNodeVisitor):
+    @classmethod
+    def apply(cls, root, **kwargs):
+        return cls().visit(root)
+
+    def visit_StencilDefinition(self, node: StencilDefinition) -> gtir.Stencil:
+        field_params = {f.name: self.visit(f) for f in node.api_fields}
+        scalar_params = {p.name: self.visit(p) for p in node.parameters}
+
+        # Vectorization of operations
+        for c in node.computations:
+            if c.body.stmts:
+                new_stmts = []
+                for stmt in c.body.stmts:
+                    if isinstance(stmt, Assign):
+                        target = stmt.target
+                        value = stmt.value
+
+                        # check if higher dimensional field
+                        target_dim = field_params[target.name].data_dims
+
+                        if target_dim and not stmt.target.data_index:
+                            # unroll rhs
+                            stmt.value = UnRoller.apply(value, params=field_params)
+                            new_stmts.append(self.visit(stmt, params=field_params))
+                        else:
+                            new_stmts.append([stmt])
+
+                # merge list
+                c.body.stmts = list(itertools.chain(*new_stmts))
+
+        return node
+
+    def visit_FieldDecl(self, node: FieldDecl) -> gtir.FieldDecl:
+        dimension_names = ["I", "J", "K"]
+        dimensions = [dim in node.axes for dim in dimension_names]
+        # datatype conversion works via same ID
+        return gtir.FieldDecl(
+            name=node.name,
+            dtype=convert_dtype(node.data_type.value),
+            dimensions=dimensions,
+            data_dims=node.data_dims,
+            loc=location_to_source_location(node.loc),
+        )
+
+    def visit_Assign(self, node: Assign, params) -> gtir.ParAssignStmt:
+        assert isinstance(node.target, FieldRef) or isinstance(node.target, VarRef)
+        target_dims = params[node.target.name].data_dims
+        if len(target_dims) == 1:
+            target_dim, = target_dims
+            assert target_dim == len(node.value) and type(node.value[0]) != list, f"assignment dimension mismatch"
+            assign_list = []
+            for index in range(target_dim):
+                tmp_node = copy.deepcopy(node)
+                target_node = tmp_node.target
+                value_node = tmp_node.value[index]
+                data_type = DataType.INT32
+                data_index = [ScalarLiteral(value=index, data_type=data_type)]
+
+                tmp_node.target.data_index = data_index
+                tmp_node.value = value_node
+
+                assign_list.append(tmp_node)
+        elif len(target_dims) == 2:
+            raise Exception("Matrix assignment not currently supported")
+        return assign_list
+
+
+class UnRoller(IRNodeVisitor):
+    @classmethod
+    def apply(cls, root, **kwargs):
+        return cls().visit(root, **kwargs)
+
+    def visit_FieldRef(self, node: FieldRef, params):
+        name = node.name 
+        if params[name].data_dims:
+            field_list = []
+            if len(params[name].data_dims) == 1:
+                dims = params[name].data_dims[0]
+                for index in range(dims):
+                    tmp = copy.deepcopy(node)
+                    data_type = DataType.INT32
+                    data_index = [ScalarLiteral(value=index, data_type=data_type)]
+                    tmp.data_index = data_index
+                    field_list.append(tmp)
+            elif len(params[name].data_dims) == 2:
+                rows, cols = params[name].data_dims
+                for row in range(rows):
+                    row_list = []
+                    for col in range(cols):
+                        tmp = copy.deepcopy(node)
+                        data_type = DataType.INT32
+                        data_index = [ScalarLiteral(value=row, data_type=data_type), ScalarLiteral(value=col, data_type=data_type)]
+                        tmp.data_index = data_index
+                        row_list.append(tmp)
+                    field_list.append(row_list)
+            else:
+                raise Exception("Higher dimensional fields only supported for vectors and matrices")
+
+        return field_list
+
+    def add_node(self, lhs_node, rhs_node, binary_op: BinaryOperator, loc: Location):
+        return BinOpExpr(op=binary_op, lhs=lhs_node, rhs=rhs_node, loc=loc)
+
+
+    def visit_BinOpExpr(self, node: BinOpExpr, params):
+
+        loc = node.loc
+        lhs_list = self.visit(node.lhs, params=params)
+        rhs_list = self.visit(node.rhs, params=params)
+        bin_op_list = []
+
+        if node.op == BinaryOperator.MATMULT:
+            for j in range(len(lhs_list)):
+                acc = self.add_node(lhs_list[j][0], rhs_list[0], BinaryOperator.MUL, loc)
+                for i in range(1, len(lhs_list[0])):
+                    mul = self.add_node(lhs_list[j][i], rhs_list[i], BinaryOperator.MUL, loc)
+                    acc = self.add_node(acc, mul, BinaryOperator.ADD, loc)
+
+                bin_op_list.append(acc)
+        
+        else:
+            # both vectors
+            if type(lhs_list) == list and type(rhs_list):
+                if len(lhs_list) == len(rhs_list):
+                    for lhs, rhs in zip(lhs_list, rhs_list):
+                        bin_op_list.append(self.add_node(lhs, rhs, node.op, node.loc))
+            # scalar and vector
+            elif type(rhs_list) == list:
+                lhs = lhs_list
+                for rhs in rhs_list:
+                    bin_op_list.append(self.add_node(lhs, rhs, node.op, node.loc))
+            elif type(lhs_list) == list:
+                rhs = rhs_list
+                for lhs in lhs_list:
+                    bin_op_list.append(self.add_node(lhs, rhs, node.op, node.loc))
+            else:
+                bin_op_list.append(node)
+
+        return bin_op_list
+
+    def visit_VarRef(self, node: VarRef, **kwargs):
+        return node
+    def visit_ScalarLiteral(self, node: VarRef, **kwargs):
+        return node
 
 
 class DefIRToGTIR(IRNodeVisitor):
@@ -162,10 +316,9 @@ class DefIRToGTIR(IRNodeVisitor):
         return cls().visit(root)
 
     def visit_StencilDefinition(self, node: StencilDefinition) -> gtir.Stencil:
-        field_params = {f.name: self.visit(f, index_vec=None) for f in node.api_fields}
+        field_params = {f.name: self.visit(f) for f in node.api_fields}
         scalar_params = {p.name: self.visit(p) for p in node.parameters}
-        # vertical_loops = [self.visit(c) for c in node.computations if c.body.stmts]
-        vertical_loops = [self.visit(c, all_params={**field_params, **scalar_params}) for c in node.computations if c.body.stmts]
+        vertical_loops = [self.visit(c) for c in node.computations if c.body.stmts]
         if node.externals is not None:
             externals = {
                 name: _make_literal(value)
@@ -198,34 +351,15 @@ class DefIRToGTIR(IRNodeVisitor):
     def visit_ArgumentInfo(self, node: ArgumentInfo, all_params: Dict[str, gtir.Decl]) -> gtir.Decl:
         return all_params[node.name]
 
-    def visit_ComputationBlock(self, node: ComputationBlock, all_params: Dict[str, gtir.Decl]) -> gtir.VerticalLoop:
+    def visit_ComputationBlock(self, node: ComputationBlock) -> gtir.VerticalLoop:
         stmts = []
         temporaries = []
         for s in node.body.stmts:
-            decl_or_stmt = self.visit(s, index_vec=None)
+            decl_or_stmt = self.visit(s)
             if isinstance(decl_or_stmt, gtir.Decl):
                 temporaries.append(decl_or_stmt)
-                
             else:
-                data_type = DataType.INT64
-                if temporaries:
-                    if s.target.name == temporaries[0].name:
-                        target_dim = temporaries[0].data_dims
-                else:
-                    target_dim = all_params[s.target.name].data_dims
-                
-                if not s.target.data_index:
-                    # value_dim = all_params[s.value.name].data_dims
-                    # assert target_dim == value_dim, f'vectorization not possible, dimension mismatch: {target_dim = }, {value_dim = }'
-
-                    for index in range(target_dim[0]):
-                        index_vec = ScalarLiteral(value=index, data_type=data_type)
-                        stmts.append(self.visit(s, index_vec=index_vec))
-
-                else:
-                    index_vec = None
-                    stmts.append(self.visit(s, index_vec=index_vec))
-
+                stmts.append(decl_or_stmt)
         start, end = self.visit(node.interval)
         interval = gtir.Interval(
             start=start,
@@ -243,15 +377,15 @@ class DefIRToGTIR(IRNodeVisitor):
     def visit_BlockStmt(self, node: BlockStmt) -> List[gtir.Stmt]:
         return [self.visit(s) for s in node.stmts]
 
-    def visit_Assign(self, node: Assign, index_vec: ScalarLiteral) -> gtir.ParAssignStmt:
+    def visit_Assign(self, node: Assign) -> gtir.ParAssignStmt:
         assert isinstance(node.target, FieldRef) or isinstance(node.target, VarRef)
         return gtir.ParAssignStmt(
-            left=self.visit(node.target, index_vec=index_vec),
-            right=self.visit(node.value, index_vec=index_vec),
+            left=self.visit(node.target),
+            right=self.visit(node.value),
             loc=location_to_source_location(node.loc),
         )
 
-    def visit_ScalarLiteral(self, node: ScalarLiteral, index_vec: ScalarLiteral) -> gtir.Literal:
+    def visit_ScalarLiteral(self, node: ScalarLiteral) -> gtir.Literal:
         return gtir.Literal(value=str(node.value), dtype=convert_dtype(node.data_type.value))
 
     def visit_UnaryOpExpr(self, node: UnaryOpExpr) -> gtir.UnaryOp:
@@ -261,16 +395,16 @@ class DefIRToGTIR(IRNodeVisitor):
             loc=location_to_source_location(node.loc),
         )
 
-    def visit_BinOpExpr(self, node: BinOpExpr, index_vec: ScalarLiteral) -> Union[gtir.BinaryOp, gtir.NativeFuncCall]:
+    def visit_BinOpExpr(self, node: BinOpExpr) -> Union[gtir.BinaryOp, gtir.NativeFuncCall]:
         if node.op in (BinaryOperator.POW, BinaryOperator.MOD):
             return gtir.NativeFuncCall(
                 func=common.NativeFunction[node.op.name],
-                args=[self.visit(node.lhs, index_vec=index_vec), self.visit(node.rhs, index_vec=index_vec)],
+                args=[self.visit(node.lhs), self.visit(node.rhs)],
                 loc=location_to_source_location(node.loc),
             )
         return gtir.BinaryOp(
-            left=self.visit(node.lhs, index_vec=index_vec),
-            right=self.visit(node.rhs, index_vec=index_vec),
+            left=self.visit(node.lhs),
+            right=self.visit(node.rhs),
             op=self.GT4PY_OP_TO_GTIR_OP[node.op],
             loc=location_to_source_location(node.loc),
         )
@@ -305,12 +439,11 @@ class DefIRToGTIR(IRNodeVisitor):
             loc=location_to_source_location(node.loc),
         )
 
-    def visit_FieldRef(self, node: FieldRef, index_vec: ScalarLiteral) -> gtir.FieldAccess:
+    def visit_FieldRef(self, node: FieldRef) -> gtir.FieldAccess:
         return gtir.FieldAccess(
             name=node.name,
             offset=self.transform_offset(node.offset),
-            # data_index=[self.visit(index) for index in node.data_index],
-            data_index=[self.visit(index, index_vec=index_vec) for index in node.data_index] if not index_vec else [self.visit(index_vec, index_vec=index_vec)],
+            data_index=[self.visit(index) for index in node.data_index],
             loc=location_to_source_location(node.loc),
         )
 
@@ -379,7 +512,7 @@ class DefIRToGTIR(IRNodeVisitor):
             level=self.GT4PY_LEVELMARKER_TO_GTIR_LEVELMARKER[node.level], offset=node.offset
         )
 
-    def visit_FieldDecl(self, node: FieldDecl, index_vec: ScalarLiteral) -> gtir.FieldDecl:
+    def visit_FieldDecl(self, node: FieldDecl) -> gtir.FieldDecl:
         dimension_names = ["I", "J", "K"]
         dimensions = [dim in node.axes for dim in dimension_names]
         # datatype conversion works via same ID

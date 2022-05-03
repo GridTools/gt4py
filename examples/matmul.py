@@ -59,60 +59,83 @@ Nx, Ny = 1, 1
 # dtype_field_2 = (dtype, (3,))
 # dtype_field = dtype
 
-n = 2
-dtype_field = (dtype, (n,))
+n = 6
+m = 3
+n_dtype = (dtype, (n,))
+m_dtype = (dtype, (m,))
+dtype_matrix = (dtype, (n,m))
+# dtype_field = dtype
 
-in_np = np.arange(n)
+n_field = np.arange(n)
+
+
+matrix_np = np.arange(n*m).reshape(n, m)
+
+
+matrix = gt.storage.from_array(
+    data= matrix_np,
+    backend = backend,
+    dtype=dtype_matrix,
+    shape=(Nx, Ny, 1), # todo: maybe try 2D
+    default_origin=(0, 0, 0))
 
 in_field_1 = gt.storage.from_array(
-    data= in_np,
+    data= n_field,
     backend = backend,
-    dtype=dtype_field,
+    dtype=n_dtype,
     shape=(Nx, Ny, 1), # todo: maybe try 2D
     default_origin=(0, 0, 0))
 
 in_field_2 = 3 * gt.storage.ones(
     backend=backend,
-    dtype=dtype_field,
+    dtype=m_dtype,
     shape=(Nx, Ny, 1), # todo: maybe try 2D
     default_origin=(0, 0, 0))
 
 
 out_field = gt.storage.zeros(
     backend=backend,
-    dtype=dtype_field,
+    dtype=n_dtype,
     shape=(Nx, Ny, 1), # todo: maybe try 2D
     default_origin=(0, 0, 0))
 
 coeff = 2.0
 
 @gtscript.function
-def mult_coeff(matrix, vec_1, out):
-    a = matrix[0,0] * vec_1[0] + matrix[0,1] * vec_1[1]
-    b = matrix[1,0] * vec_1[0] + matrix[1,1] * vec_1[1]
-
-    out[0] = a
-    out[1] = b
-    return 1
+def mult_coeff(vec: gtscript.Field[(np.float64, (2,))]):
+    tmp: gtscript.Field[(np.float64, (2,))] =  0
+    vec[0,0,0][0] = 1
+    return tmp
 
 @gtscript.function
 def tmp_func():
-    tmp: gtscript.Field[(np.float64, (2,))] =  0
-    return tmp
+    pass
 
 @gtscript.stencil(backend=backend, **backend_opts)
 def test_stencil(
-        vec_1: gtscript.Field[dtype_field],
-        vec_2: gtscript.Field[dtype_field],
-        out_vec: gtscript.Field[dtype_field],
-        c: float
-):
-    with computation(PARALLEL), interval(...):
-        out_vec = mult_coeff(vec_1, vec_2)[1:3] 
-        # out_vec = tmp_func()
+        matrix: gtscript.Field[dtype_matrix],
+        # c: float,
+        vec_2: gtscript.Field[n_dtype],
 
-test_stencil(in_field_1, in_field_2, out_field, coeff)
-print(f'{coeff = }\n{in_field_1 = }\n{in_field_2 = }\n{out_field = }')
+        out: gtscript.Field[n_dtype],
+        vec_1: gtscript.Field[m_dtype]
+):
+
+
+    with computation(PARALLEL), interval(...):
+        # out_vec[0,0,0][0] = vec_1[0,0,0][1]
+        # out_vec[0,0,0][1] = vec_1[0,0,0][1]
+        out = matrix.T @ vec_1
+        # out_vec = vec_1
+        # out_vec[0,0,0][0] = matrix[0,0,0][0, 0] * vec_1[0,0,0][0] + matrix[0,0,0][0,1] * vec_1[0,0,0][1]
+        # out_vec[0,0,0][1] = matrix[0,0,0][1, 0] * vec_1[0,0,0][0] + matrix[0,0,0][1,1] * vec_1[0,0,0][1]
+
+
+# test_stencil(in_field_1, in_field_2, out_field, coeff)
+test_stencil(matrix, in_field_1, out_field, in_field_2)
+print(f'{coeff = }\n{in_field_1 = }\n{in_field_2 = }\n{matrix = }\n{out_field = }')
+
+print(2 * in_field_1.reshape(n) + matrix.reshape(n,m) @ in_field_2.reshape(m))
 
 # @gtscript.stencil(backend=backend, **backend_opts)
 # def test_stencil(
@@ -140,6 +163,3 @@ print(f'{coeff = }\n{in_field_1 = }\n{in_field_2 = }\n{out_field = }')
 
 #         out_vec[0,0,0][:-2] = vec_1[1:-1]
 #         out_vec[0,0,0][:-2] = vec_1[1:-1] + vec_2[0:-2]
-
-
-
