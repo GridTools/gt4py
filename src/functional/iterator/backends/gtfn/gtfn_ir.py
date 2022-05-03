@@ -74,7 +74,7 @@ class FunctionDefinition(Node, SymbolTableTrait):
 
 
 class Backend(Node):
-    domain: SymRef
+    domain: Union[SymRef, FunCall]  # TODO(havogt) `FunCall` only if domain will be part of the IR
 
 
 class StencilExecution(Node):
@@ -100,6 +100,8 @@ class FencilDefinition(Node, SymbolTableTrait):
             "tuple",
             "get",
             "can_deref",
+            "domain",  # TODO(havogt) decide if domain is part of IR
+            "named_range",
         ]
     )
 

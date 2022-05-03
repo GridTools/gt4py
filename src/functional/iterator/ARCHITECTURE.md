@@ -43,9 +43,9 @@ Sketch:
 
 See directory `backends/`.
 
-### `cpptoy`
+### `gtfn`
 
-Generates C++ code in the spirit of https://github.com/GridTools/gridtools/pull/1643. Incomplete, will be adapted to the full C++ prototype. (only code generation)
+Generates C++ code for the GridTools `fn` backend. (only code generation)
 
 ### `lisp`
 

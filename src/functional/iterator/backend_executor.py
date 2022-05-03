@@ -15,6 +15,7 @@ def execute_fencil(fencil: FencilDefinition, *args, **kwargs):
 
     if kwargs["backend"] in backend._BACKENDS:
         b = backend.get_backend(kwargs["backend"])
+        kwargs.pop("backend")
         b(fencil, *args, **kwargs)
     else:
         raise RuntimeError(f"Backend {kwargs['backend']} is not registered.")

@@ -67,6 +67,8 @@ def fen_solve_tridiag(i_size, j_size, k_size, a, b, c, d, x):
 
 def test_tridiag(tridiag_reference, backend, lift_mode):
     backend, validate = backend
+    if backend == "gtfn":
+        pytest.xfail("gtfn does not yet support scans")
     a, b, c, d, x = tridiag_reference
     shape = a.shape
     as_3d_field = np_as_located_field(IDim, JDim, KDim)

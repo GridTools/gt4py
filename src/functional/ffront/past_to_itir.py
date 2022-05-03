@@ -15,8 +15,7 @@ from typing import Union
 
 from eve import NodeTranslator, SymbolTableTrait
 from functional.common import GTTypeError
-from functional.ffront import common_types
-from functional.ffront import program_ast as past
+from functional.ffront import common_types, program_ast as past
 from functional.iterator import ir as itir
 
 

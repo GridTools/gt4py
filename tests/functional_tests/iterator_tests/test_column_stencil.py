@@ -98,6 +98,8 @@ def ksum_fencil(i_size, k_size, inp, out):
 
 def test_ksum_scan(backend, lift_mode):
     backend, validate = backend
+    if backend == "gtfn":
+        pytest.xfail("gtfn does not yet support scans")
     shape = [1, 7]
     inp = np_as_located_field(IDim, KDim)(np.asarray([list(range(7))]))
     out = np_as_located_field(IDim, KDim)(np.zeros(shape))
@@ -135,6 +137,8 @@ def ksum_back_fencil(i_size, k_size, inp, out):
 
 def test_ksum_back_scan(backend, lift_mode):
     backend, validate = backend
+    if backend == "gtfn":
+        pytest.xfail("gtfn does not yet support scans")
     shape = [1, 7]
     inp = np_as_located_field(IDim, KDim)(np.asarray([list(range(7))]))
     out = np_as_located_field(IDim, KDim)(np.zeros(shape))

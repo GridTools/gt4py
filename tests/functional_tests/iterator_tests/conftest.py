@@ -6,8 +6,8 @@ from functional.iterator.transforms import LiftMode
 @pytest.fixture(
     params=[
         LiftMode.FORCE_INLINE,
-        LiftMode.FORCE_TEMPORARIES,
-        LiftMode.SIMPLE_HEURISTIC,
+        # LiftMode.FORCE_TEMPORARIES,
+        # LiftMode.SIMPLE_HEURISTIC,
     ],
     ids=lambda p: f"lift_mode={p.name}",
 )
@@ -20,7 +20,7 @@ def lift_mode(request):
         # (backend, do_validate)
         (None, True),
         ("lisp", False),
-        ("cpptoy", False),
+        ("gtfn", False),
         ("type_check", False),
         ("pretty_print", False),
         ("roundtrip", True),

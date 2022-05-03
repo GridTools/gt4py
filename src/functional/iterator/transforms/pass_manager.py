@@ -6,6 +6,7 @@ from functional.iterator.transforms.inline_lambdas import InlineLambdas
 from functional.iterator.transforms.inline_lifts import InlineLifts
 from functional.iterator.transforms.normalize_shifts import NormalizeShifts
 from functional.iterator.transforms.simple_inline_heuristic import heuristic
+from functional.iterator.transforms.unroll_reduce import UnrollReduce
 
 
 @enum.unique
@@ -15,7 +16,17 @@ class LiftMode(enum.Enum):
     SIMPLE_HEURISTIC = enum.auto()
 
 
-def apply_common_transforms(ir, lift_mode=None, offset_provider=None):
+def _inline_lifts(ir, lift_mode):
+    if lift_mode == LiftMode.FORCE_INLINE:
+        return InlineLifts().visit(ir)
+    if lift_mode == LiftMode.FORCE_TEMPORARIES:
+        predicate = heuristic(ir)
+        return InlineLifts(predicate).visit(ir)
+    assert lift_mode == LiftMode.SIMPLE_HEURISTIC
+    return ir
+
+
+def apply_common_transforms(ir, lift_mode=None, offset_provider=None, unroll_reduce=False):
     if lift_mode is None:
         lift_mode = LiftMode.FORCE_INLINE
     assert isinstance(lift_mode, LiftMode)
@@ -23,13 +34,21 @@ def apply_common_transforms(ir, lift_mode=None, offset_provider=None):
     ir = PruneUnreferencedFundefs().visit(ir)
     ir = NormalizeShifts().visit(ir)
     ir = InlineLambdas().visit(ir)
-    if lift_mode == LiftMode.FORCE_INLINE:
-        ir = InlineLifts().visit(ir)
-    elif lift_mode == LiftMode.SIMPLE_HEURISTIC:
-        predicate = heuristic(ir)
-        ir = InlineLifts(predicate).visit(ir)
+    ir = _inline_lifts(ir, lift_mode)
     ir = InlineLambdas().visit(ir)
     ir = NormalizeShifts().visit(ir)
+    if unroll_reduce:
+        for _ in range(10):
+            unrolled = UnrollReduce().visit(ir, offset_provider=offset_provider)
+            if unrolled == ir:
+                break
+            ir = unrolled
+            ir = NormalizeShifts().visit(ir)
+            ir = _inline_lifts(ir, lift_mode)
+            ir = InlineLambdas().visit(ir)
+            ir = NormalizeShifts().visit(ir)
+        else:
+            raise RuntimeError("Reduction unrolling failed")
     if lift_mode != LiftMode.FORCE_INLINE:
         assert offset_provider is not None
         ir = CreateGlobalTmps().visit(ir, offset_provider=offset_provider)

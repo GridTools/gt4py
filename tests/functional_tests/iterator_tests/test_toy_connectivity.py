@@ -170,18 +170,20 @@ def test_first_vertex_neigh_of_first_edge_neigh_of_cells_fencil(backend):
 
 
 @fundef
-def sparse_stencil(inp):
-    return reduce(lambda a, b: a + b, 0)(inp)
+def sparse_stencil(non_sparse, inp):
+    return reduce(lambda a, b, c: a + c, 0)(shift(V2E)(non_sparse), inp)
 
 
 def test_sparse_input_field(backend):
     backend, validate = backend
+    non_sparse = np_as_located_field(Edge)(np.zeros(18))
     inp = np_as_located_field(Vertex, V2E)(np.asarray([[1, 2, 3, 4]] * 9))
     out = np_as_located_field(Vertex)(np.zeros([9]))
 
     ref = np.ones([9]) * 10
 
     sparse_stencil[{Vertex: range(0, 9)}](
+        non_sparse,
         inp,
         out=out,
         backend=backend,
@@ -197,16 +199,21 @@ V2V = offset("V2V")
 
 def test_sparse_input_field_v2v(backend):
     backend, validate = backend
+    non_sparse = np_as_located_field(Edge)(np.zeros(9))
     inp = np_as_located_field(Vertex, V2V)(v2v_arr)
     out = np_as_located_field(Vertex)(np.zeros([9]))
 
     ref = np.asarray(list(sum(row) for row in v2v_arr))
 
     sparse_stencil[{Vertex: range(0, 9)}](
+        non_sparse,
         inp,
         out=out,
         backend=backend,
-        offset_provider={"V2V": NeighborTableOffsetProvider(v2v_arr, Vertex, Vertex, 4)},
+        offset_provider={
+            "V2V": NeighborTableOffsetProvider(v2v_arr, Vertex, Vertex, 4),
+            "V2E": NeighborTableOffsetProvider(v2e_arr, Vertex, Edge, 4),
+        },
     )
 
     if validate:

@@ -159,38 +159,38 @@ def test_eval_forward_ref():
     )
 
 
-def test_reveal_type():
-    assert xtyping.reveal_type(3) == int
+def test_infer_type():
+    assert xtyping.infer_type(3) == int
 
-    assert xtyping.reveal_type(None) is type(None)  # noqa: E721  # do not compare types
-    assert xtyping.reveal_type(type(None)) is type(None)  # noqa: E721  # do not compare types
-    assert xtyping.reveal_type(None, none_as_type=False) is None
-    assert xtyping.reveal_type(type(None), none_as_type=False) is None
+    assert xtyping.infer_type(None) is type(None)  # noqa: E721  # do not compare types
+    assert xtyping.infer_type(type(None)) is type(None)  # noqa: E721  # do not compare types
+    assert xtyping.infer_type(None, none_as_type=False) is None
+    assert xtyping.infer_type(type(None), none_as_type=False) is None
 
-    assert xtyping.reveal_type(Dict[str, int]) == Dict[str, int]
+    assert xtyping.infer_type(Dict[str, int]) == Dict[str, int]
 
-    assert xtyping.reveal_type({1, 2, 3}) == Set[int]
-    assert xtyping.reveal_type(frozenset({"1", "2", "3"})) == FrozenSet[str]
+    assert xtyping.infer_type({1, 2, 3}) == Set[int]
+    assert xtyping.infer_type(frozenset({"1", "2", "3"})) == FrozenSet[str]
 
-    assert xtyping.reveal_type({"a": [0], "b": [1]}) == Dict[str, List[int]]
+    assert xtyping.infer_type({"a": [0], "b": [1]}) == Dict[str, List[int]]
 
-    assert xtyping.reveal_type(str) == Type[str]
+    assert xtyping.infer_type(str) == Type[str]
 
     class A:
         ...
 
-    assert xtyping.reveal_type(A()) == A
-    assert xtyping.reveal_type(A) == Type[A]
+    assert xtyping.infer_type(A()) == A
+    assert xtyping.infer_type(A) == Type[A]
 
     def f1():
         ...
 
-    assert xtyping.reveal_type(f1) == Callable[[], Any]
+    assert xtyping.infer_type(f1) == Callable[[], Any]
 
     def f2(a: int, b: float) -> None:
         ...
 
-    assert xtyping.reveal_type(f2) == Callable[[int, float], type(None)]
+    assert xtyping.infer_type(f2) == Callable[[int, float], type(None)]
 
     def f3(
         a: Dict[Tuple[str, ...], List[int]],
@@ -200,7 +200,7 @@ def test_reveal_type():
         ...
 
     assert (
-        xtyping.reveal_type(f3)
+        xtyping.infer_type(f3)
         == Callable[
             [
                 Dict[Tuple[str, ...], List[int]],
@@ -214,9 +214,9 @@ def test_reveal_type():
     def f4(a: int, b: float, *, foo: Tuple[str, ...] = ()) -> None:
         ...
 
-    assert xtyping.reveal_type(f4) == Callable[[int, float], type(None)]
+    assert xtyping.infer_type(f4) == Callable[[int, float], type(None)]
     assert (
-        xtyping.reveal_type(f4, annotate_callable_kwargs=True)
+        xtyping.infer_type(f4, annotate_callable_kwargs=True)
         == Annotated[
             Callable[[int, float], type(None)], xtyping.CallableKwargsInfo({"foo": Tuple[str, ...]})
         ]

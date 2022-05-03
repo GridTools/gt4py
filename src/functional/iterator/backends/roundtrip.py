@@ -6,8 +6,7 @@ from typing import Iterable
 import numpy as np
 
 from eve import codegen
-from eve.codegen import FormatTemplate as as_fmt
-from eve.codegen import MakoTemplate as as_mako
+from eve.codegen import FormatTemplate as as_fmt, MakoTemplate as as_mako
 from eve.concepts import Node
 from functional import iterator
 from functional.iterator import ir
