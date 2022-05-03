@@ -21,7 +21,6 @@ from __future__ import annotations
 import dataclasses as _dataclasses
 import functools as _functools
 import inspect as _inspect
-import pprint as _pprint
 import sys as _sys
 import types as _types
 import typing as _typing

@@ -23,7 +23,11 @@ import typing
 
 import pytest
 
-from eve import type_validation as type_val
+from eve import (
+    extended_typing as xtyping,
+    type_definitions as type_def,
+    type_validation as type_val,
+)
 from eve.extended_typing import (
     Any,
     Callable,
@@ -83,9 +87,21 @@ SAMPLE_TYPE_DEFINITIONS: List[
     ),  # float literals are not supported by PEP 586
     (typing.Tuple[int, str], [(3, "three")], [(), (3, 3)], None, None),
     (typing.Tuple[int, ...], [(1, 2, 3), ()], [3, (3, "three")], None, None),
+    (xtyping.FrozenList[int], [(1, 2, 3), ()], [3, (3, "three")], None, None),
     (typing.List[int], ([1, 2, 3], []), (1, [1.0]), None, None),
     (typing.Set[int], ({1, 2, 3}, set()), (1, [1], (1,), {1: None}), None, None),
     (typing.Dict[int, str], ({}, {3: "three"}), ([(3, "three")], 3, "three", []), None, None),
+    (
+        xtyping.FrozenDict[int, str],
+        (
+            type_def.frozendict(),
+            type_def.frozendict({3: "three"}),
+            type_def.frozendict({3: "three", -1: ""}),
+        ),
+        ({}, {3: "three"}, [(3, "three")], 3, "three", []),
+        None,
+        None,
+    ),
     (typing.Sequence[int], ([1, 2, 3], [], (1, 2, 3), tuple()), (1, [1.0], {1}), None, None),
     (typing.MutableSequence[int], ([1, 2, 3], []), ((1, 2, 3), tuple(), 1, [1.0], {1}), None, None),
     (typing.Set[int], ({1, 2, 3}, set()), (1, [1], (1,), {1: None}), None, None),
