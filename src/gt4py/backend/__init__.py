@@ -28,7 +28,7 @@ from .base import (
 
 try:
     from .dace_backend import DaceCPUBackend, DaceGPUBackend
-except ImportError as error:
+except ImportError:
     pass
 
 from .cuda_backend import CudaBackend  # noqa: F401

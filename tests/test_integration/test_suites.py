@@ -781,10 +781,12 @@ class TestVariableKRead(gt_testing.StencilTestSuite):
 
     def definition(field_in, field_out, index):
         with computation(PARALLEL), interval(1, None):
-            field_out = field_in[0, 0, -1]  # noqa: F841  # Local name is assigned to but never used
+            field_out = field_in[  # noqa: F841  # Local name is assigned to but never used
+                0, 0, index
+            ]
 
     def validation(field_in, field_out, index, *, domain, origin):
-        field_out[:, :, 1:] = field_in[:, :, (np.arange(field_in.shape[-1]) + -1)[1:]]
+        field_out[:, :, 1:] = field_in[:, :, (np.arange(field_in.shape[-1]) + index)[1:]]
 
 
 class TestVariableKAndReadOutside(gt_testing.StencilTestSuite):
