@@ -112,6 +112,12 @@ _VALID_DATA_TYPES = (
 
 def _set_arg_dtypes(definition: Callable[..., None], dtypes: Dict[Type, Type]):
     def _parse_annotation(arg, annotation):
+        """
+        Evaluate the type hint ``annotation`` for the stencil argument ``arg``.
+
+        Note that ``typing.get_type_hints()`` cannot be used here since field
+        arguments are annotated using instances (and not subclasses) of ``Field``.
+        """
         if isinstance(annotation, _FieldDescriptor) and isinstance(annotation.dtype, str):
             if annotation.dtype in dtypes:
                 return _FieldDescriptor(
