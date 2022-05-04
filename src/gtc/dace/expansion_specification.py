@@ -1,8 +1,6 @@
 import copy
 from dataclasses import dataclass
-from dataclasses import field as dataclass_field
-from itertools import combinations, permutations, product
-from typing import TYPE_CHECKING, List, Optional, Set, Tuple, Union
+from typing import TYPE_CHECKING, Callable, List, Optional, Set, Union
 
 import dace
 
@@ -13,6 +11,8 @@ from gtc import oir
 
 if TYPE_CHECKING:
     from .nodes import StencilComputation
+
+_EXPANSION_VALIDITY_CHECKS: List[Callable] = []
 
 
 @dataclass
@@ -27,6 +27,10 @@ class Iteration:
     # if stride is not specified, it is chosen based on backend (tiling) and loop order (K)
     stride: Optional[int] = None
 
+    @property
+    def iterations(self) -> List["Iteration"]:
+        return [self]
+
 
 @dataclass
 class Map(ExpansionItem):
@@ -37,8 +41,11 @@ class Map(ExpansionItem):
 @dataclass
 class Loop(Iteration, ExpansionItem):
     kind: str = "contiguous"
-    localcache_fields: Set[str] = dataclass_field(default_factory=set)
     storage: dace.StorageType = None
+
+    @property
+    def iterations(self) -> List[Iteration]:
+        return [self]
 
 
 @dataclass
@@ -51,27 +58,34 @@ class Sections(ExpansionItem):
     pass
 
 
+def _get_axis_from_pattern(item, fmt):
+    for axis in dcir.Axis.dims_3d():
+        if fmt.format(axis=axis) == item:
+            return axis
+    return ""
+
+
+def _is_domain_loop(item):
+    return _get_axis_from_pattern(item, fmt="{axis}Loop")
+
+
+def _is_domain_map(item):
+    return _get_axis_from_pattern(item, fmt="{axis}Map")
+
+
+def _is_tiling(item):
+    return _get_axis_from_pattern(item, fmt="Tile{axis}")
+
+
 def get_expansion_order_axis(item):
-    if is_domain_map(item) or (is_domain_loop(item) and not item.startswith("Cached")):
-        return dcir.Axis(item[0])
-    elif is_tiling(item):
-        return dcir.Axis(item[-1])
-    elif item.startswith("Cached"):
-        return dcir.Axis(item[len("Cached")])
-    else:
-        return dcir.Axis(item)
-
-
-def is_domain_map(item):
-    return any(f"{axis}Map" == item for axis in dcir.Axis.dims_3d())
-
-
-def is_domain_loop(item):
-    return any(item.endswith(f"{axis}Loop") for axis in dcir.Axis.dims_3d())
-
-
-def is_tiling(item):
-    return any(f"Tile{axis}" == item for axis in dcir.Axis.dims_3d())
+    if axis := (
+        _is_domain_map(item)
+        or _is_domain_loop(item)
+        or _is_tiling(item)
+        or _get_axis_from_pattern(item, fmt="{axis}")
+    ):
+        return dcir.Axis(axis)
+    raise ValueError(f"Can't get axis for item '{item}'.")
 
 
 def get_expansion_order_index(expansion_order, axis):
@@ -86,7 +100,6 @@ def get_expansion_order_index(expansion_order, axis):
 
 def _is_expansion_order_implemented(expansion_specification):
 
-    # TODO: Could have single IJ map with predicates in K, e.g. also for tiling??
     for item in expansion_specification:
         if isinstance(item, Sections):
             break
@@ -94,62 +107,28 @@ def _is_expansion_order_implemented(expansion_specification):
             return False
         if isinstance(item, Map) and any(it.axis == dcir.Axis.K for it in item.iterations):
             return False
-    cached_loops = [
-        item
-        for item in expansion_specification
-        if isinstance(item, Loop) and len(item.localcache_fields) > 0
-    ]
-    if len(cached_loops) > 1:
-        return False
-
-    not_outermost_dims = set()
-    for item in expansion_specification:
-        iterations = []
-        if isinstance(item, Loop):
-            if item.localcache_fields:
-                if not all(
-                    axis in not_outermost_dims or axis == item.axis for axis in dcir.Axis.dims_3d()
-                ):
-                    return False
-            iterations = [item]
-        elif isinstance(item, Iteration):
-            iterations = [item]
-        elif isinstance(item, Map):
-            iterations = item.iterations
-        for it in iterations:
-            not_outermost_dims.add(it.axis)
-
-    is_outermost_loop_in_sdfg = True
-    for item in expansion_specification:
-        if isinstance(item, Loop):
-            if not is_outermost_loop_in_sdfg and item.localcache_fields:
-                return False
-            is_outermost_loop_in_sdfg = False
-        else:
-            is_outermost_loop_in_sdfg = True
 
     return True
 
 
+def _choose_loop_or_map(node, eo):
+    if any(eo == axis for axis in dcir.Axis.dims_horizontal()):
+        return f"{eo}Map"
+    if eo == dcir.Axis.K:
+        if node.oir_node.loop_order == common.LoopOrder.PARALLEL:
+            return f"{eo}Map"
+        else:
+            return f"{eo}Loop"
+    return eo
+
+
 def _order_as_spec(computation_node, expansion_order):
-    expansion_order = list(_sanitize_expansion_item(computation_node, eo) for eo in expansion_order)
+    expansion_order = list(_choose_loop_or_map(computation_node, eo) for eo in expansion_order)
     expansion_specification = []
     for item in expansion_order:
         if isinstance(item, ExpansionItem):
             expansion_specification.append(item)
-        elif isinstance(item, Iteration):
-            if isinstance(item, Iteration) and item.axis == "K" and item.kind == "contiguous":
-                if computation_node.oir_node is not None:
-                    if computation_node.oir_node.loop_order == common.LoopOrder.PARALLEL:
-                        expansion_specification.append(Map(iterations=[item]))
-                    else:
-                        expansion_specification.append(
-                            Loop(axis=item.axis, kind=item.kind, stride=item.stride)
-                        )
-                else:
-                    expansion_specification.append(item)
-        elif is_tiling(item):
-            axis = get_expansion_order_axis(item)
+        elif axis := _is_tiling(item):
             expansion_specification.append(
                 Map(
                     iterations=[
@@ -161,8 +140,7 @@ def _order_as_spec(computation_node, expansion_order):
                     ]
                 )
             )
-        elif is_domain_map(item):
-            axis = get_expansion_order_axis(item)
+        elif axis := _is_domain_map(item):
             expansion_specification.append(
                 Map(
                     iterations=[
@@ -174,38 +152,15 @@ def _order_as_spec(computation_node, expansion_order):
                     ]
                 )
             )
-        elif is_domain_loop(item):
-            axis = get_expansion_order_axis(item)
-            if item.startswith("Cached"):
-                localcache_fields = set(computation_node.field_decls.keys())
-                for acc in computation_node.oir_node.iter_tree().if_isinstance(oir.FieldAccess):
-                    if isinstance(acc.offset, oir.VariableKOffset):
-                        if acc.name in localcache_fields:
-                            localcache_fields.remove(acc.name)
-
-                for mask_stmt in computation_node.oir_node.iter_tree().if_isinstance(oir.MaskStmt):
-                    if mask_stmt.mask.iter_tree().if_isinstance(common.HorizontalMask).to_list():
-                        for stmt in mask_stmt.body:
-                            for acc in (
-                                stmt.iter_tree()
-                                .if_isinstance(oir.AssignStmt)
-                                .getattr("left")
-                                .if_isinstance(oir.FieldAccess)
-                            ):
-                                if acc.name in localcache_fields:
-                                    localcache_fields.remove(acc.name)
-            else:
-                localcache_fields = set()
+        elif axis := _is_domain_loop(item):
             expansion_specification.append(
                 Loop(
                     axis=axis,
                     stride=-1
                     if computation_node.oir_node.loop_order == common.LoopOrder.BACKWARD
                     else 1,
-                    localcache_fields=localcache_fields,
                 )
             )
-
         elif item == "Sections":
             expansion_specification.append(Sections())
         else:
@@ -215,7 +170,14 @@ def _order_as_spec(computation_node, expansion_order):
     return expansion_specification
 
 
-def _populate_strides(self, expansion_specification):
+def _populate_strides(node, expansion_specification):
+    """Fill in `stride` attribute of `Iteration` and `Loop` dataclasses.
+
+    For loops, stride is set to either -1 or 1, based on iteration order.
+    For tiling maps, the stride is chosen such that the resulting tile size
+    is that of the tile_size attribute.
+    Other maps get stride 1.
+    """
     if expansion_specification is None:
         return
     assert all(isinstance(es, (ExpansionItem, Iteration)) for es in expansion_specification)
@@ -230,7 +192,7 @@ def _populate_strides(self, expansion_specification):
     for it in iterations:
         if isinstance(it, Loop):
             if it.stride is None:
-                if self.oir_node.loop_order == common.LoopOrder.BACKWARD:
+                if node.oir_node.loop_order == common.LoopOrder.BACKWARD:
                     it.stride = -1
                 else:
                     it.stride = 1
@@ -239,15 +201,15 @@ def _populate_strides(self, expansion_specification):
                 if it.kind == "tiling":
                     from gt4py.definitions import Extent
 
-                    if hasattr(self, "_tile_sizes"):
-                        if self.extents is not None and it.axis.to_idx() < 2:
+                    if hasattr(node, "_tile_sizes"):
+                        if node.extents is not None and it.axis.to_idx() < 2:
                             extent = Extent.zeros(2)
-                            for he_extent in self.extents.values():
+                            for he_extent in node.extents.values():
                                 extent = extent.union(he_extent)
                             extent = extent[it.axis.to_idx()]
                         else:
                             extent = (0, 0)
-                        it.stride = self.tile_sizes.get(it.axis, 8) + extent[0] - extent[1]
+                        it.stride = node.tile_sizes.get(it.axis, 8) + extent[0] - extent[1]
                 else:
                     it.stride = 1
 
@@ -264,22 +226,7 @@ def _populate_storages(self, expansion_specification):
                 if it.kind == "tiling":
                     tiled_axes.add(it.axis)
     for es in reversed(expansion_specification):
-        if isinstance(es, Loop) and es.localcache_fields:
-            if hasattr(self, "_device"):
-                if es.storage is None:
-                    if len(innermost_axes) == 3:
-                        es.storage = dace.StorageType.Register
-                    elif (
-                        self.device == dace.DeviceType.GPU and len(innermost_axes | tiled_axes) == 3
-                    ):
-                        es.storage = dace.StorageType.GPU_Shared
-                    else:
-                        if self.device == dace.DeviceType.GPU:
-                            es.storage = dace.StorageType.GPU_Global
-                        else:
-                            es.storage = dace.StorageType.CPU_Heap
-            innermost_axes.remove(es.axis)
-        elif isinstance(es, Map):
+        if isinstance(es, Map):
             for it in es.iterations:
                 if it.axis in innermost_axes:
                     innermost_axes.remove(it.axis)
@@ -330,7 +277,6 @@ def _populate_schedules(self, expansion_specification):
                 if isinstance(es, Map):
                     if es.schedule is None:
                         if is_outermost:
-                            # es.schedule = dace.ScheduleType.CPU_Multicore
                             es.schedule = dace.ScheduleType.Sequential
                             is_outermost = False
                         else:
@@ -437,7 +383,7 @@ def _collapse_maps(self, expansion_specification):
 
 
 def make_expansion_order(
-    node: "StencilComputation", expansion_order: List[str]
+    node: "StencilComputation", expansion_order: Union[List[str], List[ExpansionItem]]
 ) -> List[ExpansionItem]:
     if expansion_order is None:
         return None
@@ -457,114 +403,9 @@ def make_expansion_order(
     return expansion_specification
 
 
-def is_expansion_order_valid(
-    node: "StencilComputation", expansion_order, *, k_inside_dims=None, k_inside_stages=None
-):
-    expansion_specification = list(_sanitize_expansion_item(node, eo) for eo in expansion_order)
-    if k_inside_dims is None:
-        k_inside_dims = _k_inside_dims(node)
-    if k_inside_stages is None:
-        k_inside_stages = _k_inside_stages(node)
-
-    # K can't be Map if not parallel
-    if node.oir_node.loop_order != common.LoopOrder.PARALLEL and any(
-        (isinstance(item, Map) and any(it.axis == dcir.Axis.K for it in item.iterations))
-        for item in expansion_specification
-    ):
-        return False
-    if not any(
-        isinstance(item, Map) or is_tiling(item) or is_domain_map(item)
-        for item in expansion_specification
-    ):
-        return False
-
-    sections_idx = next(
-        idx for idx, item in enumerate(expansion_specification) if isinstance(item, Sections)
-    )
-    stages_idx = next(
-        idx for idx, item in enumerate(expansion_specification) if isinstance(item, Stages)
-    )
-    if stages_idx < sections_idx:
-        return False
-
-    for axis in dcir.Axis.dims_horizontal():
-        if (
-            get_expansion_order_index(expansion_specification, axis)
-            < get_expansion_order_index(expansion_specification, dcir.Axis.K)
-            and axis not in k_inside_dims
-        ):
-            return False
-    if (
-        stages_idx < get_expansion_order_index(expansion_specification, dcir.Axis.K)
-        and not k_inside_stages
-    ):
-        return False
-
-    # enforce [tiling]...map per axis: no repetition of inner of maps, no tiling without
-    # subsequent iteration map, no tiling inside contiguous, all dims present
-    tiled_axes = set()
-    contiguous_axes = set()
-    for item in expansion_specification:
-        if isinstance(item, (Map, Loop, Iteration)):
-            if isinstance(item, Map):
-                iterations = item.iterations
-            else:
-                iterations = [item]
-            for it in iterations:
-                if it.kind == "tiling":
-                    if it.axis in tiled_axes or it.axis in contiguous_axes:
-                        return False
-                    tiled_axes.add(it.axis)
-                else:
-                    if it.axis in contiguous_axes:
-                        return False
-                    contiguous_axes.add(it.axis)
-    if not all(axis in contiguous_axes for axis in dcir.Axis.dims_3d()):
-        return False
-
-    # if there are multiple horizontal executions in any section, IJ iteration must go inside
-    # TODO: do mergeability checks on a per-axis basis.
-    for item in expansion_specification:
-        if isinstance(item, Stages):
-            break
-        if isinstance(item, (Map, Loop, Iteration)):
-            if isinstance(item, Map):
-                iterations = item.iterations
-            else:
-                iterations = [item]
-            for it in iterations:
-                if it.axis in dcir.Axis.horizontal_axes() and it.kind == "contiguous":
-                    if any(
-                        len(section.horizontal_executions) > 1 for section in node.oir_node.sections
-                    ):
-                        return False
-
-    # if there are horizontal executions with different iteration ranges in axis across sections,
-    # axis-contiguous must be inside sections
-    # TODO enable this with predicates?
-    # TODO less conservative: allow larger domains if all outputs in larger are temporaries?
-    for item in expansion_specification:
-        if isinstance(item, Sections):
-            break
-        if isinstance(item, Map):
-            iterations = item.iterations
-        else:
-            iterations = [item]
-        for it in iterations:
-            if it.axis in dcir.Axis.horizontal_axes() and it.kind == "contiguous":
-                xiter = iter(node.oir_node.iter_tree().if_isinstance(oir.HorizontalExecution))
-                extent = node.get_extents(next(xiter))
-                for he in xiter:
-                    if node.get_extents(he)[it.axis.to_idx()] != extent[it.axis.to_idx()]:
-                        return False
-
-    res = _is_expansion_order_implemented(expansion_specification)
-    return res
-
-
 def _k_inside_dims(node: "StencilComputation"):
     # Putting K inside of i or j is valid if
-    # * K parallel
+    # * K parallel or
     # * All reads with k-offset to values modified in same HorizontalExecution are not
     #   to fields that are also accessed horizontally (in I or J, respectively)
     #   (else, race condition in other column)
@@ -654,49 +495,134 @@ def _k_inside_stages(node: "StencilComputation"):
     return True
 
 
-def valid_expansion_orders(node: "StencilComputation"):
-    optionals = {"TileI", "TileJ", "TileK"}
-    required: Set[Union[Tuple[str, ...], str]] = {
-        ("KMap", "KLoop", "CachedKLoop"),  # tuple represents "one of",
-        ("JMap", "JLoop", "CachedJLoop"),
-        ("IMap", "ILoop", "CachedILoop"),
-    }
-    prepends: List[str] = []
-    appends: List[str] = []
-    if len(node.oir_node.sections) > 1:
-        required.add("Sections")
-    else:
-        prepends.append("Sections")
-    if any(len(section.horizontal_executions) > 1 for section in node.oir_node.sections):
-        required.add("Stages")
-    else:
-        appends.append("Stages")
-
-    def expansion_subsets():
-        for k in range(len(optionals) + 1):
-            for subset in combinations(optionals, k):
-                subset = {s if isinstance(s, tuple) else (s,) for s in set(subset) | required}
-                yield from product(*subset)
-
-    for expansion_subset in expansion_subsets():
-        for expansion_order in permutations(expansion_subset):
-            expansion_order = prepends + list(expansion_order) + appends
-            expansion_specification = _order_as_spec(node, expansion_order)
-            if is_expansion_order_valid(
-                node,
-                expansion_specification,
-                k_inside_dims=_k_inside_dims(node),
-                k_inside_stages=_k_inside_stages(node),
-            ):
-                yield expansion_order
+@_EXPANSION_VALIDITY_CHECKS.append
+def _sequential_as_loops(
+    node: "StencilComputation", expansion_specification: List[ExpansionItem]
+) -> bool:
+    # K can't be Map if not parallel
+    if node.oir_node.loop_order != common.LoopOrder.PARALLEL and any(
+        (isinstance(item, Map) and any(it.axis == dcir.Axis.K for it in item.iterations))
+        for item in expansion_specification
+    ):
+        return False
+    return True
 
 
-def _sanitize_expansion_item(node, eo):
-    if any(eo == axis for axis in dcir.Axis.dims_horizontal()):
-        return f"{eo}Map"
-    if eo == dcir.Axis.K:
-        if node.oir_node.loop_order == common.LoopOrder.PARALLEL:
-            return f"{eo}Map"
-        else:
-            return f"Cached{eo}Loop"
-    return eo
+@_EXPANSION_VALIDITY_CHECKS.append
+def _stages_inside_sections(expansion_specification: List[ExpansionItem], **kwargs) -> bool:
+    # Oir defines that HorizontalExecutions have to be applied per VerticalLoopSection. A meaningful inversion of this
+    # is not possible.
+    sections_idx = next(
+        idx for idx, item in enumerate(expansion_specification) if isinstance(item, Sections)
+    )
+    stages_idx = next(
+        idx for idx, item in enumerate(expansion_specification) if isinstance(item, Stages)
+    )
+    if stages_idx < sections_idx:
+        return False
+    return True
+
+
+@_EXPANSION_VALIDITY_CHECKS.append
+def _k_inside_ij_valid(
+    node: "StencilComputation", expansion_specification: List[ExpansionItem]
+) -> bool:
+    # OIR defines that horizontal maps go inside vertical K loop (i.e. all grid points are updated in a
+    # HorizontalExecution before the computation of the next one is executed.).  Under certain conditions the semantics
+    # remain unchanged even if a single horizontal map is executing all contained HorizontalExecution nodes.
+    # Note: Opposed to e.g. Fusions in OIR, this can here be done on a per-dimension basis. See `_k_inside_dims` for
+    # details.
+    for axis in dcir.Axis.dims_horizontal():
+        if get_expansion_order_index(expansion_specification, axis) < get_expansion_order_index(
+            expansion_specification, dcir.Axis.K
+        ) and axis not in _k_inside_dims(node):
+            return False
+    return True
+
+
+@_EXPANSION_VALIDITY_CHECKS.append
+def _k_inside_stages_valid(
+    node: "StencilComputation", expansion_specification: List[ExpansionItem]
+) -> bool:
+    # OIR defines that all horizontal executions of a VerticalLoopSection are run per level. Under certain conditions
+    # the semantics remain unchanged even if the k loop is run per horizontal execution. See `_k_inside_stages` for
+    # details
+    stages_idx = next(
+        idx for idx, item in enumerate(expansion_specification) if isinstance(item, Stages)
+    )
+    if stages_idx < get_expansion_order_index(
+        expansion_specification, dcir.Axis.K
+    ) and not _k_inside_stages(node):
+        return False
+    return True
+
+
+@_EXPANSION_VALIDITY_CHECKS.append
+def _ij_outside_sections_valid(
+    node: "StencilComputation", expansion_specification: List[ExpansionItem]
+) -> bool:
+    # If there are multiple horizontal executions in any section, IJ iteration must go inside sections.
+    # TODO: do mergeability checks on a per-axis basis.
+    for item in expansion_specification:
+        if isinstance(item, Sections):
+            break
+        if isinstance(item, (Map, Loop, Iteration)):
+            for it in item.iterations:
+                if it.axis in dcir.Axis.horizontal_axes() and it.kind == "contiguous":
+                    if any(
+                        len(section.horizontal_executions) > 1 for section in node.oir_node.sections
+                    ):
+                        return False
+
+    # if there are horizontal executions with different iteration ranges in an axis across sections,
+    # that iteration must be per section
+    # TODO less conservative: allow different domains if all outputs smaller than bounding box are temporaries
+    # TODO implement/allow this with predicates implicit regions / predicates
+    for item in expansion_specification:
+        if isinstance(item, Sections):
+            break
+        for it in getattr(item, "iterations", []):
+            if it.axis in dcir.Axis.horizontal_axes() and it.kind == "contiguous":
+                xiter = iter(node.oir_node.iter_tree().if_isinstance(oir.HorizontalExecution))
+                extent = node.get_extents(next(xiter))
+                for he in xiter:
+                    if node.get_extents(he)[it.axis.to_idx()] != extent[it.axis.to_idx()]:
+                        return False
+    return True
+
+
+@_EXPANSION_VALIDITY_CHECKS.append
+def _iterates_domain(expansion_specification: List[ExpansionItem], **kwargs) -> bool:
+    # There must be exactly one iteration per dimension, except for tiled dimensions, where a Tiling has to go outside
+    # and the corresponding contiguous iteration inside.
+    tiled_axes = set()
+    contiguous_axes = set()
+    for item in expansion_specification:
+        if isinstance(item, (Map, Loop, Iteration)):
+            for it in item.iterations:
+                if it.kind == "tiling":
+                    if it.axis in tiled_axes or it.axis in contiguous_axes:
+                        return False
+                    tiled_axes.add(it.axis)
+                else:
+                    if it.axis in contiguous_axes:
+                        return False
+                    contiguous_axes.add(it.axis)
+    if not all(axis in contiguous_axes for axis in dcir.Axis.dims_3d()):
+        return False
+    return True
+
+
+def is_expansion_order_valid(node: "StencilComputation", expansion_order) -> bool:
+    """Check if a given expansion specification valid.
+
+    That is, it is semantically valid for the StencilComputation node that is to be configured and currently
+    implemented.
+    """
+    expansion_specification = list(_choose_loop_or_map(node, eo) for eo in expansion_order)
+
+    for check in _EXPANSION_VALIDITY_CHECKS:
+        if not check(node=node, expansion_specification=expansion_specification):
+            return False
+
+    return _is_expansion_order_implemented(expansion_specification)

@@ -16,7 +16,7 @@
 
 import base64
 import pickle
-from typing import Dict
+from typing import Dict, List, Set, Union
 
 import dace.data
 import dace.dtypes
@@ -31,18 +31,12 @@ from gtc import daceir as dcir
 from gtc import oir
 from gtc.oir import Decl, FieldDecl, VerticalLoop, VerticalLoopSection
 
-from .expansion_specification import (
-    ExpansionItem,
-    Iteration,
-    Map,
-    Sections,
-    Set,
-    Stages,
-    make_expansion_order,
-)
+from .expansion_specification import ExpansionItem, make_expansion_order
 
 
-def _set_expansion_order(node, expansion_order):
+def _set_expansion_order(
+    node: "StencilComputation", expansion_order: Union[List[ExpansionItem], List[str]]
+):
     res = make_expansion_order(node, expansion_order)
     node._expansion_specification = res
 
@@ -52,35 +46,14 @@ class StencilComputation(library.LibraryNode):
     implementations: Dict[str, dace.library.ExpandTransformation] = {}
     default_implementation = "default"
 
-    oir_node = dace.properties.DataclassProperty(dtype=VerticalLoop, default=None, allow_none=True)
+    oir_node = dace.properties.DataclassProperty(dtype=VerticalLoop, allow_none=True)
 
-    declarations = dace.properties.DictProperty(
-        key_type=str, value_type=Decl, default=None, allow_none=True
-    )
-    extents = dace.properties.DictProperty(
-        key_type=int, value_type=Extent, default=None, allow_none=False
-    )
+    declarations = dace.properties.DictProperty(key_type=str, value_type=Decl, allow_none=True)
+    extents = dace.properties.DictProperty(key_type=int, value_type=Extent, allow_none=False)
 
     expansion_specification = dace.properties.ListProperty(
         element_type=ExpansionItem,
-        default=[
-            Map(
-                iterations=[
-                    Iteration(axis=dcir.Axis.I, kind="tiling"),
-                    Iteration(axis=dcir.Axis.J, kind="tiling"),
-                ],
-            ),
-            Sections(),
-            Iteration(axis=dcir.Axis.K, kind="contiguous"),  # Expands to either Loop or Map
-            Stages(),
-            Map(
-                iterations=[
-                    Iteration(axis=dcir.Axis.I, kind="contiguous"),
-                    Iteration(axis=dcir.Axis.J, kind="contiguous"),
-                ]
-            ),
-        ],
-        allow_none=False,
+        allow_none=True,
         setter=_set_expansion_order,
     )
     tile_sizes = dace.properties.DictProperty(
@@ -103,6 +76,7 @@ class StencilComputation(library.LibraryNode):
         oir_node: VerticalLoop = None,
         extents: Dict[int, Extent] = None,
         declarations: Dict[str, Decl] = None,
+        expansion_order=None,
         *args,
         **kwargs,
     ):
@@ -158,7 +132,17 @@ class StencilComputation(library.LibraryNode):
                     oir_node.loc.source,
                 )
             assert self.oir_node is not None
-            _set_expansion_order(self, self._expansion_specification)
+        if expansion_order is None:
+            expansion_order = [
+                "TileI",
+                "TileJ",
+                "Sections",
+                "K",  # Expands to either Loop or Map
+                "Stages",
+                "I",
+                "J",
+            ]
+        _set_expansion_order(self, expansion_order)
 
     def get_extents(self, he):
         for i, section in enumerate(self.oir_node.sections):
