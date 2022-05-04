@@ -51,15 +51,11 @@ def test_copy():
     a = np_as_located_field(IDim)(np.ones((size)))
     b = np_as_located_field(IDim)(np.zeros((size)))
 
-    @field_operator
+    @field_operator(backend="roundtrip")
     def copy(inp: Field[[IDim], float64]) -> Field[[IDim], float64]:
         return inp
 
-    @program
-    def fencil(inp: Field[[IDim], float64], out: Field[[IDim], float64]) -> None:
-        copy(inp, out=out)
-
-    fencil(a, b, offset_provider={})
+    copy(a, out=b, offset_provider={})
 
     assert np.allclose(a, b)
 
@@ -72,21 +68,13 @@ def test_multicopy():
     c = np_as_located_field(IDim)(np.zeros((size)))
     d = np_as_located_field(IDim)(np.zeros((size)))
 
-    @field_operator
+    @field_operator(backend="roundtrip")
     def multicopy(
         inp1: Field[[IDim], float64], inp2: Field[[IDim], float64]
     ) -> tuple[Field[[IDim], float64], Field[[IDim], float64]]:
         return inp1, inp2
 
-    @program
-    def fencil(
-        inp1: Field[[IDim], float64],
-        inp2: Field[[IDim], float64],
-        out: tuple[Field[[IDim], float64], Field[[IDim], float64]],
-    ) -> None:
-        multicopy(inp1, inp2, out=out)
-
-    fencil(a, b, (c, d), offset_provider={})
+    multicopy(a, b, out=(c, d), offset_provider={})
 
     assert np.allclose(a, c)
     assert np.allclose(b, d)
@@ -98,19 +86,13 @@ def test_arithmetic():
     b = np_as_located_field(IDim)(np.ones((size)) * 2)
     c = np_as_located_field(IDim)(np.zeros((size)))
 
-    @field_operator
+    @field_operator(backend="roundtrip")
     def arithmetic(
         inp1: Field[[IDim], float64], inp2: Field[[IDim], float64]
     ) -> Field[[IDim], float64]:
         return (inp1 + inp2) * 2.0
 
-    @program
-    def fencil(
-        inp1: Field[[IDim], float64], inp2: Field[[IDim], float64], out: Field[[IDim], float64]
-    ) -> None:
-        arithmetic(inp1, inp2, out=out)
-
-    fencil(a, b, c, offset_provider={})
+    arithmetic(a, b, out=c, offset_provider={})
 
     assert np.allclose((a.array() + b.array()) * 2.0, c)
 
@@ -123,17 +105,11 @@ def test_bit_logic():
     b = np_as_located_field(IDim)(b_data)
     c = np_as_located_field(IDim)(np.full((size), False))
 
-    @field_operator
+    @field_operator(backend="roundtrip")
     def bit_and(inp1: Field[[IDim], bool], inp2: Field[[IDim], bool]) -> Field[[IDim], bool]:
         return inp1 & inp2 & True
 
-    @program
-    def fencil(
-        inp1: Field[[IDim], bool], inp2: Field[[IDim], bool], out: Field[[IDim], bool]
-    ) -> None:
-        bit_and(inp1, inp2, out=out)
-
-    fencil(a, b, c, offset_provider={})
+    bit_and(a, b, out=c, offset_provider={})
 
     assert np.allclose(a.array() & b.array(), c)
 
@@ -143,15 +119,11 @@ def test_unary_neg():
     a = np_as_located_field(IDim)(np.ones((size), dtype=int32))
     b = np_as_located_field(IDim)(np.zeros((size), dtype=int32))
 
-    @field_operator
+    @field_operator(backend="roundtrip")
     def uneg(inp: Field[[IDim], int32]) -> Field[[IDim], int32]:
         return -inp
 
-    @program
-    def fencil(inp: Field[[IDim], int32], out: Field[[IDim], int32]) -> None:
-        uneg(inp, out=out)
-
-    fencil(a, b, offset_provider={})
+    uneg(a, out=b, offset_provider={})
 
     assert np.allclose(b, np.full((size), -1, dtype=int32))
 
@@ -166,7 +138,7 @@ def test_shift():
     def shift_by_one(inp: Field[[IDim], float64]) -> Field[[IDim], float64]:
         return inp(Ioff[1])
 
-    @program
+    @program(backend="roundtrip")
     def fencil(inp: Field[[IDim], float64], out: Field[[IDim], float64]) -> None:
         shift_by_one(inp, out=out)
 
@@ -190,7 +162,7 @@ def test_fold_shifts():
         tmp = inp1 + inp2(Ioff[1])
         return tmp(Ioff[1])
 
-    @program
+    @program(backend="roundtrip")
     def fencil(
         inp1: Field[[IDim], float64], inp2: Field[[IDim], float64], out: Field[[IDim], float64]
     ) -> None:
@@ -215,7 +187,7 @@ def test_tuples():
         scalars = 1.3, float64(5.0), float64("3.4")
         return (inps[0] * scalars[0] + inps[1] * scalars[1]) * scalars[2]
 
-    @program
+    @program(backend="roundtrip")
     def fencil(
         inp1: Field[[IDim], float64], inp2: Field[[IDim], float64], out: Field[[IDim], float64]
     ) -> None:
@@ -276,7 +248,7 @@ def test_reduction_execution(reduction_setup):
     def reduction(edge_f: Field[[Edge], "float64"]) -> Field[[Vertex], float64]:
         return neighbor_sum(edge_f(V2E), axis=V2EDim)
 
-    @program
+    @program(backend="roundtrip")
     def fencil(edge_f: Field[[Edge], float64], out: Field[[Vertex], float64]) -> None:
         reduction(edge_f, out=out)
 
@@ -300,7 +272,7 @@ def test_reduction_expression(reduction_setup):
         tmp_nbh = tmp_nbh_tup[0]
         return neighbor_sum(-edge_f(V2E) * tmp_nbh * 2.0, axis=V2EDim)
 
-    @program
+    @program(backend="roundtrip")
     def fencil(edge_f: Field[[Edge], float64], out: Field[[Vertex], float64]) -> None:
         reduce_expr(edge_f, out=out)
 
@@ -317,15 +289,11 @@ def test_scalar_arg():
     inp = 5.0
     out = np_as_located_field(Vertex)(np.zeros([size]))
 
-    @field_operator
+    @field_operator(backend="roundtrip")
     def scalar_arg(scalar_inp: float64) -> Field[[Vertex], float64]:
         return scalar_inp + 1.0
 
-    @program(backend="roundtrip")
-    def fencil(scalar_inp: float64, out: Field[[Vertex], float64]) -> None:
-        scalar_arg(scalar_inp, out=out)
-
-    fencil(inp, out, offset_provider={})
+    scalar_arg(inp, out=out, offset_provider={})
 
     ref = np.full([size], 6.0)
     assert np.allclose(ref, out.array())

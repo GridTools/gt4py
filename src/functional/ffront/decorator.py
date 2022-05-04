@@ -19,6 +19,7 @@ import dataclasses
 import functools
 import types
 import typing
+import warnings
 from typing import Any, Callable, Optional, Protocol
 
 from eve.utils import UIDs
@@ -132,6 +133,15 @@ class Program:
             definition=definition,
         )
 
+    def with_backend(self, backend: str) -> "Program":
+        return Program(
+            past_node=self.past_node,
+            captured_vars=self.captured_vars,
+            externals=self.externals,
+            backend=backend,
+            definition=self.definition,  # type: ignore[arg-type]  # mypy wrongly deduces definition as method here
+        )
+
     def _lowered_funcs_from_captured_vars(
         self, captured_vars: CapturedVars
     ) -> list[itir.FunctionDefinition]:
@@ -198,7 +208,7 @@ class Program:
         if kwargs:
             raise NotImplementedError("Keyword arguments are not supported yet.")
 
-    def __call__(self, *args, offset_provider, backend=None, **kwargs) -> None:
+    def __call__(self, *args, offset_provider, **kwargs) -> None:
         self._validate_args(*args, **kwargs)
 
         # extract size of all field arguments
@@ -215,8 +225,13 @@ class Program:
             for dim_idx in range(0, len(param.type.dims)):
                 size_args.append(args[param_idx].shape[dim_idx])
 
-        if not backend:
-            backend = self.backend if self.backend else DEFAULT_BACKEND
+        if not self.backend:
+            warnings.warn(
+                UserWarning(
+                    f"Field View Program '{self.itir.id}': Using default (embedded) backend."
+                )
+            )
+        backend = self.backend if self.backend else DEFAULT_BACKEND
 
         execute_fencil(
             self.itir,
@@ -297,6 +312,15 @@ class FieldOperator(GTCallable):
         assert isinstance(type_, ct.FunctionType)
         return type_
 
+    def with_backend(self, backend: str) -> "FieldOperator":
+        return FieldOperator(
+            foast_node=self.foast_node,
+            captured_vars=self.captured_vars,
+            externals=self.externals,
+            backend=backend,
+            definition=self.definition,  # type: ignore[arg-type]  # mypy wrongly deduces definition as method here
+        )
+
     def __gt_itir__(self) -> itir.FunctionDefinition:
         return FieldOperatorLowering.apply(self.foast_node)
 
@@ -366,15 +390,23 @@ class FieldOperator(GTCallable):
 
 
 def field_operator(
-    definition: types.FunctionType, externals: Optional[dict] = None, backend: Optional[str] = None
-) -> FieldOperator:
-    """
-    Generate an implementation of the field operator from a Python function object.
+    definition: Optional[types.FunctionType] = None,
+    *,
+    externals: Optional[dict] = None,
+    backend: Optional[str] = None,
+) -> Callable[[types.FunctionType], FieldOperator] | FieldOperator:
+    def field_operator_inner(definition: types.FunctionType) -> FieldOperator:
+        """
+        Generate an implementation of the field operator from a Python function object.
 
-    Examples:
-        >>> @field_operator  # doctest: +SKIP
-        ... def field_op(in_field: Field[..., float64]) -> Field[..., float64]: # noqa: F821
-        ...     ...
-        >>> field_op(in_field, out=out_field)  # noqa: F821 # doctest: +SKIP
-    """
-    return FieldOperator.from_function(definition, externals, backend)
+        Examples:
+            >>> @field_operator  # doctest: +SKIP
+            ... def field_op(in_field: Field[..., float64]) -> Field[..., float64]: # noqa: F821
+            ...     ...
+            >>> field_op(in_field, out=out_field)  # noqa: F821 # doctest: +SKIP
+        """
+        return FieldOperator.from_function(definition, externals, backend)
+
+    if definition:
+        return field_operator_inner(definition)
+    return field_operator_inner
