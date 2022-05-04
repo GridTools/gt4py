@@ -486,7 +486,7 @@ def index_field(axis, dtype=float):
     return LocatedField(lambda index: index[0], (axis,), dtype)
 
 
-def constant_field(value: typing.Any, dtype: type):
+def constant_field(value: typing.Any, dtype: type) -> LocatedField:
     return LocatedField(lambda _: value, (), dtype)
 
 
