@@ -30,7 +30,7 @@ from functional.ffront import (
     program_ast as past,
     symbol_makers,
 )
-from functional.ffront.fbuiltins import BuiltInFunction, FieldOffset
+from functional.ffront.fbuiltins import BUILTINS, BuiltInFunction, FieldOffset
 from functional.ffront.foast_to_itir import FieldOperatorLowering
 from functional.ffront.func_to_foast import FieldOperatorParser
 from functional.ffront.func_to_past import ProgramParser
@@ -39,7 +39,7 @@ from functional.ffront.past_to_itir import ProgramLowering
 from functional.ffront.source_utils import CapturedVars
 from functional.iterator import ir as itir
 from functional.iterator.backend_executor import execute_fencil
-from functional.iterator.embedded import CartesianAxis, ConstantField
+from functional.iterator.embedded import CartesianAxis, constant_field
 
 
 DEFAULT_BACKEND = "roundtrip"
@@ -216,7 +216,11 @@ class Program:
         rewritten_args = list(args)
         for param_idx, param in enumerate(self.past_node.params):
             if isinstance(param.type, ct.ScalarType):
-                rewritten_args[param_idx] = ConstantField(args[param_idx])
+                print(self.captured_vars)
+                rewritten_args[param_idx] = constant_field(
+                    args[param_idx],
+                    dtype=BUILTINS[param.type.kind.name.lower()],
+                )
             if not isinstance(param.type, ct.FieldType):
                 continue
             if args[param_idx].array is None:

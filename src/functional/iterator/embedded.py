@@ -394,28 +394,6 @@ builtins.builtin_dispatch.push_key(EMBEDDED)  # makes embedded the default
 FIELD_DTYPE_T = typing.TypeVar("FIELD_DTYPE_T", bound=np.typing.DTypeLike)
 
 
-class ConstantField(typing.Generic[FIELD_DTYPE_T]):
-    def __init__(self, value):
-        self.value: FIELD_DTYPE_T = value
-
-    def __getitem__(self, indices: tuple[int, ...]) -> FIELD_DTYPE_T:
-        return self.value
-
-    def __setitem__(self, indices: tuple[int, ...], value: FIELD_DTYPE_T) -> None:
-        raise TypeError("__setitem__ not supported for this field")
-
-    def __array__(self) -> None:
-        raise TypeError("__array__ not supported for this field")
-
-    @property
-    def shape(self) -> None:
-        raise TypeError("`shape` not supported for this field")
-
-    @property
-    def axises(self) -> list[CartesianAxis]:
-        return []
-
-
 class LocatedField:
     """A Field with named dimensions/axises.
 
@@ -506,6 +484,10 @@ def np_as_located_field(*axises, origin=None):
 
 def index_field(axis, dtype=float):
     return LocatedField(lambda index: index[0], (axis,), dtype)
+
+
+def constant_field(value: typing.Any, dtype: type):
+    return LocatedField(lambda _: value, (), dtype)
 
 
 @builtins.shift.register(EMBEDDED)
