@@ -122,7 +122,7 @@ class Program:
         definition: types.FunctionType,
         externals: Optional[dict] = None,
         backend: Optional[str] = None,
-    ):
+    ) -> "Program":
         captured_vars = CapturedVars.from_function(definition)
         past_node = ProgramParser.apply_to_function(definition)
         return cls(
@@ -315,7 +315,7 @@ class FieldOperator(GTCallable):
         definition: types.FunctionType,
         externals: Optional[dict] = None,
         backend: Optional[str] = None,
-    ):
+    ) -> "FieldOperator":
         captured_vars = CapturedVars.from_function(definition)
         foast_node = FieldOperatorParser.apply_to_function(definition)
         return cls(

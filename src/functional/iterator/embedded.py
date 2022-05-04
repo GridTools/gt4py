@@ -1,8 +1,10 @@
 import itertools
 import numbers
+import typing
 from dataclasses import dataclass
 
 import numpy as np
+import numpy.typing
 
 from functional import iterator
 from functional.iterator import builtins
@@ -389,23 +391,29 @@ def make_in_iterator(inp, pos, offset_provider, *, column_axis):
 builtins.builtin_dispatch.push_key(EMBEDDED)  # makes embedded the default
 
 
-class ConstantField:
-    def __init__(self, value):
-        self.value = value
-        self.axises = []
+FIELD_DTYPE_T = typing.TypeVar("FIELD_DTYPE_T", bound=np.typing.DTypeLike)
 
-    def __getitem__(self, indices):
+
+class ConstantField(typing.Generic[FIELD_DTYPE_T]):
+    def __init__(self, value):
+        self.value: FIELD_DTYPE_T = value
+
+    def __getitem__(self, indices: tuple[int, ...]) -> FIELD_DTYPE_T:
         return self.value
 
-    def __setitem__(self, indices, value):
+    def __setitem__(self, indices: tuple[int, ...], value: FIELD_DTYPE_T) -> None:
         raise TypeError("__setitem__ not supported for this field")
 
-    def __array__(self):
+    def __array__(self) -> None:
         raise TypeError("__array__ not supported for this field")
 
     @property
-    def shape(self):
+    def shape(self) -> None:
         raise TypeError("`shape` not supported for this field")
+
+    @property
+    def axises(self) -> list[CartesianAxis]:
+        return []
 
 
 class LocatedField:
