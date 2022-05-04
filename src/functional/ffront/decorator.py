@@ -176,17 +176,17 @@ class Program:
         if self.externals:
             raise NotImplementedError("Externals are not supported yet.")
 
-        func_names = []
+        func_names = set()
         for captured_var in self.past_node.captured_vars:
             if isinstance(captured_var.type, ct.FunctionType):
-                func_names.append(captured_var.id)
+                func_names.add(captured_var.id)
             else:
                 raise NotImplementedError("Only function closure vars are allowed currently.")
 
         all_captured_vars = collections.ChainMap(
             self.captured_vars.globals, self.captured_vars.nonlocals
         )
-        if undefined := (set(all_captured_vars) - set(func_names)):
+        if undefined := (set(all_captured_vars) - func_names):
             raise RuntimeError(f"Reference to undefined symbol(s) `{', '.join(undefined)}`.")
         if not_callable := [
             name for name in func_names if not isinstance(all_captured_vars[name], GTCallable)
@@ -243,12 +243,24 @@ class Program:
         )
 
 
+@typing.overload
+def program(definition: types.FunctionType) -> Program:
+    ...
+
+
+@typing.overload
 def program(
-    definition: Optional[types.FunctionType] = None,
+    *, externals: Optional[dict], backend: Optional[str]
+) -> Callable[[types.FunctionType], Program]:
+    ...
+
+
+def program(
+    definition=None,
     *,
-    externals: Optional[dict] = None,
-    backend: Optional[str] = None,
-) -> Callable[[types.FunctionType], Program] | Program:
+    externals=None,
+    backend=None,
+):
     """
     Generate an implementation of a program from a Python function object.
 
@@ -398,12 +410,24 @@ class FieldOperator(GTCallable):
         return self.as_program()(*args, out, offset_provider=offset_provider, **kwargs)
 
 
+@typing.overload
+def field_operator(definition: types.FunctionType) -> FieldOperator:
+    ...
+
+
+@typing.overload
 def field_operator(
-    definition: Optional[types.FunctionType] = None,
+    *, externals: Optional[dict], backend: Optional[str]
+) -> Callable[[types.FunctionType], FieldOperator]:
+    ...
+
+
+def field_operator(
+    definition=None,
     *,
-    externals: Optional[dict] = None,
-    backend: Optional[str] = None,
-) -> Callable[[types.FunctionType], FieldOperator] | FieldOperator:
+    externals=None,
+    backend=None,
+):
     """
     Generate an implementation of the field operator from a Python function object.
 
