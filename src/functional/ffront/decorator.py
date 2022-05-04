@@ -282,9 +282,7 @@ def program(
     def program_inner(definition: types.FunctionType) -> Program:
         return Program.from_function(definition, externals, backend)
 
-    if definition:
-        return program_inner(definition)
-    return program_inner
+    return program_inner if definition is None else program_inner(definition)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -447,6 +445,4 @@ def field_operator(
     def field_operator_inner(definition: types.FunctionType) -> FieldOperator:
         return FieldOperator.from_function(definition, externals, backend)
 
-    if definition:
-        return field_operator_inner(definition)
-    return field_operator_inner
+    return field_operator_inner if definition is None else field_operator_inner(definition)
