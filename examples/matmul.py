@@ -59,7 +59,7 @@ Nx, Ny = 1, 1
 # dtype_field_2 = (dtype, (3,))
 # dtype_field = dtype
 
-n = 6
+n = 2
 m = 3
 n_dtype = (dtype, (n,))
 m_dtype = (dtype, (m,))
@@ -114,28 +114,30 @@ def tmp_func():
 @gtscript.stencil(backend=backend, **backend_opts)
 def test_stencil(
         matrix: gtscript.Field[dtype_matrix],
-        # c: float,
-        vec_2: gtscript.Field[n_dtype],
+        c: float,
+        vec_n: gtscript.Field[n_dtype],
 
         out: gtscript.Field[n_dtype],
-        vec_1: gtscript.Field[m_dtype]
+        vec_m: gtscript.Field[m_dtype]
 ):
 
 
     with computation(PARALLEL), interval(...):
         # out_vec[0,0,0][0] = vec_1[0,0,0][1]
         # out_vec[0,0,0][1] = vec_1[0,0,0][1]
-        out = matrix.T @ vec_1
+        out = c + matrix @ vec_m + vec_n
+        # out =  vec_m
         # out_vec = vec_1
         # out_vec[0,0,0][0] = matrix[0,0,0][0, 0] * vec_1[0,0,0][0] + matrix[0,0,0][0,1] * vec_1[0,0,0][1]
         # out_vec[0,0,0][1] = matrix[0,0,0][1, 0] * vec_1[0,0,0][0] + matrix[0,0,0][1,1] * vec_1[0,0,0][1]
 
 
 # test_stencil(in_field_1, in_field_2, out_field, coeff)
-test_stencil(matrix, in_field_1, out_field, in_field_2)
+test_stencil(matrix, coeff, in_field_1, out_field, in_field_2)
 print(f'{coeff = }\n{in_field_1 = }\n{in_field_2 = }\n{matrix = }\n{out_field = }')
 
-print(2 * in_field_1.reshape(n) + matrix.reshape(n,m) @ in_field_2.reshape(m))
+# print(2 * in_field_1.reshape(n) + matrix.reshape(n,m) @ in_field_2.reshape(m))
+print(coeff + matrix.reshape(n, m) @ in_field_2.reshape(m) + in_field_1.reshape(n))
 
 # @gtscript.stencil(backend=backend, **backend_opts)
 # def test_stencil(

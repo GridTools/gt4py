@@ -1338,8 +1338,28 @@ class IRMaker(ast.NodeVisitor):
         op = self.visit(node.op)
         rhs = self.visit(node.right)
         lhs = self.visit(node.left)
+        # if isinstance(node.left, ast.Name):
+        #     lhs = self.visit(node.left)
+        # elif isinstance(node.left, ast.Attribute):
+        #     # assert isinstance(op, nodes.BinaryOperator.MATMUL), f'unsupported transposed operation'
+            
+        #     lhs = self.visit(node.left)
+        # else:
+            # raise Exception('Unknown lhs')
         result = nodes.BinOpExpr(op=op, lhs=lhs, rhs=rhs, loc=nodes.Location.from_ast_node(node))
 
+        return result
+
+    def visit_Attribute(self, node: ast.Attribute) -> nodes.UnaryOperator:
+        if node.attr == 'T':
+            return self.visit_Transposed(node)
+        else: 
+            raise Exception(f'Unknown attribute {node.attr = }')
+
+    def visit_Transposed(self, node: ast.Attribute) -> nodes.UnaryOperator:
+        op = nodes.UnaryOperator.TRANSPOSED 
+        arg = self.visit(node.value)
+        result = nodes.UnaryOpExpr(op=op, arg=arg, loc=nodes.Location.from_ast_node(node))
         return result
 
     def visit_Add(self, node: ast.Add) -> nodes.BinaryOperator:
@@ -1362,9 +1382,6 @@ class IRMaker(ast.NodeVisitor):
 
     def visit_MatMult(self, node: ast.MatMult) -> nodes.BinaryOperator:
         return nodes.BinaryOperator.MATMULT
-
-    def visit_MatMultTrans(self, node: ast.MatMult) -> nodes.BinaryOperator:
-        return nodes.BinaryOperator.MATMULTTRANS
 
     def visit_And(self, node: ast.And) -> nodes.BinaryOperator:
         return nodes.BinaryOperator.AND
