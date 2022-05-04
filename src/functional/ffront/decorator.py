@@ -208,7 +208,7 @@ class Program:
         if kwargs:
             raise NotImplementedError("Keyword arguments are not supported yet.")
 
-    def __call__(self, *args, offset_provider, **kwargs) -> None:
+    def __call__(self, *args, offset_provider: dict[str, CartesianAxis], **kwargs) -> None:
         self._validate_args(*args, **kwargs)
 
         # extract size of all field arguments
@@ -394,7 +394,7 @@ class FieldOperator(GTCallable):
             backend=self.backend,
         )
 
-    def __call__(self, *args, out, offset_provider, **kwargs) -> None:
+    def __call__(self, *args, out, offset_provider: dict[str, CartesianAxis], **kwargs) -> None:
         return self.as_program()(*args, out, offset_provider=offset_provider, **kwargs)
 
 
