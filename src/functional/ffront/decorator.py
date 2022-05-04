@@ -249,16 +249,25 @@ def program(
     externals: Optional[dict] = None,
     backend: Optional[str] = None,
 ) -> Callable[[types.FunctionType], Program] | Program:
-    def program_inner(definition: types.FunctionType) -> Program:
-        """
-        Generate an implementation of a program from a Python function object.
+    """
+    Generate an implementation of a program from a Python function object.
 
-        Examples:
-            >>> @program  # noqa: F821 # doctest: +SKIP
-            ... def program(in_field: Field[..., float64], out_field: Field[..., float64]): # noqa: F821
-            ...     field_op(in_field, out=out_field)
-            >>> program(in_field, out=out_field) # noqa: F821 # doctest: +SKIP
-        """
+    Examples:
+        >>> @program  # noqa: F821 # doctest: +SKIP
+        ... def program(in_field: Field[..., float64], out_field: Field[..., float64]): # noqa: F821
+        ...     field_op(in_field, out=out_field)
+        >>> program(in_field, out=out_field) # noqa: F821 # doctest: +SKIP
+
+        >>> # the backend can optionally be passed if already decided
+        >>> # not passing it will result in embedded execution by default
+        >>> # the above is equivalent to
+        >>> @program(backend="roundtrip")  # noqa: F821 # doctest: +SKIP
+        ... def program(in_field: Field[..., float64], out_field: Field[..., float64]): # noqa: F821
+        ...     field_op(in_field, out=out_field)
+        >>> program(in_field, out=out_field) # noqa: F821 # doctest: +SKIP
+    """
+
+    def program_inner(definition: types.FunctionType) -> Program:
         return Program.from_function(definition, externals, backend)
 
     if definition:
@@ -395,16 +404,23 @@ def field_operator(
     externals: Optional[dict] = None,
     backend: Optional[str] = None,
 ) -> Callable[[types.FunctionType], FieldOperator] | FieldOperator:
-    def field_operator_inner(definition: types.FunctionType) -> FieldOperator:
-        """
-        Generate an implementation of the field operator from a Python function object.
+    """
+    Generate an implementation of the field operator from a Python function object.
 
-        Examples:
-            >>> @field_operator  # doctest: +SKIP
-            ... def field_op(in_field: Field[..., float64]) -> Field[..., float64]: # noqa: F821
-            ...     ...
-            >>> field_op(in_field, out=out_field)  # noqa: F821 # doctest: +SKIP
-        """
+    Examples:
+        >>> @field_operator  # doctest: +SKIP
+        ... def field_op(in_field: Field[..., float64]) -> Field[..., float64]: # noqa: F821
+        ...     ...
+        >>> field_op(in_field, out=out_field)  # noqa: F821 # doctest: +SKIP
+
+        >>> # the backend can optionally be passed if already decided
+        >>> # not passing it will result in embedded execution by default
+        >>> @field_operator(backend="roundtrip")  # doctest: +SKIP
+        ... def field_op(in_field: Field[..., float64]) -> Field[..., float64]: # noqa: F821
+        ...     ...
+    """
+
+    def field_operator_inner(definition: types.FunctionType) -> FieldOperator:
         return FieldOperator.from_function(definition, externals, backend)
 
     if definition:
