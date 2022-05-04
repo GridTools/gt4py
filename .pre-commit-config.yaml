@@ -71,7 +71,6 @@ repos:
       (?x)^(
       src/eve/datamodels.py | # until datamodels is upgraded to 3.10
       src/functional/ffront/func_to_past.py | # until mypy supports match
-      src/functional/ffront/decorator.py | # until mypy supports match
       src/functional/ffront/past_to_itir.py | # until mypy supports match
       src/functional/ffront/symbol_makers.py | # until mypy supports match
       src/functional/ffront/foast_to_itir.py | # until mypy supports match
