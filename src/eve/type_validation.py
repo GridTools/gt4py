@@ -435,7 +435,7 @@ class SimpleTypeValidatorFactory(TypeValidatorFactory):
         value_validator: FixedTypeValidator,
         mapping_validator: Optional[FixedTypeValidator] = None,
     ) -> FixedTypeValidator:
-        """Create an ``FixedTypeValidator`` validator for deep checks of typed iterables."""
+        """Create an ``FixedTypeValidator`` validator for deep checks of typed mappings."""
 
         def _is_mapping_of(value: Any, **kwargs: Any) -> None:
             if mapping_validator is not None:
