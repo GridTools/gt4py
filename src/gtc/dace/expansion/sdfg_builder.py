@@ -139,13 +139,12 @@ class StencilComputationSDFGBuilder(NodeVisitor):
             sdfg_ctx=sdfg_ctx,
         )
 
-        tasklet = dace.nodes.Tasklet(
-            label=f"{sdfg_ctx.sdfg.label}_Tasklet",
+        tasklet = sdfg_ctx.state.add_tasklet(
+            name=f"{sdfg_ctx.sdfg.label}_Tasklet",
             code=code,
             inputs=set(memlet.connector for memlet in node.read_memlets),
             outputs=set(memlet.connector for memlet in node.write_memlets),
         )
-        sdfg_ctx.state.add_node(tasklet)
 
         self.visit(node.read_memlets, scope_node=tasklet, sdfg_ctx=sdfg_ctx, node_ctx=node_ctx)
         self.visit(node.write_memlets, scope_node=tasklet, sdfg_ctx=sdfg_ctx, node_ctx=node_ctx)
