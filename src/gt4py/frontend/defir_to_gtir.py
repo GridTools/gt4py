@@ -110,15 +110,18 @@ class UnVectorisation(IRNodeVisitor):
                         target = stmt.target
                         value = stmt.value
 
-                        # check if higher dimensional field
-                        target_dim = field_params[target.name].data_dims
+                        if target.name in field_params:
+                            # check if higher dimensional field
+                            target_dim = field_params[target.name].data_dims
 
-                        if target_dim and not stmt.target.data_index:
-                            # unroll rhs
-                            stmt.value = UnRoller.apply(value, params=field_params)
-                            new_stmts.append(self.visit(stmt, params=field_params))
+                            if target_dim and not stmt.target.data_index:
+                                # unroll rhs
+                                stmt.value = UnRoller.apply(value, params=field_params)
+                                new_stmts.append(self.visit(stmt, params=field_params))
+                            else:
+                                new_stmts.append([stmt])
                         else:
-                            new_stmts.append([stmt])
+                            continue
 
                 # merge list
                 c.body.stmts = list(itertools.chain(*new_stmts))
@@ -211,8 +214,11 @@ class UnRoller(IRNodeVisitor):
         return BinOpExpr(op=binary_op, lhs=lhs_node, rhs=rhs_node, loc=loc)
 
     def visit_UnaryOpExpr(self, node: UnaryOpExpr, params):
-        assert node.op == UnaryOperator.TRANSPOSED, f'Unsupported unary operator {node.op}'
-        return self.visit(node.arg, params=params, transposed=True)
+        # assert node.op == UnaryOperator.TRANSPOSED, f'Unsupported unary operator {node.op}'
+        if node.op == UnaryOperator.TRANSPOSED:
+            return self.visit(node.arg, params=params, transposed=True)
+        else:
+            return node
 
     def visit_BinOpExpr(self, node: BinOpExpr, params):
 
@@ -232,7 +238,7 @@ class UnRoller(IRNodeVisitor):
         
         else:
             # both vectors
-            if type(lhs_list) == list and type(rhs_list):
+            if type(lhs_list) == list and type(rhs_list) == list:
                 if len(lhs_list) == len(rhs_list):
                     for lhs, rhs in zip(lhs_list, rhs_list):
                         bin_op_list.append(self.add_node(lhs, rhs, node.op, node.loc))

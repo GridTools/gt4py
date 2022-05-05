@@ -122,11 +122,13 @@ def test_stencil(
 ):
 
 
+    # tmp: gtscript.Field[(np.float_, (2,))] = 1.0
     with computation(PARALLEL), interval(...):
         # out_vec[0,0,0][0] = vec_1[0,0,0][1]
         # out_vec[0,0,0][1] = vec_1[0,0,0][1]
-        out = c + matrix @ vec_m + vec_n
+        # out = c + matrix @ vec_m + vec_n
         # out =  vec_m
+        out = matrix @ vec_m + matrix @ vec_m
         # out_vec = vec_1
         # out_vec[0,0,0][0] = matrix[0,0,0][0, 0] * vec_1[0,0,0][0] + matrix[0,0,0][0,1] * vec_1[0,0,0][1]
         # out_vec[0,0,0][1] = matrix[0,0,0][1, 0] * vec_1[0,0,0][0] + matrix[0,0,0][1,1] * vec_1[0,0,0][1]
@@ -137,7 +139,7 @@ test_stencil(matrix, coeff, in_field_1, out_field, in_field_2)
 print(f'{coeff = }\n{in_field_1 = }\n{in_field_2 = }\n{matrix = }\n{out_field = }')
 
 # print(2 * in_field_1.reshape(n) + matrix.reshape(n,m) @ in_field_2.reshape(m))
-print(coeff + matrix.reshape(n, m) @ in_field_2.reshape(m) + in_field_1.reshape(n))
+print(2* matrix.reshape(n, m) @ in_field_2.reshape(m))
 
 # @gtscript.stencil(backend=backend, **backend_opts)
 # def test_stencil(
