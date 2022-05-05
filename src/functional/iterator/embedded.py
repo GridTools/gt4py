@@ -247,6 +247,8 @@ def group_offsets(*offsets):
 
 
 def shift_position(pos, *complete_offsets, offset_provider):
+    if pos is None:
+        return None
     new_pos = pos.copy()
     for tag, index in complete_offsets:
         new_pos = execute_shift(new_pos, tag, index, offset_provider=offset_provider)
