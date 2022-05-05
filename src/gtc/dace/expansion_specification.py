@@ -314,18 +314,19 @@ def _collapse_maps_gpu(self, expansion_specification):
         )
 
     res_items = []
-    tiled_axes = set()
     for item in expansion_specification:
         if isinstance(item, Map):
             if not res_items or not isinstance(res_items[-1], Map):
                 res_items.append(item)
             else:
                 res_items[-1:] = _union_map_items(last_item=res_items[-1], next_item=item)
-            tiled_axes = tiled_axes.union(
-                (it.axis for it in item.iterations if it.kind == "tiling")
-            )
         else:
             res_items.append(item)
+    for item in res_items:
+        if isinstance(item, Map) and (
+            item.schedule is None or item.schedule == dace.ScheduleType.Default
+        ):
+            item.schedule = dace.ScheduleType.Sequential
     return res_items
 
 
