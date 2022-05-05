@@ -63,7 +63,7 @@ frozendict: Final = _frozendict if sys.version_info >= (3, 9) else xtyping.Froze
 
 @final
 class NothingType(type):
-    """Metaclass for :class:`NOTHING` marker."""
+    """Metaclass of :class:`NOTHING` setting its bool value to False."""
 
     def __bool__(cls) -> bool:
         return False
