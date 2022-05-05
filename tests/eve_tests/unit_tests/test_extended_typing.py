@@ -18,9 +18,9 @@
 from __future__ import annotations
 
 import collections.abc
+import sys
 import types
 import typing
-import sys
 
 import pytest
 
@@ -75,7 +75,7 @@ ACTUAL_TYPE_SAMPLES = [
 if sys.version_info >= (3, 9):
     ACTUAL_TYPE_SAMPLES.extend(
         [
-            (tuple[int, float], types.GenericAlias),
+            (tuple[int, float], types.GenericAlias),  # type: ignore[misc]   # ignore false positive bug: https://github.com/python/mypy/issues/11098
             (list[int], types.GenericAlias),
         ]
     )
