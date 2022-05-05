@@ -15,10 +15,12 @@ class Node(eve.Node):
         return pformat(self)
 
     def __hash__(self) -> int:
-        h = hash(type(self))
-        for k, v in self.iter_children():
-            h ^= hash((k, tuple(v))) if isinstance(v, list) else hash((k, v))
-        return h
+        return hash(type(self)) ^ hash(
+            tuple(
+                hash(tuple(v)) if isinstance(v, list) else hash(v)
+                for v in self.iter_children_values()
+            )
+        )
 
 
 class Sym(Node):  # helper
