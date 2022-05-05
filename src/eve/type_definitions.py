@@ -63,14 +63,15 @@ frozendict: Final = _frozendict if sys.version_info >= (3, 9) else xtyping.Froze
 
 @final
 class NothingType(type):
+    """Metaclass for :class:`NOTHING` marker."""
     def __bool__(cls) -> bool:
         return False
 
 
-#: Marker value used to avoid confusion with `None`
-#: (specially in contexts where `None` could be a valid value)
 @final
 class NOTHING(metaclass=NothingType):
+    """Marker to avoid confusion with `None` in contexts where `None` could be a valid value."""
+
     def __new__(cls: type) -> NoReturn:  # type: ignore[misc]  # should return an instance
         raise TypeError(f"{cls.__name__} is used as a sentinel value and cannot be instantiated.")
 

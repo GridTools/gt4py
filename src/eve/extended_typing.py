@@ -169,6 +169,11 @@ _V = TypeVar("_V")
 
 
 class NonDataDescriptor(Protocol[_C, _V]):
+    """Typing protocol for non-data descriptor classes.
+
+    See https://docs.python.org/3/howto/descriptor.html for further information.
+    """
+
     @overload
     def __get__(
         self, _instance: Literal[None], _owner_type: Optional[Type[_C]] = None
@@ -188,6 +193,11 @@ class NonDataDescriptor(Protocol[_C, _V]):
 
 
 class DataDescriptor(NonDataDescriptor[_C, _V], Protocol):
+    """Typing protocol for data descriptor classes.
+
+    See https://docs.python.org/3/howto/descriptor.html for further information.
+    """
+
     def __set__(self, _instance: _C, _value: _V) -> None:
         ...
 
@@ -227,7 +237,8 @@ _T = TypeVar("_T")
 
 
 def get_actual_type(obj: _T) -> Type[_T]:
-    return _TypingGenericAliasType if isinstance(obj, _TypingGenericAliasType) else type(obj)
+    """Return type of an object (also working for GenericAlias instances which pretend to be an actual type)."""
+    return StdGenericAliasType if isinstance(obj, StdGenericAliasType) else type(obj)
 
 
 def _has_custom_hash(type_: Type) -> bool:

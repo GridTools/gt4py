@@ -18,7 +18,9 @@
 from __future__ import annotations
 
 import collections.abc
+import types
 import typing
+import sys
 
 import pytest
 
@@ -58,6 +60,30 @@ def test_is_actual_valid_type(t):
 )
 def test_is_actual_wrong_type(t):
     assert not xtyping.is_actual_type(t)
+
+
+ACTUAL_TYPE_SAMPLES = [
+    (3, int),
+    (4.5, float),
+    ({}, dict),
+    (int, type),
+    (tuple, type),
+    (list, type),
+    (Tuple[int, float], type(Tuple[int, float])),
+    (List[int], type(List[int])),
+]
+if sys.version_info >= (3, 9):
+    ACTUAL_TYPE_SAMPLES.extend(
+        [
+            (tuple[int, float], types.GenericAlias),
+            (list[int], types.GenericAlias),
+        ]
+    )
+
+
+@pytest.mark.parametrize(["instance", "expected"], ACTUAL_TYPE_SAMPLES)
+def test_get_actual_type(instance, expected):
+    assert xtyping.get_actual_type(instance) == expected
 
 
 @pytest.mark.parametrize(
