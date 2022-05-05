@@ -31,8 +31,6 @@ class GTFNCodegen(codegen.TemplatedGenerator):
         if node.type == "int":
             return node.value
         elif node.type == "float":
-            return f"{self.asfloat(node.value)}f"
-        elif node.type == "double":
             return self.asfloat(node.value)
         elif node.type == "bool":
             return node.value.lower()
