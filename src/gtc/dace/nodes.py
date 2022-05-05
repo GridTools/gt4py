@@ -31,6 +31,7 @@ from gtc import daceir as dcir
 from gtc import oir
 from gtc.oir import Decl, FieldDecl, VerticalLoop, VerticalLoopSection
 
+from .expansion.utils import get_dace_debuginfo
 from .expansion_specification import ExpansionItem, make_expansion_order
 
 
@@ -122,16 +123,8 @@ class StencilComputation(library.LibraryNode):
                     dcir.Axis.K.domain_symbol(), dtype=dace.int32
                 )
 
-            if oir_node.loc is not None:
+            self.debuginfo = get_dace_debuginfo(oir_node)
 
-                self.debuginfo = dace.dtypes.DebugInfo(
-                    oir_node.loc.line,
-                    oir_node.loc.column,
-                    oir_node.loc.line,
-                    oir_node.loc.column,
-                    oir_node.loc.source,
-                )
-            assert self.oir_node is not None
         if expansion_order is None:
             expansion_order = [
                 "TileI",

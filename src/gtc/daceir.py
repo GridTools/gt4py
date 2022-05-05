@@ -736,7 +736,7 @@ class Temporary(FieldDecl):
     pass
 
 
-class ComputationNode(Node):
+class ComputationNode(LocNode):
     # mapping connector names to tuple of field name and access info
     read_memlets: List[Memlet]
     write_memlets: List[Memlet]

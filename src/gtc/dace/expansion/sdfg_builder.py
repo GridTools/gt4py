@@ -12,6 +12,7 @@ import gtc.common as common
 from eve import NodeVisitor
 from gtc import daceir as dcir
 from gtc.dace.expansion.tasklet_codegen import TaskletCodegen
+from gtc.dace.expansion.utils import get_dace_debuginfo
 from gtc.dace.utils import get_axis_bound_str, make_subset_str
 
 
@@ -144,6 +145,7 @@ class StencilComputationSDFGBuilder(NodeVisitor):
             code=code,
             inputs=set(memlet.connector for memlet in node.read_memlets),
             outputs=set(memlet.connector for memlet in node.write_memlets),
+            debuginfo=get_dace_debuginfo(node),
         )
 
         self.visit(node.read_memlets, scope_node=tasklet, sdfg_ctx=sdfg_ctx, node_ctx=node_ctx)
@@ -179,6 +181,7 @@ class StencilComputationSDFGBuilder(NodeVisitor):
             name=name,
             ndrange=ndranges,
             schedule=node.schedule.to_dace_schedule(),
+            debuginfo=get_dace_debuginfo(node),
         )
 
         for scope_node in node.computations:
@@ -251,13 +254,13 @@ class StencilComputationSDFGBuilder(NodeVisitor):
             for memlet in computation.read_memlets:
                 if memlet.field not in read_acc_and_conn:
                     read_acc_and_conn[memlet.field] = (
-                        sdfg_ctx.state.add_access(memlet.field),
+                        sdfg_ctx.state.add_access(memlet.field, debuginfo=dace.DebugInfo(0)),
                         None,
                     )
             for memlet in computation.write_memlets:
                 if memlet.field not in write_acc_and_conn:
                     write_acc_and_conn[memlet.field] = (
-                        sdfg_ctx.state.add_access(memlet.field),
+                        sdfg_ctx.state.add_access(memlet.field, debuginfo=dace.DebugInfo(0)),
                         None,
                     )
             node_ctx = StencilComputationSDFGBuilder.NodeContext(
@@ -289,6 +292,7 @@ class StencilComputationSDFGBuilder(NodeVisitor):
                 inputs=node.input_connectors,
                 outputs=node.output_connectors,
                 symbol_mapping=symbol_mapping,
+                debuginfo=dace.DebugInfo(0),
             )
             self.visit(node.read_memlets, scope_node=nsdfg, sdfg_ctx=sdfg_ctx, node_ctx=node_ctx)
             self.visit(node.write_memlets, scope_node=nsdfg, sdfg_ctx=sdfg_ctx, node_ctx=node_ctx)
@@ -322,6 +326,7 @@ class StencilComputationSDFGBuilder(NodeVisitor):
                 dtype=np.dtype(common.data_type_to_typestr(decl.dtype)).type,
                 storage=decl.storage.to_dace_storage(),
                 transient=name not in non_transients,
+                debuginfo=dace.DebugInfo(0),
             )
         for symbol, dtype in node.symbols.items():
             if symbol not in inner_sdfg_ctx.sdfg.symbols:

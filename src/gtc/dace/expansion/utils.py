@@ -5,6 +5,7 @@ import dace.data
 import dace.library
 import dace.subsets
 
+from gtc import common
 from gtc import daceir as dcir
 from gtc.dace.utils import get_axis_bound_str
 
@@ -42,3 +43,17 @@ def add_origin(
         orig = origin_strs[axis.to_idx()]
         res_ranges.append((sym(f"({rng[0]})+({orig})"), sym(f"({rng[1]})+({orig})"), rng[2]))
     return dace.subsets.Range(res_ranges)
+
+
+def get_dace_debuginfo(node: common.LocNode):
+
+    if node.loc is not None:
+        return dace.dtypes.DebugInfo(
+            node.loc.line,
+            node.loc.column,
+            node.loc.line,
+            node.loc.column,
+            node.loc.source,
+        )
+    else:
+        return dace.dtypes.DebugInfo(0)

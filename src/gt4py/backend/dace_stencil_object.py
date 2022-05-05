@@ -66,9 +66,6 @@ class DaCeStencilObject(StencilObject, SDFGConvertible):
         if getattr(cls, "_frozen_cache", None) is None:
             cls._frozen_cache = {}
 
-        if getattr(cls, "_sdfg", None) is None:
-            cls._sdfg = dace.SDFG.from_file(cls.SDFG_PATH)
-
         return res
 
     @staticmethod
@@ -245,8 +242,13 @@ class DaCeStencilObject(StencilObject, SDFGConvertible):
         self._frozen_cache[key] = DaCeFrozenStencil(self, origin, domain, frozen_sdfg)
         return self._frozen_cache[key]
 
-    def sdfg(self) -> dace.SDFG:
-        return copy.deepcopy(self._sdfg)
+    @classmethod
+    def sdfg(cls) -> dace.SDFG:
+
+        if getattr(cls, "_sdfg", None) is None:
+            cls._sdfg = dace.SDFG.from_file(cls.SDFG_PATH)
+
+        return copy.deepcopy(cls._sdfg)
 
     def closure_resolver(
         self,
