@@ -29,7 +29,7 @@ class GTFNCodegen(codegen.TemplatedGenerator):
 
     def visit_Literal(self, node: Literal, **kwargs: Any) -> str:
         if node.type == "int":
-            return node.value
+            return node.value + "_c"
         elif node.type == "float":
             return self.asfloat(node.value)
         elif node.type == "bool":
@@ -44,7 +44,6 @@ class GTFNCodegen(codegen.TemplatedGenerator):
         return node.value if isinstance(node.value, str) else f"{node.value}_c"
 
     FunCall = as_fmt("{fun}({','.join(args)})")
-    TemplatedFunCall = as_fmt("{fun}<{','.join(template_args)}>({','.join(args)})")
     Lambda = as_mako(
         "[=](${','.join('auto ' + p for p in params)}){return ${expr};}"
     )  # TODO capture
