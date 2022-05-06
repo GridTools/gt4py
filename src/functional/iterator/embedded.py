@@ -1,8 +1,10 @@
 import itertools
 import numbers
+import typing
 from dataclasses import dataclass
 
 import numpy as np
+import numpy.typing
 
 from functional import iterator
 from functional.iterator import builtins
@@ -389,6 +391,9 @@ def make_in_iterator(inp, pos, offset_provider, *, column_axis):
 builtins.builtin_dispatch.push_key(EMBEDDED)  # makes embedded the default
 
 
+FIELD_DTYPE_T = typing.TypeVar("FIELD_DTYPE_T", bound=np.typing.DTypeLike)
+
+
 class LocatedField:
     """A Field with named dimensions/axises.
 
@@ -479,6 +484,10 @@ def np_as_located_field(*axises, origin=None):
 
 def index_field(axis, dtype=float):
     return LocatedField(lambda index: index[0], (axis,), dtype)
+
+
+def constant_field(value: typing.Any, dtype: type) -> LocatedField:
+    return LocatedField(lambda _: value, (), dtype)
 
 
 @builtins.shift.register(EMBEDDED)
