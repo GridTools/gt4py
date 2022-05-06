@@ -1,4 +1,5 @@
 from collections.abc import Callable
+from functools import partial
 from typing import Optional, Union
 
 from eve import NodeTranslator
@@ -54,12 +55,12 @@ class PopupTmps(NodeTranslator):
         return None
 
     def visit_FunCall(
-        self, node: ir.FunCall, *, lifts: Optional[dict[str, ir.Node]] = None
+        self, node: ir.FunCall, *, lifts: Optional[dict[ir.Expr, ir.SymRef]] = None
     ) -> Union[ir.SymRef, ir.FunCall]:
         if call_info := self._extract_lambda(node):
             fun, is_lift, wrap = call_info
 
-            nested_lifts = dict[str, ir.Node]()
+            nested_lifts = dict[ir.Expr, ir.SymRef]()
             fun = self.visit(fun, lifts=nested_lifts)
             # Note: lifts in arguments are just passed to the parent node
             args = self.visit(node.args, lifts=lifts)
@@ -69,7 +70,12 @@ class PopupTmps(NodeTranslator):
 
                 # check if the lifted expression captures symbols from the outer scope
                 symrefs = fun.iter_tree().if_isinstance(ir.SymRef).getattr("id").to_set()
-                captured = symrefs - {p.id for p in fun.params} - set(nested_lifts) - ir.BUILTINS
+                captured = (
+                    symrefs
+                    - {p.id for p in fun.params}
+                    - {n.id for n in nested_lifts.values()}
+                    - ir.BUILTINS
+                )
                 if captured:
                     # if symbols from an outer scope are captured, the lift has to
                     # be handled at that scope, so skip here and pass nested lifts on
@@ -78,15 +84,19 @@ class PopupTmps(NodeTranslator):
 
             # remap referenced function parameters in lift expression to passed argument values
             symbol_map = {param.id: arg for param, arg in zip(fun.params, args)}
-            for k, v in nested_lifts.items():
-                nested_lifts[k] = RemapSymbolRefs().visit(v, symbol_map=symbol_map)
-            if lifts is not None:
-                for k, v in lifts.items():
-                    lifts[k] = RemapSymbolRefs().visit(v, symbol_map=symbol_map)
+            remap = partial(RemapSymbolRefs().visit, symbol_map=symbol_map)
+
+            nested_lifts = {remap(expr): ref for expr, ref in nested_lifts.items()}
+            if lifts:
+                # lifts have to be updated in place as they are passed to parent node
+                lifted = list(lifts.items())
+                lifts.clear()
+                for expr, ref in lifted:
+                    lifts[remap(expr)] = ref
 
             # extend parameter and argument list of the function with popped lifts
-            new_params = [ir.Sym(id=p) for p in nested_lifts.keys()]
-            new_args = list(nested_lifts.values())
+            new_params = [ir.Sym(id=p.id) for p in nested_lifts.values()]
+            new_args = list(nested_lifts.keys())
             fun = ir.Lambda(params=fun.params + new_params, expr=fun.expr)
 
             # updated function call, having lifts passed as arguments
@@ -99,13 +109,12 @@ class PopupTmps(NodeTranslator):
             # ... otherwise we check if the same expression has already been
             # lifted before, then we reference that one
             assert lifts is not None
-            for k, v in lifts.items():
-                if call == v:
-                    return ir.SymRef(id=k)
+            if (previous_ref := lifts.get(call)) is not None:
+                return previous_ref
 
             # if this is the first time we lift that expression, create a new
             # symbol for it and register it so the parent node knows about it
-            symbol = UIDs.sequential_id(prefix="_lift")
-            lifts[symbol] = call
-            return ir.SymRef(id=symbol)
+            ref = ir.SymRef(id=UIDs.sequential_id(prefix="_lift"))
+            lifts[call] = ref
+            return ref
         return self.generic_visit(node, lifts=lifts)
