@@ -48,13 +48,13 @@ def apply_common_transforms(
             ir = unrolled
             ir = NormalizeShifts().visit(ir)
             ir = _inline_lifts(ir, lift_mode)
-            ir = InlineLambdas().visit(ir)
             ir = NormalizeShifts().visit(ir)
         else:
             raise RuntimeError("Reduction unrolling failed")
     if lift_mode != LiftMode.FORCE_INLINE:
         assert offset_provider is not None
         ir = CreateGlobalTmps().visit(ir, offset_provider=offset_provider)
+        ir = InlineLifts().visit(ir)
     if cse:
         ir = CSE().visit(ir)
     return ir
