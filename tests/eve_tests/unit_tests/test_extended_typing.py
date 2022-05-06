@@ -17,7 +17,12 @@
 
 from __future__ import annotations
 
+import collections.abc
+import sys
+import types
 import typing
+
+import pytest
 
 from eve import extended_typing as xtyping
 from eve.extended_typing import (
@@ -28,10 +33,97 @@ from eve.extended_typing import (
     ForwardRef,
     FrozenSet,
     List,
+    Mapping,
+    Sequence,
     Set,
     Tuple,
     Type,
+    TypeVar,
 )
+
+
+@pytest.mark.parametrize("t", (int, float, dict, tuple, frozenset, collections.abc.Mapping))
+def test_is_actual_valid_type(t):
+    assert xtyping.is_actual_type(t)
+
+
+@pytest.mark.parametrize(
+    "t",
+    (
+        Tuple[int],
+        Tuple[int, ...],
+        Tuple[int, int],
+        Dict[str, Any],
+        Dict[str, float],
+        Mapping[int, float],
+    ),
+)
+def test_is_actual_wrong_type(t):
+    assert not xtyping.is_actual_type(t)
+
+
+ACTUAL_TYPE_SAMPLES = [
+    (3, int),
+    (4.5, float),
+    ({}, dict),
+    (int, type),
+    (tuple, type),
+    (list, type),
+    (Tuple[int, float], type(Tuple[int, float])),
+    (List[int], type(List[int])),
+]
+if sys.version_info >= (3, 9):
+    ACTUAL_TYPE_SAMPLES.extend(
+        [
+            (tuple[int, float], types.GenericAlias),  # type: ignore[misc]   # ignore false positive bug: https://github.com/python/mypy/issues/11098
+            (list[int], types.GenericAlias),
+        ]
+    )
+
+
+@pytest.mark.parametrize(["instance", "expected"], ACTUAL_TYPE_SAMPLES)
+def test_get_actual_type(instance, expected):
+    assert xtyping.get_actual_type(instance) == expected
+
+
+@pytest.mark.parametrize(
+    "x", [int, float, complex, str, tuple, frozenset, 1, -2.0, "foo", (), (1, 3.0)]
+)
+def test_is_hashable(x):
+    assert xtyping.is_hashable(x)
+
+
+@pytest.mark.parametrize("x", [(list, list(), (1, []), dict())])
+def test_is_not_hashable(x):
+    assert not xtyping.is_hashable(x)
+
+
+@pytest.mark.parametrize(
+    "t",
+    [
+        int,
+        str,
+        float,
+        tuple,
+        Tuple,
+        Tuple[int],
+        Tuple[int, ...],
+        Tuple[Tuple[int, ...], ...],
+        FrozenSet,
+        Type,
+        type(None),
+        None,
+    ],
+)
+def test_is_hashable_type(t):
+    assert xtyping.is_hashable_type(t)
+
+
+@pytest.mark.parametrize(
+    "t", [dict, Dict, Dict[str, int], Sequence[int], List[str], Any, TypeVar("T")]
+)
+def test_is_not_hashable_type(t):
+    assert not xtyping.is_hashable_type(t)
 
 
 def test_is_protocol():
