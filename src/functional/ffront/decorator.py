@@ -19,7 +19,8 @@ import dataclasses
 import functools
 import types
 import typing
-from typing import Any, Optional, Protocol
+import warnings
+from typing import Any, Callable, Optional, Protocol
 
 from eve.utils import UIDs
 from functional.common import GTTypeError
@@ -29,7 +30,7 @@ from functional.ffront import (
     program_ast as past,
     symbol_makers,
 )
-from functional.ffront.fbuiltins import FieldOffset
+from functional.ffront.fbuiltins import BUILTINS, BuiltInFunction, FieldOffset
 from functional.ffront.foast_to_itir import FieldOperatorLowering
 from functional.ffront.func_to_foast import FieldOperatorParser
 from functional.ffront.func_to_past import ProgramParser
@@ -38,6 +39,7 @@ from functional.ffront.past_to_itir import ProgramLowering
 from functional.ffront.source_utils import CapturedVars
 from functional.iterator import ir as itir
 from functional.iterator.backend_executor import execute_fencil
+from functional.iterator.embedded import CartesianAxis, constant_field
 
 
 DEFAULT_BACKEND = "roundtrip"
@@ -120,7 +122,7 @@ class Program:
         definition: types.FunctionType,
         externals: Optional[dict] = None,
         backend: Optional[str] = None,
-    ):
+    ) -> "Program":
         captured_vars = CapturedVars.from_function(definition)
         past_node = ProgramParser.apply_to_function(definition)
         return cls(
@@ -131,17 +133,28 @@ class Program:
             definition=definition,
         )
 
+    def with_backend(self, backend: str) -> "Program":
+        return Program(
+            past_node=self.past_node,
+            captured_vars=self.captured_vars,
+            externals=self.externals,
+            backend=backend,
+            definition=self.definition,  # type: ignore[arg-type]  # mypy wrongly deduces definition as method here
+        )
+
     def _lowered_funcs_from_captured_vars(
         self, captured_vars: CapturedVars
     ) -> list[itir.FunctionDefinition]:
         lowered_funcs = []
 
-        vars_ = collections.ChainMap(captured_vars.globals, captured_vars.nonlocals)
-        for name, value in vars_.items():
+        all_captured_vars = collections.ChainMap(captured_vars.globals, captured_vars.nonlocals)
+        for name, value in all_captured_vars.items():
             # With respect to the frontend offsets are singleton types, i.e.
             #  they do not store any runtime information, but only type
             #  information. As such we do not need their value.
-            if isinstance(value, FieldOffset):
+            if isinstance(value, (FieldOffset, CartesianAxis)):
+                continue
+            if isinstance(value, (BuiltInFunction, type)):
                 continue
             if not isinstance(value, GTCallable):
                 raise NotImplementedError("Only function closure vars are allowed currently.")
@@ -152,9 +165,9 @@ class Program:
                 )
             lowered_funcs.append(itir_node)
             # if the closure ref has closure refs by itself, also add them
-            if value.__gt_captured_vars__():
+            if captured_vars_from_value := value.__gt_captured_vars__():
                 lowered_funcs.extend(
-                    self._lowered_funcs_from_captured_vars(value.__gt_captured_vars__())
+                    self._lowered_funcs_from_captured_vars(captured_vars_from_value)
                 )
         return lowered_funcs
 
@@ -163,17 +176,21 @@ class Program:
         if self.externals:
             raise NotImplementedError("Externals are not supported yet.")
 
-        func_names = []
+        func_names = set()
         for captured_var in self.past_node.captured_vars:
             if isinstance(captured_var.type, ct.FunctionType):
-                func_names.append(captured_var.id)
+                func_names.add(captured_var.id)
             else:
                 raise NotImplementedError("Only function closure vars are allowed currently.")
 
-        vars_ = collections.ChainMap(self.captured_vars.globals, self.captured_vars.nonlocals)
-        if undefined := (set(vars_) - set(func_names)):
+        all_captured_vars = collections.ChainMap(
+            self.captured_vars.globals, self.captured_vars.nonlocals
+        )
+        if undefined := (set(all_captured_vars) - func_names):
             raise RuntimeError(f"Reference to undefined symbol(s) `{', '.join(undefined)}`.")
-        if not_callable := [name for name in func_names if not isinstance(vars_[name], GTCallable)]:
+        if not_callable := [
+            name for name in func_names if not isinstance(all_captured_vars[name], GTCallable)
+        ]:
             raise RuntimeError(
                 f"The following function(s) are not valid GTCallables `{', '.join(not_callable)}`."
             )
@@ -191,27 +208,63 @@ class Program:
         if kwargs:
             raise NotImplementedError("Keyword arguments are not supported yet.")
 
-    def __call__(self, *args, offset_provider, **kwargs) -> None:
+    def __call__(self, *args, offset_provider: dict[str, CartesianAxis], **kwargs) -> None:
         self._validate_args(*args, **kwargs)
 
         # extract size of all field arguments
-        size_args = []
+        size_args: list[Optional[tuple[int, ...]]] = []
+        rewritten_args = list(args)
         for param_idx, param in enumerate(self.past_node.params):
+            if isinstance(param.type, ct.ScalarType):
+                print(self.captured_vars)
+                rewritten_args[param_idx] = constant_field(
+                    args[param_idx],
+                    dtype=BUILTINS[param.type.kind.name.lower()],
+                )
             if not isinstance(param.type, ct.FieldType):
+                continue
+            if args[param_idx].array is None:
+                size_args.append(None)
                 continue
             for dim_idx in range(0, len(param.type.dims)):
                 size_args.append(args[param_idx].shape[dim_idx])
 
+        if not self.backend:
+            warnings.warn(
+                UserWarning(
+                    f"Field View Program '{self.itir.id}': Using default (embedded) backend."
+                )
+            )
         backend = self.backend if self.backend else DEFAULT_BACKEND
 
         execute_fencil(
-            self.itir, *args, *size_args, **kwargs, offset_provider=offset_provider, backend=backend
+            self.itir,
+            *rewritten_args,
+            *size_args,
+            **kwargs,
+            offset_provider=offset_provider,
+            backend=backend,
         )
 
 
+@typing.overload
+def program(definition: types.FunctionType) -> Program:
+    ...
+
+
+@typing.overload
 def program(
-    definition: types.FunctionType, externals: Optional[dict] = None, backend: Optional[str] = None
-) -> Program:
+    *, externals: Optional[dict], backend: Optional[str]
+) -> Callable[[types.FunctionType], Program]:
+    ...
+
+
+def program(
+    definition=None,
+    *,
+    externals=None,
+    backend=None,
+):
     """
     Generate an implementation of a program from a Python function object.
 
@@ -220,8 +273,20 @@ def program(
         ... def program(in_field: Field[..., float64], out_field: Field[..., float64]): # noqa: F821
         ...     field_op(in_field, out=out_field)
         >>> program(in_field, out=out_field) # noqa: F821 # doctest: +SKIP
+
+        >>> # the backend can optionally be passed if already decided
+        >>> # not passing it will result in embedded execution by default
+        >>> # the above is equivalent to
+        >>> @program(backend="roundtrip")  # noqa: F821 # doctest: +SKIP
+        ... def program(in_field: Field[..., float64], out_field: Field[..., float64]): # noqa: F821
+        ...     field_op(in_field, out=out_field)
+        >>> program(in_field, out=out_field) # noqa: F821 # doctest: +SKIP
     """
-    return Program.from_function(definition, externals, backend)
+
+    def program_inner(definition: types.FunctionType) -> Program:
+        return Program.from_function(definition, externals, backend)
+
+    return program_inner if definition is None else program_inner(definition)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -254,7 +319,7 @@ class FieldOperator(GTCallable):
         definition: types.FunctionType,
         externals: Optional[dict] = None,
         backend: Optional[str] = None,
-    ):
+    ) -> "FieldOperator":
         captured_vars = CapturedVars.from_function(definition)
         foast_node = FieldOperatorParser.apply_to_function(definition)
         return cls(
@@ -269,6 +334,15 @@ class FieldOperator(GTCallable):
         type_ = symbol_makers.make_symbol_type_from_value(self.definition)
         assert isinstance(type_, ct.FunctionType)
         return type_
+
+    def with_backend(self, backend: str) -> "FieldOperator":
+        return FieldOperator(
+            foast_node=self.foast_node,
+            captured_vars=self.captured_vars,
+            externals=self.externals,
+            backend=backend,
+            definition=self.definition,  # type: ignore[arg-type]  # mypy wrongly deduces definition as method here
+        )
 
     def __gt_itir__(self) -> itir.FunctionDefinition:
         return FieldOperatorLowering.apply(self.foast_node)
@@ -286,9 +360,11 @@ class FieldOperator(GTCallable):
         loc = self.foast_node.location
 
         type_ = self.__gt_type__()
-        stencil_sym = past.Symbol(id=name, type=type_, namespace=ct.Namespace.CLOSURE, location=loc)
+        stencil_sym: past.Symbol = past.Symbol(
+            id=name, type=type_, namespace=ct.Namespace.CLOSURE, location=loc
+        )
 
-        params_decl = [
+        params_decl: list[past.Symbol] = [
             past.Symbol(
                 id=UIDs.sequential_id(prefix="__sym"),
                 type=arg_type,
@@ -298,7 +374,7 @@ class FieldOperator(GTCallable):
             for arg_type in type_.args
         ]
         params_ref = [past.Name(id=pdecl.id, location=loc) for pdecl in params_decl]
-        out_sym = past.Symbol(
+        out_sym: past.Symbol = past.Symbol(
             id="out", type=type_.returns, namespace=ct.Namespace.LOCAL, location=loc
         )
         out_ref = past.Name(id="out", location=loc)
@@ -332,13 +408,28 @@ class FieldOperator(GTCallable):
             backend=self.backend,
         )
 
-    def __call__(self, *args, out, offset_provider, **kwargs) -> None:
+    def __call__(self, *args, out, offset_provider: dict[str, CartesianAxis], **kwargs) -> None:
         return self.as_program()(*args, out, offset_provider=offset_provider, **kwargs)
 
 
+@typing.overload
+def field_operator(definition: types.FunctionType) -> FieldOperator:
+    ...
+
+
+@typing.overload
 def field_operator(
-    definition: types.FunctionType, externals: Optional[dict] = None, backend: Optional[str] = None
-) -> FieldOperator:
+    *, externals: Optional[dict], backend: Optional[str]
+) -> Callable[[types.FunctionType], FieldOperator]:
+    ...
+
+
+def field_operator(
+    definition=None,
+    *,
+    externals=None,
+    backend=None,
+):
     """
     Generate an implementation of the field operator from a Python function object.
 
@@ -347,5 +438,15 @@ def field_operator(
         ... def field_op(in_field: Field[..., float64]) -> Field[..., float64]: # noqa: F821
         ...     ...
         >>> field_op(in_field, out=out_field)  # noqa: F821 # doctest: +SKIP
+
+        >>> # the backend can optionally be passed if already decided
+        >>> # not passing it will result in embedded execution by default
+        >>> @field_operator(backend="roundtrip")  # doctest: +SKIP
+        ... def field_op(in_field: Field[..., float64]) -> Field[..., float64]: # noqa: F821
+        ...     ...
     """
-    return FieldOperator.from_function(definition, externals, backend)
+
+    def field_operator_inner(definition: types.FunctionType) -> FieldOperator:
+        return FieldOperator.from_function(definition, externals, backend)
+
+    return field_operator_inner if definition is None else field_operator_inner(definition)

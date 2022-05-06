@@ -30,7 +30,9 @@ class GTFNCodegen(codegen.TemplatedGenerator):
     def visit_Literal(self, node: Literal, **kwargs: Any) -> str:
         if node.type == "int":
             return node.value + "_c"
-        elif node.type == "float":
+        elif node.type == "float32":
+            return f"{self.asfloat(node.value)}f"
+        elif node.type == "float" or node.type == "float64":
             return self.asfloat(node.value)
         elif node.type == "bool":
             return node.value.lower()
