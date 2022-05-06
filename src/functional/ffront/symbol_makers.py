@@ -171,7 +171,7 @@ def make_symbol_type_from_value(value: Any) -> ct.SymbolType:
     elif isinstance(value, FundefDispatcher):
         symbol_type = ct.UnknownFunctionType()
     else:
-        type_ = xtyping.reveal_type(value, annotate_callable_kwargs=True)
+        type_ = xtyping.infer_type(value, annotate_callable_kwargs=True)
         symbol_type = make_symbol_type_from_typing(type_)
 
     if isinstance(

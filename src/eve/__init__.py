@@ -14,7 +14,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Eve framework to support development of DSL toolchains in pure Python.
+"""Eve framework with general utils for development of DSL toolchains in Python.
 
 The internal dependencies between modules are the following (each line depends
 on some of the previous ones):

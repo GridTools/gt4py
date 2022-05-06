@@ -355,7 +355,7 @@ class FieldOperatorTypeDeduction(NodeTranslator):
             new_args = self.visit(node.args, in_shift=True, **kwargs)
             source_dim = new_args[0].type.source
             target_dims = new_args[0].type.target
-            if source_dim not in new_func.type.dims:
+            if new_func.type.dims and source_dim not in new_func.type.dims:
                 raise FieldOperatorTypeDeductionError.from_foast_node(
                     node,
                     msg=f"Incompatible offset at {new_func.id}: can not shift from {new_args[0].type.source} to {new_func.type.dims[0]}.",

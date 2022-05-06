@@ -19,8 +19,6 @@ def test_constant():
     inp = np_as_located_field(IDim)(np.asarray([0, 42]))
     res = np_as_located_field(IDim)(np.zeros_like(inp))
 
-    add_constant[{IDim: range(2)}](
-        inp, out=res, offset_provider={}, backend="roundtrip", debug=True
-    )
+    add_constant[{IDim: range(2)}](inp, out=res, offset_provider={}, backend="roundtrip")
 
     assert np.allclose(res, np.asarray([1, 43]))
