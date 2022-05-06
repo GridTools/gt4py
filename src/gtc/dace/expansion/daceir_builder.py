@@ -498,18 +498,15 @@ class DaCeIRBuilder(NodeTranslator):
             if iteration.kind == "tiling":
                 read_memlets = untile_memlets(read_memlets, axes=[axis])
                 write_memlets = untile_memlets(write_memlets, axes=[axis])
-                if axis == dcir.Axis.K:
-                    start, end = interval.start, interval.end
-                else:
-                    start, end = (
-                        dcir.AxisBound.from_common(axis, oir.AxisBound.start()),
-                        dcir.AxisBound.from_common(axis, oir.AxisBound.end()),
+                if not axis == dcir.Axis.K:
+                    interval = dcir.DomainInterval(
+                        start=dcir.AxisBound.from_common(axis, oir.AxisBound.start()),
+                        end=dcir.AxisBound.from_common(axis, oir.AxisBound.end()),
                     )
                 ranges.append(
                     dcir.Range(
                         var=axis.tile_symbol(),
-                        start=start,
-                        end=end,
+                        interval=interval,
                         stride=iteration.stride,
                     )
                 )
@@ -567,55 +564,41 @@ class DaCeIRBuilder(NodeTranslator):
         read_memlets, write_memlets, _ = union_inout_memlets(list(scope_nodes))
         scope_nodes = self.to_state(scope_nodes, grid_subset=grid_subset)
 
-        ranges = []
         axis = item.axis
         interval = iteration_ctx.grid_subset.intervals[axis]
         grid_subset = grid_subset.set_interval(axis, interval)
         if item.kind == "tiling":
             raise NotImplementedError("Tiling as a state machine not implemented.")
-        else:
-            assert item.kind == "contiguous"
-            read_memlets = [
-                dcir.Memlet(
-                    field=memlet.field,
-                    connector=memlet.connector,
-                    access_info=memlet.access_info.apply_iteration(
-                        dcir.GridSubset.from_interval(interval, axis)
-                    ),
-                    is_read=True,
-                    is_write=False,
-                )
-                for memlet in read_memlets
-            ]
 
-            write_memlets = [
-                dcir.Memlet(
-                    field=memlet.field,
-                    connector=memlet.connector,
-                    access_info=memlet.access_info.apply_iteration(
-                        dcir.GridSubset.from_interval(interval, axis)
-                    ),
-                    is_read=False,
-                    is_write=True,
-                )
-                for memlet in write_memlets
-            ]
-
-            if isinstance(interval, oir.Interval):
-                start, end = (
-                    dcir.AxisBound.from_common(axis, interval.start),
-                    dcir.AxisBound.from_common(axis, interval.end),
-                )
-            else:
-                start, end = interval.idx_range
-            if item.stride < 0:
-                start, end = f"({end}{item.stride:+1})", f"({start}{item.stride:+1})"
-
-            index_range = dcir.Range(
-                var=axis.iteration_symbol(), start=start, end=end, stride=item.stride
+        assert item.kind == "contiguous"
+        read_memlets = [
+            dcir.Memlet(
+                field=memlet.field,
+                connector=memlet.connector,
+                access_info=memlet.access_info.apply_iteration(
+                    dcir.GridSubset.from_interval(interval, axis)
+                ),
+                is_read=True,
+                is_write=False,
             )
+            for memlet in read_memlets
+        ]
 
-        ranges.append(dcir.Range.from_axis_and_interval(axis, interval))
+        write_memlets = [
+            dcir.Memlet(
+                field=memlet.field,
+                connector=memlet.connector,
+                access_info=memlet.access_info.apply_iteration(
+                    dcir.GridSubset.from_interval(interval, axis)
+                ),
+                is_read=False,
+                is_write=True,
+            )
+            for memlet in write_memlets
+        ]
+
+        assert not isinstance(interval, dcir.IndexWithExtent)
+        index_range = dcir.Range.from_axis_and_interval(axis, interval, stride=item.stride)
 
         return [
             dcir.DomainLoop(

@@ -52,6 +52,13 @@ if TYPE_CHECKING:
     from gt4py.stencil_object import StencilObject
 
 
+def _serialize_sdfg(sdfg: dace.SDFG):
+    for sd in sdfg.all_sdfgs_recursive():
+        sd.transformation_hist = []
+        sd.orig_sdfg = None
+    return dumps(sdfg)
+
+
 def _specialize_transient_strides(sdfg: dace.SDFG, layout_map):
     repldict = replace_strides(
         [array for array in sdfg.arrays.values() if array.transient],
@@ -79,7 +86,20 @@ def _to_device(sdfg: dace.SDFG, device: str) -> None:
                 node.device = dace.DeviceType.GPU
 
 
-def _pre_expand_trafos(sdfg: dace.SDFG):
+def _pre_expand_trafos(stencil_ir: gtir.Stencil, sdfg: dace.SDFG):
+
+    args_data = make_args_data_from_gtir(GtirPipeline(stencil_ir))
+
+    # stencils without effect
+    if all(info is None for info in args_data.field_info.values()):
+        sdfg = dace.SDFG(stencil_ir.name)
+        sdfg.add_state(stencil_ir.name)
+        return sdfg
+
+    for array in sdfg.arrays.values():
+        if array.transient:
+            array.lifetime = dace.AllocationLifetime.Persistent
+
     sdfg.simplify()
     for node, _ in sdfg.all_nodes_recursive():
         if isinstance(node, StencilComputation):
@@ -105,6 +125,7 @@ def _pre_expand_trafos(sdfg: dace.SDFG):
                     break
             if not is_set:
                 raise ValueError("No expansion compatible")
+    return sdfg
 
 
 def _post_expand_trafos(sdfg: dace.SDFG):
@@ -117,26 +138,10 @@ def _post_expand_trafos(sdfg: dace.SDFG):
             node.collapse = len(node.range)
 
 
-def _expand_and_finalize_sdfg(stencil_ir: gtir.Stencil, sdfg: dace.SDFG, layout_map) -> dace.SDFG:
-
-    args_data = make_args_data_from_gtir(GtirPipeline(stencil_ir))
-
-    # stencils without effect
-    if all(info is None for info in args_data.field_info.values()):
-        sdfg = dace.SDFG(stencil_ir.name)
-        sdfg.add_state(stencil_ir.name)
-        return sdfg
-
-    for array in sdfg.arrays.values():
-        if array.transient:
-            array.lifetime = dace.AllocationLifetime.Persistent
-
-    _pre_expand_trafos(sdfg)
+def _expand_and_finalize_sdfg(sdfg: dace.SDFG, layout_map) -> dace.SDFG:
     _specialize_transient_strides(sdfg, layout_map=layout_map)
     sdfg.expand_library_nodes(recursive=True)
     _post_expand_trafos(sdfg)
-
-    return sdfg
 
 
 class DaCeExtGenerator(BackendCodegen):
@@ -155,7 +160,9 @@ class DaCeExtGenerator(BackendCodegen):
         sdfg = OirSDFGBuilder().visit(oir_node)
 
         _to_device(sdfg, self.backend.storage_info["device"])
-        sdfg = _expand_and_finalize_sdfg(stencil_ir, sdfg, self.backend.storage_info["layout_map"])
+        sdfg = _pre_expand_trafos(stencil_ir, sdfg)
+        unexpanded_json = _serialize_sdfg(sdfg)
+        _expand_and_finalize_sdfg(sdfg, self.backend.storage_info["layout_map"])
 
         # strip history from SDFG for faster save/load
         for tmp_sdfg in sdfg.all_sdfgs_recursive():
@@ -173,7 +180,7 @@ class DaCeExtGenerator(BackendCodegen):
         sources = {
             "computation": {"computation.hpp": implementation},
             "bindings": {f"bindings.{bindings_ext}": bindings},
-            "info": {self.backend.builder.module_name + ".sdfg": dumps(sdfg.to_json())},
+            "info": {self.backend.builder.module_name + ".sdfg": unexpanded_json},
         }
         return sources
 

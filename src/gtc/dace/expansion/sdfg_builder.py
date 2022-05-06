@@ -13,7 +13,7 @@ from eve import NodeVisitor
 from gtc import daceir as dcir
 from gtc.dace.expansion.tasklet_codegen import TaskletCodegen
 from gtc.dace.expansion.utils import get_dace_debuginfo
-from gtc.dace.utils import get_axis_bound_str, make_subset_str
+from gtc.dace.utils import make_dace_subset
 
 
 class StencilComputationSDFGBuilder(NodeVisitor):
@@ -54,14 +54,20 @@ class StencilComputationSDFGBuilder(NodeVisitor):
                     edge.dst,
                     edge.data,
                 )
+            if index_range.stride < 0:
+                initialize_expr = f"{index_range.interval.end} - 1"
+                end_expr = f"{index_range.interval.start} - 1"
+            else:
+                initialize_expr = str(index_range.interval.start)
+                end_expr = str(index_range.interval.end)
             comparison_op = "<" if index_range.stride > 0 else ">"
-            condition_expr = f"{index_range.var} {comparison_op} {index_range.end}"
+            condition_expr = f"{index_range.var} {comparison_op} {end_expr}"
             _, _, after_state = self.sdfg.add_loop(
                 before_state=self.state,
                 loop_state=loop_state,
                 after_state=after_state,
                 loop_var=index_range.var,
-                initialize_expr=str(index_range.start),
+                initialize_expr=initialize_expr,
                 condition_expr=condition_expr,
                 increment_expr=f"{index_range.var}+({index_range.stride})",
             )
@@ -85,11 +91,9 @@ class StencilComputationSDFGBuilder(NodeVisitor):
         connector_prefix="",
     ):
         field_decl = sdfg_ctx.field_decls[node.field]
-        memlet = dace.Memlet.simple(
+        memlet = dace.Memlet(
             node.field,
-            subset_str=make_subset_str(
-                field_decl.access_info, node.access_info, field_decl.data_dims
-            ),
+            subset=make_dace_subset(field_decl.access_info, node.access_info, field_decl.data_dims),
             dynamic=field_decl.is_dynamic,
         )
         if node.is_read:
@@ -155,15 +159,8 @@ class StencilComputationSDFGBuilder(NodeVisitor):
         )
 
     def visit_Range(self, node: dcir.Range, **kwargs):
-        if isinstance(node.start, dcir.AxisBound):
-            start = get_axis_bound_str(node.start, node.start.axis.domain_symbol())
-        else:
-            start = str(node.start)
-        if isinstance(node.end, dcir.AxisBound):
-            end = get_axis_bound_str(node.end, node.end.axis.domain_symbol())
-        else:
-            end = str(node.end)
-        return {node.var: f"{start}:{end}:{node.stride}"}
+        start, end = node.interval.to_dace_symbolic()
+        return {node.var: str(dace.subsets.Range([(start, end - 1, node.stride)]))}
 
     def visit_DomainMap(
         self,
@@ -281,10 +278,8 @@ class StencilComputationSDFGBuilder(NodeVisitor):
         state = sdfg.add_state()
         symbol_mapping = {}
         for axis in dcir.Axis.dims_3d():
-            sdfg.add_symbol(axis.domain_symbol(), stype=dace.int32)
-            symbol_mapping[axis.domain_symbol()] = dace.symbol(
-                axis.domain_symbol(), dtype=dace.int32
-            )
+            sdfg.add_symbol(axis.domain_symbol(), stype=axis.domain_dace_symbol().dtype)
+            symbol_mapping[axis.domain_symbol()] = axis.domain_dace_symbol()
         if sdfg_ctx is not None and node_ctx is not None:
             nsdfg = sdfg_ctx.state.add_nested_sdfg(
                 sdfg=sdfg,

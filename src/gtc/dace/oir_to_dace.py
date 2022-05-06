@@ -60,26 +60,26 @@ class OirSDFGBuilder(eve.NodeVisitor):
         access_collection = AccessCollector.apply(node)
 
         for field in access_collection.read_fields():
-            access_node = state.add_access(field)
+            access_node = state.add_access(field, debuginfo=dace.DebugInfo(0))
             library_node.add_in_connector("__in_" + field)
-            subset_str = ctx.dace_str_maker.make_input_subset_str(node, field)
+            subset = ctx.dace_str_maker.make_input_dace_subset(node, field)
             state.add_edge(
                 access_node,
                 None,
                 library_node,
                 "__in_" + field,
-                dace.Memlet.simple(field, subset_str=subset_str),
+                dace.Memlet(field, subset=subset),
             )
         for field in access_collection.write_fields():
-            access_node = state.add_access(field)
+            access_node = state.add_access(field, debuginfo=dace.DebugInfo(0))
             library_node.add_out_connector("__out_" + field)
-            subset_str = ctx.dace_str_maker.make_output_subset_str(node, field)
+            subset = ctx.dace_str_maker.make_output_dace_subset(node, field)
             state.add_edge(
                 library_node,
                 "__out_" + field,
                 access_node,
                 None,
-                dace.Memlet.simple(field, subset_str=subset_str),
+                dace.Memlet(field, subset=subset),
             )
 
         return
@@ -109,6 +109,7 @@ class OirSDFGBuilder(eve.NodeVisitor):
                     ],
                     dtype=data_type_to_dace_typeclass(param.dtype),
                     transient=False,
+                    debuginfo=dace.DebugInfo(0),
                 )
             else:
                 sdfg.add_symbol(param.name, stype=data_type_to_dace_typeclass(param.dtype))
@@ -126,6 +127,7 @@ class OirSDFGBuilder(eve.NodeVisitor):
                 ],
                 dtype=data_type_to_dace_typeclass(decl.dtype),
                 transient=True,
+                debuginfo=dace.DebugInfo(0),
             )
         self.generic_visit(node, ctx=ctx, block_extents=block_extents)
         ctx.sdfg.validate()

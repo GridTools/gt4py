@@ -92,6 +92,18 @@ def get_axis_bound_str(axis_bound, var_name):
         return f"{axis_bound.offset}"
 
 
+def get_axis_bound_dace_symbol(axis_bound: "dcir.AxisBound"):
+    from gtc.common import LevelMarker
+
+    if axis_bound is None:
+        return
+
+    elif axis_bound.level == LevelMarker.END:
+        return axis_bound.axis.domain_dace_symbol() + axis_bound.offset
+    else:
+        return axis_bound.offset
+
+
 def get_axis_bound_diff_str(axis_bound1, axis_bound2, var_name: str):
 
     if axis_bound1 <= axis_bound2:
@@ -387,23 +399,25 @@ def compute_dcir_access_infos(
     return res
 
 
-def make_subset_str(
+def make_dace_subset(
     context_info: "dcir.FieldAccessInfo", access_info: "dcir.FieldAccessInfo", data_dims
 ):
-    res_strs = []
     clamped_access_info = access_info
     clamped_context_info = context_info
     for axis in access_info.axes():
         if axis in access_info.variable_offset_axes:
             clamped_access_info = clamped_access_info.clamp_full_axis(axis)
             clamped_context_info = clamped_context_info.clamp_full_axis(axis)
+    res_ranges = []
 
     for axis in clamped_access_info.axes():
-        context_start, _ = clamped_context_info.grid_subset.intervals[axis].idx_range
-        subset_start, subset_end = clamped_access_info.grid_subset.intervals[axis].idx_range
-        res_strs.append(f"({subset_start})-({context_start}):({subset_end})-({context_start})")
-    res_strs.extend(f"0:{dim}" for dim in data_dims)
-    return ",".join(res_strs)
+        context_start, _ = clamped_context_info.grid_subset.intervals[axis].to_dace_symbolic()
+        subset_start, subset_end = clamped_access_info.grid_subset.intervals[
+            axis
+        ].to_dace_symbolic()
+        res_ranges.append((subset_start - context_start, subset_end - context_start - 1, 1))
+    res_ranges.extend((0, dim - 1, 1) for dim in data_dims)
+    return dace.subsets.Range(res_ranges)
 
 
 class DaceStrMaker:
@@ -429,13 +443,13 @@ class DaceStrMaker:
     def make_shape(self, field):
         if field not in self.access_infos:
             return [
-                axis.domain_symbol()
+                axis.domain_dace_symbol()
                 for axis in dcir.Axis.dims_3d()
                 if self.decls[field].dimensions[axis.to_idx()]
             ] + [d for d in self.decls[field].data_dims]
         return self.access_infos[field].shape + self.decls[field].data_dims
 
-    def make_input_subset_str(self, node, field):
+    def make_input_dace_subset(self, node, field):
         local_access_info = compute_dcir_access_infos(
             node,
             collect_read=True,
@@ -446,9 +460,9 @@ class DaceStrMaker:
         for axis in local_access_info.variable_offset_axes:
             local_access_info = local_access_info.clamp_full_axis(axis)
 
-        return self._make_subset_str(local_access_info, field)
+        return self._make_dace_subset(local_access_info, field)
 
-    def make_output_subset_str(self, node, field):
+    def make_output_dace_subset(self, node, field):
         local_access_info = compute_dcir_access_infos(
             node,
             collect_read=False,
@@ -459,11 +473,11 @@ class DaceStrMaker:
         for axis in local_access_info.variable_offset_axes:
             local_access_info = local_access_info.clamp_full_axis(axis)
 
-        return self._make_subset_str(local_access_info, field)
+        return self._make_dace_subset(local_access_info, field)
 
-    def _make_subset_str(self, local_access_info, field):
+    def _make_dace_subset(self, local_access_info, field):
         global_access_info = self.access_infos[field]
-        return make_subset_str(global_access_info, local_access_info, self.decls[field].data_dims)
+        return make_dace_subset(global_access_info, local_access_info, self.decls[field].data_dims)
 
 
 def untile_memlets(memlets: List["dcir.Memlet"], axes):

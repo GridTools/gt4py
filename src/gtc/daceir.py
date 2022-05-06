@@ -1,6 +1,7 @@
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import dace
+import sympy
 from pydantic import validator
 
 from eve import Int, IntEnum, Node, Str, StrEnum, SymbolRef, utils
@@ -8,7 +9,7 @@ from gt4py import definitions as gt_def
 from gtc import common, oir
 from gtc.common import LocNode
 
-from .dace.utils import get_axis_bound_diff_str, get_axis_bound_str
+from .dace.utils import get_axis_bound_dace_symbol, get_axis_bound_diff_str, get_axis_bound_str
 
 
 @utils.noninstantiable
@@ -19,6 +20,19 @@ class Expr(common.Expr):
 @utils.noninstantiable
 class Stmt(common.Stmt):
     pass
+
+
+_AXIS_DACE_SYMBOLS = {
+    "__I": dace.symbolic.pystr_to_symbolic("__I"),
+    "__J": dace.symbolic.pystr_to_symbolic("__J"),
+    "__K": dace.symbolic.pystr_to_symbolic("__K"),
+    "__i": dace.symbolic.pystr_to_symbolic("__i"),
+    "__j": dace.symbolic.pystr_to_symbolic("__j"),
+    "__k": dace.symbolic.pystr_to_symbolic("__k"),
+    "__tile_i": dace.symbolic.pystr_to_symbolic("__tile_i"),
+    "__tile_j": dace.symbolic.pystr_to_symbolic("__tile_j"),
+    "__tile_k": dace.symbolic.pystr_to_symbolic("__tile_k"),
+}
 
 
 class Axis(StrEnum):
@@ -49,6 +63,15 @@ class Axis(StrEnum):
 
     def to_idx(self):
         return [Axis.I, Axis.J, Axis.K].index(self)
+
+    def domain_dace_symbol(self):
+        return _AXIS_DACE_SYMBOLS[self.domain_symbol()]
+
+    def iteration_dace_symbol(self):
+        return _AXIS_DACE_SYMBOLS[self.iteration_symbol()]
+
+    def tile_dace_symbol(self):
+        return _AXIS_DACE_SYMBOLS[self.tile_symbol()]
 
 
 class MapSchedule(IntEnum):
@@ -120,6 +143,9 @@ class AxisBound(common.AxisBound):
     def from_common(cls, axis, node):
         return cls(axis=axis, level=node.level, offset=node.offset)
 
+    def to_dace_symbolic(self):
+        return get_axis_bound_dace_symbol(self)
+
 
 class IndexWithExtent(Node):
     axis: Axis
@@ -170,6 +196,17 @@ class IndexWithExtent(Node):
             f"{self.value}{self.extent[1] + 1:+d}",
         )
 
+    def to_dace_symbolic(self):
+        if isinstance(self.value, AxisBound):
+            symbolic_value = get_axis_bound_dace_symbol(self.value)
+        elif isinstance(self.value, str):
+            symbolic_value = next(
+                axis for axis in Axis.dims_3d() if axis.iteration_symbol() == self.value
+            ).iteration_dace_symbol()
+        else:
+            symbolic_value = self.value
+        return symbolic_value + self.extent[0], symbolic_value + self.extent[1] + 1
+
     def shifted(self, offset):
         extent = self.extent[0] + offset, self.extent[1] + offset
         return IndexWithExtent(axis=self.axis, value=self.value, extent=extent)
@@ -217,6 +254,9 @@ class DomainInterval(Node):
     def idx_range(self):
         return str(self.start), str(self.end)
 
+    def to_dace_symbolic(self):
+        return self.start.to_dace_symbolic(), self.end.to_dace_symbolic()
+
     def shifted(self, offset: int):
         return DomainInterval(
             start=AxisBound(
@@ -240,7 +280,7 @@ class TileInterval(Node):
     start_offset: int
     end_offset: int
     tile_size: int
-    domain_limit: str
+    domain_limit: AxisBound
 
     @property
     def size(self):
@@ -277,26 +317,35 @@ class TileInterval(Node):
         end = f"{start}+({self.size})"
         return start, end
 
+    def dace_symbolic_size(self):
+        return (
+            sympy.Min(
+                self.tile_size, self.domain_limit.to_dace_symbolic() - self.axis.tile_dace_symbol()
+            )
+            + self.end_offset
+            - self.start_offset
+        )
+
+    def to_dace_symbolic(self):
+
+        start = self.axis.tile_dace_symbol() + self.start_offset
+        end = start + self.dace_symbolic_size()
+        return start, end
+
 
 class Range(Node):
     var: Str
-    start: Union[Str, Int, AxisBound]
-    end: Union[Str, Int, AxisBound]
-    stride: Union[Str, Int] = 1
+    interval: Union[DomainInterval, TileInterval]
+    stride: int
 
     @classmethod
     def from_axis_and_interval(
         cls, axis: Axis, interval: Union[DomainInterval, TileInterval], stride=1
     ):
-        if isinstance(interval, (oir.Interval, DomainInterval)):
-            start = get_axis_bound_str(interval.start, axis.domain_symbol())
-            end = get_axis_bound_str(interval.end, axis.domain_symbol())
-        else:
-            start, end = interval.idx_range
+
         return cls(
             var=axis.iteration_symbol(),
-            start=start,
-            end=end,
+            interval=interval,
             stride=stride,
         )
 
@@ -415,7 +464,7 @@ class GridSubset(Node):
                         tile_size=tile_sizes[axis],
                         start_offset=0,
                         end_offset=0,
-                        domain_limit=str(interval.end),
+                        domain_limit=interval.end,
                     )
                 else:
                     assert (
@@ -427,7 +476,7 @@ class GridSubset(Node):
                         tile_size=tile_sizes[axis],
                         start_offset=interval.start.offset,
                         end_offset=interval.end.offset,
-                        domain_limit=axis.domain_symbol(),
+                        domain_limit=AxisBound(axis=axis, level=common.LevelMarker.END, offset=0),
                     )
             else:
                 res_intervals[axis] = interval
