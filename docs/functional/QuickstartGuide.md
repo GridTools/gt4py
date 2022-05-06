@@ -308,11 +308,11 @@ edge_weights = np.array([
 edge_weight_field = np_as_located_field(CellDim, C2EDim)(edge_weights)
 ```
 
-Putting all the above together, we can finally write the field operator for the pseudo-laplacian. The field operator requires the cell field and the edge weights as input, and output a cell field of the same shape as the input.
+Putting all the above together, we can finally write the field operator for the pseudo-laplacian. The field operator requires the cell field and the edge weights as input, and outputs a cell field of the same shape as the input.
 
-In the first line, we use the edge-to-cell connectivity relationship to construct two fields over the edges: the first field assigns the value of the first neighbour cell to the edges, the second field assigns the value of the second neighbour cell. The difference of the two fields forms the edge differences.
+In the first line, we use the edge-to-cell connectivity relationship to construct two fields over the edges: the first field assigns the value of the first neighbor cell to the edges, the second field assigns the value of the second neighbor cell. The difference of the two fields forms the edge differences.
 
-In the second line, we use the cell-to-edge connectivity to create a field over the cells. This field stores three values for each cell: the three edge differences for the three edges around the cell. Additionally, we do a summation over these three values to get a field over cells that contains only one sum for each cell.
+In the second line, we use the cell-to-edge connectivity to create a field over the cells. This field stores three values for each cell: the edge differences for the three edges around the cell. Additionally, we do a summation over these three values to get a field over cells that contains only one sum for each cell.
 
 ```{code-cell} ipython3
 @field_operator
