@@ -109,9 +109,9 @@ Multiple field operator calls can be grouped together to create a *program* that
 @program
 def run_add(a : Field[[CellDim, KDim], float32],
             b : Field[[CellDim, KDim], float32],
-            out : Field[[CellDim, KDim], float32]):
-    add(a, b, out=out)
-    add(b, out, out=out)
+            result : Field[[CellDim, KDim], float32]):
+    add(a, b, out=result)
+    add(b, result, out=result)
 ```
 
 Executing this program should result in a field filled with the value 8:
@@ -156,31 +156,31 @@ CellDim = Dimension("Cell")
 EdgeDim = Dimension("Edge")
 ```
 
-We will also define the connectivities that establish a neighborhood relation between the elements of our mesh. For this, we will use one table for the edges reachable from a cell, and another table for the cells reachable from an edge. The $i$th entry of the connectivity table contains the indices of the <span style="color: #C02020">cells</span> (<span style="color: #0080FF">edges</span>) adjacent to the $i$th <span style="color: #0080FF">edge</span> (<span style="color: #C02020">cell</span>). The aforementioned connectivity tables for our mesh are:
+We will also define the connectivities that establish a neighborhood relation between the elements of our mesh. For this, we will use one table for the edges reachable from a cell, and another table for the cells reachable from an edge. The $i$th entry of the connectivity table contains the indices of the <span style="color: #C02020">cells</span> (<span style="color: #0080FF">edges</span>) adjacent to the $i$th <span style="color: #0080FF">edge</span> (<span style="color: #C02020">cell</span>). Since the connectivity tables are dense matrices, we have to signal a missing neighbor by adding a -1 as index. The aforementioned connectivity tables for our mesh are:
 
 ```{code-cell} ipython3
 edge_to_cell_table = np.array([
-    [0, -1],
-    [2, -1],
-    [2, -1],
-    [3, -1],
-    [4, -1],
-    [5, -1],
-    [0, 5],
-    [0, 1],
-    [1, 2],
-    [1, 3],
-    [3, 4],
-    [4, 5]
+    [0, -1], # edge 0 (neighbours: cell 0)
+    [2, -1], # edge 1
+    [2, -1], # edge 2
+    [3, -1], # edge 3
+    [4, -1], # edge 4
+    [5, -1], # edge 5
+    [0, 5],  # edge 6 (neighbours: cell 0, cell 5)
+    [0, 1],  # edge 7
+    [1, 2],  # edge 8
+    [1, 3],  # edge 9
+    [3, 4],  # edge 10
+    [4, 5]   # edge 11
 ])
 
 cell_to_edge_table = np.array([
-    [0, 6, 7],
-    [7, 8, 9],
-    [1, 2, 8],
-    [3, 9, 10],
-    [4, 10, 11],
-    [5, 6, 11],
+    [0, 6, 7],   # cell 0 (neighbors: edge 0, edge 6, edge 7)
+    [7, 8, 9],   # cell 1
+    [1, 2, 8],   # cell 2
+    [3, 9, 10],  # cell 3
+    [4, 10, 11], # cell 4
+    [5, 6, 11],  # cell 5
 ])
 ```
 
