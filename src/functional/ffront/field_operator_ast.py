@@ -14,7 +14,7 @@
 
 
 import re
-from typing import Generic, Optional, TypeVar, Union
+from typing import Generic, TypeVar, Union
 
 import eve
 from eve import Node
@@ -140,6 +140,7 @@ class Compare(Expr):
 class Call(Expr):
     func: Name
     args: list[Expr]
+    kwargs: dict[str, Expr]
 
 
 class Stmt(LocatedNode):

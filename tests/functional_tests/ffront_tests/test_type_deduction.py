@@ -20,7 +20,6 @@ from functional.ffront import common_types as ct, type_info
 from functional.ffront.fbuiltins import Field, float32, float64, int64
 from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError
 from functional.ffront.func_to_foast import FieldOperatorParser
-from functional.ffront.type_info import TypeInfo
 
 
 def type_info_cases() -> list[tuple[Optional[ct.SymbolType], dict]]:
@@ -71,12 +70,12 @@ def type_info_cases() -> list[tuple[Optional[ct.SymbolType], dict]]:
     ]
 
 
-def type_info_is_callable_for_args_cases():
+def can_call_cases():
     # reuse all the other test cases
     not_callable = [
         (symbol_type, [], {}, [r"Expected a function type, but got "])
         for symbol_type, attributes in type_info_cases()
-        if not attributes.get("is_callable", False)
+        if not isinstance(symbol_type, ct.FunctionType)
     ]
 
     bool_type = ct.ScalarType(kind=ct.ScalarKind.BOOL)
@@ -122,22 +121,21 @@ def test_type_info_basic(symbol_type, expected):
         assert getattr(type_info, key)(symbol_type) == expected[key]
 
 
-@pytest.mark.parametrize("func_type,args,kwargs,expected", type_info_is_callable_for_args_cases())
-def test_type_info_is_callable_for_args_cases(
+@pytest.mark.parametrize("func_type,args,kwargs,expected", can_call_cases())
+def test_can_call(
     func_type: ct.SymbolType,
     args: list[ct.SymbolType],
     kwargs: dict[str, ct.SymbolType],
     expected: list,
 ):
-    typeinfo = TypeInfo(func_type)
     is_callable = len(expected) == 0
-    assert typeinfo.is_callable_for_args(args, kwargs) == is_callable
+    assert type_info.can_call(func_type, with_args=args, with_kwargs=kwargs) == is_callable
 
     if len(expected) > 0:
         with pytest.raises(
             GTTypeError,
         ) as exc_info:
-            typeinfo.is_callable_for_args(args, kwargs, raise_exception=True)
+            type_info.can_call(func_type, with_args=args, with_kwargs=kwargs, raise_exception=True)
 
         for expected_msg in expected:
             assert exc_info.match(expected_msg)

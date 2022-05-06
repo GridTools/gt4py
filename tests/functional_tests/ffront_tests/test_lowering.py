@@ -459,7 +459,7 @@ def test_compare_chain():
 
 def test_reduction_lowering_simple():
     def reduction(edge_f: Field[[Edge], "float64"]):
-        return neighbor_sum(edge_f(V2E), axis=V2E)
+        return neighbor_sum(edge_f(V2E), axis=V2EDim)
 
     parsed = FieldOperatorParser.apply_to_function(reduction)
     lowered = FieldOperatorLowering.apply(parsed)

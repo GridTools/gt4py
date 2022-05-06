@@ -69,7 +69,7 @@ class OffsetType(SymbolType):
     target: Optional[tuple[func_common.Dimension, ...]] = None
 
     def __str__(self):
-        return f"Offset[{self.id}]"
+        return f"Offset[{self.source}, {self.target}]"
 
 
 @dataclass(frozen=True)

@@ -426,13 +426,10 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
         if func_name in fbuiltins.TYPE_BUILTIN_NAMES:
             self._verify_builtin_type_constructor(node)
 
-        args = node.args.copy()
-        for keyword in node.keywords:
-            args.append(keyword.value)
-
         return foast.Call(
             func=self.visit(node.func, **kwargs),
-            args=[self.visit(arg, **kwargs) for arg in args],
+            args=[self.visit(arg, **kwargs) for arg in node.args],
+            kwargs={keyword.arg: self.visit(keyword.value, **kwargs) for keyword in node.keywords},
             location=self._make_loc(node),
         )
 

@@ -155,7 +155,7 @@ def make_symbol_type_from_typing(
             )
 
         case type() as t if issubclass(t, common.Dimension):
-            return ct.OffsetType()
+            return ct.ScalarType(kind=ct.ScalarKind.DIMENSION)
 
     raise TypingError(f"'{type_hint}' type is not supported")
 

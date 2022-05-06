@@ -253,7 +253,6 @@ class FieldOperatorTypeDeduction(NodeTranslator):
         return foast.TupleExpr(elts=new_elts, type=new_type, location=node.location)
 
     def visit_Call(self, node: foast.Call, **kwargs) -> foast.Call:
-        # TODO(tehrengruber): check type is complete
         new_func = self.visit(node.func, **kwargs)
 
         if isinstance(new_func.type, ct.FieldType):
@@ -272,11 +271,30 @@ class FieldOperatorTypeDeduction(NodeTranslator):
                 else:
                     new_dims.extend(target_dims)
             new_type = ct.FieldType(dims=new_dims, dtype=new_func.type.dtype)
-            return foast.Call(func=new_func, args=new_args, location=node.location, type=new_type)
+            return foast.Call(
+                func=new_func, args=new_args, kwargs={}, location=node.location, type=new_type
+            )
         elif isinstance(new_func.type, ct.FunctionType):
+            new_args = self.visit(node.args, **kwargs)
+            new_kwargs = {
+                keyword: self.visit(arg, **kwargs) for keyword, arg in node.kwargs.items()
+            }
+            try:
+                type_info.can_call(
+                    new_func.type,
+                    with_args=[arg.type for arg in new_args],
+                    with_kwargs={keyword: arg.type for keyword, arg in new_kwargs.items()},
+                    raise_exception=True,
+                )
+            except GTTypeError as err:
+                raise FieldOperatorTypeDeductionError.from_foast_node(
+                    node, msg=f"Invalid argument types in call to '{node.func.id}'!"
+                ) from err
+
             return foast.Call(
                 func=new_func,
-                args=self.visit(node.args, **kwargs),
+                args=new_args,
+                kwargs=new_kwargs,
                 location=node.location,
                 type=new_func.type.returns,
             )
