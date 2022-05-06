@@ -1,3 +1,4 @@
+from eve.utils import UIDs
 from functional.iterator import ir
 from functional.iterator.runtime import CartesianAxis
 from functional.iterator.transforms.global_tmps import (
@@ -10,6 +11,7 @@ from functional.iterator.transforms.global_tmps import (
 
 
 def test_split_closures():
+    UIDs.reset_sequence()
     testee = ir.FencilDefinition(
         id="f",
         function_definitions=[],
@@ -93,12 +95,12 @@ def test_split_closures():
                 stencil=ir.Lambda(
                     params=[
                         ir.Sym(id="bar_inp"),
-                        ir.Sym(id="t0"),
+                        ir.Sym(id="_lift_1"),
                     ],
                     expr=ir.FunCall(
                         fun=ir.SymRef(id="deref"),
                         args=[
-                            ir.SymRef(id="t0"),
+                            ir.SymRef(id="_lift_1"),
                         ],
                     ),
                 ),
@@ -108,10 +110,10 @@ def test_split_closures():
             ir.StencilClosure(
                 domain=ir.SymRef(id="d"),
                 stencil=ir.Lambda(
-                    params=[ir.SymRef(id="baz_inp"), ir.SymRef(id="t1")],
+                    params=[ir.SymRef(id="baz_inp"), ir.SymRef(id="_lift_2")],
                     expr=ir.FunCall(
                         fun=ir.SymRef(id="deref"),
-                        args=[ir.SymRef(id="t1")],
+                        args=[ir.SymRef(id="_lift_2")],
                     ),
                 ),
                 output=ir.SymRef(id="out"),
@@ -174,7 +176,7 @@ def test_update_cartesian_domains():
                         ],
                     ),
                     stencil=ir.Lambda(
-                        params=[ir.SymRef(id="baz_inp"), ir.SymRef(id="t1")],
+                        params=[ir.SymRef(id="baz_inp"), ir.SymRef(id="_lift_2")],
                         expr=ir.FunCall(
                             fun=ir.SymRef(id="deref"),
                             args=[
@@ -186,7 +188,7 @@ def test_update_cartesian_domains():
                                             ir.OffsetLiteral(value=1),
                                         ],
                                     ),
-                                    args=[ir.SymRef(id="t1")],
+                                    args=[ir.SymRef(id="_lift_2")],
                                 )
                             ],
                         ),
@@ -308,7 +310,7 @@ def test_update_cartesian_domains():
                         ],
                     ),
                     stencil=ir.Lambda(
-                        params=[ir.SymRef(id="baz_inp"), ir.SymRef(id="t1")],
+                        params=[ir.SymRef(id="baz_inp"), ir.SymRef(id="_lift_2")],
                         expr=ir.FunCall(
                             fun=ir.SymRef(id="deref"),
                             args=[
@@ -320,7 +322,7 @@ def test_update_cartesian_domains():
                                             ir.OffsetLiteral(value=1),
                                         ],
                                     ),
-                                    args=[ir.SymRef(id="t1")],
+                                    args=[ir.SymRef(id="_lift_2")],
                                 )
                             ],
                         ),
@@ -422,7 +424,7 @@ def test_collect_tmps_info():
                         ],
                     ),
                     stencil=ir.Lambda(
-                        params=[ir.SymRef(id="baz_inp"), ir.SymRef(id="t1")],
+                        params=[ir.SymRef(id="baz_inp"), ir.SymRef(id="_lift_2")],
                         expr=ir.FunCall(
                             fun=ir.SymRef(id="deref"),
                             args=[
@@ -434,7 +436,7 @@ def test_collect_tmps_info():
                                             ir.OffsetLiteral(value=1),
                                         ],
                                     ),
-                                    args=[ir.SymRef(id="t1")],
+                                    args=[ir.SymRef(id="_lift_2")],
                                 )
                             ],
                         ),

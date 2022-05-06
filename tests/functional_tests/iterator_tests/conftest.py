@@ -7,7 +7,7 @@ from functional.iterator.transforms import LiftMode
     params=[
         LiftMode.FORCE_INLINE,
         # LiftMode.FORCE_TEMPORARIES,
-        # LiftMode.SIMPLE_HEURISTIC,
+        LiftMode.SIMPLE_HEURISTIC,
     ],
     ids=lambda p: f"lift_mode={p.name}",
 )
