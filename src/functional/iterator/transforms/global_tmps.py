@@ -1,6 +1,6 @@
 from typing import Any, Optional
 
-from eve import Node, NodeTranslator
+from eve import NodeTranslator
 from eve.traits import SymbolTableTrait
 from functional.iterator import ir, type_inference
 from functional.iterator.pretty_printer import PrettyPrinter
@@ -14,13 +14,13 @@ from functional.iterator.transforms.prune_closure_inputs import PruneClosureInpu
 AUTO_DOMAIN = ir.SymRef(id="_gtmp_auto_domain")
 
 
-class Temporary(Node):
+class Temporary(ir.Node):
     id: ir.SymbolName  # noqa: A003
     domain: Optional[ir.Expr] = None
     dtype: Optional[Any] = None
 
 
-class FencilWithTemporaries(Node, SymbolTableTrait):
+class FencilWithTemporaries(ir.Node, SymbolTableTrait):
     fencil: ir.FencilDefinition
     params: list[ir.Sym]
     tmps: list[Temporary]
