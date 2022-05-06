@@ -308,25 +308,28 @@ edge_weights = np.array([
 edge_weight_field = np_as_located_field(CellDim, C2EDim)(edge_weights)
 ```
 
-**TODO**: The code:
+Putting all the above together, we can finally write the field operator for the pseudo-laplacian. The field operator requires the cell field and the edge weights as input, and output a cell field of the same shape as the input.
+
+In the first line, we use the edge-to-cell connectivity relationship to construct two fields over the edges: the first field assigns the value of the first neighbour cell to the edges, the second field assigns the value of the second neighbour cell. The difference of the two fields forms the edge differences.
+
+In the second line, we use the cell-to-edge connectivity to create a field over the cells. This field stores three values for each cell: the three edge differences for the three edges around the cell. Additionally, we do a summation over these three values to get a field over cells that contains only one sum for each cell.
 
 ```{code-cell} ipython3
 @field_operator
 def pseudo_lap(cells : Field[[CellDim], float32],
-               polarities : Field[[CellDim, C2EDim], float32]) -> Field[[CellDim], float32]:
+               edge_weights : Field[[CellDim, C2EDim], float32]) -> Field[[CellDim], float32]:
     edge_differences = cells(E2C[0]) - cells(E2C[1]) # type: Field[[EdgeDim], float32]
-    return neighbor_sum(edge_differences(C2E) * polarities, axis=C2EDim)
+    return neighbor_sum(edge_differences(C2E) * edge_weights, axis=C2EDim)
+```
 
-@field_operator
-def pseudo_laplap(cells : Field[[EdgeDim], float32],
-                  polarities : Field[[CellDim, C2EDim], float32]) -> Field[[CellDim], float32]:
-    return pseudo_lap(pseudo_lap(cells, polarities), polarities)
+The program itself is just a shallow wrapper over the `pseudo_lap` field operator. Note, however, how we are passing the offset providers that supply both the edge-to-cell and cell-to-edge connectivities when calling the program:
 
+```{code-cell} ipython3
 @program
 def run_pseudo_laplacian(cells : Field[[CellDim], float32],
-                         polarities : Field[[CellDim, C2EDim], float32],
+                         edge_weights : Field[[CellDim, C2EDim], float32],
                          out : Field[[CellDim], float32]):
-    pseudo_lap(cells, polarities, out=out)
+    pseudo_lap(cells, edge_weights, out=out)
 
 result_pseudo_lap = np_as_located_field(CellDim)(np.zeros(shape=(6,)))
 
@@ -336,6 +339,15 @@ run_pseudo_laplacian(cell_values,
                      offset_provider={"E2C": E2C_offset_provider, "C2E": C2E_offset_provider})
 
 print("pseudo-laplacian: {}".format(np.asarray(result_pseudo_lap)))
+```
+
+As a closure, we will show an example of chaining field operators, which is very simple to do when working with fields. The field operator below executes the pseudo-laplacian, and then calls the pseudo-laplacian on the result of the first, in effect, calculating the laplacian of a laplacian.
+
+```{code-cell} ipython3
+@field_operator
+def pseudo_laplap(cells : Field[[EdgeDim], float32],
+                  edge_weights : Field[[CellDim, C2EDim], float32]) -> Field[[CellDim], float32]:
+    return pseudo_lap(pseudo_lap(cells, edge_weights), edge_weights)
 ```
 
 ```{code-cell} ipython3
