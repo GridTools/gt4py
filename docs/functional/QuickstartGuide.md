@@ -26,7 +26,7 @@ The library is distributed as a Python package and can be installed directly fro
 pip install git+https://github.com/gridtools/gt4py.git@functional
 ```
 
-For now, use the below branch which contains sub bugfixes needed to run the code in the guide:
+For now, use the branch below which contains some bugfixes needed to run the code in the guide:
 
 ```{raw-cell}
 pip install git+https://github.com/tehrengruber/gt4py.git@fix_reductions
@@ -37,7 +37,7 @@ pip install git+https://github.com/tehrengruber/gt4py.git@fix_reductions
 
 ### Basic structure of an application using the library
 
-In this section, we will write a simple application that adds two arrays. The goal is to understand how represent data in the form of fields and perform basic operations between them.
+In this section, we will write a simple application that adds two arrays. The goal is to understand how to represent data using *fields* and perform basic operations with them.
 
 +++
 
@@ -103,7 +103,7 @@ print("{} + {} = {} ± {}".format(a_value, b_value, np.average(np.asarray(result
 
 +++
 
-Multiple field operator calls can be grouped together to create a *program* that, unlike field operators, allows stateful operations such as changing the input arguments. The only operations currently allowed within programs are field operator calls, but this might be extended with other operations in the future. As a guideline one is advised to write as much code as possible inside field operators, as that improves the optimization potential.
+Multiple field operator calls can be grouped together to create a *program* that, unlike field operators, allows stateful operations such as changing the input arguments. The only operations currently allowed within programs are field operator calls, but this might be extended with other operations in the future. As a guideline, one is advised to write as much code inside field operators as possible since that improves the optimization potential.
 
 ```{code-cell} ipython3
 @program
@@ -114,7 +114,7 @@ def run_add(a : Field[[CellDim, KDim], float32],
     add(b, result, out=result)
 ```
 
-Executing this program should result in a field filled with the value 8:
+Executing this program should result in a field uniformly filled with the value 8:
 
 ```{code-cell} ipython3
 result = np_as_located_field(CellDim, KDim)(np.zeros(shape=grid_shape))
@@ -125,7 +125,7 @@ print("{} + {} = {} ± {}".format(b_value, (a_value + b_value), np.average(np.as
 
 ### Operations on unstructured meshes
 
-In this section, we will write a slightly more elaborate application that performs a laplacian-like operation on an unstructured mesh to introduce additional APIs. We will define the *pseudo-laplacian* as the sum of the differences between the values on neighboring cells with the current cell, where two cells are said to be neighboring if they share a common edge.
+In this section, we will introduce additional APIs by writing a slightly more elaborate application that performs a laplacian-like operation on an unstructured mesh. We will define the *pseudo-laplacian* as the sum of the differences between the values of neighboring cells and the value of current cell, where two cells are said to be neighbors if they share a common edge.
 
 For example, if cell \#1 has three neighbors, cell \#0, \#2 and \#3, its pseudo-laplacian is $$\begin{aligned}\text{pseudolap}(cell_1) =\,& (\text{value_of}(\text{cell}_1) - \text{value_of}(\text{cell}_0)) \\
 &+ (\text{value_of}(\text{cell}_1)-\text{value_of}(\text{cell}_2)) \\
