@@ -125,13 +125,17 @@ print("{} + {} = {} ± {}".format(b_value, (a_value + b_value), np.average(np.as
 
 ### Operations on unstructured meshes
 
-In this section, we will introduce additional APIs by writing a slightly more elaborate application that performs a laplacian-like operation on an unstructured mesh. We will define the *pseudo-laplacian* as the sum of the differences between the values of neighboring cells and the value of current cell, where two cells are said to be neighbors if they share a common edge.
+In this section, we will introduce additional APIs by writing a slightly more elaborate application that performs a laplacian-like operation on an unstructured mesh. We will define the *pseudo-laplacian* for a cell as the sum of the *edge differences* around the cell. For example, the pseudo-laplacian for cell \#1, which is surrounded by edges \#7, \#8 and \#9, would be:
 
-For example, if cell \#1 has three neighbors, cell \#0, \#2 and \#3, its pseudo-laplacian is $$\begin{aligned}\text{pseudolap}(cell_1) =\,& (\text{value_of}(\text{cell}_1) - \text{value_of}(\text{cell}_0)) \\
-&+ (\text{value_of}(\text{cell}_1)-\text{value_of}(\text{cell}_2)) \\
-& + (\text{value_of}(\text{cell}_1)-\text{value_of}(\text{cell}_3))\end{aligned}$$.
+$$\begin{aligned}\text{pseudolap}(cell_1) =\,& \text{edge_diff}_7 + \text{edge_diff}_8 + \text{edge_diff}_9 \end{aligned}$$.
 
-This section is broken down into smaller parts to introduce concepts required for the pseudo-laplacian bit by bit:
+An edge difference is defined as the difference between the two cells adjacent to and edge, so for edge \#7 it would be:
+
+$$\begin{aligned} \text{edge_diff}_7 =\,& \text{edge_diff}_{0,1} = \text{value_of}(\text{cell}_0) - \text{value_of}(\text{cell}_1) \end{aligned}$$
+
+The sign of the edge difference should always be such that the neighbor cell is subtracted from the subject cell.
+
+Before implementing the actual pseudo-laplacian, we will go through the following topics by some simpler examples:
 - Defining the mesh and the connectivities (adjacencies) between cells and edges
 - Learning to apply connectivities within field operators
 - Learning to use reductions on adjacent mesh elements
