@@ -30,18 +30,15 @@ from gt4py import utils as gt_utils
 
 
 def _backend_name_as_param(name):
+    marks = []
     if gt_backend.from_name(name).storage_info["device"] == "gpu":
-        return pytest.param(name, marks=[pytest.mark.requires_gpu])
-    else:
-        return pytest.param(name)
-
-
-def make_backend_params(*names):
-    return map(_backend_name_as_param, names)
+        marks.append(pytest.mark.requires_gpu)
+    if "dace" in name:
+        marks.append(pytest.mark.requires_dace)
+    return pytest.param(name, marks=marks)
 
 
 _ALL_BACKEND_NAMES = list(gt_backend.REGISTRY.keys())
-_INTERNAL_BACKEND_NAMES = [name for name in _ALL_BACKEND_NAMES if name.startswith("gt")]
 
 
 CPU_BACKENDS = [
@@ -55,19 +52,6 @@ GPU_BACKENDS = [
     if gt_backend.from_name(name).storage_info["device"] == "gpu"
 ]
 ALL_BACKENDS = CPU_BACKENDS + GPU_BACKENDS
-
-INTERNAL_CPU_BACKENDS = [
-    _backend_name_as_param(name)
-    for name in _INTERNAL_BACKEND_NAMES
-    if gt_backend.from_name(name).storage_info["device"] == "cpu"
-]
-INTERNAL_GPU_BACKENDS = [
-    _backend_name_as_param(name)
-    for name in _INTERNAL_BACKEND_NAMES
-    if gt_backend.from_name(name).storage_info["device"] == "gpu"
-]
-
-INTERNAL_BACKENDS = INTERNAL_CPU_BACKENDS + INTERNAL_GPU_BACKENDS
 
 
 @pytest.fixture()

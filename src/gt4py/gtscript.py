@@ -111,23 +111,33 @@ _VALID_DATA_TYPES = (
 
 
 def _set_arg_dtypes(definition: Callable[..., None], dtypes: Dict[Type, Type]):
+    def _parse_annotation(arg, annotation):
+        # This function evaluates the type hint 'annotation' for the stencil argument 'arg'.
+        # Note that 'typing.get_type_hints()' cannot be used here since field
+        # arguments are annotated using instances (and not subclasses) of 'Field',
+        # which is explicitly forbidden by 'get_type_hints()'.
+        #
+        if isinstance(annotation, _FieldDescriptor) and isinstance(annotation.dtype, str):
+            if annotation.dtype in dtypes:
+                return _FieldDescriptor(
+                    dtypes[annotation.dtype], annotation.axes, annotation.data_dims
+                )
+            else:
+                raise ValueError(f"Missing '{annotation.dtype}' dtype definition for arg '{arg}'")
+        elif isinstance(annotation, str):
+            if annotation in dtypes:
+                return dtypes[annotation]
+            else:
+                def_globals = getattr(definition, "__globals__", {})
+                return _parse_annotation(arg, eval(annotation, def_globals))
+        else:
+            return annotation
+
     assert isinstance(definition, types.FunctionType)
     annotations = getattr(definition, "__annotations__", {})
     original_annotations = {**annotations}
-    for arg, value in annotations.items():
-        if isinstance(value, _FieldDescriptor) and isinstance(value.dtype, str):
-            if value.dtype in dtypes:
-                annotations[arg] = _FieldDescriptor(
-                    dtypes[value.dtype], value.axes, value.data_dims
-                )
-            else:
-                raise ValueError(f"Missing '{value.dtype}' dtype definition for arg '{arg}'")
-        elif isinstance(value, str):
-            if value in dtypes:
-                annotations[arg] = dtypes[value]
-            else:
-                raise ValueError(f"Missing '{value}' dtype definition for arg '{arg}'")
-
+    for key, value in annotations.items():
+        annotations[key] = _parse_annotation(key, value)
     return original_annotations
 
 
