@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import abc
 from collections.abc import Sequence
+import dataclasses
 from dataclasses import dataclass
 from typing import Any, Generic, TypeVar
 
@@ -28,7 +29,13 @@ DT = TypeVar("DT", bound="DType")
 @dataclass(frozen=True)
 class Dimension:
     value: str
+    local: bool = dataclasses.field(default=False)
 
+    def __gt_type__(self):
+        # TODO(tehrengruber): Revisit. This coupling to the frontend is not
+        #  optimal.
+        import functional.ffront.common_types as ct
+        return ct.DimensionType(self)
 
 class DType:
     ...

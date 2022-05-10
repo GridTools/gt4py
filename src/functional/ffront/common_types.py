@@ -60,7 +60,10 @@ class VoidType(SymbolType):
     Note: only useful for stateful dialects.
     """
 
-    ...
+
+@dataclass(frozen=True)
+class DimensionType(SymbolType):
+    dim: func_common.Dimension
 
 
 @dataclass(frozen=True)

@@ -64,6 +64,7 @@ BUILTINS = {name: globals()[name] for name in __all__ + ["bool", "int", "float"]
 # TODO(ricoh): This should be reunified with ``iterator.runtime.Offset``
 # potentially in ``functional.common``, which requires lifting of
 # ``ffront.common_types`` into ``functional``.
+# TODO(tehrengruber): remove inheritance since this is conceptually different to itir offset
 @dataclass(frozen=True)
 class FieldOffset(runtime.Offset):
     source: Optional[Dimension] = None

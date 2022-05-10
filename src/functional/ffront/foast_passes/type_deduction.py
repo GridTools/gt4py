@@ -15,7 +15,7 @@ from typing import Any, Optional
 
 import functional.ffront.field_operator_ast as foast
 from eve import NodeTranslator, SymbolTableTrait
-from functional.common import GTSyntaxError
+from functional.common import GTSyntaxError, Dimension
 from functional.ffront import common_types as ct
 from functional.ffront.type_info import GenericDimensions, TypeInfo, is_complete_symbol_type
 
@@ -192,16 +192,21 @@ class FieldOperatorTypeDeduction(NodeTranslator):
     def visit_Subscript(self, node: foast.Subscript, **kwargs) -> foast.Subscript:
         new_value = self.visit(node.value, **kwargs)
         new_type = None
-        if kwargs.get("in_shift", False):
-            return foast.Subscript(
-                value=new_value,
-                index=node.index,
-                type=new_value.type,
-                location=node.location,
-            )
         match new_value.type:
             case ct.TupleType(types=types):
                 new_type = types[node.index]
+            case ct.OffsetType(source=source, target=(target1, target2)):
+                if not target2.local:
+                    raise FieldOperatorTypeDeductionError.from_foast_node(
+                        new_value,
+                        msg="Second dimension in offset must be a local dimension."
+                    )
+                new_type = ct.OffsetType(source=source, target=(target1,))
+            case ct.OffsetType(source=_, target=(_,)):
+                # for cartesian axes (e.g. I, J) the index of the subscript only
+                #  signifies the displacement in the respective dimension,
+                #  but does not change the target type.
+                new_type = new_value.type
             case _:
                 raise FieldOperatorTypeDeductionError.from_foast_node(
                     new_value, msg="Could not deduce type of subscript expression!"
@@ -352,7 +357,7 @@ class FieldOperatorTypeDeduction(NodeTranslator):
         new_func = self.visit(node.func, **kwargs)
 
         if isinstance(new_func.type, ct.FieldType):
-            new_args = self.visit(node.args, in_shift=True, **kwargs)
+            new_args = self.visit(node.args, **kwargs)
             source_dim = new_args[0].type.source
             target_dims = new_args[0].type.target
             if new_func.type.dims and source_dim not in new_func.type.dims:
@@ -369,11 +374,28 @@ class FieldOperatorTypeDeduction(NodeTranslator):
             new_type = ct.FieldType(dims=new_dims, dtype=new_func.type.dtype)
             return foast.Call(func=new_func, args=new_args, location=node.location, type=new_type)
         elif isinstance(new_func.type, ct.FunctionType):
+            new_args = self.visit(node.args, **kwargs)
+            # todo(tehrengruber): solve in a more generic way, e.g. using
+            #  parametric polymorphism.
+            if node.func.id == "neighbor_sum":
+                field_type = new_args[0].type
+                reduction_dim = new_args[1].type.dim
+                if reduction_dim not in field_type.dims:
+                    raise FieldOperatorTypeDeductionError.from_foast_node(
+                        node,
+                        msg=f"Incompatible field argument in {node.func.id}. Expected a "
+                            f"field with dimension {node.args[1].type.dim}, but got "
+                            f"{', '.join(new_func.type.dims)}.",
+                    )
+                return_type = ct.FieldType(dims=[dim for dim in field_type.dims if dim != reduction_dim], dtype=field_type.dtype)
+            else:
+                return_type = new_func.type.returns
+
             return foast.Call(
                 func=new_func,
-                args=self.visit(node.args, **kwargs),
+                args=new_args,
                 location=node.location,
-                type=new_func.type.returns,
+                type=return_type,
             )
 
         raise FieldOperatorTypeDeductionError.from_foast_node(

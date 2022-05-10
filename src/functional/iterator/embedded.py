@@ -22,6 +22,7 @@ class NeighborTableOffsetProvider:
         self.tbl = tbl
         self.origin_axis = origin_axis
         self.neighbor_axis = neighbor_axis
+        assert tbl.shape[1] == max_neighbors
         self.max_neighbors = max_neighbors
         self.has_skip_values = has_skip_values
 
@@ -372,6 +373,14 @@ def make_in_iterator(inp, pos, offset_provider, *, column_axis):
     # TODO(havogt): support nested tuples
     axises = inp[0].axises if isinstance(inp, tuple) else inp.axises
     sparse_dimensions = [axis for axis in axises if isinstance(axis, Offset)]
+    sparse_dimensions =[]
+    for axis in axises:
+        if isinstance(axis, Offset):
+            sparse_dimensions.append(axis)
+        elif isinstance(axis, CartesianAxis) and axis.local:
+            # we just use the name of the axis to match the offset literal for now
+            sparse_dimensions.append(axis)
+
     assert len(sparse_dimensions) <= 1  # TODO multiple is not a current use case
     new_pos = pos.copy()
     for axis in sparse_dimensions:

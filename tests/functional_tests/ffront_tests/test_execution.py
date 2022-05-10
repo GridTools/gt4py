@@ -138,6 +138,7 @@ def test_shift():
     def shift_by_one(inp: Field[[IDim], float64]) -> Field[[IDim], float64]:
         return inp(Ioff[1])
 
+
     @program(backend="roundtrip")
     def fencil(inp: Field[[IDim], float64], out: Field[[IDim], float64]) -> None:
         shift_by_one(inp, out=out)
@@ -200,11 +201,10 @@ def test_tuples():
 
 @pytest.fixture
 def reduction_setup():
-
     size = 9
     edge = CartesianAxis("Edge")
     vertex = CartesianAxis("Vertex")
-    v2edim = CartesianAxis("V2E")
+    v2edim = CartesianAxis("V2E", local=True)
 
     v2e_arr = np.array(
         [
@@ -258,6 +258,24 @@ def test_reduction_execution(reduction_setup):
     assert np.allclose(ref, rs.out)
 
 
+def test_reduction_execution_nb(reduction_setup):
+    """Testing a neighbor sum on a neighbor field."""
+    rs = reduction_setup
+    V2EDim = rs.V2EDim
+    V2E = rs.V2E
+
+    nb_field = np_as_located_field(rs.Vertex, rs.V2EDim)(rs.v2e_table)
+
+    @field_operator
+    def reduction(nb_field: Field[[rs.Vertex, rs.V2EDim], "float64"]) -> Field[[rs.Vertex], "float64"]:  # type: ignore
+        return neighbor_sum(nb_field, axis=V2EDim)
+        #return nb_field(V2E[0])
+
+    reduction(nb_field, out=rs.out, offset_provider=rs.offset_provider)
+
+    ref = np.sum(rs.v2e_table, axis=1)
+    assert np.allclose(ref, rs.out)
+
 def test_reduction_expression(reduction_setup):
     """Test reduction with an expression directly inside the call."""
     rs = reduction_setup
@@ -270,7 +288,7 @@ def test_reduction_expression(reduction_setup):
     def reduce_expr(edge_f: Field[[Edge], "float64"]) -> Field[[Vertex], float64]:
         tmp_nbh_tup = edge_f(V2E), edge_f(V2E)
         tmp_nbh = tmp_nbh_tup[0]
-        return neighbor_sum(-edge_f(V2E) * tmp_nbh * 2.0, axis=V2EDim)
+        return 3.0 * neighbor_sum(-edge_f(V2E) * tmp_nbh * 2.0, axis=V2EDim)
 
     @program(backend="roundtrip")
     def fencil(edge_f: Field[[Edge], float64], out: Field[[Vertex], float64]) -> None:
@@ -278,7 +296,7 @@ def test_reduction_expression(reduction_setup):
 
     fencil(rs.inp, rs.out, offset_provider=rs.offset_provider)
 
-    ref = np.sum(-(rs.v2e_table**2) * 2, axis=1)
+    ref = 3 * np.sum(-(rs.v2e_table**2) * 2, axis=1)
     assert np.allclose(ref, rs.out.array())
 
 
