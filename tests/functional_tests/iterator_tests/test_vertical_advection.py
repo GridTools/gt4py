@@ -4,6 +4,7 @@ import pytest
 from functional.iterator.builtins import *
 from functional.iterator.embedded import np_as_located_field
 from functional.iterator.runtime import *
+from functional.iterator.transforms import LiftMode
 
 
 @fundef
@@ -67,8 +68,8 @@ def fen_solve_tridiag(i_size, j_size, k_size, a, b, c, d, x):
 
 def test_tridiag(tridiag_reference, backend, lift_mode):
     backend, validate = backend
-    if backend == "gtfn":
-        pytest.xfail("gtfn does not yet support scans")
+    if backend == "gtfn" and lift_mode == LiftMode.FORCE_INLINE:
+        pytest.xfail("gtfn does only support lifted scans when using temporaries")
     a, b, c, d, x = tridiag_reference
     shape = a.shape
     as_3d_field = np_as_located_field(IDim, JDim, KDim)
