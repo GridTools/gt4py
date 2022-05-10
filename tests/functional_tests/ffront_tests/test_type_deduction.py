@@ -329,6 +329,7 @@ def remap_setup():
     Y2X = FieldOffset("Y2X", source=X, target=(Y, Y2XDim))
     return X, Y, Y2XDim, Y2X
 
+
 def test_remap(remap_setup):
     X, Y, Y2XDim, Y2X = remap_setup
 
@@ -340,7 +341,6 @@ def test_remap(remap_setup):
     assert parsed.body[0].value.type == ct.FieldType(
         dims=[Y], dtype=ct.ScalarType(kind=ct.ScalarKind.INT64)
     )
-
 
 
 def test_remap_nbfield(remap_setup):
@@ -360,25 +360,27 @@ def test_remap_reduce(remap_setup):
     X, Y, Y2XDim, Y2X = remap_setup
 
     def remap_fo(bar: Field[[X], int64]) -> Field[[Y], int64]:
-        return 2*neighbor_sum(bar(Y2X), axis=Y2XDim)
+        return 2 * neighbor_sum(bar(Y2X), axis=Y2XDim)
 
     parsed = FieldOperatorParser.apply_to_function(remap_fo)
 
     assert parsed.body[0].value.type == ct.FieldType(
         dims=[Y], dtype=ct.ScalarType(kind=ct.ScalarKind.INT64)
     )
+
 
 def test_remap_reduce_sparse(remap_setup):
     X, Y, Y2XDim, Y2X = remap_setup
 
     def remap_fo(bar: Field[[Y, Y2XDim], int64]) -> Field[[Y], int64]:
-        return 5*neighbor_sum(bar, axis=Y2XDim)
+        return 5 * neighbor_sum(bar, axis=Y2XDim)
 
     parsed = FieldOperatorParser.apply_to_function(remap_fo)
 
     assert parsed.body[0].value.type == ct.FieldType(
         dims=[Y], dtype=ct.ScalarType(kind=ct.ScalarKind.INT64)
     )
+
 
 def test_scalar_arg():
     def scalar_arg(bar: Field[..., int64], alpha: int64) -> Field[..., int64]:

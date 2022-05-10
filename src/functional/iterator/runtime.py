@@ -17,6 +17,7 @@ class Offset:
 def offset(value):
     return Offset(value)
 
+
 # todo: rename to dimension and remove axis terminology
 CartesianAxis = common.Dimension
 

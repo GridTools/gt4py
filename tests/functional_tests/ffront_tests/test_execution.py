@@ -138,7 +138,6 @@ def test_shift():
     def shift_by_one(inp: Field[[IDim], float64]) -> Field[[IDim], float64]:
         return inp(Ioff[1])
 
-
     @program(backend="roundtrip")
     def fencil(inp: Field[[IDim], float64], out: Field[[IDim], float64]) -> None:
         shift_by_one(inp, out=out)
@@ -269,12 +268,12 @@ def test_reduction_execution_nb(reduction_setup):
     @field_operator
     def reduction(nb_field: Field[[rs.Vertex, rs.V2EDim], "float64"]) -> Field[[rs.Vertex], "float64"]:  # type: ignore
         return neighbor_sum(nb_field, axis=V2EDim)
-        #return nb_field(V2E[0])
 
     reduction(nb_field, out=rs.out, offset_provider=rs.offset_provider)
 
     ref = np.sum(rs.v2e_table, axis=1)
     assert np.allclose(ref, rs.out)
+
 
 def test_reduction_expression(reduction_setup):
     """Test reduction with an expression directly inside the call."""

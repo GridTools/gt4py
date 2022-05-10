@@ -15,8 +15,8 @@
 from __future__ import annotations
 
 import abc
-from collections.abc import Sequence
 import dataclasses
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any, Generic, TypeVar
 
@@ -35,7 +35,9 @@ class Dimension:
         # TODO(tehrengruber): Revisit. This coupling to the frontend is not
         #  optimal.
         import functional.ffront.common_types as ct
+
         return ct.DimensionType(self)
+
 
 class DType:
     ...

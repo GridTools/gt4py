@@ -11,11 +11,11 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-from typing import Any, Optional
+from typing import Any, Optional, cast
 
 import functional.ffront.field_operator_ast as foast
 from eve import NodeTranslator, SymbolTableTrait
-from functional.common import GTSyntaxError, Dimension
+from functional.common import GTSyntaxError
 from functional.ffront import common_types as ct
 from functional.ffront.type_info import GenericDimensions, TypeInfo, is_complete_symbol_type
 
@@ -191,15 +191,14 @@ class FieldOperatorTypeDeduction(NodeTranslator):
 
     def visit_Subscript(self, node: foast.Subscript, **kwargs) -> foast.Subscript:
         new_value = self.visit(node.value, **kwargs)
-        new_type = None
+        new_type: Optional[ct.SymbolType] = None
         match new_value.type:
             case ct.TupleType(types=types):
                 new_type = types[node.index]
             case ct.OffsetType(source=source, target=(target1, target2)):
                 if not target2.local:
                     raise FieldOperatorTypeDeductionError.from_foast_node(
-                        new_value,
-                        msg="Second dimension in offset must be a local dimension."
+                        new_value, msg="Second dimension in offset must be a local dimension."
                     )
                 new_type = ct.OffsetType(source=source, target=(target1,))
             case ct.OffsetType(source=_, target=(_,)):
@@ -356,6 +355,7 @@ class FieldOperatorTypeDeduction(NodeTranslator):
         # TODO(tehrengruber): check type is complete
         new_func = self.visit(node.func, **kwargs)
 
+        return_type: Optional[ct.SymbolType] = None
         if isinstance(new_func.type, ct.FieldType):
             new_args = self.visit(node.args, **kwargs)
             source_dim = new_args[0].type.source
@@ -378,16 +378,20 @@ class FieldOperatorTypeDeduction(NodeTranslator):
             # todo(tehrengruber): solve in a more generic way, e.g. using
             #  parametric polymorphism.
             if node.func.id == "neighbor_sum":
-                field_type = new_args[0].type
-                reduction_dim = new_args[1].type.dim
+                field_type: ct.FieldType = new_args[0].type
+                reduction_dim = cast(ct.DimensionType, new_args[1].type).dim
                 if reduction_dim not in field_type.dims:
+                    field_dims_str = ", ".join(str(dim) for dim in field_type.dims)
                     raise FieldOperatorTypeDeductionError.from_foast_node(
                         node,
-                        msg=f"Incompatible field argument in {node.func.id}. Expected a "
-                            f"field with dimension {node.args[1].type.dim}, but got "
-                            f"{', '.join(new_func.type.dims)}.",
+                        msg=f"Incompatible field argument in {node.func.id}. "
+                        f"Expected a field with dimension {reduction_dim}, "
+                        f"but got {field_dims_str}.",
                     )
-                return_type = ct.FieldType(dims=[dim for dim in field_type.dims if dim != reduction_dim], dtype=field_type.dtype)
+                return_type = ct.FieldType(
+                    dims=[dim for dim in field_type.dims if dim != reduction_dim],
+                    dtype=field_type.dtype,
+                )
             else:
                 return_type = new_func.type.returns
 

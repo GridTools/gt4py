@@ -30,7 +30,7 @@ from functional.ffront import (
     program_ast as past,
     symbol_makers,
 )
-from functional.ffront.fbuiltins import BUILTINS, BuiltInFunction, FieldOffset
+from functional.ffront.fbuiltins import BUILTINS
 from functional.ffront.foast_to_itir import FieldOperatorLowering
 from functional.ffront.func_to_foast import FieldOperatorParser
 from functional.ffront.func_to_past import ProgramParser
@@ -47,34 +47,37 @@ DEFAULT_BACKEND = "roundtrip"
 
 def _collect_capture_vars(captured_vars: CapturedVars) -> CapturedVars:
     new_captured_vars = captured_vars
-    all_captured_vars = collections.ChainMap(captured_vars.globals,
-                                             captured_vars.nonlocals)
+    all_captured_vars = collections.ChainMap(captured_vars.globals, captured_vars.nonlocals)
 
-    for name, value in all_captured_vars.items():
+    for value in all_captured_vars.values():
         if isinstance(value, GTCallable):
             # if the closure ref has closure refs by itself, also add them
-            if (val_captured_vars := value.__gt_captured_vars__()):
+            if val_captured_vars := value.__gt_captured_vars__():
                 val_captured_vars = _collect_capture_vars(val_captured_vars)
 
                 all_val_captured_vars = collections.ChainMap(
-                    val_captured_vars.globals, val_captured_vars.nonlocals)
+                    val_captured_vars.globals, val_captured_vars.nonlocals
+                )
                 collisions = []
-                for potential_collision in (set(all_captured_vars) & set(all_val_captured_vars)):
-                    if all_captured_vars[potential_collision] != all_val_captured_vars[potential_collision]:
+                for potential_collision in set(all_captured_vars) & set(all_val_captured_vars):
+                    if (
+                        all_captured_vars[potential_collision]
+                        != all_val_captured_vars[potential_collision]
+                    ):
                         collisions.append(potential_collision)
                 if collisions:
                     raise NotImplementedError(
                         "Using closure vars with same name, but different value "
-                        "across functions is not implemented yet.")
+                        "across functions is not implemented yet."
+                    )
 
                 new_captured_vars = dataclasses.replace(
                     new_captured_vars,
-                    globals={**new_captured_vars.globals,
-                             **val_captured_vars.globals},
-                    nonlocals={**new_captured_vars.nonlocals,
-                               **val_captured_vars.nonlocals}
+                    globals={**new_captured_vars.globals, **val_captured_vars.globals},
+                    nonlocals={**new_captured_vars.nonlocals, **val_captured_vars.nonlocals},
                 )
     return new_captured_vars
+
 
 @typing.runtime_checkable
 class GTCallable(Protocol):
@@ -178,8 +181,7 @@ class Program:
     ) -> list[itir.FunctionDefinition]:
         lowered_funcs = []
 
-        all_captured_vars = collections.ChainMap(captured_vars.globals,
-                                                 captured_vars.nonlocals)
+        all_captured_vars = collections.ChainMap(captured_vars.globals, captured_vars.nonlocals)
 
         for name, value in all_captured_vars.items():
             if not isinstance(value, GTCallable):
@@ -199,14 +201,13 @@ class Program:
 
         capture_vars = _collect_capture_vars(self.captured_vars)
 
-        referenced_var_names = set()
+        referenced_var_names: set[str] = set()
         for captured_var in self.past_node.captured_vars:
             if isinstance(captured_var.type, (ct.FunctionType, ct.OffsetType, ct.DimensionType)):
                 referenced_var_names.add(captured_var.id)
             else:
                 raise NotImplementedError("Only function closure vars are allowed currently.")
-        defined_var_names = set(capture_vars.globals) | set(
-                capture_vars.nonlocals)
+        defined_var_names = set(capture_vars.globals) | set(capture_vars.nonlocals)
         if undefined := referenced_var_names - defined_var_names:
             raise RuntimeError(f"Reference to undefined symbol(s) `{', '.join(undefined)}`.")
 
@@ -396,21 +397,20 @@ class FieldOperator(GTCallable):
         # inject stencil as a closure var into program. Since CapturedVars is
         #  immutable we have to resort to this rather ugly way of doing a copy.
         captured_vars = dataclasses.replace(
-            self.captured_vars,
-            globals={**self.captured_vars.globals, name: self}
+            self.captured_vars, globals={**self.captured_vars.globals, name: self}
         )
-        all_captured_vars = collections.ChainMap(captured_vars.globals,
-                                     captured_vars.nonlocals)
+        all_captured_vars = collections.ChainMap(captured_vars.globals, captured_vars.nonlocals)
 
-        captured_symbols = []
-        for name, val in all_captured_vars.items():
-            type_ = symbol_makers.make_symbol_type_from_value(val)
-            captured_symbols.append(past.Symbol(
-                id=name,
-                type=type_,
-                namespace=ct.Namespace.CLOSURE,
-                location=loc,
-            ))
+        captured_symbols: list[past.Symbol] = [stencil_sym]
+        for name, val in all_captured_vars.items():  # type: ignore
+            captured_symbols.append(
+                past.Symbol(
+                    id=name,
+                    type=symbol_makers.make_symbol_type_from_value(val),
+                    namespace=ct.Namespace.CLOSURE,
+                    location=loc,
+                )
+            )
 
         untyped_past_node = past.Program(
             id=f"__field_operator_{name}",
