@@ -22,7 +22,6 @@ import numpy as np
 from dace.sdfg.utils import fuse_states, inline_sdfgs
 from dace.serialize import dumps
 
-import gt4py.utils as gt_utils
 from eve import codegen
 from eve.codegen import MakoTemplate as as_mako
 from gt4py import gt_src_manager
@@ -34,7 +33,6 @@ from gt4py.backend.gtc_common import (
     PyExtModuleGenerator,
     bindings_main_template,
     cuda_is_compatible_type,
-    make_x86_layout_map,
     pybuffer_to_sid,
 )
 from gt4py.backend.module_generator import make_args_data_from_gtir
@@ -282,64 +280,47 @@ class DaCeComputationCodegen:
 
         symbols = {f"__{var}": f"__{var}" for var in "IJK"}
         for name, array in sdfg.arrays.items():
-            if array.transient:
-                decl = ir.symtable_[name]
-                layout_map = make_x86_layout_map(
-                    tuple([1 if d else 0 for d in decl.dimensions] + [1] * len(decl.data_dims))
-                )
-                expanded_shape = gt_utils.interpolate_mask(
-                    array.shape, [m is not None for m in layout_map], default=None
-                )
-                strides = []
-                for index in sorted([index for index in layout_map if index is not None]):
-                    shape_index = layout_map.index(index)
-                    str_index = (
-                        f"{'IJK'[shape_index]}" if shape_index < 3 else f"d{shape_index - 3}"
+            dims = [dim for dim, select in zip("IJK", array_dimensions(array)) if select]
+            data_ndim = len(array.shape) - len(dims)
+
+            # api field strides
+            fmt = "gt::sid::get_stride<{dim}>(gt::sid::get_strides(__{name}_sid))"
+
+            symbols.update(
+                {
+                    f"__{name}_{dim}_stride": fmt.format(
+                        dim=f"gt::stencil::dim::{dim.lower()}", name=name
                     )
-                    symbols[f"__{name}_{str_index}_stride"] = "*".join(strides) or "1"
-                    strides.append(str(expanded_shape[shape_index]))
-            else:
-                dims = [dim for dim, select in zip("IJK", array_dimensions(array)) if select]
-                data_ndim = len(array.shape) - len(dims)
-
-                # api field strides
-                fmt = "gt::sid::get_stride<{dim}>(gt::sid::get_strides(__{name}_sid))"
-
-                symbols.update(
-                    {
-                        f"__{name}_{dim}_stride": fmt.format(
-                            dim=f"gt::stencil::dim::{dim.lower()}", name=name
-                        )
-                        for dim in dims
-                    }
-                )
-                symbols.update(
-                    {
-                        f"__{name}_d{dim}_stride": fmt.format(
-                            dim=f"gt::integral_constant<int, {3 + dim}>", name=name
-                        )
-                        for dim in range(data_ndim)
-                    }
-                )
-
-                # api field pointers
-                fmt = """gt::sid::multi_shifted(
-                             gt::sid::get_origin(__{name}_sid)(),
-                             gt::sid::get_strides(__{name}_sid),
-                             std::array<gt::int_t, {ndim}>{{{origin}}}
-                         )"""
-                origin = tuple(
-                    -offset_dict[name][idx]
-                    for idx, var in enumerate("IJK")
-                    if any(
-                        dace.symbolic.pystr_to_symbolic(f"__{var}") in s.free_symbols
-                        for s in array.shape
-                        if hasattr(s, "free_symbols")
+                    for dim in dims
+                }
+            )
+            symbols.update(
+                {
+                    f"__{name}_d{dim}_stride": fmt.format(
+                        dim=f"gt::integral_constant<int, {3 + dim}>", name=name
                     )
+                    for dim in range(data_ndim)
+                }
+            )
+
+            # api field pointers
+            fmt = """gt::sid::multi_shifted(
+                         gt::sid::get_origin(__{name}_sid)(),
+                         gt::sid::get_strides(__{name}_sid),
+                         std::array<gt::int_t, {ndim}>{{{origin}}}
+                     )"""
+            origin = tuple(
+                -offset_dict[name][idx]
+                for idx, var in enumerate("IJK")
+                if any(
+                    dace.symbolic.pystr_to_symbolic(f"__{var}") in s.free_symbols
+                    for s in array.shape
+                    if hasattr(s, "free_symbols")
                 )
-                symbols[name] = fmt.format(
-                    name=name, ndim=len(array.shape), origin=",".join(str(o) for o in origin)
-                )
+            )
+            symbols[name] = fmt.format(
+                name=name, ndim=len(array.shape), origin=",".join(str(o) for o in origin)
+            )
         # the remaining arguments are variables and can be passed by name
         for sym in sdfg.signature_arglist(with_types=False, for_call=True):
             if sym not in symbols:

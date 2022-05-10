@@ -53,10 +53,10 @@ from gtc import common, gtir
 from gtc.common import ExprKind
 
 
-def convert_dtype(data_type) -> common.DataType:
+def _convert_dtype(data_type) -> common.DataType:
     dtype = common.DataType(int(data_type))
     if dtype == common.DataType.DEFAULT:
-        # TODO this will be a frontend choice later
+        # TODO: this will be a frontend choice later
         # in non-GTC parts, this is set in the backend
         dtype = cast(
             common.DataType, common.DataType.FLOAT64
@@ -231,7 +231,7 @@ class DefIRToGTIR(IRNodeVisitor):
         )
 
     def visit_ScalarLiteral(self, node: ScalarLiteral) -> gtir.Literal:
-        return gtir.Literal(value=str(node.value), dtype=convert_dtype(node.data_type.value))
+        return gtir.Literal(value=str(node.value), dtype=_convert_dtype(node.data_type.value))
 
     def visit_UnaryOpExpr(self, node: UnaryOpExpr) -> gtir.UnaryOp:
         return gtir.UnaryOp(
@@ -363,7 +363,7 @@ class DefIRToGTIR(IRNodeVisitor):
         # datatype conversion works via same ID
         return gtir.FieldDecl(
             name=node.name,
-            dtype=convert_dtype(node.data_type.value),
+            dtype=_convert_dtype(node.data_type.value),
             dimensions=dimensions,
             data_dims=node.data_dims,
             loc=location_to_source_location(node.loc),
@@ -373,7 +373,7 @@ class DefIRToGTIR(IRNodeVisitor):
         # datatype conversion works via same ID
         return gtir.ScalarDecl(
             name=node.name,
-            dtype=convert_dtype(node.data_type.value),
+            dtype=_convert_dtype(node.data_type.value),
             loc=location_to_source_location(node.loc),
         )
 

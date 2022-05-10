@@ -59,7 +59,8 @@ class Frontend(abc.ABC):
         externals: Dict[str, Any],
         options_id: str,
     ) -> StencilID:
-        """Create a StencilID object that contains a unique hash for the stencil.
+        """
+        Create a StencilID object that contains a unique hash for the stencil.
 
         Notes
         -----

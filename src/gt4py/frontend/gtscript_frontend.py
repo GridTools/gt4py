@@ -811,8 +811,9 @@ def get_temp_annotations(
 def make_init_computation(
     temp_decls: Dict[str, nodes.FieldDecl], temp_inits: Dict[str, nodes.ScalarLiteral]
 ) -> nodes.ComputationBlock:
-    # Add computation to intiialize temporaries
+    """Generate computation to initialize temporaries."""
     axes = set().union(*(set(temp_decls[name].axes) for name in temp_inits))
+    assert "I" in axes and "J" in axes
     if "K" in axes:
         order = nodes.IterationOrder.PARALLEL
         interval = nodes.AxisInterval.full_interval()
@@ -1511,13 +1512,6 @@ class IRMaker(ast.NodeVisitor):
 
         for t in node.targets[0].elts if isinstance(node.targets[0], ast.Tuple) else node.targets:
             name, spatial_offset, data_index = self._parse_assign_target(t)
-            # NOTE (jdahm): This check has to be disabled in order to assign to data dims in temporaries.
-            # is_temporary = name not in {name for name, field in self.fields.items() if field.is_api}
-            # if spatial_offset and is_temporary:
-            #     raise GTScriptSyntaxError(
-            #         message="No subscript allowed in assignment to temporaries",
-            #         loc=nodes.Location.from_ast_node(t),
-            #     )
             if spatial_offset:
                 if any(offset != 0 for offset in spatial_offset):
                     raise GTScriptSyntaxError(
@@ -1531,7 +1525,7 @@ class IRMaker(ast.NodeVisitor):
                 else:
                     if data_index is not None and data_index:
                         raise GTScriptSyntaxError(
-                            message="Temporaries may not use additional data dimensions.",
+                            message="Temporaries with data dimensions need to be declared explicitly.",
                             loc=nodes.Location.from_ast_node(t),
                         )
                     field_decl = nodes.FieldDecl(

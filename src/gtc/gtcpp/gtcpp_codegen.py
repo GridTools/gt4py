@@ -91,14 +91,14 @@ class GTCppCodegen(codegen.TemplatedGenerator):
             k_offset = self.visit(accessor_ref.offset.k, **kwargs)
         else:
             raise TypeError("Unsupported offset type")
-        if not symtable[accessor_ref.name].temporary or not accessor_ref.data_index:
-            data_index = "".join(f", {self.visit(d)}" for d in accessor_ref.data_index)
-            return f"eval({accessor_ref.name}({i_offset}, {j_offset}, {k_offset}{data_index}))"
-        else:
+        if symtable[accessor_ref.name].temporary and accessor_ref.data_index:
             data_index = ""
             for index in accessor_ref.data_index:
                 data_index += f"[{self.visit(index, **kwargs)}]"
             return f"eval({accessor_ref.name}({i_offset}, {j_offset}, {k_offset})){data_index}"
+        else:
+            data_index = "".join(f", {self.visit(d)}" for d in accessor_ref.data_index)
+            return f"eval({accessor_ref.name}({i_offset}, {j_offset}, {k_offset}{data_index}))"
 
     LocalAccess = as_fmt("{name}")
 

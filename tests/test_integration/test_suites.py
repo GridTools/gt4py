@@ -306,6 +306,7 @@ class TestHorizontalDiffusionSubroutines2(gt_testing.StencilTestSuite):
     domain_range = [(1, 15), (1, 15), (1, 15)]
     backends = ALL_BACKENDS
     symbols = dict(
+        fwd_diff=gt_testing.global_name(singleton=fwd_diff_op_xy),
         BRANCH=gt_testing.global_name(one_of=(True, False)),
         u=gt_testing.field(in_range=(-10, 10), boundary=[(2, 2), (2, 2), (0, 0)]),
         diffusion=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
@@ -887,7 +888,7 @@ class TestHorizontalRegions(gt_testing.StencilTestSuite):
 class TestTypedTemporary(gt_testing.StencilTestSuite):
     dtypes = {"field_in": np.float32, "field_out": np.float32}
     domain_range = [(2, 2), (2, 2), (2, 8)]
-    backends = INTERNAL_BACKENDS
+    backends = ALL_BACKENDS
     symbols = {
         "field_in": gt_testing.field(
             in_range=(-10, 10), axes="IJK", boundary=[(0, 0), (0, 0), (0, 0)]
@@ -903,6 +904,8 @@ class TestTypedTemporary(gt_testing.StencilTestSuite):
             with interval(0, -1):
                 tmp[0, 0, 0][0, 0] = field_in[0, 0, 0]
                 tmp[0, 0, 0][1, 0] = field_in[0, 0, 1]
+                tmp[0, 0, 0][0, 1] = -1.0
+                tmp[0, 0, 0][1, 1] = -1.0
                 field_out = (  # noqa: F841  # local variable 'field_out' is assigned to but never used
                     tmp[0, 0, 0][0, 0] + tmp[0, 0, 0][1, 0]
                 )
