@@ -1,5 +1,5 @@
 import enum
-from typing import List, Union
+from typing import Union
 
 from eve import Node
 from eve.traits import SymbolName, SymbolTableTrait
@@ -52,19 +52,26 @@ class SymRef(Expr):
 
 
 class Lambda(Expr, SymbolTableTrait):
-    params: List[Sym]
+    params: list[Sym]
     expr: Expr
 
 
 class FunCall(Expr):
     fun: Expr  # VType[Callable]
-    args: List[Expr]
+    args: list[Expr]
 
 
 class FunctionDefinition(Node, SymbolTableTrait):
     id: SymbolName  # noqa: A003
-    params: List[Sym]
+    params: list[Sym]
     expr: Expr
+
+
+class ScanPassDefinition(Node, SymbolTableTrait):
+    id: SymbolName  # noqa: A003
+    params: list[Sym]
+    expr: Expr
+    forward: bool
 
 
 class Backend(Node):
@@ -73,18 +80,38 @@ class Backend(Node):
 
 class StencilExecution(Node):
     backend: Backend
-    stencil: SymRef  # TODO should be list of assigns for canonical `scan`
+    stencil: SymRef
     output: SymRef
-    inputs: List[SymRef]
+    inputs: list[SymRef]
+
+
+class Scan(Node):
+    function: SymRef
+    output: Literal
+    inputs: list[Literal]
+    init: Expr
+
+
+class ScanExecution(Node):
+    backend: Backend
+    scans: list[Scan]
+    args: list[SymRef]
+
+
+class TemporaryAllocation(Node):
+    id: SymbolName  # noqa: A003
+    dtype: str  # TODO: proper DType specification
+    # TODO: domain: ??
 
 
 class FencilDefinition(Node, SymbolTableTrait):
     id: SymbolName  # noqa: A003
-    params: List[Sym]
-    function_definitions: List[FunctionDefinition]
-    executions: List[StencilExecution]
-    offset_declarations: List[str]
+    params: list[Sym]
+    function_definitions: list[Union[FunctionDefinition, ScanPassDefinition]]
+    executions: list[Union[StencilExecution, ScanExecution]]
+    offset_declarations: list[str]
     grid_type: GridType
+    temporaries: list[TemporaryAllocation]
 
     builtin_functions = list(
         Sym(id=name)

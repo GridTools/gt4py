@@ -58,6 +58,23 @@ class GTFNCodegen(codegen.TemplatedGenerator):
         """
     )
 
+    Scan = as_fmt("assign({output}, {function}(), {init}, {', '.join(inputs)})")
+    ScanExecution = as_fmt(
+        "{backend}.vertical_executor()().{'.'.join('arg(' + a + ')' for a in args)}.{'.'.join(scans)}.execute();"
+    )
+
+    ScanPassDefinition = as_mako(
+        """
+        struct ${id} : ${'fwd' if _this_node.forward else 'bwd'} {
+            static constexpr GT_FUNCTION auto body() {
+                return scan_pass([](${','.join('auto const& ' + p for p in params)}) {
+                    return ${expr};
+                }, host_device::identity());
+            }
+        };
+        """
+    )
+
     FunctionDefinition = as_mako(
         """
         struct ${id} {
@@ -80,6 +97,10 @@ class GTFNCodegen(codegen.TemplatedGenerator):
             grid_type_str=self._grid_type_str[node.grid_type],
             **kwargs,
         )
+
+    TemporaryAllocation = as_fmt(
+        "auto {id} = allocate_global_tmp<{dtype}>(_tmp_alloc, dom.sizes());"
+    )
 
     FencilDefinition = as_mako(
         """
@@ -105,6 +126,8 @@ class GTFNCodegen(codegen.TemplatedGenerator):
     ${''.join(function_definitions)}
 
     inline auto ${id} = [](auto backend, ${','.join('auto&& ' + p for p in params)}){
+        auto _tmp_alloc = tmp_allocator(backend);
+        ${'\\n'.join(temporaries)}
         ${'\\n'.join(executions)}
     };
     }
