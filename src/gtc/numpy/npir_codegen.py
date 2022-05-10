@@ -166,7 +166,7 @@ class NpirCodegen(TemplatedGenerator):
         ]
         offset = [str(off) for off in node.offset] + ["0"] * (1 + len(node.data_dims))
         dtype = self.visit(node.dtype, **kwargs)
-        return f"{node.name} = Field.empty(({','.join(shape)}), {dtype}, ({', '.join(offset)}))"
+        return f"{node.name} = Field.empty(({', '.join(shape)}), {dtype}, ({', '.join(offset)}))"
 
     LocalScalarDecl = FormatTemplate(
         "{name} = Field.empty((_dI_ + {upper[0] + lower[0]}, _dJ_ + {upper[1] + lower[1]}, {ksize}), {dtype}, ({', '.join(str(l) for l in lower)}, 0))"
