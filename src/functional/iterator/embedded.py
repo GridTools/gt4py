@@ -373,7 +373,7 @@ def make_in_iterator(inp, pos, offset_provider, *, column_axis):
     # TODO(havogt): support nested tuples
     axises = inp[0].axises if isinstance(inp, tuple) else inp.axises
     sparse_dimensions = [axis for axis in axises if isinstance(axis, Offset)]
-    sparse_dimensions =[]
+    sparse_dimensions = []
     for axis in axises:
         if isinstance(axis, Offset):
             sparse_dimensions.append(axis)
