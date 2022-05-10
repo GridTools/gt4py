@@ -142,9 +142,9 @@ def _collect_stencil_shifts(stencil, return_params=False):
 
 def update_cartesian_domains(node: FencilWithTemporaries, offset_provider) -> FencilWithTemporaries:
     def extend(domain, shifts):
-        assert isinstance(domain, ir.FunCall) and domain.fun == ir.SymRef(id="domain")
-        if not shifts:
+        if not any(shifts):
             return domain
+        assert isinstance(domain, ir.FunCall) and domain.fun == ir.SymRef(id="domain")
         assert all(isinstance(axis, CartesianAxis) for axis in offset_provider.values())
 
         offset_limits = {k: (0, 0) for k in offset_provider.keys()}
