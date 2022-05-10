@@ -375,10 +375,6 @@ class FieldOperator(GTCallable):
         loc = self.foast_node.location
 
         type_ = self.__gt_type__()
-        stencil_sym: past.Symbol = past.Symbol(
-            id=name, type=type_, namespace=ct.Namespace.CLOSURE, location=loc
-        )
-
         params_decl: list[past.Symbol] = [
             past.Symbol(
                 id=UIDs.sequential_id(prefix="__sym"),
@@ -401,7 +397,7 @@ class FieldOperator(GTCallable):
         )
         all_captured_vars = collections.ChainMap(captured_vars.globals, captured_vars.nonlocals)
 
-        captured_symbols: list[past.Symbol] = [stencil_sym]
+        captured_symbols: list[past.Symbol] = []
         for name, val in all_captured_vars.items():  # type: ignore
             captured_symbols.append(
                 past.Symbol(
