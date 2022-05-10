@@ -22,7 +22,7 @@ class NeighborTableOffsetProvider:
         self.tbl = tbl
         self.origin_axis = origin_axis
         self.neighbor_axis = neighbor_axis
-        assert tbl.shape[1] == max_neighbors
+        assert not hasattr(tbl, "shape") or tbl.shape[1] == max_neighbors
         self.max_neighbors = max_neighbors
         self.has_skip_values = has_skip_values
 
