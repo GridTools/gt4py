@@ -86,7 +86,7 @@ def _to_device(sdfg: dace.SDFG, device: str) -> None:
                 node.device = dace.DeviceType.GPU
 
 
-def _pre_expand_trafos(stencil_ir: gtir.Stencil, sdfg: dace.SDFG):
+def _pre_expand_trafos(stencil_ir: gtir.Stencil, sdfg: dace.SDFG, layout_map):
 
     args_data = make_args_data_from_gtir(GtirPipeline(stencil_ir))
 
@@ -125,6 +125,7 @@ def _pre_expand_trafos(stencil_ir: gtir.Stencil, sdfg: dace.SDFG):
                     break
             if not is_set:
                 raise ValueError("No expansion compatible")
+    _specialize_transient_strides(sdfg, layout_map=layout_map)
     return sdfg
 
 
@@ -136,12 +137,6 @@ def _post_expand_trafos(sdfg: dace.SDFG):
     for node, _ in sdfg.all_nodes_recursive():
         if isinstance(node, dace.nodes.MapEntry):
             node.collapse = len(node.range)
-
-
-def _expand_and_finalize_sdfg(sdfg: dace.SDFG, layout_map) -> dace.SDFG:
-    _specialize_transient_strides(sdfg, layout_map=layout_map)
-    sdfg.expand_library_nodes(recursive=True)
-    _post_expand_trafos(sdfg)
 
 
 class DaCeExtGenerator(BackendCodegen):
@@ -160,9 +155,10 @@ class DaCeExtGenerator(BackendCodegen):
         sdfg = OirSDFGBuilder().visit(oir_node)
 
         _to_device(sdfg, self.backend.storage_info["device"])
-        sdfg = _pre_expand_trafos(stencil_ir, sdfg)
+        sdfg = _pre_expand_trafos(stencil_ir, sdfg, self.backend.storage_info["layout_map"])
         unexpanded_json = _serialize_sdfg(sdfg)
-        _expand_and_finalize_sdfg(sdfg, self.backend.storage_info["layout_map"])
+        sdfg.expand_library_nodes()
+        _post_expand_trafos(sdfg)
 
         # strip history from SDFG for faster save/load
         for tmp_sdfg in sdfg.all_sdfgs_recursive():
