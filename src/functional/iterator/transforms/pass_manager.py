@@ -1,6 +1,5 @@
 import enum
 
-from functional.iterator.transforms.cse import CSE
 from functional.iterator.transforms.global_tmps import CreateGlobalTmps
 from functional.iterator.transforms.inline_fundefs import InlineFundefs, PruneUnreferencedFundefs
 from functional.iterator.transforms.inline_lambdas import InlineLambdas
@@ -27,9 +26,7 @@ def _inline_lifts(ir, lift_mode):
     return ir
 
 
-def apply_common_transforms(
-    ir, lift_mode=None, offset_provider=None, unroll_reduce=False, cse=False
-):
+def apply_common_transforms(ir, lift_mode=None, offset_provider=None, unroll_reduce=False):
     if lift_mode is None:
         lift_mode = LiftMode.FORCE_INLINE
     assert isinstance(lift_mode, LiftMode)
@@ -55,6 +52,4 @@ def apply_common_transforms(
         assert offset_provider is not None
         ir = CreateGlobalTmps().visit(ir, offset_provider=offset_provider)
         ir = InlineLifts().visit(ir)
-    if cse:
-        ir = CSE().visit(ir)
     return ir
