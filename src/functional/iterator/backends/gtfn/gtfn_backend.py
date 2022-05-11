@@ -1,6 +1,7 @@
 from typing import Any
 
 import functional.iterator.ir as itir
+from eve import codegen
 from functional.iterator.backends.backend import register_backend
 from functional.iterator.backends.gtfn.codegen import GTFNCodegen
 from functional.iterator.backends.gtfn.itir_to_gtfn_ir import GTFN_lowering
@@ -20,9 +21,7 @@ def generate(program: itir.FencilDefinition, *, grid_type: str, **kwargs: Any) -
     transformed = EtaReduction().visit(transformed)
     gtfn_ir = GTFN_lowering().visit(transformed, grid_type=grid_type)
     generated_code = GTFNCodegen.apply(gtfn_ir, **kwargs)
-    return generated_code
-    # TODO: re-enable clang-format once we have sorted out hanging process
-    # on FVM nabla: return codegen.format_source("cpp", generated_code, style="LLVM")
+    return codegen.format_source("cpp", generated_code, style="LLVM")
 
 
 def _guess_grid_type(**kwargs):
