@@ -25,8 +25,8 @@ from dace import SDFG, InterstateEdge
 
 import eve
 import gtc.oir as oir
-from gt4py.definitions import Extent
 from gtc.common import DataType, typestr_to_data_type
+from gtc.definitions import Extent
 from gtc.passes.oir_optimizations.utils import AccessCollector
 
 

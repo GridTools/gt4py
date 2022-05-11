@@ -18,8 +18,8 @@ from typing import List, Optional, Tuple, Union, cast
 
 import factory
 
-from gt4py.definitions import Extent
 from gtc import common
+from gtc.definitions import Extent
 from gtc.numpy import npir
 
 from .common_utils import identifier, undefined_symbol_list

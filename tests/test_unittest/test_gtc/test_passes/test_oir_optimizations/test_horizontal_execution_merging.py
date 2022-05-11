@@ -16,8 +16,8 @@
 
 import time
 
-from gt4py.definitions import Extent
 from gtc import common, oir
+from gtc.definitions import Extent
 from gtc.passes.oir_optimizations.horizontal_execution_merging import (
     HorizontalExecutionMerging,
     OnTheFlyMerging,

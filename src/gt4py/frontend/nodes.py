@@ -148,7 +148,7 @@ from typing import Generator, Sequence, Type
 
 import numpy as np
 
-from gt4py.definitions import AccessKind, CartesianSpace, Extent, Index
+from gt4py.definitions import AccessKind, CartesianSpace
 from gt4py.utils.attrib import Any as Any
 from gt4py.utils.attrib import Dict as DictOf
 from gt4py.utils.attrib import List as ListOf
@@ -157,6 +157,7 @@ from gt4py.utils.attrib import Tuple as TupleOf
 from gt4py.utils.attrib import Union as UnionOf
 from gt4py.utils.attrib import attribkwclass as attribclass
 from gt4py.utils.attrib import attribute, attributes_of
+from gtc.definitions import Extent, Index
 
 
 # ---- Foundations ----

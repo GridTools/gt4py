@@ -31,13 +31,13 @@ except ImportError:
     dace = None
 
 from gt4py import backend as gt_backend
-from gt4py import utils as gt_utils
+from gtc import utils as gtc_utils
 
 from . import utils as storage_utils
 
 
 def _error_on_invalid_backend(backend):
-    if not backend in gt_backend.REGISTRY:
+    if backend not in gt_backend.REGISTRY:
         raise RuntimeError(f"Backend '{backend}' is not registered.")
 
 
@@ -227,7 +227,7 @@ class Storage(np.ndarray):
                     index_iter = itertools.chain(
                         obj._new_index, [slice(None, None)] * (len(obj.mask) - len(obj._new_index))
                     )
-                    interpolated_mask = gt_utils.interpolate_mask(
+                    interpolated_mask = gtc_utils.interpolate_mask(
                         (isinstance(x, slice) for x in index_iter), obj.mask, False
                     )
                     self._mask = tuple(x & y for x, y in zip(obj.mask, interpolated_mask))
@@ -348,7 +348,7 @@ class GPUStorage(Storage):
 
     def __getitem__(self, item):
         self.device_to_host()
-        self._new_index = gt_utils.listify(item)
+        self._new_index = gtc_utils.listify(item)
         return super().__getitem__(item)
 
     def __setitem__(self, key, value):
@@ -435,7 +435,7 @@ class CPUStorage(Storage):
         return res
 
     def __getitem__(self, item):
-        self._new_index = gt_utils.listify(item)
+        self._new_index = gtc_utils.listify(item)
         return super().__getitem__(item)
 
 
@@ -503,7 +503,7 @@ class ExplicitlySyncedGPUStorage(Storage):
     def __getitem__(self, item):
         if self._is_device_modified:
             self.device_to_host()
-        self._new_index = gt_utils.listify(item)
+        self._new_index = gtc_utils.listify(item)
         return super().__getitem__(item)
 
     @property

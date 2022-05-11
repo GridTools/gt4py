@@ -20,8 +20,8 @@ from eve.concepts import BaseNode
 from eve.traits import SymbolTableTrait
 from eve.type_definitions import NOTHING
 from eve.visitors import NodeTranslator
-from gt4py.definitions import Extent
 from gtc import common, oir, utils
+from gtc.definitions import Extent
 from gtc.passes.horizontal_masks import compute_relative_mask
 from gtc.passes.oir_optimizations.utils import compute_extents
 
