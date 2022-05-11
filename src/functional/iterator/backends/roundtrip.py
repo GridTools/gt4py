@@ -3,8 +3,6 @@ import pathlib
 import tempfile
 from typing import Iterable
 
-import numpy as np
-
 from eve import codegen
 from eve.codegen import FormatTemplate as as_fmt, MakoTemplate as as_mako
 from eve.concepts import Node
@@ -51,7 +49,6 @@ def ${id}(${','.join(params)}):
                 return params[dtype] + ".dtype"
             if isinstance(dtype, tuple):
                 return "np.dtype([" + ", ".join(f"('', {np_dtype(d)})" for d in dtype) + "])"
-                return np.dtype([("", np_dtype(d)) for d in dtype])
             return f"np.dtype('{dtype}')"
 
         tmps = "\n    ".join(self.visit(node.tmps, np_dtype=np_dtype))
