@@ -186,6 +186,14 @@ def test_access_overlap_along_axis():
             0,
             None,
         ),
+        (
+            common.HorizontalMask(
+                i=common.HorizontalInterval.full(),
+                j=common.HorizontalInterval.full(),
+            ),
+            -1,
+            ((-1, 0), (0, 0)),
+        ),
     ),
 )
 def test_stencil_extents_region(mask, offset, access_extent):
