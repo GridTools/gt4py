@@ -30,7 +30,7 @@ import sys
 import textwrap
 import types
 import typing
-from subprocess import PIPE, Popen, run
+from subprocess import TimeoutExpired, run
 
 import black
 import jinja2
@@ -164,10 +164,14 @@ if _CLANG_FORMAT_EXECUTABLE is not None:
         if sort_includes:
             args.append("--sort-includes")
 
-        p = Popen(args, stdout=PIPE, stdin=PIPE, encoding="utf8")
-        formatted_source, _ = p.communicate(input=source)
-        assert isinstance(formatted_source, str)
+        try:
+            formatted_source = run(
+                args, check=True, input=source, capture_output=True, encoding="utf8", timeout=3
+            ).stdout
+        except TimeoutExpired:
+            return source
 
+        assert isinstance(formatted_source, str)
         return formatted_source
 
 
