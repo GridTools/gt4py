@@ -14,84 +14,9 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Data Model class and related utils.
+"""Data Model class creation and other utils.
 
-Data Models can be considered as enhanced  `attrs <https://www.attrs.org>`_
-/ `dataclasses <https://docs.python.org/3/library/dataclasses.html>`_ providing
-additional features like automatic run-time validation. Values assigned to fields
-at initialization can be validated with automatic type checkings using the
-field type definition. Custom field validation methods can also be added with
-the :func:`validator` decorator, and global instance validation methods with
-:func:`root_validator`.
-
-The datamodels API tries to follow ``dataclasses`` API conventions when possible,
-but it is not an exact copy. Implementation-wise, Data Models classes are just
-customized ``attrs`` classes, and therefore external tools compatible with ``attrs``
-classes should also work with Data Models classes.
-
-A valid ``__init__`` method for the Data Model class is always generated. If the class
-already defines a custom ``__init__`` method, the generated method will be named
-``__auto_init__`` and should be called from the custom ``__init__`` to profit from
-datamodels features. Additionally, if custom ``__pre_init__(self) -> None`` or
-``__post_init__(self) -> None`` methods exist in the class, they will be automatically
-called from the generated ``__init__`` before and after the instance creation.
-
-
-Examples:
-    >>> @datamodel
-    ... class SampleModel:
-    ...     name: str
-    ...     amount: int
-    ...
-    ...     @validator('name')
-    ...     def _name_validator(self, attribute, value):
-    ...         if len(value) < 3:
-    ...             raise ValueError(
-    ...                 f"Provided value '{value}' for '{attribute.name}' field is too short."
-    ...             )
-
-    >>> SampleModel("Some Name", 10)
-    SampleModel(name='Some Name', amount=10)
-
-    >>> SampleModel("A", 10)
-    Traceback (most recent call last):
-        ...
-    ValueError: Provided value 'A' for 'name' field is too short.
-
-    >>> class AnotherSampleModel(DataModel):
-    ...     name: str
-    ...     friends: List[str]
-    ...
-    ...     @root_validator
-    ...     def _root_validator(cls, instance):
-    ...         if instance.name in instance.friends:
-    ...             raise ValueError("'name' value cannot appear in 'friends' list.")
-
-    >>> AnotherSampleModel("Eve", ["Liam", "John"])
-    AnotherSampleModel(name='Eve', friends=['Liam', 'John'])
-
-    >>> AnotherSampleModel("Eve", ["Eve", "John"])
-    Traceback (most recent call last):
-        ...
-    ValueError: 'name' value cannot appear in 'friends' list.
-
-    >>> @datamodel
-    ... class CustomModel:
-    ...     value: float
-    ...     num_instances: ClassVar[int] = 0
-    ...
-    ...     def __init__(self, a: int, b: int) -> None:
-    ...         self.__auto_init__(a/b)
-    ...
-    ...     def __pre_init__(self) -> None:
-    ...         self.__class__.num_instances += 1
-    ...
-    ...     def __post_init__(self) -> None:
-    ...         print(f"Instance {self.num_instances} == {self.value}")
-
-    >>> CustomModel(3, 2)
-    Instance 1 == 1.5
-    CustomModel(value=1.5)
+Check :mod:`eve.datamodels` for additional information.
 
 """
 
@@ -105,6 +30,7 @@ import warnings
 
 import attr
 import attrs
+from numpy import require
 
 from .. import (
     exceptions,
@@ -139,10 +65,10 @@ from ..extended_typing import (
 from ..type_definitions import NOTHING, NothingType
 
 
-# from attr import frozen  # type: ignore[import]  # stubs not installed for attr (only attrs)
-
-
 # Typing
+# TODO(egparedes): these typing definitions are not very useful until
+# TODO(egparedes): PEP 681 - Data Class Transforms (https://peps.python.org/pep-0681/)
+# TODO(egparedes): is implemented.
 _T = TypeVar("_T")
 
 
@@ -188,7 +114,7 @@ else:
 RootValidator = Callable[[Type[DataModelTP], DataModelTP], None]
 BoundRootValidator = Callable[[DataModelTP], None]
 
-FieldTypeValidatorFactory = Callable[[TypeAnnotation, str], Optional[FieldValidator]]
+FieldTypeValidatorFactory = Callable[[TypeAnnotation, str], FieldValidator]
 
 TypeConverter = Callable[[Any], _T]
 
@@ -248,10 +174,27 @@ class ForwardRefValidator:
             self.validator(value)
 
 
+@dataclasses.dataclass(frozen=True, **_dataclass_opts)
+class ValidatorAdapter:
+    """Adapter to use :class:`eve.type_validation.FixedTypeValidator`s as field validators."""
+
+    validator: type_val.FixedTypeValidator
+    description: str
+
+    def __call__(self, _instance: DataModelTP, _attribute: attr.Attribute, value: Any) -> None:
+        self.validator(value)
+
+    def __repr__(self):
+        return self.description
+
+
 def field_type_validator_factory(
-    factory: type_val.TypeValidatorFactory,
+    factory: type_val.TypeValidatorFactory, *, use_cache: bool = False
 ) -> FieldTypeValidatorFactory:
-    """Create a factory of field type validators from a factory of type validators."""
+    """Create a factory of field type validators from a factory of regular type validators."""
+
+    if use_cache:
+        factory = utils.optional_lru_cache(func=factory)
 
     def _field_type_validator_factory(
         type_annotation: TypeAnnotation,
@@ -261,12 +204,8 @@ def field_type_validator_factory(
         if isinstance(type_annotation, ForwardRef):
             return ForwardRefValidator(factory)
         else:
-            simple_validator: Final = factory(type_annotation, name)
-            return (
-                lambda __i, __a, value: simple_validator(value)
-                if simple_validator is not None
-                else None
-            )
+            simple_validator = factory(type_annotation, name, required=True)
+            return ValidatorAdapter(simple_validator, f"{simple_validator.__name__} type validator")
 
     return _field_type_validator_factory
 
@@ -278,16 +217,30 @@ DefaultFieldTypeValidatorFactory: Final[Optional[FieldTypeValidatorFactory]] = (
 )
 """Default type validator factory used by datamodels classes. `None` by default if running in optimized mode."""
 
-REPR_DEFAULT: Final = True
-EQ_DEFAULT: Final = True
-ORDER_DEFAULT: Final = False
-UNSAFE_HASH_DEFAULT: Final = False
-FROZEN_DEFAULT: Final = False
-MATCH_ARGS_DEFAULT: Final = True
-KW_ONLY_DEFAULT: Final = False
-SLOTS_DEFAULT: Final = False
-COERCE_DEFAULT: Final = False
-GENERIC_DEFAULT: Final = False
+_REPR_DEFAULT: Final = None
+_EQ_DEFAULT: Final = None
+_ORDER_DEFAULT: Final = False
+_UNSAFE_HASH_DEFAULT: Final = False
+_FROZEN_DEFAULT: Final = False
+_MATCH_ARGS_DEFAULT: Final = True
+_KW_ONLY_DEFAULT: Final = False
+_SLOTS_DEFAULT: Final = False
+_COERCE_DEFAULT: Final = False
+_GENERIC_DEFAULT: Final = False
+
+DEFAULT_OPTIONS: Final = utils.FrozenNamespace(
+    repr=_REPR_DEFAULT,
+    eq=_EQ_DEFAULT,
+    order=_ORDER_DEFAULT,
+    unsafe_hash=_UNSAFE_HASH_DEFAULT,
+    frozen=_FROZEN_DEFAULT,
+    match_args=_MATCH_ARGS_DEFAULT,
+    kw_only=_KW_ONLY_DEFAULT,
+    slots=_SLOTS_DEFAULT,
+    coerce=_COERCE_DEFAULT,
+    generic=_GENERIC_DEFAULT,
+)
+"""Convenient public namespace to expose default values to users."""
 
 
 @overload
@@ -295,16 +248,16 @@ def datamodel(
     cls: Literal[None] = None,
     /,
     *,
-    repr: bool = REPR_DEFAULT,  # noqa: A002  # shadowing 'repr' python builtin
-    eq: bool = EQ_DEFAULT,
-    order: bool = ORDER_DEFAULT,
-    unsafe_hash: bool = UNSAFE_HASH_DEFAULT,
-    frozen: bool | Literal["strict"] = FROZEN_DEFAULT,
-    match_args: bool = MATCH_ARGS_DEFAULT,
-    kw_only: bool = KW_ONLY_DEFAULT,
-    slots: bool = SLOTS_DEFAULT,
-    coerce: bool = COERCE_DEFAULT,
-    generic: bool = GENERIC_DEFAULT,
+    repr: bool | None = _REPR_DEFAULT,  # noqa: A002  # shadowing 'repr' python builtin
+    eq: bool | None = _EQ_DEFAULT,
+    order: bool | None = _ORDER_DEFAULT,
+    unsafe_hash: bool | None = _UNSAFE_HASH_DEFAULT,
+    frozen: bool | Literal["strict"] = _FROZEN_DEFAULT,
+    match_args: bool = _MATCH_ARGS_DEFAULT,
+    kw_only: bool = _KW_ONLY_DEFAULT,
+    slots: bool = _SLOTS_DEFAULT,
+    coerce: bool = _COERCE_DEFAULT,
+    generic: bool = _GENERIC_DEFAULT,
     type_validation_factory: Optional[FieldTypeValidatorFactory] = DefaultFieldTypeValidatorFactory,
 ) -> Callable[[Type[_T]], Type[_T]]:
     ...
@@ -315,16 +268,16 @@ def datamodel(  # noqa: F811  # redefinion of unused symbol
     cls: Type[_T],
     /,
     *,
-    repr: bool = REPR_DEFAULT,  # noqa: A002  # shadowing 'repr' python builtin
-    eq: bool = EQ_DEFAULT,
-    order: bool = ORDER_DEFAULT,
-    unsafe_hash: bool = UNSAFE_HASH_DEFAULT,
-    frozen: bool | Literal["strict"] = FROZEN_DEFAULT,
-    match_args: bool = MATCH_ARGS_DEFAULT,
-    kw_only: bool = KW_ONLY_DEFAULT,
-    slots: bool = SLOTS_DEFAULT,
-    coerce: bool = COERCE_DEFAULT,
-    generic: bool = GENERIC_DEFAULT,
+    repr: bool | None = _REPR_DEFAULT,  # noqa: A002  # shadowing 'repr' python builtin
+    eq: bool | None = _EQ_DEFAULT,
+    order: bool | None = _ORDER_DEFAULT,
+    unsafe_hash: bool | None = _UNSAFE_HASH_DEFAULT,
+    frozen: bool | Literal["strict"] = _FROZEN_DEFAULT,
+    match_args: bool = _MATCH_ARGS_DEFAULT,
+    kw_only: bool = _KW_ONLY_DEFAULT,
+    slots: bool = _SLOTS_DEFAULT,
+    coerce: bool = _COERCE_DEFAULT,
+    generic: bool = _GENERIC_DEFAULT,
     type_validation_factory: Optional[FieldTypeValidatorFactory] = DefaultFieldTypeValidatorFactory,
 ) -> Type[_T]:
     ...
@@ -334,16 +287,16 @@ def datamodel(  # noqa: F811  # redefinion of unused symbol
     cls: Type[_T] = None,
     /,
     *,
-    repr: bool = REPR_DEFAULT,  # noqa: A002  # shadowing 'repr' python builtin
-    eq: bool = EQ_DEFAULT,
-    order: bool = ORDER_DEFAULT,
-    unsafe_hash: bool = UNSAFE_HASH_DEFAULT,
-    frozen: bool | Literal["strict"] = FROZEN_DEFAULT,
-    match_args: bool = MATCH_ARGS_DEFAULT,
-    kw_only: bool = KW_ONLY_DEFAULT,
-    slots: bool = SLOTS_DEFAULT,
-    coerce: bool = COERCE_DEFAULT,
-    generic: bool = GENERIC_DEFAULT,
+    repr: bool | None = _REPR_DEFAULT,  # noqa: A002  # shadowing 'repr' python builtin
+    eq: bool | None = _EQ_DEFAULT,
+    order: bool | None = _ORDER_DEFAULT,
+    unsafe_hash: bool | None = _UNSAFE_HASH_DEFAULT,
+    frozen: bool | Literal["strict"] = _FROZEN_DEFAULT,
+    match_args: bool = _MATCH_ARGS_DEFAULT,
+    kw_only: bool = _KW_ONLY_DEFAULT,
+    slots: bool = _SLOTS_DEFAULT,
+    coerce: bool = _COERCE_DEFAULT,
+    generic: bool = _GENERIC_DEFAULT,
     type_validation_factory: Optional[FieldTypeValidatorFactory] = DefaultFieldTypeValidatorFactory,
 ) -> Union[Type[_T], Callable[[Type[_T]], Type[_T]]]:
     """Add generated special methods to classes according to the specified attributes (class decorator).
@@ -361,10 +314,10 @@ def datamodel(  # noqa: F811  # redefinion of unused symbol
     Keyword Arguments:
         repr: If ``True``, a ``__repr__()`` method will be generated.
             If the class already defines ``__repr__()``, it will be overwritten.
-        eq: If ``True``, ``__eq__()`` and ``__ne__()`` methods will be generated.
+        eq: If ``True`` (default), ``__eq__()`` and ``__ne__()`` methods will be generated.
             This method compares the class as if it were a tuple of its fields.
             Both instances in the comparison must be of identical type.
-        order:  If ``True``, add ``__lt__()``, ``__le__()``, ``__gt__()``,
+        order:  If ``True`` (default is ``False``), add ``__lt__()``, ``__le__()``, ``__gt__()``,
             and ``__ge__()`` methods that behave like `eq` above and allow instances
             to be ordered. If ``None`` mirror value of `eq`.
         unsafe_hash: If ``False``, a ``__hash__()`` method is generated in a safe way
@@ -372,7 +325,7 @@ def datamodel(  # noqa: F811  # redefinion of unused symbol
             otherwise. If ``True``, a ``__hash__()`` method is generated anyway
             (use with care). See :func:`dataclasses.dataclass` for the complete explanation
             (or other sources like: `<https://hynek.me/articles/hashes-and-equality/>`_).
-        frozen: If ``True``, assigning to fields will generate an exception.
+        frozen: If ``True`` (default is ``False``), assigning to fields will generate an exception.
             This emulates read-only frozen instances. The ``__setattr__()`` and
             ``__delattr__()`` methods should not be defined in the class.
         match_args: If ``True`` (default) and ``__match_args__`` is not already defined in the class,
@@ -443,10 +396,11 @@ class DataModel:
         /,
         *,
         repr: bool  # noqa: A002  # shadowing 'repr' python builtin
+        | None
         | Literal["inherited"] = "inherited",
-        eq: bool | Literal["inherited"] = "inherited",
-        order: bool | Literal["inherited"] = "inherited",
-        unsafe_hash: bool | Literal["inherited"] = "inherited",
+        eq: bool | None | Literal["inherited"] = "inherited",
+        order: bool | None | Literal["inherited"] = "inherited",
+        unsafe_hash: bool | None | Literal["inherited"] = "inherited",
         frozen: bool | Literal["strict", "inherited"] = "inherited",
         match_args: bool | Literal["inherited"] = "inherited",
         kw_only: bool | Literal["inherited"] = "inherited",
@@ -469,14 +423,14 @@ class DataModel:
         locals_ = locals()
         datamodel_kwargs = {}
         for arg_name, default_value in [
-            ("repr", REPR_DEFAULT),
-            ("eq", EQ_DEFAULT),
-            ("order", ORDER_DEFAULT),
-            ("unsafe_hash", UNSAFE_HASH_DEFAULT),
-            ("frozen", FROZEN_DEFAULT),
-            ("match_args", MATCH_ARGS_DEFAULT),
-            ("kw_only", KW_ONLY_DEFAULT),
-            ("coerce", COERCE_DEFAULT),
+            ("repr", _REPR_DEFAULT),
+            ("eq", _EQ_DEFAULT),
+            ("order", _ORDER_DEFAULT),
+            ("unsafe_hash", _UNSAFE_HASH_DEFAULT),
+            ("frozen", _FROZEN_DEFAULT),
+            ("match_args", _MATCH_ARGS_DEFAULT),
+            ("kw_only", _KW_ONLY_DEFAULT),
+            ("coerce", _COERCE_DEFAULT),
             ("type_validation_factory", DefaultFieldTypeValidatorFactory),
         ]:
             arg_value = locals_[arg_name]
@@ -486,7 +440,7 @@ class DataModel:
                 datamodel_kwargs[arg_name] = arg_value
 
         if cls_params is not None and cls_params.frozen and not datamodel_kwargs["frozen"]:
-            raise TypeError(f"Subclasses of a frozen DataModel cannot be unfrozen.")
+            raise TypeError("Subclasses of a frozen DataModel cannot be unfrozen.")
 
         _make_datamodel(
             cls,
@@ -502,11 +456,11 @@ def field(
     default: Any = NOTHING,
     default_factory: Optional[Callable[[None], Any]] = None,
     init: bool = True,
-    repr: bool = REPR_DEFAULT,  # noqa: A002   # shadowing 'repr' python builtin
+    repr: bool = _REPR_DEFAULT,  # noqa: A002   # shadowing 'repr' python builtin
     hash: Optional[bool] = None,  # noqa: A002   # shadowing 'hash' python builtin
     compare: bool = True,
     metadata: Optional[Mapping[Any, Any]] = None,
-    kw_only: bool = KW_ONLY_DEFAULT,
+    kw_only: bool = _KW_ONLY_DEFAULT,
     converter: Callable[[Any], Any] | Literal["coerce"] | None = None,
     validator: AttrsValidator
     | FieldValidator
@@ -956,7 +910,6 @@ def _make_data_model_class_getitem() -> classmethod:
         type_args: Tuple[Type] = args if isinstance(args, tuple) else (args,)
         concrete_cls = concretize(cls, *type_args)
         return concrete_cls
-        # return xtyping.StdGenericAliasType(concrete_cls, type_args)
 
     return classmethod(__class_getitem__)
 

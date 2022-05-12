@@ -30,7 +30,6 @@ from eve import (
 )
 from eve.extended_typing import (
     Any,
-    Callable,
     Dict,
     Final,
     ForwardRef,

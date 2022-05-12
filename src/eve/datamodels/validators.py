@@ -14,6 +14,17 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+"""Data Model field validators.
+
+
+Check :mod:`eve.datamodels` for additional information.
+
+Note that validators are implemented as callable classes just to be able to
+customize their ``__repr__`` method.
+
+"""
+
+
 from __future__ import annotations
 
 import attrs
@@ -23,10 +34,7 @@ from attrs.validators import *  # noqa  # unused star import for reexporting
 @attrs.define(repr=False, frozen=True, slots=True)
 class _NonEmptyValidator:
     def __call__(self, inst, attr, value):
-        """
-        We use a callable class to be able to change the ``__repr__``.
-        """
-        if not value:
+        if not len(value):
             raise ValueError(f"Empty '{attr.name}' value")
 
     def __repr__(self):
@@ -34,12 +42,5 @@ class _NonEmptyValidator:
 
 
 def non_empty():
-    """
-    A validator that raises `ValueError` if the initializer is called
-    with a string or iterable that is longer than *length*.
-
-    :param int length: Maximum length of the string or iterable
-
-    .. versionadded:: 21.3.0
-    """
+    """Create a validator for non-empty iterables."""
     return _NonEmptyValidator()

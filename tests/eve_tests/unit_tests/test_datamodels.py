@@ -325,19 +325,6 @@ def test_conversion():
     assert instance.a_str == A_STR
     assert instance.a_str is A_STR
 
-    @datamodels.datamodel
-    class CoercedModel:
-        as_int: datamodels.Coerced[int]
-        a_str: str = datamodels.coerced_field()
-
-    instance = CoercedModel(-2, "2")
-    assert instance.as_int == -2
-    assert instance.a_str == "2"
-
-    instance = CoercedModel(-2, 2)
-    assert instance.as_int == -2
-    assert instance.a_str == "2"
-
     class PartiallyCoercedModel(datamodels.DataModel):
         as_int: int = datamodels.field(converter="coerce")
         only_int: int
@@ -390,6 +377,51 @@ def test_conversion():
         class CustomCoercedModel(datamodels.DataModel):
             as_int: datamodels.Coerced[int] = datamodels.field(converter=int)
             only_int: int
+
+
+def test_annotation_markers():
+    @datamodels.datamodel
+    class CoercedModel:
+        as_int: datamodels.Coerced[int]
+        only_str: str
+
+    instance = CoercedModel(-2, "2")
+    assert instance.as_int == -2
+    assert instance.only_str == "2"
+
+    instance = CoercedModel("-2", "2")
+    assert instance.as_int == -2
+    assert instance.only_str == "2"
+
+    with pytest.raises(TypeError, match="only_str"):
+        CoercedModel("-2", 2)
+
+    @datamodels.datamodel
+    class UncheckendModel:
+        as_int: datamodels.Unchecked[int]
+        only_int: int
+
+    instance = UncheckendModel(-2, 2)
+    assert instance.as_int == -2
+    assert instance.only_int == 2
+
+    instance = UncheckendModel(-2.5, 2)
+    assert instance.as_int == -2.5
+    assert instance.only_int == 2
+
+    with pytest.raises(TypeError, match="only_int"):
+        instance = UncheckendModel(-2.5, 2.5)
+
+    @datamodels.datamodel
+    class UncheckendModel:
+        a: datamodels.Unchecked[datamodels.Coerced[int]]
+        b: datamodels.Coerced[datamodels.Unchecked[int]]
+
+    instance = UncheckendModel(-2.5, "-2")
+    assert instance.a == -2 == instance.b
+
+    instance = UncheckendModel("-2", -2.5)
+    assert instance.a == -2 == instance.b
 
 
 def test_custom_type_validation_factory():
@@ -1065,3 +1097,22 @@ def test_concrete_field_type_validation(
     for value in wrong_values:
         with pytest.raises((TypeError, ValueError), match=".value'"):
             Model(value=value)
+
+
+# ---- Validators ----
+def test_non_empty():
+    @datamodels.datamodel
+    class Model:
+        str_value: str = datamodels.field(validator=datamodels.validators.non_empty())
+        list_value: list[int] = datamodels.field(validator=datamodels.validators.non_empty())
+
+    Model("AAAA", [1])
+
+    with pytest.raises(ValueError, match="Empty"):
+        Model("", [])
+
+    with pytest.raises(ValueError, match="Empty"):
+        Model("", [1])
+
+    with pytest.raises(ValueError, match="Empty"):
+        Model("AAAA", [])
