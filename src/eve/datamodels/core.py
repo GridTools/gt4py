@@ -387,8 +387,8 @@ class DataModel:
     Inheriting from this class is equivalent to apply the :func:`datamodel`
     decorator to a class, except that the ``slots`` option is always ``False``
     (since it generates a new class) and all descendants will be also converted
-    automatically in Data Models (which does not happen when explicitly
-    applying the decorator).
+    automatically in Data Models with the same options of the parent class
+    (which does not happen when explicitly applying the decorator).
 
     See :func:`datamodel` for the description of the parameters.
     """
