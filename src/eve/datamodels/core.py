@@ -183,7 +183,7 @@ class ValidatorAdapter:
     def __call__(self, _instance: DataModelTP, _attribute: attr.Attribute, value: Any) -> None:
         self.validator(value)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return self.description
 
 
@@ -226,7 +226,7 @@ _SLOTS_DEFAULT: Final = False
 _COERCE_DEFAULT: Final = False
 _GENERIC_DEFAULT: Final = False
 
-DEFAULT_OPTIONS: Final = utils.FrozenNamespace(
+DEFAULT_OPTIONS: Final[utils.FrozenNamespace] = utils.FrozenNamespace(
     repr=_REPR_DEFAULT,
     eq=_EQ_DEFAULT,
     order=_ORDER_DEFAULT,
@@ -922,7 +922,7 @@ def _make_type_converter(type_annotation: Type[_T], name: str) -> TypeConverter[
         assert not xtyping.get_args(type_annotation)
         assert callable(type_annotation)
 
-        def _type_converter(value):
+        def _type_converter(value: Any) -> _T: 
             try:
                 return value if isinstance(value, type_annotation) else type_annotation(value)
             except Exception as error:

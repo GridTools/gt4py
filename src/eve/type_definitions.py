@@ -52,6 +52,7 @@ from .extended_typing import (
     Optional,
     Tuple,
     Type,
+    TypeAlias,
     TypeVar,
     Union,
     final,
@@ -63,7 +64,7 @@ _T = TypeVar("_T")
 
 
 if sys.version_info >= (3, 9):
-    frozendict: Final = _frozendict
+    frozendict: TypeAlias = _frozendict
 else:
     _KeyT = TypeVar("_KeyT")
 

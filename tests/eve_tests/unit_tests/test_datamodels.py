@@ -37,6 +37,7 @@ from typing import (
     Type,
     TypeVar,
     Union,
+    no_type_check,
 )
 
 import devtools
@@ -168,6 +169,7 @@ def test_init():
 
 
 def test_custom_init():
+    @no_type_check
     @datamodels.datamodel
     class ModelWithCustomInit:
         value: float
