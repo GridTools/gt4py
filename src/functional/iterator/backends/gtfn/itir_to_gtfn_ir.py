@@ -203,6 +203,52 @@ class GTFN_lowering(NodeTranslator):
         )
 
     @staticmethod
+    def _merge_scans(
+        executions: list[Union[StencilExecution, ScanExecution]]
+    ) -> list[Union[StencilExecution, ScanExecution]]:
+        def merge(a: ScanExecution, b: ScanExecution) -> ScanExecution:
+            assert a.backend == b.backend
+
+            index_map = dict[int, int]()
+            compacted_b_args = list[SymRef]()
+            for b_idx, b_arg in enumerate(b.args):
+                try:
+                    a_idx = a.args.index(b_arg)
+                    index_map[b_idx] = a_idx
+                except ValueError:
+                    index_map[b_idx] = len(a.args) + len(compacted_b_args)
+                    compacted_b_args.append(b_arg)
+
+            def remap_args(s: Scan) -> Scan:
+                def remap_literal(x: Literal) -> Literal:
+                    return Literal(value=str(index_map[int(x.value)]), type=x.type)
+
+                return Scan(
+                    function=s.function,
+                    output=remap_literal(s.output),
+                    inputs=[remap_literal(i) for i in s.inputs],
+                    init=s.init,
+                )
+
+            return ScanExecution(
+                backend=a.backend,
+                scans=a.scans + [remap_args(s) for s in b.scans],
+                args=a.args + compacted_b_args,
+            )
+
+        res = executions[:1]
+        for execution in executions[1:]:
+            if (
+                isinstance(execution, ScanExecution)
+                and isinstance(res[-1], ScanExecution)
+                and execution.backend == res[-1].backend
+            ):
+                res[-1] = merge(res[-1], execution)
+            else:
+                res.append(execution)
+        return res
+
+    @staticmethod
     def _collect_offsets(node: itir.FencilDefinition) -> set[str]:
         return (
             iter_tree(node)
@@ -217,10 +263,12 @@ class GTFN_lowering(NodeTranslator):
     ) -> FencilDefinition:
         grid_type = getattr(GridType, grid_type.upper())
         extracted_functions: list[Union[FunctionDefinition, ScanPassDefinition]] = []
+        executions = self.visit(node.closures, extracted_functions=extracted_functions)
+        executions = self._merge_scans(executions)
         return FencilDefinition(
             id=SymbolName(node.id),
             params=self.visit(node.params),
-            executions=self.visit(node.closures, extracted_functions=extracted_functions),
+            executions=executions,
             offset_declarations=self._collect_offsets(node),
             function_definitions=self.visit(node.function_definitions) + extracted_functions,
             grid_type=grid_type,
