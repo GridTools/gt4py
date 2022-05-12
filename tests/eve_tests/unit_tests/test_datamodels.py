@@ -1034,11 +1034,10 @@ def test_generic_model_instantiation_name(concrete_type: Type):
     [int, List[float], Tuple[int, ...], Optional[int], Union[int, float]],
 )
 def test_generic_model_alias(concrete_type: Type):
-    Model = datamodels.concretize(GenericModel, concrete_type)  # type: ignore[misc]  # GenericModel is not detected as GenericDataModelTp
+    Model = datamodels.concretize(GenericModel, concrete_type)  # type: ignore  # GenericModel is not detected as GenericDataModelTp
 
-    # assert typing.get_origin(GenericModel[concrete_type]) is Model  # type: ignore[valid-type]  # using run-time type on purpose
 
-    class SubModel(GenericModel[concrete_type]):  # type: ignore[valid-type]  # using run-time type on purpose
+    class SubModel(GenericModel[concrete_type]):  # type: ignore  # using run-time type on purpose
         ...
 
     assert SubModel.__base__ is Model

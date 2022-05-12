@@ -69,7 +69,7 @@ else:
     _KeyT = TypeVar("_KeyT")
 
     @final
-    class frozendict(_frozendict.frozendict, Generic[_KeyT, _T]):  # type: ignore[no-redef]  # mypy consider this a redefinition
+    class frozendict(_frozendict, Generic[_KeyT, _T]):  # type: ignore[no-redef]  # mypy consider this a redefinition
         __slots__ = ()
 
 

@@ -192,7 +192,10 @@ def field_type_validator_factory(
 ) -> FieldTypeValidatorFactory:
     """Create a factory of field type validators from a factory of regular type validators."""
     if use_cache:
-        factory = utils.optional_lru_cache(func=factory)
+        factory = cast(
+            type_val.TypeValidatorFactory,
+            utils.optional_lru_cache(func=factory),  # type: ignore[arg-type]  # factory is not detected as callable
+        )
 
     def _field_type_validator_factory(
         type_annotation: TypeAnnotation,
@@ -203,7 +206,9 @@ def field_type_validator_factory(
             return ForwardRefValidator(factory)
         else:
             simple_validator = factory(type_annotation, name, required=True)
-            return ValidatorAdapter(simple_validator, f"{simple_validator.__name__} type validator")
+            return ValidatorAdapter(
+                simple_validator, f"{getattr(simple_validator,'__name__', 'A')} type validator"
+            )
 
     return _field_type_validator_factory
 
@@ -922,7 +927,7 @@ def _make_type_converter(type_annotation: Type[_T], name: str) -> TypeConverter[
         assert not xtyping.get_args(type_annotation)
         assert callable(type_annotation)
 
-        def _type_converter(value: Any) -> _T: 
+        def _type_converter(value: Any) -> _T:
             try:
                 return value if isinstance(value, type_annotation) else type_annotation(value)
             except Exception as error:
