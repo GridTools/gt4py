@@ -625,12 +625,10 @@ def as_tuple_field(field):
     return field
 
 
-_column_range = None
+_column_range = None  # TODO this is a bit ugly, alternative: pass scan range via iterator
 
 
-@builtins.scan.register(
-    EMBEDDED
-)  # TODO this is a bit ugly, alternative: pass scan range via iterator
+@builtins.scan.register(EMBEDDED)
 def scan(scan_pass, is_forward, init):
     def impl(*iters):
         if _column_range is None:
