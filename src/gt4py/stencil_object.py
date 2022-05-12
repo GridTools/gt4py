@@ -28,9 +28,9 @@ import numpy as np
 
 import gt4py.backend as gt_backend
 import gt4py.storage as gt_storage
+import gtc.utils as gtc_utils
 from gt4py.definitions import AccessKind, DomainInfo, FieldInfo, ParameterInfo
 from gtc.definitions import Index, Shape
-from gtc.utils import filter_mask, interpolate_mask
 
 
 FieldType = Union[gt_storage.storage.Storage, np.ndarray]
@@ -397,7 +397,7 @@ class StencilObject(abc.ABC):
                         f"Field '{name}' expects data dimensions {field_info.data_dims} but got {field.shape[field_domain_ndim:]}"
                     )
 
-                min_origin = interpolate_mask(
+                min_origin = gtc_utils.interpolate_mask(
                     field_info.boundary.lower_indices.filter_mask(field_domain_mask),
                     field_domain_mask,
                     default=0,
@@ -450,7 +450,7 @@ class StencilObject(abc.ABC):
 
                 elif all_origin is not None:
                     origin[name] = (
-                        *filter_mask(all_origin, field_info.domain_mask),
+                        *gtc_utils.filter_mask(all_origin, field_info.domain_mask),
                         *((0,) * len(field_info.data_dims)),
                     )
 
