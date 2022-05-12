@@ -22,7 +22,6 @@ Note that validators are implemented as callable classes just to be able to
 customize their ``__repr__`` method.
 """
 
-
 from __future__ import annotations
 
 import typing

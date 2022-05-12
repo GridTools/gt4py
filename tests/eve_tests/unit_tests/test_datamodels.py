@@ -1036,7 +1036,6 @@ def test_generic_model_instantiation_name(concrete_type: Type):
 def test_generic_model_alias(concrete_type: Type):
     Model = datamodels.concretize(GenericModel, concrete_type)  # type: ignore  # GenericModel is not detected as GenericDataModelTp
 
-
     class SubModel(GenericModel[concrete_type]):  # type: ignore  # using run-time type on purpose
         ...
 

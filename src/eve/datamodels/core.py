@@ -17,7 +17,6 @@
 """Data Model class creation and other utils.
 
 Check :mod:`eve.datamodels` for additional information.
-
 """
 
 from __future__ import annotations

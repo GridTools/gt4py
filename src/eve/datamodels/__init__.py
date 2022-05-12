@@ -14,10 +14,6 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from . import core as core, validators as validators  # noqa: F401  # imported but unused
-from .core import *  # noqa:   # star unused import
-
-
 """Data Model classes and related utils and validators.
 
 Data Models can be considered as enhanced  `attrs <https://www.attrs.org>`_
@@ -118,3 +114,6 @@ Examples:
     CustomModel(value=1.5)
 
 """
+
+from . import core as core, validators as validators  # noqa: F401  # imported but unused
+from .core import *  # noqa:   # star unused import
