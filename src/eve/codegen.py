@@ -165,8 +165,9 @@ if _CLANG_FORMAT_EXECUTABLE is not None:
             args.append("--sort-includes")
 
         try:
+            # use a timeout as clang-format used to deadlock on some sources
             formatted_source = run(
-                args, check=True, input=source, capture_output=True, encoding="utf8", timeout=3
+                args, check=True, input=source, capture_output=True, text=True, timeout=3
             ).stdout
         except TimeoutExpired:
             return source
