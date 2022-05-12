@@ -9,6 +9,19 @@ from functional.iterator.transforms.remap_symbols import RemapSymbolRefs
 
 
 class PopupTmps(NodeTranslator):
+    """Transformation for “popping up” nested lifts to lambda arguments.
+
+    In the simplest case, `(λ(x) → deref(lift(deref)(x)))(y)` is translated to
+    `(λ(x, tmp) → deref(tmp))(y, lift(deref)(y))` (where `tmp` is an arbitrary
+    new symbol name).
+
+    Note that there are edge cases of lifts which can not be popped up; for
+    example, popping up of a lift call that references a closure argument
+    (like `lift(deref)(x)` where `x` is a closure argument) is not possible
+    as we can not pop the expression to be a closure input (because closures
+    just take unmodified fencil arguments as inputs).
+    """
+
     @staticmethod
     def _extract_lambda(
         node: ir.FunCall,
