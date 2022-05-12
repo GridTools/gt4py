@@ -61,12 +61,6 @@ class FunCall(Expr):
     args: List[Expr]
 
 
-class TemplatedFunCall(Expr):
-    fun: Expr  # VType[Callable]
-    template_args: List[Expr]
-    args: List[Expr]
-
-
 class FunctionDefinition(Node, SymbolTableTrait):
     id: SymbolName  # noqa: A003
     params: List[Sym]
@@ -97,8 +91,8 @@ class FencilDefinition(Node, SymbolTableTrait):
         for name in [
             "deref",
             "shift",
-            "tuple",
-            "get",
+            "make_tuple",
+            "tuple_get",
             "can_deref",
             "domain",  # TODO(havogt) decide if domain is part of IR
             "named_range",
