@@ -30,7 +30,6 @@ import warnings
 
 import attr
 import attrs
-from numpy import require
 
 from .. import (
     exceptions,
@@ -192,7 +191,6 @@ def field_type_validator_factory(
     factory: type_val.TypeValidatorFactory, *, use_cache: bool = False
 ) -> FieldTypeValidatorFactory:
     """Create a factory of field type validators from a factory of regular type validators."""
-
     if use_cache:
         factory = utils.optional_lru_cache(func=factory)
 
@@ -251,7 +249,7 @@ def datamodel(
     repr: bool | None = _REPR_DEFAULT,  # noqa: A002  # shadowing 'repr' python builtin
     eq: bool | None = _EQ_DEFAULT,
     order: bool | None = _ORDER_DEFAULT,
-    unsafe_hash: bool | None = _UNSAFE_HASH_DEFAULT,
+    unsafe_hash: bool = _UNSAFE_HASH_DEFAULT,
     frozen: bool | Literal["strict"] = _FROZEN_DEFAULT,
     match_args: bool = _MATCH_ARGS_DEFAULT,
     kw_only: bool = _KW_ONLY_DEFAULT,
@@ -271,7 +269,7 @@ def datamodel(  # noqa: F811  # redefinion of unused symbol
     repr: bool | None = _REPR_DEFAULT,  # noqa: A002  # shadowing 'repr' python builtin
     eq: bool | None = _EQ_DEFAULT,
     order: bool | None = _ORDER_DEFAULT,
-    unsafe_hash: bool | None = _UNSAFE_HASH_DEFAULT,
+    unsafe_hash: bool = _UNSAFE_HASH_DEFAULT,
     frozen: bool | Literal["strict"] = _FROZEN_DEFAULT,
     match_args: bool = _MATCH_ARGS_DEFAULT,
     kw_only: bool = _KW_ONLY_DEFAULT,
@@ -290,7 +288,7 @@ def datamodel(  # noqa: F811  # redefinion of unused symbol
     repr: bool | None = _REPR_DEFAULT,  # noqa: A002  # shadowing 'repr' python builtin
     eq: bool | None = _EQ_DEFAULT,
     order: bool | None = _ORDER_DEFAULT,
-    unsafe_hash: bool | None = _UNSAFE_HASH_DEFAULT,
+    unsafe_hash: bool = _UNSAFE_HASH_DEFAULT,
     frozen: bool | Literal["strict"] = _FROZEN_DEFAULT,
     match_args: bool = _MATCH_ARGS_DEFAULT,
     kw_only: bool = _KW_ONLY_DEFAULT,
@@ -312,9 +310,12 @@ def datamodel(  # noqa: F811  # redefinion of unused symbol
         cls: Original class definition.
 
     Keyword Arguments:
-        repr: If ``True``, a ``__repr__()`` method will be generated.
-            If the class already defines ``__repr__()``, it will be overwritten.
-        eq: If ``True`` (default), ``__eq__()`` and ``__ne__()`` methods will be generated.
+        repr: If ``True``, a ``__repr__()`` method will be always generated.
+            If ``None`` (default), ``__repr__()`` will only be generated if it does
+            not overwrite a custom implementation defined in this class (not inherited).
+        eq: If ``True``, ``__eq__()`` and ``__ne__()`` methods will be always generated.
+            If ``None`` (default), the methods will only be generated if they do
+            not overwrite custom implementations defined in this class (not inherited).
             This method compares the class as if it were a tuple of its fields.
             Both instances in the comparison must be of identical type.
         order:  If ``True`` (default is ``False``), add ``__lt__()``, ``__le__()``, ``__gt__()``,
@@ -1136,6 +1137,8 @@ def _make_datamodel(  # noqa: C901  # too complex but still readable and documen
                 )
             cls.__class_getitem__ = _make_data_model_class_getitem()  # type: ignore[attr-defined]  # adding new attribute
 
+    # TODO(egparedes): consider the use of the field_transformer hook available in attrs:
+    # TODO(egparedes): https://www.attrs.org/en/stable/extending.html#automatic-field-transformation-and-modification
     new_cls = attrs.define(  # type: ignore[attr-defined]  # attr.define is not visible for mypy
         auto_attribs=True,
         cache_hash=bool(frozen) and num_attrs >= _CACHE_HASH_THRESHOLD,

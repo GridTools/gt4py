@@ -14,8 +14,8 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from . import core as core, validators as validators
-from .core import *
+from . import core as core, validators as validators  # noqa: F401  # imported but unused
+from .core import *  # noqa:   # star unused import
 
 
 """Data Model classes and related utils and validators.
@@ -57,7 +57,7 @@ The order of execution of the different components at initialization is the foll
         b. converter
 
     4. all field validators
-    5. root validators following the reversed class MRO order 
+    5. root validators following the reversed class MRO order
     6. ``__post_init__()``, if it exists
 
 

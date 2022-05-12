@@ -16,12 +16,10 @@
 
 """Data Model field validators.
 
-
 Check :mod:`eve.datamodels` for additional information.
 
 Note that validators are implemented as callable classes just to be able to
 customize their ``__repr__`` method.
-
 """
 
 
