@@ -20,11 +20,8 @@ from typing import TypeVar
 import numpy as np
 import pytest
 
-from functional.ffront.fbuiltins import Field, FieldOffset, float64, neighbor_sum
-from functional.ffront.foast_to_itir import FieldOperatorLowering
-from functional.ffront.func_to_foast import FieldOperatorParser
-from functional.iterator import ir as itir
-from functional.iterator.backends import roundtrip
+from functional.ffront.decorator import field_operator, program
+from functional.ffront.fbuiltins import Field, FieldOffset, float64, int32, neighbor_sum
 from functional.iterator.embedded import (
     NeighborTableOffsetProvider,
     index_field,
@@ -43,59 +40,6 @@ def debug_itir(tree):
     debug(format_python_source(EmbeddedDSL.apply(tree)))
 
 
-def make_domain(dim_name: str, lower: int, upper: int) -> itir.FunCall:
-    return itir.FunCall(
-        fun=itir.SymRef(id="domain"),
-        args=[
-            itir.FunCall(
-                fun=itir.SymRef(id="named_range"),
-                args=[
-                    itir.AxisLiteral(value=dim_name),
-                    itir.Literal(value=lower, type="int"),
-                    itir.Literal(value=upper, type="int"),
-                ],
-            )
-        ],
-    )
-
-
-def closure_from_fop(
-    node: itir.FunctionDefinition, out_name: str, domain: itir.FunCall
-) -> itir.StencilClosure:
-    return itir.StencilClosure(
-        stencil=itir.SymRef(id=node.id),
-        inputs=[itir.SymRef(id=sym.id) for sym in node.params],
-        output=itir.SymRef(id=out_name),
-        domain=domain,
-    )
-
-
-# TODO(tehrengruber): dim and size are implicitly given by out_names. Get values from there
-def fencil_from_fop(
-    node: itir.FunctionDefinition, out_name: str, dim: CartesianAxis, size: int
-) -> itir.FencilDefinition:
-    domain = make_domain(dim.value, 0, size)
-    closure = closure_from_fop(node, out_name=out_name, domain=domain)
-    return itir.FencilDefinition(
-        id=node.id + "_fencil",
-        function_definitions=[node],
-        params=[itir.Sym(id=inp.id) for inp in closure.inputs] + [itir.Sym(id=closure.output.id)],
-        closures=[closure],
-    )
-
-
-# TODO(tehrengruber): dim and size are implicitly given bys out_names. Get values from there
-def fencil_from_function(
-    func, dim: CartesianAxis, size: int, out_name: str = "foo"
-) -> itir.FencilDefinition:
-    return fencil_from_fop(
-        node=FieldOperatorLowering.apply(FieldOperatorParser.apply_to_function(func)),
-        out_name=out_name,
-        dim=dim,
-        size=size,
-    )
-
-
 DimsType = TypeVar("DimsType")
 DType = TypeVar("DType")
 
@@ -107,12 +51,11 @@ def test_copy():
     a = np_as_located_field(IDim)(np.ones((size)))
     b = np_as_located_field(IDim)(np.zeros((size)))
 
-    def copy(inp: Field[[IDim], float64]):
+    @field_operator(backend="roundtrip")
+    def copy(inp: Field[[IDim], float64]) -> Field[[IDim], float64]:
         return inp
 
-    fencil = fencil_from_function(copy, dim=IDim, size=size)
-
-    roundtrip.executor(fencil, a, b, offset_provider={})
+    copy(a, out=b, offset_provider={})
 
     assert np.allclose(a, b)
 
@@ -125,11 +68,13 @@ def test_multicopy():
     c = np_as_located_field(IDim)(np.zeros((size)))
     d = np_as_located_field(IDim)(np.zeros((size)))
 
-    def multicopy(inp1: Field[[IDim], float64], inp2: Field[[IDim], float64]):
+    @field_operator(backend="roundtrip")
+    def multicopy(
+        inp1: Field[[IDim], float64], inp2: Field[[IDim], float64]
+    ) -> tuple[Field[[IDim], float64], Field[[IDim], float64]]:
         return inp1, inp2
 
-    fencil = fencil_from_function(multicopy, dim=IDim, size=size)
-    roundtrip.executor(fencil, a, b, (c, d), offset_provider={})
+    multicopy(a, b, out=(c, d), offset_provider={})
 
     assert np.allclose(a, c)
     assert np.allclose(b, d)
@@ -141,11 +86,13 @@ def test_arithmetic():
     b = np_as_located_field(IDim)(np.ones((size)) * 2)
     c = np_as_located_field(IDim)(np.zeros((size)))
 
-    def arithmetic(inp1: Field[[IDim], float64], inp2: Field[[IDim], float64]):
+    @field_operator(backend="roundtrip")
+    def arithmetic(
+        inp1: Field[[IDim], float64], inp2: Field[[IDim], float64]
+    ) -> Field[[IDim], float64]:
         return (inp1 + inp2) * 2.0
 
-    fencil = fencil_from_function(arithmetic, dim=IDim, size=size)
-    roundtrip.executor(fencil, a, b, c, offset_provider={})
+    arithmetic(a, b, out=c, offset_provider={})
 
     assert np.allclose((a.array() + b.array()) * 2.0, c)
 
@@ -158,27 +105,27 @@ def test_bit_logic():
     b = np_as_located_field(IDim)(b_data)
     c = np_as_located_field(IDim)(np.full((size), False))
 
-    def bit_and(inp1: Field[[IDim], bool], inp2: Field[[IDim], bool]):
+    @field_operator(backend="roundtrip")
+    def bit_and(inp1: Field[[IDim], bool], inp2: Field[[IDim], bool]) -> Field[[IDim], bool]:
         return inp1 & inp2 & True
 
-    fencil = fencil_from_function(bit_and, dim=IDim, size=size)
-    roundtrip.executor(fencil, a, b, c, offset_provider={})
+    bit_and(a, b, out=c, offset_provider={})
 
     assert np.allclose(a.array() & b.array(), c)
 
 
 def test_unary_neg():
     size = 10
-    a = np_as_located_field(IDim)(np.ones((size)))
-    b = np_as_located_field(IDim)(np.zeros((size)))
+    a = np_as_located_field(IDim)(np.ones((size), dtype=int32))
+    b = np_as_located_field(IDim)(np.zeros((size), dtype=int32))
 
-    def uneg(inp: Field[[IDim], int]):
+    @field_operator(backend="roundtrip")
+    def uneg(inp: Field[[IDim], int32]) -> Field[[IDim], int32]:
         return -inp
 
-    fencil = fencil_from_function(uneg, dim=IDim, size=size)
-    roundtrip.executor(fencil, a, b, offset_provider={})
+    uneg(a, out=b, offset_provider={})
 
-    assert np.allclose(b, np.full((size), -1))
+    assert np.allclose(b, np.full((size), -1, dtype=int32))
 
 
 def test_shift():
@@ -187,11 +134,15 @@ def test_shift():
     a = np_as_located_field(IDim)(np.arange(size + 1))
     b = np_as_located_field(IDim)(np.zeros((size)))
 
-    def shift_by_one(inp: Field[[IDim], float64]):
+    @field_operator
+    def shift_by_one(inp: Field[[IDim], float64]) -> Field[[IDim], float64]:
         return inp(Ioff[1])
 
-    fencil = fencil_from_function(shift_by_one, dim=IDim, size=size)
-    roundtrip.executor(fencil, a, b, offset_provider={"Ioff": IDim})
+    @program(backend="roundtrip")
+    def fencil(inp: Field[[IDim], float64], out: Field[[IDim], float64]) -> None:
+        shift_by_one(inp, out=out)
+
+    fencil(a, b, offset_provider={"Ioff": IDim})
 
     assert np.allclose(b.array(), np.arange(1, 11))
 
@@ -204,12 +155,20 @@ def test_fold_shifts():
     b = np_as_located_field(IDim)(np.ones((size + 2)) * 2)
     c = np_as_located_field(IDim)(np.zeros((size)))
 
-    def auto_lift(inp1: Field[[IDim], float64], inp2: Field[[IDim], float64]):
+    @field_operator
+    def auto_lift(
+        inp1: Field[[IDim], float64], inp2: Field[[IDim], float64]
+    ) -> Field[[IDim], float64]:
         tmp = inp1 + inp2(Ioff[1])
         return tmp(Ioff[1])
 
-    fencil = fencil_from_function(auto_lift, dim=IDim, size=size)
-    roundtrip.executor(fencil, a, b, c, offset_provider={"Ioff": IDim})
+    @program(backend="roundtrip")
+    def fencil(
+        inp1: Field[[IDim], float64], inp2: Field[[IDim], float64], out: Field[[IDim], float64]
+    ) -> None:
+        auto_lift(inp1, inp2, out=out)
+
+    fencil(a, b, c, offset_provider={"Ioff": IDim})
 
     assert np.allclose(a[1:] + b[2:], c)
 
@@ -220,6 +179,7 @@ def test_tuples():
     b = np_as_located_field(IDim)(np.ones((size)) * 2)
     c = np_as_located_field(IDim)(np.zeros((size)))
 
+    @field_operator
     def tuples(
         inp1: Field[[IDim], float64], inp2: Field[[IDim], float64]
     ) -> Field[[IDim], float64]:
@@ -227,9 +187,13 @@ def test_tuples():
         scalars = 1.3, float64(5.0), float64("3.4")
         return (inps[0] * scalars[0] + inps[1] * scalars[1]) * scalars[2]
 
-    fencil = fencil_from_function(tuples, dim=IDim, size=size)
+    @program(backend="roundtrip")
+    def fencil(
+        inp1: Field[[IDim], float64], inp2: Field[[IDim], float64], out: Field[[IDim], float64]
+    ) -> None:
+        tuples(inp1, inp2, out=out)
 
-    roundtrip.executor(fencil, a, b, c, offset_provider={})
+    fencil(a, b, c, offset_provider={})
 
     assert np.allclose((a.array() * 1.3 + b.array() * 5.0) * 3.4, c)
 
@@ -275,19 +239,20 @@ def reduction_setup():
 def test_reduction_execution(reduction_setup):
     """Testing a trivial neighbor sum."""
     rs = reduction_setup
+    Edge = rs.Edge
+    Vertex = rs.Vertex
     V2EDim = rs.V2EDim
     V2E = rs.V2E
 
-    def reduction(edge_f: Field[[rs.Edge], "float64"]):  # type: ignore
+    @field_operator
+    def reduction(edge_f: Field[[Edge], "float64"]) -> Field[[Vertex], float64]:
         return neighbor_sum(edge_f(V2E), axis=V2EDim)
 
-    fencil = fencil_from_function(reduction, dim=rs.Vertex, size=rs.size)
-    roundtrip.executor(
-        fencil,
-        rs.inp,
-        rs.out,
-        offset_provider=rs.offset_provider,
-    )
+    @program(backend="roundtrip")
+    def fencil(edge_f: Field[[Edge], float64], out: Field[[Vertex], float64]) -> None:
+        reduction(edge_f, out=out)
+
+    fencil(rs.inp, rs.out, offset_provider=rs.offset_provider)
 
     ref = np.sum(rs.v2e_table, axis=1)
     assert np.allclose(ref, rs.out)
@@ -296,21 +261,64 @@ def test_reduction_execution(reduction_setup):
 def test_reduction_expression(reduction_setup):
     """Test reduction with an expression directly inside the call."""
     rs = reduction_setup
+    Vertex = rs.Vertex
+    Edge = rs.Edge
     V2EDim = rs.V2EDim
     V2E = rs.V2E
 
-    def reduce_expr(edge_f: Field[[rs.Edge], "float64"]):  # type: ignore
+    @field_operator
+    def reduce_expr(edge_f: Field[[Edge], "float64"]) -> Field[[Vertex], float64]:
         tmp_nbh_tup = edge_f(V2E), edge_f(V2E)
         tmp_nbh = tmp_nbh_tup[0]
         return neighbor_sum(-edge_f(V2E) * tmp_nbh * 2.0, axis=V2EDim)
 
-    fencil = fencil_from_function(reduce_expr, dim=rs.Vertex, size=rs.size)
-    roundtrip.executor(
-        fencil,
-        rs.inp,
-        rs.out,
-        offset_provider=rs.offset_provider,
-    )
+    @program(backend="roundtrip")
+    def fencil(edge_f: Field[[Edge], float64], out: Field[[Vertex], float64]) -> None:
+        reduce_expr(edge_f, out=out)
+
+    fencil(rs.inp, rs.out, offset_provider=rs.offset_provider)
 
     ref = np.sum(-(rs.v2e_table**2) * 2, axis=1)
     assert np.allclose(ref, rs.out.array())
+
+
+def test_scalar_arg():
+    """Test scalar argument being turned into 0-dim field."""
+    Vertex = CartesianAxis("Vertex")
+    size = 5
+    inp = 5.0
+    out = np_as_located_field(Vertex)(np.zeros([size]))
+
+    @field_operator(backend="roundtrip")
+    def scalar_arg(scalar_inp: float64) -> Field[[Vertex], float64]:
+        return scalar_inp + 1.0
+
+    scalar_arg(inp, out=out, offset_provider={})
+
+    ref = np.full([size], 6.0)
+    assert np.allclose(ref, out.array())
+
+
+def test_scalar_arg_with_field():
+    Edge = CartesianAxis("Edge")
+    EdgeOffset = FieldOffset("EdgeOffset", source=Edge, target=[Edge])
+    size = 5
+    inp = index_field(Edge)
+    factor = 3
+    out = np_as_located_field(Edge)(np.zeros([size]))
+
+    @field_operator
+    def scalar_and_field_args(
+        inp: Field[[Edge], float64], factor: float64
+    ) -> Field[[Edge], float64]:
+        tmp = factor * inp
+        return tmp(EdgeOffset[1])
+
+    @program(backend="roundtrip")
+    def fencil(out: Field[[Edge], float64], inp: Field[[Edge], float64], factor: float64) -> None:
+        scalar_and_field_args(inp, factor, out=out)
+
+    fencil(out, inp, factor, offset_provider={"EdgeOffset": Edge})
+
+    ref = np.arange(1, size + 1) * factor
+    assert np.allclose(ref, out.array())

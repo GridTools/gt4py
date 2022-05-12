@@ -17,9 +17,7 @@ import ast
 import collections
 from dataclasses import dataclass
 
-from functional.ffront import common_types
-from functional.ffront import program_ast as past
-from functional.ffront import symbol_makers
+from functional.ffront import common_types, program_ast as past, symbol_makers
 from functional.ffront.dialect_parser import DialectParser, DialectSyntaxError
 from functional.ffront.past_passes.type_deduction import ProgramTypeDeduction
 

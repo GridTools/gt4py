@@ -1,8 +1,10 @@
 import itertools
 import numbers
+import typing
 from dataclasses import dataclass
 
 import numpy as np
+import numpy.typing
 
 from functional import iterator
 from functional.iterator import builtins
@@ -14,11 +16,14 @@ EMBEDDED = "embedded"
 
 
 class NeighborTableOffsetProvider:
-    def __init__(self, tbl, origin_axis, neighbor_axis, max_neighbors) -> None:
+    def __init__(
+        self, tbl, origin_axis, neighbor_axis, max_neighbors, has_skip_values=True
+    ) -> None:
         self.tbl = tbl
         self.origin_axis = origin_axis
         self.neighbor_axis = neighbor_axis
         self.max_neighbors = max_neighbors
+        self.has_skip_values = has_skip_values
 
 
 @builtins.deref.register(EMBEDDED)
@@ -242,6 +247,8 @@ def group_offsets(*offsets):
 
 
 def shift_position(pos, *complete_offsets, offset_provider):
+    if pos is None:
+        return None
     new_pos = pos.copy()
     for tag, index in complete_offsets:
         new_pos = execute_shift(new_pos, tag, index, offset_provider=offset_provider)
@@ -386,6 +393,9 @@ def make_in_iterator(inp, pos, offset_provider, *, column_axis):
 builtins.builtin_dispatch.push_key(EMBEDDED)  # makes embedded the default
 
 
+FIELD_DTYPE_T = typing.TypeVar("FIELD_DTYPE_T", bound=np.typing.DTypeLike)
+
+
 class LocatedField:
     """A Field with named dimensions/axises.
 
@@ -476,6 +486,10 @@ def np_as_located_field(*axises, origin=None):
 
 def index_field(axis, dtype=float):
     return LocatedField(lambda index: index[0], (axis,), dtype)
+
+
+def constant_field(value: typing.Any, dtype: type) -> LocatedField:
+    return LocatedField(lambda _: value, (), dtype)
 
 
 @builtins.shift.register(EMBEDDED)

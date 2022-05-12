@@ -1,7 +1,7 @@
 import sys
 
 from functional.iterator.backends import gtfn
-from functional.iterator.backends.gtfn.backend import generate
+from functional.iterator.backends.gtfn.gtfn_backend import generate
 from functional.iterator.builtins import *
 from functional.iterator.runtime import CartesianAxis, closure, fundef, offset
 from functional.iterator.tracing import trace
