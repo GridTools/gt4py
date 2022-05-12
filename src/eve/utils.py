@@ -471,8 +471,54 @@ class CaseStyleConverter:
         return name.split("-")
 
 
-class FrozenNamespace(types.SimpleNamespace, Generic[T]):
-    """An immutable `types.SimpleNamespace`-like class.
+class Namespace(types.SimpleNamespace, Generic[T]):
+    """A `types.SimpleNamespace`-like class with additional dict-like interface.
+
+    Examples:
+        >>> ns = Namespace(a=10, b="hello")
+        >>> ns.a
+        10
+        >>> ns.b = 20
+        >>> ns.b
+        20
+
+        >>> ns = Namespace(a=10, b="hello")
+        >>> list(ns.keys())
+        ['a', 'b']
+
+        >>> list(ns.values())
+        [10, 'hello']
+
+        >>> list(ns.items())
+        [('a', 10), ('b', 'hello')]
+
+    """
+
+    def __contains__(self, key: str) -> bool:
+        return key in self.__dict__
+
+    def items(self) -> Iterable[Tuple[str, T]]:
+        return self.__dict__.items()
+
+    def keys(self) -> Iterable[str]:
+        return self.__dict__.keys()
+
+    def values(self) -> Iterable[T]:
+        return self.__dict__.values()
+
+    def reset(self, data: Optional[Dict[str, Any]] = None) -> None:
+        self.__dict__.clear()
+        if data:
+            self.__dict__.update(data)
+
+    def as_dict(self) -> Dict[str, T]:
+        return {**self.__dict__}
+
+    asdict = as_dict
+
+
+class FrozenNamespace(Namespace[T]):
+    """An immutable version of :class:`Namespace`.
 
     Examples:
         >>> ns = FrozenNamespace(a=10, b="hello")
@@ -524,10 +570,10 @@ class UIDGenerator:
         else dataclasses.field(default=None)
     )
 
-    #: Constantly increasing counter for generation of sequential unique ids
     _counter: Iterator[int] = dataclasses.field(
         default_factory=functools.partial(itertools.count, 1), init=False
     )
+    """Constantly increasing counter for generation of sequential unique ids."""
 
     def random_id(self, *, prefix: Optional[str] = None, width: Optional[int] = None) -> str:
         """Generate a random globally unique id."""
@@ -579,8 +625,10 @@ UIDs = UIDGenerator()
 S = TypeVar("S")
 K = TypeVar("K")
 
+P = ParamSpec("P")
 
-def as_xiter(iterator_func: Callable[..., Iterator[T]]) -> Callable[..., XIterable[T]]:
+
+def as_xiter(iterator_func: Callable[P, Iterable[T]]) -> Callable[P, XIterable[T]]:
     """Wrap the provided callable to convert its output in a :class:`XIterable`."""
 
     @functools.wraps(iterator_func)

@@ -320,7 +320,10 @@ class SimpleTypeValidatorFactory(TypeValidatorFactory):
                         mapping_validator=self.make_is_instance_of(name, origin_type),
                     )
 
-            # TODO(egparedes): add support for Callables
+                # Custom generic type: create a validator for the original type ignoring the annotation
+                return make_recursive(origin_type)
+
+            # TODO(egparedes): add support for signature checking in Callables
             raise exceptions.EveValueError(f"{type_annotation} type annotation is not supported.")
 
         except exceptions.EveValueError as error:
@@ -347,7 +350,7 @@ class SimpleTypeValidatorFactory(TypeValidatorFactory):
         def _is_instance_of(value: Any, **kwargs: Any) -> None:
             if not isinstance(value, type_):
                 raise TypeError(
-                    f"'{name}' must be {type_} (got '{value}' that is a {type(value)})."
+                    f"'{name}' must be {type_} (got '{value}' which is a {type(value)})."
                 )
 
         return _is_instance_of
@@ -358,7 +361,7 @@ class SimpleTypeValidatorFactory(TypeValidatorFactory):
 
         def _is_instance_of_int(value: Any, **kwargs: Any) -> None:
             if not isinstance(value, int) or isinstance(value, bool):
-                raise TypeError(f"'{name}' must be {int} (got '{value}' that is a {type(value)}).")
+                raise TypeError(f"'{name}' must be {int} (got '{value}' which is a {type(value)}).")
 
         return _is_instance_of_int
 
@@ -392,7 +395,7 @@ class SimpleTypeValidatorFactory(TypeValidatorFactory):
         def _is_tuple_of(value: Any, **kwargs: Any) -> None:
             if not isinstance(value, tuple_type):
                 raise TypeError(
-                    f"In '{name}' validation, got '{value}' that is a {type(value)} instead of {tuple_type}."
+                    f"In '{name}' validation, got '{value}' which is a {type(value)} instead of {tuple_type}."
                 )
             if len(value) != len(item_validators):
                 raise TypeError(
@@ -476,11 +479,11 @@ class SimpleTypeValidatorFactory(TypeValidatorFactory):
         return _combined_validator
 
 
-#: Public (with optional cache) entry point for :class:`SimpleTypeValidatorFactory`.
 simple_type_validator_factory: Final = cast(
     TypeValidatorFactory,
     utils.optional_lru_cache(SimpleTypeValidatorFactory(), typed=True),  # type: ignore[arg-type]
 )
+"""Public (with optional cache) entry point for :class:`SimpleTypeValidatorFactory`."""
 
 
 def simple_type_validator(
