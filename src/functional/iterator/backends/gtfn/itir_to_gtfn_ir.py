@@ -37,6 +37,7 @@ def pytype_to_cpptype(t: str):
             "int32": "std::int32_t",
             "int64": "std::int64_t",
             "bool": "bool",
+            "axis_literal": None,  # TODO: domain?
         }[t]
     except KeyError:
         raise TypeError(f"Unsupported type '{t}'") from None
