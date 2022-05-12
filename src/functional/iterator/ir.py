@@ -14,6 +14,14 @@ class Node(eve.Node):
 
         return pformat(self)
 
+    def __hash__(self) -> int:
+        return hash(type(self)) ^ hash(
+            tuple(
+                hash(tuple(v)) if isinstance(v, list) else hash(v)
+                for v in self.iter_children_values()
+            )
+        )
+
 
 class Sym(Node):  # helper
     id: SymbolName  # noqa: A003
