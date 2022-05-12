@@ -8,6 +8,20 @@ ALL_NEIGHBORS = boltons.typeutils.make_sentinel("ALL_NEIGHBORS")
 
 
 class CollectShifts(NodeVisitor):
+    """Collects shifts applied to symbol references.
+
+    Fills the provided `shifts` keyword argument (of type `dict[str, list[tuple]]`)
+    with a list of offset tuples. E.g., if there is just `deref(x)` and a
+    `deref(shift(a, b)(x))` in the node tree, the result will be
+    `{"x": [(), (a, b)]}`.
+
+    Limitations:
+    - Nested shift calls like `deref(shift(c, d)(shift(a, b)(x)))` are not supported.
+      That is, all shifts must be normalized (that is, `deref(shift(a, b, c, d)(x))`
+      works in the given example).
+    - Calls to lift and scan are not supported.
+    """
+
     @staticmethod
     def _as_deref(node: ir.FunCall):
         if node.fun == ir.SymRef(id="deref"):
