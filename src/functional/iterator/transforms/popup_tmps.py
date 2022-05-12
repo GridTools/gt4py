@@ -1,6 +1,6 @@
 from collections.abc import Callable
 from functools import partial
-from typing import Optional, Union
+from typing import Optional, Union, cast
 
 from eve import NodeTranslator
 from eve.utils import UIDs
@@ -12,7 +12,7 @@ class PopupTmps(NodeTranslator):
     @staticmethod
     def _extract_lambda(
         node: ir.FunCall,
-    ) -> Optional[tuple[ir.Lambda, bool, Callable[[ir.Lambda, list[ir.Node]], ir.FunCall]]]:
+    ) -> Optional[tuple[ir.Lambda, bool, Callable[[ir.Lambda, list[ir.Expr]], ir.FunCall]]]:
         """Extract the lambda function which is relevant for popping up lifts.
 
         Further, returns a bool indicating if the given function call was as a
@@ -34,20 +34,28 @@ class PopupTmps(NodeTranslator):
 
             is_scan = isinstance(fun, ir.FunCall) and fun.fun == ir.SymRef(id="scan")
             if is_scan:
+                assert isinstance(fun, ir.FunCall)  # just for mypy
                 fun = fun.args[0]
 
-            def wrap(fun: ir.Lambda, args: list[ir.Node]) -> ir.FunCall:
+            def wrap(fun: ir.Lambda, args: list[ir.Expr]) -> ir.FunCall:
                 if is_scan:
-                    fun = ir.FunCall(
-                        fun=ir.SymRef(id="scan"), args=[fun] + node.fun.args[0].args[1:]
+                    assert isinstance(node.fun, ir.FunCall) and isinstance(
+                        node.fun.args[0], ir.FunCall
                     )
-                return ir.FunCall(fun=ir.FunCall(fun=ir.SymRef(id="lift"), args=[fun]), args=args)
+                    scan_args = [cast(ir.Expr, fun)] + node.fun.args[0].args[1:]
+                    f: Union[ir.Lambda, ir.FunCall] = ir.FunCall(
+                        fun=ir.SymRef(id="scan"), args=scan_args
+                    )
+                else:
+                    f = fun
+                return ir.FunCall(fun=ir.FunCall(fun=ir.SymRef(id="lift"), args=[f]), args=args)
 
+            assert isinstance(fun, ir.Lambda)
             return fun, True, wrap
         if isinstance(node.fun, ir.Lambda):
             # direct lambda call
 
-            def wrap(fun: ir.Lambda, args: list[ir.Node]) -> ir.FunCall:
+            def wrap(fun: ir.Lambda, args: list[ir.Expr]) -> ir.FunCall:
                 return ir.FunCall(fun=fun, args=args)
 
             return node.fun, False, wrap
