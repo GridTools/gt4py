@@ -3,7 +3,9 @@ from functional.iterator import ir
 
 
 class EtaReduction(NodeTranslator):
-    def visit_Lambda(self, node):
+    """Eta reduction: simplifies `λ(args...) → f(args...)` to `f`."""
+
+    def visit_Lambda(self, node: ir.Lambda) -> ir.Node:
         if (
             isinstance(node.expr, ir.FunCall)
             and len(node.params) == len(node.expr.args)
