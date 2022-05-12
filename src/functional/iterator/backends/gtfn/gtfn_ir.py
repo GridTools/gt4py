@@ -100,7 +100,7 @@ class ScanExecution(Node):
 
 class TemporaryAllocation(Node):
     id: SymbolName  # noqa: A003
-    dtype: str  # TODO: proper DType specification
+    dtype: str
     # TODO: domain: ??
 
 

@@ -27,6 +27,21 @@ from functional.iterator.backends.gtfn.gtfn_ir import (
 )
 
 
+def pytype_to_cpptype(t: str):
+    try:
+        return {
+            "float": "double",
+            "float32": "float",
+            "float64": "double",
+            "int": "int",
+            "int32": "std::int32_t",
+            "int64": "std::int64_t",
+            "bool": "bool",
+        }[t]
+    except KeyError:
+        raise TypeError(f"Unsupported type '{t}'") from None
+
+
 class GTFN_lowering(NodeTranslator):
     _binary_op_map = {
         "plus": "+",
@@ -281,12 +296,8 @@ class GTFN_lowering(NodeTranslator):
                 return f"std::remove_const_t<sid::element_type<decltype({params[x]})>>"
             if isinstance(x, tuple):
                 return "tuple<" + ", ".join(dtype_to_cpp(i) for i in x) + ">"
-            # TODO: proper type conversion
-            if x == "float32":
-                return "float"
-            if x == "float" or x == "float64":
-                return "double"
-            raise TypeError()
+            assert isinstance(x, str)
+            return pytype_to_cpptype(x)
 
         return TemporaryAllocation(id=node.id, dtype=dtype_to_cpp(node.dtype))
 

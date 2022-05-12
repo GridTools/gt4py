@@ -9,6 +9,7 @@ from functional.iterator.backends.gtfn.gtfn_ir import (
     OffsetLiteral,
     SymRef,
 )
+from functional.iterator.backends.gtfn.itir_to_gtfn_ir import pytype_to_cpptype
 
 
 class GTFNCodegen(codegen.TemplatedGenerator):
@@ -28,15 +29,17 @@ class GTFNCodegen(codegen.TemplatedGenerator):
         return value
 
     def visit_Literal(self, node: Literal, **kwargs: Any) -> str:
-        if node.type == "int":
-            return node.value + "_c"
-        elif node.type == "float32":
-            return f"{self.asfloat(node.value)}f"
-        elif node.type == "float" or node.type == "float64":
-            return self.asfloat(node.value)
-        elif node.type == "bool":
-            return node.value.lower()
-        return node.value
+        match pytype_to_cpptype(node.type):
+            case "int":
+                return node.value + "_c"
+            case "float":
+                return self.asfloat(node.value) + "f"
+            case "double":
+                return self.asfloat(node.value)
+            case "bool":
+                return node.value.lower()
+            case _:
+                return node.value
 
     UnaryExpr = as_fmt("{op}({expr})")
     BinaryExpr = as_fmt("({lhs}{op}{rhs})")
