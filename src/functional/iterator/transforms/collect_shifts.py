@@ -4,9 +4,10 @@ from eve import NodeVisitor
 from functional.iterator import ir
 
 
-class CollectShifts(NodeVisitor):
-    ALL_NEIGHBORS = boltons.typeutils.make_sentinel(name="ALL_NEIGHBORS", var_name="ALL_NEIGHBORS")
+ALL_NEIGHBORS = boltons.typeutils.make_sentinel("ALL_NEIGHBORS")
 
+
+class CollectShifts(NodeVisitor):
     def visit_FunCall(self, node: ir.FunCall, *, shifts: dict[str, list[tuple]]):
         if node.fun == ir.SymRef(id="deref"):
             assert len(node.args) == 1
@@ -39,7 +40,7 @@ class CollectShifts(NodeVisitor):
                 self.visit(node.args, shifts=nested_shifts)
                 for symname, nshifts in nested_shifts.items():
                     for s in nshifts:
-                        shifts.setdefault(symname, []).append(s + (self.ALL_NEIGHBORS,))
+                        shifts.setdefault(symname, []).append(s + (ALL_NEIGHBORS,))
                 return
         if node.fun in (ir.SymRef(id="lift"), ir.SymRef(id="scan")) or not isinstance(
             node.fun, ir.SymRef
