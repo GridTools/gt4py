@@ -124,26 +124,6 @@ _T = TypeVar("_T")
 NoArgsCallable = Callable[[], Any]
 
 
-# Frozen collections
-class FrozenList(List[_T]):
-    __slots__ = ()
-
-    def __setitem__(self, item: int, value: _T) -> None:
-        raise TypeError(f"'{self.__class__}' object does not support item assignment")
-
-    def __delitem__(self, item: int) -> None:
-        raise TypeError(f"'{self.__class__}' object does not support item deletion")
-
-
-_KeyT = TypeVar("_KeyT")
-if _sys.version_info >= (3, 9):
-    FrozenDict: TypeAlias = _frozendict.frozendict[_KeyT, _T]
-else:
-
-    class FrozenDict(_frozendict.frozendict, Generic[_KeyT, _T]):  # type: ignore[no-redef]  # mypy consider this a redefinition
-        __slots__ = ()
-
-
 # Typing annotations
 if _sys.version_info >= (3, 9):
     SolvedTypeAnnotation = Union[

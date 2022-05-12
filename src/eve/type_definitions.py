@@ -42,23 +42,34 @@ from pydantic import (  # noqa: F401
 )
 from pydantic.types import ConstrainedStr
 
-from . import extended_typing as xtyping
 from .extended_typing import (
     Any,
     Callable,
     Final,
     Generator,
+    Generic,
     NoReturn,
     Optional,
     Tuple,
     Type,
+    TypeVar,
     Union,
     final,
 )
 
 
-frozenlist: Final = tuple
-frozendict: Final = _frozendict if sys.version_info >= (3, 9) else xtyping.FrozenDict
+# Frozen collections
+_T = TypeVar("_T")
+
+
+if sys.version_info >= (3, 9):
+    frozendict: Final = _frozendict
+else:
+    _KeyT = TypeVar("_KeyT")
+
+    @final
+    class frozendict(_frozendict.frozendict, Generic[_KeyT, _T]):  # type: ignore[no-redef]  # mypy consider this a redefinition
+        __slots__ = ()
 
 
 @final

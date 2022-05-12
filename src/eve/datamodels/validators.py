@@ -25,20 +25,27 @@ customize their ``__repr__`` method.
 
 from __future__ import annotations
 
+import typing
+from typing import Any
+
 import attrs
 from attrs.validators import *  # noqa  # unused star import for reexporting
 
 
+if typing.TYPE_CHECKING:
+    from .core import DataModelTP, FieldValidator
+
+
 @attrs.define(repr=False, frozen=True, slots=True)
 class _NonEmptyValidator:
-    def __call__(self, inst, attr, value):
+    def __call__(self, inst: DataModelTP, attr: attrs.Attribute, value: Any) -> None:
         if not len(value):
             raise ValueError(f"Empty '{attr.name}' value")
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return "<non_empty validator>"
 
 
-def non_empty():
+def non_empty() -> FieldValidator:
     """Create a validator for non-empty iterables."""
     return _NonEmptyValidator()

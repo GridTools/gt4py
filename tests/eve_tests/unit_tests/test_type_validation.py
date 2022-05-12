@@ -84,18 +84,11 @@ SAMPLE_TYPE_DEFINITIONS: List[
     ),  # float literals are not supported by PEP 586
     (typing.Tuple[int, str], [(3, "three")], [(), (3, 3)], None, None),
     (typing.Tuple[int, ...], [(1, 2, 3), ()], [3, (3, "three")], None, None),
-    (
-        xtyping.FrozenList[int],
-        [xtyping.FrozenList([1, 2, 3]), xtyping.FrozenList()],
-        [[1, 2, 3], (1, 2, 3), 3, (3, "three")],
-        None,
-        None,
-    ),
     (typing.List[int], ([1, 2, 3], []), (1, [1.0]), None, None),
     (typing.Set[int], ({1, 2, 3}, set()), (1, [1], (1,), {1: None}), None, None),
     (typing.Dict[int, str], ({}, {3: "three"}), ([(3, "three")], 3, "three", []), None, None),
     (
-        xtyping.FrozenDict[int, str],
+        type_def.frozendict[int, str],
         (
             type_def.frozendict(),
             type_def.frozendict({3: "three"}),
@@ -258,7 +251,7 @@ def test_simple_validation_particularities():
     lenient_validator(True)
 
     # not supported annotations
-    InvalidAnnotation = typing.TypeGuard[str]
+    InvalidAnnotation = xtyping.TypeGuard[str]
     assert (
         type_val.simple_type_validator_factory(InvalidAnnotation, "value", required=False) is None
     )

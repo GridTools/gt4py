@@ -1104,7 +1104,7 @@ def test_non_empty():
     @datamodels.datamodel
     class Model:
         str_value: str = datamodels.field(validator=datamodels.validators.non_empty())
-        list_value: list[int] = datamodels.field(validator=datamodels.validators.non_empty())
+        list_value: List[int] = datamodels.field(validator=datamodels.validators.non_empty())
 
     Model("AAAA", [1])
 
