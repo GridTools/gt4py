@@ -59,6 +59,7 @@ class CollectShifts(NodeVisitor):
             shifts.setdefault(sym, []).append(offsets)
             return
         if reduction_args := self._as_reduce(node):
+            # reduce(..., ...)(args...)
             nested_shifts = dict[str, list[tuple]]()
             self.visit(reduction_args, shifts=nested_shifts)
             for sym, offset_list in nested_shifts.items():
