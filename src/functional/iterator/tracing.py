@@ -237,8 +237,8 @@ def make_node(o):
 
 def trace_function_call(fun, *, args=None):
     if args is None:
-        args = [_s(param) for param in inspect.signature(fun).parameters.keys()]
-    body = fun(*args)
+        args = (_s(param) for param in inspect.signature(fun).parameters.keys())
+    body = fun(*list(args))
 
     if isinstance(body, tuple):
         return _f("make_tuple", *tuple(make_node(b) for b in body))
