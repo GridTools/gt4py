@@ -45,7 +45,6 @@ from pydantic.types import ConstrainedStr
 from .extended_typing import (
     Any,
     Callable,
-    Final,
     Generator,
     Generic,
     NoReturn,

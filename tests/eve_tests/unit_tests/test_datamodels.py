@@ -735,26 +735,26 @@ class ModelWithValidators(datamodels.DataModel):
     str_value: str = ""
     extra_value: Optional[Any] = None
 
-    @datamodels.validator("bool_value")
+    @datamodels.validator("bool_value")  # type: ignore[arg-type]  # Model class not considered a DataModel
     def _bool_value_validator(self, attribute, value) -> None:
         assert isinstance(self, ModelWithValidators)
 
-    @datamodels.validator("int_value")
+    @datamodels.validator("int_value")  # type: ignore[arg-type]  # Model class not considered a DataModel
     def _int_value_validator(self, attribute, value) -> None:
         if value < 0:
             raise ValueError(f"'{attribute.name}' must be larger or equal to 0")
 
-    @datamodels.validator("even_int_value")
+    @datamodels.validator("even_int_value")  # type: ignore[arg-type]  # Model class not considered a DataModel
     def _even_int_value_validator(self, attribute, value) -> None:
         if value % 2:
             raise ValueError(f"'{attribute.name}' must be an even number")
 
-    @datamodels.validator("float_value")
+    @datamodels.validator("float_value")  # type: ignore[arg-type]  # Model class not considered a DataModel
     def _float_value_validator(self, attribute, value) -> None:
         if value > 3.14159:
             raise ValueError(f"'{attribute.name}' must be lower or equal to 3.14159")
 
-    @datamodels.validator("str_value")
+    @datamodels.validator("str_value")  # type: ignore[arg-type]  # Model class not considered a DataModel
     def _str_value_validator(self, attribute, value) -> None:
         # This kind of validation should arguably happen in a root_validator, but
         # since float_value is defined before str_value, it should have been
@@ -762,7 +762,7 @@ class ModelWithValidators(datamodels.DataModel):
         if value == str(self.float_value):
             raise ValueError(f"'{attribute.name}' must be different to 'float_value'")
 
-    @datamodels.validator("extra_value")
+    @datamodels.validator("extra_value")  # type: ignore[arg-type]  # Model class not considered a DataModel
     def _extra_value_validator(self, attribute, value) -> None:
         if bool(value):
             raise ValueError(f"'{attribute.name}' must be equivalent to False")

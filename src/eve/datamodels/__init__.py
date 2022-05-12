@@ -38,7 +38,7 @@ called from the generated ``__init__`` before and after the instance creation.
 
 The order of execution of the different components at initialization is the following:
 
-    1. ``__init__()``
+    1. ``__init__()``.
 
         a.  If a custom ``__init__`` already exists in the class, it will not be overwritten.
             It is your responsability to call ``__auto_init__`` from there to obtain
@@ -52,9 +52,9 @@ The order of execution of the different components at initialization is the foll
         a. default factory
         b. converter
 
-    4. all field validators
-    5. root validators following the reversed class MRO order
-    6. ``__post_init__()``, if it exists
+    4. all field validators.
+    5. root validators following the reversed class MRO order.
+    6. ``__post_init__()``, if it exists.
 
 
 Examples:

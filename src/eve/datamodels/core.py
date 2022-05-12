@@ -58,6 +58,7 @@ from ..extended_typing import (
     TypeVar,
     Union,
     cast,
+    dataclass_transform,
     overload,
 )
 from ..type_definitions import NOTHING, NothingType
@@ -65,8 +66,8 @@ from ..type_definitions import NOTHING, NothingType
 
 # Typing
 # TODO(egparedes): these typing definitions are not very useful until
-# TODO(egparedes): PEP 681 - Data Class Transforms (https://peps.python.org/pep-0681/)
-# TODO(egparedes): is implemented.
+#   at least PEP 681 - Data Class Transforms (https://peps.python.org/pep-0681/)
+#   and intersection types are supported.
 _T = TypeVar("_T")
 
 
@@ -199,7 +200,7 @@ def field_type_validator_factory(
     def _field_type_validator_factory(
         type_annotation: TypeAnnotation,
         name: str,
-    ) -> Optional[FieldValidator]:
+    ) -> FieldValidator:
         """Field type validator for datamodels, supporting forward references."""
         if isinstance(type_annotation, ForwardRef):
             return ForwardRefValidator(factory)
@@ -285,6 +286,7 @@ def datamodel(  # noqa: F811  # redefinion of unused symbol
     ...
 
 
+@dataclass_transform(eq_default=True, field_specifiers=("field",))
 def datamodel(  # noqa: F811  # redefinion of unused symbol
     cls: Type[_T] = None,
     /,
@@ -381,6 +383,7 @@ frozenmodel = functools.partial(datamodel, frozen=True)
 frozen_model = frozenmodel
 
 
+@dataclass_transform(eq_default=True, field_specifiers=("field",))
 class DataModel:
     """Base class to automatically convert any subclass into a Data Model.
 
@@ -420,10 +423,11 @@ class DataModel:
         )  # type: ignore[call-arg]  # is not guaranteed that superclass does not accept kwargs
         cls_params = getattr(cls, MODEL_PARAM_DEFINITIONS_ATTR, None)
 
-        if _GENERIC_DATAMODEL_ROOT_DM_OPT in dm_opts:
-            generic = "True_no_checks"
-        else:
-            generic = getattr(cls_params, "generic", False)
+        generic: Final = (
+            "True_no_checks"
+            if _GENERIC_DATAMODEL_ROOT_DM_OPT in dm_opts
+            else getattr(cls_params, "generic", False)
+        )
 
         locals_ = locals()
         datamodel_kwargs = {}
@@ -451,7 +455,7 @@ class DataModel:
             cls,
             slots=False,
             generic=generic,
-            **datamodel_kwargs,
+            **datamodel_kwargs,  # type: ignore[arg-type]  # passing actual arguments in the dict
             _stacklevel_offset=1,
         )
 
@@ -461,7 +465,7 @@ def field(
     default: Any = NOTHING,
     default_factory: Optional[Callable[[None], Any]] = None,
     init: bool = True,
-    repr: bool = _REPR_DEFAULT,  # noqa: A002   # shadowing 'repr' python builtin
+    repr: bool = True,  # noqa: A002   # shadowing 'repr' python builtin
     hash: Optional[bool] = None,  # noqa: A002   # shadowing 'hash' python builtin
     compare: bool = True,
     metadata: Optional[Mapping[Any, Any]] = None,
@@ -482,16 +486,16 @@ def field(
             be called when a default value is needed for this field. Among other
             purposes, this can be used to specify fields with mutable default values.
             It is an error to specify both `default` and `default_factory`.
-        init: If ``True``, this field is included as a parameter to the
+        init: If ``True`` (default), this field is included as a parameter to the
             generated ``__init__()`` method.
-        repr: If ``True``, this field is included in the string returned
+        repr: If ``True`` (default), this field is included in the string returned
             by the generated ``__repr__()`` method.
-        hash: This can be a ``bool`` or ``None``. If ``True``, this field is included
-            in the generated ``__hash__()`` method. If ``None``, use the value of
-            `compare`, which would normally be the expected behavior: a field
+        hash: This can be a ``bool`` or ``None`` (default). If ``True``, this field is
+            included in the generated ``__hash__()`` method. If ``None``, use the value
+            of `compare`, which would normally be the expected behavior: a field
             should be considered in the `hash` if it is used for comparisons.
             Setting this value to anything other than ``None`` is `discouraged`.
-        compare: If ``True``, this field is included in the generated equality and
+        compare: If ``True`` (default), this field is included in the generated equality and
             comparison methods (__eq__(), __gt__(), et al.).
         metadata: An arbitrary mapping, not used at all by Data Models, and provided
             only as a third-party extension mechanism. Multiple third-parties can each
@@ -928,7 +932,11 @@ def _make_type_converter(type_annotation: Type[_T], name: str) -> TypeConverter[
 
         def _type_converter(value: Any) -> _T:
             try:
-                return value if isinstance(value, type_annotation) else type_annotation(value)
+                return (
+                    value
+                    if isinstance(value, type_annotation)
+                    else type_annotation(value)  # type: ignore[call-arg]  # signature of constructor could be different
+                )
             except Exception as error:
                 raise TypeError(
                     f"Error during coertion of given value '{value}' for field '{name}'."
@@ -1029,7 +1037,7 @@ def _make_datamodel(  # noqa: C901  # too complex but still readable and documen
             # Declare an attrs.field() for this field with the right options.
             # There are different cases depending on the current value of the attribute in the class dict.
             attr_value_in_cls = cls.__dict__.get(key, NOTHING)
-            if isinstance(attr_value_in_cls, attr._make._CountingAttr):
+            if isinstance(attr_value_in_cls, attr._make._CountingAttr):  # type: ignore[attr-defined]  # _make is private
                 # A field() function has already been used to customize the definition of the field.
                 # In this case, we need to:
                 #  - prepend the type validator to the list of provided validators (if any)
@@ -1142,7 +1150,7 @@ def _make_datamodel(  # noqa: C901  # too complex but still readable and documen
             cls.__class_getitem__ = _make_data_model_class_getitem()  # type: ignore[attr-defined]  # adding new attribute
 
     # TODO(egparedes): consider the use of the field_transformer hook available in attrs:
-    # TODO(egparedes): https://www.attrs.org/en/stable/extending.html#automatic-field-transformation-and-modification
+    #   https://www.attrs.org/en/stable/extending.html#automatic-field-transformation-and-modification
     new_cls = attrs.define(  # type: ignore[attr-defined]  # attr.define is not visible for mypy
         auto_attribs=True,
         cache_hash=bool(frozen) and num_attrs >= _CACHE_HASH_THRESHOLD,

@@ -197,6 +197,11 @@ class SimpleTypeValidatorFactory(TypeValidatorFactory):
         localns: Optional[Dict[str, Any]] = None,
         **kwargs: Any,
     ) -> Optional[FixedTypeValidator]:
+
+        # TODO(egparedes): traversing a typing definition is an operation needed in several places
+        #   but it currently requires custom and cumbersome code due to the messy implementation details
+        #   in the standard library. Ideally, this code could be replaced by translating it once to a
+        #   custom "typing tree" data structure which could be then traversed in a generic way.
         if name is None:
             name = "<value>"
 
@@ -511,4 +516,4 @@ def simple_type_validator(
 
 
 # TODO(egparedes): add other implementations for advanced 3rd-party validators
-# TODO(egparedes): e.g. 'typeguard' and specially 'beartype'
+#   e.g. 'typeguard' and specially 'beartype'
