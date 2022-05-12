@@ -15,6 +15,9 @@ class CollectShifts(NodeVisitor):
     `deref(shift(a, b)(x))` in the node tree, the result will be
     `{"x": [(), (a, b)]}`.
 
+    For reductions, the special value `ALL_NEIGHBORS` is used. E.g,
+    `reduce(f, 0.0)(shift(V2E)(x))` will return `{"x": [(V2E, ALL_NEIGHBORS)]}`.
+
     Limitations:
     - Nested shift calls like `deref(shift(c, d)(shift(a, b)(x)))` are not supported.
       That is, all shifts must be normalized (that is, `deref(shift(a, b, c, d)(x))`
