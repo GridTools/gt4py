@@ -24,7 +24,7 @@ import collections
 import pydantic
 
 from . import concepts, visitors
-from .extended_typing import Any, Dict, Iterator, Protocol, Set, Type, runtime_checkable
+from .extended_typing import Any, Dict, Set, Type
 from .type_definitions import SymbolName, SymbolRef
 
 
@@ -102,22 +102,14 @@ class SymbolRefsValidatorTrait(concepts.Model):
 
 
 # --- Visitor Traits ---
-@runtime_checkable
-class NodeVisitorTrait(Protocol):
-    """Visitor trait protocol. Traits are lightweight wrappers providing extra customization."""
-
-    def visit(self, node: concepts.Node, **kwargs: Any) -> Iterator[None]:
-        ...
-
-
-class VisitorWithSymbolTableTrait:
+class VisitorWithSymbolTableTrait(visitors.NodeVisitor):
     """Visitor trait to update or add the symtable to kwargs in the visitor calls.
 
     Visitors inhering from this trait will automatically pass the active
     symbol table to visitor methods as the 'symtable' keyword argument.
     """
 
-    def visit(self, node: concepts.Node, **kwargs: Any) -> Iterator[None]:
+    def visit(self, node: concepts.TreeNode, **kwargs: Any) -> Any:
         kwargs.setdefault("symtable", collections.ChainMap())
         if has_table := isinstance(node, SymbolTableTrait):
             kwargs["symtable"] = kwargs["symtable"].new_child(node.symtable_)
