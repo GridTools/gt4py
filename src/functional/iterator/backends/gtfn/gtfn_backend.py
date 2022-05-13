@@ -1,6 +1,7 @@
 from typing import Any
 
 import functional.iterator.ir as itir
+from eve import codegen
 from eve.utils import UIDs
 from functional.iterator.backends.backend import register_backend
 from functional.iterator.backends.gtfn.codegen import GTFNCodegen
@@ -46,9 +47,7 @@ def generate(program: itir.FencilDefinition, *, grid_type: str, **kwargs: Any) -
     transformed = extract_fundefs_from_closures(transformed)
     gtfn_ir = GTFN_lowering().visit(transformed, grid_type=grid_type)
     generated_code = GTFNCodegen.apply(gtfn_ir, **kwargs)
-    return generated_code
-    # TODO: re-enable clang-format once we have CSE
-    # slow: return codegen.format_source("cpp", generated_code, style="LLVM")
+    return codegen.format_source("cpp", generated_code, style="LLVM")
 
 
 def _guess_grid_type(**kwargs):
