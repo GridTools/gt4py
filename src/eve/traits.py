@@ -30,6 +30,11 @@ from .type_definitions import SymbolName, SymbolRef
 
 # ---  Node Traits ---
 class SymbolTableTrait(concepts.Model):
+    """Node trait adding an automatically created symbol table to the parent node.
+
+    The actual symbol table will be stored as a `node.symtable_` dict  attribute.
+    """
+
     symtable_: Dict[str, Any] = pydantic.Field(default_factory=dict)
 
     @pydantic.root_validator(skip_on_failure=True)
@@ -67,7 +72,11 @@ class SymbolTableTrait(concepts.Model):
 
 
 class SymbolRefsValidatorTrait(concepts.Model):
-    symtable_: Dict[str, Any] = pydantic.Field(default_factory=dict)
+    """Node trait adding automatic validation of symbol references appearing the node tree.
+
+    It assumes that the symbol table with the actual definitions is stored as
+    a `node.symtable_` dict  attribute (like :class:`SymbolTableTrait` does).
+    """
 
     @pydantic.root_validator(skip_on_failure=True)
     def _collect_symbols_validator(  # type: ignore  # validators are classmethods
@@ -99,6 +108,16 @@ class SymbolRefsValidatorTrait(concepts.Model):
             if isinstance(node, SymbolTableTrait):
                 symtable = {**symtable, **node.symtable_}
             self.generic_visit(node, symtable=symtable, **kwargs)
+
+
+class ValidatedSymbolTableTrait(SymbolTableTrait, SymbolRefsValidatorTrait):
+    """Node trait adding an automatically created and validated symbol table.
+
+    It is just the combination of the :class:`SymbolTableTrait` and
+    :class:`SymbolRefsValidatorTrait` traits.
+    """
+
+    pass
 
 
 # --- Visitor Traits ---

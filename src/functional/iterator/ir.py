@@ -1,7 +1,7 @@
 from typing import ClassVar, List, Union
 
 import eve
-from eve.traits import SymbolName, SymbolRefsValidatorTrait, SymbolTableTrait
+from eve.traits import SymbolName, SymbolTableTrait, ValidatedSymbolTableTrait
 from eve.type_definitions import SymbolRef
 from eve.utils import noninstantiable
 
@@ -92,7 +92,7 @@ BUILTINS = {
 }
 
 
-class FencilDefinition(Node, SymbolTableTrait, SymbolRefsValidatorTrait):
+class FencilDefinition(Node, ValidatedSymbolTableTrait):
     id: SymbolName  # noqa: A003
     function_definitions: List[FunctionDefinition]
     params: List[Sym]
