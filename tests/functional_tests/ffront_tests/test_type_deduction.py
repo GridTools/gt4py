@@ -191,7 +191,7 @@ def test_adding_bool():
 
     with pytest.raises(
         FieldOperatorTypeDeductionError,
-        match=(r"Type Field\[\.\.\., dtype=bool\] can not be used in operation '\+'!"),
+        match=(r"Type Field\[\.\.\., dtype=bool\] can not be used in operator '\+'!"),
     ):
         _ = FieldOperatorParser.apply_to_function(add_bools)
 
@@ -207,8 +207,8 @@ def test_binop_nonmatching_dims():
     with pytest.raises(
         FieldOperatorTypeDeductionError,
         match=(
-            r"Incompatible dimensions in operation "
-            r"Field\[\[X\], dtype=float64\] '\+' Field\[\[Y\], dtype=float64\]!"
+            r"Incompatible dimensions in operator '\+': "
+            r"Field\[\[X\], dtype=float64\] and Field\[\[Y\], dtype=float64\]!"
         ),
     ):
         _ = FieldOperatorParser.apply_to_function(nonmatching)
@@ -220,7 +220,7 @@ def test_bitopping_float():
 
     with pytest.raises(
         FieldOperatorTypeDeductionError,
-        match=(r"Type Field\[\.\.\., dtype=float64\] can not be used in operation '\&'! "),
+        match=(r"Type Field\[\.\.\., dtype=float64\] can not be used in operator '\&'! "),
     ):
         _ = FieldOperatorParser.apply_to_function(float_bitop)
 
@@ -265,6 +265,6 @@ def test_mismatched_literals():
 
     with pytest.raises(
         FieldOperatorTypeDeductionError,
-        match=(r"Incompatible datatypes in operation float32 '\+' float64"),
+        match=(r"Incompatible datatypes in operator '\+': float32 and float64"),
     ):
         _ = FieldOperatorParser.apply_to_function(mismatched_lit)

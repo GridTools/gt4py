@@ -174,7 +174,7 @@ class FieldOperatorTypeDeduction(NodeTranslator):
         for arg in (left, right):
             if not type_info.is_arithmetic(arg.type):
                 raise FieldOperatorTypeDeductionError.from_foast_node(
-                    arg, msg=f"Type {arg.type} can not be used in operation '{node.op}'!"
+                    arg, msg=f"Type {arg.type} can not be used in operator '{node.op}'!"
                 )
 
         self._check_operand_dtypes_match(node, left=left, right=right)
@@ -186,7 +186,7 @@ class FieldOperatorTypeDeduction(NodeTranslator):
 
         raise FieldOperatorTypeDeductionError.from_foast_node(
             node,
-            msg=f"Incompatible type(s) for operator '{node.op}': {left.type}, {right.type}!",
+            msg=f"Incompatible types for operator '{node.op}': {left.type} and {right.type}!",
         )
 
     def _deduce_binop_type(
@@ -204,7 +204,7 @@ class FieldOperatorTypeDeduction(NodeTranslator):
         for arg in (left, right):
             if not is_compatible(arg.type):
                 raise FieldOperatorTypeDeductionError.from_foast_node(
-                    arg, msg=f"Type {arg.type} can not be used in operation '{node.op}'!"
+                    arg, msg=f"Type {arg.type} can not be used in operator '{node.op}'!"
                 )
 
         if left.type == right.type:
@@ -220,7 +220,8 @@ class FieldOperatorTypeDeduction(NodeTranslator):
         # the case of left_type == right_type is already handled above
         # so here they must be incompatible
         raise FieldOperatorTypeDeductionError.from_foast_node(
-            node, msg=f"Incompatible dimensions in operation {left.type} '{node.op}' {right.type}!"
+            node,
+            msg=f"Incompatible dimensions in operator '{node.op}': {left.type} and {right.type}!",
         )
 
     def _check_operand_dtypes_match(
@@ -230,7 +231,7 @@ class FieldOperatorTypeDeduction(NodeTranslator):
         if not type_info.extract_dtype(left.type) == type_info.extract_dtype(right.type):
             raise FieldOperatorTypeDeductionError.from_foast_node(
                 node,
-                msg=f"Incompatible datatypes in operation {left.type} '{node.op}' {right.type}!",
+                msg=f"Incompatible datatypes in operator '{node.op}': {left.type} and {right.type}!",
             )
 
     def visit_UnaryOp(self, node: foast.UnaryOp, **kwargs) -> foast.UnaryOp:
