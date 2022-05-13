@@ -1,4 +1,3 @@
-import enum
 from typing import Iterator, Type, TypeGuard
 
 from functional.common import Dimension, GTTypeError
@@ -13,51 +12,6 @@ def is_concrete(symbol_type: ct.SymbolType) -> TypeGuard[ct.SymbolType]:
         case ct.SymbolType():
             return True
     return False
-
-
-class TypeKind(enum.Enum):
-    FIELD = 0
-    SCALAR = 1
-    UNKNOWN = 2
-
-
-def resulting_type_kind(symbol_type: ct.SymbolType) -> TypeKind:
-    """
-    Determine whether the resulting type kind of ``symbol_type`` is scalar, field or unknown.
-
-    Useful for determining whether an expression of ``symbol_type`` should be treated as a
-    value or iterator expression during lowering.
-
-    Examples:
-    ---------
-    >>> resulting_type_kind(ct.DeferredSymbolType(constraint=None)).name
-    'UNKNOWN'
-
-    >>> resulting_type_kind(ct.ScalarType(kind=ct.ScalarKind.BOOL)).name
-    'SCALAR'
-
-    >>> resulting_type_kind(ct.FunctionType(args=[], kwargs={}, returns=ct.FieldType(dims=[], dtype=ct.ScalarType(kind=ct.ScalarKind.INT32)))).name
-    'FIELD'
-
-    >>> resulting_type_kind(ct.TupleType(types=[ct.ScalarType(kind=ct.ScalarKind.FLOAT64)])).name
-    'SCALAR'
-    """
-    match symbol_type:
-        case ct.DeferredSymbolType(constraint=None):
-            return TypeKind.UNKNOWN
-        case ct.TupleType(types=subtypes):
-            if subtypes:
-                return resulting_type_kind(subtypes[0])
-        case ct.FunctionType(returns=returntype):
-            return resulting_type_kind(returntype)
-
-    match type_class(symbol_type):
-        case ct.FieldType:
-            return TypeKind.FIELD
-        case ct.ScalarType:
-            return TypeKind.SCALAR
-
-    return TypeKind.UNKNOWN
 
 
 def type_class(symbol_type: ct.SymbolType) -> Type[ct.SymbolType]:
@@ -89,7 +43,7 @@ def type_class(symbol_type: ct.SymbolType) -> Type[ct.SymbolType]:
 
 def extract_dtype(symbol_type: ct.SymbolType) -> ct.ScalarType:
     """
-    Make a best effort to extract the data type from ``symbol_type`` if possible.
+    Extract the data type from ``symbol_type`` if it is one of FieldType or ScalarType.
 
     Raise an error if no dtype can be found or the result would be ambiguous.
 
@@ -100,24 +54,12 @@ def extract_dtype(symbol_type: ct.SymbolType) -> ct.ScalarType:
 
     >>> print(extract_dtype(ct.FieldType(dims=[], dtype=ct.ScalarType(kind=ct.ScalarKind.BOOL))))
     bool
-
-    >>> print(extract_dtype(ct.FunctionType(args=[], kwargs={}, returns=ct.ScalarType(kind=ct.ScalarKind.INT32, shape=[2, 2]))))
-    int32[2, 2]
-
-    >>> print(extract_dtype(ct.TupleType(types=[ct.ScalarType(kind=ct.ScalarKind.INT64), ct.ScalarType(kind=ct.ScalarKind.INT64)])))
-    int64
     """
     match symbol_type:
         case ct.FieldType(dtype=dtype):
             return dtype
         case ct.ScalarType() as dtype:
             return dtype
-        case ct.FunctionType(returns=return_type):
-            return extract_dtype(return_type)
-        case ct.TupleType(types=types):
-            dtypes = [extract_dtype(t) for t in types]
-            if all(t == dtypes[0] for t in dtypes):
-                return dtypes[0]
     raise GTTypeError(f"Can not unambiguosly extract data type from {symbol_type}!")
 
 

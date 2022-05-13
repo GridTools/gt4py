@@ -12,6 +12,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import enum
 import itertools
 from dataclasses import dataclass, field
 from typing import Callable, Optional, cast
@@ -28,8 +29,48 @@ from functional.ffront.fbuiltins import FUN_BUILTIN_NAMES, TYPE_BUILTIN_NAMES
 from functional.iterator import ir as itir
 
 
+class TypeKind(enum.Enum):
+    FIELD = 0
+    SCALAR = 1
+    UNKNOWN = 2
+
+
+def resulting_type_kind(symbol_type: ct.SymbolType) -> TypeKind:
+    """
+    Determine whether the resulting type kind of ``symbol_type`` is scalar, field or unknown.
+
+    Useful for determining whether an expression of ``symbol_type`` should be treated as a
+    value or iterator expression during lowering.
+
+    Examples:
+    ---------
+    >>> resulting_type_kind(ct.DeferredSymbolType(constraint=None)).name
+    'UNKNOWN'
+
+    >>> resulting_type_kind(ct.ScalarType(kind=ct.ScalarKind.BOOL)).name
+    'SCALAR'
+
+    >>> resulting_type_kind(ct.TupleType(types=[ct.ScalarType(kind=ct.ScalarKind.FLOAT64)])).name
+    'SCALAR'
+    """
+    match symbol_type:
+        case ct.DeferredSymbolType(constraint=None):
+            return TypeKind.UNKNOWN
+        case ct.TupleType(types=subtypes):
+            if subtypes:
+                return resulting_type_kind(subtypes[0])
+
+    match type_info.type_class(symbol_type):
+        case ct.FieldType:
+            return TypeKind.FIELD
+        case ct.ScalarType:
+            return TypeKind.SCALAR
+
+    return TypeKind.UNKNOWN
+
+
 def can_be_value_or_iterator(symbol_type: ct.SymbolType):
-    return type_info.resulting_type_kind(symbol_type) is not type_info.TypeKind.UNKNOWN
+    return resulting_type_kind(symbol_type) is not TypeKind.UNKNOWN
 
 
 def to_value(node: foast.LocatedNode) -> Callable[[itir.Expr], itir.Expr]:
@@ -57,7 +98,7 @@ def to_value(node: foast.LocatedNode) -> Callable[[itir.Expr], itir.Expr]:
     SymRef(id='a')
     """
     assert can_be_value_or_iterator(node.type)
-    if type_info.resulting_type_kind(node.type) is type_info.TypeKind.FIELD:
+    if resulting_type_kind(node.type) is TypeKind.FIELD:
         return im.deref_
     return lambda x: x
 
