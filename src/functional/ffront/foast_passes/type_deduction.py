@@ -276,9 +276,7 @@ class FieldOperatorTypeDeduction(NodeTranslator):
             )
         elif isinstance(new_func.type, ct.FunctionType):
             new_args = self.visit(node.args, **kwargs)
-            new_kwargs = {
-                keyword: self.visit(arg, **kwargs) for keyword, arg in node.kwargs.items()
-            }
+            new_kwargs = self.visit(node.kwargs, **kwargs)
             try:
                 type_info.is_callable(
                     new_func.type,
