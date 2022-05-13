@@ -37,6 +37,7 @@ from typing import (
     Type,
     TypeVar,
     Union,
+    cast,
     no_type_check,
 )
 
@@ -124,7 +125,7 @@ class GenericModelFactory(factory.Factory):
 
 
 @pytest.fixture(params=SAMPLE_MODEL_FACTORIES)
-def example_model_factory(request) -> datamodels.DataModelTP:
+def example_model_factory(request) -> datamodels.DataModel:
     return request.param
 
 
@@ -176,7 +177,7 @@ def test_custom_init():
         enum_value: SampleEnum
         list_value: List[float]
 
-        def __init__(self, single_value: float) -> None:
+        def __init__(self: datamodels.DataModel, single_value: float) -> None:
             self.__auto_init__(single_value, SampleEnum.BLA, [1.0] * int(single_value))
 
     model = ModelWithCustomInit(3.5)
@@ -205,7 +206,7 @@ def test_custom_init():
         value: float
         STATIC_INT: ClassVar[int] = 0
 
-        def __init__(self, str_value: str) -> None:
+        def __init__(self: datamodels.DataModel, str_value: str) -> None:
             self.__auto_init__(float(str_value))
 
         def __pre_init__(self) -> None:
@@ -602,7 +603,7 @@ class MyType:
     @classmethod
     def __type_validator__(cls) -> datamodels.FieldValidator:
         def _custom_validator(
-            instance: datamodels.DataModelTP, attribute: datamodels.Attribute, value: Any
+            instance: datamodels.DataModel, attribute: datamodels.Attribute, value: Any
         ) -> None:
             if not (hasattr(value, "value") and hasattr(value, "add")):
                 raise TypeError("Invalid value type for '{attribute.name}' field.")
@@ -735,35 +736,47 @@ class ModelWithValidators(datamodels.DataModel):
     str_value: str = ""
     extra_value: Optional[Any] = None
 
-    @datamodels.validator("bool_value")  # type: ignore[arg-type]  # Model class not considered a DataModel
-    def _bool_value_validator(self, attribute, value) -> None:
+    @datamodels.validator("bool_value")
+    def _bool_value_validator(
+        self: datamodels.DataModel, attribute: datamodels.Attribute, value: Any
+    ) -> None:
         assert isinstance(self, ModelWithValidators)
 
-    @datamodels.validator("int_value")  # type: ignore[arg-type]  # Model class not considered a DataModel
-    def _int_value_validator(self, attribute, value) -> None:
+    @datamodels.validator("int_value")
+    def _int_value_validator(
+        self: datamodels.DataModel, attribute: datamodels.Attribute, value: Any
+    ) -> None:
         if value < 0:
             raise ValueError(f"'{attribute.name}' must be larger or equal to 0")
 
-    @datamodels.validator("even_int_value")  # type: ignore[arg-type]  # Model class not considered a DataModel
-    def _even_int_value_validator(self, attribute, value) -> None:
+    @datamodels.validator("even_int_value")
+    def _even_int_value_validator(
+        self: datamodels.DataModel, attribute: datamodels.Attribute, value: Any
+    ) -> None:
         if value % 2:
             raise ValueError(f"'{attribute.name}' must be an even number")
 
-    @datamodels.validator("float_value")  # type: ignore[arg-type]  # Model class not considered a DataModel
-    def _float_value_validator(self, attribute, value) -> None:
+    @datamodels.validator("float_value")
+    def _float_value_validator(
+        self: datamodels.DataModel, attribute: datamodels.Attribute, value: Any
+    ) -> None:
         if value > 3.14159:
             raise ValueError(f"'{attribute.name}' must be lower or equal to 3.14159")
 
-    @datamodels.validator("str_value")  # type: ignore[arg-type]  # Model class not considered a DataModel
-    def _str_value_validator(self, attribute, value) -> None:
+    @datamodels.validator("str_value")
+    def _str_value_validator(
+        self: datamodels.DataModel, attribute: datamodels.Attribute, value: Any
+    ) -> None:
         # This kind of validation should arguably happen in a root_validator, but
         # since float_value is defined before str_value, it should have been
         # already validated at this point
-        if value == str(self.float_value):
+        if value == str(cast(ModelWithValidators, self).float_value):
             raise ValueError(f"'{attribute.name}' must be different to 'float_value'")
 
-    @datamodels.validator("extra_value")  # type: ignore[arg-type]  # Model class not considered a DataModel
-    def _extra_value_validator(self, attribute, value) -> None:
+    @datamodels.validator("extra_value")
+    def _extra_value_validator(
+        self: datamodels.DataModel, attribute: datamodels.Attribute, value: Any
+    ) -> None:
         if bool(value):
             raise ValueError(f"'{attribute.name}' must be equivalent to False")
 
@@ -852,19 +865,23 @@ class ModelWithRootValidators(datamodels.DataModel):
     class_counter: ClassVar[int] = 0
 
     @datamodels.root_validator
-    def _root_validator(cls, instance):
+    def _root_validator(cls: Type[datamodels.DataModel], instance: datamodels.DataModel):
         assert cls is type(instance)
         assert issubclass(cls, ModelWithRootValidators)
         assert isinstance(instance, ModelWithRootValidators)
         cls.class_counter = 0
 
     @datamodels.root_validator
-    def _another_root_validator(cls, instance):
+    def _another_root_validator(cls: Type[datamodels.DataModel], instance: datamodels.DataModel):
+        cls = cast(Type[ModelWithRootValidators], cls)
+        instance = cast(ModelWithRootValidators, instance)
         assert cls.class_counter == 0
         cls.class_counter += 1
 
     @datamodels.root_validator
-    def _final_root_validator(cls, instance):
+    def _final_root_validator(cls: Type[datamodels.DataModel], instance: datamodels.DataModel):
+        cls = cast(Type[ModelWithRootValidators], cls)
+        instance = cast(ModelWithRootValidators, instance)
         assert cls.class_counter == 1
         cls.class_counter += 1
 
@@ -877,7 +894,7 @@ class ChildModelWithRootValidators(ModelWithRootValidators):
 
 
 @pytest.mark.parametrize("model_class", [ModelWithRootValidators, ChildModelWithRootValidators])
-def test_root_validators(model_class: Type[datamodels.DataModelTP]):
+def test_root_validators(model_class: Type[datamodels.DataModel]):
     model_class(int_value=0, float_value=1.1, str_value="")
     with pytest.raises(ValueError, match="float_value"):
         model_class(int_value=1, float_value=1.0, str_value="")
@@ -1021,11 +1038,11 @@ def test_info_functions():
     [int, List[float], Tuple[int, ...], Optional[int], Union[int, float]],
 )
 def test_generic_model_instantiation_name(concrete_type: Type):
-    Model = datamodels.concretize(GenericModel, concrete_type)  # type: ignore[misc]  # GenericModel is not detected as GenericDataModelTp
+    Model: Type[datamodels.DataModel] = datamodels.concretize(GenericModel, concrete_type)  # type: ignore[misc]
     assert Model.__name__.startswith(GenericModel.__name__)
     assert Model.__name__ != GenericModel.__name__
 
-    Model = datamodels.concretize(GenericModel, concrete_type, class_name="MyNewConcreteClass")  # type: ignore[misc]  # GenericModel is not detected as GenericDataModelTp
+    Model = datamodels.concretize(GenericModel, concrete_type, class_name="MyNewConcreteClass")  # type: ignore[misc]
     assert Model.__name__ == "MyNewConcreteClass"
 
 
@@ -1034,7 +1051,7 @@ def test_generic_model_instantiation_name(concrete_type: Type):
     [int, List[float], Tuple[int, ...], Optional[int], Union[int, float]],
 )
 def test_generic_model_alias(concrete_type: Type):
-    Model = datamodels.concretize(GenericModel, concrete_type)  # type: ignore  # GenericModel is not detected as GenericDataModelTp
+    Model: Type[datamodels.DataModel] = datamodels.concretize(GenericModel, concrete_type)  # type: ignore[misc]
 
     class SubModel(GenericModel[concrete_type]):  # type: ignore  # using run-time type on purpose
         ...
@@ -1088,8 +1105,7 @@ def test_concrete_field_type_validation(
     type_hint: str, valid_values: Sequence[Any], wrong_values: Sequence[Any]
 ):
     concrete_type: Type = eval(type_hint)
-    # Model: Type[datamodels.DataModelTP] = typing.get_origin(GenericModel[concrete_type])  # type: ignore[valid-type,assignment]
-    Model: Type[datamodels.DataModelTP] = GenericModel[concrete_type]
+    Model: Type[datamodels.DataModel] = GenericModel[concrete_type]  # type: ignore[valid-type,misc]  # concrete_type
 
     for value in valid_values:
         Model(value=value)

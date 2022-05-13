@@ -202,6 +202,7 @@ class SimpleTypeValidatorFactory(TypeValidatorFactory):
         #   but it currently requires custom and cumbersome code due to the messy implementation details
         #   in the standard library. Ideally, this code could be replaced by translating it once to a
         #   custom "typing tree" data structure which could be then traversed in a generic way.
+        #
         if name is None:
             name = "<value>"
 

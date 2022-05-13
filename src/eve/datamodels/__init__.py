@@ -49,8 +49,8 @@ The order of execution of the different components at initialization is the foll
     2. ``__pre_init__()``, if it exists.
     3. For each field, in the order it was defined:
 
-        a. default factory
-        b. converter
+        a. default factory (if any).
+        b. converter (if any).
 
     4. all field validators.
     5. root validators following the reversed class MRO order.
