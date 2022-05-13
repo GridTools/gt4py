@@ -200,10 +200,7 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
             raise FieldOperatorSyntaxError.from_AST(
                 node, msg="Only arguments of type DataType are allowed."
             )
-        if (
-            type_info.is_concrete(new_type)
-            and type_info.type_kind(new_type) is type_info.TypeKind.SCALAR
-        ):
+        if type_info.is_concrete(new_type) and type_info.type_class(new_type) is ct.ScalarType:
             new_type = ct.FieldType(dims=[], dtype=type_info.extract_dtype(new_type))
         return foast.DataSymbol(id=node.arg, location=self._make_loc(node), type=new_type)
 
@@ -219,7 +216,10 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
         constraint_type: Type[ct.DataType] = ct.DataType
         if isinstance(new_value, foast.TupleExpr):
             constraint_type = ct.TupleType
-        elif type_info.type_kind(new_value.type) is type_info.TypeKind.SCALAR:
+        elif (
+            type_info.is_concrete(new_value.type)
+            and type_info.type_class(new_value.type) is ct.ScalarType
+        ):
             constraint_type = ct.ScalarType
         return foast.Assign(
             target=foast.FieldSymbol(

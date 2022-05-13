@@ -21,22 +21,25 @@ class TypeKind(enum.Enum):
     UNKNOWN = 2
 
 
-def type_kind(symbol_type: ct.SymbolType) -> TypeKind:
+def resulting_type_kind(symbol_type: ct.SymbolType) -> TypeKind:
     """
-    Determine whether ``symbol_type`` is scalar, field or unknown.
+    Determine whether the resulting type kind of ``symbol_type`` is scalar, field or unknown.
+
+    Useful for determining whether an expression of ``symbol_type`` should be treated as a
+    value or iterator expression during lowering.
 
     Examples:
     ---------
-    >>> type_kind(ct.DeferredSymbolType(constraint=None)).name
+    >>> resulting_type_kind(ct.DeferredSymbolType(constraint=None)).name
     'UNKNOWN'
 
-    >>> type_kind(ct.ScalarType(kind=ct.ScalarKind.BOOL)).name
+    >>> resulting_type_kind(ct.ScalarType(kind=ct.ScalarKind.BOOL)).name
     'SCALAR'
 
-    >>> type_kind(ct.FunctionType(args=[], kwargs={}, returns=ct.FieldType(dims=[], dtype=ct.ScalarType(kind=ct.ScalarKind.INT32)))).name
+    >>> resulting_type_kind(ct.FunctionType(args=[], kwargs={}, returns=ct.FieldType(dims=[], dtype=ct.ScalarType(kind=ct.ScalarKind.INT32)))).name
     'FIELD'
 
-    >>> type_kind(ct.TupleType(types=[ct.ScalarType(kind=ct.ScalarKind.FLOAT64)])).name
+    >>> resulting_type_kind(ct.TupleType(types=[ct.ScalarType(kind=ct.ScalarKind.FLOAT64)])).name
     'SCALAR'
     """
     match symbol_type:
@@ -44,9 +47,9 @@ def type_kind(symbol_type: ct.SymbolType) -> TypeKind:
             return TypeKind.UNKNOWN
         case ct.TupleType(types=subtypes):
             if subtypes:
-                return type_kind(subtypes[0])
+                return resulting_type_kind(subtypes[0])
         case ct.FunctionType(returns=returntype):
-            return type_kind(returntype)
+            return resulting_type_kind(returntype)
 
     match type_class(symbol_type):
         case ct.FieldType:
@@ -86,7 +89,9 @@ def type_class(symbol_type: ct.SymbolType) -> Type[ct.SymbolType]:
 
 def extract_dtype(symbol_type: ct.SymbolType) -> ct.ScalarType:
     """
-    Extract the data type from ``symbol_type`` if possible.
+    Make a best effort to extract the data type from ``symbol_type`` if possible.
+
+    Raise an error if no dtype can be found or the result would be ambiguous.
 
     Examples:
     ---------
@@ -98,6 +103,9 @@ def extract_dtype(symbol_type: ct.SymbolType) -> ct.ScalarType:
 
     >>> print(extract_dtype(ct.FunctionType(args=[], kwargs={}, returns=ct.ScalarType(kind=ct.ScalarKind.INT32, shape=[2, 2]))))
     int32[2, 2]
+
+    >>> print(extract_dtype(ct.TupleType(types=[ct.ScalarType(kind=ct.ScalarKind.INT64), ct.ScalarType(kind=ct.ScalarKind.INT64)])))
+    int64
     """
     match symbol_type:
         case ct.FieldType(dtype=dtype):
@@ -106,7 +114,11 @@ def extract_dtype(symbol_type: ct.SymbolType) -> ct.ScalarType:
             return dtype
         case ct.FunctionType(returns=return_type):
             return extract_dtype(return_type)
-    raise GTTypeError(f"Can not extract data type from {symbol_type}!")
+        case ct.TupleType(types=types):
+            dtypes = [extract_dtype(t) for t in types]
+            if all(t == dtypes[0] for t in dtypes):
+                return dtypes[0]
+    raise GTTypeError(f"Can not unambiguosly extract data type from {symbol_type}!")
 
 
 def is_arithmetic(symbol_type: ct.SymbolType) -> bool:
@@ -219,10 +231,10 @@ def can_promote_dims(symbol_type: ct.SymbolType, to_type: ct.SymbolType) -> bool
     between differing sets of dimensions.
     """
     # scalars can always be broadcasted
-    if type_kind(symbol_type) is TypeKind.SCALAR:
+    if type_class(symbol_type) is ct.ScalarType:
         return True
     # symbol_type must be either zero- or any dimensional or have same dimensionality as to_type
-    elif type_kind(to_type) is TypeKind.FIELD:
+    elif type_class(to_type) is ct.FieldType:
         dims = extract_dims(symbol_type)
         return dims in [[], Ellipsis] or dims == extract_dims(to_type)
     return False
@@ -258,8 +270,9 @@ def function_signature_incompatibilities(
             yield f"Expected keyword argument {kwarg} to be of type {func_type.kwargs[kwarg]}, but got {kwargs[kwarg]}."
 
 
-def can_call(
+def is_callable(
     function_type: ct.FunctionType,
+    *,
     with_args: list[ct.SymbolType],
     with_kwargs: dict[str, ct.SymbolType],
     raise_exception: bool = False,
@@ -279,9 +292,9 @@ def can_call(
         ...     kwargs={"foo": bool_type},
         ...     returns=ct.VoidType()
         ... )
-        >>> can_call(func_type, with_args=[bool_type], with_kwargs={"foo": bool_type})
+        >>> is_callable(func_type, with_args=[bool_type], with_kwargs={"foo": bool_type})
         True
-        >>> can_call(func_type, with_args=[], with_kwargs={})
+        >>> is_callable(func_type, with_args=[], with_kwargs={})
         False
     """
     if not isinstance(function_type, ct.FunctionType):

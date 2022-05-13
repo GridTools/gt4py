@@ -216,7 +216,6 @@ class Program:
         rewritten_args = list(args)
         for param_idx, param in enumerate(self.past_node.params):
             if isinstance(param.type, ct.ScalarType):
-                print(self.captured_vars)
                 rewritten_args[param_idx] = constant_field(
                     args[param_idx],
                     dtype=BUILTINS[param.type.kind.name.lower()],

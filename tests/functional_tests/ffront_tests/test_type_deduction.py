@@ -28,7 +28,7 @@ def type_info_cases() -> list[tuple[Optional[ct.SymbolType], dict]]:
             ct.DeferredSymbolType(constraint=None),
             {
                 "is_concrete": False,
-                "type_kind": type_info.TypeKind.UNKNOWN,
+                "resulting_type_kind": type_info.TypeKind.UNKNOWN,
             },
         ),
         (
@@ -36,7 +36,7 @@ def type_info_cases() -> list[tuple[Optional[ct.SymbolType], dict]]:
             {
                 "is_concrete": False,
                 "type_class": ct.ScalarType,
-                "type_kind": type_info.TypeKind.SCALAR,
+                "resulting_type_kind": type_info.TypeKind.SCALAR,
             },
         ),
         (
@@ -44,7 +44,7 @@ def type_info_cases() -> list[tuple[Optional[ct.SymbolType], dict]]:
             {
                 "is_concrete": False,
                 "type_class": ct.FieldType,
-                "type_kind": type_info.TypeKind.FIELD,
+                "resulting_type_kind": type_info.TypeKind.FIELD,
             },
         ),
         (
@@ -52,7 +52,7 @@ def type_info_cases() -> list[tuple[Optional[ct.SymbolType], dict]]:
             {
                 "is_concrete": True,
                 "type_class": ct.ScalarType,
-                "type_kind": type_info.TypeKind.SCALAR,
+                "resulting_type_kind": type_info.TypeKind.SCALAR,
                 "is_arithmetic": True,
                 "is_logical": False,
             },
@@ -62,7 +62,7 @@ def type_info_cases() -> list[tuple[Optional[ct.SymbolType], dict]]:
             {
                 "is_concrete": True,
                 "type_class": ct.FieldType,
-                "type_kind": type_info.TypeKind.FIELD,
+                "resulting_type_kind": type_info.TypeKind.FIELD,
                 "is_arithmetic": False,
                 "is_logical": True,
             },
@@ -129,13 +129,15 @@ def test_can_call(
     expected: list,
 ):
     is_callable = len(expected) == 0
-    assert type_info.can_call(func_type, with_args=args, with_kwargs=kwargs) == is_callable
+    assert type_info.is_callable(func_type, with_args=args, with_kwargs=kwargs) == is_callable
 
     if len(expected) > 0:
         with pytest.raises(
             GTTypeError,
         ) as exc_info:
-            type_info.can_call(func_type, with_args=args, with_kwargs=kwargs, raise_exception=True)
+            type_info.is_callable(
+                func_type, with_args=args, with_kwargs=kwargs, raise_exception=True
+            )
 
         for expected_msg in expected:
             assert exc_info.match(expected_msg)

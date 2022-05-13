@@ -29,7 +29,7 @@ from functional.iterator import ir as itir
 
 
 def can_be_value_or_iterator(symbol_type: ct.SymbolType):
-    return type_info.type_kind(symbol_type) is not type_info.TypeKind.UNKNOWN
+    return type_info.resulting_type_kind(symbol_type) is not type_info.TypeKind.UNKNOWN
 
 
 def to_value(node: foast.LocatedNode) -> Callable[[itir.Expr], itir.Expr]:
@@ -57,7 +57,7 @@ def to_value(node: foast.LocatedNode) -> Callable[[itir.Expr], itir.Expr]:
     SymRef(id='a')
     """
     assert can_be_value_or_iterator(node.type)
-    if type_info.type_kind(node.type) is type_info.TypeKind.FIELD:
+    if type_info.resulting_type_kind(node.type) is type_info.TypeKind.FIELD:
         return im.deref_
     return lambda x: x
 
@@ -149,7 +149,7 @@ class FieldOperatorLowering(NodeTranslator):
 
     def _lift_if_field(self, node: foast.LocatedNode) -> Callable[[itir.Expr], itir.Expr]:
         assert can_be_value_or_iterator(node.type)
-        if type_info.type_kind(node.type) is type_info.TypeKind.SCALAR:
+        if type_info.resulting_type_kind(node.type) is type_info.TypeKind.SCALAR:
             return lambda x: x
         return self._lift_lambda(node)
 

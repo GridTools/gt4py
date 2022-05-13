@@ -280,7 +280,7 @@ class FieldOperatorTypeDeduction(NodeTranslator):
                 keyword: self.visit(arg, **kwargs) for keyword, arg in node.kwargs.items()
             }
             try:
-                type_info.can_call(
+                type_info.is_callable(
                     new_func.type,
                     with_args=[arg.type for arg in new_args],
                     with_kwargs={keyword: arg.type for keyword, arg in new_kwargs.items()},

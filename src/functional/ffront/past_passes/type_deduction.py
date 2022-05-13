@@ -55,7 +55,7 @@ class ProgramTypeDeduction(NodeTranslator):
             )
 
         try:
-            type_info.can_call(
+            type_info.is_callable(
                 func_type,
                 with_args=[arg.type for arg in args],
                 with_kwargs={name: expr.type for name, expr in kwargs.items()},
