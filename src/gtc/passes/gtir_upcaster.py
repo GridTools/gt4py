@@ -19,7 +19,7 @@ from typing import Any, Dict, Iterator, List
 from eve import Node, NodeTranslator
 from eve.concepts import TreeNode
 from gtc import gtir
-from gtc.common import DataType
+from gtc.common import ArithmeticOperator, DataType
 from gtc.gtir import Expr
 
 
@@ -53,6 +53,13 @@ class _GTIRUpcasting(NodeTranslator):
 
     def visit_BinaryOp(self, node: gtir.BinaryOp, **kwargs: Any) -> gtir.BinaryOp:
         left, right = _upcast_nodes(self.visit(node.left), self.visit(node.right))
+        # Python division is always floating-point, even with both left and right integers
+        # See https://github.com/GridTools/gt4py/issues/742 for more details
+        if node.op == ArithmeticOperator.DIV:
+            if left.dtype.isinteger():
+                left = _upcast_node(DataType.FLOAT32, self.visit(node.left))
+            if right.dtype.isinteger():
+                right = _upcast_node(DataType.FLOAT32, self.visit(node.right))
         return _update_node(node, {"left": left, "right": right})
 
     def visit_TernaryOp(self, node: gtir.TernaryOp, **kwargs: Any) -> gtir.TernaryOp:
