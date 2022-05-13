@@ -637,9 +637,7 @@ def get_fields(model: Union[DataModel, Type[DataModel]]) -> utils.FrozenNamespac
         ...     amount: int = 1
         ...     numbers: List[float] = field(default_factory=list)
         >>> fields(Model)  # doctest:+ELLIPSIS
-        FrozenNamespace(name=Attribute(name='name', default=NOTHING, ...),\
- amount=Attribute(name='amount', default=1, ...),\
- numbers=Attribute(name='numbers', default=Factory(factory=<class 'list'>, ...))
+        FrozenNamespace(...name=Attribute(name='name', default=NOTHING, ...
 
     """  # noqa: RST201  # doctest conventions confuse RST validator
     if not is_datamodel(model):

@@ -320,11 +320,15 @@ _T = TypeVar("_T")
 
 
 def noninstantiable(cls: Type[_T]) -> Type[_T]:
+    """Make a class without abstract method non-instantiable (subclasses should be instantiable)."""
+    if not isinstance(cls, type):
+        raise ValueError(f"Non-type value ({cls}) passed to 'noninstantiable()' class decorator.")
+
     original_init = cls.__init__
 
     def _noninstantiable_init(self: _T, *args: Any, **kwargs: Any) -> None:
         if self.__class__ is cls:
-            raise TypeError(f"Trying to instantiate `{cls.__name__}` non-instantiable class.")
+            raise TypeError(f"Trying to instantiate '{cls.__name__}' non-instantiable class.")
         else:
             original_init(self, *args, **kwargs)
 
@@ -532,22 +536,27 @@ class FrozenNamespace(Namespace[T]):
         >>> ns = FrozenNamespace(a=10, b="hello")
         >>> list(ns.items())
         [('a', 10), ('b', 'hello')]
+
+        >>> ns = FrozenNamespace(a=10, b="hello")
+        >>> hashed = hash(ns)
+        >>> assert isinstance(hashed, int)
+        >>> hashed == hash(ns)
+        True
     """
 
-    def __setattr__(self, _name: str, _value: T) -> None:
+    __slots__ = "__cached_hash"
+
+    def __setattr__(self, __name: str, __value: Any) -> None:
+        raise TypeError(f"Trying to modify immutable '{self.__class__.__name__}' instance.")
+
+    def __delattr__(self, __name: str) -> None:
         raise TypeError(f"Trying to modify immutable '{self.__class__.__name__}' instance.")
 
     def __hash__(self) -> int:  # type: ignore[override]
-        return hash(tuple(self.__dict__.items()))
+        if not hasattr(self, "_cached_hash"):
+            object.__setattr__(self, "_cached_hash", hash(tuple(self.__dict__.items())))
 
-    def items(self) -> Iterable[Tuple[str, T]]:
-        return self.__dict__.items()
-
-    def keys(self) -> Iterable[str]:
-        return self.__dict__.keys()
-
-    def values(self) -> Iterable[T]:
-        return self.__dict__.values()
+        return self._cached_hash
 
 
 @dataclasses.dataclass

@@ -145,7 +145,7 @@ def test_noninstantiable_class():
         param: int
 
     with pytest.raises(
-        TypeError, match="Trying to instantiate `NonInstantiableClass` non-instantiable class"
+        TypeError, match="Trying to instantiate 'NonInstantiableClass' non-instantiable class"
     ):
         NonInstantiableClass(param=0)
 
