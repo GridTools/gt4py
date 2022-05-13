@@ -280,6 +280,10 @@ class DaCeComputationCodegen:
 
         symbols = {f"__{var}": f"__{var}" for var in "IJK"}
         for name, array in sdfg.arrays.items():
+            # transients are set to expressions based on their shape in _specialize_transient_strides
+            if array.transient:
+                continue
+
             dims = [dim for dim, select in zip("IJK", array_dimensions(array)) if select]
             data_ndim = len(array.shape) - len(dims)
 
