@@ -142,13 +142,11 @@ else:
 TypeAnnotation = Union[ForwardRef, SolvedTypeAnnotation]
 SourceTypeAnnotation = Union[str, TypeAnnotation]
 
-StdGenericAliasType: Final[Type] = (
-    _types.GenericAlias if _sys.version_info >= (3, 9) else _typing._GenericAlias  # type: ignore[attr-defined]  # _GenericAlias is not exported in stub
-)
-StdGenericAlias: TypeAlias = (
-    _types.GenericAlias if _sys.version_info >= (3, 9) else _typing._GenericAlias  # type: ignore  # not valid type
-)
+StdGenericAliasType: Final[Type] = type(List[int])
 
+if _sys.version_info >= (3, 9):
+    if TYPE_CHECKING:
+        StdGenericAlias: TypeAlias = _types.GenericAlias
 
 _TypingSpecialFormType: Final[Type] = _typing._SpecialForm
 _TypingGenericAliasType: Final[Type] = (
