@@ -16,7 +16,8 @@
 
 """Data Model field validators.
 
-Check :mod:`eve.datamodels` for additional information.
+Check :mod:`eve.datamodels` and `attrs validation reference <https://www.attrs.org/en/stable/api.html#validators >`
+for additional information.
 
 Note that validators are implemented as callable classes just to be able to
 customize their ``__repr__`` method.

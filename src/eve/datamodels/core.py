@@ -948,11 +948,9 @@ def _make_data_model_class_getitem() -> classmethod:
 
 
 def _make_type_converter(type_annotation: TypeAnnotation, name: str) -> TypeConverter[_T]:
-
     # TODO(egparedes): if a "typing tree" structure is implemented, refactor this code as a tree traversal.
     #
-
-    if xtyping.is_actual_type(type_annotation):
+    if xtyping.is_actual_type(type_annotation) and not isinstance(None, type_annotation):
         assert not xtyping.get_args(type_annotation)
         assert isinstance(type_annotation, type)
 
@@ -992,7 +990,7 @@ def _make_type_converter(type_annotation: TypeAnnotation, name: str) -> TypeConv
 
         return cast(TypeConverter[_T], lambda x: x if x is None else _inner_type_converter(x))
 
-    if not xtyping.is_actual_type(origin_type):
+    if xtyping.is_actual_type(origin_type):
         return _make_type_converter(origin_type, name)
 
     raise exceptions.EveTypeError(

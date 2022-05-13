@@ -303,83 +303,109 @@ def test_slots():
     assert DataModel is Model
 
 
-def test_conversion():
-    @datamodels.datamodel(coerce=True)
-    class CoercedModel:
-        as_int: int
-        a_str: str
+class TestConversion:
+    def test_simple_coertion_in_decorator(self):
+        @datamodels.datamodel(coerce=True)
+        class CoercedModel:
+            as_int: int
+            a_str: str
 
-    instance = CoercedModel(-2, "2")
-    assert instance.as_int == -2
-    assert instance.a_str == "2"
+        instance = CoercedModel(-2, "2")
+        assert instance.as_int == -2
+        assert instance.a_str == "2"
 
-    instance = CoercedModel(-2, 2)
-    assert instance.as_int == -2
-    assert instance.a_str == "2"
+        instance = CoercedModel(-2, 2)
+        assert instance.as_int == -2
+        assert instance.a_str == "2"
 
-    A_STR = """
-        Lorem ipsum dolor sit amet, nonumy accusam suscipit et mei, ipsum saperet no nec,
-        te volumus insolens nam. Verear scripserit delicatissimi cu vis, eam graeci facete in.
-        Atqui inani maiorum sea ex. Vim vidit intellegam eu. Mei dico lorem eu, at per paulo
-        aperiri admodum. Summo iriure consequuntur per ea, his ex amet tacimates.
-    """
-    instance = CoercedModel("-2", A_STR)
-    assert instance.as_int == -2
-    assert instance.a_str == A_STR
-    assert instance.a_str is A_STR
+        A_STR = """
+            Lorem ipsum dolor sit amet, nonumy accusam suscipit et mei, ipsum saperet no nec,
+            te volumus insolens nam. Verear scripserit delicatissimi cu vis, eam graeci facete in.
+            Atqui inani maiorum sea ex. Vim vidit intellegam eu. Mei dico lorem eu, at per paulo
+            aperiri admodum. Summo iriure consequuntur per ea, his ex amet tacimates.
+        """
+        instance = CoercedModel("-2", A_STR)
+        assert instance.as_int == -2
+        assert instance.a_str == A_STR
+        assert instance.a_str is A_STR
 
-    class PartiallyCoercedModel(datamodels.DataModel):
-        as_int: int = datamodels.field(converter="coerce")
-        only_int: int
-
-    instance = PartiallyCoercedModel(-2, 2)
-    assert instance.as_int == -2
-    assert instance.only_int == 2
-
-    instance = PartiallyCoercedModel("-2", 2)
-    assert instance.as_int == -2
-    assert instance.only_int == 2
-
-    with pytest.raises(TypeError, match="only_int"):
-        PartiallyCoercedModel("-2", "2")
-
-    class PartiallyCoercedModel(datamodels.DataModel):
-        as_int: datamodels.Coerced[int]
-        only_int: int
-
-    instance = PartiallyCoercedModel(-2, 2)
-    assert instance.as_int == -2
-    assert instance.only_int == 2
-
-    instance = PartiallyCoercedModel("-2", 2)
-    assert instance.as_int == -2
-    assert instance.only_int == 2
-
-    with pytest.raises(TypeError, match="only_int"):
-        PartiallyCoercedModel("-2", "2")
-
-    class CustomCoercedModel(datamodels.DataModel):
-        as_int: int = datamodels.field(converter=int)
-        only_int: int
-
-    instance = CustomCoercedModel(-2, 2)
-    assert instance.as_int == -2
-    assert instance.only_int == 2
-
-    instance = CustomCoercedModel("-2", 2)
-    assert instance.as_int == -2
-    assert instance.only_int == 2
-
-    with pytest.raises(TypeError, match="only_int"):
-        CustomCoercedModel("-2", "2")
-
-    with pytest.raises(
-        TypeError, match="'CustomCoercedModel.as_int' which already defines a custom converter"
-    ):
-
-        class CustomCoercedModel(datamodels.DataModel):
-            as_int: datamodels.Coerced[int] = datamodels.field(converter=int)
+    def test_simple_coertion_in_fields(self):
+        class PartiallyCoercedModel(datamodels.DataModel):
+            as_int: int = datamodels.field(converter="coerce")
             only_int: int
+
+        instance = PartiallyCoercedModel(-2, 2)
+        assert instance.as_int == -2
+        assert instance.only_int == 2
+
+        instance = PartiallyCoercedModel("-2", 2)
+        assert instance.as_int == -2
+        assert instance.only_int == 2
+
+        with pytest.raises(TypeError, match="only_int"):
+            PartiallyCoercedModel("-2", "2")
+
+        class PartiallyCoercedModel(datamodels.DataModel):
+            as_int: datamodels.Coerced[int]
+            only_int: int
+
+        instance = PartiallyCoercedModel(-2, 2)
+        assert instance.as_int == -2
+        assert instance.only_int == 2
+
+        instance = PartiallyCoercedModel("-2", 2)
+        assert instance.as_int == -2
+        assert instance.only_int == 2
+
+        with pytest.raises(TypeError, match="only_int"):
+            PartiallyCoercedModel("-2", "2")
+
+    def test_custom_coertion_in_fields(self):
+        class CustomCoercedModel(datamodels.DataModel):
+            as_int: int = datamodels.field(converter=int)
+            only_int: int
+
+        instance = CustomCoercedModel(-2, 2)
+        assert instance.as_int == -2
+        assert instance.only_int == 2
+
+        instance = CustomCoercedModel("-2", 2)
+        assert instance.as_int == -2
+        assert instance.only_int == 2
+
+        with pytest.raises(TypeError, match="only_int"):
+            CustomCoercedModel("-2", "2")
+
+        with pytest.raises(
+            TypeError, match="'CustomCoercedModel.as_int' which already defines a custom converter"
+        ):
+
+            class CustomCoercedModel(datamodels.DataModel):
+                as_int: datamodels.Coerced[int] = datamodels.field(converter=int)
+                only_int: int
+
+    def test_coertion_of_collections(self):
+        @datamodels.datamodel(coerce=True)
+        class ModelWithCollections:
+            items: List[int]
+            table: Dict[int, Tuple[str, str]]
+
+        instance = ModelWithCollections([], {})
+        assert instance.items == []
+        assert instance.table == {}
+
+        instance = ModelWithCollections([1, 2], {2: ("two", "zwei")})
+        assert instance.items == [1, 2]
+        assert instance.table == {2: ("two", "zwei")}
+
+        instance = ModelWithCollections((-1, -2), [(2, ("two", "zwei")), (3, ("three", "drei"))])
+        assert instance.items == [-1, -2]
+        assert instance.table == {2: ("two", "zwei"), 3: ("three", "drei")}
+
+        with pytest.raises(TypeError, match="items"):
+            instance = ModelWithCollections(["1", "2"], {})
+        with pytest.raises(TypeError, match="items"):
+            instance = ModelWithCollections(("1", "2"), {})
 
 
 def test_annotation_markers():
