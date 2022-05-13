@@ -539,3 +539,10 @@ def infer_type(  # noqa: C901  # function is complex but well organized in indep
             return Callable
 
     return type(value)
+
+
+# TODO(egparedes): traversing a typing definition is an operation needed in several places
+#   but it currently requires custom and cumbersome code due to the messy implementation details
+#   in the standard library. Ideally, this code could be replaced by translating it once to a
+#   custom "typing tree" data structure which could be then traversed in a generic way.
+#

@@ -198,10 +198,7 @@ class SimpleTypeValidatorFactory(TypeValidatorFactory):
         **kwargs: Any,
     ) -> Optional[FixedTypeValidator]:
 
-        # TODO(egparedes): traversing a typing definition is an operation needed in several places
-        #   but it currently requires custom and cumbersome code due to the messy implementation details
-        #   in the standard library. Ideally, this code could be replaced by translating it once to a
-        #   custom "typing tree" data structure which could be then traversed in a generic way.
+        # TODO(egparedes): if a "typing tree" structure is implemented, refactor this code as a tree traversal.
         #
         if name is None:
             name = "<value>"
