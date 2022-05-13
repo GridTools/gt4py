@@ -73,9 +73,10 @@ from ..type_definitions import NOTHING, NothingType
 
 
 # Typing
-# TODO(egparedes): these typing definitions are not very useful until
-#   at least PEP 681 - Data Class Transforms (https://peps.python.org/pep-0681/)
-#   and intersection types are supported.
+# TODO(egparedes): these typing definitions are not perfect, but they provide
+#   some help until more advanced features are added to typing, like 
+#   PEP 681 - Data Class Transforms (https://peps.python.org/pep-0681/)
+#   or intersection types.
 _T = TypeVar("_T")
 
 
