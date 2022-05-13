@@ -114,7 +114,7 @@ class FieldOperatorTypeDeduction(NodeTranslator):
     ) -> foast.Symbol:
         symtable = kwargs["symtable"]
         if refine_type:
-            if not type_info.can_concretize(node.type, to_type=refine_type):
+            if not type_info.is_concretizable(node.type, to_type=refine_type):
                 raise FieldOperatorTypeDeductionError.from_foast_node(
                     node,
                     msg=(
@@ -181,7 +181,7 @@ class FieldOperatorTypeDeduction(NodeTranslator):
 
         # check dimensions match and broadcast scalars to fields
         for one_type, other_type in permutations([left.type, right.type]):
-            if type_info.can_promote_dims(other_type, one_type):
+            if type_info.is_dimensionally_promotable(other_type, one_type):
                 return boolified_type(one_type)
 
         raise FieldOperatorTypeDeductionError.from_foast_node(
@@ -214,7 +214,7 @@ class FieldOperatorTypeDeduction(NodeTranslator):
 
         # check dimensions match and broadcast scalars to fields
         for one_type, other_type in permutations([left.type, right.type]):
-            if type_info.can_promote_dims(other_type, one_type):
+            if type_info.is_dimensionally_promotable(other_type, one_type):
                 return copy.copy(one_type)
 
         # the case of left_type == right_type is already handled above

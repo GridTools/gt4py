@@ -171,43 +171,43 @@ def extract_dims(symbol_type: ct.SymbolType) -> list[Dimension]:
     raise GTTypeError(f"Can not extract dimensions from {symbol_type}!")
 
 
-def can_concretize(symbol_type: ct.SymbolType, to_type: ct.SymbolType) -> bool:
+def is_concretizable(symbol_type: ct.SymbolType, to_type: ct.SymbolType) -> bool:
     """
     Check if ``symbol_type`` can be concretized to ``to_type``.
 
     Examples:
     ---------
-    >>> can_concretize(
+    >>> is_concretizable(
     ...     ct.ScalarType(kind=ct.ScalarKind.INT64),
     ...     to_type=ct.ScalarType(kind=ct.ScalarKind.INT64)
     ... )
     True
 
-    >>> can_concretize(
+    >>> is_concretizable(
     ...     ct.ScalarType(kind=ct.ScalarKind.INT64),
     ...     to_type=ct.ScalarType(kind=ct.ScalarKind.FLOAT64)
     ... )
     False
 
-    >>> can_concretize(
+    >>> is_concretizable(
     ...     ct.DeferredSymbolType(constraint=None),
     ...     to_type=ct.FieldType(dtype=ct.ScalarType(kind=ct.ScalarKind.BOOL), dims=[])
     ... )
     True
 
-    >>> can_concretize(
+    >>> is_concretizable(
     ...     ct.DeferredSymbolType(constraint=ct.DataType),
     ...     to_type=ct.FieldType(dtype=ct.ScalarType(kind=ct.ScalarKind.BOOL), dims=[])
     ... )
     True
 
-    >>> can_concretize(
+    >>> is_concretizable(
     ...     ct.DeferredSymbolType(constraint=ct.OffsetType),
     ...     to_type=ct.FieldType(dtype=ct.ScalarType(kind=ct.ScalarKind.BOOL), dims=[])
     ... )
     False
 
-    >>> can_concretize(
+    >>> is_concretizable(
     ...     ct.DeferredSymbolType(constraint=ct.SymbolType),
     ...     to_type=ct.DeferredSymbolType(constraint=ct.ScalarType)
     ... )
@@ -223,7 +223,7 @@ def can_concretize(symbol_type: ct.SymbolType, to_type: ct.SymbolType) -> bool:
     return False
 
 
-def can_promote_dims(symbol_type: ct.SymbolType, to_type: ct.SymbolType) -> bool:
+def is_dimensionally_promotable(symbol_type: ct.SymbolType, to_type: ct.SymbolType) -> bool:
     """
     Check if `symbol_type` has no fixed dimensionality and can be dimensionally promoted.
 
@@ -252,7 +252,7 @@ def function_signature_incompatibilities(
     if len(func_type.args) != len(args):
         yield f"Function takes {len(func_type.args)} arguments, but {len(args)} were given."
     for i, (a_arg, b_arg) in enumerate(zip(func_type.args, args)):
-        if a_arg != b_arg and not can_concretize(a_arg, to_type=b_arg):
+        if a_arg != b_arg and not is_concretizable(a_arg, to_type=b_arg):
             yield f"Expected {i}-th argument to be of type {a_arg}, but got {b_arg}."
 
     # check for missing or extra keyword arguments
@@ -266,7 +266,7 @@ def function_signature_incompatibilities(
     for kwarg in set(func_type.kwargs.keys()) & set(kwargs.keys()):
         if (a_kwarg := func_type.kwargs[kwarg]) != (
             b_kwarg := kwargs[kwarg]
-        ) and not can_concretize(a_kwarg, to_type=b_kwarg):
+        ) and not is_concretizable(a_kwarg, to_type=b_kwarg):
             yield f"Expected keyword argument {kwarg} to be of type {func_type.kwargs[kwarg]}, but got {kwargs[kwarg]}."
 
 
