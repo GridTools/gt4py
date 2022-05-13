@@ -32,13 +32,15 @@ from .type_definitions import SymbolName, SymbolRef
 class SymbolTableTrait(concepts.Model):
     """Node trait adding an automatically created symbol table to the parent node.
 
-    The actual symbol table will be stored as a `node.symtable_` dict  attribute.
+    The actual symbol table dict will be stored in the `symtable_` attribute.
+    To inject extra symbol definitions, add the nodes to a class attribute
+    called ``_NODE_SYMBOLS_``.
     """
 
     symtable_: Dict[str, Any] = pydantic.Field(default_factory=dict)
 
     @pydantic.root_validator(skip_on_failure=True)
-    def _collect_symbols_validator(  # type: ignore  # validators are classmethods
+    def __collect_symbols(  # type: ignore  # validators are classmethods
         cls: Type[SymbolTableTrait], values: Dict[str, Any]
     ) -> Dict[str, Any]:
         values.pop("symtable_", None)
@@ -75,11 +77,11 @@ class SymbolRefsValidatorTrait(concepts.Model):
     """Node trait adding automatic validation of symbol references appearing the node tree.
 
     It assumes that the symbol table with the actual definitions is stored as
-    a `node.symtable_` dict  attribute (like :class:`SymbolTableTrait` does).
+    a dict in the `symtable_` attribute (like :class:`SymbolTableTrait` does).
     """
 
     @pydantic.root_validator(skip_on_failure=True)
-    def _collect_symbols_validator(  # type: ignore  # validators are classmethods
+    def __validate_refs(  # type: ignore  # validators are classmethods
         cls: Type[SymbolRefsValidatorTrait], values: Dict[str, Any]
     ) -> Dict[str, Any]:
         validator = cls._SymbolRefsValidator()
@@ -110,7 +112,7 @@ class SymbolRefsValidatorTrait(concepts.Model):
             self.generic_visit(node, symtable=symtable, **kwargs)
 
 
-class ValidatedSymbolTableTrait(SymbolTableTrait, SymbolRefsValidatorTrait):
+class ValidatedSymbolTableTrait(SymbolRefsValidatorTrait, SymbolTableTrait):
     """Node trait adding an automatically created and validated symbol table.
 
     It is just the combination of the :class:`SymbolTableTrait` and

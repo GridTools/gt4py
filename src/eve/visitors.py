@@ -69,7 +69,7 @@ class NodeVisitor:
 
     This dispatching mechanism is implemented in the main :meth:`visit`
     method and can be overriden in subclasses. Therefore, a simple way to extend
-    the behavior of a visitor is by inheriting from lightweight `Trait` classes
+    the behavior of a visitor is by inheriting from lightweight `trait` classes
     with a custom ``visit()`` method, which wraps the call to the superclass'
     ``visit()`` and adds extra pre and post visit logic. Check :mod:`eve.traits`
     for further information.
