@@ -540,11 +540,11 @@ class FrozenNamespace(Namespace[T]):
         >>> ns = FrozenNamespace(a=10, b="hello")
         >>> hashed = hash(ns)
         >>> assert isinstance(hashed, int)
-        >>> hashed == hash(ns)
+        >>> hashed == hash(ns) == ns.__cached_hash_value__
         True
     """
 
-    __slots__ = "__cached_hash"
+    __slots__ = "__cached_hash_value__"
 
     def __setattr__(self, __name: str, __value: Any) -> None:
         raise TypeError(f"Trying to modify immutable '{self.__class__.__name__}' instance.")
@@ -553,10 +553,10 @@ class FrozenNamespace(Namespace[T]):
         raise TypeError(f"Trying to modify immutable '{self.__class__.__name__}' instance.")
 
     def __hash__(self) -> int:  # type: ignore[override]
-        if not hasattr(self, "_cached_hash"):
-            object.__setattr__(self, "_cached_hash", hash(tuple(self.__dict__.items())))
+        if not hasattr(self, "__cached_hash_value__"):
+            object.__setattr__(self, "__cached_hash_value__", hash(tuple(self.__dict__.items())))
 
-        return self._cached_hash
+        return self.__cached_hash_value__
 
 
 @dataclasses.dataclass
