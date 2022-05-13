@@ -146,7 +146,7 @@ class LocalScalar(Decl):
 
 
 class Temporary(Decl):
-    pass
+    data_dims: Tuple[int, ...] = field(default_factory=tuple)
 
 
 class Positional(Decl):
