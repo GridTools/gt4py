@@ -224,12 +224,6 @@ else:
         return isinstance(obj, type)
 
 
-def is_generic(obj: Any) -> bool:
-    """Return ``True`` if obj is a generic class or an instance of a generic class."""
-    cls = obj if isinstance(obj, type) else obj.__class__
-    return issubclass(cls, Generic)  # type: ignore[arg-type]  # Generic not considered as a class
-
-
 def has_type_parameters(cls: Type) -> bool:
     """Return ``True`` if obj is a generic class with type parameters."""
     return issubclass(cls, Generic) and len(getattr(cls, "__parameters__", [])) > 0  # type: ignore[arg-type]  # Generic not considered as a class

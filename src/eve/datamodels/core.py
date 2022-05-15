@@ -38,13 +38,7 @@ except ModuleNotFoundError:
     # Fall back to pure Python toolz
     import toolz  # noqa: F401  # imported but unused
 
-from .. import (
-    exceptions,
-    extended_typing as xtyping,
-    type_definitions,
-    type_validation as type_val,
-    utils,
-)
+from .. import exceptions, extended_typing as xtyping, type_validation as type_val, utils
 from ..extended_typing import (
     Any,
     Callable,
@@ -237,8 +231,8 @@ DefaultFieldTypeValidatorFactory: Final[Optional[FieldTypeValidatorFactory]] = (
 )
 """Default type validator factory used by datamodels classes. `None` by default if running in optimized mode."""
 
-_REPR_DEFAULT: Final = None
-_EQ_DEFAULT: Final = None
+_REPR_DEFAULT: Final = True
+_EQ_DEFAULT: Final = True
 _ORDER_DEFAULT: Final = False
 _UNSAFE_HASH_DEFAULT: Final = False
 _FROZEN_DEFAULT: Final = False
@@ -268,9 +262,9 @@ def datamodel(
     cls: Literal[None] = None,
     /,
     *,
-    repr: bool | None = _REPR_DEFAULT,  # noqa: A002  # shadowing 'repr' python builtin
-    eq: bool | None = _EQ_DEFAULT,
-    order: bool | None = _ORDER_DEFAULT,
+    repr: bool = _REPR_DEFAULT,  # noqa: A002  # shadowing 'repr' python builtin
+    eq: bool = _EQ_DEFAULT,
+    order: bool = _ORDER_DEFAULT,
     unsafe_hash: bool = _UNSAFE_HASH_DEFAULT,
     frozen: bool | Literal["strict"] = _FROZEN_DEFAULT,
     match_args: bool = _MATCH_ARGS_DEFAULT,
@@ -288,9 +282,9 @@ def datamodel(  # noqa: F811  # redefinion of unused symbol
     cls: Type[_T],
     /,
     *,
-    repr: bool | None = _REPR_DEFAULT,  # noqa: A002  # shadowing 'repr' python builtin
-    eq: bool | None = _EQ_DEFAULT,
-    order: bool | None = _ORDER_DEFAULT,
+    repr: bool = _REPR_DEFAULT,  # noqa: A002  # shadowing 'repr' python builtin
+    eq: bool = _EQ_DEFAULT,
+    order: bool = _ORDER_DEFAULT,
     unsafe_hash: bool = _UNSAFE_HASH_DEFAULT,
     frozen: bool | Literal["strict"] = _FROZEN_DEFAULT,
     match_args: bool = _MATCH_ARGS_DEFAULT,
@@ -308,9 +302,9 @@ def datamodel(  # noqa: F811  # redefinion of unused symbol
     cls: Type[_T] = None,
     /,
     *,
-    repr: bool | None = _REPR_DEFAULT,  # noqa: A002  # shadowing 'repr' python builtin
-    eq: bool | None = _EQ_DEFAULT,
-    order: bool | None = _ORDER_DEFAULT,
+    repr: bool = _REPR_DEFAULT,  # noqa: A002  # shadowing 'repr' python builtin
+    eq: bool = _EQ_DEFAULT,
+    order: bool = _ORDER_DEFAULT,
     unsafe_hash: bool = _UNSAFE_HASH_DEFAULT,
     frozen: bool | Literal["strict"] = _FROZEN_DEFAULT,
     match_args: bool = _MATCH_ARGS_DEFAULT,
@@ -333,14 +327,12 @@ def datamodel(  # noqa: F811  # redefinion of unused symbol
         cls: Original class definition.
 
     Keyword Arguments:
-        repr: If ``True``, a ``__repr__()`` method will be always generated.
-            If ``None`` (default), ``__repr__()`` will only be generated if it does
+        repr: If ``True`` (default), a ``__repr__()`` method will be generated if it does
             not overwrite a custom implementation defined in this class (not inherited).
-        eq: If ``True``, ``__eq__()`` and ``__ne__()`` methods will be always generated.
-            If ``None`` (default), the methods will only be generated if they do
-            not overwrite custom implementations defined in this class (not inherited).
-            This method compares the class as if it were a tuple of its fields.
-            Both instances in the comparison must be of identical type.
+        eq: If ``True`` (default), ``__eq__()`` and ``__ne__()`` methods will be generated
+            if they do not overwrite custom implementations defined in this class (not inherited).
+            The generated method compares the class as if it were a tuple of its fields, but both
+            instances in the comparison must be of identical type.
         order:  If ``True`` (default is ``False``), add ``__lt__()``, ``__le__()``, ``__gt__()``,
             and ``__ge__()`` methods that behave like `eq` above and allow instances
             to be ordered. If ``None`` mirror value of `eq`.
@@ -356,7 +348,6 @@ def datamodel(  # noqa: F811  # redefinion of unused symbol
             set ``__match_args__`` on the class to support PEP 634 (Structural Pattern Matching).
             It is a tuple of all positional-only ``__init__`` parameter names on
             Python 3.10 and later. Ignored on older Python versions.
-            If false, or if , then __match_args__ will not be generated.
         kw_only: If ``True`` (default is ``False``), make all fields keyword-only in the generated
             ``__init__`` (if ``init`` is ``False``, this parameter is ignored).
         slots: slots: If ``True`` (the default is ``False``), ``__slots__`` attribute will be generated
@@ -998,13 +989,7 @@ def _make_type_converter(type_annotation: TypeAnnotation, name: str) -> TypeConv
     )
 
 
-_CACHE_HASH_THRESHOLD: Final = 6
 _KNOWN_MUTABLE_TYPES: Final = (list, dict, set)
-_FROZEN_COLLECTIONS_CHANGES: Final = {
-    list: tuple,
-    set: frozenset,
-    dict: type_definitions.frozendict,
-}
 
 
 def _make_datamodel(  # noqa: C901  # too complex but still readable and documented
@@ -1050,13 +1035,13 @@ def _make_datamodel(  # noqa: C901  # too complex but still readable and documen
                 type_extras = []
 
             coerce_field = coerce or _COERCED_TYPE_TAG in type_extras
-            qual_key = f"{cls.__name__}.{key}"
+            qualified_field_name = f"{cls.__name__}.{key}"
 
             # Create type validator if validation is enabled
             if type_validation_factory is None or _UNCHECKED_TYPE_TAG in type_extras:
                 type_validator = None
             else:
-                type_validator = type_validation_factory(type_hint, qual_key)
+                type_validator = type_validation_factory(type_hint, qualified_field_name)
 
             # Declare an attrs.field() for this field with the right options.
             # There are different cases depending on the current value of the attribute in the class dict.
@@ -1075,10 +1060,12 @@ def _make_datamodel(  # noqa: C901  # too complex but still readable and documen
                 coerce_field = coerce_field or attr_value_in_cls.converter == "coerce"
                 if coerce_field:
                     if attr_value_in_cls.converter in (None, "coerce"):
-                        attr_value_in_cls.converter = _make_type_converter(type_hint, qual_key)
+                        attr_value_in_cls.converter = _make_type_converter(
+                            type_hint, qualified_field_name
+                        )
                     else:
                         raise TypeError(
-                            f"Impossible to add automatic type converter to field '{qual_key}' "
+                            f"Impossible to add automatic type converter to field '{qualified_field_name}' "
                             "which already defines a custom converter."
                         )
 
@@ -1086,7 +1073,7 @@ def _make_datamodel(  # noqa: C901  # too complex but still readable and documen
                 # Create field converter if automatic coertion is enabled
                 converter: TypeConverter = cast(
                     TypeConverter,
-                    _make_type_converter(type_hint, qual_key) if coerce_field else None,
+                    _make_type_converter(type_hint, qualified_field_name) if coerce_field else None,
                 )
                 if attr_value_in_cls is NOTHING:
                     # The field has no definition in the class dict, it's only an annotation
@@ -1127,21 +1114,25 @@ def _make_datamodel(  # noqa: C901  # too complex but still readable and documen
     root_validators = _collect_root_validators(cls)
     field_validators = _collect_field_validators(cls)
 
-    for field_name, field_validator in field_validators.items():
-        field_c_attr = cls.__dict__.get(field_name, None)
+    for qualified_field_name, field_validator in field_validators.items():
+        field_c_attr = cls.__dict__.get(qualified_field_name, None)
         if not field_c_attr:
             # Field has not been defined in the current class namespace,
             # look for field definition in the base classes.
-            base_field_attr = _get_attribute_from_bases(field_name, mro_bases, annotations)
+            base_field_attr = _get_attribute_from_bases(
+                qualified_field_name, mro_bases, annotations
+            )
             if base_field_attr:
                 # Create a new field in the current class cloning the existing
                 # definition and add the new validator (attrs recommendation)
                 field_c_attr = _make_counting_attr_from_attribute(
                     base_field_attr,
                 )
-                setattr(cls, field_name, field_c_attr)
+                setattr(cls, qualified_field_name, field_c_attr)
             else:
-                raise TypeError(f"Validator assigned to non existing '{field_name}' field.")
+                raise TypeError(
+                    f"Validator assigned to non existing '{qualified_field_name}' field."
+                )
 
         # Add field validator using field_attr.validator
         assert isinstance(field_c_attr, attr._make._CountingAttr)  # type: ignore[attr-defined]  # attr._make is not visible for mypy
@@ -1180,9 +1171,10 @@ def _make_datamodel(  # noqa: C901  # too complex but still readable and documen
     #   https://www.attrs.org/en/stable/extending.html#automatic-field-transformation-and-modification
     new_cls = attrs.define(  # type: ignore[attr-defined]  # attr.define is not visible for mypy
         auto_attribs=True,
-        cache_hash=bool(frozen) and num_attrs >= _CACHE_HASH_THRESHOLD,
-        repr=repr,
-        eq=eq,
+        auto_detect=True,
+        init=None,
+        repr=None if repr else False,
+        eq=None if eq else False,
         order=order,
         hash=None if not unsafe_hash else True,
         frozen=frozen,

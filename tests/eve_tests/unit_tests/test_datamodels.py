@@ -156,88 +156,91 @@ def test_devtools_compatibility(example_model_factory):
         assert f"{name}=" in formatted_string
 
 
-def test_init():
-    @datamodels.datamodel
-    class Model:
-        value: int
-        enum_value: SampleEnum
-        list_value: List[int]
+class TestInitialization:
+    def test_init(self):
+        @datamodels.datamodel
+        class Model:
+            value: int
+            enum_value: SampleEnum
+            list_value: List[int]
 
-    model = Model(value=1, enum_value=SampleEnum.FOO, list_value=[1, 2, 3])
-    assert model.value == 1
-    assert model.enum_value == SampleEnum.FOO
-    assert model.list_value == [1, 2, 3]
+        model = Model(value=1, enum_value=SampleEnum.FOO, list_value=[1, 2, 3])
+        assert model.value == 1
+        assert model.enum_value == SampleEnum.FOO
+        assert model.list_value == [1, 2, 3]
 
+    def test_custom_init(self):
+        @no_type_check
+        @datamodels.datamodel
+        class ModelWithCustomInit:
+            value: float
+            enum_value: SampleEnum
+            list_value: List[float]
 
-def test_custom_init():
-    @no_type_check
-    @datamodels.datamodel
-    class ModelWithCustomInit:
-        value: float
-        enum_value: SampleEnum
-        list_value: List[float]
+            def __init__(self: datamodels.DataModel, single_value: float) -> None:
+                self.__auto_init__(single_value, SampleEnum.BLA, [1.0] * int(single_value))
 
-        def __init__(self: datamodels.DataModel, single_value: float) -> None:
-            self.__auto_init__(single_value, SampleEnum.BLA, [1.0] * int(single_value))
+        model = ModelWithCustomInit(3.5)
+        assert model.value == 3.5
+        assert model.enum_value == SampleEnum.BLA
+        assert model.list_value == [1.0, 1.0, 1.0]
 
-    model = ModelWithCustomInit(3.5)
-    assert model.value == 3.5
-    assert model.enum_value == SampleEnum.BLA
-    assert model.list_value == [1.0, 1.0, 1.0]
+    def test_init_hooks(self):
+        @datamodels.datamodel
+        class ModelWithInitHooks:
+            value: float
+            STATIC_INT: ClassVar[int] = 0
 
-    @datamodels.datamodel
-    class ModelWithInitHooks:
-        value: float
-        STATIC_INT: ClassVar[int] = 0
+            def __pre_init__(self) -> None:
+                self.__class__.STATIC_INT += 1
 
-        def __pre_init__(self) -> None:
-            self.__class__.STATIC_INT += 1
+            def __post_init__(self) -> None:
+                self.value *= 10
 
-        def __post_init__(self) -> None:
-            self.value *= 10
+        assert ModelWithInitHooks.STATIC_INT == 0
+        model = ModelWithInitHooks(3.5)
+        assert ModelWithInitHooks.STATIC_INT == 1
+        assert model.value == 3.5 * 10
 
-    assert ModelWithInitHooks.STATIC_INT == 0
-    model = ModelWithInitHooks(3.5)
-    assert ModelWithInitHooks.STATIC_INT == 1
-    assert model.value == 3.5 * 10
+    def test_custom_init_and_hooks(self):
+        @datamodels.datamodel
+        class ModelWithCustomInitAndHooks:
+            value: float
+            STATIC_INT: ClassVar[int] = 0
 
-    @datamodels.datamodel
-    class ModelWithCustomInitAndHooks:
-        value: float
-        STATIC_INT: ClassVar[int] = 0
+            def __init__(self: datamodels.DataModel, str_value: str) -> None:
+                self.__auto_init__(float(str_value))
 
-        def __init__(self: datamodels.DataModel, str_value: str) -> None:
-            self.__auto_init__(float(str_value))
+            def __pre_init__(self) -> None:
+                self.__class__.STATIC_INT += 1
 
-        def __pre_init__(self) -> None:
-            self.__class__.STATIC_INT += 1
+            def __post_init__(self) -> None:
+                self.value *= 10
 
-        def __post_init__(self) -> None:
-            self.value *= 10
+        assert ModelWithCustomInitAndHooks.STATIC_INT == 0
+        model = ModelWithCustomInitAndHooks("-5.25")
+        assert ModelWithCustomInitAndHooks.STATIC_INT == 1
+        assert model.value == -5.25 * 10
 
-    assert ModelWithCustomInitAndHooks.STATIC_INT == 0
-    model = ModelWithCustomInitAndHooks("-5.25")
-    assert ModelWithCustomInitAndHooks.STATIC_INT == 1
-    assert model.value == -5.25 * 10
+    def test_non_datamodels_init(self):
+        @datamodels.datamodel
+        class ModelWithReallyCustomInit:
+            value: float
+            STATIC_INT: ClassVar[int] = 0
 
-    @datamodels.datamodel
-    class ModelWithReallyCustomInit:
-        value: float
-        STATIC_INT: ClassVar[int] = 0
+            def __init__(self, str_value: str) -> None:
+                self.value = float(str_value)
 
-        def __init__(self, str_value: str) -> None:
-            self.value = float(str_value)
+            def __pre_init__(self) -> None:
+                self.__class__.STATIC_INT += 1
 
-        def __pre_init__(self) -> None:
-            self.__class__.STATIC_INT += 1
+            def __post_init__(self) -> None:
+                self.value *= 10
 
-        def __post_init__(self) -> None:
-            self.value *= 10
-
-    assert ModelWithReallyCustomInit.STATIC_INT == 0
-    model = ModelWithReallyCustomInit("-5.25")
-    assert ModelWithReallyCustomInit.STATIC_INT == 0
-    assert model.value == -5.25
+        assert ModelWithReallyCustomInit.STATIC_INT == 0
+        model = ModelWithReallyCustomInit("-5.25")
+        assert ModelWithReallyCustomInit.STATIC_INT == 0
+        assert model.value == -5.25
 
 
 def test_kw_only_model():
@@ -408,86 +411,91 @@ class TestConversion:
             instance = ModelWithCollections(("1", "2"), {})
 
 
-def test_annotation_markers():
-    @datamodels.datamodel
-    class CoercedModel:
-        as_int: datamodels.Coerced[int]
-        only_str: str
+class TestAnnotationMarkers:
+    def test_coerced_marker(self):
+        @datamodels.datamodel
+        class CoercedModel:
+            as_int: datamodels.Coerced[int]
+            only_str: str
 
-    instance = CoercedModel(-2, "2")
-    assert instance.as_int == -2
-    assert instance.only_str == "2"
+        instance = CoercedModel(-2, "2")
+        assert instance.as_int == -2
+        assert instance.only_str == "2"
 
-    instance = CoercedModel("-2", "2")
-    assert instance.as_int == -2
-    assert instance.only_str == "2"
+        instance = CoercedModel("-2", "2")
+        assert instance.as_int == -2
+        assert instance.only_str == "2"
 
-    with pytest.raises(TypeError, match="only_str"):
-        CoercedModel("-2", 2)
+        with pytest.raises(TypeError, match="only_str"):
+            CoercedModel("-2", 2)
 
-    @datamodels.datamodel
-    class UncheckendModel:
-        as_int: datamodels.Unchecked[int]
-        only_int: int
+    def test_unchecked_marker(self):
+        @datamodels.datamodel
+        class UncheckedModel:
+            as_int: datamodels.Unchecked[int]
+            only_int: int
 
-    instance = UncheckendModel(-2, 2)
-    assert instance.as_int == -2
-    assert instance.only_int == 2
+        instance = UncheckedModel(-2, 2)
+        assert instance.as_int == -2
+        assert instance.only_int == 2
 
-    instance = UncheckendModel(-2.5, 2)
-    assert instance.as_int == -2.5
-    assert instance.only_int == 2
+        instance = UncheckedModel(-2.5, 2)
+        assert instance.as_int == -2.5
+        assert instance.only_int == 2
 
-    with pytest.raises(TypeError, match="only_int"):
-        instance = UncheckendModel(-2.5, 2.5)
+        with pytest.raises(TypeError, match="only_int"):
+            instance = UncheckedModel(-2.5, 2.5)
 
-    @datamodels.datamodel
-    class UncheckendModel:
-        a: datamodels.Unchecked[datamodels.Coerced[int]]
-        b: datamodels.Coerced[datamodels.Unchecked[int]]
+    def test_combined_markers(self):
+        @datamodels.datamodel
+        class UncheckedAndCoercedModel:
+            a: datamodels.Unchecked[datamodels.Coerced[int]]
+            b: datamodels.Coerced[datamodels.Unchecked[int]]
 
-    instance = UncheckendModel(-2.5, "-2")
-    assert instance.a == -2 == instance.b
+        instance = UncheckedAndCoercedModel(-2.5, "-2")
+        assert instance.a == -2 == instance.b
 
-    instance = UncheckendModel("-2", -2.5)
-    assert instance.a == -2 == instance.b
+        instance = UncheckedAndCoercedModel("-2", -2.5)
+        assert instance.a == -2 == instance.b
 
 
-def test_custom_type_validation_factory():
-    @datamodels.datamodel(type_validation_factory=None)
-    class UnsafeModel:
-        an_int: int
-        a_float: float
+class TestTypeValidationFactory:
+    def test_no_factory(self):
+        @datamodels.datamodel(type_validation_factory=None)
+        class UnsafeModel:
+            an_int: int
+            a_float: float
 
-    model = UnsafeModel("foo", "bar")
-    assert isinstance(model, UnsafeModel)
-    assert model.an_int, model.a_float == ("foo", "bar")
+        model = UnsafeModel("foo", "bar")
+        assert isinstance(model, UnsafeModel)
+        assert model.an_int, model.a_float == ("foo", "bar")
 
-    def custom_factory(type_hint, name):
-        if type_hint is int:
+    def test_custom_type_validation_factory(self):
+        def custom_factory(type_hint, name):
+            if type_hint is int:
 
-            def _validator(model, attrib, value):
-                if value % 2:
-                    raise TypeError("FOO")
+                def _validator(model, attrib, value):
+                    if value % 2:
+                        raise TypeError("FOO")
 
-            return _validator
+                return _validator
 
-        else:
-            return lambda model, attrib, value: None
+            else:
+                return lambda model, attrib, value: None
 
-    @datamodels.datamodel(type_validation_factory=custom_factory)
-    class BooModel:
-        an_int: int
-        a_float: float
+        @datamodels.datamodel(type_validation_factory=custom_factory)
+        class BooModel:
+            an_int: int
+            a_float: float
 
-    model = BooModel(2, 2.0)
-    assert model.an_int, model.a_float == (2, 2.0)
+        model = BooModel(2, 2.0)
+        assert model.an_int, model.a_float == (2, 2.0)
 
-    model = BooModel(2, "a float")
-    assert model.an_int, model.a_float == (2, "a float")
+        model = BooModel(2, "a float")
+        assert model.an_int, model.a_float == (2, "a float")
 
-    with pytest.raises(TypeError, match="FOO"):
-        model = BooModel(3, 2.0)
+        with pytest.raises(TypeError, match="FOO"):
+            model = BooModel(3, 2.0)
 
 
 def test_default_values():
@@ -978,61 +986,63 @@ def test_field_metadata():
 
 
 # Test datamodel options
-def test_frozen():
-    import attr  # type: ignore[import] # Missing library stubs for Python 3.10)
+class TestDatamodelOptions:
+    def test_frozen(self):
+        import attr  # type: ignore[import] # Missing library stubs for Python 3.10)
 
-    @datamodels.datamodel(frozen=True)
-    class FrozenModel:
-        value: Any = None
+        @datamodels.datamodel(frozen=True)
+        class FrozenModel:
+            value: Any = None
 
-    assert FrozenModel.__datamodel_params__.frozen is True
-    with pytest.raises(attr.exceptions.FrozenInstanceError):
-        FrozenModel().value = 1
+        assert FrozenModel.__datamodel_params__.frozen is True
+        with pytest.raises(attr.exceptions.FrozenInstanceError):
+            FrozenModel().value = 1
 
-    class FrozenModel2(datamodels.DataModel, frozen=True):
-        value: Any = None
+        class FrozenModel2(datamodels.DataModel, frozen=True):
+            value: Any = None
 
-    assert FrozenModel2.__datamodel_params__.frozen is True
-    with pytest.raises(attr.exceptions.FrozenInstanceError):
-        FrozenModel2().value = 1
-
-
-def test_hash():
-    string_value = "this is a really long string to avoid string interning 1234567890 +:?.!"
+        assert FrozenModel2.__datamodel_params__.frozen is True
+        with pytest.raises(attr.exceptions.FrozenInstanceError):
+            FrozenModel2().value = 1
 
     # Explanation of expected hash() behavior in Python:
     #   https://hynek.me/articles/hashes-and-equality/
+    def test_safe_mutable_hash(self):
+        string_value = "this is a really long string to avoid string interning 1234567890 +:?.!"
 
-    # Safe mutable case: no hash
-    @datamodels.datamodel
-    class MutableModel:
-        value: Any = None
+        # Safe mutable case: no hash
+        @datamodels.datamodel
+        class MutableModel:
+            value: Any = None
 
-    with pytest.raises(TypeError, match="unhashable type"):
-        hash(MutableModel(value=string_value))
+        with pytest.raises(TypeError, match="unhashable type"):
+            hash(MutableModel(value=string_value))
 
-    # Unsafe mutable case: mutable hash
-    @datamodels.datamodel(unsafe_hash=True)
-    class MutableModelWithHash:
-        value: Any = None
+    def test_unsafe_mutable_hash(self):
+        # Unsafe mutable case: mutable hash
+        @datamodels.datamodel(unsafe_hash=True)
+        class MutableModelWithHash:
+            value: Any = None
 
-    mutable_model = MutableModelWithHash(value=string_value)
-    hash_value = hash(mutable_model)
-    assert hash_value == hash(MutableModelWithHash(value=string_value))
+        string_value = "this is a really long string to avoid string interning 1234567890 +:?.!"
+        mutable_model = MutableModelWithHash(value=string_value)
+        hash_value = hash(mutable_model)
+        assert hash_value == hash(MutableModelWithHash(value=string_value))
 
-    # This is the (expected) wrong behaviour with 'unsafe_hash=True',
-    # because hash value should not change during lifetime of an object
-    mutable_model.value = 42
-    assert hash_value != hash(mutable_model)
+        # This is the (expected) wrong behaviour with 'unsafe_hash=True',
+        # because hash value should not change during lifetime of an object
+        mutable_model.value = 42
+        assert hash_value != hash(mutable_model)
 
-    # Safe frozen case: proper hash
-    @datamodels.datamodel(frozen=True)
-    class FrozenModel:
-        value: Any = None
+    def test_safe_frozen_hash(self):
+        # Safe frozen case: proper hash
+        @datamodels.datamodel(frozen=True)
+        class FrozenModel:
+            value: Any = None
 
-    assert hash(MutableModelWithHash(value=string_value)) == hash(
-        MutableModelWithHash(value=string_value)
-    )
+        string_value = "this is a really long string to avoid string interning 1234567890 +:?.!"
+
+        assert hash(FrozenModel(value=string_value)) == hash(FrozenModel(value=string_value))
 
 
 # Test module functions

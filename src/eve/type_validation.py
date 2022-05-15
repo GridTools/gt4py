@@ -323,7 +323,16 @@ class SimpleTypeValidatorFactory(TypeValidatorFactory):
                         mapping_validator=self.make_is_instance_of(name, origin_type),
                     )
 
-                # Custom generic type: create a validator for the original type ignoring the annotation
+                # Custom generic type: any regular (not datamodel) user-defined generic types like:
+                #   class Foo(Generic[T]):
+                #          ...
+                #
+                # Since this can be an arbitrary type (not something regular like a collection) there is
+                # no way to check if the type parameter is verifed in the actual instance.
+                # The only check can be done at run-time is to verify that the value is an instance of
+                # the original type, completely ignoring the annotation. Ideally, the static type checker
+                # can do a better job to try figure out if the type parameter is ok ...
+
                 return make_recursive(origin_type)
 
             # TODO(egparedes): add support for signature checking in Callables
