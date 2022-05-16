@@ -19,12 +19,8 @@
 
 from __future__ import annotations
 
-import abc
 import ast
 import re
-from xml.etree.ElementInclude import DEFAULT_MAX_INCLUSION_DEPTH
-
-from eve.datamodels.core import GenericDataModel
 
 from . import datamodels, exceptions, extended_typing as xtyping, trees, type_definitions, utils
 from .datamodels import validators as dm_validators
@@ -210,18 +206,15 @@ class Node(datamodels.DataModel, trees.Tree, kw_only=True):
 
     @property
     def annex(self) -> utils.Namespace:
+        if not hasattr(self, "__node_annex__"):
+            object.__setattr__(self, "__node_annex__", utils.Namespace())
         return self.__node_annex__
 
-    @datamodels.root_validator
-    def __init_annex(cls: Type[Node], instance: Node) -> None:
-        if not hasattr(instance, "__node_annex__"):
-            object.__setattr__(instance, "__node_annex__", utils.Namespace())
-
-    def iter_node_values(self) -> Iterable:
+    def iter_children_values(self) -> Iterable:
         for name in self.__datamodel_fields__.keys():
             yield getattr(self, name)
 
-    def iter_node_items(self) -> Iterable[Tuple[trees.TreeKey, Any]]:
+    def iter_children_items(self) -> Iterable[Tuple[trees.TreeKey, Any]]:
         for name in self.__datamodel_fields__.keys():
             yield name, getattr(self, name)
 

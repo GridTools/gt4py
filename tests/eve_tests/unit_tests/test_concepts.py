@@ -136,7 +136,7 @@ class TestNode:
         assert set(sample_node.annex.keys()) >= {"an_int", "a_str"}
 
     def test_children(self, sample_node):
-        children_names = set(name for name, _ in sample_node.iter_child_items())
+        children_names = set(name for name, _ in sample_node.iter_children_items())
 
         assert not any(name.endswith("__") for name in children_names)
         assert not any(name.endswith("_") for name in children_names)
@@ -144,6 +144,6 @@ class TestNode:
         assert all(
             node1 is node2
             for (name, node1), node2 in zip(
-                sample_node.iter_child_items(), sample_node.iter_child_values()
+                sample_node.iter_children_items(), sample_node.iter_children_values()
             )
         )

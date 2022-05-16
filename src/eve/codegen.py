@@ -31,7 +31,6 @@ import sys
 import textwrap
 import types
 
-
 import black
 import jinja2
 from mako import template as mako_tpl
@@ -740,7 +739,7 @@ class TemplatedGenerator(NodeVisitor):
         )
 
     def transform_children(self, node: Node, **kwargs: Any) -> Dict[str, Any]:
-        return {key: self.visit(value, **kwargs) for key, value in node.iter_node_items()}
+        return {key: self.visit(value, **kwargs) for key, value in node.iter_children_items()}
 
     def transform_annexed_items(self, node: Node, **kwargs: Any) -> Dict[str, Any]:
         return {key: self.visit(value, **kwargs) for key, value in node.annex.items()}

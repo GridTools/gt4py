@@ -129,7 +129,7 @@ class NodeVisitor:
         return visitor(node, **kwargs)
 
     def generic_visit(self, node: concepts.RootNode, **kwargs: Any) -> Any:
-        for child in trees.iter_node_values(node):
+        for child in trees.iter_children_values(node):
             self.visit(child, **kwargs)
 
 

@@ -20,7 +20,7 @@ import random
 import string
 from typing import Collection, Dict, List, Mapping, Optional, Sequence, Set, Type, TypeVar
 
-from eve.concepts import FrozenNode, Node, VType, SourceLocation, SymbolName
+from eve.concepts import FrozenNode, Node, SourceLocation, SymbolName, VType
 from eve.datamodels import Coerced
 from eve.traits import SymbolTableTrait, ValidatedSymbolTableTrait
 from eve.type_definitions import IntEnum, StrEnum

@@ -45,11 +45,11 @@ class TreeLike(abc.ABC):
 
 class Tree(Protocol):
     @abc.abstractmethod
-    def iter_node_values(self) -> Iterable:
+    def iter_children_values(self) -> Iterable:
         ...
 
     @abc.abstractmethod
-    def iter_node_items(self) -> Iterable[Tuple[TreeKey, Any]]:
+    def iter_children_items(self) -> Iterable[Tuple[TreeKey, Any]]:
         ...
 
 
@@ -58,15 +58,15 @@ TreeLike.register(Tree)
 
 # -- Node iteration --
 @functools.singledispatch
-def iter_node_values(node: TreeLike) -> Iterable:
+def iter_children_values(node: TreeLike) -> Iterable:
     """Create an iterator to traverse values as Eve tree nodes."""
-    return node.iter_node_values() if hasattr(node, "iter_node_values") else iter(())
+    return node.iter_children_values() if hasattr(node, "iter_children_values") else iter(())
 
 
 @functools.singledispatch
-def iter_node_items(node: TreeLike) -> Iterable[Tuple[TreeKey, Any]]:
+def iter_children_items(node: TreeLike) -> Iterable[Tuple[TreeKey, Any]]:
     """Create an iterator to traverse values as Eve tree nodes."""
-    return node.iter_node_items() if hasattr(node, "iter_node_items") else iter(())
+    return node.iter_children_items() if hasattr(node, "iter_children_items") else iter(())
 
 
 _T = TypeVar("_T")
@@ -75,8 +75,8 @@ _T = TypeVar("_T")
 def register_tree_type(*types: Type[_T], iter_values_fn, iter_items_fn) -> Type[_T]:
     for t in types:
         TreeLike.register(t)
-        iter_node_values.register(t)(iter_values_fn)
-        iter_node_items.register(t)(iter_items_fn)
+        iter_children_values.register(t)(iter_values_fn)
+        iter_children_items.register(t)(iter_items_fn)
 
 
 register_tree_type(str, bytes, iter_values_fn=lambda _: iter(()), iter_items_fn=lambda _: iter(()))
@@ -113,14 +113,14 @@ def _pre_walk_items(
 ) -> Iterable[Tuple[TreeKey, Any]]:
     """Create a pre-order tree traversal iterator of (key, value) pairs."""
     yield __key__, node
-    for key, child in iter_node_items(node):
+    for key, child in iter_children_items(node):
         yield from _pre_walk_items(child, __key__=key)
 
 
 def _pre_walk_values(node: TreeLike) -> Iterable[Tuple[Any]]:
     """Create a pre-order tree traversal iterator of values."""
     yield node
-    for child in iter_node_values(node):
+    for child in iter_children_values(node):
         yield from _pre_walk_values(child)
 
 
@@ -133,14 +133,14 @@ def _post_walk_items(
 ) -> Iterable[Tuple[TreeKey, Any]]:
     """Create a post-order tree traversal iterator of (key, value) pairs."""
     yield __key__, node
-    for key, child in iter_node_items(node):
+    for key, child in iter_children_items(node):
         yield from _post_walk_items(child, __key__=key)
 
 
 def _post_walk_values(node: TreeLike) -> Iterable[Tuple[Any]]:
     """Create a post-order tree traversal iterator of values."""
-    if (iter_node_values := getattr(node, "iter_node_values", None)) is not None:
-        for child in iter_node_values():
+    if (iter_children_values := getattr(node, "iter_children_values", None)) is not None:
+        for child in iter_children_values():
             yield from _post_walk_values(child)
     yield node
 
@@ -155,7 +155,7 @@ def _bfs_walk_items(
     """Create a tree traversal iterator of (key, value) pairs by tree levels (Breadth-First Search)."""
     __queue__ = __queue__ or []
     yield __key__, node
-    __queue__.extend(iter_node_items(node))
+    __queue__.extend(iter_children_items(node))
     if __queue__:
         key, child = __queue__.pop(0)
         yield from _bfs_walk_items(child, __key__=key, __queue__=__queue__)
@@ -167,8 +167,8 @@ def _bfs_walk_values(
     """Create a tree traversal iterator of values by tree levels (Breadth-First Search)."""
     __queue__ = __queue__ or []
     yield node
-    if (iter_node_values := getattr(node, "iter_node_values", None)) is not None:
-        __queue__.extend(iter_node_values())
+    if (iter_children_values := getattr(node, "iter_children_values", None)) is not None:
+        __queue__.extend(iter_children_values())
     if __queue__:
         child = __queue__.pop(0)
         yield from _bfs_walk_values(child, __queue__=__queue__)
