@@ -517,10 +517,6 @@ class BinaryOperator(enum.Enum):
     MOD = 6
 
     MATMULT = 8
-<<<<<<< HEAD
-=======
-    MATMULTTRANS = 9
->>>>>>> d10892c (vectorization and matmul)
 
     AND = 11
     OR = 12

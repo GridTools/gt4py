@@ -2171,7 +2171,7 @@ class GTScriptParser(ast.NodeVisitor):
             loc=nodes.Location.from_ast_node(self.ast_root.body[0]),
         )
 
-        self.definition_ir = UnVectorisation.apply(self.definition_ir)
+        self.definition_ir = UnVectorisation.apply(self.definition_ir, fields_decls=fields_decls)
 
         return self.definition_ir
 

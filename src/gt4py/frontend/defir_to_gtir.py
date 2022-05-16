@@ -95,29 +95,31 @@ def _make_literal(v: numbers.Number) -> gtir.Literal:
 class UnVectorisation(IRNodeVisitor):
     @classmethod
     def apply(cls, root, **kwargs):
-        return cls().visit(root)
+        return cls().visit(root, **kwargs)
 
-    def visit_StencilDefinition(self, node: StencilDefinition) -> gtir.Stencil:
+    def visit_StencilDefinition(self, node: StencilDefinition, fields_decls) -> gtir.Stencil:
         field_params = {f.name: self.visit(f) for f in node.api_fields}
         scalar_params = {p.name: self.visit(p) for p in node.parameters}
 
         # Vectorization of operations
         for c in node.computations:
             if c.body.stmts:
+                if type(c.body.stmts[0]) == FieldDecl:
+                    continue
                 new_stmts = []
                 for stmt in c.body.stmts:
                     if isinstance(stmt, Assign):
                         target = stmt.target
                         value = stmt.value
 
-                        if target.name in field_params:
+                        if target.name in fields_decls:
                             # check if higher dimensional field
-                            target_dim = field_params[target.name].data_dims
+                            target_dim = fields_decls[target.name].data_dims
 
                             if target_dim and not stmt.target.data_index:
                                 # unroll rhs
-                                stmt.value = UnRoller.apply(value, params=field_params)
-                                new_stmts.append(self.visit(stmt, params=field_params))
+                                stmt.value = UnRoller.apply(value, params=fields_decls)
+                                new_stmts.append(self.visit(stmt, params=fields_decls))
                             else:
                                 new_stmts.append([stmt])
                         else:
