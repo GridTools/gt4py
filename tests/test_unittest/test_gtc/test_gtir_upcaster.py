@@ -123,7 +123,7 @@ def test_upcast_integers_division():
     upcast_and_validate(
         testee,
         [
-            Cast(dtype=DataType.FLOAT32, expr=LiteralFactory(value="1", dtype=DataType.INT32)),
-            Cast(dtype=DataType.FLOAT32, expr=LiteralFactory(value="2", dtype=DataType.INT32)),
+            Cast(dtype=DataType.FLOAT64, expr=LiteralFactory(value="1", dtype=DataType.INT32)),
+            Cast(dtype=DataType.FLOAT64, expr=LiteralFactory(value="2", dtype=DataType.INT32)),
         ],
     )
