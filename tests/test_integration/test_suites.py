@@ -915,3 +915,25 @@ class TestTypedTemporary(gt_testing.StencilTestSuite):
     def validation(field_in, field_out, *, domain, origin):
         field_out[:, :, :-1] = field_in[:, :, :-1] + field_in[:, :, 1:]
         field_out[:, :, -1] = 0
+
+class TestVectorAssignment(gt_testing.StencilTestSuite):
+    dtypes = {"field_in": np.float32, "field_out": np.float32}
+    domain_range = [(2, 2), (2, 2), (2, 8)]
+    # backends = INTERNAL_BACKENDS
+    backends = "numpy"
+    symbols = {
+        "field_in": gt_testing.field(
+            in_range=(-10, 10), axes="IJK", boundary=[(0, 0), (0, 0), (0, 0)]
+        ),
+        "field_out": gt_testing.field(
+            in_range=(-10, 10), axes="IJK", boundary=[(0, 0), (0, 0), (0, 0)]
+        ),
+    }
+
+    def definition(field_in, field_out):
+        with computation(PARALLEL):
+            with interval(...):
+                field_out = 2 * field_in
+
+    def validation(field_in, field_out, *, domain, origin):
+        field_out = 2 * field_in
