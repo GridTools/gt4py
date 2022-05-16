@@ -385,7 +385,29 @@ def datamodel(  # noqa: F811  # redefinion of unused symbol
         )
 
 
-frozenmodel: Callable = functools.partial(datamodel, frozen=True)
+class _DataModelDecoratorTP(Protocol[_T]):
+    def __call__(
+        self,
+        cls: Type[_T] = None,
+        /,
+        *,
+        repr: bool = _REPR_DEFAULT,  # noqa: A002  # shadowing 'repr' python builtin
+        eq: bool = _EQ_DEFAULT,
+        order: bool = _ORDER_DEFAULT,
+        unsafe_hash: bool = _UNSAFE_HASH_DEFAULT,
+        match_args: bool = _MATCH_ARGS_DEFAULT,
+        kw_only: bool = _KW_ONLY_DEFAULT,
+        slots: bool = _SLOTS_DEFAULT,
+        coerce: bool = _COERCE_DEFAULT,
+        generic: bool = _GENERIC_DEFAULT,
+        type_validation_factory: Optional[
+            FieldTypeValidatorFactory
+        ] = DefaultFieldTypeValidatorFactory,
+    ) -> Union[Type[_T], Callable[[Type[_T]], Type[_T]]]:
+        ...
+
+
+frozenmodel: _DataModelDecoratorTP = functools.partial(datamodel, frozen=True)
 """Data Model definition function using ``frozen=True``."""
 
 frozen_model = frozenmodel
