@@ -48,10 +48,6 @@ class SymbolTableTrait:
             self.collected_symbols: Dict[str, concepts.Node] = {}
 
         def visit_Node(self, node: concepts.Node) -> None:
-            if hasattr(node.__class__, "_NODE_SYMBOLS_"):
-                for extra_node in node.__class__._NODE_SYMBOLS_:
-                    self.visit(extra_node)
-
             for field_name, attribute in node.__datamodel_fields__.items():
                 if isinstance(attribute.type, type) and issubclass(
                     attribute.type, concepts.SymbolName
@@ -67,16 +63,20 @@ class SymbolTableTrait:
                 # Stop recursion if the node opens a new scope (i.e. node with SymbolTableTrait)
                 self.generic_visit(node)
 
+        def visit(self, node: concepts.RootNode, **kwargs: Any) -> Any:
+            if hasattr(node.__class__, "_NODE_SYMBOLS_"):
+                self.visit(node.__class__._NODE_SYMBOLS_)
+            return super().visit(node, **kwargs)
+
         @classmethod
         def apply(cls, node: concepts.Node) -> Dict[str, concepts.Node]:
             collector = cls()
-            # If the passed node contains a symbol table, the check in `visit_Node()` will stop
-            # the traversal. To avoid this premature stop, we start the traversal here calling
-            # `generic_visit()` to directly inspect the children (after adding any extra node
-            # symbols defined in the node class).
+            # If the passed root node already contains a symbol table, the check in `visit_Node()`
+            # will automatically stop the traversal. To avoid this premature stop, we start the
+            # traversal here calling `generic_visit()` to directly inspect the children (after
+            # adding any extra node symbols defined in the node class).
             if hasattr(node.__class__, "_NODE_SYMBOLS_"):
-                for extra_node in node.__class__._NODE_SYMBOLS_:
-                    collector.visit(extra_node)
+                collector.visit(node.__class__._NODE_SYMBOLS_)
             collector.generic_visit(node)
             return collector.collected_symbols
 

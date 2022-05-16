@@ -19,6 +19,7 @@
 
 from __future__ import annotations
 
+import abc
 import collections.abc
 import copy
 import operator
@@ -34,15 +35,29 @@ from .extended_typing import (
     Iterable,
     MutableSequence,
     MutableSet,
+    Protocol,
     Tuple,
+    TypeVar,
     Union,
 )
 
 
-ContextCallable = Callable[["NodeVisitor", concepts.RootNode, Dict[str, Any]], ContextManager[None]]
+_InT = TypeVar("_InT", contravariant=True)
+_OutT = TypeVar("_OutT", covariant=True)
+_KwargsT = TypeVar("_KwargsT", contravariant=True)
 
 
-class NodeVisitor:
+class Visitor(Protocol[_InT, _OutT, _KwargsT]):
+    @abc.abstractmethod
+    def visit(self, __data: _InT, /, **kwargs: _KwargsT) -> _OutT:
+        return NotImplemented
+
+    @abc.abstractmethod
+    def generic_visit(self, __data: _InT, /, **kwargs: _KwargsT) -> _OutT:
+        return NotImplemented
+
+
+class NodeVisitor(Visitor[concepts.Node, _OutT, _KwargsT]):
     """Simple node visitor class based on :class:`ast.NodeVisitor`.
 
     A NodeVisitor instance walks a node tree and calls a visitor
@@ -113,12 +128,21 @@ class NodeVisitor:
     def visit(self, node: concepts.RootNode, **kwargs: Any) -> Any:
         visitor = self.generic_visit
 
-        method_name = "visit_" + node.__class__.__name__
+        class_name = node.__class__.__name__
+        if "__" in class_name:
+            # For concretized data model classes, use the generic name
+            class_name = class_name[: class_name.find("__")]
+        method_name = "visit_" + class_name
+
         if hasattr(self, method_name):
             visitor = getattr(self, method_name)
         elif isinstance(node, concepts.Node):
             for node_class in node.__class__.__mro__[1:]:
-                method_name = "visit_" + node_class.__name__
+                class_name = node_class.__name__
+                if "__" in class_name:
+                    class_name = class_name[: class_name.find("__")]
+                method_name = "visit_" + class_name
+
                 if hasattr(self, method_name):
                     visitor = getattr(self, method_name)
                     break
@@ -131,6 +155,8 @@ class NodeVisitor:
     def generic_visit(self, node: concepts.RootNode, **kwargs: Any) -> Any:
         for child in trees.iter_children_values(node):
             self.visit(child, **kwargs)
+
+        return None
 
 
 class NodeTranslator(NodeVisitor):
