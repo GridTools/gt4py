@@ -116,14 +116,14 @@ class NodeVisitor:
         method_name = "visit_" + node.__class__.__name__
         if hasattr(self, method_name):
             visitor = getattr(self, method_name)
-        elif isinstance(node, concepts.BaseNode):
+        elif isinstance(node, concepts.Node):
             for node_class in node.__class__.__mro__[1:]:
                 method_name = "visit_" + node_class.__name__
                 if hasattr(self, method_name):
                     visitor = getattr(self, method_name)
                     break
 
-                if node_class is concepts.BaseNode:
+                if node_class is concepts.Node:
                     break
 
         return visitor(node, **kwargs)

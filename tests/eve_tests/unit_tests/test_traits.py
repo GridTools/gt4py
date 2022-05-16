@@ -61,13 +61,13 @@ class TestSymbolTable:
 
     def test_symbol_table_creation(self, symtable_node_and_expected_symbols):
         node, expected_symbols = symtable_node_and_expected_symbols
-        collected_symtable = node.symtable_
-        assert isinstance(node.symtable_, dict)
+        collected_symtable = node.annex.symtable
+        assert isinstance(node.annex.symtable, dict)
         assert all(isinstance(key, str) for key in collected_symtable)
 
     def test_symbol_table_collection(self, symtable_node_and_expected_symbols):
         node, expected_symbols = symtable_node_and_expected_symbols
-        collected_symtable = node.symtable_
+        collected_symtable = node.annex.symtable
         assert collected_symtable == expected_symbols
         assert all(
             collected_symtable[symbol_name] is symbol_node

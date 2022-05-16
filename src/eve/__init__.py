@@ -74,10 +74,7 @@ from .type_definitions import (
     Enum,
     IntEnum,
     NothingType,
-    SourceLocation,
     StrEnum,
-    SymbolName,
-    SymbolRef,
 )
 from .visitors import NodeTranslator, NodeVisitor
 

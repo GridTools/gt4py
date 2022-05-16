@@ -26,18 +26,18 @@ import inspect
 import os
 import re
 import string
+import subprocess
 import sys
 import textwrap
 import types
-import typing
-from subprocess import TimeoutExpired, run
+
 
 import black
 import jinja2
 from mako import template as mako_tpl
 
 from . import exceptions, utils
-from .concepts import BaseNode, CollectionNode, LeafNode, Node, RootNode
+from .concepts import CollectionNode, LeafNode, Node, RootNode
 from .extended_typing import (
     Any,
     Callable,
@@ -54,14 +54,16 @@ from .extended_typing import (
     Tuple,
     TypeVar,
     Union,
+    overload,
+    runtime_checkable,
 )
 from .visitors import NodeVisitor
 
 
 SourceFormatter = Callable[[str], str]
 
-#: Global dict storing registered formatters.
 SOURCE_FORMATTERS: Dict[str, SourceFormatter] = {}
+"""Global dict storing registered formatters."""
 
 
 class FormatterNameError(exceptions.EveRuntimeError):
@@ -133,7 +135,7 @@ def _get_clang_format() -> Optional[str]:
     executable = os.getenv("CLANG_FORMAT_EXECUTABLE", "clang-format")
     try:
         assert isinstance(executable, str)
-        if run([executable, "--version"], capture_output=True).returncode != 0:
+        if subprocess.run([executable, "--version"], capture_output=True).returncode != 0:
             return None
     except Exception:
         return None
@@ -166,10 +168,10 @@ if _CLANG_FORMAT_EXECUTABLE is not None:
 
         try:
             # use a timeout as clang-format used to deadlock on some sources
-            formatted_source = run(
+            formatted_source = subprocess.run(
                 args, check=True, input=source, capture_output=True, text=True, timeout=3
             ).stdout
-        except TimeoutExpired:
+        except subprocess.TimeoutExpired:
             return source
 
         assert isinstance(formatted_source, str)
@@ -351,7 +353,7 @@ class TextBlock:
 TemplateT = TypeVar("TemplateT", bound="Template")
 
 
-@typing.runtime_checkable
+@runtime_checkable
 class Template(Protocol):
     """Protocol (abstract base class) defining the Template interface.
 
@@ -640,12 +642,12 @@ class TemplatedGenerator(NodeVisitor):
 
         cls.__templates__ = types.MappingProxyType(templates)
 
-    @typing.overload
+    @overload
     @classmethod
     def apply(cls, root: LeafNode, **kwargs: Any) -> str:
         ...
 
-    @typing.overload
+    @overload
     @classmethod
     def apply(cls, root: CollectionNode, **kwargs: Any) -> Collection[str]:
         ...
@@ -675,7 +677,7 @@ class TemplatedGenerator(NodeVisitor):
         return str(node)
 
     def generic_visit(self, node: RootNode, **kwargs: Any) -> Union[str, Collection[str]]:
-        if isinstance(node, BaseNode):
+        if isinstance(node, Node):
             template, key = self.get_template(node)
             if template:
                 try:
@@ -683,7 +685,7 @@ class TemplatedGenerator(NodeVisitor):
                         template,
                         node,
                         self.transform_children(node, **kwargs),
-                        self.transform_impl_fields(node, **kwargs),
+                        self.transform_annexed_items(node, **kwargs),
                         **kwargs,
                     )
                 except TemplateRenderingError as e:
@@ -695,7 +697,7 @@ class TemplatedGenerator(NodeVisitor):
                         node=node,
                     ) from e.__cause__
 
-        elif isinstance(node, (list, tuple, collections.abc.Set)) or (
+        if isinstance(node, (list, tuple, collections.abc.Set)) or (
             isinstance(node, collections.abc.Sequence) and not isinstance(node, (str, bytes))
         ):
             return [self.visit(value, **kwargs) for value in node]
@@ -708,7 +710,7 @@ class TemplatedGenerator(NodeVisitor):
         """Get a template for a node instance (see class documentation)."""
         template: Optional[Template] = None
         template_key = None
-        if isinstance(node, BaseNode):
+        if isinstance(node, Node):
             for node_class in node.__class__.__mro__:
                 template_key = node_class.__name__
                 template = self.__templates__.get(template_key, None)
@@ -722,15 +724,15 @@ class TemplatedGenerator(NodeVisitor):
         template: Template,
         node: Node,
         transformed_children: Mapping[str, Any],
-        transformed_impl_fields: Mapping[str, Any],
+        transformed_annexed_items: Mapping[str, Any],
         **kwargs: Any,
     ) -> str:
         """Render a template using node instance data (see class documentation)."""
         return template.render(
             **transformed_children,
-            **transformed_impl_fields,
+            **transformed_annexed_items,
             _children=transformed_children,
-            _impl=transformed_impl_fields,
+            _impl=transformed_annexed_items,
             _this_node=node,
             _this_generator=self,
             _this_module=sys.modules[type(self).__module__],
@@ -738,7 +740,7 @@ class TemplatedGenerator(NodeVisitor):
         )
 
     def transform_children(self, node: Node, **kwargs: Any) -> Dict[str, Any]:
-        return {key: self.visit(value, **kwargs) for key, value in node.iter_children()}
+        return {key: self.visit(value, **kwargs) for key, value in node.iter_node_items()}
 
-    def transform_impl_fields(self, node: Node, **kwargs: Any) -> Dict[str, Any]:
-        return {key: self.visit(value, **kwargs) for key, value in node.iter_impl_fields()}
+    def transform_annexed_items(self, node: Node, **kwargs: Any) -> Dict[str, Any]:
+        return {key: self.visit(value, **kwargs) for key, value in node.annex.items()}

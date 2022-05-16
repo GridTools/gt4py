@@ -208,6 +208,10 @@ class Node(datamodels.DataModel, trees.Tree, kw_only=True):
 
     __slots__ = ()
 
+    @property
+    def annex(self) -> utils.Namespace:
+        return self.__node_annex__
+
     @datamodels.root_validator
     def __init_annex(cls: Type[Node], instance: Node) -> None:
         if not hasattr(instance, "__node_annex__"):
