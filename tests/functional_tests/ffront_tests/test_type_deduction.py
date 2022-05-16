@@ -28,7 +28,6 @@ def type_info_cases() -> list[tuple[Optional[ct.SymbolType], dict]]:
             ct.DeferredSymbolType(constraint=None),
             {
                 "is_concrete": False,
-                "resulting_type_kind": type_info.TypeKind.UNKNOWN,
             },
         ),
         (
@@ -36,7 +35,6 @@ def type_info_cases() -> list[tuple[Optional[ct.SymbolType], dict]]:
             {
                 "is_concrete": False,
                 "type_class": ct.ScalarType,
-                "resulting_type_kind": type_info.TypeKind.SCALAR,
             },
         ),
         (
@@ -44,7 +42,6 @@ def type_info_cases() -> list[tuple[Optional[ct.SymbolType], dict]]:
             {
                 "is_concrete": False,
                 "type_class": ct.FieldType,
-                "resulting_type_kind": type_info.TypeKind.FIELD,
             },
         ),
         (
@@ -52,7 +49,6 @@ def type_info_cases() -> list[tuple[Optional[ct.SymbolType], dict]]:
             {
                 "is_concrete": True,
                 "type_class": ct.ScalarType,
-                "resulting_type_kind": type_info.TypeKind.SCALAR,
                 "is_arithmetic": True,
                 "is_logical": False,
             },
@@ -62,7 +58,6 @@ def type_info_cases() -> list[tuple[Optional[ct.SymbolType], dict]]:
             {
                 "is_concrete": True,
                 "type_class": ct.FieldType,
-                "resulting_type_kind": type_info.TypeKind.FIELD,
                 "is_arithmetic": False,
                 "is_logical": True,
             },

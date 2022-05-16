@@ -190,7 +190,7 @@ class FieldOperatorLowering(NodeTranslator):
 
     def _lift_if_field(self, node: foast.LocatedNode) -> Callable[[itir.Expr], itir.Expr]:
         assert can_be_value_or_iterator(node.type)
-        if type_info.resulting_type_kind(node.type) is type_info.TypeKind.SCALAR:
+        if resulting_type_kind(node.type) is TypeKind.SCALAR:
             return lambda x: x
         return self._lift_lambda(node)
 

@@ -165,6 +165,16 @@ def is_concretizable(symbol_type: ct.SymbolType, to_type: ct.SymbolType) -> bool
     return False
 
 
+def _is_sublist(small_list, big_list):
+    if len(small_list) > len(big_list):
+        return False
+    elif all(i in big_list for i in small_list):
+        start = big_list.index(small_list[0])
+        end = big_list.index(small_list[-1]) + 1
+        return small_list == big_list[start:end]
+    return False
+
+
 def is_dimensionally_promotable(symbol_type: ct.SymbolType, to_type: ct.SymbolType) -> bool:
     """
     Check if `symbol_type` has no fixed dimensionality and can be dimensionally promoted.
@@ -178,7 +188,7 @@ def is_dimensionally_promotable(symbol_type: ct.SymbolType, to_type: ct.SymbolTy
     # symbol_type must be either zero- or any dimensional or have same dimensionality as to_type
     elif type_class(to_type) is ct.FieldType:
         dims = extract_dims(symbol_type)
-        return dims in [[], Ellipsis] or dims == extract_dims(to_type)
+        return dims in [[], Ellipsis] or _is_sublist(dims, extract_dims(to_type))
     return False
 
 
