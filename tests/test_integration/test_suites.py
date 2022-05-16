@@ -888,7 +888,12 @@ class TestHorizontalRegions(gt_testing.StencilTestSuite):
 class TestTypedTemporary(gt_testing.StencilTestSuite):
     dtypes = {"field_in": np.float32, "field_out": np.float32}
     domain_range = [(2, 2), (2, 2), (2, 8)]
+<<<<<<< Updated upstream
     backends = ALL_BACKENDS
+=======
+    # backends = INTERNAL_BACKENDS
+    backends = ['numpy']
+>>>>>>> Stashed changes
     symbols = {
         "field_in": gt_testing.field(
             in_range=(-10, 10), axes="IJK", boundary=[(0, 0), (0, 0), (0, 0)]
@@ -918,24 +923,79 @@ class TestTypedTemporary(gt_testing.StencilTestSuite):
         field_out[:, :, :-1] = field_in[:, :, :-1] + field_in[:, :, 1:]
         field_out[:, :, -1] = 0
 
-class TestVectorAssignment(gt_testing.StencilTestSuite):
-    dtypes = {"field_in": np.float32, "field_out": np.float32}
-    domain_range = [(2, 2), (2, 2), (2, 8)]
+class TestVectorOperations(gt_testing.StencilTestSuite):
+    dtypes = {
+        "field_1": np.float32,
+        "field_2": np.float32,
+        "field_out": np.float32
+    }
+    domain_range = [(2, 2), (2, 2), (7, 7)]
     # backends = INTERNAL_BACKENDS
-    backends = "numpy"
+    backends = ["numpy"]
     symbols = {
-        "field_in": gt_testing.field(
-            in_range=(-10, 10), axes="IJK", boundary=[(0, 0), (0, 0), (0, 0)]
+        "field_1": gt_testing.field(
+            in_range=(-10, 10), axes="IJK", boundary=[(0, 0), (0, 0), (0, 0)], data_dims=(5,)
+        ),
+        "field_2": gt_testing.field(
+            in_range=(1, 10), axes="IJK", boundary=[(0, 0), (0, 0), (0, 0)], data_dims=(5,)
         ),
         "field_out": gt_testing.field(
-            in_range=(-10, 10), axes="IJK", boundary=[(0, 0), (0, 0), (0, 0)]
+            in_range=(-10, 10), axes="IJK", boundary=[(0, 0), (0, 0), (0, 0)], data_dims=(5,)
         ),
     }
-
-    def definition(field_in, field_out):
+    def definition(field_1, field_2, field_out):
         with computation(PARALLEL):
-            with interval(...):
-                field_out = 2 * field_in
+            with interval(0, 1):
+                field_out = field_1
+            with interval(1, 2):
+                field_out = 2 * field_1
+            with interval(2, 3):
+                field_out = field_1 + field_2
+            with interval(3, 4):
+                field_out = field_1 * field_2
+            with interval(4, 5):
+                field_out = 3 * (field_1 - field_2)
+            with interval(5, 6):
+                field_out = field_1 + field_2 * field_2
+            with interval(6, 7):
+                field_out = field_1 * field_1 / field_2 + 9.81 * field_2 * field_2
 
-    def validation(field_in, field_out, *, domain, origin):
-        field_out = 2 * field_in
+    def validation(field_1, field_2, field_out, *, domain, origin):
+        field_out[:,:,0] =  field_1[:,:,0]
+        field_out[:,:,1] =  2 * field_1[:,:,1]
+        field_out[:,:,2] =  field_1[:,:,2] + field_2[:,:,2]
+        field_out[:,:,3] =  field_1[:,:,3] * field_2[:,:,3]
+        field_out[:,:,4] =  3 * (field_1[:,:,4] - field_2[:,:,4])
+        field_out[:,:,5] =  field_1[:,:,5] + field_2[:,:,5] * field_2[:,:,5]
+        field_out[:,:,6] =  field_1[:,:,6] * field_1[:,:,6] / field_2[:,:,6] + 9.81 * field_2[:,:,6] * field_2[:,:,6]
+
+class TestMatmul(gt_testing.StencilTestSuite):
+    dtypes = {
+        "matrix": np.float32,
+        "field_1": np.float32,
+        "field_2": np.float32
+    }
+    domain_range = [(2, 2), (2, 2), (2, 2)]
+    # backends = INTERNAL_BACKENDS
+    backends = ["numpy"]
+    symbols = {
+        "matrix": gt_testing.field(
+            in_range=(-10, 10), axes="IJK", boundary=[(0, 0), (0, 0), (0, 0)], data_dims=(4, 6)
+        ),
+        "field_1": gt_testing.field(
+            in_range=(-10, 10), axes="IJK", boundary=[(0, 0), (0, 0), (0, 0)], data_dims=(6,)
+        ),
+        "field_2": gt_testing.field(
+            in_range=(-10, 10), axes="IJK", boundary=[(0, 0), (0, 0), (0, 0)], data_dims=(4,)
+        ),
+    }
+    def definition(matrix, field_1, field_2):
+        with computation(PARALLEL):
+            with interval(0, 1):
+                field_2 = matrix @ field_1
+            with interval(1, 2):
+                field_1 = matrix.T @ field_2
+
+    def validation(matrix, field_1, field_2, *, domain, origin):
+        field_2[:,:,0] = np.einsum('ijkl,ijl->ijk', matrix[:,:,0], field_1[:,:,0])
+        field_1[:,:,1] = np.einsum('ijkl,ijk->ijl', matrix[:,:,1], field_2[:,:,1])

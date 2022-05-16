@@ -104,6 +104,7 @@ class UnVectorisation(IRNodeVisitor):
         # Vectorization of operations
         for c in node.computations:
             if c.body.stmts:
+                # don't modify temp preprocessing computations
                 if type(c.body.stmts[0]) == FieldDecl:
                     continue
                 new_stmts = []
