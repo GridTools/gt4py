@@ -157,6 +157,5 @@ repos:
       tests/test_unittest/test_gtc/test_common.py |
       tests/test_unittest/test_gtc/test_oir.py |
       tests/test_unittest/test_gtc/gtir_utils.py |
-      tests/test_unittest/test_gtc/test_gtir_upcaster.py |
       tests/test_unittest/test_gtc/test_gtir_to_oir.py |
       )$
