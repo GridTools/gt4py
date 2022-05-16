@@ -23,7 +23,7 @@ import collections.abc
 import copy
 import operator
 
-from . import concepts, iterators, utils
+from . import concepts, trees, utils
 from .concepts import NOTHING
 from .extended_typing import (
     Any,
@@ -39,7 +39,7 @@ from .extended_typing import (
 )
 
 
-ContextCallable = Callable[["NodeVisitor", concepts.TreeNode, Dict[str, Any]], ContextManager[None]]
+ContextCallable = Callable[["NodeVisitor", concepts.RootNode, Dict[str, Any]], ContextManager[None]]
 
 
 class NodeVisitor:
@@ -110,7 +110,7 @@ class NodeVisitor:
 
     """
 
-    def visit(self, node: concepts.TreeNode, **kwargs: Any) -> Any:
+    def visit(self, node: concepts.RootNode, **kwargs: Any) -> Any:
         visitor = self.generic_visit
 
         method_name = "visit_" + node.__class__.__name__
@@ -128,8 +128,8 @@ class NodeVisitor:
 
         return visitor(node, **kwargs)
 
-    def generic_visit(self, node: concepts.TreeNode, **kwargs: Any) -> Any:
-        for child in iterators.generic_iter_children(node):
+    def generic_visit(self, node: concepts.RootNode, **kwargs: Any) -> Any:
+        for child in trees.iter_node_values(node):
             self.visit(child, **kwargs)
 
 
@@ -159,7 +159,7 @@ class NodeTranslator(NodeVisitor):
 
     _memo_dict_: Dict[int, Any]
 
-    def generic_visit(self, node: concepts.TreeNode, **kwargs: Any) -> Any:
+    def generic_visit(self, node: concepts.RootNode, **kwargs: Any) -> Any:
         if isinstance(node, concepts.BaseNode):
             return node.__class__(  # type: ignore
                 **{key: value for key, value in node.iter_impl_fields()},
@@ -194,101 +194,5 @@ class NodeTranslator(NodeVisitor):
             if not hasattr(self, "_memo_dict_"):
                 self._memo_dict_ = {}
             result = copy.deepcopy(node, memo=self._memo_dict_)
-
-        return result
-
-
-class NodeMutator(NodeVisitor):
-    """Special `NodeVisitor` to modify nodes in place.
-
-    A NodeMutator instance will walk the tree exactly as a regular
-    :class:`NodeVisitor` and use the return value of the visitor
-    methods to replace or remove the old node. If the return value
-    is :data:`eve.NOTHING`, the node will be removed from its location,
-    otherwise it is replaced with the return value. The return value
-    may also be the original node, in which case no replacement takes place.
-
-    Keep in mind that if the node you're operating on has child nodes
-    you must either transform the child nodes yourself or call the
-    :meth:`generic_visit` method for the node first. In case a child node
-    is a mutable collection of elements, and one of this element is meant
-    to be deleted, it will deleted in place. If the collection is immutable,
-    a new immutable collection instance will be created without the removed
-    element.
-
-    Usually you use a NodeMutator like this::
-
-       YourMutator.apply(node)
-
-    Notes:
-        Check :class:`NodeVisitor` documentation for more details.
-
-    """
-
-    def generic_visit(self, node: concepts.TreeNode, **kwargs: Any) -> Any:
-        result: Any = node
-        if isinstance(
-            node, (concepts.BaseNode, collections.abc.Collection)
-        ) and utils.is_collection(node):
-            items: Iterable[Tuple[Any, Any]] = []
-            tmp_items: Collection[concepts.TreeNode] = []
-            set_op: Union[Callable[[Any, str, Any], None], Callable[[Any, int, Any], None]]
-            del_op: Union[Callable[[Any, str], None], Callable[[Any, int], None]]
-
-            if isinstance(node, concepts.Node):
-                items = list(node.iter_children())
-                set_op = setattr
-                del_op = delattr
-            elif isinstance(node, collections.abc.MutableSequence):
-                items = enumerate(node)
-                index_shift = 0
-
-                def set_op(container: MutableSequence, idx: int, value: concepts.TreeNode) -> None:
-                    container[idx - index_shift] = value
-
-                def del_op(container: MutableSequence, idx: int) -> None:
-                    nonlocal index_shift
-                    del container[idx - index_shift]
-                    index_shift += 1
-
-            elif isinstance(node, collections.abc.MutableSet):
-                items = list(enumerate(node))
-
-                def set_op(container: MutableSet, idx: Any, value: concepts.TreeNode) -> None:
-                    container.add(value)
-
-                def del_op(container: MutableSet, idx: int) -> None:
-                    container.remove(items[idx])  # type: ignore
-
-            elif isinstance(node, collections.abc.MutableMapping):
-                items = node.items()
-                set_op = operator.setitem
-                del_op = operator.delitem
-
-            elif isinstance(node, (collections.abc.Sequence, collections.abc.Set)):
-                # Inmutable sequence or set: create a new container instance with the new values
-                tmp_items = [self.visit(value, **kwargs) for value in node]
-                result = node.__class__(  # type: ignore
-                    [value for value in tmp_items if value is not concepts.NOTHING]
-                )
-
-            elif isinstance(node, collections.abc.Mapping):
-                # Inmutable mapping: create a new mapping instance with the new values
-                tmp_items = {key: self.visit(value, **kwargs) for key, value in node.items()}
-                result = node.__class__(  # type: ignore
-                    {
-                        key: value
-                        for key, value in tmp_items.items()
-                        if value is not concepts.NOTHING
-                    }
-                )
-
-            # Finally, in case current node object is mutable, process selected items (if any)
-            for key, value in items:
-                new_value = self.visit(value, **kwargs)
-                if new_value is concepts.NOTHING:
-                    del_op(result, key)
-                elif new_value != value:
-                    set_op(result, key, new_value)
 
         return result

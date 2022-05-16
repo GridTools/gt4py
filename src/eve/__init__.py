@@ -22,8 +22,10 @@ on some of the previous ones):
   - extended_typing (no dependencies)
   - exceptions, pattern_matching, type_definitions
   - datamodels, utils
-  - concepts <-> iterators  (circular dependency only inside methods, it should be safe)
-  - traits, visitors
+  - trees
+  - concepts
+  - visitors
+  - traits
   - codegen
 
 """
@@ -32,28 +34,52 @@ from __future__ import annotations  # isort:skip
 
 from .version import __version__, __versioninfo__  # isort:skip
 
-from .concepts import FieldKind, FrozenModel, FrozenNode, GenericNode, Model, Node, VType
-from .datamodels import Coerced, DataModel, concretize, datamodel, field
-from .iterators import iter_tree
-from .traits import SymbolTableTrait
+from .concepts import (
+    AnnexManager,
+    AnySourceLocation,
+    FrozenNode,
+    GenericDataModel,
+    Node,
+    SourceLocation,
+    SourceLocationGroup,
+    SymbolName,
+    SymbolRef,
+    VType,
+    register_annex_user,
+)
+from .datamodels import (
+    Coerced,
+    DataModel,
+    FrozenModel,
+    Unchecked,
+    concretize,
+    datamodel,
+    field,
+    frozenmodel,
+)
+from .traits import SymbolTableTrait, ValidatedSymbolTableTrait, VisitorWithSymbolTableTrait
+from .trees import (
+    bfs_walk_items,
+    bfs_walk_values,
+    post_walk_items,
+    post_walk_values,
+    pre_walk_items,
+    pre_walk_values,
+    walk_items,
+    walk_values,
+)
 from .type_definitions import (
     NOTHING,
-    Bool,
+    ConstrainedStr,
     Enum,
-    Float,
-    Int,
     IntEnum,
-    NegativeFloat,
-    NegativeInt,
-    PositiveFloat,
-    PositiveInt,
+    NothingType,
     SourceLocation,
-    Str,
     StrEnum,
     SymbolName,
     SymbolRef,
 )
-from .visitors import NodeMutator, NodeTranslator, NodeVisitor
+from .visitors import NodeTranslator, NodeVisitor
 
 
 __all__ = [

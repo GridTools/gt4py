@@ -17,7 +17,6 @@
 
 from __future__ import annotations
 
-import pydantic
 import pytest
 
 import eve
@@ -99,14 +98,14 @@ class TestSymbolTable:
 
 def test_visitor_with_symbol_table_trait(node_with_symbol_table):
     class BareVisitor(eve.visitors.NodeVisitor):
-        def visit_Node(self, node: eve.concepts.TreeNode, **kwargs: Any) -> Any:
+        def visit_Node(self, node: eve.concepts.RootNode, **kwargs: Any) -> Any:
             assert "symtable" in kwargs
 
     with pytest.raises(AssertionError, match="'symtable'"):
         BareVisitor().visit(node_with_symbol_table)
 
     class ExtendedVisitor(eve.traits.VisitorWithSymbolTableTrait):
-        def visit_Node(self, node: eve.concepts.TreeNode, **kwargs: Any) -> Any:
+        def visit_Node(self, node: eve.concepts.RootNode, **kwargs: Any) -> Any:
             assert "symtable" in kwargs
             assert "symbol_name" in kwargs["symtable"]
 

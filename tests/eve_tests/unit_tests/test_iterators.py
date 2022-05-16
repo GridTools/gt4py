@@ -64,7 +64,7 @@ def bfs_ordered_tree():
 
 def test_iter_tree_pre(dfs_ordered_tree):
     values = [
-        value for value in eve.iterators.iter_tree_pre(dfs_ordered_tree) if isinstance(value, int)
+        value for value in eve.trees.iter_tree_pre(dfs_ordered_tree) if isinstance(value, int)
     ]
     assert values == list(sorted(values))
 
@@ -79,7 +79,7 @@ def test_iter_tree_pre(dfs_ordered_tree):
 
 def test_iter_tree_post(dfs_ordered_tree):
     values = [
-        value for value in eve.iterators.iter_tree_post(dfs_ordered_tree) if isinstance(value, int)
+        value for value in eve.trees.iter_tree_post(dfs_ordered_tree) if isinstance(value, int)
     ]
     assert values == list(sorted(values))
 
@@ -94,9 +94,7 @@ def test_iter_tree_post(dfs_ordered_tree):
 
 def test_iter_tree_levels(bfs_ordered_tree):
     values = [
-        value
-        for value in eve.iterators.iter_tree_levels(bfs_ordered_tree)
-        if isinstance(value, int)
+        value for value in eve.trees.iter_tree_levels(bfs_ordered_tree) if isinstance(value, int)
     ]
     assert values == list(sorted(values))
 
@@ -104,7 +102,7 @@ def test_iter_tree_levels(bfs_ordered_tree):
 @pytest.mark.parametrize("tree", [bfs_ordered_tree, dfs_ordered_tree])
 def test_iter_tree(tree):
     traversals = []
-    for order in eve.iterators.TraversalOrder:
+    for order in eve.trees.TraversalOrder:
         values = [value for value in eve.iter_tree(tree, order, with_keys=True)]
         assert all(isinstance(v, tuple) for v in values)
         traversals.append(values)

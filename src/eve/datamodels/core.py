@@ -1191,7 +1191,7 @@ def _make_datamodel(  # noqa: C901  # too complex but still readable and documen
 
     # TODO(egparedes): consider the use of the field_transformer hook available in attrs:
     #   https://www.attrs.org/en/stable/extending.html#automatic-field-transformation-and-modification
-    new_cls = attrs.define(  # type: ignore[attr-defined]  # attr.define is not visible for mypy
+    new_cls = attrs.define(
         auto_attribs=True,
         auto_detect=True,
         init=None,

@@ -37,7 +37,7 @@ import jinja2
 from mako import template as mako_tpl
 
 from . import exceptions, utils
-from .concepts import BaseNode, CollectionNode, LeafNode, Node, TreeNode
+from .concepts import BaseNode, CollectionNode, LeafNode, Node, RootNode
 from .extended_typing import (
     Any,
     Callable,
@@ -651,7 +651,7 @@ class TemplatedGenerator(NodeVisitor):
         ...
 
     @classmethod
-    def apply(cls, root: TreeNode, **kwargs: Any) -> Union[str, Collection[str]]:
+    def apply(cls, root: RootNode, **kwargs: Any) -> Union[str, Collection[str]]:
         """Public method to build a class instance and visit an IR node.
 
         Args:
@@ -667,14 +667,14 @@ class TemplatedGenerator(NodeVisitor):
         return cls().visit(root, **kwargs)
 
     @classmethod
-    def generic_dump(cls, node: TreeNode, **kwargs: Any) -> str:
+    def generic_dump(cls, node: RootNode, **kwargs: Any) -> str:
         """Class-specific ``dump()`` function for primitive types.
 
         This class could be redefined in the subclasses.
         """
         return str(node)
 
-    def generic_visit(self, node: TreeNode, **kwargs: Any) -> Union[str, Collection[str]]:
+    def generic_visit(self, node: RootNode, **kwargs: Any) -> Union[str, Collection[str]]:
         if isinstance(node, BaseNode):
             template, key = self.get_template(node)
             if template:
@@ -704,7 +704,7 @@ class TemplatedGenerator(NodeVisitor):
 
         return self.generic_dump(node, **kwargs)
 
-    def get_template(self, node: TreeNode) -> Tuple[Optional[Template], Optional[str]]:
+    def get_template(self, node: RootNode) -> Tuple[Optional[Template], Optional[str]]:
         """Get a template for a node instance (see class documentation)."""
         template: Optional[Template] = None
         template_key = None
