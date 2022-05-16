@@ -69,7 +69,9 @@ def are_broadcast_compatible(left: TypeInfo, right: TypeInfo) -> bool:
             start_index = bigger_dims.index(smaller_dims[0])
             end_index = bigger_dims.index(smaller_dims[-1])
             if smaller_dims != bigger_dims[start_index : end_index + 1]:
-                return True
+                return False
+        else:
+            return False
     return left.dtype == right.dtype
 
 
