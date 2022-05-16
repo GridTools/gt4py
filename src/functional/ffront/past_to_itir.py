@@ -13,7 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 from typing import Union
 
-from eve import NodeTranslator, SymbolTableTrait
+from eve import NodeTranslator, traits
 from functional.common import GTTypeError
 from functional.ffront import common_types, program_ast as past
 from functional.iterator import ir as itir
@@ -23,7 +23,7 @@ def _size_arg_from_field(field_name: str, dim: int) -> str:
     return f"__{field_name}_size_{dim}"
 
 
-class ProgramLowering(NodeTranslator):
+class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
     """
     Lower Program AST (PAST) to Iterator IR (ITIR).
 
@@ -57,8 +57,6 @@ class ProgramLowering(NodeTranslator):
     >>> lowered.params
     [Sym(id='inp'), Sym(id='out'), Sym(id='__inp_size_0'), Sym(id='__out_size_0')]
     """
-
-    contexts = (SymbolTableTrait.symtable_merger,)
 
     @classmethod
     def apply(

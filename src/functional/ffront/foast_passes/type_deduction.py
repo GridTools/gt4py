@@ -14,7 +14,7 @@
 from typing import Any, Optional
 
 import functional.ffront.field_operator_ast as foast
-from eve import NodeTranslator, SymbolTableTrait
+from eve import NodeTranslator, traits
 from functional.common import GTSyntaxError
 from functional.ffront import common_types as ct
 from functional.ffront.type_info import GenericDimensions, TypeInfo, is_complete_symbol_type
@@ -109,7 +109,7 @@ def boolified_typeinfo(typeinfo: TypeInfo):
     return TypeInfo(type_class(**kwargs))
 
 
-class FieldOperatorTypeDeduction(NodeTranslator):
+class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
     """
     Deduce and check types of FOAST expressions and symbols.
 
@@ -133,8 +133,6 @@ class FieldOperatorTypeDeduction(NodeTranslator):
     >>> assert typed_fieldop.body[0].value.type == ct.FieldType(dtype=ct.ScalarType(
     ...     kind=ct.ScalarKind.FLOAT64), dims=Ellipsis)
     """
-
-    contexts = (SymbolTableTrait.symtable_merger,)  # type: ignore  # TODO(ricoh): check if the SymbolTableTrait.symtable_merger annotation is correct.
 
     @classmethod
     def apply(cls, node: foast.FieldOperator) -> foast.FieldOperator:
