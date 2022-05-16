@@ -385,7 +385,7 @@ def datamodel(  # noqa: F811  # redefinion of unused symbol
         )
 
 
-frozenmodel = functools.partial(datamodel, frozen=True)
+frozenmodel: Callable = functools.partial(datamodel, frozen=True)
 """Data Model definition function using ``frozen=True``."""
 
 frozen_model = frozenmodel
