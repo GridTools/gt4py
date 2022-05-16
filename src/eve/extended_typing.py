@@ -118,19 +118,9 @@ def __dir__() -> List[str]:
     return self_func.__cached_dir
 
 
+_T = TypeVar("_T")
+
 # Common type aliases
-_T_co = TypeVar("_T_co", covariant=True)
-FrozenList: TypeAlias = Tuple[_T_co, ...]
-
-_T_contra = TypeVar("_T_contra", contravariant=True)
-if _sys.version_info >= (3, 9):
-    FrozenDict: TypeAlias = _frozendict.frozendict[_T_contra, _T_co]
-else:
-
-    class FrozenDict(_frozendict.frozendict, Generic[_T_contra, _T_co]):  # type: ignore[no-redef]  # mypy consider this a redefinition
-        ...
-
-
 NoArgsCallable = Callable[[], Any]
 
 
@@ -152,10 +142,11 @@ else:
 TypeAnnotation = Union[ForwardRef, SolvedTypeAnnotation]
 SourceTypeAnnotation = Union[str, TypeAnnotation]
 
-StdGenericAliasType: Final[Type] = (
-    _types.GenericAlias if _sys.version_info >= (3, 9) else _typing._GenericAlias  # type: ignore[attr-defined]  # _GenericAlias is not exported in stub
-)
+StdGenericAliasType: Final[Type] = type(List[int])
 
+if _sys.version_info >= (3, 9):
+    if TYPE_CHECKING:
+        StdGenericAlias: TypeAlias = _types.GenericAlias
 
 _TypingSpecialFormType: Final[Type] = _typing._SpecialForm
 _TypingGenericAliasType: Final[Type] = (
@@ -233,7 +224,9 @@ else:
         return isinstance(obj, type)
 
 
-_T = TypeVar("_T")
+def has_type_parameters(cls: Type) -> bool:
+    """Return ``True`` if obj is a generic class with type parameters."""
+    return issubclass(cls, Generic) and len(getattr(cls, "__parameters__", [])) > 0  # type: ignore[arg-type]  # Generic not considered as a class
 
 
 def get_actual_type(obj: _T) -> Type[_T]:
@@ -540,3 +533,10 @@ def infer_type(  # noqa: C901  # function is complex but well organized in indep
             return Callable
 
     return type(value)
+
+
+# TODO(egparedes): traversing a typing definition is an operation needed in several places
+#   but it currently requires custom and cumbersome code due to the messy implementation details
+#   in the standard library. Ideally, this code could be replaced by translating it once to a
+#   custom "typing tree" data structure which could be then traversed in a generic way.
+#

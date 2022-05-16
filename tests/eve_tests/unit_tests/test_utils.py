@@ -20,10 +20,9 @@ import hashlib
 import string
 from typing import Any
 
-import pydantic
 import pytest
 
-import eve.utils
+import eve
 from eve.utils import XIterable
 
 
@@ -82,7 +81,7 @@ def test_register_subclasses():
     )
 
 
-class ModelClass(pydantic.BaseModel):
+class ModelClass(eve.datamodels.DataModel):
     data: Any
 
 
@@ -142,11 +141,11 @@ def unique_data_items(request):
 
 def test_noninstantiable_class():
     @eve.utils.noninstantiable
-    class NonInstantiableClass(pydantic.BaseModel):
+    class NonInstantiableClass(eve.datamodels.DataModel):
         param: int
 
     with pytest.raises(
-        TypeError, match="Trying to instantiate `NonInstantiableClass` non-instantiable class"
+        TypeError, match="Trying to instantiate 'NonInstantiableClass' non-instantiable class"
     ):
         NonInstantiableClass(param=0)
 

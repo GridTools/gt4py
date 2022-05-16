@@ -320,11 +320,15 @@ _T = TypeVar("_T")
 
 
 def noninstantiable(cls: Type[_T]) -> Type[_T]:
+    """Make a class without abstract method non-instantiable (subclasses should be instantiable)."""
+    if not isinstance(cls, type):
+        raise ValueError(f"Non-type value ({cls}) passed to 'noninstantiable()' class decorator.")
+
     original_init = cls.__init__
 
     def _noninstantiable_init(self: _T, *args: Any, **kwargs: Any) -> None:
         if self.__class__ is cls:
-            raise TypeError(f"Trying to instantiate `{cls.__name__}` non-instantiable class.")
+            raise TypeError(f"Trying to instantiate '{cls.__name__}' non-instantiable class.")
         else:
             original_init(self, *args, **kwargs)
 
@@ -471,8 +475,54 @@ class CaseStyleConverter:
         return name.split("-")
 
 
-class FrozenNamespace(types.SimpleNamespace, Generic[T]):
-    """An immutable `types.SimpleNamespace`-like class.
+class Namespace(types.SimpleNamespace, Generic[T]):
+    """A `types.SimpleNamespace`-like class with additional dict-like interface.
+
+    Examples:
+        >>> ns = Namespace(a=10, b="hello")
+        >>> ns.a
+        10
+        >>> ns.b = 20
+        >>> ns.b
+        20
+
+        >>> ns = Namespace(a=10, b="hello")
+        >>> list(ns.keys())
+        ['a', 'b']
+
+        >>> list(ns.values())
+        [10, 'hello']
+
+        >>> list(ns.items())
+        [('a', 10), ('b', 'hello')]
+
+    """
+
+    def __contains__(self, key: str) -> bool:
+        return key in self.__dict__
+
+    def items(self) -> Iterable[Tuple[str, T]]:
+        return self.__dict__.items()
+
+    def keys(self) -> Iterable[str]:
+        return self.__dict__.keys()
+
+    def values(self) -> Iterable[T]:
+        return self.__dict__.values()
+
+    def reset(self, data: Optional[Dict[str, Any]] = None) -> None:
+        self.__dict__.clear()
+        if data:
+            self.__dict__.update(data)
+
+    def as_dict(self) -> Dict[str, T]:
+        return {**self.__dict__}
+
+    asdict = as_dict
+
+
+class FrozenNamespace(Namespace[T]):
+    """An immutable version of :class:`Namespace`.
 
     Examples:
         >>> ns = FrozenNamespace(a=10, b="hello")
@@ -486,22 +536,27 @@ class FrozenNamespace(types.SimpleNamespace, Generic[T]):
         >>> ns = FrozenNamespace(a=10, b="hello")
         >>> list(ns.items())
         [('a', 10), ('b', 'hello')]
+
+        >>> ns = FrozenNamespace(a=10, b="hello")
+        >>> hashed = hash(ns)
+        >>> assert isinstance(hashed, int)
+        >>> hashed == hash(ns) == ns.__cached_hash_value__
+        True
     """
 
-    def __setattr__(self, _name: str, _value: T) -> None:
+    __slots__ = "__cached_hash_value__"  # This slot is used to avoid polluting the namespace
+
+    def __setattr__(self, __name: str, __value: Any) -> None:
+        raise TypeError(f"Trying to modify immutable '{self.__class__.__name__}' instance.")
+
+    def __delattr__(self, __name: str) -> None:
         raise TypeError(f"Trying to modify immutable '{self.__class__.__name__}' instance.")
 
     def __hash__(self) -> int:  # type: ignore[override]
-        return hash(tuple(self.__dict__.items()))
+        if not hasattr(self, "__cached_hash_value__"):
+            object.__setattr__(self, "__cached_hash_value__", hash(tuple(self.__dict__.items())))
 
-    def items(self) -> Iterable[Tuple[str, T]]:
-        return self.__dict__.items()
-
-    def keys(self) -> Iterable[str]:
-        return self.__dict__.keys()
-
-    def values(self) -> Iterable[T]:
-        return self.__dict__.values()
+        return self.__cached_hash_value__
 
 
 @dataclasses.dataclass
@@ -524,10 +579,10 @@ class UIDGenerator:
         else dataclasses.field(default=None)
     )
 
-    #: Constantly increasing counter for generation of sequential unique ids
     _counter: Iterator[int] = dataclasses.field(
         default_factory=functools.partial(itertools.count, 1), init=False
     )
+    """Constantly increasing counter for generation of sequential unique ids."""
 
     def random_id(self, *, prefix: Optional[str] = None, width: Optional[int] = None) -> str:
         """Generate a random globally unique id."""
@@ -579,8 +634,10 @@ UIDs = UIDGenerator()
 S = TypeVar("S")
 K = TypeVar("K")
 
+P = ParamSpec("P")
 
-def as_xiter(iterator_func: Callable[..., Iterator[T]]) -> Callable[..., XIterable[T]]:
+
+def as_xiter(iterator_func: Callable[P, Iterable[T]]) -> Callable[P, XIterable[T]]:
     """Wrap the provided callable to convert its output in a :class:`XIterable`."""
 
     @functools.wraps(iterator_func)
