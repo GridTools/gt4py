@@ -57,9 +57,9 @@ class _GTIRUpcasting(NodeTranslator):
         # See https://github.com/GridTools/gt4py/issues/742 for more details
         if node.op == ArithmeticOperator.DIV:
             if left.dtype.isinteger():
-                left = _upcast_node(DataType.FLOAT32, self.visit(node.left))
+                left = _upcast_node(DataType.FLOAT64, self.visit(node.left))
             if right.dtype.isinteger():
-                right = _upcast_node(DataType.FLOAT32, self.visit(node.right))
+                right = _upcast_node(DataType.FLOAT64, self.visit(node.right))
         return _update_node(node, {"left": left, "right": right})
 
     def visit_TernaryOp(self, node: gtir.TernaryOp, **kwargs: Any) -> gtir.TernaryOp:
