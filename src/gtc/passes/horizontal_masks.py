@@ -28,6 +28,7 @@ def _overlap_along_axis(
         level=common.LevelMarker.START, offset=extent[0]
     )
     clamped_end = interval.end or common.AxisBound(level=common.LevelMarker.END, offset=extent[1])
+
     if clamped_start.level == common.LevelMarker.START:
         start_diff = extent[0] - clamped_start.offset
     else:
