@@ -1,5 +1,5 @@
 from functional.iterator import ir
-from functional.iterator.transforms.collect_shifts import CollectShifts
+from functional.iterator.transforms.collect_shifts import ALL_NEIGHBORS, CollectShifts
 
 
 def test_trivial():
@@ -36,7 +36,7 @@ def test_reduce():
         ],
     )
 
-    expected = {"x": [(ir.OffsetLiteral(value="V2E"), CollectShifts.ALL_NEIGHBORS)]}
+    expected = {"x": [(ir.OffsetLiteral(value="V2E"), ALL_NEIGHBORS)]}
 
     actual = dict()
     CollectShifts().visit(testee, shifts=actual)

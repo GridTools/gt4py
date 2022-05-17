@@ -1,10 +1,9 @@
 import enum
-from typing import Union
+from typing import ClassVar, Union
 
 from eve import Node
-from eve.traits import SymbolName, SymbolTableTrait
+from eve.traits import SymbolName, SymbolTableTrait, ValidatedSymbolTableTrait
 from eve.type_definitions import StrEnum, SymbolRef
-from functional.iterator.util.sym_validation import validate_symbol_refs
 
 
 @enum.unique
@@ -104,7 +103,18 @@ class TemporaryAllocation(Node):
     # TODO: domain: ??
 
 
-class FencilDefinition(Node, SymbolTableTrait):
+BUILTINS = {
+    "deref",
+    "shift",
+    "make_tuple",
+    "tuple_get",
+    "can_deref",
+    "domain",  # TODO(havogt) decide if domain is part of IR
+    "named_range",
+}
+
+
+class FencilDefinition(Node, ValidatedSymbolTableTrait):
     id: SymbolName  # noqa: A003
     params: list[Sym]
     function_definitions: list[Union[FunctionDefinition, ScanPassDefinition]]
@@ -113,17 +123,4 @@ class FencilDefinition(Node, SymbolTableTrait):
     grid_type: GridType
     temporaries: list[TemporaryAllocation]
 
-    builtin_functions = list(
-        Sym(id=name)
-        for name in [
-            "deref",
-            "shift",
-            "make_tuple",
-            "tuple_get",
-            "can_deref",
-            "domain",  # TODO(havogt) decide if domain is part of IR
-            "named_range",
-        ]
-    )
-
-    _validate_symbol_refs = validate_symbol_refs()
+    _NODE_SYMBOLS_: ClassVar = [Sym(id=name) for name in BUILTINS]

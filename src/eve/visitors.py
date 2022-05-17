@@ -20,7 +20,6 @@
 from __future__ import annotations
 
 import collections.abc
-import contextlib
 import copy
 import operator
 
@@ -29,14 +28,12 @@ from .concepts import NOTHING
 from .extended_typing import (
     Any,
     Callable,
-    ClassVar,
     Collection,
     ContextManager,
     Dict,
     Iterable,
     MutableSequence,
     MutableSet,
-    Optional,
     Tuple,
     Union,
 )
@@ -71,10 +68,11 @@ class NodeVisitor:
         3. ``self.generic_visit()``.
 
     This dispatching mechanism is implemented in the main :meth:`visit`
-    method and can be overriden in subclasses. Additionally, a class can
-    define a list of context handlers to be applied before the actual visit
-    to customize the context. Each context receives the visitor instance,
-    the node instance, and the keywords arguments of the call.
+    method and can be overriden in subclasses. Therefore, a simple way to extend
+    the behavior of a visitor is by inheriting from lightweight `trait` classes
+    with a custom ``visit()`` method, which wraps the call to the superclass'
+    ``visit()`` and adds extra pre and post visit logic. Check :mod:`eve.traits`
+    for further information.
 
     Note that return values are not forwarded to the caller in the default
     :meth:`generic_visit` implementation. If you want to return a value from
@@ -112,8 +110,6 @@ class NodeVisitor:
 
     """
 
-    contexts: ClassVar[Optional[Tuple[ContextCallable, ...]]] = None
-
     def visit(self, node: concepts.TreeNode, **kwargs: Any) -> Any:
         visitor = self.generic_visit
 
@@ -130,13 +126,7 @@ class NodeVisitor:
                 if node_class is concepts.BaseNode:
                     break
 
-        if ctxs := type(self).contexts:
-            with contextlib.ExitStack() as stack:
-                for ctx in ctxs:
-                    stack.enter_context(ctx(self, node, kwargs))
-                return visitor(node, **kwargs)
-        else:
-            return visitor(node, **kwargs)
+        return visitor(node, **kwargs)
 
     def generic_visit(self, node: concepts.TreeNode, **kwargs: Any) -> Any:
         for child in iterators.generic_iter_children(node):
