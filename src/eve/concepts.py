@@ -23,7 +23,7 @@ import ast
 import re
 
 from . import datamodels, exceptions, extended_typing as xtyping, trees, type_definitions, utils
-from .datamodels import validators as dm_validators
+from .datamodels import validators as _validators
 from .extended_typing import (
     Any,
     Callable,
@@ -68,15 +68,11 @@ class SymbolRef(ConstrainedStr, regex=_SYMBOL_NAME_RE):
 class SourceLocation:
     """Source code location (line, column, source)."""
 
-    line: int = datamodels.field(validator=dm_validators.ge(1))
-    column: int = datamodels.field(validator=dm_validators.ge(1))
+    line: int = datamodels.field(validator=_validators.ge(1))
+    column: int = datamodels.field(validator=_validators.ge(1))
     source: str
-    end_line: Optional[int] = datamodels.field(
-        validator=dm_validators.optional(dm_validators.ge(1))
-    )
-    end_column: Optional[int] = datamodels.field(
-        validator=dm_validators.optional(dm_validators.ge(1))
-    )
+    end_line: Optional[int] = datamodels.field(validator=_validators.optional(_validators.ge(1)))
+    end_column: Optional[int] = datamodels.field(validator=_validators.optional(_validators.ge(1)))
 
     @classmethod
     def from_AST(cls, ast_node: ast.AST, source: Optional[str] = None) -> SourceLocation:
@@ -128,7 +124,7 @@ class SourceLocation:
 class SourceLocationGroup:
     """A group of merged source code locations (with optional info)."""
 
-    locations: Tuple[SourceLocation, ...] = datamodels.field(validator=dm_validators.non_empty())
+    locations: Tuple[SourceLocation, ...] = datamodels.field(validator=_validators.non_empty())
     context: Optional[Union[str, Tuple[str, ...]]]
 
     def __init__(
@@ -262,7 +258,7 @@ class FrozenNode(Node, frozen=True):
     ...
 
 
-class GenericNode(datamodels.GenericDataModel, Node):
+class GenericNode(datamodels.GenericDataModel, Node, kw_only=True):
     pass
 
 

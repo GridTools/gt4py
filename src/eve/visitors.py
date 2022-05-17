@@ -183,42 +183,39 @@ class NodeTranslator(NodeVisitor):
 
     """
 
-    _memo_dict_: Dict[int, Any]
-
     def generic_visit(self, node: concepts.RootNode, **kwargs: Any) -> Any:
-        if isinstance(node, concepts.BaseNode):
-            return node.__class__(  # type: ignore
-                **{key: value for key, value in node.iter_impl_fields()},
+
+        memo = kwargs.get("__memo__", None)
+
+        if isinstance(node, concepts.Node):
+            new_node = node.__class__(  # type: ignore
                 **{
-                    key: processed_value
-                    for key, value in node.iter_children()
-                    if (processed_value := self.visit(value, **kwargs)) is not NOTHING
+                    name: new_child
+                    for name, child in node.iter_children_items()
+                    if (new_child := self.visit(child, **kwargs)) is not NOTHING
                 },
             )
+            new_node.annex.reset(copy.deepcopy(node.annex.__dict__, memo=memo))
+            return new_node
 
-        elif isinstance(node, (list, tuple, set, collections.abc.Set)) or (
+        if isinstance(node, (list, tuple, set, collections.abc.Set)) or (
             isinstance(node, collections.abc.Sequence) and not isinstance(node, (str, bytes))
         ):
             # Sequence or set: create a new container instance with the new values
             return node.__class__(  # type: ignore
-                processed_value
-                for value in node
-                if (processed_value := self.visit(value, **kwargs)) is not NOTHING  # type: ignore[no-redef]
+                new_child
+                for child in trees.iter_children_values(node)
+                if (new_child := self.visit(child, **kwargs)) is not NOTHING
             )
 
-        elif isinstance(node, (dict, collections.abc.Mapping)):
+        if isinstance(node, (dict, collections.abc.Mapping)):
             # Mapping: create a new mapping instance with the new values
             return node.__class__(  # type: ignore[call-arg]
                 {
-                    key: processed_value
-                    for key, value in node.items()
-                    if (processed_value := self.visit(value, **kwargs)) is not NOTHING  # type: ignore[no-redef]
+                    name: new_child
+                    for name, child in trees.iter_children_items(node)
+                    if (new_child := self.visit(child, **kwargs)) is not NOTHING
                 }
             )
 
-        else:
-            if not hasattr(self, "_memo_dict_"):
-                self._memo_dict_ = {}
-            result = copy.deepcopy(node, memo=self._memo_dict_)
-
-        return result
+        return copy.deepcopy(node, memo=memo)

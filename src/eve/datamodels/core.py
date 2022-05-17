@@ -1050,76 +1050,80 @@ def _make_datamodel(  # noqa: C901  # too complex but still readable and documen
     # iteration, since the resolved annotations also contain superclasses' annotations
     for key in annotations:
         type_hint = annotations[key] = resolved_annotations[key]
-        if xtyping.get_origin(type_hint) is not ClassVar:
-            if xtyping.get_origin(annotations_with_extras[key]) == xtyping.Annotated:
-                _, *type_extras = xtyping.get_args(annotations_with_extras[key])
-            else:
-                type_extras = []
 
-            coerce_field = coerce or _COERCED_TYPE_TAG in type_extras
-            qualified_field_name = f"{cls.__name__}.{key}"
+        # Skip members annotated as class variables
+        if type_hint is ClassVar or xtyping.get_origin(type_hint) is ClassVar:
+            continue
 
-            # Create type validator if validation is enabled
-            if type_validation_factory is None or _UNCHECKED_TYPE_TAG in type_extras:
-                type_validator = None
-            else:
-                type_validator = type_validation_factory(type_hint, qualified_field_name)
+        if xtyping.get_origin(annotations_with_extras[key]) == xtyping.Annotated:
+            _, *type_extras = xtyping.get_args(annotations_with_extras[key])
+        else:
+            type_extras = []
 
-            # Declare an attrs.field() for this field with the right options.
-            # There are different cases depending on the current value of the attribute in the class dict.
-            attr_value_in_cls = cls.__dict__.get(key, NOTHING)
-            if isinstance(attr_value_in_cls, attr._make._CountingAttr):  # type: ignore[attr-defined]  # _make is private
-                # A field() function has already been used to customize the definition of the field.
-                # In this case, we need to:
-                #  - prepend the type validator to the list of provided validators (if any)
-                #  - add the converter if the field needs to be converted and another custom converter
-                #      has not been defined
-                attr_value_in_cls._validator = (
-                    type_validator
-                    if attr_value_in_cls._validator is None
-                    else attr._make.and_(type_validator, attr_value_in_cls._validator)  # type: ignore[attr-defined]  # attr._make is not visible for mypy
-                )
-                coerce_field = coerce_field or attr_value_in_cls.converter == "coerce"
-                if coerce_field:
-                    if attr_value_in_cls.converter in (None, "coerce"):
-                        attr_value_in_cls.converter = _make_type_converter(
-                            type_hint, qualified_field_name
-                        )
-                    else:
-                        raise TypeError(
-                            f"Impossible to add automatic type converter to field '{qualified_field_name}' "
-                            "which already defines a custom converter."
-                        )
+        coerce_field = coerce or _COERCED_TYPE_TAG in type_extras
+        qualified_field_name = f"{cls.__name__}.{key}"
 
-            else:
-                # Create field converter if automatic coertion is enabled
-                converter: TypeConverter = cast(
-                    TypeConverter,
-                    _make_type_converter(type_hint, qualified_field_name) if coerce_field else None,
-                )
-                if attr_value_in_cls is NOTHING:
-                    # The field has no definition in the class dict, it's only an annotation
-                    setattr(
-                        cls,
-                        key,
-                        attrs.field(converter=converter, validator=type_validator),
+        # Create type validator if validation is enabled
+        if type_validation_factory is None or _UNCHECKED_TYPE_TAG in type_extras:
+            type_validator = None
+        else:
+            type_validator = type_validation_factory(type_hint, qualified_field_name)
+
+        # Declare an attrs.field() for this field with the right options.
+        # There are different cases depending on the current value of the attribute in the class dict.
+        attr_value_in_cls = cls.__dict__.get(key, NOTHING)
+        if isinstance(attr_value_in_cls, attr._make._CountingAttr):  # type: ignore[attr-defined]  # _make is private
+            # A field() function has already been used to customize the definition of the field.
+            # In this case, we need to:
+            #  - prepend the type validator to the list of provided validators (if any)
+            #  - add the converter if the field needs to be converted and another custom converter
+            #      has not been defined
+            attr_value_in_cls._validator = (
+                type_validator
+                if attr_value_in_cls._validator is None
+                else attr._make.and_(type_validator, attr_value_in_cls._validator)  # type: ignore[attr-defined]  # attr._make is not visible for mypy
+            )
+            coerce_field = coerce_field or attr_value_in_cls.converter == "coerce"
+            if coerce_field:
+                if attr_value_in_cls.converter in (None, "coerce"):
+                    attr_value_in_cls.converter = _make_type_converter(
+                        type_hint, qualified_field_name
                     )
-
                 else:
-                    # The field contains the default value in the class dict
-                    if isinstance(attr_value_in_cls, _KNOWN_MUTABLE_TYPES):
-                        warnings.warn(
-                            f"'{attr_value_in_cls.__class__.__name__}' value used as default in '{cls.__name__}.{key}'.\n"
-                            "Mutable types should not defbe normally used as field defaults (use 'default_factory' instead).",
-                            stacklevel=_stacklevel_offset + 2,
-                        )
-                    setattr(
-                        cls,
-                        key,
-                        attrs.field(
-                            converter=converter, default=attr_value_in_cls, validator=type_validator
-                        ),
+                    raise TypeError(
+                        f"Impossible to add automatic type converter to field '{qualified_field_name}' "
+                        "which already defines a custom converter."
                     )
+
+        else:
+            # Create field converter if automatic coertion is enabled
+            converter: TypeConverter = cast(
+                TypeConverter,
+                _make_type_converter(type_hint, qualified_field_name) if coerce_field else None,
+            )
+            if attr_value_in_cls is NOTHING:
+                # The field has no definition in the class dict, it's only an annotation
+                setattr(
+                    cls,
+                    key,
+                    attrs.field(converter=converter, validator=type_validator),
+                )
+
+            else:
+                # The field contains the default value in the class dict
+                if isinstance(attr_value_in_cls, _KNOWN_MUTABLE_TYPES):
+                    warnings.warn(
+                        f"'{attr_value_in_cls.__class__.__name__}' value used as default in '{cls.__name__}.{key}'.\n"
+                        "Mutable types should not defbe normally used as field defaults (use 'default_factory' instead).",
+                        stacklevel=_stacklevel_offset + 2,
+                    )
+                setattr(
+                    cls,
+                    key,
+                    attrs.field(
+                        converter=converter, default=attr_value_in_cls, validator=type_validator
+                    ),
+                )
 
     # All fields should be annotated with type hints
     num_attrs = 0
