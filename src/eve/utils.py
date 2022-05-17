@@ -383,7 +383,7 @@ def pprint_ddiff(
     new: Any,
     *,
     pprint_opts: Optional[Dict[str, Any]] = None,
-    **kwargs,
+    **kwargs: Any,
 ) -> None:
     pprint_opts = pprint_opts or {"indent": 2}
     pprint.pprint(deepdiff.DeepDiff(old, new, **kwargs), **pprint_opts)
@@ -394,7 +394,7 @@ def pprint_diff(
     new: Any,
     *,
     pprint_kwargs: Optional[Dict[str, Any]] = None,
-    **kwargs,
+    **kwargs: Any,
 ) -> None:
     pprint_kwargs = pprint_kwargs or {"indent": 2}
     pprint.pprint(deepdiff.DeepDiff(old, new, **kwargs), **pprint_kwargs)

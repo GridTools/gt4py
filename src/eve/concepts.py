@@ -97,7 +97,7 @@ class SourceLocation:
         end_column: Optional[int] = None,
     ) -> None:
         assert end_column is None or end_line is not None
-        self.__auto_init__(
+        self.__auto_init__(  # type: ignore[attr-defined]  # __auto_init__ added dynamically
             line=line, column=column, source=source, end_line=end_line, end_column=end_column
         )
 
@@ -123,7 +123,7 @@ class SourceLocationGroup:
     def __init__(
         self, *locations: SourceLocation, context: Optional[Union[str, Tuple[str, ...]]] = None
     ) -> None:
-        self.__auto_init__(locations=locations, context=context)
+        self.__auto_init__(locations=locations, context=context)  # type: ignore[attr-defined]  # __auto_init__ added dynamically
 
     def __str__(self) -> str:
         locs = ", ".join(str(loc) for loc in self.locations)
@@ -201,7 +201,7 @@ class Node(datamodels.DataModel, trees.Tree, kw_only=True):
     def annex(self) -> utils.Namespace:
         if not hasattr(self, "__node_annex__"):
             object.__setattr__(self, "__node_annex__", utils.Namespace())
-        return self.__node_annex__
+        return self.__node_annex__  # type: ignore[attr-defined]  # __node_annex__ added dynamically
 
     def iter_children_values(self) -> Iterable:
         for name in self.__datamodel_fields__.keys():

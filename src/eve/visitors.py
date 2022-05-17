@@ -24,7 +24,7 @@ import collections.abc
 import copy
 
 from . import concepts, trees
-from .concepts import NOTHING
+from .type_definitions import NOTHING
 from .extended_typing import Any, Protocol, TypeVar
 
 

@@ -26,7 +26,7 @@ from enum import Enum as Enum, IntEnum as IntEnum  # noqa: F401  # imported but 
 from boltons.typeutils import classproperty as classproperty  # noqa: F401
 from frozendict import frozendict as _frozendict  # noqa: F401
 
-from .extended_typing import ClassVar, Generic, NoReturn, Optional, TypeAlias, TypeVar, final
+from .extended_typing import Any, ClassVar, Generic, NoReturn, Optional, TypeAlias, TypeVar, final
 
 
 # Frozen collections
@@ -96,7 +96,7 @@ class ConstrainedStr(str):
             )
         return super().__new__(cls, value)
 
-    def __init_subclass__(cls, *, regex: Optional[re.Pattern] = None, **kwargs) -> None:
+    def __init_subclass__(cls, *, regex: Optional[re.Pattern] = None, **kwargs: Any) -> None:
         super().__init_subclass__(**kwargs)
         if regex is None and "regex" in cls.__dict__:
             # regex has been defined as a class var either in this class or in the parents
