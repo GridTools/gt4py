@@ -91,7 +91,7 @@ class ToIrTransformer(lark.Transformer):
     def OFFSET_LITERAL(self, value: lark.Token) -> ir.OffsetLiteral:
         v: Union[int, str] = value.value[:-1]
         try:
-            v = int(value)
+            v = int(v)
         except ValueError:
             pass
         return ir.OffsetLiteral(value=v)
@@ -149,7 +149,7 @@ class ToIrTransformer(lark.Transformer):
         return ir.FunCall(fun=ir.SymRef(id="tuple_get"), args=[idx, tup])
 
     def make_tuple(self, *args: ir.Expr) -> ir.FunCall:
-        return ir.FunCall(fun=ir.SymRef(id="make_tuple"), args=args)
+        return ir.FunCall(fun=ir.SymRef(id="make_tuple"), args=list(args))
 
     def named_range(self, name: ir.AxisLiteral, start: ir.Expr, end: ir.Expr) -> ir.FunCall:
         return ir.FunCall(fun=ir.SymRef(id="named_range"), args=[name, start, end])

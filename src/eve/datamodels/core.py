@@ -218,7 +218,7 @@ def field_type_validator_factory(
         else:
             simple_validator = factory(type_annotation, name, required=True)
             return ValidatorAdapter(
-                simple_validator, f"{getattr(simple_validator,'__name__', 'A')} type validator"
+                simple_validator, f"{getattr(simple_validator,'__name__', 'TypeValidator')}"
             )
 
     return _field_type_validator_factory
@@ -955,7 +955,7 @@ def _make_data_model_class_getitem() -> classmethod:
         """
         type_args: Tuple[Type] = args if isinstance(args, tuple) else (args,)
         concrete_cls: Type[DataModelT] = concretize(cls, *type_args)
-        return concrete_cls
+        return xtyping.StdGenericAliasType(concrete_cls, type_args)
 
     return classmethod(__class_getitem__)
 
@@ -1327,8 +1327,8 @@ def _make_concrete_with_cache(
     assert concrete_cls.__module__ == module or not module
 
     if MODEL_FIELD_DEFINITIONS_ATTR not in concrete_cls.__dict__:
-        # If original model does not inherit from GenericModel,
-        # _make_datamodel() hasn't been called yet, so call it now
+        # If original model does not inherit from GenericDataModel,
+        # _make_datamodel() hasn't been called automatically, so call it now
         params = getattr(datamodel_cls, MODEL_PARAM_DEFINITIONS_ATTR)
         concrete_cls = _make_datamodel(
             concrete_cls,

@@ -34,7 +34,8 @@ class SymbolName(eve.SymbolName):
 SymbolT = TypeVar("SymbolT", bound=common_types.SymbolType)
 
 
-class Symbol(eve.GenericNode, LocatedNode, Generic[SymbolT]):
+# class Symbol(eve.GenericNode, LocatedNode, Generic[SymbolT]):
+class Symbol(LocatedNode, Generic[SymbolT]):
     id: Coerced[SymbolName]  # noqa: A003
     type: Union[SymbolT, common_types.DeferredSymbolType]  # noqa A003
     namespace: common_types.Namespace = common_types.Namespace(common_types.Namespace.LOCAL)
@@ -44,13 +45,13 @@ DataTypeT = TypeVar("DataTypeT", bound=common_types.DataType)
 DataSymbol = Symbol[DataTypeT]
 
 FieldTypeT = TypeVar("FieldTypeT", bound=common_types.FieldType)
-FieldSymbol = Symbol[FieldTypeT]
+FieldSymbol = DataSymbol[FieldTypeT]
 
 ScalarTypeT = TypeVar("ScalarTypeT", bound=common_types.ScalarType)
-ScalarSymbol = Symbol[ScalarTypeT]
+ScalarSymbol = DataSymbol[ScalarTypeT]
 
 TupleTypeT = TypeVar("TupleTypeT", bound=common_types.TupleType)
-TupleSymbol = Symbol[TupleTypeT]
+TupleSymbol = DataSymbol[TupleTypeT]
 
 
 class Expr(LocatedNode):
