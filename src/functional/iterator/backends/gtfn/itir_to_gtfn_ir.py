@@ -145,6 +145,6 @@ class GTFN_lowering(eve.NodeTranslator):
             params=self.visit(node.params),
             executions=self.visit(node.closures),
             grid_type=grid_type,
-            offset_declarations=self._collect_offsets(node),
+            offset_declarations=list(self._collect_offsets(node)),
             function_definitions=self.visit(node.function_definitions),
         )

@@ -88,6 +88,6 @@ class Stmt(LocatedNode):
 
 class Program(LocatedNode, SymbolTableTrait):
     id: Coerced[SymbolName]  # noqa: A003
-    params: list[Symbol[DataSymbol]]
+    params: list[DataSymbol]
     body: list[Call]
     captured_vars: list[Symbol]

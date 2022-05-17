@@ -372,7 +372,7 @@ class FieldOperator(GTCallable):
         )
 
         params_decl: list[past.Symbol] = [
-            past.Symbol(
+            past.DataSymbol(
                 id=UIDs.sequential_id(prefix="__sym"),
                 type=arg_type,
                 namespace=ct.Namespace.LOCAL,
@@ -381,7 +381,7 @@ class FieldOperator(GTCallable):
             for arg_type in type_.args
         ]
         params_ref = [past.Name(id=pdecl.id, location=loc) for pdecl in params_decl]
-        out_sym: past.Symbol = past.Symbol(
+        out_sym: past.Symbol = past.DataSymbol(
             id="out", type=type_.returns, namespace=ct.Namespace.LOCAL, location=loc
         )
         out_ref = past.Name(id="out", location=loc)
