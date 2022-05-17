@@ -1,31 +1,90 @@
-from typing import Dict, List
+import boltons.typeutils
 
 from eve import NodeVisitor
 from functional.iterator import ir
 
 
+ALL_NEIGHBORS = boltons.typeutils.make_sentinel("ALL_NEIGHBORS")
+
+
 class CollectShifts(NodeVisitor):
-    def visit_FunCall(self, node: ir.FunCall, *, shifts: Dict[str, List[tuple]]):
-        if isinstance(node.fun, ir.SymRef) and node.fun.id == "deref":
-            assert len(node.args) == 1
-            arg = node.args[0]
+    """Collects shifts applied to symbol references.
+
+    Fills the provided `shifts` keyword argument (of type `dict[str, list[tuple]]`)
+    with a list of offset tuples. E.g., if there is just `deref(x)` and a
+    `deref(shift(a, b)(x))` in the node tree, the result will be
+    `{"x": [(), (a, b)]}`.
+
+    For reductions, the special value `ALL_NEIGHBORS` is used. E.g,
+    `reduce(f, 0.0)(shift(V2E)(x))` will return `{"x": [(V2E, ALL_NEIGHBORS)]}`.
+
+    Limitations:
+    - Nested shift calls like `deref(shift(c, d)(shift(a, b)(x)))` are not supported.
+      That is, all shifts must be normalized (that is, `deref(shift(a, b, c, d)(x))`
+      works in the given example).
+    - Calls to lift and scan are not supported.
+    """
+
+    @staticmethod
+    def _as_deref(node: ir.FunCall):
+        if node.fun == ir.SymRef(id="deref"):
+            (arg,) = node.args
             if isinstance(arg, ir.SymRef):
-                # direct deref of a symbol: deref(sym)
-                shifts.setdefault(arg.id, []).append(())
-            elif (
-                isinstance(arg, ir.FunCall)
-                and isinstance(arg.fun, ir.FunCall)
-                and isinstance(arg.fun.fun, ir.SymRef)
-                and arg.fun.fun.id == "shift"
-                and isinstance(arg.args[0], ir.SymRef)
-            ):
-                # deref of a shifted symbol: deref(shift(...)(sym))
-                assert len(arg.args) == 1
-                sym = arg.args[0]
-                shift_args = arg.fun.args
-                shifts.setdefault(sym.id, []).append(tuple(shift_args))
-            else:
-                raise RuntimeError(f"Unexpected node: {node}")
-        elif isinstance(node.fun, ir.SymRef) and node.fun.id in ("lift", "scan"):
-            raise RuntimeError(f"Unsupported node: {node}")
-        return self.generic_visit(node, shifts=shifts)
+                return arg.id
+
+    @staticmethod
+    def _as_shift(node: ir.Expr):
+        if isinstance(node, ir.FunCall) and node.fun == ir.SymRef(id="shift"):
+            return tuple(node.args)
+
+    @classmethod
+    def _as_shift_call(cls, node: ir.Expr):
+        if (
+            isinstance(node, ir.FunCall)
+            and (offsets := cls._as_shift(node.fun))
+            and isinstance(sym := node.args[0], ir.SymRef)
+        ):
+            return sym.id, offsets
+
+    @classmethod
+    def _as_deref_shift(cls, node: ir.FunCall):
+        if node.fun == ir.SymRef(id="deref"):
+            (arg,) = node.args
+            if sym_and_offsets := cls._as_shift_call(arg):
+                return sym_and_offsets
+
+    @staticmethod
+    def _as_reduce(node: ir.FunCall):
+        if isinstance(node.fun, ir.FunCall) and node.fun.fun == ir.SymRef(id="reduce"):
+            assert len(node.fun.args) == 2
+            return node.args
+
+    def visit_FunCall(self, node: ir.FunCall, *, shifts: dict[str, list[tuple]]):
+        if sym_id := self._as_deref(node):
+            # direct deref of a symbol: deref(sym)
+            shifts.setdefault(sym_id, []).append(())
+            return
+        if sym_and_offsets := self._as_deref_shift(node):
+            # deref of a shifted symbol: deref(shift(...)(sym))
+            sym, offsets = sym_and_offsets
+            shifts.setdefault(sym, []).append(offsets)
+            return
+        if sym_and_offsets := self._as_shift_call(node):
+            # just shifting: shift(...)(sym)
+            # required to catch ‘underefed’ shifts in reduction calls
+            sym, offsets = sym_and_offsets
+            shifts.setdefault(sym, []).append(offsets)
+            return
+        if reduction_args := self._as_reduce(node):
+            # reduce(..., ...)(args...)
+            nested_shifts = dict[str, list[tuple]]()
+            self.visit(reduction_args, shifts=nested_shifts)
+            for sym, offset_list in nested_shifts.items():
+                for offsets in offset_list:
+                    shifts.setdefault(sym, []).append(offsets + (ALL_NEIGHBORS,))
+            return
+
+        if not isinstance(node.fun, ir.SymRef) or node.fun.id in ("lift", "scan"):
+            raise ValueError(f"Unsupported node: {node}")
+
+        self.generic_visit(node, shifts=shifts)
