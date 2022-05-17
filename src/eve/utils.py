@@ -27,6 +27,7 @@ import hashlib
 import itertools
 import operator
 import pickle
+import pprint
 import re
 import sys
 import types
@@ -34,6 +35,7 @@ import typing
 import uuid
 import warnings
 
+import deepdiff
 import xxhash
 from boltons.iterutils import (  # noqa: F401
     flatten as flatten,
@@ -371,6 +373,31 @@ def shash(*args: Any, hash_algorithm: Optional[Any] = None) -> str:
 
 
 AnyWordsIterable = Union[str, Iterable[str]]
+
+
+ddiff = deepdiff.DeepDiff
+
+
+def pprint_ddiff(
+    old: Any,
+    new: Any,
+    *,
+    pprint_opts: Optional[Dict[str, Any]] = None,
+    **kwargs,
+) -> None:
+    pprint_opts = pprint_opts or {"indent": 2}
+    pprint.pprint(deepdiff.DeepDiff(old, new, **kwargs), **pprint_opts)
+
+
+def pprint_diff(
+    old: Any,
+    new: Any,
+    *,
+    pprint_kwargs: Optional[Dict[str, Any]] = None,
+    **kwargs,
+) -> None:
+    pprint_kwargs = pprint_kwargs or {"indent": 2}
+    pprint.pprint(deepdiff.DeepDiff(old, new, **kwargs), **pprint_kwargs)
 
 
 class CaseStyleConverter:

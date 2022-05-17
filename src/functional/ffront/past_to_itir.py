@@ -108,7 +108,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         return itir.StencilClosure(
             domain=domain,
             stencil=itir.SymRef(id=node.func.id),
-            inputs=[itir.SymRef(self.visit(arg, **kwargs).id) for arg in node.args],
+            inputs=[itir.SymRef(id=self.visit(arg, **kwargs).id) for arg in node.args],
             output=output,
         )
 
@@ -191,7 +191,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                 "Unexpected `out` argument. Must be a `past.Subscript` or `past.Name` node."
             )
 
-        return itir.SymRef(self.visit(out_field_name, **kwargs).id), itir.FunCall(
+        return itir.SymRef(id=self.visit(out_field_name, **kwargs).id), itir.FunCall(
             fun=itir.SymRef(id="domain"), args=domain_args
         )
 

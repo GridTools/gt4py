@@ -143,7 +143,7 @@ class ToIrTransformer(lark.Transformer):
         return ir.FunCall(fun=ir.SymRef(id="lift"), args=[arg])
 
     def shift(self, *offsets: ir.Expr) -> ir.FunCall:
-        return ir.FunCall(fun=ir.SymRef(id="shift"), args=offsets)
+        return ir.FunCall(fun=ir.SymRef(id="shift"), args=list(offsets))
 
     def tuple_get(self, tup: ir.Expr, idx: ir.Literal) -> ir.FunCall:
         return ir.FunCall(fun=ir.SymRef(id="tuple_get"), args=[idx, tup])
@@ -155,13 +155,13 @@ class ToIrTransformer(lark.Transformer):
         return ir.FunCall(fun=ir.SymRef(id="named_range"), args=[name, start, end])
 
     def domain(self, *ranges: ir.Expr) -> ir.FunCall:
-        return ir.FunCall(fun=ir.SymRef(id="domain"), args=ranges)
+        return ir.FunCall(fun=ir.SymRef(id="domain"), args=list(ranges))
 
     def ifthenelse(self, condition: ir.Expr, then: ir.Expr, otherwise: ir.Expr) -> ir.FunCall:
         return ir.FunCall(fun=ir.SymRef(id="if_"), args=[condition, then, otherwise])
 
     def call(self, fun: ir.Expr, *args: ir.Expr) -> ir.FunCall:
-        return ir.FunCall(fun=fun, args=args)
+        return ir.FunCall(fun=fun, args=list(args))
 
     def function_definition(self, *args: ir.Node) -> ir.FunctionDefinition:
         fid, *params, expr = args
