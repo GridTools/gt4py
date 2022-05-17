@@ -198,6 +198,27 @@ def test_tuples():
     assert np.allclose((a.array() * 1.3 + b.array() * 5.0) * 3.4, c)
 
 
+def test_broadcasting():
+    Edge = CartesianAxis("Edge")
+    K = CartesianAxis("K")
+
+    size = 10
+    ksize = 5
+    a = np_as_located_field(Edge, K)(np.ones((size, ksize)))
+    b = np_as_located_field(K)(np.ones((ksize)) * 2)
+    c = np_as_located_field(Edge, K)(np.zeros((size, ksize)))
+
+    @field_operator(backend="roundtrip")
+    def broadcast(
+        inp1: Field[[Edge, K], float64], inp2: Field[[K], float64]
+    ) -> Field[[Edge, K], float64]:
+        return inp1 / inp2
+
+    broadcast(a, b, out=c, offset_provider={})
+
+    assert np.allclose((a.array() / b.array()), c)
+
+
 @pytest.fixture
 def reduction_setup():
 

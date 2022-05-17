@@ -24,8 +24,10 @@ def are_broadcast_compatible(left: TypeInfo, right: TypeInfo) -> bool:
     """
     Check if ``left`` and ``right`` types are compatible after optional broadcasting.
 
-    A binary field operation between two arguments can proceed and the result is a field.
-    on top of the dimensions, also the dtypes must match.
+    If both are fields and do not have the same list of dimensions, then the smaller
+    dimension list must be fully contained in the bigger one (ordered subset).
+
+    Dtypes must also match in any case.
 
     Examples:
     ---------
@@ -37,17 +39,39 @@ def are_broadcast_compatible(left: TypeInfo, right: TypeInfo) -> bool:
     >>> are_broadcast_compatible(int_field_t, int_scalar_t)
     True
 
+    >>> from functional.iterator.runtime import CartesianAxis
+    >>> Edge = CartesianAxis("Edge")
+    >>> K = CartesianAxis("K")
+    >>> are_broadcast_compatible(
+    ...     TypeInfo(ct.FieldType(dtype=ct.ScalarType(kind=ct.ScalarKind.INT64), dims=[K])),
+    ...     TypeInfo(ct.FieldType(dtype=ct.ScalarType(kind=ct.ScalarKind.INT64), dims=[Edge, K])),
+    ... )
+    True
+
+    >>> are_broadcast_compatible(
+    ...     TypeInfo(ct.FieldType(dtype=ct.ScalarType(kind=ct.ScalarKind.INT64), dims=[Edge])),
+    ...     TypeInfo(ct.FieldType(dtype=ct.ScalarType(kind=ct.ScalarKind.INT64), dims=[Edge, K])),
+    ... )
+    True
     """
     both_dims_given = bool(left.dims and right.dims)
     both_dims_given &= not isinstance(left.dims, GenericDimensions)
     both_dims_given &= not isinstance(right.dims, GenericDimensions)
-    if both_dims_given and any(
-        ldim != rdim
-        for ldim, rdim in zip(
-            left.dims, right.dims  # type: ignore[arg-type]  # we know they are lists here
+    if both_dims_given:
+        assert isinstance(left.dims, list)  # to reassure mypy
+        assert isinstance(right.dims, list)  # to reassure mypy
+        smaller_dims, bigger_dims = (
+            (left.dims, right.dims)
+            if len(left.dims) <= len(right.dims)
+            else (right.dims, left.dims)
         )
-    ):
-        return False
+        if smaller_dims[0] in bigger_dims and smaller_dims[-1] in bigger_dims:
+            start_index = bigger_dims.index(smaller_dims[0])
+            end_index = bigger_dims.index(smaller_dims[-1])
+            if smaller_dims != bigger_dims[start_index : end_index + 1]:
+                return False
+        else:
+            return False
     return left.dtype == right.dtype
 
 
