@@ -57,9 +57,9 @@ def are_broadcast_compatible(left: TypeInfo, right: TypeInfo) -> bool:
     both_dims_given = bool(left.dims and right.dims)
     both_dims_given &= not isinstance(left.dims, GenericDimensions)
     both_dims_given &= not isinstance(right.dims, GenericDimensions)
-    if (
-        both_dims_given and isinstance(left.dims, list) and isinstance(right.dims, list)
-    ):  # isinstance calls are for mypy
+    if both_dims_given:
+        assert isinstance(left.dims, list)  # to reassure mypy
+        assert isinstance(right.dims, list)  # to reassure mypy
         smaller_dims, bigger_dims = (
             (left.dims, right.dims)
             if len(left.dims) <= len(right.dims)
