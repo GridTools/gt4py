@@ -66,16 +66,6 @@ class Tree(Protocol):
     def iter_children_items(self) -> Iterable[Tuple[TreeKey, Any]]:
         ...
 
-    # @classmethod
-    # @abc.abstractmethod
-    # def from_children_values(cls, value: Iterable) -> Tree:
-    #     ...
-
-    # @classmethod
-    # @abc.abstractmethod
-    # def from_children_items(cls, items: Iterable[Tuple[TreeKey, Any]]) -> Tree:
-    #     ...
-
 
 TreeLike.register(Tree)
 
@@ -94,41 +84,15 @@ def iter_children_items(node: TreeLike) -> Iterable[Tuple[TreeKey, Any]]:
     return node.iter_children_items() if hasattr(node, "iter_children_items") else iter(())
 
 
-# @functools.singledispatch
-# def from_children_values(node_type: Type[TreeLikeT], values: Iterable) -> TreeLikeT:
-#     return (
-#         node_type.from_children_values(values)
-#         if hasattr(node_type, "from_children_values")
-#         else node_type(values)
-#     )
-
-
-# @functools.singledispatch
-# def from_children_items(
-#     node_type: Type[TreeLikeT], items: Iterable[Tuple[TreeKey, Any]]
-# ) -> TreeLikeT:
-#     return (
-#         node_type.from_children_items(items)
-#         if hasattr(node_type, "from_children_items")
-#         else node_type(**items)
-#     )
-
-
 def register_tree_like(
     *types: Type[_T],
     iter_values_fn: Callable[[_T], Iterable],
     iter_items_fn: Callable[[_T], Iterable[Tuple[TreeKey, Any]]],
-    # from_values_fn: Callable[[Type[_T], Iterable], _T] = None,
-    # from_items_fn: Callable[[Type[_T], Iterable[Tuple[TreeKey, Any]]], _T] = None,
 ) -> Type[_T]:
     for t in types:
         TreeLike.register(t)
         iter_children_values.register(t)(iter_values_fn)
         iter_children_items.register(t)(iter_items_fn)
-        # if from_values_fn:
-        #     from_children_values.register(t)(from_values_fn)
-        # if from_items_fn:
-        #     from_children_items.register(t)(from_items_fn)
 
 
 register_tree_like(str, bytes, iter_values_fn=lambda _: iter(()), iter_items_fn=lambda _: iter(()))
@@ -139,16 +103,10 @@ register_tree_like(
     collections.abc.Set,
     iter_values_fn=lambda x: iter(x),
     iter_items_fn=lambda x: enumerate(x),
-    # from_values_fn=lambda cls, values: cls(values),
-    # from_items_fn=lambda cls, items: cls(items[i] for i in range(items)),
 )
 
 register_tree_like(
-    collections.abc.Mapping,
-    iter_values_fn=lambda x: x.values(),
-    iter_items_fn=lambda x: x.items(),
-    # from_values_fn=lambda cls, values: cls(**{key: value for key, value in enumerate(values)}),
-    # from_items_fn=lambda cls, items: cls(items),
+    collections.abc.Mapping, iter_values_fn=lambda x: x.values(), iter_items_fn=lambda x: x.items()
 )
 
 

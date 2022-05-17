@@ -81,7 +81,7 @@ __all__ = [
     # version
     "__version__",
     "__versioninfo__",
-    # Concepts
+    # concepts
     "AnnexManager",
     "AnySourceLocation",
     "FrozenNode",
@@ -95,6 +95,16 @@ __all__ = [
     "VType",
     "register_annex_user",
     "# datamodels" "Coerced",
+    "DataModel",
+    "FrozenModel",
+    "GenericDataModel",
+    "Unchecked",
+    "concretize",
+    "datamodel",
+    "field",
+    "frozenmodel",
+    # datamodels
+    "Coerced",
     "DataModel",
     "FrozenModel",
     "GenericDataModel",

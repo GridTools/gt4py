@@ -19,31 +19,14 @@
 
 from __future__ import annotations
 
-import ast
-import functools
 import re
 import sys
-from enum import Enum as Enum, IntEnum as IntEnum
+from enum import Enum as Enum, IntEnum as IntEnum  # noqa: F401  # imported but unused
 
 from boltons.typeutils import classproperty as classproperty  # noqa: F401
 from frozendict import frozendict as _frozendict  # noqa: F401
 
-from .extended_typing import (
-    Any,
-    Callable,
-    ClassVar,
-    Final,
-    Generator,
-    NamedTuple,
-    NoReturn,
-    Optional,
-    Tuple,
-    Type,
-    TypeAlias,
-    TypeVar,
-    Union,
-    final,
-)
+from .extended_typing import ClassVar, Generic, NoReturn, Optional, TypeAlias, TypeVar, final
 
 
 # Frozen collections

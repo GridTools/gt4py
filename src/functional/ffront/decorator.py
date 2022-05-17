@@ -26,7 +26,7 @@ import functools
 import types
 import typing
 import warnings
-from typing import Any, Callable, Optional, Protocol
+from typing import Callable
 
 from eve.extended_typing import Any, Optional, Protocol
 from eve.utils import UIDs

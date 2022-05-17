@@ -22,7 +22,7 @@ from __future__ import annotations
 import ast
 import re
 
-from . import datamodels, exceptions, extended_typing as xtyping, trees, type_definitions, utils
+from . import datamodels, exceptions, extended_typing as xtyping, trees, utils
 from .datamodels import validators as _validators
 from .extended_typing import (
     Any,
@@ -30,23 +30,16 @@ from .extended_typing import (
     ClassVar,
     Dict,
     Final,
-    Generator,
-    Generic,
     Iterable,
     List,
-    Mapping,
-    NoArgsCallable,
     Optional,
-    Protocol,
     Set,
     Tuple,
     Type,
-    TypedDict,
     TypeVar,
     Union,
-    no_type_check,
 )
-from .type_definitions import NOTHING, ConstrainedStr, IntEnum, StrEnum
+from .type_definitions import ConstrainedStr, IntEnum, StrEnum
 
 
 _SYMBOL_NAME_RE: Final = re.compile(r"^[a-zA-Z_]\w*$")
@@ -148,7 +141,11 @@ class AnnexManager:
 
     @classmethod
     def register_user(
-        cls: Type[AnnexManager], key: str, type: xtyping.TypeAnnotation, *, shared: bool = False
+        cls: Type[AnnexManager],
+        key: str,
+        type_hint: xtyping.TypeAnnotation,
+        *,
+        shared: bool = False,
     ) -> Callable[[_T], _T]:
         assert isinstance(key, str)
 
@@ -163,16 +160,16 @@ class AnnexManager:
                     raise exceptions.EveRuntimeError(
                         f"Annex key '{key}' has been privately registered by {reg_owner}."
                     )
-                elif type != reg_type:
+                elif type_hint != reg_type:
                     raise exceptions.EveRuntimeError(
-                        f"Annex key '{key}' type '{type}' does not match registered type '{reg_type}' "
+                        f"Annex key '{key}' type '{type_hint}' does not match registered type '{reg_type}' "
                         f"registered by {reg_owner}."
                     )
                 owners = reg_owner
             else:
                 owners = []
 
-            cls.register[key] = (shared, type, [*owners, owner])
+            cls.register[key] = (shared, type_hint, [*owners, owner])
 
             return owner
 

@@ -12,7 +12,6 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import re
 from typing import Any, Generic, Literal, Optional, TypeVar, Union
 
 import eve

@@ -13,11 +13,9 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 
-import re
 from typing import Generic, Optional, TypeVar, Union
 
-import eve
-from eve import Coerced, Node, SourceLocation, SymbolRef
+from eve import Coerced, Node, SourceLocation, SymbolName, SymbolRef
 from eve.traits import SymbolTableTrait
 from eve.type_definitions import StrEnum
 from functional.ffront import common_types as common_types
@@ -25,10 +23,6 @@ from functional.ffront import common_types as common_types
 
 class LocatedNode(Node):
     location: SourceLocation
-
-
-class SymbolName(eve.SymbolName):
-    regex = re.compile(r"^[a-zA-Z_][\w$]*$")
 
 
 SymbolT = TypeVar("SymbolT", bound=common_types.SymbolType)

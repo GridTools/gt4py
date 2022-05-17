@@ -84,7 +84,6 @@ class SymbolTableTrait:
 @concepts.register_annex_user("symtable", Dict[str, concepts.Node], shared=True)
 @datamodels.datamodel
 class SymbolRefsValidatorTrait:
-
     """Node trait adding automatic validation of symbol references appearing the node tree.
 
     It assumes that the symbol table with the actual definitions is stored as

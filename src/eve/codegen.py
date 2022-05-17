@@ -648,11 +648,15 @@ class TemplatedGenerator(NodeVisitor):
 
     @overload
     @classmethod
-    def apply(cls, root: CollectionNode, **kwargs: Any) -> Collection[str]:
+    def apply(  # noqa: F811  # redefinition of symbol
+        cls, root: CollectionNode, **kwargs: Any
+    ) -> Collection[str]:
         ...
 
     @classmethod
-    def apply(cls, root: RootNode, **kwargs: Any) -> Union[str, Collection[str]]:
+    def apply(  # noqa: F811  # redefinition of symbol
+        cls, root: RootNode, **kwargs: Any
+    ) -> Union[str, Collection[str]]:
         """Public method to build a class instance and visit an IR node.
 
         Args:

@@ -17,10 +17,6 @@
 
 from __future__ import annotations
 
-import pytest
-
-import eve
-
 
 def test_sentinel():
     from eve.type_definitions import NOTHING

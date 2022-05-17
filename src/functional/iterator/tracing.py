@@ -80,11 +80,6 @@ _patch_Expr()
 _patch_FunctionDefinition()
 
 
-# class PatchedFunctionDefinition(FunctionDefinition):
-#     def __call__(self, *args):
-#         return FunCall(fun=SymRef(id=str(self.id)), args=[*make_node(args)])
-
-
 def _s(id_):
     return SymRef(id=id_)
 

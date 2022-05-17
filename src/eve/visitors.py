@@ -22,24 +22,10 @@ from __future__ import annotations
 import abc
 import collections.abc
 import copy
-import operator
 
-from . import concepts, trees, utils
+from . import concepts, trees
 from .concepts import NOTHING
-from .extended_typing import (
-    Any,
-    Callable,
-    Collection,
-    ContextManager,
-    Dict,
-    Iterable,
-    MutableSequence,
-    MutableSet,
-    Protocol,
-    Tuple,
-    TypeVar,
-    Union,
-)
+from .extended_typing import Any, Protocol, TypeVar
 
 
 _InT = TypeVar("_InT", contravariant=True)
