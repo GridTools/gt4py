@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 # GridTools Compiler Toolchain (GTC) - GridTools Framework
 #
 # Copyright (c) 2014-2022, ETH Zurich
