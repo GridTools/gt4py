@@ -29,20 +29,20 @@ import typing
 from typing import Any
 
 import attrs
-from attrs.validators import (  # noqa: F401  # imported but unused
-    lt,
-    le,
-    gt,
-    ge,
-    max_len,
-    instance_of,
-    in_,
+from attrs.validators import (  # type: ignore[attr-defined]  # noqa: F401  # imported but unused
     and_,
-    optional,
-    is_callable,
-    matches_re,
     deep_iterable,
     deep_mapping,
+    ge,
+    gt,
+    in_,
+    instance_of,
+    is_callable,
+    le,
+    lt,
+    matches_re,
+    max_len,
+    optional,
 )
 
 

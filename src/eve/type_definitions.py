@@ -24,7 +24,7 @@ import sys
 from enum import Enum as Enum, IntEnum as IntEnum  # noqa: F401  # imported but unused
 
 from boltons.typeutils import classproperty as classproperty  # noqa: F401
-from frozendict import frozendict as _frozendict  # noqa: F401
+from frozendict import frozendict as _frozendict  # type: ignore[attr-defined]  # noqa: F401
 
 from .extended_typing import Any, ClassVar, Generic, NoReturn, Optional, TypeAlias, TypeVar, final
 

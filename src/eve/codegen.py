@@ -109,12 +109,12 @@ def format_python_source(
     source: str,
     *,
     line_length: int = 100,
-    target_versions: Optional[Set[str]] = None,
+    python_versions: Optional[Set[str]] = None,
     string_normalization: bool = True,
 ) -> str:
     """Format Python source code using black formatter."""
-    target_versions = target_versions or {f"{sys.version_info.major}{sys.version_info.minor}"}
-    target_versions = set(black.TargetVersion[f"PY{v.replace('.', '')}"] for v in target_versions)
+    python_versions = python_versions or {f"{sys.version_info.major}{sys.version_info.minor}"}
+    target_versions = set(black.TargetVersion[f"PY{v.replace('.', '')}"] for v in python_versions)
 
     formatted_source = black.format_str(
         source,
@@ -743,7 +743,7 @@ class TemplatedGenerator(NodeVisitor):
         )
 
     def transform_children(self, node: Node, **kwargs: Any) -> Dict[str, Any]:
-        return {key: self.visit(value, **kwargs) for key, value in node.iter_children_items()}
+        return {key: self.visit(value, **kwargs) for key, value in node.iter_children_items()}  # type: ignore[misc]
 
     def transform_annexed_items(self, node: Node, **kwargs: Any) -> Dict[str, Any]:
         return {key: self.visit(value, **kwargs) for key, value in node.annex.items()}

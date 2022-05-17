@@ -24,26 +24,11 @@ import collections.abc
 import copy
 
 from . import concepts, trees
+from .extended_typing import Any
 from .type_definitions import NOTHING
-from .extended_typing import Any, Protocol, TypeVar
 
 
-_InT = TypeVar("_InT", contravariant=True)
-_OutT = TypeVar("_OutT", covariant=True)
-_KwargsT = TypeVar("_KwargsT", contravariant=True)
-
-
-class Visitor(Protocol[_InT, _OutT, _KwargsT]):
-    @abc.abstractmethod
-    def visit(self, __data: _InT, /, **kwargs: _KwargsT) -> _OutT:
-        return NotImplemented
-
-    @abc.abstractmethod
-    def generic_visit(self, __data: _InT, /, **kwargs: _KwargsT) -> _OutT:
-        return NotImplemented
-
-
-class NodeVisitor(Visitor[concepts.Node, _OutT, _KwargsT]):
+class NodeVisitor:
     """Simple node visitor class based on :class:`ast.NodeVisitor`.
 
     A NodeVisitor instance walks a node tree and calls a visitor

@@ -20,9 +20,10 @@
 from __future__ import annotations
 
 import collections
+from typing import Protocol
 
 from . import concepts, datamodels, exceptions, visitors
-from .extended_typing import Any, Dict, Set, Type
+from .extended_typing import Any, ClassVar, Dict, List, Set, Type, no_type_check
 
 
 # ---  Node Traits ---
@@ -38,6 +39,7 @@ class SymbolTableTrait:
 
     __slots__ = ()
 
+    @no_type_check
     @datamodels.root_validator
     def _collect_symbol_names(cls: Type[SymbolTableTrait], instance: concepts.Node) -> None:
         collected_symbols = cls.SymbolsCollector.apply(instance)
@@ -47,7 +49,7 @@ class SymbolTableTrait:
         def __init__(self) -> None:
             self.collected_symbols: Dict[str, concepts.Node] = {}
 
-        def visit_Node(self, node: concepts.Node) -> None:
+        def visit_Node(self, node: concepts.Node, /) -> None:
             for field_name, attribute in node.__datamodel_fields__.items():
                 if isinstance(attribute.type, type) and issubclass(
                     attribute.type, concepts.SymbolName
@@ -65,7 +67,7 @@ class SymbolTableTrait:
 
         def visit(self, node: concepts.RootNode, **kwargs: Any) -> Any:
             if hasattr(node.__class__, "_NODE_SYMBOLS_"):
-                self.visit(node.__class__._NODE_SYMBOLS_)
+                self.visit(node.__class__._NODE_SYMBOLS_)  # type: ignore[union-attr]  # _NODE_SYMBOLS_ is optional
             return super().visit(node, **kwargs)
 
         @classmethod
@@ -76,7 +78,7 @@ class SymbolTableTrait:
             # traversal here calling `generic_visit()` to directly inspect the children (after
             # adding any extra node symbols defined in the node class).
             if hasattr(node.__class__, "_NODE_SYMBOLS_"):
-                collector.visit(node.__class__._NODE_SYMBOLS_)
+                collector.visit(node.__class__._NODE_SYMBOLS_)  # type: ignore[attr-defined]  # _NODE_SYMBOLS_ is optional
             collector.generic_visit(node)
             return collector.collected_symbols
 
@@ -92,6 +94,7 @@ class SymbolRefsValidatorTrait:
 
     __slots__ = ()
 
+    @no_type_check
     @datamodels.root_validator
     def _validate_symbol_refs(cls: Type[SymbolRefsValidatorTrait], instance: concepts.Node) -> None:
         validator = cls.SymbolRefsValidator()

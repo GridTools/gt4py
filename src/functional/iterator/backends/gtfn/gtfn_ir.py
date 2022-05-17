@@ -1,5 +1,5 @@
 import enum
-from typing import ClassVar, List, Union
+from typing import ClassVar, List, Union, no_type_check
 
 import eve
 from eve import Coerced, SymbolName, SymbolRef

@@ -179,7 +179,7 @@ class AnnexManager:
 register_annex_user = AnnexManager.register_user
 
 
-class Node(datamodels.DataModel, trees.Tree, kw_only=True):
+class Node(datamodels.DataModel, trees.Tree, kw_only=True):  # type: ignore[call-arg]  # kw_only from DataModel
     """Base class representing a node in a syntax tree.
 
     Implemented as a :class:`eve.datamodels.DataModel` with some extra features.
@@ -251,11 +251,11 @@ CollectionNode = Union[List[LeafNode], Dict[Any, LeafNode], Set[LeafNode]]
 RootNode = Union[NodeT, CollectionNode]
 
 
-class FrozenNode(Node, frozen=True):
+class FrozenNode(Node, frozen=True):  # type: ignore[call-arg]  # frozen from DataModel
     ...
 
 
-class GenericNode(datamodels.GenericDataModel, Node, kw_only=True):
+class GenericNode(datamodels.GenericDataModel, Node, kw_only=True):  # type: ignore[call-arg]  # kw_only from DataModel
     pass
 
 

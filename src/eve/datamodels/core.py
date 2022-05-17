@@ -82,8 +82,8 @@ Attribute: TypeAlias = attr.Attribute
 
 
 class DataModelTP(_AttrsClassTP, xtyping.DevToolsPrettyPrintable, Protocol):
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        ...
+    # def __init__(self, *args: Any, **kwargs: Any) -> None:
+    #     ...
 
     __datamodel_fields__: ClassVar[utils.FrozenNamespace[Attribute]]
     __datamodel_params__: ClassVar[utils.FrozenNamespace[Any]]
@@ -96,7 +96,7 @@ class DataModelTP(_AttrsClassTP, xtyping.DevToolsPrettyPrintable, Protocol):
     __post_init__: Callable[[DataModelTP], None]
 
 
-DataModelT = TypeVar("DataModelT", bound=DataModelTP)
+DataModelT = TypeVar("DataModelT", bound="DataModel")
 
 
 class GenericDataModelTP(DataModelTP, Protocol):
@@ -171,10 +171,10 @@ class ForwardRefValidator:
     validator: Union[type_val.FixedTypeValidator, None, NothingType] = NOTHING
     """Actual type validator created after resolving the forward references."""
 
-    def __call__(self, instance: DataModel, attribute: attr.Attribute, value: Any) -> None:
+    def __call__(self, instance: DataModelTP, attribute: attr.Attribute, value: Any) -> None:
         if self.validator is NOTHING:
             model_cls = instance.__class__
-            update_forward_refs(model_cls)
+            update_forward_refs(model_cls)  # type: ignore[type-var]  # model_cls is an actual type
             self.validator = self.factory(
                 getattr(getattr(model_cls, MODEL_FIELD_DEFINITIONS_ATTR), attribute.name).type,
                 attribute.name,
@@ -191,7 +191,7 @@ class ValidatorAdapter:
     validator: type_val.FixedTypeValidator
     description: str
 
-    def __call__(self, _instance: DataModel, _attribute: attr.Attribute, value: Any) -> None:
+    def __call__(self, _instance: DataModelTP, _attribute: attr.Attribute, value: Any) -> None:
         self.validator(value)
 
     def __repr__(self) -> str:
@@ -297,7 +297,7 @@ def datamodel(  # noqa: F811  # redefinion of unused symbol
     ...
 
 
-@dataclass_transform(eq_default=True, field_specifiers=("field",))
+# TODO(egparedes): Use @dataclass_transform(eq_default=True, field_specifiers=("field",))
 def datamodel(  # noqa: F811  # redefinion of unused symbol
     cls: Type[_T] = None,
     /,
@@ -413,86 +413,81 @@ frozenmodel: _DataModelDecoratorTP = functools.partial(datamodel, frozen=True)
 frozen_model = frozenmodel
 
 
-if xtyping.TYPE_CHECKING:
-    DataModel: TypeAlias = DataModelTP
+# TODO(egparedes): Use @dataclass_transform(eq_default=True, field_specifiers=("field",))
+class DataModel(DataModelTP):
+    """Base class to automatically convert any subclass into a Data Model.
 
-else:
+    Inheriting from this class is equivalent to apply the :func:`datamodel`
+    decorator to a class, except that the ``slots`` option is always ``False``
+    (since it generates a new class) and all descendants will be also converted
+    automatically in Data Models with the same options of the parent class
+    (which does not happen when explicitly applying the decorator).
 
-    # TODO(egparedes): use @dataclass_transform(eq_default=True, field_specifiers=("field",))
-    class DataModel:
-        """Base class to automatically convert any subclass into a Data Model.
+    See :func:`datamodel` for the description of the parameters.
+    """
 
-        Inheriting from this class is equivalent to apply the :func:`datamodel`
-        decorator to a class, except that the ``slots`` option is always ``False``
-        (since it generates a new class) and all descendants will be also converted
-        automatically in Data Models with the same options of the parent class
-        (which does not happen when explicitly applying the decorator).
+    __slots__ = ()
 
-        See :func:`datamodel` for the description of the parameters.
-        """
+    @classmethod
+    def __init_subclass__(
+        cls,
+        /,
+        *,
+        repr: bool  # noqa: A002  # shadowing 'repr' python builtin
+        | None
+        | Literal["inherited"] = "inherited",
+        eq: bool | None | Literal["inherited"] = "inherited",
+        order: bool | None | Literal["inherited"] = "inherited",
+        unsafe_hash: bool | None | Literal["inherited"] = "inherited",
+        frozen: bool | Literal["strict", "inherited"] = "inherited",
+        match_args: bool | Literal["inherited"] = "inherited",
+        kw_only: bool | Literal["inherited"] = "inherited",
+        coerce: bool | Literal["inherited"] = "inherited",
+        type_validation_factory: Optional[FieldTypeValidatorFactory]
+        | Literal["inherited"] = "inherited",
+        **kwargs: Any,
+    ) -> None:
+        dm_opts = kwargs.pop(_DM_OPTS, [])
+        super(DataModel, cls).__init_subclass__(
+            **kwargs
+        )  # type: ignore[call-arg]  # is not guaranteed that superclass does not accept kwargs
+        cls_params = getattr(cls, MODEL_PARAM_DEFINITIONS_ATTR, None)
 
-        __slots__ = ()
+        generic: Final = (
+            "True_no_checks"
+            if _GENERIC_DATAMODEL_ROOT_DM_OPT in dm_opts
+            else getattr(cls_params, "generic", False)
+        )
 
-        @classmethod
-        def __init_subclass__(
+        locals_ = locals()
+        datamodel_kwargs = {}
+        for arg_name, default_value in [
+            ("repr", _REPR_DEFAULT),
+            ("eq", _EQ_DEFAULT),
+            ("order", _ORDER_DEFAULT),
+            ("unsafe_hash", _UNSAFE_HASH_DEFAULT),
+            ("frozen", _FROZEN_DEFAULT),
+            ("match_args", _MATCH_ARGS_DEFAULT),
+            ("kw_only", _KW_ONLY_DEFAULT),
+            ("coerce", _COERCE_DEFAULT),
+            ("type_validation_factory", DefaultFieldTypeValidatorFactory),
+        ]:
+            arg_value = locals_[arg_name]
+            if arg_value == "inherited":
+                datamodel_kwargs[arg_name] = getattr(cls_params, arg_name, default_value)
+            else:
+                datamodel_kwargs[arg_name] = arg_value
+
+        if cls_params is not None and cls_params.frozen and not datamodel_kwargs["frozen"]:
+            raise TypeError("Subclasses of a frozen DataModel cannot be unfrozen.")
+
+        _make_datamodel(
             cls,
-            /,
-            *,
-            repr: bool  # noqa: A002  # shadowing 'repr' python builtin
-            | None
-            | Literal["inherited"] = "inherited",
-            eq: bool | None | Literal["inherited"] = "inherited",
-            order: bool | None | Literal["inherited"] = "inherited",
-            unsafe_hash: bool | None | Literal["inherited"] = "inherited",
-            frozen: bool | Literal["strict", "inherited"] = "inherited",
-            match_args: bool | Literal["inherited"] = "inherited",
-            kw_only: bool | Literal["inherited"] = "inherited",
-            coerce: bool | Literal["inherited"] = "inherited",
-            type_validation_factory: Optional[FieldTypeValidatorFactory]
-            | Literal["inherited"] = "inherited",
-            **kwargs: Any,
-        ) -> None:
-            dm_opts = kwargs.pop(_DM_OPTS, [])
-            super(DataModel, cls).__init_subclass__(
-                **kwargs
-            )  # type: ignore[call-arg]  # is not guaranteed that superclass does not accept kwargs
-            cls_params = getattr(cls, MODEL_PARAM_DEFINITIONS_ATTR, None)
-
-            generic: Final = (
-                "True_no_checks"
-                if _GENERIC_DATAMODEL_ROOT_DM_OPT in dm_opts
-                else getattr(cls_params, "generic", False)
-            )
-
-            locals_ = locals()
-            datamodel_kwargs = {}
-            for arg_name, default_value in [
-                ("repr", _REPR_DEFAULT),
-                ("eq", _EQ_DEFAULT),
-                ("order", _ORDER_DEFAULT),
-                ("unsafe_hash", _UNSAFE_HASH_DEFAULT),
-                ("frozen", _FROZEN_DEFAULT),
-                ("match_args", _MATCH_ARGS_DEFAULT),
-                ("kw_only", _KW_ONLY_DEFAULT),
-                ("coerce", _COERCE_DEFAULT),
-                ("type_validation_factory", DefaultFieldTypeValidatorFactory),
-            ]:
-                arg_value = locals_[arg_name]
-                if arg_value == "inherited":
-                    datamodel_kwargs[arg_name] = getattr(cls_params, arg_name, default_value)
-                else:
-                    datamodel_kwargs[arg_name] = arg_value
-
-            if cls_params is not None and cls_params.frozen and not datamodel_kwargs["frozen"]:
-                raise TypeError("Subclasses of a frozen DataModel cannot be unfrozen.")
-
-            _make_datamodel(
-                cls,
-                slots=False,
-                generic=generic,
-                **datamodel_kwargs,  # type: ignore[arg-type]  # passing actual arguments in the dict
-                _stacklevel_offset=1,
-            )
+            slots=False,
+            generic=generic,
+            **datamodel_kwargs,  # type: ignore[arg-type]  # passing actual arguments in the dict
+            _stacklevel_offset=1,
+        )
 
 
 def field(
@@ -578,8 +573,8 @@ def field(
         order=compare,
         metadata=metadata,
         kw_only=kw_only,
-        converter=converter,
-        validator=validator,
+        converter=converter,  # type: ignore[arg-type]
+        validator=validator,  # type: ignore[arg-type]
     )
 
 
@@ -667,9 +662,9 @@ fields = get_fields
 
 
 def asdict(
-    instance: DataModel,
+    instance: DataModelTP,
     *,
-    value_serializer: Optional[Callable[[DataModel, Attribute, Any], Any]] = None,
+    value_serializer: Optional[Callable[[Type[DataModelTP], Attribute, Any], Any]] = None,
 ) -> Dict[str, Any]:
     """Return the contents of a Data Model instance as a new mapping from field names to values.
 
@@ -798,7 +793,7 @@ def concretize(
             the target module will be overwritten.
 
     """  # noqa: RST301  # doctest conventions confuse RST validator
-    concrete_cls = _make_concrete_with_cache(
+    concrete_cls: Type[DataModelT] = _make_concrete_with_cache(
         datamodel_cls, *type_args, class_name=class_name, module=module
     )
     assert isinstance(concrete_cls, type) and is_datamodel(concrete_cls)
@@ -1205,7 +1200,8 @@ def _make_datamodel(  # noqa: C901  # too complex but still readable and documen
 
     # TODO(egparedes): consider the use of the field_transformer hook available in attrs:
     #   https://www.attrs.org/en/stable/extending.html#automatic-field-transformation-and-modification
-    new_cls = attrs.define(
+    new_cls = attrs.define(  # type: ignore[call-overload]
+        cls,
         auto_attribs=True,
         auto_detect=True,
         init=None,
@@ -1217,7 +1213,7 @@ def _make_datamodel(  # noqa: C901  # too complex but still readable and documen
         match_args=match_args,
         kw_only=kw_only,
         slots=slots,
-    )(cls)
+    )
     assert (new_cls is cls) or slots
 
     # Final checks and postprocessing
@@ -1355,17 +1351,19 @@ def _make_concrete_with_cache(
     return concrete_cls
 
 
-if xtyping.TYPE_CHECKING:
-    FrozenModel: TypeAlias = DataModelTP
-else:
-
-    class FrozenModel(DataModel, frozen=True):
-        __slots__ = ()
+# if xtyping.TYPE_CHECKING:
+#     FrozenModel: TypeAlias = DataModelTP
+# else:
 
 
-if xtyping.TYPE_CHECKING:
-    GenericDataModel: TypeAlias = GenericDataModelTP
-else:
+class FrozenModel(DataModel, frozen=True):
+    __slots__ = ()
 
-    class GenericDataModel(DataModel, __dm_opts=[_GENERIC_DATAMODEL_ROOT_DM_OPT]):
-        __slots__ = ()
+
+# if xtyping.TYPE_CHECKING:
+#     GenericDataModel: TypeAlias =
+# else:
+
+
+class GenericDataModel(DataModel, GenericDataModelTP, __dm_opts=[_GENERIC_DATAMODEL_ROOT_DM_OPT]):
+    __slots__ = ()
