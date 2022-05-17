@@ -888,12 +888,7 @@ class TestHorizontalRegions(gt_testing.StencilTestSuite):
 class TestTypedTemporary(gt_testing.StencilTestSuite):
     dtypes = {"field_in": np.float32, "field_out": np.float32}
     domain_range = [(2, 2), (2, 2), (2, 8)]
-<<<<<<< Updated upstream
     backends = ALL_BACKENDS
-=======
-    # backends = INTERNAL_BACKENDS
-    backends = ['numpy']
->>>>>>> Stashed changes
     symbols = {
         "field_in": gt_testing.field(
             in_range=(-10, 10), axes="IJK", boundary=[(0, 0), (0, 0), (0, 0)]
@@ -930,8 +925,7 @@ class TestVectorOperations(gt_testing.StencilTestSuite):
         "field_out": np.float32
     }
     domain_range = [(2, 2), (2, 2), (7, 7)]
-    # backends = INTERNAL_BACKENDS
-    backends = ["numpy"]
+    backends = ALL_BACKENDS
     symbols = {
         "field_1": gt_testing.field(
             in_range=(-10, 10), axes="IJK", boundary=[(0, 0), (0, 0), (0, 0)], data_dims=(5,)
@@ -976,8 +970,7 @@ class TestMatmul(gt_testing.StencilTestSuite):
         "field_2": np.float32
     }
     domain_range = [(2, 2), (2, 2), (2, 2)]
-    # backends = INTERNAL_BACKENDS
-    backends = ["numpy"]
+    backends = ALL_BACKENDS
     symbols = {
         "matrix": gt_testing.field(
             in_range=(-10, 10), axes="IJK", boundary=[(0, 0), (0, 0), (0, 0)], data_dims=(4, 6)
