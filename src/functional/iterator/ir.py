@@ -1,7 +1,7 @@
 from typing import ClassVar, List, Union
 
 import eve
-from eve import SymbolName, SymbolRef, Coerced
+from eve import Coerced, SymbolName, SymbolRef
 from eve.traits import SymbolTableTrait, ValidatedSymbolTableTrait
 from eve.utils import noninstantiable
 

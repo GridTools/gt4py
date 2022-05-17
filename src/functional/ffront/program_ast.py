@@ -16,15 +16,13 @@ import re
 from typing import Any, Generic, Literal, Optional, TypeVar, Union
 
 import eve
-from eve import Node, Coerced, SourceLocation, SymbolName, SymbolRef
+from eve import Coerced, Node, SourceLocation, SymbolName, SymbolRef
 from eve.traits import SymbolTableTrait
 from functional.ffront import common_types
 
 
 class LocatedNode(Node):
     location: SourceLocation
-
-
 
 
 SymbolT = TypeVar("SymbolT", bound=common_types.SymbolType)

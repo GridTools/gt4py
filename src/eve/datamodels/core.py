@@ -868,6 +868,16 @@ def _substitute_typevars(
         return type_params_map[type_hint], True
     elif getattr(type_hint, "__parameters__", []):
         return type_hint[tuple(type_params_map[tp] for tp in type_hint.__parameters__)], True
+        # # Type hint is a generic model: replace all the concretized type vars
+        # replaced = False
+        # new_args = []
+        # for tp in type_hint.__parameters__:
+        #     if tp in type_params_map:
+        #         new_args.append(type_params_map[tp])
+        #         replaced = True
+        #     else:
+        #         new_args.append(type_params_map[tp])
+        # return type_hint[tuple(new_args)], replaced
     else:
         return type_hint, False
 
@@ -1290,7 +1300,11 @@ def _make_concrete_with_cache(
     # Replace field definitions with the new actual types for generic fields
     type_params_map = dict(zip(datamodel_cls.__parameters__, type_args))
     model_fields = getattr(datamodel_cls, MODEL_FIELD_DEFINITIONS_ATTR)
-    new_annotations = {}
+    new_annotations = {
+        # "__args__": "ClassVar[Tuple[Union[Type, TypeVar], ...]]",
+        # "__parameters__": "ClassVar[Tuple[TypeVar, ...]]",
+    }
+
     new_field_c_attrs = {}
     for field_name, field_type in xtyping.get_type_hints(datamodel_cls).items():
         new_annotation, replaced = _substitute_typevars(field_type, type_params_map)

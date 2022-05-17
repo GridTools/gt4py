@@ -17,7 +17,7 @@ import re
 from typing import Generic, Optional, TypeVar, Union
 
 import eve
-from eve import Node, SourceLocation, SymbolRef, Coerced
+from eve import Coerced, Node, SourceLocation, SymbolRef
 from eve.traits import SymbolTableTrait
 from eve.type_definitions import StrEnum
 from functional.ffront import common_types as common_types
