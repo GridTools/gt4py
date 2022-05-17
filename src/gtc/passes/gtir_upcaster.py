@@ -46,9 +46,9 @@ def _update_node(node: gtir.Expr, updated_children: Dict[str, TreeNode]) -> Node
         return node
 
 
+@functools.lru_cache
 def _numpy_ufunc_upcasting_rule(*dtypes, ufunc: np.ufunc):
-    types = ufunc.types
-    for t in types:
+    for t in ufunc.types:
         inputs, output = t.split("->")
         assert len(inputs) == len(dtypes)
         if all(
@@ -60,6 +60,7 @@ def _numpy_ufunc_upcasting_rule(*dtypes, ufunc: np.ufunc):
     raise ValueError(f"No implementation found for dtypes {dtypes} and ufunc {ufunc}")
 
 
+@functools.lru_cache
 def _numpy_common_upcasting_rule(*dtypes):
     typestrs = [data_type_to_typestr(dtype) for dtype in dtypes if dtype != DataType.DEFAULT]
     if not typestrs:

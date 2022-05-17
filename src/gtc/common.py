@@ -15,6 +15,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import enum
+import functools
 import typing
 from typing import Any, ClassVar, Dict, Generic, List, Optional, Tuple, Type, TypeVar, Union
 
@@ -869,6 +870,7 @@ def data_type_to_typestr(dtype: DataType) -> str:
     return np.dtype(table[dtype]).str
 
 
+@functools.lru_cache(maxsize=None, typed=True)  # typed since uniqueness is only guaranteed per enum
 def op_to_ufunc(
     op: Union[
         UnaryOperator, ArithmeticOperator, ComparisonOperator, LogicalOperator, NativeFunction
@@ -946,6 +948,7 @@ def op_to_ufunc(
     return table[op]
 
 
+@functools.lru_cache(maxsize=None)
 def typestr_to_data_type(typestr: str) -> DataType:
     if not isinstance(typestr, str) or len(typestr) < 3 or not typestr[2:].isnumeric():
         return DataType.INVALID  # type: ignore
