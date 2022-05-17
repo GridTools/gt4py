@@ -28,7 +28,7 @@ from eve import NodeVisitor
 from gtc import common
 from gtc import daceir as dcir
 from gtc.common import CartesianOffset, data_type_to_typestr
-from gtc.passes.oir_optimizations.utils import AccessCollector, compute_horizontal_block_extents
+from gtc.passes.oir_optimizations.utils import compute_horizontal_block_extents
 
 
 def array_dimensions(array: dace.data.Array):
@@ -418,66 +418,6 @@ def make_dace_subset(
         res_ranges.append((subset_start - context_start, subset_end - context_start - 1, 1))
     res_ranges.extend((0, dim - 1, 1) for dim in data_dims)
     return dace.subsets.Range(res_ranges)
-
-
-class DaceStrMaker:
-    def __init__(self, stencil: oir.Stencil):
-        self.decls = {
-            decl.name: decl
-            for decl in stencil.params + stencil.declarations
-            if isinstance(decl, oir.FieldDecl)
-        }
-        block_extents = compute_horizontal_block_extents(stencil)
-        self.block_extents = lambda he: block_extents[id(he)]
-
-        self.access_infos = compute_dcir_access_infos(
-            stencil,
-            oir_decls=self.decls,
-            block_extents=self.block_extents,
-            collect_read=True,
-            collect_write=True,
-            include_full_domain=True,
-        )
-        self.access_collection = AccessCollector.apply(stencil)
-
-    def make_shape(self, field):
-        if field not in self.access_infos:
-            return [
-                axis.domain_dace_symbol()
-                for axis in dcir.Axis.dims_3d()
-                if self.decls[field].dimensions[axis.to_idx()]
-            ] + [d for d in self.decls[field].data_dims]
-        return self.access_infos[field].shape + self.decls[field].data_dims
-
-    def make_input_dace_subset(self, node, field):
-        local_access_info = compute_dcir_access_infos(
-            node,
-            collect_read=True,
-            collect_write=False,
-            block_extents=self.block_extents,
-            oir_decls=self.decls,
-        )[field]
-        for axis in local_access_info.variable_offset_axes:
-            local_access_info = local_access_info.clamp_full_axis(axis)
-
-        return self._make_dace_subset(local_access_info, field)
-
-    def make_output_dace_subset(self, node, field):
-        local_access_info = compute_dcir_access_infos(
-            node,
-            collect_read=False,
-            collect_write=True,
-            block_extents=self.block_extents,
-            oir_decls=self.decls,
-        )[field]
-        for axis in local_access_info.variable_offset_axes:
-            local_access_info = local_access_info.clamp_full_axis(axis)
-
-        return self._make_dace_subset(local_access_info, field)
-
-    def _make_dace_subset(self, local_access_info, field):
-        global_access_info = self.access_infos[field]
-        return make_dace_subset(global_access_info, local_access_info, self.decls[field].data_dims)
 
 
 def untile_memlets(memlets: List["dcir.Memlet"], axes):

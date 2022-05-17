@@ -23,30 +23,93 @@ import dace.subsets
 
 import eve
 import gtc.oir as oir
+from gt4py.definitions import Extent
+from gtc import daceir as dcir
 from gtc.dace.nodes import StencilComputation
-from gtc.dace.utils import DaceStrMaker, data_type_to_dace_typeclass
+from gtc.dace.utils import compute_dcir_access_infos, data_type_to_dace_typeclass, make_dace_subset
 from gtc.passes.oir_optimizations.utils import AccessCollector, compute_horizontal_block_extents
 
 
 class OirSDFGBuilder(eve.NodeVisitor):
     @dataclass
-    class Context:
+    class SDFGContext:
         sdfg: dace.SDFG
         last_state: dace.SDFGState
-        dace_str_maker: DaceStrMaker
-        declarations: Dict[str, oir.Decl]
+        decls: Dict[str, oir.FieldDecl]
+        block_extents: Dict[int, Extent]
+        access_infos: Dict[str, dcir.FieldAccessInfo]
+
+        def __init__(self, stencil: oir.Stencil):
+            self.sdfg = dace.SDFG(stencil.name)
+            self.last_state = self.sdfg.add_state(is_start_state=True)
+            self.decls = {
+                decl.name: decl
+                for decl in stencil.params + stencil.declarations
+                if isinstance(decl, oir.FieldDecl)
+            }
+            self.block_extents = compute_horizontal_block_extents(stencil)
+
+            self.access_infos = compute_dcir_access_infos(
+                stencil,
+                oir_decls=self.decls,
+                block_extents=lambda he: self.block_extents[id(he)],
+                collect_read=True,
+                collect_write=True,
+                include_full_domain=True,
+            )
+
+        def make_shape(self, field):
+            if field not in self.access_infos:
+                return [
+                    axis.domain_dace_symbol()
+                    for axis in dcir.Axis.dims_3d()
+                    if self.decls[field].dimensions[axis.to_idx()]
+                ] + [d for d in self.decls[field].data_dims]
+            return self.access_infos[field].shape + self.decls[field].data_dims
+
+        def make_input_dace_subset(self, node, field):
+            local_access_info = compute_dcir_access_infos(
+                node,
+                collect_read=True,
+                collect_write=False,
+                block_extents=lambda he: self.block_extents[id(he)],
+                oir_decls=self.decls,
+            )[field]
+            for axis in local_access_info.variable_offset_axes:
+                local_access_info = local_access_info.clamp_full_axis(axis)
+
+            return self._make_dace_subset(local_access_info, field)
+
+        def make_output_dace_subset(self, node, field):
+            local_access_info = compute_dcir_access_infos(
+                node,
+                collect_read=False,
+                collect_write=True,
+                block_extents=lambda he: self.block_extents[id(he)],
+                oir_decls=self.decls,
+            )[field]
+            for axis in local_access_info.variable_offset_axes:
+                local_access_info = local_access_info.clamp_full_axis(axis)
+
+            return self._make_dace_subset(local_access_info, field)
+
+        def _make_dace_subset(self, local_access_info, field):
+            global_access_info = self.access_infos[field]
+            return make_dace_subset(
+                global_access_info, local_access_info, self.decls[field].data_dims
+            )
 
     def visit_VerticalLoop(
-        self, node: oir.VerticalLoop, *, block_extents, ctx: "OirSDFGBuilder.Context", **kwargs
+        self, node: oir.VerticalLoop, *, ctx: "OirSDFGBuilder.SDFGContext", **kwargs
     ):
         declarations = {
-            acc.name: ctx.declarations[acc.name]
+            acc.name: ctx.decls[acc.name]
             for acc in node.iter_tree().if_isinstance(oir.FieldAccess, oir.ScalarAccess)
-            if acc.name in ctx.declarations
+            if acc.name in ctx.decls
         }
         library_node = StencilComputation(
             name=f"{ctx.sdfg.name}_computation_{id(node)}",
-            extents=block_extents,
+            extents=ctx.block_extents,
             declarations=declarations,
             oir_node=node,
         )
@@ -62,7 +125,7 @@ class OirSDFGBuilder(eve.NodeVisitor):
         for field in access_collection.read_fields():
             access_node = state.add_access(field, debuginfo=dace.DebugInfo(0))
             library_node.add_in_connector("__in_" + field)
-            subset = ctx.dace_str_maker.make_input_dace_subset(node, field)
+            subset = ctx.make_input_dace_subset(node, field)
             state.add_edge(
                 access_node,
                 None,
@@ -73,7 +136,7 @@ class OirSDFGBuilder(eve.NodeVisitor):
         for field in access_collection.write_fields():
             access_node = state.add_access(field, debuginfo=dace.DebugInfo(0))
             library_node.add_out_connector("__out_" + field)
-            subset = ctx.dace_str_maker.make_output_dace_subset(node, field)
+            subset = ctx.make_output_dace_subset(node, field)
             state.add_edge(
                 library_node,
                 "__out_" + field,
@@ -85,24 +148,18 @@ class OirSDFGBuilder(eve.NodeVisitor):
         return
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs):
-        sdfg = dace.SDFG(node.name)
-        state = sdfg.add_state(is_start_state=True)
 
-        block_extents = compute_horizontal_block_extents(node)
-        ctx = OirSDFGBuilder.Context(
-            sdfg=sdfg,
-            last_state=state,
-            dace_str_maker=DaceStrMaker(node),
-            declarations={decl.name: decl for decl in node.params + node.declarations},
+        ctx = OirSDFGBuilder.SDFGContext(
+            stencil=node,
         )
         for param in node.params:
             if isinstance(param, oir.FieldDecl):
                 dim_strs = [d for i, d in enumerate("IJK") if param.dimensions[i]] + [
                     f"d{d}" for d in range(len(param.data_dims))
                 ]
-                sdfg.add_array(
+                ctx.sdfg.add_array(
                     param.name,
-                    shape=ctx.dace_str_maker.make_shape(param.name),
+                    shape=ctx.make_shape(param.name),
                     strides=[
                         dace.symbolic.pystr_to_symbolic(f"__{param.name}_{dim}_stride")
                         for dim in dim_strs
@@ -112,15 +169,15 @@ class OirSDFGBuilder(eve.NodeVisitor):
                     debuginfo=dace.DebugInfo(0),
                 )
             else:
-                sdfg.add_symbol(param.name, stype=data_type_to_dace_typeclass(param.dtype))
+                ctx.sdfg.add_symbol(param.name, stype=data_type_to_dace_typeclass(param.dtype))
 
         for decl in node.declarations:
             dim_strs = [d for i, d in enumerate("IJK") if decl.dimensions[i]] + [
                 f"d{d}" for d in range(len(decl.data_dims))
             ]
-            sdfg.add_array(
+            ctx.sdfg.add_array(
                 decl.name,
-                shape=ctx.dace_str_maker.make_shape(decl.name),
+                shape=ctx.make_shape(decl.name),
                 strides=[
                     dace.symbolic.pystr_to_symbolic(f"__{decl.name}_{dim}_stride")
                     for dim in dim_strs
@@ -129,6 +186,6 @@ class OirSDFGBuilder(eve.NodeVisitor):
                 transient=True,
                 debuginfo=dace.DebugInfo(0),
             )
-        self.generic_visit(node, ctx=ctx, block_extents=block_extents)
+        self.generic_visit(node, ctx=ctx)
         ctx.sdfg.validate()
         return ctx.sdfg
