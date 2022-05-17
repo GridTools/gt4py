@@ -255,7 +255,8 @@ class UnRoller(IRNodeVisitor):
                 for lhs in lhs_list:
                     bin_op_list.append(self.add_node(lhs, rhs, node.op, node.loc))
             else:
-                bin_op_list.append(node)
+                # TODO: check if safe
+                bin_op_list = node
 
         return bin_op_list
 
