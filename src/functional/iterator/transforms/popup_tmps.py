@@ -1,6 +1,6 @@
 from collections.abc import Callable
 from functools import partial
-from typing import Optional, Union
+from typing import Optional, Union, cast
 
 from eve import NodeTranslator
 from eve.utils import UIDs
@@ -9,10 +9,23 @@ from functional.iterator.transforms.remap_symbols import RemapSymbolRefs
 
 
 class PopupTmps(NodeTranslator):
+    """Transformation for “popping up” nested lifts to lambda arguments.
+
+    In the simplest case, `(λ(x) → deref(lift(deref)(x)))(y)` is translated to
+    `(λ(x, tmp) → deref(tmp))(y, lift(deref)(y))` (where `tmp` is an arbitrary
+    new symbol name).
+
+    Note that there are edge cases of lifts which can not be popped up; for
+    example, popping up of a lift call that references a closure argument
+    (like `lift(deref)(x)` where `x` is a closure argument) is not possible
+    as we can not pop the expression to be a closure input (because closures
+    just take unmodified fencil arguments as inputs).
+    """
+
     @staticmethod
     def _extract_lambda(
         node: ir.FunCall,
-    ) -> Optional[tuple[ir.Lambda, bool, Callable[[ir.Lambda, list[ir.Node]], ir.FunCall]]]:
+    ) -> Optional[tuple[ir.Lambda, bool, Callable[[ir.Lambda, list[ir.Expr]], ir.FunCall]]]:
         """Extract the lambda function which is relevant for popping up lifts.
 
         Further, returns a bool indicating if the given function call was as a
@@ -34,20 +47,28 @@ class PopupTmps(NodeTranslator):
 
             is_scan = isinstance(fun, ir.FunCall) and fun.fun == ir.SymRef(id="scan")
             if is_scan:
+                assert isinstance(fun, ir.FunCall)  # just for mypy
                 fun = fun.args[0]
 
-            def wrap(fun: ir.Lambda, args: list[ir.Node]) -> ir.FunCall:
+            def wrap(fun: ir.Lambda, args: list[ir.Expr]) -> ir.FunCall:
                 if is_scan:
-                    fun = ir.FunCall(
-                        fun=ir.SymRef(id="scan"), args=[fun] + node.fun.args[0].args[1:]
+                    assert isinstance(node.fun, ir.FunCall) and isinstance(
+                        node.fun.args[0], ir.FunCall
                     )
-                return ir.FunCall(fun=ir.FunCall(fun=ir.SymRef(id="lift"), args=[fun]), args=args)
+                    scan_args = [cast(ir.Expr, fun)] + node.fun.args[0].args[1:]
+                    f: Union[ir.Lambda, ir.FunCall] = ir.FunCall(
+                        fun=ir.SymRef(id="scan"), args=scan_args
+                    )
+                else:
+                    f = fun
+                return ir.FunCall(fun=ir.FunCall(fun=ir.SymRef(id="lift"), args=[f]), args=args)
 
+            assert isinstance(fun, ir.Lambda)
             return fun, True, wrap
         if isinstance(node.fun, ir.Lambda):
             # direct lambda call
 
-            def wrap(fun: ir.Lambda, args: list[ir.Node]) -> ir.FunCall:
+            def wrap(fun: ir.Lambda, args: list[ir.Expr]) -> ir.FunCall:
                 return ir.FunCall(fun=fun, args=args)
 
             return node.fun, False, wrap
