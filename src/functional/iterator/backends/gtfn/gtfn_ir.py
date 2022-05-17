@@ -1,9 +1,15 @@
 import enum
 from typing import ClassVar, List, Union
 
-from eve import Node
-from eve.traits import SymbolName, SymbolTableTrait, ValidatedSymbolTableTrait
-from eve.type_definitions import StrEnum, SymbolRef
+import eve
+from eve import SymbolName, SymbolRef, Coerced
+from eve.traits import SymbolTableTrait, ValidatedSymbolTableTrait
+from eve.type_definitions import StrEnum
+
+
+@eve.utils.noninstantiable
+class Node(eve.Node):
+    pass
 
 
 @enum.unique
@@ -13,7 +19,7 @@ class GridType(StrEnum):
 
 
 class Sym(Node):  # helper
-    id: SymbolName  # noqa: A003
+    id: Coerced[SymbolName]  # noqa: A003
 
 
 class Expr(Node):
@@ -47,7 +53,7 @@ class OffsetLiteral(Expr):
 
 
 class SymRef(Expr):
-    id: SymbolRef  # noqa: A003
+    id: Coerced[SymbolRef]  # noqa: A003
 
 
 class Lambda(Expr, SymbolTableTrait):
@@ -61,7 +67,7 @@ class FunCall(Expr):
 
 
 class FunctionDefinition(Node, SymbolTableTrait):
-    id: SymbolName  # noqa: A003
+    id: Coerced[SymbolName]  # noqa: A003
     params: List[Sym]
     expr: Expr
 
@@ -89,7 +95,7 @@ BUILTINS = {
 
 
 class FencilDefinition(Node, ValidatedSymbolTableTrait):
-    id: SymbolName  # noqa: A003
+    id: Coerced[SymbolName]  # noqa: A003
     params: List[Sym]
     function_definitions: List[FunctionDefinition]
     executions: List[StencilExecution]

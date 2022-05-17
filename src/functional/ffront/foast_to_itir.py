@@ -104,7 +104,7 @@ class FieldOperatorLowering(NodeTranslator):
         return cls().visit(node)
 
     def visit_FieldOperator(self, node: foast.FieldOperator, **kwargs) -> itir.FunctionDefinition:
-        symtable = node.symtable_
+        symtable = node.annex.symtable
         params = self.visit(node.params, symtable=symtable)
         return itir.FunctionDefinition(
             id=node.id,
@@ -144,7 +144,7 @@ class FieldOperatorLowering(NodeTranslator):
             return TypeInfo(expr.type).is_field_type
 
         param_names = list(
-            node.iter_tree().if_isinstance(foast.Name).filter(is_field).getattr("id").unique()
+            node.pre_walk_values().if_isinstance(foast.Name).filter(is_field).getattr("id").unique()
         )
         return self.lifted_lambda(*param_names)
 

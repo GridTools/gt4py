@@ -11,8 +11,14 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
+
+
 # TODO(tehrengruber): This file contains to many different components. Split
 #  into components for each dialect.
+
+
+from __future__ import annotations
+
 import abc
 import collections
 import dataclasses
@@ -22,6 +28,7 @@ import typing
 import warnings
 from typing import Any, Callable, Optional, Protocol
 
+from eve.extended_typing import Any, Optional, Protocol
 from eve.utils import UIDs
 from functional.common import GTTypeError
 from functional.ffront import (
@@ -264,7 +271,7 @@ def program(
     *,
     externals=None,
     backend=None,
-):
+) -> Program | Callable[[types.FunctionType], Program]:
     """
     Generate an implementation of a program from a Python function object.
 

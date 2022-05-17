@@ -17,7 +17,7 @@ def extract_fundefs_from_closures(program: itir.FencilDefinition) -> itir.Fencil
     # We should adapt this filter and add support for extracting builtins in `extract_function`,
     # which requires type information for the builtins.
     inlined_stencils = (
-        program.iter_tree()
+        program.pre_walk_values()
         .if_isinstance(itir.StencilClosure)
         .getattr("stencil")
         .if_not_isinstance(itir.SymRef)
