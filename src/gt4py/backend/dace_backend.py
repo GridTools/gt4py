@@ -19,7 +19,6 @@ from typing import TYPE_CHECKING, Dict, Optional, Tuple, Type
 
 import dace
 import numpy as np
-from dace.sdfg.utils import fuse_states, inline_sdfgs
 from dace.serialize import dumps
 
 from eve import codegen
@@ -130,10 +129,11 @@ def _pre_expand_trafos(stencil_ir: gtir.Stencil, sdfg: dace.SDFG, layout_map):
 
 
 def _post_expand_trafos(sdfg: dace.SDFG):
-    while inline_sdfgs(sdfg) or fuse_states(sdfg):
-        pass
+    # DaCe "standard" clean-up transformations
     sdfg.simplify()
 
+    # Only has effect if schedule is CPU_Multicore,
+    # setting node.collapse causes the omp parallel statement to include collapse(n)
     for node, _ in sdfg.all_nodes_recursive():
         if isinstance(node, dace.nodes.MapEntry):
             node.collapse = len(node.range)
