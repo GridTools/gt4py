@@ -1,10 +1,14 @@
 import enum
-from typing import List, Union
+from typing import ClassVar, List, Union
 
-from eve import Node
-from eve.traits import SymbolName, SymbolTableTrait
+import eve
+from eve.traits import SymbolName, SymbolTableTrait, ValidatedSymbolTableTrait
 from eve.type_definitions import StrEnum, SymbolRef
-from functional.iterator.util.sym_validation import validate_symbol_refs
+
+
+@eve.utils.noninstantiable
+class Node(eve.Node):
+    pass
 
 
 @enum.unique
@@ -61,12 +65,6 @@ class FunCall(Expr):
     args: List[Expr]
 
 
-class TemplatedFunCall(Expr):
-    fun: Expr  # VType[Callable]
-    template_args: List[Expr]
-    args: List[Expr]
-
-
 class FunctionDefinition(Node, SymbolTableTrait):
     id: SymbolName  # noqa: A003
     params: List[Sym]
@@ -84,7 +82,18 @@ class StencilExecution(Node):
     inputs: List[SymRef]
 
 
-class FencilDefinition(Node, SymbolTableTrait):
+BUILTINS = {
+    "deref",
+    "shift",
+    "make_tuple",
+    "tuple_get",
+    "can_deref",
+    "domain",  # TODO(havogt) decide if domain is part of IR
+    "named_range",
+}
+
+
+class FencilDefinition(Node, ValidatedSymbolTableTrait):
     id: SymbolName  # noqa: A003
     params: List[Sym]
     function_definitions: List[FunctionDefinition]
@@ -92,17 +101,4 @@ class FencilDefinition(Node, SymbolTableTrait):
     offset_declarations: List[str]
     grid_type: GridType
 
-    builtin_functions = list(
-        Sym(id=name)
-        for name in [
-            "deref",
-            "shift",
-            "tuple",
-            "get",
-            "can_deref",
-            "domain",  # TODO(havogt) decide if domain is part of IR
-            "named_range",
-        ]
-    )
-
-    _validate_symbol_refs = validate_symbol_refs()
+    _NODE_SYMBOLS_: ClassVar = [Sym(id=name) for name in BUILTINS]

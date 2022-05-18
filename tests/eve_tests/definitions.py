@@ -21,7 +21,7 @@ import string
 from typing import Collection, Dict, List, Mapping, Optional, Sequence, Set, Type, TypeVar
 
 from eve.concepts import FrozenNode, Node, VType
-from eve.traits import SymbolTableTrait
+from eve.traits import SymbolTableTrait, ValidatedSymbolTableTrait
 from eve.type_definitions import (
     Bool,
     Bytes,
@@ -140,6 +140,13 @@ class CompoundNodeWithSymbols(Node):
 
 
 class NodeWithSymbolTable(Node, SymbolTableTrait):
+    node_with_name: SimpleNodeWithSymbolName
+    list_with_name: List[SimpleNodeWithSymbolName]
+    node_with_default_name: SimpleNodeWithDefaultSymbolName
+    compound_with_name: CompoundNodeWithSymbols
+
+
+class NodeWithValidatedSymbolTable(NodeWithSymbolTable, ValidatedSymbolTableTrait):
     node_with_name: SimpleNodeWithSymbolName
     list_with_name: List[SimpleNodeWithSymbolName]
     node_with_default_name: SimpleNodeWithDefaultSymbolName
@@ -417,6 +424,17 @@ def make_compound_node_with_symbols(*, fixed: bool = False) -> CompoundNodeWithS
 
 def make_node_with_symbol_table(*, fixed: bool = False) -> NodeWithSymbolTable:
     return NodeWithSymbolTable(
+        node_with_name=make_simple_node_with_symbol_name(fixed=fixed),
+        node_with_default_name=make_simple_node_with_default_symbol_name(fixed=fixed),
+        list_with_name=make_multinode_collection_value(
+            SimpleNodeWithSymbolName, length=4, fixed=fixed
+        ),
+        compound_with_name=make_compound_node_with_symbols(fixed=fixed),
+    )
+
+
+def make_node_with_validate_symbol_table(*, fixed: bool = False) -> NodeWithValidatedSymbolTable:
+    return NodeWithValidatedSymbolTable(
         node_with_name=make_simple_node_with_symbol_name(fixed=fixed),
         node_with_default_name=make_simple_node_with_default_symbol_name(fixed=fixed),
         list_with_name=make_multinode_collection_value(

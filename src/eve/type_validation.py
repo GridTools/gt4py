@@ -197,6 +197,9 @@ class SimpleTypeValidatorFactory(TypeValidatorFactory):
         localns: Optional[Dict[str, Any]] = None,
         **kwargs: Any,
     ) -> Optional[FixedTypeValidator]:
+
+        # TODO(egparedes): if a "typing tree" structure is implemented, refactor this code as a tree traversal.
+        #
         if name is None:
             name = "<value>"
 
@@ -320,7 +323,19 @@ class SimpleTypeValidatorFactory(TypeValidatorFactory):
                         mapping_validator=self.make_is_instance_of(name, origin_type),
                     )
 
-            # TODO(egparedes): add support for Callables
+                # Custom generic type: any regular (not datamodel) user-defined generic types like:
+                #   class Foo(Generic[T]):
+                #          ...
+                #
+                # Since this can be an arbitrary type (not something regular like a collection) there is
+                # no way to check if the type parameter is verifed in the actual instance.
+                # The only check can be done at run-time is to verify that the value is an instance of
+                # the original type, completely ignoring the annotation. Ideally, the static type checker
+                # can do a better job to try figure out if the type parameter is ok ...
+
+                return make_recursive(origin_type)
+
+            # TODO(egparedes): add support for signature checking in Callables
             raise exceptions.EveValueError(f"{type_annotation} type annotation is not supported.")
 
         except exceptions.EveValueError as error:
@@ -347,7 +362,7 @@ class SimpleTypeValidatorFactory(TypeValidatorFactory):
         def _is_instance_of(value: Any, **kwargs: Any) -> None:
             if not isinstance(value, type_):
                 raise TypeError(
-                    f"'{name}' must be {type_} (got '{value}' that is a {type(value)})."
+                    f"'{name}' must be {type_} (got '{value}' which is a {type(value)})."
                 )
 
         return _is_instance_of
@@ -358,7 +373,7 @@ class SimpleTypeValidatorFactory(TypeValidatorFactory):
 
         def _is_instance_of_int(value: Any, **kwargs: Any) -> None:
             if not isinstance(value, int) or isinstance(value, bool):
-                raise TypeError(f"'{name}' must be {int} (got '{value}' that is a {type(value)}).")
+                raise TypeError(f"'{name}' must be {int} (got '{value}' which is a {type(value)}).")
 
         return _is_instance_of_int
 
@@ -392,7 +407,7 @@ class SimpleTypeValidatorFactory(TypeValidatorFactory):
         def _is_tuple_of(value: Any, **kwargs: Any) -> None:
             if not isinstance(value, tuple_type):
                 raise TypeError(
-                    f"In '{name}' validation, got '{value}' that is a {type(value)} instead of {tuple_type}."
+                    f"In '{name}' validation, got '{value}' which is a {type(value)} instead of {tuple_type}."
                 )
             if len(value) != len(item_validators):
                 raise TypeError(
@@ -476,11 +491,11 @@ class SimpleTypeValidatorFactory(TypeValidatorFactory):
         return _combined_validator
 
 
-#: Public (with optional cache) entry point for :class:`SimpleTypeValidatorFactory`.
 simple_type_validator_factory: Final = cast(
     TypeValidatorFactory,
     utils.optional_lru_cache(SimpleTypeValidatorFactory(), typed=True),  # type: ignore[arg-type]
 )
+"""Public (with optional cache) entry point for :class:`SimpleTypeValidatorFactory`."""
 
 
 def simple_type_validator(
@@ -508,4 +523,4 @@ def simple_type_validator(
 
 
 # TODO(egparedes): add other implementations for advanced 3rd-party validators
-# TODO(egparedes): e.g. 'typeguard' and specially 'beartype'
+#   e.g. 'typeguard' and specially 'beartype'

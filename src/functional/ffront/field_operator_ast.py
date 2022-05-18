@@ -44,13 +44,13 @@ DataTypeT = TypeVar("DataTypeT", bound=common_types.DataType)
 DataSymbol = Symbol[DataTypeT]
 
 FieldTypeT = TypeVar("FieldTypeT", bound=common_types.FieldType)
-FieldSymbol = Symbol[FieldTypeT]
+FieldSymbol = DataSymbol[FieldTypeT]
 
 ScalarTypeT = TypeVar("ScalarTypeT", bound=common_types.ScalarType)
-ScalarSymbol = Symbol[ScalarTypeT]
+ScalarSymbol = DataSymbol[ScalarTypeT]
 
 TupleTypeT = TypeVar("TupleTypeT", bound=common_types.TupleType)
-TupleSymbol = Symbol[TupleTypeT]
+TupleSymbol = DataSymbol[TupleTypeT]
 
 
 class Expr(LocatedNode):

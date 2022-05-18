@@ -1,10 +1,9 @@
-from typing import List, Union
+from typing import ClassVar, List, Union
 
 import eve
-from eve.traits import SymbolName, SymbolTableTrait
+from eve.traits import SymbolName, SymbolTableTrait, ValidatedSymbolTableTrait
 from eve.type_definitions import SymbolRef
 from eve.utils import noninstantiable
-from functional.iterator.util.sym_validation import validate_symbol_refs
 
 
 @noninstantiable
@@ -93,12 +92,10 @@ BUILTINS = {
 }
 
 
-class FencilDefinition(Node, SymbolTableTrait):
+class FencilDefinition(Node, ValidatedSymbolTableTrait):
     id: SymbolName  # noqa: A003
     function_definitions: List[FunctionDefinition]
     params: List[Sym]
     closures: List[StencilClosure]
 
-    builtin_functions = [Sym(id=name) for name in BUILTINS]
-
-    _validate_symbol_refs = validate_symbol_refs()
+    _NODE_SYMBOLS_: ClassVar = [Sym(id=name) for name in BUILTINS]
