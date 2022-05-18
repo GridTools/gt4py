@@ -345,8 +345,8 @@ def is_noninstantiable(cls: Type[_T]) -> bool:
     return "__noninstantiable__" in cls.__dict__
 
 
-def shash(*args: Any, hash_algorithm: Optional[Any] = None) -> str:
-    """Stable hash function.
+def content_hash(*args: Any, hash_algorithm: str | xtyping.HashlibAlgorithm | None = None) -> str:
+    """Stable content-based hash function using instance serialization data.
 
     It provides a customizable hash function for any kind of data.
     Unlike the builtin `hash` function, it is stable (same hash value across
@@ -363,19 +363,26 @@ def shash(*args: Any, hash_algorithm: Optional[Any] = None) -> str:
     if hash_algorithm is None:
         hash_algorithm = xxhash.xxh64()
     elif isinstance(hash_algorithm, str):
-        hash_algorithm = hashlib.new(hash_algorithm)
+        hash_algorithm = hashlib.new(hash_algorithm)  # type: ignore[assignment]
 
-    hash_algorithm.update(pickle.dumps(args))
-    result = hash_algorithm.hexdigest()
+    hash_algorithm.update(pickle.dumps(args))  # type: ignore[union-attr]
+    result = hash_algorithm.hexdigest()  # type: ignore[union-attr]
     assert isinstance(result, str)
 
     return result
 
 
-AnyWordsIterable = Union[str, Iterable[str]]
-
-
 ddiff = deepdiff.DeepDiff
+"""Shortcut for deepdiff.DeepDiff.
+Check https://zepworks.com/deepdiff/current/diff.html for more info.
+"""
+
+
+def dhash(obj: Any, **kwargs: Any) -> str:
+    """Shortcut for deepdiff.deephash.DeepHash.
+    Check https://zepworks.com/deepdiff/current/deephash.html for more info.
+    """
+    return deepdiff.deephash.DeepHash(obj)[obj]
 
 
 def pprint_ddiff(
@@ -385,19 +392,15 @@ def pprint_ddiff(
     pprint_opts: Optional[Dict[str, Any]] = None,
     **kwargs: Any,
 ) -> None:
+    """Pretty printing of deepdiff.DeepDiff objects.
+    Keyword Arguments:
+        pprint_opts: kwargs dict with options for pprint.pprint.
+    """
     pprint_opts = pprint_opts or {"indent": 2}
     pprint.pprint(deepdiff.DeepDiff(old, new, **kwargs), **pprint_opts)
 
 
-def pprint_diff(
-    old: Any,
-    new: Any,
-    *,
-    pprint_kwargs: Optional[Dict[str, Any]] = None,
-    **kwargs: Any,
-) -> None:
-    pprint_kwargs = pprint_kwargs or {"indent": 2}
-    pprint.pprint(deepdiff.DeepDiff(old, new, **kwargs), **pprint_kwargs)
+AnyWordsIterable = Union[str, Iterable[str]]
 
 
 class CaseStyleConverter:

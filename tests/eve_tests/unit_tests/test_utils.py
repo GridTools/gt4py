@@ -169,7 +169,7 @@ def hash_algorithm(request):
 
 
 def test_shash(unique_data_items, hash_algorithm):
-    from eve.utils import shash
+    from eve.utils import content_hash
 
     # Test hash consistency
     for item in unique_data_items:
@@ -179,10 +179,10 @@ def test_shash(unique_data_items, hash_algorithm):
         else:
             h1 = hash_algorithm
             h2 = hash_algorithm
-        assert shash(item, hash_algorithm=h1) == shash(copy.deepcopy(item), hash_algorithm=h2)
+        assert content_hash(item, hash_algorithm=h1) == content_hash(copy.deepcopy(item), hash_algorithm=h2)
 
     # Test hash specificity
-    hashes = set(shash(item, hash_algorithm=hash_algorithm) for item in unique_data_items)
+    hashes = set(content_hash(item, hash_algorithm=hash_algorithm) for item in unique_data_items)
     assert len(hashes) == len(unique_data_items)
 
 
