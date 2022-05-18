@@ -395,7 +395,7 @@ def pprint_ddiff(
     pprint_opts: Optional[Dict[str, Any]] = None,
     **kwargs: Any,
 ) -> None:
-    """Utility function for pretty printing of deepdiff.DeepDiff objects.
+    """Pretty printing of deepdiff.DeepDiff objects.
 
     Keyword Arguments:
         pprint_opts: kwargs dict with options for pprint.pprint.
