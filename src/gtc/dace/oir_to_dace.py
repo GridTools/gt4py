@@ -35,18 +35,14 @@ class OirSDFGBuilder(eve.NodeVisitor):
     class SDFGContext:
         sdfg: dace.SDFG
         last_state: dace.SDFGState
-        decls: Dict[str, oir.FieldDecl]
+        decls: Dict[str, oir.Decl]
         block_extents: Dict[int, Extent]
         access_infos: Dict[str, dcir.FieldAccessInfo]
 
         def __init__(self, stencil: oir.Stencil):
             self.sdfg = dace.SDFG(stencil.name)
             self.last_state = self.sdfg.add_state(is_start_state=True)
-            self.decls = {
-                decl.name: decl
-                for decl in stencil.params + stencil.declarations
-                if isinstance(decl, oir.FieldDecl)
-            }
+            self.decls = {decl.name: decl for decl in stencil.params + stencil.declarations}
             self.block_extents = compute_horizontal_block_extents(stencil)
 
             self.access_infos = compute_dcir_access_infos(
