@@ -17,8 +17,8 @@ import functional.ffront.field_operator_ast as foast
 from eve import NodeTranslator, SymbolTableTrait
 from functional.common import GTSyntaxError
 from functional.ffront import common_types as ct
-from functional.ffront.type_info import GenericDimensions, TypeInfo, is_complete_symbol_type
 from functional.ffront.fbuiltins import FUN_BUILTIN_NAMES
+from functional.ffront.type_info import GenericDimensions, TypeInfo, is_complete_symbol_type
 
 
 def are_broadcast_compatible(left: TypeInfo, right: TypeInfo) -> bool:
@@ -208,8 +208,8 @@ class FieldOperatorTypeDeduction(NodeTranslator):
                 #  but does not change the target type.
                 if source != target:
                     raise FieldOperatorTypeDeductionError.from_foast_node(
-                        new_value, msg="Source and target must be equal for "
-                                       "offsets with a single target."
+                        new_value,
+                        msg="Source and target must be equal for " "offsets with a single target.",
                     )
                 new_type = new_value.type
             case _:
@@ -410,8 +410,8 @@ class FieldOperatorTypeDeduction(NodeTranslator):
             raise FieldOperatorTypeDeductionError.from_foast_node(
                 node,
                 msg=f"Incompatible field argument in {node.func.id}. Expected "
-                    f"a field with dimension {reduction_dim}, but got "
-                    f"{field_dims_str}.",
+                f"a field with dimension {reduction_dim}, but got "
+                f"{field_dims_str}.",
             )
         return_type = ct.FieldType(
             dims=[dim for dim in field_type.dims if dim != reduction_dim],
