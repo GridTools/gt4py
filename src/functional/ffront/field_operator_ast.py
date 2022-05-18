@@ -28,7 +28,10 @@ class LocatedNode(Node):
 SymbolT = TypeVar("SymbolT", bound=common_types.SymbolType)
 
 
-# class Symbol(eve.GenericNode, LocatedNode, Generic[SymbolT]):
+# TODO(egparedes): this should be an actual generic datamodel but it is not fully working
+#   due to nested specialization with bound typevars, so disabling specialization for now
+#       class Symbol(eve.GenericNode, LocatedNode, Generic[SymbolT]):
+#
 class Symbol(LocatedNode, Generic[SymbolT]):
     id: Coerced[SymbolName]  # noqa: A003
     type: Union[SymbolT, common_types.DeferredSymbolType]  # noqa A003
