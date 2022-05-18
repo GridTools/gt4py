@@ -179,7 +179,9 @@ def test_shash(unique_data_items, hash_algorithm):
         else:
             h1 = hash_algorithm
             h2 = hash_algorithm
-        assert content_hash(item, hash_algorithm=h1) == content_hash(copy.deepcopy(item), hash_algorithm=h2)
+        assert content_hash(item, hash_algorithm=h1) == content_hash(
+            copy.deepcopy(item), hash_algorithm=h2
+        )
 
     # Test hash specificity
     hashes = set(content_hash(item, hash_algorithm=hash_algorithm) for item in unique_data_items)
