@@ -877,6 +877,7 @@ def _substitute_typevars(
         return type_params_map[type_hint], True
     elif getattr(type_hint, "__parameters__", []):
         return type_hint[tuple(type_params_map[tp] for tp in type_hint.__parameters__)], True
+        # TODO(egparedes): WIP fix for partial specialization
         # # Type hint is a generic model: replace all the concretized type vars
         # replaced = False
         # new_args = []

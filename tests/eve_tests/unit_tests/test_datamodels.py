@@ -1181,6 +1181,7 @@ class TestGenericModelValidation:
         with pytest.raises(TypeError, match=".value'"):
             PartiallySpecializedGenericModel(value=["1"])
 
+        # TODO(egparedes): after fixing partial nested datamodel specialization
         # FullySpecializedGenericModel = PartiallySpecializedGenericModel[str]
         # print(f"{FullySpecializedGenericModel.__datamodel_fields__=}")
         # print(f"{FullySpecializedGenericModel.__parameters__=}")

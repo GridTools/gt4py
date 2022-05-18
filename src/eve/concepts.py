@@ -223,25 +223,26 @@ class Node(datamodels.DataModel, trees.Tree, kw_only=True):  # type: ignore[call
     walk_items = trees.walk_items
     walk_values = trees.walk_values
 
-    # @property
+    # TODO(egparedes): add useful hashes to base node
+    # # @property
     # def content_id(self) -> int:
-    #     return utils.instance_hash(self.fields)
-
+    #     ...
+    #
     # @property
     # def annex_content_id(self) -> int:
-    #     return utils.instance_hash(self.fields)
-
+    #     ...
+    #
     # @property
     # def node_content_id(self) -> int:
-    #     return utils.content_hash(self.node_content_hash, self.annex_content_hash)
-
+    #     ...
+    #
     # @property
     # def instance_content_id(self) -> int:
-    #     return utils.instance_hash(self)
-
+    #     ...
+    #
     # @property
     # def instance_id(self) -> int:
-    #     return self(id)
+    #     ...
 
 
 NodeT = TypeVar("NodeT", bound="Node")
