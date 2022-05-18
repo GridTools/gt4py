@@ -202,10 +202,15 @@ class FieldOperatorTypeDeduction(NodeTranslator):
                         new_value, msg="Second dimension in offset must be a local dimension."
                     )
                 new_type = ct.OffsetType(source=source, target=(target1,))
-            case ct.OffsetType(source=_, target=(_,)):
+            case ct.OffsetType(source=source, target=(target,)):
                 # for cartesian axes (e.g. I, J) the index of the subscript only
                 #  signifies the displacement in the respective dimension,
                 #  but does not change the target type.
+                if source != target:
+                    raise FieldOperatorTypeDeductionError.from_foast_node(
+                        new_value, msg="Source and target must be equal for "
+                                       "offsets with a single target."
+                    )
                 new_type = new_value.type
             case _:
                 raise FieldOperatorTypeDeductionError.from_foast_node(
