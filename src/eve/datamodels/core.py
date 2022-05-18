@@ -60,8 +60,6 @@ from ..extended_typing import (
     TypeVar,
     Union,
     cast,
-    dataclass_transform,
-    no_type_check,
     overload,
 )
 from ..type_definitions import NOTHING, NothingType
@@ -885,15 +883,15 @@ def _substitute_typevars(
         return type_hint[tuple(type_params_map[tp] for tp in type_hint.__parameters__)], True
         # TODO(egparedes): WIP fix for partial specialization
         # # Type hint is a generic model: replace all the concretized type vars
-        # replaced = False
-        # new_args = []
-        # for tp in type_hint.__parameters__:
-        #     if tp in type_params_map:
-        #         new_args.append(type_params_map[tp])
-        #         replaced = True
-        #     else:
-        #         new_args.append(type_params_map[tp])
-        # return type_hint[tuple(new_args)], replaced
+        # noqa: e800 replaced = False
+        # noqa: e800 new_args = []
+        # noqa: e800 for tp in type_hint.__parameters__:
+        # noqa: e800     if tp in type_params_map:
+        # noqa: e800         new_args.append(type_params_map[tp])
+        # noqa: e800         replaced = True
+        # noqa: e800     else:
+        # noqa: e800         new_args.append(type_params_map[tp])
+        # noqa: e800 return type_hint[tuple(new_args)], replaced
     else:
         return type_hint, False
 
@@ -1318,8 +1316,9 @@ def _make_concrete_with_cache(
     type_params_map = dict(zip(datamodel_cls.__parameters__, type_args))
     model_fields = getattr(datamodel_cls, MODEL_FIELD_DEFINITIONS_ATTR)
     new_annotations = {
-        # "__args__": "ClassVar[Tuple[Union[Type, TypeVar], ...]]",
-        # "__parameters__": "ClassVar[Tuple[TypeVar, ...]]",
+        # TODO(egparedes): ?
+        # noqa: e800 "__args__": "ClassVar[Tuple[Union[Type, TypeVar], ...]]",
+        # noqa: e800 "__parameters__": "ClassVar[Tuple[TypeVar, ...]]",
     }
 
     new_field_c_attrs = {}

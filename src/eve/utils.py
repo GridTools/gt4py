@@ -52,6 +52,7 @@ from boltons.strutils import (  # noqa: F401
     unwrap_text as unwrap_text,
 )
 
+from . import extended_typing as xtyping
 from .extended_typing import (
     Any,
     Callable,
@@ -374,12 +375,14 @@ def content_hash(*args: Any, hash_algorithm: str | xtyping.HashlibAlgorithm | No
 
 ddiff = deepdiff.DeepDiff
 """Shortcut for deepdiff.DeepDiff.
+
 Check https://zepworks.com/deepdiff/current/diff.html for more info.
 """
 
 
 def dhash(obj: Any, **kwargs: Any) -> str:
     """Shortcut for deepdiff.deephash.DeepHash.
+
     Check https://zepworks.com/deepdiff/current/deephash.html for more info.
     """
     return deepdiff.deephash.DeepHash(obj)[obj]
@@ -393,6 +396,7 @@ def pprint_ddiff(
     **kwargs: Any,
 ) -> None:
     """Pretty printing of deepdiff.DeepDiff objects.
+
     Keyword Arguments:
         pprint_opts: kwargs dict with options for pprint.pprint.
     """

@@ -20,10 +20,9 @@
 from __future__ import annotations
 
 import collections
-from typing import Protocol
 
 from . import concepts, datamodels, exceptions, visitors
-from .extended_typing import Any, ClassVar, Dict, List, Set, Type, no_type_check
+from .extended_typing import Any, Dict, Set, Type, no_type_check
 
 
 # ---  Node Traits ---

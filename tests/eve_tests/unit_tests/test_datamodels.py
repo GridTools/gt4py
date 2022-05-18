@@ -1182,27 +1182,27 @@ class TestGenericModelValidation:
             PartiallySpecializedGenericModel(value=["1"])
 
         # TODO(egparedes): after fixing partial nested datamodel specialization
-        # FullySpecializedGenericModel = PartiallySpecializedGenericModel[str]
-        # print(f"{FullySpecializedGenericModel.__datamodel_fields__=}")
-        # print(f"{FullySpecializedGenericModel.__parameters__=}")
-        # print(f"{FullySpecializedGenericModel.__args__=}")
+        # noqa: e800 FullySpecializedGenericModel = PartiallySpecializedGenericModel[str]
+        # noqa: e800 print(f"{FullySpecializedGenericModel.__datamodel_fields__=}")
+        # noqa: e800 print(f"{FullySpecializedGenericModel.__parameters__=}")
+        # noqa: e800 print(f"{FullySpecializedGenericModel.__args__=}")
 
-        # FullySpecializedGenericModel(value=[])
-        # FullySpecializedGenericModel(value=[(1, "value")])
-        # with pytest.raises(TypeError, match=".value'"):
-        #     FullySpecializedGenericModel(value=1)
-        # with pytest.raises(TypeError, match=".value'"):
-        #     FullySpecializedGenericModel(value=(1, 2))
-        # with pytest.raises(TypeError, match=".value'"):
-        #     FullySpecializedGenericModel(value=[1.0])
-        # with pytest.raises(TypeError, match=".value'"):
-        #     FullySpecializedGenericModel(value=["1"])
-        # with pytest.raises(TypeError, match=".value'"):
-        #     FullySpecializedGenericModel(value=1)
-        # with pytest.raises(TypeError, match=".value'"):
-        #     FullySpecializedGenericModel(value=[(1, 2)])
-        # with pytest.raises(TypeError, match=".value'"):
-        #     FullySpecializedGenericModel(value=[(1, (11, 12))])
+        # noqa: e800 FullySpecializedGenericModel(value=[])
+        # noqa: e800 FullySpecializedGenericModel(value=[(1, "value")])
+        # noqa: e800 with pytest.raises(TypeError, match=".value'"):
+        # noqa: e800     FullySpecializedGenericModel(value=1)
+        # noqa: e800 with pytest.raises(TypeError, match=".value'"):
+        # noqa: e800     FullySpecializedGenericModel(value=(1, 2))
+        # noqa: e800 with pytest.raises(TypeError, match=".value'"):
+        # noqa: e800     FullySpecializedGenericModel(value=[1.0])
+        # noqa: e800 with pytest.raises(TypeError, match=".value'"):
+        # noqa: e800     FullySpecializedGenericModel(value=["1"])
+        # noqa: e800 with pytest.raises(TypeError, match=".value'"):
+        # noqa: e800     FullySpecializedGenericModel(value=1)
+        # noqa: e800 with pytest.raises(TypeError, match=".value'"):
+        # noqa: e800     FullySpecializedGenericModel(value=[(1, 2)])
+        # noqa: e800 with pytest.raises(TypeError, match=".value'"):
+        # noqa: e800     FullySpecializedGenericModel(value=[(1, (11, 12))])
 
     # Reuse sample_type_data from test_field_type_hint
     @pytest.mark.parametrize(["type_hint", "valid_values", "wrong_values"], SAMPLE_TYPE_DATA)
