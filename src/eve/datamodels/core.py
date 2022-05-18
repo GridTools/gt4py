@@ -75,6 +75,10 @@ from ..type_definitions import NOTHING, NothingType
 _T = TypeVar("_T")
 
 
+# TODO(egparedes): since these protocols are used instead of the actual classes
+#   for type checking, we assign empty tuples and None values to its members 
+#   to avoid errors from mypy complaining about instantiation of abstract classes
+
 class _AttrsClassTP(Protocol):
     __attrs_attrs__: ClassVar[Tuple[attr.Attribute, ...]] = ()
 
@@ -422,6 +426,7 @@ frozenmodel: _DataModelDecoratorTP = functools.partial(datamodel, frozen=True)
 frozen_model = frozenmodel
 
 
+# Typing protocols are used instead of the actual classes for type checks
 if xtyping.TYPE_CHECKING:
     DataModel: TypeAlias = DataModelTP
 
