@@ -1,9 +1,14 @@
 import enum
 from typing import ClassVar, List, Union
 
-from eve import Node
+import eve
 from eve.traits import SymbolName, SymbolTableTrait, ValidatedSymbolTableTrait
 from eve.type_definitions import StrEnum, SymbolRef
+
+
+@eve.utils.noninstantiable
+class Node(eve.Node):
+    pass
 
 
 @enum.unique

@@ -11,8 +11,14 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
+
+
 # TODO(tehrengruber): This file contains to many different components. Split
 #  into components for each dialect.
+
+
+from __future__ import annotations
+
 import abc
 import collections
 import dataclasses
@@ -264,7 +270,7 @@ def program(
     *,
     externals=None,
     backend=None,
-):
+) -> Program | Callable[[types.FunctionType], Program]:
     """
     Generate an implementation of a program from a Python function object.
 
@@ -365,7 +371,7 @@ class FieldOperator(GTCallable):
         )
 
         params_decl: list[past.Symbol] = [
-            past.Symbol(
+            past.DataSymbol(
                 id=UIDs.sequential_id(prefix="__sym"),
                 type=arg_type,
                 namespace=ct.Namespace.LOCAL,
@@ -374,7 +380,7 @@ class FieldOperator(GTCallable):
             for arg_type in type_.args
         ]
         params_ref = [past.Name(id=pdecl.id, location=loc) for pdecl in params_decl]
-        out_sym: past.Symbol = past.Symbol(
+        out_sym: past.Symbol = past.DataSymbol(
             id="out", type=type_.returns, namespace=ct.Namespace.LOCAL, location=loc
         )
         out_ref = past.Name(id="out", location=loc)

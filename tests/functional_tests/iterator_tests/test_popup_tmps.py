@@ -63,7 +63,7 @@ def test_trivial_single_lift():
 def test_trivial_multiple_lifts():
     testee = ir.FunCall(
         fun=ir.Lambda(
-            params=[ir.SymRef(id="baz_inp")],
+            params=[ir.Sym(id="baz_inp")],
             expr=ir.FunCall(
                 fun=ir.SymRef(id="deref"),
                 args=[
@@ -105,7 +105,7 @@ def test_trivial_multiple_lifts():
     )
     expected = ir.FunCall(
         fun=ir.Lambda(
-            params=[ir.SymRef(id="baz_inp"), ir.SymRef(id="t1")],
+            params=[ir.Sym(id="baz_inp"), ir.Sym(id="t1")],
             expr=ir.FunCall(
                 fun=ir.SymRef(id="deref"),
                 args=[ir.SymRef(id="t1")],

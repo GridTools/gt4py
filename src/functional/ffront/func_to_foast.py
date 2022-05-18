@@ -219,7 +219,7 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
         elif TypeInfo(new_value.type).is_scalar:
             constraint_type = ct.ScalarType
         return foast.Assign(
-            target=foast.FieldSymbol(
+            target=foast.DataSymbol(
                 id=target.id,
                 location=self._make_loc(target),
                 type=ct.DeferredSymbolType(constraint=constraint_type),
