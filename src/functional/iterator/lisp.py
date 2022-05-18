@@ -3,8 +3,7 @@ from typing import Union, cast
 
 import lark
 
-from eve.codegen import FormatTemplate as as_fmt
-from eve.codegen import TemplatedGenerator
+from eve.codegen import FormatTemplate as as_fmt, TemplatedGenerator
 from functional.iterator import ir
 
 
