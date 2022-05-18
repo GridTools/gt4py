@@ -18,6 +18,7 @@ from eve import NodeTranslator, SymbolTableTrait
 from functional.common import GTSyntaxError
 from functional.ffront import common_types as ct
 from functional.ffront.type_info import GenericDimensions, TypeInfo, is_complete_symbol_type
+from functional.ffront.fbuiltins import FUN_BUILTIN_NAMES
 
 
 def are_broadcast_compatible(left: TypeInfo, right: TypeInfo) -> bool:
@@ -352,7 +353,6 @@ class FieldOperatorTypeDeduction(NodeTranslator):
         return foast.TupleExpr(elts=new_elts, type=new_type, location=node.location)
 
     def visit_Call(self, node: foast.Call, **kwargs) -> foast.Call:
-        # TODO(tehrengruber): check type is complete
         new_func = self.visit(node.func, **kwargs)
 
         return_type: Optional[ct.SymbolType] = None
@@ -374,37 +374,50 @@ class FieldOperatorTypeDeduction(NodeTranslator):
             new_type = ct.FieldType(dims=new_dims, dtype=new_func.type.dtype)
             return foast.Call(func=new_func, args=new_args, location=node.location, type=new_type)
         elif isinstance(new_func.type, ct.FunctionType):
-            new_args = self.visit(node.args, **kwargs)
+            return_type = new_func.type.returns
+
             # todo(tehrengruber): solve in a more generic way, e.g. using
             #  parametric polymorphism.
-            if node.func.id == "neighbor_sum":
-                field_type: ct.FieldType = new_args[0].type
-                reduction_dim = cast(ct.DimensionType, new_args[1].type).dim
-                if reduction_dim not in field_type.dims:
-                    field_dims_str = ", ".join(str(dim) for dim in field_type.dims)
-                    raise FieldOperatorTypeDeductionError.from_foast_node(
-                        node,
-                        msg=f"Incompatible field argument in {node.func.id}. "
-                        f"Expected a field with dimension {reduction_dim}, "
-                        f"but got {field_dims_str}.",
-                    )
-                return_type = ct.FieldType(
-                    dims=[dim for dim in field_type.dims if dim != reduction_dim],
-                    dtype=field_type.dtype,
-                )
+            # resolve polymorphic builtins
+            if not is_complete_symbol_type(return_type) and node.func.id in FUN_BUILTIN_NAMES:
+                visitor = getattr(self, f"_visit_{node.func.id}")
+                return visitor(node, **kwargs)
             else:
-                return_type = new_func.type.returns
-
-            return foast.Call(
-                func=new_func,
-                args=new_args,
-                location=node.location,
-                type=return_type,
-            )
+                return foast.Call(
+                    func=new_func,
+                    args=self.visit(node.args, **kwargs),
+                    location=node.location,
+                    type=return_type,
+                )
 
         raise FieldOperatorTypeDeductionError.from_foast_node(
             node,
             msg=f"Objects of type '{new_func.type}' are not callable.",
+        )
+
+    def _visit_neighbor_sum(self, node: foast.Call, **kwargs):
+        new_func = self.visit(node.func, **kwargs)
+        new_args = self.visit(node.args, **kwargs)
+        field_type: ct.FieldType = new_args[0].type
+        reduction_dim = cast(ct.DimensionType, new_args[1].type).dim
+        if reduction_dim not in field_type.dims:
+            field_dims_str = ", ".join(str(dim) for dim in field_type.dims)
+            raise FieldOperatorTypeDeductionError.from_foast_node(
+                node,
+                msg=f"Incompatible field argument in {node.func.id}. Expected "
+                    f"a field with dimension {reduction_dim}, but got "
+                    f"{field_dims_str}.",
+            )
+        return_type = ct.FieldType(
+            dims=[dim for dim in field_type.dims if dim != reduction_dim],
+            dtype=field_type.dtype,
+        )
+
+        return foast.Call(
+            func=new_func,
+            args=new_args,
+            location=node.location,
+            type=return_type,
         )
 
     def visit_Constant(self, node: foast.Constant, **kwargs) -> foast.Constant:
