@@ -34,7 +34,7 @@ pip install git+https://github.com/tehrengruber/gt4py.git@fix_reductions
 
 ### Key concepts and application structure
 
-This section introduces three key concepts for storing and manipulating data:
+This section introduces three concepts for storing and manipulating data:
 - [Fields](#Fields),
 - [Field operators](#Field-operators), and
 - [Programs](#Programs).
@@ -45,7 +45,7 @@ The concepts are demonstrated through a simple application that adds two fields.
 
 #### Importing features
 
-The following snippet imports the most commonly used features that are needed to run the code in this document. The code examples also use numpy.
+The following snippet imports the most commonly used features that are needed to run the code in this document. Numpy is also required by the examples.
 
 ```{code-cell} ipython3
 import numpy as np
@@ -57,7 +57,7 @@ from functional.iterator.embedded import np_as_located_field, NeighborTableOffse
 
 #### Fields
 
-Fields store data as a multi-dimensional array, and are defined over named dimensions. The code snippet below defines two named dimensions, *cell* and *K*, and creates the fields `a` and `b` over them using the `np_as_located_field` helper functon. The fields are thus two-dimensional and contain the values 2 and 3 for all entries.
+Fields store data as a multi-dimensional array, and are defined over a set of named dimensions. The code snippet below defines two named dimensions, *cell* and *K*, and creates the fields `a` and `b` over their cartesian product using the `np_as_located_field` helper function. The fields contain the values 2 for `a` and 3 for `b` for all entries.
 
 ```{code-cell} ipython3
 CellDim = Dimension("Cell")
@@ -79,9 +79,9 @@ b = np_as_located_field(CellDim, KDim)(np.full(shape=grid_shape, fill_value=b_va
 
 #### Field operators
 
-Field operators perform operations on a set of fields, for example, elementwise addition or reduction along a dimension. You can write field operators as Python functions by using the `@field_operator` decorator. Field operators cannot have side effects, therefore you cannot modify its arguments, nor can you modify variables declared inside field operators. Only a subset of the Python syntax is allowed inside field operators--the library checks for correctness.
+Field operators perform operations on a set of fields, for example, elementwise addition or reduction along a dimension. You can write field operators as Python functions by using the `@field_operator` decorator. Field operators cannot have side effects, therefore you cannot modify its arguments within their body. Only a subset of the Python syntax is allowed inside field operators--the library checks for correctness.
 
-Here is an example for a field operator that adds two fields elementwise:
+Let's see an example for a field operator that adds two fields elementwise:
 
 ```{code-cell} ipython3
 @field_operator
@@ -127,7 +127,7 @@ print("{} + {} = {} ± {}".format(b_value, (a_value + b_value), np.average(np.as
 
 #### Composing field operators and programs
 
-When writing a complex application, you have to decompose it into *field operators*, *programs*, and Python (or other) code that glues it all together. The general advice is to follow best practices and write short and concise field operators that serve a single purpose. To maximise automatic optimization, use glue code sparingly and group your field operators inside *programs* as much as you can. As such, directly calling field operators is primarily used for debugging purposes.
+When writing complex applications, you have to decompose it into *field operators*, *programs*, and Python (or other) code that glues it all together. The general advice is to follow best practices and write short and concise field operators that serve a single purpose. To maximise automatic optimization, use external glue code sparingly and group your field operators inside *programs* as much as you can. Consequently, directly calling field operators is primarily used for debugging purposes.
 
 +++
 
@@ -141,7 +141,7 @@ The edge difference above is defined as the difference between the two cells adj
 
 $$\begin{aligned} \text{edge_diff}_7 =\,& \text{edge_diff}_{0,1} = \text{value_of}(\text{cell}_0) - \text{value_of}(\text{cell}_1) \end{aligned}$$
 
-The sign of the edge difference in the sum of the pseudo-laplacian is always such that the neighbor cell is subtracted from the subject cell.
+The sign of the edge difference in the sum of the pseudo-laplacian is always such that the neighbor cell is subtracted from the subject cell, not the other way around.
 
 This section approaches the pseudo-laplacian by introducing the required APIs progressively through the following subsections:
 - [Defining the mesh and the connectivities (adjacencies) between cells and edges](#Defining-the-mesh-and-its-connectivities)
@@ -153,7 +153,7 @@ This section approaches the pseudo-laplacian by introducing the required APIs pr
 
 #### Defining the mesh and its connectivities
 
-The examples related to unstructured meshes use the mesh illustrated below. The edges (in blue) and the cells (in red) are numbered with zero-based indices.
+The examples related to unstructured meshes use the mesh below. The edges (in blue) and the cells (in red) are numbered with zero-based indices.
 
 | ![grid_topo](connectivity_numbered_grid.svg) |
 |:--:| 
@@ -161,16 +161,16 @@ The examples related to unstructured meshes use the mesh illustrated below. The 
 
 +++
 
-The upcoming code examples are using only 1D fields over cells and edges, so the necessary named dimensions are the following:
+The fields in the subsequent code snippets are 1-dimensional, either over the cells or over the edges. The corresponding named dimensions are thus the following:
 
 ```{code-cell} ipython3
 CellDim = Dimension("Cell")
 EdgeDim = Dimension("Edge")
 ```
 
-You can express connectivity between elements of the mesh using adjacency (neighborhood) tables. The table below, `edge_to_cell_table`, has one row for every edge where it lists the indices of cells adjacent to that edge. (For example, edge \#6 connects to cells \#0 and \#5.) Similarly, `cell_to_edge_table` lists the edges that are neighbors to a particular cell.
+You can express connectivity between elements (i.e. cells or edges) of the mesh using connectivity (a.k.a. adjacency or neighborhood) tables. The table below, `edge_to_cell_table`, has one row for every edge where it lists the indices of cells adjacent to that edge. For example, this table says that edge \#6 connects to cells \#0 and \#5. Similarly, `cell_to_edge_table` lists the edges that are neighbors to a particular cell.
 
-Note, however, that the tables are dense matrices, so if an edge has fewer than 2 neighbor cells, the remaining entries are filled with -1. Additionally, you can specify all kinds of connectivities (edge-to-edge, cell-to-edge, cell-to-cell, etc.), and the adjacency relationships don't have to be reciprocal, so it's possible for example that cell lists an edge as its neighbour, but the edge does not list that particular cell.
+Note, however, that the tables are dense matrices, so if an edge has fewer than 2 neighbor cells, the remaining entries are filled with -1. You can also specify all kinds of connectivities like edge-to-edge, cell-to-edge or even cell-to-cell. The adjacency relationships don't have to be reciprocal, so it's possible for example that a cell lists an edge as its neighbour, but the edge does not list that particular cell.
 
 The edge-to-cell and cell-to-edge connectivity tables for the mesh are the following:
 
@@ -234,7 +234,7 @@ Note that the field offset does not contain the actual connectivity table, that'
 E2C_offset_provider = NeighborTableOffsetProvider(edge_to_cell_table, EdgeDim, CellDim, 2)
 ```
 
-The field operator `nearest_cell_to_edge` below shows an example of applying this transform. It indeed turns a cell-field into an edge-field, albeit with a little twist: the subscript in `E2C[0]` means that only the value of the first connected cell is taken, the second (if exists) is ignored.
+The field operator `nearest_cell_to_edge` below shows an example of applying this transform. There is a little twist though: the subscript in `E2C[0]` means that only the value of the first connected cell is taken, the second (if exists) is ignored.
 
 Pay attention to the syntax where the field offset `E2C` can be freely accessed in the field operator, but the offset provider `E2C_offset_provider` is passed in a dictionary to the program.
 
@@ -252,6 +252,8 @@ run_nearest_cell_to_edge(cell_values, edge_values, offset_provider={"E2C": E2C_o
 print("0th adjacent cell's value: {}".format(np.asarray(edge_values)))
 ```
 
+Running the above snippet results in the following edge field:
+
 | ![nearest_cell_values](connectivity_numbered_grid.svg) | $\mapsto$ | ![grid_topo](connectivity_edge_0th_cell.svg) |
 |:--:| :--: | :--: |
 | *Domain (edges)* |  | *Edge values* |
@@ -260,7 +262,7 @@ print("0th adjacent cell's value: {}".format(np.asarray(edge_values)))
 
 #### Using reductions on connected mesh elements
 
-Similarly to the previous example, the output is once again a field on edges. The difference is that this field operator does not take the first column of the transformed field, but sums the elements along the local dimension. In other words, the result is the sum of all the cells adjacent to an edge. You can achieve this by first transforming the cell field to a field over the cell neighbors of edges (i.e. a field of dimensions Edge × E2CDim) using `cells(E2C)`, then calling the `neighbor_sum` builtin function to sum along the `E2CDim` dimension.
+Similarly to the previous example, the output is once again a field on edges. The difference is that this field operator does not take the first column of the transformed field, but sums the columns. In other words, the result is the sum of all the cells adjacent to an edge. You can achieve this by first transforming the cell field to a field over the cell neighbors of edges (i.e. a field of dimensions Edge × E2CDim) using `cells(E2C)`, then calling the `neighbor_sum` builtin function to sum along the `E2CDim` dimension.
 
 ```{code-cell} ipython3
 @field_operator
@@ -277,7 +279,7 @@ run_sum_adjacent_cells(cell_values, edge_values, offset_provider={"E2C": E2C_off
 print("sum of adjacent cells: {}".format(np.asarray(edge_values)))
 ```
 
-For the border edges, the results are unchanged compared to the previous example, the inner edges, however, now contain the sum of the two adjacent cells:
+For the border edges, the results are unchanged compared to the previous example, but the inner edges now contain the sum of the two adjacent cells:
 
 | ![nearest_cell_values](connectivity_numbered_grid.svg) | $\mapsto$ | ![cell_values](connectivity_edge_cell_sum.svg) |
 |:--:| :--: | :--: |
@@ -287,7 +289,7 @@ For the border edges, the results are unchanged compared to the previous example
 
 #### Implementing the pseudo-laplacian
 
-As explained in the section outline, the pseudo-laplacian needs the cell-to-edge connectivities as well in addition to the edge-to-cell connectivities. Though the connectivity table has been filled above, you still need to define the local dimension, the field offset, and the offset provider that describe how to use the connectivity table. The procedure is identical to the edge-to-cell connectivity from before:
+As explained in the section outline, the pseudo-laplacian needs the cell-to-edge connectivities as well in addition to the edge-to-cell connectivities. Though the connectivity table has been filled in above, you still need to define the local dimension, the field offset, and the offset provider that describe how to use the connectivity table. The procedure is identical to the edge-to-cell connectivity from before:
 
 ```{code-cell} ipython3
 C2EDim = Dimension("C2E", True)
@@ -303,7 +305,7 @@ C2E_offset_provider = NeighborTableOffsetProvider(cell_to_edge_table, CellDim, E
 Revisiting the example from the beginning of the section, the equation of the pseudo-laplacian for cell \#1 is:
 $$\text{pseudolap}(cell_1) = -\text{edge_diff}_{0,1} + \text{edge_diff}_{1,2} + \text{edge_diff}_{1,3}$$
 
-Notice how $\text{edge_diff}_{0,1}$ is actually subtracted from the sum rather than added. This is because the edge to cell connectivity table lists cell \#1 as the second argument to the subtraction rather than the first, so the difference calculated on the edge will be the opposite sign for this particular cell. To fix this, we will need a table that has 3 elements for every cell to tell the sign of the difference on the adjacent edges. If you look for cell \#1 in the table below, you will see that the sign is negative for the first edge difference and positive for the second and third, just like in the equation above.
+Notice how $\text{edge_diff}_{0,1}$ is actually subtracted from the sum rather than added. This is because the edge to cell connectivity table lists cell \#1 as the second argument to the subtraction rather than the first, so the difference calculated on the edge will be the opposite sign for this particular cell. To fix this, we will need a table that has three elements for every cell to tell the sign of the difference on the three adjacent edges. If you look for cell \#1 in the `edge_weights` table below, you can see that the sign is negative for the first edge difference and positive for the second and third, just like in the equation above.
 
 +++
 
@@ -311,7 +313,7 @@ In addition to the signs, there is an issue with the border edges as well for wh
 
 +++
 
-Incorporating both the signs and the zeros for the border edges, the edge weights are the following:
+Incorporating both the signs and the zeros for the border edges, the final edge weights are the following:
 
 ```{code-cell} ipython3
 edge_weights = np.array([
@@ -340,7 +342,7 @@ def pseudo_lap(cells : Field[[CellDim], float32],
     return neighbor_sum(edge_differences(C2E) * edge_weights, axis=C2EDim)
 ```
 
-The program itself is just a shallow wrapper over the `pseudo_lap` field operator. Note, however, that we are passing the offset providers that supply both the edge-to-cell and cell-to-edge connectivities when calling the program:
+The program itself is just a shallow wrapper over the `pseudo_lap` field operator. The interesting part is the way we are passing the offset providers that supply both the edge-to-cell and cell-to-edge connectivities when calling the program:
 
 ```{code-cell} ipython3
 @program
