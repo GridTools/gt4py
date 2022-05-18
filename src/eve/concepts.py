@@ -193,6 +193,11 @@ class Node(datamodels.DataModel, trees.Tree, kw_only=True):  # type: ignore[call
         * supported collections (:class:`List`, :class:`Dict`, :class:`Set`)
             of any of the previous items
 
+    The `annex` attribute is used to dynamically add data to a node, even to 
+    frozen classes. Data in the `annex` do not affect the hash or equality
+    comparisons of the node, since it is not really a field. Thus, visitors
+    and pipeline passes can freely attach computed attributes into the instance
+    `annex`.
     """
 
     __slots__ = ()
