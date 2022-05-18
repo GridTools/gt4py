@@ -80,7 +80,7 @@ def boolified_typeinfo(typeinfo: TypeInfo):
 
     Examples:
     ---------
-    >>> from functional.common import Dimension
+    >>> from functional.ffront.fbuiltins import Dimension
     >>> scalar_t = TypeInfo(ct.ScalarType(kind=ct.ScalarKind.FLOAT64))
     >>> print(boolified_typeinfo(scalar_t).type)
     bool

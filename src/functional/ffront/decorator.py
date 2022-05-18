@@ -30,7 +30,7 @@ from functional.ffront import (
     program_ast as past,
     symbol_makers,
 )
-from functional.ffront.fbuiltins import BUILTINS
+from functional.ffront.fbuiltins import BUILTINS, Dimension
 from functional.ffront.foast_to_itir import FieldOperatorLowering
 from functional.ffront.func_to_foast import FieldOperatorParser
 from functional.ffront.func_to_past import ProgramParser
@@ -39,7 +39,7 @@ from functional.ffront.past_to_itir import ProgramLowering
 from functional.ffront.source_utils import CapturedVars
 from functional.iterator import ir as itir
 from functional.iterator.backend_executor import execute_fencil
-from functional.iterator.embedded import CartesianAxis, constant_field
+from functional.iterator.embedded import constant_field
 
 
 DEFAULT_BACKEND = "roundtrip"
@@ -47,34 +47,33 @@ DEFAULT_BACKEND = "roundtrip"
 
 def _collect_capture_vars(captured_vars: CapturedVars) -> CapturedVars:
     new_captured_vars = captured_vars
-    all_captured_vars = collections.ChainMap(captured_vars.globals, captured_vars.nonlocals)
+    flat_captured_vars = collections.ChainMap(captured_vars.globals, captured_vars.nonlocals)
 
-    for value in all_captured_vars.values():
+    for value in flat_captured_vars.values():
         if isinstance(value, GTCallable):
             # if the closure ref has closure refs by itself, also add them
-            if val_captured_vars := value.__gt_captured_vars__():
-                val_captured_vars = _collect_capture_vars(val_captured_vars)
+            if vars_of_val := value.__gt_captured_vars__():
+                vars_of_val = _collect_capture_vars(vars_of_val)
 
-                all_val_captured_vars = collections.ChainMap(
-                    val_captured_vars.globals, val_captured_vars.nonlocals
-                )
-                collisions = []
-                for potential_collision in set(all_captured_vars) & set(all_val_captured_vars):
+                flat_vars_of_val = collections.ChainMap(vars_of_val.globals, vars_of_val.nonlocals)
+                collisions: list[str] = []
+                for potential_collision in set(flat_captured_vars) & set(flat_vars_of_val):
                     if (
-                        all_captured_vars[potential_collision]
-                        != all_val_captured_vars[potential_collision]
+                        flat_captured_vars[potential_collision]
+                        != flat_vars_of_val[potential_collision]
                     ):
                         collisions.append(potential_collision)
                 if collisions:
                     raise NotImplementedError(
-                        "Using closure vars with same name, but different value "
-                        "across functions is not implemented yet."
+                        f"Using closure vars with same name, but different value "
+                        f"across functions is not implemented yet. \n"
+                        f"Collisions: {'`,  `'.join(collisions)}"
                     )
 
                 new_captured_vars = dataclasses.replace(
                     new_captured_vars,
-                    globals={**new_captured_vars.globals, **val_captured_vars.globals},
-                    nonlocals={**new_captured_vars.nonlocals, **val_captured_vars.nonlocals},
+                    globals={**new_captured_vars.globals, **vars_of_val.globals},
+                    nonlocals={**new_captured_vars.nonlocals, **vars_of_val.nonlocals},
                 )
     return new_captured_vars
 
@@ -224,7 +223,7 @@ class Program:
         if kwargs:
             raise NotImplementedError("Keyword arguments are not supported yet.")
 
-    def __call__(self, *args, offset_provider: dict[str, CartesianAxis], **kwargs) -> None:
+    def __call__(self, *args, offset_provider: dict[str, Dimension], **kwargs) -> None:
         self._validate_args(*args, **kwargs)
 
         # extract size of all field arguments
@@ -431,7 +430,7 @@ class FieldOperator(GTCallable):
             backend=self.backend,
         )
 
-    def __call__(self, *args, out, offset_provider: dict[str, CartesianAxis], **kwargs) -> None:
+    def __call__(self, *args, out, offset_provider: dict[str, Dimension], **kwargs) -> None:
         # TODO(tehrengruber): check all offset providers are given
         return self.as_program()(*args, out, offset_provider=offset_provider, **kwargs)
 

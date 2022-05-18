@@ -163,6 +163,8 @@ def make_symbol_type_from_value(value: Any) -> ct.SymbolType:
     #  we should check for the protocol in the future?
     if hasattr(value, "__gt_type__"):
         symbol_type = value.__gt_type__()
+    elif isinstance(value, common.Dimension):
+        symbol_type = ct.DimensionType(dim=value)
     else:
         type_ = xtyping.infer_type(value, annotate_callable_kwargs=True)
         symbol_type = make_symbol_type_from_typing(type_)

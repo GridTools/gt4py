@@ -21,13 +21,12 @@ import numpy as np
 import pytest
 
 from functional.ffront.decorator import field_operator, program
-from functional.ffront.fbuiltins import Field, FieldOffset, float64, int32, neighbor_sum
+from functional.ffront.fbuiltins import Dimension, Field, FieldOffset, float64, int32, neighbor_sum
 from functional.iterator.embedded import (
     NeighborTableOffsetProvider,
     index_field,
     np_as_located_field,
 )
-from functional.iterator.runtime import CartesianAxis
 
 
 def debug_itir(tree):
@@ -43,7 +42,7 @@ def debug_itir(tree):
 DimsType = TypeVar("DimsType")
 DType = TypeVar("DType")
 
-IDim = CartesianAxis("IDim")
+IDim = Dimension("IDim")
 
 
 def test_copy():
@@ -201,9 +200,9 @@ def test_tuples():
 @pytest.fixture
 def reduction_setup():
     size = 9
-    edge = CartesianAxis("Edge")
-    vertex = CartesianAxis("Vertex")
-    v2edim = CartesianAxis("V2E", local=True)
+    edge = Dimension("Edge")
+    vertex = Dimension("Vertex")
+    v2edim = Dimension("V2E", local=True)
 
     v2e_arr = np.array(
         [
@@ -301,7 +300,7 @@ def test_reduction_expression(reduction_setup):
 
 def test_scalar_arg():
     """Test scalar argument being turned into 0-dim field."""
-    Vertex = CartesianAxis("Vertex")
+    Vertex = Dimension("Vertex")
     size = 5
     inp = 5.0
     out = np_as_located_field(Vertex)(np.zeros([size]))
@@ -317,7 +316,7 @@ def test_scalar_arg():
 
 
 def test_scalar_arg_with_field():
-    Edge = CartesianAxis("Edge")
+    Edge = Dimension("Edge")
     EdgeOffset = FieldOffset("EdgeOffset", source=Edge, target=[Edge])
     size = 5
     inp = index_field(Edge)

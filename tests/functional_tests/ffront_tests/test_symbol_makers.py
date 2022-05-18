@@ -22,7 +22,7 @@ import pytest
 from eve import extended_typing as xtyping
 from functional import common
 from functional.ffront import common_types, field_operator_ast as foast, symbol_makers
-from functional.ffront.fbuiltins import Field, float64
+from functional.ffront.fbuiltins import Dimension, Field, float64
 
 
 class CustomInt32DType:
@@ -31,8 +31,8 @@ class CustomInt32DType:
         return np.dtype(np.int32)
 
 
-IDim = common.Dimension("IDim")
-JDim = common.Dimension("JDim")
+IDim = Dimension("IDim")
+JDim = Dimension("JDim")
 
 
 @pytest.mark.parametrize(
@@ -93,7 +93,7 @@ def test_invalid_scalar_kind():
         (
             common.Field[[IDim, JDim], float],
             common_types.FieldType(
-                dims=[common.Dimension("IDim"), common.Dimension("JDim")],
+                dims=[Dimension("IDim"), Dimension("JDim")],
                 dtype=common_types.ScalarType(kind=common_types.ScalarKind.FLOAT64),
             ),
         ),
