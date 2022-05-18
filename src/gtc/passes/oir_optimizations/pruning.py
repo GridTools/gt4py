@@ -17,8 +17,8 @@
 from typing import Any, Dict
 
 from eve import NOTHING, NodeTranslator, iter_tree
-from gt4py.definitions import Extent
 from gtc import oir
+from gtc.definitions import Extent
 from gtc.passes.horizontal_masks import mask_overlap_with_extent
 from gtc.passes.oir_optimizations.utils import compute_horizontal_block_extents
 

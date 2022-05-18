@@ -17,8 +17,8 @@
 
 import pytest
 
-from gt4py.definitions import Extent
 from gtc import common, oir
+from gtc.definitions import Extent
 from gtc.numpy import npir
 from gtc.numpy.oir_to_npir import OirToNpir
 

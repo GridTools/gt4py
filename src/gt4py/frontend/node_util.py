@@ -18,6 +18,7 @@ import copy
 import operator
 from typing import Generator, Optional, Type
 
+import gtc.utils as gtc_utils
 from gt4py import utils as gt_utils
 from gtc import common
 
@@ -180,7 +181,7 @@ def iter_nodes_of_type(root_node: Node, node_type: Type) -> Generator[Node, None
                 else:
                     children = node
             else:
-                children = gt_utils.listify(value)
+                children = gtc_utils.listify(value)
 
             for value in children:
                 if isinstance(value, Node):

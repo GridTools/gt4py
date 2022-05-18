@@ -19,8 +19,8 @@ from typing import List, Optional, Tuple, Union
 from pydantic import validator
 
 import eve
-from gt4py.definitions import Extent
 from gtc import common
+from gtc.definitions import Extent
 
 
 # --- Misc ---

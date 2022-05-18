@@ -22,8 +22,8 @@ from eve import NodeVisitor
 from eve.concepts import TreeNode
 from eve.traits import SymbolTableTrait
 from eve.utils import XIterable, xiter
-from gt4py.definitions import Extent
 from gtc import common, oir
+from gtc.definitions import Extent
 from gtc.passes.horizontal_masks import mask_overlap_with_extent
 
 

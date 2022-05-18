@@ -25,14 +25,15 @@ import numpy as np
 import pytest
 
 import gt4py as gt
+import gtc.utils as gtc_utils
 from gt4py import backend as gt_backend
 from gt4py import gtscript
 from gt4py import storage as gt_storage
 from gt4py import utils as gt_utils
-from gt4py.definitions import AccessKind, Boundary, CartesianSpace, FieldInfo, Shape
+from gt4py.definitions import AccessKind, Boundary, CartesianSpace, FieldInfo
 from gt4py.frontend.nodes import Index
 from gt4py.stencil_object import StencilObject
-from gt4py.utils import filter_mask, interpolate_mask
+from gtc.definitions import Shape
 
 from .input_strategies import (
     SymbolKind,
@@ -494,7 +495,7 @@ class StencilTestSuite(metaclass=SuiteMeta):
         for name, data in input_data.items():
             if isinstance(data, np.ndarray):
                 data_shape &= Shape(
-                    interpolate_mask(data.shape, field_masks[name], default=sys.maxsize)
+                    gtc_utils.interpolate_mask(data.shape, field_masks[name], default=sys.maxsize)
                 )
 
         domain = data_shape - (
@@ -557,7 +558,7 @@ class StencilTestSuite(metaclass=SuiteMeta):
                 offset_low = tuple(b[0] - e for b, e in zip(max_boundary, field_extent_low))
                 field_extent_high = tuple(b[1] for b in sym.boundary)
                 offset_high = tuple(b[1] - e for b, e in zip(max_boundary, field_extent_high))
-                validation_slice = filter_mask(
+                validation_slice = gtc_utils.filter_mask(
                     tuple(slice(o, s - h) for o, s, h in zip(offset_low, data_shape, offset_high)),
                     field_masks[name],
                 )

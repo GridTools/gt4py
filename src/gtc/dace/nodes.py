@@ -27,10 +27,10 @@ import dace.subsets
 import networkx as nx
 from dace import library
 
-from gt4py.definitions import Extent
 from gtc import oir
 from gtc.common import DataType, LoopOrder, SourceLocation, VariableKOffset, typestr_to_data_type
 from gtc.dace.utils import OIRFieldRenamer, dace_dtype_to_typestr, get_node_name_mapping
+from gtc.definitions import Extent
 from gtc.oir import CacheDesc, HorizontalExecution, Interval, VerticalLoop, VerticalLoopSection
 
 

@@ -22,7 +22,7 @@ from typing import Optional, Sequence
 import numpy as np
 
 import gt4py.utils as gt_util
-from gt4py.definitions import Index, Shape
+from gtc.definitions import Index, Shape
 
 
 try:

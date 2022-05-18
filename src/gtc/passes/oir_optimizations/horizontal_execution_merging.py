@@ -18,8 +18,8 @@ from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 
 from eve import NodeTranslator, SourceLocation, SymbolTableTrait
-from gt4py.definitions import Extent
 from gtc import common, oir
+from gtc.definitions import Extent
 
 from .utils import (
     AccessCollector,

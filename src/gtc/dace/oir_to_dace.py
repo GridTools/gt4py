@@ -27,10 +27,10 @@ from dace.sdfg.graph import MultiConnectorEdge
 
 import eve
 import gtc.oir as oir
-from gt4py.definitions import Extent
 from gtc.common import LevelMarker, VariableKOffset, data_type_to_typestr
 from gtc.dace.nodes import HorizontalExecutionLibraryNode, VerticalLoopLibraryNode
 from gtc.dace.utils import IntervalMapping, nodes_extent_calculation
+from gtc.definitions import Extent
 from gtc.oir import FieldDecl, Interval, ScalarDecl, Stencil, Temporary
 from gtc.passes.oir_optimizations.utils import AccessCollector
 
