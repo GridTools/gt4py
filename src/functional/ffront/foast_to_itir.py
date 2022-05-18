@@ -56,9 +56,9 @@ def to_value(node: foast.LocatedNode) -> Callable[[itir.Expr], itir.Expr]:
     >>> parsed = FieldOperatorParser.apply_to_function(foo)
     >>> field_a, scalar_b = parsed.body[-1].value.elts
     >>> to_value(field_a)(im.ref("a"))
-    FunCall(fun=SymRef(id='deref'), args=[SymRef(id='a')])
+    FunCall(fun=SymRef(id=SymbolRef('deref')), args=[SymRef(id=SymbolRef('a'))])
     >>> to_value(scalar_b)(im.ref("a"))
-    SymRef(id='a')
+    SymRef(id=SymbolRef('a'))
     """
     typeinfo = TypeInfo(node.type)
     assert can_be_value_or_iterator(typeinfo)
@@ -87,9 +87,9 @@ class FieldOperatorLowering(NodeTranslator):
     >>> type(lowered)
     <class 'functional.iterator.ir.FunctionDefinition'>
     >>> lowered.id
-    'fieldop'
+    SymbolName('fieldop')
     >>> lowered.params
-    [Sym(id='inp')]
+    [Sym(id=SymbolName('inp'))]
     """
 
     class lifted_lambda:
