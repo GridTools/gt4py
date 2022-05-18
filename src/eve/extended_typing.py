@@ -196,6 +196,26 @@ class DataDescriptor(NonDataDescriptor[_C, _V], Protocol):
         ...
 
 
+class HashlibAlgorithm(Protocol):
+    """Used in the hashlib module of the standard library."""
+
+    digest_size: int
+    block_size: int
+    name: str
+
+    def copy(self) -> HashlibAlgorithm:
+        ...
+
+    def update(self, data: bytes | SupportsBytes) -> None:
+        ...
+
+    def digest(self) -> bytes:
+        ...
+
+    def hexdigest(self) -> str:
+        ...
+
+
 # Third party protocols
 class DevToolsPrettyPrintable(Protocol):
     """Used by python-devtools (https://python-devtools.helpmanual.io/)."""
