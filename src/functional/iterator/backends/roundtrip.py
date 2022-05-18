@@ -131,6 +131,7 @@ from functional.iterator.embedded import np_as_located_field
         if not debug:
             pathlib.Path(source_file_name).unlink(missing_ok=True)
 
+    assert isinstance(ir, FencilDefinition)
     fencil_name = ir.id
     fencil = getattr(foo, fencil_name + "_wrapper")
     assert "offset_provider" in kwargs

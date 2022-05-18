@@ -352,7 +352,7 @@ class FieldOperator(GTCallable):
         )
 
     def __gt_itir__(self) -> itir.FunctionDefinition:
-        return FieldOperatorLowering.apply(self.foast_node)
+        return typing.cast(itir.FunctionDefinition, FieldOperatorLowering.apply(self.foast_node))
 
     def __gt_captured_vars__(self) -> CapturedVars:
         return self.captured_vars

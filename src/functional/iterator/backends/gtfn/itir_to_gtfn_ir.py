@@ -66,9 +66,11 @@ class GTFN_lowering(eve.NodeTranslator):
             and bool(len(node.args[0].fun.args) % 2)
         )
 
-    def _sparse_deref_shift_to_tuple_get(self, node: itir.FunCall) -> itir.FunCall:
+    def _sparse_deref_shift_to_tuple_get(self, node: itir.FunCall) -> Expr:
         # deref(shift(i)(sparse)) -> tuple_get(i, deref(sparse))
         # TODO: remove once ‘real’ sparse field handling is available
+        assert isinstance(node.args[0], itir.FunCall)
+        assert isinstance(node.args[0].fun, itir.FunCall)
         offsets = node.args[0].fun.args
         deref_arg = node.args[0].args[0]
         if len(offsets) > 1:
