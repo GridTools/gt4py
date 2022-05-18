@@ -95,7 +95,7 @@ BUILTINS = {
 
 
 class FencilDefinition(Node, ValidatedSymbolTableTrait):
-    id: Coerced[SymbolName]  # noqa: A003
+    id: SymbolName  # noqa: A003
     params: List[Sym]
     function_definitions: List[FunctionDefinition]
     executions: List[StencilExecution]
