@@ -74,7 +74,7 @@ class ConstrainedStr(str):
     Examples:
         >>> class OnlyLetters(ConstrainedStr, regex=re.compile(r"^[a-zA-Z]*$")): pass
         >>> OnlyLetters("aabbCC")
-        'aabbCC'
+        OnlyLetters('aabbCC')
 
         >>> OnlyLetters("aabbCC33")
         Traceback (most recent call last):
