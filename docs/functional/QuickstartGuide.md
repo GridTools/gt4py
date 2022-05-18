@@ -79,7 +79,7 @@ b = np_as_located_field(CellDim, KDim)(np.full(shape=grid_shape, fill_value=b_va
 
 #### Field operators
 
-Field operators perform operations on a set of fields, for example, elementwise addition or reduction along a dimension. You can write field operators as Python functions by using the `@field_operator` decorator. Field operators cannot have side effects, therefore you cannot modify its arguments within their body. Only a subset of the Python syntax is allowed inside field operators--the library checks for correctness.
+Field operators perform operations on a set of fields, for example, elementwise addition or reduction along a dimension. You can write field operators as Python functions by using the `@field_operator` decorator. Field operators cannot have side effects, therefore you cannot modify its arguments within their body. Only a subset of the Python syntax is allowed inside field operators—the library checks for correctness.
 
 Let's see an example for a field operator that adds two fields elementwise:
 
