@@ -198,8 +198,8 @@ def test_tuples():
 
 
 def test_broadcasting():
-    Edge = CartesianAxis("Edge")
-    K = CartesianAxis("K")
+    Edge = Dimension("Edge")
+    K = Dimension("K")
 
     size = 10
     ksize = 5
