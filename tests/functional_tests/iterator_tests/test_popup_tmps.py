@@ -162,3 +162,34 @@ def test_trivial_multiple_lifts(fresh_uid_sequence):
     )
     actual = PopupTmps().visit(testee)
     assert actual == expected
+
+
+def test_capture(fresh_uid_sequence):
+    testee = ir.FunCall(
+        fun=ir.Lambda(
+            params=[ir.Sym(id="x")],
+            expr=ir.FunCall(
+                fun=ir.SymRef(id="deref"),
+                args=[
+                    ir.FunCall(
+                        fun=ir.FunCall(
+                            fun=ir.SymRef(id="lift"),
+                            args=[
+                                ir.Lambda(
+                                    params=[],
+                                    expr=ir.FunCall(
+                                        fun=ir.SymRef(id="deref"),
+                                        args=[ir.SymRef(id="x")],
+                                    ),
+                                )
+                            ],
+                        ),
+                        args=[],
+                    )
+                ],
+            ),
+        ),
+        args=[ir.SymRef(id="inp")],
+    )
+    actual = PopupTmps().visit(testee)
+    assert actual == testee
