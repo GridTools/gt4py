@@ -979,7 +979,14 @@ def _make_data_model_class_getitem() -> classmethod:
         """
         type_args: Tuple[Type] = args if isinstance(args, tuple) else (args,)
         concrete_cls: Type[DataModelT] = concretize(cls, *type_args)
-        return xtyping.StdGenericAliasType(concrete_cls, type_args)
+        res = xtyping.StdGenericAliasType(concrete_cls, type_args)
+        if sys.version_info < (3, 9):
+            # in Python 3.8, xtyping.StdGenericAliasType (aka typing._GenericAlias)
+            # does not copy all required `__dict__` entries, so do it manually
+            for k, v in concrete_cls.__dict__.items():
+                if k not in res.__dict__:
+                    res.__dict__[k] = v
+        return res
 
     return classmethod(__class_getitem__)
 
