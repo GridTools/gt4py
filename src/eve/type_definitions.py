@@ -23,25 +23,69 @@ import ast
 import enum
 import functools
 import re
+import sys
 
-import boltons.typeutils
 import pydantic
 import xxhash
-from boltons.typeutils import classproperty  # noqa: F401
+from boltons.typeutils import classproperty as classproperty  # noqa: F401
+from frozendict import frozendict as _frozendict  # noqa: F401
 from pydantic import validator  # noqa
-from pydantic import NegativeFloat, NegativeInt, PositiveFloat, PositiveInt  # noqa
-from pydantic import StrictBool as Bool  # noqa: F401
-from pydantic import StrictFloat as Float  # noqa: F401
-from pydantic import StrictInt as Int  # noqa: F401
-from pydantic import StrictStr as Str
+from pydantic import (  # noqa: F401
+    NegativeFloat,
+    NegativeInt,
+    PositiveFloat,
+    PositiveInt,
+    StrictBool as Bool,
+    StrictFloat as Float,
+    StrictInt as Int,
+    StrictStr as Str,
+)
 from pydantic.types import ConstrainedStr
 
-from .extended_typing import Any, Callable, Generator, Optional, Tuple, Type, Union
+from .extended_typing import (
+    Any,
+    Callable,
+    Generator,
+    Generic,
+    NoReturn,
+    Optional,
+    Tuple,
+    Type,
+    TypeAlias,
+    TypeVar,
+    Union,
+    final,
+)
 
 
-#: Marker value used to avoid confusion with `None`
-#: (specially in contexts where `None` could be a valid value)
-NOTHING = boltons.typeutils.make_sentinel(name="NOTHING", var_name="NOTHING")
+# Frozen collections
+_T = TypeVar("_T")
+
+
+if sys.version_info >= (3, 9):
+    frozendict: TypeAlias = _frozendict
+else:
+    _KeyT = TypeVar("_KeyT")
+
+    @final
+    class frozendict(_frozendict, Generic[_KeyT, _T]):  # type: ignore[no-redef]  # mypy consider this a redefinition
+        __slots__ = ()
+
+
+@final
+class NothingType(type):
+    """Metaclass of :class:`NOTHING` setting its bool value to False."""
+
+    def __bool__(cls) -> bool:
+        return False
+
+
+@final
+class NOTHING(metaclass=NothingType):
+    """Marker to avoid confusion with `None` in contexts where `None` could be a valid value."""
+
+    def __new__(cls: type) -> NoReturn:  # type: ignore[misc]  # should return an instance
+        raise TypeError(f"{cls.__name__} is used as a sentinel value and cannot be instantiated.")
 
 
 #: Typing definitions for `__get_validators__()` methods

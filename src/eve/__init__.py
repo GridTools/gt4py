@@ -14,7 +14,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Eve framework to support development of DSL toolchains in pure Python.
+"""Eve framework with general utils for development of DSL toolchains in Python.
 
 The internal dependencies between modules are the following (each line depends
 on some of the previous ones):
@@ -32,18 +32,8 @@ from __future__ import annotations  # isort:skip
 
 from .version import __version__, __versioninfo__  # isort:skip
 
-from .concepts import (
-    FieldKind,
-    FrozenModel,
-    FrozenNode,
-    GenericNode,
-    Model,
-    Node,
-    VType,
-    field,
-    in_field,
-    out_field,
-)
+from .concepts import FieldKind, FrozenModel, FrozenNode, GenericNode, Model, Node, VType
+from .datamodels import Coerced, DataModel, concretize, datamodel, field
 from .iterators import iter_tree
 from .traits import SymbolTableTrait
 from .type_definitions import (
@@ -67,8 +57,16 @@ from .visitors import NodeMutator, NodeTranslator, NodeVisitor
 
 
 __all__ = [
+    # version
     "__version__",
     "__versioninfo__",
+    # datamodels
+    "Coerced",
+    "DataModel",
+    "concretize",
+    "datamodel",
+    "field",
+    #
     "Bool",
     "Enum",
     "Float",

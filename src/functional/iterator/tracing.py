@@ -302,7 +302,7 @@ class Tracer:
 
 @iterator.runtime.closure.register(TRACING)
 def closure(domain, stencil, output, inputs):
-    if stencil.__name__ in iterator.builtins.__all__:
+    if hasattr(stencil, "__name__") and stencil.__name__ in iterator.builtins.__all__:
         stencil = _s(stencil.__name__)
     else:
         stencil(*(_s(param) for param in inspect.signature(stencil).parameters))

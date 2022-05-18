@@ -76,5 +76,5 @@ def test_delay_complete_shift():
     assert out[0, 0] == 43
 
     out = np_as_located_field(I_loc, J_loc)(np.asarray([[-1]]))
-    delay_complete_shift_fencil(out, inp, backend="roundtrip", debug=True)
+    delay_complete_shift_fencil(out, inp, backend="roundtrip")
     assert out[0, 0] == 43

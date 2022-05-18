@@ -1,8 +1,7 @@
 from typing import Any, Collection, Union
 
 from eve import codegen
-from eve.codegen import FormatTemplate as as_fmt
-from eve.codegen import MakoTemplate as as_mako
+from eve.codegen import FormatTemplate as as_fmt, MakoTemplate as as_mako
 from functional.iterator.backends.gtfn.gtfn_ir import (
     FencilDefinition,
     GridType,
@@ -30,10 +29,10 @@ class GTFNCodegen(codegen.TemplatedGenerator):
 
     def visit_Literal(self, node: Literal, **kwargs: Any) -> str:
         if node.type == "int":
-            return node.value
-        elif node.type == "float":
+            return node.value + "_c"
+        elif node.type == "float32":
             return f"{self.asfloat(node.value)}f"
-        elif node.type == "double":
+        elif node.type == "float" or node.type == "float64":
             return self.asfloat(node.value)
         elif node.type == "bool":
             return node.value.lower()
@@ -47,7 +46,6 @@ class GTFNCodegen(codegen.TemplatedGenerator):
         return node.value if isinstance(node.value, str) else f"{node.value}_c"
 
     FunCall = as_fmt("{fun}({','.join(args)})")
-    TemplatedFunCall = as_fmt("{fun}<{','.join(template_args)}>({','.join(args)})")
     Lambda = as_mako(
         "[=](${','.join('auto ' + p for p in params)}){return ${expr};}"
     )  # TODO capture

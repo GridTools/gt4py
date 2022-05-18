@@ -14,18 +14,20 @@
 from typing import Any, Optional
 
 import functional.ffront.field_operator_ast as foast
-from eve import NodeTranslator, SymbolTableTrait
+from eve import NodeTranslator, traits
 from functional.common import GTSyntaxError
 from functional.ffront import common_types as ct
-from functional.ffront.type_info import TypeInfo, is_complete_symbol_type
+from functional.ffront.type_info import GenericDimensions, TypeInfo, is_complete_symbol_type
 
 
 def are_broadcast_compatible(left: TypeInfo, right: TypeInfo) -> bool:
     """
     Check if ``left`` and ``right`` types are compatible after optional broadcasting.
 
-    A binary field operation between two arguments can proceed and the result is a field.
-    on top of the dimensions, also the dtypes must match.
+    If both are fields and do not have the same list of dimensions, then the smaller
+    dimension list must be fully contained in the bigger one (ordered subset).
+
+    Dtypes must also match in any case.
 
     Examples:
     ---------
@@ -37,9 +39,39 @@ def are_broadcast_compatible(left: TypeInfo, right: TypeInfo) -> bool:
     >>> are_broadcast_compatible(int_field_t, int_scalar_t)
     True
 
+    >>> from functional.iterator.runtime import CartesianAxis
+    >>> Edge = CartesianAxis("Edge")
+    >>> K = CartesianAxis("K")
+    >>> are_broadcast_compatible(
+    ...     TypeInfo(ct.FieldType(dtype=ct.ScalarType(kind=ct.ScalarKind.INT64), dims=[K])),
+    ...     TypeInfo(ct.FieldType(dtype=ct.ScalarType(kind=ct.ScalarKind.INT64), dims=[Edge, K])),
+    ... )
+    True
+
+    >>> are_broadcast_compatible(
+    ...     TypeInfo(ct.FieldType(dtype=ct.ScalarType(kind=ct.ScalarKind.INT64), dims=[Edge])),
+    ...     TypeInfo(ct.FieldType(dtype=ct.ScalarType(kind=ct.ScalarKind.INT64), dims=[Edge, K])),
+    ... )
+    True
     """
-    if all([left.dims, right.dims]) and left.dims != right.dims:
-        return False
+    both_dims_given = bool(left.dims and right.dims)
+    both_dims_given &= not isinstance(left.dims, GenericDimensions)
+    both_dims_given &= not isinstance(right.dims, GenericDimensions)
+    if both_dims_given:
+        assert isinstance(left.dims, list)  # to reassure mypy
+        assert isinstance(right.dims, list)  # to reassure mypy
+        smaller_dims, bigger_dims = (
+            (left.dims, right.dims)
+            if len(left.dims) <= len(right.dims)
+            else (right.dims, left.dims)
+        )
+        if smaller_dims[0] in bigger_dims and smaller_dims[-1] in bigger_dims:
+            start_index = bigger_dims.index(smaller_dims[0])
+            end_index = bigger_dims.index(smaller_dims[-1])
+            if smaller_dims != bigger_dims[start_index : end_index + 1]:
+                return False
+        else:
+            return False
     return left.dtype == right.dtype
 
 
@@ -60,6 +92,8 @@ def broadcast_typeinfos(left: TypeInfo, right: TypeInfo) -> Optional[TypeInfo]:
     if not are_broadcast_compatible(left, right):
         return None
     if left.is_scalar and right.is_field_type:
+        return right
+    if left.dims and right.dims and len(right.dims) > len(left.dims):
         return right
     return left
 
@@ -99,7 +133,7 @@ def boolified_typeinfo(typeinfo: TypeInfo):
     return TypeInfo(type_class(**kwargs))
 
 
-class FieldOperatorTypeDeduction(NodeTranslator):
+class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
     """
     Deduce and check types of FOAST expressions and symbols.
 
@@ -123,8 +157,6 @@ class FieldOperatorTypeDeduction(NodeTranslator):
     >>> assert typed_fieldop.body[0].value.type == ct.FieldType(dtype=ct.ScalarType(
     ...     kind=ct.ScalarKind.FLOAT64), dims=Ellipsis)
     """
-
-    contexts = (SymbolTableTrait.symtable_merger,)  # type: ignore  # TODO(ricoh): check if the SymbolTableTrait.symtable_merger annotation is correct.
 
     @classmethod
     def apply(cls, node: foast.FieldOperator) -> foast.FieldOperator:
@@ -345,7 +377,7 @@ class FieldOperatorTypeDeduction(NodeTranslator):
             new_args = self.visit(node.args, in_shift=True, **kwargs)
             source_dim = new_args[0].type.source
             target_dims = new_args[0].type.target
-            if source_dim not in new_func.type.dims:
+            if new_func.type.dims and source_dim not in new_func.type.dims:
                 raise FieldOperatorTypeDeductionError.from_foast_node(
                     node,
                     msg=f"Incompatible offset at {new_func.id}: can not shift from {new_args[0].type.source} to {new_func.type.dims[0]}.",

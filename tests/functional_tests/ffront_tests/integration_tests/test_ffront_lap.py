@@ -15,11 +15,9 @@ Joff = FieldOffset("Joff", source=JDim, target=(JDim,))
 
 
 @field_operator
-def lap(
-    in_field: Field[[IDim, JDim], "float"], a4: Field[[IDim, JDim], "float"]
-) -> Field[[IDim, JDim], "float"]:
+def lap(in_field: Field[[IDim, JDim], "float"]) -> Field[[IDim, JDim], "float"]:
     return (
-        a4 * in_field
+        -4.0 * in_field
         + in_field(Ioff[1])
         + in_field(Joff[1])
         + in_field(Ioff[-1])
@@ -28,28 +26,24 @@ def lap(
 
 
 @field_operator
-def laplap(
-    in_field: Field[[IDim, JDim], "float"], a4: Field[[IDim, JDim], "float"]
-) -> Field[[IDim, JDim], "float"]:
-    return lap(lap(in_field, a4), a4)
+def laplap(in_field: Field[[IDim, JDim], "float"]) -> Field[[IDim, JDim], "float"]:
+    return lap(lap(in_field))
 
 
 @program
 def lap_program(
     in_field: Field[[IDim, JDim], "float"],
-    a4: Field[[IDim, JDim], "float"],
     out_field: Field[[IDim, JDim], "float"],
 ):
-    lap(in_field, a4, out=out_field[1:-1, 1:-1])
+    lap(in_field, out=out_field[1:-1, 1:-1])
 
 
 @program
 def laplap_program(
     in_field: Field[[IDim, JDim], "float"],
-    a4: Field[[IDim, JDim], "float"],
     out_field: Field[[IDim, JDim], "float"],
 ):
-    laplap(in_field, a4, out=out_field[2:-2, 2:-2])
+    laplap(in_field, out=out_field[2:-2, 2:-2])
 
 
 def lap_ref(inp):
@@ -61,12 +55,11 @@ def test_ffront_lap():
     shape = (20, 20)
     as_ij = np_as_located_field(IDim, JDim)
     input = as_ij(np.fromfunction(lambda x, y: x**2 + y**2, shape))
-    a4 = as_ij(np.ones(shape) * -4.0)  # TODO support scalar field
 
     result_lap = as_ij(np.zeros_like(input))
-    lap_program(input, a4, result_lap, offset_provider={"Ioff": IDim, "Joff": JDim})
+    lap_program(input, result_lap, offset_provider={"Ioff": IDim, "Joff": JDim})
     assert np.allclose(np.asarray(result_lap)[1:-1, 1:-1], lap_ref(np.asarray(input)))
 
     result_laplap = as_ij(np.zeros_like(input))
-    laplap_program(input, a4, result_laplap, offset_provider={"Ioff": IDim, "Joff": JDim})
+    laplap_program(input, result_laplap, offset_provider={"Ioff": IDim, "Joff": JDim})
     assert np.allclose(np.asarray(result_laplap)[2:-2, 2:-2], lap_ref(lap_ref(np.asarray(input))))

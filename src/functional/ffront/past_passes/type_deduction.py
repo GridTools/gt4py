@@ -11,16 +11,13 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-from eve import NodeTranslator, SymbolTableTrait
+from eve import NodeTranslator, traits
 from functional.common import GTTypeError
-from functional.ffront import common_types as ct
-from functional.ffront import program_ast as past
+from functional.ffront import common_types as ct, program_ast as past
 from functional.ffront.type_info import TypeInfo
 
 
-class ProgramTypeDeduction(NodeTranslator):
-    contexts = (SymbolTableTrait.symtable_merger,)  # type: ignore[assignment]
-
+class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
     @classmethod
     def apply(cls, node: past.Program) -> past.Program:
         return cls().visit(node)
