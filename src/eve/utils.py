@@ -377,7 +377,7 @@ ddiff = deepdiff.DeepDiff
 """Shortcut for deepdiff.DeepDiff.
 
 Check https://zepworks.com/deepdiff/current/diff.html for more info.
- """
+"""
 
 
 def dhash(obj: Any, **kwargs: Any) -> str:
