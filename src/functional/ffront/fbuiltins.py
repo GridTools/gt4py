@@ -63,7 +63,7 @@ BUILTINS = {name: globals()[name] for name in __all__ + ["bool", "int", "float"]
 
 # TODO(tehrengruber): FieldOffset and runtime.Offset are not an exact conceptual
 #  match. Revisit if we want to continue subclassing here. If we split
-#  them also check whether Dimension should continue to subclass or define
+#  them also check whether Dimension should continue to be the shared or define
 #  guidelines for decision.
 @dataclass(frozen=True)
 class FieldOffset(runtime.Offset):
