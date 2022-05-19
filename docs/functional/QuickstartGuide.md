@@ -90,7 +90,7 @@ def add(a: Field[[CellDim, KDim], float32],
     return a + b
 ```
 
-You can call field operators from [programs](#Programs), other field operators, or directly. The code snippet below shows a direct call, in which case you have to supply two additional arguments: `out`, which is a field to write the return value to, and `offset_provider`, which we leave empty for now. The result of the field operator is a field with all entries equal to 5, but for brevity, only the average and the standard deviation of the entries are printed:
+You can call field operators from [programs](#Programs), other field operators, or directly. The code snippet below shows a direct call, in which case you have to supply two additional arguments: `out`, which is a field to write the return value to, and `offset_provider`, which is left empty for now. The result of the field operator is a field with all entries equal to 5, but for brevity, only the average and the standard deviation of the entries are printed:
 
 ```{code-cell} ipython3
 result = np_as_located_field(CellDim, KDim)(np.zeros(shape=grid_shape))
@@ -298,14 +298,14 @@ C2E = FieldOffset("C2E", source=EdgeDim, target=(CellDim, C2EDim))
 C2E_offset_provider = NeighborTableOffsetProvider(cell_to_edge_table, CellDim, EdgeDim, 3)
 ```
 
-+++ {"tags": []}
++++
 
 **Weights of edge differences:**
 
 Revisiting the example from the beginning of the section, the equation of the pseudo-laplacian for cell \#1 is:
 $$\text{pseudolap}(cell_1) = -\text{edge_diff}_{0,1} + \text{edge_diff}_{1,2} + \text{edge_diff}_{1,3}$$
 
-Notice how $\text{edge_diff}_{0,1}$ is actually subtracted from the sum rather than added. This is because the edge to cell connectivity table lists cell \#1 as the second argument to the subtraction rather than the first, so the difference calculated on the edge will be the opposite sign for this particular cell. To fix this, we will need a table that has three elements for every cell to tell the sign of the difference on the three adjacent edges. If you look for cell \#1 in the `edge_weights` table below, you can see that the sign is negative for the first edge difference and positive for the second and third, just like in the equation above.
+Notice how $\text{edge_diff}_{0,1}$ is actually subtracted from the sum rather than added. This is because the edge to cell connectivity table lists cell \#1 as the second argument to the subtraction rather than the first, so the difference calculated on the edge will be the opposite sign for this particular cell. To fix this, a table that has three elements for every cell is needed specifying the sign of the difference on the three adjacent edges. If you look for cell \#1 in the `edge_weights` table below, you can see that the sign is negative for the first edge difference and positive for the second and third, just like in the equation above.
 
 +++
 
@@ -342,7 +342,7 @@ def pseudo_lap(cells : Field[[CellDim], float32],
     return neighbor_sum(edge_differences(C2E) * edge_weights, axis=C2EDim)
 ```
 
-The program itself is just a shallow wrapper over the `pseudo_lap` field operator. The interesting part is the way we are passing the offset providers that supply both the edge-to-cell and cell-to-edge connectivities when calling the program:
+The program itself is just a shallow wrapper over the `pseudo_lap` field operator. The significant part is how offset providers for both the edge-to-cell and cell-to-edge connectivities are supplied when the program is called:
 
 ```{code-cell} ipython3
 @program
