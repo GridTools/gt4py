@@ -97,6 +97,22 @@ def test_horiz_exec_merging_map_scalar():
 
 
 def test_horiz_exec_merging_complexity():
+    start_time = time.process_time()
+    transformed = HorizontalExecutionMerging().visit(
+        StencilFactory(
+            vertical_loops__0__sections__0__horizontal_executions=[
+                HorizontalExecutionFactory(
+                    body=[AssignStmtFactory(left__name="tmp", right__name="input")]
+                ),
+                HorizontalExecutionFactory(
+                    body=[AssignStmtFactory(left__name="output", right__name="tmp")]
+                ),
+            ],
+            declarations=[TemporaryFactory(name="tmp")],
+        )
+    )
+    single_process_time = time.process_time() - start_time
+
     n = 1000
     testee = StencilFactory(
         vertical_loops__0__sections__0__horizontal_executions=[
@@ -120,7 +136,7 @@ def test_horiz_exec_merging_complexity():
     start_time = time.process_time()
     transformed = HorizontalExecutionMerging().visit(testee)
     process_time = time.process_time() - start_time
-    assert process_time < 5
+    assert process_time < (n / 2) * single_process_time
     hexecs = transformed.vertical_loops[0].sections[0].horizontal_executions
     assert len(hexecs) == 1
 
