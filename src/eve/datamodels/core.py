@@ -511,7 +511,7 @@ else:
 def field(
     *,
     default: Any = NOTHING,
-    default_factory: Optional[Callable[[None], Any]] = None,
+    default_factory: Optional[Callable[[], Any]] = None,
     init: bool = True,
     repr: bool = True,  # noqa: A002   # shadowing 'repr' python builtin
     hash: Optional[bool] = None,  # noqa: A002   # shadowing 'hash' python builtin
