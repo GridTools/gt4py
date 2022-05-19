@@ -24,12 +24,6 @@ You can install the library directly from GitHub using pip:
 pip install git+https://github.com/gridtools/gt4py.git@functional
 ```
 
-For now, use the branch below which contains some bugfixes needed to run the code in the guide:
-
-```{raw-cell}
-pip install git+https://github.com/tehrengruber/gt4py.git@fix_reductions
-```
-
 ## Programming guide
 
 ### Key concepts and application structure
