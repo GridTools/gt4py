@@ -6,7 +6,7 @@ def test_sym_ref():
     expected = ti.Var(idx=0)
     inferred = ti.infer(testee)
     assert inferred == expected
-    assert ti.pretty_str(inferred) == "T₀"
+    assert ti.pformat(inferred) == "T₀"
 
 
 def test_bool_literal():
@@ -14,7 +14,7 @@ def test_bool_literal():
     expected = ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="bool"), size=ti.Var(idx=0))
     inferred = ti.infer(testee)
     assert inferred == expected
-    assert ti.pretty_str(inferred) == "bool⁰"
+    assert ti.pformat(inferred) == "bool⁰"
 
 
 def test_int_literal():
@@ -22,7 +22,7 @@ def test_int_literal():
     expected = ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="int"), size=ti.Var(idx=0))
     inferred = ti.infer(testee)
     assert inferred == expected
-    assert ti.pretty_str(inferred) == "int⁰"
+    assert ti.pformat(inferred) == "int⁰"
 
 
 def test_float_literal():
@@ -30,7 +30,7 @@ def test_float_literal():
     expected = ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="float"), size=ti.Var(idx=0))
     inferred = ti.infer(testee)
     assert inferred == expected
-    assert ti.pretty_str(inferred) == "float⁰"
+    assert ti.pformat(inferred) == "float⁰"
 
 
 def test_deref():
@@ -41,7 +41,7 @@ def test_deref():
     )
     inferred = ti.infer(testee)
     assert inferred == expected
-    assert ti.pretty_str(inferred) == "(It[T₀¹]) → T₀¹"
+    assert ti.pformat(inferred) == "(It[T₀¹]) → T₀¹"
 
 
 def test_deref_call():
@@ -49,7 +49,7 @@ def test_deref_call():
     expected = ti.Val(kind=ti.Value(), dtype=ti.Var(idx=0), size=ti.Var(idx=1))
     inferred = ti.infer(testee)
     assert inferred == expected
-    assert ti.pretty_str(inferred) == "T₀¹"
+    assert ti.pformat(inferred) == "T₀¹"
 
 
 def test_lambda():
@@ -57,7 +57,7 @@ def test_lambda():
     expected = ti.Fun(args=ti.Tuple(elems=(ti.Var(idx=0),)), ret=ti.Var(idx=0))
     inferred = ti.infer(testee)
     assert inferred == expected
-    assert ti.pretty_str(inferred) == "(T₀) → T₀"
+    assert ti.pformat(inferred) == "(T₀) → T₀"
 
 
 def test_plus():
@@ -66,7 +66,7 @@ def test_plus():
     expected = ti.Fun(args=ti.Tuple(elems=(t, t)), ret=t)
     inferred = ti.infer(testee)
     assert inferred == expected
-    assert ti.pretty_str(inferred) == "(T₀¹, T₀¹) → T₀¹"
+    assert ti.pformat(inferred) == "(T₀¹, T₀¹) → T₀¹"
 
 
 def test_eq():
@@ -78,7 +78,7 @@ def test_eq():
     )
     inferred = ti.infer(testee)
     assert inferred == expected
-    assert ti.pretty_str(inferred) == "(T₀¹, T₀¹) → bool¹"
+    assert ti.pformat(inferred) == "(T₀¹, T₀¹) → bool¹"
 
 
 def test_if():
@@ -88,7 +88,7 @@ def test_if():
     expected = ti.Fun(args=ti.Tuple(elems=(c, t, t)), ret=t)
     inferred = ti.infer(testee)
     assert inferred == expected
-    assert ti.pretty_str(inferred) == "(bool⁰, T₁⁰, T₁⁰) → T₁⁰"
+    assert ti.pformat(inferred) == "(bool⁰, T₁⁰, T₁⁰) → T₁⁰"
 
 
 def test_not():
@@ -97,7 +97,7 @@ def test_not():
     expected = ti.Fun(args=ti.Tuple(elems=(t,)), ret=t)
     inferred = ti.infer(testee)
     assert inferred == expected
-    assert ti.pretty_str(inferred) == "(bool⁰) → bool⁰"
+    assert ti.pformat(inferred) == "(bool⁰) → bool⁰"
 
 
 def test_and():
@@ -106,7 +106,7 @@ def test_and():
     expected = ti.Fun(args=ti.Tuple(elems=(t, t)), ret=t)
     inferred = ti.infer(testee)
     assert inferred == expected
-    assert ti.pretty_str(inferred) == "(bool⁰, bool⁰) → bool⁰"
+    assert ti.pformat(inferred) == "(bool⁰, bool⁰) → bool⁰"
 
 
 def test_lift():
@@ -127,7 +127,7 @@ def test_lift():
     )
     inferred = ti.infer(testee)
     assert inferred == expected
-    assert ti.pretty_str(inferred) == "((It[T¹], …)₀ → T₂¹) → (It[T¹], …)₀ → It[T₂¹]"
+    assert ti.pformat(inferred) == "((It[T¹], …)₀ → T₂¹) → (It[T¹], …)₀ → It[T₂¹]"
 
 
 def test_lift_application():
@@ -138,7 +138,7 @@ def test_lift_application():
     )
     inferred = ti.infer(testee)
     assert inferred == expected
-    assert ti.pretty_str(inferred) == "(It[T₀¹]) → It[T₀¹]"
+    assert ti.pformat(inferred) == "(It[T₀¹]) → It[T₀¹]"
 
 
 def test_lifted_call():
@@ -149,7 +149,7 @@ def test_lifted_call():
     expected = ti.Val(kind=ti.Iterator(), dtype=ti.Var(idx=0), size=ti.Var(idx=1))
     inferred = ti.infer(testee)
     assert inferred == expected
-    assert ti.pretty_str(inferred) == "It[T₀¹]"
+    assert ti.pformat(inferred) == "It[T₀¹]"
 
 
 def test_make_tuple():
@@ -170,7 +170,7 @@ def test_make_tuple():
     )
     inferred = ti.infer(testee)
     assert inferred == expected
-    assert ti.pretty_str(inferred) == "(bool, float, T₀)¹"
+    assert ti.pformat(inferred) == "(bool, float, T₀)¹"
 
 
 def test_tuple_get():
@@ -190,7 +190,7 @@ def test_tuple_get():
     expected = ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="float"), size=ti.Var(idx=0))
     inferred = ti.infer(testee)
     assert inferred == expected
-    assert ti.pretty_str(inferred) == "float⁰"
+    assert ti.pformat(inferred) == "float⁰"
 
 
 def test_tuple_get_in_lambda():
@@ -215,7 +215,7 @@ def test_tuple_get_in_lambda():
     )
     inferred = ti.infer(testee)
     assert inferred == expected
-    assert ti.pretty_str(inferred) == "(ItOrVal₀[(…, T₁, …)₂³]) → ItOrVal₀[T₁³]"
+    assert ti.pformat(inferred) == "(ItOrVal₀[(…, T₁, …)₂³]) → ItOrVal₀[T₁³]"
 
 
 def test_reduce():
@@ -245,7 +245,7 @@ def test_reduce():
     )
     inferred = ti.infer(testee)
     assert inferred == expected
-    assert ti.pretty_str(inferred) == "(It[int⁰], It[int⁰]) → int⁰"
+    assert ti.pformat(inferred) == "(It[int⁰], It[int⁰]) → int⁰"
 
 
 def test_scan():
@@ -280,7 +280,7 @@ def test_scan():
     )
     inferred = ti.infer(testee)
     assert inferred == expected
-    assert ti.pretty_str(inferred) == "(It[intᶜ], It[intᶜ]) → intᶜ"
+    assert ti.pformat(inferred) == "(It[intᶜ], It[intᶜ]) → intᶜ"
 
 
 def test_shift():
@@ -293,7 +293,7 @@ def test_shift():
     )
     inferred = ti.infer(testee)
     assert inferred == expected
-    assert ti.pretty_str(inferred) == "(It[T₀¹]) → It[T₀¹]"
+    assert ti.pformat(inferred) == "(It[T₀¹]) → It[T₀¹]"
 
 
 def test_function_definition():
@@ -303,7 +303,7 @@ def test_function_definition():
     )
     inferred = ti.infer(testee)
     assert inferred == expected
-    assert ti.pretty_str(inferred) == "f :: (T₀) → T₀"
+    assert ti.pformat(inferred) == "f :: (T₀) → T₀"
 
 
 CARTESIAN_DOMAIN = ir.FunCall(
@@ -350,7 +350,7 @@ def test_stencil_closure():
     )
     inferred = ti.infer(testee)
     assert inferred == expected
-    assert ti.pretty_str(inferred) == "(It[T₀ᶜ]) ⇒ It[T₀ᶜ]"
+    assert ti.pformat(inferred) == "(It[T₀ᶜ]) ⇒ It[T₀ᶜ]"
 
 
 def test_fencil_definition():
@@ -398,7 +398,7 @@ def test_fencil_definition():
     )
     inferred = ti.infer(testee)
     assert inferred == expected
-    assert ti.pretty_str(inferred) == "{f(intˢ, intˢ, intˢ, It[T₀ᶜ], It[T₀ᶜ], It[T₁ᶜ], It[T₁ᶜ])}"
+    assert ti.pformat(inferred) == "{f(intˢ, intˢ, intˢ, It[T₀ᶜ], It[T₀ᶜ], It[T₁ᶜ], It[T₁ᶜ])}"
 
 
 def test_fencil_definition_with_function_definitions():
@@ -488,6 +488,6 @@ def test_fencil_definition_with_function_definitions():
     inferred = ti.infer(testee)
     assert inferred == expected
     assert (
-        ti.pretty_str(inferred)
+        ti.pformat(inferred)
         == "{f :: (T₀) → T₀, g :: (It[T₁²]) → T₁², foo(intˢ, intˢ, intˢ, It[T₃ᶜ], It[T₃ᶜ], It[T₄ᶜ], It[T₄ᶜ], It[T₅ᶜ], It[T₅ᶜ])}"
     )

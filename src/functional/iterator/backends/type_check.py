@@ -4,11 +4,11 @@ from functional.iterator.transforms import apply_common_transforms
 
 
 def check(root, *args, **kwargs):
-    print(type_inference.pretty_str(type_inference.infer(root)))
+    type_inference.pprint(type_inference.infer(root))
     transformed = apply_common_transforms(
         root, use_tmps=kwargs.get("use_tmps", False), offset_provider=kwargs["offset_provider"]
     )
-    print(type_inference.pretty_str(type_inference.infer(transformed)))
+    type_inference.pprint(type_inference.infer(transformed))
 
 
 backend.register_backend("type_check", check)

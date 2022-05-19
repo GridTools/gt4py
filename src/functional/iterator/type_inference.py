@@ -570,4 +570,8 @@ class PrettyPrinter(eve.NodeTranslator):
         return "T" + self._subscript(node.idx)
 
 
-pretty_str = PrettyPrinter().visit
+pformat = PrettyPrinter().visit
+
+
+def pprint(x: DType):
+    print(pformat(x))
