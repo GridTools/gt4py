@@ -15,11 +15,13 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import enum
+import functools
 import typing
 from typing import Any, ClassVar, Dict, Generic, List, Optional, Tuple, Type, TypeVar, Union
 
 import numpy as np
 import pydantic
+import scipy.special
 from pydantic import validator
 from pydantic.class_validators import root_validator
 
@@ -868,6 +870,85 @@ def data_type_to_typestr(dtype: DataType) -> str:
     return np.dtype(table[dtype]).str
 
 
+@functools.lru_cache(maxsize=None, typed=True)  # typed since uniqueness is only guaranteed per enum
+def op_to_ufunc(
+    op: Union[
+        UnaryOperator, ArithmeticOperator, ComparisonOperator, LogicalOperator, NativeFunction
+    ]
+) -> np.ufunc:
+    Table: Dict[
+        Union[
+            UnaryOperator, ArithmeticOperator, ComparisonOperator, LogicalOperator, NativeFunction
+        ],
+        np.ufunc,
+    ]
+    # Can't put all in single table since UnaryOperator.POS == BinaryOperator.ADD
+    if isinstance(op, UnaryOperator):
+        table = {
+            UnaryOperator.POS: np.positive,
+            UnaryOperator.NEG: np.negative,
+            UnaryOperator.NOT: np.logical_not,
+        }
+    elif isinstance(op, ArithmeticOperator):
+        table = {
+            ArithmeticOperator.ADD: np.add,
+            ArithmeticOperator.SUB: np.subtract,
+            ArithmeticOperator.MUL: np.multiply,
+            ArithmeticOperator.DIV: np.true_divide,
+        }
+    elif isinstance(op, ComparisonOperator):
+        table = {
+            ComparisonOperator.GT: np.greater,
+            ComparisonOperator.LT: np.less,
+            ComparisonOperator.GE: np.greater_equal,
+            ComparisonOperator.LE: np.less_equal,
+            ComparisonOperator.EQ: np.equal,
+            ComparisonOperator.NE: np.not_equal,
+        }
+    elif isinstance(op, LogicalOperator):
+        table = {
+            LogicalOperator.AND: np.logical_and,
+            LogicalOperator.OR: np.logical_or,
+        }
+    elif isinstance(op, NativeFunction):
+        table = {
+            NativeFunction.ABS: np.abs,
+            NativeFunction.MIN: np.minimum,
+            NativeFunction.MAX: np.maximum,
+            NativeFunction.MOD: np.remainder,
+            NativeFunction.SIN: np.sin,
+            NativeFunction.COS: np.cos,
+            NativeFunction.TAN: np.tan,
+            NativeFunction.ARCSIN: np.arcsin,
+            NativeFunction.ARCCOS: np.arccos,
+            NativeFunction.ARCTAN: np.arctan,
+            NativeFunction.SINH: np.sinh,
+            NativeFunction.COSH: np.cosh,
+            NativeFunction.TANH: np.tanh,
+            NativeFunction.ARCSINH: np.arcsinh,
+            NativeFunction.ARCCOSH: np.arccosh,
+            NativeFunction.ARCTANH: np.arctanh,
+            NativeFunction.SQRT: np.sqrt,
+            NativeFunction.POW: np.power,
+            NativeFunction.EXP: np.exp,
+            NativeFunction.LOG: np.log,
+            NativeFunction.GAMMA: scipy.special.gamma,
+            NativeFunction.CBRT: np.cbrt,
+            NativeFunction.ISFINITE: np.isfinite,
+            NativeFunction.ISINF: np.isinf,
+            NativeFunction.ISNAN: np.isnan,
+            NativeFunction.FLOOR: np.floor,
+            NativeFunction.CEIL: np.ceil,
+            NativeFunction.TRUNC: np.trunc,
+        }
+    else:
+        raise TypeError(
+            "Can only convert instances of GTC operators and supported native functions to typestr."
+        )
+    return table[op]
+
+
+@functools.lru_cache(maxsize=None)
 def typestr_to_data_type(typestr: str) -> DataType:
     if not isinstance(typestr, str) or len(typestr) < 3 or not typestr[2:].isnumeric():
         return DataType.INVALID  # type: ignore
