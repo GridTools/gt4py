@@ -11,13 +11,22 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
+from collections import namedtuple
 from typing import Optional
 
 import pytest
 
-from functional.common import Dimension, GTTypeError
+from functional.common import GTTypeError
 from functional.ffront import common_types as ct
-from functional.ffront.fbuiltins import Field, float32, float64, int64
+from functional.ffront.fbuiltins import (
+    Dimension,
+    Field,
+    FieldOffset,
+    float32,
+    float64,
+    int64,
+    neighbor_sum,
+)
 from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError
 from functional.ffront.func_to_foast import FieldOperatorParser
 from functional.ffront.type_info import TypeInfo
@@ -318,6 +327,67 @@ def test_notting_int():
         match=r"Incompatible type for unary operator 'not': Field\[\.\.\., dtype=int64\]!",
     ):
         _ = FieldOperatorParser.apply_to_function(not_int)
+
+
+@pytest.fixture
+def remap_setup():
+    X = Dimension("X")
+    Y = Dimension("Y")
+    Y2XDim = Dimension("Y2X", local=True)
+    Y2X = FieldOffset("Y2X", source=X, target=(Y, Y2XDim))
+    return X, Y, Y2XDim, Y2X
+
+
+def test_remap(remap_setup):
+    X, Y, Y2XDim, Y2X = remap_setup
+
+    def remap_fo(bar: Field[[X], int64]) -> Field[[Y], int64]:
+        return bar(Y2X[0])
+
+    parsed = FieldOperatorParser.apply_to_function(remap_fo)
+
+    assert parsed.body[0].value.type == ct.FieldType(
+        dims=[Y], dtype=ct.ScalarType(kind=ct.ScalarKind.INT64)
+    )
+
+
+def test_remap_nbfield(remap_setup):
+    X, Y, Y2XDim, Y2X = remap_setup
+
+    def remap_fo(bar: Field[[X], int64]) -> Field[[Y, Y2XDim], int64]:
+        return bar(Y2X)
+
+    parsed = FieldOperatorParser.apply_to_function(remap_fo)
+
+    assert parsed.body[0].value.type == ct.FieldType(
+        dims=[Y, Y2XDim], dtype=ct.ScalarType(kind=ct.ScalarKind.INT64)
+    )
+
+
+def test_remap_reduce(remap_setup):
+    X, Y, Y2XDim, Y2X = remap_setup
+
+    def remap_fo(bar: Field[[X], int64]) -> Field[[Y], int64]:
+        return 2 * neighbor_sum(bar(Y2X), axis=Y2XDim)
+
+    parsed = FieldOperatorParser.apply_to_function(remap_fo)
+
+    assert parsed.body[0].value.type == ct.FieldType(
+        dims=[Y], dtype=ct.ScalarType(kind=ct.ScalarKind.INT64)
+    )
+
+
+def test_remap_reduce_sparse(remap_setup):
+    X, Y, Y2XDim, Y2X = remap_setup
+
+    def remap_fo(bar: Field[[Y, Y2XDim], int64]) -> Field[[Y], int64]:
+        return 5 * neighbor_sum(bar, axis=Y2XDim)
+
+    parsed = FieldOperatorParser.apply_to_function(remap_fo)
+
+    assert parsed.body[0].value.type == ct.FieldType(
+        dims=[Y], dtype=ct.ScalarType(kind=ct.ScalarKind.INT64)
+    )
 
 
 def test_scalar_arg():

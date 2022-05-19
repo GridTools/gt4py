@@ -30,12 +30,12 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
     Examples
     --------
     >>> from functional.ffront.func_to_past import ProgramParser
-    >>> from functional.iterator.runtime import CartesianAxis, offset
+    >>> from functional.iterator.runtime import offset
     >>> from functional.iterator import ir
-    >>> from functional.common import Field
+    >>> from functional.ffront.fbuiltins import Dimension, Field
     >>>
     >>> float64 = float
-    >>> IDim = CartesianAxis("IDim")
+    >>> IDim = Dimension("IDim")
     >>> Ioff = offset("Ioff")
     >>>
     >>> def fieldop(inp: Field[[IDim], "float64"]) -> Field[[IDim], "float64"]:
@@ -164,7 +164,8 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                     slice_.lower, itir.Literal(value="0", type="int"), dim_size
                 )
                 upper = self._visit_slice_bound(slice_.upper, dim_size, dim_size)
-
+                if dim.local:
+                    raise GTTypeError(f"Dimension {dim.value} must not be local.")
                 domain_args.append(
                     itir.FunCall(
                         fun=itir.SymRef(id="named_range"),

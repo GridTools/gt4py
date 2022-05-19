@@ -36,7 +36,7 @@ from functional.ffront import (
     program_ast as past,
     symbol_makers,
 )
-from functional.ffront.fbuiltins import BUILTINS, BuiltInFunction, FieldOffset
+from functional.ffront.fbuiltins import BUILTINS, Dimension
 from functional.ffront.foast_to_itir import FieldOperatorLowering
 from functional.ffront.func_to_foast import FieldOperatorParser
 from functional.ffront.func_to_past import ProgramParser
@@ -45,10 +45,43 @@ from functional.ffront.past_to_itir import ProgramLowering
 from functional.ffront.source_utils import CapturedVars
 from functional.iterator import ir as itir
 from functional.iterator.backend_executor import execute_fencil
-from functional.iterator.embedded import CartesianAxis, constant_field
+from functional.iterator.embedded import constant_field
 
 
 DEFAULT_BACKEND = "roundtrip"
+
+
+def _collect_capture_vars(captured_vars: CapturedVars) -> CapturedVars:
+    new_captured_vars = captured_vars
+    flat_captured_vars = collections.ChainMap(captured_vars.globals, captured_vars.nonlocals)
+
+    for value in flat_captured_vars.values():
+        if isinstance(value, GTCallable):
+            # if the closure ref has closure refs by itself, also add them
+            if vars_of_val := value.__gt_captured_vars__():
+                vars_of_val = _collect_capture_vars(vars_of_val)
+
+                flat_vars_of_val = collections.ChainMap(vars_of_val.globals, vars_of_val.nonlocals)
+                collisions: list[str] = []
+                for potential_collision in set(flat_captured_vars) & set(flat_vars_of_val):
+                    if (
+                        flat_captured_vars[potential_collision]
+                        != flat_vars_of_val[potential_collision]
+                    ):
+                        collisions.append(potential_collision)
+                if collisions:
+                    raise NotImplementedError(
+                        f"Using closure vars with same name, but different value "
+                        f"across functions is not implemented yet. \n"
+                        f"Collisions: {'`,  `'.join(collisions)}"
+                    )
+
+                new_captured_vars = dataclasses.replace(
+                    new_captured_vars,
+                    globals={**new_captured_vars.globals, **vars_of_val.globals},
+                    nonlocals={**new_captured_vars.nonlocals, **vars_of_val.nonlocals},
+                )
+    return new_captured_vars
 
 
 @typing.runtime_checkable
@@ -129,7 +162,7 @@ class Program:
         externals: Optional[dict] = None,
         backend: Optional[str] = None,
     ) -> "Program":
-        captured_vars = CapturedVars.from_function(definition)
+        captured_vars = _collect_capture_vars(CapturedVars.from_function(definition))
         past_node = ProgramParser.apply_to_function(definition)
         return cls(
             past_node=past_node,
@@ -154,27 +187,16 @@ class Program:
         lowered_funcs = []
 
         all_captured_vars = collections.ChainMap(captured_vars.globals, captured_vars.nonlocals)
+
         for name, value in all_captured_vars.items():
-            # With respect to the frontend offsets are singleton types, i.e.
-            #  they do not store any runtime information, but only type
-            #  information. As such we do not need their value.
-            if isinstance(value, (FieldOffset, CartesianAxis)):
-                continue
-            if isinstance(value, (BuiltInFunction, type)):
-                continue
             if not isinstance(value, GTCallable):
-                raise NotImplementedError("Only function closure vars are allowed currently.")
+                continue
             itir_node = value.__gt_itir__()
             if itir_node.id != name:
                 raise RuntimeError(
                     "Name of the closure reference and the function it holds do not match."
                 )
             lowered_funcs.append(itir_node)
-            # if the closure ref has closure refs by itself, also add them
-            if captured_vars_from_value := value.__gt_captured_vars__():
-                lowered_funcs.extend(
-                    self._lowered_funcs_from_captured_vars(captured_vars_from_value)
-                )
         return lowered_funcs
 
     @functools.cached_property
@@ -182,31 +204,24 @@ class Program:
         if self.externals:
             raise NotImplementedError("Externals are not supported yet.")
 
-        func_names = set()
+        capture_vars = _collect_capture_vars(self.captured_vars)
+
+        referenced_var_names: set[str] = set()
         for captured_var in self.past_node.captured_vars:
-            if isinstance(captured_var.type, ct.FunctionType):
-                func_names.add(captured_var.id)
+            if isinstance(captured_var.type, (ct.FunctionType, ct.OffsetType, ct.DimensionType)):
+                referenced_var_names.add(captured_var.id)
             else:
                 raise NotImplementedError("Only function closure vars are allowed currently.")
-
-        all_captured_vars = collections.ChainMap(
-            self.captured_vars.globals, self.captured_vars.nonlocals
-        )
-        if undefined := (set(all_captured_vars) - func_names):
+        defined_var_names = set(capture_vars.globals) | set(capture_vars.nonlocals)
+        if undefined := referenced_var_names - defined_var_names:
             raise RuntimeError(f"Reference to undefined symbol(s) `{', '.join(undefined)}`.")
-        if not_callable := [
-            name for name in func_names if not isinstance(all_captured_vars[name], GTCallable)
-        ]:
-            raise RuntimeError(
-                f"The following function(s) are not valid GTCallables `{', '.join(not_callable)}`."
-            )
 
-        lowered_funcs = self._lowered_funcs_from_captured_vars(self.captured_vars)
+        lowered_funcs = self._lowered_funcs_from_captured_vars(capture_vars)
 
         return ProgramLowering.apply(self.past_node, function_definitions=lowered_funcs)
 
     def _validate_args(self, *args, **kwargs) -> None:
-        # TODO(tehrengruber): better error messages
+        # TODO(tehrengruber): better error messages, check argument types
         if len(args) != len(self.past_node.params):
             raise GTTypeError(
                 f"Function takes {len(self.past_node.params)} arguments, but {len(args)} were given."
@@ -214,7 +229,7 @@ class Program:
         if kwargs:
             raise NotImplementedError("Keyword arguments are not supported yet.")
 
-    def __call__(self, *args, offset_provider: dict[str, CartesianAxis], **kwargs) -> None:
+    def __call__(self, *args, offset_provider: dict[str, Dimension], **kwargs) -> None:
         self._validate_args(*args, **kwargs)
 
         # extract size of all field arguments
@@ -222,7 +237,6 @@ class Program:
         rewritten_args = list(args)
         for param_idx, param in enumerate(self.past_node.params):
             if isinstance(param.type, ct.ScalarType):
-                print(self.captured_vars)
                 rewritten_args[param_idx] = constant_field(
                     args[param_idx],
                     dtype=BUILTINS[param.type.kind.name.lower()],
@@ -238,7 +252,7 @@ class Program:
         if not self.backend:
             warnings.warn(
                 UserWarning(
-                    f"Field View Program '{self.itir.id}': Using default (embedded) backend."
+                    f"Field View Program '{self.itir.id}': Using default ({DEFAULT_BACKEND}) backend."
                 )
             )
         backend = self.backend if self.backend else DEFAULT_BACKEND
@@ -366,10 +380,6 @@ class FieldOperator(GTCallable):
         loc = self.foast_node.location
 
         type_ = self.__gt_type__()
-        stencil_sym: past.Symbol = past.Symbol(
-            id=name, type=type_, namespace=ct.Namespace.CLOSURE, location=loc
-        )
-
         params_decl: list[past.Symbol] = [
             past.DataSymbol(
                 id=UIDs.sequential_id(prefix="__sym"),
@@ -385,6 +395,24 @@ class FieldOperator(GTCallable):
         )
         out_ref = past.Name(id="out", location=loc)
 
+        # inject stencil as a closure var into program. Since CapturedVars is
+        #  immutable we have to resort to this rather ugly way of doing a copy.
+        captured_vars = dataclasses.replace(
+            self.captured_vars, globals={**self.captured_vars.globals, name: self}
+        )
+        all_captured_vars = collections.ChainMap(captured_vars.globals, captured_vars.nonlocals)
+
+        captured_symbols: list[past.Symbol] = []
+        for name, val in all_captured_vars.items():  # type: ignore
+            captured_symbols.append(
+                past.Symbol(
+                    id=name,
+                    type=symbol_makers.make_symbol_type_from_value(val),
+                    namespace=ct.Namespace.CLOSURE,
+                    location=loc,
+                )
+            )
+
         untyped_past_node = past.Program(
             id=f"__field_operator_{name}",
             params=params_decl + [out_sym],
@@ -396,16 +424,10 @@ class FieldOperator(GTCallable):
                     location=loc,
                 )
             ],
-            captured_vars=[stencil_sym],
+            captured_vars=captured_symbols,
             location=loc,
         )
         past_node = ProgramTypeDeduction.apply(untyped_past_node)
-
-        # inject stencil as a closure var into program
-        #  since CapturedVars is immutable we have to resort to this rather ugly way of doing a copy
-        captured_vars = dataclasses.replace(
-            self.captured_vars, globals={**self.captured_vars.globals, name: self}
-        )
 
         return Program(
             past_node=past_node,
@@ -414,7 +436,8 @@ class FieldOperator(GTCallable):
             backend=self.backend,
         )
 
-    def __call__(self, *args, out, offset_provider: dict[str, CartesianAxis], **kwargs) -> None:
+    def __call__(self, *args, out, offset_provider: dict[str, Dimension], **kwargs) -> None:
+        # TODO(tehrengruber): check all offset providers are given
         return self.as_program()(*args, out, offset_provider=offset_provider, **kwargs)
 
 
