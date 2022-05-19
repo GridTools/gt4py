@@ -231,7 +231,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                 if source != target:
                     raise FieldOperatorTypeDeductionError.from_foast_node(
                         new_value,
-                        msg=f"Source and target must be equal for offsets with a single target.",
+                        msg="Source and target must be equal for offsets with a single target.",
                     )
                 new_type = new_value.type
             case _:
