@@ -70,12 +70,14 @@ def _patch_Expr():
         return FunCall(fun=self, args=[*make_node(args)])
 
 
-_patch_Expr()
-
-
-class PatchedFunctionDefinition(FunctionDefinition):
+def _patch_FunctionDefinition():
+    @monkeypatch_method(FunctionDefinition)
     def __call__(self, *args):
         return FunCall(fun=SymRef(id=str(self.id)), args=[*make_node(args)])
+
+
+_patch_Expr()
+_patch_FunctionDefinition()
 
 
 def _s(id_):
@@ -254,7 +256,7 @@ def lambdadef(fun):
 
 
 def make_function_definition(fun):
-    res = PatchedFunctionDefinition(
+    res = FunctionDefinition(
         id=fun.__name__,
         params=list(Sym(id=param) for param in inspect.signature(fun).parameters.keys()),
         expr=trace_function_call(fun),
@@ -302,7 +304,7 @@ class Tracer:
 
 @iterator.runtime.closure.register(TRACING)
 def closure(domain, stencil, output, inputs):
-    if stencil.__name__ in iterator.builtins.__all__:
+    if hasattr(stencil, "__name__") and stencil.__name__ in iterator.builtins.__all__:
         stencil = _s(stencil.__name__)
     else:
         stencil(*(_s(param) for param in inspect.signature(stencil).parameters))

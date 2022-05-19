@@ -20,10 +20,9 @@ import hashlib
 import string
 from typing import Any
 
-import pydantic
 import pytest
 
-import eve.utils
+import eve
 from eve.utils import XIterable
 
 
@@ -82,7 +81,7 @@ def test_register_subclasses():
     )
 
 
-class ModelClass(pydantic.BaseModel):
+class ModelClass(eve.datamodels.DataModel):
     data: Any
 
 
@@ -142,11 +141,11 @@ def unique_data_items(request):
 
 def test_noninstantiable_class():
     @eve.utils.noninstantiable
-    class NonInstantiableClass(pydantic.BaseModel):
+    class NonInstantiableClass(eve.datamodels.DataModel):
         param: int
 
     with pytest.raises(
-        TypeError, match="Trying to instantiate `NonInstantiableClass` non-instantiable class"
+        TypeError, match="Trying to instantiate 'NonInstantiableClass' non-instantiable class"
     ):
         NonInstantiableClass(param=0)
 
@@ -170,7 +169,7 @@ def hash_algorithm(request):
 
 
 def test_shash(unique_data_items, hash_algorithm):
-    from eve.utils import shash
+    from eve.utils import content_hash
 
     # Test hash consistency
     for item in unique_data_items:
@@ -180,10 +179,12 @@ def test_shash(unique_data_items, hash_algorithm):
         else:
             h1 = hash_algorithm
             h2 = hash_algorithm
-        assert shash(item, hash_algorithm=h1) == shash(copy.deepcopy(item), hash_algorithm=h2)
+        assert content_hash(item, hash_algorithm=h1) == content_hash(
+            copy.deepcopy(item), hash_algorithm=h2
+        )
 
     # Test hash specificity
-    hashes = set(shash(item, hash_algorithm=hash_algorithm) for item in unique_data_items)
+    hashes = set(content_hash(item, hash_algorithm=hash_algorithm) for item in unique_data_items)
     assert len(hashes) == len(unique_data_items)
 
 

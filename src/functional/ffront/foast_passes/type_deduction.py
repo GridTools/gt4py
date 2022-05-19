@@ -13,12 +13,13 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 import copy
 from itertools import permutations
-from typing import Optional
+from typing import Optional, cast
 
 import functional.ffront.field_operator_ast as foast
-from eve import NodeTranslator, SymbolTableTrait
+from eve import NodeTranslator, traits
 from functional.common import GTSyntaxError, GTTypeError
 from functional.ffront import common_types as ct, type_info
+from functional.ffront.fbuiltins import FUN_BUILTIN_NAMES
 
 
 def boolified_type(symbol_type: ct.SymbolType) -> ct.ScalarType | ct.FieldType:
@@ -48,7 +49,7 @@ def boolified_type(symbol_type: ct.SymbolType) -> ct.ScalarType | ct.FieldType:
     raise GTTypeError(f"Can not boolify type {symbol_type}!")
 
 
-class FieldOperatorTypeDeduction(NodeTranslator):
+class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
     """
     Deduce and check types of FOAST expressions and symbols.
 
@@ -73,8 +74,6 @@ class FieldOperatorTypeDeduction(NodeTranslator):
     >>> assert typed_fieldop.body[0].value.type == ct.FieldType(dtype=ct.ScalarType(
     ...     kind=ct.ScalarKind.FLOAT64), dims=Ellipsis)
     """
-
-    contexts = (SymbolTableTrait.symtable_merger,)  # type: ignore  # TODO(ricoh): check if the SymbolTableTrait.symtable_merger annotation is correct.
 
     @classmethod
     def apply(cls, node: foast.FieldOperator) -> foast.FieldOperator:
@@ -131,17 +130,26 @@ class FieldOperatorTypeDeduction(NodeTranslator):
 
     def visit_Subscript(self, node: foast.Subscript, **kwargs) -> foast.Subscript:
         new_value = self.visit(node.value, **kwargs)
-        new_type = None
-        if kwargs.get("in_shift", False):
-            return foast.Subscript(
-                value=new_value,
-                index=node.index,
-                type=new_value.type,
-                location=node.location,
-            )
+        new_type: Optional[ct.SymbolType] = None
         match new_value.type:
             case ct.TupleType(types=types):
                 new_type = types[node.index]
+            case ct.OffsetType(source=source, target=(target1, target2)):
+                if not target2.local:
+                    raise FieldOperatorTypeDeductionError.from_foast_node(
+                        new_value, msg="Second dimension in offset must be a local dimension."
+                    )
+                new_type = ct.OffsetType(source=source, target=(target1,))
+            case ct.OffsetType(source=source, target=(target,)):
+                # for cartesian axes (e.g. I, J) the index of the subscript only
+                #  signifies the displacement in the respective dimension,
+                #  but does not change the target type.
+                if source != target:
+                    raise FieldOperatorTypeDeductionError.from_foast_node(
+                        new_value,
+                        msg="Source and target must be equal for offsets with a single target.",
+                    )
+                new_type = new_value.type
             case _:
                 raise FieldOperatorTypeDeductionError.from_foast_node(
                     new_value, msg="Could not deduce type of subscript expression!"
@@ -256,8 +264,9 @@ class FieldOperatorTypeDeduction(NodeTranslator):
     def visit_Call(self, node: foast.Call, **kwargs) -> foast.Call:
         new_func = self.visit(node.func, **kwargs)
 
+        return_type: Optional[ct.SymbolType] = None
         if isinstance(new_func.type, ct.FieldType):
-            new_args = self.visit(node.args, in_shift=True, **kwargs)
+            new_args = self.visit(node.args, **kwargs)
             source_dim = new_args[0].type.source
             target_dims = new_args[0].type.target
             if new_func.type.dims and source_dim not in new_func.type.dims:
@@ -276,31 +285,67 @@ class FieldOperatorTypeDeduction(NodeTranslator):
                 func=new_func, args=new_args, kwargs={}, location=node.location, type=new_type
             )
         elif isinstance(new_func.type, ct.FunctionType):
-            new_args = self.visit(node.args, **kwargs)
-            new_kwargs = self.visit(node.kwargs, **kwargs)
-            try:
-                type_info.is_callable(
-                    new_func.type,
-                    with_args=[arg.type for arg in new_args],
-                    with_kwargs={keyword: arg.type for keyword, arg in new_kwargs.items()},
-                    raise_exception=True,
-                )
-            except GTTypeError as err:
-                raise FieldOperatorTypeDeductionError.from_foast_node(
-                    node, msg=f"Invalid argument types in call to '{node.func.id}'!"
-                ) from err
+            return_type = new_func.type.returns
 
-            return foast.Call(
-                func=new_func,
-                args=new_args,
-                kwargs=new_kwargs,
-                location=node.location,
-                type=new_func.type.returns,
-            )
+            # todo(tehrengruber): solve in a more generic way, e.g. using
+            #  parametric polymorphism.
+            # resolve polymorphic builtins
+            if not type_info.is_concrete(return_type) and node.func.id in FUN_BUILTIN_NAMES:
+                visitor = getattr(self, f"_visit_{node.func.id}")
+                return visitor(node, **kwargs)
+            else:
+                new_args = self.visit(node.args, **kwargs)
+                new_kwargs = self.visit(node.kwargs, **kwargs)
+                try:
+                    type_info.is_callable(
+                        new_func.type,
+                        with_args=[arg.type for arg in new_args],
+                        with_kwargs={keyword: arg.type for keyword, arg in new_kwargs.items()},
+                        raise_exception=True,
+                    )
+                except GTTypeError as err:
+                    raise FieldOperatorTypeDeductionError.from_foast_node(
+                        node, msg=f"Invalid argument types in call to '{node.func.id}'!"
+                    ) from err
+
+                return foast.Call(
+                    func=new_func,
+                    args=new_args,
+                    kwargs=new_kwargs,
+                    location=node.location,
+                    type=new_func.type.returns,
+                )
 
         raise FieldOperatorTypeDeductionError.from_foast_node(
             node,
             msg=f"Objects of type '{new_func.type}' are not callable.",
+        )
+
+    def _visit_neighbor_sum(self, node: foast.Call, **kwargs):
+        new_func = self.visit(node.func, **kwargs)
+        new_args = self.visit(node.args, **kwargs)
+        new_kwargs = self.visit(node.kwargs, **kwargs)
+        field_type: ct.FieldType = new_args[0].type
+        reduction_dim = cast(ct.DimensionType, new_kwargs["axis"].type).dim
+        if reduction_dim not in field_type.dims:
+            field_dims_str = ", ".join(str(dim) for dim in field_type.dims)
+            raise FieldOperatorTypeDeductionError.from_foast_node(
+                node,
+                msg=f"Incompatible field argument in {node.func.id}. Expected "
+                f"a field with dimension {reduction_dim}, but got "
+                f"{field_dims_str}.",
+            )
+        return_type = ct.FieldType(
+            dims=[dim for dim in field_type.dims if dim != reduction_dim],
+            dtype=field_type.dtype,
+        )
+
+        return foast.Call(
+            func=new_func,
+            args=new_args,
+            kwargs=new_kwargs,
+            location=node.location,
+            type=return_type,
         )
 
     def visit_Constant(self, node: foast.Constant, **kwargs) -> foast.Constant:

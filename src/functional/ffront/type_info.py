@@ -103,7 +103,7 @@ def extract_dims(symbol_type: ct.SymbolType) -> list[Dimension]:
     >>> I = Dimension(value="I")
     >>> J = Dimension(value="J")
     >>> extract_dims(ct.FieldType(dims=[I, J], dtype=ct.ScalarType(kind=ct.ScalarKind.INT64)))
-    [Dimension(value='I'), Dimension(value='J')]
+    [Dimension(value='I', local=False), Dimension(value='J', local=False)]
     """
     match symbol_type:
         case ct.ScalarType():

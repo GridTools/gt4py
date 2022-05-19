@@ -114,7 +114,7 @@ class PrettyPrinter(NodeTranslator):
         return [str(node.value)]
 
     def visit_OffsetLiteral(self, node: ir.OffsetLiteral, *, prec: int) -> list[str]:
-        return [str(node.value)]
+        return [str(node.value) + "ₒ"]
 
     def visit_AxisLiteral(self, node: ir.AxisLiteral, *, prec: int) -> list[str]:
         return [str(node.value)]
@@ -144,7 +144,8 @@ class PrettyPrinter(NodeTranslator):
             if fun_name in BINARY_OPS and len(node.args) == 2:
                 # replacing binary ops: plus(x, y) → x + y etc.
                 op = BINARY_OPS[fun_name]
-                lhs, rhs = self.visit(node.args, prec=PRECEDENCE[fun_name])
+                lhs = self.visit(node.args[0], prec=PRECEDENCE[fun_name])
+                rhs = self.visit(node.args[1], prec=PRECEDENCE[fun_name] + 1)
                 h = self._hmerge(lhs, [" " + op + " "], rhs)
                 v = self._vmerge(lhs, self._hmerge([op + " "], rhs))
                 return self._prec_parens(self._optimum(h, v), prec, PRECEDENCE[fun_name])
@@ -169,7 +170,7 @@ class PrettyPrinter(NodeTranslator):
             if fun_name == "domain" and len(node.args) >= 1:
                 # domain(x, y, ...) → { x × y × ... }
                 args = self.visit(node.args, prec=PRECEDENCE["__call__"])
-                return self._hmerge(["{ "], *self._hinterleave(args, " × "), [" }"])
+                return self._hmerge(["⟨ "], *self._hinterleave(args, ", "), [" ⟩"])
             if fun_name == "if_" and len(node.args) == 3:
                 # if_(x, y, z) → if x then y else z
                 ifb, thenb, elseb = self.visit(node.args, prec=PRECEDENCE["if_"])
@@ -204,7 +205,7 @@ class PrettyPrinter(NodeTranslator):
     def visit_FunctionDefinition(self, node: ir.FunctionDefinition, prec: int) -> list[str]:
         assert prec == 0
         params = self.visit(node.params, prec=0)
-        expr = self.visit(node.expr, prec=0)
+        expr = self._hmerge(self.visit(node.expr, prec=0), [";"])
 
         start, bridge = [node.id + " = λ("], [") → "]
         if not params:
@@ -230,7 +231,7 @@ class PrettyPrinter(NodeTranslator):
         inputs = self._optimum(hinputs, vinputs)
 
         head = self._hmerge(output, [" ← "])
-        foot = self._hmerge(inputs, [" @ "], domain)
+        foot = self._hmerge(inputs, [" @ "], domain, [";"])
 
         h = self._hmerge(head, ["("], stencil, [")"], foot)
         v = self._vmerge(

@@ -17,12 +17,11 @@
 
 from __future__ import annotations
 
-from typing import ChainMap
-
+import pydantic
 import pytest
 
 import eve
-from eve.extended_typing import List
+from eve.extended_typing import Any, ClassVar, List
 
 from .. import definitions
 
@@ -76,13 +75,39 @@ class TestSymbolTable:
             for symbol_name, symbol_node in expected_symbols.items()
         )
 
-    def test_symtable_ctx(self):
-        node = _NodeWithSymbolTable(symbols=[_NodeWithSymbolName()])
-        kwargs = dict(symtable=ChainMap({"a": True}))
+    def test_extra_node_symbols(self):
+        class NodeWithName(eve.Node):
+            name: eve.SymbolName
 
-        with eve.SymbolTableTrait.symtable_merger(None, node, kwargs):
+        class NodeWithRef(eve.Node):
+            ref_name: eve.SymbolRef
+
+        class NodeWithSymbolTable(eve.Node, eve.traits.ValidatedSymbolTableTrait):
+            symbols: List[NodeWithRef]
+
+            _NODE_SYMBOLS_: ClassVar[List] = []
+
+        NodeWithSymbolTable.update_forward_refs(**locals())
+
+        with pytest.raises(pydantic.ValidationError, match="'foo'"):
+            NodeWithSymbolTable(symbols=[NodeWithRef(ref_name="foo")])
+
+        NodeWithSymbolTable._NODE_SYMBOLS_.append(NodeWithName(name="foo"))
+        print(NodeWithSymbolTable._NODE_SYMBOLS_)
+        NodeWithSymbolTable(symbols=[NodeWithRef(ref_name=eve.SymbolRef("foo"))])
+
+
+def test_visitor_with_symbol_table_trait(node_with_symbol_table):
+    class BareVisitor(eve.visitors.NodeVisitor):
+        def visit_Node(self, node: eve.concepts.TreeNode, **kwargs: Any) -> Any:
+            assert "symtable" in kwargs
+
+    with pytest.raises(AssertionError, match="'symtable'"):
+        BareVisitor().visit(node_with_symbol_table)
+
+    class ExtendedVisitor(eve.traits.VisitorWithSymbolTableTrait):
+        def visit_Node(self, node: eve.concepts.TreeNode, **kwargs: Any) -> Any:
             assert "symtable" in kwargs
             assert "symbol_name" in kwargs["symtable"]
 
-        assert "symtable" in kwargs
-        assert "symbol_name" not in kwargs["symtable"]
+    ExtendedVisitor().visit(node_with_symbol_table)
