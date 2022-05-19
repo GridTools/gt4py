@@ -494,61 +494,80 @@ def infer(expr, symtypes=None):
     return reindex_vars(unified)
 
 
-def pretty_str(x):  # noqa: C901
-    def subscript(i):
+class PrettyPrinter(eve.NodeTranslator):
+    @staticmethod
+    def _subscript(i):
         return "".join("₀₁₂₃₄₅₆₇₈₉"[int(d)] for d in str(i))
 
-    def superscript(i):
+    @staticmethod
+    def _superscript(i):
         return "".join("⁰¹²³⁴⁵⁶⁷⁸⁹"[int(d)] for d in str(i))
 
-    def fmt_size(size):
+    def _fmt_size(self, size):
         if size == Column():
             return "ᶜ"
         if size == Scalar():
             return "ˢ"
         assert isinstance(size, Var)
-        return superscript(size.idx)
+        return self._superscript(size.idx)
 
-    def fmt_dtype(kind, dtype_str):
+    def _fmt_dtype(self, kind, dtype_str):
         if kind == Value():
             return dtype_str
         if kind == Iterator():
             return "It[" + dtype_str + "]"
         assert isinstance(kind, Var)
-        return "ItOrVal" + subscript(kind.idx) + "[" + dtype_str + "]"
+        return "ItOrVal" + self._subscript(kind.idx) + "[" + dtype_str + "]"
 
-    if isinstance(x, Tuple):
-        return "(" + ", ".join(pretty_str(e) for e in x.elems) + ")"
-    if isinstance(x, PartialTupleVar):
+    def visit_Tuple(self, node):
+        return "(" + ", ".join(self.visit(e) for e in node.elems) + ")"
+
+    def visit_PartialTupleVar(self, node):
         s = ""
-        if x.elems:
-            e = dict(x.elems)
+        if node.elems:
+            e = dict(node.elems)
             for i in range(max(e) + 1):
-                s += (pretty_str(e[i]) if i in e else "…") + ", "
-        return "(" + s + "…)" + subscript(x.idx)
-    if isinstance(x, PrefixTuple):
-        return pretty_str(x.prefix) + ":" + pretty_str(x.others)
-    if isinstance(x, Fun):
-        return pretty_str(x.args) + " → " + pretty_str(x.ret)
-    if isinstance(x, Val):
-        return fmt_dtype(x.kind, pretty_str(x.dtype) + fmt_size(x.size))
-    if isinstance(x, Primitive):
-        return x.name
-    if isinstance(x, FunDef):
-        return x.name + " :: " + pretty_str(x.fun)
-    if isinstance(x, Closure):
-        return pretty_str(x.inputs) + " ⇒ " + pretty_str(x.output)
-    if isinstance(x, Fencil):
+                s += (self.visit(e[i]) if i in e else "…") + ", "
+        return "(" + s + "…)" + self._subscript(node.idx)
+
+    def visit_PrefixTuple(self, node):
+        return self.visit(node.prefix) + ":" + self.visit(node.others)
+
+    def visit_Fun(self, node):
+        return self.visit(node.args) + " → " + self.visit(node.ret)
+
+    def visit_Val(self, node):
+        return self._fmt_dtype(node.kind, self.visit(node.dtype) + self._fmt_size(node.size))
+
+    def visit_Primitive(self, node):
+        return node.name
+
+    def visit_FunDef(self, node):
+        return node.name + " :: " + self.visit(node.fun)
+
+    def visit_Closure(self, node):
+        return self.visit(node.inputs) + " ⇒ " + self.visit(node.output)
+
+    def visit_Fencil(self, node):
         return (
             "{"
-            + "".join(pretty_str(f) + ", " for f in x.fundefs.elems)
-            + x.name
-            + pretty_str(x.params)
+            + "".join(self.visit(f) + ", " for f in node.fundefs.elems)
+            + node.name
+            + self.visit(node.params)
             + "}"
         )
-    if isinstance(x, ValTuple):
-        assert isinstance(x.dtypes, Var)
-        return "(" + fmt_dtype(x.kind, "T" + fmt_size(x.size)) + ", …)" + subscript(x.dtypes.idx)
-    if isinstance(x, VarMixin):
-        return "T" + subscript(x.idx)
-    raise AssertionError()
+
+    def visit_ValTuple(self, node):
+        assert isinstance(node.dtypes, Var)
+        return (
+            "("
+            + self._fmt_dtype(node.kind, "T" + self._fmt_size(node.size))
+            + ", …)"
+            + self._subscript(node.dtypes.idx)
+        )
+
+    def visit_Var(self, node):
+        return "T" + self._subscript(node.idx)
+
+
+pretty_str = PrettyPrinter().visit
