@@ -119,6 +119,10 @@ class GTFN_lowering(NodeTranslator):
 
     def visit_StencilClosure(self, node: itir.StencilClosure, **kwargs: Any) -> StencilExecution:
         backend = Backend(domain=self.visit(node.domain))
+
+        if not isinstance(node.stencil, SymRef):
+            raise RuntimeError(f"Stencil must be a SymRef to FunctionDefinition.")
+
         return StencilExecution(
             stencil=self.visit(node.stencil),
             output=self.visit(node.output),
