@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-#
 # GTC Toolchain - GT4Py - GridTools Framework
 #
 # Copyright (c) 2014-2022, ETH Zurich
