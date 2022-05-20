@@ -96,8 +96,8 @@ class FunDef(DType):
 
 class Fencil(DType):
     name: str
-    fundefs: DType
-    params: DType
+    fundefs: tuple[DType, ...]
+    params: tuple[DType, ...]
 
 
 class LetPolymorphic(DType):
@@ -293,7 +293,7 @@ class TypeInferrer(eve.NodeTranslator):
                 f = unify(f, c)
                 ftypes.append(f)
                 fmap[f.name] = LetPolymorphic(dtype=f.fun)
-            return Tuple(elems=tuple(ftypes)), fmap
+            return tuple(ftypes), fmap
 
         params = {p.id: Var.fresh() for p in node.params}
         self.visit(
@@ -302,7 +302,7 @@ class TypeInferrer(eve.NodeTranslator):
         return Fencil(
             name=node.id,
             fundefs=funtypes()[0],
-            params=Tuple(elems=tuple(params[p.id] for p in node.params)),
+            params=tuple(params[p.id] for p in node.params),
         )
 
 
@@ -551,10 +551,11 @@ class PrettyPrinter(eve.ReusingNodeTranslator):
     def visit_Fencil(self, node):
         return (
             "{"
-            + "".join(self.visit(f) + ", " for f in node.fundefs.elems)
+            + "".join(self.visit(f) + ", " for f in node.fundefs)
             + node.name
-            + self.visit(node.params)
-            + "}"
+            + "("
+            + ", ".join(self.visit(p) for p in node.params)
+            + ")}"
         )
 
     def visit_ValTuple(self, node):

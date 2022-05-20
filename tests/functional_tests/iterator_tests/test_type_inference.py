@@ -383,17 +383,15 @@ def test_fencil_definition():
     )
     expected = ti.Fencil(
         name="f",
-        fundefs=ti.Tuple(elems=()),
-        params=ti.Tuple(
-            elems=(
-                ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="int"), size=ti.Scalar()),
-                ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="int"), size=ti.Scalar()),
-                ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="int"), size=ti.Scalar()),
-                ti.Val(kind=ti.Iterator(), dtype=ti.Var(idx=0), size=ti.Column()),
-                ti.Val(kind=ti.Iterator(), dtype=ti.Var(idx=0), size=ti.Column()),
-                ti.Val(kind=ti.Iterator(), dtype=ti.Var(idx=1), size=ti.Column()),
-                ti.Val(kind=ti.Iterator(), dtype=ti.Var(idx=1), size=ti.Column()),
-            )
+        fundefs=(),
+        params=(
+            ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="int"), size=ti.Scalar()),
+            ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="int"), size=ti.Scalar()),
+            ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="int"), size=ti.Scalar()),
+            ti.Val(kind=ti.Iterator(), dtype=ti.Var(idx=0), size=ti.Column()),
+            ti.Val(kind=ti.Iterator(), dtype=ti.Var(idx=0), size=ti.Column()),
+            ti.Val(kind=ti.Iterator(), dtype=ti.Var(idx=1), size=ti.Column()),
+            ti.Val(kind=ti.Iterator(), dtype=ti.Var(idx=1), size=ti.Column()),
         ),
     )
     inferred = ti.infer(testee)
@@ -453,36 +451,30 @@ def test_fencil_definition_with_function_definitions():
     )
     expected = ti.Fencil(
         name="foo",
-        fundefs=ti.Tuple(
-            elems=(
-                ti.FunDef(
-                    name="f", fun=ti.Fun(args=ti.Tuple(elems=(ti.Var(idx=0),)), ret=ti.Var(idx=0))
-                ),
-                ti.FunDef(
-                    name="g",
-                    fun=ti.Fun(
-                        args=ti.Tuple(
-                            elems=(
-                                ti.Val(kind=ti.Iterator(), dtype=ti.Var(idx=1), size=ti.Var(idx=2)),
-                            )
-                        ),
-                        ret=ti.Val(kind=ti.Value(), dtype=ti.Var(idx=1), size=ti.Var(idx=2)),
+        fundefs=(
+            ti.FunDef(
+                name="f", fun=ti.Fun(args=ti.Tuple(elems=(ti.Var(idx=0),)), ret=ti.Var(idx=0))
+            ),
+            ti.FunDef(
+                name="g",
+                fun=ti.Fun(
+                    args=ti.Tuple(
+                        elems=(ti.Val(kind=ti.Iterator(), dtype=ti.Var(idx=1), size=ti.Var(idx=2)),)
                     ),
+                    ret=ti.Val(kind=ti.Value(), dtype=ti.Var(idx=1), size=ti.Var(idx=2)),
                 ),
-            )
+            ),
         ),
-        params=ti.Tuple(
-            elems=(
-                ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="int"), size=ti.Scalar()),
-                ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="int"), size=ti.Scalar()),
-                ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="int"), size=ti.Scalar()),
-                ti.Val(kind=ti.Iterator(), dtype=ti.Var(idx=3), size=ti.Column()),
-                ti.Val(kind=ti.Iterator(), dtype=ti.Var(idx=3), size=ti.Column()),
-                ti.Val(kind=ti.Iterator(), dtype=ti.Var(idx=4), size=ti.Column()),
-                ti.Val(kind=ti.Iterator(), dtype=ti.Var(idx=4), size=ti.Column()),
-                ti.Val(kind=ti.Iterator(), dtype=ti.Var(idx=5), size=ti.Column()),
-                ti.Val(kind=ti.Iterator(), dtype=ti.Var(idx=5), size=ti.Column()),
-            )
+        params=(
+            ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="int"), size=ti.Scalar()),
+            ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="int"), size=ti.Scalar()),
+            ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="int"), size=ti.Scalar()),
+            ti.Val(kind=ti.Iterator(), dtype=ti.Var(idx=3), size=ti.Column()),
+            ti.Val(kind=ti.Iterator(), dtype=ti.Var(idx=3), size=ti.Column()),
+            ti.Val(kind=ti.Iterator(), dtype=ti.Var(idx=4), size=ti.Column()),
+            ti.Val(kind=ti.Iterator(), dtype=ti.Var(idx=4), size=ti.Column()),
+            ti.Val(kind=ti.Iterator(), dtype=ti.Var(idx=5), size=ti.Column()),
+            ti.Val(kind=ti.Iterator(), dtype=ti.Var(idx=5), size=ti.Column()),
         ),
     )
     inferred = ti.infer(testee)
@@ -509,8 +501,5 @@ def test_pformat():
     assert ti.pformat(ti.Val(kind=ti.Value(), dtype=vs[0], size=ti.Scalar())) == "T₀ˢ"
     assert ti.pformat(ti.Val(kind=ti.Value(), dtype=vs[0], size=ti.Column())) == "T₀ᶜ"
     assert ti.pformat(ti.Closure(output=vs[0], inputs=vs[1])) == "T₁ ⇒ T₀"
-    assert ti.pformat(ti.FunDef(name="f", fun=vs[0])) == "f :: T₀"
-    assert (
-        ti.pformat(ti.Fencil(name="f", fundefs=ti.Tuple(elems=()), params=ti.Tuple(elems=())))
-        == "{f()}"
-    )
+    assert ti.pformat(ti.FunDef(name="f", fun=ti.Fun(args=vs[0], ret=vs[1]))) == "f :: T₀ → T₁"
+    assert ti.pformat(ti.Fencil(name="f", fundefs=(), params=())) == "{f()}"
