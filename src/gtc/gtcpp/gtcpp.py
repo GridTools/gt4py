@@ -166,7 +166,6 @@ class GTAccessor(LocNode):
     id: int  # noqa: A003  # shadowing python builtin
     intent: Intent
     extent: GTExtent
-    temporary: bool = True
     ndim: int = 3
 
 

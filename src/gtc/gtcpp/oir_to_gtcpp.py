@@ -68,7 +68,6 @@ def _extract_accessors(node: eve.Node, temp_names: Set[str]) -> List[gtcpp.GTAcc
             id=i,
             intent=gtcpp.Intent.INOUT if name in inout_fields else gtcpp.Intent.IN,
             extent=extent,
-            temporary=(name in temp_names),
             ndim=ndims[name],
         )
         for i, (name, extent) in enumerate(extents.items())

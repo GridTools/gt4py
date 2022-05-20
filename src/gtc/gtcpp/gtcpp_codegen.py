@@ -14,6 +14,8 @@
 
 from typing import Any, Collection, Dict, Union
 
+import numpy as np
+
 from eve import Node, codegen
 from eve.codegen import FormatTemplate as as_fmt
 from eve.codegen import MakoTemplate as as_mako
@@ -76,7 +78,12 @@ class GTCppCodegen(codegen.TemplatedGenerator):
     AssignStmt = as_fmt("{left} = {right};")
 
     def visit_AccessorRef(
-        self, accessor_ref: gtcpp.AccessorRef, *, symtable: Dict[str, gtcpp.GTAccessor], **kwargs
+        self,
+        accessor_ref: gtcpp.AccessorRef,
+        *,
+        symtable: Dict[str, gtcpp.GTAccessor],
+        temp_decls: Dict[str, gtcpp.Temporary],
+        **kwargs: Any,
     ):
         if isinstance(accessor_ref.offset, common.CartesianOffset):
             offset = accessor_ref.offset
@@ -89,13 +96,20 @@ class GTCppCodegen(codegen.TemplatedGenerator):
             k_offset = self.visit(accessor_ref.offset.k, **kwargs)
         else:
             raise TypeError("Unsupported offset type")
-        if symtable[accessor_ref.name].temporary and accessor_ref.data_index:
-            data_index = ""
-            for index in accessor_ref.data_index:
-                data_index += f"[{self.visit(index, **kwargs)}]"
-            return f"eval({accessor_ref.name}({i_offset}, {j_offset}, {k_offset})){data_index}"
+
+        if accessor_ref.name in temp_decls and accessor_ref.data_index:
+            temp = temp_decls[accessor_ref.name]
+            data_index = "+".join(
+                [
+                    f"{self.visit(index, in_data_index=True, **kwargs)}*{int(np.prod(temp.data_dims[i+1:], initial=1))}"
+                    for i, index in enumerate(accessor_ref.data_index)
+                ]
+            )
+            return f"eval({accessor_ref.name}({i_offset}, {j_offset}, {k_offset}))[{data_index}]"
         else:
-            data_index = "".join(f", {self.visit(d)}" for d in accessor_ref.data_index)
+            data_index = "".join(
+                f", {self.visit(d, in_data_index=True)}" for d in accessor_ref.data_index
+            )
             return f"eval({accessor_ref.name}({i_offset}, {j_offset}, {k_offset}{data_index}))"
 
     LocalAccess = as_fmt("{name}")
@@ -121,7 +135,15 @@ class GTCppCodegen(codegen.TemplatedGenerator):
             return "false"
         raise NotImplementedError("Not implemented BuiltInLiteral encountered.")
 
-    Literal = as_mako("static_cast<${dtype}>(${value})")
+    def visit_Literal(
+        self, node: gtcpp.Literal, *, in_data_index: bool = False, **kwargs: Any
+    ) -> str:
+        value = self.visit(node.value, **kwargs)
+        if in_data_index:
+            return value
+        else:
+            dtype = self.visit(node.dtype, **kwargs)
+            return f"static_cast<{dtype}>({value})"
 
     def visit_NativeFunction(self, func: NativeFunction, **kwargs: Any) -> str:
         try:
@@ -211,10 +233,10 @@ class GTCppCodegen(codegen.TemplatedGenerator):
     def visit_Temporary(self, node: gtcpp.Temporary, **kwargs: Any) -> str:
         dtype = self.visit(node.dtype, **kwargs)
         if node.data_dims:
-            for dim in node.data_dims[::-1]:
-                dtype = f"array<{dtype}, {dim}>"
-            dtype = f"({dtype})"
-        return f"GT_DECLARE_TMP({dtype}, {self.visit(node.name, **kwargs)});"
+            total_size = np.prod(node.data_dims, initial=1)
+            dtype = f"(array<{dtype}, {total_size}>)"
+        name = self.visit(node.name, **kwargs)
+        return f"GT_DECLARE_TMP({dtype}, {name});"
 
     IfStmt = as_mako(
         """if(${cond}) ${true_branch}
@@ -253,6 +275,10 @@ class GTCppCodegen(codegen.TemplatedGenerator):
         %endif
         """
     )
+
+    def visit_Program(self, node: gtcpp.Program, **kwargs: Any) -> Union[str, Collection[str]]:
+        temp_decls = {temp.name: temp for temp in node.gt_computation.temporaries}
+        return self.generic_visit(node, temp_decls=temp_decls, **kwargs)
 
     Program = as_mako(
         """

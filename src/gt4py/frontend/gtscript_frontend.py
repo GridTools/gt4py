@@ -735,7 +735,7 @@ def parse_annotation(
     tuple_or_name = (
         annotation.slice.value if isinstance(annotation.slice, ast.Index) else annotation.slice
     )
-    dtype_and_axes = gt_utils.listify(
+    dtype_and_axes = gtc_utils.listify(
         tuple_or_name.elts if isinstance(tuple_or_name, ast.Tuple) else tuple_or_name
     )
 
