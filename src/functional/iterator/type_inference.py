@@ -306,7 +306,7 @@ class TypeInferrer(eve.NodeTranslator):
         )
 
 
-class _Rename(eve.NodeTranslator):
+class _Rename(eve.ReusingNodeTranslator):
     def __init__(self, src, dst):
         self.src = src
         self.dst = dst
@@ -461,7 +461,7 @@ def unify(dtype, constraints):
     return dtype
 
 
-class _ReindexVars(eve.NodeTranslator):
+class _ReindexVars(eve.ReusingNodeTranslator):
     def __init__(self, indexer):
         super().__init__()
         self.indexer = indexer
@@ -494,7 +494,7 @@ def infer(expr, symtypes=None):
     return reindex_vars(unified)
 
 
-class PrettyPrinter(eve.NodeTranslator):
+class PrettyPrinter(eve.ReusingNodeTranslator):
     @staticmethod
     def _subscript(i):
         return "".join("₀₁₂₃₄₅₆₇₈₉"[int(d)] for d in str(i))

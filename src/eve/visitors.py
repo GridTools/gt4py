@@ -188,3 +188,57 @@ class NodeTranslator(NodeVisitor):
             )
 
         return copy.deepcopy(node, memo=memo)
+
+
+class ReusingNodeTranslator(NodeVisitor):
+    def generic_visit(self, node: concepts.RootNode, **kwargs: Any) -> Any:  # noqa: C901
+        # Note: avoiding expensive `isinstance(node, concepts.Node)`
+        if concepts.Node in node.__class__.__mro__:
+            new_values_dict = dict()
+            changed = False
+            for name, child in node.iter_children_items():  # type: ignore
+                new_child = self.visit(child, **kwargs)
+                if new_child is not NOTHING:
+                    if new_child is not child:
+                        new_values_dict[name] = new_child
+                        changed = True
+                    else:
+                        new_values_dict[name] = child
+            if not changed:
+                return node
+            new_node = node.__class__(**new_values_dict)
+            new_node.annex.reset(node.annex.__dict__)  # type: ignore
+            return new_node
+
+        if isinstance(node, (list, tuple, set)):
+            # Sequence or set: create a new container instance with the new values
+            new_values_list = []
+            changed = False
+            for child in trees.iter_children_values(node):
+                new_child = self.visit(child, **kwargs)
+                if new_child is not NOTHING:
+                    if new_child is not child:
+                        new_values_list.append(new_child)
+                        changed = True
+                    else:
+                        new_values_list.append(child)
+            if not changed:
+                return node
+            return node.__class__(new_values_list)
+
+        if isinstance(node, dict):
+            # Mapping: create a new mapping instance with the new values
+            new_values_dict = dict()
+            changed = False
+            for name, child in trees.iter_children_items(node):
+                new_child = self.visit(child, **kwargs)
+                if new_child is not NOTHING:
+                    if new_child is not child:
+                        new_values_dict[name] = new_child
+                        changed = True
+                    else:
+                        new_values_dict[name] = child
+            if not changed:
+                return node
+            return node.__class__(new_values_dict)
+        return node
