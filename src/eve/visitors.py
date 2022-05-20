@@ -19,7 +19,6 @@
 
 from __future__ import annotations
 
-import collections.abc
 import copy
 
 from . import concepts, trees
@@ -106,7 +105,8 @@ class NodeVisitor:
 
         if hasattr(self, method_name):
             visitor = getattr(self, method_name)
-        elif isinstance(node, concepts.Node):
+        # Note: avoiding expensive `isinstance(node, concepts.Node)`
+        elif concepts.Node in node.__class__.__mro__:
             for node_class in node.__class__.__mro__[1:]:
                 class_name = node_class.__name__
                 if "__" in class_name:
@@ -157,20 +157,19 @@ class NodeTranslator(NodeVisitor):
 
         memo = kwargs.get("__memo__", None)
 
-        if isinstance(node, concepts.Node):
+        # Note: avoiding expensive `isinstance(node, concepts.Node)`
+        if concepts.Node in node.__class__.__mro__:
             new_node = node.__class__(  # type: ignore
                 **{
                     name: new_child
-                    for name, child in node.iter_children_items()
+                    for name, child in node.iter_children_items()  # type: ignore
                     if (new_child := self.visit(child, **kwargs)) is not NOTHING
                 },
             )
-            new_node.annex.reset(copy.deepcopy(node.annex.__dict__, memo=memo))
+            new_node.annex.reset(copy.deepcopy(node.annex.__dict__, memo=memo))  # type: ignore
             return new_node
 
-        if isinstance(node, (list, tuple, set, collections.abc.Set)) or (
-            isinstance(node, collections.abc.Sequence) and not isinstance(node, (str, bytes))
-        ):
+        if isinstance(node, (list, tuple, set)):
             # Sequence or set: create a new container instance with the new values
             return node.__class__(  # type: ignore
                 new_child
@@ -178,7 +177,7 @@ class NodeTranslator(NodeVisitor):
                 if (new_child := self.visit(child, **kwargs)) is not NOTHING
             )
 
-        if isinstance(node, (dict, collections.abc.Mapping)):
+        if isinstance(node, dict):
             # Mapping: create a new mapping instance with the new values
             return node.__class__(  # type: ignore[call-arg]
                 {
