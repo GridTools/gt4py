@@ -284,24 +284,20 @@ class TypeInferrer(eve.NodeTranslator):
         return Closure(output=output, inputs=inputs)
 
     def visit_FencilDefinition(self, node, *, constraints, symtypes):
-        def funtypes():
-            ftypes = []
-            fmap = dict()
-            for f in node.function_definitions:
-                c = constraints.copy()
-                f = self.visit(f, constraints=c, symtypes=symtypes | fmap)
-                f = unify(f, c)
-                ftypes.append(f)
-                fmap[f.name] = LetPolymorphic(dtype=f.fun)
-            return tuple(ftypes), fmap
+        ftypes = []
+        fmap = dict()
+        for f in node.function_definitions:
+            c = set()
+            f = self.visit(f, constraints=c, symtypes=symtypes | fmap)
+            f = unify(f, c)
+            ftypes.append(f)
+            fmap[f.name] = LetPolymorphic(dtype=f.fun)
 
         params = {p.id: Var.fresh() for p in node.params}
-        self.visit(
-            node.closures, constraints=constraints, symtypes=symtypes | funtypes()[1] | params
-        )
+        self.visit(node.closures, constraints=constraints, symtypes=symtypes | fmap | params)
         return Fencil(
             name=node.id,
-            fundefs=funtypes()[0],
+            fundefs=tuple(ftypes),
             params=tuple(params[p.id] for p in node.params),
         )
 
