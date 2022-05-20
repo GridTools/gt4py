@@ -215,7 +215,7 @@ def test_tuple_get_in_lambda():
     )
     inferred = ti.infer(testee)
     assert inferred == expected
-    assert ti.pformat(inferred) == "(ItOrVal₀[(…, T₁, …)₂³]) → ItOrVal₀[T₁³]"
+    assert ti.pformat(inferred) == "(ItOrVal₀[(_, T₁, …)₂³]) → ItOrVal₀[T₁³]"
 
 
 def test_reduce():
@@ -490,4 +490,27 @@ def test_fencil_definition_with_function_definitions():
     assert (
         ti.pformat(inferred)
         == "{f :: (T₀) → T₀, g :: (It[T₁²]) → T₁², foo(intˢ, intˢ, intˢ, It[T₃ᶜ], It[T₃ᶜ], It[T₄ᶜ], It[T₄ᶜ], It[T₅ᶜ], It[T₅ᶜ])}"
+    )
+
+
+def test_pformat():
+    vs = [ti.Var(idx=i) for i in range(3)]
+    assert ti.pformat(vs[0]) == "T₀"
+    assert ti.pformat(ti.Tuple(elems=tuple(vs[:2]))) == "(T₀, T₁)"
+    assert (
+        ti.pformat(ti.PartialTupleVar(idx=0, elems=((1, vs[0]), (3, vs[1]))))
+        == "(_, T₀, _, T₁, …)₀"
+    )
+    assert ti.pformat(ti.PrefixTuple(prefix=vs[0], others=vs[1])) == "T₀:T₁"
+    assert ti.pformat(ti.Fun(args=vs[0], ret=vs[1])) == "T₀ → T₁"
+    assert ti.pformat(ti.Val(kind=vs[0], dtype=vs[1], size=vs[2])) == "ItOrVal₀[T₁²]"
+    assert ti.pformat(ti.Val(kind=ti.Value(), dtype=vs[0], size=vs[1])) == "T₀¹"
+    assert ti.pformat(ti.Val(kind=ti.Iterator(), dtype=vs[0], size=vs[1])) == "It[T₀¹]"
+    assert ti.pformat(ti.Val(kind=ti.Value(), dtype=vs[0], size=ti.Scalar())) == "T₀ˢ"
+    assert ti.pformat(ti.Val(kind=ti.Value(), dtype=vs[0], size=ti.Column())) == "T₀ᶜ"
+    assert ti.pformat(ti.Closure(output=vs[0], inputs=vs[1])) == "T₁ ⇒ T₀"
+    assert ti.pformat(ti.FunDef(name="f", fun=vs[0])) == "f :: T₀"
+    assert (
+        ti.pformat(ti.Fencil(name="f", fundefs=ti.Tuple(elems=()), params=ti.Tuple(elems=())))
+        == "{f()}"
     )

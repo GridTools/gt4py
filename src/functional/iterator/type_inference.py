@@ -18,7 +18,8 @@ class VarMixin:
 
 @noninstantiable
 class DType(eve.FrozenNode):
-    ...
+    def __str__(self) -> str:
+        return pformat(self)
 
 
 class Var(DType, VarMixin):
@@ -526,7 +527,7 @@ class PrettyPrinter(eve.ReusingNodeTranslator):
         if node.elems:
             e = dict(node.elems)
             for i in range(max(e) + 1):
-                s += (self.visit(e[i]) if i in e else "…") + ", "
+                s += (self.visit(e[i]) if i in e else "_") + ", "
         return "(" + s + "…)" + self._subscript(node.idx)
 
     def visit_PrefixTuple(self, node):
