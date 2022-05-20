@@ -91,7 +91,7 @@ class Closure(DType):
 
 class FunDef(DType):
     name: str
-    fun: DType
+    fun: Fun
 
 
 class Fencil(DType):
