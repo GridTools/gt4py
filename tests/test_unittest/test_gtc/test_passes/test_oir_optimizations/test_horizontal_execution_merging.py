@@ -136,7 +136,7 @@ def test_horiz_exec_merging_complexity():
     start_time = time.process_time()
     transformed = HorizontalExecutionMerging().visit(testee)
     process_time = time.process_time() - start_time
-    assert process_time < (n / 2) * single_process_time
+    assert process_time < 1.5 * n * single_process_time
     hexecs = transformed.vertical_loops[0].sections[0].horizontal_executions
     assert len(hexecs) == 1
 
