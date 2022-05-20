@@ -285,6 +285,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                 func=new_func, args=new_args, kwargs={}, location=node.location, type=new_type
             )
         elif isinstance(new_func.type, ct.FunctionType):
+            self._ensure_signature_valid(node, **kwargs)
             return_type = new_func.type.returns
 
             # todo(tehrengruber): solve in a more generic way, e.g. using
@@ -294,24 +295,10 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                 visitor = getattr(self, f"_visit_{node.func.id}")
                 return visitor(node, **kwargs)
             else:
-                new_args = self.visit(node.args, **kwargs)
-                new_kwargs = self.visit(node.kwargs, **kwargs)
-                try:
-                    type_info.is_callable(
-                        new_func.type,
-                        with_args=[arg.type for arg in new_args],
-                        with_kwargs={keyword: arg.type for keyword, arg in new_kwargs.items()},
-                        raise_exception=True,
-                    )
-                except GTTypeError as err:
-                    raise FieldOperatorTypeDeductionError.from_foast_node(
-                        node, msg=f"Invalid argument types in call to '{node.func.id}'!"
-                    ) from err
-
                 return foast.Call(
                     func=new_func,
-                    args=new_args,
-                    kwargs=new_kwargs,
+                    args=self.visit(node.args, **kwargs),
+                    kwargs=self.visit(node.kwargs, **kwargs),
                     location=node.location,
                     type=new_func.type.returns,
                 )
@@ -320,6 +307,22 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             node,
             msg=f"Objects of type '{new_func.type}' are not callable.",
         )
+
+    def _ensure_signature_valid(self, node: foast.Call, **kwargs):
+        new_func = self.visit(node.func, **kwargs)
+        new_args = self.visit(node.args, **kwargs)
+        new_kwargs = self.visit(node.kwargs, **kwargs)
+        try:
+            type_info.is_callable(
+                new_func.type,
+                with_args=[arg.type for arg in new_args],
+                with_kwargs={keyword: arg.type for keyword, arg in new_kwargs.items()},
+                raise_exception=True,
+            )
+        except GTTypeError as err:
+            raise FieldOperatorTypeDeductionError.from_foast_node(
+                node, msg=f"Invalid argument types in call to '{node.func.id}'!"
+            ) from err
 
     def _visit_neighbor_sum(self, node: foast.Call, **kwargs):
         new_func = self.visit(node.func, **kwargs)
