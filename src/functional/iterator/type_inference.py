@@ -563,6 +563,15 @@ class PrettyPrinter(eve.ReusingNodeTranslator):
             + self._subscript(node.dtypes.idx)
         )
 
+    def visit_UniformValTupleVar(self, node):
+        return (
+            "("
+            + self.visit(Val(kind=node.kind, dtype=node.dtype, size=node.size))
+            + " × n"
+            + self._subscript(node.idx)
+            + ")"
+        )
+
     def visit_Var(self, node):
         return "T" + self._subscript(node.idx)
 

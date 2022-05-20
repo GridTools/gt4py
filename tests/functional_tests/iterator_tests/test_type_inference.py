@@ -486,7 +486,7 @@ def test_fencil_definition_with_function_definitions():
 
 
 def test_pformat():
-    vs = [ti.Var(idx=i) for i in range(3)]
+    vs = [ti.Var(idx=i) for i in range(4)]
     assert ti.pformat(vs[0]) == "T₀"
     assert ti.pformat(ti.Tuple(elems=tuple(vs[:2]))) == "(T₀, T₁)"
     assert (
@@ -500,6 +500,12 @@ def test_pformat():
     assert ti.pformat(ti.Val(kind=ti.Iterator(), dtype=vs[0], size=vs[1])) == "It[T₀¹]"
     assert ti.pformat(ti.Val(kind=ti.Value(), dtype=vs[0], size=ti.Scalar())) == "T₀ˢ"
     assert ti.pformat(ti.Val(kind=ti.Value(), dtype=vs[0], size=ti.Column())) == "T₀ᶜ"
+    assert ti.pformat(ti.ValTuple(kind=vs[0], dtypes=vs[1], size=vs[2])) == "(ItOrVal₀[T²], …)₁"
+    assert (
+        ti.pformat(ti.UniformValTupleVar(idx=0, kind=vs[1], dtype=vs[2], size=vs[3]))
+        == "(ItOrVal₁[T₂³] × n₀)"
+    )
+    assert ti.pformat(ti.Primitive(name="foo")) == "foo"
     assert ti.pformat(ti.Closure(output=vs[0], inputs=vs[1])) == "T₁ ⇒ T₀"
     assert ti.pformat(ti.FunDef(name="f", fun=ti.Fun(args=vs[0], ret=vs[1]))) == "f :: T₀ → T₁"
     assert ti.pformat(ti.Fencil(name="f", fundefs=(), params=())) == "{f()}"
