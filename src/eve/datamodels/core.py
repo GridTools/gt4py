@@ -1096,7 +1096,7 @@ def _make_datamodel(  # noqa: C901  # too complex but still readable and documen
 
         # Create type validator if validation is enabled
         if type_validation_factory is None or _UNCHECKED_TYPE_TAG in type_extras:
-            type_validator = None
+            type_validator = lambda a, b, c: None  # noqa: E731
         else:
             type_validator = type_validation_factory(type_hint, qualified_field_name)
 
