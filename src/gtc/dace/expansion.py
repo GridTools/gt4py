@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
-#
 # GTC Toolchain - GT4Py Project - GridTools Framework
 #
-# Copyright (c) 2014-2021, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -26,7 +24,6 @@ import gtc.oir as oir
 from eve import codegen
 from eve.codegen import FormatTemplate as as_fmt
 from eve.codegen import MakoTemplate as as_mako
-from gt4py.definitions import Extent
 from gtc.common import LoopOrder
 from gtc.dace.nodes import HorizontalExecutionLibraryNode, VerticalLoopLibraryNode
 from gtc.dace.utils import (
@@ -36,6 +33,7 @@ from gtc.dace.utils import (
     get_interval_range_str,
     get_tasklet_symbol,
 )
+from gtc.definitions import Extent
 from gtc.oir import Interval
 from gtc.passes.oir_optimizations.utils import AccessCollector
 

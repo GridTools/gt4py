@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
-#
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2021, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -35,6 +33,7 @@ from gt4py.frontend import node_util, nodes
 from gt4py.frontend.defir_to_gtir import DefIRToGTIR
 from gt4py.utils import NOTHING
 from gt4py.utils import meta as gt_meta
+from gtc import utils as gtc_utils
 
 from .base import Frontend, register
 
@@ -1135,7 +1134,7 @@ class IRMaker(ast.NodeVisitor):
         self.parsing_context = ParsingContext.COMPUTATION
         stmts = []
         for stmt in node.body:
-            stmts.extend(gt_utils.listify(self.visit(stmt)))
+            stmts.extend(gtc_utils.listify(self.visit(stmt)))
         self.parsing_context = ParsingContext.CONTROL_FLOW
 
         if intervals_dicts:
@@ -1218,7 +1217,7 @@ class IRMaker(ast.NodeVisitor):
         tuple_or_constant = node.slice.value if isinstance(node.slice, ast.Index) else node.slice
 
         tuple_or_expr = node.slice.value if isinstance(node.slice, ast.Index) else node.slice
-        index_nodes = gt_utils.listify(
+        index_nodes = gtc_utils.listify(
             tuple_or_expr.elts if isinstance(tuple_or_expr, ast.Tuple) else tuple_or_expr
         )
 
@@ -1399,13 +1398,13 @@ class IRMaker(ast.NodeVisitor):
 
         main_stmts = []
         for stmt in node.body:
-            main_stmts.extend(gt_utils.listify(self.visit(stmt)))
+            main_stmts.extend(gtc_utils.listify(self.visit(stmt)))
         assert all(isinstance(item, nodes.Statement) for item in main_stmts)
 
         else_stmts = []
         if node.orelse:
             for stmt in node.orelse:
-                else_stmts.extend(gt_utils.listify(self.visit(stmt)))
+                else_stmts.extend(gtc_utils.listify(self.visit(stmt)))
             assert all(isinstance(item, nodes.Statement) for item in else_stmts)
 
         result = []
@@ -1558,7 +1557,7 @@ class IRMaker(ast.NodeVisitor):
 
             target.append(self.visit(t))
 
-        value = gt_utils.listify(self.visit(node.value))
+        value = gtc_utils.listify(self.visit(node.value))
 
         assert len(target) == len(value)
         for left, right in zip(target, value):
@@ -1592,7 +1591,9 @@ class IRMaker(ast.NodeVisitor):
 
             self.parsing_horizontal_region = True
             intervals_dicts = self._visit_with_horizontal(node.items[0], loc)
-            all_stmts = gt_utils.flatten([gt_utils.listify(self.visit(stmt)) for stmt in node.body])
+            all_stmts = gt_utils.flatten(
+                [gtc_utils.listify(self.visit(stmt)) for stmt in node.body]
+            )
             self.parsing_horizontal_region = False
             stmts = list(filter(lambda stmt: isinstance(stmt, nodes.Decl), all_stmts))
             body_block = nodes.BlockStmt(
@@ -1658,7 +1659,7 @@ class IRMaker(ast.NodeVisitor):
 
                 return compute_blocks
             elif self.parsing_context == ParsingContext.CONTROL_FLOW:
-                return gt_utils.listify(self._visit_computation_node(node))
+                return gtc_utils.listify(self._visit_computation_node(node))
             else:
                 # Mixing nested `with` blocks with stmts not allowed
                 raise syntax_error

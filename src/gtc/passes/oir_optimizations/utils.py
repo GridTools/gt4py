@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
-#
 # GTC Toolchain - GT4Py Project - GridTools Framework
 #
-# Copyright (c) 2014-2021, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -23,8 +21,8 @@ from eve import NodeVisitor
 from eve.concepts import TreeNode
 from eve.traits import SymbolTableTrait
 from eve.utils import XIterable, xiter
-from gt4py.definitions import Extent
 from gtc import common, oir
+from gtc.definitions import Extent
 from gtc.passes.horizontal_masks import mask_overlap_with_extent
 
 

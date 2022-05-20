@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
-#
 # GTC Toolchain - GT4Py Project - GridTools Framework
 #
-# Copyright (c) 2014-2021, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -25,8 +23,8 @@ from dace import SDFG, InterstateEdge
 
 import eve
 import gtc.oir as oir
-from gt4py.definitions import Extent
 from gtc.common import DataType, typestr_to_data_type
+from gtc.definitions import Extent
 from gtc.passes.oir_optimizations.utils import AccessCollector
 
 

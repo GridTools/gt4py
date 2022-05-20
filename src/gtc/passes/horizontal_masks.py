@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
-#
 # GTC Toolchain - GT4Py Project - GridTools Framework
 #
-# Copyright (c) 2014-2021, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -16,28 +14,37 @@
 
 from typing import Optional, Tuple
 
-from gt4py.definitions import Extent
 from gtc import common
+from gtc.definitions import Extent
 
 
 def _overlap_along_axis(
     extent: Tuple[int, int], interval: common.HorizontalInterval
 ) -> Optional[Tuple[int, int]]:
     """Return a tuple of the distances to the edge of the compute domain, if overlapping."""
-    if interval.start is not None and interval.start.level == common.LevelMarker.START:
+    start_diff: Optional[int]
+    end_diff: Optional[int]
+
+    if interval.start is None:
+        start_diff = 1000
+    elif interval.start.level == common.LevelMarker.START:
         start_diff = extent[0] - interval.start.offset
     else:
         start_diff = None
 
-    if interval.end is not None and interval.end.level == common.LevelMarker.END:
+    if interval.end is None:
+        end_diff = -1000
+    elif interval.end.level == common.LevelMarker.END:
         end_diff = extent[1] - interval.end.offset
     else:
         end_diff = None
 
-    if start_diff is not None and start_diff > 0 and end_diff is None:
+    if start_diff is not None and start_diff > 0 and end_diff is None and interval.end is not None:
         if interval.end.offset <= extent[0]:
             return None
-    elif end_diff is not None and end_diff < 0 and start_diff is None:
+    elif (
+        end_diff is not None and end_diff < 0 and start_diff is None and interval.start is not None
+    ):
         if interval.start.offset > extent[1]:
             return None
 
