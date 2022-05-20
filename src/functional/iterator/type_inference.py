@@ -286,7 +286,6 @@ class TypeInferrer(eve.NodeTranslator):
         def funtypes():
             ftypes = []
             fmap = dict()
-            # TODO: order by dependencies? Or is this done before?
             for f in node.function_definitions:
                 c = constraints.copy()
                 f = self.visit(f, constraints=c, symtypes=symtypes | fmap)
