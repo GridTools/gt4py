@@ -14,7 +14,7 @@
 
 
 import re
-from typing import Generic, Optional, TypeVar, Union
+from typing import Generic, TypeVar, Union
 
 import eve
 from eve import Node
@@ -54,7 +54,7 @@ TupleSymbol = DataSymbol[TupleTypeT]
 
 
 class Expr(LocatedNode):
-    type: Optional[common_types.SymbolType] = None  # noqa A003
+    type: common_types.SymbolType = common_types.DeferredSymbolType(constraint=None)  # noqa A003
 
 
 class Name(Expr):
@@ -140,6 +140,7 @@ class Compare(Expr):
 class Call(Expr):
     func: Name
     args: list[Expr]
+    kwargs: dict[str, Expr]
 
 
 class Stmt(LocatedNode):

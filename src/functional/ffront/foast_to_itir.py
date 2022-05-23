@@ -12,6 +12,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import enum
 import itertools
 from dataclasses import dataclass, field
 from typing import Callable, Optional, cast
@@ -22,18 +23,54 @@ from functional.ffront import (
     fbuiltins,
     field_operator_ast as foast,
     itir_makers as im,
+    type_info,
 )
 from functional.ffront.fbuiltins import FUN_BUILTIN_NAMES, TYPE_BUILTIN_NAMES
-from functional.ffront.type_info import TypeInfo
 from functional.iterator import ir as itir
 
 
-def can_be_value_or_iterator(typeinfo: TypeInfo):
-    return (
-        typeinfo.is_scalar
-        or typeinfo.is_field_type
-        or (typeinfo.is_complete and typeinfo.constraint is ct.TupleType)
-    )
+class TypeKind(enum.Enum):
+    FIELD = 0
+    SCALAR = 1
+    UNKNOWN = 2
+
+
+def resulting_type_kind(symbol_type: ct.SymbolType) -> TypeKind:
+    """
+    Determine whether the resulting type kind of ``symbol_type`` is scalar, field or unknown.
+
+    Useful for determining whether an expression of ``symbol_type`` should be treated as a
+    value or iterator expression during lowering.
+
+    Examples:
+    ---------
+    >>> resulting_type_kind(ct.DeferredSymbolType(constraint=None)).name
+    'UNKNOWN'
+
+    >>> resulting_type_kind(ct.ScalarType(kind=ct.ScalarKind.BOOL)).name
+    'SCALAR'
+
+    >>> resulting_type_kind(ct.TupleType(types=[ct.ScalarType(kind=ct.ScalarKind.FLOAT64)])).name
+    'SCALAR'
+    """
+    match symbol_type:
+        case ct.DeferredSymbolType(constraint=None):
+            return TypeKind.UNKNOWN
+        case ct.TupleType(types=subtypes):
+            if subtypes:
+                return resulting_type_kind(subtypes[0])
+
+    match type_info.type_class(symbol_type):
+        case ct.FieldType:
+            return TypeKind.FIELD
+        case ct.ScalarType:
+            return TypeKind.SCALAR
+
+    return TypeKind.UNKNOWN
+
+
+def can_be_value_or_iterator(symbol_type: ct.SymbolType):
+    return resulting_type_kind(symbol_type) is not TypeKind.UNKNOWN
 
 
 def to_value(node: foast.LocatedNode) -> Callable[[itir.Expr], itir.Expr]:
@@ -60,11 +97,8 @@ def to_value(node: foast.LocatedNode) -> Callable[[itir.Expr], itir.Expr]:
     >>> to_value(scalar_b)(im.ref("a"))
     SymRef(id='a')
     """
-    typeinfo = TypeInfo(node.type)
-    assert can_be_value_or_iterator(typeinfo)
-    if typeinfo.is_field_type:
-        return im.deref_
-    elif typeinfo.constraint is ct.TupleType and TypeInfo(typeinfo.type.types[0]).is_field_type:
+    assert can_be_value_or_iterator(node.type)
+    if resulting_type_kind(node.type) is TypeKind.FIELD:
         return im.deref_
     return lambda x: x
 
@@ -141,7 +175,7 @@ class FieldOperatorLowering(NodeTranslator):
 
     def _lift_lambda(self, node):
         def is_field(expr: foast.Expr) -> bool:
-            return TypeInfo(expr.type).is_field_type
+            return type_info.type_class(expr.type) is ct.FieldType
 
         param_names = list(
             node.iter_tree().if_isinstance(foast.Name).filter(is_field).getattr("id").unique()
@@ -155,9 +189,8 @@ class FieldOperatorLowering(NodeTranslator):
         return im.make_tuple_(*self.visit(node.elts, **kwargs))
 
     def _lift_if_field(self, node: foast.LocatedNode) -> Callable[[itir.Expr], itir.Expr]:
-        typeinfo = TypeInfo(node.type)
-        assert typeinfo.is_scalar or typeinfo.is_field_type
-        if typeinfo.is_scalar:
+        assert can_be_value_or_iterator(node.type)
+        if resulting_type_kind(node.type) is TypeKind.SCALAR:
             return lambda x: x
         return self._lift_lambda(node)
 
@@ -210,7 +243,7 @@ class FieldOperatorLowering(NodeTranslator):
         )(*(param[1] for param in params))
 
     def visit_Call(self, node: foast.Call, **kwargs) -> itir.FunCall:
-        if TypeInfo(node.func.type).is_field_type:
+        if type_info.type_class(node.func.type) is ct.FieldType:
             return self._visit_shift(node, **kwargs)
         elif node.func.id in FUN_BUILTIN_NAMES:
             visitor = getattr(self, f"_visit_{node.func.id}")

@@ -44,7 +44,7 @@ class BuiltInFunction:
 neighbor_sum = BuiltInFunction(
     ct.FunctionType(
         args=[ct.DeferredSymbolType(constraint=ct.FieldType)],
-        kwargs={"axis": ct.ScalarType(kind=ct.ScalarKind.DIMENSION)},
+        kwargs={"axis": ct.DeferredSymbolType(constraint=ct.DimensionType)},
         returns=ct.DeferredSymbolType(constraint=ct.FieldType),
     )
 )
