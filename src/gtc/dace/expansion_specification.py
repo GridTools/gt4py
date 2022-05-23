@@ -562,7 +562,7 @@ def _ij_outside_sections_valid(
             break
         if isinstance(item, (Map, Loop, Iteration)):
             for it in item.iterations:
-                if it.axis in dcir.Axis.horizontal_axes() and it.kind == "contiguous":
+                if it.axis in dcir.Axis.dims_horizontal() and it.kind == "contiguous":
                     if any(
                         len(section.horizontal_executions) > 1 for section in node.oir_node.sections
                     ):
@@ -576,7 +576,7 @@ def _ij_outside_sections_valid(
         if isinstance(item, Sections):
             break
         for it in getattr(item, "iterations", []):
-            if it.axis in dcir.Axis.horizontal_axes() and it.kind == "contiguous":
+            if it.axis in dcir.Axis.dims_horizontal() and it.kind == "contiguous":
                 xiter = iter(node.oir_node.iter_tree().if_isinstance(oir.HorizontalExecution))
                 extent = node.get_extents(next(xiter))
                 for he in xiter:

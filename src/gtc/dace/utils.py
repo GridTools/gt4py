@@ -16,6 +16,7 @@
 
 import re
 from dataclasses import dataclass, field
+from functools import lru_cache
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import dace
@@ -121,6 +122,11 @@ def get_axis_bound_diff_str(axis_bound1, axis_bound2, var_name: str):
 
 def axes_list_from_flags(flags):
     return [ax for f, ax in zip(flags, dcir.Axis.dims_3d()) if f]
+
+
+@lru_cache(maxsize=None)
+def get_dace_symbol(name: common.SymbolRef, dtype: common.DataType = common.DataType.INT32):
+    return dace.symbol(name, dtype=data_type_to_dace_typeclass(dtype))
 
 
 def data_type_to_dace_typeclass(data_type):
@@ -259,7 +265,7 @@ class AccessInfoCollector(NodeVisitor):
             Union[dcir.DomainInterval, dcir.TileInterval, dcir.IndexWithExtent],
         ] = dict()
         if region is not None:
-            for axis, oir_interval in zip(dcir.Axis.horizontal_axes(), region.intervals):
+            for axis, oir_interval in zip(dcir.Axis.dims_horizontal(), region.intervals):
                 start = (
                     oir_interval.start
                     if oir_interval.start is not None
@@ -278,7 +284,7 @@ class AccessInfoCollector(NodeVisitor):
         if dcir.Axis.K in he_grid.intervals:
             off = offset[dcir.Axis.K.to_idx()] or 0
             res[dcir.Axis.K] = he_grid.intervals[dcir.Axis.K].shifted(off)
-        for axis in dcir.Axis.horizontal_axes():
+        for axis in dcir.Axis.dims_horizontal():
             iteration_interval = he_grid.intervals[axis]
             mask_interval = res.get(axis, iteration_interval)
             res[axis] = dcir.DomainInterval.intersection(

@@ -105,7 +105,7 @@ class StencilComputation(library.LibraryNode):
             self.symbol_mapping.update(
                 {
                     axis.domain_symbol(): dace.symbol(axis.domain_symbol(), dtype=dace.int32)
-                    for axis in dcir.Axis.horizontal_axes()
+                    for axis in dcir.Axis.dims_horizontal()
                 }
             )
             if any(

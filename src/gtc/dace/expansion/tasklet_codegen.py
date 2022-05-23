@@ -196,7 +196,7 @@ class TaskletCodegen(codegen.TemplatedGenerator):
     def visit_HorizontalMask(self, node: common.HorizontalMask, **kwargs):
         clauses: List[str] = []
 
-        for axis, interval in zip(dcir.Axis.horizontal_axes(), node.intervals):
+        for axis, interval in zip(dcir.Axis.dims_horizontal(), node.intervals):
             it_sym, dom_sym = axis.iteration_symbol(), axis.domain_symbol()
 
             min_val = get_axis_bound_str(interval.start, dom_sym)

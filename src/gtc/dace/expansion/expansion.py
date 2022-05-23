@@ -68,7 +68,7 @@ class StencilComputationExpansion(dace.library.ExpandTransformation):
 
     @staticmethod
     def _fix_context(
-        nsdfg, node: "StencilComputation", parent_state: dace.SDFGState, daceir: dcir.StateMachine
+        nsdfg, node: "StencilComputation", parent_state: dace.SDFGState, daceir: dcir.NestedSDFG
     ):
 
         for in_edge in parent_state.in_edges(node):
@@ -126,7 +126,7 @@ class StencilComputationExpansion(dace.library.ExpandTransformation):
             arrays=StencilComputationExpansion._get_parent_arrays(node, parent_state, parent_sdfg),
         )
 
-        daceir: dcir.StateMachine = DaCeIRBuilder().visit(
+        daceir: dcir.NestedSDFG = DaCeIRBuilder().visit(
             node.oir_node,
             global_ctx=global_ctx,
         )

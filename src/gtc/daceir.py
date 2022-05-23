@@ -8,6 +8,7 @@ from eve import Int, IntEnum, Node, Str, StrEnum, SymbolRef, utils
 from gt4py import definitions as gt_def
 from gtc import common, oir
 from gtc.common import LocNode
+from gtc.dace.utils import get_dace_symbol
 
 from .dace.utils import get_axis_bound_dace_symbol, get_axis_bound_diff_str, get_axis_bound_str
 
@@ -40,13 +41,13 @@ class Axis(StrEnum):
     J = "J"
     K = "K"
 
-    def iteration_symbol(self):
-        return "__" + self.lower()
-
-    def domain_symbol(self):
+    def domain_symbol(self) -> SymbolRef:
         return "__" + self.upper()
 
-    def tile_symbol(self):
+    def iteration_symbol(self) -> SymbolRef:
+        return "__" + self.lower()
+
+    def tile_symbol(self) -> SymbolRef:
         return "__tile_" + self.lower()
 
     @staticmethod
@@ -57,21 +58,17 @@ class Axis(StrEnum):
     def dims_horizontal():
         yield from [Axis.I, Axis.J]
 
-    @staticmethod
-    def horizontal_axes():
-        yield from [Axis.I, Axis.J]
-
     def to_idx(self):
         return [Axis.I, Axis.J, Axis.K].index(self)
 
     def domain_dace_symbol(self):
-        return _AXIS_DACE_SYMBOLS[self.domain_symbol()]
+        return get_dace_symbol(self.domain_symbol())
 
     def iteration_dace_symbol(self):
-        return _AXIS_DACE_SYMBOLS[self.iteration_symbol()]
+        return get_dace_symbol(self.iteration_symbol())
 
     def tile_dace_symbol(self):
-        return _AXIS_DACE_SYMBOLS[self.tile_symbol()]
+        return get_dace_symbol(self.tile_symbol())
 
 
 class MapSchedule(IntEnum):
@@ -152,6 +149,14 @@ class IndexWithExtent(Node):
     value: Union[AxisBound, Int, Str]
     extent: Tuple[int, int]
 
+    @property
+    def free_symbols(self):
+        if isinstance(self.value, AxisBound) and self.value.level == common.LevelMarker.END:
+            return {self.axis.domain_symbol()}
+        elif isinstance(self.value, Str):
+            return self.axis.iteration_symbol()
+        return set()
+
     @classmethod
     def from_axis(cls, axis: Axis, extent=(0, 0)):
         return cls(axis=axis, value=axis.iteration_symbol(), extent=extent)
@@ -215,6 +220,15 @@ class IndexWithExtent(Node):
 class DomainInterval(Node):
     start: AxisBound
     end: AxisBound
+
+    @property
+    def free_symbols(self):
+        res = set()
+        if self.start.level == common.LevelMarker.END:
+            res.add(self.start.axis.domain_symbol())
+        if self.end.level == common.LevelMarker.END:
+            res.add(self.end.axis.domain_symbol())
+        return res
 
     @property
     def size(self):
@@ -283,6 +297,13 @@ class TileInterval(Node):
     domain_limit: AxisBound
 
     @property
+    def free_symbols(self):
+        res = {self.axis.tile_symbol()}
+        if self.domain_limit.level == common.LevelMarker.END:
+            res.add(self.axis.domain_symbol())
+        return res
+
+    @property
     def size(self):
         return "min({tile_size}, {domain_limit} - {tile_symbol}){halo_size:+d}".format(
             tile_size=self.tile_size,
@@ -334,7 +355,7 @@ class TileInterval(Node):
 
 
 class Range(Node):
-    var: Str
+    var: SymbolRef
     interval: Union[DomainInterval, TileInterval]
     stride: int
 
@@ -349,6 +370,10 @@ class Range(Node):
             stride=stride,
         )
 
+    @property
+    def free_symbols(self):
+        return {self.var, *self.interval.free_symbols}
+
 
 class GridSubset(Node):
     intervals: Dict[Axis, Union[DomainInterval, TileInterval, IndexWithExtent]]
@@ -362,6 +387,10 @@ class GridSubset(Node):
         for axis in Axis.dims_3d():
             if axis in self.intervals:
                 yield axis, self.intervals[axis]
+
+    @property
+    def free_symbols(self):
+        return set().union(*(interval.free_symbols for interval in self.intervals.values()))
 
     @classmethod
     def single_gridpoint(cls, offset=(0, 0, 0)):
@@ -781,6 +810,15 @@ class ScalarDecl(Decl):
     pass
 
 
+class LocalScalar(ScalarDecl):
+    pass
+
+
+class SymbolDecl(ScalarDecl):
+    def to_dace_symbol(self):
+        return get_dace_symbol(self.name, self.dtype)
+
+
 class Temporary(FieldDecl):
     pass
 
@@ -821,15 +859,6 @@ class IterationNode(Node):
     grid_subset: GridSubset
 
 
-class NestedSDFGNode(ComputationNode):
-    field_decls: Dict[SymbolRef, FieldDecl]
-    symbols: Dict[SymbolRef, common.DataType]
-
-
-class LocalScalar(ScalarDecl):
-    pass
-
-
 class Tasklet(ComputationNode, IterationNode):
     stmts: List[Union[LocalScalar, Stmt]]
     grid_subset: GridSubset = GridSubset.single_gridpoint()
@@ -838,7 +867,7 @@ class Tasklet(ComputationNode, IterationNode):
 class DomainMap(ComputationNode, IterationNode):
     index_ranges: List[Range]
     schedule: MapSchedule
-    computations: List[Union[Tasklet, "DomainMap", "StateMachine"]]
+    computations: List[Union[Tasklet, "DomainMap", "NestedSDFG"]]
 
 
 class ComputationState(IterationNode):
@@ -851,8 +880,10 @@ class DomainLoop(IterationNode, ComputationNode):
     loop_states: List[Union[ComputationState, "DomainLoop"]]
 
 
-class StateMachine(NestedSDFGNode):
+class NestedSDFG(ComputationNode):
     label: SymbolRef
+    field_decls: Dict[SymbolRef, FieldDecl]
+    symbol_decls: Dict[SymbolRef, SymbolDecl]
     states: List[Union[DomainLoop, ComputationState]]
 
 

@@ -1,3 +1,4 @@
+import dataclasses
 import itertools
 from dataclasses import dataclass
 from typing import Any, Dict, Optional, Set, Union
@@ -94,15 +95,31 @@ class DaCeIRBuilder(NodeTranslator):
         library_node: StencilComputation
         arrays: Dict[str, dace.data.Data]
 
-        def get_dcir_decls(self, access_infos):
+        def get_dcir_decls(
+            self,
+            access_infos: Dict[SymbolRef, dcir.FieldAccessInfo],
+            symbol_collector: "DaCeIRBuilder.SymbolCollector",
+        ) -> Dict[SymbolRef, dcir.FieldDecl]:
             return {
-                field: self.get_dcir_decl(field, access_info)
+                field: self.get_dcir_decl(field, access_info, symbol_collector=symbol_collector)
                 for field, access_info in access_infos.items()
             }
 
-        def get_dcir_decl(self, field, access_info):
-            oir_decl: oir.FieldDecl = self.library_node.declarations[field]
+        def get_dcir_decl(
+            self,
+            field: SymbolRef,
+            access_info: dcir.FieldAccessInfo,
+            symbol_collector: "DaCeIRBuilder.SymbolCollector",
+        ) -> dcir.FieldDecl:
+            oir_decl: oir.Decl = self.library_node.declarations[field]
+            assert isinstance(oir_decl, oir.FieldDecl)
             dace_array = self.arrays[field]
+            for s in dace_array.strides:
+                for sym in dace.symbolic.symlist(s).values():
+                    symbol_collector.add_symbol(str(sym))
+            for sym in access_info.grid_subset.free_symbols:
+                symbol_collector.add_symbol(sym)
+
             return dcir.FieldDecl(
                 name=field,
                 dtype=oir_decl.dtype,
@@ -111,10 +128,6 @@ class DaCeIRBuilder(NodeTranslator):
                 access_info=access_info,
                 storage=dcir.StorageType.from_dace_storage(dace.StorageType.Default),
             )
-
-    @dataclass
-    class SymbolCollector:
-        symbols: Dict[str, common.DataType]
 
     @dataclass
     class IterationContext:
@@ -187,6 +200,24 @@ class DaCeIRBuilder(NodeTranslator):
         def pop(self):
             return self.parent
 
+    @dataclass
+    class SymbolCollector:
+        symbol_decls: Dict[SymbolRef, dcir.SymbolDecl] = dataclasses.field(default_factory=dict)
+
+        @property
+        def external_symbols(self):
+            return set(self.symbol_decls.keys())
+
+        def add_symbol(self, name: SymbolRef, dtype: common.DataType = common.DataType.INT32):
+            if name not in self.symbol_decls:
+                self.symbol_decls[name] = dcir.SymbolDecl(name=name, dtype=dtype)
+            else:
+                assert self.symbol_decls[name].dtype == dtype
+
+        def remove_symbol(self, name: SymbolRef):
+            if name in self.symbol_decls:
+                del self.symbol_decls[name]
+
     def visit_Literal(self, node: oir.Literal, **kwargs: Any) -> dcir.Literal:
         return dcir.Literal(value=node.value, dtype=node.dtype)
 
@@ -246,7 +277,16 @@ class DaCeIRBuilder(NodeTranslator):
             targets.add(node.name)
         return res
 
-    def visit_ScalarAccess(self, node: oir.ScalarAccess, **kwargs: Any) -> dcir.ScalarAccess:
+    def visit_ScalarAccess(
+        self,
+        node: oir.ScalarAccess,
+        *,
+        global_ctx: "DaCeIRBuilder.GlobalContext",
+        symbol_collector: "DaCeIRBuilder.SymbolCollector",
+        **kwargs: Any,
+    ) -> dcir.ScalarAccess:
+        if node.name in global_ctx.library_node.declarations:
+            symbol_collector.add_symbol(node.name, dtype=node.dtype)
         return dcir.ScalarAccess(name=node.name, dtype=node.dtype)
 
     def visit_AssignStmt(self, node: oir.AssignStmt, *, targets, **kwargs: Any) -> dcir.AssignStmt:
@@ -289,6 +329,7 @@ class DaCeIRBuilder(NodeTranslator):
         *,
         global_ctx: "DaCeIRBuilder.GlobalContext",
         iteration_ctx: "DaCeIRBuilder.IterationContext",
+        symbol_collector: "DaCeIRBuilder.SymbolCollector",
         loop_order,
         k_interval,
         **kwargs,
@@ -297,7 +338,16 @@ class DaCeIRBuilder(NodeTranslator):
         extent = global_ctx.library_node.get_extents(node)  # type: ignore
         decls = [self.visit(decl, **kwargs) for decl in node.declarations]
         targets: Set[str] = set()
-        stmts = [self.visit(stmt, targets=targets, **kwargs) for stmt in node.body]
+        stmts = [
+            self.visit(
+                stmt,
+                targets=targets,
+                global_ctx=global_ctx,
+                symbol_collector=symbol_collector,
+                **kwargs,
+            )
+            for stmt in node.body
+        ]
 
         stages_idx = next(
             idx
@@ -307,7 +357,7 @@ class DaCeIRBuilder(NodeTranslator):
         expansion_items = global_ctx.library_node.expansion_specification[stages_idx + 1 :]
 
         iteration_ctx = iteration_ctx.push_axes_extents(
-            {k: v for k, v in zip(dcir.Axis.horizontal_axes(), extent)}
+            {k: v for k, v in zip(dcir.Axis.dims_horizontal(), extent)}
         )
         iteration_ctx = iteration_ctx.push_expansion_items(expansion_items)
 
@@ -342,6 +392,7 @@ class DaCeIRBuilder(NodeTranslator):
                 item,
                 global_ctx=global_ctx,
                 iteration_ctx=iteration_ctx,
+                symbol_collector=symbol_collector,
                 **kwargs,
             )
         # pop stages context (pushed with push_grid_subset)
@@ -355,6 +406,7 @@ class DaCeIRBuilder(NodeTranslator):
         loop_order,
         iteration_ctx: "DaCeIRBuilder.IterationContext",
         global_ctx: "DaCeIRBuilder.GlobalContext",
+        symbol_collector: "DaCeIRBuilder.SymbolCollector",
         **kwargs,
     ):
         sections_idx, stages_idx = [
@@ -374,6 +426,7 @@ class DaCeIRBuilder(NodeTranslator):
             node.horizontal_executions,
             iteration_ctx=iteration_ctx,
             global_ctx=global_ctx,
+            symbol_collector=symbol_collector,
             loop_order=loop_order,
             k_interval=node.interval,
             **kwargs,
@@ -393,6 +446,7 @@ class DaCeIRBuilder(NodeTranslator):
                 item=item,
                 iteration_ctx=iteration_ctx,
                 global_ctx=global_ctx,
+                symbol_collector=symbol_collector,
             )
         # pop off interval
         iteration_ctx.pop()
@@ -403,47 +457,20 @@ class DaCeIRBuilder(NodeTranslator):
         nodes,
         *,
         global_ctx: "DaCeIRBuilder.GlobalContext",
+        symbol_collector: "DaCeIRBuilder.SymbolCollector",
     ):
 
         nodes = flatten_list(nodes)
-        if all(isinstance(n, (dcir.StateMachine, dcir.DomainMap, dcir.Tasklet)) for n in nodes):
+        if all(isinstance(n, (dcir.NestedSDFG, dcir.DomainMap, dcir.Tasklet)) for n in nodes):
             return nodes
         elif not all(isinstance(n, (dcir.ComputationState, dcir.DomainLoop)) for n in nodes):
             raise ValueError("Can't mix dataflow and state nodes on same level.")
 
         read_memlets, write_memlets, field_memlets = union_inout_memlets(nodes)
 
-        declared_symbols = set(
-            n.name
-            for node in nodes
-            for n in node.iter_tree().if_isinstance(oir.ScalarDecl, oir.LocalScalar)
-        )
-        symbols = dict()
-
-        for memlet in field_memlets:
-            for s in global_ctx.arrays[memlet.field].strides:
-                for sym in dace.symbolic.symlist(s).values():
-                    symbols[str(sym)] = common.DataType.INT32
-        for node in nodes:
-            for acc in node.iter_tree().if_isinstance(oir.ScalarAccess):
-                if acc.name not in declared_symbols:
-                    declared_symbols.add(acc.name)
-                    symbols[acc.name] = acc.dtype
-
-        for axis in dcir.Axis.dims_3d():
-            if axis.domain_symbol() not in declared_symbols:
-                declared_symbols.add(axis.domain_symbol())
-                symbols[axis.domain_symbol()] = common.DataType.INT32
-
-        for acc in iter_tree(nodes).if_isinstance(dcir.ScalarAccess):
-            if (
-                acc.name in global_ctx.library_node.declarations
-                and acc.name not in declared_symbols
-            ):
-                declared_symbols.add(acc.name)
-                symbols[acc.name] = global_ctx.library_node.declarations[acc.name].dtype
         field_decls = global_ctx.get_dcir_decls(
-            {memlet.field: memlet.access_info for memlet in field_memlets}
+            {memlet.field: memlet.access_info for memlet in field_memlets},
+            symbol_collector=symbol_collector,
         )
         read_fields = set(memlet.field for memlet in read_memlets)
         write_fields = set(memlet.field for memlet in write_memlets)
@@ -454,15 +481,15 @@ class DaCeIRBuilder(NodeTranslator):
             memlet.remove_read() for memlet in field_memlets if memlet.field in write_fields
         ]
         return [
-            dcir.StateMachine(
+            dcir.NestedSDFG(
                 label=global_ctx.library_node.label,
                 field_decls=field_decls,
-                symbols=symbols,
                 # NestedSDFG must have same shape on input and output, matching corresponding
                 # nsdfg.sdfg's array shape
                 read_memlets=read_memlets,
                 write_memlets=write_memlets,
                 states=nodes,
+                symbol_decls=symbol_collector.symbol_decls,
             )
         ]
 
@@ -471,7 +498,7 @@ class DaCeIRBuilder(NodeTranslator):
         nodes = flatten_list(nodes)
         if all(isinstance(n, (dcir.ComputationState, dcir.DomainLoop)) for n in nodes):
             return nodes
-        elif all(isinstance(n, (dcir.StateMachine, dcir.DomainMap, dcir.Tasklet)) for n in nodes):
+        elif all(isinstance(n, (dcir.NestedSDFG, dcir.DomainMap, dcir.Tasklet)) for n in nodes):
             return [dcir.ComputationState(computations=nodes, grid_subset=grid_subset)]
         else:
             raise ValueError("Can't mix dataflow and state nodes on same level.")
@@ -483,12 +510,15 @@ class DaCeIRBuilder(NodeTranslator):
         *,
         global_ctx,
         iteration_ctx: "DaCeIRBuilder.IterationContext",
+        symbol_collector: "DaCeIRBuilder.SymbolCollector",
         **kwargs,
     ):
 
         grid_subset = iteration_ctx.grid_subset
         read_memlets, write_memlets, _ = union_inout_memlets(list(scope_nodes))
-        scope_nodes = self.to_dataflow(scope_nodes, global_ctx=global_ctx)
+        scope_nodes = self.to_dataflow(
+            scope_nodes, global_ctx=global_ctx, symbol_collector=symbol_collector
+        )
 
         ranges = []
         for iteration in item.iterations:
@@ -557,6 +587,7 @@ class DaCeIRBuilder(NodeTranslator):
         *,
         global_ctx,
         iteration_ctx: "DaCeIRBuilder.IterationContext",
+        symbol_collector: "DaCeIRBuilder.SymbolCollector",
         **kwargs,
     ):
 
@@ -599,7 +630,7 @@ class DaCeIRBuilder(NodeTranslator):
 
         assert not isinstance(interval, dcir.IndexWithExtent)
         index_range = dcir.Range.from_axis_and_interval(axis, interval, stride=item.stride)
-
+        symbol_collector.remove_symbol(index_range.var)
         return [
             dcir.DomainLoop(
                 axis=axis,
@@ -658,12 +689,14 @@ class DaCeIRBuilder(NodeTranslator):
         expansion_items = global_ctx.library_node.expansion_specification[:sections_idx]
         iteration_ctx = iteration_ctx.push_expansion_items(expansion_items)
 
+        symbol_collector = DaCeIRBuilder.SymbolCollector()
         sections = flatten_list(
             self.generic_visit(
                 node.sections,
                 loop_order=node.loop_order,
                 global_ctx=global_ctx,
                 iteration_ctx=iteration_ctx,
+                symbol_collector=symbol_collector,
                 var_offset_fields=var_offset_fields,
                 **kwargs,
             )
@@ -678,38 +711,25 @@ class DaCeIRBuilder(NodeTranslator):
                 item=item,
                 iteration_ctx=iteration_ctx,
                 global_ctx=global_ctx,
+                symbol_collector=symbol_collector,
             )
 
         read_memlets, write_memlets, field_memlets = union_inout_memlets(computations)
 
-        declared_symbols = set(
-            n.name for n in node.iter_tree().if_isinstance(oir.ScalarDecl, oir.LocalScalar)
-        )
-        symbols = dict()
-        for acc in node.iter_tree().if_isinstance(oir.ScalarAccess):
-            if acc.name not in declared_symbols:
-                declared_symbols.add(acc.name)
-                symbols[acc.name] = acc.dtype
-        for axis in dcir.Axis.dims_3d():
-            if axis.domain_symbol() not in declared_symbols:
-                declared_symbols.add(axis.domain_symbol())
-                symbols[axis.domain_symbol()] = common.DataType.INT32
         field_decls = global_ctx.get_dcir_decls(
-            {memlet.field: memlet.access_info for memlet in field_memlets}
+            {memlet.field: memlet.access_info for memlet in field_memlets},
+            symbol_collector=symbol_collector,
         )
-        for name in field_decls.keys():
-            for s in global_ctx.arrays[name].strides:
-                for sym in dace.symbolic.symlist(s).values():
-                    symbols[str(sym)] = common.DataType.INT32
+
         read_fields = set(memlet.field for memlet in read_memlets)
         write_fields = set(memlet.field for memlet in write_memlets)
-        res = dcir.StateMachine(
+        res = dcir.NestedSDFG(
             label=global_ctx.library_node.label,
             states=self.to_state(computations, grid_subset=iteration_ctx.grid_subset),
             field_decls=field_decls,
             read_memlets=[memlet for memlet in field_memlets if memlet.field in read_fields],
             write_memlets=[memlet for memlet in field_memlets if memlet.field in write_fields],
-            symbols=symbols,
+            symbol_decls=symbol_collector.symbol_decls,
         )
 
         return res
