@@ -82,9 +82,11 @@ class GTCppCodegen(codegen.TemplatedGenerator):
         accessor_ref: gtcpp.AccessorRef,
         *,
         symtable: Dict[str, gtcpp.GTAccessor],
-        temp_decls: Dict[str, gtcpp.Temporary],
+        temp_decls: Dict[str, gtcpp.Temporary] = None,
         **kwargs: Any,
     ):
+        temp_decls = temp_decls or {}
+
         if isinstance(accessor_ref.offset, common.CartesianOffset):
             offset = accessor_ref.offset
             if offset.i == offset.j == offset.k == 0 and not accessor_ref.data_index:
