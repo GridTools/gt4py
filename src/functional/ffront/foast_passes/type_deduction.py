@@ -293,9 +293,9 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             # resolve polymorphic builtins
             if not type_info.is_concrete(return_type) and node.func.id in FUN_BUILTIN_NAMES:
                 visitor = getattr(self, f"_visit_{node.func.id}")
-                return visitor(node, **kwargs)
+                result = visitor(node, **kwargs)
             else:
-                return foast.Call(
+                result = foast.Call(
                     func=new_func,
                     args=self.visit(node.args, **kwargs),
                     kwargs=self.visit(node.kwargs, **kwargs),
@@ -303,20 +303,21 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                     type=new_func.type.returns,
                 )
 
+            self._ensure_signature_valid(result)
+
+            return result
+
         raise FieldOperatorTypeDeductionError.from_foast_node(
             node,
             msg=f"Objects of type '{new_func.type}' are not callable.",
         )
 
     def _ensure_signature_valid(self, node: foast.Call, **kwargs):
-        new_func = self.visit(node.func, **kwargs)
-        new_args = self.visit(node.args, **kwargs)
-        new_kwargs = self.visit(node.kwargs, **kwargs)
         try:
             type_info.is_callable(
-                new_func.type,
-                with_args=[arg.type for arg in new_args],
-                with_kwargs={keyword: arg.type for keyword, arg in new_kwargs.items()},
+                cast(ct.FunctionType, node.func.type),
+                with_args=[arg.type for arg in node.args],
+                with_kwargs={keyword: arg.type for keyword, arg in node.kwargs.items()},
                 raise_exception=True,
             )
         except GTTypeError as err:
