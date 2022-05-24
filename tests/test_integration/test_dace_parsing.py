@@ -39,6 +39,7 @@ def dace_env():
         / "dacecache"
     )
     with dace.config.temporary_config():
+        # Setting max_concurrent_streams to -1 configures dace to only use the default stream.
         dace.config.Config.set("compiler", "cuda", "max_concurrent_streams", value=-1)
         dace.config.Config.set("compiler", "cpu", "openmp_sections", value=False)
         dace.config.Config.set("compiler", "cpu", "args", value="")
