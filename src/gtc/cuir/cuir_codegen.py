@@ -71,7 +71,9 @@ class CUIRCodegen(codegen.TemplatedGenerator):
         offset = self.visit(node.offset, **kwargs)
 
         decl = symtable[node.name]
-        if isinstance(decl, cuir.FieldDecl) or not decl.data_dims:
+        if isinstance(decl, cuir.FieldDecl) or (
+            isinstance(decl, cuir.Temporary) and not decl.data_dims
+        ):
             data_index_str = "".join(f", {index}" for index in data_index)
             return f"{name}({offset}{data_index_str})"
         else:
