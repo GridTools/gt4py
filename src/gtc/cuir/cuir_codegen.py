@@ -65,16 +65,15 @@ class CUIRCodegen(codegen.TemplatedGenerator):
             except ValueError:
                 return s
 
-        data_index = [maybe_const(self.visit(index, **kwargs)) for index in node.data_index]
-
         name = self.visit(node.name, **kwargs)
         offset = self.visit(node.offset, **kwargs)
+        data_index = [self.visit(index, in_data_index=True, **kwargs) for index in node.data_index]
 
         decl = symtable[node.name]
         if isinstance(decl, cuir.FieldDecl) or (
             isinstance(decl, cuir.Temporary) and not decl.data_dims
         ):
-            data_index_str = "".join(f", {index}" for index in data_index)
+            data_index_str = "".join(f", {maybe_const(index)}" for index in data_index)
             return f"{name}({offset}{data_index_str})"
         else:
             data_index_str = "+".join(
@@ -82,11 +81,6 @@ class CUIRCodegen(codegen.TemplatedGenerator):
                 for i, index in enumerate(data_index)
             )
             return f"{name}({offset})[{data_index_str}]"
-
-        kwargs["this_data_index"] = "".join(
-            ", " + maybe_const(self.visit(index, **kwargs)) for index in node.data_index
-        )
-        return self.generic_visit(node, **kwargs)
 
     FieldAccess = as_mako("${name}(${offset}${this_data_index})")
 
