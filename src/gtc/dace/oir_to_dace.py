@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
-#
 # GTC Toolchain - GT4Py Project - GridTools Framework
 #
-# Copyright (c) 2014-2021, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -23,10 +21,10 @@ import dace.subsets
 
 import eve
 import gtc.oir as oir
-from gt4py.definitions import Extent
 from gtc import daceir as dcir
 from gtc.dace.nodes import StencilComputation
 from gtc.dace.utils import compute_dcir_access_infos, data_type_to_dace_typeclass, make_dace_subset
+from gtc.definitions import Extent
 from gtc.passes.oir_optimizations.utils import AccessCollector, compute_horizontal_block_extents
 
 

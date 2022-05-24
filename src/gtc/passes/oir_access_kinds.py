@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
-#
 # GTC Toolchain - GT4Py Project - GridTools Framework
 #
-# Copyright (c) 2014-2021, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -19,8 +17,9 @@ import collections
 from typing import Any, Dict
 
 from eve.visitors import NodeVisitor
-from gt4py.definitions import AccessKind, Extent
+from gt4py.definitions import AccessKind
 from gtc import oir
+from gtc.definitions import Extent
 from gtc.passes.horizontal_masks import mask_overlap_with_extent
 from gtc.passes.oir_optimizations.utils import compute_horizontal_block_extents
 

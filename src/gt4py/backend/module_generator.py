@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
-#
 # GTC Toolchain - GT4Py Project - GridTools Framework
 #
-# Copyright (c) 2014-2021, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -24,8 +22,9 @@ import jinja2
 import numpy
 
 from gt4py import utils as gt_utils
-from gt4py.definitions import AccessKind, Boundary, DomainInfo, FieldInfo, ParameterInfo
+from gt4py.definitions import AccessKind, DomainInfo, FieldInfo, ParameterInfo
 from gtc import gtir, gtir_to_oir
+from gtc.definitions import Boundary
 from gtc.passes.gtir_k_boundary import compute_k_boundary, compute_min_k_size
 from gtc.passes.gtir_pipeline import GtirPipeline
 from gtc.passes.oir_access_kinds import compute_access_kinds

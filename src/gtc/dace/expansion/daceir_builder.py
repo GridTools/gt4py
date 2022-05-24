@@ -14,7 +14,6 @@ import gtc.common as common
 import gtc.oir as oir
 from eve import NodeTranslator, SymbolRef
 from eve.iterators import iter_tree
-from gt4py.definitions import Extent
 from gtc import daceir as dcir
 from gtc.dace.expansion_specification import Loop, Map, Sections, Stages
 from gtc.dace.nodes import StencilComputation
@@ -26,6 +25,7 @@ from gtc.dace.utils import (
     union_node_grid_subsets,
     untile_memlets,
 )
+from gtc.definitions import Extent
 
 
 def _access_iter(node: oir.HorizontalExecution, get_outputs: bool):

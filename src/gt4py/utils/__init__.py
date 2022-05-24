@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
-#
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2021, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -24,17 +22,14 @@ from .base import (
     classmethod_to_function,
     classproperty,
     compose,
-    filter_mask,
     flatten,
     flatten_iter,
     get_member,
-    interpolate_mask,
     is_collection,
     is_identifier_name,
     is_iterable_of,
     is_mapping_of,
     jsonify,
-    listify,
     make_dir,
     make_local_dir,
     make_module_from_file,

@@ -4,10 +4,10 @@ from typing import TYPE_CHECKING, Callable, List, Optional, Set, Union
 
 import dace
 
-from gt4py.definitions import Extent
 from gtc import common
 from gtc import daceir as dcir
 from gtc import oir
+from gtc.definitions import Extent
 
 
 if TYPE_CHECKING:
