@@ -99,8 +99,6 @@ class StencilComputationExpansion(dace.library.ExpandTransformation):
             },
             subsets,
         )
-        if "__K" in nsdfg.sdfg.free_symbols and "__K" not in symbol_mapping:
-            symbol_mapping["__K"] = 0
         nsdfg.symbol_mapping.update({**symbol_mapping, **node.symbol_mapping})
 
     @staticmethod
