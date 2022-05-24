@@ -39,6 +39,8 @@ def dace_env():
         / "dacecache"
     )
     with dace.config.temporary_config():
+        dace.config.Config.set("compiler", "cuda", "max_concurrent_streams", value=-1)
+        dace.config.Config.set("compiler", "cpu", "openmp_sections", value=False)
         dace.config.Config.set("compiler", "cpu", "args", value="")
         dace.config.Config.set("compiler", "allow_view_arguments", value=True)
         dace.config.Config.set("default_build_folder", value=str(gt_cache_path))
