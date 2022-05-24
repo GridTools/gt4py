@@ -14,13 +14,14 @@
 
 import dataclasses
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Any, ChainMap, Dict, List, Optional, Set, Tuple
 
 import dace
 import dace.data
 import dace.library
 import dace.subsets
 
+import eve
 import gtc.common as common
 from eve import NodeVisitor
 from gtc import daceir as dcir
@@ -30,6 +31,8 @@ from gtc.dace.utils import data_type_to_dace_typeclass, make_dace_subset
 
 
 class StencilComputationSDFGBuilder(NodeVisitor):
+    contexts = (eve.SymbolTableTrait.symtable_merger,)
+
     @dataclass
     class NodeContext:
         input_node_and_conns: Dict[Optional[str], Tuple[dace.nodes.Node, Optional[str]]]
@@ -39,9 +42,6 @@ class StencilComputationSDFGBuilder(NodeVisitor):
     class SDFGContext:
         sdfg: dace.SDFG
         state: dace.SDFGState
-        field_decls: Dict[common.SymbolRef, dcir.FieldDecl] = dataclasses.field(
-            default_factory=dict
-        )
         state_stack: List[dace.SDFGState] = dataclasses.field(default_factory=list)
 
         def add_state(self):
@@ -102,8 +102,10 @@ class StencilComputationSDFGBuilder(NodeVisitor):
         sdfg_ctx: "StencilComputationSDFGBuilder.SDFGContext",
         node_ctx: "StencilComputationSDFGBuilder.NodeContext",
         connector_prefix="",
+        symtable: ChainMap[common.SymbolRef, dcir.Decl],
     ):
-        field_decl = sdfg_ctx.field_decls[node.field]
+        field_decl = symtable[node.field]
+        assert isinstance(field_decl, dcir.FieldDecl)
         memlet = dace.Memlet(
             node.field,
             subset=make_dace_subset(field_decl.access_info, node.access_info, field_decl.data_dims),
@@ -148,6 +150,7 @@ class StencilComputationSDFGBuilder(NodeVisitor):
         *,
         sdfg_ctx: "StencilComputationSDFGBuilder.SDFGContext",
         node_ctx: "StencilComputationSDFGBuilder.NodeContext",
+        **kwargs,
     ):
         code = TaskletCodegen.apply(
             node,
@@ -164,8 +167,12 @@ class StencilComputationSDFGBuilder(NodeVisitor):
             debuginfo=get_dace_debuginfo(node),
         )
 
-        self.visit(node.read_memlets, scope_node=tasklet, sdfg_ctx=sdfg_ctx, node_ctx=node_ctx)
-        self.visit(node.write_memlets, scope_node=tasklet, sdfg_ctx=sdfg_ctx, node_ctx=node_ctx)
+        self.visit(
+            node.read_memlets, scope_node=tasklet, sdfg_ctx=sdfg_ctx, node_ctx=node_ctx, **kwargs
+        )
+        self.visit(
+            node.write_memlets, scope_node=tasklet, sdfg_ctx=sdfg_ctx, node_ctx=node_ctx, **kwargs
+        )
         StencilComputationSDFGBuilder._add_empty_edges(
             tasklet, tasklet, sdfg_ctx=sdfg_ctx, node_ctx=node_ctx
         )
@@ -180,10 +187,13 @@ class StencilComputationSDFGBuilder(NodeVisitor):
         *,
         node_ctx: "StencilComputationSDFGBuilder.NodeContext",
         sdfg_ctx: "StencilComputationSDFGBuilder.SDFGContext",
+        **kwargs,
     ):
 
         ndranges = {
-            k: v for index_range in node.index_ranges for k, v in self.visit(index_range).items()
+            k: v
+            for index_range in node.index_ranges
+            for k, v in self.visit(index_range, **kwargs).items()
         }
         name = sdfg_ctx.sdfg.label + "".join(ndranges.keys()) + "_map"
         map_entry, map_exit = sdfg_ctx.state.add_map(
@@ -216,7 +226,7 @@ class StencilComputationSDFGBuilder(NodeVisitor):
                 input_node_and_conns=input_node_and_conns,
                 output_node_and_conns=output_node_and_conns,
             )
-            self.visit(scope_node, sdfg_ctx=sdfg_ctx, node_ctx=inner_node_ctx)
+            self.visit(scope_node, sdfg_ctx=sdfg_ctx, node_ctx=inner_node_ctx, **kwargs)
 
         self.visit(
             node.read_memlets,
@@ -224,6 +234,7 @@ class StencilComputationSDFGBuilder(NodeVisitor):
             sdfg_ctx=sdfg_ctx,
             node_ctx=node_ctx,
             connector_prefix="IN_",
+            **kwargs,
         )
         self.visit(
             node.write_memlets,
@@ -231,6 +242,7 @@ class StencilComputationSDFGBuilder(NodeVisitor):
             sdfg_ctx=sdfg_ctx,
             node_ctx=node_ctx,
             connector_prefix="OUT_",
+            **kwargs,
         )
         StencilComputationSDFGBuilder._add_empty_edges(
             map_entry, map_exit, sdfg_ctx=sdfg_ctx, node_ctx=node_ctx
@@ -284,6 +296,7 @@ class StencilComputationSDFGBuilder(NodeVisitor):
         *,
         sdfg_ctx: "StencilComputationSDFGBuilder.SDFGContext",
         non_transients: Set[common.SymbolRef],
+        **kwargs,
     ):
         assert len(node.strides) == len(node.shape)
         sdfg_ctx.sdfg.add_array(
@@ -301,6 +314,7 @@ class StencilComputationSDFGBuilder(NodeVisitor):
         node: dcir.SymbolDecl,
         *,
         sdfg_ctx: "StencilComputationSDFGBuilder.SDFGContext",
+        **kwargs,
     ):
         if node.name not in sdfg_ctx.sdfg.symbols:
             sdfg_ctx.sdfg.add_symbol(node.name, stype=data_type_to_dace_typeclass(node.dtype))
@@ -311,6 +325,8 @@ class StencilComputationSDFGBuilder(NodeVisitor):
         *,
         sdfg_ctx: Optional["StencilComputationSDFGBuilder.SDFGContext"] = None,
         node_ctx: Optional["StencilComputationSDFGBuilder.NodeContext"] = None,
+        symtable: ChainMap[common.SymbolRef, Any],
+        **kwargs,
     ):
 
         sdfg = dace.SDFG(node.label)
@@ -318,7 +334,6 @@ class StencilComputationSDFGBuilder(NodeVisitor):
         inner_sdfg_ctx = StencilComputationSDFGBuilder.SDFGContext(
             sdfg=sdfg,
             state=state,
-            field_decls=node.field_decls,
         )
         self.visit(
             node.field_decls,
@@ -326,12 +341,13 @@ class StencilComputationSDFGBuilder(NodeVisitor):
             non_transients=set(
                 memlet.connector for memlet in node.read_memlets + node.write_memlets
             ),
+            **kwargs,
         )
-        self.visit(node.symbol_decls, sdfg_ctx=inner_sdfg_ctx)
-        symbol_mapping = {name: decl.to_dace_symbol() for name, decl in node.symbol_decls.items()}
+        self.visit(node.symbol_decls, sdfg_ctx=inner_sdfg_ctx, **kwargs)
+        symbol_mapping = {decl.name: decl.to_dace_symbol() for decl in node.symbol_decls}
 
         for computation_state in node.states:
-            self.visit(computation_state, sdfg_ctx=inner_sdfg_ctx)
+            self.visit(computation_state, sdfg_ctx=inner_sdfg_ctx, symtable=symtable, **kwargs)
 
         if sdfg_ctx is not None and node_ctx is not None:
             nsdfg = sdfg_ctx.state.add_nested_sdfg(
@@ -342,8 +358,22 @@ class StencilComputationSDFGBuilder(NodeVisitor):
                 symbol_mapping=symbol_mapping,
                 debuginfo=dace.DebugInfo(0),
             )
-            self.visit(node.read_memlets, scope_node=nsdfg, sdfg_ctx=sdfg_ctx, node_ctx=node_ctx)
-            self.visit(node.write_memlets, scope_node=nsdfg, sdfg_ctx=sdfg_ctx, node_ctx=node_ctx)
+            self.visit(
+                node.read_memlets,
+                scope_node=nsdfg,
+                sdfg_ctx=sdfg_ctx,
+                node_ctx=node_ctx,
+                symtable=symtable.parents,
+                **kwargs,
+            )
+            self.visit(
+                node.write_memlets,
+                scope_node=nsdfg,
+                sdfg_ctx=sdfg_ctx,
+                node_ctx=node_ctx,
+                symtable=symtable.parents,
+                **kwargs,
+            )
             StencilComputationSDFGBuilder._add_empty_edges(
                 nsdfg, nsdfg, sdfg_ctx=sdfg_ctx, node_ctx=node_ctx
             )

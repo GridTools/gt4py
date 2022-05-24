@@ -17,8 +17,9 @@ import dace
 import sympy
 from pydantic import validator
 
+import eve
 import gtc
-from eve import Int, IntEnum, Node, Str, StrEnum, SymbolRef, utils
+from eve import Int, IntEnum, Node, Str, StrEnum, SymbolName, SymbolRef, utils
 from gtc import common, oir
 from gtc.common import LocNode
 from gtc.dace.utils import get_dace_symbol
@@ -706,7 +707,7 @@ class Memlet(Node):
 
 
 class Decl(LocNode):
-    name: SymbolRef
+    name: SymbolName
     dtype: common.DataType
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
@@ -880,10 +881,10 @@ class DomainLoop(IterationNode, ComputationNode):
     loop_states: List[Union[ComputationState, "DomainLoop"]]
 
 
-class NestedSDFG(ComputationNode):
+class NestedSDFG(ComputationNode, eve.SymbolTableTrait):
     label: SymbolRef
-    field_decls: Dict[SymbolRef, FieldDecl]
-    symbol_decls: Dict[SymbolRef, SymbolDecl]
+    field_decls: List[FieldDecl]
+    symbol_decls: List[SymbolDecl]
     states: List[Union[DomainLoop, ComputationState]]
 
 

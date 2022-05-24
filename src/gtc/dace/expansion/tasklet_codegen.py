@@ -12,13 +12,14 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import Any, List, Optional, Union
+from typing import Any, ChainMap, List, Optional, Union
 
 import dace
 import dace.data
 import dace.library
 import dace.subsets
 
+import eve
 import gtc.common as common
 from eve import codegen
 from eve.codegen import FormatTemplate as as_fmt
@@ -27,6 +28,7 @@ from gtc.dace.utils import get_axis_bound_str, make_dace_subset
 
 
 class TaskletCodegen(codegen.TemplatedGenerator):
+    contexts = (eve.SymbolTableTrait.symtable_merger,)
 
     ScalarAccess = as_fmt("{name}")
 
@@ -74,7 +76,15 @@ class TaskletCodegen(codegen.TemplatedGenerator):
     def visit_VariableKOffset(self, node: common.CartesianOffset, **kwargs):
         return self._visit_offset(node, **kwargs)
 
-    def visit_IndexAccess(self, node: dcir.IndexAccess, *, is_target, sdfg_ctx, **kwargs):
+    def visit_IndexAccess(
+        self,
+        node: dcir.IndexAccess,
+        *,
+        is_target,
+        sdfg_ctx,
+        symtable: ChainMap[common.SymbolRef, dcir.Decl],
+        **kwargs,
+    ):
 
         memlets = kwargs["write_memlets" if is_target else "read_memlets"]
         memlet = next(mem for mem in memlets if mem.connector == node.name)
@@ -84,7 +94,7 @@ class TaskletCodegen(codegen.TemplatedGenerator):
             index_strs.append(
                 self.visit(
                     node.offset,
-                    decl=sdfg_ctx.field_decls[memlet.field],
+                    decl=symtable[memlet.field],
                     access_info=memlet.access_info,
                     **kwargs,
                 )

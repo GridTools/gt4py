@@ -15,7 +15,7 @@
 import dataclasses
 import itertools
 from dataclasses import dataclass
-from typing import Any, Dict, Optional, Set, Union
+from typing import Any, Dict, List, Optional, Set, Union
 
 import dace
 import dace.data
@@ -113,11 +113,11 @@ class DaCeIRBuilder(NodeTranslator):
             self,
             access_infos: Dict[SymbolRef, dcir.FieldAccessInfo],
             symbol_collector: "DaCeIRBuilder.SymbolCollector",
-        ) -> Dict[SymbolRef, dcir.FieldDecl]:
-            return {
-                field: self.get_dcir_decl(field, access_info, symbol_collector=symbol_collector)
+        ) -> List[dcir.FieldDecl]:
+            return [
+                self.get_dcir_decl(field, access_info, symbol_collector=symbol_collector)
                 for field, access_info in access_infos.items()
-            }
+            ]
 
         def get_dcir_decl(
             self,
@@ -217,10 +217,6 @@ class DaCeIRBuilder(NodeTranslator):
     @dataclass
     class SymbolCollector:
         symbol_decls: Dict[SymbolRef, dcir.SymbolDecl] = dataclasses.field(default_factory=dict)
-
-        @property
-        def external_symbols(self):
-            return set(self.symbol_decls.keys())
 
         def add_symbol(self, name: SymbolRef, dtype: common.DataType = common.DataType.INT32):
             if name not in self.symbol_decls:
@@ -503,7 +499,7 @@ class DaCeIRBuilder(NodeTranslator):
                 read_memlets=read_memlets,
                 write_memlets=write_memlets,
                 states=nodes,
-                symbol_decls=symbol_collector.symbol_decls,
+                symbol_decls=list(symbol_collector.symbol_decls.values()),
             )
         ]
 
@@ -743,7 +739,7 @@ class DaCeIRBuilder(NodeTranslator):
             field_decls=field_decls,
             read_memlets=[memlet for memlet in field_memlets if memlet.field in read_fields],
             write_memlets=[memlet for memlet in field_memlets if memlet.field in write_fields],
-            symbol_decls=symbol_collector.symbol_decls,
+            symbol_decls=list(symbol_collector.symbol_decls.values()),
         )
 
         return res

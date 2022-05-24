@@ -101,9 +101,9 @@ class StencilComputationExpansion(dace.library.ExpandTransformation):
         # determine "__I", "__J" and "__K" values based on memlets to StencilComputation's shape
         symbol_mapping = StencilComputationExpansion._solve_for_domain(
             {
-                name: decl
-                for name, decl in daceir.field_decls.items()
-                if name
+                decl.name: decl
+                for decl in daceir.field_decls
+                if decl.name
                 in set(memlet.field for memlet in daceir.read_memlets + daceir.write_memlets)
             },
             subsets,
