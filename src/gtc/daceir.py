@@ -36,19 +36,6 @@ class Stmt(common.Stmt):
     pass
 
 
-_AXIS_DACE_SYMBOLS = {
-    "__I": dace.symbolic.pystr_to_symbolic("__I"),
-    "__J": dace.symbolic.pystr_to_symbolic("__J"),
-    "__K": dace.symbolic.pystr_to_symbolic("__K"),
-    "__i": dace.symbolic.pystr_to_symbolic("__i"),
-    "__j": dace.symbolic.pystr_to_symbolic("__j"),
-    "__k": dace.symbolic.pystr_to_symbolic("__k"),
-    "__tile_i": dace.symbolic.pystr_to_symbolic("__tile_i"),
-    "__tile_j": dace.symbolic.pystr_to_symbolic("__tile_j"),
-    "__tile_k": dace.symbolic.pystr_to_symbolic("__tile_k"),
-}
-
-
 class Axis(StrEnum):
     I = "I"  # noqa: E741 ambiguous variable name 'I'
     J = "J"
