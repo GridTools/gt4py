@@ -407,12 +407,13 @@ def compute_dcir_access_infos(
 
 def make_dace_subset(
     context_info: "dcir.FieldAccessInfo", access_info: "dcir.FieldAccessInfo", data_dims
-):
+) -> dace.subsets.Range:
     clamped_access_info = access_info
     clamped_context_info = context_info
     for axis in access_info.axes():
         if axis in access_info.variable_offset_axes:
             clamped_access_info = clamped_access_info.clamp_full_axis(axis)
+        if axis in clamped_context_info.variable_offset_axes:
             clamped_context_info = clamped_context_info.clamp_full_axis(axis)
     res_ranges = []
 

@@ -660,7 +660,7 @@ class FieldAccessInfo(Node):
             variable_offset_axes=self.variable_offset_axes,
         )
 
-    def restricted_to_index(self, axis: Axis, extent: Tuple[int, int]):
+    def restricted_to_index(self, axis: Axis, extent: Tuple[int, int] = (0, 0)):
         return FieldAccessInfo(
             grid_subset=self.grid_subset.restricted_to_index(axis=axis, extent=extent),
             global_grid_subset=self.global_grid_subset,

@@ -9,8 +9,7 @@ import gtc.common as common
 from eve import codegen
 from eve.codegen import FormatTemplate as as_fmt
 from gtc import daceir as dcir
-from gtc.dace.expansion.utils import add_origin
-from gtc.dace.utils import get_axis_bound_str
+from gtc.dace.utils import get_axis_bound_str, make_dace_subset
 
 
 class TaskletCodegen(codegen.TemplatedGenerator):
@@ -35,18 +34,25 @@ class TaskletCodegen(codegen.TemplatedGenerator):
                 int_sizes.append(int(memlet_shape[i]))
             else:
                 int_sizes.append(None)
-        str_offset = [
-            self.visit(off, **kwargs) for off in (node.to_dict()["i"], node.to_dict()["j"], node.k)
+        sym_offsets = [
+            dace.symbolic.pystr_to_symbolic(self.visit(off, **kwargs))
+            for off in (node.to_dict()["i"], node.to_dict()["j"], node.k)
         ]
-        str_offset = [
-            f"{axis.iteration_symbol()} + {str_offset[axis.to_idx()]}"
-            for i, axis in enumerate(access_info.axes())
-        ]
-
-        res: dace.subsets.Range = add_origin(
-            decl.access_info, ",".join(str_offset), add_for_variable=True
+        for axis in access_info.variable_offset_axes:
+            access_info = access_info.restricted_to_index(axis)
+        ranges = make_dace_subset(
+            access_info,
+            dcir.FieldAccessInfo(
+                grid_subset=access_info.grid_subset,
+                global_grid_subset=access_info.global_grid_subset,
+                dynamic_access=access_info.dynamic_access,
+                variable_offset_axes=[],
+            ),
+            data_dims=(),  # data_index added in visit_IndexAccess
         )
-        return str(dace.subsets.Range([r for i, r in enumerate(res.ranges) if int_sizes[i] != 1]))
+        ranges.offset(sym_offsets, negative=False)
+        res = dace.subsets.Range([r for i, r in enumerate(ranges.ranges) if int_sizes[i] != 1])
+        return str(res)
 
     def visit_CartesianOffset(self, node: common.CartesianOffset, **kwargs):
         return self._visit_offset(node, **kwargs)
