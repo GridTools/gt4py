@@ -70,7 +70,13 @@ class StencilComputationExpansion(dace.library.ExpandTransformation):
     def _fix_context(
         nsdfg, node: "StencilComputation", parent_state: dace.SDFGState, daceir: dcir.NestedSDFG
     ):
+        """Apply changes to StencilComputation and the SDFG it is embedded in to satisfy post-expansion constraints.
 
+        * change connector names to match inner array name (before expansion prefixed to satisfy uniqueness)
+        * change in- and out-edges' subsets so that they have the same shape as the corresponding array inside
+        * determine the domain size based on edges to StencilComputation
+        """
+        # change connector names
         for in_edge in parent_state.in_edges(node):
             assert in_edge.dst_conn.startswith("__in_")
             in_edge.dst_conn = in_edge.dst_conn[len("__in_") :]
@@ -78,6 +84,7 @@ class StencilComputationExpansion(dace.library.ExpandTransformation):
             assert out_edge.src_conn.startswith("__out_")
             out_edge.src_conn = out_edge.src_conn[len("__out_") :]
 
+        # union input and output subsets
         subsets = dict()
         for edge in parent_state.in_edges(node):
             subsets[edge.dst_conn] = edge.data.subset
@@ -85,11 +92,13 @@ class StencilComputationExpansion(dace.library.ExpandTransformation):
             subsets[edge.src_conn] = dace.subsets.union(
                 edge.data.subset, subsets.get(edge.src_conn, edge.data.subset)
             )
+        # ensure single-use of input and output subset instances
         for edge in parent_state.in_edges(node):
             edge.data.subset = copy.deepcopy(subsets[edge.dst_conn])
         for edge in parent_state.out_edges(node):
             edge.data.subset = copy.deepcopy(subsets[edge.src_conn])
 
+        # determine "__I", "__J" and "__K" values based on memlets to StencilComputation's shape
         symbol_mapping = StencilComputationExpansion._solve_for_domain(
             {
                 name: decl
