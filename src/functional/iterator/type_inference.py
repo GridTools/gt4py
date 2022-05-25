@@ -443,7 +443,7 @@ class _Unifier:
 
         if isinstance(s, Tuple) and isinstance(t, Tuple):
             if len(s.elems) != len(t.elems):
-                raise TypeError(f"Can not satisfy constraint {s} = {t}")
+                raise TypeError(f"Can not satisfy constraint: {s} ≡ {t}")
             for lhs, rhs in zip(s.elems, t.elems):
                 self._add_constraint(lhs, rhs)
             return True
