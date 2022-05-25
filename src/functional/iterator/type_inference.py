@@ -459,8 +459,8 @@ class _Unifier:
 
         if isinstance(s, PartialTupleVar) and isinstance(t, PartialTupleVar):
             assert s not in free_variables(t) and t not in free_variables(s)
-            se = dict(s.elems)
-            te = dict(t.elems)
+            se = dict(zip(s.elem_indices, s.elem_values))
+            te = dict(zip(t.elem_indices, t.elem_values))
             for i in set(se) & set(te):
                 self._add_constraint(se[i], te[i])
             elems = se | te
