@@ -314,39 +314,6 @@ class TypeInferrer(eve.NodeTranslator):
         )
 
 
-class _Rename(eve.ReusingNodeTranslator):
-    def __init__(self, src, dst):
-        self.src = src
-        self.dst = dst
-
-    def __call__(self, node):
-        return self.visit(node)
-
-    def generic_visit(self, node):
-        if node == self.src:
-            return self.dst
-        return super().generic_visit(node)
-
-    def visit_ValTuple(self, node):
-        node = self.generic_visit(node)
-        assert isinstance(node, ValTuple)
-        if isinstance(node.dtypes, Tuple):
-            return Tuple(
-                elems=tuple(Val(kind=node.kind, dtype=d, size=node.size) for d in node.dtypes.elems)
-            )
-        return node
-
-    def visit_PrefixTuple(self, node):
-        node = self.generic_visit(node)
-        assert isinstance(node, PrefixTuple)
-        if isinstance(node.others, Tuple):
-            return Tuple(elems=(node.prefix,) + node.others.elems)
-        return node
-
-
-rename = _Rename
-
-
 class _FreeVariables(eve.NodeVisitor):
     def visit_DType(self, node, *, free_variables):
         self.generic_visit(node, free_variables=free_variables)
@@ -366,7 +333,7 @@ class _Dedup(eve.ReusingNodeTranslator):
         return memo.setdefault(node, node)
 
 
-class Renamer:
+class _Renamer:
     def __init__(self):
         self.parents = dict()
 
@@ -420,110 +387,132 @@ class Renamer:
             self.rename(s, d)
 
 
-def handle_constraint(constraint, constraints, renamer):  # noqa: C901
-    s, t = constraint
-    s = s.value
-    t = t.value
-    if s == t:
-        return True
+class _Unifier:
+    def __init__(self, dtype, constraints):
+        self._dtype = Box(value=dtype)
+        self._constraints = [(Box(value=s), Box(value=t)) for s, t in constraints]
 
-    def rename(x, y):
-        renamer.register(x)
-        renamer.register(y)
-        renamer.rename(x, y)
+        self._renamer = _Renamer()
+        self._renamer.register(self._dtype)
+        for s, t in self._constraints:
+            self._renamer.register(s)
+            self._renamer.register(t)
 
-    def add_constraint(x, y):
+    def unify(self):
+        while self._constraints:
+            constraint = self._constraints.pop()
+            handled = self._handle_constraint(constraint)
+            if not handled:
+                handled = self._handle_constraint(constraint[::-1])
+            if not handled:
+                raise TypeError(
+                    f"Can not satisfy constraint: {constraint[0].value} ≡ {constraint[1].value}"
+                )
+
+        return self._dtype.value
+
+    def _rename(self, x, y):
+        self._renamer.register(x)
+        self._renamer.register(y)
+        self._renamer.rename(x, y)
+
+    def _add_constraint(self, x, y):
         x = Box(value=x)
         y = Box(value=y)
-        renamer.register(x)
-        renamer.register(y)
-        constraints.append((x, y))
+        self._renamer.register(x)
+        self._renamer.register(y)
+        self._constraints.append((x, y))
 
-    if isinstance(s, Var):
-        assert s not in free_variables(t)
-        rename(s, t)
-        return True
+    def _handle_constraint(self, constraint):  # noqa: C901
+        s, t = (c.value for c in constraint)
+        if s == t:
+            return True
 
-    if isinstance(s, Fun) and isinstance(t, Fun):
-        add_constraint(s.args, t.args)
-        add_constraint(s.ret, t.ret)
-        return True
+        if isinstance(s, Var):
+            assert s not in free_variables(t)
+            self._rename(s, t)
+            return True
 
-    if isinstance(s, Val) and isinstance(t, Val):
-        add_constraint(s.kind, t.kind)
-        add_constraint(s.dtype, t.dtype)
-        add_constraint(s.size, t.size)
-        return True
+        if isinstance(s, Fun) and isinstance(t, Fun):
+            self._add_constraint(s.args, t.args)
+            self._add_constraint(s.ret, t.ret)
+            return True
 
-    if isinstance(s, Tuple) and isinstance(t, Tuple):
-        if len(s.elems) != len(t.elems):
-            raise TypeError(f"Can not satisfy constraint {s} = {t}")
-        for lhs, rhs in zip(s.elems, t.elems):
-            add_constraint(lhs, rhs)
-        return True
+        if isinstance(s, Val) and isinstance(t, Val):
+            self._add_constraint(s.kind, t.kind)
+            self._add_constraint(s.dtype, t.dtype)
+            self._add_constraint(s.size, t.size)
+            return True
 
-    if isinstance(s, PartialTupleVar) and isinstance(t, Tuple):
-        assert s not in free_variables(t)
-        for i, x in zip(s.elem_indices, s.elem_values):
-            add_constraint(x, t.elems[i])
-        return True
+        if isinstance(s, Tuple) and isinstance(t, Tuple):
+            if len(s.elems) != len(t.elems):
+                raise TypeError(f"Can not satisfy constraint {s} = {t}")
+            for lhs, rhs in zip(s.elems, t.elems):
+                self._add_constraint(lhs, rhs)
+            return True
 
-    if isinstance(s, PartialTupleVar) and isinstance(t, PartialTupleVar):
-        assert s not in free_variables(t) and t not in free_variables(s)
-        se = dict(s.elems)
-        te = dict(t.elems)
-        for i in set(se) & set(te):
-            add_constraint(se[i], te[i])
-        elems = se | te
-        combined = PartialTupleVar.fresh(
-            elem_indices=tuple(elems.keys()), elem_values=tuple(elems.values())
-        )
-        rename(s, combined)
-        rename(t, combined)
-        return True
+        if isinstance(s, PartialTupleVar) and isinstance(t, Tuple):
+            assert s not in free_variables(t)
+            for i, x in zip(s.elem_indices, s.elem_values):
+                self._add_constraint(x, t.elems[i])
+            return True
 
-    if isinstance(s, PrefixTuple) and isinstance(t, Tuple):
-        assert s not in free_variables(t)
-        add_constraint(s.prefix, t.elems[0])
-        add_constraint(s.others, Tuple(elems=t.elems[1:]))
-        return True
+        if isinstance(s, PartialTupleVar) and isinstance(t, PartialTupleVar):
+            assert s not in free_variables(t) and t not in free_variables(s)
+            se = dict(s.elems)
+            te = dict(t.elems)
+            for i in set(se) & set(te):
+                self._add_constraint(se[i], te[i])
+            elems = se | te
+            combined = PartialTupleVar.fresh(
+                elem_indices=tuple(elems.keys()), elem_values=tuple(elems.values())
+            )
+            self._rename(s, combined)
+            self._rename(t, combined)
+            return True
 
-    if isinstance(s, PrefixTuple) and isinstance(t, PrefixTuple):
-        assert s not in free_variables(t) and t not in free_variables(s)
-        add_constraint(s.prefix, t.prefix)
-        add_constraint(s.others, t.others)
-        return True
+        if isinstance(s, PrefixTuple) and isinstance(t, Tuple):
+            assert s not in free_variables(t)
+            self._add_constraint(s.prefix, t.elems[0])
+            self._add_constraint(s.others, Tuple(elems=t.elems[1:]))
+            return True
 
-    if isinstance(s, ValTuple) and isinstance(t, Tuple):
-        s_expanded = Tuple(
-            elems=tuple(Val(kind=s.kind, dtype=Var.fresh(), size=s.size) for _ in t.elems)
-        )
-        add_constraint(s.dtypes, Tuple(elems=tuple(e.dtype for e in s_expanded.elems)))
-        add_constraint(s_expanded, t)
-        return True
+        if isinstance(s, PrefixTuple) and isinstance(t, PrefixTuple):
+            assert s not in free_variables(t) and t not in free_variables(s)
+            self._add_constraint(s.prefix, t.prefix)
+            self._add_constraint(s.others, t.others)
+            return True
 
-    if isinstance(s, ValTuple) and isinstance(t, ValTuple):
-        assert s not in free_variables(t) and t not in free_variables(s)
-        add_constraint(s.kind, t.kind)
-        add_constraint(s.dtypes, t.dtypes)
-        add_constraint(s.size, t.size)
-        return True
+        if isinstance(s, ValTuple) and isinstance(t, Tuple):
+            s_expanded = Tuple(
+                elems=tuple(Val(kind=s.kind, dtype=Var.fresh(), size=s.size) for _ in t.elems)
+            )
+            self._add_constraint(s.dtypes, Tuple(elems=tuple(e.dtype for e in s_expanded.elems)))
+            self._add_constraint(s_expanded, t)
+            return True
 
-    if isinstance(s, UniformValTupleVar) and isinstance(t, Tuple):
-        assert s not in free_variables(t)
-        rename(s, t)
-        elem_dtype = Val(kind=s.kind, dtype=s.dtype, size=s.size)
-        for e in t.elems:
-            add_constraint(e, elem_dtype)
-        return True
+        if isinstance(s, ValTuple) and isinstance(t, ValTuple):
+            assert s not in free_variables(t) and t not in free_variables(s)
+            self._add_constraint(s.kind, t.kind)
+            self._add_constraint(s.dtypes, t.dtypes)
+            self._add_constraint(s.size, t.size)
+            return True
 
-    if isinstance(s, UniformValTupleVar) and isinstance(t, UniformValTupleVar):
-        add_constraint(s.kind, t.kind)
-        add_constraint(s.dtype, t.dtype)
-        add_constraint(s.size, t.size)
-        return True
+        if isinstance(s, UniformValTupleVar) and isinstance(t, Tuple):
+            assert s not in free_variables(t)
+            self._rename(s, t)
+            elem_dtype = Val(kind=s.kind, dtype=s.dtype, size=s.size)
+            for e in t.elems:
+                self._add_constraint(e, elem_dtype)
+            return True
 
-    return False
+        if isinstance(s, UniformValTupleVar) and isinstance(t, UniformValTupleVar):
+            self._add_constraint(s.kind, t.kind)
+            self._add_constraint(s.dtype, t.dtype)
+            self._add_constraint(s.size, t.size)
+            return True
+
+        return False
 
 
 def unify(dtype, constraints):
@@ -532,24 +521,8 @@ def unify(dtype, constraints):
     constraints = {_Dedup().visit(c, memo=memo) for c in constraints}
     del memo
 
-    renamer = Renamer()
-    dtype = Box(value=dtype)
-    renamer.register(dtype)
-    constraints = [(Box(value=s), Box(value=t)) for s, t in constraints]
-    for s, t in constraints:
-        renamer.register(s)
-        renamer.register(t)
-
-    while constraints:
-        c = constraints.pop()
-        handled = handle_constraint(c, constraints, renamer)
-        if not handled:
-            handled = handle_constraint(c[::-1], constraints, renamer)
-
-        if not handled:
-            raise TypeError(f"Can not satisfy constraint: {c[0].value} ≡ {c[1].value}")
-
-    return dtype.value
+    unifier = _Unifier(dtype, constraints)
+    return unifier.unify()
 
 
 class _ReindexVars(eve.ReusingNodeTranslator):

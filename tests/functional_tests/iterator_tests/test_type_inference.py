@@ -1,8 +1,8 @@
 from functional.iterator import ir, type_inference as ti
 
 
-def test_rename():
-    r = ti.Renamer()
+def test_renamer():
+    r = ti._Renamer()
     actual = [
         (
             ti.Box(value=ti.Val(kind=ti.Value(), dtype=ti.Var(idx=0), size=ti.Var(idx=1))),
