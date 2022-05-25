@@ -2,7 +2,7 @@ GT4Py: GridTools for Python
 ===========================
 
 Python library for generating high-performance implementations of
-stencil kernels from a DSL.
+stencil kernels from a domain-specific language (DSL).
 
 |tox| |format|
 
@@ -31,7 +31,7 @@ environment.
     # For the CUDA backends add the '[cudaXX]' optional dependency
     $ pip install -e ./[cuda11]
 
-There are notebooks in the `examples/` directory that can be run using IPython
+There are notebooks in the ``examples/`` directory that can be run using IPython
 notebooks on Jupyter.
 
 .. code-block:: bash
@@ -39,12 +39,12 @@ notebooks on Jupyter.
    $ pip install jupyterlab
    $ jupyter-lab
 
-In order to run the unit and integration tests in `tests/`, there are
+In order to run the unit and integration tests in ``tests/``, there are
 a couple options:
 
-1. Use tox: `pip install tox && tox -r -e py38-all-cpu`
-2. Install the development requirements: `pip install -r requirements-dev.txt`,
-   then `pytest` can execute the tests directly.
+1. Use tox: ``pip install tox && tox -r -e py38-all-cpu``.
+2. Install the development requirements: ``pip install -r requirements-dev.txt``,
+   then ``pytest`` can execute the tests directly.
 
 
 📖 Description
@@ -52,7 +52,7 @@ a couple options:
 
 GT4Py is a Python library for expressing finite-difference stencils
 related to weather and climate modeling using a high-level
-domain-specific language (DSL) using Python functions.
+DSL using Python functions.
 These functions are compiled by the framework into high-performance
 implementations for CPUs and GPUs.
 
@@ -60,8 +60,8 @@ The DSL expresses the stencils using the parallel model from the
 `GridTools C++ Framework <https://github.com/GridTools/gridtools>`__,
 and uses it, as well as other backends, for optimized code generation.
 In this Cartesian parallel model there are always three dimensions,
-and the vertical (`K`) is treated separately from the horizontal axes
-(`I`, `J`), which are iterated over in parallel.
+and the vertical (``K``) is treated separately from the horizontal axes
+(``I``, ``J``), which are iterated over in parallel.
 
 Stencil expressions are Cartesian offsets from a center index, as it
 would be written algorithmically.
@@ -72,15 +72,16 @@ in the vertical index to account for boundaries, or accumulate fields.
 🚜 Installation
 ---------------
 
-The base version of `gt4py` does not have dependencies other than the
-Python packages included in the `setup.cfg` which are automatically
+The base version of GT4Py does not have dependencies other than the
+Python packages included in the ``setup.cfg`` which are automatically
 installed.
 The GridTools backends however require
-1. The `GridTools <https://github.com/GridTools/gridtools>`__ C++ sources
-2. `Boost <https://www.boost.org/>`__ a dependency of GridTools, which
-   needs to be installed by the user.
 
-GridTools is downloaded if needed.
+1. `GridTools <https://github.com/GridTools/gridtools>`__ C++ sources.
+2. `Boost <https://www.boost.org/>`__ a dependency of GridTools,
+   which needs to be installed by the user.
+
+The correct version of GridTools is downloaded automatically when needed.
 
 Options
 ~~~~~~~
@@ -89,17 +90,17 @@ If GridTools or Boost are not found in the compiler's standard include
 path, or a custom version is desired, then a couple configuration
 environment variables will allow the compiler to use them:
 
-- `GT2_INCLUDE_PATH`: Path to the GridTools v2 (default) installation.
-- `BOOST_ROOT`: Path to the boost headers.
+- ``GT2_INCLUDE_PATH``: Path to the GridTools v2 (default) installation.
+- ``BOOST_ROOT``: Path to the boost headers.
 
 Other commonly used environment variables are:
 
-- `CUDA_ARCH`: Set the compute capability of the NVIDIA GPU if it is not
-  detected automatically by `cupy`.
-- `CXX`: Set the C++ compiler.
-- `GT_CACHE_DIR_NAME`: Name of the compiler's cache directory
-  (defaults to `.gt_cache`)
-- `GT_CACHE_ROOT`: Path to the compiler cache (defaults to `./`)
+- ``CUDA_ARCH``: Set the compute capability of the NVIDIA GPU if it is not
+  detected automatically by ``cupy``.
+- ``CXX``: Set the C++ compiler.
+- ``GT_CACHE_DIR_NAME``: Name of the compiler's cache directory
+  (defaults to ``.gt_cache``)
+- ``GT_CACHE_ROOT``: Path to the compiler cache (defaults to ``./``)
 
 More options and details in
 `config.py <https://github.com/GridTools/gt4py/blob/master/src/gt4py/config.py>`__.
@@ -107,13 +108,9 @@ More options and details in
 Documentation
 ~~~~~~~~~~~~~
 
-A proper documentation is in the works. Please refer to the jupyter
-notebooks in the examples folder of this repository for examples of how
-GT4Py can be used, or the *Quickstart* page of the documentation. To
-build it, you need to clone the repository first (follow the
-instructions in `Recommended installation for
-developers <#recommended-installation-for-developers>`__) and then
-install the additional development requirements with:
+GT4Py uses Sphinx documentation.
+However, it is not published yet, so it needs to be built by the user.
+To do that, first install the dependencies in ``requirements-dev.txt``:
 
 .. code-block:: bash
 
