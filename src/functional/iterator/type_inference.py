@@ -420,12 +420,12 @@ class Renamer:
             self.rename(s, d)
 
 
-def handle_constraint(constraint, dtype, constraints, renamer):  # noqa: C901
+def handle_constraint(constraint, constraints, renamer):  # noqa: C901
     s, t = constraint
     s = s.value
     t = t.value
     if s == t:
-        return dtype, constraints
+        return True
 
     def rename(x, y):
         renamer.register(x)
@@ -442,31 +442,31 @@ def handle_constraint(constraint, dtype, constraints, renamer):  # noqa: C901
     if isinstance(s, Var):
         assert s not in free_variables(t)
         rename(s, t)
-        return dtype, constraints
+        return True
 
     if isinstance(s, Fun) and isinstance(t, Fun):
         add_constraint(s.args, t.args)
         add_constraint(s.ret, t.ret)
-        return dtype, constraints
+        return True
 
     if isinstance(s, Val) and isinstance(t, Val):
         add_constraint(s.kind, t.kind)
         add_constraint(s.dtype, t.dtype)
         add_constraint(s.size, t.size)
-        return dtype, constraints
+        return True
 
     if isinstance(s, Tuple) and isinstance(t, Tuple):
         if len(s.elems) != len(t.elems):
             raise TypeError(f"Can not satisfy constraint {s} = {t}")
         for lhs, rhs in zip(s.elems, t.elems):
             add_constraint(lhs, rhs)
-        return dtype, constraints
+        return True
 
     if isinstance(s, PartialTupleVar) and isinstance(t, Tuple):
         assert s not in free_variables(t)
         for i, x in zip(s.elem_indices, s.elem_values):
             add_constraint(x, t.elems[i])
-        return dtype, constraints
+        return True
 
     if isinstance(s, PartialTupleVar) and isinstance(t, PartialTupleVar):
         assert s not in free_variables(t) and t not in free_variables(s)
@@ -480,19 +480,19 @@ def handle_constraint(constraint, dtype, constraints, renamer):  # noqa: C901
         )
         rename(s, combined)
         rename(t, combined)
-        return dtype, constraints
+        return True
 
     if isinstance(s, PrefixTuple) and isinstance(t, Tuple):
         assert s not in free_variables(t)
         add_constraint(s.prefix, t.elems[0])
         add_constraint(s.others, Tuple(elems=t.elems[1:]))
-        return dtype, constraints
+        return True
 
     if isinstance(s, PrefixTuple) and isinstance(t, PrefixTuple):
         assert s not in free_variables(t) and t not in free_variables(s)
         add_constraint(s.prefix, t.prefix)
         add_constraint(s.others, t.others)
-        return dtype, constraints
+        return True
 
     if isinstance(s, ValTuple) and isinstance(t, Tuple):
         s_expanded = Tuple(
@@ -500,14 +500,14 @@ def handle_constraint(constraint, dtype, constraints, renamer):  # noqa: C901
         )
         add_constraint(s.dtypes, Tuple(elems=tuple(e.dtype for e in s_expanded.elems)))
         add_constraint(s_expanded, t)
-        return dtype, constraints
+        return True
 
     if isinstance(s, ValTuple) and isinstance(t, ValTuple):
         assert s not in free_variables(t) and t not in free_variables(s)
         add_constraint(s.kind, t.kind)
         add_constraint(s.dtypes, t.dtypes)
         add_constraint(s.size, t.size)
-        return dtype, constraints
+        return True
 
     if isinstance(s, UniformValTupleVar) and isinstance(t, Tuple):
         assert s not in free_variables(t)
@@ -515,13 +515,15 @@ def handle_constraint(constraint, dtype, constraints, renamer):  # noqa: C901
         elem_dtype = Val(kind=s.kind, dtype=s.dtype, size=s.size)
         for e in t.elems:
             add_constraint(e, elem_dtype)
-        return dtype, constraints
+        return True
 
     if isinstance(s, UniformValTupleVar) and isinstance(t, UniformValTupleVar):
         add_constraint(s.kind, t.kind)
         add_constraint(s.dtype, t.dtype)
         add_constraint(s.size, t.size)
-        return dtype, constraints
+        return True
+
+    return False
 
 
 def unify(dtype, constraints):
@@ -540,13 +542,12 @@ def unify(dtype, constraints):
 
     while constraints:
         c = constraints.pop()
-        r = handle_constraint(c, dtype, constraints, renamer)
-        if not r:
-            r = handle_constraint(c[::-1], dtype, constraints, renamer)
+        handled = handle_constraint(c, constraints, renamer)
+        if not handled:
+            handled = handle_constraint(c[::-1], constraints, renamer)
 
-        if not r:
-            raise TypeError(f"Can not satisfy constraint: {c[0]} ≡ {c[1]}")
-        dtype, constraints = r
+        if not handled:
+            raise TypeError(f"Can not satisfy constraint: {c[0].value} ≡ {c[1].value}")
 
     return dtype.value
 
