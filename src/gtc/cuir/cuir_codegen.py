@@ -352,9 +352,11 @@ class CUIRCodegen(codegen.TemplatedGenerator):
 
                 % for field, data_dims in fields.items():
                 const auto ${field} = [&](auto i, auto j, auto k
+                    % if field not in temp_names:
                     % for i in range(data_dims):
                     , auto dim_${i + 3}
                     % endfor
+                    % endif
                     ) -> auto&& {
                     return *sid::multi_shifted<tag::${field}>(
                         device::at_key<tag::${field}>(_ptr),
