@@ -360,9 +360,11 @@ class CUIRCodegen(codegen.TemplatedGenerator):
                         device::at_key<tag::${field}>(_ptr),
                         m_strides,
                         tuple_util::device::make<hymap::keys<dim::i, dim::j, dim::k
+                        % if field not in temp_names:
                         % for i in range(data_dims):
                         , integral_constant<int, ${i + 3}>
                         % endfor
+                        % endif
                         >::template values>(i, j, k
                         % if field not in temp_names:
                         % for i in range(data_dims):
