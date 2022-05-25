@@ -811,7 +811,7 @@ class ScalarDecl(Decl):
     pass
 
 
-class LocalScalar(ScalarDecl):
+class LocalScalarDecl(ScalarDecl):
     pass
 
 
@@ -860,8 +860,8 @@ class IterationNode(Node):
     grid_subset: GridSubset
 
 
-class Tasklet(ComputationNode, IterationNode):
-    stmts: List[Union[LocalScalar, Stmt]]
+class Tasklet(ComputationNode, IterationNode, eve.SymbolTableTrait):
+    stmts: List[Union[LocalScalarDecl, Stmt]]
     grid_subset: GridSubset = GridSubset.single_gridpoint()
 
 

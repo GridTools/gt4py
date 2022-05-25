@@ -197,7 +197,7 @@ class TaskletCodegen(codegen.TemplatedGenerator):
 
     Param = as_fmt("{name}")
 
-    LocalScalar = as_fmt("{name}: {dtype}")
+    LocalScalarDecl = as_fmt("{name}: {dtype}")
 
     def visit_Tasklet(self, node: dcir.Tasklet, **kwargs):
         return "\n".join(self.visit(node.stmts, **kwargs))
