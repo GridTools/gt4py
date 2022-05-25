@@ -364,9 +364,11 @@ class CUIRCodegen(codegen.TemplatedGenerator):
                         , integral_constant<int, ${i + 3}>
                         % endfor
                         >::template values>(i, j, k
+                        % if field not in temp_names:
                         % for i in range(data_dims):
                         , dim_${i + 3}
                         % endfor
+                        % endif
                         ));
                 };
                 % endfor
@@ -442,6 +444,7 @@ class CUIRCodegen(codegen.TemplatedGenerator):
             loop_fields=loop_fields,
             ctype=ctype,
             cuir=cuir,
+            temp_names={decl.name for decl in node.temporaries},
             **kwargs,
         )
 
