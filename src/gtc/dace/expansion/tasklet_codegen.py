@@ -96,10 +96,14 @@ class TaskletCodegen(codegen.TemplatedGenerator):
                     node.offset,
                     decl=symtable[memlet.field],
                     access_info=memlet.access_info,
+                    symtable=symtable,
                     **kwargs,
                 )
             )
-        index_strs.extend(self.visit(idx, sdfg_ctx=sdfg_ctx, **kwargs) for idx in node.data_index)
+        index_strs.extend(
+            self.visit(idx, sdfg_ctx=sdfg_ctx, symtable=symtable, **kwargs)
+            for idx in node.data_index
+        )
         return f"{node.name}[{','.join(index_strs)}]"
 
     def visit_AssignStmt(self, node: dcir.AssignStmt, **kwargs):

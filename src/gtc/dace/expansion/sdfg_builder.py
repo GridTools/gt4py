@@ -150,6 +150,7 @@ class StencilComputationSDFGBuilder(NodeVisitor):
         *,
         sdfg_ctx: "StencilComputationSDFGBuilder.SDFGContext",
         node_ctx: "StencilComputationSDFGBuilder.NodeContext",
+        symtable: ChainMap[common.SymbolRef, dcir.Decl],
         **kwargs,
     ):
         code = TaskletCodegen.apply(
@@ -157,6 +158,7 @@ class StencilComputationSDFGBuilder(NodeVisitor):
             read_memlets=node.read_memlets,
             write_memlets=node.write_memlets,
             sdfg_ctx=sdfg_ctx,
+            symtable=symtable,
         )
 
         tasklet = sdfg_ctx.state.add_tasklet(
@@ -168,10 +170,20 @@ class StencilComputationSDFGBuilder(NodeVisitor):
         )
 
         self.visit(
-            node.read_memlets, scope_node=tasklet, sdfg_ctx=sdfg_ctx, node_ctx=node_ctx, **kwargs
+            node.read_memlets,
+            scope_node=tasklet,
+            sdfg_ctx=sdfg_ctx,
+            node_ctx=node_ctx,
+            symtable=symtable,
+            **kwargs,
         )
         self.visit(
-            node.write_memlets, scope_node=tasklet, sdfg_ctx=sdfg_ctx, node_ctx=node_ctx, **kwargs
+            node.write_memlets,
+            scope_node=tasklet,
+            sdfg_ctx=sdfg_ctx,
+            node_ctx=node_ctx,
+            symtable=symtable,
+            **kwargs,
         )
         StencilComputationSDFGBuilder._add_empty_edges(
             tasklet, tasklet, sdfg_ctx=sdfg_ctx, node_ctx=node_ctx
