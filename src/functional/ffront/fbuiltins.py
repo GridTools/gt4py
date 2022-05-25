@@ -23,7 +23,16 @@ from functional.ffront import common_types as ct
 from functional.iterator import runtime
 
 
-__all__ = ["Field", "Dimension", "float32", "float64", "int32", "int64", "neighbor_sum", "broadcast"]
+__all__ = [
+    "Field",
+    "Dimension",
+    "float32",
+    "float64",
+    "int32",
+    "int64",
+    "neighbor_sum",
+    "broadcast",
+]
 
 
 TYPE_BUILTINS = [Field, bool, int, int32, int64, float, float32, float64, tuple]
@@ -51,7 +60,10 @@ neighbor_sum = BuiltInFunction(
 
 broadcast = BuiltInFunction(
     ct.FunctionType(
-        args=[ct.DeferredSymbolType(constraint=ct.FieldType), ct.DeferredSymbolType(constraint=ct.TupleType)],
+        args=[
+            ct.DeferredSymbolType(constraint=ct.FieldType),
+            ct.DeferredSymbolType(constraint=ct.TupleType),
+        ],
         kwargs={},
         returns=ct.DeferredSymbolType(constraint=ct.FieldType),
     )
