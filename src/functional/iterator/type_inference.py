@@ -121,6 +121,90 @@ NAMED_RANGE_DTYPE = Primitive(name="named_range")  # type: ignore [call-arg]
 DOMAIN_DTYPE = Primitive(name="domain")  # type: ignore [call-arg]
 
 
+def _builtin_type(builtin):
+    assert builtin in ir.BUILTINS
+    if builtin == "deref":
+        dtype = Var.fresh()
+        size = Var.fresh()
+        return Fun(
+            args=Tuple(elems=(Val(kind=Iterator(), dtype=dtype, size=size),)),
+            ret=Val(kind=Value(), dtype=dtype, size=size),
+        )
+    if builtin == "can_deref":
+        dtype = Var.fresh()
+        size = Var.fresh()
+        return Fun(
+            args=Tuple(elems=(Val(kind=Iterator(), dtype=dtype, size=size),)),
+            ret=Val(kind=Value(), dtype=BOOL_DTYPE, size=size),
+        )
+    if builtin in ("plus", "minus", "multiplies", "divides"):
+        v = Val(kind=Value())
+        return Fun(args=Tuple(elems=(v, v)), ret=v)
+    if builtin in ("eq", "less", "greater"):
+        v = Val(kind=Value())
+        ret = Val(kind=Value(), dtype=BOOL_DTYPE, size=v.size)
+        return Fun(args=Tuple(elems=(v, v)), ret=ret)
+    if builtin == "not_":
+        v = Val(kind=Value(), dtype=BOOL_DTYPE)
+        return Fun(args=Tuple(elems=(v,)), ret=v)
+    if builtin in ("and_", "or_"):
+        v = Val(kind=Value(), dtype=BOOL_DTYPE)
+        return Fun(args=Tuple(elems=(v, v)), ret=v)
+    if builtin == "if_":
+        v = Val(kind=Value())
+        c = Val(kind=Value(), dtype=BOOL_DTYPE, size=v.size)
+        return Fun(args=Tuple(elems=(c, v, v)), ret=v)
+    if builtin == "lift":
+        size = Var.fresh()
+        args = ValTuple(kind=Iterator(), dtypes=Var.fresh(), size=size)
+        dtype = Var.fresh()
+        stencil_ret = Val(kind=Value(), dtype=dtype, size=size)
+        lifted_ret = Val(kind=Iterator(), dtype=dtype, size=size)
+        return Fun(
+            args=Tuple(elems=(Fun(args=args, ret=stencil_ret),)),
+            ret=Fun(args=args, ret=lifted_ret),
+        )
+    if builtin == "reduce":
+        dtypes = Var.fresh()
+        size = Var.fresh()
+        acc = Val(kind=Value(), dtype=Var.fresh(), size=size)
+        f_args = PrefixTuple(prefix=acc, others=ValTuple(kind=Value(), dtypes=dtypes, size=size))
+        ret_args = ValTuple(kind=Iterator(), dtypes=dtypes, size=size)
+        f = Fun(args=f_args, ret=acc)
+        ret = Fun(args=ret_args, ret=acc)
+        return Fun(args=Tuple(elems=(f, acc)), ret=ret)
+    if builtin == "scan":
+        dtypes = Var.fresh()
+        fwd = Val(kind=Value(), dtype=BOOL_DTYPE, size=Scalar())
+        acc = Val(kind=Value(), dtype=Var.fresh(), size=Scalar())
+        f_args = PrefixTuple(
+            prefix=acc, others=ValTuple(kind=Iterator(), dtypes=dtypes, size=Scalar())
+        )
+        ret_args = ValTuple(kind=Iterator(), dtypes=dtypes, size=Column())
+        f = Fun(args=f_args, ret=acc)
+        ret = Fun(args=ret_args, ret=Val(kind=Value(), dtype=acc.dtype, size=Column()))
+        return Fun(args=Tuple(elems=(f, fwd, acc)), ret=ret)
+    if builtin == "domain":
+        args = UniformValTupleVar.fresh(kind=Value(), dtype=NAMED_RANGE_DTYPE, size=Scalar())
+        ret = Val(kind=Value(), dtype=DOMAIN_DTYPE, size=Scalar())
+        return Fun(args=args, ret=ret)
+    if builtin == "named_range":
+        args = Tuple(
+            elems=(
+                Val(kind=Value(), dtype=AXIS_DTYPE, size=Scalar()),
+                Val(kind=Value(), dtype=INT_DTYPE, size=Scalar()),
+                Val(kind=Value(), dtype=INT_DTYPE, size=Scalar()),
+            )
+        )
+        ret = Val(kind=Value(), dtype=NAMED_RANGE_DTYPE, size=Scalar())
+        return Fun(args=args, ret=ret)
+    if builtin in ("make_tuple", "tuple_get", "shift"):
+        raise TypeError(
+            f"Builtin '{builtin}' is only supported as applied/called function by the type checker"
+        )
+    return NotImplementedError(f"Missing type definition of builtin '{builtin}'")
+
+
 class _TypeInferrer(eve.NodeTranslator):
     def visit_SymRef(self, node, *, constraints, symtypes):
         if node.id in symtypes:
@@ -128,85 +212,9 @@ class _TypeInferrer(eve.NodeTranslator):
             if isinstance(res, LetPolymorphic):
                 return _freshen(res.dtype)
             return res
-        if node.id == "deref":
-            dtype = Var.fresh()
-            size = Var.fresh()
-            return Fun(
-                args=Tuple(elems=(Val(kind=Iterator(), dtype=dtype, size=size),)),
-                ret=Val(kind=Value(), dtype=dtype, size=size),
-            )
-        if node.id == "can_deref":
-            dtype = Var.fresh()
-            size = Var.fresh()
-            return Fun(
-                args=Tuple(elems=(Val(kind=Iterator(), dtype=dtype, size=size),)),
-                ret=Val(kind=Value(), dtype=BOOL_DTYPE, size=size),
-            )
-        if node.id in ("plus", "minus", "multiplies", "divides"):
-            v = Val(kind=Value())
-            return Fun(args=Tuple(elems=(v, v)), ret=v)
-        if node.id in ("eq", "less", "greater"):
-            v = Val(kind=Value())
-            ret = Val(kind=Value(), dtype=BOOL_DTYPE, size=v.size)
-            return Fun(args=Tuple(elems=(v, v)), ret=ret)
-        if node.id == "not_":
-            v = Val(kind=Value(), dtype=BOOL_DTYPE)
-            return Fun(args=Tuple(elems=(v,)), ret=v)
-        if node.id in ("and_", "or_"):
-            v = Val(kind=Value(), dtype=BOOL_DTYPE)
-            return Fun(args=Tuple(elems=(v, v)), ret=v)
-        if node.id == "if_":
-            v = Val(kind=Value())
-            c = Val(kind=Value(), dtype=BOOL_DTYPE, size=v.size)
-            return Fun(args=Tuple(elems=(c, v, v)), ret=v)
-        if node.id == "lift":
-            size = Var.fresh()
-            args = ValTuple(kind=Iterator(), dtypes=Var.fresh(), size=size)
-            dtype = Var.fresh()
-            stencil_ret = Val(kind=Value(), dtype=dtype, size=size)
-            lifted_ret = Val(kind=Iterator(), dtype=dtype, size=size)
-            return Fun(
-                args=Tuple(elems=(Fun(args=args, ret=stencil_ret),)),
-                ret=Fun(args=args, ret=lifted_ret),
-            )
-        if node.id == "reduce":
-            dtypes = Var.fresh()
-            size = Var.fresh()
-            acc = Val(kind=Value(), dtype=Var.fresh(), size=size)
-            f_args = PrefixTuple(
-                prefix=acc, others=ValTuple(kind=Value(), dtypes=dtypes, size=size)
-            )
-            ret_args = ValTuple(kind=Iterator(), dtypes=dtypes, size=size)
-            f = Fun(args=f_args, ret=acc)
-            ret = Fun(args=ret_args, ret=acc)
-            return Fun(args=Tuple(elems=(f, acc)), ret=ret)
-        if node.id == "scan":
-            dtypes = Var.fresh()
-            fwd = Val(kind=Value(), dtype=BOOL_DTYPE, size=Scalar())
-            acc = Val(kind=Value(), dtype=Var.fresh(), size=Scalar())
-            f_args = PrefixTuple(
-                prefix=acc, others=ValTuple(kind=Iterator(), dtypes=dtypes, size=Scalar())
-            )
-            ret_args = ValTuple(kind=Iterator(), dtypes=dtypes, size=Column())
-            f = Fun(args=f_args, ret=acc)
-            ret = Fun(args=ret_args, ret=Val(kind=Value(), dtype=acc.dtype, size=Column()))
-            return Fun(args=Tuple(elems=(f, fwd, acc)), ret=ret)
-        if node.id == "domain":
-            args = UniformValTupleVar.fresh(kind=Value(), dtype=NAMED_RANGE_DTYPE, size=Scalar())
-            ret = Val(kind=Value(), dtype=DOMAIN_DTYPE, size=Scalar())
-            return Fun(args=args, ret=ret)
-        if node.id == "named_range":
-            args = Tuple(
-                elems=(
-                    Val(kind=Value(), dtype=AXIS_DTYPE, size=Scalar()),
-                    Val(kind=Value(), dtype=INT_DTYPE, size=Scalar()),
-                    Val(kind=Value(), dtype=INT_DTYPE, size=Scalar()),
-                )
-            )
-            ret = Val(kind=Value(), dtype=NAMED_RANGE_DTYPE, size=Scalar())
-            return Fun(args=args, ret=ret)
+        if node.id in ir.BUILTINS:
+            return _builtin_type(node.id)
 
-        assert node.id not in ir.BUILTINS
         return Var.fresh()
 
     def visit_Literal(self, node, *, constraints, symtypes):
