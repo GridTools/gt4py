@@ -394,25 +394,26 @@ class Renamer:
         dst_parents = self.parents.setdefault(dst, [])
         follow_ups = []
         for node, field, index in nodes:
-            popped = self.parents.pop(node, None)
-            if index is None:
-                setattr(node, field, dst)
-            else:
-                field_list = list(getattr(node, field))
-                field_list[index] = dst
-                setattr(node, field, tuple(field_list))
-
             if isinstance(node, ValTuple) and field == "dtypes" and isinstance(dst, Tuple):
                 tup = Tuple(
-                    elems=tuple(
-                        Val(kind=node.kind, dtype=d, size=node.size) for d in node.dtypes.elems
-                    )
+                    elems=tuple(Val(kind=node.kind, dtype=d, size=node.size) for d in dst.elems)
                 )
                 follow_ups.append((node, tup))
+            elif isinstance(node, PrefixTuple) and field == "others" and isinstance(dst, Tuple):
+                tup = Tuple(elems=(node.prefix,) + dst.elems)
+                follow_ups.append((node, tup))
+            else:
+                popped = self.parents.pop(node, None)
+                if index is None:
+                    setattr(node, field, dst)
+                else:
+                    field_list = list(getattr(node, field))
+                    field_list[index] = dst
+                    setattr(node, field, tuple(field_list))
 
-            dst_parents.append((node, field, index))
-            if popped:
-                self.parents[node] = popped
+                dst_parents.append((node, field, index))
+                if popped:
+                    self.parents[node] = popped
 
         for s, d in follow_ups:
             self.register(d)
