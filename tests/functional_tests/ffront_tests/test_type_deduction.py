@@ -25,6 +25,7 @@ from functional.ffront.fbuiltins import (
     float64,
     int64,
     neighbor_sum,
+    broadcast
 )
 from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError
 from functional.ffront.func_to_foast import FieldOperatorParser
@@ -126,17 +127,17 @@ def test_type_info_basic(symbol_type, expected):
 
 @pytest.mark.parametrize("func_type,args,kwargs,expected", is_callable_cases())
 def test_is_callable(
-    func_type: ct.SymbolType,
-    args: list[ct.SymbolType],
-    kwargs: dict[str, ct.SymbolType],
-    expected: list,
+        func_type: ct.SymbolType,
+        args: list[ct.SymbolType],
+        kwargs: dict[str, ct.SymbolType],
+        expected: list,
 ):
     is_callable = len(expected) == 0
     assert type_info.is_callable(func_type, with_args=args, with_kwargs=kwargs) == is_callable
 
     if len(expected) > 0:
         with pytest.raises(
-            GTTypeError,
+                GTTypeError,
         ) as exc_info:
             type_info.is_callable(
                 func_type, with_args=args, with_kwargs=kwargs, raise_exception=True
@@ -148,7 +149,7 @@ def test_is_callable(
 
 def test_unpack_assign():
     def unpack_explicit_tuple(
-        a: Field[..., float64], b: Field[..., float64]
+            a: Field[..., float64], b: Field[..., float64]
     ) -> tuple[Field[..., float64], Field[..., float64]]:
         tmp_a, tmp_b = (a, b)
         return tmp_a, tmp_b
@@ -193,8 +194,8 @@ def test_adding_bool():
         return a + b
 
     with pytest.raises(
-        FieldOperatorTypeDeductionError,
-        match=(r"Type Field\[\.\.\., dtype=bool\] can not be used in operator '\+'!"),
+            FieldOperatorTypeDeductionError,
+            match=(r"Type Field\[\.\.\., dtype=bool\] can not be used in operator '\+'!"),
     ):
         _ = FieldOperatorParser.apply_to_function(add_bools)
 
@@ -208,11 +209,11 @@ def test_binop_nonmatching_dims():
         return a + b
 
     with pytest.raises(
-        FieldOperatorTypeDeductionError,
-        match=(
-            r"Incompatible dimensions in operator '\+': "
-            r"Field\[\[X\], dtype=float64\] and Field\[\[Y\], dtype=float64\]!"
-        ),
+            FieldOperatorTypeDeductionError,
+            match=(
+                    r"Incompatible dimensions in operator '\+': "
+                    r"Field\[\[X\], dtype=float64\] and Field\[\[Y\], dtype=float64\]!"
+            ),
     ):
         _ = FieldOperatorParser.apply_to_function(nonmatching)
 
@@ -222,8 +223,8 @@ def test_bitopping_float():
         return a & b
 
     with pytest.raises(
-        FieldOperatorTypeDeductionError,
-        match=(r"Type Field\[\.\.\., dtype=float64\] can not be used in operator '\&'! "),
+            FieldOperatorTypeDeductionError,
+            match=(r"Type Field\[\.\.\., dtype=float64\] can not be used in operator '\&'! "),
     ):
         _ = FieldOperatorParser.apply_to_function(float_bitop)
 
@@ -233,8 +234,8 @@ def test_signing_bool():
         return -a
 
     with pytest.raises(
-        FieldOperatorTypeDeductionError,
-        match=r"Incompatible type for unary operator '\-': Field\[\.\.\., dtype=bool\]!",
+            FieldOperatorTypeDeductionError,
+            match=r"Incompatible type for unary operator '\-': Field\[\.\.\., dtype=bool\]!",
     ):
         _ = FieldOperatorParser.apply_to_function(sign_bool)
 
@@ -244,8 +245,8 @@ def test_notting_int():
         return not a
 
     with pytest.raises(
-        FieldOperatorTypeDeductionError,
-        match=r"Incompatible type for unary operator 'not': Field\[\.\.\., dtype=int64\]!",
+            FieldOperatorTypeDeductionError,
+            match=r"Incompatible type for unary operator 'not': Field\[\.\.\., dtype=int64\]!",
     ):
         _ = FieldOperatorParser.apply_to_function(not_int)
 
@@ -328,7 +329,38 @@ def test_mismatched_literals():
         return float32("1.0") + float64("1.0")
 
     with pytest.raises(
-        FieldOperatorTypeDeductionError,
-        match=(r"Incompatible datatypes in operator '\+': float32 and float64"),
+            FieldOperatorTypeDeductionError,
+            match=(r"Incompatible datatypes in operator '\+': float32 and float64"),
     ):
         _ = FieldOperatorParser.apply_to_function(mismatched_lit)
+
+
+def test_broadcast_multi_dim():
+    ADim = Dimension("ADim")
+    BDim = Dimension("BDim")
+    CDim = Dimension("CDim")
+
+    def simple_broadcast(a: Field[[ADim], float64]):
+        return broadcast(a, (ADim, BDim, CDim))
+
+    parsed = FieldOperatorParser.apply_to_function(simple_broadcast)
+
+    expected_dims = [ADim, BDim, CDim]
+
+    assert all([dim in parsed.params[0].type.dims for dim in expected_dims])
+    assert parsed.params[0].id == "a"
+
+
+def test_broadcast_disjoint():
+    ADim = Dimension("ADim")
+    BDim = Dimension("BDim")
+    CDim = Dimension("CDim")
+
+    def disjoint_broadcast(a: Field[[ADim], float64]):
+        return broadcast(a, (BDim, CDim))
+
+    with pytest.raises(
+            FieldOperatorTypeDeductionError,
+            match=r"Expected broadcast dimension is missing",
+    ):
+        _ = FieldOperatorParser.apply_to_function(disjoint_broadcast)

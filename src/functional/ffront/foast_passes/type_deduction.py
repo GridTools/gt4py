@@ -346,6 +346,35 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             type=return_type,
         )
 
+    def _visit_broadcast(self, node: foast.Call, **kwargs):
+        field_type = cast(ct.FieldType, node.args[0].type)
+        broadcast_dims = [cast(ct.DimensionType, elt.type).dim for elt in node.args[1].elts]
+
+        if not set(field_type.dims).issubset(set(broadcast_dims)):
+            raise FieldOperatorTypeDeductionError.from_foast_node(
+                node,
+                msg=f"Incompatible broadcast dimensions in {node.func.id}. Expected "
+                f"broadcast dimension is missing {set(field_type.dims).difference(set(broadcast_dims))}",
+            )
+
+        for bdim in broadcast_dims:
+            if bdim in field_type.dims:
+                continue
+            field_type.dims.append(bdim)
+
+        return_type = ct.FieldType(
+            dims=field_type.dims,
+            dtype=field_type.dtype,
+        )
+
+        return foast.Call(
+            func=node.func,
+            args=node.args,
+            kwargs=node.kwargs,
+            location=node.location,
+            type=return_type,
+        )
+
     def visit_Constant(self, node: foast.Constant, **kwargs) -> foast.Constant:
         if not node.type:
             raise FieldOperatorTypeDeductionError.from_foast_node(
