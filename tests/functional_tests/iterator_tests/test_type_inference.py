@@ -5,8 +5,8 @@ def test_renamer():
     r = ti._Renamer()
     actual = [
         (
-            ti.Box(value=ti.Val(kind=ti.Value(), dtype=ti.Var(idx=0), size=ti.Var(idx=1))),
-            ti.Box(value=ti.Var(idx=0)),
+            ti._Box(value=ti.Val(kind=ti.Value(), dtype=ti.Var(idx=0), size=ti.Var(idx=1))),
+            ti._Box(value=ti.Var(idx=0)),
         )
     ]
     src = ti.Var(idx=0)
@@ -19,8 +19,8 @@ def test_renamer():
     r.rename(src, dst)
     expected = [
         (
-            ti.Box(value=ti.Val(kind=ti.Value(), dtype=ti.Var(idx=1), size=ti.Var(idx=1))),
-            ti.Box(value=ti.Var(idx=1)),
+            ti._Box(value=ti.Val(kind=ti.Value(), dtype=ti.Var(idx=1), size=ti.Var(idx=1))),
+            ti._Box(value=ti.Var(idx=1)),
         )
     ]
     assert actual == expected

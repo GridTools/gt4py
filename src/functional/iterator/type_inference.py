@@ -105,13 +105,6 @@ class LetPolymorphic(DType):
     dtype: DType
 
 
-class Box(eve.Node, unsafe_hash=True):  # type: ignore[call-arg]
-    value: DType
-
-    def __str__(self):
-        return "«" + str(self.value) + "»"
-
-
 def freshen(dtype):
     def indexer(index_map):
         return VarMixin.fresh_index()
@@ -387,10 +380,14 @@ class _Renamer:
             self.rename(s, d)
 
 
+class _Box(eve.Node, unsafe_hash=True):  # type: ignore[call-arg]
+    value: DType
+
+
 class _Unifier:
     def __init__(self, dtype, constraints):
-        self._dtype = Box(value=dtype)
-        self._constraints = [(Box(value=s), Box(value=t)) for s, t in constraints]
+        self._dtype = _Box(value=dtype)
+        self._constraints = [(_Box(value=s), _Box(value=t)) for s, t in constraints]
 
         self._renamer = _Renamer()
         self._renamer.register(self._dtype)
@@ -417,8 +414,8 @@ class _Unifier:
         self._renamer.rename(x, y)
 
     def _add_constraint(self, x, y):
-        x = Box(value=x)
-        y = Box(value=y)
+        x = _Box(value=x)
+        y = _Box(value=y)
         self._renamer.register(x)
         self._renamer.register(y)
         self._constraints.append((x, y))
