@@ -1,3 +1,9 @@
+GT4Py: GridTools for Python
+===========================
+
+Python library for generating high-performance implementations of
+stencil kernels from a DSL.
+
 |tox| |format|
 
 .. |tox| image:: https://github.com/GridTools/gt4py/workflows/Tox%20(CPU%20only)/badge.svg?event=schedule
@@ -5,148 +11,101 @@
 .. |format| image:: https://github.com/GridTools/gt4py/workflows/Formatting%20&%20compliance/badge.svg?branch=master
    :alt:
 
+⚡️ Quick Start
+--------------
 
-GT4Py: GridTools for Python
-===========================
+GT4Py uses the standard Python packaging method, and can be installed
+using `pip`.
+However, it is not yet released on PyPI, so users have to point to the
+git repository to install it.
 
-WARNING!
---------
+As always, it is recommended to install the package in a virtual
+environment.
 
-GT4Py is still under development and is in an incomplete state. While
-GT4Py has been proven to work for some basic applications already, we
-are working actively on making GT4Py suitable for more use cases by
-adding features, improving performance as well as reliability and adding
-a thorough documentation. GT4Py will be changing for the time being. New
-features will be implemented, APIs may change and dependencies will be
-added.
+.. code-block:: bash
 
-
-Description
------------
-
-GT4Py is a Python library for generating high performance
-implementations of stencil kernels from a high-level definition using
-regular Python functions. GT4Py uses the `GridTools
-Framework <https://github.com/GridTools/gridtools>`__ for a native
-implementation of the kernel, but other code-generating backends are
-also available.
-
-The GridTools framework is a set of libraries and utilities to develop
-performance portable applications in the area of weather and climate. To
-achieve the goal of performance portability, the user-code is written in
-a generic form which is then optimized for a given architecture at
-compile-time. The core of GridTools is the stencil composition module
-which implements a DSL embedded in C++ for stencils and stencil-like
-patterns. Further, GridTools provides modules for halo exchanges,
-boundary conditions, data management and bindings to C and Fortran.
-
-
-Installation instructions
--------------------------
-
-GT4Py contains a standard ``setup.py`` installation script that might be
-installed as usual with *pip*. Additional commands are provided to
-install and remove the GridTools C++ sources, which are not contained in
-the package.
-
-**IMPORTANT:** if the user provides a custom installation of GridTools
-C++ sources, it should be compatible with the latest stable release of
-GridTools, which is the version targeted by GT4Py. Note that a
-compilation problem may also appear if there is a different GridTools
-C++ version installed in a standard prefix (e.g. ``/usr/local``) which
-could be included in user-provided or standard ``setuptools`` include
-paths (for example if *Boost* is installed in the same prefix).
-
-As usual in Python, we strongly recommended to create a new virtual
-environment for any project:
-
-::
-
-    # Create a virtual environment using the 'venv' module
-    python -m venv path_for_the_new_venv
-
-    # Activate the virtual environment and make sure that 'wheel' is installed
-    source path_for_the_new_venv/bin/activate
-    pip install --upgrade wheel
-
-Recommended installation for regular users
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-If you are not planning to modify GT4Py sources, the easiest way to
-complete the installation would be:
-
-::
-
-    # First, clone the repository
-    git clone https://github.com/gridtools/gt4py.git
-
-    # Then install the Python package directly from the local repository
+    $ git clone https://github.com/GridTools/gt4py.git && cd gt4py
+    $ python -m venv venv
+    $ source venv/bin/activate
+    $ pip install --upgrade setuptools wheel pip
     # For the CUDA backends add the '[cudaXX]' optional dependency
-    # (XX = 90, 91, 92, 100 or 101 depending on CUDA version 9.0, 9.1, ...)
-    pip install -e ./gt4py     # pip install -e ./gt4py[cudaXX]
+    $ pip install -e ./[cuda11]
 
-Alternatively, if you do not need to build the documentation or look at
-the examples, you could install GT4Py directly from the GitHub
-repository:
+There are notebooks in the `examples/` directory that can be run using IPython
+notebooks on Jupyter.
 
-::
+.. code-block:: bash
 
-    # Install the package directly from GitHub:
-    # For the CUDA backends add the '[cudaXX]' optional dependency
-    # (XX = 90, 91, 92, 100 or 101 depending on CUDA version 9.0, 9.1, ...)
-    pip install git+https://github.com/gridtools/gt4py.git
-    # pip install git+https://github.com/gridtools/gt4py.git#egg=gt4py[cudaXX]
+   $ pip install jupyterlab
+   $ jupyter-lab
 
-In either case, you need to run a post-installation script to install
-GridTools C++ sources.The new ``gtc:`` backends require GridTools v2,
-while the old GT4Py ``gt:`` backends require GridTools v1:
+In order to run the unit and integration tests in `tests/`, there are
+a couple options:
 
-::
+1. Use tox: `pip install tox && tox -r -e py38-all-cpu`
+2. Install the development requirements: `pip install -r requirements-dev.txt`,
+   then `pytest` can execute the tests directly.
 
-    # Run the command to install GridTools v1.x C++ sources
-    python -m gt4py.gt_src_manager install -m 1
 
-    # Run the command to install GridTools v2.x C++ sources
-    python -m gt4py.gt_src_manager install -m 2
+📖 Description
+--------------
 
-Note that ``pip`` will not delete GridTools C++ sources when
-uninstalling the package, so make sure you run the remove command in
-advance:
+GT4Py is a Python library for expressing finite-difference stencils
+related to weather and climate modeling using a high-level
+domain-specific language (DSL) using Python functions.
+These functions are compiled by the framework into high-performance
+implementations for CPUs and GPUs.
 
-::
+The DSL expresses the stencils using the parallel model from the
+`GridTools C++ Framework <https://github.com/GridTools/gridtools>`__,
+and uses it, as well as other backends, for optimized code generation.
+In this Cartesian parallel model there are always three dimensions,
+and the vertical (`K`) is treated separately from the horizontal axes
+(`I`, `J`), which are iterated over in parallel.
 
-    python -m gt4py.gt_src_manager remove  # -m 1 and/or -m 2
-    pip uninstall gt4py
+Stencil expressions are Cartesian offsets from a center index, as it
+would be written algorithmically.
+List of these stencil *statements* form *computations*, and can be specialized
+in the vertical index to account for boundaries, or accumulate fields.
 
-Recommended installation for developers
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-For GT4Py developers and advanced users, it is recommended to clone the
-repository and use an *editable* installation of GT4Py:
+🚜 Installation
+---------------
 
-::
+The base version of `gt4py` does not have dependencies other than the
+Python packages included in the `setup.cfg` which are automatically
+installed.
+The GridTools backends however require
+1. The `GridTools <https://github.com/GridTools/gridtools>`__ C++ sources
+2. `Boost <https://www.boost.org/>`__ a dependency of GridTools, which
+   needs to be installed by the user.
 
-    # First, clone the repository
-    git clone https://github.com/gridtools/gt4py.git
+GridTools is downloaded if needed.
 
-    # Then install the Python package directly from the local repository
-    # adding the '-e' flag to get an editable installation
-    # For the CUDA backends add the '[cudaXX]' optional dependency
-    # (XX = 90, 91, 92, 100 or 101 depending on CUDA version 9.0, 9.1, ...)
-    pip install -e ./gt4py     # pip install -e ./gt4py[cudaXX]
+Options
+~~~~~~~
 
-    # Run the command to install GridTools C++ sources
-    python -m gt4py.gt_src_manager install
+If GridTools or Boost are not found in the compiler's standard include
+path, or a custom version is desired, then a couple configuration
+environment variables will allow the compiler to use them:
 
-    # Install the pre-commit checks
-    pip install pre-commit
-    # You need to have a python3.6 interpreter in your PATH for the following:
-    pre-commit install-hooks  # in the repo directory
-    # But you can develop using any version >= 3.6
+- `GT2_INCLUDE_PATH`: Path to the GridTools v2 (default) installation.
+- `BOOST_ROOT`: Path to the boost headers.
 
+Other commonly used environment variables are:
+
+- `CUDA_ARCH`: Set the compute capability of the NVIDIA GPU if it is not
+  detected automatically by `cupy`.
+- `CXX`: Set the C++ compiler.
+- `GT_CACHE_DIR_NAME`: Name of the compiler's cache directory
+  (defaults to `.gt_cache`)
+- `GT_CACHE_ROOT`: Path to the compiler cache (defaults to `./`)
+
+More options and details in
+`config.py <https://github.com/GridTools/gt4py/blob/master/src/gt4py/config.py>`__.
 
 Documentation
--------------
+~~~~~~~~~~~~~
 
 A proper documentation is in the works. Please refer to the jupyter
 notebooks in the examples folder of this repository for examples of how
@@ -156,31 +115,39 @@ instructions in `Recommended installation for
 developers <#recommended-installation-for-developers>`__) and then
 install the additional development requirements with:
 
-::
+.. code-block:: bash
 
-    pip install -r ./gt4py/requirements-dev.txt
+    $ pip install -r ./gt4py/requirements-dev.txt
 
 and then build the docs with:
 
-::
+.. code-block:: bash
 
-    cd gt4py/docs
-    make html  # run 'make help' for a list of targets
+    $ cd gt4py/docs
+    $ make html  # run 'make help' for a list of targets
 
-Development roadmap
--------------------
+Development
+~~~~~~~~~~~
 
-A short overview of the new features and changes planned for the coming
-weeks & months.
+For GT4Py developers and advanced users, it is recommended to clone the
+repository and use an *editable* installation of GT4Py:
 
--  Update documentation (API reference, tutorial, notebooks and
-   examples)
--  Missing features:
+.. code-block:: bash
 
-   +  Support for unstructured grids (GTScript extensions)
-   +  Support for run-time values in interval definitions (run-time
-      splitters)
-   +  Support for different field layouts (storages masks)
-   +  Support for OOP-based stencil definitions
-   +  Support for boundary condition functions
-   +  Support for proper function & stencil calls
+   $ git clone https://github.com/gridtools/gt4py.git
+   $ pip install -e ./     # pip install -e ./[cudaXX] for GPU support
+   $ pip install -r requirements-dev.txt
+   $ pre-commit install-hooks
+
+Dependencies for running tests locally and for linting and formatting
+code are listed in `requirements.dev.txt`, so these should be installedj
+
+
+⚠️ License
+---------
+
+GT4Py is licensed under the terms of the
+`GPLv3 <https://github.com/GridTools/gt4py/blob/master/LICENSE.txt>`__.
+Of particular note is that this requires any code that imports `gt4py` to
+carry a GPL license.
+
