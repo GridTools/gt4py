@@ -105,12 +105,12 @@ class LetPolymorphic(DType):
     dtype: DType
 
 
-def freshen(dtype):
+def _freshen(dtype):
     def indexer(index_map):
         return VarMixin.fresh_index()
 
     index_map = dict()
-    return _ReindexVars(indexer).visit(dtype, index_map=index_map)
+    return _VarReindexer(indexer).visit(dtype, index_map=index_map)
 
 
 BOOL_DTYPE = Primitive(name="bool")  # type: ignore [call-arg]
@@ -121,12 +121,12 @@ NAMED_RANGE_DTYPE = Primitive(name="named_range")  # type: ignore [call-arg]
 DOMAIN_DTYPE = Primitive(name="domain")  # type: ignore [call-arg]
 
 
-class TypeInferrer(eve.NodeTranslator):
+class _TypeInferrer(eve.NodeTranslator):
     def visit_SymRef(self, node, *, constraints, symtypes):
         if node.id in symtypes:
             res = symtypes[node.id]
             if isinstance(res, LetPolymorphic):
-                return freshen(res.dtype)
+                return _freshen(res.dtype)
             return res
         if node.id == "deref":
             dtype = Var.fresh()
@@ -314,7 +314,7 @@ class _FreeVariables(eve.NodeVisitor):
             free_variables.add(node)
 
 
-def free_variables(x):
+def _free_variables(x):
     fv = set()
     _FreeVariables().visit(x, free_variables=fv)
     return fv
@@ -346,32 +346,38 @@ class _Renamer:
 
         collect_parents(dtype)
 
-    def rename(self, src, dst):
-        nodes = self.parents.pop(src, None)
+    def rename(self, node, replacement):
+        nodes = self.parents.pop(node, None)
         if not nodes:
             return
 
-        dst_parents = self.parents.setdefault(dst, [])
+        rep_parents = self.parents.setdefault(replacement, [])
         follow_ups = []
         for node, field, index in nodes:
-            if isinstance(node, ValTuple) and field == "dtypes" and isinstance(dst, Tuple):
+            if isinstance(node, ValTuple) and field == "dtypes" and isinstance(replacement, Tuple):
                 tup = Tuple(
-                    elems=tuple(Val(kind=node.kind, dtype=d, size=node.size) for d in dst.elems)
+                    elems=tuple(
+                        Val(kind=node.kind, dtype=d, size=node.size) for d in replacement.elems
+                    )
                 )
                 follow_ups.append((node, tup))
-            elif isinstance(node, PrefixTuple) and field == "others" and isinstance(dst, Tuple):
-                tup = Tuple(elems=(node.prefix,) + dst.elems)
+            elif (
+                isinstance(node, PrefixTuple)
+                and field == "others"
+                and isinstance(replacement, Tuple)
+            ):
+                tup = Tuple(elems=(node.prefix,) + replacement.elems)
                 follow_ups.append((node, tup))
             else:
                 popped = self.parents.pop(node, None)
                 if index is None:
-                    setattr(node, field, dst)
+                    setattr(node, field, replacement)
                 else:
                     field_list = list(getattr(node, field))
-                    field_list[index] = dst
+                    field_list[index] = replacement
                     setattr(node, field, tuple(field_list))
 
-                dst_parents.append((node, field, index))
+                rep_parents.append((node, field, index))
                 if popped:
                     self.parents[node] = popped
 
@@ -426,7 +432,7 @@ class _Unifier:
             return True
 
         if isinstance(s, Var):
-            assert s not in free_variables(t)
+            assert s not in _free_variables(t)
             self._rename(s, t)
             return True
 
@@ -449,13 +455,13 @@ class _Unifier:
             return True
 
         if isinstance(s, PartialTupleVar) and isinstance(t, Tuple):
-            assert s not in free_variables(t)
+            assert s not in _free_variables(t)
             for i, x in zip(s.elem_indices, s.elem_values):
                 self._add_constraint(x, t.elems[i])
             return True
 
         if isinstance(s, PartialTupleVar) and isinstance(t, PartialTupleVar):
-            assert s not in free_variables(t) and t not in free_variables(s)
+            assert s not in _free_variables(t) and t not in _free_variables(s)
             se = dict(zip(s.elem_indices, s.elem_values))
             te = dict(zip(t.elem_indices, t.elem_values))
             for i in set(se) & set(te):
@@ -469,13 +475,13 @@ class _Unifier:
             return True
 
         if isinstance(s, PrefixTuple) and isinstance(t, Tuple):
-            assert s not in free_variables(t)
+            assert s not in _free_variables(t)
             self._add_constraint(s.prefix, t.elems[0])
             self._add_constraint(s.others, Tuple(elems=t.elems[1:]))
             return True
 
         if isinstance(s, PrefixTuple) and isinstance(t, PrefixTuple):
-            assert s not in free_variables(t) and t not in free_variables(s)
+            assert s not in _free_variables(t) and t not in _free_variables(s)
             self._add_constraint(s.prefix, t.prefix)
             self._add_constraint(s.others, t.others)
             return True
@@ -489,14 +495,14 @@ class _Unifier:
             return True
 
         if isinstance(s, ValTuple) and isinstance(t, ValTuple):
-            assert s not in free_variables(t) and t not in free_variables(s)
+            assert s not in _free_variables(t) and t not in _free_variables(s)
             self._add_constraint(s.kind, t.kind)
             self._add_constraint(s.dtypes, t.dtypes)
             self._add_constraint(s.size, t.size)
             return True
 
         if isinstance(s, UniformValTupleVar) and isinstance(t, Tuple):
-            assert s not in free_variables(t)
+            assert s not in _free_variables(t)
             self._rename(s, t)
             elem_dtype = Val(kind=s.kind, dtype=s.dtype, size=s.size)
             for e in t.elems:
@@ -522,7 +528,7 @@ def unify(dtype, constraints):
     return unifier.unify()
 
 
-class _ReindexVars(eve.ReusingNodeTranslator):
+class _VarReindexer(eve.ReusingNodeTranslator):
     def __init__(self, indexer):
         super().__init__()
         self.indexer = indexer
@@ -543,14 +549,14 @@ def reindex_vars(dtype):
         return len(index_map)
 
     index_map = dict()
-    return _ReindexVars(indexer).visit(dtype, index_map=index_map)
+    return _VarReindexer(indexer).visit(dtype, index_map=index_map)
 
 
 def infer(expr, symtypes=None):
     if symtypes is None:
         symtypes = dict()
     constraints = set()
-    dtype = TypeInferrer().visit(expr, constraints=constraints, symtypes=symtypes)
+    dtype = _TypeInferrer().visit(expr, constraints=constraints, symtypes=symtypes)
     unified = unify(dtype, constraints)
     return reindex_vars(unified)
 
