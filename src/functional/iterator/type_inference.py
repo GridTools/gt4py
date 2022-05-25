@@ -3,17 +3,17 @@ from eve.utils import noninstantiable
 from functional.iterator import ir
 
 
-class VarMixin:
+class _VarMixin:
     _counter = -1
 
     @staticmethod
     def fresh_index():
-        VarMixin._counter += 1
-        return VarMixin._counter
+        _VarMixin._counter += 1
+        return _VarMixin._counter
 
     @classmethod
     def fresh(cls, **kwargs):
-        return cls(idx=VarMixin.fresh_index(), **kwargs)
+        return cls(idx=_VarMixin.fresh_index(), **kwargs)
 
 
 @noninstantiable
@@ -22,7 +22,7 @@ class DType(eve.Node, unsafe_hash=True):  # type: ignore[call-arg]
         return pformat(self)
 
 
-class Var(DType, VarMixin):
+class Var(DType, _VarMixin):
     idx: int
 
 
@@ -30,7 +30,7 @@ class Tuple(DType):
     elems: tuple[DType, ...]
 
 
-class PartialTupleVar(DType, VarMixin):
+class PartialTupleVar(DType, _VarMixin):
     idx: int
     elem_indices: tuple[int, ...]
     elem_values: tuple[DType, ...]
@@ -58,7 +58,7 @@ class ValTuple(DType):
     size: DType = eve.field(default_factory=Var.fresh)
 
 
-class UniformValTupleVar(DType, VarMixin):
+class UniformValTupleVar(DType, _VarMixin):
     idx: int
     kind: DType = eve.field(default_factory=Var.fresh)
     dtype: DType = eve.field(default_factory=Var.fresh)
@@ -107,7 +107,7 @@ class LetPolymorphic(DType):
 
 def _freshen(dtype):
     def indexer(index_map):
-        return VarMixin.fresh_index()
+        return _VarMixin.fresh_index()
 
     index_map = dict()
     return _VarReindexer(indexer).visit(dtype, index_map=index_map)
@@ -310,7 +310,7 @@ class _TypeInferrer(eve.NodeTranslator):
 class _FreeVariables(eve.NodeVisitor):
     def visit_DType(self, node, *, free_variables):
         self.generic_visit(node, free_variables=free_variables)
-        if isinstance(node, VarMixin):
+        if isinstance(node, _VarMixin):
             free_variables.add(node)
 
 
@@ -550,7 +550,7 @@ class _VarReindexer(eve.ReusingNodeTranslator):
 
     def visit_DType(self, node, *, index_map):
         node = self.generic_visit(node, index_map=index_map)
-        if isinstance(node, VarMixin):
+        if isinstance(node, _VarMixin):
             new_index = index_map.setdefault(node.idx, self.indexer(index_map))
             new_values = {
                 k: (new_index if k == "idx" else v) for k, v in node.iter_children_items()
