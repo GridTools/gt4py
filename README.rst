@@ -39,8 +39,7 @@ notebooks on Jupyter.
    $ pip install jupyterlab
    $ jupyter-lab
 
-In order to run the unit and integration tests in ``tests/``, there are
-a couple options:
+There are two options to run the unit and integration tests in ``tests/``:
 
 1. Use tox: ``pip install tox && tox -r -e py38-all-cpu``.
 2. Install the development requirements: ``pip install -r requirements-dev.txt``,
@@ -63,11 +62,20 @@ In this Cartesian parallel model there are always three dimensions,
 and the vertical (``K``) is treated separately from the horizontal axes
 (``I``, ``J``), which are iterated over in parallel.
 
-Stencil expressions are Cartesian offsets from a center index, as it
+The *gtscript* DSL expresses Cartesian offsets from a center index, as it
 would be written algorithmically.
 List of these stencil *statements* form *computations*, and can be specialized
 in the vertical index to account for boundaries, or accumulate fields.
 
+In order to execute stencils, arrays are required.
+For this, GT4Py has functions which create storages for the given stencil backend.
+The following backends are supported:
+
+- ``numpy``: Pure-Python backend
+- ``gt:cpu_ifirst``: GridTools C++ CPU backend using ``I``-first data ordering
+- ``gt:cpu_kfirst``: GridTools C++ CPU backend using ``K``-first data ordering
+- ``gt:gpu``: GridTools backend for CUDA
+- ``cuda``: CUDA backend minimally using utilities from GridTools
 
 🚜 Installation
 ---------------
@@ -82,6 +90,7 @@ The GridTools backends however require
    which needs to be installed by the user.
 
 The correct version of GridTools is downloaded automatically when needed.
+
 
 Options
 ~~~~~~~
@@ -104,6 +113,7 @@ Other commonly used environment variables are:
 
 More options and details in
 `config.py <https://github.com/GridTools/gt4py/blob/master/src/gt4py/config.py>`__.
+
 
 Documentation
 ~~~~~~~~~~~~~
@@ -145,6 +155,6 @@ code are listed in `requirements.dev.txt`, so these should be installedj
 
 GT4Py is licensed under the terms of the
 `GPLv3 <https://github.com/GridTools/gt4py/blob/master/LICENSE.txt>`__.
-Of particular note is that this requires any code that imports `gt4py` to
-carry a GPL license.
+Note that this requires any code that imports this library to be
+developed in the open and use GPL.
 
