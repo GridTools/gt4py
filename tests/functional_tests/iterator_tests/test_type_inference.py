@@ -3,15 +3,19 @@ from functional.iterator import ir, type_inference as ti
 
 def test_rename():
     r = ti.Renamer()
-    testee = [
+    actual = [
         (
             ti.Box(value=ti.Val(kind=ti.Value(), dtype=ti.Var(idx=0), size=ti.Var(idx=1))),
             ti.Box(value=ti.Var(idx=0)),
         )
     ]
-    actual = [(r.register(s), r.register(t)) for s, t in testee]
-    src = r.register(ti.Var(idx=0))
-    dst = r.register(ti.Var(idx=1))
+    src = ti.Var(idx=0)
+    dst = ti.Var(idx=1)
+    for s, t in actual:
+        r.register(s)
+        r.register(t)
+    r.register(src)
+    r.register(dst)
     r.rename(src, dst)
     expected = [
         (

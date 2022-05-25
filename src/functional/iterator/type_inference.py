@@ -371,19 +371,20 @@ class Renamer:
         self.parents = dict()
 
     def register(self, dtype):
-        def collect(node):
+        def collect_parents(node):
             for field, child in node.iter_children_items():
                 if isinstance(child, DType):
                     self.parents.setdefault(child, []).append((node, field, None))
-                    collect(child)
+                    collect_parents(child)
                 elif isinstance(child, tuple):
                     for i, c in enumerate(child):
                         if isinstance(c, DType):
                             self.parents.setdefault(c, []).append((node, field, i))
-                            collect(c)
+                            collect_parents(c)
+                else:
+                    assert isinstance(child, (int, str))
 
-        collect(dtype)
-        return dtype
+        collect_parents(dtype)
 
     def rename(self, src, dst):
         nodes = self.parents.pop(src, None)
@@ -402,25 +403,19 @@ class Renamer:
                 setattr(node, field, tuple(field_list))
 
             if isinstance(node, ValTuple) and field == "dtypes" and isinstance(dst, Tuple):
-                follow_ups.append(
-                    (
-                        node,
-                        self.register(
-                            Tuple(
-                                elems=tuple(
-                                    Val(kind=node.kind, dtype=d, size=node.size)
-                                    for d in node.dtypes.elems
-                                )
-                            )
-                        ),
+                tup = Tuple(
+                    elems=tuple(
+                        Val(kind=node.kind, dtype=d, size=node.size) for d in node.dtypes.elems
                     )
                 )
+                follow_ups.append((node, tup))
 
             dst_parents.append((node, field, index))
             if popped:
                 self.parents[node] = popped
 
         for s, d in follow_ups:
+            self.register(d)
             self.rename(s, d)
 
 
@@ -432,13 +427,15 @@ def handle_constraint(constraint, dtype, constraints, renamer):  # noqa: C901
         return dtype, constraints
 
     def rename(x, y):
-        x = renamer.register(x)
-        y = renamer.register(y)
+        renamer.register(x)
+        renamer.register(y)
         renamer.rename(x, y)
 
     def add_constraint(x, y):
-        x = renamer.register(Box(value=x))
-        y = renamer.register(Box(value=y))
+        x = Box(value=x)
+        y = Box(value=y)
+        renamer.register(x)
+        renamer.register(y)
         constraints.append((x, y))
 
     if isinstance(s, Var):
@@ -533,10 +530,12 @@ def unify(dtype, constraints):
     del memo
 
     renamer = Renamer()
-    dtype = renamer.register(Box(value=dtype))
-    constraints = [
-        (renamer.register(Box(value=s)), renamer.register(Box(value=t))) for s, t in constraints
-    ]
+    dtype = Box(value=dtype)
+    renamer.register(dtype)
+    constraints = [(Box(value=s), Box(value=t)) for s, t in constraints]
+    for s, t in constraints:
+        renamer.register(s)
+        renamer.register(t)
 
     while constraints:
         c = constraints.pop()
