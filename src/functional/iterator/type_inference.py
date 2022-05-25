@@ -346,42 +346,57 @@ class _Renamer:
 
         collect_parents(dtype)
 
+    @staticmethod
+    def _val_tuple_will_resolve_to_tuple(node, field, replacement):
+        return isinstance(node, ValTuple) and field == "dtypes" and isinstance(replacement, Tuple)
+
+    @staticmethod
+    def _resolve_val_tuple(node, replacement):
+        return Tuple(
+            elems=tuple(Val(kind=node.kind, dtype=d, size=node.size) for d in replacement.elems)
+        )
+
+    @staticmethod
+    def _prefix_tuple_will_resolve_to_tuple(node, field, replacement):
+        return (
+            isinstance(node, PrefixTuple) and field == "others" and isinstance(replacement, Tuple)
+        )
+
+    @staticmethod
+    def _resolve_prefix_tuple(node, replacement):
+        return Tuple(elems=(node.prefix,) + replacement.elems)
+
+    def _update_node(self, node, field, index, replacement):
+        popped = self.parents.pop(node, None)
+        if index is None:
+            setattr(node, field, replacement)
+        else:
+            field_list = list(getattr(node, field))
+            field_list[index] = replacement
+            setattr(node, field, tuple(field_list))
+
+        self.parents.setdefault(replacement, []).append((node, field, index))
+        if popped:
+            self.parents[node] = popped
+
     def rename(self, node, replacement):
-        nodes = self.parents.pop(node, None)
-        if not nodes:
+        try:
+            nodes = self.parents.pop(node)
+        except KeyError:
             return
 
-        rep_parents = self.parents.setdefault(replacement, [])
-        follow_ups = []
+        follow_up_renames = []
         for node, field, index in nodes:
-            if isinstance(node, ValTuple) and field == "dtypes" and isinstance(replacement, Tuple):
-                tup = Tuple(
-                    elems=tuple(
-                        Val(kind=node.kind, dtype=d, size=node.size) for d in replacement.elems
-                    )
-                )
-                follow_ups.append((node, tup))
-            elif (
-                isinstance(node, PrefixTuple)
-                and field == "others"
-                and isinstance(replacement, Tuple)
-            ):
-                tup = Tuple(elems=(node.prefix,) + replacement.elems)
-                follow_ups.append((node, tup))
+            if self._val_tuple_will_resolve_to_tuple(node, field, replacement):
+                tup = self._resolve_val_tuple(node, replacement)
+                follow_up_renames.append((node, tup))
+            elif self._prefix_tuple_will_resolve_to_tuple(node, field, replacement):
+                tup = self._resolve_prefix_tuple(node, replacement)
+                follow_up_renames.append((node, tup))
             else:
-                popped = self.parents.pop(node, None)
-                if index is None:
-                    setattr(node, field, replacement)
-                else:
-                    field_list = list(getattr(node, field))
-                    field_list[index] = replacement
-                    setattr(node, field, tuple(field_list))
+                self._update_node(node, field, index, replacement)
 
-                rep_parents.append((node, field, index))
-                if popped:
-                    self.parents[node] = popped
-
-        for s, d in follow_ups:
+        for s, d in follow_up_renames:
             self.register(d)
             self.rename(s, d)
 
