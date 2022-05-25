@@ -1,6 +1,27 @@
 from functional.iterator import ir, type_inference as ti
 
 
+def test_rename():
+    r = ti.Renamer()
+    testee = [
+        (
+            ti.Box(value=ti.Val(kind=ti.Value(), dtype=ti.Var(idx=0), size=ti.Var(idx=1))),
+            ti.Box(value=ti.Var(idx=0)),
+        )
+    ]
+    actual = [(r.register(s), r.register(t)) for s, t in testee]
+    src = r.register(ti.Var(idx=0))
+    dst = r.register(ti.Var(idx=1))
+    r.rename(src, dst)
+    expected = [
+        (
+            ti.Box(value=ti.Val(kind=ti.Value(), dtype=ti.Var(idx=1), size=ti.Var(idx=1))),
+            ti.Box(value=ti.Var(idx=1)),
+        )
+    ]
+    assert actual == expected
+
+
 def test_sym_ref():
     testee = ir.SymRef(id="x")
     expected = ti.Var(idx=0)
@@ -206,7 +227,9 @@ def test_tuple_get_in_lambda():
             elems=(
                 ti.Val(
                     kind=ti.Var(idx=0),
-                    dtype=ti.PartialTupleVar(idx=2, elems=((1, ti.Var(idx=1)),)),
+                    dtype=ti.PartialTupleVar(
+                        idx=2, elem_indices=(1,), elem_values=(ti.Var(idx=1),)
+                    ),
                     size=ti.Var(idx=3),
                 ),
             )
@@ -490,7 +513,7 @@ def test_pformat():
     assert ti.pformat(vs[0]) == "T₀"
     assert ti.pformat(ti.Tuple(elems=tuple(vs[:2]))) == "(T₀, T₁)"
     assert (
-        ti.pformat(ti.PartialTupleVar(idx=0, elems=((1, vs[0]), (3, vs[1]))))
+        ti.pformat(ti.PartialTupleVar(idx=0, elem_indices=(1, 3), elem_values=(vs[0], vs[1])))
         == "(_, T₀, _, T₁, …)₀"
     )
     assert ti.pformat(ti.PrefixTuple(prefix=vs[0], others=vs[1])) == "T₀:T₁"

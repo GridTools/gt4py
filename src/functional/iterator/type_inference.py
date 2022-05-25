@@ -17,7 +17,7 @@ class VarMixin:
 
 
 @noninstantiable
-class DType(eve.FrozenNode):
+class DType(eve.Node, unsafe_hash=True):  # type: ignore[call-arg]
     def __str__(self) -> str:
         return pformat(self)
 
@@ -32,7 +32,8 @@ class Tuple(DType):
 
 class PartialTupleVar(DType, VarMixin):
     idx: int
-    elems: tuple[tuple[int, DType], ...]
+    elem_indices: tuple[int, ...]
+    elem_values: tuple[DType, ...]
 
 
 class PrefixTuple(DType):
@@ -102,6 +103,13 @@ class Fencil(DType):
 
 class LetPolymorphic(DType):
     dtype: DType
+
+
+class Box(eve.Node, unsafe_hash=True):  # type: ignore[call-arg]
+    value: DType
+
+    def __str__(self):
+        return "«" + str(self.value) + "»"
 
 
 def freshen(dtype):
@@ -242,7 +250,11 @@ class TypeInferrer(eve.NodeTranslator):
                 kind = Var.fresh()
                 elem = Var.fresh()
                 size = Var.fresh()
-                val = Val(kind=kind, dtype=PartialTupleVar.fresh(elems=((idx, elem),)), size=size)
+                val = Val(
+                    kind=kind,
+                    dtype=PartialTupleVar.fresh(elem_indices=(idx,), elem_values=(elem,)),
+                    size=size,
+                )
                 constraints.add((tup, val))
                 return Val(kind=kind, dtype=elem, size=size)
             if node.fun.id == "shift":
@@ -348,40 +360,114 @@ def free_variables(x):
     return fv
 
 
-def handle_constraint(constraint, dtype, constraints):  # noqa: C901
+class _Dedup(eve.ReusingNodeTranslator):
+    def visit(self, node, *, memo):
+        node = super().visit(node, memo=memo)
+        return memo.setdefault(node, node)
+
+
+class Renamer:
+    def __init__(self):
+        self.parents = dict()
+
+    def register(self, dtype):
+        def collect(node):
+            for field, child in node.iter_children_items():
+                if isinstance(child, DType):
+                    self.parents.setdefault(child, []).append((node, field, None))
+                    collect(child)
+                elif isinstance(child, tuple):
+                    for i, c in enumerate(child):
+                        if isinstance(c, DType):
+                            self.parents.setdefault(c, []).append((node, field, i))
+                            collect(c)
+
+        collect(dtype)
+        return dtype
+
+    def rename(self, src, dst):
+        nodes = self.parents.pop(src, None)
+        if not nodes:
+            return
+
+        dst_parents = self.parents.setdefault(dst, [])
+        follow_ups = []
+        for node, field, index in nodes:
+            popped = self.parents.pop(node, None)
+            if index is None:
+                setattr(node, field, dst)
+            else:
+                field_list = list(getattr(node, field))
+                field_list[index] = dst
+                setattr(node, field, tuple(field_list))
+
+            if isinstance(node, ValTuple) and field == "dtypes" and isinstance(dst, Tuple):
+                follow_ups.append(
+                    (
+                        node,
+                        self.register(
+                            Tuple(
+                                elems=tuple(
+                                    Val(kind=node.kind, dtype=d, size=node.size)
+                                    for d in node.dtypes.elems
+                                )
+                            )
+                        ),
+                    )
+                )
+
+            dst_parents.append((node, field, index))
+            if popped:
+                self.parents[node] = popped
+
+        for s, d in follow_ups:
+            self.rename(s, d)
+
+
+def handle_constraint(constraint, dtype, constraints, renamer):  # noqa: C901
     s, t = constraint
+    s = s.value
+    t = t.value
     if s == t:
         return dtype, constraints
 
+    def rename(x, y):
+        x = renamer.register(x)
+        y = renamer.register(y)
+        renamer.rename(x, y)
+
+    def add_constraint(x, y):
+        x = renamer.register(Box(value=x))
+        y = renamer.register(Box(value=y))
+        constraints.append((x, y))
+
     if isinstance(s, Var):
         assert s not in free_variables(t)
-        r = rename(s, t)
-        dtype = r(dtype)
-        constraints = r(constraints)
+        rename(s, t)
         return dtype, constraints
 
     if isinstance(s, Fun) and isinstance(t, Fun):
-        constraints.add((s.args, t.args))
-        constraints.add((s.ret, t.ret))
+        add_constraint(s.args, t.args)
+        add_constraint(s.ret, t.ret)
         return dtype, constraints
 
     if isinstance(s, Val) and isinstance(t, Val):
-        constraints.add((s.kind, t.kind))
-        constraints.add((s.dtype, t.dtype))
-        constraints.add((s.size, t.size))
+        add_constraint(s.kind, t.kind)
+        add_constraint(s.dtype, t.dtype)
+        add_constraint(s.size, t.size)
         return dtype, constraints
 
     if isinstance(s, Tuple) and isinstance(t, Tuple):
         if len(s.elems) != len(t.elems):
             raise TypeError(f"Can not satisfy constraint {s} = {t}")
-        for c in zip(s.elems, t.elems):
-            constraints.add(c)
+        for lhs, rhs in zip(s.elems, t.elems):
+            add_constraint(lhs, rhs)
         return dtype, constraints
 
     if isinstance(s, PartialTupleVar) and isinstance(t, Tuple):
         assert s not in free_variables(t)
-        for i, x in s.elems:
-            constraints.add((x, t.elems[i]))
+        for i, x in zip(s.elem_indices, s.elem_values):
+            add_constraint(x, t.elems[i])
         return dtype, constraints
 
     if isinstance(s, PartialTupleVar) and isinstance(t, PartialTupleVar):
@@ -389,72 +475,80 @@ def handle_constraint(constraint, dtype, constraints):  # noqa: C901
         se = dict(s.elems)
         te = dict(t.elems)
         for i in set(se) & set(te):
-            constraints.add((se[i], te[i]))
-        combined = PartialTupleVar.fresh(elems=tuple((se | te).items()))
-        r = rename(s, combined)
-        dtype = r(dtype)
-        constraints = r(constraints)
-        r = rename(t, combined)
-        dtype = r(dtype)
-        constraints = r(constraints)
+            add_constraint(se[i], te[i])
+        elems = se | te
+        combined = PartialTupleVar.fresh(
+            elem_indices=tuple(elems.keys()), elem_values=tuple(elems.values())
+        )
+        rename(s, combined)
+        rename(t, combined)
         return dtype, constraints
 
     if isinstance(s, PrefixTuple) and isinstance(t, Tuple):
         assert s not in free_variables(t)
-        constraints.add((s.prefix, t.elems[0]))
-        constraints.add((s.others, Tuple(elems=t.elems[1:])))
+        add_constraint(s.prefix, t.elems[0])
+        add_constraint(s.others, Tuple(elems=t.elems[1:]))
         return dtype, constraints
 
     if isinstance(s, PrefixTuple) and isinstance(t, PrefixTuple):
         assert s not in free_variables(t) and t not in free_variables(s)
-        constraints.add((s.prefix, t.prefix))
-        constraints.add((s.others, t.others))
+        add_constraint(s.prefix, t.prefix)
+        add_constraint(s.others, t.others)
         return dtype, constraints
 
     if isinstance(s, ValTuple) and isinstance(t, Tuple):
         s_expanded = Tuple(
             elems=tuple(Val(kind=s.kind, dtype=Var.fresh(), size=s.size) for _ in t.elems)
         )
-        constraints.add((s.dtypes, Tuple(elems=tuple(e.dtype for e in s_expanded.elems))))
-        constraints.add((s_expanded, t))
+        add_constraint(s.dtypes, Tuple(elems=tuple(e.dtype for e in s_expanded.elems)))
+        add_constraint(s_expanded, t)
         return dtype, constraints
 
     if isinstance(s, ValTuple) and isinstance(t, ValTuple):
         assert s not in free_variables(t) and t not in free_variables(s)
-        constraints.add((s.kind, t.kind))
-        constraints.add((s.dtypes, t.dtypes))
-        constraints.add((s.size, t.size))
+        add_constraint(s.kind, t.kind)
+        add_constraint(s.dtypes, t.dtypes)
+        add_constraint(s.size, t.size)
         return dtype, constraints
 
     if isinstance(s, UniformValTupleVar) and isinstance(t, Tuple):
         assert s not in free_variables(t)
-        r = rename(s, t)
-        dtype = r(dtype)
-        constraints = r(constraints)
+        rename(s, t)
         elem_dtype = Val(kind=s.kind, dtype=s.dtype, size=s.size)
         for e in t.elems:
-            constraints.add((e, elem_dtype))
+            add_constraint(e, elem_dtype)
         return dtype, constraints
 
     if isinstance(s, UniformValTupleVar) and isinstance(t, UniformValTupleVar):
-        constraints.add((s.kind, t.kind))
-        constraints.add((s.dtype, t.dtype))
-        constraints.add((s.size, t.size))
+        add_constraint(s.kind, t.kind)
+        add_constraint(s.dtype, t.dtype)
+        add_constraint(s.size, t.size)
         return dtype, constraints
 
 
 def unify(dtype, constraints):
+    memo = dict()
+    dtype = _Dedup().visit(dtype, memo=memo)
+    constraints = {_Dedup().visit(c, memo=memo) for c in constraints}
+    del memo
+
+    renamer = Renamer()
+    dtype = renamer.register(Box(value=dtype))
+    constraints = [
+        (renamer.register(Box(value=s)), renamer.register(Box(value=t))) for s, t in constraints
+    ]
+
     while constraints:
         c = constraints.pop()
-        r = handle_constraint(c, dtype, constraints)
+        r = handle_constraint(c, dtype, constraints, renamer)
         if not r:
-            r = handle_constraint(c[::-1], dtype, constraints)
+            r = handle_constraint(c[::-1], dtype, constraints, renamer)
 
         if not r:
             raise TypeError(f"Can not satisfy constraint: {c[0]} ≡ {c[1]}")
         dtype, constraints = r
 
-    return dtype
+    return dtype.value
 
 
 class _ReindexVars(eve.ReusingNodeTranslator):
@@ -520,8 +614,8 @@ class PrettyPrinter(eve.ReusingNodeTranslator):
 
     def visit_PartialTupleVar(self, node):
         s = ""
-        if node.elems:
-            e = dict(node.elems)
+        if node.elem_indices:
+            e = dict(zip(node.elem_indices, node.elem_values))
             for i in range(max(e) + 1):
                 s += (self.visit(e[i]) if i in e else "_") + ", "
         return "(" + s + "…)" + self._subscript(node.idx)
@@ -555,7 +649,8 @@ class PrettyPrinter(eve.ReusingNodeTranslator):
         )
 
     def visit_ValTuple(self, node):
-        assert isinstance(node.dtypes, Var)
+        if not isinstance(node.dtypes, Var):
+            return self.visit_DType(node)
         return (
             "("
             + self._fmt_dtype(node.kind, "T" + self._fmt_size(node.size))
@@ -574,6 +669,14 @@ class PrettyPrinter(eve.ReusingNodeTranslator):
 
     def visit_Var(self, node):
         return "T" + self._subscript(node.idx)
+
+    def visit_DType(self, node):
+        return (
+            node.__class__.__name__
+            + "("
+            + ", ".join(f"{k}={v}" for k, v in node.iter_children_items())
+            + ")"
+        )
 
 
 pformat = PrettyPrinter().visit
