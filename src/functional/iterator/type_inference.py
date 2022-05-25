@@ -1,19 +1,8 @@
+from typing import ClassVar
+
 import eve
 from eve.utils import noninstantiable
 from functional.iterator import ir
-
-
-class _VarMixin:
-    _counter = -1
-
-    @staticmethod
-    def fresh_index():
-        _VarMixin._counter += 1
-        return _VarMixin._counter
-
-    @classmethod
-    def fresh(cls, **kwargs):
-        return cls(idx=_VarMixin.fresh_index(), **kwargs)
 
 
 @noninstantiable
@@ -22,16 +11,26 @@ class DType(eve.Node, unsafe_hash=True):  # type: ignore[call-arg]
         return pformat(self)
 
 
-class Var(DType, _VarMixin):
+class Var(DType):
     idx: int
+
+    _counter: ClassVar[int] = 0
+
+    @staticmethod
+    def fresh_index():
+        Var._counter += 1
+        return Var._counter
+
+    @classmethod
+    def fresh(cls, **kwargs):
+        return cls(idx=cls.fresh_index(), **kwargs)
 
 
 class Tuple(DType):
     elems: tuple[DType, ...]
 
 
-class PartialTupleVar(DType, _VarMixin):
-    idx: int
+class PartialTupleVar(Var):
     elem_indices: tuple[int, ...]
     elem_values: tuple[DType, ...]
 
@@ -58,8 +57,7 @@ class ValTuple(DType):
     size: DType = eve.field(default_factory=Var.fresh)
 
 
-class UniformValTupleVar(DType, _VarMixin):
-    idx: int
+class UniformValTupleVar(Var):
     kind: DType = eve.field(default_factory=Var.fresh)
     dtype: DType = eve.field(default_factory=Var.fresh)
     size: DType = eve.field(default_factory=Var.fresh)
@@ -105,20 +103,32 @@ class LetPolymorphic(DType):
     dtype: DType
 
 
-def _freshen(dtype):
-    def indexer(index_map):
-        return _VarMixin.fresh_index()
-
-    index_map = dict()
-    return _VarReindexer(indexer).visit(dtype, index_map=index_map)
-
-
 BOOL_DTYPE = Primitive(name="bool")  # type: ignore [call-arg]
 INT_DTYPE = Primitive(name="int")  # type: ignore [call-arg]
 FLOAT_DTYPE = Primitive(name="float")  # type: ignore [call-arg]
 AXIS_DTYPE = Primitive(name="axis")  # type: ignore [call-arg]
 NAMED_RANGE_DTYPE = Primitive(name="named_range")  # type: ignore [call-arg]
 DOMAIN_DTYPE = Primitive(name="domain")  # type: ignore [call-arg]
+
+
+class _VarReindexer(eve.ReusingNodeTranslator):
+    def __init__(self, indexer):
+        super().__init__()
+        self.indexer = indexer
+
+    def visit_Var(self, node, *, index_map):
+        node = self.generic_visit(node, index_map=index_map)
+        new_index = index_map.setdefault(node.idx, self.indexer(index_map))
+        new_values = {k: (new_index if k == "idx" else v) for k, v in node.iter_children_items()}
+        return node.__class__(**new_values)
+
+
+def _freshen(dtype):
+    def indexer(index_map):
+        return Var.fresh_index()
+
+    index_map = dict()
+    return _VarReindexer(indexer).visit(dtype, index_map=index_map)
 
 
 def _builtin_type(builtin):
@@ -316,10 +326,9 @@ class _TypeInferrer(eve.NodeTranslator):
 
 
 class _FreeVariables(eve.NodeVisitor):
-    def visit_DType(self, node, *, free_variables):
+    def visit_Var(self, node, *, free_variables):
         self.generic_visit(node, free_variables=free_variables)
-        if isinstance(node, _VarMixin):
-            free_variables.add(node)
+        free_variables.add(node)
 
 
 def _free_variables(x):
@@ -454,36 +463,36 @@ class _Unifier:
         if s == t:
             return True
 
-        if isinstance(s, Var):
+        if type(s) is Var:
             assert s not in _free_variables(t)
             self._rename(s, t)
             return True
 
-        if isinstance(s, Fun) and isinstance(t, Fun):
+        if type(s) is type(t) is Fun:
             self._add_constraint(s.args, t.args)
             self._add_constraint(s.ret, t.ret)
             return True
 
-        if isinstance(s, Val) and isinstance(t, Val):
+        if type(s) is type(t) is Val:
             self._add_constraint(s.kind, t.kind)
             self._add_constraint(s.dtype, t.dtype)
             self._add_constraint(s.size, t.size)
             return True
 
-        if isinstance(s, Tuple) and isinstance(t, Tuple):
+        if type(s) is type(t) is Tuple:
             if len(s.elems) != len(t.elems):
                 raise TypeError(f"Can not satisfy constraint: {s} ≡ {t}")
             for lhs, rhs in zip(s.elems, t.elems):
                 self._add_constraint(lhs, rhs)
             return True
 
-        if isinstance(s, PartialTupleVar) and isinstance(t, Tuple):
+        if type(s) is PartialTupleVar and type(t) is Tuple:
             assert s not in _free_variables(t)
             for i, x in zip(s.elem_indices, s.elem_values):
                 self._add_constraint(x, t.elems[i])
             return True
 
-        if isinstance(s, PartialTupleVar) and isinstance(t, PartialTupleVar):
+        if type(s) is type(t) is PartialTupleVar:
             assert s not in _free_variables(t) and t not in _free_variables(s)
             se = dict(zip(s.elem_indices, s.elem_values))
             te = dict(zip(t.elem_indices, t.elem_values))
@@ -497,19 +506,19 @@ class _Unifier:
             self._rename(t, combined)
             return True
 
-        if isinstance(s, PrefixTuple) and isinstance(t, Tuple):
+        if type(s) is PrefixTuple and type(t) is Tuple:
             assert s not in _free_variables(t)
             self._add_constraint(s.prefix, t.elems[0])
             self._add_constraint(s.others, Tuple(elems=t.elems[1:]))
             return True
 
-        if isinstance(s, PrefixTuple) and isinstance(t, PrefixTuple):
+        if type(s) is type(t) is PrefixTuple:
             assert s not in _free_variables(t) and t not in _free_variables(s)
             self._add_constraint(s.prefix, t.prefix)
             self._add_constraint(s.others, t.others)
             return True
 
-        if isinstance(s, ValTuple) and isinstance(t, Tuple):
+        if type(s) is ValTuple and type(t) is Tuple:
             s_expanded = Tuple(
                 elems=tuple(Val(kind=s.kind, dtype=Var.fresh(), size=s.size) for _ in t.elems)
             )
@@ -517,14 +526,14 @@ class _Unifier:
             self._add_constraint(s_expanded, t)
             return True
 
-        if isinstance(s, ValTuple) and isinstance(t, ValTuple):
+        if type(s) is type(t) is ValTuple:
             assert s not in _free_variables(t) and t not in _free_variables(s)
             self._add_constraint(s.kind, t.kind)
             self._add_constraint(s.dtypes, t.dtypes)
             self._add_constraint(s.size, t.size)
             return True
 
-        if isinstance(s, UniformValTupleVar) and isinstance(t, Tuple):
+        if type(s) is UniformValTupleVar and type(t) is Tuple:
             assert s not in _free_variables(t)
             self._rename(s, t)
             elem_dtype = Val(kind=s.kind, dtype=s.dtype, size=s.size)
@@ -532,7 +541,7 @@ class _Unifier:
                 self._add_constraint(e, elem_dtype)
             return True
 
-        if isinstance(s, UniformValTupleVar) and isinstance(t, UniformValTupleVar):
+        if type(s) is type(t) is UniformValTupleVar:
             self._add_constraint(s.kind, t.kind)
             self._add_constraint(s.dtype, t.dtype)
             self._add_constraint(s.size, t.size)
@@ -549,22 +558,6 @@ def unify(dtype, constraints):
 
     unifier = _Unifier(dtype, constraints)
     return unifier.unify()
-
-
-class _VarReindexer(eve.ReusingNodeTranslator):
-    def __init__(self, indexer):
-        super().__init__()
-        self.indexer = indexer
-
-    def visit_DType(self, node, *, index_map):
-        node = self.generic_visit(node, index_map=index_map)
-        if isinstance(node, _VarMixin):
-            new_index = index_map.setdefault(node.idx, self.indexer(index_map))
-            new_values = {
-                k: (new_index if k == "idx" else v) for k, v in node.iter_children_items()
-            }
-            return type(node)(**new_values)
-        return node
 
 
 def reindex_vars(dtype):
