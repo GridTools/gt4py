@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+#
 # GT4Py - GridTools4Py - GridTools for Python
 #
 # Copyright (c) 2014-2019, ETH Zurich

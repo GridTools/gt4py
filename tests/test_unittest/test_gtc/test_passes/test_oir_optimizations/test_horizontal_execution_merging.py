@@ -1,6 +1,8 @@
+# -*- coding: utf-8 -*-
+#
 # GTC Toolchain - GT4Py Project - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2021, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -95,22 +97,6 @@ def test_horiz_exec_merging_map_scalar():
 
 
 def test_horiz_exec_merging_complexity():
-    start_time = time.process_time()
-    transformed = HorizontalExecutionMerging().visit(
-        StencilFactory(
-            vertical_loops__0__sections__0__horizontal_executions=[
-                HorizontalExecutionFactory(
-                    body=[AssignStmtFactory(left__name="tmp", right__name="input")]
-                ),
-                HorizontalExecutionFactory(
-                    body=[AssignStmtFactory(left__name="output", right__name="tmp")]
-                ),
-            ],
-            declarations=[TemporaryFactory(name="tmp")],
-        )
-    )
-    single_process_time = time.process_time() - start_time
-
     n = 1000
     testee = StencilFactory(
         vertical_loops__0__sections__0__horizontal_executions=[
@@ -134,7 +120,7 @@ def test_horiz_exec_merging_complexity():
     start_time = time.process_time()
     transformed = HorizontalExecutionMerging().visit(testee)
     process_time = time.process_time() - start_time
-    assert process_time < 1.5 * n * single_process_time
+    assert process_time < 5
     hexecs = transformed.vertical_loops[0].sections[0].horizontal_executions
     assert len(hexecs) == 1
 
