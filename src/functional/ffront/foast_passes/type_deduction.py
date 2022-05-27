@@ -357,13 +357,8 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                 f"broadcast dimension is missing {set(field_type.dims).difference(set(broadcast_dims))}",
             )
 
-        for bdim in broadcast_dims:
-            if bdim in field_type.dims:
-                continue
-            field_type.dims.append(bdim)
-
         return_type = ct.FieldType(
-            dims=field_type.dims,
+            dims=broadcast_dims,
             dtype=field_type.dtype,
         )
 
