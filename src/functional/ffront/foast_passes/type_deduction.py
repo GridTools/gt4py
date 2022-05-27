@@ -350,14 +350,14 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         field_type = cast(ct.FieldType, node.args[0].type)
         broadcast_dims_expr = node.args[1].elts
 
-        if any([not (isinstance(elt.type, ct.DimensionType)) for elt in bdim_elts]):
+        if any([not (isinstance(elt.type, ct.DimensionType)) for elt in broadcast_dims_expr]):
             raise FieldOperatorTypeDeductionError.from_foast_node(
                 node,
                 msg=f"Incompatible broadcast dimension type in {node.func.id}. Expected "
                 f"all broadcast dimensions to be of type Dimension.",
             )
 
-        broadcast_dims = [cast(ct.DimensionType, elt.type).dim for elt in bdim_elts]
+        broadcast_dims = [cast(ct.DimensionType, elt.type).dim for elt in broadcast_dims_expr]
 
         if not set(field_type.dims).issubset(set(broadcast_dims)):
             raise FieldOperatorTypeDeductionError.from_foast_node(
