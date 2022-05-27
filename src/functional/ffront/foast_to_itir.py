@@ -255,7 +255,7 @@ class FieldOperatorLowering(NodeTranslator):
         )
 
     def _visit_broadcast(self, node: foast.Call, **kwargs) -> itir.FunCall:
-        # just lower broadcast argument as IR does not care about broadcasting
+        # just lower broadcasted field as iterator IR does not care about broadcasting
         broadcasted_field = node.args[0]
         return self.visit(broadcasted_field, **kwargs)
 
