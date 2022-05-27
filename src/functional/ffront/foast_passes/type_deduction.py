@@ -309,7 +309,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             msg=f"Objects of type '{new_func.type}' are not callable.",
         )
 
-    def _ensure_signature_valid(self, node: foast.Call, **kwargs):
+    def _ensure_signature_valid(self, node: foast.Call, **kwargs) -> None:
         try:
             type_info.is_callable(
                 cast(ct.FunctionType, node.func.type),
@@ -322,7 +322,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                 node, msg=f"Invalid argument types in call to '{node.func.id}'!"
             ) from err
 
-    def _visit_neighbor_sum(self, node: foast.Call, **kwargs):
+    def _visit_neighbor_sum(self, node: foast.Call, **kwargs) -> foast.Call:
         field_type = cast(ct.FieldType, node.args[0].type)
         reduction_dim = cast(ct.DimensionType, node.kwargs["axis"].type).dim
         if reduction_dim not in field_type.dims:
@@ -346,9 +346,18 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             type=return_type,
         )
 
-    def _visit_broadcast(self, node: foast.Call, **kwargs):
+    def _visit_broadcast(self, node: foast.Call, **kwargs) -> foast.Call:
         field_type = cast(ct.FieldType, node.args[0].type)
-        broadcast_dims = [cast(ct.DimensionType, elt.type).dim for elt in node.args[1].elts]
+        bdim_elts = node.args[1].elts
+
+        if any([not (isinstance(elt.type, ct.DimensionType)) for elt in bdim_elts]):
+            raise FieldOperatorTypeDeductionError.from_foast_node(
+                node,
+                msg=f"Incompatible broadcast dimension type in {node.func.id}. Expected "
+                f"all broadcast dimensions to be of type Dimension.",
+            )
+
+        broadcast_dims = [cast(ct.DimensionType, elt.type).dim for elt in bdim_elts]
 
         if not set(field_type.dims).issubset(set(broadcast_dims)):
             raise FieldOperatorTypeDeductionError.from_foast_node(

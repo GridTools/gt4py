@@ -345,10 +345,9 @@ def test_broadcast_multi_dim():
 
     parsed = FieldOperatorParser.apply_to_function(simple_broadcast)
 
-    expected_dims = [ADim, BDim, CDim]
-
-    assert all([dim in parsed.params[0].type.dims for dim in expected_dims])
-    assert parsed.params[0].id == "a"
+    assert parsed.body[0].value.type == ct.FieldType(
+        dims=[ADim, BDim, CDim], dtype=ct.ScalarType(kind=ct.ScalarKind.FLOAT64)
+    )
 
 
 def test_broadcast_disjoint():
@@ -364,3 +363,18 @@ def test_broadcast_disjoint():
         match=r"Expected broadcast dimension is missing",
     ):
         _ = FieldOperatorParser.apply_to_function(disjoint_broadcast)
+
+
+def test_broadcast_badtype():
+    ADim = Dimension("ADim")
+    BDim = "BDim"
+    CDim = Dimension("CDim")
+
+    def badtype_broadcast(a: Field[[ADim], float64]):
+        return broadcast(a, (BDim, CDim))
+
+    with pytest.raises(
+        FieldOperatorTypeDeductionError,
+        match=r"Expected all broadcast dimensions to be of type Dimension.",
+    ):
+        _ = FieldOperatorParser.apply_to_function(badtype_broadcast)
