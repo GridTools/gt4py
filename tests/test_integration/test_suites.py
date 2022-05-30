@@ -1047,18 +1047,6 @@ class TestMatmul(gt_testing.StencilTestSuite):
     }
     domain_range = [(2, 2), (2, 2), (2, 2)]
     backends = ALL_BACKENDS
-    # BUG: Fails with negative range and data_dims=(4, 6)
-    # symbols = {
-    #     "matrix": gt_testing.field(
-    #         in_range=(-5, 5), axes="IJK", boundary=[(0, 0), (0, 0), (0, 0)], data_dims=(2, 3)
-    #     ),
-    #     "field_1": gt_testing.field(
-    #         in_range=(-5, 5), axes="IJK", boundary=[(0, 0), (0, 0), (0, 0)], data_dims=(3,)
-    #     ),
-    #     "field_2": gt_testing.field(
-    #         in_range=(-5, 5), axes="IJK", boundary=[(0, 0), (0, 0), (0, 0)], data_dims=(2,)
-    #     ),
-    # }
     symbols = {
         "matrix": gt_testing.field(
             in_range=(-10, 10), axes="IJK", boundary=[(0, 0), (0, 0), (0, 0)], data_dims=(4, 6)
@@ -1072,15 +1060,11 @@ class TestMatmul(gt_testing.StencilTestSuite):
     }
     def definition(matrix, field_1, field_2):
         with computation(PARALLEL):
-            with interval(...):
+            with interval(0, 1):
                 field_2 = matrix @ field_1
-            # with interval(0, 1):
-            #     field_2 = matrix @ field_1
-            # with interval(1, 2):
-            #     field_1 = matrix.T @ field_2
+            with interval(1, 2):
+                field_1 = matrix.T @ field_2
 
     def validation(matrix, field_1, field_2, *, domain, origin):
-        field_2[...] = np.einsum('ijklm,ijkm->ijkl', matrix, field_1)
-        # pass
-        # field_2[:,:,0,:] = np.einsum('ijlm,ijm->ijl', matrix[:,:,0,:,:], field_1[:,:,0,:])
-        # field_1[:,:,1] = np.einsum('ijkl,ijk->ijl', matrix[:,:,1], field_2[:,:,1])
+        field_2[:,:,0] = np.einsum('ijlm,ijm->ijl', matrix[:,:,0], field_1[:,:,0])
+        field_1[:,:,1] = np.einsum('ijlm,ijl->ijm', matrix[:,:,1], field_2[:,:,1])
