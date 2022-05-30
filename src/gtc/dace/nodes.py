@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
-#
 # GTC Toolchain - GT4Py Project - GridTools Framework
 #
-# Copyright (c) 2014-2021, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -27,10 +25,10 @@ import dace.subsets
 import networkx as nx
 from dace import library
 
-from gt4py.definitions import Extent
 from gtc import oir
 from gtc.common import DataType, LoopOrder, SourceLocation, VariableKOffset, typestr_to_data_type
 from gtc.dace.utils import OIRFieldRenamer, dace_dtype_to_typestr, get_node_name_mapping
+from gtc.definitions import Extent
 from gtc.oir import CacheDesc, HorizontalExecution, Interval, VerticalLoop, VerticalLoopSection
 
 

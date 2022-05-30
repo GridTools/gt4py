@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
-#
 # GTC Toolchain - GT4Py Project - GridTools Framework
 #
-# Copyright (c) 2014-2021, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -70,7 +68,6 @@ def _extract_accessors(node: eve.Node, temp_names: Set[str]) -> List[gtcpp.GTAcc
             id=i,
             intent=gtcpp.Intent.INOUT if name in inout_fields else gtcpp.Intent.IN,
             extent=extent,
-            temporary=(name in temp_names),
             ndim=ndims[name],
         )
         for i, (name, extent) in enumerate(extents.items())

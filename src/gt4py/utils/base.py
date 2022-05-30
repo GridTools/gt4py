@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
-#
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2021, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -44,10 +42,6 @@ def slugify(value: str, *, replace_spaces=True, valid_symbols="-_.()", invalid_m
     if replace_spaces:
         slug = slug.replace(" ", "_")
     return slug
-
-
-def listify(value):
-    return value if isinstance(value, collections.abc.Sequence) else [value]
 
 
 # def stringify(value):
@@ -205,35 +199,6 @@ def shash(*args, hash_algorithm=None):
 
 def shashed_id(*args, length=10, hash_algorithm=None):
     return shash(*args, hash_algorithm=hash_algorithm)[:length]
-
-
-def interpolate_mask(seq: Sequence[Any], mask: Sequence[bool], default) -> Tuple[Any, ...]:
-    """
-    Return a tuple with the same shape as mask, with True values replaced by
-    the sequence, and False values replaced by default.
-
-    Example:
-    >>> default = 0
-    >>> a = (1, 2)
-    >>> mask = (False, True, False, True)
-    >>> interpolate_mask(a, mask, default)
-    (0, 1, 0, 2)
-    """
-    it = iter(seq)
-    return tuple(next(it) if m else default for m in mask)
-
-
-def filter_mask(seq: Sequence[Any], mask: Sequence[bool]) -> Tuple[Any, ...]:
-    """
-    Return a reduced-size tuple, with indices where mask[i]=False removed.
-
-    Example:
-    >>> a = (1, 2, 3)
-    >>> mask = (False, True, False)
-    >>> filter_mask(a, mask)
-    (2,)
-    """
-    return tuple(s for m, s in zip(mask, seq) if m)
 
 
 def classmethod_to_function(class_method, instance=None, owner=type(None), remove_cls_arg=False):

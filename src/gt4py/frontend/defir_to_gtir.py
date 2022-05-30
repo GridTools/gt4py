@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-#
 # GT4Py - GridTools4Py - GridTools for Python
 #
 # Copyright (c) 2014-2019, ETH Zurich
@@ -59,7 +57,6 @@ from gt4py.frontend.nodes import (
 )
 from gtc import common, gtir
 from gtc.common import ExprKind
-
 
 
 def _convert_dtype(data_type) -> common.DataType:

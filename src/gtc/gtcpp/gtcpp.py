@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
-#
 # GTC Toolchain - GT4Py Project - GridTools Framework
 #
-# Copyright (c) 2014-2021, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -168,7 +166,6 @@ class GTAccessor(LocNode):
     id: int  # noqa: A003  # shadowing python builtin
     intent: Intent
     extent: GTExtent
-    temporary: bool = True
     ndim: int = 3
 
 
