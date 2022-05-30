@@ -105,7 +105,7 @@ class UnVectorisation(IRNodeVisitor):
         for c in node.computations:
             if c.body.stmts:
                 # don't modify temp preprocessing computations
-                if type(c.body.stmts[0]) == FieldDecl:
+                if type(c.body.stmts[0]) == FieldDecl and type(c.body.stmts[1].value) != BinOpExpr:
                     continue
                 new_stmts = []
                 for stmt in c.body.stmts:
