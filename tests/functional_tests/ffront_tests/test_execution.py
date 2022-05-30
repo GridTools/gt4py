@@ -404,3 +404,20 @@ def test_broadcast_two_fields():
     expected = a.array()[:, np.newaxis] + b.array()[np.newaxis, :]
 
     assert np.allclose(expected, out)
+
+
+def test_broadcast_shifted():
+    Joff = FieldOffset("Joff", source=JDim, target=[JDim])
+
+    size = 10
+    a = np_as_located_field(IDim)(np.arange(0, size, 1, dtype=int))
+    out = np_as_located_field(IDim, JDim)(np.zeros((size, size)))
+
+    @field_operator(backend="roundtrip")
+    def simple_broadcast(inp: Field[[IDim], float64]) -> Field[[IDim, JDim], float64]:
+        bcasted = broadcast(inp, (IDim, JDim))
+        return bcasted(Joff[1])
+
+    simple_broadcast(a, out=out, offset_provider={"Joff": JDim})
+
+    assert np.allclose(a.array()[:, np.newaxis], out)
