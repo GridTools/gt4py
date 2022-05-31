@@ -1039,6 +1039,8 @@ class TestVectorizedTemporary(gt_testing.StencilTestSuite):
 
 class TestMatmul(gt_testing.StencilTestSuite):
     dtypes = {
+        # NOTE: Test fails with np.float32 due to different ordering of operations when compared to numpy.
+        # Potential fix: use tree style dot product for numerical stability.
         "matrix": np.float64,
         "field_1": np.float64,
         "field_2": np.float64
