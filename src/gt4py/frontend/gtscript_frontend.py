@@ -674,9 +674,13 @@ def _make_temp_decls(
 
 def _make_init_computation(
     temp_decls: Dict[str, nodes.FieldDecl], init_values: Dict[str, Any]
-) -> nodes.ComputationBlock:
+) -> Optional[nodes.ComputationBlock]:
+    if not temp_decls:
+        return None
+
     axes = set().union(*(set(temp_decls[name].axes) for name in temp_decls.keys()))
     assert "I" in axes and "J" in axes
+
     if "K" in axes:
         order = nodes.IterationOrder.PARALLEL
         interval = nodes.AxisInterval.full_interval()
