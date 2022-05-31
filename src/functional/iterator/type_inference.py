@@ -299,7 +299,7 @@ def _builtin_type(builtin):
         raise TypeError(
             f"Builtin '{builtin}' is only supported as applied/called function by the type checker"
         )
-    return NotImplementedError(f"Missing type definition of builtin '{builtin}'")
+    raise NotImplementedError(f"Missing type definition of builtin '{builtin}'")
 
 
 class _TypeInferrer(eve.NodeTranslator):
