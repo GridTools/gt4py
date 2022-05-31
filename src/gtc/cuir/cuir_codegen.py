@@ -56,9 +56,7 @@ class CUIRCodegen(codegen.TemplatedGenerator):
         """
     )
 
-    def visit_FieldAccess(
-        self, node: cuir.FieldAccess, **kwargs: Any
-    ):
+    def visit_FieldAccess(self, node: cuir.FieldAccess, **kwargs: Any):
         if isinstance(node, cuir.KCacheAccess):
             return self.generic_visit(node, **kwargs)
 
@@ -84,7 +82,6 @@ class CUIRCodegen(codegen.TemplatedGenerator):
         else:
             data_index_str = "".join(f", {maybe_const(index)}" for index in data_index)
             return f"{name}({offset}{data_index_str})"
-
 
     def visit_IJCacheAccess(
         self, node: cuir.IJCacheAccess, symtable: Dict[str, Any], **kwargs: Any
