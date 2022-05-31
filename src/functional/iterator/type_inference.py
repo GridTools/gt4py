@@ -1,4 +1,5 @@
-from typing import ClassVar
+from collections.abc import Callable
+from typing import Any, ClassVar, Optional, TypeVar, cast
 
 import eve
 from eve.utils import noninstantiable
@@ -11,6 +12,9 @@ Based on the classical constraint-based two-pass type consisting of the followin
     1. Constraint collection
     2. Type unification
 """
+
+V = TypeVar("V", bound="Var")
+T = TypeVar("T", bound="DType")
 
 
 @noninstantiable
@@ -40,12 +44,12 @@ class Var(DType):
     _counter: ClassVar[int] = 0
 
     @staticmethod
-    def fresh_index():
+    def fresh_index() -> int:
         Var._counter += 1
         return Var._counter
 
     @classmethod
-    def fresh(cls, **kwargs):
+    def fresh(cls: type[V], **kwargs: Any) -> V:
         """Create a type variable with a previously unused index."""
         return cls(idx=cls.fresh_index(), **kwargs)
 
@@ -196,28 +200,30 @@ DOMAIN_DTYPE = Primitive(name="domain")  # type: ignore [call-arg]
 class _VarReindexer(eve.ReusingNodeTranslator):
     """Reindex type variables in a type tree."""
 
-    def __init__(self, indexer):
+    def __init__(self, indexer: Callable[[dict[int, int]], int]):
         super().__init__()
         self.indexer = indexer
 
-    def visit_Var(self, node, *, index_map):
+    def visit_Var(self, node: V, *, index_map: dict[int, int]) -> V:
         node = self.generic_visit(node, index_map=index_map)
         new_index = index_map.setdefault(node.idx, self.indexer(index_map))
-        new_values = {k: (new_index if k == "idx" else v) for k, v in node.iter_children_items()}
+        new_values = {
+            cast(str, k): (new_index if k == "idx" else v) for k, v in node.iter_children_items()
+        }
         return node.__class__(**new_values)
 
 
-def _freshen(dtype):
+def _freshen(dtype: T) -> T:
     """Re-instantiate `dtype` with fresh type variables."""
 
-    def indexer(index_map):
+    def indexer(index_map: dict[int, int]) -> int:
         return Var.fresh_index()
 
-    index_map = dict()
+    index_map = dict[int, int]()
     return _VarReindexer(indexer).visit(dtype, index_map=index_map)
 
 
-def _builtin_type(builtin):
+def _builtin_type(builtin: str) -> DType:
     """Generate type definition for the given builtin function."""
     assert builtin in ir.BUILTINS
     if builtin == "deref":
@@ -239,7 +245,7 @@ def _builtin_type(builtin):
         return Fun(args=Tuple(elems=(v, v)), ret=v)
     if builtin in ("eq", "less", "greater"):
         v = Val(kind=Value())
-        ret = Val(kind=Value(), dtype=BOOL_DTYPE, size=v.size)
+        ret: DType = Val(kind=Value(), dtype=BOOL_DTYPE, size=v.size)
         return Fun(args=Tuple(elems=(v, v)), ret=ret)
     if builtin == "not_":
         v = Val(kind=Value(), dtype=BOOL_DTYPE)
@@ -253,7 +259,7 @@ def _builtin_type(builtin):
         return Fun(args=Tuple(elems=(c, v, v)), ret=v)
     if builtin == "lift":
         size = Var.fresh()
-        args = ValTuple(kind=Iterator(), dtypes=Var.fresh(), size=size)
+        args: DType = ValTuple(kind=Iterator(), dtypes=Var.fresh(), size=size)
         dtype = Var.fresh()
         stencil_ret = Val(kind=Value(), dtype=dtype, size=size)
         lifted_ret = Val(kind=Iterator(), dtype=dtype, size=size)
@@ -305,7 +311,9 @@ def _builtin_type(builtin):
 class _TypeInferrer(eve.NodeTranslator):
     """Visit the full iterator IR tree, convert nodes to respective types and generate constraints."""
 
-    def visit_SymRef(self, node, *, constraints, symtypes):
+    def visit_SymRef(
+        self, node: ir.SymRef, constraints: set[tuple[DType, DType]], symtypes: dict[str, DType]
+    ) -> DType:
         if node.id in symtypes:
             res = symtypes[node.id]
             if isinstance(res, LetPolymorphic):
@@ -316,21 +324,37 @@ class _TypeInferrer(eve.NodeTranslator):
 
         return Var.fresh()
 
-    def visit_Literal(self, node, *, constraints, symtypes):
+    def visit_Literal(
+        self, node: ir.Literal, constraints: set[tuple[DType, DType]], symtypes: dict[str, DType]
+    ) -> Val:
         return Val(kind=Value(), dtype=Primitive(name=node.type))
 
-    def visit_AxisLiteral(self, node, *, constraints, symtypes):
+    def visit_AxisLiteral(
+        self,
+        node: ir.AxisLiteral,
+        constraints: set[tuple[DType, DType]],
+        symtypes: dict[str, DType],
+    ) -> Val:
         return Val(kind=Value(), dtype=AXIS_DTYPE, size=Scalar())
 
-    def visit_OffsetLiteral(self, node, *, constraints, symtypes):
+    def visit_OffsetLiteral(
+        self,
+        node: ir.OffsetLiteral,
+        constraints: set[tuple[DType, DType]],
+        symtypes: dict[str, DType],
+    ) -> Var:
         return Var.fresh()
 
-    def visit_Lambda(self, node, *, constraints, symtypes):
+    def visit_Lambda(
+        self, node: ir.Lambda, constraints: set[tuple[DType, DType]], symtypes: dict[str, DType]
+    ) -> Fun:
         ptypes = {p.id: Var.fresh() for p in node.params}
         ret = self.visit(node.expr, constraints=constraints, symtypes=symtypes | ptypes)
         return Fun(args=Tuple(elems=tuple(ptypes[p.id] for p in node.params)), ret=ret)
 
-    def visit_FunCall(self, node, *, constraints, symtypes):
+    def visit_FunCall(
+        self, node: ir.FunCall, constraints: set[tuple[DType, DType]], symtypes: dict[str, DType]
+    ) -> DType:
         if isinstance(node.fun, ir.SymRef):
             if node.fun.id == "make_tuple":
                 # Calls to make_tuple are handled as being part of the grammar,
@@ -374,7 +398,12 @@ class _TypeInferrer(eve.NodeTranslator):
         constraints.add((fun, Fun(args=args, ret=ret)))
         return ret
 
-    def visit_FunctionDefinition(self, node, *, constraints, symtypes):
+    def visit_FunctionDefinition(
+        self,
+        node: ir.FunctionDefinition,
+        constraints: set[tuple[DType, DType]],
+        symtypes: dict[str, DType],
+    ) -> FunDef:
         if node.id in symtypes:
             raise TypeError(f"Multiple definitions of symbol {node.id}")
 
@@ -386,7 +415,12 @@ class _TypeInferrer(eve.NodeTranslator):
         constraints.add((fun, Fun()))
         return FunDef(name=node.id, fun=fun)
 
-    def visit_StencilClosure(self, node, *, constraints, symtypes):
+    def visit_StencilClosure(
+        self,
+        node: ir.StencilClosure,
+        constraints: set[tuple[DType, DType]],
+        symtypes: dict[str, DType],
+    ) -> Closure:
         domain = self.visit(node.domain, constraints=constraints, symtypes=symtypes)
         stencil = self.visit(node.stencil, constraints=constraints, symtypes=symtypes)
         output = self.visit(node.output, constraints=constraints, symtypes=symtypes)
@@ -401,18 +435,23 @@ class _TypeInferrer(eve.NodeTranslator):
         )
         return Closure(output=output, inputs=inputs)
 
-    def visit_FencilDefinition(self, node, *, constraints, symtypes):
+    def visit_FencilDefinition(
+        self,
+        node: ir.FencilDefinition,
+        constraints: set[tuple[DType, DType]],
+        symtypes: dict[str, DType],
+    ) -> Fencil:
         ftypes = []
-        fmap = dict()
+        fmap = dict[str, LetPolymorphic]()
         # Note: functions have to be ordered according to Lisp/Scheme `let*`
         # statements; that is, functions can only reference other functions
         # that are defined before
         for f in node.function_definitions:
-            c = set()
-            f = self.visit(f, constraints=c, symtypes=symtypes | fmap)
-            f = unify(f, c)
-            ftypes.append(f)
-            fmap[f.name] = LetPolymorphic(dtype=f.fun)
+            c = set[tuple[DType, DType]]()
+            ftype: FunDef = self.visit(f, constraints=c, symtypes=symtypes | fmap)
+            ftype = cast(FunDef, unify(ftype, c))
+            ftypes.append(ftype)
+            fmap[ftype.name] = LetPolymorphic(dtype=ftype.fun)
 
         params = {p.id: Var.fresh() for p in node.params}
         self.visit(node.closures, constraints=constraints, symtypes=symtypes | fmap | params)
@@ -426,14 +465,14 @@ class _TypeInferrer(eve.NodeTranslator):
 class _FreeVariables(eve.NodeVisitor):
     """Collect type variables within a type expression."""
 
-    def visit_Var(self, node, *, free_variables):
+    def visit_Var(self, node: Var, *, free_variables: set[Var]) -> None:
         self.generic_visit(node, free_variables=free_variables)
         free_variables.add(node)
 
 
-def _free_variables(x):
+def _free_variables(x: DType) -> set[Var]:
     """Collect type variables within a type expression."""
-    fv = set()
+    fv = set[Var]()
     _FreeVariables().visit(x, free_variables=fv)
     return fv
 
@@ -441,7 +480,7 @@ def _free_variables(x):
 class _Dedup(eve.ReusingNodeTranslator):
     """Deduplicate nodes that have the same value but a different `id`."""
 
-    def visit(self, node, *, memo):
+    def visit(self, node: T, *, memo: dict[T, T]) -> T:  # type: ignore[override]
         node = super().visit(node, memo=memo)
         return memo.setdefault(node, node)
 
@@ -458,24 +497,24 @@ class _Renamer:
     possible after renaming.
     """
 
-    def __init__(self):
-        self._parents = dict()
+    def __init__(self) -> None:
+        self._parents = dict[DType, list[tuple[DType, str, Optional[int]]]]()
 
-    def register(self, dtype):
+    def register(self, dtype: DType) -> None:
         """Register a type for possible future renaming.
 
         Collects the parent nodes of all nodes in the type tree.
         """
 
-        def collect_parents(node):
+        def collect_parents(node: DType) -> None:
             for field, child in node.iter_children_items():
                 if isinstance(child, DType):
-                    self._parents.setdefault(child, []).append((node, field, None))
+                    self._parents.setdefault(child, []).append((node, cast(str, field), None))
                     collect_parents(child)
                 elif isinstance(child, tuple):
                     for i, c in enumerate(child):
                         if isinstance(c, DType):
-                            self._parents.setdefault(c, []).append((node, field, i))
+                            self._parents.setdefault(c, []).append((node, cast(str, field), i))
                             collect_parents(c)
                 else:
                     assert isinstance(child, (int, str))
@@ -483,30 +522,32 @@ class _Renamer:
         collect_parents(dtype)
 
     @staticmethod
-    def _val_tuple_will_resolve_to_tuple(node, field, replacement):
+    def _val_tuple_will_resolve_to_tuple(node: DType, field: str, replacement: DType) -> bool:
         """Check if a `ValTuple` instance can be resolved to a `Tuple` after renaming."""
         return isinstance(node, ValTuple) and field == "dtypes" and isinstance(replacement, Tuple)
 
     @staticmethod
-    def _resolve_val_tuple(node, replacement):
+    def _resolve_val_tuple(node: ValTuple, replacement: Tuple) -> Tuple:
         """Resolve a fully defined `ValTuple` instance to a `Tuple`."""
         return Tuple(
             elems=tuple(Val(kind=node.kind, dtype=d, size=node.size) for d in replacement.elems)
         )
 
     @staticmethod
-    def _prefix_tuple_will_resolve_to_tuple(node, field, replacement):
+    def _prefix_tuple_will_resolve_to_tuple(node: DType, field: str, replacement: DType) -> bool:
         """Check if a `PrefixTuple` instance can be resolved to a `Tuple` after renaming."""
         return (
             isinstance(node, PrefixTuple) and field == "others" and isinstance(replacement, Tuple)
         )
 
     @staticmethod
-    def _resolve_prefix_tuple(node, replacement):
+    def _resolve_prefix_tuple(node: PrefixTuple, replacement: Tuple) -> Tuple:
         """Resolve a fully defined `PrefixTuple` instance to a `Tuple`."""
         return Tuple(elems=(node.prefix,) + replacement.elems)
 
-    def _update_node(self, node, field, index, replacement):
+    def _update_node(
+        self, node: DType, field: str, index: Optional[int], replacement: DType
+    ) -> None:
         """Replace a field of a node by some other value.
 
         If `index` is `None`, basically performs `setattr(node, field, replacement)`. Otherwise,
@@ -534,7 +575,7 @@ class _Renamer:
         if popped:
             self._parents[node] = popped
 
-    def rename(self, node, replacement):
+    def rename(self, node: DType, replacement: DType) -> None:
         """Rename/replace all occurrences of `node` to/by `replacement`."""
         try:
             # Find parent nodes
@@ -542,14 +583,18 @@ class _Renamer:
         except KeyError:
             return
 
-        follow_up_renames = []
+        follow_up_renames = list[tuple[DType, DType]]()
         for node, field, index in nodes:
             if self._val_tuple_will_resolve_to_tuple(node, field, replacement):
+                assert isinstance(node, ValTuple) and isinstance(replacement, Tuple)  # helping mypy
                 # Special case 1: a `ValTuple` instance can be resolved to a `Tuple` after renaming
                 tup = self._resolve_val_tuple(node, replacement)
                 # So just collect the resolved tuple for a following rename
                 follow_up_renames.append((node, tup))
             elif self._prefix_tuple_will_resolve_to_tuple(node, field, replacement):
+                assert isinstance(node, PrefixTuple) and isinstance(
+                    replacement, Tuple
+                )  # helping mypy
                 # Special case 2: a `PrefixTuple` instance can be resolved to a `Tuple` after renaming
                 tup = self._resolve_prefix_tuple(node, replacement)
                 follow_up_renames.append((node, tup))
@@ -563,7 +608,7 @@ class _Renamer:
             self.rename(s, d)
 
 
-class _Box(eve.Node, unsafe_hash=True):  # type: ignore[call-arg]
+class _Box(DType):
     """Simple value holder, used for wrapping root nodes of a type tree.
 
     This makes sure that all root nodes have a parent node which can be updated by the `_Renamer`.
@@ -579,7 +624,7 @@ class _Unifier:
     type variable renaming.
     """
 
-    def __init__(self, dtype, constraints):
+    def __init__(self, dtype: DType, constraints: set[tuple[DType, DType]]) -> None:
         # Wrap the original `dtype` and all `constraints` to make sure they have a parent node and
         # thus the root nodes are correctly handled by the renamer
         self._dtype = _Box(value=dtype)
@@ -592,7 +637,7 @@ class _Unifier:
             self._renamer.register(s)
             self._renamer.register(t)
 
-    def unify(self):
+    def unify(self) -> DType:
         """Run the unification."""
         while self._constraints:
             constraint = self._constraints.pop()
@@ -607,13 +652,13 @@ class _Unifier:
 
         return self._dtype.value
 
-    def _rename(self, x, y):
+    def _rename(self, x: DType, y: DType) -> None:
         """Type renaming/replacement."""
         self._renamer.register(x)
         self._renamer.register(y)
         self._renamer.rename(x, y)
 
-    def _add_constraint(self, x, y):
+    def _add_constraint(self, x: DType, y: DType) -> None:
         """Register a new constraint."""
         x = _Box(value=x)
         y = _Box(value=y)
@@ -621,7 +666,9 @@ class _Unifier:
         self._renamer.register(y)
         self._constraints.append((x, y))
 
-    def _handle_constraint(self, constraint):  # noqa: C901
+    def _handle_constraint(  # noqa: C901  # too complex
+        self, constraint: tuple[_Box, _Box]
+    ) -> bool:
         """Handle a single constraint."""
         s, t = (c.value for c in constraint)
         if s == t:
@@ -697,11 +744,9 @@ class _Unifier:
 
         if type(s) is ValTuple and type(t) is Tuple:
             # Expand the LHS `ValTuple` to the size of the RHS `Tuple` and make sure they match
-            s_expanded = Tuple(
-                elems=tuple(Val(kind=s.kind, dtype=Var.fresh(), size=s.size) for _ in t.elems)
-            )
-            self._add_constraint(s.dtypes, Tuple(elems=tuple(e.dtype for e in s_expanded.elems)))
-            self._add_constraint(s_expanded, t)
+            s_elems = tuple(Val(kind=s.kind, dtype=Var.fresh(), size=s.size) for _ in t.elems)
+            self._add_constraint(s.dtypes, Tuple(elems=tuple(e.dtype for e in s_elems)))
+            self._add_constraint(Tuple(elems=s_elems), t)
             return True
 
         if type(s) is type(t) is ValTuple:
@@ -730,10 +775,10 @@ class _Unifier:
         return False
 
 
-def unify(dtype, constraints):
+def unify(dtype: DType, constraints: set[tuple[DType, DType]]) -> DType:
     """Unify all given constraints."""
     # Deduplicate nodes, this can speed up later things a bit
-    memo = dict()
+    memo = dict[T, T]()
     dtype = _Dedup().visit(dtype, memo=memo)
     constraints = {_Dedup().visit(c, memo=memo) for c in constraints}
     del memo
@@ -742,23 +787,23 @@ def unify(dtype, constraints):
     return unifier.unify()
 
 
-def reindex_vars(dtype):
+def reindex_vars(dtype: T) -> T:
     """Reindex all type variables, to have nice indices starting at zero."""
 
-    def indexer(index_map):
+    def indexer(index_map: dict[int, int]) -> int:
         return len(index_map)
 
-    index_map = dict()
+    index_map = dict[int, int]()
     return _VarReindexer(indexer).visit(dtype, index_map=index_map)
 
 
-def infer(expr, symtypes=None):
+def infer(expr: ir.Node, symtypes: Optional[dict[str, DType]] = None) -> DType:
     """Infer the type of the given iterator IR expression."""
     if symtypes is None:
         symtypes = dict()
 
     # Collect constraints
-    constraints = set()
+    constraints = set[tuple[DType, DType]]()
     dtype = _TypeInferrer().visit(expr, constraints=constraints, symtypes=symtypes)
     # Compute the most general type that satisfies all constraints
     unified = unify(dtype, constraints)
@@ -769,14 +814,14 @@ class PrettyPrinter(eve.ReusingNodeTranslator):
     """Pretty-printer for type expressions."""
 
     @staticmethod
-    def _subscript(i):
+    def _subscript(i: int) -> str:
         return "".join("₀₁₂₃₄₅₆₇₈₉"[int(d)] for d in str(i))
 
     @staticmethod
-    def _superscript(i):
+    def _superscript(i: int) -> str:
         return "".join("⁰¹²³⁴⁵⁶⁷⁸⁹"[int(d)] for d in str(i))
 
-    def _fmt_size(self, size):
+    def _fmt_size(self, size: DType) -> str:
         if size == Column():
             return "ᶜ"
         if size == Scalar():
@@ -784,7 +829,7 @@ class PrettyPrinter(eve.ReusingNodeTranslator):
         assert isinstance(size, Var)
         return self._superscript(size.idx)
 
-    def _fmt_dtype(self, kind, dtype_str):
+    def _fmt_dtype(self, kind: DType, dtype_str: str) -> str:
         if kind == Value():
             return dtype_str
         if kind == Iterator():
@@ -792,10 +837,10 @@ class PrettyPrinter(eve.ReusingNodeTranslator):
         assert isinstance(kind, Var)
         return "ItOrVal" + self._subscript(kind.idx) + "[" + dtype_str + "]"
 
-    def visit_Tuple(self, node):
+    def visit_Tuple(self, node: Tuple) -> str:
         return "(" + ", ".join(self.visit(e) for e in node.elems) + ")"
 
-    def visit_PartialTupleVar(self, node):
+    def visit_PartialTupleVar(self, node: PartialTupleVar) -> str:
         s = ""
         if node.elem_indices:
             e = dict(zip(node.elem_indices, node.elem_values))
@@ -803,25 +848,25 @@ class PrettyPrinter(eve.ReusingNodeTranslator):
                 s += (self.visit(e[i]) if i in e else "_") + ", "
         return "(" + s + "…)" + self._subscript(node.idx)
 
-    def visit_PrefixTuple(self, node):
+    def visit_PrefixTuple(self, node: PrefixTuple) -> str:
         return self.visit(node.prefix) + ":" + self.visit(node.others)
 
-    def visit_Fun(self, node):
+    def visit_Fun(self, node: Fun) -> str:
         return self.visit(node.args) + " → " + self.visit(node.ret)
 
-    def visit_Val(self, node):
+    def visit_Val(self, node: Val) -> str:
         return self._fmt_dtype(node.kind, self.visit(node.dtype) + self._fmt_size(node.size))
 
-    def visit_Primitive(self, node):
+    def visit_Primitive(self, node: Primitive) -> str:
         return node.name
 
-    def visit_FunDef(self, node):
+    def visit_FunDef(self, node: FunDef) -> str:
         return node.name + " :: " + self.visit(node.fun)
 
-    def visit_Closure(self, node):
+    def visit_Closure(self, node: Closure) -> str:
         return self.visit(node.inputs) + " ⇒ " + self.visit(node.output)
 
-    def visit_Fencil(self, node):
+    def visit_Fencil(self, node: Fencil) -> str:
         return (
             "{"
             + "".join(self.visit(f) + ", " for f in node.fundefs)
@@ -831,7 +876,7 @@ class PrettyPrinter(eve.ReusingNodeTranslator):
             + ")}"
         )
 
-    def visit_ValTuple(self, node):
+    def visit_ValTuple(self, node: ValTuple) -> str:
         if not isinstance(node.dtypes, Var):
             return self.visit_DType(node)
         return (
@@ -841,7 +886,7 @@ class PrettyPrinter(eve.ReusingNodeTranslator):
             + self._subscript(node.dtypes.idx)
         )
 
-    def visit_UniformValTupleVar(self, node):
+    def visit_UniformValTupleVar(self, node: UniformValTupleVar) -> str:
         return (
             "("
             + self.visit(Val(kind=node.kind, dtype=node.dtype, size=node.size))
@@ -850,10 +895,10 @@ class PrettyPrinter(eve.ReusingNodeTranslator):
             + ")"
         )
 
-    def visit_Var(self, node):
+    def visit_Var(self, node: Var) -> str:
         return "T" + self._subscript(node.idx)
 
-    def visit_DType(self, node):
+    def visit_DType(self, node: DType) -> str:
         return (
             node.__class__.__name__
             + "("
@@ -865,5 +910,5 @@ class PrettyPrinter(eve.ReusingNodeTranslator):
 pformat = PrettyPrinter().visit
 
 
-def pprint(x: DType):
+def pprint(x: DType) -> None:
     print(pformat(x))
