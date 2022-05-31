@@ -13,7 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 
-from typing import Generic, Optional, TypeVar, Union
+from typing import Generic, TypeVar, Union
 
 from eve import Coerced, Node, SourceLocation, SymbolName, SymbolRef
 from eve.traits import SymbolTableTrait
@@ -52,7 +52,7 @@ TupleSymbol = DataSymbol[TupleTypeT]
 
 
 class Expr(LocatedNode):
-    type: Optional[common_types.SymbolType] = None  # noqa A003
+    type: common_types.SymbolType = common_types.DeferredSymbolType(constraint=None)  # noqa A003
 
 
 class Name(Expr):
@@ -138,6 +138,7 @@ class Compare(Expr):
 class Call(Expr):
     func: Name
     args: list[Expr]
+    kwargs: dict[str, Expr]
 
 
 class Stmt(LocatedNode):

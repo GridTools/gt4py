@@ -15,103 +15,70 @@ from typing import Optional
 
 import pytest
 
-from functional.common import Dimension, GTTypeError
-from functional.ffront import common_types as ct
-from functional.ffront.fbuiltins import Field, float32, float64, int64
+from functional.common import GTTypeError
+from functional.ffront import common_types as ct, type_info
+from functional.ffront.fbuiltins import (
+    Dimension,
+    Field,
+    FieldOffset,
+    float32,
+    float64,
+    int64,
+    neighbor_sum,
+)
 from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError
 from functional.ffront.func_to_foast import FieldOperatorParser
-from functional.ffront.type_info import TypeInfo
 
 
 def type_info_cases() -> list[tuple[Optional[ct.SymbolType], dict]]:
     return [
         (
-            None,
-            {
-                "is_complete": False,
-                "is_any_type": True,
-                "constraint": None,
-                "is_field_type": False,
-                "is_scalar": False,
-                "is_arithmetic_compatible": False,
-                "is_logics_compatible": False,
-                "is_callable": False,
-            },
-        ),
-        (
             ct.DeferredSymbolType(constraint=None),
             {
-                "is_complete": False,
-                "is_any_type": True,
-                "constraint": None,
-                "is_field_type": False,
-                "is_scalar": False,
-                "is_arithmetic_compatible": False,
-                "is_logics_compatible": False,
-                "is_callable": False,
+                "is_concrete": False,
             },
         ),
         (
             ct.DeferredSymbolType(constraint=ct.ScalarType),
             {
-                "is_complete": False,
-                "is_any_type": False,
-                "constraint": ct.ScalarType,
-                "is_field_type": False,
-                "is_scalar": True,
-                "is_arithmetic_compatible": False,
-                "is_logics_compatible": False,
-                "is_callable": False,
+                "is_concrete": False,
+                "type_class": ct.ScalarType,
             },
         ),
         (
             ct.DeferredSymbolType(constraint=ct.FieldType),
             {
-                "is_complete": False,
-                "is_any_type": False,
-                "constraint": ct.FieldType,
-                "is_field_type": True,
-                "is_scalar": False,
-                "is_arithmetic_compatible": False,
-                "is_logics_compatible": False,
-                "is_callable": False,
+                "is_concrete": False,
+                "type_class": ct.FieldType,
             },
         ),
         (
             ct.ScalarType(kind=ct.ScalarKind.INT64),
             {
-                "is_complete": True,
-                "is_any_type": False,
-                "constraint": ct.ScalarType,
-                "is_field_type": False,
-                "is_scalar": True,
-                "is_arithmetic_compatible": True,
-                "is_logics_compatible": False,
-                "is_callable": False,
+                "is_concrete": True,
+                "type_class": ct.ScalarType,
+                "is_arithmetic": True,
+                "is_logical": False,
             },
         ),
         (
             ct.FieldType(dims=Ellipsis, dtype=ct.ScalarType(kind=ct.ScalarKind.BOOL)),
             {
-                "is_complete": True,
-                "is_any_type": False,
-                "constraint": ct.FieldType,
-                "is_field_type": True,
-                "is_scalar": False,
-                "is_arithmetic_compatible": False,
-                "is_logics_compatible": True,
-                "is_callable": False,
+                "is_concrete": True,
+                "type_class": ct.FieldType,
+                "is_arithmetic": False,
+                "is_logical": True,
             },
         ),
     ]
 
 
-def type_info_is_callable_for_args_cases():
+def is_callable_cases():
     # reuse all the other test cases
     not_callable = [
         (symbol_type, [], {}, [r"Expected a function type, but got "])
         for symbol_type, attributes in type_info_cases()
-        if not attributes["is_callable"]
+        if not isinstance(symbol_type, ct.FunctionType)
     ]
 
     bool_type = ct.ScalarType(kind=ct.ScalarKind.BOOL)
@@ -153,58 +120,27 @@ def type_info_is_callable_for_args_cases():
 
 @pytest.mark.parametrize("symbol_type,expected", type_info_cases())
 def test_type_info_basic(symbol_type, expected):
-    typeinfo = TypeInfo(symbol_type)
     for key in expected:
-        assert getattr(typeinfo, key) == expected[key]
+        assert getattr(type_info, key)(symbol_type) == expected[key]
 
 
-def test_type_info_refinable_complete_complete():
-    complete_type = ct.ScalarType(kind=ct.ScalarKind.INT64)
-    other_complete_type = ct.ScalarType(kind=ct.ScalarKind.FLOAT64)
-    type_info_a = TypeInfo(complete_type)
-    type_info_b = TypeInfo(other_complete_type)
-    assert type_info_a.can_be_refined_to(TypeInfo(complete_type))
-    assert not type_info_a.can_be_refined_to(type_info_b)
-
-
-def test_type_info_refinable_incomplete_complete():
-    complete_type = TypeInfo(
-        ct.FieldType(dtype=ct.ScalarType(kind=ct.ScalarKind.BOOL), dims=Ellipsis)
-    )
-    assert TypeInfo(None).can_be_refined_to(complete_type)
-    assert TypeInfo(ct.DeferredSymbolType(constraint=None)).can_be_refined_to(complete_type)
-    assert TypeInfo(ct.DeferredSymbolType(constraint=ct.FieldType)).can_be_refined_to(complete_type)
-    assert not TypeInfo(ct.DeferredSymbolType(constraint=ct.OffsetType)).can_be_refined_to(
-        complete_type
-    )
-
-
-def test_type_info_refinable_incomplete_incomplete():
-    target_type = TypeInfo(ct.DeferredSymbolType(constraint=ct.ScalarType))
-    assert TypeInfo(None).can_be_refined_to(target_type)
-    assert TypeInfo(ct.DeferredSymbolType(constraint=None)).can_be_refined_to(target_type)
-    assert TypeInfo(ct.DeferredSymbolType(constraint=ct.ScalarType)).can_be_refined_to(target_type)
-    assert not TypeInfo(ct.DeferredSymbolType(constraint=ct.FieldType)).can_be_refined_to(
-        target_type
-    )
-
-
-@pytest.mark.parametrize("func_type,args,kwargs,expected", type_info_is_callable_for_args_cases())
-def test_type_info_is_callable_for_args_cases(
+@pytest.mark.parametrize("func_type,args,kwargs,expected", is_callable_cases())
+def test_is_callable(
     func_type: ct.SymbolType,
     args: list[ct.SymbolType],
     kwargs: dict[str, ct.SymbolType],
     expected: list,
 ):
-    typeinfo = TypeInfo(func_type)
     is_callable = len(expected) == 0
-    assert typeinfo.is_callable_for_args(args, kwargs) == is_callable
+    assert type_info.is_callable(func_type, with_args=args, with_kwargs=kwargs) == is_callable
 
     if len(expected) > 0:
         with pytest.raises(
             GTTypeError,
         ) as exc_info:
-            typeinfo.is_callable_for_args(args, kwargs, raise_exception=True)
+            type_info.is_callable(
+                func_type, with_args=args, with_kwargs=kwargs, raise_exception=True
+            )
 
         for expected_msg in expected:
             assert exc_info.match(expected_msg)
@@ -258,10 +194,7 @@ def test_adding_bool():
 
     with pytest.raises(
         FieldOperatorTypeDeductionError,
-        match=(
-            r"Incompatible type\(s\) for operator '\+': "
-            r"Field\[\.\.\., dtype=bool\], Field\[\.\.\., dtype=bool\]!"
-        ),
+        match=(r"Type Field\[\.\.\., dtype=bool\] can not be used in operator '\+'!"),
     ):
         _ = FieldOperatorParser.apply_to_function(add_bools)
 
@@ -277,8 +210,8 @@ def test_binop_nonmatching_dims():
     with pytest.raises(
         FieldOperatorTypeDeductionError,
         match=(
-            r"Incompatible type\(s\) for operator '\+': "
-            r"Field\[\[X\], dtype=float64\], Field\[\[Y\], dtype=float64\]!"
+            r"Incompatible dimensions in operator '\+': "
+            r"Field\[\[X\], dtype=float64\] and Field\[\[Y\], dtype=float64\]!"
         ),
     ):
         _ = FieldOperatorParser.apply_to_function(nonmatching)
@@ -290,10 +223,7 @@ def test_bitopping_float():
 
     with pytest.raises(
         FieldOperatorTypeDeductionError,
-        match=(
-            r"Incompatible type\(s\) for operator '\&': "
-            r"Field\[\.\.\., dtype=float64\], Field\[\.\.\., dtype=float64\]!"
-        ),
+        match=(r"Type Field\[\.\.\., dtype=float64\] can not be used in operator '\&'! "),
     ):
         _ = FieldOperatorParser.apply_to_function(float_bitop)
 
@@ -320,6 +250,67 @@ def test_notting_int():
         _ = FieldOperatorParser.apply_to_function(not_int)
 
 
+@pytest.fixture
+def remap_setup():
+    X = Dimension("X")
+    Y = Dimension("Y")
+    Y2XDim = Dimension("Y2X", local=True)
+    Y2X = FieldOffset("Y2X", source=X, target=(Y, Y2XDim))
+    return X, Y, Y2XDim, Y2X
+
+
+def test_remap(remap_setup):
+    X, Y, Y2XDim, Y2X = remap_setup
+
+    def remap_fo(bar: Field[[X], int64]) -> Field[[Y], int64]:
+        return bar(Y2X[0])
+
+    parsed = FieldOperatorParser.apply_to_function(remap_fo)
+
+    assert parsed.body[0].value.type == ct.FieldType(
+        dims=[Y], dtype=ct.ScalarType(kind=ct.ScalarKind.INT64)
+    )
+
+
+def test_remap_nbfield(remap_setup):
+    X, Y, Y2XDim, Y2X = remap_setup
+
+    def remap_fo(bar: Field[[X], int64]) -> Field[[Y, Y2XDim], int64]:
+        return bar(Y2X)
+
+    parsed = FieldOperatorParser.apply_to_function(remap_fo)
+
+    assert parsed.body[0].value.type == ct.FieldType(
+        dims=[Y, Y2XDim], dtype=ct.ScalarType(kind=ct.ScalarKind.INT64)
+    )
+
+
+def test_remap_reduce(remap_setup):
+    X, Y, Y2XDim, Y2X = remap_setup
+
+    def remap_fo(bar: Field[[X], int64]) -> Field[[Y], int64]:
+        return 2 * neighbor_sum(bar(Y2X), axis=Y2XDim)
+
+    parsed = FieldOperatorParser.apply_to_function(remap_fo)
+
+    assert parsed.body[0].value.type == ct.FieldType(
+        dims=[Y], dtype=ct.ScalarType(kind=ct.ScalarKind.INT64)
+    )
+
+
+def test_remap_reduce_sparse(remap_setup):
+    X, Y, Y2XDim, Y2X = remap_setup
+
+    def remap_fo(bar: Field[[Y, Y2XDim], int64]) -> Field[[Y], int64]:
+        return 5 * neighbor_sum(bar, axis=Y2XDim)
+
+    parsed = FieldOperatorParser.apply_to_function(remap_fo)
+
+    assert parsed.body[0].value.type == ct.FieldType(
+        dims=[Y], dtype=ct.ScalarType(kind=ct.ScalarKind.INT64)
+    )
+
+
 def test_scalar_arg():
     def scalar_arg(bar: Field[..., int64], alpha: int64) -> Field[..., int64]:
         return alpha * bar
@@ -338,6 +329,6 @@ def test_mismatched_literals():
 
     with pytest.raises(
         FieldOperatorTypeDeductionError,
-        match=(r"Incompatible type\(s\) for operator '\+': float32, float64"),
+        match=(r"Incompatible datatypes in operator '\+': float32 and float64"),
     ):
         _ = FieldOperatorParser.apply_to_function(mismatched_lit)

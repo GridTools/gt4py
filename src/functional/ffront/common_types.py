@@ -52,7 +52,10 @@ class VoidType(SymbolType):
     Note: only useful for stateful dialects.
     """
 
-    ...
+
+@dataclass(frozen=True)
+class DimensionType(SymbolType):
+    dim: func_common.Dimension
 
 
 @dataclass(frozen=True)
@@ -61,7 +64,7 @@ class OffsetType(SymbolType):
     target: Optional[tuple[func_common.Dimension, ...]] = None
 
     def __str__(self):
-        return f"Offset[{self.id}]"
+        return f"Offset[{self.source}, {self.target}]"
 
 
 @dataclass(frozen=True)
@@ -102,7 +105,7 @@ class FieldType(DataType):
 @dataclass(frozen=True)
 class FunctionType(SymbolType):
     args: list[Union[DataType, DeferredSymbolType]]
-    kwargs: dict[str, DataType]
+    kwargs: dict[str, Union[DataType, DeferredSymbolType]]
     returns: Union[DataType, DeferredSymbolType, VoidType]
 
     def __str__(self):

@@ -154,9 +154,6 @@ def make_symbol_type_from_typing(
                 args=args, kwargs=kwargs, returns=recursive_make_symbol(return_type)
             )
 
-        case type() as t if issubclass(t, common.Dimension):
-            return ct.OffsetType()
-
     raise TypingError(f"'{type_hint}' type is not supported")
 
 
@@ -166,12 +163,13 @@ def make_symbol_type_from_value(value: Any) -> ct.SymbolType:
     #  we should check for the protocol in the future?
     if hasattr(value, "__gt_type__"):
         symbol_type = value.__gt_type__()
-
+    elif isinstance(value, common.Dimension):
+        symbol_type = ct.DimensionType(dim=value)
     else:
         type_ = xtyping.infer_type(value, annotate_callable_kwargs=True)
         symbol_type = make_symbol_type_from_typing(type_)
 
-    if isinstance(symbol_type, (ct.DataType, ct.FunctionType, ct.OffsetType)):
+    if isinstance(symbol_type, (ct.DataType, ct.FunctionType, ct.OffsetType, ct.DimensionType)):
         return symbol_type
     else:
         raise common.GTTypeError(f"Impossible to map '{value}' value to a Symbol")
