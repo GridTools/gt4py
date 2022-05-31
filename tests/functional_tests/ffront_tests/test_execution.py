@@ -21,7 +21,15 @@ import numpy as np
 import pytest
 
 from functional.ffront.decorator import field_operator, program
-from functional.ffront.fbuiltins import Dimension, Field, FieldOffset, float64, int32, neighbor_sum
+from functional.ffront.fbuiltins import (
+    Dimension,
+    Field,
+    FieldOffset,
+    broadcast,
+    float64,
+    int32,
+    neighbor_sum,
+)
 from functional.iterator.embedded import (
     NeighborTableOffsetProvider,
     index_field,
@@ -43,6 +51,7 @@ DimsType = TypeVar("DimsType")
 DType = TypeVar("DType")
 
 IDim = Dimension("IDim")
+JDim = Dimension("JDim")
 
 
 def test_copy():
@@ -359,3 +368,56 @@ def test_scalar_arg_with_field():
 
     ref = np.arange(1, size + 1) * factor
     assert np.allclose(ref, out.array())
+
+
+def test_broadcast_simple():
+    size = 10
+    a = np_as_located_field(IDim)(np.arange(0, size, 1, dtype=int))
+    out = np_as_located_field(IDim, JDim)(np.zeros((size, size)))
+
+    @field_operator(backend="roundtrip")
+    def simple_broadcast(inp: Field[[IDim], float64]) -> Field[[IDim, JDim], float64]:
+        return broadcast(inp, (IDim, JDim))
+
+    simple_broadcast(a, out=out, offset_provider={})
+
+    assert np.allclose(a.array()[:, np.newaxis], out)
+
+
+def test_broadcast_two_fields():
+    size = 10
+    a = np_as_located_field(IDim)(np.arange(0, size, 1, dtype=int))
+    b = np_as_located_field(JDim)(np.arange(0, size, 1, dtype=int))
+
+    out = np_as_located_field(IDim, JDim)(np.zeros((size, size)))
+
+    @field_operator(backend="roundtrip")
+    def broadcast_two_fields(
+        inp1: Field[[IDim], float64], inp2: Field[[JDim], float64]
+    ) -> Field[[IDim, JDim], float64]:
+        a = broadcast(inp1, (IDim, JDim))
+        b = broadcast(inp2, (IDim, JDim))
+        return a + b
+
+    broadcast_two_fields(a, b, out=out, offset_provider={})
+
+    expected = a.array()[:, np.newaxis] + b.array()[np.newaxis, :]
+
+    assert np.allclose(expected, out)
+
+
+def test_broadcast_shifted():
+    Joff = FieldOffset("Joff", source=JDim, target=[JDim])
+
+    size = 10
+    a = np_as_located_field(IDim)(np.arange(0, size, 1, dtype=int))
+    out = np_as_located_field(IDim, JDim)(np.zeros((size, size)))
+
+    @field_operator(backend="roundtrip")
+    def simple_broadcast(inp: Field[[IDim], float64]) -> Field[[IDim, JDim], float64]:
+        bcasted = broadcast(inp, (IDim, JDim))
+        return bcasted(Joff[1])
+
+    simple_broadcast(a, out=out, offset_provider={"Joff": JDim})
+
+    assert np.allclose(a.array()[:, np.newaxis], out)
