@@ -9,6 +9,7 @@ Authors
 * Dahm, Johann. Vulcan Inc.
 * Davis, Eddie. Vulcan Inc.
 * Ehrengruber, Till. ETH Zurich - CSCS
+* Farabullini, Nicoletta. ETH Zurich - C2SM
 * George, Rhea. Vulcan Inc.
 * González Paredes, Enrique. ETH Zurich - CSCS
 * Groner, Linus. ETH Zurich - CSCS
