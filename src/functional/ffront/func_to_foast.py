@@ -42,6 +42,62 @@ class FieldOperatorSyntaxError(DialectSyntaxError):
     dialect_name = "Field Operator"
 
 
+class UnrollPowerOp(eve.NodeTranslator):
+    def visit_BinOp(self, node: foast.BinOp) -> foast.BinOp:
+        if node.op == foast.BinaryOperator.POW:
+            new_left = foast.BinOp(
+                left=self.visit(node.left),
+                right=self.visit(node.left),
+                op=foast.BinaryOperator.MULT,
+                location=node.location,
+                type=node.type,
+            )
+            if float(node.right.value) > 2.0:
+                for _i in range(int(float(node.right.value) - 3)):
+                    new_left = foast.BinOp(
+                        left=new_left,
+                        right=self.visit(node.left),
+                        op=foast.BinaryOperator.MULT,
+                        location=node.location,
+                        type=node.type,
+                    )
+                return foast.BinOp(
+                    left=new_left,
+                    right=self.visit(node.left),
+                    op=foast.BinaryOperator.MULT,
+                    location=node.location,
+                    type=node.type,
+                )
+            elif float(node.right.value) == 2.0:
+                return new_left
+            elif float(node.right.value) == 1.0:
+                return foast.BinOp(
+                    left=self.visit(node.left),
+                    right=self.visit(node.right),
+                    op=foast.BinaryOperator.MULT,
+                    location=node.location,
+                    type=node.type,
+                )
+            elif float(node.right.value) == 0.0:
+                return foast.BinOp(
+                    left=self.visit(node.left),
+                    right=self.visit(node.left),
+                    op=foast.BinaryOperator.DIV,
+                    location=node.location,
+                    type=node.type,
+                )
+            else:
+                raise ValueError("Only powers greater than zero are allowed")
+        else:
+            return foast.BinOp(
+                left=self.visit(node.left),
+                right=self.visit(node.right),
+                op=node.op,
+                location=node.location,
+                type=node.type,
+            )
+
+
 class FieldOperatorParser(DialectParser[foast.FieldOperator]):
     """
     Parse field operator function definition from source code into FOAST.
@@ -93,6 +149,8 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
 
     @classmethod
     def _postprocess_dialect_ast(cls, dialect_ast: foast.FieldOperator) -> foast.FieldOperator:
+        # return should have the unrolling already
+        dialect_ast = UnrollPowerOp().visit(dialect_ast)
         return FieldOperatorTypeDeduction.apply(dialect_ast)
 
     def _builtin_type_constructor_symbols(
@@ -342,8 +400,8 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
     def visit_Div(self, node: ast.Div, **kwargs) -> foast.BinaryOperator:
         return foast.BinaryOperator.DIV
 
-    def visit_Pow(self, node: ast.Pow, **kwargs) -> None:
-        raise FieldOperatorSyntaxError.from_AST(node, msg="`**` operator not supported!")
+    def visit_Pow(self, node: ast.Pow, **kwargs) -> foast.BinaryOperator:
+        return foast.BinaryOperator.POW
 
     def visit_Mod(self, node: ast.Mod, **kwargs) -> None:
         raise FieldOperatorSyntaxError.from_AST(node, msg="`%` operator not supported!")
