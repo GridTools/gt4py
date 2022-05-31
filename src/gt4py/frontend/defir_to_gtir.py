@@ -168,7 +168,7 @@ class UnRoller(IRNodeVisitor):
     def apply(cls, root, **kwargs):
         return cls().visit(root, **kwargs)
 
-    def visit_FieldRef(self, node: FieldRef, params, transposed=False):
+    def visit_FieldRef(self, node: FieldRef, params):
         name = node.name 
         if params[name].data_dims:
             field_list = []
@@ -184,27 +184,15 @@ class UnRoller(IRNodeVisitor):
             # matrix
             elif len(params[name].data_dims) == 2:
                 rows, cols = params[name].data_dims
-
-                if transposed:
+                for row in range(rows):
+                    row_list = []
                     for col in range(cols):
-                        col_list = []
-                        for row in range(rows):
-                            tmp = copy.deepcopy(node)
-                            data_type = DataType.INT32
-                            data_index = [ScalarLiteral(value=row, data_type=data_type), ScalarLiteral(value=col, data_type=data_type)]
-                            tmp.data_index = data_index
-                            col_list.append(tmp)
-                        field_list.append(col_list)
-                else:
-                    for row in range(rows):
-                        row_list = []
-                        for col in range(cols):
-                            tmp = copy.deepcopy(node)
-                            data_type = DataType.INT32
-                            data_index = [ScalarLiteral(value=row, data_type=data_type), ScalarLiteral(value=col, data_type=data_type)]
-                            tmp.data_index = data_index
-                            row_list.append(tmp)
-                        field_list.append(row_list)
+                        tmp = copy.deepcopy(node)
+                        data_type = DataType.INT32
+                        data_index = [ScalarLiteral(value=row, data_type=data_type), ScalarLiteral(value=col, data_type=data_type)]
+                        tmp.data_index = data_index
+                        row_list.append(tmp)
+                    field_list.append(row_list)
             else:
                 raise Exception("Higher dimensional fields only supported for vectors and matrices")
 
@@ -216,7 +204,11 @@ class UnRoller(IRNodeVisitor):
     def visit_UnaryOpExpr(self, node: UnaryOpExpr, params):
         # assert node.op == UnaryOperator.TRANSPOSED, f'Unsupported unary operator {node.op}'
         if node.op == UnaryOperator.TRANSPOSED:
-            return self.visit(node.arg, params=params, transposed=True)
+            node = self.visit(node.arg, params=params)
+            # transpose list
+            node = [list(x) for x in zip(*node)]
+            return node
+            
         else:
             return node
 

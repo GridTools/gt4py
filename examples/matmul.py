@@ -4,8 +4,8 @@ import gt4py.gtscript as gtscript
 import copy
 
 # config stuff
-backend = "gt:cpu_ifirst"
-# backend = "numpy"
+# backend = "gt:cpu_ifirst"
+backend = "numpy"
 dtype = np.float32
 if backend == "numpy":
     backend_opts = {
@@ -28,7 +28,8 @@ n_dtype = (dtype, (n,))
 m_dtype = (dtype, (m,))
 dtype_matrix = (dtype, (n,m))
 
-n_field = np.random.rand(n)
+n_field_np = np.random.rand(n)
+m_field_np = np.random.rand(m)
 matrix_np = np.random.random(n*m).reshape(n, m)
 
 matrix = gt.storage.from_array(
@@ -38,15 +39,16 @@ matrix = gt.storage.from_array(
     shape=(Nx, Ny, Nz), # todo: maybe try 2D
     default_origin=(0, 0, 0))
 
-in_field_1 = gt.storage.from_array(
-    data= n_field,
+n_field = gt.storage.from_array(
+    data= n_field_np,
     backend = backend,
     dtype=n_dtype,
     shape=(Nx, Ny, Nz), # todo: maybe try 2D
     default_origin=(0, 0, 0))
 
-in_field_2 = 3 * gt.storage.ones(
-    backend=backend,
+m_field = gt.storage.from_array(
+    data= m_field_np,
+    backend = backend,
     dtype=m_dtype,
     shape=(Nx, Ny, Nz), # todo: maybe try 2D
     default_origin=(0, 0, 0))
@@ -70,19 +72,21 @@ def mult_coeff(vec_1, vec_2):
 def test_stencil(
         matrix: gtscript.Field[dtype_matrix],
         # c: float,
-        vec_n: gtscript.Field[m_dtype],
-        out: gtscript.Field[n_dtype],
+        vec_n: gtscript.Field[n_dtype],
+        vec_m: gtscript.Field[m_dtype]
+        # out: gtscript.Field[n_dtype]
         # vec_m: gtscript.Field[m_dtype]
 ):
     # tmp: gtscript.Field[(np.float64, (2,))] =  0
     with computation(PARALLEL), interval(...):
-        out = matrix @ vec_n
+        vec_n = matrix @ vec_m
         
 
-test_stencil(matrix, in_field_2, out_field)
-print(f'{coeff = }\n{in_field_1 = }\n{in_field_2 = }\n{matrix = }\n{out_field = }')
-tmp = np.einsum('ijklm, ijkm -> ijkl', matrix, in_field_2)
-np.testing.assert_allclose(np.asarray(out_field), tmp, rtol=1e-5, atol=1e-8)
+test_stencil(matrix, n_field, m_field)
+# print(f'{coeff = }\n{n_field = }\n{m_field = }\n{matrix = }\n')
+tmp = np.einsum('ijklm, ijkm -> ijkl', matrix, m_field)
+np.testing.assert_allclose(np.asarray(n_field), tmp, rtol=1e-5, atol=1e-8)
+print(f'{m_field =}')
 print(f'{tmp = }')
 
 
