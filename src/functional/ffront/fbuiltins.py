@@ -23,7 +23,7 @@ from functional.ffront import common_types as ct
 from functional.iterator import runtime
 
 
-__all__ = ["Field", "float32", "float64", "int32", "int64", "neighbor_sum"]
+__all__ = ["Field", "Dimension", "float32", "float64", "int32", "int64", "neighbor_sum"]
 
 
 TYPE_BUILTINS = [Field, bool, int, int32, int64, float, float32, float64, tuple]
@@ -44,7 +44,7 @@ class BuiltInFunction:
 neighbor_sum = BuiltInFunction(
     ct.FunctionType(
         args=[ct.DeferredSymbolType(constraint=ct.FieldType)],
-        kwargs={"axis": ct.ScalarType(kind=ct.ScalarKind.DIMENSION)},
+        kwargs={"axis": ct.DeferredSymbolType(constraint=ct.DimensionType)},
         returns=ct.DeferredSymbolType(constraint=ct.FieldType),
     )
 )
@@ -61,9 +61,10 @@ ALL_BUILTIN_NAMES = TYPE_BUILTIN_NAMES + MODULE_BUILTIN_NAMES
 BUILTINS = {name: globals()[name] for name in __all__ + ["bool", "int", "float"]}
 
 
-# TODO(ricoh): This should be reunified with ``iterator.runtime.Offset``
-# potentially in ``functional.common``, which requires lifting of
-# ``ffront.common_types`` into ``functional``.
+# TODO(tehrengruber): FieldOffset and runtime.Offset are not an exact conceptual
+#  match. Revisit if we want to continue subclassing here. If we split
+#  them also check whether Dimension should continue to be the shared or define
+#  guidelines for decision.
 @dataclass(frozen=True)
 class FieldOffset(runtime.Offset):
     source: Optional[Dimension] = None

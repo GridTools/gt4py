@@ -25,6 +25,7 @@ from functional.ffront import (
     fbuiltins,
     field_operator_ast as foast,
     symbol_makers,
+    type_info,
 )
 from functional.ffront.ast_passes import (
     SingleAssignTargetPass,
@@ -35,7 +36,6 @@ from functional.ffront.ast_passes import (
 )
 from functional.ffront.dialect_parser import DialectParser, DialectSyntaxError
 from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduction
-from functional.ffront.type_info import TypeInfo, is_complete_scalar_type
 
 
 class FieldOperatorSyntaxError(DialectSyntaxError):
@@ -200,8 +200,8 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
             raise FieldOperatorSyntaxError.from_AST(
                 node, msg="Only arguments of type DataType are allowed."
             )
-        if is_complete_scalar_type(new_type):
-            new_type = ct.FieldType(dims=[], dtype=new_type)
+        if type_info.is_concrete(new_type) and type_info.type_class(new_type) is ct.ScalarType:
+            new_type = ct.FieldType(dims=[], dtype=type_info.extract_dtype(new_type))
         return foast.DataSymbol(id=node.arg, location=self._make_loc(node), type=new_type)
 
     def visit_Assign(self, node: ast.Assign, **kwargs) -> foast.Assign:
@@ -216,7 +216,10 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
         constraint_type: Type[ct.DataType] = ct.DataType
         if isinstance(new_value, foast.TupleExpr):
             constraint_type = ct.TupleType
-        elif TypeInfo(new_value.type).is_scalar:
+        elif (
+            type_info.is_concrete(new_value.type)
+            and type_info.type_class(new_value.type) is ct.ScalarType
+        ):
             constraint_type = ct.ScalarType
         return foast.Assign(
             target=foast.DataSymbol(
@@ -423,13 +426,10 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
         if func_name in fbuiltins.TYPE_BUILTIN_NAMES:
             self._verify_builtin_type_constructor(node)
 
-        args = node.args.copy()
-        for keyword in node.keywords:
-            args.append(keyword.value)
-
         return foast.Call(
             func=self.visit(node.func, **kwargs),
-            args=[self.visit(arg, **kwargs) for arg in args],
+            args=[self.visit(arg, **kwargs) for arg in node.args],
+            kwargs={keyword.arg: self.visit(keyword.value, **kwargs) for keyword in node.keywords},
             location=self._make_loc(node),
         )
 
