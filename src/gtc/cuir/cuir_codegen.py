@@ -57,8 +57,13 @@ class CUIRCodegen(codegen.TemplatedGenerator):
     )
 
     def visit_FieldAccess(
-        self, node: cuir.FieldAccess, symtable: Dict[str, cuir.Decl], **kwargs: Any
+        self, node: cuir.FieldAccess, **kwargs: Any
     ):
+        if isinstance(node, cuir.KCacheAccess):
+            return self.generic_visit(node, **kwargs)
+
+        symtable: Dict[str, cuir.Decl] = kwargs["symtable"]
+
         def maybe_const(s):
             try:
                 return f"{int(s)}_c"
@@ -70,19 +75,16 @@ class CUIRCodegen(codegen.TemplatedGenerator):
         data_index = [self.visit(index, in_data_index=True, **kwargs) for index in node.data_index]
 
         decl = symtable[node.name]
-        if isinstance(decl, cuir.FieldDecl) or (
-            isinstance(decl, cuir.Temporary) and not decl.data_dims
-        ):
-            data_index_str = "".join(f", {maybe_const(index)}" for index in data_index)
-            return f"{name}({offset}{data_index_str})"
-        else:
+        if isinstance(decl, cuir.Temporary) and decl.data_dims:
             data_index_str = "+".join(
-                f"{index}*{int(np.prod(decl.data_dims[i+1:], initial=1))}"
+                f"{index}*{int(np.prod(decl.data_dims[i + 1:], initial=1))}"
                 for i, index in enumerate(data_index)
             )
             return f"{name}({offset})[{data_index_str}]"
+        else:
+            data_index_str = "".join(f", {maybe_const(index)}" for index in data_index)
+            return f"{name}({offset}{data_index_str})"
 
-    FieldAccess = as_mako("${name}(${offset}${this_data_index})")
 
     def visit_IJCacheAccess(
         self, node: cuir.IJCacheAccess, symtable: Dict[str, Any], **kwargs: Any
@@ -436,7 +438,7 @@ class CUIRCodegen(codegen.TemplatedGenerator):
             dtype = self.visit(decl.dtype, **kwargs)
             if decl.data_dims:
                 total_size = int(np.prod(decl.data_dims, initial=1))
-                dtype = f"(array<{dtype}, {total_size}>)"
+                dtype = f"array<{dtype}, {total_size}>"
             return dtype
 
         return self.generic_visit(
