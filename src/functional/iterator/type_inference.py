@@ -5,13 +5,36 @@ from eve.utils import noninstantiable
 from functional.iterator import ir
 
 
+"""Constraint-based inference for the iterator IR.
+
+Based on the classical constraint-based two-pass type consisting of the following passes:
+    1. Constraint collection
+    2. Type unification
+"""
+
+
 @noninstantiable
 class DType(eve.Node, unsafe_hash=True):  # type: ignore[call-arg]
+    """Base class for all types.
+
+    The initial type constraint collection pass treats all instances of DType as hashable frozen
+    nodes, that is, no in-place modification is used.
+
+    In the type unification phase however, in-place modifications are used for efficient
+    renaming/node replacements and special care is taken to handle hash values that change due to
+    those modifications.
+    """
+
     def __str__(self) -> str:
         return pformat(self)
 
 
 class Var(DType):
+    """Basic type variable.
+
+    Also used as baseclass for specialized type variables.
+    """
+
     idx: int
 
     _counter: ClassVar[int] = 0
@@ -23,83 +46,142 @@ class Var(DType):
 
     @classmethod
     def fresh(cls, **kwargs):
+        """Create a type variable with a previously unused index."""
         return cls(idx=cls.fresh_index(), **kwargs)
 
 
 class Tuple(DType):
+    """Tuple type with arbitrary number of elements."""
+
     elems: tuple[DType, ...]
 
 
 class PartialTupleVar(Var):
+    """Type variable representing a partially defined tuple.
+
+    `elem_indices` are the indices of the known elements; `elem_values` are the values of the known
+    elements. Both tuples need to have the same length.
+
+    E.g., if `elem_indices` is `(0, 2)` and `elem_values` are two type variables `(T₀, T₁)`, then
+    the form of the tuple type is `(T₀, ?, T₁, …)`. That is, the types of the elements at indices 0
+    and 2 are known and T₀, respectively T₁. But the total number of elements and types of other
+    elements are unknown.
+    """
+
     elem_indices: tuple[int, ...]
     elem_values: tuple[DType, ...]
 
 
 class PrefixTuple(DType):
+    """A tuple type consisting of a prefix (first element) and other elements.
+
+    This type is similar to the cons operator for tuple types. Not that this type can be replaced by
+    an instance of `Tuple` as soon as the type of `others` is a `Tuple`.
+    """
+
     prefix: DType
     others: DType
 
 
 class Fun(DType):
+    """Function type.
+
+    Note: the type inference algorithm always infers a tuple-like type for
+    `args`, even for single-argument functions.
+    """
+
     args: DType = eve.field(default_factory=Var.fresh)
     ret: DType = eve.field(default_factory=Var.fresh)
 
 
 class Val(DType):
+    """The main type for representing values and iterators.
+
+    Each `Val` consists of the following three things:
+    - A `kind` which is either `Value()`, `Iterator()`, or a variable
+    - A `dtype` which is either a `Primitive` or a variable
+    - A `size` which is either `Scalar()`, `Column()`, or a variable
+    """
+
     kind: DType = eve.field(default_factory=Var.fresh)
     dtype: DType = eve.field(default_factory=Var.fresh)
     size: DType = eve.field(default_factory=Var.fresh)
 
 
 class ValTuple(DType):
+    """A tuple of `Val` where all items have the same `kind` and `size`, but different dtypes."""
+
     kind: DType = eve.field(default_factory=Var.fresh)
     dtypes: DType = eve.field(default_factory=Var.fresh)
     size: DType = eve.field(default_factory=Var.fresh)
 
 
 class UniformValTupleVar(Var):
+    """A tuple of `Val` with unknown length, but common `kind`, `size`, and `dtype` of all items."""
+
     kind: DType = eve.field(default_factory=Var.fresh)
     dtype: DType = eve.field(default_factory=Var.fresh)
     size: DType = eve.field(default_factory=Var.fresh)
 
 
 class Column(DType):
+    """Marker for column-sized values/iterators."""
+
     ...
 
 
 class Scalar(DType):
+    """Marker for scalar-sized values/iterators."""
+
     ...
 
 
 class Primitive(DType):
+    """Primitive type used in values/iterators."""
+
     name: str
 
 
 class Value(DType):
+    """Marker for values."""
+
     ...
 
 
 class Iterator(DType):
+    """Marker for iterators."""
+
     ...
 
 
 class Closure(DType):
+    """Stencil closure type."""
+
     output: DType
     inputs: DType
 
 
 class FunDef(DType):
+    """Function definition type."""
+
     name: str
     fun: Fun
 
 
 class Fencil(DType):
+    """Fencil type."""
+
     name: str
     fundefs: tuple[DType, ...]
     params: tuple[DType, ...]
 
 
 class LetPolymorphic(DType):
+    """Wrapper for let-polymorphic types.
+
+    Used for fencil-level function definitions.
+    """
+
     dtype: DType
 
 
@@ -112,6 +194,8 @@ DOMAIN_DTYPE = Primitive(name="domain")  # type: ignore [call-arg]
 
 
 class _VarReindexer(eve.ReusingNodeTranslator):
+    """Reindex type variables in a type tree."""
+
     def __init__(self, indexer):
         super().__init__()
         self.indexer = indexer
@@ -124,6 +208,8 @@ class _VarReindexer(eve.ReusingNodeTranslator):
 
 
 def _freshen(dtype):
+    """Re-instantiate `dtype` with fresh type variables."""
+
     def indexer(index_map):
         return Var.fresh_index()
 
@@ -132,6 +218,7 @@ def _freshen(dtype):
 
 
 def _builtin_type(builtin):
+    """Generate type definition for the given builtin function."""
     assert builtin in ir.BUILTINS
     if builtin == "deref":
         dtype = Var.fresh()
@@ -216,6 +303,8 @@ def _builtin_type(builtin):
 
 
 class _TypeInferrer(eve.NodeTranslator):
+    """Visit the full iterator IR tree, convert nodes to respective types and generate constraints."""
+
     def visit_SymRef(self, node, *, constraints, symtypes):
         if node.id in symtypes:
             res = symtypes[node.id]
@@ -244,6 +333,8 @@ class _TypeInferrer(eve.NodeTranslator):
     def visit_FunCall(self, node, *, constraints, symtypes):
         if isinstance(node.fun, ir.SymRef):
             if node.fun.id == "make_tuple":
+                # Calls to make_tuple are handled as being part of the grammar,
+                # not as function calls
                 argtypes = self.visit(node.args, constraints=constraints, symtypes=symtypes)
                 kind = Var.fresh()
                 size = Var.fresh()
@@ -252,6 +343,8 @@ class _TypeInferrer(eve.NodeTranslator):
                     constraints.add((Val(kind=kind, dtype=d, size=size), a))
                 return Val(kind=kind, dtype=dtype, size=size)
             if node.fun.id == "tuple_get":
+                # Calls to tuple_get are handled as being part of the grammar,
+                # not as function calls
                 if len(node.args) != 2:
                     raise TypeError("tuple_get requires exactly two arguments")
                 if not isinstance(node.args[0], ir.Literal) or node.args[0].type != "int":
@@ -269,7 +362,9 @@ class _TypeInferrer(eve.NodeTranslator):
                 constraints.add((tup, val))
                 return Val(kind=kind, dtype=elem, size=size)
             if node.fun.id == "shift":
-                # note: we just ignore the offsets
+                # Calls to shift are handled as being part of the grammar, not
+                # as function calls; that is, the offsets are completely
+                # ignored by the type inference algorithm
                 it = Val(kind=Iterator())
                 return Fun(args=Tuple(elems=(it,)), ret=it)
 
@@ -309,6 +404,9 @@ class _TypeInferrer(eve.NodeTranslator):
     def visit_FencilDefinition(self, node, *, constraints, symtypes):
         ftypes = []
         fmap = dict()
+        # Note: functions have to be ordered according to Lisp/Scheme `let*`
+        # statements; that is, functions can only reference other functions
+        # that are defined before
         for f in node.function_definitions:
             c = set()
             f = self.visit(f, constraints=c, symtypes=symtypes | fmap)
@@ -326,37 +424,58 @@ class _TypeInferrer(eve.NodeTranslator):
 
 
 class _FreeVariables(eve.NodeVisitor):
+    """Collect type variables within a type expression."""
+
     def visit_Var(self, node, *, free_variables):
         self.generic_visit(node, free_variables=free_variables)
         free_variables.add(node)
 
 
 def _free_variables(x):
+    """Collect type variables within a type expression."""
     fv = set()
     _FreeVariables().visit(x, free_variables=fv)
     return fv
 
 
 class _Dedup(eve.ReusingNodeTranslator):
+    """Deduplicate nodes that have the same value but a different `id`."""
+
     def visit(self, node, *, memo):
         node = super().visit(node, memo=memo)
         return memo.setdefault(node, node)
 
 
 class _Renamer:
+    """Efficiently rename (that is, replace) nodes in a type expression.
+
+    Works by collecting all parent nodes of all nodes in a tree. If a node should be replaced by
+    another, all referencing parent nodes can be found efficiently and modified in place.
+
+    Note that all types have to be registered before they can be used in a `rename` call.
+
+    Besides basic renaming, this also resolves `ValTuple` and `PrefixTuple` to full `Tuple` if
+    possible after renaming.
+    """
+
     def __init__(self):
-        self.parents = dict()
+        self._parents = dict()
 
     def register(self, dtype):
+        """Register a type for possible future renaming.
+
+        Collects the parent nodes of all nodes in the type tree.
+        """
+
         def collect_parents(node):
             for field, child in node.iter_children_items():
                 if isinstance(child, DType):
-                    self.parents.setdefault(child, []).append((node, field, None))
+                    self._parents.setdefault(child, []).append((node, field, None))
                     collect_parents(child)
                 elif isinstance(child, tuple):
                     for i, c in enumerate(child):
                         if isinstance(c, DType):
-                            self.parents.setdefault(c, []).append((node, field, i))
+                            self._parents.setdefault(c, []).append((node, field, i))
                             collect_parents(c)
                 else:
                     assert isinstance(child, (int, str))
@@ -365,26 +484,42 @@ class _Renamer:
 
     @staticmethod
     def _val_tuple_will_resolve_to_tuple(node, field, replacement):
+        """Check if a `ValTuple` instance can be resolved to a `Tuple` after renaming."""
         return isinstance(node, ValTuple) and field == "dtypes" and isinstance(replacement, Tuple)
 
     @staticmethod
     def _resolve_val_tuple(node, replacement):
+        """Resolve a fully defined `ValTuple` instance to a `Tuple`."""
         return Tuple(
             elems=tuple(Val(kind=node.kind, dtype=d, size=node.size) for d in replacement.elems)
         )
 
     @staticmethod
     def _prefix_tuple_will_resolve_to_tuple(node, field, replacement):
+        """Check if a `PrefixTuple` instance can be resolved to a `Tuple` after renaming."""
         return (
             isinstance(node, PrefixTuple) and field == "others" and isinstance(replacement, Tuple)
         )
 
     @staticmethod
     def _resolve_prefix_tuple(node, replacement):
+        """Resolve a fully defined `PrefixTuple` instance to a `Tuple`."""
         return Tuple(elems=(node.prefix,) + replacement.elems)
 
     def _update_node(self, node, field, index, replacement):
-        popped = self.parents.pop(node, None)
+        """Replace a field of a node by some other value.
+
+        If `index` is `None`, basically performs `setattr(node, field, replacement)`. Otherwise,
+        assumes that the given field is a tuple field and replaces only the tuple element that
+        matches the given index.
+
+        Further, updates the mapping of node parents and handles the possibly changing hash value of
+        the updated node.
+        """
+        # Pop the node out of the parents dict as its hash could change after modification
+        popped = self._parents.pop(node, None)
+
+        # Update the node’s field or field element
         if index is None:
             setattr(node, field, replacement)
         else:
@@ -392,41 +527,65 @@ class _Renamer:
             field_list[index] = replacement
             setattr(node, field, tuple(field_list))
 
-        self.parents.setdefault(replacement, []).append((node, field, index))
+        # Register `node` to be the new parent of `replacement`
+        self._parents.setdefault(replacement, []).append((node, field, index))
+
+        # Put back possible previous entries to the parents dict after possible hash change
         if popped:
-            self.parents[node] = popped
+            self._parents[node] = popped
 
     def rename(self, node, replacement):
+        """Rename/replace all occurrences of `node` to/by `replacement`."""
         try:
-            nodes = self.parents.pop(node)
+            # Find parent nodes
+            nodes = self._parents.pop(node)
         except KeyError:
             return
 
         follow_up_renames = []
         for node, field, index in nodes:
             if self._val_tuple_will_resolve_to_tuple(node, field, replacement):
+                # Special case 1: a `ValTuple` instance can be resolved to a `Tuple` after renaming
                 tup = self._resolve_val_tuple(node, replacement)
+                # So just collect the resolved tuple for a following rename
                 follow_up_renames.append((node, tup))
             elif self._prefix_tuple_will_resolve_to_tuple(node, field, replacement):
+                # Special case 2: a `PrefixTuple` instance can be resolved to a `Tuple` after renaming
                 tup = self._resolve_prefix_tuple(node, replacement)
                 follow_up_renames.append((node, tup))
             else:
+                # Default case: just update a field value of the node
                 self._update_node(node, field, index, replacement)
 
+        # Handle follow-up renames
         for s, d in follow_up_renames:
             self.register(d)
             self.rename(s, d)
 
 
 class _Box(eve.Node, unsafe_hash=True):  # type: ignore[call-arg]
+    """Simple value holder, used for wrapping root nodes of a type tree.
+
+    This makes sure that all root nodes have a parent node which can be updated by the `_Renamer`.
+    """
+
     value: DType
 
 
 class _Unifier:
+    """A classical type unifier (Robinson, 1971).
+
+    Computes the most general type satisfying all given constraints. Uses a `_Renamer` for efficient
+    type variable renaming.
+    """
+
     def __init__(self, dtype, constraints):
+        # Wrap the original `dtype` and all `constraints` to make sure they have a parent node and
+        # thus the root nodes are correctly handled by the renamer
         self._dtype = _Box(value=dtype)
         self._constraints = [(_Box(value=s), _Box(value=t)) for s, t in constraints]
 
+        # Create a renamer and register `dtype` and all `constraints` types
         self._renamer = _Renamer()
         self._renamer.register(self._dtype)
         for s, t in self._constraints:
@@ -434,10 +593,12 @@ class _Unifier:
             self._renamer.register(t)
 
     def unify(self):
+        """Run the unification."""
         while self._constraints:
             constraint = self._constraints.pop()
             handled = self._handle_constraint(constraint)
             if not handled:
+                # Try with swapped LHS and RHS
                 handled = self._handle_constraint(constraint[::-1])
             if not handled:
                 raise TypeError(
@@ -447,11 +608,13 @@ class _Unifier:
         return self._dtype.value
 
     def _rename(self, x, y):
+        """Type renaming/replacement."""
         self._renamer.register(x)
         self._renamer.register(y)
         self._renamer.rename(x, y)
 
     def _add_constraint(self, x, y):
+        """Register a new constraint."""
         x = _Box(value=x)
         y = _Box(value=y)
         self._renamer.register(x)
@@ -459,21 +622,26 @@ class _Unifier:
         self._constraints.append((x, y))
 
     def _handle_constraint(self, constraint):  # noqa: C901
+        """Handle a single constraint."""
         s, t = (c.value for c in constraint)
         if s == t:
+            # Constraint is satisfied if LHS equals RHS
             return True
 
         if type(s) is Var:
             assert s not in _free_variables(t)
+            # Just replace LHS by RHS if LHS is a type variable
             self._rename(s, t)
             return True
 
         if type(s) is type(t) is Fun:
+            # Make sure that argument and return type matches if LHS and RHS are function types
             self._add_constraint(s.args, t.args)
             self._add_constraint(s.ret, t.ret)
             return True
 
         if type(s) is type(t) is Val:
+            # Make sure that kind, dtype, and size matches if LHS and RHS are `Val` types
             self._add_constraint(s.kind, t.kind)
             self._add_constraint(s.dtype, t.dtype)
             self._add_constraint(s.size, t.size)
@@ -481,22 +649,30 @@ class _Unifier:
 
         if type(s) is type(t) is Tuple:
             if len(s.elems) != len(t.elems):
+                # If LHS and RHS are tuple types, they must have the same number of elements…
                 raise TypeError(f"Can not satisfy constraint: {s} ≡ {t}")
             for lhs, rhs in zip(s.elems, t.elems):
+                # …and also the types of all elements must match
                 self._add_constraint(lhs, rhs)
             return True
 
         if type(s) is PartialTupleVar and type(t) is Tuple:
             assert s not in _free_variables(t)
+            # Make sure that size and elements in a `PartialTupleVar` LHS match the RHS `Tuple`
+            if max(s.elem_indices) >= len(t.elems):
+                raise TypeError(f"Can not satisfy constraint: {s} ≡ {t}")
             for i, x in zip(s.elem_indices, s.elem_values):
                 self._add_constraint(x, t.elems[i])
             return True
 
         if type(s) is type(t) is PartialTupleVar:
             assert s not in _free_variables(t) and t not in _free_variables(s)
+            # If both, LHS and RHS, are `PartialTupleVar`s, replace both instances by a new,
+            # combined instance and make sure that the types of the elements defined in the LHS and
+            # RHS match
             se = dict(zip(s.elem_indices, s.elem_values))
             te = dict(zip(t.elem_indices, t.elem_values))
-            for i in set(se) & set(te):
+            for i in set(s.elem_indices) & set(t.elem_indices):
                 self._add_constraint(se[i], te[i])
             elems = se | te
             combined = PartialTupleVar.fresh(
@@ -508,6 +684,7 @@ class _Unifier:
 
         if type(s) is PrefixTuple and type(t) is Tuple:
             assert s not in _free_variables(t)
+            # Make sure that all elements match
             self._add_constraint(s.prefix, t.elems[0])
             self._add_constraint(s.others, Tuple(elems=t.elems[1:]))
             return True
@@ -519,6 +696,7 @@ class _Unifier:
             return True
 
         if type(s) is ValTuple and type(t) is Tuple:
+            # Expand the LHS `ValTuple` to the size of the RHS `Tuple` and make sure they match
             s_expanded = Tuple(
                 elems=tuple(Val(kind=s.kind, dtype=Var.fresh(), size=s.size) for _ in t.elems)
             )
@@ -535,6 +713,7 @@ class _Unifier:
 
         if type(s) is UniformValTupleVar and type(t) is Tuple:
             assert s not in _free_variables(t)
+            # Replace the LHS `UniformValTupleVar` by the RHS `Tuple` and make sure the types match
             self._rename(s, t)
             elem_dtype = Val(kind=s.kind, dtype=s.dtype, size=s.size)
             for e in t.elems:
@@ -547,10 +726,13 @@ class _Unifier:
             self._add_constraint(s.size, t.size)
             return True
 
+        # Constraint handling failed
         return False
 
 
 def unify(dtype, constraints):
+    """Unify all given constraints."""
+    # Deduplicate nodes, this can speed up later things a bit
     memo = dict()
     dtype = _Dedup().visit(dtype, memo=memo)
     constraints = {_Dedup().visit(c, memo=memo) for c in constraints}
@@ -561,6 +743,8 @@ def unify(dtype, constraints):
 
 
 def reindex_vars(dtype):
+    """Reindex all type variables, to have nice indices starting at zero."""
+
     def indexer(index_map):
         return len(index_map)
 
@@ -569,15 +753,21 @@ def reindex_vars(dtype):
 
 
 def infer(expr, symtypes=None):
+    """Infer the type of the given iterator IR expression."""
     if symtypes is None:
         symtypes = dict()
+
+    # Collect constraints
     constraints = set()
     dtype = _TypeInferrer().visit(expr, constraints=constraints, symtypes=symtypes)
+    # Compute the most general type that satisfies all constraints
     unified = unify(dtype, constraints)
     return reindex_vars(unified)
 
 
 class PrettyPrinter(eve.ReusingNodeTranslator):
+    """Pretty-printer for type expressions."""
+
     @staticmethod
     def _subscript(i):
         return "".join("₀₁₂₃₄₅₆₇₈₉"[int(d)] for d in str(i))
