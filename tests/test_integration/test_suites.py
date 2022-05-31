@@ -14,6 +14,7 @@
 
 
 import numpy as np
+import pytest
 
 from gt4py import gtscript
 from gt4py import testing as gt_testing
@@ -766,7 +767,12 @@ class TestVariableKRead(gt_testing.StencilTestSuite):
         "index": np.int32,
     }
     domain_range = [(2, 2), (2, 2), (2, 8)]
-    backends = ALL_BACKENDS
+    backends = [
+        param
+        if "dace" not in param.values[0]
+        else pytest.param(param.values[0], marks=[*param.marks, pytest.mark.xfail])
+        for param in ALL_BACKENDS
+    ]
     symbols = {
         "field_in": gt_testing.field(
             in_range=(-10, 10), axes="IJK", boundary=[(0, 0), (0, 0), (0, 0)]
@@ -794,7 +800,12 @@ class TestVariableKAndReadOutside(gt_testing.StencilTestSuite):
         "index": np.int32,
     }
     domain_range = [(2, 2), (2, 2), (2, 8)]
-    backends = ALL_BACKENDS
+    backends = [
+        param
+        if "dace" not in param.values[0]
+        else pytest.param(param.values[0], marks=[*param.marks, pytest.mark.xfail])
+        for param in ALL_BACKENDS
+    ]
     symbols = {
         "field_in": gt_testing.field(
             in_range=(0.1, 10), axes="IJK", boundary=[(0, 0), (0, 0), (1, 0)]
