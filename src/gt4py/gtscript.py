@@ -140,8 +140,7 @@ def _set_arg_dtypes(definition: Callable[..., None], dtypes: Dict[Type, Type]):
 
 
 def function(func):
-    """GTScript function."""
-
+    """Mark a GTScript function."""
     from gt4py.frontend import gtscript_frontend as gt_frontend
 
     gt_frontend.GTScriptParser.annotate_definition(func)

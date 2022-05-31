@@ -112,7 +112,6 @@ repos:
       src/gt4py/backend/__init__.py |
       src/gt4py/backend/pyext_builder.py |
       src/gt4py/frontend/__init__.py |
-      src/gt4py/frontend/gtscript_frontend.py |
       src/gt4py/frontend/nodes.py |
       src/gt4py/frontend/node_util.py |
       src/gt4py/storage/__init__.py |
@@ -142,9 +141,9 @@ repos:
       docs/gtc/conf.py |
       docs/eve/conf.py |
       src/gt4py/backend/pyext_builder.py |
-      src/gt4py/frontend/gtscript_frontend.py |
       src/gt4py/frontend/nodes.py |
       src/gt4py/frontend/node_util.py |
+      src/gt4py/frontend/gtscript_frontend.py |
       src/gt4py/utils/meta.py |
       tests/definitions.py |
       tests/definition_setup.py |
