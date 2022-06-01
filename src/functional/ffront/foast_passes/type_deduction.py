@@ -289,7 +289,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                 args=self.visit(node.args, **kwargs),
                 kwargs=self.visit(node.kwargs, **kwargs),
                 location=node.location,
-                type=ct.FieldType(dims=[], dtype=ct.ScalarType(kind=ct.ScalarKind.FLOAT32)),  # TODO
+                type=ct.UnknownFieldType(),
             )
         elif isinstance(new_func.type, ct.FunctionType):
             return_type = new_func.type.returns

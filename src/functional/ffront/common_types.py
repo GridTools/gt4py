@@ -126,3 +126,8 @@ class FunctionType(SymbolType):
 class UnknownFunctionType(SymbolType):
     def __str__(self):
         return "(...) -> ..."
+
+
+class UnknownFieldType(SymbolType):
+    def __str__(self):
+        return "Field[[...],...]"

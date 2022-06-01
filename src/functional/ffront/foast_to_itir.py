@@ -63,6 +63,8 @@ def resulting_type_kind(symbol_type: ct.SymbolType) -> TypeKind:
     match type_info.type_class(symbol_type):
         case ct.FieldType:
             return TypeKind.FIELD
+        case ct.UnknownFieldType:
+            return TypeKind.FIELD
         case ct.ScalarType:
             return TypeKind.SCALAR
 
