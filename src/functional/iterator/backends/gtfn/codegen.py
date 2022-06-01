@@ -42,6 +42,11 @@ class GTFNCodegen(codegen.TemplatedGenerator):
     BinaryExpr = as_fmt("({lhs}{op}{rhs})")
     TernaryExpr = as_fmt("({cond}?{true_expr}:{false_expr})")
 
+    TaggedValues = as_mako(
+        "hymap::keys<${','.join(t + '_t' for t in tags)}>::make_values(${','.join(values)})"
+    )
+    CartesianDomain = as_fmt("cartesian_domain({tagged_sizes}, {tagged_offsets})")
+
     def visit_OffsetLiteral(self, node: OffsetLiteral, **kwargs: Any) -> str:
         return node.value if isinstance(node.value, str) else f"{node.value}_c"
 
@@ -90,18 +95,11 @@ class GTFNCodegen(codegen.TemplatedGenerator):
     using namespace fn;
     using namespace literals;
 
-
     % if is_cartesian:
-        // TODO allow non-default names
-        using namespace cartesian;
-        constexpr inline dim::i i = {};
-        constexpr inline dim::j j = {};
-        constexpr inline dim::k k = {};
-    % else:
-        ${''.join('struct ' + o + '_t{};' for o in offset_declarations)}
-        ${''.join('constexpr inline ' + o + '_t ' + o + '{};' for o in offset_declarations)}
+        // TODO for cartesian we should use magic offset/axis names that are mapped to cartesian::dim::i, ...
     % endif
-
+    ${''.join('struct ' + o + '_t{};' for o in offset_declarations)}
+    ${''.join('constexpr inline ' + o + '_t ' + o + '{};' for o in offset_declarations)}
     ${''.join(function_definitions)}
 
     inline auto ${id} = [](auto backend, ${','.join('auto&& ' + p for p in params)}){

@@ -71,8 +71,18 @@ class FunctionDefinition(Node, SymbolTableTrait):
     expr: Expr
 
 
+class TaggedValues(Node):
+    tags: List[Expr]
+    values: List[Expr]
+
+
+class CartesianDomain(Node):
+    tagged_sizes: TaggedValues
+    tagged_offsets: TaggedValues
+
+
 class Backend(Node):
-    domain: Union[SymRef, FunCall]  # TODO(havogt) `FunCall` only if domain will be part of the IR
+    domain: Union[SymRef, CartesianDomain]
 
 
 class StencilExecution(Node):
