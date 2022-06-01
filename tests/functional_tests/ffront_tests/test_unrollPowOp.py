@@ -29,7 +29,31 @@ def test_power_0():
         type=ct.DeferredSymbolType(constraint=None),
     )
 
-    expected = foast.BinOp(
+    # expected = foast.BinOp(
+    #     right=foast.Name(
+    #         id="a",
+    #         type=ct.DeferredSymbolType(constraint=None),
+    #         location=foast.SourceLocation(
+    #             line=106, column=12, source=str(pathlib.Path(__file__).resolve())
+    #         ),
+    #     ),
+    #     left=foast.Name(
+    #         id="a",
+    #         type=ct.DeferredSymbolType(constraint=None),
+    #         location=foast.SourceLocation(
+    #             line=106, column=12, source=str(pathlib.Path(__file__).resolve())
+    #         ),
+    #     ),
+    #     op=foast.BinaryOperator.DIV,
+    #     location=foast.SourceLocation(
+    #         line=106, column=12, source=str(pathlib.Path(__file__).resolve())
+    #     ),
+    #     type=ct.DeferredSymbolType(constraint=None),
+    # )
+    actual = UnrollPowerOp().visit(testee)
+
+    expected = ObjectPattern(
+        foast.BinOp,
         right=foast.Name(
             id="a",
             type=ct.DeferredSymbolType(constraint=None),
@@ -37,32 +61,9 @@ def test_power_0():
                 line=106, column=12, source=str(pathlib.Path(__file__).resolve())
             ),
         ),
-        left=foast.Name(
-            id="a",
-            type=ct.DeferredSymbolType(constraint=None),
-            location=foast.SourceLocation(
-                line=106, column=12, source=str(pathlib.Path(__file__).resolve())
-            ),
-        ),
         op=foast.BinaryOperator.DIV,
-        location=foast.SourceLocation(
-            line=106, column=12, source=str(pathlib.Path(__file__).resolve())
-        ),
-        type=ct.DeferredSymbolType(constraint=None),
     )
-    actual = UnrollPowerOp().visit(testee)
-    assert actual == expected
-
-    # assert ObjectPattern(
-    #     actual,
-    #     right = foast.Name(id="a", type=ct.DeferredSymbolType(constraint=None), location=foast.SourceLocation(line=106, column=12, source=str(pathlib.Path(__file__).resolve()))),
-    #     left = foast.Name(id="a", type=ct.DeferredSymbolType(constraint=None), location=foast.SourceLocation(line=106, column=12, source=str(pathlib.Path(__file__).resolve()))),
-    #     op = foast.BinaryOperator.DIV).match(expected(
-    #                                          foast.Name(id="a", type=ct.DeferredSymbolType(constraint=None), location=foast.SourceLocation(line=106, column=12, source=str(pathlib.Path(__file__).resolve()))),
-    #                                          foast.Name(id="a", type=ct.DeferredSymbolType(constraint=None), location=foast.SourceLocation(line=106, column=12, source=str(pathlib.Path(__file__).resolve()))),
-    #                                          foast.BinaryOperator.DIV,
-    #                                          foast.SourceLocation(line=106, column=12, source=str(pathlib.Path(__file__).resolve())),
-    #                                          ct.DeferredSymbolType(constraint=None)))
+    assert expected.match(actual)
 
 
 def test_power_1():
@@ -89,17 +90,21 @@ def test_power_1():
         type=ct.DeferredSymbolType(constraint=None),
     )
 
-    expected = foast.Name(
-        id="a",
-        type=ct.DeferredSymbolType(constraint=None),
-        location=foast.SourceLocation(
-            line=106, column=12, source=str(pathlib.Path(__file__).resolve())
-        ),
-    )
-
     actual = UnrollPowerOp().visit(testee)
 
-    assert actual == expected
+    # expected = foast.Name(
+    #     id="a",
+    #     type=ct.DeferredSymbolType(constraint=None),
+    #     location=foast.SourceLocation(
+    #         line=106, column=12, source=str(pathlib.Path(__file__).resolve())
+    #     ),
+    # )
+
+    expected = ObjectPattern(foast.Name)
+
+    assert expected.match(actual)
+
+    # assert actual == expected
 
 
 def test_power_2():
@@ -127,7 +132,32 @@ def test_power_2():
         type=ct.DeferredSymbolType(constraint=None),
     )
 
-    expected = foast.BinOp(
+    actual = UnrollPowerOp().visit(testee)
+
+    # expected = foast.BinOp(
+    #     right=foast.Name(
+    #         id="a",
+    #         type=ct.DeferredSymbolType(constraint=None),
+    #         location=foast.SourceLocation(
+    #             line=106, column=12, source=str(pathlib.Path(__file__).resolve())
+    #         ),
+    #     ),
+    #     left=foast.Name(
+    #         id="a",
+    #         type=ct.DeferredSymbolType(constraint=None),
+    #         location=foast.SourceLocation(
+    #             line=106, column=12, source=str(pathlib.Path(__file__).resolve())
+    #         ),
+    #     ),
+    #     op=foast.BinaryOperator.MULT,
+    #     location=foast.SourceLocation(
+    #         line=106, column=12, source=str(pathlib.Path(__file__).resolve())
+    #     ),
+    #     type=ct.DeferredSymbolType(constraint=None),
+    # )
+
+    expected = ObjectPattern(
+        foast.BinOp,
         right=foast.Name(
             id="a",
             type=ct.DeferredSymbolType(constraint=None),
@@ -135,23 +165,12 @@ def test_power_2():
                 line=106, column=12, source=str(pathlib.Path(__file__).resolve())
             ),
         ),
-        left=foast.Name(
-            id="a",
-            type=ct.DeferredSymbolType(constraint=None),
-            location=foast.SourceLocation(
-                line=106, column=12, source=str(pathlib.Path(__file__).resolve())
-            ),
-        ),
         op=foast.BinaryOperator.MULT,
-        location=foast.SourceLocation(
-            line=106, column=12, source=str(pathlib.Path(__file__).resolve())
-        ),
-        type=ct.DeferredSymbolType(constraint=None),
     )
 
-    actual = UnrollPowerOp().visit(testee)
+    assert expected.match(actual)
 
-    assert actual == expected
+    # assert actual == expected
 
 
 def test_power_3():
@@ -178,7 +197,46 @@ def test_power_3():
         type=ct.DeferredSymbolType(constraint=None),
     )
 
-    expected = foast.BinOp(
+    actual = UnrollPowerOp().visit(testee)
+
+    # expected = foast.BinOp(
+    #     right=foast.Name(
+    #         id="a",
+    #         type=ct.DeferredSymbolType(constraint=None),
+    #         location=foast.SourceLocation(
+    #             line=106, column=12, source=str(pathlib.Path(__file__).resolve())
+    #         ),
+    #     ),
+    #     left=foast.BinOp(
+    #         right=foast.Name(
+    #             id="a",
+    #             type=ct.DeferredSymbolType(constraint=None),
+    #             location=foast.SourceLocation(
+    #                 line=106, column=12, source=str(pathlib.Path(__file__).resolve())
+    #             ),
+    #         ),
+    #         left=foast.Name(
+    #             id="a",
+    #             type=ct.DeferredSymbolType(constraint=None),
+    #             location=foast.SourceLocation(
+    #                 line=106, column=12, source=str(pathlib.Path(__file__).resolve())
+    #             ),
+    #         ),
+    #         location=foast.SourceLocation(
+    #             line=106, column=12, source=str(pathlib.Path(__file__).resolve())
+    #         ),
+    #         type=ct.DeferredSymbolType(constraint=None),
+    #         op=foast.BinaryOperator.MULT,
+    #     ),
+    #     op=foast.BinaryOperator.MULT,
+    #     location=foast.SourceLocation(
+    #         line=106, column=12, source=str(pathlib.Path(__file__).resolve())
+    #     ),
+    #     type=ct.DeferredSymbolType(constraint=None),
+    # )
+
+    expected = ObjectPattern(
+        foast.BinOp,
         right=foast.Name(
             id="a",
             type=ct.DeferredSymbolType(constraint=None),
@@ -208,12 +266,7 @@ def test_power_3():
             op=foast.BinaryOperator.MULT,
         ),
         op=foast.BinaryOperator.MULT,
-        location=foast.SourceLocation(
-            line=106, column=12, source=str(pathlib.Path(__file__).resolve())
-        ),
-        type=ct.DeferredSymbolType(constraint=None),
     )
+    assert expected.match(actual)
 
-    actual = UnrollPowerOp().visit(testee)
-
-    assert actual == expected
+    # assert actual == expected
