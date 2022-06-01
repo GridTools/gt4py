@@ -358,7 +358,7 @@ class ValueInliner(ast.NodeTransformer):
             elif hasattr(value, "_gtscript_"):
                 pass
             else:
-                raise AssertionError("Logic error")
+                raise ValueError(f"Failed to inline {qualified_name}.")
         return new_node
 
     def visit_ImportFrom(self, node: ast.ImportFrom):
@@ -673,14 +673,18 @@ def _make_temp_decls(
     }
 
 
-def _make_init_computation(
-    temp_decls: Dict[str, nodes.FieldDecl], init_values: Dict[str, Any]
-) -> Optional[nodes.ComputationBlock]:
+def _make_init_computations(
+    temp_decls: Dict[str, nodes.FieldDecl], init_values: Dict[str, Any], func_node: ast.AST
+) -> list[nodes.ComputationBlock]:
     if not temp_decls:
-        return None
+        return []
 
     axes = set().union(*(set(temp_decls[name].axes) for name in temp_decls.keys()))
-    assert "I" in axes and "J" in axes
+    if "I" not in axes or "J" not in axes:
+        raise GTScriptSyntaxError(
+            message="Typed temporaries must to be defined on the I and J axis.",
+            loc=nodes.Location.from_ast_node(func_node),
+        )
 
     if "K" in axes:
         order = nodes.IterationOrder.PARALLEL
@@ -719,9 +723,11 @@ def _make_init_computation(
                 )
             )
 
-    return nodes.ComputationBlock(
-        interval=interval, iteration_order=order, body=nodes.BlockStmt(stmts=stmts)
-    )
+    return [
+        nodes.ComputationBlock(
+            interval=interval, iteration_order=order, body=nodes.BlockStmt(stmts=stmts)
+        )
+    ]
 
 
 def _find_accesses_with_offsets(node: nodes.Node) -> Set[str]:
@@ -1545,6 +1551,10 @@ class IRMaker(ast.NodeVisitor):
 
 
 class CollectLocalSymbolsAstVisitor(ast.NodeVisitor):
+    @classmethod
+    def apply(cls, node: ast.FunctionDef):
+        return cls()(node)
+
     def __call__(self, node: ast.FunctionDef):
         self.local_symbols = set()
         self.visit(node)
@@ -1571,6 +1581,9 @@ class CollectLocalSymbolsAstVisitor(ast.NodeVisitor):
                     self.local_symbols.add(name_node.id)
                 else:
                     raise invalid_target
+
+    def visit_AnnAssign(self, node: ast.AnnAssign):
+        ...
 
 
 class GTScriptParser(ast.NodeVisitor):
@@ -1662,15 +1675,28 @@ class GTScriptParser(ast.NodeVisitor):
         canonical_ast = gt_meta.ast_dump(ast_func_def)
 
         # Gather temporary
-        temp_annotations = {}
-        temp_init_values = {}
+        temp_annotations: Dict[str, gtscript._FieldDescriptor] = {}
+        temp_init_values: Dict[str, numbers.Number] = {}
+
+        ann_assign_context = {
+            "Field": gtscript.Field,
+            "IJK": gtscript.IJK,
+            "IJ": gtscript.IJ,
+            "I": gtscript.I,
+            "J": gtscript.J,
+            "K": gtscript.K,
+            "IK": gtscript.IK,
+            "JK": gtscript.JK,
+            "np": np,
+            **nonlocal_symbols,
+        }
         ann_assigns = tuple(filter(lambda stmt: isinstance(stmt, ast.AnnAssign), ast_func_def.body))
         for ann_assign in ann_assigns:
             assert isinstance(ann_assign.target, ast.Name)
             name = ann_assign.target.id
 
             source = gt_meta.ast_unparse(ann_assign.annotation)
-            descriptor = eval(source, {"Field": gtscript.Field, "IJK": gtscript.IJK, "np": np})
+            descriptor = eval(source, ann_assign_context)
             temp_annotations[name] = descriptor
 
             if hasattr(ann_assign, "value") and ann_assign.value is not None:
@@ -1723,8 +1749,7 @@ class GTScriptParser(ast.NodeVisitor):
         )
 
         gtscript_ast = ast.parse(gt_meta.get_ast(definition)).body[0]
-        local_symbol_collector = CollectLocalSymbolsAstVisitor()
-        local_symbols = local_symbol_collector(gtscript_ast)
+        local_symbols = CollectLocalSymbolsAstVisitor.apply(gtscript_ast)
 
         nonlocal_symbols = {}
 
@@ -1793,7 +1818,7 @@ class GTScriptParser(ast.NodeVisitor):
             for key, value in itertools.chain(context.items(), resolved_values_list)
             if isinstance(value, types.FunctionType)
         }
-        for _, value in func_externals.items():
+        for value in func_externals.values():
             if not hasattr(value, "_gtscript_"):
                 raise TypeError(f"{value.__name__} is not a gtscript function")
             for imported_name, imported_value in value._gtscript_["imported"].items():
@@ -1914,7 +1939,7 @@ class GTScriptParser(ast.NodeVisitor):
         api_signature, fields_decls, parameter_decls = self.extract_arg_descriptors()
 
         # Inline constant values
-        for _, value in self.resolved_externals.items():
+        for value in self.resolved_externals.values():
             if hasattr(value, "_gtscript_"):
                 assert callable(value)
                 func_node = ast.parse(gt_meta.get_ast(value)).body[0]
@@ -1948,8 +1973,8 @@ class GTScriptParser(ast.NodeVisitor):
         temp_decls = _make_temp_decls(self.definition._gtscript_["temp_annotations"])
         fields_decls.update(temp_decls)
 
-        init_computation = _make_init_computation(
-            temp_decls, self.definition._gtscript_["temp_init_values"]
+        init_computations = _make_init_computations(
+            temp_decls, self.definition._gtscript_["temp_init_values"], func_node=func_node
         )
 
         # Generate definition IR
@@ -1972,7 +1997,7 @@ class GTScriptParser(ast.NodeVisitor):
             parameters=[
                 parameter_decls[item.name] for item in api_signature if item.name in parameter_decls
             ],
-            computations=[init_computation] + computations if init_computation else computations,
+            computations=init_computations + computations,
             externals=self.resolved_externals,
             docstring=inspect.getdoc(self.definition) or "",
             loc=nodes.Location.from_ast_node(self.ast_root.body[0]),
