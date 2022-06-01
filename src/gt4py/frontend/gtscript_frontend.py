@@ -499,6 +499,7 @@ class CallInliner(ast.NodeTransformer):
         # Recursively inline any possible nested subroutine call
         call_info = self.context[call_name]._gtscript_
         call_ast = copy.deepcopy(call_info["ast"])
+        self.current_name = call_name
         CallInliner.apply(call_ast, call_info["local_context"])
 
         # Extract call arguments
