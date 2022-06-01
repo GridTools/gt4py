@@ -6,28 +6,9 @@ from functional.ffront.func_to_foast import UnrollPowerOp
 
 
 def test_power_0():
-    testee = foast.BinOp(
-        right=foast.Constant(
-            dtype=ct.ScalarType(kind=ct.ScalarKind.INT),
-            location=foast.SourceLocation(
-                line=106, column=18, source=str(pathlib.Path(__file__).resolve())
-            ),
-            value="0",
-            type=ct.ScalarType(kind=ct.ScalarKind.INT),
-        ),
-        left=foast.Name(
-            id="a",
-            type=ct.DeferredSymbolType(constraint=None),
-            location=foast.SourceLocation(
-                line=106, column=12, source=str(pathlib.Path(__file__).resolve())
-            ),
-        ),
-        op=foast.BinaryOperator.POW,
-        location=foast.SourceLocation(
-            line=106, column=12, source=str(pathlib.Path(__file__).resolve())
-        ),
-        type=ct.DeferredSymbolType(constraint=None),
-    )
+    def func():
+      return a**0
+    testee = FieldOperatorParser.apply_to_function(func)
 
     actual = UnrollPowerOp().visit(testee)
 
