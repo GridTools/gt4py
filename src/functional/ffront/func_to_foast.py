@@ -45,57 +45,39 @@ class FieldOperatorSyntaxError(DialectSyntaxError):
 class UnrollPowerOp(eve.NodeTranslator):
     def visit_BinOp(self, node: foast.BinOp) -> foast.BinOp:
         if node.op == foast.BinaryOperator.POW:
-            new_left = foast.BinOp(
-                left=self.visit(node.left),
-                right=self.visit(node.left),
-                op=foast.BinaryOperator.MULT,
-                location=node.location,
-                type=node.type,
-            )
-            if float(node.right.value) > 2.0:
-                for _i in range(int(float(node.right.value) - 3)):
-                    new_left = foast.BinOp(
-                        left=new_left,
-                        right=self.visit(node.left),
-                        op=foast.BinaryOperator.MULT,
-                        location=node.location,
-                        type=node.type,
-                    )
+            new_left = self.visit(node.left)
+            if int(node.right.value) == 1:
+                return self.visit(node.left)
+            if int(node.right.value) == 0:
                 return foast.BinOp(
                     left=new_left,
-                    right=self.visit(node.left),
-                    op=foast.BinaryOperator.MULT,
-                    location=node.location,
-                    type=node.type,
-                )
-            elif float(node.right.value) == 2.0:
-                return new_left
-            elif float(node.right.value) == 1.0:
-                return foast.BinOp(
-                    left=self.visit(node.left),
-                    right=self.visit(node.right),
-                    op=foast.BinaryOperator.MULT,
-                    location=node.location,
-                    type=node.type,
-                )
-            elif float(node.right.value) == 0.0:
-                return foast.BinOp(
-                    left=self.visit(node.left),
-                    right=self.visit(node.left),
+                    right=new_left,
                     op=foast.BinaryOperator.DIV,
                     location=node.location,
                     type=node.type,
                 )
-            else:
-                raise ValueError("Only powers greater than zero are allowed")
-        else:
-            return foast.BinOp(
-                left=self.visit(node.left),
-                right=self.visit(node.right),
-                op=node.op,
-                location=node.location,
-                type=node.type,
+
+            new_op = foast.BinaryOperator.MULT
+            new_left_BinOp = foast.BinOp(
+                left=new_left, right=new_left, op=new_op, location=node.location, type=node.type
             )
+            for _i in range(int(float(node.right.value) - 2)):
+                new_left_BinOp = foast.BinOp(
+                    left=new_left_BinOp,
+                    right=new_left,
+                    op=new_op,
+                    location=node.location,
+                    type=node.type,
+                )
+            return new_left_BinOp
+
+        return foast.BinOp(
+            left=self.visit(node.left),
+            right=self.visit(node.right),
+            op=node.op,
+            location=node.location,
+            type=node.type,
+        )
 
 
 class FieldOperatorParser(DialectParser[foast.FieldOperator]):

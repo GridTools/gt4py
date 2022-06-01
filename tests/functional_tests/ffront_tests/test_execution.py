@@ -103,7 +103,7 @@ def test_power_arithmetic():
 
     @field_operator(backend="roundtrip")
     def power_arithmetic(inp1: Field[[IDim], float64]) -> Field[[IDim], float64]:
-        return inp1**5.0
+        return inp1**5
 
     power_arithmetic(a, out=b, offset_provider={})
 
