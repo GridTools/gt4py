@@ -115,7 +115,7 @@ def ast_dump(definition, *, skip_annotations: bool = True, skip_decorators: bool
 
 
 def ast_unparse(ast_node):
-    """Call ast.unparse, but use astunparse if python_version<3.9."""
+    """Call ast.unparse, but use astunparse for Python prior to 3.9."""
     if version.parse(sys.version) < version.parse("3.9"):
         import astunparse
 
@@ -220,7 +220,7 @@ class ASTPass:
         return visitor(node, **kwargs)
 
     def generic_visit(self, node, **kwargs):
-        """If no explicit visitor function exists for a node."""
+        """Fallback if no explicit visitor function exists for a node."""
         for _, value in ast.iter_fields(node):
             if isinstance(value, list):
                 for item in value:

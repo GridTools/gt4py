@@ -675,7 +675,7 @@ def _make_temp_decls(
 
 def _make_init_computations(
     temp_decls: Dict[str, nodes.FieldDecl], init_values: Dict[str, Any], func_node: ast.AST
-) -> list[nodes.ComputationBlock]:
+) -> List[nodes.ComputationBlock]:
     if not temp_decls:
         return []
 
@@ -1539,7 +1539,7 @@ class IRMaker(ast.NodeVisitor):
 
     def visit_FunctionDef(self, node: ast.FunctionDef) -> List[nodes.ComputationBlock]:
         blocks = []
-        for stmt in node.body:
+        for stmt in filter(lambda s: not isinstance(s, ast.AnnAssign), node.body):
             blocks.extend(self.visit(stmt))
 
         if not all(isinstance(item, nodes.ComputationBlock) for item in blocks):
@@ -1581,9 +1581,6 @@ class CollectLocalSymbolsAstVisitor(ast.NodeVisitor):
                     self.local_symbols.add(name_node.id)
                 else:
                     raise invalid_target
-
-    def visit_AnnAssign(self, node: ast.AnnAssign):
-        ...
 
 
 class GTScriptParser(ast.NodeVisitor):
@@ -1974,7 +1971,7 @@ class GTScriptParser(ast.NodeVisitor):
         fields_decls.update(temp_decls)
 
         init_computations = _make_init_computations(
-            temp_decls, self.definition._gtscript_["temp_init_values"], func_node=func_node
+            temp_decls, self.definition._gtscript_["temp_init_values"], func_node=main_func_node
         )
 
         # Generate definition IR
