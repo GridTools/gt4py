@@ -46,8 +46,6 @@ class UnrollPowerOp(eve.NodeTranslator):
     def visit_BinOp(self, node: foast.BinOp) -> foast.BinOp:
         if node.op == foast.BinaryOperator.POW:
             new_left = self.visit(node.left)
-            if int(node.right.value) == 1:
-                return self.visit(node.left)
             if int(node.right.value) == 0:
                 return foast.BinOp(
                     left=new_left,
@@ -57,19 +55,16 @@ class UnrollPowerOp(eve.NodeTranslator):
                     type=node.type,
                 )
 
-            new_op = foast.BinaryOperator.MULT
-            new_left_BinOp = foast.BinOp(
-                left=new_left, right=new_left, op=new_op, location=node.location, type=node.type
-            )
-            for _i in range(int(float(node.right.value) - 2)):
-                new_left_BinOp = foast.BinOp(
-                    left=new_left_BinOp,
+            unrolled_expr = self.visit(node.left)
+            for _i in range(int(node.right.value) - 1):
+                unrolled_expr = foast.BinOp(
+                    left=unrolled_expr,
                     right=new_left,
-                    op=new_op,
+                    op=foast.BinaryOperator.MULT,
                     location=node.location,
                     type=node.type,
                 )
-            return new_left_BinOp
+            return unrolled_expr
 
         return foast.BinOp(
             left=self.visit(node.left),
