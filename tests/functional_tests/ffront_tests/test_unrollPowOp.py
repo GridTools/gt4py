@@ -71,7 +71,7 @@ def test_power_1():
 
     actual = UnrollPowerOp().visit(testee)
 
-    expected = ObjectPattern(foast.Name)
+    expected = ObjectPattern(foast.Name(id="a"))
 
     assert expected.match(actual)
 
