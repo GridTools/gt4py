@@ -18,7 +18,7 @@ import ast
 import copy
 import inspect
 import operator
-import sys
+import platform
 import textwrap
 
 from packaging import version
@@ -116,7 +116,7 @@ def ast_dump(definition, *, skip_annotations: bool = True, skip_decorators: bool
 
 def ast_unparse(ast_node):
     """Call ast.unparse, but use astunparse for Python prior to 3.9."""
-    if version.parse(sys.version) < version.parse("3.9"):
+    if version.parse(platform.python_version()) < version.parse("3.9"):
         import astunparse
 
         return astunparse.unparse(ast_node)
