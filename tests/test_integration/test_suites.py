@@ -770,7 +770,15 @@ class TestVariableKRead(gt_testing.StencilTestSuite):
     backends = [
         param
         if "dace" not in param.values[0]
-        else pytest.param(param.values[0], marks=[*param.marks, pytest.mark.xfail])
+        else pytest.param(
+            param.values[0],
+            marks=[
+                *param.marks,
+                pytest.mark.xfail(
+                    reason="Corner cases failing in current dace backends. (See #806)"
+                ),
+            ],
+        )
         for param in ALL_BACKENDS
     ]
     symbols = {
@@ -803,7 +811,15 @@ class TestVariableKAndReadOutside(gt_testing.StencilTestSuite):
     backends = [
         param
         if "dace" not in param.values[0]
-        else pytest.param(param.values[0], marks=[*param.marks, pytest.mark.xfail])
+        else pytest.param(
+            param.values[0],
+            marks=[
+                *param.marks,
+                pytest.mark.xfail(
+                    reason="Corner cases failing in current dace backends. (See #806)"
+                ),
+            ],
+        )
         for param in ALL_BACKENDS
     ]
     symbols = {
