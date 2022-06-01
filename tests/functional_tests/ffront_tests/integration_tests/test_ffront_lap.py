@@ -48,9 +48,9 @@ def lapilapf(in_field):
     return lapi(lift(lapf)(in_field))
 
 
-@field_operator
-def lapflapi(in_field: Field[[IDim, JDim], "float"]) -> Field[[IDim, JDim], "float"]:
-    return lapf(lapi(in_field))
+# @field_operator
+# def lapflapi(in_field: Field[[IDim, JDim], "float"]) -> Field[[IDim, JDim], "float"]:
+#     return lapf(lapi(in_field))
 
 
 @field_operator
@@ -110,12 +110,12 @@ def lapilapf_program(
     lapilapf(in_field, out=out_field[2:-2, 2:-2])
 
 
-@program
-def lapflapi_program(
-    in_field: Field[[IDim, JDim], "float"],
-    out_field: Field[[IDim, JDim], "float"],
-):
-    lapflapi(in_field, out=out_field[2:-2, 2:-2])
+# @program
+# def lapflapi_program(
+#     in_field: Field[[IDim, JDim], "float"],
+#     out_field: Field[[IDim, JDim], "float"],
+# ):
+#     lapflapi(in_field, out=out_field[2:-2, 2:-2])
 
 
 @program
@@ -146,14 +146,14 @@ def lapilapf_fencil(in_field, out_field):
     )
 
 
-@fendef(backend="roundtrip")  # embedded not possible, as fieldview doesn't have it
-def lapflapi_fencil(in_field, out_field):
-    closure(
-        domain(named_range(IDim, 2, 18), named_range(JDim, 2, 18)),
-        lapflapi,
-        out_field,
-        [in_field],
-    )
+# @fendef(backend="roundtrip")  # embedded not possible, as fieldview doesn't have it
+# def lapflapi_fencil(in_field, out_field):
+#     closure(
+#         domain(named_range(IDim, 2, 18), named_range(JDim, 2, 18)),
+#         lapflapi,
+#         out_field,
+#         [in_field],
+#     )
 
 
 @fendef(backend="roundtrip")  # embedded not possible, as fieldview doesn't have it
@@ -190,10 +190,10 @@ def test_ffront_lap(prog):
         lapilapi_program,
         lapflapf_program,
         lapilapf_program,
-        lapflapi_program,
+        # lapflapi_program,
         lapilapi_fencil,
         lapilapf_fencil,
-        lapflapi_fencil,
+        # lapflapi_fencil,
         lapflapf_fencil,
     ],
 )
