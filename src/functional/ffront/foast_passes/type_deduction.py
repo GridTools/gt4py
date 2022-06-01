@@ -11,105 +11,45 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-from typing import Any, Optional
+import copy
+from itertools import permutations
+from typing import Optional, cast
 
 import functional.ffront.field_operator_ast as foast
-from eve import NodeTranslator, SymbolTableTrait
-from functional.common import GTSyntaxError
-from functional.ffront import common_types as ct
-from functional.ffront.type_info import GenericDimensions, TypeInfo, is_complete_symbol_type
+from eve import NodeTranslator, traits
+from functional.common import GTSyntaxError, GTTypeError
+from functional.ffront import common_types as ct, type_info
+from functional.ffront.fbuiltins import FUN_BUILTIN_NAMES
 
 
-def are_broadcast_compatible(left: TypeInfo, right: TypeInfo) -> bool:
+def boolified_type(symbol_type: ct.SymbolType) -> ct.ScalarType | ct.FieldType:
     """
-    Check if ``left`` and ``right`` types are compatible after optional broadcasting.
-
-    A binary field operation between two arguments can proceed and the result is a field.
-    on top of the dimensions, also the dtypes must match.
-
-    Examples:
-    ---------
-    >>> int_scalar_t = TypeInfo(ct.ScalarType(kind=ct.ScalarKind.INT64))
-    >>> are_broadcast_compatible(int_scalar_t, int_scalar_t)
-    True
-    >>> int_field_t = TypeInfo(ct.FieldType(dtype=ct.ScalarType(kind=ct.ScalarKind.INT64),
-    ...                         dims=...))
-    >>> are_broadcast_compatible(int_field_t, int_scalar_t)
-    True
-
-    """
-    both_dims_given = bool(left.dims and right.dims)
-    both_dims_given &= not isinstance(left.dims, GenericDimensions)
-    both_dims_given &= not isinstance(right.dims, GenericDimensions)
-    if both_dims_given and any(
-        ldim != rdim
-        for ldim, rdim in zip(
-            left.dims, right.dims  # type: ignore[arg-type]  # we know they are lists here
-        )
-    ):
-        return False
-    return left.dtype == right.dtype
-
-
-def broadcast_typeinfos(left: TypeInfo, right: TypeInfo) -> Optional[TypeInfo]:
-    """
-    Decide the result type of a binary operation between arguments of ``left`` and ``right`` type.
-
-    Return None if the two types are not compatible even after broadcasting.
-
-    Examples:
-    ---------
-    >>> int_scalar_t = TypeInfo(ct.ScalarType(kind=ct.ScalarKind.INT64))
-    >>> int_field_t = TypeInfo(ct.FieldType(dtype=ct.ScalarType(kind=ct.ScalarKind.INT64),
-    ...                         dims=...))
-    >>> assert broadcast_typeinfos(int_field_t, int_scalar_t).type == int_field_t.type
-
-    """
-    if not are_broadcast_compatible(left, right):
-        return None
-    if left.is_scalar and right.is_field_type:
-        return right
-    if left.dims and right.dims and len(right.dims) > len(left.dims):
-        return right
-    return left
-
-
-def boolified_typeinfo(typeinfo: TypeInfo):
-    """
-    Create a new symbol type from a TypeInfo, replacing the data type with ``bool``.
+    Create a new symbol type from a symbol type, replacing the data type with ``bool``.
 
     Examples:
     ---------
     >>> from functional.common import Dimension
-    >>> scalar_t = TypeInfo(ct.ScalarType(kind=ct.ScalarKind.FLOAT64))
-    >>> print(boolified_typeinfo(scalar_t).type)
+    >>> scalar_t = ct.ScalarType(kind=ct.ScalarKind.FLOAT64)
+    >>> print(boolified_type(scalar_t))
     bool
 
-    >>> field_t = TypeInfo(ct.FieldType(dims=[Dimension(value="I")], dtype=ct.ScalarType(kind=ct.ScalarKind)))
-    >>> print(boolified_typeinfo(field_t).type)
+    >>> field_t = ct.FieldType(dims=[Dimension(value="I")], dtype=ct.ScalarType(kind=ct.ScalarKind))
+    >>> print(boolified_type(field_t))
     Field[[I], dtype=bool]
-
-    >>> deferred_t = TypeInfo(ct.DeferredSymbolType(constraint=ct.FieldType))
-    >>> print(boolified_typeinfo(deferred_t).type)
-    Field[..., dtype=bool]
     """
-    type_class = typeinfo.constraint
-    if not type_class:
-        return None
-    kwargs: dict[str, Any] = {}
-    kwargs["dtype"] = ct.ScalarType(
-        kind=ct.ScalarKind.BOOL, shape=typeinfo.dtype.shape if typeinfo.dtype else None
-    )
-    if typeinfo.is_field_type:
-        kwargs["dims"] = typeinfo.dims if typeinfo.dims is not None else ...
-    elif typeinfo.is_scalar:
-        return TypeInfo(kwargs["dtype"])
-    else:
-        return None
-    return TypeInfo(type_class(**kwargs))
+    shape = None
+    if type_info.is_concrete(symbol_type):
+        shape = type_info.extract_dtype(symbol_type).shape
+    scalar_bool = ct.ScalarType(kind=ct.ScalarKind.BOOL, shape=shape)
+    type_class = type_info.type_class(symbol_type)
+    if type_class is ct.ScalarType:
+        return scalar_bool
+    elif type_class is ct.FieldType:
+        return ct.FieldType(dtype=scalar_bool, dims=type_info.extract_dims(symbol_type))
+    raise GTTypeError(f"Can not boolify type {symbol_type}!")
 
 
-class FieldOperatorTypeDeduction(NodeTranslator):
+class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
     """
     Deduce and check types of FOAST expressions and symbols.
 
@@ -127,14 +67,13 @@ class FieldOperatorTypeDeduction(NodeTranslator):
     >>> untyped_fieldop = FieldOperatorParser(
     ...     source_definition=source_definition, captured_vars=captured_vars, externals_defs={}
     ... ).visit(ast.parse(source_definition.source).body[0])
-    >>> assert untyped_fieldop.body[0].value.type is None
+    >>> untyped_fieldop.body[0].value.type
+    DeferredSymbolType(constraint=None)
 
     >>> typed_fieldop = FieldOperatorTypeDeduction.apply(untyped_fieldop)
     >>> assert typed_fieldop.body[0].value.type == ct.FieldType(dtype=ct.ScalarType(
     ...     kind=ct.ScalarKind.FLOAT64), dims=Ellipsis)
     """
-
-    contexts = (SymbolTableTrait.symtable_merger,)  # type: ignore  # TODO(ricoh): check if the SymbolTableTrait.symtable_merger annotation is correct.
 
     @classmethod
     def apply(cls, node: foast.FieldOperator) -> foast.FieldOperator:
@@ -161,7 +100,7 @@ class FieldOperatorTypeDeduction(NodeTranslator):
 
     def visit_Assign(self, node: foast.Assign, **kwargs) -> foast.Assign:
         new_value = node.value
-        if not is_complete_symbol_type(node.value.type):
+        if not type_info.is_concrete(node.value.type):
             new_value = self.visit(node.value, **kwargs)
         new_target = self.visit(node.target, refine_type=new_value.type, **kwargs)
         return foast.Assign(target=new_target, value=new_value, location=node.location)
@@ -174,7 +113,7 @@ class FieldOperatorTypeDeduction(NodeTranslator):
     ) -> foast.Symbol:
         symtable = kwargs["symtable"]
         if refine_type:
-            if not TypeInfo(node.type).can_be_refined_to(TypeInfo(refine_type)):
+            if not type_info.is_concretizable(node.type, to_type=refine_type):
                 raise FieldOperatorTypeDeductionError.from_foast_node(
                     node,
                     msg=(
@@ -191,17 +130,26 @@ class FieldOperatorTypeDeduction(NodeTranslator):
 
     def visit_Subscript(self, node: foast.Subscript, **kwargs) -> foast.Subscript:
         new_value = self.visit(node.value, **kwargs)
-        new_type = None
-        if kwargs.get("in_shift", False):
-            return foast.Subscript(
-                value=new_value,
-                index=node.index,
-                type=new_value.type,
-                location=node.location,
-            )
+        new_type: Optional[ct.SymbolType] = None
         match new_value.type:
             case ct.TupleType(types=types):
                 new_type = types[node.index]
+            case ct.OffsetType(source=source, target=(target1, target2)):
+                if not target2.local:
+                    raise FieldOperatorTypeDeductionError.from_foast_node(
+                        new_value, msg="Second dimension in offset must be a local dimension."
+                    )
+                new_type = ct.OffsetType(source=source, target=(target1,))
+            case ct.OffsetType(source=source, target=(target,)):
+                # for cartesian axes (e.g. I, J) the index of the subscript only
+                #  signifies the displacement in the respective dimension,
+                #  but does not change the target type.
+                if source != target:
+                    raise FieldOperatorTypeDeductionError.from_foast_node(
+                        new_value,
+                        msg="Source and target must be equal for offsets with a single target.",
+                    )
+                new_type = new_value.type
             case _:
                 raise FieldOperatorTypeDeductionError.from_foast_node(
                     new_value, msg="Could not deduce type of subscript expression!"
@@ -214,9 +162,7 @@ class FieldOperatorTypeDeduction(NodeTranslator):
     def visit_BinOp(self, node: foast.BinOp, **kwargs) -> foast.BinOp:
         new_left = self.visit(node.left, **kwargs)
         new_right = self.visit(node.right, **kwargs)
-        new_type = self._deduce_binop_type(
-            node.op, parent=node, left_type=new_left.type, right_type=new_right.type
-        )
+        new_type = self._deduce_binop_type(node, left=new_left, right=new_right)
         return foast.BinOp(
             op=node.op, left=new_left, right=new_right, location=node.location, type=new_type
         )
@@ -224,106 +170,84 @@ class FieldOperatorTypeDeduction(NodeTranslator):
     def visit_Compare(self, node: foast.Compare, **kwargs) -> foast.Compare:
         new_left = self.visit(node.left, **kwargs)
         new_right = self.visit(node.right, **kwargs)
-        new_type = self._deduce_compare_type(node, new_left.type, new_right.type)
+        new_type = self._deduce_compare_type(node, left=new_left, right=new_right)
         return foast.Compare(
             op=node.op, left=new_left, right=new_right, location=node.location, type=new_type
         )
 
     def _deduce_compare_type(
-        self, node: foast.Compare, left_type: ct.SymbolType, right_type: ct.SymbolType, **kwargs
+        self, node: foast.Compare, *, left: foast.Expr, right: foast.Expr, **kwargs
     ) -> Optional[ct.SymbolType]:
-        left_info = TypeInfo(left_type)
-        right_info = TypeInfo(right_type)
-        if any([not i.is_arithmetic_compatible for i in [left_info, right_info]]):
-            raise FieldOperatorTypeDeductionError.from_foast_node(
-                node,
-                msg=f"Incompatible type(s) for operator '{node.op}': {left_info.type}, {right_info.type}!",
-            )
-        if result := broadcast_typeinfos(
-            boolified_typeinfo(left_info), boolified_typeinfo(right_info)
-        ):
-            return result.type
+        # check both types compatible
+        for arg in (left, right):
+            if not type_info.is_arithmetic(arg.type):
+                raise FieldOperatorTypeDeductionError.from_foast_node(
+                    arg, msg=f"Type {arg.type} can not be used in operator '{node.op}'!"
+                )
+
+        self._check_operand_dtypes_match(node, left=left, right=right)
+
+        # check dimensions match and broadcast scalars to fields
+        for one_type, other_type in permutations([left.type, right.type]):
+            if type_info.is_dimensionally_promotable(other_type, one_type):
+                return boolified_type(one_type)
+
         raise FieldOperatorTypeDeductionError.from_foast_node(
             node,
-            msg=f"Incompatible type(s) for operator '{node.op}': {left_info.type}, {right_info.type}!",
+            msg=f"Incompatible types for operator '{node.op}': {left.type} and {right.type}!",
         )
 
     def _deduce_binop_type(
         self,
-        op: foast.BinaryOperator,
+        node: foast.BinOp,
         *,
-        parent: foast.BinOp,
-        left_type: ct.SymbolType,
-        right_type: ct.SymbolType,
+        left: foast.Expr,
+        right: foast.Expr,
         **kwargs,
     ) -> Optional[ct.SymbolType]:
-        if op in [
-            foast.BinaryOperator.ADD,
-            foast.BinaryOperator.SUB,
-            foast.BinaryOperator.MULT,
-            foast.BinaryOperator.DIV,
-        ]:
-            return self._deduce_arithmetic_binop_type(
-                op, parent=parent, left_type=left_type, right_type=right_type, **kwargs
-            )
-        else:
-            return self._deduce_logical_binop_type(
-                op, parent=parent, left_type=left_type, right_type=right_type, **kwargs
-            )
+        logical_ops = {foast.BinaryOperator.BIT_AND, foast.BinaryOperator.BIT_OR}
+        is_compatible = type_info.is_logical if node.op in logical_ops else type_info.is_arithmetic
 
-    def _deduce_arithmetic_binop_type(
-        self,
-        op: foast.BinaryOperator,
-        *,
-        parent: foast.BinOp,
-        left_type: ct.SymbolType,
-        right_type: ct.SymbolType,
-        **kwargs,
-    ) -> Optional[ct.SymbolType]:
-        left, right = TypeInfo(left_type), TypeInfo(right_type)
+        # check both types compatible
+        for arg in (left, right):
+            if not is_compatible(arg.type):
+                raise FieldOperatorTypeDeductionError.from_foast_node(
+                    arg, msg=f"Type {arg.type} can not be used in operator '{node.op}'!"
+                )
 
-        # if one type is `None` (not deduced, generic), we propagate `None`
-        if left.type is None or right.type is None:
-            return None
+        if left.type == right.type:
+            return copy.copy(left.type)
 
-        if (
-            left.is_arithmetic_compatible
-            and right.is_arithmetic_compatible
-            and are_broadcast_compatible(left, right)
-            and (broadcast_typeinfo := broadcast_typeinfos(left, right))
-        ):
-            return broadcast_typeinfo.type
+        self._check_operand_dtypes_match(node, left=left, right=right)
+
+        # check dimensions match and broadcast scalars to fields
+        for one_type, other_type in permutations([left.type, right.type]):
+            if type_info.is_dimensionally_promotable(other_type, one_type):
+                return copy.copy(one_type)
+
+        # the case of left_type == right_type is already handled above
+        # so here they must be incompatible
         raise FieldOperatorTypeDeductionError.from_foast_node(
-            parent,
-            msg=f"Incompatible type(s) for operator '{op}': {left.type}, {right.type}!",
+            node,
+            msg=f"Incompatible dimensions in operator '{node.op}': {left.type} and {right.type}!",
         )
 
-    def _deduce_logical_binop_type(
-        self,
-        op: foast.BinaryOperator,
-        *,
-        parent: foast.BinOp,
-        left_type: ct.SymbolType,
-        right_type: ct.SymbolType,
-        **kwargs,
-    ) -> Optional[ct.SymbolType]:
-        left, right = TypeInfo(left_type), TypeInfo(right_type)
-        if (
-            left.is_logics_compatible
-            and right.is_logics_compatible
-            and are_broadcast_compatible(left, right)
-            and (broadcast_typeinfo := broadcast_typeinfos(left, right))
-        ):
-            return broadcast_typeinfo.type
-        else:
+    def _check_operand_dtypes_match(
+        self, node: foast.BinOp | foast.Compare, left: foast.Expr, right: foast.Expr
+    ) -> None:
+        # check dtypes match
+        if not type_info.extract_dtype(left.type) == type_info.extract_dtype(right.type):
             raise FieldOperatorTypeDeductionError.from_foast_node(
-                parent,
-                msg=f"Incompatible type(s) for operator '{op}': {left.type}, {right.type}!",
+                node,
+                msg=f"Incompatible datatypes in operator '{node.op}': {left.type} and {right.type}!",
             )
 
     def visit_UnaryOp(self, node: foast.UnaryOp, **kwargs) -> foast.UnaryOp:
         new_operand = self.visit(node.operand, **kwargs)
-        if not self._is_unaryop_type_compatible(op=node.op, operand_type=new_operand.type):
+        is_compatible = (
+            type_info.is_logical if node.op is foast.UnaryOperator.NOT else type_info.is_arithmetic
+        )
+        if not is_compatible(new_operand.type):
             raise FieldOperatorTypeDeductionError.from_foast_node(
                 node,
                 msg=f"Incompatible type for unary operator '{node.op}': {new_operand.type}!",
@@ -332,27 +256,16 @@ class FieldOperatorTypeDeduction(NodeTranslator):
             op=node.op, operand=new_operand, location=node.location, type=new_operand.type
         )
 
-    def _is_unaryop_type_compatible(
-        self, op: foast.UnaryOperator, operand_type: ct.FieldType
-    ) -> bool:
-        operand_ti = TypeInfo(operand_type)
-        if op in [foast.UnaryOperator.UADD, foast.UnaryOperator.USUB]:
-            return operand_ti.is_arithmetic_compatible
-        elif op is foast.UnaryOperator.NOT:
-            return operand_ti.is_logics_compatible
-        return False
-
     def visit_TupleExpr(self, node: foast.TupleExpr, **kwargs) -> foast.TupleExpr:
         new_elts = self.visit(node.elts, **kwargs)
         new_type = ct.TupleType(types=[element.type for element in new_elts])
         return foast.TupleExpr(elts=new_elts, type=new_type, location=node.location)
 
     def visit_Call(self, node: foast.Call, **kwargs) -> foast.Call:
-        # TODO(tehrengruber): check type is complete
         new_func = self.visit(node.func, **kwargs)
 
         if isinstance(new_func.type, ct.FieldType):
-            new_args = self.visit(node.args, in_shift=True, **kwargs)
+            new_args = self.visit(node.args, **kwargs)
             source_dim = new_args[0].type.source
             target_dims = new_args[0].type.target
             if new_func.type.dims and source_dim not in new_func.type.dims:
@@ -367,25 +280,111 @@ class FieldOperatorTypeDeduction(NodeTranslator):
                 else:
                     new_dims.extend(target_dims)
             new_type = ct.FieldType(dims=new_dims, dtype=new_func.type.dtype)
-            return foast.Call(func=new_func, args=new_args, location=node.location, type=new_type)
-        elif isinstance(new_func.type, ct.FunctionType):
             return foast.Call(
+                func=new_func, args=new_args, kwargs={}, location=node.location, type=new_type
+            )
+        elif isinstance(new_func.type, ct.FunctionType):
+            return_type = new_func.type.returns
+            new_node = foast.Call(
                 func=new_func,
                 args=self.visit(node.args, **kwargs),
+                kwargs=self.visit(node.kwargs, **kwargs),
                 location=node.location,
-                type=new_func.type.returns,
+                type=return_type,
             )
         elif isinstance(new_func.type, ct.UnknownFunctionType):
-            return foast.Call(
+            new_node = foast.Call(
                 func=new_func,
                 args=self.visit(node.args, **kwargs),
+                kwargs=self.visit(node.kwargs, **kwargs),
                 location=node.location,
                 type=ct.FieldType(dims=[], dtype=ct.ScalarType(kind=ct.ScalarKind.FLOAT32)),  # TODO
             )
 
+            self._ensure_signature_valid(new_node, **kwargs)
+
+            # todo(tehrengruber): solve in a more generic way, e.g. using
+            #  parametric polymorphism.
+            # deduce return type of polymorphic builtins
+            if not type_info.is_concrete(return_type) and new_node.func.id in FUN_BUILTIN_NAMES:
+                visitor = getattr(self, f"_visit_{new_node.func.id}")
+                return visitor(new_node, **kwargs)
+
+            return new_node
+
         raise FieldOperatorTypeDeductionError.from_foast_node(
             node,
             msg=f"Objects of type '{new_func.type}' are not callable.",
+        )
+
+    def _ensure_signature_valid(self, node: foast.Call, **kwargs) -> None:
+        try:
+            type_info.is_callable(
+                cast(ct.FunctionType, node.func.type),
+                with_args=[arg.type for arg in node.args],
+                with_kwargs={keyword: arg.type for keyword, arg in node.kwargs.items()},
+                raise_exception=True,
+            )
+        except GTTypeError as err:
+            raise FieldOperatorTypeDeductionError.from_foast_node(
+                node, msg=f"Invalid argument types in call to '{node.func.id}'!"
+            ) from err
+
+    def _visit_neighbor_sum(self, node: foast.Call, **kwargs) -> foast.Call:
+        field_type = cast(ct.FieldType, node.args[0].type)
+        reduction_dim = cast(ct.DimensionType, node.kwargs["axis"].type).dim
+        if reduction_dim not in field_type.dims:
+            field_dims_str = ", ".join(str(dim) for dim in field_type.dims)
+            raise FieldOperatorTypeDeductionError.from_foast_node(
+                node,
+                msg=f"Incompatible field argument in {node.func.id}. Expected "
+                f"a field with dimension {reduction_dim}, but got "
+                f"{field_dims_str}.",
+            )
+        return_type = ct.FieldType(
+            dims=[dim for dim in field_type.dims if dim != reduction_dim],
+            dtype=field_type.dtype,
+        )
+
+        return foast.Call(
+            func=node.func,
+            args=node.args,
+            kwargs=node.kwargs,
+            location=node.location,
+            type=return_type,
+        )
+
+    def _visit_broadcast(self, node: foast.Call, **kwargs) -> foast.Call:
+        field_type = cast(ct.FieldType, node.args[0].type)
+        broadcast_dims_expr = node.args[1].elts
+
+        if any([not (isinstance(elt.type, ct.DimensionType)) for elt in broadcast_dims_expr]):
+            raise FieldOperatorTypeDeductionError.from_foast_node(
+                node,
+                msg=f"Incompatible broadcast dimension type in {node.func.id}. Expected "
+                f"all broadcast dimensions to be of type Dimension.",
+            )
+
+        broadcast_dims = [cast(ct.DimensionType, elt.type).dim for elt in broadcast_dims_expr]
+
+        if not set(field_type.dims).issubset(set(broadcast_dims)):
+            raise FieldOperatorTypeDeductionError.from_foast_node(
+                node,
+                msg=f"Incompatible broadcast dimensions in {node.func.id}. Expected "
+                f"broadcast dimension is missing {set(field_type.dims).difference(set(broadcast_dims))}",
+            )
+
+        return_type = ct.FieldType(
+            dims=broadcast_dims,
+            dtype=field_type.dtype,
+        )
+
+        return foast.Call(
+            func=node.func,
+            args=node.args,
+            kwargs=node.kwargs,
+            location=node.location,
+            type=return_type,
         )
 
     def visit_Constant(self, node: foast.Constant, **kwargs) -> foast.Constant:

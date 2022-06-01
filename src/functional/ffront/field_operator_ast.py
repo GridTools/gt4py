@@ -14,7 +14,7 @@
 
 
 import re
-from typing import Generic, Optional, TypeVar, Union
+from typing import Generic, TypeVar, Union
 
 import eve
 from eve import Node
@@ -44,17 +44,17 @@ DataTypeT = TypeVar("DataTypeT", bound=common_types.DataType)
 DataSymbol = Symbol[DataTypeT]
 
 FieldTypeT = TypeVar("FieldTypeT", bound=common_types.FieldType)
-FieldSymbol = Symbol[FieldTypeT]
+FieldSymbol = DataSymbol[FieldTypeT]
 
 ScalarTypeT = TypeVar("ScalarTypeT", bound=common_types.ScalarType)
-ScalarSymbol = Symbol[ScalarTypeT]
+ScalarSymbol = DataSymbol[ScalarTypeT]
 
 TupleTypeT = TypeVar("TupleTypeT", bound=common_types.TupleType)
-TupleSymbol = Symbol[TupleTypeT]
+TupleSymbol = DataSymbol[TupleTypeT]
 
 
 class Expr(LocatedNode):
-    type: Optional[common_types.SymbolType] = None  # noqa A003
+    type: common_types.SymbolType = common_types.DeferredSymbolType(constraint=None)  # noqa A003
 
 
 class Name(Expr):
@@ -140,6 +140,7 @@ class Compare(Expr):
 class Call(Expr):
     func: Name
     args: list[Expr]
+    kwargs: dict[str, Expr]
 
 
 class Stmt(LocatedNode):

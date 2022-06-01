@@ -13,7 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 from typing import Union
 
-from eve import NodeTranslator, SymbolTableTrait
+from eve import NodeTranslator, traits
 from functional.common import GTTypeError
 from functional.ffront import common_types, program_ast as past
 from functional.iterator import ir as itir
@@ -23,19 +23,19 @@ def _size_arg_from_field(field_name: str, dim: int) -> str:
     return f"__{field_name}_size_{dim}"
 
 
-class ProgramLowering(NodeTranslator):
+class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
     """
     Lower Program AST (PAST) to Iterator IR (ITIR).
 
     Examples
     --------
     >>> from functional.ffront.func_to_past import ProgramParser
-    >>> from functional.iterator.runtime import CartesianAxis, offset
+    >>> from functional.iterator.runtime import offset
     >>> from functional.iterator import ir
-    >>> from functional.common import Field
+    >>> from functional.ffront.fbuiltins import Dimension, Field
     >>>
     >>> float64 = float
-    >>> IDim = CartesianAxis("IDim")
+    >>> IDim = Dimension("IDim")
     >>> Ioff = offset("Ioff")
     >>>
     >>> def fieldop(inp: Field[[IDim], "float64"]) -> Field[[IDim], "float64"]:
@@ -57,8 +57,6 @@ class ProgramLowering(NodeTranslator):
     >>> lowered.params
     [Sym(id='inp'), Sym(id='out'), Sym(id='__inp_size_0'), Sym(id='__out_size_0')]
     """
-
-    contexts = (SymbolTableTrait.symtable_merger,)
 
     @classmethod
     def apply(
@@ -114,7 +112,7 @@ class ProgramLowering(NodeTranslator):
         return itir.StencilClosure(
             domain=domain,
             stencil=itir.SymRef(id=node.func.id),
-            inputs=[self.visit(arg, **kwargs) for arg in node.args],
+            inputs=[itir.SymRef(id=self.visit(arg, **kwargs).id) for arg in node.args],
             output=output,
         )
 
@@ -170,7 +168,8 @@ class ProgramLowering(NodeTranslator):
                     slice_.lower, itir.Literal(value="0", type="int"), dim_size
                 )
                 upper = self._visit_slice_bound(slice_.upper, dim_size, dim_size)
-
+                if dim.local:
+                    raise GTTypeError(f"Dimension {dim.value} must not be local.")
                 domain_args.append(
                     itir.FunCall(
                         fun=itir.SymRef(id="named_range"),
@@ -197,7 +196,7 @@ class ProgramLowering(NodeTranslator):
                 "Unexpected `out` argument. Must be a `past.Subscript` or `past.Name` node."
             )
 
-        return self.visit(out_field_name, **kwargs), itir.FunCall(
+        return itir.SymRef(id=self.visit(out_field_name, **kwargs).id), itir.FunCall(
             fun=itir.SymRef(id="domain"), args=domain_args
         )
 

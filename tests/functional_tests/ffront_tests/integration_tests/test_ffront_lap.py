@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from functional.common import Field
+from functional.common import Dimension, Field
 from functional.ffront.decorator import field_operator, program
 from functional.ffront.fbuiltins import FieldOffset
 from functional.iterator.builtins import *
@@ -9,8 +9,8 @@ from functional.iterator.embedded import np_as_located_field
 from functional.iterator.runtime import CartesianAxis, closure, fendef, fundef
 
 
-IDim = CartesianAxis("IDim")
-JDim = CartesianAxis("JDim")
+IDim = Dimension("IDim")
+JDim = Dimension("JDim")
 
 Ioff = FieldOffset("Ioff", source=IDim, target=(IDim,))
 Joff = FieldOffset("Joff", source=JDim, target=(JDim,))

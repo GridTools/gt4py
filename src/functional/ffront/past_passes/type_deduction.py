@@ -11,15 +11,12 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-from eve import NodeTranslator, SymbolTableTrait
+from eve import NodeTranslator, traits
 from functional.common import GTTypeError
-from functional.ffront import common_types as ct, program_ast as past
-from functional.ffront.type_info import TypeInfo
+from functional.ffront import common_types as ct, program_ast as past, type_info
 
 
-class ProgramTypeDeduction(NodeTranslator):
-    contexts = (SymbolTableTrait.symtable_merger,)  # type: ignore[assignment]
-
+class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
     @classmethod
     def apply(cls, node: past.Program) -> past.Program:
         return cls().visit(node)
@@ -65,10 +62,10 @@ class ProgramTypeDeduction(NodeTranslator):
             )
 
         try:
-            func_typeinfo = TypeInfo(func_type)
-            func_typeinfo.is_callable_for_args(
-                [arg.type for arg in args],
-                {name: expr.type for name, expr in kwargs.items()},
+            type_info.is_callable(
+                func_type,
+                with_args=[arg.type for arg in args],
+                with_kwargs={name: expr.type for name, expr in kwargs.items()},
                 raise_exception=True,
             )
         except GTTypeError as ex:
