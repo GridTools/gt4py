@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+from typing import cast
+
 import eve
-from functional.ffront import common_types as ct, field_operator_ast as foast
+from functional.ffront import common_types as ct, field_operator_ast as foast, type_info
 from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError
 
 
@@ -17,8 +19,11 @@ class UnrollPowerOp(eve.NodeTranslator):
                     node,
                     msg=f"'Power value '{type(node.right)}' not supported. Only integer values greater than zero allowed in the power operation",
                 )
-            # if type_info.extract_dtype(node.right.type) not in [ct.ScalarKind.INT32, ct.ScalarKind.INT64]:
-            if ct.ScalarKind.INT64 not in node.right.type.__dict__.values():
+            if type_info.extract_dtype(cast(ct.ScalarType, node.right.type)).kind not in [
+                ct.ScalarKind.INT32,
+                ct.ScalarKind.INT64,
+            ]:
+                # if ct.ScalarKind.INT64 not in node.right.type.__dict__.values():
                 # node.right.type.kind != ct.ScalarKind.INT64:
                 raise FieldOperatorTypeDeductionError.from_foast_node(
                     node, msg="Only integer values allowed in the power operation"
