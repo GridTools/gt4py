@@ -679,24 +679,7 @@ def _make_init_computations(
     if not temp_decls:
         return []
 
-    axes = set().union(*(set(temp_decls[name].axes) for name in temp_decls.keys()))
-    if "I" not in axes or "J" not in axes:
-        raise GTScriptSyntaxError(
-            message="Typed temporaries must to be defined on the I and J axis.",
-            loc=nodes.Location.from_ast_node(func_node),
-        )
-
-    if "K" in axes:
-        order = nodes.IterationOrder.PARALLEL
-        interval = nodes.AxisInterval.full_interval()
-    else:
-        order = nodes.IterationOrder.FORWARD
-        interval = nodes.AxisInterval(
-            start=nodes.AxisBound(level=nodes.LevelMarker.START, offset=0),
-            end=nodes.AxisBound(level=nodes.LevelMarker.START, offset=1),
-        )
-
-    stmts = []
+    stmts: List[nodes.Assign] = []
     for name in init_values:
         decl = temp_decls[name]
         stmts.append(decl)
@@ -725,7 +708,9 @@ def _make_init_computations(
 
     return [
         nodes.ComputationBlock(
-            interval=interval, iteration_order=order, body=nodes.BlockStmt(stmts=stmts)
+            interval=nodes.AxisInterval.full_interval(),
+            iteration_order=nodes.IterationOrder.PARALLEL,
+            body=nodes.BlockStmt(stmts=stmts),
         )
     ]
 
@@ -1695,6 +1680,12 @@ class GTScriptParser(ast.NodeVisitor):
             source = gt_meta.ast_unparse(ann_assign.annotation)
             descriptor = eval(source, ann_assign_context)
             temp_annotations[name] = descriptor
+            if descriptor.axes != gtscript.IJK:
+                axes = "".join(str(ax) for ax in descriptor.axes)
+                raise GTScriptSyntaxError(
+                    f"Found {axes}, but only IJK is currently supported for temporaries",
+                    loc=nodes.Location.from_ast_node(ast_func_def),
+                )
 
             if hasattr(ann_assign, "value") and ann_assign.value is not None:
                 assert isinstance(ann_assign.value, ast.Constant)
