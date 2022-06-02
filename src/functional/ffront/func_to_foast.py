@@ -49,7 +49,7 @@ class UnrollPowerOp(eve.NodeTranslator):
                 raise ValueError(
                     "Only integer values greater than zero allowed in the power operation"
                 )
-            if ct.ScalarKind.INT64 not in node.right.type.__dict__.values():
+            if type_info.extract_dtype(node.right.type) not in [ct.ScalarKind.INT32, ct.ScalarKind.INT64]:
                 # node.right.type.kind != ct.ScalarKind.INT64:
                 raise ValueError("Only integer values allowed in the power operation")
             if int(node.right.value) == 0:
