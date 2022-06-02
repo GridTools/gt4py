@@ -5,94 +5,46 @@ from functional.ffront import common_types as ct, field_operator_ast as foast
 from functional.ffront.func_to_foast import UnrollPowerOp
 
 
-def test_power_0():
-    def func():
-      return a**0
-    testee = FieldOperatorParser.apply_to_function(func)
-
-    actual = UnrollPowerOp().visit(testee)
-
-    expected = ObjectPattern(
-        foast.BinOp,
-        right=foast.Name(
-            id="a",
-            type=ct.DeferredSymbolType(constraint=None),
-            location=foast.SourceLocation(
-                line=106, column=12, source=str(pathlib.Path(__file__).resolve())
-            ),
-        ),
-        op=foast.BinaryOperator.DIV,
+def _make_power_testee(pow_n: str):
+    _set_source_location = foast.SourceLocation(
+        line=106, column=12, source=str(pathlib.Path(__file__).resolve())
     )
-    assert expected.match(actual)
 
-
-def test_power_1():
     testee = foast.BinOp(
         right=foast.Constant(
             dtype=ct.ScalarType(kind=ct.ScalarKind.INT),
-            location=foast.SourceLocation(
-                line=106, column=18, source=str(pathlib.Path(__file__).resolve())
-            ),
-            value="1",
+            location=_set_source_location,
+            value=pow_n,
             type=ct.ScalarType(kind=ct.ScalarKind.INT),
         ),
         left=foast.Name(
             id="a",
             type=ct.DeferredSymbolType(constraint=None),
-            location=foast.SourceLocation(
-                line=106, column=12, source=str(pathlib.Path(__file__).resolve())
-            ),
+            location=_set_source_location,
         ),
         op=foast.BinaryOperator.POW,
-        location=foast.SourceLocation(
-            line=106, column=12, source=str(pathlib.Path(__file__).resolve())
-        ),
+        location=_set_source_location,
         type=ct.DeferredSymbolType(constraint=None),
     )
+    return testee
 
-    actual = UnrollPowerOp().visit(testee)
 
-    expected = ObjectPattern(foast.Name(id="a"))
+def test_power_1():
+
+    actual = UnrollPowerOp().visit(_make_power_testee("1"))
+
+    expected = ObjectPattern(foast.Name, id="a")
 
     assert expected.match(actual)
 
 
 def test_power_2():
 
-    testee = foast.BinOp(
-        right=foast.Constant(
-            dtype=ct.ScalarType(kind=ct.ScalarKind.INT),
-            location=foast.SourceLocation(
-                line=106, column=18, source=str(pathlib.Path(__file__).resolve())
-            ),
-            value="2",
-            type=ct.ScalarType(kind=ct.ScalarKind.INT),
-        ),
-        left=foast.Name(
-            id="a",
-            type=ct.DeferredSymbolType(constraint=None),
-            location=foast.SourceLocation(
-                line=106, column=12, source=str(pathlib.Path(__file__).resolve())
-            ),
-        ),
-        op=foast.BinaryOperator.POW,
-        location=foast.SourceLocation(
-            line=106, column=12, source=str(pathlib.Path(__file__).resolve())
-        ),
-        type=ct.DeferredSymbolType(constraint=None),
-    )
-
-    actual = UnrollPowerOp().visit(testee)
+    actual = UnrollPowerOp().visit(_make_power_testee("2"))
 
     expected = ObjectPattern(
         foast.BinOp,
-        right=foast.Name(
-            id="a",
-            type=ct.DeferredSymbolType(constraint=None),
-            location=foast.SourceLocation(
-                line=106, column=12, source=str(pathlib.Path(__file__).resolve())
-            ),
-        ),
+        right=ObjectPattern(foast.Name, id="a"),
         op=foast.BinaryOperator.MULT,
     )
 
@@ -100,61 +52,88 @@ def test_power_2():
 
 
 def test_power_3():
-    testee = foast.BinOp(
-        right=foast.Constant(
-            dtype=ct.ScalarType(kind=ct.ScalarKind.INT),
-            location=foast.SourceLocation(
-                line=106, column=18, source=str(pathlib.Path(__file__).resolve())
-            ),
-            value="3",
-            type=ct.ScalarType(kind=ct.ScalarKind.INT),
-        ),
-        left=foast.Name(
-            id="a",
-            type=ct.DeferredSymbolType(constraint=None),
-            location=foast.SourceLocation(
-                line=106, column=12, source=str(pathlib.Path(__file__).resolve())
-            ),
-        ),
-        op=foast.BinaryOperator.POW,
-        location=foast.SourceLocation(
-            line=106, column=12, source=str(pathlib.Path(__file__).resolve())
-        ),
-        type=ct.DeferredSymbolType(constraint=None),
-    )
 
-    actual = UnrollPowerOp().visit(testee)
+    actual = UnrollPowerOp().visit(_make_power_testee("3"))
 
     expected = ObjectPattern(
         foast.BinOp,
-        right=foast.Name(
-            id="a",
-            type=ct.DeferredSymbolType(constraint=None),
-            location=foast.SourceLocation(
-                line=106, column=12, source=str(pathlib.Path(__file__).resolve())
-            ),
-        ),
-        left=foast.BinOp(
-            right=foast.Name(
-                id="a",
-                type=ct.DeferredSymbolType(constraint=None),
-                location=foast.SourceLocation(
-                    line=106, column=12, source=str(pathlib.Path(__file__).resolve())
-                ),
-            ),
-            left=foast.Name(
-                id="a",
-                type=ct.DeferredSymbolType(constraint=None),
-                location=foast.SourceLocation(
-                    line=106, column=12, source=str(pathlib.Path(__file__).resolve())
-                ),
-            ),
-            location=foast.SourceLocation(
-                line=106, column=12, source=str(pathlib.Path(__file__).resolve())
-            ),
-            type=ct.DeferredSymbolType(constraint=None),
+        right=ObjectPattern(foast.Name, id="a"),
+        left=ObjectPattern(
+            foast.BinOp,
+            right=ObjectPattern(foast.Name, id="a"),
+            left=ObjectPattern(foast.Name, id="a"),
             op=foast.BinaryOperator.MULT,
         ),
         op=foast.BinaryOperator.MULT,
     )
+    assert expected.match(actual)
+
+
+def test_power_0():
+    try:
+        UnrollPowerOp().visit(_make_power_testee("0"))
+    except ValueError:
+        True
+
+
+def test_power_neg():
+    try:
+        UnrollPowerOp().visit(_make_power_testee("-2"))
+    except ValueError:
+        True
+
+
+def test_power_float():
+    try:
+        UnrollPowerOp().visit(_make_power_testee("6.7"))
+    except ValueError:
+        True
+
+
+def test_power_reg_op():
+    # expr: a + b ** 2
+    _set_source_location = foast.SourceLocation(
+        line=106, column=12, source=str(pathlib.Path(__file__).resolve())
+    )
+    pow_n = "2"
+
+    testee = foast.BinOp(
+        right=foast.BinOp(
+            right=foast.Constant(
+                dtype=ct.ScalarType(kind=ct.ScalarKind.INT),
+                location=_set_source_location,
+                value=pow_n,
+                type=ct.ScalarType(kind=ct.ScalarKind.INT),
+            ),
+            left=foast.Name(
+                id="a", type=ct.DeferredSymbolType(constraint=None), location=_set_source_location
+            ),
+            location=_set_source_location,
+            type=ct.DeferredSymbolType(constraint=None),
+            op=foast.BinaryOperator.POW,
+        ),
+        left=foast.Name(
+            id="b",
+            type=ct.DeferredSymbolType(constraint=None),
+            location=_set_source_location,
+        ),
+        op=foast.BinaryOperator.ADD,
+        location=_set_source_location,
+        type=ct.DeferredSymbolType(constraint=None),
+    )
+
+    expected = ObjectPattern(
+        foast.BinOp,
+        right=ObjectPattern(
+            foast.BinOp,
+            right=ObjectPattern(foast.Name, id="a"),
+            left=ObjectPattern(foast.Name, id="a"),
+            op=foast.BinaryOperator.MULT,
+        ),
+        left=ObjectPattern(foast.Name, id="b"),
+        op=foast.BinaryOperator.ADD,
+    )
+
+    actual = UnrollPowerOp().visit(testee)
+
     assert expected.match(actual)

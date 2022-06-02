@@ -45,16 +45,17 @@ class FieldOperatorSyntaxError(DialectSyntaxError):
 class UnrollPowerOp(eve.NodeTranslator):
     def visit_BinOp(self, node: foast.BinOp) -> foast.BinOp:
         if node.op == foast.BinaryOperator.POW:
-            new_left = self.visit(node.left)
-            if int(node.right.value) == 0:
-                return foast.BinOp(
-                    left=new_left,
-                    right=new_left,
-                    op=foast.BinaryOperator.DIV,
-                    location=node.location,
-                    type=node.type,
+            if not type(node.right) is foast.Constant:
+                raise ValueError(
+                    "Only integer values greater than zero allowed in the power operation"
                 )
+            if ct.ScalarKind.INT64 not in node.right.type.__dict__.values():
+                # node.right.type.kind != ct.ScalarKind.INT64:
+                raise ValueError("Only integer values allowed in the power operation")
+            if int(node.right.value) == 0:
+                raise ValueError("Only values greater than zero allowed in the power operation")
 
+            new_left = self.visit(node.left)
             unrolled_expr = self.visit(node.left)
             for _i in range(int(node.right.value) - 1):
                 unrolled_expr = foast.BinOp(

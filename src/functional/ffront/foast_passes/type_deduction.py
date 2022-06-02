@@ -215,6 +215,9 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                     arg, msg=f"Type {arg.type} can not be used in operator '{node.op}'!"
                 )
 
+        if node.op == foast.BinaryOperator.POW:
+            return left.type
+
         if left.type == right.type:
             return copy.copy(left.type)
 
