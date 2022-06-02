@@ -59,11 +59,11 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
     ...     return inp
     >>> foast_tree = FieldOperatorParser.apply_to_function(field_op)
     >>> foast_tree  # doctest: +ELLIPSIS
-    FieldOperator(..., id='field_op', ...)
+    FieldOperator(..., id=SymbolName('field_op'), ...)
     >>> foast_tree.params  # doctest: +ELLIPSIS
-    [Symbol[DataTypeT](..., id='inp', type=FieldType(...), ...)]
+    [Symbol(..., id=SymbolName('inp'), type=FieldType(...), ...)]
     >>> foast_tree.body  # doctest: +ELLIPSIS
-    [Return(..., value=Name(..., id='inp'))]
+    [Return(..., value=Name(..., id=SymbolRef('inp')))]
 
 
     If a syntax error is encountered, it will point to the location in the source code.

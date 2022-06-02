@@ -19,6 +19,7 @@ import re
 import numpy as np
 import pytest
 
+import eve
 from eve.pattern_matching import ObjectPattern as P
 from functional.common import Field, GTTypeError
 from functional.ffront import common_types, program_ast as past
@@ -140,20 +141,20 @@ def test_copy_parsing(copy_program_def):
     )
     pattern_node = P(
         past.Program,
-        id="copy_program",
+        id=eve.SymbolName("copy_program"),
         params=[
-            P(past.Symbol, id="in_field", type=field_type),
-            P(past.Symbol, id="out_field", type=field_type),
+            P(past.Symbol, id=eve.SymbolName("in_field"), type=field_type),
+            P(past.Symbol, id=eve.SymbolName("out_field"), type=field_type),
         ],
         body=[
             P(
                 past.Call,
-                func=P(past.Name, id="identity"),
-                args=[P(past.Name, id="in_field")],
-                kwargs={"out": P(past.Name, id="out_field")},
+                func=P(past.Name, id=past.SymbolRef("identity")),
+                args=[P(past.Name, id=past.SymbolRef("in_field"))],
+                kwargs={"out": P(past.Name, id=past.SymbolRef("out_field"))},
             )
         ],
-        location=P(past.SourceLocation, line=57, source=str(pathlib.Path(__file__).resolve())),
+        location=P(past.SourceLocation, line=58, source=str(pathlib.Path(__file__).resolve())),
     )
     assert pattern_node.match(past_node, raise_exception=True)
 
@@ -167,24 +168,24 @@ def test_double_copy_parsing(double_copy_program_def):
     )
     pattern_node = P(
         past.Program,
-        id="double_copy_program",
+        id=eve.SymbolName("double_copy_program"),
         params=[
-            P(past.Symbol, id="in_field", type=field_type),
-            P(past.Symbol, id="intermediate_field", type=field_type),
-            P(past.Symbol, id="out_field", type=field_type),
+            P(past.Symbol, id=eve.SymbolName("in_field"), type=field_type),
+            P(past.Symbol, id=eve.SymbolName("intermediate_field"), type=field_type),
+            P(past.Symbol, id=eve.SymbolName("out_field"), type=field_type),
         ],
         body=[
             P(
                 past.Call,
-                func=P(past.Name, id="identity"),
-                args=[P(past.Name, id="in_field")],
-                kwargs={"out": P(past.Name, id="intermediate_field")},
+                func=P(past.Name, id=past.SymbolRef("identity")),
+                args=[P(past.Name, id=past.SymbolRef("in_field"))],
+                kwargs={"out": P(past.Name, id=past.SymbolRef("intermediate_field"))},
             ),
             P(
                 past.Call,
-                func=P(past.Name, id="identity"),
-                args=[P(past.Name, id="intermediate_field")],
-                kwargs={"out": P(past.Name, id="out_field")},
+                func=P(past.Name, id=past.SymbolRef("identity")),
+                args=[P(past.Name, id=past.SymbolRef("intermediate_field"))],
+                kwargs={"out": P(past.Name, id=past.SymbolRef("out_field"))},
             ),
         ],
     )
@@ -252,20 +253,20 @@ def test_copy_restrict_parsing(copy_restrict_program_def):
     )
     pattern_node = P(
         past.Program,
-        id="copy_restrict_program",
+        id=eve.SymbolName("copy_restrict_program"),
         params=[
-            P(past.Symbol, id="in_field", type=field_type),
-            P(past.Symbol, id="out_field", type=field_type),
+            P(past.Symbol, id=eve.SymbolName("in_field"), type=field_type),
+            P(past.Symbol, id=eve.SymbolName("out_field"), type=field_type),
         ],
         body=[
             P(
                 past.Call,
-                func=P(past.Name, id="identity"),
-                args=[P(past.Name, id="in_field")],
+                func=P(past.Name, id=past.SymbolRef("identity")),
+                args=[P(past.Name, id=past.SymbolRef("in_field"))],
                 kwargs={
                     "out": P(
                         past.Subscript,
-                        value=P(past.Name, id="out_field"),
+                        value=P(past.Name, id=past.SymbolRef("out_field")),
                         slice_=slice_pattern_node,
                     )
                 },
@@ -283,31 +284,31 @@ def test_copy_lowering(copy_program_def, itir_identity_fundef):
         itir.StencilClosure,
         domain=P(
             itir.FunCall,
-            fun=P(itir.SymRef, id="domain"),
+            fun=P(itir.SymRef, id=eve.SymbolRef("domain")),
             args=[
                 P(
                     itir.FunCall,
-                    fun=P(itir.SymRef, id="named_range"),
+                    fun=P(itir.SymRef, id=eve.SymbolRef("named_range")),
                     args=[
                         P(itir.AxisLiteral, value="IDim"),
                         P(itir.Literal, value="0", type="int"),
-                        P(itir.SymRef, id="__out_field_size_0"),
+                        P(itir.SymRef, id=eve.SymbolRef("__out_field_size_0")),
                     ],
                 )
             ],
         ),
-        stencil=P(itir.SymRef, id="identity"),
-        inputs=[P(itir.SymRef, id="in_field")],
-        output=P(itir.SymRef, id="out_field"),
+        stencil=P(itir.SymRef, id=eve.SymbolRef("identity")),
+        inputs=[P(itir.SymRef, id=eve.SymbolRef("in_field"))],
+        output=P(itir.SymRef, id=eve.SymbolRef("out_field")),
     )
     fencil_pattern = P(
         itir.FencilDefinition,
-        id="copy_program",
+        id=eve.SymbolName("copy_program"),
         params=[
-            P(itir.Sym, id="in_field"),
-            P(itir.Sym, id="out_field"),
-            P(itir.Sym, id="__in_field_size_0"),
-            P(itir.Sym, id="__out_field_size_0"),
+            P(itir.Sym, id=eve.SymbolName("in_field")),
+            P(itir.Sym, id=eve.SymbolName("out_field")),
+            P(itir.Sym, id=eve.SymbolName("__in_field_size_0")),
+            P(itir.Sym, id=eve.SymbolName("__out_field_size_0")),
         ],
         closures=[closure_pattern],
     )
@@ -322,11 +323,11 @@ def test_copy_restrict_lowering(copy_restrict_program_def, itir_identity_fundef)
         itir.StencilClosure,
         domain=P(
             itir.FunCall,
-            fun=P(itir.SymRef, id="domain"),
+            fun=P(itir.SymRef, id=eve.SymbolRef("domain")),
             args=[
                 P(
                     itir.FunCall,
-                    fun=P(itir.SymRef, id="named_range"),
+                    fun=P(itir.SymRef, id=eve.SymbolRef("named_range")),
                     args=[
                         P(itir.AxisLiteral, value="IDim"),
                         P(itir.Literal, value="1", type="int"),
@@ -338,12 +339,12 @@ def test_copy_restrict_lowering(copy_restrict_program_def, itir_identity_fundef)
     )
     fencil_pattern = P(
         itir.FencilDefinition,
-        id="copy_restrict_program",
+        id=eve.SymbolName("copy_restrict_program"),
         params=[
-            P(itir.Sym, id="in_field"),
-            P(itir.Sym, id="out_field"),
-            P(itir.Sym, id="__in_field_size_0"),
-            P(itir.Sym, id="__out_field_size_0"),
+            P(itir.Sym, id=eve.SymbolName("in_field")),
+            P(itir.Sym, id=eve.SymbolName("out_field")),
+            P(itir.Sym, id=eve.SymbolName("__in_field_size_0")),
+            P(itir.Sym, id=eve.SymbolName("__out_field_size_0")),
         ],
         closures=[closure_pattern],
     )

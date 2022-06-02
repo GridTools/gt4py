@@ -13,7 +13,7 @@ def add_fundefs(
     )
 
 
-def replace_nodes(root: eve.concepts.AnyNode, idmap: dict[int, eve.Node]) -> eve.concepts.AnyNode:
+def replace_nodes(root: eve.concepts.RootNode, idmap: dict[int, eve.Node]) -> eve.concepts.RootNode:
     class ReplaceNode(eve.NodeTranslator):
         def visit_Node(self, node: eve.Node) -> eve.Node:
             if id(node) in idmap:

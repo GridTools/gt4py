@@ -14,22 +14,21 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Definitions of Trait classes."""
+"""Definitions of node and visitor trait classes."""
 
 
 from __future__ import annotations
 
 import collections
 
-import pydantic
-
-from . import concepts, visitors
-from .extended_typing import Any, Dict, Set, Type
-from .type_definitions import SymbolName, SymbolRef
+from . import concepts, datamodels, exceptions, visitors
+from .extended_typing import Any, Dict, Set, Type, no_type_check
 
 
 # ---  Node Traits ---
-class SymbolTableTrait(concepts.Model):
+@concepts.register_annex_user("symtable", Dict[str, concepts.Node], shared=True)
+@datamodels.datamodel
+class SymbolTableTrait:
     """Node trait adding an automatically created symbol table to the parent node.
 
     The actual symbol table dict will be stored in the `symtable_` attribute.
@@ -37,79 +36,101 @@ class SymbolTableTrait(concepts.Model):
     called ``_NODE_SYMBOLS_``.
     """
 
-    symtable_: Dict[str, Any] = pydantic.Field(default_factory=dict)
+    __slots__ = ()
 
-    @pydantic.root_validator(skip_on_failure=True)
-    def __collect_symbols(  # type: ignore  # validators are classmethods
-        cls: Type[SymbolTableTrait], values: Dict[str, Any]
-    ) -> Dict[str, Any]:
-        values.pop("symtable_", None)
-        values["symtable_"] = cls._CollectSymbols.apply(
-            {**values, "_NODE_SYMBOLS_": getattr(cls, "_NODE_SYMBOLS_", {})}
-        )
-        return values
+    @no_type_check
+    @datamodels.root_validator
+    def _collect_symbol_names(cls: Type[SymbolTableTrait], instance: concepts.Node) -> None:
+        collected_symbols = cls.SymbolsCollector.apply(instance)
+        instance.annex.symtable = collected_symbols
 
-    class _CollectSymbols(visitors.NodeVisitor):
+    class SymbolsCollector(visitors.NodeVisitor):
         def __init__(self) -> None:
-            self.collected: Dict[str, Any] = {}
+            self.collected_symbols: Dict[str, concepts.Node] = {}
 
-        def visit_Node(self, node: concepts.Node) -> None:
-            for name, metadata in node.__node_children__.items():
-                if isinstance(metadata["definition"].type_, type) and issubclass(
-                    metadata["definition"].type_, SymbolName
+        def visit_Node(self, node: concepts.Node, /) -> None:
+            for field_name, attribute in node.__datamodel_fields__.items():
+                if isinstance(attribute.type, type) and issubclass(
+                    attribute.type, concepts.SymbolName
                 ):
-                    symbol_name = getattr(node, name)
-                    if symbol_name in self.collected:
-                        raise ValueError(f"Multiple definitions of symbol '{symbol_name}'")
-                    self.collected[symbol_name] = node
+                    symbol_name = getattr(node, field_name)
+                    if symbol_name in self.collected_symbols:
+                        raise exceptions.EveValueError(
+                            f"Multiple definitions of symbol '{symbol_name}'"
+                        )
+                    self.collected_symbols[symbol_name] = node
+
             if not isinstance(node, SymbolTableTrait):
-                # don't recurse into a new scope (i.e. node with SymbolTableTrait)
+                # Stop recursion if the node opens a new scope (i.e. node with SymbolTableTrait)
                 self.generic_visit(node)
 
+        def visit(self, node: concepts.RootNode, **kwargs: Any) -> Any:
+            if hasattr(node.__class__, "_NODE_SYMBOLS_"):
+                self.visit(node.__class__._NODE_SYMBOLS_)  # type: ignore[union-attr]  # _NODE_SYMBOLS_ is optional
+            return super().visit(node, **kwargs)
+
         @classmethod
-        def apply(cls, node: concepts.TreeNode) -> Dict[str, Any]:
-            instance = cls()
-            instance.generic_visit(node)
-            return instance.collected
+        def apply(cls, node: concepts.Node) -> Dict[str, concepts.Node]:
+            collector = cls()
+            # If the passed root node already contains a symbol table, the check in `visit_Node()`
+            # will automatically stop the traversal. To avoid this premature stop, we start the
+            # traversal here calling `generic_visit()` to directly inspect the children (after
+            # adding any extra node symbols defined in the node class).
+            if hasattr(node.__class__, "_NODE_SYMBOLS_"):
+                collector.visit(node.__class__._NODE_SYMBOLS_)  # type: ignore[attr-defined]  # _NODE_SYMBOLS_ is optional
+            collector.generic_visit(node)
+            return collector.collected_symbols
 
 
-class SymbolRefsValidatorTrait(concepts.Model):
+@concepts.register_annex_user("symtable", Dict[str, concepts.Node], shared=True)
+@datamodels.datamodel
+class SymbolRefsValidatorTrait:
     """Node trait adding automatic validation of symbol references appearing the node tree.
 
     It assumes that the symbol table with the actual definitions is stored as
     a dict in the `symtable_` attribute (like :class:`SymbolTableTrait` does).
     """
 
-    @pydantic.root_validator(skip_on_failure=True)
-    def __validate_refs(  # type: ignore  # validators are classmethods
-        cls: Type[SymbolRefsValidatorTrait], values: Dict[str, Any]
-    ) -> Dict[str, Any]:
-        validator = cls._SymbolRefsValidator()
-        for v in values.values():
-            validator.visit(v, symtable=values["symtable_"])
+    __slots__ = ()
 
-        if len(validator.missing_symbols) > 0:
-            raise ValueError("Symbols {} not found.".format(validator.missing_symbols))
+    @no_type_check
+    @datamodels.root_validator
+    def _validate_symbol_refs(cls: Type[SymbolRefsValidatorTrait], instance: concepts.Node) -> None:
+        validator = cls.SymbolRefsValidator()
+        symtable = instance.annex.symtable
+        for child_node in instance.iter_children_values():
+            validator.visit(child_node, symtable=symtable)
 
-        return values
+        if validator.missing_symbols:
+            raise exceptions.EveValueError(
+                "Symbols {} not found.".format(validator.missing_symbols)
+            )
 
-    class _SymbolRefsValidator(visitors.NodeVisitor):
+    class SymbolRefsValidator(visitors.NodeVisitor):
         def __init__(self) -> None:
             self.missing_symbols: Set[str] = set()
 
         def visit_Node(
             self, node: concepts.Node, *, symtable: Dict[str, Any], **kwargs: Any
         ) -> None:
-            for name, metadata in node.__node_children__.items():
-                if isinstance(metadata["definition"].type_, type) and issubclass(
-                    metadata["definition"].type_, SymbolRef
+            for field_name, attribute in node.__datamodel_fields__.items():
+                if isinstance(attribute.type, type) and issubclass(
+                    attribute.type, concepts.SymbolRef
                 ):
-                    if getattr(node, name) and getattr(node, name) not in symtable:
-                        self.missing_symbols.add(getattr(node, name))
+                    symbol_name = getattr(node, field_name)
+                    if symbol_name not in symtable:
+                        self.missing_symbols.add(symbol_name)
 
             if isinstance(node, SymbolTableTrait):
-                symtable = {**symtable, **node.symtable_}
+                # Append symbols from nested scope for nested nodes
+                symtable = {**symtable, **node.annex.symtable}
             self.generic_visit(node, symtable=symtable, **kwargs)
+
+        @classmethod
+        def apply(cls, node: concepts.Node, *, symtable: Dict[str, Any]) -> Set[str]:
+            validator = cls()
+            validator.visit(node, symtable=symtable)
+            return validator.missing_symbols
 
 
 class ValidatedSymbolTableTrait(SymbolRefsValidatorTrait, SymbolTableTrait):
@@ -119,6 +140,7 @@ class ValidatedSymbolTableTrait(SymbolRefsValidatorTrait, SymbolTableTrait):
     :class:`SymbolRefsValidatorTrait` traits.
     """
 
+    __slots__ = ()
     pass
 
 
@@ -130,14 +152,16 @@ class VisitorWithSymbolTableTrait(visitors.NodeVisitor):
     symbol table to visitor methods as the 'symtable' keyword argument.
     """
 
-    def visit(self, node: concepts.TreeNode, **kwargs: Any) -> Any:
+    def visit(self, node: concepts.RootNode, **kwargs: Any) -> Any:
         kwargs.setdefault("symtable", collections.ChainMap())
-        if has_table := isinstance(node, SymbolTableTrait):
-            kwargs["symtable"] = kwargs["symtable"].new_child(node.symtable_)
+        new_scope = False
+        if isinstance(node, concepts.Node):
+            if new_scope := ("symtable" in node.annex):
+                kwargs["symtable"] = kwargs["symtable"].new_child(node.annex.symtable)
 
         result = super().visit(node, **kwargs)
 
-        if has_table:
+        if new_scope:
             kwargs["symtable"] = kwargs["symtable"].parents
 
         return result

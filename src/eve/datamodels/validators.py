@@ -29,7 +29,21 @@ import typing
 from typing import Any
 
 import attrs
-from attrs.validators import *  # noqa  # unused star import for reexporting
+from attrs.validators import (  # type: ignore[attr-defined]  # noqa: F401  # imported but unused
+    and_,
+    deep_iterable,
+    deep_mapping,
+    ge,
+    gt,
+    in_,
+    instance_of,
+    is_callable,
+    le,
+    lt,
+    matches_re,
+    max_len,
+    optional,
+)
 
 
 if typing.TYPE_CHECKING:

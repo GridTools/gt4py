@@ -92,10 +92,14 @@ def executor(ir: Node, *args, **kwargs):
     program = EmbeddedDSL.apply(ir)
     wrapper = WrapperGenerator.apply(ir, tmps=tmps)
     offset_literals: Iterable[str] = (
-        ir.iter_tree().if_isinstance(OffsetLiteral).getattr("value").if_isinstance(str).to_set()
+        ir.pre_walk_values()
+        .if_isinstance(OffsetLiteral)
+        .getattr("value")
+        .if_isinstance(str)
+        .to_set()
     )
     axis_literals: Iterable[str] = (
-        ir.iter_tree().if_isinstance(AxisLiteral).getattr("value").to_set()
+        ir.pre_walk_values().if_isinstance(AxisLiteral).getattr("value").to_set()
     )
 
     header = """
@@ -127,6 +131,7 @@ from functional.iterator.embedded import np_as_located_field
         if not debug:
             pathlib.Path(source_file_name).unlink(missing_ok=True)
 
+    assert isinstance(ir, FencilDefinition)
     fencil_name = ir.id
     fencil = getattr(foo, fencil_name + "_wrapper")
     assert "offset_provider" in kwargs

@@ -1,7 +1,7 @@
 from typing import Any
 
-from eve import NodeTranslator, iter_tree
-from eve.type_definitions import SymbolName
+import eve
+from eve.concepts import SymbolName
 from functional.iterator import ir as itir
 from functional.iterator.backends.gtfn.gtfn_ir import (
     Backend,
@@ -22,7 +22,7 @@ from functional.iterator.backends.gtfn.gtfn_ir import (
 )
 
 
-class GTFN_lowering(NodeTranslator):
+class GTFN_lowering(eve.NodeTranslator):
     _binary_op_map = {
         "plus": "+",
         "minus": "-",
@@ -66,9 +66,11 @@ class GTFN_lowering(NodeTranslator):
             and bool(len(node.args[0].fun.args) % 2)
         )
 
-    def _sparse_deref_shift_to_tuple_get(self, node: itir.FunCall) -> itir.FunCall:
+    def _sparse_deref_shift_to_tuple_get(self, node: itir.FunCall) -> Expr:
         # deref(shift(i)(sparse)) -> tuple_get(i, deref(sparse))
         # TODO: remove once ‘real’ sparse field handling is available
+        assert isinstance(node.args[0], itir.FunCall)
+        assert isinstance(node.args[0].fun, itir.FunCall)
         offsets = node.args[0].fun.args
         deref_arg = node.args[0].args[0]
         if len(offsets) > 1:
@@ -129,7 +131,7 @@ class GTFN_lowering(NodeTranslator):
     @staticmethod
     def _collect_offsets(node: itir.FencilDefinition) -> set[str]:
         return (
-            iter_tree(node)
+            node.pre_walk_values()
             .if_isinstance(itir.OffsetLiteral)
             .getattr("value")
             .if_isinstance(str)

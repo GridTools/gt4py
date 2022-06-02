@@ -53,9 +53,9 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
     >>> type(lowered)
     <class 'functional.iterator.ir.FencilDefinition'>
     >>> lowered.id
-    'program'
+    SymbolName('program')
     >>> lowered.params
-    [Sym(id='inp'), Sym(id='out'), Sym(id='__inp_size_0'), Sym(id='__out_size_0')]
+    [Sym(id=SymbolName('inp')), Sym(id=SymbolName('out')), Sym(id=SymbolName('__inp_size_0')), Sym(id=SymbolName('__out_size_0'))]
     """
 
     @classmethod

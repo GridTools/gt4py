@@ -93,9 +93,9 @@ def to_value(node: foast.LocatedNode) -> Callable[[itir.Expr], itir.Expr]:
     >>> parsed = FieldOperatorParser.apply_to_function(foo)
     >>> field_a, scalar_b = parsed.body[-1].value.elts
     >>> to_value(field_a)(im.ref("a"))
-    FunCall(fun=SymRef(id='deref'), args=[SymRef(id='a')])
+    FunCall(fun=SymRef(id=SymbolRef('deref')), args=[SymRef(id=SymbolRef('a'))])
     >>> to_value(scalar_b)(im.ref("a"))
-    SymRef(id='a')
+    SymRef(id=SymbolRef('a'))
     """
     assert can_be_value_or_iterator(node.type)
     if resulting_type_kind(node.type) is TypeKind.FIELD:
@@ -121,9 +121,9 @@ class FieldOperatorLowering(NodeTranslator):
     >>> type(lowered)
     <class 'functional.iterator.ir.FunctionDefinition'>
     >>> lowered.id
-    'fieldop'
+    SymbolName('fieldop')
     >>> lowered.params
-    [Sym(id='inp')]
+    [Sym(id=SymbolName('inp'))]
     """
 
     class lifted_lambda:
@@ -138,7 +138,7 @@ class FieldOperatorLowering(NodeTranslator):
         return cls().visit(node)
 
     def visit_FieldOperator(self, node: foast.FieldOperator, **kwargs) -> itir.FunctionDefinition:
-        symtable = node.symtable_
+        symtable = node.annex.symtable
         params = self.visit(node.params, symtable=symtable)
         return itir.FunctionDefinition(
             id=node.id,
@@ -178,7 +178,7 @@ class FieldOperatorLowering(NodeTranslator):
             return type_info.type_class(expr.type) is ct.FieldType
 
         param_names = list(
-            node.iter_tree().if_isinstance(foast.Name).filter(is_field).getattr("id").unique()
+            node.pre_walk_values().if_isinstance(foast.Name).filter(is_field).getattr("id").unique()
         )
         return self.lifted_lambda(*param_names)
 
