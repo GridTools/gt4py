@@ -13,7 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 import os
 import re
-from typing import TYPE_CHECKING, Dict, Optional, Tuple, Type
+from typing import TYPE_CHECKING, Dict, Optional, Tuple, Type, List
 
 import dace
 import numpy as np
@@ -43,7 +43,7 @@ from gtc.passes.gtir_pipeline import GtirPipeline
 from gtc.passes.oir_optimizations.inlining import MaskInlining
 from gtc.passes.oir_optimizations.utils import compute_fields_extents
 from gtc.passes.oir_pipeline import DefaultPipeline
-
+from gt4py.stencil_builder import StencilBuilder
 
 if TYPE_CHECKING:
     from gt4py.stencil_object import StencilObject
@@ -168,7 +168,7 @@ class DaCeExtGenerator(BackendCodegen):
             tmp_sdfg.orig_sdfg = None
 
         sources: Dict[str, Dict[str, str]]
-        implementation = DaCeComputationCodegen.apply(stencil_ir, sdfg)
+        implementation = DaCeComputationCodegen.apply(stencil_ir, self.backend.builder, sdfg)
 
         bindings = DaCeBindingsCodegen.apply(
             stencil_ir, sdfg, module_name=self.module_name, backend=self.backend
@@ -248,7 +248,7 @@ class DaCeComputationCodegen:
         return codegen.format_source("cpp", "\n".join(lines), style="LLVM")
 
     @classmethod
-    def apply(cls, stencil_ir: gtir.Stencil, sdfg: dace.SDFG):
+    def apply(cls, stencil_ir: gtir.Stencil, builder: StencilBuilder, sdfg: dace.SDFG):
         self = cls()
         with dace.config.temporary_config():
             dace.config.Config.set("compiler", "cuda", "max_concurrent_streams", value=-1)
@@ -274,14 +274,13 @@ class DaCeComputationCodegen:
 
                              {interface}
                              """
-        formatted_code = codegen.format_source("cpp", generated_code, style="LLVM")
-        return formatted_code
+        if builder.options.format_source:
+            generated_code = codegen.format_source("cpp", generated_code, style="LLVM")
 
-    def __init__(self):
-        self._unique_index = 0
+        return generated_code
 
-    def generate_dace_args(self, ir, sdfg):
-        oir = GTIRToOIR().visit(ir)
+    def generate_dace_args(self, stencil_ir: gtir.Stencil, sdfg: dace.SDFG) -> List[str]:
+        oir = GTIRToOIR().visit(stencil_ir)
         field_extents = compute_fields_extents(oir, add_k=True)
 
         offset_dict: Dict[str, Tuple[int, int, int]] = {
@@ -289,7 +288,7 @@ class DaCeComputationCodegen:
         }
         k_origins = {
             field_name: max(boundary[0], 0)
-            for field_name, boundary in compute_k_boundary(ir).items()
+            for field_name, boundary in compute_k_boundary(stencil_ir).items()
         }
         for name, origin in k_origins.items():
             offset_dict[name] = (offset_dict[name][0], offset_dict[name][1], origin)
@@ -371,8 +370,8 @@ class DaCeBindingsCodegen:
 
     mako_template = bindings_main_template()
 
-    def generate_entry_params(self, stencil_ir: gtir.Stencil, sdfg: dace.SDFG):
-        res = {}
+    def generate_entry_params(self, stencil_ir: gtir.Stencil, sdfg: dace.SDFG) -> List[str]:
+        res: Dict[str, str] = {}
         import dace.data
 
         for name in sdfg.signature_arglist(with_types=False, for_call=True):
@@ -388,8 +387,8 @@ class DaCeBindingsCodegen:
                 res[name] = "{dtype} {name}".format(dtype=sdfg.symbols[name].ctype, name=name)
         return list(res[node.name] for node in stencil_ir.params if node.name in res)
 
-    def generate_sid_params(self, sdfg: dace.SDFG):
-        res = []
+    def generate_sid_params(self, sdfg: dace.SDFG) -> List[str]:
+        res: List[str] = []
         import dace.data
 
         for name, array in sdfg.arrays.items():
@@ -422,7 +421,7 @@ class DaCeBindingsCodegen:
             res.append(name)
         return res
 
-    def generate_sdfg_bindings(self, stencil_ir: gtir.Stencil, sdfg, module_name):
+    def generate_sdfg_bindings(self, stencil_ir: gtir.Stencil, sdfg, module_name) -> str:
 
         return self.mako_template.render_values(
             name=sdfg.name,
@@ -470,9 +469,9 @@ class DaCeCUDAPyExtModuleGenerator(DaCePyExtModuleGenerator, GTCUDAPyModuleGener
 class BaseDaceBackend(BaseGTBackend, CLIBackendMixin):
 
     GT_BACKEND_T = "dace"
+    PYEXT_GENERATOR_CLASS = DaCeExtGenerator  # type: ignore
 
     options = BaseGTBackend.GT_BACKEND_OPTS
-    PYEXT_GENERATOR_CLASS = DaCeExtGenerator  # type: ignore
 
     def generate(self) -> Type["StencilObject"]:
         self.check_options(self.builder.options)

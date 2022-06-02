@@ -75,6 +75,7 @@ class StencilComputationExpansion(dace.library.ExpandTransformation):
         * change connector names to match inner array name (before expansion prefixed to satisfy uniqueness)
         * change in- and out-edges' subsets so that they have the same shape as the corresponding array inside
         * determine the domain size based on edges to StencilComputation
+
         """
         # change connector names
         for in_edge in parent_state.in_edges(node):
@@ -127,16 +128,13 @@ class StencilComputationExpansion(dace.library.ExpandTransformation):
     def expansion(
         node: "StencilComputation", parent_state: dace.SDFGState, parent_sdfg: dace.SDFG
     ) -> dace.nodes.NestedSDFG:
-
+        parent_sdfg.view()
         global_ctx = DaCeIRBuilder.GlobalContext(
             library_node=node,
             arrays=StencilComputationExpansion._get_parent_arrays(node, parent_state, parent_sdfg),
         )
 
-        daceir: dcir.NestedSDFG = DaCeIRBuilder().visit(
-            node.oir_node,
-            global_ctx=global_ctx,
-        )
+        daceir: dcir.NestedSDFG = DaCeIRBuilder().visit(node.oir_node, global_ctx=global_ctx)
 
         nsdfg = StencilComputationSDFGBuilder().visit(daceir)
 

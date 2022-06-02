@@ -143,9 +143,7 @@ class OirSDFGBuilder(eve.NodeVisitor):
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs):
 
-        ctx = OirSDFGBuilder.SDFGContext(
-            stencil=node,
-        )
+        ctx = OirSDFGBuilder.SDFGContext(stencil=node)
         for param in node.params:
             if isinstance(param, oir.FieldDecl):
                 dim_strs = [d for i, d in enumerate("IJK") if param.dimensions[i]] + [
