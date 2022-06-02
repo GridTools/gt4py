@@ -36,41 +36,11 @@ from functional.ffront.ast_passes import (
 )
 from functional.ffront.dialect_parser import DialectParser, DialectSyntaxError
 from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduction
+from functional.ffront.foast_passes.unroll_power_op import UnrollPowerOp
 
 
 class FieldOperatorSyntaxError(DialectSyntaxError):
     dialect_name = "Field Operator"
-
-
-class UnrollPowerOp(eve.NodeTranslator):
-    @classmethod
-    def apply(cls, node: foast.LocatedNode):
-        return cls().visit(node)
-    def visit_BinOp(self, node: foast.BinOp) -> foast.BinOp:
-        if node.op == foast.BinaryOperator.POW:
-            if not type(node.right) is foast.Constant:
-                raise ValueError(
-                    "Only integer values greater than zero allowed in the power operation"
-                )
-            if type_info.extract_dtype(node.right.type) not in [ct.ScalarKind.INT32, ct.ScalarKind.INT64]:
-                # node.right.type.kind != ct.ScalarKind.INT64:
-                raise ValueError("Only integer values allowed in the power operation")
-            if int(node.right.value) == 0:
-                raise ValueError("Only values greater than zero allowed in the power operation")
-
-            new_left = self.visit(node.left)
-            unrolled_expr = self.visit(node.left)
-            for _i in range(int(node.right.value) - 1):
-                unrolled_expr = foast.BinOp(
-                    left=unrolled_expr,
-                    right=new_left,
-                    op=foast.BinaryOperator.MULT,
-                    location=node.location,
-                    type=node.type,
-                )
-            return unrolled_expr
-
-        return self.generic_visit(node)
 
 
 class FieldOperatorParser(DialectParser[foast.FieldOperator]):
@@ -124,8 +94,7 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
 
     @classmethod
     def _postprocess_dialect_ast(cls, dialect_ast: foast.FieldOperator) -> foast.FieldOperator:
-        # return should have the unrolling already
-        dialect_ast = UnrollPowerOp().visit(dialect_ast)
+        dialect_ast = UnrollPowerOp.apply(dialect_ast)
         return FieldOperatorTypeDeduction.apply(dialect_ast)
 
     def _builtin_type_constructor_symbols(

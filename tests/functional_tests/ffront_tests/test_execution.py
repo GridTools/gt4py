@@ -112,7 +112,7 @@ def test_power():
 
     @field_operator(backend="roundtrip")
     def power(inp1: Field[[IDim], float64]) -> Field[[IDim], float64]:
-        return inp1 ** (2)
+        return inp1**2
 
     power(a, out=b, offset_provider={})
 
@@ -129,11 +129,11 @@ def test_power_arithmetic():
     def power_arithmetic(
         inp1: Field[[IDim], float64], inp2: Field[[IDim], float64]
     ) -> Field[[IDim], float64]:
-        return inp2 + (inp1 ** (2))
+        return inp2 + ((inp1 + inp2) ** 2)
 
     power_arithmetic(a, c, out=b, offset_provider={})
 
-    assert np.allclose(c.array() + (a.array() ** 2), b)
+    assert np.allclose(c.array() + ((c.array() + a.array()) ** 2), b)
 
 
 def test_bit_logic():
