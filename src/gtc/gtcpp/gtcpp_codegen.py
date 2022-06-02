@@ -100,6 +100,7 @@ class GTCppCodegen(codegen.TemplatedGenerator):
             raise TypeError("Unsupported offset type")
 
         if accessor_ref.name in temp_decls and accessor_ref.data_index:
+            # Cannot use symtable. See https://github.com/GridTools/gt4py/issues/808
             temp = temp_decls[accessor_ref.name]
             data_index = "+".join(
                 [
