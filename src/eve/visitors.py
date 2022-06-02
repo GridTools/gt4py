@@ -198,7 +198,9 @@ class ReusingNodeTranslator(NodeVisitor):
             changed = False
             for name, child in node.iter_children_items():  # type: ignore
                 new_child = self.visit(child, **kwargs)
-                if new_child is not NOTHING:
+                if new_child is NOTHING:
+                    changed = True
+                else:
                     if new_child is not child:
                         new_values_dict[name] = new_child
                         changed = True
@@ -216,7 +218,9 @@ class ReusingNodeTranslator(NodeVisitor):
             changed = False
             for child in trees.iter_children_values(node):
                 new_child = self.visit(child, **kwargs)
-                if new_child is not NOTHING:
+                if new_child is NOTHING:
+                    changed = True
+                else:
                     if new_child is not child:
                         new_values_list.append(new_child)
                         changed = True
@@ -232,7 +236,9 @@ class ReusingNodeTranslator(NodeVisitor):
             changed = False
             for name, child in trees.iter_children_items(node):
                 new_child = self.visit(child, **kwargs)
-                if new_child is not NOTHING:
+                if new_child is NOTHING:
+                    changed = True
+                else:
                     if new_child is not child:
                         new_values_dict[name] = new_child
                         changed = True
