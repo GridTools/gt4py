@@ -6,8 +6,8 @@ from functional.ffront.func_to_foast import UnrollPowerOp
 
 
 def _make_power_testee(pow_n: str):
-    _set_source_location = foast.SourceLocation(
-        line=106, column=12, source=str(pathlib.Path(__file__).resolve())
+    loc = foast.SourceLocation(
+        line=0, column=0, source="none")
     )
 
     testee = foast.BinOp(
