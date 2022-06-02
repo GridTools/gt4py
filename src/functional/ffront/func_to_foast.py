@@ -66,13 +66,7 @@ class UnrollPowerOp(eve.NodeTranslator):
                 )
             return unrolled_expr
 
-        return foast.BinOp(
-            left=self.visit(node.left),
-            right=self.visit(node.right),
-            op=node.op,
-            location=node.location,
-            type=node.type,
-        )
+        return self.generic_visit(node)
 
 
 class FieldOperatorParser(DialectParser[foast.FieldOperator]):
