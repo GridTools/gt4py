@@ -197,7 +197,7 @@ NAMED_RANGE_DTYPE = Primitive(name="named_range")  # type: ignore [call-arg]
 DOMAIN_DTYPE = Primitive(name="domain")  # type: ignore [call-arg]
 
 
-class _VarReindexer(eve.ReusingNodeTranslator):
+class _VarReindexer(eve.NodeTranslator):
     """Reindex type variables in a type tree."""
 
     def __init__(self, indexer: Callable[[dict[int, int]], int]):
@@ -477,7 +477,7 @@ def _free_variables(x: DType) -> set[Var]:
     return fv
 
 
-class _Dedup(eve.ReusingNodeTranslator):
+class _Dedup(eve.NodeTranslator):
     """Deduplicate nodes that have the same value but a different `id`."""
 
     def visit(self, node: T, *, memo: dict[T, T]) -> T:  # type: ignore[override]
@@ -810,7 +810,7 @@ def infer(expr: ir.Node, symtypes: Optional[dict[str, DType]] = None) -> DType:
     return reindex_vars(unified)
 
 
-class PrettyPrinter(eve.ReusingNodeTranslator):
+class PrettyPrinter(eve.NodeTranslator):
     """Pretty-printer for type expressions."""
 
     @staticmethod

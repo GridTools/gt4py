@@ -74,7 +74,7 @@ from .trees import (
     walk_values,
 )
 from .type_definitions import NOTHING, ConstrainedStr, Enum, IntEnum, NothingType, StrEnum
-from .visitors import NodeTranslator, NodeVisitor, ReusingNodeTranslator
+from .visitors import NodeTranslator, NodeVisitor
 
 
 __all__ = [
@@ -136,5 +136,4 @@ __all__ = [
     # visitors
     "NodeTranslator",
     "NodeVisitor",
-    "ReusingNodeTranslator",
 ]

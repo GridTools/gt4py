@@ -19,6 +19,7 @@
 
 from __future__ import annotations
 
+import collections.abc
 import copy
 
 from . import concepts, trees
@@ -105,8 +106,7 @@ class NodeVisitor:
 
         if hasattr(self, method_name):
             visitor = getattr(self, method_name)
-        # Note: avoiding expensive `isinstance(node, concepts.Node)`
-        elif concepts.Node in node.__class__.__mro__:
+        elif isinstance(node, concepts.Node):
             for node_class in node.__class__.__mro__[1:]:
                 class_name = node_class.__name__
                 if "__" in class_name:
@@ -157,19 +157,20 @@ class NodeTranslator(NodeVisitor):
 
         memo = kwargs.get("__memo__", None)
 
-        # Note: avoiding expensive `isinstance(node, concepts.Node)`
-        if concepts.Node in node.__class__.__mro__:
+        if isinstance(node, concepts.Node):
             new_node = node.__class__(  # type: ignore
                 **{
                     name: new_child
-                    for name, child in node.iter_children_items()  # type: ignore
+                    for name, child in node.iter_children_items()
                     if (new_child := self.visit(child, **kwargs)) is not NOTHING
                 },
             )
-            new_node.annex.reset(copy.deepcopy(node.annex.__dict__, memo=memo))  # type: ignore
+            new_node.annex.reset(copy.deepcopy(node.annex.__dict__, memo=memo))
             return new_node
 
-        if isinstance(node, (list, tuple, set)):
+        if isinstance(node, (list, tuple, set, collections.abc.Set)) or (
+            isinstance(node, collections.abc.Sequence) and not isinstance(node, (str, bytes))
+        ):
             # Sequence or set: create a new container instance with the new values
             return node.__class__(  # type: ignore
                 new_child
@@ -177,7 +178,7 @@ class NodeTranslator(NodeVisitor):
                 if (new_child := self.visit(child, **kwargs)) is not NOTHING
             )
 
-        if isinstance(node, dict):
+        if isinstance(node, (dict, collections.abc.Mapping)):
             # Mapping: create a new mapping instance with the new values
             return node.__class__(  # type: ignore[call-arg]
                 {
@@ -188,57 +189,3 @@ class NodeTranslator(NodeVisitor):
             )
 
         return copy.deepcopy(node, memo=memo)
-
-
-class ReusingNodeTranslator(NodeVisitor):
-    def generic_visit(self, node: concepts.RootNode, **kwargs: Any) -> Any:  # noqa: C901
-        # Note: avoiding expensive `isinstance(node, concepts.Node)`
-        if concepts.Node in node.__class__.__mro__:
-            new_values_dict = dict()
-            changed = False
-            for name, child in node.iter_children_items():  # type: ignore
-                new_child = self.visit(child, **kwargs)
-                if new_child is not NOTHING:
-                    if new_child is not child:
-                        new_values_dict[name] = new_child
-                        changed = True
-                    else:
-                        new_values_dict[name] = child
-            if not changed:
-                return node
-            new_node = node.__class__(**new_values_dict)
-            new_node.annex.reset(node.annex.__dict__)  # type: ignore
-            return new_node
-
-        if isinstance(node, (list, tuple, set)):
-            # Sequence or set: create a new container instance with the new values
-            new_values_list = []
-            changed = False
-            for child in trees.iter_children_values(node):
-                new_child = self.visit(child, **kwargs)
-                if new_child is not NOTHING:
-                    if new_child is not child:
-                        new_values_list.append(new_child)
-                        changed = True
-                    else:
-                        new_values_list.append(child)
-            if not changed:
-                return node
-            return node.__class__(new_values_list)
-
-        if isinstance(node, dict):
-            # Mapping: create a new mapping instance with the new values
-            new_values_dict = dict()
-            changed = False
-            for name, child in trees.iter_children_items(node):
-                new_child = self.visit(child, **kwargs)
-                if new_child is not NOTHING:
-                    if new_child is not child:
-                        new_values_dict[name] = new_child
-                        changed = True
-                    else:
-                        new_values_dict[name] = child
-            if not changed:
-                return node
-            return node.__class__(new_values_dict)
-        return node
