@@ -43,6 +43,9 @@ class FieldOperatorSyntaxError(DialectSyntaxError):
 
 
 class UnrollPowerOp(eve.NodeTranslator):
+    @classmethod
+    def apply(cls, node: foast.LocatedNode):
+        return cls().visit(node)
     def visit_BinOp(self, node: foast.BinOp) -> foast.BinOp:
         if node.op == foast.BinaryOperator.POW:
             if not type(node.right) is foast.Constant:
