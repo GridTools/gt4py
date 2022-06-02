@@ -13,17 +13,24 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 from functional.common import Field
 from functional.ffront import itir_makers as im
-from functional.ffront.fbuiltins import FieldOffset, float32, float64, int32, int64, neighbor_sum
+from functional.ffront.fbuiltins import (
+    Dimension,
+    FieldOffset,
+    float32,
+    float64,
+    int32,
+    int64,
+    neighbor_sum,
+)
 from functional.ffront.foast_to_itir import FieldOperatorLowering
 from functional.ffront.func_to_foast import FieldOperatorParser
-from functional.iterator.runtime import CartesianAxis
 
 
-IDim = CartesianAxis("IDim")
-Edge = CartesianAxis("Edge")
-Vertex = CartesianAxis("Vertex")
-Cell = CartesianAxis("Cell")
-V2EDim = CartesianAxis("V2E")
+IDim = Dimension("IDim")
+Edge = Dimension("Edge")
+Vertex = Dimension("Vertex")
+Cell = Dimension("Cell")
+V2EDim = Dimension("V2E")
 V2E = FieldOffset("V2E", source=Edge, target=(Vertex, V2EDim))
 
 
@@ -459,7 +466,7 @@ def test_compare_chain():
 
 def test_reduction_lowering_simple():
     def reduction(edge_f: Field[[Edge], "float64"]):
-        return neighbor_sum(edge_f(V2E), axis=V2E)
+        return neighbor_sum(edge_f(V2E), axis=V2EDim)
 
     parsed = FieldOperatorParser.apply_to_function(reduction)
     lowered = FieldOperatorLowering.apply(parsed)

@@ -20,7 +20,7 @@ def test_split_closures():
             ir.StencilClosure(
                 domain=ir.SymRef(id="d"),
                 stencil=ir.Lambda(
-                    params=[ir.SymRef(id="baz_inp")],
+                    params=[ir.Sym(id="baz_inp")],
                     expr=ir.FunCall(
                         fun=ir.SymRef(id="deref"),
                         args=[
@@ -60,8 +60,8 @@ def test_split_closures():
                         ],
                     ),
                 ),
-                output=ir.Sym(id="out"),
-                inputs=[ir.Sym(id="inp")],
+                output=ir.SymRef(id="out"),
+                inputs=[ir.SymRef(id="inp")],
             )
         ],
     )
@@ -110,7 +110,7 @@ def test_split_closures():
             ir.StencilClosure(
                 domain=ir.SymRef(id="d"),
                 stencil=ir.Lambda(
-                    params=[ir.SymRef(id="baz_inp"), ir.SymRef(id="_lift_2")],
+                    params=[ir.Sym(id="baz_inp"), ir.Sym(id="_lift_2")],
                     expr=ir.FunCall(
                         fun=ir.SymRef(id="deref"),
                         args=[ir.SymRef(id="_lift_2")],
@@ -176,7 +176,7 @@ def test_update_cartesian_domains():
                         ],
                     ),
                     stencil=ir.Lambda(
-                        params=[ir.SymRef(id="baz_inp"), ir.SymRef(id="_lift_2")],
+                        params=[ir.Sym(id="baz_inp"), ir.Sym(id="_lift_2")],
                         expr=ir.FunCall(
                             fun=ir.SymRef(id="deref"),
                             args=[
@@ -310,7 +310,7 @@ def test_update_cartesian_domains():
                         ],
                     ),
                     stencil=ir.Lambda(
-                        params=[ir.SymRef(id="baz_inp"), ir.SymRef(id="_lift_2")],
+                        params=[ir.Sym(id="baz_inp"), ir.Sym(id="_lift_2")],
                         expr=ir.FunCall(
                             fun=ir.SymRef(id="deref"),
                             args=[
@@ -424,7 +424,7 @@ def test_collect_tmps_info():
                         ],
                     ),
                     stencil=ir.Lambda(
-                        params=[ir.SymRef(id="baz_inp"), ir.SymRef(id="_lift_2")],
+                        params=[ir.Sym(id="baz_inp"), ir.Sym(id="_lift_2")],
                         expr=ir.FunCall(
                             fun=ir.SymRef(id="deref"),
                             args=[

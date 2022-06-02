@@ -11,14 +11,14 @@ class InlineLambdas(NodeTranslator):
             refs = (
                 set.union(
                     *(
-                        arg.iter_tree().if_isinstance(ir.SymRef).getattr("id").to_set()
+                        arg.pre_walk_values().if_isinstance(ir.SymRef).getattr("id").to_set()
                         for arg in node.args
                     )
                 )
                 if len(node.args) > 0
                 else set()
             )
-            syms = node.fun.expr.iter_tree().if_isinstance(ir.Sym).getattr("id").to_set()
+            syms = node.fun.expr.pre_walk_values().if_isinstance(ir.Sym).getattr("id").to_set()
             clashes = refs & syms
             expr = node.fun.expr
             if clashes:

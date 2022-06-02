@@ -1,7 +1,7 @@
 from typing import Any, Optional, Union
 
-from eve import NodeTranslator, iter_tree
-from eve.type_definitions import SymbolName
+import eve
+from eve.concepts import SymbolName
 from eve.utils import UIDs
 from functional.iterator import ir as itir
 from functional.iterator.backends.gtfn.gtfn_ir import (
@@ -43,7 +43,7 @@ def pytype_to_cpptype(t: str):
         raise TypeError(f"Unsupported type '{t}'") from None
 
 
-class GTFN_lowering(NodeTranslator):
+class GTFN_lowering(eve.NodeTranslator):
     _binary_op_map = {
         "plus": "+",
         "minus": "-",
@@ -87,7 +87,7 @@ class GTFN_lowering(NodeTranslator):
         force_function_extraction: bool = False,
         extracted_functions: Optional[list] = None,
         **kwargs: Any,
-    ) -> Lambda:
+    ) -> Union[SymRef, Lambda]:
         if force_function_extraction:
             assert extracted_functions is not None
             fun_id = UIDs.sequential_id(prefix="_fun")
@@ -123,9 +123,11 @@ class GTFN_lowering(NodeTranslator):
             and bool(len(node.args[0].fun.args) % 2)
         )
 
-    def _sparse_deref_shift_to_tuple_get(self, node: itir.FunCall) -> itir.FunCall:
+    def _sparse_deref_shift_to_tuple_get(self, node: itir.FunCall) -> Expr:
         # deref(shift(i)(sparse)) -> tuple_get(i, deref(sparse))
         # TODO: remove once ‘real’ sparse field handling is available
+        assert isinstance(node.args[0], itir.FunCall)
+        assert isinstance(node.args[0].fun, itir.FunCall)
         offsets = node.args[0].fun.args
         deref_arg = node.args[0].args[0]
         if len(offsets) > 1:
@@ -193,10 +195,11 @@ class GTFN_lowering(NodeTranslator):
 
     def visit_StencilClosure(
         self, node: itir.StencilClosure, extracted_functions: list, **kwargs: Any
-    ) -> StencilExecution:
+    ) -> Union[ScanExecution, StencilExecution]:
         backend = Backend(domain=self.visit(node.domain, **kwargs))
         if self._is_scan(node.stencil):
             scan_id = UIDs.sequential_id(prefix="_scan")
+            assert isinstance(node.stencil, itir.FunCall)
             scan_lambda = self.visit(node.stencil.args[0], **kwargs)
             forward = self._bool_from_literal(node.stencil.args[1])
             scan_def = ScanPassDefinition(
@@ -205,8 +208,8 @@ class GTFN_lowering(NodeTranslator):
             extracted_functions.append(scan_def)
             scan = Scan(
                 function=SymRef(id=scan_id),
-                output=Literal(value=0, type="int"),
-                inputs=[Literal(value=i + 1, type="int") for i, _ in enumerate(node.inputs)],
+                output=Literal(value="0", type="int"),
+                inputs=[Literal(value=str(i + 1), type="int") for i, _ in enumerate(node.inputs)],
                 init=self.visit(node.stencil.args[2], **kwargs),
             )
             return ScanExecution(
@@ -273,9 +276,9 @@ class GTFN_lowering(NodeTranslator):
         return res
 
     @staticmethod
-    def _collect_offsets(node: itir.FencilDefinition) -> set[str]:
-        return (
-            iter_tree(node)
+    def _collect_offsets(node: itir.FencilDefinition) -> list[str]:
+        return list(
+            node.pre_walk_values()
             .if_isinstance(itir.OffsetLiteral)
             .getattr("value")
             .if_isinstance(str)

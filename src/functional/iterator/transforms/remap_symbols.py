@@ -44,5 +44,5 @@ class RenameSymbols(NodeTranslator):
         if isinstance(node, ir.SymbolTableTrait):
             if active is None:
                 active = set()
-            active = active | set(node.symtable_)
+            active = active | set(node.annex.symtable)
         return super().generic_visit(node, name_map=name_map, active=active)

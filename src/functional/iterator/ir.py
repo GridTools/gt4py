@@ -1,8 +1,8 @@
 from typing import ClassVar, List, Union
 
 import eve
-from eve.traits import SymbolName, SymbolTableTrait, ValidatedSymbolTableTrait
-from eve.type_definitions import SymbolRef
+from eve import Coerced, SymbolName, SymbolRef
+from eve.traits import SymbolTableTrait, ValidatedSymbolTableTrait
 from eve.utils import noninstantiable
 
 
@@ -23,7 +23,7 @@ class Node(eve.Node):
 
 
 class Sym(Node):  # helper
-    id: SymbolName  # noqa: A003
+    id: Coerced[SymbolName]  # noqa: A003
 
 
 @noninstantiable
@@ -49,7 +49,7 @@ class AxisLiteral(Expr):
 
 
 class SymRef(Expr):
-    id: SymbolRef  # noqa: A003
+    id: Coerced[SymbolRef]  # noqa: A003
 
 
 class Lambda(Expr, SymbolTableTrait):
@@ -63,7 +63,7 @@ class FunCall(Expr):
 
 
 class FunctionDefinition(Node, SymbolTableTrait):
-    id: SymbolName  # noqa: A003
+    id: Coerced[SymbolName]  # noqa: A003
     params: List[Sym]
     expr: Expr
 
@@ -101,9 +101,23 @@ BUILTINS = {
 
 
 class FencilDefinition(Node, ValidatedSymbolTableTrait):
-    id: SymbolName  # noqa: A003
+    id: Coerced[SymbolName]  # noqa: A003
     function_definitions: List[FunctionDefinition]
     params: List[Sym]
     closures: List[StencilClosure]
 
     _NODE_SYMBOLS_: ClassVar = [Sym(id=name) for name in BUILTINS]
+
+
+# TODO(fthaler): just use hashable types in nodes (tuples instead of lists)
+Sym.__hash__ = Node.__hash__  # type: ignore[assignment]
+Expr.__hash__ = Node.__hash__  # type: ignore[assignment]
+Literal.__hash__ = Node.__hash__  # type: ignore[assignment]
+NoneLiteral.__hash__ = Node.__hash__  # type: ignore[assignment]
+OffsetLiteral.__hash__ = Node.__hash__  # type: ignore[assignment]
+AxisLiteral.__hash__ = Node.__hash__  # type: ignore[assignment]
+SymRef.__hash__ = Node.__hash__  # type: ignore[assignment]
+Lambda.__hash__ = Node.__hash__  # type: ignore[assignment]
+FunCall.__hash__ = Node.__hash__  # type: ignore[assignment]
+FunctionDefinition.__hash__ = Node.__hash__  # type: ignore[assignment]
+StencilClosure.__hash__ = Node.__hash__  # type: ignore[assignment]

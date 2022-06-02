@@ -24,10 +24,10 @@ def sym(sym_or_name: Union[str, itir.Sym]) -> itir.Sym:
     Examples
     --------
     >>> sym("a")
-    Sym(id='a')
+    Sym(id=SymbolName('a'))
 
     >>> sym(itir.Sym(id="b"))
-    Sym(id='b')
+    Sym(id=SymbolName('b'))
     """
     if isinstance(sym_or_name, itir.Sym):
         return sym_or_name
@@ -41,10 +41,10 @@ def ref(ref_or_name: Union[str, itir.SymRef]) -> itir.SymRef:
     Examples
     --------
     >>> ref("a")
-    SymRef(id='a')
+    SymRef(id=SymbolRef('a'))
 
     >>> ref(itir.SymRef(id="b"))
-    SymRef(id='b')
+    SymRef(id=SymbolRef('b'))
     """
     if isinstance(ref_or_name, itir.SymRef):
         return ref_or_name
@@ -58,7 +58,7 @@ def ensure_expr(literal_or_expr: Union[str, int, itir.Expr]) -> itir.Expr:
     Examples
     --------
     >>> ensure_expr("a")
-    SymRef(id='a')
+    SymRef(id=SymbolRef('a'))
 
     >>> ensure_expr(3)
     Literal(value='3', type='int')
@@ -97,7 +97,7 @@ class lambda__:
     Examples
     --------
     >>> lambda__("a")(deref_("a"))  # doctest: +ELLIPSIS
-    Lambda(params=[Sym(id='a')], expr=FunCall(fun=SymRef(id='deref'), args=[SymRef(id='a')]), ...)
+    Lambda(params=[Sym(id=SymbolName('a'))], expr=FunCall(fun=SymRef(id=SymbolRef('deref')), args=[SymRef(id=SymbolRef('a'))]))
     """
 
     def __init__(self, *args):
@@ -114,7 +114,7 @@ class call_:
     Examples
     --------
     >>> call_("plus")(1, 1)
-    FunCall(fun=SymRef(id='plus'), args=[Literal(value='1', type='int'), Literal(value='1', type='int')])
+    FunCall(fun=SymRef(id=SymbolRef('plus')), args=[Literal(value='1', type='int'), Literal(value='1', type='int')])
     """
 
     def __init__(self, expr):
@@ -201,7 +201,7 @@ class let:
     Examples
     --------
     >>> let("a", "b")("a")  # doctest: +ELLIPSIS
-    FunCall(fun=Lambda(params=[Sym(id='a')], expr=SymRef(id='a'), ...), args=[SymRef(id='b')])
+    FunCall(fun=Lambda(params=[Sym(id=SymbolName('a'))], expr=SymRef(id=SymbolRef('a'))), args=[SymRef(id=SymbolRef('b'))])
     """
 
     def __init__(self, var, init_form):
@@ -219,10 +219,10 @@ def shift_(offset, value=None):
     Examples
     --------
     >>> shift_("i", 0)("a")
-    FunCall(fun=FunCall(fun=SymRef(id='shift'), args=[OffsetLiteral(value='i'), Literal(value='0', type='int')]), args=[SymRef(id='a')])
+    FunCall(fun=FunCall(fun=SymRef(id=SymbolRef('shift')), args=[OffsetLiteral(value='i'), Literal(value='0', type='int')]), args=[SymRef(id=SymbolRef('a'))])
 
     >>> shift_("V2E")("b")
-    FunCall(fun=FunCall(fun=SymRef(id='shift'), args=[OffsetLiteral(value='V2E')]), args=[SymRef(id='b')])
+    FunCall(fun=FunCall(fun=SymRef(id=SymbolRef('shift')), args=[OffsetLiteral(value='V2E')]), args=[SymRef(id=SymbolRef('b'))])
     """
     offset = ensure_offset(offset)
     args = [offset]

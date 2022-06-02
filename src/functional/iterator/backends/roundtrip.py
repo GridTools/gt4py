@@ -9,7 +9,7 @@ from eve.concepts import Node
 from functional import iterator
 from functional.iterator import ir
 from functional.iterator.backends import backend
-from functional.iterator.ir import AxisLiteral, OffsetLiteral
+from functional.iterator.ir import AxisLiteral, FencilDefinition, OffsetLiteral
 from functional.iterator.transforms import apply_common_transforms
 from functional.iterator.transforms.global_tmps import FencilWithTemporaries
 
@@ -88,10 +88,14 @@ def executor(ir: Node, *args, **kwargs):
 
     program = EmbeddedDSL.apply(ir)
     offset_literals: Iterable[str] = (
-        ir.iter_tree().if_isinstance(OffsetLiteral).getattr("value").if_isinstance(str).to_set()
+        ir.pre_walk_values()
+        .if_isinstance(OffsetLiteral)
+        .getattr("value")
+        .if_isinstance(str)
+        .to_set()
     )
     axis_literals: Iterable[str] = (
-        ir.iter_tree().if_isinstance(AxisLiteral).getattr("value").to_set()
+        ir.pre_walk_values().if_isinstance(AxisLiteral).getattr("value").to_set()
     )
 
     header = """
@@ -122,6 +126,7 @@ from functional.iterator.embedded import np_as_located_field
         if not debug:
             pathlib.Path(source_file_name).unlink(missing_ok=True)
 
+    assert isinstance(ir, (FencilDefinition, FencilWithTemporaries))
     fencil_name = ir.fencil.id + "_wrapper" if isinstance(ir, FencilWithTemporaries) else ir.id
     fencil = getattr(foo, fencil_name)
     assert "offset_provider" in kwargs

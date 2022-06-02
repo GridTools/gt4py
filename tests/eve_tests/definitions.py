@@ -20,19 +20,10 @@ import random
 import string
 from typing import Collection, Dict, List, Mapping, Optional, Sequence, Set, Type, TypeVar
 
-from eve.concepts import FrozenNode, Node, VType
+from eve.concepts import FrozenNode, Node, SourceLocation, SymbolName, VType
+from eve.datamodels import Coerced
 from eve.traits import SymbolTableTrait, ValidatedSymbolTableTrait
-from eve.type_definitions import (
-    Bool,
-    Bytes,
-    Float,
-    Int,
-    IntEnum,
-    SourceLocation,
-    Str,
-    StrEnum,
-    SymbolName,
-)
+from eve.type_definitions import IntEnum, StrEnum
 from eve.utils import CaseStyleConverter
 
 
@@ -72,56 +63,56 @@ class LocationNode(Node):
 
 
 class SimpleNode(Node):
-    int_value: Int
-    bool_value: Bool
-    float_value: Float
-    str_value: Str
-    bytes_value: Bytes
+    int_value: int
+    bool_value: bool
+    float_value: float
+    str_value: str
+    bytes_value: bytes
     int_kind: IntKind
     str_kind: StrKind
 
 
 class SimpleNodeWithOptionals(Node):
-    int_value: Int
-    float_value: Optional[Float]
-    str_value: Optional[Str]
+    int_value: int
+    float_value: Optional[float]
+    str_value: Optional[str] = None
 
 
 class SimpleNodeWithLoc(Node):
-    int_value: Int
-    float_value: Float
-    str_value: Str
+    int_value: int
+    float_value: float
+    str_value: str
     loc: Optional[SourceLocation]
 
 
 class SimpleNodeWithCollections(Node):
-    int_value: Int
-    int_list: List[Int]
-    str_set: Set[Str]
-    str_to_int_dict: Dict[Str, Int]
+    int_value: int
+    int_list: List[int]
+    str_set: Set[str]
+    str_to_int_dict: Dict[str, int]
     loc: Optional[SourceLocation]
 
 
 class SimpleNodeWithAbstractCollections(Node):
-    int_value: Int
-    int_sequence: Sequence[Int]
-    str_set: Set[Str]
-    str_to_int_mapping: Mapping[Str, Int]
-    loc: Optional[SourceLocation]
+    int_value: int
+    int_sequence: Sequence[int]
+    str_set: Set[str]
+    str_to_int_mapping: Mapping[str, int]
+    loc: Optional[SourceLocation] = None
 
 
 class SimpleNodeWithSymbolName(Node):
-    int_value: Int
-    name: SymbolName
+    int_value: int
+    name: Coerced[SymbolName]
 
 
 class SimpleNodeWithDefaultSymbolName(Node):
-    int_value: Int
+    int_value: int
     name: SymbolName = SymbolName("symbol_name")
 
 
 class CompoundNode(Node):
-    int_value: Int
+    int_value: int
     location: LocationNode
     simple: SimpleNode
     simple_loc: SimpleNodeWithLoc
@@ -130,7 +121,7 @@ class CompoundNode(Node):
 
 
 class CompoundNodeWithSymbols(Node):
-    int_value: Int
+    int_value: int
     location: LocationNode
     simple: SimpleNode
     simple_loc: SimpleNodeWithLoc
@@ -154,11 +145,11 @@ class NodeWithValidatedSymbolTable(NodeWithSymbolTable, ValidatedSymbolTableTrai
 
 
 class FrozenSimpleNode(FrozenNode):
-    int_value: Int
-    bool_value: Bool
-    float_value: Float
-    str_value: Str
-    bytes_value: Bytes
+    int_value: int
+    bool_value: bool
+    float_value: float
+    str_value: str
+    bytes_value: bytes
     int_kind: IntKind
     str_kind: StrKind
 
@@ -286,9 +277,12 @@ def make_multinode_collection_value(
 ) -> Collection[T]:
     length = length or _SEQUENCE_LEN
 
-    maker = globals()[f"make_{CaseStyleConverter.convert(node_class.__name__, 'pascal', 'snake')}"]
+    item_maker = globals()[
+        f"make_{CaseStyleConverter.convert(node_class.__name__, 'pascal', 'snake')}"
+    ]
+    items = [item_maker(fixed=fixed) for _ in range(length)]
 
-    return collection_type([maker(fixed=fixed) for _ in range(length)])  # type: ignore
+    return collection_type(items)  # type: ignore
 
 
 # -- Node maker functions --

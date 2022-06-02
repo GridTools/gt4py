@@ -21,13 +21,20 @@ import numpy as np
 import pytest
 
 from functional.ffront.decorator import field_operator, program
-from functional.ffront.fbuiltins import Field, FieldOffset, float64, int32, neighbor_sum
+from functional.ffront.fbuiltins import (
+    Dimension,
+    Field,
+    FieldOffset,
+    broadcast,
+    float64,
+    int32,
+    neighbor_sum,
+)
 from functional.iterator.embedded import (
     NeighborTableOffsetProvider,
     index_field,
     np_as_located_field,
 )
-from functional.iterator.runtime import CartesianAxis
 
 
 def debug_itir(tree):
@@ -43,7 +50,8 @@ def debug_itir(tree):
 DimsType = TypeVar("DimsType")
 DType = TypeVar("DType")
 
-IDim = CartesianAxis("IDim")
+IDim = Dimension("IDim")
+JDim = Dimension("JDim")
 
 
 def test_copy():
@@ -198,13 +206,33 @@ def test_tuples():
     assert np.allclose((a.array() * 1.3 + b.array() * 5.0) * 3.4, c)
 
 
+def test_broadcasting():
+    Edge = Dimension("Edge")
+    K = Dimension("K")
+
+    size = 10
+    ksize = 5
+    a = np_as_located_field(Edge, K)(np.ones((size, ksize)))
+    b = np_as_located_field(K)(np.ones((ksize)) * 2)
+    c = np_as_located_field(Edge, K)(np.zeros((size, ksize)))
+
+    @field_operator(backend="roundtrip")
+    def broadcast(
+        inp1: Field[[Edge, K], float64], inp2: Field[[K], float64]
+    ) -> Field[[Edge, K], float64]:
+        return inp1 / inp2
+
+    broadcast(a, b, out=c, offset_provider={})
+
+    assert np.allclose((a.array() / b.array()), c)
+
+
 @pytest.fixture
 def reduction_setup():
-
     size = 9
-    edge = CartesianAxis("Edge")
-    vertex = CartesianAxis("Vertex")
-    v2edim = CartesianAxis("V2E")
+    edge = Dimension("Edge")
+    vertex = Dimension("Vertex")
+    v2edim = Dimension("V2E", local=True)
 
     v2e_arr = np.array(
         [
@@ -258,6 +286,24 @@ def test_reduction_execution(reduction_setup):
     assert np.allclose(ref, rs.out)
 
 
+def test_reduction_execution_nb(reduction_setup):
+    """Testing a neighbor sum on a neighbor field."""
+    rs = reduction_setup
+    V2EDim = rs.V2EDim
+    V2E = rs.V2E
+
+    nb_field = np_as_located_field(rs.Vertex, rs.V2EDim)(rs.v2e_table)
+
+    @field_operator
+    def reduction(nb_field: Field[[rs.Vertex, rs.V2EDim], "float64"]) -> Field[[rs.Vertex], "float64"]:  # type: ignore
+        return neighbor_sum(nb_field, axis=V2EDim)
+
+    reduction(nb_field, out=rs.out, offset_provider=rs.offset_provider)
+
+    ref = np.sum(rs.v2e_table, axis=1)
+    assert np.allclose(ref, rs.out)
+
+
 def test_reduction_expression(reduction_setup):
     """Test reduction with an expression directly inside the call."""
     rs = reduction_setup
@@ -270,7 +316,7 @@ def test_reduction_expression(reduction_setup):
     def reduce_expr(edge_f: Field[[Edge], "float64"]) -> Field[[Vertex], float64]:
         tmp_nbh_tup = edge_f(V2E), edge_f(V2E)
         tmp_nbh = tmp_nbh_tup[0]
-        return neighbor_sum(-edge_f(V2E) * tmp_nbh * 2.0, axis=V2EDim)
+        return 3.0 * neighbor_sum(-edge_f(V2E) * tmp_nbh * 2.0, axis=V2EDim)
 
     @program(backend="roundtrip")
     def fencil(edge_f: Field[[Edge], float64], out: Field[[Vertex], float64]) -> None:
@@ -278,13 +324,13 @@ def test_reduction_expression(reduction_setup):
 
     fencil(rs.inp, rs.out, offset_provider=rs.offset_provider)
 
-    ref = np.sum(-(rs.v2e_table**2) * 2, axis=1)
+    ref = 3 * np.sum(-(rs.v2e_table**2) * 2, axis=1)
     assert np.allclose(ref, rs.out.array())
 
 
 def test_scalar_arg():
     """Test scalar argument being turned into 0-dim field."""
-    Vertex = CartesianAxis("Vertex")
+    Vertex = Dimension("Vertex")
     size = 5
     inp = 5.0
     out = np_as_located_field(Vertex)(np.zeros([size]))
@@ -300,7 +346,7 @@ def test_scalar_arg():
 
 
 def test_scalar_arg_with_field():
-    Edge = CartesianAxis("Edge")
+    Edge = Dimension("Edge")
     EdgeOffset = FieldOffset("EdgeOffset", source=Edge, target=[Edge])
     size = 5
     inp = index_field(Edge)
@@ -322,3 +368,56 @@ def test_scalar_arg_with_field():
 
     ref = np.arange(1, size + 1) * factor
     assert np.allclose(ref, out.array())
+
+
+def test_broadcast_simple():
+    size = 10
+    a = np_as_located_field(IDim)(np.arange(0, size, 1, dtype=int))
+    out = np_as_located_field(IDim, JDim)(np.zeros((size, size)))
+
+    @field_operator(backend="roundtrip")
+    def simple_broadcast(inp: Field[[IDim], float64]) -> Field[[IDim, JDim], float64]:
+        return broadcast(inp, (IDim, JDim))
+
+    simple_broadcast(a, out=out, offset_provider={})
+
+    assert np.allclose(a.array()[:, np.newaxis], out)
+
+
+def test_broadcast_two_fields():
+    size = 10
+    a = np_as_located_field(IDim)(np.arange(0, size, 1, dtype=int))
+    b = np_as_located_field(JDim)(np.arange(0, size, 1, dtype=int))
+
+    out = np_as_located_field(IDim, JDim)(np.zeros((size, size)))
+
+    @field_operator(backend="roundtrip")
+    def broadcast_two_fields(
+        inp1: Field[[IDim], float64], inp2: Field[[JDim], float64]
+    ) -> Field[[IDim, JDim], float64]:
+        a = broadcast(inp1, (IDim, JDim))
+        b = broadcast(inp2, (IDim, JDim))
+        return a + b
+
+    broadcast_two_fields(a, b, out=out, offset_provider={})
+
+    expected = a.array()[:, np.newaxis] + b.array()[np.newaxis, :]
+
+    assert np.allclose(expected, out)
+
+
+def test_broadcast_shifted():
+    Joff = FieldOffset("Joff", source=JDim, target=[JDim])
+
+    size = 10
+    a = np_as_located_field(IDim)(np.arange(0, size, 1, dtype=int))
+    out = np_as_located_field(IDim, JDim)(np.zeros((size, size)))
+
+    @field_operator(backend="roundtrip")
+    def simple_broadcast(inp: Field[[IDim], float64]) -> Field[[IDim, JDim], float64]:
+        bcasted = broadcast(inp, (IDim, JDim))
+        return bcasted(Joff[1])
+
+    simple_broadcast(a, out=out, offset_provider={"Joff": JDim})
+
+    assert np.allclose(a.array()[:, np.newaxis], out)

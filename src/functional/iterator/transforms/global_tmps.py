@@ -1,6 +1,6 @@
 from typing import Any, Optional
 
-from eve import NodeTranslator
+from eve import Coerced, NodeTranslator
 from eve.traits import SymbolTableTrait
 from functional.iterator import ir, type_inference
 from functional.iterator.pretty_printer import PrettyPrinter
@@ -15,7 +15,7 @@ AUTO_DOMAIN = ir.SymRef(id="_gtmp_auto_domain")
 
 
 class Temporary(ir.Node):
-    id: ir.SymbolName  # noqa: A003
+    id: Coerced[ir.SymbolName]  # noqa: A003
     domain: Optional[ir.Expr] = None
     dtype: Optional[Any] = None
 
@@ -116,7 +116,9 @@ def split_closures(node: ir.FencilDefinition) -> FencilWithTemporaries:
         fencil=ir.FencilDefinition(
             id=node.id,
             function_definitions=node.function_definitions,
-            params=node.params + tmps + [ir.Sym(id="_gtmp_auto_domain")],
+            params=node.params
+            + [ir.Sym(id=tmp.id) for tmp in tmps]
+            + [ir.Sym(id="_gtmp_auto_domain")],
             closures=list(reversed(closures)),
         ),
         params=node.params,
@@ -290,7 +292,7 @@ def update_unstructured_domains(node: FencilWithTemporaries, offset_provider):
 
 def collect_tmps_info(node: FencilWithTemporaries):
     tmps = {tmp.id for tmp in node.tmps}
-    domains = {
+    domains: dict[str, ir.Expr] = {
         closure.output.id: closure.domain
         for closure in node.fencil.closures
         if closure.output.id in tmps
@@ -312,7 +314,7 @@ def collect_tmps_info(node: FencilWithTemporaries):
     assert isinstance(fencil_type, type_inference.Fencil)
     assert isinstance(fencil_type.params, type_inference.Tuple)
     all_types = []
-    types = dict()
+    types = dict[str, ir.Expr]()
     for param, dtype in zip(node.fencil.params, fencil_type.params.elems):
         assert isinstance(dtype, type_inference.Val)
         all_types.append(convert_type(dtype.dtype))
@@ -334,11 +336,11 @@ class CreateGlobalTmps(NodeTranslator):
     def visit_FencilDefinition(
         self, node: ir.FencilDefinition, *, offset_provider
     ) -> FencilWithTemporaries:
-        node = split_closures(node)
-        node = PruneClosureInputs().visit(node)
-        node = EtaReduction().visit(node)
+        res = split_closures(node)
+        res = PruneClosureInputs().visit(res)
+        res = EtaReduction().visit(res)
         if all(isinstance(o, CartesianAxis) for o in offset_provider.values()):
-            node = update_cartesian_domains(node, offset_provider)
+            res = update_cartesian_domains(res, offset_provider)
         else:
-            node = update_unstructured_domains(node, offset_provider)
-        return collect_tmps_info(node)
+            res = update_unstructured_domains(res, offset_provider)
+        return collect_tmps_info(res)
