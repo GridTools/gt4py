@@ -254,6 +254,11 @@ class FieldOperatorLowering(NodeTranslator):
             im.call_(self.visit(node.func, **kwargs))(*self.visit(node.args, **kwargs))
         )
 
+    def _visit_broadcast(self, node: foast.Call, **kwargs) -> itir.FunCall:
+        # just lower broadcasted field as iterator IR does not care about broadcasting
+        broadcasted_field = node.args[0]
+        return self.visit(broadcasted_field, **kwargs)
+
     def _visit_neighbor_sum(self, node: foast.Call, **kwargs) -> itir.FunCall:
         return self._visit_reduce(node, **kwargs)
 

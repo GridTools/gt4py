@@ -21,6 +21,7 @@ from functional.ffront.fbuiltins import (
     Dimension,
     Field,
     FieldOffset,
+    broadcast,
     float32,
     float64,
     int64,
@@ -332,3 +333,48 @@ def test_mismatched_literals():
         match=(r"Incompatible datatypes in operator '\+': float32 and float64"),
     ):
         _ = FieldOperatorParser.apply_to_function(mismatched_lit)
+
+
+def test_broadcast_multi_dim():
+    ADim = Dimension("ADim")
+    BDim = Dimension("BDim")
+    CDim = Dimension("CDim")
+
+    def simple_broadcast(a: Field[[ADim], float64]):
+        return broadcast(a, (ADim, BDim, CDim))
+
+    parsed = FieldOperatorParser.apply_to_function(simple_broadcast)
+
+    assert parsed.body[0].value.type == ct.FieldType(
+        dims=[ADim, BDim, CDim], dtype=ct.ScalarType(kind=ct.ScalarKind.FLOAT64)
+    )
+
+
+def test_broadcast_disjoint():
+    ADim = Dimension("ADim")
+    BDim = Dimension("BDim")
+    CDim = Dimension("CDim")
+
+    def disjoint_broadcast(a: Field[[ADim], float64]):
+        return broadcast(a, (BDim, CDim))
+
+    with pytest.raises(
+        FieldOperatorTypeDeductionError,
+        match=r"Expected broadcast dimension is missing",
+    ):
+        _ = FieldOperatorParser.apply_to_function(disjoint_broadcast)
+
+
+def test_broadcast_badtype():
+    ADim = Dimension("ADim")
+    BDim = "BDim"
+    CDim = Dimension("CDim")
+
+    def badtype_broadcast(a: Field[[ADim], float64]):
+        return broadcast(a, (BDim, CDim))
+
+    with pytest.raises(
+        FieldOperatorTypeDeductionError,
+        match=r"Expected all broadcast dimensions to be of type Dimension.",
+    ):
+        _ = FieldOperatorParser.apply_to_function(badtype_broadcast)
