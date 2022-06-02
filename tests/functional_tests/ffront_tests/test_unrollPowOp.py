@@ -5,7 +5,7 @@ from functional.ffront import common_types as ct, field_operator_ast as foast
 from functional.ffront.func_to_foast import UnrollPowerOp
 
 
-def _make_power_testee(pow_n: str):
+def _make_power_testee(pow_n: int) -> foast.BinOp:
     loc = foast.SourceLocation(
         line=0, column=0, source="none")
     )
