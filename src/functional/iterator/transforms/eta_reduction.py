@@ -1,8 +1,8 @@
-from eve import NodeTranslator
+from eve import ReusingNodeTranslator
 from functional.iterator import ir
 
 
-class EtaReduction(NodeTranslator):
+class EtaReduction(ReusingNodeTranslator):
     """Eta reduction: simplifies `λ(args...) → f(args...)` to `f`."""
 
     def visit_Lambda(self, node: ir.Lambda) -> ir.Node:

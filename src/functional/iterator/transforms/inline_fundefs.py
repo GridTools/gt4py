@@ -1,10 +1,10 @@
 from typing import Any, Dict, Set
 
-from eve import NOTHING, NodeTranslator
+from eve import NOTHING, ReusingNodeTranslator
 from functional.iterator import ir
 
 
-class InlineFundefs(NodeTranslator):
+class InlineFundefs(ReusingNodeTranslator):
     def visit_SymRef(self, node: ir.SymRef, *, symtable: Dict[str, Any]):
         if node.id in symtable and isinstance((symbol := symtable[node.id]), ir.FunctionDefinition):
             return ir.Lambda(
@@ -17,7 +17,7 @@ class InlineFundefs(NodeTranslator):
         return self.generic_visit(node, symtable=node.annex.symtable)
 
 
-class PruneUnreferencedFundefs(NodeTranslator):
+class PruneUnreferencedFundefs(ReusingNodeTranslator):
     def visit_FunctionDefinition(
         self, node: ir.FunctionDefinition, *, referenced: Set[str], second_pass: bool
     ):

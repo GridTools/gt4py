@@ -1,13 +1,13 @@
 from typing import Dict, List
 
-from eve import NodeTranslator
+from eve import ReusingNodeTranslator
 from functional.iterator import ir
 from functional.iterator.runtime import CartesianAxis
 from functional.iterator.transforms.collect_shifts import CollectShifts
 from functional.iterator.transforms.popup_tmps import PopupTmps
 
 
-class CreateGlobalTmps(NodeTranslator):
+class CreateGlobalTmps(ReusingNodeTranslator):
     @staticmethod
     def _extend_domain(domain: ir.FunCall, offset_provider, shifts):
         assert isinstance(domain.fun, ir.SymRef) and domain.fun.id == "domain"

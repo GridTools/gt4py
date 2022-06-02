@@ -1,8 +1,8 @@
-from eve import NodeTranslator
+from eve import ReusingNodeTranslator
 from functional.iterator import ir
 
 
-class NormalizeShifts(NodeTranslator):
+class NormalizeShifts(ReusingNodeTranslator):
     def visit_FunCall(self, node: ir.FunCall):
         node = self.generic_visit(node)
         if (

@@ -1,8 +1,8 @@
-from eve import NodeTranslator
+from eve import ReusingNodeTranslator
 from functional.iterator import ir
 
 
-class PruneClosureInputs(NodeTranslator):
+class PruneClosureInputs(ReusingNodeTranslator):
     """Removes all unused input arguments from a stencil closure."""
 
     def visit_StencilClosure(self, node: ir.StencilClosure) -> ir.StencilClosure:

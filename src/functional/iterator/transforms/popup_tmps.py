@@ -1,11 +1,11 @@
 from typing import Dict, Optional
 
-from eve import NodeTranslator
+from eve import ReusingNodeTranslator
 from functional.iterator import ir
 from functional.iterator.transforms.remap_symbols import RemapSymbolRefs
 
 
-class PopupTmps(NodeTranslator):
+class PopupTmps(ReusingNodeTranslator):
     _counter = 0
 
     def visit_FunCall(self, node: ir.FunCall, *, lifts: Optional[Dict[str, ir.Node]] = None):

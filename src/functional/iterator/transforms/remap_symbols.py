@@ -1,10 +1,10 @@
 from typing import Any, Dict, Optional, Set
 
-from eve import NodeTranslator
+from eve import ReusingNodeTranslator
 from functional.iterator import ir
 
 
-class RemapSymbolRefs(NodeTranslator):
+class RemapSymbolRefs(ReusingNodeTranslator):
     def visit_SymRef(self, node: ir.SymRef, *, symbol_map: Dict[str, ir.Node]):
         return symbol_map.get(node.id, node)
 
@@ -23,7 +23,7 @@ class RemapSymbolRefs(NodeTranslator):
         return super().generic_visit(node, **kwargs)
 
 
-class RenameSymbols(NodeTranslator):
+class RenameSymbols(ReusingNodeTranslator):
     def visit_Sym(
         self, node: ir.Sym, *, name_map: Dict[str, str], active: Optional[Set[str]] = None
     ):

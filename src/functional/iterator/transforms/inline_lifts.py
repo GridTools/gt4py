@@ -1,8 +1,8 @@
-from eve import NodeTranslator
+from eve import ReusingNodeTranslator
 from functional.iterator import ir
 
 
-class InlineLifts(NodeTranslator):
+class InlineLifts(ReusingNodeTranslator):
     @staticmethod
     def _is_lift(node: ir.Node):
         return (

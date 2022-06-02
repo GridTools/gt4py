@@ -1,9 +1,9 @@
-from eve import NodeTranslator
+from eve import ReusingNodeTranslator
 from eve.utils import UIDs
 from functional.iterator import ir
 
 
-class UnrollReduce(NodeTranslator):
+class UnrollReduce(ReusingNodeTranslator):
     @staticmethod
     def _get_last_offset(node: ir.Expr):
         assert isinstance(node, ir.FunCall)
