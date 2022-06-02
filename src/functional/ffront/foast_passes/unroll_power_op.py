@@ -23,8 +23,6 @@ class UnrollPowerOp(eve.NodeTranslator):
                 ct.ScalarKind.INT32,
                 ct.ScalarKind.INT64,
             ]:
-                # if ct.ScalarKind.INT64 not in node.right.type.__dict__.values():
-                # node.right.type.kind != ct.ScalarKind.INT64:
                 raise FieldOperatorTypeDeductionError.from_foast_node(
                     node, msg="Only integer values allowed in the power operation"
                 )
