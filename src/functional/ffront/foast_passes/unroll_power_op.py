@@ -9,7 +9,7 @@ from functional.ffront import common_types as ct, field_operator_ast as foast, t
 
 class UnrollPowerOp(eve.NodeTranslator):
     @classmethod
-    def apply(cls, node: foast.LocatedNode) -> foast.LocatedNode:
+    def apply(cls, node: foast.FieldOperator) -> foast.FieldOperator:
         return cls().visit(node)
 
     def visit_BinOp(self, node: foast.BinOp) -> foast.BinOp:
@@ -24,12 +24,13 @@ class UnrollPowerOp(eve.NodeTranslator):
                 ct.ScalarKind.INT64,
             ]:
                 raise FieldOperatorPowerError.from_powOp_node(
-                    node, msg="Only integer values greater than zero allowed in the power operation."
+                    node,
+                    msg="Only integer values greater than zero allowed in the power operation.",
                 )
             if int(node.right.value) == 0:
                 raise FieldOperatorPowerError.from_powOp_node(
                     node,
-                    msg=f"'Only integer values greater than zero allowed in the power operation.",
+                    msg="Only integer values greater than zero allowed in the power operation.",
                 )
 
             new_left = self.visit(node.left)

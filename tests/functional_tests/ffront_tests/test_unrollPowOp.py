@@ -99,7 +99,7 @@ def test_power_neg_exponent():
 
     with pytest.raises(
         FieldOperatorPowerError,
-        match="Only integer values greater than zero allowed in the power operation",
+        match="Exponent must be a constant value",
     ):
         _ = UnrollPowerOp.apply(testee)
 
@@ -127,7 +127,7 @@ def test_power_float_exponent():
 
     with pytest.raises(
         FieldOperatorPowerError,
-        match="Only integer values allowed in the power operation",
+        match="Only integer values greater than zero allowed in the power operation",
     ):
         _ = UnrollPowerOp.apply(testee)
 
