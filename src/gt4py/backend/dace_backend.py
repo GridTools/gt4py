@@ -292,48 +292,51 @@ class DaCeComputationCodegen:
 
         symbols = {f"__{var}": f"__{var}" for var in "IJK"}
         for name, array in sdfg.arrays.items():
-            if not array.transient:
-                dims = [dim for dim, select in zip("IJK", array_dimensions(array)) if select]
-                data_ndim = len(array.shape) - len(dims)
+            # transients are set to expressions based on their shape in _specialize_transient_strides
+            if array.transient:
+                continue
 
-                # api field strides
-                fmt = "gt::sid::get_stride<{dim}>(gt::sid::get_strides(__{name}_sid))"
+            dims = [dim for dim, select in zip("IJK", array_dimensions(array)) if select]
+            data_ndim = len(array.shape) - len(dims)
 
-                symbols.update(
-                    {
-                        f"__{name}_{dim}_stride": fmt.format(
-                            dim=f"gt::stencil::dim::{dim.lower()}", name=name
-                        )
-                        for dim in dims
-                    }
-                )
-                symbols.update(
-                    {
-                        f"__{name}_d{dim}_stride": fmt.format(
-                            dim=f"gt::integral_constant<int, {3 + dim}>", name=name
-                        )
-                        for dim in range(data_ndim)
-                    }
-                )
+            # api field strides
+            fmt = "gt::sid::get_stride<{dim}>(gt::sid::get_strides(__{name}_sid))"
 
-                # api field pointers
-                fmt = """gt::sid::multi_shifted(
-                             gt::sid::get_origin(__{name}_sid)(),
-                             gt::sid::get_strides(__{name}_sid),
-                             std::array<gt::int_t, {ndim}>{{{origin}}}
-                         )"""
-                origin = tuple(
-                    -offset_dict[name][idx]
-                    for idx, var in enumerate("IJK")
-                    if any(
-                        dace.symbolic.pystr_to_symbolic(f"__{var}") in s.free_symbols
-                        for s in array.shape
-                        if hasattr(s, "free_symbols")
+            symbols.update(
+                {
+                    f"__{name}_{dim}_stride": fmt.format(
+                        dim=f"gt::stencil::dim::{dim.lower()}", name=name
                     )
+                    for dim in dims
+                }
+            )
+            symbols.update(
+                {
+                    f"__{name}_d{dim}_stride": fmt.format(
+                        dim=f"gt::integral_constant<int, {3 + dim}>", name=name
+                    )
+                    for dim in range(data_ndim)
+                }
+            )
+
+            # api field pointers
+            fmt = """gt::sid::multi_shifted(
+                         gt::sid::get_origin(__{name}_sid)(),
+                         gt::sid::get_strides(__{name}_sid),
+                         std::array<gt::int_t, {ndim}>{{{origin}}}
+                     )"""
+            origin = tuple(
+                -offset_dict[name][idx]
+                for idx, var in enumerate("IJK")
+                if any(
+                    dace.symbolic.pystr_to_symbolic(f"__{var}") in s.free_symbols
+                    for s in array.shape
+                    if hasattr(s, "free_symbols")
                 )
-                symbols[name] = fmt.format(
-                    name=name, ndim=len(array.shape), origin=",".join(str(o) for o in origin)
-                )
+            )
+            symbols[name] = fmt.format(
+                name=name, ndim=len(array.shape), origin=",".join(str(o) for o in origin)
+            )
         # the remaining arguments are variables and can be passed by name
         for sym in sdfg.signature_arglist(with_types=False, for_call=True):
             if sym not in symbols:

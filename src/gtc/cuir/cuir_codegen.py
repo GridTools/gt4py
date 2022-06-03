@@ -1,6 +1,8 @@
+# -*- coding: utf-8 -*-
+#
 # GTC Toolchain - GT4Py Project - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2021, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -13,6 +15,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from typing import Any, Collection, Dict, List, Set, Union
+
+import numpy as np
 
 from eve import codegen, traits
 from eve.codegen import FormatTemplate as as_fmt
@@ -53,18 +57,31 @@ class CUIRCodegen(codegen.TemplatedGenerator):
     )
 
     def visit_FieldAccess(self, node: cuir.FieldAccess, **kwargs: Any):
+        if isinstance(node, cuir.KCacheAccess):
+            return self.generic_visit(node, **kwargs)
+
+        symtable: Dict[str, cuir.Decl] = kwargs["symtable"]
+
         def maybe_const(s):
             try:
                 return f"{int(s)}_c"
             except ValueError:
                 return s
 
-        kwargs["this_data_index"] = "".join(
-            ", " + maybe_const(self.visit(index, **kwargs)) for index in node.data_index
-        )
-        return self.generic_visit(node, **kwargs)
+        name = self.visit(node.name, **kwargs)
+        offset = self.visit(node.offset, **kwargs)
+        data_index = [self.visit(index, in_data_index=True, **kwargs) for index in node.data_index]
 
-    FieldAccess = as_mako("${name}(${offset}${this_data_index})")
+        decl = symtable[node.name]
+        if isinstance(decl, cuir.Temporary) and decl.data_dims:
+            data_index_str = "+".join(
+                f"{index}*{int(np.prod(decl.data_dims[i + 1:], initial=1))}"
+                for i, index in enumerate(data_index)
+            )
+            return f"{name}({offset})[{data_index_str}]"
+        else:
+            data_index_str = "".join(f", {maybe_const(index)}" for index in data_index)
+            return f"{name}({offset}{data_index_str})"
 
     def visit_IJCacheAccess(
         self, node: cuir.IJCacheAccess, symtable: Dict[str, Any], **kwargs: Any
@@ -116,7 +133,15 @@ class CUIRCodegen(codegen.TemplatedGenerator):
         except KeyError as error:
             raise NotImplementedError("Not implemented BuiltInLiteral encountered.") from error
 
-    Literal = as_mako("static_cast<${dtype}>(${value})")
+    def visit_Literal(
+        self, node: cuir.Literal, *, in_data_index: bool = False, **kwargs: Any
+    ) -> str:
+        value = self.visit(node.value, **kwargs)
+        if in_data_index:
+            return value
+        else:
+            dtype = self.visit(node.dtype, **kwargs)
+            return f"static_cast<{dtype}>({value})"
 
     NATIVE_FUNCTION_TO_CODE = {
         NativeFunction.ABS: "std::abs",
@@ -215,7 +240,7 @@ class CUIRCodegen(codegen.TemplatedGenerator):
     KCacheDecl = as_mako(
         """
         % for var in _this_generator.k_cache_vars(_this_node):
-            ${dtype} ${var};
+        ${dtype} ${var};
         % endfor
         """
     )
@@ -227,32 +252,32 @@ class CUIRCodegen(codegen.TemplatedGenerator):
         </%def>
         <%def name="cache_shift(cache_vars)">
             % for dst, src in zip(cache_vars[:-1], cache_vars[1:]):
-                ${dst} = ${src};
+            ${dst} = ${src};
             % endfor
         </%def>
         // VerticalLoopSection ${id(_this_node)}
         % if order == cuir.LoopOrder.FORWARD:
-            for (int _k_block = ${start}; _k_block < ${end}; ++_k_block) {
-                ${'\\n__syncthreads();\\n'.join(horizontal_executions)}
+        for (int _k_block = ${start}; _k_block < ${end}; ++_k_block) {
+            ${'\\n__syncthreads();\\n'.join(horizontal_executions)}
 
-                ${sid_shift(1)}
-                % for k_cache in k_cache_decls:
-                    ${cache_shift(_this_generator.k_cache_vars(k_cache))}
-                % endfor
-            }
+            ${sid_shift(1)}
+            % for k_cache in k_cache_decls:
+                ${cache_shift(_this_generator.k_cache_vars(k_cache))}
+            % endfor
+        }
         % elif order == cuir.LoopOrder.BACKWARD:
-            for (int _k_block = ${end} - 1; _k_block >= ${start}; --_k_block) {
-                ${'\\n__syncthreads();\\n'.join(horizontal_executions)}
+        for (int _k_block = ${end} - 1; _k_block >= ${start}; --_k_block) {
+            ${'\\n__syncthreads();\\n'.join(horizontal_executions)}
 
-                ${sid_shift(-1)}
-                % for k_cache in k_cache_decls:
-                    ${cache_shift(_this_generator.k_cache_vars(k_cache)[::-1])}
-                % endfor
-            }
+            ${sid_shift(-1)}
+            % for k_cache in k_cache_decls:
+                ${cache_shift(_this_generator.k_cache_vars(k_cache)[::-1])}
+            % endfor
+        }
         % else:
-            if (_k_block >= ${start} && _k_block < ${end}) {
-                ${'\\n__syncthreads();\\n'.join(horizontal_executions)}
-            }
+        if (_k_block >= ${start} && _k_block < ${end}) {
+            ${'\\n__syncthreads();\\n'.join(horizontal_executions)}
+        }
         % endif
         """
     )
@@ -325,36 +350,42 @@ class CUIRCodegen(codegen.TemplatedGenerator):
                 % endif
 
                 % for field, data_dims in fields.items():
-                    const auto ${field} = [&](auto i, auto j, auto k
+                const auto ${field} = [&](auto i, auto j, auto k
+                    % if field not in temp_names:
+                    % for i in range(data_dims):
+                    , auto dim_${i + 3}
+                    % endfor
+                    % endif
+                    ) -> auto&& {
+                    return *sid::multi_shifted<tag::${field}>(
+                        device::at_key<tag::${field}>(_ptr),
+                        m_strides,
+                        tuple_util::device::make<hymap::keys<dim::i, dim::j, dim::k
+                        % if field not in temp_names:
                         % for i in range(data_dims):
-                            , auto dim_${i + 3}
+                        , integral_constant<int, ${i + 3}>
                         % endfor
-                        ) -> auto&& {
-                        return *sid::multi_shifted<tag::${field}>(
-                            device::at_key<tag::${field}>(_ptr),
-                            m_strides,
-                            tuple_util::device::make<hymap::keys<dim::i, dim::j, dim::k
-                            % for i in range(data_dims):
-                                , integral_constant<int, ${i + 3}>
-                            % endfor
-                            >::template values>(i, j, k
-                            % for i in range(data_dims):
-                                , dim_${i + 3}
-                            % endfor
-                            ));
-                    };
+                        % endif
+                        >::template values>(i, j, k
+                        % if field not in temp_names:
+                        % for i in range(data_dims):
+                        , dim_${i + 3}
+                        % endfor
+                        % endif
+                        ));
+                };
                 % endfor
 
                 % for ij_cache in ij_caches:
-                    ${ij_cache}
+                ${ij_cache}
                 % endfor
 
                 % for k_cache in k_caches:
-                    ${k_cache}
+                ${k_cache}
                 % endfor
 
                 % for section in sections:
-                    ${section}
+                ${section}
                 % endfor
             }
         };
@@ -364,13 +395,13 @@ class CUIRCodegen(codegen.TemplatedGenerator):
     Kernel = as_mako(
         """
         % for vertical_loop in vertical_loops:
-            ${vertical_loop}
+        ${vertical_loop}
         % endfor
 
         template <${', '.join(f'class Loop{id(vl)}' for vl in _this_node.vertical_loops)}>
         struct kernel_${id(_this_node)}_f {
             % for vertical_loop in _this_node.vertical_loops:
-                Loop${id(vertical_loop)} m_${id(vertical_loop)};
+            Loop${id(vertical_loop)} m_${id(vertical_loop)};
             % endfor
 
             template <class Validator>
@@ -378,7 +409,7 @@ class CUIRCodegen(codegen.TemplatedGenerator):
                                                const int _j_block,
                                                Validator validator) const {
                 % for vertical_loop in _this_node.vertical_loops:
-                    m_${id(vertical_loop)}(_i_block, _j_block, validator);
+                m_${id(vertical_loop)}(_i_block, _j_block, validator);
                 % endfor
             }
         };
@@ -400,7 +431,12 @@ class CUIRCodegen(codegen.TemplatedGenerator):
             )
 
         def ctype(symbol: str) -> str:
-            return self.visit(kwargs["symtable"][symbol].dtype, **kwargs)
+            decl = kwargs["symtable"][symbol]
+            dtype = self.visit(decl.dtype, **kwargs)
+            if decl.data_dims:
+                total_size = int(np.prod(decl.data_dims, initial=1))
+                dtype = f"array<{dtype}, {total_size}>"
+            return dtype
 
         return self.generic_visit(
             node,
@@ -411,6 +447,7 @@ class CUIRCodegen(codegen.TemplatedGenerator):
             loop_fields=loop_fields,
             ctype=ctype,
             cuir=cuir,
+            temp_names={decl.name for decl in node.temporaries},
             **kwargs,
         )
 
@@ -420,6 +457,7 @@ class CUIRCodegen(codegen.TemplatedGenerator):
         """#include <algorithm>
         #include <array>
         #include <cstdint>
+        #include <gridtools/common/array.hpp>
         #include <gridtools/common/cuda_util.hpp>
         #include <gridtools/common/host_device.hpp>
         #include <gridtools/common/hymap.hpp>
@@ -454,12 +492,12 @@ class CUIRCodegen(codegen.TemplatedGenerator):
 
             namespace tag {
                 % for p in set().union(*(loop_fields(v) for k in _this_node.kernels for v in k.vertical_loops)):
-                    struct ${p} {};
+                struct ${p} {};
                 % endfor
             }
 
             % for kernel in kernels:
-                ${kernel}
+            ${kernel}
             % endfor
 
             auto ${name}(domain_t domain){
@@ -476,74 +514,75 @@ class CUIRCodegen(codegen.TemplatedGenerator):
                     % endfor
 
                     % for tmp in temporaries:
-                        auto ${tmp} = gpu_backend::make_tmp_storage<${ctype(tmp)}>(
-                            1_c,
-                            i_block_size_t(),
-                            j_block_size_t(),
-                            ${max_extent}(),
-                            i_blocks,
-                            j_blocks,
-                            k_size,
-                            tmp_alloc);
+                    auto ${tmp} = gpu_backend::make_tmp_storage<${ctype(tmp)}>(
+                        1_c,
+                        i_block_size_t(),
+                        j_block_size_t(),
+                        ${max_extent}(),
+                        i_blocks,
+                        j_blocks,
+                        k_size,
+                        tmp_alloc
+                    );
                     % endfor
 
                     % for kernel in _this_node.kernels:
 
-                        // kernel ${id(kernel)}
+                    // kernel ${id(kernel)}
 
-                        % for vertical_loop in kernel.vertical_loops:
-                            // vertical loop ${id(vertical_loop)}
+                    % for vertical_loop in kernel.vertical_loops:
+                    // vertical loop ${id(vertical_loop)}
 
-                            assert((${loop_start(vertical_loop)}) >= 0 &&
-                                   (${loop_start(vertical_loop)}) < k_size);
-                            auto offset_${id(vertical_loop)} = tuple_util::make<hymap::keys<dim::k>::values>(
-                                ${loop_start(vertical_loop)}
-                            );
+                    assert((${loop_start(vertical_loop)}) >= 0 &&
+                           (${loop_start(vertical_loop)}) < k_size);
+                    auto offset_${id(vertical_loop)} = tuple_util::make<hymap::keys<dim::k>::values>(
+                        ${loop_start(vertical_loop)}
+                    );
 
-                            auto composite_${id(vertical_loop)} = sid::composite::make<
-                                    ${', '.join(f'tag::{field}' for field in loop_fields(vertical_loop))}
-                                >(
+                    auto composite_${id(vertical_loop)} = sid::composite::make<
+                            ${', '.join(f'tag::{field}' for field in loop_fields(vertical_loop))}
+                        >(
 
-                            % for field in loop_fields(vertical_loop):
-                                % if field in params:
-                                    block(sid::shift_sid_origin(
-                                        ${field},
-                                        offset_${id(vertical_loop)}
-                                    ))
-                                % else:
-                                    sid::shift_sid_origin(
-                                        ${field},
-                                        offset_${id(vertical_loop)}
-                                    )
-                                % endif
-                                ${'' if loop.last else ','}
-                            % endfor
-                            );
-                            using composite_${id(vertical_loop)}_t = decltype(composite_${id(vertical_loop)});
-                            loop_${id(vertical_loop)}_f<composite_${id(vertical_loop)}_t> loop_${id(vertical_loop)}{
-                                sid::get_origin(composite_${id(vertical_loop)}),
-                                sid::get_strides(composite_${id(vertical_loop)}),
-                                i_size,
-                                j_size,
-                                k_size
-                            };
+                    % for field in loop_fields(vertical_loop):
+                        % if field in params:
+                            block(sid::shift_sid_origin(
+                                ${field},
+                                offset_${id(vertical_loop)}
+                            ))
+                        % else:
+                            sid::shift_sid_origin(
+                                ${field},
+                                offset_${id(vertical_loop)}
+                            )
+                        % endif
+                        ${'' if loop.last else ','}
+                    % endfor
+                    );
+                    using composite_${id(vertical_loop)}_t = decltype(composite_${id(vertical_loop)});
+                    loop_${id(vertical_loop)}_f<composite_${id(vertical_loop)}_t> loop_${id(vertical_loop)}{
+                        sid::get_origin(composite_${id(vertical_loop)}),
+                        sid::get_strides(composite_${id(vertical_loop)}),
+                        i_size,
+                        j_size,
+                        k_size
+                    };
 
-                        % endfor
+                    % endfor
 
-                        kernel_${id(kernel)}_f<${', '.join(f'decltype(loop_{id(vl)})' for vl in kernel.vertical_loops)}> kernel_${id(kernel)}{
-                            ${', '.join(f'loop_{id(vl)}' for vl in kernel.vertical_loops)}
-                        };
-                        gpu_backend::launch_kernel<${max_extent},
-                            i_block_size_t::value, j_block_size_t::value>(
-                            i_size,
-                            j_size,
-                            % if kernel.vertical_loops[0].loop_order == cuir.LoopOrder.PARALLEL:
-                                k_size,
-                            % else:
-                                1,
-                            %endif
-                            kernel_${id(kernel)},
-                            0);
+                    kernel_${id(kernel)}_f<${', '.join(f'decltype(loop_{id(vl)})' for vl in kernel.vertical_loops)}> kernel_${id(kernel)}{
+                        ${', '.join(f'loop_{id(vl)}' for vl in kernel.vertical_loops)}
+                    };
+                    gpu_backend::launch_kernel<${max_extent},
+                        i_block_size_t::value, j_block_size_t::value>(
+                        i_size,
+                        j_size,
+                        % if kernel.vertical_loops[0].loop_order == cuir.LoopOrder.PARALLEL:
+                            k_size,
+                        % else:
+                            1,
+                        %endif
+                        kernel_${id(kernel)},
+                        0);
                     % endfor
                 };
             }

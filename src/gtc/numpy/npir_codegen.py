@@ -26,10 +26,6 @@ from gtc.numpy import npir
 __all__ = ["NpirCodegen"]
 
 
-def _dump_sequence(sequence, *, separator=", ", start="(", end=")") -> str:
-    return f"{start}{separator.join(sequence)}{end}"
-
-
 def _offset_to_str(offset: int) -> str:
     if offset > 0:
         return f" + {offset}"
@@ -160,9 +156,15 @@ class NpirCodegen(TemplatedGenerator):
         "{name} = Field({name}, _origin_['{name}'], ({', '.join(dimensions)}))"
     )
 
-    TemporaryDecl = FormatTemplate(
-        "{name} = Field.empty((_dI_ + {padding[0]}, _dJ_ + {padding[1]}, _dK_), {dtype}, ({', '.join(offset)}, 0))"
-    )
+    def visit_TemporaryDecl(
+        self, node: npir.TemporaryDecl, **kwargs
+    ) -> Union[str, Collection[str]]:
+        shape = [f"_dI_ + {node.padding[0]}", f"_dJ_ + {node.padding[1]}", "_dK_"] + [
+            str(dim) for dim in node.data_dims
+        ]
+        offset = [str(off) for off in node.offset] + ["0"] * (1 + len(node.data_dims))
+        dtype = self.visit(node.dtype, **kwargs)
+        return f"{node.name} = Field.empty(({', '.join(shape)}), {dtype}, ({', '.join(offset)}))"
 
     LocalScalarDecl = FormatTemplate(
         "{name} = Field.empty((_dI_ + {upper[0] + lower[0]}, _dJ_ + {upper[1] + lower[1]}, {ksize}), {dtype}, ({', '.join(str(l) for l in lower)}, 0))"

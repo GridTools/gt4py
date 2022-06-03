@@ -102,6 +102,7 @@ class Cast(common.Cast[Expr], Expr):  # type: ignore
 class Temporary(LocNode):
     name: SymbolName
     dtype: common.DataType
+    data_dims: Tuple[int, ...] = field(default_factory=tuple)
 
 
 class GTLevel(LocNode):
