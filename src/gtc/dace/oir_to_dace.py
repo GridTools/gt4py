@@ -13,7 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from dataclasses import dataclass
-from typing import Dict
+from typing import Dict, Optional
 
 import dace
 import dace.properties
@@ -32,14 +32,14 @@ class OirSDFGBuilder(eve.NodeVisitor):
     @dataclass
     class SDFGContext:
         sdfg: dace.SDFG
-        last_state: dace.SDFGState
+        last_state: Optional[dace.SDFGState]
         decls: Dict[str, oir.Decl]
         block_extents: Dict[int, Extent]
         access_infos: Dict[str, dcir.FieldAccessInfo]
 
         def __init__(self, stencil: oir.Stencil):
             self.sdfg = dace.SDFG(stencil.name)
-            self.last_state = self.sdfg.add_state(is_start_state=True)
+            self.last_state = None
             self.decls = {decl.name: decl for decl in stencil.params + stencil.declarations}
             self.block_extents = compute_horizontal_block_extents(stencil)
 
@@ -95,7 +95,7 @@ class OirSDFGBuilder(eve.NodeVisitor):
 
     def visit_VerticalLoop(
         self, node: oir.VerticalLoop, *, ctx: "OirSDFGBuilder.SDFGContext", **kwargs
-    ):
+    ) -> None:
         declarations = {
             acc.name: ctx.decls[acc.name]
             for acc in node.iter_tree().if_isinstance(oir.FieldAccess, oir.ScalarAccess)
@@ -108,8 +108,11 @@ class OirSDFGBuilder(eve.NodeVisitor):
             oir_node=node,
         )
 
-        state = ctx.sdfg.add_state()
-        ctx.sdfg.add_edge(ctx.last_state, state, dace.InterstateEdge())
+        if ctx.last_state is not None:
+            state = ctx.sdfg.add_state()
+            ctx.sdfg.add_edge(ctx.last_state, state, dace.InterstateEdge())
+        else:
+            state = ctx.sdfg.add_state(is_start_state=True)
         ctx.last_state = state
 
         state.add_node(library_node)
@@ -138,8 +141,6 @@ class OirSDFGBuilder(eve.NodeVisitor):
                 None,
                 dace.Memlet(field, subset=subset),
             )
-
-        return
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs):
 

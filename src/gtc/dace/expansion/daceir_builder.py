@@ -483,8 +483,8 @@ class DaCeIRBuilder(NodeTranslator):
             {memlet.field: memlet.access_info for memlet in field_memlets},
             symbol_collector=symbol_collector,
         )
-        read_fields = set(memlet.field for memlet in read_memlets)
-        write_fields = set(memlet.field for memlet in write_memlets)
+        read_fields = {memlet.field for memlet in read_memlets}
+        write_fields = {memlet.field for memlet in write_memlets}
         read_memlets = [
             memlet.remove_write() for memlet in field_memlets if memlet.field in read_fields
         ]

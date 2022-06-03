@@ -452,15 +452,15 @@ def union_node_grid_subsets(nodes: List[eve.Node]):
 
 
 def _union_memlets(*memlets: "dcir.Memlet") -> List["dcir.Memlet"]:
-    res: Dict[str, dcir.Memlet] = dict()
+    res: Dict[str, dcir.Memlet] = {}
     for memlet in memlets:
         res[memlet.field] = memlet.union(res.get(memlet.field, memlet))
     return list(res.values())
 
 
 def union_inout_memlets(nodes: List[eve.Node]):
-    read_memlets: List[dcir.Memlet] = list()
-    write_memlets: List[dcir.Memlet] = list()
+    read_memlets: List[dcir.Memlet] = []
+    write_memlets: List[dcir.Memlet] = []
     for node in collect_toplevel_computation_nodes(nodes):
         read_memlets = _union_memlets(*read_memlets, *node.read_memlets)
         write_memlets = _union_memlets(*write_memlets, *node.write_memlets)

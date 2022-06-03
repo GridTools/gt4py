@@ -128,7 +128,6 @@ class StencilComputationExpansion(dace.library.ExpandTransformation):
     def expansion(
         node: "StencilComputation", parent_state: dace.SDFGState, parent_sdfg: dace.SDFG
     ) -> dace.nodes.NestedSDFG:
-        parent_sdfg.view()
         global_ctx = DaCeIRBuilder.GlobalContext(
             library_node=node,
             arrays=StencilComputationExpansion._get_parent_arrays(node, parent_state, parent_sdfg),
