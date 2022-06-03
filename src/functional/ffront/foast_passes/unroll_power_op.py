@@ -17,7 +17,7 @@ class UnrollPowerOp(eve.NodeTranslator):
             if not type(node.right) is foast.Constant:
                 raise FieldOperatorPowerError.from_foast_node(
                     node,
-                    msg=f"'Exponent must be a constant value, but got '{type(node.right)}.",
+                    msg=f"Exponent must be a constant value, but got `{type(node.right)}`.",
                 )
             if (
                 type_info.extract_dtype(cast(ct.ScalarType, node.right.type)).kind
