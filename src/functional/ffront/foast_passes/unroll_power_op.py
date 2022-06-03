@@ -17,7 +17,7 @@ class UnrollPowerOp(eve.NodeTranslator):
             if not type(node.right) is foast.Constant:
                 raise FieldOperatorPowerError.from_powOp_node(
                     node,
-                    msg=f"'Power value '{type(node.right)}' not supported. Only integer values greater than zero allowed in the power operation",
+                    msg=f"'Exponent must be a constant value, but got '{type(node.right)}.",
                 )
             if type_info.extract_dtype(cast(ct.ScalarType, node.right.type)).kind not in [
                 ct.ScalarKind.INT32,
