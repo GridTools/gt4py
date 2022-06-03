@@ -30,21 +30,25 @@ def _make_power_testee(pow_n: int) -> foast.BinOp:
     return testee
 
 
-power_1 = ObjectPattern(foast.Name, id="a")
-power_2 = ObjectPattern(
-    foast.BinOp, right=ObjectPattern(foast.Name, id="a"), op=foast.BinaryOperator.MULT
-)
-power_3 = ObjectPattern(
-    foast.BinOp,
-    right=ObjectPattern(foast.Name, id="a"),
-    left=ObjectPattern(
+def power_test_cases():
+  return (
+    # exponent, expected
+    (1, ObjectPattern(foast.Name, id="a")),
+    (2, ObjectPattern(
+        foast.BinOp, right=ObjectPattern(foast.Name, id="a"), op=foast.BinaryOperator.MULT
+    )),
+    (3, ObjectPattern(
         foast.BinOp,
         right=ObjectPattern(foast.Name, id="a"),
-        left=ObjectPattern(foast.Name, id="a"),
+        left=ObjectPattern(
+            foast.BinOp,
+            right=ObjectPattern(foast.Name, id="a"),
+            left=ObjectPattern(foast.Name, id="a"),
+            op=foast.BinaryOperator.MULT,
+        ),
         op=foast.BinaryOperator.MULT,
-    ),
-    op=foast.BinaryOperator.MULT,
-)
+    ))
+  )
 
 
 @pytest.mark.parametrize("power_n,expected", [(1, power_1), (2, power_2), (3, power_3)])
