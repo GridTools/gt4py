@@ -2,6 +2,7 @@ import pathlib
 
 import pytest
 
+from eve import SymbolRef
 from eve.pattern_matching import ObjectPattern
 from functional.ffront import common_types as ct, field_operator_ast as foast
 from functional.ffront.foast_passes.unroll_power_op import FieldOperatorPowerError, UnrollPowerOp
@@ -32,22 +33,24 @@ def _make_power_testee(pow_n: int) -> foast.BinOp:
 def power_test_cases():
     return [
         # exponent, expected
-        (1, ObjectPattern(foast.Name, id="a")),
+        (1, ObjectPattern(foast.Name, id=SymbolRef("a"))),
         (
             2,
             ObjectPattern(
-                foast.BinOp, right=ObjectPattern(foast.Name, id="a"), op=foast.BinaryOperator.MULT
+                foast.BinOp,
+                right=ObjectPattern(foast.Name, id=SymbolRef("a")),
+                op=foast.BinaryOperator.MULT,
             ),
         ),
         (
             3,
             ObjectPattern(
                 foast.BinOp,
-                right=ObjectPattern(foast.Name, id="a"),
+                right=ObjectPattern(foast.Name, id=SymbolRef("a")),
                 left=ObjectPattern(
                     foast.BinOp,
-                    right=ObjectPattern(foast.Name, id="a"),
-                    left=ObjectPattern(foast.Name, id="a"),
+                    right=ObjectPattern(foast.Name, id=SymbolRef("a")),
+                    left=ObjectPattern(foast.Name, id=SymbolRef("a")),
                     op=foast.BinaryOperator.MULT,
                 ),
                 op=foast.BinaryOperator.MULT,
@@ -87,7 +90,7 @@ def test_power_neg_exponent():
             type=ct.DeferredSymbolType(constraint=None),
         ),
         left=foast.Name(
-            id="a",
+            id=SymbolRef("a"),
             type=ct.DeferredSymbolType(constraint=None),
             location=loc,
         ),
@@ -115,7 +118,7 @@ def test_power_float_exponent():
             type=ct.ScalarType(kind=ct.ScalarKind.FLOAT64),
         ),
         left=foast.Name(
-            id="a",
+            id=SymbolRef("a"),
             type=ct.DeferredSymbolType(constraint=None),
             location=loc,
         ),
@@ -138,7 +141,7 @@ def test_power_arithmetic_op():
     testee = foast.BinOp(
         right=_make_power_testee(2),
         left=foast.Name(
-            id="b",
+            id=SymbolRef("b"),
             type=ct.DeferredSymbolType(constraint=None),
             location=loc,
         ),
@@ -151,11 +154,11 @@ def test_power_arithmetic_op():
         foast.BinOp,
         right=ObjectPattern(
             foast.BinOp,
-            right=ObjectPattern(foast.Name, id="a"),
-            left=ObjectPattern(foast.Name, id="a"),
+            right=ObjectPattern(foast.Name, id=SymbolRef("a")),
+            left=ObjectPattern(foast.Name, id=SymbolRef("a")),
             op=foast.BinaryOperator.MULT,
         ),
-        left=ObjectPattern(foast.Name, id="b"),
+        left=ObjectPattern(foast.Name, id=SymbolRef("b")),
         op=foast.BinaryOperator.ADD,
     )
 
