@@ -66,33 +66,31 @@ def test_power_0():
 
 
 def test_power_neg():
-    def pow_neg():
-        loc = foast.SourceLocation(
-            line=106, column=12, source=str(pathlib.Path(__file__).resolve())
-        )
+    loc = foast.SourceLocation(
+        line=1, column=1, source="none")
+    )
 
-        testee = foast.BinOp(
-            right=foast.UnaryOp(
-                location=loc,
-                op=foast.UnaryOperator.USUB,
-                operand=foast.Constant(
-                    dtype=ct.ScalarType(kind=ct.ScalarKind.INT),
-                    location=loc,
-                    value=str(2),
-                    type=ct.ScalarType(kind=ct.ScalarKind.INT),
-                ),
-                type=ct.DeferredSymbolType(constraint=None),
-            ),
-            left=foast.Name(
-                id="a",
-                type=ct.DeferredSymbolType(constraint=None),
-                location=loc,
-            ),
-            op=foast.BinaryOperator.POW,
+    testee = foast.BinOp(
+        right=foast.UnaryOp(
             location=loc,
+            op=foast.UnaryOperator.USUB,
+            operand=foast.Constant(
+                dtype=ct.ScalarType(kind=ct.ScalarKind.INT),
+                location=loc,
+                value=str(2),
+                type=ct.ScalarType(kind=ct.ScalarKind.INT),
+            ),
             type=ct.DeferredSymbolType(constraint=None),
-        )
-        return testee
+        ),
+        left=foast.Name(
+            id="a",
+            type=ct.DeferredSymbolType(constraint=None),
+            location=loc,
+        ),
+        op=foast.BinaryOperator.POW,
+        location=loc,
+        type=ct.DeferredSymbolType(constraint=None),
+    )
 
     with pytest.raises(
         FieldOperatorTypeDeductionError,
