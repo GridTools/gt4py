@@ -32,7 +32,7 @@ def test_shadowing():
             params=[ir.Sym(id="x"), ir.Sym(id="y"), ir.Sym(id="z")],
             expr=ir.FunCall(
                 fun=ir.Lambda(
-                    params=[ir.SymRef(id="z")],
+                    params=[ir.Sym(id="z")],
                     expr=ir.FunCall(fun=ir.SymRef(id="deref"), args=[ir.SymRef(id="z")]),
                 ),
                 args=[ir.SymRef(id="y")],
@@ -47,7 +47,7 @@ def test_shadowing():
             params=[ir.Sym(id="y")],
             expr=ir.FunCall(
                 fun=ir.Lambda(
-                    params=[ir.SymRef(id="z")],
+                    params=[ir.Sym(id="z")],
                     expr=ir.FunCall(fun=ir.SymRef(id="deref"), args=[ir.SymRef(id="z")]),
                 ),
                 args=[ir.SymRef(id="y")],

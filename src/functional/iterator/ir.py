@@ -1,8 +1,8 @@
 from typing import ClassVar, List, Union
 
 import eve
-from eve.traits import SymbolName, SymbolTableTrait, ValidatedSymbolTableTrait
-from eve.type_definitions import SymbolRef
+from eve import Coerced, SymbolName, SymbolRef
+from eve.traits import SymbolTableTrait, ValidatedSymbolTableTrait
 from eve.utils import noninstantiable
 
 
@@ -15,7 +15,7 @@ class Node(eve.Node):
 
 
 class Sym(Node):  # helper
-    id: SymbolName  # noqa: A003
+    id: Coerced[SymbolName]  # noqa: A003
 
 
 @noninstantiable
@@ -41,7 +41,7 @@ class AxisLiteral(Expr):
 
 
 class SymRef(Expr):
-    id: SymbolRef  # noqa: A003
+    id: Coerced[SymbolRef]  # noqa: A003
 
 
 class Lambda(Expr, SymbolTableTrait):
@@ -55,7 +55,7 @@ class FunCall(Expr):
 
 
 class FunctionDefinition(Node, SymbolTableTrait):
-    id: SymbolName  # noqa: A003
+    id: Coerced[SymbolName]  # noqa: A003
     params: List[Sym]
     expr: Expr
 
@@ -93,7 +93,7 @@ BUILTINS = {
 
 
 class FencilDefinition(Node, ValidatedSymbolTableTrait):
-    id: SymbolName  # noqa: A003
+    id: Coerced[SymbolName]  # noqa: A003
     function_definitions: List[FunctionDefinition]
     params: List[Sym]
     closures: List[StencilClosure]
