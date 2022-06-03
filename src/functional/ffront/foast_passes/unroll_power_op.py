@@ -9,7 +9,7 @@ from functional.ffront import common_types as ct, field_operator_ast as foast, t
 
 class UnrollPowerOp(eve.NodeTranslator):
     @classmethod
-    def apply(cls, node: foast.LocatedNode):
+    def apply(cls, node: foast.LocatedNode) -> foast.LocatedNode:
         return cls().visit(node)
 
     def visit_BinOp(self, node: foast.BinOp) -> foast.BinOp:
