@@ -73,7 +73,6 @@ def test_power_0():
 
 
 def test_power_neg_exponent():
-
     loc = foast.SourceLocation(line=1, column=1, source="none")
 
     testee = foast.BinOp(
