@@ -52,5 +52,5 @@ class FieldOperatorPowerError(GTSyntaxError, SyntaxWarning):
     """Exceptions for unsupported power operators."""
 
     @classmethod
-    def from_powOp_node(cls, node: foast.LocatedNode, *, msg: str = ""):
+    def from_foast_node(cls, node: foast.LocatedNode, *, msg: str = ""):
         return cls(msg)
