@@ -11,7 +11,7 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
 import dace
 import sympy
@@ -647,7 +647,7 @@ class FieldAccessInfo(Node):
             global_grid_subset=self.global_grid_subset,
         )
 
-    def untile(self, tile_axes: List[Axis]):
+    def untile(self, tile_axes: Sequence[Axis]) -> "FieldAccessInfo":
         res_intervals = dict()
         for axis, interval in self.grid_subset.intervals.items():
             if isinstance(interval, TileInterval) and axis in tile_axes:

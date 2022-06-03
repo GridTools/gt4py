@@ -15,7 +15,7 @@
 import re
 from dataclasses import dataclass, field
 from functools import lru_cache
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union, Sequence
 
 import dace
 import dace.data
@@ -159,9 +159,7 @@ class AccessInfoCollector(NodeVisitor):
         grid_subset=None,
         **kwargs: Any,
     ) -> Dict[str, "dcir.FieldAccessInfo"]:
-        inner_ctx = self.Context(
-            axes=ctx.axes,
-        )
+        inner_ctx = self.Context(axes=ctx.axes)
 
         if grid_subset is None:
             grid_subset = dcir.GridSubset.from_interval(node.interval, dcir.Axis.K)
@@ -203,9 +201,7 @@ class AccessInfoCollector(NodeVisitor):
     ) -> Dict[str, "dcir.FieldAccessInfo"]:
         horizontal_extent = block_extents(node)
 
-        inner_ctx = self.Context(
-            axes=ctx.axes,
-        )
+        inner_ctx = self.Context(axes=ctx.axes)
         inner_infos = inner_ctx.access_infos
         ij_grid = dcir.GridSubset.from_gt4py_extent(horizontal_extent)
         he_grid = ij_grid.set_interval(dcir.Axis.K, k_interval)
@@ -254,14 +250,11 @@ class AccessInfoCollector(NodeVisitor):
 
     @staticmethod
     def _global_grid_subset(
-        region: common.HorizontalMask,
-        he_grid: "dcir.GridSubset",
-        offset: List[Optional[int]],
+        region: common.HorizontalMask, he_grid: "dcir.GridSubset", offset: List[Optional[int]]
     ):
         res: Dict[
-            dcir.Axis,
-            Union[dcir.DomainInterval, dcir.TileInterval, dcir.IndexWithExtent],
-        ] = dict()
+            dcir.Axis, Union[dcir.DomainInterval, dcir.TileInterval, dcir.IndexWithExtent]
+        ] = {}
         if region is not None:
             for axis, oir_interval in zip(dcir.Axis.dims_horizontal(), region.intervals):
                 start = (
@@ -298,15 +291,15 @@ class AccessInfoCollector(NodeVisitor):
         region,
         he_grid,
         grid_subset,
-    ):
-        offset = list(offset_node.to_dict()[k] for k in "ijk")
+    ) -> "dcir.FieldAccessInfo":
+        offset = [offset_node.to_dict()[k] for k in "ijk"]
         if isinstance(offset_node, oir.VariableKOffset):
             variable_offset_axes = [dcir.Axis.K]
         else:
             variable_offset_axes = []
 
         global_subset = self._global_grid_subset(region, he_grid, offset)
-        intervals = dict()
+        intervals = {}
         for axis in axes:
             if axis in variable_offset_axes:
                 intervals[axis] = dcir.IndexWithExtent(
@@ -330,12 +323,12 @@ class AccessInfoCollector(NodeVisitor):
         self,
         node: oir.FieldAccess,
         *,
-        is_write: bool = False,
-        ctx: "AccessInfoCollector.Context",
-        is_conditional=False,
-        region=None,
         he_grid,
         grid_subset,
+        is_write: bool = False,
+        is_conditional: bool = False,
+        region=None,
+        ctx: "AccessInfoCollector.Context",
         **kwargs,
     ):
         self.visit(
@@ -349,7 +342,7 @@ class AccessInfoCollector(NodeVisitor):
             **kwargs,
         )
 
-        if (not self.collect_read and (not is_write)) or (not self.collect_write and is_write):
+        if (is_write and not self.collect_write) or (not is_write and not self.collect_read):
             return
 
         access_info = self._make_access_info(
@@ -404,7 +397,9 @@ def compute_dcir_access_infos(
 
 
 def make_dace_subset(
-    context_info: "dcir.FieldAccessInfo", access_info: "dcir.FieldAccessInfo", data_dims
+    context_info: "dcir.FieldAccessInfo",
+    access_info: "dcir.FieldAccessInfo",
+    data_dims: Tuple[int, ...],
 ) -> dace.subsets.Range:
     clamped_access_info = access_info
     clamped_context_info = context_info
@@ -425,8 +420,10 @@ def make_dace_subset(
     return dace.subsets.Range(res_ranges)
 
 
-def untile_memlets(memlets: List["dcir.Memlet"], axes):
-    res_memlets = list()
+def untile_memlets(
+    memlets: Sequence["dcir.Memlet"], axes: Sequence["dcir.Axis"]
+) -> List["dcir.Memlet"]:
+    res_memlets: List["dcir.Memlet"] = []
     for memlet in memlets:
         res_memlets.append(
             dcir.Memlet(

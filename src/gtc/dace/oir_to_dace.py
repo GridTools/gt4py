@@ -32,14 +32,12 @@ class OirSDFGBuilder(eve.NodeVisitor):
     @dataclass
     class SDFGContext:
         sdfg: dace.SDFG
-        last_state: Optional[dace.SDFGState]
         decls: Dict[str, oir.Decl]
         block_extents: Dict[int, Extent]
         access_infos: Dict[str, dcir.FieldAccessInfo]
 
         def __init__(self, stencil: oir.Stencil):
             self.sdfg = dace.SDFG(stencil.name)
-            self.last_state = None
             self.decls = {decl.name: decl for decl in stencil.params + stencil.declarations}
             self.block_extents = compute_horizontal_block_extents(stencil)
 
@@ -58,7 +56,7 @@ class OirSDFGBuilder(eve.NodeVisitor):
                     axis.domain_dace_symbol()
                     for axis in dcir.Axis.dims_3d()
                     if self.decls[field].dimensions[axis.to_idx()]
-                ] + [d for d in self.decls[field].data_dims]
+                ] + list(self.decls[field].data_dims)
             return self.access_infos[field].shape + self.decls[field].data_dims
 
         def make_input_dace_subset(self, node, field):
@@ -74,7 +72,7 @@ class OirSDFGBuilder(eve.NodeVisitor):
 
             return self._make_dace_subset(local_access_info, field)
 
-        def make_output_dace_subset(self, node, field):
+        def make_output_dace_subset(self, node, field: str):
             local_access_info = compute_dcir_access_infos(
                 node,
                 collect_read=False,
@@ -87,11 +85,16 @@ class OirSDFGBuilder(eve.NodeVisitor):
 
             return self._make_dace_subset(local_access_info, field)
 
-        def _make_dace_subset(self, local_access_info, field):
+        def _make_dace_subset(self, local_access_info, field) -> dace.subsets.Range:
             global_access_info = self.access_infos[field]
             return make_dace_subset(
                 global_access_info, local_access_info, self.decls[field].data_dims
             )
+
+        @property
+        def last_state(self) -> Optional[dace.SDFGState]:
+            nodes = self.sdfg.states()
+            return nodes[-1] if nodes else None
 
     def visit_VerticalLoop(
         self, node: oir.VerticalLoop, *, ctx: "OirSDFGBuilder.SDFGContext", **kwargs
@@ -113,7 +116,6 @@ class OirSDFGBuilder(eve.NodeVisitor):
             ctx.sdfg.add_edge(ctx.last_state, state, dace.InterstateEdge())
         else:
             state = ctx.sdfg.add_state(is_start_state=True)
-        ctx.last_state = state
 
         state.add_node(library_node)
 
