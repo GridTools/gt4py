@@ -51,6 +51,17 @@ from gtc import common, gtir
 from gtc.common import ExprKind
 
 
+def _convert_dtype(data_type) -> common.DataType:
+    dtype = common.DataType(int(data_type))
+    if dtype == common.DataType.DEFAULT:
+        # TODO: this will be a frontend choice later
+        # in non-GTC parts, this is set in the backend
+        dtype = cast(
+            common.DataType, common.DataType.FLOAT64
+        )  # see https://github.com/GridTools/gtc/issues/100
+    return dtype
+
+
 def _make_literal(v: numbers.Number) -> gtir.Literal:
     value: Union[BuiltinLiteral, str]
     if isinstance(v, bool):
@@ -187,25 +198,11 @@ class DefIRToGTIR(IRNodeVisitor):
         stmts = []
         temporaries = []
         for s in node.body.stmts:
-            # FieldDecl or VarDecls in the body are temporaries
-            if isinstance(s, FieldDecl) or isinstance(s, VarDecl):
-                dtype = common.DataType(int(s.data_type.value))
-                if dtype == common.DataType.DEFAULT:
-                    # TODO this will be a frontend choice later
-                    # in non-GTC parts, this is set in the backend
-                    dtype = cast(
-                        common.DataType, common.DataType.FLOAT64
-                    )  # see https://github.com/GridTools/gtc/issues/100
-                temporaries.append(
-                    gtir.FieldDecl(
-                        name=s.name,
-                        dtype=dtype,
-                        dimensions=(True, True, True),
-                        loc=location_to_source_location(s.loc),
-                    )
-                )
+            decl_or_stmt = self.visit(s)
+            if isinstance(decl_or_stmt, gtir.Decl):
+                temporaries.append(decl_or_stmt)
             else:
-                stmts.append(self.visit(s))
+                stmts.append(decl_or_stmt)
         start, end = self.visit(node.interval)
         interval = gtir.Interval(
             start=start,
@@ -232,7 +229,7 @@ class DefIRToGTIR(IRNodeVisitor):
         )
 
     def visit_ScalarLiteral(self, node: ScalarLiteral) -> gtir.Literal:
-        return gtir.Literal(value=str(node.value), dtype=common.DataType(node.data_type.value))
+        return gtir.Literal(value=str(node.value), dtype=_convert_dtype(node.data_type.value))
 
     def visit_UnaryOpExpr(self, node: UnaryOpExpr) -> gtir.UnaryOp:
         return gtir.UnaryOp(
@@ -364,7 +361,7 @@ class DefIRToGTIR(IRNodeVisitor):
         # datatype conversion works via same ID
         return gtir.FieldDecl(
             name=node.name,
-            dtype=common.DataType(int(node.data_type.value)),
+            dtype=_convert_dtype(node.data_type.value),
             dimensions=dimensions,
             data_dims=node.data_dims,
             loc=location_to_source_location(node.loc),
@@ -374,7 +371,7 @@ class DefIRToGTIR(IRNodeVisitor):
         # datatype conversion works via same ID
         return gtir.ScalarDecl(
             name=node.name,
-            dtype=common.DataType(int(node.data_type.value)),
+            dtype=_convert_dtype(node.data_type.value),
             loc=location_to_source_location(node.loc),
         )
 

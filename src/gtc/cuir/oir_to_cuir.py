@@ -93,7 +93,9 @@ class OIRToCUIR(eve.NodeTranslator):
         )
 
     def visit_Temporary(self, node: oir.Temporary, **kwargs: Any) -> cuir.Temporary:
-        return cuir.Temporary(name=node.name, dtype=node.dtype)
+        return cuir.Temporary(
+            name=node.name, data_dims=self.visit(node.data_dims, **kwargs), dtype=node.dtype
+        )
 
     def visit_VariableKOffset(
         self, node: cuir.VariableKOffset, **kwargs: Any

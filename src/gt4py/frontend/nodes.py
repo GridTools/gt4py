@@ -142,7 +142,7 @@ storing a reference to the piece of source code which originated the node.
 import enum
 import operator
 import sys
-from typing import Generator, Sequence, Type
+from typing import Generator, List, Optional, Sequence, Type
 
 import numpy as np
 
@@ -300,9 +300,7 @@ DataType.NATIVE_TYPE_TO_NUMPY = {
     DataType.FLOAT64: "float64",
 }
 
-DataType.NUMPY_TO_NATIVE_TYPE = {
-    value: key for key, value in DataType.NATIVE_TYPE_TO_NUMPY.items() if key != DataType.DEFAULT
-}
+DataType.NUMPY_TO_NATIVE_TYPE = {value: key for key, value in DataType.NATIVE_TYPE_TO_NUMPY.items()}
 
 
 # ---- IR: expressions ----
@@ -355,12 +353,16 @@ class VarRef(Ref):
 class FieldRef(Ref):
     name = attribute(of=str)
     offset = attribute(of=DictOf[str, UnionOf[int, Expr]])
-    data_index = attribute(of=ListOf[int], factory=list)
+    data_index = attribute(of=ListOf[Expr], factory=list)
     loc = attribute(of=Location, optional=True)
 
     @classmethod
-    def at_center(cls, name: str, axes: Sequence[str], loc=None):
-        return cls(name=name, offset={axis: 0 for axis in axes}, loc=loc)
+    def at_center(
+        cls, name: str, axes: Sequence[str], data_index: Optional[List[int]] = None, loc=None
+    ):
+        return cls(
+            name=name, offset={axis: 0 for axis in axes}, data_index=data_index or [], loc=loc
+        )
 
 
 @attribclass

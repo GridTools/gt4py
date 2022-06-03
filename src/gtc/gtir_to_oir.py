@@ -207,7 +207,12 @@ class GTIRToOIR(NodeTranslator):
             horiz_execs.append(oir.HorizontalExecution(body=stmts, declarations=ctx.local_scalars))
 
         ctx.temp_fields += [
-            oir.Temporary(name=temp.name, dtype=temp.dtype, dimensions=temp.dimensions)
+            oir.Temporary(
+                name=temp.name,
+                dtype=temp.dtype,
+                dimensions=temp.dimensions,
+                data_dims=temp.data_dims,
+            )
             for temp in node.temporaries
         ]
 

@@ -25,7 +25,10 @@ from gt4py import gtscript
 from gt4py.frontend import gtscript_frontend as gt_frontend
 from gt4py.frontend import nodes
 from gt4py.gtscript import (
+    IJ,
+    IJK,
     PARALLEL,
+    Field,
     I,
     J,
     K,
@@ -856,6 +859,38 @@ class TestReducedDimensions:
         ):
             parse_definition(definition, name=inspect.stack()[0][3], module=self.__class__.__name__)
 
+    def test_higher_dim_temp(self):
+        def definition(
+            field_in: gtscript.Field[gtscript.IJK, np.float_],
+            field_out: gtscript.Field[gtscript.IJK, np.float_],
+        ):
+            tmp: Field[IJK, (np.float_, (2,))] = 0.0
+            with computation(PARALLEL), interval(...):
+                tmp[0, 0, 0][0] = field_in
+                field_out = tmp[0, 0, 0][0]
+
+        parse_definition(
+            definition,
+            name=inspect.stack()[0][3],
+            module=self.__class__.__name__,
+        )
+
+    def test_typed_temp_missing(self):
+        def definition(
+            field_in: gtscript.Field[gtscript.IJK, np.float_],
+            field_out: gtscript.Field[gtscript.IJK, np.float_],
+        ):
+            tmp: Field[IJ, np.float_] = 0.0
+            with computation(FORWARD), interval(1, None):
+                tmp = field_in[0, 0, -1]
+                field_out = tmp
+
+        with pytest.raises(
+            gt_frontend.GTScriptSyntaxError,
+            match="Found IJ, but only IJK is currently supported for temporaries",
+        ):
+            parse_definition(definition, name=inspect.stack()[0][3], module=self.__class__.__name__)
+
 
 class TestDataDimensions:
     def test_syntax(self):
@@ -1110,31 +1145,6 @@ class TestAssignmentSyntax:
             def func(in_field: gtscript.Field[np.float_], out_field: gtscript.Field[np.float_]):
                 with computation(PARALLEL), interval(...):
                     out_field["a_key"] = in_field
-
-            parse_definition(func, name=inspect.stack()[0][3], module=self.__class__.__name__)
-
-    def test_temporary(self):
-        with pytest.raises(
-            gt_frontend.GTScriptSyntaxError,
-            match="No subscript allowed in assignment to temporaries",
-        ):
-
-            def func(in_field: gtscript.Field[np.float_], out_field: gtscript.Field[np.float_]):
-                with computation(PARALLEL), interval(...):
-                    tmp[...] = in_field
-                    out_field = tmp
-
-            parse_definition(func, name=inspect.stack()[0][3], module=self.__class__.__name__)
-
-        with pytest.raises(
-            gt_frontend.GTScriptSyntaxError,
-            match="No subscript allowed in assignment to temporaries",
-        ):
-
-            def func(in_field: gtscript.Field[np.float_], out_field: gtscript.Field[np.float_]):
-                with computation(PARALLEL), interval(...):
-                    tmp[0, 0, 0] = 2 * in_field
-                    out_field = tmp
 
             parse_definition(func, name=inspect.stack()[0][3], module=self.__class__.__name__)
 
