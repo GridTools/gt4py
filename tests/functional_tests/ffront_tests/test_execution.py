@@ -105,6 +105,37 @@ def test_arithmetic():
     assert np.allclose((a.array() + b.array()) * 2.0, c)
 
 
+def test_power():
+    size = 10
+    a = np_as_located_field(IDim)(np.random.randn((size)))
+    b = np_as_located_field(IDim)(np.zeros((size)))
+
+    @field_operator(backend="roundtrip")
+    def power(inp1: Field[[IDim], float64]) -> Field[[IDim], float64]:
+        return inp1**2
+
+    power(a, out=b, offset_provider={})
+
+    assert np.allclose(a.array() ** 2, b)
+
+
+def test_power_arithmetic():
+    size = 10
+    a = np_as_located_field(IDim)(np.random.randn((size)))
+    b = np_as_located_field(IDim)(np.zeros((size)))
+    c = np_as_located_field(IDim)(np.random.randn((size)))
+
+    @field_operator(backend="roundtrip")
+    def power_arithmetic(
+        inp1: Field[[IDim], float64], inp2: Field[[IDim], float64]
+    ) -> Field[[IDim], float64]:
+        return inp2 + ((inp1 + inp2) ** 2)
+
+    power_arithmetic(a, c, out=b, offset_provider={})
+
+    assert np.allclose(c.array() + ((c.array() + a.array()) ** 2), b)
+
+
 def test_bit_logic():
     size = 10
     a = np_as_located_field(IDim)(np.full((size), True))
