@@ -435,8 +435,9 @@ class DaCeBindingsCodegen:
         generated_code = cls(backend).generate_sdfg_bindings(
             stencil_ir, sdfg, module_name=module_name
         )
-        formatted_code = codegen.format_source("cpp", generated_code, style="LLVM")
-        return formatted_code
+        if backend.builder.options.format_source:
+            generated_code = codegen.format_source("cpp", generated_code, style="LLVM")
+        return generated_code
 
 
 class DaCePyExtModuleGenerator(PyExtModuleGenerator):
