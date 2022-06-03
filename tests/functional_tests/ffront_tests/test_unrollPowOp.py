@@ -99,7 +99,7 @@ def test_power_neg_exponent():
 
     with pytest.raises(
         FieldOperatorPowerError,
-        match="Exponent must be a constant value",
+        match="Exponent must be a constant value.",
     ):
         _ = UnrollPowerOp.apply(testee)
 
