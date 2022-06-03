@@ -29,7 +29,7 @@ class UnrollPowerOp(eve.NodeTranslator):
             if int(node.right.value) == 0:
                 raise FieldOperatorPowerError.from_powOp_node(
                     node,
-                    msg=f"'Power value '{type(node.right)}' not supported. Only integer values greater than zero allowed in the power operation",
+                    msg=f"'Only integer values greater than zero allowed in the power operation.",
                 )
 
             new_left = self.visit(node.left)
