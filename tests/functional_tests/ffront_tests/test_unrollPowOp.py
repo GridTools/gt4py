@@ -58,14 +58,11 @@ def test_eval(power_n, expected):
 
 
 def test_power_0():
-    def pow_0():
-        return _make_power_testee(0)
-
     with pytest.raises(
         FieldOperatorTypeDeductionError,
         match="Only integer values greater than zero allowed in the power operation",
     ):
-        _ = UnrollPowerOp.apply(pow_0())
+        _ = UnrollPowerOp.apply(_make_power_testee(0))
 
 
 def test_power_neg():
