@@ -86,7 +86,7 @@ class StencilComputationExpansion(dace.library.ExpandTransformation):
             out_edge.src_conn = out_edge.src_conn[len("__out_") :]
 
         # union input and output subsets
-        subsets = dict()
+        subsets = {}
         for edge in parent_state.in_edges(node):
             subsets[edge.dst_conn] = edge.data.subset
         for edge in parent_state.out_edges(node):

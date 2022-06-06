@@ -202,7 +202,7 @@ class DaCeComputationCodegen:
         ]
 
     @staticmethod
-    def _postprocess_dace_code(code_objects, is_gpu):
+    def _postprocess_dace_code(code_objects, is_gpu, builder):
         lines = code_objects[[co.title for co in code_objects].index("Frame")].clean_code.split(
             "\n"
         )
@@ -233,7 +233,10 @@ class DaCeComputationCodegen:
             return True
 
         lines = filter(keep_line, lines)
-        return codegen.format_source("cpp", "\n".join(lines), style="LLVM")
+        generated_code = "\n".join(lines)
+        if builder.options.format_source:
+            generated_code = codegen.format_source("cpp", generated_code, style="LLVM")
+        return generated_code
 
     @classmethod
     def apply(cls, stencil_ir: gtir.Stencil, builder: StencilBuilder, sdfg: dace.SDFG):
@@ -244,7 +247,7 @@ class DaCeComputationCodegen:
             code_objects = sdfg.generate_code()
         is_gpu = "CUDA" in {co.title for co in code_objects}
 
-        computations = cls._postprocess_dace_code(code_objects, is_gpu)
+        computations = cls._postprocess_dace_code(code_objects, is_gpu, builder)
 
         interface = cls.template.definition.render(
             name=sdfg.name,

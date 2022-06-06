@@ -303,7 +303,7 @@ class AccessInfoCollector(NodeVisitor):
         for axis in axes:
             if axis in variable_offset_axes:
                 intervals[axis] = dcir.IndexWithExtent(
-                    axis=axis, value=axis.iteration_symbol(), extent=[0, 0]
+                    axis=axis, value=axis.iteration_symbol(), extent=(0, 0)
                 )
             else:
                 intervals[axis] = dcir.IndexWithExtent(
