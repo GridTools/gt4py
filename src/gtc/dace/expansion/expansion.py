@@ -114,26 +114,24 @@ class StencilComputationExpansion(dace.library.ExpandTransformation):
     @staticmethod
     def _get_parent_arrays(
         node: "StencilComputation", parent_state: dace.SDFGState, parent_sdfg: dace.SDFG
-    ):
-        parent_arrays = dict()
-        for edge in parent_state.in_edges(node):
-            if edge.dst_conn is not None:
-                parent_arrays[edge.dst_conn[len("__in_") :]] = parent_sdfg.arrays[edge.data.data]
-        for edge in parent_state.out_edges(node):
-            if edge.src_conn is not None:
-                parent_arrays[edge.src_conn[len("__out_") :]] = parent_sdfg.arrays[edge.data.data]
+    ) -> Dict[str, dace.data.Data]:
+        parent_arrays: Dict[str, dace.data.Data] = {}
+        for edge in (e for e in parent_state.in_edges(node) if e.dst_conn is not None):
+            parent_arrays[edge.dst_conn[len("__in_") :]] = parent_sdfg.arrays[edge.data.data]
+        for edge in (e for e in parent_state.out_edges(node) if e.src_conn is not None):
+            parent_arrays[edge.src_conn[len("__out_") :]] = parent_sdfg.arrays[edge.data.data]
         return parent_arrays
 
     @staticmethod
     def expansion(
         node: "StencilComputation", parent_state: dace.SDFGState, parent_sdfg: dace.SDFG
     ) -> dace.nodes.NestedSDFG:
-        global_ctx = DaCeIRBuilder.GlobalContext(
-            library_node=node,
-            arrays=StencilComputationExpansion._get_parent_arrays(node, parent_state, parent_sdfg),
-        )
+        """Expand the coarse SDFG in parent_sdfg to a NestedSDFG with all the states."""
+        arrays = StencilComputationExpansion._get_parent_arrays(node, parent_state, parent_sdfg)
 
-        daceir: dcir.NestedSDFG = DaCeIRBuilder().visit(node.oir_node, global_ctx=global_ctx)
+        daceir: dcir.NestedSDFG = DaCeIRBuilder().visit(
+            node.oir_node, global_ctx=DaCeIRBuilder.GlobalContext(library_node=node, arrays=arrays)
+        )
 
         nsdfg = StencilComputationSDFGBuilder().visit(daceir)
 

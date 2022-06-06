@@ -15,7 +15,7 @@
 import dataclasses
 import itertools
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Set, Union
+from typing import Any, Dict, Iterable, List, Optional, Set, Union
 
 import dace
 import dace.data
@@ -115,11 +115,11 @@ class DaCeIRBuilder(NodeTranslator):
             symbol_collector: "DaCeIRBuilder.SymbolCollector",
         ) -> List[dcir.FieldDecl]:
             return [
-                self.get_dcir_decl(field, access_info, symbol_collector=symbol_collector)
+                self._get_dcir_decl(field, access_info, symbol_collector=symbol_collector)
                 for field, access_info in access_infos.items()
             ]
 
-        def get_dcir_decl(
+        def _get_dcir_decl(
             self,
             field: SymbolRef,
             access_info: dcir.FieldAccessInfo,
@@ -153,7 +153,7 @@ class DaCeIRBuilder(NodeTranslator):
             res = cls(*args, parent=None, **kwargs)
             return res
 
-        def push_axes_extents(self, axes_extents):
+        def push_axes_extents(self, axes_extents) -> "DaCeIRBuilder.IterationContext":
             res = self.grid_subset
             for axis, extent in axes_extents.items():
                 if isinstance(res.intervals[axis], dcir.DomainInterval):
@@ -180,13 +180,13 @@ class DaCeIRBuilder(NodeTranslator):
 
         def push_interval(
             self, axis: dcir.Axis, interval: Union[dcir.DomainInterval, oir.Interval]
-        ):
+        ) -> "DaCeIRBuilder.IterationContext":
             return DaCeIRBuilder.IterationContext(
                 grid_subset=self.grid_subset.set_interval(axis, interval),
                 parent=self,
             )
 
-        def push_expansion_item(self, item):
+        def push_expansion_item(self, item: Union[Map, Loop]) -> "DaCeIRBuilder.IterationContext":
 
             if not isinstance(item, (Map, Loop)):
                 raise ValueError
@@ -205,13 +205,16 @@ class DaCeIRBuilder(NodeTranslator):
                     grid_subset = grid_subset.restricted_to_index(axis)
             return DaCeIRBuilder.IterationContext(grid_subset=grid_subset, parent=self)
 
-        def push_expansion_items(self, items):
+        def push_expansion_items(
+            self, items: Iterable[Union[Map, Loop]]
+        ) -> "DaCeIRBuilder.IterationContext":
             res = self
             for item in items:
                 res = res.push_expansion_item(item)
             return res
 
-        def pop(self):
+        def pop(self) -> "DaCeIRBuilder.IterationContext":
+            assert self.parent is not None
             return self.parent
 
     @dataclass
@@ -668,10 +671,7 @@ class DaCeIRBuilder(NodeTranslator):
         global_ctx: "DaCeIRBuilder.GlobalContext",
         **kwargs,
     ):
-        start, end = (
-            node.sections[0].interval.start,
-            node.sections[0].interval.end,
-        )
+        start, end = (node.sections[0].interval.start, node.sections[0].interval.end)
 
         overall_interval = dcir.DomainInterval(
             start=dcir.AxisBound(axis=dcir.Axis.K, level=start.level, offset=start.offset),
@@ -687,11 +687,11 @@ class DaCeIRBuilder(NodeTranslator):
             )
         )
 
-        var_offset_fields = set(
+        var_offset_fields = {
             acc.name
             for acc in node.iter_tree().if_isinstance(oir.FieldAccess)
             if isinstance(acc.offset, oir.VariableKOffset)
-        )
+        }
         sections_idx = next(
             idx
             for idx, item in enumerate(global_ctx.library_node.expansion_specification)

@@ -29,6 +29,8 @@ from gtc.passes.oir_optimizations.utils import AccessCollector, compute_horizont
 
 
 class OirSDFGBuilder(eve.NodeVisitor):
+    """Create a top-level SDFG with a node for each VericalLoop."""
+
     @dataclass
     class SDFGContext:
         sdfg: dace.SDFG

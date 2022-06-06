@@ -45,21 +45,15 @@ class StencilComputationSDFGBuilder(NodeVisitor):
         state_stack: List[dace.SDFGState] = dataclasses.field(default_factory=list)
 
         def add_state(self):
-            old_state = self.state
-            state = self.sdfg.add_state()
-            for edge in self.sdfg.out_edges(old_state):
+            new_state = self.sdfg.add_state()
+            for edge in self.sdfg.out_edges(self.state):
                 self.sdfg.remove_edge(edge)
-                self.sdfg.add_edge(
-                    state,
-                    edge.dst,
-                    edge.data,
-                )
-            self.sdfg.add_edge(old_state, state, dace.InterstateEdge())
-            self.state = state
+                self.sdfg.add_edge(new_state, edge.dst, edge.data)
+            self.sdfg.add_edge(self.state, new_state, dace.InterstateEdge())
+            self.state = new_state
             return self
 
         def add_loop(self, index_range: dcir.Range):
-
             loop_state = self.sdfg.add_state()
             after_state = self.sdfg.add_state()
             for edge in self.sdfg.out_edges(self.state):
@@ -201,7 +195,6 @@ class StencilComputationSDFGBuilder(NodeVisitor):
         sdfg_ctx: "StencilComputationSDFGBuilder.SDFGContext",
         **kwargs,
     ) -> None:
-
         ndranges = {
             k: v
             for index_range in node.index_ranges
@@ -275,9 +268,9 @@ class StencilComputationSDFGBuilder(NodeVisitor):
         **kwargs,
     ) -> None:
 
-        sdfg_ctx = sdfg_ctx.add_state()
-        read_acc_and_conn: Dict[Optional[str], Tuple[dace.nodes.Node, Optional[str]]] = dict()
-        write_acc_and_conn: Dict[Optional[str], Tuple[dace.nodes.Node, Optional[str]]] = dict()
+        sdfg_ctx.add_state()
+        read_acc_and_conn: Dict[Optional[str], Tuple[dace.nodes.Node, Optional[str]]] = {}
+        write_acc_and_conn: Dict[Optional[str], Tuple[dace.nodes.Node, Optional[str]]] = {}
         for computation in node.computations:
             assert isinstance(computation, dcir.ComputationNode)
             for memlet in computation.read_memlets:
@@ -293,8 +286,7 @@ class StencilComputationSDFGBuilder(NodeVisitor):
                         None,
                     )
             node_ctx = StencilComputationSDFGBuilder.NodeContext(
-                input_node_and_conns=read_acc_and_conn,
-                output_node_and_conns=write_acc_and_conn,
+                input_node_and_conns=read_acc_and_conn, output_node_and_conns=write_acc_and_conn
             )
             self.visit(computation, sdfg_ctx=sdfg_ctx, node_ctx=node_ctx, **kwargs)
 
@@ -338,8 +330,9 @@ class StencilComputationSDFGBuilder(NodeVisitor):
     ) -> dace.nodes.NestedSDFG:
 
         sdfg = dace.SDFG(node.label)
-        state = sdfg.add_state()
-        inner_sdfg_ctx = StencilComputationSDFGBuilder.SDFGContext(sdfg=sdfg, state=state)
+        inner_sdfg_ctx = StencilComputationSDFGBuilder.SDFGContext(
+            sdfg=sdfg, state=sdfg.add_state(is_start_state=True)
+        )
         self.visit(
             node.field_decls,
             sdfg_ctx=inner_sdfg_ctx,

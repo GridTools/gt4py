@@ -13,7 +13,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 import os
 import re
-from typing import TYPE_CHECKING, Dict, Optional, Tuple, Type, List
+import textwrap
+from typing import TYPE_CHECKING, Dict, List, Optional, Tuple, Type
 
 import dace
 import numpy as np
@@ -33,6 +34,7 @@ from gt4py.backend.gtc_common import (
     pybuffer_to_sid,
 )
 from gt4py.backend.module_generator import make_args_data_from_gtir
+from gt4py.stencil_builder import StencilBuilder
 from gtc import common, gtir
 from gtc.dace.nodes import StencilComputation
 from gtc.dace.oir_to_dace import OirSDFGBuilder
@@ -43,7 +45,7 @@ from gtc.passes.gtir_pipeline import GtirPipeline
 from gtc.passes.oir_optimizations.inlining import MaskInlining
 from gtc.passes.oir_optimizations.utils import compute_fields_extents
 from gtc.passes.oir_pipeline import DefaultPipeline
-from gt4py.stencil_builder import StencilBuilder
+
 
 if TYPE_CHECKING:
     from gt4py.stencil_object import StencilObject
@@ -101,30 +103,17 @@ def _pre_expand_trafos(stencil_ir: gtir.Stencil, sdfg: dace.SDFG, layout_map):
             array.lifetime = dace.AllocationLifetime.Persistent
 
     sdfg.simplify()
-    for node, _ in sdfg.all_nodes_recursive():
-        if isinstance(node, StencilComputation):
-            if node.oir_node.loop_order == common.LoopOrder.PARALLEL:
-                expansion_priority = []
-                expansion_priority.extend(
-                    [
-                        ["TileJ", "TileI", "Sections", "KMap", "Stages", "JMap", "IMap"],
-                    ]
-                )
-            else:
-                expansion_priority = [
-                    ["TileJ", "TileI", "Sections", "KLoop", "Stages", "JMap", "IMap"],
-                ]
-            for exp in expansion_priority:
-                try:
-                    node.expansion_specification = exp
-                    print("used", exp)
-                    is_set = True
-                except ValueError:
-                    continue
-                else:
-                    break
-            if not is_set:
-                raise ValueError("No expansion compatible")
+    for node, _ in filter(lambda n: isinstance(n, StencilComputation), sdfg.all_nodes_recursive()):
+        expansion_priority = ["TileJ", "TileI", "Sections"]
+        if node.oir_node.loop_order == common.LoopOrder.PARALLEL:
+            expansion_priority.extend(["KMap", "Stages", "JMap", "IMap"])
+        else:
+            expansion_priority.extend(["KLoop", "Stages", "JMap", "IMap"])
+
+        try:
+            node.expansion_specification = expansion_priority
+        except ValueError:
+            raise ValueError("Incompatible expansion")
     _specialize_transient_strides(sdfg, layout_map=layout_map)
     return sdfg
 
@@ -149,8 +138,7 @@ class DaCeExtGenerator(BackendCodegen):
     def __call__(self, stencil_ir: gtir.Stencil) -> Dict[str, Dict[str, str]]:
         base_oir = GTIRToOIR().visit(stencil_ir)
         oir_pipeline = self.backend.builder.options.backend_opts.get(
-            "oir_pipeline",
-            DefaultPipeline(skip=[MaskInlining]),
+            "oir_pipeline", DefaultPipeline(skip=[MaskInlining])
         )
         oir_node = oir_pipeline.run(base_oir)
         sdfg = OirSDFGBuilder().visit(oir_node)
@@ -265,7 +253,8 @@ class DaCeComputationCodegen:
             tmp_allocs=self.generate_tmp_allocs(sdfg),
             allocator="gt::cuda_util::cuda_malloc" if is_gpu else "std::make_unique",
         )
-        generated_code = f"""#include <gridtools/sid/sid_shift_origin.hpp>
+        generated_code = textwrap.dedent(
+            f"""#include <gridtools/sid/sid_shift_origin.hpp>
                              #include <gridtools/sid/allocator.hpp>
                              #include <gridtools/stencil/cartesian.hpp>
                              {"#include <gridtools/common/cuda_util.hpp>" if is_gpu else ""}
@@ -274,6 +263,7 @@ class DaCeComputationCodegen:
 
                              {interface}
                              """
+        )
         if builder.options.format_source:
             generated_code = codegen.format_source("cpp", generated_code, style="LLVM")
 
