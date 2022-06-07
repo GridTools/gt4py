@@ -35,7 +35,6 @@ from gt4py.utils import NOTHING
 from gt4py.utils import meta as gt_meta
 from gtc import utils as gtc_utils
 
-
 from .base import Frontend, register
 
 
@@ -405,8 +404,6 @@ class ReturnReplacer(gt_utils.meta.ASTTransformPass):
             raise GTScriptSyntaxError(
                 "Number of returns values does not match arguments on left side"
             )
-
-
 
 
 class CallInliner(ast.NodeTransformer):
@@ -2010,7 +2007,6 @@ class GTScriptParser(ast.NodeVisitor):
         )
 
         self.definition_ir = UnVectorisation.apply(self.definition_ir, fields_decls=fields_decls)
-
         return self.definition_ir
 
 
