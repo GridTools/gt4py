@@ -12,10 +12,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""
-Basic utilities for Python programming.
-
-"""
+"""Basic utilities for Python programming."""
 
 import collections.abc
 import functools
@@ -28,7 +25,6 @@ import string
 import sys
 import time
 import types
-from typing import Any, Sequence, Tuple
 
 from gt4py import config as gt_config
 
@@ -90,7 +86,7 @@ def get_member(instance, item_name):
 
 
 def compose(*functions_or_iterable):
-    """Function composition.
+    """Return a function that chains the input functions.
 
     Derived from: https://mathieularose.com/function-composition-in-python/
 
@@ -138,7 +134,7 @@ def is_iterable_of(
         ):
             return accept_mapping or not isinstance(value, collections.abc.Mapping)
 
-    except Exception as e:
+    except Exception:
         pass
 
     return False
@@ -158,7 +154,7 @@ def is_mapping_of(
         ):
             return True
 
-    except Exception as e:
+    except Exception:
         pass
 
     return False
@@ -267,13 +263,13 @@ def make_module_from_file(qualified_name, file_path, *, public_import=False):
             package_name = getattr(module, "__package__", "")
             if not package_name:
                 package_name = ".".join(qualified_name.split(".")[:-1])
-                setattr(module, "__package__", package_name)
+                module.__package__ = package_name
             components = package_name.split(".")
             module_name = qualified_name.split(".")[-1]
 
             if components[0] in sys.modules:
                 parent = sys.modules[components[0]]
-                for i, current in enumerate(components[1:]):
+                for current in components[1:]:
                     parent = getattr(parent, current, None)
                     if not parent:
                         break
@@ -281,7 +277,7 @@ def make_module_from_file(qualified_name, file_path, *, public_import=False):
                     setattr(parent, module_name, module)
         return module
 
-    for i in range(max(gt_config.cache_settings["load_retries"], 0)):
+    for _i in range(max(gt_config.cache_settings["load_retries"], 0)):
         try:
             return load()
         except ModuleNotFoundError:
@@ -292,7 +288,6 @@ def make_module_from_file(qualified_name, file_path, *, public_import=False):
 
 def patch_module(module, member, new_value, *, recursive=True):
     """Monkey patch a module replacing a member with a new value."""
-
     if not isinstance(module, types.ModuleType):
         raise ValueError("Invalid 'module' argument")
 
@@ -328,7 +323,6 @@ def patch_module(module, member, new_value, *, recursive=True):
 
 def restore_module(patch, *, verify=True):
     """Restore a module patched with the `patch_module()` function."""
-
     if not isinstance(patch, dict) or not {
         "module",
         "original_value",
@@ -366,8 +360,7 @@ class Registry(dict):
 
 
 class ClassProperty:
-    """Much like a :class:`property`, but the wrapped get function is a
-    class method."""
+    """Like a :class:`property`, but the wrapped function is a class method."""
 
     def __init__(self, fget=None, fset=None, fdel=None, doc=None):
         self.fget = fget

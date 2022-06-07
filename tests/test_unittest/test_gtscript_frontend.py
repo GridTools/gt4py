@@ -25,6 +25,7 @@ from gt4py import gtscript
 from gt4py.frontend import gtscript_frontend as gt_frontend
 from gt4py.frontend import nodes
 from gt4py.gtscript import (
+    IJ,
     IJK,
     PARALLEL,
     Field,
@@ -873,6 +874,22 @@ class TestReducedDimensions:
             name=inspect.stack()[0][3],
             module=self.__class__.__name__,
         )
+
+    def test_typed_temp_missing(self):
+        def definition(
+            field_in: gtscript.Field[gtscript.IJK, np.float_],
+            field_out: gtscript.Field[gtscript.IJK, np.float_],
+        ):
+            tmp: Field[IJ, np.float_] = 0.0
+            with computation(FORWARD), interval(1, None):
+                tmp = field_in[0, 0, -1]
+                field_out = tmp
+
+        with pytest.raises(
+            gt_frontend.GTScriptSyntaxError,
+            match="Found IJ, but only IJK is currently supported for temporaries",
+        ):
+            parse_definition(definition, name=inspect.stack()[0][3], module=self.__class__.__name__)
 
 
 class TestDataDimensions:

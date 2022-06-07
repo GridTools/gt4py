@@ -26,21 +26,13 @@ AnyStencilFunc = Union[StencilFunc, AnnotatedStencilFunc]
 
 
 def from_name(name: str) -> Type["Frontend"]:
+    """Return frontend by name."""
     return REGISTRY.get(name, None)
 
 
 def register(frontend_cls: Type["Frontend"]) -> None:
-    assert issubclass(frontend_cls, Frontend) and frontend_cls.name is not None
-
-    if isinstance(frontend_cls.name, str):
-        return REGISTRY.register(frontend_cls.name, frontend_cls)
-
-    else:
-        raise ValueError(
-            "Invalid 'name' attribute ('{name}') in frontend class '{cls}'".format(
-                name=frontend_cls.name, cls=frontend_cls
-            )
-        )
+    """Register a new frontend."""
+    return REGISTRY.register(frontend_cls.name, frontend_cls)
 
 
 class Frontend(abc.ABC):
@@ -106,7 +98,7 @@ class Frontend(abc.ABC):
         cls, definition: AnyStencilFunc, externals: Dict[str, Any]
     ) -> AnnotatedStencilFunc:
         """
-        Annotates the stencil function if not already done so.
+        Annotate the stencil function if not already done so.
 
         Raises
         ------
