@@ -861,7 +861,8 @@ class IterationNode(Node):
 
 
 class Tasklet(ComputationNode, IterationNode, eve.SymbolTableTrait):
-    stmts: List[Union[LocalScalarDecl, Stmt]]
+    decls: List[LocalScalarDecl]
+    stmts: List[Stmt]
     grid_subset: GridSubset = GridSubset.single_gridpoint()
 
 

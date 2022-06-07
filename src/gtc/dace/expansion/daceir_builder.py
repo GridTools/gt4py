@@ -390,7 +390,8 @@ class DaCeIRBuilder(NodeTranslator):
         )
 
         dcir_node = dcir.Tasklet(
-            stmts=decls + stmts,
+            decls=decls,
+            stmts=stmts,
             read_memlets=read_memlets,
             write_memlets=write_memlets,
         )
