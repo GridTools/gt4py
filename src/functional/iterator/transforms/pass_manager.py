@@ -19,10 +19,10 @@ class LiftMode(enum.Enum):
 def _inline_lifts(ir, lift_mode):
     if lift_mode == LiftMode.FORCE_INLINE:
         return InlineLifts().visit(ir)
-    if lift_mode == LiftMode.FORCE_TEMPORARIES:
+    if lift_mode == LiftMode.SIMPLE_HEURISTIC:
         predicate = heuristic(ir)
         return InlineLifts(predicate).visit(ir)
-    assert lift_mode == LiftMode.SIMPLE_HEURISTIC
+    assert lift_mode == LiftMode.FORCE_TEMPORARIES
     return ir
 
 
