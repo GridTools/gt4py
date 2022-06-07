@@ -13,11 +13,9 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import numbers
-from statistics import multimode
 from typing import Any, Dict, List, Optional, Tuple, Union, cast
 import copy
 import itertools
-from xml.dom import INDEX_SIZE_ERR
 
 from gt4py.frontend.node_util import IRNodeVisitor, location_to_source_location
 from gt4py.frontend.nodes import (
@@ -32,10 +30,8 @@ from gt4py.frontend.nodes import (
     BuiltinLiteral,
     Cast,
     ComputationBlock,
-
     DataType,
     Location,
-
     Empty,
     Expr,
     FieldDecl,
