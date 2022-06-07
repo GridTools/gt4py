@@ -23,8 +23,8 @@ from functional.ffront import common_types as ct
 from functional.iterator import runtime
 
 
-__all__ = ["Field", "Dimension", "float32", "float64", "int32", "int64", "neighbor_sum"]
-
+# FIXME(ben): need to clean up changes of math built-ins (quite messy currently)
+__all__ = ["Field", "Dimension", "float32", "float64", "int32", "int64", "neighbor_sum", "abs", "sin", "cos", "tan", "arcsin", "arccos", "arctan", "sinh", "cosh", "tanh", "arcsinh", "arccosh", "arctanh", "sqrt", "exp", "log", "gamma", "cbrt", "isfinite", "isinf", "isnan", "floor", "ceil", "trunc", "min", "max", "mod"]
 
 TYPE_BUILTINS = [Field, bool, int, int32, int64, float, float32, float64, tuple]
 TYPE_BUILTIN_NAMES = [t.__name__ for t in TYPE_BUILTINS]
@@ -50,8 +50,58 @@ neighbor_sum = BuiltInFunction(
 )
 
 
-FUN_BUILTIN_NAMES = ["neighbor_sum"]
+_single_arg_math_built_in = BuiltInFunction(
+    ct.FunctionType(
+        args=[ct.DeferredSymbolType(constraint=ct.FieldType)],
+        kwargs={},
+        returns=ct.DeferredSymbolType(constraint=ct.FieldType),
+    )
+)
 
+abs = _single_arg_math_built_in
+sin = _single_arg_math_built_in
+cos = _single_arg_math_built_in
+tan = _single_arg_math_built_in
+arcsin = _single_arg_math_built_in
+arccos = _single_arg_math_built_in
+arctan = _single_arg_math_built_in
+sinh = _single_arg_math_built_in
+cosh = _single_arg_math_built_in
+tanh = _single_arg_math_built_in
+arcsinh = _single_arg_math_built_in
+arccosh = _single_arg_math_built_in
+arctanh = _single_arg_math_built_in
+sqrt = _single_arg_math_built_in
+exp = _single_arg_math_built_in
+log = _single_arg_math_built_in
+gamma = _single_arg_math_built_in
+cbrt = _single_arg_math_built_in
+isfinite = _single_arg_math_built_in
+isinf = _single_arg_math_built_in
+isnan = _single_arg_math_built_in
+floor = _single_arg_math_built_in
+ceil = _single_arg_math_built_in
+trunc = _single_arg_math_built_in
+
+del _single_arg_math_built_in
+SINGLE_ARG_MATH_BUILT_INS = ["abs", "sin", "cos", "tan", "arcsin", "arccos", "arctan", "sinh", "cosh", "tanh", "arcsinh", "arccosh", "arctanh", "sqrt", "exp", "log", "gamma", "cbrt", "isfinite", "isinf", "isnan", "floor", "ceil", "trunc"]
+
+_double_arg_math_built_in = BuiltInFunction(
+    ct.FunctionType(
+        args=[ct.DeferredSymbolType(constraint=ct.FieldType), ct.DeferredSymbolType(constraint=ct.FieldType)],
+        kwargs={},
+        returns=ct.DeferredSymbolType(constraint=ct.FieldType),
+    )
+)
+
+min = _double_arg_math_built_in
+max = _double_arg_math_built_in
+mod = _double_arg_math_built_in
+
+del _double_arg_math_built_in
+DOUBLE_ARG_MATH_BUILT_IN = ["min", "max", "mod"]
+
+FUN_BUILTIN_NAMES = ["neighbor_sum"] + SINGLE_ARG_MATH_BUILT_INS + DOUBLE_ARG_MATH_BUILT_IN
 
 EXTERNALS_MODULE_NAME = "__externals__"
 MODULE_BUILTIN_NAMES = [EXTERNALS_MODULE_NAME]
