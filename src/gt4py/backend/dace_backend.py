@@ -49,10 +49,13 @@ if TYPE_CHECKING:
     from gt4py.stencil_object import StencilObject
 
 
-def _serialize_sdfg(sdfg: dace.SDFG):
+def _remove_meta_information(sdfg: dace.SDFG):
     for sd in sdfg.all_sdfgs_recursive():
         sd.transformation_hist = []
         sd.orig_sdfg = None
+
+
+def _serialize_sdfg(sdfg: dace.SDFG):
     return dumps(sdfg)
 
 
@@ -154,6 +157,7 @@ class DaCeExtGenerator(BackendCodegen):
 
         _to_device(sdfg, self.backend.storage_info["device"])
         sdfg = _pre_expand_trafos(stencil_ir, sdfg, self.backend.storage_info["layout_map"])
+        _remove_meta_information(sdfg)
         unexpanded_json = _serialize_sdfg(sdfg)
         sdfg.expand_library_nodes()
         _post_expand_trafos(sdfg)
