@@ -86,7 +86,12 @@ class TaskletCodegen(codegen.TemplatedGenerator):
         **kwargs,
     ):
 
-        memlets = kwargs["write_memlets" if is_target else "read_memlets"]
+        if is_target:
+            memlets = kwargs["write_memlets"]
+        else:
+            # if this node is not a target, it will still use the symbol of the write memlet if the
+            # field was previously written in the same memlet.
+            memlets = kwargs["read_memlets"] + kwargs["write_memlets"]
         memlet = next(mem for mem in memlets if mem.connector == node.name)
 
         index_strs = []
