@@ -945,8 +945,9 @@ class TestTypedTemporary(gt_testing.StencilTestSuite):
 
 class TestVectorGenAssignment(gt_testing.StencilTestSuite):
     dtypes = {
-        "field_in": np.float32,
-        "field_out": np.float32,
+        # NOTE: pydantic.error_wrappers.ValidationError: when using np.float32
+        "field_in": np.float64,
+        "field_out": np.float64,
     }
     domain_range = [(2, 2), (2, 2), (2, 2)]
     backends = ALL_BACKENDS
@@ -1014,9 +1015,9 @@ class TestVectorVectorOp(gt_testing.StencilTestSuite):
 
 class TestCombinedVectorScalarOp(gt_testing.StencilTestSuite):
     dtypes = {
-        "field_1": np.float32,
-        "field_2": np.float32,
-        "field_out": np.float32
+        "field_1": np.float64,
+        "field_2": np.float64,
+        "field_out": np.float64
     }
     domain_range = [(2, 2), (2, 2), (2, 2)]
     backends = ALL_BACKENDS
