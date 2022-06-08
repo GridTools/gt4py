@@ -224,89 +224,85 @@ def _freshen(dtype: T) -> T:
     return _TypeVarReindexer(indexer).visit(dtype, index_map=index_map)
 
 
-def _builtin_type(builtin: str) -> Type:
-    """Generate type definition for the given builtin function."""
-    assert builtin in ir.BUILTINS
-    if builtin == "deref":
-        dtype = TypeVar.fresh()
-        size = TypeVar.fresh()
-        return FunctionType(
-            args=Tuple(elems=(Val(kind=Iterator(), dtype=dtype, size=size),)),
-            ret=Val(kind=Value(), dtype=dtype, size=size),
-        )
-    if builtin == "can_deref":
-        dtype = TypeVar.fresh()
-        size = TypeVar.fresh()
-        return FunctionType(
-            args=Tuple(elems=(Val(kind=Iterator(), dtype=dtype, size=size),)),
-            ret=Val(kind=Value(), dtype=BOOL_DTYPE, size=size),
-        )
-    if builtin in ("plus", "minus", "multiplies", "divides"):
-        v = Val(kind=Value())
-        return FunctionType(args=Tuple(elems=(v, v)), ret=v)
-    if builtin in ("eq", "less", "greater"):
-        v = Val(kind=Value())
-        ret: Type = Val(kind=Value(), dtype=BOOL_DTYPE, size=v.size)
-        return FunctionType(args=Tuple(elems=(v, v)), ret=ret)
-    if builtin == "not_":
-        v = Val(kind=Value(), dtype=BOOL_DTYPE)
-        return FunctionType(args=Tuple(elems=(v,)), ret=v)
-    if builtin in ("and_", "or_"):
-        v = Val(kind=Value(), dtype=BOOL_DTYPE)
-        return FunctionType(args=Tuple(elems=(v, v)), ret=v)
-    if builtin == "if_":
-        v = Val(kind=Value())
-        c = Val(kind=Value(), dtype=BOOL_DTYPE, size=v.size)
-        return FunctionType(args=Tuple(elems=(c, v, v)), ret=v)
-    if builtin == "lift":
-        size = TypeVar.fresh()
-        args: Type = ValTuple(kind=Iterator(), dtypes=TypeVar.fresh(), size=size)
-        dtype = TypeVar.fresh()
-        stencil_ret = Val(kind=Value(), dtype=dtype, size=size)
-        lifted_ret = Val(kind=Iterator(), dtype=dtype, size=size)
-        return FunctionType(
-            args=Tuple(elems=(FunctionType(args=args, ret=stencil_ret),)),
-            ret=FunctionType(args=args, ret=lifted_ret),
-        )
-    if builtin == "reduce":
-        dtypes = TypeVar.fresh()
-        size = TypeVar.fresh()
-        acc = Val(kind=Value(), dtype=TypeVar.fresh(), size=size)
-        f_args = PrefixTuple(prefix=acc, others=ValTuple(kind=Value(), dtypes=dtypes, size=size))
-        ret_args = ValTuple(kind=Iterator(), dtypes=dtypes, size=size)
-        f = FunctionType(args=f_args, ret=acc)
-        ret = FunctionType(args=ret_args, ret=acc)
-        return FunctionType(args=Tuple(elems=(f, acc)), ret=ret)
-    if builtin == "scan":
-        dtypes = TypeVar.fresh()
-        fwd = Val(kind=Value(), dtype=BOOL_DTYPE, size=Scalar())
-        acc = Val(kind=Value(), dtype=TypeVar.fresh(), size=Scalar())
-        f_args = PrefixTuple(
-            prefix=acc, others=ValTuple(kind=Iterator(), dtypes=dtypes, size=Scalar())
-        )
-        ret_args = ValTuple(kind=Iterator(), dtypes=dtypes, size=Column())
-        f = FunctionType(args=f_args, ret=acc)
-        ret = FunctionType(args=ret_args, ret=Val(kind=Value(), dtype=acc.dtype, size=Column()))
-        return FunctionType(args=Tuple(elems=(f, fwd, acc)), ret=ret)
-    if builtin == "domain":
-        args = UniformValTupleVar.fresh(kind=Value(), dtype=NAMED_RANGE_DTYPE, size=Scalar())
-        ret = Val(kind=Value(), dtype=DOMAIN_DTYPE, size=Scalar())
-        return FunctionType(args=args, ret=ret)
-    if builtin == "named_range":
-        args = Tuple(
+# Some helpers to define the builtins’ types
+T0 = TypeVar.fresh()
+T1 = TypeVar.fresh()
+T2 = TypeVar.fresh()
+It_T0_T1 = Val(kind=Iterator(), dtype=T0, size=T1)
+Val_T0_T1 = Val(kind=Value(), dtype=T0, size=T1)
+Val_T0_Scalar = Val(kind=Value(), dtype=T0, size=Scalar())
+Val_BOOL_T1 = Val(kind=Value(), dtype=BOOL_DTYPE, size=T1)
+
+BUILTIN_TYPES: typing.Final[dict[str, Type]] = {
+    "deref": FunctionType(args=Tuple(elems=(It_T0_T1,)), ret=Val_T0_T1),
+    "can_deref": FunctionType(args=Tuple(elems=(It_T0_T1,)), ret=Val_BOOL_T1),
+    "plus": FunctionType(args=Tuple(elems=(Val_T0_T1, Val_T0_T1)), ret=Val_T0_T1),
+    "minus": FunctionType(args=Tuple(elems=(Val_T0_T1, Val_T0_T1)), ret=Val_T0_T1),
+    "multiplies": FunctionType(args=Tuple(elems=(Val_T0_T1, Val_T0_T1)), ret=Val_T0_T1),
+    "divides": FunctionType(args=Tuple(elems=(Val_T0_T1, Val_T0_T1)), ret=Val_T0_T1),
+    "eq": FunctionType(args=Tuple(elems=(Val_T0_T1, Val_T0_T1)), ret=Val_BOOL_T1),
+    "less": FunctionType(args=Tuple(elems=(Val_T0_T1, Val_T0_T1)), ret=Val_BOOL_T1),
+    "greater": FunctionType(args=Tuple(elems=(Val_T0_T1, Val_T0_T1)), ret=Val_BOOL_T1),
+    "and_": FunctionType(args=Tuple(elems=(Val_BOOL_T1, Val_BOOL_T1)), ret=Val_BOOL_T1),
+    "or_": FunctionType(args=Tuple(elems=(Val_BOOL_T1, Val_BOOL_T1)), ret=Val_BOOL_T1),
+    "not_": FunctionType(args=Tuple(elems=(Val_BOOL_T1,)), ret=Val_BOOL_T1),
+    "if_": FunctionType(args=Tuple(elems=(Val_BOOL_T1, Val_T0_T1, Val_T0_T1)), ret=Val_T0_T1),
+    "lift": FunctionType(
+        args=Tuple(
+            elems=(FunctionType(args=ValTuple(kind=Iterator(), dtypes=T2, size=T1), ret=Val_T0_T1),)
+        ),
+        ret=FunctionType(args=ValTuple(kind=Iterator(), dtypes=T2, size=T1), ret=It_T0_T1),
+    ),
+    "reduce": FunctionType(
+        args=Tuple(
+            elems=(
+                FunctionType(
+                    args=PrefixTuple(
+                        prefix=Val_T0_T1, others=ValTuple(kind=Value(), dtypes=T2, size=T1)
+                    ),
+                    ret=Val_T0_T1,
+                ),
+                Val_T0_T1,
+            )
+        ),
+        ret=FunctionType(args=ValTuple(kind=Iterator(), dtypes=T2, size=T1), ret=Val_T0_T1),
+    ),
+    "scan": FunctionType(
+        args=Tuple(
+            elems=(
+                FunctionType(
+                    args=PrefixTuple(
+                        prefix=Val_T0_Scalar,
+                        others=ValTuple(kind=Iterator(), dtypes=T2, size=Scalar()),
+                    ),
+                    ret=Val_T0_Scalar,
+                ),
+                Val(kind=Value(), dtype=BOOL_DTYPE, size=Scalar()),
+                Val_T0_Scalar,
+            )
+        ),
+        ret=FunctionType(
+            args=ValTuple(kind=Iterator(), dtypes=T2, size=Column()),
+            ret=Val(kind=Value(), dtype=T0, size=Column()),
+        ),
+    ),
+    "domain": FunctionType(
+        args=UniformValTupleVar.fresh(kind=Value(), dtype=NAMED_RANGE_DTYPE, size=Scalar()),
+        ret=Val(kind=Value(), dtype=DOMAIN_DTYPE, size=Scalar()),
+    ),
+    "named_range": FunctionType(
+        args=Tuple(
             elems=(
                 Val(kind=Value(), dtype=AXIS_DTYPE, size=Scalar()),
                 Val(kind=Value(), dtype=INT_DTYPE, size=Scalar()),
                 Val(kind=Value(), dtype=INT_DTYPE, size=Scalar()),
             )
-        )
-        ret = Val(kind=Value(), dtype=NAMED_RANGE_DTYPE, size=Scalar())
-        return FunctionType(args=args, ret=ret)
-    if builtin in ("make_tuple", "tuple_get", "shift"):
-        raise TypeError(
-            f"Builtin '{builtin}' is only supported as applied/called function by the type checker"
-        )
-    raise NotImplementedError(f"Missing type definition of builtin '{builtin}'")
+        ),
+        ret=Val(kind=Value(), dtype=NAMED_RANGE_DTYPE, size=Scalar()),
+    ),
+}
+
+del T0, T1, T2, It_T0_T1, Val_T0_T1, Val_T0_Scalar, Val_BOOL_T1
 
 
 class _TypeInferrer(eve.NodeTranslator):
@@ -320,8 +316,14 @@ class _TypeInferrer(eve.NodeTranslator):
             if isinstance(res, LetPolymorphic):
                 return _freshen(res.dtype)
             return res
+        if node.id in BUILTIN_TYPES:
+            return _freshen(BUILTIN_TYPES[node.id])
+        if node.id in ("make_tuple", "tuple_get", "shift"):
+            raise TypeError(
+                f"Builtin '{node.id}' is only supported as applied/called function by the type checker"
+            )
         if node.id in ir.BUILTINS:
-            return _builtin_type(node.id)
+            raise NotImplementedError(f"Missing type definition for builtin '{node.id}'")
 
         return TypeVar.fresh()
 
