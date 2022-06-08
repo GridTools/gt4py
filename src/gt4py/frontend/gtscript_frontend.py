@@ -1176,10 +1176,10 @@ class IRMaker(ast.NodeVisitor):
     def visit_Attribute(self, node: ast.Attribute) -> nodes.UnaryOperator:
         # Matrix Transposed
         if node.attr == 'T':
-            return nodes.UnaryOperator(
-            op = nodes.UnaryOperator.TRANSPOSED,
-            arg = self.visit(node.value),
-            loc=nodes.Location.from_ast_node(node)
+            return nodes.UnaryOpExpr(
+                op = nodes.UnaryOperator.TRANSPOSED,
+                arg = self.visit(node.value),
+                loc=nodes.Location.from_ast_node(node)
             )
         else: 
             raise GTScriptSyntaxError(f'Unknown attribute {node.attr = }')
