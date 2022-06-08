@@ -644,6 +644,8 @@ class DaCeIRBuilder(NodeTranslator):
 
         assert not isinstance(interval, dcir.IndexWithExtent)
         index_range = dcir.Range.from_axis_and_interval(axis, interval, stride=item.stride)
+        for sym in index_range.free_symbols:
+            symbol_collector.add_symbol(sym, common.DataType.INT32)
         symbol_collector.remove_symbol(index_range.var)
         return [
             dcir.DomainLoop(
