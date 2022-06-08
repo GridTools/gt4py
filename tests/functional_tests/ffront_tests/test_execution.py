@@ -29,6 +29,7 @@ from functional.ffront.fbuiltins import (
     float64,
     int32,
     neighbor_sum,
+    where,
 )
 from functional.iterator.embedded import (
     NeighborTableOffsetProvider,
@@ -452,3 +453,22 @@ def test_broadcast_shifted():
     simple_broadcast(a, out=out, offset_provider={"Joff": JDim})
 
     assert np.allclose(a.array()[:, np.newaxis], out)
+
+
+def test_conditional():
+    size = 10
+    mask = np_as_located_field(IDim)(np.zeros((size,), dtype=bool))
+    mask.array()[0 : (size // 2)] = True
+    a = np_as_located_field(IDim)(np.ones((size,)))
+    b = np_as_located_field(IDim)(2 * np.ones((size,)))
+    out = np_as_located_field(IDim)(np.zeros((size,)))
+
+    @field_operator(backend="roundtrip")
+    def simple_conditional(
+        mask: Field[[IDim], bool], a: Field[[IDim], float64], b: Field[[IDim], float64]
+    ) -> Field[[IDim], float64]:
+        return where(mask, a, b)
+
+    simple_conditional(mask, a, b, out=out, offset_provider={})
+
+    assert np.allclose(np.where(mask, a, b), out)

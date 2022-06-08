@@ -254,6 +254,11 @@ class FieldOperatorLowering(NodeTranslator):
             im.call_(self.visit(node.func, **kwargs))(*self.visit(node.args, **kwargs))
         )
 
+    def _visit_where(self, node: foast.Call, **kwargs) -> itir.FunCall:
+        mask = to_value(node.args[0])(self.visit(node.args[0], **kwargs))
+        left, right = (self.visit(arg, **kwargs) for arg in node.args[1:])
+        return im.call_("if_")(mask, left, right)
+
     def _visit_broadcast(self, node: foast.Call, **kwargs) -> itir.FunCall:
         # just lower broadcasted field as iterator IR does not care about broadcasting
         broadcasted_field = node.args[0]

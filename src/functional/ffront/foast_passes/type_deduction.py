@@ -349,6 +349,30 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             type=return_type,
         )
 
+    def _visit_where(self, node: foast.Call, **kwargs) -> foast.Call:
+        mask_type = cast(ct.FieldType, node.args[0].type)
+        left_type = cast(ct.FieldType, node.args[1].type)
+        right_type = cast(ct.FieldType, node.args[1].type)
+        if not type_info.is_logical(mask_type):
+            raise FieldOperatorTypeDeductionError.from_foast_node(
+                node,
+                msg=f"Incompatible argument to {node.func.id}. Expected "
+                f"a boolean as first argument.",
+            )
+        if left_type != right_type:
+            raise FieldOperatorTypeDeductionError.from_foast_node(
+                node,
+                msg=f"Incompatible argument to {node.func.id}. Expected arguments "
+                f"second and third argument to be of equal type.",
+            )
+        return foast.Call(
+            func=node.func,
+            args=node.args,
+            kwargs=node.kwargs,
+            type=left_type,
+            location=node.location,
+        )
+
     def _visit_broadcast(self, node: foast.Call, **kwargs) -> foast.Call:
         field_type = cast(ct.FieldType, node.args[0].type)
         broadcast_dims_expr = cast(foast.TupleExpr, node.args[1]).elts
