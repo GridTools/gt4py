@@ -965,6 +965,8 @@ class TestVectorGenAssignment(gt_testing.StencilTestSuite):
 
     def validation(field_in, field_out, *, domain, origin):
         field_out[...] = 2 * field_in
+
+
 class TestMatrixAssignment(gt_testing.StencilTestSuite):
     dtypes = {
         "field_in": np.float32,

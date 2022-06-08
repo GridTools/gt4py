@@ -1166,24 +1166,24 @@ class IRMaker(ast.NodeVisitor):
         return nodes.UnaryOperator.NOT
 
     def visit_BinOp(self, node: ast.BinOp) -> nodes.BinOpExpr:
-        op = self.visit(node.op)
-        rhs = self.visit(node.right)
-        lhs = self.visit(node.left)
-        result = nodes.BinOpExpr(op=op, lhs=lhs, rhs=rhs, loc=nodes.Location.from_ast_node(node))
-
-        return result
+        return nodes.BinOpExpr(
+            op = self.visit(node.op),
+            rhs = self.visit(node.right),
+            lhs = self.visit(node.left),
+            loc=nodes.Location.from_ast_node(node)
+        )
 
     def visit_Attribute(self, node: ast.Attribute) -> nodes.UnaryOperator:
+        # Matrix Transposed
         if node.attr == 'T':
-            return self.visit_Transposed(node)
+            return nodes.UnaryOperator(
+            op = nodes.UnaryOperator.TRANSPOSED,
+            arg = self.visit(node.value),
+            loc=nodes.Location.from_ast_node(node)
+            )
         else: 
-            raise Exception(f'Unknown attribute {node.attr = }')
+            raise GTScriptSyntaxError(f'Unknown attribute {node.attr = }')
 
-    def visit_Transposed(self, node: ast.Attribute) -> nodes.UnaryOperator:
-        op = nodes.UnaryOperator.TRANSPOSED 
-        arg = self.visit(node.value)
-        result = nodes.UnaryOpExpr(op=op, arg=arg, loc=nodes.Location.from_ast_node(node))
-        return result
 
     def visit_Add(self, node: ast.Add) -> nodes.BinaryOperator:
         return nodes.BinaryOperator.ADD
@@ -2000,7 +2000,7 @@ class GTScriptParser(ast.NodeVisitor):
             parameters=[
                 parameter_decls[item.name] for item in api_signature if item.name in parameter_decls
             ],
-            computations=[init_computations] + computations if init_computations else computations,
+            computations=init_computations + computations if init_computations else computations,
             externals=self.resolved_externals,
             docstring=inspect.getdoc(self.definition) or "",
             loc=nodes.Location.from_ast_node(self.ast_root.body[0]),

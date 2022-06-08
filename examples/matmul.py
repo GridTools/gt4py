@@ -2,6 +2,7 @@ import numpy as np
 import gt4py as gt
 import gt4py.gtscript as gtscript
 import copy
+from gt4py.gtscript import Field
 
 # config stuff
 # backend = "gt:cpu_ifirst"
@@ -62,11 +63,6 @@ out_field = gt.storage.zeros(
 
 coeff = 2.0
 
-@gtscript.function
-def mult_coeff(vec_1, vec_2):
-    tmp: gtscript.Field[(np.float64, (2,))] =  0
-    return tmp
-
 
 @gtscript.stencil(backend=backend, **backend_opts)
 def test_stencil(
@@ -77,16 +73,19 @@ def test_stencil(
         # out: gtscript.Field[n_dtype]
         # vec_m: gtscript.Field[m_dtype]
 ):
+    # BUG: when using gtscript.Field instead of import Field 
     # tmp: gtscript.Field[(np.float64, (2,))] =  0
+    tmp: Field[(np.float64, (4,))] =  2
     with computation(PARALLEL), interval(...):
-        vec_n = matrix @ vec_m
+        vec_n = 2 * tmp
         
 
 test_stencil(matrix, n_field, m_field)
 # print(f'{coeff = }\n{n_field = }\n{m_field = }\n{matrix = }\n')
+print(f'{n_field = }\n')
 tmp = np.einsum('ijklm, ijkm -> ijkl', matrix, m_field)
-np.testing.assert_allclose(np.asarray(n_field), tmp, rtol=1e-5, atol=1e-8)
-print(f'{m_field =}')
-print(f'{tmp = }')
+# np.testing.assert_allclose(np.asarray(n_field), tmp, rtol=1e-5, atol=1e-8)
+# print(f'{m_field =}')
+# print(f'{tmp = }')
 
 

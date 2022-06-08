@@ -90,15 +90,12 @@ class UnVectorisation(IRNodeVisitor):
     def apply(cls, root, **kwargs):
         return cls().visit(root, **kwargs)
 
-    def visit_StencilDefinition(self, node: StencilDefinition, fields_decls) -> gtir.Stencil:
-        field_params = {f.name: self.visit(f) for f in node.api_fields}
-        scalar_params = {p.name: self.visit(p) for p in node.parameters}
-
+    def visit_StencilDefinition(self, node: StencilDefinition, fields_decls: Dict[str, FieldDecl]) -> gtir.Stencil:
         # Vectorization of operations
         for c in node.computations:
             if c.body.stmts:
                 # don't modify temp preprocessing computations
-                if type(c.body.stmts[0]) == FieldDecl and type(c.body.stmts[1].value) != BinOpExpr:
+                if isinstance(c.body.stmts[0], FieldDecl) and not isinstance(c.body.stmts[1].value, BinOpExpr):
                     continue
                 new_stmts = []
                 for stmt in c.body.stmts:
@@ -136,7 +133,7 @@ class UnVectorisation(IRNodeVisitor):
             loc=location_to_source_location(node.loc),
         )
 
-    def visit_Assign(self, node: Assign, params) -> gtir.ParAssignStmt:
+    def visit_Assign(self, node: Assign, params: Dict[str, FieldDecl]) -> gtir.ParAssignStmt:
         assert isinstance(node.target, FieldRef) or isinstance(node.target, VarRef)
         target_dims = params[node.target.name].data_dims
         if len(target_dims) == 1:
@@ -164,7 +161,7 @@ class UnRoller(IRNodeVisitor):
     def apply(cls, root, **kwargs):
         return cls().visit(root, **kwargs)
 
-    def visit_FieldRef(self, node: FieldRef, params):
+    def visit_FieldRef(self, node: FieldRef, params: Dict[str, FieldDecl]):
         name = node.name 
         if params[name].data_dims:
             field_list = []
@@ -194,10 +191,10 @@ class UnRoller(IRNodeVisitor):
 
         return field_list
 
-    def add_node(self, lhs_node, rhs_node, binary_op: BinaryOperator, loc: Location):
+    def add_node(self, lhs_node: Expr, rhs_node: Expr, binary_op: BinaryOperator, loc: Location):
         return BinOpExpr(op=binary_op, lhs=lhs_node, rhs=rhs_node, loc=loc)
 
-    def visit_UnaryOpExpr(self, node: UnaryOpExpr, params):
+    def visit_UnaryOpExpr(self, node: UnaryOpExpr, params: Dict[str, FieldDecl]):
         # assert node.op == UnaryOperator.TRANSPOSED, f'Unsupported unary operator {node.op}'
         if node.op == UnaryOperator.TRANSPOSED:
             node = self.visit(node.arg, params=params)
@@ -208,8 +205,7 @@ class UnRoller(IRNodeVisitor):
         else:
             return node
 
-    def visit_BinOpExpr(self, node: BinOpExpr, params):
-
+    def visit_BinOpExpr(self, node: BinOpExpr, params: Dict[str, FieldDecl]):
         loc = node.loc
         lhs_list = self.visit(node.lhs, params=params)
         rhs_list = self.visit(node.rhs, params=params)
@@ -226,16 +222,16 @@ class UnRoller(IRNodeVisitor):
         
         else:
             # both vectors
-            if type(lhs_list) == list and type(rhs_list) == list:
+            if isinstance(lhs_list, list) and isinstance(rhs_list, list):
                 if len(lhs_list) == len(rhs_list):
                     for lhs, rhs in zip(lhs_list, rhs_list):
                         bin_op_list.append(self.add_node(lhs, rhs, node.op, node.loc))
             # scalar and vector
-            elif type(rhs_list) == list:
+            elif isinstance(rhs_list, list):
                 lhs = lhs_list
                 for rhs in rhs_list:
                     bin_op_list.append(self.add_node(lhs, rhs, node.op, node.loc))
-            elif type(lhs_list) == list:
+            elif isinstance(lhs_list, list):
                 rhs = rhs_list
                 for lhs in lhs_list:
                     bin_op_list.append(self.add_node(lhs, rhs, node.op, node.loc))
@@ -247,7 +243,7 @@ class UnRoller(IRNodeVisitor):
 
     def visit_VarRef(self, node: VarRef, **kwargs):
         return node
-    def visit_ScalarLiteral(self, node: VarRef, **kwargs):
+    def visit_ScalarLiteral(self, node: ScalarLiteral, **kwargs):
         return node
 
 
