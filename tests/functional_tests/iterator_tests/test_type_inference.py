@@ -5,12 +5,12 @@ def test_renamer():
     r = ti._Renamer()
     actual = [
         (
-            ti._Box(value=ti.Val(kind=ti.Value(), dtype=ti.Var(idx=0), size=ti.Var(idx=1))),
-            ti._Box(value=ti.Var(idx=0)),
+            ti._Box(value=ti.Val(kind=ti.Value(), dtype=ti.TypeVar(idx=0), size=ti.TypeVar(idx=1))),
+            ti._Box(value=ti.TypeVar(idx=0)),
         )
     ]
-    src = ti.Var(idx=0)
-    dst = ti.Var(idx=1)
+    src = ti.TypeVar(idx=0)
+    dst = ti.TypeVar(idx=1)
     for s, t in actual:
         r.register(s)
         r.register(t)
@@ -19,8 +19,8 @@ def test_renamer():
     r.rename(src, dst)
     expected = [
         (
-            ti._Box(value=ti.Val(kind=ti.Value(), dtype=ti.Var(idx=1), size=ti.Var(idx=1))),
-            ti._Box(value=ti.Var(idx=1)),
+            ti._Box(value=ti.Val(kind=ti.Value(), dtype=ti.TypeVar(idx=1), size=ti.TypeVar(idx=1))),
+            ti._Box(value=ti.TypeVar(idx=1)),
         )
     ]
     assert actual == expected
@@ -28,7 +28,7 @@ def test_renamer():
 
 def test_sym_ref():
     testee = ir.SymRef(id="x")
-    expected = ti.Var(idx=0)
+    expected = ti.TypeVar(idx=0)
     inferred = ti.infer(testee)
     assert inferred == expected
     assert ti.pformat(inferred) == "T₀"
@@ -36,7 +36,7 @@ def test_sym_ref():
 
 def test_bool_literal():
     testee = ir.Literal(value="False", type="bool")
-    expected = ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="bool"), size=ti.Var(idx=0))
+    expected = ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="bool"), size=ti.TypeVar(idx=0))
     inferred = ti.infer(testee)
     assert inferred == expected
     assert ti.pformat(inferred) == "bool⁰"
@@ -44,7 +44,7 @@ def test_bool_literal():
 
 def test_int_literal():
     testee = ir.Literal(value="3", type="int")
-    expected = ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="int"), size=ti.Var(idx=0))
+    expected = ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="int"), size=ti.TypeVar(idx=0))
     inferred = ti.infer(testee)
     assert inferred == expected
     assert ti.pformat(inferred) == "int⁰"
@@ -52,7 +52,7 @@ def test_int_literal():
 
 def test_float_literal():
     testee = ir.Literal(value="3.0", type="float")
-    expected = ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="float"), size=ti.Var(idx=0))
+    expected = ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="float"), size=ti.TypeVar(idx=0))
     inferred = ti.infer(testee)
     assert inferred == expected
     assert ti.pformat(inferred) == "float⁰"
@@ -60,9 +60,11 @@ def test_float_literal():
 
 def test_deref():
     testee = ir.SymRef(id="deref")
-    expected = ti.Fun(
-        args=ti.Tuple(elems=(ti.Val(kind=ti.Iterator(), dtype=ti.Var(idx=0), size=ti.Var(idx=1)),)),
-        ret=ti.Val(kind=ti.Value(), dtype=ti.Var(idx=0), size=ti.Var(idx=1)),
+    expected = ti.FunctionType(
+        args=ti.Tuple(
+            elems=(ti.Val(kind=ti.Iterator(), dtype=ti.TypeVar(idx=0), size=ti.TypeVar(idx=1)),)
+        ),
+        ret=ti.Val(kind=ti.Value(), dtype=ti.TypeVar(idx=0), size=ti.TypeVar(idx=1)),
     )
     inferred = ti.infer(testee)
     assert inferred == expected
@@ -71,7 +73,7 @@ def test_deref():
 
 def test_deref_call():
     testee = ir.FunCall(fun=ir.SymRef(id="deref"), args=[ir.SymRef(id="x")])
-    expected = ti.Val(kind=ti.Value(), dtype=ti.Var(idx=0), size=ti.Var(idx=1))
+    expected = ti.Val(kind=ti.Value(), dtype=ti.TypeVar(idx=0), size=ti.TypeVar(idx=1))
     inferred = ti.infer(testee)
     assert inferred == expected
     assert ti.pformat(inferred) == "T₀¹"
@@ -79,7 +81,7 @@ def test_deref_call():
 
 def test_lambda():
     testee = ir.Lambda(params=[ir.Sym(id="x")], expr=ir.SymRef(id="x"))
-    expected = ti.Fun(args=ti.Tuple(elems=(ti.Var(idx=0),)), ret=ti.Var(idx=0))
+    expected = ti.FunctionType(args=ti.Tuple(elems=(ti.TypeVar(idx=0),)), ret=ti.TypeVar(idx=0))
     inferred = ti.infer(testee)
     assert inferred == expected
     assert ti.pformat(inferred) == "(T₀) → T₀"
@@ -87,8 +89,8 @@ def test_lambda():
 
 def test_plus():
     testee = ir.SymRef(id="plus")
-    t = ti.Val(kind=ti.Value(), dtype=ti.Var(idx=0), size=ti.Var(idx=1))
-    expected = ti.Fun(args=ti.Tuple(elems=(t, t)), ret=t)
+    t = ti.Val(kind=ti.Value(), dtype=ti.TypeVar(idx=0), size=ti.TypeVar(idx=1))
+    expected = ti.FunctionType(args=ti.Tuple(elems=(t, t)), ret=t)
     inferred = ti.infer(testee)
     assert inferred == expected
     assert ti.pformat(inferred) == "(T₀¹, T₀¹) → T₀¹"
@@ -96,10 +98,10 @@ def test_plus():
 
 def test_eq():
     testee = ir.SymRef(id="eq")
-    t = ti.Val(kind=ti.Value(), dtype=ti.Var(idx=0), size=ti.Var(idx=1))
-    expected = ti.Fun(
+    t = ti.Val(kind=ti.Value(), dtype=ti.TypeVar(idx=0), size=ti.TypeVar(idx=1))
+    expected = ti.FunctionType(
         args=ti.Tuple(elems=(t, t)),
-        ret=ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="bool"), size=ti.Var(idx=1)),
+        ret=ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="bool"), size=ti.TypeVar(idx=1)),
     )
     inferred = ti.infer(testee)
     assert inferred == expected
@@ -108,9 +110,9 @@ def test_eq():
 
 def test_if():
     testee = ir.SymRef(id="if_")
-    c = ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="bool"), size=ti.Var(idx=0))
-    t = ti.Val(kind=ti.Value(), dtype=ti.Var(idx=1), size=ti.Var(idx=0))
-    expected = ti.Fun(args=ti.Tuple(elems=(c, t, t)), ret=t)
+    c = ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="bool"), size=ti.TypeVar(idx=0))
+    t = ti.Val(kind=ti.Value(), dtype=ti.TypeVar(idx=1), size=ti.TypeVar(idx=0))
+    expected = ti.FunctionType(args=ti.Tuple(elems=(c, t, t)), ret=t)
     inferred = ti.infer(testee)
     assert inferred == expected
     assert ti.pformat(inferred) == "(bool⁰, T₁⁰, T₁⁰) → T₁⁰"
@@ -118,8 +120,8 @@ def test_if():
 
 def test_not():
     testee = ir.SymRef(id="not_")
-    t = ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="bool"), size=ti.Var(idx=0))
-    expected = ti.Fun(args=ti.Tuple(elems=(t,)), ret=t)
+    t = ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="bool"), size=ti.TypeVar(idx=0))
+    expected = ti.FunctionType(args=ti.Tuple(elems=(t,)), ret=t)
     inferred = ti.infer(testee)
     assert inferred == expected
     assert ti.pformat(inferred) == "(bool⁰) → bool⁰"
@@ -127,8 +129,8 @@ def test_not():
 
 def test_and():
     testee = ir.SymRef(id="and_")
-    t = ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="bool"), size=ti.Var(idx=0))
-    expected = ti.Fun(args=ti.Tuple(elems=(t, t)), ret=t)
+    t = ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="bool"), size=ti.TypeVar(idx=0))
+    expected = ti.FunctionType(args=ti.Tuple(elems=(t, t)), ret=t)
     inferred = ti.infer(testee)
     assert inferred == expected
     assert ti.pformat(inferred) == "(bool⁰, bool⁰) → bool⁰"
@@ -136,18 +138,20 @@ def test_and():
 
 def test_lift():
     testee = ir.SymRef(id="lift")
-    expected = ti.Fun(
+    expected = ti.FunctionType(
         args=ti.Tuple(
             elems=(
-                ti.Fun(
-                    args=ti.ValTuple(kind=ti.Iterator(), dtypes=ti.Var(idx=0), size=ti.Var(idx=1)),
-                    ret=ti.Val(kind=ti.Value(), dtype=ti.Var(idx=2), size=ti.Var(idx=1)),
+                ti.FunctionType(
+                    args=ti.ValTuple(
+                        kind=ti.Iterator(), dtypes=ti.TypeVar(idx=0), size=ti.TypeVar(idx=1)
+                    ),
+                    ret=ti.Val(kind=ti.Value(), dtype=ti.TypeVar(idx=2), size=ti.TypeVar(idx=1)),
                 ),
             )
         ),
-        ret=ti.Fun(
-            args=ti.ValTuple(kind=ti.Iterator(), dtypes=ti.Var(idx=0), size=ti.Var(idx=1)),
-            ret=ti.Val(kind=ti.Iterator(), dtype=ti.Var(idx=2), size=ti.Var(idx=1)),
+        ret=ti.FunctionType(
+            args=ti.ValTuple(kind=ti.Iterator(), dtypes=ti.TypeVar(idx=0), size=ti.TypeVar(idx=1)),
+            ret=ti.Val(kind=ti.Iterator(), dtype=ti.TypeVar(idx=2), size=ti.TypeVar(idx=1)),
         ),
     )
     inferred = ti.infer(testee)
@@ -157,9 +161,11 @@ def test_lift():
 
 def test_lift_application():
     testee = ir.FunCall(fun=ir.SymRef(id="lift"), args=[ir.SymRef(id="deref")])
-    expected = ti.Fun(
-        args=ti.Tuple(elems=(ti.Val(kind=ti.Iterator(), dtype=ti.Var(idx=0), size=ti.Var(idx=1)),)),
-        ret=ti.Val(kind=ti.Iterator(), dtype=ti.Var(idx=0), size=ti.Var(idx=1)),
+    expected = ti.FunctionType(
+        args=ti.Tuple(
+            elems=(ti.Val(kind=ti.Iterator(), dtype=ti.TypeVar(idx=0), size=ti.TypeVar(idx=1)),)
+        ),
+        ret=ti.Val(kind=ti.Iterator(), dtype=ti.TypeVar(idx=0), size=ti.TypeVar(idx=1)),
     )
     inferred = ti.infer(testee)
     assert inferred == expected
@@ -171,7 +177,7 @@ def test_lifted_call():
         fun=ir.FunCall(fun=ir.SymRef(id="lift"), args=[ir.SymRef(id="deref")]),
         args=[ir.SymRef(id="x")],
     )
-    expected = ti.Val(kind=ti.Iterator(), dtype=ti.Var(idx=0), size=ti.Var(idx=1))
+    expected = ti.Val(kind=ti.Iterator(), dtype=ti.TypeVar(idx=0), size=ti.TypeVar(idx=1))
     inferred = ti.infer(testee)
     assert inferred == expected
     assert ti.pformat(inferred) == "It[T₀¹]"
@@ -189,9 +195,9 @@ def test_make_tuple():
     expected = ti.Val(
         kind=ti.Value(),
         dtype=ti.Tuple(
-            elems=(ti.Primitive(name="bool"), ti.Primitive(name="float"), ti.Var(idx=0))
+            elems=(ti.Primitive(name="bool"), ti.Primitive(name="float"), ti.TypeVar(idx=0))
         ),
-        size=ti.Var(idx=1),
+        size=ti.TypeVar(idx=1),
     )
     inferred = ti.infer(testee)
     assert inferred == expected
@@ -212,7 +218,7 @@ def test_tuple_get():
             ),
         ],
     )
-    expected = ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="float"), size=ti.Var(idx=0))
+    expected = ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="float"), size=ti.TypeVar(idx=0))
     inferred = ti.infer(testee)
     assert inferred == expected
     assert ti.pformat(inferred) == "float⁰"
@@ -226,19 +232,19 @@ def test_tuple_get_in_lambda():
             args=[ir.Literal(value="1", type="int"), ir.SymRef(id="x")],
         ),
     )
-    expected = ti.Fun(
+    expected = ti.FunctionType(
         args=ti.Tuple(
             elems=(
                 ti.Val(
-                    kind=ti.Var(idx=0),
+                    kind=ti.TypeVar(idx=0),
                     dtype=ti.PartialTupleVar(
-                        idx=2, elem_indices=(1,), elem_values=(ti.Var(idx=1),)
+                        idx=2, elem_indices=(1,), elem_values=(ti.TypeVar(idx=1),)
                     ),
-                    size=ti.Var(idx=3),
+                    size=ti.TypeVar(idx=3),
                 ),
             )
         ),
-        ret=ti.Val(kind=ti.Var(idx=0), dtype=ti.Var(idx=1), size=ti.Var(idx=3)),
+        ret=ti.Val(kind=ti.TypeVar(idx=0), dtype=ti.TypeVar(idx=1), size=ti.TypeVar(idx=3)),
     )
     inferred = ti.infer(testee)
     assert inferred == expected
@@ -261,14 +267,14 @@ def test_reduce():
     testee = ir.FunCall(
         fun=ir.SymRef(id="reduce"), args=[reduction_f, ir.Literal(value="0", type="int")]
     )
-    expected = ti.Fun(
+    expected = ti.FunctionType(
         args=ti.Tuple(
             elems=(
-                ti.Val(kind=ti.Iterator(), dtype=ti.Primitive(name="int"), size=ti.Var(idx=0)),
-                ti.Val(kind=ti.Iterator(), dtype=ti.Primitive(name="int"), size=ti.Var(idx=0)),
+                ti.Val(kind=ti.Iterator(), dtype=ti.Primitive(name="int"), size=ti.TypeVar(idx=0)),
+                ti.Val(kind=ti.Iterator(), dtype=ti.Primitive(name="int"), size=ti.TypeVar(idx=0)),
             )
         ),
-        ret=ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="int"), size=ti.Var(idx=0)),
+        ret=ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="int"), size=ti.TypeVar(idx=0)),
     )
     inferred = ti.infer(testee)
     assert inferred == expected
@@ -296,7 +302,7 @@ def test_scan():
         fun=ir.SymRef(id="scan"),
         args=[scan_f, ir.Literal(value="True", type="bool"), ir.Literal(value="0", type="int")],
     )
-    expected = ti.Fun(
+    expected = ti.FunctionType(
         args=ti.Tuple(
             elems=(
                 ti.Val(kind=ti.Iterator(), dtype=ti.Primitive(name="int"), size=ti.Column()),
@@ -314,9 +320,11 @@ def test_shift():
     testee = ir.FunCall(
         fun=ir.SymRef(id="shift"), args=[ir.SymRef(id="i"), ir.Literal(value="1", type="int")]
     )
-    expected = ti.Fun(
-        args=ti.Tuple(elems=(ti.Val(kind=ti.Iterator(), dtype=ti.Var(idx=0), size=ti.Var(idx=1)),)),
-        ret=ti.Val(kind=ti.Iterator(), dtype=ti.Var(idx=0), size=ti.Var(idx=1)),
+    expected = ti.FunctionType(
+        args=ti.Tuple(
+            elems=(ti.Val(kind=ti.Iterator(), dtype=ti.TypeVar(idx=0), size=ti.TypeVar(idx=1)),)
+        ),
+        ret=ti.Val(kind=ti.Iterator(), dtype=ti.TypeVar(idx=0), size=ti.TypeVar(idx=1)),
     )
     inferred = ti.infer(testee)
     assert inferred == expected
@@ -325,8 +333,9 @@ def test_shift():
 
 def test_function_definition():
     testee = ir.FunctionDefinition(id="f", params=[ir.Sym(id="x")], expr=ir.SymRef(id="x"))
-    expected = ti.FunDef(
-        name="f", fun=ti.Fun(args=ti.Tuple(elems=(ti.Var(idx=0),)), ret=ti.Var(idx=0))
+    expected = ti.FunctionDefinitionType(
+        name="f",
+        fun=ti.FunctionType(args=ti.Tuple(elems=(ti.TypeVar(idx=0),)), ret=ti.TypeVar(idx=0)),
     )
     inferred = ti.infer(testee)
     assert inferred == expected
@@ -372,8 +381,10 @@ def test_stencil_closure():
         inputs=[ir.SymRef(id="inp")],
     )
     expected = ti.Closure(
-        output=ti.Val(kind=ti.Iterator(), dtype=ti.Var(idx=0), size=ti.Column()),
-        inputs=ti.Tuple(elems=(ti.Val(kind=ti.Iterator(), dtype=ti.Var(idx=0), size=ti.Column()),)),
+        output=ti.Val(kind=ti.Iterator(), dtype=ti.TypeVar(idx=0), size=ti.Column()),
+        inputs=ti.Tuple(
+            elems=(ti.Val(kind=ti.Iterator(), dtype=ti.TypeVar(idx=0), size=ti.Column()),)
+        ),
     )
     inferred = ti.infer(testee)
     assert inferred == expected
@@ -408,17 +419,17 @@ def test_fencil_definition():
             ),
         ],
     )
-    expected = ti.Fencil(
+    expected = ti.FencilDefinitionType(
         name="f",
         fundefs=(),
         params=(
             ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="int"), size=ti.Scalar()),
             ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="int"), size=ti.Scalar()),
             ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="int"), size=ti.Scalar()),
-            ti.Val(kind=ti.Iterator(), dtype=ti.Var(idx=0), size=ti.Column()),
-            ti.Val(kind=ti.Iterator(), dtype=ti.Var(idx=0), size=ti.Column()),
-            ti.Val(kind=ti.Iterator(), dtype=ti.Var(idx=1), size=ti.Column()),
-            ti.Val(kind=ti.Iterator(), dtype=ti.Var(idx=1), size=ti.Column()),
+            ti.Val(kind=ti.Iterator(), dtype=ti.TypeVar(idx=0), size=ti.Column()),
+            ti.Val(kind=ti.Iterator(), dtype=ti.TypeVar(idx=0), size=ti.Column()),
+            ti.Val(kind=ti.Iterator(), dtype=ti.TypeVar(idx=1), size=ti.Column()),
+            ti.Val(kind=ti.Iterator(), dtype=ti.TypeVar(idx=1), size=ti.Column()),
         ),
     )
     inferred = ti.infer(testee)
@@ -476,19 +487,26 @@ def test_fencil_definition_with_function_definitions():
             ),
         ],
     )
-    expected = ti.Fencil(
+    expected = ti.FencilDefinitionType(
         name="foo",
         fundefs=(
-            ti.FunDef(
-                name="f", fun=ti.Fun(args=ti.Tuple(elems=(ti.Var(idx=0),)), ret=ti.Var(idx=0))
+            ti.FunctionDefinitionType(
+                name="f",
+                fun=ti.FunctionType(
+                    args=ti.Tuple(elems=(ti.TypeVar(idx=0),)), ret=ti.TypeVar(idx=0)
+                ),
             ),
-            ti.FunDef(
+            ti.FunctionDefinitionType(
                 name="g",
-                fun=ti.Fun(
+                fun=ti.FunctionType(
                     args=ti.Tuple(
-                        elems=(ti.Val(kind=ti.Iterator(), dtype=ti.Var(idx=1), size=ti.Var(idx=2)),)
+                        elems=(
+                            ti.Val(
+                                kind=ti.Iterator(), dtype=ti.TypeVar(idx=1), size=ti.TypeVar(idx=2)
+                            ),
+                        )
                     ),
-                    ret=ti.Val(kind=ti.Value(), dtype=ti.Var(idx=1), size=ti.Var(idx=2)),
+                    ret=ti.Val(kind=ti.Value(), dtype=ti.TypeVar(idx=1), size=ti.TypeVar(idx=2)),
                 ),
             ),
         ),
@@ -496,12 +514,12 @@ def test_fencil_definition_with_function_definitions():
             ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="int"), size=ti.Scalar()),
             ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="int"), size=ti.Scalar()),
             ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="int"), size=ti.Scalar()),
-            ti.Val(kind=ti.Iterator(), dtype=ti.Var(idx=3), size=ti.Column()),
-            ti.Val(kind=ti.Iterator(), dtype=ti.Var(idx=3), size=ti.Column()),
-            ti.Val(kind=ti.Iterator(), dtype=ti.Var(idx=4), size=ti.Column()),
-            ti.Val(kind=ti.Iterator(), dtype=ti.Var(idx=4), size=ti.Column()),
-            ti.Val(kind=ti.Iterator(), dtype=ti.Var(idx=5), size=ti.Column()),
-            ti.Val(kind=ti.Iterator(), dtype=ti.Var(idx=5), size=ti.Column()),
+            ti.Val(kind=ti.Iterator(), dtype=ti.TypeVar(idx=3), size=ti.Column()),
+            ti.Val(kind=ti.Iterator(), dtype=ti.TypeVar(idx=3), size=ti.Column()),
+            ti.Val(kind=ti.Iterator(), dtype=ti.TypeVar(idx=4), size=ti.Column()),
+            ti.Val(kind=ti.Iterator(), dtype=ti.TypeVar(idx=4), size=ti.Column()),
+            ti.Val(kind=ti.Iterator(), dtype=ti.TypeVar(idx=5), size=ti.Column()),
+            ti.Val(kind=ti.Iterator(), dtype=ti.TypeVar(idx=5), size=ti.Column()),
         ),
     )
     inferred = ti.infer(testee)
@@ -513,7 +531,7 @@ def test_fencil_definition_with_function_definitions():
 
 
 def test_pformat():
-    vs = [ti.Var(idx=i) for i in range(4)]
+    vs = [ti.TypeVar(idx=i) for i in range(4)]
     assert ti.pformat(vs[0]) == "T₀"
     assert ti.pformat(ti.Tuple(elems=tuple(vs[:2]))) == "(T₀, T₁)"
     assert (
@@ -521,7 +539,7 @@ def test_pformat():
         == "(_, T₀, _, T₁, …)₀"
     )
     assert ti.pformat(ti.PrefixTuple(prefix=vs[0], others=vs[1])) == "T₀:T₁"
-    assert ti.pformat(ti.Fun(args=vs[0], ret=vs[1])) == "T₀ → T₁"
+    assert ti.pformat(ti.FunctionType(args=vs[0], ret=vs[1])) == "T₀ → T₁"
     assert ti.pformat(ti.Val(kind=vs[0], dtype=vs[1], size=vs[2])) == "ItOrVal₀[T₁²]"
     assert ti.pformat(ti.Val(kind=ti.Value(), dtype=vs[0], size=vs[1])) == "T₀¹"
     assert ti.pformat(ti.Val(kind=ti.Iterator(), dtype=vs[0], size=vs[1])) == "It[T₀¹]"
@@ -534,5 +552,8 @@ def test_pformat():
     )
     assert ti.pformat(ti.Primitive(name="foo")) == "foo"
     assert ti.pformat(ti.Closure(output=vs[0], inputs=vs[1])) == "T₁ ⇒ T₀"
-    assert ti.pformat(ti.FunDef(name="f", fun=ti.Fun(args=vs[0], ret=vs[1]))) == "f :: T₀ → T₁"
-    assert ti.pformat(ti.Fencil(name="f", fundefs=(), params=())) == "{f()}"
+    assert (
+        ti.pformat(ti.FunctionDefinitionType(name="f", fun=ti.FunctionType(args=vs[0], ret=vs[1])))
+        == "f :: T₀ → T₁"
+    )
+    assert ti.pformat(ti.FencilDefinitionType(name="f", fundefs=(), params=())) == "{f()}"
