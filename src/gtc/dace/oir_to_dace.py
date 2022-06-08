@@ -13,7 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from dataclasses import dataclass
-from typing import Dict, Optional
+from typing import Dict
 
 import dace
 import dace.properties
@@ -29,17 +29,17 @@ from gtc.passes.oir_optimizations.utils import AccessCollector, compute_horizont
 
 
 class OirSDFGBuilder(eve.NodeVisitor):
-    """Create a top-level SDFG with a node for each VericalLoop."""
-
     @dataclass
     class SDFGContext:
         sdfg: dace.SDFG
+        last_state: dace.SDFGState
         decls: Dict[str, oir.Decl]
         block_extents: Dict[int, Extent]
         access_infos: Dict[str, dcir.FieldAccessInfo]
 
         def __init__(self, stencil: oir.Stencil):
             self.sdfg = dace.SDFG(stencil.name)
+            self.last_state = self.sdfg.add_state(is_start_state=True)
             self.decls = {decl.name: decl for decl in stencil.params + stencil.declarations}
             self.block_extents = compute_horizontal_block_extents(stencil)
 
@@ -58,7 +58,7 @@ class OirSDFGBuilder(eve.NodeVisitor):
                     axis.domain_dace_symbol()
                     for axis in dcir.Axis.dims_3d()
                     if self.decls[field].dimensions[axis.to_idx()]
-                ] + list(self.decls[field].data_dims)
+                ] + [d for d in self.decls[field].data_dims]
             return self.access_infos[field].shape + self.decls[field].data_dims
 
         def make_input_dace_subset(self, node, field):
@@ -74,7 +74,7 @@ class OirSDFGBuilder(eve.NodeVisitor):
 
             return self._make_dace_subset(local_access_info, field)
 
-        def make_output_dace_subset(self, node, field: str):
+        def make_output_dace_subset(self, node, field):
             local_access_info = compute_dcir_access_infos(
                 node,
                 collect_read=False,
@@ -87,20 +87,15 @@ class OirSDFGBuilder(eve.NodeVisitor):
 
             return self._make_dace_subset(local_access_info, field)
 
-        def _make_dace_subset(self, local_access_info, field) -> dace.subsets.Range:
+        def _make_dace_subset(self, local_access_info, field):
             global_access_info = self.access_infos[field]
             return make_dace_subset(
                 global_access_info, local_access_info, self.decls[field].data_dims
             )
 
-        @property
-        def last_state(self) -> Optional[dace.SDFGState]:
-            nodes = self.sdfg.states()
-            return nodes[-1] if nodes else None
-
     def visit_VerticalLoop(
         self, node: oir.VerticalLoop, *, ctx: "OirSDFGBuilder.SDFGContext", **kwargs
-    ) -> None:
+    ):
         declarations = {
             acc.name: ctx.decls[acc.name]
             for acc in node.iter_tree().if_isinstance(oir.FieldAccess, oir.ScalarAccess)
@@ -113,11 +108,9 @@ class OirSDFGBuilder(eve.NodeVisitor):
             oir_node=node,
         )
 
-        if ctx.last_state is not None:
-            state = ctx.sdfg.add_state()
-            ctx.sdfg.add_edge(ctx.last_state, state, dace.InterstateEdge())
-        else:
-            state = ctx.sdfg.add_state(is_start_state=True)
+        state = ctx.sdfg.add_state()
+        ctx.sdfg.add_edge(ctx.last_state, state, dace.InterstateEdge())
+        ctx.last_state = state
 
         state.add_node(library_node)
 
@@ -146,9 +139,13 @@ class OirSDFGBuilder(eve.NodeVisitor):
                 dace.Memlet(field, subset=subset),
             )
 
+        return
+
     def visit_Stencil(self, node: oir.Stencil, **kwargs):
 
-        ctx = OirSDFGBuilder.SDFGContext(stencil=node)
+        ctx = OirSDFGBuilder.SDFGContext(
+            stencil=node,
+        )
         for param in node.params:
             if isinstance(param, oir.FieldDecl):
                 dim_strs = [d for i, d in enumerate("IJK") if param.dimensions[i]] + [
