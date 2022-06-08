@@ -1,5 +1,5 @@
+import typing
 from collections.abc import Callable
-from typing import Any, ClassVar, Optional, TypeVar, cast
 
 import eve
 from eve.utils import noninstantiable
@@ -13,8 +13,8 @@ Based on the classical constraint-based two-pass type consisting of the followin
     2. Type unification
 """
 
-V = TypeVar("V", bound="Var")
-T = TypeVar("T", bound="DType")
+V = typing.TypeVar("V", bound="Var")
+T = typing.TypeVar("T", bound="DType")
 
 
 @noninstantiable
@@ -41,7 +41,7 @@ class Var(DType):
 
     idx: int
 
-    _counter: ClassVar[int] = 0
+    _counter: typing.ClassVar[int] = 0
 
     @staticmethod
     def fresh_index() -> int:
@@ -49,7 +49,7 @@ class Var(DType):
         return Var._counter
 
     @classmethod
-    def fresh(cls: type[V], **kwargs: Any) -> V:
+    def fresh(cls: type[V], **kwargs: typing.Any) -> V:
         """Create a type variable with a previously unused index."""
         return cls(idx=cls.fresh_index(), **kwargs)
 
@@ -208,7 +208,8 @@ class _VarReindexer(eve.NodeTranslator):
         node = self.generic_visit(node, index_map=index_map)
         new_index = index_map.setdefault(node.idx, self.indexer(index_map))
         new_values = {
-            cast(str, k): (new_index if k == "idx" else v) for k, v in node.iter_children_items()
+            typing.cast(str, k): (new_index if k == "idx" else v)
+            for k, v in node.iter_children_items()
         }
         return node.__class__(**new_values)
 
@@ -449,7 +450,7 @@ class _TypeInferrer(eve.NodeTranslator):
         for f in node.function_definitions:
             c = set[tuple[DType, DType]]()
             ftype: FunDef = self.visit(f, constraints=c, symtypes=symtypes | fmap)
-            ftype = cast(FunDef, unify(ftype, c))
+            ftype = typing.cast(FunDef, unify(ftype, c))
             ftypes.append(ftype)
             fmap[ftype.name] = LetPolymorphic(dtype=ftype.fun)
 
@@ -498,7 +499,7 @@ class _Renamer:
     """
 
     def __init__(self) -> None:
-        self._parents = dict[DType, list[tuple[DType, str, Optional[int]]]]()
+        self._parents = dict[DType, list[tuple[DType, str, typing.Optional[int]]]]()
 
     def register(self, dtype: DType) -> None:
         """Register a type for possible future renaming.
@@ -509,12 +510,16 @@ class _Renamer:
         def collect_parents(node: DType) -> None:
             for field, child in node.iter_children_items():
                 if isinstance(child, DType):
-                    self._parents.setdefault(child, []).append((node, cast(str, field), None))
+                    self._parents.setdefault(child, []).append(
+                        (node, typing.cast(str, field), None)
+                    )
                     collect_parents(child)
                 elif isinstance(child, tuple):
                     for i, c in enumerate(child):
                         if isinstance(c, DType):
-                            self._parents.setdefault(c, []).append((node, cast(str, field), i))
+                            self._parents.setdefault(c, []).append(
+                                (node, typing.cast(str, field), i)
+                            )
                             collect_parents(c)
                 else:
                     assert isinstance(child, (int, str))
@@ -546,7 +551,7 @@ class _Renamer:
         return Tuple(elems=(node.prefix,) + replacement.elems)
 
     def _update_node(
-        self, node: DType, field: str, index: Optional[int], replacement: DType
+        self, node: DType, field: str, index: typing.Optional[int], replacement: DType
     ) -> None:
         """Replace a field of a node by some other value.
 
@@ -797,7 +802,7 @@ def reindex_vars(dtype: T) -> T:
     return _VarReindexer(indexer).visit(dtype, index_map=index_map)
 
 
-def infer(expr: ir.Node, symtypes: Optional[dict[str, DType]] = None) -> DType:
+def infer(expr: ir.Node, symtypes: typing.Optional[dict[str, DType]] = None) -> DType:
     """Infer the type of the given iterator IR expression."""
     if symtypes is None:
         symtypes = dict()
