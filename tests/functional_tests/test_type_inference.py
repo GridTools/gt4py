@@ -41,9 +41,24 @@ def test_custom_type_inference():
     class Basic(ti.Type):
         name: str
 
+    class SpecialFun(ti.Type):
+        arg_and_ret: ti.Type
+
+        def __eq__(self, other):
+            if isinstance(other, Fun):
+                return self.arg_and_ret == other.arg == other.ret
+            return isinstance(other, SpecialFun) and self.arg_and_ret == other.arg_and_ret
+
+        def handle_constraint(self, other, add_constraint):
+            if isinstance(other, Fun):
+                add_constraint(self.arg_and_ret, other.arg)
+                add_constraint(self.arg_and_ret, other.ret)
+                return True
+            return False
+
     v = [ti.TypeVar(idx=i) for i in range(5)]
     constraints = {
-        (v[0], Fun(arg=v[1], ret=v[2])),
+        (v[0], SpecialFun(arg_and_ret=v[2])),
         (Fun(arg=v[0], ret=v[3]), v[4]),
         (Basic(name="int"), v[1]),
         (v[1], v[2]),

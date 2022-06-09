@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import typing
 from collections import abc
 
@@ -29,6 +31,17 @@ class Type(eve.Node, unsafe_hash=True):  # type: ignore[call-arg]
     renaming/node replacements and special care is taken to handle hash values that change due to
     those modifications.
     """
+
+    def handle_constraint(
+        self, other: Type, add_constraint: abc.Callable[[Type, Type], None]
+    ) -> bool:
+        """Implement special type-specific constraint handling for `self` ≡ `other`.
+
+        New constraints can be added using the provided callback (`add_constraint`). Should return
+        `True` if the provided constraint `self` ≡ `other` was handled, `False` otherwise. If the
+        handler detects an unsatisfiable constraint, raise a `TypeError`.
+        """
+        return False
 
 
 class TypeVar(Type):
@@ -249,6 +262,10 @@ class _Unifier:
             self._rename(s, t)
             return True
 
+        if s.handle_constraint(t, self._add_constraint):
+            # Use a custom constraint handler if available
+            return True
+
         if type(s) is type(t):
             assert s not in _free_variables(t) and t not in _free_variables(s)
             assert datamodels.fields(s).keys() == datamodels.fields(t).keys()
@@ -260,11 +277,6 @@ class _Unifier:
                     self._add_constraint(sv, tv)
                 else:
                     assert sv == tv
-            return True
-
-        if (custom_handler := getattr(s, "handle_constraint", None)) and custom_handler(
-            t, self._add_constraint
-        ):
             return True
 
         # Constraint handling failed
