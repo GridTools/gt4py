@@ -26,7 +26,7 @@ import functools
 import types
 import typing
 import warnings
-from typing import Callable, Iterable, Protocol
+from typing import Callable, Iterable, Protocol, Tuple
 
 from devtools import debug
 
@@ -91,6 +91,16 @@ def _collect_capture_vars(captured_vars: CapturedVars) -> CapturedVars:
                     nonlocals={**new_captured_vars.nonlocals, **vars_of_val.nonlocals},
                 )
     return new_captured_vars
+
+
+def is_capture_var_constant(captured_var: Tuple[str, Any]) -> bool:
+    return isinstance(captured_var[1], float)
+
+
+def split_captured_vars(captured_vars: dict[str, Any]) -> Tuple[dict[str, Any], dict[str, Any]]:
+    constants = dict(filter(lambda item: is_capture_var_constant(item), captured_vars.items()))
+    others = dict(filter(lambda item: not is_capture_var_constant(item), captured_vars.items()))
+    return constants, others
 
 
 @typing.runtime_checkable
@@ -419,6 +429,7 @@ class FieldOperator(GTCallable):
 
     foast_node: foast.FieldOperator
     captured_vars: CapturedVars
+    constant_captured_vars: CapturedVars
     externals: dict[str, Any]
     backend: Optional[FencilExecutor]  # note: backend is only used if directly called
     definition: Optional[types.FunctionType] = None
@@ -430,11 +441,25 @@ class FieldOperator(GTCallable):
         externals: Optional[dict] = None,
         backend: Optional[FencilExecutor] = None,
     ) -> "FieldOperator":
-        captured_vars = CapturedVars.from_function(definition)
         foast_node = FieldOperatorParser.apply_to_function(definition)
+
+        all_captured_vars = CapturedVars.from_function(definition)
+        const_globals, other_globals = split_captured_vars(all_captured_vars.globals)
+        const_nonlocals, other_nonlocals = split_captured_vars(all_captured_vars.nonlocals)
+
+        captured_vars = CapturedVars(
+            other_nonlocals,
+            other_globals,
+            all_captured_vars.annotations,
+            all_captured_vars.builtins,
+            all_captured_vars.unbound,
+        )
+        constant_captured_vars = CapturedVars(const_nonlocals, const_globals, dict(), set(), set())
+
         return cls(
             foast_node=foast_node,
             captured_vars=captured_vars,
+            constant_captured_vars=constant_captured_vars,
             externals=externals or {},
             backend=backend,
             definition=definition,
@@ -449,13 +474,17 @@ class FieldOperator(GTCallable):
         return FieldOperator(
             foast_node=self.foast_node,
             captured_vars=self.captured_vars,
+            constant_captured_vars=self.constant_captured_vars,
             externals=self.externals,
             backend=backend,
             definition=self.definition,  # type: ignore[arg-type]  # mypy wrongly deduces definition as method here
         )
 
     def __gt_itir__(self) -> itir.FunctionDefinition:
-        return typing.cast(itir.FunctionDefinition, FieldOperatorLowering.apply(self.foast_node))
+        lowered = FieldOperatorLowering.apply(
+            self.foast_node, constant_captured_vars=self.constant_captured_vars
+        )
+        return typing.cast(itir.FunctionDefinition, lowered)
 
     def __gt_captured_vars__(self) -> CapturedVars:
         return self.captured_vars

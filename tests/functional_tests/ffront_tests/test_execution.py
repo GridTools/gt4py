@@ -15,7 +15,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from collections import namedtuple
-from typing import TypeVar
+from typing import Final, TypeVar
 
 import numpy as np
 import pytest
@@ -582,3 +582,29 @@ def test_conditional_shifted():
     conditional_program(mask, a, b, out, offset_provider={"Ioff": IDim})
 
     assert np.allclose(np.where(mask, a, b)[1:], out.array()[:-1])
+
+
+CONSTANT: Final = 6.6743015e-11
+
+
+def test_constant_op():
+    Dim = Dimension("Dim")
+
+    @field_operator
+    def constant_op(field: Field[[Dim], np.float64]) -> Field[[Dim], np.float64]:
+        return CONSTANT * field
+
+    @program
+    def constant_program(field: Field[[Dim], np.float64], out: Field[[Dim], np.float64]):
+        constant_op(field, out=out)
+
+    data = np.ones(shape=(2,))
+    field = np_as_located_field(Dim)(data)
+
+    modified = np_as_located_field(Dim)(np.zeros_like(data))
+    constant_op(field, out=modified, offset_provider={})
+    assert np.allclose(np.asarray(modified), CONSTANT * data)
+
+    modified = np_as_located_field(Dim)(np.zeros_like(data))
+    constant_program(field, modified, offset_provider={})
+    assert np.allclose(np.asarray(modified), CONSTANT * data)

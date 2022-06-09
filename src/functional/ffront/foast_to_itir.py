@@ -28,6 +28,7 @@ from functional.ffront import (
     type_info,
 )
 from functional.ffront.fbuiltins import FUN_BUILTIN_NAMES, TYPE_BUILTIN_NAMES
+from functional.ffront.source_utils import CapturedVars
 from functional.iterator import ir as itir
 
 
@@ -132,6 +133,11 @@ class FieldOperatorLowering(NodeTranslator):
     [Sym(id=SymbolName('inp'))]
     """
 
+    constant_captured_vars: Optional[CapturedVars]
+
+    def __init__(self, constant_captured_vars: Optional[CapturedVars]):
+        self.constant_captured_vars = constant_captured_vars
+
     class lifted_lambda:
         def __init__(self, *params):
             self.params = params
@@ -140,16 +146,25 @@ class FieldOperatorLowering(NodeTranslator):
             return im.lift_(im.lambda__(*self.params)(expr))(*self.params)
 
     @classmethod
-    def apply(cls, node: foast.LocatedNode) -> itir.Expr:
-        return cls().visit(node)
+    def apply(
+        cls, node: foast.LocatedNode, constant_captured_vars: Optional[CapturedVars] = None
+    ) -> itir.Expr:
+        return cls(constant_captured_vars).visit(node)
 
     def visit_FieldOperator(self, node: foast.FieldOperator, **kwargs) -> itir.FunctionDefinition:
         symtable = node.annex.symtable
         params = self.visit(node.params, symtable=symtable)
+        function_body = self._visit_body(node.body, params=params, symtable=symtable)
+        if self.constant_captured_vars:
+            for captured_var in self.constant_captured_vars.globals.items():
+                symbol = itir.Sym(id=captured_var[0])
+                literal = itir.Literal(value=str(captured_var[1]), type=str(type(captured_var[1])))
+                function_body = im.let(symbol, literal)(function_body)
+
         return itir.FunctionDefinition(
             id=node.id,
             params=params,
-            expr=self._visit_body(node.body, params=params, symtable=symtable),
+            expr=function_body,
         )
 
     def _visit_body(
