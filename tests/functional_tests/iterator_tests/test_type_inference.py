@@ -552,10 +552,6 @@ def test_pformat():
     assert ti.pformat(ti.Val(kind=ti.Value(), dtype=vs[0], size=ti.Scalar())) == "T₀ˢ"
     assert ti.pformat(ti.Val(kind=ti.Value(), dtype=vs[0], size=ti.Column())) == "T₀ᶜ"
     assert ti.pformat(ti.ValTuple(kind=vs[0], dtypes=vs[1], size=vs[2])) == "(ItOrVal₀[T²], …)₁"
-    assert (
-        ti.pformat(ti.UniformValTupleVar(idx=0, kind=vs[1], dtype=vs[2], size=vs[3]))
-        == "(ItOrVal₁[T₂³] × n₀)"
-    )
     assert ti.pformat(ti.Primitive(name="foo")) == "foo"
     assert ti.pformat(ti.Closure(output=vs[0], inputs=vs[1])) == "T₁ ⇒ T₀"
     assert (

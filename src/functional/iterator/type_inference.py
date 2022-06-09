@@ -133,14 +133,6 @@ class ValTuple(Type):
         )
 
 
-class UniformValTupleVar(TypeVar):
-    """A tuple of `Val` with unknown length, but common `kind`, `size`, and `dtype` of all items."""
-
-    kind: Type = eve.field(default_factory=TypeVar.fresh)
-    dtype: Type = eve.field(default_factory=TypeVar.fresh)
-    size: Type = eve.field(default_factory=TypeVar.fresh)
-
-
 class Column(Type):
     """Marker for column-sized values/iterators."""
 
@@ -308,10 +300,6 @@ BUILTIN_TYPES: typing.Final[dict[str, Type]] = {
             ret=Val(kind=Value(), dtype=T0, size=Column()),
         ),
     ),
-    "domain": FunctionType(
-        args=UniformValTupleVar.fresh(kind=Value(), dtype=NAMED_RANGE_DTYPE, size=Scalar()),
-        ret=Val(kind=Value(), dtype=DOMAIN_DTYPE, size=Scalar()),
-    ),
     "named_range": FunctionType(
         args=Tuple.from_elems(
             Val(kind=Value(), dtype=AXIS_DTYPE, size=Scalar()),
@@ -338,7 +326,7 @@ class _TypeInferrer(eve.NodeTranslator):
             return res
         if node.id in BUILTIN_TYPES:
             return _freshen(BUILTIN_TYPES[node.id])
-        if node.id in ("make_tuple", "tuple_get", "shift"):
+        if node.id in ("make_tuple", "tuple_get", "shift", "domain"):
             raise TypeError(
                 f"Builtin '{node.id}' is only supported as applied/called function by the type checker"
             )
@@ -424,6 +412,15 @@ class _TypeInferrer(eve.NodeTranslator):
                     ),
                     ret=it,
                 )
+            if node.fun.id == "domain":
+                for arg in node.args:
+                    constraints.add(
+                        (
+                            Val(kind=Value(), dtype=NAMED_RANGE_DTYPE, size=Scalar()),
+                            self.visit(arg, constraints=constraints, symtypes=symtypes),
+                        )
+                    )
+                return Val(kind=Value(), dtype=DOMAIN_DTYPE, size=Scalar())
 
         fun = self.visit(node.fun, constraints=constraints, symtypes=symtypes)
         args = Tuple.from_elems(*self.visit(node.args, constraints=constraints, symtypes=symtypes))
@@ -705,15 +702,6 @@ class _Unifier:
             self._add_constraint(Tuple.from_elems(*s_elems), t)
             return True
 
-        if type(s) is UniformValTupleVar and type(t) is Tuple:
-            assert s not in _free_variables(t)
-            # Replace the LHS `UniformValTupleVar` by the RHS `Tuple` and make sure the types match
-            self._rename(s, t)
-            elem_dtype = Val(kind=s.kind, dtype=s.dtype, size=s.size)
-            for e in t.iter_elems():
-                self._add_constraint(e, elem_dtype)
-            return True
-
         # Constraint handling failed
         return False
 
@@ -833,15 +821,6 @@ class PrettyPrinter(eve.NodeTranslator):
                 self.visit(Val(kind=node.kind, dtype=dtype, size=node.size))
                 for dtype in node.dtypes.iter_elems()
             )
-            + ")"
-        )
-
-    def visit_UniformValTupleVar(self, node: UniformValTupleVar) -> str:
-        return (
-            "("
-            + self.visit(Val(kind=node.kind, dtype=node.dtype, size=node.size))
-            + " × n"
-            + self._subscript(node.idx)
             + ")"
         )
 
