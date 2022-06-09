@@ -1,31 +1,6 @@
 from functional.iterator import ir, type_inference as ti
 
 
-def test_renamer():
-    r = ti._Renamer()
-    actual = [
-        (
-            ti._Box(value=ti.Val(kind=ti.Value(), dtype=ti.TypeVar(idx=0), size=ti.TypeVar(idx=1))),
-            ti._Box(value=ti.TypeVar(idx=0)),
-        )
-    ]
-    src = ti.TypeVar(idx=0)
-    dst = ti.TypeVar(idx=1)
-    for s, t in actual:
-        r.register(s)
-        r.register(t)
-    r.register(src)
-    r.register(dst)
-    r.rename(src, dst)
-    expected = [
-        (
-            ti._Box(value=ti.Val(kind=ti.Value(), dtype=ti.TypeVar(idx=1), size=ti.TypeVar(idx=1))),
-            ti._Box(value=ti.TypeVar(idx=1)),
-        )
-    ]
-    assert actual == expected
-
-
 def test_sym_ref():
     testee = ir.SymRef(id="x")
     expected = ti.TypeVar(idx=0)
