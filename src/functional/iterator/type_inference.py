@@ -1,5 +1,5 @@
 import typing
-from collections.abc import Callable
+from collections import abc
 
 import eve
 from eve import datamodels
@@ -56,7 +56,7 @@ class TypeVar(Type):
 
 
 class EmptyTuple(Type):
-    def __iter__(self):
+    def __iter__(self) -> abc.Iterator[Type]:
         return
         yield
 
@@ -68,14 +68,16 @@ class Tuple(Type):
     others: Type
 
     @classmethod
-    def from_elems(cls, *elems):
-        tup = EmptyTuple()
+    def from_elems(cls: typing.Type[T], *elems: Type) -> typing.Union[T, EmptyTuple]:
+        tup: typing.Union[T, EmptyTuple] = EmptyTuple()
         for e in reversed(elems):
             tup = cls(front=e, others=tup)
         return tup
 
-    def __iter__(self):
+    def __iter__(self) -> abc.Iterator[Type]:
         yield self.front
+        if not isinstance(self.others, (Tuple, EmptyTuple)):
+            raise ValueError(f"Can not iterator over partially defined tuple {self}")
         yield from self.others
 
 
@@ -111,10 +113,10 @@ class ValTuple(Type):
     dtypes: Type = eve.field(default_factory=TypeVar.fresh)
     size: Type = eve.field(default_factory=TypeVar.fresh)
 
-    def __eq__(self, other):
+    def __eq__(self, other: typing.Any) -> bool:
         if isinstance(self.dtypes, Tuple) and isinstance(other, Tuple):
-            dtypes = self.dtypes
-            elems = other
+            dtypes: Type = self.dtypes
+            elems: Type = other
             while (
                 isinstance(dtypes, Tuple)
                 and isinstance(elems, Tuple)
@@ -131,7 +133,9 @@ class ValTuple(Type):
             and self.size == other.size
         )
 
-    def handle_constraint(self, other, add_constraint):
+    def handle_constraint(
+        self, other: Type, add_constraint: abc.Callable[[Type, Type], None]
+    ) -> bool:
         if not isinstance(other, Tuple):
             return False
 
@@ -214,7 +218,7 @@ DOMAIN_DTYPE = Primitive(name="domain")  # type: ignore [call-arg]
 class _TypeVarReindexer(eve.NodeTranslator):
     """Reindex type variables in a type tree."""
 
-    def __init__(self, indexer: Callable[[dict[int, int]], int]):
+    def __init__(self, indexer: abc.Callable[[dict[int, int]], int]):
         super().__init__()
         self.indexer = indexer
 
