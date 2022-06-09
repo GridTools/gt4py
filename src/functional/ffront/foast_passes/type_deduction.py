@@ -322,7 +322,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             )
         except GTTypeError as err:
             raise FieldOperatorTypeDeductionError.from_foast_node(
-                node, msg=f"Invalid argument types in call to '{node.func.id}'!"
+                node, msg=f"Invalid argument types in call to `{node.func.id}`."
             ) from err
 
     def _visit_neighbor_sum(self, node: foast.Call, **kwargs) -> foast.Call:
@@ -332,8 +332,8 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             field_dims_str = ", ".join(str(dim) for dim in field_type.dims)
             raise FieldOperatorTypeDeductionError.from_foast_node(
                 node,
-                msg=f"Incompatible field argument in {node.func.id}. Expected "
-                f"a field with dimension {reduction_dim}, but got "
+                msg=f"Incompatible field argument in call to `{node.func.id}`. "
+                f"Expected a field with dimension {reduction_dim}, but got "
                 f"{field_dims_str}.",
             )
         return_type = ct.FieldType(
@@ -352,17 +352,17 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
     def _visit_where(self, node: foast.Call, **kwargs) -> foast.Call:
         mask_type = cast(ct.FieldType, node.args[0].type)
         left_type = cast(ct.FieldType, node.args[1].type)
-        right_type = cast(ct.FieldType, node.args[1].type)
+        right_type = cast(ct.FieldType, node.args[2].type)
         if not type_info.is_logical(mask_type):
             raise FieldOperatorTypeDeductionError.from_foast_node(
                 node,
-                msg=f"Incompatible argument to {node.func.id}. Expected "
-                f"a boolean as first argument.",
+                msg=f"Incompatible argument in call to `{node.func.id}`. Expected "
+                f"a field with dtype bool, but got `{mask_type}`.",
             )
         if left_type != right_type:
             raise FieldOperatorTypeDeductionError.from_foast_node(
                 node,
-                msg=f"Incompatible argument to {node.func.id}. Expected arguments "
+                msg=f"Incompatible argument in call to `{node.func.id}`. Expected "
                 f"second and third argument to be of equal type.",
             )
         return foast.Call(

@@ -464,11 +464,11 @@ def test_conditional():
     out = np_as_located_field(IDim)(np.zeros((size,)))
 
     @field_operator(backend="roundtrip")
-    def simple_conditional(
+    def conditional(
         mask: Field[[IDim], bool], a: Field[[IDim], float64], b: Field[[IDim], float64]
     ) -> Field[[IDim], float64]:
         return where(mask, a, b)
 
-    simple_conditional(mask, a, b, out=out, offset_provider={})
+    conditional(mask, a, b, out=out, offset_provider={})
 
     assert np.allclose(np.where(mask, a, b), out)
