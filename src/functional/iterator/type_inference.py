@@ -33,7 +33,7 @@ class Tuple(Type):
     def __iter__(self) -> abc.Iterator[Type]:
         yield self.front
         if not isinstance(self.others, (Tuple, EmptyTuple)):
-            raise ValueError(f"Can not iterator over partially defined tuple {self}")
+            raise ValueError(f"Can not iterate over partially defined tuple {self}")
         yield from self.others
 
 
