@@ -56,7 +56,7 @@ class TypeVar(Type):
 
 
 class EmptyTuple(Type):
-    def iter_elems(self):
+    def __iter__(self):
         return
         yield
 
@@ -67,19 +67,16 @@ class Tuple(Type):
     front: Type
     others: Type
 
-    @staticmethod
-    def from_elems(*elems):
+    @classmethod
+    def from_elems(cls, *elems):
         tup = EmptyTuple()
         for e in reversed(elems):
-            tup = Tuple(front=e, others=tup)
+            tup = cls(front=e, others=tup)
         return tup
 
-    def iter_elems(self):
+    def __iter__(self):
         yield self.front
-        if isinstance(self.others, EmptyTuple):
-            return
-        assert isinstance(self.others, Tuple)
-        yield from self.others.iter_elems()
+        yield from self.others
 
 
 class FunctionType(Type):
@@ -138,7 +135,7 @@ class ValTuple(Type):
         if not isinstance(other, Tuple):
             return False
 
-        dtypes = [TypeVar.fresh() for _ in other.iter_elems()]
+        dtypes = [TypeVar.fresh() for _ in other]
         expanded = [Val(kind=self.kind, dtype=dtype, size=self.size) for dtype in dtypes]
         add_constraint(self.dtypes, Tuple.from_elems(*dtypes))
         add_constraint(Tuple.from_elems(*expanded), other)
@@ -386,7 +383,7 @@ class _TypeInferrer(eve.NodeTranslator):
                 kind = TypeVar.fresh()
                 size = TypeVar.fresh()
                 dtype = Tuple.from_elems(*(TypeVar.fresh() for _ in argtypes))
-                for d, a in zip(dtype.iter_elems(), argtypes):
+                for d, a in zip(dtype, argtypes):
                     constraints.add((Val(kind=kind, dtype=d, size=size), a))
                 return Val(kind=kind, dtype=dtype, size=size)
             if node.fun.id == "tuple_get":
@@ -787,10 +784,10 @@ class PrettyPrinter(eve.NodeTranslator):
         assert isinstance(node.params, (Tuple, EmptyTuple))
         return (
             "{"
-            + "".join(self.visit(f) + ", " for f in node.fundefs.iter_elems())
+            + "".join(self.visit(f) + ", " for f in node.fundefs)
             + node.name
             + "("
-            + ", ".join(self.visit(p) for p in node.params.iter_elems())
+            + ", ".join(self.visit(p) for p in node.params)
             + ")}"
         )
 
@@ -807,7 +804,7 @@ class PrettyPrinter(eve.NodeTranslator):
             "("
             + ", ".join(
                 self.visit(Val(kind=node.kind, dtype=dtype, size=node.size))
-                for dtype in node.dtypes.iter_elems()
+                for dtype in node.dtypes
             )
             + ")"
         )
