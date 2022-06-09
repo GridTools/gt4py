@@ -132,6 +132,16 @@ class ValTuple(Type):
             and self.size == other.size
         )
 
+    def handle_constraint(self, other, add_constraint):
+        if not isinstance(other, Tuple):
+            return False
+
+        dtypes = [TypeVar.fresh() for _ in other.iter_elems()]
+        expanded = [Val(kind=self.kind, dtype=dtype, size=self.size) for dtype in dtypes]
+        add_constraint(self.dtypes, Tuple.from_elems(*dtypes))
+        add_constraint(Tuple.from_elems(*expanded), other)
+        return True
+
 
 class Column(Type):
     """Marker for column-sized values/iterators."""
@@ -665,9 +675,7 @@ class _Unifier:
         self._renamer.register(y)
         self._constraints.append((x, y))
 
-    def _handle_constraint(  # noqa: C901  # too complex
-        self, constraint: tuple[_Box, _Box]
-    ) -> bool:
+    def _handle_constraint(self, constraint: tuple[_Box, _Box]) -> bool:
         """Handle a single constraint."""
         s, t = (c.value for c in constraint)
         if s == t:
@@ -693,13 +701,9 @@ class _Unifier:
                     assert sv == tv
             return True
 
-        if type(s) is ValTuple and type(t) is Tuple:
-            # Expand the LHS `ValTuple` to the size of the RHS `Tuple` and make sure they match
-            s_elems = tuple(
-                Val(kind=s.kind, dtype=TypeVar.fresh(), size=s.size) for _ in t.iter_elems()
-            )
-            self._add_constraint(s.dtypes, Tuple.from_elems(*(e.dtype for e in s_elems)))
-            self._add_constraint(Tuple.from_elems(*s_elems), t)
+        if (custom_handler := getattr(s, "handle_constraint", None)) and custom_handler(
+            t, self._add_constraint
+        ):
             return True
 
         # Constraint handling failed
