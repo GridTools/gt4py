@@ -2,6 +2,7 @@ import typing
 from collections.abc import Callable
 
 import eve
+from eve import datamodels
 from eve.utils import noninstantiable
 from functional.iterator import ir
 
@@ -55,9 +56,7 @@ class TypeVar(Type):
 
 
 class EmptyTuple(Type):
-    @property
-    def elems(self):
-        return tuple()
+    ...
 
 
 class Tuple(Type):
@@ -73,14 +72,12 @@ class Tuple(Type):
             tup = Tuple(front=e, others=tup)
         return tup
 
-    @property
-    def elems(self):
-        res = [self.front]
-        tup = self.others
-        while isinstance(tup, Tuple):
-            res.append(tup.front)
-            tup = tup.others
-        return tuple(res)
+    def iter_elems(self):
+        yield self.front
+        if isinstance(self.others, EmptyTuple):
+            return
+        assert isinstance(self.others, Tuple)
+        yield from self.others.iter_elems()
 
 
 class FunctionType(Type):
@@ -114,6 +111,26 @@ class ValTuple(Type):
     kind: Type = eve.field(default_factory=TypeVar.fresh)
     dtypes: Type = eve.field(default_factory=TypeVar.fresh)
     size: Type = eve.field(default_factory=TypeVar.fresh)
+
+    def __eq__(self, other):
+        if isinstance(self.dtypes, Tuple) and isinstance(other, Tuple):
+            dtypes = self.dtypes
+            elems = other
+            while (
+                isinstance(dtypes, Tuple)
+                and isinstance(elems, Tuple)
+                and Val(kind=self.kind, dtype=dtypes.front, size=self.size) == elems.front
+            ):
+                dtypes = dtypes.others
+                elems = elems.others
+            return dtypes == elems == EmptyTuple()
+
+        return (
+            isinstance(other, ValTuple)
+            and self.kind == other.kind
+            and self.dtypes == other.dtypes
+            and self.size == other.size
+        )
 
 
 class UniformValTupleVar(TypeVar):
@@ -369,7 +386,7 @@ class _TypeInferrer(eve.NodeTranslator):
                 kind = TypeVar.fresh()
                 size = TypeVar.fresh()
                 dtype = Tuple.from_elems(*(TypeVar.fresh() for _ in argtypes))
-                for d, a in zip(dtype.elems, argtypes):
+                for d, a in zip(dtype.iter_elems(), argtypes):
                     constraints.add((Val(kind=kind, dtype=d, size=size), a))
                 return Val(kind=kind, dtype=dtype, size=size)
             if node.fun.id == "tuple_get":
@@ -544,18 +561,6 @@ class _Renamer:
 
         collect_parents(dtype)
 
-    @staticmethod
-    def _val_tuple_will_resolve_to_tuple(node: Type, field: str, replacement: Type) -> bool:
-        """Check if a `ValTuple` instance can be resolved to a `Tuple` after renaming."""
-        return isinstance(node, ValTuple) and field == "dtypes" and isinstance(replacement, Tuple)
-
-    @staticmethod
-    def _resolve_val_tuple(node: ValTuple, replacement: Tuple) -> Tuple:
-        """Resolve a fully defined `ValTuple` instance to a `Tuple`."""
-        return Tuple.from_elems(
-            *(Val(kind=node.kind, dtype=d, size=node.size) for d in replacement.elems)
-        )
-
     def _update_node(
         self, node: Type, field: str, index: typing.Optional[int], replacement: Type
     ) -> None:
@@ -596,15 +601,8 @@ class _Renamer:
 
         follow_up_renames = list[tuple[Type, Type]]()
         for node, field, index in nodes:
-            if self._val_tuple_will_resolve_to_tuple(node, field, replacement):
-                assert isinstance(node, ValTuple) and isinstance(replacement, Tuple)  # helping mypy
-                # Special case 1: a `ValTuple` instance can be resolved to a `Tuple` after renaming
-                tup = self._resolve_val_tuple(node, replacement)
-                # So just collect the resolved tuple for a following rename
-                follow_up_renames.append((node, tup))
-            else:
-                # Default case: just update a field value of the node
-                self._update_node(node, field, index, replacement)
+            # Default case: just update a field value of the node
+            self._update_node(node, field, index, replacement)
 
         # Handle follow-up renames
         for s, d in follow_up_renames:
@@ -685,36 +683,26 @@ class _Unifier:
             self._rename(s, t)
             return True
 
-        if type(s) is type(t) is FunctionType:
-            # Make sure that argument and return type matches if LHS and RHS are function types
-            self._add_constraint(s.args, t.args)
-            self._add_constraint(s.ret, t.ret)
-            return True
-
-        if type(s) is type(t) is Val:
-            # Make sure that kind, dtype, and size matches if LHS and RHS are `Val` types
-            self._add_constraint(s.kind, t.kind)
-            self._add_constraint(s.dtype, t.dtype)
-            self._add_constraint(s.size, t.size)
-            return True
-
-        if type(s) is type(t) is Tuple:
-            self._add_constraint(s.front, t.front)
-            self._add_constraint(s.others, t.others)
+        if type(s) is type(t):
+            assert s not in _free_variables(t) and t not in _free_variables(s)
+            assert datamodels.fields(s).keys() == datamodels.fields(t).keys()
+            for k in datamodels.fields(s).keys():
+                sv = getattr(s, k)
+                tv = getattr(t, k)
+                if isinstance(sv, Type):
+                    assert isinstance(tv, Type)
+                    self._add_constraint(sv, tv)
+                else:
+                    assert sv == tv
             return True
 
         if type(s) is ValTuple and type(t) is Tuple:
             # Expand the LHS `ValTuple` to the size of the RHS `Tuple` and make sure they match
-            s_elems = tuple(Val(kind=s.kind, dtype=TypeVar.fresh(), size=s.size) for _ in t.elems)
+            s_elems = tuple(
+                Val(kind=s.kind, dtype=TypeVar.fresh(), size=s.size) for _ in t.iter_elems()
+            )
             self._add_constraint(s.dtypes, Tuple.from_elems(*(e.dtype for e in s_elems)))
             self._add_constraint(Tuple.from_elems(*s_elems), t)
-            return True
-
-        if type(s) is type(t) is ValTuple:
-            assert s not in _free_variables(t) and t not in _free_variables(s)
-            self._add_constraint(s.kind, t.kind)
-            self._add_constraint(s.dtypes, t.dtypes)
-            self._add_constraint(s.size, t.size)
             return True
 
         if type(s) is UniformValTupleVar and type(t) is Tuple:
@@ -722,14 +710,8 @@ class _Unifier:
             # Replace the LHS `UniformValTupleVar` by the RHS `Tuple` and make sure the types match
             self._rename(s, t)
             elem_dtype = Val(kind=s.kind, dtype=s.dtype, size=s.size)
-            for e in t.elems:
+            for e in t.iter_elems():
                 self._add_constraint(e, elem_dtype)
-            return True
-
-        if type(s) is type(t) is UniformValTupleVar:
-            self._add_constraint(s.kind, t.kind)
-            self._add_constraint(s.dtype, t.dtype)
-            self._add_constraint(s.size, t.size)
             return True
 
         # Constraint handling failed
@@ -808,7 +790,6 @@ class PrettyPrinter(eve.NodeTranslator):
             s += ", " + self.visit(node.front)
         s += ")"
         if not isinstance(node.others, EmptyTuple):
-            assert isinstance(node.others, TypeVar)
             s += ":" + self.visit(node.others)
         return s
 
@@ -838,13 +819,21 @@ class PrettyPrinter(eve.NodeTranslator):
         )
 
     def visit_ValTuple(self, node: ValTuple) -> str:
-        if not isinstance(node.dtypes, TypeVar):
-            return self.visit_Type(node)
+        if isinstance(node.dtypes, TypeVar):
+            return (
+                "("
+                + self._fmt_dtype(node.kind, "T" + self._fmt_size(node.size))
+                + ", …)"
+                + self._subscript(node.dtypes.idx)
+            )
+        assert isinstance(node.dtypes, Tuple)
         return (
             "("
-            + self._fmt_dtype(node.kind, "T" + self._fmt_size(node.size))
-            + ", …)"
-            + self._subscript(node.dtypes.idx)
+            + ", ".join(
+                self.visit(Val(kind=node.kind, dtype=dtype, size=node.size))
+                for dtype in node.dtypes.iter_elems()
+            )
+            + ")"
         )
 
     def visit_UniformValTupleVar(self, node: UniformValTupleVar) -> str:
