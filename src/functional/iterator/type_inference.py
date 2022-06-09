@@ -56,7 +56,9 @@ class TypeVar(Type):
 
 
 class EmptyTuple(Type):
-    ...
+    def iter_elems(self):
+        return
+        yield
 
 
 class Tuple(Type):
@@ -191,8 +193,8 @@ class FencilDefinitionType(Type):
     """Fencil definition type."""
 
     name: str
-    fundefs: tuple[Type, ...]
-    params: tuple[Type, ...]
+    fundefs: Type
+    params: Type
 
 
 class LetPolymorphic(Type):
@@ -500,8 +502,8 @@ class _TypeInferrer(eve.NodeTranslator):
         self.visit(node.closures, constraints=constraints, symtypes=symtypes | fmap | params)
         return FencilDefinitionType(
             name=node.id,
-            fundefs=tuple(ftypes),
-            params=tuple(params[p.id] for p in node.params),
+            fundefs=Tuple.from_elems(*ftypes),
+            params=Tuple.from_elems(*params.values()),
         )
 
 
@@ -541,7 +543,7 @@ class _Renamer:
     """
 
     def __init__(self) -> None:
-        self._parents = dict[Type, list[tuple[Type, str, typing.Optional[int]]]]()
+        self._parents = dict[Type, list[tuple[Type, str]]]()
 
     def register(self, dtype: Type) -> None:
         """Register a type for possible future renaming.
@@ -552,47 +554,27 @@ class _Renamer:
         def collect_parents(node: Type) -> None:
             for field, child in node.iter_children_items():
                 if isinstance(child, Type):
-                    self._parents.setdefault(child, []).append(
-                        (node, typing.cast(str, field), None)
-                    )
+                    self._parents.setdefault(child, []).append((node, typing.cast(str, field)))
                     collect_parents(child)
-                elif isinstance(child, tuple):
-                    for i, c in enumerate(child):
-                        if isinstance(c, Type):
-                            self._parents.setdefault(c, []).append(
-                                (node, typing.cast(str, field), i)
-                            )
-                            collect_parents(c)
                 else:
                     assert isinstance(child, (int, str))
 
         collect_parents(dtype)
 
-    def _update_node(
-        self, node: Type, field: str, index: typing.Optional[int], replacement: Type
-    ) -> None:
+    def _update_node(self, node: Type, field: str, replacement: Type) -> None:
         """Replace a field of a node by some other value.
 
-        If `index` is `None`, basically performs `setattr(node, field, replacement)`. Otherwise,
-        assumes that the given field is a tuple field and replaces only the tuple element that
-        matches the given index.
-
-        Further, updates the mapping of node parents and handles the possibly changing hash value of
-        the updated node.
+        Basically performs `setattr(node, field, replacement)`. Further, updates the mapping of node
+        parents and handles the possibly changing hash value of the updated node.
         """
         # Pop the node out of the parents dict as its hash could change after modification
         popped = self._parents.pop(node, None)
 
-        # Update the node’s field or field element
-        if index is None:
-            setattr(node, field, replacement)
-        else:
-            field_list = list(getattr(node, field))
-            field_list[index] = replacement
-            setattr(node, field, tuple(field_list))
+        # Update the node’s field
+        setattr(node, field, replacement)
 
         # Register `node` to be the new parent of `replacement`
-        self._parents.setdefault(replacement, []).append((node, field, index))
+        self._parents.setdefault(replacement, []).append((node, field))
 
         # Put back possible previous entries to the parents dict after possible hash change
         if popped:
@@ -607,9 +589,9 @@ class _Renamer:
             return
 
         follow_up_renames = list[tuple[Type, Type]]()
-        for node, field, index in nodes:
+        for node, field in nodes:
             # Default case: just update a field value of the node
-            self._update_node(node, field, index, replacement)
+            self._update_node(node, field, replacement)
 
         # Handle follow-up renames
         for s, d in follow_up_renames:
@@ -801,12 +783,14 @@ class PrettyPrinter(eve.NodeTranslator):
         return self.visit(node.inputs) + " ⇒ " + self.visit(node.output)
 
     def visit_FencilDefinitionType(self, node: FencilDefinitionType) -> str:
+        assert isinstance(node.fundefs, (Tuple, EmptyTuple))
+        assert isinstance(node.params, (Tuple, EmptyTuple))
         return (
             "{"
-            + "".join(self.visit(f) + ", " for f in node.fundefs)
+            + "".join(self.visit(f) + ", " for f in node.fundefs.iter_elems())
             + node.name
             + "("
-            + ", ".join(self.visit(p) for p in node.params)
+            + ", ".join(self.visit(p) for p in node.params.iter_elems())
             + ")}"
         )
 

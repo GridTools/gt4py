@@ -429,8 +429,8 @@ def test_fencil_definition():
     )
     expected = ti.FencilDefinitionType(
         name="f",
-        fundefs=(),
-        params=(
+        fundefs=ti.EmptyTuple(),
+        params=ti.Tuple.from_elems(
             ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="int"), size=ti.Scalar()),
             ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="int"), size=ti.Scalar()),
             ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="int"), size=ti.Scalar()),
@@ -497,7 +497,7 @@ def test_fencil_definition_with_function_definitions():
     )
     expected = ti.FencilDefinitionType(
         name="foo",
-        fundefs=(
+        fundefs=ti.Tuple.from_elems(
             ti.FunctionDefinitionType(
                 name="f",
                 fun=ti.FunctionType(
@@ -517,7 +517,7 @@ def test_fencil_definition_with_function_definitions():
                 ),
             ),
         ),
-        params=(
+        params=ti.Tuple.from_elems(
             ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="int"), size=ti.Scalar()),
             ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="int"), size=ti.Scalar()),
             ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="int"), size=ti.Scalar()),
@@ -558,4 +558,9 @@ def test_pformat():
         ti.pformat(ti.FunctionDefinitionType(name="f", fun=ti.FunctionType(args=vs[0], ret=vs[1])))
         == "f :: T₀ → T₁"
     )
-    assert ti.pformat(ti.FencilDefinitionType(name="f", fundefs=(), params=())) == "{f()}"
+    assert (
+        ti.pformat(
+            ti.FencilDefinitionType(name="f", fundefs=ti.EmptyTuple(), params=ti.EmptyTuple())
+        )
+        == "{f()}"
+    )
