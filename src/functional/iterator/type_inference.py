@@ -54,37 +54,33 @@ class TypeVar(Type):
         return cls(idx=cls.fresh_index(), **kwargs)
 
 
+class EmptyTuple(Type):
+    @property
+    def elems(self):
+        return tuple()
+
+
 class Tuple(Type):
     """Tuple type with arbitrary number of elements."""
 
-    elems: tuple[Type, ...]
-
-
-class PartialTupleVar(TypeVar):
-    """Type variable representing a partially defined tuple.
-
-    `elem_indices` are the indices of the known elements; `elem_values` are the values of the known
-    elements. Both tuples need to have the same length.
-
-    E.g., if `elem_indices` is `(0, 2)` and `elem_values` are two type variables `(T₀, T₁)`, then
-    the form of the tuple type is `(T₀, ?, T₁, …)`. That is, the types of the elements at indices 0
-    and 2 are known and T₀, respectively T₁. But the total number of elements and types of other
-    elements are unknown.
-    """
-
-    elem_indices: tuple[int, ...]
-    elem_values: tuple[Type, ...]
-
-
-class PrefixTuple(Type):
-    """A tuple type consisting of a prefix (first element) and other elements.
-
-    This type is similar to the cons operator for tuple types. Not that this type can be replaced by
-    an instance of `Tuple` as soon as the type of `others` is a `Tuple`.
-    """
-
-    prefix: Type
+    front: Type
     others: Type
+
+    @staticmethod
+    def from_elems(*elems):
+        tup = EmptyTuple()
+        for e in reversed(elems):
+            tup = Tuple(front=e, others=tup)
+        return tup
+
+    @property
+    def elems(self):
+        res = [self.front]
+        tup = self.others
+        while isinstance(tup, Tuple):
+            res.append(tup.front)
+            tup = tup.others
+        return tuple(res)
 
 
 class FunctionType(Type):
@@ -234,52 +230,61 @@ Val_T0_Scalar = Val(kind=Value(), dtype=T0, size=Scalar())
 Val_BOOL_T1 = Val(kind=Value(), dtype=BOOL_DTYPE, size=T1)
 
 BUILTIN_TYPES: typing.Final[dict[str, Type]] = {
-    "deref": FunctionType(args=Tuple(elems=(It_T0_T1,)), ret=Val_T0_T1),
-    "can_deref": FunctionType(args=Tuple(elems=(It_T0_T1,)), ret=Val_BOOL_T1),
-    "plus": FunctionType(args=Tuple(elems=(Val_T0_T1, Val_T0_T1)), ret=Val_T0_T1),
-    "minus": FunctionType(args=Tuple(elems=(Val_T0_T1, Val_T0_T1)), ret=Val_T0_T1),
-    "multiplies": FunctionType(args=Tuple(elems=(Val_T0_T1, Val_T0_T1)), ret=Val_T0_T1),
-    "divides": FunctionType(args=Tuple(elems=(Val_T0_T1, Val_T0_T1)), ret=Val_T0_T1),
-    "eq": FunctionType(args=Tuple(elems=(Val_T0_T1, Val_T0_T1)), ret=Val_BOOL_T1),
-    "less": FunctionType(args=Tuple(elems=(Val_T0_T1, Val_T0_T1)), ret=Val_BOOL_T1),
-    "greater": FunctionType(args=Tuple(elems=(Val_T0_T1, Val_T0_T1)), ret=Val_BOOL_T1),
-    "and_": FunctionType(args=Tuple(elems=(Val_BOOL_T1, Val_BOOL_T1)), ret=Val_BOOL_T1),
-    "or_": FunctionType(args=Tuple(elems=(Val_BOOL_T1, Val_BOOL_T1)), ret=Val_BOOL_T1),
-    "not_": FunctionType(args=Tuple(elems=(Val_BOOL_T1,)), ret=Val_BOOL_T1),
-    "if_": FunctionType(args=Tuple(elems=(Val_BOOL_T1, Val_T0_T1, Val_T0_T1)), ret=Val_T0_T1),
+    "deref": FunctionType(
+        args=Tuple.from_elems(
+            It_T0_T1,
+        ),
+        ret=Val_T0_T1,
+    ),
+    "can_deref": FunctionType(
+        args=Tuple.from_elems(
+            It_T0_T1,
+        ),
+        ret=Val_BOOL_T1,
+    ),
+    "plus": FunctionType(args=Tuple.from_elems(Val_T0_T1, Val_T0_T1), ret=Val_T0_T1),
+    "minus": FunctionType(args=Tuple.from_elems(Val_T0_T1, Val_T0_T1), ret=Val_T0_T1),
+    "multiplies": FunctionType(args=Tuple.from_elems(Val_T0_T1, Val_T0_T1), ret=Val_T0_T1),
+    "divides": FunctionType(args=Tuple.from_elems(Val_T0_T1, Val_T0_T1), ret=Val_T0_T1),
+    "eq": FunctionType(args=Tuple.from_elems(Val_T0_T1, Val_T0_T1), ret=Val_BOOL_T1),
+    "less": FunctionType(args=Tuple.from_elems(Val_T0_T1, Val_T0_T1), ret=Val_BOOL_T1),
+    "greater": FunctionType(args=Tuple.from_elems(Val_T0_T1, Val_T0_T1), ret=Val_BOOL_T1),
+    "and_": FunctionType(args=Tuple.from_elems(Val_BOOL_T1, Val_BOOL_T1), ret=Val_BOOL_T1),
+    "or_": FunctionType(args=Tuple.from_elems(Val_BOOL_T1, Val_BOOL_T1), ret=Val_BOOL_T1),
+    "not_": FunctionType(
+        args=Tuple.from_elems(
+            Val_BOOL_T1,
+        ),
+        ret=Val_BOOL_T1,
+    ),
+    "if_": FunctionType(args=Tuple.from_elems(Val_BOOL_T1, Val_T0_T1, Val_T0_T1), ret=Val_T0_T1),
     "lift": FunctionType(
-        args=Tuple(
-            elems=(FunctionType(args=ValTuple(kind=Iterator(), dtypes=T2, size=T1), ret=Val_T0_T1),)
+        args=Tuple.from_elems(
+            FunctionType(args=ValTuple(kind=Iterator(), dtypes=T2, size=T1), ret=Val_T0_T1)
         ),
         ret=FunctionType(args=ValTuple(kind=Iterator(), dtypes=T2, size=T1), ret=It_T0_T1),
     ),
     "reduce": FunctionType(
-        args=Tuple(
-            elems=(
-                FunctionType(
-                    args=PrefixTuple(
-                        prefix=Val_T0_T1, others=ValTuple(kind=Value(), dtypes=T2, size=T1)
-                    ),
-                    ret=Val_T0_T1,
-                ),
-                Val_T0_T1,
-            )
+        args=Tuple.from_elems(
+            FunctionType(
+                args=Tuple(front=Val_T0_T1, others=ValTuple(kind=Value(), dtypes=T2, size=T1)),
+                ret=Val_T0_T1,
+            ),
+            Val_T0_T1,
         ),
         ret=FunctionType(args=ValTuple(kind=Iterator(), dtypes=T2, size=T1), ret=Val_T0_T1),
     ),
     "scan": FunctionType(
-        args=Tuple(
-            elems=(
-                FunctionType(
-                    args=PrefixTuple(
-                        prefix=Val_T0_Scalar,
-                        others=ValTuple(kind=Iterator(), dtypes=T2, size=Scalar()),
-                    ),
-                    ret=Val_T0_Scalar,
+        args=Tuple.from_elems(
+            FunctionType(
+                args=Tuple(
+                    front=Val_T0_Scalar,
+                    others=ValTuple(kind=Iterator(), dtypes=T2, size=Scalar()),
                 ),
-                Val(kind=Value(), dtype=BOOL_DTYPE, size=Scalar()),
-                Val_T0_Scalar,
-            )
+                ret=Val_T0_Scalar,
+            ),
+            Val(kind=Value(), dtype=BOOL_DTYPE, size=Scalar()),
+            Val_T0_Scalar,
         ),
         ret=FunctionType(
             args=ValTuple(kind=Iterator(), dtypes=T2, size=Column()),
@@ -291,12 +296,10 @@ BUILTIN_TYPES: typing.Final[dict[str, Type]] = {
         ret=Val(kind=Value(), dtype=DOMAIN_DTYPE, size=Scalar()),
     ),
     "named_range": FunctionType(
-        args=Tuple(
-            elems=(
-                Val(kind=Value(), dtype=AXIS_DTYPE, size=Scalar()),
-                Val(kind=Value(), dtype=INT_DTYPE, size=Scalar()),
-                Val(kind=Value(), dtype=INT_DTYPE, size=Scalar()),
-            )
+        args=Tuple.from_elems(
+            Val(kind=Value(), dtype=AXIS_DTYPE, size=Scalar()),
+            Val(kind=Value(), dtype=INT_DTYPE, size=Scalar()),
+            Val(kind=Value(), dtype=INT_DTYPE, size=Scalar()),
         ),
         ret=Val(kind=Value(), dtype=NAMED_RANGE_DTYPE, size=Scalar()),
     ),
@@ -353,7 +356,7 @@ class _TypeInferrer(eve.NodeTranslator):
     ) -> FunctionType:
         ptypes = {p.id: TypeVar.fresh() for p in node.params}
         ret = self.visit(node.expr, constraints=constraints, symtypes=symtypes | ptypes)
-        return FunctionType(args=Tuple(elems=tuple(ptypes[p.id] for p in node.params)), ret=ret)
+        return FunctionType(args=Tuple.from_elems(*(ptypes[p.id] for p in node.params)), ret=ret)
 
     def visit_FunCall(
         self, node: ir.FunCall, constraints: set[tuple[Type, Type]], symtypes: dict[str, Type]
@@ -365,7 +368,7 @@ class _TypeInferrer(eve.NodeTranslator):
                 argtypes = self.visit(node.args, constraints=constraints, symtypes=symtypes)
                 kind = TypeVar.fresh()
                 size = TypeVar.fresh()
-                dtype = Tuple(elems=tuple(TypeVar.fresh() for _ in argtypes))
+                dtype = Tuple.from_elems(*(TypeVar.fresh() for _ in argtypes))
                 for d, a in zip(dtype.elems, argtypes):
                     constraints.add((Val(kind=kind, dtype=d, size=size), a))
                 return Val(kind=kind, dtype=dtype, size=size)
@@ -381,9 +384,14 @@ class _TypeInferrer(eve.NodeTranslator):
                 kind = TypeVar.fresh()
                 elem = TypeVar.fresh()
                 size = TypeVar.fresh()
+
+                dtype = Tuple(front=elem, others=TypeVar.fresh())
+                for _ in range(idx):
+                    dtype = Tuple(front=TypeVar.fresh(), others=dtype)
+
                 val = Val(
                     kind=kind,
-                    dtype=PartialTupleVar.fresh(elem_indices=(idx,), elem_values=(elem,)),
+                    dtype=dtype,
                     size=size,
                 )
                 constraints.add((tup, val))
@@ -393,10 +401,15 @@ class _TypeInferrer(eve.NodeTranslator):
                 # as function calls; that is, the offsets are completely
                 # ignored by the type inference algorithm
                 it = Val(kind=Iterator())
-                return FunctionType(args=Tuple(elems=(it,)), ret=it)
+                return FunctionType(
+                    args=Tuple.from_elems(
+                        it,
+                    ),
+                    ret=it,
+                )
 
         fun = self.visit(node.fun, constraints=constraints, symtypes=symtypes)
-        args = Tuple(elems=tuple(self.visit(node.args, constraints=constraints, symtypes=symtypes)))
+        args = Tuple.from_elems(*self.visit(node.args, constraints=constraints, symtypes=symtypes))
         ret = TypeVar.fresh()
         constraints.add((fun, FunctionType(args=args, ret=ret)))
         return ret
@@ -427,8 +440,8 @@ class _TypeInferrer(eve.NodeTranslator):
         domain = self.visit(node.domain, constraints=constraints, symtypes=symtypes)
         stencil = self.visit(node.stencil, constraints=constraints, symtypes=symtypes)
         output = self.visit(node.output, constraints=constraints, symtypes=symtypes)
-        inputs = Tuple(
-            elems=tuple(self.visit(node.inputs, constraints=constraints, symtypes=symtypes))
+        inputs = Tuple.from_elems(
+            *self.visit(node.inputs, constraints=constraints, symtypes=symtypes)
         )
         output_dtype = TypeVar.fresh()
         constraints.add((domain, Val(kind=Value(), dtype=Primitive(name="domain"), size=Scalar())))
@@ -499,8 +512,8 @@ class _Renamer:
 
     Note that all types have to be registered before they can be used in a `rename` call.
 
-    Besides basic renaming, this also resolves `ValTuple` and `PrefixTuple` to full `Tuple` if
-    possible after renaming.
+    Besides basic renaming, this also resolves `ValTuple` to full `Tuple` if possible after
+    renaming.
     """
 
     def __init__(self) -> None:
@@ -539,21 +552,9 @@ class _Renamer:
     @staticmethod
     def _resolve_val_tuple(node: ValTuple, replacement: Tuple) -> Tuple:
         """Resolve a fully defined `ValTuple` instance to a `Tuple`."""
-        return Tuple(
-            elems=tuple(Val(kind=node.kind, dtype=d, size=node.size) for d in replacement.elems)
+        return Tuple.from_elems(
+            *(Val(kind=node.kind, dtype=d, size=node.size) for d in replacement.elems)
         )
-
-    @staticmethod
-    def _prefix_tuple_will_resolve_to_tuple(node: Type, field: str, replacement: Type) -> bool:
-        """Check if a `PrefixTuple` instance can be resolved to a `Tuple` after renaming."""
-        return (
-            isinstance(node, PrefixTuple) and field == "others" and isinstance(replacement, Tuple)
-        )
-
-    @staticmethod
-    def _resolve_prefix_tuple(node: PrefixTuple, replacement: Tuple) -> Tuple:
-        """Resolve a fully defined `PrefixTuple` instance to a `Tuple`."""
-        return Tuple(elems=(node.prefix,) + replacement.elems)
 
     def _update_node(
         self, node: Type, field: str, index: typing.Optional[int], replacement: Type
@@ -600,13 +601,6 @@ class _Renamer:
                 # Special case 1: a `ValTuple` instance can be resolved to a `Tuple` after renaming
                 tup = self._resolve_val_tuple(node, replacement)
                 # So just collect the resolved tuple for a following rename
-                follow_up_renames.append((node, tup))
-            elif self._prefix_tuple_will_resolve_to_tuple(node, field, replacement):
-                assert isinstance(node, PrefixTuple) and isinstance(
-                    replacement, Tuple
-                )  # helping mypy
-                # Special case 2: a `PrefixTuple` instance can be resolved to a `Tuple` after renaming
-                tup = self._resolve_prefix_tuple(node, replacement)
                 follow_up_renames.append((node, tup))
             else:
                 # Default case: just update a field value of the node
@@ -705,58 +699,15 @@ class _Unifier:
             return True
 
         if type(s) is type(t) is Tuple:
-            if len(s.elems) != len(t.elems):
-                # If LHS and RHS are tuple types, they must have the same number of elements…
-                raise TypeError(f"Can not satisfy constraint: {s} ≡ {t}")
-            for lhs, rhs in zip(s.elems, t.elems):
-                # …and also the types of all elements must match
-                self._add_constraint(lhs, rhs)
-            return True
-
-        if type(s) is PartialTupleVar and type(t) is Tuple:
-            assert s not in _free_variables(t)
-            # Make sure that size and elements in a `PartialTupleVar` LHS match the RHS `Tuple`
-            if max(s.elem_indices) >= len(t.elems):
-                raise TypeError(f"Can not satisfy constraint: {s} ≡ {t}")
-            for i, x in zip(s.elem_indices, s.elem_values):
-                self._add_constraint(x, t.elems[i])
-            return True
-
-        if type(s) is type(t) is PartialTupleVar:
-            assert s not in _free_variables(t) and t not in _free_variables(s)
-            # If both, LHS and RHS, are `PartialTupleVar`s, replace both instances by a new,
-            # combined instance and make sure that the types of the elements defined in the LHS and
-            # RHS match
-            se = dict(zip(s.elem_indices, s.elem_values))
-            te = dict(zip(t.elem_indices, t.elem_values))
-            for i in set(s.elem_indices) & set(t.elem_indices):
-                self._add_constraint(se[i], te[i])
-            elems = se | te
-            combined = PartialTupleVar.fresh(
-                elem_indices=tuple(elems.keys()), elem_values=tuple(elems.values())
-            )
-            self._rename(s, combined)
-            self._rename(t, combined)
-            return True
-
-        if type(s) is PrefixTuple and type(t) is Tuple:
-            assert s not in _free_variables(t)
-            # Make sure that all elements match
-            self._add_constraint(s.prefix, t.elems[0])
-            self._add_constraint(s.others, Tuple(elems=t.elems[1:]))
-            return True
-
-        if type(s) is type(t) is PrefixTuple:
-            assert s not in _free_variables(t) and t not in _free_variables(s)
-            self._add_constraint(s.prefix, t.prefix)
+            self._add_constraint(s.front, t.front)
             self._add_constraint(s.others, t.others)
             return True
 
         if type(s) is ValTuple and type(t) is Tuple:
             # Expand the LHS `ValTuple` to the size of the RHS `Tuple` and make sure they match
             s_elems = tuple(Val(kind=s.kind, dtype=TypeVar.fresh(), size=s.size) for _ in t.elems)
-            self._add_constraint(s.dtypes, Tuple(elems=tuple(e.dtype for e in s_elems)))
-            self._add_constraint(Tuple(elems=s_elems), t)
+            self._add_constraint(s.dtypes, Tuple.from_elems(*(e.dtype for e in s_elems)))
+            self._add_constraint(Tuple.from_elems(*s_elems), t)
             return True
 
         if type(s) is type(t) is ValTuple:
@@ -847,19 +798,19 @@ class PrettyPrinter(eve.NodeTranslator):
         assert isinstance(kind, TypeVar)
         return "ItOrVal" + self._subscript(kind.idx) + "[" + dtype_str + "]"
 
+    def visit_EmptyTuple(self, node: EmptyTuple) -> str:
+        return "()"
+
     def visit_Tuple(self, node: Tuple) -> str:
-        return "(" + ", ".join(self.visit(e) for e in node.elems) + ")"
-
-    def visit_PartialTupleVar(self, node: PartialTupleVar) -> str:
-        s = ""
-        if node.elem_indices:
-            e = dict(zip(node.elem_indices, node.elem_values))
-            for i in range(max(e) + 1):
-                s += (self.visit(e[i]) if i in e else "_") + ", "
-        return "(" + s + "…)" + self._subscript(node.idx)
-
-    def visit_PrefixTuple(self, node: PrefixTuple) -> str:
-        return self.visit(node.prefix) + ":" + self.visit(node.others)
+        s = "(" + self.visit(node.front)
+        while isinstance(node.others, Tuple):
+            node = node.others
+            s += ", " + self.visit(node.front)
+        s += ")"
+        if not isinstance(node.others, EmptyTuple):
+            assert isinstance(node.others, TypeVar)
+            s += ":" + self.visit(node.others)
+        return s
 
     def visit_FunctionType(self, node: FunctionType) -> str:
         return self.visit(node.args) + " → " + self.visit(node.ret)
