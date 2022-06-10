@@ -238,12 +238,15 @@ class StencilExtentComputer(NodeVisitor):
         self.zero_extent = Extent.zeros(ndims=2)
 
     def visit_Stencil(self, node: oir.Stencil) -> "Context":
-        ctx = self.Context(fields={param.name: Extent.zeros(ndims=2) for param in node.params})
+        ctx = self.Context()
         for vloop in reversed(node.vertical_loops):
             self.visit(vloop, ctx=ctx)
 
         if self.add_k:
             ctx.fields = {name: Extent(*extent, (0, 0)) for name, extent in ctx.fields.items()}
+
+        for name in (p.name for p in node.params if p.name not in ctx.fields):
+            ctx.fields[name] = self.zero_extent
 
         return ctx
 
