@@ -117,7 +117,7 @@ class DaCeStencilObject(StencilObject, SDFGConvertible):
                         origin = [o for a, o in zip("IJK", origin) if a in axes]
 
                 ranges = [
-                    (o - e, o - e + s - 1, 1)
+                    (o - max(0, e), o - max(0, e) + s - 1, 1)
                     for o, e, s in zip(
                         origin,
                         self.field_info[name].boundary.lower_indices,
