@@ -227,11 +227,11 @@ class UnRoller(IRNodeVisitor):
                     for lhs, rhs in zip(lhs_list, rhs_list):
                         bin_op_list.append(self.add_node(lhs, rhs, node.op, node.loc))
             # scalar and vector
-            elif isinstance(rhs_list, list):
+            elif isinstance(rhs_list, list) and isinstance(lhs_list, Expr):
                 lhs = lhs_list
                 for rhs in rhs_list:
                     bin_op_list.append(self.add_node(lhs, rhs, node.op, node.loc))
-            elif isinstance(lhs_list, list):
+            elif isinstance(lhs_list, list) and isinstance(rhs_list, Expr):
                 rhs = rhs_list
                 for lhs in lhs_list:
                     bin_op_list.append(self.add_node(lhs, rhs, node.op, node.loc))
