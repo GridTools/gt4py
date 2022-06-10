@@ -103,7 +103,7 @@ def _pre_expand_trafos(stencil_ir: gtir.Stencil, sdfg: dace.SDFG, layout_map):
             array.lifetime = dace.AllocationLifetime.Persistent
 
     sdfg.simplify()
-    for node, _ in filter(lambda n: isinstance(n, StencilComputation), sdfg.all_nodes_recursive()):
+    for node, _ in filter(lambda n: isinstance(n[0], StencilComputation), sdfg.all_nodes_recursive()):
         expansion_priority = ["TileJ", "TileI", "Sections"]
         if node.oir_node.loop_order == common.LoopOrder.PARALLEL:
             expansion_priority.extend(["KMap", "Stages", "JMap", "IMap"])
