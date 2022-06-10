@@ -138,7 +138,7 @@ class UnVectorisation(IRNodeVisitor):
         target_dims = params[node.target.name].data_dims
         if len(target_dims) == 1:
             target_dim, = target_dims
-            assert target_dim == len(node.value) and type(node.value[0]) != list, f"assignment dimension mismatch"
+            assert target_dim == len(node.value) and type(node.value[0]) != list, f"assignment dimension mismatch ({node.target.name} dim = {target_dim}; rhs dim={len(node.value)})"
             assign_list = []
             for index in range(target_dim):
                 tmp_node = copy.deepcopy(node)
