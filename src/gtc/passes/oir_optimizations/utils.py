@@ -238,7 +238,7 @@ class StencilExtentComputer(NodeVisitor):
         self.zero_extent = Extent.zeros(ndims=2)
 
     def visit_Stencil(self, node: oir.Stencil) -> "Context":
-        ctx = self.Context()
+        ctx = self.Context(fields={param.name: Extent.zeros(ndims=2) for param in node.params})
         for vloop in reversed(node.vertical_loops):
             self.visit(vloop, ctx=ctx)
 

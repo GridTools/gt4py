@@ -276,15 +276,14 @@ class DaCeComputationCodegen:
         oir = GTIRToOIR().visit(stencil_ir)
         field_extents = compute_fields_extents(oir, add_k=True)
 
-        offset_dict: Dict[str, Tuple[int, int, int]] = {
-            k: (max(-v[0][0], 0), max(-v[1][0], 0), 0) for k, v in field_extents.items()
-        }
         k_origins = {
             field_name: max(boundary[0], 0)
             for field_name, boundary in compute_k_boundary(stencil_ir).items()
         }
-        for name, origin in k_origins.items():
-            offset_dict[name] = (offset_dict[name][0], offset_dict[name][1], origin)
+        offset_dict: Dict[str, Tuple[int, int, int]] = {
+            k: (max(-v[0][0], 0), max(-v[1][0], 0), k_origins[k] if k in k_origins else 0)
+            for k, v in field_extents.items()
+        }
 
         symbols = {f"__{var}": f"__{var}" for var in "IJK"}
         for name, array in sdfg.arrays.items():
