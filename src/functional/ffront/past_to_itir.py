@@ -189,6 +189,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                     )
 
         elif isinstance(node, past.Name):
+            self.uses_size_arguments = True
             out_field_name = node
             domain_args = [
                 itir.FunCall(
