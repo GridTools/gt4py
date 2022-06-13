@@ -245,6 +245,9 @@ class StencilExtentComputer(NodeVisitor):
         if self.add_k:
             ctx.fields = {name: Extent(*extent, (0, 0)) for name, extent in ctx.fields.items()}
 
+        for name in (p.name for p in node.params if p.name not in ctx.fields):
+            ctx.fields[name] = self.zero_extent
+
         return ctx
 
     def visit_VerticalLoopSection(self, node: oir.VerticalLoopSection, **kwargs: Any) -> None:

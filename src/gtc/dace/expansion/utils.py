@@ -12,12 +12,23 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import Any, List
+import dace
+import dace.data
+import dace.library
+import dace.subsets
 
-# need to import expansion so that implementation of expansion is registered
-from .expansion.expansion import (  # noqa: F401 '.expansion.StencilComputationExpansion' imported but unused
-    StencilComputationExpansion,
-)
+from gtc import common
 
 
-__all__: List[Any] = []
+def get_dace_debuginfo(node: common.LocNode):
+
+    if node.loc is not None:
+        return dace.dtypes.DebugInfo(
+            node.loc.line,
+            node.loc.column,
+            node.loc.line,
+            node.loc.column,
+            node.loc.source,
+        )
+    else:
+        return dace.dtypes.DebugInfo(0)
