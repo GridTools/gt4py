@@ -16,85 +16,124 @@
 
 """Eve framework with general utils for development of DSL toolchains in Python.
 
-The internal dependencies between modules are the following (each line depends
+The internal dependencies between modules are the following (each module depends
 on some of the previous ones):
 
-  - extended_typing (no dependencies)
-  - exceptions, pattern_matching, type_definitions
-  - datamodels, utils
-  - concepts <-> iterators  (circular dependency only inside methods, it should be safe)
-  - traits, visitors
-  - codegen
+  0. extended_typing
+  1. exceptions, pattern_matching, type_definitions
+  2. utils
+  3. type_validation
+  4. datamodels
+  5. trees
+  6. concepts
+  7. visitors
+  8. traits
+  9. codegen
 
 """
 
 from __future__ import annotations  # isort:skip
 
+
 from .version import __version__, __versioninfo__  # isort:skip
 
-from .concepts import FieldKind, FrozenModel, FrozenNode, GenericNode, Model, Node, VType
-from .datamodels import Coerced, DataModel, concretize, datamodel, field
-from .iterators import iter_tree
-from .traits import SymbolTableTrait
-from .type_definitions import (
-    NOTHING,
-    Bool,
-    Enum,
-    Float,
-    Int,
-    IntEnum,
-    NegativeFloat,
-    NegativeInt,
-    PositiveFloat,
-    PositiveInt,
+from .concepts import (
+    AnnexManager,
+    AnySourceLocation,
+    FrozenNode,
+    GenericNode,
+    Node,
+    RootNode,
     SourceLocation,
-    Str,
-    StrEnum,
+    SourceLocationGroup,
     SymbolName,
     SymbolRef,
+    VType,
+    register_annex_user,
 )
-from .visitors import NodeMutator, NodeTranslator, NodeVisitor
+from .datamodels import (
+    Coerced,
+    DataModel,
+    FrozenModel,
+    GenericDataModel,
+    Unchecked,
+    concretize,
+    datamodel,
+    field,
+    frozenmodel,
+)
+from .traits import SymbolTableTrait, ValidatedSymbolTableTrait, VisitorWithSymbolTableTrait
+from .trees import (
+    bfs_walk_items,
+    bfs_walk_values,
+    post_walk_items,
+    post_walk_values,
+    pre_walk_items,
+    pre_walk_values,
+    walk_items,
+    walk_values,
+)
+from .type_definitions import NOTHING, ConstrainedStr, Enum, IntEnum, NothingType, StrEnum
+from .visitors import NodeTranslator, NodeVisitor
 
 
 __all__ = [
     # version
     "__version__",
     "__versioninfo__",
-    # datamodels
-    "Coerced",
+    # concepts
+    "AnnexManager",
+    "AnySourceLocation",
+    "FrozenNode",
+    "RootNode",
+    "GenericNode",
+    "Node",
+    "SourceLocation",
+    "SourceLocationGroup",
+    "SymbolName",
+    "SymbolRef",
+    "VType",
+    "register_annex_user",
+    "# datamodels" "Coerced",
     "DataModel",
+    "FrozenModel",
+    "GenericDataModel",
+    "Unchecked",
     "concretize",
     "datamodel",
     "field",
-    #
-    "Bool",
-    "Enum",
-    "Float",
-    "Int",
-    "IntEnum",
-    "FieldKind",
+    "frozenmodel",
+    # datamodels
+    "Coerced",
+    "DataModel",
     "FrozenModel",
-    "FrozenNode",
-    "GenericNode",
-    "Model",
-    "NegativeFloat",
-    "NegativeInt",
+    "GenericDataModel",
+    "Unchecked",
+    "concretize",
+    "datamodel",
+    "field",
+    "frozenmodel",
+    # traits
+    "SymbolTableTrait",
+    "ValidatedSymbolTableTrait",
+    "VisitorWithSymbolTableTrait",
+    # trees
+    "bfs_walk_items",
+    "bfs_walk_values",
+    "post_walk_items",
+    "post_walk_values",
+    "pre_walk_items",
+    "pre_walk_values",
+    "walk_items",
+    "walk_values",
+    "# type_definition",
     "NOTHING",
-    "Node",
-    "NodeMutator",
+    "ConstrainedStr",
+    "Enum",
+    "IntEnum",
+    "NothingType",
+    "StrEnum",
+    # visitors
     "NodeTranslator",
     "NodeVisitor",
-    "PositiveFloat",
-    "PositiveInt",
-    "SourceLocation",
-    "Str",
-    "StrEnum",
-    "SymbolName",
-    "SymbolRef",
-    "SymbolTableTrait",
-    "VType",
-    "field",
-    "iter_tree",
-    "in_field",
-    "out_field",
 ]

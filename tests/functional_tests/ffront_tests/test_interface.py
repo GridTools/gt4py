@@ -141,7 +141,7 @@ def test_temp_assignment():
 
     parsed = FieldOperatorParser.apply_to_function(copy_field)
 
-    assert parsed.symtable_["tmp__0"].type == common_types.FieldType(
+    assert parsed.annex.symtable["tmp__0"].type == common_types.FieldType(
         dims=Ellipsis,
         dtype=common_types.ScalarType(kind=common_types.ScalarKind.FLOAT64, shape=None),
     )
@@ -160,11 +160,12 @@ def test_binary_pow():
     def power(inp: Field[..., "float64"]):
         return inp**3
 
-    with pytest.raises(
-        FieldOperatorSyntaxError,
-        match=(r"`\*\*` operator not supported!"),
-    ):
-        _ = FieldOperatorParser.apply_to_function(power)
+    parsed = FieldOperatorParser.apply_to_function(power)
+
+    assert parsed.body[-1].value.type == common_types.FieldType(
+        dims=Ellipsis,
+        dtype=common_types.ScalarType(kind=common_types.ScalarKind.FLOAT64, shape=None),
+    )
 
 
 def test_binary_mod():
@@ -223,13 +224,13 @@ def test_closure_symbols():
         return a, b
 
     parsed = FieldOperatorParser.apply_to_function(operator_with_refs)
-    assert parsed.symtable_["nonlocal_float"].type == common_types.ScalarType(
+    assert parsed.annex.symtable["nonlocal_float"].type == common_types.ScalarType(
         kind=common_types.ScalarKind.FLOAT64, shape=None
     )
-    assert parsed.symtable_["nonlocal_np_scalar"].type == common_types.ScalarType(
+    assert parsed.annex.symtable["nonlocal_np_scalar"].type == common_types.ScalarType(
         kind=common_types.ScalarKind.FLOAT32, shape=None
     )
-    assert "nonlocal_unused" not in parsed.symtable_
+    assert "nonlocal_unused" not in parsed.annex.symtable
 
 
 def test_external_symbols():
@@ -246,10 +247,10 @@ def test_external_symbols():
         operator_with_externals,
         externals=dict(ext_float=2.3, ext_np_scalar=np.float32(3.4), ext_unused=0),
     )
-    assert parsed.symtable_["ext_float"].type == common_types.ScalarType(
+    assert parsed.annex.symtable["ext_float"].type == common_types.ScalarType(
         kind=common_types.ScalarKind.FLOAT64, shape=None
     )
-    assert parsed.symtable_["ext_np_scalar"].type == common_types.ScalarType(
+    assert parsed.annex.symtable["ext_np_scalar"].type == common_types.ScalarType(
         kind=common_types.ScalarKind.FLOAT32, shape=None
     )
-    assert "ext_unused" not in parsed.symtable_
+    assert "ext_unused" not in parsed.annex.symtable

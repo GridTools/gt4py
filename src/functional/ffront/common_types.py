@@ -28,15 +28,7 @@ class Namespace(StrEnum):
 
 
 class SymbolType:
-    @classmethod
-    def validate(cls, v):
-        if not isinstance(v, cls):
-            raise TypeError(f"Value is not a valid `{cls}`")
-        return v
-
-    @classmethod
-    def __get_validators__(cls):
-        yield cls.validate
+    pass
 
 
 @dataclass(frozen=True)

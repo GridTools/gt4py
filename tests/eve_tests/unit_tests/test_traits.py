@@ -17,7 +17,6 @@
 
 from __future__ import annotations
 
-import pydantic
 import pytest
 
 import eve
@@ -40,7 +39,7 @@ def symtable_node_and_expected_symbols():
 
 
 class _NodeWithSymbolName(eve.Node):
-    name: eve.SymbolName = eve.SymbolName("symbol_name")
+    name: eve.Coerced[eve.SymbolName]
 
 
 class _NodeWithSymbolTable(eve.Node, eve.SymbolTableTrait):
@@ -50,7 +49,9 @@ class _NodeWithSymbolTable(eve.Node, eve.SymbolTableTrait):
 @pytest.fixture
 def node_with_duplicated_names_maker():
     def _maker():
-        return _NodeWithSymbolTable(symbols=[_NodeWithSymbolName(), _NodeWithSymbolName()])
+        return _NodeWithSymbolTable(
+            symbols=[_NodeWithSymbolName(name="repeated"), _NodeWithSymbolName(name="repeated")]
+        )
 
     yield _maker
 
@@ -62,13 +63,13 @@ class TestSymbolTable:
 
     def test_symbol_table_creation(self, symtable_node_and_expected_symbols):
         node, expected_symbols = symtable_node_and_expected_symbols
-        collected_symtable = node.symtable_
-        assert isinstance(node.symtable_, dict)
+        collected_symtable = node.annex.symtable
+        assert isinstance(node.annex.symtable, dict)
         assert all(isinstance(key, str) for key in collected_symtable)
 
     def test_symbol_table_collection(self, symtable_node_and_expected_symbols):
         node, expected_symbols = symtable_node_and_expected_symbols
-        collected_symtable = node.symtable_
+        collected_symtable = node.annex.symtable
         assert collected_symtable == expected_symbols
         assert all(
             collected_symtable[symbol_name] is symbol_node
@@ -77,36 +78,35 @@ class TestSymbolTable:
 
     def test_extra_node_symbols(self):
         class NodeWithName(eve.Node):
-            name: eve.SymbolName
+            name: eve.Coerced[eve.SymbolName]
 
         class NodeWithRef(eve.Node):
-            ref_name: eve.SymbolRef
+            ref_name: eve.Coerced[eve.SymbolRef]
 
         class NodeWithSymbolTable(eve.Node, eve.traits.ValidatedSymbolTableTrait):
             symbols: List[NodeWithRef]
 
             _NODE_SYMBOLS_: ClassVar[List] = []
 
-        NodeWithSymbolTable.update_forward_refs(**locals())
+        NodeWithSymbolTable.update_forward_refs(locals())
 
-        with pytest.raises(pydantic.ValidationError, match="'foo'"):
+        with pytest.raises(ValueError, match="'foo'"):
             NodeWithSymbolTable(symbols=[NodeWithRef(ref_name="foo")])
 
         NodeWithSymbolTable._NODE_SYMBOLS_.append(NodeWithName(name="foo"))
-        print(NodeWithSymbolTable._NODE_SYMBOLS_)
         NodeWithSymbolTable(symbols=[NodeWithRef(ref_name=eve.SymbolRef("foo"))])
 
 
 def test_visitor_with_symbol_table_trait(node_with_symbol_table):
     class BareVisitor(eve.visitors.NodeVisitor):
-        def visit_Node(self, node: eve.concepts.TreeNode, **kwargs: Any) -> Any:
+        def visit_Node(self, node: eve.concepts.RootNode, **kwargs: Any) -> Any:
             assert "symtable" in kwargs
 
     with pytest.raises(AssertionError, match="'symtable'"):
         BareVisitor().visit(node_with_symbol_table)
 
     class ExtendedVisitor(eve.traits.VisitorWithSymbolTableTrait):
-        def visit_Node(self, node: eve.concepts.TreeNode, **kwargs: Any) -> Any:
+        def visit_Node(self, node: eve.concepts.RootNode, **kwargs: Any) -> Any:
             assert "symtable" in kwargs
             assert "symbol_name" in kwargs["symtable"]
 
