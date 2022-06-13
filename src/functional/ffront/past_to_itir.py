@@ -58,6 +58,10 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
     [Sym(id=SymbolName('inp')), Sym(id=SymbolName('out')), Sym(id=SymbolName('__inp_size_0')), Sym(id=SymbolName('__out_size_0'))]
     """
 
+    def __init__(self) -> None:
+        self.uses_size_arguments = False  # TODO refactor this error-prone state
+        super().__init__()
+
     @classmethod
     def apply(
         cls, node: past.Program, function_definitions: list[itir.FunctionDefinition]
@@ -93,10 +97,14 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                     "Only calls to functions returning a Field supported currently."
                 )
 
+        params = [itir.Sym(id=inp.id) for inp in node.params]
+        if self.uses_size_arguments:
+            params += size_params
+
         return itir.FencilDefinition(
             id=node.id,
             function_definitions=function_definitions,
-            params=[itir.Sym(id=inp.id) for inp in node.params] + size_params,
+            params=params,
             closures=closures,
         )
 
@@ -140,38 +148,45 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         #  inspection of the PAST to emulate the behaviour
         if isinstance(node, past.Subscript):
             out_field_name: past.Name = node.value
-            if isinstance(node.slice_, past.TupleExpr) and all(
-                isinstance(el, past.Slice) for el in node.slice_.elts
-            ):
-                out_field_slice_: list[past.Slice] = node.slice_.elts
-            elif isinstance(node.slice_, past.Slice):
-                out_field_slice_: list[past.Slice] = [node.slice_]
+            if isinstance(node.slice_, past.Name):
+                # assert node.slice_ is of type domain
+                return itir.SymRef(id=self.visit(out_field_name, **kwargs).id), itir.SymRef(
+                    id=node.slice_.id
+                )
             else:
-                raise RuntimeError(
-                    "Unexpected `out` argument. Must be tuple of slices or slice expression."
-                )
-            if len(out_field_slice_) != len(node.type.dims):
-                raise GTTypeError(
-                    f"Too many indices for field {out_field_name}: field is {len(node.type.dims)}"
-                    f"-dimensional, but {len(out_field_slice_)} were indexed."
-                )
-            domain_args = []
-            for dim_i, (dim, slice_) in enumerate(zip(node.type.dims, out_field_slice_)):
-                # an expression for the size of a dimension
-                dim_size = itir.SymRef(id=_size_arg_from_field(out_field_name.id, dim_i))
-                # lower bound
-                lower = self._visit_slice_bound(
-                    slice_.lower, itir.Literal(value="0", type="int"), dim_size
-                )
-                upper = self._visit_slice_bound(slice_.upper, dim_size, dim_size)
-                if dim.local:
-                    raise GTTypeError(f"Dimension {dim.value} must not be local.")
-                domain_args.append(
-                    itir.FunCall(
-                        fun=itir.SymRef(id="named_range"),
-                        args=[itir.AxisLiteral(value=dim.value), lower, upper],
+                self.uses_size_arguments = True
+                if isinstance(node.slice_, past.TupleExpr) and all(
+                    isinstance(el, past.Slice) for el in node.slice_.elts
+                ):
+                    out_field_slice_: list[past.Slice] = node.slice_.elts
+                elif isinstance(node.slice_, past.Slice):
+                    out_field_slice_: list[past.Slice] = [node.slice_]
+                else:
+                    raise RuntimeError(
+                        "Unexpected `out` argument. Must be tuple of slices or slice expression."
                     )
-                )
+                if len(out_field_slice_) != len(node.type.dims):
+                    raise GTTypeError(
+                        f"Too many indices for field {out_field_name}: field is {len(node.type.dims)}"
+                        f"-dimensional, but {len(out_field_slice_)} were indexed."
+                    )
+                domain_args = []
+                for dim_i, (dim, slice_) in enumerate(zip(node.type.dims, out_field_slice_)):
+                    # an expression for the size of a dimension
+                    dim_size = itir.SymRef(id=_size_arg_from_field(out_field_name.id, dim_i))
+                    # lower bound
+                    lower = self._visit_slice_bound(
+                        slice_.lower, itir.Literal(value="0", type="int"), dim_size
+                    )
+                    upper = self._visit_slice_bound(slice_.upper, dim_size, dim_size)
+                    if dim.local:
+                        raise GTTypeError(f"Dimension {dim.value} must not be local.")
+                    domain_args.append(
+                        itir.FunCall(
+                            fun=itir.SymRef(id="named_range"),
+                            args=[itir.AxisLiteral(value=dim.value), lower, upper],
+                        )
+                    )
 
         elif isinstance(node, past.Name):
             out_field_name = node
