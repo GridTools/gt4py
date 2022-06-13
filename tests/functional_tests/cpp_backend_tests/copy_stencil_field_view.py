@@ -20,7 +20,7 @@ def copy_stencil(inp: Field[[IDim, JDim, KDim], float64]) -> Field[[IDim, JDim, 
 
 @program
 def copy(
-    dom: Field[[], float64],
+    dom: Field[[], float64],  # TODO should be Domain[IDim, JDim, KDim]
     inp: Field[[IDim, JDim, KDim], float64],
     out: Field[[IDim, JDim, KDim], float64],
 ):
