@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
-#
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2021, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -25,14 +23,15 @@ import numpy as np
 import pytest
 
 import gt4py as gt
+import gtc.utils as gtc_utils
 from gt4py import backend as gt_backend
 from gt4py import gtscript
 from gt4py import storage as gt_storage
 from gt4py import utils as gt_utils
-from gt4py.definitions import AccessKind, Boundary, CartesianSpace, FieldInfo, Shape
-from gt4py.ir.nodes import Index
+from gt4py.definitions import AccessKind, Boundary, CartesianSpace, FieldInfo
+from gt4py.frontend.nodes import Index
 from gt4py.stencil_object import StencilObject
-from gt4py.utils import filter_mask, interpolate_mask
+from gtc.definitions import Shape
 
 from .input_strategies import (
     SymbolKind,
@@ -164,10 +163,9 @@ class SuiteMeta(type):
                 return combinations
 
         cls_dict["tests"] = []
-        for d in get_dtype_combinations(dtypes):
-            for g in get_globals_combinations(d):
-                for b in backends:
-
+        for b in backends:
+            for d in get_dtype_combinations(dtypes):
+                for g in get_globals_combinations(d):
                     cls_dict["tests"].append(
                         dict(
                             backend=b if isinstance(b, str) else b.values[0],
@@ -330,6 +328,14 @@ class SuiteMeta(type):
         cls_dict["dtypes"] = standardize_dtype_dict(dtypes)
         cls_dict["ndims"] = len(cls_dict["domain_range"])
 
+        # Filter out unsupported backends
+        cls_dict["backends"] = [
+            backend
+            for backend in cls_dict["backends"]
+            if gt_backend.from_name(backend if isinstance(backend, str) else backend.values[0])
+            is not None
+        ]
+
         cls._validate_new_args(cls_name, cls_dict)
 
         # Extract input and parameter names
@@ -487,7 +493,7 @@ class StencilTestSuite(metaclass=SuiteMeta):
         for name, data in input_data.items():
             if isinstance(data, np.ndarray):
                 data_shape &= Shape(
-                    interpolate_mask(data.shape, field_masks[name], default=sys.maxsize)
+                    gtc_utils.interpolate_mask(data.shape, field_masks[name], default=sys.maxsize)
                 )
 
         domain = data_shape - (
@@ -550,7 +556,7 @@ class StencilTestSuite(metaclass=SuiteMeta):
                 offset_low = tuple(b[0] - e for b, e in zip(max_boundary, field_extent_low))
                 field_extent_high = tuple(b[1] for b in sym.boundary)
                 offset_high = tuple(b[1] - e for b, e in zip(max_boundary, field_extent_high))
-                validation_slice = filter_mask(
+                validation_slice = gtc_utils.filter_mask(
                     tuple(slice(o, s - h) for o, s, h in zip(offset_low, data_shape, offset_high)),
                     field_masks[name],
                 )

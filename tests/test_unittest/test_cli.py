@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
-#
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2021, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -25,7 +23,7 @@ from click.testing import CliRunner
 from gt4py import backend, cli
 from gt4py.backend.base import CLIBackendMixin
 
-from ..definitions import INTERNAL_BACKENDS
+from ..definitions import ALL_BACKENDS
 
 
 @pytest.fixture
@@ -36,7 +34,7 @@ def clirunner():
 
 @pytest.fixture(
     params=[
-        *INTERNAL_BACKENDS,  # gtc backends require definition ir as input, for now we skip the tests
+        *ALL_BACKENDS,  # gtc backends require definition ir as input, for now we skip the tests
         pytest.param(
             "nocli",
         ),
@@ -93,12 +91,13 @@ def nocli_backend(scope="module"):
 
 
 BACKEND_ROW_PATTERN_BY_NAME = {
-    "gtc:cuda": r"^\s*gtc:cuda\s*cuda\s*python\s*Yes",
-    "gtc:dace": r"^\s*gtc:dace\s*c\+\+\s*python\s*Yes",
-    "gtc:gt:cpu_ifirst": r"^\s*gtc:gt:cpu_ifirst\s*c\+\+\s*python\s*Yes",
-    "gtc:gt:cpu_kfirst": r"^\s*gtc:gt:cpu_kfirst\s*c\+\+\s*python\s*Yes",
-    "gtc:gt:gpu": r"^\s*gtc:gt:gpu\s*cuda\s*python\s*Yes",
-    "gtc:numpy": r"^\s*gtc:numpy\s*python\s*python\s*Yes",
+    "cuda": r"^\s*cuda\s*cuda\s*python\s*Yes",
+    "dace:cpu": r"^\s*dace:cpu\s*c\+\+\s*python\s*Yes",
+    "dace:gpu": r"^\s*dace:gpu\s*cuda\s*python\s*Yes",
+    "gt:cpu_ifirst": r"^\s*gt:cpu_ifirst\s*c\+\+\s*python\s*Yes",
+    "gt:cpu_kfirst": r"^\s*gt:cpu_kfirst\s*c\+\+\s*python\s*Yes",
+    "gt:gpu": r"^\s*gt:gpu\s*cuda\s*python\s*Yes",
+    "numpy": r"^\s*numpy\s*python\s*python\s*Yes",
     "nocli": r"^\s*nocli\s*\?\s*\?\s*No",
 }
 
@@ -128,7 +127,7 @@ def test_gen_silent(clirunner, simple_stencil, tmp_path):
         cli.gtpyc,
         [
             "gen",
-            "--backend=gtc:numpy",
+            "--backend=numpy",
             "--output-path",
             str(tmp_path / "test_gen_silent"),
             "--silent",
@@ -143,7 +142,7 @@ def test_gen_silent(clirunner, simple_stencil, tmp_path):
 
 def test_gen_missing_arg(clirunner):
     """Test for error if no input path argument is passed to gen."""
-    result = clirunner.invoke(cli.gtpyc, ["gen", "--backend=gtc:numpy"])
+    result = clirunner.invoke(cli.gtpyc, ["gen", "--backend=numpy"])
 
     assert result.exit_code == 2
     assert "Missing argument 'INPUT_PATH'." in result.output
@@ -197,7 +196,7 @@ def test_gen_gtc_cpu(clirunner, simple_stencil, tmp_path):
     output_path = tmp_path / "test_gen_gtc_cpu"
     result = clirunner.invoke(
         cli.gtpyc,
-        ["gen", f"--output-path={output_path}", "--backend=gtc:gt:cpu_kfirst", str(simple_stencil)],
+        ["gen", f"--output-path={output_path}", "--backend=gt:cpu_kfirst", str(simple_stencil)],
         catch_exceptions=False,
     )
     assert result.exit_code == 0
@@ -217,7 +216,7 @@ def test_backend_option_order(clirunner, simple_stencil, tmp_path):
             [
                 "gen",
                 f"--output-path={output_path1}",
-                "--backend=gtc:numpy",
+                "--backend=numpy",
                 "-O",
                 "ignore_np_errstate=True",
                 str(simple_stencil),
@@ -235,7 +234,7 @@ def test_backend_option_order(clirunner, simple_stencil, tmp_path):
                 f"--output-path={output_path1}",
                 "-O",
                 "ignore_np_errstate=True",
-                "--backend=gtc:numpy",
+                "--backend=numpy",
                 str(simple_stencil),
             ],
             catch_exceptions=False,
@@ -246,7 +245,7 @@ def test_backend_option_order(clirunner, simple_stencil, tmp_path):
 
 def test_write_computation_src(tmp_path, simple_stencil):
     builder = cli.GTScriptBuilder(
-        simple_stencil, output_path=tmp_path, backend=backend.from_name("gtc:numpy")
+        simple_stencil, output_path=tmp_path, backend=backend.from_name("numpy")
     )
     toplevel = "test_write_computation_src"
     test_src = {

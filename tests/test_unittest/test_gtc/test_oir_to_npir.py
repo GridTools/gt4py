@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
-#
 # GTC Toolchain - GT4Py Project - GridTools Framework
 #
-# Copyright (c) 2014-2021, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -18,6 +16,7 @@
 import pytest
 
 from gtc import common, oir
+from gtc.definitions import Extent
 from gtc.numpy import npir
 from gtc.numpy.oir_to_npir import OirToNpir
 
@@ -87,15 +86,15 @@ def test_horizontal_execution_to_vector_assigns() -> None:
 
 def test_mask_stmt_to_assigns() -> None:
     mask_stmt = MaskStmtFactory(body=[AssignStmtFactory()])
-    assign_stmts = OirToNpir().visit(mask_stmt)
-    assert isinstance(assign_stmts[0].mask, npir.FieldSlice)
+    assign_stmts = OirToNpir().visit(mask_stmt, extent=Extent.zeros(ndims=2))
+    assert isinstance(assign_stmts[0].right.cond, npir.FieldSlice)
     assert len(assign_stmts) == 1
 
 
 def test_mask_propagation() -> None:
     mask_stmt = MaskStmtFactory()
-    assign_stmts = OirToNpir().visit(mask_stmt)
-    assert assign_stmts[0].mask == OirToNpir().visit(mask_stmt.mask)
+    assign_stmts = OirToNpir().visit(mask_stmt, extent=Extent.zeros(ndims=2))
+    assert assign_stmts[0].right.cond == OirToNpir().visit(mask_stmt.mask)
 
 
 def make_block_and_transform(**kwargs) -> npir.HorizontalBlock:
@@ -169,7 +168,8 @@ def test_literal_broadcast() -> None:
         AssignStmtFactory(
             left__dtype=common.DataType.FLOAT32,
             right=oir.Literal(value="42", dtype=common.DataType.FLOAT32),
-        )
+        ),
+        local_assigns={},
     )
     assert isinstance(result.right, npir.Broadcast)
     assert (result.right.expr.value, result.right.expr.dtype) == ("42", common.DataType.FLOAT32)

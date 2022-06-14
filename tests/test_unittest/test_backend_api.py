@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
-#
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2021, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -62,7 +60,7 @@ def test_generate_computation(backend, tmp_path):
     )
     # TODO(havogt) remove once gtc:gt produces a cpp-file for computation
     gtc_result = (
-        (backend.name.startswith("gtc") and backend.languages["computation"] in ["c++", "cuda"])
+        (backend.languages["computation"] in ["c++", "cuda"])
         and "computation.hpp" in result["init_1_src"]
         and "bindings.cpp" not in result["init_1_src"]
     )
@@ -82,13 +80,12 @@ def test_generate_bindings(backend, tmp_path):
         # standalone python computation module imported by stencil module
         result = builder.backend.generate_bindings("python")
         assert "init_1.py" in result
-        assert re.search(r"import computation", result["init_1.py"], re.MULTILINE)
+        assert re.search(
+            r"computation = make_module_from_file\(.*\)", result["init_1.py"], re.MULTILINE
+        )
     else:
         # assumption: only gt backends support python bindings for other languages than python
-        if backend.name.startswith("gtc:"):
-            result = builder.backend.generate_bindings("python", ir=builder.definition_ir)
-        else:
-            result = builder.backend.generate_bindings("python")
+        result = builder.backend.generate_bindings("python", stencil_ir=builder.gtir)
         assert "init_1_src" in result
         srcs = result["init_1_src"]
         assert "bindings.cpp" in srcs or "bindings.cu" in srcs

@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
-#
 # GTC Toolchain - GT4Py Project - GridTools Framework
 #
-# Copyright (c) 2014-2021, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -18,8 +16,8 @@ from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 
 from eve import NodeTranslator, SourceLocation, SymbolTableTrait
-from gt4py.definitions import Extent
 from gtc import common, oir
+from gtc.definitions import Extent
 
 from .utils import (
     AccessCollector,
@@ -248,12 +246,16 @@ class OnTheFlyMerging(NodeTranslator):
         def first_has_variable_access() -> bool:
             return first_accesses.has_variable_access()
 
+        def first_has_horizontal_restriction() -> bool:
+            return any(first.iter_tree().if_isinstance(oir.HorizontalRestriction))
+
         if (
             first_fields_rewritten_later()
             or first_writes_protected()
             or first_has_large_body()
             or first_has_expensive_function_call()
             or first_has_variable_access()
+            or first_has_horizontal_restriction()
         ):
             return [first] + self._merge(others, symtable, new_symbol_name, protected_fields)
 

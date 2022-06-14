@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
-#
 # GTC Toolchain - GT4Py Project - GridTools Framework
 #
-# Copyright (c) 2014-2021, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -14,14 +12,15 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import typing
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 from eve.concepts import BaseNode
 from eve.traits import SymbolTableTrait
+from eve.type_definitions import NOTHING
 from eve.visitors import NodeTranslator
-from gt4py.definitions import Extent
 from gtc import common, oir, utils
+from gtc.definitions import Extent
+from gtc.passes.horizontal_masks import compute_relative_mask
 from gtc.passes.oir_optimizations.utils import compute_extents
 
 from . import npir
@@ -36,7 +35,7 @@ class OirToNpir(NodeTranslator):
     def visit_FieldDecl(
         self, node: oir.FieldDecl, *, field_extents: Dict[str, Extent], **kwargs: Any
     ) -> npir.FieldDecl:
-        extent = typing.cast(npir.HorizontalExtent, field_extents.get(node.name, ((0, 0), (0, 0))))
+        extent = field_extents.get(node.name, Extent.zeros(ndims=2))
         return npir.FieldDecl(
             name=node.name,
             dtype=node.dtype,
@@ -49,12 +48,12 @@ class OirToNpir(NodeTranslator):
         return npir.ScalarDecl(name=node.name, dtype=node.dtype)
 
     def visit_LocalScalar(self, node: oir.LocalScalar, **kwargs: Any) -> npir.ScalarDecl:
-        return npir.ScalarDecl(name=node.name, dtype=node.dtype)
+        return npir.LocalScalarDecl(name=node.name, dtype=node.dtype)
 
     def visit_Temporary(
         self, node: oir.Temporary, *, field_extents: Dict[str, Extent], **kwargs: Any
     ) -> npir.TemporaryDecl:
-        temp_extent = field_extents[node.name] | Extent.zeros(ndims=2)
+        temp_extent = field_extents[node.name]
         offset = [-ext[0] for ext in temp_extent]
         assert all(off >= 0 for off in offset)
         padding = [ext[1] - ext[0] for ext in temp_extent]
@@ -76,9 +75,9 @@ class OirToNpir(NodeTranslator):
     ) -> Union[npir.ParamAccess, npir.LocalScalarAccess]:
         assert node.kind == common.ExprKind.SCALAR
         if isinstance(symtable[node.name], oir.LocalScalar):
-            return npir.LocalScalarAccess(name=node.name)
+            return npir.LocalScalarAccess(name=node.name, dtype=symtable[node.name].dtype)
         else:
-            return npir.ParamAccess(name=node.name)
+            return npir.ParamAccess(name=node.name, dtype=symtable[node.name].dtype)
 
     def visit_CartesianOffset(
         self, node: common.CartesianOffset, **kwargs: Any
@@ -146,26 +145,32 @@ class OirToNpir(NodeTranslator):
         *,
         mask: Optional[npir.Expr] = None,
         **kwargs: Any,
-    ) -> List[npir.VectorAssign]:
+    ) -> List[npir.Stmt]:
         mask_expr = self.visit(node.mask, **kwargs)
         if mask:
             mask_expr = npir.VectorLogic(op=common.LogicalOperator.AND, left=mask, right=mask_expr)
-        return self.visit(node.body, mask=mask_expr, **kwargs)
+
+        return utils.flatten_list(self.visit(node.body, mask=mask_expr, **kwargs))
 
     def visit_AssignStmt(
         self,
         node: oir.AssignStmt,
         *,
         mask: Optional[npir.Expr] = None,
+        horizontal_mask: Optional[common.HorizontalMask] = None,
         **kwargs: Any,
     ) -> npir.VectorAssign:
         left = self.visit(node.left, **kwargs)
         right = self.visit(node.right, **kwargs)
-        if right.kind == common.ExprKind.SCALAR:
-            right = npir.Broadcast(expr=right, dims=3)
-        return npir.VectorAssign(left=left, right=right, mask=mask)
 
-    # --- Control Flow ---
+        if right.kind == common.ExprKind.SCALAR:
+            right = npir.Broadcast(expr=right)
+
+        if mask is not None:
+            right = npir.VectorTernaryOp(cond=mask, true_expr=right, false_expr=left)
+
+        return npir.VectorAssign(left=left, right=right, horizontal_mask=horizontal_mask)
+
     def visit_While(
         self, node: oir.While, *, mask: Optional[npir.Expr] = None, **kwargs: Any
     ) -> npir.While:
@@ -174,8 +179,20 @@ class OirToNpir(NodeTranslator):
             mask = npir.VectorLogic(op=common.LogicalOperator.AND, left=mask, right=cond)
         else:
             mask = cond
-        return npir.While(cond=cond, body=self.visit(node.body, mask=mask, **kwargs))
+        return npir.While(
+            cond=cond, body=utils.flatten_list(self.visit(node.body, mask=mask, **kwargs))
+        )
 
+    def visit_HorizontalRestriction(
+        self, node: oir.HorizontalRestriction, *, extent: Extent, **kwargs: Any
+    ) -> Any:
+        horizontal_mask = compute_relative_mask(extent, node.mask)
+        if horizontal_mask is None:
+            return NOTHING
+
+        return utils.flatten_list(self.visit(node.body, horizontal_mask=horizontal_mask, **kwargs))
+
+    # --- Control Flow ---
     def visit_HorizontalExecution(
         self,
         node: oir.HorizontalExecution,
@@ -183,13 +200,14 @@ class OirToNpir(NodeTranslator):
         block_extents: Optional[Dict[int, Extent]] = None,
         **kwargs: Any,
     ) -> npir.HorizontalBlock:
-        stmts = utils.flatten_list(self.visit(node.body, **kwargs))
         if block_extents:
             extent = block_extents[id(node)]
         else:
-            extent = ((0, 0), (0, 0))
+            extent = Extent.zeros(ndims=2)
+
+        stmts = utils.flatten_list(self.visit(node.body, extent=extent, **kwargs))
         return npir.HorizontalBlock(
-            declarations=self.visit(node.declarations, **kwargs), body=stmts, extent=extent
+            body=stmts, extent=extent, declarations=self.visit(node.declarations, **kwargs)
         )
 
     def visit_VerticalLoopSection(
@@ -222,7 +240,11 @@ class OirToNpir(NodeTranslator):
         ]
 
         vertical_passes = utils.flatten_list(
-            self.visit(node.vertical_loops, block_extents=block_extents, **kwargs)
+            self.visit(
+                node.vertical_loops,
+                block_extents=block_extents,
+                **kwargs,
+            )
         )
 
         return npir.Computation(

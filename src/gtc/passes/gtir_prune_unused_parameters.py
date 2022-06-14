@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
-#
 # GTC Toolchain - GT4Py Project - GridTools Framework
 #
-# Copyright (c) 2014-2021, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -33,6 +31,4 @@ def prune_unused_parameters(node: gtir.Stencil) -> gtir.Stencil:
         .to_list()
     )
     used_params = list(filter(lambda param: param.name in used_variables, node.params))
-    return gtir.Stencil(
-        name=node.name, params=used_params, vertical_loops=node.vertical_loops, loc=node.loc
-    )
+    return node.copy(update={"params": used_params})

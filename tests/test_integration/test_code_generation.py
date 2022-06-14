@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
-#
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2021, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -21,7 +19,7 @@ from gt4py import gtscript
 from gt4py import storage as gt_storage
 from gt4py.gtscript import __INLINED, BACKWARD, FORWARD, PARALLEL, Field, computation, interval
 
-from ..definitions import ALL_BACKENDS, CPU_BACKENDS, INTERNAL_BACKENDS
+from ..definitions import ALL_BACKENDS, CPU_BACKENDS
 from .stencil_definitions import EXTERNALS_REGISTRY as externals_registry
 from .stencil_definitions import REGISTRY as stencil_definitions
 
@@ -92,10 +90,10 @@ def test_ignore_np_errstate():
         divide_by_zero(field_a)
 
     # Usual behavior: with the numpy backend there is no error
-    setup_and_run(backend="gtc:numpy")
+    setup_and_run(backend="numpy")
 
     with pytest.warns(RuntimeWarning, match="divide by zero encountered"):
-        setup_and_run(backend="gtc:numpy", ignore_np_errstate=False)
+        setup_and_run(backend="numpy", ignore_np_errstate=False)
 
 
 @pytest.mark.parametrize("backend", CPU_BACKENDS)
@@ -284,17 +282,7 @@ def test_lower_dimensional_inputs_2d_to_3d_forward(backend):
     assert np.allclose(np.asarray(outp_f), np.asarray(inp_f)[:, :, np.newaxis])
 
 
-@pytest.mark.parametrize(
-    "backend",
-    [
-        "gtc:numpy",
-        "gtc:gt:cpu_ifirst",
-        "gtc:gt:cpu_kfirst",
-        pytest.param("gtc:gt:gpu", marks=[pytest.mark.requires_gpu, pytest.mark.xfail]),
-        pytest.param("gtc:cuda", marks=[pytest.mark.requires_gpu, pytest.mark.xfail]),
-        "gtc:dace",
-    ],
-)
+@pytest.mark.parametrize("backend", ALL_BACKENDS)
 def test_higher_dimensional_fields(backend):
     FLOAT64_VEC2 = (np.float64, (2,))
     FLOAT64_MAT22 = (np.float64, (2, 2))
@@ -329,7 +317,8 @@ def test_higher_dimensional_fields(backend):
     field = gt_storage.ones(backend, default_origin, full_shape, dtype=np.float64)
     assert field.shape == full_shape[:]
 
-    vec_field = 2.0 * gt_storage.ones(backend, default_origin, full_shape, dtype=FLOAT64_VEC2)
+    vec_field = gt_storage.ones(backend, default_origin, full_shape, dtype=FLOAT64_VEC2)
+    vec_field[:] = 2.0
     assert vec_field.shape[:-1] == full_shape
 
     mat_field = gt_storage.ones(backend, default_origin, full_shape, dtype=FLOAT64_MAT22)
@@ -352,10 +341,7 @@ def test_input_order(backend):
             out_field = in_field * parameter
 
 
-# TODO: Enable variable offsets on gtc:dace backend
-@pytest.mark.parametrize(
-    "backend", [backend for backend in ALL_BACKENDS if "dace" not in backend.values[0]]
-)
+@pytest.mark.parametrize("backend", ALL_BACKENDS)
 def test_variable_offsets(backend):
     @gtscript.stencil(backend=backend)
     def stencil_ij(
@@ -377,10 +363,7 @@ def test_variable_offsets(backend):
             out_field = in_field[0, 0, 1] + in_field[0, 0, index_field + 1]
 
 
-# TODO: Enable DaCe
-@pytest.mark.parametrize(
-    "backend", [backend for backend in ALL_BACKENDS if backend.values[0] != "gtc:dace"]
-)
+@pytest.mark.parametrize("backend", ALL_BACKENDS)
 def test_variable_offsets_and_while_loop(backend):
     @gtscript.stencil(backend=backend)
     def stencil(
@@ -401,10 +384,7 @@ def test_variable_offsets_and_while_loop(backend):
                 qout = qsum / (pe2[0, 0, 1] - pe2)
 
 
-# TODO: Enable DaCe
-@pytest.mark.parametrize(
-    "backend", [backend for backend in ALL_BACKENDS if backend.values[0] != "gtc:dace"]
-)
+@pytest.mark.parametrize("backend", ALL_BACKENDS)
 def test_nested_while_loop(backend):
     @gtscript.stencil(backend=backend)
     def stencil(
@@ -485,47 +465,48 @@ def test_read_data_dim_indirect_addressing(backend):
     assert output_field[0, 0, 0] == 1
 
 
-@pytest.mark.parametrize(
-    "backend",
-    [
-        "gtc:numpy",
-        "gtc:gt:cpu_ifirst",
-        "gtc:gt:cpu_kfirst",
-        pytest.param("gtc:gt:gpu", marks=[pytest.mark.requires_gpu]),
-        pytest.param("gtc:cuda", marks=[pytest.mark.requires_gpu]),
-        "gtc:dace",
-    ],
-)
-def test_negative_origin(backend):
-    def stencil_i(
-        input_field: gtscript.Field[gtscript.IJK, np.int32],
-        output_field: gtscript.Field[gtscript.IJK, np.int32],
-    ):
-        with computation(PARALLEL), interval(...):
-            output_field = input_field[1, 0, 0]
+@pytest.mark.parametrize("backend", ALL_BACKENDS)
+class TestNegativeOrigin:
+    def test_negative_origin_i(self, backend):
+        @gtscript.stencil(backend=backend)
+        def stencil_i(
+            input_field: gtscript.Field[gtscript.IJK, np.int32],
+            output_field: gtscript.Field[gtscript.IJK, np.int32],
+        ):
+            with computation(PARALLEL), interval(...):
+                output_field = input_field[1, 0, 0]
 
-    def stencil_k(
-        input_field: gtscript.Field[gtscript.IJK, np.int32],
-        output_field: gtscript.Field[gtscript.IJK, np.int32],
-    ):
-        with computation(PARALLEL), interval(...):
-            output_field = input_field[0, 0, 1]
-
-    input_field = gt_storage.ones(
-        backend, default_origin=(0, 0, 0), shape=(1, 1, 1), dtype=np.int32
-    )
-    output_field = gt_storage.zeros(
-        backend, default_origin=(0, 0, 0), shape=(1, 1, 1), dtype=np.int32
-    )
-
-    for origin, stencil in (((-1, 0, 0), stencil_i), ((0, 0, -1), stencil_k)):
-        gtscript.stencil(definition=stencil, backend=backend)(
-            input_field, output_field, origin={"input_field": origin}
+        input_field = gt_storage.ones(
+            backend, default_origin=(0, 0, 0), shape=(1, 1, 1), dtype=np.int32
         )
+        output_field = gt_storage.zeros(
+            backend, default_origin=(0, 0, 0), shape=(1, 1, 1), dtype=np.int32
+        )
+
+        stencil_i(input_field, output_field, origin={"input_field": (-1, 0, 0)})
+        assert output_field[0, 0, 0] == 1
+
+    def test_negative_origin_k(self, backend):
+        @gtscript.stencil(backend=backend)
+        def stencil_k(
+            input_field: gtscript.Field[gtscript.IJK, np.int32],
+            output_field: gtscript.Field[gtscript.IJK, np.int32],
+        ):
+            with computation(PARALLEL), interval(...):
+                output_field = input_field[0, 0, 1]
+
+        input_field = gt_storage.ones(
+            backend, default_origin=(0, 0, 0), shape=(1, 1, 1), dtype=np.int32
+        )
+        output_field = gt_storage.zeros(
+            backend, default_origin=(0, 0, 0), shape=(1, 1, 1), dtype=np.int32
+        )
+
+        stencil_k(input_field, output_field, origin={"input_field": (0, 0, -1)})
         assert output_field[0, 0, 0] == 1
 
 
-@pytest.mark.parametrize("backend", INTERNAL_BACKENDS)
+@pytest.mark.parametrize("backend", ALL_BACKENDS)
 def test_origin_k_fields(backend):
     @gtscript.stencil(backend=backend, rebuild=True)
     def k_to_ijk(outp: Field[np.float64], inp: Field[gtscript.K, np.float64]):

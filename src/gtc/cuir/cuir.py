@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
-#
 # GTC Toolchain - GT4Py Project - GridTools Framework
 #
-# Copyright (c) 2014-2021, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -25,7 +23,7 @@ from gtc.common import AxisBound, CartesianOffset, DataType, LocNode, LoopOrder
 
 @utils.noninstantiable
 class Expr(common.Expr):
-    dtype: common.DataType
+    dtype: Optional[common.DataType]
 
 
 @utils.noninstantiable
@@ -146,7 +144,12 @@ class LocalScalar(Decl):
 
 
 class Temporary(Decl):
-    pass
+    data_dims: Tuple[int, ...] = field(default_factory=tuple)
+
+
+class Positional(Decl):
+    axis_name: str
+    dtype = DataType.INT32
 
 
 class IJExtent(LocNode):
@@ -234,8 +237,18 @@ class Kernel(LocNode):
         return v
 
 
+def axis_size_decls() -> List[ScalarDecl]:
+    return [
+        ScalarDecl(name="i_size", dtype=common.DataType.INT32),
+        ScalarDecl(name="j_size", dtype=common.DataType.INT32),
+        ScalarDecl(name="k_size", dtype=common.DataType.INT32),
+    ]
+
+
 class Program(LocNode, SymbolTableTrait):
     name: Str
     params: List[Decl]
+    positionals: List[Positional]
     temporaries: List[Temporary]
     kernels: List[Kernel]
+    axis_sizes: List[ScalarDecl] = axis_size_decls()

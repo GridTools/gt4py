@@ -75,8 +75,8 @@ and ``field_c``) to be combined:
         for i in range(nx):
             for j in range(ny):
                 for k in range(nz):
-	            result[i, j, k] = field_a[i, j, k] - (1 - alpha) * (
-                        field_b[i, j, k] - weight * field_c[i, j, k]
+                    result[i, j, k] = field_a[i, j, k] - (1 - alpha) * (
+                            field_b[i, j, k] - weight * field_c[i, j, k]
                     )
 
 To express this calculation using GTScript, we create a function and use the DSL syntax to represent the loop
@@ -88,7 +88,7 @@ over 3 dimensions:
 
     import gt4py.gtscript as gtscript
 
-    backend = "gtc:numpy"
+    backend = "numpy"
 
     @gtscript.stencil(backend=backend)
     def stencil_example(
@@ -128,11 +128,11 @@ function with the ``stencil`` decorator provided by GT4Py.
 The ``stencil`` decorator generates code in Python or C++ depending on the ``backend`` specified by name.
 Currently, the following backends are available:
 
-* ``"gtc:numpy"``: a vectorized python backend
-* ``"gtc:gt:cpu_kfirst"``: a backend based on GridTools code performance-optimized for x86 architecture
-* ``"gtc:gt:cpu_ifirst"``: a GridTools backend targeting many core architectures
-* ``"gtc:gt:gpu"``: a GridTools backend targeting GPUs
-* ``"gtc:gpu"``: a backend targeting NVIDIA GPUs using CUDA and some GridTools
+* ``"numpy"``: a vectorized python backend
+* ``"gt:cpu_kfirst"``: a backend based on GridTools code performance-optimized for x86 architecture
+* ``"gt:cpu_ifirst"``: a GridTools backend targeting many core architectures
+* ``"gt:gpu"``: a GridTools backend targeting GPUs
+* ``"cuda"``: a backend targeting NVIDIA GPUs using CUDA and some GridTools
 
 The decorator further replaces the stencil definition function (here ``stencil_example``) by a callable object that
 can be used as a function to call the generated code which modifies the passed data in place.
@@ -160,7 +160,7 @@ regular function call receiving the definition function:
 
     stencil_example_numpy = gtscript.stencil(backend="numpy", definition=stencil_example)
 
-    another_example_gtmc = gtscript.stencil(backend="gtmc", definition=stencil_example)
+    another_example_gtmc = gtscript.stencil(backend="gt:cpu_ifirst", definition=stencil_example)
 
 The generated code is written to and compiled in a local '.gt_cache' folder. Subsequent
 invocations will check whether a recent version of the stencil already exists in the cache.
@@ -206,11 +206,6 @@ The ``default_origin`` parameter plays two roles:
 
 #. If when calling the stencil, no other `origin` is specified, this value is where the `iteration domain` begins, i.e.
    the grid point with the lowest index where a value is written.
-
-.. note::
-    Slicing a storage with reduced dimension, e.g. `field_a[:, :, 0]`, is not supported. Use `Storage.to_numpy()` to
-    retrieve a slicable array, e.g. `field_a.to_numpy()[:, :, 0]`. If a storage is needed again create a new one
-    from the sliced data.
 
 --------------------------
 Computations and Intervals

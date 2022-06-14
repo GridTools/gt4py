@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
-#
 # GTC Toolchain - GT4Py Project - GridTools Framework
 #
-# Copyright (c) 2014-2021, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -61,3 +59,11 @@ class CartesianOffsetFactory(factory.Factory):
     i = 0
     j = 0
     k = 0
+
+
+class HorizontalMaskFactory(factory.Factory):
+    class Meta:
+        model = common.HorizontalMask
+
+    i = common.HorizontalInterval.full()
+    j = common.HorizontalInterval.full()

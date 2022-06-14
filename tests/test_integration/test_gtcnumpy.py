@@ -1,6 +1,6 @@
 # GT4Py Project - GridTools Framework
 #
-# Copyright (c) 2014-2021, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -18,7 +18,7 @@ def test_masked_vector_assignment():
     from gt4py.gtscript import FORWARD, IJ, Field, computation, interval, stencil
     from gt4py.storage import ones
 
-    BACKEND = "gtc:numpy"
+    BACKEND = "numpy"
     dtype = np.float64
 
     @stencil(BACKEND)

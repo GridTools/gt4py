@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
-#
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2021, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -22,7 +20,7 @@ from typing import Optional, Sequence
 import numpy as np
 
 import gt4py.utils as gt_util
-from gt4py.definitions import Index, Shape
+from gtc.definitions import Index, Shape
 
 
 try:
@@ -48,7 +46,7 @@ def normalize_storage_spec(default_origin, shape, dtype, mask):
             - default_origin: tuple of ints with default origin values for the non-masked dimensions
             - shape: tuple of ints with shape values for the non-masked dimensions
             - dtype: scalar numpy.dtype (non-structured and without subarrays)
-            - backend: backend identifier string (gtc:numpy, gtc:gt:cpu_kfirst, gtc:gpu, ...)
+            - backend: backend identifier string (numpy, gt:cpu_kfirst, gt:gpu, ...)
             - mask: a tuple of bools (at least 3d)
     """
 

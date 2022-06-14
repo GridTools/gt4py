@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
-#
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2021, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -36,7 +34,7 @@ if TYPE_CHECKING:
 REGISTRY = gt_utils.Registry()
 
 
-def from_name(name: str) -> Type["Backend"]:
+def from_name(name: str) -> Optional[Type["Backend"]]:
     return REGISTRY.get(name, None)
 
 
@@ -91,13 +89,6 @@ class Backend(abc.ABC):
     #   "disable-cache-validation": bool
 
     builder: "StencilBuilder"
-
-    #: Toolchain choice between GTIR and ImplementationIR, True for ImplementationIR
-    #:
-    #: If True the ImplementationIR should be used for all code generation, analysis
-    #: and optimization. Instantiation of GTIR should be avoided.
-    #: Likewise if False, ImplementationIR should never be instanciated during builds.
-    USE_LEGACY_TOOLCHAIN: ClassVar[bool] = False
 
     def __init__(self, builder: "StencilBuilder"):
         self.builder = builder

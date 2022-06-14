@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
-#
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2021, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -19,9 +17,9 @@ import numpy as np
 
 from gt4py import gtscript
 from gt4py import testing as gt_testing
-from gt4py.gtscript import PARALLEL, computation, interval
+from gt4py.gtscript import PARALLEL, Field, I, J, computation, horizontal, interval, region
 
-from ..definitions import INTERNAL_BACKENDS
+from ..definitions import ALL_BACKENDS
 from .stencil_definitions import optional_field, two_optional_fields
 
 
@@ -31,7 +29,7 @@ class TestIdentity(gt_testing.StencilTestSuite):
 
     dtypes = {("field_a",): (np.float64, np.float32)}
     domain_range = [(1, 25), (1, 25), (1, 25)]
-    backends = INTERNAL_BACKENDS
+    backends = ALL_BACKENDS
     symbols = dict(field_a=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]))
 
     def definition(field_a):
@@ -49,7 +47,7 @@ class TestCopy(gt_testing.StencilTestSuite):
 
     dtypes = (np.float_,)
     domain_range = [(1, 25), (1, 25), (1, 25)]
-    backends = INTERNAL_BACKENDS
+    backends = ALL_BACKENDS
     symbols = dict(
         field_a=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
         field_b=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
@@ -68,7 +66,7 @@ class TestAugAssign(gt_testing.StencilTestSuite):
 
     dtypes = (np.float_,)
     domain_range = [(1, 25), (1, 25), (1, 25)]
-    backends = INTERNAL_BACKENDS
+    backends = ALL_BACKENDS
     symbols = dict(
         field_a=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
         field_b=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
@@ -92,7 +90,7 @@ class TestGlobalScale(gt_testing.StencilTestSuite):
 
     dtypes = (np.float_,)
     domain_range = [(1, 15), (1, 15), (1, 15)]
-    backends = INTERNAL_BACKENDS
+    backends = ALL_BACKENDS
     symbols = dict(
         SCALE_FACTOR=gt_testing.global_name(one_of=(1.0, 1e3, 1e6)),
         field_a=gt_testing.field(in_range=(-1, 1), boundary=[(0, 0), (0, 0), (0, 0)]),
@@ -114,7 +112,7 @@ class TestParametricScale(gt_testing.StencilTestSuite):
 
     dtypes = (np.float_,)
     domain_range = [(1, 15), (1, 15), (1, 15)]
-    backends = INTERNAL_BACKENDS
+    backends = ALL_BACKENDS
     symbols = dict(
         field_a=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
         scale=gt_testing.parameter(in_range=(-100, 100)),
@@ -139,7 +137,7 @@ class TestParametricMix(gt_testing.StencilTestSuite):
         ("weight", "alpha_factor"): np.float_,
     }
     domain_range = [(1, 15), (1, 15), (1, 15)]
-    backends = INTERNAL_BACKENDS
+    backends = ALL_BACKENDS
     symbols = dict(
         USE_ALPHA=gt_testing.global_name(one_of=(True, False)),
         field_a=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
@@ -178,7 +176,7 @@ class TestParametricMix(gt_testing.StencilTestSuite):
 class TestHeatEquation_FTCS_3D(gt_testing.StencilTestSuite):
     dtypes = (np.float_,)
     domain_range = [(1, 15), (1, 15), (1, 15)]
-    backends = INTERNAL_BACKENDS
+    backends = ALL_BACKENDS
     symbols = dict(
         u=gt_testing.field(in_range=(-10, 10), extent=[(-1, 1), (0, 0), (0, 0)]),
         v=gt_testing.field(in_range=(-10, 10), extent=[(0, 0), (-1, 1), (0, 0)]),
@@ -207,7 +205,7 @@ class TestHorizontalDiffusion(gt_testing.StencilTestSuite):
 
     dtypes = (np.float_,)
     domain_range = [(1, 15), (1, 15), (1, 15)]
-    backends = INTERNAL_BACKENDS
+    backends = ALL_BACKENDS
     symbols = dict(
         u=gt_testing.field(in_range=(-10, 10), boundary=[(2, 2), (2, 2), (0, 0)]),
         diffusion=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
@@ -270,7 +268,7 @@ class TestHorizontalDiffusionSubroutines(gt_testing.StencilTestSuite):
 
     dtypes = (np.float_,)
     domain_range = [(1, 15), (1, 15), (1, 15)]
-    backends = INTERNAL_BACKENDS
+    backends = ALL_BACKENDS
     symbols = dict(
         fwd_diff=gt_testing.global_name(singleton=wrap1arg2return),
         u=gt_testing.field(in_range=(-10, 10), boundary=[(2, 2), (2, 2), (0, 0)]),
@@ -304,7 +302,7 @@ class TestHorizontalDiffusionSubroutines2(gt_testing.StencilTestSuite):
 
     dtypes = (np.float_,)
     domain_range = [(1, 15), (1, 15), (1, 15)]
-    backends = INTERNAL_BACKENDS
+    backends = ALL_BACKENDS
     symbols = dict(
         fwd_diff=gt_testing.global_name(singleton=fwd_diff_op_xy),
         BRANCH=gt_testing.global_name(one_of=(True, False)),
@@ -344,7 +342,7 @@ class TestRuntimeIfFlat(gt_testing.StencilTestSuite):
 
     dtypes = (np.float_,)
     domain_range = [(1, 15), (1, 15), (1, 15)]
-    backends = INTERNAL_BACKENDS
+    backends = ALL_BACKENDS
     symbols = dict(outfield=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]))
 
     def definition(outfield):
@@ -365,7 +363,7 @@ class TestRuntimeIfNested(gt_testing.StencilTestSuite):
 
     dtypes = (np.float_,)
     domain_range = [(1, 15), (1, 15), (1, 15)]
-    backends = INTERNAL_BACKENDS
+    backends = ALL_BACKENDS
     symbols = dict(outfield=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]))
 
     def definition(outfield):
@@ -393,7 +391,7 @@ class Test3FoldNestedIf(gt_testing.StencilTestSuite):
 
     dtypes = (np.float_,)
     domain_range = [(3, 3), (3, 3), (3, 3)]
-    backends = INTERNAL_BACKENDS
+    backends = ALL_BACKENDS
     symbols = dict(field_a=gt_testing.field(in_range=(-1, 1), boundary=[(0, 0), (0, 0), (0, 0)]))
 
     def definition(field_a):
@@ -414,7 +412,7 @@ class TestRuntimeIfNestedDataDependent(gt_testing.StencilTestSuite):
 
     dtypes = (np.float_,)
     domain_range = [(3, 3), (3, 3), (3, 3)]
-    backends = INTERNAL_BACKENDS
+    backends = ALL_BACKENDS
     symbols = dict(
         factor=gt_testing.parameter(in_range=(-100, 100)),
         field_a=gt_testing.field(in_range=(-1, 1), boundary=[(0, 0), (0, 0), (0, 0)]),
@@ -450,7 +448,7 @@ class TestTernaryOp(gt_testing.StencilTestSuite):
 
     dtypes = (np.float_,)
     domain_range = [(1, 15), (2, 15), (1, 15)]
-    backends = INTERNAL_BACKENDS
+    backends = ALL_BACKENDS
     symbols = dict(
         infield=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 1), (0, 0)]),
         outfield=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
@@ -473,7 +471,7 @@ class TestThreeWayAnd(gt_testing.StencilTestSuite):
 
     dtypes = (np.float_,)
     domain_range = [(1, 15), (2, 15), (1, 15)]
-    backends = INTERNAL_BACKENDS
+    backends = ALL_BACKENDS
     symbols = dict(
         outfield=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
         a=gt_testing.parameter(in_range=(-100, 100)),
@@ -497,7 +495,7 @@ class TestThreeWayOr(gt_testing.StencilTestSuite):
 
     dtypes = (np.float_,)
     domain_range = [(1, 15), (2, 15), (1, 15)]
-    backends = INTERNAL_BACKENDS
+    backends = ALL_BACKENDS
     symbols = dict(
         outfield=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
         a=gt_testing.parameter(in_range=(-100, 100)),
@@ -520,7 +518,7 @@ class TestThreeWayOr(gt_testing.StencilTestSuite):
 class TestOptionalField(gt_testing.StencilTestSuite):
     dtypes = (np.float_,)
     domain_range = [(1, 32), (1, 32), (1, 32)]
-    backends = INTERNAL_BACKENDS
+    backends = ALL_BACKENDS
     symbols = dict(
         PHYS_TEND=gt_testing.global_name(one_of=(False, True)),
         in_field=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
@@ -540,7 +538,7 @@ class TestOptionalField(gt_testing.StencilTestSuite):
 
 
 class TestNotSpecifiedOptionalField(TestOptionalField):
-    backends = INTERNAL_BACKENDS
+    backends = ALL_BACKENDS
     symbols = TestOptionalField.symbols.copy()
     symbols["PHYS_TEND"] = gt_testing.global_name(one_of=(False,))
     symbols["phys_tend"] = gt_testing.none()
@@ -549,7 +547,7 @@ class TestNotSpecifiedOptionalField(TestOptionalField):
 class TestTwoOptionalFields(gt_testing.StencilTestSuite):
     dtypes = (np.float_,)
     domain_range = [(1, 32), (1, 32), (1, 32)]
-    backends = INTERNAL_BACKENDS
+    backends = ALL_BACKENDS
     symbols = dict(
         PHYS_TEND_A=gt_testing.global_name(one_of=(False, True)),
         PHYS_TEND_B=gt_testing.global_name(one_of=(False, True)),
@@ -591,7 +589,7 @@ class TestTwoOptionalFields(gt_testing.StencilTestSuite):
 
 
 class TestNotSpecifiedTwoOptionalFields(TestTwoOptionalFields):
-    backends = INTERNAL_BACKENDS
+    backends = ALL_BACKENDS
     symbols = TestTwoOptionalFields.symbols.copy()
     symbols["PHYS_TEND_A"] = gt_testing.global_name(one_of=(False,))
     symbols["phys_tend_a"] = gt_testing.none()
@@ -604,7 +602,7 @@ class TestNon3DFields(gt_testing.StencilTestSuite):
         "field_out": np.float64,
     }
     domain_range = [(4, 10), (4, 10), (4, 10)]
-    backends = INTERNAL_BACKENDS
+    backends = ["gt:cpu_ifirst", "gt:cpu_kfirst", "gt:gpu", "dace:cpu", "dace:gpu"]
     symbols = {
         "field_in": gt_testing.field(
             in_range=(-10, 10), axes="K", boundary=[(0, 0), (0, 0), (0, 0)]
@@ -693,7 +691,7 @@ class TestReadOutsideKInterval1(gt_testing.StencilTestSuite):
         "field_out": np.float64,
     }
     domain_range = [(4, 4), (4, 4), (4, 4)]
-    backends = INTERNAL_BACKENDS
+    backends = ALL_BACKENDS
     symbols = {
         "field_in": gt_testing.field(
             in_range=(-10, 10), axes="IJK", boundary=[(0, 0), (0, 0), (1, 1)]
@@ -719,7 +717,7 @@ class TestReadOutsideKInterval2(gt_testing.StencilTestSuite):
         "field_out": np.float64,
     }
     domain_range = [(4, 4), (4, 4), (4, 4)]
-    backends = INTERNAL_BACKENDS
+    backends = ALL_BACKENDS
     symbols = {
         "field_in": gt_testing.field(
             in_range=(-10, 10), axes="IJK", boundary=[(0, 0), (0, 0), (0, 1)]
@@ -743,7 +741,7 @@ class TestReadOutsideKInterval3(gt_testing.StencilTestSuite):
         "field_out": np.float64,
     }
     domain_range = [(4, 4), (4, 4), (4, 4)]
-    backends = INTERNAL_BACKENDS
+    backends = ALL_BACKENDS
     symbols = {
         "field_in": gt_testing.field(
             in_range=(-10, 10), axes="IJK", boundary=[(0, 0), (0, 0), (1, 0)]
@@ -768,7 +766,7 @@ class TestVariableKRead(gt_testing.StencilTestSuite):
         "index": np.int32,
     }
     domain_range = [(2, 2), (2, 2), (2, 8)]
-    backends = [backend for backend in INTERNAL_BACKENDS if backend.values[0] not in ["gtc:dace"]]
+    backends = ALL_BACKENDS
     symbols = {
         "field_in": gt_testing.field(
             in_range=(-10, 10), axes="IJK", boundary=[(0, 0), (0, 0), (0, 0)]
@@ -787,3 +785,133 @@ class TestVariableKRead(gt_testing.StencilTestSuite):
 
     def validation(field_in, field_out, index, *, domain, origin):
         field_out[:, :, 1:] = field_in[:, :, (np.arange(field_in.shape[-1]) + index)[1:]]
+
+
+class TestVariableKAndReadOutside(gt_testing.StencilTestSuite):
+    dtypes = {
+        "field_in": np.float64,
+        "field_out": np.float64,
+        "index": np.int32,
+    }
+    domain_range = [(2, 2), (2, 2), (2, 8)]
+    backends = ALL_BACKENDS
+    symbols = {
+        "field_in": gt_testing.field(
+            in_range=(0.1, 10), axes="IJK", boundary=[(0, 0), (0, 0), (1, 0)]
+        ),
+        "field_out": gt_testing.field(
+            in_range=(0.1, 10), axes="IJK", boundary=[(0, 0), (0, 0), (0, 0)]
+        ),
+        "index": gt_testing.field(in_range=(-1, 0), axes="K", boundary=[(0, 0), (0, 0), (0, 0)]),
+    }
+
+    def definition(field_in, field_out, index):
+        with computation(PARALLEL), interval(1, None):
+            field_out[0, 0, 0] = (
+                field_in[0, 0, index]  # noqa: F841  # Local name is assigned to but never used
+                + field_in[0, 0, -2]
+            )
+
+    def validation(field_in, field_out, index, *, domain, origin):
+        idx = 1 + (np.arange(domain[-1]) + index)[1:]
+        field_out[:, :, 1:] = field_in[:, :, idx]
+        field_out[:, :, 1:] += field_in[:, :, :-2]
+
+
+class TestDiagonalKOffset(gt_testing.StencilTestSuite):
+    dtypes = {
+        "field_in": np.float64,
+        "field_out": np.float64,
+    }
+    domain_range = [(2, 2), (2, 2), (2, 8)]
+    backends = ALL_BACKENDS
+    symbols = {
+        "field_in": gt_testing.field(
+            in_range=(0.1, 10), axes="IJK", boundary=[(0, 0), (1, 0), (0, 1)]
+        ),
+        "field_out": gt_testing.field(
+            in_range=(0.1, 10), axes="IJK", boundary=[(0, 0), (0, 0), (0, 0)]
+        ),
+    }
+
+    def definition(field_in, field_out):
+        with computation(PARALLEL), interval(...):
+            field_out = field_in[0, 0, 1]
+        with computation(PARALLEL), interval(0, -1):
+            field_out += field_in[0, -1, 1]
+
+    def validation(field_in, field_out, *, domain, origin):
+        field_out[:, :, :] = field_in[:, 1:, 1:]
+        field_out[:, :, :-1] += field_in[:, :-1, 1:-1]
+
+
+class TestHorizontalRegions(gt_testing.StencilTestSuite):
+    dtypes = {
+        "field_in": np.float32,
+        "field_out": np.float32,
+    }
+    domain_range = [(4, 4), (4, 4), (2, 2)]
+    backends = ALL_BACKENDS
+    symbols = {
+        "field_in": gt_testing.field(
+            in_range=(-10, 10), axes="IJK", boundary=[(0, 0), (0, 0), (0, 0)]
+        ),
+        "field_out": gt_testing.field(
+            in_range=(-10, 10), axes="IJK", boundary=[(0, 0), (0, 0), (0, 0)]
+        ),
+    }
+
+    def definition(field_in, field_out):
+        with computation(PARALLEL), interval(...):
+            field_out = (  # noqa: F841  # local variable 'field_out' is assigned to but never used
+                field_in
+            )
+            with horizontal(region[I[0], :], region[I[-1], :]):
+                field_out = (  # noqa: F841  # local variable 'field_out' is assigned to but never used
+                    field_in + 1.0
+                )
+            with horizontal(region[:, J[0]], region[:, J[-1]]):
+                field_out = (  # noqa: F841  # local variable 'field_out' is assigned to but never used
+                    field_in - 1.0
+                )
+
+    def validation(field_in, field_out, *, domain, origin):
+        field_out[:, :, :] = field_in[:, :, :]
+        field_out[0, :, :] = field_in[0, :, :] + 1.0
+        field_out[-1, :, :] = field_in[-1, :, :] + 1.0
+        field_out[:, 0, :] = field_in[:, 0, :] - 1.0
+        field_out[:, -1, :] = field_in[:, -1, :] - 1.0
+
+
+class TestTypedTemporary(gt_testing.StencilTestSuite):
+    dtypes = {"field_in": np.float32, "field_out": np.float32}
+    domain_range = [(2, 2), (2, 2), (2, 8)]
+    backends = ALL_BACKENDS
+    symbols = {
+        "field_in": gt_testing.field(
+            in_range=(-10, 10), axes="IJK", boundary=[(0, 0), (0, 0), (0, 0)]
+        ),
+        "field_out": gt_testing.field(
+            in_range=(-10, 10), axes="IJK", boundary=[(0, 0), (0, 0), (0, 0)]
+        ),
+    }
+
+    def definition(field_in, field_out):
+        tmp: Field[(np.float32, (2, 2))] = 0
+        with computation(PARALLEL):
+            with interval(0, -1):
+                tmp[0, 0, 0][0, 0] = field_in[0, 0, 0]
+                tmp[0, 0, 0][1, 0] = field_in[0, 0, 1]
+                tmp[0, 0, 0][0, 1] = -1.0
+                tmp[0, 0, 0][1, 1] = -1.0
+                field_out = (  # noqa: F841  # local variable 'field_out' is assigned to but never used
+                    tmp[0, 0, 0][0, 0] + tmp[0, 0, 0][1, 0]
+                )
+            with interval(-1, None):
+                field_out = (  # noqa: F841  # local variable 'field_out' is assigned to but never used
+                    0
+                )
+
+    def validation(field_in, field_out, *, domain, origin):
+        field_out[:, :, :-1] = field_in[:, :, :-1] + field_in[:, :, 1:]
+        field_out[:, :, -1] = 0

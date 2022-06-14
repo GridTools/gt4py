@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
-#
 # GTC Toolchain - GT4Py Project - GridTools Framework
 #
-# Copyright (c) 2014-2021, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -102,14 +100,27 @@ class GTIRToOIR(NodeTranslator):
             stmt = oir.MaskStmt(body=[stmt], mask=mask, loc=node.loc)
         return stmt
 
+    def visit_HorizontalRestriction(
+        self, node: gtir.HorizontalRestriction, **kwargs: Any
+    ) -> oir.HorizontalRestriction:
+        body_stmts = []
+        for stmt in node.body:
+            stmt_or_stmts = self.visit(stmt, **kwargs)
+            stmts = utils.flatten_list(
+                [stmt_or_stmts] if isinstance(stmt_or_stmts, oir.Stmt) else stmt_or_stmts
+            )
+            body_stmts.extend(stmts)
+
+        return oir.HorizontalRestriction(mask=node.mask, body=body_stmts)
+
     def visit_While(self, node: gtir.While, *, mask: oir.Expr = None, **kwargs: Any):
         body_stmts = []
         for stmt in node.body:
             stmt_or_stmts = self.visit(stmt, **kwargs)
-            if isinstance(stmt_or_stmts, oir.Stmt):
-                body_stmts.append(stmt_or_stmts)
-            else:
-                body_stmts.extend(stmt_or_stmts)
+            stmts = utils.flatten_list(
+                [stmt_or_stmts] if isinstance(stmt_or_stmts, oir.Stmt) else stmt_or_stmts
+            )
+            body_stmts.extend(stmts)
 
         cond = self.visit(node.cond)
         if mask:
@@ -196,7 +207,12 @@ class GTIRToOIR(NodeTranslator):
             horiz_execs.append(oir.HorizontalExecution(body=stmts, declarations=ctx.local_scalars))
 
         ctx.temp_fields += [
-            oir.Temporary(name=temp.name, dtype=temp.dtype, dimensions=temp.dimensions)
+            oir.Temporary(
+                name=temp.name,
+                dtype=temp.dtype,
+                dimensions=temp.dimensions,
+                data_dims=temp.data_dims,
+            )
             for temp in node.temporaries
         ]
 

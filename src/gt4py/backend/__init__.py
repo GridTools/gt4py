@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
-#
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2021, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -14,7 +12,6 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from . import python_generator
 from .base import (
     REGISTRY,
     Backend,
@@ -25,15 +22,14 @@ from .base import (
     from_name,
     register,
 )
-from .debug_backend import DebugBackend
-from .gt_backends import GTCUDABackend, GTMCBackend, GTX86Backend
-from .gtc_backend import (
-    GTCCudaBackend,
-    GTCDaceBackend,
-    GTCGTCpuIfirstBackend,
-    GTCGTCpuKfirstBackend,
-    GTCGTGpuBackend,
-    GTCNumpyBackend,
-)
+
+
+try:
+    from .dace_backend import DaceCPUBackend, DaceGPUBackend
+except ImportError:
+    pass
+
+from .cuda_backend import CudaBackend  # noqa: F401
+from .gtcpp_backend import GTCpuIfirstBackend, GTCpuKfirstBackend, GTGpuBackend  # noqa: F401
 from .module_generator import BaseModuleGenerator
-from .numpy_backend import NumPyBackend
+from .numpy_backend import NumpyBackend  # noqa: F401

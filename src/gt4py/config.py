@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
-#
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2021, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -71,8 +69,8 @@ build_settings: Dict[str, Any] = {
 cache_settings: Dict[str, Any] = {
     "dir_name": os.environ.get("GT_CACHE_DIR_NAME", ".gt_cache"),
     "root_path": os.environ.get("GT_CACHE_ROOT", os.path.abspath(".")),
-    "load_retries": os.environ.get("GT_CACHE_LOAD_RETRIES", 3),
-    "load_retry_delay": os.environ.get("GT_CACHE_LOAD_RETRY_DELAY", 100),  # unit miliseconds
+    "load_retries": int(os.environ.get("GT_CACHE_LOAD_RETRIES", 3)),
+    "load_retry_delay": int(os.environ.get("GT_CACHE_LOAD_RETRY_DELAY", 100)),  # unit miliseconds
 }
 
 code_settings: Dict[str, Any] = {"root_package_name": "_GT_"}

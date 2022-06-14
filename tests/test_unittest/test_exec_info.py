@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
-#
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2021, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -26,7 +24,7 @@ from gt4py import backend as gt_backend
 from gt4py import gtscript
 from gt4py import storage as gt_storage
 
-from ..definitions import INTERNAL_BACKENDS
+from ..definitions import ALL_BACKENDS
 
 
 class TestExecInfo:
@@ -189,7 +187,7 @@ class TestExecInfo:
                 assert stencil_info["total_run_cpp_time"] > stencil_info["run_cpp_time"]
 
     @given(data=hyp_st.data())
-    @pytest.mark.parametrize("backend", INTERNAL_BACKENDS)
+    @pytest.mark.parametrize("backend", ALL_BACKENDS)
     def test_backcompatibility(self, data, backend):
         # set backend as instance attribute
         self.backend = backend
@@ -232,7 +230,7 @@ class TestExecInfo:
         assert type(self.diffusion).__name__ not in exec_info
 
     @given(data=hyp_st.data())
-    @pytest.mark.parametrize("backend", INTERNAL_BACKENDS)
+    @pytest.mark.parametrize("backend", ALL_BACKENDS)
     def test_aggregate(self, data, backend):
         # set backend as instance attribute
         self.backend = backend

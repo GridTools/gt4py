@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
-#
 # GTC Toolchain - GT4Py Project - GridTools Framework
 #
-# Copyright (c) 2014-2021, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -19,6 +17,7 @@ from typing import List, Optional, Tuple, Union, cast
 import factory
 
 from gtc import common
+from gtc.definitions import Extent
 from gtc.numpy import npir
 
 from .common_utils import identifier, undefined_symbol_list
@@ -31,7 +30,7 @@ class FieldDeclFactory(factory.Factory):
     name = identifier(npir.FieldDecl)
     dimensions = (True, True, True)
     data_dims: Tuple[int] = cast(Tuple[int], tuple())
-    extent: npir.HorizontalExtent = ((0, 0), (0, 0))
+    extent: Extent = Extent.zeros(ndims=2)
     dtype = common.DataType.FLOAT32
 
 
@@ -77,6 +76,7 @@ class LocalScalarAccessFactory(factory.Factory):
         model = npir.LocalScalarAccess
 
     name = identifier(npir.LocalScalarAccess)
+    dtype = common.DataType.FLOAT32
 
 
 class NativeFuncCallFactory(factory.Factory):
@@ -93,7 +93,7 @@ class VectorAssignFactory(factory.Factory):
 
     left = factory.SubFactory(FieldSliceFactory)
     right = factory.SubFactory(FieldSliceFactory)
-    mask: Optional[npir.Expr] = None
+    horizontal_mask: Optional[common.HorizontalMask] = None
 
 
 class VectorArithmeticFactory(factory.Factory):
@@ -109,9 +109,9 @@ class HorizontalBlockFactory(factory.Factory):
     class Meta:
         model = npir.HorizontalBlock
 
-    declarations: List[npir.ScalarDecl] = []
     body = factory.List([factory.SubFactory(VectorAssignFactory)])
-    extent: npir.HorizontalExtent = ((0, 0), (0, 0))
+    extent: Extent = Extent.zeros(ndims=2)
+    declarations: List[npir.LocalScalarDecl] = []
 
 
 class VerticalPassFactory(factory.Factory):

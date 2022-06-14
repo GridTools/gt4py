@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
-#
 # GTC Toolchain - GT4Py Project - GridTools Framework
 #
-# Copyright (c) 2014-2021, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -46,6 +44,13 @@ UNDEFINED_DTYPES = {common.DataType.INVALID, common.DataType.AUTO, common.DataTy
 DEFINED_DTYPES: Set[common.DataType] = set(common.DataType) - UNDEFINED_DTYPES  # type: ignore
 
 
+def match_dtype(result, dtype) -> None:
+    if dtype not in {common.DataType.BOOL}:
+        assert result == f"np.{dtype.name.lower()}"
+    else:
+        assert result == dtype.name.lower()
+
+
 @pytest.fixture(params=DEFINED_DTYPES)
 def defined_dtype(request) -> Iterator[common.DataType]:
     yield request.param
@@ -76,27 +81,19 @@ def test_datatype() -> None:
 def test_scalarliteral(defined_dtype: common.DataType) -> None:
     result = NpirCodegen().visit(npir.ScalarLiteral(dtype=defined_dtype, value="42"))
     print(result)
-    match = re.match(r"np.(\w*?)\(42\)", result)
+    match = re.match(r"(.+?)\(42\)", result)
     assert match
-    assert match.groups()[0] == defined_dtype.name.lower()
+    match_dtype(match.groups()[0], defined_dtype)
 
 
 def test_broadcast_literal(defined_dtype: common.DataType, is_serial: bool) -> None:
     result = NpirCodegen().visit(
-        npir.Broadcast(expr=npir.ScalarLiteral(dtype=defined_dtype, value="42")),
-        is_serial=is_serial,
-        lower=(0, 0),
-        upper=(0, 0),
+        npir.Broadcast(expr=npir.ScalarLiteral(dtype=defined_dtype, value="42"))
     )
     print(result)
-    match = re.match(
-        r"np\.full\(\(_dI_\s*\+\s*(?P<iext>\d+)\s*,\s*_dJ_\s*\+\s*(?P<jext>\d+)\s*,\s*(?P<kbounds>[^\)]+)\),\s*np\.(?P<dtype>\w+)\(42\)\)",
-        result,
-    )
+    match = re.match(r"(.*?)\(42\)", result)
     assert match
-    assert tuple(match.group(ext) for ext in ("iext", "jext")) == ("0", "0")
-    assert match.group("kbounds") == "1" if is_serial else "K - k"
-    assert match.group("dtype") == defined_dtype.name.lower()
+    match_dtype(match.groups()[0], defined_dtype)
 
 
 def test_scalar_cast(defined_dtype: common.DataType, other_dtype: common.DataType) -> None:
@@ -104,10 +101,10 @@ def test_scalar_cast(defined_dtype: common.DataType, other_dtype: common.DataTyp
         npir.ScalarCast(dtype=other_dtype, expr=npir.ScalarLiteral(dtype=defined_dtype, value="42"))
     )
     print(result)
-    match = re.match(r"np\.(?P<other_dtype>\w*)\(np.(?P<defined_dtype>\w*)\(42\)\)", result)
+    match = re.match(r"(?P<other_dtype>.+)\((?P<defined_dtype>.+)\(42\)\)", result)
     assert match
-    assert match.group("defined_dtype") == defined_dtype.name.lower()
-    assert match.group("other_dtype") == other_dtype.name.lower()
+    match_dtype(match.group("defined_dtype"), defined_dtype)
+    match_dtype(match.group("other_dtype"), other_dtype)
 
 
 def test_vector_cast(defined_dtype: common.DataType, other_dtype: common.DataType) -> None:
@@ -115,13 +112,14 @@ def test_vector_cast(defined_dtype: common.DataType, other_dtype: common.DataTyp
         npir.VectorCast(
             dtype=other_dtype,
             expr=npir.FieldSlice(name="a", i_offset=0, j_offset=0, k_offset=0, dtype=defined_dtype),
-        )
+        ),
+        is_serial=False,
     )
     print(result)
-    match = re.match(r"(?P<name>\w+)\[.*]\.astype\(np\.(?P<dtype>\w+)\)", result)
+    match = re.match(r"(?P<name>\w+)\[.*]\.astype\((?P<dtype>.+)\)", result)
     assert match
     assert match.group("name") == "a"
-    assert match.group("dtype") == other_dtype.name.lower()
+    match_dtype(match.group("dtype"), other_dtype)
 
 
 def test_field_slice(is_serial: bool) -> None:
@@ -131,11 +129,11 @@ def test_field_slice(is_serial: bool) -> None:
 
     def int_to_str(i):
         if i > 0:
-            return "+" + str(i)
+            return f"+ {i}"
         elif i == 0:
             return ""
         else:
-            return str(i)
+            return f"- {-i}"
 
     field_slice = FieldSliceFactory(
         name="a",
@@ -147,7 +145,7 @@ def test_field_slice(is_serial: bool) -> None:
     result = NpirCodegen().visit(field_slice, is_serial=is_serial)
     print(result)
     match = re.match(
-        r"(?P<name>\w+)\[i(?P<il>.*):I(?P<iu>.*),\s*j(?P<jl>.*):J(?P<ju>.*),\s*(?P<kl>.*):(?P<ku>.*)\]",
+        r"(?P<name>\w+)\[i\s*(?P<il>.*):I\s*(?P<iu>.*),\s*j\s*(?P<jl>.*):J\s*(?P<ju>.*),\s*(?P<kl>.*):(?P<ku>.*)\]",
         result,
     )
     assert match
@@ -156,11 +154,11 @@ def test_field_slice(is_serial: bool) -> None:
     assert match.group("jl") == match.group("ju") == int_to_str(j_offset)
 
     if is_serial:
-        assert match.group("kl") == "k_" + int_to_str(k_offset)
-        assert match.group("ku") == "k_" + int_to_str(k_offset + 1)
+        assert match.group("kl") == "k_ " + int_to_str(k_offset)
+        assert match.group("ku") == "k_ " + int_to_str(k_offset + 1)
     else:
-        assert match.group("kl") == "k" + int_to_str(k_offset)
-        assert match.group("ku") == "K" + int_to_str(k_offset)
+        assert match.group("kl") == "k " + int_to_str(k_offset)
+        assert match.group("ku") == "K " + int_to_str(k_offset)
 
 
 def test_native_function() -> None:
@@ -171,7 +169,8 @@ def test_native_function() -> None:
                 FieldSliceFactory(name="a"),
                 ParamAccessFactory(name="p"),
             ],
-        )
+        ),
+        is_serial=False,
     )
     print(result)
     match = re.match(r"np.minimum\(a\[.*\],\s*p\)", result)
@@ -183,20 +182,20 @@ def test_native_function() -> None:
 )
 def test_vector_assign(left, is_serial: bool) -> None:
     result = NpirCodegen().visit(
-        VectorAssignFactory(left=left, right=FieldSliceFactory(name="right")),
+        VectorAssignFactory(left=left, right=FieldSliceFactory(name="right", k_offset=-1)),
         ctx=NpirCodegen.BlockContext(),
         is_serial=is_serial,
     )
     left_str, right_str = result.split(" = ")
 
-    k_str = "k_:k_+1" if is_serial else "k:K"
-
     if isinstance(left, npir.FieldSlice):
-        assert left_str == "left[i:I, j:J, " + k_str + "]"
+        k_str_left = "k_:k_ + 1" if is_serial else "k:K"
     else:
-        assert left_str == "left"
+        k_str_left = ":" if is_serial else "k:K"
+    k_str_right = "k_ - 1:k_" if is_serial else "k - 1:K - 1"
 
-    assert right_str == "right[i:I, j:J, " + k_str + "]"
+    assert left_str == f"left[i:I, j:J, {k_str_left}]"
+    assert right_str == f"right[i:I, j:J, {k_str_right}]"
 
 
 def test_field_definition() -> None:
@@ -206,9 +205,11 @@ def test_field_definition() -> None:
 
 
 def test_temp_definition() -> None:
-    result = NpirCodegen().visit(TemporaryDeclFactory(name="a", offset=(1, 2), padding=(3, 4)))
+    result = NpirCodegen().visit(
+        TemporaryDeclFactory(name="a", offset=(1, 2), padding=(3, 4), dtype=common.DataType.FLOAT32)
+    )
     print(result)
-    assert result == "a = Field.empty((_dI_ + 3, _dJ_ + 4, _dK_), (1, 2, 0))"
+    assert result == "a = Field.empty((_dI_ + 3, _dJ_ + 4, _dK_), np.float32, (1, 2, 0))"
 
 
 def test_vector_arithmetic() -> None:
@@ -239,26 +240,14 @@ def test_vector_unary_not() -> None:
         npir.VectorUnaryOp(
             op=common.UnaryOperator.NOT,
             expr=FieldSliceFactory(name="mask", dtype=common.DataType.BOOL),
-        )
+        ),
+        is_serial=False,
     )
     assert result == "(np.bitwise_not(mask[i:I, j:J, k:K]))"
 
 
-def test_assign_with_mask_local() -> None:
-    result = NpirCodegen().visit(
-        VectorAssignFactory(
-            left=LocalScalarAccessFactory(name="tmp"),
-            mask=FieldSliceFactory(name="mask1", dtype=common.DataType.BOOL),
-        ),
-        ctx=NpirCodegen.BlockContext(),
-        symtable={"tmp": ScalarDeclFactory(name="tmp", dtype=common.DataType.INT32)},
-    )
-    print(result)
-    assert re.match(r"tmp = np.where\(mask1.*, np.int32\(\)\)", result) is not None
-
-
 def test_horizontal_block() -> None:
-    result = NpirCodegen().visit(HorizontalBlockFactory()).strip("\n")
+    result = NpirCodegen().visit(HorizontalBlockFactory(), is_serial=False).strip("\n")
     print(result)
     match = re.match(
         r"#.*\n" r"i, I = _di_ - 0, _dI_ \+ 0\n" r"j, J = _dj_ - 0, _dJ_ \+ 0\n",
@@ -352,3 +341,43 @@ def test_full_computation_valid(tmp_path) -> None:
         _origin_={"a": (1, 1, 0), "b": (0, 0, 0)},
     )
     assert (a[1:9, 1:6, 0:9] == 5).all()
+
+
+def test_variable_read_outside_bounds(tmp_path) -> None:
+    """While loops can cause variable K reads to go outside the bounds of K.
+
+    This tests whether that is appropriately clipped to support that case by constructing
+    `a = b[0, 0, index]` where the read is outside bounds.
+
+    """
+    computation = ComputationFactory(
+        vertical_passes__0__body__0__body__0=VectorAssignFactory(
+            left__name="a",
+            right=FieldSliceFactory(
+                name="b",
+                k_offset=npir.VarKOffset(
+                    k=FieldSliceFactory(name="index", dtype=common.DataType.INT32)
+                ),
+            ),
+        ),
+    )
+
+    result = NpirCodegen().visit(computation)
+    print(result)
+    mod_path = tmp_path / "npir_codegen_2.py"
+    mod_path.write_text(result)
+
+    sys.path.append(str(tmp_path))
+    import npir_codegen_2 as mod
+
+    a = np.empty((2, 2, 5))
+    b = np.ones_like(a) * 3
+    index = np.ones_like(a, dtype=np.int_)
+
+    mod.run(
+        a=a,
+        b=b,
+        index=index,
+        _domain_=a.shape,
+        _origin_={"a": (0, 0, 0), "b": (0, 0, 0), "index": (0, 0, 0)},
+    )

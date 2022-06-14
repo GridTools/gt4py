@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
-#
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2021, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -23,12 +21,14 @@ import numpy as np
 import pytest
 
 import gt4py.definitions as gt_definitions
-import gt4py.ir as gt_ir
-import gt4py.utils as gt_utils
 from gt4py import gtscript
 from gt4py.frontend import gtscript_frontend as gt_frontend
+from gt4py.frontend import nodes
 from gt4py.gtscript import (
+    IJ,
+    IJK,
     PARALLEL,
+    Field,
     I,
     J,
     K,
@@ -206,7 +206,7 @@ class TestInlinedExternals:
         )
 
         stmt = def_ir.computations[0].body.stmts[0]
-        assert isinstance(stmt.value, gt_ir.ScalarLiteral) and stmt.value.value == 0
+        assert isinstance(stmt.value, nodes.ScalarLiteral) and stmt.value.value == 0
 
     @pytest.mark.parametrize("value_type", [str, dict, list])
     def test_wrong_value(self, value_type):
@@ -341,11 +341,11 @@ class TestIntervalSyntax:
             definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
         )
         loc = def_ir.computations[0].interval.loc
-        assert def_ir.computations[0].interval.start == gt_ir.AxisBound(
-            level=gt_ir.LevelMarker.START, offset=0, loc=loc
+        assert def_ir.computations[0].interval.start == nodes.AxisBound(
+            level=nodes.LevelMarker.START, offset=0, loc=loc
         )
-        assert def_ir.computations[0].interval.end == gt_ir.AxisBound(
-            level=gt_ir.LevelMarker.START, offset=1, loc=loc
+        assert def_ir.computations[0].interval.end == nodes.AxisBound(
+            level=nodes.LevelMarker.START, offset=1, loc=loc
         )
 
     def test_none(self):
@@ -357,11 +357,11 @@ class TestIntervalSyntax:
             definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
         )
         loc = def_ir.computations[0].interval.loc
-        assert def_ir.computations[0].interval.start == gt_ir.AxisBound(
-            level=gt_ir.LevelMarker.START, offset=1, loc=loc
+        assert def_ir.computations[0].interval.start == nodes.AxisBound(
+            level=nodes.LevelMarker.START, offset=1, loc=loc
         )
-        assert def_ir.computations[0].interval.end == gt_ir.AxisBound(
-            level=gt_ir.LevelMarker.END, offset=0, loc=loc
+        assert def_ir.computations[0].interval.end == nodes.AxisBound(
+            level=nodes.LevelMarker.END, offset=0, loc=loc
         )
 
     def test_externals(self):
@@ -382,11 +382,11 @@ class TestIntervalSyntax:
                 module=self.__class__.__name__,
             )
             loc = def_ir.computations[0].interval.loc
-            assert def_ir.computations[0].interval.start == gt_ir.AxisBound(
-                level=gt_ir.LevelMarker.START, offset=3, loc=loc
+            assert def_ir.computations[0].interval.start == nodes.AxisBound(
+                level=nodes.LevelMarker.START, offset=3, loc=loc
             )
-            assert def_ir.computations[0].interval.end == gt_ir.AxisBound(
-                level=gt_ir.LevelMarker.END, offset=-1, loc=loc
+            assert def_ir.computations[0].interval.end == nodes.AxisBound(
+                level=nodes.LevelMarker.END, offset=-1, loc=loc
             )
 
     def test_axisinterval(self):
@@ -398,11 +398,11 @@ class TestIntervalSyntax:
             definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
         )
         loc = def_ir.computations[0].interval.loc
-        assert def_ir.computations[0].interval.start == gt_ir.AxisBound(
-            level=gt_ir.LevelMarker.START, offset=1, loc=loc
+        assert def_ir.computations[0].interval.start == nodes.AxisBound(
+            level=nodes.LevelMarker.START, offset=1, loc=loc
         )
-        assert def_ir.computations[0].interval.end == gt_ir.AxisBound(
-            level=gt_ir.LevelMarker.END, offset=-1, loc=loc
+        assert def_ir.computations[0].interval.end == nodes.AxisBound(
+            level=nodes.LevelMarker.END, offset=-1, loc=loc
         )
 
     def test_error_none(self):
@@ -491,7 +491,7 @@ class TestRegions:
         )
 
         assert len(def_ir.computations) == 1
-        assert isinstance(def_ir.computations[0].body.stmts[0], gt_ir.HorizontalIf)
+        assert isinstance(def_ir.computations[0].body.stmts[0], nodes.HorizontalIf)
 
     def test_one_interval_only_single(self):
         def stencil(in_f: gtscript.Field[np.float_]):
@@ -522,7 +522,7 @@ class TestRegions:
         assert len(def_ir.computations) == 1
         assert (
             def_ir.computations[0].body.stmts[0].intervals["I"].start.level
-            == gt_ir.LevelMarker.START
+            == nodes.LevelMarker.START
         )
         assert def_ir.computations[0].body.stmts[0].intervals["I"].start.offset == 1
         assert def_ir.computations[0].body.stmts[0].intervals["I"].is_single_index
@@ -859,6 +859,38 @@ class TestReducedDimensions:
         ):
             parse_definition(definition, name=inspect.stack()[0][3], module=self.__class__.__name__)
 
+    def test_higher_dim_temp(self):
+        def definition(
+            field_in: gtscript.Field[gtscript.IJK, np.float_],
+            field_out: gtscript.Field[gtscript.IJK, np.float_],
+        ):
+            tmp: Field[IJK, (np.float_, (2,))] = 0.0
+            with computation(PARALLEL), interval(...):
+                tmp[0, 0, 0][0] = field_in
+                field_out = tmp[0, 0, 0][0]
+
+        parse_definition(
+            definition,
+            name=inspect.stack()[0][3],
+            module=self.__class__.__name__,
+        )
+
+    def test_typed_temp_missing(self):
+        def definition(
+            field_in: gtscript.Field[gtscript.IJK, np.float_],
+            field_out: gtscript.Field[gtscript.IJK, np.float_],
+        ):
+            tmp: Field[IJ, np.float_] = 0.0
+            with computation(FORWARD), interval(1, None):
+                tmp = field_in[0, 0, -1]
+                field_out = tmp
+
+        with pytest.raises(
+            gt_frontend.GTScriptSyntaxError,
+            match="Found IJ, but only IJK is currently supported for temporaries",
+        ):
+            parse_definition(definition, name=inspect.stack()[0][3], module=self.__class__.__name__)
+
 
 class TestDataDimensions:
     def test_syntax(self):
@@ -910,9 +942,7 @@ class TestDataDimensions:
         def_ir = parse_definition(
             definition, name=inspect.stack()[0][3], module=self.__class__.__name__
         )
-        assert isinstance(
-            def_ir.computations[0].body.stmts[0].value.data_index[0], gt_ir.nodes.VarRef
-        )
+        assert isinstance(def_ir.computations[0].body.stmts[0].value.data_index[0], nodes.VarRef)
 
     def test_indirect_access_write(self):
         def definition(
@@ -926,9 +956,7 @@ class TestDataDimensions:
         def_ir = parse_definition(
             definition, name=inspect.stack()[0][3], module=self.__class__.__name__
         )
-        assert isinstance(
-            def_ir.computations[0].body.stmts[0].target.data_index[0], gt_ir.nodes.VarRef
-        )
+        assert isinstance(def_ir.computations[0].body.stmts[0].target.data_index[0], nodes.VarRef)
 
 
 class TestImports:
@@ -1117,31 +1145,6 @@ class TestAssignmentSyntax:
             def func(in_field: gtscript.Field[np.float_], out_field: gtscript.Field[np.float_]):
                 with computation(PARALLEL), interval(...):
                     out_field["a_key"] = in_field
-
-            parse_definition(func, name=inspect.stack()[0][3], module=self.__class__.__name__)
-
-    def test_temporary(self):
-        with pytest.raises(
-            gt_frontend.GTScriptSyntaxError,
-            match="No subscript allowed in assignment to temporaries",
-        ):
-
-            def func(in_field: gtscript.Field[np.float_], out_field: gtscript.Field[np.float_]):
-                with computation(PARALLEL), interval(...):
-                    tmp[...] = in_field
-                    out_field = tmp
-
-            parse_definition(func, name=inspect.stack()[0][3], module=self.__class__.__name__)
-
-        with pytest.raises(
-            gt_frontend.GTScriptSyntaxError,
-            match="No subscript allowed in assignment to temporaries",
-        ):
-
-            def func(in_field: gtscript.Field[np.float_], out_field: gtscript.Field[np.float_]):
-                with computation(PARALLEL), interval(...):
-                    tmp[0, 0, 0] = 2 * in_field
-                    out_field = tmp
 
             parse_definition(func, name=inspect.stack()[0][3], module=self.__class__.__name__)
 

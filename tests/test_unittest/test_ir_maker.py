@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
-#
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2021, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -17,11 +15,11 @@
 import ast
 
 from gt4py.frontend.gtscript_frontend import IRMaker
-from gt4py.ir.nodes import BinaryOperator, BinOpExpr
+from gt4py.frontend.nodes import BinaryOperator, BinOpExpr
 
 
 def test_AugAssign():
-    ir_maker = IRMaker(None, None, None, domain=None, extra_temp_decls=None)
+    ir_maker = IRMaker(None, None, None, domain=None)
     aug_assign = ast.parse("a += 1").body[0]
 
     _, result = ir_maker.visit_AugAssign(aug_assign)

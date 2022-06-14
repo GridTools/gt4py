@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
-#
 # GTC Toolchain - GT4Py Project - GridTools Framework
 #
-# Copyright (c) 2014-2021, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -16,8 +14,8 @@
 
 import pytest
 
-from gt4py.backend.gtc_backend.defir_to_gtir import DefIRToGTIR
-from gt4py.ir.nodes import (
+from gt4py.frontend.defir_to_gtir import DefIRToGTIR
+from gt4py.frontend.nodes import (
     AxisBound,
     AxisInterval,
     BinaryOperator,

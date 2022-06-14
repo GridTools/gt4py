@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
-#
 # GTC Toolchain - GT4Py Project - GridTools Framework
 #
-# Copyright (c) 2014-2021, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -15,23 +13,13 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import enum
+import functools
 import typing
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    ClassVar,
-    Dict,
-    Generic,
-    List,
-    Optional,
-    Tuple,
-    Type,
-    TypeVar,
-    Union,
-)
+from typing import Any, ClassVar, Dict, Generic, List, Optional, Tuple, Type, TypeVar, Union
 
 import numpy as np
 import pydantic
+import scipy.special
 from pydantic import validator
 from pydantic.class_validators import root_validator
 
@@ -50,10 +38,6 @@ from eve import utils
 from eve.type_definitions import SymbolRef
 from eve.typingx import RootValidatorType, RootValidatorValuesType
 from gtc.utils import dimension_flags_to_names, flatten_list
-
-
-if TYPE_CHECKING:
-    from gt4py.ir.nodes import Location
 
 
 class GTCPreconditionError(eve_exceptions.EveError, RuntimeError):
@@ -658,8 +642,11 @@ class _LvalueDimsValidator(NodeVisitor):
             raise ValueError(
                 f"Vertical loop type {vertical_loop_type} has no `loop_order` attribute"
             )
-        if not decl_type.__annotations__.get("dimensions") is Tuple[bool, bool, bool]:
-            raise ValueError(f"Field decl type {decl_type} has no `dimensions` attribute")
+        if not decl_type.__annotations__.get("dimensions") == Tuple[bool, bool, bool]:
+            raise ValueError(
+                f"Field decl type {decl_type} must have a `dimensions` "
+                "attribute of type `Tuple[bool, bool, bool]`."
+            )
         self.vertical_loop_type = vertical_loop_type
         self.decl_type = decl_type
 
@@ -763,12 +750,12 @@ class AxisBound(Node):
         return cls(level=LevelMarker.END, offset=offset)
 
     @classmethod
-    def start(cls) -> "AxisBound":
-        return cls.from_start(0)
+    def start(cls, offset: int = 0) -> "AxisBound":
+        return cls.from_start(offset)
 
     @classmethod
-    def end(cls) -> "AxisBound":
-        return cls.from_end(0)
+    def end(cls, offset: int = 0) -> "AxisBound":
+        return cls.from_end(offset)
 
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, AxisBound):
@@ -798,6 +785,70 @@ class AxisBound(Node):
         return not self < other
 
 
+class HorizontalInterval(Node):
+    """Represents an interval of the index space in the horizontal.
+
+    This is separate from `gtir.Interval` because the endpoints may
+    be outside the compute domain.
+
+    """
+
+    start: Optional[AxisBound]
+    end: Optional[AxisBound]
+
+    @classmethod
+    def compute_domain(cls, start_offset: int = 0, end_offset: int = 0) -> "HorizontalInterval":
+        return cls(start=AxisBound.start(start_offset), end=AxisBound.end(end_offset))
+
+    @classmethod
+    def full(cls) -> "HorizontalInterval":
+        return cls(start=None, end=None)
+
+    @classmethod
+    def at_endpt(
+        cls, level: LevelMarker, start_offset: int, end_offset: Optional[int] = None
+    ) -> "HorizontalInterval":
+        if end_offset is None:
+            end_offset = start_offset + 1
+        return cls(
+            start=AxisBound(level=level, offset=start_offset),
+            end=AxisBound(level=level, offset=end_offset),
+        )
+
+    @root_validator
+    def check_start_before_end(cls, values: RootValidatorValuesType) -> RootValidatorValuesType:
+        if values["start"] and values["end"] and not (values["start"] <= values["end"]):
+            raise ValueError(
+                f"End ({values['end']}) is not after or equal to start ({values['start']})"
+            )
+
+        return values
+
+    def is_single_index(self) -> bool:
+        if self.start is None or self.end is None or self.start.level != self.end.level:
+            return False
+
+        return abs(self.end.offset - self.start.offset) == 1
+
+
+class HorizontalMask(LocNode):
+    """Expr to represent a convex portion of the horizontal iteration space."""
+
+    i: HorizontalInterval
+    j: HorizontalInterval
+
+    @property
+    def intervals(self) -> Tuple[HorizontalInterval, HorizontalInterval]:
+        return (self.i, self.j)
+
+
+class HorizontalRestriction(GenericNode, Generic[StmtT]):
+    """A specialization of the horizontal space."""
+
+    mask: HorizontalMask
+    body: List[StmtT]
+
+
 def data_type_to_typestr(dtype: DataType) -> str:
 
     table = {
@@ -817,6 +868,85 @@ def data_type_to_typestr(dtype: DataType) -> str:
     return np.dtype(table[dtype]).str
 
 
+@functools.lru_cache(maxsize=None, typed=True)  # typed since uniqueness is only guaranteed per enum
+def op_to_ufunc(
+    op: Union[
+        UnaryOperator, ArithmeticOperator, ComparisonOperator, LogicalOperator, NativeFunction
+    ]
+) -> np.ufunc:
+    Table: Dict[
+        Union[
+            UnaryOperator, ArithmeticOperator, ComparisonOperator, LogicalOperator, NativeFunction
+        ],
+        np.ufunc,
+    ]
+    # Can't put all in single table since UnaryOperator.POS == BinaryOperator.ADD
+    if isinstance(op, UnaryOperator):
+        table = {
+            UnaryOperator.POS: np.positive,
+            UnaryOperator.NEG: np.negative,
+            UnaryOperator.NOT: np.logical_not,
+        }
+    elif isinstance(op, ArithmeticOperator):
+        table = {
+            ArithmeticOperator.ADD: np.add,
+            ArithmeticOperator.SUB: np.subtract,
+            ArithmeticOperator.MUL: np.multiply,
+            ArithmeticOperator.DIV: np.true_divide,
+        }
+    elif isinstance(op, ComparisonOperator):
+        table = {
+            ComparisonOperator.GT: np.greater,
+            ComparisonOperator.LT: np.less,
+            ComparisonOperator.GE: np.greater_equal,
+            ComparisonOperator.LE: np.less_equal,
+            ComparisonOperator.EQ: np.equal,
+            ComparisonOperator.NE: np.not_equal,
+        }
+    elif isinstance(op, LogicalOperator):
+        table = {
+            LogicalOperator.AND: np.logical_and,
+            LogicalOperator.OR: np.logical_or,
+        }
+    elif isinstance(op, NativeFunction):
+        table = {
+            NativeFunction.ABS: np.abs,
+            NativeFunction.MIN: np.minimum,
+            NativeFunction.MAX: np.maximum,
+            NativeFunction.MOD: np.remainder,
+            NativeFunction.SIN: np.sin,
+            NativeFunction.COS: np.cos,
+            NativeFunction.TAN: np.tan,
+            NativeFunction.ARCSIN: np.arcsin,
+            NativeFunction.ARCCOS: np.arccos,
+            NativeFunction.ARCTAN: np.arctan,
+            NativeFunction.SINH: np.sinh,
+            NativeFunction.COSH: np.cosh,
+            NativeFunction.TANH: np.tanh,
+            NativeFunction.ARCSINH: np.arcsinh,
+            NativeFunction.ARCCOSH: np.arccosh,
+            NativeFunction.ARCTANH: np.arctanh,
+            NativeFunction.SQRT: np.sqrt,
+            NativeFunction.POW: np.power,
+            NativeFunction.EXP: np.exp,
+            NativeFunction.LOG: np.log,
+            NativeFunction.GAMMA: scipy.special.gamma,
+            NativeFunction.CBRT: np.cbrt,
+            NativeFunction.ISFINITE: np.isfinite,
+            NativeFunction.ISINF: np.isinf,
+            NativeFunction.ISNAN: np.isnan,
+            NativeFunction.FLOOR: np.floor,
+            NativeFunction.CEIL: np.ceil,
+            NativeFunction.TRUNC: np.trunc,
+        }
+    else:
+        raise TypeError(
+            "Can only convert instances of GTC operators and supported native functions to typestr."
+        )
+    return table[op]
+
+
+@functools.lru_cache(maxsize=None)
 def typestr_to_data_type(typestr: str) -> DataType:
     if not isinstance(typestr, str) or len(typestr) < 3 or not typestr[2:].isnumeric():
         return DataType.INVALID  # type: ignore
@@ -831,9 +961,3 @@ def typestr_to_data_type(typestr: str) -> DataType:
     }
     key = (typestr[1], int(typestr[2:]))
     return table.get(key, DataType.INVALID)  # type: ignore
-
-
-def location_to_source_location(loc: Optional["Location"]) -> Optional[SourceLocation]:
-    if loc is None or loc.line <= 0 or loc.column <= 0:
-        return None
-    return SourceLocation(loc.line, loc.column, loc.scope)

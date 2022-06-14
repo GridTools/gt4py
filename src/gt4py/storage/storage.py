@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
-#
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2021, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -14,7 +12,8 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import Dict
+import itertools
+from typing import Any, Dict, Tuple
 
 import numpy as np
 
@@ -24,13 +23,19 @@ try:
 except ImportError:
     cp = None
 
+try:
+    import dace
+except ImportError:
+    dace = None
+
 from gt4py import backend as gt_backend
+from gtc import utils as gtc_utils
 
 from . import utils as storage_utils
 
 
 def _error_on_invalid_backend(backend):
-    if not backend in gt_backend.REGISTRY:
+    if backend not in gt_backend.REGISTRY:
         raise RuntimeError(f"Backend '{backend}' is not registered.")
 
 
@@ -111,6 +116,8 @@ class Storage(np.ndarray):
     """
 
     __array_subok__ = True
+
+    default_origin: Tuple[int, ...]
 
     def __new__(cls, shape, dtype, backend, default_origin, mask=None):
         """
@@ -212,13 +219,17 @@ class Storage(np.ndarray):
                     raise RuntimeError(
                         "Meta information can not be inferred when creating Storage views from other classes than Storage."
                     )
-                if self.ndim != obj.ndim and self.ndim != 0:
-                    raise RuntimeError(
-                        "Dimension reducing slicing storages is not supported. Use `Storage.to_numpy()` to retrieve a "
-                        "slicable numpy array and create a new storage from it with proper metadata if neccessary."
-                    )
                 self.__dict__ = {**obj.__dict__, **self.__dict__}
                 self.is_stencil_view = False
+                if hasattr(obj, "_new_index"):
+                    index_iter = itertools.chain(
+                        obj._new_index, [slice(None, None)] * (len(obj.mask) - len(obj._new_index))
+                    )
+                    interpolated_mask = gtc_utils.interpolate_mask(
+                        (isinstance(x, slice) for x in index_iter), obj.mask, False
+                    )
+                    self._mask = tuple(x & y for x, y in zip(obj.mask, interpolated_mask))
+                    delattr(obj, "_new_index")
                 if not hasattr(obj, "default_origin"):
                     self.is_stencil_view = True
                 elif self._is_consistent(obj):
@@ -255,6 +266,34 @@ class Storage(np.ndarray):
 
     def device_to_host(self, force=False):
         pass
+
+    if dace is not None:
+
+        def __descriptor__(self) -> "dace.data.Array":
+            storage = (
+                dace.StorageType.GPU_Global
+                if hasattr(self, "__cuda_array_interface__")
+                else dace.StorageType.CPU_Heap
+            )
+            start_offset = (
+                int(np.array([self.default_origin]) @ np.array([self.strides]).T) // self.itemsize
+            )
+            total_size = int(
+                int(np.array([self.shape]) @ np.array([self.strides]).T) // self.itemsize
+            )
+            start_offset = (
+                start_offset % gt_backend.from_name(self.backend).storage_info["alignment"]
+            )
+            descriptor = dace.data.Array(
+                shape=self.shape,
+                strides=[s // self.itemsize for s in self.strides],
+                dtype=dace.typeclass(str(self.dtype)),
+                storage=storage,
+                total_size=total_size,
+                start_offset=start_offset,
+            )
+            descriptor.default_origin = self.default_origin
+            return descriptor
 
     def __iconcat__(self, other):
         raise NotImplementedError("Concatenation of Storages is not supported")
@@ -307,6 +346,7 @@ class GPUStorage(Storage):
 
     def __getitem__(self, item):
         self.device_to_host()
+        self._new_index = gtc_utils.listify(item)
         return super().__getitem__(item)
 
     def __setitem__(self, key, value):
@@ -385,17 +425,16 @@ class CPUStorage(Storage):
 
     @property
     def data(self):
-        return np.asarray(self)
-
-    def to_numpy(self, copy=False):
-        if copy:
-            return copy.deepcopy(self.data)
-        return self.data
+        return self.view(np.ndarray)
 
     def copy(self):
         res = super().copy()
         res[...] = self
         return res
+
+    def __getitem__(self, item):
+        self._new_index = gtc_utils.listify(item)
+        return super().__getitem__(item)
 
 
 class ExplicitlySyncedGPUStorage(Storage):
@@ -442,18 +481,6 @@ class ExplicitlySyncedGPUStorage(Storage):
     def data(self):
         return self._device_field
 
-    def to_numpy(self, copy=False):
-        self.device_to_host()
-        if copy:
-            return np.array(self, subok=False)
-        return np.asarray(self)
-
-    def to_cupy(self, copy=False):
-        self.host_to_device()
-        if copy:
-            return cp.array(self)
-        return cp.asarray(self)
-
     def synchronize(self):
         if self._is_host_modified:
             self.host_to_device()
@@ -474,6 +501,7 @@ class ExplicitlySyncedGPUStorage(Storage):
     def __getitem__(self, item):
         if self._is_device_modified:
             self.device_to_host()
+        self._new_index = gtc_utils.listify(item)
         return super().__getitem__(item)
 
     @property
@@ -564,7 +592,6 @@ class ExplicitlySyncedGPUStorage(Storage):
         return res
 
     def _finalize_view(self, base):
-
         if self.shape != base.shape or self.strides != base.strides:
             offset = (self.ctypes.data - base.ctypes.data) + (
                 self._device_field.data.ptr - self._device_raw_buffer.data.ptr

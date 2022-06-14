@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
-#
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2021, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -13,6 +11,8 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
+from types import SimpleNamespace
+
 import hypothesis as hyp
 import hypothesis.strategies as hyp_st
 import numpy as np
@@ -22,7 +22,7 @@ import pytest
 try:
     import cupy as cp
 except ImportError:
-    pass
+    cp = None
 
 import gt4py.backend as gt_backend
 import gt4py.storage as gt_store
@@ -30,8 +30,13 @@ import gt4py.storage.utils as gt_storage_utils
 from gt4py.gtscript import PARALLEL, Field, computation, interval, stencil
 from gt4py.storage.storage import GPUStorage
 
-from ..definitions import ALL_BACKENDS, CPU_BACKENDS, GPU_BACKENDS
+from ..definitions import CPU_BACKENDS, GPU_BACKENDS
 
+
+try:
+    import dace
+except ImportError:
+    dace = None
 
 # ---- Hypothesis strategies ----
 @hyp_st.composite
@@ -461,7 +466,7 @@ def test_masked_storage_cpu(param_dict):
         default_origin=default_origin,
         shape=shape,
         mask=mask,
-        backend="gtc:gt:cpu_kfirst",
+        backend="gt:cpu_kfirst",
     )
     assert sum(store.mask) == store.ndim
     assert sum(store.mask) == len(store.data.shape)
@@ -480,7 +485,7 @@ def test_masked_storage_gpu(param_dict):
         default_origin=default_origin,
         shape=shape,
         mask=mask,
-        backend="gtc:gt:gpu",
+        backend="gt:gpu",
     )
     assert sum(store.mask) == store.ndim
     assert sum(store.mask) == len(store.data.shape)
@@ -489,7 +494,7 @@ def test_masked_storage_gpu(param_dict):
 def test_masked_storage_asserts():
     default_origin = (1, 1, 1)
     shape = (2, 2, 2)
-    backend = "gtc:gt:cpu_kfirst"
+    backend = "gt:cpu_kfirst"
 
     with pytest.raises(ValueError):
         gt_store.empty(
@@ -514,12 +519,12 @@ def run_test_slices(backend):
 
 
 def test_slices_cpu():
-    run_test_slices(backend="gtc:gt:cpu_ifirst")
+    run_test_slices(backend="gt:cpu_ifirst")
 
 
 @pytest.mark.requires_gpu
 def test_slices_gpu():
-    run_test_slices(backend="gtc:gt:gpu")
+    run_test_slices(backend="gt:gpu")
 
     import cupy as cp
 
@@ -527,7 +532,7 @@ def test_slices_gpu():
     shape = (10, 10, 10)
     array = cp.random.randn(*shape)
     stor = gt_store.from_array(
-        array, backend="gtc:gt:gpu", dtype=np.float64, default_origin=default_origin, shape=shape
+        array, backend="gt:gpu", dtype=np.float64, default_origin=default_origin, shape=shape
     )
     sliced = stor[::2, ::2, ::2]
     # assert (sliced == array[::2, ::2, ::2]).all()
@@ -539,10 +544,10 @@ def test_slices_gpu():
     shape = (10, 10, 10)
     array = cp.random.randn(*shape)
     stor = gt_store.from_array(
-        array, backend="gtc:gt:gpu", dtype=np.float64, default_origin=default_origin, shape=shape
+        array, backend="gt:gpu", dtype=np.float64, default_origin=default_origin, shape=shape
     )
     ref = gt_store.from_array(
-        array, backend="gtc:gt:gpu", dtype=np.float64, default_origin=default_origin, shape=shape
+        array, backend="gt:gpu", dtype=np.float64, default_origin=default_origin, shape=shape
     )
     # assert (sliced == array[::2, ::2, ::2]).all()
     stor[::2, ::2, ::2] = ref[::2, ::2, ::2]
@@ -554,7 +559,7 @@ def test_slices_gpu():
     shape = (10, 10, 10)
     array = cp.random.randn(*shape)
     stor = gt_store.from_array(
-        array, backend="gtc:gt:gpu", dtype=np.float64, default_origin=default_origin, shape=shape
+        array, backend="gt:gpu", dtype=np.float64, default_origin=default_origin, shape=shape
     )
     ref = copy.deepcopy(stor)
     # assert (sliced == array[::2, ::2, ::2]).all()
@@ -567,7 +572,7 @@ def test_slices_gpu():
     array = cp.random.randn(*shape)
     stor = gt_store.from_array(
         array,
-        backend="gtc:gt:gpu",
+        backend="gt:gpu",
         dtype=np.float64,
         default_origin=default_origin,
         shape=shape,
@@ -575,7 +580,7 @@ def test_slices_gpu():
     )
     ref = gt_store.from_array(
         array,
-        backend="gtc:gt:gpu",
+        backend="gt:gpu",
         dtype=np.float64,
         default_origin=default_origin,
         shape=shape,
@@ -592,7 +597,7 @@ def test_slices_gpu():
     array = cp.random.randn(*shape)
     stor = gt_store.from_array(
         array,
-        backend="gtc:gt:gpu",
+        backend="gt:gpu",
         dtype=np.float64,
         default_origin=default_origin,
         shape=shape,
@@ -609,7 +614,7 @@ def test_slices_gpu():
     array = cp.random.randn(*shape)
     stor = gt_store.from_array(
         array,
-        backend="gtc:gt:gpu",
+        backend="gt:gpu",
         dtype=np.float64,
         default_origin=default_origin,
         shape=shape,
@@ -617,7 +622,7 @@ def test_slices_gpu():
     )
     ref = gt_store.from_array(
         array,
-        backend="gtc:gt:gpu",
+        backend="gt:gpu",
         dtype=np.float64,
         default_origin=default_origin,
         shape=shape,
@@ -627,7 +632,7 @@ def test_slices_gpu():
     stor[::2, ::2, ::2] = ref[::2, ::2, ::2] + ref[::2, ::2, ::2]
 
 
-def test_transpose(backend="gtc:numpy"):
+def test_transpose(backend="numpy"):
     default_origin = (1, 1, 1)
     shape = (10, 10, 10)
     array = np.random.randn(*shape)
@@ -679,7 +684,7 @@ def test_copy_cpu(method, backend):
 
 @pytest.mark.requires_gpu
 @pytest.mark.parametrize("method", ["deepcopy", "copy_method"])
-def test_copy_gpu(method, backend="gtc:gt:gpu"):
+def test_copy_gpu(method, backend="gt:gpu"):
     default_origin = (1, 1, 1)
     shape = (10, 10, 10)
     stor = gt_store.from_array(
@@ -709,7 +714,7 @@ def test_copy_gpu(method, backend="gtc:gt:gpu"):
 
 @pytest.mark.requires_gpu
 @pytest.mark.parametrize("method", ["deepcopy", "copy_method"])
-def test_deepcopy_gpu_unmanaged(method, backend="gtc:gt:gpu"):
+def test_deepcopy_gpu_unmanaged(method, backend="gt:gpu"):
     default_origin = (1, 1, 1)
     shape = (10, 10, 10)
     stor = gt_store.from_array(
@@ -793,13 +798,13 @@ def test_view_cpu(backend):
 
 @pytest.mark.requires_gpu
 def test_view_gpu():
-    run_test_view(backend="gtc:gt:gpu")
+    run_test_view(backend="gt:gpu")
 
 
 class TestNumpyPatch:
     def test_asarray(self):
         storage = gt_store.from_array(
-            np.random.randn(5, 5, 5), default_origin=(1, 1, 1), backend="gtc:gt:cpu_ifirst"
+            np.random.randn(5, 5, 5), default_origin=(1, 1, 1), backend="gt:cpu_ifirst"
         )
 
         class NDArraySub(np.ndarray):
@@ -844,7 +849,7 @@ class TestNumpyPatch:
 
     def test_array(self):
         storage = gt_store.from_array(
-            np.random.randn(5, 5, 5), default_origin=(1, 1, 1), backend="gtc:gt:cpu_ifirst"
+            np.random.randn(5, 5, 5), default_origin=(1, 1, 1), backend="gt:cpu_ifirst"
         )
 
         class NDArraySub(np.ndarray):
@@ -891,7 +896,7 @@ class TestNumpyPatch:
 def test_cuda_array_interface():
     storage = gt_store.from_array(
         cp.random.randn(5, 5, 5),
-        backend="gtc:gt:gpu",
+        backend="gt:gpu",
         dtype=np.float64,
         default_origin=(1, 1, 1),
         shape=(5, 5, 5),
@@ -932,13 +937,38 @@ def test_managed_memory():
 
 
 @pytest.mark.requires_gpu
+def test_sum_gpu():
+    i1 = 3
+    i2 = 4
+    jslice = slice(3, 4, None)
+    shape = (5, 5, 5)
+    q1 = gt_store.from_array(
+        cp.zeros(shape),
+        backend="gt:gpu",
+        dtype=np.float64,
+        default_origin=(0, 0, 0),
+        shape=shape,
+    )
+
+    q2 = gt_store.from_array(
+        cp.ones(shape),
+        backend="gt:gpu",
+        dtype=np.float64,
+        default_origin=(0, 0, 0),
+        shape=shape,
+    )
+
+    q1[i1 : i2 + 1, jslice, 0] = cp.sum(q2[i1 : i2 + 1, jslice, :], axis=2)
+
+
+@pytest.mark.requires_gpu
 def test_auto_sync_storage():
 
     # make sure no storages are modified to begin with, e.g. by other tests.
     cp.cuda.Device(0).synchronize()
     GPUStorage._modified_storages.clear()
 
-    BACKEND = "gtc:gt:gpu"
+    BACKEND = "gt:gpu"
 
     @stencil(backend=BACKEND, device_sync=False)
     def swap_stencil(
@@ -1001,7 +1031,7 @@ def test_auto_sync_storage():
 @pytest.mark.requires_gpu
 def test_slice_gpu():
     stor = gt_store.ones(
-        backend="gtc:gt:gpu",
+        backend="gt:gpu",
         managed_memory=False,
         shape=(10, 10, 10),
         default_origin=(0, 0, 0),
@@ -1023,15 +1053,6 @@ def test_slice_gpu():
     assert view_end < storage_end
 
 
-@pytest.mark.parametrize("backend", ALL_BACKENDS)
-def test_dim_red_slice_copy(backend):
-    arr = gt_store.empty(
-        backend, default_origin=[0, 0, 0], shape=[10, 10, 10], dtype=(np.float64, (3,))
-    )
-    with pytest.raises(RuntimeError, match="slicing storages is not supported"):
-        s = arr[:, :, 0]
-
-
 def test_non_existing_backend():
     with pytest.raises(RuntimeError, match="backend"):
         gt_store.empty(
@@ -1040,3 +1061,85 @@ def test_non_existing_backend():
             shape=[10, 10, 10],
             dtype=(np.float64, (3,)),
         )
+
+
+@pytest.mark.skipif(dace is None, reason="Storage __descriptor__ depends on dace.")
+class TestDescriptor:
+    @staticmethod
+    def ravel_with_padding(array):
+
+        if hasattr(array, "__cuda_array_interface__"):
+            interface = dict(array.__cuda_array_interface__)
+        else:
+            interface = dict(array.__array_interface__)
+
+        assert interface.get("offset", 0) == 0 and interface["data"] is not None
+
+        total_size = int(
+            int(np.array([array.shape]) @ np.array([array.strides]).T) // array.itemsize
+        )
+        interface["shape"] = (total_size,)
+        interface["strides"] = (min(array.strides),)
+
+        if hasattr(array, "__cuda_array_interface__"):
+            return cp.asarray(SimpleNamespace(__cuda_array_interface__=interface))
+        else:
+            return np.asarray(SimpleNamespace(__array_interface__=interface))
+
+    @pytest.mark.parametrize(
+        "backend",
+        [
+            "dace:cpu",
+            pytest.param("dace:gpu", marks=[pytest.mark.requires_gpu]),
+        ],
+    )
+    def test_device(self, backend):
+        backend_cls = gt_backend.from_name(backend)
+        stor = gt_store.ones(
+            backend=backend,
+            managed_memory=False,
+            shape=(3, 7, 13),
+            default_origin=(1, 2, 3),
+            dtype=np.float64,
+        )
+        descriptor: dace.data.Array = stor.__descriptor__()
+        if backend_cls.storage_info["device"] == "gpu":
+            assert descriptor.storage == dace.StorageType.GPU_Global
+        else:
+            assert descriptor.storage == dace.StorageType.CPU_Heap
+
+    @pytest.mark.parametrize(
+        "backend",
+        [
+            "dace:cpu",
+            pytest.param("dace:gpu", marks=[pytest.mark.requires_gpu]),
+        ],
+    )
+    def test_start_offset(self, backend):
+        backend_cls = gt_backend.from_name(backend)
+        default_origin = (1, 2, 3)
+        stor = gt_store.ones(
+            backend=backend,
+            managed_memory=False,
+            shape=(3, 7, 13),
+            default_origin=default_origin,
+            dtype=np.float64,
+        )
+        descriptor: dace.data.Array = stor.__descriptor__()
+        raveled = TestDescriptor.ravel_with_padding(stor)[descriptor.start_offset :]
+        if backend_cls.storage_info["device"] == "gpu":
+            assert raveled.data.ptr % (backend_cls.storage_info["alignment"] * stor.itemsize) == 0
+            assert (
+                backend_cls.storage_info["alignment"] == 1
+                or cp.asarray(stor).data.ptr
+                % (backend_cls.storage_info["alignment"] * stor.itemsize)
+                != 0
+            )
+        else:
+            assert (
+                raveled.ctypes.data % (backend_cls.storage_info["alignment"] * stor.itemsize) == 0
+            )
+            assert (
+                backend_cls.storage_info["alignment"] == 1
+                or stor.ctypes.data % (backend_cls.storage_info["alignment"] * stor.itemsize) != 0
+            )

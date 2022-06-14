@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
-#
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2021, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -30,12 +28,21 @@ from setuptools.command.build_ext import build_ext
 from gt4py import config as gt_config
 
 
+def get_dace_module_path() -> Optional[str]:
+    try:
+        import dace
+
+        return os.path.dirname(dace.__file__)
+    except ImportError:
+        return None
+
+
 def get_cuda_compute_capability():
     try:
         import cupy as cp
 
         return cp.cuda.Device(0).compute_capability
-    except:
+    except ImportError:
         return None
 
 
@@ -74,8 +81,6 @@ def get_gt_pyext_build_opts(
 
     import os
 
-    import dace
-
     extra_compile_args = dict(
         cxx=[
             "-std=c++14",
@@ -84,7 +89,6 @@ def get_gt_pyext_build_opts(
             "-fPIC",
             "-isystem{}".format(gt_include_path),
             "-isystem{}".format(gt_config.build_settings["boost_include_path"]),
-            "-isystem{}".format(os.path.dirname(dace.__file__) + "/runtime/include/"),
             "-DBOOST_PP_VARIADICS",
             *extra_compile_args_from_config["cxx"],
         ],
@@ -111,6 +115,14 @@ def get_gt_pyext_build_opts(
     extra_compile_args["cxx"].extend(mode_flags)
     extra_compile_args["nvcc"].extend(mode_flags)
     extra_link_args.extend(mode_flags)
+
+    if dace_path := get_dace_module_path():
+        extra_compile_args["cxx"].append(
+            "-isystem{}".format(os.path.join(dace_path, "runtime/include"))
+        )
+        extra_compile_args["nvcc"].append(
+            "-isystem={}".format(os.path.join(dace_path, "runtime/include"))
+        )
 
     if add_profile_info:
         profile_flags = ["-pg"]

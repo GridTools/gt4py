@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
-#
 # GTC Toolchain - GT4Py Project - GridTools Framework
 #
-# Copyright (c) 2014-2021, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -27,7 +25,7 @@ Analysis is required to generate valid code (complying with the parallel model)
 - `FieldIfStmt` expansion to comply with the parallel model
 """
 
-from typing import Any, Generator, List, Set, Tuple
+from typing import Any, Dict, Generator, List, Optional, Set, Tuple
 
 from pydantic import validator
 from pydantic.class_validators import root_validator
@@ -145,6 +143,10 @@ class ScalarIfStmt(common.IfStmt[BlockStmt, Expr], Stmt):
         return cond
 
 
+class HorizontalRestriction(common.HorizontalRestriction[Stmt], Stmt):
+    pass
+
+
 class While(common.While[Stmt, Expr], Stmt):
     """While loop with a field or scalar expression as condition."""
 
@@ -230,14 +232,23 @@ class VerticalLoop(LocNode):
         return values
 
 
+class Argument(Node):
+    name: Str
+    is_keyword: bool
+    default: Str
+
+
 class Stencil(LocNode, SymbolTableTrait):
     name: Str
-    # TODO(havogt) deal with gtscript externals
+    api_signature: List[Argument]
     params: List[Decl]
     vertical_loops: List[VerticalLoop]
+    externals: Dict[str, Literal]
+    sources: Optional[Dict[str, str]]
+    docstring: Optional[Str]
 
     @property
-    def param_names(self) -> List:
+    def param_names(self) -> List[str]:
         return [p.name for p in self.params]
 
     _validate_symbol_refs = common.validate_symbol_refs()

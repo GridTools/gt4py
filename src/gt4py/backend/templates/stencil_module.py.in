@@ -36,11 +36,11 @@ from numpy import dtype
 {{ imports }}
 
 from gt4py.definitions import AccessKind, Boundary, CartesianSpace
-from gt4py.stencil_object import DomainInfo, FieldInfo, ParameterInfo, StencilObject
+from gt4py.stencil_object import DomainInfo, FieldInfo, ParameterInfo
 
 {{ module_members }}
 
-class {{ class_name }}(StencilObject):
+class {{ class_name }}({{ base_class }}):
     """
     {{ docstring }}
 

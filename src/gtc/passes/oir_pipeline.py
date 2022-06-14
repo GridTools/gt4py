@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
-#
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2021, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -31,7 +29,7 @@ from gtc.passes.oir_optimizations.horizontal_execution_merging import (
 )
 from gtc.passes.oir_optimizations.inlining import MaskInlining
 from gtc.passes.oir_optimizations.mask_stmt_merging import MaskStmtMerging
-from gtc.passes.oir_optimizations.pruning import NoFieldAccessPruning
+from gtc.passes.oir_optimizations.pruning import NoFieldAccessPruning, UnreachableStmtPruning
 from gtc.passes.oir_optimizations.temporaries import (
     LocalTemporariesToScalars,
     WriteBeforeReadTemporariesToScalars,
@@ -78,6 +76,7 @@ class DefaultPipeline(OirPipeline):
             fold_temporary_fields,
             MaskStmtMerging,
             MaskInlining,
+            UnreachableStmtPruning,
             NoFieldAccessPruning,
             IJCacheDetection,
             KCacheDetection,
@@ -94,6 +93,9 @@ class DefaultPipeline(OirPipeline):
 
     def __repr__(self) -> str:
         return str([step.__name__ for step in self.steps])
+
+    def __eq__(self, other):
+        return isinstance(other, DefaultPipeline) and self.skip == other.skip
 
     def run(self, oir: oir.Stencil) -> oir.Stencil:
         for step in self.steps:
