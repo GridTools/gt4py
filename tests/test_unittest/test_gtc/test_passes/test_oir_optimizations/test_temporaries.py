@@ -106,14 +106,20 @@ def test_write_before_read_temporaries_to_scalars():
 
 def test_fold_temporary_fields_simple():
     stencil = StencilFactory(
-        vertical_loops__0__sections__0__horizontal_executions__0=HorizontalExecutionFactory(
-            body=[
-                AssignStmtFactory(left__name="a", right=LiteralFactory()),
-                AssignStmtFactory(left__name="out1", right__name="a"),
-                AssignStmtFactory(left__name="b", right=LiteralFactory()),
-                AssignStmtFactory(left__name="out2", right__name="b"),
-            ]
-        ),
+        vertical_loops__0__sections__0__horizontal_executions=[
+            HorizontalExecutionFactory(
+                body=[
+                    AssignStmtFactory(left__name="a", right=LiteralFactory()),
+                    AssignStmtFactory(left__name="out1", right__name="a"),
+                ]
+            ),
+            HorizontalExecutionFactory(
+                body=[
+                    AssignStmtFactory(left__name="b", right=LiteralFactory()),
+                    AssignStmtFactory(left__name="out2", right__name="b", right__offset__i=1),
+                ]
+            ),
+        ],
         declarations=[TemporaryFactory(name="a"), TemporaryFactory(name="b")],
     )
 
@@ -123,16 +129,27 @@ def test_fold_temporary_fields_simple():
 
 def test_fold_temporary_fields_chain():
     stencil = StencilFactory(
-        vertical_loops__0__sections__0__horizontal_executions__0=HorizontalExecutionFactory(
-            body=[
-                AssignStmtFactory(left__name="a", right=LiteralFactory()),
-                AssignStmtFactory(left__name="out1", right__name="a"),
-                AssignStmtFactory(
-                    left__name="b", right=BinaryOpFactory(left__name="a", right=LiteralFactory())
-                ),
-                AssignStmtFactory(left__name="out2", right__name="b"),
-            ]
-        ),
+        vertical_loops__0__sections__0__horizontal_executions=[
+            HorizontalExecutionFactory(
+                body=[
+                    AssignStmtFactory(left__name="a", right=LiteralFactory()),
+                    AssignStmtFactory(left__name="out1", right__name="a"),
+                ]
+            ),
+            HorizontalExecutionFactory(
+                body=[
+                    AssignStmtFactory(
+                        left__name="b",
+                        right=BinaryOpFactory(
+                            left__name="a", left__offset__i=1, right=LiteralFactory()
+                        ),
+                    )
+                ]
+            ),
+            HorizontalExecutionFactory(
+                body=[AssignStmtFactory(left__name="out2", right__name="b")]
+            ),
+        ],
         declarations=[TemporaryFactory(name="a"), TemporaryFactory(name="b")],
     )
 
@@ -142,16 +159,25 @@ def test_fold_temporary_fields_chain():
 
 def test_fold_temporary_fields_ref_later():
     stencil = StencilFactory(
-        vertical_loops__0__sections__0__horizontal_executions__0=HorizontalExecutionFactory(
-            body=[
-                AssignStmtFactory(left__name="a", right=LiteralFactory()),
-                AssignStmtFactory(left__name="out1", right__name="a"),
-                AssignStmtFactory(left__name="b", right=LiteralFactory()),
-                AssignStmtFactory(
-                    left__name="out2", right=BinaryOpFactory(left__name="a", right__name="b")
-                ),
-            ]
-        ),
+        vertical_loops__0__sections__0__horizontal_executions=[
+            HorizontalExecutionFactory(
+                body=[AssignStmtFactory(left__name="a", right=LiteralFactory())]
+            ),
+            HorizontalExecutionFactory(
+                body=[AssignStmtFactory(left__name="out1", right__name="a", right__offset__i=1)]
+            ),
+            HorizontalExecutionFactory(
+                body=[AssignStmtFactory(left__name="b", right=LiteralFactory())]
+            ),
+            HorizontalExecutionFactory(
+                body=[
+                    AssignStmtFactory(
+                        left__name="out2",
+                        right=BinaryOpFactory(left__name="a", right__name="b", right__offset__i=1),
+                    )
+                ]
+            ),
+        ],
         declarations=[TemporaryFactory(name="a"), TemporaryFactory(name="b")],
     )
 
