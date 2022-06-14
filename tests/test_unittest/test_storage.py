@@ -28,7 +28,6 @@ import gt4py.backend as gt_backend
 import gt4py.storage as gt_store
 import gt4py.storage.utils as gt_storage_utils
 from gt4py.gtscript import PARALLEL, Field, computation, interval, stencil
-from gt4py.storage.storage import GPUStorage
 
 from ..definitions import CPU_BACKENDS, GPU_BACKENDS
 
@@ -417,12 +416,8 @@ def test_normalize_storage_spec():
 @pytest.mark.parametrize("backend", CPU_BACKENDS)
 def test_cpu_constructor(alloc_fun, backend):
     stor = alloc_fun(dtype=np.float64, default_origin=(1, 2, 3), shape=(2, 4, 6), backend=backend)
-    assert type(stor.default_origin) is tuple
-    assert stor.default_origin == (1, 2, 3)
-    assert type(stor.shape) is tuple
     assert stor.shape == (2, 4, 6)
     assert isinstance(stor, np.ndarray)
-    assert stor.is_stencil_view
 
 
 @pytest.mark.parametrize(
@@ -446,30 +441,8 @@ def test_cpu_constructor(alloc_fun, backend):
 )
 def test_gpu_constructor(alloc_fun, backend):
     stor = alloc_fun(dtype=np.float64, default_origin=(1, 2, 3), shape=(2, 4, 6), backend=backend)
-    assert type(stor.default_origin) is tuple
-    assert stor.default_origin == (1, 2, 3)
-    assert type(stor.shape) is tuple
     assert stor.shape == (2, 4, 6)
-    assert isinstance(stor, np.ndarray)
-    assert stor.is_stencil_view
-
-
-@hyp.given(param_dict=mask_strategy())
-def test_masked_storage_cpu(param_dict):
-    mask = param_dict["mask"]
-    default_origin = param_dict["default_origin"]
-    shape = param_dict["shape"]
-
-    # no assert when all is defined in descriptor, no grid_group
-    store = gt_store.empty(
-        dtype=np.float64,
-        default_origin=default_origin,
-        shape=shape,
-        mask=mask,
-        backend="gt:cpu_kfirst",
-    )
-    assert sum(store.mask) == store.ndim
-    assert sum(store.mask) == len(store.data.shape)
+    assert isinstance(stor, cp.ndarray)
 
 
 @pytest.mark.requires_gpu
@@ -523,406 +496,6 @@ def test_slices_cpu():
 
 
 @pytest.mark.requires_gpu
-def test_slices_gpu():
-    run_test_slices(backend="gt:gpu")
-
-    import cupy as cp
-
-    default_origin = (1, 1, 1)
-    shape = (10, 10, 10)
-    array = cp.random.randn(*shape)
-    stor = gt_store.from_array(
-        array, backend="gt:gpu", dtype=np.float64, default_origin=default_origin, shape=shape
-    )
-    sliced = stor[::2, ::2, ::2]
-    # assert (sliced == array[::2, ::2, ::2]).all()
-    sliced[...] = array[::2, ::2, ::2]
-
-    import cupy as cp
-
-    default_origin = (1, 1, 1)
-    shape = (10, 10, 10)
-    array = cp.random.randn(*shape)
-    stor = gt_store.from_array(
-        array, backend="gt:gpu", dtype=np.float64, default_origin=default_origin, shape=shape
-    )
-    ref = gt_store.from_array(
-        array, backend="gt:gpu", dtype=np.float64, default_origin=default_origin, shape=shape
-    )
-    # assert (sliced == array[::2, ::2, ::2]).all()
-    stor[::2, ::2, ::2] = ref[::2, ::2, ::2]
-
-    import copy  # isort:skip
-    import cupy as cp
-
-    default_origin = (1, 1, 1)
-    shape = (10, 10, 10)
-    array = cp.random.randn(*shape)
-    stor = gt_store.from_array(
-        array, backend="gt:gpu", dtype=np.float64, default_origin=default_origin, shape=shape
-    )
-    ref = copy.deepcopy(stor)
-    # assert (sliced == array[::2, ::2, ::2]).all()
-    stor[::2, ::2, ::2] = ref[::2, ::2, ::2]
-
-    import cupy as cp
-
-    default_origin = (1, 1, 1)
-    shape = (10, 10, 10)
-    array = cp.random.randn(*shape)
-    stor = gt_store.from_array(
-        array,
-        backend="gt:gpu",
-        dtype=np.float64,
-        default_origin=default_origin,
-        shape=shape,
-        managed_memory=True,
-    )
-    ref = gt_store.from_array(
-        array,
-        backend="gt:gpu",
-        dtype=np.float64,
-        default_origin=default_origin,
-        shape=shape,
-        managed_memory=True,
-    )
-    # assert (sliced == array[::2, ::2, ::2]).all()
-    stor[::2, ::2, ::2] = ref[::2, ::2, ::2]
-
-    import copy  # isort:skip
-    import cupy as cp
-
-    default_origin = (1, 1, 1)
-    shape = (10, 10, 10)
-    array = cp.random.randn(*shape)
-    stor = gt_store.from_array(
-        array,
-        backend="gt:gpu",
-        dtype=np.float64,
-        default_origin=default_origin,
-        shape=shape,
-        managed_memory=True,
-    )
-    ref = copy.deepcopy(stor)
-    # assert (sliced == array[::2, ::2, ::2]).all()
-    stor[::2, ::2, ::2] = ref[::2, ::2, ::2]
-
-    import cupy as cp
-
-    default_origin = (1, 1, 1)
-    shape = (10, 10, 10)
-    array = cp.random.randn(*shape)
-    stor = gt_store.from_array(
-        array,
-        backend="gt:gpu",
-        dtype=np.float64,
-        default_origin=default_origin,
-        shape=shape,
-        managed_memory=False,
-    )
-    ref = gt_store.from_array(
-        array,
-        backend="gt:gpu",
-        dtype=np.float64,
-        default_origin=default_origin,
-        shape=shape,
-        managed_memory=False,
-    )
-    # assert (sliced == array[::2, ::2, ::2]).all()
-    stor[::2, ::2, ::2] = ref[::2, ::2, ::2] + ref[::2, ::2, ::2]
-
-
-def test_transpose(backend="numpy"):
-    default_origin = (1, 1, 1)
-    shape = (10, 10, 10)
-    array = np.random.randn(*shape)
-    stor = gt_store.from_array(
-        array, default_origin=default_origin, backend=backend, dtype=np.float64
-    )
-    transposed = np.transpose(stor, axes=(0, 1, 2))
-    assert transposed.strides == stor.strides
-    assert transposed.is_stencil_view
-    transposed = np.transpose(stor, axes=(2, 1, 0))
-    assert not transposed.is_stencil_view
-
-
-@pytest.mark.parametrize("backend", CPU_BACKENDS)
-@pytest.mark.parametrize(
-    "method",
-    ["deepcopy", "copy_method"],
-)
-def test_copy_cpu(method, backend):
-    default_origin = (1, 1, 1)
-    shape = (10, 10, 10)
-    stor = gt_store.from_array(
-        np.random.randn(*shape), default_origin=default_origin, backend=backend
-    )
-
-    import copy
-
-    if method == "deepcopy":
-        stor_copy = copy.deepcopy(stor)
-    elif method == "copy_method":
-        stor_copy = stor.copy()
-    else:
-        raise ValueError(f"Test not implemented for copying using '{method}'")
-
-    assert stor is not stor_copy
-    assert stor._raw_buffer.ctypes.data != stor_copy._raw_buffer.ctypes.data
-    if stor._raw_buffer.ctypes.data < stor_copy._raw_buffer.ctypes.data:
-        assert (
-            stor._raw_buffer.ctypes.data + len(stor._raw_buffer)
-            <= stor_copy._raw_buffer.ctypes.data
-        )
-    else:
-        assert (
-            stor._raw_buffer.ctypes.data + len(stor._raw_buffer)
-            >= stor_copy._raw_buffer.ctypes.data
-        )
-    np.testing.assert_equal(stor_copy.view(np.ndarray), stor.view(np.ndarray))
-
-
-@pytest.mark.requires_gpu
-@pytest.mark.parametrize("method", ["deepcopy", "copy_method"])
-def test_copy_gpu(method, backend="gt:gpu"):
-    default_origin = (1, 1, 1)
-    shape = (10, 10, 10)
-    stor = gt_store.from_array(
-        np.random.randn(*shape),
-        default_origin=default_origin,
-        backend=backend,
-        managed_memory=True,
-    )
-
-    import copy
-
-    if method == "deepcopy":
-        stor_copy = copy.deepcopy(stor)
-    elif method == "copy_method":
-        stor_copy = stor.copy()
-    else:
-        raise ValueError(f"Test not implemented for copying using '{method}'")
-
-    assert stor is not stor_copy
-    assert stor._raw_buffer.data.ptr != stor_copy._raw_buffer.data.ptr
-    if stor._raw_buffer.data.ptr < stor_copy._raw_buffer.data.ptr:
-        assert stor._raw_buffer.data.ptr + len(stor._raw_buffer) <= stor_copy._raw_buffer.data.ptr
-    else:
-        assert stor._raw_buffer.data.ptr + len(stor._raw_buffer) >= stor_copy._raw_buffer.data.ptr
-    np.testing.assert_equal(stor_copy.view(np.ndarray), stor.view(np.ndarray))
-
-
-@pytest.mark.requires_gpu
-@pytest.mark.parametrize("method", ["deepcopy", "copy_method"])
-def test_deepcopy_gpu_unmanaged(method, backend="gt:gpu"):
-    default_origin = (1, 1, 1)
-    shape = (10, 10, 10)
-    stor = gt_store.from_array(
-        np.random.randn(*shape),
-        default_origin=default_origin,
-        backend=backend,
-        managed_memory=False,
-    )
-
-    import copy
-
-    if method == "deepcopy":
-        stor_copy = copy.deepcopy(stor)
-    elif method == "copy_method":
-        stor_copy = stor.copy()
-    else:
-        raise ValueError(f"Test not implemented for copying using '{method}'")
-
-    assert stor is not stor_copy
-    assert stor._sync_state is not stor_copy._sync_state
-    assert stor._raw_buffer.ctypes.data != stor_copy._raw_buffer.ctypes.data
-    if stor._raw_buffer.ctypes.data < stor_copy._raw_buffer.ctypes.data:
-        assert (
-            stor._raw_buffer.ctypes.data + len(stor._raw_buffer)
-            <= stor_copy._raw_buffer.ctypes.data
-        )
-    else:
-        assert (
-            stor._raw_buffer.ctypes.data + len(stor._raw_buffer)
-            >= stor_copy._raw_buffer.ctypes.data
-        )
-
-    assert stor._device_raw_buffer.data.ptr != stor_copy._device_raw_buffer.data.ptr
-    if stor._device_raw_buffer.data.ptr < stor_copy._device_raw_buffer.data.ptr:
-        assert (
-            stor._device_raw_buffer.data.ptr + len(stor._device_raw_buffer)
-            <= stor_copy._device_raw_buffer.data.ptr
-        )
-    else:
-        assert (
-            stor._device_raw_buffer.data.ptr + len(stor._device_raw_buffer)
-            >= stor_copy._device_raw_buffer.data.ptr
-        )
-
-    np.testing.assert_equal(stor_copy.view(np.ndarray), stor.view(np.ndarray))
-    assert (stor._device_field[...] == stor_copy._device_field[...]).all()
-
-
-def run_test_view(backend):
-    default_origin = (1, 1, 1)
-    shape = (10, 10, 10)
-    stor = gt_store.from_array(
-        np.random.randn(*shape), default_origin=default_origin, backend=backend
-    )
-    stor.view(type(stor))
-    if gt_backend.from_name(backend).storage_info["layout_map"]([True] * 3) != (0, 1, 2):
-        try:
-            np.ones((10, 10, 10)).view(type(stor))
-        except RuntimeError:
-            pass
-        except Exception as e:
-            raise e
-        else:
-            raise Exception
-        tmp_view = stor[::2, ::2, ::2]
-        assert not tmp_view._is_consistent(stor)
-        assert not tmp_view.is_stencil_view
-
-
-@pytest.mark.parametrize(
-    "backend",
-    [
-        name
-        for name in gt_backend.REGISTRY.names
-        if gt_backend.from_name(name).storage_info["device"] == "cpu"
-    ],
-)
-def test_view_cpu(backend):
-    run_test_view(backend=backend)
-
-
-@pytest.mark.requires_gpu
-def test_view_gpu():
-    run_test_view(backend="gt:gpu")
-
-
-class TestNumpyPatch:
-    def test_asarray(self):
-        storage = gt_store.from_array(
-            np.random.randn(5, 5, 5), default_origin=(1, 1, 1), backend="gt:cpu_ifirst"
-        )
-
-        class NDArraySub(np.ndarray):
-            pass
-
-        numpy_array = np.ones((3, 3, 3))
-        matrix = np.ones((3, 3)).view(NDArraySub)
-
-        assert isinstance(np.asarray(storage), np.ndarray)
-        assert isinstance(np.asarray(numpy_array), np.ndarray)
-        assert isinstance(np.asarray(matrix), np.ndarray)
-        assert isinstance(np.asanyarray(storage), type(storage))
-        assert isinstance(np.asanyarray(numpy_array), np.ndarray)
-        assert isinstance(np.asanyarray(matrix), NDArraySub)
-        assert isinstance(np.array(storage), np.ndarray)
-        assert isinstance(np.array(matrix), np.ndarray)
-        assert isinstance(np.array(numpy_array), np.ndarray)
-
-        # apply numpy patch
-        gt_store.prepare_numpy()
-
-        try:
-            assert isinstance(np.asarray(storage), type(storage))
-            assert isinstance(np.asarray(numpy_array), np.ndarray)
-            assert isinstance(np.asarray(matrix), np.ndarray)
-
-            assert isinstance(np.array(matrix), np.ndarray)
-            assert isinstance(np.array(numpy_array), np.ndarray)
-            with pytest.raises(RuntimeError):
-                np.array(storage)
-        finally:
-            # undo patch
-            gt_store.restore_numpy()
-
-        assert isinstance(np.asarray(storage), np.ndarray)
-        assert isinstance(np.asarray(numpy_array), np.ndarray)
-        assert isinstance(np.asarray(matrix), np.ndarray)
-
-        assert isinstance(np.array(storage), np.ndarray)
-        assert isinstance(np.array(matrix), np.ndarray)
-        assert isinstance(np.array(numpy_array), np.ndarray)
-
-    def test_array(self):
-        storage = gt_store.from_array(
-            np.random.randn(5, 5, 5), default_origin=(1, 1, 1), backend="gt:cpu_ifirst"
-        )
-
-        class NDArraySub(np.ndarray):
-            pass
-
-        numpy_array = np.ones((3, 3, 3))
-        matrix = np.ones((3, 3)).view(NDArraySub)
-
-        assert isinstance(np.array(storage, copy=False), np.ndarray)
-        assert isinstance(np.array(numpy_array, copy=False), np.ndarray)
-        assert isinstance(np.array(matrix, copy=False), np.ndarray)
-        assert isinstance(np.asanyarray(storage), type(storage))
-        assert isinstance(np.asanyarray(numpy_array), np.ndarray)
-        assert isinstance(np.asanyarray(matrix), NDArraySub)
-        assert isinstance(np.array(storage), np.ndarray)
-        assert isinstance(np.array(matrix), np.ndarray)
-        assert isinstance(np.array(numpy_array), np.ndarray)
-
-        # apply numpy patch
-        gt_store.prepare_numpy()
-        try:
-            assert isinstance(np.array(storage, copy=False), type(storage))
-            assert isinstance(np.array(numpy_array, copy=False), np.ndarray)
-            assert isinstance(np.array(matrix, copy=False), np.ndarray)
-
-            assert isinstance(np.array(matrix), np.ndarray)
-            assert isinstance(np.array(numpy_array), np.ndarray)
-            with pytest.raises(RuntimeError):
-                np.array(storage)
-        finally:
-            # undo patch
-            gt_store.restore_numpy()
-
-        assert isinstance(np.array(storage, copy=False), np.ndarray)
-        assert isinstance(np.array(numpy_array, copy=False), np.ndarray)
-        assert isinstance(np.array(matrix, copy=False), np.ndarray)
-
-        assert isinstance(np.array(storage), np.ndarray)
-        assert isinstance(np.array(matrix), np.ndarray)
-        assert isinstance(np.array(numpy_array), np.ndarray)
-
-
-@pytest.mark.requires_gpu
-def test_cuda_array_interface():
-    storage = gt_store.from_array(
-        cp.random.randn(5, 5, 5),
-        backend="gt:gpu",
-        dtype=np.float64,
-        default_origin=(1, 1, 1),
-        shape=(5, 5, 5),
-    )
-    cupy_array = cp.array(storage)
-    assert (cupy_array == storage).all()
-
-
-@pytest.mark.requires_gpu
-def test_view_casting():
-    cp.cuda.set_allocator(cp.cuda.malloc_managed)
-    gpu_arr = cp.empty((5, 5, 5))
-
-    gpu_arr = cp.ones((10, 10, 10))
-    cpu_view = gt_storage_utils.cpu_view(gpu_arr)
-    assert cpu_view.ctypes.data == gpu_arr.data.ptr
-    assert cpu_view.strides == gpu_arr.strides
-    assert cpu_view.shape == gpu_arr.shape
-
-    gpu_view = gt_storage_utils.gpu_view(cpu_view)
-    assert gpu_view.data.ptr == cpu_view.ctypes.data
-    assert gpu_view.strides == cpu_view.strides
-    assert gpu_view.shape == cpu_view.shape
-
-
-@pytest.mark.requires_gpu
 def test_managed_memory():
     cp.cuda.set_allocator(cp.cuda.malloc_managed)
 
@@ -962,77 +535,9 @@ def test_sum_gpu():
 
 
 @pytest.mark.requires_gpu
-def test_auto_sync_storage():
-
-    # make sure no storages are modified to begin with, e.g. by other tests.
-    cp.cuda.Device(0).synchronize()
-    GPUStorage._modified_storages.clear()
-
-    BACKEND = "gt:gpu"
-
-    @stencil(backend=BACKEND, device_sync=False)
-    def swap_stencil(
-        inp: Field[float],  # type: ignore
-        out: Field[float],  # type: ignore
-    ):
-        with computation(PARALLEL), interval(...):
-            tmp = inp
-            inp = out
-            out = tmp
-
-    shape = (5, 5, 5)
-    q0 = gt_store.from_array(
-        cp.zeros(shape),
-        backend=BACKEND,
-        dtype=np.float64,
-        default_origin=(0, 0, 0),
-        shape=shape,
-        managed_memory=True,
-    )
-
-    q1 = gt_store.from_array(
-        cp.ones(shape),
-        backend=BACKEND,
-        dtype=np.float64,
-        default_origin=(0, 0, 0),
-        shape=shape,
-        managed_memory=True,
-    )
-    q0_view = q0[3:, 3:, 3:]
-
-    assert not gt_store.storage.GPUStorage.get_modified_storages()
-
-    # call stencil and mark original storage clean
-    swap_stencil(q0, q1)
-    assert len(gt_store.storage.GPUStorage.get_modified_storages()) == 2
-    assert q0._is_device_modified
-    assert q0_view._is_device_modified
-    q0_view._set_clean()
-    assert len(gt_store.storage.GPUStorage.get_modified_storages()) == 1
-    assert not q0._is_device_modified
-    assert not q0_view._is_device_modified
-
-    # call stencil and mark original storage clean
-    swap_stencil(q0, q1)
-    assert len(gt_store.storage.GPUStorage.get_modified_storages()) == 2
-    assert q0._is_device_modified
-    assert q0_view._is_device_modified
-    q0_view._set_clean()
-    assert len(gt_store.storage.GPUStorage.get_modified_storages()) == 1
-    assert not q0._is_device_modified
-    assert not q0_view._is_device_modified
-
-    # call stencil and mark original storage clean
-    swap_stencil(q0, q1)
-    q0.device_to_host()
-    assert not gt_store.storage.GPUStorage.get_modified_storages()
-
-
-@pytest.mark.requires_gpu
 def test_slice_gpu():
     stor = gt_store.ones(
         backend="gt:gpu",
-        managed_memory=False,
         shape=(10, 10, 10),
         default_origin=(0, 0, 0),
         dtype=np.float64,
@@ -1095,14 +600,12 @@ class TestDescriptor:
     )
     def test_device(self, backend):
         backend_cls = gt_backend.from_name(backend)
-        stor = gt_store.ones(
-            backend=backend,
-            managed_memory=False,
-            shape=(3, 7, 13),
-            default_origin=(1, 2, 3),
-            dtype=np.float64,
-        )
-        descriptor: dace.data.Array = stor.__descriptor__()
+        descriptor: dace.data.Array = gt_store.dace_descriptor(
+                backend=backend,
+                shape=(3, 7, 13),
+                default_origin=(1, 2, 3),
+                dtype=np.float64,
+            )
         if backend_cls.storage_info["device"] == "gpu":
             assert descriptor.storage == dace.StorageType.GPU_Global
         else:
@@ -1120,18 +623,22 @@ class TestDescriptor:
         default_origin = (1, 2, 3)
         stor = gt_store.ones(
             backend=backend,
-            managed_memory=False,
             shape=(3, 7, 13),
             default_origin=default_origin,
             dtype=np.float64,
         )
-        descriptor: dace.data.Array = stor.__descriptor__()
+        descriptor: dace.data.Array = gt_store.dace_descriptor(
+                backend=backend,
+                shape=(3, 7, 13),
+                default_origin=(1, 2, 3),
+                dtype=np.float64,
+            )
         raveled = TestDescriptor.ravel_with_padding(stor)[descriptor.start_offset :]
         if backend_cls.storage_info["device"] == "gpu":
             assert raveled.data.ptr % (backend_cls.storage_info["alignment"] * stor.itemsize) == 0
             assert (
                 backend_cls.storage_info["alignment"] == 1
-                or cp.asarray(stor).data.ptr
+                or stor.data.ptr
                 % (backend_cls.storage_info["alignment"] * stor.itemsize)
                 != 0
             )

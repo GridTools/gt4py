@@ -171,7 +171,7 @@ def allocate(default_origin, shape, layout_map, dtype, alignment_bytes, allocate
     return raw_buffer, field
 
 
-def allocate_gpu_unmanaged(default_origin, shape, layout_map, dtype, alignment_bytes):
+def allocate_gpu(default_origin, shape, layout_map, dtype, alignment_bytes):
     dtype = np.dtype(dtype)
     assert (
         alignment_bytes % dtype.itemsize
@@ -195,16 +195,7 @@ def allocate_gpu_unmanaged(default_origin, shape, layout_map, dtype, alignment_b
     padded_size = int(np.prod(padded_shape))
     buffer_size = padded_size + items_per_alignment - 1
 
-    ptr = cp.cuda.alloc_pinned_memory(buffer_size * itemsize)
-    raw_buffer = np.frombuffer(ptr, dtype, buffer_size)
     device_raw_buffer = cp.empty((buffer_size,), dtype=dtype)
-
-    allocation_mismatch = int((raw_buffer.ctypes.data % alignment_bytes) / itemsize)
-    alignment_offset = (halo_offset - allocation_mismatch) % items_per_alignment
-    field = np.reshape(raw_buffer[alignment_offset : alignment_offset + padded_size], padded_shape)
-    if field.ndim > 0:
-        field.strides = strides
-        field = field[tuple(slice(0, s, None) for s in shape)]
 
     allocation_mismatch = int((device_raw_buffer.data.ptr % alignment_bytes) / itemsize)
     alignment_offset = (halo_offset - allocation_mismatch) % items_per_alignment
@@ -217,44 +208,40 @@ def allocate_gpu_unmanaged(default_origin, shape, layout_map, dtype, alignment_b
     if device_field.ndim > 0:
         device_field = device_field[tuple(slice(0, s, None) for s in shape)]
 
-    return raw_buffer, field, device_raw_buffer, device_field
+    return device_raw_buffer, device_field
 
 
 def allocate_cpu(default_origin, shape, layout_map, dtype, alignment_bytes):
-    def allocate_f(size, dtype):
-        raw_buffer = np.empty(size, dtype)
-        return raw_buffer, raw_buffer
+    dtype = np.dtype(dtype)
+    assert (
+        alignment_bytes % dtype.itemsize
+    ) == 0, "Alignment must be a multiple of byte-width of dtype."
+    itemsize = dtype.itemsize
+    items_per_alignment = int(alignment_bytes / itemsize)
 
-    return allocate(default_origin, shape, layout_map, dtype, alignment_bytes, allocate_f)
+    order_idx = idx_from_order([i for i in layout_map if i is not None])
+    padded_shape = compute_padded_shape(shape, items_per_alignment, order_idx)
 
+    strides = strides_from_padded_shape(padded_shape, order_idx, itemsize)
+    if len(order_idx) > 0:
+        halo_offset = (
+            int(math.ceil(default_origin[order_idx[-1]] / items_per_alignment))
+            * items_per_alignment
+            - default_origin[order_idx[-1]]
+        )
+    else:
+        halo_offset = 0
 
-def allocate_gpu(default_origin, shape, layout_map, dtype, alignment_bytes):
-    def allocate_f(size, dtype):
-        cp.cuda.set_allocator(cp.cuda.malloc_managed)
-        device_buffer = cp.empty(size, dtype)
-        array = cpu_view(device_buffer)
-        return array, device_buffer
+    padded_size = int(np.prod(padded_shape))
+    buffer_size = padded_size + items_per_alignment - 1
+    raw_buffer = np.empty(buffer_size, dtype=dtype)
 
-    return allocate(default_origin, shape, layout_map, dtype, alignment_bytes, allocate_f)
+    allocation_mismatch = int((raw_buffer.ctypes.data % alignment_bytes) / itemsize)
 
+    alignment_offset = (halo_offset - allocation_mismatch) % items_per_alignment
 
-def gpu_view(cpu_array):
-    array_interface = cpu_array.__array_interface__
-    array_interface["version"] = 2
-    array_interface["strides"] = cpu_array.strides
-    array_interface.pop("offset", None)
-
-    class _cuda_array_interface:
-        __cuda_array_interface__ = array_interface
-
-    return cp.asarray(_cuda_array_interface())
-
-
-def cpu_view(gpu_array):
-    array_interface = gpu_array.__cuda_array_interface__
-    array_interface["version"] = 3
-
-    class _array_interface:
-        __array_interface__ = array_interface
-
-    return np.asarray(_array_interface())
+    field = np.reshape(raw_buffer[alignment_offset : alignment_offset + padded_size], padded_shape)
+    if field.ndim > 0:
+        field.strides = strides
+        field = field[tuple(slice(0, s, None) for s in shape)]
+    return raw_buffer, field

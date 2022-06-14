@@ -31,7 +31,7 @@ from gt4py.definitions import AccessKind, DomainInfo, FieldInfo, ParameterInfo
 from gtc.definitions import Index, Shape
 
 
-FieldType = Union[gt_storage.storage.Storage, np.ndarray]
+FieldType = Union["cp.ndarray", np.ndarray]
 OriginType = Union[Tuple[int, int, int], Dict[str, Tuple[int, ...]]]
 
 
