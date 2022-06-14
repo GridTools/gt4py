@@ -103,6 +103,15 @@ class FieldType(DataType):
 
 
 @dataclass(frozen=True)
+class DomainType(DataType):
+    dims: Union[list[func_common.Dimension], Literal[Ellipsis]]  # type: ignore[valid-type,misc]
+
+    def __str__(self):
+        dims = "..." if self.dims is Ellipsis else f"[{', '.join(dim.value for dim in self.dims)}]"
+        return f"Domain[{dims}]"
+
+
+@dataclass(frozen=True)
 class FunctionType(SymbolType):
     args: list[Union[DataType, DeferredSymbolType]]
     kwargs: dict[str, Union[DataType, DeferredSymbolType]]

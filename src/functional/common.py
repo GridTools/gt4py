@@ -20,9 +20,12 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any, Generic, TypeVar
 
+from eve.extended_typing import TypeVarTuple, Unpack
+
 
 DimT = TypeVar("DimT", bound="Dimension")
 DimsT = TypeVar("DimsT", bound=Sequence["Dimension"])
+DimsTTup = TypeVarTuple("DimsTTup")
 DT = TypeVar("DT", bound="DType")
 
 
@@ -55,6 +58,10 @@ class DType:
 
 
 class Field(Generic[DimsT, DT]):
+    ...
+
+
+class Domain(Generic[Unpack[DimsTTup]]):  # type: ignore[misc] # mypy doesn't like Unpack
     ...
 
 

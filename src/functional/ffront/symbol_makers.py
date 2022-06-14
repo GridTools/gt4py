@@ -17,7 +17,7 @@ import collections.abc
 import functools
 import types
 import typing
-from typing import Any, ForwardRef, Optional, Union
+from typing import Any, ForwardRef, Optional, Sequence
 
 import numpy as np
 import numpy.typing as npt
@@ -57,6 +57,17 @@ def make_scalar_kind(dtype: npt.DTypeLike) -> ct.ScalarKind:
                 raise common.GTTypeError(f"Impossible to map '{dtype}' value to a ScalarKind")
     else:
         raise common.GTTypeError(f"Non-trivial dtypes like '{dtype}' are not yet supported")
+
+
+def _check_dimension_sequence(dims):
+    if isinstance(dims, Sequence):
+        for d in dims:
+            if not isinstance(d, common.Dimension):
+                raise TypingError(f"Invalid field dimension definition '{d}'")
+    elif dims is Ellipsis:
+        pass
+    else:
+        raise TypingError(f"Invalid field dimensions '{dims}'")
 
 
 def make_symbol_type_from_typing(
@@ -109,17 +120,9 @@ def make_symbol_type_from_typing(
             if (n_args := len(args)) != 2:
                 raise TypingError(f"Field type requires two arguments, got {n_args}! ({type_hint})")
 
-            dims: Union[Ellipsis, list[common.Dimension]] = []
             dim_arg, dtype_arg = args
-            if isinstance(dim_arg, list):
-                for d in dim_arg:
-                    if not isinstance(d, common.Dimension):
-                        raise TypingError(f"Invalid field dimension definition '{d}'")
-                    dims.append(d)
-            elif dim_arg is Ellipsis:
-                dims = dim_arg
-            else:
-                raise TypingError(f"Invalid field dimensions '{dim_arg}'")
+
+            _check_dimension_sequence(dim_arg)
 
             try:
                 dtype = recursive_make_symbol(dtype_arg)
@@ -129,7 +132,11 @@ def make_symbol_type_from_typing(
                 ) from error
             if not isinstance(dtype, ct.ScalarType) or dtype.kind == ct.ScalarKind.STRING:
                 raise TypingError("Field dtype argument must be a scalar type (got '{dtype}')!")
-            return ct.FieldType(dims=dims, dtype=dtype)
+            return ct.FieldType(dims=dim_arg, dtype=dtype)
+
+        case common.Domain:
+            _check_dimension_sequence(args)
+            return ct.DomainType(dims=args)
 
         case collections.abc.Callable:
             if not args:

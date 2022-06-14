@@ -2,7 +2,7 @@ import sys
 
 from numpy import float64
 
-from functional.common import Field
+from functional.common import Domain, Field
 from functional.ffront.decorator import field_operator, program
 from functional.iterator.backends.gtfn.gtfn_backend import generate
 from functional.iterator.runtime import CartesianAxis
@@ -20,7 +20,7 @@ def copy_stencil(inp: Field[[IDim, JDim, KDim], float64]) -> Field[[IDim, JDim, 
 
 @program
 def copy(
-    dom: Field[[], float64],  # TODO should be Domain[IDim, JDim, KDim]
+    dom: Domain[IDim, JDim, KDim],
     inp: Field[[IDim, JDim, KDim], float64],
     out: Field[[IDim, JDim, KDim], float64],
 ):
