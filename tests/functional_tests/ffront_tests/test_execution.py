@@ -20,6 +20,7 @@ from typing import TypeVar
 import numpy as np
 import pytest
 
+from functional.common import Domain
 from functional.ffront.decorator import field_operator, program
 from functional.ffront.fbuiltins import (
     Dimension,
@@ -452,3 +453,24 @@ def test_broadcast_shifted():
     simple_broadcast(a, out=out, offset_provider={"Joff": JDim})
 
     assert np.allclose(a.array()[:, np.newaxis], out)
+
+
+def test_domain_as_symbol():
+    size = 10
+    a = np_as_located_field(IDim)(np.ones((size)))
+    b = np_as_located_field(IDim)(np.zeros((size)))
+
+    @field_operator
+    def copy(inp: Field[[IDim], float64]) -> Field[[IDim], float64]:
+        return inp
+
+    @program(backend="roundtrip")
+    def copy_program(dom: Domain[IDim], inp: Field[[IDim], float64], out: Field[[IDim], float64]):
+        copy(inp, out=out[dom])
+
+    domain = {IDim: range(1, 9)}
+    copy_program(domain, a, b, offset_provider={})
+
+    assert np.allclose(np.asarray(a)[1:-1], np.asarray(b)[1:-1])
+    assert b[0] == 0
+    assert b[9] == 0

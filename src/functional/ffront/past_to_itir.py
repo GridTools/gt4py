@@ -58,9 +58,9 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
     [Sym(id=SymbolName('inp')), Sym(id=SymbolName('out')), Sym(id=SymbolName('__inp_size_0')), Sym(id=SymbolName('__out_size_0'))]
     """
 
-    def __init__(self) -> None:
-        self.uses_size_arguments = False  # TODO refactor this error-prone state
-        super().__init__()
+    # def __init__(self) -> None:
+    #     self.uses_size_arguments = False  # TODO refactor this error-prone state
+    #     super().__init__()
 
     @classmethod
     def apply(
@@ -98,8 +98,8 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                 )
 
         params = [itir.Sym(id=inp.id) for inp in node.params]
-        if self.uses_size_arguments:
-            params += size_params
+        # if self.uses_size_arguments:
+        params += size_params
 
         return itir.FencilDefinition(
             id=node.id,
@@ -154,7 +154,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                     id=node.slice_.id
                 )
             else:
-                self.uses_size_arguments = True
+                # self.uses_size_arguments = True
                 if isinstance(node.slice_, past.TupleExpr) and all(
                     isinstance(el, past.Slice) for el in node.slice_.elts
                 ):
@@ -189,7 +189,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                     )
 
         elif isinstance(node, past.Name):
-            self.uses_size_arguments = True
+            # self.uses_size_arguments = True
             out_field_name = node
             domain_args = [
                 itir.FunCall(
