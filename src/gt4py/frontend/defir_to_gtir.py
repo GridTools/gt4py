@@ -90,32 +90,25 @@ class UnVectorisation(IRNodeVisitor):
     def apply(cls, root, **kwargs):
         return cls().visit(root, **kwargs)
 
-    def visit_StencilDefinition(self, node: StencilDefinition, fields_decls: Dict[str, FieldDecl]) -> gtir.Stencil:
+    def _is_vector_assignment(self, stmt, fields_decls):
+        if not isinstance(stmt, Assign):
+            return False
+
+        # does the referenced field has data dimensions and the access is not element wise
+        return fields_decls[stmt.target.name].data_dims and not stmt.target.data_index
+
+    def visit_StencilDefinition(self, node: StencilDefinition,
+                            fields_decls: Dict[str, FieldDecl]) -> gtir.Stencil:
         # Vectorization of operations
         for c in node.computations:
             if c.body.stmts:
-                # don't modify temp preprocessing computations
-                if isinstance(c.body.stmts[0], FieldDecl) and not isinstance(c.body.stmts[1].value, BinOpExpr):
-                    continue
                 new_stmts = []
                 for stmt in c.body.stmts:
-                    if isinstance(stmt, Assign):
-                        target = stmt.target
-                        value = stmt.value
-
-                        if target.name in fields_decls:
-                            # check if higher dimensional field
-                            target_dim = fields_decls[target.name].data_dims
-
-                            if target_dim and not stmt.target.data_index:
-                                # unroll rhs
-                                stmt.value = UnRoller.apply(value, params=fields_decls)
-                                new_stmts.append(self.visit(stmt, params=fields_decls))
-                            else:
-                                new_stmts.append([stmt])
-                        else:
-                            continue
-
+                    if self._is_vector_assignment(stmt, fields_decls):
+                        stmt.value = UnRoller.apply(stmt.value, params=fields_decls)
+                        new_stmts.append(self.visit(stmt, params=fields_decls))
+                    else:
+                        new_stmts.append([stmt])  # take stmt as is
                 # merge list
                 c.body.stmts = list(itertools.chain(*new_stmts))
 
