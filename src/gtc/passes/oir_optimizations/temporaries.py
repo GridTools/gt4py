@@ -182,6 +182,8 @@ def _iter_stmt_pairs(stencil: oir.Stencil, reverse: bool = False):
             elif isinstance(stmt, oir.While):
                 pairs.append((None, stmt.cond))
                 pairs.extend(_collect_stmts_pairs_rev(stmt.body))
+            elif isinstance(stmt, oir.HorizontalRestriction):
+                pairs.extend(_collect_stmts_pairs_rev(stmt.body))
             else:
                 raise TypeError("Unrecognized oir.Stmt subtype")
         return pairs
