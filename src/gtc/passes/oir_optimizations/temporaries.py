@@ -256,10 +256,16 @@ def _remap_temporaries(
             .to_set()
             .intersection(all_temporaries)
         )
+        temporaries_read_with_offset = (
+            hexec.iter_tree()
+            .if_isinstance(oir.FieldAccess)
+            .filter(lambda acc: any(o != 0 for o in acc.offset.to_dict().values()))
+            .getattr("name")
+            .to_set()
+        )
         for temp in temporaries_written:
-            new_temp = _find_temporary(
-                stencil.declarations, unused_allocated, temp, temporaries_written
-            )
+            ignore = (temporaries_read_with_offset | temporaries_written) - {temp}
+            new_temp = _find_temporary(stencil.declarations, unused_allocated, temp, ignore)
             if temp in symbol_to_temp:
                 pass
             elif new_temp is not None:
