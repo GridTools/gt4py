@@ -1071,3 +1071,36 @@ class TestMatmul(gt_testing.StencilTestSuite):
     def validation(matrix, field_1, field_2, *, domain, origin):
         field_2[:,:,0] = np.einsum('ijlm,ijm->ijl', matrix[:,:,0], field_1[:,:,0])
         field_1[:,:,1] = np.einsum('ijlm,ijl->ijm', matrix[:,:,1], field_2[:,:,1])
+
+
+class TestMaskedMatmul(gt_testing.StencilTestSuite):
+    dtypes = {
+        # NOTE: Test fails with np.float32 due to different ordering of operations when compared to einsum.
+        # Potential fix: use tree style dot product for numerical stability.
+        "matrix": np.float64,
+        "field_1": np.float64,
+        "field_2": np.float64
+    }
+    domain_range = [(2, 2), (2, 2), (2, 2)]
+    backends = ALL_BACKENDS
+    symbols = {
+        "matrix": gt_testing.field(
+            in_range=(-10, 10), axes="K", boundary=[(0, 0), (0, 0), (0, 0)], data_dims=(4, 6),
+        ),
+        "field_1": gt_testing.field(
+            in_range=(-10, 10), axes="IJK", boundary=[(0, 0), (0, 0), (0, 0)], data_dims=(6,)
+        ),
+        "field_2": gt_testing.field(
+            in_range=(-10, 10), axes="IJK", boundary=[(0, 0), (0, 0), (0, 0)], data_dims=(4,)
+        ),
+    }
+    def definition(matrix, field_1, field_2):
+        with computation(PARALLEL):
+            with interval(0, 1):
+                field_2 = matrix @ field_1
+            with interval(1, 2):
+                field_1 = matrix.T @ field_2
+
+    def validation(matrix, field_1, field_2, *, domain, origin):
+        field_2[:,:,0] = np.einsum('lm,ijm->ijl', matrix[0], field_1[:,:,0])
+        field_1[:,:,1] = np.einsum('lm,ijl->ijm', matrix[1], field_2[:,:,1])
