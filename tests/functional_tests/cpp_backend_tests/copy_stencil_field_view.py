@@ -33,6 +33,9 @@ if __name__ == "__main__":
     output_file = sys.argv[1]
 
     prog = copy.itir
+    prog.params = list(
+        filter(lambda p: not p.id.startswith("__"), prog.params)
+    )  # hack to remove all field sizes which are not used if domain is explicit/absolute
     generated_code = generate(prog, grid_type="Cartesian")
 
     with open(output_file, "w+") as output:
