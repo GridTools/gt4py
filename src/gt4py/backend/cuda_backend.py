@@ -32,7 +32,6 @@ from .gtc_common import (
     BaseGTBackend,
     GTCUDAPyModuleGenerator,
     cuda_is_compatible_layout,
-    cuda_is_compatible_type,
     make_cuda_layout_map,
 )
 
@@ -145,7 +144,6 @@ class CudaBackend(BaseGTBackend, CLIBackendMixin):
         "device": "gpu",
         "layout_map": make_cuda_layout_map,
         "is_compatible_layout": cuda_is_compatible_layout,
-        "is_compatible_type": cuda_is_compatible_type,
     }
     PYEXT_GENERATOR_CLASS = CudaExtGenerator  # type: ignore
     MODULE_GENERATOR_CLASS = GTCUDAPyModuleGenerator

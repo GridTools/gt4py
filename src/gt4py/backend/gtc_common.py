@@ -398,15 +398,11 @@ def debug_layout(mask):
     return tuple(layout)
 
 
-def debug_is_compatible_layout(field):
+def debug_is_compatible_layout(field, mask: Tuple[bool, ...]):
     return sum(field.shape) > 0
 
 
-def debug_is_compatible_type(field):
-    return isinstance(field, np.ndarray)
-
-
-def make_x86_layout_map(mask: Tuple[int, ...]) -> Tuple[Optional[int], ...]:
+def make_x86_layout_map(mask: Tuple[bool, ...]) -> Tuple[Optional[int], ...]:
     ctr = iter(range(sum(mask)))
     if len(mask) < 3:
         layout: List[Optional[int]] = [next(ctr) if m else None for m in mask]
@@ -419,9 +415,9 @@ def make_x86_layout_map(mask: Tuple[int, ...]) -> Tuple[Optional[int], ...]:
     return tuple(layout)
 
 
-def x86_is_compatible_layout(field: "Storage") -> bool:
+def x86_is_compatible_layout(field: "Storage", mask: Tuple[bool, ...]) -> bool:
     stride = 0
-    layout_map = make_x86_layout_map(field.mask)
+    layout_map = make_x86_layout_map(mask)
     flattened_layout = [index for index in layout_map if index is not None]
     if len(field.strides) < len(flattened_layout):
         return False
@@ -432,11 +428,7 @@ def x86_is_compatible_layout(field: "Storage") -> bool:
     return True
 
 
-def gtcpu_is_compatible_type(field: "Storage") -> bool:
-    return isinstance(field, np.ndarray)
-
-
-def make_mc_layout_map(mask: Tuple[int, ...]) -> Tuple[Optional[int], ...]:
+def make_mc_layout_map(mask: Tuple[bool, ...]) -> Tuple[Optional[int], ...]:
     ctr = reversed(range(sum(mask)))
     if len(mask) < 3:
         layout: List[Optional[int]] = [next(ctr) if m else None for m in mask]
@@ -455,9 +447,9 @@ def make_mc_layout_map(mask: Tuple[int, ...]) -> Tuple[Optional[int], ...]:
     return tuple(layout)
 
 
-def mc_is_compatible_layout(field: "Storage") -> bool:
+def mc_is_compatible_layout(field: "Storage", mask: Tuple[bool, ...]) -> bool:
     stride = 0
-    layout_map = make_mc_layout_map(field.mask)
+    layout_map = make_mc_layout_map(mask)
     flattened_layout = [index for index in layout_map if index is not None]
     if len(field.strides) < len(flattened_layout):
         return False
@@ -468,14 +460,14 @@ def mc_is_compatible_layout(field: "Storage") -> bool:
     return True
 
 
-def make_cuda_layout_map(mask: Tuple[int, ...]) -> Tuple[Optional[int], ...]:
+def make_cuda_layout_map(mask: Tuple[bool, ...]) -> Tuple[Optional[int], ...]:
     ctr = reversed(range(sum(mask)))
     return tuple([next(ctr) if m else None for m in mask])
 
 
-def cuda_is_compatible_layout(field: "Storage") -> bool:
+def cuda_is_compatible_layout(field: "Storage", mask: Tuple[bool, ...]) -> bool:
     stride = 0
-    layout_map = make_cuda_layout_map(field.mask)
+    layout_map = make_cuda_layout_map(mask)
     flattened_layout = [index for index in layout_map if index is not None]
     if len(field.strides) < len(flattened_layout):
         return False
@@ -484,9 +476,3 @@ def cuda_is_compatible_layout(field: "Storage") -> bool:
             return False
         stride = field.strides[dim]
     return True
-
-
-def cuda_is_compatible_type(field: Any) -> bool:
-    from gt4py.storage.storage import ExplicitlySyncedGPUStorage, GPUStorage
-
-    return isinstance(field, (GPUStorage, ExplicitlySyncedGPUStorage))

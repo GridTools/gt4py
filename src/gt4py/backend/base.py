@@ -71,7 +71,6 @@ class Backend(abc.ABC):
     #:  - "device": "cpu" | "gpu"
     #:  - "layout_map": callback converting a mask to a layout
     #:  - "is_compatible_layout": callback checking if a storage has compatible layout
-    #:  - "is_compatible_type": callback checking if storage has compatible type
     storage_info: ClassVar[Dict[str, Any]]
 
     #: Language support:

@@ -20,17 +20,18 @@ import typing
 import warnings
 from dataclasses import dataclass
 from pickle import dumps
-from typing import Any, Callable, ClassVar, Dict, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Any, Callable, ClassVar, Dict, Optional, Tuple, Union
 
 import numpy as np
 
 import gt4py.backend as gt_backend
-import gt4py.storage as gt_storage
 import gtc.utils as gtc_utils
 from gt4py.definitions import AccessKind, DomainInfo, FieldInfo, ParameterInfo
 from gtc.definitions import Index, Shape
 
 
+if TYPE_CHECKING:
+    import cupy as cp
 FieldType = Union["cp.ndarray", np.ndarray]
 OriginType = Union[Tuple[int, int, int], Dict[str, Tuple[int, ...]]]
 
@@ -341,15 +342,10 @@ class StencilObject(abc.ABC):
                 field = field_args[name]
 
                 if not gt_backend.from_name(self.backend).storage_info["is_compatible_layout"](
-                    field
+                    field, field_info.mask
                 ):
                     raise ValueError(
                         f"The layout of the field {name} is not compatible with the backend."
-                    )
-
-                if not gt_backend.from_name(self.backend).storage_info["is_compatible_type"](field):
-                    raise ValueError(
-                        f"Field '{name}' has type '{type(field)}', which is not compatible with the '{self.backend}' backend."
                     )
                 elif type(field) is np.ndarray:
                     warnings.warn(
@@ -363,11 +359,6 @@ class StencilObject(abc.ABC):
                         f"The dtype of field '{name}' is '{field.dtype}' instead of '{field_dtype}'"
                     )
 
-                if isinstance(field, gt_storage.storage.Storage) and not field.is_stencil_view:
-                    raise ValueError(
-                        f"An incompatible view was passed for field {name} to the stencil. "
-                    )
-
                 # Check: domain + halo vs field size
                 field_info = self.field_info[name]
                 field_domain_mask = field_info.domain_mask
@@ -378,15 +369,6 @@ class StencilObject(abc.ABC):
                     raise ValueError(
                         f"Storage for '{name}' has {field.ndim} dimensions but the API signature "
                         f"expects {field_domain_ndim + len(field_info.data_dims)} ('{field_info.axes}[{field_info.data_dims}]')"
-                    )
-
-                if (
-                    isinstance(field, gt_storage.storage.Storage)
-                    and tuple(field.mask)[:domain_ndim] != field_domain_mask
-                ):
-                    raise ValueError(
-                        f"Storage for '{name}' has domain mask '{field.mask}' but the API signature "
-                        f"expects '[{', '.join(field_info.axes)}]'"
                     )
 
                 # Check: data dimensions shape
@@ -451,10 +433,6 @@ class StencilObject(abc.ABC):
                         *gtc_utils.filter_mask(all_origin, field_info.domain_mask),
                         *((0,) * len(field_info.data_dims)),
                     )
-
-                elif isinstance(field_arg := field_args.get(name), gt_storage.storage.Storage):
-                    origin[name] = field_arg.default_origin
-
                 else:
                     origin[name] = (0,) * field_info.ndim
 

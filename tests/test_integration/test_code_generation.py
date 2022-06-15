@@ -18,6 +18,7 @@ import pytest
 from gt4py import gtscript
 from gt4py import storage as gt_storage
 from gt4py.gtscript import __INLINED, BACKWARD, FORWARD, PARALLEL, Field, computation, interval
+from gt4py.storage import utils as storage_utils
 
 from ..definitions import ALL_BACKENDS, CPU_BACKENDS
 from .stencil_definitions import EXTERNALS_REGISTRY as externals_registry
@@ -194,11 +195,11 @@ def test_lower_dimensional_inputs(backend):
     assert field_1d.shape == (full_shape[-1],)
 
     stencil(field_3d, field_2d, field_1d, origin=(1, 1, 0), domain=(4, 3, 6))
-    field_3d.device_to_host()
-    np.testing.assert_allclose(field_3d.view(np.ndarray)[1:-1, 1:-2, :1], 3)
-    np.testing.assert_allclose(field_3d.view(np.ndarray)[1:-1, 1:-2, 1:], 2)
+    field_3d = storage_utils.cpu_copy(field_3d)
+    np.testing.assert_allclose(field_3d[1:-1, 1:-2, :1], 3)
+    np.testing.assert_allclose(field_3d[1:-1, 1:-2, 1:], 2)
 
-    stencil(field_3d, field_2d, field_1d)
+    stencil(field_3d, field_2d, field_1d, origin=(1, 1, 0))
 
 
 @pytest.mark.parametrize("backend", ALL_BACKENDS)
@@ -228,8 +229,8 @@ def test_lower_dimensional_masked(backend):
 
     outp = np.choose(cond > 0.0, [outp, inp3d])
 
-    outp_f.device_to_host()
-    assert np.allclose(outp, np.asarray(outp_f))
+    outp_f = storage_utils.cpu_copy(outp)
+    assert np.allclose(outp, outp_f)
 
 
 @pytest.mark.parametrize("backend", ALL_BACKENDS)
@@ -259,7 +260,7 @@ def test_lower_dimensional_masked_2dcond(backend):
 
     outp = np.choose(cond > 0.0, [outp, inp3d])
 
-    outp_f.device_to_host()
+    outp_f = storage_utils.cpu_copy(outp_f)
     assert np.allclose(outp, np.asarray(outp_f))
 
 
@@ -277,9 +278,9 @@ def test_lower_dimensional_inputs_2d_to_3d_forward(backend):
         np.random.randn(10, 10, 10), default_origin=(0, 0, 0), backend=backend
     )
     copy_2to3(inp_f, outp_f)
-    inp_f.device_to_host()
-    outp_f.device_to_host()
-    assert np.allclose(np.asarray(outp_f), np.asarray(inp_f)[:, :, np.newaxis])
+    inp_f = storage_utils.cpu_copy(inp_f)
+    outp_f = storage_utils.cpu_copy(outp_f)
+    assert np.allclose(outp_f, inp_f[:, :, np.newaxis])
 
 
 @pytest.mark.parametrize("backend", ALL_BACKENDS)
@@ -325,7 +326,7 @@ def test_higher_dimensional_fields(backend):
     assert mat_field.shape[:-2] == full_shape
 
     stencil(field, vec_field, mat_field, origin=(1, 1, 0), domain=(4, 4, 6))
-    mat_field.device_to_host()
+    mat_field = storage_utils.cpu_copy(mat_field)
     np.testing.assert_allclose(mat_field.view(np.ndarray)[1:-1, 1:-1, 1:1], 2.0 + 5.0)
 
     stencil(field, vec_field, mat_field)
@@ -419,8 +420,8 @@ def test_mask_with_offset_written_in_conditional(backend):
 
     stencil(outp)
 
-    outp.device_to_host()
-    assert np.allclose(1.0, np.asarray(outp))
+    outp = storage_utils.cpu_copy(outp)
+    assert np.allclose(1.0, outp)
 
 
 @pytest.mark.parametrize("backend", ALL_BACKENDS)
@@ -531,11 +532,9 @@ def test_origin_k_fields(backend):
 
     k_to_ijk(outp, inp, origin=origin, domain=domain)
 
-    inp.device_to_host()
-    outp.device_to_host()
-    np.testing.assert_allclose(data, np.asarray(inp))
-    np.testing.assert_allclose(
-        np.broadcast_to(data[2:], shape=(2, 2, 8)), np.asarray(outp)[:, :, 1:-1]
-    )
-    np.testing.assert_allclose(0.0, np.asarray(outp)[:, :, 0])
-    np.testing.assert_allclose(0.0, np.asarray(outp)[:, :, -1])
+    inp = storage_utils.cpu_copy(inp)
+    outp = storage_utils.cpu_copy(outp)
+    np.testing.assert_allclose(data, inp)
+    np.testing.assert_allclose(np.broadcast_to(data[2:], shape=(2, 2, 8)), outp[:, :, 1:-1])
+    np.testing.assert_allclose(0.0, outp[:, :, 0])
+    np.testing.assert_allclose(0.0, outp[:, :, -1])

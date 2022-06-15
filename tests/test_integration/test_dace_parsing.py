@@ -23,6 +23,7 @@ import gt4py.config
 from gt4py import gtscript
 from gt4py import storage as gt_storage
 from gt4py.gtscript import PARALLEL, computation, interval
+from gt4py.storage import utils as storage_utils
 
 
 dace = pytest.importorskip("dace")
@@ -87,14 +88,15 @@ def test_basic(backend):
 
     inp = 7.0
 
-    outp.host_to_device()
+    outp = storage_utils.cpu_copy(outp)
 
     @dace.program(device=dace.DeviceType.GPU if "gpu" in backend else dace.DeviceType.CPU)
     def call_stencil_object(locoutp, locinp):
         defn(locoutp, par=locinp)
 
     call_stencil_object(locoutp=outp, locinp=inp)
-    outp.device_to_host(force=True)
+    outp = storage_utils.cpu_copy(outp)
+
     assert np.allclose(outp, 7.0)
 
 
@@ -113,16 +115,13 @@ def test_origin_offsetting_frozen(dace_stencil, domain, outp_origin):
         dtype=np.float64, shape=(10, 10, 10), default_origin=(0, 0, 0), backend=backend
     )
 
-    inp.host_to_device()
-    outp.host_to_device()
-
     @dace.program(device=dace.DeviceType.GPU if "gpu" in backend else dace.DeviceType.CPU)
     def call_frozen_stencil():
         frozen_stencil(inp=inp, outp=outp)
 
     call_frozen_stencil()
 
-    outp.device_to_host(force=True)
+    outp = storage_utils.cpu_copy(outp)
 
     assert np.allclose(inp, 7.0)
 
@@ -151,8 +150,8 @@ def test_origin_offsetting_nofrozen(dace_stencil, domain, outp_origin):
 
     origin = {"inp": (0, 0, 0), "outp": outp_origin}
 
-    inp.host_to_device()
-    outp.host_to_device()
+    inp = storage_utils.cpu_copy(inp)
+    outp = storage_utils.cpu_copy(outp)
 
     @dace.program(device=dace.DeviceType.GPU if "gpu" in backend else dace.DeviceType.CPU)
     def call_stencil_object():
@@ -160,7 +159,7 @@ def test_origin_offsetting_nofrozen(dace_stencil, domain, outp_origin):
 
     call_stencil_object()
 
-    outp.device_to_host(force=True)
+    outp = storage_utils.cpu_copy(outp)
 
     assert np.allclose(inp, 7.0)
     assert np.allclose(
@@ -200,8 +199,6 @@ def test_optional_arg_noprovide(backend):
     outp = gt_storage.zeros(
         dtype=np.float64, shape=(10, 10, 10), default_origin=(0, 0, 0), backend=backend
     )
-    inp.host_to_device()
-    outp.host_to_device()
 
     @dace.program(device=dace.DeviceType.GPU if "gpu" in backend else dace.DeviceType.CPU)
     def call_frozen_stencil():
@@ -209,7 +206,7 @@ def test_optional_arg_noprovide(backend):
 
     call_frozen_stencil()
 
-    outp.device_to_host(force=True)
+    outp = storage_utils.cpu_copy(outp)
 
     assert np.allclose(inp, 7.0)
     assert np.allclose(np.asarray(outp)[2:5, 2:5, :], 7.0)
@@ -245,8 +242,6 @@ def test_optional_arg_provide(backend):
     unused_field = gt_storage.zeros(
         dtype=np.float64, shape=(10, 10, 10), default_origin=(0, 0, 0), backend=backend
     )
-    inp.host_to_device()
-    outp.host_to_device()
 
     @dace.program(device=dace.DeviceType.GPU if "gpu" in backend else dace.DeviceType.CPU)
     def call_frozen_stencil():
@@ -254,7 +249,7 @@ def test_optional_arg_provide(backend):
 
     call_frozen_stencil()
 
-    outp.device_to_host(force=True)
+    outp = storage_utils.cpu_copy(outp)
 
     assert np.allclose(inp, 7.0)
     assert np.allclose(np.asarray(outp)[2:5, 2:5, :], 7.0)
@@ -290,8 +285,6 @@ def test_optional_arg_provide_aot(backend):
     unused_field = gt_storage.zeros(
         dtype=np.float64, shape=(10, 10, 10), default_origin=(0, 0, 0), backend=backend
     )
-    inp.host_to_device()
-    outp.host_to_device()
 
     storage = dace.StorageType.GPU_Global if "gpu" in backend else dace.StorageType.CPU_Heap
 
@@ -322,7 +315,7 @@ def test_optional_arg_provide_aot(backend):
     csdfg = call_frozen_stencil.compile()
     csdfg(inp=inp, outp=outp, unused_field=unused_field, unused_par=7.0)
 
-    outp.device_to_host(force=True)
+    outp = storage_utils.cpu_copy(outp)
 
     assert np.allclose(inp, 7.0)
     assert np.allclose(np.asarray(outp)[2:5, 2:5, :], 7.0)

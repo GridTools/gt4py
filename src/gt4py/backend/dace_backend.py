@@ -17,7 +17,6 @@ import textwrap
 from typing import TYPE_CHECKING, Dict, List, Optional, Tuple, Type
 
 import dace
-import numpy as np
 from dace.serialize import dumps
 
 from eve import codegen
@@ -30,7 +29,6 @@ from gt4py.backend.gtc_common import (
     GTCUDAPyModuleGenerator,
     PyExtModuleGenerator,
     bindings_main_template,
-    cuda_is_compatible_type,
     pybuffer_to_sid,
 )
 from gt4py.backend.module_generator import make_args_data_from_gtir
@@ -497,8 +495,7 @@ class DaceCPUBackend(BaseDaceBackend):
         "alignment": 1,
         "device": "cpu",
         "layout_map": layout_maker_factory((1, 0, 2)),
-        "is_compatible_layout": lambda x: True,
-        "is_compatible_type": lambda x: isinstance(x, np.ndarray),
+        "is_compatible_layout": lambda x, m: True,
     }
     MODULE_GENERATOR_CLASS = DaCePyExtModuleGenerator
 
@@ -519,7 +516,6 @@ class DaceGPUBackend(BaseDaceBackend):
         "device": "gpu",
         "layout_map": layout_maker_factory((2, 1, 0)),
         "is_compatible_layout": lambda x: True,
-        "is_compatible_type": cuda_is_compatible_type,
     }
     MODULE_GENERATOR_CLASS = DaCeCUDAPyExtModuleGenerator
     options = {

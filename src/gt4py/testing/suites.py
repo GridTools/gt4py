@@ -31,6 +31,7 @@ from gt4py import utils as gt_utils
 from gt4py.definitions import AccessKind, Boundary, CartesianSpace, FieldInfo
 from gt4py.frontend.nodes import Index
 from gt4py.stencil_object import StencilObject
+from gt4py.storage import utils as storage_utils
 from gtc.definitions import Shape
 
 from .input_strategies import (
@@ -581,12 +582,7 @@ class StencilTestSuite(metaclass=SuiteMeta):
         for name, value in test_values.items():
             if isinstance(value, np.ndarray):
                 expected_value = validation_values[name]
-
-                if gt_backend.from_name(value.backend).storage_info["device"] == "gpu":
-                    value.synchronize()
-                    value = value.data.get()
-                else:
-                    value = value.data
+                value = storage_utils.cpu_copy(value)
 
                 np.testing.assert_allclose(
                     value,

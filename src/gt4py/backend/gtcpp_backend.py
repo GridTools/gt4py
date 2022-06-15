@@ -30,8 +30,6 @@ from .gtc_common import (
     BaseGTBackend,
     GTCUDAPyModuleGenerator,
     cuda_is_compatible_layout,
-    cuda_is_compatible_type,
-    gtcpu_is_compatible_type,
     make_cuda_layout_map,
     make_mc_layout_map,
     make_x86_layout_map,
@@ -175,7 +173,6 @@ class GTCpuIfirstBackend(GTBaseBackend):
         "device": "cpu",
         "layout_map": make_mc_layout_map,
         "is_compatible_layout": mc_is_compatible_layout,
-        "is_compatible_type": gtcpu_is_compatible_type,
     }
 
     def generate_extension(self, **kwargs: Any) -> Tuple[str, str]:
@@ -194,7 +191,6 @@ class GTCpuKfirstBackend(GTBaseBackend):
         "device": "cpu",
         "layout_map": make_x86_layout_map,
         "is_compatible_layout": x86_is_compatible_layout,
-        "is_compatible_type": gtcpu_is_compatible_type,
     }
 
     def generate_extension(self, **kwargs: Any) -> Tuple[str, str]:
@@ -215,7 +211,6 @@ class GTGpuBackend(GTBaseBackend):
         "device": "gpu",
         "layout_map": make_cuda_layout_map,
         "is_compatible_layout": cuda_is_compatible_layout,
-        "is_compatible_type": cuda_is_compatible_type,
     }
 
     def generate_extension(self, **kwargs: Any) -> Tuple[str, str]:

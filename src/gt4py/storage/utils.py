@@ -15,7 +15,7 @@
 import collections.abc
 import math
 import numbers
-from typing import Optional, Sequence
+from typing import Optional, Sequence, Union
 
 import numpy as np
 
@@ -27,7 +27,7 @@ try:
     import cupy as cp
     from cupy.lib.stride_tricks import as_strided
 except ImportError:
-    pass
+    cp = None
 
 
 def idx_from_order(order):
@@ -245,3 +245,12 @@ def allocate_cpu(default_origin, shape, layout_map, dtype, alignment_bytes):
         field.strides = strides
         field = field[tuple(slice(0, s, None) for s in shape)]
     return raw_buffer, field
+
+
+def cpu_copy(array: Union[np.ndarray, "cp.ndarray"]):
+    if cp is not None:
+        # it's not clear from the documentation if cp.asnumpy guarantees a copy.
+        # worst case, this copies twice.
+        return np.array(cp.asnumpy(array))
+    else:
+        return np.array(array)
