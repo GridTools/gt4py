@@ -19,7 +19,7 @@ def slice_sparse(inp):
 def slice_sparse_fencil(dom, inp, out):
     closure(
         dom,
-        copy_stencil,
+        slice_sparse,
         out,
         [inp],
     )
@@ -30,8 +30,8 @@ if __name__ == "__main__":
         raise RuntimeError(f"Usage: {sys.argv[0]} <output_file>")
     output_file = sys.argv[1]
 
-    prog = trace(copy_fencil, [None] * 3)
-    generated_code = generate(prog, grid_type="Cartesian")
+    prog = trace(slice_sparse_fencil, [None] * 3)
+    generated_code = generate(prog, grid_type="unstructured")
 
     with open(output_file, "w+") as output:
         output.write(generated_code)

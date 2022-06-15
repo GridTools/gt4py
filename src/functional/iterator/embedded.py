@@ -451,6 +451,9 @@ def _tupsum(a, b):
             first = s.start
             assert s.step is None
             assert s.stop is None
+        elif s is None:
+            is_slice = True
+            first = 0
         else:
             assert isinstance(s, numbers.Integral)
             first = s
@@ -459,6 +462,9 @@ def _tupsum(a, b):
             second = t.start
             assert t.step is None
             assert t.stop is None
+        elif t is None:
+            is_slice = True
+            second = 0
         else:
             assert isinstance(t, numbers.Integral)
             second = t

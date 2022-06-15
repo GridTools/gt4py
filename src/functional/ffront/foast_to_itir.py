@@ -99,6 +99,8 @@ def to_value(node: foast.LocatedNode) -> Callable[[itir.Expr], itir.Expr]:
     """
     assert can_be_value_or_iterator(node.type)
     if resulting_type_kind(node.type) is TypeKind.FIELD:
+        if isinstance(node, foast.Subscript):
+            return lambda x: x
         return im.deref_
     return lambda x: x
 
@@ -183,7 +185,7 @@ class FieldOperatorLowering(NodeTranslator):
         return self.lifted_lambda(*param_names)
 
     def visit_Subscript(self, node: foast.Subscript, **kwargs) -> itir.FunCall:
-        return im.tuple_get_(node.index, self.visit(node.value, **kwargs))
+        return im.tuple_get_(node.index, im.deref_(self.visit(node.value, **kwargs)))
 
     def visit_TupleExpr(self, node: foast.TupleExpr, **kwargs) -> itir.FunCall:
         return im.make_tuple_(*self.visit(node.elts, **kwargs))

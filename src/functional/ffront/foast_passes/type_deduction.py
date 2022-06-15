@@ -150,6 +150,12 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                         msg="Source and target must be equal for offsets with a single target.",
                     )
                 new_type = new_value.type
+            case ct.FieldType(dims=dims, dtype=dtype):
+                if not dims[-1].local:
+                    raise FieldOperatorTypeDeductionError.from_foast_node(
+                        new_value, msg="Can only slice a local dimension."
+                    )
+                new_type = ct.FieldType(dims=dims[:-1], dtype=dtype)
             case _:
                 raise FieldOperatorTypeDeductionError.from_foast_node(
                     new_value, msg="Could not deduce type of subscript expression!"
