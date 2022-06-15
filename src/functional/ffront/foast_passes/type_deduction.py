@@ -269,6 +269,18 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
 
         if isinstance(new_func.type, ct.FieldType):
             new_args = self.visit(node.args, **kwargs)
+            if len(new_args) == 1 and isinstance(new_args[0], foast.Constant):
+                if not new_func.type.dims[-1].local:
+                    raise FieldOperatorTypeDeductionError.from_foast_node(
+                        node, msg="Cannot slice a non-local dimension."
+                    )
+                return foast.Call(
+                    func=new_func,
+                    args=new_args,
+                    kwargs={},
+                    location=node.location,
+                    type=ct.FieldType(dims=new_func.type.dims[:-1], dtype=new_func.type.dtype),
+                )
             source_dim = new_args[0].type.source
             target_dims = new_args[0].type.target
             if new_func.type.dims and source_dim not in new_func.type.dims:
