@@ -93,13 +93,10 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                     "Only calls to functions returning a Field supported currently."
                 )
 
-        params = [itir.Sym(id=inp.id) for inp in node.params]
-        params += size_params
-
         return itir.FencilDefinition(
             id=node.id,
             function_definitions=function_definitions,
-            params=params,
+            params=[itir.Sym(id=inp.id) for inp in node.params] + size_params,
             closures=closures,
         )
 
