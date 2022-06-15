@@ -12,11 +12,11 @@ KDim = CartesianAxis("KDim")
 
 
 @fundef
-def slice_sparse(inp):
-    return tuple_get(0, deref(inp))
+def copy_stencil(inp):
+    return deref(inp)
 
 
-def slice_sparse_fencil(dom, inp, out):
+def copy_fencil(dom, inp, out):
     closure(
         dom,
         copy_stencil,
