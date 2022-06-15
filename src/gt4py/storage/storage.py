@@ -12,10 +12,10 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import itertools
-from typing import Any, Dict, Tuple
-
 import numpy as np
+import pytest
+
+from gt4py import backend as gt_backend
 
 
 try:
@@ -27,9 +27,6 @@ try:
     import dace
 except ImportError:
     dace = None
-
-from gt4py import backend as gt_backend
-from gtc import utils as gtc_utils
 
 from . import utils as storage_utils
 
@@ -56,12 +53,8 @@ def empty(backend, default_origin, shape, dtype, mask=None):
     layout_map = gt_backend.from_name(backend).storage_info["layout_map"](mask)
 
     dtype = np.dtype(dtype)
-    _, res = allocate_f(
-        default_origin, shape, layout_map, dtype, alignment * dtype.itemsize
-    )
+    _, res = allocate_f(default_origin, shape, layout_map, dtype, alignment * dtype.itemsize)
     return res
-
-
 
 
 def ones(backend, default_origin, shape, dtype, mask=None):
@@ -88,9 +81,7 @@ def zeros(backend, default_origin, shape, dtype, mask=None):
     return storage
 
 
-def from_array(
-    data, backend, default_origin, shape=None, dtype=None, mask=None
-):
+def from_array(data, backend, default_origin, shape=None, dtype=None, mask=None):
     is_cupy_array = cp is not None and isinstance(data, cp.ndarray)
     xp = cp if is_cupy_array else np
     if shape is None:
@@ -114,27 +105,32 @@ def from_array(
 
     return storage
 
-def dace_descriptor(
-    backend, default_origin, shape, dtype, mask=None
-):
-    dtype = np.dtype(dtype)
+
+@pytest.mark.skipif(dace is None)
+def dace_descriptor(backend, default_origin, shape, dtype, mask=None):
+    default_origin, shape, dtype, mask = storage_utils.normalize_storage_spec(
+        default_origin, shape, dtype, mask
+    )
     itemsize = dtype.itemsize
-    items_per_alignment = int(
+    layout_map = gt_backend.from_name(backend).storage_info["layout_map"](mask)
 
-    order_idx = idx_from_order([i for i in layout_map if i is not None])
-    padded_shape = compute_padded_shape(shape, gt_backend.from_name(backend).storage_info["alignment"], order_idx)
+    order_idx = storage_utils.idx_from_order([i for i in layout_map if i is not None])
+    padded_shape = storage_utils.compute_padded_shape(
+        shape, gt_backend.from_name(backend).storage_info["alignment"], order_idx
+    )
 
-    strides = strides_from_padded_shape(padded_shape, order_idx, itemsize)
+    strides = storage_utils.strides_from_padded_shape(padded_shape, order_idx, itemsize)
 
-    storage = dace.StorageType.GPU_Global if gt_backend.from_name(backend).storage_info["device"] == "gpu" else dace.StorageType.CPU_Heap
+    storage = (
+        dace.StorageType.GPU_Global
+        if gt_backend.from_name(backend).storage_info["device"] == "gpu"
+        else dace.StorageType.CPU_Heap
+    )
     start_offset = int(np.array([default_origin]) @ np.array([strides]).T) // itemsize
-
 
     total_size = int(int(np.array([shape]) @ np.array([strides]).T) // itemsize)
 
-    start_offset = (
-        start_offset % gt_backend.from_name(backend).storage_info["alignment"]
-    )
+    start_offset = start_offset % gt_backend.from_name(backend).storage_info["alignment"]
     return dace.data.Array(
         shape=shape,
         strides=[s // itemsize for s in strides],
@@ -143,4 +139,3 @@ def dace_descriptor(
         total_size=total_size,
         start_offset=start_offset,
     )
-
