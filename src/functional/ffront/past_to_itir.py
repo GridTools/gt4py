@@ -143,11 +143,8 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         #  inspection of the PAST to emulate the behaviour
         if isinstance(node, past.Subscript):
             out_field_name: past.Name = node.value
-            if isinstance(node.slice_, past.Name):
-                # assert node.slice_ is of type domain
-                return itir.SymRef(id=self.visit(out_field_name, **kwargs).id), itir.SymRef(
-                    id=node.slice_.id
-                )
+            if isinstance(node.slice_, past.Name):  # domain is passed as program argument
+                domain = itir.SymRef(id=node.slice_.id)
             else:
                 if isinstance(node.slice_, past.TupleExpr) and all(
                     isinstance(el, past.Slice) for el in node.slice_.elts
@@ -181,6 +178,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                             args=[itir.AxisLiteral(value=dim.value), lower, upper],
                         )
                     )
+                domain = itir.FunCall(fun=itir.SymRef(id="domain"), args=domain_args)
 
         elif isinstance(node, past.Name):
             out_field_name = node
@@ -196,14 +194,13 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                 )
                 for dim_idx, dim in enumerate(node.type.dims)
             ]
+            domain = itir.FunCall(fun=itir.SymRef(id="domain"), args=domain_args)
         else:
             raise RuntimeError(
                 "Unexpected `out` argument. Must be a `past.Subscript` or `past.Name` node."
             )
 
-        return itir.SymRef(id=self.visit(out_field_name, **kwargs).id), itir.FunCall(
-            fun=itir.SymRef(id="domain"), args=domain_args
-        )
+        return itir.SymRef(id=self.visit(out_field_name, **kwargs).id), domain
 
     def visit_Constant(self, node: past.Constant, **kwargs) -> Union[itir.Literal]:
         if isinstance(node.type, common_types.ScalarType) and node.type.shape is None:
