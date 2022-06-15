@@ -221,6 +221,53 @@ def test_sparse_input_field_v2v(backend):
 
 
 @fundef
+def slice_sparse_stencil(sparse):
+    return deref(shift(1)(sparse))
+
+
+def test_slice_sparse(backend):
+    backend, validate = backend
+    inp = np_as_located_field(Vertex, V2V)(v2v_arr)
+    out = np_as_located_field(Vertex)(np.zeros([9]))
+
+    ref = v2v_arr[:, 1]
+
+    slice_sparse_stencil[{Vertex: range(0, 9)}](
+        inp,
+        out=out,
+        backend=backend,
+        offset_provider={
+            "V2V": NeighborTableOffsetProvider(v2v_arr, Vertex, Vertex, 4),
+        },
+    )
+
+
+@fundef
+def shift_sliced_sparse_stencil(sparse):
+    return deref(shift(V2V, 0)(shift(1)(sparse)))
+
+
+def test_shift_sliced_sparse(backend):
+    backend, validate = backend
+    inp = np_as_located_field(Vertex, V2V)(v2v_arr)
+    out = np_as_located_field(Vertex)(np.zeros([9]))
+
+    ref = v2v_arr[:, 1][v2v_arr][:, 0]
+
+    shift_sliced_sparse_stencil[{Vertex: range(0, 9)}](
+        inp,
+        out=out,
+        backend=backend,
+        offset_provider={
+            "V2V": NeighborTableOffsetProvider(v2v_arr, Vertex, Vertex, 4),
+        },
+    )
+
+    if validate:
+        assert allclose(out, ref)
+
+
+@fundef
 def deref_stencil(inp):
     return deref(shift(V2V, 0)(inp))
 

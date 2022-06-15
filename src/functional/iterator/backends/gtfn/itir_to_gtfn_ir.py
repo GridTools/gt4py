@@ -75,11 +75,11 @@ class GTFN_lowering(eve.NodeTranslator):
         deref_arg = node.args[0].args[0]
         if len(offsets) > 1:
             deref_arg = itir.FunCall(
-                fun=itir.FunCall(fun=itir.SymRef(id="shift"), args=offsets[:-1]),
+                fun=itir.FunCall(fun=itir.SymRef(id="shift"), args=offsets[1:]),
                 args=[deref_arg],
             )
         derefed = itir.FunCall(fun=itir.SymRef(id="deref"), args=[deref_arg])
-        sparse_access = itir.FunCall(fun=itir.SymRef(id="tuple_get"), args=[offsets[-1], derefed])
+        sparse_access = itir.FunCall(fun=itir.SymRef(id="tuple_get"), args=[offsets[0], derefed])
         return self.visit(sparse_access)
 
     def visit_FunCall(self, node: itir.FunCall, **kwargs: Any) -> Expr:
