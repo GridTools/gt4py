@@ -16,10 +16,10 @@ stencil kernels from a domain-specific language (DSL).
 
 GT4Py uses the standard Python packaging method, and can be installed
 using `pip`.
-However, it is not yet released on PyPI, so users have to point to the
+It is not yet released on PyPI, so users have to point to the
 git repository to install it.
 
-As always, it is recommended to install the package in a virtual
+It is recommended to install the package in a virtual
 environment.
 
 .. code-block:: bash
@@ -49,26 +49,14 @@ There are two options to run the unit and integration tests in ``tests/``:
 📖 Description
 --------------
 
-GT4Py is a Python library for expressing finite-difference stencils
-related to weather and climate modeling using a high-level
-DSL using Python functions.
-These functions are compiled by the framework into high-performance
-implementations for CPUs and GPUs.
+GT4Py is a Python library for expressing computational motifs as found in weather and climate applications.
+These computations are expressed in a domain specific language (GTScript) which is translated to high-performance implementations for CPUs and GPUs.
 
-The DSL expresses the stencils using the parallel model from the
-`GridTools C++ Framework <https://github.com/GridTools/gridtools>`__,
-and uses it, as well as other backends, for optimized code generation.
-In this Cartesian parallel model there are always three dimensions,
-and the vertical (``K``) is treated separately from the horizontal axes
-(``I``, ``J``), which are iterated over in parallel.
+The DSL expresses computations on a 3-dimensional Cartesian grid.
+The horizontal axes (``I``, ``J``) are always computed in parallel, while the vertical (``K``) can be iterated in sequential, forward or backward, order. Cartesian offsets are expressed relative to a center index.
 
-The *gtscript* DSL expresses Cartesian offsets from a center index, as it
-would be written algorithmically.
-List of these stencil *statements* form *computations*, and can be specialized
-in the vertical index to account for boundaries, or accumulate fields.
+In addition, GT4Py provides functions to create storages (arrays) with memory layout suited for a particular backend.
 
-In order to execute stencils, arrays are required.
-For this, GT4Py has functions which create storages for the given stencil backend.
 The following backends are supported:
 
 - ``numpy``: Pure-Python backend
@@ -80,16 +68,13 @@ The following backends are supported:
 🚜 Installation
 ---------------
 
-The base version of GT4Py does not have dependencies other than the
-Python packages included in the ``setup.cfg`` which are automatically
+For testing GT4Py with the ``numpy`` backend, all dependencies are included in the ``setup.cfg`` and are automatically
 installed.
-The GridTools backends however require
+The performance backends require
 
-1. `GridTools <https://github.com/GridTools/gridtools>`__ C++ sources.
+1. `GridTools <https://github.com/GridTools/gridtools>`__ which is automatically downloaded on first use,
 2. `Boost <https://www.boost.org/>`__ a dependency of GridTools,
    which needs to be installed by the user.
-
-The correct version of GridTools is downloaded automatically when needed.
 
 
 Options
@@ -99,8 +84,8 @@ If GridTools or Boost are not found in the compiler's standard include
 path, or a custom version is desired, then a couple configuration
 environment variables will allow the compiler to use them:
 
-- ``GT2_INCLUDE_PATH``: Path to the GridTools v2 (default) installation.
-- ``BOOST_ROOT``: Path to the boost headers.
+- ``GT2_INCLUDE_PATH``: Path to the GridTools installation.
+- ``BOOST_ROOT``: Path to a boost installation.
 
 Other commonly used environment variables are:
 
@@ -119,24 +104,24 @@ Documentation
 ~~~~~~~~~~~~~
 
 GT4Py uses Sphinx documentation.
-However, it is not published yet, so it needs to be built by the user.
-To do that, first install the dependencies in ``requirements-dev.txt``:
+To build the documentation install the dependencies in ``requirements-dev.txt``
 
 .. code-block:: bash
 
     $ pip install -r ./gt4py/requirements-dev.txt
 
-and then build the docs with:
+and then build the docs with
 
 .. code-block:: bash
 
     $ cd gt4py/docs
     $ make html  # run 'make help' for a list of targets
 
+
 Development
 ~~~~~~~~~~~
 
-For GT4Py developers and advanced users, it is recommended to clone the
+For developing GT4Py we recommend to clone the
 repository and use an *editable* installation of GT4Py:
 
 .. code-block:: bash
@@ -147,7 +132,7 @@ repository and use an *editable* installation of GT4Py:
    $ pre-commit install-hooks
 
 Dependencies for running tests locally and for linting and formatting
-code are listed in `requirements.dev.txt`, so these should be installedj
+code are listed in `requirements-dev.txt`.
 
 
 ⚠️ License
@@ -155,6 +140,4 @@ code are listed in `requirements.dev.txt`, so these should be installedj
 
 GT4Py is licensed under the terms of the
 `GPLv3 <https://github.com/GridTools/gt4py/blob/master/LICENSE.txt>`__.
-Note that this requires any code that imports this library to be
-developed in the open and use GPL.
 
