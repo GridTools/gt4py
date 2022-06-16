@@ -1,5 +1,4 @@
-from functional.iterator import ir
-from functional.iterator import type_inference as ti
+from functional.iterator import ir, type_inference as ti
 
 
 def test_sym_ref():
