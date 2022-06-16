@@ -100,6 +100,7 @@ class BinaryOperator(StrEnum):
     DIV = "divides"
     BIT_AND = "and_"
     BIT_OR = "or_"
+    POW = "power"
 
     def __str__(self) -> str:
         if self is self.ADD:
@@ -114,6 +115,8 @@ class BinaryOperator(StrEnum):
             return "&"
         elif self is self.BIT_OR:
             return "|"
+        elif self is self.POW:
+            return "**"
         return "Unknown BinaryOperator"
 
 

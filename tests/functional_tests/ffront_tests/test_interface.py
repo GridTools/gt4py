@@ -160,11 +160,12 @@ def test_binary_pow():
     def power(inp: Field[..., "float64"]):
         return inp**3
 
-    with pytest.raises(
-        FieldOperatorSyntaxError,
-        match=(r"`\*\*` operator not supported!"),
-    ):
-        _ = FieldOperatorParser.apply_to_function(power)
+    parsed = FieldOperatorParser.apply_to_function(power)
+
+    assert parsed.body[-1].value.type == common_types.FieldType(
+        dims=Ellipsis,
+        dtype=common_types.ScalarType(kind=common_types.ScalarKind.FLOAT64, shape=None),
+    )
 
 
 def test_binary_mod():
