@@ -17,7 +17,7 @@ import numpy as np
 
 from gt4py import gtscript
 from gt4py import testing as gt_testing
-from gt4py.gtscript import PARALLEL, I, J, computation, horizontal, interval, region
+from gt4py.gtscript import PARALLEL, Field, I, J, computation, horizontal, interval, region
 
 from ..definitions import ALL_BACKENDS
 from .stencil_definitions import optional_field, two_optional_fields
@@ -881,3 +881,37 @@ class TestHorizontalRegions(gt_testing.StencilTestSuite):
         field_out[-1, :, :] = field_in[-1, :, :] + 1.0
         field_out[:, 0, :] = field_in[:, 0, :] - 1.0
         field_out[:, -1, :] = field_in[:, -1, :] - 1.0
+
+
+class TestTypedTemporary(gt_testing.StencilTestSuite):
+    dtypes = {"field_in": np.float32, "field_out": np.float32}
+    domain_range = [(2, 2), (2, 2), (2, 8)]
+    backends = ALL_BACKENDS
+    symbols = {
+        "field_in": gt_testing.field(
+            in_range=(-10, 10), axes="IJK", boundary=[(0, 0), (0, 0), (0, 0)]
+        ),
+        "field_out": gt_testing.field(
+            in_range=(-10, 10), axes="IJK", boundary=[(0, 0), (0, 0), (0, 0)]
+        ),
+    }
+
+    def definition(field_in, field_out):
+        tmp: Field[(np.float32, (2, 2))] = 0
+        with computation(PARALLEL):
+            with interval(0, -1):
+                tmp[0, 0, 0][0, 0] = field_in[0, 0, 0]
+                tmp[0, 0, 0][1, 0] = field_in[0, 0, 1]
+                tmp[0, 0, 0][0, 1] = -1.0
+                tmp[0, 0, 0][1, 1] = -1.0
+                field_out = (  # noqa: F841  # local variable 'field_out' is assigned to but never used
+                    tmp[0, 0, 0][0, 0] + tmp[0, 0, 0][1, 0]
+                )
+            with interval(-1, None):
+                field_out = (  # noqa: F841  # local variable 'field_out' is assigned to but never used
+                    0
+                )
+
+    def validation(field_in, field_out, *, domain, origin):
+        field_out[:, :, :-1] = field_in[:, :, :-1] + field_in[:, :, 1:]
+        field_out[:, :, -1] = 0

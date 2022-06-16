@@ -13,11 +13,11 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 import os
 import re
-from typing import TYPE_CHECKING, Dict, Optional, Tuple, Type
+import textwrap
+from typing import TYPE_CHECKING, Dict, List, Optional, Tuple, Type
 
 import dace
 import numpy as np
-from dace.sdfg.utils import fuse_states, inline_sdfgs
 from dace.serialize import dumps
 
 from eve import codegen
@@ -34,8 +34,9 @@ from gt4py.backend.gtc_common import (
     pybuffer_to_sid,
 )
 from gt4py.backend.module_generator import make_args_data_from_gtir
-from gtc import gtir
-from gtc.dace.nodes import HorizontalExecutionLibraryNode, VerticalLoopLibraryNode
+from gt4py.stencil_builder import StencilBuilder
+from gtc import common, gtir
+from gtc.dace.nodes import StencilComputation
 from gtc.dace.oir_to_dace import OirSDFGBuilder
 from gtc.dace.utils import array_dimensions, layout_maker_factory, replace_strides
 from gtc.gtir_to_oir import GTIRToOIR
@@ -48,6 +49,16 @@ from gtc.passes.oir_pipeline import DefaultPipeline
 
 if TYPE_CHECKING:
     from gt4py.stencil_object import StencilObject
+
+
+def _remove_meta_information(sdfg: dace.SDFG):
+    for sd in sdfg.all_sdfgs_recursive():
+        sd.transformation_hist = []
+        sd.orig_sdfg = None
+
+
+def _serialize_sdfg(sdfg: dace.SDFG):
+    return dumps(sdfg)
 
 
 def _specialize_transient_strides(sdfg: dace.SDFG, layout_map):
@@ -73,39 +84,11 @@ def _to_device(sdfg: dace.SDFG, device: str) -> None:
         for array in sdfg.arrays.values():
             array.storage = dace.StorageType.GPU_Global
         for node, _ in sdfg.all_nodes_recursive():
-            if isinstance(node, VerticalLoopLibraryNode):
-                node.implementation = "block"
-                node.default_storage_type = dace.StorageType.GPU_Global
-                node.map_schedule = dace.ScheduleType.Sequential
-                node.tiling_map_schedule = dace.ScheduleType.GPU_Device
-                for _, section in node.sections:
-                    for array in section.arrays.values():
-                        array.storage = dace.StorageType.GPU_Global
-                    for node, _ in section.all_nodes_recursive():
-                        if isinstance(node, HorizontalExecutionLibraryNode):
-                            node.map_schedule = dace.ScheduleType.GPU_ThreadBlock
-    else:
-        for node, _ in sdfg.all_nodes_recursive():
-            if isinstance(node, VerticalLoopLibraryNode):
-                node.implementation = "block"
-                node.tile_sizes = [8, 8]
+            if isinstance(node, StencilComputation):
+                node.device = dace.DeviceType.GPU
 
 
-def _pre_expand_trafos(sdfg: dace.SDFG):
-    sdfg.simplify()
-
-
-def _post_expand_trafos(sdfg: dace.SDFG):
-    while inline_sdfgs(sdfg) or fuse_states(sdfg):
-        pass
-    sdfg.simplify()
-
-    for node, _ in sdfg.all_nodes_recursive():
-        if isinstance(node, dace.nodes.MapEntry):
-            node.collapse = len(node.range)
-
-
-def _expand_and_finalize_sdfg(stencil_ir: gtir.Stencil, sdfg: dace.SDFG, layout_map) -> dace.SDFG:
+def _pre_expand_trafos(stencil_ir: gtir.Stencil, sdfg: dace.SDFG, layout_map):
 
     args_data = make_args_data_from_gtir(GtirPipeline(stencil_ir))
 
@@ -119,12 +102,33 @@ def _expand_and_finalize_sdfg(stencil_ir: gtir.Stencil, sdfg: dace.SDFG, layout_
         if array.transient:
             array.lifetime = dace.AllocationLifetime.Persistent
 
-    _pre_expand_trafos(sdfg)
-    sdfg.expand_library_nodes(recursive=True)
-    _specialize_transient_strides(sdfg, layout_map=layout_map)
-    _post_expand_trafos(sdfg)
+    sdfg.simplify()
+    for node, _ in filter(
+        lambda n: isinstance(n[0], StencilComputation), sdfg.all_nodes_recursive()
+    ):
+        expansion_priority = ["TileJ", "TileI", "Sections"]
+        if node.oir_node.loop_order == common.LoopOrder.PARALLEL:
+            expansion_priority.extend(["KMap", "Stages", "JMap", "IMap"])
+        else:
+            expansion_priority.extend(["KLoop", "Stages", "JMap", "IMap"])
 
+        try:
+            node.expansion_specification = expansion_priority
+        except ValueError:
+            raise ValueError("Incompatible expansion")
+    _specialize_transient_strides(sdfg, layout_map=layout_map)
     return sdfg
+
+
+def _post_expand_trafos(sdfg: dace.SDFG):
+    # DaCe "standard" clean-up transformations
+    sdfg.simplify()
+
+    # Only has effect if schedule is CPU_Multicore,
+    # setting node.collapse causes the omp parallel statement to include collapse(n)
+    for node, _ in sdfg.all_nodes_recursive():
+        if isinstance(node, dace.nodes.MapEntry):
+            node.collapse = len(node.range)
 
 
 class DaCeExtGenerator(BackendCodegen):
@@ -136,14 +140,17 @@ class DaCeExtGenerator(BackendCodegen):
     def __call__(self, stencil_ir: gtir.Stencil) -> Dict[str, Dict[str, str]]:
         base_oir = GTIRToOIR().visit(stencil_ir)
         oir_pipeline = self.backend.builder.options.backend_opts.get(
-            "oir_pipeline",
-            DefaultPipeline(skip=[MaskInlining]),
+            "oir_pipeline", DefaultPipeline(skip=[MaskInlining])
         )
         oir_node = oir_pipeline.run(base_oir)
         sdfg = OirSDFGBuilder().visit(oir_node)
 
         _to_device(sdfg, self.backend.storage_info["device"])
-        sdfg = _expand_and_finalize_sdfg(stencil_ir, sdfg, self.backend.storage_info["layout_map"])
+        sdfg = _pre_expand_trafos(stencil_ir, sdfg, self.backend.storage_info["layout_map"])
+        _remove_meta_information(sdfg)
+        unexpanded_json = _serialize_sdfg(sdfg)
+        sdfg.expand_library_nodes()
+        _post_expand_trafos(sdfg)
 
         # strip history from SDFG for faster save/load
         for tmp_sdfg in sdfg.all_sdfgs_recursive():
@@ -151,7 +158,7 @@ class DaCeExtGenerator(BackendCodegen):
             tmp_sdfg.orig_sdfg = None
 
         sources: Dict[str, Dict[str, str]]
-        implementation = DaCeComputationCodegen.apply(stencil_ir, sdfg)
+        implementation = DaCeComputationCodegen.apply(stencil_ir, self.backend.builder, sdfg)
 
         bindings = DaCeBindingsCodegen.apply(
             stencil_ir, sdfg, module_name=self.module_name, backend=self.backend
@@ -161,7 +168,7 @@ class DaCeExtGenerator(BackendCodegen):
         sources = {
             "computation": {"computation.hpp": implementation},
             "bindings": {f"bindings.{bindings_ext}": bindings},
-            "info": {self.backend.builder.module_name + ".sdfg": dumps(sdfg.to_json())},
+            "info": {self.backend.builder.module_name + ".sdfg": unexpanded_json},
         }
         return sources
 
@@ -197,7 +204,7 @@ class DaCeComputationCodegen:
         ]
 
     @staticmethod
-    def _postprocess_dace_code(code_objects, is_gpu):
+    def _postprocess_dace_code(code_objects, is_gpu, builder):
         lines = code_objects[[co.title for co in code_objects].index("Frame")].clean_code.split(
             "\n"
         )
@@ -228,10 +235,13 @@ class DaCeComputationCodegen:
             return True
 
         lines = filter(keep_line, lines)
-        return codegen.format_source("cpp", "\n".join(lines), style="LLVM")
+        generated_code = "\n".join(lines)
+        if builder.options.format_source:
+            generated_code = codegen.format_source("cpp", generated_code, style="LLVM")
+        return generated_code
 
     @classmethod
-    def apply(cls, stencil_ir: gtir.Stencil, sdfg: dace.SDFG):
+    def apply(cls, stencil_ir: gtir.Stencil, builder: StencilBuilder, sdfg: dace.SDFG):
         self = cls()
         with dace.config.temporary_config():
             dace.config.Config.set("compiler", "cuda", "max_concurrent_streams", value=-1)
@@ -239,7 +249,7 @@ class DaCeComputationCodegen:
             code_objects = sdfg.generate_code()
         is_gpu = "CUDA" in {co.title for co in code_objects}
 
-        computations = cls._postprocess_dace_code(code_objects, is_gpu)
+        computations = cls._postprocess_dace_code(code_objects, is_gpu, builder)
 
         interface = cls.template.definition.render(
             name=sdfg.name,
@@ -248,7 +258,8 @@ class DaCeComputationCodegen:
             tmp_allocs=self.generate_tmp_allocs(sdfg),
             allocator="gt::cuda_util::cuda_malloc" if is_gpu else "std::make_unique",
         )
-        generated_code = f"""#include <gridtools/sid/sid_shift_origin.hpp>
+        generated_code = textwrap.dedent(
+            f"""#include <gridtools/sid/sid_shift_origin.hpp>
                              #include <gridtools/sid/allocator.hpp>
                              #include <gridtools/stencil/cartesian.hpp>
                              {"#include <gridtools/common/cuda_util.hpp>" if is_gpu else ""}
@@ -257,69 +268,72 @@ class DaCeComputationCodegen:
 
                              {interface}
                              """
-        formatted_code = codegen.format_source("cpp", generated_code, style="LLVM")
-        return formatted_code
+        )
+        if builder.options.format_source:
+            generated_code = codegen.format_source("cpp", generated_code, style="LLVM")
 
-    def __init__(self):
-        self._unique_index = 0
+        return generated_code
 
-    def generate_dace_args(self, ir, sdfg):
-        oir = GTIRToOIR().visit(ir)
+    def generate_dace_args(self, stencil_ir: gtir.Stencil, sdfg: dace.SDFG) -> List[str]:
+        oir = GTIRToOIR().visit(stencil_ir)
         field_extents = compute_fields_extents(oir, add_k=True)
 
-        offset_dict: Dict[str, Tuple[int, int, int]] = {
-            k: (max(-v[0][0], 0), max(-v[1][0], 0), -v[2][0]) for k, v in field_extents.items()
-        }
         k_origins = {
-            field_name: boundary[0] for field_name, boundary in compute_k_boundary(ir).items()
+            field_name: max(boundary[0], 0)
+            for field_name, boundary in compute_k_boundary(stencil_ir).items()
         }
-        for name, origin in k_origins.items():
-            offset_dict[name] = (offset_dict[name][0], offset_dict[name][1], origin)
+        offset_dict: Dict[str, Tuple[int, int, int]] = {
+            k: (max(-v[0][0], 0), max(-v[1][0], 0), k_origins[k] if k in k_origins else 0)
+            for k, v in field_extents.items()
+        }
 
         symbols = {f"__{var}": f"__{var}" for var in "IJK"}
         for name, array in sdfg.arrays.items():
-            if not array.transient:
-                dims = [dim for dim, select in zip("IJK", array_dimensions(array)) if select]
-                data_ndim = len(array.shape) - len(dims)
+            # transients are set to expressions based on their shape in _specialize_transient_strides
+            if array.transient:
+                continue
 
-                # api field strides
-                fmt = "gt::sid::get_stride<{dim}>(gt::sid::get_strides(__{name}_sid))"
+            dims = [dim for dim, select in zip("IJK", array_dimensions(array)) if select]
+            data_ndim = len(array.shape) - len(dims)
 
-                symbols.update(
-                    {
-                        f"__{name}_{dim}_stride": fmt.format(
-                            dim=f"gt::stencil::dim::{dim.lower()}", name=name
-                        )
-                        for dim in dims
-                    }
-                )
-                symbols.update(
-                    {
-                        f"__{name}_d{dim}_stride": fmt.format(
-                            dim=f"gt::integral_constant<int, {3 + dim}>", name=name
-                        )
-                        for dim in range(data_ndim)
-                    }
-                )
+            # api field strides
+            fmt = "gt::sid::get_stride<{dim}>(gt::sid::get_strides(__{name}_sid))"
 
-                # api field pointers
-                fmt = """gt::sid::multi_shifted(
-                             gt::sid::get_origin(__{name}_sid)(),
-                             gt::sid::get_strides(__{name}_sid),
-                             std::array<gt::int_t, {ndim}>{{{origin}}}
-                         )"""
-                origin = tuple(
-                    -offset_dict[name][idx]
-                    for idx, var in enumerate("IJK")
-                    if any(
-                        dace.symbolic.pystr_to_symbolic(f"__{var}") in s.free_symbols
-                        for s in array.shape
-                        if hasattr(s, "free_symbols")
+            symbols.update(
+                {
+                    f"__{name}_{dim}_stride": fmt.format(
+                        dim=f"gt::stencil::dim::{dim.lower()}", name=name
                     )
+                    for dim in dims
+                }
+            )
+            symbols.update(
+                {
+                    f"__{name}_d{dim}_stride": fmt.format(
+                        dim=f"gt::integral_constant<int, {3 + dim}>", name=name
+                    )
+                    for dim in range(data_ndim)
+                }
+            )
+
+            # api field pointers
+            fmt = """gt::sid::multi_shifted(
+                         gt::sid::get_origin(__{name}_sid)(),
+                         gt::sid::get_strides(__{name}_sid),
+                         std::array<gt::int_t, {ndim}>{{{origin}}}
+                     )"""
+            origin = tuple(
+                -offset_dict[name][idx]
+                for idx, var in enumerate("IJK")
+                if any(
+                    dace.symbolic.pystr_to_symbolic(f"__{var}") in s.free_symbols
+                    for s in array.shape
+                    if hasattr(s, "free_symbols")
                 )
-                symbols[name] = fmt.format(
-                    name=name, ndim=len(array.shape), origin=",".join(str(o) for o in origin)
-                )
+            )
+            symbols[name] = fmt.format(
+                name=name, ndim=len(array.shape), origin=",".join(str(o) for o in origin)
+            )
         # the remaining arguments are variables and can be passed by name
         for sym in sdfg.signature_arglist(with_types=False, for_call=True):
             if sym not in symbols:
@@ -350,8 +364,8 @@ class DaCeBindingsCodegen:
 
     mako_template = bindings_main_template()
 
-    def generate_entry_params(self, stencil_ir: gtir.Stencil, sdfg: dace.SDFG):
-        res = {}
+    def generate_entry_params(self, stencil_ir: gtir.Stencil, sdfg: dace.SDFG) -> List[str]:
+        res: Dict[str, str] = {}
         import dace.data
 
         for name in sdfg.signature_arglist(with_types=False, for_call=True):
@@ -367,8 +381,8 @@ class DaCeBindingsCodegen:
                 res[name] = "{dtype} {name}".format(dtype=sdfg.symbols[name].ctype, name=name)
         return list(res[node.name] for node in stencil_ir.params if node.name in res)
 
-    def generate_sid_params(self, sdfg: dace.SDFG):
-        res = []
+    def generate_sid_params(self, sdfg: dace.SDFG) -> List[str]:
+        res: List[str] = []
         import dace.data
 
         for name, array in sdfg.arrays.items():
@@ -401,7 +415,7 @@ class DaCeBindingsCodegen:
             res.append(name)
         return res
 
-    def generate_sdfg_bindings(self, stencil_ir: gtir.Stencil, sdfg, module_name):
+    def generate_sdfg_bindings(self, stencil_ir: gtir.Stencil, sdfg, module_name) -> str:
 
         return self.mako_template.render_values(
             name=sdfg.name,
@@ -415,8 +429,9 @@ class DaCeBindingsCodegen:
         generated_code = cls(backend).generate_sdfg_bindings(
             stencil_ir, sdfg, module_name=module_name
         )
-        formatted_code = codegen.format_source("cpp", generated_code, style="LLVM")
-        return formatted_code
+        if backend.builder.options.format_source:
+            generated_code = codegen.format_source("cpp", generated_code, style="LLVM")
+        return generated_code
 
 
 class DaCePyExtModuleGenerator(PyExtModuleGenerator):
@@ -449,9 +464,9 @@ class DaCeCUDAPyExtModuleGenerator(DaCePyExtModuleGenerator, GTCUDAPyModuleGener
 class BaseDaceBackend(BaseGTBackend, CLIBackendMixin):
 
     GT_BACKEND_T = "dace"
+    PYEXT_GENERATOR_CLASS = DaCeExtGenerator  # type: ignore
 
     options = BaseGTBackend.GT_BACKEND_OPTS
-    PYEXT_GENERATOR_CLASS = DaCeExtGenerator  # type: ignore
 
     def generate(self) -> Type["StencilObject"]:
         self.check_options(self.builder.options)
