@@ -48,6 +48,11 @@ def dace_env():
         yield
 
 
+@pytest.fixture(params=[gtscript.stencil, gtscript.lazy_stencil])
+def decorator(request):
+    return request.param
+
+
 @pytest.fixture(
     params=[
         "dace:cpu",
@@ -75,8 +80,8 @@ def tuple_st(min_value, max_value):
     "backend",
     ["dace:cpu", pytest.param("dace:gpu", marks=[pytest.mark.requires_gpu])],
 )
-def test_basic(backend):
-    @gtscript.stencil(backend=backend)
+def test_basic(decorator, backend):
+    @decorator(backend=backend)
     def defn(outp: gtscript.Field[np.float64], par: np.float64):
         with computation(PARALLEL), interval(...):
             outp = par  # noqa F841: local variable 'outp' is assigned to but never used
@@ -140,7 +145,7 @@ def test_origin_offsetting_frozen(dace_stencil, domain, outp_origin):
 
 @pytest.mark.parametrize("domain", [(0, 2, 3), (3, 3, 3), (1, 1, 1)])
 @pytest.mark.parametrize("outp_origin", [(0, 0, 0), (7, 7, 7), (2, 2, 0)])
-def test_origin_offsetting_nofrozen(dace_stencil, domain, outp_origin):
+def test_origin_offsetting_nofrozen(decorator, dace_stencil, domain, outp_origin):
     backend = dace_stencil.backend
     inp = gt_storage.from_array(
         data=7.0, dtype=np.float64, shape=(10, 10, 10), default_origin=(0, 0, 0), backend=backend
@@ -220,8 +225,8 @@ def test_optional_arg_noprovide(backend):
     "backend",
     ["dace:cpu", pytest.param("dace:gpu", marks=[pytest.mark.requires_gpu])],
 )
-def test_optional_arg_provide(backend):
-    @gtscript.stencil(backend=backend)
+def test_optional_arg_provide(decorator, backend):
+    @decorator(backend=backend)
     def stencil(
         inp: gtscript.Field[np.float64],
         unused_field: gtscript.Field[np.float64],
@@ -230,11 +235,6 @@ def test_optional_arg_provide(backend):
     ):
         with computation(PARALLEL), interval(...):
             outp = inp  # noqa F841: local variable 'outp' is assigned to but never used
-
-    frozen_stencil = stencil.freeze(
-        domain=(3, 3, 10),
-        origin={"inp": (2, 2, 0), "outp": (2, 2, 0), "unused_field": (0, 0, 0)},
-    )
 
     inp = gt_storage.from_array(
         data=7.0, dtype=np.float64, shape=(10, 10, 10), default_origin=(0, 0, 0), backend=backend
@@ -249,10 +249,17 @@ def test_optional_arg_provide(backend):
     outp.host_to_device()
 
     @dace.program(device=dace.DeviceType.GPU if "gpu" in backend else dace.DeviceType.CPU)
-    def call_frozen_stencil():
-        frozen_stencil(inp=inp, unused_field=unused_field, outp=outp, unused_par=7.0)
+    def call_stencil():
+        stencil(
+            inp=inp,
+            unused_field=unused_field,
+            outp=outp,
+            unused_par=7.0,
+            domain=(3, 3, 10),
+            origin={"inp": (2, 2, 0), "outp": (2, 2, 0), "unused_field": (0, 0, 0)},
+        )
 
-    call_frozen_stencil()
+    call_stencil()
 
     outp.device_to_host(force=True)
 
@@ -265,8 +272,8 @@ def test_optional_arg_provide(backend):
     "backend",
     ["dace:cpu", pytest.param("dace:gpu", marks=[pytest.mark.requires_gpu])],
 )
-def test_optional_arg_provide_aot(backend):
-    @gtscript.stencil(backend=backend)
+def test_optional_arg_provide_aot(decorator, backend):
+    @decorator(backend=backend)
     def stencil(
         inp: gtscript.Field[np.float64],
         unused_field: gtscript.Field[np.float64],
@@ -275,11 +282,6 @@ def test_optional_arg_provide_aot(backend):
     ):
         with computation(PARALLEL), interval(...):
             outp = inp  # noqa F841: local variable 'outp' is assigned to but never used
-
-    frozen_stencil = stencil.freeze(
-        domain=(3, 3, 10),
-        origin={"inp": (2, 2, 0), "outp": (2, 2, 0), "unused_field": (0, 0, 0)},
-    )
 
     inp = gt_storage.from_array(
         data=7.0, dtype=np.float64, shape=(10, 10, 10), default_origin=(0, 0, 0), backend=backend
@@ -296,7 +298,7 @@ def test_optional_arg_provide_aot(backend):
     storage = dace.StorageType.GPU_Global if "gpu" in backend else dace.StorageType.CPU_Heap
 
     @dace.program(device=dace.DeviceType.GPU if "gpu" in backend else dace.DeviceType.CPU)
-    def call_frozen_stencil(
+    def call_stencil(
         inp: dace.data.Array(
             shape=inp.shape,
             strides=tuple(s // inp.itemsize for s in inp.strides),
@@ -317,9 +319,16 @@ def test_optional_arg_provide_aot(backend):
         ),  # type: ignore
         unused_par: dace.float64,  # type: ignore
     ):
-        frozen_stencil(inp=inp, unused_field=unused_field, outp=outp, unused_par=unused_par)
+        stencil(
+            inp=inp,
+            unused_field=unused_field,
+            outp=outp,
+            unused_par=unused_par,
+            domain=(3, 3, 10),
+            origin={"inp": (2, 2, 0), "outp": (2, 2, 0), "unused_field": (0, 0, 0)},
+        )
 
-    csdfg = call_frozen_stencil.compile()
+    csdfg = call_stencil.compile()
     csdfg(inp=inp, outp=outp, unused_field=unused_field, unused_par=7.0)
 
     outp.device_to_host(force=True)
@@ -329,15 +338,11 @@ def test_optional_arg_provide_aot(backend):
     assert np.sum(np.asarray(outp), axis=(0, 1, 2)) == 90 * 7.0
 
 
-def test_nondace_raises():
-    @gtscript.stencil(backend="numpy")
+def test_nondace_raises(decorator):
+    @decorator(backend="numpy")
     def numpy_stencil(inp: gtscript.Field[np.float64], outp: gtscript.Field[np.float64]):
         with computation(PARALLEL), interval(...):
             outp = inp  # noqa F841: local variable 'outp' is assigned to but never used
-
-    frozen_stencil = numpy_stencil.freeze(
-        domain=(3, 3, 3), origin={"inp": (0, 0, 0), "outp": (0, 0, 0)}
-    )
 
     inp = gt_storage.from_array(
         data=7.0,
@@ -354,8 +359,10 @@ def test_nondace_raises():
     )
 
     @dace.program
-    def call_frozen_stencil():
-        frozen_stencil(inp=inp, outp=outp)
+    def call_stencil():
+        numpy_stencil(
+            inp=inp, outp=outp, domain=(3, 3, 3), origin={"inp": (0, 0, 0), "outp": (0, 0, 0)}
+        )
 
     with pytest.raises(
         TypeError,
@@ -363,4 +370,4 @@ def test_nondace_raises():
             "Only dace backends are supported in DaCe-orchestrated programs." ' (found "numpy")'
         ),
     ):
-        call_frozen_stencil()
+        call_stencil()

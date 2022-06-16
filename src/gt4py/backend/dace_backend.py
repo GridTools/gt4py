@@ -131,6 +131,23 @@ def _post_expand_trafos(sdfg: dace.SDFG):
             node.collapse = len(node.range)
 
 
+def make_sdfg(stencil_ir: gtir.Stencil, builder, storage_info):
+    base_oir = GTIRToOIR().visit(stencil_ir)
+    oir_pipeline = builder.options.backend_opts.get(
+        "oir_pipeline", DefaultPipeline(skip=[MaskInlining])
+    )
+    oir_node = oir_pipeline.run(base_oir)
+    sdfg = OirSDFGBuilder().visit(oir_node)
+
+    _to_device(sdfg, storage_info["device"])
+    sdfg = _pre_expand_trafos(stencil_ir, sdfg, storage_info["layout_map"])
+    _remove_meta_information(sdfg)
+    unexpanded_json = _serialize_sdfg(sdfg)
+    sdfg.expand_library_nodes()
+    _post_expand_trafos(sdfg)
+    return sdfg, unexpanded_json
+
+
 class DaCeExtGenerator(BackendCodegen):
     def __init__(self, class_name, module_name, backend):
         self.class_name = class_name
@@ -138,20 +155,9 @@ class DaCeExtGenerator(BackendCodegen):
         self.backend = backend
 
     def __call__(self, stencil_ir: gtir.Stencil) -> Dict[str, Dict[str, str]]:
-        base_oir = GTIRToOIR().visit(stencil_ir)
-        oir_pipeline = self.backend.builder.options.backend_opts.get(
-            "oir_pipeline", DefaultPipeline(skip=[MaskInlining])
+        sdfg, unexpanded_json = make_sdfg(
+            stencil_ir, self.backend.builder, self.backend.storage_info
         )
-        oir_node = oir_pipeline.run(base_oir)
-        sdfg = OirSDFGBuilder().visit(oir_node)
-
-        _to_device(sdfg, self.backend.storage_info["device"])
-        sdfg = _pre_expand_trafos(stencil_ir, sdfg, self.backend.storage_info["layout_map"])
-        _remove_meta_information(sdfg)
-        unexpanded_json = _serialize_sdfg(sdfg)
-        sdfg.expand_library_nodes()
-        _post_expand_trafos(sdfg)
-
         # strip history from SDFG for faster save/load
         for tmp_sdfg in sdfg.all_sdfgs_recursive():
             tmp_sdfg.transformation_hist = []

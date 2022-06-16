@@ -30,6 +30,11 @@ from gt4py import definitions as gt_definitions
 from gt4py.lazy_stencil import LazyStencil
 
 
+try:
+    from gt4py.dace_lazy_stencil import DaCeLazyStencil
+except ImportError:
+    DaCeLazyStencil = LazyStencil
+
 # GTScript builtins
 MATH_BUILTINS = {
     "abs",
@@ -366,9 +371,19 @@ def lazy_stencil(
                 **StencilBuilder.nest_impl_options(kwargs),
             }
         )
-        stencil = LazyStencil(
-            StencilBuilder(func, backend=backend, options=options).with_externals(externals or {})
-        )
+        if "dace" in backend:
+            stencil = DaCeLazyStencil(
+                StencilBuilder(func, backend=backend, options=options).with_externals(
+                    externals or {}
+                )
+            )
+
+        else:
+            stencil = LazyStencil(
+                StencilBuilder(func, backend=backend, options=options).with_externals(
+                    externals or {}
+                )
+            )
         if eager:
             stencil = stencil.implementation
         elif check_syntax:
