@@ -1,5 +1,7 @@
 import sys
+from types import SimpleNamespace
 
+from functional.iterator import library
 from functional.iterator.backends.gtfn.gtfn_backend import generate
 from functional.iterator.builtins import *
 from functional.iterator.runtime import closure, fundef, offset
@@ -16,34 +18,23 @@ def compute_zavgS(pp, S_M):
     return make_tuple(tuple_get(0, deref(S_M)) * zavg, tuple_get(1, deref(S_M)) * zavg)
 
 
-def _unroll_reduce(binop, init, n):
-    def impl(fun):
-        acc = init
-        for i in range(n):
-            acc = binop(acc, fun(i))
-        return acc
+@fundef
+def tuple_dot_fun(acc, zavgS, sign):
+    return make_tuple(
+        tuple_get(0, acc) + tuple_get(0, zavgS) * sign,
+        tuple_get(1, acc) + tuple_get(1, zavgS) * sign,
+    )
 
-    return impl
+
+@fundef
+def tuple_dot(a, b):
+    return reduce(tuple_dot_fun, make_tuple(0.0, 0.0))(a, b)
 
 
 @fundef
 def compute_pnabla(pp, S_M, sign, vol):
     zavgS = lift(compute_zavgS)(pp, S_M)
-
-    def step(zavgS, sign, tuple_index, neigh_index, prev):
-        return if_(
-            can_deref(shift(V2E, neigh_index)(zavgS)),
-            tuple_get(tuple_index, deref(shift(V2E, neigh_index)(zavgS)))
-            * tuple_get(neigh_index, deref(sign))
-            + prev,
-            prev,
-        )
-
-    pnabla_M = make_tuple(
-        _unroll_reduce(lambda a, b: a + b, 0.0, 6)(lambda i: step(zavgS, sign, 0, i, 0.0)),
-        _unroll_reduce(lambda a, b: a + b, 0.0, 6)(lambda i: step(zavgS, sign, 1, i, 0.0)),
-    )
-
+    pnabla_M = tuple_dot(shift(V2E)(zavgS), sign)
     return make_tuple(tuple_get(0, pnabla_M) / deref(vol), tuple_get(1, pnabla_M) / deref(vol))
 
 
@@ -72,7 +63,11 @@ if __name__ == "__main__":
 
     # prog = trace(zavgS_fencil, [None] * 4) # TODO allow generating of 2 fencils
     prog = trace(nabla_fencil, [None] * 6)
-    generated_code = generate(prog, grid_type="unstructured")
+    offset_provider = {
+        "V2E": SimpleNamespace(max_neighbors=6, has_skip_values=True),
+        "E2V": SimpleNamespace(max_neighbors=2, has_skip_values=False),
+    }
+    generated_code = generate(prog, grid_type="unstructured", offset_provider=offset_provider)
 
     with open(output_file, "w+") as output:
         output.write(generated_code)

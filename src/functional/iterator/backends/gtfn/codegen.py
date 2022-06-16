@@ -29,10 +29,10 @@ class GTFNCodegen(codegen.TemplatedGenerator):
 
     def visit_Literal(self, node: Literal, **kwargs: Any) -> str:
         if node.type == "int":
-            return node.value
-        elif node.type == "float":
+            return node.value + "_c"
+        elif node.type == "float32":
             return f"{self.asfloat(node.value)}f"
-        elif node.type == "double":
+        elif node.type == "float" or node.type == "float64":
             return self.asfloat(node.value)
         elif node.type == "bool":
             return node.value.lower()
@@ -46,7 +46,6 @@ class GTFNCodegen(codegen.TemplatedGenerator):
         return node.value if isinstance(node.value, str) else f"{node.value}_c"
 
     FunCall = as_fmt("{fun}({','.join(args)})")
-    TemplatedFunCall = as_fmt("{fun}<{','.join(template_args)}>({','.join(args)})")
     Lambda = as_mako(
         "[=](${','.join('auto ' + p for p in params)}){return ${expr};}"
     )  # TODO capture
@@ -55,7 +54,7 @@ class GTFNCodegen(codegen.TemplatedGenerator):
 
     StencilExecution = as_mako(
         """
-        ${backend}.stencil_executor()().arg(${output})${''.join('.arg(' + i + ')' for i in inputs)}.assign(0_c, ${stencil}(), ${','.join(str(i) + '_c' for i in range(1, len(inputs) + 1))}).execute();
+        ${backend}.stencil_executor()().arg(${output})${''.join('.arg(' + i + ')' for i in inputs)}.assign(0_c, ${stencil}() ${',' if inputs else ''} ${','.join(str(i) + '_c' for i in range(1, len(inputs) + 1))}).execute();
         """
     )
 

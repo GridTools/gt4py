@@ -90,7 +90,7 @@ class PopupTmps(NodeTranslator):
                 assert lifts is not None
 
                 # check if the lifted expression captures symbols from the outer scope
-                symrefs = fun.iter_tree().if_isinstance(ir.SymRef).getattr("id").to_set()
+                symrefs = fun.walk_values().if_isinstance(ir.SymRef).getattr("id").to_set()
                 captured = (
                     symrefs
                     - {p.id for p in fun.params}

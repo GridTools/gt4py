@@ -1,7 +1,7 @@
 from typing import Any
 
-from eve import NodeTranslator, iter_tree
-from eve.type_definitions import SymbolName
+import eve
+from eve.concepts import SymbolName
 from functional.iterator import ir as itir
 from functional.iterator.backends.gtfn.gtfn_ir import (
     Backend,
@@ -17,13 +17,12 @@ from functional.iterator.backends.gtfn.gtfn_ir import (
     StencilExecution,
     Sym,
     SymRef,
-    TemplatedFunCall,
     TernaryExpr,
     UnaryExpr,
 )
 
 
-class GTFN_lowering(NodeTranslator):
+class GTFN_lowering(eve.NodeTranslator):
     _binary_op_map = {
         "plus": "+",
         "minus": "-",
@@ -57,6 +56,32 @@ class GTFN_lowering(NodeTranslator):
             value="NOT_SUPPORTED", type="axis_literal"
         )  # TODO(havogt) decide if domain is part of the IR
 
+    @staticmethod
+    def _is_sparse_deref_shift(node: itir.FunCall) -> bool:
+        return (
+            node.fun == itir.SymRef(id="deref")
+            and isinstance(node.args[0], itir.FunCall)
+            and isinstance(node.args[0].fun, itir.FunCall)
+            and node.args[0].fun.fun == itir.SymRef(id="shift")
+            and bool(len(node.args[0].fun.args) % 2)
+        )
+
+    def _sparse_deref_shift_to_tuple_get(self, node: itir.FunCall) -> Expr:
+        # deref(shift(i)(sparse)) -> tuple_get(i, deref(sparse))
+        # TODO: remove once ‘real’ sparse field handling is available
+        assert isinstance(node.args[0], itir.FunCall)
+        assert isinstance(node.args[0].fun, itir.FunCall)
+        offsets = node.args[0].fun.args
+        deref_arg = node.args[0].args[0]
+        if len(offsets) > 1:
+            deref_arg = itir.FunCall(
+                fun=itir.FunCall(fun=itir.SymRef(id="shift"), args=offsets[:-1]),
+                args=[deref_arg],
+            )
+        derefed = itir.FunCall(fun=itir.SymRef(id="deref"), args=[deref_arg])
+        sparse_access = itir.FunCall(fun=itir.SymRef(id="tuple_get"), args=[offsets[-1], derefed])
+        return self.visit(sparse_access)
+
     def visit_FunCall(self, node: itir.FunCall, **kwargs: Any) -> Expr:
         if isinstance(node.fun, itir.SymRef):
             if node.fun.id in self._unary_op_map:
@@ -76,19 +101,15 @@ class GTFN_lowering(NodeTranslator):
                     true_expr=self.visit(node.args[1]),
                     false_expr=self.visit(node.args[2]),
                 )
-            elif node.fun.id == "make_tuple":
-                return FunCall(fun=SymRef(id="tuple"), args=self.visit(node.args))
-            elif node.fun.id == "tuple_get":
-                return TemplatedFunCall(
-                    fun=SymRef(id="get"),
-                    template_args=[self.visit(node.args[0])],
-                    args=self.visit(node.args[1:]),
-                )
+            elif self._is_sparse_deref_shift(node):
+                return self._sparse_deref_shift_to_tuple_get(node)
         elif isinstance(node.fun, itir.FunCall) and node.fun.fun == itir.SymRef(id="shift"):
             assert len(node.args) == 1
             return FunCall(
                 fun=self.visit(node.fun.fun), args=self.visit(node.args) + self.visit(node.fun.args)
             )
+        elif isinstance(node.fun, itir.FunCall) and node.fun == itir.SymRef(id="shift"):
+            raise ValueError("unapplied shift call not supported: {node}")
         return FunCall(fun=self.visit(node.fun), args=self.visit(node.args))
 
     def visit_FunctionDefinition(
@@ -110,7 +131,7 @@ class GTFN_lowering(NodeTranslator):
     @staticmethod
     def _collect_offsets(node: itir.FencilDefinition) -> set[str]:
         return (
-            iter_tree(node)
+            node.pre_walk_values()
             .if_isinstance(itir.OffsetLiteral)
             .getattr("value")
             .if_isinstance(str)
@@ -126,6 +147,6 @@ class GTFN_lowering(NodeTranslator):
             params=self.visit(node.params),
             executions=self.visit(node.closures),
             grid_type=grid_type,
-            offset_declarations=self._collect_offsets(node),
+            offset_declarations=list(self._collect_offsets(node)),
             function_definitions=self.visit(node.function_definitions),
         )

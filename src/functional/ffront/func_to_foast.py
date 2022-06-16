@@ -25,6 +25,7 @@ from functional.ffront import (
     fbuiltins,
     field_operator_ast as foast,
     symbol_makers,
+    type_info,
 )
 from functional.ffront.ast_passes import (
     SingleAssignTargetPass,
@@ -35,7 +36,7 @@ from functional.ffront.ast_passes import (
 )
 from functional.ffront.dialect_parser import DialectParser, DialectSyntaxError
 from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduction
-from functional.ffront.type_info import TypeInfo, is_complete_scalar_type
+from functional.ffront.foast_passes.unroll_power_op import UnrollPowerOp
 
 
 class FieldOperatorSyntaxError(DialectSyntaxError):
@@ -59,11 +60,11 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
     ...     return inp
     >>> foast_tree = FieldOperatorParser.apply_to_function(field_op)
     >>> foast_tree  # doctest: +ELLIPSIS
-    FieldOperator(..., id='field_op', ...)
+    FieldOperator(..., id=SymbolName('field_op'), ...)
     >>> foast_tree.params  # doctest: +ELLIPSIS
-    [Symbol[DataTypeT](..., id='inp', type=FieldType(...), ...)]
+    [Symbol(..., id=SymbolName('inp'), type=FieldType(...), ...)]
     >>> foast_tree.body  # doctest: +ELLIPSIS
-    [Return(..., value=Name(..., id='inp'))]
+    [Return(..., value=Name(..., id=SymbolRef('inp')))]
 
 
     If a syntax error is encountered, it will point to the location in the source code.
@@ -93,6 +94,7 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
 
     @classmethod
     def _postprocess_dialect_ast(cls, dialect_ast: foast.FieldOperator) -> foast.FieldOperator:
+        dialect_ast = UnrollPowerOp.apply(dialect_ast)
         return FieldOperatorTypeDeduction.apply(dialect_ast)
 
     def _builtin_type_constructor_symbols(
@@ -200,8 +202,8 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
             raise FieldOperatorSyntaxError.from_AST(
                 node, msg="Only arguments of type DataType are allowed."
             )
-        if is_complete_scalar_type(new_type):
-            new_type = ct.FieldType(dims=[], dtype=new_type)
+        if type_info.is_concrete(new_type) and type_info.type_class(new_type) is ct.ScalarType:
+            new_type = ct.FieldType(dims=[], dtype=type_info.extract_dtype(new_type))
         return foast.DataSymbol(id=node.arg, location=self._make_loc(node), type=new_type)
 
     def visit_Assign(self, node: ast.Assign, **kwargs) -> foast.Assign:
@@ -216,10 +218,13 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
         constraint_type: Type[ct.DataType] = ct.DataType
         if isinstance(new_value, foast.TupleExpr):
             constraint_type = ct.TupleType
-        elif TypeInfo(new_value.type).is_scalar:
+        elif (
+            type_info.is_concrete(new_value.type)
+            and type_info.type_class(new_value.type) is ct.ScalarType
+        ):
             constraint_type = ct.ScalarType
         return foast.Assign(
-            target=foast.FieldSymbol(
+            target=foast.DataSymbol(
                 id=target.id,
                 location=self._make_loc(target),
                 type=ct.DeferredSymbolType(constraint=constraint_type),
@@ -339,8 +344,8 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
     def visit_Div(self, node: ast.Div, **kwargs) -> foast.BinaryOperator:
         return foast.BinaryOperator.DIV
 
-    def visit_Pow(self, node: ast.Pow, **kwargs) -> None:
-        raise FieldOperatorSyntaxError.from_AST(node, msg="`**` operator not supported!")
+    def visit_Pow(self, node: ast.Pow, **kwargs) -> foast.BinaryOperator:
+        return foast.BinaryOperator.POW
 
     def visit_Mod(self, node: ast.Mod, **kwargs) -> None:
         raise FieldOperatorSyntaxError.from_AST(node, msg="`%` operator not supported!")
@@ -423,13 +428,10 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
         if func_name in fbuiltins.TYPE_BUILTIN_NAMES:
             self._verify_builtin_type_constructor(node)
 
-        args = node.args.copy()
-        for keyword in node.keywords:
-            args.append(keyword.value)
-
         return foast.Call(
             func=self.visit(node.func, **kwargs),
-            args=[self.visit(arg, **kwargs) for arg in args],
+            args=[self.visit(arg, **kwargs) for arg in node.args],
+            kwargs={keyword.arg: self.visit(keyword.value, **kwargs) for keyword in node.keywords},
             location=self._make_loc(node),
         )
 

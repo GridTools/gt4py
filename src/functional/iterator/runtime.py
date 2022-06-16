@@ -18,8 +18,8 @@ def offset(value):
     return Offset(value)
 
 
-class CartesianAxis(common.Dimension):
-    ...
+# todo: rename to dimension and remove axis terminology
+CartesianAxis = common.Dimension
 
 
 # dependency inversion, register fendef for embedded execution or for tracing/parsing here

@@ -22,6 +22,7 @@ class NeighborTableOffsetProvider:
         self.tbl = tbl
         self.origin_axis = origin_axis
         self.neighbor_axis = neighbor_axis
+        assert not hasattr(tbl, "shape") or tbl.shape[1] == max_neighbors
         self.max_neighbors = max_neighbors
         self.has_skip_values = has_skip_values
 
@@ -182,16 +183,14 @@ def less(first, second):
     return first < second
 
 
-def named_range_(axis, range_):
+def named_range_(axis: CartesianAxis, range_: range):
     return ((axis, i) for i in range_)
 
 
-def domain_iterator(domain):
+def domain_iterator(domain: dict[CartesianAxis, range]):
     return (
         dict(elem)
-        for elem in itertools.product(
-            *map(lambda tup: named_range_(tup[0], tup[1]), domain.items())
-        )
+        for elem in itertools.product(*(named_range_(tup[0], tup[1]) for tup in domain.items()))
     )
 
 
@@ -373,7 +372,14 @@ class MDIterator:
 def make_in_iterator(inp, pos, offset_provider, *, column_axis):
     # TODO(havogt): support nested tuples
     axises = inp[0].axises if isinstance(inp, tuple) else inp.axises
-    sparse_dimensions = [axis for axis in axises if isinstance(axis, Offset)]
+    sparse_dimensions = []
+    for axis in axises:
+        if isinstance(axis, Offset):
+            sparse_dimensions.append(axis)
+        elif isinstance(axis, CartesianAxis) and axis.local:
+            # we just use the name of the axis to match the offset literal for now
+            sparse_dimensions.append(axis)
+
     assert len(sparse_dimensions) <= 1  # TODO multiple is not a current use case
     new_pos = pos.copy()
     for axis in sparse_dimensions:
@@ -625,6 +631,39 @@ def as_tuple_field(field):
     return field
 
 
+_column_range = None  # TODO this is a bit ugly, alternative: pass scan range via iterator
+
+
+@builtins.scan.register(EMBEDDED)
+def scan(scan_pass, is_forward, init):
+    def impl(*iters):
+        if _column_range is None:
+            raise RuntimeError("Column range is not defined, cannot scan.")
+
+        column_range = _column_range
+        if not is_forward:
+            column_range = reversed(column_range)
+
+        state = init
+        col = []
+        for i in column_range:
+            state = scan_pass(
+                state, *map(shifted_scan_arg(i), iters)
+            )  # more generic scan returns state and result as 2 different things
+            col.append(state)
+
+        if not is_forward:
+            col = np.flip(col)
+
+        if isinstance(col[0], tuple):
+            dtype = np.dtype([("", type(c)) for c in col[0]])
+            return np.asarray(col, dtype=dtype)
+
+        return np.asarray(col)
+
+    return impl
+
+
 def fendef_embedded(fun, *args, **kwargs):  # noqa: 536
     if "offset_provider" not in kwargs:
         raise RuntimeError("offset_provider not provided")
@@ -634,42 +673,14 @@ def fendef_embedded(fun, *args, **kwargs):  # noqa: 536
         if not (is_located_field(out) or can_be_tuple_field(out)):
             raise TypeError("Out needs to be a located field.")
 
+        global _column_range
         column = None
         if "column_axis" in kwargs:
-            _column_axis = kwargs["column_axis"]
-            column = Column(_column_axis, domain[_column_axis])
-            del domain[_column_axis]
+            column_axis = kwargs["column_axis"]
+            column = Column(column_axis, domain[column_axis])
+            del domain[column_axis]
 
-        @builtins.scan.register(
-            EMBEDDED
-        )  # TODO this is a bit ugly, alternative: pass scan range via iterator
-        def scan(scan_pass, is_forward, init):
-            def impl(*iters):
-                if column is None:
-                    raise RuntimeError("Column axis is not defined, cannot scan.")
-
-                _range = column.range
-                if not is_forward:
-                    _range = reversed(_range)
-
-                state = init
-                col = []
-                for i in _range:
-                    state = scan_pass(
-                        state, *map(shifted_scan_arg(i), iters)
-                    )  # more generic scan returns state and result as 2 different things
-                    col.append(state)
-
-                if not is_forward:
-                    col = np.flip(col)
-
-                if isinstance(col[0], tuple):
-                    dtype = ", ".join(np.dtype(type(c)).str for c in col[0])
-                    return np.asarray(col, dtype=dtype)
-
-                return np.asarray(col)
-
-            return impl
+            _column_range = column.range
 
         out = as_tuple_field(out) if can_be_tuple_field(out) else out
 
@@ -694,6 +705,8 @@ def fendef_embedded(fun, *args, **kwargs):  # noqa: 536
                     colpos[column.axis] = k
                     ordered_indices = get_ordered_indices(out.axises, colpos)
                     out[ordered_indices] = res[k]
+
+        _column_range = None
 
     fun(*args)
 

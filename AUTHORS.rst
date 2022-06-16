@@ -9,11 +9,13 @@ Authors
 * Dahm, Johann. Vulcan Inc.
 * Davis, Eddie. Vulcan Inc.
 * Ehrengruber, Till. ETH Zurich - CSCS
+* Farabullini, Nicoletta. ETH Zurich - C2SM
 * George, Rhea. Vulcan Inc.
 * González Paredes, Enrique. ETH Zurich - CSCS
 * Groner, Linus. ETH Zurich - CSCS
 * Häuselmann, Rico. ETH Zurich - CSCS
 * Kardos, Péter. ETH Zurich - EXCLAIM
+* Kellerhals, Samuel. ETH Zurich - EXCLAIM
 * Madonna, Alberto. ETH Zurich - CSCS
 * Mariotti, Kean. ETH Zurich - CSCS
 * Müller, Christoph. MeteoSwiss
