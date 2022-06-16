@@ -7,7 +7,6 @@ from eve import codegen
 from eve.codegen import FormatTemplate as as_fmt, MakoTemplate as as_mako
 from eve.concepts import Node
 from functional import iterator
-from functional.iterator.backends import backend
 from functional.iterator.ir import AxisLiteral, FencilDefinition, OffsetLiteral
 from functional.iterator.transforms import apply_common_transforms
 
@@ -151,6 +150,3 @@ from functional.iterator.embedded import np_as_located_field
             **new_kwargs,
             backend=kwargs["dispatch_backend"],
         )
-
-
-backend.register_backend(_BACKEND_NAME, executor)

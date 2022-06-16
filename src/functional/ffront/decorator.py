@@ -46,10 +46,11 @@ from functional.ffront.past_to_itir import ProgramLowering
 from functional.ffront.source_utils import CapturedVars
 from functional.iterator import ir as itir
 from functional.iterator.backend_executor import execute_fencil
+from functional.iterator.backends import roundtrip
 from functional.iterator.embedded import constant_field
 
 
-DEFAULT_BACKEND = "roundtrip"
+DEFAULT_BACKEND: Callable = roundtrip.executor
 
 
 def _collect_capture_vars(captured_vars: CapturedVars) -> CapturedVars:
@@ -153,7 +154,7 @@ class Program:
     past_node: past.Program
     captured_vars: CapturedVars
     externals: dict[str, Any]
-    backend: Optional[str]
+    backend: Optional[Callable]
     definition: Optional[types.FunctionType] = None
 
     @classmethod
@@ -161,7 +162,7 @@ class Program:
         cls,
         definition: types.FunctionType,
         externals: Optional[dict] = None,
-        backend: Optional[str] = None,
+        backend: Optional[Callable] = None,
     ) -> "Program":
         captured_vars = _collect_capture_vars(CapturedVars.from_function(definition))
         past_node = ProgramParser.apply_to_function(definition)
@@ -173,7 +174,7 @@ class Program:
             definition=definition,
         )
 
-    def with_backend(self, backend: str) -> "Program":
+    def with_backend(self, backend: Callable) -> "Program":
         return Program(
             past_node=self.past_node,
             captured_vars=self.captured_vars,
@@ -331,7 +332,7 @@ class FieldOperator(GTCallable):
     foast_node: foast.FieldOperator
     captured_vars: CapturedVars
     externals: dict[str, Any]
-    backend: Optional[str]  # note: backend is only used if directly called
+    backend: Optional[Callable]  # note: backend is only used if directly called
     definition: Optional[types.FunctionType] = None
 
     @classmethod
@@ -339,7 +340,7 @@ class FieldOperator(GTCallable):
         cls,
         definition: types.FunctionType,
         externals: Optional[dict] = None,
-        backend: Optional[str] = None,
+        backend: Optional[Callable] = None,
     ) -> "FieldOperator":
         captured_vars = CapturedVars.from_function(definition)
         foast_node = FieldOperatorParser.apply_to_function(definition)
@@ -356,7 +357,7 @@ class FieldOperator(GTCallable):
         assert isinstance(type_, ct.FunctionType)
         return type_
 
-    def with_backend(self, backend: str) -> "FieldOperator":
+    def with_backend(self, backend: Callable) -> "FieldOperator":
         return FieldOperator(
             foast_node=self.foast_node,
             captured_vars=self.captured_vars,

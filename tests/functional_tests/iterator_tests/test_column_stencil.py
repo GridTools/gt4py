@@ -1,6 +1,7 @@
 import numpy as np
 import pytest
 
+from functional.iterator.backends.gtfn import gtfn_backend
 from functional.iterator.builtins import *
 from functional.iterator.embedded import np_as_located_field
 from functional.iterator.runtime import *
@@ -100,7 +101,7 @@ def test_ksum_scan(backend, use_tmps):
     if use_tmps:
         pytest.xfail("use_tmps currently not supported for scans")
     backend, validate = backend
-    if backend == "gtfn":
+    if backend == gtfn_backend.print_sourcecode:
         pytest.xfail("gtfn does not yet support scans")
     shape = [1, 7]
     inp = np_as_located_field(IDim, KDim)(np.asarray([list(range(7))]))
@@ -141,7 +142,7 @@ def test_ksum_back_scan(backend, use_tmps):
     if use_tmps:
         pytest.xfail("use_tmps currently not supported for scans")
     backend, validate = backend
-    if backend == "gtfn":
+    if backend == gtfn_backend.print_sourcecode:
         pytest.xfail("gtfn does not yet support scans")
     shape = [1, 7]
     inp = np_as_located_field(IDim, KDim)(np.asarray([list(range(7))]))

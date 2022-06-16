@@ -3,7 +3,6 @@ from typing import Any, cast
 import functional.iterator.ir as itir
 from eve import codegen
 from eve.utils import UIDs
-from functional.iterator.backends.backend import register_backend
 from functional.iterator.backends.gtfn.codegen import GTFNCodegen
 from functional.iterator.backends.gtfn.itir_to_gtfn_ir import GTFN_lowering
 from functional.iterator.embedded import NeighborTableOffsetProvider
@@ -62,9 +61,5 @@ def _guess_grid_type(**kwargs):
     )
 
 
-register_backend(
-    "gtfn",
-    lambda prog, *args, **kwargs: print(
-        generate(prog, grid_type=_guess_grid_type(**kwargs), **kwargs)
-    ),
-)
+def print_sourcecode(fencil: itir.FencilDefinition, *arg, **kwargs) -> None:
+    print(generate(fencil, grid_type=_guess_grid_type(**kwargs), **kwargs))

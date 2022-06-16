@@ -1,5 +1,6 @@
 import numpy as np
 
+from functional.iterator.backends import double_roundtrip, roundtrip
 from functional.iterator.builtins import *
 from functional.iterator.embedded import np_as_located_field
 from functional.iterator.runtime import *
@@ -46,10 +47,10 @@ def test_cartesian_offset_provider():
     fencil_swapped(out, inp)
     assert out[0][0] == 1
 
-    fencil(out, inp, backend="roundtrip")
+    fencil(out, inp, backend=roundtrip.executor)
     assert out[0][0] == 42
 
-    fencil(out, inp, backend="double_roundtrip")
+    fencil(out, inp, backend=double_roundtrip.executor)
     assert out[0][0] == 42
 
 
@@ -76,5 +77,5 @@ def test_delay_complete_shift():
     assert out[0, 0] == 43
 
     out = np_as_located_field(I_loc, J_loc)(np.asarray([[-1]]))
-    delay_complete_shift_fencil(out, inp, backend="roundtrip")
+    delay_complete_shift_fencil(out, inp, backend=roundtrip.executor)
     assert out[0, 0] == 43

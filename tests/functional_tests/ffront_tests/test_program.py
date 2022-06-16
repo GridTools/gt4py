@@ -29,12 +29,15 @@ from functional.ffront.func_to_past import ProgramParser
 from functional.ffront.past_passes.type_deduction import ProgramTypeError
 from functional.ffront.past_to_itir import ProgramLowering
 from functional.iterator import ir as itir
+from functional.iterator.backends import roundtrip
 from functional.iterator.embedded import np_as_located_field
 
 
 float64 = float
 IDim = Dimension("IDim")
 Ioff = FieldOffset("Ioff", source=IDim, target=[IDim])
+
+fieldview_backend = roundtrip.executor
 
 
 # TODO(tehrengruber): Improve test structure. Identity needs to be decorated
@@ -125,7 +128,7 @@ def test_identity_fo_execution(identity_def):
     size = 10
     in_field = np_as_located_field(IDim)(np.ones((size)))
     out_field = np_as_located_field(IDim)(np.zeros((size)))
-    identity = field_operator(identity_def, backend="roundtrip")
+    identity = field_operator(identity_def, backend=fieldview_backend)
 
     identity(in_field, out=out_field, offset_provider={})
 
@@ -154,7 +157,7 @@ def test_copy_parsing(copy_program_def):
                 kwargs={"out": P(past.Name, id=past.SymbolRef("out_field"))},
             )
         ],
-        location=P(past.SourceLocation, line=58, source=str(pathlib.Path(__file__).resolve())),
+        location=P(past.SourceLocation, line=61, source=str(pathlib.Path(__file__).resolve())),
     )
     assert pattern_node.match(past_node, raise_exception=True)
 
@@ -374,7 +377,7 @@ def test_shift_by_one_execution():
     ):
         shift_by_one(in_field, out=out_field[:-1])
 
-    shift_by_one_program.with_backend("roundtrip")(
+    shift_by_one_program.with_backend(fieldview_backend)(
         in_field, out_field, offset_provider={"Ioff": IDim}
     )
 
@@ -385,7 +388,7 @@ def test_copy_execution(copy_program_def):
     size = 10
     in_field = np_as_located_field(IDim)(np.ones((size)))
     out_field = np_as_located_field(IDim)(np.zeros((size)))
-    copy_program = program(copy_program_def, backend="roundtrip")
+    copy_program = program(copy_program_def, backend=fieldview_backend)
 
     copy_program(in_field, out_field, offset_provider={})
 
@@ -397,7 +400,7 @@ def test_double_copy_execution(double_copy_program_def):
     in_field = np_as_located_field(IDim)(np.ones((size)))
     intermediate_field = np_as_located_field(IDim)(np.zeros((size)))
     out_field = np_as_located_field(IDim)(np.zeros((size)))
-    double_copy_program = program(double_copy_program_def, backend="roundtrip")
+    double_copy_program = program(double_copy_program_def, backend=fieldview_backend)
 
     double_copy_program(in_field, intermediate_field, out_field, offset_provider={})
 
@@ -411,7 +414,7 @@ def test_copy_restricted_execution(copy_restrict_program_def):
     out_field_ref = np_as_located_field(IDim)(
         np.array([1 if i in range(1, 2) else 0 for i in range(0, size)])
     )
-    copy_restrict_program = program(copy_restrict_program_def, backend="roundtrip")
+    copy_restrict_program = program(copy_restrict_program_def, backend=fieldview_backend)
 
     copy_restrict_program(in_field, out_field, offset_provider={})
 
@@ -432,7 +435,7 @@ def test_calling_fo_from_fo_execution(identity_def):
     def pow_three(field: Field[[IDim], "float64"]) -> Field[[IDim], "float64"]:
         return field * pow_two(field)
 
-    @program(backend="roundtrip")
+    @program(backend=fieldview_backend)
     def fo_from_fo_program(in_field: Field[[IDim], "float64"], out_field: Field[[IDim], "float64"]):
         pow_three(in_field, out=out_field)
 

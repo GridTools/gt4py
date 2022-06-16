@@ -1,7 +1,7 @@
 from typing import Any
 
 from eve.codegen import FormatTemplate as as_fmt, TemplatedGenerator
-from functional.iterator.backends import backend
+from functional.iterator import ir as itir
 from functional.iterator.transforms import apply_common_transforms
 
 
@@ -55,6 +55,5 @@ class ToLispLike(TemplatedGenerator):
             return generated_code
 
 
-backend.register_backend(
-    "lisp", lambda prog, *args, **kwargs: print(ToLispLike.apply(prog, **kwargs))
-)
+def print_sourcecode(fencil: itir.FunctionDefinition, *args, **kwargs) -> None:
+    print(ToLispLike.apply(fencil, **kwargs))

@@ -20,13 +20,19 @@ def _execute_cmake(backend_str: str):
     subprocess.run(cmake, cwd=_source_dir(), check=True)
 
 
+def _get_available_cpu_count():
+    if hasattr(os, "sched_getaffinity"):
+        return len(os.sched_getaffinity(0))
+    return os.cpu_count()
+
+
 def _execute_build(backend_str: str):
     build = [
         "cmake",
         "--build",
         _build_dir(backend_str),
         "--parallel",
-        str(len(os.sched_getaffinity(0))),
+        str(_get_available_cpu_count()),
     ]
     subprocess.run(build, check=True)
 
