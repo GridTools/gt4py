@@ -39,7 +39,6 @@ from gt4py.frontend.nodes import (
     If,
     IterationOrder,
     LevelMarker,
-    Location,
     NativeFuncCall,
     NativeFunction,
     ScalarLiteral,
@@ -185,9 +184,6 @@ class UnRoller(IRNodeVisitor):
 
         return field_list
 
-    def add_node(self, lhs_node: Expr, rhs_node: Expr, binary_op: BinaryOperator, loc: Location):
-        return BinOpExpr(op=binary_op, lhs=lhs_node, rhs=rhs_node, loc=loc)
-
     def visit_UnaryOpExpr(self, node: UnaryOpExpr, params: Dict[str, FieldDecl]):
         if node.op == UnaryOperator.TRANSPOSED:
             node = self.visit(node.arg, params=params)
@@ -205,10 +201,14 @@ class UnRoller(IRNodeVisitor):
 
         if node.op == BinaryOperator.MATMULT:
             for j in range(len(lhs_list)):
-                acc = self.add_node(lhs_list[j][0], rhs_list[0], BinaryOperator.MUL, node.loc)
+                acc = BinOpExpr(
+                    op=BinaryOperator.MUL, lhs=lhs_list[j][0], rhs=rhs_list[0], loc=node.loc
+                )
                 for i in range(1, len(lhs_list[0])):
-                    mul = self.add_node(lhs_list[j][i], rhs_list[i], BinaryOperator.MUL, node.loc)
-                    acc = self.add_node(acc, mul, BinaryOperator.ADD, node.loc)
+                    mul = BinOpExpr(
+                        op=BinaryOperator.MUL, lhs=lhs_list[j][i], rhs=rhs_list[i], loc=node.loc
+                    )
+                    acc = BinOpExpr(op=BinaryOperator.ADD, lhs=acc, rhs=mul, loc=node.loc)
 
                 bin_op_list.append(acc)
 
@@ -217,16 +217,16 @@ class UnRoller(IRNodeVisitor):
             if isinstance(lhs_list, list) and isinstance(rhs_list, list):
                 if len(lhs_list) == len(rhs_list):
                     for lhs, rhs in zip(lhs_list, rhs_list):
-                        bin_op_list.append(self.add_node(lhs, rhs, node.op, node.loc))
+                        bin_op_list.append(BinOpExpr(op=node.op, lhs=lhs, rhs=rhs, loc=node.loc))
             # scalar and vector
             elif isinstance(rhs_list, list) and isinstance(lhs_list, Expr):
                 lhs = lhs_list
                 for rhs in rhs_list:
-                    bin_op_list.append(self.add_node(lhs, rhs, node.op, node.loc))
+                    bin_op_list.append(BinOpExpr(op=node.op, lhs=lhs, rhs=rhs, loc=node.loc))
             elif isinstance(lhs_list, list) and isinstance(rhs_list, Expr):
                 rhs = rhs_list
                 for lhs in lhs_list:
-                    bin_op_list.append(self.add_node(lhs, rhs, node.op, node.loc))
+                    bin_op_list.append(BinOpExpr(op=node.op, lhs=lhs, rhs=rhs, loc=node.loc))
             else:
                 # TODO: check if safe
                 bin_op_list = node
