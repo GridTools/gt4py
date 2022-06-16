@@ -23,6 +23,7 @@ def lift_mode(request):
         ("gtfn", False),
         ("type_check", False),
         ("pretty_print", False),
+        ("type_check", False),
         ("roundtrip", True),
         ("double_roundtrip", True),
     ],

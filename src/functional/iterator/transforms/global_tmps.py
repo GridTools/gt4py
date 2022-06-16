@@ -301,21 +301,21 @@ def collect_tmps_info(node: FencilWithTemporaries):
     def convert_type(dtype):
         if isinstance(dtype, type_inference.Primitive):
             return dtype.name
-        if isinstance(dtype, type_inference.Var):
+        if isinstance(dtype, type_inference.TypeVar):
             return dtype.idx
-        if isinstance(dtype, type_inference.PartialTupleVar):
-            elems_dict = dict(dtype.elems)
-            assert len(elems_dict) == max(elems_dict) + 1
-            return tuple(convert_type(elems_dict[i]) for i in range(len(elems_dict)))
         assert isinstance(dtype, type_inference.Tuple)
-        return tuple(convert_type(e) for e in dtype.elems)
+        dtypes = []
+        while isinstance(dtype, type_inference.Tuple):
+            dtypes.append(convert_type(dtype.front))
+            dtype = dtype.others
+        return tuple(dtypes)
 
     fencil_type = type_inference.infer(node.fencil)
-    assert isinstance(fencil_type, type_inference.Fencil)
+    assert isinstance(fencil_type, type_inference.FencilDefinitionType)
     assert isinstance(fencil_type.params, type_inference.Tuple)
     all_types = []
     types = dict[str, ir.Expr]()
-    for param, dtype in zip(node.fencil.params, fencil_type.params.elems):
+    for param, dtype in zip(node.fencil.params, fencil_type.params):
         assert isinstance(dtype, type_inference.Val)
         all_types.append(convert_type(dtype.dtype))
         if param.id in tmps:
