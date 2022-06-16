@@ -13,7 +13,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import copy
-import itertools
 import numbers
 from typing import Any, Dict, List, Optional, Tuple, Union, cast
 
@@ -107,11 +106,11 @@ class UnVectorisation(IRNodeVisitor):
                 for stmt in c.body.stmts:
                     if self._is_vector_assignment(stmt, fields_decls):
                         stmt.value = UnRoller.apply(stmt.value, params=fields_decls)
-                        new_stmts.append(self.visit(stmt, params=fields_decls))
+                        new_stmts.extend(self.visit(stmt, params=fields_decls))
                     else:
-                        new_stmts.append([stmt])  # take stmt as is
-                # merge list
-                c.body.stmts = list(itertools.chain(*new_stmts))
+                        new_stmts.append(stmt)  # take stmt as is
+
+                c.body.stmts = new_stmts
 
         return node
 
