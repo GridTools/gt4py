@@ -41,6 +41,8 @@ from gtc.dace.utils import (
 )
 from gtc.definitions import Extent
 
+from .utils import remove_horizontal_region
+
 
 def _access_iter(node: oir.HorizontalExecution, get_outputs: bool):
     if get_outputs:
@@ -101,6 +103,38 @@ def _get_tasklet_inout_memlets(node: oir.HorizontalExecution, *, get_outputs, gl
         )
         res.append(memlet)
     return res
+
+
+def _all_stmts_same_region(scope_nodes, axis: dcir.Axis, interval):
+    return (
+        axis in dcir.Axis.dims_horizontal()
+        and isinstance(interval, dcir.DomainInterval)
+        and all(
+            isinstance(stmt, oir.MaskStmt) and isinstance(stmt.mask, common.HorizontalMask)
+            for tasklet in iter_tree(scope_nodes).if_isinstance(dcir.Tasklet)
+            for stmt in tasklet.stmts
+        )
+        and len(
+            set(
+                (
+                    None
+                    if mask.intervals[axis.to_idx()].start is None
+                    else mask.intervals[axis.to_idx()].start.level,
+                    None
+                    if mask.intervals[axis.to_idx()].start is None
+                    else mask.intervals[axis.to_idx()].start.offset,
+                    None
+                    if mask.intervals[axis.to_idx()].end is None
+                    else mask.intervals[axis.to_idx()].end.level,
+                    None
+                    if mask.intervals[axis.to_idx()].end is None
+                    else mask.intervals[axis.to_idx()].end.offset,
+                )
+                for mask in iter_tree(scope_nodes).if_isinstance(common.HorizontalMask)
+            )
+        )
+        == 1
+    )
 
 
 class DaCeIRBuilder(NodeTranslator):
@@ -555,6 +589,21 @@ class DaCeIRBuilder(NodeTranslator):
                     )
                 )
             else:
+                if _all_stmts_same_region(scope_nodes, axis, interval):
+                    horizontal_mask_interval = next(
+                        iter(
+                            (
+                                mask.intervals[axis.to_idx()]
+                                for mask in iter_tree(scope_nodes).if_isinstance(
+                                    common.HorizontalMask
+                                )
+                            )
+                        )
+                    )
+                    interval = dcir.DomainInterval.intersection(
+                        axis, horizontal_mask_interval, interval
+                    )
+                    scope_nodes = remove_horizontal_region(scope_nodes, axis)
                 assert iteration.kind == "contiguous"
                 read_memlets = [
                     dcir.Memlet(
