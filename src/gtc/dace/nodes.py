@@ -29,7 +29,7 @@ from gtc import oir
 from gtc.definitions import Extent
 from gtc.oir import Decl, FieldDecl, VerticalLoop, VerticalLoopSection
 
-from .expansion.utils import get_dace_debuginfo
+from .expansion.utils import get_dace_debuginfo, mask_includes_inner_domain
 from .expansion_specification import ExpansionItem, make_expansion_order
 
 
@@ -173,3 +173,14 @@ class StencilComputation(library.LibraryNode):
         for v in self.symbol_mapping.values():
             result.update(map(str, v.free_symbols))
         return result
+
+    def has_splittable_regions(self):
+        for he in self.oir_node.iter_tree().if_isinstance(oir.HorizontalExecution):
+            if not he.declarations and any(
+                isinstance(stmt, oir.MaskStmt)
+                and isinstance(stmt.mask, common.HorizontalMask)
+                and not mask_includes_inner_domain(stmt.mask)
+                for stmt in he.body
+            ):
+                return True
+        return False
