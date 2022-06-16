@@ -12,10 +12,10 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import numbers
-from typing import Any, Dict, List, Optional, Tuple, Union, cast
 import copy
 import itertools
+import numbers
+from typing import Any, Dict, List, Optional, Tuple, Union, cast
 
 from gt4py.frontend.node_util import IRNodeVisitor, location_to_source_location
 from gt4py.frontend.nodes import (
@@ -31,7 +31,6 @@ from gt4py.frontend.nodes import (
     Cast,
     ComputationBlock,
     DataType,
-    Location,
     Empty,
     Expr,
     FieldDecl,
@@ -40,6 +39,7 @@ from gt4py.frontend.nodes import (
     If,
     IterationOrder,
     LevelMarker,
+    Location,
     NativeFuncCall,
     NativeFunction,
     ScalarLiteral,
@@ -85,6 +85,7 @@ def _make_literal(v: numbers.Number) -> gtir.Literal:
         value = str(v)
     return gtir.Literal(dtype=dtype, value=value)
 
+
 class UnVectorisation(IRNodeVisitor):
     @classmethod
     def apply(cls, root, **kwargs):
@@ -97,8 +98,9 @@ class UnVectorisation(IRNodeVisitor):
         # does the referenced field has data dimensions and the access is not element wise
         return fields_decls[stmt.target.name].data_dims and not stmt.target.data_index
 
-    def visit_StencilDefinition(self, node: StencilDefinition,
-                            fields_decls: Dict[str, FieldDecl]) -> gtir.Stencil:
+    def visit_StencilDefinition(
+        self, node: StencilDefinition, fields_decls: Dict[str, FieldDecl]
+    ) -> gtir.Stencil:
         # Vectorization of operations
         for c in node.computations:
             if c.body.stmts:
@@ -114,28 +116,22 @@ class UnVectorisation(IRNodeVisitor):
 
         return node
 
-    def visit_FieldDecl(self, node: FieldDecl) -> gtir.FieldDecl:
-        dimension_names = ["I", "J", "K"]
-        dimensions = [dim in node.axes for dim in dimension_names]
-        # datatype conversion works via same ID
-        return gtir.FieldDecl(
-            name=node.name,
-            dtype=_convert_dtype(node.data_type.value),
-            dimensions=dimensions,
-            data_dims=node.data_dims,
-            loc=location_to_source_location(node.loc),
-        )
-
     def visit_Assign(self, node: Assign, params: Dict[str, FieldDecl]) -> gtir.ParAssignStmt:
         assert isinstance(node.target, FieldRef) or isinstance(node.target, VarRef)
         target_dims = params[node.target.name].data_dims
-        if len(target_dims) == 1:
-            target_dim, = target_dims
-            assert target_dim == len(node.value) and type(node.value[0]) != list, f"assignment dimension mismatch ({node.target.name} dim = {target_dim}; rhs dim={len(node.value)})"
+        if isinstance(target_dims, list):
+            if not len(target_dims) == 1:
+                raise Exception(
+                    f"Assignment only supported for vectors: ({node.target.name}) is a rank {len(target_dims)} tensor."
+                )
+            (target_dim,) = target_dims
+            if not (target_dim == len(node.value) and type(node.value[0]) != list):
+                raise Exception(
+                    f"Assignment dimension mismatch ({node.target.name}: dim = {target_dim}; rhs: dim = {len(node.value)})."
+                )
             assign_list = []
             for index in range(target_dim):
                 tmp_node = copy.deepcopy(node)
-                target_node = tmp_node.target
                 value_node = tmp_node.value[index]
                 data_type = DataType.INT32
                 data_index = [ScalarLiteral(value=index, data_type=data_type)]
@@ -155,29 +151,34 @@ class UnRoller(IRNodeVisitor):
         return cls().visit(root, **kwargs)
 
     def visit_FieldRef(self, node: FieldRef, params: Dict[str, FieldDecl]):
-        name = node.name 
+        name = node.name
         if params[name].data_dims:
             field_list = []
             # vector
             if len(params[name].data_dims) == 1:
                 dims = params[name].data_dims[0]
                 for index in range(dims):
-                    tmp = copy.deepcopy(node)
                     data_type = DataType.INT32
                     data_index = [ScalarLiteral(value=index, data_type=data_type)]
-                    tmp.data_index = data_index
-                    field_list.append(tmp)
+                    element_ref = FieldRef(
+                        name=node.name, offset=node.offset, data_index=data_index, loc=node.loc
+                    )
+                    field_list.append(element_ref)
             # matrix
             elif len(params[name].data_dims) == 2:
                 rows, cols = params[name].data_dims
                 for row in range(rows):
                     row_list = []
                     for col in range(cols):
-                        tmp = copy.deepcopy(node)
                         data_type = DataType.INT32
-                        data_index = [ScalarLiteral(value=row, data_type=data_type), ScalarLiteral(value=col, data_type=data_type)]
-                        tmp.data_index = data_index
-                        row_list.append(tmp)
+                        data_index = [
+                            ScalarLiteral(value=row, data_type=data_type),
+                            ScalarLiteral(value=col, data_type=data_type),
+                        ]
+                        element_ref = FieldRef(
+                            name=node.name, offset=node.offset, data_index=data_index, loc=node.loc
+                        )
+                        row_list.append(element_ref)
                     field_list.append(row_list)
             else:
                 raise Exception("Higher dimensional fields only supported for vectors and matrices")
@@ -188,31 +189,29 @@ class UnRoller(IRNodeVisitor):
         return BinOpExpr(op=binary_op, lhs=lhs_node, rhs=rhs_node, loc=loc)
 
     def visit_UnaryOpExpr(self, node: UnaryOpExpr, params: Dict[str, FieldDecl]):
-        # assert node.op == UnaryOperator.TRANSPOSED, f'Unsupported unary operator {node.op}'
         if node.op == UnaryOperator.TRANSPOSED:
             node = self.visit(node.arg, params=params)
+            assert all(isinstance(row, list) and len(row) == len(node[0]) for row in node)
             # transpose list
             node = [list(x) for x in zip(*node)]
             return node
-            
         else:
             return node
 
     def visit_BinOpExpr(self, node: BinOpExpr, params: Dict[str, FieldDecl]):
-        loc = node.loc
         lhs_list = self.visit(node.lhs, params=params)
         rhs_list = self.visit(node.rhs, params=params)
-        bin_op_list = []
+        bin_op_list: List[BinOpExpr] = []
 
         if node.op == BinaryOperator.MATMULT:
             for j in range(len(lhs_list)):
-                acc = self.add_node(lhs_list[j][0], rhs_list[0], BinaryOperator.MUL, loc)
+                acc = self.add_node(lhs_list[j][0], rhs_list[0], BinaryOperator.MUL, node.loc)
                 for i in range(1, len(lhs_list[0])):
-                    mul = self.add_node(lhs_list[j][i], rhs_list[i], BinaryOperator.MUL, loc)
-                    acc = self.add_node(acc, mul, BinaryOperator.ADD, loc)
+                    mul = self.add_node(lhs_list[j][i], rhs_list[i], BinaryOperator.MUL, node.loc)
+                    acc = self.add_node(acc, mul, BinaryOperator.ADD, node.loc)
 
                 bin_op_list.append(acc)
-        
+
         else:
             # both vectors
             if isinstance(lhs_list, list) and isinstance(rhs_list, list):
@@ -236,6 +235,7 @@ class UnRoller(IRNodeVisitor):
 
     def visit_VarRef(self, node: VarRef, **kwargs):
         return node
+
     def visit_ScalarLiteral(self, node: ScalarLiteral, **kwargs):
         return node
 

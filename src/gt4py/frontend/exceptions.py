@@ -1,5 +1,7 @@
 from gt4py import definitions as gt_definitions
+
 from . import gtscript_frontend
+
 
 class GTScriptSyntaxError(gt_definitions.GTSyntaxError):
     def __init__(self, message, *, loc=None):

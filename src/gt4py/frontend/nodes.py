@@ -527,7 +527,6 @@ class BinaryOperator(enum.Enum):
     GT = 25
     GE = 26
 
-
     @property
     def python_op(self):
         return type(self).IR_OP_TO_PYTHON_OP[self]

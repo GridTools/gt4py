@@ -18,7 +18,6 @@ import enum
 import inspect
 import itertools
 import numbers
-import sys
 import textwrap
 import time
 import types
@@ -30,14 +29,20 @@ from gt4py import definitions as gt_definitions
 from gt4py import gtscript
 from gt4py import utils as gt_utils
 from gt4py.frontend import node_util, nodes
-from gt4py.frontend.defir_to_gtir import DefIRToGTIR, UnVectorisation, UnRoller
+from gt4py.frontend.defir_to_gtir import DefIRToGTIR, UnVectorisation
 from gt4py.utils import NOTHING
 from gt4py.utils import meta as gt_meta
 from gtc import utils as gtc_utils
 
 from .base import Frontend, register
-
-from .exceptions import GTScriptSyntaxError, GTScriptAssertionError, GTScriptDefinitionError, GTScriptValueError, GTScriptSymbolError, GTScriptDataTypeError
+from .exceptions import (
+    GTScriptAssertionError,
+    GTScriptDataTypeError,
+    GTScriptDefinitionError,
+    GTScriptSymbolError,
+    GTScriptSyntaxError,
+    GTScriptValueError,
+)
 
 
 class AssertionChecker(ast.NodeTransformer):
@@ -644,6 +649,7 @@ def _make_init_computations(
         )
     ]
 
+
 def _find_accesses_with_offsets(node: nodes.Node) -> Set[str]:
     names: Set[str] = set()
 
@@ -980,8 +986,16 @@ class IRMaker(ast.NodeVisitor):
 
     # -- Symbol nodes --
     def visit_Attribute(self, node: ast.Attribute):
-        qualified_name = gt_meta.get_qualified_name_from_node(node)
-        return self.visit(ast.Name(id=qualified_name, ctx=node.ctx))
+        # Matrix Transposed
+        if node.attr == "T":
+            return nodes.UnaryOpExpr(
+                op=nodes.UnaryOperator.TRANSPOSED,
+                arg=self.visit(node.value),
+                loc=nodes.Location.from_ast_node(node),
+            )
+        else:
+            qualified_name = gt_meta.get_qualified_name_from_node(node)
+            return self.visit(ast.Name(id=qualified_name, ctx=node.ctx))
 
     def visit_Name(self, node: ast.Name) -> nodes.Ref:
         symbol = node.id
@@ -1096,23 +1110,11 @@ class IRMaker(ast.NodeVisitor):
 
     def visit_BinOp(self, node: ast.BinOp) -> nodes.BinOpExpr:
         return nodes.BinOpExpr(
-            op = self.visit(node.op),
-            rhs = self.visit(node.right),
-            lhs = self.visit(node.left),
-            loc=nodes.Location.from_ast_node(node)
+            op=self.visit(node.op),
+            rhs=self.visit(node.right),
+            lhs=self.visit(node.left),
+            loc=nodes.Location.from_ast_node(node),
         )
-
-    def visit_Attribute(self, node: ast.Attribute) -> nodes.UnaryOperator:
-        # Matrix Transposed
-        if node.attr == 'T':
-            return nodes.UnaryOpExpr(
-                op = nodes.UnaryOperator.TRANSPOSED,
-                arg = self.visit(node.value),
-                loc=nodes.Location.from_ast_node(node)
-            )
-        else: 
-            raise GTScriptSyntaxError(f'Unknown attribute {node.attr = }')
-
 
     def visit_Add(self, node: ast.Add) -> nodes.BinaryOperator:
         return nodes.BinaryOperator.ADD
