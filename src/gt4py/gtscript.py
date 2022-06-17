@@ -371,7 +371,7 @@ def lazy_stencil(
                 **StencilBuilder.nest_impl_options(kwargs),
             }
         )
-        if "dace" in backend:
+        if backend and "dace" in backend:
             stencil = DaCeLazyStencil(
                 StencilBuilder(func, backend=backend, options=options).with_externals(
                     externals or {}
