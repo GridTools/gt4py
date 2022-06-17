@@ -3,12 +3,14 @@ import pytest
 
 from gt4py import gtscript
 from gt4py import storage as gt_storage
-from gt4py.dace_lazy_stencil import DaCeLazyStencil
 from gt4py.gtscript import PARALLEL, computation, interval
 from gt4py.stencil_builder import StencilBuilder
 
 
 dace = pytest.importorskip("dace")
+from gt4py.dace_lazy_stencil import (  # noqa: E402 (needs to be guarded by above importorskip)
+    DaCeLazyStencil,
+)
 
 
 def simple_stencil_defn(outp: gtscript.Field[np.float64], par: np.float64):
