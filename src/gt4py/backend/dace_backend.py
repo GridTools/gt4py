@@ -11,13 +11,16 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
+import copy
 import os
+import pathlib
 import re
 import textwrap
 from typing import TYPE_CHECKING, Dict, List, Optional, Tuple, Type
 
 import dace
 import numpy as np
+from dace.sdfg.utils import inline_sdfgs
 from dace.serialize import dumps
 
 from eve import codegen
@@ -34,7 +37,6 @@ from gt4py.backend.gtc_common import (
     pybuffer_to_sid,
 )
 from gt4py.backend.module_generator import make_args_data_from_gtir
-from gt4py.stencil_builder import StencilBuilder
 from gtc import common, gtir
 from gtc.dace.nodes import StencilComputation
 from gtc.dace.oir_to_dace import OirSDFGBuilder
@@ -48,13 +50,8 @@ from gtc.passes.oir_pipeline import DefaultPipeline
 
 
 if TYPE_CHECKING:
+    from gt4py.stencil_builder import StencilBuilder
     from gt4py.stencil_object import StencilObject
-
-
-def _remove_meta_information(sdfg: dace.SDFG):
-    for sd in sdfg.all_sdfgs_recursive():
-        sd.transformation_hist = []
-        sd.orig_sdfg = None
 
 
 def _serialize_sdfg(sdfg: dace.SDFG):
@@ -131,21 +128,203 @@ def _post_expand_trafos(sdfg: dace.SDFG):
             node.collapse = len(node.range)
 
 
-def make_sdfg(stencil_ir: gtir.Stencil, builder, storage_info):
-    base_oir = GTIRToOIR().visit(stencil_ir)
-    oir_pipeline = builder.options.backend_opts.get(
-        "oir_pipeline", DefaultPipeline(skip=[MaskInlining])
-    )
-    oir_node = oir_pipeline.run(base_oir)
-    sdfg = OirSDFGBuilder().visit(oir_node)
+def _sdfg_add_arrays_and_edges(
+    field_info, wrapper_sdfg, state, inner_sdfg, nsdfg, inputs, outputs, origins
+):
 
-    _to_device(sdfg, storage_info["device"])
-    sdfg = _pre_expand_trafos(stencil_ir, sdfg, storage_info["layout_map"])
-    _remove_meta_information(sdfg)
-    unexpanded_json = _serialize_sdfg(sdfg)
-    sdfg.expand_library_nodes()
-    _post_expand_trafos(sdfg)
-    return sdfg, unexpanded_json
+    for name, array in inner_sdfg.arrays.items():
+        if isinstance(array, dace.data.Array) and not array.transient:
+            axes = field_info[name].axes
+
+            shape = [f"__{name}_{axis}_size" for axis in axes] + [
+                d for d in field_info[name].data_dims
+            ]
+
+            wrapper_sdfg.add_array(
+                name, dtype=array.dtype, strides=array.strides, shape=shape, storage=array.storage
+            )
+            if isinstance(origins, tuple):
+                origin = [o for a, o in zip("IJK", origins) if a in axes]
+            else:
+                origin = origins.get(name, origins.get("_all_", None))
+                if len(origin) == 3:
+                    origin = [o for a, o in zip("IJK", origin) if a in axes]
+
+            ranges = [
+                (o - max(0, e), o - max(0, e) + s - 1, 1)
+                for o, e, s in zip(
+                    origin,
+                    field_info[name].boundary.lower_indices,
+                    inner_sdfg.arrays[name].shape,
+                )
+            ]
+            ranges += [(0, d, 1) for d in field_info[name].data_dims]
+            if name in inputs:
+                state.add_edge(
+                    state.add_read(name),
+                    None,
+                    nsdfg,
+                    name,
+                    dace.Memlet(name, subset=dace.subsets.Range(ranges)),
+                )
+            if name in outputs:
+                state.add_edge(
+                    nsdfg,
+                    name,
+                    state.add_write(name),
+                    None,
+                    dace.Memlet(name, subset=dace.subsets.Range(ranges)),
+                )
+
+
+def _sdfg_specialize_symbols(wrapper_sdfg, domain: Tuple[int, ...]):
+    ival, jval, kval = domain[0], domain[1], domain[2]
+    for sdfg in wrapper_sdfg.all_sdfgs_recursive():
+        if sdfg.parent_nsdfg_node is not None:
+            symmap = sdfg.parent_nsdfg_node.symbol_mapping
+
+            if "__I" in symmap:
+                ival = symmap["__I"]
+                del symmap["__I"]
+            if "__J" in symmap:
+                jval = symmap["__J"]
+                del symmap["__J"]
+            if "__K" in symmap:
+                kval = symmap["__K"]
+                del symmap["__K"]
+
+        sdfg.replace("__I", ival)
+        if "__I" in sdfg.symbols:
+            sdfg.remove_symbol("__I")
+        sdfg.replace("__J", jval)
+        if "__J" in sdfg.symbols:
+            sdfg.remove_symbol("__J")
+        sdfg.replace("__K", kval)
+        if "__K" in sdfg.symbols:
+            sdfg.remove_symbol("__K")
+
+        for val in ival, jval, kval:
+            sym = dace.symbolic.pystr_to_symbolic(val)
+            for fsym in sym.free_symbols:
+                if sdfg.parent_nsdfg_node is not None:
+                    sdfg.parent_nsdfg_node.symbol_mapping[str(fsym)] = fsym
+                if str(fsym) not in sdfg.symbols:
+                    if str(fsym) in sdfg.parent_sdfg.symbols:
+                        sdfg.add_symbol(str(fsym), stype=sdfg.parent_sdfg.symbols[str(fsym)])
+                    else:
+                        sdfg.add_symbol(str(fsym), stype=dace.dtypes.int32)
+
+
+def freeze_origin_domain_sdfg(inner_sdfg, arg_names, field_info, *, origin, domain):
+    wrapper_sdfg = dace.SDFG("frozen_" + inner_sdfg.name)
+    state = wrapper_sdfg.add_state("frozen_" + inner_sdfg.name + "_state")
+
+    inputs = set()
+    outputs = set()
+    for inner_state in inner_sdfg.nodes():
+        for node in inner_state.nodes():
+            if (
+                not isinstance(node, dace.nodes.AccessNode)
+                or inner_sdfg.arrays[node.data].transient
+            ):
+                continue
+            if node.has_reads(inner_state):
+                inputs.add(node.data)
+            if node.has_writes(inner_state):
+                outputs.add(node.data)
+
+    nsdfg = state.add_nested_sdfg(inner_sdfg, None, inputs, outputs)
+
+    _sdfg_add_arrays_and_edges(
+        field_info, wrapper_sdfg, state, inner_sdfg, nsdfg, inputs, outputs, origins=origin
+    )
+
+    # in special case of empty domain, remove entire SDFG.
+    if any(d == 0 for d in domain):
+        states = wrapper_sdfg.states()
+        assert len(states) == 1
+        for node in states[0].nodes():
+            state.remove_node(node)
+
+    # make sure that symbols are passed throught o inner sdfg
+    for symbol in nsdfg.sdfg.free_symbols:
+        if symbol not in wrapper_sdfg.symbols:
+            wrapper_sdfg.add_symbol(symbol, nsdfg.sdfg.symbols[symbol])
+
+    # Try to inline wrapped SDFG before symbols are specialized to avoid extra views
+    inline_sdfgs(wrapper_sdfg)
+
+    _sdfg_specialize_symbols(wrapper_sdfg, domain)
+
+    for _, _, array in wrapper_sdfg.arrays_recursive():
+        if array.transient:
+            array.lifetime = dace.dtypes.AllocationLifetime.SDFG
+
+    wrapper_sdfg.arg_names = arg_names
+
+    return wrapper_sdfg
+
+
+class SDFGManager:
+    def __init__(self, builder):
+        self.builder = builder
+
+    @staticmethod
+    def _strip_history(sdfg):
+        # strip history from SDFG for faster save/load
+        for tmp_sdfg in sdfg.all_sdfgs_recursive():
+            tmp_sdfg.transformation_hist = []
+            tmp_sdfg.orig_sdfg = None
+
+    @staticmethod
+    def _save_sdfg(sdfg, path):
+        SDFGManager._strip_history(sdfg)
+        sdfg.save(path)
+
+    def _unexpanded_sdfg(self):
+        filename = self.builder.module_name + ".sdfg"
+        path = (
+            pathlib.Path(os.path.relpath(self.builder.module_path.parent, pathlib.Path.cwd()))
+            / filename
+        )
+        try:
+            return dace.SDFG.from_file(path)
+        except FileNotFoundError:
+
+            base_oir = GTIRToOIR().visit(self.builder.gtir)
+            oir_pipeline = self.builder.options.backend_opts.get(
+                "oir_pipeline", DefaultPipeline(skip=[MaskInlining])
+            )
+            oir_node = oir_pipeline.run(base_oir)
+            sdfg = OirSDFGBuilder().visit(oir_node)
+
+            _to_device(sdfg, self.builder.backend.storage_info["device"])
+            _pre_expand_trafos(
+                self.builder.gtir, sdfg, self.builder.backend.storage_info["layout_map"]
+            )
+            self._save_sdfg(sdfg, path)
+            return sdfg
+
+    def unexpanded_sdfg(self):
+        return copy.deepcopy(self._unexpanded_sdfg())
+
+    def _expanded_sdfg(self):
+        sdfg = self._unexpanded_sdfg()
+        sdfg.expand_library_nodes()
+        _post_expand_trafos(sdfg)
+        return sdfg
+
+    def expanded_sdfg(self):
+        return copy.deepcopy(self._expanded_sdfg())
+
+    def _frozen_sdfg(self, *, origin: Dict[str, Tuple[int, ...]], domain: Tuple[int, ...]):
+        sdfg = self.expanded_sdfg()
+        signature = [arg.name for arg in self.builder.gtir.api_signature]
+        field_info = make_args_data_from_gtir(self.builder.gtir_pipeline).field_info
+        return freeze_origin_domain_sdfg(sdfg, signature, field_info, origin=origin, domain=domain)
+
+    def frozen_sdfg(self, *, origin: Dict[str, Tuple[int, ...]], domain: Tuple[int, ...]):
+        return copy.deepcopy(self._frozen_sdfg(origin=origin, domain=domain))
 
 
 class DaCeExtGenerator(BackendCodegen):
@@ -155,13 +334,9 @@ class DaCeExtGenerator(BackendCodegen):
         self.backend = backend
 
     def __call__(self, stencil_ir: gtir.Stencil) -> Dict[str, Dict[str, str]]:
-        sdfg, unexpanded_json = make_sdfg(
-            stencil_ir, self.backend.builder, self.backend.storage_info
-        )
-        # strip history from SDFG for faster save/load
-        for tmp_sdfg in sdfg.all_sdfgs_recursive():
-            tmp_sdfg.transformation_hist = []
-            tmp_sdfg.orig_sdfg = None
+
+        manager = SDFGManager(self.backend.builder)
+        sdfg = manager.expanded_sdfg()
 
         sources: Dict[str, Dict[str, str]]
         implementation = DaCeComputationCodegen.apply(stencil_ir, self.backend.builder, sdfg)
@@ -174,7 +349,6 @@ class DaCeExtGenerator(BackendCodegen):
         sources = {
             "computation": {"computation.hpp": implementation},
             "bindings": {f"bindings.{bindings_ext}": bindings},
-            "info": {self.backend.builder.module_name + ".sdfg": unexpanded_json},
         }
         return sources
 
@@ -247,7 +421,7 @@ class DaCeComputationCodegen:
         return generated_code
 
     @classmethod
-    def apply(cls, stencil_ir: gtir.Stencil, builder: StencilBuilder, sdfg: dace.SDFG):
+    def apply(cls, stencil_ir: gtir.Stencil, builder: "StencilBuilder", sdfg: dace.SDFG):
         self = cls()
         with dace.config.temporary_config():
             dace.config.Config.set("compiler", "cuda", "max_concurrent_streams", value=-1)
