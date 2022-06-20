@@ -1544,9 +1544,10 @@ class GTScriptParser(ast.NodeVisitor):
         return result
 
     @staticmethod
-    def annotate_definition(definition):
+    def annotate_definition(definition, externals=None):
         api_signature = []
         api_annotations = []
+        externals = externals or {}
 
         qualified_name = "{}.{}".format(definition.__module__, definition.__name__)
         sig = inspect.signature(definition)
@@ -1602,6 +1603,13 @@ class GTScriptParser(ast.NodeVisitor):
         ast_func_def = gt_meta.get_ast(definition).body[0]
         canonical_ast = gt_meta.ast_dump(ast_func_def)
 
+        # resolve externals
+        resolved_externals = GTScriptParser.resolve_external_symbols(
+            nonlocal_symbols,
+            imported_symbols,
+            externals
+        )
+
         # Gather temporary
         temp_annotations: Dict[str, gtscript._FieldDescriptor] = {}
         temp_init_values: Dict[str, numbers.Number] = {}
@@ -1616,7 +1624,7 @@ class GTScriptParser(ast.NodeVisitor):
             "IK": gtscript.IK,
             "JK": gtscript.JK,
             "np": np,
-            **nonlocal_symbols,
+            **resolved_externals
         }
         ann_assigns = tuple(filter(lambda stmt: isinstance(stmt, ast.AnnAssign), ast_func_def.body))
         for ann_assign in ann_assigns:
@@ -1646,6 +1654,7 @@ class GTScriptParser(ast.NodeVisitor):
             canonical_ast=canonical_ast,
             nonlocals=nonlocal_symbols,
             imported=imported_symbols,
+            externals=resolved_externals,
         )
 
         return definition
@@ -1966,12 +1975,7 @@ class GTScriptFrontend(Frontend):
 
     @classmethod
     def prepare_stencil_definition(cls, definition, externals):
-        GTScriptParser.annotate_definition(definition)
-        resolved_externals = GTScriptParser.resolve_external_symbols(
-            definition._gtscript_["nonlocals"], definition._gtscript_["imported"], externals
-        )
-        definition._gtscript_["externals"] = resolved_externals
-        return definition
+        return GTScriptParser.annotate_definition(definition, externals)
 
     @classmethod
     def generate(cls, definition, externals, options):
