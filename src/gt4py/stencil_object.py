@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
-#
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2021, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -28,8 +26,9 @@ import numpy as np
 
 import gt4py.backend as gt_backend
 import gt4py.storage as gt_storage
-import gt4py.utils as gt_utils
-from gt4py.definitions import DomainInfo, FieldInfo, Index, ParameterInfo, Shape
+import gtc.utils as gtc_utils
+from gt4py.definitions import AccessKind, DomainInfo, FieldInfo, ParameterInfo
+from gtc.definitions import Index, Shape
 
 
 FieldType = Union[gt_storage.storage.Storage, np.ndarray]
@@ -81,6 +80,21 @@ class FrozenStencil:
 
         if exec_info is not None:
             exec_info["call_run_end_time"] = time.perf_counter()
+
+    def __sdfg__(self, **kwargs):
+        raise TypeError(
+            f'Only dace backends are supported in DaCe-orchestrated programs. (found "{self.stencil_object.backend}")'
+        )
+
+    def __sdfg_signature__(self):
+        raise TypeError(
+            f'Only dace backends are supported in DaCe-orchestrated programs. (found "{self.stencil_object.backend}")'
+        )
+
+    def __sdfg_closure__(self, *args, **kwargs):
+        raise TypeError(
+            f'Only dace backends are supported in DaCe-orchestrated programs. (found "{self.stencil_object.backend}")'
+        )
 
 
 class StencilObject(abc.ABC):
@@ -258,7 +272,7 @@ class StencilObject(abc.ABC):
         max_domain = Shape([max_size] * domain_ndim)
 
         for name, field_info in self.field_info.items():
-            if field_info is not None:
+            if field_info.access != AccessKind.NONE:
                 assert field_args.get(name, None) is not None, f"Invalid value for '{name}' field."
                 field = field_args[name]
                 api_domain_mask = field_info.domain_mask
@@ -314,9 +328,14 @@ class StencilObject(abc.ABC):
                 f"Compute domain too large (provided: {domain}, maximum: {max_domain})"
             )
 
+        if domain[2] < self.domain_info.min_sequential_axis_size:
+            raise ValueError(
+                f"Compute domain too small. Sequential axis is {domain[2]}, but must be at least {self.domain_info.min_sequential_axis_size}."
+            )
+
         # assert compatibility of fields with stencil
         for name, field_info in self.field_info.items():
-            if field_info is not None:
+            if field_info.access != AccessKind.NONE:
                 if name not in field_args:
                     raise ValueError(f"Missing value for '{name}' field.")
                 field = field_args[name]
@@ -376,7 +395,7 @@ class StencilObject(abc.ABC):
                         f"Field '{name}' expects data dimensions {field_info.data_dims} but got {field.shape[field_domain_ndim:]}"
                     )
 
-                min_origin = gt_utils.interpolate_mask(
+                min_origin = gtc_utils.interpolate_mask(
                     field_info.boundary.lower_indices.filter_mask(field_domain_mask),
                     field_domain_mask,
                     default=0,
@@ -387,9 +406,10 @@ class StencilObject(abc.ABC):
                     )
 
                 spatial_domain = typing.cast(Shape, domain).filter_mask(field_domain_mask)
+                lower_indices = field_info.boundary.lower_indices.filter_mask(field_domain_mask)
                 upper_indices = field_info.boundary.upper_indices.filter_mask(field_domain_mask)
                 min_shape = tuple(
-                    o + d + h for o, d, h in zip(field_domain_origin, spatial_domain, upper_indices)
+                    lb + d + ub for lb, d, ub in zip(lower_indices, spatial_domain, upper_indices)
                 )
                 if min_shape > field.shape:
                     raise ValueError(
@@ -398,10 +418,10 @@ class StencilObject(abc.ABC):
 
         # assert compatibility of parameters with stencil
         for name, parameter_info in self.parameter_info.items():
-            if parameter_info is not None:
+            if parameter_info.access != AccessKind.NONE:
                 if name not in param_args:
                     raise ValueError(f"Missing value for '{name}' parameter.")
-                if type(parameter := param_args[name]) != parameter_info.dtype:
+                elif type(parameter := param_args[name]) != parameter_info.dtype:
                     raise TypeError(
                         f"The type of parameter '{name}' is '{type(parameter)}' instead of '{parameter_info.dtype}'"
                     )
@@ -414,7 +434,7 @@ class StencilObject(abc.ABC):
 
         # Set an appropriate origin for all fields
         for name, field_info in self.field_info.items():
-            if field_info is not None:
+            if field_info.access != AccessKind.NONE:
                 assert name in field_args, f"Missing value for '{name}' field."
                 field_origin = origin.get(name, None)
 
@@ -428,7 +448,7 @@ class StencilObject(abc.ABC):
 
                 elif all_origin is not None:
                     origin[name] = (
-                        *gt_utils.filter_mask(all_origin, field_info.domain_mask),
+                        *gtc_utils.filter_mask(all_origin, field_info.domain_mask),
                         *((0,) * len(field_info.data_dims)),
                     )
 
@@ -539,3 +559,18 @@ class StencilObject(abc.ABC):
             None
         """
         type(self)._domain_origin_cache.clear()
+
+    def __sdfg__(self, **kwargs):
+        raise TypeError(
+            f'Only dace backends are supported in DaCe-orchestrated programs. (found "{self.backend}")'
+        )
+
+    def __sdfg_signature__(self):
+        raise TypeError(
+            f'Only dace backends are supported in DaCe-orchestrated programs. (found "{self.backend}")'
+        )
+
+    def __sdfg_closure__(self, *args, **kwargs):
+        raise TypeError(
+            f'Only dace backends are supported in DaCe-orchestrated programs. (found "{self.backend}")'
+        )

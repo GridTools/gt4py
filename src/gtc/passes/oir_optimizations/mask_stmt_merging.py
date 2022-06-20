@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
-#
 # GTC Toolchain - GT4Py Project - GridTools Framework
 #
-# Copyright (c) 2014-2021, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -42,7 +40,22 @@ class MaskStmtMerging(NodeTranslator):
         return merged
 
     def visit_HorizontalExecution(self, node: oir.HorizontalExecution) -> oir.HorizontalExecution:
-        return oir.HorizontalExecution(body=self._merge(node.body), declarations=node.declarations)
+        return oir.HorizontalExecution(
+            body=self._merge(node.body),
+            declarations=node.declarations,
+            loc=node.loc,
+        )
+
+    # Stmt node types with lists of Stmts within them:
 
     def visit_MaskStmt(self, node: oir.MaskStmt) -> oir.MaskStmt:
-        return oir.MaskStmt(mask=node.mask, body=self._merge(node.body))
+        return oir.MaskStmt(mask=node.mask, body=self._merge(node.body), loc=node.loc)
+
+    def visit_While(self, node: oir.While) -> oir.While:
+        body_nodes = []
+        for stmt in node.body:
+            if isinstance(stmt, oir.MaskStmt) and node.cond == stmt.mask:
+                body_nodes.extend(stmt.body)
+            else:
+                body_nodes.append(stmt)
+        return oir.While(cond=self.visit(node.cond), body=self.visit(body_nodes), loc=node.loc)

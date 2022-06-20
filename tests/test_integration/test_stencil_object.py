@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
-#
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2021, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -25,7 +23,7 @@ from gt4py import storage as gt_storage
 from gt4py.gtscript import PARALLEL, Field, computation, interval
 
 
-@pytest.mark.parametrize("backend", ["gtc:numpy"])
+@pytest.mark.parametrize("backend", ["numpy"])
 def test_stencil_object_cache(backend: str):
     @gtscript.stencil(backend=backend)
     def stencil(in_field: Field[float], out_field: Field[float], *, offset: float):

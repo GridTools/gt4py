@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
-#
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2021, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -24,7 +22,7 @@ from gt4py.gtscript import PARALLEL, Field, computation, interval
 from gt4py.lazy_stencil import LazyStencil
 from gt4py.stencil_builder import StencilBuilder
 
-from ..definitions import INTERNAL_BACKENDS
+from ..definitions import ALL_BACKENDS
 
 
 def copy_stencil_definition(out_f: Field[float], in_f: Field[float]):  # type: ignore
@@ -46,7 +44,7 @@ def frontend(request):
     yield gt4py.frontend.from_name(request.param)
 
 
-@pytest.fixture(params=INTERNAL_BACKENDS)
+@pytest.fixture(params=ALL_BACKENDS)
 def backend_name(request):
     yield request.param
 
@@ -63,7 +61,7 @@ def test_lazy_stencil():
     )
     lazy_s = LazyStencil(builder)
 
-    assert lazy_s.backend.name == "debug"
+    assert lazy_s.backend.name == "numpy"
 
 
 def test_lazy_syntax_check(frontend, backend):

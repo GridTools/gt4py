@@ -1,6 +1,6 @@
 |tox| |format|
 
-.. |tox| image:: https://github.com/GridTools/gt4py/workflows/Tox%20(CPU%20only)/badge.svg?branch=master
+.. |tox| image:: https://github.com/GridTools/gt4py/workflows/Tox%20(CPU%20only)/badge.svg?event=schedule
    :alt:
 .. |format| image:: https://github.com/GridTools/gt4py/workflows/Formatting%20&%20compliance/badge.svg?branch=master
    :alt:
@@ -173,8 +173,6 @@ Development roadmap
 A short overview of the new features and changes planned for the coming
 weeks & months.
 
--  Integration with `Dawn <https://github.com/MeteoSwiss-APN/dawn>`__
-   compiler
 -  Update documentation (API reference, tutorial, notebooks and
    examples)
 -  Missing features:

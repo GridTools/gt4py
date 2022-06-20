@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
-#
 # GTC Toolchain - GT4Py Project - GridTools Framework
 #
-# Copyright (c) 2014-2021, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -487,3 +485,19 @@ def test_VariableKOffset_category():
     Testee(k=ExprC())
     with pytest.raises(ValidationError):
         Testee(k=ExprA())
+
+
+def test_HorizontalInterval():
+    common.HorizontalInterval(
+        start=common.AxisBound(level=common.LevelMarker.START, offset=-1),
+        end=common.AxisBound(level=common.LevelMarker.START, offset=0),
+    )
+    with pytest.raises(ValidationError):
+        common.HorizontalInterval(
+            start=common.AxisBound(level=common.LevelMarker.END, offset=0),
+            end=common.AxisBound(level=common.LevelMarker.START, offset=-1),
+        )
+        common.HorizontalInterval(
+            start=common.AxisBound(level=common.LevelMarker.START, offset=0),
+            end=common.AxisBound(level=common.LevelMarker.START, offset=-1),
+        )

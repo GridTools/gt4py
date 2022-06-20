@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
-#
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2021, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -25,7 +23,7 @@ from typing import Any, Callable, Dict, Generator, KeysView, Optional, Tuple, Ty
 import click
 import tabulate
 
-import gt4py
+from gt4py import backend as gt_backend
 from gt4py import gtscript_imports
 from gt4py.backend.base import CLIBackendMixin
 from gt4py.lazy_stencil import LazyStencil
@@ -41,9 +39,9 @@ class BackendChoice(click.Choice):
     -------
     .. code-block: bash
 
-        $ cmd --backend="debug"
+        $ cmd --backend="numpy"
 
-    gets converted to :py:class:`gt4py.backend.debug_backend.DebugBackend`.
+    gets converted to :py:class:`gt4py.backend.GTCNumpyBackend`.
     """
 
     name = "backend"
@@ -63,12 +61,12 @@ class BackendChoice(click.Choice):
 
     @staticmethod
     def get_backend_names() -> KeysView:
-        return gt4py.backend.REGISTRY.keys()
+        return gt_backend.REGISTRY.keys()
 
     @staticmethod
     def enabled_backend_cls_from_name(backend_name: str) -> Optional[Type[CLIBackendMixin]]:
         """Check if a given backend is enabled for CLI."""
-        backend_cls = gt4py.backend.from_name(backend_name)
+        backend_cls = gt_backend.from_name(backend_name)
         if not issubclass(backend_cls, CLIBackendMixin):
             return None
         return backend_cls
@@ -133,7 +131,7 @@ class BackendOption(click.ParamType):
     def convert(
         self, value: str, param: Optional[click.Parameter], ctx: Optional[click.Context]
     ) -> Tuple[str, Any]:
-        backend = ctx.params["backend"] if ctx else gt4py.backend.from_name("debug")
+        backend = ctx.params["backend"] if ctx else gt_backend.from_name("debug")
         name, value = self._try_split(value)
         if name.strip() not in backend.options:
             self.fail(f"Backend {backend.name} received unknown option: {name}!")

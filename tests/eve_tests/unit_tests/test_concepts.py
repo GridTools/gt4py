@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-#
 # Eve Toolchain - GT4Py Project - GridTools Framework
 #
 # Copyright (c) 2020, CSCS - Swiss National Supercomputing Center, ETH Zurich
@@ -79,3 +77,6 @@ class TestNode:
             and isinstance(metadata["definition"], pydantic.fields.ModelField)
             for metadata in sample_node.__node_children__.values()
         )
+
+    def test_serialization_roundtrip(self, sample_node):
+        assert type(sample_node).parse_raw(sample_node.json()) == sample_node

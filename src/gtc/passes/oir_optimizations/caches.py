@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
-#
 # GTC Toolchain - GT4Py Project - GridTools Framework
 #
-# Copyright (c) 2014-2021, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -79,6 +77,7 @@ class IJCacheDetection(NodeTranslator):
             sections=node.sections,
             loop_order=node.loop_order,
             caches=caches,
+            loc=node.loc,
         )
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> oir.Stencil:
@@ -113,6 +112,13 @@ class KCacheDetection(NodeTranslator):
         ):
             return self.generic_visit(node, **kwargs)
 
+        all_accesses = AccessCollector.apply(node)
+        fields_with_variable_reads = {
+            field
+            for field, offsets in all_accesses.offsets().items()
+            if any(off[2] is None for off in offsets)
+        }
+
         def accessed_more_than_once(offsets: Set[Any]) -> bool:
             return len(offsets) > 1
 
@@ -126,11 +132,15 @@ class KCacheDetection(NodeTranslator):
         def offsets_within_limits(offsets: Set[Tuple[int, int, int]]) -> bool:
             return all(abs(offset[2]) <= self.max_cacheable_offset for offset in offsets)
 
-        accesses = AccessCollector.apply(node).cartesian_accesses().offsets()
+        def has_variable_offset_reads(field: str) -> bool:
+            return field in fields_with_variable_reads
+
+        accesses = all_accesses.cartesian_accesses().offsets()
         cacheable = {
             field
             for field, offsets in accesses.items()
             if not already_cached(field)
+            and not has_variable_offset_reads(field)
             and accessed_more_than_once(offsets)
             and not has_horizontal_offset(offsets)
             and offsets_within_limits(offsets)
@@ -142,6 +152,7 @@ class KCacheDetection(NodeTranslator):
             loop_order=node.loop_order,
             sections=node.sections,
             caches=caches,
+            loc=node.loc,
         )
 
 
@@ -227,7 +238,7 @@ class PruneKCacheFlushes(NodeTranslator):
 
     def visit_KCache(self, node: oir.KCache, *, pruneable: Set[str], **kwargs: Any) -> oir.KCache:
         if node.name in pruneable:
-            return oir.KCache(name=node.name, fill=node.fill, flush=False)
+            return oir.KCache(name=node.name, fill=node.fill, flush=False, loc=node.loc)
         return self.generic_visit(node, **kwargs)
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> oir.Stencil:
@@ -252,6 +263,7 @@ class PruneKCacheFlushes(NodeTranslator):
             params=self.visit(node.params, **kwargs),
             vertical_loops=vertical_loops,
             declarations=node.declarations,
+            loc=node.loc,
         )
 
 
@@ -277,6 +289,7 @@ class FillFlushToLocalKCaches(NodeTranslator):
                 data_index=node.data_index,
                 dtype=node.dtype,
                 offset=node.offset,
+                loc=node.loc,
             )
         return node
 
@@ -299,6 +312,7 @@ class FillFlushToLocalKCaches(NodeTranslator):
         return oir.HorizontalExecution(
             body=fills + self.visit(node.body, name_map=name_map, **kwargs) + flushes,
             declarations=node.declarations,
+            loc=node.loc,
         )
 
     @staticmethod
@@ -380,9 +394,12 @@ class FillFlushToLocalKCaches(NodeTranslator):
             oir.VerticalLoopSection(
                 interval=entry_interval,
                 horizontal_executions=FixSymbolNameClashes().visit(section.horizontal_executions),
+                loc=section.loc,
             ),
             oir.VerticalLoopSection(
-                interval=rest_interval, horizontal_executions=section.horizontal_executions
+                interval=rest_interval,
+                horizontal_executions=section.horizontal_executions,
+                loc=section.loc,
             ),
         )
 
@@ -570,7 +587,12 @@ class FillFlushToLocalKCaches(NodeTranslator):
             oir.KCache(name=f, fill=False, flush=False) for f in filling_or_flushing_fields.values()
         ]
 
-        return oir.VerticalLoop(loop_order=node.loop_order, sections=sections, caches=caches)
+        return oir.VerticalLoop(
+            loop_order=node.loop_order,
+            sections=sections,
+            caches=caches,
+            loc=node.loc,
+        )
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> oir.Stencil:
         new_tmps: List[oir.Temporary] = []
@@ -584,4 +606,5 @@ class FillFlushToLocalKCaches(NodeTranslator):
                 **kwargs,
             ),
             declarations=node.declarations + new_tmps,
+            loc=node.loc,
         )

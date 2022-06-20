@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
-#
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2021, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -14,25 +12,24 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-# Disable isort to avoid circular imports
-# isort: off
-from .base import *
-from .module_generator import BaseModuleGenerator
-from . import python_generator
-
-# isort: on
-
-from .debug_backend import *
-from .gt_backends import *
-from .gtc_backend import *
-from .numpy_backend import *
+from .base import (
+    REGISTRY,
+    Backend,
+    BaseBackend,
+    BasePyExtBackend,
+    CLIBackendMixin,
+    PurePythonBackendCLIMixin,
+    from_name,
+    register,
+)
 
 
 try:
-    import dawn4py
-
-    from .dawn_backends import *
+    from .dace_backend import DaceCPUBackend, DaceGPUBackend
 except ImportError:
-    pass  # dawn4py not installed
+    pass
 
-from . import python_generator
+from .cuda_backend import CudaBackend  # noqa: F401
+from .gtcpp_backend import GTCpuIfirstBackend, GTCpuKfirstBackend, GTGpuBackend  # noqa: F401
+from .module_generator import BaseModuleGenerator
+from .numpy_backend import NumpyBackend  # noqa: F401

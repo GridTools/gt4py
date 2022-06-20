@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
-#
 # GTC Toolchain - GT4Py Project - GridTools Framework
 #
-# Copyright (c) 2014-2021, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -20,7 +18,12 @@ import factory
 
 from gtc import common, oir
 
-from .common_utils import CartesianOffsetFactory, identifier, undefined_symbol_list
+from .common_utils import (
+    CartesianOffsetFactory,
+    HorizontalMaskFactory,
+    identifier,
+    undefined_symbol_list,
+)
 
 
 class FieldAccessFactory(factory.Factory):
@@ -77,6 +80,22 @@ class MaskStmtFactory(factory.Factory):
         model = oir.MaskStmt
 
     mask = factory.SubFactory(FieldAccessFactory, dtype=common.DataType.BOOL)
+    body = factory.List([factory.SubFactory(AssignStmtFactory)])
+
+
+class HorizontalRestrictionFactory(factory.Factory):
+    class Meta:
+        model = oir.HorizontalRestriction
+
+    mask = factory.SubFactory(HorizontalMaskFactory)
+    body: List[oir.Stmt] = factory.List([factory.SubFactory(AssignStmtFactory)])
+
+
+class WhileFactory(factory.Factory):
+    class Meta:
+        model = oir.While
+
+    cond = factory.SubFactory(FieldAccessFactory, dtype=common.DataType.BOOL)
     body = factory.List([factory.SubFactory(AssignStmtFactory)])
 
 

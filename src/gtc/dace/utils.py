@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
-#
 # GTC Toolchain - GT4Py Project - GridTools Framework
 #
-# Copyright (c) 2014-2021, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -15,61 +13,21 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import re
-from typing import TYPE_CHECKING, Any, Collection, Dict, Iterator, List, Tuple, Union
+from dataclasses import dataclass, field
+from functools import lru_cache
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
 
 import dace
 import dace.data
-import networkx as nx
-from dace import SDFG, InterstateEdge
-from pydantic import validator
+import numpy as np
 
 import eve
 import gtc.oir as oir
-from eve.iterators import TraversalOrder, iter_tree
-from gtc.common import CartesianOffset, DataType, ExprKind, LevelMarker, typestr_to_data_type
-from gtc.passes.oir_optimizations.utils import AccessCollector
-
-
-if TYPE_CHECKING:
-    from gtc.dace.nodes import HorizontalExecutionLibraryNode, VerticalLoopLibraryNode
-    from gtc.oir import VerticalLoopSection
-
-
-def internal_symbols(sdfg: dace.SDFG):
-    res = ["__I", "__J", "__K"]
-    for name, array in sdfg.arrays.items():
-        if isinstance(array, dace.data.Array):
-            dimensions = array_dimensions(array)
-            n_data_dims = len(array.shape) - sum(dimensions)
-            res.extend(
-                [f"__{name}_{var}_stride" for idx, var in enumerate("IJK") if dimensions[idx]]
-            )
-            res.extend([f"__{name}_d{dim}_stride" for dim in range(n_data_dims)])
-    return res
-
-
-def validate_oir_sdfg(sdfg: dace.SDFG):
-
-    from gtc.dace.nodes import VerticalLoopLibraryNode
-
-    sdfg.validate()
-    is_correct_node_types = all(
-        isinstance(n, (dace.SDFGState, dace.nodes.AccessNode, VerticalLoopLibraryNode))
-        for n, _ in sdfg.all_nodes_recursive()
-    )
-    is_correct_data_and_dtype = all(
-        isinstance(array, dace.data.Array)
-        and typestr_to_data_type(dace_dtype_to_typestr(array.dtype)) != DataType.INVALID
-        for array in sdfg.arrays.values()
-    )
-    if not is_correct_node_types or not is_correct_data_and_dtype:
-        raise ValueError("Not a valid OIR-level SDFG")
-
-
-def dace_dtype_to_typestr(dtype: Any):
-    if not isinstance(dtype, dace.typeclass):
-        dtype = dace.typeclass(dtype)
-    return dtype.as_numpy_dtype().str
+from eve import NodeVisitor
+from gtc import common
+from gtc import daceir as dcir
+from gtc.common import CartesianOffset, data_type_to_typestr
+from gtc.passes.oir_optimizations.utils import compute_horizontal_block_extents
 
 
 def array_dimensions(array: dace.data.Array):
@@ -77,11 +35,32 @@ def array_dimensions(array: dace.data.Array):
         any(
             re.match(f"__.*_{k}_stride", str(sym))
             for st in array.strides
-            for sym in st.free_symbols
+            for sym in dace.symbolic.pystr_to_symbolic(st).free_symbols
+        )
+        or any(
+            re.match(f"__{k}", str(sym))
+            for sh in array.shape
+            for sym in dace.symbolic.pystr_to_symbolic(sh).free_symbols
         )
         for k in "IJK"
     ]
     return dims
+
+
+def replace_strides(arrays, get_layout_map):
+    symbol_mapping = {}
+    for array in arrays:
+        dims = array_dimensions(array)
+        ndata_dims = len(array.shape) - sum(dims)
+        layout = get_layout_map(dims + [True] * ndata_dims)
+        if array.transient:
+            stride = 1
+            for idx in reversed(np.argsort(layout)):
+                symbol = array.strides[idx]
+                if symbol.is_symbol:
+                    symbol_mapping[str(symbol)] = dace.symbolic.pystr_to_symbolic(stride)
+                stride *= array.shape[idx]
+    return symbol_mapping
 
 
 def get_tasklet_symbol(name, offset, is_target):
@@ -89,35 +68,45 @@ def get_tasklet_symbol(name, offset, is_target):
         return f"__{name}"
 
     acc_name = name + "__"
-    suffix = "_".join(
-        var + ("m" if o < 0 else "p") + f"{abs(o):d}" for var, o in zip("ijk", offset) if o != 0
-    )
-    if suffix != "":
-        acc_name += suffix
+    if offset is not None:
+        offset_strs = []
+        for axis in dcir.Axis.dims_3d():
+            off = offset.to_dict()[axis.lower()]
+            if off is not None and off != 0:
+                offset_strs.append(axis.lower() + ("m" if off < 0 else "p") + f"{abs(off):d}")
+        suffix = "_".join(offset_strs)
+        if suffix != "":
+            acc_name += suffix
     return acc_name
 
 
 def get_axis_bound_str(axis_bound, var_name):
     from gtc.common import LevelMarker
 
-    if axis_bound.level == LevelMarker.END:
+    if axis_bound is None:
+        return ""
+    elif axis_bound.level == LevelMarker.END:
         return f"{var_name}{axis_bound.offset:+d}"
     else:
         return f"{axis_bound.offset}"
 
 
-def get_interval_range_str(interval, var_name):
-    return "{}:{}".format(
-        get_axis_bound_str(interval.start, var_name), get_axis_bound_str(interval.end, var_name)
-    )
+def get_axis_bound_dace_symbol(axis_bound: "dcir.AxisBound"):
+    from gtc.common import LevelMarker
+
+    if axis_bound is None:
+        return
+
+    elif axis_bound.level == LevelMarker.END:
+        return axis_bound.axis.domain_dace_symbol() + axis_bound.offset
+    else:
+        return axis_bound.offset
 
 
 def get_axis_bound_diff_str(axis_bound1, axis_bound2, var_name: str):
 
-    if axis_bound1 >= axis_bound2:
-        tmp = axis_bound2
-        axis_bound2 = axis_bound1
-        axis_bound1 = tmp
+    if axis_bound1 <= axis_bound2:
+        axis_bound1, axis_bound2 = axis_bound2, axis_bound1
         sign = "-"
     else:
         sign = ""
@@ -126,539 +115,402 @@ def get_axis_bound_diff_str(axis_bound1, axis_bound2, var_name: str):
         var = var_name
     else:
         var = ""
-    return f"{sign}{var}{axis_bound2.offset-axis_bound1.offset:+d}"
+    return f"{sign}({var}{axis_bound1.offset-axis_bound2.offset:+d})"
 
 
-def get_interval_length_str(interval, var_name):
-
-    return "({})-({})".format(
-        get_axis_bound_str(interval.end, var_name), get_axis_bound_str(interval.start, var_name)
-    )
+def axes_list_from_flags(flags):
+    return [ax for f, ax in zip(flags, dcir.Axis.dims_3d()) if f]
 
 
-def get_vertical_loop_section_sdfg(section: "VerticalLoopSection") -> SDFG:
-    from gtc.dace.nodes import HorizontalExecutionLibraryNode
-
-    sdfg = SDFG("VerticalLoopSection_" + str(id(section)))
-    old_state = sdfg.add_state("start_state", is_start_state=True)
-    for he in section.horizontal_executions:
-        new_state = sdfg.add_state("HorizontalExecution_" + str(id(he)) + "_state")
-        sdfg.add_edge(old_state, new_state, InterstateEdge())
-        new_state.add_node(HorizontalExecutionLibraryNode(oir_node=he))
-
-        old_state = new_state
-    return sdfg
+@lru_cache(maxsize=None)
+def get_dace_symbol(name: common.SymbolRef, dtype: common.DataType = common.DataType.INT32):
+    return dace.symbol(name, dtype=data_type_to_dace_typeclass(dtype))
 
 
-class OIRFieldRenamer(eve.NodeTranslator):
-    def visit_FieldAccess(self, node: oir.FieldAccess):
-        if node.name not in self._field_table:
-            return node
-        return oir.FieldAccess(
-            name=self._field_table[node.name],
-            offset=node.offset,
-            dtype=node.dtype,
-            data_index=node.data_index,
+def data_type_to_dace_typeclass(data_type):
+    dtype = np.dtype(data_type_to_typestr(data_type))
+    return dace.dtypes.typeclass(dtype.type)
+
+
+class AccessInfoCollector(NodeVisitor):
+    def __init__(self, collect_read: bool, collect_write: bool, include_full_domain: bool = False):
+        self.collect_read: bool = collect_read
+        self.collect_write: bool = collect_write
+        self.include_full_domain: bool = include_full_domain
+
+    @dataclass
+    class Context:
+        axes: Dict[str, List["dcir.Axis"]]
+        access_infos: Dict[str, "dcir.FieldAccessInfo"] = field(default_factory=dict)
+
+    def visit_VerticalLoop(
+        self, node: oir.VerticalLoop, *, block_extents, ctx, **kwargs: Any
+    ) -> Dict[str, "dcir.FieldAccessInfo"]:
+        for section in reversed(node.sections):
+            self.visit(section, block_extents=block_extents, ctx=ctx, **kwargs)
+        return ctx.access_infos
+
+    def visit_VerticalLoopSection(
+        self,
+        node: oir.VerticalLoopSection,
+        *,
+        block_extents,
+        ctx,
+        grid_subset=None,
+        **kwargs: Any,
+    ) -> Dict[str, "dcir.FieldAccessInfo"]:
+        inner_ctx = self.Context(axes=ctx.axes)
+
+        if grid_subset is None:
+            grid_subset = dcir.GridSubset.from_interval(node.interval, dcir.Axis.K)
+        elif dcir.Axis.K not in grid_subset.intervals:
+            intervals = dict(dcir.GridSubset.from_interval(node.interval, dcir.Axis.K).intervals)
+            intervals.update(grid_subset.intervals)
+            grid_subset = dcir.GridSubset(intervals=intervals)
+        self.visit(
+            node.horizontal_executions,
+            block_extents=block_extents,
+            ctx=inner_ctx,
+            grid_subset=grid_subset,
+            k_interval=node.interval,
+            **kwargs,
+        )
+        inner_infos = inner_ctx.access_infos
+
+        k_grid = dcir.GridSubset.from_interval(grid_subset.intervals[dcir.Axis.K], dcir.Axis.K)
+        inner_infos = {name: info.apply_iteration(k_grid) for name, info in inner_infos.items()}
+
+        ctx.access_infos.update(
+            {
+                name: info.union(ctx.access_infos.get(name, info))
+                for name, info in inner_infos.items()
+            }
         )
 
-    def visit_ScalarAccess(self, node: oir.ScalarAccess):
-        if node.name not in self._field_table:
-            return node
-        return oir.ScalarAccess(name=self._field_table[node.name], dtype=node.dtype)
+        return ctx.access_infos
 
-    def visit_HorizontalExecution(self, node: oir.HorizontalExecution):
-        assert all(
-            decl.name not in self._field_table or self._field_table[decl.name] == decl.name
-            for decl in node.declarations
+    def visit_HorizontalExecution(
+        self,
+        node: oir.HorizontalExecution,
+        *,
+        block_extents,
+        ctx: Context,
+        k_interval,
+        grid_subset=None,
+        **kwargs,
+    ) -> Dict[str, "dcir.FieldAccessInfo"]:
+        horizontal_extent = block_extents(node)
+
+        inner_ctx = self.Context(axes=ctx.axes)
+        inner_infos = inner_ctx.access_infos
+        ij_grid = dcir.GridSubset.from_gt4py_extent(horizontal_extent)
+        he_grid = ij_grid.set_interval(dcir.Axis.K, k_interval)
+        self.visit(
+            node.body,
+            horizontal_extent=horizontal_extent,
+            ctx=inner_ctx,
+            he_grid=he_grid,
+            grid_subset=grid_subset,
+            **kwargs,
         )
-        return node
 
-    def __init__(self, field_table):
-        self._field_table = field_table
+        if grid_subset is not None:
+            for axis in ij_grid.axes():
+                if axis in grid_subset.intervals:
+                    ij_grid = ij_grid.set_interval(axis, grid_subset.intervals[axis])
 
+        inner_infos = {name: info.apply_iteration(ij_grid) for name, info in inner_infos.items()}
 
-def get_node_name_mapping(state: dace.SDFGState, node: dace.nodes.LibraryNode):
+        ctx.access_infos.update(
+            {
+                name: info.union(ctx.access_infos.get(name, info))
+                for name, info in inner_infos.items()
+            }
+        )
 
-    name_mapping = dict()
-    for edge in state.in_edges(node):
-        if edge.dst_conn is not None:
-            assert edge.dst_conn.startswith("IN_")
-            internal_name = edge.dst_conn[len("IN_") :]
-            outer_name = edge.data.data
-            if internal_name not in name_mapping:
-                name_mapping[internal_name] = outer_name
-            else:
-                msg = (
-                    f"input and output of field '{internal_name}' to node'{node.name}' refer to "
-                    + "different arrays"
-                )
-                assert name_mapping[internal_name] == outer_name, msg
-    for edge in state.out_edges(node):
-        if edge.src_conn is not None:
-            assert edge.src_conn.startswith("OUT_")
-            internal_name = edge.src_conn[len("OUT_") :]
-            outer_name = edge.data.data
-            if internal_name not in name_mapping:
-                name_mapping[internal_name] = outer_name
-            else:
-                msg = (
-                    f"input and output of field '{internal_name}' to node'{node.name}' refer to"
-                    + "different arrays"
-                )
-                assert name_mapping[internal_name] == outer_name, msg
-    return name_mapping
+        return ctx.access_infos
 
+    def visit_AssignStmt(self, node: oir.AssignStmt, **kwargs):
+        self.visit(node.right, is_write=False, **kwargs)
+        self.visit(node.left, is_write=True, **kwargs)
 
-class CartesianIterationSpace(oir.LocNode):
-    i_interval: oir.Interval
-    j_interval: oir.Interval
+    def visit_HorizontalRestriction(
+        self, node: oir.HorizontalRestriction, *, is_conditional=False, **kwargs
+    ):
+        self.visit(node.mask, is_conditional=is_conditional, **kwargs)
+        self.visit(node.body, is_conditional=True, region=node.mask, **kwargs)
 
-    @validator("i_interval", "j_interval")
-    def minimum_domain(cls, v: oir.Interval) -> oir.Interval:
-        if (
-            v.start.level != LevelMarker.START
-            or v.start.offset > 0
-            or v.end.level != LevelMarker.END
-            or v.end.offset < 0
-        ):
-            raise ValueError("iteration space must include the whole domain")
-        return v
+    def visit_MaskStmt(self, node: oir.MaskStmt, *, is_conditional=False, **kwargs):
+
+        self.visit(node.mask, is_conditional=is_conditional, **kwargs)
+        self.visit(node.body, is_conditional=True, **kwargs)
+
+    def visit_While(self, node: oir.While, *, is_conditional=False, **kwargs):
+        self.generic_visit(node, is_conditional=True, **kwargs)
 
     @staticmethod
-    def domain() -> "CartesianIterationSpace":
-        return CartesianIterationSpace(
-            i_interval=oir.Interval(start=oir.AxisBound.start(), end=oir.AxisBound.end()),
-            j_interval=oir.Interval(start=oir.AxisBound.start(), end=oir.AxisBound.end()),
-        )
-
-    @staticmethod
-    def from_offset(offset: CartesianOffset) -> "CartesianIterationSpace":
-
-        return CartesianIterationSpace(
-            i_interval=oir.Interval(
-                start=oir.AxisBound.from_start(min(0, offset.i)),
-                end=oir.AxisBound.from_end(max(0, offset.i)),
-            ),
-            j_interval=oir.Interval(
-                start=oir.AxisBound.from_start(min(0, offset.j)),
-                end=oir.AxisBound.from_end(max(0, offset.j)),
-            ),
-        )
-
-    def compose(self, other: "CartesianIterationSpace") -> "CartesianIterationSpace":
-        i_interval = oir.Interval(
-            start=oir.AxisBound.from_start(
-                self.i_interval.start.offset + other.i_interval.start.offset,
-            ),
-            end=oir.AxisBound.from_end(
-                self.i_interval.end.offset + other.i_interval.end.offset,
-            ),
-        )
-        j_interval = oir.Interval(
-            start=oir.AxisBound.from_start(
-                self.j_interval.start.offset + other.j_interval.start.offset,
-            ),
-            end=oir.AxisBound.from_end(
-                self.j_interval.end.offset + other.j_interval.end.offset,
-            ),
-        )
-        return CartesianIterationSpace(i_interval=i_interval, j_interval=j_interval)
-
-    def __or__(self, other: "CartesianIterationSpace") -> "CartesianIterationSpace":
-        i_interval = oir.Interval(
-            start=oir.AxisBound.from_start(
-                min(
-                    self.i_interval.start.offset,
-                    other.i_interval.start.offset,
+    def _global_grid_subset(
+        region: common.HorizontalMask, he_grid: "dcir.GridSubset", offset: List[Optional[int]]
+    ):
+        res: Dict[
+            dcir.Axis, Union[dcir.DomainInterval, dcir.TileInterval, dcir.IndexWithExtent]
+        ] = {}
+        if region is not None:
+            for axis, oir_interval in zip(dcir.Axis.dims_horizontal(), region.intervals):
+                start = (
+                    oir_interval.start
+                    if oir_interval.start is not None
+                    else he_grid.intervals[axis].start
                 )
-            ),
-            end=oir.AxisBound.from_end(
-                max(
-                    self.i_interval.end.offset,
-                    other.i_interval.end.offset,
+                end = (
+                    oir_interval.end
+                    if oir_interval.end is not None
+                    else he_grid.intervals[axis].end
                 )
-            ),
-        )
-        j_interval = oir.Interval(
-            start=oir.AxisBound.from_start(
-                min(
-                    self.j_interval.start.offset,
-                    other.j_interval.start.offset,
+                dcir_interval = dcir.DomainInterval(
+                    start=dcir.AxisBound.from_common(axis, start),
+                    end=dcir.AxisBound.from_common(axis, end),
                 )
-            ),
-            end=oir.AxisBound.from_end(
-                max(
-                    self.j_interval.end.offset,
-                    other.j_interval.end.offset,
-                )
-            ),
-        )
-        return CartesianIterationSpace(i_interval=i_interval, j_interval=j_interval)
+                res[axis] = dcir.DomainInterval.union(dcir_interval, res.get(axis, dcir_interval))
+        if dcir.Axis.K in he_grid.intervals:
+            off = offset[dcir.Axis.K.to_idx()] or 0
+            res[dcir.Axis.K] = he_grid.intervals[dcir.Axis.K].shifted(off)
+        for axis in dcir.Axis.dims_horizontal():
+            iteration_interval = he_grid.intervals[axis]
+            mask_interval = res.get(axis, iteration_interval)
+            res[axis] = dcir.DomainInterval.intersection(
+                axis, iteration_interval, mask_interval
+            ).shifted(offset[axis.to_idx()])
+        return dcir.GridSubset(intervals=res)
 
-
-class CartesianIJIndexSpace(tuple):
-    def __new__(cls, *args, **kwargs):
-        return super(CartesianIJIndexSpace, cls).__new__(cls, *args, **kwargs)
-
-    def __init__(self, *args, **kwargs):
-        msg = "CartesianIJIndexSpace must be a pair of pairs of integers."
-        if not len(self) == 2:
-            raise ValueError(msg)
-        if not all(len(v) == 2 for v in self):
-            raise ValueError(msg)
-        if not all(isinstance(v[0], int) and isinstance(v[1], int) for v in self):
-            raise ValueError(msg)
-
-    @staticmethod
-    def from_offset(offset: Union[Tuple[int, ...], CartesianOffset]) -> "CartesianIJIndexSpace":
-        if isinstance(offset, CartesianOffset):
-            return CartesianIJIndexSpace((offset.i, offset.i), (offset.j, offset.j))
-        return CartesianIJIndexSpace(((offset[0], offset[0]), (offset[1], offset[1])))
-
-    @staticmethod
-    def from_iteration_space(iteration_space: CartesianIterationSpace) -> "CartesianIJIndexSpace":
-        return CartesianIJIndexSpace(
-            (
-                (iteration_space.i_interval.start.offset, iteration_space.i_interval.end.offset),
-                (iteration_space.j_interval.start.offset, iteration_space.j_interval.end.offset),
-            )
-        )
-
-    def compose(
-        self, other: Union["CartesianIterationSpace", "CartesianIJIndexSpace"]
-    ) -> "CartesianIJIndexSpace":
-        if isinstance(other, CartesianIterationSpace):
-            other = CartesianIJIndexSpace.from_iteration_space(other)
-        return CartesianIJIndexSpace(
-            (
-                (self[0][0] + other[0][0], (self[0][1] + other[0][1])),
-                (self[1][0] + other[1][0], (self[1][1] + other[1][1])),
-            )
-        )
-
-    def __or__(
-        self, other: Union["CartesianIterationSpace", "CartesianIJIndexSpace"]
-    ) -> "CartesianIJIndexSpace":
-        if isinstance(other, CartesianIterationSpace):
-            other = CartesianIJIndexSpace.from_iteration_space(other)
-        return CartesianIJIndexSpace(
-            (
-                (min(self[0][0], other[0][0]), max(self[0][1], other[0][1])),
-                (min(self[1][0], other[1][0]), max(self[1][1], other[1][1])),
-            )
-        )
-
-
-def oir_iteration_space_computation(stencil: oir.Stencil) -> Dict[int, CartesianIterationSpace]:
-    iteration_spaces = dict()
-
-    offsets: Dict[str, List[CartesianOffset]] = dict()
-    outputs = set()
-    access_spaces: Dict[str, CartesianIterationSpace] = dict()
-    # reversed pre_order traversal is post-order but the last nodes per node come first.
-    # this is not possible with visitors unless a (reverseed) visit is implemented for every node
-    for node in reversed(list(iter_tree(stencil, traversal_order=TraversalOrder.PRE_ORDER))):
-        if isinstance(node, oir.FieldAccess):
-            if node.name not in offsets:
-                offsets[node.name] = list()
-            offsets[node.name].append(node.offset)
-        elif isinstance(node, oir.AssignStmt):
-            if node.left.kind == ExprKind.FIELD:
-                outputs.add(node.left.name)
-        elif isinstance(node, oir.HorizontalExecution):
-            iteration_spaces[id(node)] = CartesianIterationSpace.domain()
-            for name in outputs:
-                access_space = access_spaces.get(name, CartesianIterationSpace.domain())
-                iteration_spaces[id(node)] = iteration_spaces[id(node)] | access_space
-            for name in offsets:
-                access_space = CartesianIterationSpace.domain()
-                for offset in offsets[name]:
-                    access_space = access_space | CartesianIterationSpace.from_offset(offset)
-                accumulated_extent = iteration_spaces[id(node)].compose(access_space)
-                access_spaces[name] = (
-                    access_spaces.get(name, CartesianIterationSpace.domain()) | accumulated_extent
-                )
-
-            offsets = dict()
-            outputs = set()
-
-    return iteration_spaces
-
-
-def oir_field_boundary_computation(stencil: oir.Stencil) -> Dict[str, CartesianIterationSpace]:
-    offsets: Dict[str, List[CartesianOffset]] = dict()
-    access_spaces: Dict[str, CartesianIterationSpace] = dict()
-    iteration_spaces = oir_iteration_space_computation(stencil)
-    for node in iter_tree(stencil, traversal_order=TraversalOrder.POST_ORDER):
-        if isinstance(node, oir.FieldAccess):
-            if node.name not in offsets:
-                offsets[node.name] = list()
-            offsets[node.name].append(node.offset)
-        elif isinstance(node, oir.HorizontalExecution):
-            if iteration_spaces.get(id(node), None) is not None:
-                for name in offsets:
-                    access_space = CartesianIterationSpace.domain()
-                    for offset in offsets[name]:
-                        access_space = access_space | CartesianIterationSpace.from_offset(offset)
-                    access_spaces[name] = access_spaces.get(
-                        name, CartesianIterationSpace.domain()
-                    ) | (iteration_spaces[id(node)].compose(access_space))
-
-            offsets = dict()
-
-    return access_spaces
-
-
-def get_access_collection(
-    node: Union[dace.SDFG, "HorizontalExecutionLibraryNode", "VerticalLoopLibraryNode"]
-):
-    from gtc.dace.nodes import HorizontalExecutionLibraryNode, VerticalLoopLibraryNode
-
-    if isinstance(node, dace.SDFG):
-        res = AccessCollector.CartesianAccessCollection([])
-        for node in node.states()[0].nodes():
-            if isinstance(node, (HorizontalExecutionLibraryNode, VerticalLoopLibraryNode)):
-                collection = get_access_collection(node)
-                res._ordered_accesses.extend(collection._ordered_accesses)
-        return res
-    elif isinstance(node, HorizontalExecutionLibraryNode):
-        return AccessCollector.apply(node.oir_node)
-    else:
-        assert isinstance(node, VerticalLoopLibraryNode)
-        res = AccessCollector.CartesianAccessCollection([])
-        for _, sdfg in node.sections:
-            collection = get_access_collection(sdfg)
-            res._ordered_accesses.extend(collection._ordered_accesses)
-        return res
-
-
-def nodes_extent_calculation(
-    nodes: Collection[Union["VerticalLoopLibraryNode", "HorizontalExecutionLibraryNode"]]
-) -> Dict[str, Tuple[Tuple[int, int], Tuple[int, int]]]:
-    access_spaces: Dict[str, Tuple[Tuple[int, int], ...]] = dict()
-    inner_nodes = []
-    from gtc.dace.nodes import HorizontalExecutionLibraryNode, VerticalLoopLibraryNode
-
-    for node in nodes:
-        if isinstance(node, VerticalLoopLibraryNode):
-            for _, section_sdfg in node.sections:
-                for he in (
-                    ln
-                    for ln, _ in section_sdfg.all_nodes_recursive()
-                    if isinstance(ln, dace.nodes.LibraryNode)
-                ):
-                    inner_nodes.append(he)
+    def _make_access_info(
+        self,
+        offset_node: Union[CartesianOffset, oir.VariableKOffset],
+        axes,
+        is_conditional,
+        region,
+        he_grid,
+        grid_subset,
+    ) -> "dcir.FieldAccessInfo":
+        offset = [offset_node.to_dict()[k] for k in "ijk"]
+        if isinstance(offset_node, oir.VariableKOffset):
+            variable_offset_axes = [dcir.Axis.K]
         else:
-            assert isinstance(node, HorizontalExecutionLibraryNode)
-            inner_nodes.append(node)
-    for node in inner_nodes:
-        access_collection = AccessCollector.apply(node.oir_node)
-        iteration_space = node.iteration_space
-        if iteration_space is not None:
-            for name, offsets in access_collection.offsets().items():
-                for off in offsets:
-                    access_extent = (
-                        (
-                            iteration_space.i_interval.start.offset + off[0],
-                            iteration_space.i_interval.end.offset + off[0],
-                        ),
-                        (
-                            iteration_space.j_interval.start.offset + off[1],
-                            iteration_space.j_interval.end.offset + off[1],
-                        ),
-                    )
-                    if name not in access_spaces:
-                        access_spaces[name] = access_extent
-                    access_spaces[name] = tuple(
-                        (min(asp[0], ext[0]), max(asp[1], ext[1]))
-                        for asp, ext in zip(access_spaces[name], access_extent)
-                    )
+            variable_offset_axes = []
 
-    return {
-        name: ((-asp[0][0], asp[0][1]), (-asp[1][0], asp[1][1]))
-        for name, asp in access_spaces.items()
-    }
-
-
-def iter_vertical_loop_section_sub_sdfgs(graph: SDFG) -> Iterator[SDFG]:
-    from gtc.dace.nodes import VerticalLoopLibraryNode
-
-    for node, _ in graph.all_nodes_recursive():
-        if isinstance(node, VerticalLoopLibraryNode):
-            yield from (subgraph for _, subgraph in node.sections)
-
-
-class IntervalMapping:
-    def __init__(self) -> None:
-        self.interval_starts: List[oir.AxisBound] = list()
-        self.interval_ends: List[oir.AxisBound] = list()
-        self.values: List[Any] = list()
-
-    def _setitem_subset_of_existing(self, i: int, key: oir.Interval, value: Any) -> None:
-        start = self.interval_starts[i]
-        end = self.interval_ends[i]
-        if self.values[i] is not value:
-            idx = i
-            if key.start != start:
-                self.interval_ends[i] = key.start
-                self.interval_starts.insert(i + 1, key.start)
-                self.interval_ends.insert(i + 1, key.end)
-                self.values.insert(i + 1, value)
-                idx = i + 1
-            if key.end != end:
-                self.interval_starts.insert(idx + 1, key.end)
-                self.interval_ends.insert(idx + 1, end)
-                self.values.insert(idx + 1, self.values[i])
-                self.interval_ends[idx] = key.end
-                self.values[idx] = value
-
-    def _setitem_partial_overlap(self, i: int, key: oir.Interval, value: Any) -> None:
-        start = self.interval_starts[i]
-        if key.start < start:
-            if self.values[i] is value:
-                self.interval_starts[i] = key.start
-            else:
-                self.interval_starts[i] = key.end
-                self.interval_starts.insert(i, key.start)
-                self.interval_ends.insert(i, key.end)
-                self.values.insert(i, value)
-        else:  # key.end > end
-            if self.values[i] is value:
-                self.interval_ends[i] = key.end
-                nextidx = i + 1
-            else:
-                self.interval_ends[i] = key.start
-                self.interval_starts.insert(i + 1, key.start)
-                self.interval_ends.insert(i + 1, key.end)
-                self.values.insert(i + 1, value)
-                nextidx = i + 2
-            if nextidx < len(self.interval_starts) and (
-                key.intersects(
-                    oir.Interval(
-                        start=self.interval_starts[nextidx], end=self.interval_ends[nextidx]
-                    )
+        global_subset = self._global_grid_subset(region, he_grid, offset)
+        intervals = {}
+        for axis in axes:
+            if axis in variable_offset_axes:
+                intervals[axis] = dcir.IndexWithExtent(
+                    axis=axis, value=axis.iteration_symbol(), extent=(0, 0)
                 )
-                or self.interval_starts[nextidx] == key.end
-            ):
-                if self.values[nextidx] is value:
-                    self.interval_ends[nextidx - 1] = self.interval_ends[nextidx]
-                    del self.interval_starts[nextidx]
-                    del self.interval_ends[nextidx]
-                    del self.values[nextidx]
-                else:
-                    self.interval_starts[nextidx] = key.end
+            else:
+                intervals[axis] = dcir.IndexWithExtent(
+                    axis=axis,
+                    value=axis.iteration_symbol(),
+                    extent=[offset[axis.to_idx()], offset[axis.to_idx()]],
+                )
+        grid_subset = dcir.GridSubset(intervals=intervals)
+        return dcir.FieldAccessInfo(
+            grid_subset=grid_subset,
+            global_grid_subset=global_subset,
+            dynamic_access=len(variable_offset_axes) > 0 or is_conditional or region is not None,
+            variable_offset_axes=variable_offset_axes,
+        )
 
-    def __setitem__(self, key: oir.Interval, value: Any) -> None:
-        if not isinstance(key, oir.Interval):
-            raise TypeError("Only OIR intervals supported for method add of IntervalSet.")
+    def visit_FieldAccess(
+        self,
+        node: oir.FieldAccess,
+        *,
+        he_grid,
+        grid_subset,
+        is_write: bool = False,
+        is_conditional: bool = False,
+        region=None,
+        ctx: "AccessInfoCollector.Context",
+        **kwargs,
+    ):
+        self.visit(
+            node.offset,
+            is_conditional=is_conditional,
+            ctx=ctx,
+            is_write=False,
+            region=region,
+            he_grid=he_grid,
+            grid_subset=grid_subset,
+            **kwargs,
+        )
 
-        delete = list()
-        for i, (start, end) in enumerate(zip(self.interval_starts, self.interval_ends)):
-            if key.covers(oir.Interval(start=start, end=end)):
-                delete.append(i)
-
-        for i in reversed(delete):  # so indices keep validity while deleting
-            del self.interval_starts[i]
-            del self.interval_ends[i]
-            del self.values[i]
-
-        if len(self.interval_starts) == 0:
-            self.interval_starts.append(key.start)
-            self.interval_ends.append(key.end)
-            self.values.append(value)
+        if (is_write and not self.collect_write) or (not is_write and not self.collect_read):
             return
 
-        for i, (start, end) in enumerate(zip(self.interval_starts, self.interval_ends)):
-            if oir.Interval(start=start, end=end).covers(key):
-                self._setitem_subset_of_existing(i, key, value)
-                return
-
-        for i, (start, end) in enumerate(zip(self.interval_starts, self.interval_ends)):
-            if (
-                key.intersects(oir.Interval(start=start, end=end))
-                or start == key.end
-                or end == key.start
-            ):
-                self._setitem_partial_overlap(i, key, value)
-                return
-
-        for i, start in enumerate(self.interval_starts):
-            if start > key.start:
-                self.interval_starts.insert(i, key.start)
-                self.interval_ends.insert(i, key.end)
-                self.values.insert(i, value)
-                return
-        self.interval_starts.append(key.start)
-        self.interval_ends.append(key.end)
-        self.values.append(value)
-        return
-
-    def __getitem__(self, key: oir.Interval) -> List[Any]:
-        if not isinstance(key, oir.Interval):
-            raise TypeError("Only OIR intervals supported for keys of IntervalMapping.")
-
-        res = []
-        for start, end, value in zip(self.interval_starts, self.interval_ends, self.values):
-            if key.intersects(oir.Interval(start=start, end=end)):
-                res.append(value)
-        return res
+        access_info = self._make_access_info(
+            node.offset,
+            axes=ctx.axes[node.name],
+            is_conditional=is_conditional,
+            region=region,
+            he_grid=he_grid,
+            grid_subset=grid_subset,
+        )
+        ctx.access_infos[node.name] = access_info.union(
+            ctx.access_infos.get(node.name, access_info)
+        )
 
 
-def assert_sdfg_equal(sdfg1: dace.SDFG, sdfg2: dace.SDFG):
-    from gtc.dace.nodes import (
-        HorizontalExecutionLibraryNode,
-        OIRLibraryNode,
-        VerticalLoopLibraryNode,
+def compute_dcir_access_infos(
+    oir_node,
+    *,
+    oir_decls=None,
+    block_extents=None,
+    collect_read=True,
+    collect_write=True,
+    include_full_domain=False,
+    **kwargs,
+) -> Dict[str, "dcir.FieldAccessInfo"]:
+    if block_extents is None:
+        assert isinstance(oir_node, oir.Stencil)
+        block_extents = compute_horizontal_block_extents(oir_node)
+
+    axes = {
+        name: axes_list_from_flags(decl.dimensions)
+        for name, decl in oir_decls.items()
+        if isinstance(decl, oir.FieldDecl)
+    }
+    ctx = AccessInfoCollector.Context(axes=axes, access_infos=dict())
+    AccessInfoCollector(collect_read=collect_read, collect_write=collect_write).visit(
+        oir_node, block_extents=block_extents, ctx=ctx, **kwargs
     )
+    if include_full_domain:
+        res = dict()
+        for name, access_info in ctx.access_infos.items():
+            res[name] = access_info.union(
+                dcir.FieldAccessInfo(
+                    grid_subset=dcir.GridSubset.full_domain(axes=access_info.axes()),
+                    global_grid_subset=access_info.global_grid_subset,
+                )
+            )
+    else:
+        res = ctx.access_infos
 
-    def edge_match(edge1, edge2):
-        edge1 = next(iter(edge1.values()))
-        edge2 = next(iter(edge2.values()))
-        try:
-            if edge1["src_conn"] is not None:
-                assert edge2["src_conn"] is not None
-                assert edge1["src_conn"] == edge2["src_conn"]
+    return res
+
+
+def make_dace_subset(
+    context_info: "dcir.FieldAccessInfo",
+    access_info: "dcir.FieldAccessInfo",
+    data_dims: Tuple[int, ...],
+) -> dace.subsets.Range:
+    clamped_access_info = access_info
+    clamped_context_info = context_info
+    for axis in access_info.axes():
+        if axis in access_info.variable_offset_axes:
+            clamped_access_info = clamped_access_info.clamp_full_axis(axis)
+        if axis in clamped_context_info.variable_offset_axes:
+            clamped_context_info = clamped_context_info.clamp_full_axis(axis)
+    res_ranges = []
+
+    for axis in clamped_access_info.axes():
+        context_start, _ = clamped_context_info.grid_subset.intervals[axis].to_dace_symbolic()
+        subset_start, subset_end = clamped_access_info.grid_subset.intervals[
+            axis
+        ].to_dace_symbolic()
+        res_ranges.append((subset_start - context_start, subset_end - context_start - 1, 1))
+    res_ranges.extend((0, dim - 1, 1) for dim in data_dims)
+    return dace.subsets.Range(res_ranges)
+
+
+def untile_memlets(
+    memlets: Sequence["dcir.Memlet"], axes: Sequence["dcir.Axis"]
+) -> List["dcir.Memlet"]:
+    res_memlets: List["dcir.Memlet"] = []
+    for memlet in memlets:
+        res_memlets.append(
+            dcir.Memlet(
+                field=memlet.field,
+                access_info=memlet.access_info.untile(axes),
+                connector=memlet.connector,
+                is_read=memlet.is_read,
+                is_write=memlet.is_write,
+            )
+        )
+    return res_memlets
+
+
+def union_node_grid_subsets(nodes: List[eve.Node]):
+    grid_subset = None
+
+    for node in collect_toplevel_iteration_nodes(nodes):
+        if grid_subset is None:
+            grid_subset = node.grid_subset
+        grid_subset = grid_subset.union(node.grid_subset)
+
+    return grid_subset
+
+
+def _union_memlets(*memlets: "dcir.Memlet") -> List["dcir.Memlet"]:
+    res: Dict[str, dcir.Memlet] = {}
+    for memlet in memlets:
+        res[memlet.field] = memlet.union(res.get(memlet.field, memlet))
+    return list(res.values())
+
+
+def union_inout_memlets(nodes: List[eve.Node]):
+    read_memlets: List[dcir.Memlet] = []
+    write_memlets: List[dcir.Memlet] = []
+    for node in collect_toplevel_computation_nodes(nodes):
+        read_memlets = _union_memlets(*read_memlets, *node.read_memlets)
+        write_memlets = _union_memlets(*write_memlets, *node.write_memlets)
+
+    return (read_memlets, write_memlets, _union_memlets(*read_memlets, *write_memlets))
+
+
+def flatten_list(list_or_node: Union[List[Any], eve.Node]):
+    list_or_node = [list_or_node]
+    while not all(isinstance(ref, eve.Node) for ref in list_or_node):
+        list_or_node = [r for li in list_or_node for r in li]
+    return list_or_node
+
+
+def collect_toplevel_computation_nodes(
+    list_or_node: Union[List[Any], eve.Node]
+) -> List["dcir.ComputationNode"]:
+    class ComputationNodeCollector(eve.NodeVisitor):
+        def visit_ComputationNode(self, node: dcir.ComputationNode, *, collection: List):
+            collection.append(node)
+
+    collection: List[dcir.ComputationNode] = []
+    ComputationNodeCollector().visit(list_or_node, collection=collection)
+    return collection
+
+
+def collect_toplevel_iteration_nodes(
+    list_or_node: Union[List[Any], eve.Node]
+) -> List["dcir.IterationNode"]:
+    class IterationNodeCollector(eve.NodeVisitor):
+        def visit_IterationNode(self, node: dcir.IterationNode, *, collection: List):
+            collection.append(node)
+
+    collection: List[dcir.IterationNode] = []
+    IterationNodeCollector().visit(list_or_node, collection=collection)
+    return collection
+
+
+def layout_maker_factory(base_layout: Tuple[int, ...]) -> Callable[[List[bool]], Tuple[int, ...]]:
+    def layout_maker(mask: List[bool]) -> Tuple[int, ...]:
+        ranks = []
+        for m, l in zip(mask, base_layout):
+            if m:
+                ranks.append(l)
+        if len(mask) > 3:
+            if base_layout[2] == 2:
+                ranks.extend(3 + c for c in range(len(mask) - 3))
             else:
-                assert edge2["src_conn"] is None
-            assert edge1["data"] == edge2["data"]
-            assert edge1["data"].data == edge2["data"].data
-        except AssertionError:
-            return False
-        return True
+                ranks.extend(-c for c in range(len(mask) - 3))
 
-    def node_match(n1, n2):
-        n1 = n1["node"]
-        n2 = n2["node"]
-        try:
-            if not isinstance(
-                n1, (dace.nodes.AccessNode, VerticalLoopLibraryNode, HorizontalExecutionLibraryNode)
-            ):
-                raise TypeError
-            if isinstance(n1, dace.nodes.AccessNode):
-                assert isinstance(n2, dace.nodes.AccessNode)
-                assert n1.access == n2.access
-                assert n1.data == n2.data
-            elif isinstance(n1, OIRLibraryNode):
-                assert n1 == n2
-        except AssertionError:
-            return False
-        return True
+        res_layout = [0] * len(ranks)
+        for i, idx in enumerate(np.argsort(ranks)):
+            res_layout[idx] = i
+        return tuple(res_layout)
 
-    assert len(sdfg1.states()) == 1
-    assert len(sdfg2.states()) == 1
-    state1 = sdfg1.states()[0]
-    state2 = sdfg2.states()[0]
-
-    # SDFGState.nx does not contain any node info in the networkx node attrs (but does for edges),
-    # so we add it here manually.
-    nx.set_node_attributes(state1.nx, {n: n for n in state1.nx.nodes}, "node")
-    nx.set_node_attributes(state2.nx, {n: n for n in state2.nx.nodes}, "node")
-
-    assert nx.is_isomorphic(state1.nx, state2.nx, edge_match=edge_match, node_match=node_match)
-
-    for name in sdfg1.arrays.keys():
-        assert isinstance(sdfg1.arrays[name], type(sdfg2.arrays[name]))
-        assert isinstance(sdfg2.arrays[name], type(sdfg1.arrays[name]))
-        assert sdfg1.arrays[name].dtype == sdfg2.arrays[name].dtype
-        assert sdfg1.arrays[name].transient == sdfg2.arrays[name].transient
-        assert sdfg1.arrays[name].shape == sdfg2.arrays[name].shape
+    return layout_maker

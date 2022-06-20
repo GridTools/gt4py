@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
-#
 # GTC Toolchain - GT4Py Project - GridTools Framework
 #
-# Copyright (c) 2014-2021, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -111,3 +109,19 @@ def test_upcast_in_cond_of_TernaryOp():
         false_expr=AN_UNIMPORTANT_LITERAL,
     )
     upcast_and_validate(testee, [Cast(dtype=DataType.FLOAT64, expr=A_INT64_LITERAL)])
+
+
+def test_upcast_integers_division():
+    testee = BinaryOp(
+        op=ArithmeticOperator.DIV,
+        left=LiteralFactory(value="1", dtype=DataType.INT32),
+        right=LiteralFactory(value="2", dtype=DataType.INT32),
+    )
+
+    upcast_and_validate(
+        testee,
+        [
+            Cast(dtype=DataType.FLOAT64, expr=LiteralFactory(value="1", dtype=DataType.INT32)),
+            Cast(dtype=DataType.FLOAT64, expr=LiteralFactory(value="2", dtype=DataType.INT32)),
+        ],
+    )

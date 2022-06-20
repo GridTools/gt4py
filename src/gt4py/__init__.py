@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
-#
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2021, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -34,27 +32,5 @@ __versioninfo__: Optional[Union[LegacyVersion, Version]] = parse(__version__)
 
 del DistributionNotFound, LegacyVersion, Version, get_distribution, parse
 
-
-# Disable isort to avoid circular imports
-# isort: off
-from . import config
-from . import utils
-
-#
-from . import definitions
-from . import gtscript
-
-#
-from . import ir
-from . import analysis
-from . import frontend
-from . import backend
-from . import stencil_object
-from . import loader
-from . import storage
-from . import caching
-
-from .definitions import AccessKind, Boundary, DomainInfo, FieldInfo, ParameterInfo, CartesianSpace
+from . import config, gtscript, storage
 from .stencil_object import StencilObject
-
-# isort: on

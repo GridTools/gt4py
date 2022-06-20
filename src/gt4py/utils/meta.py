@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
-#
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2021, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -14,17 +12,16 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""
-Utilities for runtime: introspection and bytecode.
-
-"""
+"""Utilities for runtime: introspection and bytecode."""
 
 import ast
 import copy
 import inspect
 import operator
+import platform
 import textwrap
-from typing import Union
+
+from packaging import version
 
 from .base import shashed_id
 
@@ -75,7 +72,7 @@ def get_ast(func_or_source_or_ast):
     return ast_root
 
 
-def ast_dump(definition, *, skip_annotations=True, skip_decorators=True):
+def ast_dump(definition, *, skip_annotations: bool = True, skip_decorators: bool = True) -> str:
     def _dump(node: ast.AST, excluded_names):
         if isinstance(node, ast.AST):
             if excluded_names:
@@ -115,6 +112,16 @@ def ast_dump(definition, *, skip_annotations=True, skip_decorators=True):
     dumped_ast = _dump(get_ast(definition), skip_node_names)
 
     return dumped_ast
+
+
+def ast_unparse(ast_node):
+    """Call ast.unparse, but use astunparse for Python prior to 3.9."""
+    if version.parse(platform.python_version()) < version.parse("3.9"):
+        import astunparse
+
+        return astunparse.unparse(ast_node)
+    else:
+        return ast.unparse(ast_node)
 
 
 def ast_shash(ast_node, *, skip_decorators=True):
@@ -213,8 +220,8 @@ class ASTPass:
         return visitor(node, **kwargs)
 
     def generic_visit(self, node, **kwargs):
-        """Called if no explicit visitor function exists for a node."""
-        for field, value in ast.iter_fields(node):
+        """Fallback if no explicit visitor function exists for a node."""
+        for _, value in ast.iter_fields(node):
             if isinstance(value, list):
                 for item in value:
                     if isinstance(item, ast.AST):
@@ -282,7 +289,7 @@ class ASTEvaluator(ASTPass):
         try:
             result = cls(context)(func_or_source_or_ast)
 
-        except (KeyError, ValueError) as e:
+        except (KeyError, ValueError):
             result = default
         return result
 
@@ -544,19 +551,3 @@ class SymbolsNameMapper(ASTTransformPass):
 
 
 map_symbol_names = SymbolsNameMapper.apply
-
-
-# def collect_caller_symbols(collect_globals=True):
-#     symbols = dict()
-#     caller_frame = None
-#     try:
-#         caller_frame = inspect.stack()[2].frame
-#         if collect_globals:
-#             symbols.update(caller_frame.f_globals)
-#         symbols.update(caller_frame.f_locals)
-#     finally:
-#         # Break any possibly created reference cycles with the frame object
-#         del caller_frame
-#
-#     return symbols
-#

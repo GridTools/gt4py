@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
-#
 # Eve Toolchain - GT4Py Project - GridTools Framework
 #
-# Copyright (c) 2014-2021, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -687,11 +685,11 @@ class TemplatedGenerator(NodeVisitor):
                     )
                 except TemplateRenderingError as e:
                     # Raise a new exception with extra information keeping the original cause
+                    e.info["node"] = node
                     raise TemplateRenderingError(
                         f"Error in '{key}' template when rendering node '{node}'.\n"
                         + getattr(e, "message", str(e)),
                         **e.info,
-                        node=node,
                     ) from e.__cause__
 
         elif isinstance(node, (list, tuple, collections.abc.Set)) or (

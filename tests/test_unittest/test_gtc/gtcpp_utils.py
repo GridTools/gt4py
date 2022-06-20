@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
-#
 # GTC Toolchain - GT4Py Project - GridTools Framework
 #
-# Copyright (c) 2014-2021, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -107,6 +105,7 @@ class GTAccessorFactory(factory.Factory):
     id = factory.Sequence(lambda i: i)  # noqa: A003
     intent = gtcpp.Intent.INOUT
     extent = factory.SubFactory(GTExtentFactory)
+    ndim: int = 3
 
 
 class GTParamListFactory(factory.Factory):
@@ -158,6 +157,7 @@ class GTComputationCallFactory(factory.Factory):
         model = gtcpp.GTComputationCall
 
     arguments: List[gtcpp.Arg] = []
+    extra_decls: List[gtcpp.ComputationDecl] = []
     multi_stages = factory.List([factory.SubFactory(GTMultiStageFactory)])
     temporaries = undefined_symbol_list(lambda name: TemporaryFactory(name=name), "multi_stages")
 

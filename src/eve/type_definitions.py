@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
-#
 # Eve Toolchain - GT4Py Project - GridTools Framework
 #
-# Copyright (c) 2014-2021, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -56,13 +54,13 @@ class Enum(enum.Enum):
 
     @classmethod
     def __get_validators__(cls) -> PydanticCallableGenerator:
-        yield cls._strict_type_validator
+        yield cls._value_validator
 
     @classmethod
-    def _strict_type_validator(cls, v: Any) -> Enum:
-        if not isinstance(v, cls):
-            raise TypeError(f"Invalid value type [expected: {cls}, received: {v.__class__}]")
-        return v
+    def _value_validator(cls, v: Any) -> Enum:
+        if isinstance(v, cls):
+            return v
+        return cls(v)  # throws a ValueError if value is not contained in enum
 
 
 class IntEnum(enum.IntEnum):
@@ -70,13 +68,13 @@ class IntEnum(enum.IntEnum):
 
     @classmethod
     def __get_validators__(cls) -> PydanticCallableGenerator:
-        yield cls._strict_type_validator
+        yield cls._value_validator
 
     @classmethod
-    def _strict_type_validator(cls, v: Any) -> IntEnum:
-        if not isinstance(v, cls):
-            raise TypeError(f"Invalid value type [expected: {cls}, received: {v.__class__}]")
-        return v
+    def _value_validator(cls, v: Any) -> IntEnum:
+        if isinstance(v, cls):
+            return v
+        return cls(v)  # throws a ValueError if value is not contained in enum
 
 
 class StrEnum(str, enum.Enum):
@@ -84,13 +82,13 @@ class StrEnum(str, enum.Enum):
 
     @classmethod
     def __get_validators__(cls) -> PydanticCallableGenerator:
-        yield cls._strict_type_validator
+        yield cls._value_validator
 
     @classmethod
-    def _strict_type_validator(cls, v: Any) -> StrEnum:
-        if not isinstance(v, cls):
-            raise TypeError(f"Invalid value type [expected: {cls}, received: {v.__class__}]")
-        return v
+    def _value_validator(cls, v: Any) -> StrEnum:
+        if isinstance(v, cls):
+            return v
+        return cls(v)  # throws a ValueError if value is not contained in enum
 
     def __str__(self) -> str:
         assert isinstance(self.value, str)

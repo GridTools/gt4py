@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
-#
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2021, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -25,7 +23,7 @@ import pytest
 import gt4py.backend as gt_backend
 import gt4py.storage as gt_store
 
-from ..definitions import INTERNAL_BACKENDS
+from ..definitions import ALL_BACKENDS
 from ..reference_cpp_regression import reference_module
 from .utils import id_version  # import fixture used by pytest
 from .utils import generate_test_module
@@ -257,7 +255,7 @@ def run_large_k_interval(backend, id_version, domain):
         )
 
 
-@pytest.mark.parametrize("backend", INTERNAL_BACKENDS)
+@pytest.mark.parametrize("backend", ALL_BACKENDS)
 @pytest.mark.parametrize("function", REGISTRY)
 def test_cpp_regression(backend, id_version, function):
     function(gt_backend.from_name(backend), id_version)

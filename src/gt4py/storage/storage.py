@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
-#
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2021, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -14,7 +12,8 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import Dict
+import itertools
+from typing import Any, Dict, Tuple
 
 import numpy as np
 
@@ -24,12 +23,24 @@ try:
 except ImportError:
     cp = None
 
+try:
+    import dace
+except ImportError:
+    dace = None
+
 from gt4py import backend as gt_backend
+from gtc import utils as gtc_utils
 
 from . import utils as storage_utils
 
 
+def _error_on_invalid_backend(backend):
+    if backend not in gt_backend.REGISTRY:
+        raise RuntimeError(f"Backend '{backend}' is not registered.")
+
+
 def empty(backend, default_origin, shape, dtype, mask=None, *, managed_memory=False):
+    _error_on_invalid_backend(backend)
     if gt_backend.from_name(backend).storage_info["device"] == "gpu":
         if managed_memory:
             storage_t = GPUStorage
@@ -106,6 +117,8 @@ class Storage(np.ndarray):
 
     __array_subok__ = True
 
+    default_origin: Tuple[int, ...]
+
     def __new__(cls, shape, dtype, backend, default_origin, mask=None):
         """
         Parameters
@@ -128,7 +141,7 @@ class Storage(np.ndarray):
 
         mask: list of bools or list of spatial axes
             in a list of bools, ``False`` entries indicate that the corresponding dimension is masked, i.e. the storage
-            has reduced dimension and reading and writing from offsets along this axis acces the same element.
+            has reduced dimension and reading and writing from offsets along this axis access the same element.
             In a list of spatial axes (IJK), a boolean mask will be generated with ``True`` entries for all
             dimensions except for the missing spatial axes names.
         """
@@ -137,8 +150,7 @@ class Storage(np.ndarray):
             default_origin, shape, dtype, mask
         )
 
-        if not backend in gt_backend.REGISTRY:
-            ValueError("Backend must be in {}.".format(gt_backend.REGISTRY))
+        _error_on_invalid_backend(backend)
 
         alignment = gt_backend.from_name(backend).storage_info["alignment"]
         layout_map = gt_backend.from_name(backend).storage_info["layout_map"](mask)
@@ -209,6 +221,15 @@ class Storage(np.ndarray):
                     )
                 self.__dict__ = {**obj.__dict__, **self.__dict__}
                 self.is_stencil_view = False
+                if hasattr(obj, "_new_index"):
+                    index_iter = itertools.chain(
+                        obj._new_index, [slice(None, None)] * (len(obj.mask) - len(obj._new_index))
+                    )
+                    interpolated_mask = gtc_utils.interpolate_mask(
+                        (isinstance(x, slice) for x in index_iter), obj.mask, False
+                    )
+                    self._mask = tuple(x & y for x, y in zip(obj.mask, interpolated_mask))
+                    delattr(obj, "_new_index")
                 if not hasattr(obj, "default_origin"):
                     self.is_stencil_view = True
                 elif self._is_consistent(obj):
@@ -245,6 +266,34 @@ class Storage(np.ndarray):
 
     def device_to_host(self, force=False):
         pass
+
+    if dace is not None:
+
+        def __descriptor__(self) -> "dace.data.Array":
+            storage = (
+                dace.StorageType.GPU_Global
+                if hasattr(self, "__cuda_array_interface__")
+                else dace.StorageType.CPU_Heap
+            )
+            start_offset = (
+                int(np.array([self.default_origin]) @ np.array([self.strides]).T) // self.itemsize
+            )
+            total_size = int(
+                int(np.array([self.shape]) @ np.array([self.strides]).T) // self.itemsize
+            )
+            start_offset = (
+                start_offset % gt_backend.from_name(self.backend).storage_info["alignment"]
+            )
+            descriptor = dace.data.Array(
+                shape=self.shape,
+                strides=[s // self.itemsize for s in self.strides],
+                dtype=dace.typeclass(str(self.dtype)),
+                storage=storage,
+                total_size=total_size,
+                start_offset=start_offset,
+            )
+            descriptor.default_origin = self.default_origin
+            return descriptor
 
     def __iconcat__(self, other):
         raise NotImplementedError("Concatenation of Storages is not supported")
@@ -297,6 +346,7 @@ class GPUStorage(Storage):
 
     def __getitem__(self, item):
         self.device_to_host()
+        self._new_index = gtc_utils.listify(item)
         return super().__getitem__(item)
 
     def __setitem__(self, key, value):
@@ -382,6 +432,10 @@ class CPUStorage(Storage):
         res[...] = self
         return res
 
+    def __getitem__(self, item):
+        self._new_index = gtc_utils.listify(item)
+        return super().__getitem__(item)
+
 
 class ExplicitlySyncedGPUStorage(Storage):
     class SyncState:
@@ -447,6 +501,7 @@ class ExplicitlySyncedGPUStorage(Storage):
     def __getitem__(self, item):
         if self._is_device_modified:
             self.device_to_host()
+        self._new_index = gtc_utils.listify(item)
         return super().__getitem__(item)
 
     @property
@@ -537,7 +592,6 @@ class ExplicitlySyncedGPUStorage(Storage):
         return res
 
     def _finalize_view(self, base):
-
         if self.shape != base.shape or self.strides != base.strides:
             offset = (self.ctypes.data - base.ctypes.data) + (
                 self._device_field.data.ptr - self._device_raw_buffer.data.ptr

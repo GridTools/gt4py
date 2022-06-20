@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
-#
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2021, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -22,7 +20,7 @@ import gt4py.gtscript as gtscript
 import gt4py.storage as gt_storage
 from gt4py.gtscript import Field, K
 
-from ..definitions import INTERNAL_BACKENDS, INTERNAL_CPU_BACKENDS
+from ..definitions import ALL_BACKENDS, CPU_BACKENDS
 
 
 def base_stencil(
@@ -41,9 +39,11 @@ def base_stencil(
 def test_origin_selection():
     stencil = gtscript.stencil(definition=base_stencil, backend="numpy")
 
-    A = gt_storage.ones(backend="gtmc", dtype=np.float64, shape=(3, 3, 3), default_origin=(0, 0, 0))
+    A = gt_storage.ones(
+        backend="gt:cpu_ifirst", dtype=np.float64, shape=(3, 3, 3), default_origin=(0, 0, 0)
+    )
     B = gt_storage.ones(
-        backend="gtx86", dtype=np.float64, shape=(3, 3, 3), default_origin=(2, 2, 2)
+        backend="gt:cpu_kfirst", dtype=np.float64, shape=(3, 3, 3), default_origin=(2, 2, 2)
     )
     C = gt_storage.ones(
         backend="numpy", dtype=np.float32, shape=(3, 3, 3), default_origin=(0, 1, 0)
@@ -58,9 +58,11 @@ def test_origin_selection():
     assert np.sum(np.asarray(B)) == 33
     assert np.sum(np.asarray(C)) == 47
 
-    A = gt_storage.ones(backend="gtmc", dtype=np.float64, shape=(3, 3, 3), default_origin=(0, 0, 0))
+    A = gt_storage.ones(
+        backend="gt:cpu_ifirst", dtype=np.float64, shape=(3, 3, 3), default_origin=(0, 0, 0)
+    )
     B = gt_storage.ones(
-        backend="gtx86", dtype=np.float64, shape=(3, 3, 3), default_origin=(2, 2, 2)
+        backend="gt:cpu_kfirst", dtype=np.float64, shape=(3, 3, 3), default_origin=(2, 2, 2)
     )
     C = gt_storage.ones(
         backend="numpy", dtype=np.float32, shape=(3, 3, 3), default_origin=(0, 1, 0)
@@ -74,9 +76,11 @@ def test_origin_selection():
     assert np.sum(np.asarray(B)) == 33
     assert np.sum(np.asarray(C)) == 47
 
-    A = gt_storage.ones(backend="gtmc", dtype=np.float64, shape=(3, 3, 3), default_origin=(0, 0, 0))
+    A = gt_storage.ones(
+        backend="gt:cpu_ifirst", dtype=np.float64, shape=(3, 3, 3), default_origin=(0, 0, 0)
+    )
     B = gt_storage.ones(
-        backend="gtx86", dtype=np.float64, shape=(3, 3, 3), default_origin=(2, 2, 2)
+        backend="gt:cpu_kfirst", dtype=np.float64, shape=(3, 3, 3), default_origin=(2, 2, 2)
     )
     C = gt_storage.ones(
         backend="numpy", dtype=np.float32, shape=(3, 3, 3), default_origin=(0, 1, 0)
@@ -91,47 +95,14 @@ def test_origin_selection():
     assert np.sum(np.asarray(C)) == 47
 
 
-@pytest.mark.parametrize("backend", INTERNAL_BACKENDS)
-def test_origin_k_fields(backend):
-    @gtscript.stencil(backend=backend, rebuild=True)
-    def k_to_ijk(outp: Field[np.float64], inp: Field[gtscript.K, np.float64]):
-        with computation(PARALLEL), interval(...):
-            outp = inp
-
-    origin = {"outp": (0, 0, 1), "inp": (2,)}
-    domain = (2, 2, 8)
-
-    data = np.arange(10, dtype=np.float64)
-    inp = gt_storage.from_array(
-        data=data,
-        shape=(10,),
-        default_origin=(0,),
-        dtype=np.float64,
-        mask=[False, False, True],
-        backend=backend,
-    )
-    outp = gt_storage.zeros(
-        shape=(2, 2, 10), default_origin=(0, 0, 0), dtype=np.float64, backend=backend
-    )
-
-    k_to_ijk(outp, inp, origin=origin, domain=domain)
-
-    inp.device_to_host()
-    outp.device_to_host()
-    np.testing.assert_allclose(data, np.asarray(inp))
-    np.testing.assert_allclose(
-        np.broadcast_to(data[2:], shape=(2, 2, 8)), np.asarray(outp)[:, :, 1:-1]
-    )
-    np.testing.assert_allclose(0.0, np.asarray(outp)[:, :, 0])
-    np.testing.assert_allclose(0.0, np.asarray(outp)[:, :, -1])
-
-
 def test_domain_selection():
     stencil = gtscript.stencil(definition=base_stencil, backend="numpy")
 
-    A = gt_storage.ones(backend="gtmc", dtype=np.float64, shape=(3, 3, 3), default_origin=(0, 0, 0))
+    A = gt_storage.ones(
+        backend="gt:cpu_ifirst", dtype=np.float64, shape=(3, 3, 3), default_origin=(0, 0, 0)
+    )
     B = gt_storage.ones(
-        backend="gtx86", dtype=np.float64, shape=(3, 3, 3), default_origin=(2, 2, 2)
+        backend="gt:cpu_kfirst", dtype=np.float64, shape=(3, 3, 3), default_origin=(2, 2, 2)
     )
     C = gt_storage.ones(
         backend="numpy", dtype=np.float32, shape=(3, 3, 3), default_origin=(0, 1, 0)
@@ -146,9 +117,11 @@ def test_domain_selection():
     assert np.sum(np.asarray(B)) == 33
     assert np.sum(np.asarray(C)) == 47
 
-    A = gt_storage.ones(backend="gtmc", dtype=np.float64, shape=(3, 3, 3), default_origin=(0, 0, 0))
+    A = gt_storage.ones(
+        backend="gt:cpu_ifirst", dtype=np.float64, shape=(3, 3, 3), default_origin=(0, 0, 0)
+    )
     B = gt_storage.ones(
-        backend="gtx86", dtype=np.float64, shape=(3, 3, 3), default_origin=(2, 2, 2)
+        backend="gt:cpu_kfirst", dtype=np.float64, shape=(3, 3, 3), default_origin=(2, 2, 2)
     )
     C = gt_storage.ones(
         backend="numpy", dtype=np.float32, shape=(3, 3, 3), default_origin=(0, 1, 0)
@@ -187,7 +160,7 @@ def avg_stencil(in_field: Field[np.float64], out_field: Field[np.float64]):  # t
         )
 
 
-@pytest.mark.parametrize("backend", INTERNAL_CPU_BACKENDS)
+@pytest.mark.parametrize("backend", CPU_BACKENDS)
 def test_default_arguments(backend):
     branch_true = gtscript.stencil(
         backend=backend, definition=a_stencil, externals={"BRANCH": True}, rebuild=True
@@ -241,7 +214,7 @@ def test_default_arguments(backend):
         branch_false(arg1, arg2, arg3, par1=2.0, par2=5.0)
 
 
-@pytest.mark.parametrize("backend", INTERNAL_CPU_BACKENDS)
+@pytest.mark.parametrize("backend", CPU_BACKENDS)
 def test_halo_checks(backend):
     stencil = gtscript.stencil(definition=avg_stencil, backend=backend)
 
@@ -371,7 +344,7 @@ def test_ndarray_warning():
     assert len(record) == 0
 
 
-@pytest.mark.parametrize("backend", ["debug", "numpy", "gtx86"])
+@pytest.mark.parametrize("backend", ["numpy", "gt:cpu_kfirst"])
 def test_exec_info(backend):
     """test that proper warnings are raised depending on field type."""
     stencil = gtscript.stencil(definition=avg_stencil, backend=backend)
@@ -398,7 +371,7 @@ def test_exec_info(backend):
     assert all([k + "_start_time" in exec_info for k in timings])
     assert all([k + "_end_time" in exec_info for k in timings])
     assert all([exec_info[k + "_end_time"] > exec_info[k + "_start_time"] for k in timings])
-    if backend.startswith("gt"):
+    if backend.startswith("gt:"):
         assert "run_cpp_start_time" in exec_info
         assert "run_cpp_end_time" in exec_info
         assert exec_info["run_cpp_end_time"] > exec_info["run_cpp_start_time"]
@@ -407,7 +380,7 @@ def test_exec_info(backend):
 class TestAxesMismatch:
     @pytest.fixture
     def sample_stencil(self):
-        @gtscript.stencil(backend="debug")
+        @gtscript.stencil(backend="numpy")
         def _stencil(
             field_out: gtscript.Field[gtscript.IJ, np.float64],
         ):
@@ -432,14 +405,14 @@ class TestAxesMismatch:
                     shape=(3, 3),
                     mask=[True, False, True],
                     dtype=np.float64,
-                    backend="debug",
+                    backend="numpy",
                     default_origin=(0, 0),
                 )
             )
 
 
 class TestDataDimensions:
-    backend = "debug"
+    backend = "numpy"
 
     @pytest.fixture
     def sample_stencil(self):
@@ -468,7 +441,7 @@ class TestDataDimensions:
             )
 
 
-@pytest.mark.parametrize("backend", INTERNAL_BACKENDS)
+@pytest.mark.parametrize("backend", ALL_BACKENDS)
 def test_origin_unchanged(backend):
     @gtscript.stencil(backend=backend)
     def calc_damp(outp: Field[float], inp: Field[K, float]):
