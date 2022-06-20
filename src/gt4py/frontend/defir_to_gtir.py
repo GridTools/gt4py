@@ -97,7 +97,7 @@ class UnVectorisation(IRNodeVisitor):
         return fields_decls[stmt.target.name].data_dims and not stmt.target.data_index
 
     def visit_StencilDefinition(
-        self, node: StencilDefinition, fields_decls: Dict[str, FieldDecl]
+        self, node: StencilDefinition, fields_decls: Dict[str, FieldDecl], **kwargs
     ) -> gtir.Stencil:
         # Vectorization of operations
         for c in node.computations:
@@ -106,7 +106,7 @@ class UnVectorisation(IRNodeVisitor):
                 for stmt in c.body.stmts:
                     if self._is_vector_assignment(stmt, fields_decls):
                         stmt.value = UnRoller.apply(stmt.value, params=fields_decls)
-                        new_stmts.extend(self.visit(stmt, params=fields_decls))
+                        new_stmts.extend(self.visit(stmt, params=fields_decls, **kwargs))
                     else:
                         new_stmts.append(stmt)  # take stmt as is
 
@@ -114,7 +114,7 @@ class UnVectorisation(IRNodeVisitor):
 
         return node
 
-    def visit_Assign(self, node: Assign, params: Dict[str, FieldDecl]) -> gtir.ParAssignStmt:
+    def visit_Assign(self, node: Assign, params: Dict[str, FieldDecl], **kwargs) -> gtir.ParAssignStmt:
         assert isinstance(node.target, FieldRef) or isinstance(node.target, VarRef)
         target_dims = params[node.target.name].data_dims
         if isinstance(target_dims, list):
@@ -148,7 +148,7 @@ class UnRoller(IRNodeVisitor):
     def apply(cls, root, **kwargs):
         return cls().visit(root, **kwargs)
 
-    def visit_FieldRef(self, node: FieldRef, params: Dict[str, FieldDecl]):
+    def visit_FieldRef(self, node: FieldRef, params: Dict[str, FieldDecl], **kwargs):
         name = node.name
         if params[name].data_dims:
             field_list = []
@@ -183,9 +183,9 @@ class UnRoller(IRNodeVisitor):
 
         return field_list
 
-    def visit_UnaryOpExpr(self, node: UnaryOpExpr, params: Dict[str, FieldDecl]):
+    def visit_UnaryOpExpr(self, node: UnaryOpExpr, params: Dict[str, FieldDecl], **kwargs):
         if node.op == UnaryOperator.TRANSPOSED:
-            node = self.visit(node.arg, params=params)
+            node = self.visit(node.arg, params=params, **kwargs)
             assert all(isinstance(row, list) and len(row) == len(node[0]) for row in node)
             # transpose list
             node = [list(x) for x in zip(*node)]
@@ -193,9 +193,9 @@ class UnRoller(IRNodeVisitor):
         else:
             return node
 
-    def visit_BinOpExpr(self, node: BinOpExpr, params: Dict[str, FieldDecl]):
-        lhs_list = self.visit(node.lhs, params=params)
-        rhs_list = self.visit(node.rhs, params=params)
+    def visit_BinOpExpr(self, node: BinOpExpr, params: Dict[str, FieldDecl], **kwargs):
+        lhs_list = self.visit(node.lhs, params=params, **kwargs)
+        rhs_list = self.visit(node.rhs, params=params, **kwargs)
         bin_op_list: List[BinOpExpr] = []
 
         if node.op == BinaryOperator.MATMULT:
