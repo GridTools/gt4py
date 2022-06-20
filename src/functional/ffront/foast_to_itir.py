@@ -14,6 +14,7 @@
 
 import enum
 import itertools
+import sys
 from dataclasses import dataclass, field
 from typing import Callable, Optional, cast
 
@@ -251,7 +252,7 @@ class FieldOperatorLowering(NodeTranslator):
                 im.lambda__("comp", *(param[0] for param in params))(
                     im.call_("if_")(im.greater_("comp", expr), "comp", expr)
                 ),
-                0,
+                -sys.maxsize,
             )
         )(*(param[1] for param in params))
 

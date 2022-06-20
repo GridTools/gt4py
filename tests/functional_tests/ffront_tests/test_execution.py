@@ -318,6 +318,34 @@ def test_maxover_execution(reduction_setup):
     assert np.allclose(ref, rs.out)
 
 
+def test_maxover_negatives(reduction_setup):
+    """Testing max_over functionality for negative values in array."""
+    rs = reduction_setup
+    rs.v2e_table[0][0] = -6
+    rs.v2e_table[1][0] = -10
+    rs.v2e_table[2][0] = -20
+    rs.v2e_table[5][0] = -50
+    Edge = rs.Edge
+    Vertex = rs.Vertex
+    V2EDim = rs.V2EDim
+    V2E = rs.V2E
+
+    @field_operator
+    def maxover_negvals(edge_f: Field[[Edge], "float64"]) -> Field[[Vertex], float64]:
+        return max_over(edge_f(V2E), axis=V2EDim)
+
+    @program(backend="roundtrip")
+    def maxover_negvals_program(
+        edge_f: Field[[Edge], float64], out: Field[[Vertex], float64]
+    ) -> None:
+        maxover_negvals(edge_f, out=out)
+
+    maxover_negvals_program(rs.inp, rs.out, offset_provider=rs.offset_provider)
+
+    ref = np.max(rs.v2e_table, axis=1)
+    assert np.allclose(ref, rs.out)
+
+
 def test_reduction_execution(reduction_setup):
     """Testing a trivial neighbor sum."""
     rs = reduction_setup
