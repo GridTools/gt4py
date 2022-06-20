@@ -179,6 +179,40 @@ def test_origin_offsetting_nofrozen(decorator, dace_stencil, domain, outp_origin
     assert np.sum(np.asarray(outp), axis=(0, 1, 2)) == np.prod(domain) * 7.0
 
 
+@pytest.mark.parametrize("domain", [(0, 2, 3), (3, 3, 3), (1, 1, 1)])
+@pytest.mark.parametrize("outp_origin", [(0, 0, 0), (7, 7, 7), (2, 2, 0)])
+def test_origin_offsetting_nofrozen_default_origin(decorator, dace_stencil, domain, outp_origin):
+    backend = dace_stencil.backend
+    inp = gt_storage.from_array(
+        data=7.0, dtype=np.float64, shape=(10, 10, 10), default_origin=(0, 0, 0), backend=backend
+    )
+    outp = gt_storage.zeros(
+        dtype=np.float64, shape=(10, 10, 10), default_origin=outp_origin, backend=backend
+    )
+
+    inp.host_to_device()
+    outp.host_to_device()
+
+    @dace.program(device=dace.DeviceType.GPU if "gpu" in backend else dace.DeviceType.CPU)
+    def call_stencil_object():
+        dace_stencil(inp=inp, outp=outp, domain=domain)
+
+    call_stencil_object()
+
+    outp.device_to_host(force=True)
+
+    assert np.allclose(inp, 7.0)
+    assert np.allclose(
+        np.asarray(outp)[
+            outp_origin[0] : outp_origin[0] + domain[0],
+            outp_origin[1] : outp_origin[1] + domain[1],
+            outp_origin[2] : outp_origin[2] + domain[2],
+        ],
+        7.0,
+    )
+    assert np.sum(np.asarray(outp), axis=(0, 1, 2)) == np.prod(domain) * 7.0
+
+
 @pytest.mark.parametrize(
     "backend",
     ["dace:cpu", pytest.param("dace:gpu", marks=[pytest.mark.requires_gpu])],

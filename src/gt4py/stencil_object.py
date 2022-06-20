@@ -440,7 +440,6 @@ class StencilObject(abc.ABC):
     ) -> Dict[str, Tuple[int, ...]]:
         origin = StencilObject._make_origin_dict(origin)
         all_origin = origin.get("_all_", None)
-
         # Set an appropriate origin for all fields
         for name, field_info in field_infos.items():
             if field_info.access != AccessKind.NONE:
@@ -461,12 +460,12 @@ class StencilObject(abc.ABC):
                         *((0,) * len(field_info.data_dims)),
                     )
 
-                elif isinstance(field_arg := field_args.get(name), gt_storage.storage.Storage):
+                elif hasattr(field_arg := field_args.get(name), "default_origin"):
+                    assert field_arg is not None  # for mypy
                     origin[name] = field_arg.default_origin
 
                 else:
                     origin[name] = (0,) * field_info.ndim
-
         return origin
 
     def _call_run(

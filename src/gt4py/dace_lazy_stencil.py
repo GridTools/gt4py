@@ -19,6 +19,15 @@ class DaCeLazyStencil(LazyStencil, SDFGConvertible):
             raise ValueError("Trying to build a DaCeLazyStencil for non-dace backend.")
         super().__init__(builder=builder)
 
+    @property
+    def field_info(self) -> Dict[str, Any]:
+        """
+        Return same value as compiled stencil object's `field_info` attribute.
+
+        Does not trigger a build.
+        """
+        return make_args_data_from_gtir(self.builder.gtir_pipeline).field_info
+
     def closure_resolver(
         self,
         constant_args: Dict[str, Any],
