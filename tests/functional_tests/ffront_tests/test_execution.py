@@ -28,6 +28,7 @@ from functional.ffront.fbuiltins import (
     broadcast,
     float64,
     int32,
+    max_over,
     neighbor_sum,
 )
 from functional.iterator.embedded import (
@@ -293,6 +294,28 @@ def reduction_setup():
         offset_provider={"V2E": NeighborTableOffsetProvider(v2e_arr, vertex, edge, 4)},
         v2e_table=v2e_arr,
     )  # type: ignore
+
+
+def test_maxover_execution(reduction_setup):
+    """Testing max_over functionality."""
+    rs = reduction_setup
+    Edge = rs.Edge
+    Vertex = rs.Vertex
+    V2EDim = rs.V2EDim
+    V2E = rs.V2E
+
+    @field_operator
+    def maxover_fieldoperator(edge_f: Field[[Edge], "float64"]) -> Field[[Vertex], float64]:
+        return max_over(edge_f(V2E), axis=V2EDim)
+
+    @program(backend="roundtrip")
+    def maxover_program(edge_f: Field[[Edge], float64], out: Field[[Vertex], float64]) -> None:
+        maxover_fieldoperator(edge_f, out=out)
+
+    maxover_program(rs.inp, rs.out, offset_provider=rs.offset_provider)
+
+    ref = np.max(rs.v2e_table, axis=1)
+    assert np.allclose(ref, rs.out)
 
 
 def test_reduction_execution(reduction_setup):

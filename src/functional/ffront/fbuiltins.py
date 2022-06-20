@@ -58,6 +58,8 @@ neighbor_sum = BuiltInFunction(
     )
 )
 
+max_over = neighbor_sum
+
 broadcast = BuiltInFunction(
     ct.FunctionType(
         args=[
@@ -70,7 +72,7 @@ broadcast = BuiltInFunction(
 )
 
 
-FUN_BUILTIN_NAMES = ["neighbor_sum", "broadcast"]
+FUN_BUILTIN_NAMES = ["neighbor_sum", "broadcast", "max_over"]
 
 
 EXTERNALS_MODULE_NAME = "__externals__"

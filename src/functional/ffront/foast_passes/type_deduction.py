@@ -349,6 +349,9 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             type=return_type,
         )
 
+    def _visit_max_over(self, node: foast.Call, **kwargs) -> foast.Call:
+        return self._visit_neighbor_sum(node, **kwargs)
+
     def _visit_broadcast(self, node: foast.Call, **kwargs) -> foast.Call:
         field_type = cast(ct.FieldType, node.args[0].type)
         broadcast_dims_expr = cast(foast.TupleExpr, node.args[1]).elts

@@ -242,6 +242,19 @@ class FieldOperatorLowering(NodeTranslator):
             )
         )(*(param[1] for param in params))
 
+    def _visit_compare(self, node: foast.Call, **kwargs) -> itir.FunCall:
+        lowering = InsideReductionLowering()
+        expr = lowering.visit(node.args[0], **kwargs)
+        params = list(lowering.lambda_params.items())
+        return im.lift_(
+            im.call_("reduce")(
+                im.lambda__("comp", *(param[0] for param in params))(
+                    im.call_("if_")(im.greater_("comp", expr), "comp", expr)
+                ),
+                0,
+            )
+        )(*(param[1] for param in params))
+
     def visit_Call(self, node: foast.Call, **kwargs) -> itir.FunCall:
         if type_info.type_class(node.func.type) is ct.FieldType:
             return self._visit_shift(node, **kwargs)
@@ -261,6 +274,9 @@ class FieldOperatorLowering(NodeTranslator):
 
     def _visit_neighbor_sum(self, node: foast.Call, **kwargs) -> itir.FunCall:
         return self._visit_reduce(node, **kwargs)
+
+    def _visit_max_over(self, node: foast.Call, **kwargs) -> itir.FunCall:
+        return self._visit_compare(node, **kwargs)
 
     def _visit_type_constr(self, node: foast.Call, **kwargs) -> itir.Literal:
         if isinstance(node.args[0], foast.Constant):
