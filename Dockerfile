@@ -6,7 +6,6 @@ ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get update -qq && apt-get install -qq -y --no-install-recommends \
     strace \
     build-essential \
-    cuda-toolkit-12.2 \
     tar \
     wget \
     curl \
