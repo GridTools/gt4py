@@ -16,7 +16,7 @@ import copy
 import numbers
 from typing import Any, Dict, List, Optional, Tuple, Union, cast
 
-from gt4py.frontend.node_util import IRNodeVisitor, location_to_source_location
+from gt4py.frontend.node_util import IRNodeMapper, IRNodeVisitor, location_to_source_location
 from gt4py.frontend.nodes import (
     ArgumentInfo,
     Assign,
@@ -84,7 +84,7 @@ def _make_literal(v: numbers.Number) -> gtir.Literal:
     return gtir.Literal(dtype=dtype, value=value)
 
 
-class UnVectorisation(IRNodeVisitor):
+class UnVectorisation(IRNodeMapper):
     @classmethod
     def apply(cls, root, **kwargs):
         return cls().visit(root, **kwargs)
@@ -145,7 +145,7 @@ class UnVectorisation(IRNodeVisitor):
         return assign_list
 
 
-class UnRoller(IRNodeVisitor):
+class UnRoller(IRNodeMapper):
     @classmethod
     def apply(cls, root, **kwargs):
         return cls().visit(root, **kwargs)
@@ -233,12 +233,6 @@ class UnRoller(IRNodeVisitor):
                 bin_op_list = node
 
         return bin_op_list
-
-    def visit_VarRef(self, node: VarRef, **kwargs):
-        return node
-
-    def visit_ScalarLiteral(self, node: ScalarLiteral, **kwargs):
-        return node
 
 
 class DefIRToGTIR(IRNodeVisitor):

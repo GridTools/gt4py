@@ -16,11 +16,18 @@ import copy
 import operator
 from typing import Generator, Optional, Type
 
+import boltons.typeutils
+
 import gtc.utils as gtc_utils
 from gt4py import utils as gt_utils
 from gtc import common
 
 from .nodes import Location, Node
+
+
+#: Marker value used to avoid confusion with `None`
+#: (specially in contexts where `None` could be a valid value)
+NOTHING = boltons.typeutils.make_sentinel(name="NOTHING", var_name="NOTHING")
 
 
 def iter_attributes(node: Node):
@@ -67,44 +74,11 @@ class IRNodeVisitor:
             self._visit(value, **kwargs)
 
 
-class IRNodeInspector:
-    def visit(self, node: Node):
-        return self._visit((), None, node)
-
-    def _visit(self, path: tuple, node_name: str, node):
-        visitor = self.generic_visit
-        if isinstance(node, Node):
-            for node_class in node.__class__.__mro__:
-                method_name = "visit_" + node_class.__name__
-                if hasattr(self, method_name):
-                    visitor = getattr(self, method_name)
-                    break
-
-        return visitor(path, node_name, node)
-
-    def generic_visit(self, path: tuple, node_name: str, node: Node):
-        items = []
-        if isinstance(node, (str, bytes, bytearray)):
-            pass
-        elif isinstance(node, collections.abc.Mapping):
-            items = node.items()
-        elif isinstance(node, collections.abc.Iterable):
-            items = enumerate(node)
-        elif isinstance(node, Node):
-            items = iter_attributes(node)
-        else:
-            pass
-
-        for key, value in items:
-            self._visit((*path, node_name), key, value)
-
-
 class IRNodeMapper:
-    def visit(self, node: Node):
-        keep_node, new_node = self._visit((), None, node)
-        return new_node if keep_node else None
+    def visit(self, node: Node, **kwargs):
+        return self._visit(node, **kwargs)
 
-    def _visit(self, path: tuple, node_name: str, node: Node):
+    def _visit(self, node: Node, **kwargs):
         visitor = self.generic_visit
         if isinstance(node, Node):
             for node_class in node.__class__.__mro__:
@@ -113,11 +87,11 @@ class IRNodeMapper:
                     visitor = getattr(self, method_name)
                     break
 
-        return visitor(path, node_name, node)
+        return visitor(node, **kwargs)
 
-    def generic_visit(self, path: tuple, node_name: str, node: Node):
+    def generic_visit(self, node: Node, **kwargs):
         if isinstance(node, (str, bytes, bytearray)):
-            return True, node
+            return node
         elif isinstance(node, collections.abc.Iterable):
             if isinstance(node, collections.abc.Mapping):
                 items = node.items()
@@ -130,42 +104,19 @@ class IRNodeMapper:
             setattr_op = setattr
             delattr_op = delattr
         else:
-            return True, node
+            return node
 
         del_items = []
         for key, old_value in items:
-            keep_item, new_value = self._visit((*path, node_name), key, old_value)
-            if not keep_item:
+            new_value = self._visit(old_value, **kwargs)
+            if new_value == NOTHING:
                 del_items.append(key)
             elif new_value != old_value:
                 setattr_op(node, key, new_value)
         for key in reversed(del_items):  # reversed, so that keys remain valid in sequences
             delattr_op(node, key)
 
-        return True, node
-
-
-class IRNodeDumper(IRNodeMapper):
-    @classmethod
-    def apply(cls, root_node, *, as_json=False):
-        return cls(as_json=as_json)(root_node)
-
-    def __init__(self, as_json: bool):
-        self.as_json = as_json
-
-    def __call__(self, node):
-        result = self.visit(copy.deepcopy(node))
-        if self.as_json:
-            result = gt_utils.jsonify(result)
-        return result
-
-    def visit_Node(self, path: tuple, node_name: str, node: Node):
-        object_name = node.__class__.__name__.split(".")[-1]
-        keep_node, new_node = self.generic_visit(path, node_name, node)
-        return keep_node, {object_name: new_node.as_dict()}
-
-
-dump_ir = IRNodeDumper.apply
+        return node
 
 
 def iter_nodes_of_type(root_node: Node, node_type: Type) -> Generator[Node, None, None]:
