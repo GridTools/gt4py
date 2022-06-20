@@ -1,9 +1,11 @@
 import numpy as np
 
-from functional.iterator.backends import roundtrip
+from functional.fencil_processors import roundtrip
 from functional.iterator.builtins import *
 from functional.iterator.embedded import np_as_located_field
 from functional.iterator.runtime import *
+
+from .conftest import run_processor
 
 
 IDim = CartesianAxis("IDim")

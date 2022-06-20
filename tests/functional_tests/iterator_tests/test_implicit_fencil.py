@@ -5,6 +5,8 @@ from functional.iterator.builtins import *
 from functional.iterator.embedded import np_as_located_field
 from functional.iterator.runtime import CartesianAxis, fundef
 
+from .conftest import run_processor
+
 
 I = CartesianAxis("I")
 
@@ -35,7 +37,7 @@ def test_single_argument(backend, dom):
     inp = a_field()
     out = out_field()
 
-    copy_stencil[dom](inp, out=out, offset_provider={}, backend=backend)
+    run_processor(copy_stencil[dom], backend, inp, out=out, offset_provider={})
     if validate:
         assert np.allclose(inp, out)
 
@@ -51,7 +53,7 @@ def test_2_arguments(backend, dom):
     inp1 = a_field()
     out = out_field()
 
-    fun[dom](inp0, inp1, out=out, offset_provider={}, backend=backend)
+    run_processor(fun[dom], backend, inp0, inp1, out=out, offset_provider={})
 
     if validate:
         assert np.allclose(inp0.array() + inp1.array(), out)
@@ -63,7 +65,7 @@ def test_lambda_domain(backend):
     out = out_field()
 
     dom = lambda: domain(named_range(I, 0, 10))
-    copy_stencil[dom](inp, out=out, offset_provider={}, backend=backend)
+    run_processor(copy_stencil[dom], backend, inp, out=out, offset_provider={})
 
     if validate:
         assert np.allclose(inp, out)

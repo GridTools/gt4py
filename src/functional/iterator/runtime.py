@@ -1,7 +1,9 @@
+import types
 from dataclasses import dataclass
 from typing import Callable, Optional, Union
 
 from functional import common
+from functional.fencil_processors.processor_interface import execute_fencil, format_fencil
 from functional.iterator import builtins
 from functional.iterator.builtins import BackendNotSelectedError, builtin_dispatch
 
@@ -25,6 +27,42 @@ CartesianAxis = common.Dimension
 # dependency inversion, register fendef for embedded execution or for tracing/parsing here
 fendef_embedded: Optional[Callable] = None
 fendef_codegen: Optional[Callable] = None
+fendef_codegen_execute: Optional[Callable] = None
+
+
+class FendefDispatcher:
+    def __init__(self, function: types.FunctionType, executor_kwargs: dict):
+        self.function = function
+        self.out_as_kwarg_pos = executor_kwargs.pop("out_as_kwarg_pos", None)
+        self.executor_kwargs = executor_kwargs
+
+    def itir(self, *args, **kwargs):
+        kwargs = self.executor_kwargs | kwargs
+        return fendef_codegen(self.function, *args, **kwargs)
+
+    def __call__(self, *args, backend=None, **kwargs):
+        kwargs = self.executor_kwargs | kwargs
+        if self.out_as_kwarg_pos is not None and "out" in kwargs:
+            args_list = list(args)
+            args_list.insert(self.out_as_kwarg_pos, kwargs.pop("out"))
+            args = tuple(args_list)
+
+        if backend is not None:
+            if fendef_codegen is None:
+                raise RuntimeError("Backend execution is not registered")
+            execute_fencil(self.itir(*args, **kwargs), *args, backend=backend, **kwargs)
+        else:
+            if fendef_embedded is None:
+                raise RuntimeError("Embedded execution is not registered")
+            fendef_embedded(self.function, *args, **kwargs)
+
+    def string_format(self, *args, formatter=None, **kwargs) -> str:
+        kwargs = self.executor_kwargs | kwargs
+        if self.out_as_kwarg_pos is not None and "out" in kwargs:
+            args_list = list(args)
+            args_list.insert(self.out_as_kwarg_pos, kwargs.pop("out"))
+            args = tuple(args)
+        return format_fencil(self.itir(*args, **kwargs), *args, formatter=formatter, **kwargs)
 
 
 def fendef(*dec_args, **dec_kwargs):
@@ -36,19 +74,7 @@ def fendef(*dec_args, **dec_kwargs):
     """
 
     def wrapper(fun):
-        def impl(*args, **kwargs):
-            kwargs = {**kwargs, **dec_kwargs}
-
-            if "backend" in kwargs and kwargs["backend"] is not None:
-                if fendef_codegen is None:
-                    raise RuntimeError("Backend execution is not registered")
-                fendef_codegen(fun, *args, **kwargs)
-            else:
-                if fendef_embedded is None:
-                    raise RuntimeError("Embedded execution is not registered")
-                fendef_embedded(fun, *args, **kwargs)
-
-        return impl
+        return FendefDispatcher(function=fun, executor_kwargs=dec_kwargs)
 
     if len(dec_args) == 1 and len(dec_kwargs) == 0 and callable(dec_args[0]):
         return wrapper(dec_args[0])
@@ -69,29 +95,26 @@ class FundefDispatcher:
         self.__name__ = fun.__name__
 
     def __getitem__(self, domain):
-        def implicit_fencil(*args, out, **kwargs):
-            @fendef
-            def impl(out, *inps):
-                dom = domain
-                if isinstance(dom, Callable):
-                    # if domain is expressed as calls to builtin `domain()` we need to pass it lazily
-                    # as dispatching needs to happen inside of the fencil
-                    dom = dom()
-                if isinstance(dom, dict):
-                    # if passed as a dict, we need to convert back to builtins for interpretation by the backends
-                    dom = builtins.domain(
-                        *tuple(
-                            map(
-                                lambda x: builtins.named_range(x[0], x[1].start, x[1].stop),
-                                dom.items(),
-                            )
+        @fendef(out_as_kwarg_pos=0)
+        def impl(out, *inps):
+            dom = domain
+            if isinstance(dom, Callable):
+                # if domain is expressed as calls to builtin `domain()` we need to pass it lazily
+                # as dispatching needs to happen inside of the fencil
+                dom = dom()
+            if isinstance(dom, dict):
+                # if passed as a dict, we need to convert back to builtins for interpretation by the backends
+                dom = builtins.domain(
+                    *tuple(
+                        map(
+                            lambda x: builtins.named_range(x[0], x[1].start, x[1].stop),
+                            dom.items(),
                         )
                     )
-                closure(dom, self, out, [*inps])
+                )
+            closure(dom, self, out, [*inps])
 
-            impl(out, *args, **kwargs)
-
-        return implicit_fencil
+        return impl
 
     def __call__(self, *args):
         if type(self)._hook:

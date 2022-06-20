@@ -4,6 +4,7 @@ from functional.iterator.builtins import *
 from functional.iterator.embedded import np_as_located_field
 from functional.iterator.runtime import *
 
+from .conftest import run_processor
 from .hdiff_reference import hdiff_reference
 
 
@@ -63,7 +64,7 @@ def test_hdiff(hdiff_reference, backend, use_tmps):
     coeff_s = np_as_located_field(IDim, JDim)(coeff[:, :, 0])
     out_s = np_as_located_field(IDim, JDim)(np.zeros_like(coeff[:, :, 0]))
 
-    hdiff(inp_s, coeff_s, out_s, shape[0], shape[1], backend=backend, use_tmps=use_tmps)
+    run_processor(hdiff, backend, inp_s, coeff_s, out_s, shape[0], shape[1], use_tmps=use_tmps)
 
     if validate:
         assert np.allclose(out[:, :, 0], out_s)

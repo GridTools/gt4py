@@ -11,6 +11,7 @@ from functional.iterator.embedded import (
 )
 from functional.iterator.runtime import CartesianAxis, closure, fendef, fundef, offset
 
+from .conftest import run_processor
 from .test_hdiff import I
 
 
@@ -33,7 +34,7 @@ def asfield(*arrays):
     return res
 
 
-def fencil(builtin, out, *inps, backend):
+def fencil(builtin, out, *inps, processor):
     if len(inps) == 1:
 
         @fundef
@@ -67,7 +68,7 @@ def fencil(builtin, out, *inps, backend):
     else:
         raise AssertionError("Add overload")
 
-    return fenimpl({IDim: range(out.shape[0])}, *inps, out, backend=backend)
+    return run_processor(fenimpl, processor, {IDim: range(out.shape[0])}, *inps, out)
 
 
 @pytest.mark.parametrize(
@@ -102,7 +103,7 @@ def test_arithmetic_and_logical_builtins(backend, builtin, inputs, expected):
     inps = asfield(*asarray(*inputs))
     out = asfield((np.zeros_like(*asarray(expected))))[0]
 
-    fencil(builtin, out, *inps, backend=backend)
+    fencil(builtin, out, *inps, processor=backend)
 
     if validate:
         assert np.allclose(np.asarray(out), expected)
@@ -136,16 +137,24 @@ def test_can_deref(backend, stencil):
     out = np_as_located_field(Node)(np.asarray([0]))
 
     no_neighbor_tbl = NeighborTableOffsetProvider(np.array([[None]]), Node, Node, 1)
-    stencil[{Node: range(1)}](
-        inp, out=out, offset_provider={"Neighbor": no_neighbor_tbl}, backend=backend
+    run_processor(
+        stencil[{Node: range(1)}],
+        backend,
+        inp,
+        out=out,
+        offset_provider={"Neighbor": no_neighbor_tbl},
     )
 
     if validate:
         assert np.allclose(np.asarray(out), -1.0)
 
     a_neighbor_tbl = NeighborTableOffsetProvider(np.array([[0]]), Node, Node, 1)
-    stencil[{Node: range(1)}](
-        inp, out=out, offset_provider={"Neighbor": a_neighbor_tbl}, backend=backend
+    run_processor(
+        stencil[{Node: range(1)}],
+        backend,
+        inp,
+        out=out,
+        offset_provider={"Neighbor": a_neighbor_tbl},
     )
 
     if validate:

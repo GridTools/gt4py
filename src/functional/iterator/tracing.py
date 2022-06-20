@@ -3,7 +3,6 @@ from typing import List
 
 from eve import Node
 from functional import iterator
-from functional.iterator.backend_executor import execute_fencil
 from functional.iterator.ir import (
     AxisLiteral,
     Expr,
@@ -351,9 +350,8 @@ def trace(fun, args):
         )
 
 
-def fendef_tracing(fun, *args, **kwargs):
-    fencil = trace(fun, args=args)
-    execute_fencil(fencil, *args, **kwargs)
+def fendef_tracing(fun, *args, **kwargs) -> FencilDefinition:
+    return trace(fun, args=args)
 
 
 iterator.runtime.fendef_codegen = fendef_tracing

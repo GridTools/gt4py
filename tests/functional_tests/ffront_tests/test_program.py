@@ -22,6 +22,7 @@ import pytest
 import eve
 from eve.pattern_matching import ObjectPattern as P
 from functional.common import Field, GTTypeError
+from functional.fencil_processors import roundtrip
 from functional.ffront import common_types, program_ast as past
 from functional.ffront.decorator import field_operator, program
 from functional.ffront.fbuiltins import Dimension, FieldOffset
@@ -29,7 +30,6 @@ from functional.ffront.func_to_past import ProgramParser
 from functional.ffront.past_passes.type_deduction import ProgramTypeError
 from functional.ffront.past_to_itir import ProgramLowering
 from functional.iterator import ir as itir
-from functional.iterator.backends import roundtrip
 from functional.iterator.embedded import np_as_located_field
 
 

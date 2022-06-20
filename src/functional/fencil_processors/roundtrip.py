@@ -7,6 +7,7 @@ from eve import codegen
 from eve.codegen import FormatTemplate as as_fmt, MakoTemplate as as_mako
 from eve.concepts import Node
 from functional import iterator
+from functional.fencil_processors.processor_interface import fencil_executor
 from functional.iterator.ir import AxisLiteral, FencilDefinition, OffsetLiteral
 from functional.iterator.transforms import apply_common_transforms
 
@@ -75,6 +76,7 @@ class WrapperGenerator(EmbeddedDSL):
 _BACKEND_NAME = "roundtrip"
 
 
+@fencil_executor
 def executor(ir: Node, *args, **kwargs):
     debug = "debug" in kwargs and kwargs["debug"] is True
     use_tmps = "use_tmps" in kwargs and kwargs["use_tmps"] is True

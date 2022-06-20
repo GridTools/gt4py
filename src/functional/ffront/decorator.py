@@ -28,9 +28,10 @@ import typing
 import warnings
 from typing import Callable
 
-from eve.extended_typing import Any, Optional, Protocol
+from eve.extended_typing import Any, Optional
 from eve.utils import UIDs
 from functional.common import GTTypeError
+from functional.fencil_processors import roundtrip
 from functional.ffront import (
     common_types as ct,
     field_operator_ast as foast,
@@ -46,7 +47,6 @@ from functional.ffront.past_to_itir import ProgramLowering
 from functional.ffront.source_utils import CapturedVars
 from functional.iterator import ir as itir
 from functional.iterator.backend_executor import execute_fencil
-from functional.iterator.backends import roundtrip
 from functional.iterator.embedded import constant_field
 
 
@@ -87,7 +87,7 @@ def _collect_capture_vars(captured_vars: CapturedVars) -> CapturedVars:
 
 
 @typing.runtime_checkable
-class GTCallable(Protocol):
+class GTCallable(typing.Protocol):
     """
     Typing Protocol (abstract base class) defining the interface for subroutines.
 

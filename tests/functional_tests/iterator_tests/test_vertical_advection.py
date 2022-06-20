@@ -1,10 +1,12 @@
 import numpy as np
 import pytest
 
-from functional.iterator.backends.gtfn import gtfn_backend
+from functional.fencil_processors import gtfn
 from functional.iterator.builtins import *
 from functional.iterator.embedded import np_as_located_field
 from functional.iterator.runtime import *
+
+from .conftest import run_processor
 
 
 @fundef
@@ -70,7 +72,7 @@ def test_tridiag(tridiag_reference, backend, use_tmps):
     if use_tmps:
         pytest.xfail("use_tmps currently not supported for scans")
     backend, validate = backend
-    if backend == gtfn_backend.print_sourcecode:
+    if backend == gtfn.format_sourcecode:
         pytest.xfail("gtfn does not yet support scans")
     a, b, c, d, x = tridiag_reference
     shape = a.shape
@@ -81,7 +83,9 @@ def test_tridiag(tridiag_reference, backend, use_tmps):
     d_s = as_3d_field(d)
     x_s = as_3d_field(np.zeros_like(x))
 
-    fen_solve_tridiag(
+    run_processor(
+        fen_solve_tridiag,
+        backend,
         shape[0],
         shape[1],
         shape[2],
@@ -92,7 +96,6 @@ def test_tridiag(tridiag_reference, backend, use_tmps):
         x_s,
         offset_provider={},
         column_axis=KDim,
-        backend=backend,
         use_tmps=use_tmps,
     )
 

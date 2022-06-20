@@ -20,6 +20,7 @@ from typing import TypeVar
 import numpy as np
 import pytest
 
+from functional.fencil_processors import roundtrip
 from functional.ffront.decorator import field_operator, program
 from functional.ffront.fbuiltins import (
     Dimension,
@@ -30,7 +31,6 @@ from functional.ffront.fbuiltins import (
     int32,
     neighbor_sum,
 )
-from functional.iterator.backends import roundtrip
 from functional.iterator.embedded import (
     NeighborTableOffsetProvider,
     index_field,
@@ -46,7 +46,7 @@ def debug_itir(tree):
     from devtools import debug
 
     from eve.codegen import format_python_source
-    from functional.iterator.backends.roundtrip import EmbeddedDSL
+    from functional.fencil_processors import EmbeddedDSL
 
     debug(format_python_source(EmbeddedDSL.apply(tree)))
 

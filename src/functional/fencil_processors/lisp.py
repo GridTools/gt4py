@@ -1,6 +1,7 @@
 from typing import Any
 
 from eve.codegen import FormatTemplate as as_fmt, TemplatedGenerator
+from functional.fencil_processors.processor_interface import fencil_formatter
 from functional.iterator import ir as itir
 from functional.iterator.transforms import apply_common_transforms
 
@@ -55,5 +56,6 @@ class ToLispLike(TemplatedGenerator):
             return generated_code
 
 
-def print_sourcecode(fencil: itir.FunctionDefinition, *args, **kwargs) -> None:
-    print(ToLispLike.apply(fencil, **kwargs))
+@fencil_formatter
+def format_lisp(fencil: itir.FunctionDefinition, *args, **kwargs) -> str:
+    return ToLispLike.apply(fencil, **kwargs)
