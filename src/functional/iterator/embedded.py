@@ -380,7 +380,6 @@ def make_in_iterator(inp, pos, offset_provider, *, column_axis):
             # we just use the name of the axis to match the offset literal for now
             sparse_dimensions.append(axis)
 
-    assert len(sparse_dimensions) <= 1  # TODO multiple is not a current use case
     new_pos = pos.copy()
     for axis in sparse_dimensions:
         new_pos[axis] = None

@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, cast
 
 import eve
 from eve.concepts import SymbolName
@@ -63,7 +63,10 @@ class GTFN_lowering(eve.NodeTranslator):
             and isinstance(node.args[0], itir.FunCall)
             and isinstance(node.args[0].fun, itir.FunCall)
             and node.args[0].fun.fun == itir.SymRef(id="shift")
-            and bool(len(node.args[0].fun.args) % 2)
+            and isinstance(node.args[0].fun.args[0], itir.OffsetLiteral)  # just for type checking
+            and isinstance(
+                node.args[0].fun.args[0].value, int
+            )  # first offset is an int (not a tag)
         )
 
     def _sparse_deref_shift_to_tuple_get(self, node: itir.FunCall) -> Expr:
@@ -71,16 +74,22 @@ class GTFN_lowering(eve.NodeTranslator):
         # TODO: remove once ‘real’ sparse field handling is available
         assert isinstance(node.args[0], itir.FunCall)
         assert isinstance(node.args[0].fun, itir.FunCall)
-        offsets = node.args[0].fun.args
+        offsets = cast(list[OffsetLiteral], node.args[0].fun.args)
         deref_arg = node.args[0].args[0]
-        if len(offsets) > 1:
+        first_tag_offset_position = next(
+            (i for i, o in enumerate(offsets) if isinstance(o.value, str)), len(offsets)
+        )
+        if first_tag_offset_position > 0 and first_tag_offset_position < len(offsets):
             deref_arg = itir.FunCall(
-                fun=itir.FunCall(fun=itir.SymRef(id="shift"), args=offsets[1:]),
+                fun=itir.FunCall(
+                    fun=itir.SymRef(id="shift"), args=offsets[first_tag_offset_position:]
+                ),
                 args=[deref_arg],
             )
-        derefed = itir.FunCall(fun=itir.SymRef(id="deref"), args=[deref_arg])
-        sparse_access = itir.FunCall(fun=itir.SymRef(id="tuple_get"), args=[offsets[0], derefed])
-        return self.visit(sparse_access)
+        access = itir.FunCall(fun=itir.SymRef(id="deref"), args=[deref_arg])
+        for offset in offsets[:first_tag_offset_position]:
+            access = itir.FunCall(fun=itir.SymRef(id="tuple_get"), args=[offset, access])
+        return self.visit(access)
 
     def visit_FunCall(self, node: itir.FunCall, **kwargs: Any) -> Expr:
         if isinstance(node.fun, itir.SymRef):

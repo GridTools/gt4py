@@ -3,6 +3,7 @@ from functional.iterator.transforms.inline_fundefs import InlineFundefs, PruneUn
 from functional.iterator.transforms.inline_lambdas import InlineLambdas
 from functional.iterator.transforms.inline_lifts import InlineLifts
 from functional.iterator.transforms.normalize_shifts import NormalizeShifts
+from functional.iterator.transforms.normalize_sparse_shifts import NormalizeSparseShifts
 from functional.iterator.transforms.unroll_reduce import UnrollReduce
 
 
@@ -21,6 +22,7 @@ def apply_common_transforms(
         ir = InlineLifts().visit(ir)
     ir = InlineLambdas().visit(ir)
     ir = NormalizeShifts().visit(ir)
+    ir = NormalizeSparseShifts().visit(ir)
     if unroll_reduce:
         for _ in range(10):
             unrolled = UnrollReduce().visit(ir, offset_provider=offset_provider)
