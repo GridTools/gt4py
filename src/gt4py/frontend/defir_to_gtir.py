@@ -193,7 +193,7 @@ class UnRoller(IRNodeMapper):
             node = [list(x) for x in zip(*node)]
             return node
         else:
-            return node
+            return self.generic_visit(node, **kwargs)
 
     def visit_BinOpExpr(self, node: BinOpExpr, params: Dict[str, FieldDecl], **kwargs):
         lhs_list = self.visit(node.lhs, params=params, **kwargs)
@@ -220,7 +220,7 @@ class UnRoller(IRNodeMapper):
                     for lhs, rhs in zip(lhs_list, rhs_list):
                         bin_op_list.append(BinOpExpr(op=node.op, lhs=lhs, rhs=rhs, loc=node.loc))
             # scalar and vector
-            elif isinstance(rhs_list, list) and isinstance(lhs_list, Expr):
+            elif isinstance(lhs_list, Expr) and isinstance(rhs_list, list):
                 lhs = lhs_list
                 for rhs in rhs_list:
                     bin_op_list.append(BinOpExpr(op=node.op, lhs=lhs, rhs=rhs, loc=node.loc))
@@ -228,9 +228,10 @@ class UnRoller(IRNodeMapper):
                 rhs = rhs_list
                 for lhs in lhs_list:
                     bin_op_list.append(BinOpExpr(op=node.op, lhs=lhs, rhs=rhs, loc=node.loc))
+            # scalar and scalar fallback
             else:
                 # TODO: check if safe
-                bin_op_list = node
+                bin_op_list = self.generic_visit(node, **kwargs)
 
         return bin_op_list
 
