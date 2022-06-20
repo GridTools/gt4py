@@ -86,6 +86,29 @@ def is_arithmetic(symbol_type: ct.SymbolType) -> bool:
     return False
 
 
+def is_rational(symbol_type: ct.SymbolType) -> bool:
+    """
+    Check if ``symbol_type`` is a number type that supports fractions.
+
+    Examples:
+    ---------
+    >>> is_rational(ct.ScalarType(kind=ct.ScalarKind.FLOAT64))
+    True
+    >>> is_rational(ct.ScalarType(kind=ct.ScalarKind.INT32))
+    False
+    >>> is_rational(ct.ScalarType(kind=ct.ScalarKind.BOOL))
+    False
+    >>> is_rational(ct.FieldType(dims=[], dtype=ct.ScalarType(kind=ct.ScalarKind.FLOAT32)))
+    True
+    """
+    if extract_dtype(symbol_type).kind in [
+        ct.ScalarKind.FLOAT32,
+        ct.ScalarKind.FLOAT64,
+    ]:
+        return True
+    return False
+
+
 def is_logical(symbol_type: ct.SymbolType) -> bool:
     return extract_dtype(symbol_type).kind is ct.ScalarKind.BOOL
 

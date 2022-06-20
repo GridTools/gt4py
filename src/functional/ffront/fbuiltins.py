@@ -50,7 +50,8 @@ neighbor_sum = BuiltInFunction(
 )
 
 
-_single_arg_math_built_in = BuiltInFunction(
+# FIXME(ben): We should also support `ct.ScalarType` as argument/return
+_single_arg_math_generic_built_in_function_type = BuiltInFunction(
     ct.FunctionType(
         args=[ct.DeferredSymbolType(constraint=ct.FieldType)],
         kwargs={},
@@ -58,33 +59,76 @@ _single_arg_math_built_in = BuiltInFunction(
     )
 )
 
-abs = _single_arg_math_built_in
-sin = _single_arg_math_built_in
-cos = _single_arg_math_built_in
-tan = _single_arg_math_built_in
-arcsin = _single_arg_math_built_in
-arccos = _single_arg_math_built_in
-arctan = _single_arg_math_built_in
-sinh = _single_arg_math_built_in
-cosh = _single_arg_math_built_in
-tanh = _single_arg_math_built_in
-arcsinh = _single_arg_math_built_in
-arccosh = _single_arg_math_built_in
-arctanh = _single_arg_math_built_in
-sqrt = _single_arg_math_built_in
-exp = _single_arg_math_built_in
-log = _single_arg_math_built_in
-gamma = _single_arg_math_built_in
-cbrt = _single_arg_math_built_in
-isfinite = _single_arg_math_built_in
-isinf = _single_arg_math_built_in
-isnan = _single_arg_math_built_in
-floor = _single_arg_math_built_in
-ceil = _single_arg_math_built_in
-trunc = _single_arg_math_built_in
+abs = _single_arg_math_generic_built_in_function_type
+sin = _single_arg_math_generic_built_in_function_type
+cos = _single_arg_math_generic_built_in_function_type
+tan = _single_arg_math_generic_built_in_function_type
+arcsin = _single_arg_math_generic_built_in_function_type
+arccos = _single_arg_math_generic_built_in_function_type
+arctan = _single_arg_math_generic_built_in_function_type
+sinh = _single_arg_math_generic_built_in_function_type
+cosh = _single_arg_math_generic_built_in_function_type
+tanh = _single_arg_math_generic_built_in_function_type
+arcsinh = _single_arg_math_generic_built_in_function_type
+arccosh = _single_arg_math_generic_built_in_function_type
+arctanh = _single_arg_math_generic_built_in_function_type
+sqrt = _single_arg_math_generic_built_in_function_type
+exp = _single_arg_math_generic_built_in_function_type
+log = _single_arg_math_generic_built_in_function_type
+gamma = _single_arg_math_generic_built_in_function_type
+cbrt = _single_arg_math_generic_built_in_function_type
+floor = _single_arg_math_generic_built_in_function_type
+ceil = _single_arg_math_generic_built_in_function_type
+trunc = _single_arg_math_generic_built_in_function_type
 
-del _single_arg_math_built_in
-SINGLE_ARG_MATH_BUILT_INS = ["abs", "sin", "cos", "tan", "arcsin", "arccos", "arctan", "sinh", "cosh", "tanh", "arcsinh", "arccosh", "arctanh", "sqrt", "exp", "log", "gamma", "cbrt", "isfinite", "isinf", "isnan", "floor", "ceil", "trunc"]
+del _single_arg_math_generic_built_in_function_type
+
+# have signature `<numeric type> -> <numeric type>`
+_SINGLE_ARG_MATH_NUMERIC_BUILT_IN_NAMES = [
+    'sin',
+    'cos',
+    'tan',
+    'arcsin',
+    'arccos',
+    'arctan',
+    'sinh',
+    'cosh',
+    'tanh',
+    'arcsinh',
+    'arccosh',
+    'arctanh',
+    'sqrt',
+    'exp',
+    'log',
+    'gamma',
+    'cbrt',
+    'floor',
+    'ceil',
+    'trunc'
+]
+
+# have signature `<numeric type> -> bool`
+_SINGLE_ARG_MATH_BOOL_BUILT_IN_NAMES = ['isfinite', 'isinf', 'isnan']
+
+_single_arg_math_bool_built_in_function_type = BuiltInFunction(
+    ct.FunctionType(
+        args=[ct.DeferredSymbolType(constraint=ct.FieldType)],
+        kwargs={},
+        returns=ct.DeferredSymbolType(constraint=ct.FieldType(..., dtype=ct.ScalarKind.BOOL)),
+    )
+)
+
+isfinite = _single_arg_math_bool_built_in_function_type
+isinf = _single_arg_math_bool_built_in_function_type
+isnan = _single_arg_math_bool_built_in_function_type
+
+del _single_arg_math_bool_built_in_function_type
+
+
+# have special signatures
+_SINGLE_ARG_MATH_SPECIAL_BUILT_IN_NAMES = ['abs']
+
+SINGLE_ARG_MATH_BUILT_IN_NAMES = _SINGLE_ARG_MATH_NUMERIC_BUILT_IN_NAMES + _SINGLE_ARG_MATH_BOOL_BUILT_IN_NAMES + _SINGLE_ARG_MATH_SPECIAL_BUILT_IN_NAMES
 
 _double_arg_math_built_in = BuiltInFunction(
     ct.FunctionType(
@@ -99,9 +143,10 @@ max = _double_arg_math_built_in
 mod = _double_arg_math_built_in
 
 del _double_arg_math_built_in
-DOUBLE_ARG_MATH_BUILT_IN = ["min", "max", "mod"]
+DOUBLE_ARG_MATH_BUILT_IN_NAMES = ["min", "max", "mod"]
 
-FUN_BUILTIN_NAMES = ["neighbor_sum"] + SINGLE_ARG_MATH_BUILT_INS + DOUBLE_ARG_MATH_BUILT_IN
+MATH_BUILT_IN_NAMES = SINGLE_ARG_MATH_BUILT_IN_NAMES + DOUBLE_ARG_MATH_BUILT_IN_NAMES
+FUN_BUILTIN_NAMES = ["neighbor_sum"] + MATH_BUILT_IN_NAMES
 
 EXTERNALS_MODULE_NAME = "__externals__"
 MODULE_BUILTIN_NAMES = [EXTERNALS_MODULE_NAME]

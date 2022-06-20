@@ -12,6 +12,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 import copy
+import dataclasses
 from itertools import permutations
 from typing import Optional, cast
 
@@ -19,7 +20,7 @@ import functional.ffront.field_operator_ast as foast
 from eve import NodeTranslator, traits
 from functional.common import GTSyntaxError, GTTypeError
 from functional.ffront import common_types as ct, type_info
-from functional.ffront.fbuiltins import FUN_BUILTIN_NAMES
+from functional.ffront import fbuiltins
 
 
 def boolified_type(symbol_type: ct.SymbolType) -> ct.ScalarType | ct.FieldType:
@@ -285,13 +286,17 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                 func=new_func, args=new_args, kwargs={}, location=node.location, type=new_type
             )
         elif isinstance(new_func.type, ct.FunctionType):
+            assert hasattr(node.func, "id")
+
             self._ensure_signature_valid(node, **kwargs)
             return_type = new_func.type.returns
 
             # todo(tehrengruber): solve in a more generic way, e.g. using
             #  parametric polymorphism.
             # resolve polymorphic builtins
-            if not type_info.is_concrete(return_type) and node.func.id in FUN_BUILTIN_NAMES:
+            if node.func.id in fbuiltins.MATH_BUILT_IN_NAMES:
+                return self._visit_math_built_in(node, **kwargs)
+            elif not type_info.is_concrete(return_type) and node.func.id in fbuiltins.FUN_BUILTIN_NAMES:
                 visitor = getattr(self, f"_visit_{node.func.id}")
                 return visitor(node, **kwargs)
             else:
@@ -323,6 +328,51 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             raise FieldOperatorTypeDeductionError.from_foast_node(
                 node, msg=f"Invalid argument types in call to '{node.func.id}'!"
             ) from err
+
+    def _visit_math_built_in(self, node: foast.Call, **kwargs) -> foast.Call:
+
+        match node:
+            case foast.Call(func=foast.Name(id=func_name) as func, args=[arg], kwargs={}):
+
+                typed_arg = self.visit(arg, **kwargs)
+                arg_field_type: ct.FieldType = typed_arg.type
+
+                typed_func = self.visit(func, **kwargs)
+
+                if func_name == "abs" and not type_info.is_arithmetic(arg_field_type):
+                    # `abs` is special, since it also supports `int32` & `int64`
+                    raise FieldOperatorTypeDeductionError.from_foast_node(
+                        node,
+                        msg=f"Incompatible argument type '{arg_field_type}' for "
+                        f"function '{func_name}' (expected a numeric type)!",
+                    )
+                elif not type_info.is_rational(arg_field_type):
+                    # all other single arg math built-ins support only `float32` & `float64`
+                    raise FieldOperatorTypeDeductionError.from_foast_node(
+                        node,
+                        msg=f"Incompatible argument type '{arg_field_type}' for "
+                        f"function '{func_name}' (expected a fractional numeric type)!",
+                    )
+
+                return_scalar_kind = type_info.extract_dtype(arg_field_type)
+
+                if func_name in fbuiltins._SINGLE_ARG_MATH_BOOL_BUILT_IN_NAMES:
+                    return_scalar_kind = ct.ScalarKind.BOOL
+
+                return_type = dataclasses.replace(arg_field_type, dtype=dataclasses.replace(arg_field_type.dtype, kind=return_scalar_kind))
+
+                return foast.Call(
+                    func=typed_func,
+                    args=[typed_arg],
+                    kwargs={},
+                    location=node.location,
+                    type=return_type,
+                )
+
+            case foast.Call(func=foast.Name(id=str() as func_name) as func, args=[arg1, arg2], kwargs={}):
+                raise NotImplementedError()
+            case _:
+                assert False
 
     def _visit_neighbor_sum(self, node: foast.Call, **kwargs):
         new_func = self.visit(node.func, **kwargs)
