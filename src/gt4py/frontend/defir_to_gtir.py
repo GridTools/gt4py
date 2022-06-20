@@ -114,7 +114,9 @@ class UnVectorisation(IRNodeVisitor):
 
         return node
 
-    def visit_Assign(self, node: Assign, params: Dict[str, FieldDecl], **kwargs) -> gtir.ParAssignStmt:
+    def visit_Assign(
+        self, node: Assign, params: Dict[str, FieldDecl], **kwargs
+    ) -> gtir.ParAssignStmt:
         assert isinstance(node.target, FieldRef) or isinstance(node.target, VarRef)
         target_dims = params[node.target.name].data_dims
         if isinstance(target_dims, list):
