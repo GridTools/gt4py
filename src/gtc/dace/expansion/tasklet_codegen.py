@@ -252,6 +252,4 @@ class TaskletCodegen(codegen.TemplatedGenerator):
     def apply(cls, node: dcir.Tasklet, **kwargs: Any) -> str:
         if not isinstance(node, dcir.Tasklet):
             raise ValueError("apply() requires dcir.Tasklet node")
-        generated_code = super().apply(node, **kwargs)
-        formatted_code = codegen.format_source("python", generated_code)
-        return formatted_code
+        return super().apply(node, **kwargs)

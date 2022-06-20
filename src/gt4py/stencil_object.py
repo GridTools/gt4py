@@ -568,6 +568,10 @@ class StencilObject(abc.ABC):
         """
         type(self)._domain_origin_cache.clear()
 
+    def __deepcopy__(self, memodict=None):
+        # StencilObjects are singletons.
+        return self
+
     def __sdfg__(self, **kwargs):
         raise TypeError(
             f'Only dace backends are supported in DaCe-orchestrated programs. (found "{self.backend}")'

@@ -29,7 +29,6 @@ from gt4py.utils import shash
 
 
 def add_optional_fields(sdfg, field_info, parameter_info, **kwargs):
-    sdfg = dace.SDFG.from_json(sdfg.to_json())
     for name, info in field_info.items():
         if info.access == AccessKind.NONE and name in kwargs:
             outer_array = kwargs[name]

@@ -44,31 +44,33 @@ from gtc.definitions import Extent
 
 def _access_iter(node: oir.HorizontalExecution, get_outputs: bool):
     if get_outputs:
-        xiter = eve.utils.xiter(
+        iterator = eve.utils.xiter(
             itertools.chain(
                 *node.iter_tree().if_isinstance(oir.AssignStmt).getattr("left").map(iter_tree)
             )
-        )
+        ).if_isinstance(oir.FieldAccess)
     else:
-        xiter = eve.utils.xiter(
-            itertools.chain(
-                *node.iter_tree().if_isinstance(oir.AssignStmt).getattr("right").map(iter_tree),
-                *node.iter_tree().if_isinstance(oir.While).getattr("cond").map(iter_tree),
-                *node.iter_tree().if_isinstance(oir.MaskStmt).getattr("mask").map(iter_tree),
-            )
-        )
+
+        def _iterator():
+            for n in node.iter_tree():
+                if isinstance(n, oir.AssignStmt):
+                    yield from n.right.iter_tree().if_isinstance(oir.FieldAccess)
+                elif isinstance(n, oir.While):
+                    yield from n.cond.iter_tree().if_isinstance(oir.FieldAccess)
+                elif isinstance(n, oir.MaskStmt):
+                    yield from n.mask.iter_tree().if_isinstance(oir.FieldAccess)
+
+        iterator = _iterator()
 
     yield from (
-        xiter.if_isinstance(oir.FieldAccess)
-        .map(
+        eve.utils.xiter(iterator).map(
             lambda acc: (
                 acc.name,
                 acc.offset,
                 get_tasklet_symbol(acc.name, acc.offset, is_target=get_outputs),
             )
         )
-        .unique(key=lambda x: x[2])
-    )
+    ).unique(key=lambda x: x[2])
 
 
 def _get_tasklet_inout_memlets(node: oir.HorizontalExecution, *, get_outputs, global_ctx, **kwargs):

@@ -99,7 +99,7 @@ def _pre_expand_trafos(stencil_ir: gtir.Stencil, sdfg: dace.SDFG, layout_map):
         if array.transient:
             array.lifetime = dace.AllocationLifetime.Persistent
 
-    sdfg.simplify()
+    sdfg.simplify(validate=False)
     for node, _ in filter(
         lambda n: isinstance(n[0], StencilComputation), sdfg.all_nodes_recursive()
     ):
@@ -119,7 +119,7 @@ def _pre_expand_trafos(stencil_ir: gtir.Stencil, sdfg: dace.SDFG, layout_map):
 
 def _post_expand_trafos(sdfg: dace.SDFG):
     # DaCe "standard" clean-up transformations
-    sdfg.simplify()
+    sdfg.simplify(validate=False)
 
     # Only has effect if schedule is CPU_Multicore,
     # setting node.collapse causes the omp parallel statement to include collapse(n)
@@ -193,13 +193,11 @@ def _sdfg_specialize_symbols(wrapper_sdfg, domain: Tuple[int, ...]):
                 kval = symmap["__K"]
                 del symmap["__K"]
 
-        sdfg.replace("__I", ival)
+        sdfg.replace_dict({"__I": ival, "__J": jval, "__K": kval})
         if "__I" in sdfg.symbols:
             sdfg.remove_symbol("__I")
-        sdfg.replace("__J", jval)
         if "__J" in sdfg.symbols:
             sdfg.remove_symbol("__J")
-        sdfg.replace("__K", kval)
         if "__K" in sdfg.symbols:
             sdfg.remove_symbol("__K")
 
