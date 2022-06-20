@@ -14,9 +14,10 @@
 
 import enum
 import itertools
-import sys
 from dataclasses import dataclass, field
 from typing import Callable, Optional, cast
+
+import numpy as np
 
 from eve import NodeTranslator
 from functional.ffront import (
@@ -252,7 +253,7 @@ class FieldOperatorLowering(NodeTranslator):
                 im.lambda__("comp", *(param[0] for param in params))(
                     im.call_("if_")(im.greater_("comp", expr), "comp", expr)
                 ),
-                -sys.maxsize,
+                itir.Literal(value=str(np.finfo(np.float64).min), type="float64"),
             )
         )(*(param[1] for param in params))
 
