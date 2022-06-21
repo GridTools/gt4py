@@ -2,10 +2,11 @@ from eve import NodeTranslator
 from functional.iterator import ir
 
 
+# TODO this is currently broken as we the reduce unroll introduces SymRefs to offsets and we cannot distinguish tag and index without type deduction.
 class NormalizeSparseShifts(NodeTranslator):  # TODO should it be last?
     """Puts the sparse shift first.
 
-    Preconditions: Shifts are normalizes (see NormalizeShifts)
+    Preconditions: Shifts are normalized (see NormalizeShifts) and Reductions are
     """
 
     def visit_FunCall(self, node: ir.FunCall):
@@ -21,7 +22,7 @@ class NormalizeSparseShifts(NodeTranslator):  # TODO should it be last?
             sparse_offsets = []
             tag_stack = []
             for arg in node.fun.args:
-                assert isinstance(arg, ir.OffsetLiteral)
+                assert isinstance(arg, (ir.OffsetLiteral, ir.Literal))  # TODO should not be literal
                 if isinstance(arg.value, str):
                     tag_stack.append(arg)
                 else:
