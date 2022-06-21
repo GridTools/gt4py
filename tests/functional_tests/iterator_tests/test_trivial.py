@@ -29,8 +29,8 @@ def baz(baz_inp):
     return deref(lift(bar)(baz_inp))
 
 
-def test_trivial(backend, use_tmps):
-    backend, validate = backend
+def test_trivial(fencil_processor, use_tmps):
+    fencil_processor, validate = fencil_processor
     rng = np.random.default_rng()
     inp = rng.uniform(size=(5, 7, 9))
     out = np.copy(inp)
@@ -41,7 +41,7 @@ def test_trivial(backend, use_tmps):
 
     run_processor(
         baz[domain(named_range(IDim, 0, shape[0]), named_range(JDim, 0, shape[1]))],
-        backend,
+        fencil_processor,
         inp_s,
         out=out_s,
         use_tmps=use_tmps,
@@ -65,8 +65,8 @@ def fen_direct_deref(i_size, j_size, out, inp):
     )
 
 
-def test_direct_deref(backend, use_tmps):
-    backend, validate = backend
+def test_direct_deref(fencil_processor, use_tmps):
+    fencil_processor, validate = fencil_processor
     rng = np.random.default_rng()
     inp = rng.uniform(size=(5, 7))
     out = np.copy(inp)
@@ -76,7 +76,7 @@ def test_direct_deref(backend, use_tmps):
 
     run_processor(
         fen_direct_deref,
-        backend,
+        fencil_processor,
         *out.shape,
         out_s,
         inp_s,

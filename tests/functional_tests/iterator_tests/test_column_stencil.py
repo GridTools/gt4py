@@ -32,8 +32,8 @@ def fencil(i_size, k_size, inp, out):
     )
 
 
-def test_column_stencil(backend, use_tmps):
-    backend, validate = backend
+def test_column_stencil(fencil_processor, use_tmps):
+    fencil_processor, validate = fencil_processor
     shape = [5, 7]
     inp = np_as_located_field(IDim, KDim)(
         np.fromfunction(lambda i, k: i * 10 + k, [shape[0] + 1, shape[1] + 1])
@@ -44,7 +44,7 @@ def test_column_stencil(backend, use_tmps):
 
     run_processor(
         fencil,
-        backend,
+        fencil_processor,
         shape[0],
         shape[1],
         inp,
@@ -57,8 +57,8 @@ def test_column_stencil(backend, use_tmps):
         assert np.allclose(ref, out)
 
 
-def test_column_stencil_with_k_origin(backend, use_tmps):
-    backend, validate = backend
+def test_column_stencil_with_k_origin(fencil_processor, use_tmps):
+    fencil_processor, validate = fencil_processor
     shape = [5, 7]
     raw_inp = np.fromfunction(lambda i, k: i * 10 + k, [shape[0] + 1, shape[1] + 2])
     inp = np_as_located_field(IDim, KDim, origin={IDim: 0, KDim: 1})(raw_inp)
@@ -68,7 +68,7 @@ def test_column_stencil_with_k_origin(backend, use_tmps):
 
     run_processor(
         fencil,
-        backend,
+        fencil_processor,
         shape[0],
         shape[1],
         inp,
@@ -101,11 +101,11 @@ def ksum_fencil(i_size, k_size, inp, out):
     )
 
 
-def test_ksum_scan(backend, use_tmps):
+def test_ksum_scan(fencil_processor, use_tmps):
     if use_tmps:
         pytest.xfail("use_tmps currently not supported for scans")
-    backend, validate = backend
-    if backend == gtfn.format_sourcecode:
+    fencil_processor, validate = fencil_processor
+    if fencil_processor == gtfn.format_sourcecode:
         pytest.xfail("gtfn does not yet support scans")
     shape = [1, 7]
     inp = np_as_located_field(IDim, KDim)(np.asarray([list(range(7))]))
@@ -115,7 +115,7 @@ def test_ksum_scan(backend, use_tmps):
 
     run_processor(
         ksum_fencil,
-        backend,
+        fencil_processor,
         shape[0],
         shape[1],
         inp,
@@ -143,11 +143,11 @@ def ksum_back_fencil(i_size, k_size, inp, out):
     )
 
 
-def test_ksum_back_scan(backend, use_tmps):
+def test_ksum_back_scan(fencil_processor, use_tmps):
     if use_tmps:
         pytest.xfail("use_tmps currently not supported for scans")
-    backend, validate = backend
-    if backend == gtfn.format_sourcecode:
+    fencil_processor, validate = fencil_processor
+    if fencil_processor == gtfn.format_sourcecode:
         pytest.xfail("gtfn does not yet support scans")
     shape = [1, 7]
     inp = np_as_located_field(IDim, KDim)(np.asarray([list(range(7))]))
@@ -157,7 +157,7 @@ def test_ksum_back_scan(backend, use_tmps):
 
     run_processor(
         ksum_back_fencil,
-        backend,
+        fencil_processor,
         shape[0],
         shape[1],
         inp,

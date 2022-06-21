@@ -68,11 +68,11 @@ def fen_solve_tridiag(i_size, j_size, k_size, a, b, c, d, x):
     )
 
 
-def test_tridiag(tridiag_reference, backend, use_tmps):
+def test_tridiag(tridiag_reference, fencil_processor, use_tmps):
     if use_tmps:
         pytest.xfail("use_tmps currently not supported for scans")
-    backend, validate = backend
-    if backend == gtfn.format_sourcecode:
+    fencil_processor, validate = fencil_processor
+    if fencil_processor == gtfn.format_sourcecode:
         pytest.xfail("gtfn does not yet support scans")
     a, b, c, d, x = tridiag_reference
     shape = a.shape
@@ -85,7 +85,7 @@ def test_tridiag(tridiag_reference, backend, use_tmps):
 
     run_processor(
         fen_solve_tridiag,
-        backend,
+        fencil_processor,
         shape[0],
         shape[1],
         shape[2],

@@ -11,7 +11,7 @@ def use_tmps(request):
 
 @pytest.fixture(
     params=[
-        # (backend, do_validate)
+        # (processor, do_validate)
         (None, True),
         (lisp.format_lisp, False),
         (gtfn.format_sourcecode, False),
@@ -21,7 +21,7 @@ def use_tmps(request):
     ],
     ids=lambda p: f"backend={p[0].__module__.split('.')[-1] + '.' + p[0].__name__ if p[0] else p[0]}",
 )
-def backend(request):
+def fencil_processor(request):
     return request.param
 
 

@@ -58,8 +58,8 @@ def naive_lap(inp):
     return out
 
 
-def test_anton_toy(backend, use_tmps):
-    backend, validate = backend
+def test_anton_toy(fencil_processor, use_tmps):
+    fencil_processor, validate = fencil_processor
     shape = [5, 7, 9]
     rng = np.random.default_rng()
     inp = np_as_located_field(IDim, JDim, KDim, origin={IDim: 1, JDim: 1, KDim: 0})(
@@ -68,7 +68,9 @@ def test_anton_toy(backend, use_tmps):
     out = np_as_located_field(IDim, JDim, KDim)(np.zeros(shape))
     ref = naive_lap(inp)
 
-    run_processor(fencil, backend, shape[0], shape[1], shape[2], out, inp, use_tmps=use_tmps)
+    run_processor(
+        fencil, fencil_processor, shape[0], shape[1], shape[2], out, inp, use_tmps=use_tmps
+    )
 
     if validate:
         assert np.allclose(out, ref)

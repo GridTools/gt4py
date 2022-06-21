@@ -110,15 +110,15 @@ def sum_edges_to_vertices(in_edges):
     )
 
 
-def test_sum_edges_to_vertices(backend):
-    backend, validate = backend
+def test_sum_edges_to_vertices(fencil_processor):
+    fencil_processor, validate = fencil_processor
     inp = index_field(Edge)
     out = np_as_located_field(Vertex)(np.zeros([9]))
     ref = np.asarray(list(sum(row) for row in v2e_arr))
 
     run_processor(
         sum_edges_to_vertices[{Vertex: range(0, 9)}],
-        backend,
+        fencil_processor,
         out,
         inp,
         offset_provider={"V2E": NeighborTableOffsetProvider(v2e_arr, Vertex, Edge, 4)},
@@ -132,15 +132,15 @@ def sum_edges_to_vertices_reduce(in_edges):
     return reduce(lambda a, b: a + b, 0)(shift(V2E)(in_edges))
 
 
-def test_sum_edges_to_vertices_reduce(backend):
-    backend, validate = backend
+def test_sum_edges_to_vertices_reduce(fencil_processor):
+    fencil_processor, validate = fencil_processor
     inp = index_field(Edge)
     out = np_as_located_field(Vertex)(np.zeros([9]))
     ref = np.asarray(list(sum(row) for row in v2e_arr))
 
     run_processor(
         sum_edges_to_vertices_reduce[{Vertex: range(0, 9)}],
-        backend,
+        fencil_processor,
         out,
         inp,
         offset_provider={"V2E": NeighborTableOffsetProvider(v2e_arr, Vertex, Edge, 4)},
@@ -154,15 +154,15 @@ def first_vertex_neigh_of_first_edge_neigh_of_cells(in_vertices):
     return deref(shift(E2V, 0)(shift(C2E, 0)(in_vertices)))
 
 
-def test_first_vertex_neigh_of_first_edge_neigh_of_cells_fencil(backend):
-    backend, validate = backend
+def test_first_vertex_neigh_of_first_edge_neigh_of_cells_fencil(fencil_processor):
+    fencil_processor, validate = fencil_processor
     inp = index_field(Vertex)
     out = np_as_located_field(Cell)(np.zeros([9]))
     ref = np.asarray(list(v2e_arr[c[0]][0] for c in c2e_arr))
 
     run_processor(
         first_vertex_neigh_of_first_edge_neigh_of_cells[{Cell: range(0, 9)}],
-        backend,
+        fencil_processor,
         out,
         inp,
         offset_provider={
@@ -179,8 +179,8 @@ def sparse_stencil(non_sparse, inp):
     return reduce(lambda a, b, c: a + c, 0)(shift(V2E)(non_sparse), inp)
 
 
-def test_sparse_input_field(backend):
-    backend, validate = backend
+def test_sparse_input_field(fencil_processor):
+    fencil_processor, validate = fencil_processor
     non_sparse = np_as_located_field(Edge)(np.zeros(18))
     inp = np_as_located_field(Vertex, V2E)(np.asarray([[1, 2, 3, 4]] * 9))
     out = np_as_located_field(Vertex)(np.zeros([9]))
@@ -189,7 +189,7 @@ def test_sparse_input_field(backend):
 
     run_processor(
         sparse_stencil[{Vertex: range(0, 9)}],
-        backend,
+        fencil_processor,
         non_sparse,
         inp,
         out=out,
@@ -203,8 +203,8 @@ def test_sparse_input_field(backend):
 V2V = offset("V2V")
 
 
-def test_sparse_input_field_v2v(backend):
-    backend, validate = backend
+def test_sparse_input_field_v2v(fencil_processor):
+    fencil_processor, validate = fencil_processor
     non_sparse = np_as_located_field(Edge)(np.zeros(9))
     inp = np_as_located_field(Vertex, V2V)(v2v_arr)
     out = np_as_located_field(Vertex)(np.zeros([9]))
@@ -213,7 +213,7 @@ def test_sparse_input_field_v2v(backend):
 
     run_processor(
         sparse_stencil[{Vertex: range(0, 9)}],
-        backend,
+        fencil_processor,
         non_sparse,
         inp,
         out=out,
@@ -237,15 +237,15 @@ def lift_stencil(inp):
     return deref(shift(V2V, 2)(lift(deref_stencil)(inp)))
 
 
-def test_lift(backend):
-    backend, validate = backend
+def test_lift(fencil_processor):
+    fencil_processor, validate = fencil_processor
     inp = index_field(Vertex)
     out = np_as_located_field(Vertex)(np.zeros([9]))
     ref = np.asarray(np.asarray(range(9)))
 
     run_processor(
         lift_stencil[{Vertex: range(0, 9)}],
-        backend,
+        fencil_processor,
         inp,
         out=out,
         offset_provider={"V2V": NeighborTableOffsetProvider(v2v_arr, Vertex, Vertex, 4)},
@@ -259,15 +259,15 @@ def sparse_shifted_stencil(inp):
     return deref(shift(0, 2)(shift(V2V)(inp)))
 
 
-def test_shift_sparse_input_field(backend):
-    backend, validate = backend
+def test_shift_sparse_input_field(fencil_processor):
+    fencil_processor, validate = fencil_processor
     inp = np_as_located_field(Vertex, V2V)(v2v_arr)
     out = np_as_located_field(Vertex)(np.zeros([9]))
     ref = np.asarray(np.asarray(range(9)))
 
     run_processor(
         sparse_shifted_stencil[{Vertex: range(0, 9)}],
-        backend,
+        fencil_processor,
         inp,
         out=out,
         offset_provider={"V2V": NeighborTableOffsetProvider(v2v_arr, Vertex, Vertex, 4)},
@@ -287,8 +287,8 @@ def shift_sparse_stencil2(inp):
     return deref(shift(1, 3)(shift(V2E)(inp)))
 
 
-def test_shift_sparse_input_field2(backend):
-    backend, validate = backend
+def test_shift_sparse_input_field2(fencil_processor):
+    fencil_processor, validate = fencil_processor
     inp = index_field(Vertex)
     inp_sparse = np_as_located_field(Edge, E2V)(e2v_arr)
     out1 = np_as_located_field(Vertex)(np.zeros([9]))
@@ -301,11 +301,15 @@ def test_shift_sparse_input_field2(backend):
 
     domain = {Vertex: range(0, 9)}
     run_processor(
-        shift_shift_stencil2[domain], backend, inp, out=out1, offset_provider=offset_provider
+        shift_shift_stencil2[domain],
+        fencil_processor,
+        inp,
+        out=out1,
+        offset_provider=offset_provider,
     )
     run_processor(
         shift_sparse_stencil2[domain],
-        backend,
+        fencil_processor,
         inp_sparse,
         out=out2,
         offset_provider=offset_provider,
@@ -324,8 +328,8 @@ def sparse_shifted_stencil_reduce(inp):
     return reduce(sum_, 0)(shift(V2V)(lift(reduce(sum_, 0))(inp)))
 
 
-def test_shift_sparse_input_field(backend):
-    backend, validate = backend
+def test_shift_sparse_input_field(fencil_processor):
+    fencil_processor, validate = fencil_processor
     inp = np_as_located_field(Vertex, V2V)(v2v_arr)
     out = np_as_located_field(Vertex)(np.zeros([9]))
 
@@ -341,7 +345,7 @@ def test_shift_sparse_input_field(backend):
     domain = {Vertex: range(0, 9)}
     run_processor(
         sparse_shifted_stencil_reduce[domain],
-        backend,
+        fencil_processor,
         inp,
         out=out,
         offset_provider={"V2V": NeighborTableOffsetProvider(v2v_arr, Vertex, Vertex, 4)},
