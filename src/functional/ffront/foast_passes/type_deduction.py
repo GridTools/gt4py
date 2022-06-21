@@ -350,7 +350,11 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         )
 
     def _visit_max_over(self, node: foast.Call, **kwargs) -> foast.Call:
-        return self._visit_neighbor_sum(node, **kwargs)
+    def _visit_neighbor_sum(self, node: foast.Call, **kwargs) -> foast.Call:
+        return self._visit_reduction(node, **kwargs)
+        
+    def _visit_max_over(self, node: foast.Call, **kwargs) -> foast.Call:
+        return self._visit_reduction(node, **kwargs)
 
     def _visit_broadcast(self, node: foast.Call, **kwargs) -> foast.Call:
         field_type = cast(ct.FieldType, node.args[0].type)
