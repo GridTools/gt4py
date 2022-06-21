@@ -472,3 +472,34 @@ def test_conditional():
     conditional(mask, a, b, out=out, offset_provider={})
 
     assert np.allclose(np.where(mask, a, b), out)
+
+
+def test_conditional_shifted():
+    Ioff = FieldOffset("Ioff", source=IDim, target=[IDim])
+
+    size = 10
+    mask = np_as_located_field(IDim)(np.zeros((size,), dtype=bool))
+    mask.array()[size // 2] = True
+    a = np_as_located_field(IDim)(np.arange(0, size, 1))
+    b = np_as_located_field(IDim)(np.zeros((size,)))
+    out = np_as_located_field(IDim)(np.zeros((size,)))
+
+    @field_operator(backend="roundtrip")
+    def conditional(
+        mask: Field[[IDim], bool], a: Field[[IDim], float64], b: Field[[IDim], float64]
+    ) -> Field[[IDim], float64]:
+        tmp = where(mask, a, b)
+        return tmp(Ioff[1])
+
+    @program
+    def conditional_program(
+        mask: Field[[IDim], bool],
+        a: Field[[IDim], float64],
+        b: Field[[IDim], float64],
+        out: Field[[IDim], float64]
+    ):
+        conditional(mask, a, b, out=out[:-1])
+
+    conditional_program(mask, a, b, out, offset_provider={"Ioff": IDim})
+
+    assert np.allclose(np.where(mask, a, b)[1:], out.array()[:-1])
