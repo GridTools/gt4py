@@ -26,8 +26,9 @@ import functools
 import types
 import typing
 import warnings
-from typing import Any, Callable, Optional, Protocol
+from typing import Callable
 
+from eve.extended_typing import Any, Optional, Protocol
 from eve.utils import UIDs
 from functional.common import GTTypeError
 from functional.ffront import (
@@ -365,7 +366,7 @@ class FieldOperator(GTCallable):
         )
 
     def __gt_itir__(self) -> itir.FunctionDefinition:
-        return FieldOperatorLowering.apply(self.foast_node)
+        return typing.cast(itir.FunctionDefinition, FieldOperatorLowering.apply(self.foast_node))
 
     def __gt_captured_vars__(self) -> CapturedVars:
         return self.captured_vars

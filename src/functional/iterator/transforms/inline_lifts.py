@@ -12,7 +12,7 @@ class InlineLifts(NodeTranslator):
         )
 
     @staticmethod
-    def _is_shift_lift(node: ir.FunCall):
+    def _is_shift_lift(node: ir.Expr):
         return (
             isinstance(node, ir.FunCall)
             and isinstance(node.fun, ir.FunCall)
@@ -28,12 +28,17 @@ class InlineLifts(NodeTranslator):
             assert len(node.args) == 1
             if self._is_lift(node.args[0]):
                 # deref(lift(f)(args...)) -> f(args...)
+                assert isinstance(node.args[0], ir.FunCall)
+                assert isinstance(node.args[0].fun, ir.FunCall)
                 assert len(node.args[0].fun.args) == 1
                 f = node.args[0].fun.args[0]
                 args = node.args[0].args
                 return ir.FunCall(fun=f, args=args)
             elif self._is_shift_lift(node.args[0]):
                 # deref(shift(...)(lift(f)(args...)) -> f(shift(...)(args)...)
+                assert isinstance(node.args[0], ir.FunCall)
+                assert isinstance(node.args[0].args[0], ir.FunCall)
+                assert isinstance(node.args[0].args[0].fun, ir.FunCall)
                 f = node.args[0].args[0].fun.args[0]
                 shift = node.args[0].fun
                 args = node.args[0].args[0].args
@@ -44,6 +49,8 @@ class InlineLifts(NodeTranslator):
             assert len(node.args) == 1
             if self._is_lift(node.args[0]):
                 # can_deref(lift(f)(args...)) -> and(can_deref(arg[0]), and(can_deref(arg[1]), ...))
+                assert isinstance(node.args[0], ir.FunCall)
+                assert isinstance(node.args[0].fun, ir.FunCall)
                 assert len(node.args[0].fun.args) == 1
                 args = node.args[0].args
                 res = ir.FunCall(fun=ir.SymRef(id="can_deref"), args=[args[0]])
@@ -55,6 +62,8 @@ class InlineLifts(NodeTranslator):
                 return res
             elif self._is_shift_lift(node.args[0]):
                 # can_deref(shift(...)(lift(f)(args...)) -> and(can_deref(shift(...)(arg[0])), and(can_deref(shift(...)(arg[1])), ...))
+                assert isinstance(node.args[0], ir.FunCall)
+                assert isinstance(node.args[0].args[0], ir.FunCall)
                 shift = node.args[0].fun
                 args = node.args[0].args[0].args
                 res = ir.FunCall(

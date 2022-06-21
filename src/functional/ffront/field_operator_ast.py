@@ -13,13 +13,11 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 
-import re
 from typing import Generic, TypeVar, Union
 
-import eve
-from eve import Node
+from eve import Coerced, Node, SourceLocation, SymbolName, SymbolRef
 from eve.traits import SymbolTableTrait
-from eve.type_definitions import SourceLocation, StrEnum, SymbolRef
+from eve.type_definitions import StrEnum
 from functional.ffront import common_types as common_types
 
 
@@ -27,15 +25,15 @@ class LocatedNode(Node):
     location: SourceLocation
 
 
-class SymbolName(eve.traits.SymbolName):
-    regex = re.compile(r"^[a-zA-Z_][\w$]*$")
-
-
 SymbolT = TypeVar("SymbolT", bound=common_types.SymbolType)
 
 
-class Symbol(eve.GenericNode, LocatedNode, Generic[SymbolT]):
-    id: SymbolName  # noqa: A003
+# TODO(egparedes): this should be an actual generic datamodel but it is not fully working
+#   due to nested specialization with bound typevars, so disabling specialization for now
+#       class Symbol(eve.GenericNode, LocatedNode, Generic[SymbolT]):
+#
+class Symbol(LocatedNode, Generic[SymbolT]):
+    id: Coerced[SymbolName]  # noqa: A003
     type: Union[SymbolT, common_types.DeferredSymbolType]  # noqa A003
     namespace: common_types.Namespace = common_types.Namespace(common_types.Namespace.LOCAL)
 
@@ -58,7 +56,7 @@ class Expr(LocatedNode):
 
 
 class Name(Expr):
-    id: SymbolRef  # noqa: A003
+    id: Coerced[SymbolRef]  # noqa: A003
 
 
 class Constant(Expr):
@@ -102,6 +100,7 @@ class BinaryOperator(StrEnum):
     DIV = "divides"
     BIT_AND = "and_"
     BIT_OR = "or_"
+    POW = "power"
 
     def __str__(self) -> str:
         if self is self.ADD:
@@ -116,6 +115,8 @@ class BinaryOperator(StrEnum):
             return "&"
         elif self is self.BIT_OR:
             return "|"
+        elif self is self.POW:
+            return "**"
         return "Unknown BinaryOperator"
 
 
@@ -161,7 +162,7 @@ class Return(Stmt):
 
 
 class FieldOperator(LocatedNode, SymbolTableTrait):
-    id: SymbolName  # noqa: A003
+    id: Coerced[SymbolName]  # noqa: A003
     params: list[DataSymbol]
     body: list[Stmt]
     captured_vars: list[Symbol]

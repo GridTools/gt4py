@@ -108,6 +108,7 @@ class CreateGlobalTmps(NodeTranslator):
             while todos:
                 output, call = todos.pop()
                 output_shifts: List[tuple] = shifts.get(output.id, [])
+                assert isinstance(domain, ir.FunCall)
                 domain = self._extend_domain(domain, offset_provider, output_shifts)
                 if output.id in {tmp.id for tmp in tmps}:
                     assert output.id not in tmp_domains
@@ -120,7 +121,8 @@ class CreateGlobalTmps(NodeTranslator):
                 )
                 local_shifts: Dict[str, List[tuple]] = dict()
                 CollectShifts().visit(closure.stencil, shifts=local_shifts)
-                input_map = {
+                assert isinstance(closure.stencil, ir.Lambda)
+                input_map: dict[str, str] = {
                     param.id: arg.id for param, arg in zip(closure.stencil.params, closure.inputs)
                 }
                 for k, v in local_shifts.items():

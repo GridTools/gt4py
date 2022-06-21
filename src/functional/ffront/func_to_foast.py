@@ -36,6 +36,7 @@ from functional.ffront.ast_passes import (
 )
 from functional.ffront.dialect_parser import DialectParser, DialectSyntaxError
 from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduction
+from functional.ffront.foast_passes.unroll_power_op import UnrollPowerOp
 
 
 class FieldOperatorSyntaxError(DialectSyntaxError):
@@ -59,11 +60,11 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
     ...     return inp
     >>> foast_tree = FieldOperatorParser.apply_to_function(field_op)
     >>> foast_tree  # doctest: +ELLIPSIS
-    FieldOperator(..., id='field_op', ...)
+    FieldOperator(..., id=SymbolName('field_op'), ...)
     >>> foast_tree.params  # doctest: +ELLIPSIS
-    [Symbol[DataTypeT](..., id='inp', type=FieldType(...), ...)]
+    [Symbol(..., id=SymbolName('inp'), type=FieldType(...), ...)]
     >>> foast_tree.body  # doctest: +ELLIPSIS
-    [Return(..., value=Name(..., id='inp'))]
+    [Return(..., value=Name(..., id=SymbolRef('inp')))]
 
 
     If a syntax error is encountered, it will point to the location in the source code.
@@ -93,6 +94,7 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
 
     @classmethod
     def _postprocess_dialect_ast(cls, dialect_ast: foast.FieldOperator) -> foast.FieldOperator:
+        dialect_ast = UnrollPowerOp.apply(dialect_ast)
         return FieldOperatorTypeDeduction.apply(dialect_ast)
 
     def _builtin_type_constructor_symbols(
@@ -342,8 +344,8 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
     def visit_Div(self, node: ast.Div, **kwargs) -> foast.BinaryOperator:
         return foast.BinaryOperator.DIV
 
-    def visit_Pow(self, node: ast.Pow, **kwargs) -> None:
-        raise FieldOperatorSyntaxError.from_AST(node, msg="`**` operator not supported!")
+    def visit_Pow(self, node: ast.Pow, **kwargs) -> foast.BinaryOperator:
+        return foast.BinaryOperator.POW
 
     def visit_Mod(self, node: ast.Mod, **kwargs) -> None:
         raise FieldOperatorSyntaxError.from_AST(node, msg="`%` operator not supported!")

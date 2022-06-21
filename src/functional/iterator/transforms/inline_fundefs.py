@@ -14,7 +14,7 @@ class InlineFundefs(NodeTranslator):
         return self.generic_visit(node)
 
     def visit_FencilDefinition(self, node: ir.FencilDefinition):
-        return self.generic_visit(node, symtable=node.symtable_)
+        return self.generic_visit(node, symtable=node.annex.symtable)
 
 
 class PruneUnreferencedFundefs(NodeTranslator):

@@ -19,219 +19,253 @@
 
 from __future__ import annotations
 
-import functools
+import ast
+import re
 
-import pydantic
-import pydantic.generics
-
-from . import iterators, utils
+from . import datamodels, exceptions, extended_typing as xtyping, trees, utils
+from .datamodels import validators as _validators
 from .extended_typing import (
     Any,
+    Callable,
+    ClassVar,
     Dict,
-    Generator,
+    Final,
+    Iterable,
     List,
-    NoArgsCallable,
     Optional,
     Set,
     Tuple,
-    TypedDict,
+    Type,
     TypeVar,
     Union,
-    no_type_check,
 )
-from .type_definitions import NOTHING, IntEnum, Str, StrEnum
+from .type_definitions import ConstrainedStr, IntEnum, StrEnum
 
 
-# -- Fields --
-class ImplFieldMetadataDict(TypedDict, total=False):
-    info: pydantic.fields.FieldInfo
+_SYMBOL_NAME_RE: Final = re.compile(r"^[a-zA-Z_]\w*$")
 
 
-NodeImplFieldMetadataDict = Dict[str, ImplFieldMetadataDict]
+class SymbolName(ConstrainedStr, regex=_SYMBOL_NAME_RE):
+    """String value containing a valid symbol name for typical programming conventions."""
+
+    __slots__ = ()
 
 
-class FieldKind(StrEnum):
-    INPUT = "input"
-    OUTPUT = "output"
+class SymbolRef(ConstrainedStr, regex=_SYMBOL_NAME_RE):
+    """Reference to a symbol name."""
+
+    __slots__ = ()
 
 
-class FieldConstraintsDict(TypedDict, total=False):
-    vtype: Union[VType, Tuple[VType, ...]]
+@datamodels.datamodel(slots=True, frozen=True)
+class SourceLocation:
+    """Source code location (line, column, source)."""
+
+    line: int = datamodels.field(validator=_validators.ge(1))
+    column: int = datamodels.field(validator=_validators.ge(1))
+    source: str
+    end_line: Optional[int] = datamodels.field(validator=_validators.optional(_validators.ge(1)))
+    end_column: Optional[int] = datamodels.field(validator=_validators.optional(_validators.ge(1)))
+
+    @classmethod
+    def from_AST(cls, ast_node: ast.AST, source: Optional[str] = None) -> SourceLocation:
+        if (
+            not isinstance(ast_node, ast.AST)
+            or getattr(ast_node, "lineno", None) is None
+            or getattr(ast_node, "col_offset", None) is None
+        ):
+            raise ValueError(
+                f"Passed AST node '{ast_node}' does not contain a valid source location."
+            )
+        if source is None:
+            source = f"<ast.{type(ast_node).__name__} at 0x{id(ast_node):x}>"
+        return cls(
+            ast_node.lineno,
+            ast_node.col_offset + 1,
+            source,
+            end_line=ast_node.end_lineno,
+            end_column=ast_node.end_col_offset + 1 if ast_node.end_col_offset is not None else None,
+        )
+
+    def __init__(
+        self,
+        line: int,
+        column: int,
+        source: str,
+        *,
+        end_line: Optional[int] = None,
+        end_column: Optional[int] = None,
+    ) -> None:
+        assert end_column is None or end_line is not None
+        self.__auto_init__(  # type: ignore[attr-defined]  # __auto_init__ added dynamically
+            line=line, column=column, source=source, end_line=end_line, end_column=end_column
+        )
+
+    def __str__(self) -> str:
+        src = self.source or ""
+
+        end_part = ""
+        if self.end_line is not None:
+            end_part += f" to Line {self.end_line}"
+        if self.end_column is not None:
+            end_part += f", Col {self.end_column}"
+
+        return f"<'{src}': Line {self.line}, Col {self.column}{end_part}>"
 
 
-class FieldMetadataDict(TypedDict, total=False):
-    constraints: FieldConstraintsDict
-    kind: FieldKind
-    definition: pydantic.fields.ModelField
+@datamodels.datamodel(slots=True, frozen=True)
+class SourceLocationGroup:
+    """A group of merged source code locations (with optional info)."""
+
+    locations: Tuple[SourceLocation, ...] = datamodels.field(validator=_validators.non_empty())
+    context: Optional[Union[str, Tuple[str, ...]]]
+
+    def __init__(
+        self, *locations: SourceLocation, context: Optional[Union[str, Tuple[str, ...]]] = None
+    ) -> None:
+        self.__auto_init__(locations=locations, context=context)  # type: ignore[attr-defined]  # __auto_init__ added dynamically
+
+    def __str__(self) -> str:
+        locs = ", ".join(str(loc) for loc in self.locations)
+        context = f"#{self.context}#" if self.context else ""
+        return f"<{context}[{locs}]>"
 
 
-NodeChildrenMetadataDict = Dict[str, FieldMetadataDict]
+AnySourceLocation = Union[SourceLocation, SourceLocationGroup]
+
+_T = TypeVar("_T")
 
 
-_EVE_METADATA_KEY = "_EVE_META_"
+class AnnexManager:
+    register: ClassVar[Dict[str, Any]] = {}
+
+    @classmethod
+    def register_user(
+        cls: Type[AnnexManager],
+        key: str,
+        type_hint: xtyping.TypeAnnotation,
+        *,
+        shared: bool = False,
+    ) -> Callable[[_T], _T]:
+        assert isinstance(key, str)
+
+        def _decorator(owner: _T) -> _T:
+            if key in cls.register:
+                reg_shared, reg_type, reg_owner = cls.register[key]
+                if not shared:
+                    raise exceptions.EveRuntimeError(
+                        f"Annex key '{key}' has been already registered by {reg_owner}."
+                    )
+                if not reg_shared:
+                    raise exceptions.EveRuntimeError(
+                        f"Annex key '{key}' has been privately registered by {reg_owner}."
+                    )
+                elif type_hint != reg_type:
+                    raise exceptions.EveRuntimeError(
+                        f"Annex key '{key}' type '{type_hint}' does not match registered type '{reg_type}' "
+                        f"registered by {reg_owner}."
+                    )
+                owners = reg_owner
+            else:
+                owners = []
+
+            cls.register[key] = (shared, type_hint, [*owners, owner])
+
+            return owner
+
+        return _decorator
 
 
-def field(
-    default: Any = NOTHING,
-    *,
-    default_factory: Optional[NoArgsCallable] = None,
-    kind: Optional[FieldKind] = None,
-    constraints: Optional[FieldConstraintsDict] = None,
-    schema_config: Dict[str, Any] = None,
-) -> pydantic.fields.FieldInfo:
-    metadata = {}
-    for key in ["kind", "constraints"]:
-        value = locals()[key]
-        if value:
-            metadata[key] = value
-    kwargs = schema_config or {}
-    kwargs[_EVE_METADATA_KEY] = metadata
-
-    if default is NOTHING:
-        field_info = pydantic.Field(default_factory=default_factory, **kwargs)
-    else:
-        field_info = pydantic.Field(default, default_factory=default_factory, **kwargs)
-    assert isinstance(field_info, pydantic.fields.FieldInfo)
-
-    return field_info
+register_annex_user = AnnexManager.register_user
 
 
-in_field = functools.partial(field, kind=FieldKind.INPUT)
-out_field = functools.partial(field, kind=FieldKind.OUTPUT)
+class Node(datamodels.DataModel, trees.Tree, kw_only=True):  # type: ignore[call-arg]  # kw_only from DataModel
+    """Base class representing a node in a syntax tree.
 
-
-# -- Models --
-class Model(pydantic.BaseModel):
-    class Config:
-        extra = "forbid"
-
-
-class FrozenModel(pydantic.BaseModel):
-    class Config:
-        allow_mutation = False
-
-
-# -- Nodes --
-_EVE_NODE_INTERNAL_SUFFIX = "__"
-_EVE_NODE_IMPL_SUFFIX = "_"
-
-AnyNode = TypeVar("AnyNode", bound="BaseNode")
-ValueNode = Union[bool, bytes, int, float, str, IntEnum, StrEnum]
-LeafNode = Union[AnyNode, ValueNode]
-CollectionNode = Union[List[LeafNode], Dict[Any, LeafNode], Set[LeafNode]]
-TreeNode = Union[AnyNode, CollectionNode]
-
-
-class NodeMetaclass(pydantic.main.ModelMetaclass):
-    """Custom metaclass for Node classes.
-
-    Customize the creation of Node classes adding Eve specific attributes.
-
-    """
-
-    @no_type_check
-    def __new__(mcls, name, bases, namespace, **kwargs):
-        # Optional preprocessing of class namespace before creation:
-        cls = super().__new__(mcls, name, bases, namespace, **kwargs)
-
-        # Postprocess created class:
-        # Add metadata class members
-        impl_fields_metadata = {}
-        children_metadata = {}
-        for name, model_field in cls.__fields__.items():
-            if not name.endswith(_EVE_NODE_INTERNAL_SUFFIX):
-                if name.endswith(_EVE_NODE_IMPL_SUFFIX):
-                    impl_fields_metadata[name] = {"definition": model_field}
-                else:
-                    children_metadata[name] = {
-                        "definition": model_field,
-                        **model_field.field_info.extra.get(_EVE_METADATA_KEY, {}),
-                    }
-
-        cls.__node_impl_fields__ = impl_fields_metadata
-        cls.__node_children__ = children_metadata
-
-        return cls
-
-
-class BaseNode(pydantic.BaseModel, metaclass=NodeMetaclass):
-    """Base class representing an IR node.
-
-    It is currently implemented as a pydantic Model with some extra features.
+    Implemented as a :class:`eve.datamodels.DataModel` with some extra features.
 
     Field values should be either:
 
         * builtin types: `bool`, `bytes`, `int`, `float`, `str`
         * enum.Enum types
         * other :class:`Node` subclasses
-        * other :class:`pydantic.BaseModel` subclasses
+        * other :class:`eve.datamodels.DataModel` subclasses
         * supported collections (:class:`List`, :class:`Dict`, :class:`Set`)
             of any of the previous items
 
-    Field naming scheme:
-
-        * Field names starting with "_" are ignored by pydantic and Eve. They
-            will not be considered as `fields` and thus none of the pydantic
-            features will work (type coercion, validators, etc.).
-        * Field names ending with "__" are reserved for internal Eve use and
-            should NOT be defined by regular users. All pydantic features will
-            work on these fields anyway but they will be invisible for Eve users.
-        * Field names ending with "_" are considered implementation fields
-            not children nodes. They are intended to be defined by users when needed,
-            typically to cache derived, non-essential information on the node.
-
+    The `annex` attribute is used to dynamically add data to a node, even to
+    frozen classes. Data in the `annex` do not affect the hash or equality
+    comparisons of the node, since it is not really a field. Thus, visitors
+    and pipeline passes can freely attach computed attributes into the instance
+    `annex`.
     """
 
-    def iter_impl_fields(self) -> Generator[Tuple[str, Any], None, None]:
-        for name in self.__node_impl_fields__.keys():
-            yield name, getattr(self, name)
+    __slots__ = ()
 
-    def iter_children(self) -> Generator[Tuple[str, Any], None, None]:
-        for name in self.__node_children__.keys():
-            yield name, getattr(self, name)
+    @property
+    def annex(self) -> utils.Namespace:
+        if not hasattr(self, "__node_annex__"):
+            object.__setattr__(self, "__node_annex__", utils.Namespace())
+        return self.__node_annex__  # type: ignore[attr-defined]  # __node_annex__ added dynamically
 
-    def iter_children_values(self) -> Generator[Any, None, None]:
-        for name in self.__node_children__.keys():
+    def iter_children_values(self) -> Iterable:
+        for name in self.__datamodel_fields__.keys():
             yield getattr(self, name)
 
-    def iter_tree_pre(self) -> utils.XIterable:
-        return iterators.iter_tree_pre(self)
+    def iter_children_items(self) -> Iterable[Tuple[trees.TreeKey, Any]]:
+        for name in self.__datamodel_fields__.keys():
+            yield name, getattr(self, name)
 
-    def iter_tree_post(self) -> utils.XIterable:
-        return iterators.iter_tree_post(self)
+    pre_walk_items = trees.pre_walk_items
+    pre_walk_values = trees.pre_walk_values
 
-    def iter_tree_levels(self) -> utils.XIterable:
-        return iterators.iter_tree_levels(self)
+    post_walk_items = trees.post_walk_items
+    post_walk_values = trees.post_walk_values
 
-    iter_tree = iter_tree_pre
+    bfs_walk_items = trees.bfs_walk_items
+    bfs_walk_values = trees.bfs_walk_values
 
-    class Config(Model.Config):
-        pass
+    walk_items = trees.walk_items
+    walk_values = trees.walk_values
+
+    # TODO(egparedes): add useful hashes to base node
+    # # @property
+    # def content_id(self) -> int:
+    #     ...
+    #
+    # @property
+    # def annex_content_id(self) -> int:
+    #     ...
+    #
+    # @property
+    # def node_content_id(self) -> int:
+    #     ...
+    #
+    # @property
+    # def instance_content_id(self) -> int:
+    #     ...
+    #
+    # @property
+    # def instance_id(self) -> int:
+    #     ...
 
 
-class GenericNode(BaseNode, pydantic.generics.GenericModel):
+NodeT = TypeVar("NodeT", bound="Node")
+ValueNode = Union[bool, bytes, int, float, str, IntEnum, StrEnum]
+LeafNode = Union[NodeT, ValueNode]
+CollectionNode = Union[List[LeafNode], Dict[Any, LeafNode], Set[LeafNode]]
+RootNode = Union[NodeT, CollectionNode]
+
+
+class FrozenNode(Node, frozen=True):  # type: ignore[call-arg]  # frozen from DataModel
+    ...
+
+
+class GenericNode(datamodels.GenericDataModel, Node, kw_only=True):  # type: ignore[call-arg]  # kw_only from DataModel
     pass
 
 
-class Node(BaseNode):
-    """Default public name for a base node class."""
+class VType(datamodels.FrozenModel):
 
-    pass
-
-
-class FrozenNode(Node):
-    """Default public name for an inmutable base node class."""
-
-    class Config(FrozenModel.Config):
-        pass
-
-
-# -- Misc --
-class VType(FrozenModel):
-
-    # VType fields
-    #: Unique name
-    name: Str
-
-    def __init__(self, name: str) -> None:
-        super().__init__(name=name)
+    # Unique name
+    name: str
