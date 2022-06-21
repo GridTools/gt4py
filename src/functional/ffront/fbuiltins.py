@@ -58,7 +58,10 @@ neighbor_sum = BuiltInFunction(
     )
 )
 
-max_over = neighbor_sum
+_reduction_like = ...
+
+neighbor_sum = _reduction_like
+max_over = _reduction_like
 
 broadcast = BuiltInFunction(
     ct.FunctionType(
