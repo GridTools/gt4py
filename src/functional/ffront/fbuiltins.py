@@ -50,15 +50,13 @@ class BuiltInFunction:
         return self.__gt_type
 
 
-neighbor_sum = BuiltInFunction(
+_reduction_like = BuiltInFunction(
     ct.FunctionType(
         args=[ct.DeferredSymbolType(constraint=ct.FieldType)],
         kwargs={"axis": ct.DeferredSymbolType(constraint=ct.DimensionType)},
         returns=ct.DeferredSymbolType(constraint=ct.FieldType),
     )
 )
-
-_reduction_like = ...
 
 neighbor_sum = _reduction_like
 max_over = _reduction_like

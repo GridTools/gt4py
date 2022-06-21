@@ -233,29 +233,29 @@ class FieldOperatorLowering(NodeTranslator):
                 return im.shift_(offset_name)(self.visit(node.func, **kwargs))
         raise FieldOperatorLoweringError("Unexpected shift arguments!")
 
-    def _visit_reduce(self, node: foast.Call, **kwargs) -> itir.FunCall:
+    def _visit_general_reduction_params(self, node: foast.Call, **kwargs):
         lowering = InsideReductionLowering()
         expr = lowering.visit(node.args[0], **kwargs)
         params = list(lowering.lambda_params.items())
-        return im.lift_(
-            im.call_("reduce")(
-                im.lambda__("accum", *(param[0] for param in params))(im.plus_("accum", expr)),
-                0,
-            )
-        )(*(param[1] for param in params))
+        return expr, params
+
+    def _visit_reduce(self, node: foast.Call, **kwargs) -> itir.FunCall:
+        expr, params = self._visit_general_reduction_params(node, **kwargs)
+        im_call_sum = im.call_("reduce")(
+            im.lambda__("accum", *(param[0] for param in params))(im.plus_("accum", expr)),
+            0,
+        )
+        return im.lift_(im_call_sum)(*(param[1] for param in params))
 
     def _visit_compare(self, node: foast.Call, **kwargs) -> itir.FunCall:
-        lowering = InsideReductionLowering()
-        expr = lowering.visit(node.args[0], **kwargs)
-        params = list(lowering.lambda_params.items())
-        return im.lift_(
-            im.call_("reduce")(
-                im.lambda__("comp", *(param[0] for param in params))(
-                    im.call_("if_")(im.greater_("comp", expr), "comp", expr)
-                ),
-                itir.Literal(value=str(np.finfo(np.float64).min), type="float64"),
-            )
-        )(*(param[1] for param in params))
+        expr, params = self._visit_general_reduction_params(node, **kwargs)
+        im_call_maxover = im.call_("reduce")(
+            im.lambda__("comp", *(param[0] for param in params))(
+                im.call_("if_")(im.greater_("comp", expr), "comp", expr)
+            ),
+            itir.Literal(value=str(np.finfo(np.float64).min), type="float64"),
+        )
+        return im.lift_(im_call_maxover)(*(param[1] for param in params))
 
     def visit_Call(self, node: foast.Call, **kwargs) -> itir.FunCall:
         if type_info.type_class(node.func.type) is ct.FieldType:

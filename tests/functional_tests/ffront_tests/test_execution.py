@@ -296,29 +296,33 @@ def reduction_setup():
     )  # type: ignore
 
 
-def test_maxover_execution(reduction_setup):
+def test_maxover_execution_sparseFields(reduction_setup):
     """Testing max_over functionality."""
     rs = reduction_setup
-    Edge = rs.Edge
     Vertex = rs.Vertex
     V2EDim = rs.V2EDim
-    V2E = rs.V2E
+
+    inp_field = np_as_located_field(Vertex, V2EDim)(rs.v2e_table)
 
     @field_operator
-    def maxover_fieldoperator(edge_f: Field[[Edge], "float64"]) -> Field[[Vertex], float64]:
-        return max_over(edge_f(V2E), axis=V2EDim)
+    def maxover_fieldoperator(
+        inp_field: Field[[Vertex, V2EDim], "float64"]
+    ) -> Field[[Vertex], float64]:
+        return max_over(inp_field, axis=V2EDim)
 
     @program(backend="roundtrip")
-    def maxover_program(edge_f: Field[[Edge], float64], out: Field[[Vertex], float64]) -> None:
-        maxover_fieldoperator(edge_f, out=out)
+    def maxover_program(
+        inp_field: Field[[Vertex, V2EDim], float64], out: Field[[Vertex], float64]
+    ) -> None:
+        maxover_fieldoperator(inp_field, out=out)
 
-    maxover_program(rs.inp, rs.out, offset_provider=rs.offset_provider)
+    maxover_program(inp_field, rs.out, offset_provider=rs.offset_provider)
 
     ref = np.max(rs.v2e_table, axis=1)
     assert np.allclose(ref, rs.out)
 
 
-def test_maxover_negatives(reduction_setup):
+def test_maxover_execution_negatives(reduction_setup):
     """Testing max_over functionality for negative values in array."""
     rs = reduction_setup
     Edge = rs.Edge
@@ -327,7 +331,7 @@ def test_maxover_negatives(reduction_setup):
     V2E = rs.V2E
 
     edge_num = np.max(rs.v2e_table) + 1
-    inp_field_arr = np.linspace(start=-40, stop=40, num=edge_num)
+    inp_field_arr = np.linspace(start=-40, stop=40, num=edge_num, dtype=int)
     inp_field = np_as_located_field(Edge)(inp_field_arr)
 
     @field_operator

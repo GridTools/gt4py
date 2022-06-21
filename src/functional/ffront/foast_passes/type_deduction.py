@@ -325,7 +325,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                 node, msg=f"Invalid argument types in call to '{node.func.id}'!"
             ) from err
 
-    def _visit_neighbor_sum(self, node: foast.Call, **kwargs) -> foast.Call:
+    def _visit_reduction(self, node: foast.Call, **kwargs) -> foast.Call:
         field_type = cast(ct.FieldType, node.args[0].type)
         reduction_dim = cast(ct.DimensionType, node.kwargs["axis"].type).dim
         if reduction_dim not in field_type.dims:
@@ -349,10 +349,9 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             type=return_type,
         )
 
-    def _visit_max_over(self, node: foast.Call, **kwargs) -> foast.Call:
     def _visit_neighbor_sum(self, node: foast.Call, **kwargs) -> foast.Call:
         return self._visit_reduction(node, **kwargs)
-        
+
     def _visit_max_over(self, node: foast.Call, **kwargs) -> foast.Call:
         return self._visit_reduction(node, **kwargs)
 
