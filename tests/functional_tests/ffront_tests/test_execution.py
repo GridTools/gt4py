@@ -496,7 +496,7 @@ def test_conditional_shifted():
         mask: Field[[IDim], bool],
         a: Field[[IDim], float64],
         b: Field[[IDim], float64],
-        out: Field[[IDim], float64]
+        out: Field[[IDim], float64],
     ):
         conditional(mask, a, b, out=out[:-1])
 
