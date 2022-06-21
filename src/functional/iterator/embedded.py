@@ -1,6 +1,7 @@
 import itertools
 import numbers
 import typing
+from copy import deepcopy
 from dataclasses import dataclass
 
 import numpy as np
@@ -195,10 +196,18 @@ def domain_iterator(domain: dict[CartesianAxis, range]):
 
 
 def execute_shift(pos, tag, index, *, offset_provider):
-    if tag in pos and pos[tag] is None:  # sparse field with offset as neighbor dimension
-        new_pos = pos.copy()
-        new_pos[tag] = index
+    # if tag in pos and None in pos[tag]:  # sparse field with offset as neighbor dimension
+    if isinstance(tag, SparseOffset):
+        new_pos = deepcopy(pos)
+
+        for i, p in reversed(
+            list(enumerate(new_pos[tag.offset]))
+        ):  # first shift applies to the last sparse dimensions of that axis type
+            if p is None:
+                new_pos[tag.offset][i] = index
+                break
         return new_pos
+
     assert tag.value in offset_provider
     offset_implementation = offset_provider[tag.value]
     if isinstance(offset_implementation, CartesianAxis):
@@ -240,7 +249,7 @@ def group_offsets(*offsets):
             tag_stack.append(offset)
         else:
             assert tag_stack
-            tag = tag_stack.pop(0)
+            tag = tag_stack.pop()
             complete_offsets.append((tag, offset))
     return complete_offsets, tag_stack
 
@@ -369,6 +378,18 @@ class MDIterator:
             return _UNDEFINED
 
 
+@dataclass
+class SparseOffset:
+    offset: typing.Union[Offset, CartesianAxis]
+
+    @property
+    def value(self):
+        return self.offset.value
+
+    def __hash__(self):
+        return hash(self.offset)
+
+
 def make_in_iterator(inp, pos, offset_provider, *, column_axis):
     # TODO(havogt): support nested tuples
     axises = inp[0].axises if isinstance(inp, tuple) else inp.axises
@@ -381,15 +402,15 @@ def make_in_iterator(inp, pos, offset_provider, *, column_axis):
             sparse_dimensions.append(axis)
 
     new_pos = pos.copy()
-    for axis in sparse_dimensions:
-        new_pos[axis] = None
+    for axis in set(sparse_dimensions):
+        new_pos[axis] = [None] * sparse_dimensions.count(axis)
     if column_axis is not None:
         # if we deal with column stencil the column position is just an offset by which the whole column needs to be shifted
         new_pos[column_axis] = 0
     return MDIterator(
         inp,
         new_pos,
-        incomplete_offsets=[*sparse_dimensions],
+        incomplete_offsets=list(map(lambda x: SparseOffset(offset=x), sparse_dimensions)),
         offset_provider=offset_provider,
         column_axis=column_axis,
     )
@@ -439,7 +460,17 @@ def get_ordered_indices(axises, pos, *, slice_axises=None):
     """pos is a dictionary from axis to offset."""  # noqa: D403
     slice_axises = slice_axises or dict()
     assert all(axis in [*pos.keys(), *slice_axises] for axis in axises)
-    return tuple(pos[axis] if axis in pos else slice_axises[axis] for axis in axises)
+    res = []
+    pos = deepcopy(pos)
+    for axis in axises:
+        if axis in pos:
+            if isinstance(pos[axis], list):
+                res.append(pos[axis].pop(0))
+            else:
+                res.append(pos[axis])
+        else:
+            res.append(slice_axises[axis])
+    return tuple(res)
 
 
 def _tupsum(a, b):

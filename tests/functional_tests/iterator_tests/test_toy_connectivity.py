@@ -255,8 +255,7 @@ def test_slice_twice_sparse(backend):
     inp = np_as_located_field(Vertex, V2V, V2V)(v2v_arr[v2v_arr])
     out = np_as_located_field(Vertex)(np.zeros([9]))
 
-    ref = v2v_arr[v2v_arr][:, 1, 2]
-
+    ref = v2v_arr[v2v_arr][:, 2, 1]
     slice_twice_sparse_stencil[{Vertex: range(0, 9)}](
         inp,
         out=out,
@@ -377,7 +376,7 @@ def shift_shift_stencil2(inp):
 
 @fundef
 def shift_sparse_stencil2(inp):
-    return deref(shift(1, 3)(shift(V2E)(inp)))
+    return deref(shift(3, 1)(shift(V2E)(inp)))
 
 
 def test_shift_sparse_input_field2(backend):
