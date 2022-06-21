@@ -233,29 +233,36 @@ class FieldOperatorLowering(NodeTranslator):
                 return im.shift_(offset_name)(self.visit(node.func, **kwargs))
         raise FieldOperatorLoweringError("Unexpected shift arguments!")
 
-    def _visit_general_reduction_params(self, node: foast.Call, **kwargs):
+    def _make_reduction_expr(
+        self,
+        node: foast.Call,
+        op: Callable[[itir.Expr], itir.Expr],
+        init_expr: int | itir.Literal,
+        **kwargs,
+    ):
         lowering = InsideReductionLowering()
         expr = lowering.visit(node.args[0], **kwargs)
         params = list(lowering.lambda_params.items())
-        return expr, params
+        return im.lift_(
+            im.call_("reduce")(
+                im.lambda__("acc", *(param[0] for param in params))(op(expr)),
+                init_expr,
+            )
+        )(*(param[1] for param in params))
 
     def _visit_reduce(self, node: foast.Call, **kwargs) -> itir.FunCall:
-        expr, params = self._visit_general_reduction_params(node, **kwargs)
-        im_call_sum = im.call_("reduce")(
-            im.lambda__("accum", *(param[0] for param in params))(im.plus_("accum", expr)),
-            0,
-        )
-        return im.lift_(im_call_sum)(*(param[1] for param in params))
+        def op():
+            lambda expr: im.plus_("acc", expr)
+
+        return self._make_reduction_expr(node, op, 0, **kwargs)
 
     def _visit_compare(self, node: foast.Call, **kwargs) -> itir.FunCall:
-        expr, params = self._visit_general_reduction_params(node, **kwargs)
-        im_call_maxover = im.call_("reduce")(
-            im.lambda__("comp", *(param[0] for param in params))(
-                im.call_("if_")(im.greater_("comp", expr), "comp", expr)
-            ),
-            itir.Literal(value=str(np.finfo(np.float64).min), type="float64"),
-        )
-        return im.lift_(im_call_maxover)(*(param[1] for param in params))
+        # TODO(tehrengruber): replace greater_ with max_ builtin as soon as itir supports it
+        def op():
+            lambda expr: im.call_("if_")(im.greater_("acc", expr), "acc", expr)
+
+        init_expr = itir.Literal(value=str(np.finfo(np.float64).min), type="float64")
+        return self._make_reduction_expr(node, op, init_expr, **kwargs)
 
     def visit_Call(self, node: foast.Call, **kwargs) -> itir.FunCall:
         if type_info.type_class(node.func.type) is ct.FieldType:
