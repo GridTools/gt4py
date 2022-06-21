@@ -22,7 +22,7 @@ GT_REGRESSION_TEST(fn_lap, test_environment<1>, fn_backend_t) {
            in(i, j - 1, k) - 4 * in(i, j, k);
   };
 
-  generated::lap_fencil(
+  generated::lap_fencil(tuple{})(
       fn_backend_t(),
       cartesian_domain(TypeParam::fn_cartesian_sizes(), std::tuple{1, 1, 0}),
       actual, TypeParam::make_const_storage(in));

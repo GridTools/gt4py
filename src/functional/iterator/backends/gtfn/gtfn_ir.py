@@ -82,8 +82,14 @@ class CartesianDomain(Node):
     tagged_offsets: TaggedValues
 
 
+class UnstructuredDomain(Node):
+    tagged_sizes: TaggedValues
+    tagged_offsets: TaggedValues
+    connectivities: List[SymRef]  # SymRef to offset declaration
+
+
 class Backend(Node):
-    domain: Union[SymRef, CartesianDomain]
+    domain: Union[SymRef, CartesianDomain, UnstructuredDomain]
 
 
 class StencilExecution(Node):
@@ -109,7 +115,7 @@ class FencilDefinition(Node, ValidatedSymbolTableTrait):
     params: List[Sym]
     function_definitions: List[FunctionDefinition]
     executions: List[StencilExecution]
-    offset_declarations: List[str]
+    offset_declarations: List[Sym]
     grid_type: GridType
 
     _NODE_SYMBOLS_: ClassVar = [Sym(id=name) for name in BUILTINS]

@@ -18,7 +18,7 @@ import abc
 import dataclasses
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any, Generic, TypeVar
+from typing import Any, Generic, Protocol, TypeVar, runtime_checkable
 
 
 DimT = TypeVar("DimT", bound="Dimension")
@@ -79,6 +79,12 @@ class Backend:
     # TODO : proper definition and implementation
     def generate_operator(self, ir):
         return ir
+
+
+@runtime_checkable
+class Connectivity(Protocol):
+    max_neighbors: int
+    has_skip_values: bool
 
 
 class GTError:

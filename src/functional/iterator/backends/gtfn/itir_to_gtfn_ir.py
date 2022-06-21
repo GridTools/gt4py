@@ -2,6 +2,7 @@ from typing import Any
 
 import eve
 from eve.concepts import SymbolName
+from functional.common import Connectivity
 from functional.iterator import ir as itir
 from functional.iterator.backends.gtfn.gtfn_ir import (
     Backend,
@@ -14,6 +15,7 @@ from functional.iterator.backends.gtfn.gtfn_ir import (
     GridType,
     Lambda,
     Literal,
+    Node,
     OffsetLiteral,
     StencilExecution,
     Sym,
@@ -21,10 +23,11 @@ from functional.iterator.backends.gtfn.gtfn_ir import (
     TaggedValues,
     TernaryExpr,
     UnaryExpr,
+    UnstructuredDomain,
 )
 
 
-class GTFN_lowering(eve.NodeTranslator):
+class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     _binary_op_map = {
         "plus": "+",
         "minus": "-",
@@ -99,12 +102,19 @@ class GTFN_lowering(eve.NodeTranslator):
                 )
             )
             offsets.append(self.visit(named_range.args[1]))
-        return CartesianDomain(
-            tagged_sizes=TaggedValues(tags=tags, values=sizes),
-            tagged_offsets=TaggedValues(tags=tags, values=offsets),
+        return TaggedValues(tags=tags, values=sizes), TaggedValues(tags=tags, values=offsets)
+
+    @staticmethod
+    def _collect_offsets(node: itir.Node) -> set[str]:
+        return (
+            node.pre_walk_values()
+            .if_isinstance(itir.OffsetLiteral, itir.AxisLiteral)
+            .getattr("value")
+            .if_isinstance(str)
+            .to_set()
         )
 
-    def visit_FunCall(self, node: itir.FunCall, **kwargs: Any) -> Expr:
+    def visit_FunCall(self, node: itir.FunCall, **kwargs: Any) -> Node:
         if isinstance(node.fun, itir.SymRef):
             if node.fun.id in self._unary_op_map:
                 assert len(node.args) == 1
@@ -126,7 +136,23 @@ class GTFN_lowering(eve.NodeTranslator):
             elif self._is_sparse_deref_shift(node):
                 return self._sparse_deref_shift_to_tuple_get(node)
             elif node.fun.id == "domain":
-                return self._make_domain(node)
+                sizes, domain_offsets = self._make_domain(node)
+                grid_type = kwargs["grid_type"]
+                if grid_type == GridType.CARTESIAN:
+                    return CartesianDomain(tagged_sizes=sizes, tagged_offsets=domain_offsets)
+                else:
+                    offset_providers = kwargs["offset_provider"]
+                    assert "stencil" in kwargs
+                    shift_offsets = self._collect_offsets(kwargs["stencil"])
+                    connectivities = []
+                    for o in shift_offsets:
+                        if o in offset_providers and isinstance(offset_providers[o], Connectivity):
+                            connectivities.append(SymRef(id=o))
+                    return UnstructuredDomain(
+                        tagged_sizes=sizes,
+                        tagged_offsets=domain_offsets,
+                        connectivities=connectivities,
+                    )
         elif isinstance(node.fun, itir.FunCall) and node.fun.fun == itir.SymRef(id="shift"):
             assert len(node.args) == 1
             return FunCall(
@@ -144,22 +170,16 @@ class GTFN_lowering(eve.NodeTranslator):
         )
 
     def visit_StencilClosure(self, node: itir.StencilClosure, **kwargs: Any) -> StencilExecution:
-        backend = Backend(domain=self.visit(node.domain))
+        assert isinstance(node.stencil, itir.SymRef)
+        backend = Backend(
+            domain=self.visit(node.domain, stencil=kwargs["symtable"][node.stencil.id], **kwargs)
+        )
+
         return StencilExecution(
             stencil=self.visit(node.stencil),
             output=self.visit(node.output),
             inputs=self.visit(node.inputs),
             backend=backend,
-        )
-
-    @staticmethod
-    def _collect_offsets(node: itir.FencilDefinition) -> set[str]:
-        return (
-            node.pre_walk_values()
-            .if_isinstance(itir.OffsetLiteral, itir.AxisLiteral)
-            .getattr("value")
-            .if_isinstance(str)
-            .to_set()
         )
 
     def visit_FencilDefinition(
@@ -169,8 +189,8 @@ class GTFN_lowering(eve.NodeTranslator):
         return FencilDefinition(
             id=SymbolName(node.id),
             params=self.visit(node.params),
-            executions=self.visit(node.closures),
+            executions=self.visit(node.closures, grid_type=grid_type, **kwargs),
             grid_type=grid_type,
-            offset_declarations=list(self._collect_offsets(node)),
+            offset_declarations=list(map(lambda x: Sym(id=x), self._collect_offsets(node))),
             function_definitions=self.visit(node.function_definitions),
         )

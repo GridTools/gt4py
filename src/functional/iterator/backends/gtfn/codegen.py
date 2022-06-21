@@ -42,10 +42,16 @@ class GTFNCodegen(codegen.TemplatedGenerator):
     BinaryExpr = as_fmt("({lhs}{op}{rhs})")
     TernaryExpr = as_fmt("({cond}?{true_expr}:{false_expr})")
 
-    TaggedValues = as_mako(
-        "hymap::keys<${','.join(t + '_t' for t in tags)}>::make_values(${','.join(values)})"
-    )
+    # TaggedValues = as_mako(
+    #     "hymap::keys<${','.join(t + '_t' for t in tags)}>::make_values(${','.join(values)})"
+    # )
+
+    # here we throw away the tags for now (and assume a fixed order)
+    TaggedValues = as_mako("tuple(${','.join(values)})")
     CartesianDomain = as_fmt("cartesian_domain({tagged_sizes}, {tagged_offsets})")
+    UnstructuredDomain = as_mako(
+        "unstructured_domain(${tagged_sizes}, ${tagged_offsets} ${',' if len(connectivities) else ''} ${','.join(f'at_key<{c}_t>(connectivities__)' for c in connectivities)})"
+    )
 
     def visit_OffsetLiteral(self, node: OffsetLiteral, **kwargs: Any) -> str:
         return node.value if isinstance(node.value, str) else f"{node.value}_c"
@@ -102,8 +108,10 @@ class GTFNCodegen(codegen.TemplatedGenerator):
     ${''.join('constexpr inline ' + o + '_t ' + o + '{};' for o in offset_declarations)}
     ${''.join(function_definitions)}
 
-    inline auto ${id} = [](auto backend, ${','.join('auto&& ' + p for p in params)}){
-        ${'\\n'.join(executions)}
+    inline auto ${id} = [](auto connectivities__){
+        return [connectivities__](auto backend, ${','.join('auto&& ' + p for p in params)}){
+            ${'\\n'.join(executions)}
+        };
     };
     }
     """
