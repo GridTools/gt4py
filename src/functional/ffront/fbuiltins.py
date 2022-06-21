@@ -75,7 +75,7 @@ broadcast = BuiltInFunction(
 )
 
 
-FUN_BUILTIN_NAMES = ["neighbor_sum", "broadcast", "max_over"]
+FUN_BUILTIN_NAMES = ["neighbor_sum", "max_over", "broadcast"]
 
 
 EXTERNALS_MODULE_NAME = "__externals__"
