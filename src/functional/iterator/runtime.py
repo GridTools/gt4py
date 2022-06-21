@@ -37,15 +37,13 @@ class FendefDispatcher:
         self.executor_kwargs = executor_kwargs
 
     def itir(self, *args, **kwargs):
+        from devtools import debug
+
         kwargs = self.executor_kwargs | kwargs
-        return fendef_codegen(self.function, *args, **kwargs)
+        return debug(fendef_codegen(self.function, *args, **kwargs))
 
     def __call__(self, *args, backend=None, **kwargs):
-        kwargs = self.executor_kwargs | kwargs
-        if self.out_as_kwarg_pos is not None and "out" in kwargs:
-            args_list = list(args)
-            args_list.insert(self.out_as_kwarg_pos, kwargs.pop("out"))
-            args = tuple(args_list)
+        args, kwargs = self._rewrite_args(args, kwargs)
 
         if backend is not None:
             if fendef_codegen is None:
@@ -57,12 +55,18 @@ class FendefDispatcher:
             fendef_embedded(self.function, *args, **kwargs)
 
     def string_format(self, *args, formatter=None, **kwargs) -> str:
-        kwargs = self.executor_kwargs | kwargs
+        args, kwargs = self._rewrite_args(args, kwargs)
+        return format_fencil(self.itir(*args, **kwargs), *args, formatter=formatter, **kwargs)
+
+    def _rewrite_args(self, args: tuple, kwargs: dict) -> tuple[tuple, dict]:
         if self.out_as_kwarg_pos is not None and "out" in kwargs:
             args_list = list(args)
             args_list.insert(self.out_as_kwarg_pos, kwargs.pop("out"))
-            args = tuple(args)
-        return format_fencil(self.itir(*args, **kwargs), *args, formatter=formatter, **kwargs)
+            args = tuple(args_list)
+
+        kwargs = self.executor_kwargs | kwargs
+
+        return args, kwargs
 
 
 def fendef(*dec_args, **dec_kwargs):
