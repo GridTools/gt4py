@@ -251,18 +251,18 @@ class FieldOperatorLowering(NodeTranslator):
         )(*(param[1] for param in params))
 
     def _visit_reduce(self, node: foast.Call, **kwargs) -> itir.FunCall:
-        def op_reduce():
-            lambda expr: im.plus_("acc", expr)
 
-        return self._make_reduction_expr(node, op_reduce, 0, **kwargs)
+        return self._make_reduction_expr(node, lambda expr: im.plus_("acc", expr), 0, **kwargs)
 
     def _visit_compare(self, node: foast.Call, **kwargs) -> itir.FunCall:
         # TODO(tehrengruber): replace greater_ with max_ builtin as soon as itir supports it
-        def op_compare():
-            lambda expr: im.call_("if_")(im.greater_("acc", expr), "acc", expr)
-
         init_expr = itir.Literal(value=str(np.finfo(np.float64).min), type="float64")
-        return self._make_reduction_expr(node, op_compare, init_expr, **kwargs)
+        return self._make_reduction_expr(
+            node,
+            lambda expr: im.call_("if_")(im.greater_("acc", expr), "acc", expr),
+            init_expr,
+            **kwargs,
+        )
 
     def visit_Call(self, node: foast.Call, **kwargs) -> itir.FunCall:
         if type_info.type_class(node.func.type) is ct.FieldType:
