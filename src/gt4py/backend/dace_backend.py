@@ -37,6 +37,7 @@ from gt4py.backend.gtc_common import (
     pybuffer_to_sid,
 )
 from gt4py.backend.module_generator import make_args_data_from_gtir
+from gt4py.utils import shash
 from gtc import common, gtir
 from gtc.dace.nodes import StencilComputation
 from gtc.dace.oir_to_dace import OirSDFGBuilder
@@ -264,6 +265,9 @@ def freeze_origin_domain_sdfg(inner_sdfg, arg_names, field_info, *, origin, doma
 
 
 class SDFGManager:
+
+    _loaded_sdfgs: Dict[str, dace.SDFG] = dict()
+
     def __init__(self, builder):
         self.builder = builder
 
@@ -285,23 +289,28 @@ class SDFGManager:
             pathlib.Path(os.path.relpath(self.builder.module_path.parent, pathlib.Path.cwd()))
             / filename
         )
-        try:
-            return dace.SDFG.from_file(path)
-        except FileNotFoundError:
 
-            base_oir = GTIRToOIR().visit(self.builder.gtir)
-            oir_pipeline = self.builder.options.backend_opts.get(
-                "oir_pipeline", DefaultPipeline(skip=[MaskInlining])
-            )
-            oir_node = oir_pipeline.run(base_oir)
-            sdfg = OirSDFGBuilder().visit(oir_node)
+        if path not in SDFGManager._loaded_sdfgs:
 
-            _to_device(sdfg, self.builder.backend.storage_info["device"])
-            _pre_expand_trafos(
-                self.builder.gtir, sdfg, self.builder.backend.storage_info["layout_map"]
-            )
-            self._save_sdfg(sdfg, path)
-            return sdfg
+            try:
+                sdfg = dace.SDFG.from_file(path)
+            except FileNotFoundError:
+
+                base_oir = GTIRToOIR().visit(self.builder.gtir)
+                oir_pipeline = self.builder.options.backend_opts.get(
+                    "oir_pipeline", DefaultPipeline(skip=[MaskInlining])
+                )
+                oir_node = oir_pipeline.run(base_oir)
+                sdfg = OirSDFGBuilder().visit(oir_node)
+
+                _to_device(sdfg, self.builder.backend.storage_info["device"])
+                _pre_expand_trafos(
+                    self.builder.gtir, sdfg, self.builder.backend.storage_info["layout_map"]
+                )
+                self._save_sdfg(sdfg, path)
+            self._loaded_sdfgs[path] = sdfg
+
+        return SDFGManager._loaded_sdfgs[path]
 
     def unexpanded_sdfg(self):
         return copy.deepcopy(self._unexpanded_sdfg())
@@ -316,10 +325,28 @@ class SDFGManager:
         return copy.deepcopy(self._expanded_sdfg())
 
     def _frozen_sdfg(self, *, origin: Dict[str, Tuple[int, ...]], domain: Tuple[int, ...]):
-        sdfg = self.unexpanded_sdfg()
-        signature = [arg.name for arg in self.builder.gtir.api_signature]
-        field_info = make_args_data_from_gtir(self.builder.gtir_pipeline).field_info
-        return freeze_origin_domain_sdfg(sdfg, signature, field_info, origin=origin, domain=domain)
+        frozen_hash = shash(origin, domain)
+        # check if same sdfg already cached on disk
+        path = self.builder.module_path
+        basename = os.path.splitext(path)[0]
+        path = basename + "_" + str(frozen_hash) + ".sdfg"
+        if path not in self._loaded_sdfgs:
+            try:
+                sdfg = dace.SDFG.from_file(path)
+            except FileNotFoundError:
+                # otherwise, wrap and save sdfg from scratch
+                inner_sdfg = self._unexpanded_sdfg()
+
+                sdfg = freeze_origin_domain_sdfg(
+                    inner_sdfg,
+                    arg_names=[arg.name for arg in self.builder.gtir.api_signature],
+                    field_info=make_args_data_from_gtir(self.builder.gtir_pipeline).field_info,
+                    origin=origin,
+                    domain=domain,
+                )
+                self._save_sdfg(sdfg, path)
+            self._loaded_sdfgs[path] = sdfg
+        return self._loaded_sdfgs[path]
 
     def frozen_sdfg(self, *, origin: Dict[str, Tuple[int, ...]], domain: Tuple[int, ...]):
         return copy.deepcopy(self._frozen_sdfg(origin=origin, domain=domain))
