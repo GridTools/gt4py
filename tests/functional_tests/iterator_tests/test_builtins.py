@@ -3,7 +3,19 @@ from typing import Iterable
 import numpy as np
 import pytest
 
-from functional.iterator.builtins import *
+from functional.iterator.builtins import (
+    and_,
+    divides,
+    eq,
+    greater,
+    if_,
+    less,
+    minus,
+    multiplies,
+    not_,
+    or_,
+    plus,
+)
 from functional.iterator.embedded import (
     NeighborTableOffsetProvider,
     index_field,

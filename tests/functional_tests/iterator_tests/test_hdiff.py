@@ -1,8 +1,9 @@
 import numpy as np
 
+from functional.common import Dimension
 from functional.iterator.builtins import *
 from functional.iterator.embedded import np_as_located_field
-from functional.iterator.runtime import *
+from functional.iterator.runtime import fendef, fundef, offset
 
 from .hdiff_reference import hdiff_reference
 
@@ -10,8 +11,8 @@ from .hdiff_reference import hdiff_reference
 I = offset("I")
 J = offset("J")
 
-IDim = CartesianAxis("IDim")
-JDim = CartesianAxis("JDim")
+IDim = Dimension("IDim")
+JDim = Dimension("JDim")
 
 
 @fundef
