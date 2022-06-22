@@ -19,7 +19,7 @@ import numpy.typing
 from functional import iterator
 from functional.common import Dimension
 from functional.iterator import builtins
-from functional.iterator.runtime import CartesianAxis, Offset
+from functional.iterator.runtime import Offset
 from functional.iterator.utils import tupelize
 
 
@@ -258,7 +258,7 @@ def execute_shift(
         return new_pos
     assert tag in offset_provider
     offset_implementation = offset_provider[tag]
-    if isinstance(offset_implementation, CartesianAxis):
+    if isinstance(offset_implementation, Dimension):
         assert offset_implementation.value in pos
         new_pos = pos.copy()
         val = new_pos[offset_implementation.value]
@@ -450,7 +450,7 @@ def make_in_iterator(
         if isinstance(axis, Offset):
             assert isinstance(axis.value, str)
             sparse_dimensions.append(axis.value)
-        elif isinstance(axis, CartesianAxis) and axis.local:
+        elif isinstance(axis, Dimension) and axis.local:
             # we just use the name of the axis to match the offset literal for now
             sparse_dimensions.append(axis.value)
 
@@ -587,7 +587,7 @@ def shift(*offsets: Union[Offset, int]):
 
 @dataclass
 class Column:
-    axis: CartesianAxis
+    axis: str
     range: range  # noqa: A003
 
 
