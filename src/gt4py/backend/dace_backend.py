@@ -316,7 +316,7 @@ class SDFGManager:
         return copy.deepcopy(self._expanded_sdfg())
 
     def _frozen_sdfg(self, *, origin: Dict[str, Tuple[int, ...]], domain: Tuple[int, ...]):
-        sdfg = self.expanded_sdfg()
+        sdfg = self.unexpanded_sdfg()
         signature = [arg.name for arg in self.builder.gtir.api_signature]
         field_info = make_args_data_from_gtir(self.builder.gtir_pipeline).field_info
         return freeze_origin_domain_sdfg(sdfg, signature, field_info, origin=origin, domain=domain)
