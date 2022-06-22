@@ -8,7 +8,6 @@ from typing import (
     Iterable,
     Optional,
     Protocol,
-    Tuple,
     TypeVar,
     Union,
     runtime_checkable,
@@ -27,7 +26,7 @@ from functional.iterator.utils import tupelize
 EMBEDDED = "embedded"
 
 
-PosT = dict[str, Union[Tuple[Optional[int], ...], Optional[int]]]
+PosT = dict[str, Union[tuple[Optional[int], ...], Optional[int]]]
 MaybePosT = Optional[PosT]
 OffsetT = Union[str, int]
 OffsetProviderT = dict[str, Any]
