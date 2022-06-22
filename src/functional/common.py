@@ -16,9 +16,12 @@ from __future__ import annotations
 
 import abc
 import dataclasses
+import enum
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any, Generic, Protocol, TypeVar, runtime_checkable
+
+from eve.type_definitions import StrEnum
 
 
 DimT = TypeVar("DimT", bound="Dimension")
@@ -36,6 +39,13 @@ class _NoSubclassing(type):
         return type.__new__(cls, name, bases, classdict)
 
 
+@enum.unique
+class DimensionKind(StrEnum):
+    HORIZONTAL = "horizontal"
+    VERTICAL = "vertical"
+    LOCAL = "local"
+
+
 @dataclass(frozen=True)
 class Dimension(metaclass=_NoSubclassing):
     # TODO(tehrengruber): Revisit. Touches to many open questions to be resolved
@@ -47,7 +57,7 @@ class Dimension(metaclass=_NoSubclassing):
     #  from fields.
 
     value: str
-    local: bool = dataclasses.field(default=False)
+    kind: DimensionKind = dataclasses.field(default=DimensionKind.HORIZONTAL)
 
 
 class DType:

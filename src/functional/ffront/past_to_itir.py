@@ -14,7 +14,7 @@
 from typing import Union
 
 from eve import NodeTranslator, traits
-from functional.common import GTTypeError
+from functional.common import DimensionKind, GTTypeError
 from functional.ffront import common_types, program_ast as past
 from functional.iterator import ir as itir
 
@@ -164,7 +164,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                     slice_.lower, itir.Literal(value="0", type="int"), dim_size
                 )
                 upper = self._visit_slice_bound(slice_.upper, dim_size, dim_size)
-                if dim.local:
+                if dim.kind == DimensionKind.LOCAL:
                     raise GTTypeError(f"Dimension {dim.value} must not be local.")
                 domain_args.append(
                     itir.FunCall(

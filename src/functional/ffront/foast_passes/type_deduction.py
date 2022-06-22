@@ -17,7 +17,7 @@ from typing import Optional, cast
 
 import functional.ffront.field_operator_ast as foast
 from eve import NodeTranslator, traits
-from functional.common import GTSyntaxError, GTTypeError
+from functional.common import DimensionKind, GTSyntaxError, GTTypeError
 from functional.ffront import common_types as ct, type_info
 from functional.ffront.fbuiltins import FUN_BUILTIN_NAMES
 
@@ -135,7 +135,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             case ct.TupleType(types=types):
                 new_type = types[node.index]
             case ct.OffsetType(source=source, target=(target1, target2)):
-                if not target2.local:
+                if not target2.kind == DimensionKind.LOCAL:
                     raise FieldOperatorTypeDeductionError.from_foast_node(
                         new_value, msg="Second dimension in offset must be a local dimension."
                     )

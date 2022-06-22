@@ -7,6 +7,7 @@ import numpy as np
 import numpy.typing
 
 from functional import iterator
+from functional.common import DimensionKind
 from functional.iterator import builtins
 from functional.iterator.runtime import CartesianAxis, Offset
 from functional.iterator.utils import tupelize
@@ -376,7 +377,7 @@ def make_in_iterator(inp, pos, offset_provider, *, column_axis):
     for axis in axises:
         if isinstance(axis, Offset):
             sparse_dimensions.append(axis)
-        elif isinstance(axis, CartesianAxis) and axis.local:
+        elif isinstance(axis, CartesianAxis) and axis.kind == DimensionKind.LOCAL:
             # we just use the name of the axis to match the offset literal for now
             sparse_dimensions.append(axis)
 
