@@ -335,7 +335,7 @@ class SDFGManager:
                 sdfg = dace.SDFG.from_file(path)
             except FileNotFoundError:
                 # otherwise, wrap and save sdfg from scratch
-                inner_sdfg = self._unexpanded_sdfg()
+                inner_sdfg = self.unexpanded_sdfg()
 
                 sdfg = freeze_origin_domain_sdfg(
                     inner_sdfg,
