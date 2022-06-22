@@ -214,7 +214,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                 )
 
         left_type = cast(ct.FieldType | ct.ScalarType, left.type)
-        right_type = cast(ct.FieldType | ct.ScalarType, left.type)
+        right_type = cast(ct.FieldType | ct.ScalarType, right.type)
 
         if node.op == foast.BinaryOperator.POW:
             return left_type
