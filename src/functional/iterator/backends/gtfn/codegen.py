@@ -8,6 +8,7 @@ from functional.iterator.backends.gtfn.gtfn_ir import (
     Literal,
     OffsetLiteral,
     SymRef,
+    TaggedValues,
 )
 
 
@@ -42,12 +43,16 @@ class GTFNCodegen(codegen.TemplatedGenerator):
     BinaryExpr = as_fmt("({lhs}{op}{rhs})")
     TernaryExpr = as_fmt("({cond}?{true_expr}:{false_expr})")
 
-    # TaggedValues = as_mako(
-    #     "hymap::keys<${','.join(t + '_t' for t in tags)}>::make_values(${','.join(values)})"
-    # )
+    def visit_TaggedValues(self, node: TaggedValues, **kwargs):
+        tags = self.visit(node.tags)
+        values = self.visit(node.values)
+        if self.is_cartesian:
+            return (
+                f"hymap::keys<{','.join(t + '_t' for t in tags)}>::make_values({','.join(values)})"
+            )
+        else:
+            return f"tuple({','.join(values)})"
 
-    # here we throw away the tags for now (and assume a fixed order)
-    TaggedValues = as_mako("tuple(${','.join(values)})")
     CartesianDomain = as_fmt("cartesian_domain({tagged_sizes}, {tagged_offsets})")
     UnstructuredDomain = as_mako(
         "unstructured_domain(${tagged_sizes}, ${tagged_offsets} ${',' if len(connectivities) else ''} ${','.join(f'at_key<{c}_t>(connectivities__)' for c in connectivities)})"
@@ -84,10 +89,9 @@ class GTFNCodegen(codegen.TemplatedGenerator):
     def visit_FencilDefinition(
         self, node: FencilDefinition, **kwargs: Any
     ) -> Union[str, Collection[str]]:
-        is_cartesian = node.grid_type == GridType.CARTESIAN
+        self.is_cartesian = node.grid_type == GridType.CARTESIAN
         return self.generic_visit(
             node,
-            is_cartesian=is_cartesian,
             grid_type_str=self._grid_type_str[node.grid_type],
             **kwargs,
         )
@@ -101,9 +105,6 @@ class GTFNCodegen(codegen.TemplatedGenerator):
     using namespace fn;
     using namespace literals;
 
-    % if is_cartesian:
-        // TODO for cartesian we should use magic offset/axis names that are mapped to cartesian::dim::i, ...
-    % endif
     ${''.join('struct ' + o + '_t{};' for o in offset_declarations)}
     ${''.join('constexpr inline ' + o + '_t ' + o + '{};' for o in offset_declarations)}
     ${''.join(function_definitions)}

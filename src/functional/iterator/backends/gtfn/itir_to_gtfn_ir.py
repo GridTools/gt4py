@@ -2,7 +2,7 @@ from typing import Any
 
 import eve
 from eve.concepts import SymbolName
-from functional.common import Connectivity
+from functional.common import Connectivity, Dimension
 from functional.iterator import ir as itir
 from functional.iterator.backends.gtfn.gtfn_ir import (
     Backend,
@@ -54,6 +54,9 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         return Literal(value=node.value, type=node.type)
 
     def visit_OffsetLiteral(self, node: itir.OffsetLiteral, **kwargs: Any) -> OffsetLiteral:
+        if node.value in self.offset_provider:
+            if isinstance(self.offset_provider[node.value], Dimension):
+                return OffsetLiteral(value=self.offset_provider[node.value].value)
         return OffsetLiteral(value=node.value)
 
     def visit_AxisLiteral(self, node: itir.AxisLiteral, **kwargs: Any) -> Literal:
@@ -141,12 +144,13 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
                 if grid_type == GridType.CARTESIAN:
                     return CartesianDomain(tagged_sizes=sizes, tagged_offsets=domain_offsets)
                 else:
-                    offset_providers = kwargs["offset_provider"]
                     assert "stencil" in kwargs
                     shift_offsets = self._collect_offsets(kwargs["stencil"])
                     connectivities = []
                     for o in shift_offsets:
-                        if o in offset_providers and isinstance(offset_providers[o], Connectivity):
+                        if o in self.offset_provider and isinstance(
+                            self.offset_provider[o], Connectivity
+                        ):
                             connectivities.append(SymRef(id=o))
                     return UnstructuredDomain(
                         tagged_sizes=sizes,
@@ -186,11 +190,14 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         self, node: itir.FencilDefinition, *, grid_type: str, **kwargs: Any
     ) -> FencilDefinition:
         grid_type = getattr(GridType, grid_type.upper())
+        self.offset_provider = kwargs["offset_provider"]
         return FencilDefinition(
             id=SymbolName(node.id),
             params=self.visit(node.params),
             executions=self.visit(node.closures, grid_type=grid_type, **kwargs),
             grid_type=grid_type,
-            offset_declarations=list(map(lambda x: Sym(id=x), self._collect_offsets(node))),
+            offset_declarations=list(
+                map(lambda x: Sym(id=x), self._collect_offsets(node))
+            ),  # TODO filter out unused offsets after transform
             function_definitions=self.visit(node.function_definitions),
         )
