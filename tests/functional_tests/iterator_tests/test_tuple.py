@@ -275,37 +275,36 @@ def test_tuple_of_field_of_tuple_input(backend):
         assert np.allclose(2.0 * (np.asarray(inp1) + np.asarray(inp2)), out)
 
 
-# TODO tuple of tuple currently not supported, needs clean redesign of iterator of tuple
-# def test_tuple_of_tuple_of_field_input(backend):
-#     backend, validate = backend
+def test_tuple_of_tuple_of_field_input(backend):
+    backend, validate = backend
 
-#     shape = [5, 7, 9]
-#     rng = np.random.default_rng()
+    shape = [5, 7, 9]
+    rng = np.random.default_rng()
 
-#     inp1 = np_as_located_field(IDim, JDim, KDim)(
-#         rng.normal(rng.normal(size=(shape[0], shape[1], shape[2])))
-#     )
-#     inp2 = np_as_located_field(IDim, JDim, KDim)(
-#         rng.normal(rng.normal(size=(shape[0], shape[1], shape[2])))
-#     )
-#     inp3 = np_as_located_field(IDim, JDim, KDim)(
-#         rng.normal(rng.normal(size=(shape[0], shape[1], shape[2])))
-#     )
-#     inp4 = np_as_located_field(IDim, JDim, KDim)(
-#         rng.normal(rng.normal(size=(shape[0], shape[1], shape[2])))
-#     )
+    inp1 = np_as_located_field(IDim, JDim, KDim)(
+        rng.normal(rng.normal(size=(shape[0], shape[1], shape[2])))
+    )
+    inp2 = np_as_located_field(IDim, JDim, KDim)(
+        rng.normal(rng.normal(size=(shape[0], shape[1], shape[2])))
+    )
+    inp3 = np_as_located_field(IDim, JDim, KDim)(
+        rng.normal(rng.normal(size=(shape[0], shape[1], shape[2])))
+    )
+    inp4 = np_as_located_field(IDim, JDim, KDim)(
+        rng.normal(rng.normal(size=(shape[0], shape[1], shape[2])))
+    )
 
-#     out = np_as_located_field(IDim, JDim, KDim)(np.zeros(shape))
+    out = np_as_located_field(IDim, JDim, KDim)(np.zeros(shape))
 
-#     dom = {
-#         IDim: range(0, shape[0]),
-#         JDim: range(0, shape[1]),
-#         KDim: range(0, shape[2]),
-#     }
-#     tuple_tuple_input[dom](
-#         ((inp1, inp2), (inp3, inp4)), out=out, offset_provider={}, backend=backend
-#     )
-#     if validate:
-#         assert np.allclose(
-#             (np.asarray(inp1) + np.asarray(inp2) + np.asarray(inp3) + np.asarray(inp4)), out
-#         )
+    dom = {
+        IDim: range(0, shape[0]),
+        JDim: range(0, shape[1]),
+        KDim: range(0, shape[2]),
+    }
+    tuple_tuple_input[dom](
+        ((inp1, inp2), (inp3, inp4)), out=out, offset_provider={}, backend=backend
+    )
+    if validate:
+        assert np.allclose(
+            (np.asarray(inp1) + np.asarray(inp2) + np.asarray(inp3) + np.asarray(inp4)), out
+        )

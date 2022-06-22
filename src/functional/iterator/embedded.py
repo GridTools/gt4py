@@ -370,6 +370,19 @@ Undefined._setup_math_operations()
 _UNDEFINED = Undefined()
 
 
+def _get_axes(field_or_tuple: Union[LocatedField, tuple]) -> list[Dimension]:
+    return list(
+        _get_axes(field_or_tuple[0]) if isinstance(field_or_tuple, tuple) else field_or_tuple.axes
+    )
+
+
+def _make_tuple(field_or_tuple: Union[LocatedField, tuple], indices) -> tuple:
+    if isinstance(field_or_tuple, tuple):
+        return tuple(_make_tuple(f, indices) for f in field_or_tuple)
+    else:
+        return field_or_tuple[indices]
+
+
 class MDIterator:
     def __init__(
         self,
@@ -413,8 +426,7 @@ class MDIterator:
             return _UNDEFINED
 
         shifted_pos = self.pos.copy()
-        # TODO(havogt): support nested tuples
-        axes = self.field[0].axes if isinstance(self.field, tuple) else self.field.axes
+        axes = _get_axes(self.field)
 
         if not all(axis.value in shifted_pos.keys() for axis in axes):
             raise IndexError("Iterator position doesn't point to valid location for its field.")
@@ -428,10 +440,7 @@ class MDIterator:
             slice_axes=slice_column,
         )
         try:
-            if isinstance(self.field, tuple):
-                return tuple(f[ordered_indices] for f in self.field)
-            else:
-                return self.field[ordered_indices]
+            return _make_tuple(self.field, ordered_indices)
         except IndexError:
             return _UNDEFINED
 
@@ -443,8 +452,7 @@ def make_in_iterator(
     *,
     column_axis,
 ) -> MDIterator:
-    # TODO(havogt): support nested tuples
-    axes = inp[0].axes if isinstance(inp, tuple) else inp.axes
+    axes = _get_axes(inp)
     sparse_dimensions: list[str] = []
     for axis in axes:
         if isinstance(axis, Offset):
@@ -456,8 +464,8 @@ def make_in_iterator(
 
     assert len(sparse_dimensions) <= 1  # TODO multiple is not a current use case
     new_pos = pos.copy()
-    for axis in sparse_dimensions:
-        new_pos[axis] = None
+    for sparse_dim in sparse_dimensions:
+        new_pos[sparse_dim] = None
     if column_axis is not None:
         # if we deal with column stencil the column position is just an offset by which the whole column needs to be shifted
         new_pos[column_axis] = 0
@@ -743,7 +751,7 @@ def scan(scan_pass, is_forward: bool, init):
     return impl
 
 
-def fendef_embedded(fun, *args, **kwargs):  # noqa: 536
+def fendef_embedded(fun, *args, **kwargs):
     if "offset_provider" not in kwargs:
         raise RuntimeError("offset_provider not provided")
 
@@ -753,7 +761,7 @@ def fendef_embedded(fun, *args, **kwargs):  # noqa: 536
         sten,
         out: AssignableLocatedField,
         ins: list[LocatedField],
-    ):  # domain is Dict[axis, range]
+    ):
         domain: dict[str, range] = {
             k.value if isinstance(k, Dimension) else k: v for k, v in domain_.items()
         }
