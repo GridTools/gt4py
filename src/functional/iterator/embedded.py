@@ -714,8 +714,8 @@ _column_range = None  # TODO this is a bit ugly, alternative: pass scan range vi
 
 
 @builtins.scan.register(EMBEDDED)
-def scan(scan_pass, is_forward, init):
-    def impl(*iters):
+def scan(scan_pass, is_forward: bool, init):
+    def impl(*iters: ItIterator):
         if _column_range is None:
             raise RuntimeError("Column range is not defined, cannot scan.")
 
