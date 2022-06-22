@@ -299,7 +299,7 @@ def test_nabla2(fencil_processor, use_tmps):
         sign,
         vol,
         offset_provider={"E2V": e2v, "V2E": v2e},
-        fencil_processor=backend,
+        fencil_processor=fencil_processor,
         use_tmps=use_tmps,
     )
 
