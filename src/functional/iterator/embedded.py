@@ -415,20 +415,18 @@ class MDIterator:
 
         shifted_pos = self.pos.copy()
         # TODO(havogt): support nested tuples
-        axises = self.field[0].axes if isinstance(self.field, tuple) else self.field.axes
+        axes = self.field[0].axes if isinstance(self.field, tuple) else self.field.axes
 
-        if not all(axis.value in shifted_pos.keys() for axis in axises):
-            print(axises)
-            print(shifted_pos)
+        if not all(axis.value in shifted_pos.keys() for axis in axes):
             raise IndexError("Iterator position doesn't point to valid location for its field.")
         slice_column = {}
         if self.column_axis is not None:
             slice_column[self.column_axis] = slice(shifted_pos[self.column_axis], None)
             del shifted_pos[self.column_axis]
         ordered_indices = get_ordered_indices(
-            axises,
+            axes,
             shifted_pos,
-            slice_axises=slice_column,
+            slice_axes=slice_column,
         )
         try:
             if isinstance(self.field, tuple):
@@ -447,9 +445,9 @@ def make_in_iterator(
     column_axis,
 ) -> MDIterator:
     # TODO(havogt): support nested tuples
-    axises = inp[0].axes if isinstance(inp, tuple) else inp.axes
+    axes = inp[0].axes if isinstance(inp, tuple) else inp.axes
     sparse_dimensions: list[str] = []
-    for axis in axises:
+    for axis in axes:
         if isinstance(axis, Offset):
             assert isinstance(axis.value, str)
             sparse_dimensions.append(axis.value)
@@ -480,7 +478,7 @@ FIELD_DTYPE_T = TypeVar("FIELD_DTYPE_T", bound=np.typing.DTypeLike)
 
 
 class LocatedFieldImpl:
-    """A Field with named dimensions/axises.
+    """A Field with named dimensions/axes.
 
     Axis keys can be any objects that are hashable.
     """
@@ -518,14 +516,11 @@ class LocatedFieldImpl:
 
 
 def get_ordered_indices(
-    axises: Iterable[Dimension], pos: dict[str, int], *, slice_axises=None
+    axes: Iterable[Dimension], pos: dict[str, int], *, slice_axes=None
 ) -> tuple[int, ...]:
-    """pos is a dictionary from axis to offset."""  # noqa: D403
-    slice_axises = slice_axises or dict()
-    assert all(axis.value in [*pos.keys(), *slice_axises] for axis in axises)
-    return tuple(
-        pos[axis.value] if axis.value in pos else slice_axises[axis.value] for axis in axises
-    )
+    slice_axes = slice_axes or dict()
+    assert all(axis.value in [*pos.keys(), *slice_axes] for axis in axes)
+    return tuple(pos[axis.value] if axis.value in pos else slice_axes[axis.value] for axis in axes)
 
 
 def _tupsum(a, b):
@@ -553,15 +548,15 @@ def _tupsum(a, b):
     return tuple(combine_slice(*i) for i in zip(a, b))
 
 
-def np_as_located_field(*axises: Dimension, origin=None):
+def np_as_located_field(*axes: Dimension, origin=None):
     def _maker(a: np.ndarray):
-        if a.ndim != len(axises):
-            raise TypeError("ndarray.ndim incompatible with number of given axises")
+        if a.ndim != len(axes):
+            raise TypeError("ndarray.ndim incompatible with number of given axes")
 
         if origin is not None:
-            offsets = get_ordered_indices(axises, {k.value: v for k, v in origin.items()})
+            offsets = get_ordered_indices(axes, {k.value: v for k, v in origin.items()})
         else:
-            offsets = tuple(0 for _ in axises)
+            offsets = tuple(0 for _ in axes)
 
         def setter(indices, value):
             indices = tupelize(indices)
@@ -570,7 +565,7 @@ def np_as_located_field(*axises: Dimension, origin=None):
         def getter(indices):
             return a[_tupsum(indices, offsets)]
 
-        return LocatedFieldImpl(getter, axises, dtype=a.dtype, setter=setter, array=a.__array__)
+        return LocatedFieldImpl(getter, axes, dtype=a.dtype, setter=setter, array=a.__array__)
 
     return _maker
 
@@ -692,13 +687,9 @@ class TupleOfFields(TupleField):
             raise TypeError("Can only be instantiated with a tuple of fields")
         self.data = data
         axeses = _get_axeses(data)
-        if not all(axises == axeses[0] for axises in axeses):
-            raise TypeError("All fields in the tuple need the same axises.")
-        self.axises = axeses[0]
-
-    @property
-    def axes(self):
-        return self.axises
+        if not all(axes == axeses[0] for axes in axeses):
+            raise TypeError("All fields in the tuple need the same axes.")
+        self.axes = axeses[0]
 
     def __getitem__(self, indices):
         return _build_tuple_result(self.data, indices)
