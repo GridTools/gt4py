@@ -32,7 +32,11 @@ from eve.extended_typing import Any, Optional
 from eve.utils import UIDs
 from functional.common import GTTypeError
 from functional.fencil_processors import roundtrip
-from functional.fencil_processors.processor_interface import execute_fencil
+from functional.fencil_processors.processor_interface import (
+    Processor,
+    execute_fencil,
+    format_fencil,
+)
 from functional.ffront import (
     common_types as ct,
     field_operator_ast as foast,
@@ -232,6 +236,39 @@ class Program:
             raise NotImplementedError("Keyword arguments are not supported yet.")
 
     def __call__(self, *args, offset_provider: dict[str, Dimension], **kwargs) -> None:
+        rewritten_args, size_args, kwargs = self._process_args(args, kwargs)
+
+        if not self.backend:
+            warnings.warn(
+                UserWarning(
+                    f"Field View Program '{self.itir.id}': Using default ({DEFAULT_BACKEND}) backend."
+                )
+            )
+        backend = self.backend if self.backend else DEFAULT_BACKEND
+
+        execute_fencil(
+            self.itir,
+            *rewritten_args,
+            *size_args,
+            **kwargs,
+            offset_provider=offset_provider,
+            backend=backend,
+        )
+
+    def string_format(
+        self, *args, formatter: Processor, offset_provider: dict[str, Dimension], **kwargs
+    ) -> str:
+        rewritten_args, size_args, kwargs = self._process_args(args, kwargs)
+        return format_fencil(
+            self.itir,
+            *rewritten_args,
+            *size_args,
+            **kwargs,
+            offset_provider=offset_provider,
+            formatter=formatter,
+        )
+
+    def _process_args(self, args: tuple, kwargs: dict) -> tuple[tuple, tuple, dict]:
         self._validate_args(*args, **kwargs)
 
         # extract size of all field arguments
@@ -251,22 +288,7 @@ class Program:
             for dim_idx in range(0, len(param.type.dims)):
                 size_args.append(args[param_idx].shape[dim_idx])
 
-        if not self.backend:
-            warnings.warn(
-                UserWarning(
-                    f"Field View Program '{self.itir.id}': Using default ({DEFAULT_BACKEND}) backend."
-                )
-            )
-        backend = self.backend if self.backend else DEFAULT_BACKEND
-
-        execute_fencil(
-            self.itir,
-            *rewritten_args,
-            *size_args,
-            **kwargs,
-            offset_provider=offset_provider,
-            backend=backend,
-        )
+        return tuple(rewritten_args), tuple(size_args), kwargs
 
 
 @typing.overload
