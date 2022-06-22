@@ -428,7 +428,7 @@ class MDIterator:
         shifted_pos = self.pos.copy()
         axes = _get_axes(self.field)
 
-        if not all(axis.value in shifted_pos.keys() for axis in axes):
+        if not all(axis.value in shifted_pos.keys() for axis in axes if axis is not None):
             raise IndexError("Iterator position doesn't point to valid location for its field.")
         slice_column = {}
         if self.column_axis is not None:
@@ -526,8 +526,13 @@ def get_ordered_indices(
     axes: Iterable[Dimension], pos: dict[str, int], *, slice_axes=None
 ) -> tuple[int, ...]:
     slice_axes = slice_axes or dict()
-    assert all(axis.value in [*pos.keys(), *slice_axes] for axis in axes)
-    return tuple(pos[axis.value] if axis.value in pos else slice_axes[axis.value] for axis in axes)
+    assert all(axis.value in [*pos.keys(), *slice_axes] for axis in axes if axis is not None)
+    return tuple(
+        (pos[axis.value] if axis.value in pos else slice_axes[axis.value])
+        if axis is not None
+        else slice(None, None, None)
+        for axis in axes
+    )
 
 
 def _tupsum(a, b):
@@ -535,7 +540,7 @@ def _tupsum(a, b):
         is_slice = False
         if isinstance(s, slice):
             is_slice = True
-            first = s.start
+            first = 0 if s.start is None else s.start
             assert s.step is None
             assert s.stop is None
         else:
@@ -543,7 +548,7 @@ def _tupsum(a, b):
             first = s
         if isinstance(t, slice):
             is_slice = True
-            second = t.start
+            second = 0 if t.start is None else t.start
             assert t.step is None
             assert t.stop is None
         else:
@@ -596,7 +601,7 @@ def shift(*offsets: Union[Offset, int]):
 @dataclass
 class Column:
     axis: str
-    range: range  # noqa: A003
+    col_range: range
 
 
 class ScanArgIterator:
@@ -775,7 +780,7 @@ def fendef_embedded(fun, *args, **kwargs):
             column = Column(column_axis.value, domain[column_axis.value])
             del domain[column_axis.value]
 
-            _column_range = column.range
+            _column_range = column.col_range
 
         out = as_tuple_field(out) if can_be_tuple_field(out) else out
 
@@ -796,7 +801,7 @@ def fendef_embedded(fun, *args, **kwargs):
                 out[ordered_indices] = res
             else:
                 colpos = pos.copy()
-                for k in column.range:
+                for k in column.col_range:
                     colpos[column.axis] = k
                     ordered_indices = get_ordered_indices(out.axes, colpos)
                     out[ordered_indices] = res[k]
