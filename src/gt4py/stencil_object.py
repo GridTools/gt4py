@@ -572,7 +572,7 @@ class StencilObject(abc.ABC):
         # StencilObjects are singletons.
         return self
 
-    def __sdfg__(self, **kwargs):
+    def __sdfg__(self, *args, **kwargs):
         raise TypeError(
             f'Only dace backends are supported in DaCe-orchestrated programs. (found "{self.backend}")'
         )
