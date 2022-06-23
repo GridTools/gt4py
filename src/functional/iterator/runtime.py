@@ -11,7 +11,7 @@ __all__ = ["offset", "fundef", "fendef", "closure", "CartesianAxis"]
 
 @dataclass(frozen=True)
 class Offset:
-    value: Optional[Union[int, str]] = None
+    value: Union[int, str]
 
 
 def offset(value):
