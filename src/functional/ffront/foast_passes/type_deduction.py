@@ -247,7 +247,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         if not is_compatible(new_operand.type):
             raise FieldOperatorTypeDeductionError.from_foast_node(
                 node,
-                msg=f"Incompatible type for unary operator `{node.op}`: {new_operand.type}!",
+                msg=f"Incompatible type for unary operator `{node.op}`: `{new_operand.type}`!",
             )
         return foast.UnaryOp(
             op=node.op, operand=new_operand, location=node.location, type=new_operand.type
