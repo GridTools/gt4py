@@ -28,6 +28,7 @@ from functional.ffront.fbuiltins import (
     broadcast,
     float64,
     int32,
+    max_over,
     neighbor_sum,
     where,
 )
@@ -294,6 +295,51 @@ def reduction_setup():
         offset_provider={"V2E": NeighborTableOffsetProvider(v2e_arr, vertex, edge, 4)},
         v2e_table=v2e_arr,
     )  # type: ignore
+
+
+def test_maxover_execution_sparse(reduction_setup):
+    """Testing max_over functionality."""
+    rs = reduction_setup
+    Vertex = rs.Vertex
+    V2EDim = rs.V2EDim
+
+    inp_field = np_as_located_field(Vertex, V2EDim)(rs.v2e_table)
+
+    @field_operator
+    def maxover_fieldoperator(
+        inp_field: Field[[Vertex, V2EDim], "float64"]
+    ) -> Field[[Vertex], float64]:
+        return max_over(inp_field, axis=V2EDim)
+
+    maxover_fieldoperator(inp_field, out=rs.out, offset_provider=rs.offset_provider)
+
+    ref = np.max(rs.v2e_table, axis=1)
+    assert np.allclose(ref, rs.out)
+
+
+def test_maxover_execution_negatives(reduction_setup):
+    """Testing max_over functionality for negative values in array."""
+    rs = reduction_setup
+    Edge = rs.Edge
+    Vertex = rs.Vertex
+    V2EDim = rs.V2EDim
+    V2E = rs.V2E
+
+    edge_num = np.max(rs.v2e_table)
+    inp_field_arr = np.arange(-edge_num // 2, edge_num // 2 + 1, 1, dtype=int)
+    inp_field = np_as_located_field(Edge)(inp_field_arr)
+
+    @field_operator(backend="roundtrip")
+    def maxover_negvals(
+        edge_f: Field[[Edge], "float64"],
+    ) -> Field[[Vertex], float64]:
+        out = max_over(edge_f(V2E), axis=V2EDim)
+        return out
+
+    maxover_negvals(inp_field, out=rs.out, offset_provider=rs.offset_provider)
+
+    ref = np.max(inp_field_arr[rs.v2e_table], axis=1)
+    assert np.allclose(ref, rs.out)
 
 
 def test_reduction_execution(reduction_setup):

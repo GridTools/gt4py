@@ -51,13 +51,16 @@ class BuiltInFunction:
         return self.__gt_type
 
 
-neighbor_sum = BuiltInFunction(
+_reduction_like = BuiltInFunction(
     ct.FunctionType(
         args=[ct.DeferredSymbolType(constraint=ct.FieldType)],
         kwargs={"axis": ct.DeferredSymbolType(constraint=ct.DimensionType)},
         returns=ct.DeferredSymbolType(constraint=ct.FieldType),
     )
 )
+
+neighbor_sum = _reduction_like
+max_over = _reduction_like
 
 broadcast = BuiltInFunction(
     ct.FunctionType(
@@ -82,8 +85,7 @@ where = BuiltInFunction(
     )
 )
 
-
-FUN_BUILTIN_NAMES = ["neighbor_sum", "broadcast", "where"]
+FUN_BUILTIN_NAMES = ["neighbor_sum", "max_over", "broadcast", "where"]
 
 
 EXTERNALS_MODULE_NAME = "__externals__"

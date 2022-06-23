@@ -17,6 +17,8 @@ import itertools
 from dataclasses import dataclass, field
 from typing import Callable, Optional, cast
 
+import numpy as np
+
 from eve import NodeTranslator
 from functional.ffront import (
     common_types as ct,
@@ -231,16 +233,35 @@ class FieldOperatorLowering(NodeTranslator):
                 return im.shift_(offset_name)(self.visit(node.func, **kwargs))
         raise FieldOperatorLoweringError("Unexpected shift arguments!")
 
-    def _visit_reduce(self, node: foast.Call, **kwargs) -> itir.FunCall:
+    def _make_reduction_expr(
+        self,
+        node: foast.Call,
+        op: Callable[[itir.Expr], itir.Expr],
+        init_expr: int | itir.Literal,
+        **kwargs,
+    ):
         lowering = InsideReductionLowering()
         expr = lowering.visit(node.args[0], **kwargs)
         params = list(lowering.lambda_params.items())
         return im.lift_(
             im.call_("reduce")(
-                im.lambda__("accum", *(param[0] for param in params))(im.plus_("accum", expr)),
-                0,
+                im.lambda__("acc", *(param[0] for param in params))(op(expr)),
+                init_expr,
             )
         )(*(param[1] for param in params))
+
+    def _visit_reduce(self, node: foast.Call, **kwargs) -> itir.FunCall:
+        return self._make_reduction_expr(node, lambda expr: im.plus_("acc", expr), 0, **kwargs)
+
+    def _visit_max_over(self, node: foast.Call, **kwargs) -> itir.FunCall:
+        # TODO(tehrengruber): replace greater_ with max_ builtin as soon as itir supports it
+        init_expr = itir.Literal(value=str(np.finfo(np.float64).min), type="float64")
+        return self._make_reduction_expr(
+            node,
+            lambda expr: im.call_("if_")(im.greater_("acc", expr), "acc", expr),
+            init_expr,
+            **kwargs,
+        )
 
     def visit_Call(self, node: foast.Call, **kwargs) -> itir.FunCall:
         if type_info.type_class(node.func.type) is ct.FieldType:
