@@ -26,7 +26,7 @@ from functional.iterator.embedded import (
     index_field,
     np_as_located_field,
 )
-from functional.iterator.runtime import fendef, fundef, offset
+from functional.iterator.runtime import closure, fendef, fundef, offset
 
 from .fvm_nabla_setup import assert_close, nabla_setup
 

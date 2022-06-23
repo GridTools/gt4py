@@ -5,16 +5,20 @@ import pytest
 
 from functional.iterator.builtins import (
     and_,
+    can_deref,
+    deref,
     divides,
     eq,
     greater,
     if_,
     less,
+    lift,
     minus,
     multiplies,
     not_,
     or_,
     plus,
+    shift,
 )
 from functional.iterator.embedded import (
     NeighborTableOffsetProvider,

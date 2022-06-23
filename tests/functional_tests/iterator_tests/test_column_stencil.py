@@ -4,7 +4,7 @@ import pytest
 from functional.common import Dimension
 from functional.iterator.builtins import *
 from functional.iterator.embedded import np_as_located_field
-from functional.iterator.runtime import fendef, fundef, offset
+from functional.iterator.runtime import closure, fendef, fundef, offset
 
 
 I = offset("I")
