@@ -296,7 +296,7 @@ def reduction_setup():
     )  # type: ignore
 
 
-def test_maxover_execution_sparseFields(reduction_setup):
+def test_maxover_execution_sparse(reduction_setup):
     """Testing max_over functionality."""
     rs = reduction_setup
     Vertex = rs.Vertex
