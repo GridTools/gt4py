@@ -11,8 +11,6 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-import copy
-from itertools import permutations
 from typing import Optional, cast
 
 import functional.ffront.field_operator_ast as foast
@@ -187,15 +185,16 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
 
         self._check_operand_dtypes_match(node, left=left, right=right)
 
-        # check dimensions match and broadcast scalars to fields
-        for one_type, other_type in permutations([left.type, right.type]):
-            if type_info.is_dimensionally_promotable(other_type, one_type):
-                return boolified_type(one_type)
-
-        raise FieldOperatorTypeDeductionError.from_foast_node(
-            node,
-            msg=f"Incompatible types for operator '{node.op}': {left.type} and {right.type}!",
-        )
+        try:
+            # transform operands to have bool dtype and use regular promotion
+            #  mechanism to handle dimension promotion
+            return type_info.promote(boolified_type(left.type), boolified_type(right.type))
+        except GTTypeError as ex:
+            raise FieldOperatorTypeDeductionError.from_foast_node(
+                node,
+                msg=f"Could not promote `{left.type}` and `{right.type}` to common type"
+                f" in call to `{node.op}`.",
+            ) from ex
 
     def _deduce_binop_type(
         self,
@@ -212,28 +211,23 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         for arg in (left, right):
             if not is_compatible(arg.type):
                 raise FieldOperatorTypeDeductionError.from_foast_node(
-                    arg, msg=f"Type {arg.type} can not be used in operator '{node.op}'!"
+                    arg, msg=f"Type {arg.type} can not be used in operator `{node.op}`!"
                 )
 
+        left_type = cast(ct.FieldType | ct.ScalarType, left.type)
+        right_type = cast(ct.FieldType | ct.ScalarType, right.type)
+
         if node.op == foast.BinaryOperator.POW:
-            return left.type
+            return left_type
 
-        if left.type == right.type:
-            return copy.copy(left.type)
-
-        self._check_operand_dtypes_match(node, left=left, right=right)
-
-        # check dimensions match and broadcast scalars to fields
-        for one_type, other_type in permutations([left.type, right.type]):
-            if type_info.is_dimensionally_promotable(other_type, one_type):
-                return copy.copy(one_type)
-
-        # the case of left_type == right_type is already handled above
-        # so here they must be incompatible
-        raise FieldOperatorTypeDeductionError.from_foast_node(
-            node,
-            msg=f"Incompatible dimensions in operator '{node.op}': {left.type} and {right.type}!",
-        )
+        try:
+            return type_info.promote(left_type, right_type)
+        except GTTypeError as ex:
+            raise FieldOperatorTypeDeductionError.from_foast_node(
+                node,
+                msg=f"Could not promote `{left_type}` and `{right_type}` to common type"
+                f" in call to `{node.op}`.",
+            ) from ex
 
     def _check_operand_dtypes_match(
         self, node: foast.BinOp | foast.Compare, left: foast.Expr, right: foast.Expr
@@ -242,7 +236,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         if not type_info.extract_dtype(left.type) == type_info.extract_dtype(right.type):
             raise FieldOperatorTypeDeductionError.from_foast_node(
                 node,
-                msg=f"Incompatible datatypes in operator '{node.op}': {left.type} and {right.type}!",
+                msg=f"Incompatible datatypes in operator `{node.op}`: {left.type} and {right.type}!",
             )
 
     def visit_UnaryOp(self, node: foast.UnaryOp, **kwargs) -> foast.UnaryOp:
@@ -253,7 +247,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         if not is_compatible(new_operand.type):
             raise FieldOperatorTypeDeductionError.from_foast_node(
                 node,
-                msg=f"Incompatible type for unary operator '{node.op}': {new_operand.type}!",
+                msg=f"Incompatible type for unary operator `{node.op}`: `{new_operand.type}`!",
             )
         return foast.UnaryOp(
             op=node.op, operand=new_operand, location=node.location, type=new_operand.type
@@ -309,7 +303,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
 
         raise FieldOperatorTypeDeductionError.from_foast_node(
             node,
-            msg=f"Objects of type '{new_func.type}' are not callable.",
+            msg=f"Objects of type `{new_func.type}` are not callable.",
         )
 
     def _ensure_signature_valid(self, node: foast.Call, **kwargs) -> None:
@@ -322,7 +316,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             )
         except GTTypeError as err:
             raise FieldOperatorTypeDeductionError.from_foast_node(
-                node, msg=f"Invalid argument types in call to `{node.func.id}`."
+                node, msg=f"Invalid argument types in call to `{node.func.id}`!"
             ) from err
 
     def _visit_neighbor_sum(self, node: foast.Call, **kwargs) -> foast.Call:
