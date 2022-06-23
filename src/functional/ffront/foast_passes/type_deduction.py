@@ -326,8 +326,8 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             field_dims_str = ", ".join(str(dim) for dim in field_type.dims)
             raise FieldOperatorTypeDeductionError.from_foast_node(
                 node,
-                msg=f"Incompatible field argument in {node.func.id}. Expected "
-                f"a field with dimension {reduction_dim}, but got "
+                msg=f"Incompatible field argument in call to `{node.func.id}`. "
+                f"Expected a field with dimension {reduction_dim}, but got "
                 f"{field_dims_str}.",
             )
         return_type = ct.FieldType(
@@ -341,6 +341,30 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             kwargs=node.kwargs,
             location=node.location,
             type=return_type,
+        )
+
+    def _visit_where(self, node: foast.Call, **kwargs) -> foast.Call:
+        mask_type = cast(ct.FieldType, node.args[0].type)
+        left_type = cast(ct.FieldType, node.args[1].type)
+        right_type = cast(ct.FieldType, node.args[2].type)
+        if not type_info.is_logical(mask_type):
+            raise FieldOperatorTypeDeductionError.from_foast_node(
+                node,
+                msg=f"Incompatible argument in call to `{node.func.id}`. Expected "
+                f"a field with dtype bool, but got `{mask_type}`.",
+            )
+        if left_type != right_type:
+            raise FieldOperatorTypeDeductionError.from_foast_node(
+                node,
+                msg=f"Incompatible argument in call to `{node.func.id}`. Expected "
+                f"second and third argument to be of equal type.",
+            )
+        return foast.Call(
+            func=node.func,
+            args=node.args,
+            kwargs=node.kwargs,
+            type=left_type,
+            location=node.location,
         )
 
     def _visit_broadcast(self, node: foast.Call, **kwargs) -> foast.Call:
