@@ -32,6 +32,7 @@ __all__ = [
     "int64",
     "neighbor_sum",
     "broadcast",
+    "where",
 ]
 
 
@@ -72,8 +73,19 @@ broadcast = BuiltInFunction(
     )
 )
 
+where = BuiltInFunction(
+    ct.FunctionType(
+        args=[
+            ct.DeferredSymbolType(constraint=ct.FieldType),
+            ct.DeferredSymbolType(constraint=ct.FieldType),
+            ct.DeferredSymbolType(constraint=ct.FieldType),
+        ],
+        kwargs={},
+        returns=ct.DeferredSymbolType(constraint=ct.FieldType),
+    )
+)
 
-FUN_BUILTIN_NAMES = ["neighbor_sum", "max_over", "broadcast"]
+FUN_BUILTIN_NAMES = ["neighbor_sum", "max_over", "broadcast", "where"]
 
 
 EXTERNALS_MODULE_NAME = "__externals__"
