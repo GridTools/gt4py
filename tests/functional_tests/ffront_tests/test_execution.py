@@ -331,20 +331,17 @@ def test_maxover_execution_negatives(reduction_setup):
     V2E = rs.V2E
 
     edge_num = np.max(rs.v2e_table) + 1
-    inp_field_arr = np.linspace(start=-40, stop=40, num=edge_num, dtype=int)
+    inp_field_arr = np.arange(-edge_num, edge_num - 1, 1, dtype=int)
     inp_field = np_as_located_field(Edge)(inp_field_arr)
 
-    @field_operator
-    def maxover_negvals(edge_f: Field[[Edge], "float64"]) -> Field[[Vertex], float64]:
-        return max_over(edge_f(V2E), axis=V2EDim)
+    @field_operator(backend="roundtrip")
+    def maxover_negvals(
+        edge_f: Field[[Edge], "float64"],
+    ) -> Field[[Vertex], float64]:
+        out = max_over(edge_f(V2E), axis=V2EDim)
+        return out
 
-    @program(backend="roundtrip")
-    def maxover_negvals_program(
-        edge_f: Field[[Edge], float64], out: Field[[Vertex], float64]
-    ) -> None:
-        maxover_negvals(edge_f, out=out)
-
-    maxover_negvals_program(inp_field, rs.out, offset_provider=rs.offset_provider)
+    maxover_negvals(inp_field, out=rs.out, offset_provider=rs.offset_provider)
 
     ref = np.max(inp_field_arr[rs.v2e_table], axis=1)
     assert np.allclose(ref, rs.out)
