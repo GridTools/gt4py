@@ -330,8 +330,8 @@ def test_maxover_execution_negatives(reduction_setup):
     V2EDim = rs.V2EDim
     V2E = rs.V2E
 
-    edge_num = np.max(rs.v2e_table) + 1
-    inp_field_arr = np.arange(-edge_num, edge_num - 1, 1, dtype=int)
+    edge_num = np.max(rs.v2e_table)
+    inp_field_arr = np.arange(-edge_num // 2, edge_num // 2 + 1, 1, dtype=int)
     inp_field = np_as_located_field(Edge)(inp_field_arr)
 
     @field_operator(backend="roundtrip")
