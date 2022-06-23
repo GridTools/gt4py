@@ -237,7 +237,7 @@ def less(first, second):
     return first < second
 
 
-def named_range_(axis: str, range_: range) -> Generator[tuple[str, int], None, None]:
+def named_range_(axis: str, range_: Iterable[int]) -> Iterable[tuple[str, int]]:
     return ((axis, i) for i in range_)
 
 
