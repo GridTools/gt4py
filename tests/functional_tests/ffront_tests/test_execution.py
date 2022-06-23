@@ -541,10 +541,8 @@ def test_conditional_promotion():
     out = np_as_located_field(IDim)(np.zeros((size,)))
 
     @field_operator(backend="roundtrip")
-    def conditional(
-        mask: Field[[IDim], bool], a: Field[[IDim], float64]
-    ) -> Field[[IDim], float64]:
-        return where(mask, a, 10.)
+    def conditional(mask: Field[[IDim], bool], a: Field[[IDim], float64]) -> Field[[IDim], float64]:
+        return where(mask, a, 10.0)
 
     conditional(mask, a, out=out, offset_provider={})
 
