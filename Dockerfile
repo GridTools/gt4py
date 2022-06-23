@@ -1,4 +1,4 @@
-FROM nvidia/cuda:10.1-devel
+FROM nvidia/cuda:11.2.0-devel-ubuntu20.04
 ENV LANG C.UTF-8
 ENV LC_ALL C.UTF-8
 
@@ -6,7 +6,6 @@ ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get update -qq && apt-get install -qq -y --no-install-recommends \
     strace \
     build-essential \
-    cuda-toolkit-10.1 \
     tar \
     wget \
     curl \
@@ -54,5 +53,5 @@ RUN pyenv update && \
 ENV PATH="/root/.pyenv/shims:${PATH}"
 
 
-RUN pip install --upgrade pip setuptools wheel tox cupy-cuda101
+RUN pip install --upgrade pip setuptools wheel tox cupy-cuda112
 
