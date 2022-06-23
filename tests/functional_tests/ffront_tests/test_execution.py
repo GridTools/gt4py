@@ -28,7 +28,9 @@ from functional.ffront.fbuiltins import (
     broadcast,
     float64,
     int32,
+    max_over,
     neighbor_sum,
+    where,
 )
 from functional.iterator.embedded import (
     NeighborTableOffsetProvider,
@@ -295,6 +297,51 @@ def reduction_setup():
     )  # type: ignore
 
 
+def test_maxover_execution_sparse(reduction_setup):
+    """Testing max_over functionality."""
+    rs = reduction_setup
+    Vertex = rs.Vertex
+    V2EDim = rs.V2EDim
+
+    inp_field = np_as_located_field(Vertex, V2EDim)(rs.v2e_table)
+
+    @field_operator
+    def maxover_fieldoperator(
+        inp_field: Field[[Vertex, V2EDim], "float64"]
+    ) -> Field[[Vertex], float64]:
+        return max_over(inp_field, axis=V2EDim)
+
+    maxover_fieldoperator(inp_field, out=rs.out, offset_provider=rs.offset_provider)
+
+    ref = np.max(rs.v2e_table, axis=1)
+    assert np.allclose(ref, rs.out)
+
+
+def test_maxover_execution_negatives(reduction_setup):
+    """Testing max_over functionality for negative values in array."""
+    rs = reduction_setup
+    Edge = rs.Edge
+    Vertex = rs.Vertex
+    V2EDim = rs.V2EDim
+    V2E = rs.V2E
+
+    edge_num = np.max(rs.v2e_table)
+    inp_field_arr = np.arange(-edge_num // 2, edge_num // 2 + 1, 1, dtype=int)
+    inp_field = np_as_located_field(Edge)(inp_field_arr)
+
+    @field_operator(backend="roundtrip")
+    def maxover_negvals(
+        edge_f: Field[[Edge], "float64"],
+    ) -> Field[[Vertex], float64]:
+        out = max_over(edge_f(V2E), axis=V2EDim)
+        return out
+
+    maxover_negvals(inp_field, out=rs.out, offset_provider=rs.offset_provider)
+
+    ref = np.max(inp_field_arr[rs.v2e_table], axis=1)
+    assert np.allclose(ref, rs.out)
+
+
 def test_reduction_execution(reduction_setup):
     """Testing a trivial neighbor sum."""
     rs = reduction_setup
@@ -452,3 +499,53 @@ def test_broadcast_shifted():
     simple_broadcast(a, out=out, offset_provider={"Joff": JDim})
 
     assert np.allclose(a.array()[:, np.newaxis], out)
+
+
+def test_conditional():
+    size = 10
+    mask = np_as_located_field(IDim)(np.zeros((size,), dtype=bool))
+    mask.array()[0 : (size // 2)] = True
+    a = np_as_located_field(IDim)(np.ones((size,)))
+    b = np_as_located_field(IDim)(2 * np.ones((size,)))
+    out = np_as_located_field(IDim)(np.zeros((size,)))
+
+    @field_operator(backend="roundtrip")
+    def conditional(
+        mask: Field[[IDim], bool], a: Field[[IDim], float64], b: Field[[IDim], float64]
+    ) -> Field[[IDim], float64]:
+        return where(mask, a, b)
+
+    conditional(mask, a, b, out=out, offset_provider={})
+
+    assert np.allclose(np.where(mask, a, b), out)
+
+
+def test_conditional_shifted():
+    Ioff = FieldOffset("Ioff", source=IDim, target=[IDim])
+
+    size = 10
+    mask = np_as_located_field(IDim)(np.zeros((size,), dtype=bool))
+    mask.array()[size // 2] = True
+    a = np_as_located_field(IDim)(np.arange(0, size, 1))
+    b = np_as_located_field(IDim)(np.zeros((size,)))
+    out = np_as_located_field(IDim)(np.zeros((size,)))
+
+    @field_operator(backend="roundtrip")
+    def conditional(
+        mask: Field[[IDim], bool], a: Field[[IDim], float64], b: Field[[IDim], float64]
+    ) -> Field[[IDim], float64]:
+        tmp = where(mask, a, b)
+        return tmp(Ioff[1])
+
+    @program
+    def conditional_program(
+        mask: Field[[IDim], bool],
+        a: Field[[IDim], float64],
+        b: Field[[IDim], float64],
+        out: Field[[IDim], float64],
+    ):
+        conditional(mask, a, b, out=out[:-1])
+
+    conditional_program(mask, a, b, out, offset_provider={"Ioff": IDim})
+
+    assert np.allclose(np.where(mask, a, b)[1:], out.array()[:-1])
