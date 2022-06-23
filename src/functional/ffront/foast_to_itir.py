@@ -254,7 +254,7 @@ class FieldOperatorLowering(NodeTranslator):
 
         return self._make_reduction_expr(node, lambda expr: im.plus_("acc", expr), 0, **kwargs)
 
-    def _visit_compare(self, node: foast.Call, **kwargs) -> itir.FunCall:
+    def _visit_max_over(self, node: foast.Call, **kwargs) -> itir.FunCall:
         # TODO(tehrengruber): replace greater_ with max_ builtin as soon as itir supports it
         init_expr = itir.Literal(value=str(np.finfo(np.float64).min), type="float64")
         return self._make_reduction_expr(
