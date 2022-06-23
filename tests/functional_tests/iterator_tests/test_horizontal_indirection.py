@@ -11,7 +11,6 @@
 #   )
 # )
 import numpy as np
-from numpy.core.numeric import allclose
 
 from functional.common import Dimension
 from functional.iterator.builtins import *
@@ -48,4 +47,4 @@ def test_simple_indirection():
 
     foo[domain(named_range(IDim, 0, shape[0]))](inp, cond, out=out, offset_provider={"I": IDim})
 
-    assert allclose(ref, out)
+    assert np.allclose(ref, out)
