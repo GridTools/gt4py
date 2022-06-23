@@ -310,13 +310,7 @@ def test_maxover_execution_sparse(reduction_setup):
     ) -> Field[[Vertex], float64]:
         return max_over(inp_field, axis=V2EDim)
 
-    @program(backend="roundtrip")
-    def maxover_program(
-        inp_field: Field[[Vertex, V2EDim], float64], out: Field[[Vertex], float64]
-    ) -> None:
-        maxover_fieldoperator(inp_field, out=out)
-
-    maxover_program(inp_field, rs.out, offset_provider=rs.offset_provider)
+    maxover_fieldoperator(inp_field, out=rs.out, offset_provider=rs.offset_provider)
 
     ref = np.max(rs.v2e_table, axis=1)
     assert np.allclose(ref, rs.out)
