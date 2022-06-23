@@ -194,7 +194,7 @@ def promote(*types: ct.FieldType | ct.ScalarType) -> ct.FieldType | ct.SymbolTyp
     """
     if all(isinstance(type_, ct.ScalarType) for type_ in types):
         if not all(type_ == types[0] for type_ in types):
-            raise GTTypeError("Could not promote scalars of different dtype not implemented.")
+            raise GTTypeError("Could not promote scalars of different dtype (not implemented).")
         if not all(type_.shape is None for type_ in types):  # type: ignore[union-attr]
             raise NotImplementedError("Shape promotion not implemented.")
         return types[0]
@@ -217,7 +217,7 @@ def promote_dims(
     contradicting order is found an exception is raised.
 
     A modified version (ensuring uniqueness of the order) of
-    `Kahn's algirithm <https://en.wikipedia.org/wiki/Topological_sorting#Kahn's_algorithm>`_
+    `Kahn's algorithm <https://en.wikipedia.org/wiki/Topological_sorting#Kahn's_algorithm>`_
     is used to topologically sort the arguments.
 
     >>> I, J, K = (Dimension(value=dim) for dim in ["I", "J", "K"])
@@ -233,7 +233,10 @@ def promote_dims(
     functional.common.GTTypeError: Dimensions can not be promoted. The following dimensions appear in contradicting order: I, J.
     """
     # build a graph with the vertices being dimensions and edges representing
-    #  the order between two dimensions
+    #  the order between two dimensions. The graph is encoded as a dictionary
+    #  mapping dimensions to their predecessors, i.e. a dictionary containing
+    #  adjacency lists. Since graphlib.TopologicalSorter uses predecessors
+    #  (contrary to successors) we also use this directionality here.
     graph: dict[Dimension, set[Dimension]] = {}
     for dims in dims_list:
         if dims == Ellipsis:
@@ -243,13 +246,12 @@ def promote_dims(
             continue
         # create a vertex for each dimension
         for dim in dims:
-            if dim not in graph:
-                graph[dim] = set()
+            graph.setdefault(dim, set())
         # add edges
-        previous_dim = dims[0]
+        predecessor = dims[0]
         for dim in dims[1:]:
-            graph[dim].add(previous_dim)
-            previous_dim = dim
+            graph[dim].add(predecessor)
+            predecessor = dim
 
     # modified version of Kahn's algorithm
     topologically_sorted_list: list[Dimension] = []
@@ -273,8 +275,8 @@ def promote_dims(
         del in_degree[v]
         topologically_sorted_list.insert(0, v)
         # update in-degree
-        for neighbour in graph[v]:
-            in_degree[neighbour] -= 1
+        for predecessor in graph[v]:
+            in_degree[predecessor] -= 1
 
     if len(in_degree.items()) > 0:
         raise GTTypeError(

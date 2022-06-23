@@ -185,8 +185,9 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
 
         self._check_operand_dtypes_match(node, left=left, right=right)
 
-        # check dimensions match and broadcast scalars to fields
         try:
+            # transform operands to have bool dtype and use regular promotion
+            #  mechanism to handle dimension promotion
             return type_info.promote(boolified_type(left.type), boolified_type(right.type))
         except GTTypeError as ex:
             raise FieldOperatorTypeDeductionError.from_foast_node(

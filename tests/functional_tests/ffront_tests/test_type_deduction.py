@@ -11,7 +11,7 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-from typing import Optional
+from typing import Optional, Pattern
 
 import pytest
 
@@ -166,7 +166,9 @@ def test_unpack_assign():
     )
 
 
-def dimension_promotion_cases():
+def dimension_promotion_cases() -> list[
+    tuple[list[list[Dimension]], list[Dimension] | None, None | Pattern]
+]:
     raw_list = [
         # list of list of dimensions, expected result, expected error message
         ([["I", "J"], ["I"]], ["I", "J"], None),
