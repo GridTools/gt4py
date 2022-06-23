@@ -1,12 +1,23 @@
 import pytest
 
-from functional.fencil_processors import double_roundtrip, gtfn, lisp, pretty_print, roundtrip
-from functional.fencil_processors.processor_interface import ProcessorType
+from functional.fencil_processors import double_roundtrip, gtfn, lisp, roundtrip
+from functional.fencil_processors.processor_interface import ProcessorType, fencil_formatter
+from functional.iterator import ir as itir
+from functional.iterator.pretty_parser import pparse
+from functional.iterator.pretty_printer import pformat
 
 
 @pytest.fixture(params=[False, True], ids=lambda p: f"use_tmps={p}")
 def use_tmps(request):
     return request.param
+
+
+@fencil_formatter
+def pretty_format_and_check(root: itir.FencilDefinition, *args, **kwargs) -> str:
+    pretty = pformat(root)
+    parsed = pparse(pretty)
+    assert parsed == root
+    return pretty
 
 
 @pytest.fixture(
@@ -15,7 +26,7 @@ def use_tmps(request):
         (None, True),
         (lisp.format_lisp, False),
         (gtfn.format_sourcecode, False),
-        (pretty_print.pretty_format_and_check, False),
+        (pretty_format_and_check, False),
         (roundtrip.executor, True),
         (double_roundtrip.executor, True),
     ],
