@@ -221,7 +221,7 @@ class FieldOperatorLowering(NodeTranslator):
         return self._lift_if_field(node)(
             im.call_(node.op.value)(
                 to_value(node.left)(self.visit(node.left, **kwargs)),
-                to_value(node.left)(self.visit(node.right, **kwargs)),
+                to_value(node.right)(self.visit(node.right, **kwargs)),
             )
         )
 
@@ -285,7 +285,10 @@ class FieldOperatorLowering(NodeTranslator):
     def _visit_broadcast(self, node: foast.Call, **kwargs) -> itir.FunCall:
         # just lower broadcasted field as iterator IR does not care about broadcasting
         broadcasted_field = node.args[0]
-        return self.visit(broadcasted_field, **kwargs)
+        lowered_arg = self.visit(broadcasted_field, **kwargs)
+        if isinstance(broadcasted_field.type, ct.ScalarType):
+            lowered_arg = im.lift_(im.lambda__()(lowered_arg))()
+        return lowered_arg
 
     def _visit_neighbor_sum(self, node: foast.Call, **kwargs) -> itir.FunCall:
         return self._visit_reduce(node, **kwargs)

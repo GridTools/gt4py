@@ -65,7 +65,7 @@ max_over = _reduction_like
 broadcast = BuiltInFunction(
     ct.FunctionType(
         args=[
-            ct.DeferredSymbolType(constraint=ct.FieldType),
+            ct.DeferredSymbolType(constraint=(ct.FieldType, ct.ScalarType)),
             ct.DeferredSymbolType(constraint=ct.TupleType),
         ],
         kwargs={},
@@ -77,8 +77,8 @@ where = BuiltInFunction(
     ct.FunctionType(
         args=[
             ct.DeferredSymbolType(constraint=ct.FieldType),
-            ct.DeferredSymbolType(constraint=ct.FieldType),
-            ct.DeferredSymbolType(constraint=ct.FieldType),
+            ct.DeferredSymbolType(constraint=(ct.FieldType, ct.ScalarType)),
+            ct.DeferredSymbolType(constraint=(ct.FieldType, ct.ScalarType)),
         ],
         kwargs={},
         returns=ct.DeferredSymbolType(constraint=ct.FieldType),

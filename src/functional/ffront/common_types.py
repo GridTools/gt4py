@@ -35,7 +35,7 @@ class SymbolType:
 class DeferredSymbolType(SymbolType):
     """Dummy used to represent a type not yet inferred."""
 
-    constraint: typing.Optional[typing.Type[SymbolType]]
+    constraint: typing.Optional[typing.Type[SymbolType] | tuple[typing.Type[SymbolType]]]
 
 
 @dataclass(frozen=True)
