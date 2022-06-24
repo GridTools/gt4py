@@ -10,15 +10,15 @@ from typing import (
     Optional,
     Protocol,
     Sequence,
+    TypeAlias,
     TypeGuard,
     TypeVar,
     Union,
-    cast,
     runtime_checkable,
 )
 
 import numpy as np
-import numpy.typing
+import numpy.typing as npt
 
 from functional import iterator
 from functional.common import Dimension
@@ -30,15 +30,21 @@ from functional.iterator.utils import tupelize
 EMBEDDED = "embedded"
 
 
-Position = dict[str, Union[tuple[Optional[int], ...], Optional[int]]]
+Position: TypeAlias = dict[str, Union[tuple[Optional[int], ...], Optional[int]]]
 #: A ``None`` position flags invalid not-a-neighbor results in neighbor-table lookups
-MaybePosition: TypeAlias = Optional[Position]  
-AnyOffset = str | int
-OffsetProvider = dict[str, Any]
+MaybePosition: TypeAlias = Optional[Position]
+AnyOffset: TypeAlias = str | int
+OffsetProvider: TypeAlias = dict[str, Any]
 
 
 @runtime_checkable
 class ItIterator(Protocol):
+    """
+    Prototype for the Iterator concept of Iterator IR.
+
+    `ItIterator` to avoid name clashes with `Iterator` from `typing` and `collections.abc`.
+    """
+
     def shift(self, *offsets: AnyOffset) -> ItIterator:
         ...
 
@@ -74,7 +80,7 @@ class AssignableLocatedField(LocatedField):
 class NeighborTableOffsetProvider:
     def __init__(
         self,
-        tbl: np.ndarray,  # TODO(havogt): define neighbor table concept
+        tbl: npt.NDArray,  # TODO(havogt): define neighbor table concept
         origin_axis: Dimension,
         neighbor_axis: Dimension,
         max_neighbors: int,
@@ -250,22 +256,19 @@ def named_range_(axis: str, range_: Iterable[int]) -> Iterable[tuple[str, int]]:
     return ((axis, i) for i in range_)
 
 
-def domain_iterator(domain: dict[str, range]) -> Sequence[Position]:
-    return cast(
-        Sequence[Position],
-        (
-            dict(elem)
-            for elem in itertools.product(*(named_range_(tup[0], tup[1]) for tup in domain.items()))
-        ),
+def domain_iterator(domain: dict[str, range]) -> Iterable[Position]:
+    return (
+        dict(elem)
+        for elem in itertools.product(*(named_range_(axis, rang) for axis, rang in domain.items()))
     )
 
 
 def execute_shift(
-    pos: MaybePosition, tag: str, index: int, *, offset_provider: OffsetProvider
+    pos: Position, tag: str, index: int, *, offset_provider: OffsetProvider
 ) -> MaybePosition:
     assert pos is not None
     if tag in pos and pos[tag] is None:  # sparse field with offset as neighbor dimension
-        new_pos = pos | {tag: index}    
+        new_pos = pos | {tag: index}
         return new_pos
     assert tag in offset_provider
     offset_implementation = offset_provider[tag]
@@ -320,10 +323,13 @@ def shift_position(
 ) -> MaybePosition:
     if pos is None:
         return None
-    new_pos: MaybePosition = pos.copy()  # becomes MaybePos later
+    new_pos = pos.copy()
     for tag, index in complete_offsets:
-        new_pos = execute_shift(new_pos, tag, index, offset_provider=offset_provider)
-        if new_pos is None:
+        if (
+            shifted_pos := execute_shift(new_pos, tag, index, offset_provider=offset_provider)
+        ) is not None:
+            new_pos = shifted_pos
+        else:
             return None
     return new_pos
 
@@ -603,7 +609,7 @@ def np_as_located_field(
 def index_field(axis: Dimension, dtype=float) -> LocatedField:
     return LocatedFieldImpl(
         lambda index: index[0] if isinstance(index, tuple) else index, (axis,), dtype
-    )  # TODO for typing this looks like an AssignableLocatedField
+    )  # TODO(havogt) for typing this looks like an AssignableLocatedField
 
 
 def constant_field(value: Any, dtype: type) -> LocatedField:
@@ -823,11 +829,11 @@ def fendef_embedded(fun, *args, **kwargs):  # noqa: 536
                 ordered_indices = get_ordered_indices(out.axes, pos)
                 out[ordered_indices] = res
             else:
-                colpos = pos.copy()
+                col_pos = pos.copy()
                 for k in column.range:
-                    colpos[column.axis] = k
-                    assert _is_position_fully_defined(colpos)
-                    ordered_indices = get_ordered_indices(out.axes, colpos)
+                    col_pos[column.axis] = k
+                    assert _is_position_fully_defined(col_pos)
+                    ordered_indices = get_ordered_indices(out.axes, col_pos)
                     out[ordered_indices] = res[k]
 
         _column_range = None
