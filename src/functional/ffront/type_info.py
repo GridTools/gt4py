@@ -34,6 +34,8 @@ def type_class(symbol_type: ct.SymbolType) -> Type[ct.SymbolType]:
         case ct.DeferredSymbolType(constraint):
             if constraint is None:
                 raise GTTypeError(f"No type information available for {symbol_type}!")
+            elif isinstance(constraint, tuple):
+                raise GTTypeError(f"Not sufficient type information available for {symbol_type}!")
             return constraint
         case ct.SymbolType() as concrete_type:
             return concrete_type.__class__
@@ -158,7 +160,7 @@ def is_concretizable(symbol_type: ct.SymbolType, to_type: ct.SymbolType) -> bool
 
     """
     if isinstance(symbol_type, ct.DeferredSymbolType) and (
-        symbol_type.constraint is None or issubclass(type_class(to_type), symbol_type.constraint)
+        symbol_type.constraint is None or issubclass(type_class(to_type), symbol_type.constraint)  # type: ignore[arg-type]
     ):
         return True
     elif is_concrete(symbol_type):
