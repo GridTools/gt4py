@@ -333,7 +333,7 @@ def test_maxover_execution_negatives(reduction_setup):
     inp_field_arr = np.arange(-edge_num // 2, edge_num // 2 + 1, 1, dtype=int)
     inp_field = np_as_located_field(Edge)(inp_field_arr)
 
-    @field_operator(backend="roundtrip")
+    @field_operator(backend=fieldview_backend)
     def maxover_negvals(
         edge_f: Field[[Edge], "float64"],
     ) -> Field[[Vertex], float64]:
@@ -513,7 +513,7 @@ def test_conditional():
     b = np_as_located_field(IDim)(2 * np.ones((size,)))
     out = np_as_located_field(IDim)(np.zeros((size,)))
 
-    @field_operator(backend="roundtrip")
+    @field_operator(backend=fieldview_backend)
     def conditional(
         mask: Field[[IDim], bool], a: Field[[IDim], float64], b: Field[[IDim], float64]
     ) -> Field[[IDim], float64]:
@@ -534,7 +534,7 @@ def test_conditional_shifted():
     b = np_as_located_field(IDim)(np.zeros((size,)))
     out = np_as_located_field(IDim)(np.zeros((size,)))
 
-    @field_operator(backend="roundtrip")
+    @field_operator(backend=fieldview_backend)
     def conditional(
         mask: Field[[IDim], bool], a: Field[[IDim], float64], b: Field[[IDim], float64]
     ) -> Field[[IDim], float64]:
