@@ -2,8 +2,10 @@ import types
 from dataclasses import dataclass
 from typing import Callable, Optional, Union
 
+from devtools import debug
+
 from functional import common
-from functional.fencil_processors.processor_interface import execute_fencil, format_fencil
+from functional.fencil_processors.processor_interface import ensure_executor, ensure_formatter
 from functional.iterator import builtins
 from functional.iterator.builtins import BackendNotSelectedError, builtin_dispatch
 
@@ -27,7 +29,6 @@ CartesianAxis = common.Dimension
 # dependency inversion, register fendef for embedded execution or for tracing/parsing here
 fendef_embedded: Optional[Callable] = None
 fendef_codegen: Optional[Callable] = None
-fendef_codegen_execute: Optional[Callable] = None
 
 
 class FendefDispatcher:
@@ -37,26 +38,29 @@ class FendefDispatcher:
         self.executor_kwargs = executor_kwargs
 
     def itir(self, *args, **kwargs):
-        from devtools import debug
-
         kwargs = self.executor_kwargs | kwargs
-        return debug(fendef_codegen(self.function, *args, **kwargs))
+        fencil_definition = fendef_codegen(self.function, *args, **kwargs)
+        if "debug" in kwargs:
+            debug(fencil_definition)
+        return fencil_definition
 
     def __call__(self, *args, backend=None, **kwargs):
         args, kwargs = self._rewrite_args(args, kwargs)
 
         if backend is not None:
+            ensure_executor(backend)
             if fendef_codegen is None:
                 raise RuntimeError("Backend execution is not registered")
-            execute_fencil(self.itir(*args, **kwargs), *args, backend=backend, **kwargs)
+            backend(self.itir(*args, **kwargs), *args, **kwargs)
         else:
             if fendef_embedded is None:
                 raise RuntimeError("Embedded execution is not registered")
             fendef_embedded(self.function, *args, **kwargs)
 
     def string_format(self, *args, formatter=None, **kwargs) -> str:
+        ensure_formatter(formatter)
         args, kwargs = self._rewrite_args(args, kwargs)
-        return format_fencil(self.itir(*args, **kwargs), *args, formatter=formatter, **kwargs)
+        return formatter(self.itir(*args, **kwargs), *args, **kwargs)
 
     def _rewrite_args(self, args: tuple, kwargs: dict) -> tuple[tuple, dict]:
         if self.out_as_kwarg_pos is not None and "out" in kwargs:

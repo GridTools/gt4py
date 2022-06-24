@@ -14,8 +14,6 @@
 import enum
 import typing
 
-from devtools import debug
-
 from functional.iterator import ir as itir
 
 
@@ -41,27 +39,17 @@ def fencil_executor(func):
     return func
 
 
-def format_fencil(fencil: itir.FencilDefinition, *args, formatter: Processor, **kwargs) -> str:
+def ensure_formatter(formatter: Processor) -> None:
     if (
         not hasattr(formatter, "processor_type")
         or formatter.processor_type is not ProcessorType.FORMATTER
     ):
         raise RuntimeError(f"{formatter} is not marked as a fencil formatter!")
-    if kwargs.get("debug"):
-        debug(fencil)
-    return formatter(fencil, *args, **kwargs)
 
 
-def execute_fencil(fencil: itir.FencilDefinition, *args, backend: Processor, **kwargs) -> None:
+def ensure_executor(backend: Processor) -> None:
     if (
         not hasattr(backend, "processor_type")
         or backend.processor_type is not ProcessorType.EXECUTOR
     ):
         raise RuntimeError(f"{backend} is not marked as a fencil executor!")
-    if kwargs.get("debug"):
-        debug(fencil)
-
-    if len(args) != len(fencil.params):
-        raise RuntimeError("Incorrect number of arguments")
-
-    backend(fencil, *args, **kwargs)

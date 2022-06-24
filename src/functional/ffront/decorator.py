@@ -28,14 +28,16 @@ import typing
 import warnings
 from typing import Callable
 
+from devtools import debug
+
 from eve.extended_typing import Any, Optional
 from eve.utils import UIDs
 from functional.common import GTTypeError
 from functional.fencil_processors import roundtrip
 from functional.fencil_processors.processor_interface import (
     Processor,
-    execute_fencil,
-    format_fencil,
+    ensure_executor,
+    ensure_formatter,
 )
 from functional.ffront import (
     common_types as ct,
@@ -245,27 +247,31 @@ class Program:
                 )
             )
         backend = self.backend if self.backend else DEFAULT_BACKEND
+        ensure_executor(backend)
+        if "debug" in kwargs:
+            debug(self.itir)
 
-        execute_fencil(
+        backend(
             self.itir,
             *rewritten_args,
             *size_args,
             **kwargs,
             offset_provider=offset_provider,
-            backend=backend,
         )
 
     def string_format(
         self, *args, formatter: Processor, offset_provider: dict[str, Dimension], **kwargs
     ) -> str:
+        ensure_formatter(formatter)
         rewritten_args, size_args, kwargs = self._process_args(args, kwargs)
-        return format_fencil(
+        if "debug" in kwargs:
+            debug(self.itir)
+        return formatter(
             self.itir,
             *rewritten_args,
             *size_args,
             **kwargs,
             offset_provider=offset_provider,
-            formatter=formatter,
         )
 
     def _process_args(self, args: tuple, kwargs: dict) -> tuple[tuple, tuple, dict]:

@@ -9,7 +9,7 @@ tags: []
 - **Created**: 2022-06-22
 - **Updated**: 2022-06-22
 
-The backend registry was deleted and replaced by passing the function instead of the string key to `execute_fencil`. The previous de-facto concept of backend (any function that takes a fencil) has been split into two types of `fencil_processors`, `fencil_executors` and `fencil_formatters`. Care was taken to not complicate applying either of those to a fencil.
+The backend registry was deleted and replaced by calling the function instead of passing the string key to `execute_fencil`. The previous de-facto concept of backend (any function that takes a fencil) has been split into two types of `fencil_processors`, `fencil_executors` and `fencil_formatters`. Care was taken to not complicate applying either of those to a fencil.
 
 This was done to 
 
@@ -36,7 +36,7 @@ While working on integrating foreign language (non-python) backends (E.g. genera
 Anything that doesn't execute a fencil, but instead generates text from it is now called a `fencil_formatter`.
 
 ### Clarifying the `__call__` semantics
-The following was done to clarify the semantics of fencil wrapper `__call__` (and fieldview Program `__call__`), in the case of using a non-embedded backend: The `execute_fencil` function being called now checks that the backend it was passed was decorated with `@fencil_processors.processor_interface.fencil_executor`. In addition another method was introduced on the fencil / Program wrappers (`.string_format`) to cover all other currently existing fencil processors, as they all generate a text string from the fencil.
+The following was done to clarify the semantics of fencil wrapper `__call__` (and fieldview Program `__call__`), in the case of using a non-embedded backend: The `__call__` method now checks that the backend it was passed was decorated with `@fencil_processors.processor_interface.fencil_executor`. In addition another method was introduced on the fencil / Program wrappers (`.string_format`) to cover all other currently existing fencil processors, as they all generate a text string from the fencil.
 
 ### The backend registry
 The registry was removed for now. Any code using a backend by key was changed to import the backend function and use that instead.
