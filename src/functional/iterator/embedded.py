@@ -35,12 +35,53 @@ EMBEDDED = "embedded"
 class SparseOffset:
     offset: str
 
+    def __str__(self) -> str:
+        return self.offset
 
-Position: TypeAlias = dict[str, Union[list[Optional[int]], Optional[int]]]
+
+class NeighborTableOffsetProvider:
+    def __init__(
+        self,
+        tbl: npt.NDArray,  # TODO(havogt): define neighbor table concept
+        origin_axis: Dimension,
+        neighbor_axis: Dimension,
+        max_neighbors: int,
+        has_skip_values=True,
+    ) -> None:
+        self.tbl = tbl
+        self.origin_axis = origin_axis
+        self.neighbor_axis = neighbor_axis
+        assert not hasattr(tbl, "shape") or tbl.shape[1] == max_neighbors
+        self.max_neighbors = max_neighbors
+        self.has_skip_values = has_skip_values
+
+
+# Atoms
+Tag: TypeAlias = str
+IntIndex: TypeAlias = int
+
+# Offsets
+OffsetTag: TypeAlias = Tag | SparseOffset
+AnyOffset: TypeAlias = Union[OffsetTag, IntIndex]
+CompleteOffset: TypeAlias = tuple[OffsetTag, IntIndex]
+Connectivity: TypeAlias = NeighborTableOffsetProvider
+OffsetProviderElem: TypeAlias = Dimension | Connectivity
+OffsetProvider: TypeAlias = dict[Tag, OffsetProviderElem]
+
+# Positions
+SparsePositionEntry = list[int]
+IncompleteSparsePositionEntry = list[Optional[int]]
+PositionEntry = IntIndex | SparsePositionEntry
+IncompletePositionEntry = IntIndex | IncompleteSparsePositionEntry
+ConcretePosition: TypeAlias = dict[Tag, PositionEntry]
+IncompletePosition: TypeAlias = dict[Tag, IncompletePositionEntry]
+# PartialPosition: TypeAlias = dict[Tag, Optional[IntIndex]]
+# WTFPosition: TypeAlias = dict[Tag, tuple[Optional[IntIndex], ...]] ??
+# BrokenPosition: TypeAlias = dict[Tag, Optional[tuple[Optional[IntIndex], ...]]] ??
+
+Position: TypeAlias = ConcretePosition | IncompletePosition
 #: A ``None`` position flags invalid not-a-neighbor results in neighbor-table lookups
 MaybePosition: TypeAlias = Optional[Position]
-AnyOffset: TypeAlias = str | int | SparseOffset
-OffsetProvider: TypeAlias = dict[str, Any]
 
 
 @runtime_checkable
@@ -81,23 +122,6 @@ class AssignableLocatedField(LocatedField):
 
     def __setitem__(self, indices: Union[int, tuple[int, ...]], value: Any) -> None:
         ...
-
-
-class NeighborTableOffsetProvider:
-    def __init__(
-        self,
-        tbl: npt.NDArray,  # TODO(havogt): define neighbor table concept
-        origin_axis: Dimension,
-        neighbor_axis: Dimension,
-        max_neighbors: int,
-        has_skip_values=True,
-    ) -> None:
-        self.tbl = tbl
-        self.origin_axis = origin_axis
-        self.neighbor_axis = neighbor_axis
-        assert not hasattr(tbl, "shape") or tbl.shape[1] == max_neighbors
-        self.max_neighbors = max_neighbors
-        self.has_skip_values = has_skip_values
 
 
 @builtins.deref.register(EMBEDDED)
@@ -257,6 +281,13 @@ def less(first, second):
     return first < second
 
 
+def _lookup_offset_provider(offset_provider: OffsetProvider, tag: OffsetTag) -> OffsetProviderElem:
+    assert isinstance(tag, Tag)
+    if tag not in offset_provider:
+        raise RuntimeError(f"Missing offset provider for `{tag}`")
+    return offset_provider[tag]
+
+
 def named_range_(axis: str, range_: Iterable[int]) -> Iterable[tuple[str, int]]:
     return ((axis, i) for i in range_)
 
@@ -269,7 +300,7 @@ def domain_iterator(domain: dict[str, range]) -> Iterable[Position]:
 
 
 def execute_shift(
-    pos: Position, tag: str, index: int, *, offset_provider: OffsetProvider
+    pos: Position, tag: OffsetTag, index: IntIndex, *, offset_provider: OffsetProvider
 ) -> MaybePosition:
     assert pos is not None
     if isinstance(tag, SparseOffset):
@@ -319,7 +350,7 @@ def execute_shift(
 # = shift(c2e,e2v,2,0)(cell_field) <-- v2c,e2c twice incomplete shift
 # = shift(2,0)(shift(c2e,e2v)(cell_field))
 # for implementations it means everytime we have an index, we can "execute" a concrete shift
-def group_offsets(*offsets: AnyOffset) -> tuple[list[tuple[str, int]], list[str]]:
+def group_offsets(*offsets: AnyOffset) -> tuple[list[CompleteOffset], list[OffsetTag]]:
     tag_stack = []
     complete_offsets = []
     for offset in offsets:
@@ -333,7 +364,7 @@ def group_offsets(*offsets: AnyOffset) -> tuple[list[tuple[str, int]], list[str]
 
 
 def shift_position(
-    pos: MaybePosition, *complete_offsets: tuple[str, int], offset_provider: OffsetProvider
+    pos: MaybePosition, *complete_offsets: CompleteOffset, offset_provider: OffsetProvider
 ) -> MaybePosition:
     if pos is None:
         return None
@@ -348,7 +379,7 @@ def shift_position(
     return new_pos
 
 
-def get_open_offsets(*offsets: AnyOffset) -> list[str]:
+def get_open_offsets(*offsets: AnyOffset) -> list[OffsetTag]:
     return group_offsets(*offsets)[1]
 
 
@@ -429,9 +460,9 @@ class MDIterator:
         field: LocatedField,
         pos: MaybePosition,
         *,
-        incomplete_offsets: Sequence[Union[str, SparseOffset]] = None,
+        incomplete_offsets: Sequence[OffsetTag] = None,
         offset_provider: OffsetProvider,
-        column_axis: str = None,
+        column_axis: Tag = None,
     ) -> None:
         self.field = field
         self.pos = pos
@@ -451,10 +482,9 @@ class MDIterator:
 
     def max_neighbors(self) -> int:
         assert self.incomplete_offsets
-        assert isinstance(
-            self.offset_provider[self.incomplete_offsets[0]], NeighborTableOffsetProvider
-        )
-        return self.offset_provider[self.incomplete_offsets[0]].max_neighbors
+        provider = _lookup_offset_provider(self.offset_provider, self.incomplete_offsets[0])
+        assert isinstance(provider, Connectivity)
+        return provider.max_neighbors
 
     def can_deref(self) -> bool:
         return self.pos is not None
