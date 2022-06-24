@@ -15,7 +15,7 @@ def is_concrete(symbol_type: ct.SymbolType) -> TypeGuard[ct.SymbolType]:
     return False
 
 
-def type_class(symbol_type: ct.SymbolType) -> Type[ct.SymbolType] | tuple[Type[ct.SymbolType]]:
+def type_class(symbol_type: ct.SymbolType) -> Type[ct.SymbolType]:
     """
     Determine which class should be used to create a compatible concrete type.
 
