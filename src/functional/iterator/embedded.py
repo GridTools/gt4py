@@ -31,9 +31,8 @@ EMBEDDED = "embedded"
 
 
 Position = dict[str, Union[tuple[Optional[int], ...], Optional[int]]]
-MaybePosition = Optional[
-    Position
-]  # if a neighbor-table lookup results in not-a-neighbor, we set the position to None
+#: A ``None`` position flags invalid not-a-neighbor results in neighbor-table lookups
+MaybePosition: TypeAlias = Optional[Position]  
 AnyOffset = str | int
 OffsetProvider = dict[str, Any]
 
@@ -266,8 +265,7 @@ def execute_shift(
 ) -> MaybePosition:
     assert pos is not None
     if tag in pos and pos[tag] is None:  # sparse field with offset as neighbor dimension
-        new_pos = pos.copy()
-        new_pos[tag] = index
+        new_pos = pos | {tag: index}    
         return new_pos
     assert tag in offset_provider
     offset_implementation = offset_provider[tag]
@@ -281,7 +279,7 @@ def execute_shift(
     elif isinstance(offset_implementation, NeighborTableOffsetProvider):
         assert offset_implementation.origin_axis.value in pos
         new_pos = pos.copy()
-        del new_pos[offset_implementation.origin_axis.value]
+        new_pos.pop(offset_implementation.origin_axis.value)
         if offset_implementation.tbl[pos[offset_implementation.origin_axis.value], index] is None:
             return None
         else:
