@@ -31,6 +31,9 @@ from functional.iterator.utils import tupelize
 
 EMBEDDED = "embedded"
 
+# TODO mark private/public functions/classes
+# e.g. by moving all public from this file to somewhere else
+
 
 class SparseOffset(str):
     ...
@@ -59,6 +62,8 @@ IntIndex: TypeAlias = int
 
 FieldIndex: TypeAlias = int | slice  # TODO probably numpy index type?
 FieldIndexOrIndices: TypeAlias = FieldIndex | tuple[FieldIndex, ...]
+
+Axis = Dimension | None
 
 # Offsets
 AnyOffset: TypeAlias = Union[Tag, IntIndex]
@@ -597,22 +602,27 @@ class LocatedFieldImpl:
         return self.array().shape
 
 
+def _is_tuple_axis(axis: Axis):
+    return axis is None
+
+
 def get_ordered_indices(
-    axes: Iterable[Dimension], pos: Mapping[str, FieldIndex | SparsePositionEntry]
+    axes: Iterable[Axis], pos: Mapping[str, FieldIndex | SparsePositionEntry]
 ) -> tuple[FieldIndex, ...]:
     res = list[FieldIndex]()
     pos = deepcopy(pos)
     for axis in axes:
-        if axis is None:
+        if _is_tuple_axis(axis):
             res.append(slice(None))
-
-        assert axis.value in pos
-        elem = pos[axis.value]
-        if isinstance(elem, list):
-            res.append(elem.pop(0))
         else:
-            assert isinstance(elem, (int, slice))
-            res.append(elem)
+            assert axis is not None
+            assert axis.value in pos
+            elem = pos[axis.value]
+            if isinstance(elem, list):
+                res.append(elem.pop(0))
+            else:
+                assert isinstance(elem, (int, slice))
+                res.append(elem)
     return tuple(res)
 
 
