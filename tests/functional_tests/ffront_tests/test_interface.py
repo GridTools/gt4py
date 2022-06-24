@@ -21,6 +21,8 @@ Basic Interface Tests
             arctan(), sqrt(), exp(), log(), isfinite(), isinf(), isnan(), floor(), ceil(), trunc()
     - evaluation test cases
 """
+import re
+
 import pytest
 
 from functional.common import Field
@@ -229,9 +231,11 @@ def test_conditional_wrong_arg_type():
     ) -> Field[..., float64]:
         return where(mask, a, b)
 
-    msg = r"Expected second and third argument to be of equal type."
-    with pytest.raises(FieldOperatorTypeDeductionError, match=msg):
+    msg = r"Could not promote scalars of different dtype \(not implemented\)."
+    with pytest.raises(FieldOperatorTypeDeductionError) as exc_info:
         _ = FieldOperatorParser.apply_to_function(conditional_wrong_arg_type)
+
+    assert re.search(msg, exc_info.value.__context__.args[0]) is not None
 
 
 # --- External symbols ---
