@@ -5,8 +5,8 @@ from eve import codegen
 from eve.utils import UIDs
 from functional.fencil_processors.gtfn.codegen import GTFNCodegen
 from functional.fencil_processors.gtfn.itir_to_gtfn_ir import GTFN_lowering
-from functional.fencil_processors.processor_interface import fencil_formatter
 from functional.iterator.embedded import NeighborTableOffsetProvider
+from functional.iterator.processor_interface import fencil_formatter
 from functional.iterator.transforms.common import add_fundefs, replace_nodes
 from functional.iterator.transforms.extract_function import extract_function
 from functional.iterator.transforms.pass_manager import apply_common_transforms

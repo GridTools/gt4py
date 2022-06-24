@@ -34,11 +34,6 @@ from eve.extended_typing import Any, Optional
 from eve.utils import UIDs
 from functional.common import GTTypeError
 from functional.fencil_processors import roundtrip
-from functional.fencil_processors.processor_interface import (
-    Processor,
-    ensure_executor,
-    ensure_formatter,
-)
 from functional.ffront import (
     common_types as ct,
     field_operator_ast as foast,
@@ -54,6 +49,12 @@ from functional.ffront.past_to_itir import ProgramLowering
 from functional.ffront.source_utils import CapturedVars
 from functional.iterator import ir as itir
 from functional.iterator.embedded import constant_field
+from functional.iterator.processor_interface import (
+    Executor,
+    Formatter,
+    ensure_executor,
+    ensure_formatter,
+)
 
 
 DEFAULT_BACKEND: Callable = roundtrip.executor
@@ -160,7 +161,7 @@ class Program:
     past_node: past.Program
     captured_vars: CapturedVars
     externals: dict[str, Any]
-    backend: Optional[Callable]
+    backend: Optional[Executor]
     definition: Optional[types.FunctionType] = None
 
     @classmethod
@@ -168,7 +169,7 @@ class Program:
         cls,
         definition: types.FunctionType,
         externals: Optional[dict] = None,
-        backend: Optional[Callable] = None,
+        backend: Optional[Executor] = None,
     ) -> "Program":
         captured_vars = _collect_capture_vars(CapturedVars.from_function(definition))
         past_node = ProgramParser.apply_to_function(definition)
@@ -180,7 +181,7 @@ class Program:
             definition=definition,
         )
 
-    def with_backend(self, backend: Callable) -> "Program":
+    def with_backend(self, backend: Executor) -> "Program":
         return Program(
             past_node=self.past_node,
             captured_vars=self.captured_vars,
@@ -260,7 +261,7 @@ class Program:
         )
 
     def string_format(
-        self, *args, formatter: Processor, offset_provider: dict[str, Dimension], **kwargs
+        self, *args, formatter: Formatter, offset_provider: dict[str, Dimension], **kwargs
     ) -> str:
         ensure_formatter(formatter)
         rewritten_args, size_args, kwargs = self._process_args(args, kwargs)
@@ -304,7 +305,7 @@ def program(definition: types.FunctionType) -> Program:
 
 @typing.overload
 def program(
-    *, externals: Optional[dict], backend: Optional[str]
+    *, externals: Optional[dict], backend: Optional[Executor]
 ) -> Callable[[types.FunctionType], Program]:
     ...
 
@@ -360,7 +361,7 @@ class FieldOperator(GTCallable):
     foast_node: foast.FieldOperator
     captured_vars: CapturedVars
     externals: dict[str, Any]
-    backend: Optional[Callable]  # note: backend is only used if directly called
+    backend: Optional[Executor]  # note: backend is only used if directly called
     definition: Optional[types.FunctionType] = None
 
     @classmethod
@@ -368,7 +369,7 @@ class FieldOperator(GTCallable):
         cls,
         definition: types.FunctionType,
         externals: Optional[dict] = None,
-        backend: Optional[Callable] = None,
+        backend: Optional[Executor] = None,
     ) -> "FieldOperator":
         captured_vars = CapturedVars.from_function(definition)
         foast_node = FieldOperatorParser.apply_to_function(definition)
@@ -385,7 +386,7 @@ class FieldOperator(GTCallable):
         assert isinstance(type_, ct.FunctionType)
         return type_
 
-    def with_backend(self, backend: Callable) -> "FieldOperator":
+    def with_backend(self, backend: Executor) -> "FieldOperator":
         return FieldOperator(
             foast_node=self.foast_node,
             captured_vars=self.captured_vars,
@@ -478,7 +479,7 @@ def field_operator(definition: types.FunctionType) -> FieldOperator:
 
 @typing.overload
 def field_operator(
-    *, externals: Optional[dict], backend: Optional[str]
+    *, externals: Optional[dict], backend: Optional[Executor]
 ) -> Callable[[types.FunctionType], FieldOperator]:
     ...
 

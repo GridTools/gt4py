@@ -5,9 +5,14 @@ from typing import Callable, Optional, Union
 from devtools import debug
 
 from functional import common
-from functional.fencil_processors.processor_interface import ensure_executor, ensure_formatter
 from functional.iterator import builtins
 from functional.iterator.builtins import BackendNotSelectedError, builtin_dispatch
+from functional.iterator.processor_interface import (
+    Executor,
+    Formatter,
+    ensure_executor,
+    ensure_formatter,
+)
 
 
 __all__ = ["offset", "fundef", "fendef", "closure", "CartesianAxis"]
@@ -44,7 +49,7 @@ class FendefDispatcher:
             debug(fencil_definition)
         return fencil_definition
 
-    def __call__(self, *args, backend=None, **kwargs):
+    def __call__(self, *args, backend: Optional[Executor] = None, **kwargs):
         args, kwargs = self._rewrite_args(args, kwargs)
 
         if backend is not None:
@@ -57,7 +62,7 @@ class FendefDispatcher:
                 raise RuntimeError("Embedded execution is not registered")
             fendef_embedded(self.function, *args, **kwargs)
 
-    def string_format(self, *args, formatter=None, **kwargs) -> str:
+    def string_format(self, *args, formatter: Formatter, **kwargs) -> str:
         ensure_formatter(formatter)
         args, kwargs = self._rewrite_args(args, kwargs)
         return formatter(self.itir(*args, **kwargs), *args, **kwargs)

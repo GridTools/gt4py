@@ -7,8 +7,8 @@ from eve import codegen
 from eve.codegen import FormatTemplate as as_fmt, MakoTemplate as as_mako
 from eve.concepts import Node
 from functional import iterator
-from functional.fencil_processors.processor_interface import fencil_executor
 from functional.iterator.ir import AxisLiteral, FencilDefinition, OffsetLiteral
+from functional.iterator.processor_interface import fencil_executor
 from functional.iterator.transforms import apply_common_transforms
 
 

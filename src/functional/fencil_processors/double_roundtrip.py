@@ -1,6 +1,6 @@
 from eve.concepts import Node
 from functional.fencil_processors import roundtrip
-from functional.fencil_processors.processor_interface import fencil_executor
+from functional.iterator.processor_interface import fencil_executor
 
 
 @fencil_executor

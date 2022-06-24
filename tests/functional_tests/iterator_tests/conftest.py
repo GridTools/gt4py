@@ -1,10 +1,10 @@
 import pytest
 
 from functional.fencil_processors import double_roundtrip, gtfn, lisp, roundtrip
-from functional.fencil_processors.processor_interface import ProcessorType, fencil_formatter
 from functional.iterator import ir as itir
 from functional.iterator.pretty_parser import pparse
 from functional.iterator.pretty_printer import pformat
+from functional.iterator.processor_interface import ProcessorKind, fencil_formatter
 
 
 @pytest.fixture(params=[False, True], ids=lambda p: f"use_tmps={p}")
@@ -37,11 +37,11 @@ def fencil_processor(request):
 
 
 def run_processor(fencil, processor, *args, **kwargs):
-    if processor is None or processor.processor_type is ProcessorType.EXECUTOR:
+    if processor is None or processor.processor_kind is ProcessorKind.EXECUTOR:
         fencil(*args, backend=processor, **kwargs)
-    elif processor.processor_type is ProcessorType.FORMATTER:
+    elif processor.processor_kind is ProcessorKind.FORMATTER:
         print(fencil.string_format(*args, formatter=processor, **kwargs))
     else:
         raise TypeError(
-            f"fencil processor type not recognized of {processor}: {getattr(processor, 'processor_type')}!"
+            f"fencil processor type not recognized of {processor}: {getattr(processor, 'processor_kind')}!"
         )
