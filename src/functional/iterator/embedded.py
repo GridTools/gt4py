@@ -14,7 +14,6 @@ from typing import (
     Sequence,
     TypeAlias,
     TypeGuard,
-    TypeVar,
     Union,
     runtime_checkable,
 )
@@ -553,9 +552,6 @@ def make_in_iterator(
 builtins.builtin_dispatch.push_key(EMBEDDED)  # makes embedded the default
 
 
-FIELD_DTYPE_T = TypeVar("FIELD_DTYPE_T", bound=np.typing.DTypeLike)
-
-
 class LocatedFieldImpl:
     """A Field with named dimensions/axes.
 
@@ -573,7 +569,7 @@ class LocatedFieldImpl:
         dtype,
         *,
         setter: Optional[Callable[[FieldIndexOrIndices, Any], None]] = None,
-        array: Optional[Callable[[], np.ndarray]] = None,
+        array: Optional[Callable[[], npt.NDArray]] = None,
     ):
         self.getter = getter
         self._axes = axes
