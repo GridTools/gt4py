@@ -31,12 +31,8 @@ from functional.iterator.utils import tupelize
 EMBEDDED = "embedded"
 
 
-@dataclass
-class SparseOffset:
-    offset: str
-
-    def __str__(self) -> str:
-        return self.offset
+class SparseOffset(str):
+    ...
 
 
 class NeighborTableOffsetProvider:
@@ -60,10 +56,12 @@ class NeighborTableOffsetProvider:
 Tag: TypeAlias = str
 IntIndex: TypeAlias = int
 
+FieldIndex: TypeAlias = int | slice  # TODO probably numpy index type?
+FieldIndexOrIndices: TypeAlias = FieldIndex | tuple[FieldIndex, ...]
+
 # Offsets
-OffsetTag: TypeAlias = Tag | SparseOffset
-AnyOffset: TypeAlias = Union[OffsetTag, IntIndex]
-CompleteOffset: TypeAlias = tuple[OffsetTag, IntIndex]
+AnyOffset: TypeAlias = Union[Tag, IntIndex]
+CompleteOffset: TypeAlias = tuple[Tag, IntIndex]
 Connectivity: TypeAlias = NeighborTableOffsetProvider
 OffsetProviderElem: TypeAlias = Dimension | Connectivity
 OffsetProvider: TypeAlias = dict[Tag, OffsetProviderElem]
@@ -75,11 +73,8 @@ PositionEntry = IntIndex | SparsePositionEntry
 IncompletePositionEntry = IntIndex | IncompleteSparsePositionEntry
 ConcretePosition: TypeAlias = dict[Tag, PositionEntry]
 IncompletePosition: TypeAlias = dict[Tag, IncompletePositionEntry]
-# PartialPosition: TypeAlias = dict[Tag, Optional[IntIndex]]
-# WTFPosition: TypeAlias = dict[Tag, tuple[Optional[IntIndex], ...]] ??
-# BrokenPosition: TypeAlias = dict[Tag, Optional[tuple[Optional[IntIndex], ...]]] ??
 
-Position: TypeAlias = ConcretePosition | IncompletePosition
+Position: TypeAlias = Union[ConcretePosition, IncompletePosition]
 #: A ``None`` position flags invalid not-a-neighbor results in neighbor-table lookups
 MaybePosition: TypeAlias = Optional[Position]
 
@@ -113,14 +108,14 @@ class LocatedField(Protocol):
     def axes(self) -> tuple[Dimension, ...]:
         ...
 
-    def __getitem__(self, indices: Union[int, tuple[int, ...]]) -> Any:
+    def __getitem__(self, indices: FieldIndexOrIndices) -> Any:
         ...
 
 
 class AssignableLocatedField(LocatedField):
     """A LocatedField with write access."""
 
-    def __setitem__(self, indices: Union[int, tuple[int, ...]], value: Any) -> None:
+    def __setitem__(self, indices: FieldIndexOrIndices, value: Any) -> None:
         ...
 
 
@@ -184,11 +179,7 @@ def lift(stencil):
                 # TODO cleanup, test edge cases
                 open_offsets = get_open_offsets(*self.offsets)
                 assert open_offsets
-                assert isinstance(
-                    args[0].offset_provider[open_offsets[0]],
-                    NeighborTableOffsetProvider,
-                )
-                return args[0].offset_provider[open_offsets[0]].max_neighbors
+                return _get_connectivity(args[0].offset_provider, open_offsets[0]).max_neighbors
 
             def _shifted_args(self):
                 return tuple(map(lambda arg: arg.shift(*self.offsets), args))
@@ -281,32 +272,37 @@ def less(first, second):
     return first < second
 
 
-def _lookup_offset_provider(offset_provider: OffsetProvider, tag: OffsetTag) -> OffsetProviderElem:
-    assert isinstance(tag, Tag)
+def _lookup_offset_provider(offset_provider: OffsetProvider, tag: Tag) -> OffsetProviderElem:
     if tag not in offset_provider:
         raise RuntimeError(f"Missing offset provider for `{tag}`")
     return offset_provider[tag]
 
 
-def named_range_(axis: str, range_: Iterable[int]) -> Iterable[tuple[str, int]]:
+def _get_connectivity(offset_provider: OffsetProvider, tag: Tag) -> Connectivity:
+    if not isinstance(connectivity := _lookup_offset_provider(offset_provider, tag), Connectivity):
+        raise RuntimeError(f"Expected a `Connectivity` for `{tag}`")
+    return connectivity
+
+
+def _named_range(axis: str, range_: Iterable[int]) -> Iterable[tuple[str, int]]:
     return ((axis, i) for i in range_)
 
 
-def domain_iterator(domain: dict[str, range]) -> Iterable[Position]:
+def _domain_iterator(domain: dict[str, range]) -> Iterable[Position]:
     return (
         dict(elem)
-        for elem in itertools.product(*(named_range_(axis, rang) for axis, rang in domain.items()))
+        for elem in itertools.product(*(_named_range(axis, rang) for axis, rang in domain.items()))
     )
 
 
 def execute_shift(
-    pos: Position, tag: OffsetTag, index: IntIndex, *, offset_provider: OffsetProvider
+    pos: Position, tag: Tag, index: IntIndex, *, offset_provider: OffsetProvider
 ) -> MaybePosition:
     assert pos is not None
     if isinstance(tag, SparseOffset):
         new_pos = deepcopy(pos)
 
-        cur_pos = new_pos[tag.offset]
+        cur_pos = new_pos[tag]
         assert isinstance(cur_pos, list)
         for i, p in reversed(
             list(enumerate(cur_pos))
@@ -350,7 +346,7 @@ def execute_shift(
 # = shift(c2e,e2v,2,0)(cell_field) <-- v2c,e2c twice incomplete shift
 # = shift(2,0)(shift(c2e,e2v)(cell_field))
 # for implementations it means everytime we have an index, we can "execute" a concrete shift
-def group_offsets(*offsets: AnyOffset) -> tuple[list[CompleteOffset], list[OffsetTag]]:
+def group_offsets(*offsets: AnyOffset) -> tuple[list[CompleteOffset], list[Tag]]:
     tag_stack = []
     complete_offsets = []
     for offset in offsets:
@@ -379,7 +375,7 @@ def shift_position(
     return new_pos
 
 
-def get_open_offsets(*offsets: AnyOffset) -> list[OffsetTag]:
+def get_open_offsets(*offsets: AnyOffset) -> list[Tag]:
     return group_offsets(*offsets)[1]
 
 
@@ -460,7 +456,7 @@ class MDIterator:
         field: LocatedField,
         pos: MaybePosition,
         *,
-        incomplete_offsets: Sequence[OffsetTag] = None,
+        incomplete_offsets: Sequence[Tag] = None,
         offset_provider: OffsetProvider,
         column_axis: Tag = None,
     ) -> None:
@@ -482,9 +478,7 @@ class MDIterator:
 
     def max_neighbors(self) -> int:
         assert self.incomplete_offsets
-        provider = _lookup_offset_provider(self.offset_provider, self.incomplete_offsets[0])
-        assert isinstance(provider, Connectivity)
-        return provider.max_neighbors
+        return _get_connectivity(self.offset_provider, self.incomplete_offsets[0]).max_neighbors
 
     def can_deref(self) -> bool:
         return self.pos is not None
@@ -518,18 +512,15 @@ class MDIterator:
             return _UNDEFINED
 
 
-assert issubclass(MDIterator, ItIterator)
-
-
 def make_in_iterator(
     inp: LocatedField,
     pos: Position,
-    offset_provider: dict[str, Any],
+    offset_provider: OffsetProvider,
     *,
-    column_axis: Optional[str],
+    column_axis: Optional[Tag],
 ) -> MDIterator:
     axes = _get_axes(inp)
-    sparse_dimensions: list[str] = []
+    sparse_dimensions = list[Tag]()
     for axis in axes:
         if isinstance(axis, Offset):
             assert isinstance(axis.value, str)
@@ -538,16 +529,17 @@ def make_in_iterator(
             # we just use the name of the axis to match the offset literal for now
             sparse_dimensions.append(axis.value)
 
-    new_pos = pos.copy()
+    new_pos: Position = pos.copy()
     for sparse_dim in set(sparse_dimensions):
-        new_pos[sparse_dim] = [None] * sparse_dimensions.count(sparse_dim)
+        init = [None] * sparse_dimensions.count(sparse_dim)
+        new_pos[sparse_dim] = init  # type: ignore[assignment] # looks like mypy is confused
     if column_axis is not None:
         # if we deal with column stencil the column position is just an offset by which the whole column needs to be shifted
         new_pos[column_axis] = 0
     return MDIterator(
         inp,
         new_pos,
-        incomplete_offsets=list(map(lambda x: SparseOffset(offset=x), sparse_dimensions)),
+        incomplete_offsets=list(map(lambda x: SparseOffset(x), sparse_dimensions)),
         offset_provider=offset_provider,
         column_axis=column_axis,
     )
@@ -571,11 +563,11 @@ class LocatedFieldImpl:
 
     def __init__(
         self,
-        getter: Callable[[Union[int, tuple[int, ...]]], Any],
+        getter: Callable[[FieldIndexOrIndices], Any],
         axes: tuple[Dimension, ...],
         dtype,
         *,
-        setter: Optional[Callable[[Union[int, tuple[int, ...]], Any], None]] = None,
+        setter: Optional[Callable[[FieldIndexOrIndices, Any], None]] = None,
         array: Optional[Callable[[], np.ndarray]] = None,
     ):
         self.getter = getter
@@ -584,11 +576,11 @@ class LocatedFieldImpl:
         self.array = array
         self.dtype = dtype
 
-    def __getitem__(self, indices: Union[int, tuple[int, ...]]) -> Any:
+    def __getitem__(self, indices: FieldIndexOrIndices) -> Any:
         indices = tupelize(indices)
         return self.getter(indices)
 
-    def __setitem__(self, indices: Union[int, tuple[int, ...]], value: Any):
+    def __setitem__(self, indices: FieldIndexOrIndices, value: Any):
         if self.setter is None:
             raise TypeError("__setitem__ not supported for this field")
         self.setter(indices, value)
@@ -606,20 +598,22 @@ class LocatedFieldImpl:
 
 
 def get_ordered_indices(
-    axes: Iterable[Dimension], pos: dict[str, Union[int, list[int]]], *, slice_axes=None
-) -> tuple[int, ...]:
+    axes: Iterable[Dimension], pos: ConcretePosition, *, slice_axes=None
+) -> tuple[FieldIndex, ...]:
     slice_axes = slice_axes or dict()
     assert all(axis.value in [*pos.keys(), *slice_axes] for axis in axes if axis is not None)
-    res = []
+    res = list[FieldIndex]()
     pos = deepcopy(pos)
     for axis in axes:
         if axis is None:
-            return slice(None)
+            res.append(slice(None))
         if axis.value in pos:
-            if isinstance(pos[axis.value], list):
-                res.append(pos[axis.value].pop(0))
+            elem = pos[axis.value]
+            if isinstance(elem, list):
+                res.append(elem.pop(0))
             else:
-                res.append(pos[axis.value])
+                assert isinstance(elem, int)
+                res.append(elem)
         else:
             res.append(slice_axes[axis.value])
     return tuple(res)
@@ -880,7 +874,7 @@ def fendef_embedded(fun, *args, **kwargs):
 
         out = as_tuple_field(out) if can_be_tuple_field(out) else out
 
-        for pos in domain_iterator(domain):
+        for pos in _domain_iterator(domain):
             ins_iters = list(
                 make_in_iterator(
                     inp,

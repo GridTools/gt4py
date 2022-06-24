@@ -240,7 +240,7 @@ def test_slice_sparse(backend):
     )
 
     if validate:
-        assert allclose(out, ref)
+        assert np.allclose(out, ref)
 
 
 @fundef
@@ -264,7 +264,7 @@ def test_slice_twice_sparse(backend):
     )
 
     if validate:
-        assert allclose(np.asarray(out), ref)
+        assert np.allclose(np.asarray(out), ref)
 
 
 @fundef
@@ -289,7 +289,7 @@ def test_shift_sliced_sparse(backend):
     )
 
     if validate:
-        assert allclose(out, ref)
+        assert np.allclose(out, ref)
 
 
 @fundef
@@ -316,7 +316,7 @@ def test_slice_shifted_sparse(backend):
     print(ref)
     print(np.asarray(out))
     if validate:
-        assert allclose(out, ref)
+        assert np.allclose(out, ref)
 
 
 @fundef
