@@ -138,9 +138,8 @@ def make_tuple(*args):
 def lift(stencil):
     def impl(*args):
         class wrap_iterator:
-            def __init__(self, *, offsets=None, elem=None) -> None:
-                if offsets:
-                    assert all(isinstance(o, (int, str)) for o in offsets)
+            def __init__(self, *, offsets=(), elem=None) -> None:
+                assert all(isinstance(o, (int, str)) for o in offsets)
                 self.offsets = offsets or []
                 self.elem = elem
 
