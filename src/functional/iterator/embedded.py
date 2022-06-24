@@ -8,6 +8,7 @@ from typing import (
     Any,
     Callable,
     Iterable,
+    Mapping,
     Optional,
     Protocol,
     Sequence,
@@ -163,8 +164,7 @@ def make_tuple(*args):
 def lift(stencil):
     def impl(*args):
         class wrap_iterator:
-            def __init__(self, *, offsets=(), elem=None) -> None:
-                assert all(isinstance(o, (int, str)) for o in offsets)
+            def __init__(self, *, offsets: list[AnyOffset] = None, elem=None) -> None:
                 self.offsets = offsets or []
                 self.elem = elem
 
@@ -172,7 +172,7 @@ def lift(stencil):
             def __getitem__(self, index):
                 return wrap_iterator(offsets=self.offsets, elem=index)
 
-            def shift(self, *offsets):
+            def shift(self, *offsets: AnyOffset):
                 return wrap_iterator(offsets=[*self.offsets, *offsets], elem=self.elem)
 
             def max_neighbors(self):
@@ -311,6 +311,7 @@ def execute_shift(
                 cur_pos[i] = index
                 break
         return new_pos
+
     assert tag in offset_provider
     offset_implementation = offset_provider[tag]
     if isinstance(offset_implementation, Dimension):
@@ -443,7 +444,7 @@ def _make_tuple(field_or_tuple: Union[LocatedField, tuple], indices) -> tuple:
 
 def _is_position_fully_defined(
     pos: Position,
-) -> TypeGuard[dict[str, Union[int, list[int]]]]:
+) -> TypeGuard[ConcretePosition]:
     return all(
         isinstance(v, int) or (isinstance(v, list) and all(isinstance(e, int) for e in v))
         for v in pos.values()
@@ -495,7 +496,7 @@ class MDIterator:
 
         if not all(axis.value in shifted_pos.keys() for axis in axes if axis is not None):
             raise IndexError("Iterator position doesn't point to valid location for its field.")
-        slice_column = {}
+        slice_column = dict[Tag, FieldIndex]()
         if self.column_axis is not None:
             slice_column[self.column_axis] = slice(shifted_pos[self.column_axis], None)
             del shifted_pos[self.column_axis]
@@ -503,8 +504,7 @@ class MDIterator:
         assert _is_position_fully_defined(shifted_pos)
         ordered_indices = get_ordered_indices(
             axes,
-            shifted_pos,
-            slice_axes=slice_column,
+            {**shifted_pos, **slice_column},
         )
         try:
             return _make_tuple(self.field, ordered_indices)
@@ -598,24 +598,21 @@ class LocatedFieldImpl:
 
 
 def get_ordered_indices(
-    axes: Iterable[Dimension], pos: ConcretePosition, *, slice_axes=None
+    axes: Iterable[Dimension], pos: Mapping[str, FieldIndex | SparsePositionEntry]
 ) -> tuple[FieldIndex, ...]:
-    slice_axes = slice_axes or dict()
-    assert all(axis.value in [*pos.keys(), *slice_axes] for axis in axes if axis is not None)
     res = list[FieldIndex]()
     pos = deepcopy(pos)
     for axis in axes:
         if axis is None:
             res.append(slice(None))
-        if axis.value in pos:
-            elem = pos[axis.value]
-            if isinstance(elem, list):
-                res.append(elem.pop(0))
-            else:
-                assert isinstance(elem, int)
-                res.append(elem)
+
+        assert axis.value in pos
+        elem = pos[axis.value]
+        if isinstance(elem, list):
+            res.append(elem.pop(0))
         else:
-            res.append(slice_axes[axis.value])
+            assert isinstance(elem, (int, slice))
+            res.append(elem)
     return tuple(res)
 
 
