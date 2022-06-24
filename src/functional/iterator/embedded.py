@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import itertools
 import numbers
+from copy import deepcopy
 from dataclasses import dataclass
 from typing import (
     Any,
@@ -30,10 +31,15 @@ from functional.iterator.utils import tupelize
 EMBEDDED = "embedded"
 
 
-Position: TypeAlias = dict[str, Union[tuple[Optional[int], ...], Optional[int]]]
+@dataclass
+class SparseOffset:
+    offset: str
+
+
+Position: TypeAlias = dict[str, Union[list[Optional[int]], Optional[int]]]
 #: A ``None`` position flags invalid not-a-neighbor results in neighbor-table lookups
 MaybePosition: TypeAlias = Optional[Position]
-AnyOffset: TypeAlias = str | int
+AnyOffset: TypeAlias = str | int | SparseOffset
 OffsetProvider: TypeAlias = dict[str, Any]
 
 
@@ -266,8 +272,17 @@ def execute_shift(
     pos: Position, tag: str, index: int, *, offset_provider: OffsetProvider
 ) -> MaybePosition:
     assert pos is not None
-    if tag in pos and pos[tag] is None:  # sparse field with offset as neighbor dimension
-        new_pos = pos | {tag: index}
+    if isinstance(tag, SparseOffset):
+        new_pos = deepcopy(pos)
+
+        cur_pos = new_pos[tag.offset]
+        assert isinstance(cur_pos, list)
+        for i, p in reversed(
+            list(enumerate(cur_pos))
+        ):  # first shift applies to the last sparse dimensions of that axis type
+            if p is None:
+                cur_pos[i] = index
+                break
         return new_pos
     assert tag in offset_provider
     offset_implementation = offset_provider[tag]
@@ -312,7 +327,7 @@ def group_offsets(*offsets: AnyOffset) -> tuple[list[tuple[str, int]], list[str]
             tag_stack.append(offset)
         else:
             assert tag_stack
-            tag = tag_stack.pop(0)
+            tag = tag_stack.pop()
             complete_offsets.append((tag, offset))
     return complete_offsets, tag_stack
 
@@ -399,8 +414,13 @@ def _make_tuple(field_or_tuple: Union[LocatedField, tuple], indices) -> tuple:
         return field_or_tuple[indices]
 
 
-def _is_position_fully_defined(pos: Position) -> TypeGuard[dict[str, int]]:
-    return all(isinstance(v, int) for v in pos.values())
+def _is_position_fully_defined(
+    pos: Position,
+) -> TypeGuard[dict[str, Union[int, list[int]]]]:
+    return all(
+        isinstance(v, int) or (isinstance(v, list) and all(isinstance(e, int) for e in v))
+        for v in pos.values()
+    )
 
 
 class MDIterator:
@@ -409,7 +429,7 @@ class MDIterator:
         field: LocatedField,
         pos: MaybePosition,
         *,
-        incomplete_offsets: Sequence[str] = None,
+        incomplete_offsets: Sequence[Union[str, SparseOffset]] = None,
         offset_provider: OffsetProvider,
         column_axis: str = None,
     ) -> None:
@@ -488,17 +508,16 @@ def make_in_iterator(
             # we just use the name of the axis to match the offset literal for now
             sparse_dimensions.append(axis.value)
 
-    assert len(sparse_dimensions) <= 1  # TODO multiple is not a current use case
     new_pos = pos.copy()
-    for sparse_dim in sparse_dimensions:
-        new_pos[sparse_dim] = None
+    for sparse_dim in set(sparse_dimensions):
+        new_pos[sparse_dim] = [None] * sparse_dimensions.count(sparse_dim)
     if column_axis is not None:
         # if we deal with column stencil the column position is just an offset by which the whole column needs to be shifted
         new_pos[column_axis] = 0
     return MDIterator(
         inp,
         new_pos,
-        incomplete_offsets=[*sparse_dimensions],
+        incomplete_offsets=list(map(lambda x: SparseOffset(offset=x), sparse_dimensions)),
         offset_provider=offset_provider,
         column_axis=column_axis,
     )
@@ -557,16 +576,23 @@ class LocatedFieldImpl:
 
 
 def get_ordered_indices(
-    axes: Iterable[Dimension], pos: dict[str, int], *, slice_axes=None
+    axes: Iterable[Dimension], pos: dict[str, Union[int, list[int]]], *, slice_axes=None
 ) -> tuple[int, ...]:
     slice_axes = slice_axes or dict()
     assert all(axis.value in [*pos.keys(), *slice_axes] for axis in axes if axis is not None)
-    return tuple(
-        (pos[axis.value] if axis.value in pos else slice_axes[axis.value])
-        if axis is not None
-        else slice(None, None, None)
-        for axis in axes
-    )
+    res = []
+    pos = deepcopy(pos)
+    for axis in axes:
+        if axis is None:
+            return slice(None)
+        if axis.value in pos:
+            if isinstance(pos[axis.value], list):
+                res.append(pos[axis.value].pop(0))
+            else:
+                res.append(pos[axis.value])
+        else:
+            res.append(slice_axes[axis.value])
+    return tuple(res)
 
 
 def _tupsum(a, b):
