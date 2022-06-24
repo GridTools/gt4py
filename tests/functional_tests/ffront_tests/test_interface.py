@@ -25,7 +25,7 @@ import pytest
 
 from functional.common import Field
 from functional.ffront import common_types
-from functional.ffront.fbuiltins import float32, float64, int32, int64
+from functional.ffront.fbuiltins import float32, float64, int32, int64, where
 from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError
 from functional.ffront.func_to_foast import FieldOperatorParser, FieldOperatorSyntaxError
 from functional.ffront.symbol_makers import TypingError
@@ -208,6 +208,30 @@ def test_scalar_cast():
 
     with pytest.raises(FieldOperatorSyntaxError, match=(r"only takes literal arguments!")):
         _ = FieldOperatorParser.apply_to_function(cast_scalar_temp)
+
+
+def test_conditional_wrong_mask_type():
+    def conditional_wrong_mask_type(
+        a: Field[..., float64],
+    ) -> Field[..., float64]:
+        return where(a, a, a)
+
+    msg = r"Expected a field with dtype bool."
+    with pytest.raises(FieldOperatorTypeDeductionError, match=msg):
+        _ = FieldOperatorParser.apply_to_function(conditional_wrong_mask_type)
+
+
+def test_conditional_wrong_arg_type():
+    def conditional_wrong_arg_type(
+        mask: Field[..., bool],
+        a: Field[..., float32],
+        b: Field[..., float64],
+    ) -> Field[..., float64]:
+        return where(mask, a, b)
+
+    msg = r"Expected second and third argument to be of equal type."
+    with pytest.raises(FieldOperatorTypeDeductionError, match=msg):
+        _ = FieldOperatorParser.apply_to_function(conditional_wrong_arg_type)
 
 
 # --- External symbols ---
