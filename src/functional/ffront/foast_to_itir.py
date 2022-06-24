@@ -75,6 +75,10 @@ def can_be_value_or_iterator(symbol_type: ct.SymbolType):
     return resulting_type_kind(symbol_type) is not TypeKind.UNKNOWN
 
 
+def is_field(expr: foast.Expr) -> bool:
+    return type_info.type_class(expr.type) is ct.FieldType
+
+
 def to_value(node: foast.LocatedNode) -> Callable[[itir.Expr], itir.Expr]:
     """
     Either ``deref_`` or noop callable depending on the input node.
@@ -176,9 +180,6 @@ class FieldOperatorLowering(NodeTranslator):
         return im.ref(node.id)
 
     def _lift_lambda(self, node):
-        def is_field(expr: foast.Expr) -> bool:
-            return type_info.type_class(expr.type) is ct.FieldType
-
         param_names = list(
             node.pre_walk_values().if_isinstance(foast.Name).filter(is_field).getattr("id").unique()
         )
@@ -283,11 +284,21 @@ class FieldOperatorLowering(NodeTranslator):
         return self._lift_lambda(node)(im.call_("if_")(mask, left, right))
 
     def _visit_broadcast(self, node: foast.Call, **kwargs) -> itir.FunCall:
-        # just lower broadcasted field as iterator IR does not care about broadcasting
         broadcasted_field = node.args[0]
+
+        # just lower broadcasted field and ignore second argument as iterator
+        #  IR does not care about broadcasting
         lowered_arg = self.visit(broadcasted_field, **kwargs)
+
+        # if the argument is a scalar though convert it into an iterator.
+        #  This is an artefact originating from the relation between the type
+        #  deduction and the lowering. When a scalar is broadcasted the resulting
+        #  type is a field. As such the lowering expects an iterator and tries
+        #  to deref it.
         if isinstance(broadcasted_field.type, ct.ScalarType):
+            assert len(list(node.pre_walk_values().if_isinstance(foast.Name).filter(is_field))) == 0
             lowered_arg = im.lift_(im.lambda__()(lowered_arg))()
+
         return lowered_arg
 
     def _visit_neighbor_sum(self, node: foast.Call, **kwargs) -> itir.FunCall:

@@ -467,8 +467,8 @@ def test_broadcast_scalar():
     out = np_as_located_field(IDim)(np.zeros((size)))
 
     @field_operator(backend="roundtrip")
-    def scalar_broadcast() -> Field[[IDim,], float64]:
-        return broadcast(float(1.), (IDim,))
+    def scalar_broadcast() -> Field[[IDim], float64]:
+        return broadcast(float(1.0), (IDim,))
 
     scalar_broadcast(out=out, offset_provider={})
 
