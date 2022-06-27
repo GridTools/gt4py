@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import itertools
 import numbers
+from copy import deepcopy
 from dataclasses import dataclass
 from typing import (
     Any,
@@ -71,8 +72,9 @@ OffsetProviderElem: TypeAlias = Dimension | Connectivity
 OffsetProvider: TypeAlias = dict[Tag, OffsetProviderElem]
 
 # Positions
-IncompleteSparsePositionEntry: TypeAlias = Optional[int]
-PositionEntry: TypeAlias = IntIndex
+SparsePositionEntry = list[int]
+IncompleteSparsePositionEntry: TypeAlias = list[Optional[int]]
+PositionEntry: TypeAlias = IntIndex | SparsePositionEntry
 IncompletePositionEntry: TypeAlias = IntIndex | IncompleteSparsePositionEntry
 ConcretePosition: TypeAlias = dict[Tag, PositionEntry]
 IncompletePosition: TypeAlias = dict[Tag, IncompletePositionEntry]
@@ -301,8 +303,17 @@ def execute_shift(
     pos: Position, tag: Tag, index: IntIndex, *, offset_provider: OffsetProvider
 ) -> MaybePosition:
     assert pos is not None
-    if tag in pos and pos[tag] is None:  # sparse field with offset as neighbor dimension
-        new_pos = pos | {tag: index}
+    if isinstance(tag, SparseOffset):
+        new_pos = deepcopy(pos)
+
+        cur_pos = new_pos[tag]
+        assert isinstance(cur_pos, list)
+        for i, p in reversed(
+            list(enumerate(cur_pos))
+        ):  # first shift applies to the last sparse dimensions of that axis type
+            if p is None:
+                cur_pos[i] = index
+                break
         return new_pos
 
     assert tag in offset_provider
@@ -348,7 +359,7 @@ def group_offsets(*offsets: AnyOffset) -> tuple[list[CompleteOffset], list[Tag]]
             tag_stack.append(offset)
         else:
             assert tag_stack
-            tag = tag_stack.pop(0)  # TODO fix comes in next PR
+            tag = tag_stack.pop()
             complete_offsets.append((tag, offset))
     return complete_offsets, tag_stack
 
@@ -509,17 +520,17 @@ def make_in_iterator(
             # we just use the name of the axis to match the offset literal for now
             sparse_dimensions.append(axis.value)
 
-    assert len(sparse_dimensions) <= 1  # TODO multiple is not a current use case
     new_pos: Position = pos.copy()
-    for sparse_dim in sparse_dimensions:
-        new_pos[sparse_dim] = None  # type: ignore[assignment] # looks like mypy is confused
+    for sparse_dim in set(sparse_dimensions):
+        init = [None] * sparse_dimensions.count(sparse_dim)
+        new_pos[sparse_dim] = init  # type: ignore[assignment] # looks like mypy is confused
     if column_axis is not None:
         # if we deal with column stencil the column position is just an offset by which the whole column needs to be shifted
         new_pos[column_axis] = 0
     return MDIterator(
         inp,
         new_pos,
-        incomplete_offsets=[*sparse_dimensions],
+        incomplete_offsets=list(map(lambda x: SparseOffset(x), sparse_dimensions)),
         offset_provider=offset_provider,
         column_axis=column_axis,
     )
@@ -574,11 +585,28 @@ class LocatedFieldImpl:
         return self.array().shape
 
 
+def _is_tuple_axis(axis: Axis):
+    return axis is None
+
+
 def get_ordered_indices(
-    axes: Iterable[Axis], pos: Mapping[str, FieldIndex]
+    axes: Iterable[Axis], pos: Mapping[str, FieldIndex | SparsePositionEntry]
 ) -> tuple[FieldIndex, ...]:
-    assert all(axis.value in [*pos.keys()] for axis in axes)
-    return tuple(pos[axis.value] for axis in axes)
+    res = list[FieldIndex]()
+    pos = deepcopy(pos)
+    for axis in axes:
+        if _is_tuple_axis(axis):
+            res.append(slice(None))
+        else:
+            assert axis is not None
+            assert axis.value in pos
+            elem = pos[axis.value]
+            if isinstance(elem, list):
+                res.append(elem.pop(0))
+            else:
+                assert isinstance(elem, (int, slice))
+                res.append(elem)
+    return tuple(res)
 
 
 def _tupsum(a, b):
