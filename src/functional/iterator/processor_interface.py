@@ -11,52 +11,56 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-import enum
-import typing
+from dataclasses import dataclass
+from functools import update_wrapper
+from typing import Protocol
 
 from functional.iterator import ir as itir
 
 
-class ProcessorKind(enum.Enum):
-    EXECUTOR = 0
-    FORMATTER = 1
-
-
-class Executor(typing.Protocol):
-    processor_kind: ProcessorKind
-
-    def __call__(fencil: itir.FencilDefinition, *args, **kwargs) -> None:
+class FencilFormatterFunction(Protocol):
+    def __call__(self, fencil: itir.FencilDefinition, *args, **kwargs) -> str:
         ...
 
 
-class Formatter(typing.Protocol):
-    processor_kind: ProcessorKind
-
-    def __call__(fencil: itir.FencilDefinition, *args, **kwargs) -> str:
+class FencilExecutorFunction(Protocol):
+    def __call__(self, fencil: itir.FencilDefinition, *args, **kwargs) -> None:
         ...
 
 
-def fencil_formatter(func: typing.Callable) -> Formatter:
-    func.processor_kind = ProcessorKind.FORMATTER  # type: ignore[attr-defined]  # we want to add the attr if necessary
-    return func  # type: ignore[return-value]  # mypy does not recognize compatibility of this protocol
+@dataclass
+class FencilFormatter:
+    formatter_function: FencilFormatterFunction
+
+    def __call__(self, fencil: itir.FencilDefinition, *args, **kwargs) -> str:
+        return self.formatter_function(fencil, *args, **kwargs)
 
 
-def fencil_executor(func: typing.Callable) -> Executor:
-    func.processor_kind = ProcessorKind.EXECUTOR  # type: ignore[attr-defined]  # we want to add the attr if necessary
-    return func  # type: ignore[return-value]  # mypy does not recognize compatibility of this protocol
+@dataclass
+class FencilExecutor:
+    executor_function: FencilExecutorFunction
+
+    def __call__(self, fencil: itir.FencilDefinition, *args, **kwargs) -> None:
+        self.executor_function(fencil, *args, **kwargs)
 
 
-def ensure_formatter(formatter: Executor) -> None:
-    if (
-        not hasattr(formatter, "processor_kind")
-        or formatter.processor_kind is not ProcessorKind.FORMATTER
-    ):
-        raise RuntimeError(f"{formatter} is not marked as a fencil formatter!")
+def fencil_formatter(func: FencilFormatterFunction) -> FencilFormatter:
+    wrapper = FencilFormatter(formatter_function=func)
+    update_wrapper(wrapper, func)
+    return wrapper
 
 
-def ensure_executor(backend: Formatter) -> None:
-    if (
-        not hasattr(backend, "processor_kind")
-        or backend.processor_kind is not ProcessorKind.EXECUTOR
-    ):
-        raise RuntimeError(f"{backend} is not marked as a fencil executor!")
+def fencil_executor(func: FencilExecutorFunction) -> FencilExecutor:
+    wrapper = FencilExecutor(executor_function=func)
+    update_wrapper(wrapper, func)
+    return wrapper
+
+
+def ensure_formatter(formatter: FencilFormatter) -> None:
+    if not isinstance(formatter, FencilFormatter):
+        raise RuntimeError(f"{formatter} is not a fencil formatter!")
+
+
+def ensure_executor(executor: FencilExecutor) -> None:
+    if not isinstance(executor, FencilExecutor):
+        raise RuntimeError(f"{executor} is not a fencil executor!")

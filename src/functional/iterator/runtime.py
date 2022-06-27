@@ -8,8 +8,8 @@ from functional import common
 from functional.iterator import builtins
 from functional.iterator.builtins import BackendNotSelectedError, builtin_dispatch
 from functional.iterator.processor_interface import (
-    Executor,
-    Formatter,
+    FencilExecutor,
+    FencilFormatter,
     ensure_executor,
     ensure_formatter,
 )
@@ -51,7 +51,7 @@ class FendefDispatcher:
             debug(fencil_definition)
         return fencil_definition
 
-    def __call__(self, *args, backend: Optional[Executor] = None, **kwargs):
+    def __call__(self, *args, backend: Optional[FencilExecutor] = None, **kwargs):
         args, kwargs = self._rewrite_args(args, kwargs)
 
         if backend is not None:
@@ -62,7 +62,7 @@ class FendefDispatcher:
                 raise RuntimeError("Embedded execution is not registered")
             fendef_embedded(self.function, *args, **kwargs)
 
-    def string_format(self, *args, formatter: Formatter, **kwargs) -> str:
+    def string_format(self, *args, formatter: FencilFormatter, **kwargs) -> str:
         ensure_formatter(formatter)
         args, kwargs = self._rewrite_args(args, kwargs)
         return formatter(self.itir(*args, **kwargs), *args, **kwargs)

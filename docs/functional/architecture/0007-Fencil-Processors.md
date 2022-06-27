@@ -60,7 +60,3 @@ In order to preserve the ease of testing any processor on all test cases, a disp
 ### Separating into categories of "executors" and "everything else"
 
 The only usecase that didn't either execute or generate a string was `pretty_print_and_check`. This was moved to the test suite because it would likely not be useful in practice. This step can be taken later if the variety general fencil processors ever increases.
-
-### Creating a type hierarchy of fencil processor kinds
-
-Simply seemed overengineering at this point but might be considered an option later.
