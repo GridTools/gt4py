@@ -435,9 +435,7 @@ def _make_tuple(field_or_tuple: Union[LocatedField, tuple], indices) -> tuple:
         return field_or_tuple[indices]
 
 
-def _is_position_fully_defined(
-    pos: Position,
-) -> TypeGuard[ConcretePosition]:
+def _is_position_fully_defined(pos: Position) -> TypeGuard[ConcretePosition]:
     return all(isinstance(v, int) for v in pos.values())
 
 
