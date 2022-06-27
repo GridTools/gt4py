@@ -54,7 +54,7 @@ class NeighborTableOffsetProvider:
 Tag: TypeAlias = str
 IntIndex: TypeAlias = int
 
-FieldIndex: TypeAlias = int | slice  # TODO probably numpy index type?
+FieldIndex: TypeAlias = int | slice
 FieldIndexOrIndices: TypeAlias = FieldIndex | tuple[FieldIndex, ...]
 
 Axis: TypeAlias = Dimension
