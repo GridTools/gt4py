@@ -44,6 +44,8 @@ class FendefDispatcher:
 
     def itir(self, *args, **kwargs):
         kwargs = self.executor_kwargs | kwargs
+        if fendef_codegen is None:
+            raise RuntimeError("Backend execution is not registered")
         fencil_definition = fendef_codegen(self.function, *args, **kwargs)
         if "debug" in kwargs:
             debug(fencil_definition)
@@ -54,8 +56,6 @@ class FendefDispatcher:
 
         if backend is not None:
             ensure_executor(backend)
-            if fendef_codegen is None:
-                raise RuntimeError("Backend execution is not registered")
             backend(self.itir(*args, **kwargs), *args, **kwargs)
         else:
             if fendef_embedded is None:
