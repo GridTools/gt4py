@@ -422,7 +422,7 @@ Undefined._setup_math_operations()
 _UNDEFINED = Undefined()
 
 
-def _is_position_fully_defined(pos: Position) -> TypeGuard[dict[str, int]]:
+def _is_position_fully_defined(pos: Position) -> TypeGuard[ConcretePosition]:
     return all(isinstance(v, int) for v in pos.values())
 
 
