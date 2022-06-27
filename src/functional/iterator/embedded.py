@@ -433,8 +433,13 @@ Undefined._setup_math_operations()
 _UNDEFINED = Undefined()
 
 
-def _is_position_fully_defined(pos: Position) -> TypeGuard[dict[str, int]]:
-    return all(isinstance(v, int) for v in pos.values())
+def _is_position_fully_defined(
+    pos: Position,
+) -> TypeGuard[ConcretePosition]:
+    return all(
+        isinstance(v, int) or (isinstance(v, list) and all(isinstance(e, int) for e in v))
+        for v in pos.values()
+    )
 
 
 class MDIterator:
