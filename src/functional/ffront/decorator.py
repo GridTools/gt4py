@@ -275,7 +275,7 @@ class Program:
             offset_provider=offset_provider,
         )
 
-    def _process_args(self, args: tuple, kwargs: dict) -> tuple[tuple, tuple, dict]:
+    def _process_args(self, args: tuple, kwargs: dict) -> tuple[tuple, tuple, dict[str, Any]]:
         self._validate_args(*args, **kwargs)
 
         # extract size of all field arguments
