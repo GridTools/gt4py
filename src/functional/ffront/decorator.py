@@ -244,7 +244,7 @@ class Program:
                 )
             if not isinstance(param.type, ct.FieldType):
                 continue
-            if not hasattr(args[param_idx], "array"):
+            if not hasattr(args[param_idx], "__array__"):
                 size_args.append(None)
                 continue
             for dim_idx in range(0, len(param.type.dims)):
