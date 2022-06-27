@@ -28,8 +28,10 @@ class NeighborTableOffsetProvider:
 
 
 @builtins.deref.register(EMBEDDED)
-def deref(it):
-    return it.deref()
+def deref(it_or_tuple):
+    if isinstance(it_or_tuple, tuple):
+        return tuple(it.deref() for it in it_or_tuple)
+    return it_or_tuple.deref()
 
 
 @builtins.can_deref.register(EMBEDDED)
@@ -39,6 +41,7 @@ def can_deref(it):
 
 @builtins.if_.register(EMBEDDED)
 def if_(cond, t, f):
+    assert not hasattr(cond, "shift")  # ensure someone doesn't accidentally pass an iterator
     return t if cond else f
 
 
@@ -59,7 +62,11 @@ def or_(a, b):
 
 @builtins.tuple_get.register(EMBEDDED)
 def tuple_get(i, tup):
-    return tup[i]
+    if isinstance(tup, np.ndarray): # columns
+        return tup[f"f{i}"]
+    elif isinstance(tup, tuple):
+        return tup[i]
+    raise ValueError()
 
 
 @builtins.make_tuple.register(EMBEDDED)
@@ -71,29 +78,31 @@ def make_tuple(*args):
 def lift(stencil):
     def impl(*args):
         class wrap_iterator:
-            def __init__(self, *, offsets=None, elem=None) -> None:
+            def __init__(self, stencil, args, *, offsets=None, elem=None) -> None:
+                self.stencil = stencil
+                self.args = args
                 self.offsets = offsets or []
                 self.elem = elem
 
             # TODO needs to be supported by all iterators that represent tuples
             def __getitem__(self, index):
-                return wrap_iterator(offsets=self.offsets, elem=index)
+                return wrap_iterator(self.stencil, self.args, offsets=self.offsets, elem=index)
 
             def shift(self, *offsets):
-                return wrap_iterator(offsets=[*self.offsets, *offsets], elem=self.elem)
+                return wrap_iterator(self.stencil, self.args, offsets=[*self.offsets, *offsets], elem=self.elem)
 
             def max_neighbors(self):
                 # TODO cleanup, test edge cases
                 open_offsets = get_open_offsets(*self.offsets)
                 assert open_offsets
                 assert isinstance(
-                    args[0].offset_provider[open_offsets[0].value],
+                    self.args[0].offset_provider[open_offsets[0].value],
                     NeighborTableOffsetProvider,
                 )
-                return args[0].offset_provider[open_offsets[0].value].max_neighbors
+                return self.args[0].offset_provider[open_offsets[0].value].max_neighbors
 
             def _shifted_args(self):
-                return tuple(map(lambda arg: arg.shift(*self.offsets), args))
+                return tuple(map(lambda arg: arg.shift(*self.offsets), self.args))
 
             def can_deref(self):
                 shifted_args = self._shifted_args()
@@ -108,11 +117,11 @@ def lift(stencil):
                 shifted_args = self._shifted_args()
 
                 if self.elem is None:
-                    return stencil(*shifted_args)
+                    return self.stencil(*shifted_args)
                 else:
-                    return stencil(*shifted_args)[self.elem]
+                    return self.stencil(*shifted_args)[self.elem]
 
-        return wrap_iterator()
+        return wrap_iterator(stencil, args)
 
     return impl
 
@@ -210,7 +219,7 @@ def execute_shift(pos, tag, index, *, offset_provider):
         assert offset_implementation.origin_axis in pos
         new_pos = pos.copy()
         del new_pos[offset_implementation.origin_axis]
-        if offset_implementation.tbl[pos[offset_implementation.origin_axis], index] is None:
+        if offset_implementation.tbl[pos[offset_implementation.origin_axis], index] in [None, -1]:
             return None
         else:
             new_pos[offset_implementation.neighbor_axis] = offset_implementation.tbl[
@@ -521,6 +530,7 @@ class ScanArgIterator:
     def deref(self):
         if not self.can_deref():
             return _UNDEFINED
+        derefed = self.wrapped_iter.deref()
         return self.wrapped_iter.deref()[self.k_pos]
 
     def can_deref(self):
@@ -675,7 +685,7 @@ def fendef_embedded(fun, *args, **kwargs):  # noqa: 536
 
         global _column_range
         column = None
-        if "column_axis" in kwargs:
+        if "column_axis" in kwargs and kwargs["column_axis"] in domain:
             column_axis = kwargs["column_axis"]
             column = Column(column_axis, domain[column_axis])
             del domain[column_axis]
@@ -691,7 +701,7 @@ def fendef_embedded(fun, *args, **kwargs):  # noqa: 536
                     pos,
                     kwargs["offset_provider"],
                     column_axis=column.axis if column is not None else None,
-                )
+                ) if not isinstance(inp, numbers.Number) else inp
                 for inp in ins
             )
             res = sten(*ins_iters)

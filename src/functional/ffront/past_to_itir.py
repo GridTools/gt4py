@@ -84,14 +84,15 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
 
         closures: list[itir.StencilClosure] = []
         for stmt in node.body:
-            if isinstance(stmt, past.Call) and isinstance(
-                symtable[stmt.func.id].type.returns, common_types.FieldType
-            ):
-                closures.append(self._visit_stencil_call(stmt, **kwargs))
-            else:
-                raise NotImplementedError(
-                    "Only calls to functions returning a Field supported currently."
-                )
+            closures.append(self._visit_stencil_call(stmt, **kwargs))
+            #if isinstance(stmt, past.Call) and isinstance(
+            #    symtable[stmt.func.id].type.returns, common_types.FieldType
+            #):
+            #    closures.append(self._visit_stencil_call(stmt, **kwargs))
+            #else:
+            #    raise NotImplementedError(
+            #        "Only calls to functions returning a Field supported currently."
+            #    )
 
         return itir.FencilDefinition(
             id=node.id,
@@ -101,8 +102,6 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         )
 
     def _visit_stencil_call(self, node: past.Call, **kwargs) -> itir.StencilClosure:
-        assert isinstance(node.kwargs["out"].type, common_types.FieldType)
-
         output, domain = self._visit_stencil_call_out_arg(node.kwargs["out"], **kwargs)
 
         return itir.StencilClosure(

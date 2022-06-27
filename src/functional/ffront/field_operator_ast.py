@@ -13,7 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 
-from typing import Generic, TypeVar, Union
+from typing import Generic, TypeVar, Union, Optional, Any
 
 from eve import Coerced, Node, SourceLocation, SymbolName, SymbolRef
 from eve.traits import SymbolTableTrait
@@ -50,6 +50,9 @@ ScalarSymbol = DataSymbol[ScalarTypeT]
 TupleTypeT = TypeVar("TupleTypeT", bound=common_types.TupleType)
 TupleSymbol = DataSymbol[TupleTypeT]
 
+DimensionTypeT = TypeVar("DimensionTypeT", bound=common_types.DimensionType)
+DimensionSymbol = DataSymbol[DimensionTypeT]
+
 
 class Expr(LocatedNode):
     type: common_types.SymbolType = common_types.DeferredSymbolType(constraint=None)  # noqa A003
@@ -60,8 +63,7 @@ class Name(Expr):
 
 
 class Constant(Expr):
-    value: str
-    dtype: Union[common_types.DataType, str]
+    value: Any # todo: be more specific
 
 
 class Subscript(Expr):
@@ -161,8 +163,24 @@ class Return(Stmt):
     value: Expr
 
 
-class FieldOperator(LocatedNode, SymbolTableTrait):
+class FunctionDefinition(LocatedNode, SymbolTableTrait):
     id: Coerced[SymbolName]  # noqa: A003
     params: list[DataSymbol]
     body: list[Stmt]
     captured_vars: list[Symbol]
+    type: Optional[common_types.FunctionType] = None  # noqa A003
+
+
+class FieldOperator(LocatedNode, SymbolTableTrait):
+    id: Coerced[SymbolName]  # noqa: A003
+    definition: FunctionDefinition
+    type: Optional[common_types.FieldOperatorType] = None  # noqa A003
+
+
+class ScanOperator(LocatedNode, SymbolTableTrait):
+    id: Coerced[SymbolName]  # noqa: A003
+    axis: Constant
+    forward: Constant
+    init: Constant
+    definition: FunctionDefinition  # scan pass
+    type: Optional[common_types.ScanOperatorType] = None  # noqa A003

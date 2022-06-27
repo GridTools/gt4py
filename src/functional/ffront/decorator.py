@@ -26,7 +26,8 @@ import functools
 import types
 import typing
 import warnings
-from typing import Callable
+from typing import Callable, ClassVar, TypeVar, Generic, Type
+from numbers import Number
 
 from eve.extended_typing import Any, Optional, Protocol
 from eve.utils import UIDs
@@ -36,18 +37,19 @@ from functional.ffront import (
     field_operator_ast as foast,
     program_ast as past,
     symbol_makers,
+    type_info
 )
 from functional.ffront.fbuiltins import BUILTINS, Dimension
 from functional.ffront.foast_to_itir import FieldOperatorLowering
 from functional.ffront.func_to_foast import FieldOperatorParser
 from functional.ffront.func_to_past import ProgramParser
 from functional.ffront.past_passes.type_deduction import ProgramTypeDeduction
+from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduction
 from functional.ffront.past_to_itir import ProgramLowering
 from functional.ffront.source_utils import CapturedVars
 from functional.iterator import ir as itir
 from functional.iterator.backend_executor import execute_fencil
 from functional.iterator.embedded import constant_field
-
 
 DEFAULT_BACKEND = "roundtrip"
 
@@ -209,7 +211,7 @@ class Program:
 
         referenced_var_names: set[str] = set()
         for captured_var in self.past_node.captured_vars:
-            if isinstance(captured_var.type, (ct.FunctionType, ct.OffsetType, ct.DimensionType)):
+            if isinstance(captured_var.type, (ct.CallableType, ct.OffsetType, ct.DimensionType)):
                 referenced_var_names.add(captured_var.id)
             else:
                 raise NotImplementedError("Only function closure vars are allowed currently.")
@@ -237,11 +239,6 @@ class Program:
         size_args: list[Optional[tuple[int, ...]]] = []
         rewritten_args = list(args)
         for param_idx, param in enumerate(self.past_node.params):
-            if isinstance(param.type, ct.ScalarType):
-                rewritten_args[param_idx] = constant_field(
-                    args[param_idx],
-                    dtype=BUILTINS[param.type.kind.name.lower()],
-                )
             if not isinstance(param.type, ct.FieldType):
                 continue
             if args[param_idx].array is None:
@@ -265,6 +262,7 @@ class Program:
             **kwargs,
             offset_provider=offset_provider,
             backend=backend,
+            column_axis=Dimension(value="K"),
         )
 
 
@@ -310,8 +308,11 @@ def program(
     return program_inner if definition is None else program_inner(definition)
 
 
+OperatorNodeT = TypeVar("OperatorNodeT", bound=foast.LocatedNode)
+
+
 @dataclasses.dataclass(frozen=True)
-class FieldOperator(GTCallable):
+class FieldOperator(GTCallable, Generic[OperatorNodeT]):
     """
     Construct a field operator object from a PAST node.
 
@@ -327,8 +328,7 @@ class FieldOperator(GTCallable):
         backend: The backend to be used for code generation.
         definition: The Python function object corresponding to the PAST node.
     """
-
-    foast_node: foast.FieldOperator
+    foast_node: OperatorNodeT
     captured_vars: CapturedVars
     externals: dict[str, Any]
     backend: Optional[str]  # note: backend is only used if directly called
@@ -340,9 +340,26 @@ class FieldOperator(GTCallable):
         definition: types.FunctionType,
         externals: Optional[dict] = None,
         backend: Optional[str] = None,
-    ) -> "FieldOperator":
+        *,
+        operator_node_cls: Type[OperatorNodeT] = foast.FieldOperator,
+        operator_attributes: Optional[dict[str, Any]] = None,
+    ) -> FieldOperator[OperatorNodeT]:
         captured_vars = CapturedVars.from_function(definition)
-        foast_node = FieldOperatorParser.apply_to_function(definition)
+        foast_definition_node = FieldOperatorParser.apply_to_function(definition)
+        loc = foast_definition_node.location
+        operator_attribute_nodes = {
+            key: foast.Constant(value=value,
+                                type=symbol_makers.make_symbol_type_from_value(
+                                    value), location=loc)
+            for key, value in operator_attributes.items()
+        } if operator_attributes else {}
+        untyped_foast_node = operator_node_cls(
+            id=foast_definition_node.id,
+            definition=foast_definition_node,
+            location=loc,
+            **(operator_attribute_nodes)
+        )
+        foast_node = FieldOperatorTypeDeduction.apply(untyped_foast_node)
         return cls(
             foast_node=foast_node,
             captured_vars=captured_vars,
@@ -352,11 +369,11 @@ class FieldOperator(GTCallable):
         )
 
     def __gt_type__(self) -> ct.FunctionType:
-        type_ = symbol_makers.make_symbol_type_from_value(self.definition)
-        assert isinstance(type_, ct.FunctionType)
+        type_ = self.foast_node.type
+        assert type_info.is_concrete(type_)
         return type_
 
-    def with_backend(self, backend: str) -> "FieldOperator":
+    def with_backend(self, backend: str) -> FieldOperator:
         return FieldOperator(
             foast_node=self.foast_node,
             captured_vars=self.captured_vars,
@@ -371,11 +388,13 @@ class FieldOperator(GTCallable):
     def __gt_captured_vars__(self) -> CapturedVars:
         return self.captured_vars
 
-    def as_program(self) -> Program:
-        if any(param.id == "out" for param in self.foast_node.params):
-            raise Exception(
-                "Direct call to Field operator whose signature contains an argument `out` is not permitted."
-            )
+    def as_program(self, arg_types: list[ct.SymbolType], kwarg_types: dict[str, ct.SymbolType]) -> Program:
+        # todo(tehrengruber): add comment why arg types are needed
+        # todo(tehrengruber): use kwargs for check
+        #if any(param.id == "out" for param in self.foast_node.params):
+        #    raise Exception(
+        #        "Direct call to Field operator whose signature contains an argument `out` is not permitted."
+        #    )
 
         name = self.foast_node.id
         loc = self.foast_node.location
@@ -388,11 +407,12 @@ class FieldOperator(GTCallable):
                 namespace=ct.Namespace.LOCAL,
                 location=loc,
             )
-            for arg_type in type_.args
+            for arg_type in arg_types
+            # for arg_type in type_.args # TODO(check it agrees with arg_types)
         ]
         params_ref = [past.Name(id=pdecl.id, location=loc) for pdecl in params_decl]
         out_sym: past.Symbol = past.DataSymbol(
-            id="out", type=type_.returns, namespace=ct.Namespace.LOCAL, location=loc
+            id="out", type=type_info.return_type(type_, with_args=arg_types, with_kwargs=kwarg_types), namespace=ct.Namespace.LOCAL, location=loc
         )
         out_ref = past.Name(id="out", location=loc)
 
@@ -437,20 +457,31 @@ class FieldOperator(GTCallable):
             backend=self.backend,
         )
 
-    def __call__(self, *args, out, offset_provider: dict[str, Dimension], **kwargs) -> None:
+    def __call__(self, *args, out, offset_provider: dict[str, Dimension],
+                 **kwargs) -> None:
         # TODO(tehrengruber): check all offset providers are given
-        return self.as_program()(*args, out, offset_provider=offset_provider, **kwargs)
+        # deduce argument types
+        arg_types = []
+        for arg in args:
+            arg_types.append(symbol_makers.make_symbol_type_from_value(arg))
+        kwarg_types = {}
+        for name, arg in kwargs.items():
+            kwarg_types[name] = symbol_makers.make_symbol_type_from_value(arg)
+
+        return self.as_program(arg_types, kwarg_types)(*args, out,
+                                                       offset_provider=offset_provider,
+                                                       **kwargs)
 
 
 @typing.overload
-def field_operator(definition: types.FunctionType) -> FieldOperator:
+def field_operator(definition: types.FunctionType) -> FieldOperator[foast.FieldOperator]:
     ...
 
 
 @typing.overload
 def field_operator(
     *, externals: Optional[dict], backend: Optional[str]
-) -> Callable[[types.FunctionType], FieldOperator]:
+) -> Callable[[types.FunctionType], FieldOperator[foast.FieldOperator]]:
     ...
 
 
@@ -476,7 +507,63 @@ def field_operator(
         ...     ...
     """
 
-    def field_operator_inner(definition: types.FunctionType) -> FieldOperator:
+    def field_operator_inner(definition: types.FunctionType) -> FieldOperator[foast.FieldOperator]:
         return FieldOperator.from_function(definition, externals, backend)
 
     return field_operator_inner if definition is None else field_operator_inner(definition)
+
+
+@typing.overload
+def scan_operator(definition: types.FunctionType) -> FieldOperator[foast.ScanOperator]:
+    ...
+
+
+@typing.overload
+def scan_operator(
+    *, externals: Optional[dict], backend: Optional[str]
+) -> Callable[[types.FunctionType], FieldOperator[foast.ScanOperator]]:
+    ...
+
+
+def scan_operator(
+    definition=None,
+    *,
+    axis: Dimension,
+    forward: bool = True,
+    init: Number = 0.,
+    externals=None,
+    backend=None,
+):
+    """
+    Generate an implementation of the scan operator from a Python function object.+
+
+    Arguments:
+        definition: Function from scalars to a scalar.
+
+    Keyword Arguments:
+        axis: A :ref:`Dimension` to reduce over.
+        forward: Boolean specifying the direction.
+        init: Initial value for the carry argument of the scan pass.
+
+    Examples:
+        >>>
+        >>> @scan_operator(axis=KDim, forward=True, init=0.)
+        >>> def scan_operator(carry: float, val: float) -> float:
+        >>>     return carry+val.
+        >>> scan_operator(field, out=out)
+    """
+
+    def scan_operator_inner(definition: types.FunctionType) -> FieldOperator:
+        return FieldOperator.from_function(
+            definition,
+            externals,
+            backend,
+            operator_node_cls=foast.ScanOperator,
+            operator_attributes={
+                "axis": axis,
+                "forward": forward,
+                "init": init
+            }
+        )
+
+    return scan_operator_inner if definition is None else scan_operator_inner(definition)

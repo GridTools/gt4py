@@ -12,7 +12,6 @@ def _make_power_testee(pow_n: int) -> foast.BinOp:
 
     testee = foast.BinOp(
         right=foast.Constant(
-            dtype=ct.ScalarType(kind=ct.ScalarKind.INT),
             location=loc,
             value=str(pow_n),
             type=ct.ScalarType(kind=ct.ScalarKind.INT),
@@ -80,7 +79,6 @@ def test_power_neg_exponent():
             location=loc,
             op=foast.UnaryOperator.USUB,
             operand=foast.Constant(
-                dtype=ct.ScalarType(kind=ct.ScalarKind.INT),
                 location=loc,
                 value=str(2),
                 type=ct.ScalarType(kind=ct.ScalarKind.INT),
@@ -110,7 +108,6 @@ def test_power_float_exponent():
 
     testee = foast.BinOp(
         right=foast.Constant(
-            dtype=ct.ScalarType(kind=ct.ScalarKind.FLOAT64),
             location=loc,
             value=str(6.7),
             type=ct.ScalarType(kind=ct.ScalarKind.FLOAT64),

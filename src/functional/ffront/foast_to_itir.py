@@ -76,7 +76,8 @@ def can_be_value_or_iterator(symbol_type: ct.SymbolType):
 
 
 def is_field(expr: foast.Expr) -> bool:
-    return type_info.type_class(expr.type) is ct.FieldType
+    #return type_info.type_class(expr.type) is ct.FieldType
+    return resulting_type_kind(expr.type) is TypeKind.FIELD
 
 
 def to_value(node: foast.LocatedNode) -> Callable[[itir.Expr], itir.Expr]:
@@ -144,12 +145,38 @@ class FieldOperatorLowering(NodeTranslator):
         return cls().visit(node)
 
     def visit_FieldOperator(self, node: foast.FieldOperator, **kwargs) -> itir.FunctionDefinition:
+        return self.visit(node.definition, **kwargs)
+
+    def visit_FunctionDefinition(self, node: foast.FunctionDefinition, **kwargs) -> itir.FunctionDefinition:
         symtable = node.annex.symtable
         params = self.visit(node.params, symtable=symtable)
         return itir.FunctionDefinition(
             id=node.id,
             params=params,
             expr=self._visit_body(node.body, params=params, symtable=symtable),
+        )
+
+    def visit_ScanOperator(self, node: foast.ScanOperator, **kwargs) -> itir.FunctionDefinition:
+        forward = self.visit(node.forward, **kwargs)
+        init = self.visit(node.init, **kwargs)
+
+        if not node.axis.value.value == "K":
+            raise NotImplementedError("Vertical axis in scan operator must be `K`.")
+
+        # lower definition function
+        func_definition: itir.FunctionDefinition = self.visit(node.definition,
+                                                              **kwargs)
+        new_body = func_definition.expr
+        for param in func_definition.params[1:]:
+            new_body = im.let(param.id, im.deref_(param.id))(new_body)
+        definition = itir.Lambda(params=func_definition.params, expr=new_body)
+        body = im.call_(im.call_("scan")(definition, forward, init))(
+                         *(itir.SymRef(id=param.id) for param in definition.params[1:]))
+
+        return itir.FunctionDefinition(
+            id=node.id,
+            params=definition.params[1:],
+            expr=body,
         )
 
     def _visit_body(
@@ -163,7 +190,7 @@ class FieldOperatorLowering(NodeTranslator):
                 current_expr
             )
 
-        return to_value(return_stmt.value)(current_expr)
+        return current_expr
 
     def _visit_assign(self, node: foast.Assign, **kwargs) -> tuple[itir.Sym, itir.Expr]:
         sym = self.visit(node.target, **kwargs)
@@ -171,7 +198,7 @@ class FieldOperatorLowering(NodeTranslator):
         return sym, expr
 
     def visit_Return(self, node: foast.Return, **kwargs) -> itir.Expr:
-        return self.visit(node.value, **kwargs)
+        return to_value(node.value)(self.visit(node.value, **kwargs))
 
     def visit_Symbol(self, node: foast.Symbol, **kwargs) -> itir.Sym:
         return im.sym(node.id)
@@ -186,7 +213,7 @@ class FieldOperatorLowering(NodeTranslator):
         return self.lifted_lambda(*param_names)
 
     def visit_Subscript(self, node: foast.Subscript, **kwargs) -> itir.FunCall:
-        return im.tuple_get_(node.index, self.visit(node.value, **kwargs))
+        return self._lift_if_field(node.value)(im.tuple_get_(node.index, to_value(node.value)(self.visit(node.value, **kwargs))))
 
     def visit_TupleExpr(self, node: foast.TupleExpr, **kwargs) -> itir.FunCall:
         return im.make_tuple_(*self.visit(node.elts, **kwargs))
@@ -308,18 +335,23 @@ class FieldOperatorLowering(NodeTranslator):
         if isinstance(node.args[0], foast.Constant):
             target_type = fbuiltins.BUILTINS[node.type.kind.name.lower()]
             source_type = {**fbuiltins.BUILTINS, "string": str}[
-                node.args[0].dtype.kind.name.lower()
+                node.args[0].type.kind.name.lower()
             ]
             if target_type is bool and source_type is not bool:
                 return im.literal_(str(bool(source_type(node.args[0].value))), node.func.id)
-            return im.literal_(node.args[0].value, node.type.kind.name.lower())
+            return im.literal_(str(node.args[0].value), node.type.kind.name.lower())
         raise FieldOperatorLoweringError(f"Encountered a type cast, which is not supported: {node}")
 
     def visit_Constant(self, node: foast.Constant, **kwargs) -> itir.Literal:
+        # todo: check constant is supported in iterator ir
         if isinstance(node.type, ct.ScalarType) and not node.type.shape:
             typename = node.type.kind.name.lower()
             return im.literal_(str(node.value), typename)
-        raise FieldOperatorLoweringError(f"Unsupported scalar type: {node.dtype}")
+        elif isinstance(node.type, ct.TupleType): # TODO: cleanup
+            return im.make_tuple_(
+                *(self.visit(foast.Constant(value=val, type=type_, location=node.location), **kwargs) for val, type_ in zip(node.value, node.type.types))
+            )
+        raise FieldOperatorLoweringError(f"Unsupported scalar type: {node.type}")
 
 
 @dataclass

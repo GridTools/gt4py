@@ -107,12 +107,17 @@ class UnpackedAssignPass(NodeYielder):
     def foo():
         a0 = 1
         b0 = 5
-        a1 = (b0, a0)[0]
-        b1 = (b0, a0)[1]
+        __tuple_tmp_0 = (b0, a0)
+        a1 = __tuple_tmp_0[0]
+        b1 = __tuple_tmp_0[1]
         return (a1, b1)
 
     which would not have been equivalent had the input AST not been in SSA form.
     """
+
+    def __init__(self, separator="__"):
+        super().__init__()
+        self.counter: int = 0
 
     def visit_Assign(self, node: ast.Assign) -> Iterator[ast.Assign]:
         if len(node.targets) != 1:
@@ -127,12 +132,21 @@ class UnpackedAssignPass(NodeYielder):
     def _unpack_assignment(
         self, node: ast.Assign, *, targets: list[ast.expr]  # targets passed here for typing
     ) -> Iterator[ast.Assign]:
+        tuple_name = ast.Name(id=f"__tuple_tmp_{self.counter}", ctx=ast.Store())
+        self.counter += 1
+        tuple_assign = ast.Assign(
+            targets=[tuple_name],
+            value=node.value
+        )
+        ast.copy_location(tuple_name, node)
+        ast.copy_location(tuple_assign, node)
+        yield from self.visit_Assign(tuple_assign)
         for index, subtarget in enumerate(targets):
             new_assign = copy.copy(node)
             new_assign.targets = [subtarget]
             new_assign.value = ast.Subscript(
                 ctx=ast.Load(),  # <- ctx is mandatory for ast.Subscript, Load() for rhs.
-                value=node.value,
+                value=tuple_name,
                 slice=ast.Constant(value=index),
             )
             ast.copy_location(new_assign.value, node.value)

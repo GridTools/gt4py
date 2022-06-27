@@ -158,6 +158,7 @@ def make_symbol_type_from_typing(
 
 
 def make_symbol_type_from_value(value: Any) -> ct.SymbolType:
+    from functional.iterator.embedded import LocatedField
     """Make a symbol node from a Python value."""
     # TODO(tehrengruber): What we expect here currently is a GTCallable. Maybe
     #  we should check for the protocol in the future?
@@ -165,11 +166,16 @@ def make_symbol_type_from_value(value: Any) -> ct.SymbolType:
         symbol_type = value.__gt_type__()
     elif isinstance(value, common.Dimension):
         symbol_type = ct.DimensionType(dim=value)
+    elif isinstance(value, LocatedField):
+        # TODO(tehrengruber): revisit
+        dims = list(value.axises)
+        dtype = make_symbol_type_from_typing(value.dtype.type)
+        symbol_type = ct.FieldType(dims=dims, dtype=dtype)
     else:
         type_ = xtyping.infer_type(value, annotate_callable_kwargs=True)
         symbol_type = make_symbol_type_from_typing(type_)
 
-    if isinstance(symbol_type, (ct.DataType, ct.FunctionType, ct.OffsetType, ct.DimensionType)):
+    if isinstance(symbol_type, (ct.DataType, ct.CallableType, ct.OffsetType, ct.DimensionType)):
         return symbol_type
     else:
         raise common.GTTypeError(f"Impossible to map '{value}' value to a Symbol")
