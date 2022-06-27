@@ -47,7 +47,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
     ...     params=[ir.Sym(id="inp")],
     ...     expr=ir.FunCall(fun=ir.SymRef(id="deref"), args=[ir.SymRef(id="inp")])
     ... )
-    >>> lowered = ProgramLowering.apply(parsed, [fieldop_def])
+    >>> lowered = ProgramLowering.apply(parsed, [fieldop_def], grid_type=GridType.CARTESIAN)
     >>> type(lowered)
     <class 'functional.iterator.ir.FencilDefinition'>
     >>> lowered.id
