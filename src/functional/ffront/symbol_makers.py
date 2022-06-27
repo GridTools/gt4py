@@ -168,7 +168,7 @@ def make_symbol_type_from_value(value: Any) -> ct.SymbolType:
         symbol_type = ct.DimensionType(dim=value)
     elif isinstance(value, LocatedField):
         # TODO(tehrengruber): revisit
-        dims = list(value.axises)
+        dims = list(value.axes)
         dtype = make_symbol_type_from_typing(value.dtype.type)
         symbol_type = ct.FieldType(dims=dims, dtype=dtype)
     else:
