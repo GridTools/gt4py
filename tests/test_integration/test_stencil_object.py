@@ -73,4 +73,4 @@ def test_common_stencil_options(backend, backend_opts):
     @gtscript.stencil(backend=backend, **backend_opts)
     def foo(f: Field[float]):
         with computation(PARALLEL), interval(...):  # type: ignore
-            field = 42.0
+            f = 42.0  # noqa F841
