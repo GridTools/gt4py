@@ -61,7 +61,7 @@ IntIndex: TypeAlias = int
 FieldIndex: TypeAlias = int | slice  # TODO probably numpy index type?
 FieldIndexOrIndices: TypeAlias = FieldIndex | tuple[FieldIndex, ...]
 
-Axis = Dimension | None
+Axis = Dimension
 
 # Offsets
 AnyOffset: TypeAlias = Union[Tag, IntIndex]
@@ -71,9 +71,8 @@ OffsetProviderElem: TypeAlias = Dimension | Connectivity
 OffsetProvider: TypeAlias = dict[Tag, OffsetProviderElem]
 
 # Positions
-SparsePositionEntry = list[int]
-IncompleteSparsePositionEntry = list[Optional[int]]
-PositionEntry = IntIndex | SparsePositionEntry
+IncompleteSparsePositionEntry = Optional[int]
+PositionEntry = IntIndex
 IncompletePositionEntry = IntIndex | IncompleteSparsePositionEntry
 ConcretePosition: TypeAlias = dict[Tag, PositionEntry]
 IncompletePosition: TypeAlias = dict[Tag, IncompletePositionEntry]
@@ -349,7 +348,7 @@ def group_offsets(*offsets: AnyOffset) -> tuple[list[CompleteOffset], list[Tag]]
             tag_stack.append(offset)
         else:
             assert tag_stack
-            tag = tag_stack.pop()
+            tag = tag_stack.pop(0)  # TODO fix comes in next PR
             complete_offsets.append((tag, offset))
     return complete_offsets, tag_stack
 
@@ -501,7 +500,7 @@ def make_in_iterator(
 ) -> MDIterator:
     # TODO(havogt): support nested tuples
     axes = inp[0].axes if isinstance(inp, tuple) else inp.axes
-    sparse_dimensions: list[str] = []
+    sparse_dimensions = list[Tag]()
     for axis in axes:
         if isinstance(axis, Offset):
             assert isinstance(axis.value, str)
@@ -511,9 +510,9 @@ def make_in_iterator(
             sparse_dimensions.append(axis.value)
 
     assert len(sparse_dimensions) <= 1  # TODO multiple is not a current use case
-    new_pos = pos.copy()
+    new_pos: Position = pos.copy()
     for sparse_dim in sparse_dimensions:
-        new_pos[sparse_dim] = None
+        new_pos[sparse_dim] = None  # type: ignore[assignment] # looks like mypy is confused
     if column_axis is not None:
         # if we deal with column stencil the column position is just an offset by which the whole column needs to be shifted
         new_pos[column_axis] = 0
@@ -576,11 +575,10 @@ class LocatedFieldImpl:
 
 
 def get_ordered_indices(
-    axes: Iterable[Dimension], pos: dict[str, int], *, slice_axes=None
-) -> tuple[int, ...]:
-    slice_axes = slice_axes or dict()
-    assert all(axis.value in [*pos.keys(), *slice_axes] for axis in axes)
-    return tuple(pos[axis.value] if axis.value in pos else slice_axes[axis.value] for axis in axes)
+    axes: Iterable[Axis], pos: Mapping[str, FieldIndex]
+) -> tuple[FieldIndex, ...]:
+    assert all(axis.value in [*pos.keys()] for axis in axes)
+    return tuple(pos[axis.value] for axis in axes)
 
 
 def _tupsum(a, b):

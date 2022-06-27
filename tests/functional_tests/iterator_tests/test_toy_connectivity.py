@@ -215,7 +215,7 @@ def test_sparse_input_field_v2v(backend):
     )
 
     if validate:
-        assert allclose(out, ref)
+        assert np.allclose(out, ref)
 
 
 @fundef
