@@ -344,7 +344,7 @@ def group_offsets(*offsets: AnyOffset) -> tuple[list[CompleteOffset], list[Tag]]
             tag_stack.append(offset)
         else:
             assert tag_stack
-            tag = tag_stack.pop(0)  # TODO fix comes in next PR
+            tag = tag_stack.pop(0)
             complete_offsets.append((tag, offset))
     return complete_offsets, tag_stack
 
