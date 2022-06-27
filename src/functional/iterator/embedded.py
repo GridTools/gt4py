@@ -206,8 +206,13 @@ def reduce(fun, init):
     return sten
 
 
-@builtins.domain.register(EMBEDDED)
-def domain(*args):
+@builtins.cartesian_domain.register(EMBEDDED)
+def cartesian_domain(*args):
+    return dict(args)  # TODO wrap into a special type to allow checking in offset_provider
+
+
+@builtins.unstructured_domain.register(EMBEDDED)
+def unstructured_domain(*args):
     return dict(args)
 
 

@@ -62,7 +62,7 @@ def test_lambda_domain(backend):
     inp = a_field()
     out = out_field()
 
-    dom = lambda: domain(named_range(I, 0, 10))
+    dom = lambda: cartesian_domain(named_range(I, 0, 10))
     copy_stencil[dom](inp, out=out, offset_provider={}, backend=backend)
 
     if validate:

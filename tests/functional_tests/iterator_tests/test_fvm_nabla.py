@@ -53,7 +53,7 @@ def compute_zavgS_fencil(
     S_M,
 ):
     closure(
-        domain(named_range(Edge, 0, n_edges)),
+        unstructured_domain(named_range(Edge, 0, n_edges)),
         compute_zavgS,
         out,
         [pp, S_M],
@@ -112,7 +112,7 @@ def nabla(
     vol,
 ):
     closure(
-        domain(named_range(Vertex, 0, n_nodes)),
+        unstructured_domain(named_range(Vertex, 0, n_nodes)),
         pnabla,
         out,
         [pp, S_MXX, S_MYY, sign, vol],
@@ -168,7 +168,7 @@ def compute_zavgS2_fencil(
     S_M,
 ):
     closure(
-        domain(named_range(Edge, 0, n_edges)),
+        unstructured_domain(named_range(Edge, 0, n_edges)),
         compute_zavgS2,
         out,
         [pp, S_M],
@@ -259,7 +259,7 @@ def nabla2(
     vol,
 ):
     closure(
-        domain(named_range(Vertex, 0, n_nodes)),
+        unstructured_domain(named_range(Vertex, 0, n_nodes)),
         compute_pnabla2,
         out,
         [pp, S, sign, vol],
@@ -334,13 +334,13 @@ def compute_pnabla_sign(pp, S_M, vol, node_index, is_pole_edge):
 def nabla_sign(n_nodes, out_MXX, out_MYY, pp, S_MXX, S_MYY, vol, node_index, is_pole_edge):
     # TODO replace by single stencil which returns tuple
     closure(
-        domain(named_range(Vertex, 0, n_nodes)),
+        unstructured_domain(named_range(Vertex, 0, n_nodes)),
         compute_pnabla_sign,
         out_MXX,
         [pp, S_MXX, vol, node_index, is_pole_edge],
     )
     closure(
-        domain(named_range(Vertex, 0, n_nodes)),
+        unstructured_domain(named_range(Vertex, 0, n_nodes)),
         compute_pnabla_sign,
         out_MYY,
         [pp, S_MYY, vol, node_index, is_pole_edge],

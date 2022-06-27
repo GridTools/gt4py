@@ -79,7 +79,8 @@ class FundefDispatcher:
                     dom = dom()
                 if isinstance(dom, dict):
                     # if passed as a dict, we need to convert back to builtins for interpretation by the backends
-                    dom = builtins.domain(
+                    assert "offset_provider" in kwargs
+                    dom = builtins.cartesian_domain(  # TODO dispatch
                         *tuple(
                             map(
                                 lambda x: builtins.named_range(x[0], x[1].start, x[1].stop),

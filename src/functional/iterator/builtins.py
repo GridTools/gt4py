@@ -21,7 +21,8 @@ __all__ = [
     "and_",
     "or_",
     "scan",
-    "domain",
+    "cartesian_domain",
+    "unstructured_domain",
     "named_range",
 ]
 
@@ -64,7 +65,12 @@ def scan(*args):
 
 
 @builtin_dispatch
-def domain(*args):
+def cartesian_domain(*args):
+    raise BackendNotSelectedError()
+
+
+@builtin_dispatch
+def unstructured_domain(*args):
     raise BackendNotSelectedError()
 
 
