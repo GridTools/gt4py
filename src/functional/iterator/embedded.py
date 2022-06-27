@@ -671,14 +671,37 @@ def np_as_located_field(
     return _maker
 
 
-def index_field(axis: Dimension, dtype=float) -> LocatedField:
-    return LocatedFieldImpl(
-        lambda index: index[0] if isinstance(index, tuple) else index, (axis,), dtype
-    )  # TODO(havogt) for typing this looks like an AssignableLocatedField
+def index_field(axis: Dimension, dtype: type = float) -> LocatedField:
+    class IndexField:
+        def __init__(self, axis: Dimension, dtype: type) -> None:
+            self.axis = axis
+            self.dtype = dtype
+
+        def __getitem__(self, index: FieldIndexOrIndices):  # TODO return type
+            assert isinstance(index, int) or (isinstance(index, tuple) and len(index) == 1)
+            return dtype(index if isinstance(index, int) else index[0])
+
+        @property
+        def axes(self) -> tuple[Dimension]:
+            return (self.axis,)
+
+    return IndexField(axis, dtype)
 
 
-def constant_field(value: Any, dtype: type) -> LocatedField:
-    return LocatedFieldImpl(lambda _: value, (), dtype)
+def constant_field(value: Any, dtype: type = float) -> LocatedField:
+    class ConstantField:
+        def __init__(self, value, dtype):
+            self.value = value
+            self.dtype = dtype
+
+        def __getitem__(self, _: FieldIndexOrIndices):  # TODO return type
+            return value
+
+        @property
+        def axes(self) -> tuple[()]:
+            return ()
+
+    return ConstantField(value, dtype)
 
 
 @builtins.shift.register(EMBEDDED)
