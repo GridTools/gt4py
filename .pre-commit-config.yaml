@@ -72,7 +72,6 @@ repos:
     - types-frozendict
     exclude: |
       (?x)^(
-
       src/functional/ffront/func_to_past.py | # until mypy supports match
       src/functional/ffront/past_to_itir.py | # until mypy supports match
       src/functional/ffront/symbol_makers.py | # until mypy supports match

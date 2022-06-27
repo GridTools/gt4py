@@ -23,8 +23,46 @@ from functional.ffront import common_types as ct
 from functional.iterator import runtime
 
 
-# FIXME(ben): need to clean up changes of math built-ins (quite messy currently)
-__all__ = ["Field", "Dimension", "float32", "float64", "int32", "int64", "neighbor_sum", "abs", "sin", "cos", "tan", "arcsin", "arccos", "arctan", "sinh", "cosh", "tanh", "arcsinh", "arccosh", "arctanh", "sqrt", "exp", "log", "gamma", "cbrt", "isfinite", "isinf", "isnan", "floor", "ceil", "trunc", "min", "max", "mod"]
+__all__ = [
+    "Field",
+    "Dimension",
+    "float32",
+    "float64",
+    "int32",
+    "int64",
+    "neighbor_sum",
+    "broadcast",
+    "where",
+    # math built-ins
+    "abs",
+    "sin",
+    "cos",
+    "tan",
+    "arcsin",
+    "arccos",
+    "arctan",
+    "sinh",
+    "cosh",
+    "tanh",
+    "arcsinh",
+    "arccosh",
+    "arctanh",
+    "sqrt",
+    "exp",
+    "log",
+    "gamma",
+    "cbrt",
+    "isfinite",
+    "isinf",
+    "isnan",
+    "floor",
+    "ceil",
+    "trunc",
+    "min",
+    "max",
+    "mod"
+]
+
 
 TYPE_BUILTINS = [Field, bool, int, int32, int64, float, float32, float64, tuple]
 TYPE_BUILTIN_NAMES = [t.__name__ for t in TYPE_BUILTINS]
@@ -41,7 +79,7 @@ class BuiltInFunction:
         return self.__gt_type
 
 
-neighbor_sum = BuiltInFunction(
+_reduction_like = BuiltInFunction(
     ct.FunctionType(
         args=[ct.DeferredSymbolType(constraint=ct.FieldType)],
         kwargs={"axis": ct.DeferredSymbolType(constraint=ct.DimensionType)},
@@ -49,8 +87,32 @@ neighbor_sum = BuiltInFunction(
     )
 )
 
+neighbor_sum = _reduction_like
+max_over = _reduction_like
 
-# FIXME(ben): We should also support `ct.ScalarType` as argument/return
+broadcast = BuiltInFunction(
+    ct.FunctionType(
+        args=[
+            ct.DeferredSymbolType(constraint=(ct.FieldType, ct.ScalarType)),
+            ct.DeferredSymbolType(constraint=ct.TupleType),
+        ],
+        kwargs={},
+        returns=ct.DeferredSymbolType(constraint=ct.FieldType),
+    )
+)
+
+where = BuiltInFunction(
+    ct.FunctionType(
+        args=[
+            ct.DeferredSymbolType(constraint=ct.FieldType),
+            ct.DeferredSymbolType(constraint=(ct.FieldType, ct.ScalarType)),
+            ct.DeferredSymbolType(constraint=(ct.FieldType, ct.ScalarType)),
+        ],
+        kwargs={},
+        returns=ct.DeferredSymbolType(constraint=ct.FieldType),
+    )
+)
+
 _single_arg_math_generic_built_in_function_type = BuiltInFunction(
     ct.FunctionType(
         args=[ct.DeferredSymbolType(constraint=ct.FieldType)],
@@ -146,7 +208,9 @@ del _double_arg_math_built_in
 DOUBLE_ARG_MATH_BUILT_IN_NAMES = ["min", "max", "mod"]
 
 MATH_BUILT_IN_NAMES = SINGLE_ARG_MATH_BUILT_IN_NAMES + DOUBLE_ARG_MATH_BUILT_IN_NAMES
-FUN_BUILTIN_NAMES = ["neighbor_sum"] + MATH_BUILT_IN_NAMES
+
+FUN_BUILTIN_NAMES = ["neighbor_sum", "max_over", "broadcast", "where"] + MATH_BUILT_IN_NAMES
+
 
 EXTERNALS_MODULE_NAME = "__externals__"
 MODULE_BUILTIN_NAMES = [EXTERNALS_MODULE_NAME]

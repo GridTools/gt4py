@@ -17,9 +17,9 @@ import ast
 import textwrap
 import types
 from dataclasses import dataclass
-from typing import Any, ClassVar, Generic, Optional, Type, TypeVar
 
-from eve.type_definitions import SourceLocation
+from eve.concepts import SourceLocation
+from eve.extended_typing import Any, ClassVar, Generic, Optional, Type, TypeVar
 from functional import common
 from functional.ffront.ast_passes.fix_missing_locations import FixMissingLocations
 from functional.ffront.source_utils import CapturedVars, SourceDefinition, SymbolNames

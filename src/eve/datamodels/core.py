@@ -60,7 +60,6 @@ from ..extended_typing import (
     TypeVar,
     Union,
     cast,
-    dataclass_transform,
     overload,
 )
 from ..type_definitions import NOTHING, NothingType
@@ -74,8 +73,13 @@ from ..type_definitions import NOTHING, NothingType
 _T = TypeVar("_T")
 
 
+# TODO(egparedes): since these protocols are used instead of the actual classes
+#   for type checking, we assign empty tuples and None values to its members
+#   to avoid errors from mypy complaining about instantiation of abstract classes
+
+
 class _AttrsClassTP(Protocol):
-    __attrs_attrs__: ClassVar[Tuple[attr.Attribute, ...]]
+    __attrs_attrs__: ClassVar[Tuple[attr.Attribute, ...]] = ()
 
 
 Attribute: TypeAlias = attr.Attribute
@@ -85,23 +89,31 @@ class DataModelTP(_AttrsClassTP, xtyping.DevToolsPrettyPrintable, Protocol):
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         ...
 
-    __datamodel_fields__: ClassVar[utils.FrozenNamespace[Attribute]]
-    __datamodel_params__: ClassVar[utils.FrozenNamespace[Any]]
+    __datamodel_fields__: ClassVar[utils.FrozenNamespace[Attribute]] = cast(
+        utils.FrozenNamespace[Attribute], None
+    )
+    __datamodel_params__: ClassVar[utils.FrozenNamespace[Any]] = cast(
+        utils.FrozenNamespace[Attribute], None
+    )
     __datamodel_root_validators__: ClassVar[
         Tuple[xtyping.NonDataDescriptor[DataModelTP, BoundRootValidator], ...]
-    ]
+    ] = ()
     # Optional
-    __auto_init__: Callable[..., None]
-    __pre_init__: Callable[[DataModelTP], None]
-    __post_init__: Callable[[DataModelTP], None]
+    __auto_init__: ClassVar[Callable[..., None]] = cast(Callable[..., None], None)
+    __pre_init__: ClassVar[Callable[[DataModelTP], None]] = cast(
+        Callable[["DataModelTP"], None], None
+    )
+    __post_init__: ClassVar[Callable[[DataModelTP], None]] = cast(
+        Callable[["DataModelTP"], None], None
+    )
 
 
 DataModelT = TypeVar("DataModelT", bound=DataModelTP)
 
 
 class GenericDataModelTP(DataModelTP, Protocol):
-    __args__: ClassVar[Tuple[Union[Type, TypeVar], ...]]
-    __parameters__: ClassVar[Tuple[TypeVar, ...]]
+    __args__: ClassVar[Tuple[Union[Type, TypeVar], ...]] = ()
+    __parameters__: ClassVar[Tuple[TypeVar, ...]] = ()
 
     @classmethod
     def __class_getitem__(
@@ -174,7 +186,7 @@ class ForwardRefValidator:
     def __call__(self, instance: DataModel, attribute: attr.Attribute, value: Any) -> None:
         if self.validator is NOTHING:
             model_cls = instance.__class__
-            update_forward_refs(model_cls)
+            update_forward_refs(model_cls)  # type: ignore[type-var]  # model_cls is an actual type
             self.validator = self.factory(
                 getattr(getattr(model_cls, MODEL_FIELD_DEFINITIONS_ATTR), attribute.name).type,
                 attribute.name,
@@ -218,7 +230,7 @@ def field_type_validator_factory(
         else:
             simple_validator = factory(type_annotation, name, required=True)
             return ValidatorAdapter(
-                simple_validator, f"{getattr(simple_validator,'__name__', 'A')} type validator"
+                simple_validator, f"{getattr(simple_validator,'__name__', 'TypeValidator')}"
             )
 
     return _field_type_validator_factory
@@ -297,7 +309,7 @@ def datamodel(  # noqa: F811  # redefinion of unused symbol
     ...
 
 
-@dataclass_transform(eq_default=True, field_specifiers=("field",))
+# TODO(egparedes): Use @dataclass_transform(eq_default=True, field_specifiers=("field",))
 def datamodel(  # noqa: F811  # redefinion of unused symbol
     cls: Type[_T] = None,
     /,
@@ -413,6 +425,7 @@ frozenmodel: _DataModelDecoratorTP = functools.partial(datamodel, frozen=True)
 frozen_model = frozenmodel
 
 
+# Typing protocols are used instead of the actual classes for type checks
 if xtyping.TYPE_CHECKING:
     DataModel: TypeAlias = DataModelTP
 
@@ -498,7 +511,7 @@ else:
 def field(
     *,
     default: Any = NOTHING,
-    default_factory: Optional[Callable[[None], Any]] = None,
+    default_factory: Optional[Callable[[], Any]] = None,
     init: bool = True,
     repr: bool = True,  # noqa: A002   # shadowing 'repr' python builtin
     hash: Optional[bool] = None,  # noqa: A002   # shadowing 'hash' python builtin
@@ -578,8 +591,8 @@ def field(
         order=compare,
         metadata=metadata,
         kw_only=kw_only,
-        converter=converter,
-        validator=validator,
+        converter=converter,  # type: ignore[arg-type]
+        validator=validator,  # type: ignore[arg-type]
     )
 
 
@@ -669,7 +682,7 @@ fields = get_fields
 def asdict(
     instance: DataModel,
     *,
-    value_serializer: Optional[Callable[[DataModel, Attribute, Any], Any]] = None,
+    value_serializer: Optional[Callable[[Type[DataModel], Attribute, Any], Any]] = None,
 ) -> Dict[str, Any]:
     """Return the contents of a Data Model instance as a new mapping from field names to values.
 
@@ -798,7 +811,7 @@ def concretize(
             the target module will be overwritten.
 
     """  # noqa: RST301  # doctest conventions confuse RST validator
-    concrete_cls = _make_concrete_with_cache(
+    concrete_cls: Type[DataModelT] = _make_concrete_with_cache(
         datamodel_cls, *type_args, class_name=class_name, module=module
     )
     assert isinstance(concrete_cls, type) and is_datamodel(concrete_cls)
@@ -868,6 +881,17 @@ def _substitute_typevars(
         return type_params_map[type_hint], True
     elif getattr(type_hint, "__parameters__", []):
         return type_hint[tuple(type_params_map[tp] for tp in type_hint.__parameters__)], True
+        # TODO(egparedes): WIP fix for partial specialization
+        # # Type hint is a generic model: replace all the concretized type vars
+        # noqa: e800 replaced = False
+        # noqa: e800 new_args = []
+        # noqa: e800 for tp in type_hint.__parameters__:
+        # noqa: e800     if tp in type_params_map:
+        # noqa: e800         new_args.append(type_params_map[tp])
+        # noqa: e800         replaced = True
+        # noqa: e800     else:
+        # noqa: e800         new_args.append(type_params_map[tp])
+        # noqa: e800 return type_hint[tuple(new_args)], replaced
     else:
         return type_hint, False
 
@@ -955,7 +979,14 @@ def _make_data_model_class_getitem() -> classmethod:
         """
         type_args: Tuple[Type] = args if isinstance(args, tuple) else (args,)
         concrete_cls: Type[DataModelT] = concretize(cls, *type_args)
-        return concrete_cls
+        res = xtyping.StdGenericAliasType(concrete_cls, type_args)
+        if sys.version_info < (3, 9):
+            # in Python 3.8, xtyping.StdGenericAliasType (aka typing._GenericAlias)
+            # does not copy all required `__dict__` entries, so do it manually
+            for k, v in concrete_cls.__dict__.items():
+                if k not in res.__dict__:
+                    res.__dict__[k] = v
+        return res
 
     return classmethod(__class_getitem__)
 
@@ -1050,76 +1081,80 @@ def _make_datamodel(  # noqa: C901  # too complex but still readable and documen
     # iteration, since the resolved annotations also contain superclasses' annotations
     for key in annotations:
         type_hint = annotations[key] = resolved_annotations[key]
-        if xtyping.get_origin(type_hint) is not ClassVar:
-            if xtyping.get_origin(annotations_with_extras[key]) == xtyping.Annotated:
-                _, *type_extras = xtyping.get_args(annotations_with_extras[key])
-            else:
-                type_extras = []
 
-            coerce_field = coerce or _COERCED_TYPE_TAG in type_extras
-            qualified_field_name = f"{cls.__name__}.{key}"
+        # Skip members annotated as class variables
+        if type_hint is ClassVar or xtyping.get_origin(type_hint) is ClassVar:
+            continue
 
-            # Create type validator if validation is enabled
-            if type_validation_factory is None or _UNCHECKED_TYPE_TAG in type_extras:
-                type_validator = None
-            else:
-                type_validator = type_validation_factory(type_hint, qualified_field_name)
+        if xtyping.get_origin(annotations_with_extras[key]) == xtyping.Annotated:
+            _, *type_extras = xtyping.get_args(annotations_with_extras[key])
+        else:
+            type_extras = []
 
-            # Declare an attrs.field() for this field with the right options.
-            # There are different cases depending on the current value of the attribute in the class dict.
-            attr_value_in_cls = cls.__dict__.get(key, NOTHING)
-            if isinstance(attr_value_in_cls, attr._make._CountingAttr):  # type: ignore[attr-defined]  # _make is private
-                # A field() function has already been used to customize the definition of the field.
-                # In this case, we need to:
-                #  - prepend the type validator to the list of provided validators (if any)
-                #  - add the converter if the field needs to be converted and another custom converter
-                #      has not been defined
-                attr_value_in_cls._validator = (
-                    type_validator
-                    if attr_value_in_cls._validator is None
-                    else attr._make.and_(type_validator, attr_value_in_cls._validator)  # type: ignore[attr-defined]  # attr._make is not visible for mypy
-                )
-                coerce_field = coerce_field or attr_value_in_cls.converter == "coerce"
-                if coerce_field:
-                    if attr_value_in_cls.converter in (None, "coerce"):
-                        attr_value_in_cls.converter = _make_type_converter(
-                            type_hint, qualified_field_name
-                        )
-                    else:
-                        raise TypeError(
-                            f"Impossible to add automatic type converter to field '{qualified_field_name}' "
-                            "which already defines a custom converter."
-                        )
+        coerce_field = coerce or _COERCED_TYPE_TAG in type_extras
+        qualified_field_name = f"{cls.__name__}.{key}"
 
-            else:
-                # Create field converter if automatic coertion is enabled
-                converter: TypeConverter = cast(
-                    TypeConverter,
-                    _make_type_converter(type_hint, qualified_field_name) if coerce_field else None,
-                )
-                if attr_value_in_cls is NOTHING:
-                    # The field has no definition in the class dict, it's only an annotation
-                    setattr(
-                        cls,
-                        key,
-                        attrs.field(converter=converter, validator=type_validator),
+        # Create type validator if validation is enabled
+        if type_validation_factory is None or _UNCHECKED_TYPE_TAG in type_extras:
+            type_validator = lambda a, b, c: None  # noqa: E731
+        else:
+            type_validator = type_validation_factory(type_hint, qualified_field_name)
+
+        # Declare an attrs.field() for this field with the right options.
+        # There are different cases depending on the current value of the attribute in the class dict.
+        attr_value_in_cls = cls.__dict__.get(key, NOTHING)
+        if isinstance(attr_value_in_cls, attr._make._CountingAttr):  # type: ignore[attr-defined]  # _make is private
+            # A field() function has already been used to customize the definition of the field.
+            # In this case, we need to:
+            #  - prepend the type validator to the list of provided validators (if any)
+            #  - add the converter if the field needs to be converted and another custom converter
+            #      has not been defined
+            attr_value_in_cls._validator = (
+                type_validator
+                if attr_value_in_cls._validator is None
+                else attr._make.and_(type_validator, attr_value_in_cls._validator)  # type: ignore[attr-defined]  # attr._make is not visible for mypy
+            )
+            coerce_field = coerce_field or attr_value_in_cls.converter == "coerce"
+            if coerce_field:
+                if attr_value_in_cls.converter in (None, "coerce"):
+                    attr_value_in_cls.converter = _make_type_converter(
+                        type_hint, qualified_field_name
                     )
-
                 else:
-                    # The field contains the default value in the class dict
-                    if isinstance(attr_value_in_cls, _KNOWN_MUTABLE_TYPES):
-                        warnings.warn(
-                            f"'{attr_value_in_cls.__class__.__name__}' value used as default in '{cls.__name__}.{key}'.\n"
-                            "Mutable types should not defbe normally used as field defaults (use 'default_factory' instead).",
-                            stacklevel=_stacklevel_offset + 2,
-                        )
-                    setattr(
-                        cls,
-                        key,
-                        attrs.field(
-                            converter=converter, default=attr_value_in_cls, validator=type_validator
-                        ),
+                    raise TypeError(
+                        f"Impossible to add automatic type converter to field '{qualified_field_name}' "
+                        "which already defines a custom converter."
                     )
+
+        else:
+            # Create field converter if automatic coertion is enabled
+            converter: TypeConverter = cast(
+                TypeConverter,
+                _make_type_converter(type_hint, qualified_field_name) if coerce_field else None,
+            )
+            if attr_value_in_cls is NOTHING:
+                # The field has no definition in the class dict, it's only an annotation
+                setattr(
+                    cls,
+                    key,
+                    attrs.field(converter=converter, validator=type_validator),
+                )
+
+            else:
+                # The field contains the default value in the class dict
+                if isinstance(attr_value_in_cls, _KNOWN_MUTABLE_TYPES):
+                    warnings.warn(
+                        f"'{attr_value_in_cls.__class__.__name__}' value used as default in '{cls.__name__}.{key}'.\n"
+                        "Mutable types should not defbe normally used as field defaults (use 'default_factory' instead).",
+                        stacklevel=_stacklevel_offset + 2,
+                    )
+                setattr(
+                    cls,
+                    key,
+                    attrs.field(
+                        converter=converter, default=attr_value_in_cls, validator=type_validator
+                    ),
+                )
 
     # All fields should be annotated with type hints
     num_attrs = 0
@@ -1191,7 +1226,8 @@ def _make_datamodel(  # noqa: C901  # too complex but still readable and documen
 
     # TODO(egparedes): consider the use of the field_transformer hook available in attrs:
     #   https://www.attrs.org/en/stable/extending.html#automatic-field-transformation-and-modification
-    new_cls = attrs.define(  # type: ignore[attr-defined]  # attr.define is not visible for mypy
+    new_cls = attrs.define(  # type: ignore[call-overload]
+        cls,
         auto_attribs=True,
         auto_detect=True,
         init=None,
@@ -1203,7 +1239,7 @@ def _make_datamodel(  # noqa: C901  # too complex but still readable and documen
         match_args=match_args,
         kw_only=kw_only,
         slots=slots,
-    )(cls)
+    )
     assert (new_cls is cls) or slots
 
     # Final checks and postprocessing
@@ -1286,7 +1322,12 @@ def _make_concrete_with_cache(
     # Replace field definitions with the new actual types for generic fields
     type_params_map = dict(zip(datamodel_cls.__parameters__, type_args))
     model_fields = getattr(datamodel_cls, MODEL_FIELD_DEFINITIONS_ATTR)
-    new_annotations = {}
+    new_annotations = {
+        # TODO(egparedes): ?
+        # noqa: e800 "__args__": "ClassVar[Tuple[Union[Type, TypeVar], ...]]",
+        # noqa: e800 "__parameters__": "ClassVar[Tuple[TypeVar, ...]]",
+    }
+
     new_field_c_attrs = {}
     for field_name, field_type in xtyping.get_type_hints(datamodel_cls).items():
         new_annotation, replaced = _substitute_typevars(field_type, type_params_map)
@@ -1323,8 +1364,8 @@ def _make_concrete_with_cache(
     assert concrete_cls.__module__ == module or not module
 
     if MODEL_FIELD_DEFINITIONS_ATTR not in concrete_cls.__dict__:
-        # If original model does not inherit from GenericModel,
-        # _make_datamodel() hasn't been called yet, so call it now
+        # If original model does not inherit from GenericDataModel,
+        # _make_datamodel() hasn't been called automatically, so call it now
         params = getattr(datamodel_cls, MODEL_PARAM_DEFINITIONS_ATTR)
         concrete_cls = _make_datamodel(
             concrete_cls,

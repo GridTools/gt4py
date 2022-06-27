@@ -11,10 +11,8 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-import copy
-import dataclasses
-from itertools import permutations
 from typing import Optional, cast
+import dataclasses
 
 import functional.ffront.field_operator_ast as foast
 from eve import NodeTranslator, traits
@@ -188,15 +186,16 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
 
         self._check_operand_dtypes_match(node, left=left, right=right)
 
-        # check dimensions match and broadcast scalars to fields
-        for one_type, other_type in permutations([left.type, right.type]):
-            if type_info.is_dimensionally_promotable(other_type, one_type):
-                return boolified_type(one_type)
-
-        raise FieldOperatorTypeDeductionError.from_foast_node(
-            node,
-            msg=f"Incompatible types for operator '{node.op}': {left.type} and {right.type}!",
-        )
+        try:
+            # transform operands to have bool dtype and use regular promotion
+            #  mechanism to handle dimension promotion
+            return type_info.promote(boolified_type(left.type), boolified_type(right.type))
+        except GTTypeError as ex:
+            raise FieldOperatorTypeDeductionError.from_foast_node(
+                node,
+                msg=f"Could not promote `{left.type}` and `{right.type}` to common type"
+                f" in call to `{node.op}`.",
+            ) from ex
 
     def _deduce_binop_type(
         self,
@@ -213,25 +212,23 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         for arg in (left, right):
             if not is_compatible(arg.type):
                 raise FieldOperatorTypeDeductionError.from_foast_node(
-                    arg, msg=f"Type {arg.type} can not be used in operator '{node.op}'!"
+                    arg, msg=f"Type {arg.type} can not be used in operator `{node.op}`!"
                 )
 
-        if left.type == right.type:
-            return copy.copy(left.type)
+        left_type = cast(ct.FieldType | ct.ScalarType, left.type)
+        right_type = cast(ct.FieldType | ct.ScalarType, right.type)
 
-        self._check_operand_dtypes_match(node, left=left, right=right)
+        if node.op == foast.BinaryOperator.POW:
+            return left_type
 
-        # check dimensions match and broadcast scalars to fields
-        for one_type, other_type in permutations([left.type, right.type]):
-            if type_info.is_dimensionally_promotable(other_type, one_type):
-                return copy.copy(one_type)
-
-        # the case of left_type == right_type is already handled above
-        # so here they must be incompatible
-        raise FieldOperatorTypeDeductionError.from_foast_node(
-            node,
-            msg=f"Incompatible dimensions in operator '{node.op}': {left.type} and {right.type}!",
-        )
+        try:
+            return type_info.promote(left_type, right_type)
+        except GTTypeError as ex:
+            raise FieldOperatorTypeDeductionError.from_foast_node(
+                node,
+                msg=f"Could not promote `{left_type}` and `{right_type}` to common type"
+                f" in call to `{node.op}`.",
+            ) from ex
 
     def _check_operand_dtypes_match(
         self, node: foast.BinOp | foast.Compare, left: foast.Expr, right: foast.Expr
@@ -240,7 +237,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         if not type_info.extract_dtype(left.type) == type_info.extract_dtype(right.type):
             raise FieldOperatorTypeDeductionError.from_foast_node(
                 node,
-                msg=f"Incompatible datatypes in operator '{node.op}': {left.type} and {right.type}!",
+                msg=f"Incompatible datatypes in operator `{node.op}`: {left.type} and {right.type}!",
             )
 
     def visit_UnaryOp(self, node: foast.UnaryOp, **kwargs) -> foast.UnaryOp:
@@ -251,7 +248,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         if not is_compatible(new_operand.type):
             raise FieldOperatorTypeDeductionError.from_foast_node(
                 node,
-                msg=f"Incompatible type for unary operator '{node.op}': {new_operand.type}!",
+                msg=f"Incompatible type for unary operator `{node.op}`: `{new_operand.type}`!",
             )
         return foast.UnaryOp(
             op=node.op, operand=new_operand, location=node.location, type=new_operand.type
@@ -265,7 +262,6 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
     def visit_Call(self, node: foast.Call, **kwargs) -> foast.Call:
         new_func = self.visit(node.func, **kwargs)
 
-        return_type: Optional[ct.SymbolType] = None
         if isinstance(new_func.type, ct.FieldType):
             new_args = self.visit(node.args, **kwargs)
             source_dim = new_args[0].type.source
@@ -286,47 +282,44 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                 func=new_func, args=new_args, kwargs={}, location=node.location, type=new_type
             )
         elif isinstance(new_func.type, ct.FunctionType):
-            assert hasattr(node.func, "id")
-
-            self._ensure_signature_valid(node, **kwargs)
             return_type = new_func.type.returns
+            new_node = foast.Call(
+                func=new_func,
+                args=self.visit(node.args, **kwargs),
+                kwargs=self.visit(node.kwargs, **kwargs),
+                location=node.location,
+                type=return_type,
+            )
+
+            self._ensure_signature_valid(new_node, **kwargs)
 
             # todo(tehrengruber): solve in a more generic way, e.g. using
             #  parametric polymorphism.
-            # resolve polymorphic builtins
+            # deduce return type of polymorphic builtins
             if node.func.id in fbuiltins.MATH_BUILT_IN_NAMES:
-                return self._visit_math_built_in(node, **kwargs)
-            elif not type_info.is_concrete(return_type) and node.func.id in fbuiltins.FUN_BUILTIN_NAMES:
-                visitor = getattr(self, f"_visit_{node.func.id}")
-                return visitor(node, **kwargs)
-            else:
-                return foast.Call(
-                    func=new_func,
-                    args=self.visit(node.args, **kwargs),
-                    kwargs=self.visit(node.kwargs, **kwargs),
-                    location=node.location,
-                    type=new_func.type.returns,
-                )
+                return self._visit_math_built_in(new_node, **kwargs)
+            elif not type_info.is_concrete(return_type) and new_node.func.id in fbuiltins.FUN_BUILTIN_NAMES:
+                visitor = getattr(self, f"_visit_{new_node.func.id}")
+                return visitor(new_node, **kwargs)
+
+            return new_node
 
         raise FieldOperatorTypeDeductionError.from_foast_node(
             node,
-            msg=f"Objects of type '{new_func.type}' are not callable.",
+            msg=f"Objects of type `{new_func.type}` are not callable.",
         )
 
-    def _ensure_signature_valid(self, node: foast.Call, **kwargs):
-        new_func = self.visit(node.func, **kwargs)
-        new_args = self.visit(node.args, **kwargs)
-        new_kwargs = self.visit(node.kwargs, **kwargs)
+    def _ensure_signature_valid(self, node: foast.Call, **kwargs) -> None:
         try:
             type_info.is_callable(
-                new_func.type,
-                with_args=[arg.type for arg in new_args],
-                with_kwargs={keyword: arg.type for keyword, arg in new_kwargs.items()},
+                cast(ct.FunctionType, node.func.type),
+                with_args=[arg.type for arg in node.args],
+                with_kwargs={keyword: arg.type for keyword, arg in node.kwargs.items()},
                 raise_exception=True,
             )
         except GTTypeError as err:
             raise FieldOperatorTypeDeductionError.from_foast_node(
-                node, msg=f"Invalid argument types in call to '{node.func.id}'!"
+                node, msg=f"Invalid argument types in call to `{node.func.id}`!"
             ) from err
 
     def _visit_math_built_in(self, node: foast.Call, **kwargs) -> foast.Call:
@@ -374,18 +367,15 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             case _:
                 assert False
 
-    def _visit_neighbor_sum(self, node: foast.Call, **kwargs):
-        new_func = self.visit(node.func, **kwargs)
-        new_args = self.visit(node.args, **kwargs)
-        new_kwargs = self.visit(node.kwargs, **kwargs)
-        field_type: ct.FieldType = new_args[0].type
-        reduction_dim = cast(ct.DimensionType, new_kwargs["axis"].type).dim
+    def _visit_reduction(self, node: foast.Call, **kwargs) -> foast.Call:
+        field_type = cast(ct.FieldType, node.args[0].type)
+        reduction_dim = cast(ct.DimensionType, node.kwargs["axis"].type).dim
         if reduction_dim not in field_type.dims:
             field_dims_str = ", ".join(str(dim) for dim in field_type.dims)
             raise FieldOperatorTypeDeductionError.from_foast_node(
                 node,
-                msg=f"Incompatible field argument in {node.func.id}. Expected "
-                f"a field with dimension {reduction_dim}, but got "
+                msg=f"Incompatible field argument in call to `{node.func.id}`. "
+                f"Expected a field with dimension {reduction_dim}, but got "
                 f"{field_dims_str}.",
             )
         return_type = ct.FieldType(
@@ -394,9 +384,75 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         )
 
         return foast.Call(
-            func=new_func,
-            args=new_args,
-            kwargs=new_kwargs,
+            func=node.func,
+            args=node.args,
+            kwargs=node.kwargs,
+            location=node.location,
+            type=return_type,
+        )
+
+    def _visit_neighbor_sum(self, node: foast.Call, **kwargs) -> foast.Call:
+        return self._visit_reduction(node, **kwargs)
+
+    def _visit_max_over(self, node: foast.Call, **kwargs) -> foast.Call:
+        return self._visit_reduction(node, **kwargs)
+
+    def _visit_where(self, node: foast.Call, **kwargs) -> foast.Call:
+        mask_type = cast(ct.FieldType, node.args[0].type)
+        left_type = cast(ct.FieldType, node.args[1].type)
+        right_type = cast(ct.FieldType, node.args[2].type)
+        if not type_info.is_logical(mask_type):
+            raise FieldOperatorTypeDeductionError.from_foast_node(
+                node,
+                msg=f"Incompatible argument in call to `{node.func.id}`. Expected "
+                f"a field with dtype bool, but got `{mask_type}`.",
+            )
+
+        try:
+            return_type = type_info.promote(left_type, right_type)
+        except GTTypeError as ex:
+            raise FieldOperatorTypeDeductionError.from_foast_node(
+                node,
+                msg=f"Incompatible argument in call to `{node.func.id}`.",
+            ) from ex
+
+        return foast.Call(
+            func=node.func,
+            args=node.args,
+            kwargs=node.kwargs,
+            type=return_type,
+            location=node.location,
+        )
+
+    def _visit_broadcast(self, node: foast.Call, **kwargs) -> foast.Call:
+        arg_type = cast(ct.FieldType | ct.ScalarType, node.args[0].type)
+        broadcast_dims_expr = cast(foast.TupleExpr, node.args[1]).elts
+
+        if any([not (isinstance(elt.type, ct.DimensionType)) for elt in broadcast_dims_expr]):
+            raise FieldOperatorTypeDeductionError.from_foast_node(
+                node,
+                msg=f"Incompatible broadcast dimension type in {node.func.id}. Expected "
+                f"all broadcast dimensions to be of type Dimension.",
+            )
+
+        broadcast_dims = [cast(ct.DimensionType, elt.type).dim for elt in broadcast_dims_expr]
+
+        if not set((arg_dims := type_info.extract_dims(arg_type))).issubset(set(broadcast_dims)):
+            raise FieldOperatorTypeDeductionError.from_foast_node(
+                node,
+                msg=f"Incompatible broadcast dimensions in {node.func.id}. Expected "
+                f"broadcast dimension is missing {set(arg_dims).difference(set(broadcast_dims))}",
+            )
+
+        return_type = ct.FieldType(
+            dims=broadcast_dims,
+            dtype=type_info.extract_dtype(arg_type),
+        )
+
+        return foast.Call(
+            func=node.func,
+            args=node.args,
+            kwargs=node.kwargs,
             location=node.location,
             type=return_type,
         )

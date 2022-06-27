@@ -17,6 +17,8 @@ import itertools
 from dataclasses import dataclass, field
 from typing import Callable, Optional, cast
 
+import numpy as np
+
 from eve import NodeTranslator
 from functional.ffront import (
     common_types as ct,
@@ -73,6 +75,10 @@ def can_be_value_or_iterator(symbol_type: ct.SymbolType):
     return resulting_type_kind(symbol_type) is not TypeKind.UNKNOWN
 
 
+def is_field(expr: foast.Expr) -> bool:
+    return type_info.type_class(expr.type) is ct.FieldType
+
+
 def to_value(node: foast.LocatedNode) -> Callable[[itir.Expr], itir.Expr]:
     """
     Either ``deref_`` or noop callable depending on the input node.
@@ -93,9 +99,9 @@ def to_value(node: foast.LocatedNode) -> Callable[[itir.Expr], itir.Expr]:
     >>> parsed = FieldOperatorParser.apply_to_function(foo)
     >>> field_a, scalar_b = parsed.body[-1].value.elts
     >>> to_value(field_a)(im.ref("a"))
-    FunCall(fun=SymRef(id='deref'), args=[SymRef(id='a')])
+    FunCall(fun=SymRef(id=SymbolRef('deref')), args=[SymRef(id=SymbolRef('a'))])
     >>> to_value(scalar_b)(im.ref("a"))
-    SymRef(id='a')
+    SymRef(id=SymbolRef('a'))
     """
     assert can_be_value_or_iterator(node.type)
     if resulting_type_kind(node.type) is TypeKind.FIELD:
@@ -121,9 +127,9 @@ class FieldOperatorLowering(NodeTranslator):
     >>> type(lowered)
     <class 'functional.iterator.ir.FunctionDefinition'>
     >>> lowered.id
-    'fieldop'
+    SymbolName('fieldop')
     >>> lowered.params
-    [Sym(id='inp')]
+    [Sym(id=SymbolName('inp'))]
     """
 
     class lifted_lambda:
@@ -138,7 +144,7 @@ class FieldOperatorLowering(NodeTranslator):
         return cls().visit(node)
 
     def visit_FieldOperator(self, node: foast.FieldOperator, **kwargs) -> itir.FunctionDefinition:
-        symtable = node.symtable_
+        symtable = node.annex.symtable
         params = self.visit(node.params, symtable=symtable)
         return itir.FunctionDefinition(
             id=node.id,
@@ -174,11 +180,8 @@ class FieldOperatorLowering(NodeTranslator):
         return im.ref(node.id)
 
     def _lift_lambda(self, node):
-        def is_field(expr: foast.Expr) -> bool:
-            return type_info.type_class(expr.type) is ct.FieldType
-
         param_names = list(
-            node.iter_tree().if_isinstance(foast.Name).filter(is_field).getattr("id").unique()
+            node.pre_walk_values().if_isinstance(foast.Name).filter(is_field).getattr("id").unique()
         )
         return self.lifted_lambda(*param_names)
 
@@ -219,7 +222,7 @@ class FieldOperatorLowering(NodeTranslator):
         return self._lift_if_field(node)(
             im.call_(node.op.value)(
                 to_value(node.left)(self.visit(node.left, **kwargs)),
-                to_value(node.left)(self.visit(node.right, **kwargs)),
+                to_value(node.right)(self.visit(node.right, **kwargs)),
             )
         )
 
@@ -231,16 +234,35 @@ class FieldOperatorLowering(NodeTranslator):
                 return im.shift_(offset_name)(self.visit(node.func, **kwargs))
         raise FieldOperatorLoweringError("Unexpected shift arguments!")
 
-    def _visit_reduce(self, node: foast.Call, **kwargs) -> itir.FunCall:
+    def _make_reduction_expr(
+        self,
+        node: foast.Call,
+        op: Callable[[itir.Expr], itir.Expr],
+        init_expr: int | itir.Literal,
+        **kwargs,
+    ):
         lowering = InsideReductionLowering()
         expr = lowering.visit(node.args[0], **kwargs)
         params = list(lowering.lambda_params.items())
         return im.lift_(
             im.call_("reduce")(
-                im.lambda__("accum", *(param[0] for param in params))(im.plus_("accum", expr)),
-                0,
+                im.lambda__("acc", *(param[0] for param in params))(op(expr)),
+                init_expr,
             )
         )(*(param[1] for param in params))
+
+    def _visit_reduce(self, node: foast.Call, **kwargs) -> itir.FunCall:
+        return self._make_reduction_expr(node, lambda expr: im.plus_("acc", expr), 0, **kwargs)
+
+    def _visit_max_over(self, node: foast.Call, **kwargs) -> itir.FunCall:
+        # TODO(tehrengruber): replace greater_ with max_ builtin as soon as itir supports it
+        init_expr = itir.Literal(value=str(np.finfo(np.float64).min), type="float64")
+        return self._make_reduction_expr(
+            node,
+            lambda expr: im.call_("if_")(im.greater_("acc", expr), "acc", expr),
+            init_expr,
+            **kwargs,
+        )
 
     def visit_Call(self, node: foast.Call, **kwargs) -> itir.FunCall:
         if type_info.type_class(node.func.type) is ct.FieldType:
@@ -255,6 +277,31 @@ class FieldOperatorLowering(NodeTranslator):
         return self._lift_if_field(node)(
             im.call_(self.visit(node.func, **kwargs))(*self.visit(node.args, **kwargs))
         )
+
+    def _visit_where(self, node: foast.Call, **kwargs) -> itir.FunCall:
+        mask, left, right = (to_value(arg)(self.visit(arg, **kwargs)) for arg in node.args)
+        # since the if_ builtin expects a value for the condition we need to
+        #  use a lifted-lambda here such that the mask is also shifted on a
+        #  subsequent shift.
+        return self._lift_lambda(node)(im.call_("if_")(mask, left, right))
+
+    def _visit_broadcast(self, node: foast.Call, **kwargs) -> itir.FunCall:
+        broadcasted_field = node.args[0]
+
+        # just lower broadcasted field and ignore second argument as iterator
+        #  IR does not care about broadcasting
+        lowered_arg = self.visit(broadcasted_field, **kwargs)
+
+        # if the argument is a scalar though convert it into an iterator.
+        #  This is an artefact originating from the relation between the type
+        #  deduction and the lowering. When a scalar is broadcasted the resulting
+        #  type is a field. As such the lowering expects an iterator and tries
+        #  to deref it.
+        if isinstance(broadcasted_field.type, ct.ScalarType):
+            assert len(list(node.pre_walk_values().if_isinstance(foast.Name).filter(is_field))) == 0
+            lowered_arg = im.lift_(im.lambda__()(lowered_arg))()
+
+        return lowered_arg
 
     def _visit_math_built_in(self, node: foast.Call, **kwargs) -> itir.FunCall:
         match node:

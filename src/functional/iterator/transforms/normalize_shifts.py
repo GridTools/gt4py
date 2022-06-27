@@ -11,6 +11,7 @@ class NormalizeShifts(NodeTranslator):
             and node.fun.fun.id == "shift"
             and node.args
             and isinstance(node.args[0], ir.FunCall)
+            and isinstance(node.args[0].fun, ir.FunCall)
             and isinstance(node.args[0].fun.fun, ir.SymRef)
             and node.args[0].fun.fun.id == "shift"
         ):

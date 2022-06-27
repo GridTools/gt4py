@@ -1,6 +1,5 @@
-import typing
 from dataclasses import dataclass
-from typing import Literal, Optional, Union
+from typing import Literal, Optional
 
 import numpy as np
 
@@ -28,28 +27,20 @@ class Namespace(StrEnum):
 
 
 class SymbolType:
-    @classmethod
-    def validate(cls, v):
-        if not isinstance(v, cls):
-            raise TypeError(f"Value is not a valid `{cls}`")
-        return v
-
-    @classmethod
-    def __get_validators__(cls):
-        yield cls.validate
+    pass
 
 
 @dataclass(frozen=True)
 class DeferredSymbolType(SymbolType):
     """Dummy used to represent a type not yet inferred."""
 
-    constraint: typing.Optional[typing.Type[SymbolType]]
+    constraint: Optional[type[SymbolType] | tuple[type[SymbolType], ...]]
 
 
 @dataclass(frozen=True)
 class SymbolTypeVariable(SymbolType):
     id: str  # noqa A003
-    bound: typing.Type[SymbolType]
+    bound: type[SymbolType]
 
 
 @dataclass(frozen=True)
@@ -102,7 +93,7 @@ class TupleType(DataType):
 
 @dataclass(frozen=True)
 class FieldType(DataType):
-    dims: Union[list[func_common.Dimension], Literal[Ellipsis]]  # type: ignore[valid-type,misc]
+    dims: list[func_common.Dimension] | Literal[Ellipsis]  # type: ignore[valid-type,misc]
     dtype: ScalarType
 
     def __str__(self):
@@ -112,9 +103,9 @@ class FieldType(DataType):
 
 @dataclass(frozen=True)
 class FunctionType(SymbolType):
-    args: list[Union[DataType, DeferredSymbolType]]
-    kwargs: dict[str, Union[DataType, DeferredSymbolType]]
-    returns: Union[DataType, DeferredSymbolType, VoidType]
+    args: list[DataType | DeferredSymbolType]
+    kwargs: dict[str, DataType | DeferredSymbolType]
+    returns: DataType | DeferredSymbolType | VoidType
 
     def __str__(self):
         arg_strs = [str(arg) for arg in self.args]

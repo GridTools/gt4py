@@ -11,7 +11,7 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-from typing import Optional
+from typing import Optional, Pattern
 
 import pytest
 
@@ -21,6 +21,7 @@ from functional.ffront.fbuiltins import (
     Dimension,
     Field,
     FieldOffset,
+    broadcast,
     float32,
     float64,
     int64,
@@ -155,14 +156,59 @@ def test_unpack_assign():
 
     parsed = FieldOperatorParser.apply_to_function(unpack_explicit_tuple)
 
-    assert parsed.symtable_["tmp_a__0"].type == ct.FieldType(
+    assert parsed.annex.symtable["tmp_a__0"].type == ct.FieldType(
         dims=Ellipsis,
         dtype=ct.ScalarType(kind=ct.ScalarKind.FLOAT64, shape=None),
     )
-    assert parsed.symtable_["tmp_b__0"].type == ct.FieldType(
+    assert parsed.annex.symtable["tmp_b__0"].type == ct.FieldType(
         dims=Ellipsis,
         dtype=ct.ScalarType(kind=ct.ScalarKind.FLOAT64, shape=None),
     )
+
+
+def dimension_promotion_cases() -> list[
+    tuple[list[list[Dimension]], list[Dimension] | None, None | Pattern]
+]:
+    raw_list = [
+        # list of list of dimensions, expected result, expected error message
+        ([["I", "J"], ["I"]], ["I", "J"], None),
+        ([["I", "J"], ["J"]], ["I", "J"], None),
+        ([["I", "J"], ["J", "K"]], ["I", "J", "K"], None),
+        (
+            [["I", "J"], ["J", "I"]],
+            None,
+            r"The following dimensions appear in contradicting order: I, J.",
+        ),
+        (
+            [["I", "K"], ["J", "K"]],
+            None,
+            r"Could not determine order of the following dimensions: I, J",
+        ),
+    ]
+    # transform dimension names into Dimension objects
+    return [
+        (
+            [[Dimension(el) for el in arg] for arg in args],
+            [Dimension(el) for el in result] if result else result,
+            msg,
+        )
+        for args, result, msg in raw_list
+    ]
+
+
+@pytest.mark.parametrize("dim_list,expected_result,expected_error_msg", dimension_promotion_cases())
+def test_dimension_promotion(
+    dim_list: list[list[Dimension]],
+    expected_result: Optional[list[Dimension]],
+    expected_error_msg: Optional[str],
+):
+    if expected_result:
+        assert type_info.promote_dims(*dim_list) == expected_result
+    else:
+        with pytest.raises(Exception) as exc_info:
+            type_info.promote_dims(*dim_list)
+
+        assert exc_info.match(expected_error_msg)
 
 
 def test_assign_tuple():
@@ -172,7 +218,7 @@ def test_assign_tuple():
 
     parsed = FieldOperatorParser.apply_to_function(temp_tuple)
 
-    assert parsed.symtable_["tmp__0"].type == ct.TupleType(
+    assert parsed.annex.symtable["tmp__0"].type == ct.TupleType(
         types=[
             ct.FieldType(
                 dims=Ellipsis,
@@ -194,7 +240,7 @@ def test_adding_bool():
 
     with pytest.raises(
         FieldOperatorTypeDeductionError,
-        match=(r"Type Field\[\.\.\., dtype=bool\] can not be used in operator '\+'!"),
+        match=(r"Type Field\[\.\.\., dtype=bool\] can not be used in operator `\+`!"),
     ):
         _ = FieldOperatorParser.apply_to_function(add_bools)
 
@@ -210,8 +256,7 @@ def test_binop_nonmatching_dims():
     with pytest.raises(
         FieldOperatorTypeDeductionError,
         match=(
-            r"Incompatible dimensions in operator '\+': "
-            r"Field\[\[X\], dtype=float64\] and Field\[\[Y\], dtype=float64\]!"
+            r"Could not promote `Field\[\[X], dtype=float64\]` and `Field\[\[Y\], dtype=float64\]` to common type in call to +."
         ),
     ):
         _ = FieldOperatorParser.apply_to_function(nonmatching)
@@ -223,7 +268,7 @@ def test_bitopping_float():
 
     with pytest.raises(
         FieldOperatorTypeDeductionError,
-        match=(r"Type Field\[\.\.\., dtype=float64\] can not be used in operator '\&'! "),
+        match=(r"Type Field\[\.\.\., dtype=float64\] can not be used in operator `\&`! "),
     ):
         _ = FieldOperatorParser.apply_to_function(float_bitop)
 
@@ -234,7 +279,7 @@ def test_signing_bool():
 
     with pytest.raises(
         FieldOperatorTypeDeductionError,
-        match=r"Incompatible type for unary operator '\-': Field\[\.\.\., dtype=bool\]!",
+        match=r"Incompatible type for unary operator `\-`: `Field\[\.\.\., dtype=bool\]`!",
     ):
         _ = FieldOperatorParser.apply_to_function(sign_bool)
 
@@ -245,7 +290,7 @@ def test_notting_int():
 
     with pytest.raises(
         FieldOperatorTypeDeductionError,
-        match=r"Incompatible type for unary operator 'not': Field\[\.\.\., dtype=int64\]!",
+        match=r"Incompatible type for unary operator `not`: `Field\[\.\.\., dtype=int64\]`!",
     ):
         _ = FieldOperatorParser.apply_to_function(not_int)
 
@@ -329,6 +374,51 @@ def test_mismatched_literals():
 
     with pytest.raises(
         FieldOperatorTypeDeductionError,
-        match=(r"Incompatible datatypes in operator '\+': float32 and float64"),
+        match=(r"Could not promote `float32` and `float64` to common type in call to +."),
     ):
         _ = FieldOperatorParser.apply_to_function(mismatched_lit)
+
+
+def test_broadcast_multi_dim():
+    ADim = Dimension("ADim")
+    BDim = Dimension("BDim")
+    CDim = Dimension("CDim")
+
+    def simple_broadcast(a: Field[[ADim], float64]):
+        return broadcast(a, (ADim, BDim, CDim))
+
+    parsed = FieldOperatorParser.apply_to_function(simple_broadcast)
+
+    assert parsed.body[0].value.type == ct.FieldType(
+        dims=[ADim, BDim, CDim], dtype=ct.ScalarType(kind=ct.ScalarKind.FLOAT64)
+    )
+
+
+def test_broadcast_disjoint():
+    ADim = Dimension("ADim")
+    BDim = Dimension("BDim")
+    CDim = Dimension("CDim")
+
+    def disjoint_broadcast(a: Field[[ADim], float64]):
+        return broadcast(a, (BDim, CDim))
+
+    with pytest.raises(
+        FieldOperatorTypeDeductionError,
+        match=r"Expected broadcast dimension is missing",
+    ):
+        _ = FieldOperatorParser.apply_to_function(disjoint_broadcast)
+
+
+def test_broadcast_badtype():
+    ADim = Dimension("ADim")
+    BDim = "BDim"
+    CDim = Dimension("CDim")
+
+    def badtype_broadcast(a: Field[[ADim], float64]):
+        return broadcast(a, (BDim, CDim))
+
+    with pytest.raises(
+        FieldOperatorTypeDeductionError,
+        match=r"Expected all broadcast dimensions to be of type Dimension.",
+    ):
+        _ = FieldOperatorParser.apply_to_function(badtype_broadcast)

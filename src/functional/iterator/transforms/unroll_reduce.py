@@ -5,7 +5,8 @@ from functional.iterator import ir
 
 class UnrollReduce(NodeTranslator):
     @staticmethod
-    def _get_last_offset(node: ir.FunCall):
+    def _get_last_offset(node: ir.Expr):
+        assert isinstance(node, ir.FunCall)
         assert isinstance(node.fun, ir.FunCall) and node.fun.fun == ir.SymRef(id="shift")
         return node.fun.args[0]
 
@@ -47,12 +48,13 @@ class UnrollReduce(NodeTranslator):
         offset = ir.SymRef(id=UIDs.sequential_id(prefix="_i"))
         step = ir.SymRef(id=UIDs.sequential_id(prefix="_step"))
 
+        assert isinstance(node.fun, ir.FunCall)
         fun, init = node.fun.args
 
         derefed_shifted_args = [
             self._make_deref(self._make_shift([offset], arg)) for arg in node.args
         ]
-        step_fun = ir.FunCall(fun=fun, args=[acc] + derefed_shifted_args)
+        step_fun: ir.Expr = ir.FunCall(fun=fun, args=[acc] + derefed_shifted_args)
         if has_skip_values:
             can_deref = self._make_can_deref(self._make_shift([offset], node.args[0]))
             step_fun = self._make_if(can_deref, step_fun, acc)
