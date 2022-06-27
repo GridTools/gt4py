@@ -1,11 +1,12 @@
 import numpy as np
 
+from functional.common import Dimension
 from functional.iterator.builtins import *
 from functional.iterator.embedded import np_as_located_field
-from functional.iterator.runtime import *
+from functional.iterator.runtime import fundef
 
 
-IDim = CartesianAxis("IDim")
+IDim = Dimension("IDim")
 
 
 def test_constant():

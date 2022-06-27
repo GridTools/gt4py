@@ -1,20 +1,18 @@
-from dataclasses import field
-
 import numpy as np
-from numpy.core.numeric import allclose
 
+from functional.common import Dimension
 from functional.iterator.builtins import *
 from functional.iterator.embedded import (
     NeighborTableOffsetProvider,
     index_field,
     np_as_located_field,
 )
-from functional.iterator.runtime import *
+from functional.iterator.runtime import fundef, offset
 
 
-Vertex = CartesianAxis("Vertex")
-Edge = CartesianAxis("Edge")
-Cell = CartesianAxis("Cell")
+Vertex = Dimension("Vertex")
+Edge = Dimension("Edge")
+Cell = Dimension("Cell")
 
 
 # 3x3 periodic   edges        cells
@@ -121,7 +119,7 @@ def test_sum_edges_to_vertices(backend):
         offset_provider={"V2E": NeighborTableOffsetProvider(v2e_arr, Vertex, Edge, 4)},
     )
     if validate:
-        assert allclose(out, ref)
+        assert np.allclose(out, ref)
 
 
 @fundef
@@ -142,7 +140,7 @@ def test_sum_edges_to_vertices_reduce(backend):
         offset_provider={"V2E": NeighborTableOffsetProvider(v2e_arr, Vertex, Edge, 4)},
     )
     if validate:
-        assert allclose(out, ref)
+        assert np.allclose(out, ref)
 
 
 @fundef
@@ -166,7 +164,7 @@ def test_first_vertex_neigh_of_first_edge_neigh_of_cells_fencil(backend):
         },
     )
     if validate:
-        assert allclose(out, ref)
+        assert np.allclose(out, ref)
 
 
 @fundef
@@ -191,7 +189,7 @@ def test_sparse_input_field(backend):
     )
 
     if validate:
-        assert allclose(out, ref)
+        assert np.allclose(out, ref)
 
 
 V2V = offset("V2V")
@@ -217,7 +215,7 @@ def test_sparse_input_field_v2v(backend):
     )
 
     if validate:
-        assert allclose(out, ref)
+        assert np.allclose(out, ref)
 
 
 @fundef
@@ -243,7 +241,7 @@ def test_lift(backend):
         offset_provider={"V2V": NeighborTableOffsetProvider(v2v_arr, Vertex, Vertex, 4)},
     )
     if validate:
-        assert allclose(out, ref)
+        assert np.allclose(out, ref)
 
 
 @fundef
@@ -265,7 +263,7 @@ def test_shift_sparse_input_field(backend):
     )
 
     if validate:
-        assert allclose(out, ref)
+        assert np.allclose(out, ref)
 
 
 @fundef
@@ -297,7 +295,7 @@ def test_shift_sparse_input_field2(backend):
     )
 
     if validate:
-        assert allclose(out1, out2)
+        assert np.allclose(out1, out2)
 
 
 @fundef
@@ -309,7 +307,7 @@ def sparse_shifted_stencil_reduce(inp):
     return reduce(sum_, 0)(shift(V2V)(lift(reduce(sum_, 0))(inp)))
 
 
-def test_shift_sparse_input_field(backend):
+def test_sparse_shifted_stencil_reduce(backend):
     backend, validate = backend
     inp = np_as_located_field(Vertex, V2V)(v2v_arr)
     out = np_as_located_field(Vertex)(np.zeros([9]))
@@ -332,4 +330,4 @@ def test_shift_sparse_input_field(backend):
     )
 
     if validate:
-        assert allclose(np.asarray(out), ref)
+        assert np.allclose(np.asarray(out), ref)
