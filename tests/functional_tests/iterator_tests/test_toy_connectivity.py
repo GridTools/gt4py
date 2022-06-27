@@ -215,108 +215,7 @@ def test_sparse_input_field_v2v(backend):
     )
 
     if validate:
-        assert np.allclose(out, ref)
-
-
-@fundef
-def slice_sparse_stencil(sparse):
-    return deref(shift(1)(sparse))
-
-
-def test_slice_sparse(backend):
-    backend, validate = backend
-    inp = np_as_located_field(Vertex, V2V)(v2v_arr)
-    out = np_as_located_field(Vertex)(np.zeros([9]))
-
-    ref = v2v_arr[:, 1]
-
-    slice_sparse_stencil[{Vertex: range(0, 9)}](
-        inp,
-        out=out,
-        backend=backend,
-        offset_provider={
-            "V2V": NeighborTableOffsetProvider(v2v_arr, Vertex, Vertex, 4),
-        },
-    )
-
-    if validate:
-        assert np.allclose(out, ref)
-
-
-@fundef
-def slice_twice_sparse_stencil(sparse):
-    return deref(shift(2)(shift(1)(sparse)))
-
-
-def test_slice_twice_sparse(backend):
-    backend, validate = backend
-    inp = np_as_located_field(Vertex, V2V, V2V)(v2v_arr[v2v_arr])
-    out = np_as_located_field(Vertex)(np.zeros([9]))
-
-    ref = v2v_arr[v2v_arr][:, 2, 1]
-    slice_twice_sparse_stencil[{Vertex: range(0, 9)}](
-        inp,
-        out=out,
-        backend=backend,
-        offset_provider={
-            "V2V": NeighborTableOffsetProvider(v2v_arr, Vertex, Vertex, 4),
-        },
-    )
-
-    if validate:
-        assert np.allclose(np.asarray(out), ref)
-
-
-@fundef
-def shift_sliced_sparse_stencil(sparse):
-    return deref(shift(V2V, 0)(shift(1)(sparse)))
-
-
-def test_shift_sliced_sparse(backend):
-    backend, validate = backend
-    inp = np_as_located_field(Vertex, V2V)(v2v_arr)
-    out = np_as_located_field(Vertex)(np.zeros([9]))
-
-    ref = v2v_arr[:, 1][v2v_arr][:, 0]
-
-    shift_sliced_sparse_stencil[{Vertex: range(0, 9)}](
-        inp,
-        out=out,
-        backend=backend,
-        offset_provider={
-            "V2V": NeighborTableOffsetProvider(v2v_arr, Vertex, Vertex, 4),
-        },
-    )
-
-    if validate:
-        assert np.allclose(out, ref)
-
-
-@fundef
-def slice_shifted_sparse_stencil(sparse):
-    return deref(shift(1)(shift(V2V, 0)(sparse)))
-
-
-def test_slice_shifted_sparse(backend):
-    backend, validate = backend
-    inp = np_as_located_field(Vertex, V2V)(v2v_arr)
-    out = np_as_located_field(Vertex)(np.zeros([9]))
-
-    ref = v2v_arr[:, 1][v2v_arr][:, 0]
-
-    slice_shifted_sparse_stencil[{Vertex: range(0, 9)}](
-        inp,
-        out=out,
-        backend=backend,
-        offset_provider={
-            "V2V": NeighborTableOffsetProvider(v2v_arr, Vertex, Vertex, 4),
-        },
-    )
-
-    print(ref)
-    print(np.asarray(out))
-    if validate:
-        assert np.allclose(out, ref)
+        assert allclose(out, ref)
 
 
 @fundef
@@ -374,7 +273,7 @@ def shift_shift_stencil2(inp):
 
 @fundef
 def shift_sparse_stencil2(inp):
-    return deref(shift(3, 1)(shift(V2E)(inp)))
+    return deref(shift(1, 3)(shift(V2E)(inp)))
 
 
 def test_shift_sparse_input_field2(backend):
