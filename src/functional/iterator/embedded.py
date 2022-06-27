@@ -1,7 +1,10 @@
+# TODO(havogt) move public definitions and make this module private
+
 from __future__ import annotations
 
 import itertools
 import numbers
+from abc import abstractmethod
 from dataclasses import dataclass
 from typing import (
     Any,
@@ -29,13 +32,6 @@ from functional.iterator.utils import tupelize
 
 EMBEDDED = "embedded"
 
-# TODO mark private/public functions/classes
-# e.g. by moving all public from this file to somewhere else
-
-
-class SparseOffset(str):
-    ...
-
 
 class NeighborTableOffsetProvider:
     def __init__(
@@ -58,13 +54,13 @@ class NeighborTableOffsetProvider:
 Tag: TypeAlias = str
 IntIndex: TypeAlias = int
 
-FieldIndex: TypeAlias = int | slice  # TODO probably numpy index type?
+FieldIndex: TypeAlias = int | slice
 FieldIndexOrIndices: TypeAlias = FieldIndex | tuple[FieldIndex, ...]
 
 Axis: TypeAlias = Dimension
 
 # Offsets
-AnyOffset: TypeAlias = Union[Tag, IntIndex]
+AnyOffset: TypeAlias = Tag | IntIndex
 CompleteOffset: TypeAlias = tuple[Tag, IntIndex]
 Connectivity: TypeAlias = NeighborTableOffsetProvider
 OffsetProviderElem: TypeAlias = Dimension | Connectivity
@@ -80,6 +76,10 @@ IncompletePosition: TypeAlias = dict[Tag, IncompletePositionEntry]
 Position: TypeAlias = Union[ConcretePosition, IncompletePosition]
 #: A ``None`` position flags invalid not-a-neighbor results in neighbor-table lookups
 MaybePosition: TypeAlias = Optional[Position]
+
+
+def is_position_entry(p: IncompletePositionEntry) -> TypeGuard[PositionEntry]:
+    return isinstance(p, int)
 
 
 @runtime_checkable
@@ -108,17 +108,24 @@ class LocatedField(Protocol):
     """A field with named dimensions providing read access."""
 
     @property
+    @abstractmethod
     def axes(self) -> tuple[Dimension, ...]:
         ...
 
+    @abstractmethod
     def __getitem__(self, indices: FieldIndexOrIndices) -> Any:
         ...
 
 
-class AssignableLocatedField(LocatedField):
+class MutableLocatedField(LocatedField, Protocol):
     """A LocatedField with write access."""
 
+    @abstractmethod
     def __setitem__(self, indices: FieldIndexOrIndices, value: Any) -> None:
+        ...
+
+    @abstractmethod
+    def __array__(self) -> np.ndarray:
         ...
 
 
@@ -165,17 +172,17 @@ def make_tuple(*args):
 @builtins.lift.register(EMBEDDED)
 def lift(stencil):
     def impl(*args):
-        class wrap_iterator:
+        class _WrappedIterator:
             def __init__(self, *, offsets: list[AnyOffset] = None, elem=None) -> None:
                 self.offsets = offsets or []
                 self.elem = elem
 
             # TODO needs to be supported by all iterators that represent tuples
             def __getitem__(self, index):
-                return wrap_iterator(offsets=self.offsets, elem=index)
+                return _WrappedIterator(offsets=self.offsets, elem=index)
 
             def shift(self, *offsets: AnyOffset):
-                return wrap_iterator(offsets=[*self.offsets, *offsets], elem=self.elem)
+                return _WrappedIterator(offsets=[*self.offsets, *offsets], elem=self.elem)
 
             def max_neighbors(self):
                 # TODO cleanup, test edge cases
@@ -203,7 +210,7 @@ def lift(stencil):
                 else:
                     return stencil(*shifted_args)[self.elem]
 
-        return wrap_iterator()
+        return _WrappedIterator()
 
     return impl
 
@@ -286,7 +293,7 @@ def _get_connectivity(offset_provider: OffsetProvider, tag: Tag) -> Connectivity
     return connectivity
 
 
-def _named_range(axis: str, range_: Iterable[int]) -> Iterable[tuple[str, int]]:
+def _named_range(axis: str, range_: Iterable[int]) -> Iterable[CompleteOffset]:
     return ((axis, i) for i in range_)
 
 
@@ -310,9 +317,10 @@ def execute_shift(
     if isinstance(offset_implementation, Dimension):
         assert offset_implementation.value in pos
         new_pos = pos.copy()
-        _extracted_val_for_mypy_check = new_pos[offset_implementation.value]
-        assert isinstance(_extracted_val_for_mypy_check, int)
-        new_pos[offset_implementation.value] = _extracted_val_for_mypy_check + index
+        if is_position_entry(value := new_pos[offset_implementation.value]):
+            new_pos[offset_implementation.value] = value + index
+        else:
+            raise AssertionError()
         return new_pos
     elif isinstance(offset_implementation, NeighborTableOffsetProvider):
         assert offset_implementation.origin_axis.value in pos
@@ -326,7 +334,7 @@ def execute_shift(
             )
         return new_pos
 
-    raise AssertionError()
+    raise AssertionError("Unknown object in `offset_provider`")
 
 
 # The following holds for shifts:
@@ -348,7 +356,7 @@ def group_offsets(*offsets: AnyOffset) -> tuple[list[CompleteOffset], list[Tag]]
             tag_stack.append(offset)
         else:
             assert tag_stack
-            tag = tag_stack.pop(0)  # TODO fix comes in next PR
+            tag = tag_stack.pop(0)
             complete_offsets.append((tag, offset))
     return complete_offsets, tag_stack
 
@@ -439,6 +447,7 @@ def _is_position_fully_defined(pos: Position) -> TypeGuard[ConcretePosition]:
     return all(isinstance(v, int) for v in pos.values())
 
 
+# TODO(havogt) frozen dataclass
 class MDIterator:
     def __init__(
         self,
@@ -487,7 +496,7 @@ class MDIterator:
         slice_column = dict[Tag, FieldIndex]()
         if self.column_axis is not None:
             slice_column[self.column_axis] = slice(shifted_pos[self.column_axis], None)
-            del shifted_pos[self.column_axis]
+            shifted_pos.pop(self.column_axis)
 
         assert _is_position_fully_defined(shifted_pos)
         ordered_indices = get_ordered_indices(
@@ -508,7 +517,7 @@ def make_in_iterator(
     column_axis: Optional[Tag],
 ) -> MDIterator:
     axes = _get_axes(inp)
-    sparse_dimensions = list[Tag]()
+    sparse_dimensions: list[Tag] = []
     for axis in axes:
         if isinstance(axis, Offset):
             assert isinstance(axis.value, str)
@@ -536,11 +545,8 @@ def make_in_iterator(
 builtins.builtin_dispatch.push_key(EMBEDDED)  # makes embedded the default
 
 
-class LocatedFieldImpl:
-    """A Field with named dimensions/axes.
-
-    Axis keys can be any objects that are hashable.
-    """
+class LocatedFieldImpl(MutableLocatedField):
+    """A Field with named dimensions/axes."""
 
     @property
     def axes(self) -> tuple[Dimension, ...]:
@@ -552,8 +558,8 @@ class LocatedFieldImpl:
         axes: tuple[Dimension, ...],
         dtype,
         *,
-        setter: Optional[Callable[[FieldIndexOrIndices, Any], None]] = None,
-        array: Optional[Callable[[], npt.NDArray]] = None,
+        setter: Callable[[FieldIndexOrIndices, Any], None],
+        array: Callable[[], npt.NDArray],
     ):
         self.getter = getter
         self._axes = axes
@@ -566,13 +572,9 @@ class LocatedFieldImpl:
         return self.getter(indices)
 
     def __setitem__(self, indices: FieldIndexOrIndices, value: Any):
-        if self.setter is None:
-            raise TypeError("__setitem__ not supported for this field")
         self.setter(indices, value)
 
     def __array__(self) -> np.ndarray:
-        if self.array is None:
-            raise TypeError("__array__ not supported for this field")
         return self.array()
 
     @property
@@ -642,36 +644,38 @@ def np_as_located_field(
     return _maker
 
 
-def index_field(axis: Dimension, dtype: type = float) -> LocatedField:
-    class IndexField:
-        def __init__(self, axis: Dimension, dtype: type) -> None:
-            self.axis = axis
-            self.dtype = dtype
+class IndexField(LocatedField):
+    def __init__(self, axis: Dimension, dtype: npt.DTypeLike) -> None:
+        self.axis = axis
+        self.dtype = np.dtype(dtype).type
 
-        def __getitem__(self, index: FieldIndexOrIndices):  # TODO return type
-            assert isinstance(index, int) or (isinstance(index, tuple) and len(index) == 1)
-            return dtype(index if isinstance(index, int) else index[0])
+    def __getitem__(self, index: FieldIndexOrIndices) -> Any:
+        assert isinstance(index, int) or (isinstance(index, tuple) and len(index) == 1)
+        return self.dtype(index if isinstance(index, int) else index[0])
 
-        @property
-        def axes(self) -> tuple[Dimension]:
-            return (self.axis,)
+    @property
+    def axes(self) -> tuple[Dimension]:
+        return (self.axis,)
 
+
+def index_field(axis: Dimension, dtype: npt.DTypeLike = float) -> LocatedField:
     return IndexField(axis, dtype)
 
 
-def constant_field(value: Any, dtype: type = float) -> LocatedField:
-    class ConstantField:
-        def __init__(self, value, dtype):
-            self.value = value
-            self.dtype = dtype
+class ConstantField(LocatedField):
+    def __init__(self, value: Any, dtype: npt.DTypeLike):
+        self.value = value
+        self.dtype = np.dtype(dtype).type
 
-        def __getitem__(self, _: FieldIndexOrIndices):  # TODO return type
-            return value
+    def __getitem__(self, _: FieldIndexOrIndices) -> Any:
+        return self.dtype(self.value)
 
-        @property
-        def axes(self) -> tuple[()]:
-            return ()
+    @property
+    def axes(self) -> tuple[()]:
+        return ()
 
+
+def constant_field(value: Any, dtype: npt.DTypeLike = float) -> LocatedField:
     return ConstantField(value, dtype)
 
 
@@ -843,7 +847,7 @@ def scan(scan_pass, is_forward: bool, init):
     return impl
 
 
-def fendef_embedded(fun, *args, **kwargs):
+def fendef_embedded(fun: Callable[..., None], *args: Any, **kwargs: Any):
     if "offset_provider" not in kwargs:
         raise RuntimeError("offset_provider not provided")
 
@@ -851,7 +855,7 @@ def fendef_embedded(fun, *args, **kwargs):
     def closure(
         domain_: dict[Union[str, Dimension], range],
         sten: Callable[..., Any],
-        out: AssignableLocatedField,
+        out: MutableLocatedField,
         ins: list[LocatedField],
     ) -> None:
         domain: dict[str, range] = {
