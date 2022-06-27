@@ -438,10 +438,7 @@ def _make_tuple(field_or_tuple: Union[LocatedField, tuple], indices) -> tuple:
 def _is_position_fully_defined(
     pos: Position,
 ) -> TypeGuard[ConcretePosition]:
-    return all(
-        isinstance(v, int) or (isinstance(v, list) and all(isinstance(e, int) for e in v))
-        for v in pos.values()
-    )
+    return all(isinstance(v, int) for v in pos.values())
 
 
 class MDIterator:
@@ -587,11 +584,15 @@ class LocatedFieldImpl:
         return self.array().shape
 
 
+def _is_tuple_axis(axis: Axis):
+    return axis is None
+
+
 def get_ordered_indices(
     axes: Iterable[Axis], pos: Mapping[str, FieldIndex]
 ) -> tuple[FieldIndex, ...]:
-    assert all(axis.value in [*pos.keys()] for axis in axes)
-    return tuple(pos[axis.value] for axis in axes)
+    assert all(axis.value in [*pos.keys()] for axis in axes if axis is not None)
+    return tuple(pos[axis.value] if not _is_tuple_axis(axis) else slice(None) for axis in axes)
 
 
 def _tupsum(a, b):
