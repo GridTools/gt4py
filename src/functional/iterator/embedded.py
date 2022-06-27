@@ -33,10 +33,6 @@ EMBEDDED = "embedded"
 # e.g. by moving all public from this file to somewhere else
 
 
-class SparseOffset(str):
-    ...
-
-
 class NeighborTableOffsetProvider:
     def __init__(
         self,
