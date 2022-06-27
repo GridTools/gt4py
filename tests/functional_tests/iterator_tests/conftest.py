@@ -44,6 +44,6 @@ def run_processor(fencil, processor, *args, **kwargs):
     if processor is None or isinstance(processor, FencilExecutor):
         fencil(*args, backend=processor, **kwargs)
     elif isinstance(processor, FencilFormatter):
-        print(fencil.string_format(*args, formatter=processor, **kwargs))
+        print(fencil.format_itir(*args, formatter=processor, **kwargs))
     else:
         raise TypeError(f"fencil processor kind not recognized: {processor}!")

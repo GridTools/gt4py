@@ -241,13 +241,15 @@ class Program:
     def __call__(self, *args, offset_provider: dict[str, Dimension], **kwargs) -> None:
         rewritten_args, size_args, kwargs = self._process_args(args, kwargs)
 
+        backend = self.backend
         if not self.backend:
             warnings.warn(
                 UserWarning(
                     f"Field View Program '{self.itir.id}': Using default ({DEFAULT_BACKEND}) backend."
                 )
             )
-        backend = self.backend if self.backend else DEFAULT_BACKEND
+            backend = DEFAULT_BACKEND
+
         ensure_executor(backend)
         if "debug" in kwargs:
             debug(self.itir)
@@ -260,7 +262,7 @@ class Program:
             offset_provider=offset_provider,
         )
 
-    def string_format(
+    def format_itir(
         self, *args, formatter: FencilFormatter, offset_provider: dict[str, Dimension], **kwargs
     ) -> str:
         ensure_formatter(formatter)

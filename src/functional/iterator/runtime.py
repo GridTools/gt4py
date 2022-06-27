@@ -62,7 +62,7 @@ class FendefDispatcher:
                 raise RuntimeError("Embedded execution is not registered")
             fendef_embedded(self.function, *args, **kwargs)
 
-    def string_format(self, *args, formatter: FencilFormatter, **kwargs) -> str:
+    def format_itir(self, *args, formatter: FencilFormatter, **kwargs) -> str:
         ensure_formatter(formatter)
         args, kwargs = self._rewrite_args(args, kwargs)
         return formatter(self.itir(*args, **kwargs), *args, **kwargs)

@@ -36,7 +36,7 @@ While working on integrating foreign language (non-python) backends (E.g. genera
 Anything that doesn't execute a fencil, but instead generates text from it is now called a `fencil_formatter`.
 
 ### Clarifying the `__call__` semantics
-The following was done to clarify the semantics of fencil wrapper `__call__` (and fieldview Program `__call__`), in the case of using a non-embedded backend: The `__call__` method now checks that the backend it was passed was decorated with `@fencil_processors.processor_interface.fencil_executor`. In addition another method was introduced on the fencil / Program wrappers (`.string_format`) to cover all other currently existing fencil processors, as they all generate a text string from the fencil.
+The following was done to clarify the semantics of fencil wrapper `__call__` (and fieldview Program `__call__`), in the case of using a non-embedded backend: The `__call__` method now checks that the backend it was passed was decorated with `@fencil_processors.processor_interface.fencil_executor`. In addition another method was introduced on the fencil / Program wrappers (`.format_itir` / `.format_itir`) to cover all other currently existing fencil processors, as they all generate a text string from the fencil.
 
 ### The backend registry
 The registry was removed for now. Any code using a backend by key was changed to import the backend function and use that instead.
