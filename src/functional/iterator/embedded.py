@@ -422,8 +422,26 @@ Undefined._setup_math_operations()
 _UNDEFINED = Undefined()
 
 
-def _is_position_fully_defined(pos: Position) -> TypeGuard[dict[str, int]]:
-    return all(isinstance(v, int) for v in pos.values())
+def _get_axes(field_or_tuple: Union[LocatedField, tuple]) -> list[Dimension]:
+    return list(
+        _get_axes(field_or_tuple[0]) if isinstance(field_or_tuple, tuple) else field_or_tuple.axes
+    )
+
+
+def _make_tuple(field_or_tuple: Union[LocatedField, tuple], indices) -> tuple:
+    if isinstance(field_or_tuple, tuple):
+        return tuple(_make_tuple(f, indices) for f in field_or_tuple)
+    else:
+        return field_or_tuple[indices]
+
+
+def _is_position_fully_defined(
+    pos: Position,
+) -> TypeGuard[ConcretePosition]:
+    return all(
+        isinstance(v, int) or (isinstance(v, list) and all(isinstance(e, int) for e in v))
+        for v in pos.values()
+    )
 
 
 class MDIterator:
@@ -467,10 +485,9 @@ class MDIterator:
 
         assert self.pos is not None
         shifted_pos = self.pos.copy()
-        # TODO(havogt): support nested tuples
-        axes = self.field[0].axes if isinstance(self.field, tuple) else self.field.axes
+        axes = _get_axes(self.field)
 
-        if not all(axis.value in shifted_pos.keys() for axis in axes):
+        if not all(axis.value in shifted_pos.keys() for axis in axes if axis is not None):
             raise IndexError("Iterator position doesn't point to valid location for its field.")
         slice_column = dict[Tag, FieldIndex]()
         if self.column_axis is not None:
@@ -483,10 +500,7 @@ class MDIterator:
             {**shifted_pos, **slice_column},
         )
         try:
-            if isinstance(self.field, tuple):
-                return tuple(f[ordered_indices] for f in self.field)
-            else:
-                return self.field[ordered_indices]
+            return _make_tuple(self.field, ordered_indices)
         except IndexError:
             return _UNDEFINED
 
@@ -498,8 +512,7 @@ def make_in_iterator(
     *,
     column_axis: Optional[Tag],
 ) -> MDIterator:
-    # TODO(havogt): support nested tuples
-    axes = inp[0].axes if isinstance(inp, tuple) else inp.axes
+    axes = _get_axes(inp)
     sparse_dimensions = list[Tag]()
     for axis in axes:
         if isinstance(axis, Offset):
@@ -586,7 +599,7 @@ def _tupsum(a, b):
         is_slice = False
         if isinstance(s, slice):
             is_slice = True
-            first = s.start
+            first = 0 if s.start is None else s.start
             assert s.step is None
             assert s.stop is None
         else:
@@ -594,7 +607,7 @@ def _tupsum(a, b):
             first = s
         if isinstance(t, slice):
             is_slice = True
-            second = t.start
+            second = 0 if t.start is None else t.start
             assert t.step is None
             assert t.stop is None
         else:
