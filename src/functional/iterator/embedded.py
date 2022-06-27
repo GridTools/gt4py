@@ -632,36 +632,38 @@ def np_as_located_field(
     return _maker
 
 
+class IndexField(LocatedField):
+    def __init__(self, axis: Dimension, dtype: npt.DTypeLike) -> None:
+        self.axis = axis
+        self.dtype = np.dtype(dtype).type
+
+    def __getitem__(self, index: FieldIndexOrIndices) -> Any:
+        assert isinstance(index, int) or (isinstance(index, tuple) and len(index) == 1)
+        return self.dtype(index if isinstance(index, int) else index[0])
+
+    @property
+    def axes(self) -> tuple[Dimension]:
+        return (self.axis,)
+
+
 def index_field(axis: Dimension, dtype: npt.DTypeLike = float) -> LocatedField:
-    class IndexField:
-        def __init__(self, axis: Dimension, dtype: type) -> None:
-            self.axis = axis
-            self.dtype = np.dtype(dtype)
-
-        def __getitem__(self, index: FieldIndexOrIndices) -> npt.DTypeLike:
-            assert isinstance(index, int) or (isinstance(index, tuple) and len(index) == 1)
-            return dtype(index if isinstance(index, int) else index[0])
-
-        @property
-        def axes(self) -> tuple[Dimension]:
-            return (self.axis,)
-
     return IndexField(axis, dtype)
 
 
+class ConstantField(LocatedField):
+    def __init__(self, value: Any, dtype: npt.DTypeLike):
+        self.value = value
+        self.dtype = np.dtype(dtype).type
+
+    def __getitem__(self, _: FieldIndexOrIndices) -> Any:
+        return self.dtype(self.value)
+
+    @property
+    def axes(self) -> tuple[()]:
+        return ()
+
+
 def constant_field(value: Any, dtype: npt.DTypeLike = float) -> LocatedField:
-    class ConstantField:
-        def __init__(self, value, dtype):
-            self.value = value
-            self.dtype = np.dtype(dtype)
-
-        def __getitem__(self, _: FieldIndexOrIndices) -> npt.DTypeLike:
-            return self.dtype(value)
-
-        @property
-        def axes(self) -> tuple[()]:
-            return ()
-
     return ConstantField(value, dtype)
 
 
