@@ -21,6 +21,7 @@ import pytest
 from gt4py import gtscript
 from gt4py import storage as gt_storage
 from gt4py.gtscript import PARALLEL, Field, computation, interval
+from tests.definitions import ALL_BACKENDS
 
 
 @pytest.mark.parametrize("backend", ["numpy"])
@@ -64,3 +65,12 @@ def test_stencil_object_cache(backend: str):
     assert len(stencil._domain_origin_cache) == 0
     cleaned_cache_time = runit(in_storage, out_storage, offset=1.0)
     assert cleaned_cache_time > fast_time
+
+
+@pytest.mark.parametrize("backend", ALL_BACKENDS)
+@pytest.mark.parametrize("backend_opts", [{"verbose": True}])
+def test_common_stencil_options(backend, backend_opts):
+    @gtscript.stencil(backend=backend, **backend_opts)
+    def foo(f: Field[float]):
+        with computation(PARALLEL), interval(...):  # type: ignore
+            field = 42.0
