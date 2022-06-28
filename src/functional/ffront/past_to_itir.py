@@ -200,7 +200,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             "cartesian_domain" if self.grid_type == GridType.CARTESIAN else "unstructured_domain"
         )
         return itir.SymRef(id=self.visit(out_field_name, **kwargs).id), itir.FunCall(
-            fun=itir.SymRef(id=domain_builtin), args=domain_args  # TODO
+            fun=itir.SymRef(id=domain_builtin), args=domain_args
         )
 
     def visit_Constant(self, node: past.Constant, **kwargs) -> itir.Literal:
