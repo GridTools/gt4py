@@ -68,9 +68,10 @@ def test_stencil_object_cache(backend: str):
 
 
 @pytest.mark.parametrize("backend", ALL_BACKENDS)
-@pytest.mark.parametrize("backend_opts", [{"verbose": True}])
-def test_common_stencil_options(backend, backend_opts):
-    @gtscript.stencil(backend=backend, **backend_opts)
-    def foo(f: Field[float]):
-        with computation(PARALLEL), interval(...):  # type: ignore
-            f = 42.0  # noqa F841
+def test_warning_for_unsupported_backend_option(backend):
+    with pytest.warns(RuntimeWarning, match="Unknown option"):
+
+        @gtscript.stencil(backend=backend, **{"this_option_is_not_supported": "foo"})
+        def foo(f: Field[float]):
+            with computation(PARALLEL), interval(...):  # type: ignore
+                f = 42.0  # noqa F841

@@ -272,7 +272,9 @@ class BaseBackend(Backend):
         assert self.options is not None
         unknown_options = set(options.backend_opts.keys()) - set(self.options.keys())
         if unknown_options:
-            warnings.warn(f"Unknown options '{unknown_options}' for backend '{self.name}'")
+            warnings.warn(
+                f"Unknown options '{unknown_options}' for backend '{self.name}'", RuntimeWarning
+            )
 
     def make_module(
         self,
