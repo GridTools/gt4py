@@ -186,28 +186,34 @@ class Program:
         )
 
     @staticmethod
-    def _deduce_grid_type(requested_grid_type: Optional[GridType], offsets: set[FieldOffset]):
+    def _deduce_grid_type(
+        requested_grid_type: Optional[GridType],
+        offsets_and_dimensions: set[FieldOffset | Dimension],
+    ):
         def is_cartesian_offset(o: FieldOffset):
-            return o.source == o.target
+            return len(o.target) == 1 and o.source == o.target[0]
 
         deduced_grid_type = GridType.CARTESIAN
-        for o in offsets:
-            if not is_cartesian_offset(o):
+        for o in offsets_and_dimensions:
+            if isinstance(o, FieldOffset) and not is_cartesian_offset(o):
+                deduced_grid_type = GridType.UNSTRUCTURED
+                break
+            if isinstance(o, Dimension) and o.local:
                 deduced_grid_type = GridType.UNSTRUCTURED
                 break
 
         if requested_grid_type == GridType.CARTESIAN and deduced_grid_type == GridType.UNSTRUCTURED:
             raise GTTypeError(
-                "grid_type == GridType.CARTESIAN was requested, but unstructured `FieldOffset` was found."
+                "grid_type == GridType.CARTESIAN was requested, but unstructured `FieldOffset` or local `Dimension` was found."
             )
 
         return deduced_grid_type if requested_grid_type is None else requested_grid_type
 
     def _lowered_funcs_from_captured_vars(
         self, captured_vars: CapturedVars
-    ) -> tuple[list[itir.FunctionDefinition], set[FieldOffset]]:
+    ) -> tuple[list[itir.FunctionDefinition], set[FieldOffset | Dimension]]:
         lowered_funcs = []
-        offsets = set[FieldOffset]()
+        offsets_and_dimensions = set[FieldOffset | Dimension]()
 
         all_captured_vars = collections.ChainMap(captured_vars.globals, captured_vars.nonlocals)
 
@@ -221,11 +227,13 @@ class Program:
                 lowered_funcs.append(itir_node)
 
                 if (captured := value.__gt_captured_vars__()) is not None:
-                    for c in captured.globals:
+                    for c in (captured.globals | captured.nonlocals).values():
                         if isinstance(c, FieldOffset):
-                            offsets.add(c)
+                            offsets_and_dimensions.add(c)
+                        if isinstance(c, Dimension):
+                            offsets_and_dimensions.add(c)
 
-        return lowered_funcs, offsets
+        return lowered_funcs, offsets_and_dimensions
 
     @functools.cached_property
     def itir(self) -> itir.FencilDefinition:
@@ -244,9 +252,12 @@ class Program:
         if undefined := referenced_var_names - defined_var_names:
             raise RuntimeError(f"Reference to undefined symbol(s) `{', '.join(undefined)}`.")
 
-        lowered_funcs, offsets = self._lowered_funcs_from_captured_vars(capture_vars)
+        lowered_funcs, offsets_and_dimensions = self._lowered_funcs_from_captured_vars(capture_vars)
 
-        grid_type = self._deduce_grid_type(self.grid_type, offsets)
+        grid_type = self._deduce_grid_type(
+            self.grid_type,
+            offsets_and_dimensions,
+        )
         return ProgramLowering.apply(
             self.past_node, function_definitions=lowered_funcs, grid_type=grid_type
         )

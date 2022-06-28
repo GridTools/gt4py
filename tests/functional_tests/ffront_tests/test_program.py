@@ -34,7 +34,7 @@ from functional.iterator.embedded import np_as_located_field
 
 float64 = float
 IDim = Dimension("IDim")
-Ioff = FieldOffset("Ioff", source=IDim, target=[IDim])
+Ioff = FieldOffset("Ioff", source=IDim, target=(IDim,))
 
 
 # TODO(tehrengruber): Improve test structure. Identity needs to be decorated
