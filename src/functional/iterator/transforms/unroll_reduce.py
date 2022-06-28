@@ -1,3 +1,4 @@
+from itertools import groupby
 from typing import Iterable
 
 from eve import NodeTranslator
@@ -5,32 +6,30 @@ from eve.utils import UIDs
 from functional.iterator import ir
 
 
+def all_equal(it: Iterable):
+    g = groupby(it)
+    return next(g, True) and not next(g, False)
+
+
 class UnrollReduce(NodeTranslator):
     @staticmethod
     def _find_last_offset(reduce_args: Iterable[ir.Expr], offset_provider):
-        result = None
-        max_neighbors = None
-        has_skip_values = None
+        connectivities = []
         for arg in reduce_args:
             if (
                 isinstance(arg, ir.FunCall)
                 and isinstance(arg.fun, ir.FunCall)
                 and arg.fun.fun == ir.SymRef(id="shift")
             ):
-                result = arg.fun.args[0]
-                assert isinstance(result, ir.OffsetLiteral)
-                if max_neighbors is not None or has_skip_values is not None:
-                    if (
-                        max_neighbors != offset_provider[result.value].max_neighbors
-                        or has_skip_values != offset_provider[result.value].has_skip_values
-                    ):
-                        raise RuntimeError("Arguments to reduce have incompatible partial shifts.")
-                else:
-                    max_neighbors = offset_provider[result.value].max_neighbors
-                    has_skip_values = offset_provider[result.value].has_skip_values
-        if result is None:
+                assert isinstance(arg.fun.args[0], ir.OffsetLiteral)
+                connectivities.append(offset_provider[arg.fun.args[0].value])
+
+        if not connectivities:
             raise RuntimeError("Couldn't detect partial shift in any arguments of reduce.")
-        return result
+
+        if not all_equal((c.max_neighbors, c.has_skip_values) for c in connectivities):
+            raise RuntimeError("Arguments to reduce have incompatible partial shifts.")
+        return connectivities[0]
 
     @staticmethod
     def _is_reduce(node: ir.FunCall):
@@ -62,9 +61,9 @@ class UnrollReduce(NodeTranslator):
 
         offset_provider = kwargs["offset_provider"]
         assert offset_provider is not None
-        last_offset = self._find_last_offset(node.args, offset_provider)
-        max_neighbors = offset_provider[last_offset.value].max_neighbors
-        has_skip_values = offset_provider[last_offset.value].has_skip_values
+        connectivity = self._find_last_offset(node.args, offset_provider)
+        max_neighbors = connectivity.max_neighbors
+        has_skip_values = connectivity.has_skip_values
 
         acc = ir.SymRef(id=UIDs.sequential_id(prefix="_acc"))
         offset = ir.SymRef(id=UIDs.sequential_id(prefix="_i"))
