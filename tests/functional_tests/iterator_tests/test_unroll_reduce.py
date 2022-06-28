@@ -42,6 +42,27 @@ def reduction_with_shift_on_second_arg():
     )
 
 
+@pytest.fixture
+def reduction_with_incompatible_shifts():
+    UIDs.reset_sequence()
+    return ir.FunCall(
+        fun=ir.FunCall(
+            fun=ir.SymRef(id="reduce"),
+            args=[ir.SymRef(id="foo"), ir.Literal(value="0.0", type="float")],
+        ),
+        args=[
+            ir.FunCall(
+                fun=ir.FunCall(fun=ir.SymRef(id="shift"), args=[ir.OffsetLiteral(value="dim")]),
+                args=[ir.SymRef(id="x")],
+            ),
+            ir.FunCall(
+                fun=ir.FunCall(fun=ir.SymRef(id="shift"), args=[ir.OffsetLiteral(value="dim2")]),
+                args=[ir.SymRef(id="y")],
+            ),
+        ],
+    )
+
+
 def _expected(red, dim, max_neighbors, has_skip_values):
     acc = ir.SymRef(id="_acc_1")
     offset = ir.SymRef(id="_i_2")
@@ -107,3 +128,29 @@ def test_reduction_with_shift_on_second_arg(reduction_with_shift_on_second_arg):
         reduction_with_shift_on_second_arg, offset_provider=offset_provider
     )
     assert actual == expected
+
+
+@pytest.mark.parametrize(
+    "offset_provider",
+    [
+        {
+            "dim": SimpleNamespace(max_neighbors=3, has_skip_values=False),
+            "dim2": SimpleNamespace(max_neighbors=2, has_skip_values=False),
+        },
+        {
+            "dim": SimpleNamespace(max_neighbors=3, has_skip_values=False),
+            "dim2": SimpleNamespace(max_neighbors=3, has_skip_values=True),
+        },
+        {
+            "dim": SimpleNamespace(max_neighbors=3, has_skip_values=False),
+            "dim2": SimpleNamespace(max_neighbors=2, has_skip_values=True),
+        },
+    ],
+)
+def test_reduction_with_incompatible_shifts(reduction_with_incompatible_shifts, offset_provider):
+    offset_provider = {
+        "dim": SimpleNamespace(max_neighbors=3, has_skip_values=False),
+        "dim2": SimpleNamespace(max_neighbors=2, has_skip_values=False),
+    }
+    with pytest.raises(RuntimeError, match="incompatible"):
+        UnrollReduce().visit(reduction_with_incompatible_shifts, offset_provider=offset_provider)
