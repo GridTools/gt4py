@@ -86,14 +86,14 @@ def _to_device(sdfg: dace.SDFG, device: str) -> None:
                 node.device = dace.DeviceType.GPU
 
 
-def _pre_expand_trafos(stencil_ir: gtir.Stencil, sdfg: dace.SDFG, layout_map):
+def _pre_expand_trafos(gtir_pipeline: GtirPipeline, sdfg: dace.SDFG, layout_map):
 
-    args_data = make_args_data_from_gtir(GtirPipeline(stencil_ir))
+    args_data = make_args_data_from_gtir(gtir_pipeline)
 
     # stencils without effect
     if all(info is None for info in args_data.field_info.values()):
-        sdfg = dace.SDFG(stencil_ir.name)
-        sdfg.add_state(stencil_ir.name)
+        sdfg = dace.SDFG(gtir_pipeline.gtir.name)
+        sdfg.add_state(gtir_pipeline.gtir.name)
         return sdfg
 
     for array in sdfg.arrays.values():
@@ -305,7 +305,9 @@ class SDFGManager:
 
                 _to_device(sdfg, self.builder.backend.storage_info["device"])
                 _pre_expand_trafos(
-                    self.builder.gtir, sdfg, self.builder.backend.storage_info["layout_map"]
+                    self.builder.gtir_pipeline,
+                    sdfg,
+                    self.builder.backend.storage_info["layout_map"],
                 )
                 self._save_sdfg(sdfg, path)
             self._loaded_sdfgs[path] = sdfg

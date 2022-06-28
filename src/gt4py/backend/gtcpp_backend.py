@@ -51,7 +51,7 @@ class GTExtGenerator(BackendCodegen):
         self.backend = backend
 
     def __call__(self, stencil_ir: gtir.Stencil) -> Dict[str, Dict[str, str]]:
-        stencil_ir = GtirPipeline(stencil_ir).full()
+        stencil_ir = GtirPipeline(stencil_ir, self.backend.builder.stencil_id).full()
         base_oir = GTIRToOIR().visit(stencil_ir)
         oir_pipeline = self.backend.builder.options.backend_opts.get(
             "oir_pipeline", DefaultPipeline()
