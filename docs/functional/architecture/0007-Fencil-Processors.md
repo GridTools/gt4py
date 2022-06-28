@@ -11,6 +11,8 @@ tags: []
 
 The backend registry was deleted and replaced by calling the function instead of passing the string key to `execute_fencil`. The previous de-facto concept of backend (any function that takes a fencil) has been split into two types of `fencil_processors`, `fencil_executors` and `fencil_formatters`. Care was taken to not complicate applying either of those to a fencil.
 
+In contrast to "backend" we can clearly define a **fencil processor**: Any function that takes an IteratorIR representation of a fencil as a parameter along with all the inputs needed to call the fencil is a **fencil processor**. What kind of processor depends on the behaviour of that function.
+
 This was done to 
 
 1. Give a single semantic meaning to calling a `@fendef` decorated function or FieldView program: executing the fencil.
@@ -34,6 +36,8 @@ While working on integrating foreign language (non-python) backends (E.g. genera
 
 ### Clarifying nomenclature
 Anything that doesn't execute a fencil, but instead generates text from it is now called a `fencil_formatter`.
+
+
 
 ### Clarifying the `__call__` semantics
 The following was done to clarify the semantics of fencil wrapper `__call__` (and FieldView Program `__call__`), in the case of using a non-embedded backend: The `__call__` method now checks that the backend it was passed was decorated with `@fencil_processors.processor_interface.fencil_executor`. In addition another method was introduced on the fencil / Program wrappers (`.format_itir` / `.format_itir`) to cover all other currently existing fencil processors, as they all generate a text string from the fencil.
