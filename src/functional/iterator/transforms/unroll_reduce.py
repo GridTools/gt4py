@@ -1,3 +1,5 @@
+from typing import Iterable
+
 from eve import NodeTranslator
 from eve.utils import UIDs
 from functional.iterator import ir
@@ -5,10 +7,15 @@ from functional.iterator import ir
 
 class UnrollReduce(NodeTranslator):
     @staticmethod
-    def _get_last_offset(node: ir.Expr):
-        assert isinstance(node, ir.FunCall)
-        assert isinstance(node.fun, ir.FunCall) and node.fun.fun == ir.SymRef(id="shift")
-        return node.fun.args[0]
+    def _find_last_offset(reduce_args: Iterable[ir.Expr]):
+        for arg in reduce_args:
+            if (
+                isinstance(arg, ir.FunCall)
+                and isinstance(arg.fun, ir.FunCall)
+                and arg.fun.fun == ir.SymRef(id="shift")
+            ):
+                return arg.fun.args[0]
+        raise RuntimeError("Couldn't detect partial shift in any arguments of reduce.")
 
     @staticmethod
     def _is_reduce(node: ir.FunCall):
@@ -40,7 +47,7 @@ class UnrollReduce(NodeTranslator):
 
         offset_provider = kwargs["offset_provider"]
         assert offset_provider is not None
-        last_offset = self._get_last_offset(node.args[0])
+        last_offset = self._find_last_offset(node.args)
         max_neighbors = offset_provider[last_offset.value].max_neighbors
         has_skip_values = offset_provider[last_offset.value].has_skip_values
 
