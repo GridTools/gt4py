@@ -359,22 +359,25 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                 msg=f"Incompatible argument in call to `{node.func.id}`. Expected "
                 f"a field with dtype bool, but got `{mask_type}`.",
             )
-        if left_type != right_type:
+
+        try:
+            return_type = type_info.promote(left_type, right_type)
+        except GTTypeError as ex:
             raise FieldOperatorTypeDeductionError.from_foast_node(
                 node,
-                msg=f"Incompatible argument in call to `{node.func.id}`. Expected "
-                f"second and third argument to be of equal type.",
-            )
+                msg=f"Incompatible argument in call to `{node.func.id}`.",
+            ) from ex
+
         return foast.Call(
             func=node.func,
             args=node.args,
             kwargs=node.kwargs,
-            type=left_type,
+            type=return_type,
             location=node.location,
         )
 
     def _visit_broadcast(self, node: foast.Call, **kwargs) -> foast.Call:
-        field_type = cast(ct.FieldType, node.args[0].type)
+        arg_type = cast(ct.FieldType | ct.ScalarType, node.args[0].type)
         broadcast_dims_expr = cast(foast.TupleExpr, node.args[1]).elts
 
         if any([not (isinstance(elt.type, ct.DimensionType)) for elt in broadcast_dims_expr]):
@@ -386,16 +389,16 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
 
         broadcast_dims = [cast(ct.DimensionType, elt.type).dim for elt in broadcast_dims_expr]
 
-        if not set(field_type.dims).issubset(set(broadcast_dims)):
+        if not set((arg_dims := type_info.extract_dims(arg_type))).issubset(set(broadcast_dims)):
             raise FieldOperatorTypeDeductionError.from_foast_node(
                 node,
                 msg=f"Incompatible broadcast dimensions in {node.func.id}. Expected "
-                f"broadcast dimension is missing {set(field_type.dims).difference(set(broadcast_dims))}",
+                f"broadcast dimension is missing {set(arg_dims).difference(set(broadcast_dims))}",
             )
 
         return_type = ct.FieldType(
             dims=broadcast_dims,
-            dtype=field_type.dtype,
+            dtype=type_info.extract_dtype(arg_type),
         )
 
         return foast.Call(

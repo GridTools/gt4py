@@ -243,7 +243,7 @@ def test_tuples():
     assert np.allclose((a.array() * 1.3 + b.array() * 5.0) * 3.4, c)
 
 
-def test_broadcasting():
+def test_promotion():
     Edge = Dimension("Edge")
     K = Dimension("K")
 
@@ -254,12 +254,12 @@ def test_broadcasting():
     c = np_as_located_field(Edge, K)(np.zeros((size, ksize)))
 
     @field_operator(backend=fieldview_backend)
-    def broadcast(
+    def promotion(
         inp1: Field[[Edge, K], float64], inp2: Field[[K], float64]
     ) -> Field[[Edge, K], float64]:
         return inp1 / inp2
 
-    broadcast(a, b, out=c, offset_provider={})
+    promotion(a, b, out=c, offset_provider={})
 
     assert np.allclose((a.array() / b.array()), c)
 
@@ -466,6 +466,19 @@ def test_broadcast_simple():
     assert np.allclose(a.array()[:, np.newaxis], out)
 
 
+def test_broadcast_scalar():
+    size = 10
+    out = np_as_located_field(IDim)(np.zeros((size)))
+
+    @field_operator(backend=fieldview_backend)
+    def scalar_broadcast() -> Field[[IDim], float64]:
+        return broadcast(float(1.0), (IDim,))
+
+    scalar_broadcast(out=out, offset_provider={})
+
+    assert np.allclose(1, out)
+
+
 def test_broadcast_two_fields():
     size = 10
     a = np_as_located_field(IDim)(np.arange(0, size, 1, dtype=int))
@@ -522,6 +535,22 @@ def test_conditional():
     conditional(mask, a, b, out=out, offset_provider={})
 
     assert np.allclose(np.where(mask, a, b), out)
+
+
+def test_conditional_promotion():
+    size = 10
+    mask = np_as_located_field(IDim)(np.zeros((size,), dtype=bool))
+    mask.array()[0 : (size // 2)] = True
+    a = np_as_located_field(IDim)(np.ones((size,)))
+    out = np_as_located_field(IDim)(np.zeros((size,)))
+
+    @field_operator(backend=fieldview_backend)
+    def conditional(mask: Field[[IDim], bool], a: Field[[IDim], float64]) -> Field[[IDim], float64]:
+        return where(mask, a, 10.0)
+
+    conditional(mask, a, out=out, offset_provider={})
+
+    assert np.allclose(np.where(mask, a, 10), out)
 
 
 def test_conditional_shifted():

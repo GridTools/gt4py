@@ -1,10 +1,11 @@
 import numpy as np
 import pytest
 
+from functional.common import Dimension
 from functional.fencil_processors import gtfn
 from functional.iterator.builtins import *
 from functional.iterator.embedded import np_as_located_field
-from functional.iterator.runtime import *
+from functional.iterator.runtime import closure, fendef, fundef
 
 from .conftest import run_processor
 
@@ -49,9 +50,9 @@ def tridiag_reference():
     return a, b, c, d, x
 
 
-IDim = CartesianAxis("IDim")
-JDim = CartesianAxis("JDim")
-KDim = CartesianAxis("KDim")
+IDim = Dimension("IDim")
+JDim = Dimension("JDim")
+KDim = Dimension("KDim")
 
 
 @fendef

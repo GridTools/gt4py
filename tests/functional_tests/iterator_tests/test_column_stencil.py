@@ -1,10 +1,11 @@
 import numpy as np
 import pytest
 
+from functional.common import Dimension
 from functional.fencil_processors import gtfn
 from functional.iterator.builtins import *
 from functional.iterator.embedded import np_as_located_field
-from functional.iterator.runtime import *
+from functional.iterator.runtime import closure, fendef, fundef, offset
 
 from .conftest import run_processor
 
@@ -18,8 +19,8 @@ def multiply_stencil(inp):
     return deref(shift(K, 1, I, 1)(inp))
 
 
-KDim = CartesianAxis("KDim")
-IDim = CartesianAxis("IDim")
+KDim = Dimension("KDim")
+IDim = Dimension("IDim")
 
 
 @fendef(column_axis=KDim)
