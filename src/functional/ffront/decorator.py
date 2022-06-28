@@ -26,7 +26,7 @@ import functools
 import types
 import typing
 import warnings
-from typing import Callable
+from typing import Callable, Protocol
 
 from devtools import debug
 
@@ -94,7 +94,7 @@ def _collect_capture_vars(captured_vars: CapturedVars) -> CapturedVars:
 
 
 @typing.runtime_checkable
-class GTCallable(typing.Protocol):
+class GTCallable(Protocol):
     """
     Typing Protocol (abstract base class) defining the interface for subroutines.
 
