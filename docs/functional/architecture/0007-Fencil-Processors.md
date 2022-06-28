@@ -20,7 +20,7 @@ This was done to
 ## Context
 
 ### The fencil wrapper `__call__` used to have unclear semantics
-Previously, any function with the signature `(itir.FencilDefinition, *args, **kwargs) -> Any` could be registered as a backend and called via the `__call__` method of the return type of the iterator or fieldview decorator. Semantically this meant that calling a fencil can not be expected to execute the fencil without first knowing what the "backend" method actually does.
+Previously, any function with the signature `(itir.FencilDefinition, *args, **kwargs) -> Any` could be registered as a backend and called via the `__call__` method of the return type of the iterator or FieldView decorator. Semantically this meant that calling a fencil can not be expected to execute the fencil without first knowing what the "backend" method actually does.
 
 This was useful for testing because it allowed parametrize tests with any kind of fencil processor (coupled with whether the fencil processor should execute the fencil and hence the result should be validated).
 
