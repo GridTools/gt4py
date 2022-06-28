@@ -22,7 +22,7 @@ import jinja2
 import numpy
 
 from gt4py import utils as gt_utils
-from gt4py.definitions import AccessKind, DomainInfo, FieldInfo, ParameterInfo
+from gt4py.definitions import AccessKind, DomainInfo, FieldInfo, ParameterInfo, StencilID
 from gtc import gtir, gtir_to_oir
 from gtc.definitions import Boundary
 from gtc.passes.gtir_k_boundary import compute_k_boundary, compute_min_k_size
@@ -54,12 +54,17 @@ class ModuleData:
         return set(self.parameter_info.keys())
 
 
+_args_data_cache: Dict[StencilID, ModuleData] = {}
+
+
 def make_args_data_from_gtir(pipeline: GtirPipeline) -> ModuleData:
     """
     Compute module data containing information about stencil arguments from gtir.
 
     This is no longer compatible with the legacy backends.
     """
+    if pipeline.stencil_id in _args_data_cache:
+        return _args_data_cache[pipeline.stencil_id]
     data = ModuleData()
 
     # NOTE: pipeline.gtir has not had prune_unused_parameters applied.
@@ -102,6 +107,7 @@ def make_args_data_from_gtir(pipeline: GtirPipeline) -> ModuleData:
         data.parameter_info[decl.name] = ParameterInfo(access=access, dtype=dtype)
 
     data.unreferenced = [*sorted(name for name in accesses if accesses[name] == AccessKind.NONE)]
+    _args_data_cache[pipeline.stencil_id] = data
     return data
 
 
