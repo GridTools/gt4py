@@ -16,7 +16,7 @@ from __future__ import annotations
 import ast
 import textwrap
 import types
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from eve.concepts import SourceLocation
 from eve.extended_typing import Any, ClassVar, Generic, Optional, Type, TypeVar
@@ -61,7 +61,7 @@ class DialectParser(ast.NodeVisitor, Generic[DialectRootT]):
     captured_vars: CapturedVars
     externals_defs: dict[str, Any]
 
-    syntax_error_cls: ClassVar[Type[DialectSyntaxError]] = "DialectSyntaxError"
+    syntax_error_cls: ClassVar[Type[DialectSyntaxError]] = field(default=lambda: DialectSyntaxError)
 
     @classmethod
     def apply(
