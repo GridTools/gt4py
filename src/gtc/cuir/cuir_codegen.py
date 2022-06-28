@@ -366,7 +366,7 @@ class CUIRCodegen(codegen.TemplatedGenerator):
                         , integral_constant<int, ${i + 3}>
                         % endfor
                         % endif
-                        >::template make_values>(i, j, k
+                        >::make_values(i, j, k
                         % if field not in temp_names:
                         % for i in range(data_dims):
                         , dim_${i + 3}
