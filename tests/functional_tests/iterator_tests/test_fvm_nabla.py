@@ -17,6 +17,7 @@ import pytest
 
 pytest.importorskip("atlas4py")
 
+from functional.common import Dimension
 from functional.iterator import library
 from functional.iterator.atlas_utils import AtlasTable
 from functional.iterator.builtins import *
@@ -25,13 +26,13 @@ from functional.iterator.embedded import (
     index_field,
     np_as_located_field,
 )
-from functional.iterator.runtime import *
+from functional.iterator.runtime import closure, fendef, fundef, offset
 
 from .fvm_nabla_setup import assert_close, nabla_setup
 
 
-Vertex = CartesianAxis("Vertex")
-Edge = CartesianAxis("Edge")
+Vertex = Dimension("Vertex")
+Edge = Dimension("Edge")
 
 V2E = offset("V2E")
 E2V = offset("E2V")

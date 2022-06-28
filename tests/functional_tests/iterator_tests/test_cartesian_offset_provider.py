@@ -1,14 +1,15 @@
 import numpy as np
 
+from functional.common import Dimension
 from functional.iterator.builtins import *
 from functional.iterator.embedded import np_as_located_field
-from functional.iterator.runtime import *
+from functional.iterator.runtime import closure, fendef, fundef, offset
 
 
 I = offset("I")
 J = offset("J")
-I_loc = CartesianAxis("I_loc")
-J_loc = CartesianAxis("J_loc")
+I_loc = Dimension("I_loc")
+J_loc = Dimension("J_loc")
 
 
 @fundef

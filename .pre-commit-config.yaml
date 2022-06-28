@@ -79,5 +79,5 @@ repos:
       src/functional/ffront/past_passes/type_deduction.py | # until mypy supports match
       docs/eve/conf.py |
       tests/eve_tests/definitions.py |
-      tests/functional_tests/.* |
+      tests/functional_tests/ffront_tests/.* |
       )$

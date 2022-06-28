@@ -11,11 +11,11 @@
 #   )
 # )
 import numpy as np
-from numpy.core.numeric import allclose
 
+from functional.common import Dimension
 from functional.iterator.builtins import *
 from functional.iterator.embedded import np_as_located_field
-from functional.iterator.runtime import *
+from functional.iterator.runtime import fundef, offset
 
 
 I = offset("I")
@@ -31,7 +31,7 @@ def foo(inp, cond):
     return deref(compute_shift(cond)(inp))
 
 
-IDim = CartesianAxis("IDim")
+IDim = Dimension("IDim")
 
 
 def test_simple_indirection():
@@ -49,4 +49,4 @@ def test_simple_indirection():
         inp, cond, out=out, offset_provider={"I": IDim}
     )
 
-    assert allclose(ref, out)
+    assert np.allclose(ref, out)
