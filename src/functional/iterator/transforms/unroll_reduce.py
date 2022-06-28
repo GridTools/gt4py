@@ -13,7 +13,7 @@ def all_equal(it: Iterable):
 
 class UnrollReduce(NodeTranslator):
     @staticmethod
-    def _find_last_offset(reduce_args: Iterable[ir.Expr], offset_provider):
+    def _find_connectivity(reduce_args: Iterable[ir.Expr], offset_provider):
         connectivities = []
         for arg in reduce_args:
             if (
@@ -61,7 +61,7 @@ class UnrollReduce(NodeTranslator):
 
         offset_provider = kwargs["offset_provider"]
         assert offset_provider is not None
-        connectivity = self._find_last_offset(node.args, offset_provider)
+        connectivity = self._find_connectivity(node.args, offset_provider)
         max_neighbors = connectivity.max_neighbors
         has_skip_values = connectivity.has_skip_values
 
