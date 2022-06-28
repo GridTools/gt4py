@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Callable, Optional, Union
+from typing import Any, Callable, Optional, Union
 
 from functional import common
 from functional.iterator import builtins
@@ -20,6 +20,14 @@ def offset(value):
 
 # todo: rename to dimension and remove axis terminology
 CartesianAxis = common.Dimension
+
+
+class CartesianDomain(dict):
+    ...
+
+
+class UnstructuredDomain(dict):
+    ...
 
 
 # dependency inversion, register fendef for embedded execution or for tracing/parsing here
@@ -57,6 +65,28 @@ def fendef(*dec_args, **dec_kwargs):
         return wrapper
 
 
+def _deduce_domain(domain: dict[common.Dimension, range], offset_provider: dict[str, Any]):
+    if isinstance(domain, UnstructuredDomain):
+        domain_builtin = builtins.unstructured_domain
+    elif isinstance(domain, CartesianDomain):
+        domain_builtin = builtins.cartesian_domain
+    else:
+        domain_builtin = (
+            builtins.unstructured_domain
+            if any(isinstance(o, common.Connectivity) for o in offset_provider.values())
+            else builtins.cartesian_domain
+        )
+
+    return domain_builtin(
+        *tuple(
+            map(
+                lambda x: builtins.named_range(x[0], x[1].start, x[1].stop),
+                domain.items(),
+            )
+        )
+    )
+
+
 class FundefDispatcher:
     _hook = None
     # hook is an object that
@@ -77,17 +107,10 @@ class FundefDispatcher:
                     # if domain is expressed as calls to builtin `domain()` we need to pass it lazily
                     # as dispatching needs to happen inside of the fencil
                     dom = dom()
-                if isinstance(dom, dict):
+                elif isinstance(dom, dict):
                     # if passed as a dict, we need to convert back to builtins for interpretation by the backends
                     assert "offset_provider" in kwargs
-                    dom = builtins.cartesian_domain(  # TODO dispatch
-                        *tuple(
-                            map(
-                                lambda x: builtins.named_range(x[0], x[1].start, x[1].stop),
-                                dom.items(),
-                            )
-                        )
-                    )
+                    dom = _deduce_domain(dom, kwargs["offset_provider"])
                 closure(dom, self, out, [*inps])
 
             impl(out, *args, **kwargs)
