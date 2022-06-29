@@ -190,6 +190,12 @@ class Program:
         requested_grid_type: Optional[GridType],
         offsets_and_dimensions: set[FieldOffset | Dimension],
     ):
+        """
+        Derive grid type from actually occurring dimensions and check against optional user request.
+        
+        Unstructured grid type is consistent with any kind of offset, cartesian is easier to optimize for but only
+        allowed in the absence of unstructured dimensions and offsets.
+        """
         def is_cartesian_offset(o: FieldOffset):
             return len(o.target) == 1 and o.source == o.target[0]
 
