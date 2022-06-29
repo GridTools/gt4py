@@ -52,7 +52,7 @@ K = CartesianAxis("K")
 
 def nabla_fencil(n_vertices, n_levels, out, pp, S_M, sign, vol):
     closure(
-        domain(named_range(Vertex, 0, n_vertices), named_range(K, 0, n_levels)),
+        unstructured_domain(named_range(Vertex, 0, n_vertices), named_range(K, 0, n_levels)),
         compute_pnabla,
         out,
         [pp, S_M, sign, vol],

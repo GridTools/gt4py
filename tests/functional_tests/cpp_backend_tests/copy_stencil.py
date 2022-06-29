@@ -18,7 +18,7 @@ def copy_stencil(inp):
 
 def copy_fencil(isize, jsize, ksize, inp, out):
     closure(
-        domain(
+        cartesian_domain(
             named_range(IDim, 0, isize), named_range(JDim, 0, jsize), named_range(KDim, 0, ksize)
         ),
         copy_stencil,

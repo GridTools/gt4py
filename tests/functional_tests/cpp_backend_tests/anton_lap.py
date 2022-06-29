@@ -38,7 +38,7 @@ KDim = CartesianAxis("KDim")
 
 def lap_fencil(i_size, j_size, k_size, i_off, j_off, k_off, out, inp):
     closure(
-        domain(
+        cartesian_domain(
             named_range(IDim, i_off, i_size + i_off),
             named_range(JDim, j_off, j_size + j_off),
             named_range(KDim, k_off, k_size + k_off),

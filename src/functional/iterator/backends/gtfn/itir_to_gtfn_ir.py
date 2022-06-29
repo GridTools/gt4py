@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Iterable, Type
 
 import eve
 from eve.concepts import SymbolName
@@ -55,7 +55,9 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
 
     def visit_OffsetLiteral(self, node: itir.OffsetLiteral, **kwargs: Any) -> OffsetLiteral:
         if node.value in self.offset_provider:
-            if isinstance(self.offset_provider[node.value], Dimension):
+            if isinstance(
+                self.offset_provider[node.value], Dimension
+            ):  # replace offset tag by dimension tag
                 return OffsetLiteral(value=self.offset_provider[node.value].value)
         return OffsetLiteral(value=node.value)
 
@@ -108,14 +110,21 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         return TaggedValues(tags=tags, values=sizes), TaggedValues(tags=tags, values=offsets)
 
     @staticmethod
-    def _collect_offsets(node: itir.Node) -> set[str]:
-        return (
-            node.pre_walk_values()
-            .if_isinstance(itir.OffsetLiteral, itir.AxisLiteral)
-            .getattr("value")
-            .if_isinstance(str)
-            .to_set()
-        )
+    def _collect_offset_or_axis_node(
+        node_type: Type, tree: eve.Node | Iterable[eve.Node]
+    ) -> set[str]:
+        if not isinstance(tree, Iterable):
+            tree = [tree]
+        result = set()
+        for n in tree:
+            result.update(
+                n.pre_walk_values()
+                .if_isinstance(node_type)
+                .getattr("value")
+                .if_isinstance(str)
+                .to_set()
+            )
+        return result
 
     def visit_FunCall(self, node: itir.FunCall, **kwargs: Any) -> Node:
         if isinstance(node.fun, itir.SymRef):
@@ -144,7 +153,9 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             elif node.fun.id == "unstructured_domain":
                 sizes, domain_offsets = self._make_domain(node)
                 assert "stencil" in kwargs
-                shift_offsets = self._collect_offsets(kwargs["stencil"])
+                shift_offsets = self._collect_offset_or_axis_node(
+                    itir.OffsetLiteral, kwargs["stencil"]
+                )
                 connectivities = []
                 for o in shift_offsets:
                     if o in self.offset_provider and isinstance(
@@ -190,13 +201,18 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     ) -> FencilDefinition:
         grid_type = getattr(GridType, grid_type.upper())
         self.offset_provider = kwargs["offset_provider"]
+        executions = self.visit(node.closures, grid_type=grid_type, **kwargs)
+        function_definitions = self.visit(node.function_definitions)
+        axes = self._collect_offset_or_axis_node(itir.AxisLiteral, node)
+        offsets = self._collect_offset_or_axis_node(
+            OffsetLiteral, executions + function_definitions
+        )  # collect offsets from gtfn nodes as some might have been dropped
+        offset_declarations = list(map(lambda x: Sym(id=x), axes | offsets))
         return FencilDefinition(
             id=SymbolName(node.id),
             params=self.visit(node.params),
-            executions=self.visit(node.closures, grid_type=grid_type, **kwargs),
+            executions=executions,
             grid_type=grid_type,
-            offset_declarations=list(
-                map(lambda x: Sym(id=x), self._collect_offsets(node))
-            ),  # TODO filter out unused offsets after transform
-            function_definitions=self.visit(node.function_definitions),
+            offset_declarations=offset_declarations,
+            function_definitions=function_definitions,
         )
