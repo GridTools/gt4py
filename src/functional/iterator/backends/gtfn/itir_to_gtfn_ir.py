@@ -138,25 +138,24 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
                 )
             elif self._is_sparse_deref_shift(node):
                 return self._sparse_deref_shift_to_tuple_get(node)
-            elif node.fun.id == "domain":
+            elif node.fun.id == "cartesian_domain":
                 sizes, domain_offsets = self._make_domain(node)
-                grid_type = kwargs["grid_type"]
-                if grid_type == GridType.CARTESIAN:
-                    return CartesianDomain(tagged_sizes=sizes, tagged_offsets=domain_offsets)
-                else:
-                    assert "stencil" in kwargs
-                    shift_offsets = self._collect_offsets(kwargs["stencil"])
-                    connectivities = []
-                    for o in shift_offsets:
-                        if o in self.offset_provider and isinstance(
-                            self.offset_provider[o], Connectivity
-                        ):
-                            connectivities.append(SymRef(id=o))
-                    return UnstructuredDomain(
-                        tagged_sizes=sizes,
-                        tagged_offsets=domain_offsets,
-                        connectivities=connectivities,
-                    )
+                return CartesianDomain(tagged_sizes=sizes, tagged_offsets=domain_offsets)
+            elif node.fun.id == "unstructured_domain":
+                sizes, domain_offsets = self._make_domain(node)
+                assert "stencil" in kwargs
+                shift_offsets = self._collect_offsets(kwargs["stencil"])
+                connectivities = []
+                for o in shift_offsets:
+                    if o in self.offset_provider and isinstance(
+                        self.offset_provider[o], Connectivity
+                    ):
+                        connectivities.append(SymRef(id=o))
+                return UnstructuredDomain(
+                    tagged_sizes=sizes,
+                    tagged_offsets=domain_offsets,
+                    connectivities=connectivities,
+                )
         elif isinstance(node.fun, itir.FunCall) and node.fun.fun == itir.SymRef(id="shift"):
             assert len(node.args) == 1
             return FunCall(

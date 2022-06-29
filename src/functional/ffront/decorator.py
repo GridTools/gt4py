@@ -30,7 +30,7 @@ from typing import Callable
 
 from eve.extended_typing import Any, Optional, Protocol
 from eve.utils import UIDs
-from functional.common import GridType, GTTypeError
+from functional.common import DimensionKind, GridType, GTTypeError
 from functional.ffront import (
     common_types as ct,
     field_operator_ast as foast,
@@ -198,7 +198,7 @@ class Program:
             if isinstance(o, FieldOffset) and not is_cartesian_offset(o):
                 deduced_grid_type = GridType.UNSTRUCTURED
                 break
-            if isinstance(o, Dimension) and o.local:
+            if isinstance(o, Dimension) and o.kind == DimensionKind.LOCAL:
                 deduced_grid_type = GridType.UNSTRUCTURED
                 break
 
