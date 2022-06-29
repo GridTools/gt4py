@@ -16,7 +16,7 @@ from __future__ import annotations
 import ast
 import textwrap
 import types
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from eve.concepts import SourceLocation
 from eve.extended_typing import Any, ClassVar, Generic, Optional, Type, TypeVar
@@ -61,7 +61,7 @@ class DialectParser(ast.NodeVisitor, Generic[DialectRootT]):
     captured_vars: CapturedVars
     externals_defs: dict[str, Any]
 
-    syntax_error_cls: ClassVar[Type[DialectSyntaxError]] = field(default=lambda: DialectSyntaxError)
+    syntax_error_cls: ClassVar[Type[DialectSyntaxError]]
 
     @classmethod
     def apply(
@@ -78,11 +78,13 @@ class DialectParser(ast.NodeVisitor, Generic[DialectRootT]):
                 ast.increment_lineno(FixMissingLocations.apply(raw_ast), starting_line - 1)
             )
             output_ast = cls._postprocess_dialect_ast(
-                cls(
+                cls(  # type: ignore[call-arg]  # mypy does not know that dataclasses ignore ClassVar attributes
                     source_definition=source_definition,
                     captured_vars=captured_vars,
                     externals_defs=externals or {},
-                ).visit(definition_ast)
+                ).visit(
+                    definition_ast
+                )
             )
             if __debug__:
                 _assert_source_invariants(source_definition, captured_vars)
