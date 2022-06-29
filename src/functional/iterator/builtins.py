@@ -14,7 +14,7 @@ __all__ = [
     "make_tuple",
     "tuple_get",
     "if_",
-    "greater",  # TODO not in c++
+    "greater",
     "less",
     "eq",
     "not_",

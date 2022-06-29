@@ -13,7 +13,7 @@ def test_located_field_1d():
 
     foo[0] = 42
 
-    assert foo.axises[0] == "foo"
+    assert foo.axes[0] == "foo"
     assert foo[0] == 42
 
 
@@ -22,7 +22,7 @@ def test_located_field_2d():
 
     foo[0, 0] = 42
 
-    assert foo.axises[0] == "foo"
+    assert foo.axes[0] == "foo"
     assert foo[0, 0] == 42
     assert foo.dtype == np.float64
 

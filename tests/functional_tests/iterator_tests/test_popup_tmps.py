@@ -1,8 +1,16 @@
+import pytest
+
+from eve.utils import UIDs
 from functional.iterator import ir
 from functional.iterator.transforms.popup_tmps import PopupTmps
 
 
-def test_trivial_single_lift():
+@pytest.fixture
+def fresh_uid_sequence():
+    UIDs.reset_sequence()
+
+
+def test_trivial_single_lift(fresh_uid_sequence):
     testee = ir.FunCall(
         fun=ir.Lambda(
             params=[ir.Sym(id="bar_inp")],
@@ -31,10 +39,10 @@ def test_trivial_single_lift():
     )
     expected = ir.FunCall(
         fun=ir.Lambda(
-            params=[ir.Sym(id="bar_inp"), ir.Sym(id="t0")],
+            params=[ir.Sym(id="bar_inp"), ir.Sym(id="_lift_1")],
             expr=ir.FunCall(
                 fun=ir.SymRef(id="deref"),
-                args=[ir.SymRef(id="t0")],
+                args=[ir.SymRef(id="_lift_1")],
             ),
         ),
         args=[
@@ -60,7 +68,7 @@ def test_trivial_single_lift():
     assert actual == expected
 
 
-def test_trivial_multiple_lifts():
+def test_trivial_multiple_lifts(fresh_uid_sequence):
     testee = ir.FunCall(
         fun=ir.Lambda(
             params=[ir.Sym(id="baz_inp")],
@@ -105,10 +113,10 @@ def test_trivial_multiple_lifts():
     )
     expected = ir.FunCall(
         fun=ir.Lambda(
-            params=[ir.Sym(id="baz_inp"), ir.Sym(id="t1")],
+            params=[ir.Sym(id="baz_inp"), ir.Sym(id="_lift_2")],
             expr=ir.FunCall(
                 fun=ir.SymRef(id="deref"),
-                args=[ir.SymRef(id="t1")],
+                args=[ir.SymRef(id="_lift_2")],
             ),
         ),
         args=[
@@ -120,12 +128,12 @@ def test_trivial_multiple_lifts():
                         ir.Lambda(
                             params=[
                                 ir.Sym(id="bar_inp"),
-                                ir.Sym(id="t0"),
+                                ir.Sym(id="_lift_1"),
                             ],
                             expr=ir.FunCall(
                                 fun=ir.SymRef(id="deref"),
                                 args=[
-                                    ir.SymRef(id="t0"),
+                                    ir.SymRef(id="_lift_1"),
                                 ],
                             ),
                         )
@@ -154,3 +162,34 @@ def test_trivial_multiple_lifts():
     )
     actual = PopupTmps().visit(testee)
     assert actual == expected
+
+
+def test_capture(fresh_uid_sequence):
+    testee = ir.FunCall(
+        fun=ir.Lambda(
+            params=[ir.Sym(id="x")],
+            expr=ir.FunCall(
+                fun=ir.SymRef(id="deref"),
+                args=[
+                    ir.FunCall(
+                        fun=ir.FunCall(
+                            fun=ir.SymRef(id="lift"),
+                            args=[
+                                ir.Lambda(
+                                    params=[],
+                                    expr=ir.FunCall(
+                                        fun=ir.SymRef(id="deref"),
+                                        args=[ir.SymRef(id="x")],
+                                    ),
+                                )
+                            ],
+                        ),
+                        args=[],
+                    )
+                ],
+            ),
+        ),
+        args=[ir.SymRef(id="inp")],
+    )
+    actual = PopupTmps().visit(testee)
+    assert actual == testee
