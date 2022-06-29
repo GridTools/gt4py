@@ -38,7 +38,7 @@ def test_trivial(backend, use_tmps):
     inp_s = np_as_located_field(IDim, JDim, origin={IDim: 0, JDim: 0})(inp[:, :, 0])
     out_s = np_as_located_field(IDim, JDim)(np.zeros_like(inp[:, :, 0]))
 
-    baz[domain(named_range(IDim, 0, shape[0]), named_range(JDim, 0, shape[1]))](
+    baz[cartesian_domain(named_range(IDim, 0, shape[0]), named_range(JDim, 0, shape[1]))](
         inp_s, out=out_s, backend=backend, use_tmps=use_tmps, offset_provider={"I": IDim, "J": JDim}
     )
 
@@ -49,7 +49,7 @@ def test_trivial(backend, use_tmps):
 @fendef
 def fen_direct_deref(i_size, j_size, out, inp):
     closure(
-        domain(
+        cartesian_domain(
             named_range(IDim, 0, i_size),
             named_range(JDim, 0, j_size),
         ),

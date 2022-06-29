@@ -45,6 +45,8 @@ def test_simple_indirection():
     for i in range(shape[0]):
         ref[i] = inp[i - 1] if cond[i] < 0 else inp[i + 1]
 
-    foo[domain(named_range(IDim, 0, shape[0]))](inp, cond, out=out, offset_provider={"I": IDim})
+    foo[cartesian_domain(named_range(IDim, 0, shape[0]))](
+        inp, cond, out=out, offset_provider={"I": IDim}
+    )
 
     assert np.allclose(ref, out)

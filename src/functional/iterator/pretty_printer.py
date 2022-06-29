@@ -167,10 +167,14 @@ class PrettyPrinter(NodeTranslator):
                 dim, start, end = self.visit(node.args, prec=0)
                 res = self._hmerge(dim, [": ["], start, [", "], end, [")"])
                 return self._prec_parens(res, prec, PRECEDENCE["__call__"])
-            if fun_name == "domain" and len(node.args) >= 1:
-                # domain(x, y, ...) → { x × y × ... }
+            if fun_name == "cartesian_domain" and len(node.args) >= 1:
+                # cartesian_domain(x, y, ...) → c{ x × y × ... }
                 args = self.visit(node.args, prec=PRECEDENCE["__call__"])
-                return self._hmerge(["⟨ "], *self._hinterleave(args, ", "), [" ⟩"])
+                return self._hmerge(["c⟨ "], *self._hinterleave(args, ", "), [" ⟩"])
+            if fun_name == "unstructured_domain" and len(node.args) >= 1:
+                # unstructured_domain(x, y, ...) → u{ x × y × ... }
+                args = self.visit(node.args, prec=PRECEDENCE["__call__"])
+                return self._hmerge(["u⟨ "], *self._hinterleave(args, ", "), [" ⟩"])
             if fun_name == "if_" and len(node.args) == 3:
                 # if_(x, y, z) → if x then y else z
                 ifb, thenb, elseb = self.visit(node.args, prec=PRECEDENCE["if_"])

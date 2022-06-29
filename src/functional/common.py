@@ -97,6 +97,12 @@ class Connectivity(Protocol):
     has_skip_values: bool
 
 
+@enum.unique
+class GridType(StrEnum):
+    CARTESIAN = "cartesian"
+    UNSTRUCTURED = "unstructured"
+
+
 class GTError:
     """Base class for GridTools exceptions.
 

@@ -14,7 +14,6 @@
 
 from builtins import bool, float, int
 from dataclasses import dataclass
-from typing import Optional
 
 from numpy import float32, float64, int32, int64
 
@@ -102,8 +101,8 @@ BUILTINS = {name: globals()[name] for name in __all__ + ["bool", "int", "float"]
 #  guidelines for decision.
 @dataclass(frozen=True)
 class FieldOffset(runtime.Offset):
-    source: Optional[Dimension] = None
-    target: Optional[tuple[Dimension, ...]] = None
+    source: Dimension
+    target: tuple[Dimension, ...]
 
     def __gt_type__(self):
         return ct.OffsetType(source=self.source, target=self.target)

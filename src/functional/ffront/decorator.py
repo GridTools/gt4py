@@ -30,14 +30,14 @@ from typing import Callable
 
 from eve.extended_typing import Any, Optional, Protocol
 from eve.utils import UIDs
-from functional.common import GTTypeError
+from functional.common import GridType, GTTypeError
 from functional.ffront import (
     common_types as ct,
     field_operator_ast as foast,
     program_ast as past,
     symbol_makers,
 )
-from functional.ffront.fbuiltins import BUILTINS, Dimension
+from functional.ffront.fbuiltins import BUILTINS, Dimension, FieldOffset
 from functional.ffront.foast_to_itir import FieldOperatorLowering
 from functional.ffront.func_to_foast import FieldOperatorParser
 from functional.ffront.func_to_past import ProgramParser
@@ -124,7 +124,7 @@ class GTCallable(Protocol):
         ...
 
     # TODO(tehrengruber): For embedded execution a `__call__` method and for
-    #  "truely" embedded execution arguably also a `from_function` method is
+    #  "truly" embedded execution arguably also a `from_function` method is
     #  required. Since field operators currently have a `__gt_type__` with a
     #  Field return value, but it's `__call__` method being void (result via
     #  out arg) there is no good / consistent definition on what signature a
@@ -155,6 +155,7 @@ class Program:
     externals: dict[str, Any]
     backend: Optional[str]
     definition: Optional[types.FunctionType] = None
+    grid_type: Optional[GridType] = None
 
     @classmethod
     def from_function(
@@ -162,6 +163,7 @@ class Program:
         definition: types.FunctionType,
         externals: Optional[dict] = None,
         backend: Optional[str] = None,
+        grid_type: Optional[GridType] = None,
     ) -> "Program":
         captured_vars = _collect_capture_vars(CapturedVars.from_function(definition))
         past_node = ProgramParser.apply_to_function(definition)
@@ -171,6 +173,7 @@ class Program:
             externals={} if externals is None else externals,
             backend=backend,
             definition=definition,
+            grid_type=grid_type,
         )
 
     def with_backend(self, backend: str) -> "Program":
@@ -182,23 +185,55 @@ class Program:
             definition=self.definition,  # type: ignore[arg-type]  # mypy wrongly deduces definition as method here
         )
 
+    @staticmethod
+    def _deduce_grid_type(
+        requested_grid_type: Optional[GridType],
+        offsets_and_dimensions: set[FieldOffset | Dimension],
+    ):
+        def is_cartesian_offset(o: FieldOffset):
+            return len(o.target) == 1 and o.source == o.target[0]
+
+        deduced_grid_type = GridType.CARTESIAN
+        for o in offsets_and_dimensions:
+            if isinstance(o, FieldOffset) and not is_cartesian_offset(o):
+                deduced_grid_type = GridType.UNSTRUCTURED
+                break
+            if isinstance(o, Dimension) and o.local:
+                deduced_grid_type = GridType.UNSTRUCTURED
+                break
+
+        if requested_grid_type == GridType.CARTESIAN and deduced_grid_type == GridType.UNSTRUCTURED:
+            raise GTTypeError(
+                "grid_type == GridType.CARTESIAN was requested, but unstructured `FieldOffset` or local `Dimension` was found."
+            )
+
+        return deduced_grid_type if requested_grid_type is None else requested_grid_type
+
     def _lowered_funcs_from_captured_vars(
         self, captured_vars: CapturedVars
-    ) -> list[itir.FunctionDefinition]:
+    ) -> tuple[list[itir.FunctionDefinition], set[FieldOffset | Dimension]]:
         lowered_funcs = []
+        offsets_and_dimensions = set[FieldOffset | Dimension]()
 
         all_captured_vars = collections.ChainMap(captured_vars.globals, captured_vars.nonlocals)
 
         for name, value in all_captured_vars.items():
-            if not isinstance(value, GTCallable):
-                continue
-            itir_node = value.__gt_itir__()
-            if itir_node.id != name:
-                raise RuntimeError(
-                    "Name of the closure reference and the function it holds do not match."
-                )
-            lowered_funcs.append(itir_node)
-        return lowered_funcs
+            if isinstance(value, GTCallable):
+                itir_node = value.__gt_itir__()
+                if itir_node.id != name:
+                    raise RuntimeError(
+                        "Name of the closure reference and the function it holds do not match."
+                    )
+                lowered_funcs.append(itir_node)
+
+                if (captured := value.__gt_captured_vars__()) is not None:
+                    for c in (captured.globals | captured.nonlocals).values():
+                        if isinstance(c, FieldOffset):
+                            offsets_and_dimensions.add(c)
+                        if isinstance(c, Dimension):
+                            offsets_and_dimensions.add(c)
+
+        return lowered_funcs, offsets_and_dimensions
 
     @functools.cached_property
     def itir(self) -> itir.FencilDefinition:
@@ -217,9 +252,15 @@ class Program:
         if undefined := referenced_var_names - defined_var_names:
             raise RuntimeError(f"Reference to undefined symbol(s) `{', '.join(undefined)}`.")
 
-        lowered_funcs = self._lowered_funcs_from_captured_vars(capture_vars)
+        lowered_funcs, offsets_and_dimensions = self._lowered_funcs_from_captured_vars(capture_vars)
 
-        return ProgramLowering.apply(self.past_node, function_definitions=lowered_funcs)
+        grid_type = self._deduce_grid_type(
+            self.grid_type,
+            offsets_and_dimensions,
+        )
+        return ProgramLowering.apply(
+            self.past_node, function_definitions=lowered_funcs, grid_type=grid_type
+        )
 
     def _validate_args(self, *args, **kwargs) -> None:
         # TODO(tehrengruber): better error messages, check argument types
@@ -285,6 +326,7 @@ def program(
     *,
     externals=None,
     backend=None,
+    grid_type=None,
 ) -> Program | Callable[[types.FunctionType], Program]:
     """
     Generate an implementation of a program from a Python function object.
@@ -305,7 +347,7 @@ def program(
     """
 
     def program_inner(definition: types.FunctionType) -> Program:
-        return Program.from_function(definition, externals, backend)
+        return Program.from_function(definition, externals, backend, grid_type)
 
     return program_inner if definition is None else program_inner(definition)
 

@@ -172,7 +172,7 @@ def test_unary_neg():
 
 def test_shift():
     size = 10
-    Ioff = FieldOffset("Ioff", source=IDim, target=[IDim])
+    Ioff = FieldOffset("Ioff", source=IDim, target=(IDim,))
     a = np_as_located_field(IDim)(np.arange(size + 1))
     b = np_as_located_field(IDim)(np.zeros((size)))
 
@@ -192,7 +192,7 @@ def test_shift():
 def test_fold_shifts():
     """Shifting the result of an addition should work."""
     size = 10
-    Ioff = FieldOffset("Ioff", source=IDim, target=[IDim])
+    Ioff = FieldOffset("Ioff", source=IDim, target=(IDim,))
     a = np_as_located_field(IDim)(np.arange(size + 1))
     b = np_as_located_field(IDim)(np.ones((size + 2)) * 2)
     c = np_as_located_field(IDim)(np.zeros((size)))
@@ -426,7 +426,7 @@ def test_scalar_arg():
 
 def test_scalar_arg_with_field():
     Edge = Dimension("Edge")
-    EdgeOffset = FieldOffset("EdgeOffset", source=Edge, target=[Edge])
+    EdgeOffset = FieldOffset("EdgeOffset", source=Edge, target=(Edge,))
     size = 5
     inp = index_field(Edge)
     factor = 3
@@ -499,7 +499,7 @@ def test_broadcast_two_fields():
 
 
 def test_broadcast_shifted():
-    Joff = FieldOffset("Joff", source=JDim, target=[JDim])
+    Joff = FieldOffset("Joff", source=JDim, target=(JDim,))
 
     size = 10
     a = np_as_located_field(IDim)(np.arange(0, size, 1, dtype=int))
@@ -551,7 +551,7 @@ def test_conditional_promotion():
 
 
 def test_conditional_shifted():
-    Ioff = FieldOffset("Ioff", source=IDim, target=[IDim])
+    Ioff = FieldOffset("Ioff", source=IDim, target=(IDim,))
 
     size = 10
     mask = np_as_located_field(IDim)(np.zeros((size,), dtype=bool))
