@@ -44,6 +44,7 @@ def dace_env():
         dace.config.Config.set(
             "compiler", "cuda", "args", value="-Xcompiler -fPIC --default-stream legacy"
         )
+        dace.config.Config.set("compiler", "cuda", "syncdebug", value=True)
         dace.config.Config.set("compiler", "cpu", "openmp_sections", value=False)
         dace.config.Config.set("compiler", "cpu", "args", value="")
         dace.config.Config.set("compiler", "allow_view_arguments", value=True)
