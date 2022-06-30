@@ -36,6 +36,7 @@ from functional.ffront import (
     field_operator_ast as foast,
     program_ast as past,
     symbol_makers,
+    type_info,
 )
 from functional.ffront.fbuiltins import BUILTINS, Dimension
 from functional.ffront.foast_to_itir import FieldOperatorLowering
@@ -352,8 +353,13 @@ class FieldOperator(GTCallable):
         )
 
     def __gt_type__(self) -> ct.FunctionType:
-        type_ = symbol_makers.make_symbol_type_from_value(self.definition)
-        assert isinstance(type_, ct.FunctionType)
+        # TODO(tehrengruber): temporary solution until #837 is merged
+        assert isinstance(self.foast_node.body[-1], foast.Return)
+        return_type = self.foast_node.body[-1].value.type
+        type_ = ct.FunctionType(
+            args=[param.type for param in self.foast_node.params], kwargs={}, returns=return_type
+        )
+        assert type_info.is_concrete(type_)
         return type_
 
     def with_backend(self, backend: str) -> "FieldOperator":
