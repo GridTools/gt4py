@@ -11,14 +11,13 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-from typing import Optional, cast
 import dataclasses
+from typing import Optional, cast
 
 import functional.ffront.field_operator_ast as foast
 from eve import NodeTranslator, traits
 from functional.common import GTSyntaxError, GTTypeError
-from functional.ffront import common_types as ct, type_info
-from functional.ffront import fbuiltins
+from functional.ffront import common_types as ct, fbuiltins, type_info
 
 
 def boolified_type(symbol_type: ct.SymbolType) -> ct.ScalarType | ct.FieldType:
@@ -296,9 +295,12 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             # todo(tehrengruber): solve in a more generic way, e.g. using
             #  parametric polymorphism.
             # deduce return type of polymorphic builtins
-            if node.func.id in fbuiltins.MATH_BUILT_IN_NAMES:
+            if node.func.id in fbuiltins.MATH_BUILTIN_NAMES:
                 return self._visit_math_built_in(new_node, **kwargs)
-            elif not type_info.is_concrete(return_type) and new_node.func.id in fbuiltins.FUN_BUILTIN_NAMES:
+            elif (
+                not type_info.is_concrete(return_type)
+                and new_node.func.id in fbuiltins.FUN_BUILTIN_NAMES
+            ):
                 visitor = getattr(self, f"_visit_{new_node.func.id}")
                 return visitor(new_node, **kwargs)
 
@@ -323,49 +325,86 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             ) from err
 
     def _visit_math_built_in(self, node: foast.Call, **kwargs) -> foast.Call:
+        func_name = node.func.id
 
-        match node:
-            case foast.Call(func=foast.Name(id=func_name) as func, args=[arg], kwargs={}):
-
-                typed_arg = self.visit(arg, **kwargs)
-                arg_field_type: ct.FieldType = typed_arg.type
-
-                typed_func = self.visit(func, **kwargs)
-
-                if func_name == "abs" and not type_info.is_arithmetic(arg_field_type):
-                    # `abs` is special, since it also supports `int32` & `int64`
-                    raise FieldOperatorTypeDeductionError.from_foast_node(
-                        node,
-                        msg=f"Incompatible argument type '{arg_field_type}' for "
-                        f"function '{func_name}' (expected a numeric type)!",
-                    )
-                elif not type_info.is_rational(arg_field_type):
-                    # all other single arg math built-ins support only `float32` & `float64`
-                    raise FieldOperatorTypeDeductionError.from_foast_node(
-                        node,
-                        msg=f"Incompatible argument type '{arg_field_type}' for "
-                        f"function '{func_name}' (expected a fractional numeric type)!",
-                    )
-
-                return_scalar_kind = type_info.extract_dtype(arg_field_type)
-
-                if func_name in fbuiltins._SINGLE_ARG_MATH_BOOL_BUILT_IN_NAMES:
-                    return_scalar_kind = ct.ScalarKind.BOOL
-
-                return_type = dataclasses.replace(arg_field_type, dtype=dataclasses.replace(arg_field_type.dtype, kind=return_scalar_kind))
-
-                return foast.Call(
-                    func=typed_func,
-                    args=[typed_arg],
-                    kwargs={},
-                    location=node.location,
-                    type=return_type,
+        # deduce return type and check arguments
+        return_type: Optional[ct.FieldType, ct.ScalarType] = None
+        error_msg_preamble = f"Incompatible argument in call to `{func_name}`."
+        if func_name in fbuiltins.UNARY_MATH_NUMBER_BUILTIN_NAMES:
+            if not type_info.is_arithmetic(node.args[0].type):
+                raise FieldOperatorTypeDeductionError.from_foast_node(
+                    node.args[0],
+                    msg=error_msg_preamble + f"Expected 0-th argument to be a number type,"
+                    f"but got `{node.args[0].type}`.",
                 )
+            return_type = node.args[0].type
+        elif func_name in fbuiltins.UNARY_MATH_FP_BUILTIN_NAMES:
+            if not type_info.is_floating_point(node.args[0].type):
+                raise FieldOperatorTypeDeductionError.from_foast_node(
+                    node.args[0],
+                    msg=error_msg_preamble + f"Expected 0-th argument to be a floating point type,"
+                    f"but got `{node.args[0].type}`.",
+                )
+            return_type = node.args[0].type
+        elif func_name in fbuiltins.UNARY_MATH_FP_PREDICATE_BUILTIN_NAMES:
+            if not type_info.is_floating_point(node.args[0].type):
+                raise FieldOperatorTypeDeductionError.from_foast_node(
+                    node.args[0],
+                    msg=error_msg_preamble + f"Expected 0-th argument to be a floating point type,"
+                    f"but got `{node.args[0].type}`.",
+                )
+            return_type = boolified_type(node.args[0].type)
+        elif func_name in fbuiltins.BINARY_MATH_NUMBER_BUILTIN_NAMES:
+            error_msgs = []
+            for i, arg in enumerate(node.args):
+                if not type_info.is_arithmetic(arg.type):
+                    error_msgs.append(
+                        f"Expected {i}-th argument to be a number type, but " f"got `{arg.type}`."
+                    )
+            if error_msgs:
+                raise FieldOperatorTypeDeductionError.from_foast_node(
+                    node,
+                    msg=error_msg_preamble
+                    + "\n"
+                    + ("\n".join([f"  - {error}" for error in error_msgs])),
+                )
+            try:
+                return_type = type_info.promote(*((arg.type) for arg in node.args))
+            except GTTypeError as ex:
+                raise FieldOperatorTypeDeductionError.from_foast_node(
+                    node, msg=error_msg_preamble
+                ) from ex
+        elif func_name in fbuiltins.BINARY_MATH_INT_BUILTIN_NAMES:
+            error_msgs = []
+            for i, arg in enumerate(node.args):
+                if not type_info.is_integral(node.args[0].type):
+                    error_msgs.append(
+                        f"Expected {i}-th argument to be an integral type, but "
+                        f"got `{node.args[0].type}`."
+                    )
+            if error_msgs:
+                raise FieldOperatorTypeDeductionError.from_foast_node(
+                    node,
+                    msg=error_msg_preamble
+                    + "\n"
+                    + ("\n".join([f"  - {error}" for error in error_msgs])),
+                )
+            try:
+                return_type = type_info.promote(*((arg.type) for arg in node.args))
+            except GTTypeError as ex:
+                raise FieldOperatorTypeDeductionError.from_foast_node(
+                    node, msg=error_msg_preamble
+                ) from ex
+        else:
+            raise AssertionError(f"Unknown math builtin `{func_name}`.")
 
-            case foast.Call(func=foast.Name(id=str() as func_name) as func, args=[arg1, arg2], kwargs={}):
-                raise NotImplementedError()
-            case _:
-                assert False
+        return foast.Call(
+            func=node.func,
+            args=node.args,
+            kwargs=node.kwargs,
+            location=node.location,
+            type=return_type,
+        )
 
     def _visit_reduction(self, node: foast.Call, **kwargs) -> foast.Call:
         field_type = cast(ct.FieldType, node.args[0].type)

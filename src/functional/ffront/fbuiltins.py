@@ -12,7 +12,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from builtins import bool, float, int
+from builtins import bool, float, int, tuple
 from dataclasses import dataclass
 from typing import Optional
 
@@ -23,48 +23,10 @@ from functional.ffront import common_types as ct
 from functional.iterator import runtime
 
 
-__all__ = [
-    "Field",
-    "Dimension",
-    "float32",
-    "float64",
-    "int32",
-    "int64",
-    "neighbor_sum",
-    "broadcast",
-    "where",
-    # math built-ins
-    "abs",
-    "sin",
-    "cos",
-    "tan",
-    "arcsin",
-    "arccos",
-    "arctan",
-    "sinh",
-    "cosh",
-    "tanh",
-    "arcsinh",
-    "arccosh",
-    "arctanh",
-    "sqrt",
-    "exp",
-    "log",
-    "gamma",
-    "cbrt",
-    "isfinite",
-    "isinf",
-    "isnan",
-    "floor",
-    "ceil",
-    "trunc",
-    "min",
-    "max",
-    "mod"
-]
+PYTHON_TYPE_BUILTINS = [bool, int, float, tuple]
+PYTHON_TYPE_BUILTIN_NAMES = [t.__name__ for t in PYTHON_TYPE_BUILTINS]
 
-
-TYPE_BUILTINS = [Field, bool, int, int32, int64, float, float32, float64, tuple]
+TYPE_BUILTINS = [Field, Dimension, int32, int64, float32, float64] + PYTHON_TYPE_BUILTINS
 TYPE_BUILTIN_NAMES = [t.__name__ for t in TYPE_BUILTINS]
 
 
@@ -113,111 +75,119 @@ where = BuiltInFunction(
     )
 )
 
-_single_arg_math_generic_built_in_function_type = BuiltInFunction(
+_unary_math_builtin = BuiltInFunction(
     ct.FunctionType(
-        args=[ct.DeferredSymbolType(constraint=ct.FieldType)],
+        args=[ct.DeferredSymbolType(constraint=(ct.ScalarType, ct.FieldType))],
         kwargs={},
-        returns=ct.DeferredSymbolType(constraint=ct.FieldType),
+        returns=ct.DeferredSymbolType(constraint=(ct.ScalarType, ct.FieldType)),
     )
 )
 
-abs = _single_arg_math_generic_built_in_function_type
-sin = _single_arg_math_generic_built_in_function_type
-cos = _single_arg_math_generic_built_in_function_type
-tan = _single_arg_math_generic_built_in_function_type
-arcsin = _single_arg_math_generic_built_in_function_type
-arccos = _single_arg_math_generic_built_in_function_type
-arctan = _single_arg_math_generic_built_in_function_type
-sinh = _single_arg_math_generic_built_in_function_type
-cosh = _single_arg_math_generic_built_in_function_type
-tanh = _single_arg_math_generic_built_in_function_type
-arcsinh = _single_arg_math_generic_built_in_function_type
-arccosh = _single_arg_math_generic_built_in_function_type
-arctanh = _single_arg_math_generic_built_in_function_type
-sqrt = _single_arg_math_generic_built_in_function_type
-exp = _single_arg_math_generic_built_in_function_type
-log = _single_arg_math_generic_built_in_function_type
-gamma = _single_arg_math_generic_built_in_function_type
-cbrt = _single_arg_math_generic_built_in_function_type
-floor = _single_arg_math_generic_built_in_function_type
-ceil = _single_arg_math_generic_built_in_function_type
-trunc = _single_arg_math_generic_built_in_function_type
+# unary math builtins (number) -> number
+abs = _unary_math_builtin
 
-del _single_arg_math_generic_built_in_function_type
+UNARY_MATH_NUMBER_BUILTIN_NAMES = ["abs"]
 
-# have signature `<numeric type> -> <numeric type>`
-_SINGLE_ARG_MATH_NUMERIC_BUILT_IN_NAMES = [
-    'sin',
-    'cos',
-    'tan',
-    'arcsin',
-    'arccos',
-    'arctan',
-    'sinh',
-    'cosh',
-    'tanh',
-    'arcsinh',
-    'arccosh',
-    'arctanh',
-    'sqrt',
-    'exp',
-    'log',
-    'gamma',
-    'cbrt',
-    'floor',
-    'ceil',
-    'trunc'
+# unary math builtins (float) -> float
+sin = _unary_math_builtin
+cos = _unary_math_builtin
+tan = _unary_math_builtin
+arcsin = _unary_math_builtin
+arccos = _unary_math_builtin
+arctan = _unary_math_builtin
+sinh = _unary_math_builtin
+cosh = _unary_math_builtin
+tanh = _unary_math_builtin
+arcsinh = _unary_math_builtin
+arccosh = _unary_math_builtin
+arctanh = _unary_math_builtin
+sqrt = _unary_math_builtin
+exp = _unary_math_builtin
+log = _unary_math_builtin
+# a = _unary_math_builtin
+cbrt = _unary_math_builtin
+floor = _unary_math_builtin
+ceil = _unary_math_builtin
+trunc = _unary_math_builtin
+
+UNARY_MATH_FP_BUILTIN_NAMES = [
+    "sin",
+    "cos",
+    "tan",
+    "arcsin",
+    "arccos",
+    "arctan",
+    "sinh",
+    "cosh",
+    "tanh",
+    "arcsinh",
+    "arccosh",
+    "arctanh",
+    "sqrt",
+    "exp",
+    "log",
+    #'gamma',
+    "cbrt",
+    "floor",
+    "ceil",
+    "trunc",
 ]
 
-# have signature `<numeric type> -> bool`
-_SINGLE_ARG_MATH_BOOL_BUILT_IN_NAMES = ['isfinite', 'isinf', 'isnan']
-
-_single_arg_math_bool_built_in_function_type = BuiltInFunction(
+# unary math predicates (float) -> bool
+_unary_math_predicate_builtin = BuiltInFunction(
     ct.FunctionType(
-        args=[ct.DeferredSymbolType(constraint=ct.FieldType)],
+        args=[ct.DeferredSymbolType(constraint=(ct.ScalarType, ct.FieldType))],
         kwargs={},
-        returns=ct.DeferredSymbolType(constraint=ct.FieldType(..., dtype=ct.ScalarKind.BOOL)),
+        returns=ct.DeferredSymbolType(constraint=(ct.ScalarType, ct.FieldType)),
     )
 )
 
-isfinite = _single_arg_math_bool_built_in_function_type
-isinf = _single_arg_math_bool_built_in_function_type
-isnan = _single_arg_math_bool_built_in_function_type
+isfinite = _unary_math_predicate_builtin
+isinf = _unary_math_predicate_builtin
+isnan = _unary_math_predicate_builtin
 
-del _single_arg_math_bool_built_in_function_type
+UNARY_MATH_FP_PREDICATE_BUILTIN_NAMES = ["isfinite", "isinf", "isnan"]
 
-
-# have special signatures
-_SINGLE_ARG_MATH_SPECIAL_BUILT_IN_NAMES = ['abs']
-
-SINGLE_ARG_MATH_BUILT_IN_NAMES = _SINGLE_ARG_MATH_NUMERIC_BUILT_IN_NAMES + _SINGLE_ARG_MATH_BOOL_BUILT_IN_NAMES + _SINGLE_ARG_MATH_SPECIAL_BUILT_IN_NAMES
-
-_double_arg_math_built_in = BuiltInFunction(
+# binary math builtins (number, number) -> number
+_binary_math_builtin = BuiltInFunction(
     ct.FunctionType(
-        args=[ct.DeferredSymbolType(constraint=ct.FieldType), ct.DeferredSymbolType(constraint=ct.FieldType)],
+        args=[
+            ct.DeferredSymbolType(constraint=(ct.ScalarType, ct.FieldType)),
+            ct.DeferredSymbolType(constraint=(ct.ScalarType, ct.FieldType)),
+        ],
         kwargs={},
-        returns=ct.DeferredSymbolType(constraint=ct.FieldType),
+        returns=ct.DeferredSymbolType(constraint=(ct.ScalarType, ct.FieldType)),
     )
 )
 
-min = _double_arg_math_built_in
-max = _double_arg_math_built_in
-mod = _double_arg_math_built_in
+minimum = _binary_math_builtin
+maximum = _binary_math_builtin
 
-del _double_arg_math_built_in
-DOUBLE_ARG_MATH_BUILT_IN_NAMES = ["min", "max", "mod"]
+BINARY_MATH_NUMBER_BUILTIN_NAMES = ["minimum", "maximum"]
 
-MATH_BUILT_IN_NAMES = SINGLE_ARG_MATH_BUILT_IN_NAMES + DOUBLE_ARG_MATH_BUILT_IN_NAMES
+# binary math builtins (int) -> int
+mod = _binary_math_builtin
+BINARY_MATH_INT_BUILTIN_NAMES = ["mod"]
 
-FUN_BUILTIN_NAMES = ["neighbor_sum", "max_over", "broadcast", "where"] + MATH_BUILT_IN_NAMES
+MATH_BUILTIN_NAMES = (
+    UNARY_MATH_NUMBER_BUILTIN_NAMES
+    + UNARY_MATH_FP_BUILTIN_NAMES
+    + UNARY_MATH_FP_PREDICATE_BUILTIN_NAMES
+    + BINARY_MATH_NUMBER_BUILTIN_NAMES
+    + BINARY_MATH_INT_BUILTIN_NAMES
+)
+
+FUN_BUILTIN_NAMES = ["neighbor_sum", "max_over", "broadcast", "where"] + MATH_BUILTIN_NAMES
 
 
 EXTERNALS_MODULE_NAME = "__externals__"
 MODULE_BUILTIN_NAMES = [EXTERNALS_MODULE_NAME]
 
-ALL_BUILTIN_NAMES = TYPE_BUILTIN_NAMES + MODULE_BUILTIN_NAMES
+BUILTIN_NAMES = TYPE_BUILTIN_NAMES + FUN_BUILTIN_NAMES
 
-BUILTINS = {name: globals()[name] for name in __all__ + ["bool", "int", "float"]}
+BUILTINS = {name: globals()[name] for name in BUILTIN_NAMES}
+
+__all__ = BUILTIN_NAMES
 
 
 # TODO(tehrengruber): FieldOffset and runtime.Offset are not an exact conceptual

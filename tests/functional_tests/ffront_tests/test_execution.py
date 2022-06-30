@@ -16,7 +16,6 @@
 
 from collections import namedtuple
 from typing import TypeVar
-import math
 
 import numpy as np
 import pytest
@@ -26,40 +25,38 @@ from functional.ffront.fbuiltins import (
     Dimension,
     Field,
     FieldOffset,
-    broadcast,
-    float64,
-    int32,
-    max_over,
-    neighbor_sum,
-    where,
-    sin,
     abs,
-    sin,
-    cos,
-    tan,
-    arcsin,
     arccos,
-    arctan,
-    sinh,
-    cosh,
-    tanh,
-    arcsinh,
     arccosh,
+    arcsin,
+    arcsinh,
+    arctan,
     arctanh,
-    sqrt,
-    exp,
-    log,
-    gamma,
+    broadcast,
     cbrt,
+    ceil,
+    cos,
+    cosh,
+    exp,
+    float64,
+    floor,
+    int32,
     isfinite,
     isinf,
     isnan,
-    floor,
-    ceil,
+    log,
+    max_over,
+    maximum,
+    minimum,
+    mod,
+    neighbor_sum,
+    sin,
+    sinh,
+    sqrt,
+    tan,
+    tanh,
     trunc,
-    min,
-    max,
-    mod
+    where,
 )
 from functional.iterator.embedded import (
     NeighborTableOffsetProvider,
@@ -355,8 +352,8 @@ def math_fun_field_op_log(arg: Field[[IDim], float64]) -> Field[[IDim], float64]
     return log(arg)
 
 
-def math_fun_field_op_gamma(arg: Field[[IDim], float64]) -> Field[[IDim], float64]:
-    return gamma(arg)
+# def math_fun_field_op_gamma(arg: Field[[IDim], float64]) -> Field[[IDim], float64]:
+#    return gamma(arg)
 
 
 def math_fun_field_op_cbrt(arg: Field[[IDim], float64]) -> Field[[IDim], float64]:
@@ -387,15 +384,19 @@ def math_fun_field_op_trunc(arg: Field[[IDim], float64]) -> Field[[IDim], float6
     return trunc(arg)
 
 
-def math_fun_field_op_min(arg1: Field[[IDim], float64], arg2: Field[[IDim], float64]) -> Field[[IDim], float64]:
-    return min(arg1, arg2)
+def math_fun_field_op_minimum(
+    arg1: Field[[IDim], float64], arg2: Field[[IDim], float64]
+) -> Field[[IDim], float64]:
+    return minimum(arg1, arg2)
 
 
-def math_fun_field_op_max(arg1: Field[[IDim], float64], arg2: Field[[IDim], float64]) -> Field[[IDim], float64]:
-    return max(arg1, arg2)
+def math_fun_field_op_maximum(
+    arg1: Field[[IDim], float64], arg2: Field[[IDim], float64]
+) -> Field[[IDim], float64]:
+    return maximum(arg1, arg2)
 
 
-def math_fun_field_op_mod(arg1: Field[[IDim], float64], arg2: Field[[IDim], float64]) -> Field[[IDim], float64]:
+def math_fun_field_op_mod(arg1: Field[[IDim], int], arg2: Field[[IDim], int]) -> Field[[IDim], int]:
     return mod(arg1, arg2)
 
 
@@ -413,36 +414,67 @@ def math_fun_field_op_mod(arg1: Field[[IDim], float64], arg2: Field[[IDim], floa
             ([-1, 1, -1.0, 1.0, 0, -0, 0.0, -0.0],),
         ),
         (
-            math_fun_field_op_min,
-            # FIXME(ben): what's the signature & semantics of `min` & `max`?
-            # `np.min` and python's built-in `min` have very different signatures...
-            lambda a, b: np.min(np.stack((a, b)), axis=-1),
-            ([2, 2.0, 2.0, 3.0, 2, 3, -2, -2.0, -2.0, -3.0, -2, -3], [2, 2.0, 3.0, 2.0, 3, 2, -2, -2.0, -3.0, -2.0, -3, -2, ]),
+            math_fun_field_op_minimum,
+            np.minimum,
+            (
+                [2, 2.0, 2.0, 3.0, 2, 3, -2, -2.0, -2.0, -3.0, -2, -3],
+                [
+                    2,
+                    2.0,
+                    3.0,
+                    2.0,
+                    3,
+                    2,
+                    -2,
+                    -2.0,
+                    -3.0,
+                    -2.0,
+                    -3,
+                    -2,
+                ],
+            ),
         ),
         (
-            math_fun_field_op_max,
-            lambda a, b: np.max(np.stack((a, b)), axis=-1),
-            ([2, 2.0, 2.0, 3.0, 2, 3, -2, -2.0, -2.0, -3.0, -2, -3], [2, 2.0, 3.0, 2.0, 3, 2, -2, -2.0, -3.0, -2.0, -3, -2, ]),
+            math_fun_field_op_maximum,
+            np.maximum,
+            (
+                [2, 2.0, 2.0, 3.0, 2, 3, -2, -2.0, -2.0, -3.0, -2, -3],
+                [
+                    2,
+                    2.0,
+                    3.0,
+                    2.0,
+                    3,
+                    2,
+                    -2,
+                    -2.0,
+                    -3.0,
+                    -2.0,
+                    -3,
+                    -2,
+                ],
+            ),
         ),
         (
             math_fun_field_op_mod,
             np.mod,
-            ([6, 6.0, -6, 6.0, 7, -7.0, 4.8, 4], [2, 2.0, 2.0, -2, 3.0, -3, 1.2, -1.2]),
+            # ([6, 6.0, -6, 6.0, 7, -7.0, 4.8, 4], [2, 2.0, 2.0, -2, 3.0, -3, 1.2, -1.2]),
+            ([6, 7, 4], [2, -2, -3]),
         ),
         (
             math_fun_field_op_sin,
             np.sin,
-            ([0, 0.1, -0.01, np.pi, -2.0/3.0*np.pi, 2.0*np.pi, 3, 1000, -1000],),
+            ([0, 0.1, -0.01, np.pi, -2.0 / 3.0 * np.pi, 2.0 * np.pi, 3, 1000, -1000],),
         ),
         (
             math_fun_field_op_cos,
             np.cos,
-            ([0, 0.1, -0.01, np.pi, -2.0/3.0*np.pi, 2.0*np.pi, 3, 1000, -1000],),
+            ([0, 0.1, -0.01, np.pi, -2.0 / 3.0 * np.pi, 2.0 * np.pi, 3, 1000, -1000],),
         ),
         (
             math_fun_field_op_tan,
             np.tan,
-            ([0, 0.1, -0.01, np.pi, -2.0/3.0*np.pi, 2.0*np.pi, 3, 1000, -1000],),
+            ([0, 0.1, -0.01, np.pi, -2.0 / 3.0 * np.pi, 2.0 * np.pi, 3, 1000, -1000],),
         ),
         (
             math_fun_field_op_arcsin,
@@ -457,27 +489,137 @@ def math_fun_field_op_mod(arg1: Field[[IDim], float64], arg2: Field[[IDim], floa
         (
             math_fun_field_op_arctan,
             np.arctan,
-            ([-1002.3, -1000, -103.7, -100, -1.2, -1.0, -0.7, -0.1, -0.0, 0, 0.0, 0.1, 0.7, 1.0, 1.2, 100, 103.7, 1000, 1002.3],),
+            (
+                [
+                    -1002.3,
+                    -1000,
+                    -103.7,
+                    -100,
+                    -1.2,
+                    -1.0,
+                    -0.7,
+                    -0.1,
+                    -0.0,
+                    0,
+                    0.0,
+                    0.1,
+                    0.7,
+                    1.0,
+                    1.2,
+                    100,
+                    103.7,
+                    1000,
+                    1002.3,
+                ],
+            ),
         ),
         (
             math_fun_field_op_sinh,
             np.sinh,
-            ([-1002.3, -1000, -103.7, -100, -1.2, -1.0, -0.7, -0.1, -0.0, 0, 0.0, 0.1, 0.7, 1.0, 1.2, 100, 103.7, 1000, 1002.3],),
+            (
+                [
+                    -1002.3,
+                    -1000,
+                    -103.7,
+                    -100,
+                    -1.2,
+                    -1.0,
+                    -0.7,
+                    -0.1,
+                    -0.0,
+                    0,
+                    0.0,
+                    0.1,
+                    0.7,
+                    1.0,
+                    1.2,
+                    100,
+                    103.7,
+                    1000,
+                    1002.3,
+                ],
+            ),
         ),
         (
             math_fun_field_op_cosh,
             np.cosh,
-            ([-1002.3, -1000, -103.7, -100, -1.2, -1.0, -0.7, -0.1, -0.0, 0, 0.0, 0.1, 0.7, 1.0, 1.2, 100, 103.7, 1000, 1002.3],),
+            (
+                [
+                    -1002.3,
+                    -1000,
+                    -103.7,
+                    -100,
+                    -1.2,
+                    -1.0,
+                    -0.7,
+                    -0.1,
+                    -0.0,
+                    0,
+                    0.0,
+                    0.1,
+                    0.7,
+                    1.0,
+                    1.2,
+                    100,
+                    103.7,
+                    1000,
+                    1002.3,
+                ],
+            ),
         ),
         (
             math_fun_field_op_tanh,
             np.tanh,
-            ([-1002.3, -1000, -103.7, -100, -1.2, -1.0, -0.7, -0.1, -0.0, 0, 0.0, 0.1, 0.7, 1.0, 1.2, 100, 103.7, 1000, 1002.3],),
+            (
+                [
+                    -1002.3,
+                    -1000,
+                    -103.7,
+                    -100,
+                    -1.2,
+                    -1.0,
+                    -0.7,
+                    -0.1,
+                    -0.0,
+                    0,
+                    0.0,
+                    0.1,
+                    0.7,
+                    1.0,
+                    1.2,
+                    100,
+                    103.7,
+                    1000,
+                    1002.3,
+                ],
+            ),
         ),
         (
             math_fun_field_op_arcsinh,
             np.arcsinh,
-            ([-1002.3, -1000, -103.7, -100, -1.2, -1.0, -0.7, -0.1, -0.0, 0, 0.0, 0.1, 0.7, 1.0, 1.2, 100, 103.7, 1000, 1002.3],),
+            (
+                [
+                    -1002.3,
+                    -1000,
+                    -103.7,
+                    -100,
+                    -1.2,
+                    -1.0,
+                    -0.7,
+                    -0.1,
+                    -0.0,
+                    0,
+                    0.0,
+                    0.1,
+                    0.7,
+                    1.0,
+                    1.2,
+                    100,
+                    103.7,
+                    1000,
+                    1002.3,
+                ],
+            ),
         ),
         (
             math_fun_field_op_arccosh,
@@ -492,29 +634,112 @@ def math_fun_field_op_mod(arg1: Field[[IDim], float64], arg2: Field[[IDim], floa
         (
             math_fun_field_op_sqrt,
             np.sqrt,
-            ([-0.0, 0, 0.0, 0.1, 0.9, 1, 1.0, 2.3, 4, 4.0, 16, 16.0, 34.7, 100, 100.0, 1000, 1337.1337],),
+            (
+                [
+                    -0.0,
+                    0,
+                    0.0,
+                    0.1,
+                    0.9,
+                    1,
+                    1.0,
+                    2.3,
+                    4,
+                    4.0,
+                    16,
+                    16.0,
+                    34.7,
+                    100,
+                    100.0,
+                    1000,
+                    1337.1337,
+                ],
+            ),
         ),
         (
             math_fun_field_op_exp,
             np.exp,
-            ([-1002.3, -1000, -103.7, -100, -1.2, -1.0, -0.7, -0.1, -0.0, 0, 0.0, 0.1, 0.7, 1.0, 1.2, 100, 103.7, 1000, 1002.3],),
+            (
+                [
+                    -1002.3,
+                    -1000,
+                    -103.7,
+                    -100,
+                    -1.2,
+                    -1.0,
+                    -0.7,
+                    -0.1,
+                    -0.0,
+                    0,
+                    0.0,
+                    0.1,
+                    0.7,
+                    1.0,
+                    1.2,
+                    100,
+                    103.7,
+                    1000,
+                    1002.3,
+                ],
+            ),
         ),
         (
             math_fun_field_op_log,
             np.log,
-            ([-0.0, 0, 0.0, 0.1, 0.9, 1, 1.0, 2.3, 4, 4.0, 16, 16.0, 34.7, 100, 100.0, 1000, 1337.1337],),
+            (
+                [
+                    -0.0,
+                    0,
+                    0.0,
+                    0.1,
+                    0.9,
+                    1,
+                    1.0,
+                    2.3,
+                    4,
+                    4.0,
+                    16,
+                    16.0,
+                    34.7,
+                    100,
+                    100.0,
+                    1000,
+                    1337.1337,
+                ],
+            ),
         ),
-        (
-            math_fun_field_op_gamma,
-            np.frompyfunc(math.gamma, nin=1, nout=1),
-            # FIXME(ben): math.gamma throws when it overflows, maybe should instead yield `np.inf`?
-            # overflows very quickly, already at `173`
-            ([-1002.3, -103.7, -1.2, -0.7, -0.1, 0.1, 0.7, 1.0, 1, 1.2, 100, 103.7, 170.5],),
-        ),
+        # (
+        #    math_fun_field_op_gamma,
+        #    np.frompyfunc(math.gamma, nin=1, nout=1),
+        #    # FIXME(ben): math.gamma throws when it overflows, maybe should instead yield `np.inf`?
+        #    # overflows very quickly, already at `173`
+        #    ([-1002.3, -103.7, -1.2, -0.7, -0.1, 0.1, 0.7, 1.0, 1, 1.2, 100, 103.7, 170.5],),
+        # ),
         (
             math_fun_field_op_cbrt,
             np.cbrt,
-            ([-1003.2, -704.3, -100.5, -10.4, -1.5, -1.001, -0.7, -0.01, -0.0, 0.0, 0.01, 0.7, 1.001, 1.5, 10.4, 100.5, 704.3, 1003.2],),
+            (
+                [
+                    -1003.2,
+                    -704.3,
+                    -100.5,
+                    -10.4,
+                    -1.5,
+                    -1.001,
+                    -0.7,
+                    -0.01,
+                    -0.0,
+                    0.0,
+                    0.01,
+                    0.7,
+                    1.001,
+                    1.5,
+                    10.4,
+                    100.5,
+                    704.3,
+                    1003.2,
+                ],
+            ),
         ),
         (
             math_fun_field_op_isfinite,

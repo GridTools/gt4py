@@ -66,7 +66,7 @@ def extract_dtype(symbol_type: ct.SymbolType) -> ct.ScalarType:
     raise GTTypeError(f"Can not unambiguosly extract data type from {symbol_type}!")
 
 
-def is_arithmetic(symbol_type: ct.SymbolType) -> bool:
+def is_arithmetic(symbol_type: ct.FieldType | ct.ScalarType) -> bool:
     """
     Check if ``symbol_type`` is compatible with arithmetic operations.
 
@@ -89,24 +89,48 @@ def is_arithmetic(symbol_type: ct.SymbolType) -> bool:
     return False
 
 
-def is_rational(symbol_type: ct.SymbolType) -> bool:
+def is_floating_point(symbol_type: ct.FieldType | ct.ScalarType) -> bool:
     """
-    Check if ``symbol_type`` is a number type that supports fractions.
+    Check if the dtype of ``symbol_type`` is a floating point type.
 
     Examples:
     ---------
-    >>> is_rational(ct.ScalarType(kind=ct.ScalarKind.FLOAT64))
+    >>> is_floating_point(ct.ScalarType(kind=ct.ScalarKind.FLOAT64))
     True
-    >>> is_rational(ct.ScalarType(kind=ct.ScalarKind.INT32))
+    >>> is_floating_point(ct.ScalarType(kind=ct.ScalarKind.FLOAT32))
+    True
+    >>> is_floating_point(ct.ScalarType(kind=ct.ScalarKind.INT32))
     False
-    >>> is_rational(ct.ScalarType(kind=ct.ScalarKind.BOOL))
-    False
-    >>> is_rational(ct.FieldType(dims=[], dtype=ct.ScalarType(kind=ct.ScalarKind.FLOAT32)))
+    >>> is_floating_point(ct.FieldType(dims=[], dtype=ct.ScalarType(kind=ct.ScalarKind.FLOAT32)))
     True
     """
     if extract_dtype(symbol_type).kind in [
         ct.ScalarKind.FLOAT32,
         ct.ScalarKind.FLOAT64,
+    ]:
+        return True
+    return False
+
+
+def is_integral(symbol_type: ct.FieldType | ct.ScalarType) -> bool:
+    """
+    Check if the dtype of ``symbol_type`` is an integral type.
+
+    Examples:
+    ---------
+    >>> is_integral(ct.ScalarType(kind=ct.ScalarKind.INT))
+    True
+    >>> is_integral(ct.ScalarType(kind=ct.ScalarKind.INT32))
+    True
+    >>> is_integral(ct.ScalarType(kind=ct.ScalarKind.FLOAT32))
+    False
+    >>> is_integral(ct.FieldType(dims=[], dtype=ct.ScalarType(kind=ct.ScalarKind.INT)))
+    True
+    """
+    if extract_dtype(symbol_type).kind in [
+        ct.ScalarKind.INT,
+        ct.ScalarKind.INT32,
+        ct.ScalarKind.INT64,
     ]:
         return True
     return False

@@ -24,8 +24,8 @@ __all__ = [
     "domain",
     "named_range",
     "abs",
-    "min",
-    "max",
+    "minimum",
+    "maximum",
     "mod",
     "sin",
     "cos",
@@ -167,29 +167,13 @@ def tuple_get(*args):
 
 # FIXME(ben): various of the following built-ins will shadow python built-ins!
 # We should find a good way around this...
-
 @builtin_dispatch
 def abs(*args):
     raise BackendNotSelectedError()
 
 
 @builtin_dispatch
-def min(*args):
-    raise BackendNotSelectedError()
-
-
-@builtin_dispatch
-def max(*args):
-    raise BackendNotSelectedError()
-
-
-@builtin_dispatch
-def mod(*args):
-    raise BackendNotSelectedError()
-
-
-@builtin_dispatch
-def sin (*args):
+def sin(*args):
     raise BackendNotSelectedError()
 
 
@@ -274,6 +258,21 @@ def cbrt(*args):
 
 
 @builtin_dispatch
+def floor(*args):
+    raise BackendNotSelectedError()
+
+
+@builtin_dispatch
+def ceil(*args):
+    raise BackendNotSelectedError()
+
+
+@builtin_dispatch
+def trunc(*args):
+    raise BackendNotSelectedError()
+
+
+@builtin_dispatch
 def isfinite(*args):
     raise BackendNotSelectedError()
 
@@ -289,15 +288,15 @@ def isnan(*args):
 
 
 @builtin_dispatch
-def floor(*args):
+def minimum(*args):
     raise BackendNotSelectedError()
 
 
 @builtin_dispatch
-def ceil(*args):
+def maximum(*args):
     raise BackendNotSelectedError()
 
 
 @builtin_dispatch
-def trunc(*args):
+def mod(*args):
     raise BackendNotSelectedError()
