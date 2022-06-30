@@ -141,6 +141,10 @@ class GTCallable(Protocol):
 
 # TODO(tehrengruber): Decide if and how programs can call other programs. As a
 #  result Program could become a GTCallable.
+# TODO(ricoh): factor out the generated ITIR together with arguments rewriting
+# so that using fencil processors on `some_program.itir` becomes trivial without
+# prior knowledge of the fencil signature rewriting done by `Program`.
+# After that, drop the `.format_itir()` method, since it won't be needed.
 @dataclasses.dataclass(frozen=True)
 class Program:
     """
