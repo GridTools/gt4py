@@ -25,10 +25,6 @@ from gt4py import storage as gt_storage
 from gt4py.gtscript import PARALLEL, computation, interval
 
 
-try:
-    import cupy as cp
-except ImportError:
-    cp = None
 dace = pytest.importorskip("dace")
 
 
@@ -45,6 +41,7 @@ def dace_env():
     with dace.config.temporary_config():
         # Setting max_concurrent_streams to -1 configures dace to only use the default stream.
         dace.config.Config.set("compiler", "cuda", "max_concurrent_streams", value=-1)
+        dace.config.Config.set("compiler", "cuda", "syncdebug", value=True)
         dace.config.Config.set("compiler", "cpu", "openmp_sections", value=False)
         dace.config.Config.set("compiler", "cpu", "args", value="")
         dace.config.Config.set("compiler", "allow_view_arguments", value=True)
@@ -98,10 +95,6 @@ def test_basic(backend):
         defn(locoutp, par=locinp)
 
     call_stencil_object(locoutp=outp, locinp=inp)
-
-    if cp is not None:
-        cp.cuda.Device(0).synchronize()
-
     outp.device_to_host(force=True)
     assert np.allclose(outp, 7.0)
 
@@ -129,9 +122,6 @@ def test_origin_offsetting_frozen(dace_stencil, domain, outp_origin):
         frozen_stencil(inp=inp, outp=outp)
 
     call_frozen_stencil()
-
-    if cp is not None:
-        cp.cuda.Device(0).synchronize()
 
     outp.device_to_host(force=True)
 
@@ -170,9 +160,6 @@ def test_origin_offsetting_nofrozen(dace_stencil, domain, outp_origin):
         dace_stencil(inp=inp, outp=outp, domain=domain, origin=origin)
 
     call_stencil_object()
-
-    if cp is not None:
-        cp.cuda.Device(0).synchronize()
 
     outp.device_to_host(force=True)
 
@@ -223,9 +210,6 @@ def test_optional_arg_noprovide(backend):
 
     call_frozen_stencil()
 
-    if cp is not None:
-        cp.cuda.Device(0).synchronize()
-
     outp.device_to_host(force=True)
 
     assert np.allclose(inp, 7.0)
@@ -270,9 +254,6 @@ def test_optional_arg_provide(backend):
         frozen_stencil(inp=inp, unused_field=unused_field, outp=outp, unused_par=7.0)
 
     call_frozen_stencil()
-
-    if cp is not None:
-        cp.cuda.Device(0).synchronize()
 
     outp.device_to_host(force=True)
 
@@ -341,9 +322,6 @@ def test_optional_arg_provide_aot(backend):
 
     csdfg = call_frozen_stencil.compile()
     csdfg(inp=inp, outp=outp, unused_field=unused_field, unused_par=7.0)
-
-    if cp is not None:
-        cp.cuda.Device(0).synchronize()
 
     outp.device_to_host(force=True)
 
