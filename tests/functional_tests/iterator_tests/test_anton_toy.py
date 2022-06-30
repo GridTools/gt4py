@@ -1,6 +1,6 @@
 import numpy as np
 
-from functional.iterator.builtins import deref, domain, lift, named_range, shift
+from functional.iterator.builtins import cartesian_domain, deref, lift, named_range, shift
 from functional.iterator.embedded import np_as_located_field
 from functional.iterator.runtime import CartesianAxis, closure, fendef, fundef, offset
 
@@ -39,7 +39,7 @@ KDim = CartesianAxis("KDim")
 @fendef(offset_provider={"i": IDim, "j": JDim})
 def fencil(x, y, z, out, inp):
     closure(
-        domain(named_range(IDim, 0, x), named_range(JDim, 0, y), named_range(KDim, 0, z)),
+        cartesian_domain(named_range(IDim, 0, x), named_range(JDim, 0, y), named_range(KDim, 0, z)),
         lap,
         out,
         [inp],

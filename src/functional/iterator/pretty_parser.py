@@ -55,7 +55,8 @@ GRAMMAR = """
         | prec8 "(" ( prec0 "," )* prec0? ")" -> call
         | "{" ( prec0 "," )* prec0? "}" -> make_tuple
         | "⟪" ( prec0 "," )* prec0? "⟫" -> shift
-        | "⟨" ( prec0 "," )* prec0? "⟩" -> domain
+        | "u⟨" ( prec0 "," )* prec0? "⟩" -> unstructured_domain
+        | "c⟨" ( prec0 "," )* prec0? "⟩" -> cartesian_domain
 
     ?prec9: _literal
         | SYM_REF
@@ -154,8 +155,11 @@ class ToIrTransformer(lark.Transformer):
     def named_range(self, name: ir.AxisLiteral, start: ir.Expr, end: ir.Expr) -> ir.FunCall:
         return ir.FunCall(fun=ir.SymRef(id="named_range"), args=[name, start, end])
 
-    def domain(self, *ranges: ir.Expr) -> ir.FunCall:
-        return ir.FunCall(fun=ir.SymRef(id="domain"), args=list(ranges))
+    def cartesian_domain(self, *ranges: ir.Expr) -> ir.FunCall:
+        return ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=list(ranges))
+
+    def unstructured_domain(self, *ranges: ir.Expr) -> ir.FunCall:
+        return ir.FunCall(fun=ir.SymRef(id="unstructured_domain"), args=list(ranges))
 
     def ifthenelse(self, condition: ir.Expr, then: ir.Expr, otherwise: ir.Expr) -> ir.FunCall:
         return ir.FunCall(fun=ir.SymRef(id="if_"), args=[condition, then, otherwise])

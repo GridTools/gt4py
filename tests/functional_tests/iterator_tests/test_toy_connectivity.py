@@ -1,7 +1,7 @@
 import numpy as np
 
 from functional.common import Dimension
-from functional.iterator.builtins import *
+from functional.iterator.builtins import deref, lift, reduce, shift
 from functional.iterator.embedded import (
     NeighborTableOffsetProvider,
     index_field,
@@ -117,8 +117,8 @@ def test_sum_edges_to_vertices(fencil_processor):
     run_processor(
         sum_edges_to_vertices[{Vertex: range(0, 9)}],
         fencil_processor,
-        out,
         inp,
+        out=out,
         offset_provider={"V2E": NeighborTableOffsetProvider(v2e_arr, Vertex, Edge, 4)},
     )
     if validate:
@@ -139,8 +139,8 @@ def test_sum_edges_to_vertices_reduce(fencil_processor):
     run_processor(
         sum_edges_to_vertices_reduce[{Vertex: range(0, 9)}],
         fencil_processor,
-        out,
         inp,
+        out=out,
         offset_provider={"V2E": NeighborTableOffsetProvider(v2e_arr, Vertex, Edge, 4)},
     )
     if validate:
@@ -161,8 +161,8 @@ def test_first_vertex_neigh_of_first_edge_neigh_of_cells_fencil(fencil_processor
     run_processor(
         first_vertex_neigh_of_first_edge_neigh_of_cells[{Cell: range(0, 9)}],
         fencil_processor,
-        out,
         inp,
+        out=out,
         offset_provider={
             "E2V": NeighborTableOffsetProvider(e2v_arr, Edge, Vertex, 2),
             "C2E": NeighborTableOffsetProvider(c2e_arr, Cell, Edge, 4),

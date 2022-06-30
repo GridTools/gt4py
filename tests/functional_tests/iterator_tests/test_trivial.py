@@ -41,7 +41,7 @@ def test_trivial(fencil_processor, use_tmps):
     out_s = np_as_located_field(IDim, JDim)(np.zeros_like(inp[:, :, 0]))
 
     run_processor(
-        baz[domain(named_range(IDim, 0, shape[0]), named_range(JDim, 0, shape[1]))],
+        baz[cartesian_domain(named_range(IDim, 0, shape[0]), named_range(JDim, 0, shape[1]))],
         fencil_processor,
         inp_s,
         out=out_s,
@@ -56,7 +56,7 @@ def test_trivial(fencil_processor, use_tmps):
 @fendef
 def fen_direct_deref(i_size, j_size, out, inp):
     closure(
-        domain(
+        cartesian_domain(
             named_range(IDim, 0, i_size),
             named_range(JDim, 0, j_size),
         ),

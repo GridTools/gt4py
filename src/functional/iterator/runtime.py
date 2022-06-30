@@ -1,6 +1,8 @@
+from __future__ import annotations
+
 import types
 from dataclasses import dataclass
-from typing import Callable, Optional, Union
+from typing import Any, Callable, Optional, Union
 
 from devtools import debug
 
@@ -31,6 +33,14 @@ def offset(value):
 CartesianAxis = common.Dimension
 
 
+class CartesianDomain(dict):
+    ...
+
+
+class UnstructuredDomain(dict):
+    ...
+
+
 # dependency inversion, register fendef for embedded execution or for tracing/parsing here
 fendef_embedded: Optional[Callable] = None
 fendef_codegen: Optional[Callable] = None
@@ -39,11 +49,10 @@ fendef_codegen: Optional[Callable] = None
 class FendefDispatcher:
     def __init__(self, function: types.FunctionType, executor_kwargs: dict):
         self.function = function
-        self.out_as_kwarg_pos = executor_kwargs.pop("out_as_kwarg_pos", None)
         self.executor_kwargs = executor_kwargs
 
     def itir(self, *args, **kwargs):
-        kwargs = self.executor_kwargs | kwargs
+        args, kwargs = self._rewrite_args(args, kwargs)
         if fendef_codegen is None:
             raise RuntimeError("Backend execution is not registered")
         fencil_definition = fendef_codegen(self.function, *args, **kwargs)
@@ -68,11 +77,6 @@ class FendefDispatcher:
         return formatter(self.itir(*args, **kwargs), *args, **kwargs)
 
     def _rewrite_args(self, args: tuple, kwargs: dict) -> tuple[tuple, dict]:
-        if self.out_as_kwarg_pos is not None and "out" in kwargs:
-            args_list = list(args)
-            args_list.insert(self.out_as_kwarg_pos, kwargs.pop("out"))
-            args = tuple(args_list)
-
         kwargs = self.executor_kwargs | kwargs
 
         return args, kwargs
@@ -96,6 +100,61 @@ def fendef(*dec_args, **dec_kwargs):
         return wrapper
 
 
+def _deduce_domain(domain: dict[common.Dimension, range], offset_provider: dict[str, Any]):
+    if isinstance(domain, UnstructuredDomain):
+        domain_builtin = builtins.unstructured_domain
+    elif isinstance(domain, CartesianDomain):
+        domain_builtin = builtins.cartesian_domain
+    else:
+        domain_builtin = (
+            builtins.unstructured_domain
+            if any(isinstance(o, common.Connectivity) for o in offset_provider.values())
+            else builtins.cartesian_domain
+        )
+
+    return domain_builtin(
+        *tuple(
+            map(
+                lambda x: builtins.named_range(x[0], x[1].start, x[1].stop),
+                domain.items(),
+            )
+        )
+    )
+
+
+@dataclass
+class FundefFencilWrapper:
+    fundef_dispatcher: FendefDispatcher
+    domain: Callable | dict
+
+    def _get_fencil(self, offset_provider=None):
+        @fendef
+        def impl(out, *inps):
+            dom = self.domain
+            if isinstance(dom, Callable):
+                # if domain is expressed as calls to builtin `domain()` we need to pass it lazily
+                # as dispatching needs to happen inside of the fencil
+                dom = dom()
+            elif isinstance(dom, dict):
+                # if passed as a dict, we need to convert back to builtins for interpretation by the backends
+                assert offset_provider is not None
+                dom = _deduce_domain(dom, offset_provider)
+            closure(dom, self.fundef_dispatcher, out, [*inps])
+
+        return impl
+
+    def itir(self, *args, **kwargs):
+        return self._get_fencil(offset_provider=kwargs.get("offset_provider")).itir(*args, **kwargs)
+
+    def __call__(self, *args, out, **kwargs):
+        self._get_fencil(offset_provider=kwargs.get("offset_provider"))(out, *args, **kwargs)
+
+    def format_itir(self, *args, out, **kwargs):
+        return self._get_fencil(offset_provider=kwargs.get("offset_provider")).format_itir(
+            out, *args, **kwargs
+        )
+
+
 class FundefDispatcher:
     _hook = None
     # hook is an object that
@@ -108,26 +167,7 @@ class FundefDispatcher:
         self.__name__ = fun.__name__
 
     def __getitem__(self, domain):
-        @fendef(out_as_kwarg_pos=0)
-        def impl(out, *inps):
-            dom = domain
-            if isinstance(dom, Callable):
-                # if domain is expressed as calls to builtin `domain()` we need to pass it lazily
-                # as dispatching needs to happen inside of the fencil
-                dom = dom()
-            if isinstance(dom, dict):
-                # if passed as a dict, we need to convert back to builtins for interpretation by the backends
-                dom = builtins.domain(
-                    *tuple(
-                        map(
-                            lambda x: builtins.named_range(x[0], x[1].start, x[1].stop),
-                            dom.items(),
-                        )
-                    )
-                )
-            closure(dom, self, out, [*inps])
-
-        return impl
+        return FundefFencilWrapper(self, domain)
 
     def __call__(self, *args):
         if type(self)._hook:

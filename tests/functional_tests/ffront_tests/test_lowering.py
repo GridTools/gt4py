@@ -104,7 +104,7 @@ def test_arithmetic():
 
 
 def test_shift():
-    Ioff = FieldOffset("Ioff", source=IDim, target=[IDim])
+    Ioff = FieldOffset("Ioff", source=IDim, target=(IDim,))
 
     def shift_by_one(inp: Field[[IDim], float64]):
         return inp(Ioff[1])
@@ -119,7 +119,7 @@ def test_shift():
 
 
 def test_negative_shift():
-    Ioff = FieldOffset("Ioff", source=IDim, target=[IDim])
+    Ioff = FieldOffset("Ioff", source=IDim, target=(IDim,))
 
     def shift_by_one(inp: Field[[IDim], float64]):
         return inp(Ioff[-1])

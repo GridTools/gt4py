@@ -21,7 +21,7 @@ import pytest
 
 import eve
 from eve.pattern_matching import ObjectPattern as P
-from functional.common import Field, GTTypeError
+from functional.common import Field, GridType, GTTypeError
 from functional.fencil_processors import roundtrip
 from functional.ffront import common_types, program_ast as past
 from functional.ffront.decorator import field_operator, program
@@ -35,7 +35,7 @@ from functional.iterator.embedded import np_as_located_field
 
 float64 = float
 IDim = Dimension("IDim")
-Ioff = FieldOffset("Ioff", source=IDim, target=[IDim])
+Ioff = FieldOffset("Ioff", source=IDim, target=(IDim,))
 
 fieldview_backend = roundtrip.executor
 
@@ -282,12 +282,14 @@ def test_copy_restrict_parsing(copy_restrict_program_def):
 
 def test_copy_lowering(copy_program_def, itir_identity_fundef):
     past_node = ProgramParser.apply_to_function(copy_program_def)
-    itir_node = ProgramLowering.apply(past_node, function_definitions=[itir_identity_fundef])
+    itir_node = ProgramLowering.apply(
+        past_node, function_definitions=[itir_identity_fundef], grid_type=GridType.CARTESIAN
+    )
     closure_pattern = P(
         itir.StencilClosure,
         domain=P(
             itir.FunCall,
-            fun=P(itir.SymRef, id=eve.SymbolRef("domain")),
+            fun=P(itir.SymRef, id=eve.SymbolRef("cartesian_domain")),
             args=[
                 P(
                     itir.FunCall,
@@ -321,12 +323,14 @@ def test_copy_lowering(copy_program_def, itir_identity_fundef):
 
 def test_copy_restrict_lowering(copy_restrict_program_def, itir_identity_fundef):
     past_node = ProgramParser.apply_to_function(copy_restrict_program_def)
-    itir_node = ProgramLowering.apply(past_node, function_definitions=[itir_identity_fundef])
+    itir_node = ProgramLowering.apply(
+        past_node, function_definitions=[itir_identity_fundef], grid_type=GridType.CARTESIAN
+    )
     closure_pattern = P(
         itir.StencilClosure,
         domain=P(
             itir.FunCall,
-            fun=P(itir.SymRef, id=eve.SymbolRef("domain")),
+            fun=P(itir.SymRef, id=eve.SymbolRef("cartesian_domain")),
             args=[
                 P(
                     itir.FunCall,

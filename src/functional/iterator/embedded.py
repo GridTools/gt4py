@@ -24,9 +24,9 @@ import numpy as np
 import numpy.typing as npt
 
 from functional import iterator
-from functional.common import Dimension
+from functional.common import Connectivity, Dimension
 from functional.iterator import builtins
-from functional.iterator.runtime import Offset
+from functional.iterator.runtime import CartesianDomain, Offset, UnstructuredDomain
 from functional.iterator.utils import tupelize
 
 
@@ -62,7 +62,6 @@ Axis: TypeAlias = Dimension
 # Offsets
 AnyOffset: TypeAlias = Tag | IntIndex
 CompleteOffset: TypeAlias = tuple[Tag, IntIndex]
-Connectivity: TypeAlias = NeighborTableOffsetProvider
 OffsetProviderElem: TypeAlias = Dimension | Connectivity
 OffsetProvider: TypeAlias = dict[Tag, OffsetProviderElem]
 
@@ -236,13 +235,24 @@ def reduce(fun, init):
     return sten
 
 
-@builtins.domain.register(EMBEDDED)
-def domain(*args):
-    return dict(args)
+NamedRange: TypeAlias = tuple[Tag | Dimension, range]
+
+
+@builtins.cartesian_domain.register(EMBEDDED)
+def cartesian_domain(*args: NamedRange) -> CartesianDomain:
+    return CartesianDomain(args)
+
+
+@builtins.unstructured_domain.register(EMBEDDED)
+def unstructured_domain(*args: NamedRange) -> UnstructuredDomain:
+    return UnstructuredDomain(args)
+
+
+Domain = CartesianDomain | UnstructuredDomain | dict[str | Dimension, range]
 
 
 @builtins.named_range.register(EMBEDDED)
-def named_range(tag, start, end):
+def named_range(tag: Tag | Dimension, start: int, end: int) -> NamedRange:
     return (tag, range(start, end))
 
 
@@ -835,20 +845,31 @@ def scan(scan_pass, is_forward: bool, init):
     return impl
 
 
+def _dimension_to_tag(domain: Domain) -> dict[Tag, range]:
+    return {k.value if isinstance(k, Dimension) else k: v for k, v in domain.items()}
+
+
+def _validate_domain(domain: Domain, offset_provider: OffsetProvider) -> None:
+    if isinstance(domain, CartesianDomain):
+        if any(isinstance(o, Connectivity) for o in offset_provider.values()):
+            raise RuntimeError(
+                "Got a `CartesianDomain`, but found a `Connectivity` in `offset_provider`, expected `UnstructuredDomain`."
+            )
+
+
 def fendef_embedded(fun: Callable[..., None], *args: Any, **kwargs: Any):
     if "offset_provider" not in kwargs:
         raise RuntimeError("offset_provider not provided")
 
     @iterator.runtime.closure.register(EMBEDDED)
     def closure(
-        domain_: dict[Union[str, Dimension], range],
+        domain_: Domain,
         sten: Callable[..., Any],
         out: MutableLocatedField,
         ins: list[LocatedField],
     ) -> None:
-        domain: dict[str, range] = {
-            k.value if isinstance(k, Dimension) else k: v for k, v in domain_.items()
-        }
+        _validate_domain(domain_, kwargs["offset_provider"])
+        domain: dict[Tag, range] = _dimension_to_tag(domain_)
         if not (is_located_field(out) or can_be_tuple_field(out)):
             raise TypeError("Out needs to be a located field.")
 
