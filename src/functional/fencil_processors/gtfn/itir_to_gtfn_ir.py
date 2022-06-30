@@ -2,8 +2,7 @@ from typing import Any
 
 import eve
 from eve.concepts import SymbolName
-from functional.iterator import ir as itir
-from functional.iterator.backends.gtfn.gtfn_ir import (
+from functional.fencil_processors.gtfn.gtfn_ir import (
     Backend,
     BinaryExpr,
     Expr,
@@ -20,6 +19,7 @@ from functional.iterator.backends.gtfn.gtfn_ir import (
     TernaryExpr,
     UnaryExpr,
 )
+from functional.iterator import ir as itir
 
 
 class GTFN_lowering(eve.NodeTranslator):

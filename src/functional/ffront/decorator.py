@@ -26,11 +26,14 @@ import functools
 import types
 import typing
 import warnings
-from typing import Callable, Iterable
+from typing import Callable, Iterable, Protocol
 
-from eve.extended_typing import Any, Optional, Protocol
+from devtools import debug
+
+from eve.extended_typing import Any, Optional
 from eve.utils import UIDs
 from functional.common import GridType, GTTypeError
+from functional.fencil_processors import roundtrip
 from functional.ffront import (
     common_types as ct,
     field_operator_ast as foast,
@@ -45,11 +48,16 @@ from functional.ffront.past_passes.type_deduction import ProgramTypeDeduction
 from functional.ffront.past_to_itir import ProgramLowering
 from functional.ffront.source_utils import CapturedVars
 from functional.iterator import ir as itir
-from functional.iterator.backend_executor import execute_fencil
 from functional.iterator.embedded import constant_field
+from functional.iterator.processor_interface import (
+    FencilExecutor,
+    FencilFormatter,
+    ensure_executor,
+    ensure_formatter,
+)
 
 
-DEFAULT_BACKEND = "roundtrip"
+DEFAULT_BACKEND: Callable = roundtrip.executor
 
 
 def _collect_capture_vars(captured_vars: CapturedVars) -> CapturedVars:
@@ -133,6 +141,10 @@ class GTCallable(Protocol):
 
 # TODO(tehrengruber): Decide if and how programs can call other programs. As a
 #  result Program could become a GTCallable.
+# TODO(ricoh): factor out the generated ITIR together with arguments rewriting
+# so that using fencil processors on `some_program.itir` becomes trivial without
+# prior knowledge of the fencil signature rewriting done by `Program`.
+# After that, drop the `.format_itir()` method, since it won't be needed.
 @dataclasses.dataclass(frozen=True)
 class Program:
     """
@@ -153,7 +165,7 @@ class Program:
     past_node: past.Program
     captured_vars: CapturedVars
     externals: dict[str, Any]
-    backend: Optional[str]
+    backend: Optional[FencilExecutor]
     definition: Optional[types.FunctionType] = None
     grid_type: Optional[GridType] = None
 
@@ -162,7 +174,7 @@ class Program:
         cls,
         definition: types.FunctionType,
         externals: Optional[dict] = None,
-        backend: Optional[str] = None,
+        backend: Optional[FencilExecutor] = None,
         grid_type: Optional[GridType] = None,
     ) -> "Program":
         captured_vars = _collect_capture_vars(CapturedVars.from_function(definition))
@@ -176,7 +188,7 @@ class Program:
             grid_type=grid_type,
         )
 
-    def with_backend(self, backend: str) -> "Program":
+    def with_backend(self, backend: FencilExecutor) -> "Program":
         return Program(
             past_node=self.past_node,
             captured_vars=self.captured_vars,
@@ -284,6 +296,44 @@ class Program:
             raise NotImplementedError("Keyword arguments are not supported yet.")
 
     def __call__(self, *args, offset_provider: dict[str, Dimension], **kwargs) -> None:
+        rewritten_args, size_args, kwargs = self._process_args(args, kwargs)
+
+        if not self.backend:
+            warnings.warn(
+                UserWarning(
+                    f"Field View Program '{self.itir.id}': Using default ({DEFAULT_BACKEND}) backend."
+                )
+            )
+        backend = self.backend if self.backend else DEFAULT_BACKEND
+
+        ensure_executor(backend)
+        if "debug" in kwargs:
+            debug(self.itir)
+
+        backend(
+            self.itir,
+            *rewritten_args,
+            *size_args,
+            **kwargs,
+            offset_provider=offset_provider,
+        )
+
+    def format_itir(
+        self, *args, formatter: FencilFormatter, offset_provider: dict[str, Dimension], **kwargs
+    ) -> str:
+        ensure_formatter(formatter)
+        rewritten_args, size_args, kwargs = self._process_args(args, kwargs)
+        if "debug" in kwargs:
+            debug(self.itir)
+        return formatter(
+            self.itir,
+            *rewritten_args,
+            *size_args,
+            **kwargs,
+            offset_provider=offset_provider,
+        )
+
+    def _process_args(self, args: tuple, kwargs: dict) -> tuple[tuple, tuple, dict[str, Any]]:
         self._validate_args(*args, **kwargs)
 
         # extract size of all field arguments
@@ -303,22 +353,7 @@ class Program:
             for dim_idx in range(0, len(param.type.dims)):
                 size_args.append(args[param_idx].shape[dim_idx])
 
-        if not self.backend:
-            warnings.warn(
-                UserWarning(
-                    f"Field View Program '{self.itir.id}': Using default ({DEFAULT_BACKEND}) backend."
-                )
-            )
-        backend = self.backend if self.backend else DEFAULT_BACKEND
-
-        execute_fencil(
-            self.itir,
-            *rewritten_args,
-            *size_args,
-            **kwargs,
-            offset_provider=offset_provider,
-            backend=backend,
-        )
+        return tuple(rewritten_args), tuple(size_args), kwargs
 
 
 @typing.overload
@@ -328,7 +363,7 @@ def program(definition: types.FunctionType) -> Program:
 
 @typing.overload
 def program(
-    *, externals: Optional[dict], backend: Optional[str]
+    *, externals: Optional[dict], backend: Optional[FencilExecutor]
 ) -> Callable[[types.FunctionType], Program]:
     ...
 
@@ -385,7 +420,7 @@ class FieldOperator(GTCallable):
     foast_node: foast.FieldOperator
     captured_vars: CapturedVars
     externals: dict[str, Any]
-    backend: Optional[str]  # note: backend is only used if directly called
+    backend: Optional[FencilExecutor]  # note: backend is only used if directly called
     definition: Optional[types.FunctionType] = None
 
     @classmethod
@@ -393,7 +428,7 @@ class FieldOperator(GTCallable):
         cls,
         definition: types.FunctionType,
         externals: Optional[dict] = None,
-        backend: Optional[str] = None,
+        backend: Optional[FencilExecutor] = None,
     ) -> "FieldOperator":
         captured_vars = CapturedVars.from_function(definition)
         foast_node = FieldOperatorParser.apply_to_function(definition)
@@ -410,7 +445,7 @@ class FieldOperator(GTCallable):
         assert isinstance(type_, ct.FunctionType)
         return type_
 
-    def with_backend(self, backend: str) -> "FieldOperator":
+    def with_backend(self, backend: FencilExecutor) -> "FieldOperator":
         return FieldOperator(
             foast_node=self.foast_node,
             captured_vars=self.captured_vars,
@@ -503,7 +538,7 @@ def field_operator(definition: types.FunctionType) -> FieldOperator:
 
 @typing.overload
 def field_operator(
-    *, externals: Optional[dict], backend: Optional[str]
+    *, externals: Optional[dict], backend: Optional[FencilExecutor]
 ) -> Callable[[types.FunctionType], FieldOperator]:
     ...
 

@@ -1,8 +1,7 @@
 import sys
 from types import SimpleNamespace
 
-from functional.iterator import library
-from functional.iterator.backends.gtfn.gtfn_backend import generate
+from functional.fencil_processors.gtfn.gtfn_backend import generate
 from functional.iterator.builtins import *
 from functional.iterator.runtime import closure, fundef, offset
 from functional.iterator.tracing import trace
