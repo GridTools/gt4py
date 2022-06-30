@@ -135,9 +135,14 @@ def tuple_get(*args):
     return _f("tuple_get", *args)
 
 
-@iterator.builtins.domain.register(TRACING)
-def domain(*args):
-    return _f("domain", *args)
+@iterator.builtins.cartesian_domain.register(TRACING)
+def cartesian_domain(*args):
+    return _f("cartesian_domain", *args)
+
+
+@iterator.builtins.unstructured_domain.register(TRACING)
+def unstructured_domain(*args):
+    return _f("unstructured_domain", *args)
 
 
 @iterator.builtins.named_range.register(TRACING)
