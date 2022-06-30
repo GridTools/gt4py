@@ -55,78 +55,6 @@ def _assert_source_invariants(source_definition: SourceDefinition, captured_vars
 DialectRootT = TypeVar("DialectRootT")
 
 
-@dataclass(frozen=True, kw_only=True)
-class DialectParser(ast.NodeVisitor, Generic[DialectRootT]):
-    source_definition: SourceDefinition
-    captured_vars: CapturedVars
-    externals_defs: dict[str, Any]
-
-    syntax_error_cls: ClassVar[Type[DialectSyntaxError]]
-
-    @classmethod
-    def apply(
-        cls,
-        source_definition: SourceDefinition,
-        captured_vars: CapturedVars,
-        externals: Optional[dict[str, Any]] = None,
-    ) -> DialectRootT:
-
-        source, filename, starting_line = source_definition
-        try:
-            raw_ast = ast.parse(textwrap.dedent(source)).body[0]
-            definition_ast = cls._preprocess_definition_ast(
-                ast.increment_lineno(FixMissingLocations.apply(raw_ast), starting_line - 1)
-            )
-            output_ast = cls._postprocess_dialect_ast(
-                cls(
-                    source_definition=source_definition,
-                    captured_vars=captured_vars,
-                    externals_defs=externals or {},
-                ).visit(definition_ast)
-            )
-            if __debug__:
-                _assert_source_invariants(source_definition, captured_vars)
-        except SyntaxError as err:
-            # The ast nodes do not contain information about the path of the
-            #  source file or its contents. We add this information here so
-            #  that raising an error using :func:`DialectSyntaxError.from_AST`
-            #  does not require passing the information on every invocation.
-            if not err.filename:
-                err.filename = filename
-            if not err.text:
-                err.text = source
-            raise err
-
-        return output_ast
-
-    @classmethod
-    def _preprocess_definition_ast(cls, definition_ast: ast.AST) -> ast.AST:
-        return definition_ast
-
-    @classmethod
-    def _postprocess_dialect_ast(cls, output_ast: DialectRootT) -> DialectRootT:
-        return output_ast
-
-    @classmethod
-    def apply_to_function(
-        cls,
-        func: types.FunctionType,
-        externals: Optional[dict[str, Any]] = None,
-    ) -> DialectRootT:
-        source_definition = SourceDefinition.from_function(func)
-        captured_vars = CapturedVars.from_function(func)
-        return cls.apply(source_definition, captured_vars, externals)
-
-    def generic_visit(self, node: ast.AST) -> None:
-        raise self.syntax_error_cls.from_AST(
-            node,
-            msg=f"Nodes of type {type(node).__module__}.{type(node).__qualname__} not supported in dialect.",
-        )
-
-    def _make_loc(self, node: ast.AST) -> SourceLocation:
-        return SourceLocation.from_AST(node, source=self.source_definition.filename)
-
-
 class DialectSyntaxError(common.GTSyntaxError):
     dialect_name: ClassVar[str] = ""
 
@@ -162,3 +90,75 @@ class DialectSyntaxError(common.GTSyntaxError):
             end_offset=getattr(node, "end_col_offset", None),
             text=text,
         )
+
+
+@dataclass(frozen=True, kw_only=True)
+class DialectParser(ast.NodeVisitor, Generic[DialectRootT]):
+    source_definition: SourceDefinition
+    captured_vars: CapturedVars
+    externals_defs: dict[str, Any]
+
+    syntax_error_cls: ClassVar[Type[DialectSyntaxError]] = DialectSyntaxError
+
+    @classmethod
+    def apply(
+        cls,
+        source_definition: SourceDefinition,
+        captured_vars: CapturedVars,
+        externals: Optional[dict[str, Any]] = None,
+    ) -> DialectRootT:  # type: ignore[valid-type]  # used to work, now mypy is going berserk for unknown reasons
+
+        source, filename, starting_line = source_definition
+        try:
+            raw_ast = ast.parse(textwrap.dedent(source)).body[0]
+            definition_ast = cls._preprocess_definition_ast(
+                ast.increment_lineno(FixMissingLocations.apply(raw_ast), starting_line - 1)
+            )
+            output_ast = cls._postprocess_dialect_ast(
+                cls(
+                    source_definition=source_definition,
+                    captured_vars=captured_vars,
+                    externals_defs=externals or {},
+                ).visit(definition_ast)
+            )
+            if __debug__:
+                _assert_source_invariants(source_definition, captured_vars)
+        except SyntaxError as err:
+            # The ast nodes do not contain information about the path of the
+            #  source file or its contents. We add this information here so
+            #  that raising an error using :func:`DialectSyntaxError.from_AST`
+            #  does not require passing the information on every invocation.
+            if not err.filename:
+                err.filename = filename
+            if not err.text:
+                err.text = source
+            raise err
+
+        return output_ast
+
+    @classmethod
+    def _preprocess_definition_ast(cls, definition_ast: ast.AST) -> ast.AST:
+        return definition_ast
+
+    @classmethod
+    def _postprocess_dialect_ast(cls, output_ast: DialectRootT) -> DialectRootT:  # type: ignore[valid-type]  # used to work, now mypy is going berserk for unknown reasons
+        return output_ast
+
+    @classmethod
+    def apply_to_function(
+        cls,
+        func: types.FunctionType,
+        externals: Optional[dict[str, Any]] = None,
+    ) -> DialectRootT:  # type: ignore[valid-type]  # used to work, now mypy is going berserk for unknown reasons
+        source_definition = SourceDefinition.from_function(func)
+        captured_vars = CapturedVars.from_function(func)
+        return cls.apply(source_definition, captured_vars, externals)
+
+    def generic_visit(self, node: ast.AST) -> None:
+        raise self.syntax_error_cls.from_AST(
+            node,
+            msg=f"Nodes of type {type(node).__module__}.{type(node).__qualname__} not supported in dialect.",
+        )
+
+    def _make_loc(self, node: ast.AST) -> SourceLocation:
+        return SourceLocation.from_AST(node, source=self.source_definition.filename)
