@@ -55,13 +55,50 @@ def _assert_source_invariants(source_definition: SourceDefinition, captured_vars
 DialectRootT = TypeVar("DialectRootT")
 
 
+class DialectSyntaxError(common.GTSyntaxError):
+    dialect_name: ClassVar[str] = ""
+
+    def __init__(
+        self,
+        msg="",
+        *,
+        lineno: int = 0,
+        offset: int = 0,
+        filename: Optional[str] = None,
+        end_lineno: int = None,
+        end_offset: int = None,
+        text: Optional[str] = None,
+    ):
+        msg = f"Invalid {self.dialect_name} Syntax: {msg}"
+        super().__init__(msg, (filename, lineno, offset, text, end_lineno, end_offset))
+
+    @classmethod
+    def from_AST(
+        cls,
+        node: ast.AST,
+        *,
+        msg: str = "",
+        filename: Optional[str] = None,
+        text: Optional[str] = None,
+    ):
+        return cls(
+            msg,
+            lineno=node.lineno,
+            offset=node.col_offset,
+            filename=filename,
+            end_lineno=getattr(node, "end_lineno", None),
+            end_offset=getattr(node, "end_col_offset", None),
+            text=text,
+        )
+
+
 @dataclass(frozen=True, kw_only=True)
 class DialectParser(ast.NodeVisitor, Generic[DialectRootT]):
     source_definition: SourceDefinition
     captured_vars: CapturedVars
     externals_defs: dict[str, Any]
 
-    syntax_error_cls: ClassVar[Type[DialectSyntaxError]]
+    syntax_error_cls: ClassVar[Type[DialectSyntaxError]] = DialectSyntaxError
 
     @classmethod
     def apply(
@@ -78,13 +115,11 @@ class DialectParser(ast.NodeVisitor, Generic[DialectRootT]):
                 ast.increment_lineno(FixMissingLocations.apply(raw_ast), starting_line - 1)
             )
             output_ast = cls._postprocess_dialect_ast(
-                cls(  # type: ignore[call-arg]  # mypy does not know that dataclasses ignore ClassVar attributes
+                cls(
                     source_definition=source_definition,
                     captured_vars=captured_vars,
                     externals_defs=externals or {},
-                ).visit(
-                    definition_ast
-                )
+                ).visit(definition_ast)
             )
             if __debug__:
                 _assert_source_invariants(source_definition, captured_vars)
@@ -127,40 +162,3 @@ class DialectParser(ast.NodeVisitor, Generic[DialectRootT]):
 
     def _make_loc(self, node: ast.AST) -> SourceLocation:
         return SourceLocation.from_AST(node, source=self.source_definition.filename)
-
-
-class DialectSyntaxError(common.GTSyntaxError):
-    dialect_name: ClassVar[str] = ""
-
-    def __init__(
-        self,
-        msg="",
-        *,
-        lineno: int = 0,
-        offset: int = 0,
-        filename: Optional[str] = None,
-        end_lineno: int = None,
-        end_offset: int = None,
-        text: Optional[str] = None,
-    ):
-        msg = f"Invalid {self.dialect_name} Syntax: {msg}"
-        super().__init__(msg, (filename, lineno, offset, text, end_lineno, end_offset))
-
-    @classmethod
-    def from_AST(
-        cls,
-        node: ast.AST,
-        *,
-        msg: str = "",
-        filename: Optional[str] = None,
-        text: Optional[str] = None,
-    ):
-        return cls(
-            msg,
-            lineno=node.lineno,
-            offset=node.col_offset,
-            filename=filename,
-            end_lineno=getattr(node, "end_lineno", None),
-            end_offset=getattr(node, "end_col_offset", None),
-            text=text,
-        )
