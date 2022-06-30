@@ -16,9 +16,12 @@ from __future__ import annotations
 
 import abc
 import dataclasses
+import enum
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any, Generic, TypeVar
+from typing import Any, Generic, Protocol, TypeVar, runtime_checkable
+
+from eve.type_definitions import StrEnum
 
 
 DimT = TypeVar("DimT", bound="Dimension")
@@ -79,6 +82,18 @@ class Backend:
     # TODO : proper definition and implementation
     def generate_operator(self, ir):
         return ir
+
+
+@runtime_checkable
+class Connectivity(Protocol):
+    max_neighbors: int
+    has_skip_values: bool
+
+
+@enum.unique
+class GridType(StrEnum):
+    CARTESIAN = "cartesian"
+    UNSTRUCTURED = "unstructured"
 
 
 class GTError:

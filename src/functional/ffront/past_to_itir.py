@@ -11,10 +11,8 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-from typing import Union
-
 from eve import NodeTranslator, traits
-from functional.common import GTTypeError
+from functional.common import GridType, GTTypeError
 from functional.ffront import common_types, program_ast as past
 from functional.iterator import ir as itir
 
@@ -49,7 +47,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
     ...     params=[ir.Sym(id="inp")],
     ...     expr=ir.FunCall(fun=ir.SymRef(id="deref"), args=[ir.SymRef(id="inp")])
     ... )
-    >>> lowered = ProgramLowering.apply(parsed, [fieldop_def])
+    >>> lowered = ProgramLowering.apply(parsed, [fieldop_def], grid_type=GridType.CARTESIAN)
     >>> type(lowered)
     <class 'functional.iterator.ir.FencilDefinition'>
     >>> lowered.id
@@ -60,9 +58,15 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
 
     @classmethod
     def apply(
-        cls, node: past.Program, function_definitions: list[itir.FunctionDefinition]
+        cls,
+        node: past.Program,
+        function_definitions: list[itir.FunctionDefinition],
+        grid_type: GridType,
     ) -> itir.FencilDefinition:
-        return cls().visit(node, function_definitions=function_definitions)
+        return cls(grid_type=grid_type).visit(node, function_definitions=function_definitions)
+
+    def __init__(self, grid_type):
+        self.grid_type = grid_type
 
     def _gen_size_params_from_program(self, node: past.Program):
         """Generate symbols for each field param and dimension."""
@@ -192,11 +196,14 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                 "Unexpected `out` argument. Must be a `past.Subscript` or `past.Name` node."
             )
 
+        domain_builtin = (
+            "cartesian_domain" if self.grid_type == GridType.CARTESIAN else "unstructured_domain"
+        )
         return itir.SymRef(id=self.visit(out_field_name, **kwargs).id), itir.FunCall(
-            fun=itir.SymRef(id="domain"), args=domain_args
+            fun=itir.SymRef(id=domain_builtin), args=domain_args
         )
 
-    def visit_Constant(self, node: past.Constant, **kwargs) -> Union[itir.Literal]:
+    def visit_Constant(self, node: past.Constant, **kwargs) -> itir.Literal:
         if isinstance(node.type, common_types.ScalarType) and node.type.shape is None:
             match node.type.kind:
                 case common_types.ScalarKind.STRING:
