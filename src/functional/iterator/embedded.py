@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import itertools
+import math
 import numbers
 from dataclasses import dataclass
 from typing import (
@@ -268,7 +269,7 @@ UNARY_MATH_FP_BUILTINS = {
     "sqrt",
     "exp",
     "log",
-    #'gamma',
+    "gamma",
     "cbrt",
     "floor",
     "ceil",
@@ -285,9 +286,17 @@ MATH_BUILTINS = (
     | BINARY_MATH_INT_BUILTINS
 )
 
-for math_builtin in MATH_BUILTINS:
-    decorator = getattr(builtins, math_builtin).register(EMBEDDED)
-    globals()[math_builtin] = decorator(getattr(np, math_builtin))
+for math_builtin_name in MATH_BUILTINS:
+    decorator = getattr(builtins, math_builtin_name).register(EMBEDDED)
+    # numpy has no gamma function
+    if math_builtin_name == "gamma":
+        continue
+    globals()[math_builtin_name] = decorator(getattr(np, math_builtin_name))
+
+
+@builtins.less.register(EMBEDDED)
+def gamma(arg):
+    return math.gamma(arg)
 
 
 def named_range_(axis: str, range_: Iterable[int]) -> Iterable[tuple[str, int]]:

@@ -168,7 +168,7 @@ def tuple_get(*args):
 # FIXME(ben): various of the following built-ins will shadow python built-ins!
 # We should find a good way around this...
 @builtin_dispatch
-def abs(*args):
+def abs(*args):  # noqa: A001
     raise BackendNotSelectedError()
 
 

@@ -303,10 +303,9 @@ class FieldOperatorLowering(NodeTranslator):
 
         return lowered_arg
 
-    def _visit_math_built_in(self, node: foast.Call, **kwargs) -> itir.FunCall:
-        func_name = node.func.id
+    def _visit_math_built_in(self, node: foast.Call, **kwargs) -> itir.Expr:
         args = tuple(to_value(arg)(self.visit(arg, **kwargs)) for arg in node.args)
-        return self._lift_if_field(node)(im.call_(im.ref(func_name))(*args))
+        return self._lift_if_field(node)(im.call_(self.visit(node.func, **kwargs))(*args))
 
     def _visit_neighbor_sum(self, node: foast.Call, **kwargs) -> itir.FunCall:
         return self._visit_reduce(node, **kwargs)

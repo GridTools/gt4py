@@ -92,7 +92,7 @@ UNARY_MATH_FP_BUILTINS = {
     "sqrt",
     "exp",
     "log",
-    #'gamma',
+    "gamma",
     "cbrt",
     "floor",
     "ceil",

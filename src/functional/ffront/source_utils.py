@@ -54,7 +54,7 @@ def make_captured_vars_from_function(func: Callable) -> CapturedVars:
     )
     # python builtins returned by getclosurevars() are not ffront.builtins
     unbound = set(inspect_builtins.keys()) | inspect_unbound
-    builtins = unbound & {*fbuiltins.PYTHON_TYPE_BUILTIN_NAMES} & {fbuiltins.EXTERNALS_MODULE_NAME}
+    builtins = unbound & {*fbuiltins.PYTHON_TYPE_BUILTIN_NAMES, fbuiltins.EXTERNALS_MODULE_NAME}
     unbound -= builtins
     annotations = xtyping.get_type_hints(func)
 

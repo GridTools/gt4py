@@ -11,7 +11,6 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-import dataclasses
 from typing import Optional, cast
 
 import functional.ffront.field_operator_ast as foast
@@ -377,7 +376,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         elif func_name in fbuiltins.BINARY_MATH_INT_BUILTIN_NAMES:
             error_msgs = []
             for i, arg in enumerate(node.args):
-                if not type_info.is_integral(node.args[0].type):
+                if not type_info.is_integral(arg.type):
                     error_msgs.append(
                         f"Expected {i}-th argument to be an integral type, but "
                         f"got `{node.args[0].type}`."

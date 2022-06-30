@@ -84,7 +84,7 @@ _unary_math_builtin = BuiltInFunction(
 )
 
 # unary math builtins (number) -> number
-abs = _unary_math_builtin
+abs = _unary_math_builtin  # noqa: A001
 
 UNARY_MATH_NUMBER_BUILTIN_NAMES = ["abs"]
 
@@ -104,7 +104,7 @@ arctanh = _unary_math_builtin
 sqrt = _unary_math_builtin
 exp = _unary_math_builtin
 log = _unary_math_builtin
-# a = _unary_math_builtin
+gamma = _unary_math_builtin
 cbrt = _unary_math_builtin
 floor = _unary_math_builtin
 ceil = _unary_math_builtin
@@ -126,7 +126,7 @@ UNARY_MATH_FP_BUILTIN_NAMES = [
     "sqrt",
     "exp",
     "log",
-    #'gamma',
+    "gamma",
     "cbrt",
     "floor",
     "ceil",
