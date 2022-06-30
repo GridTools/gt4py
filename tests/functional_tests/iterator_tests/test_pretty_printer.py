@@ -220,12 +220,22 @@ def test_named_range():
     assert actual == expected
 
 
-def test_domain():
+def test_cartesian_domain():
     testee = ir.FunCall(
-        fun=ir.SymRef(id="domain"),
+        fun=ir.SymRef(id="cartesian_domain"),
         args=[ir.SymRef(id="x"), ir.SymRef(id="y")],
     )
-    expected = "⟨ x, y ⟩"
+    expected = "c⟨ x, y ⟩"
+    actual = pformat(testee)
+    assert actual == expected
+
+
+def test_unstructured_domain():
+    testee = ir.FunCall(
+        fun=ir.SymRef(id="unstructured_domain"),
+        args=[ir.SymRef(id="x"), ir.SymRef(id="y")],
+    )
+    expected = "u⟨ x, y ⟩"
     actual = pformat(testee)
     assert actual == expected
 

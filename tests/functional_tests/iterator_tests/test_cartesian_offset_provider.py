@@ -20,7 +20,7 @@ def foo(inp):
 @fendef(offset_provider={"I": I_loc, "J": J_loc})
 def fencil(output, input):
     closure(
-        domain(named_range(I_loc, 0, 1), named_range(J_loc, 0, 1)),
+        cartesian_domain(named_range(I_loc, 0, 1), named_range(J_loc, 0, 1)),
         foo,
         output,
         [input],
@@ -30,7 +30,7 @@ def fencil(output, input):
 @fendef(offset_provider={"I": J_loc, "J": I_loc})
 def fencil_swapped(output, input):
     closure(
-        domain(named_range(I_loc, 0, 1), named_range(J_loc, 0, 1)),
+        cartesian_domain(named_range(I_loc, 0, 1), named_range(J_loc, 0, 1)),
         foo,
         output,
         [input],
@@ -62,7 +62,7 @@ def delay_complete_shift(inp):
 @fendef(offset_provider={"I": J_loc, "J": I_loc})
 def delay_complete_shift_fencil(output, input):
     closure(
-        domain(named_range(I_loc, 0, 1), named_range(J_loc, 0, 1)),
+        cartesian_domain(named_range(I_loc, 0, 1), named_range(J_loc, 0, 1)),
         delay_complete_shift,
         output,
         [input],
