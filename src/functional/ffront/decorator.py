@@ -26,7 +26,7 @@ import functools
 import types
 import typing
 import warnings
-from typing import Callable
+from typing import Callable, Iterable
 
 from eve.extended_typing import Any, Optional, Protocol
 from eve.utils import UIDs
@@ -190,6 +190,13 @@ class Program:
         requested_grid_type: Optional[GridType],
         offsets_and_dimensions: set[FieldOffset | Dimension],
     ):
+        """
+        Derive grid type from actually occurring dimensions and check against optional user request.
+
+        Unstructured grid type is consistent with any kind of offset, cartesian is easier to optimize for but only
+        allowed in the absence of unstructured dimensions and offsets.
+        """
+
         def is_cartesian_offset(o: FieldOffset):
             return len(o.target) == 1 and o.source == o.target[0]
 
@@ -209,31 +216,36 @@ class Program:
 
         return deduced_grid_type if requested_grid_type is None else requested_grid_type
 
-    def _lowered_funcs_from_captured_vars(
-        self, captured_vars: CapturedVars
-    ) -> tuple[list[itir.FunctionDefinition], set[FieldOffset | Dimension]]:
-        lowered_funcs = []
-        offsets_and_dimensions = set[FieldOffset | Dimension]()
-
+    def _gt_callables_from_captured_vars(self, captured_vars: CapturedVars) -> list[GTCallable]:
         all_captured_vars = collections.ChainMap(captured_vars.globals, captured_vars.nonlocals)
 
+        gt_callables = []
         for name, value in all_captured_vars.items():
             if isinstance(value, GTCallable):
-                itir_node = value.__gt_itir__()
-                if itir_node.id != name:
+                if value.__gt_itir__().id != name:
                     raise RuntimeError(
                         "Name of the closure reference and the function it holds do not match."
                     )
-                lowered_funcs.append(itir_node)
+                gt_callables.append(value)
+        return gt_callables
 
-                if (captured := value.__gt_captured_vars__()) is not None:
-                    for c in (captured.globals | captured.nonlocals).values():
-                        if isinstance(c, FieldOffset):
-                            offsets_and_dimensions.add(c)
-                        if isinstance(c, Dimension):
-                            offsets_and_dimensions.add(c)
+    def _offsets_and_dimensions_from_gt_callables(
+        self, gt_callables: Iterable[GTCallable]
+    ) -> set[FieldOffset | Dimension]:
+        offsets_and_dimensions: set[FieldOffset | Dimension] = set()
+        for gt_callable in gt_callables:
+            if (captured := gt_callable.__gt_captured_vars__()) is not None:
+                for c in (captured.globals | captured.nonlocals).values():
+                    if isinstance(c, FieldOffset):
+                        offsets_and_dimensions.add(c)
+                    if isinstance(c, Dimension):
+                        offsets_and_dimensions.add(c)
+        return offsets_and_dimensions
 
-        return lowered_funcs, offsets_and_dimensions
+    def _lowered_funcs_from_gt_callables(
+        self, gt_callables: Iterable[GTCallable]
+    ) -> list[itir.FunctionDefinition]:
+        return [gt_callable.__gt_itir__() for gt_callable in gt_callables]
 
     @functools.cached_property
     def itir(self) -> itir.FencilDefinition:
@@ -252,12 +264,12 @@ class Program:
         if undefined := referenced_var_names - defined_var_names:
             raise RuntimeError(f"Reference to undefined symbol(s) `{', '.join(undefined)}`.")
 
-        lowered_funcs, offsets_and_dimensions = self._lowered_funcs_from_captured_vars(capture_vars)
-
+        referenced_gt_callables = self._gt_callables_from_captured_vars(capture_vars)
         grid_type = self._deduce_grid_type(
-            self.grid_type,
-            offsets_and_dimensions,
+            self.grid_type, self._offsets_and_dimensions_from_gt_callables(referenced_gt_callables)
         )
+
+        lowered_funcs = self._lowered_funcs_from_gt_callables(referenced_gt_callables)
         return ProgramLowering.apply(
             self.past_node, function_definitions=lowered_funcs, grid_type=grid_type
         )
