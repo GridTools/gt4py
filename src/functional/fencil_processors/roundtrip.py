@@ -7,8 +7,8 @@ from eve import codegen
 from eve.codegen import FormatTemplate as as_fmt, MakoTemplate as as_mako
 from eve.concepts import Node
 from functional import iterator
-from functional.iterator.backends import backend
 from functional.iterator.ir import AxisLiteral, FencilDefinition, OffsetLiteral
+from functional.iterator.processor_interface import fencil_executor
 from functional.iterator.transforms import apply_common_transforms
 
 
@@ -76,6 +76,7 @@ class WrapperGenerator(EmbeddedDSL):
 _BACKEND_NAME = "roundtrip"
 
 
+@fencil_executor
 def executor(ir: Node, *args, **kwargs):
     debug = "debug" in kwargs and kwargs["debug"] is True
     use_tmps = "use_tmps" in kwargs and kwargs["use_tmps"] is True
@@ -151,6 +152,3 @@ from functional.iterator.embedded import np_as_located_field
             **new_kwargs,
             backend=kwargs["dispatch_backend"],
         )
-
-
-backend.register_backend(_BACKEND_NAME, executor)
