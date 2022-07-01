@@ -22,6 +22,7 @@ from typing import Any, ForwardRef, Optional, Union
 import numpy as np
 import numpy.typing as npt
 
+import eve.utils
 from eve import extended_typing as xtyping
 from functional import common
 from functional.ffront import common_types as ct
@@ -157,6 +158,12 @@ def make_symbol_type_from_typing(
     raise TypingError(f"'{type_hint}' type is not supported")
 
 
+def make_symbol_type_from_struct(value: Any) -> ct.SymbolType:
+    value_fields = value.items()
+    type_fields = {name: make_symbol_type_from_value(value) for name, value in value_fields}
+    return ct.StructType(fields=type_fields)
+
+
 def make_symbol_type_from_value(value: Any) -> ct.SymbolType:
     """Make a symbol node from a Python value."""
     # TODO(tehrengruber): What we expect here currently is a GTCallable. Maybe
@@ -165,6 +172,8 @@ def make_symbol_type_from_value(value: Any) -> ct.SymbolType:
         symbol_type = value.__gt_type__()
     elif isinstance(value, common.Dimension):
         symbol_type = ct.DimensionType(dim=value)
+    elif isinstance(value, eve.utils.ConstantNamespace):
+        symbol_type = make_symbol_type_from_struct(value)
     else:
         type_ = xtyping.infer_type(value, annotate_callable_kwargs=True)
         symbol_type = make_symbol_type_from_typing(type_)

@@ -126,6 +126,21 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             return new_node
         return node
 
+    def visit_Attribute(self, node: foast.Attribute, **kwargs) -> foast.Attribute:
+        new_value = self.visit(node.value, **kwargs)
+        if isinstance(new_value.type, ct.StructType):
+            new_type = new_value.type.fields[node.attribute]
+            return foast.Attribute(
+                value=new_value,
+                attribute=node.attribute,
+                location=node.location,
+                type=new_type
+            )
+        raise FieldOperatorTypeDeductionError.from_foast_node(
+            node,
+            msg="Only attributes of struct types are supported."
+        )
+
     def visit_Subscript(self, node: foast.Subscript, **kwargs) -> foast.Subscript:
         new_value = self.visit(node.value, **kwargs)
         new_type: Optional[ct.SymbolType] = None

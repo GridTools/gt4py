@@ -59,6 +59,11 @@ class Name(Expr):
     id: Coerced[SymbolRef]  # noqa: A003
 
 
+class Attribute(Expr):
+    value: Expr
+    attribute: str
+
+
 class Constant(Expr):
     value: str
     dtype: Union[common_types.DataType, str]

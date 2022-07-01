@@ -593,6 +593,13 @@ class FrozenNamespace(Namespace[T]):
         return self.__cached_hash_value__
 
 
+class ConstantNamespace(FrozenNamespace):
+    def __setattr__(self, __name: str, __value: Any) -> None:
+        if hasattr(self, __name):
+            raise TypeError(f"Trying to modify immutable attribute {__name}.")
+        self.__dict__[__name] = __value
+
+
 @dataclasses.dataclass
 class UIDGenerator:
     """Simple unique id generator using different methods."""

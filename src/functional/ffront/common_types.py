@@ -92,6 +92,14 @@ class TupleType(DataType):
 
 
 @dataclass(frozen=True)
+class StructType(DataType):
+    fields: dict[str, DataType]
+
+    def __str__(self):
+        return f"struct{self.fields}"
+
+
+@dataclass(frozen=True)
 class FieldType(DataType):
     dims: list[func_common.Dimension] | Literal[Ellipsis]  # type: ignore[valid-type,misc]
     dtype: ScalarType

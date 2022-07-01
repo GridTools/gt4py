@@ -38,6 +38,7 @@ from functional.iterator.embedded import (
     index_field,
     np_as_located_field,
 )
+from eve.utils import ConstantNamespace
 
 
 fieldview_backend = roundtrip.executor
@@ -584,7 +585,8 @@ def test_conditional_shifted():
     assert np.allclose(np.where(mask, a, b)[1:], out.array()[:-1])
 
 
-CONSTANT: Final = 6.6743015e-11
+consts = ConstantNamespace()
+consts.G = 6.6743015e-11
 
 
 def test_constant_op():
@@ -592,7 +594,7 @@ def test_constant_op():
 
     @field_operator
     def constant_op(field: Field[[Dim], np.float64]) -> Field[[Dim], np.float64]:
-        return CONSTANT * field
+        return consts.G * field
 
     @program
     def constant_program(field: Field[[Dim], np.float64], out: Field[[Dim], np.float64]):

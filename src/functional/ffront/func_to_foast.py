@@ -275,6 +275,13 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
                 return node.operand.value
         raise ValueError(f"Not an index: {node}")
 
+    def visit_Attribute(self, node: ast.Attribute, **kwargs) -> foast.Attribute:
+        return foast.Attribute(
+            value=self.visit(node.value),
+            attribute=node.attr,
+            location=self._make_loc(node)
+        )
+
     def visit_Subscript(self, node: ast.Subscript, **kwargs) -> foast.Subscript:
         try:
             index = self._match_index(node.slice)
