@@ -230,17 +230,18 @@ def slice_sparse_stencil(sparse):
     return deref(shift(1)(sparse))
 
 
-def test_slice_sparse(backend):
-    backend, validate = backend
+def test_slice_sparse(fencil_processor):
+    fencil_processor, validate = fencil_processor
     inp = np_as_located_field(Vertex, V2V)(v2v_arr)
     out = np_as_located_field(Vertex)(np.zeros([9]))
 
     ref = v2v_arr[:, 1]
 
-    slice_sparse_stencil[{Vertex: range(0, 9)}](
+    run_processor(
+        slice_sparse_stencil[{Vertex: range(0, 9)}],
+        fencil_processor,
         inp,
         out=out,
-        backend=backend,
         offset_provider={
             "V2V": NeighborTableOffsetProvider(v2v_arr, Vertex, Vertex, 4),
         },
@@ -255,16 +256,17 @@ def slice_twice_sparse_stencil(sparse):
     return deref(shift(2)(shift(1)(sparse)))
 
 
-def test_slice_twice_sparse(backend):
-    backend, validate = backend
+def test_slice_twice_sparse(fencil_processor):
+    fencil_processor, validate = fencil_processor
     inp = np_as_located_field(Vertex, V2V, V2V)(v2v_arr[v2v_arr])
     out = np_as_located_field(Vertex)(np.zeros([9]))
 
     ref = v2v_arr[v2v_arr][:, 2, 1]
-    slice_twice_sparse_stencil[{Vertex: range(0, 9)}](
+    run_processor(
+        slice_twice_sparse_stencil[{Vertex: range(0, 9)}],
+        fencil_processor,
         inp,
         out=out,
-        backend=backend,
         offset_provider={
             "V2V": NeighborTableOffsetProvider(v2v_arr, Vertex, Vertex, 4),
         },
@@ -279,17 +281,18 @@ def shift_sliced_sparse_stencil(sparse):
     return deref(shift(V2V, 0)(shift(1)(sparse)))
 
 
-def test_shift_sliced_sparse(backend):
-    backend, validate = backend
+def test_shift_sliced_sparse(fencil_processor):
+    fencil_processor, validate = fencil_processor
     inp = np_as_located_field(Vertex, V2V)(v2v_arr)
     out = np_as_located_field(Vertex)(np.zeros([9]))
 
     ref = v2v_arr[:, 1][v2v_arr][:, 0]
 
-    shift_sliced_sparse_stencil[{Vertex: range(0, 9)}](
+    run_processor(
+        shift_sliced_sparse_stencil[{Vertex: range(0, 9)}],
+        fencil_processor,
         inp,
         out=out,
-        backend=backend,
         offset_provider={
             "V2V": NeighborTableOffsetProvider(v2v_arr, Vertex, Vertex, 4),
         },
@@ -304,17 +307,18 @@ def slice_shifted_sparse_stencil(sparse):
     return deref(shift(1)(shift(V2V, 0)(sparse)))
 
 
-def test_slice_shifted_sparse(backend):
-    backend, validate = backend
+def test_slice_shifted_sparse(fencil_processor):
+    fencil_processor, validate = fencil_processor
     inp = np_as_located_field(Vertex, V2V)(v2v_arr)
     out = np_as_located_field(Vertex)(np.zeros([9]))
 
     ref = v2v_arr[:, 1][v2v_arr][:, 0]
 
-    slice_shifted_sparse_stencil[{Vertex: range(0, 9)}](
+    run_processor(
+        slice_shifted_sparse_stencil[{Vertex: range(0, 9)}],
+        fencil_processor,
         inp,
         out=out,
-        backend=backend,
         offset_provider={
             "V2V": NeighborTableOffsetProvider(v2v_arr, Vertex, Vertex, 4),
         },
