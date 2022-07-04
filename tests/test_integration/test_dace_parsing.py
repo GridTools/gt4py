@@ -60,7 +60,7 @@ def decorator(request):
         pytest.param("dace:gpu", marks=[pytest.mark.requires_gpu]),
     ]
 )
-def dace_stencil(request):
+def dace_stencil(request, decorator):
     @gtscript.stencil(backend=request.param)
     def defn(inp: gtscript.Field[np.float64], outp: gtscript.Field[np.float64]):
         with computation(PARALLEL), interval(...):
@@ -146,7 +146,7 @@ def test_origin_offsetting_frozen(dace_stencil, domain, outp_origin):
 
 @pytest.mark.parametrize("domain", [(0, 2, 3), (3, 3, 3), (1, 1, 1)])
 @pytest.mark.parametrize("outp_origin", [(0, 0, 0), (7, 7, 7), (2, 2, 0)])
-def test_origin_offsetting_nofrozen(decorator, dace_stencil, domain, outp_origin):
+def test_origin_offsetting_nofrozen(dace_stencil, domain, outp_origin):
     backend = dace_stencil.backend
     inp = gt_storage.from_array(
         data=7.0, dtype=np.float64, shape=(10, 10, 10), default_origin=(0, 0, 0), backend=backend
@@ -182,7 +182,7 @@ def test_origin_offsetting_nofrozen(decorator, dace_stencil, domain, outp_origin
 
 @pytest.mark.parametrize("domain", [(0, 2, 3), (3, 3, 3), (1, 1, 1)])
 @pytest.mark.parametrize("outp_origin", [(0, 0, 0), (7, 7, 7), (2, 2, 0)])
-def test_origin_offsetting_nofrozen_default_origin(decorator, dace_stencil, domain, outp_origin):
+def test_origin_offsetting_nofrozen_default_origin(dace_stencil, domain, outp_origin):
     backend = dace_stencil.backend
     inp = gt_storage.from_array(
         data=7.0, dtype=np.float64, shape=(10, 10, 10), default_origin=(0, 0, 0), backend=backend
