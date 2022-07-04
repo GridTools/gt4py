@@ -89,7 +89,8 @@ BUILTINS = {
     "make_tuple",
     "tuple_get",
     "can_deref",
-    "domain",  # TODO(havogt) decide if domain is part of IR
+    "cartesian_domain",
+    "unstructured_domain",
     "named_range",
 }
 

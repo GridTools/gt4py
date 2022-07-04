@@ -1,17 +1,14 @@
 from typing import Any
 
 from functional.iterator import ir
-from functional.iterator.backends import backend
 from functional.iterator.pretty_parser import pparse
 from functional.iterator.pretty_printer import pformat
+from functional.iterator.processor_interface import fencil_formatter
 
 
-def pretty_print_and_check(root: ir.Node, *args: Any, **kwargs: Any) -> None:
+@fencil_formatter
+def pretty_format_and_check(root: ir.Node, *args: Any, **kwargs: Any) -> str:
     pretty = pformat(root)
-    print(pretty)
     parsed = pparse(pretty)
-
     assert parsed == root
-
-
-backend.register_backend("pretty_print", pretty_print_and_check)
+    return pretty

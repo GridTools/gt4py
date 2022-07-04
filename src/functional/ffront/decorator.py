@@ -26,12 +26,15 @@ import functools
 import types
 import typing
 import warnings
-from typing import Callable, ClassVar, TypeVar, Generic, Type
+from typing import Callable, Iterable, Protocol, ClassVar, TypeVar, Generic, Type
 from numbers import Number
 
-from eve.extended_typing import Any, Optional, Protocol
+from devtools import debug
+
+from eve.extended_typing import Any, Optional
 from eve.utils import UIDs
-from functional.common import GTTypeError
+from functional.common import GridType, GTTypeError
+from functional.fencil_processors import roundtrip
 from functional.ffront import (
     common_types as ct,
     field_operator_ast as foast,
@@ -39,7 +42,7 @@ from functional.ffront import (
     symbol_makers,
     type_info
 )
-from functional.ffront.fbuiltins import BUILTINS, Dimension
+from functional.ffront.fbuiltins import BUILTINS, Dimension, FieldOffset
 from functional.ffront.foast_to_itir import FieldOperatorLowering
 from functional.ffront.func_to_foast import FieldOperatorParser
 from functional.ffront.func_to_past import ProgramParser
@@ -48,10 +51,16 @@ from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduc
 from functional.ffront.past_to_itir import ProgramLowering
 from functional.ffront.source_utils import CapturedVars
 from functional.iterator import ir as itir
-from functional.iterator.backend_executor import execute_fencil
 from functional.iterator.embedded import constant_field
+from functional.iterator.processor_interface import (
+    FencilExecutor,
+    FencilFormatter,
+    ensure_executor,
+    ensure_formatter,
+)
 
-DEFAULT_BACKEND = "roundtrip"
+
+DEFAULT_BACKEND: Callable = roundtrip.executor
 
 
 def _collect_capture_vars(captured_vars: CapturedVars) -> CapturedVars:
@@ -126,7 +135,7 @@ class GTCallable(Protocol):
         ...
 
     # TODO(tehrengruber): For embedded execution a `__call__` method and for
-    #  "truely" embedded execution arguably also a `from_function` method is
+    #  "truly" embedded execution arguably also a `from_function` method is
     #  required. Since field operators currently have a `__gt_type__` with a
     #  Field return value, but it's `__call__` method being void (result via
     #  out arg) there is no good / consistent definition on what signature a
@@ -135,6 +144,10 @@ class GTCallable(Protocol):
 
 # TODO(tehrengruber): Decide if and how programs can call other programs. As a
 #  result Program could become a GTCallable.
+# TODO(ricoh): factor out the generated ITIR together with arguments rewriting
+# so that using fencil processors on `some_program.itir` becomes trivial without
+# prior knowledge of the fencil signature rewriting done by `Program`.
+# After that, drop the `.format_itir()` method, since it won't be needed.
 @dataclasses.dataclass(frozen=True)
 class Program:
     """
@@ -155,15 +168,17 @@ class Program:
     past_node: past.Program
     captured_vars: CapturedVars
     externals: dict[str, Any]
-    backend: Optional[str]
+    backend: Optional[FencilExecutor]
     definition: Optional[types.FunctionType] = None
+    grid_type: Optional[GridType] = None
 
     @classmethod
     def from_function(
         cls,
         definition: types.FunctionType,
         externals: Optional[dict] = None,
-        backend: Optional[str] = None,
+        backend: Optional[FencilExecutor] = None,
+        grid_type: Optional[GridType] = None,
     ) -> "Program":
         captured_vars = _collect_capture_vars(CapturedVars.from_function(definition))
         past_node = ProgramParser.apply_to_function(definition)
@@ -173,9 +188,10 @@ class Program:
             externals={} if externals is None else externals,
             backend=backend,
             definition=definition,
+            grid_type=grid_type,
         )
 
-    def with_backend(self, backend: str) -> "Program":
+    def with_backend(self, backend: FencilExecutor) -> "Program":
         return Program(
             past_node=self.past_node,
             captured_vars=self.captured_vars,
@@ -184,23 +200,67 @@ class Program:
             definition=self.definition,  # type: ignore[arg-type]  # mypy wrongly deduces definition as method here
         )
 
-    def _lowered_funcs_from_captured_vars(
-        self, captured_vars: CapturedVars
-    ) -> list[itir.FunctionDefinition]:
-        lowered_funcs = []
+    @staticmethod
+    def _deduce_grid_type(
+        requested_grid_type: Optional[GridType],
+        offsets_and_dimensions: set[FieldOffset | Dimension],
+    ):
+        """
+        Derive grid type from actually occurring dimensions and check against optional user request.
 
+        Unstructured grid type is consistent with any kind of offset, cartesian is easier to optimize for but only
+        allowed in the absence of unstructured dimensions and offsets.
+        """
+
+        def is_cartesian_offset(o: FieldOffset):
+            return len(o.target) == 1 and o.source == o.target[0]
+
+        deduced_grid_type = GridType.CARTESIAN
+        for o in offsets_and_dimensions:
+            if isinstance(o, FieldOffset) and not is_cartesian_offset(o):
+                deduced_grid_type = GridType.UNSTRUCTURED
+                break
+            if isinstance(o, Dimension) and o.local:
+                deduced_grid_type = GridType.UNSTRUCTURED
+                break
+
+        if requested_grid_type == GridType.CARTESIAN and deduced_grid_type == GridType.UNSTRUCTURED:
+            raise GTTypeError(
+                "grid_type == GridType.CARTESIAN was requested, but unstructured `FieldOffset` or local `Dimension` was found."
+            )
+
+        return deduced_grid_type if requested_grid_type is None else requested_grid_type
+
+    def _gt_callables_from_captured_vars(self, captured_vars: CapturedVars) -> list[GTCallable]:
         all_captured_vars = collections.ChainMap(captured_vars.globals, captured_vars.nonlocals)
 
+        gt_callables = []
         for name, value in all_captured_vars.items():
-            if not isinstance(value, GTCallable):
-                continue
-            itir_node = value.__gt_itir__()
-            if itir_node.id != name:
-                raise RuntimeError(
-                    "Name of the closure reference and the function it holds do not match."
-                )
-            lowered_funcs.append(itir_node)
-        return lowered_funcs
+            if isinstance(value, GTCallable):
+                if value.__gt_itir__().id != name:
+                    raise RuntimeError(
+                        "Name of the closure reference and the function it holds do not match."
+                    )
+                gt_callables.append(value)
+        return gt_callables
+
+    def _offsets_and_dimensions_from_gt_callables(
+        self, gt_callables: Iterable[GTCallable]
+    ) -> set[FieldOffset | Dimension]:
+        offsets_and_dimensions: set[FieldOffset | Dimension] = set()
+        for gt_callable in gt_callables:
+            if (captured := gt_callable.__gt_captured_vars__()) is not None:
+                for c in (captured.globals | captured.nonlocals).values():
+                    if isinstance(c, FieldOffset):
+                        offsets_and_dimensions.add(c)
+                    if isinstance(c, Dimension):
+                        offsets_and_dimensions.add(c)
+        return offsets_and_dimensions
+
+    def _lowered_funcs_from_gt_callables(
+        self, gt_callables: Iterable[GTCallable]
+    ) -> list[itir.FunctionDefinition]:
+        return [gt_callable.__gt_itir__() for gt_callable in gt_callables]
 
     @functools.cached_property
     def itir(self) -> itir.FencilDefinition:
@@ -219,9 +279,15 @@ class Program:
         if undefined := referenced_var_names - defined_var_names:
             raise RuntimeError(f"Reference to undefined symbol(s) `{', '.join(undefined)}`.")
 
-        lowered_funcs = self._lowered_funcs_from_captured_vars(capture_vars)
+        referenced_gt_callables = self._gt_callables_from_captured_vars(capture_vars)
+        grid_type = self._deduce_grid_type(
+            self.grid_type, self._offsets_and_dimensions_from_gt_callables(referenced_gt_callables)
+        )
 
-        return ProgramLowering.apply(self.past_node, function_definitions=lowered_funcs)
+        lowered_funcs = self._lowered_funcs_from_gt_callables(referenced_gt_callables)
+        return ProgramLowering.apply(
+            self.past_node, function_definitions=lowered_funcs, grid_type=grid_type
+        )
 
     def _validate_args(self, *args, **kwargs) -> None:
         # TODO(tehrengruber): better error messages, check argument types
@@ -233,19 +299,7 @@ class Program:
             raise NotImplementedError("Keyword arguments are not supported yet.")
 
     def __call__(self, *args, offset_provider: dict[str, Dimension], **kwargs) -> None:
-        self._validate_args(*args, **kwargs)
-
-        # extract size of all field arguments
-        size_args: list[Optional[tuple[int, ...]]] = []
-        rewritten_args = list(args)
-        for param_idx, param in enumerate(self.past_node.params):
-            if not isinstance(param.type, ct.FieldType):
-                continue
-            if args[param_idx].array is None:
-                size_args.append(None)
-                continue
-            for dim_idx in range(0, len(param.type.dims)):
-                size_args.append(args[param_idx].shape[dim_idx])
+        rewritten_args, size_args, kwargs = self._process_args(args, kwargs)
 
         if not self.backend:
             warnings.warn(
@@ -255,15 +309,50 @@ class Program:
             )
         backend = self.backend if self.backend else DEFAULT_BACKEND
 
-        execute_fencil(
+        ensure_executor(backend)
+        if "debug" in kwargs:
+            debug(self.itir)
+
+        backend(
             self.itir,
             *rewritten_args,
             *size_args,
             **kwargs,
             offset_provider=offset_provider,
-            backend=backend,
             column_axis=Dimension(value="K"),
         )
+
+    def format_itir(
+        self, *args, formatter: FencilFormatter, offset_provider: dict[str, Dimension], **kwargs
+    ) -> str:
+        ensure_formatter(formatter)
+        rewritten_args, size_args, kwargs = self._process_args(args, kwargs)
+        if "debug" in kwargs:
+            debug(self.itir)
+        return formatter(
+            self.itir,
+            *rewritten_args,
+            *size_args,
+            **kwargs,
+            offset_provider=offset_provider,
+        )
+
+    def _process_args(self, args: tuple, kwargs: dict) -> tuple[tuple, tuple, dict[str, Any]]:
+        self._validate_args(*args, **kwargs)
+
+        # extract size of all field arguments
+        size_args: list[Optional[tuple[int, ...]]] = []
+        rewritten_args = list(args)
+        for param_idx, param in enumerate(self.past_node.params):
+            if not isinstance(param.type, ct.FieldType):
+                continue
+            if not hasattr(args[param_idx], "__array__"):
+                size_args.append(None)
+                continue
+            for dim_idx in range(0, len(param.type.dims)):
+                size_args.append(args[param_idx].shape[dim_idx])
+
+        return tuple(rewritten_args), tuple(size_args), kwargs
 
 
 @typing.overload
@@ -273,7 +362,7 @@ def program(definition: types.FunctionType) -> Program:
 
 @typing.overload
 def program(
-    *, externals: Optional[dict], backend: Optional[str]
+    *, externals: Optional[dict], backend: Optional[FencilExecutor]
 ) -> Callable[[types.FunctionType], Program]:
     ...
 
@@ -283,6 +372,7 @@ def program(
     *,
     externals=None,
     backend=None,
+    grid_type=None,
 ) -> Program | Callable[[types.FunctionType], Program]:
     """
     Generate an implementation of a program from a Python function object.
@@ -303,7 +393,7 @@ def program(
     """
 
     def program_inner(definition: types.FunctionType) -> Program:
-        return Program.from_function(definition, externals, backend)
+        return Program.from_function(definition, externals, backend, grid_type)
 
     return program_inner if definition is None else program_inner(definition)
 
@@ -331,7 +421,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
     foast_node: OperatorNodeT
     captured_vars: CapturedVars
     externals: dict[str, Any]
-    backend: Optional[str]  # note: backend is only used if directly called
+    backend: Optional[FencilExecutor]  # note: backend is only used if directly called
     definition: Optional[types.FunctionType] = None
 
     @classmethod
@@ -339,7 +429,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         cls,
         definition: types.FunctionType,
         externals: Optional[dict] = None,
-        backend: Optional[str] = None,
+        backend: Optional[FencilExecutor] = None,
         *,
         operator_node_cls: Type[OperatorNodeT] = foast.FieldOperator,
         operator_attributes: Optional[dict[str, Any]] = None,
@@ -480,7 +570,7 @@ def field_operator(definition: types.FunctionType) -> FieldOperator[foast.FieldO
 
 @typing.overload
 def field_operator(
-    *, externals: Optional[dict], backend: Optional[str]
+    *, externals: Optional[dict], backend: Optional[FencilExecutor]
 ) -> Callable[[types.FunctionType], FieldOperator[foast.FieldOperator]]:
     ...
 

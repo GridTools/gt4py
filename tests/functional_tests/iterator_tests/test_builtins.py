@@ -3,7 +3,23 @@ from typing import Iterable
 import numpy as np
 import pytest
 
-from functional.iterator.builtins import *
+from functional.iterator.builtins import (
+    and_,
+    can_deref,
+    deref,
+    divides,
+    eq,
+    greater,
+    if_,
+    less,
+    lift,
+    minus,
+    multiplies,
+    not_,
+    or_,
+    plus,
+    shift,
+)
 from functional.iterator.embedded import (
     NeighborTableOffsetProvider,
     index_field,
@@ -11,6 +27,7 @@ from functional.iterator.embedded import (
 )
 from functional.iterator.runtime import CartesianAxis, closure, fendef, fundef, offset
 
+from .conftest import run_processor
 from .test_hdiff import I
 
 
@@ -33,7 +50,7 @@ def asfield(*arrays):
     return res
 
 
-def fencil(builtin, out, *inps, backend):
+def fencil(builtin, out, *inps, processor):
     if len(inps) == 1:
 
         @fundef
@@ -67,7 +84,7 @@ def fencil(builtin, out, *inps, backend):
     else:
         raise AssertionError("Add overload")
 
-    return fenimpl({IDim: range(out.shape[0])}, *inps, out, backend=backend)
+    return run_processor(fenimpl, processor, {IDim: range(out.shape[0])}, *inps, out)
 
 
 @pytest.mark.parametrize(
@@ -96,13 +113,13 @@ def fencil(builtin, out, *inps, backend):
         (or_, [[True, True, False, False], [True, False, True, False]], [True, True, True, False]),
     ],
 )
-def test_arithmetic_and_logical_builtins(backend, builtin, inputs, expected):
-    backend, validate = backend
+def test_arithmetic_and_logical_builtins(fencil_processor, builtin, inputs, expected):
+    fencil_processor, validate = fencil_processor
 
     inps = asfield(*asarray(*inputs))
     out = asfield((np.zeros_like(*asarray(expected))))[0]
 
-    fencil(builtin, out, *inps, backend=backend)
+    fencil(builtin, out, *inps, processor=fencil_processor)
 
     if validate:
         assert np.allclose(np.asarray(out), expected)
@@ -127,8 +144,8 @@ def _can_deref_lifted(inp):
 
 
 @pytest.mark.parametrize("stencil", [_can_deref, _can_deref_lifted])
-def test_can_deref(backend, stencil):
-    backend, validate = backend
+def test_can_deref(fencil_processor, stencil):
+    fencil_processor, validate = fencil_processor
 
     Node = CartesianAxis("Node")
 
@@ -136,24 +153,32 @@ def test_can_deref(backend, stencil):
     out = np_as_located_field(Node)(np.asarray([0]))
 
     no_neighbor_tbl = NeighborTableOffsetProvider(np.array([[None]]), Node, Node, 1)
-    stencil[{Node: range(1)}](
-        inp, out=out, offset_provider={"Neighbor": no_neighbor_tbl}, backend=backend
+    run_processor(
+        stencil[{Node: range(1)}],
+        fencil_processor,
+        inp,
+        out=out,
+        offset_provider={"Neighbor": no_neighbor_tbl},
     )
 
     if validate:
         assert np.allclose(np.asarray(out), -1.0)
 
     a_neighbor_tbl = NeighborTableOffsetProvider(np.array([[0]]), Node, Node, 1)
-    stencil[{Node: range(1)}](
-        inp, out=out, offset_provider={"Neighbor": a_neighbor_tbl}, backend=backend
+    run_processor(
+        stencil[{Node: range(1)}],
+        fencil_processor,
+        inp,
+        out=out,
+        offset_provider={"Neighbor": a_neighbor_tbl},
     )
 
     if validate:
         assert np.allclose(np.asarray(out), 1.0)
 
 
-# def test_can_deref_lifted(backend):
-#     backend, validate = backend
+# def test_can_deref_lifted(fencil_processor):
+#     fencil_processor, validate = fencil_processor
 
 #     Neighbor = offset("Neighbor")
 #     Node = CartesianAxis("Node")
@@ -168,7 +193,7 @@ def test_can_deref(backend, stencil):
 
 #     no_neighbor_tbl = NeighborTableOffsetProvider(np.array([[None]]), Node, Node, 1)
 #     _can_deref[{Node: range(1)}](
-#         inp, out=out, offset_provider={"Neighbor": no_neighbor_tbl}, backend=backend
+#         inp, out=out, offset_provider={"Neighbor": no_neighbor_tbl}, fencil_processor=fencil_processor
 #     )
 
 #     if validate:
@@ -176,7 +201,7 @@ def test_can_deref(backend, stencil):
 
 #     a_neighbor_tbl = NeighborTableOffsetProvider(np.array([[0]]), Node, Node, 1)
 #     _can_deref[{Node: range(1)}](
-#         inp, out=out, offset_provider={"Neighbor": a_neighbor_tbl}, backend=backend
+#         inp, out=out, offset_provider={"Neighbor": a_neighbor_tbl}, fencil_processor=fencil_processor
 #     )
 
 #     if validate:

@@ -10,7 +10,9 @@ from functional.iterator.transforms.popup_tmps import PopupTmps
 class CreateGlobalTmps(NodeTranslator):
     @staticmethod
     def _extend_domain(domain: ir.FunCall, offset_provider, shifts):
-        assert isinstance(domain.fun, ir.SymRef) and domain.fun.id == "domain"
+        assert isinstance(domain.fun, ir.SymRef) and (
+            domain.fun.id == "cartesian_domain" or domain.fun.id == "unstructured_domain"
+        )
         assert all(isinstance(o, CartesianAxis) for o in offset_provider.values())
 
         offset_limits = {k: (0, 0) for k in offset_provider.keys()}
