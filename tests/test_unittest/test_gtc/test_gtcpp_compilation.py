@@ -59,12 +59,14 @@ def build_gridtools_test(tmp_path: Path, code: str):
         "--build-lib=" + str(tmp_src.parent),
         "--force",
     ]
+    extra_compile_args = ["-std=c++17"]
     setuptools.setup(
         name="test",
         ext_modules=[
             ext_module,
         ],
         script_args=args,
+        extra_compile_args=extra_compile_args,
     )
 
 
