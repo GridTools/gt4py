@@ -13,6 +13,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import copy
+import functools
+import itertools
 import numbers
 from typing import Any, Dict, List, Optional, Tuple, Union, cast
 
@@ -114,34 +116,36 @@ class UnVectorisation(IRNodeMapper):
 
         return node
 
+    # computes dimensions of nested lists
+    def _nested_list_dim(self, a: List) -> List[int]:
+        if not isinstance(a, list):
+            return []
+        return [len(a)] + self._nested_list_dim(a[0])
+
     def visit_Assign(
         self, node: Assign, params: Dict[str, FieldDecl], **kwargs
     ) -> gtir.ParAssignStmt:
         assert isinstance(node.target, FieldRef) or isinstance(node.target, VarRef)
         target_dims = params[node.target.name].data_dims
-        if isinstance(target_dims, list):
-            if not len(target_dims) == 1:
-                raise Exception(
-                    f"Assignment only supported for vectors: ({node.target.name}) is a rank {len(target_dims)} tensor."
-                )
-            (target_dim,) = target_dims
-            if not (target_dim == len(node.value) and type(node.value[0]) != list):
-                raise Exception(
-                    f"Assignment dimension mismatch ({node.target.name}: dim = {target_dim}; rhs: dim = {len(node.value)})."
-                )
+        value_dims = self._nested_list_dim(node.value)
+        if target_dims != value_dims:
+            raise Exception(
+                f"Assignment dimension mismatch: '{node.target.name}' has dim = {target_dims}; rhs has dim {value_dims}."
+            )
+        else:
             assign_list = []
-            for index in range(target_dim):
+            for index in itertools.product(*(range(dim) for dim in target_dims)):
                 tmp_node = copy.deepcopy(node)
-                value_node = tmp_node.value[index]
+                value_node = functools.reduce(lambda arr, el: arr[el], index, tmp_node.value)
                 data_type = DataType.INT32
-                data_index = [ScalarLiteral(value=index, data_type=data_type)]
+                data_index = [
+                    ScalarLiteral(value=index_el, data_type=data_type) for index_el in index
+                ]
 
                 tmp_node.target.data_index = data_index
                 tmp_node.value = value_node
 
                 assign_list.append(tmp_node)
-        elif len(target_dims) == 2:
-            raise Exception("Matrix assignment not currently supported")
         return assign_list
 
 
