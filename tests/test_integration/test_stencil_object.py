@@ -21,6 +21,7 @@ import pytest
 from gt4py import gtscript
 from gt4py import storage as gt_storage
 from gt4py.gtscript import PARALLEL, Field, computation, interval
+from tests.definitions import ALL_BACKENDS
 
 
 @pytest.mark.parametrize("backend", ["numpy"])
@@ -64,3 +65,13 @@ def test_stencil_object_cache(backend: str):
     assert len(stencil._domain_origin_cache) == 0
     cleaned_cache_time = runit(in_storage, out_storage, offset=1.0)
     assert cleaned_cache_time > fast_time
+
+
+@pytest.mark.parametrize("backend", ALL_BACKENDS)
+def test_warning_for_unsupported_backend_option(backend):
+    with pytest.warns(RuntimeWarning, match="Unknown option"):
+
+        @gtscript.stencil(backend=backend, **{"this_option_is_not_supported": "foo"})
+        def foo(f: Field[float]):
+            with computation(PARALLEL), interval(...):  # type: ignore
+                f = 42.0  # noqa F841
