@@ -23,7 +23,14 @@ import gt4py.config as gt_config
 
 _DEFAULT_GRIDTOOLS_VERSION = 2
 
-_GRIDTOOLS_GIT_BRANCHES = {1: "v1.1.4", 2: "master"}
+_GRIDTOOLS_GIT_REPO = {
+    1: "https://github.com/GridTools/gridtools.git",
+    2: "https://github.com/havogt/gridtools.git",
+}  # TODO reset to main repo
+_GRIDTOOLS_GIT_BRANCHES = {
+    1: "v1.1.4",
+    2: "workaround_for_nvcc_bug_in_workaround_for_nvcc_bug",
+}  # TODO reset to master or release
 _GRIDTOOLS_INCLUDE_PATHS = {
     1: gt_config.build_settings["gt_include_path"],
     2: gt_config.build_settings["gt2_include_path"],
@@ -37,7 +44,7 @@ def install_gt_sources(major_version: int = _DEFAULT_GRIDTOOLS_VERSION) -> bool:
     is_ok = has_gt_sources(major_version)
     if not is_ok:
         GIT_BRANCH = _GRIDTOOLS_GIT_BRANCHES[major_version]
-        GIT_REPO = "https://github.com/GridTools/gridtools.git"
+        GIT_REPO = _GRIDTOOLS_GIT_REPO[major_version]
 
         install_path = os.path.dirname(__file__)
         target_path = os.path.abspath(
