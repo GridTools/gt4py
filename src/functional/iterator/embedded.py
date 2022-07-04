@@ -14,6 +14,7 @@ from typing import (
     Optional,
     Protocol,
     Sequence,
+    Type,
     TypeAlias,
     TypeGuard,
     Union,
@@ -140,21 +141,29 @@ def can_deref(it):
 
 @builtins.if_.register(EMBEDDED)
 def if_(cond, t, f):
+    if isinstance(cond, np.ndarray):
+        return np.where(cond, t, f)
     return t if cond else f
 
 
 @builtins.not_.register(EMBEDDED)
 def not_(a):
+    if isinstance(a, np.ndarray):
+        return np.logical_not(a)
     return not a
 
 
 @builtins.and_.register(EMBEDDED)
 def and_(a, b):
+    if isinstance(a, np.ndarray):
+        return np.logical_and(a, b)
     return a and b
 
 
 @builtins.or_.register(EMBEDDED)
 def or_(a, b):
+    if isinstance(a, np.ndarray):
+        return np.logical_or(a, b)
     return a or b
 
 
@@ -686,7 +695,7 @@ def shift(*offsets: Union[Offset, int]) -> Callable[[ItIterator], ItIterator]:
 
 
 @dataclass
-class Column:
+class ColumnDescriptor:
     axis: str
     col_range: range  # TODO(havogt) introduce range type that doesn't have step
 
@@ -815,6 +824,12 @@ def as_tuple_field(field):
 _column_range = None  # TODO this is a bit ugly, alternative: pass scan range via iterator
 
 
+def _get_scalar_dtype(s: Any) -> Type:
+    if isinstance(s, Sequence):
+        return _get_scalar_dtype(s[0])
+    return type(s[0])
+
+
 @builtins.scan.register(EMBEDDED)
 def scan(scan_pass, is_forward: bool, init):
     def impl(*iters: ItIterator):
@@ -837,7 +852,9 @@ def scan(scan_pass, is_forward: bool, init):
             col = np.flip(col)
 
         if isinstance(col[0], tuple):
-            dtype = np.dtype([("", type(c)) for c in col[0]])
+            assert all(isinstance(c, type(col[0])) for c in col)
+            assert all(isinstance(elem, type(col[0][0])) for elem in col[0])
+            dtype = _get_scalar_dtype(col)
             return np.asarray(col, dtype=dtype)
 
         return np.asarray(col)
@@ -874,10 +891,10 @@ def fendef_embedded(fun: Callable[..., None], *args: Any, **kwargs: Any):
             raise TypeError("Out needs to be a located field.")
 
         global _column_range
-        column: Optional[Column] = None
-        if "column_axis" in kwargs:
+        column: Optional[ColumnDescriptor] = None
+        if "column_axis" in kwargs and kwargs["column_axis"] is not None:
             column_axis = kwargs["column_axis"]
-            column = Column(column_axis.value, domain[column_axis.value])
+            column = ColumnDescriptor(column_axis.value, domain[column_axis.value])
             del domain[column_axis.value]
 
             _column_range = column.col_range
