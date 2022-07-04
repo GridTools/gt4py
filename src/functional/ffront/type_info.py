@@ -66,7 +66,7 @@ def extract_dtype(symbol_type: ct.SymbolType) -> ct.ScalarType:
     raise GTTypeError(f"Can not unambiguosly extract data type from {symbol_type}!")
 
 
-def is_arithmetic(symbol_type: ct.FieldType | ct.ScalarType) -> bool:
+def is_arithmetic(symbol_type: ct.SymbolType) -> bool:
     """
     Check if ``symbol_type`` is compatible with arithmetic operations.
 
@@ -89,7 +89,7 @@ def is_arithmetic(symbol_type: ct.FieldType | ct.ScalarType) -> bool:
     return False
 
 
-def is_floating_point(symbol_type: ct.FieldType | ct.ScalarType) -> bool:
+def is_floating_point(symbol_type: ct.SymbolType) -> bool:
     """
     Check if the dtype of ``symbol_type`` is a floating point type.
 
@@ -112,7 +112,7 @@ def is_floating_point(symbol_type: ct.FieldType | ct.ScalarType) -> bool:
     return False
 
 
-def is_integral(symbol_type: ct.FieldType | ct.ScalarType) -> bool:
+def is_integral(symbol_type: ct.SymbolType) -> bool:
     """
     Check if the dtype of ``symbol_type`` is an integral type.
 
@@ -215,7 +215,7 @@ def is_concretizable(symbol_type: ct.SymbolType, to_type: ct.SymbolType) -> bool
     return False
 
 
-def promote(*types: ct.FieldType | ct.ScalarType) -> ct.FieldType | ct.SymbolType:
+def promote(*types: ct.FieldType | ct.ScalarType) -> ct.FieldType | ct.ScalarType:
     """
     Promote a set of field or scalar types to a common type.
 

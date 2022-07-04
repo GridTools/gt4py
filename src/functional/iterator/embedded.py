@@ -288,15 +288,12 @@ MATH_BUILTINS = (
 
 for math_builtin_name in MATH_BUILTINS:
     decorator = getattr(builtins, math_builtin_name).register(EMBEDDED)
-    # numpy has no gamma function
     if math_builtin_name == "gamma":
-        continue
-    globals()[math_builtin_name] = decorator(getattr(np, math_builtin_name))
-
-
-@builtins.less.register(EMBEDDED)
-def gamma(arg):
-    return math.gamma(arg)
+        # numpy has no gamma function
+        impl = np.frompyfunc(math.gamma, nin=1, nout=1)
+    else:
+        impl = getattr(np, math_builtin_name)
+    globals()[math_builtin_name] = decorator(impl)
 
 
 def named_range_(axis: str, range_: Iterable[int]) -> Iterable[tuple[str, int]]:

@@ -26,7 +26,7 @@ import functools
 import types
 import typing
 import warnings
-from typing import Callable
+from typing import Callable, cast
 
 from eve.extended_typing import Any, Optional, Protocol
 from eve.utils import UIDs
@@ -356,11 +356,15 @@ class FieldOperator(GTCallable):
         # TODO(tehrengruber): temporary solution until #837 is merged
         assert isinstance(self.foast_node.body[-1], foast.Return)
         return_type = self.foast_node.body[-1].value.type
+        if not isinstance(return_type, ct.FieldType):
+            raise GTTypeError(
+                f"Return type of a FieldOperator must be a Field, but got `{return_type}`"
+            )
         type_ = ct.FunctionType(
             args=[param.type for param in self.foast_node.params], kwargs={}, returns=return_type
         )
         assert type_info.is_concrete(type_)
-        return type_
+        return cast(ct.FunctionType, type_)
 
     def with_backend(self, backend: str) -> "FieldOperator":
         return FieldOperator(
