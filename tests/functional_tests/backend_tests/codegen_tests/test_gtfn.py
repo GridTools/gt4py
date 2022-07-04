@@ -9,7 +9,7 @@ from functional.backend import defs
 
 @pytest.fixture
 def fencil_example():
-    domain = ir.FunCall(fun=ir.SymRef(id="domain"),
+    domain = ir.FunCall(fun=ir.SymRef(id="cartesian_domain"),
                         args=[ir.FunCall(fun=ir.SymRef(id="named_range"),
                                          args=[
                                              ir.AxisLiteral(value="X"),

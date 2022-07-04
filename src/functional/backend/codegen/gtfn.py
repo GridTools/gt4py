@@ -1,5 +1,5 @@
 from functional.backend import cpp
-from functional.iterator.backends.gtfn import gtfn_backend
+from functional.fencil_processors.gtfn import gtfn_backend
 from functional.iterator.ir import FencilDefinition
 from functional.backend import defs
 from typing import Sequence

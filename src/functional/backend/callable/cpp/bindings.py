@@ -14,12 +14,12 @@ from eve.codegen import JinjaTemplate, TemplatedGenerator
 T = TypeVar("T")
 
 
-class CommaSeparatedList(Generic[T], Node):
-    items: list[T]
+class CommaSeparatedList(Node):
+    items: list
 
 
-class NewlineSeparatedList(Generic[T], Node):
-    items: list[T]
+class NewlineSeparatedList(Node):
+    items: list
 
 
 class BindingFunction(Node):
@@ -31,7 +31,7 @@ class BindingFunction(Node):
 class BindingModule(Node):
     name: str
     doc: str
-    functions: NewlineSeparatedList[BindingFunction]
+    functions: NewlineSeparatedList
 
 
 class FunctionParameter(Node):
@@ -61,7 +61,7 @@ class SidExpr(Node):
 
 class WrapperFunction(Node):
     name: str
-    parameters: CommaSeparatedList[FunctionParameter]
+    parameters: CommaSeparatedList
     body: Any
 
 
