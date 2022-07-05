@@ -182,8 +182,10 @@ def test_unpacking():
     lowered = FieldOperatorLowering.apply(parsed)
 
     reference = im.deref_(
-        im.let("tmp1__0", im.tuple_get_(0, im.make_tuple_("inp1", "inp2")))(
-            im.let("tmp2__0", im.tuple_get_(1, im.make_tuple_("inp1", "inp2")))("tmp1__0")
+        im.let("__tuple_tmp_0", im.make_tuple_("inp1", "inp2"))(
+            im.let("tmp1__0", im.tuple_get_(0, "__tuple_tmp_0"))(
+                im.let("tmp2__0", im.tuple_get_(1, "__tuple_tmp_0"))("tmp1__0")
+            )
         )
     )
 
