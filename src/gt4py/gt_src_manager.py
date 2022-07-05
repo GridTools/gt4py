@@ -25,11 +25,11 @@ _DEFAULT_GRIDTOOLS_VERSION = 2
 
 _GRIDTOOLS_GIT_REPO = {
     1: "https://github.com/GridTools/gridtools.git",
-    2: "https://github.com/havogt/gridtools.git",
+    2: "https://github.com/GridTools/gridtools.git",
 }  # TODO reset to main repo
 _GRIDTOOLS_GIT_BRANCHES = {
     1: "v1.1.4",
-    2: "workaround_for_nvcc_bug_in_workaround_for_nvcc_bug",
+    2: "master",
 }  # TODO reset to master or release
 _GRIDTOOLS_INCLUDE_PATHS = {
     1: gt_config.build_settings["gt_include_path"],
