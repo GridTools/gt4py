@@ -3,8 +3,7 @@ from typing import Any, Iterable, Type
 import eve
 from eve.concepts import SymbolName
 from functional.common import Connectivity, Dimension
-from functional.iterator import ir as itir
-from functional.iterator.backends.gtfn.gtfn_ir import (
+from functional.fencil_processors.gtfn.gtfn_ir import (
     Backend,
     BinaryExpr,
     CartesianDomain,
@@ -25,6 +24,7 @@ from functional.iterator.backends.gtfn.gtfn_ir import (
     UnaryExpr,
     UnstructuredDomain,
 )
+from functional.iterator import ir as itir
 
 
 class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):

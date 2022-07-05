@@ -248,7 +248,7 @@ def unstructured_domain(*args: NamedRange) -> UnstructuredDomain:
     return UnstructuredDomain(args)
 
 
-Domain = CartesianDomain | UnstructuredDomain | dict[str | Dimension, range]
+Domain: TypeAlias = CartesianDomain | UnstructuredDomain | dict[str | Dimension, range]
 
 
 @builtins.named_range.register(EMBEDDED)
