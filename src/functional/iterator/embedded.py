@@ -827,7 +827,7 @@ _column_range = None  # TODO this is a bit ugly, alternative: pass scan range vi
 def _get_scalar_dtype(s: Any) -> Type:
     if isinstance(s, Sequence):
         return _get_scalar_dtype(s[0])
-    return type(s[0])
+    return type(s)
 
 
 def is_uniform_column(column: npt.NDArray):
