@@ -47,11 +47,13 @@ def build_gridtools_test(tmp_path: Path, code: str):
     tmp_src = tmp_path / "test.cpp"
     tmp_src.write_text(code)
 
+    extra_compile_args = ["-std=c++17"]
     ext_module = setuptools.Extension(
         "test",
         [str(tmp_src.absolute())],
         include_dirs=[config.GT2_INCLUDE_PATH, config.build_settings["boost_include_path"]],
         language="c++",
+        extra_compile_args=extra_compile_args,
     )
     args = [
         "build_ext",
@@ -59,14 +61,12 @@ def build_gridtools_test(tmp_path: Path, code: str):
         "--build-lib=" + str(tmp_src.parent),
         "--force",
     ]
-    extra_compile_args = ["-std=c++17"]
     setuptools.setup(
         name="test",
         ext_modules=[
             ext_module,
         ],
         script_args=args,
-        extra_compile_args=extra_compile_args,
     )
 
 
