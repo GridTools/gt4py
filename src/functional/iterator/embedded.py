@@ -821,19 +821,13 @@ def as_tuple_field(field):
     return field
 
 
-_column_range = None  # TODO this is a bit ugly, alternative: pass scan range via iterator
+_column_range: Optional[range] = None  # TODO this is a bit ugly, alternative: pass scan range via iterator
 
-
-def _get_scalar_dtype(s: Any) -> Type:
-    if isinstance(s, Sequence):
-        return _get_scalar_dtype(s[0])
-    return type(s)
-
-
-def is_uniform_column(column: npt.NDArray):
-    return all(isinstance(c, type(column[0])) for c in column) and all(
-        isinstance(elem, type(column[0][0])) for elem in column[0]
-    )
+def _ensure_dtype_matches(val: numbers.Number | tuple[numbers.Number, ...], expected_dtype: type):
+    if isinstance(val, tuple):
+        assert all(isinstance(el, expected_dtype) for el in val)
+    else:
+        assert isinstance(val, expected_dtype)
 
 
 @builtins.scan.register(EMBEDDED)
@@ -843,26 +837,31 @@ def scan(scan_pass, is_forward: bool, init):
             raise RuntimeError("Column range is not defined, cannot scan.")
 
         column_range = _column_range
+        levels = len(column_range)
         if not is_forward:
             column_range = reversed(column_range)
 
+        # deduce dtype and shape of resulting column
+        if isinstance(init, tuple):
+            assert all(type(el) == type(init[0]) for el in init)
+            dtype = type(init[0])
+            shape = (levels, len(init))
+        else:
+            dtype = type(init)
+            shape = levels
+
         state = init
-        col = []
+        col = np.zeros(shape, dtype=dtype)
         for i in column_range:
+            # more generic scan returns state and result as 2 different things
             state = scan_pass(
                 state, *map(shifted_scan_arg(i), iters)
-            )  # more generic scan returns state and result as 2 different things
-            col.append(state)
+            )
+            if __debug__:
+                _ensure_dtype_matches(state, dtype)
+            col[i] = state
 
-        if not is_forward:
-            col = np.flip(col)
-
-        if isinstance(col[0], tuple):
-            assert is_uniform_column(col)
-            dtype = _get_scalar_dtype(col)
-            return np.asarray(col, dtype=dtype)
-
-        return np.asarray(col)
+        return col
 
     return impl
 
