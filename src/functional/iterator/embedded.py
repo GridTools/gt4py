@@ -830,6 +830,12 @@ def _get_scalar_dtype(s: Any) -> Type:
     return type(s[0])
 
 
+def is_uniform_column(column: npt.NDArray):
+    return all(isinstance(c, type(column[0])) for c in column) and all(
+        isinstance(elem, type(column[0][0])) for elem in column[0]
+    )
+
+
 @builtins.scan.register(EMBEDDED)
 def scan(scan_pass, is_forward: bool, init):
     def impl(*iters: ItIterator):
@@ -852,8 +858,7 @@ def scan(scan_pass, is_forward: bool, init):
             col = np.flip(col)
 
         if isinstance(col[0], tuple):
-            assert all(isinstance(c, type(col[0])) for c in col)
-            assert all(isinstance(elem, type(col[0][0])) for elem in col[0])
+            assert is_uniform_column(col)
             dtype = _get_scalar_dtype(col)
             return np.asarray(col, dtype=dtype)
 
