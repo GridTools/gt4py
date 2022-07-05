@@ -163,11 +163,7 @@ def or_(a, b):
 
 @builtins.tuple_get.register(EMBEDDED)
 def tuple_get(i, tup):
-    if isinstance(tup, np.ndarray): # columns
-        return tup[f"f{i}"]
-    elif isinstance(tup, tuple):
-        return tup[i]
-    raise ValueError()
+    return tup[i]
 
 
 @builtins.make_tuple.register(EMBEDDED)

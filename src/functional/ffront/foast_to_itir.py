@@ -198,6 +198,10 @@ class FieldOperatorLowering(NodeTranslator):
         return sym, expr
 
     def visit_Return(self, node: foast.Return, **kwargs) -> itir.Expr:
+        # if we encounter a tuple dereference all elements
+        if isinstance(node.value, foast.TupleExpr):
+            return im.make_tuple_(*(to_value(el)(self.visit(el, **kwargs)) for el in node.value.elts))
+
         return to_value(node.value)(self.visit(node.value, **kwargs))
 
     def visit_Symbol(self, node: foast.Symbol, **kwargs) -> itir.Sym:
