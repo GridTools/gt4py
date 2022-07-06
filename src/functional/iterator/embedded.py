@@ -60,6 +60,8 @@ FieldIndexOrIndices: TypeAlias = FieldIndex | tuple[FieldIndex, ...]
 
 Axis: TypeAlias = Dimension
 
+Column: TypeAlias = np.ndarray  # TODO consider replacing by a wrapper around ndarray
+
 # Offsets
 AnyOffset: TypeAlias = Tag | IntIndex
 CompleteOffset: TypeAlias = tuple[Tag, IntIndex]
@@ -129,6 +131,10 @@ class MutableLocatedField(LocatedField, Protocol):
         ...
 
 
+def _is_column(v: Any) -> TypeGuard[Column]:
+    return isinstance(v, np.ndarray)
+
+
 @builtins.deref.register(EMBEDDED)
 def deref(it):
     return it.deref()
@@ -141,28 +147,28 @@ def can_deref(it):
 
 @builtins.if_.register(EMBEDDED)
 def if_(cond, t, f):
-    if isinstance(cond, np.ndarray):
+    if _is_column(cond):
         return np.where(cond, t, f)
     return t if cond else f
 
 
 @builtins.not_.register(EMBEDDED)
 def not_(a):
-    if isinstance(a, np.ndarray):
+    if _is_column(a):
         return np.logical_not(a)
     return not a
 
 
 @builtins.and_.register(EMBEDDED)
 def and_(a, b):
-    if isinstance(a, np.ndarray):
+    if _is_column(a):
         return np.logical_and(a, b)
     return a and b
 
 
 @builtins.or_.register(EMBEDDED)
 def or_(a, b):
-    if isinstance(a, np.ndarray):
+    if _is_column(a):
         return np.logical_or(a, b)
     return a or b
 
