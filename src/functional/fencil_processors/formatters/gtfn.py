@@ -1,4 +1,4 @@
-from functional.fencil_processors.codegens.gtfn.gtfn_backend import generate, _guess_grid_type
+from functional.fencil_processors.codegens.gtfn.gtfn_backend import _guess_grid_type, generate
 from functional.iterator import ir as itir
 from functional.iterator.processor_interface import fencil_formatter
 

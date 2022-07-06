@@ -1,5 +1,5 @@
-import tempfile
 import pathlib
+import tempfile
 
 import pytest
 
@@ -9,9 +9,7 @@ from functional.fencil_processors.callables.cpp import build
 @pytest.fixture
 def project_input():
     name = "example"
-    files = {
-        "dllmain.cpp": "void dllmain() {}"
-    }
+    files = {"dllmain.cpp": "void dllmain() {}"}
     deps = []
     return name, deps, files
 

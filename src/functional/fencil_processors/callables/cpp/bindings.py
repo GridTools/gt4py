@@ -1,12 +1,12 @@
 import os
 import typing
-from typing import Any, Sequence, TypeVar, Type
-import functional.fencil_processors.defs as defs
-import functional.fencil_processors.cpp as cpp
+from typing import Any, Sequence, Type, TypeVar
 
 import jinja2
 
 import eve.codegen
+import functional.fencil_processors.cpp as cpp
+import functional.fencil_processors.defs as defs
 from eve import Node
 from eve.codegen import JinjaTemplate, TemplatedGenerator
 
@@ -82,7 +82,7 @@ class BindingCodeGenerator(TemplatedGenerator):
         {% endfor %}
 
         {{wrapper}}
-        
+
         {{binding_module}}\
         """
     )
@@ -125,7 +125,8 @@ class BindingCodeGenerator(TemplatedGenerator):
             dim_config=expr.dim_config,
         )
 
-    BindingModule = JinjaTemplate("""\
+    BindingModule = JinjaTemplate(
+        """\
         PYBIND11_MODULE({{name}}, module) {
             module.doc() = "{{doc}}";
             {{functions}}
@@ -150,13 +151,17 @@ class BindingCodeGenerator(TemplatedGenerator):
         return cpp.render_function_call(call.target, args)
 
 
-def make_parameter_list(parameters: Sequence[
-    defs.ScalarParameter | defs.BufferParameter]) -> Sequence[FunctionParameter]:
-    def make_parameter(parameter: [defs.ScalarParameter | defs.BufferParameter]):
+def make_parameter_list(
+    parameters: Sequence[defs.ScalarParameter | defs.BufferParameter],
+) -> Sequence[FunctionParameter]:
+    def make_parameter(parameter: defs.ScalarParameter | defs.BufferParameter):
         if isinstance(parameter, defs.ScalarParameter):
             return FunctionParameter(name=parameter.name, ndim=0, dtype=parameter.type_)
         else:
-            return FunctionParameter(name=parameter.name, ndim=parameter.num_dimensions, dtype=parameter.scalar_type)
+            return FunctionParameter(
+                name=parameter.name, ndim=parameter.num_dimensions, dtype=parameter.scalar_type
+            )
+
     regulars = [make_parameter(param) for param in parameters]
     return regulars
 
@@ -198,7 +203,7 @@ def create_bindings(target: defs.Function, target_header: str) -> defs.BindingCo
         wrapper=WrapperFunction(
             name=wrapper_name,
             parameters=CommaSeparatedList(items=make_parameter_list(target.parameters)),
-            body=ReturnStmt(expr=FunctionCall(target=target))
+            body=ReturnStmt(expr=FunctionCall(target=target)),
         ),
         binding_module=BindingModule(
             name=target.name,

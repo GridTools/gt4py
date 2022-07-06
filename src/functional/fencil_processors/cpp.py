@@ -1,10 +1,11 @@
+import ctypes
 import textwrap
+from typing import Final, Sequence, Type
 
-from functional.fencil_processors import defs
-from typing import Sequence, Final, Type
 import jinja2
 import numpy
-import ctypes
+
+from functional.fencil_processors import defs
 
 
 language_id = "cpp"
@@ -55,7 +56,7 @@ def render_python_type(python_type: Type):
     return mapping[python_type]
 
 
-def _render_function_param(param: [defs.ScalarParameter | defs. BufferParameter], index: int):
+def _render_function_param(param: defs.ScalarParameter | defs.BufferParameter, index: int):
     if isinstance(param, defs.ScalarParameter):
         return "{type} {name}".format(type=render_python_type(param.type_), name=param.name)
     else:
@@ -64,16 +65,24 @@ def _render_function_param(param: [defs.ScalarParameter | defs. BufferParameter]
 
 
 def render_function_declaration(function: defs.Function, body: str) -> str:
-    decl_templ = jinja2.Template(textwrap.dedent("""\
+    decl_templ = jinja2.Template(
+        textwrap.dedent(
+            """\
     decltype(auto) {{name}}({{", ".join(parameters)}}) {
         {{body}}
     }\
-    """))
-    rendered_params = [_render_function_param(param, index) for index, param in enumerate(function.parameters)]
+    """
+        )
+    )
+    rendered_params = [
+        _render_function_param(param, index) for index, param in enumerate(function.parameters)
+    ]
     rendered_decl = decl_templ.render(name=function.name, parameters=rendered_params, body=body)
-    template_params = ["class BufferT{index}".format(index=index)
-                       for index, param in enumerate(function.parameters)
-                       if isinstance(param, defs.BufferParameter)]
+    template_params = [
+        "class BufferT{index}".format(index=index)
+        for index, param in enumerate(function.parameters)
+        if isinstance(param, defs.BufferParameter)
+    ]
     if template_params:
         render_tpl = jinja2.Template("""template <{{", ".join(template_params)}}>""")
         rendered_tpl_params = render_tpl.render(template_params=template_params)

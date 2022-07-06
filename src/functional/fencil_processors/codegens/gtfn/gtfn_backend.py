@@ -59,5 +59,3 @@ def _guess_grid_type(**kwargs):
         if any(isinstance(o, NeighborTableOffsetProvider) for o in kwargs["offset_provider"])
         else "cartesian"
     )
-
-

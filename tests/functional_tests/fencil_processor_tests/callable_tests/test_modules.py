@@ -1,7 +1,8 @@
-from functional.fencil_processors.callables import modules
-import textwrap
-import tempfile
 import pathlib
+import tempfile
+import textwrap
+
+from functional.fencil_processors.callables import modules
 
 
 def test_load_binding():

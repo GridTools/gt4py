@@ -2,10 +2,11 @@ import pathlib
 import subprocess
 import textwrap
 from typing import Dict, Final, Optional, Sequence
-from functional.fencil_processors import defs
-from eve.codegen import TemplatedGenerator
+
 from eve import Node
-from eve.codegen import JinjaTemplate
+from eve.codegen import JinjaTemplate, TemplatedGenerator
+from functional.fencil_processors import defs
+
 
 _build_subdir: Final = "build"
 
@@ -33,10 +34,10 @@ class CMakeListsGenerator(TemplatedGenerator):
         """
         project({{project_name}})
         cmake_minimum_required(VERSION 3.20.0)
-        
+
         # Languages
         enable_language(CXX)
-        set(CMAKE_CXX_STANDARD 17)      
+        set(CMAKE_CXX_STANDARD 17)
         set(THREADS_PREFER_PTHREAD_FLAG ON)
         find_package(Threads REQUIRED)
         link_libraries(Threads::Threads)
@@ -44,21 +45,21 @@ class CMakeListsGenerator(TemplatedGenerator):
         # Paths
         list(APPEND CMAKE_MODULE_PATH ${CMAKE_BINARY_DIR})
         list(APPEND CMAKE_PREFIX_PATH ${CMAKE_BINARY_DIR})
-        
+
         set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
         set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
         set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
         # Find dependencies
         include(FetchContent)
-        
+
         {{"\\n".join(find_deps)}}
-        
+
         # Targets
         add_library({{project_name}} MODULE)
-        
+
         set_target_properties({{project_name}} PROPERTIES PREFIX "" SUFFIX ".{{bin_output_suffix}}")
-        
+
         target_sources({{project_name}}
             PRIVATE
                 {{"\\n".join(source_names)}}
@@ -74,13 +75,15 @@ class CMakeListsGenerator(TemplatedGenerator):
             case "pybind11":
                 return "find_package(pybind11 CONFIG REQUIRED)"
             case "gridtools":
-                return textwrap.dedent("""\
+                return textwrap.dedent(
+                    """\
                     FetchContent_Declare(GridTools
                         GIT_REPOSITORY https://github.com/GridTools/gridtools.git
                         GIT_TAG        master
                     )
                     FetchContent_MakeAvailable(GridTools)\
-                    """)
+                    """
+                )
             case "openmp":
                 return "find_package(OpenMP REQUIRED)"
             case _:
@@ -96,17 +99,21 @@ class CMakeListsGenerator(TemplatedGenerator):
                 lib_name = "OpenMP::OpenMP_CXX"
             case _:
                 raise ValueError("Library {name} is not supported".format(name=dep.name))
-        return "target_link_libraries({target} PUBLIC {lib})".format(target=dep.target, lib=lib_name)
+        return "target_link_libraries({target} PUBLIC {lib})".format(
+            target=dep.target, lib=lib_name
+        )
 
 
-def _render_cmakelists(project_name: str,
-                       dependencies: Sequence[defs.LibraryDependency],
-                       source_names: Sequence[str]) -> str:
-    cmakelists_file = CMakeListsFile(project_name=project_name,
-                                     find_deps=[FindDependency(name=d.name, version=d.version) for d in dependencies],
-                                     link_deps=[LinkDependency(name=d.name, target=project_name) for d in dependencies],
-                                     source_names=source_names,
-                                     bin_output_suffix=_get_python_module_suffix())
+def _render_cmakelists(
+    project_name: str, dependencies: Sequence[defs.LibraryDependency], source_names: Sequence[str]
+) -> str:
+    cmakelists_file = CMakeListsFile(
+        project_name=project_name,
+        find_deps=[FindDependency(name=d.name, version=d.version) for d in dependencies],
+        link_deps=[LinkDependency(name=d.name, target=project_name) for d in dependencies],
+        source_names=source_names,
+        bin_output_suffix=_get_python_module_suffix(),
+    )
     return CMakeListsGenerator.apply(cmakelists_file)
 
 
@@ -121,16 +128,18 @@ class CMakeProject:
     cmakelists: str
     sources: Dict[str, str]
 
-    def __init__(self, name: str,
-                 dependencies: Sequence[defs.LibraryDependency],
-                 sources: Dict[str, str]):
+    def __init__(
+        self, name: str, dependencies: Sequence[defs.LibraryDependency], sources: Dict[str, str]
+    ):
         self.name = name
         self.extension = _get_python_module_suffix()
         self.cmakelists = _render_cmakelists(name, dependencies, list(sources.keys()))
         self.sources = sources
 
     @staticmethod
-    def get_binary(root_folder: pathlib.Path, name: str, extension: str = _get_python_module_suffix()):
+    def get_binary(
+        root_folder: pathlib.Path, name: str, extension: str = _get_python_module_suffix()
+    ):
         return root_folder / _build_subdir / "bin" / (name + "." + extension)
 
     def get_current_binary(self) -> pathlib.Path:

@@ -2,40 +2,48 @@ import ctypes
 
 import pytest
 
-from functional.iterator import ir
 from functional.fencil_processors import defs
 from functional.fencil_processors.codegens.gtfn import gtfn_module
+from functional.iterator import ir
 
 
 @pytest.fixture
 def fencil_example():
-    domain = ir.FunCall(fun=ir.SymRef(id="cartesian_domain"),
-                        args=[ir.FunCall(fun=ir.SymRef(id="named_range"),
-                                         args=[
-                                             ir.AxisLiteral(value="X"),
-                                             ir.Literal(value="0", type="int"),
-                                             ir.Literal(value="10", type="int")
-                                         ])
-                              ])
-    itir = ir.FencilDefinition(id="example",
-                               params=[ir.Sym(id="buf"), ir.Sym(id="sc")],
-                               function_definitions=[
-                                   ir.FunctionDefinition(id="stencil",
-                                                         params=[
-                                                             ir.Sym(id="buf"),
-                                                             ir.Sym(id="sc")
-                                                         ],
-                                                         expr=ir.Literal(value="1", type="float"))
-                               ],
-                               closures=[
-                                   ir.StencilClosure(domain=domain,
-                                                     stencil=ir.SymRef(id="stencil"),
-                                                     output=ir.SymRef(id="buf"),
-                                                     inputs=[ir.SymRef(id="buf"), ir.SymRef(id="sc")])
-                               ])
+    domain = ir.FunCall(
+        fun=ir.SymRef(id="cartesian_domain"),
+        args=[
+            ir.FunCall(
+                fun=ir.SymRef(id="named_range"),
+                args=[
+                    ir.AxisLiteral(value="X"),
+                    ir.Literal(value="0", type="int"),
+                    ir.Literal(value="10", type="int"),
+                ],
+            )
+        ],
+    )
+    itir = ir.FencilDefinition(
+        id="example",
+        params=[ir.Sym(id="buf"), ir.Sym(id="sc")],
+        function_definitions=[
+            ir.FunctionDefinition(
+                id="stencil",
+                params=[ir.Sym(id="buf"), ir.Sym(id="sc")],
+                expr=ir.Literal(value="1", type="float"),
+            )
+        ],
+        closures=[
+            ir.StencilClosure(
+                domain=domain,
+                stencil=ir.SymRef(id="stencil"),
+                output=ir.SymRef(id="buf"),
+                inputs=[ir.SymRef(id="buf"), ir.SymRef(id="sc")],
+            )
+        ],
+    )
     params = [
         defs.BufferParameter("buf", 1, ctypes.c_float),
-        defs.ScalarParameter("sc", ctypes.c_float)
+        defs.ScalarParameter("sc", ctypes.c_float),
     ]
     return itir, params
 

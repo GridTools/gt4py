@@ -1,22 +1,28 @@
-import pytest
 import ctypes
 
+import pytest
+
 from eve.codegen import format_source
-from functional.fencil_processors.callables.cpp import bindings
 from functional.fencil_processors import defs
+from functional.fencil_processors.callables.cpp import bindings
 
 
 @pytest.fixture
 def example_function():
-    return defs.Function(name="example", parameters=[
-        defs.BufferParameter("buf", 2, ctypes.c_float),
-        defs.ScalarParameter("sc", ctypes.c_float)
-    ])
+    return defs.Function(
+        name="example",
+        parameters=[
+            defs.BufferParameter("buf", 2, ctypes.c_float),
+            defs.ScalarParameter("sc", ctypes.c_float),
+        ],
+    )
 
 
 def test_bindings(example_function):
     module = bindings.create_bindings(example_function, "example.hpp")
-    expected_src = format_source("cpp", """\
+    expected_src = format_source(
+        "cpp",
+        """\
         #include "example.hpp"
         
         #include <gridtools/common/defs.hpp>
@@ -38,6 +44,8 @@ def test_bindings(example_function):
           module.doc() = "";
           module.def("example", &example_wrapper, "");
         }\
-        """, style="LLVM")
+        """,
+        style="LLVM",
+    )
     assert module.library_deps[0].name == "pybind11"
     assert module.source_code == expected_src

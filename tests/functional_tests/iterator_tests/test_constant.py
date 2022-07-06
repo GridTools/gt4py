@@ -6,6 +6,7 @@ from functional.iterator.builtins import *
 from functional.iterator.embedded import np_as_located_field
 from functional.iterator.runtime import fundef
 
+
 IDim = Dimension("IDim")
 
 
