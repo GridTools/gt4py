@@ -58,9 +58,11 @@ IntIndex: TypeAlias = int
 FieldIndex: TypeAlias = int | slice
 FieldIndexOrIndices: TypeAlias = FieldIndex | tuple[FieldIndex, ...]
 
-FieldAxis: TypeAlias = Dimension
+FieldAxis: TypeAlias = (
+    Dimension | Offset
+)  # TODO Offset should be removed, is sometimes used for sparse dimensions
 TupleAxis: TypeAlias = NoneType
-Axis: TypeAlias = Dimension | NoneType
+Axis: TypeAlias = FieldAxis | TupleAxis
 
 # Offsets
 AnyOffset: TypeAlias = Tag | IntIndex
@@ -602,9 +604,7 @@ class LocatedFieldImpl(MutableLocatedField):
 
 
 def _is_field_axis(axis: Axis) -> TypeGuard[FieldAxis]:
-    return isinstance(
-        axis, Dimension
-    )  # TODO should be isinstance(axis, FieldAxis) but mypy doesn't like it
+    return isinstance(axis, (Dimension, Offset))  # TODO should be `isinstance(axis, FieldAxis)`
 
 
 def get_ordered_indices(
