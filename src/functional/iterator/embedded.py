@@ -843,6 +843,8 @@ def scan(scan_pass, is_forward: bool, init):
 
         # deduce dtype and shape of resulting column
         if isinstance(init, tuple):
+            if any(isinstance(el, tuple) for el in init):
+                raise NotImplementedError("Nested tuples not supported.")
             assert all(type(el) == type(init[0]) for el in init)
             dtype = type(init[0])
             shape = (levels, len(init))
