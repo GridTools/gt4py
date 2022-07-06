@@ -897,7 +897,7 @@ def fendef_embedded(fun: Callable[..., None], *args: Any, **kwargs: Any):
 
         global _column_range
         column: Optional[ColumnDescriptor] = None
-        if "column_axis" in kwargs and kwargs["column_axis"] is not None:
+        if kwargs.get("column_axis"):
             column_axis = kwargs["column_axis"]
             column = ColumnDescriptor(column_axis.value, domain[column_axis.value])
             del domain[column_axis.value]
