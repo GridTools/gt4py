@@ -30,7 +30,7 @@ _GRIDTOOLS_GIT_REPO = {
 _GRIDTOOLS_GIT_BRANCHES = {
     1: "v1.1.4",
     2: "v2.2.0",
-}  # TODO reset to master or release
+}
 _GRIDTOOLS_INCLUDE_PATHS = {
     1: gt_config.build_settings["gt_include_path"],
     2: gt_config.build_settings["gt2_include_path"],
