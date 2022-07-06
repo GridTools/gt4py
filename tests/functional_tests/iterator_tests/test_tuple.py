@@ -279,7 +279,7 @@ def test_field_of_extra_dim_input(fencil_processor):
 
     inp1 = rng.normal(size=(shape[0], shape[1], shape[2]))
     inp2 = rng.normal(size=(shape[0], shape[1], shape[2]))
-    inp = np.stack(inp1, inp2, axis=-1)
+    inp = np.stack((inp1, inp2), axis=-1)
 
     inp = np_as_located_field(IDim, JDim, KDim, None)(inp)
     out = np_as_located_field(IDim, JDim, KDim)(np.zeros(shape))

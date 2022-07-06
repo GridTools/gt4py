@@ -6,6 +6,7 @@ import itertools
 import numbers
 from abc import abstractmethod
 from dataclasses import dataclass
+from types import NoneType
 from typing import (
     Any,
     Callable,
@@ -57,7 +58,9 @@ IntIndex: TypeAlias = int
 FieldIndex: TypeAlias = int | slice
 FieldIndexOrIndices: TypeAlias = FieldIndex | tuple[FieldIndex, ...]
 
-Axis: TypeAlias = Dimension
+FieldAxis: TypeAlias = Dimension
+TupleAxis: TypeAlias = NoneType
+Axis: TypeAlias = Dimension | NoneType
 
 # Offsets
 AnyOffset: TypeAlias = Tag | IntIndex
@@ -440,13 +443,17 @@ Undefined._setup_math_operations()
 _UNDEFINED = Undefined()
 
 
-def _get_axes(field_or_tuple: Union[LocatedField, tuple]) -> list[Dimension]:
-    return list(
+def _get_axes(
+    field_or_tuple: LocatedField | tuple,
+) -> Sequence[Dimension]:  # arbitrary nesting of tuples of LocatedField
+    return (
         _get_axes(field_or_tuple[0]) if isinstance(field_or_tuple, tuple) else field_or_tuple.axes
     )
 
 
-def _make_tuple(field_or_tuple: Union[LocatedField, tuple], indices) -> tuple:
+def _make_tuple(
+    field_or_tuple: LocatedField | tuple, indices: int | slice | tuple[int | slice, ...]
+) -> tuple:  # arbitrary nesting of tuples of LocatedField
     if isinstance(field_or_tuple, tuple):
         return tuple(_make_tuple(f, indices) for f in field_or_tuple)
     else:
@@ -594,15 +601,17 @@ class LocatedFieldImpl(MutableLocatedField):
         return self.array().shape
 
 
-def _is_tuple_axis(axis: Axis):
-    return axis is None
+def _is_field_axis(axis: Axis) -> TypeGuard[FieldAxis]:
+    return isinstance(
+        axis, Dimension
+    )  # TODO should be isinstance(axis, FieldAxis) but mypy doesn't like it
 
 
 def get_ordered_indices(
-    axes: Iterable[Axis], pos: Mapping[str, FieldIndex]
+    axes: Iterable[FieldAxis], pos: Mapping[str, FieldIndex]
 ) -> tuple[FieldIndex, ...]:
-    assert all(axis.value in [*pos.keys()] for axis in axes if axis is not None)
-    return tuple(pos[axis.value] if not _is_tuple_axis(axis) else slice(None) for axis in axes)
+    assert all(axis.value in [*pos] for axis in axes if axis is not None)
+    return tuple(pos[axis.value] if _is_field_axis(axis) else slice(None) for axis in axes)
 
 
 def _tupsum(a, b):
