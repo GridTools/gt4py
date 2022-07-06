@@ -821,7 +821,10 @@ def as_tuple_field(field):
     return field
 
 
-_column_range: Optional[range] = None  # TODO this is a bit ugly, alternative: pass scan range via iterator
+_column_range: Optional[
+    range
+] = None  # TODO this is a bit ugly, alternative: pass scan range via iterator
+
 
 def _ensure_dtype_matches(val: numbers.Number | tuple[numbers.Number, ...], expected_dtype: type):
     if isinstance(val, tuple):
@@ -830,34 +833,31 @@ def _ensure_dtype_matches(val: numbers.Number | tuple[numbers.Number, ...], expe
         assert isinstance(val, expected_dtype)
 
 
+def _column_dtype_and_shape(levels: int, elem: Any) -> tuple[Type, int | tuple[int, int]]:
+    if isinstance(elem, tuple):
+        return type(elem[0]), (levels, len(elem))
+    else:
+        return type(elem), levels
+
+
 @builtins.scan.register(EMBEDDED)
 def scan(scan_pass, is_forward: bool, init):
     def impl(*iters: ItIterator):
         if _column_range is None:
             raise RuntimeError("Column range is not defined, cannot scan.")
-
-        column_range = _column_range
-        levels = len(column_range)
-        if not is_forward:
-            column_range = reversed(column_range)
-
-        # deduce dtype and shape of resulting column
         if isinstance(init, tuple):
             if any(isinstance(el, tuple) for el in init):
                 raise NotImplementedError("Nested tuples not supported.")
-            assert all(type(el) == type(init[0]) for el in init)
-            dtype = type(init[0])
-            shape = (levels, len(init))
-        else:
-            dtype = type(init)
-            shape = levels
+
+        levels = len(_column_range)
+        column_range = _column_range if is_forward else reversed(_column_range)
+
+        dtype, shape = _column_dtype_and_shape(levels, init)
 
         state = init
         col = np.zeros(shape, dtype=dtype)
         for i in column_range:
-            state = scan_pass(
-                state, *map(shifted_scan_arg(i), iters)
-            )
+            state = scan_pass(state, *map(shifted_scan_arg(i), iters))
             if __debug__:
                 _ensure_dtype_matches(state, dtype)
             col[i] = state
