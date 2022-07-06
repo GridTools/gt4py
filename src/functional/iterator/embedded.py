@@ -14,7 +14,6 @@ from typing import (
     Optional,
     Protocol,
     Sequence,
-    Type,
     TypeAlias,
     TypeGuard,
     Union,
@@ -839,7 +838,7 @@ def _ensure_dtype_matches(val: numbers.Number | tuple[numbers.Number, ...], expe
         assert isinstance(val, expected_dtype)
 
 
-def _column_dtype_and_shape(levels: int, elem: Any) -> tuple[Type, int | tuple[int, int]]:
+def _column_dtype_and_shape(levels: int, elem: Any) -> tuple[type, int | tuple[int, int]]:
     if isinstance(elem, tuple):
         return type(elem[0]), (levels, len(elem))
     else:
