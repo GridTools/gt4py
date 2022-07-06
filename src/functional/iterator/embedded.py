@@ -855,7 +855,6 @@ def scan(scan_pass, is_forward: bool, init):
         state = init
         col = np.zeros(shape, dtype=dtype)
         for i in column_range:
-            # more generic scan returns state and result as 2 different things
             state = scan_pass(
                 state, *map(shifted_scan_arg(i), iters)
             )
