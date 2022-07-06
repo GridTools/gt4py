@@ -20,7 +20,7 @@ from typing import TypeVar
 import numpy as np
 import pytest
 
-from functional.fencil_processors import roundtrip
+from functional.fencil_processors.runners import roundtrip
 from functional.ffront.decorator import field_operator, program
 from functional.ffront.fbuiltins import (
     Dimension,

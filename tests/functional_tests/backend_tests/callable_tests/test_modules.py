@@ -1,4 +1,4 @@
-from functional.backend.callable import modules
+from functional.fencil_processors.callables import modules
 import textwrap
 import tempfile
 import pathlib

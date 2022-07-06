@@ -3,10 +3,9 @@ from typing import Any, cast
 import functional.iterator.ir as itir
 from eve import codegen
 from eve.utils import UIDs
-from functional.fencil_processors.gtfn.codegen import GTFNCodegen
-from functional.fencil_processors.gtfn.itir_to_gtfn_ir import GTFN_lowering
+from functional.fencil_processors.codegens.gtfn.codegen import GTFNCodegen
+from functional.fencil_processors.codegens.gtfn.itir_to_gtfn_ir import GTFN_lowering
 from functional.iterator.embedded import NeighborTableOffsetProvider
-from functional.iterator.processor_interface import fencil_formatter
 from functional.iterator.transforms.common import add_fundefs, replace_nodes
 from functional.iterator.transforms.extract_function import extract_function
 from functional.iterator.transforms.pass_manager import apply_common_transforms
@@ -62,6 +61,3 @@ def _guess_grid_type(**kwargs):
     )
 
 
-@fencil_formatter
-def format_sourcecode(fencil: itir.FencilDefinition, *arg, **kwargs) -> str:
-    return generate(fencil, grid_type=_guess_grid_type(**kwargs), **kwargs)

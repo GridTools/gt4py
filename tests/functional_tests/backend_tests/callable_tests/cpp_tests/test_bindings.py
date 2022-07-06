@@ -2,8 +2,9 @@ import pytest
 import ctypes
 
 from eve.codegen import format_source
-from functional.backend.callable.cpp import bindings
-from functional.backend import defs
+from functional.fencil_processors.callables.cpp import bindings
+from functional.fencil_processors import defs
+
 
 @pytest.fixture
 def example_function():

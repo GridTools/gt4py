@@ -22,7 +22,7 @@ import pytest
 import eve
 from eve.pattern_matching import ObjectPattern as P
 from functional.common import Field, GridType, GTTypeError
-from functional.fencil_processors import roundtrip
+from functional.fencil_processors.runners import roundtrip
 from functional.ffront import common_types, program_ast as past
 from functional.ffront.decorator import field_operator, program
 from functional.ffront.fbuiltins import Dimension, FieldOffset

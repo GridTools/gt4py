@@ -2,7 +2,7 @@ import pathlib
 import subprocess
 import textwrap
 from typing import Dict, Final, Optional, Sequence
-from functional.backend import defs
+from functional.fencil_processors import defs
 from eve.codegen import TemplatedGenerator
 from eve import Node
 from eve.codegen import JinjaTemplate

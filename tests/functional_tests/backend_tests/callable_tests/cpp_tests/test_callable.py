@@ -4,9 +4,9 @@ import math
 import numpy as np
 import pytest
 
-from functional.backend.callable.cpp import callable
-from functional.backend import defs
-from functional.backend import cpp
+from functional.fencil_processors.callables.cpp import callable
+from functional.fencil_processors import defs, cpp
+
 
 @pytest.fixture
 def source_module():
@@ -19,7 +19,7 @@ def source_module():
         const auto ydim = sid_get_upper_bounds(buf)[1];
         return xdim * ydim * sc;\
         """
-    )
+                                           )
     src = f"""
     #include <gridtools/fn/cartesian.hpp>
     #include <gridtools/fn/unstructured.hpp>

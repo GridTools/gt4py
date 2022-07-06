@@ -1,8 +1,9 @@
 import numpy as np
 import pytest
 
+import functional.fencil_processors.formatters.gtfn
 from functional.common import Dimension
-from functional.fencil_processors import gtfn
+from functional.fencil_processors.codegens import gtfn
 from functional.iterator.builtins import *
 from functional.iterator.embedded import np_as_located_field
 from functional.iterator.runtime import closure, fendef, fundef, offset
@@ -106,7 +107,7 @@ def test_ksum_scan(fencil_processor, use_tmps):
     if use_tmps:
         pytest.xfail("use_tmps currently not supported for scans")
     fencil_processor, validate = fencil_processor
-    if fencil_processor == gtfn.format_sourcecode:
+    if fencil_processor == functional.fencil_processors.formatters.gtfn.format_sourcecode:
         pytest.xfail("gtfn does not yet support scans")
     shape = [1, 7]
     inp = np_as_located_field(IDim, KDim)(np.asarray([list(range(7))]))
@@ -148,7 +149,7 @@ def test_ksum_back_scan(fencil_processor, use_tmps):
     if use_tmps:
         pytest.xfail("use_tmps currently not supported for scans")
     fencil_processor, validate = fencil_processor
-    if fencil_processor == gtfn.format_sourcecode:
+    if fencil_processor == functional.fencil_processors.formatters.gtfn.format_sourcecode:
         pytest.xfail("gtfn does not yet support scans")
     shape = [1, 7]
     inp = np_as_located_field(IDim, KDim)(np.asarray([list(range(7))]))

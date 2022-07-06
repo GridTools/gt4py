@@ -1,6 +1,6 @@
 import sys
 
-from functional.fencil_processors.gtfn.gtfn_backend import generate
+from functional.fencil_processors.codegens.gtfn.gtfn_backend import generate
 from functional.iterator.builtins import *
 from functional.iterator.runtime import CartesianAxis, closure, fundef, offset
 from functional.iterator.tracing import trace

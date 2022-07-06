@@ -1,8 +1,8 @@
 import os
 import typing
-from typing import Any, Generic, Sequence, Tuple, TypeVar, Type
-import functional.backend.defs as defs
-import functional.backend.cpp as cpp
+from typing import Any, Sequence, TypeVar, Type
+import functional.fencil_processors.defs as defs
+import functional.fencil_processors.cpp as cpp
 
 import jinja2
 
@@ -150,7 +150,8 @@ class BindingCodeGenerator(TemplatedGenerator):
         return cpp.render_function_call(call.target, args)
 
 
-def make_parameter_list(parameters: Sequence[defs.ScalarParameter | defs.BufferParameter]) -> Sequence[FunctionParameter]:
+def make_parameter_list(parameters: Sequence[
+    defs.ScalarParameter | defs.BufferParameter]) -> Sequence[FunctionParameter]:
     def make_parameter(parameter: [defs.ScalarParameter | defs.BufferParameter]):
         if isinstance(parameter, defs.ScalarParameter):
             return FunctionParameter(name=parameter.name, ndim=0, dtype=parameter.type_)

@@ -1,6 +1,6 @@
 import textwrap
 
-from . import defs
+from functional.fencil_processors import defs
 from typing import Sequence, Final, Type
 import jinja2
 import numpy

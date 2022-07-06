@@ -3,7 +3,7 @@ import pathlib
 
 import pytest
 
-from functional.backend.callable.cpp import build
+from functional.fencil_processors.callables.cpp import build
 
 
 @pytest.fixture

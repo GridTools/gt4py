@@ -1,7 +1,7 @@
 import pytest
 
-import functional.backend.cpp as cpp
-import functional.backend.defs as defs
+import functional.fencil_processors.cpp as cpp
+import functional.fencil_processors.defs as defs
 from eve.codegen import format_source
 
 

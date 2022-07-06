@@ -1,13 +1,13 @@
-from functional.backend import cpp
-from functional.fencil_processors.gtfn import gtfn_backend
+from functional.fencil_processors.codegens.gtfn import gtfn_backend
 from functional.iterator.ir import FencilDefinition
-from functional.backend import defs
+from functional.fencil_processors import defs, cpp
 from typing import Sequence
 from eve.codegen import format_source
 
 
 def create_source_module(itir: FencilDefinition,
-                         parameters: Sequence[defs.ScalarParameter | defs.BufferParameter]) -> defs.SourceCodeModule:
+                         parameters: Sequence[defs.ScalarParameter | defs.BufferParameter],
+                         **kwargs) -> defs.SourceCodeModule:
     function = defs.Function(itir.id, parameters)
 
     rendered_params = ", ".join([
@@ -16,7 +16,7 @@ def create_source_module(itir: FencilDefinition,
     ])
     decl_body = f"return generated::{function.name}({rendered_params});"
     decl_src = cpp.render_function_declaration(function, body=decl_body)
-    stencil_src = gtfn_backend.generate(itir, grid_type=gtfn_backend._guess_grid_type(offset_provider={}))
+    stencil_src = gtfn_backend.generate(itir, grid_type=gtfn_backend._guess_grid_type(**kwargs))
     source_code = format_source("cpp",
                                 f"""\
                                 #include <gridtools/fn/backend/naive.hpp>

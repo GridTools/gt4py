@@ -2,7 +2,7 @@ from typing import Any, Collection, Union
 
 from eve import codegen
 from eve.codegen import FormatTemplate as as_fmt, MakoTemplate as as_mako
-from functional.fencil_processors.gtfn.gtfn_ir import (
+from functional.fencil_processors.codegens.gtfn.gtfn_ir import (
     FencilDefinition,
     GridType,
     Literal,

@@ -2,10 +2,10 @@ from typing import Callable
 
 from . import bindings
 from . import build
-from functional.backend import defs as defs
-from functional.backend.callable.modules import load_module
-from functional.backend.callable.cache import get_cache_folder
-from functional.backend.callable.cache import Strategy as CacheStrategy
+from functional.fencil_processors import defs as defs
+from functional.fencil_processors.callables.modules import load_module
+from functional.fencil_processors.callables.cache import get_cache_folder
+from functional.fencil_processors.callables.cache import Strategy as CacheStrategy
 
 
 def create_callable(source_module: defs.SourceCodeModule, cache_strategy=CacheStrategy.SESSION) -> Callable:

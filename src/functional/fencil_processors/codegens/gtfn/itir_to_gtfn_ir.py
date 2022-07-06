@@ -2,7 +2,7 @@ from typing import Any
 
 import eve
 from eve.concepts import SymbolName
-from functional.fencil_processors.gtfn.gtfn_ir import (
+from functional.fencil_processors.codegens.gtfn.gtfn_ir import (
     Backend,
     BinaryExpr,
     Expr,
