@@ -25,7 +25,9 @@ class PopupTmps(NodeTranslator):
     @staticmethod
     def _extract_lambda(
         node: ir.FunCall,
-    ) -> Optional[tuple[ir.Lambda, bool, Callable[[ir.Lambda, list[ir.Expr]], ir.FunCall]]]:
+    ) -> Optional[
+        tuple[ir.Lambda, list[ir.Sym], bool, Callable[[ir.Lambda, list[ir.Expr]], ir.FunCall]]
+    ]:
         """Extract the lambda function which is relevant for popping up lifts.
 
         Further, returns a bool indicating if the given function call was as a
@@ -49,6 +51,9 @@ class PopupTmps(NodeTranslator):
             if is_scan:
                 assert isinstance(fun, ir.FunCall)  # just for mypy
                 fun = fun.args[0]
+                params = fun.params[1:]
+            else:
+                params = fun.params
 
             def wrap(fun: ir.Lambda, args: list[ir.Expr]) -> ir.FunCall:
                 if is_scan:
@@ -64,14 +69,14 @@ class PopupTmps(NodeTranslator):
                 return ir.FunCall(fun=ir.FunCall(fun=ir.SymRef(id="lift"), args=[f]), args=args)
 
             assert isinstance(fun, ir.Lambda)
-            return fun, True, wrap
+            return fun, params, True, wrap
         if isinstance(node.fun, ir.Lambda):
             # direct lambda call
 
             def wrap(fun: ir.Lambda, args: list[ir.Expr]) -> ir.FunCall:
                 return ir.FunCall(fun=fun, args=args)
 
-            return node.fun, False, wrap
+            return node.fun, node.fun.params, False, wrap
 
         return None
 
@@ -79,7 +84,7 @@ class PopupTmps(NodeTranslator):
         self, node: ir.FunCall, *, lifts: Optional[dict[ir.Expr, ir.SymRef]] = None
     ) -> Union[ir.SymRef, ir.FunCall]:
         if call_info := self._extract_lambda(node):
-            fun, is_lift, wrap = call_info
+            fun, params, is_lift, wrap = call_info
 
             nested_lifts = dict[ir.Expr, ir.SymRef]()
             fun = self.visit(fun, lifts=nested_lifts)
@@ -104,7 +109,8 @@ class PopupTmps(NodeTranslator):
                     return wrap(fun, args)
 
             # remap referenced function parameters in lift expression to passed argument values
-            symbol_map = {param.id: arg for param, arg in zip(fun.params, args)}
+            assert len(params) == len(args)
+            symbol_map = {param.id: arg for param, arg in zip(params, args)}
             remap = partial(RemapSymbolRefs().visit, symbol_map=symbol_map)
 
             nested_lifts = {remap(expr): ref for expr, ref in nested_lifts.items()}
@@ -113,12 +119,16 @@ class PopupTmps(NodeTranslator):
                 lifted = list(lifts.items())
                 lifts.clear()
                 for expr, ref in lifted:
-                    lifts[remap(expr)] = ref
+                    lifts[remap(expr)] = remap(ref)
 
-            # extend parameter and argument list of the function with popped lifts
+            # extend parameter list of the function with popped lifts
             new_params = [ir.Sym(id=p.id) for p in nested_lifts.values()]
-            new_args = list(nested_lifts.keys())
             fun = ir.Lambda(params=fun.params + new_params, expr=fun.expr)
+            # for the arguments, we have to resolve possible cross-references of lifts
+            symbol_map = {v.id: k for k, v in nested_lifts.items()}
+            new_args = [
+                RemapSymbolRefs().visit(a, symbol_map=symbol_map) for a in nested_lifts.keys()
+            ]
 
             # updated function call, having lifts passed as arguments
             call = wrap(fun, args + new_args)
