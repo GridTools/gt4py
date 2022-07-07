@@ -28,9 +28,27 @@ def tridiag_backward(x_kp1, cpdp):
 
 
 @fundef
+def tridiag_backward2(x_kp1, cp, dp):
+    return deref(dp) - deref(cp) * x_kp1
+
+
+@fundef
 def solve_tridiag(a, b, c, d):
     cpdp = lift(scan(tridiag_forward, True, make_tuple(0.0, 0.0)))(a, b, c, d)
     return scan(tridiag_backward, False, 0.0)(cpdp)
+
+
+def tuple_get_it(i, x):
+    def stencil(x):
+        return tuple_get(i, deref(x))
+
+    return lift(stencil)(x)
+
+
+@fundef
+def solve_tridiag2(a, b, c, d):
+    cpdp = lift(scan(tridiag_forward, True, make_tuple(0.0, 0.0)))(a, b, c, d)
+    return scan(tridiag_backward2, False, 0.0)(tuple_get_it(0, cpdp), tuple_get_it(1, cpdp))
 
 
 @pytest.fixture
@@ -70,7 +88,22 @@ def fen_solve_tridiag(i_size, j_size, k_size, a, b, c, d, x):
     )
 
 
-def test_tridiag(tridiag_reference, fencil_processor, lift_mode):
+@fendef
+def fen_solve_tridiag2(i_size, j_size, k_size, a, b, c, d, x):
+    closure(
+        cartesian_domain(
+            named_range(IDim, 0, i_size),
+            named_range(JDim, 0, j_size),
+            named_range(KDim, 0, k_size),
+        ),
+        solve_tridiag2,
+        x,
+        [a, b, c, d],
+    )
+
+
+@pytest.fixture
+def tridiag_test(tridiag_reference, fencil_processor, lift_mode):
     fencil_processor, validate = fencil_processor
     if fencil_processor == gtfn.format_sourcecode and lift_mode == LiftMode.FORCE_INLINE:
         pytest.xfail("gtfn does only support lifted scans when using temporaries")
@@ -83,21 +116,32 @@ def test_tridiag(tridiag_reference, fencil_processor, lift_mode):
     d_s = as_3d_field(d)
     x_s = as_3d_field(np.zeros_like(x))
 
-    run_processor(
-        fen_solve_tridiag,
-        fencil_processor,
-        shape[0],
-        shape[1],
-        shape[2],
-        a_s,
-        b_s,
-        c_s,
-        d_s,
-        x_s,
-        offset_provider={},
-        column_axis=KDim,
-        lift_mode=lift_mode,
-    )
+    def run(fencil):
+        run_processor(
+            fencil,
+            fencil_processor,
+            shape[0],
+            shape[1],
+            shape[2],
+            a_s,
+            b_s,
+            c_s,
+            d_s,
+            x_s,
+            offset_provider={},
+            column_axis=KDim,
+            lift_mode=lift_mode,
+        )
+
+    yield run
 
     if validate:
         assert np.allclose(x, np.asarray(x_s))
+
+
+def test_tridiag(tridiag_test):
+    tridiag_test(fen_solve_tridiag)
+
+
+def test_tridiag2(tridiag_test):
+    tridiag_test(fen_solve_tridiag2)
