@@ -80,4 +80,5 @@ repos:
       docs/eve/conf.py |
       tests/eve_tests/definitions.py |
       tests/functional_tests/ffront_tests/.* |
+      tests/functional_tests/cpp_backend_tests/.* |
       )$

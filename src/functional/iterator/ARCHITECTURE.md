@@ -15,7 +15,7 @@ The builtins dispatcher is implemented in `dispatcher.py`. Implementations are r
 
 `fundef` returns a wrapper around the function, which dispatches `__call__` to a hook if a predicate is met (used for *tracing*). By default the original function is called (used in *embedded* mode).
 
-`fendef` return a wrapper that dispatches to a registered function. If `backend` is in the keyword arguments and not `None` `fendef_codegen` will be called, otherwise `fundef_embedded` will be called.
+`fendef` return a wrapper that dispatches to a registered function. If `backend` is in the keyword arguments and not `None` `fendef_codegen` will be called and the result passed directly to the backend, otherwise `fendef_embedded` will be called. The fendef wrapper also has a `.format_itir()` method to invoke code generators and anything else that turns a fencil into text.
 
 ## Embedded execution
 
@@ -39,25 +39,29 @@ Sketch:
 - In appropriate places values are converted to nodes, see `make_node()`.
 - Finally the IR tree will be passed to `execute_fencil()` in `backend_executor.py` which will generator code for the program (and execute, if appropriate).
 
-## Backends
+## Backends / Text generators
 
-See directory `backends/`.
+See directory `fencil_processors/`.
 
-### `gtfn`
+### `gtfn.format_sourcecode`
 
 Generates C++ code for the GridTools `fn` backend. (only code generation)
 
-### `lisp`
+### `lisp.format_lisp`
 
-Incomplete. Example for the grammar used in the model design document. (not executable)
+Incomplete text formatter. Example for the grammar used in the model design document. (not executable)
 
-### `roundtrip`
+### `roundtrip.executor`
 
 Generates from the IR an aquivalent Python iterator view program which is then executed in embedded mode.
 
-### `double_roundtrip`
+### `double_roundtrip.executor`
 
 Generates the Python iterator view program, traces it again, generates again and executes. Ensures that the generated Python code can still be traced. While the original program might be different from the generated program (e.g. `+` will be converted to `plus()` builtin). The programs from the embedded and double roundtrip backends should be identical.
+
+### `pretty_print.pretty_format`
+
+Generates a pretty formated version with type information
 
 ## Adding a new builtin
 

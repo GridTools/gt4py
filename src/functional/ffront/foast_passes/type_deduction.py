@@ -15,7 +15,7 @@ from typing import Optional, cast
 
 import functional.ffront.field_operator_ast as foast
 from eve import NodeTranslator, traits
-from functional.common import GTSyntaxError, GTTypeError
+from functional.common import DimensionKind, GTSyntaxError, GTTypeError
 from functional.ffront import common_types as ct, type_info
 from functional.ffront.fbuiltins import FUN_BUILTIN_NAMES
 
@@ -131,18 +131,18 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         new_type: Optional[ct.SymbolType] = None
         match new_value.type:
             case ct.TupleType(types=types):
-                new_type = types[node.index]
+                new_type = types[node.index]  # type: ignore[has-type]  # used to work, now mypy is going berserk for unknown reasons
             case ct.OffsetType(source=source, target=(target1, target2)):
-                if not target2.local:
+                if not target2.kind == DimensionKind.LOCAL:  # type: ignore[has-type]  # used to work, now mypy is going berserk for unknown reasons
                     raise FieldOperatorTypeDeductionError.from_foast_node(
                         new_value, msg="Second dimension in offset must be a local dimension."
                     )
-                new_type = ct.OffsetType(source=source, target=(target1,))
+                new_type = ct.OffsetType(source=source, target=(target1,))  # type: ignore[has-type]  # used to work, now mypy is going berserk for unknown reasons
             case ct.OffsetType(source=source, target=(target,)):
                 # for cartesian axes (e.g. I, J) the index of the subscript only
                 #  signifies the displacement in the respective dimension,
                 #  but does not change the target type.
-                if source != target:
+                if source != target:  # type: ignore[has-type]  # used to work, now mypy is going berserk for unknown reasons
                     raise FieldOperatorTypeDeductionError.from_foast_node(
                         new_value,
                         msg="Source and target must be equal for offsets with a single target.",

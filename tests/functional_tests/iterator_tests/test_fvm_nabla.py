@@ -14,6 +14,8 @@
 import numpy as np
 import pytest
 
+from .conftest import run_processor
+
 
 pytest.importorskip("atlas4py")
 
@@ -54,7 +56,7 @@ def compute_zavgS_fencil(
     S_M,
 ):
     closure(
-        domain(named_range(Edge, 0, n_edges)),
+        unstructured_domain(named_range(Edge, 0, n_edges)),
         compute_zavgS,
         out,
         [pp, S_M],
@@ -113,17 +115,17 @@ def nabla(
     vol,
 ):
     closure(
-        domain(named_range(Vertex, 0, n_nodes)),
+        unstructured_domain(named_range(Vertex, 0, n_nodes)),
         pnabla,
         out,
         [pp, S_MXX, S_MYY, sign, vol],
     )
 
 
-def test_compute_zavgS(backend, use_tmps):
+def test_compute_zavgS(fencil_processor, use_tmps):
     if use_tmps:
         pytest.xfail("use_tmps currently only supported for cartesian")
-    backend, validate = backend
+    fencil_processor, validate = fencil_processor
     setup = nabla_setup()
 
     pp = np_as_located_field(Vertex)(setup.input_field)
@@ -133,13 +135,14 @@ def test_compute_zavgS(backend, use_tmps):
 
     e2v = NeighborTableOffsetProvider(AtlasTable(setup.edges2node_connectivity), Edge, Vertex, 2)
 
-    compute_zavgS_fencil(
+    run_processor(
+        compute_zavgS_fencil,
+        fencil_processor,
         setup.edges_size,
         zavgS,
         pp,
         S_MXX,
         offset_provider={"E2V": e2v},
-        backend=backend,
         use_tmps=use_tmps,
     )
 
@@ -147,13 +150,14 @@ def test_compute_zavgS(backend, use_tmps):
         assert_close(-199755464.25741270, min(zavgS))
         assert_close(388241977.58389181, max(zavgS))
 
-    compute_zavgS_fencil(
+    run_processor(
+        compute_zavgS_fencil,
+        fencil_processor,
         setup.edges_size,
         zavgS,
         pp,
         S_MYY,
         offset_provider={"E2V": e2v},
-        backend=backend,
         use_tmps=use_tmps,
     )
     if validate:
@@ -169,17 +173,17 @@ def compute_zavgS2_fencil(
     S_M,
 ):
     closure(
-        domain(named_range(Edge, 0, n_edges)),
+        unstructured_domain(named_range(Edge, 0, n_edges)),
         compute_zavgS2,
         out,
         [pp, S_M],
     )
 
 
-def test_compute_zavgS2(backend, use_tmps):
+def test_compute_zavgS2(fencil_processor, use_tmps):
     if use_tmps:
         pytest.xfail("use_tmps currently only supported for cartesian")
-    backend, validate = backend
+    fencil_processor, validate = fencil_processor
     setup = nabla_setup()
 
     pp = np_as_located_field(Vertex)(setup.input_field)
@@ -195,13 +199,14 @@ def test_compute_zavgS2(backend, use_tmps):
 
     e2v = NeighborTableOffsetProvider(AtlasTable(setup.edges2node_connectivity), Edge, Vertex, 2)
 
-    compute_zavgS2_fencil(
+    run_processor(
+        compute_zavgS2_fencil,
+        fencil_processor,
         setup.edges_size,
         zavgS,
         pp,
         S,
         offset_provider={"E2V": e2v},
-        backend=backend,
         use_tmps=use_tmps,
     )
 
@@ -213,10 +218,10 @@ def test_compute_zavgS2(backend, use_tmps):
         assert_close(1000788897.3202186, max(zavgS[1]))
 
 
-def test_nabla(backend, use_tmps):
+def test_nabla(fencil_processor, use_tmps):
     if use_tmps:
         pytest.xfail("use_tmps currently only supported for cartesian")
-    backend, validate = backend
+    fencil_processor, validate = fencil_processor
     setup = nabla_setup()
 
     sign = np_as_located_field(Vertex, V2E)(setup.sign_field)
@@ -230,7 +235,9 @@ def test_nabla(backend, use_tmps):
     e2v = NeighborTableOffsetProvider(AtlasTable(setup.edges2node_connectivity), Edge, Vertex, 2)
     v2e = NeighborTableOffsetProvider(AtlasTable(setup.nodes2edge_connectivity), Vertex, Edge, 7)
 
-    nabla(
+    run_processor(
+        nabla,
+        fencil_processor,
         setup.nodes_size,
         (pnabla_MXX, pnabla_MYY),
         pp,
@@ -239,7 +246,6 @@ def test_nabla(backend, use_tmps):
         sign,
         vol,
         offset_provider={"E2V": e2v, "V2E": v2e},
-        backend=backend,
         use_tmps=use_tmps,
     )
 
@@ -260,17 +266,17 @@ def nabla2(
     vol,
 ):
     closure(
-        domain(named_range(Vertex, 0, n_nodes)),
+        unstructured_domain(named_range(Vertex, 0, n_nodes)),
         compute_pnabla2,
         out,
         [pp, S, sign, vol],
     )
 
 
-def test_nabla2(backend, use_tmps):
+def test_nabla2(fencil_processor, use_tmps):
     if use_tmps:
         pytest.xfail("use_tmps currently only supported for cartesian")
-    backend, validate = backend
+    fencil_processor, validate = fencil_processor
     setup = nabla_setup()
 
     sign = np_as_located_field(Vertex, V2E)(setup.sign_field)
@@ -294,7 +300,7 @@ def test_nabla2(backend, use_tmps):
         sign,
         vol,
         offset_provider={"E2V": e2v, "V2E": v2e},
-        backend=backend,
+        fencil_processor=fencil_processor,
         use_tmps=use_tmps,
     )
 
@@ -335,24 +341,24 @@ def compute_pnabla_sign(pp, S_M, vol, node_index, is_pole_edge):
 def nabla_sign(n_nodes, out_MXX, out_MYY, pp, S_MXX, S_MYY, vol, node_index, is_pole_edge):
     # TODO replace by single stencil which returns tuple
     closure(
-        domain(named_range(Vertex, 0, n_nodes)),
+        unstructured_domain(named_range(Vertex, 0, n_nodes)),
         compute_pnabla_sign,
         out_MXX,
         [pp, S_MXX, vol, node_index, is_pole_edge],
     )
     closure(
-        domain(named_range(Vertex, 0, n_nodes)),
+        unstructured_domain(named_range(Vertex, 0, n_nodes)),
         compute_pnabla_sign,
         out_MYY,
         [pp, S_MYY, vol, node_index, is_pole_edge],
     )
 
 
-def test_nabla_sign(backend, use_tmps):
+def test_nabla_sign(fencil_processor, use_tmps):
     if use_tmps:
         pytest.xfail("use_tmps currently only supported for cartesian")
 
-    backend, validate = backend
+    fencil_processor, validate = fencil_processor
     setup = nabla_setup()
 
     # sign = np_as_located_field(Vertex, V2E)(setup.sign_field)
@@ -367,7 +373,9 @@ def test_nabla_sign(backend, use_tmps):
     e2v = NeighborTableOffsetProvider(AtlasTable(setup.edges2node_connectivity), Edge, Vertex, 2)
     v2e = NeighborTableOffsetProvider(AtlasTable(setup.nodes2edge_connectivity), Vertex, Edge, 7)
 
-    nabla_sign(
+    run_processor(
+        nabla_sign,
+        fencil_processor,
         setup.nodes_size,
         pnabla_MXX,
         pnabla_MYY,
@@ -378,7 +386,6 @@ def test_nabla_sign(backend, use_tmps):
         index_field(Vertex),
         is_pole_edge,
         offset_provider={"E2V": e2v, "V2E": v2e},
-        backend=backend,
         use_tmps=use_tmps,
     )
 

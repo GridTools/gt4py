@@ -1,6 +1,6 @@
 import sys
 
-from functional.iterator.backends.gtfn.gtfn_backend import generate
+from functional.fencil_processors.gtfn.gtfn_backend import generate
 from functional.iterator.builtins import *
 from functional.iterator.runtime import CartesianAxis, closure, fundef
 from functional.iterator.tracing import trace
@@ -16,9 +16,11 @@ def copy_stencil(inp):
     return deref(inp)
 
 
-def copy_fencil(dom, inp, out):
+def copy_fencil(isize, jsize, ksize, inp, out):
     closure(
-        dom,
+        cartesian_domain(
+            named_range(IDim, 0, isize), named_range(JDim, 0, jsize), named_range(KDim, 0, ksize)
+        ),
         copy_stencil,
         out,
         [inp],
@@ -30,7 +32,7 @@ if __name__ == "__main__":
         raise RuntimeError(f"Usage: {sys.argv[0]} <output_file>")
     output_file = sys.argv[1]
 
-    prog = trace(copy_fencil, [None] * 3)
+    prog = trace(copy_fencil, [None] * 5)
     generated_code = generate(prog, grid_type="Cartesian")
 
     with open(output_file, "w+") as output:
