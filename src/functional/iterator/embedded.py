@@ -160,7 +160,11 @@ def or_(a, b):
 
 @builtins.tuple_get.register(EMBEDDED)
 def tuple_get(i, tup):
-    return tup[i]
+    if isinstance(tup, tuple):
+        return tup[i]
+    assert isinstance(tup, (np.ndarray, np.void))
+    assert tup.dtype.fields
+    return tup[tup.dtype.names[i]]
 
 
 @builtins.make_tuple.register(EMBEDDED)
