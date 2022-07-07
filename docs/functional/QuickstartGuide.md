@@ -218,7 +218,7 @@ Another way to look at it is that transform uses the edge-to-cell connectivity t
 You can use the field offset `E2C` below to transform a field over cells to a field over edges using the edge-to-cell connectivities:
 
 ```{code-cell} ipython3
-E2CDim = Dimension("E2C", local=True)
+E2CDim = Dimension("E2C", kind=DimensionKind.local)
 E2C = FieldOffset("E2C", source=CellDim, target=(EdgeDim,))
 ```
 
