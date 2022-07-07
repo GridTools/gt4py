@@ -80,14 +80,14 @@ def test_copy(fieldview_backend_list):
 
 
 @pytest.mark.skip(reason="no lowering for returning a tuple of fields exists yet.")
-def test_multicopy():
+def test_multicopy(fieldview_backend_list):
     size = 10
     a = np_as_located_field(IDim)(np.ones((size)))
     b = np_as_located_field(IDim)(np.ones((size)) * 3)
     c = np_as_located_field(IDim)(np.zeros((size)))
     d = np_as_located_field(IDim)(np.zeros((size)))
 
-    @field_operator(backend=fieldview_backend)
+    @field_operator(backend=fieldview_backend_list)
     def multicopy(
         inp1: Field[[IDim], float64], inp2: Field[[IDim], float64]
     ) -> tuple[Field[[IDim], float64], Field[[IDim], float64]]:
@@ -99,13 +99,13 @@ def test_multicopy():
     assert np.allclose(b, d)
 
 
-def test_arithmetic():
+def test_arithmetic(fieldview_backend_list):
     size = 10
     a = np_as_located_field(IDim)(np.ones((size)))
     b = np_as_located_field(IDim)(np.ones((size)) * 2)
     c = np_as_located_field(IDim)(np.zeros((size)))
 
-    @field_operator(backend=fieldview_backend)
+    @field_operator(backend=fieldview_backend_list)
     def arithmetic(
         inp1: Field[[IDim], float64], inp2: Field[[IDim], float64]
     ) -> Field[[IDim], float64]:
@@ -116,12 +116,12 @@ def test_arithmetic():
     assert np.allclose((a.array() + b.array()) * 2.0, c)
 
 
-def test_power():
+def test_power(fieldview_backend_list):
     size = 10
     a = np_as_located_field(IDim)(np.random.randn((size)))
     b = np_as_located_field(IDim)(np.zeros((size)))
 
-    @field_operator(backend=fieldview_backend)
+    @field_operator(backend=fieldview_backend_list)
     def power(inp1: Field[[IDim], float64]) -> Field[[IDim], float64]:
         return inp1**2
 
@@ -130,13 +130,13 @@ def test_power():
     assert np.allclose(a.array() ** 2, b)
 
 
-def test_power_arithmetic():
+def test_power_arithmetic(fieldview_backend_list):
     size = 10
     a = np_as_located_field(IDim)(np.random.randn((size)))
     b = np_as_located_field(IDim)(np.zeros((size)))
     c = np_as_located_field(IDim)(np.random.randn((size)))
 
-    @field_operator(backend=fieldview_backend)
+    @field_operator(backend=fieldview_backend_list)
     def power_arithmetic(
         inp1: Field[[IDim], float64], inp2: Field[[IDim], float64]
     ) -> Field[[IDim], float64]:
@@ -147,7 +147,7 @@ def test_power_arithmetic():
     assert np.allclose(c.array() + ((c.array() + a.array()) ** 2), b)
 
 
-def test_bit_logic():
+def test_bit_logic(fieldview_backend_list):
     size = 10
     a = np_as_located_field(IDim)(np.full((size), True))
     b_data = np.full((size), True)
@@ -155,7 +155,7 @@ def test_bit_logic():
     b = np_as_located_field(IDim)(b_data)
     c = np_as_located_field(IDim)(np.full((size), False))
 
-    @field_operator(backend=fieldview_backend)
+    @field_operator(backend=fieldview_backend_list)
     def bit_and(inp1: Field[[IDim], bool], inp2: Field[[IDim], bool]) -> Field[[IDim], bool]:
         return inp1 & inp2 & True
 
@@ -164,12 +164,12 @@ def test_bit_logic():
     assert np.allclose(a.array() & b.array(), c)
 
 
-def test_unary_neg():
+def test_unary_neg(fieldview_backend_list):
     size = 10
     a = np_as_located_field(IDim)(np.ones((size), dtype=int32))
     b = np_as_located_field(IDim)(np.zeros((size), dtype=int32))
 
-    @field_operator(backend=fieldview_backend)
+    @field_operator(backend=fieldview_backend_list)
     def uneg(inp: Field[[IDim], int32]) -> Field[[IDim], int32]:
         return -inp
 
