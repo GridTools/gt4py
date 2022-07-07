@@ -64,7 +64,14 @@ class PrettyPrinter(NodeTranslator):
 
     @staticmethod
     def _hmerge(*blocks: list[str]) -> list[str]:
+        if not blocks:
+            return []
+
         def impl(a: list[str], b: list[str]) -> list[str]:
+            if not a:
+                return b
+            if not b:
+                return a
             spaces = len(a[-1]) * " "
             return a[:-1] + [a[-1] + b[0]] + [spaces + line for line in b[1:]]
 
@@ -86,6 +93,8 @@ class PrettyPrinter(NodeTranslator):
         return [" " * self.indent + line for line in block]
 
     def _cost(self, block: list[str]) -> int:
+        if not block:
+            return 0
         max_line_length = max(len(line) for line in block)
         return (
             # preferring blocks of fewer lines:
@@ -102,6 +111,8 @@ class PrettyPrinter(NodeTranslator):
     def _hinterleave(
         self, blocks: Sequence[list[str]], sep: str, *, indent: bool = False
     ) -> Iterable[list[str]]:
+        if not blocks:
+            return blocks
         do_indent = self._indent if indent else lambda x: x
         for block in blocks[:-1]:
             yield do_indent(self._hmerge(block, [sep]))
