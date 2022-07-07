@@ -50,14 +50,15 @@ def asfield(*arrays):
     return res
 
 
-def fencil(builtin, out, *inps, processor):
+def fencil(builtin, out, *inps, processor, as_column=False):
+    column_axis = IDim if as_column else None
     if len(inps) == 1:
 
         @fundef
         def sten(arg0):
             return builtin(deref(arg0))
 
-        @fendef(offset_provider={})
+        @fendef(offset_provider={}, column_axis=column_axis)
         def fenimpl(dom, arg0, out):
             closure(dom, sten, out, [arg0])
 
@@ -67,7 +68,7 @@ def fencil(builtin, out, *inps, processor):
         def sten(arg0, arg1):
             return builtin(deref(arg0), deref(arg1))
 
-        @fendef(offset_provider={})
+        @fendef(offset_provider={}, column_axis=column_axis)
         def fenimpl(dom, arg0, arg1, out):
             closure(dom, sten, out, [arg0, arg1])
 
@@ -77,7 +78,7 @@ def fencil(builtin, out, *inps, processor):
         def sten(arg0, arg1, arg2):
             return builtin(deref(arg0), deref(arg1), deref(arg2))
 
-        @fendef(offset_provider={})
+        @fendef(offset_provider={}, column_axis=column_axis)
         def fenimpl(dom, arg0, arg1, arg2, out):
             closure(dom, sten, out, [arg0, arg1, arg2])
 
@@ -87,6 +88,7 @@ def fencil(builtin, out, *inps, processor):
     return run_processor(fenimpl, processor, {IDim: range(out.shape[0])}, *inps, out)
 
 
+@pytest.mark.parametrize("as_column", [False, True])
 @pytest.mark.parametrize(
     "builtin, inputs, expected",
     [
@@ -113,13 +115,13 @@ def fencil(builtin, out, *inps, processor):
         (or_, [[True, True, False, False], [True, False, True, False]], [True, True, True, False]),
     ],
 )
-def test_arithmetic_and_logical_builtins(fencil_processor, builtin, inputs, expected):
+def test_arithmetic_and_logical_builtins(fencil_processor, builtin, inputs, expected, as_column):
     fencil_processor, validate = fencil_processor
 
     inps = asfield(*asarray(*inputs))
     out = asfield((np.zeros_like(*asarray(expected))))[0]
 
-    fencil(builtin, out, *inps, processor=fencil_processor)
+    fencil(builtin, out, *inps, processor=fencil_processor, as_column=as_column)
 
     if validate:
         assert np.allclose(np.asarray(out), expected)
