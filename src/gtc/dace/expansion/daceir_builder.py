@@ -248,9 +248,18 @@ class DaCeIRBuilder(NodeTranslator):
         )
 
     def visit_HorizontalRestriction(
-        self, node: oir.HorizontalRestriction, **kwargs: Any
+        self, node: oir.HorizontalRestriction, *, symbol_collector, **kwargs: Any
     ) -> dcir.HorizontalRestriction:
-        return dcir.HorizontalRestriction(mask=node.mask, body=self.visit(node.body, **kwargs))
+        for axis, interval in zip(dcir.Axis.dims_horizontal(), node.mask.intervals):
+            for bound in (interval.start, interval.end):
+                if bound is not None:
+                    symbol_collector.add_symbol(axis.iteration_symbol())
+                    if bound.level == common.LevelMarker.END:
+                        symbol_collector.add_symbol(axis.domain_symbol())
+        return dcir.HorizontalRestriction(
+            mask=node.mask,
+            body=self.visit(node.body, symbol_collector=symbol_collector, **kwargs),
+        )
 
     def visit_VariableKOffset(self, node: oir.VariableKOffset, **kwargs):
         return dcir.VariableKOffset(k=self.visit(node.k, **kwargs))
