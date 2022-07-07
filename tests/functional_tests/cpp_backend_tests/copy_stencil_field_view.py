@@ -28,30 +28,6 @@ def copy_program(
     copy_stencil(inp, out=out2)
 
 
-# For use outside of GT4Py we should probably support a domain being used explicitly instead of relative to out field
-# someting like:
-# @program
-# def copy_program(
-#     isize, jsize, ksize,
-#     inp: Field[[IDim, JDim, KDim], float64],
-#     out: Field[[IDim, JDim, KDim], float64],
-#     out2: Field[[IDim, JDim, KDim], float64],
-# ):
-#     copy_stencil(inp, out=out[{IDim:[0,isize], JDim:[...], ...}])
-#     copy_stencil(inp, out=out2[...])
-
-# or just
-# @program
-# def copy_program(
-#     domain,
-#     inp: Field[[IDim, JDim, KDim], float64],
-#     out: Field[[IDim, JDim, KDim], float64],
-#     out2: Field[[IDim, JDim, KDim], float64],
-# ):
-#     copy_stencil(inp, out=out[domain])
-#     copy_stencil(inp, out=out2[domain])
-
-
 if __name__ == "__main__":
     if len(sys.argv) != 2:
         raise RuntimeError(f"Usage: {sys.argv[0]} <output_file>")
