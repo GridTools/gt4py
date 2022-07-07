@@ -3,8 +3,7 @@ from typing import Any, Optional, Union
 import eve
 from eve.concepts import SymbolName
 from eve.utils import UIDs
-from functional.iterator import ir as itir
-from functional.iterator.backends.gtfn.gtfn_ir import (
+from functional.fencil_processors.gtfn.gtfn_ir import (
     Backend,
     BinaryExpr,
     Expr,
@@ -25,6 +24,7 @@ from functional.iterator.backends.gtfn.gtfn_ir import (
     TernaryExpr,
     UnaryExpr,
 )
+from functional.iterator import ir as itir
 
 
 def pytype_to_cpptype(t: str):

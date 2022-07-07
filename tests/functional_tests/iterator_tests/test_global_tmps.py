@@ -162,7 +162,7 @@ def test_update_cartesian_domains():
                 ),
                 ir.StencilClosure(
                     domain=ir.FunCall(
-                        fun=ir.SymRef(id="domain"),
+                        fun=ir.SymRef(id="cartesian_domain"),
                         args=[
                             ir.FunCall(
                                 fun=ir.SymRef(id="named_range"),
@@ -226,7 +226,7 @@ def test_update_cartesian_domains():
             closures=[
                 ir.StencilClosure(
                     domain=ir.FunCall(
-                        fun=ir.SymRef(id="domain"),
+                        fun=ir.SymRef(id="cartesian_domain"),
                         args=[
                             ir.FunCall(
                                 fun=ir.SymRef(id="named_range"),
@@ -264,7 +264,7 @@ def test_update_cartesian_domains():
                 ),
                 ir.StencilClosure(
                     domain=ir.FunCall(
-                        fun=ir.SymRef(id="domain"),
+                        fun=ir.SymRef(id="cartesian_domain"),
                         args=[
                             ir.FunCall(
                                 fun=ir.SymRef(id="named_range"),
@@ -296,7 +296,7 @@ def test_update_cartesian_domains():
                 ),
                 ir.StencilClosure(
                     domain=ir.FunCall(
-                        fun=ir.SymRef(id="domain"),
+                        fun=ir.SymRef(id="cartesian_domain"),
                         args=[
                             ir.FunCall(
                                 fun=ir.SymRef(id="named_range"),
@@ -350,7 +350,7 @@ def test_update_cartesian_domains():
 
 def test_collect_tmps_info():
     tmp_domain = ir.FunCall(
-        fun=ir.SymRef(id="domain"),
+        fun=ir.SymRef(id="cartesian_domain"),
         args=[
             ir.FunCall(
                 fun=ir.SymRef(id="named_range"),
@@ -410,7 +410,7 @@ def test_collect_tmps_info():
                 ),
                 ir.StencilClosure(
                     domain=ir.FunCall(
-                        fun=ir.SymRef(id="domain"),
+                        fun=ir.SymRef(id="cartesian_domain"),
                         args=[
                             ir.FunCall(
                                 fun=ir.SymRef(id="named_range"),

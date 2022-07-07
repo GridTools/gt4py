@@ -76,7 +76,8 @@ class StencilClosure(Node):
 
 
 BUILTINS = {
-    "domain",
+    "cartesian_domain",
+    "unstructured_domain",
     "named_range",
     "lift",
     "make_tuple",

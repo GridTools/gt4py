@@ -194,7 +194,7 @@ def test_get_partial_type_hints():
         "return": Dict[str, MissingRef],
     }
 
-    def f_annotated(a: Annotated[int, "Foo"]) -> float:
+    def f_annotated(a: Annotated[int, "Foo"]) -> float:  # type: ignore[name-defined]  # used to work, now mypy is going berserk for unknown reasons
         ...
 
     assert xtyping.get_partial_type_hints(f_annotated) == {"a": int, "return": float}

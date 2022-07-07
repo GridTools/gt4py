@@ -1,14 +1,32 @@
+# TODO(havogt) move public definitions and make this module private
+
+from __future__ import annotations
+
 import itertools
 import numbers
-import typing
+from abc import abstractmethod
 from dataclasses import dataclass
+from typing import (
+    Any,
+    Callable,
+    Iterable,
+    Mapping,
+    Optional,
+    Protocol,
+    Sequence,
+    TypeAlias,
+    TypeGuard,
+    Union,
+    runtime_checkable,
+)
 
 import numpy as np
-import numpy.typing
+import numpy.typing as npt
 
 from functional import iterator
+from functional.common import Connectivity, Dimension
 from functional.iterator import builtins
-from functional.iterator.runtime import CartesianAxis, Offset
+from functional.iterator.runtime import CartesianDomain, Offset, UnstructuredDomain
 from functional.iterator.utils import tupelize
 
 
@@ -17,7 +35,12 @@ EMBEDDED = "embedded"
 
 class NeighborTableOffsetProvider:
     def __init__(
-        self, tbl, origin_axis, neighbor_axis, max_neighbors, has_skip_values=True
+        self,
+        tbl: npt.NDArray,  # TODO(havogt): define neighbor table concept
+        origin_axis: Dimension,
+        neighbor_axis: Dimension,
+        max_neighbors: int,
+        has_skip_values=True,
     ) -> None:
         self.tbl = tbl
         self.origin_axis = origin_axis
@@ -25,6 +48,84 @@ class NeighborTableOffsetProvider:
         assert not hasattr(tbl, "shape") or tbl.shape[1] == max_neighbors
         self.max_neighbors = max_neighbors
         self.has_skip_values = has_skip_values
+
+
+# Atoms
+Tag: TypeAlias = str
+IntIndex: TypeAlias = int
+
+FieldIndex: TypeAlias = int | slice
+FieldIndexOrIndices: TypeAlias = FieldIndex | tuple[FieldIndex, ...]
+
+Axis: TypeAlias = Dimension
+
+# Offsets
+AnyOffset: TypeAlias = Tag | IntIndex
+CompleteOffset: TypeAlias = tuple[Tag, IntIndex]
+OffsetProviderElem: TypeAlias = Dimension | Connectivity
+OffsetProvider: TypeAlias = dict[Tag, OffsetProviderElem]
+
+# Positions
+IncompleteSparsePositionEntry: TypeAlias = Optional[int]
+PositionEntry: TypeAlias = IntIndex
+IncompletePositionEntry: TypeAlias = IntIndex | IncompleteSparsePositionEntry
+ConcretePosition: TypeAlias = dict[Tag, PositionEntry]
+IncompletePosition: TypeAlias = dict[Tag, IncompletePositionEntry]
+
+Position: TypeAlias = Union[ConcretePosition, IncompletePosition]
+#: A ``None`` position flags invalid not-a-neighbor results in neighbor-table lookups
+MaybePosition: TypeAlias = Optional[Position]
+
+
+def is_position_entry(p: IncompletePositionEntry) -> TypeGuard[PositionEntry]:
+    return isinstance(p, int)
+
+
+@runtime_checkable
+class ItIterator(Protocol):
+    """
+    Prototype for the Iterator concept of Iterator IR.
+
+    `ItIterator` to avoid name clashes with `Iterator` from `typing` and `collections.abc`.
+    """
+
+    def shift(self, *offsets: AnyOffset) -> ItIterator:
+        ...
+
+    def max_neighbors(self) -> int:
+        ...
+
+    def can_deref(self) -> bool:
+        ...
+
+    def deref(self) -> Any:
+        ...
+
+
+@runtime_checkable
+class LocatedField(Protocol):
+    """A field with named dimensions providing read access."""
+
+    @property
+    @abstractmethod
+    def axes(self) -> tuple[Dimension, ...]:
+        ...
+
+    @abstractmethod
+    def __getitem__(self, indices: FieldIndexOrIndices) -> Any:
+        ...
+
+
+class MutableLocatedField(LocatedField, Protocol):
+    """A LocatedField with write access."""
+
+    @abstractmethod
+    def __setitem__(self, indices: FieldIndexOrIndices, value: Any) -> None:
+        ...
+
+    @abstractmethod
+    def __array__(self) -> np.ndarray:
+        ...
 
 
 @builtins.deref.register(EMBEDDED)
@@ -70,27 +171,23 @@ def make_tuple(*args):
 @builtins.lift.register(EMBEDDED)
 def lift(stencil):
     def impl(*args):
-        class wrap_iterator:
-            def __init__(self, *, offsets=None, elem=None) -> None:
+        class _WrappedIterator:
+            def __init__(self, *, offsets: list[AnyOffset] = None, elem=None) -> None:
                 self.offsets = offsets or []
                 self.elem = elem
 
             # TODO needs to be supported by all iterators that represent tuples
             def __getitem__(self, index):
-                return wrap_iterator(offsets=self.offsets, elem=index)
+                return _WrappedIterator(offsets=self.offsets, elem=index)
 
-            def shift(self, *offsets):
-                return wrap_iterator(offsets=[*self.offsets, *offsets], elem=self.elem)
+            def shift(self, *offsets: AnyOffset):
+                return _WrappedIterator(offsets=[*self.offsets, *offsets], elem=self.elem)
 
             def max_neighbors(self):
                 # TODO cleanup, test edge cases
                 open_offsets = get_open_offsets(*self.offsets)
                 assert open_offsets
-                assert isinstance(
-                    args[0].offset_provider[open_offsets[0].value],
-                    NeighborTableOffsetProvider,
-                )
-                return args[0].offset_provider[open_offsets[0].value].max_neighbors
+                return _get_connectivity(args[0].offset_provider, open_offsets[0]).max_neighbors
 
             def _shifted_args(self):
                 return tuple(map(lambda arg: arg.shift(*self.offsets), args))
@@ -112,7 +209,7 @@ def lift(stencil):
                 else:
                     return stencil(*shifted_args)[self.elem]
 
-        return wrap_iterator()
+        return _WrappedIterator()
 
     return impl
 
@@ -138,13 +235,24 @@ def reduce(fun, init):
     return sten
 
 
-@builtins.domain.register(EMBEDDED)
-def domain(*args):
-    return dict(args)
+NamedRange: TypeAlias = tuple[Tag | Dimension, range]
+
+
+@builtins.cartesian_domain.register(EMBEDDED)
+def cartesian_domain(*args: NamedRange) -> CartesianDomain:
+    return CartesianDomain(args)
+
+
+@builtins.unstructured_domain.register(EMBEDDED)
+def unstructured_domain(*args: NamedRange) -> UnstructuredDomain:
+    return UnstructuredDomain(args)
+
+
+Domain: TypeAlias = CartesianDomain | UnstructuredDomain | dict[str | Dimension, range]
 
 
 @builtins.named_range.register(EMBEDDED)
-def named_range(tag, start, end):
+def named_range(tag: Tag | Dimension, start: int, end: int) -> NamedRange:
     return (tag, range(start, end))
 
 
@@ -183,42 +291,60 @@ def less(first, second):
     return first < second
 
 
-def named_range_(axis: CartesianAxis, range_: range):
+def _lookup_offset_provider(offset_provider: OffsetProvider, tag: Tag) -> OffsetProviderElem:
+    if tag not in offset_provider:
+        raise RuntimeError(f"Missing offset provider for `{tag}`")
+    return offset_provider[tag]
+
+
+def _get_connectivity(offset_provider: OffsetProvider, tag: Tag) -> Connectivity:
+    if not isinstance(connectivity := _lookup_offset_provider(offset_provider, tag), Connectivity):
+        raise RuntimeError(f"Expected a `Connectivity` for `{tag}`")
+    return connectivity
+
+
+def _named_range(axis: str, range_: Iterable[int]) -> Iterable[CompleteOffset]:
     return ((axis, i) for i in range_)
 
 
-def domain_iterator(domain: dict[CartesianAxis, range]):
+def _domain_iterator(domain: dict[str, range]) -> Iterable[Position]:
     return (
         dict(elem)
-        for elem in itertools.product(*(named_range_(tup[0], tup[1]) for tup in domain.items()))
+        for elem in itertools.product(*(_named_range(axis, rang) for axis, rang in domain.items()))
     )
 
 
-def execute_shift(pos, tag, index, *, offset_provider):
+def execute_shift(
+    pos: Position, tag: Tag, index: IntIndex, *, offset_provider: OffsetProvider
+) -> MaybePosition:
+    assert pos is not None
     if tag in pos and pos[tag] is None:  # sparse field with offset as neighbor dimension
-        new_pos = pos.copy()
-        new_pos[tag] = index
-        return new_pos
-    assert tag.value in offset_provider
-    offset_implementation = offset_provider[tag.value]
-    if isinstance(offset_implementation, CartesianAxis):
-        assert offset_implementation in pos
-        new_pos = pos.copy()
-        new_pos[offset_implementation] += index
-        return new_pos
-    elif isinstance(offset_implementation, NeighborTableOffsetProvider):
-        assert offset_implementation.origin_axis in pos
-        new_pos = pos.copy()
-        del new_pos[offset_implementation.origin_axis]
-        if offset_implementation.tbl[pos[offset_implementation.origin_axis], index] is None:
-            return None
-        else:
-            new_pos[offset_implementation.neighbor_axis] = offset_implementation.tbl[
-                pos[offset_implementation.origin_axis], index
-            ]
+        new_pos = pos | {tag: index}
         return new_pos
 
-    raise AssertionError()
+    assert tag in offset_provider
+    offset_implementation = offset_provider[tag]
+    if isinstance(offset_implementation, Dimension):
+        assert offset_implementation.value in pos
+        new_pos = pos.copy()
+        if is_position_entry(value := new_pos[offset_implementation.value]):
+            new_pos[offset_implementation.value] = value + index
+        else:
+            raise AssertionError()
+        return new_pos
+    elif isinstance(offset_implementation, NeighborTableOffsetProvider):
+        assert offset_implementation.origin_axis.value in pos
+        new_pos = pos.copy()
+        new_pos.pop(offset_implementation.origin_axis.value)
+        if offset_implementation.tbl[pos[offset_implementation.origin_axis.value], index] is None:
+            return None
+        else:
+            new_pos[offset_implementation.neighbor_axis.value] = int(
+                offset_implementation.tbl[pos[offset_implementation.origin_axis.value], index]
+            )
+        return new_pos
+
+    raise AssertionError("Unknown object in `offset_provider`")
 
 
 # The following holds for shifts:
@@ -232,7 +358,7 @@ def execute_shift(pos, tag, index, *, offset_provider):
 # = shift(c2e,e2v,2,0)(cell_field) <-- v2c,e2c twice incomplete shift
 # = shift(2,0)(shift(c2e,e2v)(cell_field))
 # for implementations it means everytime we have an index, we can "execute" a concrete shift
-def group_offsets(*offsets):
+def group_offsets(*offsets: AnyOffset) -> tuple[list[CompleteOffset], list[Tag]]:
     tag_stack = []
     complete_offsets = []
     for offset in offsets:
@@ -245,18 +371,23 @@ def group_offsets(*offsets):
     return complete_offsets, tag_stack
 
 
-def shift_position(pos, *complete_offsets, offset_provider):
+def shift_position(
+    pos: MaybePosition, *complete_offsets: CompleteOffset, offset_provider: OffsetProvider
+) -> MaybePosition:
     if pos is None:
         return None
     new_pos = pos.copy()
     for tag, index in complete_offsets:
-        new_pos = execute_shift(new_pos, tag, index, offset_provider=offset_provider)
-        if new_pos is None:
+        if (
+            shifted_pos := execute_shift(new_pos, tag, index, offset_provider=offset_provider)
+        ) is not None:
+            new_pos = shifted_pos
+        else:
             return None
     return new_pos
 
 
-def get_open_offsets(*offsets):
+def get_open_offsets(*offsets: AnyOffset) -> list[Tag]:
     return group_offsets(*offsets)[1]
 
 
@@ -309,9 +440,20 @@ Undefined._setup_math_operations()
 _UNDEFINED = Undefined()
 
 
+def _is_position_fully_defined(pos: Position) -> TypeGuard[ConcretePosition]:
+    return all(isinstance(v, int) for v in pos.values())
+
+
+# TODO(havogt) frozen dataclass
 class MDIterator:
     def __init__(
-        self, field, pos, *, incomplete_offsets=None, offset_provider, column_axis=None
+        self,
+        field: LocatedField,
+        pos: MaybePosition,
+        *,
+        incomplete_offsets: Sequence[Tag] = None,
+        offset_provider: OffsetProvider,
+        column_axis: Tag = None,
     ) -> None:
         self.field = field
         self.pos = pos
@@ -319,7 +461,7 @@ class MDIterator:
         self.offset_provider = offset_provider
         self.column_axis = column_axis
 
-    def shift(self, *offsets):
+    def shift(self, *offsets: AnyOffset) -> MDIterator:
         complete_offsets, open_offsets = group_offsets(*self.incomplete_offsets, *offsets)
         return MDIterator(
             self.field,
@@ -329,36 +471,35 @@ class MDIterator:
             column_axis=self.column_axis,
         )
 
-    def max_neighbors(self):
+    def max_neighbors(self) -> int:
         assert self.incomplete_offsets
-        assert isinstance(
-            self.offset_provider[self.incomplete_offsets[0].value], NeighborTableOffsetProvider
-        )
-        return self.offset_provider[self.incomplete_offsets[0].value].max_neighbors
+        return _get_connectivity(self.offset_provider, self.incomplete_offsets[0]).max_neighbors
 
-    def can_deref(self):
+    def can_deref(self) -> bool:
         return self.pos is not None
 
-    def deref(self):
+    def deref(self) -> Any:
         if not self.can_deref():
             # this can legally happen in cases like `if_(can_deref(inp), deref(inp), 42.)`
             # because both branches will be eagerly executed
             return _UNDEFINED
 
+        assert self.pos is not None
         shifted_pos = self.pos.copy()
         # TODO(havogt): support nested tuples
-        axises = self.field[0].axises if isinstance(self.field, tuple) else self.field.axises
+        axes = self.field[0].axes if isinstance(self.field, tuple) else self.field.axes
 
-        if not all(axis in shifted_pos.keys() for axis in axises):
+        if not all(axis.value in shifted_pos.keys() for axis in axes):
             raise IndexError("Iterator position doesn't point to valid location for its field.")
-        slice_column = {}
+        slice_column = dict[Tag, FieldIndex]()
         if self.column_axis is not None:
             slice_column[self.column_axis] = slice(shifted_pos[self.column_axis], None)
-            del shifted_pos[self.column_axis]
+            shifted_pos.pop(self.column_axis)
+
+        assert _is_position_fully_defined(shifted_pos)
         ordered_indices = get_ordered_indices(
-            axises,
-            shifted_pos,
-            slice_axises=slice_column,
+            axes,
+            {**shifted_pos, **slice_column},
         )
         try:
             if isinstance(self.field, tuple):
@@ -369,21 +510,28 @@ class MDIterator:
             return _UNDEFINED
 
 
-def make_in_iterator(inp, pos, offset_provider, *, column_axis):
+def make_in_iterator(
+    inp: LocatedField,
+    pos: Position,
+    offset_provider: OffsetProvider,
+    *,
+    column_axis: Optional[Tag],
+) -> MDIterator:
     # TODO(havogt): support nested tuples
-    axises = inp[0].axises if isinstance(inp, tuple) else inp.axises
-    sparse_dimensions = []
-    for axis in axises:
+    axes = inp[0].axes if isinstance(inp, tuple) else inp.axes
+    sparse_dimensions: list[Tag] = []
+    for axis in axes:
         if isinstance(axis, Offset):
-            sparse_dimensions.append(axis)
-        elif isinstance(axis, CartesianAxis) and axis.local:
+            assert isinstance(axis.value, str)
+            sparse_dimensions.append(axis.value)
+        elif isinstance(axis, Dimension) and axis.local:
             # we just use the name of the axis to match the offset literal for now
-            sparse_dimensions.append(axis)
+            sparse_dimensions.append(axis.value)
 
     assert len(sparse_dimensions) <= 1  # TODO multiple is not a current use case
-    new_pos = pos.copy()
-    for axis in sparse_dimensions:
-        new_pos[axis] = None
+    new_pos: Position = pos.copy()
+    for sparse_dim in sparse_dimensions:
+        new_pos[sparse_dim] = None  # type: ignore[assignment] # looks like mypy is confused
     if column_axis is not None:
         # if we deal with column stencil the column position is just an offset by which the whole column needs to be shifted
         new_pos[column_axis] = 0
@@ -399,34 +547,36 @@ def make_in_iterator(inp, pos, offset_provider, *, column_axis):
 builtins.builtin_dispatch.push_key(EMBEDDED)  # makes embedded the default
 
 
-FIELD_DTYPE_T = typing.TypeVar("FIELD_DTYPE_T", bound=np.typing.DTypeLike)
+class LocatedFieldImpl(MutableLocatedField):
+    """A Field with named dimensions/axes."""
 
+    @property
+    def axes(self) -> tuple[Dimension, ...]:
+        return self._axes
 
-class LocatedField:
-    """A Field with named dimensions/axises.
-
-    Axis keys can be any objects that are hashable.
-    """
-
-    def __init__(self, getter, axises, dtype, *, setter=None, array=None):
+    def __init__(
+        self,
+        getter: Callable[[FieldIndexOrIndices], Any],
+        axes: tuple[Dimension, ...],
+        dtype,
+        *,
+        setter: Callable[[FieldIndexOrIndices, Any], None],
+        array: Callable[[], npt.NDArray],
+    ):
         self.getter = getter
-        self.axises = axises
+        self._axes = axes
         self.setter = setter
         self.array = array
         self.dtype = dtype
 
-    def __getitem__(self, indices):
+    def __getitem__(self, indices: FieldIndexOrIndices) -> Any:
         indices = tupelize(indices)
         return self.getter(indices)
 
-    def __setitem__(self, indices, value):
-        if self.setter is None:
-            raise TypeError("__setitem__ not supported for this field")
+    def __setitem__(self, indices: FieldIndexOrIndices, value: Any):
         self.setter(indices, value)
 
-    def __array__(self):
-        if self.array is None:
-            raise TypeError("__array__ not supported for this field")
+    def __array__(self) -> np.ndarray:
         return self.array()
 
     @property
@@ -436,11 +586,11 @@ class LocatedField:
         return self.array().shape
 
 
-def get_ordered_indices(axises, pos, *, slice_axises=None):
-    """pos is a dictionary from axis to offset."""  # noqa: D403
-    slice_axises = slice_axises or dict()
-    assert all(axis in [*pos.keys(), *slice_axises] for axis in axises)
-    return tuple(pos[axis] if axis in pos else slice_axises[axis] for axis in axises)
+def get_ordered_indices(
+    axes: Iterable[Axis], pos: Mapping[str, FieldIndex]
+) -> tuple[FieldIndex, ...]:
+    assert all(axis.value in [*pos.keys()] for axis in axes)
+    return tuple(pos[axis.value] for axis in axes)
 
 
 def _tupsum(a, b):
@@ -468,15 +618,17 @@ def _tupsum(a, b):
     return tuple(combine_slice(*i) for i in zip(a, b))
 
 
-def np_as_located_field(*axises, origin=None):
-    def _maker(a: np.ndarray):
-        if a.ndim != len(axises):
-            raise TypeError("ndarray.ndim incompatible with number of given axises")
+def np_as_located_field(
+    *axes: Dimension, origin: Optional[dict[Dimension, int]] = None
+) -> Callable[[np.ndarray], LocatedFieldImpl]:
+    def _maker(a: np.ndarray) -> LocatedFieldImpl:
+        if a.ndim != len(axes):
+            raise TypeError("ndarray.ndim incompatible with number of given axes")
 
         if origin is not None:
-            offsets = get_ordered_indices(axises, origin)
+            offsets = get_ordered_indices(axes, {k.value: v for k, v in origin.items()})
         else:
-            offsets = tuple(0 for _ in axises)
+            offsets = tuple(0 for _ in axes)
 
         def setter(indices, value):
             indices = tupelize(indices)
@@ -485,60 +637,89 @@ def np_as_located_field(*axises, origin=None):
         def getter(indices):
             return a[_tupsum(indices, offsets)]
 
-        return LocatedField(getter, axises, dtype=a.dtype, setter=setter, array=a.__array__)
+        return LocatedFieldImpl(getter, axes, dtype=a.dtype, setter=setter, array=a.__array__)
 
     return _maker
 
 
-def index_field(axis, dtype=float):
-    return LocatedField(lambda index: index[0], (axis,), dtype)
+class IndexField(LocatedField):
+    def __init__(self, axis: Dimension, dtype: npt.DTypeLike) -> None:
+        self.axis = axis
+        self.dtype = np.dtype(dtype).type
+
+    def __getitem__(self, index: FieldIndexOrIndices) -> Any:
+        assert isinstance(index, int) or (isinstance(index, tuple) and len(index) == 1)
+        return self.dtype(index if isinstance(index, int) else index[0])
+
+    @property
+    def axes(self) -> tuple[Dimension]:
+        return (self.axis,)
 
 
-def constant_field(value: typing.Any, dtype: type) -> LocatedField:
-    return LocatedField(lambda _: value, (), dtype)
+def index_field(axis: Dimension, dtype: npt.DTypeLike = float) -> LocatedField:
+    return IndexField(axis, dtype)
+
+
+class ConstantField(LocatedField):
+    def __init__(self, value: Any, dtype: npt.DTypeLike):
+        self.value = value
+        self.dtype = np.dtype(dtype).type
+
+    def __getitem__(self, _: FieldIndexOrIndices) -> Any:
+        return self.dtype(self.value)
+
+    @property
+    def axes(self) -> tuple[()]:
+        return ()
+
+
+def constant_field(value: Any, dtype: npt.DTypeLike = float) -> LocatedField:
+    return ConstantField(value, dtype)
 
 
 @builtins.shift.register(EMBEDDED)
-def shift(*offsets):
-    def impl(it):
-        return it.shift(*offsets)
+def shift(*offsets: Union[Offset, int]) -> Callable[[ItIterator], ItIterator]:
+    def impl(it: ItIterator) -> ItIterator:
+        return it.shift(*list(o.value if isinstance(o, Offset) else o for o in offsets))
 
     return impl
 
 
 @dataclass
 class Column:
-    axis: CartesianAxis
-    range: range  # noqa: A003
+    axis: str
+    col_range: range  # TODO(havogt) introduce range type that doesn't have step
 
 
 class ScanArgIterator:
-    def __init__(self, wrapped_iter, k_pos, *, offsets=None) -> None:
+    def __init__(
+        self, wrapped_iter: ItIterator, k_pos: int, *, offsets: Sequence[AnyOffset] = None
+    ) -> None:
         self.wrapped_iter = wrapped_iter
         self.offsets = offsets or []
         self.k_pos = k_pos
 
-    def deref(self):
+    def deref(self) -> Any:
         if not self.can_deref():
             return _UNDEFINED
         return self.wrapped_iter.deref()[self.k_pos]
 
-    def can_deref(self):
+    def can_deref(self) -> bool:
         return self.wrapped_iter.can_deref()
 
-    def shift(self, *offsets):
-        return ScanArgIterator(self.wrapped_iter, offsets=[*offsets, *self.offsets])
+    def shift(self, *offsets: AnyOffset) -> ScanArgIterator:
+        return ScanArgIterator(self.wrapped_iter, self.k_pos, offsets=[*offsets, *self.offsets])
 
 
-def shifted_scan_arg(k_pos):
-    def impl(it):
+def shifted_scan_arg(k_pos: int) -> Callable[[ItIterator], ScanArgIterator]:
+    def impl(it: ItIterator) -> ScanArgIterator:
         return ScanArgIterator(it, k_pos=k_pos)
 
     return impl
 
 
-def is_located_field(field) -> bool:
-    return isinstance(field, LocatedField)  # TODO define on concept, not on concrete model
+def is_located_field(field: Any) -> bool:
+    return isinstance(field, LocatedField)  # TODO(havogt): avoid isinstance on Protocol
 
 
 def has_uniform_tuple_element(field) -> bool:
@@ -577,7 +758,7 @@ def _get_axeses(field):
         return tuple(itertools.chain(*tuple(_get_axeses(f) for f in field)))
     else:
         assert is_located_field(field)
-        return (field.axises,)
+        return (field.axes,)
 
 
 def _build_tuple_result(field, indices):
@@ -607,9 +788,9 @@ class TupleOfFields(TupleField):
             raise TypeError("Can only be instantiated with a tuple of fields")
         self.data = data
         axeses = _get_axeses(data)
-        if not all(axises == axeses[0] for axises in axeses):
-            raise TypeError("All fields in the tuple need the same axises.")
-        self.axises = axeses[0]
+        if not all(axes == axeses[0] for axes in axeses):
+            raise TypeError("All fields in the tuple need the same axes.")
+        self.axes = axeses[0]
 
     def __getitem__(self, indices):
         return _build_tuple_result(self.data, indices)
@@ -635,8 +816,8 @@ _column_range = None  # TODO this is a bit ugly, alternative: pass scan range vi
 
 
 @builtins.scan.register(EMBEDDED)
-def scan(scan_pass, is_forward, init):
-    def impl(*iters):
+def scan(scan_pass, is_forward: bool, init):
+    def impl(*iters: ItIterator):
         if _column_range is None:
             raise RuntimeError("Column range is not defined, cannot scan.")
 
@@ -664,27 +845,46 @@ def scan(scan_pass, is_forward, init):
     return impl
 
 
-def fendef_embedded(fun, *args, **kwargs):  # noqa: 536
+def _dimension_to_tag(domain: Domain) -> dict[Tag, range]:
+    return {k.value if isinstance(k, Dimension) else k: v for k, v in domain.items()}
+
+
+def _validate_domain(domain: Domain, offset_provider: OffsetProvider) -> None:
+    if isinstance(domain, CartesianDomain):
+        if any(isinstance(o, Connectivity) for o in offset_provider.values()):
+            raise RuntimeError(
+                "Got a `CartesianDomain`, but found a `Connectivity` in `offset_provider`, expected `UnstructuredDomain`."
+            )
+
+
+def fendef_embedded(fun: Callable[..., None], *args: Any, **kwargs: Any):
     if "offset_provider" not in kwargs:
         raise RuntimeError("offset_provider not provided")
 
     @iterator.runtime.closure.register(EMBEDDED)
-    def closure(domain, sten, out, ins):  # domain is Dict[axis, range]
+    def closure(
+        domain_: Domain,
+        sten: Callable[..., Any],
+        out: MutableLocatedField,
+        ins: list[LocatedField],
+    ) -> None:
+        _validate_domain(domain_, kwargs["offset_provider"])
+        domain: dict[Tag, range] = _dimension_to_tag(domain_)
         if not (is_located_field(out) or can_be_tuple_field(out)):
             raise TypeError("Out needs to be a located field.")
 
         global _column_range
-        column = None
+        column: Optional[Column] = None
         if "column_axis" in kwargs:
             column_axis = kwargs["column_axis"]
-            column = Column(column_axis, domain[column_axis])
-            del domain[column_axis]
+            column = Column(column_axis.value, domain[column_axis.value])
+            del domain[column_axis.value]
 
-            _column_range = column.range
+            _column_range = column.col_range
 
         out = as_tuple_field(out) if can_be_tuple_field(out) else out
 
-        for pos in domain_iterator(domain):
+        for pos in _domain_iterator(domain):
             ins_iters = list(
                 make_in_iterator(
                     inp,
@@ -697,13 +897,15 @@ def fendef_embedded(fun, *args, **kwargs):  # noqa: 536
             res = sten(*ins_iters)
 
             if column is None:
-                ordered_indices = get_ordered_indices(out.axises, pos)
+                assert _is_position_fully_defined(pos)
+                ordered_indices = get_ordered_indices(out.axes, pos)
                 out[ordered_indices] = res
             else:
-                colpos = pos.copy()
-                for k in column.range:
-                    colpos[column.axis] = k
-                    ordered_indices = get_ordered_indices(out.axises, colpos)
+                col_pos = pos.copy()
+                for k in column.col_range:
+                    col_pos[column.axis] = k
+                    assert _is_position_fully_defined(col_pos)
+                    ordered_indices = get_ordered_indices(out.axes, col_pos)
                     out[ordered_indices] = res[k]
 
         _column_range = None

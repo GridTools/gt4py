@@ -1,4 +1,5 @@
-from typing import Iterator, Type, TypeGuard
+from types import EllipsisType
+from typing import Iterator, Type, TypeGuard, cast
 
 from functional.common import Dimension, GTTypeError
 from functional.ffront import common_types as ct
@@ -31,9 +32,11 @@ def type_class(symbol_type: ct.SymbolType) -> Type[ct.SymbolType]:
     """
     match symbol_type:
         case ct.DeferredSymbolType(constraint):
-            if constraint is None:
+            if constraint is None:  # type: ignore[has-type]  # mypy can not get the type from the case expression anymore (why?)
                 raise GTTypeError(f"No type information available for {symbol_type}!")
-            return constraint
+            elif isinstance(constraint, tuple):  # type: ignore[has-type]  # mypy can not get the type from the case expression anymore (why?)
+                raise GTTypeError(f"Not sufficient type information available for {symbol_type}!")
+            return constraint  # type: ignore[has-type]  # mypy can not get the type from the case expression anymore (why?)
         case ct.SymbolType() as concrete_type:
             return concrete_type.__class__
     raise GTTypeError(
@@ -109,7 +112,7 @@ def extract_dims(symbol_type: ct.SymbolType) -> list[Dimension]:
         case ct.ScalarType():
             return []
         case ct.FieldType(dims):
-            return dims
+            return dims  # type: ignore[has-type]  # mypy can not get the type from the case expression anymore (why?)
     raise GTTypeError(f"Can not extract dimensions from {symbol_type}!")
 
 
@@ -157,7 +160,7 @@ def is_concretizable(symbol_type: ct.SymbolType, to_type: ct.SymbolType) -> bool
 
     """
     if isinstance(symbol_type, ct.DeferredSymbolType) and (
-        symbol_type.constraint is None or issubclass(type_class(to_type), symbol_type.constraint)
+        symbol_type.constraint is None or issubclass(type_class(to_type), symbol_type.constraint)  # type: ignore[arg-type]
     ):
         return True
     elif is_concrete(symbol_type):
@@ -165,31 +168,125 @@ def is_concretizable(symbol_type: ct.SymbolType, to_type: ct.SymbolType) -> bool
     return False
 
 
-def _is_sublist(small_list, big_list):
-    if len(small_list) > len(big_list):
-        return False
-    elif all(i in big_list for i in small_list):
-        start = big_list.index(small_list[0])
-        end = big_list.index(small_list[-1]) + 1
-        return small_list == big_list[start:end]
-    return False
-
-
-def is_dimensionally_promotable(symbol_type: ct.SymbolType, to_type: ct.SymbolType) -> bool:
+def promote(*types: ct.FieldType | ct.ScalarType) -> ct.FieldType | ct.SymbolType:
     """
-    Check if `symbol_type` has no fixed dimensionality and can be dimensionally promoted.
+    Promote a set of field or scalar types to a common type.
 
-    This is not to be mistaken for broadcasting, a more general concept, which allows interactions
-    between differing sets of dimensions.
+    The resulting type is defined on all dimensions of the arguments, respecting
+    the individual order of the dimensions of each argument (see
+    :func:`promote_dims` for more details).
+
+    >>> dtype = ct.ScalarType(kind=ct.ScalarKind.INT64)
+    >>> I, J, K = (Dimension(value=dim) for dim in ["I", "J", "K"])
+    >>> promoted: ct.FieldType = promote(
+    ...     ct.FieldType(dims=[I, J], dtype=dtype),
+    ...     ct.FieldType(dims=[I, J, K], dtype=dtype),
+    ...     dtype
+    ... )
+    >>> promoted.dims == [I, J, K] and promoted.dtype == dtype
+    True
+
+    >>> promote(
+    ...     ct.FieldType(dims=[I, J], dtype=dtype),
+    ...     ct.FieldType(dims=[K], dtype=dtype)
+    ... ) # doctest: +ELLIPSIS
+    Traceback (most recent call last):
+     ...
+    functional.common.GTTypeError: Dimensions can not be promoted. Could not determine order of the following dimensions: J, K.
     """
-    # scalars can always be broadcasted
-    if type_class(symbol_type) is ct.ScalarType:
-        return True
-    # symbol_type must be either zero- or any dimensional or have same dimensionality as to_type
-    elif type_class(to_type) is ct.FieldType:
-        dims = extract_dims(symbol_type)
-        return dims in [[], Ellipsis] or _is_sublist(dims, extract_dims(to_type))
-    return False
+    if all(isinstance(type_, ct.ScalarType) for type_ in types):
+        if not all(type_ == types[0] for type_ in types):
+            raise GTTypeError("Could not promote scalars of different dtype (not implemented).")
+        if not all(type_.shape is None for type_ in types):  # type: ignore[union-attr]
+            raise NotImplementedError("Shape promotion not implemented.")
+        return types[0]
+    elif all(isinstance(type_, (ct.ScalarType, ct.FieldType)) for type_ in types):
+        dims = promote_dims(*(extract_dims(type_) for type_ in types))
+        dtype = cast(ct.ScalarType, promote(*(extract_dtype(type_) for type_ in types)))
+
+        return ct.FieldType(dims=dims, dtype=dtype)
+    raise TypeError("Expected a FieldType or ScalarType.")
+
+
+def promote_dims(
+    *dims_list: list[Dimension] | EllipsisType,
+) -> list[Dimension] | EllipsisType:
+    """
+    Find a unique ordering of multiple (individually ordered) lists of dimensions.
+
+    The resulting list of dimensions contains all dimensions of the arguments
+    in the order they originally appear. If no unique order exists or a
+    contradicting order is found an exception is raised.
+
+    A modified version (ensuring uniqueness of the order) of
+    `Kahn's algorithm <https://en.wikipedia.org/wiki/Topological_sorting#Kahn's_algorithm>`_
+    is used to topologically sort the arguments.
+
+    >>> I, J, K = (Dimension(value=dim) for dim in ["I", "J", "K"])
+    >>> promote_dims([I, J], [I, J, K]) == [I, J, K]
+    True
+    >>> promote_dims([I, J], [K]) # doctest: +ELLIPSIS
+    Traceback (most recent call last):
+     ...
+    functional.common.GTTypeError: Dimensions can not be promoted. Could not determine order of the following dimensions: J, K.
+    >>> promote_dims([I, J], [J, I]) # doctest: +ELLIPSIS
+    Traceback (most recent call last):
+     ...
+    functional.common.GTTypeError: Dimensions can not be promoted. The following dimensions appear in contradicting order: I, J.
+    """
+    # build a graph with the vertices being dimensions and edges representing
+    #  the order between two dimensions. The graph is encoded as a dictionary
+    #  mapping dimensions to their predecessors, i.e. a dictionary containing
+    #  adjacency lists. Since graphlib.TopologicalSorter uses predecessors
+    #  (contrary to successors) we also use this directionality here.
+    graph: dict[Dimension, set[Dimension]] = {}
+    for dims in dims_list:
+        if dims == Ellipsis:
+            return Ellipsis
+        dims = cast(list[Dimension], dims)
+        if len(dims) == 0:
+            continue
+        # create a vertex for each dimension
+        for dim in dims:
+            graph.setdefault(dim, set())
+        # add edges
+        predecessor = dims[0]
+        for dim in dims[1:]:
+            graph[dim].add(predecessor)
+            predecessor = dim
+
+    # modified version of Kahn's algorithm
+    topologically_sorted_list: list[Dimension] = []
+
+    # compute in-degree for each vertex
+    in_degree = {v: 0 for v in graph.keys()}
+    for v1 in graph:
+        for v2 in graph[v1]:
+            in_degree[v2] += 1
+
+    # process vertices with in-degree == 0
+    # TODO(tehrengruber): avoid recomputation of zero_in_degree_vertex_list
+    while zero_in_degree_vertex_list := [v for v, d in in_degree.items() if d == 0]:
+        if len(zero_in_degree_vertex_list) != 1:
+            raise GTTypeError(
+                f"Dimensions can not be promoted. Could not determine "
+                f"order of the following dimensions: "
+                f"{', '.join((dim.value for dim in zero_in_degree_vertex_list))}."
+            )
+        v = zero_in_degree_vertex_list[0]
+        del in_degree[v]
+        topologically_sorted_list.insert(0, v)
+        # update in-degree
+        for predecessor in graph[v]:
+            in_degree[predecessor] -= 1
+
+    if len(in_degree.items()) > 0:
+        raise GTTypeError(
+            f"Dimensions can not be promoted. The following dimensions "
+            f"appear in contradicting order: {', '.join((dim.value for dim in in_degree.keys()))}."
+        )
+
+    return topologically_sorted_list
 
 
 def function_signature_incompatibilities(

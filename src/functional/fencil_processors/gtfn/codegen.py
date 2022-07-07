@@ -2,14 +2,14 @@ from typing import Any, Collection, Union
 
 from eve import codegen
 from eve.codegen import FormatTemplate as as_fmt, MakoTemplate as as_mako
-from functional.iterator.backends.gtfn.gtfn_ir import (
+from functional.fencil_processors.gtfn.gtfn_ir import (
     FencilDefinition,
     GridType,
     Literal,
     OffsetLiteral,
     SymRef,
 )
-from functional.iterator.backends.gtfn.itir_to_gtfn_ir import pytype_to_cpptype
+from functional.fencil_processors.gtfn.itir_to_gtfn_ir import pytype_to_cpptype
 
 
 class GTFNCodegen(codegen.TemplatedGenerator):

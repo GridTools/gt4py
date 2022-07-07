@@ -8,8 +8,8 @@ from eve.codegen import FormatTemplate as as_fmt, MakoTemplate as as_mako
 from eve.concepts import Node
 from functional import iterator
 from functional.iterator import ir
-from functional.iterator.backends import backend
 from functional.iterator.ir import AxisLiteral, FencilDefinition, OffsetLiteral
+from functional.iterator.processor_interface import fencil_executor
 from functional.iterator.transforms import apply_common_transforms
 from functional.iterator.transforms.global_tmps import FencilWithTemporaries
 
@@ -64,7 +64,10 @@ def ${id}(${','.join(params)}):
         )
 
     def visit_Temporary(self, node, *, np_dtype, **kwargs):
-        assert isinstance(node.domain, ir.FunCall) and node.domain.fun == ir.SymRef(id="domain")
+        assert isinstance(node.domain, ir.FunCall) and node.domain.fun.id in (
+            "cartesian_domain",
+            "unstructured_domain",
+        )
         assert all(
             isinstance(r, ir.FunCall) and r.fun == ir.SymRef(id="named_range")
             for r in node.domain.args
@@ -80,6 +83,7 @@ def ${id}(${','.join(params)}):
 _BACKEND_NAME = "roundtrip"
 
 
+@fencil_executor
 def executor(ir: Node, *args, **kwargs):
     debug = "debug" in kwargs and kwargs["debug"] is True
     lift_mode = kwargs.get("lift_mode")
@@ -146,6 +150,3 @@ from functional.iterator.embedded import np_as_located_field
             **new_kwargs,
             backend=kwargs["dispatch_backend"],
         )
-
-
-backend.register_backend(_BACKEND_NAME, executor)

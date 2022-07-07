@@ -267,7 +267,13 @@ class _TypeInferrer(eve.NodeTranslator):
             return res
         if node.id in BUILTIN_TYPES:
             return freshen(BUILTIN_TYPES[node.id])
-        if node.id in ("make_tuple", "tuple_get", "shift", "domain"):
+        if node.id in (
+            "make_tuple",
+            "tuple_get",
+            "shift",
+            "cartesian_domain",
+            "unstructured_domain",
+        ):
             raise TypeError(
                 f"Builtin '{node.id}' is only supported as applied/called function by the type checker"
             )
@@ -353,7 +359,7 @@ class _TypeInferrer(eve.NodeTranslator):
                     ),
                     ret=it,
                 )
-            if node.fun.id == "domain":
+            if node.fun.id.endswith("domain"):
                 for arg in node.args:
                     constraints.add(
                         (

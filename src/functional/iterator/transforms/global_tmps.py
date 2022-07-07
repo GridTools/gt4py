@@ -146,7 +146,7 @@ def update_cartesian_domains(node: FencilWithTemporaries, offset_provider) -> Fe
     def extend(domain, shifts):
         if not any(shifts):
             return domain
-        assert isinstance(domain, ir.FunCall) and domain.fun == ir.SymRef(id="domain")
+        assert isinstance(domain, ir.FunCall) and domain.fun == ir.SymRef(id="cartesian_domain")
         assert all(isinstance(axis, CartesianAxis) for axis in offset_provider.values())
 
         offset_limits = {k: (0, 0) for k in offset_provider.keys()}
@@ -259,7 +259,7 @@ def update_unstructured_domains(node: FencilWithTemporaries, offset_provider):
                     axis = conn.origin_axis
                     size = conn.tbl.shape[0]
                     domain = ir.FunCall(
-                        fun=ir.SymRef(id="domain"),
+                        fun=ir.SymRef(id="unstructured_domain"),
                         args=[
                             ir.FunCall(
                                 fun=ir.SymRef(id="named_range"),
