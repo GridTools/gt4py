@@ -1,14 +1,8 @@
-from itertools import groupby
-from typing import Iterable
+from collections.abc import Iterable
 
 from eve import NodeTranslator
 from eve.utils import UIDs
 from functional.iterator import ir
-
-
-def all_equal(it: Iterable):
-    g = groupby(it)
-    return next(g, True) and not next(g, False)
 
 
 class UnrollReduce(NodeTranslator):
@@ -21,13 +15,14 @@ class UnrollReduce(NodeTranslator):
                 and isinstance(arg.fun, ir.FunCall)
                 and arg.fun.fun == ir.SymRef(id="shift")
             ):
-                assert isinstance(arg.fun.args[0], ir.OffsetLiteral)
-                connectivities.append(offset_provider[arg.fun.args[0].value])
+                assert isinstance(arg.fun.args[-1], ir.OffsetLiteral), f"{arg.fun.args}"
+                connectivities.append(offset_provider[arg.fun.args[-1].value])
 
         if not connectivities:
             raise RuntimeError("Couldn't detect partial shift in any arguments of reduce.")
 
-        if not all_equal((c.max_neighbors, c.has_skip_values) for c in connectivities):
+        if len({(c.max_neighbors, c.has_skip_values) for c in connectivities}) != 1:
+            # The condition for this check is required but not sufficient: the actual neighbor tables could still be incompatible.
             raise RuntimeError("Arguments to reduce have incompatible partial shifts.")
         return connectivities[0]
 

@@ -63,6 +63,34 @@ def reduction_with_incompatible_shifts():
     )
 
 
+@pytest.fixture
+def reduction_with_irrelevant_full_shift():
+    UIDs.reset_sequence()
+    return ir.FunCall(
+        fun=ir.FunCall(
+            fun=ir.SymRef(id="reduce"),
+            args=[ir.SymRef(id="foo"), ir.Literal(value="0.0", type="float")],
+        ),
+        args=[
+            ir.FunCall(
+                fun=ir.FunCall(
+                    fun=ir.SymRef(id="shift"),
+                    args=[
+                        ir.OffsetLiteral(value="irrelevant_dim"),
+                        ir.OffsetLiteral(value="0"),
+                        ir.OffsetLiteral(value="dim"),
+                    ],
+                ),
+                args=[ir.SymRef(id="x")],
+            ),
+            ir.FunCall(
+                fun=ir.FunCall(fun=ir.SymRef(id="shift"), args=[ir.OffsetLiteral(value="dim")]),
+                args=[ir.SymRef(id="y")],
+            ),
+        ],
+    )
+
+
 def _expected(red, dim, max_neighbors, has_skip_values):
     acc = ir.SymRef(id="_acc_1")
     offset = ir.SymRef(id="_i_2")
@@ -126,6 +154,21 @@ def test_reduction_with_shift_on_second_arg(reduction_with_shift_on_second_arg):
     offset_provider = {"dim": SimpleNamespace(max_neighbors=3, has_skip_values=False)}
     actual = UnrollReduce().visit(
         reduction_with_shift_on_second_arg, offset_provider=offset_provider
+    )
+    assert actual == expected
+
+
+def test_reduction_with_irrelevant_full_shift(reduction_with_irrelevant_full_shift):
+    expected = _expected(reduction_with_irrelevant_full_shift, "dim", 3, False)
+
+    offset_provider = {
+        "dim": SimpleNamespace(max_neighbors=3, has_skip_values=False),
+        "irrelevant_dim": SimpleNamespace(
+            max_neighbors=1, has_skip_values=True
+        ),  # different max_neighbors and skip value to trigger error
+    }
+    actual = UnrollReduce().visit(
+        reduction_with_irrelevant_full_shift, offset_provider=offset_provider
     )
     assert actual == expected
 
