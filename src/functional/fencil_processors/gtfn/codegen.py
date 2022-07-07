@@ -2,12 +2,13 @@ from typing import Any, Collection, Union
 
 from eve import codegen
 from eve.codegen import FormatTemplate as as_fmt, MakoTemplate as as_mako
-from functional.iterator.backends.gtfn.gtfn_ir import (
+from functional.fencil_processors.gtfn.gtfn_ir import (
     FencilDefinition,
     GridType,
     Literal,
     OffsetLiteral,
     SymRef,
+    TaggedValues,
 )
 
 
@@ -42,6 +43,21 @@ class GTFNCodegen(codegen.TemplatedGenerator):
     BinaryExpr = as_fmt("({lhs}{op}{rhs})")
     TernaryExpr = as_fmt("({cond}?{true_expr}:{false_expr})")
 
+    def visit_TaggedValues(self, node: TaggedValues, **kwargs):
+        tags = self.visit(node.tags)
+        values = self.visit(node.values)
+        if self.is_cartesian:
+            return (
+                f"hymap::keys<{','.join(t + '_t' for t in tags)}>::make_values({','.join(values)})"
+            )
+        else:
+            return f"tuple({','.join(values)})"
+
+    CartesianDomain = as_fmt("cartesian_domain({tagged_sizes}, {tagged_offsets})")
+    UnstructuredDomain = as_mako(
+        "unstructured_domain(${tagged_sizes}, ${tagged_offsets} ${',' if len(connectivities) else ''} ${','.join(f'at_key<{c}_t>(connectivities__)' for c in connectivities)})"
+    )
+
     def visit_OffsetLiteral(self, node: OffsetLiteral, **kwargs: Any) -> str:
         return node.value if isinstance(node.value, str) else f"{node.value}_c"
 
@@ -54,7 +70,7 @@ class GTFNCodegen(codegen.TemplatedGenerator):
 
     StencilExecution = as_mako(
         """
-        ${backend}.stencil_executor()().arg(${output})${''.join('.arg(' + i + ')' for i in inputs)}.assign(0_c, ${stencil}(), ${','.join(str(i) + '_c' for i in range(1, len(inputs) + 1))}).execute();
+        ${backend}.stencil_executor()().arg(${output})${''.join('.arg(' + i + ')' for i in inputs)}.assign(0_c, ${stencil}() ${',' if inputs else ''} ${','.join(str(i) + '_c' for i in range(1, len(inputs) + 1))}).execute();
         """
     )
 
@@ -73,10 +89,9 @@ class GTFNCodegen(codegen.TemplatedGenerator):
     def visit_FencilDefinition(
         self, node: FencilDefinition, **kwargs: Any
     ) -> Union[str, Collection[str]]:
-        is_cartesian = node.grid_type == GridType.CARTESIAN
+        self.is_cartesian = node.grid_type == GridType.CARTESIAN
         return self.generic_visit(
             node,
-            is_cartesian=is_cartesian,
             grid_type_str=self._grid_type_str[node.grid_type],
             **kwargs,
         )
@@ -90,22 +105,14 @@ class GTFNCodegen(codegen.TemplatedGenerator):
     using namespace fn;
     using namespace literals;
 
-
-    % if is_cartesian:
-        // TODO allow non-default names
-        using namespace cartesian;
-        constexpr inline dim::i i = {};
-        constexpr inline dim::j j = {};
-        constexpr inline dim::k k = {};
-    % else:
-        ${''.join('struct ' + o + '_t{};' for o in offset_declarations)}
-        ${''.join('constexpr inline ' + o + '_t ' + o + '{};' for o in offset_declarations)}
-    % endif
-
+    ${''.join('struct ' + o + '_t{};' for o in offset_declarations)}
+    ${''.join('constexpr inline ' + o + '_t ' + o + '{};' for o in offset_declarations)}
     ${''.join(function_definitions)}
 
-    inline auto ${id} = [](auto backend, ${','.join('auto&& ' + p for p in params)}){
-        ${'\\n'.join(executions)}
+    inline auto ${id} = [](auto connectivities__){
+        return [connectivities__](auto backend, ${','.join('auto&& ' + p for p in params)}){
+            ${'\\n'.join(executions)}
+        };
     };
     }
     """

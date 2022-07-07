@@ -21,11 +21,13 @@ Basic Interface Tests
             arctan(), sqrt(), exp(), log(), isfinite(), isinf(), isnan(), floor(), ceil(), trunc()
     - evaluation test cases
 """
+import re
+
 import pytest
 
 from functional.common import Field
 from functional.ffront import common_types
-from functional.ffront.fbuiltins import float32, float64, int32, int64
+from functional.ffront.fbuiltins import float32, float64, int32, int64, where
 from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError
 from functional.ffront.func_to_foast import FieldOperatorParser, FieldOperatorSyntaxError
 from functional.ffront.symbol_makers import TypingError
@@ -160,11 +162,12 @@ def test_binary_pow():
     def power(inp: Field[..., "float64"]):
         return inp**3
 
-    with pytest.raises(
-        FieldOperatorSyntaxError,
-        match=(r"`\*\*` operator not supported!"),
-    ):
-        _ = FieldOperatorParser.apply_to_function(power)
+    parsed = FieldOperatorParser.apply_to_function(power)
+
+    assert parsed.body[-1].value.type == common_types.FieldType(
+        dims=Ellipsis,
+        dtype=common_types.ScalarType(kind=common_types.ScalarKind.FLOAT64, shape=None),
+    )
 
 
 def test_binary_mod():
@@ -207,6 +210,32 @@ def test_scalar_cast():
 
     with pytest.raises(FieldOperatorSyntaxError, match=(r"only takes literal arguments!")):
         _ = FieldOperatorParser.apply_to_function(cast_scalar_temp)
+
+
+def test_conditional_wrong_mask_type():
+    def conditional_wrong_mask_type(
+        a: Field[..., float64],
+    ) -> Field[..., float64]:
+        return where(a, a, a)
+
+    msg = r"Expected a field with dtype bool."
+    with pytest.raises(FieldOperatorTypeDeductionError, match=msg):
+        _ = FieldOperatorParser.apply_to_function(conditional_wrong_mask_type)
+
+
+def test_conditional_wrong_arg_type():
+    def conditional_wrong_arg_type(
+        mask: Field[..., bool],
+        a: Field[..., float32],
+        b: Field[..., float64],
+    ) -> Field[..., float64]:
+        return where(mask, a, b)
+
+    msg = r"Could not promote scalars of different dtype \(not implemented\)."
+    with pytest.raises(FieldOperatorTypeDeductionError) as exc_info:
+        _ = FieldOperatorParser.apply_to_function(conditional_wrong_arg_type)
+
+    assert re.search(msg, exc_info.value.__context__.args[0]) is not None
 
 
 # --- External symbols ---

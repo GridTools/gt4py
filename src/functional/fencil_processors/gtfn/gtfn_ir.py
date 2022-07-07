@@ -72,8 +72,24 @@ class FunctionDefinition(Node, SymbolTableTrait):
     expr: Expr
 
 
+class TaggedValues(Node):
+    tags: List[Expr]
+    values: List[Expr]
+
+
+class CartesianDomain(Node):
+    tagged_sizes: TaggedValues
+    tagged_offsets: TaggedValues
+
+
+class UnstructuredDomain(Node):
+    tagged_sizes: TaggedValues
+    tagged_offsets: TaggedValues
+    connectivities: List[SymRef]  # SymRef to offset declaration
+
+
 class Backend(Node):
-    domain: Union[SymRef, FunCall]  # TODO(havogt) `FunCall` only if domain will be part of the IR
+    domain: Union[SymRef, CartesianDomain, UnstructuredDomain]
 
 
 class StencilExecution(Node):
@@ -89,7 +105,8 @@ BUILTINS = {
     "make_tuple",
     "tuple_get",
     "can_deref",
-    "domain",  # TODO(havogt) decide if domain is part of IR
+    "cartesian_domain",
+    "unstructured_domain",
     "named_range",
 }
 
@@ -99,7 +116,7 @@ class FencilDefinition(Node, ValidatedSymbolTableTrait):
     params: List[Sym]
     function_definitions: List[FunctionDefinition]
     executions: List[StencilExecution]
-    offset_declarations: List[str]
+    offset_declarations: List[Sym]
     grid_type: GridType
 
     _NODE_SYMBOLS_: ClassVar = [Sym(id=name) for name in BUILTINS]

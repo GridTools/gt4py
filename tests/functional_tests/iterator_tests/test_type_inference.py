@@ -326,7 +326,7 @@ def test_function_definition():
 
 
 CARTESIAN_DOMAIN = ir.FunCall(
-    fun=ir.SymRef(id="domain"),
+    fun=ir.SymRef(id="cartesian_domain"),
     args=[
         ir.FunCall(
             fun=ir.SymRef(id="named_range"),

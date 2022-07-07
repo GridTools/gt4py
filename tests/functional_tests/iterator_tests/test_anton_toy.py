@@ -1,8 +1,10 @@
 import numpy as np
 
-from functional.iterator.builtins import deref, domain, lift, named_range, shift
+from functional.iterator.builtins import cartesian_domain, deref, lift, named_range, shift
 from functional.iterator.embedded import np_as_located_field
 from functional.iterator.runtime import CartesianAxis, closure, fendef, fundef, offset
+
+from .conftest import run_processor
 
 
 @fundef
@@ -37,7 +39,7 @@ KDim = CartesianAxis("KDim")
 @fendef(offset_provider={"i": IDim, "j": JDim})
 def fencil(x, y, z, out, inp):
     closure(
-        domain(named_range(IDim, 0, x), named_range(JDim, 0, y), named_range(KDim, 0, z)),
+        cartesian_domain(named_range(IDim, 0, x), named_range(JDim, 0, y), named_range(KDim, 0, z)),
         lap,
         out,
         [inp],
@@ -56,8 +58,8 @@ def naive_lap(inp):
     return out
 
 
-def test_anton_toy(backend, use_tmps):
-    backend, validate = backend
+def test_anton_toy(fencil_processor, use_tmps):
+    fencil_processor, validate = fencil_processor
     shape = [5, 7, 9]
     rng = np.random.default_rng()
     inp = np_as_located_field(IDim, JDim, KDim, origin={IDim: 1, JDim: 1, KDim: 0})(
@@ -66,7 +68,9 @@ def test_anton_toy(backend, use_tmps):
     out = np_as_located_field(IDim, JDim, KDim)(np.zeros(shape))
     ref = naive_lap(inp)
 
-    fencil(shape[0], shape[1], shape[2], out, inp, backend=backend, use_tmps=use_tmps)
+    run_processor(
+        fencil, fencil_processor, shape[0], shape[1], shape[2], out, inp, use_tmps=use_tmps
+    )
 
     if validate:
         assert np.allclose(out, ref)

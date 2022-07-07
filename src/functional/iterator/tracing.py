@@ -3,7 +3,6 @@ from typing import List
 
 from eve import Node
 from functional import iterator
-from functional.iterator.backend_executor import execute_fencil
 from functional.iterator.ir import (
     AxisLiteral,
     Expr,
@@ -135,9 +134,14 @@ def tuple_get(*args):
     return _f("tuple_get", *args)
 
 
-@iterator.builtins.domain.register(TRACING)
-def domain(*args):
-    return _f("domain", *args)
+@iterator.builtins.cartesian_domain.register(TRACING)
+def cartesian_domain(*args):
+    return _f("cartesian_domain", *args)
+
+
+@iterator.builtins.unstructured_domain.register(TRACING)
+def unstructured_domain(*args):
+    return _f("unstructured_domain", *args)
 
 
 @iterator.builtins.named_range.register(TRACING)
@@ -351,9 +355,8 @@ def trace(fun, args):
         )
 
 
-def fendef_tracing(fun, *args, **kwargs):
-    fencil = trace(fun, args=args)
-    execute_fencil(fencil, *args, **kwargs)
+def fendef_tracing(fun, *args, **kwargs) -> FencilDefinition:
+    return trace(fun, args=args)
 
 
 iterator.runtime.fendef_codegen = fendef_tracing

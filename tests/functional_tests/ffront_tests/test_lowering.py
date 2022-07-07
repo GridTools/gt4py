@@ -39,7 +39,7 @@ def debug_itir(tree):
     from devtools import debug
 
     from eve.codegen import format_python_source
-    from functional.iterator.backends.roundtrip import EmbeddedDSL
+    from functional.fencil_processors import EmbeddedDSL
 
     debug(format_python_source(EmbeddedDSL.apply(tree)))
 
@@ -104,7 +104,7 @@ def test_arithmetic():
 
 
 def test_shift():
-    Ioff = FieldOffset("Ioff", source=IDim, target=[IDim])
+    Ioff = FieldOffset("Ioff", source=IDim, target=(IDim,))
 
     def shift_by_one(inp: Field[[IDim], float64]):
         return inp(Ioff[1])
@@ -119,7 +119,7 @@ def test_shift():
 
 
 def test_negative_shift():
-    Ioff = FieldOffset("Ioff", source=IDim, target=[IDim])
+    Ioff = FieldOffset("Ioff", source=IDim, target=(IDim,))
 
     def shift_by_one(inp: Field[[IDim], float64]):
         return inp(Ioff[-1])
@@ -474,7 +474,7 @@ def test_reduction_lowering_simple():
     reference = im.deref_(
         im.lift_(
             im.call_("reduce")(
-                im.lambda__("accum", "edge_f__0")(im.plus_("accum", "edge_f__0")),
+                im.lambda__("acc", "edge_f__0")(im.plus_("acc", "edge_f__0")),
                 0,
             )
         )(im.shift_("V2E")("edge_f"))
@@ -495,9 +495,9 @@ def test_reduction_lowering_expr():
         im.let("e1_nbh__0", im.shift_("V2E")("e1"))(
             im.lift_(
                 im.call_("reduce")(
-                    im.lambda__("accum", "e1_nbh__0__0", "e2__1")(
+                    im.lambda__("acc", "e1_nbh__0__0", "e2__1")(
                         im.plus_(
-                            "accum",
+                            "acc",
                             im.multiplies_(
                                 im.literal_("1.1", "float64"), im.plus_("e1_nbh__0__0", "e2__1")
                             ),

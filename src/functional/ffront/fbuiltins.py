@@ -14,7 +14,6 @@
 
 from builtins import bool, float, int
 from dataclasses import dataclass
-from typing import Optional
 
 from numpy import float32, float64, int32, int64
 
@@ -32,6 +31,7 @@ __all__ = [
     "int64",
     "neighbor_sum",
     "broadcast",
+    "where",
 ]
 
 
@@ -50,7 +50,7 @@ class BuiltInFunction:
         return self.__gt_type
 
 
-neighbor_sum = BuiltInFunction(
+_reduction_like = BuiltInFunction(
     ct.FunctionType(
         args=[ct.DeferredSymbolType(constraint=ct.FieldType)],
         kwargs={"axis": ct.DeferredSymbolType(constraint=ct.DimensionType)},
@@ -58,10 +58,13 @@ neighbor_sum = BuiltInFunction(
     )
 )
 
+neighbor_sum = _reduction_like
+max_over = _reduction_like
+
 broadcast = BuiltInFunction(
     ct.FunctionType(
         args=[
-            ct.DeferredSymbolType(constraint=ct.FieldType),
+            ct.DeferredSymbolType(constraint=(ct.FieldType, ct.ScalarType)),
             ct.DeferredSymbolType(constraint=ct.TupleType),
         ],
         kwargs={},
@@ -69,8 +72,19 @@ broadcast = BuiltInFunction(
     )
 )
 
+where = BuiltInFunction(
+    ct.FunctionType(
+        args=[
+            ct.DeferredSymbolType(constraint=ct.FieldType),
+            ct.DeferredSymbolType(constraint=(ct.FieldType, ct.ScalarType)),
+            ct.DeferredSymbolType(constraint=(ct.FieldType, ct.ScalarType)),
+        ],
+        kwargs={},
+        returns=ct.DeferredSymbolType(constraint=ct.FieldType),
+    )
+)
 
-FUN_BUILTIN_NAMES = ["neighbor_sum", "broadcast"]
+FUN_BUILTIN_NAMES = ["neighbor_sum", "max_over", "broadcast", "where"]
 
 
 EXTERNALS_MODULE_NAME = "__externals__"
@@ -87,8 +101,8 @@ BUILTINS = {name: globals()[name] for name in __all__ + ["bool", "int", "float"]
 #  guidelines for decision.
 @dataclass(frozen=True)
 class FieldOffset(runtime.Offset):
-    source: Optional[Dimension] = None
-    target: Optional[tuple[Dimension, ...]] = None
+    source: Dimension
+    target: tuple[Dimension, ...]
 
     def __gt_type__(self):
         return ct.OffsetType(source=self.source, target=self.target)

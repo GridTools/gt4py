@@ -452,7 +452,7 @@ def infer_type(  # noqa: C901  # function is complex but well organized in indep
         tuple[int, str]
 
         >>> infer_type((3, 4))
-        tuple[int, ...]
+        tuple[int, int]
 
         >>> infer_type(frozenset([1, 2, 3]))
         frozenset[int]
@@ -506,10 +506,8 @@ def infer_type(  # noqa: C901  # function is complex but well organized in indep
         return Type[value]
 
     if isinstance(value, tuple):
-        unique_type, args = _collapse_type_args(*(_reveal(item) for item in value))
-        if unique_type and len(args) > 1:
-            return StdGenericAliasType(tuple, (args[0], ...))
-        elif args:
+        _, args = _collapse_type_args(*(_reveal(item) for item in value))
+        if args:
             return StdGenericAliasType(tuple, args)
         else:
             return StdGenericAliasType(tuple, (Any, ...))

@@ -15,10 +15,12 @@
 from __future__ import annotations
 
 import abc
-import dataclasses
+import enum
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any, Generic, TypeVar
+from typing import Any, Generic, Protocol, TypeVar, runtime_checkable
+
+from eve.type_definitions import StrEnum
 
 
 DimT = TypeVar("DimT", bound="Dimension")
@@ -26,28 +28,17 @@ DimsT = TypeVar("DimsT", bound=Sequence["Dimension"])
 DT = TypeVar("DT", bound="DType")
 
 
-class _NoSubclassing(type):
-    """Utility metaclass prohibiting subclassing."""
-
-    def __new__(cls, name, bases, classdict):
-        for b in bases:
-            if isinstance(b, _NoSubclassing):
-                raise TypeError(f"Type '{b.__name__}' must not be subclassed.")
-        return type.__new__(cls, name, bases, classdict)
+@enum.unique
+class DimensionKind(StrEnum):
+    HORIZONTAL = "horizontal"
+    VERTICAL = "vertical"
+    LOCAL = "local"
 
 
 @dataclass(frozen=True)
-class Dimension(metaclass=_NoSubclassing):
-    # TODO(tehrengruber): Revisit. Touches to many open questions to be resolved
-    #  meaningfully. For now we just prohibit subclassing. The "iterator frontend"
-    #  needs to be able to create instances of Dimension from an axis literal to
-    #  construct the domain. However the dimensions of a field are passed as is.
-    #  As such using an instance of a subclass of Dimension will break all equality
-    #  checks between dimensions obtained from the domain and those obtained
-    #  from fields.
-
+class Dimension:
     value: str
-    local: bool = dataclasses.field(default=False)
+    kind: DimensionKind = DimensionKind.HORIZONTAL  # type: ignore[assignment]
 
 
 class DType:
@@ -79,6 +70,18 @@ class Backend:
     # TODO : proper definition and implementation
     def generate_operator(self, ir):
         return ir
+
+
+@runtime_checkable
+class Connectivity(Protocol):
+    max_neighbors: int
+    has_skip_values: bool
+
+
+@enum.unique
+class GridType(StrEnum):
+    CARTESIAN = "cartesian"
+    UNSTRUCTURED = "unstructured"
 
 
 class GTError:
