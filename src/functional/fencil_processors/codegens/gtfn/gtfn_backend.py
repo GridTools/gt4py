@@ -40,14 +40,17 @@ def extract_fundefs_from_closures(program: itir.FencilDefinition) -> itir.Fencil
 
 def generate(program: itir.FencilDefinition, *, grid_type: str, **kwargs: Any) -> str:
     transformed = program
+    offset_provider = kwargs.get("offset_provider", None)
     transformed = apply_common_transforms(
         program,
         use_tmps=kwargs.get("use_tmps", False),
-        offset_provider=kwargs.get("offset_provider", None),
+        offset_provider=offset_provider,
         unroll_reduce=True,
     )
     transformed = extract_fundefs_from_closures(transformed)
-    gtfn_ir = GTFN_lowering().visit(transformed, grid_type=grid_type)
+    gtfn_ir = GTFN_lowering().visit(
+        transformed, grid_type=grid_type, offset_provider=offset_provider
+    )
     generated_code = GTFNCodegen.apply(gtfn_ir, **kwargs)
     return codegen.format_source("cpp", generated_code, style="LLVM")
 

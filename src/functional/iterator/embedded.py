@@ -24,7 +24,7 @@ import numpy as np
 import numpy.typing as npt
 
 from functional import iterator
-from functional.common import Connectivity, Dimension
+from functional.common import Connectivity, Dimension, DimensionKind
 from functional.iterator import builtins
 from functional.iterator.runtime import CartesianDomain, Offset, UnstructuredDomain
 from functional.iterator.utils import tupelize
@@ -524,7 +524,7 @@ def make_in_iterator(
         if isinstance(axis, Offset):
             assert isinstance(axis.value, str)
             sparse_dimensions.append(axis.value)
-        elif isinstance(axis, Dimension) and axis.local:
+        elif isinstance(axis, Dimension) and axis.kind == DimensionKind.LOCAL:
             # we just use the name of the axis to match the offset literal for now
             sparse_dimensions.append(axis.value)
 

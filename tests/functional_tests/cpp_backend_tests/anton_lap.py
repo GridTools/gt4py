@@ -35,9 +35,13 @@ JDim = CartesianAxis("JDim")
 KDim = CartesianAxis("KDim")
 
 
-def lap_fencil(dom, out, inp):
+def lap_fencil(i_size, j_size, k_size, i_off, j_off, k_off, out, inp):
     closure(
-        dom,
+        cartesian_domain(
+            named_range(IDim, i_off, i_size + i_off),
+            named_range(JDim, j_off, j_size + j_off),
+            named_range(KDim, k_off, k_size + k_off),
+        ),
         lap,
         out,
         [inp],
@@ -49,8 +53,8 @@ if __name__ == "__main__":
         raise RuntimeError(f"Usage: {sys.argv[0]} <output_file>")
     output_file = sys.argv[1]
 
-    prog = trace(lap_fencil, [None] * 3)
-    generated_code = generate(prog, grid_type="Cartesian")
+    prog = trace(lap_fencil, [None] * 8)
+    generated_code = generate(prog, grid_type="Cartesian", offset_provider={"i": IDim, "j": JDim})
 
     with open(output_file, "w+") as output:
         output.write(generated_code)

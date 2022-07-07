@@ -20,6 +20,7 @@ from typing import TypeVar
 import numpy as np
 import pytest
 
+from functional.common import DimensionKind
 from functional.fencil_processors.runners import roundtrip
 from functional.ffront.decorator import field_operator, program
 from functional.ffront.fbuiltins import (
@@ -269,7 +270,7 @@ def reduction_setup():
     size = 9
     edge = Dimension("Edge")
     vertex = Dimension("Vertex")
-    v2edim = Dimension("V2E", local=True)
+    v2edim = Dimension("V2E", kind=DimensionKind.LOCAL)
 
     v2e_arr = np.array(
         [

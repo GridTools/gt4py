@@ -1,12 +1,12 @@
 import pytest
 
-from functional.common import Dimension, GridType, GTTypeError
+from functional.common import Dimension, DimensionKind, GridType, GTTypeError
 from functional.ffront.decorator import Program
 from functional.ffront.fbuiltins import FieldOffset
 
 
 Dim = Dimension("Dim")
-LocalDim = Dimension("LocalDim", local=True)
+LocalDim = Dimension("LocalDim", kind=DimensionKind.LOCAL)
 
 CartesianOffset = FieldOffset("CartesianOffset", source=Dim, target=(Dim,))
 UnstructuredOffset = FieldOffset("UnstructuredOffset", source=Dim, target=(Dim, LocalDim))
