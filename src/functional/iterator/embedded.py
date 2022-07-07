@@ -25,7 +25,7 @@ import numpy as np
 import numpy.typing as npt
 
 from functional import iterator
-from functional.common import Connectivity, Dimension
+from functional.common import Connectivity, Dimension, DimensionKind
 from functional.iterator import builtins
 from functional.iterator.runtime import CartesianDomain, Offset, UnstructuredDomain
 from functional.iterator.utils import tupelize
@@ -42,6 +42,8 @@ FieldIndex: TypeAlias = int | slice
 FieldIndexOrIndices: TypeAlias = FieldIndex | tuple[FieldIndex, ...]
 
 Axis: TypeAlias = Dimension
+
+Column: TypeAlias = np.ndarray  # TODO consider replacing by a wrapper around ndarray
 
 
 class SparseTag(Tag):
@@ -135,6 +137,10 @@ class MutableLocatedField(LocatedField, Protocol):
         ...
 
 
+def _is_column(v: Any) -> TypeGuard[Column]:
+    return isinstance(v, np.ndarray)
+
+
 @builtins.deref.register(EMBEDDED)
 def deref(it):
     return it.deref()
@@ -147,21 +153,29 @@ def can_deref(it):
 
 @builtins.if_.register(EMBEDDED)
 def if_(cond, t, f):
+    if _is_column(cond):
+        return np.where(cond, t, f)
     return t if cond else f
 
 
 @builtins.not_.register(EMBEDDED)
 def not_(a):
+    if _is_column(a):
+        return np.logical_not(a)
     return not a
 
 
 @builtins.and_.register(EMBEDDED)
 def and_(a, b):
+    if _is_column(a):
+        return np.logical_and(a, b)
     return a and b
 
 
 @builtins.or_.register(EMBEDDED)
 def or_(a, b):
+    if _is_column(a):
+        return np.logical_or(a, b)
     return a or b
 
 
@@ -542,7 +556,7 @@ def make_in_iterator(
         if isinstance(axis, Offset):
             assert isinstance(axis.value, str)
             sparse_dimensions.append(axis.value)
-        elif isinstance(axis, Dimension) and axis.local:
+        elif isinstance(axis, Dimension) and axis.kind == DimensionKind.LOCAL:
             # we just use the name of the axis to match the offset literal for now
             sparse_dimensions.append(axis.value)
 
@@ -721,7 +735,7 @@ def shift(*offsets: Union[Offset, int]) -> Callable[[ItIterator], ItIterator]:
 
 
 @dataclass
-class Column:
+class ColumnDescriptor:
     axis: str
     col_range: range  # TODO(havogt) introduce range type that doesn't have step
 
@@ -847,7 +861,23 @@ def as_tuple_field(field):
     return field
 
 
-_column_range = None  # TODO this is a bit ugly, alternative: pass scan range via iterator
+_column_range: Optional[
+    range
+] = None  # TODO this is a bit ugly, alternative: pass scan range via iterator
+
+
+def _ensure_dtype_matches(val: numbers.Number | tuple[numbers.Number, ...], expected_dtype: type):
+    if isinstance(val, tuple):
+        assert all(isinstance(el, expected_dtype) for el in val)
+    else:
+        assert isinstance(val, expected_dtype)
+
+
+def _column_dtype_and_shape(levels: int, elem: Any) -> tuple[type, int | tuple[int, int]]:
+    if isinstance(elem, tuple):
+        return type(elem[0]), (levels, len(elem))
+    else:
+        return type(elem), levels
 
 
 @builtins.scan.register(EMBEDDED)
@@ -855,27 +885,24 @@ def scan(scan_pass, is_forward: bool, init):
     def impl(*iters: ItIterator):
         if _column_range is None:
             raise RuntimeError("Column range is not defined, cannot scan.")
+        if isinstance(init, tuple):
+            if any(isinstance(el, tuple) for el in init):
+                raise NotImplementedError("Nested tuples not supported.")
 
-        column_range = _column_range
-        if not is_forward:
-            column_range = reversed(column_range)
+        levels = len(_column_range)
+        column_range = _column_range if is_forward else reversed(_column_range)
+
+        dtype, shape = _column_dtype_and_shape(levels, init)
 
         state = init
-        col = []
+        col = np.zeros(shape, dtype=dtype)
         for i in column_range:
-            state = scan_pass(
-                state, *map(shifted_scan_arg(i), iters)
-            )  # more generic scan returns state and result as 2 different things
-            col.append(state)
+            state = scan_pass(state, *map(shifted_scan_arg(i), iters))
+            if __debug__:
+                _ensure_dtype_matches(state, dtype)
+            col[i] = state
 
-        if not is_forward:
-            col = np.flip(col)
-
-        if isinstance(col[0], tuple):
-            dtype = np.dtype([("", type(c)) for c in col[0]])
-            return np.asarray(col, dtype=dtype)
-
-        return np.asarray(col)
+        return col
 
     return impl
 
@@ -909,10 +936,10 @@ def fendef_embedded(fun: Callable[..., None], *args: Any, **kwargs: Any):
             raise TypeError("Out needs to be a located field.")
 
         global _column_range
-        column: Optional[Column] = None
-        if "column_axis" in kwargs:
+        column: Optional[ColumnDescriptor] = None
+        if kwargs.get("column_axis"):
             column_axis = kwargs["column_axis"]
-            column = Column(column_axis.value, domain[column_axis.value])
+            column = ColumnDescriptor(column_axis.value, domain[column_axis.value])
             del domain[column_axis.value]
 
             _column_range = column.col_range
