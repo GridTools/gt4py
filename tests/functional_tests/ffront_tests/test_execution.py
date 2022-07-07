@@ -21,7 +21,7 @@ import numpy as np
 import pytest
 
 from functional.common import DimensionKind
-from functional.fencil_processors.runners import roundtrip
+from functional.fencil_processors.runners import roundtrip, gtfn_cpu
 from functional.ffront.decorator import field_operator, program
 from functional.ffront.fbuiltins import (
     Dimension,
@@ -43,6 +43,10 @@ from functional.iterator.embedded import (
 
 fieldview_backend = roundtrip.executor
 
+@pytest.fixture(params=[roundtrip.executor, gtfn_cpu.run_gtfn])
+def fieldview_backend_list(request):
+    yield request.param
+
 
 def debug_itir(tree):
     """Compare tree snippets while debugging."""
@@ -61,12 +65,12 @@ IDim = Dimension("IDim")
 JDim = Dimension("JDim")
 
 
-def test_copy():
+def test_copy(fieldview_backend_list):
     size = 10
     a = np_as_located_field(IDim)(np.ones((size)))
     b = np_as_located_field(IDim)(np.zeros((size)))
 
-    @field_operator(backend=fieldview_backend)
+    @field_operator(backend=fieldview_backend_list)
     def copy(inp: Field[[IDim], float64]) -> Field[[IDim], float64]:
         return inp
 

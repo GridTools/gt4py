@@ -12,7 +12,7 @@ def example_function():
     return defs.Function(
         name="example",
         parameters=[
-            defs.BufferParameter("buf", 2, ctypes.c_float),
+            defs.BufferParameter("buf", ["I", "J"], ctypes.c_float),
             defs.ScalarParameter("sc", ctypes.c_float),
         ],
     )
@@ -29,14 +29,17 @@ def test_bindings(example_function):
         #include <gridtools/fn/backend/naive.hpp>
         #include <gridtools/fn/cartesian.hpp>
         #include <gridtools/fn/unstructured.hpp>
+        #include <gridtools/sid/rename_dimensions.hpp>
         #include <gridtools/storage/adapter/python_sid_adapter.hpp>
         #include <pybind11/pybind11.h>
         #include <pybind11/stl.h>
         
         decltype(auto) example_wrapper(pybind11::buffer buf, float sc) {
           return example(
-              gridtools::as_sid<float, 2, gridtools::integral_constant<int, 0>,
-                                999'999'999>(buf),
+              gridtools::sid::rename_numbered_dimensions<generated::I_t,
+                                                         generated::J_t>(
+                  gridtools::as_sid<float, 2, gridtools::integral_constant<int, 0>,
+                                    999'999'999>(buf)),
               sc);
         }
         

@@ -48,17 +48,6 @@ class ReturnStmt(Node):
     expr: Any
 
 
-class GridToolsSidExpr(Node):
-    name: str
-    num_dims: int
-    dtype: typing.Type
-    dim_config: int
-
-
-class SidExpr(Node):
-    identifier: str
-
-
 class WrapperFunction(Node):
     name: str
     parameters: CommaSeparatedList
@@ -109,22 +98,6 @@ class BindingCodeGenerator(TemplatedGenerator):
 
     ReturnStmt = JinjaTemplate("""return {{expr}};""")
 
-    def visit_GridToolsSidExpr(self, expr: GridToolsSidExpr):
-        template = jinja2.Template(
-            """\
-            gridtools::as_sid<{{dtype}},\
-                              {{num_dims}},\
-                              gridtools::integral_constant<int, {{dim_config}}>,\
-                              999'999'999>({{name}})\
-            """
-        )
-        return template.render(
-            name=expr.name,
-            num_dims=expr.num_dims,
-            dtype=cpp.render_python_type(expr.dtype),
-            dim_config=expr.dim_config,
-        )
-
     BindingModule = JinjaTemplate(
         """\
         PYBIND11_MODULE({{name}}, module) {
@@ -159,7 +132,7 @@ def make_parameter_list(
             return FunctionParameter(name=parameter.name, ndim=0, dtype=parameter.type_)
         else:
             return FunctionParameter(
-                name=parameter.name, ndim=parameter.num_dimensions, dtype=parameter.scalar_type
+                name=parameter.name, ndim=len(parameter.dimensions), dtype=parameter.scalar_type
             )
 
     regulars = [make_parameter(param) for param in parameters]
@@ -172,15 +145,17 @@ def render_argument(index: int, param: defs.ScalarParameter | defs.BufferParamet
     else:
         template = jinja2.Template(
             """\
-            gridtools::as_sid<{{dtype}},\
-                              {{ndims}},\
-                              gridtools::integral_constant<int, {{dim_config}}>,\
-                              999'999'999>({{name}})\
+            gridtools::sid::rename_numbered_dimensions<{{", ".join(dims)}}>(
+                gridtools::as_sid<{{dtype}},\
+                                  {{dims.__len__()}},\
+                                  gridtools::integral_constant<int, {{dim_config}}>,\
+                                  999'999'999>({{name}})
+            )\
             """
         )
         return template.render(
             name=param.name,
-            ndims=param.num_dimensions,
+            dims=[f"generated::{dim}_t" for dim in param.dimensions],
             dtype=cpp.render_python_type(param.scalar_type),
             dim_config=index,
         )
@@ -195,6 +170,7 @@ def create_bindings(target: defs.Function, target_header: str) -> defs.BindingCo
             "pybind11/pybind11.h",
             "pybind11/stl.h",
             "gridtools/storage/adapter/python_sid_adapter.hpp",
+            "gridtools/sid/rename_dimensions.hpp",
             "gridtools/common/defs.hpp",
             "gridtools/fn/unstructured.hpp",
             "gridtools/fn/cartesian.hpp",

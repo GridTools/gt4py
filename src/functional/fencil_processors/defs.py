@@ -11,7 +11,7 @@ class ScalarParameter:
 @dataclass
 class BufferParameter:
     name: str
-    num_dimensions: int
+    dimensions: Sequence[str]
     scalar_type: Type
 
 

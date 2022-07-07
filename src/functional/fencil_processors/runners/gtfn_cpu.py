@@ -13,7 +13,7 @@ def get_arg_types(*args) -> Sequence[defs.ScalarParameter | defs.BufferParameter
     def get_arg_type(arg):
         view = numpy.array(arg)
         if view.ndim > 0:
-            return defs.BufferParameter("", view.ndim, view.dtype.type)
+            return defs.BufferParameter("", [dim.value for dim in arg.axes], view.dtype.type)
         else:
             return defs.ScalarParameter("", type(arg))
 
@@ -22,7 +22,7 @@ def get_arg_types(*args) -> Sequence[defs.ScalarParameter | defs.BufferParameter
 
 def convert_args(*args) -> Sequence[Any]:
     def convert_arg(arg):
-        view = numpy.array(arg)
+        view = numpy.asarray(arg)
         if view.ndim > 0:
             return memoryview(view)
         else:
