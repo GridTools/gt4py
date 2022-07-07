@@ -26,7 +26,8 @@ def source_module():
         return xdim * ydim * sc;\
         """,
     )
-    src = jinja2.Template("""\
+    src = jinja2.Template(
+        """\
     #include <gridtools/fn/cartesian.hpp>
     #include <gridtools/fn/unstructured.hpp>
     namespace generated {
@@ -34,7 +35,8 @@ def source_module():
     struct J_t {} constexpr inline J; 
     }
     {{func}}\
-    """).render(func=func)
+    """
+    ).render(func=func)
 
     return defs.SourceCodeModule(
         entry_point=entry_point,

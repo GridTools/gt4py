@@ -1,5 +1,4 @@
 import os
-import typing
 from typing import Any, Sequence, Type, TypeVar
 
 import jinja2

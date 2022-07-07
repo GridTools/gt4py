@@ -21,7 +21,7 @@ import numpy as np
 import pytest
 
 from functional.common import DimensionKind
-from functional.fencil_processors.runners import roundtrip, gtfn_cpu
+from functional.fencil_processors.runners import gtfn_cpu, roundtrip
 from functional.ffront.decorator import field_operator, program
 from functional.ffront.fbuiltins import (
     Dimension,
@@ -42,6 +42,7 @@ from functional.iterator.embedded import (
 
 
 fieldview_backend = roundtrip.executor
+
 
 @pytest.fixture(params=[roundtrip.executor, gtfn_cpu.run_gtfn])
 def fieldview_backend_list(request):
