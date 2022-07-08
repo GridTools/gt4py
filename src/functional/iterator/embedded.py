@@ -587,7 +587,7 @@ def make_in_iterator(
     return MDIterator(
         inp,
         new_pos,
-        incomplete_offsets=list(map(lambda x: SparseTag(x), sparse_dimensions)),
+        incomplete_offsets=[SparseTag(x) for x in sparse_dimensions],
         offset_provider=offset_provider,
         column_axis=column_axis,
     )
@@ -647,7 +647,7 @@ def get_ordered_indices(
     axes: Iterable[Axis], pos: Mapping[Tag, FieldIndex | SparsePositionEntry]
 ) -> tuple[FieldIndex, ...]:
     res: list[FieldIndex] = []
-    pos = deepcopy(pos)
+    pos = deepcopy(pos)  # deepcopy as we consume the sparse entries
     for axis in axes:
         if _is_tuple_axis(axis):
             res.append(slice(None))
@@ -656,7 +656,7 @@ def get_ordered_indices(
             assert axis.value in pos
             elem = pos[axis.value]
             if isinstance(elem, list):
-                res.append(elem.pop(0))
+                res.append(elem.pop(0))  # we consume a sparse entry, this smells...
             else:
                 assert isinstance(elem, (int, slice))
                 res.append(elem)
