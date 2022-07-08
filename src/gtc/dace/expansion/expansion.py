@@ -133,7 +133,14 @@ class StencilComputationExpansion(dace.library.ExpandTransformation):
             node.oir_node, global_ctx=DaCeIRBuilder.GlobalContext(library_node=node, arrays=arrays)
         )
 
-        nsdfg = StencilComputationSDFGBuilder().visit(daceir)
+        nsdfg: dace.nodes.NestedSDFG = StencilComputationSDFGBuilder().visit(daceir)
+
+        delkeys = set()
+        for sym in node.symbol_mapping.keys():
+            if str(sym) not in nsdfg.free_symbols:
+                delkeys.add(str(sym))
+        for key in delkeys:
+            del node.symbol_mapping[key]
 
         StencilComputationExpansion._fix_context(nsdfg, node, parent_state, daceir)
 

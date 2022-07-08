@@ -101,33 +101,35 @@ def _pre_expand_trafos(gtir_pipeline: GtirPipeline, sdfg: dace.SDFG, layout_map)
             array.lifetime = dace.AllocationLifetime.Persistent
 
     sdfg.simplify(validate=False)
-    for node, _ in sdfg.all_nodes_recursive():
-        if isinstance(node, StencilComputation):
-            if node.oir_node.loop_order == common.LoopOrder.PARALLEL:
-                expansion_priority = []
-                expansion_priority.extend(
-                    [
-                        ["Sections", "Stages", "K", "J", "I"],
-                        ["TileJ", "TileI", "Sections", "KMap", "Stages", "JMap", "IMap"],
-                    ]
-                )
-            else:
-                expansion_priority = [
-                    ["J", "I", "Sections", "Stages", "K"],
-                    ["TileJ", "TileI", "Sections", "KLoop", "Stages", "JMap", "IMap"],
-                ]
-            is_set = False
-            for exp in expansion_priority:
 
-                try:
-                    node.expansion_specification = exp
-                    is_set = True
-                except ValueError:
-                    continue
-                else:
-                    break
-            if not is_set:
-                raise ValueError("No expansion compatible")
+    for node, _ in filter(
+        lambda n: isinstance(n[0], StencilComputation), sdfg.all_nodes_recursive()
+    ):
+        if node.oir_node.loop_order == common.LoopOrder.PARALLEL:
+            expansion_priority = []
+            expansion_priority.extend(
+                [
+                    ["Sections", "Stages", "K", "J", "I"],
+                    ["TileJ", "TileI", "Sections", "KMap", "Stages", "JMap", "IMap"],
+                ]
+            )
+        else:
+            expansion_priority = [
+                ["J", "I", "Sections", "Stages", "K"],
+                ["TileJ", "TileI", "Sections", "KLoop", "Stages", "JMap", "IMap"],
+            ]
+        is_set = False
+        for exp in expansion_priority:
+
+            try:
+                node.expansion_specification = exp
+                is_set = True
+            except ValueError:
+                continue
+            else:
+                break
+        if not is_set:
+            raise ValueError("No expansion compatible")
     _specialize_transient_strides(sdfg, layout_map=layout_map)
     return sdfg
 

@@ -558,6 +558,7 @@ class DaCeIRBuilder(NodeTranslator):
                         start=dcir.AxisBound.from_common(axis, oir.AxisBound.start()),
                         end=dcir.AxisBound.from_common(axis, oir.AxisBound.end()),
                     )
+                symbol_collector.remove_symbol(axis.tile_symbol())
                 ranges.append(
                     dcir.Range(
                         var=axis.tile_symbol(),
@@ -567,32 +568,46 @@ class DaCeIRBuilder(NodeTranslator):
                 )
             else:
                 assert iteration.kind == "contiguous"
-                read_memlets = [
-                    dcir.Memlet(
-                        field=memlet.field,
-                        connector=memlet.connector,
-                        access_info=memlet.access_info.apply_iteration(
-                            dcir.GridSubset.from_interval(interval, axis)
-                        ),
-                        is_read=True,
-                        is_write=False,
+                res_read_memlets = []
+                res_write_memlets = []
+                for memlet in read_memlets:
+                    access_info = memlet.access_info.apply_iteration(
+                        dcir.GridSubset.from_interval(interval, axis)
                     )
-                    for memlet in read_memlets
-                ]
+                    for sym in access_info.grid_subset.free_symbols:
+                        print("ADDING", sym)
+                        symbol_collector.add_symbol(sym)
+                    res_read_memlets.append(
+                        dcir.Memlet(
+                            field=memlet.field,
+                            connector=memlet.connector,
+                            access_info=access_info,
+                            is_read=True,
+                            is_write=False,
+                        )
+                    )
+                for memlet in write_memlets:
+                    access_info = memlet.access_info.apply_iteration(
+                        dcir.GridSubset.from_interval(interval, axis)
+                    )
+                    for sym in access_info.grid_subset.free_symbols:
+                        print("ADDING", sym)
+                        symbol_collector.add_symbol(sym)
+                    res_write_memlets.append(
+                        dcir.Memlet(
+                            field=memlet.field,
+                            connector=memlet.connector,
+                            access_info=access_info,
+                            is_read=False,
+                            is_write=True,
+                        )
+                    )
+                read_memlets = res_read_memlets
+                write_memlets = res_write_memlets
 
-                write_memlets = [
-                    dcir.Memlet(
-                        field=memlet.field,
-                        connector=memlet.connector,
-                        access_info=memlet.access_info.apply_iteration(
-                            dcir.GridSubset.from_interval(interval, axis)
-                        ),
-                        is_read=False,
-                        is_write=True,
-                    )
-                    for memlet in write_memlets
-                ]
-                ranges.append(dcir.Range.from_axis_and_interval(axis, interval))
+                index_range = dcir.Range.from_axis_and_interval(axis, interval)
+                symbol_collector.remove_symbol(index_range.var)
+                ranges.append(index_range)
 
         return [
             dcir.DomainMap(
@@ -627,31 +642,42 @@ class DaCeIRBuilder(NodeTranslator):
             raise NotImplementedError("Tiling as a state machine not implemented.")
 
         assert item.kind == "contiguous"
-        read_memlets = [
-            dcir.Memlet(
-                field=memlet.field,
-                connector=memlet.connector,
-                access_info=memlet.access_info.apply_iteration(
-                    dcir.GridSubset.from_interval(interval, axis)
-                ),
-                is_read=True,
-                is_write=False,
+        res_read_memlets = []
+        res_write_memlets = []
+        for memlet in read_memlets:
+            access_info = memlet.access_info.apply_iteration(
+                dcir.GridSubset.from_interval(interval, axis)
             )
-            for memlet in read_memlets
-        ]
-
-        write_memlets = [
-            dcir.Memlet(
-                field=memlet.field,
-                connector=memlet.connector,
-                access_info=memlet.access_info.apply_iteration(
-                    dcir.GridSubset.from_interval(interval, axis)
-                ),
-                is_read=False,
-                is_write=True,
+            for sym in access_info.grid_subset.free_symbols:
+                print("ADDING", sym)
+                symbol_collector.add_symbol(sym)
+            res_read_memlets.append(
+                dcir.Memlet(
+                    field=memlet.field,
+                    connector=memlet.connector,
+                    access_info=access_info,
+                    is_read=True,
+                    is_write=False,
+                )
             )
-            for memlet in write_memlets
-        ]
+        for memlet in write_memlets:
+            access_info = memlet.access_info.apply_iteration(
+                dcir.GridSubset.from_interval(interval, axis)
+            )
+            for sym in access_info.grid_subset.free_symbols:
+                print("ADDING", sym)
+                symbol_collector.add_symbol(sym)
+            res_write_memlets.append(
+                dcir.Memlet(
+                    field=memlet.field,
+                    connector=memlet.connector,
+                    access_info=access_info,
+                    is_read=False,
+                    is_write=True,
+                )
+            )
+        read_memlets = res_read_memlets
+        write_memlets = res_write_memlets
 
         assert not isinstance(interval, dcir.IndexWithExtent)
         index_range = dcir.Range.from_axis_and_interval(axis, interval, stride=item.stride)
