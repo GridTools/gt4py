@@ -1,3 +1,4 @@
+import importlib
 import pathlib
 import subprocess
 import textwrap
@@ -118,7 +119,7 @@ def _render_cmakelists(
 
 
 def _get_python_module_suffix():
-    return "so"
+    return importlib.machinery.EXTENSION_SUFFIXES[0][1:]
 
 
 class CMakeProject:
