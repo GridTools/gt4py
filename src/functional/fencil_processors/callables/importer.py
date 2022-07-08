@@ -5,7 +5,7 @@ import sys
 from typing import Callable, Dict
 
 
-def load_module(module_file: pathlib.Path) -> Dict[str, Callable]:
+def import_callables(module_file: pathlib.Path) -> Dict[str, Callable]:
     folder = module_file.parent
     sys.path.append(str(folder))
     importlib.invalidate_caches()

@@ -2,7 +2,7 @@ from typing import Callable
 
 from functional.fencil_processors import defs as defs
 from functional.fencil_processors.callables.cache import Strategy as CacheStrategy, get_cache_folder
-from functional.fencil_processors.callables.modules import load_module
+from functional.fencil_processors.callables.importer import import_callables
 
 from . import bindings, build
 
@@ -15,7 +15,7 @@ def create_callable(
     )
     module_file = build.CMakeProject.get_binary(cache_folder, source_module.entry_point.name)
     try:
-        return load_module(module_file)[source_module.entry_point.name]
+        return import_callables(module_file)[source_module.entry_point.name]
     except ModuleNotFoundError:
         pass
 
@@ -36,4 +36,4 @@ def create_callable(
     project.configure()
     project.build()
 
-    return load_module(module_file)[source_module.entry_point.name]
+    return import_callables(module_file)[source_module.entry_point.name]

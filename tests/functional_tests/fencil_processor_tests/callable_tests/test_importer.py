@@ -2,10 +2,10 @@ import pathlib
 import tempfile
 import textwrap
 
-from functional.fencil_processors.callables import modules
+from functional.fencil_processors.callables import importer
 
 
-def test_load_binding():
+def test_import_callables():
     src_module = textwrap.dedent(
         """\
     def function(a, b):
@@ -15,5 +15,5 @@ def test_load_binding():
     with tempfile.TemporaryDirectory() as folder:
         file = pathlib.Path(folder) / "module.py"
         file.write_text(src_module)
-        functions = modules.load_module(file)
+        functions = importer.import_callables(file)
         assert "function" in functions
