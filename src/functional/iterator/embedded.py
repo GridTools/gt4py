@@ -636,7 +636,7 @@ class LocatedFieldImpl(MutableLocatedField):
 
 
 def _is_tuple_axis(axis: Axis) -> TypeGuard[TupleAxis]:
-    return axis is None
+    return isinstance(axis, TupleAxis)
 
 
 def _is_field_axis(axis: Axis) -> TypeGuard[FieldAxis]:
