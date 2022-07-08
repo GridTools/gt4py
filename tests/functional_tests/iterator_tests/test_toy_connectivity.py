@@ -1,6 +1,8 @@
 import numpy as np
+import pytest
 
 from functional.common import Dimension
+from functional.fencil_processors import gtfn
 from functional.iterator.builtins import deref, lift, reduce, shift
 from functional.iterator.embedded import (
     NeighborTableOffsetProvider,
@@ -328,6 +330,10 @@ def sparse_shifted_stencil_reduce(inp):
 
 def test_sparse_shifted_stencil_reduce(fencil_processor):
     fencil_processor, validate = fencil_processor
+    if fencil_processor == gtfn.format_sourcecode:
+        pytest.xfail("We cannot unroll a reduction on a sparse field only.")
+        # With our current understanding, this iterator IR program is illegal, however we might want to fix it and therefore keep the test for now.
+
     inp = np_as_located_field(Vertex, V2V)(v2v_arr)
     out = np_as_located_field(Vertex)(np.zeros([9]))
 
