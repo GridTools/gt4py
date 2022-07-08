@@ -7,6 +7,7 @@ import numbers
 from abc import abstractmethod
 from copy import deepcopy
 from dataclasses import dataclass
+from types import NoneType
 from typing import (
     Any,
     Callable,
@@ -41,7 +42,11 @@ IntIndex: TypeAlias = int
 FieldIndex: TypeAlias = int | slice
 FieldIndexOrIndices: TypeAlias = FieldIndex | tuple[FieldIndex, ...]
 
-Axis: TypeAlias = Dimension
+FieldAxis: TypeAlias = (
+    Dimension | Offset
+)  # TODO Offset should be removed, is sometimes used for sparse dimensions
+TupleAxis: TypeAlias = NoneType
+Axis: TypeAlias = FieldAxis | TupleAxis
 
 Column: TypeAlias = np.ndarray  # TODO consider replacing by a wrapper around ndarray
 
@@ -476,6 +481,23 @@ def _is_concrete_position(pos: Position) -> TypeGuard[ConcretePosition]:
     )
 
 
+def _get_axes(
+    field_or_tuple: LocatedField | tuple,
+) -> Sequence[Dimension]:  # arbitrary nesting of tuples of LocatedField
+    return (
+        _get_axes(field_or_tuple[0]) if isinstance(field_or_tuple, tuple) else field_or_tuple.axes
+    )
+
+
+def _make_tuple(
+    field_or_tuple: LocatedField | tuple, indices: int | slice | tuple[int | slice, ...]
+) -> tuple:  # arbitrary nesting of tuples of LocatedField
+    if isinstance(field_or_tuple, tuple):
+        return tuple(_make_tuple(f, indices) for f in field_or_tuple)
+    else:
+        return field_or_tuple[indices]
+
+
 # TODO(havogt) frozen dataclass
 class MDIterator:
     def __init__(
@@ -518,10 +540,9 @@ class MDIterator:
 
         assert self.pos is not None
         shifted_pos = self.pos.copy()
-        # TODO(havogt): support nested tuples
-        axes = self.field[0].axes if isinstance(self.field, tuple) else self.field.axes
+        axes = _get_axes(self.field)
 
-        if not all(axis.value in shifted_pos.keys() for axis in axes):
+        if not all(axis.value in shifted_pos.keys() for axis in axes if axis is not None):
             raise IndexError("Iterator position doesn't point to valid location for its field.")
         slice_column = dict[Tag, FieldIndex]()
         if self.column_axis is not None:
@@ -534,10 +555,7 @@ class MDIterator:
             {**shifted_pos, **slice_column},
         )
         try:
-            if isinstance(self.field, tuple):
-                return tuple(f[ordered_indices] for f in self.field)
-            else:
-                return self.field[ordered_indices]
+            return _make_tuple(self.field, ordered_indices)
         except IndexError:
             return _UNDEFINED
 
@@ -549,8 +567,7 @@ def make_in_iterator(
     *,
     column_axis: Optional[Tag],
 ) -> MDIterator:
-    # TODO(havogt): support nested tuples
-    axes = inp[0].axes if isinstance(inp, tuple) else inp.axes
+    axes = _get_axes(inp)
     sparse_dimensions: list[Tag] = []
     for axis in axes:
         if isinstance(axis, Offset):
@@ -618,8 +635,12 @@ class LocatedFieldImpl(MutableLocatedField):
         return self.array().shape
 
 
-def _is_tuple_axis(axis: Axis):
+def _is_tuple_axis(axis: Axis) -> TypeGuard[TupleAxis]:
     return axis is None
+
+
+def _is_field_axis(axis: Axis) -> TypeGuard[FieldAxis]:
+    return isinstance(axis, FieldAxis)  # type: ignore[misc,arg-type] # see https://github.com/python/mypy/issues/11673
 
 
 def get_ordered_indices(
@@ -631,7 +652,7 @@ def get_ordered_indices(
         if _is_tuple_axis(axis):
             res.append(slice(None))
         else:
-            assert axis is not None
+            assert _is_field_axis(axis)
             assert axis.value in pos
             elem = pos[axis.value]
             if isinstance(elem, list):
@@ -647,7 +668,7 @@ def _tupsum(a, b):
         is_slice = False
         if isinstance(s, slice):
             is_slice = True
-            first = s.start
+            first = 0 if s.start is None else s.start
             assert s.step is None
             assert s.stop is None
         else:
@@ -655,7 +676,7 @@ def _tupsum(a, b):
             first = s
         if isinstance(t, slice):
             is_slice = True
-            second = t.start
+            second = 0 if t.start is None else t.start
             assert t.step is None
             assert t.stop is None
         else:
