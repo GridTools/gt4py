@@ -1,4 +1,3 @@
-import os
 from typing import Any, Sequence, Type, TypeVar
 
 import jinja2
@@ -13,14 +12,6 @@ from eve.codegen import JinjaTemplate, TemplatedGenerator
 T = TypeVar("T")
 
 
-class CommaSeparatedList(Node):
-    items: list
-
-
-class NewlineSeparatedList(Node):
-    items: list
-
-
 class BindingFunction(Node):
     exported_name: str
     wrapper_name: str
@@ -30,7 +21,7 @@ class BindingFunction(Node):
 class BindingModule(Node):
     name: str
     doc: str
-    functions: NewlineSeparatedList
+    functions: Sequence[BindingFunction]
 
 
 class FunctionParameter(Node):
@@ -49,7 +40,7 @@ class ReturnStmt(Node):
 
 class WrapperFunction(Node):
     name: str
-    parameters: CommaSeparatedList
+    parameters: Sequence[FunctionParameter]
     body: Any
 
 
@@ -78,7 +69,7 @@ class BindingCodeGenerator(TemplatedGenerator):
     WrapperFunction = JinjaTemplate(
         """\
         decltype(auto) {{name}}(
-            {{parameters}}
+            {{"\n,".join(parameters)}}
         )
         {
             {{body}}
@@ -101,7 +92,7 @@ class BindingCodeGenerator(TemplatedGenerator):
         """\
         PYBIND11_MODULE({{name}}, module) {
             module.doc() = "{{doc}}";
-            {{functions}}
+            {{"\n".join(functions)}}
         }\
         """
     )
@@ -109,14 +100,6 @@ class BindingCodeGenerator(TemplatedGenerator):
     BindingFunction = JinjaTemplate(
         """module.def("{{exported_name}}", &{{wrapper_name}}, "{{doc}}");"""
     )
-
-    def visit_CommaSeparatedList(self, items: NewlineSeparatedList):
-        str_items = [self.visit(item) for item in items.items]
-        return ", ".join(str_items)
-
-    def visit_NewlineSeparatedList(self, items: NewlineSeparatedList):
-        str_items = [self.visit(item) for item in items.items]
-        return str(os.linesep).join(str_items)
 
     def visit_FunctionCall(self, call: FunctionCall):
         args = [render_argument(index, param) for index, param in enumerate(call.target.parameters)]
@@ -177,17 +160,15 @@ def create_bindings(target: defs.Function, target_header: str) -> defs.BindingCo
         ],
         wrapper=WrapperFunction(
             name=wrapper_name,
-            parameters=CommaSeparatedList(items=make_parameter_list(target.parameters)),
+            parameters=make_parameter_list(target.parameters),
             body=ReturnStmt(expr=FunctionCall(target=target)),
         ),
         binding_module=BindingModule(
             name=target.name,
             doc="",
-            functions=NewlineSeparatedList(
-                items=[
-                    BindingFunction(exported_name=target.name, wrapper_name=wrapper_name, doc="")
-                ]
-            ),
+            functions=[
+                BindingFunction(exported_name=target.name, wrapper_name=wrapper_name, doc="")
+            ],
         ),
     )
 

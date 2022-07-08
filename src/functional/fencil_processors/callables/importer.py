@@ -2,7 +2,6 @@ import importlib
 import importlib.util
 import inspect
 import pathlib
-import sys
 from typing import Callable, Dict
 
 
@@ -11,7 +10,7 @@ def import_callables(module_file: pathlib.Path) -> Dict[str, Callable]:
 
     error_msg = f"Could not load module named {module_name} from {module_file}"
     spec = importlib.util.spec_from_file_location(module_name, module_file)
-    if not spec:
+    if not spec or not spec.loader:
         raise ModuleNotFoundError(error_msg)
     try:
         module = importlib.util.module_from_spec(spec)
