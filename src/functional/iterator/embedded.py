@@ -618,7 +618,7 @@ class LocatedFieldImpl(MutableLocatedField):
 
 
 def _is_field_axis(axis: Axis) -> TypeGuard[FieldAxis]:
-    return isinstance(axis, (Dimension, Offset))  # TODO should be `isinstance(axis, FieldAxis)`
+    return isinstance(axis, FieldAxis)  # type: ignore[misc,arg-type] # see https://github.com/python/mypy/issues/11673
 
 
 def get_ordered_indices(
