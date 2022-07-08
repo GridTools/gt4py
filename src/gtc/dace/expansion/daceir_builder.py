@@ -649,7 +649,6 @@ class DaCeIRBuilder(NodeTranslator):
                 dcir.GridSubset.from_interval(interval, axis)
             )
             for sym in access_info.grid_subset.free_symbols:
-                print("ADDING", sym)
                 symbol_collector.add_symbol(sym)
             res_read_memlets.append(
                 dcir.Memlet(
@@ -665,7 +664,6 @@ class DaCeIRBuilder(NodeTranslator):
                 dcir.GridSubset.from_interval(interval, axis)
             )
             for sym in access_info.grid_subset.free_symbols:
-                print("ADDING", sym)
                 symbol_collector.add_symbol(sym)
             res_write_memlets.append(
                 dcir.Memlet(
