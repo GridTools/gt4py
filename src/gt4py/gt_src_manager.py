@@ -26,7 +26,7 @@ _DEFAULT_GRIDTOOLS_VERSION = 2
 _GRIDTOOLS_GIT_REPO = {
     1: "https://github.com/GridTools/gridtools.git",
     2: "https://github.com/GridTools/gridtools.git",
-}  # TODO reset to main repo
+}
 _GRIDTOOLS_GIT_BRANCHES = {
     1: "v1.1.4",
     2: "v2.2.0",
