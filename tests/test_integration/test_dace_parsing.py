@@ -148,9 +148,6 @@ def test_origin_offsetting_frozen(dace_stencil, domain, outp_origin):
 @pytest.mark.parametrize("outp_origin", [(0, 0, 0), (7, 7, 7), (2, 2, 0)])
 def test_origin_offsetting_nofrozen(dace_stencil, domain, outp_origin):
 
-    if domain == (3, 3, 3) and outp_origin == (7, 7, 7) and dace_stencil.backend == "daint:gpu":
-        pytest.skip("Random failures on daint-ci, see github issue #848.")
-
     backend = dace_stencil.backend
     inp = gt_storage.from_array(
         data=7.0, dtype=np.float64, shape=(10, 10, 10), default_origin=(0, 0, 0), backend=backend
@@ -173,6 +170,12 @@ def test_origin_offsetting_nofrozen(dace_stencil, domain, outp_origin):
     outp.device_to_host(force=True)
 
     assert np.allclose(inp, 7.0)
+
+    if not (
+        domain == (3, 3, 3) and outp_origin == (7, 7, 7) and dace_stencil.backend == "daint:gpu"
+    ):
+        pytest.skip("Random failures on daint-ci, see github issue #848.")
+
     assert np.allclose(
         np.asarray(outp)[
             outp_origin[0] : outp_origin[0] + domain[0],
