@@ -2,7 +2,7 @@ import ctypes
 
 import pytest
 
-from functional.fencil_processors import defs
+from functional.fencil_processors import cpp, defs
 from functional.fencil_processors.codegens.gtfn import gtfn_module
 from functional.iterator import ir
 
@@ -53,4 +53,4 @@ def test_codegen(fencil_example):
     module = gtfn_module.create_source_module(itir, parameters, offset_provider={})
     assert module.entry_point.name == itir.id
     assert any(d.name == "gridtools" for d in module.library_deps)
-    assert all(fp.name == ip.id for fp, ip in zip(module.entry_point.parameters, itir.params))
+    assert module.language == cpp.language_id
