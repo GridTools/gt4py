@@ -38,7 +38,6 @@ class CMakeListsGenerator(TemplatedGenerator):
 
         # Languages
         enable_language(CXX)
-        set(CMAKE_CXX_STANDARD 17)
         set(THREADS_PREFER_PTHREAD_FLAG ON)
         find_package(Threads REQUIRED)
         link_libraries(Threads::Threads)
@@ -59,6 +58,7 @@ class CMakeListsGenerator(TemplatedGenerator):
         # Targets
         add_library({{project_name}} MODULE)
 
+        target_compile_features({{project_name}} PRIVATE cxx_std_17)
         set_target_properties({{project_name}} PROPERTIES PREFIX "" SUFFIX ".{{bin_output_suffix}}")
 
         target_sources({{project_name}}
