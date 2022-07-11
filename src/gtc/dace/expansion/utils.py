@@ -12,6 +12,8 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+from typing import TYPE_CHECKING, List
+
 import dace
 import dace.data
 import dace.library
@@ -19,8 +21,14 @@ import dace.subsets
 
 import eve
 from eve.iterators import iter_tree
-from gtc import common
-from gtc import oir
+from gtc import common, oir
+from gtc.definitions import Extent
+
+
+if TYPE_CHECKING:
+    import daceir as dcir
+
+    from gtc.dace.nodes import StencilComputation
 
 
 def get_dace_debuginfo(node: common.LocNode):
@@ -105,7 +113,7 @@ class HorizontalExecutionSplitter(eve.NodeTranslator):
             extents.append(library_node.get_extents(node))
             return node
 
-        last_stmts = []
+        last_stmts: List[common.Stmt] = []
         res_he_stmts = [last_stmts]
         for stmt in node.body:
             if last_stmts and (
@@ -146,15 +154,16 @@ class HorizontalExecutionSplitter(eve.NodeTranslator):
                 res_hes.append(new_he)
         return oir.VerticalLoopSection(interval=node.interval, horizontal_executions=res_hes)
 
+
 def split_horizontal_exeuctions_regions(node: "StencilComputation"):
 
-    extents = []
+    extents: List[Extent] = []
 
     node.oir_node = HorizontalExecutionSplitter().visit(
         node.oir_node, library_node=node, extents=extents
     )
     ctr = 0
     for i, section in enumerate(node.oir_node.sections):
-        for j, he in enumerate(section.horizontal_executions):
+        for j, _ in enumerate(section.horizontal_executions):
             node.extents[j * len(node.oir_node.sections) + i] = extents[ctr]
             ctr += 1

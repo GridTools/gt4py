@@ -26,7 +26,9 @@ from gtc import daceir as dcir
 from gtc.dace.expansion.daceir_builder import DaCeIRBuilder
 from gtc.dace.expansion.sdfg_builder import StencilComputationSDFGBuilder
 from gtc.dace.nodes import StencilComputation
+
 from .utils import split_horizontal_exeuctions_regions
+
 
 @dace.library.register_expansion(StencilComputation, "default")
 class StencilComputationExpansion(dace.library.ExpandTransformation):
