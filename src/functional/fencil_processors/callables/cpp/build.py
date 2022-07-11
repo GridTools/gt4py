@@ -38,9 +38,6 @@ class CMakeListsGenerator(TemplatedGenerator):
 
         # Languages
         enable_language(CXX)
-        set(THREADS_PREFER_PTHREAD_FLAG ON)
-        find_package(Threads REQUIRED)
-        link_libraries(Threads::Threads)
 
         # Paths
         list(APPEND CMAKE_MODULE_PATH ${CMAKE_BINARY_DIR})
