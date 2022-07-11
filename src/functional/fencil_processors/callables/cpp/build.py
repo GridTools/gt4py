@@ -74,7 +74,9 @@ class CMakeListsGenerator(TemplatedGenerator):
     def visit_FindDependency(self, dep: FindDependency):
         match dep.name:
             case "pybind11":
-                return "find_package(pybind11 CONFIG REQUIRED)"
+                import pybind11
+
+                return f"find_package(pybind11 CONFIG REQUIRED PATHS {pybind11.get_cmake_dir()})"
             case "gridtools":
                 return textwrap.dedent(
                     """\
