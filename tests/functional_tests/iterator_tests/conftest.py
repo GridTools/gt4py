@@ -1,7 +1,7 @@
 import pytest
 
 import functional.fencil_processors.formatters.gtfn
-from functional.fencil_processors.codegens import gtfn
+from functional.fencil_processors import type_check
 from functional.fencil_processors.formatters import lisp
 from functional.fencil_processors.runners import double_roundtrip, roundtrip
 from functional.iterator import ir as itir
