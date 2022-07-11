@@ -35,6 +35,7 @@ def pretty_format_and_check(root: itir.FencilDefinition, *args, **kwargs) -> str
         (functional.fencil_processors.formatters.gtfn.format_sourcecode, False),
         (pretty_format_and_check, False),
         (roundtrip.executor, True),
+        (type_check.check, False),
         (double_roundtrip.executor, True),
     ],
     ids=lambda p: f"backend={p[0].__module__.split('.')[-1] + '.' + p[0].__name__ if p[0] else p[0]}",
