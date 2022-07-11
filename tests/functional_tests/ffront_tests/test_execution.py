@@ -179,7 +179,7 @@ def test_unary_neg(fieldview_backend_list):
     assert np.allclose(b, np.full((size), -1, dtype=int32))
 
 
-def test_shift():
+def test_shift(fieldview_backend_list):
     size = 10
     Ioff = FieldOffset("Ioff", source=IDim, target=(IDim,))
     a = np_as_located_field(IDim)(np.arange(size + 1))
@@ -189,7 +189,7 @@ def test_shift():
     def shift_by_one(inp: Field[[IDim], float64]) -> Field[[IDim], float64]:
         return inp(Ioff[1])
 
-    @program(backend=fieldview_backend)
+    @program(backend=fieldview_backend_list)
     def fencil(inp: Field[[IDim], float64], out: Field[[IDim], float64]) -> None:
         shift_by_one(inp, out=out)
 
