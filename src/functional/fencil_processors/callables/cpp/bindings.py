@@ -30,8 +30,20 @@ class FunctionParameter(Node):
     dtype: Type
 
 
+class DimExpr(Node):
+    name: str
+
+
+class SidExpr(Node):
+    buffer_name: str
+    dimensions: Sequence[DimExpr]
+    scalar_type: Type
+    dim_config: int
+
+
 class FunctionCall(Node):
     target: defs.Function
+    args: Any
 
 
 class ReturnStmt(Node):
@@ -84,8 +96,6 @@ class BindingCodeGenerator(TemplatedGenerator):
             type_str = cpp.render_python_type(param.dtype)
         return type_str + " " + param.name
 
-    FunctionArgument = JinjaTemplate("""{{expr}}""")
-
     ReturnStmt = JinjaTemplate("""return {{expr}};""")
 
     BindingModule = JinjaTemplate(
@@ -102,8 +112,28 @@ class BindingCodeGenerator(TemplatedGenerator):
     )
 
     def visit_FunctionCall(self, call: FunctionCall):
-        args = [render_argument(index, param) for index, param in enumerate(call.target.parameters)]
+        args = [self.visit(arg) for arg in call.args]
         return cpp.render_function_call(call.target, args)
+
+    def visit_SidExpr(self, sid: SidExpr):
+        template = jinja2.Template(
+            """\
+            gridtools::sid::rename_numbered_dimensions<{{", ".join(dimensions)}}>(
+                gridtools::as_sid<{{scalar_type}},\
+                                  {{dimensions.__len__()}},\
+                                  gridtools::integral_constant<int, {{dim_config}}>,\
+                                  999'999'999>({{buffer_name}})
+            )\
+            """
+        )
+        return template.render(
+            buffer_name=sid.buffer_name,
+            dimensions=[self.visit(dim) for dim in sid.dimensions],
+            scalar_type=cpp.render_python_type(sid.scalar_type),
+            dim_config=sid.dim_config,
+        )
+
+    DimExpr = JinjaTemplate("""generated::{{name}}_t""")
 
 
 def make_parameter(parameter: defs.ScalarParameter | defs.BufferParameter) -> FunctionParameter:
@@ -113,24 +143,14 @@ def make_parameter(parameter: defs.ScalarParameter | defs.BufferParameter) -> Fu
     return FunctionParameter(name=name, ndim=ndim, dtype=scalar_type)
 
 
-def render_argument(index: int, param: defs.ScalarParameter | defs.BufferParameter) -> str:
+def make_argument(index: int, param: defs.ScalarParameter | defs.BufferParameter) -> str | SidExpr:
     if isinstance(param, defs.ScalarParameter):
-        return """{name}""".format(name=param.name)
+        return param.name
     else:
-        template = jinja2.Template(
-            """\
-            gridtools::sid::rename_numbered_dimensions<{{", ".join(dims)}}>(
-                gridtools::as_sid<{{dtype}},\
-                                  {{dims.__len__()}},\
-                                  gridtools::integral_constant<int, {{dim_config}}>,\
-                                  999'999'999>({{name}})
-            )\
-            """
-        )
-        return template.render(
-            name=param.name,
-            dims=[f"generated::{dim}_t" for dim in param.dimensions],
-            dtype=cpp.render_python_type(param.scalar_type),
+        return SidExpr(
+            buffer_name=param.name,
+            dimensions=[DimExpr(name=dim) for dim in param.dimensions],
+            scalar_type=param.scalar_type,
             dim_config=index,
         )
 
@@ -153,7 +173,14 @@ def create_bindings(target: defs.Function, target_header: str) -> defs.BindingCo
         wrapper=WrapperFunction(
             name=wrapper_name,
             parameters=[make_parameter(param) for param in target.parameters],
-            body=ReturnStmt(expr=FunctionCall(target=target)),
+            body=ReturnStmt(
+                expr=FunctionCall(
+                    target=target,
+                    args=[
+                        make_argument(index, param) for index, param in enumerate(target.parameters)
+                    ],
+                )
+            ),
         ),
         binding_module=BindingModule(
             name=target.name,
