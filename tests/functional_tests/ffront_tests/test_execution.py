@@ -41,11 +41,8 @@ from functional.iterator.embedded import (
 )
 
 
-fieldview_backend = roundtrip.executor
-
-
 @pytest.fixture(params=[roundtrip.executor, gtfn_cpu.run_gtfn])
-def fieldview_backend_list(request):
+def fieldview_backend(request):
     yield request.param
 
 
@@ -66,12 +63,12 @@ IDim = Dimension("IDim")
 JDim = Dimension("JDim")
 
 
-def test_copy(fieldview_backend_list):
+def test_copy(fieldview_backend):
     size = 10
     a = np_as_located_field(IDim)(np.ones((size)))
     b = np_as_located_field(IDim)(np.zeros((size)))
 
-    @field_operator(backend=fieldview_backend_list)
+    @field_operator(backend=fieldview_backend)
     def copy(inp: Field[[IDim], float64]) -> Field[[IDim], float64]:
         return inp
 
@@ -81,14 +78,14 @@ def test_copy(fieldview_backend_list):
 
 
 @pytest.mark.skip(reason="no lowering for returning a tuple of fields exists yet.")
-def test_multicopy(fieldview_backend_list):
+def test_multicopy(fieldview_backend):
     size = 10
     a = np_as_located_field(IDim)(np.ones((size)))
     b = np_as_located_field(IDim)(np.ones((size)) * 3)
     c = np_as_located_field(IDim)(np.zeros((size)))
     d = np_as_located_field(IDim)(np.zeros((size)))
 
-    @field_operator(backend=fieldview_backend_list)
+    @field_operator(backend=fieldview_backend)
     def multicopy(
         inp1: Field[[IDim], float64], inp2: Field[[IDim], float64]
     ) -> tuple[Field[[IDim], float64], Field[[IDim], float64]]:
@@ -100,13 +97,13 @@ def test_multicopy(fieldview_backend_list):
     assert np.allclose(b, d)
 
 
-def test_arithmetic(fieldview_backend_list):
+def test_arithmetic(fieldview_backend):
     size = 10
     a = np_as_located_field(IDim)(np.ones((size)))
     b = np_as_located_field(IDim)(np.ones((size)) * 2)
     c = np_as_located_field(IDim)(np.zeros((size)))
 
-    @field_operator(backend=fieldview_backend_list)
+    @field_operator(backend=fieldview_backend)
     def arithmetic(
         inp1: Field[[IDim], float64], inp2: Field[[IDim], float64]
     ) -> Field[[IDim], float64]:
@@ -117,12 +114,12 @@ def test_arithmetic(fieldview_backend_list):
     assert np.allclose((a.array() + b.array()) * 2.0, c)
 
 
-def test_power(fieldview_backend_list):
+def test_power(fieldview_backend):
     size = 10
     a = np_as_located_field(IDim)(np.random.randn((size)))
     b = np_as_located_field(IDim)(np.zeros((size)))
 
-    @field_operator(backend=fieldview_backend_list)
+    @field_operator(backend=fieldview_backend)
     def power(inp1: Field[[IDim], float64]) -> Field[[IDim], float64]:
         return inp1**2
 
@@ -131,13 +128,13 @@ def test_power(fieldview_backend_list):
     assert np.allclose(a.array() ** 2, b)
 
 
-def test_power_arithmetic(fieldview_backend_list):
+def test_power_arithmetic(fieldview_backend):
     size = 10
     a = np_as_located_field(IDim)(np.random.randn((size)))
     b = np_as_located_field(IDim)(np.zeros((size)))
     c = np_as_located_field(IDim)(np.random.randn((size)))
 
-    @field_operator(backend=fieldview_backend_list)
+    @field_operator(backend=fieldview_backend)
     def power_arithmetic(
         inp1: Field[[IDim], float64], inp2: Field[[IDim], float64]
     ) -> Field[[IDim], float64]:
@@ -148,7 +145,7 @@ def test_power_arithmetic(fieldview_backend_list):
     assert np.allclose(c.array() + ((c.array() + a.array()) ** 2), b)
 
 
-def test_bit_logic(fieldview_backend_list):
+def test_bit_logic(fieldview_backend):
     size = 10
     a = np_as_located_field(IDim)(np.full((size), True))
     b_data = np.full((size), True)
@@ -156,7 +153,7 @@ def test_bit_logic(fieldview_backend_list):
     b = np_as_located_field(IDim)(b_data)
     c = np_as_located_field(IDim)(np.full((size), False))
 
-    @field_operator(backend=fieldview_backend_list)
+    @field_operator(backend=fieldview_backend)
     def bit_and(inp1: Field[[IDim], bool], inp2: Field[[IDim], bool]) -> Field[[IDim], bool]:
         return inp1 & inp2 & True
 
@@ -165,12 +162,12 @@ def test_bit_logic(fieldview_backend_list):
     assert np.allclose(a.array() & b.array(), c)
 
 
-def test_unary_neg(fieldview_backend_list):
+def test_unary_neg(fieldview_backend):
     size = 10
     a = np_as_located_field(IDim)(np.ones((size), dtype=int32))
     b = np_as_located_field(IDim)(np.zeros((size), dtype=int32))
 
-    @field_operator(backend=fieldview_backend_list)
+    @field_operator(backend=fieldview_backend)
     def uneg(inp: Field[[IDim], int32]) -> Field[[IDim], int32]:
         return -inp
 
@@ -179,7 +176,7 @@ def test_unary_neg(fieldview_backend_list):
     assert np.allclose(b, np.full((size), -1, dtype=int32))
 
 
-def test_shift(fieldview_backend_list):
+def test_shift(fieldview_backend):
     size = 10
     Ioff = FieldOffset("Ioff", source=IDim, target=(IDim,))
     a = np_as_located_field(IDim)(np.arange(size + 1))
@@ -189,7 +186,7 @@ def test_shift(fieldview_backend_list):
     def shift_by_one(inp: Field[[IDim], float64]) -> Field[[IDim], float64]:
         return inp(Ioff[1])
 
-    @program(backend=fieldview_backend_list)
+    @program(backend=fieldview_backend)
     def fencil(inp: Field[[IDim], float64], out: Field[[IDim], float64]) -> None:
         shift_by_one(inp, out=out)
 
@@ -198,7 +195,7 @@ def test_shift(fieldview_backend_list):
     assert np.allclose(b.array(), np.arange(1, 11))
 
 
-def test_fold_shifts():
+def test_fold_shifts(fieldview_backend):
     """Shifting the result of an addition should work."""
     size = 10
     Ioff = FieldOffset("Ioff", source=IDim, target=(IDim,))
@@ -224,7 +221,9 @@ def test_fold_shifts():
     assert np.allclose(a[1:] + b[2:], c)
 
 
-def test_tuples():
+def test_tuples(fieldview_backend):
+    if fieldview_backend == gtfn_cpu.run_gtfn:
+        pytest.skip(reason="Tuples are not supported yet.")
     size = 10
     a = np_as_located_field(IDim)(np.ones((size)))
     b = np_as_located_field(IDim)(np.ones((size)) * 2)
@@ -249,7 +248,7 @@ def test_tuples():
     assert np.allclose((a.array() * 1.3 + b.array() * 5.0) * 3.4, c)
 
 
-def test_promotion():
+def test_promotion(fieldview_backend):
     Edge = Dimension("Edge")
     K = Dimension("K")
 
@@ -307,15 +306,17 @@ def reduction_setup():
     )  # type: ignore
 
 
-def test_maxover_execution_sparse(reduction_setup):
+def test_maxover_execution_sparse(reduction_setup, fieldview_backend):
     """Testing max_over functionality."""
+    if fieldview_backend == gtfn_cpu.run_gtfn:
+        pytest.skip(reason="not yet supported.")
     rs = reduction_setup
     Vertex = rs.Vertex
     V2EDim = rs.V2EDim
 
     inp_field = np_as_located_field(Vertex, V2EDim)(rs.v2e_table)
 
-    @field_operator
+    @field_operator(backend=fieldview_backend)
     def maxover_fieldoperator(
         inp_field: Field[[Vertex, V2EDim], "float64"]
     ) -> Field[[Vertex], float64]:
@@ -327,8 +328,10 @@ def test_maxover_execution_sparse(reduction_setup):
     assert np.allclose(ref, rs.out)
 
 
-def test_maxover_execution_negatives(reduction_setup):
+def test_maxover_execution_negatives(reduction_setup, fieldview_backend):
     """Testing max_over functionality for negative values in array."""
+    if fieldview_backend == gtfn_cpu.run_gtfn:
+        pytest.skip(reason="not yet supported.")
     rs = reduction_setup
     Edge = rs.Edge
     Vertex = rs.Vertex
@@ -352,8 +355,10 @@ def test_maxover_execution_negatives(reduction_setup):
     assert np.allclose(ref, rs.out)
 
 
-def test_reduction_execution(reduction_setup):
+def test_reduction_execution(reduction_setup, fieldview_backend):
     """Testing a trivial neighbor sum."""
+    if fieldview_backend == gtfn_cpu.run_gtfn:
+        pytest.skip(reason="IndexFields are not supported yet.")
     rs = reduction_setup
     Edge = rs.Edge
     Vertex = rs.Vertex
@@ -374,15 +379,16 @@ def test_reduction_execution(reduction_setup):
     assert np.allclose(ref, rs.out)
 
 
-def test_reduction_execution_nb(reduction_setup):
+def test_reduction_execution_nb(reduction_setup, fieldview_backend):
     """Testing a neighbor sum on a neighbor field."""
+    if fieldview_backend == gtfn_cpu.run_gtfn:
+        pytest.skip(reason="not yet supported.")
     rs = reduction_setup
     V2EDim = rs.V2EDim
-    V2E = rs.V2E
 
     nb_field = np_as_located_field(rs.Vertex, rs.V2EDim)(rs.v2e_table)
 
-    @field_operator
+    @field_operator(backend=fieldview_backend)
     def reduction(nb_field: Field[[rs.Vertex, rs.V2EDim], "float64"]) -> Field[[rs.Vertex], "float64"]:  # type: ignore
         return neighbor_sum(nb_field, axis=V2EDim)
 
@@ -392,8 +398,10 @@ def test_reduction_execution_nb(reduction_setup):
     assert np.allclose(ref, rs.out)
 
 
-def test_reduction_expression(reduction_setup):
+def test_reduction_expression(reduction_setup, fieldview_backend):
     """Test reduction with an expression directly inside the call."""
+    if fieldview_backend == gtfn_cpu.run_gtfn:
+        pytest.skip(reason="IndexFields are not supported yet.")
     rs = reduction_setup
     Vertex = rs.Vertex
     Edge = rs.Edge
@@ -416,8 +424,10 @@ def test_reduction_expression(reduction_setup):
     assert np.allclose(ref, rs.out.array())
 
 
-def test_scalar_arg():
+def test_scalar_arg(fieldview_backend):
     """Test scalar argument being turned into 0-dim field."""
+    if fieldview_backend == gtfn_cpu.run_gtfn:
+        pytest.skip(reason="ConstantFields are not supported yet.")
     Vertex = Dimension("Vertex")
     size = 5
     inp = 5.0
@@ -433,7 +443,9 @@ def test_scalar_arg():
     assert np.allclose(ref, out.array())
 
 
-def test_scalar_arg_with_field():
+def test_scalar_arg_with_field(fieldview_backend):
+    if fieldview_backend == gtfn_cpu.run_gtfn:
+        pytest.skip(reason="IndexFields and ConstantFields are not supported yet.")
     Edge = Dimension("Edge")
     EdgeOffset = FieldOffset("EdgeOffset", source=Edge, target=(Edge,))
     size = 5
@@ -458,7 +470,7 @@ def test_scalar_arg_with_field():
     assert np.allclose(ref, out.array())
 
 
-def test_broadcast_simple():
+def test_broadcast_simple(fieldview_backend):
     size = 10
     a = np_as_located_field(IDim)(np.arange(0, size, 1, dtype=int))
     out = np_as_located_field(IDim, JDim)(np.zeros((size, size)))
@@ -472,7 +484,7 @@ def test_broadcast_simple():
     assert np.allclose(a.array()[:, np.newaxis], out)
 
 
-def test_broadcast_scalar():
+def test_broadcast_scalar(fieldview_backend):
     size = 10
     out = np_as_located_field(IDim)(np.zeros((size)))
 
@@ -485,7 +497,7 @@ def test_broadcast_scalar():
     assert np.allclose(1, out)
 
 
-def test_broadcast_two_fields():
+def test_broadcast_two_fields(fieldview_backend):
     size = 10
     a = np_as_located_field(IDim)(np.arange(0, size, 1, dtype=int))
     b = np_as_located_field(JDim)(np.arange(0, size, 1, dtype=int))
@@ -507,7 +519,7 @@ def test_broadcast_two_fields():
     assert np.allclose(expected, out)
 
 
-def test_broadcast_shifted():
+def test_broadcast_shifted(fieldview_backend):
     Joff = FieldOffset("Joff", source=JDim, target=(JDim,))
 
     size = 10
@@ -524,7 +536,7 @@ def test_broadcast_shifted():
     assert np.allclose(a.array()[:, np.newaxis], out)
 
 
-def test_conditional():
+def test_conditional(fieldview_backend):
     size = 10
     mask = np_as_located_field(IDim)(np.zeros((size,), dtype=bool))
     mask.array()[0 : (size // 2)] = True
@@ -543,7 +555,7 @@ def test_conditional():
     assert np.allclose(np.where(mask, a, b), out)
 
 
-def test_conditional_promotion():
+def test_conditional_promotion(fieldview_backend):
     size = 10
     mask = np_as_located_field(IDim)(np.zeros((size,), dtype=bool))
     mask.array()[0 : (size // 2)] = True
@@ -551,15 +563,17 @@ def test_conditional_promotion():
     out = np_as_located_field(IDim)(np.zeros((size,)))
 
     @field_operator(backend=fieldview_backend)
-    def conditional(mask: Field[[IDim], bool], a: Field[[IDim], float64]) -> Field[[IDim], float64]:
+    def conditional_promotion(
+        mask: Field[[IDim], bool], a: Field[[IDim], float64]
+    ) -> Field[[IDim], float64]:
         return where(mask, a, 10.0)
 
-    conditional(mask, a, out=out, offset_provider={})
+    conditional_promotion(mask, a, out=out, offset_provider={})
 
     assert np.allclose(np.where(mask, a, 10), out)
 
 
-def test_conditional_shifted():
+def test_conditional_shifted(fieldview_backend):
     Ioff = FieldOffset("Ioff", source=IDim, target=(IDim,))
 
     size = 10
@@ -569,21 +583,21 @@ def test_conditional_shifted():
     b = np_as_located_field(IDim)(np.zeros((size,)))
     out = np_as_located_field(IDim)(np.zeros((size,)))
 
-    @field_operator(backend=fieldview_backend)
-    def conditional(
+    @field_operator()
+    def conditional_shifted(
         mask: Field[[IDim], bool], a: Field[[IDim], float64], b: Field[[IDim], float64]
     ) -> Field[[IDim], float64]:
         tmp = where(mask, a, b)
         return tmp(Ioff[1])
 
-    @program
+    @program(backend=fieldview_backend)
     def conditional_program(
         mask: Field[[IDim], bool],
         a: Field[[IDim], float64],
         b: Field[[IDim], float64],
         out: Field[[IDim], float64],
     ):
-        conditional(mask, a, b, out=out[:-1])
+        conditional_shifted(mask, a, b, out=out[:-1])
 
     conditional_program(mask, a, b, out, offset_provider={"Ioff": IDim})
 
