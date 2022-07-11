@@ -16,7 +16,9 @@ def create_source_module(
     rendered_params = ", ".join(["gridtools::fn::backend::naive{}", *[p.name for p in parameters]])
     decl_body = f"return generated::{function.name}(nullptr)({rendered_params});"
     decl_src = cpp.render_function_declaration(function, body=decl_body)
-    stencil_src = gtfn_backend.generate(itir, grid_type=gtfn_backend._guess_grid_type(**kwargs))
+    stencil_src = gtfn_backend.generate(
+        itir, grid_type=gtfn_backend._guess_grid_type(**kwargs), **kwargs
+    )
     source_code = format_source(
         "cpp",
         f"""\
