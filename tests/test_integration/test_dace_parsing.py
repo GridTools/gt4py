@@ -85,6 +85,7 @@ def test_basic(decorator, backend):
         defn(locoutp, par=locinp)
 
     call_stencil_object(locoutp=outp, locinp=inp)
+    outp.device_to_host(force=True)
     assert np.allclose(outp, 7.0)
 
 
@@ -304,27 +305,25 @@ def test_optional_arg_provide_aot(decorator):
         dtype=np.float64, shape=(10, 10, 10), default_origin=(0, 0, 0), backend=backend
     )
 
-    storage = dace.StorageType.GPU_Global if "gpu" in backend else dace.StorageType.CPU_Heap
-
     @dace.program
     def call_stencil(
         inp: dace.data.Array(
             shape=inp.shape,
             strides=tuple(s // inp.itemsize for s in inp.strides),
             dtype=dace.float64,
-            storage=storage,
+            storage=dace.StorageType.CPU_Heap,
         ),
         outp: dace.data.Array(
             shape=outp.shape,
             strides=tuple(s // outp.itemsize for s in outp.strides),
             dtype=dace.float64,
-            storage=storage,
+            storage=dace.StorageType.CPU_Heap,
         ),
         unused_field: dace.data.Array(
             shape=unused_field.shape,
             strides=tuple(s // unused_field.itemsize for s in unused_field.strides),
             dtype=dace.float64,
-            storage=storage,
+            storage=dace.StorageType.CPU_Heap,
         ),  # type: ignore
         unused_par: dace.float64,  # type: ignore
     ):
