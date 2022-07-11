@@ -87,8 +87,6 @@ class CMakeListsGenerator(TemplatedGenerator):
                     FetchContent_MakeAvailable(GridTools)\
                     """
                 )
-            case "openmp":
-                return "find_package(OpenMP REQUIRED)"
             case _:
                 raise ValueError("Library {name} is not supported".format(name=dep.name))
 
@@ -97,9 +95,7 @@ class CMakeListsGenerator(TemplatedGenerator):
             case "pybind11":
                 lib_name = "pybind11::module"
             case "gridtools":
-                lib_name = "GridTools::gridtools"
-            case "openmp":
-                lib_name = "OpenMP::OpenMP_CXX"
+                lib_name = "GridTools::fn_naive"
             case _:
                 raise ValueError("Library {name} is not supported".format(name=dep.name))
         return "target_link_libraries({target} PUBLIC {lib})".format(

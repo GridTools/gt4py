@@ -43,7 +43,6 @@ def source_module():
         source_code=src,
         library_deps=[
             defs.LibraryDependency("gridtools", "master"),
-            defs.LibraryDependency("openmp", "*"),
         ],
         language=cpp.language_id,
     )
