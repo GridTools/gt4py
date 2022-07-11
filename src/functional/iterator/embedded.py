@@ -5,6 +5,7 @@ from __future__ import annotations
 import itertools
 import numbers
 from abc import abstractmethod
+from copy import deepcopy
 from dataclasses import dataclass
 from types import NoneType
 from typing import (
@@ -34,6 +35,26 @@ from functional.iterator.utils import tupelize
 EMBEDDED = "embedded"
 
 
+# Atoms
+Tag: TypeAlias = str
+IntIndex: TypeAlias = int
+
+FieldIndex: TypeAlias = int | slice
+FieldIndexOrIndices: TypeAlias = FieldIndex | tuple[FieldIndex, ...]
+
+FieldAxis: TypeAlias = (
+    Dimension | Offset
+)  # TODO Offset should be removed, is sometimes used for sparse dimensions
+TupleAxis: TypeAlias = NoneType
+Axis: TypeAlias = FieldAxis | TupleAxis
+
+Column: TypeAlias = np.ndarray  # TODO consider replacing by a wrapper around ndarray
+
+
+class SparseTag(Tag):
+    ...
+
+
 class NeighborTableOffsetProvider:
     def __init__(
         self,
@@ -51,30 +72,16 @@ class NeighborTableOffsetProvider:
         self.has_skip_values = has_skip_values
 
 
-# Atoms
-Tag: TypeAlias = str
-IntIndex: TypeAlias = int
-
-FieldIndex: TypeAlias = int | slice
-FieldIndexOrIndices: TypeAlias = FieldIndex | tuple[FieldIndex, ...]
-
-FieldAxis: TypeAlias = (
-    Dimension | Offset
-)  # TODO Offset should be removed, is sometimes used for sparse dimensions
-TupleAxis: TypeAlias = NoneType
-Axis: TypeAlias = FieldAxis | TupleAxis
-
-Column: TypeAlias = np.ndarray  # TODO consider replacing by a wrapper around ndarray
-
 # Offsets
-AnyOffset: TypeAlias = Tag | IntIndex
+OffsetPart: TypeAlias = Tag | IntIndex
 CompleteOffset: TypeAlias = tuple[Tag, IntIndex]
 OffsetProviderElem: TypeAlias = Dimension | Connectivity
 OffsetProvider: TypeAlias = dict[Tag, OffsetProviderElem]
 
 # Positions
-IncompleteSparsePositionEntry: TypeAlias = Optional[int]
-PositionEntry: TypeAlias = IntIndex
+SparsePositionEntry = list[int]
+IncompleteSparsePositionEntry: TypeAlias = list[Optional[int]]
+PositionEntry: TypeAlias = IntIndex | SparsePositionEntry
 IncompletePositionEntry: TypeAlias = IntIndex | IncompleteSparsePositionEntry
 ConcretePosition: TypeAlias = dict[Tag, PositionEntry]
 IncompletePosition: TypeAlias = dict[Tag, IncompletePositionEntry]
@@ -84,7 +91,7 @@ Position: TypeAlias = Union[ConcretePosition, IncompletePosition]
 MaybePosition: TypeAlias = Optional[Position]
 
 
-def is_position_entry(p: IncompletePositionEntry) -> TypeGuard[PositionEntry]:
+def is_int_index(p: Any) -> TypeGuard[IntIndex]:
     return isinstance(p, int)
 
 
@@ -96,7 +103,7 @@ class ItIterator(Protocol):
     `ItIterator` to avoid name clashes with `Iterator` from `typing` and `collections.abc`.
     """
 
-    def shift(self, *offsets: AnyOffset) -> ItIterator:
+    def shift(self, *offsets: OffsetPart) -> ItIterator:
         ...
 
     def max_neighbors(self) -> int:
@@ -191,7 +198,7 @@ def make_tuple(*args):
 def lift(stencil):
     def impl(*args):
         class _WrappedIterator:
-            def __init__(self, *, offsets: list[AnyOffset] = None, elem=None) -> None:
+            def __init__(self, *, offsets: list[OffsetPart] = None, elem=None) -> None:
                 self.offsets = offsets or []
                 self.elem = elem
 
@@ -199,7 +206,7 @@ def lift(stencil):
             def __getitem__(self, index):
                 return _WrappedIterator(offsets=self.offsets, elem=index)
 
-            def shift(self, *offsets: AnyOffset):
+            def shift(self, *offsets: OffsetPart):
                 return _WrappedIterator(offsets=[*self.offsets, *offsets], elem=self.elem)
 
             def max_neighbors(self):
@@ -337,16 +344,24 @@ def execute_shift(
     pos: Position, tag: Tag, index: IntIndex, *, offset_provider: OffsetProvider
 ) -> MaybePosition:
     assert pos is not None
-    if tag in pos and pos[tag] is None:  # sparse field with offset as neighbor dimension
-        new_pos = pos | {tag: index}
-        return new_pos
+    if isinstance(tag, SparseTag):
+        current_entry = pos[tag]
+        assert isinstance(current_entry, list)
+        new_entry = list(current_entry)
+        assert None in new_entry
+        for i, p in reversed(list(enumerate(new_entry))):
+            # first shift applies to the last sparse dimensions of that axis type
+            if p is None:
+                new_entry[i] = index
+                break
+        return pos | {tag: new_entry}  # type: ignore [dict-item] # mypy is confused
 
     assert tag in offset_provider
     offset_implementation = offset_provider[tag]
     if isinstance(offset_implementation, Dimension):
         assert offset_implementation.value in pos
         new_pos = pos.copy()
-        if is_position_entry(value := new_pos[offset_implementation.value]):
+        if is_int_index(value := new_pos[offset_implementation.value]):
             new_pos[offset_implementation.value] = value + index
         else:
             raise AssertionError()
@@ -377,7 +392,7 @@ def execute_shift(
 # = shift(c2e,e2v,2,0)(cell_field) <-- v2c,e2c twice incomplete shift
 # = shift(2,0)(shift(c2e,e2v)(cell_field))
 # for implementations it means everytime we have an index, we can "execute" a concrete shift
-def group_offsets(*offsets: AnyOffset) -> tuple[list[CompleteOffset], list[Tag]]:
+def group_offsets(*offsets: OffsetPart) -> tuple[list[CompleteOffset], list[Tag]]:
     tag_stack = []
     complete_offsets = []
     for offset in offsets:
@@ -385,7 +400,7 @@ def group_offsets(*offsets: AnyOffset) -> tuple[list[CompleteOffset], list[Tag]]
             tag_stack.append(offset)
         else:
             assert tag_stack
-            tag = tag_stack.pop(0)
+            tag = tag_stack.pop()
             complete_offsets.append((tag, offset))
     return complete_offsets, tag_stack
 
@@ -406,7 +421,7 @@ def shift_position(
     return new_pos
 
 
-def get_open_offsets(*offsets: AnyOffset) -> list[Tag]:
+def get_open_offsets(*offsets: OffsetPart) -> list[Tag]:
     return group_offsets(*offsets)[1]
 
 
@@ -459,6 +474,13 @@ Undefined._setup_math_operations()
 _UNDEFINED = Undefined()
 
 
+def _is_concrete_position(pos: Position) -> TypeGuard[ConcretePosition]:
+    return all(
+        isinstance(v, int) or (isinstance(v, list) and all(isinstance(e, int) for e in v))
+        for v in pos.values()
+    )
+
+
 def _get_axes(
     field_or_tuple: LocatedField | tuple,
 ) -> Sequence[Dimension]:  # arbitrary nesting of tuples of LocatedField
@@ -474,10 +496,6 @@ def _make_tuple(
         return tuple(_make_tuple(f, indices) for f in field_or_tuple)
     else:
         return field_or_tuple[indices]
-
-
-def _is_position_fully_defined(pos: Position) -> TypeGuard[ConcretePosition]:
-    return all(isinstance(v, int) for v in pos.values())
 
 
 # TODO(havogt) frozen dataclass
@@ -497,7 +515,7 @@ class MDIterator:
         self.offset_provider = offset_provider
         self.column_axis = column_axis
 
-    def shift(self, *offsets: AnyOffset) -> MDIterator:
+    def shift(self, *offsets: OffsetPart) -> MDIterator:
         complete_offsets, open_offsets = group_offsets(*self.incomplete_offsets, *offsets)
         return MDIterator(
             self.field,
@@ -531,7 +549,7 @@ class MDIterator:
             slice_column[self.column_axis] = slice(shifted_pos[self.column_axis], None)
             shifted_pos.pop(self.column_axis)
 
-        assert _is_position_fully_defined(shifted_pos)
+        assert _is_concrete_position(shifted_pos)
         ordered_indices = get_ordered_indices(
             axes,
             {**shifted_pos, **slice_column},
@@ -559,17 +577,17 @@ def make_in_iterator(
             # we just use the name of the axis to match the offset literal for now
             sparse_dimensions.append(axis.value)
 
-    assert len(sparse_dimensions) <= 1  # TODO multiple is not a current use case
     new_pos: Position = pos.copy()
-    for sparse_dim in sparse_dimensions:
-        new_pos[sparse_dim] = None  # type: ignore[assignment] # looks like mypy is confused
+    for sparse_dim in set(sparse_dimensions):
+        init = [None] * sparse_dimensions.count(sparse_dim)
+        new_pos[sparse_dim] = init  # type: ignore[assignment] # looks like mypy is confused
     if column_axis is not None:
         # if we deal with column stencil the column position is just an offset by which the whole column needs to be shifted
         new_pos[column_axis] = 0
     return MDIterator(
         inp,
         new_pos,
-        incomplete_offsets=[*sparse_dimensions],
+        incomplete_offsets=[SparseTag(x) for x in sparse_dimensions],
         offset_provider=offset_provider,
         column_axis=column_axis,
     )
@@ -617,15 +635,32 @@ class LocatedFieldImpl(MutableLocatedField):
         return self.array().shape
 
 
+def _is_tuple_axis(axis: Axis) -> TypeGuard[TupleAxis]:
+    return isinstance(axis, TupleAxis)
+
+
 def _is_field_axis(axis: Axis) -> TypeGuard[FieldAxis]:
     return isinstance(axis, FieldAxis)  # type: ignore[misc,arg-type] # see https://github.com/python/mypy/issues/11673
 
 
 def get_ordered_indices(
-    axes: Iterable[FieldAxis], pos: Mapping[str, FieldIndex]
+    axes: Iterable[Axis], pos: Mapping[Tag, FieldIndex | SparsePositionEntry]
 ) -> tuple[FieldIndex, ...]:
-    assert all(axis.value in [*pos] for axis in axes if axis is not None)
-    return tuple(pos[axis.value] if _is_field_axis(axis) else slice(None) for axis in axes)
+    res: list[FieldIndex] = []
+    pos = deepcopy(pos)  # deepcopy as we consume the sparse entries
+    for axis in axes:
+        if _is_tuple_axis(axis):
+            res.append(slice(None))
+        else:
+            assert _is_field_axis(axis)
+            assert axis.value in pos
+            elem = pos[axis.value]
+            if isinstance(elem, list):
+                res.append(elem.pop(0))  # we consume a sparse entry, this smells...
+            else:
+                assert isinstance(elem, (int, slice))
+                res.append(elem)
+    return tuple(res)
 
 
 def _tupsum(a, b):
@@ -728,7 +763,7 @@ class ColumnDescriptor:
 
 class ScanArgIterator:
     def __init__(
-        self, wrapped_iter: ItIterator, k_pos: int, *, offsets: Sequence[AnyOffset] = None
+        self, wrapped_iter: ItIterator, k_pos: int, *, offsets: Sequence[OffsetPart] = None
     ) -> None:
         self.wrapped_iter = wrapped_iter
         self.offsets = offsets or []
@@ -742,7 +777,7 @@ class ScanArgIterator:
     def can_deref(self) -> bool:
         return self.wrapped_iter.can_deref()
 
-    def shift(self, *offsets: AnyOffset) -> ScanArgIterator:
+    def shift(self, *offsets: OffsetPart) -> ScanArgIterator:
         return ScanArgIterator(self.wrapped_iter, self.k_pos, offsets=[*offsets, *self.offsets])
 
 
@@ -945,14 +980,14 @@ def fendef_embedded(fun: Callable[..., None], *args: Any, **kwargs: Any):
             res = sten(*ins_iters)
 
             if column is None:
-                assert _is_position_fully_defined(pos)
+                assert _is_concrete_position(pos)
                 ordered_indices = get_ordered_indices(out.axes, pos)
                 out[ordered_indices] = res
             else:
                 col_pos = pos.copy()
                 for k in column.col_range:
                     col_pos[column.axis] = k
-                    assert _is_position_fully_defined(col_pos)
+                    assert _is_concrete_position(col_pos)
                     ordered_indices = get_ordered_indices(out.axes, col_pos)
                     out[ordered_indices] = res[k]
 
