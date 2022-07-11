@@ -156,11 +156,6 @@ def test_origin_offsetting_nofrozen(domain, outp_origin):
 
     assert np.allclose(inp, 7.0)
 
-    if not (
-        domain == (3, 3, 3) and outp_origin == (7, 7, 7) and dace_stencil.backend == "daint:gpu"
-    ):
-        pytest.skip("Random failures on daint-ci, see github issue #848.")
-
     assert np.allclose(
         np.asarray(outp)[
             outp_origin[0] : outp_origin[0] + domain[0],
