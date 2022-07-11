@@ -106,19 +106,11 @@ class BindingCodeGenerator(TemplatedGenerator):
         return cpp.render_function_call(call.target, args)
 
 
-def make_parameter_list(
-    parameters: Sequence[defs.ScalarParameter | defs.BufferParameter],
-) -> Sequence[FunctionParameter]:
-    def make_parameter(parameter: defs.ScalarParameter | defs.BufferParameter):
-        if isinstance(parameter, defs.ScalarParameter):
-            return FunctionParameter(name=parameter.name, ndim=0, dtype=parameter.type_)
-        else:
-            return FunctionParameter(
-                name=parameter.name, ndim=len(parameter.dimensions), dtype=parameter.scalar_type
-            )
-
-    regulars = [make_parameter(param) for param in parameters]
-    return regulars
+def make_parameter(parameter: defs.ScalarParameter | defs.BufferParameter) -> FunctionParameter:
+    name = parameter.name
+    ndim = 0 if isinstance(parameter, defs.ScalarParameter) else len(parameter.dimensions)
+    scalar_type = parameter.scalar_type
+    return FunctionParameter(name=name, ndim=ndim, dtype=scalar_type)
 
 
 def render_argument(index: int, param: defs.ScalarParameter | defs.BufferParameter) -> str:
@@ -160,7 +152,7 @@ def create_bindings(target: defs.Function, target_header: str) -> defs.BindingCo
         ],
         wrapper=WrapperFunction(
             name=wrapper_name,
-            parameters=make_parameter_list(target.parameters),
+            parameters=[make_parameter(param) for param in target.parameters],
             body=ReturnStmt(expr=FunctionCall(target=target)),
         ),
         binding_module=BindingModule(

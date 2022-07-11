@@ -5,7 +5,7 @@ from typing import Sequence, Type
 @dataclass
 class ScalarParameter:
     name: str
-    type_: Type
+    scalar_type: Type
 
 
 @dataclass
