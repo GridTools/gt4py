@@ -58,7 +58,7 @@ class SidExpr(Node):
 
 class FunctionCall(Node):
     target: defs.Function
-    args: Any
+    args: Sequence[Any]
 
 
 class ReturnStmt(Node):
