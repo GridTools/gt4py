@@ -360,13 +360,13 @@ class CUIRCodegen(codegen.TemplatedGenerator):
                     return *sid::multi_shifted<tag::${field}>(
                         device::at_key<tag::${field}>(_ptr),
                         m_strides,
-                        tuple_util::device::make<hymap::keys<dim::i, dim::j, dim::k
+                        hymap::keys<dim::i, dim::j, dim::k
                         % if field not in temp_names:
                         % for i in range(data_dims):
                         , integral_constant<int, ${i + 3}>
                         % endfor
                         % endif
-                        >::template values>(i, j, k
+                        >::make_values(i, j, k
                         % if field not in temp_names:
                         % for i in range(data_dims):
                         , dim_${i + 3}
@@ -486,7 +486,7 @@ class CUIRCodegen(codegen.TemplatedGenerator):
             template <class Storage>
             auto block(Storage storage) {
                 return sid::block(std::move(storage),
-                    tuple_util::make<hymap::keys<dim::i, dim::j>::values>(
+                    hymap::keys<dim::i, dim::j>::make_values(
                         i_block_size_t(), j_block_size_t()));
             }
 
@@ -502,7 +502,7 @@ class CUIRCodegen(codegen.TemplatedGenerator):
 
             auto ${name}(domain_t domain){
                 return [domain](${','.join(f'auto&& {p}' for p in params)}){
-                    auto tmp_alloc = sid::device::make_cached_allocator(&cuda_util::cuda_malloc<char[]>);
+                    auto tmp_alloc = sid::device::cached_allocator(&cuda_util::cuda_malloc<char[]>);
                     const int i_size = domain[0];
                     const int j_size = domain[1];
                     const int k_size = domain[2];
@@ -535,13 +535,13 @@ class CUIRCodegen(codegen.TemplatedGenerator):
 
                     assert((${loop_start(vertical_loop)}) >= 0 &&
                            (${loop_start(vertical_loop)}) < k_size);
-                    auto offset_${id(vertical_loop)} = tuple_util::make<hymap::keys<dim::k>::values>(
+                    auto offset_${id(vertical_loop)} = hymap::keys<dim::k>::make_values(
                         ${loop_start(vertical_loop)}
                     );
 
-                    auto composite_${id(vertical_loop)} = sid::composite::make<
+                    auto composite_${id(vertical_loop)} = sid::composite::keys<
                             ${', '.join(f'tag::{field}' for field in loop_fields(vertical_loop))}
-                        >(
+                        >::make_values(
 
                     % for field in loop_fields(vertical_loop):
                         % if field in params:
