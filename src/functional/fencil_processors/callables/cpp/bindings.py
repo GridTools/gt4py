@@ -148,10 +148,14 @@ class BindingCodeGenerator(TemplatedGenerator):
             dim_config=sid.dim_config,
         )
 
-    DimExpr = JinjaTemplate("""generated::{{name}}_t""")
+    DimExpr = JinjaTemplate("""{{name}}""")
 
 
 def make_parameter(parameter: defs.ScalarParameter | defs.BufferParameter) -> FunctionParameter:
+    if isinstance(parameter, defs.ConnectivityParameter):
+        return FunctionParameter(
+            name=parameter.name, ndim=2, dtype=int
+        )  # TODO check if we use ndim and dtype
     name = parameter.name
     ndim = 0 if isinstance(parameter, defs.ScalarParameter) else len(parameter.dimensions)
     scalar_type = parameter.scalar_type
@@ -160,6 +164,8 @@ def make_parameter(parameter: defs.ScalarParameter | defs.BufferParameter) -> Fu
 
 def make_argument(index: int, param: defs.ScalarParameter | defs.BufferParameter) -> str | SidExpr:
     if isinstance(param, defs.ScalarParameter):
+        return param.name
+    elif isinstance(param, defs.ConnectivityParameter):
         return param.name
     else:
         return SidExpr(

@@ -177,6 +177,14 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
                         self.offset_provider[o], Connectivity
                     ):
                         connectivities.append(SymRef(id=o))
+
+                if len(sizes.tags) == 1:
+                    sizes.tags.append(OffsetLiteral(value="unused"))
+                    sizes.values.append(Literal(value="1", type="int"))
+                elif len(sizes.tags) == 2:
+                    pass
+                else:
+                    raise RuntimeError("Invalid domain.")
                 return UnstructuredDomain(
                     tagged_sizes=sizes,
                     tagged_offsets=domain_offsets,

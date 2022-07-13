@@ -93,8 +93,8 @@ class CMakeListsGenerator(TemplatedGenerator):
                 return textwrap.dedent(
                     """\
                     FetchContent_Declare(GridTools
-                        GIT_REPOSITORY https://github.com/GridTools/gridtools.git
-                        GIT_TAG        master
+                        GIT_REPOSITORY https://github.com/havogt/gridtools.git
+                        GIT_TAG        python_neighbor_table
                     )
                     FetchContent_MakeAvailable(GridTools)\
                     """

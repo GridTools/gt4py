@@ -17,18 +17,33 @@ from typing import Any, Sequence
 
 import numpy
 
+from functional.common import Connectivity, DimensionKind
 from functional.fencil_processors import defs
 from functional.fencil_processors.callables import cpp as cpp_callable
-from functional.fencil_processors.codegens.gtfn import gtfn_module as gtfn_codegen
+from functional.fencil_processors.callables.cache import Strategy
+from functional.fencil_processors.codegens.gtfn import gtfn_backend, gtfn_module as gtfn_codegen
 from functional.iterator import ir
 from functional.iterator.processor_interface import fencil_executor
 
 
-def get_arg_types(*args) -> Sequence[defs.ScalarParameter | defs.BufferParameter]:
+_dimension_kind_to_tag = {
+    DimensionKind.HORIZONTAL: "gridtools::fn::unstructured::dim::horizontal",
+    DimensionKind.VERTICAL: "gridtools::fn::unstructured::dim::vertical",
+}  # TODO probably not the right place
+
+
+def get_arg_types(*args, grid_type) -> list[defs.ScalarParameter | defs.BufferParameter]:
     def get_arg_type(arg):
         view = numpy.array(arg)
         if view.ndim > 0:
-            return defs.BufferParameter("", [dim.value for dim in arg.axes], view.dtype.type)
+            if grid_type == "unstructured":  # TODO introduce a common enum for grid_type
+                return defs.BufferParameter(
+                    "", [_dimension_kind_to_tag[dim.kind] for dim in arg.axes], view.dtype.type
+                )
+            else:
+                return defs.BufferParameter(
+                    "", [f"generated::{dim.value}_t" for dim in arg.axes], view.dtype.type
+                )  # TODO not the right place
         else:
             return defs.ScalarParameter("", type(arg))
 
@@ -46,11 +61,21 @@ def convert_args(*args) -> Sequence[Any]:
     return [convert_arg(arg) for arg in args]
 
 
+def neighbortable_args(offset_provider):
+    return [c.tbl for c in offset_provider.values() if isinstance(c, Connectivity)]
+
+
 @fencil_executor
 def run_gtfn(itir: ir.FencilDefinition, *args, **kwargs):
-    parameters = get_arg_types(*args)
+    assert "offset_provider" in kwargs
+    grid_type = gtfn_backend._guess_grid_type(**kwargs)
+    parameters = get_arg_types(*args, grid_type=grid_type)  # TODO cleanup handling of grid_type
     for fparam, iparam in zip(parameters, itir.params):
         fparam.name = iparam.id
+
+    for name, c in kwargs["offset_provider"].items():
+        if isinstance(c, Connectivity):
+            parameters.append(defs.ConnectivityParameter(name, name))
     source_module = gtfn_codegen.create_source_module(itir, parameters, **kwargs)
-    wrapper = cpp_callable.create_callable(source_module)
-    wrapper(*convert_args(*args))
+    wrapper = cpp_callable.create_callable(source_module, cache_strategy=Strategy.PERSISTENT)
+    wrapper(*convert_args(*args), *neighbortable_args(kwargs["offset_provider"]))

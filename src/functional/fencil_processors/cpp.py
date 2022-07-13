@@ -96,7 +96,7 @@ def render_function_declaration(function: defs.Function, body: str) -> str:
     template_params = [
         "class BufferT{index}".format(index=index)
         for index, param in enumerate(function.parameters)
-        if isinstance(param, defs.BufferParameter)
+        if isinstance(param, (defs.BufferParameter, defs.ConnectivityParameter))
     ]
     if template_params:
         render_tpl = jinja2.Template("""template <{{", ".join(template_params)}}>""")

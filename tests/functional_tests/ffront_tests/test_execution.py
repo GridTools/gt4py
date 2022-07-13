@@ -287,7 +287,8 @@ def reduction_setup():
             [6, 12, 8, 15],  # 6
             [7, 13, 6, 16],
             [8, 14, 7, 17],
-        ]
+        ],
+        dtype=np.int32,
     )
 
     yield namedtuple(
@@ -357,8 +358,6 @@ def test_maxover_execution_negatives(reduction_setup, fieldview_backend):
 
 def test_reduction_execution(reduction_setup, fieldview_backend):
     """Testing a trivial neighbor sum."""
-    if fieldview_backend == gtfn_cpu.run_gtfn:
-        pytest.skip("IndexFields are not supported yet.")
     rs = reduction_setup
     Edge = rs.Edge
     Vertex = rs.Vertex
@@ -382,7 +381,7 @@ def test_reduction_execution(reduction_setup, fieldview_backend):
 def test_reduction_execution_nb(reduction_setup, fieldview_backend):
     """Testing a neighbor sum on a neighbor field."""
     if fieldview_backend == gtfn_cpu.run_gtfn:
-        pytest.skip("not yet supported.")
+        pytest.skip("SparseFields are not supported yet.")
     rs = reduction_setup
     V2EDim = rs.V2EDim
 

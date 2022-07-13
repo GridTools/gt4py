@@ -31,9 +31,15 @@ class BufferParameter:
 
 
 @dataclass
+class ConnectivityParameter:
+    name: str
+    offset_tag: str
+
+
+@dataclass
 class Function:
     name: str
-    parameters: Sequence[ScalarParameter | BufferParameter]
+    parameters: Sequence[ConnectivityParameter | ScalarParameter | BufferParameter]
 
 
 @dataclass
