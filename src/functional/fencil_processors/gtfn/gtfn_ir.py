@@ -79,8 +79,24 @@ class ScanPassDefinition(Node, SymbolTableTrait):
     forward: bool
 
 
+class TaggedValues(Node):
+    tags: list[Expr]
+    values: list[Expr]
+
+
+class CartesianDomain(Node):
+    tagged_sizes: TaggedValues
+    tagged_offsets: TaggedValues
+
+
+class UnstructuredDomain(Node):
+    tagged_sizes: TaggedValues
+    tagged_offsets: TaggedValues
+    connectivities: list[SymRef]  # SymRef to offset declaration
+
+
 class Backend(Node):
-    domain: Union[SymRef, FunCall]  # TODO(havogt) `FunCall` only if domain will be part of the IR
+    domain: Union[SymRef, CartesianDomain, UnstructuredDomain]
 
 
 class StencilExecution(Node):
@@ -106,7 +122,7 @@ class ScanExecution(Node):
 class TemporaryAllocation(Node):
     id: SymbolName  # noqa: A003
     dtype: str
-    # TODO: domain: ??
+    domain: Union[SymRef, CartesianDomain, UnstructuredDomain]
 
 
 BUILTINS = {
@@ -126,7 +142,7 @@ class FencilDefinition(Node, ValidatedSymbolTableTrait):
     params: list[Sym]
     function_definitions: list[Union[FunctionDefinition, ScanPassDefinition]]
     executions: list[Union[StencilExecution, ScanExecution]]
-    offset_declarations: list[str]
+    offset_declarations: list[Sym]
     grid_type: GridType
     temporaries: list[TemporaryAllocation]
 

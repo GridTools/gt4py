@@ -34,8 +34,15 @@ def solve_tridiag(a, b, c, d):
     return scan(tridiag_backward, False, 0.0)(cpdp)
 
 
-def tridiagonal_solve_fencil(dom, a, b, c, d, x):
-    closure(dom, solve_tridiag, x, [a, b, c, d])
+def tridiagonal_solve_fencil(isize, jsize, ksize, a, b, c, d, x):
+    closure(
+        cartesian_domain(
+            named_range(IDim, 0, isize), named_range(JDim, 0, jsize), named_range(KDim, 0, ksize)
+        ),
+        solve_tridiag,
+        x,
+        [a, b, c, d],
+    )
 
 
 if __name__ == "__main__":
@@ -43,7 +50,7 @@ if __name__ == "__main__":
         raise RuntimeError(f"Usage: {sys.argv[0]} <output_file>")
     output_file = sys.argv[1]
 
-    prog = trace(tridiagonal_solve_fencil, [None] * 6)
+    prog = trace(tridiagonal_solve_fencil, [None] * 8)
     offset_provider = {"I": CartesianAxis("IDim"), "J": CartesianAxis("JDim")}
     generated_code = generate(
         prog,

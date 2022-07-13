@@ -3,6 +3,7 @@
 #include GENERATED_FILE
 
 #include <fn_select.hpp>
+#include <gridtools/sid/rename_dimensions.hpp>
 #include <test_environment.hpp>
 
 namespace {
@@ -30,14 +31,25 @@ GT_REGRESSION_TEST(fn_cartesian_tridiagonal_solve, vertical_test_environment<>,
                    fn_backend_t) {
   using float_t = typename TypeParam::float_t;
 
+  auto wrap = [](auto &&storage) {
+    return sid::rename_numbered_dimensions<generated::IDim_t, generated::JDim_t,
+                                           generated::KDim_t>(
+        std::forward<decltype(storage)>(storage));
+  };
+
   auto x = TypeParam::make_storage();
-  auto comp = [&, a = TypeParam::make_const_storage(a),
-               b = TypeParam::make_const_storage(b),
-               c = TypeParam::make_const_storage(c),
-               d = TypeParam::make_const_storage(d(TypeParam::d(2)))] {
-    generated::tridiagonal_solve_fencil(
-        fn_backend_t(), cartesian_domain(TypeParam::fn_cartesian_sizes()), a, b,
-        c, d, x);
+  auto x_wrapped = wrap(x);
+  auto a_wrapped = wrap(TypeParam::make_const_storage(a));
+  auto b_wrapped = wrap(TypeParam::make_const_storage(b));
+  auto c_wrapped = wrap(TypeParam::make_const_storage(c));
+  auto d_wrapped = wrap(TypeParam::make_const_storage(d(TypeParam::d(2))));
+  auto comp = [&] {
+    generated::tridiagonal_solve_fencil(tuple{})(
+        fn_backend_t(),
+        at_key<cartesian::dim::i>(TypeParam::fn_cartesian_sizes()),
+        at_key<cartesian::dim::j>(TypeParam::fn_cartesian_sizes()),
+        at_key<cartesian::dim::k>(TypeParam::fn_cartesian_sizes()), a_wrapped,
+        b_wrapped, c_wrapped, d_wrapped, x_wrapped);
   };
   comp();
   TypeParam::verify(expected, x);

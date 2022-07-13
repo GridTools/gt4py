@@ -1,5 +1,3 @@
-from typing import Tuple
-
 import numpy as np
 import pytest
 
@@ -186,6 +184,36 @@ def test_field_of_tuple_output(fencil_processor, stencil):
         assert np.allclose(inp2, out_np[:]["f1"])
 
 
+@pytest.mark.parametrize(
+    "stencil",
+    [tuple_output1, tuple_output2],
+)
+def test_field_of_extra_dim_output(fencil_processor, stencil):
+    fencil_processor, validate = fencil_processor
+
+    shape = [5, 7, 9]
+    rng = np.random.default_rng()
+    inp1 = np_as_located_field(IDim, JDim, KDim)(
+        rng.normal(size=(shape[0], shape[1], shape[2])),
+    )
+    inp2 = np_as_located_field(IDim, JDim, KDim)(
+        rng.normal(size=(shape[0], shape[1], shape[2])),
+    )
+
+    out_np = np.zeros(shape + [2])
+    out = np_as_located_field(IDim, JDim, KDim, None)(out_np)
+
+    dom = {
+        IDim: range(0, shape[0]),
+        JDim: range(0, shape[1]),
+        KDim: range(0, shape[2]),
+    }
+    run_processor(stencil[dom], fencil_processor, inp1, inp2, out=out, offset_provider={})
+    if validate:
+        assert np.allclose(inp1, out_np[:, :, :, 0])
+        assert np.allclose(inp2, out_np[:, :, :, 1])
+
+
 @fundef
 def tuple_input(inp):
     inp_deref = deref(inp)
@@ -222,8 +250,8 @@ def test_field_of_tuple_input(fencil_processor):
     shape = [5, 7, 9]
     rng = np.random.default_rng()
 
-    inp1 = rng.normal(rng.normal(size=(shape[0], shape[1], shape[2])))
-    inp2 = rng.normal(rng.normal(size=(shape[0], shape[1], shape[2])))
+    inp1 = rng.normal(size=(shape[0], shape[1], shape[2]))
+    inp2 = rng.normal(size=(shape[0], shape[1], shape[2]))
     inp = np.zeros(shape, dtype="f8, f8")
     for i in range(shape[0]):
         for j in range(shape[1]):
@@ -231,6 +259,29 @@ def test_field_of_tuple_input(fencil_processor):
                 inp[i, j, k] = (inp1[i, j, k], inp2[i, j, k])
 
     inp = np_as_located_field(IDim, JDim, KDim)(inp)
+    out = np_as_located_field(IDim, JDim, KDim)(np.zeros(shape))
+
+    dom = {
+        IDim: range(0, shape[0]),
+        JDim: range(0, shape[1]),
+        KDim: range(0, shape[2]),
+    }
+    run_processor(tuple_input[dom], fencil_processor, inp, out=out, offset_provider={})
+    if validate:
+        assert np.allclose(np.asarray(inp1) + np.asarray(inp2), out)
+
+
+def test_field_of_extra_dim_input(fencil_processor):
+    fencil_processor, validate = fencil_processor
+
+    shape = [5, 7, 9]
+    rng = np.random.default_rng()
+
+    inp1 = rng.normal(size=(shape[0], shape[1], shape[2]))
+    inp2 = rng.normal(size=(shape[0], shape[1], shape[2]))
+    inp = np.stack((inp1, inp2), axis=-1)
+
+    inp = np_as_located_field(IDim, JDim, KDim, None)(inp)
     out = np_as_located_field(IDim, JDim, KDim)(np.zeros(shape))
 
     dom = {
@@ -260,8 +311,8 @@ def test_tuple_of_field_of_tuple_input(fencil_processor):
     shape = [5, 7, 9]
     rng = np.random.default_rng()
 
-    inp1 = rng.normal(rng.normal(size=(shape[0], shape[1], shape[2])))
-    inp2 = rng.normal(rng.normal(size=(shape[0], shape[1], shape[2])))
+    inp1 = rng.normal(size=(shape[0], shape[1], shape[2]))
+    inp2 = rng.normal(size=(shape[0], shape[1], shape[2]))
     inp = np.zeros(shape, dtype="f8, f8")
     for i in range(shape[0]):
         for j in range(shape[1]):
@@ -281,37 +332,60 @@ def test_tuple_of_field_of_tuple_input(fencil_processor):
         assert np.allclose(2.0 * (np.asarray(inp1) + np.asarray(inp2)), out)
 
 
-# TODO tuple of tuple currently not supported, needs clean redesign of iterator of tuple
-# def test_tuple_of_tuple_of_field_input(fencil_processor):
-#     fencil_processor, validate = fencil_processor
+def test_tuple_of_tuple_of_field_input(fencil_processor):
+    fencil_processor, validate = fencil_processor
 
-#     shape = [5, 7, 9]
-#     rng = np.random.default_rng()
+    shape = [5, 7, 9]
+    rng = np.random.default_rng()
 
-#     inp1 = np_as_located_field(IDim, JDim, KDim)(
-#         rng.normal(rng.normal(size=(shape[0], shape[1], shape[2])))
-#     )
-#     inp2 = np_as_located_field(IDim, JDim, KDim)(
-#         rng.normal(rng.normal(size=(shape[0], shape[1], shape[2])))
-#     )
-#     inp3 = np_as_located_field(IDim, JDim, KDim)(
-#         rng.normal(rng.normal(size=(shape[0], shape[1], shape[2])))
-#     )
-#     inp4 = np_as_located_field(IDim, JDim, KDim)(
-#         rng.normal(rng.normal(size=(shape[0], shape[1], shape[2])))
-#     )
+    inp1 = np_as_located_field(IDim, JDim, KDim)(rng.normal(size=(shape[0], shape[1], shape[2])))
+    inp2 = np_as_located_field(IDim, JDim, KDim)(rng.normal(size=(shape[0], shape[1], shape[2])))
+    inp3 = np_as_located_field(IDim, JDim, KDim)(rng.normal(size=(shape[0], shape[1], shape[2])))
+    inp4 = np_as_located_field(IDim, JDim, KDim)(rng.normal(size=(shape[0], shape[1], shape[2])))
 
-#     out = np_as_located_field(IDim, JDim, KDim)(np.zeros(shape))
+    out = np_as_located_field(IDim, JDim, KDim)(np.zeros(shape))
 
-#     dom = {
-#         IDim: range(0, shape[0]),
-#         JDim: range(0, shape[1]),
-#         KDim: range(0, shape[2]),
-#     }
-#     run_processor(tuple_tuple_input[dom], fencil_processor,
-#         ((inp1, inp2), (inp3, inp4)), out=out, offset_provider={},
-#     )
-#     if validate:
-#         assert np.allclose(
-#             (np.asarray(inp1) + np.asarray(inp2) + np.asarray(inp3) + np.asarray(inp4)), out
-#         )
+    dom = {
+        IDim: range(0, shape[0]),
+        JDim: range(0, shape[1]),
+        KDim: range(0, shape[2]),
+    }
+    run_processor(
+        tuple_tuple_input[dom],
+        fencil_processor,
+        ((inp1, inp2), (inp3, inp4)),
+        out=out,
+        offset_provider={},
+    )
+    if validate:
+        assert np.allclose(
+            (np.asarray(inp1) + np.asarray(inp2) + np.asarray(inp3) + np.asarray(inp4)), out
+        )
+
+
+def test_field_of_2_extra_dim_input(fencil_processor):
+    fencil_processor, validate = fencil_processor
+
+    shape = [5, 7, 9]
+    rng = np.random.default_rng()
+
+    inp = np_as_located_field(IDim, JDim, KDim, None, None)(
+        rng.normal(size=(shape[0], shape[1], shape[2], 2, 2))
+    )
+
+    out = np_as_located_field(IDim, JDim, KDim)(np.zeros(shape))
+
+    dom = {
+        IDim: range(0, shape[0]),
+        JDim: range(0, shape[1]),
+        KDim: range(0, shape[2]),
+    }
+    run_processor(
+        tuple_tuple_input[dom],
+        fencil_processor,
+        inp,
+        out=out,
+        offset_provider={},
+    )
+    if validate:
+        assert np.allclose(np.sum(inp, axis=(3, 4)), out)

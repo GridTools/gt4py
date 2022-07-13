@@ -8,6 +8,7 @@ from functional.fencil_processors.gtfn.gtfn_ir import (
     Literal,
     OffsetLiteral,
     SymRef,
+    TaggedValues,
 )
 from functional.fencil_processors.gtfn.itir_to_gtfn_ir import pytype_to_cpptype
 
@@ -45,6 +46,21 @@ class GTFNCodegen(codegen.TemplatedGenerator):
     BinaryExpr = as_fmt("({lhs}{op}{rhs})")
     TernaryExpr = as_fmt("({cond}?{true_expr}:{false_expr})")
 
+    def visit_TaggedValues(self, node: TaggedValues, **kwargs):
+        tags = self.visit(node.tags)
+        values = self.visit(node.values)
+        if self.is_cartesian:
+            return (
+                f"hymap::keys<{','.join(t + '_t' for t in tags)}>::make_values({','.join(values)})"
+            )
+        else:
+            return f"tuple({','.join(values)})"
+
+    CartesianDomain = as_fmt("cartesian_domain({tagged_sizes}, {tagged_offsets})")
+    UnstructuredDomain = as_mako(
+        "unstructured_domain(${tagged_sizes}, ${tagged_offsets} ${',' if len(connectivities) else ''} ${','.join(f'at_key<{c}_t>(connectivities__)' for c in connectivities)})"
+    )
+
     def visit_OffsetLiteral(self, node: OffsetLiteral, **kwargs: Any) -> str:
         return node.value if isinstance(node.value, str) else f"{node.value}_c"
 
@@ -63,7 +79,7 @@ class GTFNCodegen(codegen.TemplatedGenerator):
 
     Scan = as_fmt("assign({output}, {function}(), {init}, {', '.join(inputs)})")
     ScanExecution = as_fmt(
-        "{backend}.vertical_executor()().{'.'.join('arg(' + a + ')' for a in args)}.{'.'.join(scans)}.execute();"
+        "{backend}.vertical_executor(generated::KDim_t())().{'.'.join('arg(' + a + ')' for a in args)}.{'.'.join(scans)}.execute();"
     )
 
     ScanPassDefinition = as_mako(
@@ -93,16 +109,15 @@ class GTFNCodegen(codegen.TemplatedGenerator):
     def visit_FencilDefinition(
         self, node: FencilDefinition, **kwargs: Any
     ) -> Union[str, Collection[str]]:
-        is_cartesian = node.grid_type == GridType.CARTESIAN
+        self.is_cartesian = node.grid_type == GridType.CARTESIAN
         return self.generic_visit(
             node,
-            is_cartesian=is_cartesian,
             grid_type_str=self._grid_type_str[node.grid_type],
             **kwargs,
         )
 
     TemporaryAllocation = as_fmt(
-        "auto {id} = allocate_global_tmp<{dtype}>(_tmp_alloc, dom.sizes());"
+        "auto {id} = allocate_global_tmp<{dtype}>(_tmp_alloc, {domain}.sizes());"
     )
 
     FencilDefinition = as_mako(
@@ -114,24 +129,16 @@ class GTFNCodegen(codegen.TemplatedGenerator):
     using namespace fn;
     using namespace literals;
 
-
-    % if is_cartesian:
-        // TODO allow non-default names
-        using namespace cartesian;
-        constexpr inline dim::i i = {};
-        constexpr inline dim::j j = {};
-        constexpr inline dim::k k = {};
-    % else:
-        ${''.join('struct ' + o + '_t{};' for o in offset_declarations)}
-        ${''.join('constexpr inline ' + o + '_t ' + o + '{};' for o in offset_declarations)}
-    % endif
-
+    ${''.join('struct ' + o + '_t{};' for o in offset_declarations)}
+    ${''.join('constexpr inline ' + o + '_t ' + o + '{};' for o in offset_declarations)}
     ${''.join(function_definitions)}
 
-    inline auto ${id} = [](auto backend, ${','.join('auto&& ' + p for p in params)}){
-        auto _tmp_alloc = tmp_allocator(backend);
-        ${'\\n'.join(temporaries)}
-        ${'\\n'.join(executions)}
+    inline auto ${id} = [](auto connectivities__){
+        return [connectivities__](auto backend, ${','.join('auto&& ' + p for p in params)}){
+            auto _tmp_alloc = tmp_allocator(backend);
+            ${'\\n'.join(temporaries)}
+            ${'\\n'.join(executions)}
+        };
     };
     }
     """

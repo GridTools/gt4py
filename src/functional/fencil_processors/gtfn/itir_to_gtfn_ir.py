@@ -1,11 +1,13 @@
-from typing import Any, Optional, Union
+from typing import Any, Iterable, Optional, Type, Union
 
 import eve
 from eve.concepts import SymbolName
 from eve.utils import UIDs
+from functional.common import Connectivity, Dimension
 from functional.fencil_processors.gtfn.gtfn_ir import (
     Backend,
     BinaryExpr,
+    CartesianDomain,
     Expr,
     FencilDefinition,
     FunCall,
@@ -13,6 +15,7 @@ from functional.fencil_processors.gtfn.gtfn_ir import (
     GridType,
     Lambda,
     Literal,
+    Node,
     OffsetLiteral,
     Scan,
     ScanExecution,
@@ -20,9 +23,11 @@ from functional.fencil_processors.gtfn.gtfn_ir import (
     StencilExecution,
     Sym,
     SymRef,
+    TaggedValues,
     TemporaryAllocation,
     TernaryExpr,
     UnaryExpr,
+    UnstructuredDomain,
 )
 from functional.iterator import ir as itir
 
@@ -43,7 +48,7 @@ def pytype_to_cpptype(t: str):
         raise TypeError(f"Unsupported type '{t}'") from None
 
 
-class GTFN_lowering(eve.NodeTranslator):
+class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     _binary_op_map = {
         "plus": "+",
         "minus": "-",
@@ -106,12 +111,15 @@ class GTFN_lowering(eve.NodeTranslator):
         return Literal(value=node.value, type=node.type)
 
     def visit_OffsetLiteral(self, node: itir.OffsetLiteral, **kwargs: Any) -> OffsetLiteral:
+        if node.value in self.offset_provider:
+            if isinstance(
+                self.offset_provider[node.value], Dimension
+            ):  # replace offset tag by dimension tag
+                return OffsetLiteral(value=self.offset_provider[node.value].value)
         return OffsetLiteral(value=node.value)
 
     def visit_AxisLiteral(self, node: itir.AxisLiteral, **kwargs: Any) -> Literal:
-        return Literal(
-            value="NOT_SUPPORTED", type="axis_literal"
-        )  # TODO(havogt) decide if domain is part of the IR
+        return Literal(value=node.value, type="axis_literal")
 
     @staticmethod
     def _is_sparse_deref_shift(node: itir.FunCall) -> bool:
@@ -139,7 +147,43 @@ class GTFN_lowering(eve.NodeTranslator):
         sparse_access = itir.FunCall(fun=itir.SymRef(id="tuple_get"), args=[offsets[-1], derefed])
         return self.visit(sparse_access)
 
-    def visit_FunCall(self, node: itir.FunCall, **kwargs: Any) -> Expr:
+    def _make_domain(self, node: itir.FunCall):
+        tags = []
+        sizes = []
+        offsets = []
+        for named_range in node.args:
+            if not (
+                isinstance(named_range, itir.FunCall)
+                and named_range.fun == itir.SymRef(id="named_range")
+            ):
+                raise ValueError("Arguments to `domain` need to be calls to `named_range`.")
+            tags.append(self.visit(named_range.args[0]))
+            sizes.append(
+                BinaryExpr(
+                    op="-", lhs=self.visit(named_range.args[2]), rhs=self.visit(named_range.args[1])
+                )
+            )
+            offsets.append(self.visit(named_range.args[1]))
+        return TaggedValues(tags=tags, values=sizes), TaggedValues(tags=tags, values=offsets)
+
+    @staticmethod
+    def _collect_offset_or_axis_node(
+        node_type: Type, tree: eve.Node | Iterable[eve.Node]
+    ) -> set[str]:
+        if not isinstance(tree, Iterable):
+            tree = [tree]
+        result = set()
+        for n in tree:
+            result.update(
+                n.pre_walk_values()
+                .if_isinstance(node_type)
+                .getattr("value")
+                .if_isinstance(str)
+                .to_set()
+            )
+        return result
+
+    def visit_FunCall(self, node: itir.FunCall, **kwargs: Any) -> Node:
         if isinstance(node.fun, itir.SymRef):
             if node.fun.id in self._unary_op_map:
                 assert len(node.args) == 1
@@ -164,6 +208,26 @@ class GTFN_lowering(eve.NodeTranslator):
                 raise ValueError("unapplied shift call not supported: {node}")
             elif node.fun.id == "scan":
                 raise ValueError("scans are only supported at the top level of a stencil closure")
+            elif node.fun.id == "cartesian_domain":
+                sizes, domain_offsets = self._make_domain(node)
+                return CartesianDomain(tagged_sizes=sizes, tagged_offsets=domain_offsets)
+            elif node.fun.id == "unstructured_domain":
+                sizes, domain_offsets = self._make_domain(node)
+                connectivities = []
+                if "stencil" in kwargs:
+                    shift_offsets = self._collect_offset_or_axis_node(
+                        itir.OffsetLiteral, kwargs["stencil"]
+                    )
+                    for o in shift_offsets:
+                        if o in self.offset_provider and isinstance(
+                            self.offset_provider[o], Connectivity
+                        ):
+                            connectivities.append(SymRef(id=o))
+                return UnstructuredDomain(
+                    tagged_sizes=sizes,
+                    tagged_offsets=domain_offsets,
+                    connectivities=connectivities,
+                )
         elif isinstance(node.fun, itir.FunCall) and node.fun.fun == itir.SymRef(id="shift"):
             assert len(node.args) == 1
             return FunCall(
@@ -196,7 +260,7 @@ class GTFN_lowering(eve.NodeTranslator):
     def visit_StencilClosure(
         self, node: itir.StencilClosure, extracted_functions: list, **kwargs: Any
     ) -> Union[ScanExecution, StencilExecution]:
-        backend = Backend(domain=self.visit(node.domain, **kwargs))
+        backend = Backend(domain=self.visit(node.domain, stencil=node.stencil, **kwargs))
         if self._is_scan(node.stencil):
             scan_id = UIDs.sequential_id(prefix="_scan")
             assert isinstance(node.stencil, itir.FunCall)
@@ -290,14 +354,23 @@ class GTFN_lowering(eve.NodeTranslator):
     ) -> FencilDefinition:
         grid_type = getattr(GridType, grid_type.upper())
         extracted_functions: list[Union[FunctionDefinition, ScanPassDefinition]] = []
-        executions = self.visit(node.closures, extracted_functions=extracted_functions)
+        self.offset_provider = kwargs["offset_provider"]
+        executions = self.visit(
+            node.closures, grid_type=grid_type, extracted_functions=extracted_functions
+        )
         executions = self._merge_scans(executions)
+        function_definitions = self.visit(node.function_definitions) + extracted_functions
+        axes = self._collect_offset_or_axis_node(itir.AxisLiteral, node)
+        offsets = self._collect_offset_or_axis_node(
+            OffsetLiteral, executions + function_definitions
+        )  # collect offsets from gtfn nodes as some might have been dropped
+        offset_declarations = list(map(lambda x: Sym(id=x), axes | offsets))
         return FencilDefinition(
             id=SymbolName(node.id),
             params=self.visit(node.params),
             executions=executions,
-            offset_declarations=self._collect_offsets(node),
-            function_definitions=self.visit(node.function_definitions) + extracted_functions,
+            offset_declarations=offset_declarations,
+            function_definitions=function_definitions,
             grid_type=grid_type,
             temporaries=[],
         )
@@ -311,7 +384,9 @@ class GTFN_lowering(eve.NodeTranslator):
             assert isinstance(x, str)
             return pytype_to_cpptype(x)
 
-        return TemporaryAllocation(id=node.id, dtype=dtype_to_cpp(node.dtype))
+        return TemporaryAllocation(
+            id=node.id, dtype=dtype_to_cpp(node.dtype), domain=self.visit(node.domain, **kwargs)
+        )
 
     def visit_FencilWithTemporaries(self, node, **kwargs) -> FencilDefinition:
         fencil = self.visit(node.fencil, **kwargs)

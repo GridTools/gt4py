@@ -12,14 +12,17 @@ from functional.iterator.transforms.pass_manager import apply_common_transforms
 
 def generate(program: itir.FencilDefinition, *, grid_type: str, **kwargs: Any) -> str:
     transformed = program
+    offset_provider = kwargs.get("offset_provider")
     transformed = apply_common_transforms(
         program,
         lift_mode=kwargs.get("lift_mode"),
-        offset_provider=kwargs.get("offset_provider", None),
+        offset_provider=offset_provider,
         unroll_reduce=True,
     )
     transformed = EtaReduction().visit(transformed)
-    gtfn_ir = GTFN_lowering().visit(transformed, grid_type=grid_type)
+    gtfn_ir = GTFN_lowering().visit(
+        transformed, grid_type=grid_type, offset_provider=offset_provider
+    )
     generated_code = GTFNCodegen.apply(gtfn_ir, **kwargs)
     return codegen.format_source("cpp", generated_code, style="LLVM")
 
