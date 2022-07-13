@@ -169,3 +169,57 @@ def test_ksum_back_scan(fencil_processor, use_tmps):
 
     if validate:
         assert np.allclose(ref, np.asarray(out))
+
+
+@fundef
+def doublesum_scanpass(state, inp0, inp1):
+    return make_tuple(tuple_get(0, state) + deref(inp0), tuple_get(1, state) + deref(inp1))
+
+
+@fundef
+def kdoublesum(inp0, inp1):
+    return scan(doublesum_scanpass, True, make_tuple(0.0, 0))(inp0, inp1)
+
+
+@fendef(column_axis=KDim)
+def kdoublesum_fencil(i_size, k_size, inp0, inp1, out):
+    closure(
+        cartesian_domain(named_range(IDim, 0, i_size), named_range(KDim, 0, k_size)),
+        kdoublesum,
+        out,
+        [inp0, inp1],
+    )
+
+
+def test_kdoublesum_scan(fencil_processor, use_tmps):
+    if use_tmps:
+        pytest.xfail("use_tmps currently not supported for scans")
+    fencil_processor, validate = fencil_processor
+    if fencil_processor == gtfn.format_sourcecode:
+        pytest.xfail("gtfn does not yet support scans")
+    shape = [1, 7]
+    inp0 = np_as_located_field(IDim, KDim)(np.asarray([list(range(7))], dtype=np.float64))
+    inp1 = np_as_located_field(IDim, KDim)(np.asarray([list(range(7))], dtype=np.int32))
+    out = np_as_located_field(IDim, KDim)(
+        np.zeros(shape, dtype=np.dtype([("foo", np.float64), ("bar", np.int32)]))
+    )
+
+    ref = np.asarray(
+        [[(0, 0), (1, 1), (3, 3), (6, 6), (10, 10), (15, 15), (21, 21)]], dtype=out.dtype
+    )
+
+    run_processor(
+        kdoublesum_fencil,
+        fencil_processor,
+        shape[0],
+        shape[1],
+        inp0,
+        inp1,
+        out,
+        offset_provider={"I": IDim, "K": KDim},
+        use_tmps=use_tmps,
+    )
+
+    if validate:
+        for n in ref.dtype.names:
+            assert np.allclose(ref[n], np.asarray(out)[n])
