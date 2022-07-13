@@ -183,12 +183,8 @@ def kdoublesum_fencil(i_size, k_size, inp0, inp1, out):
     )
 
 
-def test_kdoublesum_scan(fencil_processor, use_tmps):
-    if use_tmps:
-        pytest.xfail("use_tmps currently not supported for scans")
+def test_kdoublesum_scan(fencil_processor, lift_mode):
     fencil_processor, validate = fencil_processor
-    if fencil_processor == gtfn.format_sourcecode:
-        pytest.xfail("gtfn does not yet support scans")
     shape = [1, 7]
     inp0 = np_as_located_field(IDim, KDim)(np.asarray([list(range(7))], dtype=np.float64))
     inp1 = np_as_located_field(IDim, KDim)(np.asarray([list(range(7))], dtype=np.int32))
@@ -209,7 +205,7 @@ def test_kdoublesum_scan(fencil_processor, use_tmps):
         inp1,
         out,
         offset_provider={"I": IDim, "K": KDim},
-        use_tmps=use_tmps,
+        lift_mode=lift_mode,
     )
 
     if validate:
