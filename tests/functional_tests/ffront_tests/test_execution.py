@@ -420,7 +420,7 @@ def test_scalar_arg():
 
     @field_operator(backend=fieldview_backend)
     def scalar_arg(scalar_inp: float64) -> Field[[Vertex], float64]:
-        return scalar_inp + 1.0
+        return broadcast(scalar_inp + 1.0, (Vertex,))
 
     scalar_arg(inp, out=out, offset_provider={})
 

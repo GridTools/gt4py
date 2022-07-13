@@ -341,18 +341,20 @@ class Program:
         size_args: list[Optional[tuple[int, ...]]] = []
         rewritten_args = list(args)
         for param_idx, param in enumerate(self.past_node.params):
-            if isinstance(param.type, ct.ScalarType):
+            if isinstance(param.type, ct.FieldType) and type_info.extract_dims(param.type) == []:
+                dtype = type_info.extract_dtype(param.type)
                 rewritten_args[param_idx] = constant_field(
                     args[param_idx],
-                    dtype=BUILTINS[param.type.kind.name.lower()],
+                    dtype=BUILTINS[dtype.kind.name.lower()],
                 )
             if not isinstance(param.type, ct.FieldType):
                 continue
-            if not hasattr(args[param_idx], "__array__"):
-                size_args.append(None)
-                continue
+            has_shape = hasattr(args[param_idx], "shape")
             for dim_idx in range(0, len(param.type.dims)):
-                size_args.append(args[param_idx].shape[dim_idx])
+                if has_shape:
+                    size_args.append(args[param_idx].shape[dim_idx])
+                else:
+                    size_args.append(None)
 
         return tuple(rewritten_args), tuple(size_args), kwargs
 

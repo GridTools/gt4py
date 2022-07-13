@@ -10,6 +10,7 @@ from functional.ffront import (
     field_operator_ast as foast,
     symbol_makers,
 )
+from functional.fencil_processors import roundtrip
 from functional.ffront.decorator import FieldOperator
 from functional.ffront.fbuiltins import Dimension, Field, float64, int32, int64
 from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduction
@@ -18,6 +19,7 @@ from functional.iterator.embedded import np_as_located_field
 
 from ..iterator_tests.math_builtin_test_data import math_builtin_test_data
 
+fieldview_backend = roundtrip.executor
 
 IDim = Dimension("IDim")
 
@@ -96,7 +98,7 @@ def make_builtin_field_operator(builtin_name: str):
         foast_node=typed_foast_node,
         captured_vars=captured_vars,
         externals={},
-        backend="roundtrip",
+        backend=fieldview_backend,
         definition=None,
     )
 
