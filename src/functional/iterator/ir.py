@@ -103,7 +103,8 @@ BINARY_MATH_NUMBER_BUILTINS = {"minimum", "maximum", "mod"}
 BINARY_MATH_INT_BUILTINS = {"mod"}
 
 BUILTINS = {
-    "domain",
+    "cartesian_domain",
+    "unstructured_domain",
     "named_range",
     "lift",
     "make_tuple",

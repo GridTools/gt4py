@@ -32,11 +32,11 @@ def type_class(symbol_type: ct.SymbolType) -> Type[ct.SymbolType]:
     """
     match symbol_type:
         case ct.DeferredSymbolType(constraint):
-            if constraint is None:
+            if constraint is None:  # type: ignore[has-type]  # mypy can not get the type from the case expression anymore (why?)
                 raise GTTypeError(f"No type information available for {symbol_type}!")
-            elif isinstance(constraint, tuple):
+            elif isinstance(constraint, tuple):  # type: ignore[has-type]  # mypy can not get the type from the case expression anymore (why?)
                 raise GTTypeError(f"Not sufficient type information available for {symbol_type}!")
-            return constraint
+            return constraint  # type: ignore[has-type]  # mypy can not get the type from the case expression anymore (why?)
         case ct.SymbolType() as concrete_type:
             return concrete_type.__class__
     raise GTTypeError(
@@ -153,13 +153,13 @@ def extract_dims(symbol_type: ct.SymbolType) -> list[Dimension]:
     >>> I = Dimension(value="I")
     >>> J = Dimension(value="J")
     >>> extract_dims(ct.FieldType(dims=[I, J], dtype=ct.ScalarType(kind=ct.ScalarKind.INT64)))
-    [Dimension(value='I', local=False), Dimension(value='J', local=False)]
+    [Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)]
     """
     match symbol_type:
         case ct.ScalarType():
             return []
         case ct.FieldType(dims):
-            return dims
+            return dims  # type: ignore[has-type]  # mypy can not get the type from the case expression anymore (why?)
     raise GTTypeError(f"Can not extract dimensions from {symbol_type}!")
 
 

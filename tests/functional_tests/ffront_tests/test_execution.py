@@ -20,6 +20,8 @@ from typing import TypeVar
 import numpy as np
 import pytest
 
+from functional.common import DimensionKind
+from functional.fencil_processors import roundtrip
 from functional.ffront.decorator import field_operator, program
 from functional.ffront.fbuiltins import (
     Dimension,
@@ -39,12 +41,15 @@ from functional.iterator.embedded import (
 )
 
 
+fieldview_backend = roundtrip.executor
+
+
 def debug_itir(tree):
     """Compare tree snippets while debugging."""
     from devtools import debug
 
     from eve.codegen import format_python_source
-    from functional.iterator.backends.roundtrip import EmbeddedDSL
+    from functional.fencil_processors import EmbeddedDSL
 
     debug(format_python_source(EmbeddedDSL.apply(tree)))
 
@@ -61,7 +66,7 @@ def test_copy():
     a = np_as_located_field(IDim)(np.ones((size)))
     b = np_as_located_field(IDim)(np.zeros((size)))
 
-    @field_operator(backend="roundtrip")
+    @field_operator(backend=fieldview_backend)
     def copy(inp: Field[[IDim], float64]) -> Field[[IDim], float64]:
         return inp
 
@@ -78,7 +83,7 @@ def test_multicopy():
     c = np_as_located_field(IDim)(np.zeros((size)))
     d = np_as_located_field(IDim)(np.zeros((size)))
 
-    @field_operator(backend="roundtrip")
+    @field_operator(backend=fieldview_backend)
     def multicopy(
         inp1: Field[[IDim], float64], inp2: Field[[IDim], float64]
     ) -> tuple[Field[[IDim], float64], Field[[IDim], float64]]:
@@ -96,7 +101,7 @@ def test_arithmetic():
     b = np_as_located_field(IDim)(np.ones((size)) * 2)
     c = np_as_located_field(IDim)(np.zeros((size)))
 
-    @field_operator(backend="roundtrip")
+    @field_operator(backend=fieldview_backend)
     def arithmetic(
         inp1: Field[[IDim], float64], inp2: Field[[IDim], float64]
     ) -> Field[[IDim], float64]:
@@ -112,7 +117,7 @@ def test_power():
     a = np_as_located_field(IDim)(np.random.randn((size)))
     b = np_as_located_field(IDim)(np.zeros((size)))
 
-    @field_operator(backend="roundtrip")
+    @field_operator(backend=fieldview_backend)
     def power(inp1: Field[[IDim], float64]) -> Field[[IDim], float64]:
         return inp1**2
 
@@ -127,7 +132,7 @@ def test_power_arithmetic():
     b = np_as_located_field(IDim)(np.zeros((size)))
     c = np_as_located_field(IDim)(np.random.randn((size)))
 
-    @field_operator(backend="roundtrip")
+    @field_operator(backend=fieldview_backend)
     def power_arithmetic(
         inp1: Field[[IDim], float64], inp2: Field[[IDim], float64]
     ) -> Field[[IDim], float64]:
@@ -146,7 +151,7 @@ def test_bit_logic():
     b = np_as_located_field(IDim)(b_data)
     c = np_as_located_field(IDim)(np.full((size), False))
 
-    @field_operator(backend="roundtrip")
+    @field_operator(backend=fieldview_backend)
     def bit_and(inp1: Field[[IDim], bool], inp2: Field[[IDim], bool]) -> Field[[IDim], bool]:
         return inp1 & inp2 & True
 
@@ -160,7 +165,7 @@ def test_unary_neg():
     a = np_as_located_field(IDim)(np.ones((size), dtype=int32))
     b = np_as_located_field(IDim)(np.zeros((size), dtype=int32))
 
-    @field_operator(backend="roundtrip")
+    @field_operator(backend=fieldview_backend)
     def uneg(inp: Field[[IDim], int32]) -> Field[[IDim], int32]:
         return -inp
 
@@ -171,7 +176,7 @@ def test_unary_neg():
 
 def test_shift():
     size = 10
-    Ioff = FieldOffset("Ioff", source=IDim, target=[IDim])
+    Ioff = FieldOffset("Ioff", source=IDim, target=(IDim,))
     a = np_as_located_field(IDim)(np.arange(size + 1))
     b = np_as_located_field(IDim)(np.zeros((size)))
 
@@ -179,7 +184,7 @@ def test_shift():
     def shift_by_one(inp: Field[[IDim], float64]) -> Field[[IDim], float64]:
         return inp(Ioff[1])
 
-    @program(backend="roundtrip")
+    @program(backend=fieldview_backend)
     def fencil(inp: Field[[IDim], float64], out: Field[[IDim], float64]) -> None:
         shift_by_one(inp, out=out)
 
@@ -191,7 +196,7 @@ def test_shift():
 def test_fold_shifts():
     """Shifting the result of an addition should work."""
     size = 10
-    Ioff = FieldOffset("Ioff", source=IDim, target=[IDim])
+    Ioff = FieldOffset("Ioff", source=IDim, target=(IDim,))
     a = np_as_located_field(IDim)(np.arange(size + 1))
     b = np_as_located_field(IDim)(np.ones((size + 2)) * 2)
     c = np_as_located_field(IDim)(np.zeros((size)))
@@ -203,7 +208,7 @@ def test_fold_shifts():
         tmp = inp1 + inp2(Ioff[1])
         return tmp(Ioff[1])
 
-    @program(backend="roundtrip")
+    @program(backend=fieldview_backend)
     def fencil(
         inp1: Field[[IDim], float64], inp2: Field[[IDim], float64], out: Field[[IDim], float64]
     ) -> None:
@@ -228,7 +233,7 @@ def test_tuples():
         scalars = 1.3, float64(5.0), float64("3.4")
         return (inps[0] * scalars[0] + inps[1] * scalars[1]) * scalars[2]
 
-    @program(backend="roundtrip")
+    @program(backend=fieldview_backend)
     def fencil(
         inp1: Field[[IDim], float64], inp2: Field[[IDim], float64], out: Field[[IDim], float64]
     ) -> None:
@@ -249,7 +254,7 @@ def test_promotion():
     b = np_as_located_field(K)(np.ones((ksize)) * 2)
     c = np_as_located_field(Edge, K)(np.zeros((size, ksize)))
 
-    @field_operator(backend="roundtrip")
+    @field_operator(backend=fieldview_backend)
     def promotion(
         inp1: Field[[Edge, K], float64], inp2: Field[[K], float64]
     ) -> Field[[Edge, K], float64]:
@@ -265,7 +270,7 @@ def reduction_setup():
     size = 9
     edge = Dimension("Edge")
     vertex = Dimension("Vertex")
-    v2edim = Dimension("V2E", local=True)
+    v2edim = Dimension("V2E", kind=DimensionKind.LOCAL)
 
     v2e_arr = np.array(
         [
@@ -329,7 +334,7 @@ def test_maxover_execution_negatives(reduction_setup):
     inp_field_arr = np.arange(-edge_num // 2, edge_num // 2 + 1, 1, dtype=int)
     inp_field = np_as_located_field(Edge)(inp_field_arr)
 
-    @field_operator(backend="roundtrip")
+    @field_operator(backend=fieldview_backend)
     def maxover_negvals(
         edge_f: Field[[Edge], "float64"],
     ) -> Field[[Vertex], float64]:
@@ -354,7 +359,7 @@ def test_reduction_execution(reduction_setup):
     def reduction(edge_f: Field[[Edge], "float64"]) -> Field[[Vertex], float64]:
         return neighbor_sum(edge_f(V2E), axis=V2EDim)
 
-    @program(backend="roundtrip")
+    @program(backend=fieldview_backend)
     def fencil(edge_f: Field[[Edge], float64], out: Field[[Vertex], float64]) -> None:
         reduction(edge_f, out=out)
 
@@ -396,7 +401,7 @@ def test_reduction_expression(reduction_setup):
         tmp_nbh = tmp_nbh_tup[0]
         return 3.0 * neighbor_sum(-edge_f(V2E) * tmp_nbh * 2.0, axis=V2EDim)
 
-    @program(backend="roundtrip")
+    @program(backend=fieldview_backend)
     def fencil(edge_f: Field[[Edge], float64], out: Field[[Vertex], float64]) -> None:
         reduce_expr(edge_f, out=out)
 
@@ -413,7 +418,7 @@ def test_scalar_arg():
     inp = 5.0
     out = np_as_located_field(Vertex)(np.zeros([size]))
 
-    @field_operator(backend="roundtrip")
+    @field_operator(backend=fieldview_backend)
     def scalar_arg(scalar_inp: float64) -> Field[[Vertex], float64]:
         return scalar_inp + 1.0
 
@@ -425,7 +430,7 @@ def test_scalar_arg():
 
 def test_scalar_arg_with_field():
     Edge = Dimension("Edge")
-    EdgeOffset = FieldOffset("EdgeOffset", source=Edge, target=[Edge])
+    EdgeOffset = FieldOffset("EdgeOffset", source=Edge, target=(Edge,))
     size = 5
     inp = index_field(Edge)
     factor = 3
@@ -438,7 +443,7 @@ def test_scalar_arg_with_field():
         tmp = factor * inp
         return tmp(EdgeOffset[1])
 
-    @program(backend="roundtrip")
+    @program(backend=fieldview_backend)
     def fencil(out: Field[[Edge], float64], inp: Field[[Edge], float64], factor: float64) -> None:
         scalar_and_field_args(inp, factor, out=out)
 
@@ -453,7 +458,7 @@ def test_broadcast_simple():
     a = np_as_located_field(IDim)(np.arange(0, size, 1, dtype=int))
     out = np_as_located_field(IDim, JDim)(np.zeros((size, size)))
 
-    @field_operator(backend="roundtrip")
+    @field_operator(backend=fieldview_backend)
     def simple_broadcast(inp: Field[[IDim], float64]) -> Field[[IDim, JDim], float64]:
         return broadcast(inp, (IDim, JDim))
 
@@ -466,7 +471,7 @@ def test_broadcast_scalar():
     size = 10
     out = np_as_located_field(IDim)(np.zeros((size)))
 
-    @field_operator(backend="roundtrip")
+    @field_operator(backend=fieldview_backend)
     def scalar_broadcast() -> Field[[IDim], float64]:
         return broadcast(float(1.0), (IDim,))
 
@@ -482,7 +487,7 @@ def test_broadcast_two_fields():
 
     out = np_as_located_field(IDim, JDim)(np.zeros((size, size)))
 
-    @field_operator(backend="roundtrip")
+    @field_operator(backend=fieldview_backend)
     def broadcast_two_fields(
         inp1: Field[[IDim], float64], inp2: Field[[JDim], float64]
     ) -> Field[[IDim, JDim], float64]:
@@ -498,13 +503,13 @@ def test_broadcast_two_fields():
 
 
 def test_broadcast_shifted():
-    Joff = FieldOffset("Joff", source=JDim, target=[JDim])
+    Joff = FieldOffset("Joff", source=JDim, target=(JDim,))
 
     size = 10
     a = np_as_located_field(IDim)(np.arange(0, size, 1, dtype=int))
     out = np_as_located_field(IDim, JDim)(np.zeros((size, size)))
 
-    @field_operator(backend="roundtrip")
+    @field_operator(backend=fieldview_backend)
     def simple_broadcast(inp: Field[[IDim], float64]) -> Field[[IDim, JDim], float64]:
         bcasted = broadcast(inp, (IDim, JDim))
         return bcasted(Joff[1])
@@ -522,7 +527,7 @@ def test_conditional():
     b = np_as_located_field(IDim)(2 * np.ones((size,)))
     out = np_as_located_field(IDim)(np.zeros((size,)))
 
-    @field_operator(backend="roundtrip")
+    @field_operator(backend=fieldview_backend)
     def conditional(
         mask: Field[[IDim], bool], a: Field[[IDim], float64], b: Field[[IDim], float64]
     ) -> Field[[IDim], float64]:
@@ -540,7 +545,7 @@ def test_conditional_promotion():
     a = np_as_located_field(IDim)(np.ones((size,)))
     out = np_as_located_field(IDim)(np.zeros((size,)))
 
-    @field_operator(backend="roundtrip")
+    @field_operator(backend=fieldview_backend)
     def conditional(mask: Field[[IDim], bool], a: Field[[IDim], float64]) -> Field[[IDim], float64]:
         return where(mask, a, 10.0)
 
@@ -550,7 +555,7 @@ def test_conditional_promotion():
 
 
 def test_conditional_shifted():
-    Ioff = FieldOffset("Ioff", source=IDim, target=[IDim])
+    Ioff = FieldOffset("Ioff", source=IDim, target=(IDim,))
 
     size = 10
     mask = np_as_located_field(IDim)(np.zeros((size,), dtype=bool))
@@ -559,7 +564,7 @@ def test_conditional_shifted():
     b = np_as_located_field(IDim)(np.zeros((size,)))
     out = np_as_located_field(IDim)(np.zeros((size,)))
 
-    @field_operator(backend="roundtrip")
+    @field_operator(backend=fieldview_backend)
     def conditional(
         mask: Field[[IDim], bool], a: Field[[IDim], float64], b: Field[[IDim], float64]
     ) -> Field[[IDim], float64]:
