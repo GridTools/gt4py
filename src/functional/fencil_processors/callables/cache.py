@@ -42,9 +42,12 @@ def get_cache_folder(module_name: str, module_src: str, strategy: Strategy) -> p
     folder_name = _cache_folder_name(module_name, module_src)
 
     match strategy:
-        case Strategy.SESSION: base_path = _session_cache_dir_path
-        case Strategy.PERSISTENT: base_path = _persistent_cache_dir_path
-        case _: raise ValueError("Unsupported caching strategy.")
+        case Strategy.SESSION:
+            base_path = _session_cache_dir_path
+        case Strategy.PERSISTENT:
+            base_path = _persistent_cache_dir_path
+        case _:
+            raise ValueError("Unsupported caching strategy.")
 
     base_path.mkdir(exist_ok=True)
 

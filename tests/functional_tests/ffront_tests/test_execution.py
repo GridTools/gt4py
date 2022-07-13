@@ -223,7 +223,7 @@ def test_fold_shifts(fieldview_backend):
 
 def test_tuples(fieldview_backend):
     if fieldview_backend == gtfn_cpu.run_gtfn:
-        pytest.skip(reason="Tuples are not supported yet.")
+        pytest.skip("Tuples are not supported yet.")
     size = 10
     a = np_as_located_field(IDim)(np.ones((size)))
     b = np_as_located_field(IDim)(np.ones((size)) * 2)
@@ -309,7 +309,7 @@ def reduction_setup():
 def test_maxover_execution_sparse(reduction_setup, fieldview_backend):
     """Testing max_over functionality."""
     if fieldview_backend == gtfn_cpu.run_gtfn:
-        pytest.skip(reason="not yet supported.")
+        pytest.skip("not yet supported.")
     rs = reduction_setup
     Vertex = rs.Vertex
     V2EDim = rs.V2EDim
@@ -331,7 +331,7 @@ def test_maxover_execution_sparse(reduction_setup, fieldview_backend):
 def test_maxover_execution_negatives(reduction_setup, fieldview_backend):
     """Testing max_over functionality for negative values in array."""
     if fieldview_backend == gtfn_cpu.run_gtfn:
-        pytest.skip(reason="not yet supported.")
+        pytest.skip("not yet supported.")
     rs = reduction_setup
     Edge = rs.Edge
     Vertex = rs.Vertex
@@ -358,7 +358,7 @@ def test_maxover_execution_negatives(reduction_setup, fieldview_backend):
 def test_reduction_execution(reduction_setup, fieldview_backend):
     """Testing a trivial neighbor sum."""
     if fieldview_backend == gtfn_cpu.run_gtfn:
-        pytest.skip(reason="IndexFields are not supported yet.")
+        pytest.skip("IndexFields are not supported yet.")
     rs = reduction_setup
     Edge = rs.Edge
     Vertex = rs.Vertex
@@ -382,7 +382,7 @@ def test_reduction_execution(reduction_setup, fieldview_backend):
 def test_reduction_execution_nb(reduction_setup, fieldview_backend):
     """Testing a neighbor sum on a neighbor field."""
     if fieldview_backend == gtfn_cpu.run_gtfn:
-        pytest.skip(reason="not yet supported.")
+        pytest.skip("not yet supported.")
     rs = reduction_setup
     V2EDim = rs.V2EDim
 
@@ -401,7 +401,7 @@ def test_reduction_execution_nb(reduction_setup, fieldview_backend):
 def test_reduction_expression(reduction_setup, fieldview_backend):
     """Test reduction with an expression directly inside the call."""
     if fieldview_backend == gtfn_cpu.run_gtfn:
-        pytest.skip(reason="IndexFields are not supported yet.")
+        pytest.skip("IndexFields are not supported yet.")
     rs = reduction_setup
     Vertex = rs.Vertex
     Edge = rs.Edge
@@ -427,7 +427,7 @@ def test_reduction_expression(reduction_setup, fieldview_backend):
 def test_scalar_arg(fieldview_backend):
     """Test scalar argument being turned into 0-dim field."""
     if fieldview_backend == gtfn_cpu.run_gtfn:
-        pytest.skip(reason="ConstantFields are not supported yet.")
+        pytest.skip("ConstantFields are not supported yet.")
     Vertex = Dimension("Vertex")
     size = 5
     inp = 5.0
@@ -445,7 +445,7 @@ def test_scalar_arg(fieldview_backend):
 
 def test_scalar_arg_with_field(fieldview_backend):
     if fieldview_backend == gtfn_cpu.run_gtfn:
-        pytest.skip(reason="IndexFields and ConstantFields are not supported yet.")
+        pytest.skip("IndexFields and ConstantFields are not supported yet.")
     Edge = Dimension("Edge")
     EdgeOffset = FieldOffset("EdgeOffset", source=Edge, target=(Edge,))
     size = 5
