@@ -117,7 +117,7 @@ class GTFNCodegen(codegen.TemplatedGenerator):
         )
 
     TemporaryAllocation = as_fmt(
-        "auto {id} = allocate_global_tmp<{dtype}>(_tmp_alloc, {domain}.sizes());"
+        "auto {id} = allocate_global_tmp<{dtype}>(tmp_alloc__, {domain}.sizes());"
     )
 
     FencilDefinition = as_mako(
@@ -135,7 +135,7 @@ class GTFNCodegen(codegen.TemplatedGenerator):
 
     inline auto ${id} = [](auto connectivities__){
         return [connectivities__](auto backend, ${','.join('auto&& ' + p for p in params)}){
-            auto _tmp_alloc = tmp_allocator(backend);
+            auto tmp_alloc__ = tmp_allocator(backend);
             ${'\\n'.join(temporaries)}
             ${'\\n'.join(executions)}
         };
