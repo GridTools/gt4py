@@ -189,8 +189,9 @@ def tuple_get(i, tup):
     if isinstance(tup, tuple):
         return tup[i]
     assert isinstance(tup, (np.ndarray, np.void))
-    assert tup.dtype.fields
-    return tup[tup.dtype.names[i]]
+    if tup.dtype.names:
+        return tup[tup.dtype.names[i]]
+    return tup[i]
 
 
 @builtins.make_tuple.register(EMBEDDED)
