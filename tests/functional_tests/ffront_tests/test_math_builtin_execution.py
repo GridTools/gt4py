@@ -25,6 +25,8 @@ IDim = Dimension("IDim")
 
 
 def make_builtin_field_operator(builtin_name: str):
+    # TODO(tehrengruber): creating a field operator programmatically should be
+    #  easier than what we need to do here.
     # construct annotation dictionary containing the input argument and return
     #  types
     if builtin_name in fbuiltins.UNARY_MATH_NUMBER_BUILTIN_NAMES:
@@ -103,8 +105,6 @@ def make_builtin_field_operator(builtin_name: str):
     )
 
 
-# FIXME(ben): this is a code clone from `./tests/functional_tests/iterator_tests/test_builtins.py`
-# we should probably put that dataset somewhere so we can resue it for these tests
 @pytest.mark.parametrize("builtin_name, inputs", math_builtin_test_data())
 def test_math_function_builtins_execution(builtin_name: str, inputs):
     ref_impl: Callable = getattr(np, builtin_name)
