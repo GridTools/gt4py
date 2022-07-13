@@ -36,7 +36,6 @@ from functional.ffront.ast_passes import (
 )
 from functional.ffront.dialect_parser import DialectParser, DialectSyntaxError
 from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduction
-from functional.ffront.foast_passes.unroll_power_op import UnrollPowerOp
 
 
 class FieldOperatorSyntaxError(DialectSyntaxError):
@@ -94,7 +93,6 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
 
     @classmethod
     def _postprocess_dialect_ast(cls, dialect_ast: foast.FieldOperator) -> foast.FieldOperator:
-        dialect_ast = UnrollPowerOp.apply(dialect_ast)
         return FieldOperatorTypeDeduction.apply(dialect_ast)
 
     def _builtin_type_constructor_symbols(

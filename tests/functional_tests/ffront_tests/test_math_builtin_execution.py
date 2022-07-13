@@ -24,6 +24,10 @@ fieldview_backend = roundtrip.executor
 
 IDim = Dimension("IDim")
 
+# TODO(tehrengruber): add tests for scalar arguments to builtin. To avoid code
+#  bloat this is postponed until programatically creating field operators
+#  becomes easier.
+
 
 def make_builtin_field_operator(builtin_name: str):
     # TODO(tehrengruber): creating a field operator programmatically should be
@@ -41,12 +45,6 @@ def make_builtin_field_operator(builtin_name: str):
             "inp1": Field[[IDim], float64],
             "inp2": Field[[IDim], float64],
             "return": Field[[IDim], float64],
-        }
-    elif builtin_name in fbuiltins.BINARY_MATH_INT_BUILTIN_NAMES:
-        annotations = {
-            "inp1": Field[[IDim], int64],
-            "inp2": Field[[IDim], int64],
-            "return": Field[[IDim], int64],
         }
     else:
         raise AssertionError(f"Unknown builtin `{builtin_name}`")

@@ -254,6 +254,11 @@ def mod(*args):
     raise BackendNotSelectedError()
 
 
+@builtin_dispatch
+def power(*args):
+    raise BackendNotSelectedError()
+
+
 UNARY_MATH_NUMBER_BUILTINS = {"abs"}
 UNARY_MATH_FP_BUILTINS = {
     "sin",
@@ -278,14 +283,12 @@ UNARY_MATH_FP_BUILTINS = {
     "trunc",
 }
 UNARY_MATH_FP_PREDICATE_BUILTINS = {"isfinite", "isinf", "isnan"}
-BINARY_MATH_NUMBER_BUILTINS = {"minimum", "maximum", "mod"}
-BINARY_MATH_INT_BUILTINS = {"mod"}
+BINARY_MATH_NUMBER_BUILTINS = {"minimum", "maximum", "mod", "power"}
 MATH_BUILTINS = (
     UNARY_MATH_NUMBER_BUILTINS
     | UNARY_MATH_FP_BUILTINS
     | UNARY_MATH_FP_PREDICATE_BUILTINS
     | BINARY_MATH_NUMBER_BUILTINS
-    | BINARY_MATH_INT_BUILTINS
 )
 
 __all__ = [

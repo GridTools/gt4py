@@ -336,8 +336,6 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             arg_validator = type_info.is_floating_point
         elif func_name in fbuiltins.BINARY_MATH_NUMBER_BUILTIN_NAMES:
             arg_validator = type_info.is_arithmetic
-        elif func_name in fbuiltins.BINARY_MATH_INT_BUILTIN_NAMES:
-            arg_validator = type_info.is_integral
         else:
             raise AssertionError(f"Unknown math builtin `{func_name}`.")
 
@@ -364,10 +362,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             return_type = cast(ct.FieldType | ct.ScalarType, node.args[0].type)
         elif func_name in fbuiltins.UNARY_MATH_FP_PREDICATE_BUILTIN_NAMES:
             return_type = boolified_type(cast(ct.FieldType | ct.ScalarType, node.args[0].type))
-        elif (
-            func_name
-            in fbuiltins.BINARY_MATH_NUMBER_BUILTIN_NAMES + fbuiltins.BINARY_MATH_INT_BUILTIN_NAMES
-        ):
+        elif func_name in fbuiltins.BINARY_MATH_NUMBER_BUILTIN_NAMES:
             try:
                 return_type = type_info.promote(
                     *((cast(ct.FieldType | ct.ScalarType, arg.type)) for arg in node.args)

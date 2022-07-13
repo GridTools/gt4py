@@ -161,19 +161,16 @@ _binary_math_builtin = BuiltInFunction(
 
 minimum = _binary_math_builtin
 maximum = _binary_math_builtin
-
-BINARY_MATH_NUMBER_BUILTIN_NAMES = ["minimum", "maximum"]
-
-# binary math builtins (int) -> int
 mod = _binary_math_builtin
-BINARY_MATH_INT_BUILTIN_NAMES = ["mod"]
+power = _binary_math_builtin
+
+BINARY_MATH_NUMBER_BUILTIN_NAMES = ["minimum", "maximum", "mod", "power"]
 
 MATH_BUILTIN_NAMES = (
     UNARY_MATH_NUMBER_BUILTIN_NAMES
     + UNARY_MATH_FP_BUILTIN_NAMES
     + UNARY_MATH_FP_PREDICATE_BUILTIN_NAMES
     + BINARY_MATH_NUMBER_BUILTIN_NAMES
-    + BINARY_MATH_INT_BUILTIN_NAMES
 )
 
 FUN_BUILTIN_NAMES = ["neighbor_sum", "max_over", "broadcast", "where"] + MATH_BUILTIN_NAMES
