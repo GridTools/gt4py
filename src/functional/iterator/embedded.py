@@ -318,41 +318,7 @@ def less(first, second):
     return first < second
 
 
-UNARY_MATH_NUMBER_BUILTINS = {"abs"}
-UNARY_MATH_FP_BUILTINS = {
-    "sin",
-    "cos",
-    "tan",
-    "arcsin",
-    "arccos",
-    "arctan",
-    "sinh",
-    "cosh",
-    "tanh",
-    "arcsinh",
-    "arccosh",
-    "arctanh",
-    "sqrt",
-    "exp",
-    "log",
-    "gamma",
-    "cbrt",
-    "floor",
-    "ceil",
-    "trunc",
-}
-UNARY_MATH_FP_PREDICATE_BUILTINS = {"isfinite", "isinf", "isnan"}
-BINARY_MATH_NUMBER_BUILTINS = {"minimum", "maximum", "mod"}
-BINARY_MATH_INT_BUILTINS = {"mod"}
-MATH_BUILTINS = (
-    UNARY_MATH_NUMBER_BUILTINS
-    | UNARY_MATH_FP_BUILTINS
-    | UNARY_MATH_FP_PREDICATE_BUILTINS
-    | BINARY_MATH_NUMBER_BUILTINS
-    | BINARY_MATH_INT_BUILTINS
-)
-
-for math_builtin_name in MATH_BUILTINS:
+for math_builtin_name in builtins.MATH_BUILTINS:
     decorator = getattr(builtins, math_builtin_name).register(EMBEDDED)
     if math_builtin_name == "gamma":
         # numpy has no gamma function

@@ -17,7 +17,6 @@ import functional.ffront.field_operator_ast as foast
 from eve import NodeTranslator, traits
 from functional.common import DimensionKind, GTSyntaxError, GTTypeError
 from functional.ffront import common_types as ct, fbuiltins, type_info
-from functional.ffront.fbuiltins import FUN_BUILTIN_NAMES
 
 
 def boolified_type(symbol_type: ct.SymbolType) -> ct.ScalarType | ct.FieldType:
@@ -346,7 +345,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         for i, arg in enumerate(node.args):
             if not arg_validator(arg.type):
                 error_msgs.append(
-                    f"Expected {i}-th argument to be a number type, but " f"got `{arg.type}`."
+                    f"Expected {i}-th argument to be a number type, but got `{arg.type}`."
                 )
         if error_msgs:
             raise FieldOperatorTypeDeductionError.from_foast_node(

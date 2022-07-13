@@ -5,6 +5,7 @@ from typing import Callable, Iterable
 import numpy as np
 import pytest
 
+from functional.fencil_processors import gtfn, type_check
 from functional.iterator.builtins import (
     and_,
     can_deref,
@@ -30,6 +31,7 @@ from functional.iterator.embedded import (
 from functional.iterator.runtime import CartesianAxis, closure, fendef, fundef, offset
 
 from .conftest import run_processor
+from .math_builtin_test_data import math_builtin_test_data
 from .test_hdiff import I
 
 
@@ -129,11 +131,17 @@ def test_arithmetic_and_logical_builtins(fencil_processor, builtin, inputs, expe
         assert np.allclose(np.asarray(out), expected)
 
 
+@pytest.mark.parametrize("as_column", [False, True])
 @pytest.mark.parametrize("builtin_name, inputs", math_builtin_test_data())
-def test_math_function_builtins(backend, builtin_name, inputs):
+def test_math_function_builtins(fencil_processor, builtin_name, inputs, as_column):
     from functional.iterator import builtins as it_builtins
 
-    backend, validate = backend
+    fencil_processor, validate = fencil_processor
+
+    if fencil_processor == gtfn.format_sourcecode:
+        pytest.xfail("gtfn does not yet support math builtins")
+    if fencil_processor == type_check.check:
+        pytest.xfail("type inference does not yet support math builtins")
 
     ref_impl: Callable = getattr(np, builtin_name)
     inps = asfield(*asarray(*inputs))
@@ -141,7 +149,13 @@ def test_math_function_builtins(backend, builtin_name, inputs):
 
     out = asfield((np.zeros_like(*asarray(expected))))[0]
 
-    fencil(getattr(it_builtins, builtin_name), out, *inps, backend=backend)
+    fencil(
+        getattr(it_builtins, builtin_name),
+        out,
+        *inps,
+        processor=fencil_processor,
+        as_column=as_column,
+    )
 
     if validate:
         assert np.allclose(np.asarray(out), expected)

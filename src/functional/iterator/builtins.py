@@ -1,58 +1,6 @@
 from functional.iterator.dispatcher import Dispatcher
 
 
-__all__ = [
-    "deref",
-    "can_deref",
-    "shift",
-    "lift",
-    "reduce",
-    "plus",
-    "minus",
-    "multiplies",
-    "divides",
-    "make_tuple",
-    "tuple_get",
-    "if_",
-    "greater",
-    "less",
-    "eq",
-    "not_",
-    "and_",
-    "or_",
-    "scan",
-    "cartesian_domain",
-    "unstructured_domain",
-    "named_range",
-    "abs",
-    "minimum",
-    "maximum",
-    "mod",
-    "sin",
-    "cos",
-    "tan",
-    "arcsin",
-    "arccos",
-    "arctan",
-    "sinh",
-    "cosh",
-    "tanh",
-    "arcsinh",
-    "arccosh",
-    "arctanh",
-    "sqrt",
-    "exp",
-    "log",
-    "gamma",
-    "cbrt",
-    "isfinite",
-    "isinf",
-    "isnan",
-    "floor",
-    "ceil",
-    "trunc",
-]
-
 builtin_dispatch = Dispatcher()
 
 
@@ -171,8 +119,6 @@ def tuple_get(*args):
     raise BackendNotSelectedError()
 
 
-# FIXME(ben): various of the following built-ins will shadow python built-ins!
-# We should find a good way around this...
 @builtin_dispatch
 def abs(*args):  # noqa: A001
     raise BackendNotSelectedError()
@@ -306,3 +252,64 @@ def maximum(*args):
 @builtin_dispatch
 def mod(*args):
     raise BackendNotSelectedError()
+
+
+UNARY_MATH_NUMBER_BUILTINS = {"abs"}
+UNARY_MATH_FP_BUILTINS = {
+    "sin",
+    "cos",
+    "tan",
+    "arcsin",
+    "arccos",
+    "arctan",
+    "sinh",
+    "cosh",
+    "tanh",
+    "arcsinh",
+    "arccosh",
+    "arctanh",
+    "sqrt",
+    "exp",
+    "log",
+    "gamma",
+    "cbrt",
+    "floor",
+    "ceil",
+    "trunc",
+}
+UNARY_MATH_FP_PREDICATE_BUILTINS = {"isfinite", "isinf", "isnan"}
+BINARY_MATH_NUMBER_BUILTINS = {"minimum", "maximum", "mod"}
+BINARY_MATH_INT_BUILTINS = {"mod"}
+MATH_BUILTINS = (
+    UNARY_MATH_NUMBER_BUILTINS
+    | UNARY_MATH_FP_BUILTINS
+    | UNARY_MATH_FP_PREDICATE_BUILTINS
+    | BINARY_MATH_NUMBER_BUILTINS
+    | BINARY_MATH_INT_BUILTINS
+)
+
+__all__ = [
+    "deref",
+    "can_deref",
+    "shift",
+    "lift",
+    "reduce",
+    "plus",
+    "minus",
+    "multiplies",
+    "divides",
+    "make_tuple",
+    "tuple_get",
+    "if_",
+    "greater",
+    "less",
+    "eq",
+    "not_",
+    "and_",
+    "or_",
+    "scan",
+    "cartesian_domain",
+    "unstructured_domain",
+    "named_range",
+    *MATH_BUILTINS,
+]

@@ -3,6 +3,7 @@ from typing import List
 
 from eve import Node
 from functional import iterator
+from functional.iterator import builtins
 from functional.iterator.ir import (
     AxisLiteral,
     Expr,
@@ -209,6 +210,15 @@ def greater(*args):
 @iterator.builtins.less.register(TRACING)
 def less(*args):
     return _f("less", *args)
+
+
+for math_builtin_name in builtins.MATH_BUILTINS:
+    decorator = getattr(iterator.builtins, math_builtin_name).register(TRACING)
+    exec(
+        f"""@iterator.builtins.{math_builtin_name}.register(TRACING)\n"""
+        f"""def {math_builtin_name}(*args):\n"""
+        f"""  return _f("{math_builtin_name}", *args)\n"""
+    )
 
 
 # helpers

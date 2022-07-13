@@ -1,9 +1,7 @@
-import numbers
-
 import numpy as np
 
 
-def math_builtin_test_data() -> list[tuple[str, tuple[list[numbers.Number, ...]]]]:
+def math_builtin_test_data() -> list[tuple[str, tuple[list[int | float], ...]]]:
     return [
         # FIXME(ben): what about pow?
         # FIXME(ben): dataset is missing invalid ranges (mostly nan outputs)

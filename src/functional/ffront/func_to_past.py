@@ -63,9 +63,11 @@ class ProgramParser(DialectParser[past.Program]):
         if (annotation := self.captured_vars.annotations.get(node.arg, None)) is None:
             raise ProgramSyntaxError.from_AST(node, msg="Untyped parameters not allowed!")
         new_type = symbol_makers.make_symbol_type_from_typing(annotation)
-        if type_info.is_concrete(new_type) and type_info.type_class(new_type) is common_types.ScalarType:
-            new_type = common_types.FieldType(dims=[],
-                                    dtype=type_info.extract_dtype(new_type))
+        if (
+            type_info.is_concrete(new_type)
+            and type_info.type_class(new_type) is common_types.ScalarType
+        ):
+            new_type = common_types.FieldType(dims=[], dtype=type_info.extract_dtype(new_type))
         if not isinstance(new_type, common_types.DataType):
             raise ProgramSyntaxError.from_AST(
                 node, msg="Only arguments of type DataType are allowed."
