@@ -61,6 +61,7 @@ We decided to keep compiled backend completely independent of the fields view fr
 Reasons:
 - There may be multiple frontends, but all of them would emit iterator IR and therefore would be compatible with compiled backends out of the box
 - The field view frontend must import compiled backends. If compiled backends were aware of field view features, that would lead to a circular dependency between the frontend and backend.
+- The work to support starting from iterator IR directly would have to be done in any case.
 
 
 ## Limitations
