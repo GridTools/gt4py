@@ -117,6 +117,7 @@ class ScanExecution(Node):
     backend: Backend
     scans: list[Scan]
     args: list[SymRef]
+    axis: SymRef
 
 
 class TemporaryAllocation(Node):

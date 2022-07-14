@@ -280,6 +280,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
                 backend=backend,
                 scans=[scan],
                 args=[self.visit(node.output, **kwargs)] + self.visit(node.inputs),
+                axis=SymRef(id=kwargs["column_axis"].value),
             )
         return StencilExecution(
             stencil=self.visit(
@@ -299,6 +300,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     ) -> list[Union[StencilExecution, ScanExecution]]:
         def merge(a: ScanExecution, b: ScanExecution) -> ScanExecution:
             assert a.backend == b.backend
+            assert a.axis == b.axis
 
             index_map = dict[int, int]()
             compacted_b_args = list[SymRef]()
@@ -325,6 +327,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
                 backend=a.backend,
                 scans=a.scans + [remap_args(s) for s in b.scans],
                 args=a.args + compacted_b_args,
+                axis=a.axis,
             )
 
         res = executions[:1]
@@ -356,7 +359,10 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         extracted_functions: list[Union[FunctionDefinition, ScanPassDefinition]] = []
         self.offset_provider = kwargs["offset_provider"]
         executions = self.visit(
-            node.closures, grid_type=grid_type, extracted_functions=extracted_functions
+            node.closures,
+            grid_type=grid_type,
+            extracted_functions=extracted_functions,
+            column_axis=kwargs.get("column_axis"),
         )
         executions = self._merge_scans(executions)
         function_definitions = self.visit(node.function_definitions) + extracted_functions

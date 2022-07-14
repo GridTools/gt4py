@@ -57,6 +57,7 @@ if __name__ == "__main__":
         grid_type="Cartesian",
         offset_provider=offset_provider,
         lift_mode=LiftMode.SIMPLE_HEURISTIC,
+        column_axis=KDim,
     )
 
     with open(output_file, "w+") as output:

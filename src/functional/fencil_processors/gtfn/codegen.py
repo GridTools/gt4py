@@ -79,7 +79,7 @@ class GTFNCodegen(codegen.TemplatedGenerator):
 
     Scan = as_fmt("assign({output}, {function}(), {init}, {', '.join(inputs)})")
     ScanExecution = as_fmt(
-        "{backend}.vertical_executor(generated::KDim_t())().{'.'.join('arg(' + a + ')' for a in args)}.{'.'.join(scans)}.execute();"
+        "{backend}.vertical_executor({axis})().{'.'.join('arg(' + a + ')' for a in args)}.{'.'.join(scans)}.execute();"
     )
 
     ScanPassDefinition = as_mako(

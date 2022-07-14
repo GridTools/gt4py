@@ -21,7 +21,10 @@ def generate(program: itir.FencilDefinition, *, grid_type: str, **kwargs: Any) -
     )
     transformed = EtaReduction().visit(transformed)
     gtfn_ir = GTFN_lowering().visit(
-        transformed, grid_type=grid_type, offset_provider=offset_provider
+        transformed,
+        grid_type=grid_type,
+        offset_provider=offset_provider,
+        column_axis=kwargs.get("column_axis"),
     )
     generated_code = GTFNCodegen.apply(gtfn_ir, **kwargs)
     return codegen.format_source("cpp", generated_code, style="LLVM")
