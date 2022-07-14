@@ -66,15 +66,14 @@ Reasons:
 
 ## Limitations
 
+The main goal of this project is to implement the complete pipeline from field view to machine code and demonstrate that it's working. To keep the scope of the project reasonable, feature completeness is left for future work.
+
 ### Splitting existing fencil and binding code generators
 
 The roundtrip backend could benefit from being split into a Python fencil generator and a small binding generator, which would merely write out the file and load it back live.
 
 This is out of the scope of this project, but should be done in the future. Additional backends, wherever possible, should follow the separated pattern for clarity.
 
+### Fencil argument types
 
-
-
-We didn’t rewrite roundtrip to be split into a python-code generator and an executor. This does not mean it wouldn’t be cleaner to do so, only that it wasn’t a priority yet.
-
-Fencil argument handling is minimalistic, not by design, but for practical reasons and is meant to be expanded. I.e. only scalars and fields are handled, contant fields and index fields aren't supported.
+In this implementation, only fencil having scalar and field arguments can be executed with compiled backends. Constant fields and index fields are to be added later.
