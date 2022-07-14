@@ -118,10 +118,10 @@ def test_power():
     b = np_as_located_field(IDim)(np.zeros((size)))
 
     @field_operator(backend=fieldview_backend)
-    def power(inp1: Field[[IDim], float64]) -> Field[[IDim], float64]:
+    def pow(inp1: Field[[IDim], float64]) -> Field[[IDim], float64]:
         return inp1**2
 
-    power(a, out=b, offset_provider={})
+    pow(a, out=b, offset_provider={})
 
     assert np.allclose(a.array() ** 2, b)
 
