@@ -71,9 +71,10 @@ def test_unpack():
             """
         )
     )
-    assert len(lines) == 2
-    assert lines[0] == "a = (c, d)[0]"
-    assert lines[1] == "b = (c, d)[1]"
+    assert len(lines) == 3
+    assert lines[0] == "__tuple_tmp_0 = (c, d)"
+    assert lines[1] == "a = __tuple_tmp_0[0]"
+    assert lines[2] == "b = __tuple_tmp_0[1]"
 
 
 def test_nested_unpack():
@@ -85,10 +86,13 @@ def test_nested_unpack():
             """
         )
     )
-    assert len(lines) == 3
-    assert lines[0] == "a = foo()[0]"
-    assert lines[1] == "b = foo()[1][0]"
-    assert lines[2] == "c = foo()[1][1][0]"
+    assert len(lines) == 6
+    assert lines[0] == "__tuple_tmp_0 = foo()"
+    assert lines[1] == "a = __tuple_tmp_0[0]"
+    assert lines[2] == "__tuple_tmp_1 = __tuple_tmp_0[1]"
+    assert lines[3] == "b = __tuple_tmp_1[0]"
+    assert lines[4] == "__tuple_tmp_2 = __tuple_tmp_1[1]"
+    assert lines[5] == "c = __tuple_tmp_2[0]"
 
 
 def test_nested_multi_target_unpack():
@@ -102,7 +106,8 @@ def test_nested_multi_target_unpack():
             )
         )
     )
-    assert len(lines) == 3
+    assert len(lines) == 4
     assert lines[0] == "a = [d, e]"
-    assert lines[1] == "b = [d, e][0]"
-    assert lines[2] == "c = [d, e][1]"
+    assert lines[1] == "__tuple_tmp_0 = [d, e]"
+    assert lines[2] == "b = __tuple_tmp_0[0]"
+    assert lines[3] == "c = __tuple_tmp_0[1]"
