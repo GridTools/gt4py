@@ -12,12 +12,11 @@ Summary of the key design choices made for the live execution of generated C++ (
 As per the current state, gt4py can execute iterator IR by generating Python code from it which is loaded back as a module. Additionally, gt4py can also emit equivalent C++ code from iterator IR. The integration of the compiled backends focuses on compiling the emitted C++ code and calling it from Python, effectively executing iterator IR live by translating it to machine code.
 
 The process of executing ITIR this way consists of the following steps:
-1. Generate ITIR
-2. Generate C++ code equivalent (*fencil code*) to ITIR
-3. Generate C++ code that wraps the fencil code and can be accessed from Python (*binding code*)
-4. Compile the fencil and binding codes into machine code (a dynamically linked library)
-5. Load the dynamic library into Python and extract the interfaces as Python objects 
-6. Call the interfaces from Python with the fencil's arguments
+1. Generate C++ code equivalent (*fencil code*) to ITIR
+2. Generate C++ code that wraps the fencil code and can be accessed from Python (*binding code*)
+3. Compile the fencil and binding codes into machine code (a dynamically linked library)
+4. Load the dynamic library into Python and extract the interfaces as Python objects 
+5. Call the interfaces from Python with the fencil's arguments
 
 
 ## Python bindings for C++ code
@@ -77,3 +76,21 @@ This is out of the scope of this project, but should be done in the future. Addi
 ### Fencil argument types
 
 In this implementation, only fencil having scalar and field arguments can be executed with compiled backends. Constant fields and index fields are to be added later.
+
+### GridTools CUDA support
+
+To keep things simple, GridTools CUDA is not supported in this first iteration.
+
+To add support, we have to decide on the interface that is exposed to the user:
+1. There are two completely separate backends for CPU and CUDA
+2. There is a single backend and the device is selected by a flag
+
+The existing code can be extended for either options in the future. 
+
+### Unstructured grids
+
+This implementation only supports cartesian grids, again, to keep things simple. Unstructured grids are to be added as soon as possible, however, that requires more design when it comes to passing the connectivities from Python to C++.
+
+### Library dependencies
+
+In this iteration, library dependencies (i.e. boost, GridTools, pybind11) are handled in an inefficient and ad-hoc manner. To improve performance and user-friendliness, this should be resolved in future work.
