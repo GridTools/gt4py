@@ -127,11 +127,15 @@ class UnpackedAssignPass(NodeYielder):
         else:
             yield node
 
+    def _unique_tuple_name(self) -> ast.Name:
+        name = ast.Name(id=f"__tuple_tmp_{self.unique_name_id}", ctx=ast.Store())
+        self.unique_name_id += 1
+        return name
+
     def _unpack_assignment(
         self, node: ast.Assign, *, targets: list[ast.expr]  # targets passed here for typing
     ) -> Iterator[ast.Assign]:
-        tuple_name = ast.Name(id=f"__tuple_tmp_{self.unique_name_id}", ctx=ast.Store())
-        self.unique_name_id += 1
+        tuple_name = self._unique_tuple_name()
         tuple_assign = ast.Assign(targets=[tuple_name], value=node.value)
         ast.copy_location(tuple_name, node)
         ast.copy_location(tuple_assign, node)
