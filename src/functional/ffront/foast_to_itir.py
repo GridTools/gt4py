@@ -20,6 +20,7 @@ from typing import Callable, Optional, cast
 import numpy as np
 
 from eve import NodeTranslator
+from functional.common import DimensionKind
 from functional.ffront import (
     common_types as ct,
     fbuiltins,
@@ -76,7 +77,14 @@ def can_be_value_or_iterator(symbol_type: ct.SymbolType):
 
 
 def is_field(expr: foast.Expr) -> bool:
-    return type_info.type_class(expr.type) is ct.FieldType
+    return resulting_type_kind(expr.type) is TypeKind.FIELD
+    #return type_info.type_class(expr.type) is ct.FieldType
+
+
+def is_local_kind(symbol_type: ct.SymbolType) -> TypeKind:
+    if isinstance(symbol_type, ct.TupleType):
+        return any(is_local_kind(el) for el in symbol_type.types)
+    return any(dim.kind == DimensionKind.LOCAL for dim in symbol_type.dims)
 
 
 def to_value(node: foast.LocatedNode) -> Callable[[itir.Expr], itir.Expr]:
@@ -103,8 +111,9 @@ def to_value(node: foast.LocatedNode) -> Callable[[itir.Expr], itir.Expr]:
     >>> to_value(scalar_b)(im.ref("a"))
     SymRef(id=SymbolRef('a'))
     """
+    from functional.common import DimensionKind
     assert can_be_value_or_iterator(node.type)
-    if resulting_type_kind(node.type) is TypeKind.FIELD:
+    if resulting_type_kind(node.type) is TypeKind.FIELD and not is_local_kind(node.type):
         return im.deref_
     return lambda x: x
 
@@ -186,14 +195,20 @@ class FieldOperatorLowering(NodeTranslator):
         return self.lifted_lambda(*param_names)
 
     def visit_Subscript(self, node: foast.Subscript, **kwargs) -> itir.FunCall:
-        return im.tuple_get_(node.index, self.visit(node.value, **kwargs))
+        value = to_value(node.value)(self.visit(node.value, **kwargs))
+        return self._lift_if_field(node)(im.tuple_get_(node.index, value))
 
     def visit_TupleExpr(self, node: foast.TupleExpr, **kwargs) -> itir.FunCall:
-        return im.make_tuple_(*self.visit(node.elts, **kwargs))
+        # it is important to use `node` here instead of el to decide if we
+        #  want to have a value. As soon as we have one local field in the
+        #  expression we choose a tuple of iterators layout (which other
+        #  parts of the lowering rely on).
+        elts = tuple(to_value(node)(self.visit(el, **kwargs)) for el in node.elts)
+        return self._lift_if_field(node)(im.make_tuple_(*elts))
 
     def _lift_if_field(self, node: foast.LocatedNode) -> Callable[[itir.Expr], itir.Expr]:
         assert can_be_value_or_iterator(node.type)
-        if resulting_type_kind(node.type) is TypeKind.SCALAR:
+        if resulting_type_kind(node.type) is TypeKind.SCALAR or is_local_kind(node.type):
             return lambda x: x
         return self._lift_lambda(node)
 
