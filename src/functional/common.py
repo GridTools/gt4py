@@ -15,7 +15,6 @@
 from __future__ import annotations
 
 import abc
-import dataclasses
 import enum
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -29,10 +28,17 @@ DimsT = TypeVar("DimsT", bound=Sequence["Dimension"])
 DT = TypeVar("DT", bound="DType")
 
 
+@enum.unique
+class DimensionKind(StrEnum):
+    HORIZONTAL = "horizontal"
+    VERTICAL = "vertical"
+    LOCAL = "local"
+
+
 @dataclass(frozen=True)
 class Dimension:
     value: str
-    local: bool = dataclasses.field(default=False)
+    kind: DimensionKind = DimensionKind.HORIZONTAL  # type: ignore[assignment]
 
 
 class DType:
