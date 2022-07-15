@@ -72,11 +72,12 @@ jobs:
         tox -r -e dev-quickstart-guide
 
   tox-eve-tests:
-    runs-on: ubuntu-latest
     strategy:
       matrix:
         python-version: ["3.8", "3.9"]
+        os: ["ubuntu-latest", "macos-latest"]
 
+    runs-on: ${{ matrix.os }}
     steps:
     - uses: actions/checkout@v2
     - name: Set up Python ${{ matrix.python-version }}
