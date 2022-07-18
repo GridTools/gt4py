@@ -47,3 +47,4 @@ jobs:
         files: coverage.xml
         name: gt4py-functional
         fail_ci_if_error: false
+        flags: gt4py-all

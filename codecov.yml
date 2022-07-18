@@ -13,12 +13,16 @@ coverage:
         threshold: 0%
         paths:
         - "src/functional"
+        flags:
+        - gt4py-all
         if_ci_failed: success
       eve:
         target: 85%
         threshold: 0%
         paths:
         - "src/eve"
+        flags:
+        - eve-all
         if_ci_failed: success
 
 parsers:
