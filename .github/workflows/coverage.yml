@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       PY_VERSION: "3.10"
-      TOX_ENV_FACTORS: "base"
+      TOX_ENV_FACTOR: "base"
     steps:
     - uses: actions/checkout@v2
 
@@ -25,7 +25,7 @@ jobs:
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v2
       with:
-        python-version: ${{ matrix.python-version }}
+        python-version: ${{ env.PY_VERSION }}
 
     - name: Install python dependencies
       shell: bash
@@ -35,9 +35,9 @@ jobs:
     - name: Gather coverage
       shell: bash
       run: |
-        pyversion_no_dot="${{ PY_VERSION }}"
+        pyversion_no_dot="${{ env.PY_VERSION }}"
         pyversion_no_dot="${pyversion_no_dot/./}"
-        tox_env_factor="${{ matrix.tox-env-factors }}"
+        tox_env_factor="${{ env.TOX_ENV_FACTOR }}"
         pip install tox clang-format
         tox -r -e py${pyversion_no_dot}-${tox_env_factor}
 
