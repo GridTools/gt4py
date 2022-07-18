@@ -39,7 +39,7 @@ jobs:
         pyversion_no_dot="${pyversion_no_dot/./}"
         tox_env_factor="${{ env.TOX_ENV_FACTOR }}"
         pip install tox clang-format
-        tox -r -e py${pyversion_no_dot}-${tox_env_factor}
+        tox -r -e gt4py-py${pyversion_no_dot}-${tox_env_factor}
 
     - name: Upload to codecov.io
       uses: codecov/codecov-action@v2
@@ -51,7 +51,7 @@ jobs:
   eve:
     runs-on: ubuntu-latest
     env:
-      PY_VERSION: "3.9"
+      PY_VERSION: "3.10"
     steps:
     - uses: actions/checkout@v2
 

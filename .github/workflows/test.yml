@@ -39,7 +39,7 @@ jobs:
         pyversion_no_dot="${pyversion_no_dot/./}"
         tox_env_factor="${{ matrix.tox-env-factors }}"
         pip install tox clang-format
-        tox -r -e py${pyversion_no_dot}-${tox_env_factor}
+        tox -r -e gt4py-py${pyversion_no_dot}-${tox_env_factor}
     - name: Archive code coverage results
       uses: actions/upload-artifact@v2
       with:
@@ -49,8 +49,9 @@ jobs:
   eve:
     strategy:
       matrix:
-        python-version: ["3.8", "3.9"]
+        python-version: ["3.8", "3.9", "3.10"]
         os: ["ubuntu-latest", "macos-latest"]
+      fail-fast: false
 
     runs-on: ${{ matrix.os }}
     steps:
