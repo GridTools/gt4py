@@ -40,8 +40,3 @@ jobs:
         tox_env_factor="${{ matrix.tox-env-factors }}"
         pip install tox clang-format
         tox -r -e gt4py-py${pyversion_no_dot}-${tox_env_factor}
-    - name: Archive code coverage results
-      uses: actions/upload-artifact@v2
-      with:
-        name: code-coverage-report
-        path: tests/_reports/
