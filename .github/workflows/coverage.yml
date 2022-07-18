@@ -9,7 +9,7 @@ on:
     - functional
 
 jobs:
-  coverage:
+  gt4py:
     runs-on: ubuntu-latest
     env:
       PY_VERSION: "3.10"
@@ -40,6 +40,36 @@ jobs:
         tox_env_factor="${{ env.TOX_ENV_FACTOR }}"
         pip install tox clang-format
         tox -r -e py${pyversion_no_dot}-${tox_env_factor}
+
+    - name: Upload to codecov.io
+      uses: codecov/codecov-action@v2
+      with:
+        files: coverage.xml
+        name: gt4py-functional
+        fail_ci_if_error: false
+
+  eve:
+    runs-on: ubuntu-latest
+    env:
+      PY_VERSION: "3.9"
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Set up Python ${{ env.PY_VERSION }}
+      uses: actions/setup-python@v2
+      with:
+        python-version: ${{ env.PY_VERSION }}
+
+    - name: Install python dependencies
+      run: |
+        python -m pip install --upgrade pip setuptools wheel
+
+    - name: Gather coverage
+      run: |
+        pyversion_no_dot="${{ env.PY_VERSION }}"
+        pyversion_no_dot="${pyversion_no_dot/./}"
+        pip install tox
+        tox -r -e eve-py${pyversion_no_dot}
 
     - name: Upload to codecov.io
       uses: codecov/codecov-action@v2
