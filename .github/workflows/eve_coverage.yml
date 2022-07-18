@@ -4,9 +4,21 @@ on:
   push:
     branches:
     - functional
+    paths:
+    - "**"
+    - "!src/**"
+    - "!tests/**"
+    - "src/eve"
+    - "tests/eve_tests"
   pull_request:
     branches:
     - functional
+    paths:
+    - "**"
+    - "!src/**"
+    - "!tests/**"
+    - "src/eve"
+    - "tests/eve_tests"
 
 jobs:
   collect:
