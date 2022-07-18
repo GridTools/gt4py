@@ -1,0 +1,49 @@
+name: Coverage
+
+on:
+  push:
+    branches:
+    - functional
+  pull_request:
+    branches:
+    - functional
+
+jobs:
+  coverage:
+    runs-on: ubuntu-latest
+    env:
+      PY_VERSION: "3.10"
+      TOX_ENV_FACTORS: "base"
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Install C++ libraries
+      shell: bash
+      run: |
+        brew install boost
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v2
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Install python dependencies
+      shell: bash
+      run: |
+        python -m pip install --upgrade pip setuptools wheel
+
+    - name: Gather coverage
+      shell: bash
+      run: |
+        pyversion_no_dot="${{ matrix.python-version }}"
+        pyversion_no_dot="${pyversion_no_dot/./}"
+        tox_env_factor="${{ matrix.tox-env-factors }}"
+        pip install tox clang-format
+        tox -r -e py${pyversion_no_dot}-${tox_env_factor}
+
+    - name: Upload to codecov.io
+      uses: codecov/codecov-action@v2
+      with:
+        files: coverage.xml
+        name: gt4py-functional
+        fail_ci_if_error: false
