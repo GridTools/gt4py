@@ -35,7 +35,7 @@ jobs:
     - name: Gather coverage
       shell: bash
       run: |
-        pyversion_no_dot="${{ matrix.python-version }}"
+        pyversion_no_dot="${{ PY_VERSION }}"
         pyversion_no_dot="${pyversion_no_dot/./}"
         tox_env_factor="${{ matrix.tox-env-factors }}"
         pip install tox clang-format
