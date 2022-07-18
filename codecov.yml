@@ -7,12 +7,19 @@ coverage:
   range: "85...100"
   status:
     project:
-      default:
+      default: false
+      gt4py:
         target: 85%
         threshold: 100%
-        if_ci_failed: success
         paths:
-        - "src"
+        - "src/functional"
+        if_ci_failed: success
+      eve:
+        target: 85%
+        threshold: 100%
+        paths:
+        - "src/eve"
+        if_ci_failed: success
 
 parsers:
   gcov:
