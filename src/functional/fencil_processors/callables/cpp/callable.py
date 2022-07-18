@@ -25,9 +25,7 @@ from . import bindings, build
 def create_callable(
     source_module: defs.SourceCodeModule, cache_strategy=CacheStrategy.SESSION
 ) -> Callable:
-    cache_folder = get_cache_folder(
-        source_module.entry_point.name, source_module.source_code, cache_strategy
-    )
+    cache_folder = get_cache_folder(source_module, cache_strategy)
     module_file = build.CMakeProject.get_binary(cache_folder, source_module.entry_point.name)
     try:
         return import_callables(module_file)[source_module.entry_point.name]
