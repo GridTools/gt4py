@@ -11,6 +11,7 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
+"""Caching for compiled backend artifacts."""
 
 
 import enum
@@ -68,6 +69,7 @@ def _cache_folder_name(module: source_modules.SourceModule) -> str:
 
 
 def get_cache_folder(module: source_modules.SourceModule, strategy: Strategy) -> pathlib.Path:
+    """Construct the path to where the build system project artifact of a source module should be cached."""
     folder_name = _cache_folder_name(module)
 
     match strategy:
