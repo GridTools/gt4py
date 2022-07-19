@@ -23,7 +23,7 @@ import numpy
 from functional.fencil_processors import source_modules
 
 
-language_id = "cpp"
+LANGUAGE_ID: Final = "cpp"
 
 
 def render_python_type(python_type: Type) -> str:

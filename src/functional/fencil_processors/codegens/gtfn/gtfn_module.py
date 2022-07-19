@@ -51,6 +51,6 @@ def create_source_module(
             source_modules.LibraryDependency("gridtools", "master"),
         ],
         source_code=source_code,
-        language=cpp.language_id,
+        language=cpp.LANGUAGE_ID,
     )
     return module

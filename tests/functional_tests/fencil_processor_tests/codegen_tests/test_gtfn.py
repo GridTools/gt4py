@@ -69,4 +69,4 @@ def test_codegen(fencil_example):
     module = gtfn_module.create_source_module(itir, parameters, offset_provider={})
     assert module.entry_point.name == itir.id
     assert any(d.name == "gridtools" for d in module.library_deps)
-    assert module.language == cpp.language_id
+    assert module.language == cpp.LANGUAGE_ID
