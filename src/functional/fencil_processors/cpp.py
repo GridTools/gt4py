@@ -106,5 +106,4 @@ def render_function_declaration(function: defs.Function, body: str) -> str:
 
 
 def render_function_call(function: defs.Function, args: Sequence[str]) -> str:
-    call_templ = jinja2.Template("""{{name}}({{", ".join(args)}})""")
-    return call_templ.render(name=function.name, args=args)
+    return f"{function.name}({', '.join(args)})"
