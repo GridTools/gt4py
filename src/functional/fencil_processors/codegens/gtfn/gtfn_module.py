@@ -16,17 +16,18 @@
 from typing import Sequence
 
 from eve.codegen import format_source
-from functional.fencil_processors import cpp, defs
+from functional.fencil_processors import source_modules
 from functional.fencil_processors.codegens.gtfn import gtfn_backend
+from functional.fencil_processors.source_modules import cpp_gen as cpp
 from functional.iterator.ir import FencilDefinition
 
 
 def create_source_module(
     itir: FencilDefinition,
-    parameters: Sequence[defs.ScalarParameter | defs.BufferParameter],
+    parameters: Sequence[source_modules.ScalarParameter | source_modules.BufferParameter],
     **kwargs,
-) -> defs.SourceCodeModule:
-    function = defs.Function(itir.id, parameters)
+) -> source_modules.SourceModule:
+    function = source_modules.Function(itir.id, parameters)
 
     rendered_params = ", ".join(["gridtools::fn::backend::naive{}", *[p.name for p in parameters]])
     decl_body = f"return generated::{function.name}(nullptr)({rendered_params});"
@@ -44,10 +45,10 @@ def create_source_module(
         style="LLVM",
     )
 
-    module = defs.SourceCodeModule(
+    module = source_modules.SourceModule(
         entry_point=function,
         library_deps=[
-            defs.LibraryDependency("gridtools", "master"),
+            source_modules.LibraryDependency("gridtools", "master"),
         ],
         source_code=source_code,
         language=cpp.language_id,

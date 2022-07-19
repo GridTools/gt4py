@@ -18,7 +18,7 @@ import tempfile
 
 import pytest
 
-from functional.fencil_processors.callables.cpp import build
+from functional.fencil_processors.builders.cpp import build
 
 
 @pytest.fixture

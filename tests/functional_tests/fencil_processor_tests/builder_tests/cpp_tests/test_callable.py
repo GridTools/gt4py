@@ -20,17 +20,18 @@ import jinja2
 import numpy as np
 import pytest
 
-from functional.fencil_processors import cpp, defs
-from functional.fencil_processors.callables.cpp import callable
+from functional.fencil_processors import source_modules
+from functional.fencil_processors.builders.cpp import callable
+from functional.fencil_processors.source_modules import cpp_gen as cpp
 
 
 @pytest.fixture
-def source_module():
-    entry_point = defs.Function(
+def source_module_example():
+    entry_point = source_modules.Function(
         "stencil",
         parameters=[
-            defs.BufferParameter("buf", ["I", "J"], ctypes.c_float),
-            defs.ScalarParameter("sc", ctypes.c_float),
+            source_modules.BufferParameter("buf", ["I", "J"], ctypes.c_float),
+            source_modules.ScalarParameter("sc", ctypes.c_float),
         ],
     )
     func = cpp.render_function_declaration(
@@ -53,18 +54,18 @@ def source_module():
     """
     ).render(func=func)
 
-    return defs.SourceCodeModule(
+    return source_modules.SourceModule(
         entry_point=entry_point,
         source_code=src,
         library_deps=[
-            defs.LibraryDependency("gridtools", "master"),
+            source_modules.LibraryDependency("gridtools", "master"),
         ],
         language=cpp.language_id,
     )
 
 
-def test_callable(source_module):
-    wrapper = callable.create_callable(source_module)
+def test_callable(source_module_example):
+    wrapper = callable.create_callable(source_module_example)
     buf = np.zeros(shape=(6, 5), dtype=np.float32)
     sc = np.float32(3.1415926)
     res = wrapper(buf, sc)

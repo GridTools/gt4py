@@ -15,9 +15,9 @@
 
 import pytest
 
-import functional.fencil_processors.cpp as cpp
-import functional.fencil_processors.defs as defs
+import functional.fencil_processors.source_modules.cpp_gen as cpp
 from eve.codegen import format_source
+from functional.fencil_processors import source_modules
 
 
 def test_render_types():
@@ -27,9 +27,12 @@ def test_render_types():
 
 @pytest.fixture
 def function_scalar_example():
-    return defs.Function(
+    return source_modules.Function(
         name="example",
-        parameters=[defs.ScalarParameter("a", float), defs.ScalarParameter("b", int)],
+        parameters=[
+            source_modules.ScalarParameter("a", float),
+            source_modules.ScalarParameter("b", int),
+        ],
     )
 
 
@@ -61,9 +64,12 @@ def test_render_function_call_scalar(function_scalar_example):
 
 @pytest.fixture
 def function_buffer_example():
-    return defs.Function(
+    return source_modules.Function(
         name="example",
-        parameters=[defs.BufferParameter("a_buf", 2, float), defs.BufferParameter("b_buf", 1, int)],
+        parameters=[
+            source_modules.BufferParameter("a_buf", 2, float),
+            source_modules.BufferParameter("b_buf", 1, int),
+        ],
     )
 
 

@@ -17,7 +17,7 @@ import pathlib
 import tempfile
 import textwrap
 
-from functional.fencil_processors.callables import importer
+from functional.fencil_processors.builders import importer
 
 
 def test_import_callables():

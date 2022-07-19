@@ -20,7 +20,7 @@ from typing import Final, Sequence, Type
 import jinja2
 import numpy
 
-from functional.fencil_processors import defs
+from functional.fencil_processors import source_modules
 
 
 language_id = "cpp"
@@ -71,15 +71,17 @@ def render_python_type(python_type: Type):
     return mapping[python_type]
 
 
-def _render_function_param(param: defs.ScalarParameter | defs.BufferParameter, index: int):
-    if isinstance(param, defs.ScalarParameter):
+def _render_function_param(
+    param: source_modules.ScalarParameter | source_modules.BufferParameter, index: int
+):
+    if isinstance(param, source_modules.ScalarParameter):
         return "{type} {name}".format(type=render_python_type(param.scalar_type), name=param.name)
     else:
         template_type = "BufferT{index}&&".format(index=index)
         return "{type} {name}".format(type=template_type, name=param.name)
 
 
-def render_function_declaration(function: defs.Function, body: str) -> str:
+def render_function_declaration(function: source_modules.Function, body: str) -> str:
     decl_templ = jinja2.Template(
         textwrap.dedent(
             """\
@@ -96,7 +98,7 @@ def render_function_declaration(function: defs.Function, body: str) -> str:
     template_params = [
         "class BufferT{index}".format(index=index)
         for index, param in enumerate(function.parameters)
-        if isinstance(param, defs.BufferParameter)
+        if isinstance(param, source_modules.BufferParameter)
     ]
     if template_params:
         render_tpl = jinja2.Template("""template <{{", ".join(template_params)}}>""")
@@ -105,5 +107,5 @@ def render_function_declaration(function: defs.Function, body: str) -> str:
     return rendered_decl
 
 
-def render_function_call(function: defs.Function, args: Sequence[str]) -> str:
+def render_function_call(function: source_modules.Function, args: Sequence[str]) -> str:
     return f"{function.name}({', '.join(args)})"

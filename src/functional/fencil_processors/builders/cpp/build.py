@@ -21,7 +21,7 @@ from typing import Dict, Final, Optional, Sequence
 
 from eve import Node
 from eve.codegen import JinjaTemplate, TemplatedGenerator
-from functional.fencil_processors import defs
+from functional.fencil_processors import source_modules
 
 
 _build_subdir: Final = "build"
@@ -116,7 +116,9 @@ class CMakeListsGenerator(TemplatedGenerator):
 
 
 def _render_cmakelists(
-    project_name: str, dependencies: Sequence[defs.LibraryDependency], source_names: Sequence[str]
+    project_name: str,
+    dependencies: Sequence[source_modules.LibraryDependency],
+    source_names: Sequence[str],
 ) -> str:
     cmakelists_file = CMakeListsFile(
         project_name=project_name,
@@ -140,7 +142,10 @@ class CMakeProject:
     sources: Dict[str, str]
 
     def __init__(
-        self, name: str, dependencies: Sequence[defs.LibraryDependency], sources: Dict[str, str]
+        self,
+        name: str,
+        dependencies: Sequence[source_modules.LibraryDependency],
+        sources: Dict[str, str],
     ):
         self.name = name
         self.extension = _get_python_module_suffix()

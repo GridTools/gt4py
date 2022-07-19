@@ -15,15 +15,15 @@
 
 from typing import Callable
 
-from functional.fencil_processors import defs as defs
-from functional.fencil_processors.callables.cache import Strategy as CacheStrategy, get_cache_folder
-from functional.fencil_processors.callables.importer import import_callables
+from functional.fencil_processors.builders.cache import Strategy as CacheStrategy, get_cache_folder
+from functional.fencil_processors.builders.importer import import_callables
 
+from ...source_modules import source_modules as defs
 from . import bindings, build
 
 
 def create_callable(
-    source_module: defs.SourceCodeModule, cache_strategy=CacheStrategy.SESSION
+    source_module: defs.SourceModule, cache_strategy=CacheStrategy.SESSION
 ) -> Callable:
     cache_folder = get_cache_folder(source_module, cache_strategy)
     module_file = build.CMakeProject.get_binary(cache_folder, source_module.entry_point.name)

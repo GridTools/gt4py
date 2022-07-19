@@ -18,8 +18,8 @@ from typing import Any, Sequence, Type, TypeVar
 import jinja2
 
 import eve.codegen
-import functional.fencil_processors.cpp as cpp
-import functional.fencil_processors.defs as defs
+import functional.fencil_processors.source_modules.cpp_gen as cpp
+import functional.fencil_processors.source_modules.source_modules as defs
 from eve import Node
 from eve.codegen import JinjaTemplate, TemplatedGenerator
 
@@ -170,7 +170,7 @@ def make_argument(index: int, param: defs.ScalarParameter | defs.BufferParameter
         )
 
 
-def create_bindings(target: defs.Function, target_header: str) -> defs.BindingCodeModule:
+def create_bindings(target: defs.Function, target_header: str) -> defs.BindingModule:
     wrapper_name = target.name + "_wrapper"
 
     file_binding = BindingFile(
@@ -207,4 +207,4 @@ def create_bindings(target: defs.Function, target_header: str) -> defs.BindingCo
     )
 
     src = eve.codegen.format_source("cpp", BindingCodeGenerator.apply(file_binding), style="LLVM")
-    return defs.BindingCodeModule(src, [defs.LibraryDependency("pybind11", "2.9.2")])
+    return defs.BindingModule(src, [defs.LibraryDependency("pybind11", "2.9.2")])

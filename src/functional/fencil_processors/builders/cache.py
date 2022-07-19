@@ -18,7 +18,7 @@ import hashlib
 import pathlib
 import tempfile
 
-from functional.fencil_processors import defs
+from functional.fencil_processors import source_modules
 
 
 class Strategy(enum.Enum):
@@ -34,19 +34,21 @@ _persistent_cache_dir_path = (
 )
 
 
-def _serialize_param(parameter: defs.ScalarParameter | defs.BufferParameter) -> str:
-    if isinstance(parameter, defs.ScalarParameter):
+def _serialize_param(
+    parameter: source_modules.ScalarParameter | source_modules.BufferParameter,
+) -> str:
+    if isinstance(parameter, source_modules.ScalarParameter):
         return f"{parameter.name}: {str(parameter.scalar_type)}"
-    elif isinstance(parameter, defs.BufferParameter):
+    elif isinstance(parameter, source_modules.BufferParameter):
         return f"{parameter.name}: {str(parameter.scalar_type)}<{', '.join(parameter.dimensions)}>"
     raise ValueError("Invalid parameter type. This is a bug.")
 
 
-def _serialize_library_dependency(dependency: defs.LibraryDependency) -> str:
+def _serialize_library_dependency(dependency: source_modules.LibraryDependency) -> str:
     return f"{dependency.name}/{dependency.version}"
 
 
-def _serialize_module(module: defs.SourceCodeModule) -> str:
+def _serialize_module(module: source_modules.SourceModule) -> str:
     parameters = [_serialize_param(param) for param in module.entry_point.parameters]
     dependencies = [_serialize_library_dependency(dep) for dep in module.library_deps]
     return f"""\
@@ -58,14 +60,14 @@ def _serialize_module(module: defs.SourceCodeModule) -> str:
     """
 
 
-def _cache_folder_name(module: defs.SourceCodeModule) -> str:
+def _cache_folder_name(module: source_modules.SourceModule) -> str:
     serialized = _serialize_module(module)
     fingerprint = hashlib.sha256(serialized.encode(encoding="utf-8"))
     fingerprint_hex_str = fingerprint.hexdigest()
     return module.entry_point.name + "_" + fingerprint_hex_str
 
 
-def get_cache_folder(module: defs.SourceCodeModule, strategy: Strategy) -> pathlib.Path:
+def get_cache_folder(module: source_modules.SourceModule, strategy: Strategy) -> pathlib.Path:
     folder_name = _cache_folder_name(module)
 
     match strategy:

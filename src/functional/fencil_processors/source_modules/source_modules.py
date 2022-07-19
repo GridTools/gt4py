@@ -43,7 +43,7 @@ class LibraryDependency:
 
 
 @dataclass
-class SourceCodeModule:
+class SourceModule:
     entry_point: Function
     source_code: str
     library_deps: Sequence[LibraryDependency]
@@ -51,6 +51,6 @@ class SourceCodeModule:
 
 
 @dataclass
-class BindingCodeModule:
+class BindingModule:
     source_code: str
     library_deps: Sequence[LibraryDependency]

@@ -17,8 +17,9 @@ import ctypes
 
 import pytest
 
-from functional.fencil_processors import cpp, defs
+from functional.fencil_processors import source_modules
 from functional.fencil_processors.codegens.gtfn import gtfn_module
+from functional.fencil_processors.source_modules import cpp_gen as cpp
 from functional.iterator import ir
 
 
@@ -57,8 +58,8 @@ def fencil_example():
         ],
     )
     params = [
-        defs.BufferParameter("buf", 1, ctypes.c_float),
-        defs.ScalarParameter("sc", ctypes.c_float),
+        source_modules.BufferParameter("buf", 1, ctypes.c_float),
+        source_modules.ScalarParameter("sc", ctypes.c_float),
     ]
     return itir, params
 

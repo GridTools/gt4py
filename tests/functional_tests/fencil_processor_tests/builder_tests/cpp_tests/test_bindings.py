@@ -18,8 +18,8 @@ import ctypes
 import pytest
 
 from eve.codegen import format_source
-from functional.fencil_processors import defs
-from functional.fencil_processors.callables.cpp import bindings
+from functional.fencil_processors.builders.cpp import bindings
+from functional.fencil_processors.source_modules import source_modules
 
 
 @pytest.fixture
