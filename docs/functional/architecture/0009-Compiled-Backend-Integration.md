@@ -18,7 +18,7 @@ The process of executing ITIR this way consists of the following steps:
 4. Load the dynamic library into Python and extract the interfaces as Python objects 
 5. Call the interfaces from Python with the fencil's arguments
 
-Step 1 is the core responsibility of a compiled backend. For Step 2 and 3, the `fencil_processors.source_modules` subpackage provides utilities and data structures which should simplify implementation and guide design, without restricting the backend implementer (they are opt-in). Steps 4 and 5 should rely on `fencil_processors.builders` with little code required on the backend side. For backends where additional functionality is required, it is expected that the missing functionality be implemented inside those subpackages.
+Step 1 is the core responsibility of a compiled backend. For Interoperability between steps, the `fencil_processors.source_modules` subpackage provides utilities and data structures which should simplify implementation and guide design, without restricting the backend implementer (they are opt-in). Steps 2-4 should rely on `fencil_processors.builders` with little code required on the backend side. For backends where additional functionality is required, it is expected that the missing functionality be implemented inside those subpackages. Step 5 should typically simply relay the fencil arguments to the result of step 4 without additional code required.
 
 The desired pipeline architecture for these steps is made easy to achieve by the provided library, on a per-backend level. The clear separation of the steps is not yet enforced, however, and neither is it completely implemented for the `gtfn` backend yet.
 
@@ -73,7 +73,7 @@ The main goal of this project is to implement the complete pipeline from FieldVi
 
 ### Desired Architecture
 
-As stated above, the architectural goal that each step of the compilation process with a potentially useful output should stand alone and be accessible through a unified interface is not quite reached yet.
+As stated above, the architectural goal that each step of the compilation process with a potentially useful output should stand alone and be accessible through a unified interface is not quite reached yet. These useful outputs are generated code, a build system project with generated code and (optionally) python bindings code, a python extension module containing the callable fencil (or the callable fencil from it).
 
 The `FencilExecutor` provided by `gtfn` should be refactored to run the necessary steps in a declarative way, so no other logic (which should really be in one of the steps) can be introduced.
 
