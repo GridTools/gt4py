@@ -26,7 +26,7 @@ from functional.fencil_processors import source_modules
 language_id = "cpp"
 
 
-def render_python_type(python_type: Type):
+def render_python_type(python_type: Type) -> str:
     mapping: Final = {
         bool: "bool",
         int: "long",
@@ -73,7 +73,7 @@ def render_python_type(python_type: Type):
 
 def _render_function_param(
     param: source_modules.ScalarParameter | source_modules.BufferParameter, index: int
-):
+) -> str:
     if isinstance(param, source_modules.ScalarParameter):
         return "{type} {name}".format(type=render_python_type(param.scalar_type), name=param.name)
     else:
