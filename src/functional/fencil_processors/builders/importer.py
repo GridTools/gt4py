@@ -12,7 +12,6 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-
 import importlib
 import importlib.util
 import inspect
@@ -21,6 +20,7 @@ from typing import Callable, Dict
 
 
 def import_callables(module_file: pathlib.Path) -> Dict[str, Callable]:
+    """Import all function objects from a python module and return a mapping {name: object}."""
     module_name = module_file.name.split(".")[0]
 
     error_msg = f"Could not load module named {module_name} from {module_file}"
