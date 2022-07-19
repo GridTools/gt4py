@@ -27,6 +27,7 @@ def create_source_module(
     parameters: Sequence[source_modules.ScalarParameter | source_modules.BufferParameter],
     **kwargs,
 ) -> source_modules.SourceModule:
+    """Generate GTFN C++ code from the ITIR definition."""
     function = source_modules.Function(itir.id, parameters)
 
     rendered_params = ", ".join(["gridtools::fn::backend::naive{}", *[p.name for p in parameters]])

@@ -171,6 +171,13 @@ def make_argument(index: int, param: defs.ScalarParameter | defs.BufferParameter
 
 
 def create_bindings(target: defs.Function, target_header: str) -> defs.BindingModule:
+    """
+    Generate Python bindings through which a C++ function can be called.
+
+        Parameters:
+            target: The signature of the C++ function
+            target_header: The name of the C++ (header) file in which the function resides; used for includes
+    """
     wrapper_name = target.name + "_wrapper"
 
     file_binding = BindingFile(

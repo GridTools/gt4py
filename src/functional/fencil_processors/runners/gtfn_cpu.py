@@ -52,6 +52,7 @@ def convert_args(*args) -> Sequence[Any]:
 
 @fencil_executor
 def run_gtfn(itir: ir.FencilDefinition, *args, **kwargs):
+    """Execute the iterator IR fencil with the provided arguments."""
     parameters = get_arg_types(*args)
     for fparam, iparam in zip(parameters, itir.params):
         fparam.name = iparam.id

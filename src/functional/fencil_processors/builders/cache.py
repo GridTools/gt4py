@@ -69,7 +69,11 @@ def _cache_folder_name(module: source_modules.SourceModule) -> str:
 
 
 def get_cache_folder(module: source_modules.SourceModule, strategy: Strategy) -> pathlib.Path:
-    """Construct the path to where the build system project artifact of a source module should be cached."""
+    """
+    Construct the path to where the build system project artifact of a source module should be cached.
+
+    The returned path points to an existing folder in all cases.
+    """
     folder_name = _cache_folder_name(module)
 
     match strategy:

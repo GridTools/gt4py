@@ -11,6 +11,7 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
+"""Structures that provide a unified interface for connecting source code generators and builders."""
 
 
 from dataclasses import dataclass
