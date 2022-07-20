@@ -20,7 +20,7 @@ import textwrap
 from typing import Dict, Final, Optional, Sequence
 
 from eve import Node
-from eve.codegen import JinjaTemplate, TemplatedGenerator
+from eve.codegen import JinjaTemplate as as_jinja, TemplatedGenerator
 from functional.fencil_processors import source_modules
 
 
@@ -46,7 +46,7 @@ class CMakeListsFile(Node):
 
 
 class CMakeListsGenerator(TemplatedGenerator):
-    CMakeListsFile = JinjaTemplate(
+    CMakeListsFile = as_jinja(
         """
         project({{project_name}})
         cmake_minimum_required(VERSION 3.20.0)
