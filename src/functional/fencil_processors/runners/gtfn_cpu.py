@@ -28,7 +28,7 @@ def get_arg_types(
     *args,
 ) -> Sequence[source_modules.ScalarParameter | source_modules.BufferParameter]:
     def get_arg_type(arg):
-        view = numpy.array(arg)
+        view = numpy.asarray(arg)
         if view.ndim > 0:
             return source_modules.BufferParameter(
                 "", [dim.value for dim in arg.axes], view.dtype.type
