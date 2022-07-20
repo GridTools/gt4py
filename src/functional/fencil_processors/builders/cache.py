@@ -30,9 +30,7 @@ class Strategy(enum.Enum):
 _session_cache_dir = tempfile.TemporaryDirectory(prefix="gt4py_session_")
 
 _session_cache_dir_path = pathlib.Path(_session_cache_dir.name)
-_persistent_cache_dir_path = (
-    pathlib.Path(tempfile.tempdir) / "gt4py_cache" if tempfile.tempdir else _session_cache_dir_path
-)
+_persistent_cache_dir_path = pathlib.Path(tempfile.gettempdir()) / "gt4py_cache"
 
 
 def _serialize_param(
