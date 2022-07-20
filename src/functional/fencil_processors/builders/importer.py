@@ -20,7 +20,7 @@ from types import ModuleType
 
 def import_from_path(module_file: pathlib.Path) -> ModuleType:
     """Import all function objects from a Python module and return a mapping {function_name: object}."""
-    module_name = module_file.stem
+    module_name = module_file.name.split(".")[0]
 
     error_msg = f"Could not load module named {module_name} from {module_file}"
     spec = importlib.util.spec_from_file_location(module_name, module_file)
