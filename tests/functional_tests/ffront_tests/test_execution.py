@@ -616,28 +616,6 @@ def test_conditional_shifted():
     assert np.allclose(np.where(mask, a, b)[1:], out.array()[:-1])
 
 
-def test_tuple_return():
-    size = 10
-    a = np_as_located_field(IDim)(np.ones((size,)))
-    b = np_as_located_field(IDim)(2 * np.ones((size,)))
-    out = np_as_located_field(IDim)(np.zeros((size,)))
-
-    @field_operator
-    def foo(
-        a: Field[[IDim], float64], b: Field[[IDim], float64]
-    ) -> tuple[Field[[IDim], float64], Field[[IDim], float64]]:
-        return a, b
-
-    @field_operator
-    def combine(a: Field[[IDim], float64], b: Field[[IDim], float64]) -> Field[[IDim], float64]:
-        something = foo(a, b)
-        return something[0] + something[1]
-
-    combine(a, b, out=out, offset_provider={})
-
-    assert np.allclose(a.array() + b.array(), out)
-
-
 def test_nested_tuple_return():
     size = 10
     a = np_as_located_field(IDim)(np.ones((size,)))
