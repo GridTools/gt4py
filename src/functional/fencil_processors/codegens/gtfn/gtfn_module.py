@@ -30,7 +30,7 @@ def create_source_module(
     """Generate GTFN C++ code from the ITIR definition."""
     function = source_modules.Function(itir.id, parameters)
 
-    rendered_params = ", ".join(["gridtools::fn::backend::naive{}", *[p.name for p in parameters]])
+    rendered_params = ", ".join(["gridtools::fn::backend::naive{}", *(p.name for p in parameters)])
     decl_body = f"return generated::{function.name}(nullptr)({rendered_params});"
     decl_src = cpp.render_function_declaration(function, body=decl_body)
     stencil_src = gtfn_backend.generate(
