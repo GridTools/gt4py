@@ -25,7 +25,7 @@ from . import bindings, build
 def create_callable(
     source_module: defs.SourceModule, cache_strategy=CacheStrategy.SESSION
 ) -> Callable:
-    """Build the source module and returns its entry point as a Python function object."""
+    """Build the source module and return its entry point as a Python function object."""
     cache_folder = get_cache_folder(source_module, cache_strategy)
     module_file = build.CMakeProject.get_binary(cache_folder, source_module.entry_point.name)
     try:
