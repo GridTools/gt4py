@@ -638,6 +638,56 @@ def test_tuple_return():
     assert np.allclose(a.array() + b.array(), out)
 
 
+def test_nested_tuple_return():
+    size = 10
+    a = np_as_located_field(IDim)(np.ones((size,)))
+    b = np_as_located_field(IDim)(2 * np.ones((size,)))
+    out = np_as_located_field(IDim)(np.zeros((size,)))
+
+    @field_operator
+    def foo(
+        a: Field[[IDim], float64], b: Field[[IDim], float64]
+    ) -> tuple[Field[[IDim], float64], tuple[Field[[IDim], float64], Field[[IDim], float64]]]:
+        return (a, (a, b))
+
+    @field_operator
+    def combine(a: Field[[IDim], float64], b: Field[[IDim], float64]) -> Field[[IDim], float64]:
+        something = foo(a, b)
+        return something[0] + something[1][0] + something[1][1]
+
+    combine(a, b, out=out, offset_provider={})
+
+    assert np.allclose(2 * a.array() + b.array(), out)
+
+
+def test_tuple_return_2(reduction_setup):
+    rs = reduction_setup
+    Edge = rs.Edge
+    Vertex = rs.Vertex
+    V2EDim = rs.V2EDim
+    V2E = rs.V2E
+
+    @field_operator
+    def reduction_tuple(
+        a: Field[[Edge], float], b: Field[[Edge], float]  # , c: float
+    ) -> tuple[Field[[Vertex], float], Field[[Vertex], float], float]:
+        a = neighbor_sum(a(V2E), axis=V2EDim)
+        b = neighbor_sum(b(V2E), axis=V2EDim)
+        return a, b
+
+    @field_operator
+    def fencil_tuple(
+        a: Field[[Edge], float], b: Field[[Edge], float]  # , c: float
+    ) -> Field[[Vertex], float]:
+        tp_red = reduction_tuple(a, b)
+        return tp_red[0] + tp_red[1]
+
+    fencil_tuple(rs.inp, rs.inp, out=rs.out, offset_provider=rs.offset_provider)
+
+    ref = np.sum(rs.v2e_table, axis=1) * 2
+    assert np.allclose(ref, rs.out)
+
+
 @pytest.mark.xfail(raises=NotImplementedError)
 def test_tuple_with_local_field_in_reduction_shifted(reduction_setup):
     rs = reduction_setup
@@ -676,32 +726,3 @@ def test_tuple_with_local_field_in_reduction_shifted(reduction_setup):
     expected = red[rs.v2e_table][:, 0]
 
     assert np.allclose(expected, out)
-
-
-def test_tuple_return_2(reduction_setup):
-    rs = reduction_setup
-    Edge = rs.Edge
-    Vertex = rs.Vertex
-    V2EDim = rs.V2EDim
-    V2E = rs.V2E
-
-    @field_operator
-    def reduction_tuple(
-        a: Field[[Edge], float], b: Field[[Edge], float]  # , c: float
-    ) -> tuple[Field[[Vertex], float], Field[[Vertex], float], float]:
-        a = neighbor_sum(a(V2E), axis=V2EDim)
-        b = neighbor_sum(b(V2E), axis=V2EDim)
-        # c = c * 1.0
-        return a, b  # , c
-
-    @field_operator
-    def fencil_tuple(
-        a: Field[[Edge], float], b: Field[[Edge], float]  # , c: float
-    ) -> Field[[Vertex], float]:
-        tp_red = reduction_tuple(a, b)
-        return tp_red[0] + tp_red[1]  # * c
-
-    fencil_tuple(rs.inp, rs.inp, out=rs.out, offset_provider=rs.offset_provider)
-
-    ref = np.sum(rs.v2e_table, axis=1) * 2
-    assert np.allclose(ref, rs.out)

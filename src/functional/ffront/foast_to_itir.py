@@ -209,7 +209,9 @@ class FieldOperatorLowering(NodeTranslator):
             .if_isinstance(foast.Name)
             .filter(is_expr_with_iterator_type_kind(IteratorTypeKind.ENCAPSULATED_ITERATOR))
         ):
-            raise NotImplementedError()
+            raise NotImplementedError(
+                "Using a composite type containing a local field is not supported."
+            )
         param_names = (
             node.pre_walk_values()
             .if_isinstance(foast.Name)
