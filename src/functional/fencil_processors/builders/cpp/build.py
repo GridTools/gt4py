@@ -138,11 +138,11 @@ def _get_python_module_suffix():
 class CMakeProject:
     """Work with CMake projects on the file system."""
 
-    folder: Optional[pathlib.Path] = None
-    name: str
-    extension: str
-    cmakelists: str
-    sources: Dict[str, str]
+    _folder: Optional[pathlib.Path] = None
+    _name: str
+    _extension: str
+    _cmakelists: str
+    _sources: Dict[str, str]
 
     def __init__(
         self,
@@ -150,43 +150,46 @@ class CMakeProject:
         dependencies: Sequence[source_modules.LibraryDependency],
         sources: Dict[str, str],
     ):
-        self.name = name
-        self.extension = _get_python_module_suffix()
-        self.cmakelists = _render_cmakelists(name, dependencies, list(sources.keys()))
-        self.sources = sources
+        self._name = name
+        self._extension = _get_python_module_suffix()
+        self._cmakelists = _render_cmakelists(name, dependencies, list(sources.keys()))
+        self._sources = sources
 
-    @staticmethod
-    def get_binary(
-        root_folder: pathlib.Path, name: str, extension: str = _get_python_module_suffix()
-    ):
+    @classmethod
+    def get_binary_path(
+        cls, root_folder: pathlib.Path, name: str, extension: str = _get_python_module_suffix()
+    ) -> pathlib.Path:
         return root_folder / _BUILD_SUBDIR / "bin" / (name + "." + extension)
 
-    def get_current_binary(self) -> pathlib.Path:
-        if not self.folder:
-            raise RuntimeError("First you have to write the project to a folder.")
-
-        return self.__class__.get_binary(self.folder, self.name, self.extension)
+    @property
+    def current_binary(self) -> Optional[pathlib.Path]:
+        if not self._folder:
+            return None
+        path = self.get_binary_path(self._folder, self._name, self._extension)
+        if not path.exists():
+            return None
+        return path
 
     def write(self, folder: pathlib.Path):
-        (folder / "CMakeLists.txt").write_text(self.cmakelists, encoding="utf-8")
-        for file_name, file_content in self.sources.items():
+        (folder / "CMakeLists.txt").write_text(self._cmakelists, encoding="utf-8")
+        for file_name, file_content in self._sources.items():
             (folder / file_name).write_text(file_content, encoding="utf-8")
-        self.folder = folder
+        self._folder = folder
 
     def configure(self):
-        if not self.folder:
+        if not self._folder:
             raise RuntimeError("First you have to write the project to a folder.")
 
-        (self.folder / _BUILD_SUBDIR).mkdir(exist_ok=True)
+        (self._folder / _BUILD_SUBDIR).mkdir(exist_ok=True)
         result = subprocess.run(
             [
                 "cmake",
                 "-G",
                 "Ninja",
                 "-S",
-                self.folder,
+                self._folder,
                 "-B",
-                self.folder / _BUILD_SUBDIR,
+                self._folder / _BUILD_SUBDIR,
                 "-DCMAKE_BUILD_TYPE=Debug",
             ],
             stdout=subprocess.PIPE,
@@ -197,11 +200,11 @@ class CMakeProject:
             raise RuntimeError(error)
 
     def build(self):
-        if not self.folder:
+        if not self._folder:
             raise RuntimeError("First you have to write the project to a folder.")
 
         result = subprocess.run(
-            ["cmake", "--build", self.folder / _BUILD_SUBDIR],
+            ["cmake", "--build", self._folder / _BUILD_SUBDIR],
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
         )
