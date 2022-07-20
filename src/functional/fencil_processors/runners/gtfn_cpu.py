@@ -53,7 +53,15 @@ def convert_args(*args) -> Sequence[Any]:
 # TODO(ricoh): change style to declarative pipeline
 @fencil_executor
 def run_gtfn(itir: ir.FencilDefinition, *args, **kwargs):
-    """Execute the iterator IR fencil with the provided arguments."""
+    """
+    Execute the iterator IR fencil with the provided arguments.
+
+    The fencil is compiled to machine code with C++ as an intermediate step, so the first execution
+    is expected to have a significant overhead, while subsequent calls are very fast.
+    Only scalar and buffer arguments are supported currently.
+
+    See ``FencilExecutorFunction`` for details.
+    """
     parameters = get_arg_types(*args)
     for fparam, iparam in zip(parameters, itir.params):
         fparam.name = iparam.id
