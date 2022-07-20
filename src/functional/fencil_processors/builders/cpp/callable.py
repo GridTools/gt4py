@@ -22,6 +22,7 @@ from ...source_modules import source_modules as defs
 from . import bindings, build
 
 
+# TODO (ricoh): split into pipeline steps
 def create_callable(
     source_module: defs.SourceModule, *, cache_strategy=CacheStrategy.SESSION
 ) -> Callable:

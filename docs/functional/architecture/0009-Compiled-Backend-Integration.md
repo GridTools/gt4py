@@ -22,6 +22,8 @@ Step 1 is the core responsibility of a compiled backend. For Interoperability be
 
 The desired pipeline architecture for these steps is made easy to achieve by the provided library, on a per-backend level. The clear separation of the steps is not yet enforced, however, and neither is it completely implemented for the `gtfn` backend yet.
 
+For reference, steps 2-4 are currently encoded in `fencil_processors.builders.callable.create_callable`, while examples for step 1 and 5 can be found at `fencil_processors.codegens.gtfn.gtfn_backend.generate` and `fencil_processors.runners.gtfn.run_gtfn` (which also encompasses all the other steps).
+
 ## Python bindings for C++ code
 
 ### Alternatives

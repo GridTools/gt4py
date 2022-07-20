@@ -50,6 +50,7 @@ def convert_args(*args) -> Sequence[Any]:
     return [convert_arg(arg) for arg in args]
 
 
+# TODO(ricoh): change style to declarative pipeline
 @fencil_executor
 def run_gtfn(itir: ir.FencilDefinition, *args, **kwargs):
     """Execute the iterator IR fencil with the provided arguments."""
