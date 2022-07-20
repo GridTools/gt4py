@@ -14,9 +14,10 @@
 """C++ python bindings IR and generator."""
 
 
-from typing import Any, Sequence, Type, TypeVar
+from typing import Any, Sequence, TypeVar
 
 import jinja2
+import numpy
 
 import eve.codegen
 import functional.fencil_processors.source_modules.cpp_gen as cpp
@@ -43,7 +44,7 @@ class BindingModule(Node):
 class FunctionParameter(Node):
     name: str
     ndim: int
-    dtype: Type
+    dtype: numpy.dtype
 
 
 class DimExpr(Node):
@@ -53,7 +54,7 @@ class DimExpr(Node):
 class SidExpr(Node):
     buffer_name: str
     dimensions: Sequence[DimExpr]
-    scalar_type: Type
+    scalar_type: numpy.dtype
     dim_config: int
 
 
@@ -109,7 +110,7 @@ class BindingCodeGenerator(TemplatedGenerator):
         if param.ndim > 0:
             type_str = "pybind11::buffer"
         else:
-            type_str = cpp.render_python_type(param.dtype)
+            type_str = cpp.render_python_type(param.dtype.type)
         return type_str + " " + param.name
 
     ReturnStmt = as_jinja("""return {{expr}};""")
@@ -143,7 +144,7 @@ class BindingCodeGenerator(TemplatedGenerator):
         return template.render(
             buffer_name=sid.buffer_name,
             dimensions=[self.visit(dim) for dim in sid.dimensions],
-            scalar_type=cpp.render_python_type(sid.scalar_type),
+            scalar_type=cpp.render_python_type(sid.scalar_type.type),
             dim_config=sid.dim_config,
         )
 

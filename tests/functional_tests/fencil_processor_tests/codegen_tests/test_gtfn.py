@@ -13,8 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 
-import ctypes
-
+import numpy
 import pytest
 
 from functional.fencil_processors import source_modules
@@ -58,8 +57,8 @@ def fencil_example():
         ],
     )
     params = [
-        source_modules.BufferParameter("buf", 1, ctypes.c_float),
-        source_modules.ScalarParameter("sc", ctypes.c_float),
+        source_modules.BufferParameter("buf", ["I"], numpy.dtype(numpy.float32)),
+        source_modules.ScalarParameter("sc", numpy.dtype(numpy.float32)),
     ]
     return itir, params
 

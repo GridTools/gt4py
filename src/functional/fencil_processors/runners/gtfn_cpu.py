@@ -29,11 +29,9 @@ def get_param_description(
 ) -> source_modules.ScalarParameter | source_modules.BufferParameter:
     view = numpy.asarray(obj)
     if view.ndim > 0:
-        return source_modules.BufferParameter(
-            name, [dim.value for dim in obj.axes], view.dtype.type
-        )
+        return source_modules.BufferParameter(name, [dim.value for dim in obj.axes], view.dtype)
     else:
-        return source_modules.ScalarParameter(name, type(obj))
+        return source_modules.ScalarParameter(name, view.dtype)
 
 
 def convert_arg(arg) -> Any:

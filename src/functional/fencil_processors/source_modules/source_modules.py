@@ -15,20 +15,22 @@
 
 
 from dataclasses import dataclass
-from typing import Sequence, Type
+from typing import Sequence
+
+import numpy
 
 
 @dataclass
 class ScalarParameter:
     name: str
-    scalar_type: Type
+    scalar_type: numpy.dtype
 
 
 @dataclass
 class BufferParameter:
     name: str
     dimensions: Sequence[str]
-    scalar_type: Type
+    scalar_type: numpy.dtype
 
 
 @dataclass

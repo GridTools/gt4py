@@ -75,7 +75,9 @@ def _render_function_param(
     param: source_modules.ScalarParameter | source_modules.BufferParameter, index: int
 ) -> str:
     if isinstance(param, source_modules.ScalarParameter):
-        return "{type} {name}".format(type=render_python_type(param.scalar_type), name=param.name)
+        return "{type} {name}".format(
+            type=render_python_type(param.scalar_type.type), name=param.name
+        )
     else:
         template_type = "BufferT{index}&&".format(index=index)
         return "{type} {name}".format(type=template_type, name=param.name)

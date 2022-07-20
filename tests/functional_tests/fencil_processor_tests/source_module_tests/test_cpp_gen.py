@@ -11,8 +11,7 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-
-
+import numpy
 import pytest
 
 import functional.fencil_processors.source_modules.cpp_gen as cpp
@@ -30,8 +29,8 @@ def function_scalar_example():
     return source_modules.Function(
         name="example",
         parameters=[
-            source_modules.ScalarParameter("a", float),
-            source_modules.ScalarParameter("b", int),
+            source_modules.ScalarParameter("a", numpy.dtype(float)),
+            source_modules.ScalarParameter("b", numpy.dtype(int)),
         ],
     )
 
