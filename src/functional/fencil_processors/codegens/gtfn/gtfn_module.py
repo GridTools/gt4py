@@ -38,11 +38,11 @@ def create_source_module(
     )
     source_code = format_source(
         "cpp",
-        f"""\
-                                #include <gridtools/fn/backend/naive.hpp>
-                                {stencil_src}
-                                {decl_src}\
-                                """,
+        f"""
+        #include <gridtools/fn/backend/naive.hpp>
+        {stencil_src}
+        {decl_src}
+        """.strip(),
         style="LLVM",
     )
 
