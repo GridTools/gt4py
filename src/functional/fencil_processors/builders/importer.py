@@ -14,15 +14,13 @@
 
 import importlib
 import importlib.util
-import inspect
 import pathlib
-from collections.abc import Callable
-from typing import Dict
+from types import ModuleType
 
 
-def import_callables(module_file: pathlib.Path) -> Dict[str, Callable]:
+def import_from_path(module_file: pathlib.Path) -> ModuleType:
     """Import all function objects from a Python module and return a mapping {function_name: object}."""
-    module_name = module_file.name.split(".")[0]
+    module_name = module_file.stem
 
     error_msg = f"Could not load module named {module_name} from {module_file}"
     spec = importlib.util.spec_from_file_location(module_name, module_file)
@@ -34,6 +32,4 @@ def import_callables(module_file: pathlib.Path) -> Dict[str, Callable]:
     except ImportError:
         raise ModuleNotFoundError(error_msg)
 
-    members = inspect.getmembers(module)
-    functions = filter(lambda obj: inspect.isfunction(obj[1]) or inspect.isbuiltin(obj[1]), members)
-    return dict(functions)
+    return module

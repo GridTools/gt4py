@@ -16,7 +16,7 @@
 from collections.abc import Callable
 
 from functional.fencil_processors.builders.cache import Strategy as CacheStrategy, get_cache_folder
-from functional.fencil_processors.builders.importer import import_callables
+from functional.fencil_processors.builders.importer import import_from_path
 
 from ...source_modules import source_modules as defs
 from . import bindings, build
@@ -30,7 +30,7 @@ def create_callable(
     cache_folder = get_cache_folder(source_module, cache_strategy)
     module_file = build.CMakeProject.get_binary(cache_folder, source_module.entry_point.name)
     try:
-        return import_callables(module_file)[source_module.entry_point.name]
+        return getattr(import_from_path(module_file), source_module.entry_point.name)
     except ModuleNotFoundError:
         pass
 
@@ -51,4 +51,4 @@ def create_callable(
     project.configure()
     project.build()
 
-    return import_callables(module_file)[source_module.entry_point.name]
+    return getattr(import_from_path(module_file), source_module.entry_point.name)
