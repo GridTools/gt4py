@@ -16,7 +16,8 @@ import importlib
 import importlib.util
 import inspect
 import pathlib
-from typing import Callable, Dict
+from collections.abc import Callable
+from typing import Dict
 
 
 def import_callables(module_file: pathlib.Path) -> Dict[str, Callable]:

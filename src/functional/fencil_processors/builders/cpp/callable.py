@@ -13,7 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 
-from typing import Callable
+from collections.abc import Callable
 
 from functional.fencil_processors.builders.cache import Strategy as CacheStrategy, get_cache_folder
 from functional.fencil_processors.builders.importer import import_callables
