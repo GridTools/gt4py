@@ -11,6 +11,7 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
+"""Build system functionality."""
 
 
 import importlib
@@ -135,6 +136,8 @@ def _get_python_module_suffix():
 
 
 class CMakeProject:
+    """Work with CMake projects on the file system."""
+
     folder: Optional[pathlib.Path] = None
     name: str
     extension: str
