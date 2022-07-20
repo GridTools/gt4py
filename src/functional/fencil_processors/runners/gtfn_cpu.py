@@ -24,12 +24,16 @@ from functional.iterator import ir
 from functional.iterator.processor_interface import fencil_executor
 
 
-def get_arg_type(arg) -> source_modules.ScalarParameter | source_modules.BufferParameter:
-    view = numpy.asarray(arg)
+def get_param_description(
+    name, obj
+) -> source_modules.ScalarParameter | source_modules.BufferParameter:
+    view = numpy.asarray(obj)
     if view.ndim > 0:
-        return source_modules.BufferParameter("", [dim.value for dim in arg.axes], view.dtype.type)
+        return source_modules.BufferParameter(
+            name, [dim.value for dim in obj.axes], view.dtype.type
+        )
     else:
-        return source_modules.ScalarParameter("", type(arg))
+        return source_modules.ScalarParameter(name, type(obj))
 
 
 def convert_arg(arg) -> Any:
@@ -52,9 +56,9 @@ def run_gtfn(itir: ir.FencilDefinition, *args, **kwargs):
 
     See ``FencilExecutorFunction`` for details.
     """
-    parameters = [get_arg_type(arg) for arg in args]
-    for fparam, iparam in zip(parameters, itir.params):
-        fparam.name = iparam.id
+    parameters = [
+        get_param_description(itir_param.id, obj) for obj, itir_param in zip(args, itir.params)
+    ]
     source_module = gtfn_codegen.create_source_module(itir, parameters, **kwargs)
     wrapper = cpp_callable.create_callable(source_module)
     wrapper(*[convert_arg(arg) for arg in args])
