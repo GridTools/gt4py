@@ -43,5 +43,5 @@ def test_cmake_configure_build(project_input):
         project.write(pathlib.Path(folder))
         project.configure()
         project.build()
-        output = project.get_current_binary()
+        output = project.current_binary
         assert output.exists()

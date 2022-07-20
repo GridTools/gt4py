@@ -28,7 +28,7 @@ def create_callable(
 ) -> Callable:
     """Build the source module and return its entry point as a Python function object."""
     cache_folder = get_cache_folder(source_module, cache_strategy)
-    module_file = build.CMakeProject.get_binary(cache_folder, source_module.entry_point.name)
+    module_file = build.CMakeProject.get_binary_path(cache_folder, source_module.entry_point.name)
     try:
         return getattr(import_from_path(module_file), source_module.entry_point.name)
     except ModuleNotFoundError:
