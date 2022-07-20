@@ -11,6 +11,7 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
+"""C++ python bindings IR and generator."""
 
 
 from typing import Any, Sequence, Type, TypeVar
@@ -172,9 +173,12 @@ def create_bindings(target: defs.Function, target_header: str) -> defs.BindingMo
     """
     Generate Python bindings through which a C++ function can be called.
 
-        Parameters:
-            target: The signature of the C++ function
-            target_header: The name of the C++ (header) file in which the function resides; used for includes
+    Parameters
+    ----------
+    target
+        The signature of the C++ function
+    target_header
+        The name of the C++ (header) file in which the function resides; used for includes
     """
     wrapper_name = target.name + "_wrapper"
 
