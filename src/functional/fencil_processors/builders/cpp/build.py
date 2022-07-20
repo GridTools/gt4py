@@ -24,7 +24,7 @@ from eve.codegen import JinjaTemplate, TemplatedGenerator
 from functional.fencil_processors import source_modules
 
 
-_build_subdir: Final = "build"
+_BUILD_SUBDIR: Final = "build"
 
 
 class FindDependency(Node):
@@ -156,7 +156,7 @@ class CMakeProject:
     def get_binary(
         root_folder: pathlib.Path, name: str, extension: str = _get_python_module_suffix()
     ):
-        return root_folder / _build_subdir / "bin" / (name + "." + extension)
+        return root_folder / _BUILD_SUBDIR / "bin" / (name + "." + extension)
 
     def get_current_binary(self) -> pathlib.Path:
         if not self.folder:
@@ -174,7 +174,7 @@ class CMakeProject:
         if not self.folder:
             raise RuntimeError("First you have to write the project to a folder.")
 
-        (self.folder / _build_subdir).mkdir(exist_ok=True)
+        (self.folder / _BUILD_SUBDIR).mkdir(exist_ok=True)
         result = subprocess.run(
             [
                 "cmake",
@@ -183,7 +183,7 @@ class CMakeProject:
                 "-S",
                 self.folder,
                 "-B",
-                self.folder / _build_subdir,
+                self.folder / _BUILD_SUBDIR,
                 "-DCMAKE_BUILD_TYPE=Debug",
             ],
             stdout=subprocess.PIPE,
@@ -198,7 +198,7 @@ class CMakeProject:
             raise RuntimeError("First you have to write the project to a folder.")
 
         result = subprocess.run(
-            ["cmake", "--build", self.folder / _build_subdir],
+            ["cmake", "--build", self.folder / _BUILD_SUBDIR],
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
         )
