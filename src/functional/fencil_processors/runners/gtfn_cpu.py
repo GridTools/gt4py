@@ -13,7 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 
-from typing import Any, Sequence
+from typing import Any
 
 import numpy
 
@@ -24,30 +24,20 @@ from functional.iterator import ir
 from functional.iterator.processor_interface import fencil_executor
 
 
-def get_arg_types(
-    *args,
-) -> Sequence[source_modules.ScalarParameter | source_modules.BufferParameter]:
-    def get_arg_type(arg):
-        view = numpy.asarray(arg)
-        if view.ndim > 0:
-            return source_modules.BufferParameter(
-                "", [dim.value for dim in arg.axes], view.dtype.type
-            )
-        else:
-            return source_modules.ScalarParameter("", type(arg))
-
-    return [get_arg_type(arg) for arg in args]
+def get_arg_type(arg) -> source_modules.ScalarParameter | source_modules.BufferParameter:
+    view = numpy.asarray(arg)
+    if view.ndim > 0:
+        return source_modules.BufferParameter("", [dim.value for dim in arg.axes], view.dtype.type)
+    else:
+        return source_modules.ScalarParameter("", type(arg))
 
 
-def convert_args(*args) -> Sequence[Any]:
-    def convert_arg(arg):
-        view = numpy.asarray(arg)
-        if view.ndim > 0:
-            return memoryview(view)
-        else:
-            return arg
-
-    return [convert_arg(arg) for arg in args]
+def convert_arg(arg) -> Any:
+    view = numpy.asarray(arg)
+    if view.ndim > 0:
+        return memoryview(view)
+    else:
+        return arg
 
 
 # TODO(ricoh): change style to declarative pipeline
@@ -62,9 +52,9 @@ def run_gtfn(itir: ir.FencilDefinition, *args, **kwargs):
 
     See ``FencilExecutorFunction`` for details.
     """
-    parameters = get_arg_types(*args)
+    parameters = [get_arg_type(arg) for arg in args]
     for fparam, iparam in zip(parameters, itir.params):
         fparam.name = iparam.id
     source_module = gtfn_codegen.create_source_module(itir, parameters, **kwargs)
     wrapper = cpp_callable.create_callable(source_module)
-    wrapper(*convert_args(*args))
+    wrapper(*[convert_arg(arg) for arg in args])
