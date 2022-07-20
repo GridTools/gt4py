@@ -21,7 +21,7 @@ import eve.codegen
 import functional.fencil_processors.source_modules.cpp_gen as cpp
 import functional.fencil_processors.source_modules.source_modules as defs
 from eve import Node
-from eve.codegen import JinjaTemplate, TemplatedGenerator
+from eve.codegen import JinjaTemplate as as_jinja, TemplatedGenerator
 
 
 T = TypeVar("T")
@@ -79,7 +79,7 @@ class BindingFile(Node):
 
 
 class BindingCodeGenerator(TemplatedGenerator):
-    BindingFile = JinjaTemplate(
+    BindingFile = as_jinja(
         """\
         #include "{{callee_header_file}}"
 
@@ -93,7 +93,7 @@ class BindingCodeGenerator(TemplatedGenerator):
         """
     )
 
-    WrapperFunction = JinjaTemplate(
+    WrapperFunction = as_jinja(
         """\
         decltype(auto) {{name}}(
             {{"\n,".join(parameters)}}
@@ -111,9 +111,9 @@ class BindingCodeGenerator(TemplatedGenerator):
             type_str = cpp.render_python_type(param.dtype)
         return type_str + " " + param.name
 
-    ReturnStmt = JinjaTemplate("""return {{expr}};""")
+    ReturnStmt = as_jinja("""return {{expr}};""")
 
-    BindingModule = JinjaTemplate(
+    BindingModule = as_jinja(
         """\
         PYBIND11_MODULE({{name}}, module) {
             module.doc() = "{{doc}}";
@@ -122,9 +122,7 @@ class BindingCodeGenerator(TemplatedGenerator):
         """
     )
 
-    BindingFunction = JinjaTemplate(
-        """module.def("{{exported_name}}", &{{wrapper_name}}, "{{doc}}");"""
-    )
+    BindingFunction = as_jinja("""module.def("{{exported_name}}", &{{wrapper_name}}, "{{doc}}");""")
 
     def visit_FunctionCall(self, call: FunctionCall):
         args = [self.visit(arg) for arg in call.args]
@@ -148,7 +146,7 @@ class BindingCodeGenerator(TemplatedGenerator):
             dim_config=sid.dim_config,
         )
 
-    DimExpr = JinjaTemplate("""generated::{{name}}_t""")
+    DimExpr = as_jinja("""generated::{{name}}_t""")
 
 
 def make_parameter(parameter: defs.ScalarParameter | defs.BufferParameter) -> FunctionParameter:
