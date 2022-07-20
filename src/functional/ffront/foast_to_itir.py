@@ -210,7 +210,7 @@ class FieldOperatorLowering(NodeTranslator):
             .filter(is_expr_with_iterator_type_kind(IteratorTypeKind.ENCAPSULATED_ITERATOR))
         ):
             raise NotImplementedError(
-                "Using a composite type containing a local field is not supported."
+                "Using composite types (e.g. tuples) containing local fields not supported."
             )
         param_names = (
             node.pre_walk_values()
