@@ -17,7 +17,19 @@ import pytest
 
 from gt4py import gtscript
 from gt4py import storage as gt_storage
-from gt4py.gtscript import __INLINED, BACKWARD, FORWARD, PARALLEL, Field, computation, interval
+from gt4py.gtscript import (
+    __INLINED,
+    BACKWARD,
+    FORWARD,
+    PARALLEL,
+    Field,
+    I,
+    J,
+    computation,
+    horizontal,
+    interval,
+    region,
+)
 from gt4py.storage import utils as storage_utils
 
 from ..definitions import ALL_BACKENDS, CPU_BACKENDS
@@ -538,3 +550,17 @@ def test_origin_k_fields(backend):
     np.testing.assert_allclose(np.broadcast_to(data[2:], shape=(2, 2, 8)), outp[:, :, 1:-1])
     np.testing.assert_allclose(0.0, outp[:, :, 0])
     np.testing.assert_allclose(0.0, outp[:, :, -1])
+
+
+@pytest.mark.parametrize("backend", ALL_BACKENDS)
+def test_pruned_args_match(backend):
+    @gtscript.stencil(backend=backend)
+    def test(out: Field[np.float64], inp: Field[np.float64]):
+        with computation(PARALLEL), interval(...):
+            out = 0.0
+            with horizontal(region[I[0] - 1, J[0] - 1]):
+                out = inp
+
+    inp = gt_storage.zeros(backend, default_origin=(0, 0, 0), shape=(2, 2, 2), dtype=np.float64)
+    out = gt_storage.empty(backend, default_origin=(0, 0, 0), shape=(2, 2, 2), dtype=np.float64)
+    test(out, inp)

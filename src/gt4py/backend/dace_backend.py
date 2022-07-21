@@ -181,7 +181,7 @@ class DaCeComputationCodegen:
                 const int __J = domain[1];
                 const int __K = domain[2];
                 ${name}_t dace_handle;
-                auto allocator = gt::sid::make_cached_allocator(&${allocator}<char[]>);
+                auto allocator = gt::sid::cached_allocator(&${allocator}<char[]>);
                 ${"\\n".join(tmp_allocs)}
                 __program_${name}(${",".join(["&dace_handle", *dace_args])});
             };

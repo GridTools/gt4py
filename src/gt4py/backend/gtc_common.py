@@ -195,13 +195,11 @@ class PyExtModuleGenerator(BaseModuleGenerator):
         ir = self.builder.gtir
         sources = gt_utils.text.TextBlock(indent_size=BaseModuleGenerator.TEMPLATE_INDENT_SIZE)
 
-        params_decls = {decl.name: decl for decl in ir.params}
         args: List[str] = []
-        for arg in ir.api_signature:
-            if arg.name not in self.args_data.unreferenced:
-                args.append(arg.name)
-                if isinstance(params_decls.get(arg.name, None), gtir.FieldDecl):
-                    args.append("list(_origin_['{}'])".format(arg.name))
+        for decl in ir.params:
+            args.append(decl.name)
+            if isinstance(decl, gtir.FieldDecl):
+                args.append("list(_origin_['{}'])".format(decl.name))
 
         # only generate implementation if any multi_stages are present. e.g. if no statement in the
         # stencil has any effect on the API fields, this may not be the case since they could be

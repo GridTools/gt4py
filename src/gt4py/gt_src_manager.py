@@ -22,8 +22,15 @@ import gt4py.config as gt_config
 
 
 _DEFAULT_GRIDTOOLS_VERSION = 2
-# TODO: GT2 release with CUDA SID adapter
-_GRIDTOOLS_GIT_BRANCHES = {1: "v1.1.4", 2: "v2.1.0"}
+
+_GRIDTOOLS_GIT_REPO = {
+    1: "https://github.com/GridTools/gridtools.git",
+    2: "https://github.com/GridTools/gridtools.git",
+}
+_GRIDTOOLS_GIT_BRANCHES = {
+    1: "v1.1.4",
+    2: "v2.2.0",
+}
 _GRIDTOOLS_INCLUDE_PATHS = {
     1: gt_config.build_settings["gt_include_path"],
     2: gt_config.build_settings["gt2_include_path"],
@@ -37,7 +44,7 @@ def install_gt_sources(major_version: int = _DEFAULT_GRIDTOOLS_VERSION) -> bool:
     is_ok = has_gt_sources(major_version)
     if not is_ok:
         GIT_BRANCH = _GRIDTOOLS_GIT_BRANCHES[major_version]
-        GIT_REPO = "https://github.com/GridTools/gridtools.git"
+        GIT_REPO = _GRIDTOOLS_GIT_REPO[major_version]
 
         install_path = os.path.dirname(__file__)
         target_path = os.path.abspath(
