@@ -623,15 +623,15 @@ def test_nested_tuple_return():
     out = np_as_located_field(IDim)(np.zeros((size,)))
 
     @field_operator
-    def foo(
+    def pack_tuple(
         a: Field[[IDim], float64], b: Field[[IDim], float64]
     ) -> tuple[Field[[IDim], float64], tuple[Field[[IDim], float64], Field[[IDim], float64]]]:
         return (a, (a, b))
 
     @field_operator
     def combine(a: Field[[IDim], float64], b: Field[[IDim], float64]) -> Field[[IDim], float64]:
-        something = foo(a, b)
-        return something[0] + something[1][0] + something[1][1]
+        packed = pack_tuple(a, b)
+        return packed[0] + packed[1][0] + packed[1][1]
 
     combine(a, b, out=out, offset_provider={})
 
@@ -647,20 +647,18 @@ def test_tuple_return_2(reduction_setup):
 
     @field_operator
     def reduction_tuple(
-        a: Field[[Edge], float], b: Field[[Edge], float]  # , c: float
+        a: Field[[Edge], float], b: Field[[Edge], float]
     ) -> tuple[Field[[Vertex], float], Field[[Vertex], float], float]:
         a = neighbor_sum(a(V2E), axis=V2EDim)
         b = neighbor_sum(b(V2E), axis=V2EDim)
         return a, b
 
     @field_operator
-    def fencil_tuple(
-        a: Field[[Edge], float], b: Field[[Edge], float]  # , c: float
-    ) -> Field[[Vertex], float]:
-        tp_red = reduction_tuple(a, b)
-        return tp_red[0] + tp_red[1]
+    def combine_tuple(a: Field[[Edge], float], b: Field[[Edge], float]) -> Field[[Vertex], float]:
+        packed = reduction_tuple(a, b)
+        return packed[0] + packed[1]
 
-    fencil_tuple(rs.inp, rs.inp, out=rs.out, offset_provider=rs.offset_provider)
+    combine_tuple(rs.inp, rs.inp, out=rs.out, offset_provider=rs.offset_provider)
 
     ref = np.sum(rs.v2e_table, axis=1) * 2
     assert np.allclose(ref, rs.out)
@@ -685,7 +683,7 @@ def test_tuple_with_local_field_in_reduction_shifted(reduction_setup):
     out = np_as_located_field(Edge)(np.zeros((num_edges,)))
 
     @field_operator
-    def foo(
+    def reduce_tuple_element(
         edge_field: Field[[Edge], float64], vertex_field: Field[[Vertex], float64]
     ) -> Field[[Edge], float64]:
         tup = edge_field(V2E), vertex_field
@@ -697,7 +695,7 @@ def test_tuple_with_local_field_in_reduction_shifted(reduction_setup):
         #  again - can not be shifted.
         return red(E2V[0])
 
-    foo(a, b, out=out, offset_provider=rs.offset_provider)
+    reduce_tuple_element(a, b, out=out, offset_provider=rs.offset_provider)
 
     # conn table used is inverted here on purpose
     red = np.sum(np.asarray(a)[rs.e2v_table] + np.asarray(b)[:, np.newaxis], axis=1)
