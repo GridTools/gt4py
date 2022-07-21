@@ -20,32 +20,32 @@ from typing import Sequence
 import numpy
 
 
-@dataclass
+@dataclass(frozen=True)
 class ScalarParameter:
     name: str
     scalar_type: numpy.dtype
 
 
-@dataclass
+@dataclass(frozen=True)
 class BufferParameter:
     name: str
     dimensions: Sequence[str]
     scalar_type: numpy.dtype
 
 
-@dataclass
+@dataclass(frozen=True)
 class Function:
     name: str
     parameters: Sequence[ScalarParameter | BufferParameter]
 
 
-@dataclass
+@dataclass(frozen=True)
 class LibraryDependency:
     name: str
     version: str
 
 
-@dataclass
+@dataclass(frozen=True)
 class SourceModule:
     entry_point: Function
     source_code: str
@@ -53,7 +53,7 @@ class SourceModule:
     language: str
 
 
-@dataclass
+@dataclass(frozen=True)
 class BindingModule:
     source_code: str
     library_deps: Sequence[LibraryDependency]
