@@ -45,14 +45,12 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
 
         try:
             if not isinstance(new_func.type, (ct.FieldOperatorType, ct.ScanOperatorType)):
-                raise ProgramTypeError.from_past_node(
-                    node,
-                    msg=f"Only calls `FieldOperator`s and `ScanOperators` allowed in `Program`, but got `{new_func.type}`.",
+                raise GTTypeError(
+                    f"Only calls `FieldOperator`s and `ScanOperators` "
+                    f"allowed in `Program`, but got `{new_func.type}`."
                 )
             if "out" not in new_kwargs:
-                raise ProgramTypeError.from_past_node(
-                    node, msg="Missing required keyword argument(s) `out`."
-                )
+                raise GTTypeError("Missing required keyword argument(s) `out`.")
 
             arg_types = [arg.type for arg in new_args]
             kwarg_types = {name: expr.type for name, expr in new_kwargs.items() if name != "out"}
@@ -64,13 +62,15 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                 raise_exception=True,
             )
 
-            return_type = type_info.return_type(new_func.type,
-                                                with_args=arg_types,
-                                                with_kwargs=kwarg_types)
+            return_type = type_info.return_type(
+                new_func.type, with_args=arg_types, with_kwargs=kwarg_types
+            )
             if return_type != new_kwargs["out"].type:
-                raise GTTypeError(f"Expected keyword argument `out` to be of "
-                                  f"type {return_type}, but got "
-                                  f"{new_kwargs['out'].type}.")
+                raise GTTypeError(
+                    f"Expected keyword argument `out` to be of "
+                    f"type {return_type}, but got "
+                    f"{new_kwargs['out'].type}."
+                )
         except GTTypeError as ex:
             raise ProgramTypeError.from_past_node(
                 node, msg=f"Invalid call to `{node.func.id}`."
