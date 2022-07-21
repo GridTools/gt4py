@@ -16,7 +16,6 @@
 
 from typing import Any, Sequence, TypeVar
 
-import jinja2
 import numpy
 
 import eve.codegen
@@ -131,22 +130,18 @@ class BindingCodeGenerator(TemplatedGenerator):
         return cpp.render_function_call(call.target, args)
 
     def visit_SidExpr(self, sid: SidExpr):
-        template = jinja2.Template(
-            """\
-            gridtools::sid::rename_numbered_dimensions<{{", ".join(dimensions)}}>(
-                gridtools::as_sid<{{scalar_type}},\
+        return self.generic_visit(
+            sid, rendered_scalar_type=cpp.render_python_type(sid.scalar_type.type)
+        )
+
+    SidExpr = as_jinja(
+        """gridtools::sid::rename_numbered_dimensions<{{", ".join(dimensions)}}>(
+                gridtools::as_sid<{{rendered_scalar_type}},\
                                   {{dimensions.__len__()}},\
                                   gridtools::integral_constant<int, {{dim_config}}>,\
                                   999'999'999>({{buffer_name}})
-            )\
-            """
-        )
-        return template.render(
-            buffer_name=sid.buffer_name,
-            dimensions=[self.visit(dim) for dim in sid.dimensions],
-            scalar_type=cpp.render_python_type(sid.scalar_type.type),
-            dim_config=sid.dim_config,
-        )
+            )"""
+    )
 
     DimExpr = as_jinja("""generated::{{name}}_t""")
 
