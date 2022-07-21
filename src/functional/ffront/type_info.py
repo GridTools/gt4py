@@ -363,7 +363,8 @@ def return_type_scanop(
     carry_dtype = callable_type.definition.returns
     promoted_dims = promote_dims(
         *(extract_dims(arg) for arg in with_args),
-        # todo: check if we are fine with this
+        # the vertical axis is always added to the dimension of the returned
+        #  field
         (callable_type.axis,),
     )
     if isinstance(carry_dtype, ct.TupleType):

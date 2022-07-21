@@ -485,12 +485,10 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
     def as_program(
         self, arg_types: list[ct.SymbolType], kwarg_types: dict[str, ct.SymbolType]
     ) -> Program:
-        # todo(tehrengruber): add comment why arg types are needed
-        # todo(tehrengruber): use kwargs for check
-        # if any(param.id == "out" for param in self.foast_node.params):
-        #    raise Exception(
-        #        "Direct call to Field operator whose signature contains an argument `out` is not permitted."
-        #    )
+        # todo(tehrengruber): implement mechanism to deduce default values
+        #  of arg and kwarg types
+        # todo(tehrengruber): check foast operator has no out argument that clashes
+        #  with the out argument of the program we generate here.
 
         name = self.foast_node.id
         loc = self.foast_node.location
@@ -504,7 +502,6 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
                 location=loc,
             )
             for arg_type in arg_types
-            # for arg_type in type_.args # TODO(check it agrees with arg_types)
         ]
         params_ref = [past.Name(id=pdecl.id, location=loc) for pdecl in params_decl]
         out_sym: past.Symbol = past.DataSymbol(
@@ -662,12 +659,12 @@ def scan_operator(
         >>> import numpy as np
         >>> from functional.iterator.embedded import np_as_located_field
         >>> KDim = Dimension("K")
-        >>> field = np_as_located_field(KDim)(np.ones((10,)))
+        >>> inp = np_as_located_field(KDim)(np.ones((10,)))
         >>> out = np_as_located_field(KDim)(np.zeros((10,)))
         >>> @scan_operator(axis=KDim, forward=True, init=0.)
         ... def scan_operator(carry: float, val: float) -> float:
         ...     return carry+val
-        >>> scan_operator(field, out=out, offset_provider={})
+        >>> scan_operator(inp, out=out, offset_provider={})
         >>> out.array()
         array([ 1.,  2.,  3.,  4.,  5.,  6.,  7.,  8.,  9., 10.])
     """

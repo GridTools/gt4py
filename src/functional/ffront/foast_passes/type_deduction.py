@@ -145,7 +145,6 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                 node, msg=f"Argument `forward` to scan operator `{node.id}` must " f"be a boolean."
             )
         new_init = self.visit(node.init, **kwargs)
-        # TODO(tehrengruber): tuple
         if not all(
             type_info.is_arithmetic(type_)
             for type_ in type_info.primitive_constituents(new_init.type)

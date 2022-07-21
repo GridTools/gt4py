@@ -445,7 +445,6 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             ) from e
 
         return foast.Constant(
-            # TODO(tehrengruber): is the type actually needed or can this be handled by type deduction?
             value=node.value,
             location=self._make_loc(node),
             type=type_,
