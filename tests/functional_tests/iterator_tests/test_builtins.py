@@ -1,5 +1,4 @@
 import math
-import numbers
 from typing import Callable, Iterable
 
 import numpy as np
@@ -143,7 +142,12 @@ def test_math_function_builtins(fencil_processor, builtin_name, inputs, as_colum
     if fencil_processor == type_check.check:
         pytest.xfail("type inference does not yet support math builtins")
 
-    ref_impl: Callable = getattr(np, builtin_name)
+    if builtin_name == "gamma":
+        # numpy has no gamma function
+        ref_impl: Callable = np.vectorize(math.gamma)
+    else:
+        ref_impl: Callable = getattr(np, builtin_name)
+
     inps = asfield(*asarray(*inputs))
     expected = ref_impl(*inputs)
 
