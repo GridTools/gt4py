@@ -13,10 +13,10 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 
-import numpy
 import math
 
 import jinja2
+import numpy
 import numpy as np
 import pytest
 
