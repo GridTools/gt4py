@@ -13,7 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 
-import ctypes
+import numpy
 import math
 
 import jinja2
@@ -30,8 +30,8 @@ def source_module_example():
     entry_point = source_modules.Function(
         "stencil",
         parameters=[
-            source_modules.BufferParameter("buf", ["I", "J"], ctypes.c_float),
-            source_modules.ScalarParameter("sc", ctypes.c_float),
+            source_modules.BufferParameter("buf", ["I", "J"], numpy.dtype(numpy.float32)),
+            source_modules.ScalarParameter("sc", numpy.dtype(numpy.float32)),
         ],
     )
     func = cpp.render_function_declaration(
