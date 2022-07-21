@@ -3,7 +3,7 @@ import pytest
 
 import functional.fencil_processors.formatters.gtfn
 from functional.common import Dimension
-from functional.fencil_processors.codegens import gtfn
+from functional.fencil_processors.formatters import gtfn
 from functional.iterator.builtins import *
 from functional.iterator.embedded import np_as_located_field
 from functional.iterator.runtime import closure, fendef, fundef, offset
