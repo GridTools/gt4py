@@ -1,4 +1,4 @@
-import numbers
+import math
 from typing import Callable
 
 import numpy as np
@@ -106,7 +106,12 @@ def make_builtin_field_operator(builtin_name: str):
 
 @pytest.mark.parametrize("builtin_name, inputs", math_builtin_test_data())
 def test_math_function_builtins_execution(builtin_name: str, inputs):
-    ref_impl: Callable = getattr(np, builtin_name)
+    if builtin_name == "gamma":
+        # numpy has no gamma function
+        ref_impl: Callable = np.vectorize(math.gamma)
+    else:
+        ref_impl: Callable = getattr(np, builtin_name)
+
     inps = [np_as_located_field(IDim)(np.asarray(input)) for input in inputs]
     expected = ref_impl(*inputs)
     out = np_as_located_field(IDim)(np.zeros_like(expected))

@@ -328,6 +328,10 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
 
         # validate arguments
         error_msg_preamble = f"Incompatible argument in call to `{func_name}`."
+        error_msg_for_validator = {
+            type_info.is_arithmetic: "an arithmetic",
+            type_info.is_floating_point: "a floating point",
+        }
         if func_name in fbuiltins.UNARY_MATH_NUMBER_BUILTIN_NAMES:
             arg_validator = type_info.is_arithmetic
         elif func_name in fbuiltins.UNARY_MATH_FP_BUILTIN_NAMES:
@@ -343,14 +347,12 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         for i, arg in enumerate(node.args):
             if not arg_validator(arg.type):
                 error_msgs.append(
-                    f"Expected {i}-th argument to be a number type, but got `{arg.type}`."
+                    f"Expected {i}-th argument to be {error_msg_for_validator[arg_validator]} type, but got `{arg.type}`."
                 )
         if error_msgs:
             raise FieldOperatorTypeDeductionError.from_foast_node(
                 node,
-                msg=error_msg_preamble
-                + "\n"
-                + ("\n".join([f"  - {error}" for error in error_msgs])),
+                msg="\n".join([error_msg_preamble] + [f"  - {error}" for error in error_msgs]),
             )
 
         # deduce return type

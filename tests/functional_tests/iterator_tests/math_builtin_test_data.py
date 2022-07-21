@@ -293,13 +293,12 @@ def math_builtin_test_data() -> list[tuple[str, tuple[list[int | float], ...]]]:
                 ],
             ),
         ),
-        # (
-        #    math_fun_field_op_gamma,
-        #    np.frompyfunc(math.gamma, nin=1, nout=1),
-        #    # FIXME(ben): math.gamma throws when it overflows, maybe should instead yield `np.inf`?
-        #    # overflows very quickly, already at `173`
-        #    ([-1002.3, -103.7, -1.2, -0.7, -0.1, 0.1, 0.7, 1.0, 1, 1.2, 100, 103.7, 170.5],),
-        # ),
+        (
+            "gamma",
+            # TODO(ben): math.gamma throws when it overflows, maybe should instead yield `np.inf`?
+            #  overflows very quickly, already at `173`
+            ([-1002.3, -103.7, -1.2, -0.7, -0.1, 0.1, 0.7, 1.0, 1, 1.2, 100, 103.7, 170.5],),
+        ),
         (
             "cbrt",
             (

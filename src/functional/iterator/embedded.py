@@ -322,7 +322,7 @@ for math_builtin_name in builtins.MATH_BUILTINS:
     decorator = getattr(builtins, math_builtin_name).register(EMBEDDED)
     if math_builtin_name == "gamma":
         # numpy has no gamma function
-        impl = np.frompyfunc(math.gamma, nin=1, nout=1)
+        impl = np.vectorize(math.gamma)
     else:
         impl = getattr(np, math_builtin_name)
     globals()[math_builtin_name] = decorator(impl)
