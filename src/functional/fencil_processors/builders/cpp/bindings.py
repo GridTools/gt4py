@@ -14,7 +14,7 @@
 """C++ python bindings IR and generator."""
 
 
-from typing import Any, Sequence, TypeVar
+from typing import Any, Sequence
 
 import numpy
 
@@ -25,7 +25,44 @@ from eve import Node
 from eve.codegen import JinjaTemplate as as_jinja, TemplatedGenerator
 
 
-T = TypeVar("T")
+class Expr(Node):
+    pass
+
+
+class Stmt(Node):
+    pass
+
+
+class DimensionType(Expr):
+    name: str
+
+
+class SidConversion(Expr):
+    buffer_name: str
+    dimensions: Sequence[DimensionType]
+    scalar_type: numpy.dtype
+    dim_config: int
+
+
+class FunctionCall(Expr):
+    target: defs.Function
+    args: Sequence[Any]
+
+
+class ReturnStmt(Stmt):
+    expr: Expr
+
+
+class FunctionParameter(Node):
+    name: str
+    ndim: int
+    dtype: numpy.dtype
+
+
+class WrapperFunction(Node):
+    name: str
+    parameters: Sequence[FunctionParameter]
+    body: Stmt
 
 
 class BindingFunction(Node):
@@ -40,41 +77,9 @@ class BindingModule(Node):
     functions: Sequence[BindingFunction]
 
 
-class FunctionParameter(Node):
-    name: str
-    ndim: int
-    dtype: numpy.dtype
-
-
-class DimExpr(Node):
-    name: str
-
-
-class SidExpr(Node):
-    buffer_name: str
-    dimensions: Sequence[DimExpr]
-    scalar_type: numpy.dtype
-    dim_config: int
-
-
-class FunctionCall(Node):
-    target: defs.Function
-    args: Sequence[Any]
-
-
-class ReturnStmt(Node):
-    expr: Any
-
-
-class WrapperFunction(Node):
-    name: str
-    parameters: Sequence[FunctionParameter]
-    body: Any
-
-
 class BindingFile(Node):
     callee_header_file: str
-    header_files: list[str]
+    header_files: Sequence[str]
     wrapper: WrapperFunction
     binding_module: BindingModule
 
@@ -129,12 +134,12 @@ class BindingCodeGenerator(TemplatedGenerator):
         args = [self.visit(arg) for arg in call.args]
         return cpp.render_function_call(call.target, args)
 
-    def visit_SidExpr(self, sid: SidExpr):
+    def visit_SidConversion(self, sid: SidConversion):
         return self.generic_visit(
             sid, rendered_scalar_type=cpp.render_python_type(sid.scalar_type.type)
         )
 
-    SidExpr = as_jinja(
+    SidConversion = as_jinja(
         """gridtools::sid::rename_numbered_dimensions<{{", ".join(dimensions)}}>(
                 gridtools::as_sid<{{rendered_scalar_type}},\
                                   {{dimensions.__len__()}},\
@@ -143,7 +148,7 @@ class BindingCodeGenerator(TemplatedGenerator):
             )"""
     )
 
-    DimExpr = as_jinja("""generated::{{name}}_t""")
+    DimensionType = as_jinja("""generated::{{name}}_t""")
 
 
 def make_parameter(parameter: defs.ScalarParameter | defs.BufferParameter) -> FunctionParameter:
@@ -153,13 +158,15 @@ def make_parameter(parameter: defs.ScalarParameter | defs.BufferParameter) -> Fu
     return FunctionParameter(name=name, ndim=ndim, dtype=scalar_type)
 
 
-def make_argument(index: int, param: defs.ScalarParameter | defs.BufferParameter) -> str | SidExpr:
+def make_argument(
+    index: int, param: defs.ScalarParameter | defs.BufferParameter
+) -> str | SidConversion:
     if isinstance(param, defs.ScalarParameter):
         return param.name
     else:
-        return SidExpr(
+        return SidConversion(
             buffer_name=param.name,
-            dimensions=[DimExpr(name=dim) for dim in param.dimensions],
+            dimensions=[DimensionType(name=dim) for dim in param.dimensions],
             scalar_type=param.scalar_type,
             dim_config=index,
         )
