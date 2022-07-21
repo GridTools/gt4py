@@ -12,7 +12,7 @@ Summary of the key design choices made for the live execution of generated C++ (
 As per the current state, gt4py can execute iterator IR by generating Python code from it which is loaded back as a module. Additionally, gt4py can also emit equivalent C++ code from iterator IR. The integration of the compiled backends focuses on compiling the emitted C++ code and calling it from Python, effectively executing iterator IR live by translating it to machine code.
 
 The process of executing ITIR this way consists of the following steps:
-1. Generate C++ code equivalent (*fencil code*) to ITIR
+1. Generate C++ code equivalent to ITIR (*fencil code*)
 2. Generate C++ code that wraps the fencil code and can be accessed from Python (*binding code*)
 3. Compile the fencil and binding codes into machine code (a dynamically linked library)
 4. Load the dynamic library into Python and extract the interfaces as Python objects 
@@ -71,7 +71,7 @@ Reasons:
 
 ## Limitations
 
-The main goal of this project is to implement the complete pipeline from FieldView to machine code and demonstrate that it's working. To keep the scope of the project reasonable, feature completeness is left for future work.
+The main goal of this project is to implement the complete pipeline from FieldView to machine code and demonstrate that it's working. To keep the scope of the project reasonable, feature completeness is not targeted.
 
 ### Desired Architecture
 
