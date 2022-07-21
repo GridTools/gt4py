@@ -13,7 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 
-from typing import Generic, TypeVar, Union, Optional, Any
+from typing import Any, Generic, Optional, TypeVar, Union
 
 from eve import Coerced, Node, SourceLocation, SymbolName, SymbolRef
 from eve.traits import SymbolTableTrait
@@ -63,7 +63,7 @@ class Name(Expr):
 
 
 class Constant(Expr):
-    value: Any # todo: be more specific
+    value: Any  # todo: be more specific
 
 
 class Subscript(Expr):

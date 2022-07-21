@@ -159,6 +159,7 @@ def make_symbol_type_from_typing(
 
 def make_symbol_type_from_value(value: Any) -> ct.SymbolType:
     from functional.iterator.embedded import LocatedField
+
     """Make a symbol node from a Python value."""
     # TODO(tehrengruber): What we expect here currently is a GTCallable. Maybe
     #  we should check for the protocol in the future?

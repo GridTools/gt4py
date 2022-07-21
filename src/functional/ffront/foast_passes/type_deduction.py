@@ -49,20 +49,24 @@ def boolified_type(symbol_type: ct.SymbolType) -> ct.ScalarType | ct.FieldType:
 
 class FieldOperatorTypeDeductionCompletnessValidator(NodeVisitor):
     @classmethod
-    def apply(cls, node: foast.LocatedNode) -> foast.LocatedNode:
-        incomplete_nodes: foast.LocatedNode = []
+    def apply(cls, node: foast.LocatedNode) -> None:
+        incomplete_nodes: list[foast.LocatedNode] = []
         cls().visit(node, incomplete_nodes=incomplete_nodes)
 
         if incomplete_nodes:
             raise ValueError()
 
-    def visit_LocatedNode(self, node: foast.LocatedNode, *, incomplete_nodes: dict[str, foast.LocatedNode]):
+    def visit_LocatedNode(
+        self, node: foast.LocatedNode, *, incomplete_nodes: list[foast.LocatedNode]
+    ):
         num_incomplete_prior = len(incomplete_nodes)
         self.generic_visit(node, incomplete_nodes=incomplete_nodes)
 
-        if (len(incomplete_nodes) == num_incomplete_prior
-                and hasattr(node, "type")
-                and not type_info.is_concrete(node.type)):
+        if (
+            len(incomplete_nodes) == num_incomplete_prior
+            and hasattr(node, "type")
+            and not type_info.is_concrete(node.type)
+        ):
             incomplete_nodes.append(node)
 
 
@@ -106,9 +110,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         assert isinstance(new_body[-1], foast.Return)
         return_type = new_body[-1].value.type
         new_type = ct.FunctionType(
-            args=[new_param.type for new_param in new_params],
-            kwargs={},
-            returns=return_type
+            args=[new_param.type for new_param in new_params], kwargs={}, returns=return_type
         )
 
         return foast.FunctionDefinition(
@@ -117,7 +119,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             body=new_body,
             captured_vars=self.visit(node.captured_vars, **kwargs),
             type=new_type,
-            location=node.location
+            location=node.location,
         )
 
     # todo: make sure all scalar arguments are lifted to 0-dim field args
@@ -127,7 +129,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             id=node.id,
             definition=new_definition,
             location=node.location,
-            type=ct.FieldOperatorType(definition=new_definition.type)
+            type=ct.FieldOperatorType(definition=new_definition.type),
         )
 
     def visit_ScanOperator(self, node: foast.ScanOperator, **kwargs) -> foast.ScanOperator:
@@ -135,22 +137,24 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         if not isinstance(new_axis.type, ct.DimensionType):
             raise FieldOperatorTypeDeductionError.from_foast_node(
                 node,
-                msg=f"Argument `dimension` to scan operator `{node.id}` must "
-                    f"be a dimension."
+                msg=f"Argument `dimension` to scan operator `{node.id}` must " f"be a dimension.",
             )
         new_forward = self.visit(node.forward, **kwargs)
         if not new_forward.type.kind == ct.ScalarKind.BOOL:
             raise FieldOperatorTypeDeductionError.from_foast_node(
-                node, msg=f"Argument `forward` to scan operator `{node.id}` must "
-                          f"be a boolean."
+                node, msg=f"Argument `forward` to scan operator `{node.id}` must " f"be a boolean."
             )
         new_init = self.visit(node.init, **kwargs)
         # TODO(tehrengruber): tuple
-        #if not type_info.is_arithmetic(new_init.type):
-        #    raise FieldOperatorTypeDeductionError.from_foast_node(
-        #        node, msg=f"Argument `forward` to scan operator `{node.id}` must "
-        #                  f"be an arithmetic type."
-        #    )
+        if not all(
+            type_info.is_arithmetic(type_)
+            for type_ in type_info.primitive_constituents(new_init.type)
+        ):
+            raise FieldOperatorTypeDeductionError.from_foast_node(
+                node,
+                msg=f"Argument `init` to scan operator `{node.id}` must "
+                f"be an arithmetic type or a composite of arithmetic types.",
+            )
         new_definition = self.visit(node.definition, **kwargs)
         new_type = ct.ScanOperatorType(
             axis=new_axis.type.dim,
@@ -163,9 +167,8 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             init=new_init,
             definition=new_definition,
             type=new_type,
-            location=node.location
+            location=node.location,
         )
-
 
     def visit_Name(self, node: foast.Name, **kwargs) -> foast.Name:
         symtable = kwargs["symtable"]
@@ -358,8 +361,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             )
         except GTTypeError as err:
             raise FieldOperatorTypeDeductionError.from_foast_node(
-                node,
-                msg=f"Invalid argument types in call to `{node.func.id}`!"
+                node, msg=f"Invalid argument types in call to `{node.func.id}`!"
             ) from err
 
         return_type = type_info.return_type(func_type, with_args=arg_types, with_kwargs=kwarg_types)
@@ -372,9 +374,11 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             type=return_type,
         )
 
-        if isinstance(new_func.type,
-                      ct.FunctionType) and not type_info.is_concrete(
-                return_type) and new_node.func.id in FUN_BUILTIN_NAMES:
+        if (
+            isinstance(new_func.type, ct.FunctionType)
+            and not type_info.is_concrete(return_type)
+            and new_node.func.id in FUN_BUILTIN_NAMES
+        ):
             visitor = getattr(self, f"_visit_{new_node.func.id}")
             return visitor(new_node, **kwargs)
 

@@ -89,11 +89,11 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         closures: list[itir.StencilClosure] = []
         for stmt in node.body:
             closures.append(self._visit_stencil_call(stmt, **kwargs))
-            #if isinstance(stmt, past.Call) and isinstance(
+            # if isinstance(stmt, past.Call) and isinstance(
             #    symtable[stmt.func.id].type.returns, common_types.FieldType
-            #):
+            # ):
             #    closures.append(self._visit_stencil_call(stmt, **kwargs))
-            #else:
+            # else:
             #    raise NotImplementedError(
             #        "Only calls to functions returning a Field supported currently."
             #    )

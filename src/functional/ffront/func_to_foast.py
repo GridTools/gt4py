@@ -17,9 +17,10 @@ from __future__ import annotations
 import ast
 import builtins
 import collections
-from typing import Any, Callable, Iterable, Mapping, Type, cast, TypeVar
+from typing import Any, Callable, Iterable, Mapping, Type, cast
 
 import eve
+from functional import common
 from functional.ffront import (
     common_types as ct,
     fbuiltins,
@@ -118,7 +119,9 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
                 foast.Symbol(
                     id=name,
                     type=ct.FunctionType(
-                        args=[ct.DeferredSymbolType(constraint=ct.ScalarType)], # this is a constraint type that will not be inferred (as the function is polymorphic)
+                        args=[
+                            ct.DeferredSymbolType(constraint=ct.ScalarType)
+                        ],  # this is a constraint type that will not be inferred (as the function is polymorphic)
                         kwargs={},
                         returns=cast(
                             ct.DataType, symbol_makers.make_symbol_type_from_typing(value)
@@ -434,12 +437,16 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
         )
 
     def visit_Constant(self, node: ast.Constant, **kwargs) -> foast.Constant:
-        type = symbol_makers.make_symbol_type_from_value(node.value)
-        if not type:
+        try:
+            type_ = symbol_makers.make_symbol_type_from_value(node.value)
+        except common.GTTypeError as e:
             raise FieldOperatorSyntaxError.from_AST(
-                node, msg=f"Constants of type {type(node.value)} are not permitted"
-            )
+                node, msg=f"Constants of type {type(node.value)} are not permitted."
+            ) from e
+
         return foast.Constant(
             # TODO(tehrengruber): is the type actually needed or can this be handled by type deduction?
-            value=node.value, location=self._make_loc(node), type=type
+            value=node.value,
+            location=self._make_loc(node),
+            type=type_,
         )

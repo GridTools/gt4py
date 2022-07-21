@@ -202,7 +202,9 @@ def make_tuple(*args):
 def lift(stencil):
     def impl(*args):
         class _WrappedIterator:
-            def __init__(self, stencil, args, *, offsets: list[OffsetPart] = None, elem=None) -> None:
+            def __init__(
+                self, stencil, args, *, offsets: list[OffsetPart] = None, elem=None
+            ) -> None:
                 assert not offsets or all(isinstance(o, (int, str)) for o in offsets)
                 self.stencil = stencil
                 self.args = args
@@ -214,7 +216,9 @@ def lift(stencil):
                 return _WrappedIterator(self.stencil, self.args, offsets=self.offsets, elem=index)
 
             def shift(self, *offsets: OffsetPart):
-                return _WrappedIterator(self.stencil, self.args, offsets=[*self.offsets, *offsets], elem=self.elem)
+                return _WrappedIterator(
+                    self.stencil, self.args, offsets=[*self.offsets, *offsets], elem=self.elem
+                )
 
             def max_neighbors(self):
                 # TODO cleanup, test edge cases
@@ -377,7 +381,10 @@ def execute_shift(
         assert offset_implementation.origin_axis.value in pos
         new_pos = pos.copy()
         new_pos.pop(offset_implementation.origin_axis.value)
-        if offset_implementation.tbl[pos[offset_implementation.origin_axis.value], index] in [None, -1]:
+        if offset_implementation.tbl[pos[offset_implementation.origin_axis.value], index] in [
+            None,
+            -1,
+        ]:
             return None
         else:
             new_pos[offset_implementation.neighbor_axis.value] = int(
@@ -969,7 +976,9 @@ def fendef_embedded(fun: Callable[..., None], *args: Any, **kwargs: Any):
                     pos,
                     kwargs["offset_provider"],
                     column_axis=column.axis if column else None,
-                ) if not isinstance(inp, numbers.Number) else inp
+                )
+                if not isinstance(inp, numbers.Number)
+                else inp
                 for inp in ins
             )
             res = sten(*ins_iters)

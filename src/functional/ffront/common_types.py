@@ -92,9 +92,8 @@ class TupleType(DataType):
 
 
 class CallableType:
-    """
-    Base class of all callable types.
-    """
+    """Base class of all callable types."""
+
     pass
 
 

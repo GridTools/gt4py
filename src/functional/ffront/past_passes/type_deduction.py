@@ -44,16 +44,15 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         # assert "out" not in new_func.type.kwargs
 
         try:
-            if not isinstance(new_func.type,
-                              (ct.FieldOperatorType, ct.ScanOperatorType)):
+            if not isinstance(new_func.type, (ct.FieldOperatorType, ct.ScanOperatorType)):
                 raise ProgramTypeError.from_past_node(
                     node,
-                    msg=f"Only calls `FieldOperator`s and `ScanOperators` allowed in `Program`, but got `{new_func.type}`."
+                    msg=f"Only calls `FieldOperator`s and `ScanOperators` allowed in `Program`, but got `{new_func.type}`.",
                 )
-            if not "out" in new_kwargs:
+            if "out" not in new_kwargs:
                 # TODO(tehrengruber): check out type
                 raise ProgramTypeError.from_past_node(
-                    node, msg=f"Missing required keyword argument(s) `out`."
+                    node, msg="Missing required keyword argument(s) `out`."
                 )
 
             type_info.is_callable(
@@ -68,7 +67,11 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             ) from ex
 
         return past.Call(
-            func=new_func, args=new_args, kwargs=new_kwargs, type=ct.VoidType(), location=node.location
+            func=new_func,
+            args=new_args,
+            kwargs=new_kwargs,
+            type=ct.VoidType(),
+            location=node.location,
         )
 
     def visit_Name(self, node: past.Name, **kwargs) -> past.Name:

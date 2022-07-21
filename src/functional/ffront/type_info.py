@@ -1,6 +1,6 @@
-from types import EllipsisType
-from typing import Iterator, Type, TypeGuard, cast, Literal
 import functools
+from types import EllipsisType
+from typing import Iterator, Type, TypeGuard, cast
 
 from eve.utils import XIterable, xiter
 from functional.common import Dimension, GTTypeError
@@ -319,32 +319,33 @@ def promote_dims(
 
     return topologically_sorted_list
 
+
 @functools.singledispatch
 def return_type(
-        callable_type: ct.FieldOperatorType,
-        *,
-        with_args: list[ct.SymbolType],
-        with_kwargs: dict[str, ct.SymbolType]
+    callable_type: ct.FieldOperatorType,
+    *,
+    with_args: list[ct.SymbolType],
+    with_kwargs: dict[str, ct.SymbolType],
 ):
     raise TypeError()
 
 
 @return_type.register
 def return_type_func(
-        func_type: ct.FunctionType,
-        *,
-        with_args: list[ct.SymbolType],
-        with_kwargs: dict[str, ct.SymbolType]
+    func_type: ct.FunctionType,
+    *,
+    with_args: list[ct.SymbolType],
+    with_kwargs: dict[str, ct.SymbolType],
 ):
     return func_type.returns
 
 
 @return_type.register
 def return_type_fieldop(
-        fieldop_type: ct.FieldOperatorType,
-        *,
-        with_args: list[ct.SymbolType],
-        with_kwargs: dict[str, ct.SymbolType]
+    fieldop_type: ct.FieldOperatorType,
+    *,
+    with_args: list[ct.SymbolType],
+    with_kwargs: dict[str, ct.SymbolType],
 ):
     ret_type = return_type(fieldop_type.definition, with_args=with_args, with_kwargs=with_kwargs)
     if isinstance(ret_type, ct.ScalarType):
@@ -354,29 +355,30 @@ def return_type_fieldop(
 
 @return_type.register
 def return_type_scanop(
-        callable_type: ct.ScanOperatorType,
-        *,
-        with_args: list[ct.SymbolType],
-        with_kwargs: dict[str, ct.SymbolType]
+    callable_type: ct.ScanOperatorType,
+    *,
+    with_args: list[ct.SymbolType],
+    with_kwargs: dict[str, ct.SymbolType],
 ):
     carry_dtype = callable_type.definition.returns
     promoted_dims = promote_dims(
         *(extract_dims(arg) for arg in with_args),
         # todo: check if we are fine with this
-        (callable_type.axis,)
+        (callable_type.axis,),
     )
     if isinstance(carry_dtype, ct.TupleType):
         return ct.TupleType(
-            types=[ct.FieldType(dims=promoted_dims, dtype=dtype) for dtype in carry_dtype.types])
+            types=[ct.FieldType(dims=promoted_dims, dtype=dtype) for dtype in carry_dtype.types]
+        )
     return ct.FieldType(dims=promoted_dims, dtype=carry_dtype)
 
 
 @return_type.register
 def return_type_(
-        field_type: ct.FieldType,
-        *,
-        with_args: list[ct.SymbolType],
-        with_kwargs: dict[str, ct.SymbolType]
+    field_type: ct.FieldType,
+    *,
+    with_args: list[ct.SymbolType],
+    with_kwargs: dict[str, ct.SymbolType],
 ):
     if not is_callable(field_type, with_args=with_args, with_kwargs=with_kwargs):
         raise TypeError()
@@ -426,7 +428,7 @@ def function_signature_incompatibilities_func(
 
     for kwarg in set(func_type.kwargs.keys()) & set(kwargs.keys()):
         if (a_kwarg := func_type.kwargs[kwarg]) != (
-                b_kwarg := kwargs[kwarg]
+            b_kwarg := kwargs[kwarg]
         ) and not is_concretizable(a_kwarg, to_type=b_kwarg):
             yield f"Expected keyword argument {kwarg} to be of type {func_type.kwargs[kwarg]}, but got {kwargs[kwarg]}."
 
@@ -452,16 +454,19 @@ def function_signature_incompatibilities_scanop(
     except GTTypeError as e:
         yield e.args[0]
 
-    if len(args) != len(scanop_type.definition.args)-1:
+    if len(args) != len(scanop_type.definition.args) - 1:
         yield f"Scan operator takes {len(scanop_type.definition.args)-1} arguments, but {len(args)} were given."
         return
 
     # build a function type to leverage the already existing signature checking
     #  capabilities
     function_type = ct.FunctionType(
-        args=[ct.FieldType(dims=dims, dtype=dtype) for dims, dtype in zip(arg_dims, scanop_type.definition.args[1:])],
+        args=[
+            ct.FieldType(dims=dims, dtype=dtype)
+            for dims, dtype in zip(arg_dims, scanop_type.definition.args[1:])
+        ],
         kwargs={},
-        returns=ct.DeferredSymbolType(constraint=None)
+        returns=ct.DeferredSymbolType(constraint=None),
     )
 
     yield from function_signature_incompatibilities(function_type, args, kwargs)
@@ -469,7 +474,7 @@ def function_signature_incompatibilities_scanop(
 
 @function_signature_incompatibilities.register
 def function_signature_incompatibilities_field(
-    field_type: ct.FieldType, args: list[ct.SymbolType], kwargs: Literal[{}]
+    field_type: ct.FieldType, args: list[ct.SymbolType], kwargs: dict[str, ct.SymbolType]
 ) -> Iterator[str]:
     if len(args) != 1:
         yield f"Function takes 1 argument(s), but {len(args)} were given."
@@ -479,13 +484,14 @@ def function_signature_incompatibilities_field(
         yield f"Expected 0-th argument to be of type {ct.OffsetType}, but got {args[0]}."
         return
 
+    if kwargs:
+        yield f"Got unexpected keyword argument(s) `{'`, `'.join(kwargs.keys())}`."
+        return
+
     source_dim = args[0].source
     target_dims = args[0].target
     if field_type.dims and source_dim not in field_type.dims:
-        yield f"Incompatible offset can not shift field defined on " \
-              f"{', '.join([dim.value for dim in field_type.dims])} from " \
-              f"{source_dim.value} to target dim(s): " \
-              f"{', '.join([dim.value for dim in target_dims])}"
+        yield f"Incompatible offset can not shift field defined on " f"{', '.join([dim.value for dim in field_type.dims])} from " f"{source_dim.value} to target dim(s): " f"{', '.join([dim.value for dim in target_dims])}"
 
 
 def is_callable(

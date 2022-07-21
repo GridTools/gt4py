@@ -26,8 +26,8 @@ import functools
 import types
 import typing
 import warnings
-from typing import Callable, Iterable, Protocol, ClassVar, TypeVar, Generic, Type
 from numbers import Number
+from typing import Callable, Generic, Iterable, Protocol, Type, TypeVar
 
 from devtools import debug
 
@@ -40,18 +40,17 @@ from functional.ffront import (
     field_operator_ast as foast,
     program_ast as past,
     symbol_makers,
-    type_info
+    type_info,
 )
-from functional.ffront.fbuiltins import BUILTINS, Dimension, FieldOffset
+from functional.ffront.fbuiltins import Dimension, FieldOffset
+from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduction
 from functional.ffront.foast_to_itir import FieldOperatorLowering
 from functional.ffront.func_to_foast import FieldOperatorParser
 from functional.ffront.func_to_past import ProgramParser
 from functional.ffront.past_passes.type_deduction import ProgramTypeDeduction
-from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduction
 from functional.ffront.past_to_itir import ProgramLowering
 from functional.ffront.source_utils import CapturedVars
 from functional.iterator import ir as itir
-from functional.iterator.embedded import constant_field
 from functional.iterator.processor_interface import (
     FencilExecutor,
     FencilFormatter,
@@ -418,6 +417,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         backend: The backend to be used for code generation.
         definition: The Python function object corresponding to the PAST node.
     """
+
     foast_node: OperatorNodeT
     captured_vars: CapturedVars
     externals: dict[str, Any]
@@ -437,17 +437,21 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         captured_vars = CapturedVars.from_function(definition)
         foast_definition_node = FieldOperatorParser.apply_to_function(definition)
         loc = foast_definition_node.location
-        operator_attribute_nodes = {
-            key: foast.Constant(value=value,
-                                type=symbol_makers.make_symbol_type_from_value(
-                                    value), location=loc)
-            for key, value in operator_attributes.items()
-        } if operator_attributes else {}
+        operator_attribute_nodes = (
+            {
+                key: foast.Constant(
+                    value=value, type=symbol_makers.make_symbol_type_from_value(value), location=loc
+                )
+                for key, value in operator_attributes.items()
+            }
+            if operator_attributes
+            else {}
+        )
         untyped_foast_node = operator_node_cls(
             id=foast_definition_node.id,
             definition=foast_definition_node,
             location=loc,
-            **(operator_attribute_nodes)
+            **(operator_attribute_nodes),
         )
         foast_node = FieldOperatorTypeDeduction.apply(untyped_foast_node)
         return cls(
@@ -478,10 +482,12 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
     def __gt_captured_vars__(self) -> CapturedVars:
         return self.captured_vars
 
-    def as_program(self, arg_types: list[ct.SymbolType], kwarg_types: dict[str, ct.SymbolType]) -> Program:
+    def as_program(
+        self, arg_types: list[ct.SymbolType], kwarg_types: dict[str, ct.SymbolType]
+    ) -> Program:
         # todo(tehrengruber): add comment why arg types are needed
         # todo(tehrengruber): use kwargs for check
-        #if any(param.id == "out" for param in self.foast_node.params):
+        # if any(param.id == "out" for param in self.foast_node.params):
         #    raise Exception(
         #        "Direct call to Field operator whose signature contains an argument `out` is not permitted."
         #    )
@@ -502,7 +508,10 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         ]
         params_ref = [past.Name(id=pdecl.id, location=loc) for pdecl in params_decl]
         out_sym: past.Symbol = past.DataSymbol(
-            id="out", type=type_info.return_type(type_, with_args=arg_types, with_kwargs=kwarg_types), namespace=ct.Namespace.LOCAL, location=loc
+            id="out",
+            type=type_info.return_type(type_, with_args=arg_types, with_kwargs=kwarg_types),
+            namespace=ct.Namespace.LOCAL,
+            location=loc,
         )
         out_ref = past.Name(id="out", location=loc)
 
@@ -547,8 +556,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
             backend=self.backend,
         )
 
-    def __call__(self, *args, out, offset_provider: dict[str, Dimension],
-                 **kwargs) -> None:
+    def __call__(self, *args, out, offset_provider: dict[str, Dimension], **kwargs) -> None:
         # TODO(tehrengruber): check all offset providers are given
         # deduce argument types
         arg_types = []
@@ -558,13 +566,15 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         for name, arg in kwargs.items():
             kwarg_types[name] = symbol_makers.make_symbol_type_from_value(arg)
 
-        return self.as_program(arg_types, kwarg_types)(*args, out,
-                                                       offset_provider=offset_provider,
-                                                       **kwargs)
+        return self.as_program(arg_types, kwarg_types)(
+            *args, out, offset_provider=offset_provider, **kwargs
+        )
 
 
 @typing.overload
-def field_operator(definition: types.FunctionType) -> FieldOperator[foast.FieldOperator]:
+def field_operator(
+    definition: types.FunctionType, *, externals: Optional[dict], backend: Optional[FencilExecutor]
+) -> FieldOperator[foast.FieldOperator]:
     ...
 
 
@@ -604,13 +614,26 @@ def field_operator(
 
 
 @typing.overload
-def scan_operator(definition: types.FunctionType) -> FieldOperator[foast.ScanOperator]:
+def scan_operator(
+    definition: types.FunctionType,
+    *,
+    axis: Dimension,
+    forward: bool,
+    init: Number,
+    externals: Optional[dict],
+    backend: Optional[str],
+) -> FieldOperator[foast.ScanOperator]:
     ...
 
 
 @typing.overload
 def scan_operator(
-    *, externals: Optional[dict], backend: Optional[str]
+    *,
+    axis: Dimension,
+    forward: bool,
+    init: Number,
+    externals: Optional[dict],
+    backend: Optional[str],
 ) -> Callable[[types.FunctionType], FieldOperator[foast.ScanOperator]]:
     ...
 
@@ -620,12 +643,12 @@ def scan_operator(
     *,
     axis: Dimension,
     forward: bool = True,
-    init: Number = 0.,
+    init: Number = 0.0,  # type: ignore[assignment]
     externals=None,
     backend=None,
 ):
     """
-    Generate an implementation of the scan operator from a Python function object.+
+    Generate an implementation of the scan operator from a Python function object.
 
     Arguments:
         definition: Function from scalars to a scalar.
@@ -636,11 +659,17 @@ def scan_operator(
         init: Initial value for the carry argument of the scan pass.
 
     Examples:
-        >>>
+        >>> import numpy as np
+        >>> from functional.iterator.embedded import np_as_located_field
+        >>> KDim = Dimension("K")
+        >>> field = np_as_located_field(KDim)(np.ones((10,)))
+        >>> out = np_as_located_field(KDim)(np.zeros((10,)))
         >>> @scan_operator(axis=KDim, forward=True, init=0.)
-        >>> def scan_operator(carry: float, val: float) -> float:
-        >>>     return carry+val.
-        >>> scan_operator(field, out=out)
+        ... def scan_operator(carry: float, val: float) -> float:
+        ...     return carry+val
+        >>> scan_operator(field, out=out, offset_provider={})
+        >>> out.array()
+        array([ 1.,  2.,  3.,  4.,  5.,  6.,  7.,  8.,  9., 10.])
     """
 
     def scan_operator_inner(definition: types.FunctionType) -> FieldOperator:
@@ -649,11 +678,7 @@ def scan_operator(
             externals,
             backend,
             operator_node_cls=foast.ScanOperator,
-            operator_attributes={
-                "axis": axis,
-                "forward": forward,
-                "init": init
-            }
+            operator_attributes={"axis": axis, "forward": forward, "init": init},
         )
 
     return scan_operator_inner if definition is None else scan_operator_inner(definition)

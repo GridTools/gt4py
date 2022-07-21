@@ -91,17 +91,20 @@ def is_callable_cases():
     scanop_type = ct.ScanOperatorType(
         axis=Dimension("K"),
         definition=ct.FunctionType(
-            args=[float_type, int_type, int_type],
-            kwargs={},
-            returns=float_type
-        )
+            args=[float_type, int_type, int_type], kwargs={}, returns=float_type
+        ),
     )
 
     return [
         # func_type, args, kwargs, expected incompatibilities
         *not_callable,
         (nullary_func_type, [], {}, []),
-        (nullary_func_type, [bool_type], {}, [r"Function takes 0 argument\(s\), but 1 were given."]),
+        (
+            nullary_func_type,
+            [bool_type],
+            {},
+            [r"Function takes 0 argument\(s\), but 1 were given."],
+        ),
         (
             nullary_func_type,
             [],
@@ -130,15 +133,14 @@ def is_callable_cases():
         (
             scanop_type,
             [
-                ct.FieldType(dims=[Dimension("K")],
-                             dtype=float_type),
+                ct.FieldType(dims=[Dimension("K")], dtype=float_type),
                 ct.FieldType(dims=[Dimension("K")], dtype=float_type),
             ],
             {},
             [
                 r"Expected 0-th argument to be of type Field\[\[K\], dtype=int64\], but got Field\[\[K\], dtype=float64\]",
-                r"Expected 1-th argument to be of type Field\[\[K\], dtype=int64\], but got Field\[\[K\], dtype=float64\]"
-            ]
+                r"Expected 1-th argument to be of type Field\[\[K\], dtype=int64\], but got Field\[\[K\], dtype=float64\]",
+            ],
         ),
         (
             scanop_type,
@@ -147,8 +149,10 @@ def is_callable_cases():
                 ct.FieldType(dims=[Dimension("K")], dtype=int_type),
             ],
             {},
-            [r"Dimensions can not be promoted. Could not determine order of the "
-             r"following dimensions: J, K."]
+            [
+                r"Dimensions can not be promoted. Could not determine order of the "
+                r"following dimensions: J, K."
+            ],
         ),
         (
             scanop_type,
@@ -157,7 +161,7 @@ def is_callable_cases():
                 ct.FieldType(dims=[Dimension("K")], dtype=int_type),
             ],
             {},
-            []
+            [],
         ),
         (
             scanop_type,
@@ -166,7 +170,7 @@ def is_callable_cases():
                 ct.FieldType(dims=[Dimension("I"), Dimension("J")], dtype=int_type),
             ],
             {},
-            []
+            [],
         ),
     ]
 

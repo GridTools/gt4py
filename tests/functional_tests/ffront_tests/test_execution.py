@@ -343,9 +343,7 @@ def test_maxover_execution_sparse(reduction_setup):
     inp_field = np_as_located_field(Vertex, V2EDim)(rs.v2e_table)
 
     @field_operator
-    def maxover_fieldoperator(
-        inp_field: Field[[Vertex, V2EDim], int64]
-    ) -> Field[[Vertex], int64]:
+    def maxover_fieldoperator(inp_field: Field[[Vertex, V2EDim], int64]) -> Field[[Vertex], int64]:
         return max_over(inp_field, axis=V2EDim)
 
     maxover_fieldoperator(inp_field, out=rs.out, offset_provider=rs.offset_provider)
@@ -713,13 +711,13 @@ def test_simple_scan(forward):
     size = 10
     init = 1.0
     out = np_as_located_field(KDim)(np.zeros((size,)))
-    expected = np.arange(init + 1., init + 1. + size, 1)
+    expected = np.arange(init + 1.0, init + 1.0 + size, 1)
     if not forward:
         expected = np.flip(expected)
 
     @scan_operator(axis=KDim, forward=forward, init=init)
     def simple_scan_operator(carry: float) -> float:
-        return carry+1.
+        return carry + 1.0
 
     simple_scan_operator(out=out, offset_provider={})
 
@@ -732,7 +730,9 @@ def test_solve_triag():
     rng = np.random.default_rng()
     a_np, b_np, c_np, d_np = (rng.normal(size=shape) for _ in range(4))
     b_np *= 2
-    a, b, c, d = (np_as_located_field(IDim, JDim, KDim)(np_arr) for np_arr in [a_np, b_np, c_np, d_np])
+    a, b, c, d = (
+        np_as_located_field(IDim, JDim, KDim)(np_arr) for np_arr in [a_np, b_np, c_np, d_np]
+    )
     out = np_as_located_field(IDim, JDim, KDim)(np.zeros(shape))
 
     # compute reference
@@ -743,26 +743,22 @@ def test_solve_triag():
     matrices[:, :, i[:-1], i[1:]] = c_np[:, :, :-1]
     expected = np.linalg.solve(matrices, d_np)
 
-    @scan_operator(axis=KDim, forward=True, init=(0., 0.))
+    @scan_operator(axis=KDim, forward=True, init=(0.0, 0.0))
     def tridiag_forward(
-            state: tuple[float, float],
-            a: float, b: float, c: float, d: float
+        state: tuple[float, float], a: float, b: float, c: float, d: float
     ) -> tuple[float, float]:
-        return (
-            c / (b - a * state[0]),
-            (d - a * state[1]) / (b - a * state[0])
-        )
+        return (c / (b - a * state[0]), (d - a * state[1]) / (b - a * state[0]))
 
-    @scan_operator(axis=KDim, forward=False, init=0.)
+    @scan_operator(axis=KDim, forward=False, init=0.0)
     def tridiag_backward(x_kp1: float, cp: float, dp: float) -> float:
         return dp - cp * x_kp1
 
     @field_operator
     def solve_tridiag(
-            a: Field[[IDim, JDim, KDim], float],
-            b: Field[[IDim, JDim, KDim], float],
-            c: Field[[IDim, JDim, KDim], float],
-            d: Field[[IDim, JDim, KDim], float]
+        a: Field[[IDim, JDim, KDim], float],
+        b: Field[[IDim, JDim, KDim], float],
+        c: Field[[IDim, JDim, KDim], float],
+        d: Field[[IDim, JDim, KDim], float],
     ):
         cp, dp = tridiag_forward(a, b, c, d)
         return tridiag_backward(cp, dp)

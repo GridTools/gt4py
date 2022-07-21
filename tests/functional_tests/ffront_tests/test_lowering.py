@@ -65,9 +65,7 @@ def test_scalar_arg():
     lowered = FieldOperatorLowering.apply(parsed)
 
     reference = im.deref_(
-        im.lift_(im.lambda__("bar")(im.multiplies_("alpha", im.deref_("bar"))))(
-            "bar"
-        )
+        im.lift_(im.lambda__("bar")(im.multiplies_("alpha", im.deref_("bar"))))("bar")
     )
 
     assert lowered.expr == reference
