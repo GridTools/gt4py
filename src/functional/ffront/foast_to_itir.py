@@ -409,7 +409,7 @@ class FieldOperatorLowering(NodeTranslator):
         raise FieldOperatorLoweringError(f"Encountered a type cast, which is not supported: {node}")
 
     def visit_Constant(self, node: foast.Constant, **kwargs) -> itir.Literal:
-        # todo: check constant is supported in iterator ir
+        # TODO: check constant is supported in iterator ir
         if isinstance(node.type, ct.ScalarType) and not node.type.shape:
             typename = node.type.kind.name.lower()
             return im.literal_(str(node.value), typename)

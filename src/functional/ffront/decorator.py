@@ -485,9 +485,9 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
     def as_program(
         self, arg_types: list[ct.SymbolType], kwarg_types: dict[str, ct.SymbolType]
     ) -> Program:
-        # todo(tehrengruber): implement mechanism to deduce default values
+        # TODO(tehrengruber): implement mechanism to deduce default values
         #  of arg and kwarg types
-        # todo(tehrengruber): check foast operator has no out argument that clashes
+        # TODO(tehrengruber): check foast operator has no out argument that clashes
         #  with the out argument of the program we generate here.
 
         name = self.foast_node.id
