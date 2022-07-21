@@ -15,7 +15,7 @@ from typing import Optional, cast
 
 import functional.ffront.field_operator_ast as foast
 from eve import NodeTranslator, NodeVisitor, traits
-from functional.common import GTSyntaxError, GTTypeError
+from functional.common import DimensionKind, GTSyntaxError, GTTypeError
 from functional.ffront import common_types as ct, type_info
 from functional.ffront.fbuiltins import FUN_BUILTIN_NAMES
 
@@ -214,7 +214,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             case ct.TupleType(types=types):
                 new_type = types[node.index]  # type: ignore[has-type]  # used to work, now mypy is going berserk for unknown reasons
             case ct.OffsetType(source=source, target=(target1, target2)):
-                if not target2.local:  # type: ignore[has-type]  # used to work, now mypy is going berserk for unknown reasons
+                if not target2.kind == DimensionKind.LOCAL:  # type: ignore[has-type]  # used to work, now mypy is going berserk for unknown reasons
                     raise FieldOperatorTypeDeductionError.from_foast_node(
                         new_value, msg="Second dimension in offset must be a local dimension."
                     )
@@ -230,7 +230,6 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                     )
                 new_type = new_value.type
             case _:
-                breakpoint()
                 raise FieldOperatorTypeDeductionError.from_foast_node(
                     new_value, msg="Could not deduce type of subscript expression!"
                 )

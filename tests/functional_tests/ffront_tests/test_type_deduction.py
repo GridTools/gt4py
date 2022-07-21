@@ -15,7 +15,7 @@ from typing import Optional, Pattern
 
 import pytest
 
-from functional.common import GTTypeError
+from functional.common import DimensionKind, GTTypeError
 from functional.ffront import common_types as ct, type_info
 from functional.ffront.fbuiltins import (
     Dimension,
@@ -351,7 +351,7 @@ def test_notting_int():
 def remap_setup():
     X = Dimension("X")
     Y = Dimension("Y")
-    Y2XDim = Dimension("Y2X", local=True)
+    Y2XDim = Dimension("Y2X", kind=DimensionKind.LOCAL)
     Y2X = FieldOffset("Y2X", source=X, target=(Y, Y2XDim))
     return X, Y, Y2XDim, Y2X
 

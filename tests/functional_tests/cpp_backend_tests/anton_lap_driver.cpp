@@ -5,6 +5,7 @@
 #include <gtest/gtest.h>
 
 #include <fn_select.hpp>
+#include <gridtools/sid/rename_dimensions.hpp>
 #include <test_environment.hpp>
 
 namespace {
@@ -22,10 +23,16 @@ GT_REGRESSION_TEST(fn_lap, test_environment<1>, fn_backend_t) {
            in(i, j - 1, k) - 4 * in(i, j, k);
   };
 
-  generated::lap_fencil(
+  generated::lap_fencil(tuple{})(
       fn_backend_t(),
-      cartesian_domain(TypeParam::fn_cartesian_sizes(), std::tuple{1, 1, 0}),
-      actual, TypeParam::make_const_storage(in));
+      at_key<cartesian::dim::i>(TypeParam::fn_cartesian_sizes()),
+      at_key<cartesian::dim::j>(TypeParam::fn_cartesian_sizes()),
+      at_key<cartesian::dim::k>(TypeParam::fn_cartesian_sizes()), 1, 1, 0,
+      sid::rename_numbered_dimensions<generated::IDim_t, generated::JDim_t,
+                                      generated::KDim_t>(actual),
+      sid::rename_numbered_dimensions<generated::IDim_t, generated::JDim_t,
+                                      generated::KDim_t>(
+          TypeParam::make_const_storage(in)));
 
   TypeParam::verify(expected, actual);
 }
