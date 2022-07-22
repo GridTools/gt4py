@@ -11,7 +11,7 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""C++ python bindings IR and generator."""
+"""Python bindings generator for C++ functions."""
 
 
 from typing import Any, Sequence
@@ -26,10 +26,6 @@ from eve.codegen import JinjaTemplate as as_jinja, TemplatedGenerator
 
 
 class Expr(Node):
-    pass
-
-
-class Stmt(Node):
     pass
 
 
@@ -49,7 +45,7 @@ class FunctionCall(Expr):
     args: Sequence[Any]
 
 
-class ReturnStmt(Stmt):
+class ReturnStmt(Node):
     expr: Expr
 
 
@@ -62,7 +58,7 @@ class FunctionParameter(Node):
 class WrapperFunction(Node):
     name: str
     parameters: Sequence[FunctionParameter]
-    body: Stmt
+    body: ReturnStmt
 
 
 class BindingFunction(Node):
