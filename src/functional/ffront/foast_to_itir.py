@@ -39,7 +39,7 @@ def is_local_kind(symbol_type: ct.FieldType) -> bool:
     return any(dim.kind == DimensionKind.LOCAL for dim in symbol_type.dims)
 
 
-class IteratorTypeKind(enum.Enum):
+class ITIRTypeKind(enum.Enum):
     VALUE = 0
     ITERATOR = 1
     ENCAPSULATED_ITERATOR = 2
@@ -47,7 +47,7 @@ class IteratorTypeKind(enum.Enum):
 
 def iterator_type_kind(
     symbol_type: ct.ScalarType | ct.FieldType | ct.TupleType,
-) -> IteratorTypeKind:
+) -> ITIRTypeKind:
     """
     Return the corresponding type kind (on iterator level) to a FOAST expression of the given symbol type.
 
@@ -76,7 +76,7 @@ def iterator_type_kind(
     +------------------------------------+------------------------+
     """
     if isinstance(symbol_type, ct.FieldType):
-        return IteratorTypeKind.ITERATOR
+        return ITIRTypeKind.ITERATOR
     elif any(type_info.primitive_constituents(symbol_type).if_isinstance(ct.FieldType)):
         # if we encounter any field type that is defined on a local dimension
         #  the resulting type on iterator ir level is not an iterator, but contains
@@ -86,13 +86,13 @@ def iterator_type_kind(
             .if_isinstance(ct.FieldType)
             .filter(is_local_kind)
         ):
-            return IteratorTypeKind.ENCAPSULATED_ITERATOR
+            return ITIRTypeKind.ENCAPSULATED_ITERATOR
         # otherwise we get an iterator, e.g. an iterator of values or tuples
-        return IteratorTypeKind.ITERATOR
-    return IteratorTypeKind.VALUE
+        return ITIRTypeKind.ITERATOR
+    return ITIRTypeKind.VALUE
 
 
-def is_expr_with_iterator_type_kind(it_type_kind: IteratorTypeKind) -> Callable[[foast.Expr], bool]:
+def is_expr_with_iterator_type_kind(it_type_kind: ITIRTypeKind) -> Callable[[foast.Expr], bool]:
     def predicate(node: foast.Expr):
         return iterator_type_kind(node.type) is it_type_kind
 
@@ -123,11 +123,11 @@ def to_value(node: foast.LocatedNode) -> Callable[[itir.Expr], itir.Expr]:
     >>> to_value(scalar_b)(im.ref("a"))
     SymRef(id=SymbolRef('a'))
     """
-    if iterator_type_kind(node.type) is IteratorTypeKind.ITERATOR:
+    if iterator_type_kind(node.type) is ITIRTypeKind.ITERATOR:
         # just to ensure we don't accidentally deref a local field
         assert not (isinstance(node.type, ct.FieldType) and is_local_kind(node.type))
         return im.deref_
-    elif iterator_type_kind(node.type) is IteratorTypeKind.VALUE:
+    elif iterator_type_kind(node.type) is ITIRTypeKind.VALUE:
         return lambda x: x
 
     raise AssertionError(f"Type {node.type} can not be turned into a value.")
@@ -235,7 +235,7 @@ class FieldOperatorLowering(NodeTranslator):
         if any(
             node.pre_walk_values()
             .if_isinstance(foast.Name)
-            .filter(is_expr_with_iterator_type_kind(IteratorTypeKind.ENCAPSULATED_ITERATOR))
+            .filter(is_expr_with_iterator_type_kind(ITIRTypeKind.ENCAPSULATED_ITERATOR))
         ):
             raise NotImplementedError(
                 "Using composite types (e.g. tuples) containing local fields not supported."
@@ -243,7 +243,7 @@ class FieldOperatorLowering(NodeTranslator):
         param_names = (
             node.pre_walk_values()
             .if_isinstance(foast.Name)
-            .filter(is_expr_with_iterator_type_kind(IteratorTypeKind.ITERATOR))
+            .filter(is_expr_with_iterator_type_kind(ITIRTypeKind.ITERATOR))
             .getattr("id")
             .unique()
             .to_list()
@@ -252,11 +252,11 @@ class FieldOperatorLowering(NodeTranslator):
 
     def visit_Subscript(self, node: foast.Subscript, **kwargs) -> itir.FunCall:
         value = self.visit(node.value, **kwargs)
-        if iterator_type_kind(node.value.type) is IteratorTypeKind.ITERATOR:
+        if iterator_type_kind(node.value.type) is ITIRTypeKind.ITERATOR:
             return self._lift_lambda(node)(im.tuple_get_(node.index, im.deref_(value)))
         elif iterator_type_kind(node.value.type) in (
-            IteratorTypeKind.VALUE,
-            IteratorTypeKind.ENCAPSULATED_ITERATOR,
+            ITIRTypeKind.VALUE,
+            ITIRTypeKind.ENCAPSULATED_ITERATOR,
         ):
             return im.tuple_get_(node.index, value)
         raise AssertionError("Unexpected `IteratorTypeKind`.")
@@ -266,21 +266,21 @@ class FieldOperatorLowering(NodeTranslator):
         #  want to have a value. As soon as we have one local field in the
         #  expression we choose a tuple of iterators layout (which other
         #  parts of the lowering rely on).
-        if iterator_type_kind(node.type) is IteratorTypeKind.ITERATOR:
+        if iterator_type_kind(node.type) is ITIRTypeKind.ITERATOR:
             elts = tuple(to_value(el)(self.visit(el, **kwargs)) for el in node.elts)
             return self._lift_lambda(node)(im.make_tuple_(*elts))
         elif iterator_type_kind(node.type) in (
-            IteratorTypeKind.VALUE,
-            IteratorTypeKind.ENCAPSULATED_ITERATOR,
+            ITIRTypeKind.VALUE,
+            ITIRTypeKind.ENCAPSULATED_ITERATOR,
         ):
             elts = tuple(self.visit(el, **kwargs) for el in node.elts)
             return im.make_tuple_(*elts)
         raise AssertionError("Unexpected `IteratorTypeKind`.")
 
     def _lift_if_field(self, node: foast.LocatedNode) -> Callable[[itir.Expr], itir.Expr]:
-        if iterator_type_kind(node.type) is IteratorTypeKind.VALUE:
+        if iterator_type_kind(node.type) is ITIRTypeKind.VALUE:
             return lambda x: x
-        elif iterator_type_kind(node.type) is IteratorTypeKind.ITERATOR:
+        elif iterator_type_kind(node.type) is ITIRTypeKind.ITERATOR:
             return self._lift_lambda(node)
         raise AssertionError("Unexpected `IteratorTypeKind`.")
 
@@ -434,7 +434,7 @@ class InsideReductionLowering(FieldOperatorLowering):
 
     def visit_Name(self, node: foast.Name, **kwargs) -> itir.SymRef:
         uid = f"{node.id}__{self._sequential_id()}"
-        if iterator_type_kind(node.type) is IteratorTypeKind.ENCAPSULATED_ITERATOR:
+        if iterator_type_kind(node.type) is ITIRTypeKind.ENCAPSULATED_ITERATOR:
             raise NotImplementedError(
                 "Using composite types (e.g. tuples) containing local fields not supported."
             )
