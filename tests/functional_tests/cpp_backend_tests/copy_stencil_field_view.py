@@ -3,7 +3,7 @@ import sys
 from numpy import float64
 
 from functional.common import Field
-from functional.fencil_processors.gtfn.gtfn_backend import generate
+from functional.fencil_processors.codegens.gtfn.gtfn_backend import generate
 from functional.ffront.decorator import field_operator, program
 from functional.iterator.runtime import CartesianAxis
 
