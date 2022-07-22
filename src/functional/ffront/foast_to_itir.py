@@ -49,19 +49,19 @@ def iterator_type_kind(
     symbol_type: ct.ScalarType | ct.FieldType | ct.TupleType,
 ) -> IteratorTypeKind:
     """
-    Return the kind of type on iterator level an foast expr of given type corresponds to.
+    Return the corresponding type kind (on iterator level) to a FOAST expression of the given symbol type.
 
     This function is used both to decide on how to lower an foast expression
     of the given type and how to handle such expressions in other expressions.
 
-    - VALUE: The expression is a value, e.g. a scalar.
-    - ITERATOR: The expression can be derefed returning a value or composite
-        object of values (e.g. tuple).
-    - ENCAPSULATED_ITERATOR: The expression is a composite object (e.g. tuple)
-        that contains at least one iterator.
+    - VALUE: The lowered expression is a value, e.g. a scalar.
+    - ITERATOR: The lowered expression is an iterator that can be dereferenced,
+        returning a value or composite object of values (e.g. tuple).
+    - ENCAPSULATED_ITERATOR: The lowered expression is a composite object
+        (e.g. tuple) that contains at least one iterator.
 
     +------------------------------------+------------------------+
-    | Expr                               | Iterator Type Kind     |
+    | FOAST Expr                         | Iterator Type Kind     |
     +====================================+========================+
     | 1                                  | VALUE                  |
     | regular_field                      | ITERATOR               |
