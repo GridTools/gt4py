@@ -1,6 +1,7 @@
 from types import EllipsisType
 from typing import Iterator, Type, TypeGuard, cast
 
+from eve.utils import XIterable, xiter
 from functional.common import Dimension, GTTypeError
 from functional.ffront import common_types as ct
 
@@ -42,6 +43,36 @@ def type_class(symbol_type: ct.SymbolType) -> Type[ct.SymbolType]:
     raise GTTypeError(
         f"Invalid type for TypeInfo: requires {ct.SymbolType}, got {type(symbol_type)}!"
     )
+
+
+def primitive_constituents(
+    symbol_type: ct.ScalarType | ct.FieldType | ct.TupleType,
+) -> XIterable[ct.ScalarType | ct.FieldType]:
+    """
+    Return the primitive types contained in a composite type.
+
+    >>> from functional.common import Dimension
+    >>> I = Dimension(value="I")
+    >>> int_type = ct.ScalarType(kind=ct.ScalarKind.INT)
+    >>> field_type = ct.FieldType(dims=[I], dtype=int_type)
+
+    >>> tuple_type = ct.TupleType(types=[int_type, field_type])
+    >>> primitive_constituents(tuple_type).to_list()  # doctest: +ELLIPSIS
+    [ScalarType(...), FieldType(...)]
+
+    >>> nested_tuple = ct.TupleType(types=[field_type, tuple_type])
+    >>> primitive_constituents(nested_tuple).to_list()  # doctest: +ELLIPSIS
+    [FieldType(...), ScalarType(...), FieldType(...)]
+    """
+
+    def constituents_yielder(symbol_type: ct.SymbolType):
+        if isinstance(symbol_type, ct.TupleType):
+            for el_type in symbol_type.types:
+                yield from constituents_yielder(el_type)
+        else:
+            yield symbol_type
+
+    return xiter(constituents_yielder(symbol_type))
 
 
 def extract_dtype(symbol_type: ct.SymbolType) -> ct.ScalarType:
