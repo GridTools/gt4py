@@ -227,8 +227,8 @@ class FieldOperatorLowering(NodeTranslator):
         if iterator_type_kind(node.value.type) is ITIRTypeKind.ITERATOR:
             return self._lift_lambda(node)(im.tuple_get_(node.index, im.deref_(value)))
         elif iterator_type_kind(node.value.type) in (
-                ITIRTypeKind.VALUE,
-                ITIRTypeKind.ENCAPSULATED_ITERATOR,
+            ITIRTypeKind.VALUE,
+            ITIRTypeKind.ENCAPSULATED_ITERATOR,
         ):
             return im.tuple_get_(node.index, value)
         raise AssertionError("Unexpected `IteratorTypeKind`.")
@@ -242,8 +242,8 @@ class FieldOperatorLowering(NodeTranslator):
             elts = tuple(to_value(el)(self.visit(el, **kwargs)) for el in node.elts)
             return self._lift_lambda(node)(im.make_tuple_(*elts))
         elif iterator_type_kind(node.type) in (
-                ITIRTypeKind.VALUE,
-                ITIRTypeKind.ENCAPSULATED_ITERATOR,
+            ITIRTypeKind.VALUE,
+            ITIRTypeKind.ENCAPSULATED_ITERATOR,
         ):
             elts = tuple(self.visit(el, **kwargs) for el in node.elts)
             return im.make_tuple_(*elts)
