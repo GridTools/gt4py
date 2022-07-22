@@ -83,7 +83,7 @@ The `FencilExecutor` provided by `gtfn` should be refactored to run the necessar
 
 The `fencil_processors.builders.cpp.build.CMakeProject` class design should not be considered final. All the operations are blocking and the state of the project is not exposed (written to file or not, configured or not, build successful or not). Future refactoring for such functionality will likely include redesigning.
 
-Blocking blocking to asynchronous operations will be necessary when implementing fencil compilation before fencil execution. This would enable interleaving compilation of multiple stencils as an optimization.
+Furthermore, the blocking `configure` and `build` functions may need to be converted to asynchronous operations to support parallel compilation of multiple fencils.
 
 ### Splitting existing fencil and binding code generators
 
