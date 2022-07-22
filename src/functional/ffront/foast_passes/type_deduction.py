@@ -48,13 +48,15 @@ def boolified_type(symbol_type: ct.SymbolType) -> ct.ScalarType | ct.FieldType:
 
 
 class FieldOperatorTypeDeductionCompletnessValidator(NodeVisitor):
+    """Validate an FOAST expression is fully typed."""
+
     @classmethod
     def apply(cls, node: foast.LocatedNode) -> None:
         incomplete_nodes: list[foast.LocatedNode] = []
         cls().visit(node, incomplete_nodes=incomplete_nodes)
 
         if incomplete_nodes:
-            raise ValueError()
+            raise AssertionError("FOAST expression is not fully typed.")
 
     def visit_LocatedNode(
         self, node: foast.LocatedNode, *, incomplete_nodes: list[foast.LocatedNode]
