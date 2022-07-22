@@ -184,6 +184,10 @@ def test_field_of_tuple_output(fencil_processor, stencil):
         assert np.allclose(inp2, out_np[:]["f1"])
 
 
+@pytest.mark.xfail(
+    raises=NotImplementedError,
+    reason="tuple_get is not compatible with this way of expressing tuples.",
+)
 @pytest.mark.parametrize(
     "stencil",
     [tuple_output1, tuple_output2],
@@ -271,6 +275,10 @@ def test_field_of_tuple_input(fencil_processor):
         assert np.allclose(np.asarray(inp1) + np.asarray(inp2), out)
 
 
+@pytest.mark.xfail(
+    raises=NotImplementedError,
+    reason="tuple_get is not compatible with this way of expressing tuples.",
+)
 def test_field_of_extra_dim_input(fencil_processor):
     fencil_processor, validate = fencil_processor
 
@@ -363,6 +371,10 @@ def test_tuple_of_tuple_of_field_input(fencil_processor):
         )
 
 
+@pytest.mark.xfail(
+    raises=NotImplementedError,
+    reason="tuple_get is not compatible with this way of expressing tuples.",
+)
 def test_field_of_2_extra_dim_input(fencil_processor):
     fencil_processor, validate = fencil_processor
 
