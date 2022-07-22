@@ -79,6 +79,12 @@ As stated above, the architectural goal that each step of the compilation proces
 
 The `FencilExecutor` provided by `gtfn` should be refactored to run the necessary steps in a declarative way, so no other logic (which should really be in one of the steps) can be introduced.
 
+### Build system project
+
+The `fencil_processors.builders.cpp.build.CMakeProject` class design should not be considered final. All the operations are blocking and the state of the project is not exposed (written to file or not, configured or not, build successful or not). Future refactoring for such functionality will likely include redesigning.
+
+Blocking blocking to asynchronous operations will be necessary when implementing fencil compilation before fencil execution. This would enable interleaving compilation of multiple stencils as an optimization.
+
 ### Splitting existing fencil and binding code generators
 
 The "roundtrip" backend could benefit from being split into a Python fencil generator and a small binding generator, which would merely write out the file and load it back live.
