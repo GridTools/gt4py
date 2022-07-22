@@ -36,7 +36,7 @@ The most popular libraries to make C++ code accessible from Python are:
 
 ### Decision
 
-Python/C is a good choice if we want to have a C interface to the compiled code, which can then be called not only form Python, but from pretty much any other language. On the other hand, having to manually handle C++ types and exceptions makes this approach much more complicated.
+Python/C is a good choice if we want to have a C interface to the compiled code, which can then be called not only from Python, but from pretty much any other language. On the other hand, having to manually handle C++ types and exceptions makes this approach much more complicated.
 
 Boost.Python and pybind11 are very similar. Since boost is not a requirement for the bindings themselves (though it is for all current C++ fencil code), it makes sense to use the much more lightweight and perhaps more modern alternative of pybind11. Unlike Python/C, pybind11 handles STL containers and name mangling out of the box, and it also has a much more concise interface.
 
