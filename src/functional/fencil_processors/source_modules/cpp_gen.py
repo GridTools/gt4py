@@ -14,6 +14,7 @@
 
 
 import ctypes
+from types import MappingProxyType
 from typing import Final, Sequence, Type
 
 import numpy
@@ -23,9 +24,8 @@ from functional.fencil_processors import source_modules
 
 LANGUAGE_ID: Final = "cpp"
 
-
-def render_python_type(python_type: Type) -> str:
-    mapping: Final = {
+_TYPE_MAPPING: Final = MappingProxyType(
+    {
         bool: "bool",
         int: "long",
         float: "double",
@@ -66,7 +66,11 @@ def render_python_type(python_type: Type) -> str:
         ctypes.c_double: "double",
         ctypes.c_longdouble: "long double",
     }
-    return mapping[python_type]
+)
+
+
+def render_python_type(python_type: Type) -> str:
+    return _TYPE_MAPPING[python_type]
 
 
 def _render_function_param(
