@@ -81,9 +81,13 @@ The `FencilExecutor` provided by `gtfn` should be refactored to run the necessar
 
 ### Build system project
 
-The `fencil_processors.builders.cpp.build.CMakeProject` class design should not be considered final. All the operations are blocking and the state of the project is not exposed (written to file or not, configured or not, build successful or not). Future refactoring for such functionality will likely include redesigning.
+The `fencil_processors.builders.cpp.build.CMakeProject` class design should not be considered final because of the following pitfalls:
+- the state of the project (i.e. is written to file, is configured, is built) cannot be queried explicitly
+- the blocking `configure` and `build` functions may need to be converted to asynchronous operations to support parallel compilation of multiple fencils
+- support needs to be added to switch between debug and release builds, as well as to conditionally enable debug information for release builds
+- support needs to be added to enable compiler optimizations and tuning for target hardware
 
-Furthermore, the blocking `configure` and `build` functions may need to be converted to asynchronous operations to support parallel compilation of multiple fencils.
+Considering these, future changes will likely require a more extended refactoring pass.
 
 ### Splitting existing fencil and binding code generators
 
