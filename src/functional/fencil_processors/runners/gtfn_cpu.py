@@ -48,9 +48,9 @@ def run_gtfn(itir: ir.FencilDefinition, *args, **kwargs):
     """
     Execute the iterator IR fencil with the provided arguments.
 
-    The fencil is compiled to machine code with C++ as an intermediate step, so the first execution
-    is expected to have a significant overhead, while subsequent calls are very fast.
-    Only scalar and buffer arguments are supported currently.
+    The fencil is compiled to machine code with C++ as an intermediate step,
+    so the first execution is expected to have a significant overhead, while subsequent
+    calls are very fast. Only scalar and buffer arguments are supported currently.
 
     See ``FencilExecutorFunction`` for details.
     """
