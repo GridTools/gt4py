@@ -408,6 +408,7 @@ class DaCeIRBuilder(NodeTranslator):
             stmts=stmts,
             read_memlets=read_memlets,
             write_memlets=write_memlets,
+            name_map={memlet.field for memlet in read_memlets+write_memlets}
         )
 
         for item in reversed(expansion_items):

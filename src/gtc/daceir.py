@@ -863,6 +863,7 @@ class IterationNode(Node):
 class Tasklet(ComputationNode, IterationNode, eve.SymbolTableTrait):
     decls: List[LocalScalarDecl]
     stmts: List[Stmt]
+    name_map: Dict[str, str]
     grid_subset: GridSubset = GridSubset.single_gridpoint()
 
 
@@ -876,17 +877,22 @@ class ComputationState(IterationNode):
     computations: List[Union[Tasklet, DomainMap]]
 
 
+class CopyState(ComputationNode, IterationNode):
+    name_map: Dict[str, str]
+
+
 class DomainLoop(IterationNode, ComputationNode):
     axis: Axis
     index_range: Range
-    loop_states: List[Union[ComputationState, "DomainLoop"]]
+    loop_states: List[Union[ComputationState, CopyState, "DomainLoop"]]
 
 
 class NestedSDFG(ComputationNode, eve.SymbolTableTrait):
     label: SymbolRef
     field_decls: List[FieldDecl]
     symbol_decls: List[SymbolDecl]
-    states: List[Union[DomainLoop, ComputationState]]
+    name_map: Dict[str, str]
+    states: List[Union[DomainLoop, CopyState, ComputationState]]
 
 
 # There are circular type references with string placeholders. These statements let pydantic resolve those.

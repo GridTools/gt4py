@@ -514,3 +514,39 @@ def layout_maker_factory(base_layout: Tuple[int, ...]) -> Callable[[List[bool]],
         return tuple(res_layout)
 
     return layout_maker
+
+
+def union_node_access_infos(nodes: List[eve.Node]):
+    from gtc import daceir as dcir
+
+    read_accesses: Dict[str, dcir.FieldAccessInfo] = dict()
+    write_accesses: Dict[str, dcir.FieldAccessInfo] = dict()
+    for node in collect_toplevel_computation_nodes(nodes):
+        read_accesses.update(
+            {
+                name: access_info.union(read_accesses.get(name, access_info))
+                for name, access_info in node.read_accesses.items()
+            }
+        )
+        write_accesses.update(
+            {
+                name: access_info.union(write_accesses.get(name, access_info))
+                for name, access_info in node.write_accesses.items()
+            }
+        )
+
+    return (
+        read_accesses,
+        write_accesses,
+        union_access_info_dicts(read_accesses, write_accesses),
+    )
+
+
+def union_access_info_dicts(
+    first_infos: Dict[str, "dcir.FieldAccessInfo"],
+    second_infos: Dict[str, "dcir.FieldAccessInfo"],
+):
+    res = dict(first_infos)
+    for key, access_info in second_infos.items():
+        res[key] = access_info.union(first_infos.get(key, access_info))
+    return res

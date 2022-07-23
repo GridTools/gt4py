@@ -14,7 +14,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 import copy
-from typing import Dict, List
+from typing import Dict, List, Optional, Set, Tuple
 
 import dace
 import dace.data
@@ -25,7 +25,24 @@ import sympy
 from gtc import daceir as dcir
 from gtc.dace.expansion.daceir_builder import DaCeIRBuilder
 from gtc.dace.expansion.sdfg_builder import StencilComputationSDFGBuilder
+from gtc.dace.expansion_specification import Loop
 from gtc.dace.nodes import StencilComputation
+from gtc.passes.daceir_optimizations import MakeLocalCaches
+
+
+def _collect_localcache_config(
+    node: StencilComputation,
+) -> Optional[Tuple[dcir.Axis, Set[str], dace.StorageType]]:
+    try:
+        loop_item = next(
+            item
+            for item in node.expansion_specification
+            if isinstance(item, Loop) and len(item.localcache_fields) > 0
+        )
+    except StopIteration:
+        return None
+
+    return loop_item.axis, node.localcache_fields, loop_item.storage
 
 
 @dace.library.register_expansion(StencilComputation, "default")
@@ -132,6 +149,10 @@ class StencilComputationExpansion(dace.library.ExpandTransformation):
         daceir: dcir.NestedSDFG = DaCeIRBuilder().visit(
             node.oir_node, global_ctx=DaCeIRBuilder.GlobalContext(library_node=node, arrays=arrays)
         )
+
+        if (config := _collect_localcache_config(node)) is not None:
+            axis, fields, storage = config
+            daceir = MakeLocalCaches(axis=axis, fields=fields, storage=storage).visit(daceir)
 
         nsdfg: dace.nodes.NestedSDFG = StencilComputationSDFGBuilder().visit(daceir)
 
