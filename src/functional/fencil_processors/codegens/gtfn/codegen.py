@@ -53,7 +53,7 @@ class GTFNCodegen(codegen.TemplatedGenerator):
         "trunc": "std::trunc",
         "minimum": "std::min",
         "maximum": "std::max",
-        "mod": "std::fmod",
+        "fmod": "std::fmod",
         "power": "std::pow",
     }
 
