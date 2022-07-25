@@ -82,31 +82,31 @@ class TestExecInfo:
         self.in_phi = gt_storage.from_array(
             data.draw(st_arrays(dtype=float, shape=shape)),
             backend=backend,
-            default_origin=(0, 0, 0),
+            aligned_index=(0, 0, 0),
             dtype=float,
         )
         self.in_u = gt_storage.from_array(
             data.draw(st_arrays(dtype=float, shape=shape)),
             backend=backend,
-            default_origin=(0, 0, 0),
+            aligned_index=(0, 0, 0),
             dtype=float,
         )
         self.in_v = gt_storage.from_array(
             data.draw(st_arrays(dtype=float, shape=shape)),
             backend=backend,
-            default_origin=(0, 0, 0),
+            aligned_index=(0, 0, 0),
             dtype=float,
         )
         self.tmp_phi = gt_storage.from_array(
             data.draw(st_arrays(dtype=float, shape=shape)),
             backend=backend,
-            default_origin=(1, 1, 0),
+            aligned_index=(1, 1, 0),
             dtype=float,
         )
         self.out_phi = gt_storage.from_array(
             data.draw(st_arrays(dtype=float, shape=shape)),
             backend=backend,
-            default_origin=(3, 3, 0),
+            aligned_index=(3, 3, 0),
             dtype=float,
         )
         self.alpha = 1 / 32

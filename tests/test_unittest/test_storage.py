@@ -66,22 +66,22 @@ def allocation_strategy(draw):
     dimension = draw(hyp_st.integers(min_value=1, max_value=4))
 
     shape_strats = []
-    default_origin_strats = []
+    aligned_index_strats = []
 
     for i in range(dimension):
         shape_strats = shape_strats + [hyp_st.integers(min_value=1, max_value=64)]
     shape = draw(hyp_st.tuples(*shape_strats))
     for i in range(dimension):
-        default_origin_strats = default_origin_strats + [
+        aligned_index_strats = aligned_index_strats + [
             hyp_st.integers(min_value=0, max_value=min(32, shape[i] - 1))
         ]
-    default_origin = draw(hyp_st.tuples(*default_origin_strats))
+    aligned_index = draw(hyp_st.tuples(*aligned_index_strats))
     layout_order = draw(hyp_st.permutations(tuple(range(dimension))))
     return dict(
         dtype=dtype,
         alignment=alignment,
         shape=shape,
-        default_origin=default_origin,
+        aligned_index=aligned_index,
         layout_order=layout_order,
     )
 
@@ -92,10 +92,10 @@ def mask_strategy(draw):
 
     shape_strats = [hyp_st.integers(min_value=1, max_value=32)] * dimension
     shape = draw(hyp_st.tuples(*shape_strats))
-    default_origin_strats = [
+    aligned_index_strats = [
         hyp_st.integers(min_value=0, max_value=min(32, shape[i] - 1)) for i in range(dimension)
     ]
-    default_origin = draw(hyp_st.tuples(*default_origin_strats))
+    aligned_index = draw(hyp_st.tuples(*aligned_index_strats))
 
     mask_values = [True] * dimension
     if dimension < 3:
@@ -107,7 +107,7 @@ def mask_strategy(draw):
             hyp_st.permutations(mask_values),
         )
     )
-    return dict(shape=shape, default_origin=default_origin, mask=mask)
+    return dict(shape=shape, aligned_index=aligned_index, mask=mask)
 
 
 # ---- Tests ----
@@ -115,12 +115,12 @@ def mask_strategy(draw):
 def test_allocate_cpu(param_dict):
     alignment_bytes = param_dict["alignment"]
     dtype = param_dict["dtype"]
-    default_origin = param_dict["default_origin"]
+    aligned_index = param_dict["aligned_index"]
     shape = param_dict["shape"]
     layout_map = param_dict["layout_order"]
 
     raw_buffer, field = gt_storage_utils.allocate_cpu(
-        default_origin, shape, layout_map, dtype, alignment_bytes
+        aligned_index, shape, layout_map, dtype, alignment_bytes
     )
 
     # check that field is a view of raw_buffer
@@ -139,7 +139,7 @@ def test_allocate_cpu(param_dict):
         slices = []
         for hidx in range(len(shape)):
             if hidx == np.argmax(layout_map):
-                slices = slices + [slice(default_origin[hidx], None)]
+                slices = slices + [slice(aligned_index[hidx], None)]
             else:
                 slices = slices + [slice(random.randint(0, shape[hidx]), None)]
         assert field[tuple(slices)].ctypes.data % alignment_bytes == 0
@@ -152,7 +152,7 @@ def test_allocate_cpu(param_dict):
 
     slices = []
     for hidx in range(len(shape)):
-        slices = slices + [default_origin[hidx]]
+        slices = slices + [aligned_index[hidx]]
     field[tuple(slices)] = 1
 
     slices = []
@@ -179,12 +179,12 @@ def test_allocate_cpu(param_dict):
 def test_allocate_gpu(param_dict):
     alignment_bytes = param_dict["alignment"]
     dtype = param_dict["dtype"]
-    default_origin = param_dict["default_origin"]
+    aligned_index = param_dict["aligned_index"]
     shape = param_dict["shape"]
     layout_map = param_dict["layout_order"]
 
     raw_buffer, field = gt_storage_utils.allocate_gpu(
-        default_origin, shape, layout_map, dtype, alignment_bytes
+        aligned_index, shape, layout_map, dtype, alignment_bytes
     )
 
     # check that memory of field is contained in raw_buffer
@@ -200,7 +200,7 @@ def test_allocate_gpu(param_dict):
         slices = []
         for hidx in range(len(shape)):
             if hidx == np.argmax(layout_map):
-                slices = slices + [slice(default_origin[hidx], None)]
+                slices = slices + [slice(aligned_index[hidx], None)]
             else:
                 slices = slices + [slice(random.randint(0, shape[hidx]), None)]
         assert field[tuple(slices)].ctypes.data % alignment_bytes == 0
@@ -213,7 +213,7 @@ def test_allocate_gpu(param_dict):
 
     slices = []
     for hidx in range(len(shape)):
-        slices = slices + [default_origin[hidx]]
+        slices = slices + [aligned_index[hidx]]
     field[tuple(slices)] = 1
 
     slices = []
@@ -240,11 +240,11 @@ def test_allocate_gpu(param_dict):
 def test_allocate_gpu_unmanaged(param_dict):
     alignment_bytes = param_dict["alignment"]
     dtype = param_dict["dtype"]
-    default_origin = param_dict["default_origin"]
+    aligned_index = param_dict["aligned_index"]
     shape = param_dict["shape"]
     layout_map = param_dict["layout_order"]
     raw_buffer, field, device_raw_buffer, device_field = gt_storage_utils.allocate_gpu_unmanaged(
-        default_origin, shape, layout_map, dtype, alignment_bytes
+        aligned_index, shape, layout_map, dtype, alignment_bytes
     )
 
     # check that field is a view of raw_buffer
@@ -268,7 +268,7 @@ def test_allocate_gpu_unmanaged(param_dict):
         slices = []
         for hidx in range(len(shape)):
             if hidx == np.argmax(layout_map):
-                slices = slices + [slice(default_origin[hidx], None)]
+                slices = slices + [slice(aligned_index[hidx], None)]
             else:
                 slices = slices + [slice(random.randint(0, shape[hidx]), None)]
         assert field[tuple(slices)].ctypes.data % alignment_bytes == 0
@@ -283,7 +283,7 @@ def test_allocate_gpu_unmanaged(param_dict):
 
     slices = []
     for hidx in range(len(shape)):
-        slices = slices + [default_origin[hidx]]
+        slices = slices + [aligned_index[hidx]]
     field[tuple(slices)] = 1
     device_field[tuple(slices)] = 1
 
@@ -318,81 +318,81 @@ def test_normalize_storage_spec():
     from gt4py import gtscript
     from gt4py.storage.utils import normalize_storage_spec
 
-    default_origin = (0, 0, 0)
+    aligned_index = (0, 0, 0)
     shape = (10, 10, 10)
     dtype = np.float64
     mask = (True, True, True)
 
-    default_origin_out, shape_out, dtype_out, mask_out = normalize_storage_spec(
-        default_origin, shape, dtype, mask
+    aligned_index_out, shape_out, dtype_out, mask_out = normalize_storage_spec(
+        aligned_index, shape, dtype, mask
     )
-    assert default_origin_out == default_origin
+    assert aligned_index_out == aligned_index
     assert shape_out == shape
     assert dtype_out == dtype
     assert mask_out == mask
 
     # Default origin
-    default_origin_out, shape_out, dtype_out, mask_out = normalize_storage_spec(
+    aligned_index_out, shape_out, dtype_out, mask_out = normalize_storage_spec(
         (1, 1, 1), shape, dtype, mask
     )
-    assert default_origin_out == (1, 1, 1)
+    assert aligned_index_out == (1, 1, 1)
     assert shape_out == shape
     assert dtype_out == dtype
     assert mask_out == mask
 
-    with pytest.raises(TypeError, match="default_origin"):
+    with pytest.raises(TypeError, match="aligned_index"):
         normalize_storage_spec(None, shape, dtype, mask)
-    with pytest.raises(TypeError, match="default_origin"):
+    with pytest.raises(TypeError, match="aligned_index"):
         normalize_storage_spec(("1", "1", "1"), shape, dtype, mask)
-    with pytest.raises(ValueError, match="default_origin"):
+    with pytest.raises(ValueError, match="aligned_index"):
         normalize_storage_spec((1, 1, 1, 1), shape, dtype, mask)
-    with pytest.raises(ValueError, match="default_origin"):
+    with pytest.raises(ValueError, match="aligned_index"):
         normalize_storage_spec((-1, -1, -1), shape, dtype, mask)
 
     # Shape
-    default_origin_out, shape_out, dtype_out, mask_out = normalize_storage_spec(
-        default_origin, (10, 10), dtype, (True, True, False)
+    aligned_index_out, shape_out, dtype_out, mask_out = normalize_storage_spec(
+        aligned_index, (10, 10), dtype, (True, True, False)
     )
-    assert default_origin_out == (0, 0)
+    assert aligned_index_out == (0, 0)
     assert shape_out == (10, 10)
     assert dtype_out == dtype
     assert mask_out == (True, True, False)
 
     with pytest.raises(ValueError, match="non-matching"):
-        normalize_storage_spec(default_origin, (10, 20), dtype, (False, True, False))
+        normalize_storage_spec(aligned_index, (10, 20), dtype, (False, True, False))
     with pytest.raises(TypeError, match="shape"):
-        normalize_storage_spec(default_origin, "(10,10)", dtype, mask)
+        normalize_storage_spec(aligned_index, "(10,10)", dtype, mask)
     with pytest.raises(TypeError, match="shape"):
-        normalize_storage_spec(default_origin, None, dtype, mask)
+        normalize_storage_spec(aligned_index, None, dtype, mask)
     with pytest.raises(ValueError, match="shape"):
-        normalize_storage_spec(default_origin, (10, 10, 0), dtype, mask)
+        normalize_storage_spec(aligned_index, (10, 10, 0), dtype, mask)
 
     # Mask
-    default_origin_out, shape_out, dtype_out, mask_out = normalize_storage_spec(
-        default_origin, (10, 10), dtype, (True, True, False)
+    aligned_index_out, shape_out, dtype_out, mask_out = normalize_storage_spec(
+        aligned_index, (10, 10), dtype, (True, True, False)
     )
-    assert default_origin_out == (0, 0)
+    assert aligned_index_out == (0, 0)
     assert shape_out == (10, 10)
     assert dtype_out == dtype
     assert mask_out == (True, True, False)
 
-    _, __, ___, mask_out = normalize_storage_spec(default_origin, (10, 10), dtype, "IJ")
+    _, __, ___, mask_out = normalize_storage_spec(aligned_index, (10, 10), dtype, "IJ")
     assert mask_out == (True, True, False)
 
-    _, __, ___, mask_out = normalize_storage_spec(default_origin, (10, 10), dtype, gtscript.IJ)
+    _, __, ___, mask_out = normalize_storage_spec(aligned_index, (10, 10), dtype, gtscript.IJ)
     assert mask_out == (True, True, False)
 
-    _, __, ___, mask_out = normalize_storage_spec(default_origin, (10, 10, 10), dtype, gtscript.IJK)
+    _, __, ___, mask_out = normalize_storage_spec(aligned_index, (10, 10, 10), dtype, gtscript.IJK)
     assert mask_out == (True, True, True)
 
     with pytest.raises(ValueError, match="mask"):
-        normalize_storage_spec(default_origin, (10, 10), dtype, (False, False, False))
+        normalize_storage_spec(aligned_index, (10, 10), dtype, (False, False, False))
 
     # Dtype
-    default_origin_out, shape_out, dtype_out, mask_out = normalize_storage_spec(
-        default_origin, shape, (dtype, (2,)), mask
+    aligned_index_out, shape_out, dtype_out, mask_out = normalize_storage_spec(
+        aligned_index, shape, (dtype, (2,)), mask
     )
-    assert default_origin_out == tuple([*default_origin, 0])
+    assert aligned_index_out == tuple([*aligned_index, 0])
     assert shape_out == tuple([*shape, 2])
     assert dtype_out == dtype
     assert mask_out == tuple([*mask, True])
@@ -404,18 +404,18 @@ def test_normalize_storage_spec():
         gt_store.empty,
         gt_store.ones,
         gt_store.zeros,
-        lambda dtype, default_origin, shape, backend: gt_store.from_array(
+        lambda dtype, aligned_index, shape, backend: gt_store.from_array(
             np.empty(shape, dtype=dtype),
             backend=backend,
             shape=shape,
             dtype=dtype,
-            default_origin=default_origin,
+            aligned_index=aligned_index,
         ),
     ],
 )
 @pytest.mark.parametrize("backend", CPU_BACKENDS)
 def test_cpu_constructor(alloc_fun, backend):
-    stor = alloc_fun(dtype=np.float64, default_origin=(1, 2, 3), shape=(2, 4, 6), backend=backend)
+    stor = alloc_fun(dtype=np.float64, aligned_index=(1, 2, 3), shape=(2, 4, 6), backend=backend)
     assert stor.shape == (2, 4, 6)
     assert isinstance(stor, np.ndarray)
 
@@ -426,12 +426,12 @@ def test_cpu_constructor(alloc_fun, backend):
         gt_store.empty,
         gt_store.ones,
         gt_store.zeros,
-        lambda dtype, default_origin, shape, backend: gt_store.from_array(
+        lambda dtype, aligned_index, shape, backend: gt_store.from_array(
             np.empty(shape, dtype=dtype),
             backend=backend,
             shape=shape,
             dtype=dtype,
-            default_origin=default_origin,
+            aligned_index=aligned_index,
         ),
     ],
 )
@@ -440,7 +440,7 @@ def test_cpu_constructor(alloc_fun, backend):
     GPU_BACKENDS,
 )
 def test_gpu_constructor(alloc_fun, backend):
-    stor = alloc_fun(dtype=np.float64, default_origin=(1, 2, 3), shape=(2, 4, 6), backend=backend)
+    stor = alloc_fun(dtype=np.float64, aligned_index=(1, 2, 3), shape=(2, 4, 6), backend=backend)
     assert stor.shape == (2, 4, 6)
     assert isinstance(stor, cp.ndarray)
 
@@ -449,13 +449,13 @@ def test_gpu_constructor(alloc_fun, backend):
 @hyp.given(param_dict=mask_strategy())
 def test_masked_storage_gpu(param_dict):
     mask = param_dict["mask"]
-    default_origin = param_dict["default_origin"]
+    aligned_index = param_dict["aligned_index"]
     shape = param_dict["shape"]
 
     # no assert when all is defined in descriptor, no grid_group
     store = gt_store.empty(
         dtype=np.float64,
-        default_origin=default_origin,
+        aligned_index=aligned_index,
         shape=shape,
         mask=mask,
         backend="gt:gpu",
@@ -465,14 +465,14 @@ def test_masked_storage_gpu(param_dict):
 
 
 def test_masked_storage_asserts():
-    default_origin = (1, 1, 1)
+    aligned_index = (1, 1, 1)
     shape = (2, 2, 2)
     backend = "gt:cpu_kfirst"
 
     with pytest.raises(ValueError):
         gt_store.empty(
             dtype=np.float64,
-            default_origin=default_origin,
+            aligned_index=aligned_index,
             shape=shape,
             mask=(),
             backend=backend,
@@ -480,11 +480,11 @@ def test_masked_storage_asserts():
 
 
 def run_test_slices(backend):
-    default_origin = (1, 1, 1)
+    aligned_index = (1, 1, 1)
     shape = (10, 10, 10)
     array = np.random.randn(*shape)
     stor = gt_store.from_array(
-        array, backend=backend, dtype=np.float64, default_origin=default_origin, shape=shape
+        array, backend=backend, dtype=np.float64, aligned_index=aligned_index, shape=shape
     )
     sliced = stor[::2, ::2, ::2]
     assert (sliced.view(np.ndarray) == array[::2, ::2, ::2]).all()
@@ -519,7 +519,7 @@ def test_sum_gpu():
         cp.zeros(shape),
         backend="gt:gpu",
         dtype=np.float64,
-        default_origin=(0, 0, 0),
+        aligned_index=(0, 0, 0),
         shape=shape,
     )
 
@@ -527,7 +527,7 @@ def test_sum_gpu():
         cp.ones(shape),
         backend="gt:gpu",
         dtype=np.float64,
-        default_origin=(0, 0, 0),
+        aligned_index=(0, 0, 0),
         shape=shape,
     )
 
@@ -539,7 +539,7 @@ def test_slice_gpu():
     stor = gt_store.ones(
         backend="gt:gpu",
         shape=(10, 10, 10),
-        default_origin=(0, 0, 0),
+        aligned_index=(0, 0, 0),
         dtype=np.float64,
     )
     stor.synchronize()
@@ -562,7 +562,7 @@ def test_non_existing_backend():
     with pytest.raises(RuntimeError, match="backend"):
         gt_store.empty(
             "non_existing_backend",
-            default_origin=[0, 0, 0],
+            aligned_index=[0, 0, 0],
             shape=[10, 10, 10],
             dtype=(np.float64, (3,)),
         )
@@ -603,7 +603,7 @@ class TestDescriptor:
         descriptor: dace.data.Array = gt_store.dace_descriptor(
             backend=backend,
             shape=(3, 7, 13),
-            default_origin=(1, 2, 3),
+            aligned_index=(1, 2, 3),
             dtype=np.float64,
         )
         if backend_cls.storage_info["device"] == "gpu":
@@ -620,17 +620,17 @@ class TestDescriptor:
     )
     def test_start_offset(self, backend):
         backend_cls = gt_backend.from_name(backend)
-        default_origin = (1, 2, 3)
+        aligned_index = (1, 2, 3)
         stor = gt_store.ones(
             backend=backend,
             shape=(3, 7, 13),
-            default_origin=default_origin,
+            aligned_index=aligned_index,
             dtype=np.float64,
         )
         descriptor: dace.data.Array = gt_store.dace_descriptor(
             backend=backend,
             shape=(3, 7, 13),
-            default_origin=(1, 2, 3),
+            aligned_index=(1, 2, 3),
             dtype=np.float64,
         )
         raveled = TestDescriptor.ravel_with_padding(stor)[descriptor.start_offset :]

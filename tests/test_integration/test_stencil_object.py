@@ -37,11 +37,11 @@ def test_stencil_object_cache(backend: str):
 
     shape = (4, 4, 4)
     in_storage = OriginWrapper(
-        array=gt_storage.ones(backend=backend, default_origin=(0, 0, 0), shape=shape, dtype=float),
+        array=gt_storage.ones(backend=backend, aligned_index=(0, 0, 0), shape=shape, dtype=float),
         origin=(0, 0, 0),
     )
     out_storage = OriginWrapper(
-        array=gt_storage.ones(backend=backend, default_origin=(0, 0, 0), shape=shape, dtype=float),
+        array=gt_storage.ones(backend=backend, aligned_index=(0, 0, 0), shape=shape, dtype=float),
         origin=(0, 0, 0),
     )
 
@@ -58,7 +58,7 @@ def test_stencil_object_cache(backend: str):
 
     # When an origin changes, it needs to recompute more, so the time should increase
     other_out_storage = OriginWrapper(
-        array=gt_storage.ones(backend=backend, default_origin=(1, 0, 0), shape=shape, dtype=float),
+        array=gt_storage.ones(backend=backend, aligned_index=(1, 0, 0), shape=shape, dtype=float),
         origin=(1, 0, 0),
     )
     other_origin_time = runit(in_storage, other_out_storage, offset=1.0)

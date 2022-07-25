@@ -30,7 +30,7 @@ def test_masked_vector_assignment():
                 fld2D = 0.0
 
     origin = (0, 0, 0)
-    fld2D = ones(shape=(2, 3), dtype=dtype, backend=BACKEND, default_origin=origin)
+    fld2D = ones(shape=(2, 3), dtype=dtype, backend=BACKEND, aligned_index=origin)
 
     masked_vector_assignment(fld2D)
 

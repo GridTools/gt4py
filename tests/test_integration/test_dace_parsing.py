@@ -86,7 +86,7 @@ def test_basic(backend):
 
     outp = NdarraySubclassOriginWrapper(
         array=gt_storage.zeros(
-            dtype=np.float64, shape=(10, 10, 10), default_origin=(0, 0, 0), backend=backend
+            dtype=np.float64, shape=(10, 10, 10), aligned_index=(0, 0, 0), backend=backend
         ),
         origin=(0, 0, 0),
     )
@@ -115,7 +115,7 @@ def test_origin_offsetting_frozen(dace_stencil, domain, outp_origin):
             data=7.0,
             dtype=np.float64,
             shape=(10, 10, 10),
-            default_origin=(0, 0, 0),
+            aligned_index=(0, 0, 0),
             backend=backend,
         ),
         origin=(0, 0, 0),
@@ -123,7 +123,7 @@ def test_origin_offsetting_frozen(dace_stencil, domain, outp_origin):
 
     outp = NdarraySubclassOriginWrapper(
         array=gt_storage.zeros(
-            dtype=np.float64, shape=(10, 10, 10), default_origin=(0, 0, 0), backend=backend
+            dtype=np.float64, shape=(10, 10, 10), aligned_index=(0, 0, 0), backend=backend
         ),
         origin=(0, 0, 0),
     )
@@ -163,14 +163,14 @@ def test_origin_offsetting_nofrozen(dace_stencil, domain, outp_origin):
             data=7.0,
             dtype=np.float64,
             shape=(10, 10, 10),
-            default_origin=(0, 0, 0),
+            aligned_index=(0, 0, 0),
             backend=backend,
         ),
         origin=(0, 0, 0),
     )
     outp = NdarraySubclassOriginWrapper(
         array=gt_storage.zeros(
-            dtype=np.float64, shape=(10, 10, 10), default_origin=(0, 0, 0), backend=backend
+            dtype=np.float64, shape=(10, 10, 10), aligned_index=(0, 0, 0), backend=backend
         ),
         origin=(0, 0, 0),
     )
@@ -225,14 +225,14 @@ def test_optional_arg_noprovide(backend):
             data=7.0,
             dtype=np.float64,
             shape=(10, 10, 10),
-            default_origin=(0, 0, 0),
+            aligned_index=(0, 0, 0),
             backend=backend,
         ),
         origin=(0, 0, 0),
     )
     outp = NdarraySubclassOriginWrapper(
         array=gt_storage.zeros(
-            dtype=np.float64, shape=(10, 10, 10), default_origin=(0, 0, 0), backend=backend
+            dtype=np.float64, shape=(10, 10, 10), aligned_index=(0, 0, 0), backend=backend
         ),
         origin=(0, 0, 0),
     )
@@ -275,20 +275,20 @@ def test_optional_arg_provide(backend):
             data=7.0,
             dtype=np.float64,
             shape=(10, 10, 10),
-            default_origin=(0, 0, 0),
+            aligned_index=(0, 0, 0),
             backend=backend,
         ),
         origin=(0, 0, 0),
     )
     outp = NdarraySubclassOriginWrapper(
         array=gt_storage.zeros(
-            dtype=np.float64, shape=(10, 10, 10), default_origin=(0, 0, 0), backend=backend
+            dtype=np.float64, shape=(10, 10, 10), aligned_index=(0, 0, 0), backend=backend
         ),
         origin=(0, 0, 0),
     )
     unused_field = NdarraySubclassOriginWrapper(
         array=gt_storage.zeros(
-            dtype=np.float64, shape=(10, 10, 10), default_origin=(0, 0, 0), backend=backend
+            dtype=np.float64, shape=(10, 10, 10), aligned_index=(0, 0, 0), backend=backend
         ),
         origin=(0, 0, 0),
     )
@@ -331,20 +331,20 @@ def test_optional_arg_provide_aot(backend):
             data=7.0,
             dtype=np.float64,
             shape=(10, 10, 10),
-            default_origin=(0, 0, 0),
+            aligned_index=(0, 0, 0),
             backend=backend,
         ),
         origin=(0, 0, 0),
     )
     outp = NdarraySubclassOriginWrapper(
         array=gt_storage.zeros(
-            dtype=np.float64, shape=(10, 10, 10), default_origin=(0, 0, 0), backend=backend
+            dtype=np.float64, shape=(10, 10, 10), aligned_index=(0, 0, 0), backend=backend
         ),
         origin=(0, 0, 0),
     )
     unused_field = NdarraySubclassOriginWrapper(
         array=gt_storage.zeros(
-            dtype=np.float64, shape=(10, 10, 10), default_origin=(0, 0, 0), backend=backend
+            dtype=np.float64, shape=(10, 10, 10), aligned_index=(0, 0, 0), backend=backend
         ),
         origin=(0, 0, 0),
     )
@@ -400,7 +400,7 @@ def test_nondace_raises():
             data=7.0,
             dtype=np.float64,
             shape=(10, 10, 10),
-            default_origin=(0, 0, 0),
+            aligned_index=(0, 0, 0),
             backend="numpy",
         ),
         origin=(0, 0, 0),
@@ -409,7 +409,7 @@ def test_nondace_raises():
         array=gt_storage.zeros(
             dtype=np.float64,
             shape=(10, 10, 10),
-            default_origin=(0, 0, 0),
+            aligned_index=(0, 0, 0),
             backend="numpy",
         ),
         origin=(0, 0, 0),

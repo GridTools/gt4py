@@ -41,16 +41,14 @@ def test_origin_selection():
     stencil = gtscript.stencil(definition=base_stencil, backend="numpy")
 
     A = gt_storage.ones(
-        backend="gt:cpu_ifirst", dtype=np.float64, shape=(3, 3, 3), default_origin=(0, 0, 0)
+        backend="gt:cpu_ifirst", dtype=np.float64, shape=(3, 3, 3), aligned_index=(0, 0, 0)
     )
     Awrap = OriginWrapper(array=A, origin=(0, 0, 0))
     B = gt_storage.ones(
-        backend="gt:cpu_kfirst", dtype=np.float64, shape=(3, 3, 3), default_origin=(2, 2, 2)
+        backend="gt:cpu_kfirst", dtype=np.float64, shape=(3, 3, 3), aligned_index=(2, 2, 2)
     )
     Bwrap = OriginWrapper(array=B, origin=(2, 2, 2))
-    C = gt_storage.ones(
-        backend="numpy", dtype=np.float32, shape=(3, 3, 3), default_origin=(0, 1, 0)
-    )
+    C = gt_storage.ones(backend="numpy", dtype=np.float32, shape=(3, 3, 3), aligned_index=(0, 1, 0))
     Cwrap = OriginWrapper(array=C, origin=(0, 1, 0))
 
     stencil(Awrap, Bwrap, Cwrap, param=3.0, origin=(1, 1, 1), domain=(1, 1, 1))
@@ -63,16 +61,14 @@ def test_origin_selection():
     assert np.sum(C) == 47
 
     A = gt_storage.ones(
-        backend="gt:cpu_ifirst", dtype=np.float64, shape=(3, 3, 3), default_origin=(0, 0, 0)
+        backend="gt:cpu_ifirst", dtype=np.float64, shape=(3, 3, 3), aligned_index=(0, 0, 0)
     )
     Awrap = OriginWrapper(array=A, origin=(0, 0, 0))
     B = gt_storage.ones(
-        backend="gt:cpu_kfirst", dtype=np.float64, shape=(3, 3, 3), default_origin=(2, 2, 2)
+        backend="gt:cpu_kfirst", dtype=np.float64, shape=(3, 3, 3), aligned_index=(2, 2, 2)
     )
     Bwrap = OriginWrapper(array=B, origin=(2, 2, 2))
-    C = gt_storage.ones(
-        backend="numpy", dtype=np.float32, shape=(3, 3, 3), default_origin=(0, 1, 0)
-    )
+    C = gt_storage.ones(backend="numpy", dtype=np.float32, shape=(3, 3, 3), aligned_index=(0, 1, 0))
     Cwrap = OriginWrapper(array=C, origin=(0, 1, 0))
     stencil(
         Awrap,
@@ -91,17 +87,15 @@ def test_origin_selection():
     assert np.sum(C) == 47
 
     A = gt_storage.ones(
-        backend="gt:cpu_ifirst", dtype=np.float64, shape=(3, 3, 3), default_origin=(0, 0, 0)
+        backend="gt:cpu_ifirst", dtype=np.float64, shape=(3, 3, 3), aligned_index=(0, 0, 0)
     )
     Awrap = OriginWrapper(array=A, origin=(0, 0, 0))
 
     B = gt_storage.ones(
-        backend="gt:cpu_kfirst", dtype=np.float64, shape=(3, 3, 3), default_origin=(2, 2, 2)
+        backend="gt:cpu_kfirst", dtype=np.float64, shape=(3, 3, 3), aligned_index=(2, 2, 2)
     )
     Bwrap = OriginWrapper(array=B, origin=(2, 2, 2))
-    C = gt_storage.ones(
-        backend="numpy", dtype=np.float32, shape=(3, 3, 3), default_origin=(0, 1, 0)
-    )
+    C = gt_storage.ones(backend="numpy", dtype=np.float32, shape=(3, 3, 3), aligned_index=(0, 1, 0))
     Cwrap = OriginWrapper(array=C, origin=(0, 1, 0))
     stencil(Awrap, Bwrap, Cwrap, param=3.0, origin={"field1": (2, 2, 2)}, domain=(1, 1, 1))
 
@@ -117,14 +111,12 @@ def test_domain_selection():
     stencil = gtscript.stencil(definition=base_stencil, backend="numpy")
 
     A = gt_storage.ones(
-        backend="gt:cpu_ifirst", dtype=np.float64, shape=(3, 3, 3), default_origin=(0, 0, 0)
+        backend="gt:cpu_ifirst", dtype=np.float64, shape=(3, 3, 3), aligned_index=(0, 0, 0)
     )
     B = gt_storage.ones(
-        backend="gt:cpu_kfirst", dtype=np.float64, shape=(3, 3, 3), default_origin=(2, 2, 2)
+        backend="gt:cpu_kfirst", dtype=np.float64, shape=(3, 3, 3), aligned_index=(2, 2, 2)
     )
-    C = gt_storage.ones(
-        backend="numpy", dtype=np.float32, shape=(3, 3, 3), default_origin=(0, 1, 0)
-    )
+    C = gt_storage.ones(backend="numpy", dtype=np.float32, shape=(3, 3, 3), aligned_index=(0, 1, 0))
 
     stencil(A, B, C, param=3.0, origin=(1, 1, 1), domain=(1, 1, 1))
 
@@ -136,14 +128,12 @@ def test_domain_selection():
     assert np.sum(np.asarray(C)) == 47
 
     A = gt_storage.ones(
-        backend="gt:cpu_ifirst", dtype=np.float64, shape=(3, 3, 3), default_origin=(0, 0, 0)
+        backend="gt:cpu_ifirst", dtype=np.float64, shape=(3, 3, 3), aligned_index=(0, 0, 0)
     )
     B = gt_storage.ones(
-        backend="gt:cpu_kfirst", dtype=np.float64, shape=(3, 3, 3), default_origin=(2, 2, 2)
+        backend="gt:cpu_kfirst", dtype=np.float64, shape=(3, 3, 3), aligned_index=(2, 2, 2)
     )
-    C = gt_storage.ones(
-        backend="numpy", dtype=np.float32, shape=(3, 3, 3), default_origin=(0, 1, 0)
-    )
+    C = gt_storage.ones(backend="numpy", dtype=np.float32, shape=(3, 3, 3), aligned_index=(0, 1, 0))
     stencil(A, B, C, param=3.0, origin=(0, 0, 0))
 
     assert np.all(A == 4)
@@ -188,13 +178,13 @@ def test_default_arguments(backend):
     )
 
     arg1 = gt_storage.ones(
-        backend=backend, dtype=np.float64, shape=(3, 3, 3), default_origin=(0, 0, 0)
+        backend=backend, dtype=np.float64, shape=(3, 3, 3), aligned_index=(0, 0, 0)
     )
     arg2 = gt_storage.zeros(
-        backend=backend, dtype=np.float64, shape=(3, 3, 3), default_origin=(0, 0, 0)
+        backend=backend, dtype=np.float64, shape=(3, 3, 3), aligned_index=(0, 0, 0)
     )
     arg3 = gt_storage.ones(
-        backend=backend, dtype=np.float64, shape=(3, 3, 3), default_origin=(0, 0, 0)
+        backend=backend, dtype=np.float64, shape=(3, 3, 3), aligned_index=(0, 0, 0)
     )
     tmp = np.asarray(arg3)
     tmp *= 2
@@ -210,13 +200,13 @@ def test_default_arguments(backend):
         branch_false(arg1, arg2, par1=2.0, par3=2.0)
 
     arg1 = gt_storage.ones(
-        backend=backend, dtype=np.float64, shape=(3, 3, 3), default_origin=(0, 0, 0)
+        backend=backend, dtype=np.float64, shape=(3, 3, 3), aligned_index=(0, 0, 0)
     )
     arg2 = gt_storage.zeros(
-        backend=backend, dtype=np.float64, shape=(3, 3, 3), default_origin=(0, 0, 0)
+        backend=backend, dtype=np.float64, shape=(3, 3, 3), aligned_index=(0, 0, 0)
     )
     arg3 = gt_storage.ones(
-        backend=backend, dtype=np.float64, shape=(3, 3, 3), default_origin=(0, 0, 0)
+        backend=backend, dtype=np.float64, shape=(3, 3, 3), aligned_index=(0, 0, 0)
     )
     tmp = np.asarray(arg3)
     tmp *= 2
@@ -239,13 +229,13 @@ def test_halo_checks(backend):
     # test default works
     in_field = OriginWrapper(
         array=gt_storage.ones(
-            backend=backend, shape=(22, 22, 10), default_origin=(1, 1, 0), dtype=np.float64
+            backend=backend, shape=(22, 22, 10), aligned_index=(1, 1, 0), dtype=np.float64
         ),
         origin=(1, 1, 0),
     )
     out_field = OriginWrapper(
         array=gt_storage.zeros(
-            backend=backend, shape=(22, 22, 10), default_origin=(1, 1, 0), dtype=np.float64
+            backend=backend, shape=(22, 22, 10), aligned_index=(1, 1, 0), dtype=np.float64
         ),
         origin=(1, 1, 0),
     )
@@ -255,13 +245,13 @@ def test_halo_checks(backend):
     # test setting arbitrary, small domain works
     in_field = OriginWrapper(
         array=gt_storage.ones(
-            backend=backend, shape=(22, 22, 10), default_origin=(1, 1, 0), dtype=np.float64
+            backend=backend, shape=(22, 22, 10), aligned_index=(1, 1, 0), dtype=np.float64
         ),
         origin=(1, 1, 0),
     )
     out_field = OriginWrapper(
         array=gt_storage.zeros(
-            backend=backend, shape=(22, 22, 10), default_origin=(1, 1, 0), dtype=np.float64
+            backend=backend, shape=(22, 22, 10), aligned_index=(1, 1, 0), dtype=np.float64
         ),
         origin=(1, 1, 0),
     )
@@ -271,13 +261,13 @@ def test_halo_checks(backend):
     # test setting domain+origin too large raises
     in_field = OriginWrapper(
         array=gt_storage.ones(
-            backend=backend, shape=(22, 22, 10), default_origin=(1, 1, 0), dtype=np.float64
+            backend=backend, shape=(22, 22, 10), aligned_index=(1, 1, 0), dtype=np.float64
         ),
         origin=(1, 1, 0),
     )
     out_field = OriginWrapper(
         array=gt_storage.zeros(
-            backend=backend, shape=(22, 22, 10), default_origin=(1, 1, 0), dtype=np.float64
+            backend=backend, shape=(22, 22, 10), aligned_index=(1, 1, 0), dtype=np.float64
         ),
         origin=(1, 1, 0),
     )
@@ -287,13 +277,13 @@ def test_halo_checks(backend):
     # test 2*origin+domain does not raise if still fits (c.f. previous bug in c++ check.)
     in_field = OriginWrapper(
         array=gt_storage.ones(
-            backend=backend, shape=(23, 23, 10), default_origin=(1, 1, 0), dtype=np.float64
+            backend=backend, shape=(23, 23, 10), aligned_index=(1, 1, 0), dtype=np.float64
         ),
         origin=(1, 1, 0),
     )
     out_field = OriginWrapper(
         array=gt_storage.zeros(
-            backend=backend, shape=(23, 23, 10), default_origin=(1, 1, 0), dtype=np.float64
+            backend=backend, shape=(23, 23, 10), aligned_index=(1, 1, 0), dtype=np.float64
         ),
         origin=(1, 1, 0),
     )
@@ -308,13 +298,13 @@ def test_np_int_types():
     in_field = gt_storage.ones(
         backend=backend,
         shape=(np.int8(23), np.int16(23), np.int32(10)),
-        default_origin=(np.int64(1), int(1), 0),
+        aligned_index=(np.int64(1), int(1), 0),
         dtype=np.float64,
     )
     out_field = gt_storage.zeros(
         backend=backend,
         shape=(np.int8(23), np.int16(23), np.int32(10)),
-        default_origin=(np.int64(1), int(1), 0),
+        aligned_index=(np.int64(1), int(1), 0),
         dtype=np.float64,
     )
     stencil(
@@ -333,13 +323,13 @@ def test_np_array_int_types():
     in_field = gt_storage.ones(
         backend=backend,
         shape=np.asarray((23, 23, 10), dtype=np.int64),
-        default_origin=np.asarray((1, 1, 0), dtype=np.int64),
+        aligned_index=np.asarray((1, 1, 0), dtype=np.int64),
         dtype=np.float64,
     )
     out_field = gt_storage.zeros(
         backend=backend,
         shape=np.asarray((23, 23, 10), dtype=np.int64),
-        default_origin=np.asarray((1, 1, 0), dtype=np.int64),
+        aligned_index=np.asarray((1, 1, 0), dtype=np.int64),
         dtype=np.float64,
     )
     stencil(
@@ -360,11 +350,11 @@ def test_exec_info(backend):
     in_field = gt_storage.ones(
         backend=backend,
         shape=(np.int8(23), np.int16(23), np.int32(10)),
-        default_origin=(1, 1, 0),
+        aligned_index=(1, 1, 0),
         dtype=np.float64,
     )
     out_field = gt_storage.zeros(
-        backend=backend, shape=(23, 23, 10), default_origin=(1, 1, 0), dtype=np.float64
+        backend=backend, shape=(23, 23, 10), aligned_index=(1, 1, 0), dtype=np.float64
     )
     stencil(
         in_field=in_field,
@@ -413,7 +403,7 @@ class TestAxesMismatch:
                         mask=[True, False, True],
                         dtype=np.float64,
                         backend="numpy",
-                        default_origin=(0, 0),
+                        aligned_index=(0, 0),
                     ),
                     dimensions=("I", "K"),
                 )
@@ -445,7 +435,7 @@ class TestDataDimensions:
                     mask=[True, True, True],
                     dtype=(np.float64, (3,)),
                     backend=self.backend,
-                    default_origin=(0, 0, 0),
+                    aligned_index=(0, 0, 0),
                 )
             )
 
@@ -459,14 +449,14 @@ def test_origin_unchanged(backend):
 
     outp = gt_storage.ones(
         backend=backend,
-        default_origin=(1, 1, 1),
+        aligned_index=(1, 1, 1),
         shape=(4, 4, 4),
         dtype=float,
         mask=[True, True, True],
     )
     inp = gt_storage.ones(
         backend=backend,
-        default_origin=(1,),
+        aligned_index=(1,),
         shape=(4, 4, 4),
         dtype=float,
         mask=[False, False, True],

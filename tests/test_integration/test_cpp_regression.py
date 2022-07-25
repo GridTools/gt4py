@@ -50,7 +50,7 @@ def get_reference(test_name, backend, domain, origins, shapes, masks=None):
                 field = gt_store.from_array(
                     data,
                     dtype=np.float_,
-                    default_origin=origins[k],
+                    aligned_index=origins[k],
                     shape=shapes[k],
                     backend=backend.name,
                 )
@@ -58,7 +58,7 @@ def get_reference(test_name, backend, domain, origins, shapes, masks=None):
                 field = gt_store.from_array(
                     data,
                     dtype=np.float_,
-                    default_origin=origins[k[: -len("_reference")]],
+                    aligned_index=origins[k[: -len("_reference")]],
                     shape=shapes[k[: -len("_reference")]],
                     backend=backend.name,
                 )

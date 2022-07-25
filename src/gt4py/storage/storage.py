@@ -35,15 +35,15 @@ def _error_on_invalid_backend(backend):
         raise RuntimeError(f"Backend '{backend}' is not registered.")
 
 
-def empty(backend, default_origin, shape, dtype, mask=None):
+def empty(backend, aligned_index, shape, dtype, mask=None):
     _error_on_invalid_backend(backend)
     if gt_backend.from_name(backend).storage_info["device"] == "gpu":
         allocate_f = storage_utils.allocate_gpu
     else:
         allocate_f = storage_utils.allocate_cpu
 
-    default_origin, shape, dtype, mask = storage_utils.normalize_storage_spec(
-        default_origin, shape, dtype, mask
+    aligned_index, shape, dtype, mask = storage_utils.normalize_storage_spec(
+        aligned_index, shape, dtype, mask
     )
 
     _error_on_invalid_backend(backend)
@@ -52,35 +52,35 @@ def empty(backend, default_origin, shape, dtype, mask=None):
     layout_map = gt_backend.from_name(backend).storage_info["layout_map"](mask)
 
     dtype = np.dtype(dtype)
-    _, res = allocate_f(default_origin, shape, layout_map, dtype, alignment * dtype.itemsize)
+    _, res = allocate_f(aligned_index, shape, layout_map, dtype, alignment * dtype.itemsize)
     return res
 
 
-def ones(backend, default_origin, shape, dtype, mask=None):
+def ones(backend, aligned_index, shape, dtype, mask=None):
     storage = empty(
         shape=shape,
         dtype=dtype,
         backend=backend,
-        default_origin=default_origin,
+        aligned_index=aligned_index,
         mask=mask,
     )
     storage[...] = 1
     return storage
 
 
-def zeros(backend, default_origin, shape, dtype, mask=None):
+def zeros(backend, aligned_index, shape, dtype, mask=None):
     storage = empty(
         shape=shape,
         dtype=dtype,
         backend=backend,
-        default_origin=default_origin,
+        aligned_index=aligned_index,
         mask=mask,
     )
     storage[...] = 0
     return storage
 
 
-def from_array(data, backend, default_origin, shape=None, dtype=None, mask=None):
+def from_array(data, backend, aligned_index, shape=None, dtype=None, mask=None):
     is_cupy_array = cp is not None and isinstance(data, cp.ndarray)
     xp = cp if is_cupy_array else np
     if shape is None:
@@ -91,7 +91,7 @@ def from_array(data, backend, default_origin, shape=None, dtype=None, mask=None)
         shape=shape,
         dtype=dtype,
         backend=backend,
-        default_origin=default_origin,
+        aligned_index=aligned_index,
         mask=mask,
     )
     if is_cupy_array:
@@ -107,9 +107,9 @@ def from_array(data, backend, default_origin, shape=None, dtype=None, mask=None)
 
 if dace is not None:
 
-    def dace_descriptor(backend, default_origin, shape, dtype, mask=None):
-        default_origin, shape, dtype, mask = storage_utils.normalize_storage_spec(
-            default_origin, shape, dtype, mask
+    def dace_descriptor(backend, aligned_index, shape, dtype, mask=None):
+        aligned_index, shape, dtype, mask = storage_utils.normalize_storage_spec(
+            aligned_index, shape, dtype, mask
         )
         itemsize = dtype.itemsize
         layout_map = gt_backend.from_name(backend).storage_info["layout_map"](mask)
@@ -126,7 +126,7 @@ if dace is not None:
             if gt_backend.from_name(backend).storage_info["device"] == "gpu"
             else dace.StorageType.CPU_Heap
         )
-        start_offset = int(np.array([default_origin]) @ np.array([strides]).T) // itemsize
+        start_offset = int(np.array([aligned_index]) @ np.array([strides]).T) // itemsize
 
         total_size = int(int(np.array([shape]) @ np.array([strides]).T) // itemsize)
 

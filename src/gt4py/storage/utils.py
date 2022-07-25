@@ -34,16 +34,16 @@ def idx_from_order(order):
     return list(np.argsort(order))
 
 
-def normalize_storage_spec(default_origin, shape, dtype, mask):
+def normalize_storage_spec(aligned_index, shape, dtype, mask):
     """Normalize the fields of the storage spec in a homogeneous representation.
 
     Returns
     -------
 
-    tuple(default_origin, shape, dtype, mask)
+    tuple(aligned_index, shape, dtype, mask)
         The output tuple fields verify the following semantics:
 
-            - default_origin: tuple of ints with default origin values for the non-masked dimensions
+            - aligned_index: tuple of ints with default origin values for the non-masked dimensions
             - shape: tuple of ints with shape values for the non-masked dimensions
             - dtype: scalar numpy.dtype (non-structured and without subarrays)
             - backend: backend identifier string (numpy, gt:cpu_kfirst, gt:gpu, ...)
@@ -86,35 +86,35 @@ def normalize_storage_spec(default_origin, shape, dtype, mask):
     else:
         raise TypeError("shape must be an iterable of ints.")
 
-    if default_origin is not None:
-        if not gt_util.is_iterable_of(default_origin, numbers.Integral):
-            raise TypeError("default_origin must be an iterable of ints.")
-        if len(default_origin) not in (sum(mask), len(mask)):
+    if aligned_index is not None:
+        if not gt_util.is_iterable_of(aligned_index, numbers.Integral):
+            raise TypeError("aligned_index must be an iterable of ints.")
+        if len(aligned_index) not in (sum(mask), len(mask)):
             raise ValueError(
-                f"Mask ({mask}) and default_origin ({default_origin}) have non-matching sizes."
-                f"len(default_origin)(={len(default_origin)}) must be equal to len(mask)(={len(mask)}) "
+                f"Mask ({mask}) and aligned_index ({aligned_index}) have non-matching sizes."
+                f"len(aligned_index)(={len(aligned_index)}) must be equal to len(mask)(={len(mask)}) "
                 f"or the number of 'True' entries in mask '{mask}'."
             )
 
-        if sum(mask) < len(default_origin):
-            default_origin = tuple(d for i, d in enumerate(default_origin) if mask[i])
+        if sum(mask) < len(aligned_index):
+            aligned_index = tuple(d for i, d in enumerate(aligned_index) if mask[i])
         else:
-            default_origin = tuple(default_origin)
+            aligned_index = tuple(aligned_index)
 
-        if any(i < 0 for i in default_origin):
-            raise ValueError("default_origin ({}) contains negative value.".format(default_origin))
+        if any(i < 0 for i in aligned_index):
+            raise ValueError("aligned_index ({}) contains negative value.".format(aligned_index))
     else:
-        raise TypeError("default_origin must be an iterable of ints.")
+        raise TypeError("aligned_index must be an iterable of ints.")
 
     dtype = np.dtype(dtype)
     if dtype.shape:
         # Subarray dtype
-        default_origin = (*default_origin, *((0,) * dtype.ndim))
+        aligned_index = (*aligned_index, *((0,) * dtype.ndim))
         shape = (*shape, *(dtype.subdtype[1]))
         mask = (*mask, *((True,) * dtype.ndim))
         dtype = dtype.subdtype[0]
 
-    return default_origin, shape, dtype, mask
+    return aligned_index, shape, dtype, mask
 
 
 def compute_padded_shape(shape, items_per_alignment, order_idx):
@@ -135,7 +135,7 @@ def strides_from_padded_shape(padded_size, order_idx, itemsize):
     return list(strides)
 
 
-def allocate(default_origin, shape, layout_map, dtype, alignment_bytes, allocate_f):
+def allocate(aligned_index, shape, layout_map, dtype, alignment_bytes, allocate_f):
     dtype = np.dtype(dtype)
     assert (
         alignment_bytes % dtype.itemsize
@@ -149,9 +149,8 @@ def allocate(default_origin, shape, layout_map, dtype, alignment_bytes, allocate
     strides = strides_from_padded_shape(padded_shape, order_idx, itemsize)
     if len(order_idx) > 0:
         halo_offset = (
-            int(math.ceil(default_origin[order_idx[-1]] / items_per_alignment))
-            * items_per_alignment
-            - default_origin[order_idx[-1]]
+            int(math.ceil(aligned_index[order_idx[-1]] / items_per_alignment)) * items_per_alignment
+            - aligned_index[order_idx[-1]]
         )
     else:
         halo_offset = 0
@@ -171,7 +170,7 @@ def allocate(default_origin, shape, layout_map, dtype, alignment_bytes, allocate
     return raw_buffer, field
 
 
-def allocate_gpu(default_origin, shape, layout_map, dtype, alignment_bytes):
+def allocate_gpu(aligned_index, shape, layout_map, dtype, alignment_bytes):
     dtype = np.dtype(dtype)
     assert (
         alignment_bytes % dtype.itemsize
@@ -185,9 +184,8 @@ def allocate_gpu(default_origin, shape, layout_map, dtype, alignment_bytes):
     strides = strides_from_padded_shape(padded_shape, order_idx, itemsize)
     if len(order_idx) > 0:
         halo_offset = (
-            int(math.ceil(default_origin[order_idx[-1]] / items_per_alignment))
-            * items_per_alignment
-            - default_origin[order_idx[-1]]
+            int(math.ceil(aligned_index[order_idx[-1]] / items_per_alignment)) * items_per_alignment
+            - aligned_index[order_idx[-1]]
         )
     else:
         halo_offset = 0
@@ -211,7 +209,7 @@ def allocate_gpu(default_origin, shape, layout_map, dtype, alignment_bytes):
     return device_raw_buffer, device_field
 
 
-def allocate_cpu(default_origin, shape, layout_map, dtype, alignment_bytes):
+def allocate_cpu(aligned_index, shape, layout_map, dtype, alignment_bytes):
     dtype = np.dtype(dtype)
     assert (
         alignment_bytes % dtype.itemsize
@@ -225,9 +223,8 @@ def allocate_cpu(default_origin, shape, layout_map, dtype, alignment_bytes):
     strides = strides_from_padded_shape(padded_shape, order_idx, itemsize)
     if len(order_idx) > 0:
         halo_offset = (
-            int(math.ceil(default_origin[order_idx[-1]] / items_per_alignment))
-            * items_per_alignment
-            - default_origin[order_idx[-1]]
+            int(math.ceil(aligned_index[order_idx[-1]] / items_per_alignment)) * items_per_alignment
+            - aligned_index[order_idx[-1]]
         )
     else:
         halo_offset = 0

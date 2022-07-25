@@ -23,8 +23,7 @@
     - parameters: [{ "name": str, "dtype": str }]
 
 imports, module_members, class_name, class_members, stencil_signature, implementation
-gt_backend, gt_source, gt_domain_info, gt_field_info, gt_parameter_info, gt_constants, gt_default_domain,
-gt_default_origin, gt_options
+gt_backend, gt_source, gt_domain_info, gt_field_info, gt_parameter_info, gt_constants, gt_options
 
 #}
 

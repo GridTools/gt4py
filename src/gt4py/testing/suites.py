@@ -532,7 +532,7 @@ class StencilTestSuite(metaclass=SuiteMeta):
                         dtype=dtype,
                         shape=shape,
                         mask=field_masks[name],
-                        default_origin=origin,
+                        aligned_index=origin,
                         backend=implementation.backend,
                     )
                     validation_values[name] = np.array(data)
