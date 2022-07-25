@@ -20,6 +20,7 @@ import eve
 from eve import Coerced, SymbolName, SymbolRef
 from eve.traits import SymbolTableTrait, ValidatedSymbolTableTrait
 from eve.type_definitions import StrEnum
+from functional.iterator import ir as itir
 
 
 @eve.utils.noninstantiable
@@ -114,6 +115,11 @@ class StencilExecution(Node):
     inputs: List[SymRef]
 
 
+UNARY_MATH_NUMBER_BUILTINS = itir.UNARY_MATH_NUMBER_BUILTINS
+UNARY_MATH_FP_BUILTINS = itir.UNARY_MATH_FP_BUILTINS
+UNARY_MATH_FP_PREDICATE_BUILTINS = itir.UNARY_MATH_FP_PREDICATE_BUILTINS
+BINARY_MATH_NUMBER_BUILTINS = itir.BINARY_MATH_NUMBER_BUILTINS
+
 BUILTINS = {
     "deref",
     "shift",
@@ -123,6 +129,10 @@ BUILTINS = {
     "cartesian_domain",
     "unstructured_domain",
     "named_range",
+    *UNARY_MATH_NUMBER_BUILTINS,
+    *UNARY_MATH_FP_BUILTINS,
+    *UNARY_MATH_FP_PREDICATE_BUILTINS,
+    *BINARY_MATH_NUMBER_BUILTINS,
 }
 
 

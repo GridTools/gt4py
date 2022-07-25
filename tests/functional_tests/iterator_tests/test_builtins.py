@@ -5,11 +5,11 @@ import numpy as np
 import pytest
 
 from functional.fencil_processors import type_check
-from functional.fencil_processors.formatters.gtfn import format_sourcecode as gtfn_format_sourcecode
 from functional.fencil_processors.runners import gtfn_cpu
 from functional.iterator.builtins import (
     and_,
     can_deref,
+    cartesian_domain,
     deref,
     divides,
     eq,
@@ -19,6 +19,7 @@ from functional.iterator.builtins import (
     lift,
     minus,
     multiplies,
+    named_range,
     not_,
     or_,
     plus,
@@ -64,8 +65,8 @@ def fencil(builtin, out, *inps, processor, as_column=False):
             return builtin(deref(arg0))
 
         @fendef(offset_provider={}, column_axis=column_axis)
-        def fenimpl(dom, arg0, out):
-            closure(dom, sten, out, [arg0])
+        def fenimpl(size, arg0, out):
+            closure(cartesian_domain(named_range(IDim, 0, size)), sten, out, [arg0])
 
     elif len(inps) == 2:
 
@@ -74,8 +75,8 @@ def fencil(builtin, out, *inps, processor, as_column=False):
             return builtin(deref(arg0), deref(arg1))
 
         @fendef(offset_provider={}, column_axis=column_axis)
-        def fenimpl(dom, arg0, arg1, out):
-            closure(dom, sten, out, [arg0, arg1])
+        def fenimpl(size, arg0, arg1, out):
+            closure(cartesian_domain(named_range(IDim, 0, size)), sten, out, [arg0, arg1])
 
     elif len(inps) == 3:
 
@@ -84,13 +85,13 @@ def fencil(builtin, out, *inps, processor, as_column=False):
             return builtin(deref(arg0), deref(arg1), deref(arg2))
 
         @fendef(offset_provider={}, column_axis=column_axis)
-        def fenimpl(dom, arg0, arg1, arg2, out):
-            closure(dom, sten, out, [arg0, arg1, arg2])
+        def fenimpl(size, arg0, arg1, arg2, out):
+            closure(cartesian_domain(named_range(IDim, 0, size)), sten, out, [arg0, arg1, arg2])
 
     else:
         raise AssertionError("Add overload")
 
-    return run_processor(fenimpl, processor, {IDim: range(out.shape[0])}, *inps, out)
+    return run_processor(fenimpl, processor, out.shape[0], *inps, out)
 
 
 @pytest.mark.parametrize("as_column", [False, True])
@@ -139,8 +140,6 @@ def test_math_function_builtins(fencil_processor, builtin_name, inputs, as_colum
 
     fencil_processor, validate = fencil_processor
 
-    if fencil_processor == gtfn_format_sourcecode:
-        pytest.xfail("gtfn does not yet support math builtins")
     if fencil_processor == type_check.check:
         pytest.xfail("type inference does not yet support math builtins")
 

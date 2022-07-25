@@ -17,22 +17,49 @@ from typing import Any, Collection, Union
 
 from eve import codegen
 from eve.codegen import FormatTemplate as as_fmt, MakoTemplate as as_mako
-from functional.fencil_processors.codegens.gtfn.gtfn_ir import (
-    FencilDefinition,
-    GridType,
-    Literal,
-    OffsetLiteral,
-    SymRef,
-    TaggedValues,
-)
+from functional.fencil_processors.codegens.gtfn import gtfn_ir
 
 
 class GTFNCodegen(codegen.TemplatedGenerator):
-    _grid_type_str = {GridType.CARTESIAN: "cartesian", GridType.UNSTRUCTURED: "unstructured"}
+    _grid_type_str = {
+        gtfn_ir.GridType.CARTESIAN: "cartesian",
+        gtfn_ir.GridType.UNSTRUCTURED: "unstructured",
+    }
+
+    _builtins_mapping = {
+        "abs": "std::abs",
+        "sin": "std::sin",
+        "cos": "std::cos",
+        "tan": "std::tan",
+        "arcsin": "std::asin",
+        "arccos": "std::acos",
+        "arctan": "std::atan",
+        "sinh": "std::sinh",
+        "cosh": "std::cosh",
+        "tanh": "std::tanh",
+        "arcsinh": "std::asinh",
+        "arccosh": "std::acosh",
+        "arctanh": "std::atanh",
+        "sqrt": "std::sqrt",
+        "exp": "std::exp",
+        "log": "std::log",
+        "gamma": "std::tgamma",
+        "cbrt": "std::cbrt",
+        "isfinite": "std::isfinite",
+        "isinf": "std::isinf",
+        "isnan": "std::isnan",
+        "floor": "std::floor",
+        "ceil": "std::ceil",
+        "trunc": "std::trunc",
+        "minimum": "std::min",
+        "maximum": "std::max",
+        "mod": "std::fmod",
+        "power": "std::pow",
+    }
 
     Sym = as_fmt("{id}")
 
-    def visit_SymRef(self, node: SymRef, **kwargs: Any) -> str:
+    def visit_SymRef(self, node: gtfn_ir.SymRef, **kwargs: Any) -> str:
         if node.id == "get":
             return "tuple_util::get"
         return node.id
@@ -43,7 +70,7 @@ class GTFNCodegen(codegen.TemplatedGenerator):
             return f"{value}."
         return value
 
-    def visit_Literal(self, node: Literal, **kwargs: Any) -> str:
+    def visit_Literal(self, node: gtfn_ir.Literal, **kwargs: Any) -> str:
         if node.type == "int":
             return node.value + "_c"
         elif node.type == "float32":
@@ -58,7 +85,7 @@ class GTFNCodegen(codegen.TemplatedGenerator):
     BinaryExpr = as_fmt("({lhs}{op}{rhs})")
     TernaryExpr = as_fmt("({cond}?{true_expr}:{false_expr})")
 
-    def visit_TaggedValues(self, node: TaggedValues, **kwargs):
+    def visit_TaggedValues(self, node: gtfn_ir.TaggedValues, **kwargs):
         tags = self.visit(node.tags)
         values = self.visit(node.values)
         if self.is_cartesian:
@@ -73,10 +100,16 @@ class GTFNCodegen(codegen.TemplatedGenerator):
         "unstructured_domain(${tagged_sizes}, ${tagged_offsets} ${',' if len(connectivities) else ''} ${','.join(f'at_key<{c}_t>(connectivities__)' for c in connectivities)})"
     )
 
-    def visit_OffsetLiteral(self, node: OffsetLiteral, **kwargs: Any) -> str:
+    def visit_OffsetLiteral(self, node: gtfn_ir.OffsetLiteral, **kwargs: Any) -> str:
         return node.value if isinstance(node.value, str) else f"{node.value}_c"
 
-    FunCall = as_fmt("{fun}({','.join(args)})")
+    def visit_FunCall(self, node: gtfn_ir.FunCall, **kwargs):
+        if isinstance(node.fun, gtfn_ir.SymRef) and node.fun.id in self._builtins_mapping:
+            return self.generic_visit(node, fun_name=self._builtins_mapping[node.fun.id])
+        return self.generic_visit(node, fun_name=node.fun.id)
+
+    FunCall = as_fmt("{fun_name}({','.join(args)})")
+
     Lambda = as_mako(
         "[=](${','.join('auto ' + p for p in params)}){return ${expr};}"
     )  # TODO capture
@@ -102,9 +135,9 @@ class GTFNCodegen(codegen.TemplatedGenerator):
     )
 
     def visit_FencilDefinition(
-        self, node: FencilDefinition, **kwargs: Any
+        self, node: gtfn_ir.FencilDefinition, **kwargs: Any
     ) -> Union[str, Collection[str]]:
-        self.is_cartesian = node.grid_type == GridType.CARTESIAN
+        self.is_cartesian = node.grid_type == gtfn_ir.GridType.CARTESIAN
         return self.generic_visit(
             node,
             grid_type_str=self._grid_type_str[node.grid_type],
@@ -113,6 +146,7 @@ class GTFNCodegen(codegen.TemplatedGenerator):
 
     FencilDefinition = as_mako(
         """
+    #include <cmath>
     #include <gridtools/fn/${grid_type_str}.hpp>
 
     namespace generated{
