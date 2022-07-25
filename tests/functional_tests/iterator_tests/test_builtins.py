@@ -4,7 +4,9 @@ from typing import Callable, Iterable
 import numpy as np
 import pytest
 
-from functional.fencil_processors import gtfn, type_check
+from functional.fencil_processors import type_check
+from functional.fencil_processors.formatters.gtfn import format_sourcecode as gtfn_format_sourcecode
+from functional.fencil_processors.runners import gtfn_cpu
 from functional.iterator.builtins import (
     and_,
     can_deref,
@@ -137,7 +139,7 @@ def test_math_function_builtins(fencil_processor, builtin_name, inputs, as_colum
 
     fencil_processor, validate = fencil_processor
 
-    if fencil_processor == gtfn.format_sourcecode:
+    if fencil_processor == gtfn_format_sourcecode:
         pytest.xfail("gtfn does not yet support math builtins")
     if fencil_processor == type_check.check:
         pytest.xfail("type inference does not yet support math builtins")
