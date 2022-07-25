@@ -452,7 +452,8 @@ class FieldOperator(GTCallable):
             for type_ in type_info.primitive_constituents(return_type)
         ):
             raise GTTypeError(
-                f"Return type of a FieldOperator must be a Field, but got `{return_type}`"
+                f"Return type of a FieldOperator must be a Field or composite "
+                f"of Fields, but got `{return_type}`."
             )
         type_ = ct.FunctionType(
             args=[param.type for param in self.foast_node.params], kwargs={}, returns=return_type
