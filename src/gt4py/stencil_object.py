@@ -49,6 +49,7 @@ def _compute_cache_key(array_infos, parameter_args, domain, origin) -> int:
 class _ArgsInfo:
     device: str
     array: FieldType
+    original_object: Any
     origin: Optional[Tuple[int]] = None
     dimensions: Optional[Tuple[str]] = None
 
@@ -58,6 +59,7 @@ def _extract_array_infos(field_args, device) -> Dict[str, Optional[_ArgsInfo]]:
         return {
             name: _ArgsInfo(
                 array=cp.asarray(arg),
+                original_object=arg,
                 dimensions=getattr(arg, "dimensions", None),
                 device=device,
                 origin=getattr(arg, "origin", None),
@@ -70,6 +72,7 @@ def _extract_array_infos(field_args, device) -> Dict[str, Optional[_ArgsInfo]]:
         return {
             name: _ArgsInfo(
                 array=np.asarray(arg),
+                original_object=arg,
                 dimensions=getattr(arg, "dimensions", None),
                 device=device,
                 origin=getattr(arg, "origin", None),
@@ -403,6 +406,17 @@ class StencilObject(abc.ABC):
                     raise ValueError(
                         f"Storage for '{name}' has {arg_info.array.ndim} dimensions but the API signature "
                         f"expects {field_domain_ndim + len(field_info.data_dims)} ('{field_info.axes}[{field_info.data_dims}]')"
+                    )
+
+                if (
+                    arg_info.dimensions is not None
+                    and (*field_info.axes, *(str(d) for d in range(len(field_info.data_dims))))
+                    != arg_info.dimensions
+                ):
+                    raise ValueError(
+                        f"Storage for '{name}' has dimensions '{arg_info.dimensions}' but the API signature "
+                        f"expects '[{', '.join(field_info.axes)}]'"
+                        + (f" and {len(field_info.data_dims)}" if field_info.data_dims else "")
                     )
 
                 # Check: data dimensions shape

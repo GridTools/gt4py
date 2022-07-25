@@ -404,7 +404,7 @@ class TestAxesMismatch:
     def test_storage(self, sample_stencil):
         with pytest.raises(
             Exception,
-            match="Storage for '.*' has domain mask '.*' but the API signature expects '\[I, J\]'",
+            match="Storage for '.*' has dimensions '.*' but the API signature expects '\[I, J\]'",
         ):
             sample_stencil(
                 field_out=DimensionsWrapper(
