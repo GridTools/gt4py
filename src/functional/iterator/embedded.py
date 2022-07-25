@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import itertools
+import math
 import numbers
 from abc import abstractmethod
 from copy import deepcopy
@@ -315,6 +316,16 @@ def greater(first, second):
 @builtins.less.register(EMBEDDED)
 def less(first, second):
     return first < second
+
+
+for math_builtin_name in builtins.MATH_BUILTINS:
+    decorator = getattr(builtins, math_builtin_name).register(EMBEDDED)
+    if math_builtin_name == "gamma":
+        # numpy has no gamma function
+        impl = np.vectorize(math.gamma)
+    else:
+        impl = getattr(np, math_builtin_name)
+    globals()[math_builtin_name] = decorator(impl)
 
 
 def _lookup_offset_provider(offset_provider: OffsetProvider, tag: Tag) -> OffsetProviderElem:
