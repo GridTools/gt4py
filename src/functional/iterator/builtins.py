@@ -290,8 +290,7 @@ MATH_BUILTINS = (
     | UNARY_MATH_FP_PREDICATE_BUILTINS
     | BINARY_MATH_NUMBER_BUILTINS
 )
-
-__all__ = [
+BUILTINS = {
     "deref",
     "can_deref",
     "shift",
@@ -315,4 +314,6 @@ __all__ = [
     "unstructured_domain",
     "named_range",
     *MATH_BUILTINS,
-]
+}
+
+__all__ = [*BUILTINS]

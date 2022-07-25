@@ -1,3 +1,4 @@
+import dataclasses
 import inspect
 from typing import List
 
@@ -99,77 +100,6 @@ def _f(fun, *args):
     return FunCall(fun=fun, args=[*make_node(args)])
 
 
-# builtins
-@iterator.builtins.deref.register(TRACING)
-def deref(arg):
-    return _f("deref", arg)
-
-
-@iterator.builtins.can_deref.register(TRACING)
-def can_deref(arg):
-    return _f("can_deref", arg)
-
-
-@iterator.builtins.lift.register(TRACING)
-def lift(sten):
-    return _f("lift", sten)
-
-
-@iterator.builtins.reduce.register(TRACING)
-def reduce(*args):
-    return _f("reduce", *args)
-
-
-@iterator.builtins.scan.register(TRACING)
-def scan(*args):
-    return _f("scan", *args)
-
-
-@iterator.builtins.make_tuple.register(TRACING)
-def make_tuple(*args):
-    return _f("make_tuple", *args)
-
-
-@iterator.builtins.tuple_get.register(TRACING)
-def tuple_get(*args):
-    return _f("tuple_get", *args)
-
-
-@iterator.builtins.cartesian_domain.register(TRACING)
-def cartesian_domain(*args):
-    return _f("cartesian_domain", *args)
-
-
-@iterator.builtins.unstructured_domain.register(TRACING)
-def unstructured_domain(*args):
-    return _f("unstructured_domain", *args)
-
-
-@iterator.builtins.named_range.register(TRACING)
-def named_range(*args):
-    return _f("named_range", *args)
-
-
-@iterator.builtins.if_.register(TRACING)
-def if_(*args):
-    return _f("if_", *args)
-
-
-@iterator.builtins.not_.register(TRACING)
-def not_(*args):
-    return _f("not_", *args)
-
-
-@iterator.builtins.and_.register(TRACING)
-def and_(*args):
-    return _f("and_", *args)
-
-
-@iterator.builtins.or_.register(TRACING)
-def or_(*args):
-    return _f("or_", *args)
-
-
 # shift promotes its arguments to literals, therefore special
 @iterator.builtins.shift.register(TRACING)
 def shift(*offsets):
@@ -177,48 +107,20 @@ def shift(*offsets):
     return _f("shift", *offsets)
 
 
-@iterator.builtins.plus.register(TRACING)
-def plus(*args):
-    return _f("plus", *args)
+for builtin_name in builtins.BUILTINS:
+    if builtin_name == "shift":
+        continue
 
+    decorator = getattr(iterator.builtins, builtin_name).register(TRACING)
 
-@iterator.builtins.minus.register(TRACING)
-def minus(*args):
-    return _f("minus", *args)
+    @dataclasses.dataclass(frozen=True)
+    class BuiltinTracer:
+        name: str
 
+        def __call__(self, *args):
+            return _f(self.name, *args)
 
-@iterator.builtins.multiplies.register(TRACING)
-def multiplies(*args):
-    return _f("multiplies", *args)
-
-
-@iterator.builtins.divides.register(TRACING)
-def divides(*args):
-    return _f("divides", *args)
-
-
-@iterator.builtins.eq.register(TRACING)
-def eq(*args):
-    return _f("eq", *args)
-
-
-@iterator.builtins.greater.register(TRACING)
-def greater(*args):
-    return _f("greater", *args)
-
-
-@iterator.builtins.less.register(TRACING)
-def less(*args):
-    return _f("less", *args)
-
-
-for math_builtin_name in builtins.MATH_BUILTINS:
-    decorator = getattr(iterator.builtins, math_builtin_name).register(TRACING)
-    exec(
-        f"""@iterator.builtins.{math_builtin_name}.register(TRACING)\n"""
-        f"""def {math_builtin_name}(*args):\n"""
-        f"""  return _f("{math_builtin_name}", *args)\n"""
-    )
+    decorator(BuiltinTracer(name=builtin_name))
 
 
 # helpers
@@ -275,7 +177,7 @@ def make_function_definition(fun):
         params=list(Sym(id=param) for param in inspect.signature(fun).parameters.keys()),
         expr=trace_function_call(fun),
     )
-    Tracer.add_fundef(res)
+    TracerContext.add_fundef(res)
     return res
 
 
@@ -294,7 +196,7 @@ class FundefTracer:
 iterator.runtime.FundefDispatcher.register_hook(FundefTracer())
 
 
-class Tracer:
+class TracerContext:
     fundefs: List[FunctionDefinition] = []
     closures: List[StencilClosure] = []
 
@@ -323,7 +225,7 @@ def closure(domain, stencil, output, inputs):
     else:
         stencil(*(_s(param) for param in inspect.signature(stencil).parameters))
         stencil = make_node(stencil)
-    Tracer.add_closure(
+    TracerContext.add_closure(
         StencilClosure(
             domain=domain,
             stencil=stencil,
@@ -353,15 +255,15 @@ def _make_param_names(fun, args):
 
 
 def trace(fun, args):
-    with Tracer() as _:
+    with TracerContext() as _:
         param_names = _make_param_names(fun, args)
         trace_function_call(fun, args=(_s(p) for p in param_names))
 
         return FencilDefinition(
             id=fun.__name__,
-            function_definitions=Tracer.fundefs,
+            function_definitions=TracerContext.fundefs,
             params=list(Sym(id=param) for param in param_names),
-            closures=Tracer.closures,
+            closures=TracerContext.closures,
         )
 
 
