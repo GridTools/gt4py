@@ -468,7 +468,7 @@ class StencilObject(abc.ABC):
                     *((0,) * len(field_info.data_dims)),
                 )
 
-            elif info_origin := getattr(array_infos.get(name), "origin", None) is not None:
+            elif (info_origin := getattr(array_infos.get(name), "origin", None)) is not None:
                 origin[name] = info_origin  # type: ignore
 
             else:
