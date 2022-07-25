@@ -107,19 +107,19 @@ def shift(*offsets):
     return _f("shift", *offsets)
 
 
+@dataclasses.dataclass(frozen=True)
+class BuiltinTracer:
+    name: str
+
+    def __call__(self, *args):
+        return _f(self.name, *args)
+
+
 for builtin_name in builtins.BUILTINS:
     if builtin_name == "shift":
         continue
 
     decorator = getattr(iterator.builtins, builtin_name).register(TRACING)
-
-    @dataclasses.dataclass(frozen=True)
-    class BuiltinTracer:
-        name: str
-
-        def __call__(self, *args):
-            return _f(self.name, *args)
-
     decorator(BuiltinTracer(name=builtin_name))
 
 
