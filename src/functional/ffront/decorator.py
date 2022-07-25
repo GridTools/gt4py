@@ -26,15 +26,16 @@ import functools
 import types
 import typing
 import warnings
+from collections.abc import Callable, Iterable
 from numbers import Number
-from typing import Callable, Generic, Iterable, Protocol, Type, TypeVar
+from typing import Generic, Protocol, TypeVar
 
 from devtools import debug
 
 from eve.extended_typing import Any, Optional
 from eve.utils import UIDs
 from functional.common import DimensionKind, GridType, GTTypeError
-from functional.fencil_processors import roundtrip
+from functional.fencil_processors.runners import roundtrip
 from functional.ffront import (
     common_types as ct,
     field_operator_ast as foast,
@@ -431,7 +432,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         externals: Optional[dict] = None,
         backend: Optional[FencilExecutor] = None,
         *,
-        operator_node_cls: Type[OperatorNodeT] = foast.FieldOperator,
+        operator_node_cls: type[OperatorNodeT] = foast.FieldOperator,
         operator_attributes: Optional[dict[str, Any]] = None,
     ) -> FieldOperator[OperatorNodeT]:
         captured_vars = CapturedVars.from_function(definition)
