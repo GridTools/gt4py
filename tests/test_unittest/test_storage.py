@@ -601,11 +601,11 @@ class TestDescriptor:
     def test_device(self, backend):
         backend_cls = gt_backend.from_name(backend)
         descriptor: dace.data.Array = gt_store.dace_descriptor(
-                backend=backend,
-                shape=(3, 7, 13),
-                default_origin=(1, 2, 3),
-                dtype=np.float64,
-            )
+            backend=backend,
+            shape=(3, 7, 13),
+            default_origin=(1, 2, 3),
+            dtype=np.float64,
+        )
         if backend_cls.storage_info["device"] == "gpu":
             assert descriptor.storage == dace.StorageType.GPU_Global
         else:
@@ -628,19 +628,17 @@ class TestDescriptor:
             dtype=np.float64,
         )
         descriptor: dace.data.Array = gt_store.dace_descriptor(
-                backend=backend,
-                shape=(3, 7, 13),
-                default_origin=(1, 2, 3),
-                dtype=np.float64,
-            )
+            backend=backend,
+            shape=(3, 7, 13),
+            default_origin=(1, 2, 3),
+            dtype=np.float64,
+        )
         raveled = TestDescriptor.ravel_with_padding(stor)[descriptor.start_offset :]
         if backend_cls.storage_info["device"] == "gpu":
             assert raveled.data.ptr % (backend_cls.storage_info["alignment"] * stor.itemsize) == 0
             assert (
                 backend_cls.storage_info["alignment"] == 1
-                or stor.data.ptr
-                % (backend_cls.storage_info["alignment"] * stor.itemsize)
-                != 0
+                or stor.data.ptr % (backend_cls.storage_info["alignment"] * stor.itemsize) != 0
             )
         else:
             assert (
