@@ -21,6 +21,7 @@ import gt4py.storage as gt_storage
 from gt4py.gtscript import Field, K
 
 from ..definitions import ALL_BACKENDS, CPU_BACKENDS
+from ..storage_test_utils import DimensionsWrapper, OriginWrapper
 
 
 def base_stencil(
@@ -42,57 +43,74 @@ def test_origin_selection():
     A = gt_storage.ones(
         backend="gt:cpu_ifirst", dtype=np.float64, shape=(3, 3, 3), default_origin=(0, 0, 0)
     )
+    Awrap = OriginWrapper(array=A, origin=(0, 0, 0))
     B = gt_storage.ones(
         backend="gt:cpu_kfirst", dtype=np.float64, shape=(3, 3, 3), default_origin=(2, 2, 2)
     )
+    Bwrap = OriginWrapper(array=B, origin=(2, 2, 2))
     C = gt_storage.ones(
         backend="numpy", dtype=np.float32, shape=(3, 3, 3), default_origin=(0, 1, 0)
     )
+    Cwrap = OriginWrapper(array=C, origin=(0, 1, 0))
 
-    stencil(A, B, C, param=3.0, origin=(1, 1, 1), domain=(1, 1, 1))
+    stencil(Awrap, Bwrap, Cwrap, param=3.0, origin=(1, 1, 1), domain=(1, 1, 1))
 
     assert A[1, 1, 1] == 4
     assert B[1, 1, 1] == 7
     assert C[1, 1, 1] == 21
-    assert np.sum(np.asarray(A)) == 30
-    assert np.sum(np.asarray(B)) == 33
-    assert np.sum(np.asarray(C)) == 47
+    assert np.sum(A) == 30
+    assert np.sum(B) == 33
+    assert np.sum(C) == 47
 
     A = gt_storage.ones(
         backend="gt:cpu_ifirst", dtype=np.float64, shape=(3, 3, 3), default_origin=(0, 0, 0)
     )
+    Awrap = OriginWrapper(array=A, origin=(0, 0, 0))
     B = gt_storage.ones(
         backend="gt:cpu_kfirst", dtype=np.float64, shape=(3, 3, 3), default_origin=(2, 2, 2)
     )
+    Bwrap = OriginWrapper(array=B, origin=(2, 2, 2))
     C = gt_storage.ones(
         backend="numpy", dtype=np.float32, shape=(3, 3, 3), default_origin=(0, 1, 0)
     )
-    stencil(A, B, C, param=3.0, origin={"_all_": (1, 1, 1), "field1": (2, 2, 2)}, domain=(1, 1, 1))
+    Cwrap = OriginWrapper(array=C, origin=(0, 1, 0))
+    stencil(
+        Awrap,
+        Bwrap,
+        Cwrap,
+        param=3.0,
+        origin={"_all_": (1, 1, 1), "field1": (2, 2, 2)},
+        domain=(1, 1, 1),
+    )
 
     assert A[2, 2, 2] == 4
     assert B[1, 1, 1] == 7
     assert C[1, 1, 1] == 21
-    assert np.sum(np.asarray(A)) == 30
-    assert np.sum(np.asarray(B)) == 33
-    assert np.sum(np.asarray(C)) == 47
+    assert np.sum(A) == 30
+    assert np.sum(B) == 33
+    assert np.sum(C) == 47
 
     A = gt_storage.ones(
         backend="gt:cpu_ifirst", dtype=np.float64, shape=(3, 3, 3), default_origin=(0, 0, 0)
     )
+    Awrap = OriginWrapper(array=A, origin=(0, 0, 0))
+
     B = gt_storage.ones(
         backend="gt:cpu_kfirst", dtype=np.float64, shape=(3, 3, 3), default_origin=(2, 2, 2)
     )
+    Bwrap = OriginWrapper(array=B, origin=(2, 2, 2))
     C = gt_storage.ones(
         backend="numpy", dtype=np.float32, shape=(3, 3, 3), default_origin=(0, 1, 0)
     )
-    stencil(A, B, C, param=3.0, origin={"field1": (2, 2, 2)}, domain=(1, 1, 1))
+    Cwrap = OriginWrapper(array=C, origin=(0, 1, 0))
+    stencil(Awrap, Bwrap, Cwrap, param=3.0, origin={"field1": (2, 2, 2)}, domain=(1, 1, 1))
 
     assert A[2, 2, 2] == 4
     assert B[2, 2, 2] == 7
     assert C[0, 1, 0] == 21
-    assert np.sum(np.asarray(A)) == 30
-    assert np.sum(np.asarray(B)) == 33
-    assert np.sum(np.asarray(C)) == 47
+    assert np.sum(A) == 30
+    assert np.sum(B) == 33
+    assert np.sum(C) == 47
 
 
 def test_domain_selection():
@@ -219,41 +237,65 @@ def test_halo_checks(backend):
     stencil = gtscript.stencil(definition=avg_stencil, backend=backend)
 
     # test default works
-    in_field = gt_storage.ones(
-        backend=backend, shape=(22, 22, 10), default_origin=(1, 1, 0), dtype=np.float64
+    in_field = OriginWrapper(
+        array=gt_storage.ones(
+            backend=backend, shape=(22, 22, 10), default_origin=(1, 1, 0), dtype=np.float64
+        ),
+        origin=(1, 1, 0),
     )
-    out_field = gt_storage.zeros(
-        backend=backend, shape=(22, 22, 10), default_origin=(1, 1, 0), dtype=np.float64
+    out_field = OriginWrapper(
+        array=gt_storage.zeros(
+            backend=backend, shape=(22, 22, 10), default_origin=(1, 1, 0), dtype=np.float64
+        ),
+        origin=(1, 1, 0),
     )
     stencil(in_field=in_field, out_field=out_field)
-    assert (out_field[1:-1, 1:-1, :] == 1).all()
+    assert (out_field.array[1:-1, 1:-1, :] == 1).all()
 
     # test setting arbitrary, small domain works
-    in_field = gt_storage.ones(
-        backend=backend, shape=(22, 22, 10), default_origin=(1, 1, 0), dtype=np.float64
+    in_field = OriginWrapper(
+        array=gt_storage.ones(
+            backend=backend, shape=(22, 22, 10), default_origin=(1, 1, 0), dtype=np.float64
+        ),
+        origin=(1, 1, 0),
     )
-    out_field = gt_storage.zeros(
-        backend=backend, shape=(22, 22, 10), default_origin=(1, 1, 0), dtype=np.float64
+    out_field = OriginWrapper(
+        array=gt_storage.zeros(
+            backend=backend, shape=(22, 22, 10), default_origin=(1, 1, 0), dtype=np.float64
+        ),
+        origin=(1, 1, 0),
     )
     stencil(in_field=in_field, out_field=out_field, origin=(2, 2, 0), domain=(10, 10, 10))
-    assert (out_field[2:12, 2:12, :] == 1).all()
+    assert (out_field.array[2:12, 2:12, :] == 1).all()
 
     # test setting domain+origin too large raises
-    in_field = gt_storage.ones(
-        backend=backend, shape=(22, 22, 10), default_origin=(1, 1, 0), dtype=np.float64
+    in_field = OriginWrapper(
+        array=gt_storage.ones(
+            backend=backend, shape=(22, 22, 10), default_origin=(1, 1, 0), dtype=np.float64
+        ),
+        origin=(1, 1, 0),
     )
-    out_field = gt_storage.zeros(
-        backend=backend, shape=(22, 22, 10), default_origin=(1, 1, 0), dtype=np.float64
+    out_field = OriginWrapper(
+        array=gt_storage.zeros(
+            backend=backend, shape=(22, 22, 10), default_origin=(1, 1, 0), dtype=np.float64
+        ),
+        origin=(1, 1, 0),
     )
     with pytest.raises(ValueError):
         stencil(in_field=in_field, out_field=out_field, origin=(2, 2, 0), domain=(20, 20, 10))
 
     # test 2*origin+domain does not raise if still fits (c.f. previous bug in c++ check.)
-    in_field = gt_storage.ones(
-        backend=backend, shape=(23, 23, 10), default_origin=(1, 1, 0), dtype=np.float64
+    in_field = OriginWrapper(
+        array=gt_storage.ones(
+            backend=backend, shape=(23, 23, 10), default_origin=(1, 1, 0), dtype=np.float64
+        ),
+        origin=(1, 1, 0),
     )
-    out_field = gt_storage.zeros(
-        backend=backend, shape=(23, 23, 10), default_origin=(1, 1, 0), dtype=np.float64
+    out_field = OriginWrapper(
+        array=gt_storage.zeros(
+            backend=backend, shape=(23, 23, 10), default_origin=(1, 1, 0), dtype=np.float64
+        ),
+        origin=(1, 1, 0),
     )
     stencil(in_field=in_field, out_field=out_field, origin=(2, 2, 0), domain=(20, 20, 10))
 
@@ -306,42 +348,6 @@ def test_np_array_int_types():
         origin=np.asarray((2, 2, 0), dtype=np.int64),
         domain=np.asarray((20, 20, 10), dtype=np.int64),
     )
-
-
-def test_ndarray_warning():
-    """test that proper warnings are raised depending on field type."""
-    backend = "numpy"
-    stencil = gtscript.stencil(definition=avg_stencil, backend=backend)
-
-    # test numpy int types are accepted
-    in_field = gt_storage.ones(
-        backend=backend,
-        shape=np.asarray((23, 23, 10), dtype=np.int64),
-        default_origin=np.asarray((1, 1, 0), dtype=np.int64),
-        dtype=np.float64,
-    )
-    out_field = gt_storage.zeros(
-        backend=backend,
-        shape=np.asarray((23, 23, 10), dtype=np.int64),
-        default_origin=np.asarray((1, 1, 0), dtype=np.int64),
-        dtype=np.float64,
-    )
-    with pytest.warns(RuntimeWarning):
-        stencil(
-            in_field=in_field.view(np.ndarray),
-            out_field=out_field.view(np.ndarray),
-            origin=np.asarray((2, 2, 0), dtype=np.int64),
-            domain=np.asarray((20, 20, 10), dtype=np.int64),
-        )
-
-    with pytest.warns(None) as record:
-        stencil(
-            in_field=in_field,
-            out_field=out_field,
-            origin=np.asarray((2, 2, 0), dtype=np.int64),
-            domain=np.asarray((20, 20, 10), dtype=np.int64),
-        )
-    assert len(record) == 0
 
 
 @pytest.mark.parametrize("backend", ["numpy", "gt:cpu_kfirst"])
@@ -401,12 +407,15 @@ class TestAxesMismatch:
             match="Storage for '.*' has domain mask '.*' but the API signature expects '\[I, J\]'",
         ):
             sample_stencil(
-                field_out=gt_storage.empty(
-                    shape=(3, 3),
-                    mask=[True, False, True],
-                    dtype=np.float64,
-                    backend="numpy",
-                    default_origin=(0, 0),
+                field_out=DimensionsWrapper(
+                    array=gt_storage.empty(
+                        shape=(3, 3),
+                        mask=[True, False, True],
+                        dtype=np.float64,
+                        backend="numpy",
+                        default_origin=(0, 0),
+                    ),
+                    dimensions=("I", "K"),
                 )
             )
 

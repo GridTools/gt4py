@@ -17,7 +17,6 @@ import collections.abc
 import sys
 import time
 import typing
-import warnings
 from dataclasses import dataclass
 from pickle import dumps
 from typing import TYPE_CHECKING, Any, Callable, ClassVar, Dict, Optional, Tuple, Union
@@ -36,14 +35,53 @@ FieldType = Union["cp.ndarray", np.ndarray]
 OriginType = Union[Tuple[int, int, int], Dict[str, Tuple[int, ...]]]
 
 
-def _compute_cache_key(field_args, parameter_args, domain, origin) -> int:
+def _compute_cache_key(array_infos, parameter_args, domain, origin) -> int:
     # field.default_origin is computed using getattr to support numpy.ndarray.
     field_data = tuple(
-        (name, field.shape, getattr(field, "default_origin", (0, 0, 0)))
-        for name, field in field_args.items()
-        if field is not None
+        (name, info.array.shape, info.origin or (0, 0, 0))
+        for name, info in array_infos.items()
+        if info is not None
     )
     return hash((field_data, *parameter_args.keys(), dumps(domain), dumps(origin)))
+
+
+@dataclass
+class _ArgsInfo:
+    device: str
+    array: FieldType
+    origin: Optional[Tuple[int]] = None
+    dimensions: Optional[Tuple[str]] = None
+
+
+def _extract_array_infos(field_args, device) -> Dict[str, Optional[_ArgsInfo]]:
+    if device == "gpu":
+        return {
+            name: _ArgsInfo(
+                array=cp.asarray(arg),
+                dimensions=getattr(arg, "dimensions", None),
+                device=device,
+                origin=getattr(arg, "origin", None),
+            )
+            if arg is not None
+            else None
+            for name, arg in field_args.items()
+        }
+    else:
+        return {
+            name: _ArgsInfo(
+                array=np.asarray(arg),
+                dimensions=getattr(arg, "dimensions", None),
+                device=device,
+                origin=getattr(arg, "origin", None),
+            )
+            if arg is not None
+            else None
+            for name, arg in field_args.items()
+        }
+
+
+def _extract_stencil_arrays(array_infos: Dict[str, Optional[_ArgsInfo]]):
+    return {name: info.array if info is not None else None for name, info in array_infos.items()}
 
 
 @dataclass(frozen=True)
@@ -248,7 +286,7 @@ class StencilObject(abc.ABC):
 
     def _get_max_domain(
         self,
-        field_args: Dict[str, Any],
+        array_infos: Dict[str, Optional[_ArgsInfo]],
         origin: Dict[str, Tuple[int, ...]],
         *,
         squeeze: bool = True,
@@ -274,14 +312,14 @@ class StencilObject(abc.ABC):
 
         for name, field_info in self.field_info.items():
             if field_info.access != AccessKind.NONE:
-                assert field_args.get(name, None) is not None, f"Invalid value for '{name}' field."
-                field = field_args[name]
+                info = array_infos.get(name, None)
+                assert info is not None, f"Invalid value for '{name}' field."
                 api_domain_mask = field_info.domain_mask
                 api_domain_ndim = field_info.domain_ndim
                 upper_indices = field_info.boundary.upper_indices.filter_mask(api_domain_mask)
                 field_origin = Index.from_value(origin[name])
                 field_domain = tuple(
-                    field.shape[i] - (field_origin[i] + upper_indices[i])
+                    info.array.shape[i] - (field_origin[i] + upper_indices[i])
                     for i in range(api_domain_ndim)
                 )
                 max_domain &= Shape.from_mask(field_domain, api_domain_mask, default=max_size)
@@ -293,7 +331,7 @@ class StencilObject(abc.ABC):
 
     def _validate_args(  # noqa: C901  # Function is too complex
         self,
-        field_args: Dict[str, FieldType],
+        arg_infos: Dict[str, Optional[_ArgsInfo]],
         param_args: Dict[str, Any],
         domain: Tuple[int, ...],
         origin: Dict[str, Tuple[int, ...]],
@@ -309,7 +347,7 @@ class StencilObject(abc.ABC):
             TypeError
                 If an incorrect field or parameter data type is passed.
         """
-        assert isinstance(field_args, dict) and isinstance(param_args, dict)
+        assert isinstance(arg_infos, dict) and isinstance(param_args, dict)
 
         # validate domain sizes
         domain_ndim = self.domain_info.ndim
@@ -324,7 +362,7 @@ class StencilObject(abc.ABC):
         if not domain > Shape.zeros(domain_ndim):
             raise ValueError(f"Compute domain contains zero sizes '{domain}')")
 
-        if not domain <= (max_domain := self._get_max_domain(field_args, origin, squeeze=False)):
+        if not domain <= (max_domain := self._get_max_domain(arg_infos, origin, squeeze=False)):
             raise ValueError(
                 f"Compute domain too large (provided: {domain}, maximum: {max_domain})"
             )
@@ -337,26 +375,22 @@ class StencilObject(abc.ABC):
         # assert compatibility of fields with stencil
         for name, field_info in self.field_info.items():
             if field_info.access != AccessKind.NONE:
-                if name not in field_args:
+                if name not in arg_infos:
                     raise ValueError(f"Missing value for '{name}' field.")
-                field = field_args[name]
+                arg_info = arg_infos[name]
+                assert arg_info is not None
 
                 if not gt_backend.from_name(self.backend).storage_info["is_compatible_layout"](
-                    field, field_info.mask
+                    arg_info.array, field_info.mask
                 ):
                     raise ValueError(
                         f"The layout of the field {name} is not compatible with the backend."
                     )
-                elif type(field) is np.ndarray:
-                    warnings.warn(
-                        "NumPy ndarray passed as field. This is discouraged and only works with constraints and only for certain backends.",
-                        RuntimeWarning,
-                    )
 
                 field_dtype = self.field_info[name].dtype
-                if not field.dtype == field_dtype:
+                if not arg_info.array.dtype == field_dtype:
                     raise TypeError(
-                        f"The dtype of field '{name}' is '{field.dtype}' instead of '{field_dtype}'"
+                        f"The dtype of field '{name}' is '{arg_info.array.dtype}' instead of '{field_dtype}'"
                     )
 
                 # Check: domain + halo vs field size
@@ -365,16 +399,16 @@ class StencilObject(abc.ABC):
                 field_domain_ndim = field_info.domain_ndim
                 field_domain_origin = Index.from_mask(origin[name], field_domain_mask[:domain_ndim])
 
-                if field.ndim != field_domain_ndim + len(field_info.data_dims):
+                if arg_info.array.ndim != field_domain_ndim + len(field_info.data_dims):
                     raise ValueError(
-                        f"Storage for '{name}' has {field.ndim} dimensions but the API signature "
+                        f"Storage for '{name}' has {arg_info.array.ndim} dimensions but the API signature "
                         f"expects {field_domain_ndim + len(field_info.data_dims)} ('{field_info.axes}[{field_info.data_dims}]')"
                     )
 
                 # Check: data dimensions shape
-                if field.shape[field_domain_ndim:] != field_info.data_dims:
+                if arg_info.array.shape[field_domain_ndim:] != field_info.data_dims:
                     raise ValueError(
-                        f"Field '{name}' expects data dimensions {field_info.data_dims} but got {field.shape[field_domain_ndim:]}"
+                        f"Field '{name}' expects data dimensions {field_info.data_dims} but got {arg_info.array.shape[field_domain_ndim:]}"
                     )
 
                 min_origin = gtc_utils.interpolate_mask(
@@ -393,9 +427,9 @@ class StencilObject(abc.ABC):
                 min_shape = tuple(
                     lb + d + ub for lb, d, ub in zip(lower_indices, spatial_domain, upper_indices)
                 )
-                if min_shape > field.shape:
+                if min_shape > arg_info.array.shape:
                     raise ValueError(
-                        f"Shape of field {name} is {field.shape} but must be at least {min_shape} for given domain and origin."
+                        f"Shape of field {name} is {arg_info.array.shape} but must be at least {min_shape} for given domain and origin."
                     )
 
         # assert compatibility of parameters with stencil
@@ -409,7 +443,7 @@ class StencilObject(abc.ABC):
                     )
 
     def _normalize_origins(
-        self, field_args: Dict[str, FieldType], origin: Optional[OriginType]
+        self, array_infos: Dict[str, Optional[_ArgsInfo]], origin: Optional[OriginType]
     ) -> Dict[str, Tuple[int, ...]]:
         origin = self._make_origin_dict(origin)
         all_origin = origin.get("_all_", None)
@@ -417,7 +451,7 @@ class StencilObject(abc.ABC):
         # Set an appropriate origin for all fields
         for name, field_info in self.field_info.items():
 
-            assert name in field_args, f"Missing value for '{name}' field."
+            assert name in array_infos, f"Missing value for '{name}' field."
             field_origin = origin.get(name, None)
 
             if field_origin is not None:
@@ -434,8 +468,8 @@ class StencilObject(abc.ABC):
                     *((0,) * len(field_info.data_dims)),
                 )
 
-            elif hasattr(field_arg := field_args.get(name), "origin"):
-                origin[name] = field_arg.origin  # type: ignore
+            elif info_origin := getattr(array_infos.get(name), "origin", None) is not None:
+                origin[name] = info_origin  # type: ignore
 
             else:
                 origin[name] = (0,) * field_info.ndim
@@ -483,23 +517,31 @@ class StencilObject(abc.ABC):
         """
         if exec_info is not None:
             exec_info["call_run_start_time"] = time.perf_counter()
+        array_infos = _extract_array_infos(
+            field_args, gt_backend.from_name(self.backend).storage_info["device"]
+        )
 
-        cache_key = _compute_cache_key(field_args, parameter_args, domain, origin)
+        cache_key = _compute_cache_key(array_infos, parameter_args, domain, origin)
         if cache_key not in self._domain_origin_cache:
-            origin = self._normalize_origins(field_args, origin)
+            origin = self._normalize_origins(array_infos, origin)
 
             if domain is None:
-                domain = self._get_max_domain(field_args, origin)
+                domain = self._get_max_domain(array_infos, origin)
 
             if validate_args:
-                self._validate_args(field_args, parameter_args, domain, origin)
+                self._validate_args(array_infos, parameter_args, domain, origin)
 
             type(self)._domain_origin_cache[cache_key] = (domain, origin)
         else:
             domain, origin = type(self)._domain_origin_cache[cache_key]
 
+        permuted_arrays = _extract_stencil_arrays(array_infos)
         self.run(
-            _domain_=domain, _origin_=origin, exec_info=exec_info, **field_args, **parameter_args
+            _domain_=domain,
+            _origin_=origin,
+            exec_info=exec_info,
+            **permuted_arrays,
+            **parameter_args,
         )
 
         if exec_info is not None:

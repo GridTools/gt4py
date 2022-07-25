@@ -21,7 +21,9 @@ import pytest
 from gt4py import gtscript
 from gt4py import storage as gt_storage
 from gt4py.gtscript import PARALLEL, Field, computation, interval
-from tests.definitions import ALL_BACKENDS
+
+from ..definitions import ALL_BACKENDS
+from ..storage_test_utils import OriginWrapper
 
 
 @pytest.mark.parametrize("backend", ["numpy"])
@@ -34,11 +36,13 @@ def test_stencil_object_cache(backend: str):
             )
 
     shape = (4, 4, 4)
-    in_storage = gt_storage.ones(
-        backend=backend, default_origin=(0, 0, 0), shape=shape, dtype=float
+    in_storage = OriginWrapper(
+        array=gt_storage.ones(backend=backend, default_origin=(0, 0, 0), shape=shape, dtype=float),
+        origin=(0, 0, 0),
     )
-    out_storage = gt_storage.ones(
-        backend=backend, default_origin=(0, 0, 0), shape=shape, dtype=float
+    out_storage = OriginWrapper(
+        array=gt_storage.ones(backend=backend, default_origin=(0, 0, 0), shape=shape, dtype=float),
+        origin=(0, 0, 0),
     )
 
     def runit(*args, **kwargs) -> float:
@@ -53,8 +57,9 @@ def test_stencil_object_cache(backend: str):
     assert fast_time < base_time
 
     # When an origin changes, it needs to recompute more, so the time should increase
-    other_out_storage = gt_storage.ones(
-        backend=backend, default_origin=(1, 0, 0), shape=shape, dtype=float
+    other_out_storage = OriginWrapper(
+        array=gt_storage.ones(backend=backend, default_origin=(1, 0, 0), shape=shape, dtype=float),
+        origin=(1, 0, 0),
     )
     other_origin_time = runit(in_storage, other_out_storage, offset=1.0)
     assert other_origin_time > fast_time

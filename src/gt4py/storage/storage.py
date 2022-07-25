@@ -13,7 +13,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import numpy as np
-import pytest
 
 from gt4py import backend as gt_backend
 
@@ -106,36 +105,37 @@ def from_array(data, backend, default_origin, shape=None, dtype=None, mask=None)
     return storage
 
 
-@pytest.mark.skipif(dace is None)
-def dace_descriptor(backend, default_origin, shape, dtype, mask=None):
-    default_origin, shape, dtype, mask = storage_utils.normalize_storage_spec(
-        default_origin, shape, dtype, mask
-    )
-    itemsize = dtype.itemsize
-    layout_map = gt_backend.from_name(backend).storage_info["layout_map"](mask)
+if dace is not None:
 
-    order_idx = storage_utils.idx_from_order([i for i in layout_map if i is not None])
-    padded_shape = storage_utils.compute_padded_shape(
-        shape, gt_backend.from_name(backend).storage_info["alignment"], order_idx
-    )
+    def dace_descriptor(backend, default_origin, shape, dtype, mask=None):
+        default_origin, shape, dtype, mask = storage_utils.normalize_storage_spec(
+            default_origin, shape, dtype, mask
+        )
+        itemsize = dtype.itemsize
+        layout_map = gt_backend.from_name(backend).storage_info["layout_map"](mask)
 
-    strides = storage_utils.strides_from_padded_shape(padded_shape, order_idx, itemsize)
+        order_idx = storage_utils.idx_from_order([i for i in layout_map if i is not None])
+        padded_shape = storage_utils.compute_padded_shape(
+            shape, gt_backend.from_name(backend).storage_info["alignment"], order_idx
+        )
 
-    storage = (
-        dace.StorageType.GPU_Global
-        if gt_backend.from_name(backend).storage_info["device"] == "gpu"
-        else dace.StorageType.CPU_Heap
-    )
-    start_offset = int(np.array([default_origin]) @ np.array([strides]).T) // itemsize
+        strides = storage_utils.strides_from_padded_shape(padded_shape, order_idx, itemsize)
 
-    total_size = int(int(np.array([shape]) @ np.array([strides]).T) // itemsize)
+        storage = (
+            dace.StorageType.GPU_Global
+            if gt_backend.from_name(backend).storage_info["device"] == "gpu"
+            else dace.StorageType.CPU_Heap
+        )
+        start_offset = int(np.array([default_origin]) @ np.array([strides]).T) // itemsize
 
-    start_offset = start_offset % gt_backend.from_name(backend).storage_info["alignment"]
-    return dace.data.Array(
-        shape=shape,
-        strides=[s // itemsize for s in strides],
-        dtype=dace.typeclass(str(dtype)),
-        storage=storage,
-        total_size=total_size,
-        start_offset=start_offset,
-    )
+        total_size = int(int(np.array([shape]) @ np.array([strides]).T) // itemsize)
+
+        start_offset = start_offset % gt_backend.from_name(backend).storage_info["alignment"]
+        return dace.data.Array(
+            shape=shape,
+            strides=[s // itemsize for s in strides],
+            dtype=dace.typeclass(str(dtype)),
+            storage=storage,
+            total_size=total_size,
+            start_offset=start_offset,
+        )

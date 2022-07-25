@@ -30,6 +30,30 @@ from gt4py.stencil_object import FrozenStencil, StencilObject
 from gt4py.utils import shash
 
 
+@dataclass
+class _ArgsInfo:
+    device: str
+    array: dace.data.Array
+    origin: Optional[Tuple[int]] = None
+    dimensions: Optional[Tuple[str]] = None
+
+
+def _extract_array_infos(field_args, device) -> Dict[str, _ArgsInfo]:
+    return {
+        name: _ArgsInfo(
+            array=arg,
+            dimensions=getattr(arg, "dimensions", None),
+            device=device,
+            origin=getattr(arg, "origin", None),
+        )
+        for name, arg in field_args.items()
+    }
+
+
+def _extract_stencil_arrays(array_infos: Dict[str, _ArgsInfo]):
+    return {name: info.array for name, info in array_infos.items()}
+
+
 @dataclass(frozen=True)
 class DaCeFrozenStencil(FrozenStencil, SDFGConvertible):
 
@@ -298,10 +322,14 @@ class DaCeStencilObject(StencilObject, SDFGConvertible):
         args_as_kwargs = {
             name: (kwargs[name] if name in kwargs else next(args_iter)) for name in arg_names
         }
+        arg_infos = _extract_array_infos(
+            field_args=args_as_kwargs,
+            device=gt_backend.from_name(self.backend).storage_info["device"],
+        )
 
-        origin = self._normalize_origins(args_as_kwargs, origin)
+        origin = self._normalize_origins(arg_infos, origin)
         if domain is None:
-            domain = self._get_max_domain(args_as_kwargs, origin)
+            domain = self._get_max_domain(arg_infos, origin)
         for key, value in kwargs.items():
             args_as_kwargs.setdefault(key, value)
         args_as_kwargs["domain"] = domain
