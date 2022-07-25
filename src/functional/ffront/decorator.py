@@ -447,7 +447,10 @@ class FieldOperator(GTCallable):
         # TODO(tehrengruber): temporary solution until #837 is merged
         assert isinstance(self.foast_node.body[-1], foast.Return)
         return_type = self.foast_node.body[-1].value.type
-        if not isinstance(return_type, ct.FieldType):
+        if not all(
+            isinstance(type_, ct.FieldType)
+            for type_ in type_info.primitive_constituents(return_type)
+        ):
             raise GTTypeError(
                 f"Return type of a FieldOperator must be a Field, but got `{return_type}`"
             )
