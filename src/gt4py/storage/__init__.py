@@ -15,4 +15,10 @@
 """GridTools storages classes."""
 
 
-from .storage import dace_descriptor, empty, from_array, ones, zeros
+from .storage import empty, from_array, ones, zeros
+
+
+try:
+    from .storage import dace_descriptor
+except ImportError:
+    pass
