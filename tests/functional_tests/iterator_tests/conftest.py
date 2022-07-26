@@ -27,17 +27,24 @@ def pretty_format_and_check(root: itir.FencilDefinition, *args, **kwargs) -> str
     return pretty
 
 
+_common_processors = [
+    # (processor, do_validate)
+    (None, True),
+    (lisp.format_lisp, False),
+    (pretty_format_and_check, False),
+    (roundtrip.executor, True),
+    (type_check.check, False),
+    (double_roundtrip.executor, True),
+]
+_processors = [*_common_processors, (gtfn_cpu.run_gtfn, True)]
+_processors_no_gtfn_exec = [
+    *_common_processors,
+    (functional.fencil_processors.formatters.gtfn.format_sourcecode, False),
+]
+
+
 @pytest.fixture(
-    params=[
-        # (processor, do_validate)
-        (None, True),
-        (lisp.format_lisp, False),
-        (gtfn_cpu.run_gtfn, True),
-        (pretty_format_and_check, False),
-        (roundtrip.executor, True),
-        (type_check.check, False),
-        (double_roundtrip.executor, True),
-    ],
+    params=_processors,
     ids=lambda p: f"backend={p[0].__module__.split('.')[-1] + '.' + p[0].__name__ if p[0] else p[0]}",
 )
 def fencil_processor(request):
@@ -45,16 +52,7 @@ def fencil_processor(request):
 
 
 @pytest.fixture(
-    params=[
-        # (processor, do_validate)
-        (None, True),
-        (lisp.format_lisp, False),
-        (functional.fencil_processors.formatters.gtfn.format_sourcecode, False),
-        (pretty_format_and_check, False),
-        (roundtrip.executor, True),
-        (type_check.check, False),
-        (double_roundtrip.executor, True),
-    ],
+    params=_processors_no_gtfn_exec,
     ids=lambda p: f"backend={p[0].__module__.split('.')[-1] + '.' + p[0].__name__ if p[0] else p[0]}",
 )
 def fencil_processor_no_gtfn_exec(request):

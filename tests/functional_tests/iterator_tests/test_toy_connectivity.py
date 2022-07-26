@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 
 from functional.common import Dimension
-from functional.fencil_processor_no_gtfn_execs.formatters import gtfn
+from functional.fencil_processors.formatters import gtfn
 from functional.iterator.builtins import deref, lift, reduce, shift
 from functional.iterator.embedded import (
     NeighborTableOffsetProvider,
