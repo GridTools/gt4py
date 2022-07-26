@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 
 from functional.fencil_processors import type_check
-from functional.fencil_processors.runners import gtfn_cpu
+from functional.fencil_processors.runners.gtfn_cpu import run_gtfn
 from functional.iterator.builtins import (
     and_,
     can_deref,
@@ -25,11 +25,7 @@ from functional.iterator.builtins import (
     plus,
     shift,
 )
-from functional.iterator.embedded import (
-    NeighborTableOffsetProvider,
-    index_field,
-    np_as_located_field,
-)
+from functional.iterator.embedded import NeighborTableOffsetProvider, np_as_located_field
 from functional.iterator.runtime import CartesianAxis, closure, fendef, fundef, offset
 
 from .conftest import run_processor
@@ -187,6 +183,9 @@ def _can_deref_lifted(inp):
 @pytest.mark.parametrize("stencil", [_can_deref, _can_deref_lifted])
 def test_can_deref(fencil_processor, stencil):
     fencil_processor, validate = fencil_processor
+
+    if fencil_processor == run_gtfn:
+        pytest.xfail("TODO: gtfn bindings don't support unstructured")
 
     Node = CartesianAxis("Node")
 
