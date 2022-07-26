@@ -27,7 +27,6 @@ from gt4py.backend.base import CLIBackendMixin, register
 from gt4py.backend.gtc_common import (
     BackendCodegen,
     BaseGTBackend,
-    GTCUDAPyModuleGenerator,
     PyExtModuleGenerator,
     bindings_main_template,
     pybuffer_to_sid,
@@ -445,10 +444,6 @@ class DaCePyExtModuleGenerator(PyExtModuleGenerator):
         return res
 
 
-class DaCeCUDAPyExtModuleGenerator(DaCePyExtModuleGenerator, GTCUDAPyModuleGenerator):
-    pass
-
-
 class BaseDaceBackend(BaseGTBackend, CLIBackendMixin):
 
     GT_BACKEND_T = "dace"
@@ -507,7 +502,7 @@ class DaceGPUBackend(BaseDaceBackend):
         "layout_map": layout_maker_factory((2, 1, 0)),
         "is_compatible_layout": lambda x: True,
     }
-    MODULE_GENERATOR_CLASS = DaCeCUDAPyExtModuleGenerator
+    MODULE_GENERATOR_CLASS = DaCePyExtModuleGenerator
     options = {
         **BaseGTBackend.GT_BACKEND_OPTS,
         "device_sync": {"versioning": True, "type": bool},

@@ -22,6 +22,7 @@ import pytest
 
 import gt4py.backend as gt_backend
 import gt4py.storage as gt_store
+from gt4py.storage.utils import cpu_copy
 
 from ..definitions import ALL_BACKENDS
 from ..reference_cpp_regression import reference_module
@@ -86,9 +87,6 @@ def run_horizontal_diffusion(backend, id_version, domain):
     testmodule = generate_test_module(
         "horizontal_diffusion", backend, id_version=id_version, rebuild=False
     )
-    for k in arg_fields:
-        if hasattr(arg_fields[k], "host_to_device"):
-            arg_fields[k].host_to_device()
     testmodule.run(
         **arg_fields,
         _domain_=domain,
@@ -97,10 +95,8 @@ def run_horizontal_diffusion(backend, id_version, domain):
     )
 
     for k in validate_field_names:
-        if hasattr(arg_fields[k], "synchronize"):
-            arg_fields[k].device_to_host(force=True)
         np.testing.assert_allclose(
-            arg_fields[k].view(np.ndarray), validate_fields[k + "_reference"].view(np.ndarray)
+            cpu_copy(arg_fields[k]), validate_fields[k + "_reference"].view(np.ndarray)
         )
 
 
@@ -136,9 +132,7 @@ def run_tridiagonal_solver(backend, id_version, domain):
     testmodule = generate_test_module(
         "tridiagonal_solver", backend, id_version=id_version, rebuild=False
     )
-    for k in arg_fields:
-        if hasattr(arg_fields[k], "host_to_device"):
-            arg_fields[k].host_to_device()
+
     testmodule.run(
         **arg_fields,
         _domain_=domain,
@@ -150,7 +144,7 @@ def run_tridiagonal_solver(backend, id_version, domain):
         if hasattr(arg_fields[k], "synchronize"):
             arg_fields[k].device_to_host(force=True)
         np.testing.assert_allclose(
-            arg_fields[k].view(np.ndarray), validate_fields[k + "_reference"].view(np.ndarray)
+            cpu_copy(arg_fields[k]), validate_fields[k + "_reference"].view(np.ndarray)
         )
 
 
@@ -190,9 +184,7 @@ def run_vertical_advection_dycore(backend, id_version, domain):
     testmodule = generate_test_module(
         "vertical_advection_dycore", backend, id_version=id_version, rebuild=False
     )
-    for k in arg_fields:
-        if hasattr(arg_fields[k], "host_to_device"):
-            arg_fields[k].host_to_device()
+
     testmodule.run(
         **arg_fields,
         _domain_=domain,
@@ -204,10 +196,8 @@ def run_vertical_advection_dycore(backend, id_version, domain):
     )
 
     for k in validate_field_names:
-        if hasattr(arg_fields[k], "synchronize"):
-            arg_fields[k].device_to_host(force=True)
         np.testing.assert_allclose(
-            arg_fields[k].view(np.ndarray), validate_fields[k + "_reference"].view(np.ndarray)
+            cpu_copy(arg_fields[k]), validate_fields[k + "_reference"].view(np.ndarray)
         )
 
 
@@ -237,9 +227,6 @@ def run_large_k_interval(backend, id_version, domain):
     testmodule = generate_test_module(
         "large_k_interval", backend, id_version=id_version, rebuild=False
     )
-    for k in arg_fields:
-        if hasattr(arg_fields[k], "host_to_device"):
-            arg_fields[k].host_to_device()
     testmodule.run(
         **arg_fields,
         _domain_=domain,
@@ -251,7 +238,7 @@ def run_large_k_interval(backend, id_version, domain):
         if hasattr(arg_fields[k], "synchronize"):
             arg_fields[k].device_to_host(force=True)
         np.testing.assert_allclose(
-            arg_fields[k].view(np.ndarray), validate_fields[k + "_reference"].view(np.ndarray)
+            cpu_copy(arg_fields[k]), validate_fields[k + "_reference"].view(np.ndarray)
         )
 
 

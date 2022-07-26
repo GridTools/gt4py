@@ -193,16 +193,16 @@ def test_lower_dimensional_inputs(backend):
     aligned_index = (1, 1, 0)
     dtype = float
 
-    field_3d = gt_storage.zeros(backend, aligned_index, full_shape, dtype, mask=None)
+    field_3d = gt_storage.zeros(backend, aligned_index, full_shape, dtype, dimensions=None)
     assert field_3d.shape == full_shape[:]
 
     field_2d = gt_storage.zeros(
-        backend, aligned_index[:-1], full_shape[:-1], dtype, mask=[True, True, False]
+        backend, aligned_index[:-1], full_shape[:-1], dtype, dimensions="IJ"
     )
     assert field_2d.shape == full_shape[:-1]
 
     field_1d = gt_storage.ones(
-        backend, (aligned_index[-1],), (full_shape[-1],), dtype, mask=[False, False, True]
+        backend, (aligned_index[-1],), (full_shape[-1],), dtype, dimensions="K"
     )
     assert field_1d.shape == (full_shape[-1],)
 

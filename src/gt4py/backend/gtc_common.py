@@ -29,7 +29,6 @@ from gt4py import backend as gt_backend
 from gt4py import utils as gt_utils
 from gt4py.backend import Backend
 from gt4py.backend.module_generator import BaseModuleGenerator, ModuleData
-from gt4py.definitions import AccessKind
 from gtc import gtir
 from gtc.passes.gtir_pipeline import GtirPipeline
 from gtc.passes.oir_pipeline import OirPipeline
@@ -370,26 +369,6 @@ class CUDAPyExtModuleGenerator(PyExtModuleGenerator):
             + super().generate_imports()
         )
         return source
-
-
-class GTCUDAPyModuleGenerator(CUDAPyExtModuleGenerator):
-    def generate_pre_run(self) -> str:
-        field_names = [
-            key
-            for key in self.args_data.field_info
-            if self.args_data.field_info[key].access != AccessKind.NONE
-        ]
-
-        return "\n".join([f + ".host_to_device()" for f in field_names])
-
-    def generate_post_run(self) -> str:
-        output_field_names = [
-            name
-            for name, info in self.args_data.field_info.items()
-            if info is not None and bool(info.access & AccessKind.WRITE)
-        ]
-
-        return "\n".join([f + "._set_device_modified()" for f in output_field_names])
 
 
 def _dimensions_to_mask(dimensions: Tuple[str, ...]) -> Tuple[bool, ...]:

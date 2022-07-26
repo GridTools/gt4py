@@ -30,7 +30,7 @@ from gtc.passes.oir_pipeline import DefaultPipeline
 
 from .gtc_common import (
     BaseGTBackend,
-    GTCUDAPyModuleGenerator,
+    PyExtModuleGenerator,
     cuda_is_compatible_layout,
     make_cuda_layout_map,
 )
@@ -146,7 +146,7 @@ class CudaBackend(BaseGTBackend, CLIBackendMixin):
         "is_compatible_layout": cuda_is_compatible_layout,
     }
     PYEXT_GENERATOR_CLASS = CudaExtGenerator  # type: ignore
-    MODULE_GENERATOR_CLASS = GTCUDAPyModuleGenerator
+    MODULE_GENERATOR_CLASS = PyExtModuleGenerator
     GT_BACKEND_T = "gpu"
 
     def generate_extension(self, **kwargs: Any) -> Tuple[str, str]:

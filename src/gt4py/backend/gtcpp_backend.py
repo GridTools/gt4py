@@ -28,7 +28,7 @@ from gtc.passes.oir_pipeline import DefaultPipeline
 
 from .gtc_common import (
     BaseGTBackend,
-    GTCUDAPyModuleGenerator,
+    PyExtModuleGenerator,
     cuda_is_compatible_layout,
     make_cuda_layout_map,
     make_mc_layout_map,
@@ -201,7 +201,7 @@ class GTCpuKfirstBackend(GTBaseBackend):
 class GTGpuBackend(GTBaseBackend):
     """GridTools python backend using gtc."""
 
-    MODULE_GENERATOR_CLASS = GTCUDAPyModuleGenerator
+    MODULE_GENERATOR_CLASS = PyExtModuleGenerator
     name = "gt:gpu"
     GT_BACKEND_T = "gpu"
     languages = {"computation": "cuda", "bindings": ["python"]}
