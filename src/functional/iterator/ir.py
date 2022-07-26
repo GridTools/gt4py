@@ -71,7 +71,7 @@ class FunctionDefinition(Node, SymbolTableTrait):
 class StencilClosure(Node):
     domain: Expr
     stencil: Expr
-    output: SymRef  # we could consider Expr for cases like make_tuple(out0,out1)
+    output: Expr
     inputs: List[SymRef]
 
 

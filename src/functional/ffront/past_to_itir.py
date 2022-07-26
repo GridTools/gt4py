@@ -88,14 +88,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
 
         closures: list[itir.StencilClosure] = []
         for stmt in node.body:
-            if isinstance(stmt, past.Call) and isinstance(
-                symtable[stmt.func.id].type.returns, common_types.FieldType
-            ):
-                closures.append(self._visit_stencil_call(stmt, **kwargs))
-            else:
-                raise NotImplementedError(
-                    "Only calls to functions returning a Field supported currently."
-                )
+            closures.append(self._visit_stencil_call(stmt, **kwargs))
 
         return itir.FencilDefinition(
             id=node.id,
@@ -105,7 +98,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         )
 
     def _visit_stencil_call(self, node: past.Call, **kwargs) -> itir.StencilClosure:
-        assert isinstance(node.kwargs["out"].type, common_types.FieldType)
+        assert common_types.is_field_type_or_tuple_of_field_type(node.kwargs["out"].type)
 
         output, domain = self._visit_stencil_call_out_arg(node.kwargs["out"], **kwargs)
 
@@ -136,6 +129,41 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         else:
             raise AssertionError("Expected `None` or `past.Constant`.")
         return lowered_bound
+
+    @property
+    def _domain_builtin(self) -> str:
+        return "cartesian_domain" if self.grid_type == GridType.CARTESIAN else "unstructured_domain"
+
+    def _visit_tuple_out_arg(self, node: past.TupleExpr | past.Name, **kwargs):  # TODO
+        if isinstance(node, past.Name):
+            out_field_name = node
+            domain_args = [
+                itir.FunCall(
+                    fun=itir.SymRef(id="named_range"),
+                    args=[
+                        itir.AxisLiteral(value=dim.value),
+                        itir.Literal(value="0", type="int"),
+                        # here we use the artificial size arguments added to the fencil
+                        itir.SymRef(id=_size_arg_from_field(out_field_name.id, dim_idx)),
+                    ],
+                )
+                for dim_idx, dim in enumerate(node.type.dims)
+            ]
+            return itir.SymRef(id=self.visit(out_field_name, **kwargs).id), itir.FunCall(
+                fun=itir.SymRef(id=self._domain_builtin), args=domain_args
+            )
+        elif isinstance(node, past.TupleExpr):
+            domain = None
+            field_refs = []
+            for field in node.elts:
+                f, domain = self._visit_tuple_out_arg(
+                    field, **kwargs
+                )  # we assume all domains are the same (and keep the last), but we can only check on execution
+                field_refs.append(f)
+            return itir.FunCall(fun=itir.SymRef(id="make_tuple"), args=field_refs), domain
+        raise RuntimeError(
+            "Unexpected `out` argument. Must be a `past.Name` or nesting of `past.TupleExpr` and `past.Name`."
+        )
 
     def _visit_stencil_call_out_arg(
         self, node: past.Expr, **kwargs
@@ -176,32 +204,17 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                         args=[itir.AxisLiteral(value=dim.value), lower, upper],
                     )
                 )
-
-        elif isinstance(node, past.Name):
-            out_field_name = node
-            domain_args = [
-                itir.FunCall(
-                    fun=itir.SymRef(id="named_range"),
-                    args=[
-                        itir.AxisLiteral(value=dim.value),
-                        itir.Literal(value="0", type="int"),
-                        # here we use the artificial size arguments added to the fencil
-                        itir.SymRef(id=_size_arg_from_field(out_field_name.id, dim_idx)),
-                    ],
-                )
-                for dim_idx, dim in enumerate(node.type.dims)
-            ]
-        else:
-            raise RuntimeError(
-                "Unexpected `out` argument. Must be a `past.Subscript` or `past.Name` node."
+            return itir.SymRef(id=self.visit(out_field_name, **kwargs).id), itir.FunCall(
+                fun=itir.SymRef(id=self.domain_builtin), args=domain_args
             )
 
-        domain_builtin = (
-            "cartesian_domain" if self.grid_type == GridType.CARTESIAN else "unstructured_domain"
-        )
-        return itir.SymRef(id=self.visit(out_field_name, **kwargs).id), itir.FunCall(
-            fun=itir.SymRef(id=domain_builtin), args=domain_args
-        )
+        elif isinstance(node, (past.Name, past.TupleExpr)):
+            return self._visit_tuple_out_arg(node)
+
+        else:
+            raise RuntimeError(
+                "Unexpected `out` argument. Must be a `past.Subscript`, `past.Name` or `past.TupleExpr` node."
+            )
 
     def visit_Constant(self, node: past.Constant, **kwargs) -> itir.Literal:
         if isinstance(node.type, common_types.ScalarType) and node.type.shape is None:

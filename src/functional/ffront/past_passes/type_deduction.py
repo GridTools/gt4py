@@ -42,15 +42,15 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         kwargs = self.visit(node.kwargs, **kwargs)
 
         func_type = func.type
-        # functions returning fields in a program are implicitly converted into
-        #  stencil closures. Change function signature accordingly
-        if isinstance(func.type.returns, ct.FieldType):
-            assert "out" not in func.type.kwargs
-            func_type = ct.FunctionType(
-                args=func.type.args,
-                kwargs={**func.type.kwargs, "out": func.type.returns},
-                returns=ct.VoidType(),
-            )
+        # functions in a program are implicitly converted into
+        # stencil closures. Change function signature accordingly
+        assert not isinstance(func.type.returns, ct.VoidType)
+        assert "out" not in func.type.kwargs
+        func_type = ct.FunctionType(
+            args=func.type.args,
+            kwargs={**func.type.kwargs, "out": func.type.returns},
+            returns=ct.VoidType(),
+        )
 
         try:
             type_info.is_callable(

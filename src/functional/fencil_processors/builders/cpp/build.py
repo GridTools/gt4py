@@ -94,8 +94,8 @@ class CMakeListsGenerator(TemplatedGenerator):
                 return textwrap.dedent(
                     """\
                     FetchContent_Declare(GridTools
-                        GIT_REPOSITORY https://github.com/GridTools/gridtools.git
-                        GIT_TAG        master
+                        GIT_REPOSITORY https://github.com/havogt/gridtools.git
+                        GIT_TAG        fix_composite_for_move_only_sids
                     )
                     FetchContent_MakeAvailable(GridTools)\
                     """

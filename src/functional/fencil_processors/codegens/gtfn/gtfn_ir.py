@@ -107,10 +107,14 @@ class Backend(Node):
     domain: Union[SymRef, CartesianDomain, UnstructuredDomain]
 
 
+class SidComposite(Expr):
+    values: List[Expr]  # SymRef or SidComposite (need recursive type)
+
+
 class StencilExecution(Node):
     backend: Backend
     stencil: SymRef  # TODO should be list of assigns for canonical `scan`
-    output: SymRef
+    output: Expr  # SymRef or SidComposite
     inputs: List[SymRef]
 
 

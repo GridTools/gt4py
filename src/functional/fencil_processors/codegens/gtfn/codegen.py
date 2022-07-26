@@ -76,6 +76,9 @@ class GTFNCodegen(codegen.TemplatedGenerator):
     def visit_OffsetLiteral(self, node: OffsetLiteral, **kwargs: Any) -> str:
         return node.value if isinstance(node.value, str) else f"{node.value}_c"
 
+    SidComposite = as_mako(
+        "sid::composite::keys<${','.join(f'gridtools::integral_constant<int,{i}>' for i in range(len(values)))}>::make_values(${','.join(values)})"
+    )
     FunCall = as_fmt("{fun}({','.join(args)})")
     Lambda = as_mako(
         "[=](${','.join('auto ' + p for p in params)}){return ${expr};}"
