@@ -106,7 +106,7 @@ def _pre_expand_trafos(stencil_ir: gtir.Stencil, sdfg: dace.SDFG, layout_map):
     for node, _ in filter(
         lambda n: isinstance(n[0], StencilComputation), sdfg.all_nodes_recursive()
     ):
-        if node.has_splittable_regions():  # and "corner" in node.label:
+        if node.has_splittable_regions():
             expansion_priority = [
                 "Sections",
                 "Stages",
@@ -114,7 +114,6 @@ def _pre_expand_trafos(stencil_ir: gtir.Stencil, sdfg: dace.SDFG, layout_map):
                 "I",
                 "K",
             ]
-            print("Reordered schedule for", node.label)
         else:
             expansion_priority = ["TileJ", "TileI", "Sections"]
             if node.oir_node.loop_order == common.LoopOrder.PARALLEL:
@@ -256,7 +255,6 @@ class DaCeComputationCodegen:
         with dace.config.temporary_config():
             dace.config.Config.set("compiler", "cuda", "max_concurrent_streams", value=-1)
             dace.config.Config.set("compiler", "cpu", "openmp_sections", value=False)
-            sdfg.view()
             code_objects = sdfg.generate_code()
         is_gpu = "CUDA" in {co.title for co in code_objects}
 
