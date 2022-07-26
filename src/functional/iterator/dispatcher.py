@@ -22,6 +22,7 @@ class _fun_dispatcher:
 
         def _impl(fun):
             self.dispatcher._funs[key][self.fun.__name__] = fun
+            return fun
 
         return _impl
 

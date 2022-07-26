@@ -31,7 +31,7 @@ from typing import Callable, Iterable, Protocol, cast
 from devtools import debug
 
 from eve.extended_typing import Any, Optional
-from eve.utils import UIDs
+from eve.utils import UIDGenerator
 from functional.common import DimensionKind, GridType, GTTypeError
 from functional.fencil_processors.runners import roundtrip
 from functional.ffront import (
@@ -471,7 +471,14 @@ class FieldOperator(GTCallable):
         )
 
     def __gt_itir__(self) -> itir.FunctionDefinition:
-        return typing.cast(itir.FunctionDefinition, FieldOperatorLowering.apply(self.foast_node))
+        if hasattr(self, "__cached_itir"):
+            return getattr(self, "__cached_itir")  # noqa: B009
+
+        itir_node: itir.FunctionDefinition = FieldOperatorLowering.apply(self.foast_node)
+
+        object.__setattr__(self, "__cached_itir", itir_node)
+
+        return itir_node
 
     def __gt_captured_vars__(self) -> CapturedVars:
         return self.captured_vars
@@ -484,11 +491,12 @@ class FieldOperator(GTCallable):
 
         name = self.foast_node.id
         loc = self.foast_node.location
+        param_sym_uids = UIDGenerator()  # use a new UID generator to allow caching
 
         type_ = self.__gt_type__()
         params_decl: list[past.Symbol] = [
             past.DataSymbol(
-                id=UIDs.sequential_id(prefix="__sym"),
+                id=param_sym_uids.sequential_id(prefix="__sym"),
                 type=arg_type,
                 namespace=ct.Namespace.LOCAL,
                 location=loc,

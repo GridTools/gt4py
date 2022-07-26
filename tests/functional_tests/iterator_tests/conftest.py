@@ -1,17 +1,26 @@
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 import pytest
 
 import functional.fencil_processors.formatters.gtfn
 from functional.fencil_processors import type_check
 from functional.fencil_processors.formatters import lisp
-from functional.fencil_processors.runners import double_roundtrip, roundtrip
+from functional.fencil_processors.runners import double_roundtrip, embedded, roundtrip
 from functional.iterator import ir as itir
 from functional.iterator.pretty_parser import pparse
 from functional.iterator.pretty_printer import pformat
 from functional.iterator.processor_interface import (
+    EmbeddedFencilExecutor,
     FencilExecutor,
     FencilFormatter,
     fencil_formatter,
 )
+
+
+if TYPE_CHECKING:
+    from functional.iterator.runtime import FendefDispatcher
 
 
 @pytest.fixture(params=[False, True], ids=lambda p: f"use_tmps={p}")
@@ -34,6 +43,7 @@ def pretty_format_and_check(root: itir.FencilDefinition, *args, **kwargs) -> str
         (lisp.format_lisp, False),
         (functional.fencil_processors.formatters.gtfn.format_sourcecode, False),
         (pretty_format_and_check, False),
+        (embedded.executor, True),
         (roundtrip.executor, True),
         (type_check.check, False),
         (double_roundtrip.executor, True),
@@ -44,8 +54,13 @@ def fencil_processor(request):
     return request.param
 
 
-def run_processor(fencil, processor, *args, **kwargs):
-    if processor is None or isinstance(processor, FencilExecutor):
+def run_processor(
+    fencil: FendefDispatcher,
+    processor: FencilExecutor | FencilFormatter | EmbeddedFencilExecutor,
+    *args,
+    **kwargs,
+) -> None:
+    if processor is None or isinstance(processor, (FencilExecutor, EmbeddedFencilExecutor)):
         fencil(*args, backend=processor, **kwargs)
     elif isinstance(processor, FencilFormatter):
         print(fencil.format_itir(*args, formatter=processor, **kwargs))

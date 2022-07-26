@@ -11,20 +11,28 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-
+from __future__ import annotations
 
 import importlib.util
 import pathlib
 import tempfile
-from typing import Iterable
+import textwrap
+from typing import TYPE_CHECKING
 
 from eve import codegen
 from eve.codegen import FormatTemplate as as_fmt, MakoTemplate as as_mako
 from eve.concepts import Node
-from functional import iterator
 from functional.iterator.ir import AxisLiteral, FencilDefinition, OffsetLiteral
 from functional.iterator.processor_interface import fencil_executor
 from functional.iterator.transforms import apply_common_transforms
+
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Iterable
+    from typing import Optional
+
+    from functional.common import Dimension
+    from functional.iterator.embedded import NeighborTableOffsetProvider
 
 
 class EmbeddedDSL(codegen.TemplatedGenerator):
@@ -90,19 +98,29 @@ class WrapperGenerator(EmbeddedDSL):
 
 _BACKEND_NAME = "roundtrip"
 
+_FENCIL_CACHE: dict[int, Callable] = {}
 
-@fencil_executor
-def executor(ir: Node, *args, **kwargs):
-    debug = "debug" in kwargs and kwargs["debug"] is True
-    use_tmps = "use_tmps" in kwargs and kwargs["use_tmps"] is True
 
-    tmps = dict()
+def fencel_generator(
+    ir: Node,
+    debug: bool,
+    use_tmps: bool,
+    use_embedded: bool,
+    offset_provider: dict[str, NeighborTableOffsetProvider],
+) -> Callable:
+    # TODO(tehrengruber): just a temporary solution until we have a proper generic
+    #  caching mechanism
+    cache_key = hash((ir, use_tmps, debug, use_embedded, tuple(offset_provider.items())))
+    if cache_key in _FENCIL_CACHE:
+        return _FENCIL_CACHE[cache_key]
+
+    tmps = {}
 
     def register_tmp(tmp, domain):
         tmps[tmp] = domain
 
     ir = apply_common_transforms(
-        ir, use_tmps=use_tmps, offset_provider=kwargs["offset_provider"], register_tmp=register_tmp
+        ir, use_tmps=use_tmps, offset_provider=offset_provider, register_tmp=register_tmp
     )
 
     program = EmbeddedDSL.apply(ir)
@@ -118,12 +136,19 @@ def executor(ir: Node, *args, **kwargs):
         ir.pre_walk_values().if_isinstance(AxisLiteral).getattr("value").to_set()
     )
 
-    header = """
-import numpy as np
-from functional.iterator.builtins import *
-from functional.iterator.runtime import *
-from functional.iterator.embedded import np_as_located_field
-"""
+    if use_embedded:
+        builtins_import = "from functional.iterator.embedded import *"
+    else:
+        builtins_import = "from functional.iterator.builtins import *"
+
+    header = textwrap.dedent(
+        f"""
+        import numpy as np
+        {builtins_import}
+        from functional.iterator.runtime import *
+        from functional.iterator.embedded import np_as_located_field
+        """
+    )
 
     with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as source_file:
         source_file_name = source_file.name
@@ -150,20 +175,34 @@ from functional.iterator.embedded import np_as_located_field
     assert isinstance(ir, FencilDefinition)
     fencil_name = ir.id
     fencil = getattr(foo, fencil_name + "_wrapper")
-    assert "offset_provider" in kwargs
 
-    new_kwargs = {}
-    new_kwargs["offset_provider"] = kwargs["offset_provider"]
-    if "column_axis" in kwargs:
-        new_kwargs["column_axis"] = kwargs["column_axis"]
+    _FENCIL_CACHE[cache_key] = fencil
 
-    if "dispatch_backend" not in kwargs:
-        iterator.builtins.builtin_dispatch.push_key("embedded")
-        fencil(*args, **new_kwargs)
-        iterator.builtins.builtin_dispatch.pop_key()
-    else:
-        fencil(
-            *args,
-            **new_kwargs,
-            backend=kwargs["dispatch_backend"],
-        )
+    return fencil
+
+
+@fencil_executor
+def executor(
+    ir: Node,
+    *args,
+    column_axis: Optional[Dimension] = None,
+    debug: bool = False,
+    use_tmps: bool = False,
+    dispatch_backend: Optional[str] = None,
+    offset_provider: dict[str, NeighborTableOffsetProvider],
+) -> None:
+    debug = True
+
+    fencil = fencel_generator(
+        ir,
+        offset_provider=offset_provider,
+        debug=debug,
+        use_tmps=use_tmps,
+        use_embedded=dispatch_backend is None,
+    )
+
+    new_kwargs = {"offset_provider": offset_provider, "column_axis": column_axis}
+    if dispatch_backend:
+        new_kwargs["backend"] = dispatch_backend
+
+    return fencil(*args, **new_kwargs)
