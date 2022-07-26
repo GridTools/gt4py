@@ -34,7 +34,7 @@ def idx_from_order(order):
     return list(np.argsort(order))
 
 
-def normalize_storage_spec(aligned_index, shape, dtype, mask):
+def normalize_storage_spec(aligned_index, shape, dtype, dimensions):
     """Normalize the fields of the storage spec in a homogeneous representation.
 
     Returns
@@ -47,37 +47,27 @@ def normalize_storage_spec(aligned_index, shape, dtype, mask):
             - shape: tuple of ints with shape values for the non-masked dimensions
             - dtype: scalar numpy.dtype (non-structured and without subarrays)
             - backend: backend identifier string (numpy, gt:cpu_kfirst, gt:gpu, ...)
-            - mask: a tuple of bools (at least 3d)
+            - dimensions: a tuple of dimension identifier strings
     """
 
-    if mask is None:
-        mask = tuple(True if i < len(shape) else False for i in range(max(len(shape), 3)))
-    elif not gt_util.is_iterable_of(mask, bool):
-        # User-friendly axes specification (e.g. "IJK" or gtscript.IJK)
-        str_kind = "".join(str(i) for i in mask) if isinstance(mask, (tuple, list)) else str(mask)
-        axes_set = set(str_kind)
-        if axes_set - {"I", "J", "K"}:
-            raise ValueError(f"Invalid axes names in mask specification: '{mask}'")
-        if len(axes_set) != len(str_kind):
-            raise ValueError(f"Repeated axes names in mask specification: '{mask}'")
-        mask = ("I" in axes_set, "J" in axes_set, "K" in axes_set)
-    elif len(mask) < 3 or not sum(mask):
-        raise ValueError(f"Invalid mask definition: '{mask}'")
-
-    assert len(mask) >= 3
+    if dimensions is None:
+        dimensions = (
+            list("IJK"[: len(shape)])
+            if len(shape) <= 3
+            else list("IJK") + [str(d) for d in range(len(shape) - 3)]
+        )
+    if not all(isinstance(d, str) and (d.isdigit() or d in "IJK") for d in dimensions):
+        raise ValueError(f"Invalid dimensions definition: '{dimensions}'")
 
     if shape is not None:
         if not gt_util.is_iterable_of(shape, numbers.Integral):
             raise TypeError("shape must be an iterable of ints.")
-        if len(shape) not in (sum(mask), len(mask)):
+        if len(shape) != len(dimensions):
             raise ValueError(
-                f"Mask ({mask}) and shape ({shape}) have non-matching sizes."
-                f"len(shape)(={len(shape)}) must be equal to len(mask)(={len(mask)}) "
-                f"or the number of 'True' entries in mask '{mask}'."
+                f"Dimensions ({dimensions}) and shape ({shape}) have non-matching sizes."
+                f"len(shape)(={len(shape)}) must be equal to len(dimensions)(={len(dimensions)})."
             )
 
-        if sum(mask) < len(shape):
-            shape = tuple(int(d) for i, d in enumerate(shape) if mask[i])
         else:
             shape = tuple(shape)
 
@@ -89,17 +79,13 @@ def normalize_storage_spec(aligned_index, shape, dtype, mask):
     if aligned_index is not None:
         if not gt_util.is_iterable_of(aligned_index, numbers.Integral):
             raise TypeError("aligned_index must be an iterable of ints.")
-        if len(aligned_index) not in (sum(mask), len(mask)):
+        if len(aligned_index) != len(shape):
             raise ValueError(
-                f"Mask ({mask}) and aligned_index ({aligned_index}) have non-matching sizes."
-                f"len(aligned_index)(={len(aligned_index)}) must be equal to len(mask)(={len(mask)}) "
-                f"or the number of 'True' entries in mask '{mask}'."
+                f"Shape ({shape}) and aligned_index ({aligned_index}) have non-matching sizes."
+                f"len(aligned_index)(={len(aligned_index)}) must be equal to len(shape)(={len(shape)})."
             )
 
-        if sum(mask) < len(aligned_index):
-            aligned_index = tuple(d for i, d in enumerate(aligned_index) if mask[i])
-        else:
-            aligned_index = tuple(aligned_index)
+        aligned_index = tuple(aligned_index)
 
         if any(i < 0 for i in aligned_index):
             raise ValueError("aligned_index ({}) contains negative value.".format(aligned_index))
@@ -111,10 +97,10 @@ def normalize_storage_spec(aligned_index, shape, dtype, mask):
         # Subarray dtype
         aligned_index = (*aligned_index, *((0,) * dtype.ndim))
         shape = (*shape, *(dtype.subdtype[1]))
-        mask = (*mask, *((True,) * dtype.ndim))
+        dimensions = (*dimensions, *(str(d) for d in range(dtype.ndim)))
         dtype = dtype.subdtype[0]
 
-    return aligned_index, shape, dtype, mask
+    return aligned_index, shape, dtype, dimensions
 
 
 def compute_padded_shape(shape, items_per_alignment, order_idx):

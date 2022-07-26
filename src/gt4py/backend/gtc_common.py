@@ -458,9 +458,8 @@ def mc_is_compatible_layout(field: "Storage", mask: Tuple[bool, ...]) -> bool:
     return True
 
 
-def make_cuda_layout_map(mask: Tuple[bool, ...]) -> Tuple[Optional[int], ...]:
-    ctr = reversed(range(sum(mask)))
-    return tuple([next(ctr) if m else None for m in mask])
+def make_cuda_layout_map(dimensions: Tuple[bool, ...]) -> Tuple[Optional[int], ...]:
+    return tuple(reversed(range(len(dimensions))))
 
 
 def cuda_is_compatible_layout(field: "Storage", mask: Tuple[bool, ...]) -> bool:
