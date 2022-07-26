@@ -110,7 +110,7 @@ def _all_stmts_same_region(scope_nodes, axis: dcir.Axis, interval):
         axis in dcir.Axis.dims_horizontal()
         and isinstance(interval, dcir.DomainInterval)
         and all(
-            isinstance(stmt, oir.MaskStmt) and isinstance(stmt.mask, common.HorizontalMask)
+            isinstance(stmt, dcir.HorizontalRestriction)
             for tasklet in iter_tree(scope_nodes).if_isinstance(dcir.Tasklet)
             for stmt in tasklet.stmts
         )

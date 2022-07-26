@@ -68,9 +68,9 @@ class HorizontalMaskRemover(eve.NodeMutator):
                 res_body.append(newstmt)
         return dcir.Tasklet(
             stmts=res_body,
-            name_map=node.name_map,
-            read_accesses=node.read_accesses,
-            write_accesses=node.write_accesses,
+            decls=node.decls,
+            read_memlets=node.read_memlets,
+            write_memlets=node.write_memlets,
         )
 
     def visit_MaskStmt(self, node: oir.MaskStmt):
@@ -155,7 +155,7 @@ class HorizontalExecutionSplitter(eve.NodeTranslator):
         return oir.VerticalLoopSection(interval=node.interval, horizontal_executions=res_hes)
 
 
-def split_horizontal_exeuctions_regions(node: "StencilComputation"):
+def split_horizontal_executions_regions(node: "StencilComputation"):
 
     extents: List[Extent] = []
 

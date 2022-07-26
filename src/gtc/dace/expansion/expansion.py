@@ -27,7 +27,7 @@ from gtc.dace.expansion.daceir_builder import DaCeIRBuilder
 from gtc.dace.expansion.sdfg_builder import StencilComputationSDFGBuilder
 from gtc.dace.nodes import StencilComputation
 
-from .utils import split_horizontal_exeuctions_regions
+from .utils import split_horizontal_executions_regions
 
 
 @dace.library.register_expansion(StencilComputation, "default")
@@ -129,7 +129,7 @@ class StencilComputationExpansion(dace.library.ExpandTransformation):
         node: "StencilComputation", parent_state: dace.SDFGState, parent_sdfg: dace.SDFG
     ) -> dace.nodes.NestedSDFG:
         """Expand the coarse SDFG in parent_sdfg to a NestedSDFG with all the states."""
-        split_horizontal_exeuctions_regions(node)
+        split_horizontal_executions_regions(node)
         arrays = StencilComputationExpansion._get_parent_arrays(node, parent_state, parent_sdfg)
 
         daceir: dcir.NestedSDFG = DaCeIRBuilder().visit(
