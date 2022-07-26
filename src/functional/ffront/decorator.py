@@ -198,37 +198,6 @@ class Program:
             definition=self.definition,  # type: ignore[arg-type]  # mypy wrongly deduces definition as method here
         )
 
-    @staticmethod
-    def _deduce_grid_type(
-        requested_grid_type: Optional[GridType],
-        offsets_and_dimensions: set[FieldOffset | Dimension],
-    ):
-        """
-        Derive grid type from actually occurring dimensions and check against optional user request.
-
-        Unstructured grid type is consistent with any kind of offset, cartesian is easier to optimize for but only
-        allowed in the absence of unstructured dimensions and offsets.
-        """
-
-        def is_cartesian_offset(o: FieldOffset):
-            return len(o.target) == 1 and o.source == o.target[0]
-
-        deduced_grid_type = GridType.CARTESIAN
-        for o in offsets_and_dimensions:
-            if isinstance(o, FieldOffset) and not is_cartesian_offset(o):
-                deduced_grid_type = GridType.UNSTRUCTURED
-                break
-            if isinstance(o, Dimension) and o.kind == DimensionKind.LOCAL:
-                deduced_grid_type = GridType.UNSTRUCTURED
-                break
-
-        if requested_grid_type == GridType.CARTESIAN and deduced_grid_type == GridType.UNSTRUCTURED:
-            raise GTTypeError(
-                "grid_type == GridType.CARTESIAN was requested, but unstructured `FieldOffset` or local `Dimension` was found."
-            )
-
-        return deduced_grid_type if requested_grid_type is None else requested_grid_type
-
     def _gt_callables_from_captured_vars(self, captured_vars: CapturedVars) -> list[GTCallable]:
         all_captured_vars = collections.ChainMap(captured_vars.globals, captured_vars.nonlocals)
 
@@ -241,19 +210,6 @@ class Program:
                     )
                 gt_callables.append(value)
         return gt_callables
-
-    def _offsets_and_dimensions_from_gt_callables(
-        self, gt_callables: Iterable[GTCallable]
-    ) -> set[FieldOffset | Dimension]:
-        offsets_and_dimensions: set[FieldOffset | Dimension] = set()
-        for gt_callable in gt_callables:
-            if (captured := gt_callable.__gt_captured_vars__()) is not None:
-                for c in (captured.globals | captured.nonlocals).values():
-                    if isinstance(c, FieldOffset):
-                        offsets_and_dimensions.add(c)
-                    if isinstance(c, Dimension):
-                        offsets_and_dimensions.add(c)
-        return offsets_and_dimensions
 
     def _lowered_funcs_from_gt_callables(
         self, gt_callables: Iterable[GTCallable]
