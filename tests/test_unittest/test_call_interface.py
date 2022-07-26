@@ -400,7 +400,7 @@ class TestAxesMismatch:
                 field_out=DimensionsWrapper(
                     array=gt_storage.empty(
                         shape=(3, 3),
-                        mask=[True, False, True],
+                        dimensions=["I", "K"],
                         dtype=np.float64,
                         backend="numpy",
                         aligned_index=(0, 0),
@@ -432,7 +432,7 @@ class TestDataDimensions:
             sample_stencil(
                 field_out=gt_storage.empty(
                     shape=(3, 3, 1),
-                    mask=[True, True, True],
+                    dimensions=["I", "J", "K"],
                     dtype=(np.float64, (3,)),
                     backend=self.backend,
                     aligned_index=(0, 0, 0),
@@ -452,14 +452,14 @@ def test_origin_unchanged(backend):
         aligned_index=(1, 1, 1),
         shape=(4, 4, 4),
         dtype=float,
-        mask=[True, True, True],
+        dimensions="IJK",
     )
     inp = gt_storage.ones(
         backend=backend,
         aligned_index=(1,),
-        shape=(4, 4, 4),
+        shape=(4,),
         dtype=float,
-        mask=[False, False, True],
+        dimensions="K",
     )
 
     origin = {"_all_": (1, 1, 1), "inp": (1,)}

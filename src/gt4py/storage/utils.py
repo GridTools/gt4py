@@ -12,15 +12,14 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import collections.abc
 import math
 import numbers
-from typing import Optional, Sequence, Union
+from typing import Union
 
 import numpy as np
 
 import gt4py.utils as gt_util
-from gtc.definitions import Index, Shape
+from gt4py.gtscript import Axis
 
 
 try:
@@ -56,9 +55,13 @@ def normalize_storage_spec(aligned_index, shape, dtype, dimensions):
             if len(shape) <= 3
             else list("IJK") + [str(d) for d in range(len(shape) - 3)]
         )
-    if not all(isinstance(d, str) and (d.isdigit() or d in "IJK") for d in dimensions):
-        raise ValueError(f"Invalid dimensions definition: '{dimensions}'")
 
+    if not all(
+        isinstance(d, (str, Axis)) and (str(d).isdigit() or str(d) in "IJK") for d in dimensions
+    ):
+        raise ValueError(f"Invalid dimensions definition: '{dimensions}'")
+    else:
+        dimensions = tuple(str(d) for d in dimensions)
     if shape is not None:
         if not gt_util.is_iterable_of(shape, numbers.Integral):
             raise TypeError("shape must be an iterable of ints.")

@@ -48,7 +48,7 @@ def test_generation(name, backend):
         if isinstance(v, gtscript._FieldDescriptor):
             args[k] = gt_storage.ones(
                 dtype=(v.dtype, v.data_dims) if v.data_dims else v.dtype,
-                mask=gtscript.mask_from_axes(v.axes),
+                dimensions=v.axes,
                 backend=backend,
                 shape=(23, 23, 23),
                 aligned_index=(10, 10, 10),
@@ -535,7 +535,7 @@ def test_origin_k_fields(backend):
         shape=(10,),
         aligned_index=(0,),
         dtype=np.float64,
-        mask=[False, False, True],
+        dimensions="K",
         backend=backend,
     )
     outp = gt_storage.zeros(

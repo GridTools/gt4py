@@ -17,6 +17,7 @@ import textwrap
 from typing import TYPE_CHECKING, Dict, List, Optional, Tuple, Type
 
 import dace
+import dace.data
 from dace.serialize import dumps
 
 from eve import codegen
@@ -364,7 +365,6 @@ class DaCeBindingsCodegen:
 
     def generate_entry_params(self, stencil_ir: gtir.Stencil, sdfg: dace.SDFG) -> List[str]:
         res: Dict[str, str] = {}
-        import dace.data
 
         for name in sdfg.signature_arglist(with_types=False, for_call=True):
             if name in sdfg.arrays:
@@ -381,22 +381,12 @@ class DaCeBindingsCodegen:
 
     def generate_sid_params(self, sdfg: dace.SDFG) -> List[str]:
         res: List[str] = []
-        import dace.data
 
         for name, array in sdfg.arrays.items():
             if array.transient:
                 continue
-            domain_dim_flags = tuple(
-                True
-                if any(
-                    dace.symbolic.pystr_to_symbolic(f"__{dim.upper()}") in s.free_symbols
-                    for s in array.shape
-                    if hasattr(s, "free_symbols")
-                )
-                else False
-                for dim in "ijk"
-            )
-            data_ndim = len(array.shape) - sum(array_dimensions(array))
+            domain_dim_flags = array_dimensions(array)
+            data_ndim = len(array.shape) - sum(domain_dim_flags)
             sid_def = pybuffer_to_sid(
                 name=name,
                 ctype=array.dtype.ctype,

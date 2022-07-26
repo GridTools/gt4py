@@ -383,7 +383,8 @@ class StencilObject(abc.ABC):
                 assert arg_info is not None
 
                 if not gt_backend.from_name(self.backend).storage_info["is_compatible_layout"](
-                    arg_info.array, field_info.mask
+                    arg_info.array,
+                    list(field_info.axes) + [str(d) for d in range(len(field_info.data_dims))],
                 ):
                     raise ValueError(
                         f"The layout of the field {name} is not compatible with the backend."

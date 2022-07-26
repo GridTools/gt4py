@@ -27,7 +27,9 @@ except ImportError:
 import gt4py.backend as gt_backend
 import gt4py.storage as gt_store
 import gt4py.storage.utils as gt_storage_utils
+from gt4py import gtscript
 from gt4py.gtscript import PARALLEL, Field, computation, interval, stencil
+from gt4py.storage.utils import normalize_storage_spec
 
 from ..definitions import CPU_BACKENDS, GPU_BACKENDS
 
@@ -87,7 +89,7 @@ def allocation_strategy(draw):
 
 
 @hyp_st.composite
-def mask_strategy(draw):
+def dimensions_strategy(draw):
     dimension = draw(hyp_st.integers(min_value=1, max_value=6))
 
     shape_strats = [hyp_st.integers(min_value=1, max_value=32)] * dimension
@@ -107,7 +109,13 @@ def mask_strategy(draw):
             hyp_st.permutations(mask_values),
         )
     )
-    return dict(shape=shape, aligned_index=aligned_index, mask=mask)
+    if mask is not None:
+        select_dimensions = ["I", "J", "K"] + [str(d) for d in range(max(0, dimension - 3))]
+        assert len(select_dimensions) == len(mask)
+        dimensions = [d for m, d in zip(mask, select_dimensions) if m]
+    else:
+        dimensions = None
+    return dict(shape=shape, aligned_index=aligned_index, dimensions=dimensions)
 
 
 # ---- Tests ----
@@ -314,88 +322,110 @@ def test_allocate_gpu_unmanaged(param_dict):
     assert device_field.shape == shape
 
 
-def test_normalize_storage_spec():
-    from gt4py import gtscript
-    from gt4py.storage.utils import normalize_storage_spec
+class TestNormalizeStorageSpec:
+    def test_normal(self):
+        aligned_index = (0, 0, 0)
+        shape = (10, 10, 10)
+        dtype = np.float64
+        dimensions = ("I", "J", "K")
 
-    aligned_index = (0, 0, 0)
-    shape = (10, 10, 10)
-    dtype = np.float64
-    mask = (True, True, True)
+        aligned_index_out, shape_out, dtype_out, dimensions_out = normalize_storage_spec(
+            aligned_index, shape, dtype, dimensions
+        )
+        assert aligned_index_out == aligned_index
+        assert shape_out == shape
+        assert dtype_out == dtype
+        assert dimensions_out == dimensions
 
-    aligned_index_out, shape_out, dtype_out, mask_out = normalize_storage_spec(
-        aligned_index, shape, dtype, mask
-    )
-    assert aligned_index_out == aligned_index
-    assert shape_out == shape
-    assert dtype_out == dtype
-    assert mask_out == mask
+    def test_aligned_index(self):
+        shape = (10, 10, 10)
+        dtype = np.float64
+        dimensions = ("I", "J", "K")
 
-    # Default origin
-    aligned_index_out, shape_out, dtype_out, mask_out = normalize_storage_spec(
-        (1, 1, 1), shape, dtype, mask
-    )
-    assert aligned_index_out == (1, 1, 1)
-    assert shape_out == shape
-    assert dtype_out == dtype
-    assert mask_out == mask
+        aligned_index_out, shape_out, dtype_out, dimensions_out = normalize_storage_spec(
+            (1, 1, 1), shape, dtype, dimensions
+        )
+        assert aligned_index_out == (1, 1, 1)
+        assert shape_out == shape
+        assert dtype_out == dtype
+        assert dimensions_out == dimensions
 
-    with pytest.raises(TypeError, match="aligned_index"):
-        normalize_storage_spec(None, shape, dtype, mask)
-    with pytest.raises(TypeError, match="aligned_index"):
-        normalize_storage_spec(("1", "1", "1"), shape, dtype, mask)
-    with pytest.raises(ValueError, match="aligned_index"):
-        normalize_storage_spec((1, 1, 1, 1), shape, dtype, mask)
-    with pytest.raises(ValueError, match="aligned_index"):
-        normalize_storage_spec((-1, -1, -1), shape, dtype, mask)
+        with pytest.raises(TypeError, match="aligned_index"):
+            normalize_storage_spec(None, shape, dtype, dimensions)
+        with pytest.raises(TypeError, match="aligned_index"):
+            normalize_storage_spec(("1", "1", "1"), shape, dtype, dimensions)
+        with pytest.raises(ValueError, match="aligned_index"):
+            normalize_storage_spec((1, 1, 1, 1), shape, dtype, dimensions)
+        with pytest.raises(ValueError, match="aligned_index"):
+            normalize_storage_spec((-1, -1, -1), shape, dtype, dimensions)
 
-    # Shape
-    aligned_index_out, shape_out, dtype_out, mask_out = normalize_storage_spec(
-        aligned_index, (10, 10), dtype, (True, True, False)
-    )
-    assert aligned_index_out == (0, 0)
-    assert shape_out == (10, 10)
-    assert dtype_out == dtype
-    assert mask_out == (True, True, False)
+    def test_shape(self):
+        aligned_index = (0, 0)
+        dtype = np.float64
+        dimensions = ("I", "J", "K")
 
-    with pytest.raises(ValueError, match="non-matching"):
-        normalize_storage_spec(aligned_index, (10, 20), dtype, (False, True, False))
-    with pytest.raises(TypeError, match="shape"):
-        normalize_storage_spec(aligned_index, "(10,10)", dtype, mask)
-    with pytest.raises(TypeError, match="shape"):
-        normalize_storage_spec(aligned_index, None, dtype, mask)
-    with pytest.raises(ValueError, match="shape"):
-        normalize_storage_spec(aligned_index, (10, 10, 0), dtype, mask)
+        # Shape
+        aligned_index_out, shape_out, dtype_out, dimensions_out = normalize_storage_spec(
+            aligned_index, (10, 10), dtype, ("I", "J")
+        )
+        assert aligned_index_out == (0, 0)
+        assert shape_out == (10, 10)
+        assert dtype_out == dtype
+        assert dimensions_out == ("I", "J")
 
-    # Mask
-    aligned_index_out, shape_out, dtype_out, mask_out = normalize_storage_spec(
-        aligned_index, (10, 10), dtype, (True, True, False)
-    )
-    assert aligned_index_out == (0, 0)
-    assert shape_out == (10, 10)
-    assert dtype_out == dtype
-    assert mask_out == (True, True, False)
+        with pytest.raises(ValueError, match="non-matching"):
+            normalize_storage_spec(aligned_index, (10, 20), dtype, ("J",))
+        with pytest.raises(TypeError, match="shape"):
+            normalize_storage_spec(aligned_index, "(10,10)", dtype, dimensions)
+        with pytest.raises(TypeError, match="shape"):
+            normalize_storage_spec(aligned_index, None, dtype, dimensions)
+        with pytest.raises(ValueError, match="shape"):
+            normalize_storage_spec(aligned_index, (10, 10, 0), dtype, dimensions)
 
-    _, __, ___, mask_out = normalize_storage_spec(aligned_index, (10, 10), dtype, "IJ")
-    assert mask_out == (True, True, False)
+    def test_dimensions(self):
+        aligned_index = (0, 0)
+        dtype = np.float64
 
-    _, __, ___, mask_out = normalize_storage_spec(aligned_index, (10, 10), dtype, gtscript.IJ)
-    assert mask_out == (True, True, False)
+        # Mask
+        aligned_index_out, shape_out, dtype_out, dimensions_out = normalize_storage_spec(
+            aligned_index, (10, 10), dtype, ("I", "J")
+        )
+        assert aligned_index_out == (0, 0)
+        assert shape_out == (10, 10)
+        assert dtype_out == dtype
+        assert dimensions_out == ("I", "J")
 
-    _, __, ___, mask_out = normalize_storage_spec(aligned_index, (10, 10, 10), dtype, gtscript.IJK)
-    assert mask_out == (True, True, True)
+        _, __, ___, dimensions_out = normalize_storage_spec(aligned_index, (10, 10), dtype, "IJ")
+        assert dimensions_out == ("I", "J")
 
-    with pytest.raises(ValueError, match="mask"):
-        normalize_storage_spec(aligned_index, (10, 10), dtype, (False, False, False))
+        _, __, ___, dimensions_out = normalize_storage_spec(
+            aligned_index, (10, 10), dtype, gtscript.IJ
+        )
+        assert dimensions_out == ("I", "J")
 
-    # Dtype
-    aligned_index_out, shape_out, dtype_out, mask_out = normalize_storage_spec(
-        aligned_index, shape, (dtype, (2,)), mask
-    )
-    assert aligned_index_out == tuple([*aligned_index, 0])
-    assert shape_out == tuple([*shape, 2])
-    assert dtype_out == dtype
-    assert mask_out == tuple([*mask, True])
+        _, __, ___, dimensions_out = normalize_storage_spec(
+            (0, 0, 0), (10, 10, 10), dtype, gtscript.IJK
+        )
+        assert dimensions_out == ("I", "J", "K")
+
+        with pytest.raises(ValueError, match="dimensions"):
+            normalize_storage_spec(aligned_index, (10, 10), dtype, ())
+
+    def test_dtype(self):
+
+        aligned_index = (0, 0, 0)
+        shape = (10, 10, 10)
+        dtype = np.float64
+        dimensions = ("I", "J", "K")
+
+        aligned_index_out, shape_out, dtype_out, dimensions_out = normalize_storage_spec(
+            aligned_index, shape, (dtype, (2,)), dimensions
+        )
+
+        assert aligned_index_out == tuple([*aligned_index, 0])
+        assert shape_out == tuple([*shape, 2])
+        assert dtype_out == dtype
+        assert dimensions_out == tuple([*dimensions, "0"])
 
 
 @pytest.mark.parametrize(
@@ -446,22 +476,27 @@ def test_gpu_constructor(alloc_fun, backend):
 
 
 @pytest.mark.requires_gpu
-@hyp.given(param_dict=mask_strategy())
+@hyp.given(param_dict=dimensions_strategy())
 def test_masked_storage_gpu(param_dict):
-    mask = param_dict["mask"]
+
+    import cupy as cp
+
+    dimensions = param_dict["dimensions"]
     aligned_index = param_dict["aligned_index"]
     shape = param_dict["shape"]
 
     # no assert when all is defined in descriptor, no grid_group
-    store = gt_store.empty(
+    array = gt_store.empty(
         dtype=np.float64,
         aligned_index=aligned_index,
         shape=shape,
-        mask=mask,
+        dimensions=dimensions,
         backend="gt:gpu",
     )
-    assert sum(store.mask) == store.ndim
-    assert sum(store.mask) == len(store.data.shape)
+
+    assert isinstance(array, cp.ndarray)
+    assert len(dimensions) == array.ndim
+    assert len(dimensions) == len(array.data.shape)
 
 
 def test_masked_storage_asserts():
@@ -474,88 +509,9 @@ def test_masked_storage_asserts():
             dtype=np.float64,
             aligned_index=aligned_index,
             shape=shape,
-            mask=(),
+            dimensions=(),
             backend=backend,
         )
-
-
-def run_test_slices(backend):
-    aligned_index = (1, 1, 1)
-    shape = (10, 10, 10)
-    array = np.random.randn(*shape)
-    stor = gt_store.from_array(
-        array, backend=backend, dtype=np.float64, aligned_index=aligned_index, shape=shape
-    )
-    sliced = stor[::2, ::2, ::2]
-    assert (sliced.view(np.ndarray) == array[::2, ::2, ::2]).all()
-    sliced[...] = array[::2, ::2, ::2]
-
-
-def test_slices_cpu():
-    run_test_slices(backend="gt:cpu_ifirst")
-
-
-@pytest.mark.requires_gpu
-def test_managed_memory():
-    cp.cuda.set_allocator(cp.cuda.malloc_managed)
-
-    gpu_arr = cp.ones((10, 10, 10))
-    cpu_view = gt_storage_utils.cpu_view(gpu_arr)
-
-    gpu_arr[0, 0, 0] = 123
-    cp.cuda.runtime.deviceSynchronize()
-    assert cpu_view[0, 0, 0] == 123
-    cpu_view[1, 1, 1] = 321
-    assert gpu_arr[1, 1, 1] == 321
-
-
-@pytest.mark.requires_gpu
-def test_sum_gpu():
-    i1 = 3
-    i2 = 4
-    jslice = slice(3, 4, None)
-    shape = (5, 5, 5)
-    q1 = gt_store.from_array(
-        cp.zeros(shape),
-        backend="gt:gpu",
-        dtype=np.float64,
-        aligned_index=(0, 0, 0),
-        shape=shape,
-    )
-
-    q2 = gt_store.from_array(
-        cp.ones(shape),
-        backend="gt:gpu",
-        dtype=np.float64,
-        aligned_index=(0, 0, 0),
-        shape=shape,
-    )
-
-    q1[i1 : i2 + 1, jslice, 0] = cp.sum(q2[i1 : i2 + 1, jslice, :], axis=2)
-
-
-@pytest.mark.requires_gpu
-def test_slice_gpu():
-    stor = gt_store.ones(
-        backend="gt:gpu",
-        shape=(10, 10, 10),
-        aligned_index=(0, 0, 0),
-        dtype=np.float64,
-    )
-    stor.synchronize()
-    view = stor[1:-1, 1:-1, 1:-1]
-
-    gpu_stor = stor._device_field
-    gpu_view = view._device_field
-
-    view_start = gpu_view.data.ptr
-    storage_start = gpu_stor.data.ptr
-
-    view_end = gpu_view[-1:, -1:, -1:].data.ptr
-    storage_end = gpu_stor[-1:, -1:, -1:].data.ptr
-
-    assert view_start > storage_start
-    assert view_end < storage_end
 
 
 def test_non_existing_backend():
