@@ -11,14 +11,40 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
+from typing import Optional
+
 from eve import NodeTranslator, traits
 from functional.common import DimensionKind, GridType, GTTypeError
-from functional.ffront import common_types, program_ast as past
+from functional.ffront import common_types as ct, program_ast as past
 from functional.iterator import ir as itir
 
 
 def _size_arg_from_field(field_name: str, dim: int) -> str:
     return f"__{field_name}_size_{dim}"
+
+
+def _deduce_grid_type(offsets_and_dimensions: set[ct.DimensionType, ct.OffsetType]) -> GridType:
+    """
+    Derive grid type from actually occurring dimensions.
+
+    Unstructured grid type is consistent with any kind of offset, cartesian is
+    easier to optimize for but only allowed in the absence of unstructured
+    dimensions and offsets.
+    """
+    grid_type = GridType.CARTESIAN
+
+    def is_cartesian_offset(o: ct.OffsetType) -> bool:
+        return len(o.target) == 1 and o.source == o.target[0]
+
+    for type_ in offsets_and_dimensions:
+        if isinstance(type_, ct.OffsetType) and not is_cartesian_offset(type_):
+            grid_type = GridType.UNSTRUCTURED
+            break
+        elif isinstance(type_, ct.DimensionType) and type_.dim.kind == DimensionKind.LOCAL:
+            grid_type = GridType.UNSTRUCTURED
+            break
+
+    return grid_type
 
 
 class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
@@ -61,18 +87,31 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         cls,
         node: past.Program,
         function_definitions: list[itir.FunctionDefinition],
-        grid_type: GridType,
+        *,
+        force_grid_type: Optional[GridType] = None,
     ) -> itir.FencilDefinition:
+        # deduce grid type
+        offsets_and_dims = {
+            sym for sym in node.captured_vars if isinstance(sym, (ct.OffsetType, ct.DimensionType))
+        }
+
+        deduced_grid_type: GridType = _deduce_grid_type(offsets_and_dims)
+        if force_grid_type == GridType.CARTESIAN and deduced_grid_type == GridType.UNSTRUCTURED:
+            raise GTTypeError(
+                "grid_type == GridType.CARTESIAN was requested, but unstructured `FieldOffset` or local `Dimension` was found."
+            )
+        grid_type = force_grid_type if force_grid_type else deduced_grid_type
+
         return cls(grid_type=grid_type).visit(node, function_definitions=function_definitions)
 
-    def __init__(self, grid_type):
+    def __init__(self, grid_type: GridType):
         self.grid_type = grid_type
 
     def _gen_size_params_from_program(self, node: past.Program):
         """Generate symbols for each field param and dimension."""
         size_params = []
         for param in node.params:
-            if isinstance(param.type, common_types.FieldType):
+            if isinstance(param.type, ct.FieldType):
                 for dim_idx in range(0, len(param.type.dims)):
                     size_params.append(itir.Sym(id=_size_arg_from_field(param.id, dim_idx)))
         return size_params
@@ -89,7 +128,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         closures: list[itir.StencilClosure] = []
         for stmt in node.body:
             if isinstance(stmt, past.Call) and isinstance(
-                symtable[stmt.func.id].type.returns, common_types.FieldType
+                symtable[stmt.func.id].type.returns, ct.FieldType
             ):
                 closures.append(self._visit_stencil_call(stmt, **kwargs))
             else:
@@ -105,7 +144,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         )
 
     def _visit_stencil_call(self, node: past.Call, **kwargs) -> itir.StencilClosure:
-        assert isinstance(node.kwargs["out"].type, common_types.FieldType)
+        assert isinstance(node.kwargs["out"].type, ct.FieldType)
 
         output, domain = self._visit_stencil_call_out_arg(node.kwargs["out"], **kwargs)
 
@@ -123,8 +162,8 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             lowered_bound = default_value
         elif isinstance(slice_bound, past.Constant):
             assert (
-                isinstance(slice_bound.type, common_types.ScalarType)
-                and slice_bound.type.kind == common_types.ScalarKind.INT
+                isinstance(slice_bound.type, ct.ScalarType)
+                and slice_bound.type.kind == ct.ScalarKind.INT
             )
             if slice_bound.value < 0:
                 lowered_bound = itir.FunCall(
@@ -204,9 +243,9 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         )
 
     def visit_Constant(self, node: past.Constant, **kwargs) -> itir.Literal:
-        if isinstance(node.type, common_types.ScalarType) and node.type.shape is None:
+        if isinstance(node.type, ct.ScalarType) and node.type.shape is None:
             match node.type.kind:
-                case common_types.ScalarKind.STRING:
+                case ct.ScalarKind.STRING:
                     raise NotImplementedError(
                         f"Scalars of kind {node.type.kind} not supported currently."
                     )

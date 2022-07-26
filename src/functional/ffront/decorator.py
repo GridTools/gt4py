@@ -278,13 +278,10 @@ class Program:
             raise RuntimeError(f"Reference to undefined symbol(s) `{', '.join(undefined)}`.")
 
         referenced_gt_callables = self._gt_callables_from_captured_vars(capture_vars)
-        grid_type = self._deduce_grid_type(
-            self.grid_type, self._offsets_and_dimensions_from_gt_callables(referenced_gt_callables)
-        )
 
         lowered_funcs = self._lowered_funcs_from_gt_callables(referenced_gt_callables)
         return ProgramLowering.apply(
-            self.past_node, function_definitions=lowered_funcs, grid_type=grid_type
+            self.past_node, function_definitions=lowered_funcs, force_grid_type=self.grid_type
         )
 
     def _validate_args(self, *args, **kwargs) -> None:
