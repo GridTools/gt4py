@@ -673,8 +673,8 @@ def get_ordered_indices(
             elem = pos[axis.value]
             if _is_sparse_position_entry(elem):
                 sparse_position_tracker.setdefault(axis.value, 0)
-                sparse_position_tracker[axis.value] += 1
                 res.append(elem[sparse_position_tracker[axis.value]])
+                sparse_position_tracker[axis.value] += 1
             else:
                 assert isinstance(elem, (int, slice))
                 res.append(elem)
