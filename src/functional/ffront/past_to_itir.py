@@ -164,6 +164,8 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             raise RuntimeError(
                 "Incompatible fields in tuple: all fields must have the same dimensions."
             )
+
+        # we assume all fields in the tuple are on the same domain, therefore use the size of the first field
         domain_args = [
             itir.FunCall(
                 fun=itir.SymRef(id="named_range"),
@@ -184,9 +186,9 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
     def _visit_stencil_call_out_arg(
         self, node: past.Expr, **kwargs
     ) -> tuple[itir.SymRef, itir.FunCall]:
-        # as the ITIR does not support slicing a field we have to do a deeper
-        #  inspection of the PAST to emulate the behaviour
         if isinstance(node, past.Subscript):
+            # as the ITIR does not support slicing a field we have to do a deeper
+            #  inspection of the PAST to emulate the behaviour
             out_field_name: past.Name = node.value
             if isinstance(node.slice_, past.TupleExpr) and all(
                 isinstance(el, past.Slice) for el in node.slice_.elts
@@ -225,6 +227,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             )
 
         elif isinstance(node, (past.Name, past.TupleExpr)):
+            # note: we currently don't allow slicing in TupleExpr
             return self._visit_tuple_out_arg(node)
 
         else:
