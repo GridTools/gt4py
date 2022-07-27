@@ -5,6 +5,7 @@ import numpy as np
 import pytest
 
 from functional.fencil_processors import type_check
+from functional.fencil_processors.formatters.gtfn import format_sourcecode as gtfn_format_sourcecode
 from functional.fencil_processors.runners.gtfn_cpu import run_gtfn
 from functional.iterator.builtins import (
     and_,
@@ -136,7 +137,7 @@ def test_math_function_builtins(fencil_processor, builtin_name, inputs, as_colum
 
     fencil_processor, validate = fencil_processor
 
-    if fencil_processor == run_gtfn:
+    if fencil_processor == run_gtfn or fencil_processor == gtfn_format_sourcecode:
         pytest.xfail("Support for math builtins comes in separate PR.")
     if fencil_processor == type_check.check:
         pytest.xfail("type inference does not yet support math builtins")
