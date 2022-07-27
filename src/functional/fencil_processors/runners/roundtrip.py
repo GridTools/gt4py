@@ -101,7 +101,7 @@ _BACKEND_NAME = "roundtrip"
 _FENCIL_CACHE: dict[int, Callable] = {}
 
 
-def fencel_generator(
+def fencil_generator(
     ir: Node,
     debug: bool,
     use_tmps: bool,
@@ -191,9 +191,7 @@ def executor(
     dispatch_backend: Optional[str] = None,
     offset_provider: dict[str, NeighborTableOffsetProvider],
 ) -> None:
-    debug = True
-
-    fencil = fencel_generator(
+    fencil = fencil_generator(
         ir,
         offset_provider=offset_provider,
         debug=debug,
