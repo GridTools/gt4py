@@ -17,13 +17,14 @@ from typing import Any, Collection, Union
 
 from eve import codegen
 from eve.codegen import FormatTemplate as as_fmt, MakoTemplate as as_mako
+from functional import common
 from functional.fencil_processors.codegens.gtfn import gtfn_ir
 
 
 class GTFNCodegen(codegen.TemplatedGenerator):
     _grid_type_str = {
-        gtfn_ir.GridType.CARTESIAN: "cartesian",
-        gtfn_ir.GridType.UNSTRUCTURED: "unstructured",
+        common.GridType.CARTESIAN: "cartesian",
+        common.GridType.UNSTRUCTURED: "unstructured",
     }
 
     _builtins_mapping = {
@@ -106,7 +107,7 @@ class GTFNCodegen(codegen.TemplatedGenerator):
     def visit_FunCall(self, node: gtfn_ir.FunCall, **kwargs):
         if isinstance(node.fun, gtfn_ir.SymRef) and node.fun.id in self._builtins_mapping:
             return self.generic_visit(node, fun_name=self._builtins_mapping[node.fun.id])
-        return self.generic_visit(node, fun_name=node.fun.id)
+        return self.generic_visit(node, fun_name=self.visit(node.fun))
 
     FunCall = as_fmt("{fun_name}({','.join(args)})")
 
@@ -137,7 +138,7 @@ class GTFNCodegen(codegen.TemplatedGenerator):
     def visit_FencilDefinition(
         self, node: gtfn_ir.FencilDefinition, **kwargs: Any
     ) -> Union[str, Collection[str]]:
-        self.is_cartesian = node.grid_type == gtfn_ir.GridType.CARTESIAN
+        self.is_cartesian = node.grid_type == common.GridType.CARTESIAN
         return self.generic_visit(
             node,
             grid_type_str=self._grid_type_str[node.grid_type],

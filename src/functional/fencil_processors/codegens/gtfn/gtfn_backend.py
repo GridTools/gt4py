@@ -18,9 +18,9 @@ from typing import Any, cast
 import functional.iterator.ir as itir
 from eve import codegen
 from eve.utils import UIDs
+from functional.common import Connectivity
 from functional.fencil_processors.codegens.gtfn.codegen import GTFNCodegen
 from functional.fencil_processors.codegens.gtfn.itir_to_gtfn_ir import GTFN_lowering
-from functional.iterator.embedded import NeighborTableOffsetProvider
 from functional.iterator.transforms.common import add_fundefs, replace_nodes
 from functional.iterator.transforms.extract_function import extract_function
 from functional.iterator.transforms.pass_manager import apply_common_transforms
@@ -70,10 +70,10 @@ def generate(program: itir.FencilDefinition, *, grid_type: str, **kwargs: Any) -
     return codegen.format_source("cpp", generated_code, style="LLVM")
 
 
-def _guess_grid_type(**kwargs):
+def guess_grid_type(**kwargs):
     assert "offset_provider" in kwargs
     return (
         "unstructured"
-        if any(isinstance(o, NeighborTableOffsetProvider) for o in kwargs["offset_provider"])
+        if any(isinstance(o, Connectivity) for o in kwargs["offset_provider"])
         else "cartesian"
     )

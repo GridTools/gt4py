@@ -13,25 +13,18 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 
-import enum
 from typing import ClassVar, List, Union
 
 import eve
 from eve import Coerced, SymbolName, SymbolRef
 from eve.traits import SymbolTableTrait, ValidatedSymbolTableTrait
-from eve.type_definitions import StrEnum
+from functional import common
 from functional.iterator import ir as itir
 
 
 @eve.utils.noninstantiable
 class Node(eve.Node):
     pass
-
-
-@enum.unique
-class GridType(StrEnum):
-    CARTESIAN = "cartesian"
-    UNSTRUCTURED = "unstructured"
 
 
 class Sym(Node):  # helper
@@ -142,6 +135,6 @@ class FencilDefinition(Node, ValidatedSymbolTableTrait):
     function_definitions: List[FunctionDefinition]
     executions: List[StencilExecution]
     offset_declarations: List[Sym]
-    grid_type: GridType
+    grid_type: common.GridType
 
     _NODE_SYMBOLS_: ClassVar = [Sym(id=name) for name in BUILTINS]
