@@ -1,7 +1,6 @@
 import numpy as np
 import pytest
 
-import functional.fencil_processors.formatters.gtfn
 from functional.common import Dimension
 from functional.fencil_processors.formatters.gtfn import format_sourcecode as gtfn_format_sourcecode
 from functional.fencil_processors.runners.gtfn_cpu import run_gtfn
