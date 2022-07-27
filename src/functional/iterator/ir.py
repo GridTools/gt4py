@@ -99,7 +99,7 @@ UNARY_MATH_FP_BUILTINS = {
     "trunc",
 }
 UNARY_MATH_FP_PREDICATE_BUILTINS = {"isfinite", "isinf", "isnan"}
-BINARY_MATH_NUMBER_BUILTINS = {"minimum", "maximum", "mod", "power"}
+BINARY_MATH_NUMBER_BUILTINS = {"minimum", "maximum", "fmod", "power"}
 
 BUILTINS = {
     "cartesian_domain",
