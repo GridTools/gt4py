@@ -1,6 +1,8 @@
 import numpy as np
+import pytest
 
 from functional.common import Dimension
+from functional.fencil_processors.runners.gtfn_cpu import run_gtfn
 from functional.iterator.builtins import *
 from functional.iterator.embedded import np_as_located_field
 from functional.iterator.runtime import closure, fendef, fundef, offset
@@ -32,6 +34,10 @@ def baz(baz_inp):
 
 def test_trivial(fencil_processor, use_tmps):
     fencil_processor, validate = fencil_processor
+
+    if fencil_processor == run_gtfn:
+        pytest.xfail("origin not yet supported in gtfn")
+
     rng = np.random.default_rng()
     inp = rng.uniform(size=(5, 7, 9))
     out = np.copy(inp)
@@ -68,6 +74,9 @@ def fen_direct_deref(i_size, j_size, out, inp):
 
 def test_direct_deref(fencil_processor, use_tmps):
     fencil_processor, validate = fencil_processor
+    if fencil_processor == run_gtfn:
+        pytest.xfail("extract_fundefs_from_closures() doesn't work for builtins in gtfn")
+
     rng = np.random.default_rng()
     inp = rng.uniform(size=(5, 7))
     out = np.copy(inp)
