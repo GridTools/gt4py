@@ -76,7 +76,7 @@ def get_cache_folder(module: source_modules.SourceModule, strategy: Strategy) ->
     """
     folder_name = _cache_folder_name(module)
 
-    strategy = Strategy.PERSISTENT
+    strategy = Strategy.PERSISTENT  # TODO remove
     match strategy:
         case Strategy.SESSION:
             base_path = _session_cache_dir_path

@@ -14,7 +14,7 @@
 """Python bindings generator for C++ functions."""
 
 
-from typing import Any, Sequence, Type
+from typing import Any, Sequence
 
 import numpy
 
