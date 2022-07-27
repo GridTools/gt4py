@@ -668,7 +668,7 @@ def get_ordered_indices(
             if isinstance(elem, list):
                 pos = copy.copy(pos)  # copy such that we can modify
                 # we consume a sparse entry, this smells...
-                elem, *pos[axis.value] = cast(SparsePositionEntry, elem)  # type: ignore[index]
+                elem = pos[axis.value].pop(0)
             assert isinstance(elem, (int, slice))
             res.append(elem)
     return tuple(res)
