@@ -355,9 +355,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                 msg="\n".join([error_msg_preamble] + [f"  - {error}" for error in error_msgs]),
             )
 
-        if func_name in ["power", "mod"] and all(
-            type_info.is_integral(arg.type) for arg in node.args
-        ):
+        if func_name == "power" and all(type_info.is_integral(arg.type) for arg in node.args):
             print(f"Warning: return type of {func_name} might be inconsistent (not implemented).")
 
         # deduce return type

@@ -7,12 +7,11 @@ import pytest
 import functional.fencil_processors.formatters.gtfn
 from functional.fencil_processors import type_check
 from functional.fencil_processors.formatters import lisp
-from functional.fencil_processors.runners import double_roundtrip, embedded, roundtrip
+from functional.fencil_processors.runners import double_roundtrip, gtfn_cpu, roundtrip
 from functional.iterator import ir as itir
 from functional.iterator.pretty_parser import pparse
 from functional.iterator.pretty_printer import pformat
 from functional.iterator.processor_interface import (
-    EmbeddedFencilExecutor,
     FencilExecutor,
     FencilFormatter,
     fencil_formatter,
@@ -41,12 +40,12 @@ def pretty_format_and_check(root: itir.FencilDefinition, *args, **kwargs) -> str
         # (processor, do_validate)
         (None, True),
         (lisp.format_lisp, False),
-        (functional.fencil_processors.formatters.gtfn.format_sourcecode, False),
         (pretty_format_and_check, False),
-        (embedded.executor, True),
         (roundtrip.executor, True),
         (type_check.check, False),
         (double_roundtrip.executor, True),
+        (gtfn_cpu.run_gtfn, True),
+        (functional.fencil_processors.formatters.gtfn.format_sourcecode, False),
     ],
     ids=lambda p: f"backend={p[0].__module__.split('.')[-1] + '.' + p[0].__name__ if p[0] else p[0]}",
 )
@@ -54,13 +53,20 @@ def fencil_processor(request):
     return request.param
 
 
+@pytest.fixture
+def fencil_processor_no_gtfn_exec(fencil_processor):
+    if fencil_processor[0] == gtfn_cpu.run_gtfn:
+        pytest.xfail("gtfn backend not yet supported.")
+    return fencil_processor
+
+
 def run_processor(
     fencil: FendefDispatcher,
-    processor: FencilExecutor | FencilFormatter | EmbeddedFencilExecutor,
+    processor: FencilExecutor | FencilFormatter,
     *args,
     **kwargs,
 ) -> None:
-    if processor is None or isinstance(processor, (FencilExecutor, EmbeddedFencilExecutor)):
+    if processor is None or isinstance(processor, FencilExecutor):
         fencil(*args, backend=processor, **kwargs)
     elif isinstance(processor, FencilFormatter):
         print(fencil.format_itir(*args, formatter=processor, **kwargs))
