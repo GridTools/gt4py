@@ -276,7 +276,6 @@ def test_field_of_tuple_input(fencil_processor):
 
 
 @pytest.mark.xfail(
-    raises=NotImplementedError,
     reason="tuple_get is not compatible with this way of expressing tuples.",
 )
 def test_field_of_extra_dim_input(fencil_processor):
@@ -372,7 +371,6 @@ def test_tuple_of_tuple_of_field_input(fencil_processor):
 
 
 @pytest.mark.xfail(
-    raises=NotImplementedError,
     reason="tuple_get is not compatible with this way of expressing tuples.",
 )
 def test_field_of_2_extra_dim_input(fencil_processor):
