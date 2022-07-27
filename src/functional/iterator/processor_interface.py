@@ -20,17 +20,11 @@ Those which generate / any kind of string based on the fencil and (optionally) i
 
 For more information refer to ``gt4py/docs/functional/architecture/007-Fencil-Processors.md``
 """
-from __future__ import annotations
-
 from dataclasses import dataclass
 from functools import update_wrapper
-from typing import TYPE_CHECKING, Protocol
+from typing import Protocol
 
 from functional.iterator import ir as itir
-
-
-if TYPE_CHECKING:
-    from collections.abc import Callable
 
 
 class FencilFormatterFunction(Protocol):
@@ -40,11 +34,6 @@ class FencilFormatterFunction(Protocol):
 
 class FencilExecutorFunction(Protocol):
     def __call__(self, fencil: itir.FencilDefinition, *args, **kwargs) -> None:
-        ...
-
-
-class EmbeddedFencilExecutorFunction(Protocol):
-    def __call__(self, fencil: Callable, *args, **kwargs) -> None:
         ...
 
 
@@ -65,16 +54,6 @@ class FencilExecutor:
     executor_function: FencilExecutorFunction
 
     def __call__(self, fencil: itir.FencilDefinition, *args, **kwargs) -> None:
-        self.executor_function(fencil, *args, **kwargs)
-
-
-@dataclass
-class EmbeddedFencilExecutor:
-    """Wrap a raw embedded executor function and make it type-checkable as a fencil executor at runtime."""
-
-    executor_function: FencilExecutorFunction
-
-    def __call__(self, fencil: Callable, *args, **kwargs) -> None:
         self.executor_function(fencil, *args, **kwargs)
 
 
@@ -114,24 +93,6 @@ def fencil_executor(func: FencilExecutorFunction) -> FencilExecutor:
     return wrapper
 
 
-def embedded_fencil_executor(func: EmbeddedFencilExecutorFunction) -> EmbeddedFencilExecutor:
-    """
-    Wrap an executor function in a ``EmbeddedFencilFormatter`` instance.
-
-    Examples:
-    ---------
-    >>> @embedded_fencil_executor
-    ... def badly_execute(fencil: Callable, *args, **kwargs) -> None:
-    ...     '''A useless and incorrect embedded fencil executor.'''
-    ...     pass
-
-    >>> assert isinstance(badly_execute, EmbeddedFencilExecutor)
-    """
-    wrapper = EmbeddedFencilExecutor(executor_function=func)
-    update_wrapper(wrapper, func)
-    return wrapper
-
-
 def ensure_formatter(formatter: FencilFormatter) -> None:
     """Check that a formatter is an instance of ``FencilFormatter`` and raise an error if not."""
     if not isinstance(formatter, FencilFormatter):
@@ -142,9 +103,3 @@ def ensure_executor(executor: FencilExecutor) -> None:
     """Check that an executor is an instance of ``FencilExecutor`` and raise an error if not."""
     if not isinstance(executor, FencilExecutor):
         raise RuntimeError(f"{executor} is not a fencil executor!")
-
-
-def ensure_embedded_executor(executor: EmbeddedFencilExecutor) -> None:
-    """Check that an executor is an instance of ``EmbeddedFencilExecutor`` and raise an error if not."""
-    if not isinstance(executor, EmbeddedFencilExecutor):
-        raise RuntimeError(f"{executor} is not an embedded fencil executor!")

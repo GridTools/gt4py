@@ -108,6 +108,18 @@ def fencil_generator(
     use_embedded: bool,
     offset_provider: dict[str, NeighborTableOffsetProvider],
 ) -> Callable:
+    """
+    Generate a directly executable fencil from an ITIR node.
+
+    Arguments:
+        ir: The iterator IR (ITIR) node.
+        debug: Keep module source containing fencil implementation.
+        use_tmps: Apply global temporary extraction pass (see :py:class:`functional.iterator.transforms.global_tmps.CreateGlobalTmps`).
+        use_embedded: Directly use builtins from embedded backend instead of
+                      generic dispatcher. Gives faster performance and is easier
+                      to debug.
+        offset_provider: A mapping from offset names to offset providers.
+    """
     # TODO(tehrengruber): just a temporary solution until we have a proper generic
     #  caching mechanism
     cache_key = hash((ir, use_tmps, debug, use_embedded, tuple(offset_provider.items())))
@@ -186,10 +198,10 @@ def executor(
     ir: Node,
     *args,
     column_axis: Optional[Dimension] = None,
+    offset_provider: dict[str, NeighborTableOffsetProvider],
     debug: bool = False,
     use_tmps: bool = False,
     dispatch_backend: Optional[str] = None,
-    offset_provider: dict[str, NeighborTableOffsetProvider],
 ) -> None:
     fencil = fencil_generator(
         ir,

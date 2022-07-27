@@ -10,9 +10,9 @@ from functional import common
 from functional.iterator import builtins
 from functional.iterator.builtins import BackendNotSelectedError, builtin_dispatch
 from functional.iterator.processor_interface import (
-    EmbeddedFencilExecutor,
     FencilExecutor,
     FencilFormatter,
+    ensure_executor,
     ensure_formatter,
 )
 
@@ -63,18 +63,13 @@ class FendefDispatcher:
     def __call__(self, *args, backend: Optional[FencilExecutor] = None, **kwargs):
         args, kwargs = self._rewrite_args(args, kwargs)
 
-        if backend is None:
+        if backend is not None:
+            ensure_executor(backend)
+            backend(self.itir(*args, **kwargs), *args, **kwargs)
+        else:
             if fendef_embedded is None:
                 raise RuntimeError("Embedded execution is not registered")
-
-            backend = fendef_embedded
-
-        if isinstance(backend, FencilExecutor):
-            backend(self.itir(*args, **kwargs), *args, **kwargs)
-        elif backend == fendef_embedded or isinstance(backend, EmbeddedFencilExecutor):
-            backend(self.function, *args, **kwargs)
-        else:
-            raise RuntimeError("Fencil executor not recognized.")
+            fendef_embedded(self.function, *args, **kwargs)
 
     def format_itir(self, *args, formatter: FencilFormatter, **kwargs) -> str:
         ensure_formatter(formatter)
