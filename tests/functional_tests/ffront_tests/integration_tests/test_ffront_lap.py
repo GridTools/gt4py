@@ -2,6 +2,7 @@ import numpy as np
 import pytest
 
 from functional.common import Dimension, Field
+from functional.fencil_processors.runners.roundtrip import executor as roundtrip
 from functional.ffront.decorator import field_operator, program
 from functional.ffront.fbuiltins import FieldOffset
 from functional.iterator.builtins import *
@@ -77,17 +78,17 @@ def lapi_program(
 @fendef
 def lapi_fencil(in_field, out_field):
     closure(
-        domain(named_range(IDim, 1, 19), named_range(JDim, 1, 19)),
+        cartesian_domain(named_range(IDim, 1, 19), named_range(JDim, 1, 19)),
         lapi,
         out_field,
         [in_field],
     )
 
 
-@fendef(backend="roundtrip")  # embedded not possible, as fieldview doesn't have it
+@fendef(backend=roundtrip)  # embedded not possible, as fieldview doesn't have it
 def lapf_fencil(in_field, out_field):
     closure(
-        domain(named_range(IDim, 1, 19), named_range(JDim, 1, 19)),
+        cartesian_domain(named_range(IDim, 1, 19), named_range(JDim, 1, 19)),
         lapf,
         out_field,
         [in_field],
@@ -129,37 +130,37 @@ def lapflapf_program(
 @fendef
 def lapilapi_fencil(in_field, out_field):
     closure(
-        domain(named_range(IDim, 2, 18), named_range(JDim, 2, 18)),
+        cartesian_domain(named_range(IDim, 2, 18), named_range(JDim, 2, 18)),
         lapilapi,
         out_field,
         [in_field],
     )
 
 
-@fendef(backend="roundtrip")  # embedded not possible, as fieldview doesn't have it
+@fendef(backend=roundtrip)  # embedded not possible, as fieldview doesn't have it
 def lapilapf_fencil(in_field, out_field):
     closure(
-        domain(named_range(IDim, 2, 18), named_range(JDim, 2, 18)),
+        cartesian_domain(named_range(IDim, 2, 18), named_range(JDim, 2, 18)),
         lapilapf,
         out_field,
         [in_field],
     )
 
 
-@fendef(backend="roundtrip")  # embedded not possible, as fieldview doesn't have it
+@fendef(backend=roundtrip)  # embedded not possible, as fieldview doesn't have it
 def lapflapi_fencil(in_field, out_field):
     closure(
-        domain(named_range(IDim, 2, 18), named_range(JDim, 2, 18)),
+        cartesian_domain(named_range(IDim, 2, 18), named_range(JDim, 2, 18)),
         lapflapi,
         out_field,
         [in_field],
     )
 
 
-@fendef(backend="roundtrip")  # embedded not possible, as fieldview doesn't have it
+@fendef(backend=roundtrip)  # embedded not possible, as fieldview doesn't have it
 def lapflapf_fencil(in_field, out_field):
     closure(
-        domain(named_range(IDim, 2, 18), named_range(JDim, 2, 18)),
+        cartesian_domain(named_range(IDim, 2, 18), named_range(JDim, 2, 18)),
         lapflapf,
         out_field,
         [in_field],

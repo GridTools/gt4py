@@ -39,7 +39,7 @@ def debug_itir(tree):
     from devtools import debug
 
     from eve.codegen import format_python_source
-    from functional.iterator.backends.roundtrip import EmbeddedDSL
+    from functional.fencil_processors import EmbeddedDSL
 
     debug(format_python_source(EmbeddedDSL.apply(tree)))
 
@@ -80,8 +80,11 @@ def test_multicopy():
     parsed = FieldOperatorParser.apply_to_function(multicopy)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    # TODO(ricoh): reevaluate after tuple of fields is allowed in iterator model
-    reference = im.deref_(im.make_tuple_("inp1", "inp2"))
+    reference = im.deref_(
+        im.lift_(im.lambda__("inp1", "inp2")(im.make_tuple_(im.deref_("inp1"), im.deref_("inp2"))))(
+            "inp1", "inp2"
+        )
+    )
 
     assert lowered.expr == reference
 
@@ -104,7 +107,7 @@ def test_arithmetic():
 
 
 def test_shift():
-    Ioff = FieldOffset("Ioff", source=IDim, target=[IDim])
+    Ioff = FieldOffset("Ioff", source=IDim, target=(IDim,))
 
     def shift_by_one(inp: Field[[IDim], float64]):
         return inp(Ioff[1])
@@ -119,7 +122,7 @@ def test_shift():
 
 
 def test_negative_shift():
-    Ioff = FieldOffset("Ioff", source=IDim, target=[IDim])
+    Ioff = FieldOffset("Ioff", source=IDim, target=(IDim,))
 
     def shift_by_one(inp: Field[[IDim], float64]):
         return inp(Ioff[-1])
@@ -181,12 +184,21 @@ def test_unpacking():
     parsed = FieldOperatorParser.apply_to_function(unpacking)
     lowered = FieldOperatorLowering.apply(parsed)
 
+    tuple_expr = im.lift_(
+        im.lambda__("inp1", "inp2")(im.make_tuple_(im.deref_("inp1"), im.deref_("inp2")))
+    )("inp1", "inp2")
+    tuple_access_0 = im.lift_(
+        im.lambda__("__tuple_tmp_0")(im.tuple_get_(0, im.deref_("__tuple_tmp_0")))
+    )("__tuple_tmp_0")
+    tuple_access_1 = im.lift_(
+        im.lambda__("__tuple_tmp_0")(im.tuple_get_(1, im.deref_("__tuple_tmp_0")))
+    )("__tuple_tmp_0")
+
     reference = im.deref_(
-        im.let("tmp1__0", im.tuple_get_(0, im.make_tuple_("inp1", "inp2")))(
-            im.let("tmp2__0", im.tuple_get_(1, im.make_tuple_("inp1", "inp2")))("tmp1__0")
+        im.let("__tuple_tmp_0", tuple_expr)(
+            im.let("tmp1__0", tuple_access_0)(im.let("tmp2__0", tuple_access_1)("tmp1__0"))
         )
     )
-
     assert lowered.expr == reference
 
 
@@ -228,8 +240,10 @@ def test_temp_tuple():
     parsed = FieldOperatorParser.apply_to_function(temp_tuple)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    # TODO(ricoh): reevaluate after tuple of fields is allowed in iterator model
-    reference = im.deref_(im.let("tmp__0", im.make_tuple_("a", "b"))("tmp__0"))
+    tuple_expr = im.lift_(im.lambda__("a", "b")(im.make_tuple_(im.deref_("a"), im.deref_("b"))))(
+        "a", "b"
+    )
+    reference = im.deref_(im.let("tmp__0", tuple_expr)("tmp__0"))
 
     assert lowered.expr == reference
 
@@ -474,7 +488,7 @@ def test_reduction_lowering_simple():
     reference = im.deref_(
         im.lift_(
             im.call_("reduce")(
-                im.lambda__("accum", "edge_f__0")(im.plus_("accum", "edge_f__0")),
+                im.lambda__("acc", "edge_f__0")(im.plus_("acc", "edge_f__0")),
                 0,
             )
         )(im.shift_("V2E")("edge_f"))
@@ -495,9 +509,9 @@ def test_reduction_lowering_expr():
         im.let("e1_nbh__0", im.shift_("V2E")("e1"))(
             im.lift_(
                 im.call_("reduce")(
-                    im.lambda__("accum", "e1_nbh__0__0", "e2__1")(
+                    im.lambda__("acc", "e1_nbh__0__0", "e2__1")(
                         im.plus_(
-                            "accum",
+                            "acc",
                             im.multiplies_(
                                 im.literal_("1.1", "float64"), im.plus_("e1_nbh__0__0", "e2__1")
                             ),

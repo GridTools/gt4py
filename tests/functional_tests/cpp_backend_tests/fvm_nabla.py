@@ -1,10 +1,9 @@
 import sys
 from types import SimpleNamespace
 
-from functional.iterator import library
-from functional.iterator.backends.gtfn.gtfn_backend import generate
+from functional.fencil_processors.codegens.gtfn.gtfn_backend import generate
 from functional.iterator.builtins import *
-from functional.iterator.runtime import closure, fundef, offset
+from functional.iterator.runtime import CartesianAxis, closure, fundef, offset
 from functional.iterator.tracing import trace_fendef
 
 
@@ -47,9 +46,13 @@ def zavgS_fencil(edge_domain, out, pp, S_M):
     )
 
 
-def nabla_fencil(vertex_domain, out, pp, S_M, sign, vol):
+Vertex = CartesianAxis("Vertex")
+K = CartesianAxis("K")
+
+
+def nabla_fencil(n_vertices, n_levels, out, pp, S_M, sign, vol):
     closure(
-        vertex_domain,
+        unstructured_domain(named_range(Vertex, 0, n_vertices), named_range(K, 0, n_levels)),
         compute_pnabla,
         out,
         [pp, S_M, sign, vol],
@@ -62,7 +65,7 @@ if __name__ == "__main__":
     output_file = sys.argv[1]
 
     # prog = trace(zavgS_fencil, [None] * 4) # TODO allow generating of 2 fencils
-    prog = trace_fendef(nabla_fencil, [None] * 6)
+    prog = trace_fendef(nabla_fencil, [None] * 7)
     offset_provider = {
         "V2E": SimpleNamespace(max_neighbors=6, has_skip_values=True),
         "E2V": SimpleNamespace(max_neighbors=2, has_skip_values=False),

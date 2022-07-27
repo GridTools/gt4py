@@ -3,6 +3,7 @@
 #include GENERATED_FILE
 
 #include <fn_select.hpp>
+#include <gridtools/sid/rename_dimensions.hpp>
 #include <test_environment.hpp>
 
 namespace {
@@ -14,11 +15,21 @@ constexpr inline auto in = [](auto... indices) { return (... + indices); };
 
 GT_REGRESSION_TEST(fn_cartesian_copy, test_environment<>, fn_backend_t) {
   auto out = TypeParam::make_storage();
+  auto out_wrapped =
+      sid::rename_numbered_dimensions<generated::IDim_t, generated::JDim_t,
+                                      generated::KDim_t>(out);
 
-  auto comp = [&, in = TypeParam::make_const_storage(in)] {
-    generated::copy_fencil(fn_backend_t{},
-                           cartesian_domain(TypeParam::fn_cartesian_sizes()),
-                           in, out);
+  auto in_wrapped =
+      sid::rename_numbered_dimensions<generated::IDim_t, generated::JDim_t,
+                                      generated::KDim_t>(
+          TypeParam::make_const_storage(in));
+  auto comp = [&] {
+    generated::copy_fencil(tuple{})(
+        fn_backend_t{},
+        at_key<cartesian::dim::i>(TypeParam::fn_cartesian_sizes()),
+        at_key<cartesian::dim::j>(TypeParam::fn_cartesian_sizes()),
+        at_key<cartesian::dim::k>(TypeParam::fn_cartesian_sizes()), in_wrapped,
+        out_wrapped);
   };
   comp();
 

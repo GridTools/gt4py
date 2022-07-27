@@ -13,6 +13,14 @@ class Node(eve.Node):
 
         return pformat(self)
 
+    def __hash__(self) -> int:
+        return hash(type(self)) ^ hash(
+            tuple(
+                hash(tuple(v)) if isinstance(v, list) else hash(v)
+                for v in self.iter_children_values()
+            )
+        )
+
 
 class Sym(Node):  # helper
     id: Coerced[SymbolName]  # noqa: A003
@@ -67,8 +75,35 @@ class StencilClosure(Node):
     inputs: List[SymRef]
 
 
+UNARY_MATH_NUMBER_BUILTINS = {"abs"}
+UNARY_MATH_FP_BUILTINS = {
+    "sin",
+    "cos",
+    "tan",
+    "arcsin",
+    "arccos",
+    "arctan",
+    "sinh",
+    "cosh",
+    "tanh",
+    "arcsinh",
+    "arccosh",
+    "arctanh",
+    "sqrt",
+    "exp",
+    "log",
+    "gamma",
+    "cbrt",
+    "floor",
+    "ceil",
+    "trunc",
+}
+UNARY_MATH_FP_PREDICATE_BUILTINS = {"isfinite", "isinf", "isnan"}
+BINARY_MATH_NUMBER_BUILTINS = {"minimum", "maximum", "fmod", "power"}
+
 BUILTINS = {
-    "domain",
+    "cartesian_domain",
+    "unstructured_domain",
     "named_range",
     "lift",
     "make_tuple",
@@ -89,6 +124,10 @@ BUILTINS = {
     "not_",
     "and_",
     "or_",
+    *UNARY_MATH_NUMBER_BUILTINS,
+    *UNARY_MATH_FP_BUILTINS,
+    *UNARY_MATH_FP_PREDICATE_BUILTINS,
+    *BINARY_MATH_NUMBER_BUILTINS,
 }
 
 
@@ -99,3 +138,17 @@ class FencilDefinition(Node, ValidatedSymbolTableTrait):
     closures: List[StencilClosure]
 
     _NODE_SYMBOLS_: ClassVar = [Sym(id=name) for name in BUILTINS]
+
+
+# TODO(fthaler): just use hashable types in nodes (tuples instead of lists)
+Sym.__hash__ = Node.__hash__  # type: ignore[assignment]
+Expr.__hash__ = Node.__hash__  # type: ignore[assignment]
+Literal.__hash__ = Node.__hash__  # type: ignore[assignment]
+NoneLiteral.__hash__ = Node.__hash__  # type: ignore[assignment]
+OffsetLiteral.__hash__ = Node.__hash__  # type: ignore[assignment]
+AxisLiteral.__hash__ = Node.__hash__  # type: ignore[assignment]
+SymRef.__hash__ = Node.__hash__  # type: ignore[assignment]
+Lambda.__hash__ = Node.__hash__  # type: ignore[assignment]
+FunCall.__hash__ = Node.__hash__  # type: ignore[assignment]
+FunctionDefinition.__hash__ = Node.__hash__  # type: ignore[assignment]
+StencilClosure.__hash__ = Node.__hash__  # type: ignore[assignment]

@@ -1,11 +1,13 @@
 import numpy as np
 
+from functional.common import Dimension
+from functional.fencil_processors.runners import roundtrip
 from functional.iterator.builtins import *
 from functional.iterator.embedded import np_as_located_field
-from functional.iterator.runtime import *
+from functional.iterator.runtime import fundef
 
 
-IDim = CartesianAxis("IDim")
+IDim = Dimension("IDim")
 
 
 def test_constant():
@@ -19,6 +21,6 @@ def test_constant():
     inp = np_as_located_field(IDim)(np.asarray([0, 42]))
     res = np_as_located_field(IDim)(np.zeros_like(inp))
 
-    add_constant[{IDim: range(2)}](inp, out=res, offset_provider={}, backend="roundtrip")
+    add_constant[{IDim: range(2)}](inp, out=res, offset_provider={}, backend=roundtrip.executor)
 
     assert np.allclose(res, np.asarray([1, 43]))

@@ -5,6 +5,8 @@ from functional.iterator.builtins import *
 from functional.iterator.embedded import np_as_located_field
 from functional.iterator.runtime import CartesianAxis, fundef
 
+from .conftest import run_processor
+
 
 I = CartesianAxis("I")
 
@@ -29,19 +31,19 @@ def copy_stencil(inp):
     return deref(inp)
 
 
-def test_single_argument(backend, dom):
-    backend, validate = backend
+def test_single_argument(fencil_processor, dom):
+    fencil_processor, validate = fencil_processor
 
     inp = a_field()
     out = out_field()
 
-    copy_stencil[dom](inp, out=out, offset_provider={}, backend=backend)
+    run_processor(copy_stencil[dom], fencil_processor, inp, out=out, offset_provider={})
     if validate:
         assert np.allclose(inp, out)
 
 
-def test_2_arguments(backend, dom):
-    backend, validate = backend
+def test_2_arguments(fencil_processor, dom):
+    fencil_processor, validate = fencil_processor
 
     @fundef
     def fun(inp0, inp1):
@@ -51,19 +53,19 @@ def test_2_arguments(backend, dom):
     inp1 = a_field()
     out = out_field()
 
-    fun[dom](inp0, inp1, out=out, offset_provider={}, backend=backend)
+    run_processor(fun[dom], fencil_processor, inp0, inp1, out=out, offset_provider={})
 
     if validate:
         assert np.allclose(inp0.array() + inp1.array(), out)
 
 
-def test_lambda_domain(backend):
-    backend, validate = backend
+def test_lambda_domain(fencil_processor):
+    fencil_processor, validate = fencil_processor
     inp = a_field()
     out = out_field()
 
-    dom = lambda: domain(named_range(I, 0, 10))
-    copy_stencil[dom](inp, out=out, offset_provider={}, backend=backend)
+    dom = lambda: cartesian_domain(named_range(I, 0, 10))
+    run_processor(copy_stencil[dom], fencil_processor, inp, out=out, offset_provider={})
 
     if validate:
         assert np.allclose(inp, out)

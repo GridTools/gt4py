@@ -1,17 +1,21 @@
 import numpy as np
+import pytest
 
+from functional.common import Dimension
+from functional.fencil_processors.runners.gtfn_cpu import run_gtfn
 from functional.iterator.builtins import *
 from functional.iterator.embedded import np_as_located_field
-from functional.iterator.runtime import *
+from functional.iterator.runtime import closure, fendef, fundef, offset
 
+from .conftest import run_processor
 from .hdiff_reference import hdiff_reference
 
 
 I = offset("I")
 J = offset("J")
 
-IDim = CartesianAxis("IDim")
-JDim = CartesianAxis("JDim")
+IDim = Dimension("IDim")
+JDim = Dimension("JDim")
 
 
 @fundef
@@ -47,15 +51,18 @@ def hdiff_sten(inp, coeff):
 @fendef(offset_provider={"I": IDim, "J": JDim})
 def hdiff(inp, coeff, out, x, y):
     closure(
-        domain(named_range(IDim, 0, x), named_range(JDim, 0, y)),
+        cartesian_domain(named_range(IDim, 0, x), named_range(JDim, 0, y)),
         hdiff_sten,
         out,
         [inp, coeff],
     )
 
 
-def test_hdiff(hdiff_reference, backend, use_tmps):
-    backend, validate = backend
+def test_hdiff(hdiff_reference, fencil_processor, use_tmps):
+    fencil_processor, validate = fencil_processor
+    if fencil_processor == run_gtfn:
+        pytest.xfail("origin not yet supported in gtfn")
+
     inp, coeff, out = hdiff_reference
     shape = (out.shape[0], out.shape[1])
 
@@ -63,7 +70,9 @@ def test_hdiff(hdiff_reference, backend, use_tmps):
     coeff_s = np_as_located_field(IDim, JDim)(coeff[:, :, 0])
     out_s = np_as_located_field(IDim, JDim)(np.zeros_like(coeff[:, :, 0]))
 
-    hdiff(inp_s, coeff_s, out_s, shape[0], shape[1], backend=backend, use_tmps=use_tmps)
+    run_processor(
+        hdiff, fencil_processor, inp_s, coeff_s, out_s, shape[0], shape[1], use_tmps=use_tmps
+    )
 
     if validate:
         assert np.allclose(out[:, :, 0], out_s)

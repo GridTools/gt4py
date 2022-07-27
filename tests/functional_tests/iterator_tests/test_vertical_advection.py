@@ -1,9 +1,14 @@
 import numpy as np
 import pytest
 
+from functional.common import Dimension
+from functional.fencil_processors.formatters.gtfn import format_sourcecode as gtfn_format_sourcecode
+from functional.fencil_processors.runners.gtfn_cpu import run_gtfn
 from functional.iterator.builtins import *
 from functional.iterator.embedded import np_as_located_field
-from functional.iterator.runtime import *
+from functional.iterator.runtime import closure, fendef, fundef
+
+from .conftest import run_processor
 
 
 @fundef
@@ -46,15 +51,15 @@ def tridiag_reference():
     return a, b, c, d, x
 
 
-IDim = CartesianAxis("IDim")
-JDim = CartesianAxis("JDim")
-KDim = CartesianAxis("KDim")
+IDim = Dimension("IDim")
+JDim = Dimension("JDim")
+KDim = Dimension("KDim")
 
 
 @fendef
 def fen_solve_tridiag(i_size, j_size, k_size, a, b, c, d, x):
     closure(
-        domain(
+        cartesian_domain(
             named_range(IDim, 0, i_size),
             named_range(JDim, 0, j_size),
             named_range(KDim, 0, k_size),
@@ -65,11 +70,11 @@ def fen_solve_tridiag(i_size, j_size, k_size, a, b, c, d, x):
     )
 
 
-def test_tridiag(tridiag_reference, backend, use_tmps):
+def test_tridiag(tridiag_reference, fencil_processor, use_tmps):
     if use_tmps:
         pytest.xfail("use_tmps currently not supported for scans")
-    backend, validate = backend
-    if backend == "gtfn":
+    fencil_processor, validate = fencil_processor
+    if fencil_processor == run_gtfn or fencil_processor == gtfn_format_sourcecode:
         pytest.xfail("gtfn does not yet support scans")
     a, b, c, d, x = tridiag_reference
     shape = a.shape
@@ -80,7 +85,9 @@ def test_tridiag(tridiag_reference, backend, use_tmps):
     d_s = as_3d_field(d)
     x_s = as_3d_field(np.zeros_like(x))
 
-    fen_solve_tridiag(
+    run_processor(
+        fen_solve_tridiag,
+        fencil_processor,
         shape[0],
         shape[1],
         shape[2],
@@ -91,7 +98,6 @@ def test_tridiag(tridiag_reference, backend, use_tmps):
         x_s,
         offset_provider={},
         column_axis=KDim,
-        backend=backend,
         use_tmps=use_tmps,
     )
 
