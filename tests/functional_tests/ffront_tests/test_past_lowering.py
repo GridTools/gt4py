@@ -16,17 +16,8 @@ from typing import Tuple
 import pytest
 
 from functional.common import Field, GridType
-from functional.ffront import itir_makers as im
 from functional.ffront.decorator import field_operator
-from functional.ffront.fbuiltins import (
-    Dimension,
-    FieldOffset,
-    float32,
-    float64,
-    int32,
-    int64,
-    neighbor_sum,
-)
+from functional.ffront.fbuiltins import Dimension, float64
 from functional.ffront.func_to_past import ProgramParser
 from functional.ffront.past_to_itir import ProgramLowering
 
