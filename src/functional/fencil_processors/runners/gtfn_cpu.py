@@ -31,55 +31,6 @@ _dimension_kind_to_tag = {
 }  # TODO probably not the right place
 
 
-# def get_arg_types(*args, grid_type) -> list[defs.ScalarParameter | defs.BufferParameter]:
-#     def get_arg_type(arg):
-#         view = numpy.array(arg)
-#         if view.ndim > 0:
-#             if grid_type == "unstructured":  # TODO introduce a common enum for grid_type
-#                 return defs.BufferParameter(
-#                     "", [_dimension_kind_to_tag[dim.kind] for dim in arg.axes], view.dtype.type
-#                 )
-#             else:
-#                 return defs.BufferParameter(
-#                     "", [f"generated::{dim.value}_t" for dim in arg.axes], view.dtype.type
-#                 )  # TODO not the right place
-#         else:
-#             return defs.ScalarParameter("", type(arg))
-
-#     return [get_arg_type(arg) for arg in args]
-
-
-# def convert_args(*args) -> Sequence[Any]:
-#     def convert_arg(arg):
-#         view = numpy.asarray(arg)
-#         if view.ndim > 0:
-#             return memoryview(view)
-#         else:
-#             return arg
-
-#     return [convert_arg(arg) for arg in args]
-
-
-# def neighbortable_args(offset_provider):
-#     return [c.tbl for c in offset_provider.values() if isinstance(c, Connectivity)]
-
-
-# @fencil_executor
-# def run_gtfn(itir: ir.FencilDefinition, *args, **kwargs):
-#     assert "offset_provider" in kwargs
-#     grid_type = gtfn_backend._guess_grid_type(**kwargs)
-#     parameters = get_arg_types(*args, grid_type=grid_type)  # TODO cleanup handling of grid_type
-#     for fparam, iparam in zip(parameters, itir.params):
-#         fparam.name = iparam.id
-
-#     for name, c in kwargs["offset_provider"].items():
-#         if isinstance(c, Connectivity):
-#             parameters.append(defs.ConnectivityParameter(name, name))
-#     source_module = gtfn_codegen.create_source_module(itir, parameters, **kwargs)
-#     wrapper = cpp_callable.create_callable(source_module, cache_strategy=Strategy.PERSISTENT)
-#     wrapper(*convert_args(*args), *neighbortable_args(kwargs["offset_provider"]))
-
-
 def get_param_description(
     name, obj, *, grid_type
 ) -> source_modules.ScalarParameter | source_modules.BufferParameter:
@@ -93,7 +44,6 @@ def get_param_description(
             return source_modules.BufferParameter(
                 name, [f"generated::{dim.value}_t" for dim in obj.axes], view.dtype
             )  # TODO not the right place
-        # return source_modules.BufferParameter(name, [dim.value for dim in obj.axes], view.dtype)
     else:
         return source_modules.ScalarParameter(name, view.dtype)
 
@@ -122,7 +72,6 @@ def run_gtfn(itir: ir.FencilDefinition, *args, **kwargs):
 
     See ``FencilExecutorFunction`` for details.
     """
-
     assert "offset_provider" in kwargs
     grid_type = gtfn_backend.guess_grid_type(**kwargs)
     parameters = [
