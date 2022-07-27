@@ -205,7 +205,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                     )
                 )
             return itir.SymRef(id=self.visit(out_field_name, **kwargs).id), itir.FunCall(
-                fun=itir.SymRef(id=self.domain_builtin), args=domain_args
+                fun=itir.SymRef(id=self._domain_builtin), args=domain_args
             )
 
         elif isinstance(node, (past.Name, past.TupleExpr)):
