@@ -379,7 +379,7 @@ def test_maxover_execution_negatives(reduction_setup, fieldview_backend):
         out = max_over(edge_f(V2E), axis=V2EDim)
         return out
 
-    maxover_negvals(inp_field, out=rs.out, offset_provider=rs.offset_provider)
+    maxover_negvals(inp_field, out=rs.out, offset_provider={"V2E": rs.offset_provider["V2E"]})
 
     ref = np.max(inp_field_arr[rs.v2e_table], axis=1)
     assert np.allclose(ref, rs.out)
@@ -403,7 +403,9 @@ def test_reduction_execution(reduction_setup, fieldview_backend):
     def fencil(edge_f: Field[[Edge], float64], out: Field[[Vertex], float64]) -> None:
         reduction(edge_f, out=out)
 
-    fencil(rs.inp, rs.out, offset_provider=rs.offset_provider)
+    fencil(
+        rs.inp, rs.out, offset_provider={"V2E": rs.offset_provider["V2E"]}
+    )  # TODO should allow to pass the full offset_provider
 
     ref = np.sum(rs.v2e_table, axis=1)
     assert np.allclose(ref, rs.out)
