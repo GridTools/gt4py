@@ -27,36 +27,29 @@ def pretty_format_and_check(root: itir.FencilDefinition, *args, **kwargs) -> str
     return pretty
 
 
-_common_processors = [
-    # (processor, do_validate)
-    (None, True),
-    (lisp.format_lisp, False),
-    (pretty_format_and_check, False),
-    (roundtrip.executor, True),
-    (type_check.check, False),
-    (double_roundtrip.executor, True),
-]
-_processors = [*_common_processors, (gtfn_cpu.run_gtfn, True)]
-_processors_no_gtfn_exec = [
-    *_common_processors,
-    (functional.fencil_processors.formatters.gtfn.format_sourcecode, False),
-]
-
-
 @pytest.fixture(
-    params=_processors,
+    params=[
+        # (processor, do_validate)
+        (None, True),
+        (lisp.format_lisp, False),
+        (pretty_format_and_check, False),
+        (roundtrip.executor, True),
+        (type_check.check, False),
+        (double_roundtrip.executor, True),
+        (gtfn_cpu.run_gtfn, True),
+        (functional.fencil_processors.formatters.gtfn.format_sourcecode, False),
+    ],
     ids=lambda p: f"backend={p[0].__module__.split('.')[-1] + '.' + p[0].__name__ if p[0] else p[0]}",
 )
 def fencil_processor(request):
     return request.param
 
 
-@pytest.fixture(
-    params=_processors_no_gtfn_exec,
-    ids=lambda p: f"backend={p[0].__module__.split('.')[-1] + '.' + p[0].__name__ if p[0] else p[0]}",
-)
-def fencil_processor_no_gtfn_exec(request):
-    return request.param
+@pytest.fixture
+def fencil_processor_no_gtfn_exec(fencil_processor):
+    if fencil_processor[0] == gtfn_cpu.run_gtfn:
+        pytest.xfail("gtfn backend not yet supported.")
+    return fencil_processor
 
 
 def run_processor(fencil, processor, *args, **kwargs):

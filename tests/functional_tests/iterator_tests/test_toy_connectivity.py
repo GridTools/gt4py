@@ -111,14 +111,14 @@ def sum_edges_to_vertices(in_edges):
 
 
 def test_sum_edges_to_vertices(fencil_processor_no_gtfn_exec):
-    fencil_processor_no_gtfn_exec, validate = fencil_processor_no_gtfn_exec
+    fencil_processor, validate = fencil_processor_no_gtfn_exec
     inp = index_field(Edge)
     out = np_as_located_field(Vertex)(np.zeros([9]))
     ref = np.asarray(list(sum(row) for row in v2e_arr))
 
     run_processor(
         sum_edges_to_vertices[{Vertex: range(0, 9)}],
-        fencil_processor_no_gtfn_exec,
+        fencil_processor,
         inp,
         out=out,
         offset_provider={"V2E": NeighborTableOffsetProvider(v2e_arr, Vertex, Edge, 4)},
@@ -133,14 +133,14 @@ def sum_edges_to_vertices_reduce(in_edges):
 
 
 def test_sum_edges_to_vertices_reduce(fencil_processor_no_gtfn_exec):
-    fencil_processor_no_gtfn_exec, validate = fencil_processor_no_gtfn_exec
+    fencil_processor, validate = fencil_processor_no_gtfn_exec
     inp = index_field(Edge)
     out = np_as_located_field(Vertex)(np.zeros([9]))
     ref = np.asarray(list(sum(row) for row in v2e_arr))
 
     run_processor(
         sum_edges_to_vertices_reduce[{Vertex: range(0, 9)}],
-        fencil_processor_no_gtfn_exec,
+        fencil_processor,
         inp,
         out=out,
         offset_provider={"V2E": NeighborTableOffsetProvider(v2e_arr, Vertex, Edge, 4)},
@@ -155,14 +155,14 @@ def first_vertex_neigh_of_first_edge_neigh_of_cells(in_vertices):
 
 
 def test_first_vertex_neigh_of_first_edge_neigh_of_cells_fencil(fencil_processor_no_gtfn_exec):
-    fencil_processor_no_gtfn_exec, validate = fencil_processor_no_gtfn_exec
+    fencil_processor, validate = fencil_processor_no_gtfn_exec
     inp = index_field(Vertex)
     out = np_as_located_field(Cell)(np.zeros([9]))
     ref = np.asarray(list(v2e_arr[c[0]][0] for c in c2e_arr))
 
     run_processor(
         first_vertex_neigh_of_first_edge_neigh_of_cells[{Cell: range(0, 9)}],
-        fencil_processor_no_gtfn_exec,
+        fencil_processor,
         inp,
         out=out,
         offset_provider={
@@ -180,7 +180,7 @@ def sparse_stencil(non_sparse, inp):
 
 
 def test_sparse_input_field(fencil_processor_no_gtfn_exec):
-    fencil_processor_no_gtfn_exec, validate = fencil_processor_no_gtfn_exec
+    fencil_processor, validate = fencil_processor_no_gtfn_exec
     non_sparse = np_as_located_field(Edge)(np.zeros(18))
     inp = np_as_located_field(Vertex, V2E)(np.asarray([[1, 2, 3, 4]] * 9))
     out = np_as_located_field(Vertex)(np.zeros([9]))
@@ -189,7 +189,7 @@ def test_sparse_input_field(fencil_processor_no_gtfn_exec):
 
     run_processor(
         sparse_stencil[{Vertex: range(0, 9)}],
-        fencil_processor_no_gtfn_exec,
+        fencil_processor,
         non_sparse,
         inp,
         out=out,
@@ -204,7 +204,7 @@ V2V = offset("V2V")
 
 
 def test_sparse_input_field_v2v(fencil_processor_no_gtfn_exec):
-    fencil_processor_no_gtfn_exec, validate = fencil_processor_no_gtfn_exec
+    fencil_processor, validate = fencil_processor_no_gtfn_exec
     non_sparse = np_as_located_field(Edge)(np.zeros(9))
     inp = np_as_located_field(Vertex, V2V)(v2v_arr)
     out = np_as_located_field(Vertex)(np.zeros([9]))
@@ -213,7 +213,7 @@ def test_sparse_input_field_v2v(fencil_processor_no_gtfn_exec):
 
     run_processor(
         sparse_stencil[{Vertex: range(0, 9)}],
-        fencil_processor_no_gtfn_exec,
+        fencil_processor,
         non_sparse,
         inp,
         out=out,
@@ -233,7 +233,7 @@ def slice_sparse_stencil(sparse):
 
 
 def test_slice_sparse(fencil_processor_no_gtfn_exec):
-    fencil_processor_no_gtfn_exec, validate = fencil_processor_no_gtfn_exec
+    fencil_processor, validate = fencil_processor_no_gtfn_exec
     inp = np_as_located_field(Vertex, V2V)(v2v_arr)
     out = np_as_located_field(Vertex)(np.zeros([9]))
 
@@ -241,7 +241,7 @@ def test_slice_sparse(fencil_processor_no_gtfn_exec):
 
     run_processor(
         slice_sparse_stencil[{Vertex: range(0, 9)}],
-        fencil_processor_no_gtfn_exec,
+        fencil_processor,
         inp,
         out=out,
         offset_provider={
@@ -259,14 +259,14 @@ def slice_twice_sparse_stencil(sparse):
 
 
 def test_slice_twice_sparse(fencil_processor_no_gtfn_exec):
-    fencil_processor_no_gtfn_exec, validate = fencil_processor_no_gtfn_exec
+    fencil_processor, validate = fencil_processor_no_gtfn_exec
     inp = np_as_located_field(Vertex, V2V, V2V)(v2v_arr[v2v_arr])
     out = np_as_located_field(Vertex)(np.zeros([9]))
 
     ref = v2v_arr[v2v_arr][:, 2, 1]
     run_processor(
         slice_twice_sparse_stencil[{Vertex: range(0, 9)}],
-        fencil_processor_no_gtfn_exec,
+        fencil_processor,
         inp,
         out=out,
         offset_provider={
@@ -284,7 +284,7 @@ def shift_sliced_sparse_stencil(sparse):
 
 
 def test_shift_sliced_sparse(fencil_processor_no_gtfn_exec):
-    fencil_processor_no_gtfn_exec, validate = fencil_processor_no_gtfn_exec
+    fencil_processor, validate = fencil_processor_no_gtfn_exec
     inp = np_as_located_field(Vertex, V2V)(v2v_arr)
     out = np_as_located_field(Vertex)(np.zeros([9]))
 
@@ -292,7 +292,7 @@ def test_shift_sliced_sparse(fencil_processor_no_gtfn_exec):
 
     run_processor(
         shift_sliced_sparse_stencil[{Vertex: range(0, 9)}],
-        fencil_processor_no_gtfn_exec,
+        fencil_processor,
         inp,
         out=out,
         offset_provider={
@@ -310,7 +310,7 @@ def slice_shifted_sparse_stencil(sparse):
 
 
 def test_slice_shifted_sparse(fencil_processor_no_gtfn_exec):
-    fencil_processor_no_gtfn_exec, validate = fencil_processor_no_gtfn_exec
+    fencil_processor, validate = fencil_processor_no_gtfn_exec
     inp = np_as_located_field(Vertex, V2V)(v2v_arr)
     out = np_as_located_field(Vertex)(np.zeros([9]))
 
@@ -318,7 +318,7 @@ def test_slice_shifted_sparse(fencil_processor_no_gtfn_exec):
 
     run_processor(
         slice_shifted_sparse_stencil[{Vertex: range(0, 9)}],
-        fencil_processor_no_gtfn_exec,
+        fencil_processor,
         inp,
         out=out,
         offset_provider={
@@ -341,14 +341,14 @@ def lift_stencil(inp):
 
 
 def test_lift(fencil_processor_no_gtfn_exec):
-    fencil_processor_no_gtfn_exec, validate = fencil_processor_no_gtfn_exec
+    fencil_processor, validate = fencil_processor_no_gtfn_exec
     inp = index_field(Vertex)
     out = np_as_located_field(Vertex)(np.zeros([9]))
     ref = np.asarray(np.asarray(range(9)))
 
     run_processor(
         lift_stencil[{Vertex: range(0, 9)}],
-        fencil_processor_no_gtfn_exec,
+        fencil_processor,
         inp,
         out=out,
         offset_provider={"V2V": NeighborTableOffsetProvider(v2v_arr, Vertex, Vertex, 4)},
@@ -363,14 +363,14 @@ def sparse_shifted_stencil(inp):
 
 
 def test_shift_sparse_input_field(fencil_processor_no_gtfn_exec):
-    fencil_processor_no_gtfn_exec, validate = fencil_processor_no_gtfn_exec
+    fencil_processor, validate = fencil_processor_no_gtfn_exec
     inp = np_as_located_field(Vertex, V2V)(v2v_arr)
     out = np_as_located_field(Vertex)(np.zeros([9]))
     ref = np.asarray(np.asarray(range(9)))
 
     run_processor(
         sparse_shifted_stencil[{Vertex: range(0, 9)}],
-        fencil_processor_no_gtfn_exec,
+        fencil_processor,
         inp,
         out=out,
         offset_provider={"V2V": NeighborTableOffsetProvider(v2v_arr, Vertex, Vertex, 4)},
@@ -391,7 +391,7 @@ def shift_sparse_stencil2(inp):
 
 
 def test_shift_sparse_input_field2(fencil_processor_no_gtfn_exec):
-    fencil_processor_no_gtfn_exec, validate = fencil_processor_no_gtfn_exec
+    fencil_processor, validate = fencil_processor_no_gtfn_exec
     inp = index_field(Vertex)
     inp_sparse = np_as_located_field(Edge, E2V)(e2v_arr)
     out1 = np_as_located_field(Vertex)(np.zeros([9]))
@@ -405,14 +405,14 @@ def test_shift_sparse_input_field2(fencil_processor_no_gtfn_exec):
     domain = {Vertex: range(0, 9)}
     run_processor(
         shift_shift_stencil2[domain],
-        fencil_processor_no_gtfn_exec,
+        fencil_processor,
         inp,
         out=out1,
         offset_provider=offset_provider,
     )
     run_processor(
         shift_sparse_stencil2[domain],
-        fencil_processor_no_gtfn_exec,
+        fencil_processor,
         inp_sparse,
         out=out2,
         offset_provider=offset_provider,
@@ -432,8 +432,8 @@ def sparse_shifted_stencil_reduce(inp):
 
 
 def test_sparse_shifted_stencil_reduce(fencil_processor_no_gtfn_exec):
-    fencil_processor_no_gtfn_exec, validate = fencil_processor_no_gtfn_exec
-    if fencil_processor_no_gtfn_exec == gtfn.format_sourcecode:
+    fencil_processor, validate = fencil_processor_no_gtfn_exec
+    if fencil_processor == gtfn.format_sourcecode:
         pytest.xfail("We cannot unroll a reduction on a sparse field only.")
         # With our current understanding, this iterator IR program is illegal, however we might want to fix it and therefore keep the test for now.
 
@@ -452,7 +452,7 @@ def test_sparse_shifted_stencil_reduce(fencil_processor_no_gtfn_exec):
     domain = {Vertex: range(0, 9)}
     run_processor(
         sparse_shifted_stencil_reduce[domain],
-        fencil_processor_no_gtfn_exec,
+        fencil_processor,
         inp,
         out=out,
         offset_provider={"V2V": NeighborTableOffsetProvider(v2v_arr, Vertex, Vertex, 4)},

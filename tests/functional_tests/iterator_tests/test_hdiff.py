@@ -1,6 +1,8 @@
 import numpy as np
+import pytest
 
 from functional.common import Dimension
+from functional.fencil_processors.runners.gtfn_cpu import run_gtfn
 from functional.iterator.builtins import *
 from functional.iterator.embedded import np_as_located_field
 from functional.iterator.runtime import closure, fendef, fundef, offset
@@ -58,6 +60,9 @@ def hdiff(inp, coeff, out, x, y):
 
 def test_hdiff(hdiff_reference, fencil_processor, use_tmps):
     fencil_processor, validate = fencil_processor
+    if fencil_processor == run_gtfn:
+        pytest.xfail("origin not yet supported in gtfn")
+
     inp, coeff, out = hdiff_reference
     shape = (out.shape[0], out.shape[1])
 
