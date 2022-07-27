@@ -279,6 +279,14 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             return foast.Call(
                 func=new_func, args=new_args, kwargs={}, location=node.location, type=new_type
             )
+        elif isinstance(new_func.type, ct.UnknownFunctionType):
+            return foast.Call(
+                func=new_func,
+                args=self.visit(node.args, **kwargs),
+                kwargs=self.visit(node.kwargs, **kwargs),
+                location=node.location,
+                type=ct.UnknownFieldType(),
+            )
         elif isinstance(new_func.type, ct.FunctionType):
             return_type = new_func.type.returns
             new_node = foast.Call(
@@ -288,7 +296,6 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                 location=node.location,
                 type=return_type,
             )
-
             self._ensure_signature_valid(new_node, **kwargs)
 
             # todo(tehrengruber): solve in a more generic way, e.g. using

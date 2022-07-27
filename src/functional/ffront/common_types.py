@@ -112,3 +112,13 @@ class FunctionType(SymbolType):
         kwarg_strs = [f"{key}: {value}" for key, value in self.kwargs.items()]
         args_str = ", ".join((*arg_strs, *kwarg_strs))
         return f"({args_str}) -> {self.returns}"
+
+
+class UnknownFunctionType(SymbolType):
+    def __str__(self):
+        return "(...) -> ..."
+
+
+class UnknownFieldType(SymbolType):
+    def __str__(self):
+        return "Field[[...],...]"

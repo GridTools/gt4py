@@ -56,6 +56,8 @@ from functional.iterator.processor_interface import (
     ensure_executor,
     ensure_formatter,
 )
+from functional.iterator.runtime import FundefDispatcher
+from functional.iterator.tracing import trace_fundef
 
 
 DEFAULT_BACKEND: Callable = roundtrip.executor
@@ -242,6 +244,15 @@ class Program:
                 gt_callables.append(value)
         return gt_callables
 
+    def _lowered_fundefs_from_captured_vars(self, captured_vars: CapturedVars) -> list[GTCallable]:
+        all_captured_vars = collections.ChainMap(captured_vars.globals, captured_vars.nonlocals)
+
+        fundefs = []
+        for value in all_captured_vars.values():
+            if isinstance(value, FundefDispatcher):
+                fundefs.extend(trace_fundef(value))
+        return fundefs
+
     def _offsets_and_dimensions_from_gt_callables(
         self, gt_callables: Iterable[GTCallable]
     ) -> set[FieldOffset | Dimension]:
@@ -269,7 +280,10 @@ class Program:
 
         referenced_var_names: set[str] = set()
         for captured_var in self.past_node.captured_vars:
-            if isinstance(captured_var.type, (ct.FunctionType, ct.OffsetType, ct.DimensionType)):
+            if isinstance(
+                captured_var.type,
+                (ct.FunctionType, ct.OffsetType, ct.DimensionType, ct.UnknownFunctionType),
+            ):
                 referenced_var_names.add(captured_var.id)
             else:
                 raise NotImplementedError("Only function closure vars are allowed currently.")
@@ -283,6 +297,7 @@ class Program:
         )
 
         lowered_funcs = self._lowered_funcs_from_gt_callables(referenced_gt_callables)
+        lowered_funcs.extend(self._lowered_fundefs_from_captured_vars(capture_vars))
         return ProgramLowering.apply(
             self.past_node, function_definitions=lowered_funcs, grid_type=grid_type
         )

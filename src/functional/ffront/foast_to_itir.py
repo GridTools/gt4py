@@ -75,7 +75,7 @@ def iterator_type_kind(
     | (1, (local_field, regular_field))  | ENCAPSULATED_ITERATOR  |
     +------------------------------------+------------------------+
     """
-    if isinstance(symbol_type, ct.FieldType):
+    if isinstance(symbol_type, (ct.FieldType, ct.UnknownFieldType)):
         return ITIRTypeKind.ITERATOR
     elif any(type_info.primitive_constituents(symbol_type).if_isinstance(ct.FieldType)):
         # if we encounter any field type that is defined on a local dimension

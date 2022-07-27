@@ -3,7 +3,7 @@ import sys
 from functional.fencil_processors.codegens.gtfn.gtfn_backend import generate
 from functional.iterator.builtins import *
 from functional.iterator.runtime import CartesianAxis, closure, fundef
-from functional.iterator.tracing import trace
+from functional.iterator.tracing import trace_fendef
 
 
 IDim = CartesianAxis("IDim")
@@ -32,7 +32,7 @@ if __name__ == "__main__":
         raise RuntimeError(f"Usage: {sys.argv[0]} <output_file>")
     output_file = sys.argv[1]
 
-    prog = trace(copy_fencil, [None] * 5)
+    prog = trace_fendef(copy_fencil, [None] * 5)
     generated_code = generate(prog, grid_type="Cartesian")
 
     with open(output_file, "w+") as output:

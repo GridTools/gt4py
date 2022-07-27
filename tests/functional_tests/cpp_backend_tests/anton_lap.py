@@ -3,7 +3,7 @@ import sys
 from functional.fencil_processors.codegens.gtfn.gtfn_backend import generate
 from functional.iterator.builtins import *
 from functional.iterator.runtime import CartesianAxis, closure, fundef, offset
-from functional.iterator.tracing import trace
+from functional.iterator.tracing import trace_fendef
 
 
 @fundef
@@ -53,7 +53,7 @@ if __name__ == "__main__":
         raise RuntimeError(f"Usage: {sys.argv[0]} <output_file>")
     output_file = sys.argv[1]
 
-    prog = trace(lap_fencil, [None] * 8)
+    prog = trace_fendef(lap_fencil, [None] * 8)
     generated_code = generate(prog, grid_type="Cartesian", offset_provider={"i": IDim, "j": JDim})
 
     with open(output_file, "w+") as output:

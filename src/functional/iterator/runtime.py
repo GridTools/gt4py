@@ -63,6 +63,8 @@ class FendefDispatcher:
     def __call__(self, *args, backend: Optional[FencilExecutor] = None, **kwargs):
         args, kwargs = self._rewrite_args(args, kwargs)
 
+        backend = kwargs["backend"] if "backend" in kwargs and backend is None else backend
+
         if backend is not None:
             ensure_executor(backend)
             backend(self.itir(*args, **kwargs), *args, **kwargs)

@@ -19,7 +19,7 @@ from functional.iterator.ir import (
     Sym,
     SymRef,
 )
-from functional.iterator.runtime import CartesianAxis
+from functional.iterator.runtime import CartesianAxis, FundefDispatcher
 
 
 TRACING = "tracing"
@@ -123,11 +123,25 @@ for builtin_name in builtins.BUILTINS:
     decorator(BuiltinTracer(name=builtin_name))
 
 
+def make_node_from_fieldop(fieldop):
+    fun = fieldop.__gt_itir__()  # TODO need GTCallable in common to decouple from field view
+    TracerContext.add_fundef(fun)
+    # TODO(havogt): the following is super hacked to get all referenced functions either
+    for c in fieldop.__gt_captured_vars__().globals.values():  # if they are fieldoperators
+        if hasattr(c, "__gt_itir__"):
+            make_node(c)
+        elif isinstance(c, FundefDispatcher):  # or if they are fundefs
+            c(*(_s(param) for param in inspect.signature(c).parameters))
+    return _s(fun.id)
+
+
 # helpers
 def make_node(o):
     if isinstance(o, Node):
         return o
     if callable(o):
+        if hasattr(o, "__gt_itir__"):
+            return make_node_from_fieldop(o)
         if o.__name__ == "<lambda>":
             return lambdadef(o)
         if hasattr(o, "__code__") and o.__code__.co_flags & inspect.CO_NESTED:
@@ -220,7 +234,9 @@ class TracerContext:
 
 @iterator.runtime.closure.register(TRACING)
 def closure(domain, stencil, output, inputs):
-    if hasattr(stencil, "__name__") and stencil.__name__ in iterator.builtins.__all__:
+    if hasattr(stencil, "__gt_itir__"):
+        stencil = make_node(stencil)
+    elif hasattr(stencil, "__name__") and stencil.__name__ in iterator.builtins.__all__:
         stencil = _s(stencil.__name__)
     else:
         stencil(*(_s(param) for param in inspect.signature(stencil).parameters))
@@ -254,7 +270,7 @@ def _make_param_names(fun, args):
     return param_names
 
 
-def trace(fun, args):
+def trace_fendef(fun, args):
     with TracerContext() as _:
         param_names = _make_param_names(fun, args)
         trace_function_call(fun, args=(_s(p) for p in param_names))
@@ -267,8 +283,14 @@ def trace(fun, args):
         )
 
 
+def trace_fundef(fun):
+    with TracerContext() as _:
+        trace_function_call(fun)
+        return TracerContext.fundefs
+
+
 def fendef_tracing(fun, *args, **kwargs) -> FencilDefinition:
-    return trace(fun, args=args)
+    return trace_fendef(fun, args=args)
 
 
 iterator.runtime.fendef_codegen = fendef_tracing
