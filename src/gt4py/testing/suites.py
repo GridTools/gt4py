@@ -483,11 +483,16 @@ class StencilTestSuite(metaclass=SuiteMeta):
         origin = cls.origin
         max_boundary = Boundary(cls.max_boundary)
         field_params = cls.field_params
+        field_dimensions = {}
         field_masks = {}
         for name, value in input_data.items():
             if isinstance(value, np.ndarray):
                 field_masks[name] = tuple(
                     ax in field_params[name][0] for ax in CartesianSpace.names
+                )
+                field_dimensions[name] = tuple(
+                    [ax for ax in CartesianSpace.names if ax in field_params[name][0]]
+                    + [str(d) for d in range(len(field_params[name][1]))]
                 )
 
         data_shape = Shape((sys.maxsize,) * 3)
@@ -531,7 +536,7 @@ class StencilTestSuite(metaclass=SuiteMeta):
                         data,
                         dtype=dtype,
                         shape=shape,
-                        mask=field_masks[name],
+                        dimensions=field_dimensions[name],
                         aligned_index=origin,
                         backend=implementation.backend,
                     )
