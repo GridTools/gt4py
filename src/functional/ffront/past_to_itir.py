@@ -11,10 +11,18 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 from eve import NodeTranslator, traits
 from functional.common import DimensionKind, GridType, GTTypeError
 from functional.ffront import common_types, program_ast as past
 from functional.iterator import ir as itir
+
+
+if TYPE_CHECKING:
+    from typing import Optional
 
 
 def _size_arg_from_field(field_name: str, dim: int) -> str:
@@ -140,48 +148,52 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             raise AssertionError("Expected `None` or `past.Constant`.")
         return lowered_bound
 
-    @property
-    def _domain_builtin(self) -> str:
-        return "cartesian_domain" if self.grid_type == GridType.CARTESIAN else "unstructured_domain"
-
-    def _construct_out_arg(self, node: past.TupleExpr | past.Name) -> itir.Expr:
+    def _construct_itir_out_arg(self, node: past.TupleExpr | past.Name) -> itir.Expr:
         if isinstance(node, past.Name):
-            return itir.SymRef(id=self.visit(node).id)
+            return itir.SymRef(id=node.id)
         elif isinstance(node, past.TupleExpr):
             return itir.FunCall(
                 fun=itir.SymRef(id="make_tuple"),
-                args=[self._construct_out_arg(e) for e in node.elts],
+                args=[self._construct_itir_out_arg(el) for el in node.elts],
             )
         else:
             raise RuntimeError(
                 "Unexpected `out` argument. Must be a `past.Name` or nesting of `past.TupleExpr` and `past.Name`."
             )
 
-    def _construct_domain_arg(self, node: past.TupleExpr | past.Name) -> itir.Expr:
-        flattened = _flatten_tuple_expr(node)
-        first_field = flattened[0]
-        if not all(field.type.dims == first_field.type.dims for field in flattened):
-            raise RuntimeError(
-                "Incompatible fields in tuple: all fields must have the same dimensions."
+    def _construct_itir_domain_arg(
+        self, out_field: past.Name, slices: Optional[list[past.Slice]] = None
+    ) -> itir.FunCall:
+        domain_args = []
+        for dim_i, dim in enumerate(out_field.type.dims):
+            # an expression for the size of a dimension
+            dim_size = itir.SymRef(id=_size_arg_from_field(out_field.id, dim_i))
+            # bounds
+            lower = self._visit_slice_bound(
+                slices[dim_i].lower if slices else None,
+                itir.Literal(value="0", type="int"),
+                dim_size,
+            )
+            upper = self._visit_slice_bound(
+                slices[dim_i].upper if slices else None, dim_size, dim_size
+            )
+            if dim.kind == DimensionKind.LOCAL:
+                raise GTTypeError(f"Dimension {dim.value} must not be local.")
+            domain_args.append(
+                itir.FunCall(
+                    fun=itir.SymRef(id="named_range"),
+                    args=[itir.AxisLiteral(value=dim.value), lower, upper],
+                )
             )
 
-        # we assume all fields in the tuple are on the same domain, therefore use the size of the first field
-        domain_args = [
-            itir.FunCall(
-                fun=itir.SymRef(id="named_range"),
-                args=[
-                    itir.AxisLiteral(value=dim.value),
-                    itir.Literal(value="0", type="int"),
-                    # here we use the artificial size arguments added to the fencil
-                    itir.SymRef(id=_size_arg_from_field(first_field.id, dim_idx)),
-                ],
-            )
-            for dim_idx, dim in enumerate(first_field.type.dims)
-        ]
-        return itir.FunCall(fun=itir.SymRef(id=self._domain_builtin), args=domain_args)
+        if self.grid_type == GridType.CARTESIAN:
+            domain_builtin = "cartesian_domain"
+        elif self.grid_type == GridType.UNSTRUCTURED:
+            domain_builtin = "unstructured_domain"
+        else:
+            raise AssertionError()
 
-    def _visit_tuple_out_arg(self, node: past.TupleExpr | past.Name) -> tuple[itir.Expr, itir.Expr]:
-        return self._construct_out_arg(node), self._construct_domain_arg(node)
+        return itir.FunCall(fun=itir.SymRef(id=domain_builtin), args=domain_args)
 
     def _visit_stencil_call_out_arg(
         self, node: past.Expr, **kwargs
@@ -205,31 +217,25 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                     f"Too many indices for field {out_field_name}: field is {len(node.type.dims)}"
                     f"-dimensional, but {len(out_field_slice_)} were indexed."
                 )
-            domain_args = []
-            for dim_i, (dim, slice_) in enumerate(zip(node.type.dims, out_field_slice_)):
-                # an expression for the size of a dimension
-                dim_size = itir.SymRef(id=_size_arg_from_field(out_field_name.id, dim_i))
-                # lower bound
-                lower = self._visit_slice_bound(
-                    slice_.lower, itir.Literal(value="0", type="int"), dim_size
-                )
-                upper = self._visit_slice_bound(slice_.upper, dim_size, dim_size)
-                if dim.kind == DimensionKind.LOCAL:
-                    raise GTTypeError(f"Dimension {dim.value} must not be local.")
-                domain_args.append(
-                    itir.FunCall(
-                        fun=itir.SymRef(id="named_range"),
-                        args=[itir.AxisLiteral(value=dim.value), lower, upper],
-                    )
-                )
-            return itir.SymRef(id=self.visit(out_field_name, **kwargs).id), itir.FunCall(
-                fun=itir.SymRef(id=self._domain_builtin), args=domain_args
+
+            return (
+                self._construct_itir_out_arg(out_field_name),
+                self._construct_itir_domain_arg(out_field_name, out_field_slice_),
             )
+        elif isinstance(node, past.Name):
+            return (self._construct_itir_out_arg(node), self._construct_itir_domain_arg(node))
+        elif isinstance(node, past.TupleExpr):
+            flattened = _flatten_tuple_expr(node)
+            first_field = flattened[0]
+            if not all(field.type.dims == first_field.type.dims for field in flattened):
+                raise RuntimeError(
+                    "Incompatible fields in tuple: all fields must have the same dimensions."
+                )
 
-        elif isinstance(node, (past.Name, past.TupleExpr)):
-            # note: we currently don't allow slicing in TupleExpr
-            return self._visit_tuple_out_arg(node)
-
+            return (
+                self._construct_itir_out_arg(node),
+                self._construct_itir_domain_arg(first_field),
+            )
         else:
             raise RuntimeError(
                 "Unexpected `out` argument. Must be a `past.Subscript`, `past.Name` or `past.TupleExpr` node."
