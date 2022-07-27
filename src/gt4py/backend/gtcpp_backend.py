@@ -28,7 +28,7 @@ from gtc.passes.oir_pipeline import DefaultPipeline
 
 from .gtc_common import (
     BaseGTBackend,
-    PyExtModuleGenerator,
+    CUDAPyExtModuleGenerator,
     cuda_is_compatible_layout,
     make_cuda_layout_map,
     make_mc_layout_map,
@@ -74,7 +74,8 @@ class GTExtGenerator(BackendCodegen):
 
 
 class GTCppBindingsCodegen(codegen.TemplatedGenerator):
-    def __init__(self):
+    def __init__(self, backend):
+        self.backend = backend
         self._unique_index: int = 0
 
     def unique_index(self) -> int:
@@ -91,7 +92,10 @@ class GTCppBindingsCodegen(codegen.TemplatedGenerator):
             data_ndim = len(node.data_dims)
             sid_ndim = domain_ndim + data_ndim
             if kwargs["external_arg"]:
-                return "py::buffer {name}, std::array<gt::int_t,{sid_ndim}> {name}_origin".format(
+                return "py::{pybind_type} {name}, std::array<gt::int_t,{sid_ndim}> {name}_origin".format(
+                    pybind_type="object"
+                    if self.backend.storage_info["device"] == "gpu"
+                    else "buffer",
                     name=node.name,
                     sid_ndim=sid_ndim,
                 )
@@ -127,7 +131,7 @@ class GTCppBindingsCodegen(codegen.TemplatedGenerator):
 
     @classmethod
     def apply(cls, root, *, module_name="stencil", **kwargs) -> str:
-        generated_code = cls().visit(root, module_name=module_name, **kwargs)
+        generated_code = cls(kwargs.get("backend")).visit(root, module_name=module_name, **kwargs)
         if kwargs.get("format_source", True):
             generated_code = codegen.format_source("cpp", generated_code, style="LLVM")
 
@@ -201,7 +205,7 @@ class GTCpuKfirstBackend(GTBaseBackend):
 class GTGpuBackend(GTBaseBackend):
     """GridTools python backend using gtc."""
 
-    MODULE_GENERATOR_CLASS = PyExtModuleGenerator
+    MODULE_GENERATOR_CLASS = CUDAPyExtModuleGenerator
     name = "gt:gpu"
     GT_BACKEND_T = "gpu"
     languages = {"computation": "cuda", "bindings": ["python"]}

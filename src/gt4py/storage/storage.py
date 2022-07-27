@@ -94,13 +94,13 @@ def from_array(data, backend, aligned_index, shape=None, dtype=None, dimensions=
         aligned_index=aligned_index,
         dimensions=dimensions,
     )
-    if is_cupy_array:
-        if isinstance(storage, cp.ndarray):
+    if isinstance(storage, cp.ndarray):
+        if is_cupy_array:
             storage[...] = data
         else:
-            storage[...] = cp.asnumpy(data)
+            storage[...] = cp.asarray(data)
     else:
-        storage[...] = data
+        storage[...] = cp.asnumpy(data)
 
     return storage
 

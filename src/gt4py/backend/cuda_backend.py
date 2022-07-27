@@ -30,7 +30,7 @@ from gtc.passes.oir_pipeline import DefaultPipeline
 
 from .gtc_common import (
     BaseGTBackend,
-    PyExtModuleGenerator,
+    CUDAPyExtModuleGenerator,
     cuda_is_compatible_layout,
     make_cuda_layout_map,
 )
@@ -89,7 +89,7 @@ class CudaBindingsCodegen(codegen.TemplatedGenerator):
             data_ndim = len(node.data_dims)
             sid_ndim = domain_ndim + data_ndim
             if kwargs["external_arg"]:
-                return "py::buffer {name}, std::array<gt::int_t,{sid_ndim}> {name}_origin".format(
+                return "py::object {name}, std::array<gt::int_t,{sid_ndim}> {name}_origin".format(
                     name=node.name,
                     sid_ndim=sid_ndim,
                 )
@@ -146,7 +146,7 @@ class CudaBackend(BaseGTBackend, CLIBackendMixin):
         "is_compatible_layout": cuda_is_compatible_layout,
     }
     PYEXT_GENERATOR_CLASS = CudaExtGenerator  # type: ignore
-    MODULE_GENERATOR_CLASS = PyExtModuleGenerator
+    MODULE_GENERATOR_CLASS = CUDAPyExtModuleGenerator
     GT_BACKEND_T = "gpu"
 
     def generate_extension(self, **kwargs: Any) -> Tuple[str, str]:

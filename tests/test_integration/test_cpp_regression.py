@@ -96,7 +96,7 @@ def run_horizontal_diffusion(backend, id_version, domain):
 
     for k in validate_field_names:
         np.testing.assert_allclose(
-            cpu_copy(arg_fields[k]), validate_fields[k + "_reference"].view(np.ndarray)
+            cpu_copy(arg_fields[k]), cpu_copy(validate_fields[k + "_reference"])
         )
 
 
@@ -144,7 +144,7 @@ def run_tridiagonal_solver(backend, id_version, domain):
         if hasattr(arg_fields[k], "synchronize"):
             arg_fields[k].device_to_host(force=True)
         np.testing.assert_allclose(
-            cpu_copy(arg_fields[k]), validate_fields[k + "_reference"].view(np.ndarray)
+            cpu_copy(arg_fields[k]), cpu_copy(validate_fields[k + "_reference"])
         )
 
 
@@ -197,7 +197,7 @@ def run_vertical_advection_dycore(backend, id_version, domain):
 
     for k in validate_field_names:
         np.testing.assert_allclose(
-            cpu_copy(arg_fields[k]), validate_fields[k + "_reference"].view(np.ndarray)
+            cpu_copy(arg_fields[k]), cpu_copy(validate_fields[k + "_reference"])
         )
 
 
@@ -238,7 +238,7 @@ def run_large_k_interval(backend, id_version, domain):
         if hasattr(arg_fields[k], "synchronize"):
             arg_fields[k].device_to_host(force=True)
         np.testing.assert_allclose(
-            cpu_copy(arg_fields[k]), validate_fields[k + "_reference"].view(np.ndarray)
+            cpu_copy(arg_fields[k]), cpu_copy(validate_fields[k + "_reference"])
         )
 
 

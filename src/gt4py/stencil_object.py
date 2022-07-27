@@ -19,7 +19,7 @@ import time
 import typing
 from dataclasses import dataclass
 from pickle import dumps
-from typing import TYPE_CHECKING, Any, Callable, ClassVar, Dict, Optional, Tuple, Union
+from typing import Any, Callable, ClassVar, Dict, Optional, Tuple, Union
 
 import numpy as np
 
@@ -29,8 +29,11 @@ from gt4py.definitions import AccessKind, DomainInfo, FieldInfo, ParameterInfo
 from gtc.definitions import Index, Shape
 
 
-if TYPE_CHECKING:
+try:
     import cupy as cp
+except ImportError:
+    cupy = None
+
 FieldType = Union["cp.ndarray", np.ndarray]
 OriginType = Union[Tuple[int, int, int], Dict[str, Tuple[int, ...]]]
 

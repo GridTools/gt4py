@@ -27,6 +27,7 @@ from gt4py.backend.base import CLIBackendMixin, register
 from gt4py.backend.gtc_common import (
     BackendCodegen,
     BaseGTBackend,
+    CUDAPyExtModuleGenerator,
     PyExtModuleGenerator,
     bindings_main_template,
     pybuffer_to_sid,
@@ -369,7 +370,12 @@ class DaCeBindingsCodegen:
             if name in sdfg.arrays:
                 data = sdfg.arrays[name]
                 assert isinstance(data, dace.data.Array)
-                res[name] = "py::buffer {name}, std::array<gt::int_t,{ndim}> {name}_origin".format(
+                res[
+                    name
+                ] = "py::{pybind_type} {name}, std::array<gt::int_t,{ndim}> {name}_origin".format(
+                    pybind_type="object"
+                    if self.backend.storage_info["device"] == "gpu"
+                    else "buffer",
                     name=name,
                     ndim=len(data.shape),
                 )
@@ -444,10 +450,14 @@ class DaCePyExtModuleGenerator(PyExtModuleGenerator):
         return res
 
 
+class DaCeCUDAPyExtModuleGenerator(DaCePyExtModuleGenerator, CUDAPyExtModuleGenerator):
+    pass
+
+
 class BaseDaceBackend(BaseGTBackend, CLIBackendMixin):
 
     GT_BACKEND_T = "dace"
-    PYEXT_GENERATOR_CLASS = DaCeExtGenerator  # type: ignore
+    PYEXT_GENERATOR_CLASS = DaCeCUDAPyExtModuleGenerator  # type: ignore
 
     options = BaseGTBackend.GT_BACKEND_OPTS
 
@@ -500,7 +510,7 @@ class DaceGPUBackend(BaseDaceBackend):
         "alignment": 32,
         "device": "gpu",
         "layout_map": layout_maker_factory((2, 1, 0)),
-        "is_compatible_layout": lambda x: True,
+        "is_compatible_layout": lambda *args: True,
     }
     MODULE_GENERATOR_CLASS = DaCePyExtModuleGenerator
     options = {
