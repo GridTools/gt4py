@@ -21,6 +21,16 @@ def _size_arg_from_field(field_name: str, dim: int) -> str:
     return f"__{field_name}_size_{dim}"
 
 
+def _flatten_tuple_expr(node: past.TupleExpr | past.Name) -> list[past.Name]:
+    if isinstance(node, past.Name):
+        return [node]
+    elif isinstance(node, past.TupleExpr):
+        result = []
+        for e in node.elts:
+            result.extend(_flatten_tuple_expr(e))
+        return result
+
+
 class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
     """
     Lower Program AST (PAST) to Iterator IR (ITIR).
@@ -134,36 +144,42 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
     def _domain_builtin(self) -> str:
         return "cartesian_domain" if self.grid_type == GridType.CARTESIAN else "unstructured_domain"
 
-    def _visit_tuple_out_arg(self, node: past.TupleExpr | past.Name, **kwargs):  # TODO
+    def _construct_out_arg(self, node: past.TupleExpr | past.Name) -> itir.Expr:
         if isinstance(node, past.Name):
-            out_field_name = node
-            domain_args = [
-                itir.FunCall(
-                    fun=itir.SymRef(id="named_range"),
-                    args=[
-                        itir.AxisLiteral(value=dim.value),
-                        itir.Literal(value="0", type="int"),
-                        # here we use the artificial size arguments added to the fencil
-                        itir.SymRef(id=_size_arg_from_field(out_field_name.id, dim_idx)),
-                    ],
-                )
-                for dim_idx, dim in enumerate(node.type.dims)
-            ]
-            return itir.SymRef(id=self.visit(out_field_name, **kwargs).id), itir.FunCall(
-                fun=itir.SymRef(id=self._domain_builtin), args=domain_args
-            )
+            return itir.SymRef(id=self.visit(node).id)
         elif isinstance(node, past.TupleExpr):
-            domain = None
-            field_refs = []
-            for field in node.elts:
-                f, domain = self._visit_tuple_out_arg(
-                    field, **kwargs
-                )  # we assume all domains are the same (and keep the last), but we can only check on execution
-                field_refs.append(f)
-            return itir.FunCall(fun=itir.SymRef(id="make_tuple"), args=field_refs), domain
-        raise RuntimeError(
-            "Unexpected `out` argument. Must be a `past.Name` or nesting of `past.TupleExpr` and `past.Name`."
-        )
+            return itir.FunCall(
+                fun=itir.SymRef(id="make_tuple"),
+                args=[self._construct_out_arg(e) for e in node.elts],
+            )
+        else:
+            raise RuntimeError(
+                "Unexpected `out` argument. Must be a `past.Name` or nesting of `past.TupleExpr` and `past.Name`."
+            )
+
+    def _construct_domain_arg(self, node: past.TupleExpr | past.Name) -> itir.Expr:
+        flattened = _flatten_tuple_expr(node)
+        first_field = flattened[0]
+        if not all(field.type.dims == first_field.type.dims for field in flattened):
+            raise RuntimeError(
+                "Incompatible fields in tuple: all fields must have the same dimensions."
+            )
+        domain_args = [
+            itir.FunCall(
+                fun=itir.SymRef(id="named_range"),
+                args=[
+                    itir.AxisLiteral(value=dim.value),
+                    itir.Literal(value="0", type="int"),
+                    # here we use the artificial size arguments added to the fencil
+                    itir.SymRef(id=_size_arg_from_field(first_field.id, dim_idx)),
+                ],
+            )
+            for dim_idx, dim in enumerate(first_field.type.dims)
+        ]
+        return itir.FunCall(fun=itir.SymRef(id=self._domain_builtin), args=domain_args)
+
+    def _visit_tuple_out_arg(self, node: past.TupleExpr | past.Name) -> tuple[itir.Expr, itir.Expr]:
+        return self._construct_out_arg(node), self._construct_domain_arg(node)
 
     def _visit_stencil_call_out_arg(
         self, node: past.Expr, **kwargs
