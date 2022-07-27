@@ -491,8 +491,7 @@ class StencilTestSuite(metaclass=SuiteMeta):
                     ax in field_params[name][0] for ax in CartesianSpace.names
                 )
                 field_dimensions[name] = tuple(
-                    [ax for ax in CartesianSpace.names if ax in field_params[name][0]]
-                    + [str(d) for d in range(len(field_params[name][1]))]
+                    ax for ax in CartesianSpace.names if ax in field_params[name][0]
                 )
 
         data_shape = Shape((sys.maxsize,) * 3)
@@ -537,7 +536,7 @@ class StencilTestSuite(metaclass=SuiteMeta):
                         dtype=dtype,
                         shape=shape,
                         dimensions=field_dimensions[name],
-                        aligned_index=origin,
+                        aligned_index=gtc_utils.filter_mask(origin, field_masks[name]),
                         backend=implementation.backend,
                     )
                     validation_values[name] = np.array(data)
