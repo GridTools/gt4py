@@ -120,6 +120,53 @@ def is_arithmetic(symbol_type: ct.SymbolType) -> bool:
     return False
 
 
+def is_floating_point(symbol_type: ct.SymbolType) -> bool:
+    """
+    Check if the dtype of ``symbol_type`` is a floating point type.
+
+    Examples:
+    ---------
+    >>> is_floating_point(ct.ScalarType(kind=ct.ScalarKind.FLOAT64))
+    True
+    >>> is_floating_point(ct.ScalarType(kind=ct.ScalarKind.FLOAT32))
+    True
+    >>> is_floating_point(ct.ScalarType(kind=ct.ScalarKind.INT32))
+    False
+    >>> is_floating_point(ct.FieldType(dims=[], dtype=ct.ScalarType(kind=ct.ScalarKind.FLOAT32)))
+    True
+    """
+    if extract_dtype(symbol_type).kind in [
+        ct.ScalarKind.FLOAT32,
+        ct.ScalarKind.FLOAT64,
+    ]:
+        return True
+    return False
+
+
+def is_integral(symbol_type: ct.SymbolType) -> bool:
+    """
+    Check if the dtype of ``symbol_type`` is an integral type.
+
+    Examples:
+    ---------
+    >>> is_integral(ct.ScalarType(kind=ct.ScalarKind.INT))
+    True
+    >>> is_integral(ct.ScalarType(kind=ct.ScalarKind.INT32))
+    True
+    >>> is_integral(ct.ScalarType(kind=ct.ScalarKind.FLOAT32))
+    False
+    >>> is_integral(ct.FieldType(dims=[], dtype=ct.ScalarType(kind=ct.ScalarKind.INT)))
+    True
+    """
+    if extract_dtype(symbol_type).kind in [
+        ct.ScalarKind.INT,
+        ct.ScalarKind.INT32,
+        ct.ScalarKind.INT64,
+    ]:
+        return True
+    return False
+
+
 def is_logical(symbol_type: ct.SymbolType) -> bool:
     return extract_dtype(symbol_type).kind is ct.ScalarKind.BOOL
 
@@ -199,7 +246,7 @@ def is_concretizable(symbol_type: ct.SymbolType, to_type: ct.SymbolType) -> bool
     return False
 
 
-def promote(*types: ct.FieldType | ct.ScalarType) -> ct.FieldType | ct.SymbolType:
+def promote(*types: ct.FieldType | ct.ScalarType) -> ct.FieldType | ct.ScalarType:
     """
     Promote a set of field or scalar types to a common type.
 

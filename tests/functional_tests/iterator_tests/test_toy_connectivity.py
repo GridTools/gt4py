@@ -110,8 +110,8 @@ def sum_edges_to_vertices(in_edges):
     )
 
 
-def test_sum_edges_to_vertices(fencil_processor):
-    fencil_processor, validate = fencil_processor
+def test_sum_edges_to_vertices(fencil_processor_no_gtfn_exec):
+    fencil_processor, validate = fencil_processor_no_gtfn_exec
     inp = index_field(Edge)
     out = np_as_located_field(Vertex)(np.zeros([9]))
     ref = np.asarray(list(sum(row) for row in v2e_arr))
@@ -132,8 +132,8 @@ def sum_edges_to_vertices_reduce(in_edges):
     return reduce(lambda a, b: a + b, 0)(shift(V2E)(in_edges))
 
 
-def test_sum_edges_to_vertices_reduce(fencil_processor):
-    fencil_processor, validate = fencil_processor
+def test_sum_edges_to_vertices_reduce(fencil_processor_no_gtfn_exec):
+    fencil_processor, validate = fencil_processor_no_gtfn_exec
     inp = index_field(Edge)
     out = np_as_located_field(Vertex)(np.zeros([9]))
     ref = np.asarray(list(sum(row) for row in v2e_arr))
@@ -154,8 +154,8 @@ def first_vertex_neigh_of_first_edge_neigh_of_cells(in_vertices):
     return deref(shift(E2V, 0)(shift(C2E, 0)(in_vertices)))
 
 
-def test_first_vertex_neigh_of_first_edge_neigh_of_cells_fencil(fencil_processor):
-    fencil_processor, validate = fencil_processor
+def test_first_vertex_neigh_of_first_edge_neigh_of_cells_fencil(fencil_processor_no_gtfn_exec):
+    fencil_processor, validate = fencil_processor_no_gtfn_exec
     inp = index_field(Vertex)
     out = np_as_located_field(Cell)(np.zeros([9]))
     ref = np.asarray(list(v2e_arr[c[0]][0] for c in c2e_arr))
@@ -179,8 +179,8 @@ def sparse_stencil(non_sparse, inp):
     return reduce(lambda a, b, c: a + c, 0)(shift(V2E)(non_sparse), inp)
 
 
-def test_sparse_input_field(fencil_processor):
-    fencil_processor, validate = fencil_processor
+def test_sparse_input_field(fencil_processor_no_gtfn_exec):
+    fencil_processor, validate = fencil_processor_no_gtfn_exec
     non_sparse = np_as_located_field(Edge)(np.zeros(18))
     inp = np_as_located_field(Vertex, V2E)(np.asarray([[1, 2, 3, 4]] * 9))
     out = np_as_located_field(Vertex)(np.zeros([9]))
@@ -203,8 +203,8 @@ def test_sparse_input_field(fencil_processor):
 V2V = offset("V2V")
 
 
-def test_sparse_input_field_v2v(fencil_processor):
-    fencil_processor, validate = fencil_processor
+def test_sparse_input_field_v2v(fencil_processor_no_gtfn_exec):
+    fencil_processor, validate = fencil_processor_no_gtfn_exec
     non_sparse = np_as_located_field(Edge)(np.zeros(9))
     inp = np_as_located_field(Vertex, V2V)(v2v_arr)
     out = np_as_located_field(Vertex)(np.zeros([9]))
@@ -232,8 +232,8 @@ def slice_sparse_stencil(sparse):
     return deref(shift(1)(sparse))
 
 
-def test_slice_sparse(fencil_processor):
-    fencil_processor, validate = fencil_processor
+def test_slice_sparse(fencil_processor_no_gtfn_exec):
+    fencil_processor, validate = fencil_processor_no_gtfn_exec
     inp = np_as_located_field(Vertex, V2V)(v2v_arr)
     out = np_as_located_field(Vertex)(np.zeros([9]))
 
@@ -258,8 +258,8 @@ def slice_twice_sparse_stencil(sparse):
     return deref(shift(2)(shift(1)(sparse)))
 
 
-def test_slice_twice_sparse(fencil_processor):
-    fencil_processor, validate = fencil_processor
+def test_slice_twice_sparse(fencil_processor_no_gtfn_exec):
+    fencil_processor, validate = fencil_processor_no_gtfn_exec
     inp = np_as_located_field(Vertex, V2V, V2V)(v2v_arr[v2v_arr])
     out = np_as_located_field(Vertex)(np.zeros([9]))
 
@@ -283,8 +283,8 @@ def shift_sliced_sparse_stencil(sparse):
     return deref(shift(V2V, 0)(shift(1)(sparse)))
 
 
-def test_shift_sliced_sparse(fencil_processor):
-    fencil_processor, validate = fencil_processor
+def test_shift_sliced_sparse(fencil_processor_no_gtfn_exec):
+    fencil_processor, validate = fencil_processor_no_gtfn_exec
     inp = np_as_located_field(Vertex, V2V)(v2v_arr)
     out = np_as_located_field(Vertex)(np.zeros([9]))
 
@@ -309,8 +309,8 @@ def slice_shifted_sparse_stencil(sparse):
     return deref(shift(1)(shift(V2V, 0)(sparse)))
 
 
-def test_slice_shifted_sparse(fencil_processor):
-    fencil_processor, validate = fencil_processor
+def test_slice_shifted_sparse(fencil_processor_no_gtfn_exec):
+    fencil_processor, validate = fencil_processor_no_gtfn_exec
     inp = np_as_located_field(Vertex, V2V)(v2v_arr)
     out = np_as_located_field(Vertex)(np.zeros([9]))
 
@@ -340,8 +340,8 @@ def lift_stencil(inp):
     return deref(shift(V2V, 2)(lift(deref_stencil)(inp)))
 
 
-def test_lift(fencil_processor):
-    fencil_processor, validate = fencil_processor
+def test_lift(fencil_processor_no_gtfn_exec):
+    fencil_processor, validate = fencil_processor_no_gtfn_exec
     inp = index_field(Vertex)
     out = np_as_located_field(Vertex)(np.zeros([9]))
     ref = np.asarray(np.asarray(range(9)))
@@ -362,8 +362,8 @@ def sparse_shifted_stencil(inp):
     return deref(shift(0, 2)(shift(V2V)(inp)))
 
 
-def test_shift_sparse_input_field(fencil_processor):
-    fencil_processor, validate = fencil_processor
+def test_shift_sparse_input_field(fencil_processor_no_gtfn_exec):
+    fencil_processor, validate = fencil_processor_no_gtfn_exec
     inp = np_as_located_field(Vertex, V2V)(v2v_arr)
     out = np_as_located_field(Vertex)(np.zeros([9]))
     ref = np.asarray(np.asarray(range(9)))
@@ -390,8 +390,8 @@ def shift_sparse_stencil2(inp):
     return deref(shift(3, 1)(shift(V2E)(inp)))
 
 
-def test_shift_sparse_input_field2(fencil_processor):
-    fencil_processor, validate = fencil_processor
+def test_shift_sparse_input_field2(fencil_processor_no_gtfn_exec):
+    fencil_processor, validate = fencil_processor_no_gtfn_exec
     inp = index_field(Vertex)
     inp_sparse = np_as_located_field(Edge, E2V)(e2v_arr)
     out1 = np_as_located_field(Vertex)(np.zeros([9]))
@@ -431,8 +431,8 @@ def sparse_shifted_stencil_reduce(inp):
     return reduce(sum_, 0)(shift(V2V)(lift(reduce(sum_, 0))(inp)))
 
 
-def test_sparse_shifted_stencil_reduce(fencil_processor):
-    fencil_processor, validate = fencil_processor
+def test_sparse_shifted_stencil_reduce(fencil_processor_no_gtfn_exec):
+    fencil_processor, validate = fencil_processor_no_gtfn_exec
     if fencil_processor == gtfn.format_sourcecode:
         pytest.xfail("We cannot unroll a reduction on a sparse field only.")
         # With our current understanding, this iterator IR program is illegal, however we might want to fix it and therefore keep the test for now.

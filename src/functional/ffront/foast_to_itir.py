@@ -28,7 +28,7 @@ from functional.ffront import (
     itir_makers as im,
     type_info,
 )
-from functional.ffront.fbuiltins import FUN_BUILTIN_NAMES, TYPE_BUILTIN_NAMES
+from functional.ffront.fbuiltins import FUN_BUILTIN_NAMES, MATH_BUILTIN_NAMES, TYPE_BUILTIN_NAMES
 from functional.iterator import ir as itir
 
 
@@ -354,6 +354,8 @@ class FieldOperatorLowering(NodeTranslator):
     def visit_Call(self, node: foast.Call, **kwargs) -> itir.FunCall:
         if type_info.type_class(node.func.type) is ct.FieldType:
             return self._visit_shift(node, **kwargs)
+        elif node.func.id in MATH_BUILTIN_NAMES:
+            return self._visit_math_built_in(node, **kwargs)
         elif node.func.id in FUN_BUILTIN_NAMES:
             visitor = getattr(self, f"_visit_{node.func.id}")
             return visitor(node, **kwargs)
@@ -395,6 +397,10 @@ class FieldOperatorLowering(NodeTranslator):
             lowered_arg = im.lift_(im.lambda__()(lowered_arg))()
 
         return lowered_arg
+
+    def _visit_math_built_in(self, node: foast.Call, **kwargs) -> itir.Expr:
+        args = tuple(to_value(arg)(self.visit(arg, **kwargs)) for arg in node.args)
+        return self._lift_if_field(node)(im.call_(self.visit(node.func, **kwargs))(*args))
 
     def _visit_neighbor_sum(self, node: foast.Call, **kwargs) -> itir.FunCall:
         return self._visit_reduce(node, **kwargs)

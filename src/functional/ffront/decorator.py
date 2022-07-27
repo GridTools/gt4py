@@ -346,11 +346,12 @@ class Program:
         for param_idx, param in enumerate(self.past_node.params):
             if not isinstance(param.type, ct.FieldType):
                 continue
-            if not hasattr(args[param_idx], "__array__"):
-                size_args.append(None)
-                continue
+            has_shape = hasattr(args[param_idx], "shape")
             for dim_idx in range(0, len(param.type.dims)):
-                size_args.append(args[param_idx].shape[dim_idx])
+                if has_shape:
+                    size_args.append(args[param_idx].shape[dim_idx])
+                else:
+                    size_args.append(None)
 
         return tuple(rewritten_args), tuple(size_args), kwargs
 
@@ -468,7 +469,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         assert type_info.is_concrete(type_)
         return type_
 
-    def with_backend(self, backend: str) -> FieldOperator:
+    def with_backend(self, backend: FencilExecutor) -> FieldOperator:
         return FieldOperator(
             foast_node=self.foast_node,
             captured_vars=self.captured_vars,
