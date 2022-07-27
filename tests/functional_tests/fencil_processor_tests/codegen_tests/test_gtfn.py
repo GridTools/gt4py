@@ -13,12 +13,12 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 
-import ctypes
-
+import numpy
 import pytest
 
-from functional.fencil_processors import cpp, defs
+from functional.fencil_processors import source_modules
 from functional.fencil_processors.codegens.gtfn import gtfn_module
+from functional.fencil_processors.source_modules import cpp_gen as cpp
 from functional.iterator import ir
 
 
@@ -57,8 +57,8 @@ def fencil_example():
         ],
     )
     params = [
-        defs.BufferParameter("buf", 1, ctypes.c_float),
-        defs.ScalarParameter("sc", ctypes.c_float),
+        source_modules.BufferParameter("buf", ["I"], numpy.dtype(numpy.float32)),
+        source_modules.ScalarParameter("sc", numpy.dtype(numpy.float32)),
     ]
     return itir, params
 
@@ -68,4 +68,4 @@ def test_codegen(fencil_example):
     module = gtfn_module.create_source_module(itir, parameters, offset_provider={})
     assert module.entry_point.name == itir.id
     assert any(d.name == "gridtools" for d in module.library_deps)
-    assert module.language == cpp.language_id
+    assert module.language == cpp.LANGUAGE_ID

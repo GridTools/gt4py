@@ -34,8 +34,6 @@ jobs:
     - name: Install python dependencies
       run: |
         python -m pip install --upgrade pip setuptools wheel
-    - name: Set up C++ devtools
-      uses: seanmiddleditch/gha-setup-ninja@v3
     - name: Install C++ dependencies
       run: |
         sudo apt install libboost-all-dev

@@ -1,4 +1,0 @@
-include *.md
-include *.rst
-include *.toml
-include *.txt

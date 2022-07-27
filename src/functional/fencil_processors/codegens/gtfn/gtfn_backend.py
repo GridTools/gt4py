@@ -70,7 +70,7 @@ def generate(program: itir.FencilDefinition, *, grid_type: str, **kwargs: Any) -
     return codegen.format_source("cpp", generated_code, style="LLVM")
 
 
-def _guess_grid_type(**kwargs):
+def guess_grid_type(**kwargs):
     assert "offset_provider" in kwargs
     return (
         "unstructured"

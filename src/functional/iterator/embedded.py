@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import itertools
+import math
 import numbers
 from abc import abstractmethod
 from copy import deepcopy
@@ -315,6 +316,16 @@ def greater(first, second):
 @builtins.less.register(EMBEDDED)
 def less(first, second):
     return first < second
+
+
+for math_builtin_name in builtins.MATH_BUILTINS:
+    decorator = getattr(builtins, math_builtin_name).register(EMBEDDED)
+    if math_builtin_name == "gamma":
+        # numpy has no gamma function
+        impl = np.vectorize(math.gamma)
+    else:
+        impl = getattr(np, math_builtin_name)
+    globals()[math_builtin_name] = decorator(impl)
 
 
 def _lookup_offset_provider(offset_provider: OffsetProvider, tag: Tag) -> OffsetProviderElem:
@@ -887,18 +898,11 @@ _column_range: Optional[
 ] = None  # TODO this is a bit ugly, alternative: pass scan range via iterator
 
 
-def _ensure_dtype_matches(val: numbers.Number | tuple[numbers.Number, ...], expected_dtype: type):
-    if isinstance(val, tuple):
-        assert all(isinstance(el, expected_dtype) for el in val)
-    else:
-        assert isinstance(val, expected_dtype)
-
-
-def _column_dtype_and_shape(levels: int, elem: Any) -> tuple[type, int | tuple[int, int]]:
+def _column_dtype(elem: Any) -> np.dtype:
     if isinstance(elem, tuple):
-        return type(elem[0]), (levels, len(elem))
+        return np.dtype([(f"f{i}", _column_dtype(e)) for i, e in enumerate(elem)])
     else:
-        return type(elem), levels
+        return np.dtype(type(elem))
 
 
 @builtins.scan.register(EMBEDDED)
@@ -906,21 +910,16 @@ def scan(scan_pass, is_forward: bool, init):
     def impl(*iters: ItIterator):
         if _column_range is None:
             raise RuntimeError("Column range is not defined, cannot scan.")
-        if isinstance(init, tuple):
-            if any(isinstance(el, tuple) for el in init):
-                raise NotImplementedError("Nested tuples not supported.")
 
         levels = len(_column_range)
         column_range = _column_range if is_forward else reversed(_column_range)
 
-        dtype, shape = _column_dtype_and_shape(levels, init)
+        dtype = _column_dtype(init)
 
         state = init
-        col = np.zeros(shape, dtype=dtype)
+        col = np.zeros(levels, dtype=dtype)
         for i in column_range:
             state = scan_pass(state, *map(shifted_scan_arg(i), iters))
-            if __debug__:
-                _ensure_dtype_matches(state, dtype)
             col[i] = state
 
         return col

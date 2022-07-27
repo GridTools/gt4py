@@ -1,6 +1,7 @@
 from types import EllipsisType
 from typing import Iterator, Type, TypeGuard, cast
 
+from eve.utils import XIterable, xiter
 from functional.common import Dimension, GTTypeError
 from functional.ffront import common_types as ct
 
@@ -44,6 +45,36 @@ def type_class(symbol_type: ct.SymbolType) -> Type[ct.SymbolType]:
     )
 
 
+def primitive_constituents(
+    symbol_type: ct.ScalarType | ct.FieldType | ct.TupleType,
+) -> XIterable[ct.ScalarType | ct.FieldType]:
+    """
+    Return the primitive types contained in a composite type.
+
+    >>> from functional.common import Dimension
+    >>> I = Dimension(value="I")
+    >>> int_type = ct.ScalarType(kind=ct.ScalarKind.INT)
+    >>> field_type = ct.FieldType(dims=[I], dtype=int_type)
+
+    >>> tuple_type = ct.TupleType(types=[int_type, field_type])
+    >>> primitive_constituents(tuple_type).to_list()  # doctest: +ELLIPSIS
+    [ScalarType(...), FieldType(...)]
+
+    >>> nested_tuple = ct.TupleType(types=[field_type, tuple_type])
+    >>> primitive_constituents(nested_tuple).to_list()  # doctest: +ELLIPSIS
+    [FieldType(...), ScalarType(...), FieldType(...)]
+    """
+
+    def constituents_yielder(symbol_type: ct.SymbolType):
+        if isinstance(symbol_type, ct.TupleType):
+            for el_type in symbol_type.types:
+                yield from constituents_yielder(el_type)
+        else:
+            yield symbol_type
+
+    return xiter(constituents_yielder(symbol_type))
+
+
 def extract_dtype(symbol_type: ct.SymbolType) -> ct.ScalarType:
     """
     Extract the data type from ``symbol_type`` if it is one of FieldType or ScalarType.
@@ -84,6 +115,53 @@ def is_arithmetic(symbol_type: ct.SymbolType) -> bool:
         ct.ScalarKind.INT64,
         ct.ScalarKind.FLOAT32,
         ct.ScalarKind.FLOAT64,
+    ]:
+        return True
+    return False
+
+
+def is_floating_point(symbol_type: ct.SymbolType) -> bool:
+    """
+    Check if the dtype of ``symbol_type`` is a floating point type.
+
+    Examples:
+    ---------
+    >>> is_floating_point(ct.ScalarType(kind=ct.ScalarKind.FLOAT64))
+    True
+    >>> is_floating_point(ct.ScalarType(kind=ct.ScalarKind.FLOAT32))
+    True
+    >>> is_floating_point(ct.ScalarType(kind=ct.ScalarKind.INT32))
+    False
+    >>> is_floating_point(ct.FieldType(dims=[], dtype=ct.ScalarType(kind=ct.ScalarKind.FLOAT32)))
+    True
+    """
+    if extract_dtype(symbol_type).kind in [
+        ct.ScalarKind.FLOAT32,
+        ct.ScalarKind.FLOAT64,
+    ]:
+        return True
+    return False
+
+
+def is_integral(symbol_type: ct.SymbolType) -> bool:
+    """
+    Check if the dtype of ``symbol_type`` is an integral type.
+
+    Examples:
+    ---------
+    >>> is_integral(ct.ScalarType(kind=ct.ScalarKind.INT))
+    True
+    >>> is_integral(ct.ScalarType(kind=ct.ScalarKind.INT32))
+    True
+    >>> is_integral(ct.ScalarType(kind=ct.ScalarKind.FLOAT32))
+    False
+    >>> is_integral(ct.FieldType(dims=[], dtype=ct.ScalarType(kind=ct.ScalarKind.INT)))
+    True
+    """
+    if extract_dtype(symbol_type).kind in [
+        ct.ScalarKind.INT,
+        ct.ScalarKind.INT32,
+        ct.ScalarKind.INT64,
     ]:
         return True
     return False
@@ -168,7 +246,7 @@ def is_concretizable(symbol_type: ct.SymbolType, to_type: ct.SymbolType) -> bool
     return False
 
 
-def promote(*types: ct.FieldType | ct.ScalarType) -> ct.FieldType | ct.SymbolType:
+def promote(*types: ct.FieldType | ct.ScalarType) -> ct.FieldType | ct.ScalarType:
     """
     Promote a set of field or scalar types to a common type.
 

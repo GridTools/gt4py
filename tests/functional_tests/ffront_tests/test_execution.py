@@ -120,10 +120,10 @@ def test_power(fieldview_backend):
     b = np_as_located_field(IDim)(np.zeros((size)))
 
     @field_operator(backend=fieldview_backend)
-    def power(inp1: Field[[IDim], float64]) -> Field[[IDim], float64]:
+    def pow(inp1: Field[[IDim], float64]) -> Field[[IDim], float64]:
         return inp1**2
 
-    power(a, out=b, offset_provider={})
+    pow(a, out=b, offset_provider={})
 
     assert np.allclose(a.array() ** 2, b)
 
@@ -271,10 +271,11 @@ def test_promotion(fieldview_backend):
 
 @pytest.fixture
 def reduction_setup():
-    size = 9
+    num_vertices = 9
     edge = Dimension("Edge")
     vertex = Dimension("Vertex")
     v2edim = Dimension("V2E", kind=DimensionKind.LOCAL)
+    e2vdim = Dimension("E2V", kind=DimensionKind.LOCAL)
 
     v2e_arr = np.array(
         [
@@ -291,19 +292,49 @@ def reduction_setup():
         dtype=np.int32,
     )
 
+    # create e2v connectivity by inverting v2e
+    num_edges = np.max(v2e_arr) + 1
+    e2v_arr = [[] for _ in range(0, num_edges)]
+    for v in range(0, v2e_arr.shape[0]):
+        for e in v2e_arr[v]:
+            e2v_arr[e].append(v)
+    assert all(len(row) == 2 for row in e2v_arr)
+    e2v_arr = np.asarray(e2v_arr)
+
     yield namedtuple(
         "ReductionSetup",
-        ["size", "Edge", "Vertex", "V2EDim", "V2E", "inp", "out", "v2e_table", "offset_provider"],
+        [
+            "num_vertices",
+            "num_edges",
+            "Edge",
+            "Vertex",
+            "V2EDim",
+            "E2VDim",
+            "V2E",
+            "E2V",
+            "inp",
+            "out",
+            "offset_provider",
+            "v2e_table",
+            "e2v_table",
+        ],
     )(
-        size=9,
+        num_vertices=num_vertices,
+        num_edges=num_edges,
         Edge=edge,
         Vertex=vertex,
         V2EDim=v2edim,
+        E2VDim=e2vdim,
         V2E=FieldOffset("V2E", source=edge, target=(vertex, v2edim)),
+        E2V=FieldOffset("E2V", source=vertex, target=(edge, e2vdim)),
         inp=index_field(edge),
-        out=np_as_located_field(vertex)(np.zeros([size])),
-        offset_provider={"V2E": NeighborTableOffsetProvider(v2e_arr, vertex, edge, 4)},
+        out=np_as_located_field(vertex)(np.zeros([num_vertices])),
+        offset_provider={
+            "V2E": NeighborTableOffsetProvider(v2e_arr, vertex, edge, 4),
+            "E2V": NeighborTableOffsetProvider(e2v_arr, edge, vertex, 2, has_skip_values=False),
+        },
         v2e_table=v2e_arr,
+        e2v_table=e2v_arr,
     )  # type: ignore
 
 
@@ -331,8 +362,6 @@ def test_maxover_execution_sparse(reduction_setup, fieldview_backend):
 
 def test_maxover_execution_negatives(reduction_setup, fieldview_backend):
     """Testing max_over functionality for negative values in array."""
-    if fieldview_backend == gtfn_cpu.run_gtfn:
-        pytest.skip("not yet supported.")
     rs = reduction_setup
     Edge = rs.Edge
     Vertex = rs.Vertex
@@ -358,6 +387,8 @@ def test_maxover_execution_negatives(reduction_setup, fieldview_backend):
 
 def test_reduction_execution(reduction_setup, fieldview_backend):
     """Testing a trivial neighbor sum."""
+    if fieldview_backend == gtfn_cpu.run_gtfn:
+        pytest.skip("IndexFields are not supported yet.")
     rs = reduction_setup
     Edge = rs.Edge
     Vertex = rs.Vertex
@@ -434,7 +465,7 @@ def test_scalar_arg(fieldview_backend):
 
     @field_operator(backend=fieldview_backend)
     def scalar_arg(scalar_inp: float64) -> Field[[Vertex], float64]:
-        return scalar_inp + 1.0
+        return broadcast(scalar_inp + 1.0, (Vertex,))
 
     scalar_arg(inp, out=out, offset_provider={})
 
@@ -601,3 +632,91 @@ def test_conditional_shifted(fieldview_backend):
     conditional_program(mask, a, b, out, offset_provider={"Ioff": IDim})
 
     assert np.allclose(np.where(mask, a, b)[1:], out.array()[:-1])
+
+
+def test_nested_tuple_return():
+    size = 10
+    a = np_as_located_field(IDim)(np.ones((size,)))
+    b = np_as_located_field(IDim)(2 * np.ones((size,)))
+    out = np_as_located_field(IDim)(np.zeros((size,)))
+
+    @field_operator
+    def pack_tuple(
+        a: Field[[IDim], float64], b: Field[[IDim], float64]
+    ) -> tuple[Field[[IDim], float64], tuple[Field[[IDim], float64], Field[[IDim], float64]]]:
+        return (a, (a, b))
+
+    @field_operator
+    def combine(a: Field[[IDim], float64], b: Field[[IDim], float64]) -> Field[[IDim], float64]:
+        packed = pack_tuple(a, b)
+        return packed[0] + packed[1][0] + packed[1][1]
+
+    combine(a, b, out=out, offset_provider={})
+
+    assert np.allclose(2 * a.array() + b.array(), out)
+
+
+def test_tuple_return_2(reduction_setup):
+    rs = reduction_setup
+    Edge = rs.Edge
+    Vertex = rs.Vertex
+    V2EDim = rs.V2EDim
+    V2E = rs.V2E
+
+    @field_operator
+    def reduction_tuple(
+        a: Field[[Edge], float], b: Field[[Edge], float]
+    ) -> tuple[Field[[Vertex], float], Field[[Vertex], float], float]:
+        a = neighbor_sum(a(V2E), axis=V2EDim)
+        b = neighbor_sum(b(V2E), axis=V2EDim)
+        return a, b
+
+    @field_operator
+    def combine_tuple(a: Field[[Edge], float], b: Field[[Edge], float]) -> Field[[Vertex], float]:
+        packed = reduction_tuple(a, b)
+        return packed[0] + packed[1]
+
+    combine_tuple(rs.inp, rs.inp, out=rs.out, offset_provider=rs.offset_provider)
+
+    ref = np.sum(rs.v2e_table, axis=1) * 2
+    assert np.allclose(ref, rs.out)
+
+
+@pytest.mark.xfail(raises=NotImplementedError)
+def test_tuple_with_local_field_in_reduction_shifted(reduction_setup):
+    rs = reduction_setup
+    Edge = rs.Edge
+    Vertex = rs.Vertex
+    V2EDim = rs.V2EDim
+    V2E = rs.V2E
+    E2V = rs.E2V
+
+    num_vertices = rs.num_vertices
+    num_edges = rs.num_edges
+
+    size = 10
+    # TODO(tehrengruber): use different values per location
+    a = np_as_located_field(Edge)(np.ones((num_vertices,)))
+    b = np_as_located_field(Vertex)(2 * np.ones((num_edges,)))
+    out = np_as_located_field(Edge)(np.zeros((num_edges,)))
+
+    @field_operator
+    def reduce_tuple_element(
+        edge_field: Field[[Edge], float64], vertex_field: Field[[Vertex], float64]
+    ) -> Field[[Edge], float64]:
+        tup = edge_field(V2E), vertex_field
+        # the shift inside the reduction fails as tup is a tuple of iterators
+        #  (as it contains a local field) which can not be shifted
+        red = neighbor_sum(tup[0] + vertex_field, axis=V2EDim)
+        # even if the above is fixed we need to be careful with a subsequent
+        #  shift as the lifted lambda will contain tup as an argument which -
+        #  again - can not be shifted.
+        return red(E2V[0])
+
+    reduce_tuple_element(a, b, out=out, offset_provider=rs.offset_provider)
+
+    # conn table used is inverted here on purpose
+    red = np.sum(np.asarray(a)[rs.e2v_table] + np.asarray(b)[:, np.newaxis], axis=1)
+    expected = red[rs.v2e_table][:, 0]
+
+    assert np.allclose(expected, out)

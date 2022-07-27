@@ -16,50 +16,58 @@
 from typing import Sequence
 
 from eve.codegen import format_source
-from functional.fencil_processors import cpp, defs
+from functional.fencil_processors import source_modules
 from functional.fencil_processors.codegens.gtfn import gtfn_backend
+from functional.fencil_processors.source_modules import cpp_gen as cpp
 from functional.iterator.ir import FencilDefinition
 
 
 def create_source_module(
     itir: FencilDefinition,
-    parameters: Sequence[defs.ScalarParameter | defs.BufferParameter],
+    parameters: Sequence[source_modules.ScalarParameter | source_modules.BufferParameter],
     **kwargs,
-) -> defs.SourceCodeModule:
-    function = defs.Function(itir.id, parameters)
+) -> source_modules.SourceModule:
+    """Generate GTFN C++ code from the ITIR definition."""
+    function = source_modules.Function(itir.id, parameters)
 
     rendered_params = ", ".join(
         [
             "gridtools::fn::backend::naive{}",
-            *[p.name for p in parameters if not isinstance(p, defs.ConnectivityParameter)],
+            *[
+                p.name
+                for p in parameters
+                if not isinstance(p, source_modules.ConnectivityParameter)
+            ],
         ]
     )
-    conn_params = [p.name for p in parameters if isinstance(p, defs.ConnectivityParameter)]
+    conn_params = [
+        p.name for p in parameters if isinstance(p, source_modules.ConnectivityParameter)
+    ]
     rendered_connectivity = f"gridtools::hymap::keys<{', '.join(f'generated::{p}_t' for p in conn_params)}>::make_values({', '.join(f'gridtools::fn::as_neighbor_table<int,4>({c})' for c in conn_params)})"  # TODO std::forward, type and max_neighbors
     decl_body = f"return generated::{function.name}({rendered_connectivity})({rendered_params});"
     decl_src = cpp.render_function_declaration(function, body=decl_body)
     stencil_src = gtfn_backend.generate(
-        itir, grid_type=gtfn_backend._guess_grid_type(**kwargs), **kwargs
+        itir, grid_type=gtfn_backend.guess_grid_type(**kwargs), **kwargs
     )
     source_code = format_source(
         "cpp",
-        f"""\
-                                #include <gridtools/fn/backend/naive.hpp>
-                                #include <gridtools/fn/unstructured.hpp> // TODO the correct one
-                                #include <gridtools/fn/python_neighbor_table_adapter.hpp>
-                                #include <gridtools/common/hymap.hpp>
-                                {stencil_src}
-                                {decl_src}\
-                                """,
+        f"""
+        #include <gridtools/fn/backend/naive.hpp>
+        #include <gridtools/fn/unstructured.hpp> // TODO the correct one
+        #include <gridtools/fn/python_neighbor_table_adapter.hpp>
+        #include <gridtools/common/hymap.hpp>
+        {stencil_src}
+        {decl_src}
+        """.strip(),
         style="LLVM",
     )
 
-    module = defs.SourceCodeModule(
+    module = source_modules.SourceModule(
         entry_point=function,
         library_deps=[
-            defs.LibraryDependency("gridtools", "master"),
+            source_modules.LibraryDependency("gridtools", "master"),
         ],
         source_code=source_code,
-        language=cpp.language_id,
+        language=cpp.LANGUAGE_ID,
     )
     return module
