@@ -653,10 +653,17 @@ def _is_field_axis(axis: Axis) -> TypeGuard[FieldAxis]:
     return isinstance(axis, FieldAxis)  # type: ignore[misc,arg-type] # see https://github.com/python/mypy/issues/11673
 
 
+def _is_sparse_position_entry(
+    pos: FieldIndex | SparsePositionEntry,
+) -> TypeGuard[SparsePositionEntry]:
+    return isinstance(pos, list)
+
+
 def get_ordered_indices(
     axes: Iterable[Axis], pos: Mapping[Tag, FieldIndex | SparsePositionEntry]
 ) -> tuple[FieldIndex, ...]:
     res: list[FieldIndex] = []
+    sparse_position_tracker: dict[Tag, int] = {}
     for axis in axes:
         if _is_tuple_axis(axis):
             res.append(slice(None))
@@ -664,12 +671,14 @@ def get_ordered_indices(
             assert _is_field_axis(axis)
             assert axis.value in pos
             elem = pos[axis.value]
-            if isinstance(elem, list):
-                pos = copy.copy(pos)  # copy such that we can modify
-                # we consume a sparse entry, this smells...
-                elem = pos[axis.value].pop(0)
-            assert isinstance(elem, (int, slice))
-            res.append(elem)
+            if _is_sparse_position_entry(elem):
+                sparse_position_tracker[axis.value] = (
+                    sparse_position_tracker.get(axis.value, -1) + 1
+                )
+                res.append(elem[sparse_position_tracker[axis.value]])
+            else:
+                assert isinstance(elem, (int, slice))
+                res.append(elem)
     return tuple(res)
 
 
