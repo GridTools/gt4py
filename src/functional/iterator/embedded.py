@@ -20,7 +20,6 @@ from typing import (
     TypeAlias,
     TypeGuard,
     Union,
-    cast,
     runtime_checkable,
 )
 
