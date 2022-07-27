@@ -202,6 +202,55 @@ def test_field_of_tuple_output(fencil_processor_no_gtfn_exec, stencil):
     "stencil",
     [tuple_output1, tuple_output2],
 )
+def test_tuple_of_field_output_constructed_inside(fencil_processor, stencil):
+    fencil_processor, validate = fencil_processor
+
+    @fendef
+    def fencil(size0, size1, size2, inp1, inp2, out1, out2):
+        closure(
+            cartesian_domain(
+                named_range(IDim, 0, size0),
+                named_range(JDim, 0, size1),
+                named_range(KDim, 0, size2),
+            ),
+            stencil,
+            make_tuple(out1, out2),
+            [inp1, inp2],
+        )
+
+    shape = [5, 7, 9]
+    rng = np.random.default_rng()
+    inp1 = np_as_located_field(IDim, JDim, KDim)(
+        rng.normal(size=(shape[0], shape[1], shape[2])),
+    )
+    inp2 = np_as_located_field(IDim, JDim, KDim)(
+        rng.normal(size=(shape[0], shape[1], shape[2])),
+    )
+
+    out1 = np_as_located_field(IDim, JDim, KDim)(np.zeros(shape))
+    out2 = np_as_located_field(IDim, JDim, KDim)(np.zeros(shape))
+
+    run_processor(
+        fencil,
+        fencil_processor,
+        shape[0],
+        shape[1],
+        shape[2],
+        inp1,
+        inp2,
+        out1,
+        out2,
+        offset_provider={},
+    )
+    if validate:
+        assert np.allclose(inp1, out1)
+        assert np.allclose(inp2, out2)
+
+
+@pytest.mark.parametrize(
+    "stencil",
+    [tuple_output1, tuple_output2],
+)
 def test_field_of_extra_dim_output(fencil_processor_no_gtfn_exec, stencil):
     fencil_processor, validate = fencil_processor_no_gtfn_exec
 
