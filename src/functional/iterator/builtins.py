@@ -115,12 +115,12 @@ def less_equal(*args):
 
 
 @builtin_dispatch
-def greatereq(*args):
+def greater_equal(*args):
     raise BackendNotSelectedError()
 
 
 @builtin_dispatch
-def noteq(*args):
+def not_equal(*args):
     raise BackendNotSelectedError()
 
 
@@ -320,10 +320,10 @@ BUILTINS = {
     "if_",
     "greater",
     "less",
-    "lesseq",
-    "greatereq",
+    "less_equal",
+    "greater_equal",
     "eq",
-    "noteq",
+    "not_equal",
     "not_",
     "and_",
     "or_",

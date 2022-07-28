@@ -50,9 +50,9 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         "eq": "==",
         "less": "<",
         "greater": ">",
-        "lesseq": "<=",
-        "greatereq": ">=",
-        "noteq": "!=",
+        "less_equal": "<=",
+        "greater_equal": ">=",
+        "not_equal": "!=",
         "and_": "&&",
         "or_": "||",
     }

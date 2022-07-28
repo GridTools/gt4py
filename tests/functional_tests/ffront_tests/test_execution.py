@@ -613,7 +613,6 @@ def test_conditional_promotion(fieldview_backend):
 def test_conditional_compareop(fieldview_backend):
     size = 10
     a = np_as_located_field(IDim)(np.ones((size,)))
-    c = np_as_located_field(IDim)(np.zeros((size,)))
     out = np_as_located_field(IDim)(np.zeros((size,)))
 
     @field_operator(backend=fieldview_backend)
@@ -654,7 +653,6 @@ def test_conditional_shifted(fieldview_backend):
     conditional_program(mask, a, b, out, offset_provider={"Ioff": IDim})
 
     assert np.allclose(np.where(mask, a, b)[1:], out.array()[:-1])
-
 
 def test_nested_tuple_return():
     size = 10

@@ -318,18 +318,18 @@ def less(first, second):
     return first < second
 
 
-@builtins.lesseq.register(EMBEDDED)
-def lesseq(first, second):
+@builtins.less_equal.register(EMBEDDED)
+def less_equal(first, second):
     return first <= second
 
 
-@builtins.greatereq.register(EMBEDDED)
-def greatereq(first, second):
+@builtins.greater_equal.register(EMBEDDED)
+def greater_equal(first, second):
     return first >= second
 
 
-@builtins.noteq.register(EMBEDDED)
-def noteq(first, second):
+@builtins.not_equal.register(EMBEDDED)
+def not_equal(first, second):
     return first != second
 
 
