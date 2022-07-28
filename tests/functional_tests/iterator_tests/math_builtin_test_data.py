@@ -52,7 +52,7 @@ def math_builtin_test_data() -> list[tuple[str, tuple[list[int | float], ...]]]:
             ),
         ),
         (
-            "mod",
+            "fmod",
             # ([6, 6.0, -6, 6.0, 7, -7.0, 4.8, 4], [2, 2.0, 2.0, -2, 3.0, -3, 1.2, -1.2]),
             ([6, 7, 4], [2, -2, -3]),
         ),

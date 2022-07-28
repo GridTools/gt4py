@@ -161,10 +161,10 @@ _binary_math_builtin = BuiltInFunction(
 
 minimum = _binary_math_builtin
 maximum = _binary_math_builtin
-mod = _binary_math_builtin
+fmod = _binary_math_builtin
 power = _binary_math_builtin
 
-BINARY_MATH_NUMBER_BUILTIN_NAMES = ["minimum", "maximum", "mod", "power"]
+BINARY_MATH_NUMBER_BUILTIN_NAMES = ["minimum", "maximum", "fmod", "power"]
 
 MATH_BUILTIN_NAMES = (
     UNARY_MATH_NUMBER_BUILTIN_NAMES

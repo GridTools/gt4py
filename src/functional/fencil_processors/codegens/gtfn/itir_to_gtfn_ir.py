@@ -17,7 +17,7 @@ from typing import Any, Iterable, Type
 
 import eve
 from eve.concepts import SymbolName
-from functional.common import Connectivity, Dimension
+from functional import common
 from functional.fencil_processors.codegens.gtfn.gtfn_ir import (
     Backend,
     BinaryExpr,
@@ -26,7 +26,6 @@ from functional.fencil_processors.codegens.gtfn.gtfn_ir import (
     FencilDefinition,
     FunCall,
     FunctionDefinition,
-    GridType,
     Lambda,
     Literal,
     Node,
@@ -71,7 +70,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     def visit_OffsetLiteral(self, node: itir.OffsetLiteral, **kwargs: Any) -> OffsetLiteral:
         if node.value in self.offset_provider:
             if isinstance(
-                self.offset_provider[node.value], Dimension
+                self.offset_provider[node.value], common.Dimension
             ):  # replace offset tag by dimension tag
                 return OffsetLiteral(value=self.offset_provider[node.value].value)
         return OffsetLiteral(value=node.value)
@@ -174,7 +173,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
                 connectivities = []
                 for o in shift_offsets:
                     if o in self.offset_provider and isinstance(
-                        self.offset_provider[o], Connectivity
+                        self.offset_provider[o], common.Connectivity
                     ):
                         connectivities.append(SymRef(id=o))
                 return UnstructuredDomain(
@@ -214,7 +213,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     def visit_FencilDefinition(
         self, node: itir.FencilDefinition, *, grid_type: str, **kwargs: Any
     ) -> FencilDefinition:
-        grid_type = getattr(GridType, grid_type.upper())
+        grid_type = getattr(common.GridType, grid_type.upper())
         self.offset_provider = kwargs["offset_provider"]
         executions = self.visit(node.closures, grid_type=grid_type, **kwargs)
         function_definitions = self.visit(node.function_definitions)

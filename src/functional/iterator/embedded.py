@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
+import copy
 import itertools
 import math
 import numbers
 from abc import abstractmethod
-from copy import deepcopy
 from dataclasses import dataclass
 from types import NoneType
 from typing import (
@@ -370,8 +370,7 @@ def execute_shift(
     assert tag in offset_provider
     offset_implementation = offset_provider[tag]
     if isinstance(offset_implementation, Dimension):
-        assert offset_implementation.value in pos
-        new_pos = pos.copy()
+        new_pos = copy.copy(pos)
         if is_int_index(value := new_pos[offset_implementation.value]):
             new_pos[offset_implementation.value] = value + index
         else:
@@ -654,11 +653,17 @@ def _is_field_axis(axis: Axis) -> TypeGuard[FieldAxis]:
     return isinstance(axis, FieldAxis)  # type: ignore[misc,arg-type] # see https://github.com/python/mypy/issues/11673
 
 
+def _is_sparse_position_entry(
+    pos: FieldIndex | SparsePositionEntry,
+) -> TypeGuard[SparsePositionEntry]:
+    return isinstance(pos, list)
+
+
 def get_ordered_indices(
     axes: Iterable[Axis], pos: Mapping[Tag, FieldIndex | SparsePositionEntry]
 ) -> tuple[FieldIndex, ...]:
     res: list[FieldIndex] = []
-    pos = deepcopy(pos)  # deepcopy as we consume the sparse entries
+    sparse_position_tracker: dict[Tag, int] = {}
     for axis in axes:
         if _is_tuple_axis(axis):
             res.append(slice(None))
@@ -666,8 +671,10 @@ def get_ordered_indices(
             assert _is_field_axis(axis)
             assert axis.value in pos
             elem = pos[axis.value]
-            if isinstance(elem, list):
-                res.append(elem.pop(0))  # we consume a sparse entry, this smells...
+            if _is_sparse_position_entry(elem):
+                sparse_position_tracker.setdefault(axis.value, 0)
+                res.append(elem[sparse_position_tracker[axis.value]])
+                sparse_position_tracker[axis.value] += 1
             else:
                 assert isinstance(elem, (int, slice))
                 res.append(elem)
@@ -709,14 +716,14 @@ def np_as_located_field(
         if origin is not None:
             offsets = get_ordered_indices(axes, {k.value: v for k, v in origin.items()})
         else:
-            offsets = tuple(0 for _ in axes)
+            offsets = None
 
         def setter(indices, value):
             indices = tupelize(indices)
-            a[_tupsum(indices, offsets)] = value
+            a[_tupsum(indices, offsets) if offsets else indices] = value
 
         def getter(indices):
-            return a[_tupsum(indices, offsets)]
+            return a[_tupsum(indices, offsets) if offsets else indices]
 
         return LocatedFieldImpl(getter, axes, dtype=a.dtype, setter=setter, array=a.__array__)
 

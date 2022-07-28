@@ -35,8 +35,8 @@ def tuple_output2(inp1, inp2):
     "stencil",
     [tuple_output1, tuple_output2],
 )
-def test_tuple_output(fencil_processor, stencil):
-    fencil_processor, validate = fencil_processor
+def test_tuple_output(fencil_processor_no_gtfn_exec, stencil):
+    fencil_processor, validate = fencil_processor_no_gtfn_exec
 
     shape = [5, 7, 9]
     rng = np.random.default_rng()
@@ -63,8 +63,8 @@ def test_tuple_output(fencil_processor, stencil):
         assert np.allclose(inp2, out[1])
 
 
-def test_tuple_of_field_of_tuple_output(fencil_processor):
-    fencil_processor, validate = fencil_processor
+def test_tuple_of_field_of_tuple_output(fencil_processor_no_gtfn_exec):
+    fencil_processor, validate = fencil_processor_no_gtfn_exec
 
     @fundef
     def stencil(inp1, inp2, inp3, inp4):
@@ -97,7 +97,14 @@ def test_tuple_of_field_of_tuple_output(fencil_processor):
         KDim: range(0, shape[2]),
     }
     run_processor(
-        stencil[dom], fencil_processor, inp1, inp2, inp3, inp4, out=out, offset_provider={}
+        stencil[dom],
+        fencil_processor,
+        inp1,
+        inp2,
+        inp3,
+        inp4,
+        out=out,
+        offset_provider={},
     )
     if validate:
         assert np.allclose(inp1, out_np1[:]["f0"])
@@ -106,8 +113,8 @@ def test_tuple_of_field_of_tuple_output(fencil_processor):
         assert np.allclose(inp4, out_np2[:]["f1"])
 
 
-def test_tuple_of_tuple_of_field_output(fencil_processor):
-    fencil_processor, validate = fencil_processor
+def test_tuple_of_tuple_of_field_output(fencil_processor_no_gtfn_exec):
+    fencil_processor, validate = fencil_processor_no_gtfn_exec
 
     @fundef
     def stencil(inp1, inp2, inp3, inp4):
@@ -145,7 +152,14 @@ def test_tuple_of_tuple_of_field_output(fencil_processor):
         KDim: range(0, shape[2]),
     }
     run_processor(
-        stencil[dom], fencil_processor, inp1, inp2, inp3, inp4, out=out, offset_provider={}
+        stencil[dom],
+        fencil_processor,
+        inp1,
+        inp2,
+        inp3,
+        inp4,
+        out=out,
+        offset_provider={},
     )
     if validate:
         assert np.allclose(inp1, out[0][0])
@@ -158,8 +172,8 @@ def test_tuple_of_tuple_of_field_output(fencil_processor):
     "stencil",
     [tuple_output1, tuple_output2],
 )
-def test_field_of_tuple_output(fencil_processor, stencil):
-    fencil_processor, validate = fencil_processor
+def test_field_of_tuple_output(fencil_processor_no_gtfn_exec, stencil):
+    fencil_processor, validate = fencil_processor_no_gtfn_exec
 
     shape = [5, 7, 9]
     rng = np.random.default_rng()
@@ -188,8 +202,8 @@ def test_field_of_tuple_output(fencil_processor, stencil):
     "stencil",
     [tuple_output1, tuple_output2],
 )
-def test_field_of_extra_dim_output(fencil_processor, stencil):
-    fencil_processor, validate = fencil_processor
+def test_field_of_extra_dim_output(fencil_processor_no_gtfn_exec, stencil):
+    fencil_processor, validate = fencil_processor_no_gtfn_exec
 
     shape = [5, 7, 9]
     rng = np.random.default_rng()
@@ -220,8 +234,8 @@ def tuple_input(inp):
     return tuple_get(0, inp_deref) + tuple_get(1, inp_deref)
 
 
-def test_tuple_field_input(fencil_processor):
-    fencil_processor, validate = fencil_processor
+def test_tuple_field_input(fencil_processor_no_gtfn_exec):
+    fencil_processor, validate = fencil_processor_no_gtfn_exec
 
     shape = [5, 7, 9]
     rng = np.random.default_rng()
@@ -244,8 +258,8 @@ def test_tuple_field_input(fencil_processor):
         assert np.allclose(np.asarray(inp1) + np.asarray(inp2), out)
 
 
-def test_field_of_tuple_input(fencil_processor):
-    fencil_processor, validate = fencil_processor
+def test_field_of_tuple_input(fencil_processor_no_gtfn_exec):
+    fencil_processor, validate = fencil_processor_no_gtfn_exec
 
     shape = [5, 7, 9]
     rng = np.random.default_rng()
@@ -271,8 +285,8 @@ def test_field_of_tuple_input(fencil_processor):
         assert np.allclose(np.asarray(inp1) + np.asarray(inp2), out)
 
 
-def test_field_of_extra_dim_input(fencil_processor):
-    fencil_processor, validate = fencil_processor
+def test_field_of_extra_dim_input(fencil_processor_no_gtfn_exec):
+    fencil_processor, validate = fencil_processor_no_gtfn_exec
 
     shape = [5, 7, 9]
     rng = np.random.default_rng()
@@ -305,8 +319,8 @@ def tuple_tuple_input(inp):
     )
 
 
-def test_tuple_of_field_of_tuple_input(fencil_processor):
-    fencil_processor, validate = fencil_processor
+def test_tuple_of_field_of_tuple_input(fencil_processor_no_gtfn_exec):
+    fencil_processor, validate = fencil_processor_no_gtfn_exec
 
     shape = [5, 7, 9]
     rng = np.random.default_rng()
@@ -327,13 +341,19 @@ def test_tuple_of_field_of_tuple_input(fencil_processor):
         JDim: range(0, shape[1]),
         KDim: range(0, shape[2]),
     }
-    run_processor(tuple_tuple_input[dom], fencil_processor, (inp, inp), out=out, offset_provider={})
+    run_processor(
+        tuple_tuple_input[dom],
+        fencil_processor,
+        (inp, inp),
+        out=out,
+        offset_provider={},
+    )
     if validate:
         assert np.allclose(2.0 * (np.asarray(inp1) + np.asarray(inp2)), out)
 
 
-def test_tuple_of_tuple_of_field_input(fencil_processor):
-    fencil_processor, validate = fencil_processor
+def test_tuple_of_tuple_of_field_input(fencil_processor_no_gtfn_exec):
+    fencil_processor, validate = fencil_processor_no_gtfn_exec
 
     shape = [5, 7, 9]
     rng = np.random.default_rng()
@@ -363,8 +383,8 @@ def test_tuple_of_tuple_of_field_input(fencil_processor):
         )
 
 
-def test_field_of_2_extra_dim_input(fencil_processor):
-    fencil_processor, validate = fencil_processor
+def test_field_of_2_extra_dim_input(fencil_processor_no_gtfn_exec):
+    fencil_processor, validate = fencil_processor_no_gtfn_exec
 
     shape = [5, 7, 9]
     rng = np.random.default_rng()
