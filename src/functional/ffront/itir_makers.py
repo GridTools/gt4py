@@ -174,9 +174,9 @@ def less_equal_(left, right):
     return call_("less_equal")(left, right)
 
 
-def greaterequal_(left, right):
-    """Create a less FunCall, shorthand for ``call("greaterequal")(left, right)``."""
-    return call_("greaterequal")(left, right)
+def greater_equal_(left, right):
+    """Create a greater_equal_ FunCall, shorthand for ``call("greater_equal")(left, right)``."""
+    return call_("greater_equal")(left, right)
 
 
 def noteq_(left, right):
