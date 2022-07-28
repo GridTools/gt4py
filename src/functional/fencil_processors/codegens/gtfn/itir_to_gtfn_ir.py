@@ -48,8 +48,11 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         "multiplies": "*",
         "divides": "/",
         "eq": "==",
+        "not_eq": "!=",
         "less": "<",
+        "less_equal": "<=",
         "greater": ">",
+        "greater_equal": ">=",
         "and_": "&&",
         "or_": "||",
     }
