@@ -177,11 +177,13 @@ def is_field_type_or_tuple_of_field_type(type_: ct.DataType) -> bool:
 
     Examples:
     ---------
-    >>> is_field_type_or_tuple_of_field_type(ct.FieldType(dims=[], dtype=ct.ScalarType(kind=ct.ScalarKind.INT)))
+   >>> scalar_type = ct.ScalarType(kind=ct.ScalarKind.INT)
+   >>> field_type = ct.FieldType(dims=[], dtype=scalar_type)
+    >>> is_field_type_or_tuple_of_field_type(field_type)
     True
-    >>> is_field_type_or_tuple_of_field_type(ct.TupleType(types=[ct.FieldType(dims=[], dtype=ct.ScalarType(kind=ct.ScalarKind.INT)), ct.FieldType(dims=[], dtype=ct.ScalarType(kind=ct.ScalarKind.INT))]))
+    >>> is_field_type_or_tuple_of_field_type(ct.TupleType(types=[field_type, field_type]))
     True
-    >>> is_field_type_or_tuple_of_field_type(ct.TupleType(types=[ct.FieldType(dims=[], dtype=ct.ScalarType(kind=ct.ScalarKind.INT)), ct.ScalarType(kind=ct.ScalarKind.INT)]))
+    >>> is_field_type_or_tuple_of_field_type(ct.TupleType(types=[field_type, scalar_type]))
     False
     """
     return all(isinstance(t, ct.FieldType) for t in primitive_constituents(type_))
