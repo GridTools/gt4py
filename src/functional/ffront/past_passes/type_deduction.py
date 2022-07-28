@@ -44,7 +44,7 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         func_type = func.type
         # functions in a program are implicitly converted into
         # stencil closures. Change function signature accordingly
-        assert not isinstance(func.type.returns, ct.VoidType)
+        assert is_field_type_or_tuple_of_field_type(func.type.returns)
         assert "out" not in func.type.kwargs
         func_type = ct.FunctionType(
             args=func.type.args,
