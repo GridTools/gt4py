@@ -717,8 +717,8 @@ def test_tuple_with_local_field_in_reduction_shifted(reduction_setup):
 
     size = 10
     # TODO(tehrengruber): use different values per location
-    a = np_as_located_field(Edge)(np.ones((num_vertices,)))
-    b = np_as_located_field(Vertex)(2 * np.ones((num_edges,)))
+    a = np_as_located_field(Edge)(np.ones((num_edges,)))
+    b = np_as_located_field(Vertex)(2 * np.ones((num_vertices,)))
     out = np_as_located_field(Edge)(np.zeros((num_edges,)))
 
     @field_operator
@@ -737,7 +737,7 @@ def test_tuple_with_local_field_in_reduction_shifted(reduction_setup):
     reduce_tuple_element(a, b, out=out, offset_provider=rs.offset_provider)
 
     # conn table used is inverted here on purpose
-    red = np.sum(np.asarray(a)[rs.e2v_table] + np.asarray(b)[:, np.newaxis], axis=1)
-    expected = red[rs.v2e_table][:, 0]
+    red = np.sum(np.asarray(a)[rs.v2e_table] + np.asarray(b)[:, np.newaxis], axis=1)
+    expected = red[rs.e2v_table][:, 0]
 
     assert np.allclose(expected, out)
