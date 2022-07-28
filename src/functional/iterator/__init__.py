@@ -6,6 +6,8 @@ from pkg_resources import DistributionNotFound, get_distribution  # type: ignore
 from . import tracing  # noqa: F401 # ignore unused
 
 
+__all__: list = []
+
 try:
     __version__: str = get_distribution("gt4py").version
 except DistributionNotFound:
