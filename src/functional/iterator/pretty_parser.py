@@ -65,7 +65,7 @@ GRAMMAR = """
 
     named_range: AXIS_NAME ":" "[" prec0 "," prec0 ")"
     function_definition: ID_NAME "=" "λ(" ( SYM "," )* SYM? ")" "→" prec0 ";"
-    stencil_closure: SYM_REF "←" "(" prec0 ")" "(" ( SYM_REF ", " )* SYM_REF ")" "@" prec0 ";"
+    stencil_closure: prec0 "←" "(" prec0 ")" "(" ( SYM_REF ", " )* SYM_REF ")" "@" prec0 ";"
     fencil_definition: ID_NAME "(" ( SYM "," )* SYM ")" "{" ( function_definition )* ( stencil_closure )+ "}"
 
     %import common (CNAME, SIGNED_FLOAT, SIGNED_INT, WS)

@@ -104,6 +104,10 @@ class GTFNCodegen(codegen.TemplatedGenerator):
     def visit_OffsetLiteral(self, node: gtfn_ir.OffsetLiteral, **kwargs: Any) -> str:
         return node.value if isinstance(node.value, str) else f"{node.value}_c"
 
+    SidComposite = as_mako(
+        "sid::composite::keys<${','.join(f'gridtools::integral_constant<int,{i}>' for i in range(len(values)))}>::make_values(${','.join(values)})"
+    )
+
     def visit_FunCall(self, node: gtfn_ir.FunCall, **kwargs):
         if isinstance(node.fun, gtfn_ir.SymRef) and node.fun.id in self._builtins_mapping:
             return self.generic_visit(node, fun_name=self._builtins_mapping[node.fun.id])
