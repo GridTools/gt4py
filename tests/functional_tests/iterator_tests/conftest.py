@@ -16,10 +16,7 @@ from functional.iterator.processor_interface import (
     FencilFormatter,
     fencil_formatter,
 )
-
-
-if TYPE_CHECKING:
-    from functional.iterator.runtime import FendefDispatcher
+from functional.iterator.runtime import FendefDispatcher
 
 
 @pytest.fixture(params=[False, True], ids=lambda p: f"use_tmps={p}")

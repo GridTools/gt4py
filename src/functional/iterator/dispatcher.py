@@ -24,6 +24,7 @@ class _fun_dispatcher:
             self.dispatcher._funs[key][self.fun.__name__] = fun
             return fun
 
+        # required for direct call to dispatched functions (see roundtrip).
         return _impl
 
 
