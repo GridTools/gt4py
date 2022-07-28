@@ -110,7 +110,7 @@ def less(*args):
 
 
 @builtin_dispatch
-def lesseq(*args):
+def less_equal(*args):
     raise BackendNotSelectedError()
 
 
