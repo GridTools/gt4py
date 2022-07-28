@@ -30,6 +30,7 @@ from functional.fencil_processors.codegens.gtfn.gtfn_ir import (
     Literal,
     Node,
     OffsetLiteral,
+    SidComposite,
     StencilExecution,
     Sym,
     SymRef,
@@ -200,6 +201,13 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             id=node.id, params=self.visit(node.params), expr=self.visit(node.expr)
         )
 
+    def _visit_output_argument(self, node: itir.SymRef | itir.FunCall):
+        if isinstance(node, itir.SymRef):
+            return self.visit(node)
+        elif isinstance(node, itir.FunCall) and node.fun == itir.SymRef(id="make_tuple"):
+            return SidComposite(values=[self._visit_output_argument(v) for v in node.args])
+        raise ValueError("Expected `SymRef` or `make_tuple` in output argument.")
+
     def visit_StencilClosure(self, node: itir.StencilClosure, **kwargs: Any) -> StencilExecution:
         assert isinstance(node.stencil, itir.SymRef)
         backend = Backend(
@@ -208,7 +216,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
 
         return StencilExecution(
             stencil=self.visit(node.stencil),
-            output=self.visit(node.output),
+            output=self._visit_output_argument(node.output),
             inputs=self.visit(node.inputs),
             backend=backend,
         )
