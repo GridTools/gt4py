@@ -17,8 +17,8 @@ import importlib.util
 import pathlib
 import tempfile
 import textwrap
-from typing import Optional
 from collections.abc import Callable, Iterable
+from typing import Optional
 
 from eve import codegen
 from eve.codegen import FormatTemplate as as_fmt, MakoTemplate as as_mako
