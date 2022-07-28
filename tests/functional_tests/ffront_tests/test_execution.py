@@ -654,6 +654,7 @@ def test_conditional_shifted(fieldview_backend):
 
     assert np.allclose(np.where(mask, a, b)[1:], out.array()[:-1])
 
+
 def test_nested_tuple_return():
     size = 10
     a = np_as_located_field(IDim)(np.ones((size,)))

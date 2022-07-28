@@ -173,13 +173,16 @@ def lessequal_(left, right):
     """Create a less FunCall, shorthand for ``call("lessequal")(left, right)``."""
     return call_("less_equal")(left, right)
 
+
 def greaterequal_(left, right):
     """Create a less FunCall, shorthand for ``call("greaterequal")(left, right)``."""
     return call_("greaterequal")(left, right)
 
+
 def noteq_(left, right):
     """Create a less FunCall, shorthand for ``call("noteq_")(left, right)``."""
     return call_("noteq")(left, right)
+
 
 def eq_(left, right):
     """Create a eq FunCall, shorthand for ``call("eq")(left, right)``."""
