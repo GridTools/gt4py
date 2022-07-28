@@ -11,23 +11,28 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
+import re
 from typing import Tuple
 
 import pytest
 
 import eve
 from eve.pattern_matching import ObjectPattern as P
-from functional.common import Field, GridType
+from functional.common import Field, GridType, GTTypeError
 from functional.ffront.decorator import field_operator
-from functional.ffront.fbuiltins import Dimension, float64
 from functional.ffront.func_to_past import ProgramParser
 from functional.ffront.past_to_itir import ProgramLowering
 from functional.iterator import ir as itir
 
-from .past_common_fixtures import copy_program_def, copy_restrict_program_def, identity_def
-
-
-IDim = Dimension("IDim")
+from .past_common_fixtures import (
+    IDim,
+    copy_program_def,
+    copy_restrict_program_def,
+    float64,
+    identity_def,
+    invalid_call_sig_program_def,
+    make_tuple_op,
+)
 
 
 @pytest.fixture
@@ -37,16 +42,6 @@ def itir_identity_fundef():
         params=[itir.Sym(id="x")],
         expr=itir.FunCall(fun=itir.SymRef(id="deref"), args=[itir.SymRef(id="x")]),
     )
-
-
-@pytest.fixture
-def make_tuple_op():
-    def make_tuple_op_impl(
-        inp: Field[[IDim], float64]
-    ) -> Tuple[Field[[IDim], float64], Field[[IDim], float64]]:
-        return inp, inp
-
-    return field_operator(make_tuple_op_impl)
 
 
 def test_copy_lowering(copy_program_def, itir_identity_fundef):
@@ -137,3 +132,39 @@ def test_tuple_constructed_in_out_with_slicing(make_tuple_op):
 
     parsed = ProgramParser.apply_to_function(tuple_program)
     ProgramLowering.apply(parsed, function_definitions=[], grid_type=GridType.CARTESIAN)
+
+
+@pytest.mark.xfail
+def test_inout_prohibited(identity_def):
+    identity = field_operator(identity_def)
+
+    def inout_field_program(inout_field: Field[[IDim], "float64"]):
+        identity(inout_field, out=inout_field)
+
+    with pytest.raises(
+        GTTypeError,
+        match=(r"Call to function with field as input and output not allowed."),
+    ):
+        ProgramLowering.apply(ProgramParser.apply_to_function(inout_field_program))
+
+
+def test_invalid_call_sig_program(invalid_call_sig_program_def):
+    with pytest.raises(
+        GTTypeError,
+    ) as exc_info:
+        ProgramLowering.apply(ProgramParser.apply_to_function(invalid_call_sig_program_def))
+
+    assert exc_info.match("Invalid call to `identity`")
+    # TODO(tehrengruber): find a better way to test this
+    assert (
+        re.search(
+            "Function takes 1 arguments, but 2 were given.", exc_info.value.__context__.args[0]
+        )
+        is not None
+    )
+    assert (
+        re.search(
+            "Missing required keyword argument\(s\) `out`", exc_info.value.__context__.args[0]
+        )
+        is not None
+    )

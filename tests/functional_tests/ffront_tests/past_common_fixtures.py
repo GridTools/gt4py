@@ -11,6 +11,8 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
+from typing import Tuple
+
 import pytest
 
 from functional.common import Field
@@ -35,6 +37,17 @@ def identity_def():
         return in_field
 
     return identity
+
+
+@pytest.fixture
+def make_tuple_op():
+    @field_operator()
+    def make_tuple_op_impl(
+        inp: Field[[IDim], float64]
+    ) -> Tuple[Field[[IDim], float64], Field[[IDim], float64]]:
+        return inp, inp
+
+    return make_tuple_op_impl
 
 
 @pytest.fixture
