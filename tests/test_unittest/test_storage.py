@@ -190,76 +190,8 @@ def test_allocate_gpu(param_dict):
     aligned_index = param_dict["aligned_index"]
     shape = param_dict["shape"]
     layout_map = param_dict["layout_order"]
-
-    raw_buffer, field = gt_storage_utils.allocate_gpu(
+    device_raw_buffer, device_field = gt_storage_utils.allocate_gpu(
         aligned_index, shape, layout_map, dtype, alignment_bytes
-    )
-
-    # check that memory of field is contained in raw_buffer
-    assert (
-        field.ctypes.data >= raw_buffer.data.ptr
-        and field[-1:].ctypes.data <= raw_buffer[-1:].data.ptr
-    )
-
-    # check if the first compute-domain point in the last dimension is aligned for 100 random "columns"
-    import random
-
-    for i in range(100):
-        slices = []
-        for hidx in range(len(shape)):
-            if hidx == np.argmax(layout_map):
-                slices = slices + [slice(aligned_index[hidx], None)]
-            else:
-                slices = slices + [slice(random.randint(0, shape[hidx]), None)]
-        assert field[tuple(slices)].ctypes.data % alignment_bytes == 0
-
-    # check that writing does not give errors, e.g. because of going out of bounds
-    slices = []
-    for hidx in range(len(shape)):
-        slices = slices + [0]
-    field[tuple(slices)] = 1
-
-    slices = []
-    for hidx in range(len(shape)):
-        slices = slices + [aligned_index[hidx]]
-    field[tuple(slices)] = 1
-
-    slices = []
-    for hidx in range(len(shape)):
-        slices = slices + [shape[hidx] - 1]
-    field[tuple(slices)] = 1
-
-    slices = []
-    for hidx in range(len(shape)):
-        slices = slices + [shape[hidx]]
-    try:
-        field[tuple(slices)] = 1
-    except IndexError:
-        pass
-    else:
-        assert False
-
-    # check if shape is properly set
-    assert field.shape == shape
-
-
-@pytest.mark.requires_gpu
-@hyp.given(param_dict=allocation_strategy())
-def test_allocate_gpu_unmanaged(param_dict):
-    alignment_bytes = param_dict["alignment"]
-    dtype = param_dict["dtype"]
-    aligned_index = param_dict["aligned_index"]
-    shape = param_dict["shape"]
-    layout_map = param_dict["layout_order"]
-    raw_buffer, field, device_raw_buffer, device_field = gt_storage_utils.allocate_gpu_unmanaged(
-        aligned_index, shape, layout_map, dtype, alignment_bytes
-    )
-
-    # check that field is a view of raw_buffer
-    assert field.base is raw_buffer
-    assert (
-        field.ctypes.data >= raw_buffer.ctypes.data
-        and field[-1:].ctypes.data <= raw_buffer[-1:].ctypes.data
     )
 
     # assert (device_field.base is device_raw_buffer) # as_strided actually returns an ndarray where base=None??
@@ -279,46 +211,32 @@ def test_allocate_gpu_unmanaged(param_dict):
                 slices = slices + [slice(aligned_index[hidx], None)]
             else:
                 slices = slices + [slice(random.randint(0, shape[hidx]), None)]
-        assert field[tuple(slices)].ctypes.data % alignment_bytes == 0
         assert device_field[tuple(slices)].data.ptr % alignment_bytes == 0
 
     # check that writing does not give errors, e.g. because of going out of bounds
     slices = []
     for hidx in range(len(shape)):
         slices = slices + [0]
-    field[tuple(slices)] = 1
     device_field[tuple(slices)] = 1
 
     slices = []
     for hidx in range(len(shape)):
         slices = slices + [aligned_index[hidx]]
-    field[tuple(slices)] = 1
     device_field[tuple(slices)] = 1
 
     slices = []
     for hidx in range(len(shape)):
         slices = slices + [shape[hidx] - 1]
-    field[tuple(slices)] = 1
     device_field[tuple(slices)] = 1
 
     slices = []
     for hidx in range(len(shape)):
         slices = slices + [shape[hidx]]
-    try:
-        field[tuple(slices)] = 1
-    except IndexError:
-        pass
-    else:
-        assert False
-    try:
+
+    with pytest.raises(IndexError):
         device_field[tuple(slices)] = 1
-    except IndexError:
-        pass
-    else:
-        assert False
 
     # check if shape is properly set
-    assert field.shape == shape
     assert device_field.shape == shape
 
 
@@ -495,8 +413,12 @@ def test_masked_storage_gpu(param_dict):
     )
 
     assert isinstance(array, cp.ndarray)
+    if dimensions is None:
+        dimensions = ["I", "J", "K"][: len(shape)]
+        if len(shape) > 3:
+            dimensions += [str(d) for d in range(len(shape) - 3)]
     assert len(dimensions) == array.ndim
-    assert len(dimensions) == len(array.data.shape)
+    assert len(dimensions) == len(array.shape)
 
 
 def test_masked_storage_asserts():

@@ -207,9 +207,9 @@ def test_lower_dimensional_inputs(backend):
     assert field_1d.shape == (full_shape[-1],)
 
     stencil(field_3d, field_2d, field_1d, origin=(1, 1, 0), domain=(4, 3, 6))
-    field_3d = storage_utils.cpu_copy(field_3d)
-    np.testing.assert_allclose(field_3d[1:-1, 1:-2, :1], 3)
-    np.testing.assert_allclose(field_3d[1:-1, 1:-2, 1:], 2)
+    res_field_3d = storage_utils.cpu_copy(field_3d)
+    np.testing.assert_allclose(res_field_3d[1:-1, 1:-2, :1], 3)
+    np.testing.assert_allclose(res_field_3d[1:-1, 1:-2, 1:], 2)
 
     stencil(field_3d, field_2d, field_1d, origin=(1, 1, 0))
 
@@ -338,8 +338,8 @@ def test_higher_dimensional_fields(backend):
     assert mat_field.shape[:-2] == full_shape
 
     stencil(field, vec_field, mat_field, origin=(1, 1, 0), domain=(4, 4, 6))
-    mat_field = storage_utils.cpu_copy(mat_field)
-    np.testing.assert_allclose(mat_field.view(np.ndarray)[1:-1, 1:-1, 1:1], 2.0 + 5.0)
+    res_mat_field = storage_utils.cpu_copy(mat_field)
+    np.testing.assert_allclose(res_mat_field[1:-1, 1:-1, 1:1], 2.0 + 5.0)
 
     stencil(field, vec_field, mat_field)
 
