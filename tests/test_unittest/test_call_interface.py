@@ -470,3 +470,33 @@ def test_origin_unchanged(backend):
     assert all(k in origin_ref for k in origin.keys())
     assert all(k in origin for k in origin_ref.keys())
     assert all(v is origin_ref[k] for k, v in origin.items())
+
+
+def test_permute_axes():
+    @gtscript.stencil(backend="numpy")
+    def calc_damp(outp: Field[float], inp: Field[K, float]):
+        with computation(FORWARD), interval(...):
+            outp = inp
+
+    outp = gt_storage.ones(
+        backend="numpy",
+        aligned_index=(1, 1, 1),
+        shape=(4, 4, 4),
+        dtype=float,
+        dimensions="KJI",
+    )
+    outp_wrap = DimensionsWrapper(array=outp, dimensions="KJI")
+
+    inp = gt_storage.from_array(
+        data=np.arange(4),
+        backend="numpy",
+        aligned_index=(1,),
+        shape=(4,),
+        dtype=float,
+        dimensions="K",
+    )
+
+    calc_damp(outp_wrap, inp)
+
+    for i in range(4):
+        np.testing.assert_equal(outp[i, :, :], i)

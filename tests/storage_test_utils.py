@@ -36,18 +36,18 @@ class NdarraySubclassWrapper(np.ndarray, ArrayWrapper):
 
 class DimensionsWrapper(ArrayWrapper):
     def __init__(self, dimensions, **kwargs):
-        self.dimensions = dimensions
+        self.__gt_dims__ = dimensions
         super().__init__(**kwargs)
 
 
 class OriginWrapper(ArrayWrapper):
     def __init__(self, *, origin, **kwargs):
-        self.origin = origin
+        self.__gt_origin__ = origin
         super().__init__(**kwargs)
 
     def __descriptor__(self):
         res = super().__descriptor__()
-        res.origin = self.origin
+        res.__gt_origin__ = self.__gt_origin__
         return res
 
 

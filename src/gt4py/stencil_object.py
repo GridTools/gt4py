@@ -57,32 +57,29 @@ class _ArgsInfo:
 
 
 def _extract_array_infos(field_args, device) -> Dict[str, Optional[_ArgsInfo]]:
-    if device == "gpu":
-        return {
-            name: _ArgsInfo(
-                array=cp.asarray(arg),
+    xp = cp if device == "gpu" else np
+    array_infos: Dict[str, Optional[_ArgsInfo]] = {}
+    for name, arg in field_args.items():
+        if arg is None:
+            array_infos[name] = None
+        else:
+            array = xp.asarray(arg)
+            dimensions = getattr(arg, "__gt_dims__", None)
+            if dimensions is not None:
+                sorted_dimensions = [d for d in "IJK" if d in dimensions]
+                data_dims = [int(d) for d in dimensions if str(d).isdigit()]
+                sorted_dimensions += [str(d) for d in sorted(data_dims)]
+                dimension_indices = [dimensions.index(sd) for sd in sorted_dimensions]
+                array = array.transpose(dimension_indices)
+                dimensions = tuple(sorted_dimensions)
+            array_infos[name] = _ArgsInfo(
+                array=array,
                 original_object=arg,
-                dimensions=getattr(arg, "dimensions", None),
+                dimensions=dimensions,
                 device=device,
-                origin=getattr(arg, "origin", None),
+                origin=getattr(arg, "__gt_origin__", None),
             )
-            if arg is not None
-            else None
-            for name, arg in field_args.items()
-        }
-    else:
-        return {
-            name: _ArgsInfo(
-                array=np.asarray(arg),
-                original_object=arg,
-                dimensions=getattr(arg, "dimensions", None),
-                device=device,
-                origin=getattr(arg, "origin", None),
-            )
-            if arg is not None
-            else None
-            for name, arg in field_args.items()
-        }
+    return array_infos
 
 
 def _extract_stencil_arrays(array_infos: Dict[str, Optional[_ArgsInfo]]):
