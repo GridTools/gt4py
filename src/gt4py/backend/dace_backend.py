@@ -457,7 +457,7 @@ class DaCeCUDAPyExtModuleGenerator(DaCePyExtModuleGenerator, CUDAPyExtModuleGene
 class BaseDaceBackend(BaseGTBackend, CLIBackendMixin):
 
     GT_BACKEND_T = "dace"
-    PYEXT_GENERATOR_CLASS = DaCeCUDAPyExtModuleGenerator  # type: ignore
+    PYEXT_GENERATOR_CLASS = DaCeExtGenerator  # type: ignore
 
     options = BaseGTBackend.GT_BACKEND_OPTS
 
@@ -512,7 +512,7 @@ class DaceGPUBackend(BaseDaceBackend):
         "layout_map": layout_maker_factory((2, 1, 0)),
         "is_compatible_layout": lambda *args: True,
     }
-    MODULE_GENERATOR_CLASS = DaCePyExtModuleGenerator
+    MODULE_GENERATOR_CLASS = DaCeCUDAPyExtModuleGenerator
     options = {
         **BaseGTBackend.GT_BACKEND_OPTS,
         "device_sync": {"versioning": True, "type": bool},
