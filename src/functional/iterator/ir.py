@@ -1,7 +1,7 @@
 from typing import ClassVar, List, Union
 
 import eve
-from eve import Coerced, SymbolName, SymbolRef
+from eve import Coerced, SymbolName, SymbolRef, datamodels
 from eve.traits import SymbolTableTrait, ValidatedSymbolTableTrait
 from eve.utils import noninstantiable
 
@@ -71,8 +71,13 @@ class FunctionDefinition(Node, SymbolTableTrait):
 class StencilClosure(Node):
     domain: Expr
     stencil: Expr
-    output: Expr
+    output: Union[SymRef, FunCall]
     inputs: List[SymRef]
+
+    @datamodels.validator("output")
+    def _output_validator(self, attribute, value):
+        if isinstance(value, FunCall) and value.fun != SymRef(id="make_tuple"):
+            raise ValueError("Only FunCall to `make_tuple` allowed.")
 
 
 UNARY_MATH_NUMBER_BUILTINS = {"abs"}

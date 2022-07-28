@@ -171,6 +171,22 @@ def is_logical(symbol_type: ct.SymbolType) -> bool:
     return extract_dtype(symbol_type).kind is ct.ScalarKind.BOOL
 
 
+def is_field_type_or_tuple_of_field_type(type_: ct.DataType) -> bool:
+    """
+    Return True if ``type_`` is FieldType or FieldType nested in TupleType.
+
+    Examples:
+    ---------
+    >>> is_field_type_or_tuple_of_field_type(ct.FieldType(dims=[], dtype=ct.ScalarType(kind=ct.ScalarKind.INT)))
+    True
+    >>> is_field_type_or_tuple_of_field_type(ct.TupleType(types=[ct.FieldType(dims=[], dtype=ct.ScalarType(kind=ct.ScalarKind.INT)), ct.FieldType(dims=[], dtype=ct.ScalarType(kind=ct.ScalarKind.INT))]))
+    True
+    >>> is_field_type_or_tuple_of_field_type(ct.TupleType(types=[ct.FieldType(dims=[], dtype=ct.ScalarType(kind=ct.ScalarKind.INT)), ct.ScalarType(kind=ct.ScalarKind.INT)]))
+    False
+    """
+    return all(isinstance(t, ct.FieldType) for t in primitive_constituents(type_))
+
+
 def extract_dims(symbol_type: ct.SymbolType) -> list[Dimension]:
     """
     Try to extract field dimensions if possible.

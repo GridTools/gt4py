@@ -25,103 +25,26 @@ from functional.common import Field, GridType, GTTypeError
 from functional.fencil_processors.runners import roundtrip
 from functional.ffront import common_types, program_ast as past
 from functional.ffront.decorator import field_operator, program
-from functional.ffront.fbuiltins import Dimension, FieldOffset
 from functional.ffront.func_to_past import ProgramParser
 from functional.ffront.past_passes.type_deduction import ProgramTypeError
 from functional.ffront.past_to_itir import ProgramLowering
 from functional.iterator import ir as itir
 from functional.iterator.embedded import np_as_located_field
 
+from .past_common_fixtures import (
+    IDim,
+    Ioff,
+    copy_program_def,
+    copy_restrict_program_def,
+    double_copy_program_def,
+    float64,
+    identity_def,
+    invalid_call_sig_program_def,
+    invalid_out_slice_dims_program_def,
+)
 
-float64 = float
-IDim = Dimension("IDim")
-Ioff = FieldOffset("Ioff", source=IDim, target=(IDim,))
 
 fieldview_backend = roundtrip.executor
-
-
-# TODO(tehrengruber): Improve test structure. Identity needs to be decorated
-#  in order to be used inside a program. This is unfortunate as a bug inside
-#  the decorator may result in failing tests before the actual test is run.
-#  A better way would be to first test everything field operator related,
-#  including the decorator and then continue with program tests that then
-#  can safely use the field operator decorator inside the fixtures.
-@pytest.fixture
-def identity_def():
-    def identity(in_field: Field[[IDim], "float64"]) -> Field[[IDim], "float64"]:
-        return in_field
-
-    return identity
-
-
-@pytest.fixture
-def copy_program_def(identity_def):
-    identity = field_operator(identity_def)
-
-    def copy_program(in_field: Field[[IDim], "float64"], out_field: Field[[IDim], "float64"]):
-        identity(in_field, out=out_field)
-
-    return copy_program
-
-
-@pytest.fixture
-def double_copy_program_def(identity_def):
-    identity = field_operator(identity_def)
-
-    def double_copy_program(
-        in_field: Field[[IDim], "float64"],
-        intermediate_field: Field[[IDim], "float64"],
-        out_field: Field[[IDim], "float64"],
-    ):
-        identity(in_field, out=intermediate_field)
-        identity(intermediate_field, out=out_field)
-
-    return double_copy_program
-
-
-@pytest.fixture
-def copy_restrict_program_def(identity_def):
-    identity = field_operator(identity_def)
-
-    def copy_restrict_program(
-        in_field: Field[[IDim], "float64"], out_field: Field[[IDim], "float64"]
-    ):
-        identity(in_field, out=out_field[1:2])
-
-    return copy_restrict_program
-
-
-@pytest.fixture
-def invalid_call_sig_program_def(identity_def):
-    identity = field_operator(identity_def)
-
-    def invalid_call_sig_program(
-        in_field: Field[[IDim], "float64"], out_field: Field[[IDim], "float64"]
-    ):
-        identity(in_field, out_field)
-
-    return invalid_call_sig_program
-
-
-@pytest.fixture
-def invalid_out_slice_dims_program_def(identity_def):
-    identity = field_operator(identity_def)
-
-    def invalid_out_slice_dims_program(
-        in_field: Field[[IDim], "float64"], out_field: Field[[IDim], "float64"]
-    ):
-        identity(in_field, out=out_field[1:2, 3:4])
-
-    return invalid_out_slice_dims_program
-
-
-@pytest.fixture
-def itir_identity_fundef():
-    return itir.FunctionDefinition(
-        id="identity",
-        params=[itir.Sym(id="x")],
-        expr=itir.FunCall(fun=itir.SymRef(id="deref"), args=[itir.SymRef(id="x")]),
-    )
 
 
 def test_identity_fo_execution(identity_def):
@@ -157,7 +80,7 @@ def test_copy_parsing(copy_program_def):
                 kwargs={"out": P(past.Name, id=past.SymbolRef("out_field"))},
             )
         ],
-        location=P(past.SourceLocation, line=61, source=str(pathlib.Path(__file__).resolve())),
+        location=P(past.SourceLocation),
     )
     assert pattern_node.match(past_node, raise_exception=True)
 
@@ -278,85 +201,6 @@ def test_copy_restrict_parsing(copy_restrict_program_def):
     )
 
     pattern_node.match(past_node, raise_exception=True)
-
-
-def test_copy_lowering(copy_program_def, itir_identity_fundef):
-    past_node = ProgramParser.apply_to_function(copy_program_def)
-    itir_node = ProgramLowering.apply(
-        past_node, function_definitions=[itir_identity_fundef], grid_type=GridType.CARTESIAN
-    )
-    closure_pattern = P(
-        itir.StencilClosure,
-        domain=P(
-            itir.FunCall,
-            fun=P(itir.SymRef, id=eve.SymbolRef("cartesian_domain")),
-            args=[
-                P(
-                    itir.FunCall,
-                    fun=P(itir.SymRef, id=eve.SymbolRef("named_range")),
-                    args=[
-                        P(itir.AxisLiteral, value="IDim"),
-                        P(itir.Literal, value="0", type="int"),
-                        P(itir.SymRef, id=eve.SymbolRef("__out_field_size_0")),
-                    ],
-                )
-            ],
-        ),
-        stencil=P(itir.SymRef, id=eve.SymbolRef("identity")),
-        inputs=[P(itir.SymRef, id=eve.SymbolRef("in_field"))],
-        output=P(itir.SymRef, id=eve.SymbolRef("out_field")),
-    )
-    fencil_pattern = P(
-        itir.FencilDefinition,
-        id=eve.SymbolName("copy_program"),
-        params=[
-            P(itir.Sym, id=eve.SymbolName("in_field")),
-            P(itir.Sym, id=eve.SymbolName("out_field")),
-            P(itir.Sym, id=eve.SymbolName("__in_field_size_0")),
-            P(itir.Sym, id=eve.SymbolName("__out_field_size_0")),
-        ],
-        closures=[closure_pattern],
-    )
-
-    fencil_pattern.match(itir_node, raise_exception=True)
-
-
-def test_copy_restrict_lowering(copy_restrict_program_def, itir_identity_fundef):
-    past_node = ProgramParser.apply_to_function(copy_restrict_program_def)
-    itir_node = ProgramLowering.apply(
-        past_node, function_definitions=[itir_identity_fundef], grid_type=GridType.CARTESIAN
-    )
-    closure_pattern = P(
-        itir.StencilClosure,
-        domain=P(
-            itir.FunCall,
-            fun=P(itir.SymRef, id=eve.SymbolRef("cartesian_domain")),
-            args=[
-                P(
-                    itir.FunCall,
-                    fun=P(itir.SymRef, id=eve.SymbolRef("named_range")),
-                    args=[
-                        P(itir.AxisLiteral, value="IDim"),
-                        P(itir.Literal, value="1", type="int"),
-                        P(itir.Literal, value="2", type="int"),
-                    ],
-                )
-            ],
-        ),
-    )
-    fencil_pattern = P(
-        itir.FencilDefinition,
-        id=eve.SymbolName("copy_restrict_program"),
-        params=[
-            P(itir.Sym, id=eve.SymbolName("in_field")),
-            P(itir.Sym, id=eve.SymbolName("out_field")),
-            P(itir.Sym, id=eve.SymbolName("__in_field_size_0")),
-            P(itir.Sym, id=eve.SymbolName("__out_field_size_0")),
-        ],
-        closures=[closure_pattern],
-    )
-
-    fencil_pattern.match(itir_node, raise_exception=True)
 
 
 def test_shift_by_one_execution():

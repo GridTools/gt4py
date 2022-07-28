@@ -15,19 +15,24 @@ from typing import Tuple
 
 from functional.common import Field
 from functional.ffront.decorator import field_operator
-from functional.ffront.fbuiltins import float64
+from functional.ffront.fbuiltins import Dimension, float64
 from functional.ffront.func_to_past import ProgramParser
 
 
+IDim = Dimension("IDim")
+
+
 @field_operator
-def make_tuple_op(inp: Field[..., float64]) -> Tuple[Field[..., float64], Field[..., float64]]:
+def make_tuple_op(
+    inp: Field[[IDim], float64]
+) -> Tuple[Field[[IDim], float64], Field[[IDim], float64]]:
     return inp, inp
 
 
 # --- Parsing ---
 def test_tuple_constructed_in_out():
     def tuple_program(
-        inp: Field[..., float64], out1: Field[..., float64], out2: Field[..., float64]
+        inp: Field[[IDim], float64], out1: Field[[IDim], float64], out2: Field[[IDim], float64]
     ):
         make_tuple_op(inp, out=(out1, out2))
 

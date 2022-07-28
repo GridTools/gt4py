@@ -13,16 +13,12 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import Optional
 
 from eve import NodeTranslator, traits
 from functional.common import DimensionKind, GridType, GTTypeError
-from functional.ffront import common_types, program_ast as past
+from functional.ffront import common_types, program_ast as past, type_info
 from functional.iterator import ir as itir
-
-
-if TYPE_CHECKING:
-    from typing import Optional
 
 
 def _size_arg_from_field(field_name: str, dim: int) -> str:
@@ -37,6 +33,7 @@ def _flatten_tuple_expr(node: past.TupleExpr | past.Name) -> list[past.Name]:
         for e in node.elts:
             result.extend(_flatten_tuple_expr(e))
         return result
+    raise AssertionError("Only `past.Name` or `past.TupleExpr`s thereof are allowed.")
 
 
 class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
@@ -116,7 +113,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         )
 
     def _visit_stencil_call(self, node: past.Call, **kwargs) -> itir.StencilClosure:
-        assert common_types.is_field_type_or_tuple_of_field_type(node.kwargs["out"].type)
+        assert type_info.is_field_type_or_tuple_of_field_type(node.kwargs["out"].type)
 
         output, domain = self._visit_stencil_call_out_arg(node.kwargs["out"], **kwargs)
 
@@ -225,7 +222,13 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         elif isinstance(node, past.Name):
             return (self._construct_itir_out_arg(node), self._construct_itir_domain_arg(node))
         elif isinstance(node, past.TupleExpr):
-            flattened = _flatten_tuple_expr(node)
+            try:
+                flattened = _flatten_tuple_expr(node)
+            except AssertionError:
+                raise ValueError(
+                    f"Illegal expression in tuple, only (nested) tuples of non-sliced Fields allowed in {node.location}. "
+                )
+
             first_field = flattened[0]
             if not all(field.type.dims == first_field.type.dims for field in flattened):
                 raise RuntimeError(

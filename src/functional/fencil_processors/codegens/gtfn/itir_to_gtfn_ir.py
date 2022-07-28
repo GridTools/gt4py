@@ -211,11 +211,9 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             domain=self.visit(node.domain, stencil=kwargs["symtable"][node.stencil.id], **kwargs)
         )
 
-        output = self._visit_output_argument(node.output)
-
         return StencilExecution(
             stencil=self.visit(node.stencil),
-            output=output,
+            output=self._visit_output_argument(node.output),
             inputs=self.visit(node.inputs),
             backend=backend,
         )

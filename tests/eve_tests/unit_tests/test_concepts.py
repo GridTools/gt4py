@@ -53,15 +53,15 @@ class TestSourceLocation:
 
     def test_str(self):
         loc = eve.concepts.SourceLocation(line=1, column=1, source="dir/source.py")
-        assert str(loc) == "<'dir/source.py': Line 1, Col 1>"
+        assert str(loc) == "<'dir/source.py:1': Line 1, Col 1>"
 
         loc = eve.concepts.SourceLocation(line=1, column=1, source="dir/source.py", end_line=2)
-        assert str(loc) == "<'dir/source.py': Line 1, Col 1 to Line 2>"
+        assert str(loc) == "<'dir/source.py:1': Line 1, Col 1 to Line 2>"
 
         loc = eve.concepts.SourceLocation(
             line=1, column=1, source="dir/source.py", end_line=2, end_column=2
         )
-        assert str(loc) == "<'dir/source.py': Line 1, Col 1 to Line 2, Col 2>"
+        assert str(loc) == "<'dir/source.py:1': Line 1, Col 1 to Line 2, Col 2>"
 
     def test_construction_from_ast(self):
         import ast
@@ -105,7 +105,7 @@ class TestSourceLocationGroup:
         loc = eve.concepts.SourceLocationGroup(loc1, loc2, context="some context")
         assert (
             str(loc)
-            == "<#some context#[<'source1.py': Line 1, Col 1>, <'source2.py': Line 2, Col 2>]>"
+            == "<#some context#[<'source1.py:1': Line 1, Col 1>, <'source2.py:2': Line 2, Col 2>]>"
         )
 
 

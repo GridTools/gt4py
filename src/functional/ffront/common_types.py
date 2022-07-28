@@ -101,14 +101,6 @@ class FieldType(DataType):
         return f"Field[{dims}, dtype={self.dtype}]"
 
 
-def is_field_type_or_tuple_of_field_type(t: DataType) -> bool:
-    if isinstance(t, FieldType):
-        return True
-    elif isinstance(t, TupleType):
-        return all(is_field_type_or_tuple_of_field_type(e) for e in t.types)
-    return False
-
-
 @dataclass(frozen=True)
 class FunctionType(SymbolType):
     args: list[DataType | DeferredSymbolType]

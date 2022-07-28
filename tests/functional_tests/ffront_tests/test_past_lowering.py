@@ -15,32 +15,125 @@ from typing import Tuple
 
 import pytest
 
+import eve
+from eve.pattern_matching import ObjectPattern as P
 from functional.common import Field, GridType
 from functional.ffront.decorator import field_operator
 from functional.ffront.fbuiltins import Dimension, float64
 from functional.ffront.func_to_past import ProgramParser
 from functional.ffront.past_to_itir import ProgramLowering
+from functional.iterator import ir as itir
+
+from .past_common_fixtures import copy_program_def, copy_restrict_program_def, identity_def
 
 
-IDim = Dimension("[IDim]")
+IDim = Dimension("IDim")
 
 
-@field_operator
-def make_tuple_op(
-    inp: Field[[IDim], float64]
-) -> Tuple[Field[[IDim], float64], Field[[IDim], float64]]:
-    return inp, inp
+@pytest.fixture
+def itir_identity_fundef():
+    return itir.FunctionDefinition(
+        id="identity",
+        params=[itir.Sym(id="x")],
+        expr=itir.FunCall(fun=itir.SymRef(id="deref"), args=[itir.SymRef(id="x")]),
+    )
 
 
-def test_tuple_constructed_in_out_invalid_slicing():
+@pytest.fixture
+def make_tuple_op():
+    def make_tuple_op_impl(
+        inp: Field[[IDim], float64]
+    ) -> Tuple[Field[[IDim], float64], Field[[IDim], float64]]:
+        return inp, inp
+
+    return field_operator(make_tuple_op_impl)
+
+
+def test_copy_lowering(copy_program_def, itir_identity_fundef):
+    past_node = ProgramParser.apply_to_function(copy_program_def)
+    itir_node = ProgramLowering.apply(
+        past_node, function_definitions=[itir_identity_fundef], grid_type=GridType.CARTESIAN
+    )
+    closure_pattern = P(
+        itir.StencilClosure,
+        domain=P(
+            itir.FunCall,
+            fun=P(itir.SymRef, id=eve.SymbolRef("cartesian_domain")),
+            args=[
+                P(
+                    itir.FunCall,
+                    fun=P(itir.SymRef, id=eve.SymbolRef("named_range")),
+                    args=[
+                        P(itir.AxisLiteral, value="IDim"),
+                        P(itir.Literal, value="0", type="int"),
+                        P(itir.SymRef, id=eve.SymbolRef("__out_field_size_0")),
+                    ],
+                )
+            ],
+        ),
+        stencil=P(itir.SymRef, id=eve.SymbolRef("identity")),
+        inputs=[P(itir.SymRef, id=eve.SymbolRef("in_field"))],
+        output=P(itir.SymRef, id=eve.SymbolRef("out_field")),
+    )
+    fencil_pattern = P(
+        itir.FencilDefinition,
+        id=eve.SymbolName("copy_program"),
+        params=[
+            P(itir.Sym, id=eve.SymbolName("in_field")),
+            P(itir.Sym, id=eve.SymbolName("out_field")),
+            P(itir.Sym, id=eve.SymbolName("__in_field_size_0")),
+            P(itir.Sym, id=eve.SymbolName("__out_field_size_0")),
+        ],
+        closures=[closure_pattern],
+    )
+
+    fencil_pattern.match(itir_node, raise_exception=True)
+
+
+def test_copy_restrict_lowering(copy_restrict_program_def, itir_identity_fundef):
+    past_node = ProgramParser.apply_to_function(copy_restrict_program_def)
+    itir_node = ProgramLowering.apply(
+        past_node, function_definitions=[itir_identity_fundef], grid_type=GridType.CARTESIAN
+    )
+    closure_pattern = P(
+        itir.StencilClosure,
+        domain=P(
+            itir.FunCall,
+            fun=P(itir.SymRef, id=eve.SymbolRef("cartesian_domain")),
+            args=[
+                P(
+                    itir.FunCall,
+                    fun=P(itir.SymRef, id=eve.SymbolRef("named_range")),
+                    args=[
+                        P(itir.AxisLiteral, value="IDim"),
+                        P(itir.Literal, value="1", type="int"),
+                        P(itir.Literal, value="2", type="int"),
+                    ],
+                )
+            ],
+        ),
+    )
+    fencil_pattern = P(
+        itir.FencilDefinition,
+        id=eve.SymbolName("copy_restrict_program"),
+        params=[
+            P(itir.Sym, id=eve.SymbolName("in_field")),
+            P(itir.Sym, id=eve.SymbolName("out_field")),
+            P(itir.Sym, id=eve.SymbolName("__in_field_size_0")),
+            P(itir.Sym, id=eve.SymbolName("__out_field_size_0")),
+        ],
+        closures=[closure_pattern],
+    )
+
+    fencil_pattern.match(itir_node, raise_exception=True)
+
+
+@pytest.mark.xfail(reason="slicing in tuple expr not yet supported.")
+def test_tuple_constructed_in_out_with_slicing(make_tuple_op):
     def tuple_program(
         inp: Field[[IDim], float64], out1: Field[[IDim], float64], out2: Field[[IDim], float64]
     ):
         make_tuple_op(inp, out=(out1[1:], out2))
 
     parsed = ProgramParser.apply_to_function(tuple_program)
-    with pytest.raises(
-        RuntimeError,
-        match="Unexpected `out` argument",
-    ):
-        ProgramLowering.apply(parsed, function_definitions=[], grid_type=GridType.CARTESIAN)
+    ProgramLowering.apply(parsed, function_definitions=[], grid_type=GridType.CARTESIAN)
