@@ -153,7 +153,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         if isinstance(node, past.Name):
             return itir.SymRef(id=node.id)
         elif isinstance(node, past.TupleExpr):
-            if any(isinstance(el, past.Subscript()) for el in _flatten_tuple_expr(node)):
+            if any(isinstance(el, past.Subscript) for el in _flatten_tuple_expr(node)):
                 raise NotImplementedError("Slicing for tuple `out` argument not supported.")
             return itir.FunCall(
                 fun=itir.SymRef(id="make_tuple"),

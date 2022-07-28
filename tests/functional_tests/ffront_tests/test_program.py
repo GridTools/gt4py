@@ -22,7 +22,7 @@ import pytest
 import eve
 from eve.pattern_matching import ObjectPattern as P
 from functional.common import Field, GridType, GTTypeError
-from functional.fencil_processors.runners import roundtrip
+from functional.fencil_processors.runners import gtfn_cpu, roundtrip
 from functional.ffront import common_types, program_ast as past
 from functional.ffront.decorator import field_operator, program
 from functional.ffront.func_to_past import ProgramParser
@@ -44,10 +44,12 @@ from .past_common_fixtures import (
 )
 
 
-fieldview_backend = roundtrip.executor
+@pytest.fixture(params=[roundtrip.executor, gtfn_cpu.run_gtfn])
+def fieldview_backend(request):
+    yield request.param
 
 
-def test_identity_fo_execution(identity_def):
+def test_identity_fo_execution(fieldview_backend, identity_def):
     size = 10
     in_field = np_as_located_field(IDim)(np.ones((size)))
     out_field = np_as_located_field(IDim)(np.zeros((size)))
@@ -58,7 +60,7 @@ def test_identity_fo_execution(identity_def):
     assert np.allclose(in_field, out_field)
 
 
-def test_shift_by_one_execution():
+def test_shift_by_one_execution(fieldview_backend):
     size = 10
     in_field = np_as_located_field(IDim)(np.arange(0, size, 1))
     out_field = np_as_located_field(IDim)(np.zeros((size)))
@@ -87,7 +89,7 @@ def test_shift_by_one_execution():
     assert np.allclose(out_field, out_field_ref)
 
 
-def test_copy_execution(copy_program_def):
+def test_copy_execution(fieldview_backend, copy_program_def):
     size = 10
     in_field = np_as_located_field(IDim)(np.ones((size)))
     out_field = np_as_located_field(IDim)(np.zeros((size)))
@@ -98,7 +100,7 @@ def test_copy_execution(copy_program_def):
     assert np.allclose(in_field, out_field)
 
 
-def test_double_copy_execution(double_copy_program_def):
+def test_double_copy_execution(fieldview_backend, double_copy_program_def):
     size = 10
     in_field = np_as_located_field(IDim)(np.ones((size)))
     intermediate_field = np_as_located_field(IDim)(np.zeros((size)))
@@ -110,7 +112,7 @@ def test_double_copy_execution(double_copy_program_def):
     assert np.allclose(in_field, out_field)
 
 
-def test_copy_restricted_execution(copy_restrict_program_def):
+def test_copy_restricted_execution(fieldview_backend, copy_restrict_program_def):
     size = 10
     in_field = np_as_located_field(IDim)(np.ones((size)))
     out_field = np_as_located_field(IDim)(np.zeros((size)))
@@ -124,7 +126,7 @@ def test_copy_restricted_execution(copy_restrict_program_def):
     assert np.allclose(out_field_ref, out_field)
 
 
-def test_calling_fo_from_fo_execution(identity_def):
+def test_calling_fo_from_fo_execution(fieldview_backend, identity_def):
     size = 10
     in_field = np_as_located_field(IDim)(2 * np.ones((size)))
     out_field = np_as_located_field(IDim)(np.zeros((size)))
@@ -145,3 +147,63 @@ def test_calling_fo_from_fo_execution(identity_def):
     fo_from_fo_program(in_field, out_field, offset_provider={})
 
     assert np.allclose(out_field, out_field_ref)
+
+
+def test_tuple_program_return_constructed_inside(fieldview_backend):
+    size = 10
+    a = np_as_located_field(IDim)(np.ones((size,)))
+    b = np_as_located_field(IDim)(2 * np.ones((size,)))
+    out_a = np_as_located_field(IDim)(np.zeros((size,)))
+    out_b = np_as_located_field(IDim)(np.zeros((size,)))
+
+    @field_operator
+    def pack_tuple(
+        a: Field[[IDim], float64], b: Field[[IDim], float64]
+    ) -> tuple[Field[[IDim], float64], Field[[IDim], float64]]:
+        return (a, b)
+
+    @program(backend=fieldview_backend)
+    def prog(
+        a: Field[[IDim], float64],
+        b: Field[[IDim], float64],
+        out_a: Field[[IDim], float64],
+        out_b: Field[[IDim], float64],
+    ):
+        pack_tuple(a, b, out=(out_a, out_b))
+
+    prog(a, b, out_a, out_b, offset_provider={})
+
+    assert np.allclose(a, out_a)
+    assert np.allclose(b, out_b)
+
+
+def test_tuple_program_return_constructed_inside_nested(fieldview_backend):
+    size = 10
+    a = np_as_located_field(IDim)(np.ones((size,)))
+    b = np_as_located_field(IDim)(2 * np.ones((size,)))
+    c = np_as_located_field(IDim)(3 * np.ones((size,)))
+    out_a = np_as_located_field(IDim)(np.zeros((size,)))
+    out_b = np_as_located_field(IDim)(np.zeros((size,)))
+    out_c = np_as_located_field(IDim)(np.zeros((size,)))
+
+    @field_operator
+    def pack_tuple(
+        a: Field[[IDim], float64], b: Field[[IDim], float64], c: Field[[IDim], float64]
+    ) -> tuple[tuple[Field[[IDim], float64], Field[[IDim], float64]], Field[[IDim], float64]]:
+        return ((a, b), c)
+
+    @program(backend=fieldview_backend)
+    def prog(
+        a: Field[[IDim], float64],
+        b: Field[[IDim], float64],
+        c: Field[[IDim], float64],
+        out_a: Field[[IDim], float64],
+        out_b: Field[[IDim], float64],
+        out_c: Field[[IDim], float64],
+    ):
+        pack_tuple(a, b, c, out=((out_a, out_b), out_c))
+
+    prog(a, b, c, out_a, out_b, out_c, offset_provider={})
+
+    assert np.allclose(a, out_a)
+    assert np.allclose(b, out_b)
