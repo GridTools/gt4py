@@ -328,7 +328,7 @@ def greater_equal(first, second):
     return first >= second
 
 
-@builtins.not_equal.register(EMBEDDED)
+@builtins.not_eq.register(EMBEDDED)
 def not_equal(first, second):
     return first != second
 

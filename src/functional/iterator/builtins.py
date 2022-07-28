@@ -120,7 +120,7 @@ def greater_equal(*args):
 
 
 @builtin_dispatch
-def not_equal(*args):
+def not_eq(*args):
     raise BackendNotSelectedError()
 
 
@@ -323,7 +323,7 @@ BUILTINS = {
     "less_equal",
     "greater_equal",
     "eq",
-    "not_equal",
+    "not_eq",
     "not_",
     "and_",
     "or_",

@@ -122,7 +122,7 @@ BUILTINS = {
     "greater",
     "greater_equal",
     "less_equal",
-    "not_equal",
+    "not_eq",
     "if_",
     "not_",
     "and_",
