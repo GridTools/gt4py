@@ -24,6 +24,7 @@ from typing import Any, Callable, ClassVar, Dict, Optional, Tuple, Union
 import numpy as np
 
 import gt4py.backend as gt_backend
+import gt4py.storage.utils
 import gtc.utils as gtc_utils
 from gt4py.definitions import AccessKind, DomainInfo, FieldInfo, ParameterInfo
 from gtc.definitions import Index, Shape
@@ -57,13 +58,13 @@ class _ArgsInfo:
 
 
 def _extract_array_infos(field_args, device) -> Dict[str, Optional[_ArgsInfo]]:
-    xp = cp if device == "gpu" else np
+    asarray = gt4py.storage.utils.as_cupy if device == "gpu" else gt4py.storage.utils.as_numpy
     array_infos: Dict[str, Optional[_ArgsInfo]] = {}
     for name, arg in field_args.items():
         if arg is None:
             array_infos[name] = None
         else:
-            array = xp.asarray(arg)
+            array = asarray(arg)
             dimensions = getattr(arg, "__gt_dims__", None)
             if dimensions is not None:
                 sorted_dimensions = [d for d in "IJK" if d in dimensions]

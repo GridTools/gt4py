@@ -14,6 +14,7 @@
 
 import numpy as np
 
+import gt4py.storage.utils
 from gt4py import backend as gt_backend
 
 
@@ -82,11 +83,11 @@ def zeros(backend, aligned_index, shape, dtype, dimensions=None):
 
 def from_array(data, backend, aligned_index, shape=None, dtype=None, dimensions=None):
     is_cupy_array = cp is not None and isinstance(data, cp.ndarray)
-    xp = cp if is_cupy_array else np
+    asarray = gt4py.storage.utils.as_cupy if is_cupy_array else gt4py.storage.utils.as_numpy
     if shape is None:
-        shape = xp.asarray(data).shape
+        shape = asarray(data).shape
     if dtype is None:
-        dtype = xp.asarray(data).dtype
+        dtype = asarray(data).dtype
     storage = empty(
         shape=shape,
         dtype=dtype,
@@ -95,17 +96,10 @@ def from_array(data, backend, aligned_index, shape=None, dtype=None, dimensions=
         dimensions=dimensions,
     )
 
-    if cp is not None:
-        if isinstance(storage, cp.ndarray):
-            if is_cupy_array:
-                storage[...] = data
-            else:
-                storage[...] = cp.asarray(data)
-        else:
-            storage[...] = cp.asnumpy(data)
+    if cp is not None and isinstance(storage, cp.ndarray):
+        storage[...] = gt4py.storage.utils.as_cupy(data)
     else:
-        assert isinstance(storage, np.ndarray)
-        storage[...] = data
+        storage[...] = gt4py.storage.utils.as_numpy(data)
 
     return storage
 

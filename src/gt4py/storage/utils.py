@@ -14,7 +14,7 @@
 
 import math
 import numbers
-from typing import Union
+from typing import Any, Dict, Protocol, Union
 
 import numpy as np
 
@@ -27,6 +27,17 @@ try:
     from cupy.lib.stride_tricks import as_strided
 except ImportError:
     cp = None
+
+
+class ArrayInterfaceType(Protocol):
+    __array_interface__: Dict[str, Any]
+
+
+class CudaArrayInterfaceType(Protocol):
+    __array_interface__: Dict[str, Any]
+
+
+FieldLike = Union["cp.ndarray", np.ndarray, ArrayInterfaceType, CudaArrayInterfaceType]
 
 
 def idx_from_order(order):
@@ -240,3 +251,11 @@ def cpu_copy(array: Union[np.ndarray, "cp.ndarray"]):
         return np.array(cp.asnumpy(array))
     else:
         return np.array(array)
+
+
+def as_numpy(array: FieldLike) -> np.ndarray:
+    return np.asarray(array)
+
+
+def as_cupy(array: FieldLike) -> "cp.ndarray":
+    return cp.asarray(array)
