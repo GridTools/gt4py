@@ -128,7 +128,7 @@ class BinOp(Expr):
 
 class CompareOperator(StrEnum):
     EQ = "eq"
-    NOTEQ = "not_equal"
+    NOTEQ = "not_eq"
     LT = "less"
     LTE = "less_equal"
     GT = "greater"
