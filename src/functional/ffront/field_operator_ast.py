@@ -130,6 +130,9 @@ class CompareOperator(StrEnum):
     GT = "greater"
     LT = "less"
     EQ = "eq"
+    LTE = "lesseq"
+    GTE = "greatereq"
+    NOTEQ = "noteq"
 
 
 class Compare(Expr):

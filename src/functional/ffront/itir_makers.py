@@ -169,6 +169,11 @@ def less_(left, right):
     return call_("less")(left, right)
 
 
+def lessequal_(left, right):
+    """Create a less FunCall, shorthand for ``call("less")(left, right)``."""
+    return call_("lessequal")(left, right)
+
+
 def eq_(left, right):
     """Create a eq FunCall, shorthand for ``call("eq")(left, right)``."""
     return call_("eq")(left, right)

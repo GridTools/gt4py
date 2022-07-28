@@ -110,6 +110,21 @@ def less(*args):
 
 
 @builtin_dispatch
+def lesseq(*args):
+    raise BackendNotSelectedError()
+
+
+@builtin_dispatch
+def greatereq(*args):
+    raise BackendNotSelectedError()
+
+
+@builtin_dispatch
+def noteq(*args):
+    raise BackendNotSelectedError()
+
+
+@builtin_dispatch
 def make_tuple(*args):
     raise BackendNotSelectedError()
 
@@ -305,7 +320,10 @@ BUILTINS = {
     "if_",
     "greater",
     "less",
+    "lesseq",
+    "greatereq",
     "eq",
+    "noteq",
     "not_",
     "and_",
     "or_",
