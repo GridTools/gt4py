@@ -17,22 +17,17 @@ import importlib.util
 import pathlib
 import tempfile
 import textwrap
-from typing import TYPE_CHECKING
+from typing import Optional
+from collections.abc import Callable, Iterable
 
 from eve import codegen
 from eve.codegen import FormatTemplate as as_fmt, MakoTemplate as as_mako
 from eve.concepts import Node
+from functional.common import Dimension
+from functional.iterator.embedded import NeighborTableOffsetProvider
 from functional.iterator.ir import AxisLiteral, FencilDefinition, OffsetLiteral
 from functional.iterator.processor_interface import fencil_executor
 from functional.iterator.transforms import apply_common_transforms
-
-
-if TYPE_CHECKING:
-    from collections.abc import Callable, Iterable
-    from typing import Optional
-
-    from functional.common import Dimension
-    from functional.iterator.embedded import NeighborTableOffsetProvider
 
 
 class EmbeddedDSL(codegen.TemplatedGenerator):
