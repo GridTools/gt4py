@@ -329,7 +329,7 @@ def greater_equal(first, second):
 
 
 @builtins.not_eq.register(EMBEDDED)
-def not_equal(first, second):
+def not_eq(first, second):
     return first != second
 
 
