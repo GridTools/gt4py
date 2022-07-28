@@ -127,12 +127,12 @@ class BinOp(Expr):
 
 
 class CompareOperator(StrEnum):
-    GT = "greater"
-    LT = "less"
     EQ = "eq"
-    LTE = "lesseq"
-    GTE = "greatereq"
     NOTEQ = "noteq"
+    LT = "less"
+    LTE = "lesseq"
+    GT = "greater"
+    GTE = "greatereq"
 
 
 class Compare(Expr):
