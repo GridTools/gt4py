@@ -71,7 +71,7 @@ class FunctionDefinition(Node, SymbolTableTrait):
 class StencilClosure(Node):
     domain: Expr
     stencil: Expr
-    output: SymRef | FunCall
+    output: Union[SymRef, FunCall]
     inputs: List[SymRef]
 
     @datamodels.validator("output")
@@ -142,7 +142,7 @@ class FencilDefinition(Node, ValidatedSymbolTableTrait):
     params: List[Sym]
     closures: List[StencilClosure]
 
-    _NODE_SYMBOLS_: ClassVar = [Sym(id=name) for name in BUILTINS]
+    _NODE_SYMBOLS_: ClassVar[List[Sym]] = [Sym(id=name) for name in BUILTINS]
 
 
 # TODO(fthaler): just use hashable types in nodes (tuples instead of lists)
