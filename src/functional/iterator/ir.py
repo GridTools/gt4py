@@ -71,7 +71,7 @@ class FunctionDefinition(Node, SymbolTableTrait):
 class StencilClosure(Node):
     domain: Expr
     stencil: Expr
-    output: Union[SymRef, FunCall]
+    output: SymRef | FunCall
     inputs: List[SymRef]
 
     @datamodels.validator("output")
