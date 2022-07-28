@@ -170,7 +170,7 @@ def less_(left, right):
 
 
 def less_equal_(left, right):
-    """Create a less FunCall, shorthand for ``call("lessequal")(left, right)``."""
+    """Create a less_equal FunCall, shorthand for ``call("less_equal")(left, right)``."""
     return call_("less_equal")(left, right)
 
 
