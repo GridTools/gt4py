@@ -76,7 +76,8 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     def visit_Literal(self, node: itir.Literal, **kwargs: Any) -> Literal:
         return Literal(value=node.value, type=node.type)
 
-    _vertical_dimension = "gridtools::unstructured::dim::vertical"
+    _vertical_dimension = "unstructured::dim::vertical"
+    _horizontal_dimension = "unstructured::dim::horizontal"
 
     def visit_OffsetLiteral(
         self, node: itir.OffsetLiteral, *, grid_type, **kwargs: Any
@@ -252,19 +253,47 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             backend=backend,
         )
 
-    def _add_axis_definitions(self, node: eve.Node):
-        axes = self._collect_offset_or_axis_node(itir.AxisLiteral, node)
-        for a in axes:
-            self.offset_definitions[a] = OffsetDefinition(name=Sym(id=a))
+    @staticmethod
+    def _get_gridtype(closures: list[itir.StencilClosure]) -> common.GridType:
+        def _extract_grid_type(domain_arg: itir.Expr) -> common.GridType:
+            assert isinstance(domain_arg, itir.FunCall)
+            if domain_arg.fun == itir.SymRef(id="cartesian_domain"):
+                return common.GridType.CARTESIAN
+            else:
+                assert domain_arg.fun == itir.SymRef(id="unstructured_domain")
+                return common.GridType.UNSTRUCTURED
+
+        first = _extract_grid_type(closures[0].domain)
+        assert all(first == _extract_grid_type(c.domain) for c in closures)
+        return first
+
+    def _collect_dimensions_from_domain(self, closures: list[itir.StencilClosure]) -> None:
+        for c in closures:
+            if c.domain.fun == itir.SymRef(id="cartesian_domain"):
+                for nr in c.domain.args:
+                    assert isinstance(nr, itir.FunCall) and nr.fun == itir.SymRef(id="named_range")
+                    dim_name = nr.args[0].value
+                    self.offset_definitions[dim_name] = OffsetDefinition(name=Sym(id=dim_name))
+            else:
+                assert c.domain.fun == itir.SymRef(id="unstructured_domain")
+                assert len(c.domain.args) == 2
+                horizontal_name = c.domain.args[0].args[0].value
+                self.offset_definitions[horizontal_name] = OffsetDefinition(
+                    name=Sym(id=horizontal_name), alias=self._horizontal_dimension
+                )
+                vertical_name = c.domain.args[1].args[0].value
+                self.offset_definitions[vertical_name] = OffsetDefinition(
+                    name=Sym(id=vertical_name), alias=self._vertical_dimension
+                )
 
     def visit_FencilDefinition(
-        self, node: itir.FencilDefinition, *, grid_type: str, **kwargs: Any
+        self, node: itir.FencilDefinition, **kwargs: Any
     ) -> FencilDefinition:
-        grid_type = getattr(common.GridType, grid_type.upper())
+        grid_type = self._get_gridtype(node.closures)
         self.offset_provider = kwargs["offset_provider"]
         executions = self.visit(node.closures, grid_type=grid_type, **kwargs)
         function_definitions = self.visit(node.function_definitions, grid_type=grid_type)
-        self._add_axis_definitions(node)
+        self._collect_dimensions_from_domain(node.closures)
         return FencilDefinition(
             id=SymbolName(node.id),
             params=self.visit(node.params),
