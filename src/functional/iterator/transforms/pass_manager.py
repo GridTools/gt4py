@@ -1,3 +1,5 @@
+from functional.iterator.transforms.bubble_up_derefed_lambda_call import BubbleUpDerefedLambdaCall
+from functional.iterator.transforms.cse import CSE
 from functional.iterator.transforms.global_tmps import CreateGlobalTmps
 from functional.iterator.transforms.inline_fundefs import InlineFundefs, PruneUnreferencedFundefs
 from functional.iterator.transforms.inline_lambdas import InlineLambdas
@@ -17,10 +19,16 @@ def apply_common_transforms(
     ir = PruneUnreferencedFundefs().visit(ir)
     ir = NormalizeShifts().visit(ir)
     ir = InlineLambdas().visit(ir)
+    ir = BubbleUpDerefedLambdaCall().visit(ir)
     if not use_tmps:
         ir = InlineLifts().visit(ir)
     ir = InlineLambdas().visit(ir)
     ir = NormalizeShifts().visit(ir)
+
+    ir = CSE().visit(ir)
+    ir = InlineLambdas().visit(ir)
+    ir = NormalizeShifts().visit(ir)
+
     if unroll_reduce:
         for _ in range(10):
             unrolled = UnrollReduce().visit(ir, offset_provider=offset_provider)
@@ -37,4 +45,7 @@ def apply_common_transforms(
         ir = CreateGlobalTmps().visit(
             ir, offset_provider=offset_provider, register_tmp=register_tmp
         )
+
+    ir = CSE().visit(ir)
+
     return ir

@@ -1,6 +1,28 @@
-from eve import NodeTranslator
+import dataclasses
+
+from eve import NodeTranslator, NodeVisitor
 from functional.iterator import ir
 from functional.iterator.transforms.remap_symbols import RemapSymbolRefs, RenameSymbols
+
+
+@dataclasses.dataclass
+class CountSymRefs(NodeVisitor):
+    sym_name: str
+    count: int = 0
+
+    @classmethod
+    def apply(cls, node: ir.Node, sym_name: str):
+        obj = cls(sym_name=sym_name, count=0)
+        obj.visit(node)
+        return obj.count
+
+    def visit_SymRef(self, node: ir.SymRef):
+        if node.id == self.sym_name:
+            self.count += 1
+
+    def visit_Lambda(self, node: ir.Lambda):
+        if any(param.id == self.sym_name for param in node.params):
+            self.generic_visit(node)
 
 
 class InlineLambdas(NodeTranslator):
@@ -8,6 +30,21 @@ class InlineLambdas(NodeTranslator):
         node = self.generic_visit(node)
         if isinstance(node.fun, ir.Lambda):
             assert len(node.fun.params) == len(node.args)
+
+            all_params_referenced_once = True
+            for param in node.fun.params:
+                # TODO(tehrengruber): slow
+                c = CountSymRefs.apply(node.fun, param.id)
+                if c != 1:
+                    all_params_referenced_once = False
+
+            primitive = all(isinstance(arg, ir.SymRef) for arg in node.args)
+
+            # only inline when we don't increase the number of operations
+            # TODO(tehrengruber): make configurable
+            if not primitive and not all_params_referenced_once:
+                return node
+
             refs = (
                 set.union(
                     *(
