@@ -134,12 +134,17 @@ BUILTINS = {
 }
 
 
+class OffsetDefinition(Node):
+    name: Sym
+    alias: str = ""  # TODO Optional[str] errors in eve
+
+
 class FencilDefinition(Node, ValidatedSymbolTableTrait):
     id: SymbolName  # noqa: A003
     params: List[Sym]
     function_definitions: List[FunctionDefinition]
     executions: List[StencilExecution]
-    offset_declarations: List[Sym]
+    offset_definitions: List[OffsetDefinition]
     grid_type: common.GridType
 
     _NODE_SYMBOLS_: ClassVar[List[Sym]] = [Sym(id=name) for name in BUILTINS]

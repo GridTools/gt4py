@@ -29,6 +29,7 @@ from functional.fencil_processors.codegens.gtfn.gtfn_ir import (
     Lambda,
     Literal,
     Node,
+    OffsetDefinition,
     OffsetLiteral,
     SidComposite,
     StencilExecution,
@@ -43,6 +44,7 @@ from functional.iterator import ir as itir
 
 
 class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
+
     _binary_op_map = {
         "plus": "+",
         "minus": "-",
@@ -59,6 +61,9 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     }
     _unary_op_map = {"not_": "!"}
 
+    def __init__(self):
+        self.offset_definitions = {}
+
     def visit_Sym(self, node: itir.Sym, **kwargs: Any) -> Sym:
         return Sym(id=node.id)
 
@@ -66,17 +71,40 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         return SymRef(id=node.id)
 
     def visit_Lambda(self, node: itir.Lambda, **kwargs: Any) -> Lambda:
-        return Lambda(params=self.visit(node.params), expr=self.visit(node.expr))
+        return Lambda(params=self.visit(node.params), expr=self.visit(node.expr, **kwargs))
 
     def visit_Literal(self, node: itir.Literal, **kwargs: Any) -> Literal:
         return Literal(value=node.value, type=node.type)
 
-    def visit_OffsetLiteral(self, node: itir.OffsetLiteral, **kwargs: Any) -> OffsetLiteral:
-        if node.value in self.offset_provider:
-            if isinstance(
-                self.offset_provider[node.value], common.Dimension
-            ):  # replace offset tag by dimension tag
-                return OffsetLiteral(value=self.offset_provider[node.value].value)
+    _vertical_dimension = "gridtools::unstructured::dim::vertical"
+
+    def visit_OffsetLiteral(
+        self, node: itir.OffsetLiteral, *, grid_type, **kwargs: Any
+    ) -> OffsetLiteral:
+        if isinstance(node.value, int):
+            return OffsetLiteral(value=node.value)
+
+        if node.value not in self.offset_provider:
+            raise ValueError(f"Missing offset_provider entry from {node.value}")
+        offset_name = node.value
+        if isinstance(self.offset_provider[node.value], common.Dimension):
+            print(node.value)
+            dim = self.offset_provider[node.value]
+            if grid_type == common.GridType.CARTESIAN:
+                # rename offset to dimension
+                self.offset_definitions[dim.value] = OffsetDefinition(name=Sym(id=dim.value))
+                return OffsetLiteral(value=dim.value)
+            else:
+                assert grid_type == common.GridType.UNSTRUCTURED
+                if not dim.kind == common.DimensionKind.VERTICAL:
+                    raise ValueError(
+                        "Mapping an offset to a horizontal dimension in unstructured is not allowed."
+                    )
+                self.offset_definitions[offset_name] = OffsetDefinition(
+                    name=Sym(id=offset_name), alias=self._vertical_dimension
+                )
+                return OffsetLiteral(value=offset_name)
+        self.offset_definitions[offset_name] = OffsetDefinition(name=Sym(id=offset_name))
         return OffsetLiteral(value=node.value)
 
     def visit_AxisLiteral(self, node: itir.AxisLiteral, **kwargs: Any) -> Literal:
@@ -148,20 +176,22 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         if isinstance(node.fun, itir.SymRef):
             if node.fun.id in self._unary_op_map:
                 assert len(node.args) == 1
-                return UnaryExpr(op=self._unary_op_map[node.fun.id], expr=self.visit(node.args[0]))
+                return UnaryExpr(
+                    op=self._unary_op_map[node.fun.id], expr=self.visit(node.args[0], **kwargs)
+                )
             elif node.fun.id in self._binary_op_map:
                 assert len(node.args) == 2
                 return BinaryExpr(
                     op=self._binary_op_map[node.fun.id],
-                    lhs=self.visit(node.args[0]),
-                    rhs=self.visit(node.args[1]),
+                    lhs=self.visit(node.args[0], **kwargs),
+                    rhs=self.visit(node.args[1], **kwargs),
                 )
             elif node.fun.id == "if_":
                 assert len(node.args) == 3
                 return TernaryExpr(
-                    cond=self.visit(node.args[0]),
-                    true_expr=self.visit(node.args[1]),
-                    false_expr=self.visit(node.args[2]),
+                    cond=self.visit(node.args[0], **kwargs),
+                    true_expr=self.visit(node.args[1], **kwargs),
+                    false_expr=self.visit(node.args[2], **kwargs),
                 )
             elif self._is_sparse_deref_shift(node):
                 return self._sparse_deref_shift_to_tuple_get(node)
@@ -188,17 +218,18 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         elif isinstance(node.fun, itir.FunCall) and node.fun.fun == itir.SymRef(id="shift"):
             assert len(node.args) == 1
             return FunCall(
-                fun=self.visit(node.fun.fun), args=self.visit(node.args) + self.visit(node.fun.args)
+                fun=self.visit(node.fun.fun, **kwargs),
+                args=self.visit(node.args, **kwargs) + self.visit(node.fun.args, **kwargs),
             )
         elif isinstance(node.fun, itir.FunCall) and node.fun == itir.SymRef(id="shift"):
             raise ValueError("unapplied shift call not supported: {node}")
-        return FunCall(fun=self.visit(node.fun), args=self.visit(node.args))
+        return FunCall(fun=self.visit(node.fun, **kwargs), args=self.visit(node.args, **kwargs))
 
     def visit_FunctionDefinition(
         self, node: itir.FunctionDefinition, **kwargs: Any
     ) -> FunctionDefinition:
         return FunctionDefinition(
-            id=node.id, params=self.visit(node.params), expr=self.visit(node.expr)
+            id=node.id, params=self.visit(node.params), expr=self.visit(node.expr, **kwargs)
         )
 
     def _visit_output_argument(self, node: itir.SymRef | itir.FunCall):
@@ -215,11 +246,16 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         )
 
         return StencilExecution(
-            stencil=self.visit(node.stencil),
+            stencil=self.visit(node.stencil, **kwargs),
             output=self._visit_output_argument(node.output),
             inputs=self.visit(node.inputs),
             backend=backend,
         )
+
+    def _add_axis_definitions(self, node: eve.Node):
+        axes = self._collect_offset_or_axis_node(itir.AxisLiteral, node)
+        for a in axes:
+            self.offset_definitions[a] = OffsetDefinition(name=Sym(id=a))
 
     def visit_FencilDefinition(
         self, node: itir.FencilDefinition, *, grid_type: str, **kwargs: Any
@@ -227,17 +263,13 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         grid_type = getattr(common.GridType, grid_type.upper())
         self.offset_provider = kwargs["offset_provider"]
         executions = self.visit(node.closures, grid_type=grid_type, **kwargs)
-        function_definitions = self.visit(node.function_definitions)
-        axes = self._collect_offset_or_axis_node(itir.AxisLiteral, node)
-        offsets = self._collect_offset_or_axis_node(
-            OffsetLiteral, executions + function_definitions
-        )  # collect offsets from gtfn nodes as some might have been dropped
-        offset_declarations = list(map(lambda x: Sym(id=x), axes | offsets))
+        function_definitions = self.visit(node.function_definitions, grid_type=grid_type)
+        self._add_axis_definitions(node)
         return FencilDefinition(
             id=SymbolName(node.id),
             params=self.visit(node.params),
             executions=executions,
             grid_type=grid_type,
-            offset_declarations=offset_declarations,
+            offset_definitions=list(self.offset_definitions.values()),
             function_definitions=function_definitions,
         )

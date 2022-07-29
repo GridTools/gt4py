@@ -139,6 +139,17 @@ class GTFNCodegen(codegen.TemplatedGenerator):
     """
     )
 
+    OffsetDefinition = as_mako(
+        """
+        %if _this_node.alias:
+        using ${name}_t = ${alias};
+        %else:
+        struct ${name}_t{};
+        %endif
+        constexpr inline ${name}_t ${name}{};
+        """
+    )
+
     def visit_FencilDefinition(
         self, node: gtfn_ir.FencilDefinition, **kwargs: Any
     ) -> Union[str, Collection[str]]:
@@ -159,8 +170,7 @@ class GTFNCodegen(codegen.TemplatedGenerator):
     using namespace fn;
     using namespace literals;
 
-    ${''.join('struct ' + o + '_t{};' for o in offset_declarations)}
-    ${''.join('constexpr inline ' + o + '_t ' + o + '{};' for o in offset_declarations)}
+    ${''.join(offset_definitions)}
     ${''.join(function_definitions)}
 
     inline auto ${id} = [](auto connectivities__){
