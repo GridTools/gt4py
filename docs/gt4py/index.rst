@@ -72,6 +72,7 @@ Features:
    :caption: Contents:
 
    quickstart
+   arrays
    commandline
    apiref
    indices
