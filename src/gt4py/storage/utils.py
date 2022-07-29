@@ -14,7 +14,7 @@
 
 import math
 import numbers
-from typing import Any, Dict, Protocol, Union
+from typing import Any, Dict, Protocol, Tuple, Union
 
 import numpy as np
 
@@ -35,6 +35,14 @@ class ArrayInterfaceType(Protocol):
 
 class CudaArrayInterfaceType(Protocol):
     __array_interface__: Dict[str, Any]
+
+
+class GtDimsInterface(Protocol):
+    __gt_dims__: Tuple[str, ...]
+
+
+class GtOriginInterface(Protocol):
+    __gt_origin__: Tuple[int, ...]
 
 
 FieldLike = Union["cp.ndarray", np.ndarray, ArrayInterfaceType, CudaArrayInterfaceType]
@@ -259,3 +267,11 @@ def as_numpy(array: FieldLike) -> np.ndarray:
 
 def as_cupy(array: FieldLike) -> "cp.ndarray":
     return cp.asarray(array)
+
+
+def get_dims(object: GtDimsInterface) -> Tuple[str, ...]:
+    return tuple(str(d) for d in object.__gt_dims__)
+
+
+def get_origin(object: GtOriginInterface) -> Tuple[int, ...]:
+    return tuple(int(o) for o in object.__gt_origin__)
