@@ -53,7 +53,7 @@ The utility ``gt4py.utils.get_dims(storage, annotation)`` that implements this l
 use it.
 
 Note: Support for xarray can be added manually by the user by means of the mechanism described
-`here <https://xarray.pydata.org/en/stable/internals/extending-xarray.html`_.
+`here <https://xarray.pydata.org/en/stable/internals/extending-xarray.html>`_.
 
 Default Origin
 ^^^^^^^^^^^^^^
