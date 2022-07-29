@@ -14,7 +14,7 @@
 
 import math
 import numbers
-from typing import Any, Dict, Protocol, Tuple, Union
+from typing import Any, Dict, Optional, Protocol, Tuple, Union
 
 import numpy as np
 
@@ -269,9 +269,15 @@ def as_cupy(array: FieldLike) -> "cp.ndarray":
     return cp.asarray(array)
 
 
-def get_dims(object: GtDimsInterface) -> Tuple[str, ...]:
-    return tuple(str(d) for d in object.__gt_dims__)
+def get_dims(object: GtDimsInterface) -> Optional[Tuple[str, ...]]:
+    dims = getattr(object, "__gt_dims__", None)
+    if dims is None:
+        return dims
+    return tuple(str(d) for d in dims)
 
 
-def get_origin(object: GtOriginInterface) -> Tuple[int, ...]:
-    return tuple(int(o) for o in object.__gt_origin__)
+def get_origin(object: GtOriginInterface) -> Optional[Tuple[int, ...]]:
+    origin = getattr(object, "__gt_origin__", None)
+    if origin is None:
+        return origin
+    return tuple(int(o) for o in origin)

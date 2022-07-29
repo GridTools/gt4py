@@ -65,7 +65,7 @@ def _extract_array_infos(field_args, device) -> Dict[str, Optional[_ArgsInfo]]:
             array_infos[name] = None
         else:
             array = asarray(arg)
-            dimensions = getattr(arg, "__gt_dims__", None)
+            dimensions = gt4py.storage.utils.get_dims(arg)
             if dimensions is not None:
                 sorted_dimensions = [d for d in "IJK" if d in dimensions]
                 data_dims = [int(d) for d in dimensions if str(d).isdigit()]
@@ -78,7 +78,7 @@ def _extract_array_infos(field_args, device) -> Dict[str, Optional[_ArgsInfo]]:
                 original_object=arg,
                 dimensions=dimensions,
                 device=device,
-                origin=getattr(arg, "__gt_origin__", None),
+                origin=gt4py.storage.utils.get_origin(arg),
             )
     return array_infos
 
