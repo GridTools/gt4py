@@ -2,7 +2,7 @@ import pytest
 
 from eve.utils import UIDs
 from functional.iterator import ir
-from functional.iterator.transforms.cse import CSE
+from functional.iterator.transforms.cse import CommonSubexpressionElimination as CSE
 
 
 @pytest.fixture

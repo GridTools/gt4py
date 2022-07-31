@@ -6,50 +6,75 @@ from functional.iterator.transforms.remap_symbols import RemapSymbolRefs, Rename
 
 
 @dataclasses.dataclass
-class CountSymRefs(NodeVisitor):
-    sym_name: str
-    count: int = 0
+class CountSymbolRefs(NodeVisitor):
+    ref_counts: dict[str, int]
 
     @classmethod
-    def apply(cls, node: ir.Node, sym_name: str):
-        obj = cls(sym_name=sym_name, count=0)
-        obj.visit(node)
-        return obj.count
+    def apply(cls, node: ir.Node, symbol_names: list[str]) -> dict[str, int]:
+        ref_counts = {name: 0 for name in symbol_names}
+        active_refs = set(symbol_names)
 
-    def visit_SymRef(self, node: ir.SymRef):
-        if node.id == self.sym_name:
-            self.count += 1
+        obj = cls(ref_counts=ref_counts)
+        obj.visit(node, active_refs=active_refs)
 
-    def visit_Lambda(self, node: ir.Lambda):
-        if any(param.id == self.sym_name for param in node.params):
-            self.generic_visit(node)
+        return ref_counts
+
+    def visit_SymRef(self, node: ir.Node, *, active_refs: set[str]):
+        if node.id in active_refs:
+            self.ref_counts[node.id] += 1
+
+    def visit_Lambda(self, node: ir.Lambda, *, active_refs: set[str]):
+        active_refs = active_refs - set(param.id for param in node.params)
+
+        self.generic_visit(node, active_refs=active_refs)
 
 
+@dataclasses.dataclass
 class InlineLambdas(NodeTranslator):
+    """Inline lambda calls by substituting every arguments by its value."""
+
+    opcount_preserving: bool
+
+    @classmethod
+    def apply(cls, node: ir.Node, opcount_preserving=False):
+        """
+        Inline lambda calls by substituting every arguments by its value.
+
+        Examples:
+            `(λ(x) → x)(y)` to `y`
+            `(λ(x) → x)(y+y)` to `y+y`
+            `(λ(x) → x+x)(y+y)` to `y+y+y+y` if not opcount_preserving
+            `(λ(x) → x+x)(y+y)` stays as is if opcount_preserving
+
+        Arguments:
+            opcount_preserving: Preserve the number of operations, i.e. only
+            inline lambda call if the resulting call has the same number of
+            operations.
+        """
+        return InlineLambdas(opcount_preserving=opcount_preserving).visit(node)
+
     def visit_FunCall(self, node: ir.FunCall):
         node = self.generic_visit(node)
         if isinstance(node.fun, ir.Lambda):
             assert len(node.fun.params) == len(node.args)
 
-            all_params_referenced_once = True
-            for param in node.fun.params:
-                # TODO(tehrengruber): slow
-                c = CountSymRefs.apply(node.fun, param.id)
-                if c != 1:
-                    all_params_referenced_once = False
+            eligable_params: list[bool] = [True] * len(node.fun.params)
+            if self.opcount_preserving:
+                ref_counts = CountSymbolRefs.apply(node.fun.expr, [p.id for p in node.fun.params])
 
-            primitive = all(isinstance(arg, ir.SymRef) for arg in node.args)
+                for i, param in enumerate(node.fun.params):
+                    if ref_counts[param.id] != 1 and not isinstance(node.args[i], ir.SymRef):
+                        eligable_params[i] = False
 
-            # only inline when we don't increase the number of operations
-            # TODO(tehrengruber): make configurable
-            if not primitive and not all_params_referenced_once:
-                return node
+                if not any(eligable_params):
+                    return node
 
             refs = (
                 set.union(
                     *(
                         arg.pre_walk_values().if_isinstance(ir.SymRef).getattr("id").to_set()
-                        for arg in node.args
+                        for i, arg in enumerate(node.args)
+                        if eligable_params[i]
                     )
                 )
                 if len(node.args) > 0
@@ -68,6 +93,26 @@ class InlineLambdas(NodeTranslator):
                 name_map = {sym: new_name(sym) for sym in clashes}
                 expr = RenameSymbols().visit(expr, name_map=name_map)
 
-            symbol_map = {param.id: arg for param, arg in zip(node.fun.params, node.args)}
-            return RemapSymbolRefs().visit(expr, symbol_map=symbol_map)
+            symbol_map = {
+                param.id: arg
+                for i, (param, arg) in enumerate(zip(node.fun.params, node.args))
+                if eligable_params[i]
+            }
+            new_expr = RemapSymbolRefs().visit(expr, symbol_map=symbol_map)
+
+            if all(eligable_params):
+                return new_expr
+            else:
+                return ir.FunCall(
+                    fun=ir.Lambda(
+                        params=[
+                            param
+                            for param, eligable in zip(node.fun.params, eligable_params)
+                            if not eligable
+                        ],
+                        expr=new_expr,
+                    ),
+                    args=[arg for arg, eligable in zip(node.args, eligable_params) if not eligable],
+                )
+
         return node
