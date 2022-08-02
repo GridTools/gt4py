@@ -2,7 +2,8 @@ GT4Py: GridTools for Python
 ===========================
 
 Python library for generating high-performance implementations of
-stencil kernels from a domain-specific language (DSL).
+stencil kernels for weather and climate modeling from a
+domain-specific language (DSL).
 
 |tox| |format|
 
@@ -19,8 +20,7 @@ using `pip`.
 It is not yet released on PyPI, so users have to point to the
 git repository to install it.
 
-It is recommended to install the package in a virtual
-environment.
+It is recommended to install the package in a virtual environment.
 
 .. code-block:: bash
 
@@ -28,11 +28,11 @@ environment.
     $ python -m venv venv
     $ source venv/bin/activate
     $ pip install --upgrade setuptools wheel pip
-    # For the CUDA backends add the '[cudaXX]' optional dependency
-    $ pip install -e ./[cuda11]
+    # For the CUDA backends add the '[cudaXXX]' optional dependency
+    $ pip install -e ./[cuda117]
 
-There are notebooks in the ``examples/`` directory that can be run using IPython
-notebooks on Jupyter.
+There are notebooks in the ``examples/`` directory that can be run using
+IPython notebooks on Jupyter.
 
 .. code-block:: bash
 
@@ -64,6 +64,8 @@ The following backends are supported:
 - ``gt:cpu_kfirst``: GridTools C++ CPU backend using ``K``-first data ordering
 - ``gt:gpu``: GridTools backend for CUDA
 - ``cuda``: CUDA backend minimally using utilities from GridTools
+- ``dace:cpu``: Dace code-generated CPU backend
+- ``dace:gpu``: Dace code-generated GPU backend
 
 🚜 Installation
 ---------------
@@ -121,8 +123,8 @@ and then build the docs with
 Development
 ~~~~~~~~~~~
 
-For developing GT4Py we recommend to clone the
-repository and use an *editable* installation of GT4Py:
+For developing GT4Py we recommend to clone the repository
+and use an *editable* installation of GT4Py:
 
 .. code-block:: bash
 
@@ -132,7 +134,7 @@ repository and use an *editable* installation of GT4Py:
    $ pre-commit install-hooks
 
 Dependencies for running tests locally and for linting and formatting
-code are listed in `requirements-dev.txt`.
+source are listed in `requirements-dev.txt`.
 
 
 ⚠️ License
@@ -140,4 +142,3 @@ code are listed in `requirements-dev.txt`.
 
 GT4Py is licensed under the terms of the
 `GPLv3 <https://github.com/GridTools/gt4py/blob/master/LICENSE.txt>`__.
-
