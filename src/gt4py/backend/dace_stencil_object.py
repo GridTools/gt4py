@@ -55,7 +55,7 @@ class DaCeFrozenStencil(FrozenStencil, SDFGConvertible):
                     sdfg.add_symbol(name, stype=kwargs[name].dtype)
                 else:
                     sdfg.add_symbol(name, stype=dace.typeclass(type(kwargs[name])))
-        return dace.SDFG.from_json(sdfg.to_json())
+        return sdfg
 
     def __sdfg__(self, **kwargs):
         return self._add_optionals(copy.deepcopy(self.sdfg), **kwargs)

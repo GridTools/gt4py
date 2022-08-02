@@ -434,29 +434,28 @@ class StencilObject(abc.ABC):
 
         # Set an appropriate origin for all fields
         for name, field_info in self.field_info.items():
-            if field_info.access != AccessKind.NONE:
-                assert name in field_args, f"Missing value for '{name}' field."
-                field_origin = origin.get(name, None)
+            assert name in field_args, f"Missing value for '{name}' field."
+            field_origin = origin.get(name, None)
 
-                if field_origin is not None:
-                    field_origin_ndim = len(field_origin)
-                    if field_origin_ndim != field_info.ndim:
-                        assert (
-                            field_origin_ndim == field_info.domain_ndim
-                        ), f"Invalid origin specification ({field_origin}) for '{name}' field."
-                        origin[name] = (*field_origin, *((0,) * len(field_info.data_dims)))
+            if field_origin is not None:
+                field_origin_ndim = len(field_origin)
+                if field_origin_ndim != field_info.ndim:
+                    assert (
+                        field_origin_ndim == field_info.domain_ndim
+                    ), f"Invalid origin specification ({field_origin}) for '{name}' field."
+                    origin[name] = (*field_origin, *((0,) * len(field_info.data_dims)))
 
-                elif all_origin is not None:
-                    origin[name] = (
-                        *gtc_utils.filter_mask(all_origin, field_info.domain_mask),
-                        *((0,) * len(field_info.data_dims)),
-                    )
+            elif all_origin is not None:
+                origin[name] = (
+                    *gtc_utils.filter_mask(all_origin, field_info.domain_mask),
+                    *((0,) * len(field_info.data_dims)),
+                )
 
-                elif isinstance(field_arg := field_args.get(name), gt_storage.storage.Storage):
-                    origin[name] = field_arg.default_origin
+            elif isinstance(field_arg := field_args.get(name), gt_storage.storage.Storage):
+                origin[name] = field_arg.default_origin
 
-                else:
-                    origin[name] = (0,) * field_info.ndim
+            else:
+                origin[name] = (0,) * field_info.ndim
 
         return origin
 
