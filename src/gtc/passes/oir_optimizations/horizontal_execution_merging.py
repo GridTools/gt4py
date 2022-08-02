@@ -27,6 +27,34 @@ from .utils import (
 )
 
 
+def find_write_and_read_with_offset(node: oir.Stencil) -> Set[str]:
+    def _writes(loop: oir.VerticalLoop) -> Set[str]:
+        result = set()
+        for left in loop.iter_tree().if_isinstance(oir.AssignStmt).getattr("left"):
+            result |= left.iter_tree().if_isinstance(oir.FieldAccess).getattr("name").to_set()
+        return result
+
+    def _reads_with_offset(loop: oir.VerticalLoop) -> Set[str]:
+        return (
+            loop.iter_tree()
+            .if_isinstance(oir.FieldAccess)
+            .filter(
+                lambda acc: isinstance(acc.offset, common.CartesianOffset)
+                and (acc.offset.i != 0 or acc.offset.j != 0)
+            )
+            .getattr("name")
+            .to_set()
+        )
+
+    writes_and_reads_with_offset: Set[str] = set()
+    for loop in node.vertical_loops:
+        writes = _writes(loop)
+        reads_with_offset = _reads_with_offset(loop)
+        writes_and_reads_with_offset |= writes & reads_with_offset
+
+    return writes_and_reads_with_offset
+
+
 class HorizontalExecutionMerging(NodeTranslator):
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> oir.Stencil:
         all_names = collect_symbol_names(node)
@@ -375,6 +403,11 @@ class OnTheFlyMerging(NodeTranslator):
             vertical_loops.append(vl)
             protected_fields |= AccessCollector.apply(vl).read_fields()
         vertical_loops = list(reversed(vertical_loops))
+
+        # Ensure that no reads with offset and write were generated
+        # If there are any, bail and return the original stencil
+        if find_write_and_read_with_offset(node):
+            return node
 
         accessed = AccessCollector.apply(vertical_loops).fields()
         return oir.Stencil(
