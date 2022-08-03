@@ -46,11 +46,15 @@ def find_write_and_read_with_offset(node: oir.Stencil) -> Set[str]:
             .to_set()
         )
 
+    temp_names = {decl.name for decl in node.declarations}
+
     writes_and_reads_with_offset: Set[str] = set()
     for loop in node.vertical_loops:
         writes = _writes(loop)
         reads_with_offset = _reads_with_offset(loop)
-        writes_and_reads_with_offset |= writes & reads_with_offset
+        writes_and_reads_with_offset |= {
+            name for name in (writes & reads_with_offset) if name not in temp_names
+        }
 
     return writes_and_reads_with_offset
 
