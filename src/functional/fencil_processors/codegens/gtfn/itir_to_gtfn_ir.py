@@ -279,12 +279,12 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
                     self.offset_definitions[horizontal_name] = OffsetDefinition(
                         name=Sym(id=horizontal_name), alias=self._horizontal_dimension
                     )
-                elif len(c.domain.args) > 1:
+                if len(c.domain.args) > 1:
                     vertical_name = c.domain.args[1].args[0].value
                     self.offset_definitions[vertical_name] = OffsetDefinition(
                         name=Sym(id=vertical_name), alias=self._vertical_dimension
                     )
-                else:
+                if len(c.domain.args) > 2:
                     raise RuntimeError("unstructured_domain must not have more than 2 arguments.")
 
     def visit_FencilDefinition(
