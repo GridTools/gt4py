@@ -13,7 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 
-from typing import Any, Iterable, Type
+from typing import Any, Iterable, Optional, Type
 
 import eve
 from eve.concepts import SymbolName
@@ -61,8 +61,9 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     }
     _unary_op_map = {"not_": "!"}
 
-    def __init__(self):
-        self.offset_definitions = {}
+    def __init__(self, *, grid_type: Optional[common.GridType] = None):
+        self.grid_type = grid_type
+        self.offset_definitions: dict[str, common.Dimension | common.Connectivity] = {}
 
     def visit_Sym(self, node: itir.Sym, **kwargs: Any) -> Sym:
         return Sym(id=node.id)
@@ -84,7 +85,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             return OffsetLiteral(value=node.value)
 
         if node.value not in self.offset_provider:
-            raise ValueError(f"Missing offset_provider entry from {node.value}")
+            raise ValueError(f"Missing offset_provider entry for {node.value}")
         offset_name = node.value
         if isinstance(self.offset_provider[node.value], common.Dimension):
             print(node.value)
@@ -267,30 +268,40 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
 
     def _collect_dimensions_from_domain(self, closures: list[itir.StencilClosure]) -> None:
         for c in closures:
-            if c.domain.fun == itir.SymRef(id="cartesian_domain"):
-                for nr in c.domain.args:
-                    assert isinstance(nr, itir.FunCall) and nr.fun == itir.SymRef(id="named_range")
-                    dim_name = nr.args[0].value
-                    self.offset_definitions[dim_name] = OffsetDefinition(name=Sym(id=dim_name))
+            if self.grid_type == common.GridType.CARTESIAN:
+                if isinstance(c.domain, itir.FunCall) and c.domain.fun == itir.SymRef(
+                    id="cartesian_domain"
+                ):
+                    for nr in c.domain.args:
+                        assert isinstance(nr, itir.FunCall) and nr.fun == itir.SymRef(
+                            id="named_range"
+                        )
+                        dim_name = nr.args[0].value
+                        self.offset_definitions[dim_name] = OffsetDefinition(name=Sym(id=dim_name))
             else:
-                assert c.domain.fun == itir.SymRef(id="unstructured_domain")
-                if len(c.domain.args) > 0:
-                    horizontal_name = c.domain.args[0].args[0].value
-                    self.offset_definitions[horizontal_name] = OffsetDefinition(
-                        name=Sym(id=horizontal_name), alias=self._horizontal_dimension
-                    )
-                if len(c.domain.args) > 1:
-                    vertical_name = c.domain.args[1].args[0].value
-                    self.offset_definitions[vertical_name] = OffsetDefinition(
-                        name=Sym(id=vertical_name), alias=self._vertical_dimension
-                    )
-                if len(c.domain.args) > 2:
-                    raise RuntimeError("unstructured_domain must not have more than 2 arguments.")
+                if isinstance(c.domain, itir.FunCall) and c.domain.fun == itir.SymRef(
+                    id="unstructured_domain"
+                ):
+                    if len(c.domain.args) > 0:
+                        horizontal_name = c.domain.args[0].args[0].value
+                        self.offset_definitions[horizontal_name] = OffsetDefinition(
+                            name=Sym(id=horizontal_name), alias=self._horizontal_dimension
+                        )
+                    if len(c.domain.args) > 1:
+                        vertical_name = c.domain.args[1].args[0].value
+                        self.offset_definitions[vertical_name] = OffsetDefinition(
+                            name=Sym(id=vertical_name), alias=self._vertical_dimension
+                        )
+                    if len(c.domain.args) > 2:
+                        raise RuntimeError(
+                            "unstructured_domain must not have more than 2 arguments."
+                        )
 
     def visit_FencilDefinition(
         self, node: itir.FencilDefinition, **kwargs: Any
     ) -> FencilDefinition:
-        self.grid_type = self._get_gridtype(node.closures)
+        if self.grid_type is None:
+            self.grid_type = self._get_gridtype(node.closures)
         self.offset_provider = kwargs["offset_provider"]
         executions = self.visit(node.closures, **kwargs)
         function_definitions = self.visit(node.function_definitions)
