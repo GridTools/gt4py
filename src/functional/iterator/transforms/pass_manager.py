@@ -34,8 +34,16 @@ def apply_common_transforms(ir, lift_mode=None, offset_provider=None, unroll_red
     ir = PruneUnreferencedFundefs().visit(ir)
     ir = NormalizeShifts().visit(ir)
     ir = InlineLambdas().visit(ir)
-    ir = _inline_lifts(ir, lift_mode)
-    ir = InlineLambdas().visit(ir)
+    if lift_mode != LiftMode.FORCE_INLINE:
+        for _ in range(10):
+            inlined = _inline_lifts.visit(ir, lift_mode)
+            inlined = InlineLambdas().visit(inlined)
+            if inlined == ir:
+                break
+            ir = inlined
+        else:
+            raise RuntimeError("Inlining lift and lambdas did not converge.")
+
     ir = NormalizeShifts().visit(ir)
     if unroll_reduce:
         for _ in range(10):
