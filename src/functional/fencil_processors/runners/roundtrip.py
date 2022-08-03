@@ -1,16 +1,33 @@
+# GT4Py Project - GridTools Framework
+#
+# Copyright (c) 2014-2022, ETH Zurich
+# All rights reserved.
+#
+# This file is part of the GT4Py project and the GridTools framework.
+# GT4Py is free software: you can redistribute it and/or modify it under
+# the terms of the GNU General Public License as published by the
+# Free Software Foundation, either version 3 of the License, or any later
+# version. See the LICENSE.txt file at the top-level directory of this
+# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+from __future__ import annotations
+
 import importlib.util
 import pathlib
 import tempfile
-from typing import Iterable
+import textwrap
+from collections.abc import Callable, Iterable
+from typing import Optional
 
 from eve import codegen
 from eve.codegen import FormatTemplate as as_fmt, MakoTemplate as as_mako
 from eve.concepts import Node
-from functional import iterator
-from functional.iterator import ir
-from functional.iterator.ir import AxisLiteral, FencilDefinition, OffsetLiteral
+from functional.common import Dimension
+from functional.iterator import ir as itir
+from functional.iterator.embedded import NeighborTableOffsetProvider
 from functional.iterator.processor_interface import fencil_executor
-from functional.iterator.transforms import apply_common_transforms
+from functional.iterator.transforms import LiftMode, apply_common_transforms
 from functional.iterator.transforms.global_tmps import FencilWithTemporaries
 
 
@@ -64,12 +81,12 @@ def ${id}(${','.join(params)}):
         )
 
     def visit_Temporary(self, node, *, np_dtype, **kwargs):
-        assert isinstance(node.domain, ir.FunCall) and node.domain.fun.id in (
+        assert isinstance(node.domain, itir.FunCall) and node.domain.fun.id in (
             "cartesian_domain",
             "unstructured_domain",
         )
         assert all(
-            isinstance(r, ir.FunCall) and r.fun == ir.SymRef(id="named_range")
+            isinstance(r, itir.FunCall) and r.fun == itir.SymRef(id="named_range")
             for r in node.domain.args
         )
         domain_ranges = [self.visit(r.args) for r in node.domain.args]
@@ -82,32 +99,61 @@ def ${id}(${','.join(params)}):
 
 _BACKEND_NAME = "roundtrip"
 
+_FENCIL_CACHE: dict[int, Callable] = {}
 
-@fencil_executor
-def executor(ir: Node, *args, **kwargs):
-    debug = "debug" in kwargs and kwargs["debug"] is True
-    lift_mode = kwargs.get("lift_mode")
 
-    ir = apply_common_transforms(ir, lift_mode=lift_mode, offset_provider=kwargs["offset_provider"])
+def fencil_generator(
+    ir: Node,
+    debug: bool,
+    lift_mode: LiftMode,
+    use_embedded: bool,
+    offset_provider: dict[str, NeighborTableOffsetProvider],
+) -> Callable:
+    """
+    Generate a directly executable fencil from an ITIR node.
+
+    Arguments:
+        ir: The iterator IR (ITIR) node.
+        debug: Keep module source containing fencil implementation.
+        lift_mode: Change the way lifted function calls are evaluated.
+        use_embedded: Directly use builtins from embedded backend instead of
+                      generic dispatcher. Gives faster performance and is easier
+                      to debug.
+        offset_provider: A mapping from offset names to offset providers.
+    """
+    # TODO(tehrengruber): just a temporary solution until we have a proper generic
+    #  caching mechanism
+    cache_key = hash((ir, lift_mode, debug, use_embedded, tuple(offset_provider.items())))
+    if cache_key in _FENCIL_CACHE:
+        return _FENCIL_CACHE[cache_key]
+
+    ir = apply_common_transforms(ir, lift_mode=lift_mode, offset_provider=offset_provider)
 
     program = EmbeddedDSL.apply(ir)
     offset_literals: Iterable[str] = (
         ir.pre_walk_values()
-        .if_isinstance(OffsetLiteral)
+        .if_isinstance(itir.OffsetLiteral)
         .getattr("value")
         .if_isinstance(str)
         .to_set()
     )
     axis_literals: Iterable[str] = (
-        ir.pre_walk_values().if_isinstance(AxisLiteral).getattr("value").to_set()
+        ir.pre_walk_values().if_isinstance(itir.AxisLiteral).getattr("value").to_set()
     )
 
-    header = """
-import numpy as np
-from functional.iterator.builtins import *
-from functional.iterator.runtime import *
-from functional.iterator.embedded import np_as_located_field
-"""
+    if use_embedded:
+        builtins_import = "from functional.iterator.embedded import *"
+    else:
+        builtins_import = "from functional.iterator.builtins import *"
+
+    header = textwrap.dedent(
+        f"""
+        import numpy as np
+        {builtins_import}
+        from functional.iterator.runtime import *
+        from functional.iterator.embedded import np_as_located_field
+        """
+    )
 
     with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as source_file:
         source_file_name = source_file.name
@@ -130,23 +176,35 @@ from functional.iterator.embedded import np_as_located_field
         if not debug:
             pathlib.Path(source_file_name).unlink(missing_ok=True)
 
-    assert isinstance(ir, (FencilDefinition, FencilWithTemporaries))
+    assert isinstance(ir, (itir.FencilDefinition, FencilWithTemporaries))
     fencil_name = ir.fencil.id + "_wrapper" if isinstance(ir, FencilWithTemporaries) else ir.id
     fencil = getattr(foo, fencil_name)
-    assert "offset_provider" in kwargs
 
-    new_kwargs = {}
-    new_kwargs["offset_provider"] = kwargs["offset_provider"]
-    if "column_axis" in kwargs:
-        new_kwargs["column_axis"] = kwargs["column_axis"]
+    _FENCIL_CACHE[cache_key] = fencil
 
-    if "dispatch_backend" not in kwargs:
-        iterator.builtins.builtin_dispatch.push_key("embedded")
-        fencil(*args, **new_kwargs)
-        iterator.builtins.builtin_dispatch.pop_key()
-    else:
-        fencil(
-            *args,
-            **new_kwargs,
-            backend=kwargs["dispatch_backend"],
-        )
+    return fencil
+
+
+@fencil_executor
+def executor(
+    ir: Node,
+    *args,
+    column_axis: Optional[Dimension] = None,
+    offset_provider: dict[str, NeighborTableOffsetProvider],
+    debug: bool = False,
+    lift_mode: LiftMode = LiftMode.FORCE_INLINE,
+    dispatch_backend: Optional[str] = None,
+) -> None:
+    fencil = fencil_generator(
+        ir,
+        offset_provider=offset_provider,
+        debug=debug,
+        lift_mode=lift_mode,
+        use_embedded=dispatch_backend is None,
+    )
+
+    new_kwargs = {"offset_provider": offset_provider, "column_axis": column_axis}
+    if dispatch_backend:
+        new_kwargs["backend"] = dispatch_backend
+
+    return fencil(*args, **new_kwargs)

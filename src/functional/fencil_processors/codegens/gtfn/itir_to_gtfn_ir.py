@@ -1,10 +1,25 @@
+# GT4Py Project - GridTools Framework
+#
+# Copyright (c) 2014-2022, ETH Zurich
+# All rights reserved.
+#
+# This file is part of the GT4Py project and the GridTools framework.
+# GT4Py is free software: you can redistribute it and/or modify it under
+# the terms of the GNU General Public License as published by the
+# Free Software Foundation, either version 3 of the License, or any later
+# version. See the LICENSE.txt file at the top-level directory of this
+# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+
 from typing import Any, Iterable, Optional, Type, Union
 
 import eve
 from eve.concepts import SymbolName
 from eve.utils import UIDs
-from functional.common import Connectivity, Dimension
-from functional.fencil_processors.gtfn.gtfn_ir import (
+from functional import common
+from functional.fencil_processors.codegens.gtfn.gtfn_ir import (
     Backend,
     BinaryExpr,
     CartesianDomain,
@@ -12,7 +27,6 @@ from functional.fencil_processors.gtfn.gtfn_ir import (
     FencilDefinition,
     FunCall,
     FunctionDefinition,
-    GridType,
     Lambda,
     Literal,
     Node,
@@ -20,6 +34,7 @@ from functional.fencil_processors.gtfn.gtfn_ir import (
     Scan,
     ScanExecution,
     ScanPassDefinition,
+    SidComposite,
     StencilExecution,
     Sym,
     SymRef,
@@ -55,8 +70,11 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         "multiplies": "*",
         "divides": "/",
         "eq": "==",
+        "not_eq": "!=",
         "less": "<",
+        "less_equal": "<=",
         "greater": ">",
+        "greater_equal": ">=",
         "and_": "&&",
         "or_": "||",
     }
@@ -113,7 +131,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     def visit_OffsetLiteral(self, node: itir.OffsetLiteral, **kwargs: Any) -> OffsetLiteral:
         if node.value in self.offset_provider:
             if isinstance(
-                self.offset_provider[node.value], Dimension
+                self.offset_provider[node.value], common.Dimension
             ):  # replace offset tag by dimension tag
                 return OffsetLiteral(value=self.offset_provider[node.value].value)
         return OffsetLiteral(value=node.value)
@@ -220,7 +238,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
                     )
                     for o in shift_offsets:
                         if o in self.offset_provider and isinstance(
-                            self.offset_provider[o], Connectivity
+                            self.offset_provider[o], common.Connectivity
                         ):
                             connectivities.append(SymRef(id=o))
                 return UnstructuredDomain(
@@ -250,6 +268,13 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     @staticmethod
     def _is_scan(node: itir.Node):
         return isinstance(node, itir.FunCall) and node.fun == itir.SymRef(id="scan")
+
+    def _visit_output_argument(self, node: itir.SymRef | itir.FunCall):
+        if isinstance(node, itir.SymRef):
+            return self.visit(node)
+        elif isinstance(node, itir.FunCall) and node.fun == itir.SymRef(id="make_tuple"):
+            return SidComposite(values=[self._visit_output_argument(v) for v in node.args])
+        raise ValueError("Expected `SymRef` or `make_tuple` in output argument.")
 
     @staticmethod
     def _bool_from_literal(node: itir.Node):
@@ -289,7 +314,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
                 extracted_functions=extracted_functions,
                 **kwargs,
             ),
-            output=self.visit(node.output, **kwargs),
+            output=self._visit_output_argument(node.output),
             inputs=self.visit(node.inputs, **kwargs),
             backend=backend,
         )
@@ -355,7 +380,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     def visit_FencilDefinition(
         self, node: itir.FencilDefinition, *, grid_type: str, **kwargs: Any
     ) -> FencilDefinition:
-        grid_type = getattr(GridType, grid_type.upper())
+        grid_type = getattr(common.GridType, grid_type.upper())
         extracted_functions: list[Union[FunctionDefinition, ScanPassDefinition]] = []
         self.offset_provider = kwargs["offset_provider"]
         executions = self.visit(

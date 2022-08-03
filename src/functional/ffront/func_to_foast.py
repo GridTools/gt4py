@@ -36,7 +36,6 @@ from functional.ffront.ast_passes import (
 )
 from functional.ffront.dialect_parser import DialectParser, DialectSyntaxError
 from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduction
-from functional.ffront.foast_passes.unroll_power_op import UnrollPowerOp
 
 
 class FieldOperatorSyntaxError(DialectSyntaxError):
@@ -94,7 +93,6 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
 
     @classmethod
     def _postprocess_dialect_ast(cls, dialect_ast: foast.FieldOperator) -> foast.FieldOperator:
-        dialect_ast = UnrollPowerOp.apply(dialect_ast)
         return FieldOperatorTypeDeduction.apply(dialect_ast)
 
     def _builtin_type_constructor_symbols(
@@ -379,6 +377,15 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
 
     def visit_Eq(self, node: ast.Eq, **kwargs) -> foast.CompareOperator:
         return foast.CompareOperator.EQ
+
+    def visit_LtE(self, node: ast.LtE, **kwargs) -> foast.CompareOperator:
+        return foast.CompareOperator.LTE
+
+    def visit_GtE(self, node: ast.GtE, **kwargs) -> foast.CompareOperator:
+        return foast.CompareOperator.GTE
+
+    def visit_NotEq(self, node: ast.NotEq, **kwargs) -> foast.CompareOperator:
+        return foast.CompareOperator.NOTEQ
 
     def _verify_builtin_function(self, node: ast.Call):
         func_name = self._func_name(node)

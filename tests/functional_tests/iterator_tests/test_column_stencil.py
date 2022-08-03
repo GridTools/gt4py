@@ -2,7 +2,8 @@ import numpy as np
 import pytest
 
 from functional.common import Dimension
-from functional.fencil_processors import gtfn
+from functional.fencil_processors.formatters.gtfn import format_sourcecode as gtfn_format_sourcecode
+from functional.fencil_processors.runners.gtfn_cpu import run_gtfn
 from functional.iterator.builtins import *
 from functional.iterator.embedded import np_as_located_field
 from functional.iterator.runtime import closure, fendef, fundef, offset
@@ -60,6 +61,9 @@ def test_column_stencil(fencil_processor, lift_mode):
 
 def test_column_stencil_with_k_origin(fencil_processor, lift_mode):
     fencil_processor, validate = fencil_processor
+    if fencil_processor == run_gtfn:
+        pytest.xfail("origin not yet supported in gtfn")
+
     shape = [5, 7]
     raw_inp = np.fromfunction(lambda i, k: i * 10 + k, [shape[0] + 1, shape[1] + 2])
     inp = np_as_located_field(IDim, KDim, origin={IDim: 0, KDim: 1})(raw_inp)
@@ -185,6 +189,8 @@ def kdoublesum_fencil(i_size, k_size, inp0, inp1, out):
 
 def test_kdoublesum_scan(fencil_processor, lift_mode):
     fencil_processor, validate = fencil_processor
+    if fencil_processor == run_gtfn or fencil_processor == gtfn_format_sourcecode:
+        pytest.xfail("structured dtype input/output currently unsupported")
     shape = [1, 7]
     inp0 = np_as_located_field(IDim, KDim)(np.asarray([list(range(7))], dtype=np.float64))
     inp1 = np_as_located_field(IDim, KDim)(np.asarray([list(range(7))], dtype=np.int32))

@@ -26,19 +26,20 @@ import functools
 import types
 import typing
 import warnings
-from typing import Callable, Iterable, Protocol
+from typing import Callable, Iterable, Protocol, cast
 
 from devtools import debug
 
 from eve.extended_typing import Any, Optional
-from eve.utils import UIDs
+from eve.utils import UIDGenerator
 from functional.common import DimensionKind, GridType, GTTypeError
-from functional.fencil_processors import roundtrip
+from functional.fencil_processors.runners import roundtrip
 from functional.ffront import (
     common_types as ct,
     field_operator_ast as foast,
     program_ast as past,
     symbol_makers,
+    type_info,
 )
 from functional.ffront.fbuiltins import BUILTINS, Dimension, FieldOffset
 from functional.ffront.foast_to_itir import FieldOperatorLowering
@@ -340,18 +341,20 @@ class Program:
         size_args: list[Optional[tuple[int, ...]]] = []
         rewritten_args = list(args)
         for param_idx, param in enumerate(self.past_node.params):
-            if isinstance(param.type, ct.ScalarType):
+            if isinstance(param.type, ct.FieldType) and type_info.extract_dims(param.type) == []:
+                dtype = type_info.extract_dtype(param.type)
                 rewritten_args[param_idx] = constant_field(
                     args[param_idx],
-                    dtype=BUILTINS[param.type.kind.name.lower()],
+                    dtype=BUILTINS[dtype.kind.name.lower()],
                 )
             if not isinstance(param.type, ct.FieldType):
                 continue
-            if not hasattr(args[param_idx], "__array__"):
-                size_args.append(None)
-                continue
+            has_shape = hasattr(args[param_idx], "shape")
             for dim_idx in range(0, len(param.type.dims)):
-                size_args.append(args[param_idx].shape[dim_idx])
+                if has_shape:
+                    size_args.append(args[param_idx].shape[dim_idx])
+                else:
+                    size_args.append(None)
 
         return tuple(rewritten_args), tuple(size_args), kwargs
 
@@ -441,9 +444,22 @@ class FieldOperator(GTCallable):
         )
 
     def __gt_type__(self) -> ct.FunctionType:
-        type_ = symbol_makers.make_symbol_type_from_value(self.definition)
-        assert isinstance(type_, ct.FunctionType)
-        return type_
+        # TODO(tehrengruber): temporary solution until #837 is merged
+        assert isinstance(self.foast_node.body[-1], foast.Return)
+        return_type = self.foast_node.body[-1].value.type
+        if not all(
+            isinstance(type_, ct.FieldType)
+            for type_ in type_info.primitive_constituents(return_type)
+        ):
+            raise GTTypeError(
+                f"Return type of a FieldOperator must be a Field or composite "
+                f"of Fields, but got `{return_type}`."
+            )
+        type_ = ct.FunctionType(
+            args=[param.type for param in self.foast_node.params], kwargs={}, returns=return_type
+        )
+        assert type_info.is_concrete(type_)
+        return cast(ct.FunctionType, type_)
 
     def with_backend(self, backend: FencilExecutor) -> "FieldOperator":
         return FieldOperator(
@@ -455,7 +471,14 @@ class FieldOperator(GTCallable):
         )
 
     def __gt_itir__(self) -> itir.FunctionDefinition:
-        return typing.cast(itir.FunctionDefinition, FieldOperatorLowering.apply(self.foast_node))
+        if hasattr(self, "__cached_itir"):
+            return getattr(self, "__cached_itir")  # noqa: B009
+
+        itir_node: itir.FunctionDefinition = FieldOperatorLowering.apply(self.foast_node)
+
+        object.__setattr__(self, "__cached_itir", itir_node)
+
+        return itir_node
 
     def __gt_captured_vars__(self) -> CapturedVars:
         return self.captured_vars
@@ -468,11 +491,12 @@ class FieldOperator(GTCallable):
 
         name = self.foast_node.id
         loc = self.foast_node.location
+        param_sym_uids = UIDGenerator()  # use a new UID generator to allow caching
 
         type_ = self.__gt_type__()
         params_decl: list[past.Symbol] = [
             past.DataSymbol(
-                id=UIDs.sequential_id(prefix="__sym"),
+                id=param_sym_uids.sequential_id(prefix="__sym"),
                 type=arg_type,
                 namespace=ct.Namespace.LOCAL,
                 location=loc,

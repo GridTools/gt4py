@@ -106,11 +106,11 @@ class SourceLocation:
 
         end_part = ""
         if self.end_line is not None:
-            end_part += f" to Line {self.end_line}"
+            end_part += f" to {self.end_line}"
         if self.end_column is not None:
-            end_part += f", Col {self.end_column}"
+            end_part += f":{self.end_column}"
 
-        return f"<'{src}': Line {self.line}, Col {self.column}{end_part}>"
+        return f"<{src}:{self.line}:{self.column}{end_part}>"
 
 
 @datamodels.datamodel(slots=True, frozen=True)

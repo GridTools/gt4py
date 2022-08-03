@@ -20,6 +20,7 @@ from .conftest import run_processor
 pytest.importorskip("atlas4py")
 
 from functional.common import Dimension
+from functional.fencil_processors.runners.gtfn_cpu import run_gtfn
 from functional.iterator import library
 from functional.iterator.atlas_utils import AtlasTable
 from functional.iterator.builtins import *
@@ -124,6 +125,8 @@ def nabla(
 
 def test_compute_zavgS(fencil_processor, lift_mode):
     fencil_processor, validate = fencil_processor
+    if fencil_processor == run_gtfn:
+        pytest.xfail("TODO: gtfn bindings don't support unstructured")
     setup = nabla_setup()
 
     pp = np_as_located_field(Vertex)(setup.input_field)
@@ -180,6 +183,8 @@ def compute_zavgS2_fencil(
 
 def test_compute_zavgS2(fencil_processor, lift_mode):
     fencil_processor, validate = fencil_processor
+    if fencil_processor == run_gtfn:
+        pytest.xfail("TODO: gtfn bindings don't support unstructured")
     setup = nabla_setup()
 
     pp = np_as_located_field(Vertex)(setup.input_field)
@@ -216,6 +221,8 @@ def test_compute_zavgS2(fencil_processor, lift_mode):
 
 def test_nabla(fencil_processor, lift_mode):
     fencil_processor, validate = fencil_processor
+    if fencil_processor == run_gtfn:
+        pytest.xfail("TODO: gtfn bindings don't support unstructured")
     setup = nabla_setup()
 
     sign = np_as_located_field(Vertex, V2E)(setup.sign_field)
@@ -268,6 +275,8 @@ def nabla2(
 
 
 def test_nabla2(fencil_processor, lift_mode):
+    if fencil_processor == run_gtfn:
+        pytest.xfail("TODO: gtfn bindings don't support unstructured")
     fencil_processor, validate = fencil_processor
     setup = nabla_setup()
 
@@ -342,6 +351,8 @@ def nabla_sign(n_nodes, out_MXX, out_MYY, pp, S_MXX, S_MYY, vol, node_index, is_
 
 def test_nabla_sign(fencil_processor, lift_mode):
     fencil_processor, validate = fencil_processor
+    if fencil_processor == run_gtfn:
+        pytest.xfail("TODO: gtfn bindings don't support unstructured")
     setup = nabla_setup()
 
     # sign = np_as_located_field(Vertex, V2E)(setup.sign_field)

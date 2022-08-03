@@ -1,21 +1,31 @@
-import enum
+# GT4Py Project - GridTools Framework
+#
+# Copyright (c) 2014-2022, ETH Zurich
+# All rights reserved.
+#
+# This file is part of the GT4Py project and the GridTools framework.
+# GT4Py is free software: you can redistribute it and/or modify it under
+# the terms of the GNU General Public License as published by the
+# Free Software Foundation, either version 3 of the License, or any later
+# version. See the LICENSE.txt file at the top-level directory of this
+# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+from __future__ import annotations
+
 from typing import ClassVar, Union
 
 import eve
 from eve import Coerced, SymbolName, SymbolRef
 from eve.traits import SymbolTableTrait, ValidatedSymbolTableTrait
-from eve.type_definitions import StrEnum
+from functional import common
+from functional.iterator import ir as itir
 
 
 @eve.utils.noninstantiable
 class Node(eve.Node):
     pass
-
-
-@enum.unique
-class GridType(StrEnum):
-    CARTESIAN = "cartesian"
-    UNSTRUCTURED = "unstructured"
 
 
 class Sym(Node):  # helper
@@ -99,10 +109,14 @@ class Backend(Node):
     domain: Union[SymRef, CartesianDomain, UnstructuredDomain]
 
 
+class SidComposite(Expr):
+    values: list[Union[SymRef, SidComposite]]
+
+
 class StencilExecution(Node):
     backend: Backend
     stencil: SymRef
-    output: SymRef
+    output: Union[SymRef, SidComposite]
     inputs: list[SymRef]
 
 
@@ -126,6 +140,11 @@ class TemporaryAllocation(Node):
     domain: Union[SymRef, CartesianDomain, UnstructuredDomain]
 
 
+UNARY_MATH_NUMBER_BUILTINS = itir.UNARY_MATH_NUMBER_BUILTINS
+UNARY_MATH_FP_BUILTINS = itir.UNARY_MATH_FP_BUILTINS
+UNARY_MATH_FP_PREDICATE_BUILTINS = itir.UNARY_MATH_FP_PREDICATE_BUILTINS
+BINARY_MATH_NUMBER_BUILTINS = itir.BINARY_MATH_NUMBER_BUILTINS
+
 BUILTINS = {
     "deref",
     "shift",
@@ -135,6 +154,10 @@ BUILTINS = {
     "cartesian_domain",
     "unstructured_domain",
     "named_range",
+    *UNARY_MATH_NUMBER_BUILTINS,
+    *UNARY_MATH_FP_BUILTINS,
+    *UNARY_MATH_FP_PREDICATE_BUILTINS,
+    *BINARY_MATH_NUMBER_BUILTINS,
 }
 
 
@@ -144,7 +167,7 @@ class FencilDefinition(Node, ValidatedSymbolTableTrait):
     function_definitions: list[Union[FunctionDefinition, ScanPassDefinition]]
     executions: list[Union[StencilExecution, ScanExecution]]
     offset_declarations: list[Sym]
-    grid_type: GridType
+    grid_type: common.GridType
     temporaries: list[TemporaryAllocation]
 
-    _NODE_SYMBOLS_: ClassVar = [Sym(id=name) for name in BUILTINS]
+    _NODE_SYMBOLS_: ClassVar[list[Sym]] = [Sym(id=name) for name in BUILTINS]

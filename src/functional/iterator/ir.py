@@ -1,7 +1,7 @@
 from typing import ClassVar, List, Union
 
 import eve
-from eve import Coerced, SymbolName, SymbolRef
+from eve import Coerced, SymbolName, SymbolRef, datamodels
 from eve.traits import SymbolTableTrait, ValidatedSymbolTableTrait
 from eve.utils import noninstantiable
 
@@ -71,9 +71,40 @@ class FunctionDefinition(Node, SymbolTableTrait):
 class StencilClosure(Node):
     domain: Expr
     stencil: Expr
-    output: SymRef  # we could consider Expr for cases like make_tuple(out0,out1)
+    output: Union[SymRef, FunCall]
     inputs: List[SymRef]
 
+    @datamodels.validator("output")
+    def _output_validator(self, attribute, value):
+        if isinstance(value, FunCall) and value.fun != SymRef(id="make_tuple"):
+            raise ValueError("Only FunCall to `make_tuple` allowed.")
+
+
+UNARY_MATH_NUMBER_BUILTINS = {"abs"}
+UNARY_MATH_FP_BUILTINS = {
+    "sin",
+    "cos",
+    "tan",
+    "arcsin",
+    "arccos",
+    "arctan",
+    "sinh",
+    "cosh",
+    "tanh",
+    "arcsinh",
+    "arccosh",
+    "arctanh",
+    "sqrt",
+    "exp",
+    "log",
+    "gamma",
+    "cbrt",
+    "floor",
+    "ceil",
+    "trunc",
+}
+UNARY_MATH_FP_PREDICATE_BUILTINS = {"isfinite", "isinf", "isnan"}
+BINARY_MATH_NUMBER_BUILTINS = {"minimum", "maximum", "fmod", "power"}
 
 BUILTINS = {
     "cartesian_domain",
@@ -94,10 +125,17 @@ BUILTINS = {
     "eq",
     "less",
     "greater",
+    "greater_equal",
+    "less_equal",
+    "not_eq",
     "if_",
     "not_",
     "and_",
     "or_",
+    *UNARY_MATH_NUMBER_BUILTINS,
+    *UNARY_MATH_FP_BUILTINS,
+    *UNARY_MATH_FP_PREDICATE_BUILTINS,
+    *BINARY_MATH_NUMBER_BUILTINS,
 }
 
 
@@ -107,7 +145,7 @@ class FencilDefinition(Node, ValidatedSymbolTableTrait):
     params: List[Sym]
     closures: List[StencilClosure]
 
-    _NODE_SYMBOLS_: ClassVar = [Sym(id=name) for name in BUILTINS]
+    _NODE_SYMBOLS_: ClassVar[List[Sym]] = [Sym(id=name) for name in BUILTINS]
 
 
 # TODO(fthaler): just use hashable types in nodes (tuples instead of lists)
@@ -122,3 +160,4 @@ Lambda.__hash__ = Node.__hash__  # type: ignore[assignment]
 FunCall.__hash__ = Node.__hash__  # type: ignore[assignment]
 FunctionDefinition.__hash__ = Node.__hash__  # type: ignore[assignment]
 StencilClosure.__hash__ = Node.__hash__  # type: ignore[assignment]
+FencilDefinition.__hash__ = Node.__hash__  # type: ignore[assignment]
