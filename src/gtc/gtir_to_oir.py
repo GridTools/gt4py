@@ -22,6 +22,15 @@ from gtc.passes.oir_optimizations.utils import compute_fields_extents
 
 
 def validate_stencil_memory_accesses(node: oir.Stencil) -> oir.Stencil:
+    """Check that no memory races occur in GridTools backends.
+
+    Since this is required for GridTools backends, it's imposed on all backends
+    at the OIR level. This is similar to the check at the gtir level for read-with-offset
+    and writes, but more complete because it involves extent analysis, so it catches
+    indirect read-with-offset through temporaries.
+
+    """
+
     def _writes(node: oir.Stencil) -> Set[str]:
         result = set()
         for left in node.iter_tree().if_isinstance(oir.AssignStmt).getattr("left"):
@@ -36,10 +45,11 @@ def validate_stencil_memory_accesses(node: oir.Stencil) -> oir.Stencil:
     names: Set[str] = set()
     for name in write_fields:
         if not field_extents[name].is_zero:
+            print(name, field_extents[name])
             names.add(name)
 
     if names:
-        raise ValueError(f"Found non-zero read extent on a written fields: {names}")
+        raise ValueError(f"Found non-zero read extent on written fields: {', '.join(names)}")
 
     return node
 
