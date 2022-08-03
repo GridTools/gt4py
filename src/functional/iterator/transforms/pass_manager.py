@@ -19,14 +19,18 @@ def apply_common_transforms(
     ir = InlineFundefs().visit(ir)
     ir = PruneUnreferencedFundefs().visit(ir)
     ir = NormalizeShifts().visit(ir)
-    for _ in range(10):
-        inlined_ir = InlineLifts.apply(ir, preserve_shift_count=use_tmps)
-        inlined_ir = InlineLambdas.apply(inlined_ir)
-        if inlined_ir == ir:
-            break
-        ir = inlined_ir
+    if not use_tmps:
+        for _ in range(10):
+            inlined = InlineLifts().visit(ir)
+            inlined = InlineLambdas.apply(inlined)
+            if inlined == ir:
+                break
+            ir = inlined
+        else:
+            raise RuntimeError("Inlining lift and lambdas did not converge.")
     else:
-        raise RuntimeError("Inlining lift and lambdas did not converge.")
+        ir = InlineLambdas.apply(ir)
+
     ir = NormalizeShifts().visit(ir)
 
     if unroll_reduce:
@@ -36,7 +40,7 @@ def apply_common_transforms(
                 break
             ir = unrolled
             ir = NormalizeShifts().visit(ir)
-            ir = InlineLifts.apply(ir, preserve_shift_count=use_tmps)
+            ir = InlineLifts().visit(ir)
         else:
             raise RuntimeError("Reduction unrolling failed.")
     if use_tmps:
