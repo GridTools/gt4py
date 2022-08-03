@@ -34,7 +34,7 @@ def apply_common_transforms(ir, lift_mode=None, offset_provider=None, unroll_red
     ir = PruneUnreferencedFundefs().visit(ir)
     ir = NormalizeShifts().visit(ir)
     ir = InlineLambdas().visit(ir)
-    if lift_mode != LiftMode.FORCE_INLINE:
+    if lift_mode != LiftMode.FORCE_TEMPORARIES:
         for _ in range(10):
             inlined = _inline_lifts(ir, lift_mode)
             inlined = InlineLambdas().visit(inlined)
