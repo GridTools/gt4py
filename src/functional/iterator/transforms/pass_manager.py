@@ -36,7 +36,7 @@ def apply_common_transforms(ir, lift_mode=None, offset_provider=None, unroll_red
     ir = InlineLambdas().visit(ir)
     if lift_mode != LiftMode.FORCE_INLINE:
         for _ in range(10):
-            inlined = _inline_lifts.visit(ir, lift_mode)
+            inlined = _inline_lifts(ir, lift_mode)
             inlined = InlineLambdas().visit(inlined)
             if inlined == ir:
                 break
