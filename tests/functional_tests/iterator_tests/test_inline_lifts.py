@@ -97,5 +97,5 @@ def inline_lift_test_data():
 
 @pytest.mark.parametrize("testee, expected", inline_lift_test_data())
 def test_deref_lift(testee, expected):
-    result = InlineLifts.apply(testee)
+    result = InlineLifts().visit(testee)
     assert result == expected
