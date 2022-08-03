@@ -51,22 +51,22 @@ class InlineLambdas(NodeTranslator):
             inline lambda call if the resulting call has the same number of
             operations.
         """
-        return InlineLambdas(opcount_preserving=opcount_preserving).visit(node)
+        return cls(opcount_preserving=opcount_preserving).visit(node)
 
     def visit_FunCall(self, node: ir.FunCall):
         node = self.generic_visit(node)
         if isinstance(node.fun, ir.Lambda):
             assert len(node.fun.params) == len(node.args)
 
-            eligable_params: list[bool] = [True] * len(node.fun.params)
+            eligible_params: list[bool] = [True] * len(node.fun.params)
             if self.opcount_preserving:
                 ref_counts = CountSymbolRefs.apply(node.fun.expr, [p.id for p in node.fun.params])
 
                 for i, param in enumerate(node.fun.params):
                     if ref_counts[param.id] != 1 and not isinstance(node.args[i], ir.SymRef):
-                        eligable_params[i] = False
+                        eligible_params[i] = False
 
-                if not any(eligable_params):
+                if not any(eligible_params):
                     return node
 
             refs = (
@@ -74,7 +74,7 @@ class InlineLambdas(NodeTranslator):
                     *(
                         arg.pre_walk_values().if_isinstance(ir.SymRef).getattr("id").to_set()
                         for i, arg in enumerate(node.args)
-                        if eligable_params[i]
+                        if eligible_params[i]
                     )
                 )
                 if len(node.args) > 0
@@ -96,23 +96,23 @@ class InlineLambdas(NodeTranslator):
             symbol_map = {
                 param.id: arg
                 for i, (param, arg) in enumerate(zip(node.fun.params, node.args))
-                if eligable_params[i]
+                if eligible_params[i]
             }
             new_expr = RemapSymbolRefs().visit(expr, symbol_map=symbol_map)
 
-            if all(eligable_params):
+            if all(eligible_params):
                 return new_expr
             else:
                 return ir.FunCall(
                     fun=ir.Lambda(
                         params=[
                             param
-                            for param, eligable in zip(node.fun.params, eligable_params)
+                            for param, eligable in zip(node.fun.params, eligible_params)
                             if not eligable
                         ],
                         expr=new_expr,
                     ),
-                    args=[arg for arg, eligable in zip(node.args, eligable_params) if not eligable],
+                    args=[arg for arg, eligable in zip(node.args, eligible_params) if not eligable],
                 )
 
         return node

@@ -43,8 +43,8 @@ class InlineLifts(NodeTranslator):
                 f = node.args[0].fun.args[0]
                 args = node.args[0].args
                 return ir.FunCall(fun=f, args=args)
-            elif _is_shift_lift(node.args[0]) and not self.preserve_shift_count:
-                # deref(shift(...)(lift(f)(args...)) -> f(shift(...)(args)...)
+            elif _is_shift_lift(node.args[0]) and (not self.preserve_shift_count or len(node.args[0].args[0].args) == 1):
+                # deref(shift(...)(lift(f)(args...))) -> f(shift(...)(args)...)
                 assert isinstance(node.args[0], ir.FunCall)
                 assert isinstance(node.args[0].args[0], ir.FunCall)
                 assert isinstance(node.args[0].args[0].fun, ir.FunCall)
@@ -69,7 +69,7 @@ class InlineLifts(NodeTranslator):
                         args=[res, ir.FunCall(fun=ir.SymRef(id="can_deref"), args=[arg])],
                     )
                 return res
-            elif _is_shift_lift(node.args[0]) and not self.preserve_shift_count:
+            elif _is_shift_lift(node.args[0]) and (not self.preserve_shift_count or len(node.args[0].args[0].args) == 1):
                 # can_deref(shift(...)(lift(f)(args...)) -> and(can_deref(shift(...)(arg[0])), and(can_deref(shift(...)(arg[1])), ...))
                 assert isinstance(node.args[0], ir.FunCall)
                 assert isinstance(node.args[0].args[0], ir.FunCall)
