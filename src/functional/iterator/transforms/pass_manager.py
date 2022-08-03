@@ -18,8 +18,15 @@ def apply_common_transforms(
     ir = NormalizeShifts().visit(ir)
     ir = InlineLambdas().visit(ir)
     if not use_tmps:
-        ir = InlineLifts().visit(ir)
-    ir = InlineLambdas().visit(ir)
+        for _ in range(10):
+            inlined = InlineLifts().visit(ir)
+            inlined = InlineLambdas().visit(inlined)
+            if inlined == ir:
+                break
+            ir = inlined
+        else:
+            raise RuntimeError("Inlining lift and lambdas did not converge.")
+
     ir = NormalizeShifts().visit(ir)
     if unroll_reduce:
         for _ in range(10):
