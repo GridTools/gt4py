@@ -13,7 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 
-from typing import Any, Iterable, Optional, Type
+from typing import Any, Iterable, Type
 
 import eve
 from eve.concepts import SymbolName
@@ -61,8 +61,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     }
     _unary_op_map = {"not_": "!"}
 
-    def __init__(self, *, grid_type: Optional[common.GridType] = None):
-        self.grid_type = grid_type
+    def __init__(self):
         self.offset_definitions: dict[str, common.Dimension | common.Connectivity] = {}
 
     def visit_Sym(self, node: itir.Sym, **kwargs: Any) -> Sym:
@@ -299,8 +298,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     def visit_FencilDefinition(
         self, node: itir.FencilDefinition, **kwargs: Any
     ) -> FencilDefinition:
-        if self.grid_type is None:
-            self.grid_type = self._get_gridtype(node.closures)
+        self.grid_type = self._get_gridtype(node.closures)
         self.offset_provider = kwargs["offset_provider"]
         executions = self.visit(node.closures, **kwargs)
         function_definitions = self.visit(node.function_definitions)
