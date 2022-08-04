@@ -62,8 +62,6 @@ def fencil_example():
     params = [
         np_as_located_field(Dimension("I"))(numpy.empty((1,), dtype=numpy.float32)),
         numpy.float32(3.14),
-        #  source_modules.BufferParameter("buf", ["I"], numpy.dtype(numpy.float32)),
-        #  source_modules.ScalarParameter("sc", numpy.dtype(numpy.float32)),
     ]
     return itir, params
 
