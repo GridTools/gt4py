@@ -16,10 +16,13 @@
 import numpy
 import pytest
 
-from functional.fencil_processors import source_modules
+from functional.common import Dimension
+
+#  from functional.fencil_processors import source_modules
 from functional.fencil_processors.codegens.gtfn import gtfn_module
 from functional.fencil_processors.source_modules import cpp_gen as cpp
 from functional.iterator import ir
+from functional.iterator.embedded import np_as_located_field
 
 
 @pytest.fixture
@@ -57,15 +60,17 @@ def fencil_example():
         ],
     )
     params = [
-        source_modules.BufferParameter("buf", ["I"], numpy.dtype(numpy.float32)),
-        source_modules.ScalarParameter("sc", numpy.dtype(numpy.float32)),
+        np_as_located_field(Dimension("I"))(numpy.empty((1,), dtype=numpy.float32)),
+        numpy.float32(3.14),
+        #  source_modules.BufferParameter("buf", ["I"], numpy.dtype(numpy.float32)),
+        #  source_modules.ScalarParameter("sc", numpy.dtype(numpy.float32)),
     ]
     return itir, params
 
 
 def test_codegen(fencil_example):
     itir, parameters = fencil_example
-    module = gtfn_module.create_source_module(itir, parameters, offset_provider={})
+    module = gtfn_module.create_source_module(itir, *parameters, offset_provider={})
     assert module.entry_point.name == itir.id
     assert any(d.name == "gridtools" for d in module.library_deps)
     assert module.language == cpp.LANGUAGE_ID

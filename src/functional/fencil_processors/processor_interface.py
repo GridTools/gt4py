@@ -108,6 +108,9 @@ def fencil_generator(func: FencilGeneratorFunction) -> FencilGenerator:
 
     >>> assert isinstance(generate_foo, FencilGenerator)
     """
+    wrapper = FencilGenerator(generator_function=func)
+    update_wrapper(wrapper, func)
+    return wrapper
 
 
 def fencil_executor(func: FencilExecutorFunction) -> FencilExecutor:
