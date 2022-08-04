@@ -28,7 +28,9 @@ from gt4py.stencil_object import FrozenStencil, StencilObject
 from gt4py.utils import shash
 
 
-def add_optional_fields(sdfg: dace.SDFG, field_info: Dict[str, Any], parameter_info: Dict[str, Any], **kwargs: Any) -> dace.SDFG:
+def add_optional_fields(
+    sdfg: dace.SDFG, field_info: Dict[str, Any], parameter_info: Dict[str, Any], **kwargs: Any
+) -> dace.SDFG:
     for name, info in field_info.items():
         if info.access == AccessKind.NONE and name in kwargs:
             outer_array = kwargs[name]
