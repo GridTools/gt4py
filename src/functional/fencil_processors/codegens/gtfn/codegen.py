@@ -98,7 +98,7 @@ class GTFNCodegen(codegen.TemplatedGenerator):
 
     CartesianDomain = as_fmt("cartesian_domain({tagged_sizes}, {tagged_offsets})")
     UnstructuredDomain = as_mako(
-        "unstructured_domain(${tagged_sizes}, ${tagged_offsets} ${',' if len(connectivities) else ''} ${','.join(f'at_key<{c}_t>(connectivities__)' for c in connectivities)})"
+            "unstructured_domain(${tagged_sizes}, ${tagged_offsets}, connectivities__)"
     )
 
     def visit_OffsetLiteral(self, node: gtfn_ir.OffsetLiteral, **kwargs: Any) -> str:
