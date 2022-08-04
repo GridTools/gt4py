@@ -88,7 +88,6 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             raise ValueError(f"Missing offset_provider entry for {node.value}")
         offset_name = node.value
         if isinstance(self.offset_provider[node.value], common.Dimension):
-            print(node.value)
             dim = self.offset_provider[node.value]
             if self.grid_type == common.GridType.CARTESIAN:
                 # rename offset to dimension
