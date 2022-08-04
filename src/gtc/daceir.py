@@ -670,12 +670,22 @@ class FieldAccessInfo(Node):
         )
 
 
+from eve.datamodels import root_validator
+
+
 class Memlet(Node):
     field: SymbolRef
     access_info: FieldAccessInfo
     connector: SymbolRef
     is_read: bool
     is_write: bool
+    other_grid_subset: GridSubset = None
+
+    @root_validator
+    def infer_other_grid_subset(cls, values: Dict[str, Any]) -> Dict[str, Any]:
+        if values.get("other_grid_subset") is None:
+            values["other_grid_subset"] = values["access_info"].grid_subset
+        return values
 
     def union(self, other):
         assert self.field == other.field
@@ -878,6 +888,7 @@ class ComputationState(IterationNode):
 
 
 class CopyState(ComputationNode, IterationNode):
+    write_memlets: List[Memlet] = []
     name_map: Dict[str, str]
 
 

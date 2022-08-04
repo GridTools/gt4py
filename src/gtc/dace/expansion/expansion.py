@@ -42,7 +42,7 @@ def _collect_localcache_config(
     except StopIteration:
         return None
 
-    return loop_item.axis, node.localcache_fields, loop_item.storage
+    return loop_item.axis, loop_item.localcache_fields, loop_item.storage
 
 
 @dace.library.register_expansion(StencilComputation, "default")
@@ -152,7 +152,7 @@ class StencilComputationExpansion(dace.library.ExpandTransformation):
 
         if (config := _collect_localcache_config(node)) is not None:
             axis, fields, storage = config
-            daceir = MakeLocalCaches(axis=axis, fields=fields, storage=storage).visit(daceir)
+            daceir = MakeLocalCaches().visit(daceir, axis=axis, fields=fields, storage=storage)
 
         nsdfg: dace.nodes.NestedSDFG = StencilComputationSDFGBuilder().visit(daceir)
 

@@ -448,7 +448,7 @@ def union_node_grid_subsets(nodes: List[eve.Node]):
     return grid_subset
 
 
-def _union_memlets(*memlets: "dcir.Memlet") -> List["dcir.Memlet"]:
+def union_memlets(*memlets: "dcir.Memlet") -> List["dcir.Memlet"]:
     res: Dict[str, dcir.Memlet] = {}
     for memlet in memlets:
         res[memlet.field] = memlet.union(res.get(memlet.field, memlet))
@@ -459,10 +459,10 @@ def union_inout_memlets(nodes: List[eve.Node]):
     read_memlets: List[dcir.Memlet] = []
     write_memlets: List[dcir.Memlet] = []
     for node in collect_toplevel_computation_nodes(nodes):
-        read_memlets = _union_memlets(*read_memlets, *node.read_memlets)
-        write_memlets = _union_memlets(*write_memlets, *node.write_memlets)
+        read_memlets = union_memlets(*read_memlets, *node.read_memlets)
+        write_memlets = union_memlets(*write_memlets, *node.write_memlets)
 
-    return (read_memlets, write_memlets, _union_memlets(*read_memlets, *write_memlets))
+    return (read_memlets, write_memlets, union_memlets(*read_memlets, *write_memlets))
 
 
 def flatten_list(list_or_node: Union[List[Any], eve.Node]):
@@ -524,14 +524,14 @@ def union_node_access_infos(nodes: List[eve.Node]):
     for node in collect_toplevel_computation_nodes(nodes):
         read_accesses.update(
             {
-                name: access_info.union(read_accesses.get(name, access_info))
-                for name, access_info in node.read_accesses.items()
+                mem.field: mem.access_info.union(write_accesses.get(mem.field, mem.access_info))
+                for mem in node.write_memlets
             }
         )
         write_accesses.update(
             {
-                name: access_info.union(write_accesses.get(name, access_info))
-                for name, access_info in node.write_accesses.items()
+                mem.field: mem.access_info.union(write_accesses.get(mem.field, mem.access_info))
+                for mem in node.write_memlets
             }
         )
 

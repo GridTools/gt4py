@@ -17,11 +17,12 @@ from typing import Any, Dict, List, Tuple
 import dace
 
 import eve
+import gtc.dace.utils
 from eve.iterators import iter_tree
 from gtc import common
 from gtc import daceir as dcir
 from gtc import oir
-from gtc.dace.utils import union_node_access_infos
+from gtc.dace.utils import union_node_access_infos, union_node_grid_subsets
 
 
 def set_grid_subset_idx(axis, grid_subset, idx):
@@ -39,15 +40,23 @@ def set_grid_subset_idx(axis, grid_subset, idx):
     )
 
 
-def set_idx(axis, access_infos, idx):
-    res = dict()
-    for name, info in access_infos.items():
-        grid_subset = set_grid_subset_idx(axis, info.grid_subset, idx)
-        res[name] = dcir.FieldAccessInfo(
-            grid_subset=grid_subset,
-            global_grid_subset=info.global_grid_subset,
-            dynamic_access=info.dynamic_access,
-            variable_offset_axes=info.variable_offset_axes,  # should actually never be True here
+def set_idx(axis, memlets: List[dcir.Memlet], idx):
+    res = list()
+    for mem in memlets:
+        grid_subset = set_grid_subset_idx(axis, mem.access_info.grid_subset, idx)
+        res.append(
+            dcir.Memlet(
+                field=mem.field,
+                access_info=dcir.FieldAccessInfo(
+                    grid_subset=grid_subset,
+                    global_grid_subset=mem.access_info.global_grid_subset,
+                    dynamic_access=mem.access_info.dynamic_access,
+                    variable_offset_axes=mem.access_info.variable_offset_axes,  # should actually never be True here
+                ),
+                connector=mem.connector,
+                is_read=mem.is_read,
+                is_write=mem.is_write,
+            )
         )
     return res
 
@@ -146,7 +155,7 @@ class FieldDeclPropagator(eve.NodeMutator):
         *,
         decl_map: Dict[str, Tuple[Any, dace.StorageType]],
     ):
-        field_decls = dict(node.field_decls)
+        field_decls = {decl.name: decl for decl in node.field_decls}
         for name, (strides, storage) in decl_map.items():
             if name in node.name_map:
                 orig_field_decl = field_decls[node.name_map[name]]
@@ -164,10 +173,10 @@ class FieldDeclPropagator(eve.NodeMutator):
         )
         return dcir.NestedSDFG(
             label=node.label,
-            field_decls=field_decls,  # don't rename, this is inside
-            read_accesses=node.read_accesses,
-            write_accesses=node.write_accesses,
-            symbols=node.symbols,
+            field_decls=[decl for decl in field_decls.values()],  # don't rename, this is inside
+            read_memlets=node.read_memlets,
+            write_memlets=node.write_memlets,
+            symbol_decls=node.symbol_decls,
             states=states,
             name_map=node.name_map,
         )
@@ -342,16 +351,25 @@ class MakeLocalCaches(eve.NodeTranslator):
             res[name] = subset.set_interval(axis, subset.intervals[axis].shifted(offset))
         return res
 
-    def _set_access_info_subset(self, access_infos, subsets):
-        res = dict(access_infos)
+    def _set_access_info_subset(self, memlets, subsets):
+        res = list()
+        memlet_dict = {mem.field: mem for mem in memlets}
         for name, subset in subsets.items():
-            if name in access_infos:
-                access_info = access_infos[name]
-                res[name] = dcir.FieldAccessInfo(
-                    grid_subset=subset,
-                    global_grid_subset=access_info.global_grid_subset,
-                    dynamic_access=access_info.dynamic_access,
-                    variable_offset_axes=access_info.variable_offset_axes,
+            if name in memlet_dict:
+                memlet = memlet_dict[name]
+                res.append(
+                    dcir.Memlet(
+                        field=memlet.field,
+                        access_info=dcir.FieldAccessInfo(
+                            grid_subset=subset,
+                            global_grid_subset=memlet.access_info.global_grid_subset,
+                            dynamic_access=memlet.access_info.dynamic_access,
+                            variable_offset_axes=memlet.access_info.variable_offset_axes,
+                        ),
+                        connector=memlet.connector,
+                        is_read=memlet.is_read,
+                        is_write=memlet.is_write,
+                    )
                 )
         return res
 
@@ -368,10 +386,24 @@ class MakeLocalCaches(eve.NodeTranslator):
     ):
 
         # also, init
-        from .utils import union_node_access_infos, union_node_grid_subsets
 
         grid_subset = union_node_grid_subsets(list(loop_states))
-        read_accesses, write_accesses, field_accesses = union_node_access_infos(list(loop_states))
+        # read_accesses, write_accesses, field_accesses = union_node_access_infos(list(loop_states))
+        read_memlets = gtc.dace.utils.union_memlets(
+            *(
+                mem
+                for st in gtc.dace.utils.collect_toplevel_computation_nodes(loop_states)
+                for mem in st.read_memlets
+            )
+        )
+        write_memlets = gtc.dace.utils.union_memlets(
+            *(
+                mem
+                for st in gtc.dace.utils.collect_toplevel_computation_nodes(loop_states)
+                for mem in st.write_memlets
+            )
+        )
+
         axis = loop.axis
 
         cache_read_subsets = self._get_cache_read_subset(axis, loop_states, local_name_map)
@@ -379,9 +411,9 @@ class MakeLocalCaches(eve.NodeTranslator):
             axis, loop_states, loop.index_range.stride, local_name_map
         )
         flush_subsets = {
-            name: info.grid_subset
-            for name, info in write_accesses.items()
-            if name in local_name_map
+            mem.field: mem.access_info.grid_subset
+            for mem in write_memlets
+            if mem.field in local_name_map
         }
         init_subsets = self._subsets_diff(
             axis, self._subsets_diff(axis, cache_read_subsets, cache_subsets), fill_subsets
@@ -393,10 +425,19 @@ class MakeLocalCaches(eve.NodeTranslator):
             {k: v for k, v in shift_subsets.items() if v is not None},
         )
 
-        def set_local_names(access_infos):
-            return {local_name_map[k]: v for k, v in access_infos.items()}
+        def set_local_names(memlets):
+            return [
+                dcir.Memlet(
+                    field=mem.field,
+                    access_info=mem.access_info,
+                    connector=local_name_map[mem.field],
+                    is_write=mem.is_write,
+                    is_read=mem.is_read,
+                )
+                for mem in memlets
+            ]
 
-        def shift(access_infos, offset):
+        def shift(memlets, offset):
             res = dict()
             for name, info in access_infos.items():
                 grid_subset = info.grid_subset.set_interval(
@@ -410,27 +451,28 @@ class MakeLocalCaches(eve.NodeTranslator):
                 )
             return res
 
-        init_accesses = self._set_access_info_subset(
-            {
-                k: v
-                for k, v in field_accesses.items()
-                if k in init_subsets and init_subsets[k] is not None
-            },
+        init_memlets = self._set_access_info_subset(
+            [
+                mem
+                for mem in read_memlets + write_memlets
+                if mem.field in init_subsets and init_subsets[mem.field] is not None
+            ],
             init_subsets,
         )
         init_state = dcir.CopyState(
             grid_subset=grid_subset,
-            read_accesses=set_idx(axis, init_accesses, loop.index_range.start),
-            write_accesses=set_local_names(init_accesses),
+            read_memlets=set_local_names(
+                set_idx(axis, init_memlets, loop.index_range.interval.start)
+            ),
             name_map=local_name_map,
         )
 
         fill_accesses = self._set_access_info_subset(
-            {
-                k: v
-                for k, v in field_accesses.items()
-                if k in fill_subsets and fill_subsets[k] is not None
-            },
+            [
+                mem
+                for mem in read_memlets + write_memlets
+                if mem.field in fill_subsets and fill_subsets[mem.field] is not None
+            ],
             fill_subsets,
         )
         fill_state = dcir.CopyState(
@@ -442,26 +484,25 @@ class MakeLocalCaches(eve.NodeTranslator):
         loop_states = rename_field_accesses(loop_states, local_name_map=local_name_map)
 
         flush_accesses = self._set_access_info_subset(
-            {
-                k: v
-                for k, v in field_accesses.items()
-                if k in flush_subsets and flush_subsets[k] is not None
-            },
+            [
+                mem
+                for mem in read_memlets + write_memlets
+                if mem.field in flush_subsets and flush_subsets[mem.field] is not None
+            ],
             flush_subsets,
         )
         flush_state = dcir.CopyState(
             grid_subset=grid_subset,
-            read_accesses=set_local_names(flush_accesses),
-            write_accesses=flush_accesses,
+            read_memlets=set_local_names(flush_accesses),
             name_map={v: k for k, v in local_name_map.items()},
         )
 
         shift_accesses = self._set_access_info_subset(
-            {
-                k: v
-                for k, v in field_accesses.items()
-                if k in shift_subsets and shift_subsets[k] is not None
-            },
+            [
+                mem
+                for mem in read_memlets + write_memlets
+                if mem.field in shift_subsets and shift_subsets[mem.field] is not None
+            ],
             shift_subsets,
         )
         shift_state = dcir.CopyState(
@@ -472,7 +513,7 @@ class MakeLocalCaches(eve.NodeTranslator):
         )
         return init_state, (fill_state, *loop_states, flush_state, shift_state)
 
-    def _process_state_sequence(self, states, *, localcache_infos):
+    def _process_state_sequence(self, states, *, fields):
 
         loops_and_states = []
         for loop in states:
@@ -506,9 +547,9 @@ class MakeLocalCaches(eve.NodeTranslator):
                     write_accesses[name].dynamic_access if name in write_accesses else False
                 )
                 if (
-                    name in localcache_infos.fields
+                    name in fields
                     and isinstance(interval, dcir.IndexWithExtent)
-                    and interval.size > 1
+                    # and interval.size > 1
                     and not dynamic_write
                 ):
                     cache_fields.add(name)
@@ -563,7 +604,7 @@ class MakeLocalCaches(eve.NodeTranslator):
             last_loop_node = loop_node
         return res_states, local_name_map
 
-    def visit_DomainLoop(self, node: dcir.DomainLoop, *, ctx_name_map, localcache_infos):
+    def visit_DomainLoop(self, node: dcir.DomainLoop, *, ctx_name_map, axis, fields, **kwargs):
         loop_states = node.loop_states
         # first, recurse
         if any(isinstance(n, dcir.DomainLoop) for n in loop_states):
@@ -575,9 +616,9 @@ class MakeLocalCaches(eve.NodeTranslator):
             ]
             end_idx = end_idx[0] if end_idx else None
             loop_nodes = [n for n in loop_states if isinstance(n, dcir.DomainLoop)]
-            if loop_nodes[0].axis in localcache_infos:
+            if loop_nodes[0].axis == axis:
                 domain_loop_nodes, local_name_map = self._process_state_sequence(
-                    loop_nodes, localcache_infos=localcache_infos[loop_nodes[0].axis]
+                    loop_nodes, fields=fields
                 )
                 res_loop_states = [*loop_states[:start_idx], *domain_loop_nodes]
                 if end_idx:
@@ -587,58 +628,77 @@ class MakeLocalCaches(eve.NodeTranslator):
 
         inner_name_map = dict()
         loop_states = self.generic_visit(
-            loop_states, localcache_infos=localcache_infos, ctx_name_map=inner_name_map
+            loop_states, fields=fields, ctx_name_map=inner_name_map, axis=axis, **kwargs
         )
         ctx_name_map.update(inner_name_map)
 
-        from .utils import union_node_access_infos
-
-        read_accesses, write_accesses, _ = union_node_access_infos(loop_states)
+        read_memlets = gtc.dace.utils.union_memlets(
+            *(
+                mem
+                for st in gtc.dace.utils.collect_toplevel_computation_nodes(loop_states)
+                for mem in st.read_memlets
+            )
+        )
+        write_memlets = gtc.dace.utils.union_memlets(
+            *(
+                mem
+                for st in gtc.dace.utils.collect_toplevel_computation_nodes(loop_states)
+                for mem in st.write_memlets
+            )
+        )
         return dcir.DomainLoop(
             grid_subset=node.grid_subset,
-            read_accesses=read_accesses,
-            write_accesses=write_accesses,
+            read_memlets=read_memlets,
+            write_memlets=write_memlets,
             axis=node.axis,
             index_range=node.index_range,
             loop_states=loop_states,
         )
 
-    def visit_NestedSDFG(self, node: dcir.NestedSDFG, *, localcache_infos, **kwargs):
+    def visit_NestedSDFG(self, node: dcir.NestedSDFG, *, axis, fields, storage, **kwargs):
         states = node.states
         local_name_map = dict()
         # first, recurse
         is_add_caches = (
-            all(isinstance(n, dcir.DomainLoop) for n in states)
-            and states[0].axis in localcache_infos
+            all(isinstance(n, dcir.DomainLoop) for n in states) and states[0].axis == axis
         )
 
         if is_add_caches:
             axis = states[0].axis
-            states, local_name_map = self._process_state_sequence(
-                states, localcache_infos=localcache_infos[states[0].axis]
-            )
+            states, local_name_map = self._process_state_sequence(states, fields=fields)
         from gtc.dace.utils import union_node_access_infos
 
         inner_name_map = dict()
         states = self.generic_visit(
-            states, localcache_infos=localcache_infos, ctx_name_map=inner_name_map
+            states, axis=axis, fields=fields, storage=storage, ctx_name_map=inner_name_map
         )
         local_name_map.update(inner_name_map)
 
-        _, _, inner_field_accesses = union_node_access_infos(
-            [s for loop in states if isinstance(loop, dcir.DomainLoop) for s in loop.loop_states]
+        inner_memlets = gtc.dace.utils.union_memlets(
+            *(
+                mem
+                for loop in states
+                if isinstance(loop, dcir.DomainLoop)
+                for n in gtc.dace.utils.collect_toplevel_computation_nodes(loop.loop_states)
+                for l in (n.read_memlets, n.write_memlets)
+                for mem in l
+            )
         )
+        field_decls = {decl.name: decl for decl in node.field_decls}
         field_accesses = {
-            k: v if k.startswith("__local_") else node.field_decls[k].access_info
-            for k, v in inner_field_accesses.items()
+            mem.field: mem.access_info
+            if mem.field.startswith("__local_")
+            else field_decls[mem.field].access_info
+            for mem in inner_memlets
         }
         for k in field_accesses.keys():
             if k not in local_name_map:
                 local_name_map[k] = k
 
-        field_decls = dict(node.field_decls)
+        field_decls = {decl.name: decl for decl in node.field_decls}
+        memlet_names = {mem.field for mem in node.read_memlets + node.write_memlets}
         for name, cached_name in local_name_map.items():
-            if cached_name in node.read_accesses or cached_name in node.write_accesses:
+            if cached_name in memlet_names:
                 continue
             while name.startswith("__local_"):
                 name = name[len("__local_") :]
@@ -654,7 +714,7 @@ class MakeLocalCaches(eve.NodeTranslator):
                 strides = [stride, *strides]
                 stride = f"({stride}) * ({s})"
             if is_add_caches:
-                storage = dcir.StorageType.from_dace_storage(localcache_infos[axis].storage)
+                storage = dcir.StorageType.from_dace_storage(storage)
             else:
                 storage = dcir.StorageType.Default
             field_decls[cached_name] = dcir.FieldDecl(
@@ -674,9 +734,9 @@ class MakeLocalCaches(eve.NodeTranslator):
         return dcir.NestedSDFG(
             label=node.label,
             states=states,
-            read_accesses=node.read_accesses,
-            write_accesses=node.write_accesses,
-            field_decls=field_decls,
-            symbols=node.symbols,
+            read_memlets=node.read_memlets,
+            write_memlets=node.write_memlets,
+            field_decls=[decl for decl in field_decls.values()],
+            symbol_decls=node.symbol_decls,
             name_map=node.name_map,
         )
