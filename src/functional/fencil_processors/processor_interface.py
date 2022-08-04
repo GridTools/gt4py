@@ -20,20 +20,29 @@ Those which generate / any kind of string based on the fencil and (optionally) i
 
 For more information refer to ``gt4py/docs/functional/architecture/007-Fencil-Processors.md``
 """
+from __future__ import annotations
+
 from dataclasses import dataclass
 from functools import update_wrapper
 from typing import Protocol
 
-from functional.iterator import ir as itir
+from functional.iterator.ir import FencilDefinition
+
+from .source_modules import SourceModule
 
 
 class FencilFormatterFunction(Protocol):
-    def __call__(self, fencil: itir.FencilDefinition, *args, **kwargs) -> str:
+    def __call__(self, fencil: FencilDefinition, *args, **kwargs) -> str:
+        ...
+
+
+class FencilGeneratorFunction(Protocol):
+    def __call__(self, fencil: FencilDefinition, *args, **kwargs) -> SourceModule:
         ...
 
 
 class FencilExecutorFunction(Protocol):
-    def __call__(self, fencil: itir.FencilDefinition, *args, **kwargs) -> None:
+    def __call__(self, fencil: FencilDefinition, *args, **kwargs) -> None:
         ...
 
 
@@ -43,8 +52,18 @@ class FencilFormatter:
 
     formatter_function: FencilFormatterFunction
 
-    def __call__(self, fencil: itir.FencilDefinition, *args, **kwargs) -> str:
+    def __call__(self, fencil: FencilDefinition, *args, **kwargs) -> str:
         return self.formatter_function(fencil, *args, **kwargs)
+
+
+@dataclass
+class FencilGenerator:
+    """Wrap a source code generator as a type checkable fencil generator."""
+
+    generator_function: FencilGeneratorFunction
+
+    def __call__(self, fencil: FencilDefinition, *args, **kwargs) -> SourceModule:
+        return self.generator_function(fencil, *args, **kwargs)
 
 
 @dataclass
@@ -53,7 +72,7 @@ class FencilExecutor:
 
     executor_function: FencilExecutorFunction
 
-    def __call__(self, fencil: itir.FencilDefinition, *args, **kwargs) -> None:
+    def __call__(self, fencil: FencilDefinition, *args, **kwargs) -> None:
         self.executor_function(fencil, *args, **kwargs)
 
 
@@ -64,7 +83,7 @@ def fencil_formatter(func: FencilFormatterFunction) -> FencilFormatter:
     Examples:
     ---------
     >>> @fencil_formatter
-    ... def format_foo(fencil: itir.FencilDefinition, *args, **kwargs) -> str:
+    ... def format_foo(fencil: FencilDefinition, *args, **kwargs) -> str:
     ...     '''A very useless fencil formatter.'''
     ...     return "foo"
 
@@ -75,6 +94,22 @@ def fencil_formatter(func: FencilFormatterFunction) -> FencilFormatter:
     return wrapper
 
 
+def fencil_generator(func: FencilGeneratorFunction) -> FencilGenerator:
+    """
+    Wrap a source module generator function in a ``FencilGenerator`` instance.
+
+    Examples:
+    ---------
+    >>> from .source_modules import Function
+    >>> @fencil_generator
+    ... def generate_foo(fencil: FencilDefinition, *args, **kwargs) -> SourceModule:
+    ...     '''A very useless fencil formatter.'''
+    ...     return SourceModule(entry_point=Function(fencil.id, []), library_deps=[], source_code="foo", language="foo")
+
+    >>> assert isinstance(generate_foo, FencilGenerator)
+    """
+
+
 def fencil_executor(func: FencilExecutorFunction) -> FencilExecutor:
     """
     Wrap an executor function in a ``FencilFormatter`` instance.
@@ -82,7 +117,7 @@ def fencil_executor(func: FencilExecutorFunction) -> FencilExecutor:
     Examples:
     ---------
     >>> @fencil_executor
-    ... def badly_execute(fencil: itir.FencilDefinition, *args, **kwargs) -> None:
+    ... def badly_execute(fencil: FencilDefinition, *args, **kwargs) -> None:
     ...     '''A useless and incorrect fencil executor.'''
     ...     pass
 

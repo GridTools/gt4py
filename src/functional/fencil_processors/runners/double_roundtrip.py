@@ -14,8 +14,9 @@
 
 
 from eve.concepts import Node
+from functional.fencil_processors.processor_interface import fencil_executor
 from functional.fencil_processors.runners import roundtrip
-from functional.iterator.processor_interface import fencil_executor
+from functional.iterator import tracing  # noqa: F401  # importing registers tracing
 
 
 @fencil_executor

@@ -7,14 +7,14 @@ from typing import Any, Callable, Optional, Union
 from devtools import debug
 
 from functional import common
-from functional.iterator import builtins
-from functional.iterator.builtins import BackendNotSelectedError, builtin_dispatch
-from functional.iterator.processor_interface import (
+from functional.fencil_processors.processor_interface import (
     FencilExecutor,
     FencilFormatter,
     ensure_executor,
     ensure_formatter,
 )
+from functional.iterator import builtins
+from functional.iterator.builtins import BackendNotSelectedError, builtin_dispatch
 
 
 __all__ = ["offset", "fundef", "fendef", "closure", "CartesianAxis"]

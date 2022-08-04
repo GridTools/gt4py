@@ -20,9 +20,9 @@ import numpy
 
 import eve.codegen
 import functional.fencil_processors.source_modules.cpp_gen as cpp
-import functional.fencil_processors.source_modules.source_modules as defs
 from eve import Node
 from eve.codegen import JinjaTemplate as as_jinja, TemplatedGenerator
+from functional.fencil_processors.source_modules import source_modules
 
 
 class Expr(Node):
@@ -41,7 +41,7 @@ class SidConversion(Expr):
 
 
 class FunctionCall(Expr):
-    target: defs.Function
+    target: source_modules.Function
     args: Sequence[Any]
 
 
@@ -147,17 +147,19 @@ class BindingCodeGenerator(TemplatedGenerator):
     DimensionType = as_jinja("""generated::{{name}}_t""")
 
 
-def make_parameter(parameter: defs.ScalarParameter | defs.BufferParameter) -> FunctionParameter:
+def make_parameter(
+    parameter: source_modules.ScalarParameter | source_modules.BufferParameter,
+) -> FunctionParameter:
     name = parameter.name
-    ndim = 0 if isinstance(parameter, defs.ScalarParameter) else len(parameter.dimensions)
+    ndim = 0 if isinstance(parameter, source_modules.ScalarParameter) else len(parameter.dimensions)
     scalar_type = parameter.scalar_type
     return FunctionParameter(name=name, ndim=ndim, dtype=scalar_type)
 
 
 def make_argument(
-    index: int, param: defs.ScalarParameter | defs.BufferParameter
+    index: int, param: source_modules.ScalarParameter | source_modules.BufferParameter
 ) -> str | SidConversion:
-    if isinstance(param, defs.ScalarParameter):
+    if isinstance(param, source_modules.ScalarParameter):
         return param.name
     else:
         return SidConversion(
@@ -168,7 +170,9 @@ def make_argument(
         )
 
 
-def create_bindings(target: defs.Function, target_header: str) -> defs.BindingModule:
+def create_bindings(
+    target: source_modules.Function, target_header: str
+) -> source_modules.BindingModule:
     """
     Generate Python bindings through which a C++ function can be called.
 
@@ -215,4 +219,6 @@ def create_bindings(target: defs.Function, target_header: str) -> defs.BindingMo
     )
 
     src = eve.codegen.format_source("cpp", BindingCodeGenerator.apply(file_binding), style="LLVM")
-    return defs.BindingModule(src, [defs.LibraryDependency("pybind11", "2.9.2")])
+    return source_modules.BindingModule(
+        src, [source_modules.LibraryDependency("pybind11", "2.9.2")]
+    )

@@ -20,8 +20,8 @@ import numpy
 from functional.fencil_processors import source_modules
 from functional.fencil_processors.builders import cpp as cpp_callable
 from functional.fencil_processors.codegens.gtfn import gtfn_module as gtfn_codegen
+from functional.fencil_processors.processor_interface import fencil_executor
 from functional.iterator import ir
-from functional.iterator.processor_interface import fencil_executor
 
 
 def get_param_description(

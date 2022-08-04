@@ -5,15 +5,15 @@ import pytest
 import functional.fencil_processors.formatters.gtfn
 from functional.fencil_processors import type_check
 from functional.fencil_processors.formatters import lisp
-from functional.fencil_processors.runners import double_roundtrip, gtfn_cpu, roundtrip
-from functional.iterator import ir as itir
-from functional.iterator.pretty_parser import pparse
-from functional.iterator.pretty_printer import pformat
-from functional.iterator.processor_interface import (
+from functional.fencil_processors.processor_interface import (
     FencilExecutor,
     FencilFormatter,
     fencil_formatter,
 )
+from functional.fencil_processors.runners import double_roundtrip, gtfn_cpu, roundtrip
+from functional.iterator import ir as itir
+from functional.iterator.pretty_parser import pparse
+from functional.iterator.pretty_printer import pformat
 from functional.iterator.runtime import FendefDispatcher
 
 

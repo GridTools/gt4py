@@ -33,6 +33,12 @@ from devtools import debug
 from eve.extended_typing import Any, Optional
 from eve.utils import UIDGenerator
 from functional.common import DimensionKind, GridType, GTTypeError
+from functional.fencil_processors.processor_interface import (
+    FencilExecutor,
+    FencilFormatter,
+    ensure_executor,
+    ensure_formatter,
+)
 from functional.fencil_processors.runners import roundtrip
 from functional.ffront import (
     common_types as ct,
@@ -50,12 +56,6 @@ from functional.ffront.past_to_itir import ProgramLowering
 from functional.ffront.source_utils import CapturedVars
 from functional.iterator import ir as itir
 from functional.iterator.embedded import constant_field
-from functional.iterator.processor_interface import (
-    FencilExecutor,
-    FencilFormatter,
-    ensure_executor,
-    ensure_formatter,
-)
 
 
 DEFAULT_BACKEND: Callable = roundtrip.executor
