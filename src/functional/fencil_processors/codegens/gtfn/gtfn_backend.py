@@ -18,7 +18,6 @@ from typing import Any, cast
 import functional.iterator.ir as itir
 from eve import codegen
 from eve.utils import UIDs
-from functional.common import Connectivity
 from functional.fencil_processors.codegens.gtfn.codegen import GTFNCodegen
 from functional.fencil_processors.codegens.gtfn.itir_to_gtfn_ir import GTFN_lowering
 from functional.iterator.transforms.common import add_fundefs, replace_nodes
@@ -53,7 +52,7 @@ def extract_fundefs_from_closures(program: itir.FencilDefinition) -> itir.Fencil
     return program
 
 
-def generate(program: itir.FencilDefinition, *, grid_type: str, **kwargs: Any) -> str:
+def generate(program: itir.FencilDefinition, **kwargs: Any) -> str:
     transformed = program
     offset_provider = kwargs.get("offset_provider", None)
     transformed = apply_common_transforms(
@@ -63,17 +62,6 @@ def generate(program: itir.FencilDefinition, *, grid_type: str, **kwargs: Any) -
         unroll_reduce=True,
     )
     transformed = extract_fundefs_from_closures(transformed)
-    gtfn_ir = GTFN_lowering().visit(
-        transformed, grid_type=grid_type, offset_provider=offset_provider
-    )
+    gtfn_ir = GTFN_lowering().visit(transformed, offset_provider=offset_provider)
     generated_code = GTFNCodegen.apply(gtfn_ir, **kwargs)
     return codegen.format_source("cpp", generated_code, style="LLVM")
-
-
-def guess_grid_type(**kwargs):
-    assert "offset_provider" in kwargs
-    return (
-        "unstructured"
-        if any(isinstance(o, Connectivity) for o in kwargs["offset_provider"])
-        else "cartesian"
-    )
