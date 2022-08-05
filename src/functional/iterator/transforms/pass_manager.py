@@ -40,7 +40,8 @@ def apply_common_transforms(
                 break
             ir = unrolled
             ir = NormalizeShifts().visit(ir)
-            ir = InlineLifts().visit(ir)
+            if not use_tmps:
+                ir = InlineLifts().visit(ir)
         else:
             raise RuntimeError("Reduction unrolling failed.")
     if use_tmps:
