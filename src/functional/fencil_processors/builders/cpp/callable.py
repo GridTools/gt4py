@@ -18,13 +18,17 @@ from collections.abc import Callable
 from functional.fencil_processors.builders.cache import Strategy as CacheStrategy, get_cache_folder
 from functional.fencil_processors.builders.importer import import_from_path
 
+from ...pipeline import CPP_DEFAULT, CppLanguage
 from ...source_modules import source_modules as defs
 from . import bindings, build
 
 
 # TODO (ricoh): split into pipeline steps
 def create_callable(
-    source_module: defs.SourceModule, *, cache_strategy=CacheStrategy.SESSION
+    source_module: defs.SourceModule,
+    *,
+    language: CppLanguage = CPP_DEFAULT,
+    cache_strategy=CacheStrategy.SESSION,
 ) -> Callable:
     """Build the source module and return its entry point as a Python function object."""
     cache_folder = get_cache_folder(source_module, cache_strategy)
@@ -34,9 +38,9 @@ def create_callable(
     except ModuleNotFoundError:
         pass
 
-    src_header_file = source_module.entry_point.name + ".cpp.inc"
-    bindings_file = source_module.entry_point.name + "_bindings.cpp"
-    bindings_module = bindings.create_bindings(source_module.entry_point, src_header_file)
+    src_header_file = source_module.entry_point.name + language.include_extension
+    bindings_file = source_module.entry_point.name + "_bindings" + language.implementation_extension
+    bindings_module = bindings.create_bindings(source_module)
 
     deps = [*source_module.library_deps, *bindings_module.library_deps]
     sources = {

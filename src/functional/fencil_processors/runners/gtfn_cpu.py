@@ -46,3 +46,13 @@ def run_gtfn(itir: ir.FencilDefinition, *args, **kwargs):
     source_module = gtfn_codegen.create_source_module(itir, *args, **kwargs)
     wrapper = cpp_callable.create_callable(source_module)
     wrapper(*[convert_arg(arg) for arg in args])
+
+
+# This is what the pipeline approach would look like with the current ideas
+#  @fencil_executor
+#  def run_gtfn_pipeline(itir: ir.FencilDefinition, *args, **kwargs):
+#      return CMakeProject(
+#          source_module=(so_mo := gtfn_codegen.create_source_module(itir, *args, **kwargs)),
+#          bindings_module=bindings.create_bindings(so_mo, language=CPP_DEFAULT),
+#          cache_strategy=CacheStrategy.SESSION
+#      ).get_fencil_impl()(*[convert_arg(arg) for arg in args])
