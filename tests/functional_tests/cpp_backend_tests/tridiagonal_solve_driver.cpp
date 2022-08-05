@@ -15,13 +15,7 @@ constexpr inline auto a = [](auto...) { return -1; };
 constexpr inline auto b = [](auto...) { return 3; };
 constexpr inline auto c = [](auto...) { return 1; };
 constexpr inline auto d = [](int ksize) {
-  return [kmax = ksize - 1](auto... indices) {
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wunused-value"
-    GT_NVCC_DIAG_PUSH_SUPPRESS(174)
-    int k = (..., indices);
-#pragma GCC diagnostic pop
-    GT_NVCC_DIAG_POP_SUPPRESS(174)
+  return [kmax = ksize - 1](auto, auto, auto k) {
     return k == 0 ? 4 : k == kmax ? 2 : 3;
   };
 };
