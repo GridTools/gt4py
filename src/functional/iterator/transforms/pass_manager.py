@@ -1,5 +1,7 @@
 import enum
 
+from functional.iterator import ir
+from functional.iterator.transforms.cse import CommonSubexpressionElimination
 from functional.iterator.transforms.global_tmps import CreateGlobalTmps
 from functional.iterator.transforms.inline_fundefs import InlineFundefs, PruneUnreferencedFundefs
 from functional.iterator.transforms.inline_lambdas import InlineLambdas
@@ -26,25 +28,33 @@ def _inline_lifts(ir, lift_mode):
     return ir
 
 
-def apply_common_transforms(ir, lift_mode=None, offset_provider=None, unroll_reduce=False):
+def apply_common_transforms(
+    ir: ir.Node,
+    lift_mode=None,
+    offset_provider=None,
+    unroll_reduce=False,
+    common_subexpression_elimination=True,
+):
     if lift_mode is None:
         lift_mode = LiftMode.FORCE_INLINE
     assert isinstance(lift_mode, LiftMode)
     ir = InlineFundefs().visit(ir)
     ir = PruneUnreferencedFundefs().visit(ir)
     ir = NormalizeShifts().visit(ir)
-    ir = InlineLambdas().visit(ir)
     if lift_mode != LiftMode.FORCE_TEMPORARIES:
         for _ in range(10):
             inlined = _inline_lifts(ir, lift_mode)
-            inlined = InlineLambdas().visit(inlined)
+            inlined = InlineLambdas.apply(inlined)
             if inlined == ir:
                 break
             ir = inlined
         else:
             raise RuntimeError("Inlining lift and lambdas did not converge.")
+    else:
+        ir = InlineLambdas.apply(ir)
 
     ir = NormalizeShifts().visit(ir)
+
     if unroll_reduce:
         for _ in range(10):
             unrolled = UnrollReduce().visit(ir, offset_provider=offset_provider)
@@ -55,9 +65,15 @@ def apply_common_transforms(ir, lift_mode=None, offset_provider=None, unroll_red
             ir = _inline_lifts(ir, lift_mode)
             ir = NormalizeShifts().visit(ir)
         else:
-            raise RuntimeError("Reduction unrolling failed")
+            raise RuntimeError("Reduction unrolling failed.")
     if lift_mode != LiftMode.FORCE_INLINE:
         assert offset_provider is not None
         ir = CreateGlobalTmps().visit(ir, offset_provider=offset_provider)
         ir = InlineLifts().visit(ir)
+
+    if common_subexpression_elimination:
+        ir = CommonSubexpressionElimination().visit(ir)
+
+    ir = InlineLambdas.apply(ir, opcount_preserving=common_subexpression_elimination)
+
     return ir

@@ -34,7 +34,7 @@ if __name__ == "__main__":
     output_file = sys.argv[1]
 
     prog = copy_program.itir
-    generated_code = generate(prog, grid_type="Cartesian")
+    generated_code = generate(prog)
 
     with open(output_file, "w+") as output:
         output.write(generated_code)

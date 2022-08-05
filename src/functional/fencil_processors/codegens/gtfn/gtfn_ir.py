@@ -161,12 +161,17 @@ BUILTINS = {
 }
 
 
+class TagDefinition(Node):
+    name: Sym
+    alias: Union[str, SymRef] = ""  # TODO eve has problem with Optional[str]
+
+
 class FencilDefinition(Node, ValidatedSymbolTableTrait):
     id: SymbolName  # noqa: A003
     params: list[Sym]
     function_definitions: list[Union[FunctionDefinition, ScanPassDefinition]]
     executions: list[Union[StencilExecution, ScanExecution]]
-    offset_declarations: list[Sym]
+    offset_definitions: list[TagDefinition]
     grid_type: common.GridType
     temporaries: list[TemporaryAllocation]
 

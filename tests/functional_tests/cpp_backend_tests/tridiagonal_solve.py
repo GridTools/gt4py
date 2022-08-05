@@ -54,7 +54,6 @@ if __name__ == "__main__":
     offset_provider = {"I": CartesianAxis("IDim"), "J": CartesianAxis("JDim")}
     generated_code = generate(
         prog,
-        grid_type="Cartesian",
         offset_provider=offset_provider,
         lift_mode=LiftMode.SIMPLE_HEURISTIC,
         column_axis=KDim,
