@@ -134,9 +134,9 @@ BUILTINS = {
 }
 
 
-class OffsetDefinition(Node):
+class TagDefinition(Node):
     name: Sym
-    alias: str = ""  # TODO Optional[str] errors in eve
+    alias: Union[str, SymRef] = ""  # TODO eve has problem with Optional[str]
 
 
 class FencilDefinition(Node, ValidatedSymbolTableTrait):
@@ -144,7 +144,7 @@ class FencilDefinition(Node, ValidatedSymbolTableTrait):
     params: List[Sym]
     function_definitions: List[FunctionDefinition]
     executions: List[StencilExecution]
-    offset_definitions: List[OffsetDefinition]
+    offset_definitions: List[TagDefinition]
     grid_type: common.GridType
 
     _NODE_SYMBOLS_: ClassVar[List[Sym]] = [Sym(id=name) for name in BUILTINS]

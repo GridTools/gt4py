@@ -139,12 +139,16 @@ class GTFNCodegen(codegen.TemplatedGenerator):
     """
     )
 
-    OffsetDefinition = as_mako(
+    TagDefinition = as_mako(
         """
         %if _this_node.alias:
-        using ${name}_t = ${alias};
+            %if isinstance(_this_node.alias, str):
+                using ${name}_t = ${alias};
+            %else:
+                using ${name}_t = ${alias}_t;
+            %endif
         %else:
-        struct ${name}_t{};
+            struct ${name}_t{};
         %endif
         constexpr inline ${name}_t ${name}{};
         """
@@ -170,8 +174,8 @@ class GTFNCodegen(codegen.TemplatedGenerator):
     using namespace fn;
     using namespace literals;
 
-    ${''.join(offset_definitions)}
-    ${''.join(function_definitions)}
+    ${'\\n'.join(offset_definitions)}
+    ${'\\n'.join(function_definitions)}
 
     inline auto ${id} = [](auto... connectivities__){
         return [connectivities__...](auto backend, ${','.join('auto&& ' + p for p in params)}){
