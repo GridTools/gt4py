@@ -1,6 +1,7 @@
 import sys
 from types import SimpleNamespace
 
+from functional.common import Dimension, DimensionKind
 from functional.fencil_processors.codegens.gtfn.gtfn_backend import generate
 from functional.iterator.builtins import *
 from functional.iterator.runtime import CartesianAxis, closure, fundef, offset
@@ -46,8 +47,8 @@ def zavgS_fencil(edge_domain, out, pp, S_M):
     )
 
 
-Vertex = CartesianAxis("Vertex")
-K = CartesianAxis("K")
+Vertex = Dimension("Vertex")
+K = Dimension("K", kind=DimensionKind.VERTICAL)
 
 
 def nabla_fencil(n_vertices, n_levels, out, pp, S_M, sign, vol):
@@ -70,7 +71,7 @@ if __name__ == "__main__":
         "V2E": SimpleNamespace(max_neighbors=6, has_skip_values=True),
         "E2V": SimpleNamespace(max_neighbors=2, has_skip_values=False),
     }
-    generated_code = generate(prog, grid_type="unstructured", offset_provider=offset_provider)
+    generated_code = generate(prog, offset_provider=offset_provider)
 
     with open(output_file, "w+") as output:
         output.write(generated_code)

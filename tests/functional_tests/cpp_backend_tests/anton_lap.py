@@ -54,7 +54,7 @@ if __name__ == "__main__":
     output_file = sys.argv[1]
 
     prog = trace(lap_fencil, [None] * 8)
-    generated_code = generate(prog, grid_type="Cartesian", offset_provider={"i": IDim, "j": JDim})
+    generated_code = generate(prog, offset_provider={"i": IDim, "j": JDim})
 
     with open(output_file, "w+") as output:
         output.write(generated_code)
