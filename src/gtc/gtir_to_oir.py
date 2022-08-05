@@ -45,7 +45,6 @@ def validate_stencil_memory_accesses(node: oir.Stencil) -> oir.Stencil:
     names: Set[str] = set()
     for name in write_fields:
         if not field_extents[name].is_zero:
-            print(name, field_extents[name])
             names.add(name)
 
     if names:
