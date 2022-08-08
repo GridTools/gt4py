@@ -63,7 +63,7 @@ def _extract_grid_type(domain: itir.FunCall) -> common.GridType:
 
 def _get_gridtype(closures: list[itir.StencilClosure]) -> common.GridType:
     domains = _get_domains(closures)
-    grid_types = set(_extract_grid_type(d) for d in domains)
+    grid_types = {_extract_grid_type(d) for d in domains}
     if len(grid_types) != 1:
         raise ValueError(
             f"Found StencilClosures with more than one GridType: {grid_types}. This is currently not supported."
