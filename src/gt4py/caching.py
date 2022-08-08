@@ -202,8 +202,8 @@ class JITCachingStrategy(CachingStrategy):
         backend_root = self.root_path / cpython_id / gt_utils.slugify(self.builder.backend.name)
         if not backend_root.exists():
             if not backend_root.parent.exists():
-                backend_root.parent.mkdir(parents=False, exist_ok=False)
-            backend_root.mkdir(parents=False, exist_ok=False)
+                backend_root.parent.mkdir(parents=False, exist_ok=True)
+            backend_root.mkdir(parents=False, exist_ok=True)
         return backend_root
 
     @property
