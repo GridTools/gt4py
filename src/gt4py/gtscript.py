@@ -158,6 +158,7 @@ def stencil(
     format_source=True,
     name=None,
     rebuild=False,
+    cache_settings=None,
     **kwargs,
 ):
     """Generate an implementation of the stencil definition with the specified backend.
@@ -200,6 +201,13 @@ def stencil(
             Force rebuild of the :class:`gt4py.StencilObject` even if it is
             found in the cache. (`False` by default).
 
+        cache_settings: `dict`, optional
+            Dictionary to configure cache (directory) settings (see
+             :value:`gt4py.config.cache_settings`).
+            Possible key-value pairs:
+            - `root_path`: (str)
+            - `dir_name`: (str)
+
         **kwargs: `dict`, optional
             Extra backend-specific options. Check the specific backend
             documentation for further information.
@@ -235,6 +243,8 @@ def stencil(
         raise ValueError(f"Invalid 'name' string ('{name}')")
     if not isinstance(rebuild, bool):
         raise ValueError(f"Invalid 'rebuild' bool value ('{rebuild}')")
+    if cache_settings is not None and not isinstance(cache_settings, dict):
+        raise ValueError(f"Invalid 'cache_settings' dictionary ('{rebuild}')")
 
     module = None
     if name:
@@ -260,6 +270,9 @@ def stencil(
         time_keys = ("parse_time", "module_time", "codegen_time", "build_time", "load_time")
         build_info.update({time_key: 0.0 for time_key in time_keys})
 
+    if cache_settings is None:
+        cache_settings = {}
+
     build_options = gt_definitions.BuildOptions(
         name=name,
         module=module,
@@ -267,6 +280,7 @@ def stencil(
         rebuild=rebuild,
         backend_opts=kwargs,
         build_info=build_info,
+        cache_settings=cache_settings,
         impl_opts=_impl_opts,
     )
 
