@@ -33,9 +33,9 @@ assert gt_src_manager.has_gt_sources() or gt_src_manager.install_gt_sources()
 def compile_reference():
     current_dir = os.path.dirname(__file__)
     build_opts = pyext_builder.get_gt_pyext_build_opts().copy()
-    gt2_include_path = gt_config.build_settings["gt2_include_path"]
+    gt_include_path = gt_config.build_settings["gt_include_path"]
     build_opts["include_dirs"].extend(
-        [gt2_include_path, os.path.join(gt2_include_path, "..", "tests")]
+        [gt_include_path, os.path.join(gt_include_path, "..", "tests")]
     )
 
     build_opts.setdefault("extra_compile_args", [])

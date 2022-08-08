@@ -160,7 +160,7 @@ regular function call receiving the definition function:
 
     stencil_example_numpy = gtscript.stencil(backend="numpy", definition=stencil_example)
 
-    another_example_gtmc = gtscript.stencil(backend="gtmc", definition=stencil_example)
+    another_example_gtmc = gtscript.stencil(backend="gt:cpu_ifirst", definition=stencil_example)
 
 The generated code is written to and compiled in a local '.gt_cache' folder. Subsequent
 invocations will check whether a recent version of the stencil already exists in the cache.

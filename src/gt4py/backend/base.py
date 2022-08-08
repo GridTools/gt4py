@@ -18,6 +18,7 @@ import hashlib
 import os
 import pathlib
 import time
+import warnings
 from typing import TYPE_CHECKING, Any, Callable, ClassVar, Dict, List, Optional, Tuple, Type, Union
 
 from gt4py import definitions as gt_definitions
@@ -271,7 +272,9 @@ class BaseBackend(Backend):
         assert self.options is not None
         unknown_options = set(options.backend_opts.keys()) - set(self.options.keys())
         if unknown_options:
-            raise ValueError("Unknown backend options: '{}'".format(unknown_options))
+            warnings.warn(
+                f"Unknown options '{unknown_options}' for backend '{self.name}'", RuntimeWarning
+            )
 
     def make_module(
         self,

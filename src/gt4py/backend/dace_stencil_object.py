@@ -80,9 +80,6 @@ class DaCeStencilObject(StencilObject, SDFGConvertible):
         if getattr(cls, "_frozen_cache", None) is None:
             cls._frozen_cache = {}
 
-        if getattr(cls, "_sdfg", None) is None:
-            cls._sdfg = dace.SDFG.from_file(cls.SDFG_PATH)
-
         return res
 
     @staticmethod
@@ -100,7 +97,7 @@ class DaCeStencilObject(StencilObject, SDFGConvertible):
                 axes = self.field_info[name].axes
 
                 shape = [f"__{name}_{axis}_size" for axis in axes] + [
-                    str(d) for d in self.field_info[name].data_dims
+                    d for d in self.field_info[name].data_dims
                 ]
 
                 wrapper_sdfg.add_array(
@@ -119,22 +116,22 @@ class DaCeStencilObject(StencilObject, SDFGConvertible):
                     if len(origin) == 3:
                         origin = [o for a, o in zip("IJK", origin) if a in axes]
 
-                subset_strs = [
-                    f"{o - e}:{o - e + s}"
+                ranges = [
+                    (o - max(0, e), o - max(0, e) + s - 1, 1)
                     for o, e, s in zip(
                         origin,
                         self.field_info[name].boundary.lower_indices,
                         inner_sdfg.arrays[name].shape,
                     )
                 ]
-                subset_strs += [f"0:{d}" for d in self.field_info[name].data_dims]
+                ranges += [(0, d, 1) for d in self.field_info[name].data_dims]
                 if name in inputs:
                     state.add_edge(
                         state.add_read(name),
                         None,
                         nsdfg,
                         name,
-                        dace.Memlet.simple(name, ",".join(subset_strs)),
+                        dace.Memlet(name, subset=dace.subsets.Range(ranges)),
                     )
                 if name in outputs:
                     state.add_edge(
@@ -142,7 +139,7 @@ class DaCeStencilObject(StencilObject, SDFGConvertible):
                         name,
                         state.add_write(name),
                         None,
-                        dace.Memlet.simple(name, ",".join(subset_strs)),
+                        dace.Memlet(name, subset=dace.subsets.Range(ranges)),
                     )
 
     def _sdfg_specialize_symbols(self, wrapper_sdfg, domain: Tuple[int, ...]):
@@ -259,8 +256,13 @@ class DaCeStencilObject(StencilObject, SDFGConvertible):
         self._frozen_cache[key] = DaCeFrozenStencil(self, origin, domain, frozen_sdfg)
         return self._frozen_cache[key]
 
-    def sdfg(self) -> dace.SDFG:
-        return copy.deepcopy(self._sdfg)
+    @classmethod
+    def sdfg(cls) -> dace.SDFG:
+
+        if getattr(cls, "_sdfg", None) is None:
+            cls._sdfg = dace.SDFG.from_file(cls.SDFG_PATH)
+
+        return copy.deepcopy(cls._sdfg)
 
     def closure_resolver(
         self,

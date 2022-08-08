@@ -114,7 +114,7 @@ autodoc_default_options = {
     "special-members": "__call__",
     "undoc-members": True,
 }
-autodoc_mock_imports = ["dace"]
+autodoc_mock_imports = ["dace", "sympy"]
 
 # ---- Options for intersphinx extension
 intersphinx_mapping = {
