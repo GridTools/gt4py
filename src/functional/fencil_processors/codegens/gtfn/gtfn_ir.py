@@ -14,7 +14,7 @@
 
 from __future__ import annotations
 
-from typing import ClassVar, Union
+from typing import ClassVar, Optional, Union
 
 import eve
 from eve import Coerced, SymbolName, SymbolRef
@@ -163,7 +163,7 @@ BUILTINS = {
 
 class TagDefinition(Node):
     name: Sym
-    alias: Union[str, SymRef] = ""  # TODO eve has problem with Optional[str]
+    alias: Optional[Union[str, SymRef]] = None
 
 
 class FencilDefinition(Node, ValidatedSymbolTableTrait):
