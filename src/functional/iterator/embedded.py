@@ -581,8 +581,9 @@ class MDIterator:
         shifted_pos = self.pos.copy()
         axes = _get_axes(self.field)
 
-        if not all(axis.value in shifted_pos.keys() for axis in axes if axis is not None):
-            raise IndexError("Iterator position doesn't point to valid location for its field.")
+        if __debug__:
+            if not all(axis.value in shifted_pos.keys() for axis in axes if axis is not None):
+                raise IndexError("Iterator position doesn't point to valid location for its field.")
         slice_column = dict[Tag, FieldIndex]()
         if self.column_axis is not None:
             slice_column[self.column_axis] = slice(shifted_pos[self.column_axis], None)

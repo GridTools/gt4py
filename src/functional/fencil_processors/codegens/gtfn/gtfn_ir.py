@@ -14,7 +14,7 @@
 
 from __future__ import annotations
 
-from typing import ClassVar, List, Union
+from typing import ClassVar, List, Optional, Union
 
 import eve
 from eve import Coerced, SymbolName, SymbolRef
@@ -134,12 +134,17 @@ BUILTINS = {
 }
 
 
+class TagDefinition(Node):
+    name: Sym
+    alias: Optional[Union[str, SymRef]] = None
+
+
 class FencilDefinition(Node, ValidatedSymbolTableTrait):
     id: SymbolName  # noqa: A003
     params: List[Sym]
     function_definitions: List[FunctionDefinition]
     executions: List[StencilExecution]
-    offset_declarations: List[Sym]
+    offset_definitions: List[TagDefinition]
     grid_type: common.GridType
 
     _NODE_SYMBOLS_: ClassVar[List[Sym]] = [Sym(id=name) for name in BUILTINS]
