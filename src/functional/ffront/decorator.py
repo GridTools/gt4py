@@ -26,14 +26,14 @@ import functools
 import types
 import typing
 import warnings
+import numpy as np
 from collections.abc import Callable, Iterable
-from numbers import Number
-from typing import Generic, Protocol, TypeVar
+from typing import Generic, Protocol, TypeVar, TypeAlias, SupportsInt, SupportsFloat
 
 from devtools import debug
 
 from eve.extended_typing import Any, Optional
-from eve.utils import UIDs
+from eve.utils import UIDGenerator
 from functional.common import DimensionKind, GridType, GTTypeError
 from functional.fencil_processors.runners import roundtrip
 from functional.ffront import (
@@ -59,6 +59,7 @@ from functional.iterator.processor_interface import (
     ensure_formatter,
 )
 
+Scalar: TypeAlias = SupportsInt | SupportsFloat | np.int32 | np.int64 | np.float32 | np.float64
 
 DEFAULT_BACKEND: Callable = roundtrip.executor
 
@@ -115,7 +116,7 @@ class GTCallable(Protocol):
         return None
 
     @abc.abstractmethod
-    def __gt_type__(self) -> ct.FunctionType:
+    def __gt_type__(self) -> ct.CallableType:
         """
         Return symbol type, i.e. signature and return type.
 
@@ -436,24 +437,22 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         operator_node_cls: type[OperatorNodeT] = foast.FieldOperator,
         operator_attributes: Optional[dict[str, Any]] = None,
     ) -> FieldOperator[OperatorNodeT]:
+        operator_attributes = operator_attributes or {}
+
         captured_vars = CapturedVars.from_function(definition)
         foast_definition_node = FieldOperatorParser.apply_to_function(definition)
         loc = foast_definition_node.location
-        operator_attribute_nodes = (
-            {
-                key: foast.Constant(
-                    value=value, type=symbol_makers.make_symbol_type_from_value(value), location=loc
-                )
-                for key, value in operator_attributes.items()
-            }
-            if operator_attributes
-            else {}
-        )
+        operator_attribute_nodes = {
+            key: foast.Constant(value=value,
+                                type=symbol_makers.make_symbol_type_from_value(
+                                    value), location=loc)
+            for key, value in operator_attributes.items()
+        }
         untyped_foast_node = operator_node_cls(
             id=foast_definition_node.id,
             definition=foast_definition_node,
             location=loc,
-            **(operator_attribute_nodes),
+            **operator_attribute_nodes,
         )
         foast_node = FieldOperatorTypeDeduction.apply(untyped_foast_node)
         return cls(
@@ -464,7 +463,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
             definition=definition,
         )
 
-    def __gt_type__(self) -> ct.FunctionType:
+    def __gt_type__(self) -> ct.CallableType:
         type_ = self.foast_node.type
         assert type_info.is_concrete(type_)
         return type_
@@ -479,7 +478,14 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         )
 
     def __gt_itir__(self) -> itir.FunctionDefinition:
-        return typing.cast(itir.FunctionDefinition, FieldOperatorLowering.apply(self.foast_node))
+        if hasattr(self, "__cached_itir"):
+            return getattr(self, "__cached_itir")  # noqa: B009
+
+        itir_node: itir.FunctionDefinition = FieldOperatorLowering.apply(self.foast_node)
+
+        object.__setattr__(self, "__cached_itir", itir_node)
+
+        return itir_node
 
     def __gt_captured_vars__(self) -> CapturedVars:
         return self.captured_vars
@@ -494,11 +500,12 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
 
         name = self.foast_node.id
         loc = self.foast_node.location
+        param_sym_uids = UIDGenerator()  # use a new UID generator to allow caching
 
         type_ = self.__gt_type__()
         params_decl: list[past.Symbol] = [
             past.DataSymbol(
-                id=UIDs.sequential_id(prefix="__sym"),
+                id=param_sym_uids.sequential_id(prefix="__sym"),
                 type=arg_type,
                 namespace=ct.Namespace.LOCAL,
                 location=loc,
@@ -618,7 +625,7 @@ def scan_operator(
     *,
     axis: Dimension,
     forward: bool,
-    init: Number,
+    init: Scalar,
     externals: Optional[dict],
     backend: Optional[str],
 ) -> FieldOperator[foast.ScanOperator]:
@@ -630,7 +637,7 @@ def scan_operator(
     *,
     axis: Dimension,
     forward: bool,
-    init: Number,
+    init: Scalar,
     externals: Optional[dict],
     backend: Optional[str],
 ) -> Callable[[types.FunctionType], FieldOperator[foast.ScanOperator]]:
@@ -642,7 +649,7 @@ def scan_operator(
     *,
     axis: Dimension,
     forward: bool = True,
-    init: Number = 0.0,  # type: ignore[assignment]
+    init: Scalar = 0.0,  # type: ignore[assignment]
     externals=None,
     backend=None,
 ):

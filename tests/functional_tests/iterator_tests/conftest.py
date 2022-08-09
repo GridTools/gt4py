@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import pytest
 
 import functional.fencil_processors.formatters.gtfn
@@ -12,6 +14,7 @@ from functional.iterator.processor_interface import (
     FencilFormatter,
     fencil_formatter,
 )
+from functional.iterator.runtime import FendefDispatcher
 
 
 @pytest.fixture(params=[False, True], ids=lambda p: f"use_tmps={p}")
@@ -52,7 +55,12 @@ def fencil_processor_no_gtfn_exec(fencil_processor):
     return fencil_processor
 
 
-def run_processor(fencil, processor, *args, **kwargs):
+def run_processor(
+    fencil: FendefDispatcher,
+    processor: FencilExecutor | FencilFormatter,
+    *args,
+    **kwargs,
+) -> None:
     if processor is None or isinstance(processor, FencilExecutor):
         fencil(*args, backend=processor, **kwargs)
     elif isinstance(processor, FencilFormatter):

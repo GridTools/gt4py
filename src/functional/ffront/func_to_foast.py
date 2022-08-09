@@ -379,6 +379,15 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
     def visit_Eq(self, node: ast.Eq, **kwargs) -> foast.CompareOperator:
         return foast.CompareOperator.EQ
 
+    def visit_LtE(self, node: ast.LtE, **kwargs) -> foast.CompareOperator:
+        return foast.CompareOperator.LTE
+
+    def visit_GtE(self, node: ast.GtE, **kwargs) -> foast.CompareOperator:
+        return foast.CompareOperator.GTE
+
+    def visit_NotEq(self, node: ast.NotEq, **kwargs) -> foast.CompareOperator:
+        return foast.CompareOperator.NOTEQ
+
     def _verify_builtin_function(self, node: ast.Call):
         func_name = self._func_name(node)
         func_info = getattr(fbuiltins, func_name).__gt_type__()

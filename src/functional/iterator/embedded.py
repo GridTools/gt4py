@@ -329,6 +329,21 @@ def less(first, second):
     return first < second
 
 
+@builtins.less_equal.register(EMBEDDED)
+def less_equal(first, second):
+    return first <= second
+
+
+@builtins.greater_equal.register(EMBEDDED)
+def greater_equal(first, second):
+    return first >= second
+
+
+@builtins.not_eq.register(EMBEDDED)
+def not_eq(first, second):
+    return first != second
+
+
 for math_builtin_name in builtins.MATH_BUILTINS:
     decorator = getattr(builtins, math_builtin_name).register(EMBEDDED)
     if math_builtin_name == "gamma":

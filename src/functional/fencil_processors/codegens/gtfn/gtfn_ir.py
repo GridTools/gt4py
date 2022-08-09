@@ -12,6 +12,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+from __future__ import annotations
 
 from typing import ClassVar, List, Union
 
@@ -101,10 +102,14 @@ class Backend(Node):
     domain: Union[SymRef, CartesianDomain, UnstructuredDomain]
 
 
+class SidComposite(Expr):
+    values: List[Union[SymRef, SidComposite]]
+
+
 class StencilExecution(Node):
     backend: Backend
     stencil: SymRef  # TODO should be list of assigns for canonical `scan`
-    output: SymRef
+    output: Union[SymRef, SidComposite]
     inputs: List[SymRef]
 
 
@@ -137,4 +142,4 @@ class FencilDefinition(Node, ValidatedSymbolTableTrait):
     offset_declarations: List[Sym]
     grid_type: common.GridType
 
-    _NODE_SYMBOLS_: ClassVar = [Sym(id=name) for name in BUILTINS]
+    _NODE_SYMBOLS_: ClassVar[List[Sym]] = [Sym(id=name) for name in BUILTINS]

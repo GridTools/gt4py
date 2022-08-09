@@ -11,7 +11,7 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-from functional.common import Field
+from functional.common import DimensionKind, Field
 from functional.ffront import itir_makers as im
 from functional.ffront.fbuiltins import (
     Dimension,
@@ -30,7 +30,7 @@ IDim = Dimension("IDim")
 Edge = Dimension("Edge")
 Vertex = Dimension("Vertex")
 Cell = Dimension("Cell")
-V2EDim = Dimension("V2E")
+V2EDim = Dimension("V2E", DimensionKind.LOCAL)
 V2E = FieldOffset("V2E", source=Edge, target=(Vertex, V2EDim))
 
 

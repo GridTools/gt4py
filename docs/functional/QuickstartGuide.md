@@ -5,7 +5,7 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.13.8
+    jupytext_version: 1.14.0
 kernelspec:
   display_name: Python 3 (ipykernel)
   language: python
@@ -44,6 +44,7 @@ The following snippet imports the most commonly used features that are needed to
 ```{code-cell} ipython3
 import numpy as np
 
+from functional.common import DimensionKind
 from functional.ffront.fbuiltins import Dimension, Field, float32, FieldOffset, neighbor_sum
 from functional.ffront.decorator import field_operator, program
 from functional.iterator.embedded import np_as_located_field, NeighborTableOffsetProvider
@@ -218,8 +219,8 @@ Another way to look at it is that transform uses the edge-to-cell connectivity t
 You can use the field offset `E2C` below to transform a field over cells to a field over edges using the edge-to-cell connectivities:
 
 ```{code-cell} ipython3
-E2CDim = Dimension("E2C", kind=DimensionKind.local)
-E2C = FieldOffset("E2C", source=CellDim, target=(EdgeDim,))
+E2CDim = Dimension("E2C", kind=DimensionKind.LOCAL)
+E2C = FieldOffset("E2C", source=CellDim, target=(EdgeDim,E2CDim))
 ```
 
 Note that the field offset does not contain the actual connectivity table, that's provided through an *offset provider*:
@@ -286,13 +287,11 @@ For the border edges, the results are unchanged compared to the previous example
 As explained in the section outline, the pseudo-laplacian needs the cell-to-edge connectivities as well in addition to the edge-to-cell connectivities. Though the connectivity table has been filled in above, you still need to define the local dimension, the field offset, and the offset provider that describe how to use the connectivity table. The procedure is identical to the edge-to-cell connectivity from before:
 
 ```{code-cell} ipython3
-C2EDim = Dimension("C2E", True)
+C2EDim = Dimension("C2E", kind=DimensionKind.LOCAL)
 C2E = FieldOffset("C2E", source=EdgeDim, target=(CellDim, C2EDim))
 
 C2E_offset_provider = NeighborTableOffsetProvider(cell_to_edge_table, CellDim, EdgeDim, 3)
 ```
-
-+++
 
 **Weights of edge differences:**
 
@@ -359,11 +358,7 @@ As a closure, here is an example of chaining field operators, which is very simp
 
 ```{code-cell} ipython3
 @field_operator
-def pseudo_laplap(cells : Field[[EdgeDim], float32],
+def pseudo_laplap(cells : Field[[CellDim], float32],
                   edge_weights : Field[[CellDim, C2EDim], float32]) -> Field[[CellDim], float32]:
     return pseudo_lap(pseudo_lap(cells, edge_weights), edge_weights)
-```
-
-```{code-cell} ipython3
-
 ```

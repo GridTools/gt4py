@@ -17,7 +17,7 @@ from dataclasses import dataclass
 
 from numpy import float32, float64, int32, int64
 
-from functional.common import Dimension, Field
+from functional.common import Dimension, DimensionKind, Field
 from functional.ffront import common_types as ct
 from functional.iterator import runtime
 
@@ -193,7 +193,11 @@ __all__ = BUILTIN_NAMES
 @dataclass(frozen=True)
 class FieldOffset(runtime.Offset):
     source: Dimension
-    target: tuple[Dimension, ...]
+    target: tuple[Dimension] | tuple[Dimension, Dimension]
+
+    def __post_init__(self):
+        if len(self.target) == 2 and self.target[1].kind != DimensionKind.LOCAL:
+            raise ValueError("Second dimension in offset must be a local dimension.")
 
     def __gt_type__(self):
         return ct.OffsetType(source=self.source, target=self.target)
