@@ -60,7 +60,6 @@ class FieldOperatorTypeDeductionCompletnessValidator(NodeVisitor):
     def visit_LocatedNode(
         self, node: foast.LocatedNode, *, incomplete_nodes: list[foast.LocatedNode]
     ):
-        num_incomplete_prior = len(incomplete_nodes)
         self.generic_visit(node, incomplete_nodes=incomplete_nodes)
 
         if hasattr(node, "type") and not type_info.is_concrete(node.type):
