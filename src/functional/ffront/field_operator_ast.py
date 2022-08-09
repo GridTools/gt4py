@@ -33,7 +33,7 @@ SymbolT = TypeVar("SymbolT", bound=common_types.SymbolType)
 #       class Symbol(eve.GenericNode, LocatedNode, Generic[SymbolT]):
 #
 class Symbol(LocatedNode, Generic[SymbolT]):
-    id: Coerced[SymbolName]  # noqa: A003
+    id: Coerced[SymbolName]  # noqa: A003  # shadowing a python builtin
     type: Union[SymbolT, common_types.DeferredSymbolType]  # noqa A003
     namespace: common_types.Namespace = common_types.Namespace(common_types.Namespace.LOCAL)
 
@@ -59,7 +59,7 @@ class Expr(LocatedNode):
 
 
 class Name(Expr):
-    id: Coerced[SymbolRef]  # noqa: A003
+    id: Coerced[SymbolRef]  # noqa: A003  # shadowing a python builtin
 
 
 class Constant(Expr):
@@ -167,23 +167,23 @@ class Return(Stmt):
 
 
 class FunctionDefinition(LocatedNode, SymbolTableTrait):
-    id: Coerced[SymbolName]  # noqa: A003
+    id: Coerced[SymbolName]  # noqa: A003  # shadowing a python builtin
     params: list[DataSymbol]
     body: list[Stmt]
     captured_vars: list[Symbol]
-    type: Optional[common_types.FunctionType] = None  # noqa A003
+    type: Optional[common_types.FunctionType] = None  # noqa A003  # shadowing a python builtin
 
 
 class FieldOperator(LocatedNode, SymbolTableTrait):
-    id: Coerced[SymbolName]  # noqa: A003
+    id: Coerced[SymbolName]  # noqa: A003  # shadowing a python builtin
     definition: FunctionDefinition
-    type: Optional[common_types.FieldOperatorType] = None  # noqa A003
+    type: Optional[common_types.FieldOperatorType] = None  # noqa A003  # shadowing a python builtin
 
 
 class ScanOperator(LocatedNode, SymbolTableTrait):
-    id: Coerced[SymbolName]  # noqa: A003
+    id: Coerced[SymbolName]  # noqa: A003 # shadowing a python builtin
     axis: Constant
     forward: Constant
     init: Constant
     definition: FunctionDefinition  # scan pass
-    type: Optional[common_types.ScanOperatorType] = None  # noqa A003
+    type: Optional[common_types.ScanOperatorType] = None  # noqa A003 # shadowing a python builtin

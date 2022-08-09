@@ -158,6 +158,8 @@ def make_symbol_type_from_typing(
 
 
 def make_symbol_type_from_value(value: Any) -> ct.SymbolType:
+    # TODO(tehrengruber): use protocol from functional.common when available
+    #  instead of importing from the embedded implementation
     from functional.iterator.embedded import LocatedField
 
     """Make a symbol node from a Python value."""

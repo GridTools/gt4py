@@ -387,12 +387,14 @@ def promote_dims(
 
 @functools.singledispatch
 def return_type(
-    callable_type: ct.FieldOperatorType,
+    callable_type: ct.CallableType,
     *,
     with_args: list[ct.SymbolType],
     with_kwargs: dict[str, ct.SymbolType],
 ):
-    raise TypeError()
+    raise NotImplementedError(
+        f"Return type deduction of type " f"{type(callable_type).__name__} not implemented."
+    )
 
 
 @return_type.register
@@ -440,14 +442,16 @@ def return_type_scanop(
 
 
 @return_type.register
-def return_type_(
+def return_type_field(
     field_type: ct.FieldType,
     *,
     with_args: list[ct.SymbolType],
     with_kwargs: dict[str, ct.SymbolType],
 ):
-    if not is_callable(field_type, with_args=with_args, with_kwargs=with_kwargs):
-        raise TypeError()
+    try:
+        is_callable(field_type, with_args=with_args, with_kwargs=with_kwargs, raise_exception=True)
+    except GTTypeError as ex:
+        raise GTTypeError("Could not deduce return type of invalid remap operation.") from ex
 
     source_dim = with_args[0].source
     target_dims = with_args[0].target
@@ -469,7 +473,7 @@ def function_signature_incompatibilities(
 
     Note that all types must be concrete/complete.
     """
-    raise TypeError("")
+    raise NotImplementedError(f"Not implemented for type {type(func_type).__name__}.")
 
 
 @function_signature_incompatibilities.register

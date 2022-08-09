@@ -26,10 +26,10 @@ import functools
 import types
 import typing
 import warnings
-import numpy as np
 from collections.abc import Callable, Iterable
-from typing import Generic, Protocol, TypeVar, TypeAlias, SupportsInt, SupportsFloat
+from typing import Generic, Protocol, SupportsFloat, SupportsInt, TypeAlias, TypeVar
 
+import numpy as np
 from devtools import debug
 
 from eve.extended_typing import Any, Optional
@@ -58,6 +58,7 @@ from functional.iterator.processor_interface import (
     ensure_executor,
     ensure_formatter,
 )
+
 
 Scalar: TypeAlias = SupportsInt | SupportsFloat | np.int32 | np.int64 | np.float32 | np.float64
 
@@ -443,9 +444,9 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         foast_definition_node = FieldOperatorParser.apply_to_function(definition)
         loc = foast_definition_node.location
         operator_attribute_nodes = {
-            key: foast.Constant(value=value,
-                                type=symbol_makers.make_symbol_type_from_value(
-                                    value), location=loc)
+            key: foast.Constant(
+                value=value, type=symbol_makers.make_symbol_type_from_value(value), location=loc
+            )
             for key, value in operator_attributes.items()
         }
         untyped_foast_node = operator_node_cls(
@@ -465,7 +466,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
 
     def __gt_type__(self) -> ct.CallableType:
         type_ = self.foast_node.type
-        assert type_info.is_concrete(type_)
+        assert isinstance(type_, ct.CallableType)
         return type_
 
     def with_backend(self, backend: FencilExecutor) -> FieldOperator:
@@ -645,11 +646,11 @@ def scan_operator(
 
 
 def scan_operator(
-    definition=None,
+    definition: Optional[types.FunctionType] = None,
     *,
     axis: Dimension,
     forward: bool = True,
-    init: Scalar = 0.0,  # type: ignore[assignment]
+    init: Scalar = 0.0,
     externals=None,
     backend=None,
 ):
