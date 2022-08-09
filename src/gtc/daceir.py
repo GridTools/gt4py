@@ -15,7 +15,7 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
 import dace
 import sympy
-from pydantic import validator
+from pydantic import root_validator, validator
 
 import eve
 import gtc
@@ -121,14 +121,14 @@ class StorageType(IntEnum):
         }[self]
 
     @classmethod
-    def from_dace_storage(cls, schedule):
+    def from_dace_storage(cls, storage):
         return {
             dace.StorageType.Default: StorageType.Default,
             dace.StorageType.CPU_Heap: StorageType.CPU_Heap,
             dace.StorageType.GPU_Global: StorageType.GPU_Global,
             dace.StorageType.GPU_Shared: StorageType.GPU_Shared,
             dace.StorageType.Register: StorageType.Register,
-        }[schedule]
+        }[storage]
 
 
 class AxisBound(common.AxisBound):
@@ -670,9 +670,6 @@ class FieldAccessInfo(Node):
         )
 
 
-from eve.datamodels import root_validator
-
-
 class Memlet(Node):
     field: SymbolRef
     access_info: FieldAccessInfo
@@ -887,9 +884,15 @@ class ComputationState(IterationNode):
     computations: List[Union[Tasklet, DomainMap]]
 
 
-class CopyState(ComputationNode, IterationNode):
-    write_memlets: List[Memlet] = []
-    name_map: Dict[str, str]
+class CopyState(Node):
+    memlets: List[Memlet]
+    name_map: Dict[SymbolRef, SymbolRef]
+
+    @validator("memlets")
+    def valid_memlets(cls, v: List[Memlet]) -> List[Memlet]:
+        if not len(v) == len({memlet.field for memlet in v}):
+            raise ValueError("Only one dcir.Memlet per field is allowed.")
+        return v
 
 
 class DomainLoop(IterationNode, ComputationNode):

@@ -56,6 +56,7 @@ def set_idx(axis, memlets: List[dcir.Memlet], idx):
                 connector=mem.connector,
                 is_read=mem.is_read,
                 is_write=mem.is_write,
+                other_grid_subset=mem.other_grid_subset,
             )
         )
     return res
@@ -65,19 +66,24 @@ class FieldAccessRenamer(eve.NodeMutator):
     def apply(self, node, *, local_name_map):
         return self.visit(node, local_name_map=local_name_map)
 
-    def _rename_accesses(self, access_infos, *, local_name_map):
-        return {
-            local_name_map[name] if name in local_name_map else name: info
-            for name, info in access_infos.items()
-        }
+    def _rename_memlets(self, memlets, *, local_name_map):
+        return [
+            dcir.Memlet(
+                field=local_name_map[mem.field] if mem.field in local_name_map else mem.field,
+                access_info=mem.access_info,
+                connector=mem.connector,
+                is_read=mem.is_read,
+                is_write=mem.is_write,
+                other_grid_subset=mem.other_grid_subset,
+            )
+            for mem in memlets
+        ]
 
     def visit_CopyState(self, node: dcir.CopyState, *, local_name_map):
         name_map = {local_name_map[k]: local_name_map[v] for k, v in node.name_map.items()}
         return dcir.CopyState(
-            read_accesses=self._rename_accesses(node.read_accesses, local_name_map=local_name_map),
-            write_accesses=self._rename_accesses(
-                node.write_accesses, local_name_map=local_name_map
-            ),
+            read_memlets=self._rename_memlets(node.read_memlets, local_name_map=local_name_map),
+            write_memlets=self._rename_memlets(node.write_memlets, local_name_map=local_name_map),
             name_map=name_map,
         )
 
@@ -116,11 +122,9 @@ class FieldAccessRenamer(eve.NodeMutator):
         return dcir.NestedSDFG(
             label=node.label,
             field_decls=node.field_decls,  # don't rename, this is inside
-            read_accesses=self._rename_accesses(node.read_accesses, local_name_map=local_name_map),
-            write_accesses=self._rename_accesses(
-                node.write_accesses, local_name_map=local_name_map
-            ),
-            symbols=node.symbols,
+            read_accesses=self._rename_memlets(node.read_memlets, local_name_map=local_name_map),
+            write_accesses=self._rename_memlets(node.write_memlets, local_name_map=local_name_map),
+            symbol_decls=node.symbol_decls,
             states=node.states,
             name_map=name_map,
         )
@@ -133,10 +137,9 @@ class FieldAccessRenamer(eve.NodeMutator):
                 name_map[new_array_name] = name_map[old_array_name]
                 del name_map[old_array_name]
         return dcir.Tasklet(
-            read_accesses=self._rename_accesses(node.read_accesses, local_name_map=local_name_map),
-            write_accesses=self._rename_accesses(
-                node.write_accesses, local_name_map=local_name_map
-            ),
+            decls=node.decls,
+            read_memlets=self._rename_memlets(node.read_memlets, local_name_map=local_name_map),
+            write_memlets=self._rename_memlets(node.write_memlets, local_name_map=local_name_map),
             name_map=name_map,
             stmts=node.stmts,
         )
@@ -369,6 +372,7 @@ class MakeLocalCaches(eve.NodeTranslator):
                         connector=memlet.connector,
                         is_read=memlet.is_read,
                         is_write=memlet.is_write,
+                        other_grid_subset=memlet.other_grid_subset,
                     )
                 )
         return res
@@ -387,7 +391,7 @@ class MakeLocalCaches(eve.NodeTranslator):
 
         # also, init
 
-        grid_subset = union_node_grid_subsets(list(loop_states))
+        # grid_subset = union_node_grid_subsets(list(loop_states))
         # read_accesses, write_accesses, field_accesses = union_node_access_infos(list(loop_states))
         read_memlets = gtc.dace.utils.union_memlets(
             *(
@@ -425,29 +429,52 @@ class MakeLocalCaches(eve.NodeTranslator):
             {k: v for k, v in shift_subsets.items() if v is not None},
         )
 
-        def set_local_names(memlets):
+        def _set_readonly(memlets):
             return [
                 dcir.Memlet(
                     field=mem.field,
                     access_info=mem.access_info,
-                    connector=local_name_map[mem.field],
-                    is_write=mem.is_write,
-                    is_read=mem.is_read,
+                    connector=mem.connector,
+                    is_read=True,
+                    is_write=False,
                 )
                 for mem in memlets
             ]
 
-        def shift(memlets, offset):
-            res = dict()
-            for name, info in access_infos.items():
-                grid_subset = info.grid_subset.set_interval(
-                    axis, info.grid_subset.intervals[axis].shifted(offset)
+        def _set_local_names(memlets):
+            return [
+                dcir.Memlet(
+                    field=local_name_map[mem.field],
+                    access_info=mem.access_info,
+                    connector=mem.connector,
+                    is_read=mem.is_read,
+                    is_write=mem.is_write,
+                    other_grid_subset=mem.other_grid_subset,
                 )
-                res[name] = dcir.FieldAccessInfo(
-                    grid_subset=grid_subset,
-                    global_grid_subset=info.global_grid_subset,
-                    dynamic_access=info.dynamic_access,
-                    variable_offset_axes=info.variable_offset_axes,  # should actually never be True here
+                for mem in memlets
+            ]
+
+        def _shift_src_subset(memlets, offset):
+            res = list()
+            for memlet in memlets:
+                grid_subset = memlet.access_info.grid_subset.set_interval(
+                    axis, memlet.access_info.grid_subset.intervals[axis].shifted(offset)
+                )
+
+                res.append(
+                    dcir.Memlet(
+                        field=memlet.field,
+                        access_info=dcir.FieldAccessInfo(
+                            grid_subset=grid_subset,
+                            global_grid_subset=memlet.access_info.global_grid_subset,
+                            dynamic_access=memlet.access_info.dynamic_access,
+                            variable_offset_axes=memlet.access_info.variable_offset_axes,  # should actually never be True here
+                        ),
+                        connector=memlet.connector,
+                        is_read=memlet.is_read,
+                        is_write=memlet.is_write,
+                        other_grid_subset=memlet.other_grid_subset,
+                    )
                 )
             return res
 
@@ -460,10 +487,7 @@ class MakeLocalCaches(eve.NodeTranslator):
             init_subsets,
         )
         init_state = dcir.CopyState(
-            grid_subset=grid_subset,
-            read_memlets=set_local_names(
-                set_idx(axis, init_memlets, loop.index_range.interval.start)
-            ),
+            memlets=_set_readonly(set_idx(axis, init_memlets, loop.index_range.interval.start)),
             name_map=local_name_map,
         )
 
@@ -476,9 +500,7 @@ class MakeLocalCaches(eve.NodeTranslator):
             fill_subsets,
         )
         fill_state = dcir.CopyState(
-            grid_subset=grid_subset,
-            read_accesses=fill_accesses,
-            write_accesses=set_local_names(fill_accesses),
+            memlets=_set_readonly(fill_accesses),
             name_map=local_name_map,
         )
         loop_states = rename_field_accesses(loop_states, local_name_map=local_name_map)
@@ -492,8 +514,7 @@ class MakeLocalCaches(eve.NodeTranslator):
             flush_subsets,
         )
         flush_state = dcir.CopyState(
-            grid_subset=grid_subset,
-            read_memlets=set_local_names(flush_accesses),
+            memlets=_set_readonly(_set_local_names(flush_accesses)),
             name_map={v: k for k, v in local_name_map.items()},
         )
 
@@ -506,9 +527,9 @@ class MakeLocalCaches(eve.NodeTranslator):
             shift_subsets,
         )
         shift_state = dcir.CopyState(
-            grid_subset=grid_subset,
-            read_accesses=shift(set_local_names(shift_accesses), loop.index_range.stride),
-            write_accesses=set_local_names(shift_accesses),
+            memlets=_set_readonly(
+                _shift_src_subset(_set_local_names(shift_accesses), loop.index_range.stride)
+            ),
             name_map={v: v for v in local_name_map.values()},
         )
         return init_state, (fill_state, *loop_states, flush_state, shift_state)
@@ -565,7 +586,7 @@ class MakeLocalCaches(eve.NodeTranslator):
         for loop_node, loop_state_nodes in loops_and_states:
             if last_loop_node is not None:
                 if (
-                    last_loop_node.index_range.end == loop_node.index_range.start
+                    last_loop_node.index_range.interval.end == loop_node.index_range.interval.start
                     and last_loop_node.index_range.stride == loop_node.index_range.stride
                 ):
                     cache_subsets = cache_subsets
@@ -596,8 +617,8 @@ class MakeLocalCaches(eve.NodeTranslator):
                         axis=loop_node.axis,
                         index_range=loop_node.index_range,
                         grid_subset=loop_node.grid_subset,
-                        read_accesses=loop_node.read_accesses,
-                        write_accesses=loop_node.write_accesses,
+                        read_memlets=loop_node.read_memlets,
+                        write_memlets=loop_node.write_memlets,
                     ),
                 ]
             )
@@ -702,7 +723,7 @@ class MakeLocalCaches(eve.NodeTranslator):
                 continue
             while name.startswith("__local_"):
                 name = name[len("__local_") :]
-            main_decl = node.field_decls[name]
+            main_decl = next(decl for decl in node.field_decls if decl.name == name)
 
             stride = 1
             strides = []
@@ -714,16 +735,16 @@ class MakeLocalCaches(eve.NodeTranslator):
                 strides = [stride, *strides]
                 stride = f"({stride}) * ({s})"
             if is_add_caches:
-                storage = dcir.StorageType.from_dace_storage(storage)
+                dcir_storage = dcir.StorageType.from_dace_storage(storage)
             else:
-                storage = dcir.StorageType.Default
+                dcir_storage = dcir.StorageType.Default
             field_decls[cached_name] = dcir.FieldDecl(
                 name=cached_name,
                 access_info=field_accesses[cached_name],
                 dtype=main_decl.dtype,
                 data_dims=main_decl.data_dims,
                 strides=strides,
-                storage=storage,
+                storage=dcir_storage,
             )
 
         states = propagate_field_decls(

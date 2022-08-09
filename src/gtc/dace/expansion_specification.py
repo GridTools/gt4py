@@ -259,7 +259,19 @@ def _populate_storages(self, expansion_specification):
                 if it.kind == "tiling":
                     tiled_axes.add(it.axis)
     for es in reversed(expansion_specification):
-        if isinstance(es, Map):
+        if isinstance(es, Loop) and es.localcache_fields:
+            if hasattr(self, "_device") and es.storage is None:
+                if len(innermost_axes) == 3:
+                    es.storage = dace.StorageType.Register
+                elif self.device == dace.DeviceType.GPU and len(innermost_axes | tiled_axes) == 3:
+                    es.storage = dace.StorageType.GPU_Shared
+                else:
+                    if self.device == dace.DeviceType.GPU:
+                        es.storage = dace.StorageType.GPU_Global
+                    else:
+                        es.storage = dace.StorageType.CPU_Heap
+            innermost_axes.remove(es.axis)
+        elif isinstance(es, Map):
             for it in es.iterations:
                 if it.axis in innermost_axes:
                     innermost_axes.remove(it.axis)

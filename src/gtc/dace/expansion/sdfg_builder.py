@@ -20,6 +20,7 @@ import dace
 import dace.data
 import dace.library
 import dace.subsets
+import numpy as np
 
 import eve
 import gtc.common as common
@@ -100,9 +101,27 @@ class StencilComputationSDFGBuilder(NodeVisitor):
     ) -> None:
         field_decl = symtable[node.field]
         assert isinstance(field_decl, dcir.FieldDecl)
+        other_decl = (
+            symtable[scope_node.data] if isinstance(scope_node, dace.nodes.AccessNode) else None
+        )
+        if node.access_info.grid_subset != node.other_grid_subset or (
+            other_decl is not None and other_decl.access_info != field_decl.access_info
+        ):
+            other_access_info = dcir.FieldAccessInfo(
+                grid_subset=node.other_grid_subset,
+                global_grid_subset=node.access_info.global_grid_subset,
+                dynamic_access=node.access_info.dynamic_access,
+                variable_offset_axes=node.access_info.variable_offset_axes,
+            )
+            other_subset = make_dace_subset(
+                other_decl.access_info, other_access_info, field_decl.data_dims
+            )
+        else:
+            other_subset = None
         memlet = dace.Memlet(
             node.field,
             subset=make_dace_subset(field_decl.access_info, node.access_info, field_decl.data_dims),
+            other_subset=other_subset,
             dynamic=field_decl.is_dynamic,
         )
         if node.is_read:
@@ -259,6 +278,93 @@ class StencilComputationSDFGBuilder(NodeVisitor):
         sdfg_ctx = sdfg_ctx.add_loop(node.index_range)
         self.visit(node.loop_states, sdfg_ctx=sdfg_ctx, **kwargs)
         sdfg_ctx.pop_loop()
+
+    def visit_CopyState(
+        self,
+        node: dcir.CopyState,
+        *,
+        sdfg_ctx: "StencilComputationSDFGBuilder.SDFGContext",
+        symtable: ChainMap[common.SymbolRef, Any],
+        **kwargs,
+    ) -> None:
+        sdfg_ctx.add_state()
+
+        src_nodes = {
+            memlet.field: sdfg_ctx.state.add_access(memlet.field) for memlet in node.memlets
+        }
+        dst_nodes = {
+            node.name_map[memlet.field]: sdfg_ctx.state.add_access(node.name_map[memlet.field])
+            for memlet in node.memlets
+        }
+        intermediate_nodes = {
+            node.name_map[memlet.field]: sdfg_ctx.state.add_access(sdfg_ctx.sdfg.temp_data_name())
+            for memlet in node.memlets
+            if node.name_map[memlet.field] == memlet.field
+        }
+
+        for memlet in node.memlets:
+            dst_name = node.name_map[memlet.field]
+            if dst_name in intermediate_nodes:
+                stride = 1
+                strides = []
+                for s in reversed(memlet.access_info.overapproximated_shape):
+                    strides = [stride, *strides]
+                    stride = f"({stride}) * ({s})"
+
+                sdfg_ctx.sdfg.add_array(
+                    name=intermediate_nodes[dst_name].data,
+                    shape=memlet.access_info.overapproximated_shape,
+                    strides=[dace.symbolic.pystr_to_symbolic(s) for s in strides],
+                    dtype=np.dtype(common.data_type_to_typestr(symtable[dst_name].dtype)).type,
+                    transient=True,
+                )
+                symtable[intermediate_nodes[dst_name].data] = dcir.FieldDecl(
+                    strides=strides,
+                    data_dims=symtable[dst_name].data_dims,
+                    access_info=memlet.access_info,
+                    storage=dcir.StorageType.Register,
+                )
+
+        node_ctx = StencilComputationSDFGBuilder.NodeContext(
+            input_node_and_conns={name: (node, None) for name, node in src_nodes.items()},
+            output_node_and_conns=dict(),
+        )
+        for memlet in node.memlets:
+            dst_name = node.name_map[memlet.field]
+            dst_node = intermediate_nodes.get(dst_name, dst_nodes[dst_name])
+            self.visit(
+                memlet, scope_node=dst_node, node_ctx=node_ctx, sdfg_ctx=sdfg_ctx, symtable=symtable
+            )
+
+        swap_node_ctx = StencilComputationSDFGBuilder.NodeContext(
+            input_node_and_conns={name: (node, None) for name, node in intermediate_nodes.items()},
+            output_node_and_conns=dict(),
+        )
+        for memlet in node.memlets:
+            dst_name = node.name_map[memlet.field]
+            if dst_name in intermediate_nodes:
+                access_info = dcir.FieldAccessInfo(
+                    grid_subset=memlet.other_grid_subset,
+                    global_grid_subset=memlet.access_info.global_grid_subset,
+                    dynamic_access=memlet.access_info.dynamic_access,
+                    variable_offset_axes=memlet.access_info.variable_offset_axes,
+                )
+                swap_memlet = dcir.Memlet(
+                    field=intermediate_nodes[dst_name].data,
+                    access_info=access_info,
+                    connector=None,
+                    is_read=memlet.is_read,
+                    is_write=memlet.is_write,
+                    other_grid_subset=None,
+                )
+
+                self.visit(
+                    swap_memlet,
+                    scope_node=dst_nodes[dst_name],
+                    node_ctx=swap_node_ctx,
+                    sdfg_ctx=sdfg_ctx,
+                    symtable=symtable,
+                )
 
     def visit_ComputationState(
         self,
