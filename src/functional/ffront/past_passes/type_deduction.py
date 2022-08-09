@@ -55,7 +55,7 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             arg_types = [arg.type for arg in new_args]
             kwarg_types = {name: expr.type for name, expr in new_kwargs.items() if name != "out"}
 
-            type_info.is_callable(
+            type_info.accepts_args(
                 new_func.type,
                 with_args=arg_types,
                 with_kwargs=kwarg_types,

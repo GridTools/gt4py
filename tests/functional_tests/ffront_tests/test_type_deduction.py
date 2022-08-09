@@ -189,13 +189,13 @@ def test_is_callable(
     expected: list,
 ):
     is_callable = len(expected) == 0
-    assert type_info.is_callable(func_type, with_args=args, with_kwargs=kwargs) == is_callable
+    assert type_info.accepts_args(func_type, with_args=args, with_kwargs=kwargs) == is_callable
 
     if len(expected) > 0:
         with pytest.raises(
             GTTypeError,
         ) as exc_info:
-            type_info.is_callable(
+            type_info.accepts_args(
                 func_type, with_args=args, with_kwargs=kwargs, raise_exception=True
             )
 

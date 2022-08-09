@@ -449,7 +449,7 @@ def return_type_field(
     with_kwargs: dict[str, ct.SymbolType],
 ):
     try:
-        is_callable(field_type, with_args=with_args, with_kwargs=with_kwargs, raise_exception=True)
+        accepts_args(field_type, with_args=with_args, with_kwargs=with_kwargs, raise_exception=True)
     except GTTypeError as ex:
         raise GTTypeError("Could not deduce return type of invalid remap operation.") from ex
 
@@ -505,9 +505,9 @@ def function_signature_incompatibilities_func(
 
 @function_signature_incompatibilities.register
 def function_signature_incompatibilities_fieldop(
-    func_type: ct.FieldOperatorType, args: list[ct.SymbolType], kwargs: dict[str, ct.SymbolType]
+    fieldop_type: ct.FieldOperatorType, args: list[ct.SymbolType], kwargs: dict[str, ct.SymbolType]
 ) -> Iterator[str]:
-    yield from function_signature_incompatibilities_func(func_type.definition, args, kwargs)
+    yield from function_signature_incompatibilities_func(fieldop_type.definition, args, kwargs)
 
 
 @function_signature_incompatibilities.register
@@ -564,8 +564,8 @@ def function_signature_incompatibilities_field(
         yield f"Incompatible offset can not shift field defined on " f"{', '.join([dim.value for dim in field_type.dims])} from " f"{source_dim.value} to target dim(s): " f"{', '.join([dim.value for dim in target_dims])}"
 
 
-def is_callable(
-    function_type: ct.CallableType,
+def accepts_args(
+    callable_type: ct.CallableType,
     *,
     with_args: list[ct.SymbolType],
     with_kwargs: dict[str, ct.SymbolType],
@@ -586,22 +586,22 @@ def is_callable(
         ...     kwargs={"foo": bool_type},
         ...     returns=ct.VoidType()
         ... )
-        >>> is_callable(func_type, with_args=[bool_type], with_kwargs={"foo": bool_type})
+        >>> accepts_args(func_type, with_args=[bool_type], with_kwargs={"foo": bool_type})
         True
-        >>> is_callable(func_type, with_args=[], with_kwargs={})
+        >>> accepts_args(func_type, with_args=[], with_kwargs={})
         False
     """
-    if not isinstance(function_type, ct.CallableType):
+    if not isinstance(callable_type, ct.CallableType):
         if raise_exception:
-            raise GTTypeError(f"Expected a callable type, but got `{function_type}`.")
+            raise GTTypeError(f"Expected a callable type, but got `{callable_type}`.")
         return False
 
-    errors = function_signature_incompatibilities(function_type, with_args, with_kwargs)
+    errors = function_signature_incompatibilities(callable_type, with_args, with_kwargs)
     if raise_exception:
         error_list = list(errors)
         if len(error_list) > 0:
             raise GTTypeError(
-                f"Invalid call to function of type `{function_type}`:\n"
+                f"Invalid call to function of type `{callable_type}`:\n"
                 + ("\n".join([f"  - {error}" for error in error_list]))
             )
         return True

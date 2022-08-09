@@ -63,11 +63,7 @@ class FieldOperatorTypeDeductionCompletnessValidator(NodeVisitor):
         num_incomplete_prior = len(incomplete_nodes)
         self.generic_visit(node, incomplete_nodes=incomplete_nodes)
 
-        if (
-            len(incomplete_nodes) == num_incomplete_prior
-            and hasattr(node, "type")
-            and not type_info.is_concrete(node.type)
-        ):
+        if hasattr(node, "type") and not type_info.is_concrete(node.type):
             incomplete_nodes.append(node)
 
 
@@ -358,7 +354,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
 
         # ensure signature is valid
         try:
-            type_info.is_callable(
+            type_info.accepts_args(
                 func_type,
                 with_args=arg_types,
                 with_kwargs=kwarg_types,
@@ -396,7 +392,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
 
     def _ensure_signature_valid(self, node: foast.Call, **kwargs) -> None:
         try:
-            type_info.is_callable(
+            type_info.accepts_args(
                 cast(ct.FunctionType, node.func.type),
                 with_args=[arg.type for arg in node.args],
                 with_kwargs={keyword: arg.type for keyword, arg in node.kwargs.items()},
