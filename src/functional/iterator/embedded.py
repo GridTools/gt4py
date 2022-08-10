@@ -191,7 +191,9 @@ def tuple_get(i, tup):
         return tup[i]
     assert isinstance(tup, (np.ndarray, np.void))
     if tup.dtype.names:
+        # array with structured dtype
         return tup[tup.dtype.names[i]]
+    # array with tuple dimension (i.e., tuple is a 1D array)
     return tup[i]
 
 
