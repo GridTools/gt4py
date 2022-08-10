@@ -128,13 +128,13 @@ class StencilComputationSDFGBuilder(NodeVisitor):
             sdfg_ctx.state.add_edge(
                 *node_ctx.input_node_and_conns[memlet.data],
                 scope_node,
-                connector_prefix + node.connector,
+                connector_prefix + node.connector if node.connector is not None else None,
                 memlet,
             )
         if node.is_write:
             sdfg_ctx.state.add_edge(
                 scope_node,
-                connector_prefix + node.connector,
+                connector_prefix + node.connector if node.connector is not None else None,
                 *node_ctx.output_node_and_conns[memlet.data],
                 memlet,
             )
@@ -319,10 +319,12 @@ class StencilComputationSDFGBuilder(NodeVisitor):
                     transient=True,
                 )
                 symtable[intermediate_nodes[dst_name].data] = dcir.FieldDecl(
+                    name=intermediate_nodes[dst_name].data,
                     strides=strides,
                     data_dims=symtable[dst_name].data_dims,
                     access_info=memlet.access_info,
                     storage=dcir.StorageType.Register,
+                    dtype=symtable[dst_name].dtype,
                 )
 
         node_ctx = StencilComputationSDFGBuilder.NodeContext(
@@ -337,7 +339,7 @@ class StencilComputationSDFGBuilder(NodeVisitor):
             )
 
         swap_node_ctx = StencilComputationSDFGBuilder.NodeContext(
-            input_node_and_conns={name: (node, None) for name, node in intermediate_nodes.items()},
+            input_node_and_conns={node.data: (node, None) for node in intermediate_nodes.values()},
             output_node_and_conns=dict(),
         )
         for memlet in node.memlets:

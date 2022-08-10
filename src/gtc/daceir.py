@@ -673,7 +673,7 @@ class FieldAccessInfo(Node):
 class Memlet(Node):
     field: SymbolRef
     access_info: FieldAccessInfo
-    connector: SymbolRef
+    connector: Optional[SymbolRef]
     is_read: bool
     is_write: bool
     other_grid_subset: GridSubset = None

@@ -524,8 +524,8 @@ def union_node_access_infos(nodes: List[eve.Node]):
     for node in collect_toplevel_computation_nodes(nodes):
         read_accesses.update(
             {
-                mem.field: mem.access_info.union(write_accesses.get(mem.field, mem.access_info))
-                for mem in node.write_memlets
+                mem.field: mem.access_info.union(read_accesses.get(mem.field, mem.access_info))
+                for mem in node.read_memlets
             }
         )
         write_accesses.update(
