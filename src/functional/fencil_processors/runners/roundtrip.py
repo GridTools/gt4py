@@ -170,15 +170,15 @@ def fencil_generator(
 
     try:
         spec = importlib.util.spec_from_file_location("module.name", source_file_name)
-        foo = importlib.util.module_from_spec(spec)  # type: ignore
-        spec.loader.exec_module(foo)  # type: ignore
+        mod = importlib.util.module_from_spec(spec)  # type: ignore
+        spec.loader.exec_module(mod)  # type: ignore
     finally:
         if not debug:
             pathlib.Path(source_file_name).unlink(missing_ok=True)
 
     assert isinstance(ir, (itir.FencilDefinition, FencilWithTemporaries))
     fencil_name = ir.fencil.id + "_wrapper" if isinstance(ir, FencilWithTemporaries) else ir.id
-    fencil = getattr(foo, fencil_name)
+    fencil = getattr(mod, fencil_name)
 
     _FENCIL_CACHE[cache_key] = fencil
 
