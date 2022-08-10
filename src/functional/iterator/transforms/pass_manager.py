@@ -2,6 +2,7 @@ import enum
 
 from functional.iterator import ir
 from functional.iterator.transforms.cse import CommonSubexpressionElimination
+from functional.iterator.transforms.eta_reduction import EtaReduction
 from functional.iterator.transforms.global_tmps import CreateGlobalTmps
 from functional.iterator.transforms.inline_fundefs import InlineFundefs, PruneUnreferencedFundefs
 from functional.iterator.transforms.inline_lambdas import InlineLambdas
@@ -71,6 +72,8 @@ def apply_common_transforms(
         assert offset_provider is not None
         ir = CreateGlobalTmps().visit(ir, offset_provider=offset_provider)
         ir = InlineLifts().visit(ir)
+
+    ir = EtaReduction().visit(ir)
 
     if common_subexpression_elimination:
         ir = CommonSubexpressionElimination().visit(ir)

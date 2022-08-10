@@ -19,7 +19,6 @@ import functional.iterator.ir as itir
 from eve import codegen
 from functional.fencil_processors.codegens.gtfn.codegen import GTFNCodegen
 from functional.fencil_processors.codegens.gtfn.itir_to_gtfn_ir import GTFN_lowering
-from functional.iterator.transforms.eta_reduction import EtaReduction
 from functional.iterator.transforms.pass_manager import apply_common_transforms
 
 
@@ -32,7 +31,6 @@ def generate(program: itir.FencilDefinition, **kwargs: Any) -> str:
         offset_provider=offset_provider,
         unroll_reduce=True,
     )
-    transformed = EtaReduction().visit(transformed)
     gtfn_ir = GTFN_lowering().visit(
         transformed,
         offset_provider=offset_provider,
