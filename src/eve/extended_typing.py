@@ -18,6 +18,7 @@
 
 from __future__ import annotations
 
+import abc as _abc
 import array as _array
 import collections.abc as _collections_abc
 import dataclasses as _dataclasses
@@ -241,17 +242,53 @@ class DevToolsPrettyPrintable(Protocol):
 
 # Extra functionality
 class _ExtendedProtocolMeta(_typing._ProtocolMeta):
+    # This metaclass inherits from typing.Protocol's metaclass
+    # to reset  __instancecheck__ implementation to the
+    # simple implementation in ABC types.
     def __instancecheck__(cls, instance: object) -> bool:
-        return issubclass(type(instance), cls)
+        return _abc.ABCMeta.__instancecheck__(cls, instance)
 
 
+_TypeT = TypeVar("_TypeT", bound=type)
+
+
+@overload
 def extended_runtime_checkable(
-    maybe_cls=None,
     *,
     instance_check_shortcut: bool = True,
     subclass_check_with_data_members: bool = False,
-) -> Any:
-    def _decorator(cls):
+) -> Callable[[_TypeT], _TypeT]:
+    ...
+
+
+@overload
+def extended_runtime_checkable(
+    maybe_cls: _TypeT,
+    *,
+    instance_check_shortcut: bool = True,
+    subclass_check_with_data_members: bool = False,
+) -> _TypeT:
+    ...
+
+
+def extended_runtime_checkable(
+    maybe_cls: Optional[_TypeT] = None,
+    *,
+    instance_check_shortcut: bool = True,
+    subclass_check_with_data_members: bool = False,
+) -> _TypeT | Callable[[_TypeT], _TypeT]:
+    """Emulates :func:`typing.runtime_checkable` with optional performance shortcuts.
+
+    If all optional shortcuts are set to ``False``, it behaves exactly
+    as :func:`typing.runtime_checkable`.
+
+    Keyword Arguments:
+        instance_check_shortcut: instance checks only use the instance type
+            instead of checking the instance data for members added at runtime.
+        subclass_check_with_data_members: subclass checks also work for
+            protocols with data members.    """
+
+    def _decorator(cls: _TypeT) -> _TypeT:
         cls = _typing.runtime_checkable(cls)
         if not (instance_check_shortcut or subclass_check_with_data_members):
             return cls
@@ -274,6 +311,8 @@ def extended_runtime_checkable(
             _get_protocol_attrs = _typing._get_protocol_attrs
             _is_callable_members_only = _typing._is_callable_members_only
 
+            # Define a patched version of the proto hook which ignores
+            # __is_callable_members_only() result at certain points
             def _patched_proto_hook(other):
                 if not cls.__dict__.get("_is_protocol", False):
                     return NotImplemented
@@ -288,6 +327,8 @@ def extended_runtime_checkable(
                     )
                 if not _is_callable_members_only(cls) and _allow_reckless_class_checks():
                     return NotImplemented
+                    # A TypeError should be raised here if not `allow_reckless_class_checks()`
+                    # but we ignored in this patched version`
                 if not isinstance(other, type):
                     # Same error message as for issubclass(1, int).
                     raise TypeError("issubclass() arg 1 must be a class")
