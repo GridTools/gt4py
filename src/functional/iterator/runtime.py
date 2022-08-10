@@ -15,6 +15,7 @@ from functional.fencil_processors.processor_interface import (
 )
 from functional.iterator import builtins
 from functional.iterator.builtins import BackendNotSelectedError, builtin_dispatch
+from functional.iterator.ir import FencilDefinition
 
 
 __all__ = ["offset", "fundef", "fendef", "closure", "CartesianAxis"]
@@ -42,8 +43,7 @@ class UnstructuredDomain(dict):
 
 
 # dependency inversion, register fendef for embedded execution or for tracing/parsing here
-fendef_embedded: Optional[Callable] = None
-fendef_codegen: Optional[Callable] = None
+fendef_embedded: Optional[Callable[[types.FunctionType], None]] = None
 
 
 class FendefDispatcher:
@@ -51,10 +51,17 @@ class FendefDispatcher:
         self.function = function
         self.executor_kwargs = executor_kwargs
 
-    def itir(self, *args, **kwargs):
+    def itir(
+        self,
+        *args,
+        fendef_codegen: Optional[Callable[[types.FunctionType], FencilDefinition]] = None,
+        **kwargs,
+    ):
         args, kwargs = self._rewrite_args(args, kwargs)
         if fendef_codegen is None:
-            raise RuntimeError("Backend execution is not registered")
+            from .tracing import fendef_tracing
+
+            fendef_codegen = fendef_tracing
         fencil_definition = fendef_codegen(self.function, *args, **kwargs)
         if "debug" in kwargs:
             debug(fencil_definition)
@@ -124,7 +131,7 @@ def _deduce_domain(domain: dict[common.Dimension, range], offset_provider: dict[
 
 @dataclass
 class FundefFencilWrapper:
-    fundef_dispatcher: FendefDispatcher
+    fundef_dispatcher: FundefDispatcher
     domain: Callable | dict
 
     def _get_fencil(self, offset_provider=None):

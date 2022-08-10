@@ -15,7 +15,6 @@
 
 from functional.fencil_processors.codegens.gtfn.gtfn_backend import generate
 from functional.fencil_processors.processor_interface import fencil_formatter
-from functional.iterator import tracing  # noqa: F401  # importing registers tracing
 from functional.iterator import ir as itir
 
 

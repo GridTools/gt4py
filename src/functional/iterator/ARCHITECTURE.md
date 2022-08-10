@@ -15,7 +15,7 @@ The builtins dispatcher is implemented in `dispatcher.py`. Implementations are r
 
 `fundef` returns a wrapper around the function, which dispatches `__call__` to a hook if a predicate is met (used for *tracing*). By default the original function is called (used in *embedded* mode).
 
-`fendef` return a wrapper that dispatches to a registered function. If `backend` is in the keyword arguments and not `None` `fendef_codegen` will be called and the result passed directly to the backend, otherwise `fendef_embedded` will be called. The fendef wrapper also has a `.format_itir()` method to invoke code generators and anything else that turns a fencil into text.
+`fendef` returns a wrapper that dispatches to a registered function. If `backend` is in the keyword arguments and not `None`, `fendef_codegen` will be called (can be passed as a keyword arg, by default `tracing.fendef_tracing` will be imported and used.) and the result passed directly to the backend, otherwise `fendef_embedded` will be called. The fendef wrapper also has a `.format_itir()` method to invoke code generators and anything else that turns a fencil into text.
 
 ## Embedded execution
 
