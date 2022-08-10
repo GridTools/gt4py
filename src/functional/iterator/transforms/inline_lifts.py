@@ -6,7 +6,7 @@ from functional.iterator import ir
 
 
 class InlineLifts(NodeTranslator):
-    def __init__(self, predicate: Optional[Callable[[int], bool]] = None) -> None:
+    def __init__(self, predicate: Optional[Callable[[ir.Expr], bool]] = None) -> None:
         super().__init__()
         if predicate is None:
             self.predicate = lambda x: True
