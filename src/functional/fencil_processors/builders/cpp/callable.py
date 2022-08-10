@@ -32,7 +32,7 @@ def create_callable(
 ) -> Callable:
     """Build the source module and return its entry point as a Python function object."""
     cache_folder = get_cache_folder(source_module, cache_strategy)
-    module_file = build.CMakeProject.get_binary_path(cache_folder, source_module.entry_point.name)
+    module_file = build.CMakeProject.get_binary(cache_folder, source_module.entry_point.name)
     try:
         return getattr(import_from_path(module_file), source_module.entry_point.name)
     except ModuleNotFoundError:
@@ -40,7 +40,7 @@ def create_callable(
 
     src_header_file = source_module.entry_point.name + language.include_extension
     bindings_file = source_module.entry_point.name + "_bindings" + language.implementation_extension
-    bindings_module = bindings.create_bindings(source_module)
+    bindings_module = bindings.create_bindings(source_module, language)
 
     deps = [*source_module.library_deps, *bindings_module.library_deps]
     sources = {

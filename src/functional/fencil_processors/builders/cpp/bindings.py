@@ -171,7 +171,7 @@ def make_argument(
 
 
 def create_bindings(
-    target: source_modules.SourceModule, language: CppLanguage = CPP_DEFAULT
+    source_module: source_modules.SourceModule, language: CppLanguage = CPP_DEFAULT
 ) -> source_modules.BindingModule:
     """
     Generate Python bindings through which a C++ function can be called.
@@ -183,10 +183,10 @@ def create_bindings(
     language
         A CppLanguage instance (see ``functional.fencil_processors.pipeline.CppLanguage``)
     """
-    wrapper_name = source_modules.entry_point.name + "_wrapper"
+    wrapper_name = source_module.entry_point.name + "_wrapper"
 
     file_binding = BindingFile(
-        callee_header_file=target.name + language.include_extension,
+        callee_header_file=source_module.entry_point.name + language.include_extension,
         header_files=[
             "pybind11/pybind11.h",
             "pybind11/stl.h",
@@ -199,21 +199,24 @@ def create_bindings(
         ],
         wrapper=WrapperFunction(
             name=wrapper_name,
-            parameters=[make_parameter(param) for param in target.parameters],
+            parameters=[make_parameter(param) for param in source_module.entry_point.parameters],
             body=ReturnStmt(
                 expr=FunctionCall(
-                    target=target,
+                    target=source_module.entry_point,
                     args=[
-                        make_argument(index, param) for index, param in enumerate(target.parameters)
+                        make_argument(index, param)
+                        for index, param in enumerate(source_module.entry_point.parameters)
                     ],
                 )
             ),
         ),
         binding_module=BindingModule(
-            name=target.name,
+            name=source_module.entry_point.name,
             doc="",
             functions=[
-                BindingFunction(exported_name=target.name, wrapper_name=wrapper_name, doc="")
+                BindingFunction(
+                    exported_name=source_module.entry_point.name, wrapper_name=wrapper_name, doc=""
+                )
             ],
         ),
     )

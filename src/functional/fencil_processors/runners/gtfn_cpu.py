@@ -17,8 +17,11 @@ from typing import Any
 
 import numpy
 
-from functional.fencil_processors.builders import cpp as cpp_callable
+from functional.fencil_processors.builders import cache  # , cpp as cpp_callable
+from functional.fencil_processors.builders.cpp import bindings
+from functional.fencil_processors.builders.cpp.build import CMakeBuildProject
 from functional.fencil_processors.codegens.gtfn import gtfn_module as gtfn_codegen
+from functional.fencil_processors.pipeline import CPP_DEFAULT
 from functional.fencil_processors.processor_interface import fencil_executor
 from functional.iterator import ir
 
@@ -43,9 +46,15 @@ def run_gtfn(itir: ir.FencilDefinition, *args, **kwargs):
 
     See ``FencilExecutorFunction`` for details.
     """
-    source_module = gtfn_codegen.create_source_module(itir, *args, **kwargs)
-    wrapper = cpp_callable.create_callable(source_module)
-    wrapper(*[convert_arg(arg) for arg in args])
+    #  source_module = gtfn_codegen.create_source_module(itir, *args, **kwargs)
+    #  wrapper = cpp_callable.create_callable(source_module)
+    #  wrapper(*[convert_arg(arg) for arg in args])
+    return CMakeBuildProject(
+        source_module=(source_module := gtfn_codegen.create_source_module(itir, *args, **kwargs)),
+        bindings_module=bindings.create_bindings(source_module, language=CPP_DEFAULT),
+        language=CPP_DEFAULT,
+        cache_strategy=cache.Strategy.SESSION,
+    ).get_implementation()(*[convert_arg(arg) for arg in args])
 
 
 # This is what the pipeline approach would look like with the current ideas
