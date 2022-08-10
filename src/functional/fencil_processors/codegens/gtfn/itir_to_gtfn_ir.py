@@ -474,16 +474,6 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
                 res.append(execution)
         return res
 
-    @staticmethod
-    def _collect_offsets(node: itir.FencilDefinition) -> list[str]:
-        return list(
-            node.pre_walk_values()
-            .if_isinstance(itir.OffsetLiteral)
-            .getattr("value")
-            .if_isinstance(str)
-            .to_set()
-        )
-
     def visit_FencilDefinition(
         self, node: itir.FencilDefinition, **kwargs: Any
     ) -> FencilDefinition:
