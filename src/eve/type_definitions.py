@@ -23,14 +23,31 @@ import re
 import sys
 from enum import Enum as Enum, IntEnum as IntEnum  # noqa: F401  # imported but unused
 
+import frozenlist as _frozenlist
 from boltons.typeutils import classproperty as classproperty  # noqa: F401
 from frozendict import frozendict as _frozendict  # type: ignore[attr-defined]  # noqa: F401
 
-from .extended_typing import Any, ClassVar, Generic, NoReturn, Optional, TypeAlias, TypeVar, final
+from .extended_typing import (
+    Any,
+    ClassVar,
+    Generic,
+    Iterable,
+    NoReturn,
+    Optional,
+    TypeAlias,
+    TypeVar,
+    final,
+)
 
 
 # Frozen collections
 _T = TypeVar("_T")
+
+
+class FrozenList(_frozenlist.FrozenList):
+    def __init__(self, items: Optional[Iterable] = None):
+        super(FrozenList, self).__init__(items)
+        self.freeze()
 
 
 if sys.version_info >= (3, 9):

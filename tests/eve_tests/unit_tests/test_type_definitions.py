@@ -17,6 +17,17 @@
 
 from __future__ import annotations
 
+import pytest
+
+
+def test_frozen_list():
+    from eve.type_definitions import FrozenList
+
+    fl = FrozenList([0, 1, 2, 3, 4, 5])
+
+    with pytest.raises(RuntimeError, match="Cannot modify frozen list."):
+        fl[2] = -2
+
 
 def test_sentinel():
     from eve.type_definitions import NOTHING

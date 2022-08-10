@@ -18,9 +18,14 @@
 
 from __future__ import annotations
 
+import array as _array
+import collections.abc as _collections_abc
 import dataclasses as _dataclasses
+import enum as _enum
 import functools as _functools
 import inspect as _inspect
+import mmap as _mmap
+import pickle as _pickle
 import sys as _sys
 import types as _types
 import typing as _typing
@@ -28,7 +33,6 @@ import typing as _typing
 # Definitions in 'typing_extensions' take priority over those in 'typing'
 from typing import *  # noqa: F403
 
-import frozendict as _frozendict
 from typing_extensions import *  # type: ignore[misc]  # noqa: F403
 
 
@@ -196,6 +200,14 @@ class DataDescriptor(NonDataDescriptor[_C, _V], Protocol):
         ...
 
 
+# Based on typeshed definitions
+ReadOnlyBuffer: TypeAlias = Union[bytes, SupportsBytes]
+WriteableBuffer: TypeAlias = Union[
+    bytearray, memoryview, _array.array, _mmap.mmap, _pickle.PickleBuffer
+]
+ReadableBuffer: TypeAlias = Union[ReadOnlyBuffer, WriteableBuffer]
+
+
 class HashlibAlgorithm(Protocol):
     """Used in the hashlib module of the standard library."""
 
@@ -203,10 +215,13 @@ class HashlibAlgorithm(Protocol):
     block_size: int
     name: str
 
+    def __init__(self, data: ReadableBuffer = ...) -> None:
+        ...
+
     def copy(self) -> HashlibAlgorithm:
         ...
 
-    def update(self, data: bytes | SupportsBytes) -> None:
+    def update(self, data: ReadableBuffer) -> None:
         ...
 
     def digest(self) -> bytes:
@@ -225,6 +240,94 @@ class DevToolsPrettyPrintable(Protocol):
 
 
 # Extra functionality
+class _ExtendedProtocolMeta(_typing._ProtocolMeta):
+    def __instancecheck__(cls, instance: object) -> bool:
+        return issubclass(type(instance), cls)
+
+
+def extended_runtime_checkable(
+    maybe_cls=None,
+    *,
+    instance_check_shortcut: bool = True,
+    subclass_check_with_data_members: bool = False,
+) -> Any:
+    def _decorator(cls):
+        cls = _typing.runtime_checkable(cls)
+        if not (instance_check_shortcut or subclass_check_with_data_members):
+            return cls
+
+        if instance_check_shortcut:
+            cls.__class__ = _ExtendedProtocolMeta
+
+        if subclass_check_with_data_members:
+            assert "__subclasshook__" in cls.__dict__
+            if cls.__subclasshook__.__module__ not in (
+                "typing",
+                "typing_extensions",
+                "extended_typing",
+            ):
+                raise TypeError(
+                    "Cannot use 'subclass_check_with_data_members' with custom '__subclasshook__' definitions."
+                )
+
+            _allow_reckless_class_checks = _typing._allow_reckless_class_checks
+            _get_protocol_attrs = _typing._get_protocol_attrs
+            _is_callable_members_only = _typing._is_callable_members_only
+
+            def _patched_proto_hook(other):
+                if not cls.__dict__.get("_is_protocol", False):
+                    return NotImplemented
+
+                # First, perform various sanity checks.
+                if not getattr(cls, "_is_runtime_protocol", False):
+                    if _allow_reckless_class_checks():
+                        return NotImplemented
+                    raise TypeError(
+                        "Instance and class checks can only be used with"
+                        " @runtime_checkable protocols"
+                    )
+                if not _is_callable_members_only(cls) and _allow_reckless_class_checks():
+                    return NotImplemented
+                if not isinstance(other, type):
+                    # Same error message as for issubclass(1, int).
+                    raise TypeError("issubclass() arg 1 must be a class")
+
+                # Second, perform the actual structural compatibility check.
+                for attr in _get_protocol_attrs(cls):
+                    for base in other.__mro__:
+                        # Check if the members appears in the class dictionary...
+                        if callable(getattr(cls, attr, None)):  # Method member
+                            if attr in base.__dict__:
+                                if base.__dict__[attr] is None:
+                                    return NotImplemented
+                                break
+                        elif attr in base.__dict__ or (  # Data member
+                            base_annotations := getattr(base, "__annotations__", {})
+                            and isinstance(base_annotations, _collections_abc.Mapping)
+                            and attr in base_annotations
+                        ):
+                            break
+
+                        # ...or in annotations, if it is a sub-protocol.
+                        base_annotations = getattr(base, "__annotations__", {})
+                        if (
+                            isinstance(base_annotations, _collections_abc.Mapping)
+                            and attr in base_annotations
+                            and issubclass(other, Generic)
+                            and other._is_protocol
+                        ):
+                            break
+                    else:
+                        return NotImplemented
+                return True
+
+            cls.__subclasshook__ = _patched_proto_hook
+
+        return cls
+
+    return _decorator(maybe_cls) if maybe_cls is not None else _decorator
+
+
 if _sys.version_info >= (3, 9):
 
     def is_actual_type(obj: Any) -> TypeGuard[Type]:
@@ -254,46 +357,46 @@ def get_actual_type(obj: _T) -> Type[_T]:
     return StdGenericAliasType if isinstance(obj, StdGenericAliasType) else type(obj)
 
 
-def _has_custom_hash(type_: Type) -> bool:
-    return type_.__hash__ is not None and type_.__hash__ != object.__hash__
+def is_type_with_custom_hash(type_: Type) -> bool:
+    return type_.__hash__ not in (None, object.__hash__)
 
 
-def is_hashable(obj: Any) -> TypeGuard[Hashable]:
-    """Check if an object is hashable (by value)."""
-    if obj in (None, type):
-        return True
+class HasCustomHash(Hashable):
+    """ABC for types defining a custom hash function."""
 
-    obj_type = obj if isinstance(obj, type) else type(obj)
-    if _has_custom_hash(obj_type):
-        try:
-            hash(obj)
-            return True
-        except Exception:
-            pass
-
-    return False
+    @classmethod
+    def __subclasshook__(cls, candidate_cls) -> bool:
+        return is_type_with_custom_hash(candidate_cls)
 
 
-def is_hashable_type(
+def is_value_hashable(obj: Any) -> TypeGuard[HasCustomHash]:
+    return isinstance(obj, type) or obj is None or is_type_with_custom_hash(type(obj))
+
+
+def is_value_hashable_typing(
     type_annotation: TypeAnnotation,
     *,
     globalns: Optional[Dict[str, Any]] = None,
     localns: Optional[Dict[str, Any]] = None,
 ) -> bool:
-    """Check if a type annotation describes a hashable (by value) type."""
+    """Check if a type annotation describes a type hashable by value."""
     if is_actual_type(type_annotation):
         assert not get_args(type_annotation)
-        return True if type_annotation in (type, type(None)) else _has_custom_hash(type_annotation)
+        return (
+            True
+            if type_annotation in (type, type(None))
+            else is_type_with_custom_hash(type_annotation)
+        )
 
     if isinstance(type_annotation, TypeVar):
         if type_annotation.__bound__:
-            return is_hashable_type(type_annotation.__bound__)
+            return is_value_hashable_typing(type_annotation.__bound__)
         if type_annotation.__constraints__:
-            return all(is_hashable_type(c) for c in type_annotation.__constraints__)
+            return all(is_value_hashable_typing(c) for c in type_annotation.__constraints__)
         return False
 
     if isinstance(type_annotation, ForwardRef):
-        return is_hashable_type(
+        return is_value_hashable_typing(
             eval_forward_ref(type_annotation, globalns=globalns, localns=localns)
         )
 
@@ -308,20 +411,17 @@ def is_hashable_type(
         return True
 
     if origin_type is Union:
-        return all(is_hashable_type(t) for t in type_args)
+        return all(is_value_hashable_typing(t) for t in type_args)
 
-    if isinstance(origin_type, type) and is_hashable_type(origin_type):
-        return all(is_hashable_type(t) for t in type_args if t != Ellipsis)
+    if isinstance(origin_type, type) and is_value_hashable_typing(origin_type):
+        return all(is_value_hashable_typing(t) for t in type_args if t != Ellipsis)
 
     return type_annotation is None
 
 
 def is_protocol(type_: Type) -> bool:
     """Check if a type is a Protocol definition."""
-    this_module = _sys.modules[is_protocol.__module__]
-    return (
-        isinstance(type_, this_module._ProtocolMeta) and type_.__bases__[-1] is this_module.Protocol
-    )
+    return getattr(type_, "_is_protocol", False)
 
 
 def get_partial_type_hints(
@@ -494,7 +594,7 @@ def infer_type(  # noqa: C901  # function is complex but well organized in indep
         <class 'float'>
 
     """
-    _reveal = _functools.partial(infer_type, annotate_callable_kwargs=annotate_callable_kwargs)
+    _infer = _functools.partial(infer_type, annotate_callable_kwargs=annotate_callable_kwargs)
 
     if isinstance(value, (StdGenericAliasType, _TypingSpecialFormType)):
         return value
@@ -506,7 +606,7 @@ def infer_type(  # noqa: C901  # function is complex but well organized in indep
         return Type[value]
 
     if isinstance(value, tuple):
-        _, args = _collapse_type_args(*(_reveal(item) for item in value))
+        _, args = _collapse_type_args(*(_infer(item) for item in value))
         if args:
             return StdGenericAliasType(tuple, args)
         else:
@@ -514,12 +614,12 @@ def infer_type(  # noqa: C901  # function is complex but well organized in indep
 
     if isinstance(value, (list, set, frozenset)):
         t: Union[Type[List], Type[Set], Type[FrozenSet]] = type(value)
-        unique_type, args = _collapse_type_args(*(_reveal(item) for item in value))
+        unique_type, args = _collapse_type_args(*(_infer(item) for item in value))
         return StdGenericAliasType(t, args[0] if unique_type else Any)
 
     if isinstance(value, dict):
-        unique_key_type, keys = _collapse_type_args(*(_reveal(key) for key in value.keys()))
-        unique_value_type, values = _collapse_type_args(*(_reveal(v) for v in value.values()))
+        unique_key_type, keys = _collapse_type_args(*(_infer(key) for key in value.keys()))
+        unique_value_type, values = _collapse_type_args(*(_infer(v) for v in value.values()))
         kt = keys[0] if unique_key_type else Any
         vt = values[0] if unique_value_type else Any
         return StdGenericAliasType(dict, (kt, vt))
