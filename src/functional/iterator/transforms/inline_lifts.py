@@ -6,6 +6,11 @@ from functional.iterator import ir
 
 
 class InlineLifts(NodeTranslator):
+    """Inline lifted function calls.
+
+    Optionally a predicate function can be passed which can enable or disable inlining of specific function nodes.
+    """
+
     def __init__(self, predicate: Optional[Callable[[ir.Expr], bool]] = None) -> None:
         super().__init__()
         if predicate is None:
