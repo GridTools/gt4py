@@ -43,6 +43,8 @@ class UnstructuredDomain(dict):
 
 
 # dependency inversion, register fendef for embedded execution or for tracing/parsing here
+# TODO(ricoh): this pattern lead to import cycles with `fendef_codegen`
+#   and was changed there. Maybe applies to `fendef_embedded` too?
 fendef_embedded: Optional[Callable[[types.FunctionType], None]] = None
 
 
@@ -59,6 +61,9 @@ class FendefDispatcher:
     ):
         args, kwargs = self._rewrite_args(args, kwargs)
         if fendef_codegen is None:
+            # TODO(ricoh): refactor so that `tracing` does not import this module
+            #   and can be imported top level. Then set `fendef_tracing` as a
+            #   proper default value, instead of using `None` as a sentinel.
             from .tracing import fendef_tracing
 
             fendef_codegen = fendef_tracing
