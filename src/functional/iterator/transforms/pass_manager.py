@@ -30,6 +30,7 @@ def _inline_lifts(ir, lift_mode):
 
 def apply_common_transforms(
     ir: ir.Node,
+    *,
     lift_mode=None,
     offset_provider=None,
     unroll_reduce=False,
