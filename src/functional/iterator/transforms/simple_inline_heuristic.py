@@ -33,7 +33,7 @@ def heuristic(node: ir.Node) -> Callable[[ir.Node], bool]:
     - Don’t inline scans (as there is no efficient way to inline them, also required by some
       backends, e.g. gtfn)
     - Don’t inline the first lifted function call within a scan (otherwise, all stencils would get
-      inlined into the scans, leading to reduced parallelism/scan-only computatio)
+      inlined into the scans, leading to reduced parallelism/scan-only computation)
     """
     inline = dict[int, bool]()
     AnalyzeLifts().visit(node, inline=inline)
