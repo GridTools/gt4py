@@ -89,7 +89,7 @@ def is_callable_cases():
     unary_func_type = ct.FunctionType(args=[bool_type], kwargs={}, returns=ct.VoidType())
     kwarg_func_type = ct.FunctionType(args=[], kwargs={"foo": bool_type}, returns=ct.VoidType())
     scanop_type = ct.ScanOperatorType(
-        axis=Dimension("K"),
+        axis=Dimension("K", kind=DimensionKind.VERTICAL),
         definition=ct.FunctionType(
             args=[float_type, int_type, int_type], kwargs={}, returns=float_type
         ),
@@ -133,8 +133,8 @@ def is_callable_cases():
         (
             scanop_type,
             [
-                ct.FieldType(dims=[Dimension("K")], dtype=float_type),
-                ct.FieldType(dims=[Dimension("K")], dtype=float_type),
+                ct.FieldType(dims=[Dimension("K", kind=DimensionKind.VERTICAL)], dtype=float_type),
+                ct.FieldType(dims=[Dimension("K", kind=DimensionKind.VERTICAL)], dtype=float_type),
             ],
             {},
             [
@@ -146,7 +146,7 @@ def is_callable_cases():
             scanop_type,
             [
                 ct.FieldType(dims=[Dimension("I"), Dimension("J")], dtype=int_type),
-                ct.FieldType(dims=[Dimension("K")], dtype=int_type),
+                ct.FieldType(dims=[Dimension("K", kind=DimensionKind.VERTICAL)], dtype=int_type),
             ],
             {},
             [
@@ -157,8 +157,8 @@ def is_callable_cases():
         (
             scanop_type,
             [
-                ct.FieldType(dims=[Dimension("K")], dtype=int_type),
-                ct.FieldType(dims=[Dimension("K")], dtype=int_type),
+                ct.FieldType(dims=[Dimension("K", kind=DimensionKind.VERTICAL)], dtype=int_type),
+                ct.FieldType(dims=[Dimension("K", kind=DimensionKind.VERTICAL)], dtype=int_type),
             ],
             {},
             [],
@@ -166,7 +166,14 @@ def is_callable_cases():
         (
             scanop_type,
             [
-                ct.FieldType(dims=[Dimension("I"), Dimension("J"), Dimension("K")], dtype=int_type),
+                ct.FieldType(
+                    dims=[
+                        Dimension("I"),
+                        Dimension("J"),
+                        Dimension("K", kind=DimensionKind.VERTICAL),
+                    ],
+                    dtype=int_type,
+                ),
                 ct.FieldType(dims=[Dimension("I"), Dimension("J")], dtype=int_type),
             ],
             {},

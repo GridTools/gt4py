@@ -680,7 +680,7 @@ def scan_operator(
     Examples:
         >>> import numpy as np
         >>> from functional.iterator.embedded import np_as_located_field
-        >>> KDim = Dimension("K")
+        >>> KDim = Dimension("K", kind=DimensionKind.VERTICAL)
         >>> inp = np_as_located_field(KDim)(np.ones((10,)))
         >>> out = np_as_located_field(KDim)(np.zeros((10,)))
         >>> @scan_operator(axis=KDim, forward=True, init=0.)
