@@ -133,12 +133,12 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         if not isinstance(new_axis.type, ct.DimensionType):
             raise FieldOperatorTypeDeductionError.from_foast_node(
                 node,
-                msg=f"Argument `dimension` to scan operator `{node.id}` must " f"be a dimension.",
+                msg=f"Argument `axis` to scan operator `{node.id}` must be a dimension.",
             )
-        # TODO(tehrengruber):
-        if new_axis.type.dim.value != "K":
-            raise NotImplementedError(
-                f"Axis argument to scan operator " f"`{node.id}` must be named `K`."
+        if not new_axis.type.dim.kind == DimensionKind.VERTICAL:
+            raise FieldOperatorTypeDeductionError.from_foast_node(
+                node,
+                msg=f"Argument `axis` to scan operator `{node.id}` must be a vertical dimension.",
             )
         new_forward = self.visit(node.forward, **kwargs)
         if not new_forward.type.kind == ct.ScalarKind.BOOL:

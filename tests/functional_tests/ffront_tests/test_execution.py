@@ -747,7 +747,7 @@ def test_simple_scan(fieldview_backend, forward):
     if fieldview_backend == gtfn_cpu.run_gtfn:
         pytest.xfail("gtfn does not yet support scan pass.")
 
-    KDim = Dimension("K")
+    KDim = Dimension("K", kind=DimensionKind.VERTICAL)
     size = 10
     init = 1.0
     out = np_as_located_field(KDim)(np.zeros((size,)))
@@ -768,7 +768,7 @@ def test_solve_triag(fieldview_backend):
     if fieldview_backend == gtfn_cpu.run_gtfn:
         pytest.xfail("gtfn does not yet support scan pass.")
 
-    KDim = Dimension("K")
+    KDim = Dimension("K", kind=DimensionKind.VERTICAL)
     shape = (3, 7, 5)
     rng = np.random.default_rng()
     a_np, b_np, c_np, d_np = (rng.normal(size=shape) for _ in range(4))

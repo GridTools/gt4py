@@ -182,11 +182,11 @@ class FieldOperatorLowering(NodeTranslator):
         )
 
     def visit_ScanOperator(self, node: foast.ScanOperator, **kwargs) -> itir.FunctionDefinition:
+        # note: we don't need the axis here as this is handled by the program
+        #  decorator
+
         forward = self.visit(node.forward, **kwargs)
         init = self.visit(node.init, **kwargs)
-
-        if not node.axis.value.value == "K":
-            raise NotImplementedError("Vertical axis in scan operator must be `K`.")
 
         # lower definition function
         func_definition: itir.FunctionDefinition = self.visit(node.definition, **kwargs)

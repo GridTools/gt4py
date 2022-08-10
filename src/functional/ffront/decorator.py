@@ -98,6 +98,37 @@ def _collect_capture_vars(captured_vars: CapturedVars) -> CapturedVars:
     return new_captured_vars
 
 
+def _deduce_grid_type(
+    requested_grid_type: Optional[GridType],
+    offsets_and_dimensions: Iterable[FieldOffset | Dimension],
+):
+    """
+    Derive grid type from actually occurring dimensions and check against optional user request.
+
+    Unstructured grid type is consistent with any kind of offset, cartesian is easier to optimize for but only
+    allowed in the absence of unstructured dimensions and offsets.
+    """
+
+    def is_cartesian_offset(o: FieldOffset):
+        return len(o.target) == 1 and o.source == o.target[0]
+
+    deduced_grid_type = GridType.CARTESIAN
+    for o in offsets_and_dimensions:
+        if isinstance(o, FieldOffset) and not is_cartesian_offset(o):
+            deduced_grid_type = GridType.UNSTRUCTURED
+            break
+        if isinstance(o, Dimension) and o.kind == DimensionKind.LOCAL:
+            deduced_grid_type = GridType.UNSTRUCTURED
+            break
+
+    if requested_grid_type == GridType.CARTESIAN and deduced_grid_type == GridType.UNSTRUCTURED:
+        raise GTTypeError(
+            "grid_type == GridType.CARTESIAN was requested, but unstructured `FieldOffset` or local `Dimension` was found."
+        )
+
+    return deduced_grid_type if requested_grid_type is None else requested_grid_type
+
+
 @typing.runtime_checkable
 class GTCallable(Protocol):
     """
@@ -182,7 +213,7 @@ class Program:
         backend: Optional[FencilExecutor] = None,
         grid_type: Optional[GridType] = None,
     ) -> "Program":
-        captured_vars = _collect_capture_vars(CapturedVars.from_function(definition))
+        captured_vars = CapturedVars.from_function(definition)
         past_node = ProgramParser.apply_to_function(definition)
         return cls(
             past_node=past_node,
@@ -193,6 +224,27 @@ class Program:
             grid_type=grid_type,
         )
 
+    def __post_init__(self):
+        # validate contents of captured vars
+        for name, value in self._filter_capture_vars_by_type(GTCallable).items():
+            if value.__gt_itir__().id != name:
+                raise RuntimeError(
+                    "Name of the closure reference and the function it holds do not match."
+                )
+
+        # validate Symbols of captured vars in PAST
+        referenced_var_names: set[str] = set()
+        for captured_var in self.past_node.captured_vars:
+            if isinstance(captured_var.type, (ct.CallableType, ct.OffsetType, ct.DimensionType)):
+                referenced_var_names.add(captured_var.id)
+            else:
+                raise NotImplementedError("Only function closure vars are allowed currently.")
+        defined_var_names = set(self.all_capture_vars.globals) | set(
+            self.all_capture_vars.nonlocals
+        )
+        if undefined := referenced_var_names - defined_var_names:
+            raise RuntimeError(f"Reference to undefined symbol(s) `{', '.join(undefined)}`.")
+
     def with_backend(self, backend: FencilExecutor) -> "Program":
         return Program(
             past_node=self.past_node,
@@ -202,103 +254,24 @@ class Program:
             definition=self.definition,  # type: ignore[arg-type]  # mypy wrongly deduces definition as method here
         )
 
-    @staticmethod
-    def _deduce_grid_type(
-        requested_grid_type: Optional[GridType],
-        offsets_and_dimensions: set[FieldOffset | Dimension],
-    ):
-        """
-        Derive grid type from actually occurring dimensions and check against optional user request.
-
-        Unstructured grid type is consistent with any kind of offset, cartesian is easier to optimize for but only
-        allowed in the absence of unstructured dimensions and offsets.
-        """
-
-        def is_cartesian_offset(o: FieldOffset):
-            return len(o.target) == 1 and o.source == o.target[0]
-
-        deduced_grid_type = GridType.CARTESIAN
-        for o in offsets_and_dimensions:
-            if isinstance(o, FieldOffset) and not is_cartesian_offset(o):
-                deduced_grid_type = GridType.UNSTRUCTURED
-                break
-            if isinstance(o, Dimension) and o.kind == DimensionKind.LOCAL:
-                deduced_grid_type = GridType.UNSTRUCTURED
-                break
-
-        if requested_grid_type == GridType.CARTESIAN and deduced_grid_type == GridType.UNSTRUCTURED:
-            raise GTTypeError(
-                "grid_type == GridType.CARTESIAN was requested, but unstructured `FieldOffset` or local `Dimension` was found."
-            )
-
-        return deduced_grid_type if requested_grid_type is None else requested_grid_type
-
-    def _gt_callables_from_captured_vars(self, captured_vars: CapturedVars) -> list[GTCallable]:
-        all_captured_vars = collections.ChainMap(captured_vars.globals, captured_vars.nonlocals)
-
-        gt_callables = []
-        for name, value in all_captured_vars.items():
-            if isinstance(value, GTCallable):
-                if value.__gt_itir__().id != name:
-                    raise RuntimeError(
-                        "Name of the closure reference and the function it holds do not match."
-                    )
-                gt_callables.append(value)
-        return gt_callables
-
-    def _offsets_and_dimensions_from_gt_callables(
-        self, gt_callables: Iterable[GTCallable]
-    ) -> set[FieldOffset | Dimension]:
-        offsets_and_dimensions: set[FieldOffset | Dimension] = set()
-        for gt_callable in gt_callables:
-            if (captured := gt_callable.__gt_captured_vars__()) is not None:
-                for c in (captured.globals | captured.nonlocals).values():
-                    if isinstance(c, FieldOffset):
-                        offsets_and_dimensions.add(c)
-                    if isinstance(c, Dimension):
-                        offsets_and_dimensions.add(c)
-        return offsets_and_dimensions
-
-    def _lowered_funcs_from_gt_callables(
-        self, gt_callables: Iterable[GTCallable]
-    ) -> list[itir.FunctionDefinition]:
-        return [gt_callable.__gt_itir__() for gt_callable in gt_callables]
+    @functools.cached_property
+    def all_capture_vars(self) -> CapturedVars:
+        return _collect_capture_vars(self.captured_vars)
 
     @functools.cached_property
     def itir(self) -> itir.FencilDefinition:
         if self.externals:
             raise NotImplementedError("Externals are not supported yet.")
 
-        capture_vars = _collect_capture_vars(self.captured_vars)
-
-        referenced_var_names: set[str] = set()
-        for captured_var in self.past_node.captured_vars:
-            if isinstance(captured_var.type, (ct.CallableType, ct.OffsetType, ct.DimensionType)):
-                referenced_var_names.add(captured_var.id)
-            else:
-                raise NotImplementedError("Only function closure vars are allowed currently.")
-        defined_var_names = set(capture_vars.globals) | set(capture_vars.nonlocals)
-        if undefined := referenced_var_names - defined_var_names:
-            raise RuntimeError(f"Reference to undefined symbol(s) `{', '.join(undefined)}`.")
-
-        referenced_gt_callables = self._gt_callables_from_captured_vars(capture_vars)
-        grid_type = self._deduce_grid_type(
-            self.grid_type, self._offsets_and_dimensions_from_gt_callables(referenced_gt_callables)
+        grid_type = _deduce_grid_type(
+            self.grid_type, self._filter_capture_vars_by_type(FieldOffset, Dimension).values()
         )
 
-        lowered_funcs = self._lowered_funcs_from_gt_callables(referenced_gt_callables)
+        gt_callables = self._filter_capture_vars_by_type(GTCallable).values()
+        lowered_funcs = [gt_callable.__gt_itir__() for gt_callable in gt_callables]
         return ProgramLowering.apply(
             self.past_node, function_definitions=lowered_funcs, grid_type=grid_type
         )
-
-    def _validate_args(self, *args, **kwargs) -> None:
-        # TODO(tehrengruber): better error messages, check argument types
-        if len(args) != len(self.past_node.params):
-            raise GTTypeError(
-                f"Function takes {len(self.past_node.params)} arguments, but {len(args)} were given."
-            )
-        if kwargs:
-            raise NotImplementedError("Keyword arguments are not supported yet.")
 
     def __call__(self, *args, offset_provider: dict[str, Dimension], **kwargs) -> None:
         rewritten_args, size_args, kwargs = self._process_args(args, kwargs)
@@ -309,7 +282,7 @@ class Program:
                     f"Field View Program '{self.itir.id}': Using default ({DEFAULT_BACKEND}) backend."
                 )
             )
-        backend = self.backend if self.backend else DEFAULT_BACKEND
+        backend = self.backend or DEFAULT_BACKEND
 
         ensure_executor(backend)
         if "debug" in kwargs:
@@ -321,7 +294,7 @@ class Program:
             *size_args,
             **kwargs,
             offset_provider=offset_provider,
-            column_axis=Dimension(value="K"),
+            column_axis=self._column_axis,
         )
 
     def format_itir(
@@ -338,6 +311,15 @@ class Program:
             **kwargs,
             offset_provider=offset_provider,
         )
+
+    def _validate_args(self, *args, **kwargs) -> None:
+        # TODO(tehrengruber): better error messages, check argument types
+        if len(args) != len(self.past_node.params):
+            raise GTTypeError(
+                f"Function takes {len(self.past_node.params)} arguments, but {len(args)} were given."
+            )
+        if kwargs:
+            raise NotImplementedError("Keyword arguments are not supported yet.")
 
     def _process_args(self, args: tuple, kwargs: dict) -> tuple[tuple, tuple, dict[str, Any]]:
         self._validate_args(*args, **kwargs)
@@ -356,6 +338,36 @@ class Program:
                     size_args.append(None)
 
         return tuple(rewritten_args), tuple(size_args), kwargs
+
+    def _filter_capture_vars_by_type(self, *types: type) -> dict[str, Any]:
+        flat_capture_vars = self.all_capture_vars.globals | self.all_capture_vars.nonlocals
+        return {k: v for k, v in flat_capture_vars.items() if isinstance(v, types)}
+
+    @functools.cached_property
+    def _column_axis(self):
+        # construct mapping from column axis to scan operators defined on
+        #  that dimension. only one column axis is allowed, but we can use
+        #  this mapping to provide good error messages.
+        scanops_per_axis: dict[Dimension, str] = {}
+        for name, gt_callable in self._filter_capture_vars_by_type(GTCallable).items():
+            if isinstance((type_ := gt_callable.__gt_type__()), ct.ScanOperatorType):
+                scanops_per_axis.setdefault(type_.axis, []).append(name)
+
+        if len(scanops_per_axis.values()) == 0:
+            return None
+
+        if len(scanops_per_axis.values()) != 1:
+            scanops_per_axis_strs = [
+                f"- {dim.value}: {', '.join(scanops)}" for dim, scanops in scanops_per_axis.items()
+            ]
+
+            raise GTTypeError(
+                "Only `ScanOperator`s defined on the same axis "
+                + "can be used in a `Program`, but found:\n"
+                + "\n".join(scanops_per_axis_strs)
+            )
+
+        return iter(scanops_per_axis.keys()).__next__()
 
 
 @typing.overload
