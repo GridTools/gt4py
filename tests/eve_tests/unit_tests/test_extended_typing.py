@@ -43,7 +43,8 @@ from eve.extended_typing import (
 )
 
 
-class TestExtendedProtocol:
+@pytest.fixture
+def sample_class_defs():
     TEST_SRC = """
 from __future__ import annotations
 
@@ -76,7 +77,7 @@ class DataProto(NoDataProto, Protocol):
     BAR: ClassVar[int]
 
 class ConcreteClass:
-    foo:int = 32
+    foo: int = 32
     BAR = 32
 
     def method_1(self) -> int:
@@ -109,19 +110,18 @@ class IncompleteClass:
 
     def method_2(self) -> int:
         return 42
-"""
+    """
+    DEFINITIONS = {}
+    exec(TEST_SRC, None, DEFINITIONS)
+    yield types.SimpleNamespace(**DEFINITIONS)
 
-    def test_instance_check_shortcut(self):
-        DEFINITIONS = {}
-        NUM_REPETITIONS = 10000
-        PASS_STMT = "isinstance(ConcreteClass(), NoDataProto)"
-        FAIL_STMT = "isinstance(IncompleteClass(), NoDataProto)"
 
-        exec(self.TEST_SRC, None, DEFINITIONS)
-        ConcreteClass = DEFINITIONS["ConcreteClass"]
-        IncompleteClass = DEFINITIONS["IncompleteClass"]
-        NoDataProto = DEFINITIONS["NoDataProto"]
-        DataProto = DEFINITIONS["DataProto"]
+class TestExtendedProtocol:
+    def test_instance_check_shortcut(self, sample_class_defs):
+        ConcreteClass = sample_class_defs.ConcreteClass
+        IncompleteClass = sample_class_defs.IncompleteClass
+        NoDataProto = sample_class_defs.NoDataProto
+        DataProto = sample_class_defs.DataProto
 
         # Undecorated runtime protocol checks should fail
         with pytest.raises(
@@ -135,62 +135,61 @@ class IncompleteClass:
         assert isinstance(ConcreteClass(), DataProto)
         assert not isinstance(IncompleteClass(), NoDataProto)
 
-        std_pass_check = timeit.timeit(stmt=PASS_STMT, number=NUM_REPETITIONS, globals=DEFINITIONS)
-        std_fail_check = timeit.timeit(stmt=FAIL_STMT, number=NUM_REPETITIONS, globals=DEFINITIONS)
-
-        # Standard runtime protocol checks from extended decorator (behavior and performance should be the same)
+        # Standard runtime protocol checks from extended decorator (behavior should be the same)
         xtyping.extended_runtime_checkable(
             NoDataProto, instance_check_shortcut=False, subclass_check_with_data_members=False
         )
-        assert eval(PASS_STMT, DEFINITIONS)
-        assert not eval(FAIL_STMT, DEFINITIONS)
-
-        assert (
-            0.33
-            < (
-                timer_ratio := (
-                    std_pass_check
-                    / timeit.timeit(stmt=PASS_STMT, number=NUM_REPETITIONS, globals=DEFINITIONS)
-                )
-            )
-            < 3.0
-        )
-        assert (
-            0.33
-            < (
-                timer_ratio := (
-                    std_fail_check
-                    / timeit.timeit(stmt=FAIL_STMT, number=NUM_REPETITIONS, globals=DEFINITIONS)
-                )
-            )
-            < 3.0
-        )
+        assert isinstance(ConcreteClass(), NoDataProto)
+        assert isinstance(ConcreteClass(), DataProto)
+        assert not isinstance(IncompleteClass(), NoDataProto)
 
         # Runtime protocol checks from extended decorator with shortcuts
         xtyping.extended_runtime_checkable(
             instance_check_shortcut=True, subclass_check_with_data_members=False
         )(NoDataProto)
-        assert eval(PASS_STMT, DEFINITIONS)
-        assert not eval(FAIL_STMT, DEFINITIONS)
+        assert isinstance(ConcreteClass(), NoDataProto)
+        assert isinstance(ConcreteClass(), DataProto)
+        assert not isinstance(IncompleteClass(), NoDataProto)
 
-        timer_ratio = abs(
-            std_pass_check
-            / timeit.timeit(stmt=PASS_STMT, number=NUM_REPETITIONS, globals=DEFINITIONS)
+    def test_instance_check_shortcut_performance(self, sample_class_defs):
+        PASS_STMT = "isinstance(ConcreteClass(), NoDataProto)"
+        FAIL_STMT = "isinstance(IncompleteClass(), NoDataProto)"
+        DEFINITIONS = sample_class_defs.__dict__
+        NUM_REPETITIONS = 10000
+
+        # Timings for standard runtime_checkable()
+        xtyping.runtime_checkable(sample_class_defs.NoDataProto)
+        std_pass_time = timeit.timeit(stmt=PASS_STMT, number=NUM_REPETITIONS, globals=DEFINITIONS)
+        std_fail_time = timeit.timeit(stmt=FAIL_STMT, number=NUM_REPETITIONS, globals=DEFINITIONS)
+
+        # Standard runtime protocol checks from extended decorator (performance should be the same)
+        xtyping.runtime_checkable(sample_class_defs.NoDataProto)
+        std_from_ext_pass_time = timeit.timeit(
+            stmt=PASS_STMT, number=NUM_REPETITIONS, globals=DEFINITIONS
         )
-        assert timer_ratio > 10
-
-        timer_ratio = abs(
-            std_fail_check
-            / timeit.timeit(stmt=FAIL_STMT, number=NUM_REPETITIONS, globals=DEFINITIONS)
+        std_from_ext_fail_time = timeit.timeit(
+            stmt=FAIL_STMT, number=NUM_REPETITIONS, globals=DEFINITIONS
         )
-        assert timer_ratio > 10
+        bound_factor = 3.0
 
-    def test_subclass_check_with_data_members(self):
-        DEFINITIONS = {}
-        exec(self.TEST_SRC, None, DEFINITIONS)
-        ConcreteClass = DEFINITIONS["ConcreteClass"]
-        NoDataProto = DEFINITIONS["NoDataProto"]
-        DataProto = DEFINITIONS["DataProto"]
+        assert (1 / bound_factor) < (std_pass_time / std_from_ext_pass_time) < bound_factor
+        assert (1 / bound_factor) < (std_fail_time / std_from_ext_fail_time) < bound_factor
+
+        # Runtime protocol checks from extended decorator with shortcuts
+        xtyping.extended_runtime_checkable(
+            instance_check_shortcut=True, subclass_check_with_data_members=False
+        )(sample_class_defs.NoDataProto)
+        ext_pass_time = timeit.timeit(stmt=PASS_STMT, number=NUM_REPETITIONS, globals=DEFINITIONS)
+        ext_fail_time = timeit.timeit(stmt=FAIL_STMT, number=NUM_REPETITIONS, globals=DEFINITIONS)
+        bound_factor = 10.0
+
+        assert std_pass_time / ext_pass_time > bound_factor
+        assert std_pass_time / ext_fail_time > bound_factor
+
+    def test_subclass_check_with_data_members(self, sample_class_defs):
+        ConcreteClass = sample_class_defs.ConcreteClass
+        NoDataProto = sample_class_defs.NoDataProto
+        DataProto = sample_class_defs.DataProto
 
         # Undecorated runtime protocol checks should fail
         with pytest.raises(

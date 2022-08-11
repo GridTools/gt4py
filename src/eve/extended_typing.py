@@ -339,8 +339,9 @@ def extended_runtime_checkable(  # noqa: C901  # too complex but unavoidable
                     )
                 if not _is_callable_members_only(cls) and _allow_reckless_class_checks():
                     return NotImplemented
-                    # A TypeError should be raised here if not `allow_reckless_class_checks()`
-                    # but we ignored in this patched version`
+                    # PATCHED: a TypeError should be raised here if not
+                    # `allow_reckless_class_checks()` but we ignored in
+                    # this patched version`
                 if not isinstance(other, type):
                     # Same error message as for issubclass(1, int).
                     raise TypeError("issubclass() arg 1 must be a class")
