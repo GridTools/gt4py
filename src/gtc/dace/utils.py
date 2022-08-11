@@ -484,6 +484,21 @@ def collect_toplevel_computation_nodes(
     return collection
 
 
+def collect_toplevel_copy_states(
+    list_or_node: Union[List[Any], eve.Node]
+) -> List["dcir.CopyState"]:
+    class ComputationNodeCollector(eve.NodeVisitor):
+        def visit_NestedSDFG(self, node: dcir.NestedSDFG, **kwargs):
+            return
+
+        def visit_CopyState(self, node: dcir.CopyState, *, collection: List[dcir.CopyState]):
+            collection.append(node)
+
+    collection: List[dcir.CopyState] = []
+    ComputationNodeCollector().visit(list_or_node, collection=collection)
+    return collection
+
+
 def collect_toplevel_iteration_nodes(
     list_or_node: Union[List[Any], eve.Node]
 ) -> List["dcir.IterationNode"]:

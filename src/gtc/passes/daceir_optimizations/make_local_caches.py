@@ -82,8 +82,7 @@ class FieldAccessRenamer(eve.NodeMutator):
     def visit_CopyState(self, node: dcir.CopyState, *, local_name_map):
         name_map = {local_name_map[k]: local_name_map[v] for k, v in node.name_map.items()}
         return dcir.CopyState(
-            read_memlets=self._rename_memlets(node.read_memlets, local_name_map=local_name_map),
-            write_memlets=self._rename_memlets(node.write_memlets, local_name_map=local_name_map),
+            memlets=self._rename_memlets(node.memlets, local_name_map=local_name_map),
             name_map=name_map,
         )
 
@@ -94,10 +93,8 @@ class FieldAccessRenamer(eve.NodeMutator):
             computations=computations,
             schedule=node.schedule,
             grid_subset=node.grid_subset,
-            read_accesses=self._rename_accesses(node.read_accesses, local_name_map=local_name_map),
-            write_accesses=self._rename_accesses(
-                node.write_accesses, local_name_map=local_name_map
-            ),
+            read_accesses=self._rename_memlets(node.read_memlets, local_name_map=local_name_map),
+            write_accesses=self._rename_memlets(node.write_memlets, local_name_map=local_name_map),
         )
 
     def visit_DomainLoop(self, node: dcir.DomainLoop, *, local_name_map):
@@ -106,10 +103,8 @@ class FieldAccessRenamer(eve.NodeMutator):
             index_range=node.index_range,
             loop_states=self.visit(node.loop_states, local_name_map=local_name_map),
             grid_subset=node.grid_subset,
-            read_accesses=self._rename_accesses(node.read_accesses, local_name_map=local_name_map),
-            write_accesses=self._rename_accesses(
-                node.write_accesses, local_name_map=local_name_map
-            ),
+            read_accesses=self._rename_memlets(node.read_memlets, local_name_map=local_name_map),
+            write_accesses=self._rename_memlets(node.write_memlets, local_name_map=local_name_map),
         )
 
     def visit_NestedSDFG(self, node: dcir.NestedSDFG, *, local_name_map: Dict[str, str]):
@@ -211,22 +206,31 @@ class MakeLocalCaches(eve.NodeTranslator):
                     yield from _iterate_access_order(n)
             elif isinstance(node, dcir.Tasklet):
                 yield from _iterate_access_order(node.stmts)
-            elif isinstance(node, oir.MaskStmt):
+            elif isinstance(node, dcir.MaskStmt):
                 yield from _iterate_access_order(node.mask, is_write=False, is_masked=is_masked)
                 yield from _iterate_access_order(node.body, is_masked=True)
-            elif isinstance(node, oir.AssignStmt):
+            elif isinstance(node, dcir.HorizontalRestriction):
+                yield from _iterate_access_order(node.body, is_masked=True)
+            elif isinstance(node, dcir.AssignStmt):
                 yield from _iterate_access_order(node.right, is_write=False, is_masked=is_masked)
                 yield from _iterate_access_order(node.left, is_write=True, is_masked=is_masked)
             else:
-                for node in iter_tree(node).if_isinstance(common.FieldAccess):
+                for node in iter_tree(node).if_isinstance(dcir.IndexAccess, dcir.ScalarAccess):
                     yield node, is_write, is_masked
 
+        connector_to_field = {
+            mem.connector: mem.field
+            for tasklet in tasklets
+            for mem in tasklet.read_memlets + tasklet.write_memlets
+        }
         for acc, is_write, is_masked in _iterate_access_order(tasklets):
+            if (field_name := connector_to_field.get(acc.name)) is None:
+                continue
             if is_write and not is_masked:
-                if acc.name not in maybe_read_first_fields:
-                    guaranteed_write_first_fields.add(acc.name)
-            elif not is_write and acc.name not in guaranteed_write_first_fields:
-                maybe_read_first_fields.add(acc.name)
+                if field_name not in maybe_read_first_fields:
+                    guaranteed_write_first_fields.add(field_name)
+            elif not is_write and field_name not in guaranteed_write_first_fields:
+                maybe_read_first_fields.add(field_name)
 
         tasklet_name_map = {k: v for tasklet in tasklets for k, v in tasklet.name_map.items()}
         name_map = {v: k for k, v in tasklet_name_map.items()}
@@ -354,6 +358,24 @@ class MakeLocalCaches(eve.NodeTranslator):
             res[name] = subset.set_interval(axis, subset.intervals[axis].shifted(offset))
         return res
 
+    def _set_other_subset(self, memlets, subsets):
+        res = list()
+        memlet_dict = {mem.field: mem for mem in memlets}
+        for name, subset in subsets.items():
+            if name in memlet_dict:
+                memlet = memlet_dict[name]
+                res.append(
+                    dcir.Memlet(
+                        field=memlet.field,
+                        access_info=memlet.access_info,
+                        connector=memlet.connector,
+                        is_read=memlet.is_read,
+                        is_write=memlet.is_write,
+                        other_grid_subset=subset,
+                    )
+                )
+        return res
+
     def _set_access_info_subset(self, memlets, subsets):
         res = list()
         memlet_dict = {mem.field: mem for mem in memlets}
@@ -429,6 +451,19 @@ class MakeLocalCaches(eve.NodeTranslator):
             {k: v for k, v in shift_subsets.items() if v is not None},
         )
 
+        def _remove_connector(memlets):
+            return [
+                dcir.Memlet(
+                    field=mem.field,
+                    access_info=mem.access_info,
+                    connector=None,
+                    is_read=mem.is_read,
+                    is_write=mem.is_write,
+                    other_grid_subset=mem.other_grid_subset,
+                )
+                for mem in memlets
+            ]
+
         def _set_readonly(memlets):
             return [
                 dcir.Memlet(
@@ -437,6 +472,7 @@ class MakeLocalCaches(eve.NodeTranslator):
                     connector=mem.connector,
                     is_read=True,
                     is_write=False,
+                    other_grid_subset=mem.other_grid_subset,
                 )
                 for mem in memlets
             ]
@@ -478,29 +514,34 @@ class MakeLocalCaches(eve.NodeTranslator):
                 )
             return res
 
-        init_memlets = self._set_access_info_subset(
-            [
-                mem
-                for mem in read_memlets + write_memlets
-                if mem.field in init_subsets and init_subsets[mem.field] is not None
-            ],
+        init_memlets = self._set_other_subset(
+            self._set_access_info_subset(
+                [
+                    mem
+                    for mem in gtc.dace.utils.union_memlets(*read_memlets, *write_memlets)
+                    if mem.field in init_subsets and init_subsets[mem.field] is not None
+                ],
+                init_subsets,
+            ),
             init_subsets,
         )
         init_state = dcir.CopyState(
-            memlets=_set_readonly(set_idx(axis, init_memlets, loop.index_range.interval.start)),
+            memlets=_remove_connector(
+                _set_readonly(set_idx(axis, init_memlets, loop.index_range.interval.start))
+            ),
             name_map=local_name_map,
         )
 
         fill_accesses = self._set_access_info_subset(
             [
                 mem
-                for mem in read_memlets + write_memlets
+                for mem in gtc.dace.utils.union_memlets(*read_memlets, *write_memlets)
                 if mem.field in fill_subsets and fill_subsets[mem.field] is not None
             ],
             fill_subsets,
         )
         fill_state = dcir.CopyState(
-            memlets=_set_readonly(fill_accesses),
+            memlets=_remove_connector(_set_readonly(fill_accesses)),
             name_map=local_name_map,
         )
         loop_states = rename_field_accesses(loop_states, local_name_map=local_name_map)
@@ -508,27 +549,29 @@ class MakeLocalCaches(eve.NodeTranslator):
         flush_accesses = self._set_access_info_subset(
             [
                 mem
-                for mem in read_memlets + write_memlets
+                for mem in gtc.dace.utils.union_memlets(*write_memlets)
                 if mem.field in flush_subsets and flush_subsets[mem.field] is not None
             ],
             flush_subsets,
         )
         flush_state = dcir.CopyState(
-            memlets=_set_readonly(_set_local_names(flush_accesses)),
+            memlets=_remove_connector(_set_readonly(_set_local_names(flush_accesses))),
             name_map={v: k for k, v in local_name_map.items()},
         )
 
         shift_accesses = self._set_access_info_subset(
             [
                 mem
-                for mem in read_memlets + write_memlets
+                for mem in gtc.dace.utils.union_memlets(*read_memlets, *write_memlets)
                 if mem.field in shift_subsets and shift_subsets[mem.field] is not None
             ],
             shift_subsets,
         )
         shift_state = dcir.CopyState(
-            memlets=_set_readonly(
-                _shift_src_subset(_set_local_names(shift_accesses), loop.index_range.stride)
+            memlets=_remove_connector(
+                _set_readonly(
+                    _shift_src_subset(_set_local_names(shift_accesses), loop.index_range.stride)
+                )
             ),
             name_map={v: v for v in local_name_map.values()},
         )
@@ -676,6 +719,42 @@ class MakeLocalCaches(eve.NodeTranslator):
             loop_states=loop_states,
         )
 
+    def _collect_access_infos_from_memlets(self, states, old_decls):
+        from gtc.dace.utils import union_node_grid_subsets
+
+        name_and_subsets = (
+            [
+                (mem.field, mem.access_info.grid_subset)
+                for loop in states
+                if isinstance(loop, dcir.DomainLoop)
+                for n in gtc.dace.utils.collect_toplevel_computation_nodes(loop.loop_states)
+                for l in (n.read_memlets, n.write_memlets)
+                for mem in l
+            ]
+            + [
+                (mem.field, mem.access_info.grid_subset)
+                for n in gtc.dace.utils.collect_toplevel_copy_states(states)
+                for mem in n.memlets
+            ]
+            + [
+                (n.name_map[mem.field], mem.other_grid_subset)
+                for n in gtc.dace.utils.collect_toplevel_copy_states(states)
+                for mem in n.memlets
+            ]
+        )
+        subsets_dict = dict()
+        for name, subset in name_and_subsets:
+            subsets_dict[name] = subset.union(subsets_dict.get(name, subset))
+        return subsets_dict
+        # field_decls = {decl.name: decl for decl in old_decls}
+        # field_accesses = {
+        #     mem.field: mem.access_info
+        #     if mem.field.startswith("__local_")
+        #     else field_decls[mem.field].access_info
+        #     for mem in
+        # }
+        # return field_accesses
+
     def visit_NestedSDFG(self, node: dcir.NestedSDFG, *, axis, fields, storage, **kwargs):
         states = node.states
         local_name_map = dict()
@@ -687,7 +766,6 @@ class MakeLocalCaches(eve.NodeTranslator):
         if is_add_caches:
             axis = states[0].axis
             states, local_name_map = self._process_state_sequence(states, fields=fields)
-        from gtc.dace.utils import union_node_access_infos
 
         inner_name_map = dict()
         states = self.generic_visit(
@@ -695,24 +773,8 @@ class MakeLocalCaches(eve.NodeTranslator):
         )
         local_name_map.update(inner_name_map)
 
-        inner_memlets = gtc.dace.utils.union_memlets(
-            *(
-                mem
-                for loop in states
-                if isinstance(loop, dcir.DomainLoop)
-                for n in gtc.dace.utils.collect_toplevel_computation_nodes(loop.loop_states)
-                for l in (n.read_memlets, n.write_memlets)
-                for mem in l
-            )
-        )
-        field_decls = {decl.name: decl for decl in node.field_decls}
-        field_accesses = {
-            mem.field: mem.access_info
-            if mem.field.startswith("__local_")
-            else field_decls[mem.field].access_info
-            for mem in inner_memlets
-        }
-        for k in field_accesses.keys():
+        grid_subsets = self._collect_access_infos_from_memlets(states, node.field_decls)
+        for k in grid_subsets.keys():
             if k not in local_name_map:
                 local_name_map[k] = k
 
@@ -728,9 +790,9 @@ class MakeLocalCaches(eve.NodeTranslator):
             stride = 1
             strides = []
             if cached_name.startswith("__local_"):
-                shape = field_accesses[cached_name].overapproximated_shape
+                shape = grid_subsets[cached_name].overapproximated_shape
             else:
-                shape = field_accesses[cached_name].shape
+                shape = grid_subsets[cached_name].shape
             for s in reversed(shape):
                 strides = [stride, *strides]
                 stride = f"({stride}) * ({s})"
@@ -738,9 +800,15 @@ class MakeLocalCaches(eve.NodeTranslator):
                 dcir_storage = dcir.StorageType.from_dace_storage(storage)
             else:
                 dcir_storage = dcir.StorageType.Default
+            access_info = dcir.FieldAccessInfo(
+                grid_subset=grid_subsets[cached_name],
+                global_grid_subset=grid_subsets[cached_name],
+                dynamic_access=main_decl.access_info.dynamic_access,
+                variable_offset_axes=main_decl.access_info.variable_offset_axes,
+            )
             field_decls[cached_name] = dcir.FieldDecl(
                 name=cached_name,
-                access_info=field_accesses[cached_name],
+                access_info=access_info,
                 dtype=main_decl.dtype,
                 data_dims=main_decl.data_dims,
                 strides=strides,

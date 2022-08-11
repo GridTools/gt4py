@@ -682,9 +682,11 @@ class Memlet(Node):
     def infer_other_grid_subset(cls, values: Dict[str, Any]) -> Dict[str, Any]:
         if values.get("other_grid_subset") is None:
             values["other_grid_subset"] = values["access_info"].grid_subset
+        # if not values["other_grid_subset"].shape == values["access_info"].grid_subset.shape:
+        #     raise ValueError("Memlet subsets don't match.")
         return values
 
-    def union(self, other):
+    def union(self, other: "Memlet"):
         assert self.field == other.field
         return Memlet(
             field=self.field,
@@ -692,6 +694,7 @@ class Memlet(Node):
             connector=self.field,
             is_read=self.is_read or other.is_read,
             is_write=self.is_write or other.is_write,
+            other_grid_subset=self.other_grid_subset.union(other.other_grid_subset),
         )
 
     def remove_read(self):
@@ -701,6 +704,7 @@ class Memlet(Node):
             connector=self.connector,
             is_read=False,
             is_write=self.is_write,
+            other_grid_subset=self.other_grid_subset,
         )
 
     def remove_write(self):
@@ -710,6 +714,7 @@ class Memlet(Node):
             connector=self.connector,
             is_read=self.is_read,
             is_write=False,
+            other_grid_subset=self.other_grid_subset,
         )
 
 

@@ -203,7 +203,7 @@ def _order_as_spec(computation_node, expansion_order):
                     stride=-1
                     if computation_node.oir_node.loop_order == common.LoopOrder.BACKWARD
                     else 1,
-                    localcache_fields={"ccol"} if "ccol" in localcache_fields else set(),
+                    localcache_fields=localcache_fields,
                 )
             )
         elif item == "Sections":

@@ -45,8 +45,8 @@ class StencilComputationSDFGBuilder(NodeVisitor):
         state: dace.SDFGState
         state_stack: List[dace.SDFGState] = dataclasses.field(default_factory=list)
 
-        def add_state(self):
-            new_state = self.sdfg.add_state()
+        def add_state(self, label=None):
+            new_state = self.sdfg.add_state(label)
             for edge in self.sdfg.out_edges(self.state):
                 self.sdfg.remove_edge(edge)
                 self.sdfg.add_edge(new_state, edge.dst, edge.data)
@@ -279,6 +279,8 @@ class StencilComputationSDFGBuilder(NodeVisitor):
         self.visit(node.loop_states, sdfg_ctx=sdfg_ctx, **kwargs)
         sdfg_ctx.pop_loop()
 
+    ctr = 0
+
     def visit_CopyState(
         self,
         node: dcir.CopyState,
@@ -287,8 +289,8 @@ class StencilComputationSDFGBuilder(NodeVisitor):
         symtable: ChainMap[common.SymbolRef, Any],
         **kwargs,
     ) -> None:
-        sdfg_ctx.add_state()
-
+        sdfg_ctx.add_state(f"CopyState_{StencilComputationSDFGBuilder.ctr}")
+        StencilComputationSDFGBuilder.ctr += 1
         src_nodes = {
             memlet.field: sdfg_ctx.state.add_access(memlet.field) for memlet in node.memlets
         }
@@ -318,11 +320,17 @@ class StencilComputationSDFGBuilder(NodeVisitor):
                     dtype=np.dtype(common.data_type_to_typestr(symtable[dst_name].dtype)).type,
                     transient=True,
                 )
+                tmp_access_info = dcir.FieldAccessInfo(
+                    grid_subset=memlet.other_grid_subset,
+                    global_grid_subset=memlet.access_info.global_grid_subset,
+                    dynamic_access=memlet.access_info.dynamic_access,
+                    variable_offset_axes=memlet.access_info.variable_offset_axes,
+                )
                 symtable[intermediate_nodes[dst_name].data] = dcir.FieldDecl(
                     name=intermediate_nodes[dst_name].data,
                     strides=strides,
                     data_dims=symtable[dst_name].data_dims,
-                    access_info=memlet.access_info,
+                    access_info=tmp_access_info,
                     storage=dcir.StorageType.Register,
                     dtype=symtable[dst_name].dtype,
                 )
@@ -355,8 +363,8 @@ class StencilComputationSDFGBuilder(NodeVisitor):
                     field=intermediate_nodes[dst_name].data,
                     access_info=access_info,
                     connector=None,
-                    is_read=memlet.is_read,
-                    is_write=memlet.is_write,
+                    is_read=True,
+                    is_write=False,
                     other_grid_subset=None,
                 )
 
