@@ -16,7 +16,7 @@ import pytest
 from functional.fencil_processors.processor_interface import (
     FencilExecutor,
     FencilFormatter,
-    FencilGenerator,
+    FencilSourceModuleGenerator,
     ensure_processor_kind,
     fencil_formatter,
 )
@@ -37,16 +37,16 @@ def test_decorated_formatter_function_is_recognized(dummy_formatter):
     ensure_processor_kind(dummy_formatter, FencilFormatter)
 
 
-def test_custom_generator_class_is_recognized():
-    class DummyFencilGenerator:
+def test_custom_source_module_generator_class_is_recognized():
+    class DummyFencilSourceModuleGenerator:
         @classmethod
-        def kind(cls) -> type[FencilGenerator]:
-            return FencilGenerator
+        def kind(cls) -> type[FencilSourceModuleGenerator]:
+            return FencilSourceModuleGenerator
 
         def __call__(self, fencil: FencilDefinition, *args, **kwargs) -> SourceModule:
             return SourceModule()
 
-    ensure_processor_kind(DummyFencilGenerator(), FencilGenerator)
+    ensure_processor_kind(DummyFencilSourceModuleGenerator(), FencilSourceModuleGenerator)
 
 
 def test_undecorated_formatter_function_is_not_recognized():

@@ -79,34 +79,36 @@ def fencil_formatter(
     return formatter_instance
 
 
-class FencilGenerator(FencilProcessorProtocol[SourceModule, "FencilGenerator"], Protocol):
+class FencilSourceModuleGenerator(
+    FencilProcessorProtocol[SourceModule, "FencilSourceModuleGenerator"], Protocol
+):
     @classmethod
-    def kind(cls) -> type[FencilGenerator]:
-        return FencilGenerator
+    def kind(cls) -> type[FencilSourceModuleGenerator]:
+        return FencilSourceModuleGenerator
 
 
-def fencil_generator(
+def fencil_source_module_generator(
     func: FencilProcessorFunction[SourceModule],
-) -> FencilProcessorProtocol[SourceModule, FencilGenerator]:
+) -> FencilProcessorProtocol[SourceModule, FencilSourceModuleGenerator]:
     """
-    Wrap a source module generator function in a ``FencilGenerator`` instance.
+    Wrap a source module generator function in a ``FencilSourceModuleGenerator`` instance.
 
     Examples:
     ---------
-    >>> from .source_modules import Function
-    >>> @fencil_generator
+    >>> from .source_modules.source_modules import Function
+    >>> @fencil_source_module_generator
     ... def generate_foo(fencil: FencilDefinition, *args, **kwargs) -> SourceModule:
     ...     '''A very useless fencil formatter.'''
     ...     return SourceModule(entry_point=Function(fencil.id, []), library_deps=[], source_code="foo", language="foo")
 
-    >>> ensure_processor_kind(generate_foo, FencilGenerator)
+    >>> ensure_processor_kind(generate_foo, FencilSourceModuleGenerator)
     """
 
-    class _GeneratorClass(FencilGenerator):
+    class _SourceModuleGeneratorClass(FencilSourceModuleGenerator):
         def __call__(self, fencil: FencilDefinition, *args, **kwargs) -> SourceModule:
             return func(fencil, *args, **kwargs)
 
-    generator_instance = _GeneratorClass()
+    generator_instance = _SourceModuleGeneratorClass()
     update_wrapper(generator_instance, func)
     return generator_instance
 
