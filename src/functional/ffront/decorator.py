@@ -101,7 +101,7 @@ def _collect_capture_vars(captured_vars: CapturedVars) -> CapturedVars:
 def _deduce_grid_type(
     requested_grid_type: Optional[GridType],
     offsets_and_dimensions: Iterable[FieldOffset | Dimension],
-):
+) -> GridType:
     """
     Derive grid type from actually occurring dimensions and check against optional user request.
 
@@ -666,7 +666,7 @@ def scan_operator(
     init: Scalar = 0.0,
     externals=None,
     backend=None,
-):
+) -> FieldOperator[foast.ScanOperator]:
     """
     Generate an implementation of the scan operator from a Python function object.
 

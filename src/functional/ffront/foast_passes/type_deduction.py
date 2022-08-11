@@ -118,7 +118,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             location=node.location,
         )
 
-    # TODO: make sure all scalar arguments are lifted to 0-dim field args
+    # TODO(tehrengruber): make sure all scalar arguments are lifted to 0-dim field args
     def visit_FieldOperator(self, node: foast.FieldOperator, **kwargs) -> foast.FieldOperator:
         new_definition = self.visit(node.definition, **kwargs)
         return foast.FieldOperator(
