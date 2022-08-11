@@ -61,9 +61,9 @@ def run_processor(
     *args,
     **kwargs,
 ) -> None:
-    if processor is None or isinstance(processor, FencilExecutor):
+    if processor is None or processor.kind() == FencilExecutor:
         fencil(*args, backend=processor, **kwargs)
-    elif isinstance(processor, FencilFormatter):
+    elif processor.kind() == FencilFormatter:
         print(fencil.format_itir(*args, formatter=processor, **kwargs))
     else:
         raise TypeError(f"fencil processor kind not recognized: {processor}!")

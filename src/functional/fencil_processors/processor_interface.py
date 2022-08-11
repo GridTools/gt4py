@@ -43,6 +43,8 @@ class FencilProcessorFunction(Protocol[PROCESSOR_RETURN_T]):
 class FencilProcessorProtocol(
     FencilProcessorFunction[PROCESSOR_RETURN_T], Protocol[PROCESSOR_RETURN_T, PROCESSOR_KIND_T]
 ):
+    __name__: str = ""  # dummy to convince mypy that a __name__ is present for error messages
+
     @classmethod
     def kind(cls) -> type[PROCESSOR_KIND_T]:
         ...
@@ -146,6 +148,8 @@ def fencil_executor(
 
 def ensure_processor_kind(processor: FencilProcessorProtocol, kind: type) -> None:
     if not isinstance(processor, FencilProcessorProtocol):
-        raise RuntimeError(f"{processor} does not fulfill {FencilProcessorProtocol.__name__}")
+        raise RuntimeError(
+            f"{processor.__name__} does not fulfill {FencilProcessorProtocol.__name__}"
+        )
     if processor.kind() != kind:
-        raise RuntimeError(f"{processor} is not a {kind.__name__}!")
+        raise RuntimeError(f"{processor.__name__} is not a {kind.__name__}!")
