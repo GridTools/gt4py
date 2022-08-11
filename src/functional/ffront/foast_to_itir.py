@@ -15,7 +15,7 @@
 import enum
 import itertools
 from dataclasses import dataclass, field
-from typing import Callable, Optional, cast
+from typing import Any, Callable, Optional, cast
 
 import numpy as np
 
@@ -168,12 +168,40 @@ class FieldOperatorLowering(NodeTranslator):
         return cls().visit(node)
 
     def visit_FieldOperator(self, node: foast.FieldOperator, **kwargs) -> itir.FunctionDefinition:
+        return self.visit(node.definition, **kwargs)
+
+    def visit_FunctionDefinition(
+        self, node: foast.FunctionDefinition, **kwargs
+    ) -> itir.FunctionDefinition:
         symtable = node.annex.symtable
         params = self.visit(node.params, symtable=symtable)
         return itir.FunctionDefinition(
             id=node.id,
             params=params,
             expr=self._visit_body(node.body, params=params, symtable=symtable),
+        )
+
+    def visit_ScanOperator(self, node: foast.ScanOperator, **kwargs) -> itir.FunctionDefinition:
+        # note: we don't need the axis here as this is handled by the program
+        #  decorator
+
+        forward = self.visit(node.forward, **kwargs)
+        init = self.visit(node.init, **kwargs)
+
+        # lower definition function
+        func_definition: itir.FunctionDefinition = self.visit(node.definition, **kwargs)
+        new_body = func_definition.expr
+        for param in func_definition.params[1:]:
+            new_body = im.let(param.id, im.deref_(param.id))(new_body)
+        definition = itir.Lambda(params=func_definition.params, expr=new_body)
+        body = im.call_(im.call_("scan")(definition, forward, init))(
+            *(itir.SymRef(id=param.id) for param in definition.params[1:])
+        )
+
+        return itir.FunctionDefinition(
+            id=node.id,
+            params=definition.params[1:],
+            expr=body,
         )
 
     def _visit_body(
@@ -187,7 +215,7 @@ class FieldOperatorLowering(NodeTranslator):
                 current_expr
             )
 
-        return to_value(return_stmt.value)(current_expr)
+        return current_expr
 
     def _visit_assign(self, node: foast.Assign, **kwargs) -> tuple[itir.Sym, itir.Expr]:
         sym = self.visit(node.target, **kwargs)
@@ -195,7 +223,7 @@ class FieldOperatorLowering(NodeTranslator):
         return sym, expr
 
     def visit_Return(self, node: foast.Return, **kwargs) -> itir.Expr:
-        return self.visit(node.value, **kwargs)
+        return to_value(node.value)(self.visit(node.value, **kwargs))
 
     def visit_Symbol(self, node: foast.Symbol, **kwargs) -> itir.Sym:
         return im.sym(node.id)
@@ -380,19 +408,26 @@ class FieldOperatorLowering(NodeTranslator):
     def _visit_type_constr(self, node: foast.Call, **kwargs) -> itir.Literal:
         if isinstance(node.args[0], foast.Constant):
             target_type = fbuiltins.BUILTINS[node.type.kind.name.lower()]
-            source_type = {**fbuiltins.BUILTINS, "string": str}[
-                node.args[0].dtype.kind.name.lower()
-            ]
+            source_type = {**fbuiltins.BUILTINS, "string": str}[node.args[0].type.kind.name.lower()]
             if target_type is bool and source_type is not bool:
                 return im.literal_(str(bool(source_type(node.args[0].value))), node.func.id)
-            return im.literal_(node.args[0].value, node.type.kind.name.lower())
+            return im.literal_(str(node.args[0].value), node.type.kind.name.lower())
         raise FieldOperatorLoweringError(f"Encountered a type cast, which is not supported: {node}")
 
+    def _make_literal(self, val: Any, type_: ct.ScalarType) -> itir.Literal:
+        typename = type_.kind.name.lower()
+        return im.literal_(str(val), typename)
+
     def visit_Constant(self, node: foast.Constant, **kwargs) -> itir.Literal:
+        # TODO: check constant is supported in iterator ir
         if isinstance(node.type, ct.ScalarType) and not node.type.shape:
-            typename = node.type.kind.name.lower()
-            return im.literal_(str(node.value), typename)
-        raise FieldOperatorLoweringError(f"Unsupported scalar type: {node.dtype}")
+            return self._make_literal(node.value, node.type)
+        elif isinstance(node.type, ct.TupleType):
+            assert all(isinstance(type_, ct.ScalarType) for type_ in node.type.types)
+            return im.make_tuple_(
+                *(self._make_literal(val, type_) for val, type_ in zip(node.value, node.type.types))
+            )
+        raise FieldOperatorLoweringError(f"Unsupported scalar type: {node.type}")
 
 
 @dataclass

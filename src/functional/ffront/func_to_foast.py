@@ -20,6 +20,7 @@ import collections
 from typing import Any, Callable, Iterable, Mapping, Type, cast
 
 import eve
+from functional import common
 from functional.ffront import (
     common_types as ct,
     fbuiltins,
@@ -42,7 +43,7 @@ class FieldOperatorSyntaxError(DialectSyntaxError):
     dialect_name = "Field Operator"
 
 
-class FieldOperatorParser(DialectParser[foast.FieldOperator]):
+class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
     """
     Parse field operator function definition from source code into FOAST.
 
@@ -59,7 +60,7 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
     ...     return inp
     >>> foast_tree = FieldOperatorParser.apply_to_function(field_op)
     >>> foast_tree  # doctest: +ELLIPSIS
-    FieldOperator(..., id=SymbolName('field_op'), ...)
+    FunctionDefinition(..., id=SymbolName('field_op'), ...)
     >>> foast_tree.params  # doctest: +ELLIPSIS
     [Symbol(..., id=SymbolName('inp'), type=FieldType(...), ...)]
     >>> foast_tree.body  # doctest: +ELLIPSIS
@@ -116,7 +117,9 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
                 foast.Symbol(
                     id=name,
                     type=ct.FunctionType(
-                        args=[ct.DeferredSymbolType(constraint=ct.ScalarType)],
+                        args=[
+                            ct.DeferredSymbolType(constraint=ct.ScalarType)
+                        ],  # this is a constraint type that will not be inferred (as the function is polymorphic)
                         kwargs={},
                         returns=cast(
                             ct.DataType, symbol_makers.make_symbol_type_from_typing(value)
@@ -129,7 +132,7 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
 
         return result, to_be_inserted.keys()
 
-    def visit_FunctionDef(self, node: ast.FunctionDef, **kwargs) -> foast.FieldOperator:
+    def visit_FunctionDef(self, node: ast.FunctionDef, **kwargs) -> foast.FunctionDefinition:
         captured_vars: Mapping[str, Any] = collections.ChainMap(
             self.captured_vars.globals, self.captured_vars.nonlocals
         )
@@ -148,10 +151,10 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
                 )
             )
 
-        return foast.FieldOperator(
+        return foast.FunctionDefinition(
             id=node.name,
-            params=self.visit(node.args),
-            body=self.visit_stmt_list(node.body),
+            params=self.visit(node.args, **kwargs),
+            body=self.visit_stmt_list(node.body, **kwargs),
             captured_vars=captured_symbols,
             location=self._make_loc(node),
         )
@@ -200,8 +203,6 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
             raise FieldOperatorSyntaxError.from_AST(
                 node, msg="Only arguments of type DataType are allowed."
             )
-        if type_info.is_concrete(new_type) and type_info.type_class(new_type) is ct.ScalarType:
-            new_type = ct.FieldType(dims=[], dtype=type_info.extract_dtype(new_type))
         return foast.DataSymbol(id=node.arg, location=self._make_loc(node), type=new_type)
 
     def visit_Assign(self, node: ast.Assign, **kwargs) -> foast.Assign:
@@ -297,12 +298,12 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
             raise FieldOperatorSyntaxError.from_AST(node, msg="Empty return not allowed")
         return foast.Return(value=self.visit(node.value), location=self._make_loc(node))
 
-    def visit_stmt_list(self, nodes: list[ast.stmt]) -> list[foast.Expr]:
+    def visit_stmt_list(self, nodes: list[ast.stmt], **kwargs) -> list[foast.Expr]:
         if not isinstance(last_node := nodes[-1], ast.Return):
             raise FieldOperatorSyntaxError.from_AST(
                 last_node, msg="Field operator must return a field expression on the last line!"
             )
-        return [self.visit(node) for node in nodes]
+        return [self.visit(node, **kwargs) for node in nodes]
 
     def visit_Name(self, node: ast.Name, **kwargs) -> foast.Name:
         return foast.Name(id=node.id, location=self._make_loc(node))
@@ -443,11 +444,15 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
         )
 
     def visit_Constant(self, node: ast.Constant, **kwargs) -> foast.Constant:
-        dtype = symbol_makers.make_symbol_type_from_value(node.value)
-        if not dtype:
+        try:
+            type_ = symbol_makers.make_symbol_type_from_value(node.value)
+        except common.GTTypeError as e:
             raise FieldOperatorSyntaxError.from_AST(
-                node, msg=f"Constants of type {type(node.value)} are not permitted"
-            )
+                node, msg=f"Constants of type {type(node.value)} are not permitted."
+            ) from e
+
         return foast.Constant(
-            value=str(node.value), dtype=dtype, location=self._make_loc(node), type=dtype
+            value=node.value,
+            location=self._make_loc(node),
+            type=type_,
         )

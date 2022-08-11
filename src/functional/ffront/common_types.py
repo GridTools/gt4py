@@ -91,8 +91,14 @@ class TupleType(DataType):
         return f"tuple{self.types}"
 
 
+class CallableType:
+    """Base class of all callable types."""
+
+    pass
+
+
 @dataclass(frozen=True)
-class FieldType(DataType):
+class FieldType(DataType, CallableType):
     dims: list[func_common.Dimension] | Literal[Ellipsis]  # type: ignore[valid-type,misc]
     dtype: ScalarType
 
@@ -102,7 +108,7 @@ class FieldType(DataType):
 
 
 @dataclass(frozen=True)
-class FunctionType(SymbolType):
+class FunctionType(SymbolType, CallableType):
     args: list[DataType | DeferredSymbolType]
     kwargs: dict[str, DataType | DeferredSymbolType]
     returns: DataType | DeferredSymbolType | VoidType
@@ -112,3 +118,14 @@ class FunctionType(SymbolType):
         kwarg_strs = [f"{key}: {value}" for key, value in self.kwargs.items()]
         args_str = ", ".join((*arg_strs, *kwarg_strs))
         return f"({args_str}) -> {self.returns}"
+
+
+@dataclass(frozen=True)
+class ScanOperatorType(SymbolType, CallableType):
+    axis: func_common.Dimension
+    definition: FunctionType
+
+
+@dataclass(frozen=True)
+class FieldOperatorType(SymbolType, CallableType):
+    definition: FunctionType
