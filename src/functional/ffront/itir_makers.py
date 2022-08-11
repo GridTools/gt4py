@@ -70,6 +70,8 @@ def ensure_expr(literal_or_expr: Union[str, int, itir.Expr]) -> itir.Expr:
         return ref(literal_or_expr)
     elif isinstance(literal_or_expr, int):
         return itir.Literal(value=str(literal_or_expr), type="int")
+    elif isinstance(literal_or_expr, float):
+        return itir.Literal(value=str(literal_or_expr), type="float")
     return literal_or_expr
 
 
