@@ -666,7 +666,9 @@ def scan_operator(
     init: Scalar = 0.0,
     externals=None,
     backend=None,
-) -> FieldOperator[foast.ScanOperator]:
+) -> FieldOperator[foast.ScanOperator] | Callable[
+    [types.FunctionType], FieldOperator[foast.ScanOperator]
+]:
     """
     Generate an implementation of the scan operator from a Python function object.
 
