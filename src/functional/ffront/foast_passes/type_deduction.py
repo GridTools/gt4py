@@ -14,7 +14,7 @@
 from typing import Optional, cast
 
 import functional.ffront.field_operator_ast as foast
-from eve import NodeTranslator, traits
+from eve import NodeTranslator, NodeVisitor, traits
 from functional.common import DimensionKind, GTSyntaxError, GTTypeError
 from functional.ffront import common_types as ct, fbuiltins, type_info
 
@@ -46,6 +46,26 @@ def boolified_type(symbol_type: ct.SymbolType) -> ct.ScalarType | ct.FieldType:
     raise GTTypeError(f"Can not boolify type {symbol_type}!")
 
 
+class FieldOperatorTypeDeductionCompletnessValidator(NodeVisitor):
+    """Validate an FOAST expression is fully typed."""
+
+    @classmethod
+    def apply(cls, node: foast.LocatedNode) -> None:
+        incomplete_nodes: list[foast.LocatedNode] = []
+        cls().visit(node, incomplete_nodes=incomplete_nodes)
+
+        if incomplete_nodes:
+            raise AssertionError("FOAST expression is not fully typed.")
+
+    def visit_LocatedNode(
+        self, node: foast.LocatedNode, *, incomplete_nodes: list[foast.LocatedNode]
+    ):
+        self.generic_visit(node, incomplete_nodes=incomplete_nodes)
+
+        if hasattr(node, "type") and not type_info.is_concrete(node.type):
+            incomplete_nodes.append(node)
+
+
 class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
     """
     Deduce and check types of FOAST expressions and symbols.
@@ -74,14 +94,79 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
 
     @classmethod
     def apply(cls, node: foast.FieldOperator) -> foast.FieldOperator:
-        return cls().visit(node)
+        typed_foast_node = cls().visit(node)
 
+        FieldOperatorTypeDeductionCompletnessValidator.apply(typed_foast_node)
+
+        return typed_foast_node
+
+    def visit_FunctionDefinition(self, node: foast.FunctionDefinition, **kwargs):
+        new_params = self.visit(node.params, **kwargs)
+        new_body = self.visit(node.body, **kwargs)
+        assert isinstance(new_body[-1], foast.Return)
+        return_type = new_body[-1].value.type
+        new_type = ct.FunctionType(
+            args=[new_param.type for new_param in new_params], kwargs={}, returns=return_type
+        )
+
+        return foast.FunctionDefinition(
+            id=node.id,
+            params=new_params,
+            body=new_body,
+            captured_vars=self.visit(node.captured_vars, **kwargs),
+            type=new_type,
+            location=node.location,
+        )
+
+    # TODO(tehrengruber): make sure all scalar arguments are lifted to 0-dim field args
     def visit_FieldOperator(self, node: foast.FieldOperator, **kwargs) -> foast.FieldOperator:
+        new_definition = self.visit(node.definition, **kwargs)
         return foast.FieldOperator(
             id=node.id,
-            params=self.visit(node.params, **kwargs),
-            body=self.visit(node.body, **kwargs),
-            captured_vars=self.visit(node.captured_vars, **kwargs),
+            definition=new_definition,
+            location=node.location,
+            type=ct.FieldOperatorType(definition=new_definition.type),
+        )
+
+    def visit_ScanOperator(self, node: foast.ScanOperator, **kwargs) -> foast.ScanOperator:
+        new_axis = self.visit(node.axis, **kwargs)
+        if not isinstance(new_axis.type, ct.DimensionType):
+            raise FieldOperatorTypeDeductionError.from_foast_node(
+                node,
+                msg=f"Argument `axis` to scan operator `{node.id}` must be a dimension.",
+            )
+        if not new_axis.type.dim.kind == DimensionKind.VERTICAL:
+            raise FieldOperatorTypeDeductionError.from_foast_node(
+                node,
+                msg=f"Argument `axis` to scan operator `{node.id}` must be a vertical dimension.",
+            )
+        new_forward = self.visit(node.forward, **kwargs)
+        if not new_forward.type.kind == ct.ScalarKind.BOOL:
+            raise FieldOperatorTypeDeductionError.from_foast_node(
+                node, msg=f"Argument `forward` to scan operator `{node.id}` must" f"be a boolean."
+            )
+        new_init = self.visit(node.init, **kwargs)
+        if not all(
+            type_info.is_arithmetic(type_)
+            for type_ in type_info.primitive_constituents(new_init.type)
+        ):
+            raise FieldOperatorTypeDeductionError.from_foast_node(
+                node,
+                msg=f"Argument `init` to scan operator `{node.id}` must "
+                f"be an arithmetic type or a composite of arithmetic types.",
+            )
+        new_definition = self.visit(node.definition, **kwargs)
+        new_type = ct.ScanOperatorType(
+            axis=new_axis.type.dim,
+            definition=new_definition.type,
+        )
+        return foast.ScanOperator(
+            id=node.id,
+            axis=new_axis,
+            forward=new_forward,
+            init=new_init,
+            definition=new_definition,
+            type=new_type,
             location=node.location,
         )
 
@@ -259,60 +344,54 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
 
     def visit_Call(self, node: foast.Call, **kwargs) -> foast.Call:
         new_func = self.visit(node.func, **kwargs)
+        new_args = self.visit(node.args, **kwargs)
+        new_kwargs = self.visit(node.kwargs, **kwargs)
 
-        if isinstance(new_func.type, ct.FieldType):
-            new_args = self.visit(node.args, **kwargs)
-            source_dim = new_args[0].type.source
-            target_dims = new_args[0].type.target
-            if new_func.type.dims and source_dim not in new_func.type.dims:
-                raise FieldOperatorTypeDeductionError.from_foast_node(
-                    node,
-                    msg=f"Incompatible offset at {new_func.id}: can not shift from {new_args[0].type.source} to {new_func.type.dims[0]}.",
-                )
-            new_dims = []
-            for d in new_func.type.dims:
-                if d != source_dim:
-                    new_dims.append(d)
-                else:
-                    new_dims.extend(target_dims)
-            new_type = ct.FieldType(dims=new_dims, dtype=new_func.type.dtype)
-            return foast.Call(
-                func=new_func, args=new_args, kwargs={}, location=node.location, type=new_type
+        func_type = new_func.type
+        arg_types = [arg.type for arg in new_args]
+        kwarg_types = {name: arg.type for name, arg in new_kwargs.items()}
+
+        # ensure signature is valid
+        try:
+            type_info.accepts_args(
+                func_type,
+                with_args=arg_types,
+                with_kwargs=kwarg_types,
+                raise_exception=True,
             )
-        elif isinstance(new_func.type, ct.FunctionType):
-            return_type = new_func.type.returns
-            new_node = foast.Call(
-                func=new_func,
-                args=self.visit(node.args, **kwargs),
-                kwargs=self.visit(node.kwargs, **kwargs),
-                location=node.location,
-                type=return_type,
-            )
+        except GTTypeError as err:
+            raise FieldOperatorTypeDeductionError.from_foast_node(
+                node, msg=f"Invalid argument types in call to `{node.func.id}`!"
+            ) from err
 
-            self._ensure_signature_valid(new_node, **kwargs)
+        return_type = type_info.return_type(func_type, with_args=arg_types, with_kwargs=kwarg_types)
 
-            # todo(tehrengruber): solve in a more generic way, e.g. using
-            #  parametric polymorphism.
-            # deduce return type of polymorphic builtins
-            if node.func.id in fbuiltins.MATH_BUILTIN_NAMES:
-                return self._visit_math_built_in(new_node, **kwargs)
-            elif (
-                not type_info.is_concrete(return_type)
-                and new_node.func.id in fbuiltins.FUN_BUILTIN_NAMES
-            ):
-                visitor = getattr(self, f"_visit_{new_node.func.id}")
-                return visitor(new_node, **kwargs)
-
-            return new_node
-
-        raise FieldOperatorTypeDeductionError.from_foast_node(
-            node,
-            msg=f"Objects of type `{new_func.type}` are not callable.",
+        new_node = foast.Call(
+            func=new_func,
+            args=new_args,
+            kwargs=new_kwargs,
+            location=node.location,
+            type=return_type,
         )
+
+        if (
+            isinstance(new_func.type, ct.FunctionType)
+            and new_func.id in fbuiltins.MATH_BUILTIN_NAMES
+        ):
+            return self._visit_math_built_in(new_node, **kwargs)
+        elif (
+            isinstance(new_func.type, ct.FunctionType)
+            and not type_info.is_concrete(return_type)
+            and new_func.id in fbuiltins.FUN_BUILTIN_NAMES
+        ):
+            visitor = getattr(self, f"_visit_{new_func.id}")
+            return visitor(new_node, **kwargs)
+
+        return new_node
 
     def _ensure_signature_valid(self, node: foast.Call, **kwargs) -> None:
         try:
-            type_info.is_callable(
+            type_info.accepts_args(
                 cast(ct.FunctionType, node.func.type),
                 with_args=[arg.type for arg in node.args],
                 with_kwargs={keyword: arg.type for keyword, arg in node.kwargs.items()},

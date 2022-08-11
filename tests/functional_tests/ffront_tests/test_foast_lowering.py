@@ -65,9 +65,7 @@ def test_scalar_arg():
     lowered = FieldOperatorLowering.apply(parsed)
 
     reference = im.deref_(
-        im.lift_(im.lambda__("alpha", "bar")(im.multiplies_(im.deref_("alpha"), im.deref_("bar"))))(
-            "alpha", "bar"
-        )
+        im.lift_(im.lambda__("bar")(im.multiplies_("alpha", im.deref_("bar"))))("bar")
     )
 
     assert lowered.expr == reference
@@ -146,8 +144,8 @@ def test_temp_assignment():
     parsed = FieldOperatorParser.apply_to_function(copy_field)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.deref_(
-        im.let("tmp__0", "inp")(im.let("inp__0", "tmp__0")(im.let("tmp2__0", "inp__0")("tmp2__0")))
+    reference = im.let("tmp__0", "inp")(
+        im.let("inp__0", "tmp__0")(im.let("tmp2__0", "inp__0")(im.deref_("tmp2__0")))
     )
 
     assert lowered.expr == reference
@@ -162,13 +160,14 @@ def test_unary_ops():
     parsed = FieldOperatorParser.apply_to_function(unary)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.deref_(
-        im.let("tmp__0", im.lift_(im.lambda__("inp")(im.plus_(0, im.deref_("inp"))))("inp"),)(
-            im.let(
-                "tmp__1",
-                im.lift_(im.lambda__("tmp__0")(im.minus_(0, im.deref_("tmp__0"))))("tmp__0"),
-            )("tmp__1")
-        )
+    reference = im.let(
+        "tmp__0",
+        im.lift_(im.lambda__("inp")(im.plus_(0, im.deref_("inp"))))("inp"),
+    )(
+        im.let(
+            "tmp__1",
+            im.lift_(im.lambda__("tmp__0")(im.minus_(0, im.deref_("tmp__0"))))("tmp__0"),
+        )(im.deref_("tmp__1"))
     )
 
     assert lowered.expr == reference
@@ -194,10 +193,8 @@ def test_unpacking():
         im.lambda__("__tuple_tmp_0")(im.tuple_get_(1, im.deref_("__tuple_tmp_0")))
     )("__tuple_tmp_0")
 
-    reference = im.deref_(
-        im.let("__tuple_tmp_0", tuple_expr)(
-            im.let("tmp1__0", tuple_access_0)(im.let("tmp2__0", tuple_access_1)("tmp1__0"))
-        )
+    reference = im.let("__tuple_tmp_0", tuple_expr)(
+        im.let("tmp1__0", tuple_access_0)(im.let("tmp2__0", tuple_access_1)(im.deref_("tmp1__0")))
     )
     assert lowered.expr == reference
 
@@ -210,7 +207,7 @@ def test_annotated_assignment():
     parsed = FieldOperatorParser.apply_to_function(copy_field)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.deref_(im.let("tmp__0", "inp")("tmp__0"))
+    reference = im.let("tmp__0", "inp")(im.deref_("tmp__0"))
 
     assert lowered.expr == reference
 
@@ -243,7 +240,7 @@ def test_temp_tuple():
     tuple_expr = im.lift_(im.lambda__("a", "b")(im.make_tuple_(im.deref_("a"), im.deref_("b"))))(
         "a", "b"
     )
-    reference = im.deref_(im.let("tmp__0", tuple_expr)("tmp__0"))
+    reference = im.let("tmp__0", tuple_expr)(im.deref_("tmp__0"))
 
     assert lowered.expr == reference
 
@@ -296,15 +293,13 @@ def test_add_scalar_literals():
     parsed = FieldOperatorParser.apply_to_function(scalar_plus_scalar)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.deref_(
-        im.let(
-            "tmp__0",
-            im.plus_(
-                im.literal_("1", "int32"),
-                im.literal_("1", "int32"),
-            ),
-        )(im.lift_(im.lambda__("a")(im.plus_(im.deref_("a"), "tmp__0")))("a"))
-    )
+    reference = im.let(
+        "tmp__0",
+        im.plus_(
+            im.literal_("1", "int32"),
+            im.literal_("1", "int32"),
+        ),
+    )(im.deref_(im.lift_(im.lambda__("a")(im.plus_(im.deref_("a"), "tmp__0")))("a")))
 
     assert lowered.expr == reference
 
@@ -505,8 +500,8 @@ def test_reduction_lowering_expr():
     parsed = FieldOperatorParser.apply_to_function(reduction)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.deref_(
-        im.let("e1_nbh__0", im.shift_("V2E")("e1"))(
+    reference = im.let("e1_nbh__0", im.shift_("V2E")("e1"))(
+        im.deref_(
             im.lift_(
                 im.call_("reduce")(
                     im.lambda__("acc", "e1_nbh__0__0", "e2__1")(
