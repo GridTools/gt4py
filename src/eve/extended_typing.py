@@ -309,9 +309,13 @@ def extended_runtime_checkable(  # noqa: C901  # too complex but unavoidable
                     "Cannot use 'subclass_check_with_data_members' with custom '__subclasshook__' definitions."
                 )
 
-            _allow_reckless_class_checks = (
-                _typing._allow_reckless_class_checks  # type: ignore[attr-defined]  # private member
+            _allow_reckless_class_checks = getattr(
+                _typing,
+                "_allow_reckless_class_checks"
+                if hasattr(_typing, "_allow_reckless_class_checks")
+                else "_allow_reckless_class_cheks",  # There is a typo in 3.8 and 3.9
             )
+
             _get_protocol_attrs = (
                 _typing._get_protocol_attrs  # type: ignore[attr-defined]  # private member
             )
