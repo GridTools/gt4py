@@ -33,6 +33,7 @@ import typing as _typing
 
 # Definitions in 'typing_extensions' take priority over those in 'typing'
 from typing import *  # noqa: F403
+from typing import overload  # Only needed to avoid false flake8 errors
 
 from typing_extensions import *  # type: ignore[misc]  # noqa: F403
 
@@ -249,7 +250,7 @@ class _ExtendedProtocolMeta(_typing._ProtocolMeta):
         return _abc.ABCMeta.__instancecheck__(cls, instance)
 
 
-_TypeT = TypeVar("_TypeT", bound=type)
+_ProtoT = TypeVar("_ProtoT", bound=_abc.ABCMeta)
 
 
 @overload
@@ -257,26 +258,26 @@ def extended_runtime_checkable(
     *,
     instance_check_shortcut: bool = True,
     subclass_check_with_data_members: bool = False,
-) -> Callable[[_TypeT], _TypeT]:
+) -> Callable[[_ProtoT], _ProtoT]:
     ...
 
 
 @overload
 def extended_runtime_checkable(
-    maybe_cls: _TypeT,
+    maybe_cls: _ProtoT,
     *,
     instance_check_shortcut: bool = True,
     subclass_check_with_data_members: bool = False,
-) -> _TypeT:
+) -> _ProtoT:
     ...
 
 
-def extended_runtime_checkable(
-    maybe_cls: Optional[_TypeT] = None,
+def extended_runtime_checkable(  # noqa: C901  # too complex but unavoidable
+    maybe_cls: Optional[_ProtoT] = None,
     *,
     instance_check_shortcut: bool = True,
     subclass_check_with_data_members: bool = False,
-) -> _TypeT | Callable[[_TypeT], _TypeT]:
+) -> _ProtoT | Callable[[_ProtoT], _ProtoT]:
     """Emulates :func:`typing.runtime_checkable` with optional performance shortcuts.
 
     If all optional shortcuts are set to ``False``, it behaves exactly
@@ -286,19 +287,20 @@ def extended_runtime_checkable(
         instance_check_shortcut: instance checks only use the instance type
             instead of checking the instance data for members added at runtime.
         subclass_check_with_data_members: subclass checks also work for
-            protocols with data members.    """
+            protocols with data members.
+    """
 
-    def _decorator(cls: _TypeT) -> _TypeT:
+    def _decorator(cls: _ProtoT) -> _ProtoT:
         cls = _typing.runtime_checkable(cls)
         if not (instance_check_shortcut or subclass_check_with_data_members):
             return cls
 
         if instance_check_shortcut:
-            cls.__class__ = _ExtendedProtocolMeta
+            cls.__class__ = _ExtendedProtocolMeta  # type: ignore[assignment]
 
         if subclass_check_with_data_members:
             assert "__subclasshook__" in cls.__dict__
-            if cls.__subclasshook__.__module__ not in (
+            if cls.__subclasshook__.__module__ not in (  # type: ignore[attr-defined]
                 "typing",
                 "typing_extensions",
                 "extended_typing",
@@ -307,9 +309,15 @@ def extended_runtime_checkable(
                     "Cannot use 'subclass_check_with_data_members' with custom '__subclasshook__' definitions."
                 )
 
-            _allow_reckless_class_checks = _typing._allow_reckless_class_checks
-            _get_protocol_attrs = _typing._get_protocol_attrs
-            _is_callable_members_only = _typing._is_callable_members_only
+            _allow_reckless_class_checks = (
+                _typing._allow_reckless_class_checks  # type: ignore[attr-defined]  # private member
+            )
+            _get_protocol_attrs = (
+                _typing._get_protocol_attrs  # type: ignore[attr-defined]  # private member
+            )
+            _is_callable_members_only = (
+                _typing._is_callable_members_only  # type: ignore[attr-defined]  # private member
+            )
 
             # Define a patched version of the proto hook which ignores
             # __is_callable_members_only() result at certain points
@@ -362,7 +370,7 @@ def extended_runtime_checkable(
                         return NotImplemented
                 return True
 
-            cls.__subclasshook__ = _patched_proto_hook
+            cls.__subclasshook__ = _patched_proto_hook  # type: ignore[attr-defined]
 
         return cls
 

@@ -30,13 +30,11 @@ from eve.extended_typing import (
     Annotated,
     Any,
     Callable,
-    ClassVar,
     Dict,
     ForwardRef,
     FrozenSet,
     List,
     Mapping,
-    Protocol,
     Sequence,
     Set,
     Tuple,
@@ -80,7 +78,7 @@ class DataProto(NoDataProto, Protocol):
 class ConcreteClass:
     foo:int = 32
     BAR = 32
-    
+
     def method_1(self) -> int:
         return 42
 
@@ -175,18 +173,17 @@ class IncompleteClass:
         assert eval(PASS_STMT, DEFINITIONS)
         assert not eval(FAIL_STMT, DEFINITIONS)
 
-        assert (
-            timer_ratio := abs(
-                std_pass_check
-                / timeit.timeit(stmt=PASS_STMT, number=NUM_REPETITIONS, globals=DEFINITIONS)
-            )
-        ) > 10
-        assert (
-            timer_ratio := abs(
-                std_fail_check
-                / timeit.timeit(stmt=FAIL_STMT, number=NUM_REPETITIONS, globals=DEFINITIONS)
-            )
-        ) > 10
+        timer_ratio = abs(
+            std_pass_check
+            / timeit.timeit(stmt=PASS_STMT, number=NUM_REPETITIONS, globals=DEFINITIONS)
+        )
+        assert timer_ratio > 10
+
+        timer_ratio = abs(
+            std_fail_check
+            / timeit.timeit(stmt=FAIL_STMT, number=NUM_REPETITIONS, globals=DEFINITIONS)
+        )
+        assert timer_ratio > 10
 
     def test_subclass_check_with_data_members(self):
         DEFINITIONS = {}
