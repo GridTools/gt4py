@@ -296,6 +296,10 @@ def extended_runtime_checkable(  # noqa: C901  # too complex but unavoidable
             return cls
 
         if instance_check_shortcut:
+            # Monkey patch the decorated protocol class using our custom
+            # metaclass, which assumes that no data members have been
+            # added at runtime and therefore the expensive instance members
+            # checks can be replaced by (cached) tests with class members
             cls.__class__ = _ExtendedProtocolMeta  # type: ignore[assignment]
 
         if subclass_check_with_data_members:
