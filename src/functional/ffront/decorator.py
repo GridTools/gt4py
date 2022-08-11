@@ -36,8 +36,7 @@ from functional.common import DimensionKind, GridType, GTTypeError
 from functional.fencil_processors.processor_interface import (
     FencilExecutor,
     FencilFormatter,
-    ensure_executor,
-    ensure_formatter,
+    ensure_processor_kind,
 )
 from functional.fencil_processors.runners import roundtrip
 from functional.ffront import (
@@ -307,7 +306,7 @@ class Program:
             )
         backend = self.backend if self.backend else DEFAULT_BACKEND
 
-        ensure_executor(backend)
+        ensure_processor_kind(backend, FencilExecutor)
         if "debug" in kwargs:
             debug(self.itir)
 
@@ -322,7 +321,7 @@ class Program:
     def format_itir(
         self, *args, formatter: FencilFormatter, offset_provider: dict[str, Dimension], **kwargs
     ) -> str:
-        ensure_formatter(formatter)
+        ensure_processor_kind(formatter, FencilFormatter)
         rewritten_args, size_args, kwargs = self._process_args(args, kwargs)
         if "debug" in kwargs:
             debug(self.itir)

@@ -22,61 +22,41 @@ For more information refer to ``gt4py/docs/functional/architecture/007-Fencil-Pr
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
 from functools import update_wrapper
-from typing import Protocol
+from typing import Protocol, TypeVar, runtime_checkable
 
 from functional.iterator.ir import FencilDefinition
 
 from .source_modules import SourceModule
 
 
-class FencilFormatterFunction(Protocol):
-    def __call__(self, fencil: FencilDefinition, *args, **kwargs) -> str:
+PROCESSOR_RETURN_T = TypeVar("PROCESSOR_RETURN_T", covariant=True)
+PROCESSOR_KIND_T = TypeVar("PROCESSOR_KIND_T", bound="FencilProcessorProtocol", covariant=True)
+
+
+class FencilProcessorFunction(Protocol[PROCESSOR_RETURN_T]):
+    def __call__(self, fencil: FencilDefinition, *args, **kwargs) -> PROCESSOR_RETURN_T:
         ...
 
 
-class FencilGeneratorFunction(Protocol):
-    def __call__(self, fencil: FencilDefinition, *args, **kwargs) -> SourceModule:
+@runtime_checkable
+class FencilProcessorProtocol(
+    FencilProcessorFunction[PROCESSOR_RETURN_T], Protocol[PROCESSOR_RETURN_T, PROCESSOR_KIND_T]
+):
+    @classmethod
+    def kind(cls) -> type[PROCESSOR_KIND_T]:
         ...
 
 
-class FencilExecutorFunction(Protocol):
-    def __call__(self, fencil: FencilDefinition, *args, **kwargs) -> None:
-        ...
+class FencilFormatter(FencilProcessorProtocol[str, "FencilFormatter"], Protocol):
+    @classmethod
+    def kind(cls) -> type[FencilFormatter]:
+        return FencilFormatter
 
 
-@dataclass
-class FencilFormatter:
-    """Wrap a raw formatter function and make it type-checkable as a fencil formatter at runtime."""
-
-    formatter_function: FencilFormatterFunction
-
-    def __call__(self, fencil: FencilDefinition, *args, **kwargs) -> str:
-        return self.formatter_function(fencil, *args, **kwargs)
-
-
-@dataclass
-class FencilGenerator:
-    """Wrap a source code generator as a type checkable fencil generator."""
-
-    generator_function: FencilGeneratorFunction
-
-    def __call__(self, fencil: FencilDefinition, *args, **kwargs) -> SourceModule:
-        return self.generator_function(fencil, *args, **kwargs)
-
-
-@dataclass
-class FencilExecutor:
-    """Wrap a raw executor function and make it type-checkable as a fencil executor at runtime."""
-
-    executor_function: FencilExecutorFunction
-
-    def __call__(self, fencil: FencilDefinition, *args, **kwargs) -> None:
-        self.executor_function(fencil, *args, **kwargs)
-
-
-def fencil_formatter(func: FencilFormatterFunction) -> FencilFormatter:
+def fencil_formatter(
+    func: FencilProcessorFunction[str],
+) -> FencilProcessorProtocol[str, FencilFormatter]:
     """
     Wrap a formatter function in a ``FencilFormatter`` instance.
 
@@ -87,14 +67,27 @@ def fencil_formatter(func: FencilFormatterFunction) -> FencilFormatter:
     ...     '''A very useless fencil formatter.'''
     ...     return "foo"
 
-    >>> assert isinstance(format_foo, FencilFormatter)
+    >>> ensure_processor_kind(format_foo, FencilFormatter)
     """
-    wrapper = FencilFormatter(formatter_function=func)
-    update_wrapper(wrapper, func)
-    return wrapper
+
+    class _FormatterClass(FencilFormatter):
+        def __call__(self, fencil: FencilDefinition, *args, **kwargs) -> str:
+            return func(fencil, *args, **kwargs)
+
+    formatter_instance = _FormatterClass()
+    update_wrapper(formatter_instance, func)
+    return formatter_instance
 
 
-def fencil_generator(func: FencilGeneratorFunction) -> FencilGenerator:
+class FencilGenerator(FencilProcessorProtocol[SourceModule, "FencilGenerator"], Protocol):
+    @classmethod
+    def kind(cls) -> type[FencilGenerator]:
+        return FencilGenerator
+
+
+def fencil_generator(
+    func: FencilProcessorFunction[SourceModule],
+) -> FencilProcessorProtocol[SourceModule, FencilGenerator]:
     """
     Wrap a source module generator function in a ``FencilGenerator`` instance.
 
@@ -106,14 +99,27 @@ def fencil_generator(func: FencilGeneratorFunction) -> FencilGenerator:
     ...     '''A very useless fencil formatter.'''
     ...     return SourceModule(entry_point=Function(fencil.id, []), library_deps=[], source_code="foo", language="foo")
 
-    >>> assert isinstance(generate_foo, FencilGenerator)
+    >>> ensure_processor_kind(generate_foo, FencilGenerator)
     """
-    wrapper = FencilGenerator(generator_function=func)
-    update_wrapper(wrapper, func)
-    return wrapper
+
+    class _GeneratorClass(FencilGenerator):
+        def __call__(self, fencil: FencilDefinition, *args, **kwargs) -> SourceModule:
+            return func(fencil, *args, **kwargs)
+
+    generator_instance = _GeneratorClass()
+    update_wrapper(generator_instance, func)
+    return generator_instance
 
 
-def fencil_executor(func: FencilExecutorFunction) -> FencilExecutor:
+class FencilExecutor(FencilProcessorProtocol[None, "FencilExecutor"], Protocol):
+    @classmethod
+    def kind(cls) -> type[FencilExecutor]:
+        return FencilExecutor
+
+
+def fencil_executor(
+    func: FencilProcessorFunction[None],
+) -> FencilProcessorProtocol[None, FencilExecutor]:
     """
     Wrap an executor function in a ``FencilFormatter`` instance.
 
@@ -124,20 +130,20 @@ def fencil_executor(func: FencilExecutorFunction) -> FencilExecutor:
     ...     '''A useless and incorrect fencil executor.'''
     ...     pass
 
-    >>> assert isinstance(badly_execute, FencilExecutor)
+    >>> ensure_processor_kind(badly_execute, FencilExecutor)
     """
-    wrapper = FencilExecutor(executor_function=func)
-    update_wrapper(wrapper, func)
-    return wrapper
+
+    class _ExecutorClass(FencilExecutor):
+        def __call__(self, fencil: FencilDefinition, *args, **kwargs) -> None:
+            func(fencil, *args, **kwargs)
+
+    executor_instance = _ExecutorClass()
+    update_wrapper(executor_instance, func)
+    return executor_instance
 
 
-def ensure_formatter(formatter: FencilFormatter) -> None:
-    """Check that a formatter is an instance of ``FencilFormatter`` and raise an error if not."""
-    if not isinstance(formatter, FencilFormatter):
-        raise RuntimeError(f"{formatter} is not a fencil formatter!")
-
-
-def ensure_executor(executor: FencilExecutor) -> None:
-    """Check that an executor is an instance of ``FencilExecutor`` and raise an error if not."""
-    if not isinstance(executor, FencilExecutor):
-        raise RuntimeError(f"{executor} is not a fencil executor!")
+def ensure_processor_kind(processor: FencilProcessorProtocol, kind: type) -> None:
+    if not isinstance(processor, FencilProcessorProtocol):
+        raise RuntimeError(f"{processor} does not fulfill {FencilProcessorProtocol.__name__}")
+    if processor.kind() != kind:
+        raise RuntimeError(f"{processor} is not a {kind.__name__}!")

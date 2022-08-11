@@ -10,8 +10,7 @@ from functional import common
 from functional.fencil_processors.processor_interface import (
     FencilExecutor,
     FencilFormatter,
-    ensure_executor,
-    ensure_formatter,
+    ensure_processor_kind,
 )
 from functional.iterator import builtins
 from functional.iterator.builtins import BackendNotSelectedError, builtin_dispatch
@@ -76,7 +75,7 @@ class FendefDispatcher:
         args, kwargs = self._rewrite_args(args, kwargs)
 
         if backend is not None:
-            ensure_executor(backend)
+            ensure_processor_kind(backend, FencilExecutor)
             backend(self.itir(*args, **kwargs), *args, **kwargs)
         else:
             if fendef_embedded is None:
@@ -84,7 +83,7 @@ class FendefDispatcher:
             fendef_embedded(self.function, *args, **kwargs)
 
     def format_itir(self, *args, formatter: FencilFormatter, **kwargs) -> str:
-        ensure_formatter(formatter)
+        ensure_processor_kind(formatter, FencilFormatter)
         args, kwargs = self._rewrite_args(args, kwargs)
         return formatter(self.itir(*args, **kwargs), *args, **kwargs)
 
