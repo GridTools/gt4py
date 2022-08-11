@@ -244,7 +244,7 @@ def stencil(
     if not isinstance(rebuild, bool):
         raise ValueError(f"Invalid 'rebuild' bool value ('{rebuild}')")
     if cache_settings is not None and not isinstance(cache_settings, dict):
-        raise ValueError(f"Invalid 'cache_settings' dictionary ('{rebuild}')")
+        raise ValueError(f"Invalid 'cache_settings' dictionary ('{cache_settings}')")
 
     module = None
     if name:
@@ -270,9 +270,6 @@ def stencil(
         time_keys = ("parse_time", "module_time", "codegen_time", "build_time", "load_time")
         build_info.update({time_key: 0.0 for time_key in time_keys})
 
-    if cache_settings is None:
-        cache_settings = {}
-
     build_options = gt_definitions.BuildOptions(
         name=name,
         module=module,
@@ -280,7 +277,7 @@ def stencil(
         rebuild=rebuild,
         backend_opts=kwargs,
         build_info=build_info,
-        cache_settings=cache_settings,
+        cache_settings=cache_settings or {},
         impl_opts=_impl_opts,
     )
 
