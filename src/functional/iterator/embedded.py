@@ -92,6 +92,12 @@ Position: TypeAlias = Union[ConcretePosition, IncompletePosition]
 MaybePosition: TypeAlias = Optional[Position]
 
 
+@dataclass
+class ColumnDescriptor:
+    axis: str
+    col_range: range  # TODO(havogt) introduce range type that doesn't have step
+
+
 def is_int_index(p: Any) -> TypeGuard[IntIndex]:
     return isinstance(p, int)
 
@@ -114,6 +120,10 @@ class ItIterator(Protocol):
         ...
 
     def deref(self) -> Any:
+        ...
+
+    @property
+    def column_descriptor(self) -> ColumnDescriptor:
         ...
 
 
@@ -222,6 +232,10 @@ def lift(stencil):
             def can_deref(self):
                 shifted_args = self._shifted_args()
                 return all(shifted_arg.can_deref() for shifted_arg in shifted_args)
+
+            @property
+            def column_descriptor(self) -> ColumnDescriptor:
+                return args[0].column_descriptor
 
             def deref(self):
                 if not self.can_deref():
@@ -532,13 +546,13 @@ class MDIterator:
         *,
         incomplete_offsets: Sequence[Tag] = None,
         offset_provider: OffsetProvider,
-        column_axis: Tag = None,
+        column_descriptor: Optional[ColumnDescriptor] = None,
     ) -> None:
         self.field = field
         self.pos = pos
         self.incomplete_offsets = incomplete_offsets or []
         self.offset_provider = offset_provider
-        self.column_axis = column_axis
+        self.column_descriptor = column_descriptor
 
     def shift(self, *offsets: OffsetPart) -> MDIterator:
         complete_offsets, open_offsets = group_offsets(*self.incomplete_offsets, *offsets)
@@ -547,7 +561,7 @@ class MDIterator:
             shift_position(self.pos, *complete_offsets, offset_provider=self.offset_provider),
             incomplete_offsets=open_offsets,
             offset_provider=self.offset_provider,
-            column_axis=self.column_axis,
+            column_descriptor=self.column_descriptor,
         )
 
     def max_neighbors(self) -> int:
@@ -571,9 +585,11 @@ class MDIterator:
             if not all(axis.value in shifted_pos.keys() for axis in axes if axis is not None):
                 raise IndexError("Iterator position doesn't point to valid location for its field.")
         slice_column = dict[Tag, FieldIndex]()
-        if self.column_axis is not None:
-            slice_column[self.column_axis] = slice(shifted_pos[self.column_axis], None)
-            shifted_pos.pop(self.column_axis)
+        if self.column_descriptor is not None:
+            slice_column[self.column_descriptor.axis] = slice(
+                shifted_pos[self.column_descriptor.axis], None
+            )
+            shifted_pos.pop(self.column_descriptor.axis)
 
         assert _is_concrete_position(shifted_pos)
         ordered_indices = get_ordered_indices(
@@ -591,7 +607,7 @@ def make_in_iterator(
     pos: Position,
     offset_provider: OffsetProvider,
     *,
-    column_axis: Optional[Tag],
+    column_descriptor: Optional[ColumnDescriptor],
 ) -> MDIterator:
     axes = _get_axes(inp)
     sparse_dimensions: list[Tag] = []
@@ -607,15 +623,15 @@ def make_in_iterator(
     for sparse_dim in set(sparse_dimensions):
         init = [None] * sparse_dimensions.count(sparse_dim)
         new_pos[sparse_dim] = init  # type: ignore[assignment] # looks like mypy is confused
-    if column_axis is not None:
+    if column_descriptor is not None:
         # if we deal with column stencil the column position is just an offset by which the whole column needs to be shifted
-        new_pos[column_axis] = 0
+        new_pos[column_descriptor.axis] = 0
     return MDIterator(
         inp,
         new_pos,
         incomplete_offsets=[SparseTag(x) for x in sparse_dimensions],
         offset_provider=offset_provider,
-        column_axis=column_axis,
+        column_descriptor=column_descriptor,
     )
 
 
@@ -789,12 +805,6 @@ def shift(*offsets: Union[Offset, int]) -> Callable[[ItIterator], ItIterator]:
     return impl
 
 
-@dataclass
-class ColumnDescriptor:
-    axis: str
-    col_range: range  # TODO(havogt) introduce range type that doesn't have step
-
-
 class ScanArgIterator:
     def __init__(
         self, wrapped_iter: ItIterator, k_pos: int, *, offsets: Sequence[OffsetPart] = None
@@ -813,6 +823,10 @@ class ScanArgIterator:
 
     def shift(self, *offsets: OffsetPart) -> ScanArgIterator:
         return ScanArgIterator(self.wrapped_iter, self.k_pos, offsets=[*offsets, *self.offsets])
+
+    @property
+    def column_descriptor(self) -> ColumnDescriptor:
+        return self.wrapped_iter.column_descriptor
 
 
 def shifted_scan_arg(k_pos: int) -> Callable[[ItIterator], ScanArgIterator]:
@@ -916,11 +930,6 @@ def as_tuple_field(field):
     return field
 
 
-_column_range: Optional[
-    range
-] = None  # TODO this is a bit ugly, alternative: pass scan range via iterator
-
-
 def _column_dtype(elem: Any) -> np.dtype:
     if isinstance(elem, tuple):
         return np.dtype([(f"f{i}", _column_dtype(e)) for i, e in enumerate(elem)])
@@ -931,9 +940,7 @@ def _column_dtype(elem: Any) -> np.dtype:
 @builtins.scan.register(EMBEDDED)
 def scan(scan_pass, is_forward: bool, init):
     def impl(*iters: ItIterator):
-        if _column_range is None:
-            raise RuntimeError("Column range is not defined, cannot scan.")
-
+        _column_range = iters[0].column_descriptor.col_range
         levels = len(_column_range)
         column_range = _column_range if is_forward else reversed(_column_range)
 
@@ -978,14 +985,11 @@ def fendef_embedded(fun: Callable[..., None], *args: Any, **kwargs: Any):
         if not (is_located_field(out) or can_be_tuple_field(out)):
             raise TypeError("Out needs to be a located field.")
 
-        global _column_range
-        column: Optional[ColumnDescriptor] = None
+        column_descriptor: Optional[ColumnDescriptor] = None
         if kwargs.get("column_axis"):
             column_axis = kwargs["column_axis"]
-            column = ColumnDescriptor(column_axis.value, domain[column_axis.value])
+            column_descriptor = ColumnDescriptor(column_axis.value, domain[column_axis.value])
             del domain[column_axis.value]
-
-            _column_range = column.col_range
 
         out = as_tuple_field(out) if can_be_tuple_field(out) else out
 
@@ -995,25 +999,23 @@ def fendef_embedded(fun: Callable[..., None], *args: Any, **kwargs: Any):
                     inp,
                     pos,
                     kwargs["offset_provider"],
-                    column_axis=column.axis if column is not None else None,
+                    column_descriptor=column_descriptor,
                 )
                 for inp in ins
             )
             res = sten(*ins_iters)
 
-            if column is None:
+            if column_descriptor is None:
                 assert _is_concrete_position(pos)
                 ordered_indices = get_ordered_indices(out.axes, pos)
                 out[ordered_indices] = res
             else:
                 col_pos = pos.copy()
-                for k in column.col_range:
-                    col_pos[column.axis] = k
+                for k in column_descriptor.col_range:
+                    col_pos[column_descriptor.axis] = k
                     assert _is_concrete_position(col_pos)
                     ordered_indices = get_ordered_indices(out.axes, col_pos)
                     out[ordered_indices] = res[k]
-
-        _column_range = None
 
     fun(*args)
 
