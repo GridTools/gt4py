@@ -12,6 +12,8 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+from typing import Any, Optional, Sequence, Tuple, Union
+
 import numpy as np
 
 import gt4py.storage.utils
@@ -28,6 +30,12 @@ try:
 except ImportError:
     dace = None
 
+if np.lib.NumpyVersion(np.__version__) >= "1.20.0":
+    from numpy.typing import ArrayLike, DTypeLike
+else:
+    ArrayLike = Any
+    DTypeLike = Any
+
 from . import utils as storage_utils
 
 
@@ -36,7 +44,14 @@ def _error_on_invalid_backend(backend):
         raise RuntimeError(f"Backend '{backend}' is not registered.")
 
 
-def empty(backend, aligned_index, shape, dtype, dimensions=None):
+def empty(
+    shape: Sequence[int],
+    dtype: DTypeLike = np.float64,
+    *,
+    backend: str,
+    aligned_index: Tuple[int, ...],
+    dimensions: Optional[Tuple[str, ...]] = None,
+) -> Union[np.ndarray, "cp.ndarray"]:
     _error_on_invalid_backend(backend)
     if gt_backend.from_name(backend).storage_info["device"] == "gpu":
         allocate_f = storage_utils.allocate_gpu
@@ -57,7 +72,14 @@ def empty(backend, aligned_index, shape, dtype, dimensions=None):
     return res
 
 
-def ones(backend, aligned_index, shape, dtype, dimensions=None):
+def ones(
+    shape: Sequence[int],
+    dtype: DTypeLike = np.float64,
+    *,
+    backend: str,
+    aligned_index: Tuple[int, ...],
+    dimensions: Optional[Tuple[str, ...]] = None,
+) -> Union[np.ndarray, "cp.ndarray"]:
     storage = empty(
         shape=shape,
         dtype=dtype,
@@ -69,7 +91,14 @@ def ones(backend, aligned_index, shape, dtype, dimensions=None):
     return storage
 
 
-def zeros(backend, aligned_index, shape, dtype, dimensions=None):
+def zeros(
+    shape: Sequence[int],
+    dtype: DTypeLike = np.float64,
+    *,
+    backend: str,
+    aligned_index: Tuple[int, ...],
+    dimensions: Optional[Tuple[str, ...]] = None,
+) -> Union[np.ndarray, "cp.ndarray"]:
     storage = empty(
         shape=shape,
         dtype=dtype,
@@ -81,11 +110,17 @@ def zeros(backend, aligned_index, shape, dtype, dimensions=None):
     return storage
 
 
-def from_array(data, backend, aligned_index, shape=None, dtype=None, dimensions=None):
+def from_array(
+    data: ArrayLike,
+    dtype: DTypeLike = np.float64,
+    *,
+    backend: str,
+    aligned_index: Tuple[int, ...],
+    dimensions: Optional[Tuple[str, ...]] = None,
+) -> Union[np.ndarray, "cp.ndarray"]:
     is_cupy_array = cp is not None and isinstance(data, cp.ndarray)
     asarray = gt4py.storage.utils.as_cupy if is_cupy_array else gt4py.storage.utils.as_numpy
-    if shape is None:
-        shape = asarray(data).shape
+    shape = asarray(data).shape
     if dtype is None:
         dtype = asarray(data).dtype
     storage = empty(
@@ -106,7 +141,14 @@ def from_array(data, backend, aligned_index, shape=None, dtype=None, dimensions=
 
 if dace is not None:
 
-    def dace_descriptor(backend, aligned_index, shape, dtype, dimensions=None):
+    def dace_descriptor(
+        shape: Sequence[int],
+        dtype: DTypeLike = np.float64,
+        *,
+        backend: str,
+        aligned_index: Tuple[int, ...],
+        dimensions: Optional[Tuple[str, ...]] = None,
+    ) -> dace.data.Array:
         aligned_index, shape, dtype, dimensions = storage_utils.normalize_storage_spec(
             aligned_index, shape, dtype, dimensions
         )

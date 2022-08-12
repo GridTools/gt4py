@@ -85,7 +85,7 @@ The return type is either a ``numpy.ndarray`` or a `cupy.ndarray`, for CPU and G
 
     For common keyword-only arguments, please see below.
 
-:code:`zeros(shape: Sequence[int], dtype: dtype_like = np.float64, **kwargs) -> Storage`
+:code:`zeros(shape: Sequence[int], dtype: dtype_like = np.float64, **kwargs) -> ndarray`
     Allocate an array with values initialized to 0.
 
     Parameters:
@@ -99,7 +99,7 @@ The return type is either a ``numpy.ndarray`` or a `cupy.ndarray`, for CPU and G
 
         For common keyword-only arguments, please see below.
 
-:code:`ones(shape: Sequence[int], dtype: dtype_like = np.float64, **kwargs) -> Storage`
+:code:`ones(shape: Sequence[int], dtype: dtype_like = np.float64, **kwargs) -> ndarray`
     Allocate an array with values initialized to 1.
 
     Parameters:
@@ -114,7 +114,7 @@ The return type is either a ``numpy.ndarray`` or a `cupy.ndarray`, for CPU and G
     For common keyword-only arguments, please see below.
 
 
-:code:`full(shape: Sequence[int], fill_value: Number, dtype=np.float64, **kwargs) -> Storage`
+:code:`full(shape: Sequence[int], fill_value: Number, dtype=np.float64, **kwargs) -> ndarray`
     Allocate an array with values initialized to the scalar given in :code:`fill_value`.
 
     Parameters:
@@ -130,7 +130,7 @@ The return type is either a ``numpy.ndarray`` or a `cupy.ndarray`, for CPU and G
 
     For common keyword-only arguments, please see below.
 
-:code:`from_array(data: array_like = None, device_data: array_like = None, *, dtype: dtype_like = np.float64, **kwargs) -> Storage`
+:code:`from_array(data: array_like, device_data: array_like = None, *, dtype: dtype_like = np.float64, **kwargs) -> ndarray`
     Used to allocate an array with values initialized to those of a given array.
 
     Parameters:
