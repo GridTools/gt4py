@@ -224,5 +224,6 @@ def create_bindings(
     src = language.format_source(BindingCodeGenerator.apply(file_binding))
 
     return source_modules.BindingModule(
-        src, [source_modules.LibraryDependency("pybind11", "2.9.2")]
+        src,
+        (source_modules.LibraryDependency("pybind11", "2.9.2"),),
     )

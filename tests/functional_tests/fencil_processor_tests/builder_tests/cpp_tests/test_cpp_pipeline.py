@@ -21,7 +21,10 @@ import numpy as np
 import pytest
 
 from functional.fencil_processors import source_modules
-from functional.fencil_processors.builders.cpp import callable
+from functional.fencil_processors.builders import cache
+from functional.fencil_processors.cpp.bindings import create_bindings
+from functional.fencil_processors.cpp.build import CMakeBuildProject
+from functional.fencil_processors.pipeline import CPP_DEFAULT
 from functional.fencil_processors.source_modules import cpp_gen as cpp
 
 
@@ -65,7 +68,12 @@ def source_module_example():
 
 
 def test_callable(source_module_example):
-    wrapper = callable.create_callable(source_module_example)
+    wrapper = CMakeBuildProject(
+        source_module=source_module_example,
+        bindings_module=create_bindings(source_module_example, language=CPP_DEFAULT),
+        language=CPP_DEFAULT,
+        cache_strategy=cache.Strategy.SESSION,
+    ).get_implementation()
     buf = np.zeros(shape=(6, 5), dtype=np.float32)
     sc = np.float32(3.1415926)
     res = wrapper(buf, sc)

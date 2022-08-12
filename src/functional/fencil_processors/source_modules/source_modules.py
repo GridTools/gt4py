@@ -15,7 +15,6 @@
 
 
 from dataclasses import dataclass
-from typing import Sequence
 
 import numpy
 
@@ -29,14 +28,14 @@ class ScalarParameter:
 @dataclass(frozen=True)
 class BufferParameter:
     name: str
-    dimensions: Sequence[str]
+    dimensions: tuple[str, ...]
     scalar_type: numpy.dtype
 
 
 @dataclass(frozen=True)
 class Function:
     name: str
-    parameters: Sequence[ScalarParameter | BufferParameter]
+    parameters: tuple[ScalarParameter | BufferParameter, ...]
 
 
 @dataclass(frozen=True)
@@ -49,11 +48,11 @@ class LibraryDependency:
 class SourceModule:
     entry_point: Function
     source_code: str
-    library_deps: Sequence[LibraryDependency]
+    library_deps: tuple[LibraryDependency, ...]
     language: str
 
 
 @dataclass(frozen=True)
 class BindingModule:
     source_code: str
-    library_deps: Sequence[LibraryDependency]
+    library_deps: tuple[LibraryDependency, ...]

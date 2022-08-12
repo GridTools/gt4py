@@ -30,7 +30,9 @@ def get_param_description(
 ) -> source_modules.ScalarParameter | source_modules.BufferParameter:
     view = numpy.asarray(obj)
     if view.ndim > 0:
-        return source_modules.BufferParameter(name, [dim.value for dim in obj.axes], view.dtype)
+        return source_modules.BufferParameter(
+            name, tuple(dim.value for dim in obj.axes), view.dtype
+        )
     else:
         return source_modules.ScalarParameter(name, view.dtype)
 
@@ -42,9 +44,9 @@ def create_source_module(
     **kwargs,
 ) -> source_modules.SourceModule:
     """Generate GTFN C++ code from the ITIR definition."""
-    parameters = [
+    parameters = tuple(
         get_param_description(itir_param.id, obj) for obj, itir_param in zip(args, itir.params)
-    ]
+    )
     function = source_modules.Function(itir.id, parameters)
 
     rendered_params = ", ".join(["gridtools::fn::backend::naive{}", *(p.name for p in parameters)])
@@ -63,9 +65,7 @@ def create_source_module(
 
     module = source_modules.SourceModule(
         entry_point=function,
-        library_deps=[
-            source_modules.LibraryDependency("gridtools", "master"),
-        ],
+        library_deps=(source_modules.LibraryDependency("gridtools", "master"),),
         source_code=source_code,
         language=cpp.LANGUAGE_ID,
     )
