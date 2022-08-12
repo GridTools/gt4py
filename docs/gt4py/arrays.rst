@@ -49,8 +49,8 @@ order.
 Valid dimension strings are ``"I"``, ``"J"``, ``"K"`` as well as decimal string representations of integer
 numbers to denote data dimensions.
 
-The utility ``gt4py.utils.get_dims(storage, annotation)`` that implements this lookup, gt4py developers are advised to
-use it.
+Developers are advised to use the utility ``gt4py.utils.get_dims(storage, annotation)``,
+which implements this lookup.
 
 Note: Support for xarray can be added manually by the user by means of the mechanism described
 `here <https://xarray.pydata.org/en/stable/internals/extending-xarray.html>`_.
@@ -155,7 +155,7 @@ Additionally, these **optional** keyword-only parameters are accepted:
     origin or domain when passed to a stencil. It defaults to the lower indices of the
     :code:`halo` parameter. (See :code:`__gt_origin__` interface instead.)
 
-:code:`dimensions: Optional[Sequence[str]`
+:code:`dimensions: Optional[Sequence[str]]`
     Sequence indicating the semantic meaning of the dimensions of this storage. This is used to
     determine the default layout for the storage. Currently supported will be :code:`"I"`,
     :code:`"J"`, :code:`"K"` and additional dimensions as string representations of integers,
