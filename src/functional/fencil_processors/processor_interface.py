@@ -134,6 +134,8 @@ def is_processor_kind(
     return callable(obj) and getattr(obj, "kind", None) is kind
 
 
-def ensure_processor_kind(obj: object, kind: type) -> None:
+def ensure_processor_kind(
+    obj: FencilProcessorProtocol[OutputT, ProcessorKindT], kind: type[ProcessorKindT]
+) -> None:
     if not is_processor_kind(obj, kind):
         raise RuntimeError(f"{obj} is not a {kind.__name__}!")
