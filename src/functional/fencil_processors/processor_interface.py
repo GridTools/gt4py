@@ -53,9 +53,7 @@ class FencilFormatter(FencilProcessorProtocol[str, "FencilFormatter"], Protocol)
         return FencilFormatter
 
 
-def fencil_formatter(
-    func: FencilProcessorFunction[str],
-) -> FencilFormatter:
+def fencil_formatter(func: FencilProcessorFunction[str]) -> FencilFormatter:
     """
     Turn a formatter function into a FencilFormatter.
 
@@ -108,9 +106,7 @@ class FencilExecutor(FencilProcessorProtocol[None, "FencilExecutor"], Protocol):
         return FencilExecutor
 
 
-def fencil_executor(
-    func: FencilProcessorFunction[None],
-) -> FencilExecutor:
+def fencil_executor(func: FencilProcessorFunction[None]) -> FencilExecutor:
     """
     Wrap an executor function in a ``FencilFormatter`` instance.
 
