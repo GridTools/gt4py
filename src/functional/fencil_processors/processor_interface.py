@@ -55,7 +55,7 @@ class FencilFormatter(FencilProcessorProtocol[str, "FencilFormatter"], Protocol)
 
 def fencil_formatter(
     func: FencilProcessorFunction[str],
-) -> FencilProcessorProtocol[str, FencilFormatter]:
+) -> FencilFormatter:
     """
     Turn a formatter function into a FencilFormatter.
 
@@ -83,7 +83,7 @@ class FencilSourceModuleGenerator(
 
 def fencil_source_module_generator(
     func: FencilProcessorFunction[SourceModule],
-) -> FencilProcessorProtocol[SourceModule, FencilSourceModuleGenerator]:
+) -> FencilSourceModuleGenerator:
     """
     Wrap a source module generator function in a ``FencilSourceModuleGenerator`` instance.
 
@@ -110,7 +110,7 @@ class FencilExecutor(FencilProcessorProtocol[None, "FencilExecutor"], Protocol):
 
 def fencil_executor(
     func: FencilProcessorFunction[None],
-) -> FencilProcessorProtocol[None, FencilExecutor]:
+) -> FencilExecutor:
     """
     Wrap an executor function in a ``FencilFormatter`` instance.
 
@@ -125,7 +125,7 @@ def fencil_executor(
     """
     # this operation effectively changes the type of func and that is the intention here
     func.kind = FencilExecutor  # type: ignore[attr-defined]
-    return cast(FencilProcessorProtocol[None, FencilExecutor], func)
+    return cast(FencilExecutor, func)
 
 
 def is_processor_kind(
