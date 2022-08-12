@@ -14,11 +14,14 @@
 """
 Interface for fencil processors.
 
-Fencil processors are functions which take an ``iterator.ir.FencilDefinition`` along with input values for the fencil.
-Those which execute the fencil with the given arguments (possibly by generating code along the way) are fencil executors.
-Those which generate / any kind of string based on the fencil and (optionally) input values are fencil formatters.
+Fencil processors are functions which take an ``iterator.ir.FencilDefinition``
+along with input values for the fencil. Those which execute the fencil with
+the given arguments (possibly by generating code along the way) are fencil
+executors. Those which generate any kind of string based on the fencil
+and (optionally) input values are fencil formatters.
 
-For more information refer to ``gt4py/docs/functional/architecture/007-Fencil-Processors.md``
+For more information refer to
+``gt4py/docs/functional/architecture/007-Fencil-Processors.md``
 """
 from __future__ import annotations
 
@@ -43,7 +46,7 @@ class FencilProcessorFunction(Protocol[PROCESSOR_RETURN_T]):
 class FencilProcessorProtocol(
     FencilProcessorFunction[PROCESSOR_RETURN_T], Protocol[PROCESSOR_RETURN_T, PROCESSOR_KIND_T]
 ):
-    __name__: str = ""  # dummy to convince mypy that a __name__ is present for error messages
+    __name__: ClassVar[str]   # dummy to convince mypy that a __name__ is present for error messages
 
     @classmethod
     def kind(cls) -> type[PROCESSOR_KIND_T]:
