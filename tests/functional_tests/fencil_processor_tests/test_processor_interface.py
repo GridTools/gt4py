@@ -39,8 +39,8 @@ def test_decorated_formatter_function_is_recognized(dummy_formatter):
 
 def test_custom_source_module_generator_class_is_recognized():
     class DummyFencilSourceModuleGenerator:
-        @classmethod
-        def kind(cls) -> type[FencilSourceModuleGenerator]:
+        @property
+        def kind(self) -> type[FencilSourceModuleGenerator]:
             return FencilSourceModuleGenerator
 
         def __call__(self, fencil: FencilDefinition, *args, **kwargs) -> SourceModule:
@@ -53,7 +53,7 @@ def test_undecorated_formatter_function_is_not_recognized():
     def undecorated_formatter(fencil: FencilDefinition, *args, **kwargs) -> str:
         return ""
 
-    with pytest.raises(RuntimeError, match="does not fulfill FencilProcessorProtocol"):
+    with pytest.raises(RuntimeError, match="is not a FencilFormatter"):
         ensure_processor_kind(undecorated_formatter, FencilFormatter)
 
 

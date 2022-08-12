@@ -25,37 +25,31 @@ For more information refer to
 """
 from __future__ import annotations
 
-from functools import update_wrapper
-from typing import Protocol, TypeVar, runtime_checkable
+from typing import Protocol, TypeGuard, TypeVar, cast
 
 from functional.iterator.ir import FencilDefinition
 
 from .source_modules import SourceModule
 
 
-PROCESSOR_RETURN_T = TypeVar("PROCESSOR_RETURN_T", covariant=True)
-PROCESSOR_KIND_T = TypeVar("PROCESSOR_KIND_T", bound="FencilProcessorProtocol", covariant=True)
+OutputT = TypeVar("OutputT", covariant=True)
+ProcessorKindT = TypeVar("ProcessorKindT", bound="FencilProcessorProtocol", covariant=True)
 
 
-class FencilProcessorFunction(Protocol[PROCESSOR_RETURN_T]):
-    def __call__(self, fencil: FencilDefinition, *args, **kwargs) -> PROCESSOR_RETURN_T:
+class FencilProcessorFunction(Protocol[OutputT]):
+    def __call__(self, fencil: FencilDefinition, *args, **kwargs) -> OutputT:
         ...
 
 
-@runtime_checkable
-class FencilProcessorProtocol(
-    FencilProcessorFunction[PROCESSOR_RETURN_T], Protocol[PROCESSOR_RETURN_T, PROCESSOR_KIND_T]
-):
-    __name__: ClassVar[str]   # dummy to convince mypy that a __name__ is present for error messages
-
-    @classmethod
-    def kind(cls) -> type[PROCESSOR_KIND_T]:
+class FencilProcessorProtocol(FencilProcessorFunction[OutputT], Protocol[OutputT, ProcessorKindT]):
+    @property
+    def kind(self) -> type[ProcessorKindT]:
         ...
 
 
 class FencilFormatter(FencilProcessorProtocol[str, "FencilFormatter"], Protocol):
-    @classmethod
-    def kind(cls) -> type[FencilFormatter]:
+    @property
+    def kind(self) -> type[FencilFormatter]:
         return FencilFormatter
 
 
@@ -63,7 +57,7 @@ def fencil_formatter(
     func: FencilProcessorFunction[str],
 ) -> FencilProcessorProtocol[str, FencilFormatter]:
     """
-    Wrap a formatter function in a ``FencilFormatter`` instance.
+    Turn a formatter function into a FencilFormatter.
 
     Examples:
     ---------
@@ -74,21 +68,16 @@ def fencil_formatter(
 
     >>> ensure_processor_kind(format_foo, FencilFormatter)
     """
-
-    class _FormatterClass(FencilFormatter):
-        def __call__(self, fencil: FencilDefinition, *args, **kwargs) -> str:
-            return func(fencil, *args, **kwargs)
-
-    formatter_instance = _FormatterClass()
-    update_wrapper(formatter_instance, func)
-    return formatter_instance
+    # this operation effectively changes the type of func and that is the intention here
+    func.kind = FencilFormatter  # type: ignore[attr-defined]
+    return cast(FencilProcessorProtocol[str, FencilFormatter], func)
 
 
 class FencilSourceModuleGenerator(
     FencilProcessorProtocol[SourceModule, "FencilSourceModuleGenerator"], Protocol
 ):
-    @classmethod
-    def kind(cls) -> type[FencilSourceModuleGenerator]:
+    @property
+    def kind(self) -> type[FencilSourceModuleGenerator]:
         return FencilSourceModuleGenerator
 
 
@@ -108,19 +97,14 @@ def fencil_source_module_generator(
 
     >>> ensure_processor_kind(generate_foo, FencilSourceModuleGenerator)
     """
-
-    class _SourceModuleGeneratorClass(FencilSourceModuleGenerator):
-        def __call__(self, fencil: FencilDefinition, *args, **kwargs) -> SourceModule:
-            return func(fencil, *args, **kwargs)
-
-    generator_instance = _SourceModuleGeneratorClass()
-    update_wrapper(generator_instance, func)
-    return generator_instance
+    # this operation effectively changes the type of func and that is the intention here
+    func.kind = FencilSourceModuleGenerator  # type: ignore[attr-defined]
+    return cast(FencilProcessorProtocol[SourceModule, FencilSourceModuleGenerator], func)
 
 
 class FencilExecutor(FencilProcessorProtocol[None, "FencilExecutor"], Protocol):
-    @classmethod
-    def kind(cls) -> type[FencilExecutor]:
+    @property
+    def kind(self) -> type[FencilExecutor]:
         return FencilExecutor
 
 
@@ -139,20 +123,17 @@ def fencil_executor(
 
     >>> ensure_processor_kind(badly_execute, FencilExecutor)
     """
-
-    class _ExecutorClass(FencilExecutor):
-        def __call__(self, fencil: FencilDefinition, *args, **kwargs) -> None:
-            func(fencil, *args, **kwargs)
-
-    executor_instance = _ExecutorClass()
-    update_wrapper(executor_instance, func)
-    return executor_instance
+    # this operation effectively changes the type of func and that is the intention here
+    func.kind = FencilExecutor  # type: ignore[attr-defined]
+    return cast(FencilProcessorProtocol[None, FencilExecutor], func)
 
 
-def ensure_processor_kind(processor: FencilProcessorProtocol, kind: type) -> None:
-    if not isinstance(processor, FencilProcessorProtocol):
-        raise RuntimeError(
-            f"{processor.__name__} does not fulfill {FencilProcessorProtocol.__name__}"
-        )
-    if processor.kind() != kind:
-        raise RuntimeError(f"{processor.__name__} is not a {kind.__name__}!")
+def is_processor_kind(
+    obj: object, kind: type[ProcessorKindT]
+) -> TypeGuard[FencilProcessorProtocol[OutputT, ProcessorKindT]]:
+    return callable(obj) and getattr(obj, "kind", None) is kind
+
+
+def ensure_processor_kind(obj: object, kind: type) -> None:
+    if not is_processor_kind(obj, kind):
+        raise RuntimeError(f"{obj} is not a {kind.__name__}!")

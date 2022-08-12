@@ -9,6 +9,7 @@ from functional.fencil_processors.processor_interface import (
     FencilExecutor,
     FencilFormatter,
     fencil_formatter,
+    is_processor_kind,
 )
 from functional.fencil_processors.runners import double_roundtrip, gtfn_cpu, roundtrip
 from functional.iterator import ir as itir
@@ -61,9 +62,9 @@ def run_processor(
     *args,
     **kwargs,
 ) -> None:
-    if processor is None or processor.kind() == FencilExecutor:
+    if processor is None or is_processor_kind(processor, FencilExecutor):
         fencil(*args, backend=processor, **kwargs)
-    elif processor.kind() == FencilFormatter:
+    elif is_processor_kind(processor, FencilFormatter):
         print(fencil.format_itir(*args, formatter=processor, **kwargs))
     else:
         raise TypeError(f"fencil processor kind not recognized: {processor}!")
