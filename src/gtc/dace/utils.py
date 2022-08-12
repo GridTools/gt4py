@@ -537,18 +537,14 @@ def union_node_access_infos(nodes: List[eve.Node]):
     read_accesses: Dict[str, dcir.FieldAccessInfo] = dict()
     write_accesses: Dict[str, dcir.FieldAccessInfo] = dict()
     for node in collect_toplevel_computation_nodes(nodes):
-        read_accesses.update(
-            {
-                mem.field: mem.access_info.union(read_accesses.get(mem.field, mem.access_info))
-                for mem in node.read_memlets
-            }
-        )
-        write_accesses.update(
-            {
-                mem.field: mem.access_info.union(write_accesses.get(mem.field, mem.access_info))
-                for mem in node.write_memlets
-            }
-        )
+        for mem in node.read_memlets:
+            read_accesses[mem.field] = mem.access_info.union(
+                read_accesses.get(mem.field, mem.access_info)
+            )
+        for mem in node.write_memlets:
+            write_accesses[mem.field] = mem.access_info.union(
+                write_accesses.get(mem.field, mem.access_info)
+            )
 
     return (
         read_accesses,

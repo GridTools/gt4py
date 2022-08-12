@@ -401,7 +401,7 @@ class MakeLocalCaches(eve.NodeTranslator):
 
     def _make_localcache_states(
         self,
-        loop,
+        loop: dcir.DomainLoop,
         loop_states,
         *,
         context_read_accesses,
@@ -525,19 +525,25 @@ class MakeLocalCaches(eve.NodeTranslator):
             ),
             init_subsets,
         )
+        if loop.index_range.stride > 0:
+            init_idx = loop.index_range.interval.start
+        else:
+            int_end = loop.index_range.interval.end
+            init_idx = dcir.AxisBound(axis=axis, level=int_end.level, offset=int_end.offset - 1)
         init_state = dcir.CopyState(
-            memlets=_remove_connector(
-                _set_readonly(set_idx(axis, init_memlets, loop.index_range.interval.start))
-            ),
+            memlets=_remove_connector(_set_readonly(set_idx(axis, init_memlets, init_idx))),
             name_map=local_name_map,
         )
 
-        fill_accesses = self._set_access_info_subset(
-            [
-                mem
-                for mem in gtc.dace.utils.union_memlets(*read_memlets, *write_memlets)
-                if mem.field in fill_subsets and fill_subsets[mem.field] is not None
-            ],
+        fill_accesses = self._set_other_subset(
+            self._set_access_info_subset(
+                [
+                    mem
+                    for mem in gtc.dace.utils.union_memlets(*read_memlets, *write_memlets)
+                    if mem.field in fill_subsets and fill_subsets[mem.field] is not None
+                ],
+                fill_subsets,
+            ),
             fill_subsets,
         )
         fill_state = dcir.CopyState(
@@ -559,14 +565,18 @@ class MakeLocalCaches(eve.NodeTranslator):
             name_map={v: k for k, v in local_name_map.items()},
         )
 
-        shift_accesses = self._set_access_info_subset(
-            [
-                mem
-                for mem in gtc.dace.utils.union_memlets(*read_memlets, *write_memlets)
-                if mem.field in shift_subsets and shift_subsets[mem.field] is not None
-            ],
+        shift_accesses = self._set_other_subset(
+            self._set_access_info_subset(
+                [
+                    mem
+                    for mem in gtc.dace.utils.union_memlets(*read_memlets, *write_memlets)
+                    if mem.field in shift_subsets and shift_subsets[mem.field] is not None
+                ],
+                shift_subsets,
+            ),
             shift_subsets,
         )
+
         shift_state = dcir.CopyState(
             memlets=_remove_connector(
                 _set_readonly(
