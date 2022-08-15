@@ -12,20 +12,12 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import Optional, Union
-
-from packaging.version import LegacyVersion, Version, parse
-from pkg_resources import DistributionNotFound, get_distribution
+import typing
 
 
-__copyright__ = "Copyright (c) 2014-2021 ETH Zurich"
-__license__ = "GPLv3+"
+__copyright__: typing.Final = "Copyright (c) 2014-2022 ETH Zurich"
+__license__: typing.Final = "GPLv3+"
 
-try:
-    __version__: str = get_distribution("gt4py").version
-except DistributionNotFound:
-    __version__ = "X.X.X.unknown"
+from .version import VERSION as __version__, VERSION_INFO as __versioninfo__  # isort:skip
 
-__versioninfo__: Optional[Union[LegacyVersion, Version]] = parse(__version__)
-
-del DistributionNotFound, LegacyVersion, Version, get_distribution, parse
+__all__ = ["__copyright__", "__license__", "__version__", "__versioninfo__"]

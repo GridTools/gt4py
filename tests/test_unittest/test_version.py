@@ -1,6 +1,8 @@
+# -*- coding: utf-8 -*-
+#
 # Eve Toolchain - GT4Py Project - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2020, CSCS - Swiss National Supercomputing Center, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -12,12 +14,19 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Version specification."""
 
-import typing
-
-from packaging import version as pkg_version
+import gt4py
 
 
-VERSION: typing.Final = "0.0.1"
-VERSION_INFO: typing.Final = pkg_version.parse(VERSION)
+def test_version():
+    assert isinstance(gt4py.version.VERSION, str)
+    assert all(len(p) for p in gt4py.version.VERSION.split("."))
+    assert gt4py.version.VERSION == gt4py.__version__
+
+
+def test_version_info():
+    from packaging.version import Version
+
+    assert isinstance(gt4py.version.VERSION_INFO, Version)
+    assert (0, 0) <= gt4py.version.VERSION_INFO.release < (0, 1)
+    assert gt4py.version.VERSION_INFO == gt4py.__versioninfo__
