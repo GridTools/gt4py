@@ -25,7 +25,7 @@ For more information refer to
 """
 from __future__ import annotations
 
-from typing import Protocol, TypeGuard, TypeVar, cast
+from typing import Callable, Protocol, TypeGuard, TypeVar, cast
 
 from functional.iterator.ir import FencilDefinition
 
@@ -125,7 +125,7 @@ def fencil_executor(func: FencilProcessorFunction[None]) -> FencilExecutor:
 
 
 def is_processor_kind(
-    obj: object, kind: type[ProcessorKindT]
+    obj: Callable[..., OutputT], kind: type[ProcessorKindT]
 ) -> TypeGuard[FencilProcessorProtocol[OutputT, ProcessorKindT]]:
     return callable(obj) and getattr(obj, "kind", None) is kind
 
