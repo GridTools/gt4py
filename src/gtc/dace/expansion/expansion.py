@@ -156,13 +156,15 @@ class StencilComputationExpansion(dace.library.ExpandTransformation):
 
         nsdfg: dace.nodes.NestedSDFG = StencilComputationSDFGBuilder().visit(daceir)
 
+        StencilComputationExpansion._fix_context(nsdfg, node, parent_state, daceir)
+
         delkeys = set()
         for sym in node.symbol_mapping.keys():
-            if str(sym) not in nsdfg.free_symbols:
+            if str(sym) not in nsdfg.sdfg.free_symbols:
                 delkeys.add(str(sym))
         for key in delkeys:
             del node.symbol_mapping[key]
-
-        StencilComputationExpansion._fix_context(nsdfg, node, parent_state, daceir)
+            if key in nsdfg.symbol_mapping:
+                del nsdfg.symbol_mapping[key]
 
         return nsdfg

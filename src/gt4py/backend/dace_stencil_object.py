@@ -28,9 +28,12 @@ from gt4py.stencil_object import FrozenStencil, StencilObject
 from gt4py.utils import shash
 
 
-def add_optional_fields(sdfg, field_info, parameter_info, **kwargs):
+def add_optional_fields(
+    sdfg: dace.SDFG, field_info: Dict[str, Any], parameter_info: Dict[str, Any], **kwargs: Any
+) -> dace.SDFG:
+    sdfg = copy.deepcopy(sdfg)
     for name, info in field_info.items():
-        if info.access == AccessKind.NONE and name in kwargs:
+        if info.access == AccessKind.NONE and name in kwargs and name not in sdfg.arrays:
             outer_array = kwargs[name]
             sdfg.add_array(
                 name,
@@ -40,7 +43,7 @@ def add_optional_fields(sdfg, field_info, parameter_info, **kwargs):
             )
 
     for name, info in parameter_info.items():
-        if info.access == AccessKind.NONE and name in kwargs:
+        if info.access == AccessKind.NONE and name in kwargs and name not in sdfg.symbols:
             if isinstance(kwargs[name], dace.data.Scalar):
                 sdfg.add_symbol(name, stype=kwargs[name].dtype)
             else:
