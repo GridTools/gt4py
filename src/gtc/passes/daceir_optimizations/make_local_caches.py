@@ -71,7 +71,9 @@ class FieldAccessRenamer(eve.NodeMutator):
             dcir.Memlet(
                 field=local_name_map[mem.field] if mem.field in local_name_map else mem.field,
                 access_info=mem.access_info,
-                connector=mem.connector,
+                connector=local_name_map[mem.connector]
+                if mem.connector is not None and mem.connector in local_name_map
+                else mem.connector,
                 is_read=mem.is_read,
                 is_write=mem.is_write,
                 other_grid_subset=mem.other_grid_subset,
@@ -93,8 +95,8 @@ class FieldAccessRenamer(eve.NodeMutator):
             computations=computations,
             schedule=node.schedule,
             grid_subset=node.grid_subset,
-            read_accesses=self._rename_memlets(node.read_memlets, local_name_map=local_name_map),
-            write_accesses=self._rename_memlets(node.write_memlets, local_name_map=local_name_map),
+            read_memlets=self._rename_memlets(node.read_memlets, local_name_map=local_name_map),
+            write_memlets=self._rename_memlets(node.write_memlets, local_name_map=local_name_map),
         )
 
     def visit_DomainLoop(self, node: dcir.DomainLoop, *, local_name_map):
@@ -103,8 +105,8 @@ class FieldAccessRenamer(eve.NodeMutator):
             index_range=node.index_range,
             loop_states=self.visit(node.loop_states, local_name_map=local_name_map),
             grid_subset=node.grid_subset,
-            read_accesses=self._rename_memlets(node.read_memlets, local_name_map=local_name_map),
-            write_accesses=self._rename_memlets(node.write_memlets, local_name_map=local_name_map),
+            read_memlets=self._rename_memlets(node.read_memlets, local_name_map=local_name_map),
+            write_memlets=self._rename_memlets(node.write_memlets, local_name_map=local_name_map),
         )
 
     def visit_NestedSDFG(self, node: dcir.NestedSDFG, *, local_name_map: Dict[str, str]):
@@ -117,8 +119,8 @@ class FieldAccessRenamer(eve.NodeMutator):
         return dcir.NestedSDFG(
             label=node.label,
             field_decls=node.field_decls,  # don't rename, this is inside
-            read_accesses=self._rename_memlets(node.read_memlets, local_name_map=local_name_map),
-            write_accesses=self._rename_memlets(node.write_memlets, local_name_map=local_name_map),
+            read_memlets=self._rename_memlets(node.read_memlets, local_name_map=local_name_map),
+            write_memlets=self._rename_memlets(node.write_memlets, local_name_map=local_name_map),
             symbol_decls=node.symbol_decls,
             states=node.states,
             name_map=name_map,
