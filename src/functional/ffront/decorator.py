@@ -35,6 +35,11 @@ from devtools import debug
 from eve.extended_typing import Any, Optional
 from eve.utils import UIDGenerator
 from functional.common import DimensionKind, GridType, GTTypeError
+from functional.fencil_processors.processor_interface import (
+    FencilExecutor,
+    FencilFormatter,
+    ensure_processor_kind,
+)
 from functional.fencil_processors.runners import roundtrip
 from functional.ffront import (
     common_types as ct,
@@ -52,12 +57,6 @@ from functional.ffront.past_passes.type_deduction import ProgramTypeDeduction
 from functional.ffront.past_to_itir import ProgramLowering
 from functional.ffront.source_utils import CapturedVars
 from functional.iterator import ir as itir
-from functional.iterator.processor_interface import (
-    FencilExecutor,
-    FencilFormatter,
-    ensure_executor,
-    ensure_formatter,
-)
 
 
 Scalar: TypeAlias = SupportsInt | SupportsFloat | np.int32 | np.int64 | np.float32 | np.float64
@@ -285,7 +284,7 @@ class Program:
             )
         backend = self.backend or DEFAULT_BACKEND
 
-        ensure_executor(backend)
+        ensure_processor_kind(backend, FencilExecutor)
         if "debug" in kwargs:
             debug(self.itir)
 
@@ -301,7 +300,7 @@ class Program:
     def format_itir(
         self, *args, formatter: FencilFormatter, offset_provider: dict[str, Dimension], **kwargs
     ) -> str:
-        ensure_formatter(formatter)
+        ensure_processor_kind(formatter, FencilFormatter)
         rewritten_args, size_args, kwargs = self._process_args(args, kwargs)
         if "debug" in kwargs:
             debug(self.itir)

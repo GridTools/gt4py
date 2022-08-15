@@ -3,8 +3,6 @@ from typing import Optional, Union
 from packaging.version import LegacyVersion, Version, parse
 from pkg_resources import DistributionNotFound, get_distribution  # type: ignore
 
-from . import tracing  # noqa: F401 # ignore unused
-
 
 __all__: list = []
 

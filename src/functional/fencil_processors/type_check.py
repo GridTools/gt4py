@@ -13,8 +13,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 
+from functional.fencil_processors.processor_interface import fencil_formatter
 from functional.iterator import type_inference
-from functional.iterator.processor_interface import fencil_formatter
 from functional.iterator.transforms import apply_common_transforms
 
 
