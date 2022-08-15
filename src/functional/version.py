@@ -12,17 +12,16 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from . import common, fencil_processors, ffront, iterator, type_inference, version
-from .version import VERSION as __version__, VERSION_INFO as __versioninfo__
+
+"""Version specification."""
 
 
-__all__ = [
-    "__version__",
-    "__versioninfo__",
-    "common",
-    "fencil_processors",
-    "ffront",
-    "iterator",
-    "type_inference",
-    "version",
-]
+from __future__ import annotations
+
+import typing
+
+from packaging import version as pkg_version
+
+
+VERSION: typing.Final = "0.1.0"
+VERSION_INFO: typing.Final = pkg_version.parse(VERSION)
