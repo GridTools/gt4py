@@ -98,11 +98,15 @@ class GTFNCodegen(codegen.TemplatedGenerator):
 
     CartesianDomain = as_fmt("cartesian_domain({tagged_sizes}, {tagged_offsets})")
     UnstructuredDomain = as_mako(
-        "unstructured_domain(${tagged_sizes}, ${tagged_offsets} ${',' if len(connectivities) else ''} ${','.join(f'at_key<{c}_t>(connectivities__)' for c in connectivities)})"
+        "unstructured_domain(${tagged_sizes}, ${tagged_offsets}, connectivities__...)"
     )
 
     def visit_OffsetLiteral(self, node: gtfn_ir.OffsetLiteral, **kwargs: Any) -> str:
         return node.value if isinstance(node.value, str) else f"{node.value}_c"
+
+    SidComposite = as_mako(
+        "sid::composite::keys<${','.join(f'gridtools::integral_constant<int,{i}>' for i in range(len(values)))}>::make_values(${','.join(values)})"
+    )
 
     def visit_FunCall(self, node: gtfn_ir.FunCall, **kwargs):
         if isinstance(node.fun, gtfn_ir.SymRef) and node.fun.id in self._builtins_mapping:
@@ -135,6 +139,21 @@ class GTFNCodegen(codegen.TemplatedGenerator):
     """
     )
 
+    TagDefinition = as_mako(
+        """
+        %if _this_node.alias:
+            %if isinstance(_this_node.alias, str):
+                using ${name}_t = ${alias};
+            %else:
+                using ${name}_t = ${alias}_t;
+            %endif
+        %else:
+            struct ${name}_t{};
+        %endif
+        constexpr inline ${name}_t ${name}{};
+        """
+    )
+
     def visit_FencilDefinition(
         self, node: gtfn_ir.FencilDefinition, **kwargs: Any
     ) -> Union[str, Collection[str]]:
@@ -151,19 +170,20 @@ class GTFNCodegen(codegen.TemplatedGenerator):
     #include <gridtools/fn/${grid_type_str}.hpp>
 
     namespace generated{
+    namespace{
     using namespace gridtools;
     using namespace fn;
     using namespace literals;
 
-    ${''.join('struct ' + o + '_t{};' for o in offset_declarations)}
-    ${''.join('constexpr inline ' + o + '_t ' + o + '{};' for o in offset_declarations)}
-    ${''.join(function_definitions)}
+    ${'\\n'.join(offset_definitions)}
+    ${'\\n'.join(function_definitions)}
 
-    inline auto ${id} = [](auto connectivities__){
-        return [connectivities__](auto backend, ${','.join('auto&& ' + p for p in params)}){
+    inline auto ${id} = [](auto... connectivities__){
+        return [connectivities__...](auto backend, ${','.join('auto&& ' + p for p in params)}){
             ${'\\n'.join(executions)}
         };
     };
+    }
     }
     """
     )

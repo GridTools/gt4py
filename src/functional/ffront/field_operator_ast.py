@@ -13,7 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 
-from typing import Generic, TypeVar, Union
+from typing import Any, Generic, Optional, TypeVar, Union
 
 from eve import Coerced, Node, SourceLocation, SymbolName, SymbolRef
 from eve.traits import SymbolTableTrait
@@ -33,7 +33,7 @@ SymbolT = TypeVar("SymbolT", bound=common_types.SymbolType)
 #       class Symbol(eve.GenericNode, LocatedNode, Generic[SymbolT]):
 #
 class Symbol(LocatedNode, Generic[SymbolT]):
-    id: Coerced[SymbolName]  # noqa: A003
+    id: Coerced[SymbolName]  # noqa: A003  # shadowing a python builtin
     type: Union[SymbolT, common_types.DeferredSymbolType]  # noqa A003
     namespace: common_types.Namespace = common_types.Namespace(common_types.Namespace.LOCAL)
 
@@ -50,18 +50,20 @@ ScalarSymbol = DataSymbol[ScalarTypeT]
 TupleTypeT = TypeVar("TupleTypeT", bound=common_types.TupleType)
 TupleSymbol = DataSymbol[TupleTypeT]
 
+DimensionTypeT = TypeVar("DimensionTypeT", bound=common_types.DimensionType)
+DimensionSymbol = DataSymbol[DimensionTypeT]
+
 
 class Expr(LocatedNode):
     type: common_types.SymbolType = common_types.DeferredSymbolType(constraint=None)  # noqa A003
 
 
 class Name(Expr):
-    id: Coerced[SymbolRef]  # noqa: A003
+    id: Coerced[SymbolRef]  # noqa: A003  # shadowing a python builtin
 
 
 class Constant(Expr):
-    value: str
-    dtype: Union[common_types.DataType, str]
+    value: Any  # TODO: be more specific
 
 
 class Subscript(Expr):
@@ -127,9 +129,12 @@ class BinOp(Expr):
 
 
 class CompareOperator(StrEnum):
-    GT = "greater"
-    LT = "less"
     EQ = "eq"
+    NOTEQ = "not_eq"
+    LT = "less"
+    LTE = "less_equal"
+    GT = "greater"
+    GTE = "greater_equal"
 
 
 class Compare(Expr):
@@ -161,8 +166,24 @@ class Return(Stmt):
     value: Expr
 
 
-class FieldOperator(LocatedNode, SymbolTableTrait):
-    id: Coerced[SymbolName]  # noqa: A003
+class FunctionDefinition(LocatedNode, SymbolTableTrait):
+    id: Coerced[SymbolName]  # noqa: A003  # shadowing a python builtin
     params: list[DataSymbol]
     body: list[Stmt]
     captured_vars: list[Symbol]
+    type: Optional[common_types.FunctionType] = None  # noqa A003  # shadowing a python builtin
+
+
+class FieldOperator(LocatedNode, SymbolTableTrait):
+    id: Coerced[SymbolName]  # noqa: A003  # shadowing a python builtin
+    definition: FunctionDefinition
+    type: Optional[common_types.FieldOperatorType] = None  # noqa A003  # shadowing a python builtin
+
+
+class ScanOperator(LocatedNode, SymbolTableTrait):
+    id: Coerced[SymbolName]  # noqa: A003 # shadowing a python builtin
+    axis: Constant
+    forward: Constant
+    init: Constant
+    definition: FunctionDefinition  # scan pass
+    type: Optional[common_types.ScanOperatorType] = None  # noqa A003 # shadowing a python builtin

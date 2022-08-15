@@ -70,6 +70,8 @@ def ensure_expr(literal_or_expr: Union[str, int, itir.Expr]) -> itir.Expr:
         return ref(literal_or_expr)
     elif isinstance(literal_or_expr, int):
         return itir.Literal(value=str(literal_or_expr), type="int")
+    elif isinstance(literal_or_expr, float):
+        return itir.Literal(value=str(literal_or_expr), type="float")
     return literal_or_expr
 
 
@@ -167,6 +169,21 @@ def greater_(left, right):
 def less_(left, right):
     """Create a less FunCall, shorthand for ``call("less")(left, right)``."""
     return call_("less")(left, right)
+
+
+def less_equal_(left, right):
+    """Create a less_equal FunCall, shorthand for ``call("less_equal")(left, right)``."""
+    return call_("less_equal")(left, right)
+
+
+def greater_equal_(left, right):
+    """Create a greater_equal_ FunCall, shorthand for ``call("greater_equal")(left, right)``."""
+    return call_("greater_equal")(left, right)
+
+
+def not_eq_(left, right):
+    """Create a not_eq_ FunCall, shorthand for ``call("not_eq_")(left, right)``."""
+    return call_("not_eq_")(left, right)
 
 
 def eq_(left, right):

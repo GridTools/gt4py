@@ -108,9 +108,7 @@ GT_REGRESSION_TEST(unstructured_nabla, test_environment<>, fn_backend_t) {
   auto vertex_domain = unstructured_domain({mesh.nvertices(), mesh.nlevels()},
                                            {}, v2e_conn, e2v_conn);
 
-  generated::nabla_fencil(
-      hymap::keys<generated::E2V_t, generated::V2E_t>::make_values(
-          e2v_conn, v2e_conn))(fn_backend_t{}, mesh.nvertices(), mesh.nlevels(),
+  generated::nabla_fencil(e2v_conn, v2e_conn)(fn_backend_t{}, mesh.nvertices(), mesh.nlevels(),
                                actual, pp_, s_, sign_, vol_);
 
   auto expected = make_expected(mesh);

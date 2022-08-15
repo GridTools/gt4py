@@ -79,19 +79,23 @@ def make_builtin_field_operator(builtin_name: str):
 
     foast_node = foast.FieldOperator(
         id=builtin_name + "_field_operator",
-        body=[
-            foast.Return(
-                value=foast.Call(
-                    func=foast.Name(id=builtin_name, location=loc),
-                    args=args,
-                    kwargs={},
+        definition=foast.FunctionDefinition(
+            id=builtin_name + "_field_operator",
+            body=[
+                foast.Return(
+                    value=foast.Call(
+                        func=foast.Name(id=builtin_name, location=loc),
+                        args=args,
+                        kwargs={},
+                        location=loc,
+                    ),
                     location=loc,
-                ),
-                location=loc,
-            )
-        ],
-        captured_vars=captured_vars_nodes,
-        params=params,
+                )
+            ],
+            captured_vars=captured_vars_nodes,
+            params=params,
+            location=loc,
+        ),
         location=loc,
     )
     typed_foast_node = FieldOperatorTypeDeduction.apply(foast_node)
