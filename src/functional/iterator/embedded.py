@@ -159,6 +159,8 @@ def can_deref(it):
 
 @builtins.if_.register(EMBEDDED)
 def if_(cond, t, f):
+    # ensure someone doesn't accidentally pass an iterator
+    assert not hasattr(cond, "shift")
     if _is_column(cond):
         return np.where(cond, t, f)
     return t if cond else f
@@ -187,6 +189,8 @@ def or_(a, b):
 
 @builtins.tuple_get.register(EMBEDDED)
 def tuple_get(i, tup):
+    if _is_column(tup):
+        return tup[f"f{i}"]
     return tup[i]
 
 
@@ -199,16 +203,23 @@ def make_tuple(*args):
 def lift(stencil):
     def impl(*args):
         class _WrappedIterator:
-            def __init__(self, *, offsets: list[OffsetPart] = None, elem=None) -> None:
+            def __init__(
+                self, stencil, args, *, offsets: list[OffsetPart] = None, elem=None
+            ) -> None:
+                assert not offsets or all(isinstance(o, (int, str)) for o in offsets)
+                self.stencil = stencil
+                self.args = args
                 self.offsets = offsets or []
                 self.elem = elem
 
             # TODO needs to be supported by all iterators that represent tuples
             def __getitem__(self, index):
-                return _WrappedIterator(offsets=self.offsets, elem=index)
+                return _WrappedIterator(self.stencil, self.args, offsets=self.offsets, elem=index)
 
             def shift(self, *offsets: OffsetPart):
-                return _WrappedIterator(offsets=[*self.offsets, *offsets], elem=self.elem)
+                return _WrappedIterator(
+                    self.stencil, self.args, offsets=[*self.offsets, *offsets], elem=self.elem
+                )
 
             def max_neighbors(self):
                 # TODO cleanup, test edge cases
@@ -217,7 +228,7 @@ def lift(stencil):
                 return _get_connectivity(args[0].offset_provider, open_offsets[0]).max_neighbors
 
             def _shifted_args(self):
-                return tuple(map(lambda arg: arg.shift(*self.offsets), args))
+                return tuple(map(lambda arg: arg.shift(*self.offsets), self.args))
 
             def can_deref(self):
                 shifted_args = self._shifted_args()
@@ -232,11 +243,11 @@ def lift(stencil):
                 shifted_args = self._shifted_args()
 
                 if self.elem is None:
-                    return stencil(*shifted_args)
+                    return self.stencil(*shifted_args)
                 else:
-                    return stencil(*shifted_args)[self.elem]
+                    return self.stencil(*shifted_args)[self.elem]
 
-        return _WrappedIterator()
+        return _WrappedIterator(stencil, args)
 
     return impl
 
@@ -395,7 +406,10 @@ def execute_shift(
         assert offset_implementation.origin_axis.value in pos
         new_pos = pos.copy()
         new_pos.pop(offset_implementation.origin_axis.value)
-        if offset_implementation.tbl[pos[offset_implementation.origin_axis.value], index] is None:
+        if offset_implementation.tbl[pos[offset_implementation.origin_axis.value], index] in [
+            None,
+            -1,
+        ]:
             return None
         else:
             new_pos[offset_implementation.neighbor_axis.value] = int(
@@ -749,11 +763,11 @@ def np_as_located_field(
 class IndexField(LocatedField):
     def __init__(self, axis: Dimension, dtype: npt.DTypeLike) -> None:
         self.axis = axis
-        self.dtype = np.dtype(dtype).type
+        self.dtype = np.dtype(dtype)
 
     def __getitem__(self, index: FieldIndexOrIndices) -> Any:
         assert isinstance(index, int) or (isinstance(index, tuple) and len(index) == 1)
-        return self.dtype(index if isinstance(index, int) else index[0])
+        return self.dtype.type(index if isinstance(index, int) else index[0])
 
     @property
     def axes(self) -> tuple[Dimension]:
@@ -980,7 +994,7 @@ def fendef_embedded(fun: Callable[..., None], *args: Any, **kwargs: Any):
 
         global _column_range
         column: Optional[ColumnDescriptor] = None
-        if kwargs.get("column_axis"):
+        if kwargs.get("column_axis") and kwargs["column_axis"].value in domain:
             column_axis = kwargs["column_axis"]
             column = ColumnDescriptor(column_axis.value, domain[column_axis.value])
             del domain[column_axis.value]
@@ -995,8 +1009,10 @@ def fendef_embedded(fun: Callable[..., None], *args: Any, **kwargs: Any):
                     inp,
                     pos,
                     kwargs["offset_provider"],
-                    column_axis=column.axis if column is not None else None,
+                    column_axis=column.axis if column else None,
                 )
+                if not isinstance(inp, numbers.Number)
+                else inp
                 for inp in ins
             )
             res = sten(*ins_iters)

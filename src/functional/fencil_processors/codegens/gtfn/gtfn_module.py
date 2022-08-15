@@ -20,7 +20,7 @@ import numpy
 from eve.codegen import format_source
 from functional.fencil_processors import source_modules
 from functional.fencil_processors.codegens.gtfn import gtfn_backend
-from functional.fencil_processors.processor_interface import fencil_generator
+from functional.fencil_processors.processor_interface import fencil_source_module_generator
 from functional.fencil_processors.source_modules import cpp_gen as cpp
 from functional.iterator.ir import FencilDefinition
 
@@ -37,7 +37,7 @@ def get_param_description(
         return source_modules.ScalarParameter(name, view.dtype)
 
 
-@fencil_generator
+@fencil_source_module_generator
 def create_source_module(
     itir: FencilDefinition,
     *args,

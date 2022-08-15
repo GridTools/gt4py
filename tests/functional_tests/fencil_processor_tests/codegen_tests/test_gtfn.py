@@ -59,8 +59,9 @@ def fencil_example():
             )
         ],
     )
+    IDim = Dimension("I")
     params = [
-        np_as_located_field(Dimension("I"))(numpy.empty((1,), dtype=numpy.float32)),
+        np_as_located_field(IDim)(numpy.empty((1,), dtype=numpy.float32)),
         numpy.float32(3.14),
     ]
     return itir, params
