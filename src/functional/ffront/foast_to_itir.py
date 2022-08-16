@@ -168,7 +168,18 @@ class FieldOperatorLowering(NodeTranslator):
         return cls().visit(node)
 
     def visit_FieldOperator(self, node: foast.FieldOperator, **kwargs) -> itir.FunctionDefinition:
-        return self.visit(node.definition, **kwargs)
+        func_definition: itir.FunctionDefinition = self.visit(node.definition, **kwargs)
+        new_body = func_definition.expr
+        for i, param in enumerate(func_definition.params):
+            if isinstance(node.definition.params[i].type, ct.ScalarType):
+                new_body = im.let(param.id, im.deref_(param.id))(new_body)
+
+        return itir.FunctionDefinition(
+            id=func_definition.id,
+            params=func_definition.params,
+            expr=new_body,
+        )
+        return itir.Lambda(params=func_definition.params, expr=new_body)
 
     def visit_FunctionDefinition(
         self, node: foast.FunctionDefinition, **kwargs
@@ -361,9 +372,22 @@ class FieldOperatorLowering(NodeTranslator):
             return visitor(node, **kwargs)
         elif node.func.id in TYPE_BUILTIN_NAMES:
             return self._visit_type_constr(node, **kwargs)
-        return self._lift_if_field(node)(
-            im.call_(self.visit(node.func, **kwargs))(*self.visit(node.args, **kwargs))
-        )
+
+        lowered_func = self.visit(node.func, **kwargs)
+        lowered_args = []
+        for arg in node.args:
+            lowered_arg = self.visit(arg, **kwargs)
+            # FieldOperator and ScanOperator only accept iterator arguments
+            # (such that all arguments are shift-able). Therefor promote all
+            #  value arguments to iterators.
+            if (
+                isinstance(lowered_func, (ct.FieldOperatorType, ct.ScanOperatorType))
+                and iterator_type_kind(arg.type) == ITIRTypeKind.VALUE
+            ):
+                lowered_arg = im.call_(im.lift_(im.lambda__()(lowered_arg)))()
+            lowered_args.append(lowered_arg)
+
+        return self._lift_if_field(node)(im.call_(lowered_func)(*lowered_args))
 
     def _visit_where(self, node: foast.Call, **kwargs) -> itir.FunCall:
         mask, left, right = (to_value(arg)(self.visit(arg, **kwargs)) for arg in node.args)

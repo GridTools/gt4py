@@ -74,7 +74,7 @@ def type_info_cases() -> list[tuple[Optional[ct.SymbolType], dict]]:
     ]
 
 
-def is_callable_cases():
+def accept_args_cases():
     # reuse all the other test cases
     not_callable = [
         (symbol_type, [], {}, [r"Expected a callable type, but got "])
@@ -85,9 +85,13 @@ def is_callable_cases():
     bool_type = ct.ScalarType(kind=ct.ScalarKind.BOOL)
     float_type = ct.ScalarType(kind=ct.ScalarKind.FLOAT64)
     int_type = ct.ScalarType(kind=ct.ScalarKind.INT64)
+    field_type = ct.FieldType(dims=[Dimension("I")], dtype=float_type)
     nullary_func_type = ct.FunctionType(args=[], kwargs={}, returns=ct.VoidType())
     unary_func_type = ct.FunctionType(args=[bool_type], kwargs={}, returns=ct.VoidType())
     kwarg_func_type = ct.FunctionType(args=[], kwargs={"foo": bool_type}, returns=ct.VoidType())
+    fieldop_type = ct.FieldOperatorType(
+        definition=ct.FunctionType(args=[field_type, float_type], kwargs={}, returns=field_type)
+    )
     scanop_type = ct.ScanOperatorType(
         axis=Dimension("K", kind=DimensionKind.VERTICAL),
         definition=ct.FunctionType(
@@ -128,6 +132,16 @@ def is_callable_cases():
             [r"Expected keyword argument foo to be of type bool, but got float64."],
         ),
         (kwarg_func_type, [], {"bar": bool_type}, [r"Got unexpected keyword argument\(s\) `bar`."]),
+        # field operator
+        (
+            fieldop_type,
+            [field_type, float_type],
+            {},
+            [
+                r"Expected 1-th argument to be of type float64, but got Field\[\[\], dtype=float64\]."
+            ],
+        ),
+        (fieldop_type, [field_type, field_type], {}, []),
         # scan operator
         (scanop_type, [], {}, [r"Scan operator takes 2 arguments, but 0 were given."]),
         (
@@ -188,15 +202,15 @@ def test_type_info_basic(symbol_type, expected):
         assert getattr(type_info, key)(symbol_type) == expected[key]
 
 
-@pytest.mark.parametrize("func_type,args,kwargs,expected", is_callable_cases())
-def test_is_callable(
+@pytest.mark.parametrize("func_type,args,kwargs,expected", accept_args_cases())
+def test_accept_args(
     func_type: ct.SymbolType,
     args: list[ct.SymbolType],
     kwargs: dict[str, ct.SymbolType],
     expected: list,
 ):
-    is_callable = len(expected) == 0
-    assert type_info.accepts_args(func_type, with_args=args, with_kwargs=kwargs) == is_callable
+    accepts_args = len(expected) == 0
+    assert type_info.accepts_args(func_type, with_args=args, with_kwargs=kwargs) == accepts_args
 
     if len(expected) > 0:
         with pytest.raises(

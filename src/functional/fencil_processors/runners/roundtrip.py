@@ -194,7 +194,7 @@ def executor(
     *args,
     column_axis: Optional[Dimension] = None,
     offset_provider: dict[str, NeighborTableOffsetProvider],
-    debug: bool = False,
+    debug: bool = True,
     use_tmps: bool = False,
     dispatch_backend: Optional[str] = None,
 ) -> None:
