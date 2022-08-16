@@ -53,7 +53,7 @@ from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduc
 from functional.ffront.foast_to_itir import FieldOperatorLowering
 from functional.ffront.func_to_foast import FieldOperatorParser
 from functional.ffront.func_to_past import ProgramParser
-from functional.ffront.past_passes.type_deduction import ProgramTypeDeduction
+from functional.ffront.past_passes.type_deduction import ProgramTypeDeduction, ProgramTypeError
 from functional.ffront.past_to_itir import ProgramLowering
 from functional.ffront.source_utils import CapturedVars
 from functional.iterator import ir as itir
@@ -313,13 +313,21 @@ class Program:
         )
 
     def _validate_args(self, *args, **kwargs) -> None:
-        # TODO(tehrengruber): better error messages, check argument types
-        if len(args) != len(self.past_node.params):
-            raise GTTypeError(
-                f"Function takes {len(self.past_node.params)} arguments, but {len(args)} were given."
-            )
         if kwargs:
             raise NotImplementedError("Keyword arguments are not supported yet.")
+
+        arg_types = [symbol_makers.make_symbol_type_from_value(arg) for arg in args]
+        kwarg_types = {k: symbol_makers.make_symbol_type_from_value(v) for k, v in kwargs.items()}
+
+        try:
+            type_info.accepts_args(self.past_node.type,
+                                   with_args=arg_types,
+                                   with_kwargs=kwarg_types,
+                                   raise_exception=True)
+        except GTTypeError as err:
+            raise ProgramTypeError.from_past_node(
+                self.past_node, msg=f"Invalid argument types in call to `{self.past_node.id}`!"
+            ) from err
 
     def _process_args(self, args: tuple, kwargs: dict) -> tuple[tuple, tuple, dict[str, Any]]:
         self._validate_args(*args, **kwargs)
@@ -554,6 +562,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
 
         untyped_past_node = past.Program(
             id=f"__field_operator_{name}",
+            type=ct.DeferredSymbolType(constraint=ct.ProgramType),
             params=params_decl + [out_sym],
             body=[
                 past.Call(

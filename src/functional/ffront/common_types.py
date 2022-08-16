@@ -129,3 +129,8 @@ class ScanOperatorType(SymbolType, CallableType):
 @dataclass(frozen=True)
 class FieldOperatorType(SymbolType, CallableType):
     definition: FunctionType
+
+
+@dataclass(frozen=True)
+class ProgramType(SymbolType, CallableType):
+    definition: FunctionType

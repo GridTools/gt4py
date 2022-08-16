@@ -21,6 +21,25 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
     def apply(cls, node: past.Program) -> past.Program:
         return cls().visit(node)
 
+    def visit_Program(self, node: past.Program, **kwargs):
+        params = self.visit(node.params, **kwargs)
+
+        definition_type = ct.FunctionType(
+            args=[param.type for param in params],
+            kwargs={},
+            returns=ct.VoidType()
+        )
+
+        return past.Program(
+            id=self.visit(node.id, **kwargs),
+            type=ct.ProgramType(definition=definition_type),
+            params=params,
+            body=self.visit(node.body, **kwargs),
+            captured_vars=self.visit(node.captured_vars, **kwargs),
+            location=node.location
+        )
+
+
     def visit_Subscript(self, node: past.Subscript, **kwargs):
         value = self.visit(node.value, **kwargs)
         return past.Subscript(
