@@ -5,15 +5,16 @@ import pytest
 import functional.fencil_processors.formatters.gtfn
 from functional.fencil_processors import type_check
 from functional.fencil_processors.formatters import lisp
+from functional.fencil_processors.processor_interface import (
+    FencilExecutor,
+    FencilFormatter,
+    fencil_formatter,
+    is_processor_kind,
+)
 from functional.fencil_processors.runners import double_roundtrip, gtfn_cpu, roundtrip
 from functional.iterator import ir as itir
 from functional.iterator.pretty_parser import pparse
 from functional.iterator.pretty_printer import pformat
-from functional.iterator.processor_interface import (
-    FencilExecutor,
-    FencilFormatter,
-    fencil_formatter,
-)
 from functional.iterator.runtime import FendefDispatcher
 from functional.iterator.transforms import LiftMode
 
@@ -69,9 +70,9 @@ def run_processor(
     *args,
     **kwargs,
 ) -> None:
-    if processor is None or isinstance(processor, FencilExecutor):
+    if processor is None or is_processor_kind(processor, FencilExecutor):
         fencil(*args, backend=processor, **kwargs)
-    elif isinstance(processor, FencilFormatter):
+    elif is_processor_kind(processor, FencilFormatter):
         print(fencil.format_itir(*args, formatter=processor, **kwargs))
     else:
         raise TypeError(f"fencil processor kind not recognized: {processor}!")

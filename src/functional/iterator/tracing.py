@@ -269,6 +269,3 @@ def trace(fun, args):
 
 def fendef_tracing(fun, *args, **kwargs) -> FencilDefinition:
     return trace(fun, args=args)
-
-
-iterator.runtime.fendef_codegen = fendef_tracing

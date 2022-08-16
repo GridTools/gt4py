@@ -16,8 +16,8 @@
 from typing import Any
 
 from eve.codegen import FormatTemplate as as_fmt, TemplatedGenerator
+from functional.fencil_processors.processor_interface import fencil_formatter
 from functional.iterator import ir as itir
-from functional.iterator.processor_interface import fencil_formatter
 from functional.iterator.transforms import apply_common_transforms
 
 

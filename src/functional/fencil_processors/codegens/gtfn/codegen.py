@@ -194,6 +194,7 @@ class GTFNCodegen(codegen.TemplatedGenerator):
     #include <gridtools/fn/${grid_type_str}.hpp>
 
     namespace generated{
+    namespace{
     using namespace gridtools;
     using namespace fn;
     using namespace literals;
@@ -208,6 +209,7 @@ class GTFNCodegen(codegen.TemplatedGenerator):
             ${'\\n'.join(executions)}
         };
     };
+    }
     }
     """
     )

@@ -24,9 +24,9 @@ from eve import codegen
 from eve.codegen import FormatTemplate as as_fmt, MakoTemplate as as_mako
 from eve.concepts import Node
 from functional.common import Dimension
+from functional.fencil_processors.processor_interface import fencil_executor
 from functional.iterator import ir as itir
 from functional.iterator.embedded import NeighborTableOffsetProvider
-from functional.iterator.processor_interface import fencil_executor
 from functional.iterator.transforms import LiftMode, apply_common_transforms
 from functional.iterator.transforms.global_tmps import FencilWithTemporaries
 
