@@ -66,7 +66,7 @@ def test_shift_by_one_execution(fieldview_backend):
     in_field = np_as_located_field(IDim)(np.arange(0, size, 1, dtype=np.float64))
     out_field = np_as_located_field(IDim)(np.zeros((size)))
     out_field_ref = np_as_located_field(IDim)(
-        np.array([i + 1. if i in range(0, size - 1) else 0 for i in range(0, size)])
+        np.array([i + 1.0 if i in range(0, size - 1) else 0 for i in range(0, size)])
     )
 
     @field_operator
@@ -78,9 +78,7 @@ def test_shift_by_one_execution(fieldview_backend):
     # shift_by_one(in_field, out=out_field[:-1], offset_provider={"Ioff": IDim})
 
     @program
-    def shift_by_one_program(
-        in_field: Field[[IDim], float64], out_field: Field[[IDim], float64]
-    ):
+    def shift_by_one_program(in_field: Field[[IDim], float64], out_field: Field[[IDim], float64]):
         shift_by_one(in_field, out=out_field[:-1])
 
     shift_by_one_program.with_backend(fieldview_backend)(
@@ -226,7 +224,7 @@ def test_wrong_argument_type(fieldview_backend, copy_program_def):
         "- Expected 0-th argument to be of type Field\[\[IDim], dtype=float64\],"
         " but got Field\[\[JDim\], dtype=float64\].",
         "- Expected 1-th argument to be of type Field\[\[IDim], dtype=float64\],"
-        " but got Field\[\[JDim\], dtype=float64\]."
+        " but got Field\[\[JDim\], dtype=float64\].",
     ]
     for msg in msgs:
         assert re.search(msg, exc_info.value.__context__.args[0]) is not None

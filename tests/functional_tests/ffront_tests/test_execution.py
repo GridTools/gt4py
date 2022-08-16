@@ -486,7 +486,7 @@ def test_scalar_arg_with_field(fieldview_backend):
     EdgeOffset = FieldOffset("EdgeOffset", source=Edge, target=(Edge,))
     size = 5
     inp = index_field(Edge)
-    factor = 3.
+    factor = 3.0
     out = np_as_located_field(Edge)(np.zeros((size), dtype=np.float64))
 
     @field_operator
