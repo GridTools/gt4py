@@ -24,5 +24,5 @@ import typing
 from packaging import version as pkg_version
 
 
-VERSION: typing.Final = "0.1.1"
-VERSION_INFO: typing.Final = pkg_version.parse(VERSION)
+__version__: typing.Final = "0.1.1"
+__version_info__: typing.Final = pkg_version.parse(__version__)

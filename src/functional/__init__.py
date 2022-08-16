@@ -13,12 +13,12 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from . import common, fencil_processors, ffront, iterator, type_inference, version
-from .version import VERSION as __version__, VERSION_INFO as __versioninfo__
+from .version import __version__, __version_info__
 
 
 __all__ = [
     "__version__",
-    "__versioninfo__",
+    "__version_info__",
     "common",
     "fencil_processors",
     "ffront",

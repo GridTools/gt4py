@@ -19,14 +19,14 @@ import functional
 
 
 def test_version():
-    assert isinstance(functional.version.VERSION, str)
-    assert all(len(p) for p in functional.version.VERSION.split("."))
-    assert functional.version.VERSION == functional.__version__
+    assert isinstance(functional.version.__version__, str)
+    assert all(len(p) for p in functional.version.__version__.split("."))
+    assert functional.version.__version__ == functional.__version__
 
 
 def test_version_info():
     from packaging.version import Version
 
-    assert isinstance(functional.version.VERSION_INFO, Version)
-    assert (0, 1) <= functional.version.VERSION_INFO.release < (0, 2)
-    assert functional.version.VERSION_INFO == functional.__versioninfo__
+    assert isinstance(functional.version.__version_info__, Version)
+    assert (0, 1) <= functional.version.__version_info__.release < (0, 2)
+    assert functional.version.__version_info__ == functional.__version_info__
