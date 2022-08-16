@@ -34,6 +34,7 @@ from functional.iterator.embedded import np_as_located_field
 from .past_common_fixtures import (
     IDim,
     Ioff,
+    JDim,
     copy_program_def,
     copy_restrict_program_def,
     double_copy_program_def,
@@ -62,14 +63,14 @@ def test_identity_fo_execution(fieldview_backend, identity_def):
 
 def test_shift_by_one_execution(fieldview_backend):
     size = 10
-    in_field = np_as_located_field(IDim)(np.arange(0, size, 1))
+    in_field = np_as_located_field(IDim)(np.arange(0, size, 1, dtype=np.float64))
     out_field = np_as_located_field(IDim)(np.zeros((size)))
     out_field_ref = np_as_located_field(IDim)(
-        np.array([i + 1 if i in range(0, size - 1) else 0 for i in range(0, size)])
+        np.array([i + 1. if i in range(0, size - 1) else 0 for i in range(0, size)])
     )
 
     @field_operator
-    def shift_by_one(in_field: Field[[IDim], "float64"]) -> Field[[IDim], "float64"]:
+    def shift_by_one(in_field: Field[[IDim], float64]) -> Field[[IDim], float64]:
         return in_field(Ioff[1])
 
     # direct call to field operator
@@ -78,7 +79,7 @@ def test_shift_by_one_execution(fieldview_backend):
 
     @program
     def shift_by_one_program(
-        in_field: Field[[IDim], "float64"], out_field: Field[[IDim], "float64"]
+        in_field: Field[[IDim], float64], out_field: Field[[IDim], float64]
     ):
         shift_by_one(in_field, out=out_field[:-1])
 
@@ -207,3 +208,25 @@ def test_tuple_program_return_constructed_inside_nested(fieldview_backend):
 
     assert np.allclose(a, out_a)
     assert np.allclose(b, out_b)
+
+
+def test_wrong_argument_type(fieldview_backend, copy_program_def):
+    size = 10
+    inp = np_as_located_field(JDim)(np.ones((size,)))
+    out = np_as_located_field(JDim)(np.zeros((size,)))
+
+    copy_program = program(copy_program_def, backend=fieldview_backend)
+
+    with pytest.raises(ProgramTypeError) as exc_info:
+        # program is defined on Field[[IDim], ...], but we call with
+        #  Field[[JDim], ...]
+        copy_program(inp, out, offset_provider={})
+
+    msgs = [
+        "- Expected 0-th argument to be of type Field\[\[IDim], dtype=float64\],"
+        " but got Field\[\[JDim\], dtype=float64\].",
+        "- Expected 1-th argument to be of type Field\[\[IDim], dtype=float64\],"
+        " but got Field\[\[JDim\], dtype=float64\]."
+    ]
+    for msg in msgs:
+        assert re.search(msg, exc_info.value.__context__.args[0]) is not None

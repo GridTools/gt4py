@@ -45,7 +45,7 @@ The following snippet imports the most commonly used features that are needed to
 import numpy as np
 
 from functional.common import DimensionKind
-from functional.ffront.fbuiltins import Dimension, Field, float32, FieldOffset, neighbor_sum
+from functional.ffront.fbuiltins import Dimension, Field, float64, FieldOffset, neighbor_sum
 from functional.ffront.decorator import field_operator, program
 from functional.iterator.embedded import np_as_located_field, NeighborTableOffsetProvider
 ```
@@ -64,8 +64,8 @@ grid_shape = (num_cells, num_layers)
 
 a_value = 2.0
 b_value = 3.0
-a = np_as_located_field(CellDim, KDim)(np.full(shape=grid_shape, fill_value=a_value, dtype=np.float32))
-b = np_as_located_field(CellDim, KDim)(np.full(shape=grid_shape, fill_value=b_value, dtype=np.float32))
+a = np_as_located_field(CellDim, KDim)(np.full(shape=grid_shape, fill_value=a_value, dtype=np.float64))
+b = np_as_located_field(CellDim, KDim)(np.full(shape=grid_shape, fill_value=b_value, dtype=np.float64))
 ```
 
 *Note: The interface to construct fields is provisional only and will change soon.*
@@ -80,8 +80,8 @@ Let's see an example for a field operator that adds two fields elementwise:
 
 ```{code-cell} ipython3
 @field_operator
-def add(a: Field[[CellDim, KDim], float32],
-        b: Field[[CellDim, KDim], float32]) -> Field[[CellDim, KDim], float32]:
+def add(a: Field[[CellDim, KDim], float64],
+        b: Field[[CellDim, KDim], float64]) -> Field[[CellDim, KDim], float64]:
     return a + b
 ```
 
@@ -104,9 +104,9 @@ This example program below calls the above elementwise addition field operator t
 
 ```{code-cell} ipython3
 @program
-def run_add(a : Field[[CellDim, KDim], float32],
-            b : Field[[CellDim, KDim], float32],
-            result : Field[[CellDim, KDim], float32]):
+def run_add(a : Field[[CellDim, KDim], float64],
+            b : Field[[CellDim, KDim], float64],
+            result : Field[[CellDim, KDim], float64]):
     add(a, b, out=result)
     add(b, result, out=result)
 ```
@@ -235,11 +235,11 @@ Pay attention to the syntax where the field offset `E2C` can be freely accessed 
 
 ```{code-cell} ipython3
 @field_operator
-def nearest_cell_to_edge(cell_values: Field[[CellDim], float32]) -> Field[[EdgeDim], float32]:
+def nearest_cell_to_edge(cell_values: Field[[CellDim], float64]) -> Field[[EdgeDim], float64]:
     return cell_values(E2C[0])
 
 @program
-def run_nearest_cell_to_edge(cell_values: Field[[CellDim], float32], out : Field[[EdgeDim], float32]):
+def run_nearest_cell_to_edge(cell_values: Field[[CellDim], float64], out : Field[[EdgeDim], float64]):
     nearest_cell_to_edge(cell_values, out=out)
 
 run_nearest_cell_to_edge(cell_values, edge_values, offset_provider={"E2C": E2C_offset_provider})
@@ -261,12 +261,12 @@ Similarly to the previous example, the output is once again a field on edges. Th
 
 ```{code-cell} ipython3
 @field_operator
-def sum_adjacent_cells(cells : Field[[CellDim], float32]) -> Field[[EdgeDim], float32]:
-    # type of cells(E2C) is Field[[CellDim, E2CDim], float32]
+def sum_adjacent_cells(cells : Field[[CellDim], float64]) -> Field[[EdgeDim], float64]:
+    # type of cells(E2C) is Field[[CellDim, E2CDim], float64]
     return neighbor_sum(cells(E2C), axis=E2CDim)
 
 @program
-def run_sum_adjacent_cells(cells : Field[[CellDim], float32], out : Field[[EdgeDim], float32]):
+def run_sum_adjacent_cells(cells : Field[[CellDim], float64], out : Field[[EdgeDim], float64]):
     sum_adjacent_cells(cells, out=out)
     
 run_sum_adjacent_cells(cell_values, edge_values, offset_provider={"E2C": E2C_offset_provider})
@@ -329,9 +329,9 @@ The second lines first creates a temporary field using `edge_differences(C2E)`, 
 
 ```{code-cell} ipython3
 @field_operator
-def pseudo_lap(cells : Field[[CellDim], float32],
-               edge_weights : Field[[CellDim, C2EDim], float32]) -> Field[[CellDim], float32]:
-    edge_differences = cells(E2C[0]) - cells(E2C[1]) # type: Field[[EdgeDim], float32]
+def pseudo_lap(cells : Field[[CellDim], float64],
+               edge_weights : Field[[CellDim, C2EDim], float64]) -> Field[[CellDim], float64]:
+    edge_differences = cells(E2C[0]) - cells(E2C[1]) # type: Field[[EdgeDim], float64]
     return neighbor_sum(edge_differences(C2E) * edge_weights, axis=C2EDim)
 ```
 
@@ -339,9 +339,9 @@ The program itself is just a shallow wrapper over the `pseudo_lap` field operato
 
 ```{code-cell} ipython3
 @program
-def run_pseudo_laplacian(cells : Field[[CellDim], float32],
-                         edge_weights : Field[[CellDim, C2EDim], float32],
-                         out : Field[[CellDim], float32]):
+def run_pseudo_laplacian(cells : Field[[CellDim], float64],
+                         edge_weights : Field[[CellDim, C2EDim], float64],
+                         out : Field[[CellDim], float64]):
     pseudo_lap(cells, edge_weights, out=out)
 
 result_pseudo_lap = np_as_located_field(CellDim)(np.zeros(shape=(6,)))
@@ -358,7 +358,7 @@ As a closure, here is an example of chaining field operators, which is very simp
 
 ```{code-cell} ipython3
 @field_operator
-def pseudo_laplap(cells : Field[[CellDim], float32],
-                  edge_weights : Field[[CellDim, C2EDim], float32]) -> Field[[CellDim], float32]:
+def pseudo_laplap(cells : Field[[CellDim], float64],
+                  edge_weights : Field[[CellDim, C2EDim], float64]) -> Field[[CellDim], float64]:
     return pseudo_lap(pseudo_lap(cells, edge_weights), edge_weights)
 ```
