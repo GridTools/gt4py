@@ -19,14 +19,14 @@ import eve
 
 
 def test_version():
-    assert isinstance(eve.version.VERSION, str)
-    assert all(len(p) for p in eve.version.VERSION.split("."))
-    assert eve.version.VERSION == eve.__version__
+    assert isinstance(eve.version.__version__, str)
+    assert all(len(p) for p in eve.version.__version__.split("."))
+    assert eve.version.__version__ == eve.__version__
 
 
 def test_version_info():
     from packaging.version import Version
 
-    assert isinstance(eve.version.VERSION_INFO, Version)
-    assert (0, 0) <= eve.version.VERSION_INFO.release < (0, 1)
-    assert eve.version.VERSION_INFO == eve.__versioninfo__
+    assert isinstance(eve.version.__version_info__, Version)
+    assert (0, 0) <= eve.version.__version_info__.release < (0, 1)
+    assert eve.version.__version_info__ == eve.__version_info__

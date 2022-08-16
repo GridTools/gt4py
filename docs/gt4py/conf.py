@@ -49,7 +49,7 @@ description = "Python API of the GridTools framework to develop performance port
 # built documents.
 
 # The short X.Y.Z version.
-version = gt4py.__versioninfo__.base_version
+version = gt4py.__version_info__.base_version
 
 # The full version, including alpha/beta/rc tags
 release = gt4py.__version__

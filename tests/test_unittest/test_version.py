@@ -19,14 +19,14 @@ import gt4py
 
 
 def test_version():
-    assert isinstance(gt4py.version.VERSION, str)
-    assert all(len(p) for p in gt4py.version.VERSION.split("."))
-    assert gt4py.version.VERSION == gt4py.__version__
+    assert isinstance(gt4py.version.__version__, str)
+    assert all(len(p) for p in gt4py.version.__version__.split("."))
+    assert gt4py.version.__version__ == gt4py.__version__
 
 
 def test_version_info():
     from packaging.version import Version
 
-    assert isinstance(gt4py.version.VERSION_INFO, Version)
-    assert (0, 0) <= gt4py.version.VERSION_INFO.release < (0, 1)
-    assert gt4py.version.VERSION_INFO == gt4py.__versioninfo__
+    assert isinstance(gt4py.version.__version_info__, Version)
+    assert (0, 0) <= gt4py.version.__version_info__.release < (0, 1)
+    assert gt4py.version.__version_info__ == gt4py.__version_info__
