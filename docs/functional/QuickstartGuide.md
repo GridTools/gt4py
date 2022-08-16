@@ -316,7 +316,7 @@ edge_weights = np.array([
     [0, -1, 1],  # cell 3
     [0, -1, 1],  # cell 4
     [0, -1, -1], # cell 5
-])
+], dtype=np.float64)
 
 edge_weight_field = np_as_located_field(CellDim, C2EDim)(edge_weights)
 ```
