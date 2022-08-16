@@ -15,12 +15,16 @@ AUTO_DOMAIN = ir.SymRef(id="_gtmp_auto_domain")
 
 
 class Temporary(ir.Node):
+    """Iterator IR extension: declaration of a temporary buffer."""
+
     id: Coerced[ir.SymbolName]  # noqa: A003
     domain: Optional[ir.Expr] = None
     dtype: Optional[Any] = None
 
 
 class FencilWithTemporaries(ir.Node, SymbolTableTrait):
+    """Iterator IR extension: declaration of a fencil with temporary buffers."""
+
     fencil: ir.FencilDefinition
     params: list[ir.Sym]
     tmps: list[Temporary]
@@ -75,22 +79,39 @@ PrettyPrinter.visit_FencilWithTemporaries = pformat_FencilWithTemporaries  # typ
 
 
 def split_closures(node: ir.FencilDefinition) -> FencilWithTemporaries:
+    """Split closures on lifted function calls and introduce new temporary buffers for return values.
+
+    Newly introduced temporaries will have the symbolic size of `AUTO_DOMAIN`. A symbol with the
+    same name is also added as a fencil argument (to be replaced at a later stage).
+
+    For each closure, follows these steps:
+    1. Pops up lifted function calls to the top of the expression tree.
+    2. Introduce new temporary for the output.
+    3. Extract lifted function class as new closures with the previously created temporary as output.
+    The closures are processed in reverse order to properly respect the dependencies.
+    """
     tmps: list[ir.SymRef] = []
 
     def handle_arg(arg):
+        """Handle arguments of closure calls: extract lifted function calls.
+
+        Lifted function calls, do:
+        1. Replace the call by a new symbol ref, put this into `tmps`.
+        2. Put the ‘unlifted’ function call to the stack of stencil calls that still have to be
+        processed.
+        """
         if isinstance(arg, ir.SymRef):
             return arg
         if (
             isinstance(arg, ir.FunCall)
             and isinstance(arg.fun, ir.FunCall)
-            and isinstance(arg.fun.fun, ir.SymRef)
-            and arg.fun.fun.id == "lift"
+            and arg.fun.fun == ir.SymRef(id="lift")
         ):
             assert len(arg.fun.args) == 1
             ref = ir.SymRef(id=f"_gtmp_{len(tmps)}")
             tmps.append(ir.Sym(id=ref.id))
             unlifted = ir.FunCall(fun=arg.fun.args[0], args=arg.args)
-            todos.append((ref, unlifted))
+            stencil_stack.append((ref, unlifted))
             return ref
         raise AssertionError()
 
@@ -99,10 +120,10 @@ def split_closures(node: ir.FencilDefinition) -> FencilWithTemporaries:
         wrapped_stencil = ir.FunCall(fun=closure.stencil, args=closure.inputs)
         popped_stencil = PopupTmps().visit(wrapped_stencil)
 
-        todos = [(closure.output, popped_stencil)]
+        stencil_stack = [(closure.output, popped_stencil)]
         domain = closure.domain
-        while todos:
-            output, call = todos.pop()
+        while stencil_stack:
+            output, call = stencil_stack.pop()
             closure = ir.StencilClosure(
                 domain=domain,
                 stencil=call.fun,
@@ -116,9 +137,7 @@ def split_closures(node: ir.FencilDefinition) -> FencilWithTemporaries:
         fencil=ir.FencilDefinition(
             id=node.id,
             function_definitions=node.function_definitions,
-            params=node.params
-            + [ir.Sym(id=tmp.id) for tmp in tmps]
-            + [ir.Sym(id="_gtmp_auto_domain")],
+            params=node.params + [ir.Sym(id=tmp.id) for tmp in tmps] + [ir.Sym(id=AUTO_DOMAIN.id)],
             closures=list(reversed(closures)),
         ),
         params=node.params,
@@ -127,6 +146,7 @@ def split_closures(node: ir.FencilDefinition) -> FencilWithTemporaries:
 
 
 def _collect_stencil_shifts(stencil, return_params=False):
+    """Collect shift offsets applied within a stencil, correctly handling scans."""
     if isinstance(stencil, ir.FunCall) and stencil.fun == ir.SymRef(id="scan"):
         # get params of scan function, but ignore accumulator
         fun = stencil.args[0]
@@ -143,6 +163,11 @@ def _collect_stencil_shifts(stencil, return_params=False):
 
 
 def update_cartesian_domains(node: FencilWithTemporaries, offset_provider) -> FencilWithTemporaries:
+    """Replace appearances of `AUTO_DOMAIN` by concrete domain sizes.
+
+    Naive extent analysis, does not handle boundary conditions etc. in a smart way.
+    """
+
     def extend(domain, shifts):
         if not any(shifts):
             return domain
@@ -232,6 +257,7 @@ def update_cartesian_domains(node: FencilWithTemporaries, offset_provider) -> Fe
 
 
 def update_unstructured_domains(node: FencilWithTemporaries, offset_provider):
+    """Replace appearances of `AUTO_DOMAIN` by concrete domain sizes."""
     known_domains = {
         closure.output.id: closure.domain
         for closure in node.fencil.closures
@@ -291,6 +317,7 @@ def update_unstructured_domains(node: FencilWithTemporaries, offset_provider):
 
 
 def collect_tmps_info(node: FencilWithTemporaries):
+    """Perform type inference for finding the types of temporaries."""
     tmps = {tmp.id for tmp in node.tmps}
     domains: dict[str, ir.Expr] = {
         closure.output.id: closure.domain
@@ -336,11 +363,16 @@ class CreateGlobalTmps(NodeTranslator):
     def visit_FencilDefinition(
         self, node: ir.FencilDefinition, *, offset_provider
     ) -> FencilWithTemporaries:
+        # Split closures on lifted function calls and introduce temporaries
         res = split_closures(node)
+        # Prune unreferences closure inputs introduced in the previous step
         res = PruneClosureInputs().visit(res)
+        # Perform an eta-reduction which should put all calls at the highest level of a closure
         res = EtaReduction().visit(res)
+        # Perform a naive extent analysis to compute domain sizes of closures and temporaries
         if all(isinstance(o, CartesianAxis) for o in offset_provider.values()):
             res = update_cartesian_domains(res, offset_provider)
         else:
             res = update_unstructured_domains(res, offset_provider)
+        # Use type inference to determine the data type of the temporaries
         return collect_tmps_info(res)
