@@ -377,9 +377,7 @@ class FieldOperatorLowering(NodeTranslator):
         lowered_args = []
         for arg in node.args:
             lowered_arg = self.visit(arg, **kwargs)
-            # FieldOperator and ScanOperator only accept iterator arguments
-            # (such that all arguments are shift-able). Therefor promote all
-            #  value arguments to iterators.
+            # ensure all arguments are iterators
             if (
                 isinstance(lowered_func, (ct.FieldOperatorType, ct.ScanOperatorType))
                 and iterator_type_kind(arg.type) == ITIRTypeKind.VALUE
