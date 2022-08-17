@@ -24,6 +24,7 @@ from typing import (
 )
 
 import numpy as np
+import numpy.lib.mixins
 import numpy.typing as npt
 
 from functional import iterator
@@ -48,8 +49,6 @@ FieldAxis: TypeAlias = (
 )  # TODO Offset should be removed, is sometimes used for sparse dimensions
 TupleAxis: TypeAlias = NoneType
 Axis: TypeAlias = FieldAxis | TupleAxis
-
-Column: TypeAlias = np.ndarray  # TODO consider replacing by a wrapper around ndarray
 
 
 class SparseTag(Tag):
@@ -143,8 +142,33 @@ class MutableLocatedField(LocatedField, Protocol):
         ...
 
 
-def _is_column(v: Any) -> TypeGuard[Column]:
-    return isinstance(v, np.ndarray)
+class Column(numpy.lib.mixins.NDArrayOperatorsMixin):
+    def __init__(self, kstart: int, data: np.ndarray):
+        self.kstart = kstart
+        self.data = data
+
+    def __getitem__(self, i: int):
+        return self.data[i - self.kstart]
+
+    def tuple_get(self, i: int):
+        if self.data.dtype.names is not None:
+            return Column(self.kstart, self.data[f"f{i}"])
+        else:
+            return Column(self.kstart, self.data[i, ...])
+
+    def __setitem__(self, i: int, v: Any):
+        self.data[i - self.kstart] = v
+
+    def __array__(self, dtype=None) -> np.ndarray:
+        return self.data if dtype is None or dtype == self.data.dtype else self.data.astype(dtype)
+
+    def __array_function__(self, func, types, args, kwargs):
+        assert all(issubclass(t, self.__class__) for t in types)
+        return self.__class__(self.kstart, func(*(arg.data for arg in args), **kwargs))
+
+
+def _make_column(column_range: range, dtype=np.dtype):
+    return Column(min(column_range), np.zeros(len(column_range), dtype=dtype))
 
 
 @builtins.deref.register(EMBEDDED)
@@ -161,36 +185,36 @@ def can_deref(it):
 def if_(cond, t, f):
     # ensure someone doesn't accidentally pass an iterator
     assert not hasattr(cond, "shift")
-    if _is_column(cond):
+    if isinstance(cond, Column):
         return np.where(cond, t, f)
     return t if cond else f
 
 
 @builtins.not_.register(EMBEDDED)
 def not_(a):
-    if _is_column(a):
-        return np.logical_not(a)
+    if isinstance(a, Column):
+        return np.logical_not(a.data)
     return not a
 
 
 @builtins.and_.register(EMBEDDED)
 def and_(a, b):
-    if _is_column(a):
+    if isinstance(a, Column):
         return np.logical_and(a, b)
     return a and b
 
 
 @builtins.or_.register(EMBEDDED)
 def or_(a, b):
-    if _is_column(a):
+    if isinstance(a, Column):
         return np.logical_or(a, b)
     return a or b
 
 
 @builtins.tuple_get.register(EMBEDDED)
 def tuple_get(i, tup):
-    if _is_column(tup):
-        return tup[f"f{i}"]
+    if isinstance(tup, Column):
+        return tup.tuple_get(i)
     return tup[i]
 
 
@@ -534,7 +558,11 @@ def _make_tuple(
     if isinstance(field_or_tuple, tuple):
         return tuple(_make_tuple(f, indices) for f in field_or_tuple)
     else:
-        return field_or_tuple[indices]
+        data = field_or_tuple[indices]
+        if isinstance(data, np.ndarray):
+            return Column(0, data)
+        else:
+            return data
 
 
 # TODO(havogt) frozen dataclass
@@ -948,13 +976,9 @@ def scan(scan_pass, is_forward: bool, init):
         if _column_range is None:
             raise RuntimeError("Column range is not defined, cannot scan.")
 
-        levels = len(_column_range)
         column_range = _column_range if is_forward else reversed(_column_range)
-
-        dtype = _column_dtype(init)
-
         state = init
-        col = np.zeros(levels, dtype=dtype)
+        col = _make_column(_column_range, _column_dtype(init))
         for i in column_range:
             state = scan_pass(state, *map(shifted_scan_arg(i), iters))
             col[i] = state
