@@ -110,7 +110,6 @@ The main goal of this project is to implement the complete pipeline from FieldVi
 ### Build system project
 
 The `fencil_processors.builders.cpp.build.CMakeProject` class design should not be considered final because of the following pitfalls:
-- the state of the project (i.e. is written to file, is configured, is built) cannot be queried explicitly
 - the blocking `configure` and `build` functions may need to be converted to asynchronous operations to support parallel compilation of multiple fencils
 - support needs to be added to switch between debug and release builds, as well as to conditionally enable debug information for release builds
 - support needs to be added to enable compiler optimizations and tuning for target hardware
