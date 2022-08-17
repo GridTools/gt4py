@@ -142,8 +142,10 @@ def test_origin_offsetting_frozen(dace_stencil, domain, outp_origin):
 @pytest.mark.parametrize("outp_origin", [(0, 0, 0), (7, 7, 7), (2, 2, 0)])
 def test_origin_offsetting_nofrozen(dace_stencil, domain, outp_origin):
 
-    if domain == (3, 3, 3) and outp_origin == (7, 7, 7) and dace_stencil.backend == "daint:gpu":
-        pytest.skip("Random failures on daint-ci, see github issue #848.")
+    if dace_stencil.backend == "daint:gpu":
+        pytest.skip(
+            "Random failures on daint-ci, see https://github.com/GridTools/gt4py/issues/848."
+        )
 
     backend = dace_stencil.backend
     inp = gt_storage.from_array(
