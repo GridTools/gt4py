@@ -27,7 +27,6 @@ import typing
 import warnings
 from collections.abc import Callable, Iterable
 from typing import Generic, SupportsFloat, SupportsInt, TypeAlias, TypeVar
-from typing import Callable, Iterable, cast
 
 import numpy as np
 from devtools import debug
@@ -53,10 +52,10 @@ from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduc
 from functional.ffront.foast_to_itir import FieldOperatorLowering
 from functional.ffront.func_to_foast import FieldOperatorParser
 from functional.ffront.func_to_past import ProgramParser
+from functional.ffront.gtcallable import GTCallable
 from functional.ffront.past_passes.type_deduction import ProgramTypeDeduction
 from functional.ffront.past_to_itir import ProgramLowering
 from functional.ffront.source_utils import CapturedVars
-from functional.gtcallable import GTCallable
 from functional.iterator import ir as itir
 
 
