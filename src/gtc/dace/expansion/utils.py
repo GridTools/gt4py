@@ -21,13 +21,13 @@ import dace.subsets
 
 import eve
 from eve.iterators import iter_tree
-from gtc import common, oir
+from gtc import common
+from gtc import daceir as dcir
+from gtc import oir
 from gtc.definitions import Extent
 
 
 if TYPE_CHECKING:
-    import daceir as dcir
-
     from gtc.dace.nodes import StencilComputation
 
 
@@ -57,7 +57,6 @@ class HorizontalIntervalRemover(eve.NodeMutator):
 
 class HorizontalMaskRemover(eve.NodeMutator):
     def visit_Tasklet(self, node: "dcir.Tasklet"):
-        from gtc import daceir as dcir
 
         res_body = []
         for stmt in node.stmts:

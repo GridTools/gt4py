@@ -106,34 +106,42 @@ def _get_tasklet_inout_memlets(node: oir.HorizontalExecution, *, get_outputs, gl
 
 
 def _all_stmts_same_region(scope_nodes, axis: dcir.Axis, interval):
-    return (
-        axis in dcir.Axis.dims_horizontal()
-        and isinstance(interval, dcir.DomainInterval)
-        and all(
+    def all_statements_in_region(scope_nodes):
+        return all(
             isinstance(stmt, dcir.HorizontalRestriction)
             for tasklet in iter_tree(scope_nodes).if_isinstance(dcir.Tasklet)
             for stmt in tasklet.stmts
         )
-        and len(
-            set(
-                (
-                    None
-                    if mask.intervals[axis.to_idx()].start is None
-                    else mask.intervals[axis.to_idx()].start.level,
-                    None
-                    if mask.intervals[axis.to_idx()].start is None
-                    else mask.intervals[axis.to_idx()].start.offset,
-                    None
-                    if mask.intervals[axis.to_idx()].end is None
-                    else mask.intervals[axis.to_idx()].end.level,
-                    None
-                    if mask.intervals[axis.to_idx()].end is None
-                    else mask.intervals[axis.to_idx()].end.offset,
+
+    def all_regions_same(scope_nodes):
+        return (
+            len(
+                set(
+                    (
+                        None
+                        if mask.intervals[axis.to_idx()].start is None
+                        else mask.intervals[axis.to_idx()].start.level,
+                        None
+                        if mask.intervals[axis.to_idx()].start is None
+                        else mask.intervals[axis.to_idx()].start.offset,
+                        None
+                        if mask.intervals[axis.to_idx()].end is None
+                        else mask.intervals[axis.to_idx()].end.level,
+                        None
+                        if mask.intervals[axis.to_idx()].end is None
+                        else mask.intervals[axis.to_idx()].end.offset,
+                    )
+                    for mask in iter_tree(scope_nodes).if_isinstance(common.HorizontalMask)
                 )
-                for mask in iter_tree(scope_nodes).if_isinstance(common.HorizontalMask)
             )
+            == 1
         )
-        == 1
+
+    return (
+        axis in dcir.Axis.dims_horizontal()
+        and isinstance(interval, dcir.DomainInterval)
+        and all_statements_in_region(scope_nodes)
+        and all_regions_same(scope_nodes)
     )
 
 
