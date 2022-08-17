@@ -55,7 +55,6 @@ Column: TypeAlias = np.ndarray  # TODO consider replacing by a wrapper around nd
 class SparseTag(Tag):
     ...
 
-
 class NeighborTableOffsetProvider:
     def __init__(
         self,
@@ -72,6 +71,32 @@ class NeighborTableOffsetProvider:
         self.max_neighbors = max_neighbors
         self.has_skip_values = has_skip_values
 
+class NewSparseOffsetProvider:
+    def __init__(
+        self,
+        shape,
+        origin_axis: Dimension,
+        neighbor_axis: Dimension,
+        max_neighbors: int,
+        has_skip_values=True,
+    ) -> None:
+        self.shape = shape
+        self.origin_axis = origin_axis
+        self.neighbor_axis = neighbor_axis
+        self.max_neighbors = max_neighbors
+        self.has_skip_values = has_skip_values
+
+    @property
+    def tbl(self):
+        class Impl:
+            def __init__(self, shape):
+                self.shape = shape
+
+            def __getitem__(self, tpl):
+                assert isinstance(tpl, tuple)
+                return tpl[0] * self.shape[1] + tpl[1]
+
+        return Impl(self.shape)
 
 # Offsets
 OffsetPart: TypeAlias = Tag | IntIndex
@@ -391,7 +416,7 @@ def execute_shift(
         else:
             raise AssertionError()
         return new_pos
-    elif isinstance(offset_implementation, NeighborTableOffsetProvider):
+    elif isinstance(offset_implementation, NeighborTableOffsetProvider) or isinstance(offset_implementation, NewSparseOffsetProvider):
         assert offset_implementation.origin_axis.value in pos
         new_pos = pos.copy()
         new_pos.pop(offset_implementation.origin_axis.value)
