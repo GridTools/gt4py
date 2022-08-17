@@ -133,15 +133,7 @@ def accept_args_cases():
         ),
         (kwarg_func_type, [], {"bar": bool_type}, [r"Got unexpected keyword argument\(s\) `bar`."]),
         # field operator
-        (
-            fieldop_type,
-            [field_type, float_type],
-            {},
-            [
-                r"Expected 1-th argument to be of type float64, but got Field\[\[\], dtype=float64\]."
-            ],
-        ),
-        (fieldop_type, [field_type, field_type], {}, []),
+        (fieldop_type, [field_type, float_type], {}, []),
         # scan operator
         (scanop_type, [], {}, [r"Scan operator takes 2 arguments, but 0 were given."]),
         (
