@@ -171,8 +171,9 @@ class FieldOperatorLowering(NodeTranslator):
         func_definition: itir.FunctionDefinition = self.visit(node.definition, **kwargs)
 
         # value arguments, e.g. scalars and tuples thereof, are passed as
-        #  iterators, deref them here such that they are in the "format"
-        #  expected by the rest of the lowering inside the body.
+        #  iterators (see visit_Call for corresponding promotion to iterators).
+        #  deref them here such that they are in the "format" expected by the
+        #  rest of the lowering inside the body. See ADR-0002 for more details.
         new_body = func_definition.expr
         for i, param in enumerate(func_definition.params):
             if isinstance(node.definition.params[i].type, ct.ScalarType):
@@ -376,8 +377,10 @@ class FieldOperatorLowering(NodeTranslator):
         elif node.func.id in TYPE_BUILTIN_NAMES:
             return self._visit_type_constr(node, **kwargs)
         elif isinstance(node.func.type, (ct.FieldOperatorType, ct.ScanOperatorType)):
-            # transform all value arguments, e.g. scalars and tuples thereof
-            #  into iterators
+            # operators are lowered into stencils and only accept iterator
+            #  arguments. As such transform all value arguments, e.g. scalars
+            #  and tuples thereof, into iterators. See ADR-0002 for more
+            #  details.
             lowered_func = self.visit(node.func, **kwargs)
             lowered_args = []
             for arg in node.args:
