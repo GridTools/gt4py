@@ -106,11 +106,20 @@ def _pre_expand_trafos(stencil_ir: gtir.Stencil, sdfg: dace.SDFG, layout_map):
     for node, _ in filter(
         lambda n: isinstance(n[0], StencilComputation), sdfg.all_nodes_recursive()
     ):
-        expansion_priority = ["TileJ", "TileI", "Sections"]
-        if node.oir_node.loop_order == common.LoopOrder.PARALLEL:
-            expansion_priority.extend(["KMap", "Stages", "JMap", "IMap"])
+        if node.has_splittable_regions():
+            expansion_priority = [
+                "Sections",
+                "Stages",
+                "J",
+                "I",
+                "K",
+            ]
         else:
-            expansion_priority.extend(["KLoop", "Stages", "JMap", "IMap"])
+            expansion_priority = ["TileJ", "TileI", "Sections"]
+            if node.oir_node.loop_order == common.LoopOrder.PARALLEL:
+                expansion_priority.extend(["KMap", "Stages", "JMap", "IMap"])
+            else:
+                expansion_priority.extend(["KLoop", "Stages", "JMap", "IMap"])
 
         try:
             node.expansion_specification = expansion_priority
