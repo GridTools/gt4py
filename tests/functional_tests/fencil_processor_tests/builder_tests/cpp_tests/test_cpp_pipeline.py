@@ -47,14 +47,14 @@ def source_module_example():
     )
     src = jinja2.Template(
         """\
-    #include <gridtools/fn/cartesian.hpp>
-    #include <gridtools/fn/unstructured.hpp>
-    namespace generated {
-    struct I_t {} constexpr inline I; 
-    struct J_t {} constexpr inline J; 
-    }
-    {{func}}\
-    """
+        #include <gridtools/fn/cartesian.hpp>
+        #include <gridtools/fn/unstructured.hpp>
+        namespace generated {
+        struct I_t {} constexpr inline I;
+        struct J_t {} constexpr inline J;
+        }
+        {{func}}\
+        """
     ).render(func=func)
 
     return source_modules.SourceModule(
@@ -67,7 +67,7 @@ def source_module_example():
     )
 
 
-def test_callable(source_module_example):
+def test_gtfn_cpp_with_cmake(source_module_example):
     wrapper = CMakeBuildProject(
         source_module=source_module_example,
         bindings_module=create_bindings(source_module_example, language=CPP_DEFAULT),
