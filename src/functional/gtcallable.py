@@ -38,7 +38,7 @@ class GTCallable(typing.Protocol):
         return None
 
     @abc.abstractmethod
-    def __gt_type__(self) -> ct.FunctionType:
+    def __gt_type__(self) -> ct.CallableType:
         """
         Return symbol type, i.e. signature and return type.
 

@@ -13,29 +13,44 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 
-from typing import Sequence
+from typing import Any
+
+import numpy
 
 from eve.codegen import format_source
 from functional.fencil_processors import source_modules
 from functional.fencil_processors.codegens.gtfn import gtfn_backend
+from functional.fencil_processors.processor_interface import fencil_source_module_generator
 from functional.fencil_processors.source_modules import cpp_gen as cpp
 from functional.iterator.ir import FencilDefinition
 
 
+def get_param_description(
+    name: str, obj: Any
+) -> source_modules.ScalarParameter | source_modules.BufferParameter:
+    view = numpy.asarray(obj)
+    if view.ndim > 0:
+        return source_modules.BufferParameter(name, [dim.value for dim in obj.axes], view.dtype)
+    else:
+        return source_modules.ScalarParameter(name, view.dtype)
+
+
+@fencil_source_module_generator
 def create_source_module(
     itir: FencilDefinition,
-    parameters: Sequence[source_modules.ScalarParameter | source_modules.BufferParameter],
+    *args,
     **kwargs,
 ) -> source_modules.SourceModule:
     """Generate GTFN C++ code from the ITIR definition."""
+    parameters = [
+        get_param_description(itir_param.id, obj) for obj, itir_param in zip(args, itir.params)
+    ]
     function = source_modules.Function(itir.id, parameters)
 
     rendered_params = ", ".join(["gridtools::fn::backend::naive{}", *(p.name for p in parameters)])
-    decl_body = f"return generated::{function.name}(nullptr)({rendered_params});"
+    decl_body = f"return generated::{function.name}()({rendered_params});"
     decl_src = cpp.render_function_declaration(function, body=decl_body)
-    stencil_src = gtfn_backend.generate(
-        itir, grid_type=gtfn_backend.guess_grid_type(**kwargs), **kwargs
-    )
+    stencil_src = gtfn_backend.generate(itir, **kwargs)
     source_code = format_source(
         "cpp",
         f"""

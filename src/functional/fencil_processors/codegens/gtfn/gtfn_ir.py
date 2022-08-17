@@ -12,8 +12,9 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+from __future__ import annotations
 
-from typing import ClassVar, List, Union
+from typing import ClassVar, List, Optional, Union
 
 import eve
 from eve import Coerced, SymbolName, SymbolRef
@@ -101,10 +102,14 @@ class Backend(Node):
     domain: Union[SymRef, CartesianDomain, UnstructuredDomain]
 
 
+class SidComposite(Expr):
+    values: List[Union[SymRef, SidComposite]]
+
+
 class StencilExecution(Node):
     backend: Backend
     stencil: SymRef  # TODO should be list of assigns for canonical `scan`
-    output: SymRef
+    output: Union[SymRef, SidComposite]
     inputs: List[SymRef]
 
 
@@ -129,12 +134,17 @@ BUILTINS = {
 }
 
 
+class TagDefinition(Node):
+    name: Sym
+    alias: Optional[Union[str, SymRef]] = None
+
+
 class FencilDefinition(Node, ValidatedSymbolTableTrait):
     id: SymbolName  # noqa: A003
     params: List[Sym]
     function_definitions: List[FunctionDefinition]
     executions: List[StencilExecution]
-    offset_declarations: List[Sym]
+    offset_definitions: List[TagDefinition]
     grid_type: common.GridType
 
-    _NODE_SYMBOLS_: ClassVar = [Sym(id=name) for name in BUILTINS]
+    _NODE_SYMBOLS_: ClassVar[List[Sym]] = [Sym(id=name) for name in BUILTINS]

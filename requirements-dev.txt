@@ -26,3 +26,4 @@ setuptools>=40.8.0
 sphinx>=3.1
 sphinx_rtd_theme>=0.4
 tox>=3.14
+jupytext>=1.14

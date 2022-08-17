@@ -37,35 +37,51 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         )
 
     def visit_Call(self, node: past.Call, **kwargs):
-        func = self.visit(node.func, **kwargs)
-        args = self.visit(node.args, **kwargs)
-        kwargs = self.visit(node.kwargs, **kwargs)
+        new_func = self.visit(node.func, **kwargs)
+        new_args = self.visit(node.args, **kwargs)
+        new_kwargs = self.visit(node.kwargs, **kwargs)
 
-        func_type = func.type
-        # functions returning fields in a program are implicitly converted into
-        #  stencil closures. Change function signature accordingly
-        if isinstance(func.type.returns, ct.FieldType):
-            assert "out" not in func.type.kwargs
-            func_type = ct.FunctionType(
-                args=func.type.args,
-                kwargs={**func.type.kwargs, "out": func.type.returns},
-                returns=ct.VoidType(),
-            )
+        # assert "out" not in new_func.type.kwargs
 
         try:
-            type_info.is_callable(
-                func_type,
-                with_args=[arg.type for arg in args],
-                with_kwargs={name: expr.type for name, expr in kwargs.items()},
+            if not isinstance(new_func.type, (ct.FieldOperatorType, ct.ScanOperatorType)):
+                raise GTTypeError(
+                    f"Only calls `FieldOperator`s and `ScanOperators` "
+                    f"allowed in `Program`, but got `{new_func.type}`."
+                )
+            if "out" not in new_kwargs:
+                raise GTTypeError("Missing required keyword argument(s) `out`.")
+
+            arg_types = [arg.type for arg in new_args]
+            kwarg_types = {name: expr.type for name, expr in new_kwargs.items() if name != "out"}
+
+            type_info.accepts_args(
+                new_func.type,
+                with_args=arg_types,
+                with_kwargs=kwarg_types,
                 raise_exception=True,
             )
+
+            return_type = type_info.return_type(
+                new_func.type, with_args=arg_types, with_kwargs=kwarg_types
+            )
+            if return_type != new_kwargs["out"].type:
+                raise GTTypeError(
+                    f"Expected keyword argument `out` to be of "
+                    f"type {return_type}, but got "
+                    f"{new_kwargs['out'].type}."
+                )
         except GTTypeError as ex:
             raise ProgramTypeError.from_past_node(
                 node, msg=f"Invalid call to `{node.func.id}`."
             ) from ex
 
         return past.Call(
-            func=func, args=args, kwargs=kwargs, type=func_type.returns, location=node.location
+            func=new_func,
+            args=new_args,
+            kwargs=new_kwargs,
+            type=ct.VoidType(),
+            location=node.location,
         )
 
     def visit_Name(self, node: past.Name, **kwargs) -> past.Name:

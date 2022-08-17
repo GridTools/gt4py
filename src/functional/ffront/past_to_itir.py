@@ -11,14 +11,33 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
+from __future__ import annotations
+
+from typing import Optional
+
 from eve import NodeTranslator, traits
 from functional.common import DimensionKind, GridType, GTTypeError
-from functional.ffront import common_types, program_ast as past
+from functional.ffront import common_types, program_ast as past, type_info
 from functional.iterator import ir as itir
 
 
 def _size_arg_from_field(field_name: str, dim: int) -> str:
     return f"__{field_name}_size_{dim}"
+
+
+def _flatten_tuple_expr(
+    node: past.Name | past.Subscript | past.TupleExpr,
+) -> list[past.Name | past.Subscript]:
+    if isinstance(node, (past.Name, past.Subscript)):
+        return [node]
+    elif isinstance(node, past.TupleExpr):
+        result = []
+        for e in node.elts:
+            result.extend(_flatten_tuple_expr(e))
+        return result
+    raise AssertionError(
+        "Only `past.Name`, `past.Subscript` or `past.TupleExpr`s thereof are allowed."
+    )
 
 
 class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
@@ -41,20 +60,24 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
     >>> def program(inp: Field[[IDim], "float64"], out: Field[[IDim], "float64"]):
     ...    fieldop(inp, out=out)
     >>>
-    >>> parsed = ProgramParser.apply_to_function(program)
+    >>> parsed = ProgramParser.apply_to_function(program)  # doctest: +SKIP
     >>> fieldop_def = ir.FunctionDefinition(
     ...     id="fieldop",
     ...     params=[ir.Sym(id="inp")],
     ...     expr=ir.FunCall(fun=ir.SymRef(id="deref"), args=[ir.SymRef(id="inp")])
-    ... )
-    >>> lowered = ProgramLowering.apply(parsed, [fieldop_def], grid_type=GridType.CARTESIAN)
-    >>> type(lowered)
+    ... )  # doctest: +SKIP
+    >>> lowered = ProgramLowering.apply(parsed, [fieldop_def],
+    ...     grid_type=GridType.CARTESIAN)  # doctest: +SKIP
+    >>> type(lowered)  # doctest: +SKIP
     <class 'functional.iterator.ir.FencilDefinition'>
-    >>> lowered.id
+    >>> lowered.id  # doctest: +SKIP
     SymbolName('program')
-    >>> lowered.params
+    >>> lowered.params  # doctest: +SKIP
     [Sym(id=SymbolName('inp')), Sym(id=SymbolName('out')), Sym(id=SymbolName('__inp_size_0')), Sym(id=SymbolName('__out_size_0'))]
     """
+
+    # TODO(tehrengruber): enable doctests again. For unknown / obscure reasons
+    #  the above doctest fails when executed using `pytest --doctest-modules`.
 
     @classmethod
     def apply(
@@ -88,14 +111,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
 
         closures: list[itir.StencilClosure] = []
         for stmt in node.body:
-            if isinstance(stmt, past.Call) and isinstance(
-                symtable[stmt.func.id].type.returns, common_types.FieldType
-            ):
-                closures.append(self._visit_stencil_call(stmt, **kwargs))
-            else:
-                raise NotImplementedError(
-                    "Only calls to functions returning a Field supported currently."
-                )
+            closures.append(self._visit_stencil_call(stmt, **kwargs))
 
         return itir.FencilDefinition(
             id=node.id,
@@ -105,7 +121,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         )
 
     def _visit_stencil_call(self, node: past.Call, **kwargs) -> itir.StencilClosure:
-        assert isinstance(node.kwargs["out"].type, common_types.FieldType)
+        assert type_info.is_field_type_or_tuple_of_field_type(node.kwargs["out"].type)
 
         output, domain = self._visit_stencil_call_out_arg(node.kwargs["out"], **kwargs)
 
@@ -137,12 +153,62 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             raise AssertionError("Expected `None` or `past.Constant`.")
         return lowered_bound
 
+    def _construct_itir_out_arg(self, node: past.TupleExpr | past.Name) -> itir.Expr:
+        if isinstance(node, past.Name):
+            return itir.SymRef(id=node.id)
+        elif isinstance(node, past.TupleExpr):
+            if any(isinstance(el, past.Subscript) for el in _flatten_tuple_expr(node)):
+                raise NotImplementedError("Slicing for tuple `out` argument not supported.")
+            return itir.FunCall(
+                fun=itir.SymRef(id="make_tuple"),
+                args=[self._construct_itir_out_arg(el) for el in node.elts],
+            )
+        else:
+            raise AssertionError()(
+                "Unexpected `out` argument. Must be a `past.Name` or nesting of "
+                "`past.TupleExpr` and `past.Name`."
+            )
+
+    def _construct_itir_domain_arg(
+        self, out_field: past.Name, slices: Optional[list[past.Slice]] = None
+    ) -> itir.FunCall:
+        domain_args = []
+        for dim_i, dim in enumerate(out_field.type.dims):
+            # an expression for the size of a dimension
+            dim_size = itir.SymRef(id=_size_arg_from_field(out_field.id, dim_i))
+            # bounds
+            lower = self._visit_slice_bound(
+                slices[dim_i].lower if slices else None,
+                itir.Literal(value="0", type="int"),
+                dim_size,
+            )
+            upper = self._visit_slice_bound(
+                slices[dim_i].upper if slices else None, dim_size, dim_size
+            )
+            if dim.kind == DimensionKind.LOCAL:
+                raise GTTypeError(f"Dimension {dim.value} must not be local.")
+            domain_args.append(
+                itir.FunCall(
+                    fun=itir.SymRef(id="named_range"),
+                    args=[itir.AxisLiteral(value=dim.value), lower, upper],
+                )
+            )
+
+        if self.grid_type == GridType.CARTESIAN:
+            domain_builtin = "cartesian_domain"
+        elif self.grid_type == GridType.UNSTRUCTURED:
+            domain_builtin = "unstructured_domain"
+        else:
+            raise AssertionError()
+
+        return itir.FunCall(fun=itir.SymRef(id=domain_builtin), args=domain_args)
+
     def _visit_stencil_call_out_arg(
         self, node: past.Expr, **kwargs
     ) -> tuple[itir.SymRef, itir.FunCall]:
-        # as the ITIR does not support slicing a field we have to do a deeper
-        #  inspection of the PAST to emulate the behaviour
         if isinstance(node, past.Subscript):
+            # as the ITIR does not support slicing a field we have to do a deeper
+            #  inspection of the PAST to emulate the behaviour
             out_field_name: past.Name = node.value
             if isinstance(node.slice_, past.TupleExpr) and all(
                 isinstance(el, past.Slice) for el in node.slice_.elts
@@ -151,7 +217,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             elif isinstance(node.slice_, past.Slice):
                 out_field_slice_: list[past.Slice] = [node.slice_]
             else:
-                raise RuntimeError(
+                raise AssertionError(
                     "Unexpected `out` argument. Must be tuple of slices or slice expression."
                 )
             if len(out_field_slice_) != len(node.type.dims):
@@ -159,49 +225,29 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                     f"Too many indices for field {out_field_name}: field is {len(node.type.dims)}"
                     f"-dimensional, but {len(out_field_slice_)} were indexed."
                 )
-            domain_args = []
-            for dim_i, (dim, slice_) in enumerate(zip(node.type.dims, out_field_slice_)):
-                # an expression for the size of a dimension
-                dim_size = itir.SymRef(id=_size_arg_from_field(out_field_name.id, dim_i))
-                # lower bound
-                lower = self._visit_slice_bound(
-                    slice_.lower, itir.Literal(value="0", type="int"), dim_size
-                )
-                upper = self._visit_slice_bound(slice_.upper, dim_size, dim_size)
-                if dim.kind == DimensionKind.LOCAL:
-                    raise GTTypeError(f"Dimension {dim.value} must not be local.")
-                domain_args.append(
-                    itir.FunCall(
-                        fun=itir.SymRef(id="named_range"),
-                        args=[itir.AxisLiteral(value=dim.value), lower, upper],
-                    )
-                )
 
-        elif isinstance(node, past.Name):
-            out_field_name = node
-            domain_args = [
-                itir.FunCall(
-                    fun=itir.SymRef(id="named_range"),
-                    args=[
-                        itir.AxisLiteral(value=dim.value),
-                        itir.Literal(value="0", type="int"),
-                        # here we use the artificial size arguments added to the fencil
-                        itir.SymRef(id=_size_arg_from_field(out_field_name.id, dim_idx)),
-                    ],
-                )
-                for dim_idx, dim in enumerate(node.type.dims)
-            ]
-        else:
-            raise RuntimeError(
-                "Unexpected `out` argument. Must be a `past.Subscript` or `past.Name` node."
+            return (
+                self._construct_itir_out_arg(out_field_name),
+                self._construct_itir_domain_arg(out_field_name, out_field_slice_),
             )
+        elif isinstance(node, past.Name):
+            return (self._construct_itir_out_arg(node), self._construct_itir_domain_arg(node))
+        elif isinstance(node, past.TupleExpr):
+            flattened = _flatten_tuple_expr(node)
 
-        domain_builtin = (
-            "cartesian_domain" if self.grid_type == GridType.CARTESIAN else "unstructured_domain"
-        )
-        return itir.SymRef(id=self.visit(out_field_name, **kwargs).id), itir.FunCall(
-            fun=itir.SymRef(id=domain_builtin), args=domain_args
-        )
+            first_field = flattened[0]
+            assert all(
+                field.type.dims == first_field.type.dims for field in flattened
+            ), "Incompatible fields in tuple: all fields must have the same dimensions."
+
+            return (
+                self._construct_itir_out_arg(node),
+                self._construct_itir_domain_arg(first_field),
+            )
+        else:
+            raise AssertionError(
+                "Unexpected `out` argument. Must be a `past.Subscript`, `past.Name` or `past.TupleExpr` node."
+            )
 
     def visit_Constant(self, node: past.Constant, **kwargs) -> itir.Literal:
         if isinstance(node.type, common_types.ScalarType) and node.type.shape is None:

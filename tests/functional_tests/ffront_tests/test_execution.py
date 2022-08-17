@@ -22,7 +22,7 @@ import pytest
 
 from functional.common import DimensionKind
 from functional.fencil_processors.runners import gtfn_cpu, roundtrip
-from functional.ffront.decorator import field_operator, program
+from functional.ffront.decorator import field_operator, program, scan_operator
 from functional.ffront.fbuiltins import (
     Dimension,
     Field,
@@ -30,6 +30,7 @@ from functional.ffront.fbuiltins import (
     broadcast,
     float64,
     int32,
+    int64,
     max_over,
     neighbor_sum,
     where,
@@ -41,7 +42,7 @@ from functional.iterator.embedded import (
 )
 
 
-@pytest.fixture(params=[roundtrip.executor, gtfn_cpu.run_gtfn])
+@pytest.fixture(params=[roundtrip.executor])
 def fieldview_backend(request):
     yield request.param
 
@@ -354,9 +355,7 @@ def test_maxover_execution_sparse(reduction_setup, fieldview_backend):
     inp_field = np_as_located_field(Vertex, V2EDim)(rs.v2e_table)
 
     @field_operator(backend=fieldview_backend)
-    def maxover_fieldoperator(
-        inp_field: Field[[Vertex, V2EDim], "float64"]
-    ) -> Field[[Vertex], float64]:
+    def maxover_fieldoperator(inp_field: Field[[Vertex, V2EDim], int64]) -> Field[[Vertex], int64]:
         return max_over(inp_field, axis=V2EDim)
 
     maxover_fieldoperator(inp_field, out=rs.out, offset_provider=rs.offset_provider)
@@ -381,8 +380,8 @@ def test_maxover_execution_negatives(reduction_setup, fieldview_backend):
 
     @field_operator(backend=fieldview_backend)
     def maxover_negvals(
-        edge_f: Field[[Edge], "float64"],
-    ) -> Field[[Vertex], float64]:
+        edge_f: Field[[Edge], int64],
+    ) -> Field[[Vertex], int64]:
         out = max_over(edge_f(V2E), axis=V2EDim)
         return out
 
@@ -426,7 +425,7 @@ def test_reduction_execution_nb(reduction_setup, fieldview_backend):
     nb_field = np_as_located_field(rs.Vertex, rs.V2EDim)(rs.v2e_table)
 
     @field_operator(backend=fieldview_backend)
-    def reduction(nb_field: Field[[rs.Vertex, rs.V2EDim], "float64"]) -> Field[[rs.Vertex], "float64"]:  # type: ignore
+    def reduction(nb_field: Field[[rs.Vertex, rs.V2EDim], int64]) -> Field[[rs.Vertex], int64]:  # type: ignore
         return neighbor_sum(nb_field, axis=V2EDim)
 
     reduction(nb_field, out=rs.out, offset_provider=rs.offset_provider)
@@ -513,7 +512,7 @@ def test_broadcast_simple(fieldview_backend):
     out = np_as_located_field(IDim, JDim)(np.zeros((size, size)))
 
     @field_operator(backend=fieldview_backend)
-    def simple_broadcast(inp: Field[[IDim], float64]) -> Field[[IDim, JDim], float64]:
+    def simple_broadcast(inp: Field[[IDim], int64]) -> Field[[IDim, JDim], int64]:
         return broadcast(inp, (IDim, JDim))
 
     simple_broadcast(a, out=out, offset_provider={})
@@ -543,8 +542,8 @@ def test_broadcast_two_fields(fieldview_backend):
 
     @field_operator(backend=fieldview_backend)
     def broadcast_two_fields(
-        inp1: Field[[IDim], float64], inp2: Field[[JDim], float64]
-    ) -> Field[[IDim, JDim], float64]:
+        inp1: Field[[IDim], int64], inp2: Field[[JDim], int64]
+    ) -> Field[[IDim, JDim], int64]:
         a = broadcast(inp1, (IDim, JDim))
         b = broadcast(inp2, (IDim, JDim))
         return a + b
@@ -564,7 +563,7 @@ def test_broadcast_shifted(fieldview_backend):
     out = np_as_located_field(IDim, JDim)(np.zeros((size, size)))
 
     @field_operator(backend=fieldview_backend)
-    def simple_broadcast(inp: Field[[IDim], float64]) -> Field[[IDim, JDim], float64]:
+    def simple_broadcast(inp: Field[[IDim], int64]) -> Field[[IDim, JDim], int64]:
         bcasted = broadcast(inp, (IDim, JDim))
         return bcasted(Joff[1])
 
@@ -608,6 +607,20 @@ def test_conditional_promotion(fieldview_backend):
     conditional_promotion(mask, a, out=out, offset_provider={})
 
     assert np.allclose(np.where(mask, a, 10), out)
+
+
+def test_conditional_compareop(fieldview_backend):
+    size = 10
+    a = np_as_located_field(IDim)(np.ones((size,)))
+    out = np_as_located_field(IDim)(np.zeros((size,)))
+
+    @field_operator(backend=fieldview_backend)
+    def conditional_promotion(a: Field[[IDim], float64]) -> Field[[IDim], float64]:
+        return where(a != a, a, 10.0)
+
+    conditional_promotion(a, out=out, offset_provider={})
+
+    assert np.allclose(np.where(np.asarray(a) != np.asarray(a), a, 10), out)
 
 
 def test_conditional_shifted(fieldview_backend):
@@ -703,8 +716,8 @@ def test_tuple_with_local_field_in_reduction_shifted(reduction_setup):
 
     size = 10
     # TODO(tehrengruber): use different values per location
-    a = np_as_located_field(Edge)(np.ones((num_vertices,)))
-    b = np_as_located_field(Vertex)(2 * np.ones((num_edges,)))
+    a = np_as_located_field(Edge)(np.ones((num_edges,)))
+    b = np_as_located_field(Vertex)(2 * np.ones((num_vertices,)))
     out = np_as_located_field(Edge)(np.zeros((num_edges,)))
 
     @field_operator
@@ -723,7 +736,76 @@ def test_tuple_with_local_field_in_reduction_shifted(reduction_setup):
     reduce_tuple_element(a, b, out=out, offset_provider=rs.offset_provider)
 
     # conn table used is inverted here on purpose
-    red = np.sum(np.asarray(a)[rs.e2v_table] + np.asarray(b)[:, np.newaxis], axis=1)
-    expected = red[rs.v2e_table][:, 0]
+    red = np.sum(np.asarray(a)[rs.v2e_table] + np.asarray(b)[:, np.newaxis], axis=1)
+    expected = red[rs.e2v_table][:, 0]
 
     assert np.allclose(expected, out)
+
+
+@pytest.mark.parametrize("forward", [True, False])
+def test_simple_scan(fieldview_backend, forward):
+    if fieldview_backend == gtfn_cpu.run_gtfn:
+        pytest.xfail("gtfn does not yet support scan pass.")
+
+    KDim = Dimension("K", kind=DimensionKind.VERTICAL)
+    size = 10
+    init = 1.0
+    out = np_as_located_field(KDim)(np.zeros((size,)))
+    expected = np.arange(init + 1.0, init + 1.0 + size, 1)
+    if not forward:
+        expected = np.flip(expected)
+
+    @scan_operator(axis=KDim, forward=forward, init=init, backend=fieldview_backend)
+    def simple_scan_operator(carry: float) -> float:
+        return carry + 1.0
+
+    simple_scan_operator(out=out, offset_provider={})
+
+    assert np.allclose(expected, out)
+
+
+def test_solve_triag(fieldview_backend):
+    if fieldview_backend == gtfn_cpu.run_gtfn:
+        pytest.xfail("gtfn does not yet support scan pass.")
+
+    KDim = Dimension("K", kind=DimensionKind.VERTICAL)
+    shape = (3, 7, 5)
+    rng = np.random.default_rng()
+    a_np, b_np, c_np, d_np = (rng.normal(size=shape) for _ in range(4))
+    b_np *= 2
+    a, b, c, d = (
+        np_as_located_field(IDim, JDim, KDim)(np_arr) for np_arr in [a_np, b_np, c_np, d_np]
+    )
+    out = np_as_located_field(IDim, JDim, KDim)(np.zeros(shape))
+
+    # compute reference
+    matrices = np.zeros(shape + shape[-1:])
+    i = np.arange(shape[2])
+    matrices[:, :, i[1:], i[:-1]] = a_np[:, :, 1:]
+    matrices[:, :, i, i] = b_np
+    matrices[:, :, i[:-1], i[1:]] = c_np[:, :, :-1]
+    expected = np.linalg.solve(matrices, d_np)
+
+    @scan_operator(axis=KDim, forward=True, init=(0.0, 0.0))
+    def tridiag_forward(
+        state: tuple[float, float], a: float, b: float, c: float, d: float
+    ) -> tuple[float, float]:
+        return (c / (b - a * state[0]), (d - a * state[1]) / (b - a * state[0]))
+
+    @scan_operator(axis=KDim, forward=False, init=0.0)
+    def tridiag_backward(x_kp1: float, cp: float, dp: float) -> float:
+        return dp - cp * x_kp1
+
+    @field_operator(backend=fieldview_backend)
+    def solve_tridiag(
+        a: Field[[IDim, JDim, KDim], float],
+        b: Field[[IDim, JDim, KDim], float],
+        c: Field[[IDim, JDim, KDim], float],
+        d: Field[[IDim, JDim, KDim], float],
+    ):
+        cp, dp = tridiag_forward(a, b, c, d)
+        return tridiag_backward(cp, dp)
+
+    solve_tridiag(a, b, c, d, out=out, offset_provider={})
+
+    np.allclose(expected, out)
