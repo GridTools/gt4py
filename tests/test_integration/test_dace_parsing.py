@@ -379,7 +379,7 @@ def test_nondace_raises(decorator):
         call_stencil()
 
 
-from gt4py.dace_lazy_stencil import (  # noqa: E402 (needs to be guarded by above importorskip)
+from gt4py.backend.dace_lazy_stencil import (  # noqa: E402 (needs to be guarded by above importorskip)
     DaCeLazyStencil,
 )
 

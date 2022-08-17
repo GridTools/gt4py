@@ -31,7 +31,7 @@ from gt4py.lazy_stencil import LazyStencil
 
 
 try:
-    from gt4py.dace_lazy_stencil import DaCeLazyStencil
+    from gt4py.backend.dace_lazy_stencil import DaCeLazyStencil
 except ImportError:
     DaCeLazyStencil = LazyStencil
 
@@ -163,6 +163,7 @@ def stencil(
     format_source=True,
     name=None,
     rebuild=False,
+    cache_settings=None,
     **kwargs,
 ):
     """Generate an implementation of the stencil definition with the specified backend.
@@ -205,6 +206,13 @@ def stencil(
             Force rebuild of the :class:`gt4py.StencilObject` even if it is
             found in the cache. (`False` by default).
 
+        cache_settings: `dict`, optional
+            Dictionary to configure cache (directory) settings (see
+            ``gt4py.config.cache_settings``).
+            Possible key-value pairs:
+            - `root_path`: (str)
+            - `dir_name`: (str)
+
         **kwargs: `dict`, optional
             Extra backend-specific options. Check the specific backend
             documentation for further information.
@@ -240,6 +248,8 @@ def stencil(
         raise ValueError(f"Invalid 'name' string ('{name}')")
     if not isinstance(rebuild, bool):
         raise ValueError(f"Invalid 'rebuild' bool value ('{rebuild}')")
+    if cache_settings is not None and not isinstance(cache_settings, dict):
+        raise ValueError(f"Invalid 'cache_settings' dictionary ('{cache_settings}')")
 
     module = None
     if name:
@@ -272,6 +282,7 @@ def stencil(
         rebuild=rebuild,
         backend_opts=kwargs,
         build_info=build_info,
+        cache_settings=cache_settings or {},
         impl_opts=_impl_opts,
     )
 
@@ -332,6 +343,9 @@ def lazy_stencil(
 
         externals: `dict`, optional
             Specify values for otherwise unbound symbols.
+
+        format_source : `bool`, optional
+            Format generated sources when possible (`True` by default).
 
         name : `str`, optional
             The fully qualified name of the generated :class:`StencilObject`.

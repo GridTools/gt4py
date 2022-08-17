@@ -11,6 +11,7 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
+
 import copy
 import os
 import pathlib
@@ -105,8 +106,18 @@ def _pre_expand_trafos(gtir_pipeline: GtirPipeline, sdfg: dace.SDFG, layout_map)
     for node, _ in filter(
         lambda n: isinstance(n[0], StencilComputation), sdfg.all_nodes_recursive()
     ):
+        expansion_priority = []
+        if node.has_splittable_regions():
+            expansion_priority.append(
+                [
+                    "Sections",
+                    "Stages",
+                    "J",
+                    "I",
+                    "K",
+                ]
+            )
         if node.oir_node.loop_order == common.LoopOrder.PARALLEL:
-            expansion_priority = []
             expansion_priority.extend(
                 [
                     ["Sections", "Stages", "KMap", "J", "I"],
@@ -114,13 +125,14 @@ def _pre_expand_trafos(gtir_pipeline: GtirPipeline, sdfg: dace.SDFG, layout_map)
                 ]
             )
         else:
-            expansion_priority = [
-                ["J", "I", "Sections", "Stages", "CachedKLoop"],
-                ["TileJ", "TileI", "Sections", "CachedKLoop", "Stages", "JMap", "IMap"],
-            ]
+            expansion_priority.extend(
+                [
+                    ["J", "I", "Sections", "Stages", "CachedKLoop"],
+                    ["TileJ", "TileI", "Sections", "CachedKLoop", "Stages", "JMap", "IMap"],
+                ]
+            )
         is_set = False
         for exp in expansion_priority:
-
             try:
                 node.expansion_specification = exp
                 is_set = True

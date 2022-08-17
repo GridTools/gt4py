@@ -72,7 +72,7 @@ class StencilBuilder:
         backend = gt4py.backend.from_name(backend) if isinstance(backend, str) else backend
         self.backend: "BackendType" = backend(self)
         self.frontend: "FrontendType" = frontend or gt4py.frontend.from_name("gtscript")
-        self.caching = gt4py.caching.strategy_factory("jit", self)
+        self.caching = gt4py.caching.strategy_factory("jit", self, **self.options.cache_settings)
         self._build_data: Dict[str, Any] = {}
         self._externals: Dict[str, Any] = {}
 
@@ -200,10 +200,6 @@ class StencilBuilder:
             "prepared_def",
             self.frontend.prepare_stencil_definition(self._definition, self.externals),
         )
-
-    def capture_externals(self) -> None:
-        """Extract externals from the annotated stencil definition for fingerprinting. Freezes the references."""
-        self.caching.capture_externals()
 
     @property
     def externals(self) -> Dict[str, Any]:
