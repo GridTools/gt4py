@@ -178,10 +178,11 @@ def create_bindings(
 
     Parameters
     ----------
-    target
-        The signature of the C++ function
+    source_module
+        The source module for which the bindings are created
     language
         A CppLanguage instance (see ``functional.fencil_processors.pipeline.CppLanguage``)
+        which configures how source files are named.
     """
     wrapper_name = source_module.entry_point.name + "_wrapper"
 
