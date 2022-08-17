@@ -391,7 +391,9 @@ class FieldOperatorLowering(NodeTranslator):
 
             return self._lift_if_field(node)(im.call_(lowered_func)(*lowered_args))
 
-        raise AssertionError(f"Call to object of type {type(node.func).__name__} not understood.")
+        raise AssertionError(
+            f"Call to object of type {type(node.func.type).__name__} not understood."
+        )
 
     def _visit_where(self, node: foast.Call, **kwargs) -> itir.FunCall:
         mask, left, right = (to_value(arg)(self.visit(arg, **kwargs)) for arg in node.args)
