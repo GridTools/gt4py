@@ -23,8 +23,7 @@ class AtlasTable:
         self.atlas_connectivity = atlas_connectivity
 
     def __getitem__(self, indices):
-        primary_index = indices[0]
-        neigh_index = indices[1]
+        primary_index, neigh_index = indices
         if isinstance(self.atlas_connectivity, IrregularConnectivity):
             if neigh_index < self.atlas_connectivity.cols(primary_index):
                 return self.atlas_connectivity[primary_index, neigh_index]
@@ -39,3 +38,12 @@ class AtlasTable:
     @property
     def shape(self):
         return (self.atlas_connectivity.rows, self.atlas_connectivity.maxcols)
+
+    def max(self):  # noqa: A003
+        maximum = -1
+        for i in range(self.shape[0]):
+            for j in range(self.shape[1]):
+                v = self[i, j]
+                if v is not None:
+                    maximum = max(maximum, v)
+        return maximum

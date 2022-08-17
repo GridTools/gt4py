@@ -1,14 +1,30 @@
+# GT4Py New Semantic Model - GridTools Framework
+#
+# Copyright (c) 2014-2021, ETH Zurich All rights reserved.
+#
+# This file is part of the GT4Py project and the GridTools framework.  GT4Py
+# New Semantic Model is free software: you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the Free
+# Software Foundation, either version 3 of the License, or any later version.
+# See the LICENSE.txt file at the top-level directory of this distribution for
+# a copy of the license or check <https://www.gnu.org/licenses/>.
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 from typing import Any, Optional
 
 from eve import Coerced, NodeTranslator
 from eve.traits import SymbolTableTrait
+from functional.common import DimensionKind
 from functional.iterator import ir, type_inference
+from functional.iterator.embedded import NeighborTableOffsetProvider
 from functional.iterator.pretty_printer import PrettyPrinter
 from functional.iterator.runtime import CartesianAxis
 from functional.iterator.transforms.collect_shifts import CollectShifts
 from functional.iterator.transforms.eta_reduction import EtaReduction
 from functional.iterator.transforms.popup_tmps import PopupTmps
 from functional.iterator.transforms.prune_closure_inputs import PruneClosureInputs
+from functional.iterator.transforms.trace_shifts import TraceShifts
 
 
 AUTO_DOMAIN = ir.SymRef(id="_gtmp_auto_domain")
@@ -147,10 +163,18 @@ def split_closures(node: ir.FencilDefinition) -> FencilWithTemporaries:
 
 def _collect_stencil_shifts(stencil, return_params=False):
     """Collect shift offsets applied within a stencil, correctly handling scans."""
-    if isinstance(stencil, ir.FunCall) and stencil.fun == ir.SymRef(id="scan"):
-        # get params of scan function, but ignore accumulator
-        fun = stencil.args[0]
-        params = fun.params[1:]
+    if isinstance(stencil, ir.FunCall):
+        if stencil.fun == ir.SymRef(id="scan"):
+            # get params of scan function, but ignore accumulator
+            fun = stencil.args[0]
+            params = fun.params[1:]
+        elif stencil.fun == ir.SymRef(id="reduce"):
+            # not shifts can happen within a reduce
+            if return_params:
+                return dict(), []
+            return dict()
+        else:
+            raise AssertionError(f"Unexpected stencil: {stencil}")
     else:
         assert isinstance(stencil, ir.Lambda)
         fun = stencil
@@ -256,60 +280,101 @@ def update_cartesian_domains(node: FencilWithTemporaries, offset_provider) -> Fe
     )
 
 
+def _location_type_from_offsets(domain, offsets, offset_provider):
+    location = domain.args[0].args[0].value
+    for o in offsets:
+        if isinstance(o, ir.OffsetLiteral) and isinstance(o.value, str):
+            provider = offset_provider[o.value]
+            if isinstance(provider, NeighborTableOffsetProvider):
+                location = provider.neighbor_axis.value
+    return location
+
+
+def _unstructured_domain(axis, size, vertical_ranges):
+    return ir.FunCall(
+        fun=ir.SymRef(id="unstructured_domain"),
+        args=[
+            ir.FunCall(
+                fun=ir.SymRef(id="named_range"),
+                args=[
+                    ir.AxisLiteral(value=axis),
+                    ir.Literal(value="0", type="int"),
+                    ir.Literal(value=str(size), type="int"),
+                ],
+            )
+        ]
+        + list(vertical_ranges),
+    )
+
+
+def _max_domain_sizes_by_location_type(offset_provider):
+    sizes = dict[str, int]()
+    for provider in offset_provider.values():
+        if isinstance(provider, NeighborTableOffsetProvider):
+            assert provider.origin_axis.kind == DimensionKind.HORIZONTAL
+            assert provider.neighbor_axis.kind == DimensionKind.HORIZONTAL
+            sizes[provider.origin_axis.value] = max(
+                sizes.get(provider.origin_axis.value, 0), provider.tbl.shape[0]
+            )
+            sizes[provider.neighbor_axis.value] = max(
+                sizes.get(provider.neighbor_axis.value, 0),
+                provider.tbl.max(),
+            )
+    return sizes
+
+
+def _domain_ranges(closures, offset_provider):
+    ranges = dict[str, set[ir.Expr]]()
+    for closure in closures:
+        domain = closure.domain
+        if isinstance(domain, ir.FunCall) and domain.fun == ir.SymRef(id="unstructured_domain"):
+            for arg in domain.args:
+                assert isinstance(arg, ir.FunCall) and arg.fun == ir.SymRef(id="named_range")
+                axis = arg.args[0].value
+                ranges.setdefault(axis, []).append(arg)
+    return ranges
+
+
 def update_unstructured_domains(node: FencilWithTemporaries, offset_provider):
     """Replace appearances of `AUTO_DOMAIN` by concrete domain sizes."""
-    known_domains = {
-        closure.output.id: closure.domain
-        for closure in node.fencil.closures
-        if closure.domain != AUTO_DOMAIN
-    }
+    horizontal_sizes = _max_domain_sizes_by_location_type(offset_provider)
+    vertical_ranges = _domain_ranges(node.fencil.closures, offset_provider)
+    for k in horizontal_sizes:
+        vertical_ranges.pop(k, None)
 
     closures = []
-    for closure in node.fencil.closures:
+    domains = dict[str, ir.Expr]()
+    for closure in reversed(node.fencil.closures):
         if closure.domain == AUTO_DOMAIN:
-            if closure.stencil == ir.SymRef(id="deref"):
-                domain = known_domains[closure.inputs[0].id]
-            else:
-                shifts = _collect_stencil_shifts(closure.stencil)
-                first_connectivity = {c[0].value for s in shifts.values() for c in s if c}
-                if not first_connectivity:
-                    # for now we assume that all inputs have the same domain
-                    assert all(
-                        known_domains[inp.id] == known_domains[closure.inputs[0].id]
-                        for inp in closure.inputs
-                    )
-                    domain = known_domains[closure.inputs[0].id]
-                else:
-                    assert len(first_connectivity) == 1
-                    conn = offset_provider[next(iter(first_connectivity))]
-                    axis = conn.origin_axis
-                    size = conn.tbl.shape[0]
-                    domain = ir.FunCall(
-                        fun=ir.SymRef(id="unstructured_domain"),
-                        args=[
-                            ir.FunCall(
-                                fun=ir.SymRef(id="named_range"),
-                                args=[
-                                    ir.AxisLiteral(value=axis.value),
-                                    ir.Literal(value="0", type="int"),
-                                    ir.Literal(value=str(size), type="int"),
-                                ],
-                            )
-                        ],
-                    )
-
-            known_domains[closure.output.id] = domain
+            domain = domains[closure.output.id]
             closure = ir.StencilClosure(
                 domain=domain, stencil=closure.stencil, output=closure.output, inputs=closure.inputs
             )
+        else:
+            domain = closure.domain
 
         closures.append(closure)
+
+        if closure.stencil == ir.SymRef(id="deref"):
+            domains[closure.inputs[0]] = domain
+            continue
+
+        local_shifts = TraceShifts.apply(closure)
+        for param, shifts in local_shifts.items():
+            loctypes = {_location_type_from_offsets(domain, s, offset_provider) for s in shifts}
+            assert len(loctypes) == 1
+            loctype = loctypes.pop()
+            horizontal_size = horizontal_sizes[loctype]
+            domains[param] = _unstructured_domain(
+                loctype, horizontal_size, vertical_ranges.values()
+            )
+
     return FencilWithTemporaries(
         fencil=ir.FencilDefinition(
             id=node.fencil.id,
             function_definitions=node.fencil.function_definitions,
             params=node.fencil.params[:-1],
-            closures=closures,
+            closures=list(reversed(closures)),
         ),
         params=node.params,
         tmps=node.tmps,
@@ -317,7 +382,7 @@ def update_unstructured_domains(node: FencilWithTemporaries, offset_provider):
 
 
 def collect_tmps_info(node: FencilWithTemporaries):
-    """Perform type inference for finding the types of temporaries."""
+    """Perform type inference for finding the types of temporaries and sets the temporary size."""
     tmps = {tmp.id for tmp in node.tmps}
     domains: dict[str, ir.Expr] = {
         closure.output.id: closure.domain
