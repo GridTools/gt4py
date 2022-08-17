@@ -211,7 +211,7 @@ def test_tuple_program_return_constructed_inside_nested(fieldview_backend):
 def test_wrong_argument_type(fieldview_backend, copy_program_def):
     size = 10
     inp = np_as_located_field(JDim)(np.ones((size,)))
-    out = np_as_located_field(JDim)(np.zeros((size,)))
+    out = np_as_located_field(IDim)(np.zeros((size,)))
 
     copy_program = program(copy_program_def, backend=fieldview_backend)
 
@@ -222,8 +222,6 @@ def test_wrong_argument_type(fieldview_backend, copy_program_def):
 
     msgs = [
         "- Expected 0-th argument to be of type Field\[\[IDim], dtype=float64\],"
-        " but got Field\[\[JDim\], dtype=float64\].",
-        "- Expected 1-th argument to be of type Field\[\[IDim], dtype=float64\],"
         " but got Field\[\[JDim\], dtype=float64\].",
     ]
     for msg in msgs:
