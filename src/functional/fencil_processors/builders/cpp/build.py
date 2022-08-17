@@ -15,7 +15,6 @@
 
 
 import importlib
-import json
 import pathlib
 import subprocess
 import textwrap
@@ -151,11 +150,7 @@ class CMakeProject(BuildProject):
         return self.source_module.entry_point.name
 
     @property
-    def dependencies(self) -> list[source_modules.LibraryDependency]:
-        return [*self.source_module.library_deps, *self.bindings_module.library_deps]
-
-    @property
-    def input_sources(self) -> dict[str, str]:
+    def sources(self) -> dict[str, str]:
         header_name = self.name + self.language.include_extension
         bindings_name = self.name + "_bindings" + self.language.implementation_extension
         return {
@@ -164,28 +159,23 @@ class CMakeProject(BuildProject):
         }
 
     @property
-    def sources(self) -> dict[str, str]:
-        return self.input_sources | {
+    def files(self) -> dict[str, str]:
+        return self.sources | {
             "CMakeLists.txt": self.cmakelists_source,
-            "gt4py_info.json": self.info_source,
         }
 
     @property
     def cmakelists_source(self) -> str:
-        return _render_cmakelists(self.name, self.dependencies, list(self.input_sources.keys()))
-
-    @property
-    def info_source(self) -> str:
-        return json.dumps(
-            {
-                "gt4py_version": "unknown",
-                "hash": str(hash(self)),
-                "BuildProject": self.__class__.__module__ + "." + self.__class__.__name__,
-            }
+        return _render_cmakelists(
+            self.name,
+            [*self.source_module.library_deps, *self.bindings_module.library_deps],
+            list(self.sources.keys()),
         )
 
     @property
     def src_dir(self) -> pathlib.Path:
+        # TODO(ricoh): For any real caching, the source module, bindings module, type of build system
+        #   have to be taken into account at least.
         return cache.get_cache_folder(self.source_module, self.cache_strategy)
 
     @property
@@ -201,7 +191,7 @@ class CMakeProject(BuildProject):
 
     def write(self) -> None:
         root = self.src_dir
-        for name, content in self.sources.items():
+        for name, content in self.files.items():
             (root / name).write_text(content, encoding="utf-8")
 
     def is_configured(self) -> bool:

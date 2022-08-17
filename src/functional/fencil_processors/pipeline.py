@@ -12,7 +12,6 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Callable, Optional, Protocol
 
 import eve.codegen
@@ -65,34 +64,6 @@ class BuildProject(Protocol):
     ):
         ...
 
-    def find_fs_cache(self) -> Path:
-        ...
-
-    # write unconditionally
-    def write(self) -> None:
-        ...
-
-    # trigger underlying configure unconditionally, fail if not written to fs
-    def configure(self) -> None:
-        ...
-
-    def is_configured(self) -> bool:
-        ...
-
-    # trigger underlying build unconditionally but fail if not configured
-    def build(self) -> None:
-        # TODO(ricoh): encode the requirement that every build output file has a unique name
-        #   because python can not re-import a module cleanly. Best put the hash into the output name,
-        #   then the build system's build command only needs to be triggered if the hash changes.
-        #   Otherwise the fencil function wouldn't change anyway so why bother.
-        #   (https://docs.python.org/3.4/library/importlib.html#importlib.reload does not recommend
-        #   importlib.reload() for dynamically imported modules, especially extensions.)
-        ...
-
-    def is_built(self) -> bool:
-        ...
-
-    # trigger whatever steps are necessary, use caches when safely possible
     def get_fencil_impl(self) -> Callable:
         ...
 
