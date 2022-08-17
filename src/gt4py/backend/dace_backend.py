@@ -118,16 +118,19 @@ def _pre_expand_trafos(gtir_pipeline: GtirPipeline, sdfg: dace.SDFG, layout_map)
                 ]
             )
         if node.oir_node.loop_order == common.LoopOrder.PARALLEL:
-            expansion_priority.append(
-                ["Sections", "Stages", "K", "J", "I"],
+            expansion_priority.extend(
+                [
+                    ["Sections", "Stages", "K", "J", "I"],
+                    ["TileJ", "TileI", "Sections", "KMap", "Stages", "JMap", "IMap"],
+                ]
             )
         else:
-            expansion_priority = [
-                ["J", "I", "Sections", "Stages", "K"],
-            ]
-        expansion_priority.append(
-            ["TileJ", "TileI", "Sections", "KMap", "Stages", "JMap", "IMap"],
-        )
+            expansion_priority.extend(
+                [
+                    ["J", "I", "Sections", "Stages", "K"],
+                    ["TileJ", "TileI", "Sections", "KLoop", "Stages", "JMap", "IMap"],
+                ]
+            )
         is_set = False
         for exp in expansion_priority:
             try:
