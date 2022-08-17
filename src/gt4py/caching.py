@@ -177,10 +177,23 @@ class JITCachingStrategy(CachingStrategy):
 
     name = "jit"
 
+    _root_path: str
+    _dir_name: str
+
+    def __init__(
+        self,
+        builder: "StencilBuilder",
+        *,
+        root_path: Optional[str] = None,
+        dir_name: Optional[str] = None,
+    ):
+        super().__init__(builder)
+        self._root_path = root_path or gt_config.cache_settings["root_path"]
+        self._dir_name = dir_name or gt_config.cache_settings["dir_name"]
+
     @property
     def root_path(self) -> pathlib.Path:
-        settings = gt_config.cache_settings
-        cache_root = pathlib.Path(settings["root_path"]) / settings["dir_name"]
+        cache_root = pathlib.Path(self._root_path) / self._dir_name
 
         if not cache_root.exists():
             gt_utils.make_dir(str(cache_root), is_cache=True)
@@ -195,8 +208,8 @@ class JITCachingStrategy(CachingStrategy):
         backend_root = self.root_path / cpython_id / gt_utils.slugify(self.builder.backend.name)
         if not backend_root.exists():
             if not backend_root.parent.exists():
-                backend_root.parent.mkdir(parents=False)
-            backend_root.mkdir(parents=False)
+                backend_root.parent.mkdir(parents=False, exist_ok=True)
+            backend_root.mkdir(parents=False, exist_ok=True)
         return backend_root
 
     @property

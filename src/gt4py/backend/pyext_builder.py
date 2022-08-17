@@ -72,12 +72,7 @@ def get_gt_pyext_build_opts(
     else:
         cuda_arch = ""
 
-    if gt_version == 1:
-        gt_include_path = gt_config.build_settings["gt_include_path"]
-    elif gt_version == 2:
-        gt_include_path = gt_config.build_settings["gt2_include_path"]
-    else:
-        raise RuntimeError(f"GridTools version {gt_version}.x is not supported")
+    gt_include_path = gt_config.build_settings["gt_include_path"]
 
     import os
 

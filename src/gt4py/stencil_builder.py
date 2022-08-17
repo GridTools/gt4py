@@ -72,7 +72,7 @@ class StencilBuilder:
         backend = gt4py.backend.from_name(backend) if isinstance(backend, str) else backend
         self.backend: "BackendType" = backend(self)
         self.frontend: "FrontendType" = frontend or gt4py.frontend.from_name("gtscript")
-        self.caching = gt4py.caching.strategy_factory("jit", self)
+        self.caching = gt4py.caching.strategy_factory("jit", self, **self.options.cache_settings)
         self._build_data: Dict[str, Any] = {}
         self._externals: Dict[str, Any] = {}
 
