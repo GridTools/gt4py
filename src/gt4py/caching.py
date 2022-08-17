@@ -158,7 +158,7 @@ class CachingStrategy(abc.ABC):
 
     def capture_externals(self) -> Dict[str, Any]:
         """Extract externals from the annotated stencil definition for fingerprinting. Freezes the references."""
-        pass
+        return {}
 
 
 class JITCachingStrategy(CachingStrategy):

@@ -201,10 +201,6 @@ class StencilBuilder:
             self.frontend.prepare_stencil_definition(self._definition, self.externals),
         )
 
-    def capture_externals(self) -> None:
-        """Extract externals from the annotated stencil definition for fingerprinting. Freezes the references."""
-        self.caching.capture_externals()
-
     @property
     def externals(self) -> Dict[str, Any]:
         return self._build_data.get("externals") or self._build_data.setdefault(

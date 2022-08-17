@@ -344,6 +344,9 @@ def lazy_stencil(
         externals: `dict`, optional
             Specify values for otherwise unbound symbols.
 
+        format_source : `bool`, optional
+            Format generated sources when possible (`True` by default).
+
         name : `str`, optional
             The fully qualified name of the generated :class:`StencilObject`.
             If `None`, it will be set to the qualified name of the definition function.

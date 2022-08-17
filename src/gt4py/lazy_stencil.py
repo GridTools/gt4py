@@ -39,7 +39,7 @@ class LazyStencil:
 
     def __init__(self, builder: "StencilBuilder"):
         self.builder = builder
-        self.builder.capture_externals()
+        self.builder.caching.capture_externals()
 
     @cached_property
     def implementation(self) -> "StencilObject":

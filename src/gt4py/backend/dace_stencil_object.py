@@ -23,6 +23,7 @@ import dace.data
 import dace.frontend.python.common
 from dace.frontend.python.common import SDFGClosure, SDFGConvertible
 
+from gt4py.backend.dace_backend import freeze_origin_domain_sdfg
 from gt4py.definitions import AccessKind
 from gt4py.stencil_object import FrozenStencil, StencilObject
 from gt4py.utils import shash
@@ -109,7 +110,6 @@ class DaCeStencilObject(StencilObject, SDFGConvertible):
         except FileNotFoundError:
             # otherwise, wrap and save sdfg from scratch
             inner_sdfg = self.sdfg()
-            from gt4py.backend.dace_backend import freeze_origin_domain_sdfg
 
             frozen_sdfg = freeze_origin_domain_sdfg(
                 inner_sdfg,

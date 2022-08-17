@@ -248,7 +248,11 @@ class DaCeIRBuilder(NodeTranslator):
         )
 
     def visit_HorizontalRestriction(
-        self, node: oir.HorizontalRestriction, *, symbol_collector, **kwargs: Any
+        self,
+        node: oir.HorizontalRestriction,
+        *,
+        symbol_collector: "DaCeIRBuilder.SymbolCollector",
+        **kwargs: Any,
     ) -> dcir.HorizontalRestriction:
         for axis, interval in zip(dcir.Axis.dims_horizontal(), node.mask.intervals):
             for bound in (interval.start, interval.end):
