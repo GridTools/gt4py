@@ -184,17 +184,18 @@ def _order_as_spec(computation_node, expansion_order):
                         if acc.name in localcache_fields:
                             localcache_fields.remove(acc.name)
 
-                for mask_stmt in computation_node.oir_node.iter_tree().if_isinstance(oir.MaskStmt):
-                    if mask_stmt.mask.iter_tree().if_isinstance(common.HorizontalMask).to_list():
-                        for stmt in mask_stmt.body:
-                            for acc in (
-                                stmt.iter_tree()
-                                .if_isinstance(oir.AssignStmt)
-                                .getattr("left")
-                                .if_isinstance(oir.FieldAccess)
-                            ):
-                                if acc.name in localcache_fields:
-                                    localcache_fields.remove(acc.name)
+                for mask_stmt in computation_node.oir_node.iter_tree().if_isinstance(
+                    oir.HorizontalRestriction
+                ):
+                    for stmt in mask_stmt.body:
+                        for acc in (
+                            stmt.iter_tree()
+                            .if_isinstance(oir.AssignStmt)
+                            .getattr("left")
+                            .if_isinstance(oir.FieldAccess)
+                        ):
+                            if acc.name in localcache_fields:
+                                localcache_fields.remove(acc.name)
             else:
                 localcache_fields = set()
             expansion_specification.append(

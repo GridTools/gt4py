@@ -625,7 +625,7 @@ class MakeLocalCaches(eve.NodeTranslator):
                 if (
                     name in fields
                     and isinstance(interval, dcir.IndexWithExtent)
-                    # and interval.size > 1
+                    and interval.size > 1
                     and not dynamic_write
                 ):
                     cache_fields.add(name)
