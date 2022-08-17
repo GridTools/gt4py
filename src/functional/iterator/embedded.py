@@ -71,7 +71,7 @@ class NeighborTableOffsetProvider:
         self.max_neighbors = max_neighbors
         self.has_skip_values = has_skip_values
 
-class NewSparseOffsetProvider:
+class StridedNeighborOffsetProvider:
     def __init__(
         self,
         shape,
