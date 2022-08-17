@@ -55,6 +55,7 @@ Column: TypeAlias = np.ndarray  # TODO consider replacing by a wrapper around nd
 class SparseTag(Tag):
     ...
 
+
 class NeighborTableOffsetProvider:
     def __init__(
         self,
@@ -70,6 +71,7 @@ class NeighborTableOffsetProvider:
         assert not hasattr(tbl, "shape") or tbl.shape[1] == max_neighbors
         self.max_neighbors = max_neighbors
         self.has_skip_values = has_skip_values
+
 
 class StridedNeighborOffsetProvider:
     def __init__(
@@ -97,6 +99,7 @@ class StridedNeighborOffsetProvider:
                 return tpl[0] * self.shape[1] + tpl[1]
 
         return Impl(self.shape)
+
 
 # Offsets
 OffsetPart: TypeAlias = Tag | IntIndex
