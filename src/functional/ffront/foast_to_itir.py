@@ -168,7 +168,22 @@ class FieldOperatorLowering(NodeTranslator):
         return cls().visit(node)
 
     def visit_FieldOperator(self, node: foast.FieldOperator, **kwargs) -> itir.FunctionDefinition:
-        return self.visit(node.definition, **kwargs)
+        func_definition: itir.FunctionDefinition = self.visit(node.definition, **kwargs)
+
+        # value arguments, e.g. scalars and tuples thereof, are passed as
+        #  iterators (see visit_Call for corresponding promotion to iterators).
+        #  deref them here such that they are in the "format" expected by the
+        #  rest of the lowering inside the body. See ADR-0002 for more details.
+        new_body = func_definition.expr
+        for i, param in enumerate(func_definition.params):
+            if isinstance(node.definition.params[i].type, ct.ScalarType):
+                new_body = im.let(param.id, im.deref_(param.id))(new_body)
+
+        return itir.FunctionDefinition(
+            id=func_definition.id,
+            params=func_definition.params,
+            expr=new_body,
+        )
 
     def visit_FunctionDefinition(
         self, node: foast.FunctionDefinition, **kwargs
@@ -361,8 +376,23 @@ class FieldOperatorLowering(NodeTranslator):
             return visitor(node, **kwargs)
         elif node.func.id in TYPE_BUILTIN_NAMES:
             return self._visit_type_constr(node, **kwargs)
-        return self._lift_if_field(node)(
-            im.call_(self.visit(node.func, **kwargs))(*self.visit(node.args, **kwargs))
+        elif isinstance(node.func.type, (ct.FieldOperatorType, ct.ScanOperatorType)):
+            # operators are lowered into stencils and only accept iterator
+            #  arguments. As such transform all value arguments, e.g. scalars
+            #  and tuples thereof, into iterators. See ADR-0002 for more
+            #  details.
+            lowered_func = self.visit(node.func, **kwargs)
+            lowered_args = []
+            for arg in node.args:
+                lowered_arg = self.visit(arg, **kwargs)
+                if iterator_type_kind(arg.type) == ITIRTypeKind.VALUE:
+                    lowered_arg = im.call_(im.lift_(im.lambda__()(lowered_arg)))()
+                lowered_args.append(lowered_arg)
+
+            return self._lift_if_field(node)(im.call_(lowered_func)(*lowered_args))
+
+        raise AssertionError(
+            f"Call to object of type {type(node.func.type).__name__} not understood."
         )
 
     def _visit_where(self, node: foast.Call, **kwargs) -> itir.FunCall:
