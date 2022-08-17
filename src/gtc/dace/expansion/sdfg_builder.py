@@ -417,7 +417,7 @@ class StencilComputationSDFGBuilder(NodeVisitor):
         assert len(node.strides) == len(node.shape)
         sdfg_ctx.sdfg.add_array(
             node.name,
-            shape=node.shape,
+            shape=node.access_info.overapproximated_shape,
             strides=[dace.symbolic.pystr_to_symbolic(s) for s in node.strides],
             dtype=data_type_to_dace_typeclass(node.dtype),
             storage=node.storage.to_dace_storage(),
