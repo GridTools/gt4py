@@ -17,7 +17,7 @@ Before accepting changes we assess the design according to the following guideli
 
 We follow the [Google Python Style Guide][google-style-guide] with very few minor changes (mentioned below). Since the best way to remember something is to understand the reasons behind it, make sure you go through the style guide at least once, paying special to the explanations for the final decisions given in the _Pros_, _Cons_ and _Decision_ subsections.
 
-We explicitly deviate from the [Google Python Style Guide][google-style-guide] only in the following minor issues:
+We deviate from the [Google Python Style Guide][google-style-guide] only in the following points:
 
 - [`pylint`][pylint] is not required. We use [`flake8`][flake8] with some plugins.
 - We use [`black`][black] and [`isort`][isort] for source code and imports formatting, which may break some of the guidelines in Section [_3. Python Style Rules_](https://google.github.io/styleguide/pyguide.html#3-python-style-rules). For example, maximum line length is set to 100 instead of 79 (although docstrings lines should still be limited to 79).
@@ -26,66 +26,42 @@ We explicitly deviate from the [Google Python Style Guide][google-style-guide] o
 
 ### Docstrings
 
-We generate the API documentation automatically from the docstrings using [Sphinx][sphinx] generator together with some extensions like [Sphinx-autodoc][sphinx-autodoc] and [Sphinx-napoleon][sphinx-napoleon], which understands and enhances the docstrings conventions from the Google Python Style Guide. Checkout [Example Google Style Python Docstrings](https://sphinxcontrib-napoleon.readthedocs.io/en/latest/example_google.html#example-google)) for a complete overview.
+We generate the API documentation automatically from the docstrings using the [Sphinx][sphinx] generator together with some extensions like [Sphinx-autodoc][sphinx-autodoc] and [Sphinx-napoleon][sphinx-napoleon], which understands and enhances the docstrings conventions from the Google Python Style Guide. Checkout [Example Google Style Python Docstrings](https://sphinxcontrib-napoleon.readthedocs.io/en/latest/example_google.html#example-google) for a complete overview.
 
-Sphinx supports [reStructuredText][sphinx-rest] (reST) markup language to add additional formatting options to the generated docs but the [_3.8 Comments and Docstrings_](https://google.github.io/styleguide/pyguide.html#38-comments-and-docstrings) section of the Google Python Style Guide does not define how to use markups in docstrings. Therefore, we decided to forbid the use of reST markup in docstrings except for:
+Sphinx supports [reStructuredText][sphinx-rest] (reST) markup language to add additional formatting options to the generated docs, however section [_3.8 Comments and Docstrings_](https://google.github.io/styleguide/pyguide.html#38-comments-and-docstrings) in the Google Python Style Guide does not define how to use markups in docstrings. Therefore, we decided to forbid the use of reST markup in docstrings except for:
 
    - Cross-referencing other objects using Sphinx text roles for the [Python domain](https://www.sphinx-doc.org/en/master/usage/restructuredtext/domains.html#the-python-domain) (as explained [here](https://www.sphinx-doc.org/en/master/usage/restructuredtext/domains.html#python-roles)).   
-   - Very basic formatting markup to improve readability of the generated documentation without obscuring the source docstring (e.g.: ``` ``literal`` ```  strings).
+   - Very basic formatting markup to improve _readability_ of the generated documentation without obscuring the source docstring (e.g.: ``` ``literal`` ```  strings).
    
-We highly encourage to write code examples in docstrings using doctest format to test automatically that they are not out-of-sync with the code.
+Regarding code examples in docstrings, we highly encourage to use [doctests](https://docs.python.org/3/library/doctest.html) format to automatically test they are in sync with the code.
 
 ### Ignoring QA errors
 
-You may need ocassionally to disable QA or typing checks on specific lines because the tool is not able to fully understand why that piece of code is needed. This is usually feasible inlining a special comment like `# type: ignore`. However, you should **only** ignore QA errors when you fully understand its cause and it is not reasonable to fix it by rewriting the offending code in a different way. Additionally, add a brief comment to make sure anyone else reading the code also understands what is happening. For example:
+You may ocassionally need to disable checks from _quality assurance_  (QA) tools (e.g. linters, type checkers, etc.) on specific lines because the tool is not able to fully understand why that piece of code is needed. This is usually feasible inlining a special comment like `# type: ignore`. Note that you should **only** ignore QA errors when you fully understand its cause and it is not reasonable to fix it by rewriting the offending code in a different way. Additionally, you should add a brief comment to make sure anyone else reading the code will also understand what is happening there. For example:
 
    ```python
    f = lambda: 'empty'  # noqa: E731  # assign lambda expression for testing
    ```
 
-
-
 ### Module structure
 
-In general, Python modules should be structured in the following order:
+In general, Python modules should be structured in the following way:
 
-1. Shebang line, #! /usr/bin/env python (only for executable scripts)
-2. License header (``LICENSE_HEADER.txt``) and module-level comments
-3. Module-level docstring
-4. ``__all__ = [...]`` statement, if present
-5. Imports (alphabetically ordered within each block)
+1. (Only for **executable scripts**) _shebang_ line: `#! /usr/bin/env python3`.
+2. License header boilerplate (check `LICENSE_HEADER.txt`).
+3. Module docstring.
+4. Imports, alphabetically ordered within each block:
+   1. Block of imports from the standard library.
+   2. Block of imports from general third party libraries using standard shortcuts if when customary (e.g. `numpy as np`).
+   3. Block of imports from specific modules of the project.
+5. (Optional, mainly for re-exporting symbols) Definition of exported symbols:   
+```python
+__all__ = ["func_a", "CONST_B"]
+   ```
+6. Public constants and typings definitions.
+7. Module contents organized in a meaningful way for reading the module, usually defining functions before classes.
 
-   a. Block of imports from the standard library
-   b. Block of imports from general third party libraries (e.g. numpy,
-      xarray)
-   c. Block of imports from specific submodules of the project
-
-6. Private module variables, functions and classes (names start with
-   underscore)
-7. Public module variables, functions and classes
-
-
-Python modules should be structured in the following order:
-
-1. Shebang line, ``#! /usr/bin/env python`` (only for executable scripts)
-
-2. License header (``LICENSE_HEADER.txt``) and module-level comments
-
-3. Module-level docstring
-
-4. ``__all__ = [...]`` statement, if present
-
-5. Imports (sorting and grouping automated by pre-commit hook)
-
-6. Private module variables, functions and classes (names start with
-   underscore)
-
-7. Public module variables, functions and classes
-
-
-
-+ In config files, try to keep sections and items within sections ordered logically. If there is not an evident logical order, just use alphabetical order. - in setting files: if somethins is in alphabetical (or any other)  order, keep it that way when adding items. If it's not, consider if it could help.
-
+In configuration files, try to keep sections and items within sections ordered logically, adding comments to make it explicit if needed. If there is not only one evident logical order, just pick your favorite one or use alphabetical order.
 
 
 ## Testing 
@@ -102,18 +78,15 @@ Napoleon google/numpy style docstrings (and use sections. Doctests are cool for 
 
 ## Tools
 
--  Use `Black: the uncoompromising Python code
-   formatter <https://github.com/ambv/black>`__ with not more than 120
-   characters per source line and 79 for docstrings
+We use several coding tools to help us increasing the quality or our code. New tools can be added, specially if they do not add a large overhead to our workflow and we think they bring extra benefits to keep our codebasde in shape. The most important ones we currently rely on are:
 
--  Follow NumPy format for docstrings with sphinx-Napoleon. Very useful
-   guidelines can be found in
-   `LSST <https://developer.lsst.io/python/numpydoc.html>`__ docstrings
-   conventions
+   - [Black: the uncoompromising Python code][black]
+   - [flake8][flake8]
+   - [pre-commit][pre-commit]
+   - [sphinx][sphinx], with the following plugins
+      + [sphinx-autodoc][sphinx-autodoc]
+      + [sphinx-napoleon][sphinx-napoleon]
 
--  Git commit hooks with `pre-commit <https://pre-commit.com/>`__
-   - runs formatting and compliance checks for you
-   - will be run on all files at every pull request
 
 
 <!-- Reference links -->
@@ -122,6 +95,7 @@ Napoleon google/numpy style docstrings (and use sections. Doctests are cool for 
 [flake8]: https://flake8.pycqa.org/
 [google-style-guide]: https://google.github.io/styleguide/pyguide.html
 [isort]: https://pycqa.github.io/isort/
+[pre-commit]: https://pre-commit.com/
 [pylint]: https://pylint.pycqa.org/
 [sphinx]: https://www.sphinx-doc.org
 [sphinx-autodoc]: https://www.sphinx-doc.org/en/master/usage/extensions/autodoc.html
