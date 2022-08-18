@@ -69,10 +69,12 @@ Try to keep sections and items within sections ordered logically, adding comment
 
 
 ## Testing 
-- Tests best-practises: factory boy, pytest-cases, other pytest-plugins, make them parallelizable ??
 
+Testing components is a critical part of a software development project. We follow 
+
+- Tests best-practises: factory boy, pytest-cases, other pytest-plugins, make them parallelizable ??
 + factories and test input data (factory boy? pytest-cases?)
-Napoleon google/numpy style docstrings (and use sections. Doctests are cool for small things but not a fully replacement of unit tests). Learn sphinx and RST, napoleon tags for beautiful but lightweight docstrins.
+-Doctests are cool for small things but not a fully replacement of unit tests). Learn sphinx and RST, napoleon tags for beautiful but lightweight docstrins.
 
 
 ## Tools

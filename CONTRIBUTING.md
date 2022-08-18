@@ -67,14 +67,14 @@ Ready to start contributing?
 
    Now you can make your changes locally. Make sure you follow the project code style documented in [CODING_GUIDELINES.md](CODING_GUIDELINES.md).
 
-5. When you're done making changes, check that your changes pass code format and analysis checks with `pre-commit`, and regression and units tests (including  other Python versions) with `tox`:
+5. When you're done making changes, check that your code comply with the project code style and other quality assurance (QA) practices using `pre-commit`, and that unit and regression tests pass for all supported Python versions using `tox`:
 
    ```bash
    $ pre-commit run
    $ tox
    ```
 
-   [README.md](README.md) also contains more details.
+   Read [Testing](#testing) section below for further details.
 
 6. Commit your changes and push your branch to GitHub:
 
@@ -87,6 +87,77 @@ Ready to start contributing?
 7. Submit a pull request (PR) through the [GitHub](https://github.com/gridtools/gt4py) website.
 
 
+## Testing
+
+### Quality Assurance
+
+We use [pre-commit](https://pre-commit.com/) to run several auto-formatting and linting tools. You should always execute it locally before opening a pull request. `pre-commit` can be installed as a _git hook_ to automatically check the staged changes before commiting:
+
+```bash
+# Install pre-commit as a git hook and initialized all the configured tools
+pre-commit install --install-hooks
+```
+
+Or it can be executed on demand from the command line:
+
+```bash
+# Check only the staged changes
+pre-commit run
+
+# Check all the files in the repository (-a / --all-files)
+pre-commit run -a
+
+# Run only some of the tools (e.g. flake8)
+pre-commit run -a flake8
+```
+
+### Unit and Regression Tests
+
+In the GT4Py project we use the [pytest](https://pytest.org/) framework for testing our code. `pytest` comes with a very convenient CLI tool to run tests. For example:
+
+```bash
+# Run tests inside `path/to/test/folder`
+pytest path/to/test/folder
+
+# Run tests stopping immediately on first error: -x / --exitfirst
+pytest -x tests/
+
+# Run tests matching the pattern: -k pattern (supports boolean operators)
+pytest -k pattern tests/
+
+# Run tests in parallel: -n NUM_OF_PROCS (or `auto`)
+pytest -n auto tests/
+
+# Run only tests that failed last time: --lf / --last-failed
+pytest --lf tests/
+
+# Run all the tests starting with the tests that failed last time:
+# --ff / --failed-first
+pytest --ff tests/
+
+# Run tests with more informative output:
+#   -v / --verbose          - increase verbosity
+#   -l / --showlocalsflag   - show locals in tracebacks
+#   -s                      - show tests outputs to stdout
+pytest -v -l -s tests/
+```
+
+Check `pytest` documentation (`pytest --help`) for all the options to select and execute tests.
+
+To run the complete test suite we also recommended to use `tox`:
+
+```bash
+# List all the available test environments
+tox -a
+
+# Run test suite in a specific environment
+tox -e py310-base
+```
+
+`tox` is configured to generate test coverage reports by default. An `HTML`
+copy will be written in `tests/_reports/coverage_html/` at the end of the run.
+
+
 ## Pull Request and Merge Guidelines
 
 Before you submit a pull request, check that it meets these guidelines:
@@ -97,7 +168,8 @@ Before you submit a pull request, check that it meets these guidelines:
 4. Ask for a review ...
 5. MErge using a commit message from ... [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/#summary)
 
-## Deploying
+
+## Deployment
 
 A reminder for the maintainers on how to deploy.
 Make sure all your changes are committed (including an entry in HISTORY.rst).
