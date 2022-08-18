@@ -30,6 +30,11 @@ from gt4py import definitions as gt_definitions
 from gt4py.lazy_stencil import LazyStencil
 
 
+try:
+    from gt4py.backend.dace_lazy_stencil import DaCeLazyStencil
+except ImportError:
+    DaCeLazyStencil = LazyStencil
+
 # GTScript builtins
 MATH_BUILTINS = {
     "abs",
@@ -311,6 +316,7 @@ def lazy_stencil(
     build_info=None,
     dtypes=None,
     externals=None,
+    format_source=True,
     name=None,
     rebuild=False,
     eager=False,
@@ -337,6 +343,9 @@ def lazy_stencil(
 
         externals: `dict`, optional
             Specify values for otherwise unbound symbols.
+
+        format_source : `bool`, optional
+            Format generated sources when possible (`True` by default).
 
         name : `str`, optional
             The fully qualified name of the generated :class:`StencilObject`.
@@ -366,20 +375,75 @@ def lazy_stencil(
     """
     from gt4py.stencil_builder import StencilBuilder
 
-    def _decorator(func):
-        _set_arg_dtypes(func, dtypes or {})
-        options = gt_definitions.BuildOptions(
-            **{
-                **StencilBuilder.default_options_dict(func),
-                **StencilBuilder.name_to_options_args(name),
-                "rebuild": rebuild,
-                "build_info": build_info,
-                **StencilBuilder.nest_impl_options(kwargs),
-            }
-        )
-        stencil = LazyStencil(
-            StencilBuilder(func, backend=backend, options=options).with_externals(externals or {})
-        )
+    if build_info is not None and not isinstance(build_info, dict):
+        raise ValueError(f"Invalid 'build_info' dictionary ('{build_info}')")
+    if dtypes is not None and not isinstance(dtypes, dict):
+        raise ValueError(f"Invalid 'dtypes' dictionary ('{dtypes}')")
+    if externals is not None and not isinstance(externals, dict):
+        raise ValueError(f"Invalid 'externals' dictionary ('{externals}')")
+    if not isinstance(format_source, bool):
+        raise ValueError(f"Invalid 'format_source' bool value ('{name}')")
+    if name is not None and not isinstance(name, str):
+        raise ValueError(f"Invalid 'name' string ('{name}')")
+    if not isinstance(rebuild, bool):
+        raise ValueError(f"Invalid 'rebuild' bool value ('{rebuild}')")
+
+    module = None
+    if name:
+        name_components = name.split(".")
+        name = name_components[-1]
+        module = ".".join(name_components[:-1])
+
+    name = name or ""
+    module = (
+        module or inspect.currentframe().f_back.f_globals["__name__"]
+    )  # definition_func.__globals__["__name__"] ??,
+
+    # Move hidden "_option" keys to _impl_opts
+    _impl_opts = {}
+    for key, value in kwargs.items():
+        if key.startswith("_"):
+            _impl_opts[key] = value
+    for key in _impl_opts:
+        kwargs.pop(key)
+
+    # Setup build_info timings
+    if build_info is not None:
+        time_keys = ("parse_time", "module_time", "codegen_time", "build_time", "load_time")
+        build_info.update({time_key: 0.0 for time_key in time_keys})
+
+    build_options = gt_definitions.BuildOptions(
+        name=name,
+        module=module,
+        format_source=format_source,
+        rebuild=rebuild,
+        backend_opts=kwargs,
+        build_info=build_info,
+        impl_opts=_impl_opts,
+    )
+
+    def _decorator(definition_func):
+        if not isinstance(definition_func, types.FunctionType):
+            if hasattr(definition_func, "definition_func"):  # StencilObject
+                definition_func = definition_func.definition_func
+            elif callable(definition_func):  # General callable
+                definition_func = definition_func.__call__
+
+        if not build_options.name:
+            build_options.name = f"{definition_func.__name__}"
+        if backend and "dace" in backend:
+            stencil = DaCeLazyStencil(
+                StencilBuilder(
+                    definition_func, backend=backend, options=build_options
+                ).with_externals(externals or {})
+            )
+
+        else:
+            stencil = LazyStencil(
+                StencilBuilder(
+                    definition_func, backend=backend, options=build_options
+                ).with_externals(externals or {})
+            )
         if eager:
             stencil = stencil.implementation
         elif check_syntax:

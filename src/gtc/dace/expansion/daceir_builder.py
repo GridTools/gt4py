@@ -46,31 +46,33 @@ from .utils import remove_horizontal_region
 
 def _access_iter(node: oir.HorizontalExecution, get_outputs: bool):
     if get_outputs:
-        xiter = eve.utils.xiter(
+        iterator = eve.utils.xiter(
             itertools.chain(
                 *node.iter_tree().if_isinstance(oir.AssignStmt).getattr("left").map(iter_tree)
             )
-        )
+        ).if_isinstance(oir.FieldAccess)
     else:
-        xiter = eve.utils.xiter(
-            itertools.chain(
-                *node.iter_tree().if_isinstance(oir.AssignStmt).getattr("right").map(iter_tree),
-                *node.iter_tree().if_isinstance(oir.While).getattr("cond").map(iter_tree),
-                *node.iter_tree().if_isinstance(oir.MaskStmt).getattr("mask").map(iter_tree),
-            )
-        )
+
+        def _iterator():
+            for n in node.iter_tree():
+                if isinstance(n, oir.AssignStmt):
+                    yield from n.right.iter_tree().if_isinstance(oir.FieldAccess)
+                elif isinstance(n, oir.While):
+                    yield from n.cond.iter_tree().if_isinstance(oir.FieldAccess)
+                elif isinstance(n, oir.MaskStmt):
+                    yield from n.mask.iter_tree().if_isinstance(oir.FieldAccess)
+
+        iterator = _iterator()
 
     yield from (
-        xiter.if_isinstance(oir.FieldAccess)
-        .map(
+        eve.utils.xiter(iterator).map(
             lambda acc: (
                 acc.name,
                 acc.offset,
                 get_tasklet_symbol(acc.name, acc.offset, is_target=get_outputs),
             )
         )
-        .unique(key=lambda x: x[2])
-    )
+    ).unique(key=lambda x: x[2])
 
 
 def _get_tasklet_inout_memlets(node: oir.HorizontalExecution, *, get_outputs, global_ctx, **kwargs):
@@ -288,9 +290,22 @@ class DaCeIRBuilder(NodeTranslator):
         )
 
     def visit_HorizontalRestriction(
-        self, node: oir.HorizontalRestriction, **kwargs: Any
+        self,
+        node: oir.HorizontalRestriction,
+        *,
+        symbol_collector: "DaCeIRBuilder.SymbolCollector",
+        **kwargs: Any,
     ) -> dcir.HorizontalRestriction:
-        return dcir.HorizontalRestriction(mask=node.mask, body=self.visit(node.body, **kwargs))
+        for axis, interval in zip(dcir.Axis.dims_horizontal(), node.mask.intervals):
+            for bound in (interval.start, interval.end):
+                if bound is not None:
+                    symbol_collector.add_symbol(axis.iteration_symbol())
+                    if bound.level == common.LevelMarker.END:
+                        symbol_collector.add_symbol(axis.domain_symbol())
+        return dcir.HorizontalRestriction(
+            mask=node.mask,
+            body=self.visit(node.body, symbol_collector=symbol_collector, **kwargs),
+        )
 
     def visit_VariableKOffset(self, node: oir.VariableKOffset, **kwargs):
         return dcir.VariableKOffset(k=self.visit(node.k, **kwargs))
@@ -589,6 +604,7 @@ class DaCeIRBuilder(NodeTranslator):
                         start=dcir.AxisBound.from_common(axis, oir.AxisBound.start()),
                         end=dcir.AxisBound.from_common(axis, oir.AxisBound.end()),
                     )
+                symbol_collector.remove_symbol(axis.tile_symbol())
                 ranges.append(
                     dcir.Range(
                         var=axis.tile_symbol(),
@@ -613,32 +629,44 @@ class DaCeIRBuilder(NodeTranslator):
                     )
                     scope_nodes = remove_horizontal_region(scope_nodes, axis)
                 assert iteration.kind == "contiguous"
-                read_memlets = [
-                    dcir.Memlet(
-                        field=memlet.field,
-                        connector=memlet.connector,
-                        access_info=memlet.access_info.apply_iteration(
-                            dcir.GridSubset.from_interval(interval, axis)
-                        ),
-                        is_read=True,
-                        is_write=False,
+                res_read_memlets = []
+                res_write_memlets = []
+                for memlet in read_memlets:
+                    access_info = memlet.access_info.apply_iteration(
+                        dcir.GridSubset.from_interval(interval, axis)
                     )
-                    for memlet in read_memlets
-                ]
+                    for sym in access_info.grid_subset.free_symbols:
+                        symbol_collector.add_symbol(sym)
+                    res_read_memlets.append(
+                        dcir.Memlet(
+                            field=memlet.field,
+                            connector=memlet.connector,
+                            access_info=access_info,
+                            is_read=True,
+                            is_write=False,
+                        )
+                    )
+                for memlet in write_memlets:
+                    access_info = memlet.access_info.apply_iteration(
+                        dcir.GridSubset.from_interval(interval, axis)
+                    )
+                    for sym in access_info.grid_subset.free_symbols:
+                        symbol_collector.add_symbol(sym)
+                    res_write_memlets.append(
+                        dcir.Memlet(
+                            field=memlet.field,
+                            connector=memlet.connector,
+                            access_info=access_info,
+                            is_read=False,
+                            is_write=True,
+                        )
+                    )
+                read_memlets = res_read_memlets
+                write_memlets = res_write_memlets
 
-                write_memlets = [
-                    dcir.Memlet(
-                        field=memlet.field,
-                        connector=memlet.connector,
-                        access_info=memlet.access_info.apply_iteration(
-                            dcir.GridSubset.from_interval(interval, axis)
-                        ),
-                        is_read=False,
-                        is_write=True,
-                    )
-                    for memlet in write_memlets
-                ]
-                ranges.append(dcir.Range.from_axis_and_interval(axis, interval))
+                index_range = dcir.Range.from_axis_and_interval(axis, interval)
+                symbol_collector.remove_symbol(index_range.var)
+                ranges.append(index_range)
 
         return [
             dcir.DomainMap(
@@ -673,31 +701,40 @@ class DaCeIRBuilder(NodeTranslator):
             raise NotImplementedError("Tiling as a state machine not implemented.")
 
         assert item.kind == "contiguous"
-        read_memlets = [
-            dcir.Memlet(
-                field=memlet.field,
-                connector=memlet.connector,
-                access_info=memlet.access_info.apply_iteration(
-                    dcir.GridSubset.from_interval(interval, axis)
-                ),
-                is_read=True,
-                is_write=False,
+        res_read_memlets = []
+        res_write_memlets = []
+        for memlet in read_memlets:
+            access_info = memlet.access_info.apply_iteration(
+                dcir.GridSubset.from_interval(interval, axis)
             )
-            for memlet in read_memlets
-        ]
-
-        write_memlets = [
-            dcir.Memlet(
-                field=memlet.field,
-                connector=memlet.connector,
-                access_info=memlet.access_info.apply_iteration(
-                    dcir.GridSubset.from_interval(interval, axis)
-                ),
-                is_read=False,
-                is_write=True,
+            for sym in access_info.grid_subset.free_symbols:
+                symbol_collector.add_symbol(sym)
+            res_read_memlets.append(
+                dcir.Memlet(
+                    field=memlet.field,
+                    connector=memlet.connector,
+                    access_info=access_info,
+                    is_read=True,
+                    is_write=False,
+                )
             )
-            for memlet in write_memlets
-        ]
+        for memlet in write_memlets:
+            access_info = memlet.access_info.apply_iteration(
+                dcir.GridSubset.from_interval(interval, axis)
+            )
+            for sym in access_info.grid_subset.free_symbols:
+                symbol_collector.add_symbol(sym)
+            res_write_memlets.append(
+                dcir.Memlet(
+                    field=memlet.field,
+                    connector=memlet.connector,
+                    access_info=access_info,
+                    is_read=False,
+                    is_write=True,
+                )
+            )
+        read_memlets = res_read_memlets
+        write_memlets = res_write_memlets
 
         assert not isinstance(interval, dcir.IndexWithExtent)
         index_range = dcir.Range.from_axis_and_interval(axis, interval, stride=item.stride)

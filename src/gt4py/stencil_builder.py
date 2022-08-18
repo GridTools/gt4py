@@ -215,6 +215,7 @@ class StencilBuilder:
         """
         self._build_data = {}
         self._externals = externals
+        self.with_caching(self.caching.name)
         return self
 
     @property
@@ -255,7 +256,10 @@ class StencilBuilder:
     def gtir_pipeline(self) -> GtirPipeline:
         return self._build_data.get("gtir_pipeline") or self._build_data.setdefault(
             "gtir_pipeline",
-            GtirPipeline(self.frontend.generate(self.definition, self.externals, self.options)),
+            GtirPipeline(
+                self.frontend.generate(self.definition, self.externals, self.options),
+                self.stencil_id,
+            ),
         )
 
     @property

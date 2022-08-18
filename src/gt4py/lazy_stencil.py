@@ -39,6 +39,7 @@ class LazyStencil:
 
     def __init__(self, builder: "StencilBuilder"):
         self.builder = builder
+        self.builder.caching.capture_externals()
 
     @cached_property
     def implementation(self) -> "StencilObject":
@@ -77,3 +78,18 @@ class LazyStencil:
     def run(self, *args: Any, **kwargs: Any) -> None:
         """Pass through to the implementation.run."""
         self.implementation.run(*args, **kwargs)
+
+    def __sdfg__(self, **kwargs):
+        raise TypeError(
+            f'Only dace backends are supported in DaCe-orchestrated programs. (found "{self.backend.name}")'
+        )
+
+    def __sdfg_signature__(self):
+        raise TypeError(
+            f'Only dace backends are supported in DaCe-orchestrated programs. (found "{self.backend.name}")'
+        )
+
+    def __sdfg_closure__(self, *args, **kwargs):
+        raise TypeError(
+            f'Only dace backends are supported in DaCe-orchestrated programs. (found "{self.backend.name}")'
+        )

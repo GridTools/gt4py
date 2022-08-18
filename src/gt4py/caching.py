@@ -21,6 +21,8 @@ import sys
 import types
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
+from cached_property import cached_property
+
 from gt4py import config as gt_config
 from gt4py import utils as gt_utils
 from gt4py.definitions import StencilID
@@ -154,6 +156,10 @@ class CachingStrategy(abc.ABC):
         """Calculate the name for the stencil class, default is to read from build options."""
         return self.builder.options.name
 
+    def capture_externals(self) -> Dict[str, Any]:
+        """Extract externals from the annotated stencil definition for fingerprinting. Freezes the references."""
+        return {}
+
 
 class JITCachingStrategy(CachingStrategy):
     """
@@ -282,7 +288,12 @@ class JITCachingStrategy(CachingStrategy):
             return self.builder.backend.filter_options_for_id(self.builder.options).shashed_id
         return self.builder.options.shashed_id
 
-    def _extract_externals(self) -> Dict[str, Any]:
+    def capture_externals(self) -> Dict[str, Any]:
+        """Extract externals from the annotated stencil definition for fingerprinting."""
+        return self._externals
+
+    @cached_property
+    def _externals(self) -> Dict[str, Any]:
         """Extract externals from the annotated stencil definition for fingerprinting."""
         return {
             name: value._gtscript_["canonical_ast"] if hasattr(value, "_gtscript_") else value
@@ -299,7 +310,7 @@ class JITCachingStrategy(CachingStrategy):
             "__main__": self.builder.definition._gtscript_["canonical_ast"],
             "docstring": inspect.getdoc(self.builder.definition),
             "api_annotations": f"[{', '.join(self._extract_api_annotations())}]",
-            **self._extract_externals(),
+            **self._externals,
         }
 
         # typeignore because attrclass StencilID has generated constructor

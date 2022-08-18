@@ -40,32 +40,58 @@ def _set_expansion_order(
     node._expansion_specification = res
 
 
+class PickledProperty:
+    def to_json(self, obj):
+        protocol = pickle.DEFAULT_PROTOCOL
+        pbytes = pickle.dumps(obj, protocol=protocol)
+        jsonobj = dict(pickle=base64.b64encode(pbytes).decode("utf-8"))
+        return jsonobj
+
+    @classmethod
+    def from_json(cls, d, sdfg=None):
+        b64string = d["pickle"]
+        byte_repr = base64.b64decode(b64string)
+        return pickle.loads(byte_repr)
+
+
+class PickledDataclassProperty(PickledProperty, dace.properties.DataclassProperty):
+    pass
+
+
+class PickledListProperty(PickledProperty, dace.properties.ListProperty):
+    pass
+
+
+class PickledDictProperty(PickledProperty, dace.properties.DictProperty):
+    pass
+
+
 @library.node
 class StencilComputation(library.LibraryNode):
     implementations: Dict[str, dace.library.ExpandTransformation] = {}
     default_implementation = "default"
 
-    oir_node = dace.properties.DataclassProperty(dtype=VerticalLoop, allow_none=True)
+    oir_node = PickledDataclassProperty(dtype=VerticalLoop, allow_none=True)
 
-    declarations = dace.properties.DictProperty(key_type=str, value_type=Decl, allow_none=True)
-    extents = dace.properties.DictProperty(key_type=int, value_type=Extent, allow_none=False)
+    declarations = PickledDictProperty(key_type=str, value_type=Decl, allow_none=True)
+    extents = PickledDictProperty(key_type=int, value_type=Extent, allow_none=False)
 
-    expansion_specification = dace.properties.ListProperty(
+    device = dace.properties.EnumProperty(
+        dtype=dace.DeviceType, default=dace.DeviceType.CPU, allow_none=True
+    )
+    expansion_specification = PickledListProperty(
         element_type=ExpansionItem,
         allow_none=True,
         setter=_set_expansion_order,
     )
-    tile_sizes = dace.properties.DictProperty(
+    tile_sizes = PickledDictProperty(
         key_type=str,
         value_type=int,
         default={dcir.Axis.I: 64, dcir.Axis.J: 8, dcir.Axis.K: 8},
     )
-    device = dace.properties.EnumProperty(
-        dtype=dace.DeviceType, default=dace.DeviceType.CPU, allow_none=True
-    )
 
     symbol_mapping = dace.properties.DictProperty(
-        key_type=str, value_type=object, default=None, allow_none=True
+        key_type=str, value_type=dace.symbolic.pystr_to_symbolic, default=None, allow_none=True
     )
     _dace_library_name = "StencilComputation"
 
@@ -90,8 +116,8 @@ class StencilComputation(library.LibraryNode):
                     extents_dict[j * len(oir_node.sections) + i] = extents[id(he)]
 
             self.oir_node = oir_node
-            self.extents = extents_dict
-            self.declarations = declarations
+            self.extents = extents_dict  # type: ignore
+            self.declarations = declarations  # type: ignore
             self.symbol_mapping = {
                 decl.name: dace.symbol(
                     decl.name,
@@ -146,26 +172,6 @@ class StencilComputation(library.LibraryNode):
         return {
             name: decl for name, decl in self.declarations.items() if isinstance(decl, FieldDecl)
         }
-
-    def to_json(self, parent):
-        protocol = pickle.DEFAULT_PROTOCOL
-        pbytes = pickle.dumps(self, protocol=protocol)
-
-        jsonobj = super().to_json(parent)
-        jsonobj["classpath"] = dace.nodes.full_class_path(self)
-        jsonobj["attributes"]["protocol"] = protocol
-        jsonobj["attributes"]["pickle"] = base64.b64encode(pbytes).decode("utf-8")
-
-        return jsonobj
-
-    @classmethod
-    def from_json(cls, json_obj, context=None):
-        if "attributes" not in json_obj:
-            b64string = json_obj["pickle"]
-        else:
-            b64string = json_obj["attributes"]["pickle"]
-        byte_repr = base64.b64decode(b64string)
-        return pickle.loads(byte_repr)
 
     @property
     def free_symbols(self) -> Set[str]:

@@ -245,9 +245,11 @@ class StencilObject(abc.ABC):
 
         raise ValueError("Invalid 'origin' value ({})".format(origin))
 
+    @staticmethod
     def _get_max_domain(
-        self,
         field_args: Dict[str, Any],
+        domain_infos: DomainInfo,
+        field_infos: Dict[str, FieldInfo],
         origin: Dict[str, Tuple[int, ...]],
         *,
         squeeze: bool = True,
@@ -267,11 +269,11 @@ class StencilObject(abc.ABC):
         -------
             `Shape`: the maximum domain size.
         """
-        domain_ndim = self.domain_info.ndim
+        domain_ndim = domain_infos.ndim
         max_size = sys.maxsize
         max_domain = Shape([max_size] * domain_ndim)
 
-        for name, field_info in self.field_info.items():
+        for name, field_info in field_infos.items():
             if field_info.access != AccessKind.NONE:
                 assert field_args.get(name, None) is not None, f"Invalid value for '{name}' field."
                 field = field_args[name]
@@ -323,7 +325,11 @@ class StencilObject(abc.ABC):
         if not domain > Shape.zeros(domain_ndim):
             raise ValueError(f"Compute domain contains zero sizes '{domain}')")
 
-        if not domain <= (max_domain := self._get_max_domain(field_args, origin, squeeze=False)):
+        if not domain <= (
+            max_domain := self._get_max_domain(
+                field_args, self.domain_info, self.field_info, origin, squeeze=False
+            )
+        ):
             raise ValueError(
                 f"Compute domain too large (provided: {domain}, maximum: {max_domain})"
             )
@@ -426,14 +432,17 @@ class StencilObject(abc.ABC):
                         f"The type of parameter '{name}' is '{type(parameter)}' instead of '{parameter_info.dtype}'"
                     )
 
+    @staticmethod
     def _normalize_origins(
-        self, field_args: Dict[str, FieldType], origin: Optional[OriginType]
+        field_args: Dict[str, FieldType],
+        field_infos: Dict[str, FieldInfo],
+        origin: Optional[OriginType],
     ) -> Dict[str, Tuple[int, ...]]:
-        origin = self._make_origin_dict(origin)
+        origin = StencilObject._make_origin_dict(origin)
         all_origin = origin.get("_all_", None)
-
         # Set an appropriate origin for all fields
-        for name, field_info in self.field_info.items():
+
+        for name, field_info in field_infos.items():
             assert name in field_args, f"Missing value for '{name}' field."
             field_origin = origin.get(name, None)
 
@@ -451,9 +460,9 @@ class StencilObject(abc.ABC):
                     *((0,) * len(field_info.data_dims)),
                 )
 
-            elif isinstance(field_arg := field_args.get(name), gt_storage.storage.Storage):
+            elif hasattr(field_arg := field_args.get(name), "default_origin"):
+                assert field_arg is not None  # for mypy
                 origin[name] = field_arg.default_origin
-
             else:
                 origin[name] = (0,) * field_info.ndim
 
@@ -503,10 +512,10 @@ class StencilObject(abc.ABC):
 
         cache_key = _compute_cache_key(field_args, parameter_args, domain, origin)
         if cache_key not in self._domain_origin_cache:
-            origin = self._normalize_origins(field_args, origin)
+            origin = self._normalize_origins(field_args, self.field_info, origin)
 
             if domain is None:
-                domain = self._get_max_domain(field_args, origin)
+                domain = self._get_max_domain(field_args, self.domain_info, self.field_info, origin)
 
             if validate_args:
                 self._validate_args(field_args, parameter_args, domain, origin)
@@ -559,7 +568,11 @@ class StencilObject(abc.ABC):
         """
         type(self)._domain_origin_cache.clear()
 
-    def __sdfg__(self, **kwargs):
+    def __deepcopy__(self, memodict=None):
+        # StencilObjects are singletons.
+        return self
+
+    def __sdfg__(self, *args, **kwargs):
         raise TypeError(
             f'Only dace backends are supported in DaCe-orchestrated programs. (found "{self.backend}")'
         )

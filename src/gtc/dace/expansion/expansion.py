@@ -113,6 +113,16 @@ class StencilComputationExpansion(dace.library.ExpandTransformation):
         )
         nsdfg.symbol_mapping.update({**symbol_mapping, **node.symbol_mapping})
 
+        # remove unused symbols from symbol_mapping
+        delkeys = set()
+        for sym in node.symbol_mapping.keys():
+            if str(sym) not in nsdfg.sdfg.free_symbols:
+                delkeys.add(str(sym))
+        for key in delkeys:
+            del node.symbol_mapping[key]
+            if key in nsdfg.symbol_mapping:
+                del nsdfg.symbol_mapping[key]
+
     @staticmethod
     def _get_parent_arrays(
         node: "StencilComputation", parent_state: dace.SDFGState, parent_sdfg: dace.SDFG
@@ -136,8 +146,7 @@ class StencilComputationExpansion(dace.library.ExpandTransformation):
             node.oir_node, global_ctx=DaCeIRBuilder.GlobalContext(library_node=node, arrays=arrays)
         )
 
-        nsdfg = StencilComputationSDFGBuilder().visit(daceir)
+        nsdfg: dace.nodes.NestedSDFG = StencilComputationSDFGBuilder().visit(daceir)
 
         StencilComputationExpansion._fix_context(nsdfg, node, parent_state, daceir)
-
         return nsdfg

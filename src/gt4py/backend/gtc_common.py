@@ -15,7 +15,6 @@
 
 import abc
 import os
-import pathlib
 import textwrap
 import time
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Type, Union
@@ -316,12 +315,6 @@ class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
 
         result = self.build_extension_module(gt_pyext_sources, pyext_opts, uses_cuda=uses_cuda)
 
-        for filename, content in gt_pyext_files.get("info", {}).items():
-            stencil_cache_dir = pathlib.Path(
-                os.path.relpath(self.builder.module_path.parent, pathlib.Path.cwd())
-            )
-            with open(stencil_cache_dir / filename, "w+") as handle:
-                handle.write(content)
         if build_info is not None:
             build_info["build_time"] = time.perf_counter() - start_time
 
