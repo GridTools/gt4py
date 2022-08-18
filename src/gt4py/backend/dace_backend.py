@@ -128,6 +128,15 @@ def _pre_expand_trafos(gtir_pipeline: GtirPipeline, sdfg: dace.SDFG, layout_map)
             expansion_priority.extend(
                 [
                     ["J", "I", "Sections", "Stages", "CachedKLoop"],
+                    [
+                        "TileJ",
+                        "TileI",
+                        "Sections",
+                        "Stages",
+                        "JMap",
+                        "IMap",
+                        "CachedKLoop",
+                    ],
                     ["TileJ", "TileI", "Sections", "CachedKLoop", "Stages", "JMap", "IMap"],
                 ]
             )
@@ -481,6 +490,7 @@ class DaCeComputationCodegen:
         with dace.config.temporary_config():
             dace.config.Config.set("compiler", "cuda", "max_concurrent_streams", value=-1)
             dace.config.Config.set("compiler", "cpu", "openmp_sections", value=False)
+            sdfg.view()
             code_objects = sdfg.generate_code()
         is_gpu = "CUDA" in {co.title for co in code_objects}
 

@@ -81,6 +81,8 @@ class StencilComputationSDFGBuilder(NodeVisitor):
                 condition_expr=condition_expr,
                 increment_expr=f"{index_range.var}+({index_range.stride})",
             )
+            if index_range.var not in self.sdfg.symbols:
+                self.sdfg.add_symbol(index_range.var, stype=dace.int32)
             self.state_stack.append(after_state)
             self.state = loop_state
             return self
@@ -307,8 +309,8 @@ class StencilComputationSDFGBuilder(NodeVisitor):
         for memlet in node.memlets:
             dst_name = node.name_map[memlet.field]
             if dst_name in intermediate_nodes:
-                stride = 1
-                strides = []
+                stride = "1"
+                strides: List[str] = []
                 for s in reversed(memlet.access_info.overapproximated_shape):
                     strides = [stride, *strides]
                     stride = f"({stride}) * ({s})"
