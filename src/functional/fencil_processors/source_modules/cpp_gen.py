@@ -26,7 +26,7 @@ from functional.fencil_processors.source_modules import source_modules
 
 @dataclass(frozen=True)
 class CppLanguage:
-    """Implements source_modules.SupportedLanguageProtocol for C++ language settings."""
+    """Implements source_modules.IncludeImplementationLanguageProtocol for C++ language settings."""
 
     name: str
     implementation_extension: str
