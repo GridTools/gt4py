@@ -45,7 +45,7 @@ You may ocassionally need to disable checks from _quality assurance_  (QA) tools
 
 ### Module structure
 
-In general, we structure Python modules in the following way:
+In general, you should structure new Python modules in the following way:
 
 1. (Only for **executable scripts**) _shebang_ line: `#! /usr/bin/env python3`.
 2. License header boilerplate (check `LICENSE_HEADER.txt`).
@@ -78,7 +78,7 @@ Napoleon google/numpy style docstrings (and use sections. Doctests are cool for 
 
 ## Tools
 
-We use several coding tools to help us increasing the quality or our code. New tools can be added at any time, specially if they do not add a large overhead to our workflow and we think they bring extra benefits to keep our codebase in shape. The most important ones we currently rely on are:
+As mentioned above, we use several tools to help us writing high-quality code. New tools can be added at any time, specially if they do not add a large overhead to our workflow and we think they bring extra benefits to keep our codebase in shape. The most important ones we currently rely on are:
 
    - [Black][black] for autoformatting source code.
    - [isort][isort] for autoformatting import statements.
@@ -90,7 +90,7 @@ We use several coding tools to help us increasing the quality or our code. New t
    - [tox][tox] for testing automating with different environments.
    - [sphinx][sphinx] for generating documentation, extended with:
       + [sphinx-autodoc][sphinx-autodoc] and [sphinx-napoleon][sphinx-napoleon] for extracting API documentation from docstrings.
-      + [jupytext][jupytext] for writing user documentation with
+      + [jupytext][jupytext] for writing user documentation with code examples.
 
 
 <!-- Reference links -->

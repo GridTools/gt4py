@@ -99,17 +99,32 @@ pre-commit run -a flake8
 
 ### Testing
 
-GT4Py testing uses the [pytest](https://pytest.org/) framework which comes with an integrated ``pytest`` command tool to easily run tests:
+GT4Py testing uses the [pytest](https://pytest.org/) framework which comes with an integrated ``pytest`` CLI tool to run tests in a very convenient way. For example:
 
 ```bash
-# Run all tests (verbose mode)
-pytest -v 
+# Run tests inside `path/to/test/folder`
+pytest path/to/test/folder
 
-# Run only tests in `path/to/test/folder`
-pytest -v path/to/test/folder
+# Run tests in parallel: -n NUM_OF_PROCS (or `auto`)
+pytest -n auto tests/
+
+# Run only tests that failed last time: --lf / --last-failed
+pytest --lf tests/
+
+# Run all the tests starting with the tests that failed last time:
+# --ff / --failed-first
+pytest --ff tests/
+
+# Run tests with more informative output:
+#   -v / --verbose          - increase verbosity
+#   -l / --showlocalsflag   - show locals in tracebacks
+#   -s                      - show tests outputs to stdout
+pytest -v -l -s tests/
 ```
 
-Nonetheless, we also recommended to use `tox` to run the complete test suite:
+Check `pytest` documentation (`pytest --help`) for all the options to select and execute tests.
+
+To run the complete test suite we recommended to also use `tox`:
 
 ```bash
 # List all the available test environments
