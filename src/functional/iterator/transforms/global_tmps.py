@@ -11,6 +11,19 @@ from functional.iterator.transforms.popup_tmps import PopupTmps
 from functional.iterator.transforms.prune_closure_inputs import PruneClosureInputs
 
 
+"""Iterator IR extension for global temporaries.
+
+Replaces lifted function calls by temporaries using the following steps:
+1. Split closures by popping up lifted function calls to the top of the expression tree, (that is,
+   to stencil arguments) and then extracting them as new closures.
+2. Introduces a new fencil-scope variable (the temporary) for each output of newly created closures.
+   The domain size is set to a new symbol `_gtmp_auto_domain`.
+3. Infer the domain sizes for the new closures by analysing the accesses/shifts within all closures
+   and replace all occurrences of `_gtmp_auto_domain` by concrete domain sizes.
+4. Infer the data type and size of the temporary buffers.
+"""
+
+
 AUTO_DOMAIN = ir.SymRef(id="_gtmp_auto_domain")
 
 
