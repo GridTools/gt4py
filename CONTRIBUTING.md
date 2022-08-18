@@ -169,17 +169,19 @@ Before you submit a pull request, check that it meets these guidelines:
 5. Once the PR has been approved, it should be squash-merged as soon as possible with a meaningful description of the changes involved. Check the [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/#summary) specification for writing informative and automation-friendly commit messages.
 
 
-## Deployment
+## Releasing Process
 
-TODO: A reminder for the maintainers on how to deploy.
-Make sure all your changes are committed (including an entry in HISTORY.rst).
-Then run::
+This section documents the process of releasing new GT4Py versions for core members of the development team. Currently, GT4Py releases are published as commit tags in the main GitHub repository (although they will be soon available in TestPyPi and PyPI). To create a new release you should:
 
-```bash
-$ bump2version patch
-$ git push
-$ git push --tags
-```
+1. Make sure all the expected changes (new features, bug fixes, documentation changes, etc. are already included in the public branch.
+2. Update the [CHANGELOG.md](CHANGELOG.md) file....
+3. Use `bump2version` to update the version number.
+   ```bash
+   $ bump2version patch
+   ```
+4. Commit the changes
+5. Add a new tag
+6. Push directly to the upstream repo.
 
 
 ## Tools
