@@ -43,6 +43,9 @@ Replaces lifted function calls by temporaries using the following steps:
 AUTO_DOMAIN = ir.SymRef(id="_gtmp_auto_domain")
 
 
+# Iterator IR extension nodes
+
+
 class Temporary(ir.Node):
     """Iterator IR extension: declaration of a temporary buffer."""
 
@@ -57,6 +60,9 @@ class FencilWithTemporaries(ir.Node, SymbolTableTrait):
     fencil: ir.FencilDefinition
     params: list[ir.Sym]
     tmps: list[Temporary]
+
+
+# Extensions for `PrettyPrinter` for easier debugging
 
 
 def pformat_Temporary(printer: PrettyPrinter, node: Temporary, *, prec: int) -> list[str]:
@@ -105,6 +111,9 @@ def pformat_FencilWithTemporaries(
 
 PrettyPrinter.visit_Temporary = pformat_Temporary  # type: ignore
 PrettyPrinter.visit_FencilWithTemporaries = pformat_FencilWithTemporaries  # type: ignore
+
+
+# Main implementation
 
 
 def split_closures(node: ir.FencilDefinition) -> FencilWithTemporaries:
@@ -457,6 +466,11 @@ def collect_tmps_info(node: FencilWithTemporaries) -> FencilWithTemporaries:
 
 
 class CreateGlobalTmps(NodeTranslator):
+    """Main entry point for introducing global temporaries.
+
+    Transforms an existing iterator IR fencil into a fencil with global temporaries.
+    """
+
     def visit_FencilDefinition(
         self, node: ir.FencilDefinition, *, offset_provider: Mapping[str, Any]
     ) -> FencilWithTemporaries:
