@@ -70,6 +70,7 @@ class HorizontalMaskRemover(eve.NodeMutator):
             decls=node.decls,
             read_memlets=node.read_memlets,
             write_memlets=node.write_memlets,
+            name_map=node.name_map,
         )
 
     def visit_MaskStmt(self, node: oir.MaskStmt):
