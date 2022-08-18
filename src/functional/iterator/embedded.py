@@ -420,7 +420,7 @@ def execute_shift(
             raise AssertionError()
         return new_pos
     else:
-        assert isinstance(offset_implementation, Connectivity):
+        assert isinstance(offset_implementation, Connectivity)
         assert offset_implementation.origin_axis.value in pos
         new_pos = pos.copy()
         new_pos.pop(offset_implementation.origin_axis.value)
