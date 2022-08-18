@@ -21,6 +21,8 @@ import numpy
 
 
 class SupportedLanguageProtocol(Protocol):
+    """Ensures consistent code formatting along the pipeline."""
+
     @property
     def name(self) -> str:
         ...
@@ -30,6 +32,8 @@ class SupportedLanguageProtocol(Protocol):
 
 
 class IncludeImplementationLanguageProtocol(SupportedLanguageProtocol, Protocol):
+    """Ensures consistent file naming for languages that split code into include (header) and implementation files."""
+
     @property
     def implementation_extension(self) -> str:
         ...
