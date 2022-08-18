@@ -15,8 +15,31 @@
 
 
 from dataclasses import dataclass
+from typing import Generic, Protocol, TypeVar
 
 import numpy
+
+
+class SupportedLanguageProtocol(Protocol):
+    @property
+    def name(self) -> str:
+        ...
+
+    def format_source(self, source_code: str) -> str:
+        ...
+
+
+class IncludeImplementationLanguageProtocol(SupportedLanguageProtocol, Protocol):
+    @property
+    def implementation_extension(self) -> str:
+        ...
+
+    @property
+    def include_extension(self) -> str:
+        ...
+
+
+LanguageT = TypeVar("LanguageT", bound=SupportedLanguageProtocol, covariant=True)
 
 
 @dataclass(frozen=True)
@@ -45,11 +68,11 @@ class LibraryDependency:
 
 
 @dataclass(frozen=True)
-class SourceModule:
+class SourceModule(Generic[LanguageT]):
     entry_point: Function
     source_code: str
     library_deps: tuple[LibraryDependency, ...]
-    language: str
+    language: LanguageT
 
 
 @dataclass(frozen=True)

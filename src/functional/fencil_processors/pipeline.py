@@ -11,68 +11,32 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-from dataclasses import dataclass
-from typing import Callable, Optional, Protocol
-
-import eve.codegen
+from typing import Callable, Optional, Protocol, TypeVar
 
 from .builders.cache import Strategy as CacheStrategy
-from .source_modules.source_modules import BindingModule, SourceModule
+from .source_modules.source_modules import BindingModule, SourceModule, SupportedLanguageProtocol
 
 
-class SupportedLanguageProtocol(Protocol):
-    def format_source(self, source_code: str) -> str:
-        ...
-
-
-@dataclass(frozen=True)
-class SupportedLanguage(SupportedLanguageProtocol):
-    name: str
-    implementation_extension: str
-    include_extension: str
-
-
-@dataclass(frozen=True)
-class CppLanguage(SupportedLanguage):
-    formatting_style: str
-
-    def format_source(self, source_code: str) -> str:
-        return eve.codegen.format_source(self.name, source_code, style=self.formatting_style)
-
-
-CPP_DEFAULT = CppLanguage(
-    name="cpp",
-    implementation_extension=".cpp",
-    include_extension=".cpp.inc",
-    formatting_style="LLVM",
+LanguageT_contra = TypeVar(
+    "LanguageT_contra", bound="SupportedLanguageProtocol", contravariant=True
 )
 
 
-class BindingsGenerator(Protocol):
-    def __call__(
-        self, source_module: SourceModule, supported_language: SupportedLanguage
-    ) -> BindingModule:
+class BindingsGenerator(Protocol[LanguageT_contra]):
+    def __call__(self, source_module: SourceModule[LanguageT_contra]) -> BindingModule:
         ...
 
 
 class BuildProject(Protocol):
-    def __init__(
-        self,
-        source_module: SourceModule,
-        bindings_module: Optional[BindingModule],
-        cache_strategy: CacheStrategy,
-    ):
-        ...
-
     def get_fencil_impl(self) -> Callable:
         ...
 
 
-class BuildProjectGenerator(Protocol):
+class BuildProjectGenerator(Protocol[LanguageT_contra]):
     def __call__(
         self,
-        source_module: SourceModule,
+        source_module: SourceModule[LanguageT_contra],
         bindings_module: Optional[BindingModule],
-        language: SupportedLanguage,
+        cache_strategy: CacheStrategy,
     ) -> BuildProject:
         ...

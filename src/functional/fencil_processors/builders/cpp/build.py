@@ -26,7 +26,10 @@ from eve.codegen import JinjaTemplate as as_jinja, TemplatedGenerator
 from functional.fencil_processors import source_modules
 from functional.fencil_processors.builders import cache
 from functional.fencil_processors.builders.importer import import_from_path
-from functional.fencil_processors.pipeline import BuildProject, SupportedLanguage
+from functional.fencil_processors.pipeline import BuildProject
+from functional.fencil_processors.source_modules.source_modules import (
+    IncludeImplementationLanguageProtocol,
+)
 
 
 class FindDependency(Node):
@@ -140,9 +143,8 @@ def _get_python_module_suffix():
 class CMakeProject(BuildProject):
     """Represent a CMake project for an externally compiled fencil."""
 
-    source_module: source_modules.SourceModule
+    source_module: source_modules.SourceModule[IncludeImplementationLanguageProtocol]
     bindings_module: source_modules.BindingModule
-    language: SupportedLanguage
     cache_strategy: cache.Strategy
 
     @property
@@ -151,8 +153,10 @@ class CMakeProject(BuildProject):
 
     @property
     def sources(self) -> dict[str, str]:
-        header_name = self.name + self.language.include_extension
-        bindings_name = self.name + "_bindings" + self.language.implementation_extension
+        header_name = self.name + self.source_module.language.include_extension
+        bindings_name = (
+            self.name + "_bindings" + self.source_module.language.implementation_extension
+        )
         return {
             header_name: self.source_module.source_code,
             bindings_name: self.bindings_module.source_code,

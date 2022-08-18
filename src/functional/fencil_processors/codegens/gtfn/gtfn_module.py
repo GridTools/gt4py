@@ -13,15 +13,19 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 
+from dataclasses import dataclass, field
 from typing import Any
 
 import numpy
 
-from eve.codegen import format_source
 from functional.fencil_processors import source_modules
 from functional.fencil_processors.codegens.gtfn import gtfn_backend
-from functional.fencil_processors.processor_interface import fencil_source_module_generator
+from functional.fencil_processors.processor_interface import (
+    FencilProcessorProtocol,
+    FencilSourceModuleGenerator,
+)
 from functional.fencil_processors.source_modules import cpp_gen as cpp
+from functional.fencil_processors.source_modules.cpp_gen import CPP_DEFAULT, CppLanguage
 from functional.iterator.ir import FencilDefinition
 
 
@@ -37,36 +41,46 @@ def get_param_description(
         return source_modules.ScalarParameter(name, view.dtype)
 
 
-@fencil_source_module_generator
-def create_source_module(
-    itir: FencilDefinition,
-    *args,
-    **kwargs,
-) -> source_modules.SourceModule:
-    """Generate GTFN C++ code from the ITIR definition."""
-    parameters = tuple(
-        get_param_description(itir_param.id, obj) for obj, itir_param in zip(args, itir.params)
-    )
-    function = source_modules.Function(itir.id, parameters)
+@dataclass(frozen=True)
+class GTFNSourceModuleGenerator(FencilSourceModuleGenerator):
+    language_settings: CppLanguage = field(default=CPP_DEFAULT)
 
-    rendered_params = ", ".join(["gridtools::fn::backend::naive{}", *(p.name for p in parameters)])
-    decl_body = f"return generated::{function.name}()({rendered_params});"
-    decl_src = cpp.render_function_declaration(function, body=decl_body)
-    stencil_src = gtfn_backend.generate(itir, **kwargs)
-    source_code = format_source(
-        "cpp",
-        f"""
-        #include <gridtools/fn/backend/naive.hpp>
-        {stencil_src}
-        {decl_src}
-        """.strip(),
-        style="LLVM",
-    )
+    def __call__(
+        self,
+        fencil: FencilDefinition,
+        *args,
+        **kwargs,
+    ) -> source_modules.SourceModule:
+        """Generate GTFN C++ code from the ITIR definition."""
+        parameters = tuple(
+            get_param_description(fencil_param.id, obj)
+            for obj, fencil_param in zip(args, fencil.params)
+        )
+        function = source_modules.Function(fencil.id, parameters)
 
-    module = source_modules.SourceModule(
-        entry_point=function,
-        library_deps=(source_modules.LibraryDependency("gridtools", "master"),),
-        source_code=source_code,
-        language=cpp.LANGUAGE_ID,
-    )
-    return module
+        rendered_params = ", ".join(
+            ["gridtools::fn::backend::naive{}", *(p.name for p in parameters)]
+        )
+        decl_body = f"return generated::{function.name}()({rendered_params});"
+        decl_src = cpp.render_function_declaration(function, body=decl_body)
+        stencil_src = gtfn_backend.generate(fencil, **kwargs)
+        source_code = self.language_settings.format_source(
+            f"""
+            #include <gridtools/fn/backend/naive.hpp>
+            {stencil_src}
+            {decl_src}
+            """.strip()
+        )
+
+        module = source_modules.SourceModule(
+            entry_point=function,
+            library_deps=(source_modules.LibraryDependency("gridtools", "master"),),
+            source_code=source_code,
+            language=self.language_settings,
+        )
+        return module
+
+
+create_source_module: FencilProcessorProtocol[
+    source_modules.SourceModule, FencilSourceModuleGenerator
+] = GTFNSourceModuleGenerator()

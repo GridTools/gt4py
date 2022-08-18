@@ -13,41 +13,56 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 
-from typing import Any
+from dataclasses import dataclass, field
+from typing import Any, Optional
 
 import numpy
 
 from functional.fencil_processors.builders import cache  # , cpp as cpp_callable
 from functional.fencil_processors.builders.cpp import bindings
 from functional.fencil_processors.builders.cpp.build import CMakeProject
-from functional.fencil_processors.codegens.gtfn import gtfn_module as gtfn_codegen
-from functional.fencil_processors.pipeline import CPP_DEFAULT
-from functional.fencil_processors.processor_interface import fencil_executor
+from functional.fencil_processors.codegens.gtfn import gtfn_module
+from functional.fencil_processors.processor_interface import FencilExecutor, FencilProcessorProtocol
+from functional.fencil_processors.source_modules.cpp_gen import CPP_DEFAULT, CppLanguage
 from functional.iterator import ir
 
 
 def convert_arg(arg: Any) -> Any:
     view = numpy.asarray(arg)
     if view.ndim > 0:
-        return memoryview(view)
+        return memoryview(view)  # type: ignore[arg-type] # mypy seems unaware that ndarray is compatible with buffer protocol
     else:
         return arg
 
 
-@fencil_executor
-def run_gtfn(itir: ir.FencilDefinition, *args, **kwargs):
-    """
-    Execute the iterator IR fencil with the provided arguments.
+@dataclass(frozen=True)
+class GTFNExecutor(FencilExecutor):
+    language_settings: CppLanguage = field(default=CPP_DEFAULT)
+    name: Optional[str] = None
 
-    The fencil is compiled to machine code with C++ as an intermediate step,
-    so the first execution is expected to have a significant overhead, while subsequent
-    calls are very fast. Only scalar and buffer arguments are supported currently.
+    def __call__(self, fencil: ir.FencilDefinition, *args, **kwargs):
+        """
+        Execute the iterator IR fencil with the provided arguments.
 
-    See ``FencilExecutorFunction`` for details.
-    """
-    return CMakeProject(
-        source_module=(source_module := gtfn_codegen.create_source_module(itir, *args, **kwargs)),
-        bindings_module=bindings.create_bindings(source_module, language=CPP_DEFAULT),
-        language=CPP_DEFAULT,
-        cache_strategy=cache.Strategy.SESSION,
-    ).get_implementation()(*[convert_arg(arg) for arg in args])
+        The fencil is compiled to machine code with C++ as an intermediate step,
+        so the first execution is expected to have a significant overhead, while subsequent
+        calls are very fast. Only scalar and buffer arguments are supported currently.
+
+        See ``FencilExecutorFunction`` for details.
+        """
+        return CMakeProject(
+            source_module=(
+                source_module := gtfn_module.GTFNSourceModuleGenerator(self.language_settings)(
+                    fencil, *args, **kwargs
+                )
+            ),
+            bindings_module=bindings.create_bindings(source_module),
+            cache_strategy=cache.Strategy.SESSION,
+        ).get_implementation()(*[convert_arg(arg) for arg in args])
+
+    @property
+    def __name__(self):
+        return self.name or repr(self)
+
+
+run_gtfn: FencilProcessorProtocol[None, FencilExecutor] = GTFNExecutor(name="run_gtfn")

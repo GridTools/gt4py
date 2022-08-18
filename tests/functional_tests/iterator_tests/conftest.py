@@ -31,6 +31,14 @@ def pretty_format_and_check(root: itir.FencilDefinition, *args, **kwargs) -> str
     return pretty
 
 
+def get_processor_id(processor):
+    if hasattr(processor, "__module__") and hasattr(processor, "__name__"):
+        module_path = processor.__module__.split(".")[-1]
+        name = processor.__name__
+        return f"{module_path}.{name}"
+    return repr(processor)
+
+
 @pytest.fixture(
     params=[
         # (processor, do_validate)
@@ -43,7 +51,7 @@ def pretty_format_and_check(root: itir.FencilDefinition, *args, **kwargs) -> str
         (gtfn_cpu.run_gtfn, True),
         (functional.fencil_processors.formatters.gtfn.format_sourcecode, False),
     ],
-    ids=lambda p: f"backend={p[0].__module__.split('.')[-1] + '.' + p[0].__name__ if p[0] else p[0]}",
+    ids=lambda p: get_processor_id(p[0]),
 )
 def fencil_processor(request):
     return request.param

@@ -21,7 +21,6 @@ import numpy
 import functional.fencil_processors.source_modules.cpp_gen as cpp
 from eve import Node
 from eve.codegen import JinjaTemplate as as_jinja, TemplatedGenerator
-from functional.fencil_processors.pipeline import CPP_DEFAULT, CppLanguage
 from functional.fencil_processors.source_modules import source_modules
 
 
@@ -171,7 +170,9 @@ def make_argument(
 
 
 def create_bindings(
-    source_module: source_modules.SourceModule, language: CppLanguage = CPP_DEFAULT
+    source_module: source_modules.SourceModule[
+        source_modules.IncludeImplementationLanguageProtocol
+    ],
 ) -> source_modules.BindingModule:
     """
     Generate Python bindings through which a C++ function can be called.
@@ -180,14 +181,14 @@ def create_bindings(
     ----------
     source_module
         The source module for which the bindings are created
-    language
-        A CppLanguage instance (see ``functional.fencil_processors.pipeline.CppLanguage``)
-        which configures how source files are named.
     """
+    if not isinstance(source_module.language, cpp.CppLanguage):
+        raise NotImplementedError("Can only create bindings for C++ source modules.")
     wrapper_name = source_module.entry_point.name + "_wrapper"
 
     file_binding = BindingFile(
-        callee_header_file=source_module.entry_point.name + language.include_extension,
+        callee_header_file=source_module.entry_point.name
+        + source_module.language.include_extension,
         header_files=[
             "pybind11/pybind11.h",
             "pybind11/stl.h",
@@ -222,7 +223,7 @@ def create_bindings(
         ),
     )
 
-    src = language.format_source(BindingCodeGenerator.apply(file_binding))
+    src = source_module.language.format_source(BindingCodeGenerator.apply(file_binding))
 
     return source_modules.BindingModule(
         src,

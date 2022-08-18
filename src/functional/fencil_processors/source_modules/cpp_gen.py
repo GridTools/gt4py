@@ -14,15 +14,35 @@
 
 
 import ctypes
+from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Final, Sequence, Type
 
 import numpy
 
-from functional.fencil_processors import source_modules
+from eve.codegen import format_source
+from functional.fencil_processors.source_modules import source_modules
 
 
-LANGUAGE_ID: Final = "cpp"
+@dataclass(frozen=True)
+class CppLanguage:
+    """Implements source_modules.SupportedLanguageProtocol for C++ language settings."""
+
+    name: str
+    implementation_extension: str
+    include_extension: str
+    formatting_style: str
+
+    def format_source(self, source_code: str) -> str:
+        return format_source(self.name, source_code, style=self.formatting_style)
+
+
+CPP_DEFAULT: Final = CppLanguage(
+    name="cpp",
+    implementation_extension=".cpp",
+    include_extension=".cpp.inc",
+    formatting_style="LLVM",
+)
 
 _TYPE_MAPPING: Final = MappingProxyType(
     {
