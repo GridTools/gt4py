@@ -819,7 +819,7 @@ def test_ternary_operator(reduction_setup):
     num_edges = rs.num_edges
     a = np_as_located_field(Edge)(np.ones((num_edges,)))
     b = np_as_located_field(Edge)(2 * np.ones((num_edges,)))
-    out_1 = np_as_located_field(Edge)(np.zeros((num_edges,)))
+    out = np_as_located_field(Edge)(np.zeros((num_edges,)))
 
     @field_operator
     def ternary_field_op(a: Field[[Edge], float], b: Field[[Edge], float]) -> Field[[Edge], float]:
@@ -827,14 +827,12 @@ def test_ternary_operator(reduction_setup):
         return c
 
     @program
-    def ternary_field(
-        a: Field[[Edge], float], b: Field[[Edge], float], out_1: Field[[Edge], float]
-    ):
-        ternary_field_op(a, b, out=out_1)
+    def ternary_field(a: Field[[Edge], float], b: Field[[Edge], float], out: Field[[Edge], float]):
+        ternary_field_op(a, b, out=out)
 
-    ternary_field(a, b, out_1, offset_provider={})
+    ternary_field(a, b, out, offset_provider={})
     e = np.asarray(a) if 2 < 3 else np.asarray(b)
-    np.allclose(e, out_1)
+    np.allclose(e, out)
 
 
 def test_ternary_operator_tuple(reduction_setup):

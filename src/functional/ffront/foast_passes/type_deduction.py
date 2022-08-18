@@ -277,6 +277,15 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         # check that left and right types are the same
         self._check_operand_dtypes_match(node, left=left, right=right)
 
+        try:
+            type_info.promote(boolified_type(test.left.type), boolified_type(test.right.type))
+        except GTTypeError as ex:
+            raise FieldOperatorTypeDeductionError.from_foast_node(
+                test,
+                msg=f"Could not promote `{test.left.type}` and `{test.right.type}` to common type"
+                f" in call to `{test.op}`.",
+            ) from ex
+
         return left.type
 
     def visit_Compare(self, node: foast.Compare, **kwargs) -> foast.Compare:
