@@ -810,3 +810,57 @@ def test_solve_triag(fieldview_backend):
     solve_tridiag(a, b, c, d, out=out, offset_provider={})
 
     np.allclose(expected, out)
+
+def test_ternary_operator(reduction_setup):
+    rs = reduction_setup
+    Edge = rs.Edge
+
+    num_edges = rs.num_edges
+    a = np_as_located_field(Edge)(np.ones((num_edges,)))
+    b = np_as_located_field(Edge)(2 * np.ones((num_edges,)))
+    out_1 = np_as_located_field(Edge)(np.zeros((num_edges,)))
+
+    @field_operator
+    def ternary_field_op(
+            a: Field[[Edge], float], b: Field[[Edge], float]
+    ) -> Field[[Edge], float]:
+        c = a if 2 < 3 else b
+        return c
+
+    @program
+    def ternary_field(
+            a: Field[[Edge], float], b: Field[[Edge], float], out_1: Field[[Edge], float]
+    ):
+        ternary_field_op(a, b, out=out_1)
+
+    ternary_field(a, b, out_1, offset_provider={})
+    e = np.asarray(a) if 2 < 3 else np.asarray(b)
+    np.allclose(e, out_1)
+
+def test_ternary_operator_tuple(reduction_setup):
+    rs = reduction_setup
+    Edge = rs.Edge
+
+    num_edges = rs.num_edges
+    a = np_as_located_field(Edge)(np.ones((num_edges,)))
+    b = np_as_located_field(Edge)(2 * np.ones((num_edges,)))
+    out_1 = np_as_located_field(Edge)(np.zeros((num_edges,)))
+    out_2 = np_as_located_field(Edge)(np.zeros((num_edges,)))
+
+    @field_operator
+    def ternary_field_op(
+            a: Field[[Edge], float], b: Field[[Edge], float]
+    ) -> tuple[Field[[Edge], float], Field[[Edge], float]]:
+        c,d = (a,b) if 2 < 3 else (b,a)
+        return c, d
+
+    @program
+    def ternary_field(
+            a: Field[[Edge], float], b: Field[[Edge], float], out_1: Field[[Edge], float], out_2: Field[[Edge], float]
+    ):
+        ternary_field_op(a, b, out=(out_1, out_2))
+    ternary_field(a, b, out_1, out_2, offset_provider={})
+
+    e,f = (np.asarray(a), np.asarray(b)) if 2 < 3 else (np.asarray(b), np.asarray(a))
+    np.allclose(e, out_1)
+    np.allclose(f, out_2)

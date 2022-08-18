@@ -142,6 +142,10 @@ class Compare(Expr):
     left: Expr
     right: Expr
 
+class IfExp(Expr):
+    test: Expr
+    body: Expr
+    orelse: Expr
 
 class Call(Expr):
     func: Name

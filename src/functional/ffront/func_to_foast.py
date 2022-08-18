@@ -358,6 +358,15 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
     def visit_BoolOp(self, node: ast.BoolOp, **kwargs) -> None:
         raise FieldOperatorSyntaxError.from_AST(node, msg="`and`/`or` operator not allowed!")
 
+    def visit_IfExp(self, node: ast.IfExp, **kwargs) -> foast.IfExp:
+        return foast.IfExp(
+            test= self.visit(node.test),
+            body = self.visit(node.body),
+            orelse = self.visit(node.orelse),
+            location = self._make_loc(node),
+            type = ct.DeferredSymbolType(constraint=ct.DataType)
+        )
+
     def visit_Compare(self, node: ast.Compare, **kwargs) -> foast.Compare:
         if len(node.ops) != 1 or len(node.comparators) != 1:
             raise FieldOperatorSyntaxError.from_AST(

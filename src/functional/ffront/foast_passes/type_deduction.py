@@ -249,6 +249,43 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             op=node.op, left=new_left, right=new_right, location=node.location, type=new_type
         )
 
+    def visit_IfExp(self, node: foast.IfExp, **kwargs) -> foast.IfExp:
+        new_left = self.visit(node.body, **kwargs)
+        new_right = self.visit(node.orelse, **kwargs)
+        new_type= self._deduce_ifexp_type(node, left=new_left, right=new_right, test=node.test)
+        return foast.IfExp(
+            test=self.visit(node.test, **kwargs),
+            body=self.visit(node.body, **kwargs),
+            orelse=self.visit(node.orelse, **kwargs),
+            location=node.location,
+            type=new_type
+        )
+
+    def _deduce_ifexp_type(
+            self, node: foast.IfExp, *, left: foast.Expr, right: foast.Expr, test: foast.Expr, **kwargs
+    ) -> Optional[ct.SymbolType]:
+        if isinstance(left.type, ct.TupleType):
+            return ct.TupleType(types=[element.type for element in left.elts])
+
+        # check that math ops can be done on left and right
+        for arg in (left, right):
+            if not type_info.is_arithmetic(arg.type):
+                raise FieldOperatorTypeDeductionError.from_foast_node(
+                    arg, msg=f"Type {arg.type} can not be used"
+                )
+
+        # check that left and right types are the same
+        self._check_operand_dtypes_match(node, left=left, right=right)
+
+        # # check that test is of type bool
+        # if not type_info.is_logical(test.type):
+        #     raise FieldOperatorTypeDeductionError.from_foast_node(
+        #             test, msg=f"Type {test.type} can not be used in operator '{node.op}'!"
+        #         )
+
+        return left.type
+
+
     def visit_Compare(self, node: foast.Compare, **kwargs) -> foast.Compare:
         new_left = self.visit(node.left, **kwargs)
         new_right = self.visit(node.right, **kwargs)
