@@ -325,7 +325,7 @@ class FieldOperatorLowering(NodeTranslator):
             im.call_("if_")(
                 to_value(node.test)(self.visit(node.test, **kwargs)),
                 to_value(node.body)(self.visit(node.body, **kwargs)),
-                to_value(node.orelse)(self.visit(node.orelse, **kwargs))
+                to_value(node.orelse)(self.visit(node.orelse, **kwargs)),
             )
         )
 
@@ -497,10 +497,10 @@ class InsideReductionLowering(FieldOperatorLowering):
 
     def visit_IfExp(self, node: foast.IfExp, **kwargs) -> itir.FunCall:
         return im.call_("if_")(
-                self.visit(node.test, **kwargs),
-                self.visit(node.body, **kwargs),
-                self.visit(node.orelse, **kwargs)
-            )
+            self.visit(node.test, **kwargs),
+            self.visit(node.body, **kwargs),
+            self.visit(node.orelse, **kwargs),
+        )
 
     def visit_UnaryOp(self, node: foast.UnaryOp, **kwargs) -> itir.FunCall:
         if node.op is foast.UnaryOperator.NOT:

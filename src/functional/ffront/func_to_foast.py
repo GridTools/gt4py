@@ -360,11 +360,11 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
 
     def visit_IfExp(self, node: ast.IfExp, **kwargs) -> foast.IfExp:
         return foast.IfExp(
-            test= self.visit(node.test),
-            body = self.visit(node.body),
-            orelse = self.visit(node.orelse),
-            location = self._make_loc(node),
-            type = ct.DeferredSymbolType(constraint=ct.DataType)
+            test=self.visit(node.test),
+            body=self.visit(node.body),
+            orelse=self.visit(node.orelse),
+            location=self._make_loc(node),
+            type=ct.DeferredSymbolType(constraint=ct.DataType),
         )
 
     def visit_Compare(self, node: ast.Compare, **kwargs) -> foast.Compare:
