@@ -11,6 +11,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+from collections.abc import Mapping, Sequence
 from typing import Any, Optional
 
 from eve import Coerced, NodeTranslator
@@ -173,7 +174,7 @@ def split_closures(node: ir.FencilDefinition) -> FencilWithTemporaries:
     )
 
 
-def prune_unused_temporaries(node: FencilWithTemporaries):
+def prune_unused_temporaries(node: FencilWithTemporaries) -> FencilWithTemporaries:
     """Remove temporaries that are never read."""
     unused_tmps = {tmp.id for tmp in node.tmps}
     for closure in node.fencil.closures:
@@ -199,21 +200,29 @@ def prune_unused_temporaries(node: FencilWithTemporaries):
     )
 
 
-def _offset_limits(offsets, offset_provider):
+def _offset_limits(
+    offsets: Sequence[tuple[ir.OffsetLiteral, ...]], offset_provider: Mapping[str, CartesianAxis]
+):
     offset_limits = {k: (0, 0) for k in offset_provider.keys()}
-    for shift in offsets:
-        offsets = {k: 0 for k in offset_provider.keys()}
-        for k, v in zip(shift[0::2], shift[1::2]):
+    for o in offsets:
+        offset_sum = {k: 0 for k in offset_provider.keys()}
+        for k, v in zip(o[0::2], o[1::2]):
             assert isinstance(v, ir.OffsetLiteral) and isinstance(v.value, int)
-            offsets[k.value] += v.value
-        for k, v in offsets.items():
+            offset_sum[k.value] += v.value
+        for k, v in offset_sum.items():
             old_min, old_max = offset_limits[k]
             offset_limits[k] = (min(old_min, v), max(old_max, v))
 
     return {v.value: offset_limits[k] for k, v in offset_provider.items()}
 
 
-def _named_range_with_offsets(axis_literal, lower_bound, upper_bound, lower_offset, upper_offset):
+def _named_range_with_offsets(
+    axis_literal: ir.AxisLiteral,
+    lower_bound: ir.Expr,
+    upper_bound: ir.Expr,
+    lower_offset: int,
+    upper_offset: int,
+) -> ir.FunCall:
     if lower_offset:
         lower_bound = ir.FunCall(
             fun=ir.SymRef(id="plus"),
@@ -229,7 +238,9 @@ def _named_range_with_offsets(axis_literal, lower_bound, upper_bound, lower_offs
     )
 
 
-def _extend_cartesian_domain(domain, offsets, offset_provider):
+def _extend_cartesian_domain(
+    domain: ir.FunCall, offsets: Sequence[tuple], offset_provider: Mapping[str, CartesianAxis]
+):
     if not any(offsets):
         return domain
     assert isinstance(domain, ir.FunCall) and domain.fun == ir.SymRef(id="cartesian_domain")
@@ -257,7 +268,9 @@ def _extend_cartesian_domain(domain, offsets, offset_provider):
     return ir.FunCall(fun=domain.fun, args=named_ranges)
 
 
-def update_cartesian_domains(node: FencilWithTemporaries, offset_provider) -> FencilWithTemporaries:
+def update_cartesian_domains(
+    node: FencilWithTemporaries, offset_provider: Mapping[str, Any]
+) -> FencilWithTemporaries:
     """Replace appearances of `AUTO_DOMAIN` by concrete domain sizes.
 
     Naive extent analysis, does not handle boundary conditions etc. in a smart way.
@@ -295,7 +308,9 @@ def update_cartesian_domains(node: FencilWithTemporaries, offset_provider) -> Fe
     )
 
 
-def _location_type_from_offsets(domain, offsets, offset_provider):
+def _location_type_from_offsets(
+    domain: ir.FunCall, offsets: Sequence, offset_provider: Mapping[str, Any]
+):
     location = domain.args[0].args[0].value
     for o in offsets:
         if isinstance(o, ir.OffsetLiteral) and isinstance(o.value, str):
@@ -305,7 +320,9 @@ def _location_type_from_offsets(domain, offsets, offset_provider):
     return location
 
 
-def _unstructured_domain(axis, size, vertical_ranges):
+def _unstructured_domain(
+    axis: ir.AxisLiteral, size: int, vertical_ranges: Sequence[ir.FunCall]
+) -> ir.FunCall:
     return ir.FunCall(
         fun=ir.SymRef(id="unstructured_domain"),
         args=[
@@ -322,7 +339,7 @@ def _unstructured_domain(axis, size, vertical_ranges):
     )
 
 
-def _max_domain_sizes_by_location_type(offset_provider):
+def _max_domain_sizes_by_location_type(offset_provider: Mapping[str, Any]) -> dict[str, int]:
     sizes = dict[str, int]()
     for provider in offset_provider.values():
         if isinstance(provider, NeighborTableOffsetProvider):
@@ -338,8 +355,8 @@ def _max_domain_sizes_by_location_type(offset_provider):
     return sizes
 
 
-def _domain_ranges(closures, offset_provider):
-    ranges = dict[str, set[ir.Expr]]()
+def _domain_ranges(closures: Sequence[ir.StencilClosure], offset_provider: Mapping[str, Any]):
+    ranges = dict[str, list[ir.Expr]]()
     for closure in closures:
         domain = closure.domain
         if isinstance(domain, ir.FunCall) and domain.fun == ir.SymRef(id="unstructured_domain"):
@@ -350,7 +367,7 @@ def _domain_ranges(closures, offset_provider):
     return ranges
 
 
-def update_unstructured_domains(node: FencilWithTemporaries, offset_provider):
+def update_unstructured_domains(node: FencilWithTemporaries, offset_provider: Mapping[str, Any]):
     """Replace appearances of `AUTO_DOMAIN` by concrete domain sizes."""
     horizontal_sizes = _max_domain_sizes_by_location_type(offset_provider)
     vertical_ranges = _domain_ranges(node.fencil.closures, offset_provider)
@@ -396,7 +413,7 @@ def update_unstructured_domains(node: FencilWithTemporaries, offset_provider):
     )
 
 
-def collect_tmps_info(node: FencilWithTemporaries):
+def collect_tmps_info(node: FencilWithTemporaries) -> FencilWithTemporaries:
     """Perform type inference for finding the types of temporaries and sets the temporary size."""
     tmps = {tmp.id for tmp in node.tmps}
     domains: dict[str, ir.Expr] = {
@@ -441,7 +458,7 @@ def collect_tmps_info(node: FencilWithTemporaries):
 
 class CreateGlobalTmps(NodeTranslator):
     def visit_FencilDefinition(
-        self, node: ir.FencilDefinition, *, offset_provider
+        self, node: ir.FencilDefinition, *, offset_provider: Mapping[str, Any]
     ) -> FencilWithTemporaries:
         # Split closures on lifted function calls and introduce temporaries
         res = split_closures(node)
