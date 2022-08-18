@@ -488,9 +488,6 @@ def test_tuple_of_tuple_of_field_input(fencil_processor_no_gtfn_exec):
         )
 
 
-# @pytest.mark.xfail(
-#     reason="tuple_get is not compatible with this way of expressing tuples.",
-# )
 def test_field_of_2_extra_dim_input(fencil_processor_no_gtfn_exec):
     fencil_processor, validate = fencil_processor_no_gtfn_exec
 
