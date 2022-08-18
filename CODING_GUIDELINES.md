@@ -15,7 +15,7 @@ Before accepting changes we assess the design according to the following guideli
 
 ## Code Style
 
-We follow the [Google Python Style Guide][google-style-guide] with very few minor changes (mentioned below). Since the best way to remember something is to understand the reasons behind it, make sure you go through the style guide at least once, paying special to the explanations for the final decisions given in the _Pros_, _Cons_ and _Decision_ subsections.
+We follow the [Google Python Style Guide][google-style-guide] with very few minor changes (mentioned below). Since the best way to remember something is to understand the reasons behind it, make sure you go through the style guide at least once, paying special to the discussions in the _Pros_, _Cons_ and _Decision_ subsections.
 
 We deviate from the [Google Python Style Guide][google-style-guide] only in the following points:
 
@@ -31,13 +31,13 @@ We generate the API documentation automatically from the docstrings using the [S
 Sphinx supports [reStructuredText][sphinx-rest] (reST) markup language to add additional formatting options to the generated docs, however section [_3.8 Comments and Docstrings_](https://google.github.io/styleguide/pyguide.html#38-comments-and-docstrings) in the Google Python Style Guide does not define how to use markups in docstrings. Therefore, we decided to forbid the use of reST markup in docstrings except for:
 
    - Cross-referencing other objects using Sphinx text roles for the [Python domain](https://www.sphinx-doc.org/en/master/usage/restructuredtext/domains.html#the-python-domain) (as explained [here](https://www.sphinx-doc.org/en/master/usage/restructuredtext/domains.html#python-roles)).   
-   - Very basic formatting markup to improve _readability_ of the generated documentation without obscuring the source docstring (e.g.: ``` ``literal`` ```  strings).
+   - Very basic formatting markup to improve _readability_ of the generated documentation without obscuring the source docstring (e.g. ``` ``literal`` ```  strings).
    
-Regarding code examples in docstrings, we highly encourage to use [doctests](https://docs.python.org/3/library/doctest.html) format to automatically test they are in sync with the code.
+Regarding code examples in docstrings, we highly encourage to use [doctest](https://docs.python.org/3/library/doctest.html) format to automatically test they are in sync with the code.
 
 ### Ignoring QA errors
 
-You may ocassionally need to disable checks from _quality assurance_  (QA) tools (e.g. linters, type checkers, etc.) on specific lines because the tool is not able to fully understand why that piece of code is needed. This is usually feasible inlining a special comment like `# type: ignore`. Note that you should **only** ignore QA errors when you fully understand its cause and it is not reasonable to fix it by rewriting the offending code in a different way. Additionally, you should add a brief comment to make sure anyone else reading the code will also understand what is happening there. For example:
+You may ocassionally need to disable checks from _quality assurance_  (QA) tools (e.g. linters, type checkers, etc.) on specific lines because the tool is not able to fully understand why that piece of code is needed. This is usually feasible inlining a special comment like `# type: ignore`. You should **only** ignore QA errors when you fully understand its cause and it is not reasonable to fix it by rewriting the offending code in a different way. Additionally, you should add a brief comment to make sure anyone else reading the code also understands what is happening there. For example:
 
    ```python
    f = lambda: 'empty'  # noqa: E731  # assign lambda expression for testing
@@ -45,7 +45,7 @@ You may ocassionally need to disable checks from _quality assurance_  (QA) tools
 
 ### Module structure
 
-In general, Python modules should be structured in the following way:
+In general, we structure Python modules in the following way:
 
 1. (Only for **executable scripts**) _shebang_ line: `#! /usr/bin/env python3`.
 2. License header boilerplate (check `LICENSE_HEADER.txt`).
@@ -58,10 +58,10 @@ In general, Python modules should be structured in the following way:
 ```python
 __all__ = ["func_a", "CONST_B"]
    ```
-6. Public constants and typings definitions.
-7. Module contents organized in a meaningful way for reading the module, usually defining functions before classes.
+6. Public constant and typing definitions.
+7. Module contents organized in a meaningful way for reading and understanding the module, usually defining functions before classes.
 
-In configuration files, try to keep sections and items within sections ordered logically, adding comments to make it explicit if needed. If there is not only one evident logical order, just pick your favorite one or use alphabetical order.
+Try to keep sections and items within sections ordered logically, adding comments to make it explicit if needed (also in configuration files). If there is not only one evident logical order, just pick one or use alphabetical order.
 
 
 ## Testing 
@@ -78,28 +78,37 @@ Napoleon google/numpy style docstrings (and use sections. Doctests are cool for 
 
 ## Tools
 
-We use several coding tools to help us increasing the quality or our code. New tools can be added, specially if they do not add a large overhead to our workflow and we think they bring extra benefits to keep our codebasde in shape. The most important ones we currently rely on are:
+We use several coding tools to help us increasing the quality or our code. New tools can be added at any time, specially if they do not add a large overhead to our workflow and we think they bring extra benefits to keep our codebase in shape. The most important ones we currently rely on are:
 
-   - [Black: the uncoompromising Python code][black]
-   - [flake8][flake8]
-   - [pre-commit][pre-commit]
-   - [sphinx][sphinx], with the following plugins
-      + [sphinx-autodoc][sphinx-autodoc]
-      + [sphinx-napoleon][sphinx-napoleon]
-
+   - [Black][black] for autoformatting source code.
+   - [isort][isort] for autoformatting import statements.
+   - [Flake8][flake8] for style enforcement and code linting.
+   - [pre-commit][pre-commit] for automating the execution of QA tools.
+   - [pytest][pytest] for writing readable tests, extended with:
+      + [Coverage.py][coverage] and [pytest-cov][pytest-cov] for test coverage reports.
+      + [pytest-xdist][pytest-xdist] for running tests in parallel.
+   - [tox][tox] for testing automating with different environments.
+   - [sphinx][sphinx] for generating documentation, extended with:
+      + [sphinx-autodoc][sphinx-autodoc] and [sphinx-napoleon][sphinx-napoleon] for extracting API documentation from docstrings.
+      + [jupytext][jupytext] for writing user documentation with
 
 
 <!-- Reference links -->
 
 [black]: https://black.readthedocs.io/en/stable/
+[coverage]: https://coverage.readthedocs.io/
 [flake8]: https://flake8.pycqa.org/
 [google-style-guide]: https://google.github.io/styleguide/pyguide.html
 [isort]: https://pycqa.github.io/isort/
+[jupytext]: https://jupytext.readthedocs.io/
 [pre-commit]: https://pre-commit.com/
 [pylint]: https://pylint.pycqa.org/
+[pytest]: https://docs.pytest.org/
+[pytest-cov]: https://pypi.org/project/pytest-cov/
+[pytest-xdist]: https://pytest-xdist.readthedocs.io/en/latest/
 [sphinx]: https://www.sphinx-doc.org
 [sphinx-autodoc]: https://www.sphinx-doc.org/en/master/usage/extensions/autodoc.html
 [sphinx-napoleon]: https://sphinxcontrib-napoleon.readthedocs.io/en/latest/index.html#
 [sphinx-rest]: https://www.sphinx-doc.org/en/master/usage/restructuredtext/basics.html
-
+[tox]: https://tox.wiki/en/latest/#
 
