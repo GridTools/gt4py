@@ -3,7 +3,9 @@
 
 ## Code design
 
-Before accepting changes we assess the design according to the following guidelines:
+Designing software is a hard task which can be easily overlooked when you are working under tight deadlines or you are eager to implement some cool new feature. However, in the long term bad designs come up with a large cost of additional work caused by having chosen in the past the quickest solution rather than the most effective one (_technical debt_).
+
+When working on the implementation of new features, you should think carefully about the design of your solution and assess it with the following principles in mind:
 
 1. Look at each piece of code and ask yourself: _Would I point to this in a job interview as an example of well crafted code according to my best abilities?_
 2. If it isn't tested and verified, it isn't scientific. This is a scientifi software library.
@@ -11,6 +13,9 @@ Before accepting changes we assess the design according to the following guideli
 4. Do not repeat yourself ([DRY](https://en.wikipedia.org/wiki/Don%27t_repeat_yourself)): always check if functionality already exists elsewhere in the project before implementing it. Also recognize when multiple specific implementations of an algorithm can be replaced with a single generic one.
 5. Do not reinvent the wheel: instead of writing a new component to solve a problem consider existing solutions.
 6. Names should state the intent of code objects. If the intent of a code expression **might** not be immediately obvious it deserves a name which makes it obvious.
+
+Remember that important design decisions should be documented as reference for the future and to share the knowledge with all the developers. We decided to use lightweight _Architecture Decision Records_ (ADRs) for this purpose. The as documented in [here](docs/functional/architecture/Index.md)
+
 
 
 ## Code Style
@@ -68,17 +73,12 @@ Try to keep sections and items within sections ordered logically, adding comment
 - Tests best-practises: factory boy, pytest-cases, other pytest-plugins, make them parallelizable ??
 
 + factories and test input data (factory boy? pytest-cases?)
-+ running tests in parallel: pytest-xdist[psutil] (`-n auto`) 
-+ run only the tests that failed last time: `--lf / --last-failed` option.
-+ run all the tests starting with the tests that failed last time: `--ff / --failed-first` option
-+ use ` -l / --showlocalsflag` option to see the value of all local variables in tracebacks
 Napoleon google/numpy style docstrings (and use sections. Doctests are cool for small things but not a fully replacement of unit tests). Learn sphinx and RST, napoleon tags for beautiful but lightweight docstrins.
-
 
 
 ## Tools
 
-As mentioned above, we use several tools to help us writing high-quality code. New tools can be added at any time, specially if they do not add a large overhead to our workflow and we think they bring extra benefits to keep our codebase in shape. The most important ones we currently rely on are:
+As mentioned above, we use several tools to help us writing high-quality code. New tools could be added in the future, specially if they do not add a large overhead to our workflow and we think they bring extra benefits to keep our codebase in shape. The most important ones we currently rely on are:
 
    - [Black][black] for autoformatting source code.
    - [isort][isort] for autoformatting import statements.
