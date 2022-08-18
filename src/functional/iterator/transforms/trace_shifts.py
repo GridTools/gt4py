@@ -131,7 +131,7 @@ def _reduce(f, init):
     return apply
 
 
-def _scan(f, init, forward):
+def _scan(f, forward, init):
     def apply(*args):
         return f(init, *args)
 
