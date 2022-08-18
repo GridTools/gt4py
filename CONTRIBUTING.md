@@ -42,7 +42,7 @@ If you are proposing a feature:
 
 ## Getting Started 
 
-Ready to start contributing?
+Ready to start contributing? Follow these steps:
 
 1. Fork the [GT4Py](https://github.com/gridtools/gt4py) repo on GitHub.
 
@@ -180,3 +180,41 @@ $ bump2version patch
 $ git push
 $ git push --tags
 ```
+
+
+## Tools
+
+As mentioned above, we use several tools to help us writing high-quality code. New tools could be added in the future, specially if they do not add a large overhead to our workflow and we think they bring extra benefits to keep our codebase in shape. The most important ones we currently rely on are:
+
+   - [Black][black] for autoformatting source code.
+   - [isort][isort] for autoformatting import statements.
+   - [Flake8][flake8] for style enforcement and code linting.
+   - [pre-commit][pre-commit] for automating the execution of QA tools.
+   - [pytest][pytest] for writing readable tests, extended with:
+      + [Coverage.py][coverage] and [pytest-cov][pytest-cov] for test coverage reports.
+      + [pytest-xdist][pytest-xdist] for running tests in parallel.
+   - [tox][tox] for testing automating with different environments.
+   - [sphinx][sphinx] for generating documentation, extended with:
+      + [sphinx-autodoc][sphinx-autodoc] and [sphinx-napoleon][sphinx-napoleon] for extracting API documentation from docstrings.
+      + [jupytext][jupytext] for writing user documentation with code examples.
+
+
+<!-- Reference links -->
+
+[black]: https://black.readthedocs.io/en/stable/
+[coverage]: https://coverage.readthedocs.io/
+[flake8]: https://flake8.pycqa.org/
+[google-style-guide]: https://google.github.io/styleguide/pyguide.html
+[isort]: https://pycqa.github.io/isort/
+[jupytext]: https://jupytext.readthedocs.io/
+[pre-commit]: https://pre-commit.com/
+[pylint]: https://pylint.pycqa.org/
+[pytest]: https://docs.pytest.org/
+[pytest-cov]: https://pypi.org/project/pytest-cov/
+[pytest-xdist]: https://pytest-xdist.readthedocs.io/en/latest/
+[sphinx]: https://www.sphinx-doc.org
+[sphinx-autodoc]: https://www.sphinx-doc.org/en/master/usage/extensions/autodoc.html
+[sphinx-napoleon]: https://sphinxcontrib-napoleon.readthedocs.io/en/latest/index.html#
+[sphinx-rest]: https://www.sphinx-doc.org/en/master/usage/restructuredtext/basics.html
+[tox]: https://tox.wiki/en/latest/#
+
