@@ -320,6 +320,7 @@ def update_cartesian_domains(
 def _location_type_from_offsets(
     domain: ir.FunCall, offsets: Sequence, offset_provider: Mapping[str, Any]
 ):
+    """Derive the location type of an iterator from given offsets relative to an initial domain."""
     location = domain.args[0].args[0].value
     for o in offsets:
         if isinstance(o, ir.OffsetLiteral) and isinstance(o.value, str):
@@ -332,6 +333,7 @@ def _location_type_from_offsets(
 def _unstructured_domain(
     axis: ir.AxisLiteral, size: int, vertical_ranges: Sequence[ir.FunCall]
 ) -> ir.FunCall:
+    """Create an unstructured domain expression."""
     return ir.FunCall(
         fun=ir.SymRef(id="unstructured_domain"),
         args=[
@@ -349,6 +351,11 @@ def _unstructured_domain(
 
 
 def _max_domain_sizes_by_location_type(offset_provider: Mapping[str, Any]) -> dict[str, int]:
+    """Extract horizontal domain sizes from an `offset_provider`.
+
+    Considers the shape of the neighbor table to get the size of each `origin_axis` and the maximum
+    value inside the neighbor table to get the size of each `neighbor_axis`.
+    """
     sizes = dict[str, int]()
     for provider in offset_provider.values():
         if isinstance(provider, NeighborTableOffsetProvider):
@@ -364,7 +371,8 @@ def _max_domain_sizes_by_location_type(offset_provider: Mapping[str, Any]) -> di
     return sizes
 
 
-def _domain_ranges(closures: Sequence[ir.StencilClosure], offset_provider: Mapping[str, Any]):
+def _domain_ranges(closures: Sequence[ir.StencilClosure]):
+    """Extract all `named_ranges` from the given closures."""
     ranges = dict[str, list[ir.Expr]]()
     for closure in closures:
         domain = closure.domain
@@ -377,9 +385,12 @@ def _domain_ranges(closures: Sequence[ir.StencilClosure], offset_provider: Mappi
 
 
 def update_unstructured_domains(node: FencilWithTemporaries, offset_provider: Mapping[str, Any]):
-    """Replace appearances of `AUTO_DOMAIN` by concrete domain sizes."""
+    """Replace appearances of `AUTO_DOMAIN` by concrete domain sizes.
+
+    Note: the domain sizes are extracted from the `offset_provider` and are thus compile time!
+    """
     horizontal_sizes = _max_domain_sizes_by_location_type(offset_provider)
-    vertical_ranges = _domain_ranges(node.fencil.closures, offset_provider)
+    vertical_ranges = _domain_ranges(node.fencil.closures)
     for k in horizontal_sizes:
         vertical_ranges.pop(k, None)
 
