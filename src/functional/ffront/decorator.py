@@ -19,7 +19,6 @@
 
 from __future__ import annotations
 
-import abc
 import collections
 import dataclasses
 import functools
@@ -27,7 +26,7 @@ import types
 import typing
 import warnings
 from collections.abc import Callable, Iterable
-from typing import Generic, Protocol, SupportsFloat, SupportsInt, TypeAlias, TypeVar
+from typing import Generic, SupportsFloat, SupportsInt, TypeAlias, TypeVar
 
 import numpy as np
 from devtools import debug
@@ -35,6 +34,11 @@ from devtools import debug
 from eve.extended_typing import Any, Optional
 from eve.utils import UIDGenerator
 from functional.common import DimensionKind, GridType, GTTypeError
+from functional.fencil_processors.processor_interface import (
+    FencilExecutor,
+    FencilFormatter,
+    ensure_processor_kind,
+)
 from functional.fencil_processors.runners import roundtrip
 from functional.ffront import (
     common_types as ct,
@@ -43,21 +47,17 @@ from functional.ffront import (
     symbol_makers,
     type_info,
 )
-from functional.ffront.fbuiltins import Dimension, FieldOffset
+from functional.ffront.fbuiltins import BUILTINS, Dimension, FieldOffset
 from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduction
 from functional.ffront.foast_to_itir import FieldOperatorLowering
 from functional.ffront.func_to_foast import FieldOperatorParser
 from functional.ffront.func_to_past import ProgramParser
-from functional.ffront.past_passes.type_deduction import ProgramTypeDeduction
+from functional.ffront.gtcallable import GTCallable
+from functional.ffront.past_passes.type_deduction import ProgramTypeDeduction, ProgramTypeError
 from functional.ffront.past_to_itir import ProgramLowering
 from functional.ffront.source_utils import CapturedVars
 from functional.iterator import ir as itir
-from functional.iterator.processor_interface import (
-    FencilExecutor,
-    FencilFormatter,
-    ensure_executor,
-    ensure_formatter,
-)
+from functional.iterator.embedded import constant_field
 
 
 Scalar: TypeAlias = SupportsInt | SupportsFloat | np.int32 | np.int64 | np.float32 | np.float64
@@ -128,52 +128,6 @@ def _deduce_grid_type(
         )
 
     return deduced_grid_type if requested_grid_type is None else requested_grid_type
-
-
-@typing.runtime_checkable
-class GTCallable(Protocol):
-    """
-    Typing Protocol (abstract base class) defining the interface for subroutines.
-
-    Any class implementing the methods defined in this protocol can be called
-    from ``ffront`` programs or operators.
-    """
-
-    def __gt_captured_vars__(self) -> Optional[CapturedVars]:
-        """
-        Return all external variables referenced inside the callable.
-
-        Note that in addition to the callable itself all captured variables
-        are also lowered such that they can be used in the lowered callable.
-        """
-        return None
-
-    @abc.abstractmethod
-    def __gt_type__(self) -> ct.CallableType:
-        """
-        Return symbol type, i.e. signature and return type.
-
-        The type is used internally to populate the closure vars of the
-        various dialects root nodes (i.e. FOAST Field Operator, PAST Program)
-        """
-        ...
-
-    @abc.abstractmethod
-    def __gt_itir__(self) -> itir.FunctionDefinition:
-        """
-        Return iterator IR function definition representing the callable.
-
-        Used internally by the Program decorator to populate the function
-        definitions of the iterator IR.
-        """
-        ...
-
-    # TODO(tehrengruber): For embedded execution a `__call__` method and for
-    #  "truly" embedded execution arguably also a `from_function` method is
-    #  required. Since field operators currently have a `__gt_type__` with a
-    #  Field return value, but it's `__call__` method being void (result via
-    #  out arg) there is no good / consistent definition on what signature a
-    #  protocol implementer is expected to provide. Skipping for now.
 
 
 # TODO(tehrengruber): Decide if and how programs can call other programs. As a
@@ -285,7 +239,7 @@ class Program:
             )
         backend = self.backend or DEFAULT_BACKEND
 
-        ensure_executor(backend)
+        ensure_processor_kind(backend, FencilExecutor)
         if "debug" in kwargs:
             debug(self.itir)
 
@@ -301,7 +255,7 @@ class Program:
     def format_itir(
         self, *args, formatter: FencilFormatter, offset_provider: dict[str, Dimension], **kwargs
     ) -> str:
-        ensure_formatter(formatter)
+        ensure_processor_kind(formatter, FencilFormatter)
         rewritten_args, size_args, kwargs = self._process_args(args, kwargs)
         if "debug" in kwargs:
             debug(self.itir)
@@ -314,13 +268,23 @@ class Program:
         )
 
     def _validate_args(self, *args, **kwargs) -> None:
-        # TODO(tehrengruber): better error messages, check argument types
-        if len(args) != len(self.past_node.params):
-            raise GTTypeError(
-                f"Function takes {len(self.past_node.params)} arguments, but {len(args)} were given."
-            )
         if kwargs:
             raise NotImplementedError("Keyword arguments are not supported yet.")
+
+        arg_types = [symbol_makers.make_symbol_type_from_value(arg) for arg in args]
+        kwarg_types = {k: symbol_makers.make_symbol_type_from_value(v) for k, v in kwargs.items()}
+
+        try:
+            type_info.accepts_args(
+                self.past_node.type,
+                with_args=arg_types,
+                with_kwargs=kwarg_types,
+                raise_exception=True,
+            )
+        except GTTypeError as err:
+            raise ProgramTypeError.from_past_node(
+                self.past_node, msg=f"Invalid argument types in call to `{self.past_node.id}`!"
+            ) from err
 
     def _process_args(self, args: tuple, kwargs: dict) -> tuple[tuple, tuple, dict[str, Any]]:
         self._validate_args(*args, **kwargs)
@@ -329,6 +293,12 @@ class Program:
         size_args: list[Optional[tuple[int, ...]]] = []
         rewritten_args = list(args)
         for param_idx, param in enumerate(self.past_node.params):
+            if isinstance(param.type, ct.ScalarType):
+                dtype = type_info.extract_dtype(param.type)
+                rewritten_args[param_idx] = constant_field(
+                    args[param_idx],
+                    dtype=BUILTINS[dtype.kind.name.lower()],
+                )
             if not isinstance(param.type, ct.FieldType):
                 continue
             has_shape = hasattr(args[param_idx], "shape")
@@ -555,6 +525,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
 
         untyped_past_node = past.Program(
             id=f"__field_operator_{name}",
+            type=ct.DeferredSymbolType(constraint=ct.ProgramType),
             params=params_decl + [out_sym],
             body=[
                 past.Call(

@@ -11,8 +11,12 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
+from __future__ import annotations
+
+from types import SimpleNamespace
+
 from functional.common import DimensionKind, Field
-from functional.ffront import itir_makers as im
+from functional.ffront import common_types as ct, itir_makers as im
 from functional.ffront.fbuiltins import (
     Dimension,
     FieldOffset,
@@ -24,6 +28,7 @@ from functional.ffront.fbuiltins import (
 )
 from functional.ffront.foast_to_itir import FieldOperatorLowering
 from functional.ffront.func_to_foast import FieldOperatorParser
+from functional.ffront.symbol_makers import make_symbol_type_from_typing
 
 
 IDim = Dimension("IDim")
@@ -45,7 +50,7 @@ def debug_itir(tree):
 
 
 def test_copy():
-    def copy_field(inp: Field[..., "float64"]):
+    def copy_field(inp: Field[..., float64]):
         return inp
 
     # ast_passes
@@ -135,7 +140,7 @@ def test_negative_shift():
 
 
 def test_temp_assignment():
-    def copy_field(inp: Field[..., "float64"]):
+    def copy_field(inp: Field[..., float64]):
         tmp = inp
         inp = tmp
         tmp2 = inp
@@ -152,7 +157,7 @@ def test_temp_assignment():
 
 
 def test_unary_ops():
-    def unary(inp: Field[..., "float64"]):
+    def unary(inp: Field[..., float64]):
         tmp = +inp
         tmp = -tmp
         return tmp
@@ -176,7 +181,7 @@ def test_unary_ops():
 def test_unpacking():
     """Unpacking assigns should get separated."""
 
-    def unpacking(inp1: Field[..., "float64"], inp2: Field[..., "float64"]):
+    def unpacking(inp1: Field[..., float64], inp2: Field[..., float64]):
         tmp1, tmp2 = inp1, inp2  # noqa
         return tmp1
 
@@ -200,8 +205,8 @@ def test_unpacking():
 
 
 def test_annotated_assignment():
-    def copy_field(inp: Field[..., "float64"]):
-        tmp: Field[..., "float64"] = inp
+    def copy_field(inp: Field[..., float64]):
+        tmp: Field[..., float64] = inp
         return tmp
 
     parsed = FieldOperatorParser.apply_to_function(copy_field)
@@ -213,10 +218,17 @@ def test_annotated_assignment():
 
 
 def test_call():
-    def identity(x: Field[..., "float64"]) -> Field[..., "float64"]:
-        return x
+    # create something that appears to the lowering like a field operator.
+    #  we could also create an actual field operator, but we want to avoid
+    #  using such heavy constructs for testing the lowering.
+    field_type = make_symbol_type_from_typing(Field[..., float64])
+    identity = SimpleNamespace(
+        __gt_type__=lambda: ct.FieldOperatorType(
+            definition=ct.FunctionType(args=[field_type], kwargs={}, returns=field_type)
+        )
+    )
 
-    def call(inp: Field[..., "float64"]) -> Field[..., "float64"]:
+    def call(inp: Field[..., float64]) -> Field[..., float64]:
         return identity(inp)
 
     parsed = FieldOperatorParser.apply_to_function(call)
@@ -258,7 +270,7 @@ def test_unary_not():
 
 
 def test_binary_plus():
-    def plus(a: Field[..., "float64"], b: Field[..., "float64"]):
+    def plus(a: Field[..., float64], b: Field[..., float64]):
         return a + b
 
     parsed = FieldOperatorParser.apply_to_function(plus)
@@ -272,7 +284,7 @@ def test_binary_plus():
 
 
 def test_add_scalar_literal_to_field():
-    def scalar_plus_field(a: Field[[IDim], "float64"]) -> Field[[IDim], "float64"]:
+    def scalar_plus_field(a: Field[[IDim], float64]) -> Field[[IDim], float64]:
         return 2.0 + a
 
     parsed = FieldOperatorParser.apply_to_function(scalar_plus_field)
@@ -305,7 +317,7 @@ def test_add_scalar_literals():
 
 
 def test_binary_mult():
-    def mult(a: Field[..., "float64"], b: Field[..., "float64"]):
+    def mult(a: Field[..., float64], b: Field[..., float64]):
         return a * b
 
     parsed = FieldOperatorParser.apply_to_function(mult)
@@ -319,7 +331,7 @@ def test_binary_mult():
 
 
 def test_binary_minus():
-    def minus(a: Field[..., "float64"], b: Field[..., "float64"]):
+    def minus(a: Field[..., float64], b: Field[..., float64]):
         return a - b
 
     parsed = FieldOperatorParser.apply_to_function(minus)
@@ -333,7 +345,7 @@ def test_binary_minus():
 
 
 def test_binary_div():
-    def division(a: Field[..., "float64"], b: Field[..., "float64"]):
+    def division(a: Field[..., float64], b: Field[..., float64]):
         return a / b
 
     parsed = FieldOperatorParser.apply_to_function(division)
@@ -401,7 +413,7 @@ def test_compare_scalars():
 
 
 def test_compare_gt():
-    def comp_gt(a: Field[..., "float64"], b: Field[..., "float64"]):
+    def comp_gt(a: Field[..., float64], b: Field[..., float64]):
         return a > b
 
     parsed = FieldOperatorParser.apply_to_function(comp_gt)
@@ -415,7 +427,7 @@ def test_compare_gt():
 
 
 def test_compare_lt():
-    def comp_lt(a: Field[..., "float64"], b: Field[..., "float64"]):
+    def comp_lt(a: Field[..., float64], b: Field[..., float64]):
         return a < b
 
     parsed = FieldOperatorParser.apply_to_function(comp_lt)
@@ -444,7 +456,7 @@ def test_compare_eq():
 
 def test_compare_chain():
     def compare_chain(
-        a: Field[[IDim], "float64"], b: Field[[IDim], "float64"], c: Field[[IDim], "float64"]
+        a: Field[[IDim], float64], b: Field[[IDim], float64], c: Field[[IDim], float64]
     ) -> Field[[IDim], bool]:
         return a > b > c
 
@@ -474,7 +486,7 @@ def test_compare_chain():
 
 
 def test_reduction_lowering_simple():
-    def reduction(edge_f: Field[[Edge], "float64"]):
+    def reduction(edge_f: Field[[Edge], float64]):
         return neighbor_sum(edge_f(V2E), axis=V2EDim)
 
     parsed = FieldOperatorParser.apply_to_function(reduction)
@@ -493,7 +505,7 @@ def test_reduction_lowering_simple():
 
 
 def test_reduction_lowering_expr():
-    def reduction(e1: Field[[Edge], "float64"], e2: Field[[Vertex, V2EDim], "float64"]):
+    def reduction(e1: Field[[Edge], float64], e2: Field[[Vertex, V2EDim], float64]):
         e1_nbh = e1(V2E)
         return neighbor_sum(1.1 * (e1_nbh + e2), axis=V2EDim)
 

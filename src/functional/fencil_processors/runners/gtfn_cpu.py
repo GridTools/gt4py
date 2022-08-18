@@ -17,24 +17,13 @@ from typing import Any
 
 import numpy
 
-from functional.fencil_processors import source_modules
 from functional.fencil_processors.builders import cpp as cpp_callable
 from functional.fencil_processors.codegens.gtfn import gtfn_module as gtfn_codegen
+from functional.fencil_processors.processor_interface import fencil_executor
 from functional.iterator import ir
-from functional.iterator.processor_interface import fencil_executor
 
 
-def get_param_description(
-    name, obj
-) -> source_modules.ScalarParameter | source_modules.BufferParameter:
-    view = numpy.asarray(obj)
-    if view.ndim > 0:
-        return source_modules.BufferParameter(name, [dim.value for dim in obj.axes], view.dtype)
-    else:
-        return source_modules.ScalarParameter(name, view.dtype)
-
-
-def convert_arg(arg) -> Any:
+def convert_arg(arg: Any) -> Any:
     view = numpy.asarray(arg)
     if view.ndim > 0:
         return memoryview(view)
@@ -54,9 +43,6 @@ def run_gtfn(itir: ir.FencilDefinition, *args, **kwargs):
 
     See ``FencilExecutorFunction`` for details.
     """
-    parameters = [
-        get_param_description(itir_param.id, obj) for obj, itir_param in zip(args, itir.params)
-    ]
-    source_module = gtfn_codegen.create_source_module(itir, parameters, **kwargs)
+    source_module = gtfn_codegen.create_source_module(itir, *args, **kwargs)
     wrapper = cpp_callable.create_callable(source_module)
     wrapper(*[convert_arg(arg) for arg in args])
