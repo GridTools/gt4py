@@ -163,15 +163,15 @@ copy will be written in `tests/_reports/coverage_html/` at the end of the run.
 Before you submit a pull request, check that it meets these guidelines:
 
 1. The pull request should include tests.
-2. If the pull request adds functionality, it should be documented both in the code docstrings and in the docs.
+2. If the pull request adds functionality, it should be documented both in the code docstrings and in the official documentation.
 3. The pull request should contain a meaninful description of the intent of the PR and a summary of the main changes and design issues in the code for the reviewers.
-4. Ask for a review ...
-5. MErge using a commit message from ... [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/#summary)
+4. Pick one reviewer and try to contact him directly to let him know about the PR. If there is no feedback in 24h/48h try to contact him again or pick another reviewer.
+5. Once the PR has been approved, it should be squash-merged as soon as possible with a meaningful description of the changes involved. Check the [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/#summary) specification for writing informative and automation-friendly commit messages.
 
 
 ## Deployment
 
-A reminder for the maintainers on how to deploy.
+TODO: A reminder for the maintainers on how to deploy.
 Make sure all your changes are committed (including an entry in HISTORY.rst).
 Then run::
 

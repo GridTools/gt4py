@@ -37,7 +37,7 @@ Sphinx supports [reStructuredText][sphinx-rest] (reST) markup language to add ad
    - Cross-referencing other objects using Sphinx text roles for the [Python domain](https://www.sphinx-doc.org/en/master/usage/restructuredtext/domains.html#the-python-domain) (as explained [here](https://www.sphinx-doc.org/en/master/usage/restructuredtext/domains.html#python-roles)).   
    - Very basic formatting markup to improve _readability_ of the generated documentation without obscuring the source docstring (e.g. ``` ``literal`` ```  strings).
    
-Regarding code examples in docstrings, we highly encourage to use [doctest](https://docs.python.org/3/library/doctest.html) format to automatically test they are in sync with the code.
+Regarding code examples in docstrings, we highly encourage to use [doctest][doctest] format to automatically test they are in sync with the code.
 
 ### Ignoring QA errors
 
@@ -70,16 +70,22 @@ Try to keep sections and items within sections ordered logically, adding comment
 
 ## Testing 
 
-Testing components is a critical part of a software development project. We follow 
+Testing components is a critical part of a software development project. We follow standard practices of software development and write unit, integration and regression tests. Note that even [doctests][doctest] are great for documentation purposes, they are not a replacement for proper unit tests.
 
-- Tests best-practises: factory boy, pytest-cases, other pytest-plugins, make them parallelizable ??
-+ factories and test input data (factory boy? pytest-cases?)
--Doctests are cool for small things but not a fully replacement of unit tests). Learn sphinx and RST, napoleon tags for beautiful but lightweight docstrins.
+```
+TODO: add test conventions:
+TODO:    - to organize tests inside the `tests/` folder
+TODO:    - to name tests
+TODO:    - to use pytest features (fixtures, markers, etc.)
+TODO:    - to generate mock objects and data for tests (e.g. pytest-factoryboy, pytest-cases)
+TODO:    - to use pytest plugins 
+```
 
 
 <!-- Reference links -->
 
 [black]: https://black.readthedocs.io/en/stable/
+[doctest]: https://docs.python.org/3/library/doctest.html
 [flake8]: https://flake8.pycqa.org/
 [google-style-guide]: https://google.github.io/styleguide/pyguide.html
 [isort]: https://pycqa.github.io/isort/
