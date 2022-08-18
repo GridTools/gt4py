@@ -14,8 +14,7 @@ When working on the implementation of new features, you should think carefully a
 5. Do not reinvent the wheel: instead of writing a new component to solve a problem consider existing solutions.
 6. Names should state the intent of code objects. If the intent of a code expression **might** not be immediately obvious it deserves a name which makes it obvious.
 
-Remember that important design decisions should be documented as reference for the future and to share the knowledge with all the developers. We decided to use lightweight _Architecture Decision Records_ (ADRs) for this purpose. The as documented in [here](docs/functional/architecture/Index.md)
-
+Remember that important design decisions should be documented as reference for the future and to share the knowledge with all the developers. We decided to use lightweight _Architecture Decision Records_ (ADRs) for this purpose. The whole list of ADRs and documentation about when and how to write new ones can be found in [docs/functional/architecture/Index.md](docs/functional/architecture/Index.md).
 
 
 ## Code Style
