@@ -16,13 +16,13 @@ of GT4Py working only with unstructured meshes and Python 3.10. The more
 stable version of GT4Py for Cartesian meshes lives in the `master` branch.
 
 
-## Installation instructions
+## Installation Instructions
 
 GT4Py can be installed as a regular Python package using `pip` (or any
 other PEP-517 frontend). As usual, we strongly recommended to create a
 new virtual environment to work on this project.
 
-### Recommended installation using `tox`
+### Recommended Installation using `tox`
 
 If [tox](https://tox.wiki/en/latest/) is already installed in your system (``tox`` is available in PyPI and many other package managers), the easiest way to create a virtual environment ready for development is:
 
@@ -42,7 +42,7 @@ source .venv/bin/activate
 pytest -v
 ```
 
-### Installation from scratch
+### Installation from Scratch
 
 Alternatively, a development environment can be created from scratch:
 
@@ -70,12 +70,12 @@ pip install -e .
 pytest -v
 ```
 
-## Development instructions
+## Development Instructions
 
 After following the installation instructions above, an _editable_  installation
-of the GT4Py package will be active in the virtual environment. In this mode, code changes are immediately visible since source files are imported directly by the Python interpreter.
+of the GT4Py package will be active in the virtual environment. In this mode, code changes are immediately visible since source files are imported directly by the Python interpreter, which is very convenient for development. Simple instructions to run development tools are given below, but make sure you read the [CONTRIBUTING.md](CONTRIBUTING.md) and [CODING_GUIDELINES.md](CODING_GUIDELINES.md) documents before you start with the actual development.
 
-### Code quality checks
+### Code Quality Checks
 
 [pre-commit](https://pre-commit.com/) is used to run several linting and checking tools. It should always be executed locally before opening a pull request. `pre-commit` can be installed as a _git hook_ to automatically check the staged changes before commiting:
 
