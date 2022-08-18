@@ -166,22 +166,45 @@ Before you submit a pull request, check that it meets these guidelines:
 2. If the pull request adds functionality, it should be documented both in the code docstrings and in the official documentation.
 3. The pull request should contain a meaninful description of the intent of the PR and a summary of the main changes and design issues in the code for the reviewers.
 4. Pick one reviewer and try to contact him directly to let him know about the PR. If there is no feedback in 24h/48h try to contact him again or pick another reviewer.
-5. Once the PR has been approved, it should be squash-merged as soon as possible with a meaningful description of the changes involved. Check the [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/#summary) specification for writing informative and automation-friendly commit messages.
+5. Once the PR has been approved, it should be squash-merged as soon as possible with a meaningful description of the changes involved. Check the [Conventional Commits][conventional-commits] specification for writing informative and automation-friendly commit messages.
 
 
 ## Releasing Process
 
-This section documents the process of releasing new GT4Py versions for core members of the development team. Currently, GT4Py releases are published as commit tags in the main GitHub repository (although they will be soon available in TestPyPi and PyPI). To create a new release you should:
+This section documents the process to release new GT4Py versions and it is only useful for core members of the development team.
 
-1. Make sure all the expected changes (new features, bug fixes, documentation changes, etc. are already included in the public branch.
-2. Update the [CHANGELOG.md](CHANGELOG.md) file....
-3. Use `bump2version` to update the version number.
+Currently, GT4Py releases are published as commit tags in the main GitHub repository (although they will be soon available in TestPyPi and PyPI). To create a new release you should:
+
+1. Make sure all the expected changes (new features, bug fixes, documentation changes, etc.) are already included in the main public branch.
+
+2. Use `bump2version` to update the version number.
+
    ```bash
    $ bump2version patch
    ```
-4. Commit the changes
-5. Add a new tag
-6. Push directly to the upstream repo.
+
+3. Update the [CHANGELOG.md](CHANGELOG.md) file to document the changes included in the new release. You should keep the changelog format in sync with the standard recommendations ([keep a changelog](https://keepachangelog.com/en/1.0.0/)). This process can be fully or partially automatized if commit messages follow the [Conventional Commits][conventional-commits] convention as suggested in the section about [Pull Request and Merge Guidelines](#pull-request-and-merge-guidelines). 
+
+4. Commit the changes with the following commit message:
+
+   ```bash
+   $ git commit -m 'Releasing {M}.{m}.{p} version.'
+   ```
+
+5. Add a new lightweight tag like: `v{M}.{m}.{p}`
+
+   ```bash
+   $ git tag v{M}.{m}.{p}
+   ```
+
+6. Push the new commit and tag directly to the upstream repo:
+
+   ```bash
+   $ git push upstream 
+   $ git push upstream v{M}.{m}.{p}
+   ```
+
+7. Go to the GitHub website and verify that the new tag has been successfully created.
 
 
 ## Tools
@@ -204,6 +227,8 @@ As mentioned above, we use several tools to help us writing high-quality code. N
 <!-- Reference links -->
 
 [black]: https://black.readthedocs.io/en/stable/
+[commitizen]: https://commitizen-tools.github.io/commitizen/
+[conventional-commits]: https://www.conventionalcommits.org/en/v1.0.0/#summary
 [coverage]: https://coverage.readthedocs.io/
 [flake8]: https://flake8.pycqa.org/
 [google-style-guide]: https://google.github.io/styleguide/pyguide.html
