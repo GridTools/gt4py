@@ -29,6 +29,8 @@ from gtc.dace.expansion_specification import Loop
 from gtc.dace.nodes import StencilComputation
 from gtc.passes.daceir_optimizations import MakeLocalCaches
 
+from .utils import split_horizontal_executions_regions
+
 
 def _collect_localcache_config(
     node: StencilComputation,
@@ -43,9 +45,6 @@ def _collect_localcache_config(
         return None
 
     return loop_item.axis, loop_item.localcache_fields, loop_item.storage
-
-
-from .utils import split_horizontal_executions_regions
 
 
 @dace.library.register_expansion(StencilComputation, "default")

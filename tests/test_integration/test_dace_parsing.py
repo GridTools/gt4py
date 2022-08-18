@@ -28,6 +28,10 @@ from gt4py.stencil_builder import StencilBuilder
 
 dace = pytest.importorskip("dace")
 
+from gt4py.backend.dace_lazy_stencil import (  # noqa: E402 (needs to be guarded by above importorskip)
+    DaCeLazyStencil,
+)
+
 
 pytestmark = pytest.mark.usefixtures("dace_env")
 
@@ -377,11 +381,6 @@ def test_nondace_raises(decorator):
         ),
     ):
         call_stencil()
-
-
-from gt4py.backend.dace_lazy_stencil import (  # noqa: E402 (needs to be guarded by above importorskip)
-    DaCeLazyStencil,
-)
 
 
 def simple_stencil_defn(outp: gtscript.Field[np.float64], par: np.float64):
