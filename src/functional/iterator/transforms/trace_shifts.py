@@ -92,8 +92,6 @@ def _combine(*tracers):
         elif isinstance(tracer, tuple):
             for t in tracer:
                 handle_tracer(t)
-        else:
-            assert tracer is None
 
     for tracer in tracers:
         handle_tracer(tracer)
@@ -133,6 +131,13 @@ def _reduce(f, init):
     return apply
 
 
+def _scan(f, init, forward):
+    def apply(*args):
+        return f(init, *args)
+
+    return apply
+
+
 def _make_tuple(*args):
     return args
 
@@ -148,6 +153,7 @@ _START_CTX: Final = {
     "shift": _shift,
     "lift": _lift,
     "reduce": _reduce,
+    "scan": _scan,
     "make_tuple": _make_tuple,
     "tuple_get": _tuple_get,
 }
@@ -158,9 +164,6 @@ class TraceShifts(NodeTranslator):
         if node.id in ctx:
             return ctx[node.id]
         return _combine
-
-    def visit_Literal(self, node: ir.Literal, ctx: dict[str, Any]) -> None:
-        return None
 
     def visit_FunCall(self, node: ir.FunCall, *, ctx: dict[str, Any]) -> Any:
         fun = self.visit(node.fun, ctx=ctx)
