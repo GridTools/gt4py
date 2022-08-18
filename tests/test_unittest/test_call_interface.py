@@ -491,7 +491,6 @@ def test_permute_axes():
         data=np.arange(4),
         backend="numpy",
         aligned_index=(1,),
-        shape=(4,),
         dtype=float,
         dimensions="K",
     )

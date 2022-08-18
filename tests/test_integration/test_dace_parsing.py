@@ -117,10 +117,10 @@ def test_origin_offsetting_frozen(dace_stencil, domain, outp_origin):
     wrapper_type = OriginWrapper if "gpu" in backend else NdarraySubclassOriginWrapper
 
     inp = wrapper_type(
-        array=gt_storage.from_array(
-            data=7.0,
-            dtype=np.float64,
+        array=gt_storage.full(
+            fill_value=7.0,
             shape=(10, 10, 10),
+            dtype=np.float64,
             aligned_index=(0, 0, 0),
             backend=backend,
         ),
@@ -170,10 +170,10 @@ def test_origin_offsetting_nofrozen(dace_stencil, domain, outp_origin):
     wrapper_type = OriginWrapper if "gpu" in backend else NdarraySubclassOriginWrapper
 
     inp = wrapper_type(
-        array=gt_storage.from_array(
-            data=7.0,
-            dtype=np.float64,
+        array=gt_storage.full(
+            fill_value=7.0,
             shape=(10, 10, 10),
+            dtype=np.float64,
             aligned_index=(0, 0, 0),
             backend=backend,
         ),
@@ -233,10 +233,10 @@ def test_optional_arg_noprovide(backend):
     wrapper_type = OriginWrapper if "gpu" in backend else NdarraySubclassOriginWrapper
 
     inp = wrapper_type(
-        array=gt_storage.from_array(
-            data=7.0,
-            dtype=np.float64,
+        array=gt_storage.full(
+            fill_value=7.0,
             shape=(10, 10, 10),
+            dtype=np.float64,
             aligned_index=(0, 0, 0),
             backend=backend,
         ),
@@ -287,10 +287,10 @@ def test_optional_arg_provide(backend):
     wrapper_type = OriginWrapper if "gpu" in backend else NdarraySubclassOriginWrapper
 
     inp = wrapper_type(
-        array=gt_storage.from_array(
-            data=7.0,
-            dtype=np.float64,
+        array=gt_storage.full(
+            fill_value=7.0,
             shape=(10, 10, 10),
+            dtype=np.float64,
             aligned_index=(0, 0, 0),
             backend=backend,
         ),
@@ -349,10 +349,10 @@ def test_optional_arg_provide_aot(backend):
     wrapper_type = OriginWrapper if "gpu" in backend else NdarraySubclassOriginWrapper
 
     inp = wrapper_type(
-        array=gt_storage.from_array(
-            data=7.0,
-            dtype=np.float64,
+        array=gt_storage.full(
+            fill_value=7.0,
             shape=(10, 10, 10),
+            dtype=np.float64,
             aligned_index=(0, 0, 0),
             backend=backend,
         ),
@@ -402,8 +402,8 @@ def test_nondace_raises():
     )
 
     inp = NdarraySubclassOriginWrapper(
-        array=gt_storage.from_array(
-            data=7.0,
+        array=gt_storage.full(
+            fill_value=7.0,
             dtype=np.float64,
             shape=(10, 10, 10),
             aligned_index=(0, 0, 0),

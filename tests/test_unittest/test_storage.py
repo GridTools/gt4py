@@ -352,12 +352,11 @@ class TestNormalizeStorageSpec:
         gt_store.empty,
         gt_store.ones,
         gt_store.zeros,
-        lambda dtype, aligned_index, shape, backend: gt_store.from_array(
+        lambda *args, **kwargs: gt_store.full(*args, fill_value=7, **kwargs),
+        lambda shape, dtype, **kwargs: gt_store.from_array(
             np.empty(shape, dtype=dtype),
-            backend=backend,
-            shape=shape,
             dtype=dtype,
-            aligned_index=aligned_index,
+            **kwargs,
         ),
     ],
 )
@@ -374,12 +373,11 @@ def test_cpu_constructor(alloc_fun, backend):
         gt_store.empty,
         gt_store.ones,
         gt_store.zeros,
-        lambda dtype, aligned_index, shape, backend: gt_store.from_array(
+        lambda *args, **kwargs: gt_store.full(*args, fill_value=7, **kwargs),
+        lambda shape, dtype, **kwargs: gt_store.from_array(
             np.empty(shape, dtype=dtype),
-            backend=backend,
-            shape=shape,
             dtype=dtype,
-            aligned_index=aligned_index,
+            **kwargs,
         ),
     ],
 )
@@ -439,9 +437,9 @@ def test_masked_storage_asserts():
 def test_non_existing_backend():
     with pytest.raises(RuntimeError, match="backend"):
         gt_store.empty(
-            "non_existing_backend",
-            aligned_index=[0, 0, 0],
             shape=[10, 10, 10],
+            backend="non_existing_backend",
+            aligned_index=[0, 0, 0],
             dtype=(np.float64, (3,)),
         )
 

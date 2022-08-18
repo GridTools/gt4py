@@ -12,6 +12,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+from numbers import Number
 from typing import Any, Optional, Sequence, Tuple, Union
 
 import numpy as np
@@ -49,8 +50,8 @@ def empty(
     dtype: DTypeLike = np.float64,
     *,
     backend: str,
-    aligned_index: Tuple[int, ...],
-    dimensions: Optional[Tuple[str, ...]] = None,
+    aligned_index: Sequence[int],
+    dimensions: Optional[Sequence[str]] = None,
 ) -> Union[np.ndarray, "cp.ndarray"]:
     _error_on_invalid_backend(backend)
     if gt_backend.from_name(backend).storage_info["device"] == "gpu":
@@ -77,8 +78,8 @@ def ones(
     dtype: DTypeLike = np.float64,
     *,
     backend: str,
-    aligned_index: Tuple[int, ...],
-    dimensions: Optional[Tuple[str, ...]] = None,
+    aligned_index: Sequence[int],
+    dimensions: Optional[Sequence[str]] = None,
 ) -> Union[np.ndarray, "cp.ndarray"]:
     storage = empty(
         shape=shape,
@@ -91,13 +92,33 @@ def ones(
     return storage
 
 
+def full(
+    shape: Sequence[int],
+    fill_value: Number,
+    dtype: DTypeLike = np.float64,
+    *,
+    backend: str,
+    aligned_index: Sequence[int],
+    dimensions: Optional[Sequence[str]] = None,
+) -> Union[np.ndarray, "cp.ndarray"]:
+    storage = empty(
+        shape=shape,
+        dtype=dtype,
+        backend=backend,
+        aligned_index=aligned_index,
+        dimensions=dimensions,
+    )
+    storage[...] = fill_value
+    return storage
+
+
 def zeros(
     shape: Sequence[int],
     dtype: DTypeLike = np.float64,
     *,
     backend: str,
-    aligned_index: Tuple[int, ...],
-    dimensions: Optional[Tuple[str, ...]] = None,
+    aligned_index: Sequence[int],
+    dimensions: Optional[Sequence[str]] = None,
 ) -> Union[np.ndarray, "cp.ndarray"]:
     storage = empty(
         shape=shape,
@@ -115,8 +136,8 @@ def from_array(
     dtype: DTypeLike = np.float64,
     *,
     backend: str,
-    aligned_index: Tuple[int, ...],
-    dimensions: Optional[Tuple[str, ...]] = None,
+    aligned_index: Sequence[int],
+    dimensions: Optional[Sequence[str]] = None,
 ) -> Union[np.ndarray, "cp.ndarray"]:
     is_cupy_array = cp is not None and isinstance(data, cp.ndarray)
     asarray = gt4py.storage.utils.as_cupy if is_cupy_array else gt4py.storage.utils.as_numpy
@@ -146,8 +167,8 @@ if dace is not None:
         dtype: DTypeLike = np.float64,
         *,
         backend: str,
-        aligned_index: Tuple[int, ...],
-        dimensions: Optional[Tuple[str, ...]] = None,
+        aligned_index: Sequence[int],
+        dimensions: Optional[Sequence[str]] = None,
     ) -> dace.data.Array:
         aligned_index, shape, dtype, dimensions = storage_utils.normalize_storage_spec(
             aligned_index, shape, dtype, dimensions

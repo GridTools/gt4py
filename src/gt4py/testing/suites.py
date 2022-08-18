@@ -527,14 +527,11 @@ class StencilTestSuite(metaclass=SuiteMeta):
                     data_dims = field_params[name][1]
                     if data_dims:
                         dtype = (data.dtype, data_dims)
-                        shape = data.shape[: -len(data_dims)]
                     else:
                         dtype = data.dtype
-                        shape = data.shape
                     test_values[name] = gt_storage.from_array(
-                        data,
+                        data=data,
                         dtype=dtype,
-                        shape=shape,
                         dimensions=field_dimensions[name],
                         aligned_index=gtc_utils.filter_mask(origin, field_masks[name]),
                         backend=implementation.backend,

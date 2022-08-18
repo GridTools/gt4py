@@ -52,7 +52,6 @@ def get_reference(test_name, backend, domain, origins, shapes, masks=None):
                     data,
                     dtype=np.float_,
                     aligned_index=origins[k],
-                    shape=shapes[k],
                     backend=backend.name,
                 )
             except KeyError:
@@ -60,7 +59,6 @@ def get_reference(test_name, backend, domain, origins, shapes, masks=None):
                     data,
                     dtype=np.float_,
                     aligned_index=origins[k[: -len("_reference")]],
-                    shape=shapes[k[: -len("_reference")]],
                     backend=backend.name,
                 )
 

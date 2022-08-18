@@ -193,18 +193,20 @@ def test_lower_dimensional_inputs(backend):
     aligned_index = (1, 1, 0)
     dtype = float
 
-    field_3d = gt_storage.zeros(backend, aligned_index, full_shape, dtype, dimensions=None)
+    field_3d = gt_storage.zeros(
+        full_shape, dtype, backend=backend, aligned_index=aligned_index, dimensions=None
+    )
     assert field_3d.shape == full_shape[:]
 
     field_2d = gt_storage.zeros(
-        backend, aligned_index[:-1], full_shape[:-1], dtype, dimensions="IJ"
+        full_shape[:-1], dtype, backend=backend, aligned_index=aligned_index[:-1], dimensions="IJ"
     )
     assert field_2d.shape == full_shape[:-1]
 
     field_1d = gt_storage.ones(
-        backend, (aligned_index[-1],), (full_shape[-1],), dtype, dimensions="K"
+        full_shape[-1:], dtype, backend=backend, aligned_index=(aligned_index[-1],), dimensions="K"
     )
-    assert field_1d.shape == (full_shape[-1],)
+    assert field_1d.shape == full_shape[-1:]
 
     stencil(field_3d, field_2d, field_1d, origin=(1, 1, 0), domain=(4, 3, 6))
     res_field_3d = storage_utils.cpu_copy(field_3d)
@@ -327,14 +329,20 @@ def test_higher_dimensional_fields(backend):
     full_shape = (6, 6, 6)
     aligned_index = (1, 1, 0)
 
-    field = gt_storage.ones(backend, aligned_index, full_shape, dtype=np.float64)
+    field = gt_storage.ones(
+        full_shape, backend=backend, aligned_index=aligned_index, dtype=np.float64
+    )
     assert field.shape == full_shape[:]
 
-    vec_field = gt_storage.ones(backend, aligned_index, full_shape, dtype=FLOAT64_VEC2)
+    vec_field = gt_storage.ones(
+        full_shape, backend=backend, aligned_index=aligned_index, dtype=FLOAT64_VEC2
+    )
     vec_field[:] = 2.0
     assert vec_field.shape[:-1] == full_shape
 
-    mat_field = gt_storage.ones(backend, aligned_index, full_shape, dtype=FLOAT64_MAT22)
+    mat_field = gt_storage.ones(
+        full_shape, backend=backend, aligned_index=aligned_index, dtype=FLOAT64_MAT22
+    )
     assert mat_field.shape[:-2] == full_shape
 
     stencil(field, vec_field, mat_field, origin=(1, 1, 0), domain=(4, 4, 6))
@@ -450,8 +458,12 @@ def test_write_data_dim_indirect_addressing(backend):
 
     aligned_index = (0, 0, 0)
     full_shape = (1, 1, 2)
-    input_field = gt_storage.ones(backend, aligned_index, full_shape, dtype=np.int32)
-    output_field = gt_storage.zeros(backend, aligned_index, full_shape, dtype=INT32_VEC2)
+    input_field = gt_storage.ones(
+        full_shape, backend=backend, aligned_index=aligned_index, dtype=np.int32
+    )
+    output_field = gt_storage.zeros(
+        full_shape, backend=backend, aligned_index=aligned_index, dtype=INT32_VEC2
+    )
 
     gtscript.stencil(definition=stencil, backend=backend)(input_field, output_field, index := 1)
     assert output_field[0, 0, 0, index] == 1
@@ -471,8 +483,12 @@ def test_read_data_dim_indirect_addressing(backend):
 
     aligned_index = (0, 0, 0)
     full_shape = (1, 1, 2)
-    input_field = gt_storage.ones(backend, aligned_index, full_shape, dtype=INT32_VEC2)
-    output_field = gt_storage.zeros(backend, aligned_index, full_shape, dtype=np.int32)
+    input_field = gt_storage.ones(
+        full_shape, backend=backend, aligned_index=aligned_index, dtype=INT32_VEC2
+    )
+    output_field = gt_storage.zeros(
+        full_shape, backend=backend, aligned_index=aligned_index, dtype=np.int32
+    )
 
     gtscript.stencil(definition=stencil, backend=backend)(input_field, output_field, 1)
     assert output_field[0, 0, 0] == 1
@@ -490,10 +506,10 @@ class TestNegativeOrigin:
                 output_field = input_field[1, 0, 0]
 
         input_field = gt_storage.ones(
-            backend, aligned_index=(0, 0, 0), shape=(1, 1, 1), dtype=np.int32
+            backend=backend, aligned_index=(0, 0, 0), shape=(1, 1, 1), dtype=np.int32
         )
         output_field = gt_storage.zeros(
-            backend, aligned_index=(0, 0, 0), shape=(1, 1, 1), dtype=np.int32
+            backend=backend, aligned_index=(0, 0, 0), shape=(1, 1, 1), dtype=np.int32
         )
 
         stencil_i(input_field, output_field, origin={"input_field": (-1, 0, 0)})
@@ -509,10 +525,10 @@ class TestNegativeOrigin:
                 output_field = input_field[0, 0, 1]
 
         input_field = gt_storage.ones(
-            backend, aligned_index=(0, 0, 0), shape=(1, 1, 1), dtype=np.int32
+            backend=backend, aligned_index=(0, 0, 0), shape=(1, 1, 1), dtype=np.int32
         )
         output_field = gt_storage.zeros(
-            backend, aligned_index=(0, 0, 0), shape=(1, 1, 1), dtype=np.int32
+            backend=backend, aligned_index=(0, 0, 0), shape=(1, 1, 1), dtype=np.int32
         )
 
         stencil_k(input_field, output_field, origin={"input_field": (0, 0, -1)})
@@ -532,7 +548,6 @@ def test_origin_k_fields(backend):
     data = np.arange(10, dtype=np.float64)
     inp = gt_storage.from_array(
         data=data,
-        shape=(10,),
         aligned_index=(0,),
         dtype=np.float64,
         dimensions="K",
@@ -561,6 +576,10 @@ def test_pruned_args_match(backend):
             with horizontal(region[I[0] - 1, J[0] - 1]):
                 out = inp
 
-    inp = gt_storage.zeros(backend, aligned_index=(0, 0, 0), shape=(2, 2, 2), dtype=np.float64)
-    out = gt_storage.empty(backend, aligned_index=(0, 0, 0), shape=(2, 2, 2), dtype=np.float64)
+    inp = gt_storage.zeros(
+        backend=backend, aligned_index=(0, 0, 0), shape=(2, 2, 2), dtype=np.float64
+    )
+    out = gt_storage.empty(
+        backend=backend, aligned_index=(0, 0, 0), shape=(2, 2, 2), dtype=np.float64
+    )
     test(out, inp)
