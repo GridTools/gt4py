@@ -20,7 +20,9 @@ import functional
 
 def test_version():
     assert isinstance(functional.version.__version__, str)
-    assert all(len(p) for p in functional.version.__version__.split("."))
+    assert len(functional.version.__version__) and all(
+        len(p) for p in functional.version.__version__.split(".")
+    )
     assert functional.version.__version__ == functional.__version__
 
 
@@ -28,5 +30,14 @@ def test_version_info():
     from packaging.version import Version
 
     assert isinstance(functional.version.__version_info__, Version)
-    assert (0, 1) <= functional.version.__version_info__.release < (0, 2)
+    assert functional.version.__version_info__.release == tuple(
+        int(p) for p in functional.version.__version__.split(".")
+    )
+    assert (0, 2) <= functional.version.__version_info__.release < (0, 3)
     assert functional.version.__version_info__ == functional.__version_info__
+
+
+def test_subprojects_version_sync():
+    import eve
+
+    assert functional.version.__version__ == eve.version.__version__
