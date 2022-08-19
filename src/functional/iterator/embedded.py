@@ -159,7 +159,7 @@ class Column(numpy.lib.mixins.NDArrayOperatorsMixin):
     def __setitem__(self, i: int, v: Any) -> None:
         self.data[i - self.kstart] = v
 
-    def __array__(self, dtype: Optional[DTypeLike]=None) -> np.ndarray:
+    def __array__(self, dtype: Optional[npt.DTypeLike] = None) -> np.ndarray:
         return self.data if dtype or dtype == self.data.dtype else self.data.astype(dtype)
 
     def __array_function__(self, func, types, args, kwargs):
@@ -168,7 +168,7 @@ class Column(numpy.lib.mixins.NDArrayOperatorsMixin):
 
 
 def _make_column(column_range: range, dtype=np.dtype):
-    return Column(min(column_range), np.zeros(len(column_range), dtype=dtype))
+    return Column(column_range.start, np.zeros(len(column_range), dtype=dtype))
 
 
 @builtins.deref.register(EMBEDDED)
