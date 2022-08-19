@@ -8,7 +8,7 @@ Designing software is a hard task which can be easily overlooked when you are wo
 When working on the implementation of new features, you should think carefully about the design of your solution and assess it with the following principles in mind:
 
 1. Look at each piece of code and ask yourself: _Would I point to this in a job interview as an example of well crafted code according to my best abilities?_
-2. If it isn't tested and verified, it isn't scientific. This is a scientifi software library.
+2. If it isn't tested and verified, it isn't scientific. This is a scientific software library.
 3. Separate concerns: any unit of code should have one concern and one only. The implementation details of any unit of code should not be known to any other unit of code.
 4. Do not repeat yourself ([DRY](https://en.wikipedia.org/wiki/Don%27t_repeat_yourself)): always check if functionality already exists elsewhere in the project before implementing it. Also recognize when multiple specific implementations of an algorithm can be replaced with a single generic one.
 5. Do not reinvent the wheel: instead of writing a new component to solve a problem consider existing solutions.

@@ -1,6 +1,6 @@
 # Contributing
 
-Contributions to GT4Py are welcome, and they are greatly appreciated. Proper credit will be given to contributors by adding their names to the [AUTHORS.md](AUTHORS.md) file. Note that ETH Zurich is the owner of the GridTools project and the GT4Py library, therefore external contributors must sign a contributor assignment agreement.
+Contributions to GT4Py are welcome, and they are greatly appreciated. Proper credit will be given to contributors by adding their names to the [AUTHORS.md](AUTHORS.md) file. Note that [ETH Zurich](https://ethz.ch/en.html) is the owner of the GridTools project and the GT4Py library, therefore external contributors must sign a contributor assignment agreement.
 
 
 ## Types of Contributions
@@ -189,20 +189,20 @@ Currently, GT4Py releases are published as commit tags in the main GitHub reposi
 4. Commit the changes with the following commit message:
 
    ```bash
-   $ git commit -m 'Releasing {M}.{m}.{p} version.'
+   $ git commit -m 'Releasing 0.{M}.{m}.{p} version.'
    ```
 
-5. Add a new lightweight tag like: `v{M}.{m}.{p}`
+5. Add a new lightweight tag like: `v0.{M}.{m}.{p}`
 
    ```bash
-   $ git tag v{M}.{m}.{p}
+   $ git tag v0.{M}.{m}.{p}
    ```
 
 6. Push the new commit and tag directly to the upstream repo:
 
    ```bash
    $ git push upstream 
-   $ git push upstream v{M}.{m}.{p}
+   $ git push upstream v0.{M}.{m}.{p}
    ```
 
 7. Go to the GitHub website and verify that the new tag has been successfully created.
