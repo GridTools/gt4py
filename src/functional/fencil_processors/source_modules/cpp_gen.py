@@ -34,13 +34,13 @@ class CppLanguage:
     formatting_style: str
 
     def format_source(self, source_code: str) -> str:
-        return format_source(self.name, source_code, style=self.formatting_style)
+        return format_source("cpp", source_code, style=self.formatting_style)
 
 
 CPP_DEFAULT: Final = CppLanguage(
-    name="cpp",
-    implementation_extension=".cpp",
-    include_extension=".cpp.inc",
+    name="C++ (default)",
+    implementation_extension="cpp",
+    include_extension="cpp.inc",
     formatting_style="LLVM",
 )
 

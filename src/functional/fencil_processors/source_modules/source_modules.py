@@ -20,7 +20,7 @@ from typing import Generic, Protocol, TypeVar
 import numpy
 
 
-class SupportedLanguageProtocol(Protocol):
+class SupportedLanguage(Protocol):
     """Ensures consistent code formatting along the pipeline."""
 
     @property
@@ -31,7 +31,7 @@ class SupportedLanguageProtocol(Protocol):
         ...
 
 
-class IncludeImplementationLanguageProtocol(SupportedLanguageProtocol, Protocol):
+class LanguageWithHeaders(SupportedLanguage, Protocol):
     """Ensures consistent file naming for languages that split code into include (header) and implementation files."""
 
     @property
@@ -43,7 +43,7 @@ class IncludeImplementationLanguageProtocol(SupportedLanguageProtocol, Protocol)
         ...
 
 
-LanguageT = TypeVar("LanguageT", bound=SupportedLanguageProtocol, covariant=True)
+LanguageT = TypeVar("LanguageT", bound=SupportedLanguage, covariant=True)
 
 
 @dataclass(frozen=True)
