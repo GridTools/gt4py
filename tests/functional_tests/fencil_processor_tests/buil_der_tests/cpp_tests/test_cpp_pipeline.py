@@ -22,9 +22,8 @@ import pytest
 
 from functional.fencil_processors import source_modules
 from functional.fencil_processors.builders import cache
-from functional.fencil_processors.cpp.bindings import create_bindings
-from functional.fencil_processors.cpp.build import CMakeBuildProject
-from functional.fencil_processors.pipeline import CPP_DEFAULT
+from functional.fencil_processors.builders.cpp.bindings import create_bindings
+from functional.fencil_processors.builders.cpp.build import CMakeProject, CompileCommandProject
 from functional.fencil_processors.source_modules import cpp_gen as cpp
 
 
@@ -67,14 +66,57 @@ def source_module_example():
     )
 
 
-def test_gtfn_cpp_with_cmake(source_module_example):
-    wrapper = CMakeBuildProject(
+def test_gt_cpp_with_cmake(source_module_example):
+    wrapper = CMakeProject(
         source_module=source_module_example,
-        bindings_module=create_bindings(source_module_example, language=CPP_DEFAULT),
-        language=CPP_DEFAULT,
+        bindings_module=create_bindings(source_module_example),
         cache_strategy=cache.Strategy.SESSION,
     ).get_implementation()
     buf = np.zeros(shape=(6, 5), dtype=np.float32)
     sc = np.float32(3.1415926)
     res = wrapper(buf, sc)
     assert math.isclose(res, 6 * 5 * 3.1415926, rel_tol=1e-4)
+
+
+def test_gt_cpp_with_compile_command(source_module_example):
+    wrapper = CompileCommandProject(
+        source_module=source_module_example,
+        bindings_module=create_bindings(source_module_example),
+        cache_strategy=cache.Strategy.SESSION,
+    ).get_implementation()
+    buf = np.zeros(shape=(6, 5), dtype=np.float32)
+    sc = np.float32(3.1415926)
+    res = wrapper(buf, sc)
+    assert math.isclose(res, 6 * 5 * 3.1415926, rel_tol=1e-4)
+
+
+def test_compile_command_only_configures_once(source_module_example):
+    first_cc = CompileCommandProject(
+        source_module=source_module_example,
+        bindings_module=create_bindings(source_module_example),
+        cache_strategy=cache.Strategy.SESSION,
+    )
+
+    cc, config_did_run = first_cc.get_compile_command(reconfigure=True)
+
+    assert config_did_run is True
+
+    print(cc)
+
+    changed_source_module = source_modules.SourceModule(
+        entry_point=source_modules.Function(
+            "test_compile_command_only_configure_once_fencil",
+            parameters=source_module_example.entry_point.parameters,
+        ),
+        source_code=source_module_example.source_code,
+        library_deps=source_module_example.library_deps,
+        language=source_module_example.language,
+    )
+
+    second_cc = CompileCommandProject(
+        source_module=changed_source_module,
+        bindings_module=create_bindings(changed_source_module),
+        cache_strategy=cache.Strategy.SESSION,
+    )
+
+    assert second_cc.get_compile_command()[1] is False

@@ -15,10 +15,11 @@
 
 
 import importlib
+import json
 import pathlib
 import subprocess
 import textwrap
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Callable, Sequence
 
 from eve import Node
@@ -140,12 +141,139 @@ def _get_python_module_suffix():
 
 
 @dataclass(frozen=True)
+class CompileCommandProject(BuildProject):
+    """Use CMake to configure a valid compile command and then just compile."""
+
+    source_module: source_modules.SourceModule[IncludeImplementationLanguageProtocol]
+    bindings_module: source_modules.BindingModule
+    cache_strategy: cache.Strategy
+
+    def get_compile_command(
+        self, reconfigure: bool = False
+    ) -> tuple[list[dict[str, str]], bool, pathlib.Path]:
+        sentinel_source_module = source_modules.SourceModule(
+            entry_point=source_modules.Function("cc_sentry", parameters=()),
+            source_code="",
+            library_deps=self.source_module.library_deps,
+            language=self.source_module.language,
+        )
+        sentinel_binding_module = source_modules.BindingModule(
+            source_code="", library_deps=self.bindings_module.library_deps
+        )
+        sentinel_project = CMakeProject(
+            sentinel_source_module,
+            sentinel_binding_module,
+            self.cache_strategy,
+        )
+
+        if config_did_run := not sentinel_project.is_configured() or reconfigure:
+            sentinel_project.configure()
+
+            commands = json.loads(
+                subprocess.check_output(
+                    ["ninja", "-t", "compdb"],
+                    cwd=sentinel_project.build_dir,
+                    stderr=subprocess.STDOUT,
+                ).decode("utf-8")
+            )
+
+            (sentinel_project.build_dir / "compile_commands.json").write_text(
+                json.dumps(
+                    [
+                        cmd
+                        for cmd in commands
+                        if "cc_sentry" in pathlib.Path(cmd["file"]).stem and cmd["command"]
+                    ]
+                )
+            )
+
+        with (sentinel_project.src_dir / "build" / "compile_commands.json").open() as fp:
+            result = json.load(fp)
+            print(result)
+            return result, config_did_run, sentinel_project.src_dir
+
+    @property
+    def name(self) -> str:
+        return self.source_module.entry_point.name
+
+    @property
+    def src_dir(self) -> pathlib.Path:
+        # TODO(ricoh): For any real caching, the source module, bindings module, type of build system
+        #   have to be taken into account at least.
+        return cache.get_cache_folder(self.source_module, self.cache_strategy)
+
+    @property
+    def binary_file(self) -> pathlib.Path:
+        return self.src_dir / "bin" / (self.name + "." + _get_python_module_suffix())
+
+    def build(self) -> None:
+        header_name = self.name + self.source_module.language.include_extension
+        bindings_name = (
+            self.name + "_bindings" + self.source_module.language.implementation_extension
+        )
+        files = {
+            header_name: self.source_module.source_code,
+            bindings_name: self.bindings_module.source_code,
+        }
+        root = self.src_dir
+
+        print(f"-> writing files to {root}...")
+        for name, content in files.items():
+            (root / name).write_text(content, encoding="utf-8")
+            print(f"-> {root / name}.")
+
+        compile_commands, _, sentry_root = self.get_compile_command()
+
+        (root / "build").mkdir(exist_ok=True)
+        (root / "bin").mkdir(exist_ok=True)
+
+        for compile_command in compile_commands:
+            cmd = []
+            for item in compile_command["command"].split(" "):
+                print(f"->>> rewrite {item}")
+                item = item.replace("CMakeFiles/cc_sentry.dir", "build")
+                print(f"|  ->>> to {item}")
+                if (foo := str(sentry_root / "build" / "_deps")) not in item:
+                    item = item.replace(str(sentry_root), str(root))
+                print(f"|  ->>> to {item}")
+                print(f"|  because {foo}{' not' if foo not in item else ' '} in {item}")
+                if "-I" not in item:
+                    item = item.replace("cc_sentry", self.name)
+                print(f"->>> to {item}")
+                if item not in [":", "&&"]:
+                    cmd.append(item)
+
+            output = root / compile_command["output"].replace(
+                "CMakeFiles/cc_sentry.dir", "build"
+            ).replace("cc_sentry", self.name)
+
+            print("\n->  " + " ".join(cmd))
+            print(f"->  cwd: {root}")
+
+            subprocess.check_call(" ".join(cmd), cwd=root, shell=True)
+
+            print(f"-> checking that otputfile {output} was produced...")
+            if not output.exists():
+                raise RuntimeError(f"command produced no output: {output} does not exists.")
+            print("-> ok.")
+
+    def is_built(self) -> bool:
+        return self.binary_file.exists()
+
+    def get_implementation(self) -> Callable:
+        if not self.is_built():
+            self.build()
+        return getattr(import_from_path(self.binary_file), self.name)
+
+
+@dataclass(frozen=True)
 class CMakeProject(BuildProject):
     """Represent a CMake project for an externally compiled fencil."""
 
     source_module: source_modules.SourceModule[IncludeImplementationLanguageProtocol]
     bindings_module: source_modules.BindingModule
     cache_strategy: cache.Strategy
+    extra_cmake_flags: list[str] = field(default_factory=list)
 
     @property
     def name(self) -> str:
@@ -217,6 +345,7 @@ class CMakeProject(BuildProject):
                 "-B",
                 build_dir,
                 "-DCMAKE_BUILD_TYPE=Debug",
+                *self.extra_cmake_flags,
             ],
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,

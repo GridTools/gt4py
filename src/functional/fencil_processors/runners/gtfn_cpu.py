@@ -18,10 +18,11 @@ from typing import Any, Optional
 
 import numpy
 
-from functional.fencil_processors.builders import cache  # , cpp as cpp_callable
+from functional.fencil_processors.builders import cache
 from functional.fencil_processors.builders.cpp import bindings
-from functional.fencil_processors.builders.cpp.build import CMakeProject
+from functional.fencil_processors.builders.cpp.build import CompileCommandProject
 from functional.fencil_processors.codegens.gtfn import gtfn_module
+from functional.fencil_processors.pipeline import BuildProjectGenerator
 from functional.fencil_processors.processor_interface import FencilExecutor, FencilProcessorProtocol
 from functional.fencil_processors.source_modules.cpp_gen import CPP_DEFAULT, CppLanguage
 from functional.iterator import ir
@@ -38,6 +39,7 @@ def convert_arg(arg: Any) -> Any:
 @dataclass(frozen=True)
 class GTFNExecutor(FencilExecutor):
     language_settings: CppLanguage = field(default=CPP_DEFAULT)
+    build_project_gen: BuildProjectGenerator = field(default=CompileCommandProject)
     name: Optional[str] = None
 
     def __call__(self, fencil: ir.FencilDefinition, *args, **kwargs):
@@ -50,7 +52,7 @@ class GTFNExecutor(FencilExecutor):
 
         See ``FencilExecutorFunction`` for details.
         """
-        return CMakeProject(
+        return self.build_project_gen(
             source_module=(
                 source_module := gtfn_module.GTFNSourceModuleGenerator(self.language_settings)(
                     fencil, *args, **kwargs
