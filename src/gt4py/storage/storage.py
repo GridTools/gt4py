@@ -144,6 +144,11 @@ def from_array(
     shape = asarray(data).shape
     if dtype is None:
         dtype = asarray(data).dtype
+    dtype = np.dtype(dtype)
+    if dtype.shape:
+        if dtype.shape and not shape[-dtype.ndim :] == dtype.shape:
+            raise ValueError(f"Incompatible data shape {shape} with dtype of shape {dtype.shape}.")
+        shape = shape[: -dtype.ndim]
     storage = empty(
         shape=shape,
         dtype=dtype,
