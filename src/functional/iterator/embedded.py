@@ -151,16 +151,16 @@ class Column(numpy.lib.mixins.NDArrayOperatorsMixin):
         return self.data[i - self.kstart]
 
     def tuple_get(self, i: int):
-        if self.data.dtype.names is not None:
-            return Column(self.kstart, self.data[f"f{i}"])
+        if self.data.dtype.names:
+            return Column(self.kstart, self.data[self.data.dtype.names[i]])
         else:
             return Column(self.kstart, self.data[i, ...])
 
-    def __setitem__(self, i: int, v: Any):
+    def __setitem__(self, i: int, v: Any) -> None:
         self.data[i - self.kstart] = v
 
-    def __array__(self, dtype=None) -> np.ndarray:
-        return self.data if dtype is None or dtype == self.data.dtype else self.data.astype(dtype)
+    def __array__(self, dtype: Optional[DTypeLike]=None) -> np.ndarray:
+        return self.data if dtype or dtype == self.data.dtype else self.data.astype(dtype)
 
     def __array_function__(self, func, types, args, kwargs):
         assert all(issubclass(t, self.__class__) for t in types)
