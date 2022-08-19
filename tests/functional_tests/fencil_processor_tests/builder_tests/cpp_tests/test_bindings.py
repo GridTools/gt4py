@@ -17,28 +17,32 @@ import ctypes
 
 import pytest
 
-from eve.codegen import format_source
 from functional.fencil_processors.builders.cpp import bindings
 from functional.fencil_processors.source_modules import source_modules
+from functional.fencil_processors.source_modules.cpp_gen import CPP_DEFAULT
 
 
 @pytest.fixture
-def example_function():
-    return defs.Function(
-        name="example",
-        parameters=[
-            defs.BufferParameter("buf", ["I", "J"], ctypes.c_float),
-            defs.ScalarParameter("sc", ctypes.c_float),
-        ],
+def example_source_module():
+    return source_modules.SourceModule(
+        entry_point=source_modules.Function(
+            name="example",
+            parameters=[
+                source_modules.BufferParameter("buf", ["I", "J"], ctypes.c_float),
+                source_modules.ScalarParameter("sc", ctypes.c_float),
+            ],
+        ),
+        source_code="",
+        library_deps=[],
+        language=CPP_DEFAULT,
     )
 
 
-def test_bindings(example_function):
-    module = bindings.create_bindings(example_function, "example.hpp")
-    expected_src = format_source(
-        "cpp",
+def test_bindings(example_source_module):
+    module = bindings.create_bindings(example_source_module)
+    expected_src = example_source_module.language.format_source(
         """\
-        #include "example.hpp"
+        #include "example.cpp.inc"
         
         #include <gridtools/common/defs.hpp>
         #include <gridtools/fn/backend/naive.hpp>
@@ -62,8 +66,7 @@ def test_bindings(example_function):
           module.doc() = "";
           module.def("example", &example_wrapper, "");
         }\
-        """,
-        style="LLVM",
+        """
     )
     assert module.library_deps[0].name == "pybind11"
     assert module.source_code == expected_src

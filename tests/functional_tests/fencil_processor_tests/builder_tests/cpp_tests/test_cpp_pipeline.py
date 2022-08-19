@@ -22,9 +22,8 @@ import pytest
 
 from functional.fencil_processors import source_modules
 from functional.fencil_processors.builders import cache
-from functional.fencil_processors.cpp.bindings import create_bindings
-from functional.fencil_processors.cpp.build import CMakeBuildProject
-from functional.fencil_processors.pipeline import CPP_DEFAULT
+from functional.fencil_processors.builders.cpp.bindings import create_bindings
+from functional.fencil_processors.builders.cpp.build import CMakeProject
 from functional.fencil_processors.source_modules import cpp_gen as cpp
 
 
@@ -68,10 +67,9 @@ def source_module_example():
 
 
 def test_gtfn_cpp_with_cmake(source_module_example):
-    wrapper = CMakeBuildProject(
+    wrapper = CMakeProject(
         source_module=source_module_example,
-        bindings_module=create_bindings(source_module_example, language=CPP_DEFAULT),
-        language=CPP_DEFAULT,
+        bindings_module=create_bindings(source_module_example),
         cache_strategy=cache.Strategy.SESSION,
     ).get_implementation()
     buf = np.zeros(shape=(6, 5), dtype=np.float32)
