@@ -168,3 +168,7 @@ In the course of implementing the lowering it turned out that while it is clear 
 ## Temporary variable renaming
 
 Since temporary variables are no longer inlined, the renaming that happens in the SSA pass now goes through into the lowered IR, requiring the new names to be valid `SymbolNames`. This renaming should consequently be checked for and made more robust against user variable name collisions.
+
+## Operator signature FOAST <-> ITIR
+
+On iterator level the arguments to all stencils / functions used inside a fencil closure need to be iterators (due to the compiled backend using a single SID composite to pass the arguments). Following the FOAST value <-> ITIR value, FOAST field <-> ITIR iterator correspondence, all field operator arguments whose type on FOAST level is a value, i.e. scalar or composite thereof, are expected to be values on ITIR level by the rest of the lowering. As a consequence we transform all values into iterators before calling field operators (to satisfy the former constraint) and deref them immediately inside every field operator (to satify the latter constraint).
