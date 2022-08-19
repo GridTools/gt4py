@@ -20,7 +20,9 @@ import gt4py
 
 def test_version():
     assert isinstance(gt4py.version.__version__, str)
-    assert all(len(p) for p in gt4py.version.__version__.split("."))
+    assert len(gt4py.version.__version__) and all(
+        len(p) for p in gt4py.version.__version__.split(".")
+    )
     assert gt4py.version.__version__ == gt4py.__version__
 
 
@@ -28,5 +30,17 @@ def test_version_info():
     from packaging.version import Version
 
     assert isinstance(gt4py.version.__version_info__, Version)
-    assert (0, 0) <= gt4py.version.__version_info__.release < (0, 1)
+    assert gt4py.version.__version_info__.release == tuple(
+        int(p) for p in gt4py.version.__version__.split(".")
+    )
+    assert (0, 1) <= gt4py.version.__version_info__.release < (0, 2)
     assert gt4py.version.__version_info__ == gt4py.__version_info__
+
+
+# TODO(egparedes): remove this test when changing the structure of the repo
+def test_subprojects_version_sync():
+    import eve
+    import gtc
+
+    assert gt4py.version.__version__ == eve.version.__version__
+    assert gt4py.version.__version__ == gtc.version.__version__
