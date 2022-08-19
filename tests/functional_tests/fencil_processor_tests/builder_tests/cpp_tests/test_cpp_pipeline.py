@@ -97,7 +97,7 @@ def test_compile_command_only_configures_once(source_module_example):
         cache_strategy=cache.Strategy.SESSION,
     )
 
-    cc, config_did_run = first_cc.get_compile_command(reconfigure=True)
+    cc, config_did_run, _ = first_cc.get_compile_command(reconfigure=True)
 
     assert config_did_run is True
 

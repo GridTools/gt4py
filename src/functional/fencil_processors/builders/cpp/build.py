@@ -205,9 +205,9 @@ class CompileCommandProject(BuildProject):
         return self.src_dir / "bin" / (self.name + "." + _get_python_module_suffix())
 
     def build(self) -> None:
-        header_name = self.name + self.source_module.language.include_extension
+        header_name = self.name + "." + self.source_module.language.include_extension
         bindings_name = (
-            self.name + "_bindings" + self.source_module.language.implementation_extension
+            self.name + "_bindings" + "." + self.source_module.language.implementation_extension
         )
         files = {
             header_name: self.source_module.source_code,
