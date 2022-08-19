@@ -15,10 +15,10 @@
 
 from typing import Any
 
+from functional.fencil_processors.processor_interface import fencil_formatter
 from functional.iterator import ir
 from functional.iterator.pretty_parser import pparse
 from functional.iterator.pretty_printer import pformat
-from functional.iterator.processor_interface import fencil_formatter
 
 
 @fencil_formatter

@@ -7,14 +7,14 @@ from typing import Any, Callable, Optional, Union
 from devtools import debug
 
 from functional import common
-from functional.iterator import builtins
-from functional.iterator.builtins import BackendNotSelectedError, builtin_dispatch
-from functional.iterator.processor_interface import (
+from functional.fencil_processors.processor_interface import (
     FencilExecutor,
     FencilFormatter,
-    ensure_executor,
-    ensure_formatter,
+    ensure_processor_kind,
 )
+from functional.iterator import builtins
+from functional.iterator.builtins import BackendNotSelectedError, builtin_dispatch
+from functional.iterator.ir import FencilDefinition
 
 
 __all__ = ["offset", "fundef", "fendef", "closure", "CartesianAxis"]
@@ -29,7 +29,7 @@ def offset(value):
     return Offset(value)
 
 
-# todo: rename to dimension and remove axis terminology
+# TODO: rename to dimension and remove axis terminology
 CartesianAxis = common.Dimension
 
 
@@ -42,8 +42,9 @@ class UnstructuredDomain(dict):
 
 
 # dependency inversion, register fendef for embedded execution or for tracing/parsing here
-fendef_embedded: Optional[Callable] = None
-fendef_codegen: Optional[Callable] = None
+# TODO(ricoh): this pattern lead to import cycles with `fendef_codegen`
+#   and was changed there. Maybe applies to `fendef_embedded` too?
+fendef_embedded: Optional[Callable[[types.FunctionType], None]] = None
 
 
 class FendefDispatcher:
@@ -51,10 +52,20 @@ class FendefDispatcher:
         self.function = function
         self.executor_kwargs = executor_kwargs
 
-    def itir(self, *args, **kwargs):
+    def itir(
+        self,
+        *args,
+        fendef_codegen: Optional[Callable[[types.FunctionType], FencilDefinition]] = None,
+        **kwargs,
+    ):
         args, kwargs = self._rewrite_args(args, kwargs)
         if fendef_codegen is None:
-            raise RuntimeError("Backend execution is not registered")
+            # TODO(ricoh): refactor so that `tracing` does not import this module
+            #   and can be imported top level. Then set `fendef_tracing` as a
+            #   proper default value, instead of using `None` as a sentinel.
+            from .tracing import fendef_tracing
+
+            fendef_codegen = fendef_tracing
         fencil_definition = fendef_codegen(self.function, *args, **kwargs)
         if "debug" in kwargs:
             debug(fencil_definition)
@@ -64,7 +75,7 @@ class FendefDispatcher:
         args, kwargs = self._rewrite_args(args, kwargs)
 
         if backend is not None:
-            ensure_executor(backend)
+            ensure_processor_kind(backend, FencilExecutor)
             backend(self.itir(*args, **kwargs), *args, **kwargs)
         else:
             if fendef_embedded is None:
@@ -72,7 +83,7 @@ class FendefDispatcher:
             fendef_embedded(self.function, *args, **kwargs)
 
     def format_itir(self, *args, formatter: FencilFormatter, **kwargs) -> str:
-        ensure_formatter(formatter)
+        ensure_processor_kind(formatter, FencilFormatter)
         args, kwargs = self._rewrite_args(args, kwargs)
         return formatter(self.itir(*args, **kwargs), *args, **kwargs)
 
@@ -124,7 +135,7 @@ def _deduce_domain(domain: dict[common.Dimension, range], offset_provider: dict[
 
 @dataclass
 class FundefFencilWrapper:
-    fundef_dispatcher: FendefDispatcher
+    fundef_dispatcher: FundefDispatcher
     domain: Callable | dict
 
     def _get_fencil(self, offset_provider=None):

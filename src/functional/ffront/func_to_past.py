@@ -17,7 +17,7 @@ import ast
 import collections
 from dataclasses import dataclass
 
-from functional.ffront import common_types, program_ast as past, symbol_makers, type_info
+from functional.ffront import common_types, program_ast as past, symbol_makers
 from functional.ffront.dialect_parser import DialectParser, DialectSyntaxError
 from functional.ffront.past_passes.type_deduction import ProgramTypeDeduction
 
@@ -50,6 +50,7 @@ class ProgramParser(DialectParser[past.Program]):
 
         return past.Program(
             id=node.name,
+            type=common_types.DeferredSymbolType(constraint=common_types.ProgramType),
             params=self.visit(node.args),
             body=[self.visit(node) for node in node.body],
             captured_vars=captured_vars,
@@ -63,11 +64,6 @@ class ProgramParser(DialectParser[past.Program]):
         if (annotation := self.captured_vars.annotations.get(node.arg, None)) is None:
             raise ProgramSyntaxError.from_AST(node, msg="Untyped parameters not allowed!")
         new_type = symbol_makers.make_symbol_type_from_typing(annotation)
-        if (
-            type_info.is_concrete(new_type)
-            and type_info.type_class(new_type) is common_types.ScalarType
-        ):
-            new_type = common_types.FieldType(dims=[], dtype=type_info.extract_dtype(new_type))
         if not isinstance(new_type, common_types.DataType):
             raise ProgramSyntaxError.from_AST(
                 node, msg="Only arguments of type DataType are allowed."
