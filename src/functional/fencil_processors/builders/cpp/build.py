@@ -27,9 +27,7 @@ from functional.fencil_processors import source_modules
 from functional.fencil_processors.builders import cache
 from functional.fencil_processors.builders.importer import import_from_path
 from functional.fencil_processors.pipeline import BuildProject
-from functional.fencil_processors.source_modules.source_modules import (
-    IncludeImplementationLanguageProtocol,
-)
+from functional.fencil_processors.source_modules.source_modules import LanguageWithHeaders
 
 
 class FindDependency(Node):
@@ -143,7 +141,7 @@ def _get_python_module_suffix():
 class CMakeProject(BuildProject):
     """Represent a CMake project for an externally compiled fencil."""
 
-    source_module: source_modules.SourceModule[IncludeImplementationLanguageProtocol]
+    source_module: source_modules.SourceModule[LanguageWithHeaders]
     bindings_module: source_modules.BindingModule
     cache_strategy: cache.Strategy
 
@@ -153,9 +151,9 @@ class CMakeProject(BuildProject):
 
     @property
     def sources(self) -> dict[str, str]:
-        header_name = self.name + self.source_module.language.include_extension
+        header_name = self.name + "." + self.source_module.language.include_extension
         bindings_name = (
-            self.name + "_bindings" + self.source_module.language.implementation_extension
+            self.name + "_bindings" + "." + self.source_module.language.implementation_extension
         )
         return {
             header_name: self.source_module.source_code,

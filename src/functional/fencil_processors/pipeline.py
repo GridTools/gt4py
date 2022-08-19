@@ -14,12 +14,10 @@
 from typing import Callable, Optional, Protocol, TypeVar
 
 from .builders.cache import Strategy as CacheStrategy
-from .source_modules.source_modules import BindingModule, SourceModule, SupportedLanguageProtocol
+from .source_modules.source_modules import BindingModule, SourceModule, SupportedLanguage
 
 
-LanguageT_contra = TypeVar(
-    "LanguageT_contra", bound="SupportedLanguageProtocol", contravariant=True
-)
+LanguageT_contra = TypeVar("LanguageT_contra", bound=SupportedLanguage, contravariant=True)
 
 
 class BindingsGenerator(Protocol[LanguageT_contra]):

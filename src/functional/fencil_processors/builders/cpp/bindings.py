@@ -170,9 +170,7 @@ def make_argument(
 
 
 def create_bindings(
-    source_module: source_modules.SourceModule[
-        source_modules.IncludeImplementationLanguageProtocol
-    ],
+    source_module: source_modules.SourceModule[source_modules.LanguageWithHeaders],
 ) -> source_modules.BindingModule:
     """
     Generate Python bindings through which a C++ function can be called.
