@@ -37,6 +37,7 @@ def test_version_info():
     assert functional.version.__version_info__ == functional.__version_info__
 
 
+# TODO(egparedes): remove this test when changing the structure of the repo
 def test_subprojects_version_sync():
     import eve
 
