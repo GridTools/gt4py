@@ -154,7 +154,7 @@ tox -a
 tox -e py310-base
 ```
 
-`tox` is configured to generate test coverage reports by default. An `HTML`
+`tox` is configured to generate test coverage reports by default. An HTML
 copy will be written in `tests/_reports/coverage_html/` at the end of the run.
 
 
@@ -163,10 +163,11 @@ copy will be written in `tests/_reports/coverage_html/` at the end of the run.
 Before you submit a pull request, check that it meets these guidelines:
 
 1. The pull request should include tests.
-2. If the pull request adds functionality, it should be documented both in the code docstrings and in the official documentation.
-3. The pull request should contain a meaninful description of the intent of the PR and a summary of the main changes and design issues in the code for the reviewers.
-4. Pick one reviewer and try to contact him directly to let him know about the PR. If there is no feedback in 24h/48h try to contact him again or pick another reviewer.
-5. Once the PR has been approved, it should be squash-merged as soon as possible with a meaningful description of the changes involved. Check the [Conventional Commits][conventional-commits] specification for writing informative and automation-friendly commit messages.
+2. If the pull request adds functionality, it should be documented both in the code docstrings and in the official documentation. If there
+3. If the pull request contains important design changes, it should contain a new ADR documenting the rationale behind the final decision.
+4. The pull request should have a proper description of its intent and the main changes in the code. In general this description should be used as commit message if the PR is approved (check point **6.** below).
+5. Pick one reviewer and try to contact him directly to let him know about the PR. If there is no feedback in 24h/48h try to contact him again or pick another reviewer.
+6. Once the PR has been approved, it should be squash-merged as soon as possible with a meaningful description of the changes. Although it is optional, we encourage the use of the [Conventional Commits][conventional-commits] specification for writing informative and automation-friendly commit messages.
 
 
 ## Releasing Process
@@ -180,10 +181,10 @@ Currently, GT4Py releases are published as commit tags in the main GitHub reposi
 2. Use `bump2version` to update the version number.
 
    ```bash
-   $ bump2version patch
+   $ bump2version minor # or patch
    ```
 
-3. Update the [CHANGELOG.md](CHANGELOG.md) file to document the changes included in the new release. You should keep the changelog format in sync with the standard recommendations ([keep a changelog](https://keepachangelog.com/en/1.0.0/)). This process can be fully or partially automatized if commit messages follow the [Conventional Commits][conventional-commits] convention as suggested in the section about [Pull Request and Merge Guidelines](#pull-request-and-merge-guidelines). 
+3. Update the [CHANGELOG.md](CHANGELOG.md) file to document the changes included in the new release. This process can be fully or partially automatized if commit messages follow the [Conventional Commits][conventional-commits] convention as suggested in the section about [Pull Request and Merge Guidelines](#pull-request-and-merge-guidelines). 
 
 4. Commit the changes with the following commit message:
 

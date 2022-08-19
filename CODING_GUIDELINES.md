@@ -72,15 +72,15 @@ Try to keep sections and items within sections ordered logically, adding comment
 
 Testing components is a critical part of a software development project. We follow standard practices of software development and write unit, integration and regression tests. Note that even [doctests][doctest] are great for documentation purposes, they are not a replacement for proper unit tests.
 
-```
+TODO: add test conventions
+<!--
 TODO: add test conventions:
 TODO:    - to organize tests inside the `tests/` folder
 TODO:    - to name tests
 TODO:    - to use pytest features (fixtures, markers, etc.)
 TODO:    - to generate mock objects and data for tests (e.g. pytest-factoryboy, pytest-cases)
 TODO:    - to use pytest plugins 
-```
-
+-->
 
 <!-- Reference links -->
 
