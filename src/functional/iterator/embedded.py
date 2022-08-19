@@ -553,14 +553,20 @@ def _get_axes(
 
 
 def _make_tuple(
-    field_or_tuple: LocatedField | tuple, indices: int | slice | tuple[int | slice, ...]
-) -> tuple:  # arbitrary nesting of tuples of LocatedField
+    field_or_tuple: LocatedField | tuple,  # arbitrary nesting of tuples of LocatedField
+    indices: int | slice | tuple[int | slice, ...],
+    *,
+    as_column: bool = False,
+) -> tuple:  # arbitrary nesting of tuples of field values or `Column`s
     if isinstance(field_or_tuple, tuple):
         return tuple(_make_tuple(f, indices) for f in field_or_tuple)
     else:
         data = field_or_tuple[indices]
-        if isinstance(data, np.ndarray):
-            return Column(0, data)
+        if as_column:
+            # wraps a vertical slice of an input field into a `Column`
+            return Column(
+                0, data
+            )  # TODO(havogt) when we support LocatedFields with origin (i.e. non-zero origin), kstart needs to be adapated here
         else:
             return data
 
@@ -623,7 +629,7 @@ class MDIterator:
             {**shifted_pos, **slice_column},
         )
         try:
-            return _make_tuple(self.field, ordered_indices)
+            return _make_tuple(self.field, ordered_indices, as_column=self.column_axis is not None)
         except IndexError:
             return _UNDEFINED
 
