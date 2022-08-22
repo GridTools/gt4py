@@ -826,6 +826,7 @@ def test_ternary_operator(reduction_setup):
         c = a if 2 < 3 else b
         return c
 
+    # TODO(tehrengruber): directly call field operator when the generated programs support `out` being a tuple
     @program
     def ternary_field(a: Field[[Edge], float], b: Field[[Edge], float], out: Field[[Edge], float]):
         ternary_field_op(a, b, out=out)
