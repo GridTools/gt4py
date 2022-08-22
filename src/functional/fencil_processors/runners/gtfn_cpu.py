@@ -40,7 +40,7 @@ class GTFNExecutor(fpi.FencilExecutor):
     language_settings: cpp_gen.CppLanguage = field(default=cpp_gen.CPP_DEFAULT)
     name: Optional[str] = None
 
-    def __call__(self, fencil: itir.FencilDefinition, *args, **kwargs):
+    def __call__(self, fencil: itir.FencilDefinition, *args: Any, **kwargs: Any) -> None:
         """
         Execute the iterator IR fencil with the provided arguments.
 
@@ -61,7 +61,7 @@ class GTFNExecutor(fpi.FencilExecutor):
         ).get_implementation()(*[convert_arg(arg) for arg in args])
 
     @property
-    def __name__(self):
+    def __name__(self) -> str:
         return self.name or repr(self)
 
 
