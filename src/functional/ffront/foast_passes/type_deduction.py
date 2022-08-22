@@ -249,20 +249,20 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             op=node.op, left=new_left, right=new_right, location=node.location, type=new_type
         )
 
-    def visit_IfExp(self, node: foast.IfExp, **kwargs) -> foast.IfExp:
-        new_left = self.visit(node.body, **kwargs)
-        new_right = self.visit(node.orelse, **kwargs)
-        new_type = self._deduce_ifexp_type(node, left=new_left, right=new_right, test=node.test)
-        return foast.IfExp(
-            test=self.visit(node.test, **kwargs),
-            body=self.visit(node.body, **kwargs),
-            orelse=self.visit(node.orelse, **kwargs),
+    def visit_TernaryExpr(self, node: foast.TernaryExpr, **kwargs) -> foast.TernaryExpr:
+        new_left = self.visit(node.true_expr, **kwargs)
+        new_right = self.visit(node.false_expr, **kwargs)
+        new_type = self._deduce_ifexp_type(node, left=new_left, right=new_right, test=node.condition)
+        return foast.TernaryExpr(
+            condition=self.visit(node.condition, **kwargs),
+            true_expr=self.visit(node.true_expr, **kwargs),
+            false_expr=self.visit(node.false_expr, **kwargs),
             location=node.location,
             type=new_type,
         )
 
     def _deduce_ifexp_type(
-        self, node: foast.IfExp, *, left: foast.Expr, right: foast.Expr, test: foast.Expr, **kwargs
+        self, node: foast.TernaryExpr, *, left: foast.Expr, right: foast.Expr, test: foast.Expr, **kwargs
     ) -> Optional[ct.SymbolType]:
         if isinstance(left.type, ct.TupleType):
             return ct.TupleType(types=[element.type for element in left.elts])
