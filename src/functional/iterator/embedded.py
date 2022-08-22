@@ -76,29 +76,27 @@ class NeighborTableOffsetProvider:
 class StridedNeighborOffsetProvider:
     def __init__(
         self,
-        shape,
         origin_axis: Dimension,
         neighbor_axis: Dimension,
         max_neighbors: int,
         has_skip_values=True,
     ) -> None:
-        self.shape = shape
         self.origin_axis = origin_axis
         self.neighbor_axis = neighbor_axis
         self.max_neighbors = max_neighbors
         self.has_skip_values = has_skip_values
 
     @property
-    def tbl(self):
+    def tbl(self):  # TODO(havogt): define Connectivity concept properly
         class Impl:
-            def __init__(self, shape):
-                self.shape = shape
+            def __init__(self, stride: int) -> None:
+                self.stride = stride
 
-            def __getitem__(self, tpl):
-                assert isinstance(tpl, tuple)
-                return tpl[0] * self.shape[1] + tpl[1]
+            def __getitem__(self, indices: tuple[int, int]) -> int:
+                primary, neighbor_idx = indices
+                return primary * self.stride + neighbor_idx
 
-        return Impl(self.shape)
+        return Impl(stride=self.max_neighbors)
 
 
 # Offsets
