@@ -18,15 +18,10 @@ from typing import Any
 
 import numpy
 
-from functional.fencil_processors import source_modules
+from functional.fencil_processors import processor_interface as fpi  # fencil processor interface
 from functional.fencil_processors.codegens.gtfn import gtfn_backend
-from functional.fencil_processors.processor_interface import (
-    FencilProcessorProtocol,
-    FencilSourceModuleGenerator,
-)
-from functional.fencil_processors.source_modules import cpp_gen as cpp
-from functional.fencil_processors.source_modules.cpp_gen import CPP_DEFAULT, CppLanguage
-from functional.iterator.ir import FencilDefinition
+from functional.fencil_processors.source_modules import cpp_gen, source_modules
+from functional.iterator import ir as itir
 
 
 def get_param_description(
@@ -42,12 +37,12 @@ def get_param_description(
 
 
 @dataclass(frozen=True)
-class GTFNSourceModuleGenerator(FencilSourceModuleGenerator):
-    language_settings: CppLanguage = field(default=CPP_DEFAULT)
+class GTFNSourceModuleGenerator(fpi.FencilSourceModuleGenerator):
+    language_settings: cpp_gen.CppLanguage = field(default=cpp_gen.CPP_DEFAULT)
 
     def __call__(
         self,
-        fencil: FencilDefinition,
+        fencil: itir.FencilDefinition,
         *args,
         **kwargs,
     ) -> source_modules.SourceModule:
@@ -62,7 +57,7 @@ class GTFNSourceModuleGenerator(FencilSourceModuleGenerator):
             ["gridtools::fn::backend::naive{}", *(p.name for p in parameters)]
         )
         decl_body = f"return generated::{function.name}()({rendered_params});"
-        decl_src = cpp.render_function_declaration(function, body=decl_body)
+        decl_src = cpp_gen.render_function_declaration(function, body=decl_body)
         stencil_src = gtfn_backend.generate(fencil, **kwargs)
         source_code = self.language_settings.format_source(
             f"""
@@ -81,6 +76,6 @@ class GTFNSourceModuleGenerator(FencilSourceModuleGenerator):
         return module
 
 
-create_source_module: FencilProcessorProtocol[
-    source_modules.SourceModule, FencilSourceModuleGenerator
+create_source_module: fpi.FencilProcessorProtocol[
+    source_modules.SourceModule, fpi.FencilSourceModuleGenerator
 ] = GTFNSourceModuleGenerator()

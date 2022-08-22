@@ -17,59 +17,56 @@ import numpy
 import pytest
 
 from functional.common import Dimension
-
-#  from functional.fencil_processors import source_modules
 from functional.fencil_processors.codegens.gtfn import gtfn_module
-from functional.fencil_processors.source_modules import cpp_gen as cpp
-from functional.iterator import ir
-from functional.iterator.embedded import np_as_located_field
+from functional.fencil_processors.source_modules import cpp_gen
+from functional.iterator import embedded, ir as itir
 
 
 @pytest.fixture
 def fencil_example():
-    domain = ir.FunCall(
-        fun=ir.SymRef(id="cartesian_domain"),
+    domain = itir.FunCall(
+        fun=itir.SymRef(id="cartesian_domain"),
         args=[
-            ir.FunCall(
-                fun=ir.SymRef(id="named_range"),
+            itir.FunCall(
+                fun=itir.SymRef(id="named_range"),
                 args=[
-                    ir.AxisLiteral(value="X"),
-                    ir.Literal(value="0", type="int"),
-                    ir.Literal(value="10", type="int"),
+                    itir.AxisLiteral(value="X"),
+                    itir.Literal(value="0", type="int"),
+                    itir.Literal(value="10", type="int"),
                 ],
             )
         ],
     )
-    itir = ir.FencilDefinition(
+    fencil = itir.FencilDefinition(
         id="example",
-        params=[ir.Sym(id="buf"), ir.Sym(id="sc")],
+        params=[itir.Sym(id="buf"), itir.Sym(id="sc")],
         function_definitions=[
-            ir.FunctionDefinition(
+            itir.FunctionDefinition(
                 id="stencil",
-                params=[ir.Sym(id="buf"), ir.Sym(id="sc")],
-                expr=ir.Literal(value="1", type="float"),
+                params=[itir.Sym(id="buf"), itir.Sym(id="sc")],
+                expr=itir.Literal(value="1", type="float"),
             )
         ],
         closures=[
-            ir.StencilClosure(
+            itir.StencilClosure(
                 domain=domain,
-                stencil=ir.SymRef(id="stencil"),
-                output=ir.SymRef(id="buf"),
-                inputs=[ir.SymRef(id="buf"), ir.SymRef(id="sc")],
+                stencil=itir.SymRef(id="stencil"),
+                output=itir.SymRef(id="buf"),
+                inputs=[itir.SymRef(id="buf"), itir.SymRef(id="sc")],
             )
         ],
     )
     IDim = Dimension("I")
     params = [
-        np_as_located_field(IDim)(numpy.empty((1,), dtype=numpy.float32)),
+        embedded.np_as_located_field(IDim)(numpy.empty((1,), dtype=numpy.float32)),
         numpy.float32(3.14),
     ]
-    return itir, params
+    return fencil, params
 
 
 def test_codegen(fencil_example):
-    itir, parameters = fencil_example
-    module = gtfn_module.create_source_module(itir, *parameters, offset_provider={})
-    assert module.entry_point.name == itir.id
+    fencil, parameters = fencil_example
+    module = gtfn_module.create_source_module(fencil, *parameters, offset_provider={})
+    assert module.entry_point.name == fencil.id
     assert any(d.name == "gridtools" for d in module.library_deps)
-    assert isinstance(module.language, cpp.CppLanguage)
+    assert isinstance(module.language, cpp_gen.CppLanguage)

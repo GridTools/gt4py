@@ -18,8 +18,7 @@ import ctypes
 import pytest
 
 from functional.fencil_processors.builders.cpp import bindings
-from functional.fencil_processors.source_modules import source_modules
-from functional.fencil_processors.source_modules.cpp_gen import CPP_DEFAULT
+from functional.fencil_processors.source_modules import cpp_gen, source_modules
 
 
 @pytest.fixture
@@ -34,7 +33,7 @@ def example_source_module():
         ),
         source_code="",
         library_deps=[],
-        language=CPP_DEFAULT,
+        language=cpp_gen.CPP_DEFAULT,
     )
 
 

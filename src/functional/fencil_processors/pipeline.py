@@ -13,15 +13,20 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 from typing import Callable, Optional, Protocol, TypeVar
 
-from .builders.cache import Strategy as CacheStrategy
-from .source_modules.source_modules import BindingModule, SourceModule, SupportedLanguage
+from functional.fencil_processors.builders import cache
+from functional.fencil_processors.source_module import source_modules
 
 
-LanguageT_contra = TypeVar("LanguageT_contra", bound=SupportedLanguage, contravariant=True)
+LanguageT_co = TypeVar("LanguageT_co", bound=source_modules.SupportedLanguage, covariant=True)
+LanguageT_contra = TypeVar(
+    "LanguageT_contra", bound=source_modules.SupportedLanguage, contravariant=True
+)
 
 
-class BindingsGenerator(Protocol[LanguageT_contra]):
-    def __call__(self, source_module: SourceModule[LanguageT_contra]) -> BindingModule:
+class BindingsGenerator(Protocol[LanguageT_co]):
+    def __call__(
+        self, source_module: source_modules.SourceModule[LanguageT_co]
+    ) -> source_modules.BindingModule:
         ...
 
 
@@ -30,11 +35,11 @@ class BuildProject(Protocol):
         ...
 
 
-class BuildProjectGenerator(Protocol[LanguageT_contra]):
+class BuildProjectGenerator(Protocol[LanguageT_co]):
     def __call__(
         self,
-        source_module: SourceModule[LanguageT_contra],
-        bindings_module: Optional[BindingModule],
-        cache_strategy: CacheStrategy,
+        source_module: source_modules.SourceModule[LanguageT_co],
+        bindings_module: Optional[source_modules.BindingModule],
+        cache_strategy: cache.Strategy,
     ) -> BuildProject:
         ...

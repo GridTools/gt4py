@@ -21,26 +21,24 @@ import textwrap
 from dataclasses import dataclass
 from typing import Callable, Sequence
 
-from eve import Node
-from eve.codegen import JinjaTemplate as as_jinja, TemplatedGenerator
-from functional.fencil_processors import source_modules
-from functional.fencil_processors.builders import cache
-from functional.fencil_processors.builders.importer import import_from_path
-from functional.fencil_processors.pipeline import BuildProject
-from functional.fencil_processors.source_modules.source_modules import LanguageWithHeaders
+import eve
+from eve.codegen import JinjaTemplate as as_jinja
+from functional.fencil_processors import pipeline
+from functional.fencil_processors.builders import cache, importer
+from functional.fencil_processors.source_modules import source_modules
 
 
-class FindDependency(Node):
+class FindDependency(eve.Node):
     name: str
     version: str
 
 
-class LinkDependency(Node):
+class LinkDependency(eve.Node):
     name: str
     target: str
 
 
-class CMakeListsFile(Node):
+class CMakeListsFile(eve.Node):
     project_name: str
     find_deps: Sequence[FindDependency]
     link_deps: Sequence[LinkDependency]
@@ -48,7 +46,7 @@ class CMakeListsFile(Node):
     bin_output_suffix: str
 
 
-class CMakeListsGenerator(TemplatedGenerator):
+class CMakeListsGenerator(eve.codegen.TemplatedGenerator):
     CMakeListsFile = as_jinja(
         """
         project({{project_name}})
@@ -138,10 +136,10 @@ def _get_python_module_suffix():
 
 
 @dataclass(frozen=True)
-class CMakeProject(BuildProject):
+class CMakeProject(pipeline.BuildProject):
     """Represent a CMake project for an externally compiled fencil."""
 
-    source_module: source_modules.SourceModule[LanguageWithHeaders]
+    source_module: source_modules.SourceModule[source_modules.LanguageWithHeaders]
     bindings_module: source_modules.BindingModule
     cache_strategy: cache.Strategy
 
@@ -242,4 +240,4 @@ class CMakeProject(BuildProject):
     def get_implementation(self) -> Callable:
         if not self.is_built():
             self.build()
-        return getattr(import_from_path(self.binary_file), self.name)
+        return getattr(importer.import_from_path(self.binary_file), self.name)

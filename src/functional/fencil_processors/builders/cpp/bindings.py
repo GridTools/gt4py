@@ -20,13 +20,12 @@ from typing import Any, Sequence
 
 import numpy
 
-import functional.fencil_processors.source_modules.cpp_gen as cpp
-from eve import Node
+import eve
 from eve.codegen import JinjaTemplate as as_jinja, TemplatedGenerator
-from functional.fencil_processors.source_modules import source_modules
+from functional.fencil_processors.source_modules import cpp_gen, source_modules
 
 
-class Expr(Node):
+class Expr(eve.Node):
     pass
 
 
@@ -46,35 +45,35 @@ class FunctionCall(Expr):
     args: Sequence[Any]
 
 
-class ReturnStmt(Node):
+class ReturnStmt(eve.Node):
     expr: Expr
 
 
-class FunctionParameter(Node):
+class FunctionParameter(eve.Node):
     name: str
     ndim: int
     dtype: numpy.dtype
 
 
-class WrapperFunction(Node):
+class WrapperFunction(eve.Node):
     name: str
     parameters: Sequence[FunctionParameter]
     body: ReturnStmt
 
 
-class BindingFunction(Node):
+class BindingFunction(eve.Node):
     exported_name: str
     wrapper_name: str
     doc: str
 
 
-class BindingModule(Node):
+class BindingModule(eve.Node):
     name: str
     doc: str
     functions: Sequence[BindingFunction]
 
 
-class BindingFile(Node):
+class BindingFile(eve.Node):
     callee_header_file: str
     header_files: Sequence[str]
     wrapper: WrapperFunction
@@ -111,7 +110,7 @@ class BindingCodeGenerator(TemplatedGenerator):
         if param.ndim > 0:
             type_str = "pybind11::buffer"
         else:
-            type_str = cpp.render_python_type(param.dtype.type)
+            type_str = cpp_gen.render_python_type(param.dtype.type)
         return type_str + " " + param.name
 
     ReturnStmt = as_jinja("""return {{expr}};""")
@@ -129,11 +128,11 @@ class BindingCodeGenerator(TemplatedGenerator):
 
     def visit_FunctionCall(self, call: FunctionCall):
         args = [self.visit(arg) for arg in call.args]
-        return cpp.render_function_call(call.target, args)
+        return cpp_gen.render_function_call(call.target, args)
 
     def visit_SidConversion(self, sid: SidConversion):
         return self.generic_visit(
-            sid, rendered_scalar_type=cpp.render_python_type(sid.scalar_type.type)
+            sid, rendered_scalar_type=cpp_gen.render_python_type(sid.scalar_type.type)
         )
 
     SidConversion = as_jinja(
@@ -182,7 +181,7 @@ def create_bindings(
     source_module
         The source module for which the bindings are created
     """
-    if not isinstance(source_module.language, cpp.CppLanguage):
+    if not isinstance(source_module.language, cpp_gen.CppLanguage):
         raise NotImplementedError("Can only create bindings for C++ source modules.")
     wrapper_name = source_module.entry_point.name + "_wrapper"
 

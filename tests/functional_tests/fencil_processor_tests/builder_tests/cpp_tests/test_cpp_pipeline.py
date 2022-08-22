@@ -20,11 +20,9 @@ import numpy
 import numpy as np
 import pytest
 
-from functional.fencil_processors import source_modules
 from functional.fencil_processors.builders import cache
-from functional.fencil_processors.builders.cpp.bindings import create_bindings
-from functional.fencil_processors.builders.cpp.build import CMakeProject
-from functional.fencil_processors.source_modules import cpp_gen as cpp
+from functional.fencil_processors.builders.cpp import bindings, build
+from functional.fencil_processors.source_modules import cpp_gen, source_modules
 
 
 @pytest.fixture
@@ -36,7 +34,7 @@ def source_module_example():
             source_modules.ScalarParameter("sc", numpy.dtype(numpy.float32)),
         ],
     )
-    func = cpp.render_function_declaration(
+    func = cpp_gen.render_function_declaration(
         entry_point,
         """\
         const auto xdim = gridtools::at_key<generated::I_t>(sid_get_upper_bounds(buf));
@@ -62,14 +60,14 @@ def source_module_example():
         library_deps=[
             source_modules.LibraryDependency("gridtools", "master"),
         ],
-        language=cpp.CPP_DEFAULT,
+        language=cpp_gen.CPP_DEFAULT,
     )
 
 
 def test_gtfn_cpp_with_cmake(source_module_example):
-    wrapper = CMakeProject(
+    wrapper = build.CMakeProject(
         source_module=source_module_example,
-        bindings_module=create_bindings(source_module_example),
+        bindings_module=bindings.create_bindings(source_module_example),
         cache_strategy=cache.Strategy.SESSION,
     ).get_implementation()
     buf = np.zeros(shape=(6, 5), dtype=np.float32)

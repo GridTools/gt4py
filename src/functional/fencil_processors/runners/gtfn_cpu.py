@@ -18,13 +18,12 @@ from typing import Any, Optional
 
 import numpy
 
-from functional.fencil_processors.builders import cache  # , cpp as cpp_callable
-from functional.fencil_processors.builders.cpp import bindings
-from functional.fencil_processors.builders.cpp.build import CMakeProject
+from functional.fencil_processors import processor_interface as fpi  # fencil processor interface
+from functional.fencil_processors.builders import cache
+from functional.fencil_processors.builders.cpp import bindings, build
 from functional.fencil_processors.codegens.gtfn import gtfn_module
-from functional.fencil_processors.processor_interface import FencilExecutor, FencilProcessorProtocol
-from functional.fencil_processors.source_modules.cpp_gen import CPP_DEFAULT, CppLanguage
-from functional.iterator import ir
+from functional.fencil_processors.source_modules import cpp_gen
+from functional.iterator import ir as itir
 
 
 def convert_arg(arg: Any) -> Any:
@@ -36,11 +35,11 @@ def convert_arg(arg: Any) -> Any:
 
 
 @dataclass(frozen=True)
-class GTFNExecutor(FencilExecutor):
-    language_settings: CppLanguage = field(default=CPP_DEFAULT)
+class GTFNExecutor(fpi.FencilExecutor):
+    language_settings: cpp_gen.CppLanguage = field(default=cpp_gen.CPP_DEFAULT)
     name: Optional[str] = None
 
-    def __call__(self, fencil: ir.FencilDefinition, *args, **kwargs):
+    def __call__(self, fencil: itir.FencilDefinition, *args, **kwargs):
         """
         Execute the iterator IR fencil with the provided arguments.
 
@@ -50,7 +49,7 @@ class GTFNExecutor(FencilExecutor):
 
         See ``FencilExecutorFunction`` for details.
         """
-        return CMakeProject(
+        return build.CMakeProject(
             source_module=(
                 source_module := gtfn_module.GTFNSourceModuleGenerator(self.language_settings)(
                     fencil, *args, **kwargs
@@ -65,4 +64,4 @@ class GTFNExecutor(FencilExecutor):
         return self.name or repr(self)
 
 
-run_gtfn: FencilProcessorProtocol[None, FencilExecutor] = GTFNExecutor(name="run_gtfn")
+run_gtfn: fpi.FencilProcessorProtocol[None, fpi.FencilExecutor] = GTFNExecutor(name="run_gtfn")
