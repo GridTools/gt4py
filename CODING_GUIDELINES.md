@@ -19,14 +19,14 @@ Remember that important design decisions should be documented as reference for t
 
 ## Code Style
 
-We follow the [Google Python Style Guide][google-style-guide] with very few minor changes (mentioned below). Since the best way to remember something is to understand the reasons behind it, make sure you go through the style guide at least once, paying special to the discussions in the _Pros_, _Cons_ and _Decision_ subsections.
+We follow the [Google Python Style Guide][google-style-guide] with very few minor changes (mentioned below). Since the best way to remember something is to understand the reasons behind it, make sure you go through the style guide at least once, paying special attention to the discussions in the _Pros_, _Cons_ and _Decision_ subsections.
 
 We deviate from the [Google Python Style Guide][google-style-guide] only in the following points:
 
 - [`pylint`][pylint] is not required. We use [`flake8`][flake8] with some plugins.
 - We use [`black`][black] and [`isort`][isort] for source code and imports formatting, which may break some of the guidelines in Section [_3. Python Style Rules_](https://google.github.io/styleguide/pyguide.html#3-python-style-rules). For example, maximum line length is set to 100 instead of 79 (although docstrings lines should still be limited to 79).
 - _Power features_ (e.g. custom metaclasses, import hacks, reflection, etc.) should be avoided according to subsection [_2.19 Power Features_](https://google.github.io/styleguide/pyguide.html#219-power-features), although it is also mentioned that _"standard library classes internally using these features are allowed"_. Following the same spirit, we allow the use of power features in basic infrastructure library code with similar functionality and scope as the Python standard library.
-- According to subsection [_3.19.12 Imports For Typing_](https://google.github.io/styleguide/pyguide.html#31912-imports-for-typing) symbols from `typing` and `collections.abc` modules used in type annotations _can be imported directly to keep common annotations concise and match standard typing practices_. Following the same spirit, symbols can also be imported directly from third-party or internal modules which are just collections of type definitions.
+- According to subsection [_3.19.12 Imports For Typing_](https://google.github.io/styleguide/pyguide.html#31912-imports-for-typing) symbols from `typing` and `collections.abc` modules used in type annotations _"can be imported directly to keep common annotations concise and match standard typing practices"_. Following the same spirit, symbols can also be imported directly from third-party or internal modules which are just collections of type definitions.
 
 ### Docstrings
 
@@ -56,7 +56,7 @@ In general, you should structure new Python modules in the following way:
 3. Module docstring.
 4. Imports, alphabetically ordered within each block:
    1. Block of imports from the standard library.
-   2. Block of imports from general third party libraries using standard shortcuts if when customary (e.g. `numpy as np`).
+   2. Block of imports from general third party libraries using standard shortcuts when customary (e.g. `numpy as np`).
    3. Block of imports from specific modules of the project.
 5. (Optional, mainly for re-exporting symbols) Definition of exported symbols:   
 ```python
@@ -65,13 +65,13 @@ __all__ = ["func_a", "CONST_B"]
 6. Public constant and typing definitions.
 7. Module contents organized in a meaningful way for reading and understanding the module, usually defining functions before classes.
 
-Try to keep sections and items within sections ordered logically, adding comments to make it explicit if needed (also in configuration files). If there is not only one evident logical order, just pick one or use alphabetical order.
+Try to keep sections and items within sections ordered logically, adding comments to make it explicit if needed (also in configuration files). If there is not one single evident logical order, just pick the order you consider best or use alphabetical order.
 
 
 ## Testing 
 
-Testing components is a critical part of a software development project. We follow standard practices of software development and write unit, integration and regression tests. Note that even [doctests][doctest] are great for documentation purposes, they are not a replacement for proper unit tests.
-
+Testing components is a critical part of a software development project. We follow standard practices of software development and write unit, integration and regression tests. Note that even [doctests][doctest] are great for documentation purposes, they lack many features and are not easy to debug. Hence, they should not be used as replacement for proper unit tests except for trivial cases.
+ 
 TODO: add test conventions
 <!--
 TODO: add test conventions:
@@ -80,6 +80,10 @@ TODO:    - to name tests
 TODO:    - to use pytest features (fixtures, markers, etc.)
 TODO:    - to generate mock objects and data for tests (e.g. pytest-factoryboy, pytest-cases)
 TODO:    - to use pytest plugins 
+
+Refs:
+https://towardsdatascience.com/pytest-plugins-to-love-%EF%B8%8F-9c71635fbe22
+https://testandcode.com/116
 -->
 
 <!-- Reference links -->

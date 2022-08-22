@@ -42,7 +42,7 @@ source .venv/bin/activate
 pytest -v
 ```
 
-### Installation from Scratch
+### Manual Installation
 
 Alternatively, a development environment can be created from scratch:
 
