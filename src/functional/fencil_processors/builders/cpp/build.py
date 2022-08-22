@@ -20,28 +20,27 @@ import pathlib
 import subprocess
 import textwrap
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Callable, Sequence
 
-from eve import Node
+import eve
 from eve.codegen import JinjaTemplate as as_jinja, TemplatedGenerator
-from functional.fencil_processors import source_modules
-from functional.fencil_processors.builders import cache
-from functional.fencil_processors.builders.importer import import_from_path
-from functional.fencil_processors.pipeline import BuildProject
-from functional.fencil_processors.source_modules.source_modules import LanguageWithHeaders
+from functional.fencil_processors import pipeline
+from functional.fencil_processors.builders import cache, importer
+from functional.fencil_processors.source_modules import source_modules
 
 
-class FindDependency(Node):
+class FindDependency(eve.Node):
     name: str
     version: str
 
 
-class LinkDependency(Node):
+class LinkDependency(eve.Node):
     name: str
     target: str
 
 
-class CMakeListsFile(Node):
+class CMakeListsFile(eve.Node):
     project_name: str
     find_deps: Sequence[FindDependency]
     link_deps: Sequence[LinkDependency]
@@ -139,10 +138,10 @@ def _get_python_module_suffix():
 
 
 @dataclass(frozen=True)
-class CompileCommandProject(BuildProject):
+class CompileCommandProject(pipeline.BuildProject):
     """Use CMake to configure a valid compile command and then just compile."""
 
-    source_module: source_modules.SourceModule[LanguageWithHeaders]
+    source_module: source_modules.SourceModule[source_modules.LanguageWithHeaders]
     bindings_module: source_modules.BindingModule
     cache_strategy: cache.Strategy
 
@@ -187,7 +186,6 @@ class CompileCommandProject(BuildProject):
 
         with (sentinel_project.src_dir / "build" / "compile_commands.json").open() as fp:
             result = json.load(fp)
-            print(result)
             return result, config_did_run, sentinel_project.src_dir
 
     @property
@@ -215,10 +213,11 @@ class CompileCommandProject(BuildProject):
         }
         root = self.src_dir
 
-        print(f"-> writing files to {root}...")
+        logfile = root / "log.txt"
+
+        logfile.write_text(f"starting compilation at {datetime.now().isoformat()}")
         for name, content in files.items():
             (root / name).write_text(content, encoding="utf-8")
-            print(f"-> {root / name}.")
 
         compile_commands, _, sentry_root = self.get_compile_command()
 
@@ -228,16 +227,11 @@ class CompileCommandProject(BuildProject):
         for compile_command in compile_commands:
             cmd = []
             for item in compile_command["command"].split(" "):
-                print(f"->>> rewrite {item}")
                 item = item.replace("CMakeFiles/cc_sentry.dir", "build")
-                print(f"|  ->>> to {item}")
-                if (foo := str(sentry_root / "build" / "_deps")) not in item:
+                if str(sentry_root / "build" / "_deps") not in item:
                     item = item.replace(str(sentry_root), str(root))
-                print(f"|  ->>> to {item}")
-                print(f"|  because {foo}{' not' if foo not in item else ' '} in {item}")
                 if "-I" not in item:
                     item = item.replace("cc_sentry", self.name)
-                print(f"->>> to {item}")
                 if item not in [":", "&&"]:
                     cmd.append(item)
 
@@ -245,15 +239,15 @@ class CompileCommandProject(BuildProject):
                 "CMakeFiles/cc_sentry.dir", "build"
             ).replace("cc_sentry", self.name)
 
-            print("\n->  " + " ".join(cmd))
-            print(f"->  cwd: {root}")
+            logfile.write_text("\n" + " ".join(cmd))
 
-            subprocess.check_call(" ".join(cmd), cwd=root, shell=True)
+            with logfile.open(mode="a") as log_fp:
+                subprocess.check_call(
+                    " ".join(cmd), cwd=root, shell=True, stdout=log_fp, stderr=log_fp
+                )
 
-            print(f"-> checking that otputfile {output} was produced...")
             if not output.exists():
                 raise RuntimeError(f"command produced no output: {output} does not exists.")
-            print("-> ok.")
 
     def is_built(self) -> bool:
         return self.binary_file.exists()
@@ -261,14 +255,14 @@ class CompileCommandProject(BuildProject):
     def get_implementation(self) -> Callable:
         if not self.is_built():
             self.build()
-        return getattr(import_from_path(self.binary_file), self.name)
+        return getattr(importer.import_from_path(self.binary_file), self.name)
 
 
 @dataclass(frozen=True)
-class CMakeProject(BuildProject):
+class CMakeProject(pipeline.BuildProject):
     """Represent a CMake project for an externally compiled fencil."""
 
-    source_module: source_modules.SourceModule[LanguageWithHeaders]
+    source_module: source_modules.SourceModule[source_modules.LanguageWithHeaders]
     bindings_module: source_modules.BindingModule
     cache_strategy: cache.Strategy
     extra_cmake_flags: list[str] = field(default_factory=list)
@@ -371,4 +365,4 @@ class CMakeProject(BuildProject):
     def get_implementation(self) -> Callable:
         if not self.is_built():
             self.build()
-        return getattr(import_from_path(self.binary_file), self.name)
+        return getattr(importer.import_from_path(self.binary_file), self.name)

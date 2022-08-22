@@ -79,11 +79,15 @@ def test_gt_cpp_with_cmake(source_module_example):
 
 
 def test_gt_cpp_with_compile_command(source_module_example):
-    wrapper = CompileCommandProject(
-        source_module=source_module_example,
-        bindings_module=create_bindings(source_module_example),
-        cache_strategy=cache.Strategy.SESSION,
+    wrapper = (
+        foo := CompileCommandProject(
+            source_module=source_module_example,
+            bindings_module=create_bindings(source_module_example),
+            cache_strategy=cache.Strategy.SESSION,
+        )
     ).get_implementation()
+    print((foo.src_dir / "log.txt").read_text())
+    assert False
     buf = np.zeros(shape=(6, 5), dtype=np.float32)
     sc = np.float32(3.1415926)
     res = wrapper(buf, sc)
@@ -97,11 +101,9 @@ def test_compile_command_only_configures_once(source_module_example):
         cache_strategy=cache.Strategy.SESSION,
     )
 
-    cc, config_did_run, _ = first_cc.get_compile_command(reconfigure=True)
+    _, config_did_run, _ = first_cc.get_compile_command(reconfigure=True)
 
     assert config_did_run is True
-
-    print(cc)
 
     changed_source_module = source_modules.SourceModule(
         entry_point=source_modules.Function(
