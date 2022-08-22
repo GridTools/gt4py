@@ -813,10 +813,9 @@ def test_solve_triag(fieldview_backend):
 
 
 def test_ternary_operator(reduction_setup):
-    rs = reduction_setup
-    Edge = rs.Edge
+    Edge = reduction_setup.Edge
+    num_edges = reduction_setup.num_edges
 
-    num_edges = rs.num_edges
     a = np_as_located_field(Edge)(np.ones((num_edges,)))
     b = np_as_located_field(Edge)(2 * np.ones((num_edges,)))
     out = np_as_located_field(Edge)(np.zeros((num_edges,)))
