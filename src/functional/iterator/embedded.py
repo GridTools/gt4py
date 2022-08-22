@@ -142,7 +142,11 @@ class MutableLocatedField(LocatedField, Protocol):
 
 
 class Column(np.lib.mixins.NDArrayOperatorsMixin):
-    """Represents a column when executed in column mode (`column_axis != None`)."""
+    """Represents a column when executed in column mode (`column_axis != None`).
+
+    Implements `__array_ufunc__` and `__array_function__` to isolate
+    and simplify dispatching in iterator ir builtins.
+    """
 
     def __init__(self, kstart: int, data: np.ndarray) -> None:
         self.kstart = kstart
@@ -165,10 +169,14 @@ class Column(np.lib.mixins.NDArrayOperatorsMixin):
 
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs) -> Column:
         assert method == "__call__"
+        assert all(inp.kstart == self.kstart for inp in inputs)
+        assert all(inp.data.shape == self.data.shape for inp in inputs)
         return self.__class__(self.kstart, ufunc(*(inp.data for inp in inputs), **kwargs))
 
     def __array_function__(self, func, types, args, kwargs) -> Column:
         assert all(issubclass(t, self.__class__) for t in types)
+        assert all(arg.kstart == self.kstart for arg in args)
+        assert all(arg.data.shape == self.data.shape for arg in args)
         return self.__class__(self.kstart, func(*(arg.data for arg in args), **kwargs))
 
 
