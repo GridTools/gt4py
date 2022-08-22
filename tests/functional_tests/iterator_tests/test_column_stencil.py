@@ -97,16 +97,23 @@ def ksum(inp):
 
 
 @fendef(column_axis=KDim)
-def ksum_fencil(i_size, k_size, inp, out):
+def ksum_fencil(i_size, k_start, k_end, inp, out):
     closure(
-        cartesian_domain(named_range(IDim, 0, i_size), named_range(KDim, 0, k_size)),
+        cartesian_domain(named_range(IDim, 0, i_size), named_range(KDim, k_start, k_end)),
         ksum,
         out,
         [inp],
     )
 
 
-def test_ksum_scan(fencil_processor, use_tmps):
+@pytest.mark.parametrize(
+    "kstart, reference",
+    [
+        (0, np.asarray([[0, 1, 3, 6, 10, 15, 21]])),
+        (2, np.asarray([[0, 0, 2, 5, 9, 14, 20]])),
+    ],
+)
+def test_ksum_scan(fencil_processor, use_tmps, kstart, reference):
     if use_tmps:
         pytest.xfail("use_tmps currently not supported for scans")
     fencil_processor, validate = fencil_processor
@@ -116,12 +123,11 @@ def test_ksum_scan(fencil_processor, use_tmps):
     inp = np_as_located_field(IDim, KDim)(np.asarray([list(range(7))]))
     out = np_as_located_field(IDim, KDim)(np.zeros(shape))
 
-    ref = np.asarray([[0, 1, 3, 6, 10, 15, 21]])
-
     run_processor(
         ksum_fencil,
         fencil_processor,
         shape[0],
+        kstart,
         shape[1],
         inp,
         out,
@@ -130,7 +136,7 @@ def test_ksum_scan(fencil_processor, use_tmps):
     )
 
     if validate:
-        assert np.allclose(ref, np.asarray(out))
+        assert np.allclose(reference, np.asarray(out))
 
 
 @fundef
@@ -186,16 +192,35 @@ def kdoublesum(inp0, inp1):
 
 
 @fendef(column_axis=KDim)
-def kdoublesum_fencil(i_size, k_size, inp0, inp1, out):
+def kdoublesum_fencil(i_size, k_start, k_end, inp0, inp1, out):
     closure(
-        cartesian_domain(named_range(IDim, 0, i_size), named_range(KDim, 0, k_size)),
+        cartesian_domain(named_range(IDim, 0, i_size), named_range(KDim, k_start, k_end)),
         kdoublesum,
         out,
         [inp0, inp1],
     )
 
 
-def test_kdoublesum_scan(fencil_processor, use_tmps):
+@pytest.mark.parametrize(
+    "kstart, reference",
+    [
+        (
+            0,
+            np.asarray(
+                [[(0, 0), (1, 1), (3, 3), (6, 6), (10, 10), (15, 15), (21, 21)]],
+                dtype=np.dtype([("foo", np.float64), ("bar", np.int32)]),
+            ),
+        ),
+        (
+            2,
+            np.asarray(
+                [[(0, 0), (0, 0), (2, 2), (5, 5), (9, 9), (14, 14), (20, 20)]],
+                dtype=np.dtype([("foo", np.float64), ("bar", np.int32)]),
+            ),
+        ),
+    ],
+)
+def test_kdoublesum_scan(fencil_processor, use_tmps, kstart, reference):
     if use_tmps:
         pytest.xfail("use_tmps currently not supported for scans")
     fencil_processor, validate = fencil_processor
@@ -204,18 +229,13 @@ def test_kdoublesum_scan(fencil_processor, use_tmps):
     shape = [1, 7]
     inp0 = np_as_located_field(IDim, KDim)(np.asarray([list(range(7))], dtype=np.float64))
     inp1 = np_as_located_field(IDim, KDim)(np.asarray([list(range(7))], dtype=np.int32))
-    out = np_as_located_field(IDim, KDim)(
-        np.zeros(shape, dtype=np.dtype([("foo", np.float64), ("bar", np.int32)]))
-    )
-
-    ref = np.asarray(
-        [[(0, 0), (1, 1), (3, 3), (6, 6), (10, 10), (15, 15), (21, 21)]], dtype=out.dtype
-    )
+    out = np_as_located_field(IDim, KDim)(np.zeros(shape, dtype=reference.dtype))
 
     run_processor(
         kdoublesum_fencil,
         fencil_processor,
         shape[0],
+        kstart,
         shape[1],
         inp0,
         inp1,
@@ -225,5 +245,8 @@ def test_kdoublesum_scan(fencil_processor, use_tmps):
     )
 
     if validate:
-        for n in ref.dtype.names:
-            assert np.allclose(ref[n], np.asarray(out)[n])
+        for n in reference.dtype.names:
+            assert np.allclose(reference[n], np.asarray(out)[n])
+
+
+# TODO(havogt) test tuple_get builtin on a Column
