@@ -24,7 +24,6 @@ from typing import (
 )
 
 import numpy as np
-import numpy.lib.mixins
 import numpy.typing as npt
 
 from functional import iterator
@@ -142,15 +141,17 @@ class MutableLocatedField(LocatedField, Protocol):
         ...
 
 
-class Column(numpy.lib.mixins.NDArrayOperatorsMixin):
-    def __init__(self, kstart: int, data: np.ndarray):
+class Column(np.lib.mixins.NDArrayOperatorsMixin):
+    """Represents a column when executed in column mode (`column_axis != None`)."""
+
+    def __init__(self, kstart: int, data: np.ndarray) -> None:
         self.kstart = kstart
         self.data = data
 
-    def __getitem__(self, i: int):
+    def __getitem__(self, i: int) -> Any:
         return self.data[i - self.kstart]
 
-    def tuple_get(self, i: int):
+    def tuple_get(self, i: int) -> Column:
         if self.data.dtype.names:
             return Column(self.kstart, self.data[self.data.dtype.names[i]])
         else:
@@ -160,9 +161,13 @@ class Column(numpy.lib.mixins.NDArrayOperatorsMixin):
         self.data[i - self.kstart] = v
 
     def __array__(self, dtype: Optional[npt.DTypeLike] = None) -> np.ndarray:
-        return self.data if dtype or dtype == self.data.dtype else self.data.astype(dtype)
+        return self.data if not dtype or dtype == self.data.dtype else self.data.astype(dtype)
 
-    def __array_function__(self, func, types, args, kwargs):
+    def __array_ufunc__(self, ufunc, method, *inputs, **kwargs) -> Column:
+        assert method == "__call__"
+        return self.__class__(self.kstart, ufunc(*(inp.data for inp in inputs), **kwargs))
+
+    def __array_function__(self, func, types, args, kwargs) -> Column:
         assert all(issubclass(t, self.__class__) for t in types)
         return self.__class__(self.kstart, func(*(arg.data for arg in args), **kwargs))
 
