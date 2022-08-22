@@ -165,7 +165,7 @@ class Column(np.lib.mixins.NDArrayOperatorsMixin):
         self.data[i - self.kstart] = v
 
     def __array__(self, dtype: Optional[npt.DTypeLike] = None) -> np.ndarray:
-        return self.data if not dtype or dtype == self.data.dtype else self.data.astype(dtype)
+        return self.data.astype(dtype, copy=False)
 
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs) -> Column:
         assert method == "__call__"
