@@ -171,8 +171,10 @@ def make_argument(
 
 
 def create_bindings(
-    source_module: source_modules.SourceModule[source_modules.LanguageWithHeaders],
-) -> source_modules.BindingModule:
+    source_module: source_modules.SourceModule[
+        source_modules.Cpp, source_modules.LanguageWithHeaderFilesSettings
+    ],
+) -> source_modules.BindingModule[source_modules.Cpp, source_modules.Python]:
     """
     Generate Python bindings through which a C++ function can be called.
 
@@ -181,14 +183,14 @@ def create_bindings(
     source_module
         The source module for which the bindings are created
     """
-    if not isinstance(source_module.language, cpp_gen.CppLanguage):
+    if source_module.language is not source_modules.Cpp:
         raise NotImplementedError("Can only create bindings for C++ source modules.")
     wrapper_name = source_module.entry_point.name + "_wrapper"
 
     file_binding = BindingFile(
         callee_header_file=source_module.entry_point.name
         + "."
-        + source_module.language.include_extension,
+        + source_module.language_settings.header_extension,
         header_files=[
             "pybind11/pybind11.h",
             "pybind11/stl.h",
@@ -223,7 +225,10 @@ def create_bindings(
         ),
     )
 
-    src = source_module.language.format_source(BindingCodeGenerator.apply(file_binding))
+    src = source_modules.format_source(
+        source_module.language_settings,
+        BindingCodeGenerator.apply(file_binding),
+    )
 
     return source_modules.BindingModule(
         src,

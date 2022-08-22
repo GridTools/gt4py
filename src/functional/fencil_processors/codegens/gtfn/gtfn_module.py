@@ -38,14 +38,18 @@ def get_param_description(
 
 @dataclass(frozen=True)
 class GTFNSourceModuleGenerator(fpi.FencilSourceModuleGenerator):
-    language_settings: cpp_gen.CppLanguage = field(default=cpp_gen.CPP_DEFAULT)
+    language_settings: source_modules.LanguageWithHeaderFilesSettings = field(
+        default=cpp_gen.CPP_DEFAULT
+    )
 
     def __call__(
         self,
         fencil: itir.FencilDefinition,
         *args,
         **kwargs,
-    ) -> source_modules.SourceModule:
+    ) -> source_modules.SourceModule[
+        source_modules.Cpp, source_modules.LanguageWithHeaderFilesSettings
+    ]:
         """Generate GTFN C++ code from the ITIR definition."""
         parameters = tuple(
             get_param_description(fencil_param.id, obj)
@@ -59,23 +63,26 @@ class GTFNSourceModuleGenerator(fpi.FencilSourceModuleGenerator):
         decl_body = f"return generated::{function.name}()({rendered_params});"
         decl_src = cpp_gen.render_function_declaration(function, body=decl_body)
         stencil_src = gtfn_backend.generate(fencil, **kwargs)
-        source_code = self.language_settings.format_source(
+        source_code = source_modules.format_source(
+            self.language_settings,
             f"""
             #include <gridtools/fn/backend/naive.hpp>
             {stencil_src}
             {decl_src}
-            """.strip()
+            """.strip(),
         )
 
         module = source_modules.SourceModule(
             entry_point=function,
             library_deps=(source_modules.LibraryDependency("gridtools", "master"),),
             source_code=source_code,
-            language=self.language_settings,
+            language=source_modules.Cpp,
+            language_settings=self.language_settings,
         )
         return module
 
 
 create_source_module: fpi.FencilProcessorProtocol[
-    source_modules.SourceModule, fpi.FencilSourceModuleGenerator
+    source_modules.SourceModule[source_modules.Cpp, source_modules.LanguageWithHeaderFilesSettings],
+    fpi.FencilSourceModuleGenerator,
 ] = GTFNSourceModuleGenerator()

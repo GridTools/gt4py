@@ -37,11 +37,11 @@ class CppLanguage:
         return format_source("cpp", source_code, style=self.formatting_style)
 
 
-CPP_DEFAULT: Final = CppLanguage(
-    name="C++ (default)",
-    implementation_extension="cpp",
-    include_extension="cpp.inc",
-    formatting_style="LLVM",
+CPP_DEFAULT: Final = source_modules.LanguageWithHeaderFilesSettings(
+    formatter_key="cpp",
+    formatter_style="LLVM",
+    file_extension="cpp",
+    header_extension="cpp.inc",
 )
 
 _TYPE_MAPPING: Final = MappingProxyType(

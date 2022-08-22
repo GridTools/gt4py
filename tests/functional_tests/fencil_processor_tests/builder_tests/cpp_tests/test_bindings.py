@@ -33,13 +33,15 @@ def example_source_module():
         ),
         source_code="",
         library_deps=[],
-        language=cpp_gen.CPP_DEFAULT,
+        language=source_modules.Cpp,
+        language_settings=cpp_gen.CPP_DEFAULT,
     )
 
 
 def test_bindings(example_source_module):
     module = bindings.create_bindings(example_source_module)
-    expected_src = example_source_module.language.format_source(
+    expected_src = source_modules.format_source(
+        example_source_module.language_settings,
         """\
         #include "example.cpp.inc"
         
@@ -65,7 +67,7 @@ def test_bindings(example_source_module):
           module.doc() = "";
           module.def("example", &example_wrapper, "");
         }\
-        """
+        """,
     )
     assert module.library_deps[0].name == "pybind11"
     assert module.source_code == expected_src

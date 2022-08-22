@@ -18,7 +18,7 @@ import pytest
 
 from functional.common import Dimension
 from functional.fencil_processors.codegens.gtfn import gtfn_module
-from functional.fencil_processors.source_modules import cpp_gen
+from functional.fencil_processors.source_modules import source_modules
 from functional.iterator import embedded, ir as itir
 
 
@@ -69,4 +69,4 @@ def test_codegen(fencil_example):
     module = gtfn_module.create_source_module(fencil, *parameters, offset_provider={})
     assert module.entry_point.name == fencil.id
     assert any(d.name == "gridtools" for d in module.library_deps)
-    assert isinstance(module.language, cpp_gen.CppLanguage)
+    assert module.language is source_modules.Cpp

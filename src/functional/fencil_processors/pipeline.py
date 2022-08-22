@@ -17,16 +17,15 @@ from functional.fencil_processors.builders import cache
 from functional.fencil_processors.source_modules import source_modules
 
 
-LanguageT_co = TypeVar("LanguageT_co", bound=source_modules.SupportedLanguage, covariant=True)
-LanguageT_contra = TypeVar(
-    "LanguageT_contra", bound=source_modules.SupportedLanguage, contravariant=True
-)
+SrcL = TypeVar("SrcL", bound=source_modules.LanguageTag, covariant=True)
+TgtL = TypeVar("TgtL", bound=source_modules.LanguageTag, covariant=True)
+LS = TypeVar("LS", bound=source_modules.LanguageSettings, covariant=True)
 
 
-class BindingsGenerator(Protocol[LanguageT_co]):
+class BindingsGenerator(Protocol[SrcL, LS, TgtL]):
     def __call__(
-        self, source_module: source_modules.SourceModule[LanguageT_co]
-    ) -> source_modules.BindingModule:
+        self, source_module: source_modules.SourceModule[SrcL, LS]
+    ) -> source_modules.BindingModule[SrcL, TgtL]:
         ...
 
 
@@ -35,11 +34,11 @@ class BuildProject(Protocol):
         ...
 
 
-class BuildProjectGenerator(Protocol[LanguageT_co]):
+class BuildProjectGenerator(Protocol[SrcL, LS, TgtL]):
     def __call__(
         self,
-        source_module: source_modules.SourceModule[LanguageT_co],
-        bindings_module: Optional[source_modules.BindingModule[LanguageT_co]],
+        source_module: source_modules.SourceModule[SrcL, LS],
+        bindings_module: Optional[source_modules.BindingModule[SrcL, TgtL]],
         cache_strategy: cache.Strategy,
     ) -> BuildProject:
         ...

@@ -59,7 +59,8 @@ def source_module_example():
         library_deps=[
             source_modules.LibraryDependency("gridtools", "master"),
         ],
-        language=cpp_gen.CPP_DEFAULT,
+        language=source_modules.Cpp,
+        language_settings=cpp_gen.CPP_DEFAULT,
     )
 
 

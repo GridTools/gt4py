@@ -22,7 +22,7 @@ from functional.fencil_processors import processor_interface as fpi  # fencil pr
 from functional.fencil_processors.builders import cache
 from functional.fencil_processors.builders.cpp import bindings, build
 from functional.fencil_processors.codegens.gtfn import gtfn_module
-from functional.fencil_processors.source_modules import cpp_gen
+from functional.fencil_processors.source_modules import cpp_gen, source_modules
 from functional.iterator import ir as itir
 
 
@@ -37,7 +37,9 @@ def convert_arg(arg: Any) -> Any:
 
 @dataclass(frozen=True)
 class GTFNExecutor(fpi.FencilExecutor):
-    language_settings: cpp_gen.CppLanguage = field(default=cpp_gen.CPP_DEFAULT)
+    language_settings: source_modules.LanguageWithHeaderFilesSettings = field(
+        default=cpp_gen.CPP_DEFAULT
+    )
     name: Optional[str] = None
 
     def __call__(self, fencil: itir.FencilDefinition, *args: Any, **kwargs: Any) -> None:
