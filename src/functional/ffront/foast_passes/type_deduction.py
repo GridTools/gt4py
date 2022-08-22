@@ -252,7 +252,9 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
     def visit_TernaryExpr(self, node: foast.TernaryExpr, **kwargs) -> foast.TernaryExpr:
         new_left = self.visit(node.true_expr, **kwargs)
         new_right = self.visit(node.false_expr, **kwargs)
-        new_type = self._deduce_ifexp_type(node, left=new_left, right=new_right, test=node.condition)
+        new_type = self._deduce_ternaryexpr_type(
+            node, left=new_left, right=new_right, test=node.condition
+        )
         return foast.TernaryExpr(
             condition=self.visit(node.condition, **kwargs),
             true_expr=self.visit(node.true_expr, **kwargs),
@@ -261,8 +263,14 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             type=new_type,
         )
 
-    def _deduce_ifexp_type(
-        self, node: foast.TernaryExpr, *, left: foast.Expr, right: foast.Expr, test: foast.Expr, **kwargs
+    def _deduce_ternaryexpr_type(
+        self,
+        node: foast.TernaryExpr,
+        *,
+        left: foast.Expr,
+        right: foast.Expr,
+        test: foast.Expr,
+        **kwargs,
     ) -> Optional[ct.SymbolType]:
         if isinstance(left.type, ct.TupleType):
             return ct.TupleType(types=[element.type for element in left.elts])

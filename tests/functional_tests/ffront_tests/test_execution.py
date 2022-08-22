@@ -820,20 +820,28 @@ def test_ternary_operator(reduction_setup):
     b = np_as_located_field(Edge)(2 * np.ones((num_edges,)))
     out = np_as_located_field(Edge)(np.zeros((num_edges,)))
 
-    int_1 = 2.0
-    int_2 = 3.0
+    left = 2.0
+    right = 3.0
 
     @field_operator
-    def ternary_field_op(a: Field[[Edge], float], b: Field[[Edge], float], int_1: float, int_2: float) -> Field[[Edge], float]:
-        c = a if int_1 < int_2 else b
+    def ternary_field_op(
+        a: Field[[Edge], float], b: Field[[Edge], float], left: float, right: float
+    ) -> Field[[Edge], float]:
+        c = a if left < right else b
         return c
 
     # TODO(tehrengruber): directly call field operator when the generated programs support `out` being a tuple
     @program
-    def ternary_field(a: Field[[Edge], float], b: Field[[Edge], float], int_1: float, int_2: float, out: Field[[Edge], float]):
-        ternary_field_op(a, b, int_1, int_2, out=out)
+    def ternary_field(
+        a: Field[[Edge], float],
+        b: Field[[Edge], float],
+        left: float,
+        right: float,
+        out: Field[[Edge], float],
+    ):
+        ternary_field_op(a, b, left, right, out=out)
 
-    ternary_field(a, b, int_1, int_2, out, offset_provider={})
+    ternary_field(a, b, left, right, out, offset_provider={})
     e = np.asarray(a) if 2 < 3 else np.asarray(b)
     np.allclose(e, out)
 
@@ -846,27 +854,28 @@ def test_ternary_operator_tuple(reduction_setup):
     out_1 = np_as_located_field(Edge)(np.zeros((num_edges,)))
     out_2 = np_as_located_field(Edge)(np.zeros((num_edges,)))
 
-    int_1 = 2.0
-    int_2 = 3.0
+    left = 2.0
+    right = 3.0
 
     @field_operator
     def ternary_field_op(
-        a: Field[[Edge], float], b: Field[[Edge], float], int_1: float, int_2: float
+        a: Field[[Edge], float], b: Field[[Edge], float], left: float, right: float
     ) -> tuple[Field[[Edge], float], Field[[Edge], float]]:
-        c, d = (a, b) if int_1 < int_2 else (b, a)
+        c, d = (a, b) if left < right else (b, a)
         return c, d
 
     @program
     def ternary_field(
         a: Field[[Edge], float],
         b: Field[[Edge], float],
-        int_1: float, int_2: float,
+        left: float,
+        right: float,
         out_1: Field[[Edge], float],
         out_2: Field[[Edge], float],
     ):
-        ternary_field_op(a, b, int_1, int_2, out=(out_1, out_2))
+        ternary_field_op(a, b, left, right, out=(out_1, out_2))
 
-    ternary_field(a, b, int_1, int_2, out_1, out_2, offset_provider={})
+    ternary_field(a, b, left, right, out_1, out_2, offset_provider={})
 
     e, f = (np.asarray(a), np.asarray(b)) if 2 < 3 else (np.asarray(b), np.asarray(a))
     np.allclose(e, out_1)
