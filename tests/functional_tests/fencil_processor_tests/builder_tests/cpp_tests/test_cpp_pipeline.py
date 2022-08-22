@@ -16,7 +16,6 @@
 import math
 
 import jinja2
-import numpy
 import numpy as np
 import pytest
 
@@ -30,8 +29,8 @@ def source_module_example():
     entry_point = source_modules.Function(
         "stencil",
         parameters=[
-            source_modules.BufferParameter("buf", ["I", "J"], numpy.dtype(numpy.float32)),
-            source_modules.ScalarParameter("sc", numpy.dtype(numpy.float32)),
+            source_modules.BufferParameter("buf", ["I", "J"], np.dtype(np.float32)),
+            source_modules.ScalarParameter("sc", np.dtype(np.float32)),
         ],
     )
     func = cpp_gen.render_function_declaration(

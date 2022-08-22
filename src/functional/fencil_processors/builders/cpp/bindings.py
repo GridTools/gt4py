@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from typing import Any, Sequence
 
-import numpy
+import numpy as np
 
 import eve
 from eve.codegen import JinjaTemplate as as_jinja, TemplatedGenerator
@@ -36,7 +36,7 @@ class DimensionType(Expr):
 class SidConversion(Expr):
     buffer_name: str
     dimensions: Sequence[DimensionType]
-    scalar_type: numpy.dtype
+    scalar_type: np.dtype
     dim_config: int
 
 
@@ -52,7 +52,7 @@ class ReturnStmt(eve.Node):
 class FunctionParameter(eve.Node):
     name: str
     ndim: int
-    dtype: numpy.dtype
+    dtype: np.dtype
 
 
 class WrapperFunction(eve.Node):
@@ -153,7 +153,7 @@ def make_parameter(
     name = parameter.name
     ndim = 0 if isinstance(parameter, source_modules.ScalarParameter) else len(parameter.dimensions)
     scalar_type = parameter.scalar_type
-    return FunctionParameter(name=name, ndim=ndim, dtype=numpy.dtype(scalar_type))
+    return FunctionParameter(name=name, ndim=ndim, dtype=np.dtype(scalar_type))
 
 
 def make_argument(
@@ -165,7 +165,7 @@ def make_argument(
         return SidConversion(
             buffer_name=param.name,
             dimensions=[DimensionType(name=dim) for dim in param.dimensions],
-            scalar_type=numpy.dtype(param.scalar_type),
+            scalar_type=np.dtype(param.scalar_type),
             dim_config=index,
         )
 

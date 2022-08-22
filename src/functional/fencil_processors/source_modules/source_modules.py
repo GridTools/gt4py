@@ -17,7 +17,7 @@
 from dataclasses import dataclass
 from typing import Generic, Protocol, TypeVar
 
-import numpy
+import numpy as np
 
 
 class SupportedLanguage(Protocol):
@@ -43,20 +43,21 @@ class LanguageWithHeaders(SupportedLanguage, Protocol):
         ...
 
 
-LanguageT = TypeVar("LanguageT", bound=SupportedLanguage, covariant=True)
+LanguageT_co = TypeVar("LanguageT_co", bound=SupportedLanguage, covariant=True)
+LanguageT_contra = TypeVar("LanguageT_contra", bound=SupportedLanguage, contravariant=True)
 
 
 @dataclass(frozen=True)
 class ScalarParameter:
     name: str
-    scalar_type: numpy.dtype
+    scalar_type: np.dtype
 
 
 @dataclass(frozen=True)
 class BufferParameter:
     name: str
     dimensions: tuple[str, ...]
-    scalar_type: numpy.dtype
+    scalar_type: np.dtype
 
 
 @dataclass(frozen=True)
@@ -72,14 +73,14 @@ class LibraryDependency:
 
 
 @dataclass(frozen=True)
-class SourceModule(Generic[LanguageT]):
+class SourceModule(Generic[LanguageT_co]):
     entry_point: Function
     source_code: str
     library_deps: tuple[LibraryDependency, ...]
-    language: LanguageT
+    language: LanguageT_co
 
 
 @dataclass(frozen=True)
-class BindingModule:
+class BindingModule(Generic[LanguageT_contra]):
     source_code: str
     library_deps: tuple[LibraryDependency, ...]

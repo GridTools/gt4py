@@ -16,7 +16,7 @@
 from dataclasses import dataclass, field
 from typing import Any
 
-import numpy
+import numpy as np
 
 from functional.fencil_processors import processor_interface as fpi  # fencil processor interface
 from functional.fencil_processors.codegens.gtfn import gtfn_backend
@@ -27,7 +27,7 @@ from functional.iterator import ir as itir
 def get_param_description(
     name: str, obj: Any
 ) -> source_modules.ScalarParameter | source_modules.BufferParameter:
-    view = numpy.asarray(obj)
+    view = np.asarray(obj)
     if view.ndim > 0:
         return source_modules.BufferParameter(
             name, tuple(dim.value for dim in obj.axes), view.dtype

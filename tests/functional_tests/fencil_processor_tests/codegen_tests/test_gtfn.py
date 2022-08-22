@@ -13,7 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 
-import numpy
+import numpy as np
 import pytest
 
 from functional.common import Dimension
@@ -58,8 +58,8 @@ def fencil_example():
     )
     IDim = Dimension("I")
     params = [
-        embedded.np_as_located_field(IDim)(numpy.empty((1,), dtype=numpy.float32)),
-        numpy.float32(3.14),
+        embedded.np_as_located_field(IDim)(np.empty((1,), dtype=np.float32)),
+        np.float32(3.14),
     ]
     return fencil, params
 

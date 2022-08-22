@@ -39,7 +39,7 @@ class BuildProjectGenerator(Protocol[LanguageT_co]):
     def __call__(
         self,
         source_module: source_modules.SourceModule[LanguageT_co],
-        bindings_module: Optional[source_modules.BindingModule],
+        bindings_module: Optional[source_modules.BindingModule[LanguageT_co]],
         cache_strategy: cache.Strategy,
     ) -> BuildProject:
         ...

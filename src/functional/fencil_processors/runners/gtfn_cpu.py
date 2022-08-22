@@ -16,7 +16,7 @@
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
-import numpy
+import numpy as np
 
 from functional.fencil_processors import processor_interface as fpi  # fencil processor interface
 from functional.fencil_processors.builders import cache
@@ -27,7 +27,7 @@ from functional.iterator import ir as itir
 
 
 def convert_arg(arg: Any) -> Any:
-    view = numpy.asarray(arg)
+    view = np.asarray(arg)
     if view.ndim > 0:
         return memoryview(view)  # type: ignore[arg-type] # mypy seems unaware that ndarray is compatible with buffer protocol
     else:
