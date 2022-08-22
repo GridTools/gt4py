@@ -14,7 +14,7 @@
 from typing import Callable, Optional, Protocol, TypeVar
 
 from functional.fencil_processors.builders import cache
-from functional.fencil_processors.source_module import source_modules
+from functional.fencil_processors.source_modules import source_modules
 
 
 LanguageT_co = TypeVar("LanguageT_co", bound=source_modules.SupportedLanguage, covariant=True)

@@ -26,10 +26,11 @@ from functional.fencil_processors.source_modules import cpp_gen
 from functional.iterator import ir as itir
 
 
+# TODO(ricoh): Add support for the whole range of arguments that can be passed to a fencil.
 def convert_arg(arg: Any) -> Any:
     view = np.asarray(arg)
     if view.ndim > 0:
-        return memoryview(view)  # type: ignore[arg-type] # mypy seems unaware that ndarray is compatible with buffer protocol
+        return view
     else:
         return arg
 
