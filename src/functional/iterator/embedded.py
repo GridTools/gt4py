@@ -71,6 +71,32 @@ class NeighborTableOffsetProvider:
         self.has_skip_values = has_skip_values
 
 
+class StridedNeighborOffsetProvider:
+    def __init__(
+        self,
+        origin_axis: Dimension,
+        neighbor_axis: Dimension,
+        max_neighbors: int,
+        has_skip_values=True,
+    ) -> None:
+        self.origin_axis = origin_axis
+        self.neighbor_axis = neighbor_axis
+        self.max_neighbors = max_neighbors
+        self.has_skip_values = has_skip_values
+
+    @property
+    def tbl(self):  # TODO(havogt): define Connectivity concept properly
+        class Impl:
+            def __init__(self, stride: int) -> None:
+                self.stride = stride
+
+            def __getitem__(self, indices: tuple[int, int]) -> int:
+                primary, neighbor_idx = indices
+                return primary * self.stride + neighbor_idx
+
+        return Impl(stride=self.max_neighbors)
+
+
 # Offsets
 OffsetPart: TypeAlias = Tag | IntIndex
 CompleteOffset: TypeAlias = tuple[Tag, IntIndex]
@@ -439,7 +465,8 @@ def execute_shift(
         else:
             raise AssertionError()
         return new_pos
-    elif isinstance(offset_implementation, NeighborTableOffsetProvider):
+    else:
+        assert isinstance(offset_implementation, Connectivity)
         assert offset_implementation.origin_axis.value in pos
         new_pos = pos.copy()
         new_pos.pop(offset_implementation.origin_axis.value)
