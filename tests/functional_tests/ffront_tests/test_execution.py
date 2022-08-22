@@ -827,7 +827,7 @@ def test_ternary_operator(reduction_setup):
     def ternary_field_op(
         a: Field[[Edge], float], b: Field[[Edge], float], left: float, right: float
     ) -> Field[[Edge], float]:
-        c = a+b if left < right else b
+        c = a + b if left < right else b
         return c
 
     # TODO(tehrengruber): directly call field operator when the generated programs support `out` being a tuple
@@ -842,7 +842,7 @@ def test_ternary_operator(reduction_setup):
         ternary_field_op(a, b, left, right, out=out)
 
     ternary_field(a, b, left, right, out, offset_provider={})
-    e = np.asarray(a)+np.asarray(b) if left < right else np.asarray(b)
+    e = np.asarray(a) + np.asarray(b) if left < right else np.asarray(b)
     np.allclose(e, out)
 
 
@@ -881,6 +881,7 @@ def test_ternary_operator_tuple(reduction_setup):
     np.allclose(e, out_1)
     np.allclose(f, out_2)
 
+
 def test_ternary_builtin_neighbor_sum(reduction_setup):
     rs = reduction_setup
     Edge = rs.Edge
@@ -906,13 +907,14 @@ def test_ternary_builtin_neighbor_sum(reduction_setup):
     def ternary_reduce(
         a: Field[[Edge], float], b: Field[[Vertex], float], out: Field[[Vertex], float]
     ):
-        _ternary_reduce(a, b, out = out)
+        _ternary_reduce(a, b, out=out)
 
     ternary_reduce(a, b, out, offset_provider=rs.offset_provider)
 
     expected = np.asarray(b) if 2 < 3 else np.sum(np.asarray(a)[rs.v2e_table], axis=1)
 
     assert np.allclose(expected, out)
+
 
 @pytest.mark.parametrize("forward", [True, True])
 def test_ternary_scan(forward):

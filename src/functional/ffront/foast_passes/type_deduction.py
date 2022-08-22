@@ -276,7 +276,8 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             return ct.TupleType(types=[element.type for element in left.elts])
 
         # check that left and right types are the same for condition
-        if not type(condition.left) == type(condition.right):
+        right_type = type(condition.right)
+        if not isinstance(condition.left, right_type):
             raise FieldOperatorTypeDeductionError.from_foast_node(
                 condition,
                 msg=f"Incompatible datatypes in operator `{condition.op}`: {type(condition.left)} and {type(condition.right)}!",
