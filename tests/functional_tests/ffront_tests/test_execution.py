@@ -881,4 +881,52 @@ def test_ternary_operator_tuple(reduction_setup):
     np.allclose(e, out_1)
     np.allclose(f, out_2)
 
+def test_ternary_builtin_neighbor_sum(reduction_setup):
+    rs = reduction_setup
+    Edge = rs.Edge
+    Vertex = rs.Vertex
+    V2EDim = rs.V2EDim
+    V2E = rs.V2E
 
+    num_vertices = rs.num_vertices
+    num_edges = rs.num_edges
+
+    a = np_as_located_field(Edge)(np.ones((num_edges,)))
+    b = np_as_located_field(Vertex)(2 * np.ones((num_vertices,)))
+    out = np_as_located_field(Vertex)(np.zeros((num_vertices,)))
+
+    @field_operator
+    def _ternary_reduce(
+        a: Field[[Edge], float], b: Field[[Vertex], float]
+    ) -> Field[[Vertex], float]:
+        f = b if 2 < 3 else neighbor_sum(a(V2E), axis=V2EDim)
+        return f
+
+    @program
+    def ternary_reduce(
+        a: Field[[Edge], float], b: Field[[Vertex], float], out: Field[[Vertex], float]
+    ):
+        _ternary_reduce(a, b, out = out)
+
+    ternary_reduce(a, b, out, offset_provider=rs.offset_provider)
+
+    expected = np.asarray(b) if 2 < 3 else np.sum(np.asarray(a)[rs.v2e_table], axis=1)
+
+    assert np.allclose(expected, out)
+
+@pytest.mark.parametrize("forward", [True, True])
+def test_ternary_scan(forward):
+    KDim = Dimension("K", kind=DimensionKind.VERTICAL)
+    size = 10
+    init = 1.0
+    out = np_as_located_field(KDim)(np.zeros((size,)))
+    expected = np.arange(init + 1.0, init + 1.0 + size, 1)
+
+    @scan_operator(axis=KDim, forward=forward, init=init)
+    def simple_scan_operator(carry: float) -> float:
+        c = carry if 2 > 3 else carry + 1.0
+        return c
+
+    simple_scan_operator(out=out, offset_provider={})
+
+    assert np.allclose(expected, out)
