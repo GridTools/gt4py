@@ -827,7 +827,7 @@ def test_ternary_operator(reduction_setup):
     def ternary_field_op(
         a: Field[[Edge], float], b: Field[[Edge], float], left: float, right: float
     ) -> Field[[Edge], float]:
-        c = a if left < right else b
+        c = a+b if left < right else b
         return c
 
     # TODO(tehrengruber): directly call field operator when the generated programs support `out` being a tuple
@@ -842,7 +842,7 @@ def test_ternary_operator(reduction_setup):
         ternary_field_op(a, b, left, right, out=out)
 
     ternary_field(a, b, left, right, out, offset_provider={})
-    e = np.asarray(a) if 2 < 3 else np.asarray(b)
+    e = np.asarray(a)+np.asarray(b) if left < right else np.asarray(b)
     np.allclose(e, out)
 
 
@@ -880,3 +880,5 @@ def test_ternary_operator_tuple(reduction_setup):
     e, f = (np.asarray(a), np.asarray(b)) if 2 < 3 else (np.asarray(b), np.asarray(a))
     np.allclose(e, out_1)
     np.allclose(f, out_2)
+
+

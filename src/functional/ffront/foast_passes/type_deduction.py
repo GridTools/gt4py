@@ -253,7 +253,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         new_left = self.visit(node.true_expr, **kwargs)
         new_right = self.visit(node.false_expr, **kwargs)
         new_type = self._deduce_ternaryexpr_type(
-            node, left=new_left, right=new_right, test=node.condition
+            node, left=new_left, right=new_right, condition=node.condition
         )
         return foast.TernaryExpr(
             condition=self.visit(node.condition, **kwargs),
@@ -269,32 +269,36 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         *,
         left: foast.Expr,
         right: foast.Expr,
-        test: foast.Expr,
+        condition: foast.Expr,
         **kwargs,
     ) -> Optional[ct.SymbolType]:
         if isinstance(left.type, ct.TupleType):
             return ct.TupleType(types=[element.type for element in left.elts])
 
-        # check that math ops can be done on left and right
+        # check that left and right types are the same for condition
+        if not type(condition.left) == type(condition.right):
+            raise FieldOperatorTypeDeductionError.from_foast_node(
+                condition,
+                msg=f"Incompatible datatypes in operator `{condition.op}`: {type(condition.left)} and {type(condition.right)}!",
+            )
+
+        # check that returns left and right are the same type
+        self._check_operand_dtypes_match(node, left=left, right=right)
+
+        # check that returns left and right are compatible with math operations
         for arg in (left, right):
             if not type_info.is_arithmetic(arg.type):
                 raise FieldOperatorTypeDeductionError.from_foast_node(
-                    arg, msg=f"Type {arg.type} can not be used"
+                    arg, msg=f"Type {arg.type} can not be used in ternary operator"
                 )
-
-        # check that left and right types are the same
-        self._check_operand_dtypes_match(node, left=left, right=right)
-
-        # try:
-        #     type_info.promote(boolified_type(test.left.type), boolified_type(test.right.type))
-        # except GTTypeError as ex:
-        #     raise FieldOperatorTypeDeductionError.from_foast_node(
-        #         test,
-        #         msg=f"Could not promote `{test.left.type}` and `{test.right.type}` to common type"
-        #         f" in call to `{test.op}`.",
-        #     ) from ex
-
-        return left.type
+        try:
+            return type_info.promote(left.type, right.type)
+        except GTTypeError as ex:
+            raise FieldOperatorTypeDeductionError.from_foast_node(
+                node,
+                msg=f"Could not promote `{left.type}` and `{right.type}` to common type"
+                f" for ternary return.",
+            ) from ex
 
     def visit_Compare(self, node: foast.Compare, **kwargs) -> foast.Compare:
         new_left = self.visit(node.left, **kwargs)
