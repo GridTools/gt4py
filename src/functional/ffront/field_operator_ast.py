@@ -143,10 +143,10 @@ class Compare(Expr):
     right: Expr
 
 
-class IfExp(Expr):
-    test: Expr
-    body: Expr
-    orelse: Expr
+class TernaryExpr(Expr):
+    condition: Expr
+    true_expr: Expr
+    false_expr: Expr
 
 
 class Call(Expr):
