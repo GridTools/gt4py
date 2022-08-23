@@ -1,6 +1,8 @@
+# -*- coding: utf-8 -*-
+#
 # Eve Toolchain - GT4Py Project - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2021, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -14,17 +16,21 @@
 
 """Version specification."""
 
-from typing import Optional, Union
+
+from __future__ import annotations
+
+from importlib.metadata import PackageNotFoundError, version
+from typing import Final, Optional, Union
 
 from packaging.version import LegacyVersion, Version, parse
-from pkg_resources import DistributionNotFound, get_distribution
 
 
+# TODO(egparedes): Set up proper versioning scheme after migrating repo to new location
 try:
-    __version__: str = get_distribution("gt4py").version
-except DistributionNotFound:
-    __version__ = "X.X.X.unknown"
+    _version: str = version("gt4py-functional")
+except PackageNotFoundError:
+    _version = "X.X.X.unknown"
 
-__versioninfo__: Optional[Union[LegacyVersion, Version]] = parse(__version__)
 
-del DistributionNotFound, LegacyVersion, Version, get_distribution, parse
+__version__: Final = _version
+__versioninfo__: Final[Optional[Union[LegacyVersion, Version]]] = parse(__version__)
