@@ -167,7 +167,7 @@ Before you submit a pull request, check that it meets these guidelines:
 3. If the pull request contains important design changes, it should contain a new ADR documenting the rationale behind the final decision.
 4. The pull request should have a proper description of its intent and the main changes in the code. In general this description should be used as commit message if the PR is approved (check point **6.** below).
 5. Pick one reviewer and try to contact him directly to let him know about the PR. If there is no feedback in 24h/48h try to contact him again or pick another reviewer.
-6. Once the PR has been approved, it should be squash-merged as soon as possible with a meaningful description of the changes. Although it is optional, we encourage the use of the [Conventional Commits][conventional-commits] specification for writing informative and automation-friendly commit messages.
+6. Once the PR has been approved, it should be squash-merged as soon as possible with a meaningful description of the changes. Although it is optional, we encourage the use of the [Conventional Commits][conventional-commits] specification for writing informative and automation-friendly commit messages (_commit types: `fix`, `feat`, `build`, `ci`, `docs`, `style`, `refactor`, `perf`, `test`_).
 
 
 ## Releasing Process

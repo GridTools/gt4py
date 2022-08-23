@@ -39,14 +39,6 @@ Sphinx supports [reStructuredText][sphinx-rest] (reST) markup language to add ad
    
 Regarding code examples in docstrings, we highly encourage to use [doctest][doctest] format to automatically test they are in sync with the code.
 
-### Ignoring QA errors
-
-You may ocassionally need to disable checks from _quality assurance_  (QA) tools (e.g. linters, type checkers, etc.) on specific lines because the tool is not able to fully understand why that piece of code is needed. This is usually feasible inlining a special comment like `# type: ignore`. You should **only** ignore QA errors when you fully understand its cause and it is not reasonable to fix it by rewriting the offending code in a different way. Additionally, you should add a brief comment to make sure anyone else reading the code also understands what is happening there. For example:
-
-   ```python
-   f = lambda: 'empty'  # noqa: E731  # assign lambda expression for testing
-   ```
-
 ### Module structure
 
 In general, you should structure new Python modules in the following way:
@@ -58,7 +50,7 @@ In general, you should structure new Python modules in the following way:
    1. Block of imports from the standard library.
    2. Block of imports from general third party libraries using standard shortcuts when customary (e.g. `numpy as np`).
    3. Block of imports from specific modules of the project.
-5. (Optional, mainly for re-exporting symbols) Definition of exported symbols:   
+5. (Optional, mainly for re-exporting symbols from other modules) Definition of exported symbols:   
 ```python
 __all__ = ["func_a", "CONST_B"]
    ```
@@ -67,10 +59,17 @@ __all__ = ["func_a", "CONST_B"]
 
 Try to keep sections and items within sections ordered logically, adding comments to make it explicit if needed (also in configuration files). If there is not one single evident logical order, just pick the order you consider best or use alphabetical order.
 
+### Ignoring QA errors
+
+You may ocassionally need to disable checks from _quality assurance_  (QA) tools (e.g. linters, type checkers, etc.) on specific lines because the tool is not able to fully understand why that piece of code is needed. This is usually feasible inlining a special comment like `# type: ignore`. You should **only** ignore QA errors when you fully understand its cause and it is not reasonable to fix it by rewriting the offending code in a different way. Additionally, you should add a brief comment to make sure anyone else reading the code also understands what is happening there. For example:
+
+   ```python
+   f = lambda: 'empty'  # noqa: E731  # assign lambda expression for testing
+   ```
 
 ## Testing 
 
-Testing components is a critical part of a software development project. We follow standard practices of software development and write unit, integration and regression tests. Note that even [doctests][doctest] are great for documentation purposes, they lack many features and are not easy to debug. Hence, they should not be used as replacement for proper unit tests except for trivial cases.
+Testing components is a critical part of a software development project. We follow standard practices in software development and write unit, integration and regression tests. Note that even [doctests][doctest] are great for documentation purposes, they lack many features and are not easy to debug. Hence, they should not be used as replacement for proper unit tests except for trivial cases.
  
 TODO: add test conventions
 <!--
