@@ -27,3 +27,18 @@ def test_basic_settings_with_cpp_rejected():
                 formatter_key="cpp", formatter_style="llvm", file_extension="cpp"
             ),
         )
+
+
+def test_header_files_settings_with_cpp_accepted():
+    source_modules.SourceModule(
+        entry_point=source_modules.Function(name="basic_settings_with_cpp", parameters=[]),
+        source_code="",
+        library_deps=(),
+        language=source_modules.Cpp,
+        language_settings=source_modules.LanguageWithHeaderFilesSettings(
+            formatter_key="cpp",
+            formatter_style="llvm",
+            file_extension="cpp",
+            header_extension="hpp",
+        ),
+    )
