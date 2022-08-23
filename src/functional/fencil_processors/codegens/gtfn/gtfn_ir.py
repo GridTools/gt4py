@@ -14,7 +14,7 @@
 
 from __future__ import annotations
 
-from typing import ClassVar, List, Optional, Union
+from typing import ClassVar, Optional, Union
 
 import eve
 from eve import Coerced, SymbolName, SymbolRef
@@ -67,24 +67,31 @@ class SymRef(Expr):
 
 
 class Lambda(Expr, SymbolTableTrait):
-    params: List[Sym]
+    params: list[Sym]
     expr: Expr
 
 
 class FunCall(Expr):
     fun: Expr  # VType[Callable]
-    args: List[Expr]
+    args: list[Expr]
 
 
 class FunctionDefinition(Node, SymbolTableTrait):
     id: Coerced[SymbolName]  # noqa: A003
-    params: List[Sym]
+    params: list[Sym]
     expr: Expr
 
 
+class ScanPassDefinition(Node, SymbolTableTrait):
+    id: Coerced[SymbolName]  # noqa: A003
+    params: list[Sym]
+    expr: Expr
+    forward: bool
+
+
 class TaggedValues(Node):
-    tags: List[Expr]
-    values: List[Expr]
+    tags: list[Expr]
+    values: list[Expr]
 
 
 class CartesianDomain(Node):
@@ -95,7 +102,7 @@ class CartesianDomain(Node):
 class UnstructuredDomain(Node):
     tagged_sizes: TaggedValues
     tagged_offsets: TaggedValues
-    connectivities: List[SymRef]  # SymRef to offset declaration
+    connectivities: list[SymRef]  # SymRef to offset declaration
 
 
 class Backend(Node):
@@ -103,14 +110,34 @@ class Backend(Node):
 
 
 class SidComposite(Expr):
-    values: List[Union[SymRef, SidComposite]]
+    values: list[Union[SymRef, SidComposite]]
 
 
 class StencilExecution(Node):
     backend: Backend
-    stencil: SymRef  # TODO should be list of assigns for canonical `scan`
+    stencil: SymRef
     output: Union[SymRef, SidComposite]
-    inputs: List[SymRef]
+    inputs: list[SymRef]
+
+
+class Scan(Node):
+    function: SymRef
+    output: Literal
+    inputs: list[Literal]
+    init: Expr
+
+
+class ScanExecution(Node):
+    backend: Backend
+    scans: list[Scan]
+    args: list[SymRef]
+    axis: SymRef
+
+
+class TemporaryAllocation(Node):
+    id: SymbolName  # noqa: A003
+    dtype: str
+    domain: Union[SymRef, CartesianDomain, UnstructuredDomain]
 
 
 UNARY_MATH_NUMBER_BUILTINS = itir.UNARY_MATH_NUMBER_BUILTINS
@@ -141,10 +168,11 @@ class TagDefinition(Node):
 
 class FencilDefinition(Node, ValidatedSymbolTableTrait):
     id: SymbolName  # noqa: A003
-    params: List[Sym]
-    function_definitions: List[FunctionDefinition]
-    executions: List[StencilExecution]
-    offset_definitions: List[TagDefinition]
+    params: list[Sym]
+    function_definitions: list[Union[FunctionDefinition, ScanPassDefinition]]
+    executions: list[Union[StencilExecution, ScanExecution]]
+    offset_definitions: list[TagDefinition]
     grid_type: common.GridType
+    temporaries: list[TemporaryAllocation]
 
-    _NODE_SYMBOLS_: ClassVar[List[Sym]] = [Sym(id=name) for name in BUILTINS]
+    _NODE_SYMBOLS_: ClassVar[list[Sym]] = [Sym(id=name) for name in BUILTINS]

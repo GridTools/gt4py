@@ -25,9 +25,10 @@ from eve.codegen import FormatTemplate as as_fmt, MakoTemplate as as_mako
 from eve.concepts import Node
 from functional.common import Dimension
 from functional.fencil_processors.processor_interface import fencil_executor
+from functional.iterator import ir as itir
 from functional.iterator.embedded import NeighborTableOffsetProvider
-from functional.iterator.ir import AxisLiteral, FencilDefinition, OffsetLiteral
-from functional.iterator.transforms import apply_common_transforms
+from functional.iterator.transforms import LiftMode, apply_common_transforms
+from functional.iterator.transforms.global_tmps import FencilWithTemporaries
 
 
 class EmbeddedDSL(codegen.TemplatedGenerator):
@@ -56,39 +57,44 @@ def ${id}(${','.join(params)}):
     """
     )
 
-
-# TODO this wrapper should be replaced by an extension of the IR
-class WrapperGenerator(EmbeddedDSL):
-    def visit_FencilDefinition(self, node: FencilDefinition, *, tmps):
+    # extension required by global_tmps
+    def visit_FencilWithTemporaries(self, node, **kwargs):
         params = self.visit(node.params)
-        non_tmp_params = [param for param in params if param not in tmps]
 
-        body = []
-        for tmp, domain in tmps.items():
-            axis_literals = [named_range.args[0].value for named_range in domain.args]
-            origin = (
-                "{"
-                + ", ".join(
-                    f"{named_range.args[0].value}: -{self.visit(named_range.args[1])}"
-                    for named_range in domain.args
-                )
-                + "}"
-            )
-            shape = (
-                "("
-                + ", ".join(
-                    f"{self.visit(named_range.args[2])}-{self.visit(named_range.args[1])}"
-                    for named_range in domain.args
-                )
-                + ")"
-            )
-            body.append(
-                f"{tmp} = np_as_located_field({','.join(axis_literals)}, origin={origin})(np.full({shape}, np.nan))"
-            )
+        def np_dtype(dtype):
+            if isinstance(dtype, int):
+                return params[dtype] + ".dtype"
+            if isinstance(dtype, tuple):
+                return "np.dtype([" + ", ".join(f"('', {np_dtype(d)})" for d in dtype) + "])"
+            return f"np.dtype('{dtype}')"
 
-        body.append(f"{node.id}({','.join(params)}, **kwargs)")
-        body_str = "\n    ".join(body)
-        return f"\ndef {node.id}_wrapper({','.join(non_tmp_params)}, **kwargs):\n    {body_str}\n"
+        tmps = "\n    ".join(self.visit(node.tmps, np_dtype=np_dtype))
+        args = ", ".join(params + [tmp.id for tmp in node.tmps])
+        params = ", ".join(params)
+        fencil = self.visit(node.fencil)
+        return (
+            fencil
+            + "\n"
+            + f"def {node.fencil.id}_wrapper({params}, **kwargs):\n    "
+            + tmps
+            + f"\n    {node.fencil.id}({args}, **kwargs)\n"
+        )
+
+    def visit_Temporary(self, node, *, np_dtype, **kwargs):
+        assert isinstance(node.domain, itir.FunCall) and node.domain.fun.id in (
+            "cartesian_domain",
+            "unstructured_domain",
+        )
+        assert all(
+            isinstance(r, itir.FunCall) and r.fun == itir.SymRef(id="named_range")
+            for r in node.domain.args
+        )
+        domain_ranges = [self.visit(r.args) for r in node.domain.args]
+        axes = ", ".join(label for label, _, _ in domain_ranges)
+        origin = "{" + ", ".join(f"{label}: -{start}" for label, start, _ in domain_ranges) + "}"
+        shape = "(" + ", ".join(f"{stop}-{start}" for _, start, stop in domain_ranges) + ")"
+        dtype = np_dtype(node.dtype)
+        return f"{node.id} = np_as_located_field({axes}, origin={origin})(np.empty({shape}, dtype={dtype}))"
 
 
 _BACKEND_NAME = "roundtrip"
@@ -99,7 +105,7 @@ _FENCIL_CACHE: dict[int, Callable] = {}
 def fencil_generator(
     ir: Node,
     debug: bool,
-    use_tmps: bool,
+    lift_mode: LiftMode,
     use_embedded: bool,
     offset_provider: dict[str, NeighborTableOffsetProvider],
 ) -> Callable:
@@ -109,7 +115,7 @@ def fencil_generator(
     Arguments:
         ir: The iterator IR (ITIR) node.
         debug: Keep module source containing fencil implementation.
-        use_tmps: Apply global temporary extraction pass (see :py:class:`functional.iterator.transforms.global_tmps.CreateGlobalTmps`).
+        lift_mode: Change the way lifted function calls are evaluated.
         use_embedded: Directly use builtins from embedded backend instead of
                       generic dispatcher. Gives faster performance and is easier
                       to debug.
@@ -117,30 +123,22 @@ def fencil_generator(
     """
     # TODO(tehrengruber): just a temporary solution until we have a proper generic
     #  caching mechanism
-    cache_key = hash((ir, use_tmps, debug, use_embedded, tuple(offset_provider.items())))
+    cache_key = hash((ir, lift_mode, debug, use_embedded, tuple(offset_provider.items())))
     if cache_key in _FENCIL_CACHE:
         return _FENCIL_CACHE[cache_key]
 
-    tmps = {}
-
-    def register_tmp(tmp, domain):
-        tmps[tmp] = domain
-
-    ir = apply_common_transforms(
-        ir, use_tmps=use_tmps, offset_provider=offset_provider, register_tmp=register_tmp
-    )
+    ir = apply_common_transforms(ir, lift_mode=lift_mode, offset_provider=offset_provider)
 
     program = EmbeddedDSL.apply(ir)
-    wrapper = WrapperGenerator.apply(ir, tmps=tmps)
     offset_literals: Iterable[str] = (
         ir.pre_walk_values()
-        .if_isinstance(OffsetLiteral)
+        .if_isinstance(itir.OffsetLiteral)
         .getattr("value")
         .if_isinstance(str)
         .to_set()
     )
     axis_literals: Iterable[str] = (
-        ir.pre_walk_values().if_isinstance(AxisLiteral).getattr("value").to_set()
+        ir.pre_walk_values().if_isinstance(itir.AxisLiteral).getattr("value").to_set()
     )
 
     if use_embedded:
@@ -169,19 +167,18 @@ def fencil_generator(
         source_file.write("\n".join(axis_literals))
         source_file.write("\n")
         source_file.write(program)
-        source_file.write(wrapper)
 
     try:
         spec = importlib.util.spec_from_file_location("module.name", source_file_name)
-        foo = importlib.util.module_from_spec(spec)  # type: ignore
-        spec.loader.exec_module(foo)  # type: ignore
+        mod = importlib.util.module_from_spec(spec)  # type: ignore
+        spec.loader.exec_module(mod)  # type: ignore
     finally:
         if not debug:
             pathlib.Path(source_file_name).unlink(missing_ok=True)
 
-    assert isinstance(ir, FencilDefinition)
-    fencil_name = ir.id
-    fencil = getattr(foo, fencil_name + "_wrapper")
+    assert isinstance(ir, (itir.FencilDefinition, FencilWithTemporaries))
+    fencil_name = ir.fencil.id + "_wrapper" if isinstance(ir, FencilWithTemporaries) else ir.id
+    fencil = getattr(mod, fencil_name)
 
     _FENCIL_CACHE[cache_key] = fencil
 
@@ -195,14 +192,14 @@ def executor(
     column_axis: Optional[Dimension] = None,
     offset_provider: dict[str, NeighborTableOffsetProvider],
     debug: bool = False,
-    use_tmps: bool = False,
+    lift_mode: LiftMode = LiftMode.FORCE_INLINE,
     dispatch_backend: Optional[str] = None,
 ) -> None:
     fencil = fencil_generator(
         ir,
         offset_provider=offset_provider,
         debug=debug,
-        use_tmps=use_tmps,
+        lift_mode=lift_mode,
         use_embedded=dispatch_backend is None,
     )
 

@@ -16,10 +16,18 @@ from functional.iterator import ir as itir
 from functional.iterator.pretty_parser import pparse
 from functional.iterator.pretty_printer import pformat
 from functional.iterator.runtime import FendefDispatcher
+from functional.iterator.transforms import LiftMode
 
 
-@pytest.fixture(params=[False, True], ids=lambda p: f"use_tmps={p}")
-def use_tmps(request):
+@pytest.fixture(
+    params=[
+        LiftMode.FORCE_INLINE,
+        LiftMode.FORCE_TEMPORARIES,
+        LiftMode.SIMPLE_HEURISTIC,
+    ],
+    ids=lambda p: f"lift_mode={p.name}",
+)
+def lift_mode(request):
     return request.param
 
 
