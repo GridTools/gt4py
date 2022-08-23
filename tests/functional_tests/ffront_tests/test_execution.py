@@ -811,26 +811,22 @@ def test_solve_triag(fieldview_backend):
 
     np.allclose(expected, out)
 
+
 def test_docstring():
     size = 10
     a = np_as_located_field(IDim)(np.ones((size,)))
 
     @field_operator
-    def _test_docstring(
-            a: Field[[IDim], float64]
-    ) -> Field[[IDim], float64]:
-        '''3 '''
-        #Hello
+    def _test_docstring(a: Field[[IDim], float64]) -> Field[[IDim], float64]:
+        """3"""
+        # Hello
 
         a = a
         return a
 
     @program
-    def test_docstring(
-            a: Field[[IDim], float64]
-    ) -> Field[[IDim], float64]:
-        '''3 '''
-        _test_docstring(a, out = a)
-
+    def test_docstring(a: Field[[IDim], float64]) -> Field[[IDim], float64]:
+        """3"""
+        _test_docstring(a, out=a)
 
     test_docstring(a, offset_provider={})

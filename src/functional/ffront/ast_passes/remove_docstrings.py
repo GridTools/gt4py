@@ -18,22 +18,24 @@ import dataclasses
 @dataclasses.dataclass(kw_only=True)
 class RemoveDocstrings(ast.NodeTransformer):
     """
-    Docstrings within a field_operator or program appear as type ast.Expr with ast.Constant value of type string
+    Description.
+
+    Docstrings within a field_operator or program appear as type ast.Expr with ast.Constant value of type string.
     If such patterns is detected, this entry in the node.body list is removed.
     """
 
     _parent_node: ast.AST
 
     @classmethod
-    def apply(cls, node: ast.AST) -> ast.AST:
+    def apply(cls, node):
         return cls(_parent_node=node).visit(node)
 
-    def generic_visit(self, node: ast.AST) -> ast.AST:
-
-        if hasattr(node, "body"):
-            for obj in node.body:
+    def generic_visit(self, node):
+        new_node = self._parent_node
+        if hasattr(new_node, "body"):
+            for obj in new_node.body:
                 if isinstance(obj, ast.Expr):
                     if isinstance(obj.value, ast.Constant) and isinstance(obj.value.value, str):
-                        node.body.remove(obj)
+                        new_node.body.remove(obj)
 
-        return node
+        return new_node
