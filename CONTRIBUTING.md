@@ -163,7 +163,7 @@ copy will be written in `tests/_reports/coverage_html/` at the end of the run.
 Before you submit a pull request, check that it meets these guidelines:
 
 1. The pull request should include tests.
-2. If the pull request adds functionality, it should be documented both in the code docstrings and in the official documentation. If there
+2. If the pull request adds functionality, it should be documented both in the code docstrings and in the official documentation.
 3. If the pull request contains important design changes, it should contain a new ADR documenting the rationale behind the final decision.
 4. The pull request should have a proper description of its intent and the main changes in the code. In general this description should be used as commit message if the PR is approved (check point **6.** below).
 5. Pick one reviewer and try to contact him directly to let him know about the PR. If there is no feedback in 24h/48h try to contact him again or pick another reviewer.
