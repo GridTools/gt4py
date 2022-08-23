@@ -114,7 +114,7 @@ class SourceModule(Generic[SrcL, SettingT]):
     language: type[SrcL]
     language_settings: SettingT
 
-    def __post__init__(self):
+    def __post_init__(self):
         if not issubclass(self.__class__, self.language.settings_level):
             raise TypeError(
                 f"Wrong language settings type for {self.language}, must be subclass of {self.language.settings_level}"
