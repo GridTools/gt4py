@@ -5,20 +5,26 @@ import pytest
 from functional.fencil_processors import processor_interface as fpi, type_check
 from functional.fencil_processors.formatters import gtfn, lisp
 from functional.fencil_processors.runners import double_roundtrip, gtfn_cpu, roundtrip
-from functional.iterator import ir as itir, runtime
+from functional.iterator import ir as itir, runtime, transforms
 from functional.iterator.pretty_parser import pparse
-from functional.iterator.pretty_printer import pformat
 
 
-@pytest.fixture(params=[False, True], ids=lambda p: f"use_tmps={p}")
-def use_tmps(request):
+@pytest.fixture(
+    params=[
+        transforms.LiftMode.FORCE_INLINE,
+        transforms.LiftMode.FORCE_TEMPORARIES,
+        transforms.LiftMode.SIMPLE_HEURISTIC,
+    ],
+    ids=lambda p: f"lift_mode={p.name}",
+)
+def lift_mode(request):
     return request.param
 
 
 @fpi.fencil_formatter
 def pretty_format_and_check(root: itir.FencilDefinition, *args, **kwargs) -> str:
-    pretty = pformat(root)
-    parsed = pparse(pretty)
+    pretty = pparse.pformat(root)
+    parsed = pparse.pparse(pretty)
     assert parsed == root
     return pretty
 

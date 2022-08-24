@@ -19,18 +19,10 @@
 
 from __future__ import annotations
 
-from importlib.metadata import PackageNotFoundError, version
-from typing import Final, Optional, Union
+import typing
 
-from packaging.version import LegacyVersion, Version, parse
-
-
-# TODO(egparedes): Set up proper versioning scheme after migrating repo to new location
-try:
-    _version: str = version("gt4py-functional")
-except PackageNotFoundError:
-    _version = "X.X.X.unknown"
+from packaging import version as pkg_version
 
 
-__version__: Final = _version
-__versioninfo__: Final[Optional[Union[LegacyVersion, Version]]] = parse(__version__)
+__version__: typing.Final = "0.2.0"
+__version_info__: typing.Final = pkg_version.parse(__version__)

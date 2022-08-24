@@ -23,6 +23,8 @@ from functional.ffront.fbuiltins import Dimension, FieldOffset
 float64 = float
 IDim = Dimension("IDim")
 Ioff = FieldOffset("Ioff", source=IDim, target=(IDim,))
+JDim = Dimension("JDim")
+Joff = FieldOffset("Joff", source=JDim, target=(JDim,))
 
 
 # TODO(tehrengruber): Improve test structure. Identity needs to be decorated

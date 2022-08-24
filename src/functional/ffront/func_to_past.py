@@ -50,6 +50,7 @@ class ProgramParser(DialectParser[past.Program]):
 
         return past.Program(
             id=node.name,
+            type=common_types.DeferredSymbolType(constraint=common_types.ProgramType),
             params=self.visit(node.args),
             body=[self.visit(node) for node in node.body],
             captured_vars=captured_vars,

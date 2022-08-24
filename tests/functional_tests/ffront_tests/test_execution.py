@@ -186,7 +186,7 @@ def test_unary_neg(fieldview_backend):
 def test_shift(fieldview_backend):
     size = 10
     Ioff = FieldOffset("Ioff", source=IDim, target=(IDim,))
-    a = np_as_located_field(IDim)(np.arange(size + 1))
+    a = np_as_located_field(IDim)(np.arange(size + 1, dtype=np.float64))
     b = np_as_located_field(IDim)(np.zeros((size)))
 
     @field_operator
@@ -206,7 +206,7 @@ def test_fold_shifts(fieldview_backend):
     """Shifting the result of an addition should work."""
     size = 10
     Ioff = FieldOffset("Ioff", source=IDim, target=(IDim,))
-    a = np_as_located_field(IDim)(np.arange(size + 1))
+    a = np_as_located_field(IDim)(np.arange(size + 1, dtype=np.float64))
     b = np_as_located_field(IDim)(np.ones((size + 2)) * 2)
     c = np_as_located_field(IDim)(np.zeros((size)))
 
@@ -333,8 +333,8 @@ def reduction_setup():
         E2VDim=e2vdim,
         V2E=FieldOffset("V2E", source=edge, target=(vertex, v2edim)),
         E2V=FieldOffset("E2V", source=vertex, target=(edge, e2vdim)),
-        inp=index_field(edge),
-        out=np_as_located_field(vertex)(np.zeros([num_vertices])),
+        inp=index_field(edge, dtype=np.int64),
+        out=np_as_located_field(vertex)(np.zeros([num_vertices], dtype=np.int64)),
         offset_provider={
             "V2E": NeighborTableOffsetProvider(v2e_arr, vertex, edge, 4),
             "E2V": NeighborTableOffsetProvider(e2v_arr, edge, vertex, 2, has_skip_values=False),
@@ -402,11 +402,11 @@ def test_reduction_execution(reduction_setup, fieldview_backend):
     V2E = rs.V2E
 
     @field_operator
-    def reduction(edge_f: Field[[Edge], "float64"]) -> Field[[Vertex], float64]:
+    def reduction(edge_f: Field[[Edge], int64]) -> Field[[Vertex], int64]:
         return neighbor_sum(edge_f(V2E), axis=V2EDim)
 
     @program(backend=fieldview_backend)
-    def fencil(edge_f: Field[[Edge], float64], out: Field[[Vertex], float64]) -> None:
+    def fencil(edge_f: Field[[Edge], int64], out: Field[[Vertex], int64]) -> None:
         reduction(edge_f, out=out)
 
     fencil(rs.inp, rs.out, offset_provider=rs.offset_provider)
@@ -445,13 +445,13 @@ def test_reduction_expression(reduction_setup, fieldview_backend):
     V2E = rs.V2E
 
     @field_operator
-    def reduce_expr(edge_f: Field[[Edge], "float64"]) -> Field[[Vertex], float64]:
+    def reduce_expr(edge_f: Field[[Edge], int64]) -> Field[[Vertex], int64]:
         tmp_nbh_tup = edge_f(V2E), edge_f(V2E)
         tmp_nbh = tmp_nbh_tup[0]
-        return 3.0 * neighbor_sum(-edge_f(V2E) * tmp_nbh * 2.0, axis=V2EDim)
+        return 3 * neighbor_sum(-edge_f(V2E) * tmp_nbh * 2, axis=V2EDim)
 
     @program(backend=fieldview_backend)
-    def fencil(edge_f: Field[[Edge], float64], out: Field[[Vertex], float64]) -> None:
+    def fencil(edge_f: Field[[Edge], int64], out: Field[[Vertex], int64]) -> None:
         reduce_expr(edge_f, out=out)
 
     fencil(rs.inp, rs.out, offset_provider=rs.offset_provider)
@@ -486,8 +486,8 @@ def test_scalar_arg_with_field(fieldview_backend):
     EdgeOffset = FieldOffset("EdgeOffset", source=Edge, target=(Edge,))
     size = 5
     inp = index_field(Edge)
-    factor = 3
-    out = np_as_located_field(Edge)(np.zeros([size]))
+    factor = 3.0
+    out = np_as_located_field(Edge)(np.zeros((size), dtype=np.float64))
 
     @field_operator
     def scalar_and_field_args(
@@ -508,8 +508,8 @@ def test_scalar_arg_with_field(fieldview_backend):
 
 def test_broadcast_simple(fieldview_backend):
     size = 10
-    a = np_as_located_field(IDim)(np.arange(0, size, 1, dtype=int))
-    out = np_as_located_field(IDim, JDim)(np.zeros((size, size)))
+    a = np_as_located_field(IDim)(np.arange(0, size, 1, dtype=int64))
+    out = np_as_located_field(IDim, JDim)(np.zeros((size, size), dtype=int64))
 
     @field_operator(backend=fieldview_backend)
     def simple_broadcast(inp: Field[[IDim], int64]) -> Field[[IDim, JDim], int64]:
@@ -535,10 +535,10 @@ def test_broadcast_scalar(fieldview_backend):
 
 def test_broadcast_two_fields(fieldview_backend):
     size = 10
-    a = np_as_located_field(IDim)(np.arange(0, size, 1, dtype=int))
-    b = np_as_located_field(JDim)(np.arange(0, size, 1, dtype=int))
+    a = np_as_located_field(IDim)(np.arange(0, size, 1, dtype=int64))
+    b = np_as_located_field(JDim)(np.arange(0, size, 1, dtype=int64))
 
-    out = np_as_located_field(IDim, JDim)(np.zeros((size, size)))
+    out = np_as_located_field(IDim, JDim)(np.zeros((size, size), dtype=int64))
 
     @field_operator(backend=fieldview_backend)
     def broadcast_two_fields(
@@ -560,7 +560,7 @@ def test_broadcast_shifted(fieldview_backend):
 
     size = 10
     a = np_as_located_field(IDim)(np.arange(0, size, 1, dtype=int))
-    out = np_as_located_field(IDim, JDim)(np.zeros((size, size)))
+    out = np_as_located_field(IDim, JDim)(np.zeros((size, size), dtype=int64))
 
     @field_operator(backend=fieldview_backend)
     def simple_broadcast(inp: Field[[IDim], int64]) -> Field[[IDim, JDim], int64]:
@@ -629,7 +629,8 @@ def test_conditional_shifted(fieldview_backend):
     size = 10
     mask = np_as_located_field(IDim)(np.zeros((size,), dtype=bool))
     mask.array()[size // 2] = True
-    a = np_as_located_field(IDim)(np.arange(0, size, 1))
+    a = np_as_located_field(IDim)(np.arange(0, size, 1, dtype=float64))
+    a = np_as_located_field(IDim)(np.arange(0, size, 1, dtype=float64))
     b = np_as_located_field(IDim)(np.zeros((size,)))
     out = np_as_located_field(IDim)(np.zeros((size,)))
 
@@ -685,14 +686,14 @@ def test_tuple_return_2(reduction_setup):
 
     @field_operator
     def reduction_tuple(
-        a: Field[[Edge], float], b: Field[[Edge], float]
-    ) -> tuple[Field[[Vertex], float], Field[[Vertex], float], float]:
+        a: Field[[Edge], int64], b: Field[[Edge], int64]
+    ) -> tuple[Field[[Vertex], int64], Field[[Vertex], int64], int64]:
         a = neighbor_sum(a(V2E), axis=V2EDim)
         b = neighbor_sum(b(V2E), axis=V2EDim)
         return a, b
 
     @field_operator
-    def combine_tuple(a: Field[[Edge], float], b: Field[[Edge], float]) -> Field[[Vertex], float]:
+    def combine_tuple(a: Field[[Edge], int64], b: Field[[Edge], int64]) -> Field[[Vertex], int64]:
         packed = reduction_tuple(a, b)
         return packed[0] + packed[1]
 

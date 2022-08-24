@@ -58,7 +58,7 @@ def hdiff(inp, coeff, out, x, y):
     )
 
 
-def test_hdiff(hdiff_reference, fencil_processor, use_tmps):
+def test_hdiff(hdiff_reference, fencil_processor, lift_mode):
     fencil_processor, validate = fencil_processor
     if fencil_processor == run_gtfn:
         pytest.xfail("origin not yet supported in gtfn")
@@ -71,7 +71,7 @@ def test_hdiff(hdiff_reference, fencil_processor, use_tmps):
     out_s = np_as_located_field(IDim, JDim)(np.zeros_like(coeff[:, :, 0]))
 
     run_processor(
-        hdiff, fencil_processor, inp_s, coeff_s, out_s, shape[0], shape[1], use_tmps=use_tmps
+        hdiff, fencil_processor, inp_s, coeff_s, out_s, shape[0], shape[1], lift_mode=lift_mode
     )
 
     if validate:

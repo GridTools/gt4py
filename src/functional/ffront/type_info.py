@@ -543,6 +543,13 @@ def function_signature_incompatibilities_scanop(
 
 
 @function_signature_incompatibilities.register
+def function_signature_incompatibilities_program(
+    program_type: ct.ProgramType, args: list[ct.SymbolType], kwargs: dict[str, ct.SymbolType]
+) -> Iterator[str]:
+    yield from function_signature_incompatibilities_func(program_type.definition, args, kwargs)
+
+
+@function_signature_incompatibilities.register
 def function_signature_incompatibilities_field(
     field_type: ct.FieldType, args: list[ct.SymbolType], kwargs: dict[str, ct.SymbolType]
 ) -> Iterator[str]:

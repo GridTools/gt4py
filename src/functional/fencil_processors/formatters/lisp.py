@@ -59,7 +59,7 @@ class ToLispLike(TemplatedGenerator):
     @classmethod
     def apply(cls, root, **kwargs: Any) -> str:
         transformed = apply_common_transforms(
-            root, use_tmps=kwargs.get("use_tmps", False), offset_provider=kwargs["offset_provider"]
+            root, lift_mode=kwargs.get("lift_mode"), offset_provider=kwargs["offset_provider"]
         )
         generated_code = super().apply(transformed, **kwargs)
         try:
