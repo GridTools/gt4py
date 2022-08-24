@@ -123,7 +123,19 @@ def test_copy_restrict_lowering(copy_restrict_program_def, itir_identity_fundef)
     fencil_pattern.match(itir_node, raise_exception=True)
 
 
-@pytest.mark.xfail(reason="slicing in tuple expr not yet supported.")
+def test_tuple_constructed_in_out_with_slicing(make_tuple_op):
+    def tuple_program(
+        inp: Field[[IDim], float64], out1: Field[[IDim], float64], out2: Field[[IDim], float64]
+    ):
+        make_tuple_op(inp, out=(out1[1:], out2[1:]))
+
+    parsed = ProgramParser.apply_to_function(tuple_program)
+    ProgramLowering.apply(parsed, function_definitions=[], grid_type=GridType.CARTESIAN)
+
+
+@pytest.mark.xfail(
+    reason="slicing is only allowed if all fields are sliced in the same way."
+)  # see ADR 10
 def test_tuple_constructed_in_out_with_slicing(make_tuple_op):
     def tuple_program(
         inp: Field[[IDim], float64], out1: Field[[IDim], float64], out2: Field[[IDim], float64]
