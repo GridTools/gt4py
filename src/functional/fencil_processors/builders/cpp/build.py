@@ -14,17 +14,17 @@
 """Build system functionality."""
 
 
+import dataclasses
 import importlib
 import json
 import pathlib
 import subprocess
 import textwrap
-from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Callable, Sequence
 
 import eve
-from eve.codegen import JinjaTemplate as as_jinja, TemplatedGenerator
+from eve.codegen import JinjaTemplate as as_jinja
 from functional.fencil_processors import pipeline
 from functional.fencil_processors.builders import cache, importer
 from functional.fencil_processors.source_modules import source_modules
@@ -48,7 +48,7 @@ class CMakeListsFile(eve.Node):
     bin_output_suffix: str
 
 
-class CMakeListsGenerator(TemplatedGenerator):
+class CMakeListsGenerator(eve.codegen.TemplatedGenerator):
     CMakeListsFile = as_jinja(
         """
         project({{project_name}})
@@ -137,26 +137,25 @@ def _get_python_module_suffix():
     return importlib.machinery.EXTENSION_SUFFIXES[0][1:]
 
 
-@dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True)
 class CompileCommandProject(pipeline.BuildProject):
     """Use CMake to configure a valid compile command and then just compile."""
 
-    source_module: source_modules.SourceModule[source_modules.LanguageWithHeaders]
+    source_module: source_modules.SourceModule[
+        source_modules.Cpp, source_modules.LanguageWithHeaderFilesSettings
+    ]
     bindings_module: source_modules.BindingModule
     cache_strategy: cache.Strategy
 
     def get_compile_command(
         self, reconfigure: bool = False
     ) -> tuple[list[dict[str, str]], bool, pathlib.Path]:
-        sentinel_source_module = source_modules.SourceModule(
+        sentinel_source_module = dataclasses.replace(
+            self.source_module,
             entry_point=source_modules.Function("cc_sentry", parameters=()),
             source_code="",
-            library_deps=self.source_module.library_deps,
-            language=self.source_module.language,
         )
-        sentinel_binding_module = source_modules.BindingModule(
-            source_code="", library_deps=self.bindings_module.library_deps
-        )
+        sentinel_binding_module = dataclasses.replace(self.bindings_module, source_code="")
         sentinel_project = CMakeProject(
             sentinel_source_module,
             sentinel_binding_module,
@@ -203,9 +202,9 @@ class CompileCommandProject(pipeline.BuildProject):
         return self.src_dir / "bin" / (self.name + "." + _get_python_module_suffix())
 
     def build(self) -> None:
-        header_name = self.name + "." + self.source_module.language.include_extension
+        header_name = self.name + "." + self.source_module.language_settings.header_extension
         bindings_name = (
-            self.name + "_bindings" + "." + self.source_module.language.implementation_extension
+            self.name + "_bindings" + "." + self.source_module.language_settings.file_extension
         )
         files = {
             header_name: self.source_module.source_code,
@@ -239,9 +238,8 @@ class CompileCommandProject(pipeline.BuildProject):
                 "CMakeFiles/cc_sentry.dir", "build"
             ).replace("cc_sentry", self.name)
 
-            logfile.write_text("\n" + " ".join(cmd))
-
             with logfile.open(mode="a") as log_fp:
+                log_fp.write("\n" + " ".join(cmd))
                 subprocess.check_call(
                     " ".join(cmd), cwd=root, shell=True, stdout=log_fp, stderr=log_fp
                 )
@@ -258,14 +256,16 @@ class CompileCommandProject(pipeline.BuildProject):
         return getattr(importer.import_from_path(self.binary_file), self.name)
 
 
-@dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True)
 class CMakeProject(pipeline.BuildProject):
     """Represent a CMake project for an externally compiled fencil."""
 
-    source_module: source_modules.SourceModule[source_modules.LanguageWithHeaders]
-    bindings_module: source_modules.BindingModule
+    source_module: source_modules.SourceModule[
+        source_modules.Cpp, source_modules.LanguageWithHeaderFilesSettings
+    ]
+    bindings_module: source_modules.BindingModule[source_modules.Cpp, source_modules.Python]
     cache_strategy: cache.Strategy
-    extra_cmake_flags: list[str] = field(default_factory=list)
+    extra_cmake_flags: list[str] = dataclasses.field(default_factory=list)
 
     @property
     def name(self) -> str:
@@ -273,9 +273,9 @@ class CMakeProject(pipeline.BuildProject):
 
     @property
     def sources(self) -> dict[str, str]:
-        header_name = self.name + "." + self.source_module.language.include_extension
+        header_name = self.name + "." + self.source_module.language_settings.header_extension
         bindings_name = (
-            self.name + "_bindings" + "." + self.source_module.language.implementation_extension
+            self.name + "_bindings" + "." + self.source_module.language_settings.file_extension
         )
         return {
             header_name: self.source_module.source_code,

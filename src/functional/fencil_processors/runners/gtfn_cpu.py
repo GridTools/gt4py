@@ -16,33 +16,34 @@
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
-import numpy
+import numpy as np
 
+from functional.fencil_processors import pipeline, processor_interface as fpi
 from functional.fencil_processors.builders import cache
-from functional.fencil_processors.builders.cpp import bindings
-from functional.fencil_processors.builders.cpp.build import CompileCommandProject
+from functional.fencil_processors.builders.cpp import bindings, build
 from functional.fencil_processors.codegens.gtfn import gtfn_module
-from functional.fencil_processors.pipeline import BuildProjectGenerator
-from functional.fencil_processors.processor_interface import FencilExecutor, FencilProcessorProtocol
-from functional.fencil_processors.source_modules.cpp_gen import CPP_DEFAULT, CppLanguage
-from functional.iterator import ir
+from functional.fencil_processors.source_modules import cpp_gen, source_modules
+from functional.iterator import ir as itir
 
 
+# TODO(ricoh): Add support for the whole range of arguments that can be passed to a fencil.
 def convert_arg(arg: Any) -> Any:
-    view = numpy.asarray(arg)
+    view = np.asarray(arg)
     if view.ndim > 0:
-        return memoryview(view)  # type: ignore[arg-type] # mypy seems unaware that ndarray is compatible with buffer protocol
+        return view
     else:
         return arg
 
 
 @dataclass(frozen=True)
-class GTFNExecutor(FencilExecutor):
-    language_settings: CppLanguage = field(default=CPP_DEFAULT)
-    build_project_gen: BuildProjectGenerator = field(default=CompileCommandProject)
+class GTFNExecutor(fpi.FencilExecutor):
+    language_settings: source_modules.LanguageWithHeaderFilesSettings = field(
+        default=cpp_gen.CPP_DEFAULT
+    )
+    build_project_gen: pipeline.BuildProjectGenerator = field(default=build.CompileCommandProject)
     name: Optional[str] = None
 
-    def __call__(self, fencil: ir.FencilDefinition, *args, **kwargs):
+    def __call__(self, fencil: itir.FencilDefinition, *args: Any, **kwargs: Any) -> None:
         """
         Execute the iterator IR fencil with the provided arguments.
 
@@ -63,8 +64,8 @@ class GTFNExecutor(FencilExecutor):
         ).get_implementation()(*[convert_arg(arg) for arg in args])
 
     @property
-    def __name__(self):
+    def __name__(self) -> str:
         return self.name or repr(self)
 
 
-run_gtfn: FencilProcessorProtocol[None, FencilExecutor] = GTFNExecutor(name="run_gtfn")
+run_gtfn: fpi.FencilProcessorProtocol[None, fpi.FencilExecutor] = GTFNExecutor(name="run_gtfn")

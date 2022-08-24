@@ -13,18 +13,16 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 
+import dataclasses
 import math
 
 import jinja2
-import numpy
 import numpy as np
 import pytest
 
-from functional.fencil_processors import source_modules
 from functional.fencil_processors.builders import cache
-from functional.fencil_processors.builders.cpp.bindings import create_bindings
-from functional.fencil_processors.builders.cpp.build import CMakeProject, CompileCommandProject
-from functional.fencil_processors.source_modules import cpp_gen as cpp
+from functional.fencil_processors.builders.cpp import bindings, build
+from functional.fencil_processors.source_modules import cpp_gen, source_modules
 
 
 @pytest.fixture
@@ -32,11 +30,11 @@ def source_module_example():
     entry_point = source_modules.Function(
         "stencil",
         parameters=[
-            source_modules.BufferParameter("buf", ["I", "J"], numpy.dtype(numpy.float32)),
-            source_modules.ScalarParameter("sc", numpy.dtype(numpy.float32)),
+            source_modules.BufferParameter("buf", ["I", "J"], np.dtype(np.float32)),
+            source_modules.ScalarParameter("sc", np.dtype(np.float32)),
         ],
     )
-    func = cpp.render_function_declaration(
+    func = cpp_gen.render_function_declaration(
         entry_point,
         """\
         const auto xdim = gridtools::at_key<generated::I_t>(sid_get_upper_bounds(buf));
@@ -62,14 +60,15 @@ def source_module_example():
         library_deps=[
             source_modules.LibraryDependency("gridtools", "master"),
         ],
-        language=cpp.CPP_DEFAULT,
+        language=source_modules.Cpp,
+        language_settings=cpp_gen.CPP_DEFAULT,
     )
 
 
 def test_gt_cpp_with_cmake(source_module_example):
-    wrapper = CMakeProject(
+    wrapper = build.CMakeProject(
         source_module=source_module_example,
-        bindings_module=create_bindings(source_module_example),
+        bindings_module=bindings.create_bindings(source_module_example),
         cache_strategy=cache.Strategy.SESSION,
     ).get_implementation()
     buf = np.zeros(shape=(6, 5), dtype=np.float32)
@@ -80,14 +79,14 @@ def test_gt_cpp_with_cmake(source_module_example):
 
 def test_gt_cpp_with_compile_command(source_module_example):
     wrapper = (
-        foo := CompileCommandProject(
+        foo := build.CompileCommandProject(
             source_module=source_module_example,
-            bindings_module=create_bindings(source_module_example),
+            bindings_module=bindings.create_bindings(source_module_example),
             cache_strategy=cache.Strategy.SESSION,
         )
     ).get_implementation()
-    print((foo.src_dir / "log.txt").read_text())
-    assert False
+    log = (foo.src_dir / "log.txt").read_text()
+    assert len(log.splitlines()) >= 2
     buf = np.zeros(shape=(6, 5), dtype=np.float32)
     sc = np.float32(3.1415926)
     res = wrapper(buf, sc)
@@ -95,9 +94,9 @@ def test_gt_cpp_with_compile_command(source_module_example):
 
 
 def test_compile_command_only_configures_once(source_module_example):
-    first_cc = CompileCommandProject(
+    first_cc = build.CompileCommandProject(
         source_module=source_module_example,
-        bindings_module=create_bindings(source_module_example),
+        bindings_module=bindings.create_bindings(source_module_example),
         cache_strategy=cache.Strategy.SESSION,
     )
 
@@ -105,19 +104,17 @@ def test_compile_command_only_configures_once(source_module_example):
 
     assert config_did_run is True
 
-    changed_source_module = source_modules.SourceModule(
+    changed_source_module = dataclasses.replace(
+        source_module_example,
         entry_point=source_modules.Function(
             "test_compile_command_only_configure_once_fencil",
             parameters=source_module_example.entry_point.parameters,
         ),
-        source_code=source_module_example.source_code,
-        library_deps=source_module_example.library_deps,
-        language=source_module_example.language,
     )
 
-    second_cc = CompileCommandProject(
+    second_cc = build.CompileCommandProject(
         source_module=changed_source_module,
-        bindings_module=create_bindings(changed_source_module),
+        bindings_module=bindings.create_bindings(changed_source_module),
         cache_strategy=cache.Strategy.SESSION,
     )
 

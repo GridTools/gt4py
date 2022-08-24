@@ -13,15 +13,19 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 from typing import Callable, Optional, Protocol, TypeVar
 
-from .builders.cache import Strategy as CacheStrategy
-from .source_modules.source_modules import BindingModule, SourceModule, SupportedLanguage
+from functional.fencil_processors.builders import cache
+from functional.fencil_processors.source_modules import source_modules
 
 
-LanguageT_contra = TypeVar("LanguageT_contra", bound=SupportedLanguage, contravariant=True)
+SrcL = TypeVar("SrcL", bound=source_modules.LanguageTag, covariant=True)
+TgtL = TypeVar("TgtL", bound=source_modules.LanguageTag, covariant=True)
+LS = TypeVar("LS", bound=source_modules.LanguageSettings, covariant=True)
 
 
-class BindingsGenerator(Protocol[LanguageT_contra]):
-    def __call__(self, source_module: SourceModule[LanguageT_contra]) -> BindingModule:
+class BindingsGenerator(Protocol[SrcL, LS, TgtL]):
+    def __call__(
+        self, source_module: source_modules.SourceModule[SrcL, LS]
+    ) -> source_modules.BindingModule[SrcL, TgtL]:
         ...
 
 
@@ -30,11 +34,11 @@ class BuildProject(Protocol):
         ...
 
 
-class BuildProjectGenerator(Protocol[LanguageT_contra]):
+class BuildProjectGenerator(Protocol[SrcL, LS, TgtL]):
     def __call__(
         self,
-        source_module: SourceModule[LanguageT_contra],
-        bindings_module: Optional[BindingModule],
-        cache_strategy: CacheStrategy,
+        source_module: source_modules.SourceModule[SrcL, LS],
+        bindings_module: Optional[source_modules.BindingModule[SrcL, TgtL]],
+        cache_strategy: cache.Strategy,
     ) -> BuildProject:
         ...

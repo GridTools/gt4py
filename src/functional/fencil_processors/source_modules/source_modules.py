@@ -14,10 +14,14 @@
 """Structures that provide a unified interface for connecting source code generators and builders."""
 
 
-from dataclasses import dataclass
-from typing import Generic, Protocol, TypeVar
+from __future__ import annotations
 
-import numpy
+from dataclasses import dataclass
+from typing import ClassVar, Generic, Optional, Protocol, TypeVar
+
+import numpy as np
+
+import eve.codegen
 
 
 class SupportedLanguage(Protocol):
@@ -43,20 +47,51 @@ class LanguageWithHeaders(SupportedLanguage, Protocol):
         ...
 
 
-LanguageT = TypeVar("LanguageT", bound=SupportedLanguage, covariant=True)
+class LanguageTag:
+    settings_level: ClassVar[type[LanguageSettings]]
+    ...
+
+
+SrcL = TypeVar("SrcL", bound=LanguageTag)
+TgtL = TypeVar("TgtL", bound=LanguageTag)
+
+
+@dataclass(frozen=True)
+class LanguageSettings:
+    formatter_key: str
+    formatter_style: Optional[str]
+    file_extension: str
+
+
+SettingT = TypeVar("SettingT", bound=LanguageSettings)
+
+
+@dataclass(frozen=True)
+class LanguageWithHeaderFilesSettings(LanguageSettings):
+    header_extension: str
+
+
+class Python(LanguageTag):
+    settings_level = LanguageSettings
+    ...
+
+
+class Cpp(LanguageTag):
+    settings_level = LanguageWithHeaderFilesSettings
+    ...
 
 
 @dataclass(frozen=True)
 class ScalarParameter:
     name: str
-    scalar_type: numpy.dtype
+    scalar_type: np.dtype
 
 
 @dataclass(frozen=True)
 class BufferParameter:
     name: str
     dimensions: tuple[str, ...]
-    scalar_type: numpy.dtype
+    scalar_type: np.dtype
 
 
 @dataclass(frozen=True)
@@ -72,14 +107,25 @@ class LibraryDependency:
 
 
 @dataclass(frozen=True)
-class SourceModule(Generic[LanguageT]):
+class SourceModule(Generic[SrcL, SettingT]):
     entry_point: Function
     source_code: str
     library_deps: tuple[LibraryDependency, ...]
-    language: LanguageT
+    language: type[SrcL]
+    language_settings: SettingT
+
+    def __post_init__(self):
+        if not isinstance(self.language_settings, self.language.settings_level):
+            raise TypeError(
+                f"Wrong language settings type for {self.language}, must be subclass of {self.language.settings_level}"
+            )
 
 
 @dataclass(frozen=True)
-class BindingModule:
+class BindingModule(Generic[SrcL, TgtL]):
     source_code: str
     library_deps: tuple[LibraryDependency, ...]
+
+
+def format_source(settings: LanguageSettings, source):
+    return eve.codegen.format_source(settings.formatter_key, source, style=settings.formatter_style)
