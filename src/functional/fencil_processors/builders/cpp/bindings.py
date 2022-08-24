@@ -153,7 +153,7 @@ def make_parameter(
     name = parameter.name
     ndim = 0 if isinstance(parameter, source_modules.ScalarParameter) else len(parameter.dimensions)
     scalar_type = parameter.scalar_type
-    return FunctionParameter(name=name, ndim=ndim, dtype=np.dtype(scalar_type))
+    return FunctionParameter(name=name, ndim=ndim, dtype=scalar_type)
 
 
 def make_argument(
@@ -165,7 +165,7 @@ def make_argument(
         return SidConversion(
             buffer_name=param.name,
             dimensions=[DimensionType(name=dim) for dim in param.dimensions],
-            scalar_type=np.dtype(param.scalar_type),
+            scalar_type=param.scalar_type,
             dim_config=index,
         )
 
@@ -219,7 +219,9 @@ def create_bindings(
             doc="",
             functions=[
                 BindingFunction(
-                    exported_name=source_module.entry_point.name, wrapper_name=wrapper_name, doc=""
+                    exported_name=source_module.entry_point.name,
+                    wrapper_name=wrapper_name,
+                    doc="",
                 )
             ],
         ),
