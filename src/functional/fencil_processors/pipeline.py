@@ -34,7 +34,7 @@ class BuildableProject(Protocol):
         ...
 
 
-class BuildProjectGenerator(Protocol[SrcL, LS, TgtL]):
+class BuildableProjectGenerator(Protocol[SrcL, LS, TgtL]):
     def __call__(
         self,
         source_module: source_modules.SourceModule[SrcL, LS],

@@ -50,7 +50,7 @@ This would could be usefeul as an endpoint to use the Python bindings as an exam
 
 **Step 3a:**
 
-Use an implementation of the `fencil_processors.pipeline.BuildProjectGenerator` interface to obtain an object that fulfills the `fencil_processors.pipeline.BuildableProject` protocol.
+Use an implementation of the `fencil_processors.pipeline.BuildableProjectGenerator` interface to obtain an object that fulfills the `fencil_processors.pipeline.BuildableProject` protocol.
 
 The resulting object may be used to write a self-contained folder that contains all the information to build the bindings.
 
