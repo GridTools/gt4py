@@ -17,34 +17,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import ClassVar, Generic, Optional, Protocol, TypeVar
+from typing import ClassVar, Generic, Optional, TypeVar
 
 import numpy as np
 
 import eve.codegen
-
-
-class SupportedLanguage(Protocol):
-    """Ensures consistent code formatting along the pipeline."""
-
-    @property
-    def name(self) -> str:
-        ...
-
-    def format_source(self, source_code: str) -> str:
-        ...
-
-
-class LanguageWithHeaders(SupportedLanguage, Protocol):
-    """Ensures consistent file naming for languages that split code into include (header) and implementation files."""
-
-    @property
-    def implementation_extension(self) -> str:
-        ...
-
-    @property
-    def include_extension(self) -> str:
-        ...
 
 
 class LanguageTag:

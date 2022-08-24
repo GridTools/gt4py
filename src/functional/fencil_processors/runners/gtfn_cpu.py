@@ -14,7 +14,7 @@
 
 
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import Any, Final, Optional
 
 import numpy as np
 
@@ -67,4 +67,6 @@ class GTFNExecutor(fpi.FencilExecutor):
         return self.name or repr(self)
 
 
-run_gtfn: fpi.FencilProcessorProtocol[None, fpi.FencilExecutor] = GTFNExecutor(name="run_gtfn")
+run_gtfn: Final[fpi.FencilProcessorProtocol[None, fpi.FencilExecutor]] = GTFNExecutor(
+    name="run_gtfn"
+)
