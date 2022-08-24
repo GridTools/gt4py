@@ -29,7 +29,7 @@ def source_module_example():
     entry_point = source_modules.Function(
         "stencil",
         parameters=[
-            source_modules.BufferParameter("buf", ["I", "J"], np.dtype(np.float32)),
+            source_modules.BufferParameter("buf", ("I", "J"), np.dtype(np.float32)),
             source_modules.ScalarParameter("sc", np.dtype(np.float32)),
         ],
     )

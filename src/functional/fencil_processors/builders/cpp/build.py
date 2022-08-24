@@ -136,7 +136,7 @@ def _get_python_module_suffix():
 
 
 @dataclass(frozen=True)
-class CMakeProject(pipeline.BuildProject):
+class CMakeProject(pipeline.BuildableProject):
     """Represent a CMake project for an externally compiled fencil."""
 
     source_module: source_modules.SourceModule[
@@ -151,10 +151,11 @@ class CMakeProject(pipeline.BuildProject):
 
     @property
     def sources(self) -> dict[str, str]:
-        header_name = self.name + "." + self.source_module.language_settings.header_extension
+        header_name = f"{self.name}.{self.source_module.language_settings.header_extension}"
         bindings_name = (
-            self.name + "_bindings" + "." + self.source_module.language_settings.file_extension
+            f"{self.name}_bindings.{self.source_module.language_settings.file_extension}"
         )
+
         return {
             header_name: self.source_module.source_code,
             bindings_name: self.bindings_module.source_code,

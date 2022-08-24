@@ -184,13 +184,13 @@ def create_bindings(
         The source module for which the bindings are created
     """
     if source_module.language is not source_modules.Cpp:
-        raise NotImplementedError("Can only create bindings for C++ source modules.")
+        raise ValueError(
+            f"Can only create bindings for C++ source modules, received {source_module.language}."
+        )
     wrapper_name = source_module.entry_point.name + "_wrapper"
 
     file_binding = BindingFile(
-        callee_header_file=source_module.entry_point.name
-        + "."
-        + source_module.language_settings.header_extension,
+        callee_header_file=f"{source_module.entry_point.name}.{source_module.language_settings.header_extension}",
         header_files=[
             "pybind11/pybind11.h",
             "pybind11/stl.h",
