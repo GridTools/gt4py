@@ -15,6 +15,7 @@
 
 import ctypes
 
+import numpy as np
 import pytest
 
 from functional.fencil_processors.builders.cpp import bindings
@@ -27,8 +28,8 @@ def example_source_module():
         entry_point=source_modules.Function(
             name="example",
             parameters=[
-                source_modules.BufferParameter("buf", ("I", "J"), ctypes.c_float),
-                source_modules.ScalarParameter("sc", ctypes.c_float),
+                source_modules.BufferParameter("buf", ("I", "J"), np.dtype(ctypes.c_float)),
+                source_modules.ScalarParameter("sc", np.dtype(ctypes.c_float)),
             ],
         ),
         source_code="",

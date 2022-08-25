@@ -28,9 +28,8 @@ from functional.iterator import ir as itir
 
 # TODO(ricoh): Add support for the whole range of arguments that can be passed to a fencil.
 def convert_arg(arg: Any) -> Any:
-    view = np.asarray(arg)
-    if view.ndim > 0:
-        return view
+    if hasattr(arg, "__array__"):
+        return np.asarray(arg)
     else:
         return arg
 
