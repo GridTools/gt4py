@@ -14,11 +14,14 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import copy
 import re
 
 import pytest
 
 import eve
+
+from .. import definitions
 
 
 def test_symbol_types():
@@ -146,26 +149,27 @@ class TestNode:
         )
 
 
-import copy
-
-from ..definitions import (
-    make_simple_node_with_loc,
-    make_source_location,
-    make_source_location_group,
-)
-
-
 class TestEqNonlocated:
     def test_source_location(self):
-        node = make_simple_node_with_loc()
-        node2 = copy.copy(node)
-        node2.loc = make_source_location()
-        assert node != node2
-        assert eve.concepts.eq_nonlocated(node, node2)
+        node = definitions.make_simple_node_with_loc()
+
+        node_different_loc = copy.copy(node)
+        node_different_loc.loc = definitions.make_source_location()
+        assert node != node_different_loc
+        assert eve.concepts.eq_nonlocated(node, node_different_loc)
+
+        node_different_value_and_loc = copy.copy(node_different_loc)
+        node_different_value_and_loc.str_value = definitions.make_str_value()
+        assert not eve.concepts.eq_nonlocated(node, node_different_value_and_loc)
 
     def test_source_location_group(self):
-        node = make_simple_node_with_loc()
-        node2 = copy.copy(node)
-        node2.loc = make_source_location_group()
-        assert node != node2
-        assert eve.concepts.eq_nonlocated(node, node2)
+        node = definitions.make_simple_node_with_loc()
+
+        node_different_loc_group = copy.copy(node)
+        node_different_loc_group.loc = definitions.make_source_location_group()
+        assert node != node_different_loc_group
+        assert eve.concepts.eq_nonlocated(node, node_different_loc_group)
+
+        node_different_value_and_loc_group = copy.copy(node_different_loc_group)
+        node_different_value_and_loc_group.str_value = definitions.make_str_value()
+        assert not eve.concepts.eq_nonlocated(node, node_different_value_and_loc_group)
