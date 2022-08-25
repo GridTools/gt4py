@@ -14,27 +14,12 @@
 
 
 import ctypes
-from dataclasses import dataclass
-from types import MappingProxyType
+import types
 from typing import Final, Sequence, Type
 
 import numpy as np
 
-from eve.codegen import format_source
 from functional.fencil_processors.source_modules import source_modules
-
-
-@dataclass(frozen=True)
-class CppLanguage:
-    """Implements source_modules.IncludeImplementationLanguageProtocol for C++ language settings."""
-
-    name: str
-    implementation_extension: str
-    include_extension: str
-    formatting_style: str
-
-    def format_source(self, source_code: str) -> str:
-        return format_source("cpp", source_code, style=self.formatting_style)
 
 
 CPP_DEFAULT: Final = source_modules.LanguageWithHeaderFilesSettings(
@@ -44,7 +29,7 @@ CPP_DEFAULT: Final = source_modules.LanguageWithHeaderFilesSettings(
     header_extension="cpp.inc",
 )
 
-_TYPE_MAPPING: Final = MappingProxyType(
+_TYPE_MAPPING: Final = types.MappingProxyType(
     {
         bool: "bool",
         int: "long",

@@ -5,8 +5,7 @@ import pytest
 from functional.fencil_processors import processor_interface as fpi, type_check
 from functional.fencil_processors.formatters import gtfn, lisp
 from functional.fencil_processors.runners import double_roundtrip, gtfn_cpu, roundtrip
-from functional.iterator import ir as itir, runtime, transforms
-from functional.iterator.pretty_parser import pparse
+from functional.iterator import ir as itir, pretty_parser, pretty_printer, runtime, transforms
 
 
 @pytest.fixture(
@@ -23,8 +22,8 @@ def lift_mode(request):
 
 @fpi.fencil_formatter
 def pretty_format_and_check(root: itir.FencilDefinition, *args, **kwargs) -> str:
-    pretty = pparse.pformat(root)
-    parsed = pparse.pparse(pretty)
+    pretty = pretty_printer.pformat(root)
+    parsed = pretty_parser.pparse(pretty)
     assert parsed == root
     return pretty
 

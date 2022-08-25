@@ -52,6 +52,8 @@ class GTFNExecutor(fpi.FencilExecutor):
 
         See ``FencilExecutorFunction`` for details.
         """
+        # TODO(ricoh): a pipeline runner might enhance readability as well as discourage
+        #  custom logic between steps.
         return build.CMakeProject(
             source_module=(
                 source_module := gtfn_module.GTFNSourceModuleGenerator(self.language_settings)(
