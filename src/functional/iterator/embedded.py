@@ -193,13 +193,20 @@ class Column(np.lib.mixins.NDArrayOperatorsMixin):
     def __array__(self, dtype: Optional[npt.DTypeLike] = None) -> np.ndarray:
         return self.data.astype(dtype, copy=False)
 
+    def _validate_kstart(self, args):
+        if wrong_kstarts := (  # noqa: F841 # wrong_kstarts looks unused
+            set(arg.kstart for arg in args if isinstance(arg, Column)) - {self.kstart}
+        ):
+            raise ValueError(
+                "Incompatible Column.kstart: it should be '{self.kstart}' but found other values: {wrong_kstarts}"
+            )
+
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs) -> Column:
         # note:
         # - we allow scalars to silently pass through and be handled correctly by numpy
         # - we let numpy do the checking of compatible shapes
         assert method == "__call__"
-        if (wrong_kstarts := (set(inp.kstart for inp in inputs if isinstance(inp, Column)) - {self.kstart})):
-            raise ValueError("Incompatible Column.kstart: it should be '{self.kstart}' but found other values: {wrong_kstarts}")
+        self._validate_kstart(inputs)
         return self.__class__(
             self.kstart,
             ufunc(*(inp.data if isinstance(inp, Column) else inp for inp in inputs), **kwargs),
@@ -207,8 +214,7 @@ class Column(np.lib.mixins.NDArrayOperatorsMixin):
 
     def __array_function__(self, func, types, args, kwargs) -> Column:
         # see note in `__array_ufunc__`
-        if not all(arg.kstart == self.kstart for arg in args if isinstance(arg, Column)):
-            raise ValueError("Incompatible Column.kstart")
+        self._validate_kstart(args)
         return self.__class__(
             self.kstart,
             func(*(arg.data if isinstance(arg, Column) else arg for arg in args), **kwargs),
