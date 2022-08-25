@@ -269,3 +269,7 @@ class VType(datamodels.FrozenModel):
 
     # Unique name
     name: str
+
+
+def eq_nonlocated(a: Node, b: Node) -> bool:
+    return utils.ddiff(a, b, ignore_type_in_groups=[SourceLocation, SourceLocationGroup])

@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from eve import NodeTranslator, traits
+from eve import NodeTranslator, concepts, traits
 from functional.common import DimensionKind, GridType, GTTypeError
 from functional.ffront import common_types, program_ast as past, type_info
 from functional.iterator import ir as itir
@@ -250,7 +250,9 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                 assert all(
                     isinstance(field, past.Subscript) for field in flattened
                 ), "Incompatible field in tuple: either all fields or no field must be sliced."
-                # assert all(first_field.slice_ == field.slice_ for field in flattened), "Incompatible field in tuple: all fields must be sliced in the same way."
+                assert all(
+                    concepts.eq_nonlocated(first_field.slice_, field.slice_) for field in flattened
+                ), "Incompatible field in tuple: all fields must be sliced in the same way."
                 field_slice = self._compute_field_slice(first_field)
                 first_field = first_field.value
 

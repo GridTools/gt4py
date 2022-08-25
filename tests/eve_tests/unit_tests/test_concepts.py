@@ -144,3 +144,28 @@ class TestNode:
                 sample_node.iter_children_items(), sample_node.iter_children_values()
             )
         )
+
+
+import copy
+
+from ..definitions import (
+    make_simple_node_with_loc,
+    make_source_location,
+    make_source_location_group,
+)
+
+
+class TestEqNonlocated:
+    def test_source_location(self):
+        node = make_simple_node_with_loc()
+        node2 = copy.copy(node)
+        node2.loc = make_source_location()
+        assert node != node2
+        assert eve.concepts.eq_nonlocated(node, node2)
+
+    def test_source_location_group(self):
+        node = make_simple_node_with_loc()
+        node2 = copy.copy(node)
+        node2.loc = make_source_location_group()
+        assert node != node2
+        assert eve.concepts.eq_nonlocated(node, node2)
