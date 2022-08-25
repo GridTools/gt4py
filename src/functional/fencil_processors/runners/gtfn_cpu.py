@@ -13,7 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 
-from dataclasses import dataclass, field
+import dataclasses
 from typing import Any, Final, Optional
 
 import numpy as np
@@ -35,11 +35,10 @@ def convert_arg(arg: Any) -> Any:
         return arg
 
 
-@dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True)
 class GTFNExecutor(fpi.FencilExecutor):
-    language_settings: source_modules.LanguageWithHeaderFilesSettings = field(
-        default=cpp_gen.CPP_DEFAULT
-    )
+    language_settings: source_modules.LanguageWithHeaderFilesSettings = cpp_gen.CPP_DEFAULT
+
     name: Optional[str] = None
 
     def __call__(self, fencil: itir.FencilDefinition, *args: Any, **kwargs: Any) -> None:

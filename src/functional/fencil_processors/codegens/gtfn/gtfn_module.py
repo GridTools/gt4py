@@ -38,9 +38,7 @@ def get_param_description(
 
 @dataclasses.dataclass(frozen=True)
 class GTFNSourceModuleGenerator(fpi.FencilSourceModuleGenerator):
-    language_settings: source_modules.LanguageWithHeaderFilesSettings = dataclasses.field(
-        default=cpp_gen.CPP_DEFAULT
-    )
+    language_settings: source_modules.LanguageWithHeaderFilesSettings = cpp_gen.CPP_DEFAULT
 
     def __call__(
         self,
