@@ -14,6 +14,14 @@ def test_column_ufunc():
     assert res.kstart == 1
 
 
+def test_column_ufunc_with_scalar():
+    a = Column(1, np.asarray(range(0, 3)))
+    res = 1.0 + a
+    assert isinstance(res, Column)
+    assert np.array_equal(res.data, a.data + 1.0)
+    assert res.kstart == 1
+
+
 def test_column_ufunc_wrong_kstart():
     a = Column(1, np.asarray(range(0, 3)))
     wrong_kstart = Column(2, np.asarray(range(3, 6)))
@@ -33,6 +41,19 @@ def test_column_ufunc_wrong_shape():
 def test_column_array_function():
     cond = Column(1, np.asarray([True, False]))
     a = Column(1, np.asarray([1, 1]))
+    b = Column(1, np.asarray([2, 2]))
+
+    res = np.where(cond, a, b)
+    ref = np.asarray([1, 2])
+
+    assert isinstance(res, Column)
+    assert np.array_equal(res.data, ref)
+    assert res.kstart == 1
+
+
+def test_column_array_function_with_scalar():
+    cond = Column(1, np.asarray([True, False]))
+    a = 1
     b = Column(1, np.asarray([2, 2]))
 
     res = np.where(cond, a, b)
