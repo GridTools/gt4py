@@ -32,7 +32,7 @@ class InputTracer:
         return InputTracer(
             inp=self.inp,
             register_deref=self.register_deref,
-            offsets=tuple(offsets) + self.offsets,
+            offsets=self.offsets + tuple(offsets),
             lift_level=self.lift_level,
         )
 
