@@ -1,11 +1,9 @@
-# -*- coding: utf-8 -*-
-#
-# GT4Py - GridTools4Py - GridTools for Python
+# GT4Py Project - GridTools Framework
 #
 # Copyright (c) 2014-2021, ETH Zurich
 # All rights reserved.
 #
-# This file is part the GT4Py project and the GridTools framework.
+# This file is part of the GT4Py project and the GridTools framework.
 # GT4Py is free software: you can redistribute it and/or modify it under
 # the terms of the GNU General Public License as published by the
 # Free Software Foundation, either version 3 of the License, or any later
@@ -15,8 +13,15 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 
-import setuptools
+"""Version specification."""
 
 
-if __name__ == "__main__":
-    setuptools.setup()
+from __future__ import annotations
+
+import typing
+
+from packaging import version as pkg_version
+
+
+__version__: typing.Final = "0.2.0"
+__version_info__: typing.Final = pkg_version.parse(__version__)

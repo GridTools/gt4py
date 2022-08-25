@@ -49,8 +49,6 @@ FieldAxis: TypeAlias = (
 TupleAxis: TypeAlias = NoneType
 Axis: TypeAlias = FieldAxis | TupleAxis
 
-Column: TypeAlias = np.ndarray  # TODO consider replacing by a wrapper around ndarray
-
 
 class SparseTag(Tag):
     ...
@@ -71,6 +69,32 @@ class NeighborTableOffsetProvider:
         assert not hasattr(tbl, "shape") or tbl.shape[1] == max_neighbors
         self.max_neighbors = max_neighbors
         self.has_skip_values = has_skip_values
+
+
+class StridedNeighborOffsetProvider:
+    def __init__(
+        self,
+        origin_axis: Dimension,
+        neighbor_axis: Dimension,
+        max_neighbors: int,
+        has_skip_values=True,
+    ) -> None:
+        self.origin_axis = origin_axis
+        self.neighbor_axis = neighbor_axis
+        self.max_neighbors = max_neighbors
+        self.has_skip_values = has_skip_values
+
+    @property
+    def tbl(self):  # TODO(havogt): define Connectivity concept properly
+        class Impl:
+            def __init__(self, stride: int) -> None:
+                self.stride = stride
+
+            def __getitem__(self, indices: tuple[int, int]) -> int:
+                primary, neighbor_idx = indices
+                return primary * self.stride + neighbor_idx
+
+        return Impl(stride=self.max_neighbors)
 
 
 # Offsets
@@ -143,8 +167,47 @@ class MutableLocatedField(LocatedField, Protocol):
         ...
 
 
-def _is_column(v: Any) -> TypeGuard[Column]:
-    return isinstance(v, np.ndarray)
+class Column(np.lib.mixins.NDArrayOperatorsMixin):
+    """Represents a column when executed in column mode (`column_axis != None`).
+
+    Implements `__array_ufunc__` and `__array_function__` to isolate
+    and simplify dispatching in iterator ir builtins.
+    """
+
+    def __init__(self, kstart: int, data: np.ndarray) -> None:
+        self.kstart = kstart
+        self.data = data
+
+    def __getitem__(self, i: int) -> Any:
+        return self.data[i - self.kstart]
+
+    def tuple_get(self, i: int) -> Column:
+        if self.data.dtype.names:
+            return Column(self.kstart, self.data[self.data.dtype.names[i]])
+        else:
+            return Column(self.kstart, self.data[i, ...])
+
+    def __setitem__(self, i: int, v: Any) -> None:
+        self.data[i - self.kstart] = v
+
+    def __array__(self, dtype: Optional[npt.DTypeLike] = None) -> np.ndarray:
+        return self.data.astype(dtype, copy=False)
+
+    def __array_ufunc__(self, ufunc, method, *inputs, **kwargs) -> Column:
+        assert method == "__call__"
+        assert all(inp.kstart == self.kstart for inp in inputs)
+        assert all(inp.data.shape == self.data.shape for inp in inputs)
+        return self.__class__(self.kstart, ufunc(*(inp.data for inp in inputs), **kwargs))
+
+    def __array_function__(self, func, types, args, kwargs) -> Column:
+        assert all(issubclass(t, self.__class__) for t in types)
+        assert all(arg.kstart == self.kstart for arg in args)
+        assert all(arg.data.shape == self.data.shape for arg in args)
+        return self.__class__(self.kstart, func(*(arg.data for arg in args), **kwargs))
+
+
+def _make_column(column_range: range, dtype=np.dtype):
+    return Column(column_range.start, np.zeros(len(column_range), dtype=dtype))
 
 
 @builtins.deref.register(EMBEDDED)
@@ -161,41 +224,36 @@ def can_deref(it):
 def if_(cond, t, f):
     # ensure someone doesn't accidentally pass an iterator
     assert not hasattr(cond, "shift")
-    if _is_column(cond):
+    if isinstance(cond, Column):
         return np.where(cond, t, f)
     return t if cond else f
 
 
 @builtins.not_.register(EMBEDDED)
 def not_(a):
-    if _is_column(a):
-        return np.logical_not(a)
+    if isinstance(a, Column):
+        return np.logical_not(a.data)
     return not a
 
 
 @builtins.and_.register(EMBEDDED)
 def and_(a, b):
-    if _is_column(a):
+    if isinstance(a, Column):
         return np.logical_and(a, b)
     return a and b
 
 
 @builtins.or_.register(EMBEDDED)
 def or_(a, b):
-    if _is_column(a):
+    if isinstance(a, Column):
         return np.logical_or(a, b)
     return a or b
 
 
 @builtins.tuple_get.register(EMBEDDED)
 def tuple_get(i, tup):
-    if isinstance(tup, tuple):
-        return tup[i]
-    assert isinstance(tup, (np.ndarray, np.void))
-    if tup.dtype.names:
-        # array with structured dtype
-        return tup[tup.dtype.names[i]]
-    # array with tuple dimension (i.e., tuple is a 1D array)
+    if isinstance(tup, Column):
+        return tup.tuple_get(i)
     return tup[i]
 
 
@@ -407,7 +465,8 @@ def execute_shift(
         else:
             raise AssertionError()
         return new_pos
-    elif isinstance(offset_implementation, NeighborTableOffsetProvider):
+    else:
+        assert isinstance(offset_implementation, Connectivity)
         assert offset_implementation.origin_axis.value in pos
         new_pos = pos.copy()
         new_pos.pop(offset_implementation.origin_axis.value)
@@ -534,12 +593,22 @@ def _get_axes(
 
 
 def _make_tuple(
-    field_or_tuple: LocatedField | tuple, indices: int | slice | tuple[int | slice, ...]
-) -> tuple:  # arbitrary nesting of tuples of LocatedField
+    field_or_tuple: LocatedField | tuple,  # arbitrary nesting of tuples of LocatedField
+    indices: int | slice | tuple[int | slice, ...],
+    *,
+    as_column: bool = False,
+) -> tuple:  # arbitrary nesting of tuples of field values or `Column`s
     if isinstance(field_or_tuple, tuple):
         return tuple(_make_tuple(f, indices) for f in field_or_tuple)
     else:
-        return field_or_tuple[indices]
+        data = field_or_tuple[indices]
+        if as_column:
+            # wraps a vertical slice of an input field into a `Column`
+            return Column(
+                0, data
+            )  # TODO(havogt) when we support LocatedFields with origin (i.e. non-zero origin), kstart needs to be adapated here
+        else:
+            return data
 
 
 # TODO(havogt) frozen dataclass
@@ -600,7 +669,7 @@ class MDIterator:
             {**shifted_pos, **slice_column},
         )
         try:
-            return _make_tuple(self.field, ordered_indices)
+            return _make_tuple(self.field, ordered_indices, as_column=self.column_axis is not None)
         except IndexError:
             return _UNDEFINED
 
@@ -953,13 +1022,9 @@ def scan(scan_pass, is_forward: bool, init):
         if _column_range is None:
             raise RuntimeError("Column range is not defined, cannot scan.")
 
-        levels = len(_column_range)
         column_range = _column_range if is_forward else reversed(_column_range)
-
-        dtype = _column_dtype(init)
-
         state = init
-        col = np.zeros(levels, dtype=dtype)
+        col = _make_column(_column_range, _column_dtype(init))
         for i in column_range:
             state = scan_pass(state, *map(shifted_scan_arg(i), iters))
             col[i] = state

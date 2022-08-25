@@ -11,3 +11,18 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
+
+from . import common, fencil_processors, ffront, iterator, type_inference, version
+from .version import __version__, __version_info__
+
+
+__all__ = [
+    "__version__",
+    "__version_info__",
+    "common",
+    "fencil_processors",
+    "ffront",
+    "iterator",
+    "type_inference",
+    "version",
+]

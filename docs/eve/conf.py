@@ -37,7 +37,7 @@ description = "Eve framework to develop DSL toolchains."
 # built documents.
 
 # The short X.Y.Z version.
-version = eve.__versioninfo__.base_version
+version = eve.__version_info__.base_version
 
 # The full version, including alpha/beta/rc tags
 release = eve.__version__

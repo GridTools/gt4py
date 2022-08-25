@@ -235,7 +235,7 @@ def test_conditional_wrong_arg_type():
     with pytest.raises(FieldOperatorTypeDeductionError) as exc_info:
         _ = FieldOperatorParser.apply_to_function(conditional_wrong_arg_type)
 
-    assert re.search(msg, exc_info.value.__context__.args[0]) is not None
+    assert re.search(msg, exc_info.value.__cause__.args[0]) is not None
 
 
 # --- External symbols ---

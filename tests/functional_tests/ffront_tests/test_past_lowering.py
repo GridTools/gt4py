@@ -159,13 +159,11 @@ def test_invalid_call_sig_program(invalid_call_sig_program_def):
     #  immediately after missing `out` argument
     # assert (
     #    re.search(
-    #        "Function takes 1 arguments, but 2 were given.", exc_info.value.__context__.args[0]
+    #        "Function takes 1 arguments, but 2 were given.", exc_info.value.__cause__.args[0]
     #    )
     #    is not None
     # )
     assert (
-        re.search(
-            "Missing required keyword argument\(s\) `out`", exc_info.value.__context__.args[0]
-        )
+        re.search("Missing required keyword argument\(s\) `out`", exc_info.value.__cause__.args[0])
         is not None
     )
