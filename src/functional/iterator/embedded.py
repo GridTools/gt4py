@@ -198,8 +198,8 @@ class Column(np.lib.mixins.NDArrayOperatorsMixin):
         # - we allow scalars to silently pass through and be handled correctly by numpy
         # - we let numpy do the checking of compatible shapes
         assert method == "__call__"
-        if not all(inp.kstart == self.kstart for inp in inputs if isinstance(inp, Column)):
-            raise ValueError("Incompatible Column.kstart")
+        if (wrong_kstarts := (set(inp.kstart for inp in inputs if isinstance(inp, Column)) - {self.kstart})):
+            raise ValueError("Incompatible Column.kstart: it should be '{self.kstart}' but found other values: {wrong_kstarts}")
         return self.__class__(
             self.kstart,
             ufunc(*(inp.data if isinstance(inp, Column) else inp for inp in inputs), **kwargs),
