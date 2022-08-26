@@ -144,7 +144,7 @@ pytest -v -l -s tests/
 
 Check `pytest` documentation (`pytest --help`) for all the options to select and execute tests.
 
-To run the complete test suite we also recommended to use `tox`:
+To run the complete test suite we recommended using `tox`:
 
 ```bash
 # List all the available test environments
