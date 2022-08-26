@@ -160,7 +160,7 @@ copy will be written in `tests/_reports/coverage_html/` at the end of the run.
 
 ## Pull Request and Merge Guidelines
 
-Before you submit a pull request, check that it meets these guidelines:
+Before submitting a pull request, check that it meets the following criteria:
 
 1. The pull request should include tests.
 2. If the pull request adds functionality, it should be documented both in the code docstrings and in the official documentation.
