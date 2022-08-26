@@ -172,7 +172,7 @@ Before submitting a pull request, check that it meets the following criteria:
 
 ## Releasing Process
 
-This section documents the process to release new GT4Py versions and it is only useful for core members of the development team.
+This section documents the process of releasing new versions of GT4Py and it's only useful to core members of the development team.
 
 Currently, GT4Py releases are published as commit tags in the main GitHub repository (although they will be soon available in TestPyPi and PyPI). To create a new release you should:
 
