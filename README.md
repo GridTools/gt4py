@@ -73,4 +73,4 @@ pytest -v
 ## Development Instructions
 
 After following the installation instructions above, an _editable_  installation
-of the GT4Py package will be active in the virtual environment and thus you will be ready to start your development contributions to  GT4Py.  Make sure you read the [CONTRIBUTING.md](CONTRIBUTING.md) and [CODING_GUIDELINES.md](CODING_GUIDELINES.md) documents before you start.
+of the GT4Py package will be active in the virtual environment and thus you will be ready to start your development contributions to GT4Py. Make sure you read the [CONTRIBUTING.md](CONTRIBUTING.md) and [CODING_GUIDELINES.md](CODING_GUIDELINES.md) documents before you start.
