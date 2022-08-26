@@ -29,16 +29,16 @@ class BindingsGenerator(Protocol[SrcL, LS, TgtL]):
         ...
 
 
-class BuildProject(Protocol):
+class BuildableProject(Protocol):
     def get_fencil_impl(self) -> Callable:
         ...
 
 
-class BuildProjectGenerator(Protocol[SrcL, LS, TgtL]):
+class BuildableProjectGenerator(Protocol[SrcL, LS, TgtL]):
     def __call__(
         self,
         source_module: source_modules.SourceModule[SrcL, LS],
         bindings_module: Optional[source_modules.BindingModule[SrcL, TgtL]],
         cache_strategy: cache.Strategy,
-    ) -> BuildProject:
+    ) -> BuildableProject:
         ...

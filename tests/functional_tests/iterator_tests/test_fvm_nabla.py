@@ -44,7 +44,7 @@ E2V = offset("E2V")
 @fundef
 def compute_zavgS(pp, S_M):
     zavg = 0.5 * (deref(shift(E2V, 0)(pp)) + deref(shift(E2V, 1)(pp)))
-    # zavg = 0.5 * reduce(lambda a, b: a + b, 0)(shift(E2V)(pp))
+    # zavg = 0.5 * reduce(lambda a, b: a + b, 0.0)(shift(E2V)(pp))
     # zavg = 0.5 * library.sum()(shift(E2V)(pp))
     return deref(S_M) * zavg
 
@@ -67,7 +67,7 @@ def compute_zavgS_fencil(
 @fundef
 def compute_pnabla(pp, S_M, sign, vol):
     zavgS = lift(compute_zavgS)(pp, S_M)
-    # pnabla_M = reduce(lambda a, b, c: a + b * c, 0)(shift(V2E)(zavgS), sign)
+    # pnabla_M = reduce(lambda a, b, c: a + b * c, 0.0)(shift(V2E)(zavgS), sign)
     # pnabla_M = library.sum(lambda a, b: a * b)(shift(V2E)(zavgS), sign)
     pnabla_M = library.dot(shift(V2E)(zavgS), sign)
     return pnabla_M / deref(vol)
@@ -123,9 +123,7 @@ def nabla(
     )
 
 
-def test_compute_zavgS(fencil_processor, use_tmps):
-    if use_tmps:
-        pytest.xfail("use_tmps currently only supported for cartesian")
+def test_compute_zavgS(fencil_processor, lift_mode):
     fencil_processor, validate = fencil_processor
     if fencil_processor == run_gtfn:
         pytest.xfail("TODO: gtfn bindings don't support unstructured")
@@ -146,7 +144,7 @@ def test_compute_zavgS(fencil_processor, use_tmps):
         pp,
         S_MXX,
         offset_provider={"E2V": e2v},
-        use_tmps=use_tmps,
+        lift_mode=lift_mode,
     )
 
     if validate:
@@ -161,7 +159,7 @@ def test_compute_zavgS(fencil_processor, use_tmps):
         pp,
         S_MYY,
         offset_provider={"E2V": e2v},
-        use_tmps=use_tmps,
+        lift_mode=lift_mode,
     )
     if validate:
         assert_close(-1000788897.3202186, min(zavgS))
@@ -183,9 +181,7 @@ def compute_zavgS2_fencil(
     )
 
 
-def test_compute_zavgS2(fencil_processor, use_tmps):
-    if use_tmps:
-        pytest.xfail("use_tmps currently only supported for cartesian")
+def test_compute_zavgS2(fencil_processor, lift_mode):
     fencil_processor, validate = fencil_processor
     if fencil_processor == run_gtfn:
         pytest.xfail("TODO: gtfn bindings don't support unstructured")
@@ -212,7 +208,7 @@ def test_compute_zavgS2(fencil_processor, use_tmps):
         pp,
         S,
         offset_provider={"E2V": e2v},
-        use_tmps=use_tmps,
+        lift_mode=lift_mode,
     )
 
     if validate:
@@ -223,9 +219,7 @@ def test_compute_zavgS2(fencil_processor, use_tmps):
         assert_close(1000788897.3202186, max(zavgS[1]))
 
 
-def test_nabla(fencil_processor, use_tmps):
-    if use_tmps:
-        pytest.xfail("use_tmps currently only supported for cartesian")
+def test_nabla(fencil_processor, lift_mode):
     fencil_processor, validate = fencil_processor
     if fencil_processor == run_gtfn:
         pytest.xfail("TODO: gtfn bindings don't support unstructured")
@@ -253,7 +247,7 @@ def test_nabla(fencil_processor, use_tmps):
         sign,
         vol,
         offset_provider={"E2V": e2v, "V2E": v2e},
-        use_tmps=use_tmps,
+        lift_mode=lift_mode,
     )
 
     if validate:
@@ -280,9 +274,7 @@ def nabla2(
     )
 
 
-def test_nabla2(fencil_processor, use_tmps):
-    if use_tmps:
-        pytest.xfail("use_tmps currently only supported for cartesian")
+def test_nabla2(fencil_processor, lift_mode):
     if fencil_processor == run_gtfn:
         pytest.xfail("TODO: gtfn bindings don't support unstructured")
     fencil_processor, validate = fencil_processor
@@ -310,7 +302,7 @@ def test_nabla2(fencil_processor, use_tmps):
         vol,
         offset_provider={"E2V": e2v, "V2E": v2e},
         fencil_processor=fencil_processor,
-        use_tmps=use_tmps,
+        lift_mode=lift_mode,
     )
 
     if validate:
@@ -322,20 +314,14 @@ def test_nabla2(fencil_processor, use_tmps):
 
 @fundef
 def sign(node_indices, is_pole_edge):
-    node_index = deref(node_indices)
+    def impl(node_indices2, is_pole_edge):
+        return if_(
+            or_(deref(is_pole_edge), eq(deref(node_indices), deref(shift(E2V, 0)(node_indices2)))),
+            1.0,
+            -1.0,
+        )
 
-    @fundef
-    def sign_impl(node_index):
-        def impl2(node_indices, is_pole_edge):
-            return if_(
-                or_(deref(is_pole_edge), eq(node_index, deref(shift(E2V, 0)(node_indices)))),
-                1.0,
-                -1.0,
-            )
-
-        return impl2
-
-    return shift(V2E)(lift(sign_impl(node_index))(node_indices, is_pole_edge))
+    return shift(V2E)(lift(impl)(node_indices, is_pole_edge))
 
 
 @fundef
@@ -363,10 +349,7 @@ def nabla_sign(n_nodes, out_MXX, out_MYY, pp, S_MXX, S_MYY, vol, node_index, is_
     )
 
 
-def test_nabla_sign(fencil_processor, use_tmps):
-    if use_tmps:
-        pytest.xfail("use_tmps currently only supported for cartesian")
-
+def test_nabla_sign(fencil_processor, lift_mode):
     fencil_processor, validate = fencil_processor
     if fencil_processor == run_gtfn:
         pytest.xfail("TODO: gtfn bindings don't support unstructured")
@@ -397,7 +380,7 @@ def test_nabla_sign(fencil_processor, use_tmps):
         index_field(Vertex),
         is_pole_edge,
         offset_provider={"E2V": e2v, "V2E": v2e},
-        use_tmps=use_tmps,
+        lift_mode=lift_mode,
     )
 
     if validate:

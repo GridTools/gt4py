@@ -13,8 +13,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 
-from dataclasses import dataclass, field
-from typing import Any, Optional
+import dataclasses
+from typing import Any, Final, Optional
 
 import numpy as np
 
@@ -28,19 +28,17 @@ from functional.iterator import ir as itir
 
 # TODO(ricoh): Add support for the whole range of arguments that can be passed to a fencil.
 def convert_arg(arg: Any) -> Any:
-    view = np.asarray(arg)
-    if view.ndim > 0:
-        return view
+    if hasattr(arg, "__array__"):
+        return np.asarray(arg)
     else:
         return arg
 
 
-@dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True)
 class GTFNExecutor(fpi.FencilExecutor):
-    language_settings: source_modules.LanguageWithHeaderFilesSettings = field(
-        default=cpp_gen.CPP_DEFAULT
-    )
-    build_project_gen: pipeline.BuildProjectGenerator = field(default=build.CompileCommandProject)
+    language_settings: source_modules.LanguageWithHeaderFilesSettings = cpp_gen.CPP_DEFAULT
+    build_project_gen: pipeline.BuildProjectGenerator = build.CompileCommandProject
+
     name: Optional[str] = None
 
     def __call__(self, fencil: itir.FencilDefinition, *args: Any, **kwargs: Any) -> None:
@@ -53,6 +51,8 @@ class GTFNExecutor(fpi.FencilExecutor):
 
         See ``FencilExecutorFunction`` for details.
         """
+        # TODO(ricoh): a pipeline runner might enhance readability as well as discourage
+        #  custom logic between steps.
         return self.build_project_gen(
             source_module=(
                 source_module := gtfn_module.GTFNSourceModuleGenerator(self.language_settings)(
@@ -68,4 +68,6 @@ class GTFNExecutor(fpi.FencilExecutor):
         return self.name or repr(self)
 
 
-run_gtfn: fpi.FencilProcessorProtocol[None, fpi.FencilExecutor] = GTFNExecutor(name="run_gtfn")
+run_gtfn: Final[fpi.FencilProcessorProtocol[None, fpi.FencilExecutor]] = GTFNExecutor(
+    name="run_gtfn"
+)

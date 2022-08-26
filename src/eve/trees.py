@@ -55,7 +55,7 @@ if TYPE_CHECKING:
     TreeLike = Any
 else:
 
-    class TreeLike(abc.ABC):
+    class TreeLike(abc.ABC):  # noqa: B024
         ...
 
 

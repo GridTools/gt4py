@@ -13,8 +13,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 
-from dataclasses import dataclass, field
-from typing import Any
+import dataclasses
+from typing import Any, Final
 
 import numpy as np
 
@@ -36,11 +36,9 @@ def get_param_description(
         return source_modules.ScalarParameter(name, view.dtype)
 
 
-@dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True)
 class GTFNSourceModuleGenerator(fpi.FencilSourceModuleGenerator):
-    language_settings: source_modules.LanguageWithHeaderFilesSettings = field(
-        default=cpp_gen.CPP_DEFAULT
-    )
+    language_settings: source_modules.LanguageWithHeaderFilesSettings = cpp_gen.CPP_DEFAULT
 
     def __call__(
         self,
@@ -82,7 +80,11 @@ class GTFNSourceModuleGenerator(fpi.FencilSourceModuleGenerator):
         return module
 
 
-create_source_module: fpi.FencilProcessorProtocol[
-    source_modules.SourceModule[source_modules.Cpp, source_modules.LanguageWithHeaderFilesSettings],
-    fpi.FencilSourceModuleGenerator,
+create_source_module: Final[
+    fpi.FencilProcessorProtocol[
+        source_modules.SourceModule[
+            source_modules.Cpp, source_modules.LanguageWithHeaderFilesSettings
+        ],
+        fpi.FencilSourceModuleGenerator,
+    ]
 ] = GTFNSourceModuleGenerator()

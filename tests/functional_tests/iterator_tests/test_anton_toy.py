@@ -60,7 +60,7 @@ def naive_lap(inp):
     return out
 
 
-def test_anton_toy(fencil_processor, use_tmps):
+def test_anton_toy(fencil_processor, lift_mode):
     fencil_processor, validate = fencil_processor
 
     if fencil_processor == run_gtfn:
@@ -75,7 +75,7 @@ def test_anton_toy(fencil_processor, use_tmps):
     ref = naive_lap(inp)
 
     run_processor(
-        fencil, fencil_processor, shape[0], shape[1], shape[2], out, inp, use_tmps=use_tmps
+        fencil, fencil_processor, shape[0], shape[1], shape[2], out, inp, lift_mode=lift_mode
     )
 
     if validate:

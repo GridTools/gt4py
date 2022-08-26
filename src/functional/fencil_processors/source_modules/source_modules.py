@@ -17,37 +17,21 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import ClassVar, Generic, Optional, Protocol, TypeVar
+from typing import ClassVar, Generic, Optional, TypeVar
 
 import numpy as np
 
 import eve.codegen
 
 
-class SupportedLanguage(Protocol):
-    """Ensures consistent code formatting along the pipeline."""
-
-    @property
-    def name(self) -> str:
-        ...
-
-    def format_source(self, source_code: str) -> str:
-        ...
-
-
-class LanguageWithHeaders(SupportedLanguage, Protocol):
-    """Ensures consistent file naming for languages that split code into include (header) and implementation files."""
-
-    @property
-    def implementation_extension(self) -> str:
-        ...
-
-    @property
-    def include_extension(self) -> str:
-        ...
-
-
 class LanguageTag:
+    """
+    Represent a programming language.
+
+    ``.settings_level`` should be set to the ``LanguageSettings`` subclass
+    with the minimum amount of settings required for the language.
+    """
+
     settings_level: ClassVar[type[LanguageSettings]]
     ...
 
@@ -58,6 +42,14 @@ TgtL = TypeVar("TgtL", bound=LanguageTag)
 
 @dataclass(frozen=True)
 class LanguageSettings:
+    """
+    Basic settings for any language.
+
+    Formatting will happen through ``eve.codegen.format_source``.
+    For available formatting styles check, which formatter is used (depends on ``.formatter_key``)
+    and then check which styles are available for that (if any).
+    """
+
     formatter_key: str
     formatter_style: Optional[str]
     file_extension: str
@@ -68,6 +60,8 @@ SettingT = TypeVar("SettingT", bound=LanguageSettings)
 
 @dataclass(frozen=True)
 class LanguageWithHeaderFilesSettings(LanguageSettings):
+    """Add a header file extension setting on top of the basic set."""
+
     header_extension: str
 
 

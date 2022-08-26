@@ -50,13 +50,13 @@ This would could be usefeul as an endpoint to use the Python bindings as an exam
 
 **Step 3a:**
 
-Use an implementation of the `fencil_processors.pipeline.BuildProjectGenerator` interface to obtain an object that fulfills the `fencil_processors.pipeline.BuildProject` protocol.
+Use an implementation of the `fencil_processors.pipeline.BuildableProjectGenerator` interface to obtain an object that fulfills the `fencil_processors.pipeline.BuildableProject` protocol.
 
 The resulting object may be used to write a self-contained folder that contains all the information to build the bindings.
 
 **Step 3b:**
 
-Use the `fencil_processors.pipeline.BuildProject.get_fencil_impl` method to obtain a callable that can execute the fencil given the inputs. Depending on the underlying build system of the concrete implementation, this may call additional steps when needed (such as writing to file, configuring, building etc).
+Use the `fencil_processors.pipeline.BuildableProject.get_fencil_impl` method to obtain a callable that can execute the fencil given the inputs. Depending on the underlying build system of the concrete implementation, this may call additional steps when needed (such as writing to file, configuring, building etc).
 
 ## Python bindings for C++ code
 
