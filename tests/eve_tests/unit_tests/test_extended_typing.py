@@ -162,7 +162,8 @@ class TestExtendedProtocol:
         std_pass_time = timeit.timeit(stmt=PASS_STMT, number=NUM_REPETITIONS, globals=DEFINITIONS)
         std_fail_time = timeit.timeit(stmt=FAIL_STMT, number=NUM_REPETITIONS, globals=DEFINITIONS)
 
-        # Standard runtime protocol checks from extended decorator (performance should be the same)
+        # Standard runtime protocol checks from extended decorator.
+        # Expected performance should be roughly the same.
         xtyping.runtime_checkable(sample_class_defs.NoDataProto)
         std_from_ext_pass_time = timeit.timeit(
             stmt=PASS_STMT, number=NUM_REPETITIONS, globals=DEFINITIONS
@@ -176,6 +177,7 @@ class TestExtendedProtocol:
         assert (1 / bound_factor) < (std_fail_time / std_from_ext_fail_time) < bound_factor
 
         # Runtime protocol checks from extended decorator with shortcuts
+        # Expected performance should be much better.
         xtyping.extended_runtime_checkable(
             instance_check_shortcut=True, subclass_check_with_data_members=False
         )(sample_class_defs.NoDataProto)
@@ -207,7 +209,8 @@ class TestExtendedProtocol:
         ):
             assert issubclass(ConcreteClass, DataProto)
 
-        # Standard runtime protocol checks from extended decorator (behavior and performance should be the same)
+        # Standard runtime protocol checks from extended decorator.
+        # Expected behavior and performance should be roughly the same.
         xtyping.extended_runtime_checkable(
             instance_check_shortcut=False, subclass_check_with_data_members=False
         )(DataProto)

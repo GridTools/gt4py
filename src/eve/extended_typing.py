@@ -126,11 +126,11 @@ def __dir__() -> List[str]:
 
 _T = TypeVar("_T")
 
-# Common type aliases
+# -- Common type aliases --
 NoArgsCallable = Callable[[], Any]
 
 
-# Typing annotations
+# -- Typing annotations --
 if _sys.version_info >= (3, 9):
     SolvedTypeAnnotation = Union[
         Type,
@@ -160,7 +160,7 @@ _TypingGenericAliasType: Final[Type] = (
 )
 
 
-# Standard Python protocols
+# -- Standard Python protocols --
 _C = TypeVar("_C")
 _V = TypeVar("_V")
 
@@ -202,7 +202,7 @@ class DataDescriptor(NonDataDescriptor[_C, _V], Protocol):
         ...
 
 
-# Based on typeshed definitions
+# -- Based on typeshed definitions --
 ReadOnlyBuffer: TypeAlias = Union[bytes, SupportsBytes]
 WriteableBuffer: TypeAlias = Union[
     bytearray, memoryview, _array.array, _mmap.mmap, _pickle.PickleBuffer
@@ -233,7 +233,7 @@ class HashlibAlgorithm(Protocol):
         ...
 
 
-# Third party protocols
+# -- Third party protocols --
 class DevToolsPrettyPrintable(Protocol):
     """Used by python-devtools (https://python-devtools.helpmanual.io/)."""
 
@@ -241,13 +241,12 @@ class DevToolsPrettyPrintable(Protocol):
         ...
 
 
-# Extra functionality
-class _ExtendedProtocolMeta(_typing._ProtocolMeta):
-    # This metaclass inherits from typing.Protocol's metaclass
-    # to reset  __instancecheck__ implementation to the
-    # simple implementation in ABC types.
-    def __instancecheck__(cls, instance: object) -> bool:
-        return _abc.ABCMeta.__instancecheck__(cls, instance)
+# -- Added functionality --
+class NonProtocolABCMeta(_typing._ProtocolMeta):
+    """Subclass of :cls:`typing.Protocol`'s metaclass doing instance and subclass checks as ABCMeta."""
+
+    __instancecheck__ = _abc.ABCMeta.__instancecheck__  # type: ignore[assignment]
+    __subclasshook__ = None
 
 
 _ProtoT = TypeVar("_ProtoT", bound=_abc.ABCMeta)
@@ -300,7 +299,7 @@ def extended_runtime_checkable(  # noqa: C901  # too complex but unavoidable
             # metaclass, which assumes that no data members have been
             # added at runtime and therefore the expensive instance members
             # checks can be replaced by (cached) tests with class members
-            cls.__class__ = _ExtendedProtocolMeta  # type: ignore[assignment]
+            cls.__class__ = NonProtocolABCMeta  # type: ignore[assignment]
 
         if subclass_check_with_data_members:
             assert "__subclasshook__" in cls.__dict__
