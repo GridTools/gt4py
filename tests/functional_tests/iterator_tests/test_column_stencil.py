@@ -14,71 +14,84 @@ from .conftest import run_processor
 I = offset("I")
 K = offset("K")
 
-
-@fundef
-def multiply_stencil(inp):
-    return deref(shift(K, 1, I, 1)(inp))
-
-
 KDim = Dimension("KDim")
 IDim = Dimension("IDim")
 
 
-@fendef(column_axis=KDim)
-def fencil(i_size, k_size, inp, out):
-    closure(
-        cartesian_domain(named_range(IDim, 0, i_size), named_range(KDim, 0, k_size)),
-        multiply_stencil,
-        out,
-        [inp],
-    )
+@fundef
+def add_scalar(inp):
+    return deref(inp) + 1.0
 
 
-def test_column_stencil(fencil_processor, lift_mode):
+@fundef
+def if_scalar_cond(inp):
+    return if_(True, deref(inp), 1.0)
+
+
+@fundef
+def if_scalar_return(inp):
+    return if_(deref(inp) < 0.0, deref(inp), 1.0)
+
+
+@fundef
+def shift_stencil(inp):
+    return deref(shift(K, 1, I, 1)(inp))
+
+
+@pytest.fixture(
+    params=[
+        # (stencil, reference_function, inp_fun (None=default), (skip_backend_fun, msg))
+        (add_scalar, lambda inp: np.asarray(inp) + 1.0, None, None),
+        (if_scalar_cond, lambda inp: np.asarray(inp), None, None),
+        (if_scalar_return, lambda inp: np.ones_like(inp), None, None),
+        (
+            shift_stencil,
+            lambda inp: np.asarray(inp)[1:, 1:],
+            lambda shape: np_as_located_field(IDim, KDim)(
+                np.fromfunction(lambda i, k: i * 10 + k, [shape[0] + 1, shape[1] + 1])
+            ),
+            None,
+        ),
+        (
+            shift_stencil,
+            lambda inp: np.asarray(inp)[1:, 2:],
+            lambda shape: np_as_located_field(IDim, KDim, origin={IDim: 0, KDim: 1})(
+                np.fromfunction(lambda i, k: i * 10 + k, [shape[0] + 1, shape[1] + 2])
+            ),
+            (lambda backend: backend == run_gtfn, "origin not supported in gtfn"),
+        ),
+    ],
+    ids=lambda p: f"{p[0].__name__}",
+)
+def basic_stencils(request):
+    return request.param
+
+
+def test_basic_column_stencils(fencil_processor, lift_mode, basic_stencils):
     fencil_processor, validate = fencil_processor
+    stencil, ref_fun, inp_fun, skip_backend = basic_stencils
+    if skip_backend is not None:
+        skip_backend_fun, msg = skip_backend
+        if skip_backend_fun(fencil_processor):
+            pytest.xfail(msg)
+
     shape = [5, 7]
-    inp = np_as_located_field(IDim, KDim)(
-        np.fromfunction(lambda i, k: i * 10 + k, [shape[0] + 1, shape[1] + 1])
+    inp = (
+        np_as_located_field(IDim, KDim)(np.fromfunction(lambda i, k: i * 10 + k, shape))
+        if inp_fun is None
+        else inp_fun(shape)
     )
     out = np_as_located_field(IDim, KDim)(np.zeros(shape))
 
-    ref = np.asarray(inp)[1:, 1:]
+    ref = ref_fun(inp)
 
     run_processor(
-        fencil,
+        stencil[{IDim: range(0, shape[0]), KDim: range(0, shape[1])}],
         fencil_processor,
-        shape[0],
-        shape[1],
         inp,
-        out,
+        out=out,
         offset_provider={"I": IDim, "K": KDim},
-        lift_mode=lift_mode,
-    )
-
-    if validate:
-        assert np.allclose(ref, out)
-
-
-def test_column_stencil_with_k_origin(fencil_processor, lift_mode):
-    fencil_processor, validate = fencil_processor
-    if fencil_processor == run_gtfn:
-        pytest.xfail("origin not yet supported in gtfn")
-
-    shape = [5, 7]
-    raw_inp = np.fromfunction(lambda i, k: i * 10 + k, [shape[0] + 1, shape[1] + 2])
-    inp = np_as_located_field(IDim, KDim, origin={IDim: 0, KDim: 1})(raw_inp)
-    out = np_as_located_field(IDim, KDim)(np.zeros(shape))
-
-    ref = np.asarray(inp)[1:, 2:]
-
-    run_processor(
-        fencil,
-        fencil_processor,
-        shape[0],
-        shape[1],
-        inp,
-        out,
-        offset_provider={"I": IDim, "K": KDim},
+        column_axis=KDim,
         lift_mode=lift_mode,
     )
 
