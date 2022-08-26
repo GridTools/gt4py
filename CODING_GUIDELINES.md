@@ -61,7 +61,7 @@ Try to keep sections and items within sections ordered logically, adding comment
 
 ### Ignoring QA errors
 
-You may ocassionally need to disable checks from _quality assurance_  (QA) tools (e.g. linters, type checkers, etc.) on specific lines because the tool is not able to fully understand why that piece of code is needed. This is usually feasible inlining a special comment like `# type: ignore`. You should **only** ignore QA errors when you fully understand its cause and it is not reasonable to fix it by rewriting the offending code in a different way. Additionally, you should add a brief comment to make sure anyone else reading the code also understands what is happening there. For example:
+You may ocassionally need to disable checks from _quality assurance_  (QA) tools (e.g. linters, type checkers, etc.) on specific lines because the tool is not able to fully understand why that piece of code is needed. This is usually done by a special comment like `# type: ignore`. You should **only** ignore QA errors when you fully understand its cause and rewriting it to pass QA checks would actually make it less readable. Additionally, you should add a brief comment to make sure anyone else reading the code also understands what is happening there. For example:
 
    ```python
    f = lambda: 'empty'  # noqa: E731  # assign lambda expression for testing
