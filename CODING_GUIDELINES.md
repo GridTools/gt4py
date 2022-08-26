@@ -54,7 +54,7 @@ In general, you should structure new Python modules in the following way:
 ```python
 __all__ = ["func_a", "CONST_B"]
    ```
-6. Public constant and typing definitions.
+6. Public constants and typing definitions.
 7. Module contents organized in a meaningful way for reading and understanding the module, usually defining functions before classes.
 
 Try to keep sections and items within sections ordered logically, adding comments to make it explicit if needed (also in configuration files). If there is not one single evident logical order, just pick the order you consider best or use alphabetical order.
