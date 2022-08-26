@@ -3,7 +3,7 @@
 
 ## Code design
 
-Designing software is a hard task which can be easily overlooked when you are working under tight deadlines or you are eager to implement some cool new feature. However, in the long term bad designs come up with a large cost of additional work caused by having chosen in the past the quickest solution rather than the most effective one (_technical debt_).
+Designing software is a hard task and can be easily overlooked when you are working under tight deadlines or eager to implement some cool new feature. However, choosing the quick solution instead of the clean one will likely lead to a large amount of additional work in the future (_technical debt_).
 
 When working on the implementation of new features, you should think carefully about the design of your solution and assess it with the following principles in mind:
 
