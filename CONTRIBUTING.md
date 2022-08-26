@@ -98,7 +98,7 @@ We use [pre-commit](https://pre-commit.com/) to run several auto-formatting and 
 pre-commit install --install-hooks
 ```
 
-Or it can be executed on demand from the command line:
+Alternatively, it can be executed on demand from the command line:
 
 ```bash
 # Check only the staged changes
