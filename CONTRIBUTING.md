@@ -26,7 +26,7 @@ Look through the [GitHub issues](https://github.com/gridtools/gt4py/issues) for 
 
 ### Write Documentation
 
-GT4Py could always use more documentation, whether as part of the official GT4Py docs, in docstrings, or even on the web in blog posts, articles, and such.
+GT4Py could always use more documentation, whether as part of the official GT4Py docs, in docstrings, or even on the web in blog posts and articles.
 
 ### Submit Feedback
 
