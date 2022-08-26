@@ -166,8 +166,9 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                 args=[self._construct_itir_out_arg(el) for el in node.elts],
             )
         else:
-            raise AssertionError()(
-                "Unexpected `out` argument. Must be a `past.Name` or `past.Subscript` or nesting in a `past.TupleExpr`."
+            raise AssertionError(
+                "Unexpected `out` argument. Must be a `past.Name`, `past.Subscript`"
+                " or a `past.TupleExpr` of  `past.Name`, `past.Subscript` or`past.TupleExpr` (recursively)."
             )
 
     def _construct_itir_domain_arg(
