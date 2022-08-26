@@ -14,39 +14,44 @@
 
 
 import ctypes
-from types import MappingProxyType
+import types
 from typing import Final, Sequence, Type
 
-import numpy
+import numpy as np
 
-from functional.fencil_processors import source_modules
+from functional.fencil_processors.source_modules import source_modules
 
 
-LANGUAGE_ID: Final = "cpp"
+CPP_DEFAULT: Final = source_modules.LanguageWithHeaderFilesSettings(
+    formatter_key="cpp",
+    formatter_style="LLVM",
+    file_extension="cpp",
+    header_extension="cpp.inc",
+)
 
-_TYPE_MAPPING: Final = MappingProxyType(
+_TYPE_MAPPING: Final = types.MappingProxyType(
     {
         bool: "bool",
         int: "long",
         float: "double",
         complex: "std::complex<double>",
-        numpy.bool_: "bool",
-        numpy.byte: "signed char",
-        numpy.ubyte: "unsigned char",
-        numpy.short: "short",
-        numpy.ushort: "unsigned short",
-        numpy.intc: "int",
-        numpy.uintc: "unsigned int",
-        numpy.int_: "long",
-        numpy.uint: "unsigned long",
-        numpy.longlong: "long long",
-        numpy.ulonglong: "unsigned long long",
-        numpy.single: "float",
-        numpy.double: "double",
-        numpy.longdouble: "long double",
-        numpy.csingle: "std::complex<float>",
-        numpy.cdouble: "std::complex<double>",
-        numpy.clongdouble: "std::complex<long double>",
+        np.bool_: "bool",
+        np.byte: "signed char",
+        np.ubyte: "unsigned char",
+        np.short: "short",
+        np.ushort: "unsigned short",
+        np.intc: "int",
+        np.uintc: "unsigned int",
+        np.int_: "long",
+        np.uint: "unsigned long",
+        np.longlong: "long long",
+        np.ulonglong: "unsigned long long",
+        np.single: "float",
+        np.double: "double",
+        np.longdouble: "long double",
+        np.csingle: "std::complex<float>",
+        np.cdouble: "std::complex<double>",
+        np.clongdouble: "std::complex<long double>",
         ctypes.c_bool: "bool",
         ctypes.c_char: "char",
         ctypes.c_wchar: "wchar_t",
