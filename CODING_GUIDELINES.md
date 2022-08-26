@@ -69,7 +69,7 @@ You may ocassionally need to disable checks from _quality assurance_  (QA) tools
 
 ## Testing 
 
-Testing components is a critical part of a software development project. We follow standard practices in software development and write unit, integration and regression tests. Note that even though [doctests][doctest] are great for documentation purposes, they lack many features and are not easy to debug. Hence, they should not be used as replacement for proper unit tests except for trivial cases.
+Testing components is a critical part of a software development project. We follow standard practices in software development and write unit, integration and regression tests. Note that even though [doctests][doctest] are great for documentation purposes, they lack many features and are difficult to debug. Hence, they should not be used as replacement for proper unit tests except for trivial cases.
  
 TODO: add test conventions
 <!--
