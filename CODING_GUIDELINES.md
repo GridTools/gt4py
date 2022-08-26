@@ -30,7 +30,7 @@ We deviate from the [Google Python Style Guide][google-style-guide] only in the 
 
 ### Docstrings
 
-We generate the API documentation automatically from the docstrings using the [Sphinx][sphinx] generator together with some extensions like [Sphinx-autodoc][sphinx-autodoc] and [Sphinx-napoleon][sphinx-napoleon], which understands and enhances the docstrings conventions from the Google Python Style Guide. Checkout [Example Google Style Python Docstrings](https://sphinxcontrib-napoleon.readthedocs.io/en/latest/example_google.html#example-google) for a complete overview.
+We generate the API documentation automatically from the docstrings using [Sphinx][sphinx] together with some extensions like [Sphinx-autodoc][sphinx-autodoc] and [Sphinx-napoleon][sphinx-napoleon], which follow the Google Python Style Guide docstring conventions to automatically format the generated documentation. Check out the [Example Google Style Python Docstrings](https://sphinxcontrib-napoleon.readthedocs.io/en/latest/example_google.html#example-google)for a complete overview.
 
 Sphinx supports [reStructuredText][sphinx-rest] (reST) markup language to add additional formatting options to the generated docs, however section [_3.8 Comments and Docstrings_](https://google.github.io/styleguide/pyguide.html#38-comments-and-docstrings) of the Google Python Style Guide does not define how to use markups in docstrings. As a result, we decided to forbid the use of reST markup in docstrings, except for the following cases:
 
@@ -46,7 +46,7 @@ In general, you should structure new Python modules in the following way:
 1. _shebang_ line: `#! /usr/bin/env python3` (only for **executable scripts**!).
 2. License header (see `LICENSE_HEADER.txt`).
 3. Module docstring.
-4. Imports, alphabetically ordered within each block:
+4. Imports, alphabetically ordered within each block (fixed automatically by `isort`):
    1. Block of imports from the standard library.
    2. Block of imports from general third party libraries using standard shortcuts when customary (e.g. `numpy as np`).
    3. Block of imports from specific modules of the project.
@@ -55,7 +55,7 @@ In general, you should structure new Python modules in the following way:
 __all__ = ["func_a", "CONST_B"]
    ```
 6. Public constants and typing definitions.
-7. Module contents organized in a meaningful way for reading and understanding the module, usually defining functions before classes.
+7. Module contents organized in a convenient way for understanding how the pieces of code fit together, usually defining functions before classes.
 
 Try to keep sections and items within sections ordered logically, adding comments to make it explicit if needed (also in configuration files). If there is not one single evident logical order, just pick the order you consider best or use alphabetical order.
 
