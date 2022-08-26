@@ -210,7 +210,7 @@ Currently, GT4Py releases are published as commit tags in the main GitHub reposi
 
 ## Tools
 
-As mentioned above, we use several tools to help us writing high-quality code. New tools could be added in the future, specially if they do not add a large overhead to our workflow and we think they bring extra benefits to keep our codebase in shape. The most important ones we currently rely on are:
+As mentioned above, we use several tools that help us write high-quality code. New tools could be added in the future, especially if they do not add a large overhead to our workflow and we think they bring extra benefits to keep our codebase in shape. The most important ones we currently rely on are:
 
    - [Black][black] for autoformatting source code.
    - [isort][isort] for autoformatting import statements.
