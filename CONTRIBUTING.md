@@ -84,7 +84,7 @@ Ready to start contributing? Follow these steps:
     $ git push origin name-of-your-bugfix-or-feature
    ```
 
-7. Submit a pull request (PR) through the [GitHub](https://github.com/gridtools/gt4py) website.
+7. Submit a pull request (PR) on [GT4Py's GitHub page](https://github.com/gridtools/gt4py).
 
 
 ## Testing
