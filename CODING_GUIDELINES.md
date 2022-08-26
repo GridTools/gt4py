@@ -50,7 +50,7 @@ In general, you should structure new Python modules in the following way:
    1. Block of imports from the standard library.
    2. Block of imports from general third party libraries using standard shortcuts when customary (e.g. `numpy as np`).
    3. Block of imports from specific modules of the project.
-5. (Optional, mainly for re-exporting symbols from other modules) Definition of exported symbols:   
+5. Definition of exported symbols (optional, mainly for re-exporting symbols from other modules):
 ```python
 __all__ = ["func_a", "CONST_B"]
    ```
