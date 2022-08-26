@@ -67,7 +67,7 @@ Ready to start contributing? Follow these steps:
 
    Now you can make your changes locally. Make sure you follow the project code style documented in [CODING_GUIDELINES.md](CODING_GUIDELINES.md).
 
-5. When you're done making changes, check that your code comply with the project code style and other quality assurance (QA) practices using `pre-commit`, and that unit and regression tests pass for all supported Python versions using `tox`:
+5. When you're done making changes, check that your code complies with the project code style and other quality assurance (QA) practices using `pre-commit`. Additionally, make sure that unit and regression tests pass for all supported Python versions by running `tox`:
 
    ```bash
    $ pre-commit run
