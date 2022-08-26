@@ -45,7 +45,7 @@ _T = TypeVar("_T")
 _Tc = TypeVar("_Tc", covariant=True)
 
 
-class FrozenList(Tuple[_Tc, ...], metaclass=abc.ABCMeta):
+class FrozenList(Tuple[_Tc, ...], metaclass=abc.ABCMeta):  # noqa: B024   # no abstract methods
     """Tuple subtype which works as an alias of ``Tuple[_Tc, ...]``."""
 
     __slots__ = ()
