@@ -43,7 +43,7 @@ Regarding code examples in docstrings, we highly encourage using the [doctest][d
 
 In general, you should structure new Python modules in the following way:
 
-1. (Only for **executable scripts**) _shebang_ line: `#! /usr/bin/env python3`.
+1. _shebang_ line: `#! /usr/bin/env python3` (only for **executable scripts**!).
 2. License header (see `LICENSE_HEADER.txt`).
 3. Module docstring.
 4. Imports, alphabetically ordered within each block:
