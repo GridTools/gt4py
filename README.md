@@ -1,4 +1,4 @@
-![tox-badge](https://github.com/GridTools/gt4py/actions/workflows/tox.yml/badge.svg?branch=functional) ![qa-badge](https://github.com/GridTools/gt4py/actions/workflows/qa.yml/badge.svg?branch=functional)
+![tox-badge](https://github.com/GridTools/gt4py/actions/workflows/tox.yml/badge.svg?branch=functional) ![qa-badge](https://github.com/GridTools/gt4py/actions/workflows/qa.yml/badge.svg?branch=functional)![license-badge](https://img.shields.io/github/license/GridTools/gt4py)
 
 
 # GT4Py: GridTools for Python
