@@ -184,7 +184,7 @@ Currently, GT4Py releases are published as commit tags in the main GitHub reposi
    $ bump2version minor # or patch
    ```
 
-3. Update the [CHANGELOG.md](CHANGELOG.md) file to document the changes included in the new release. This process can be fully or partially automatized if commit messages follow the [Conventional Commits][conventional-commits] convention as suggested in the section about [Pull Request and Merge Guidelines](#pull-request-and-merge-guidelines). 
+3. Update the [CHANGELOG.md](CHANGELOG.md) file to document the changes included in the new release. This process can be fully or partially automated if commit messages follow the [Conventional Commits][conventional-commits] convention as suggested in the section about [Pull Request and Merge Guidelines](#pull-request-and-merge-guidelines). 
 
 4. Commit the changes with the following commit message:
 
