@@ -1,6 +1,6 @@
 # Contributing
 
-Contributions to GT4Py are welcome, and they are greatly appreciated. Proper credit will be given to contributors by adding their names to the [AUTHORS.md](AUTHORS.md) file. Note that [ETH Zurich](https://ethz.ch/en.html) is the owner of the GridTools project and the GT4Py library, therefore external contributors must sign a contributor assignment agreement.
+Contributions to GT4Py are welcome and greatly appreciated. Proper credit will be given to contributors by adding their names to the [AUTHORS.md](AUTHORS.md) file. Note that [ETH Zurich](https://ethz.ch/en.html) is the owner of the GridTools project and the GT4Py library, therefore external contributors must sign a contributor assignment agreement.
 
 
 ## Types of Contributions
