@@ -37,7 +37,7 @@ def convert_arg(arg: Any) -> Any:
 @dataclasses.dataclass(frozen=True)
 class GTFNExecutor(fpi.FencilExecutor):
     language_settings: source_modules.LanguageWithHeaderFilesSettings = cpp_gen.CPP_DEFAULT
-    build_project_gen: pipeline.BuildProjectGenerator = build.CompileCommandProject
+    build_project_gen: pipeline.BuildableProjectGenerator = build.CompileCommandProject
 
     name: Optional[str] = None
 

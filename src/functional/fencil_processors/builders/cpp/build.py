@@ -138,7 +138,7 @@ def _get_python_module_suffix():
 
 
 @dataclasses.dataclass(frozen=True)
-class CompileCommandProject(pipeline.BuildProject):
+class CompileCommandProject(pipeline.BuildableProject):
     """Use CMake to configure a valid compile command and then just compile."""
 
     source_module: source_modules.SourceModule[
