@@ -137,6 +137,8 @@ def _get_python_module_suffix():
     return importlib.machinery.EXTENSION_SUFFIXES[0][1:]
 
 
+# @todo adapt CompileCommandProject to design changes
+# @todo clean up CompileCommandProject
 @dataclasses.dataclass(frozen=True)
 class CompileCommandProject(pipeline.BuildableProject):
     """Use CMake to configure a valid compile command and then just compile."""
@@ -256,6 +258,7 @@ class CompileCommandProject(pipeline.BuildableProject):
         return getattr(importer.import_from_path(self.binary_file), self.name)
 
 
+# @todo split CMakeProject into cachable jit module (data, caching ops) and jit builder (manage build system)
 @dataclasses.dataclass(frozen=True)
 class CMakeProject(pipeline.BuildableProject):
     """Represent a CMake project for an externally compiled fencil."""
