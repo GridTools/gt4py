@@ -5,14 +5,14 @@
 
 Designing software is a hard task and can be easily overlooked when you are working under tight deadlines or eager to implement some cool new feature. However, choosing the quick solution instead of the clean one will likely lead to a large amount of additional work in the future (_technical debt_).
 
-When working on the implementation of new features, you should think carefully about the design of your solution and assess it with the following principles in mind:
+To keep technical debt at acceptable levels, follow best practices when designing and implementing new features:
 
-1. Look at each piece of code and ask yourself: _Would I point to this in a job interview as an example of well crafted code according to my best abilities?_
-2. If it isn't tested and verified, it isn't scientific. This is a scientific software library.
-3. Separate concerns: any unit of code should have one concern and one only. The implementation details of any unit of code should not be known to any other unit of code.
-4. Do not repeat yourself ([DRY](https://en.wikipedia.org/wiki/Don%27t_repeat_yourself)): always check if functionality already exists elsewhere in the project before implementing it. Also recognize when multiple specific implementations of an algorithm can be replaced with a single generic one.
-5. Do not reinvent the wheel: instead of writing a new component to solve a problem consider existing solutions.
-6. Names should state the intent of code objects. If the intent of a code expression **might** not be immediately obvious it deserves a name which makes it obvious.
+1. Make sure all your code is covered by automatic testing to ensure its correctness. Where unit tests are impractical, use integration tests.
+2. Adhere to the [SOLID](https://en.wikipedia.org/wiki/SOLID) principles of software design.
+3. Do not reinvent the wheel: if someone else solved your problem within the project or in a third party library, consider using it or extending it before writing a new component for basically the same purpose.
+4. _You ain't gonna need it_ ([YAGNI](https://en.wikipedia.org/wiki/You_aren%27t_gonna_need_it)): don't design solutions for problems that might come up in the future, chances are you will never need that code. Focus on the current problems and prepare for future requirements by writing clean code.
+5. _Do not repeat yourself_ ([DRY](https://en.wikipedia.org/wiki/Don%27t_repeat_yourself)): if you are writing down the same code pattern in several places you should extract it into a function.
+6. Use meaningful names: the purpose of an object should be clear from its name. Class names are usually nouns and function names are verbs.
 
 Remember that important design decisions should be documented as reference for the future and to share the knowledge with all the developers. We decided to use lightweight _Architecture Decision Records_ (ADRs) for this purpose. The whole list of ADRs and documentation about when and how to write new ones can be found in [docs/functional/architecture/Index.md](docs/functional/architecture/Index.md).
 
