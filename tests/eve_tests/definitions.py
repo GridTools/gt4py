@@ -303,7 +303,7 @@ def make_source_location(*, fixed: bool = False) -> SourceLocation:
     return SourceLocation(line=line, column=column, source=source)
 
 
-def make_source_location_group(*, fixed: bool = False) -> SourceLocation:
+def make_source_location_group(*, fixed: bool = False) -> SourceLocationGroup:
     loc1 = make_source_location(fixed=fixed)
     loc2 = make_source_location(fixed=fixed)
 
