@@ -57,7 +57,9 @@ __all__ = ["func_a", "CONST_B"]
 6. Public constants and typing definitions.
 7. Module contents organized in a convenient way for understanding how the pieces of code fit together, usually defining functions before classes.
 
-Try to keep sections and items within sections ordered logically, adding comments to make it explicit if needed (also in configuration files). If there is not one single evident logical order, just pick the order you consider best or use alphabetical order.
+Try to keep sections and items within sections ordered logically, add section separator comments to make section boundaries explicit when needed. If there is not one a single evident logical order, just pick the order you consider best or use alphabetical order.
+
+Consider configuration files as another kind of source code and apply the same criteria to keep them structured in a logical order, using comments when possible for the ease of reading.
 
 ### Ignoring QA errors
 
