@@ -817,7 +817,7 @@ def test_docstring():
     a = np_as_located_field(IDim)(np.ones((size,)))
 
     @field_operator
-    def _test_docstring(a: Field[[IDim], float64]) -> Field[[IDim], float64]:
+    def fieldop_with_docstring(a: Field[[IDim], float64]) -> Field[[IDim], float64]:
         """My docstring."""
 
         a = a
