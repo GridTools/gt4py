@@ -619,9 +619,8 @@ def _make_tuple(
         data = field_or_tuple[indices]
         if as_column:
             # wraps a vertical slice of an input field into a `Column`
-            return Column(
-                0, data
-            )  # TODO(havogt) when we support LocatedFields with origin (i.e. non-zero origin), kstart needs to be adapated here
+            assert _column_range is not None
+            return Column(_column_range.start, data)
         else:
             return data
 
@@ -675,7 +674,10 @@ class MDIterator:
                 raise IndexError("Iterator position doesn't point to valid location for its field.")
         slice_column = dict[Tag, FieldIndex]()
         if self.column_axis is not None:
-            slice_column[self.column_axis] = slice(shifted_pos[self.column_axis], None)
+            assert _column_range is not None
+            k_pos = shifted_pos[self.column_axis]
+            assert isinstance(k_pos, int)
+            slice_column[self.column_axis] = slice(k_pos, k_pos + len(_column_range))
             shifted_pos.pop(self.column_axis)
 
         assert _is_concrete_position(shifted_pos)
@@ -683,10 +685,7 @@ class MDIterator:
             axes,
             {**shifted_pos, **slice_column},
         )
-        try:
-            return _make_tuple(self.field, ordered_indices, as_column=self.column_axis is not None)
-        except IndexError:
-            return _UNDEFINED
+        return _make_tuple(self.field, ordered_indices, as_column=self.column_axis is not None)
 
 
 def make_in_iterator(
@@ -712,7 +711,8 @@ def make_in_iterator(
         new_pos[sparse_dim] = init  # type: ignore[assignment] # looks like mypy is confused
     if column_axis is not None:
         # if we deal with column stencil the column position is just an offset by which the whole column needs to be shifted
-        new_pos[column_axis] = 0
+        assert _column_range is not None
+        new_pos[column_axis] = _column_range.start
     return MDIterator(
         inp,
         new_pos,
@@ -806,21 +806,27 @@ def _tupsum(a, b):
         if isinstance(s, slice):
             is_slice = True
             first = 0 if s.start is None else s.start
+            first_stop = s.stop
             assert s.step is None
-            assert s.stop is None
         else:
             assert isinstance(s, numbers.Integral)
             first = s
+            first_stop = None
         if isinstance(t, slice):
             is_slice = True
             second = 0 if t.start is None else t.start
+            second_stop = t.stop
             assert t.step is None
-            assert t.stop is None
         else:
             assert isinstance(t, numbers.Integral)
             second = t
+            second_stop = None
         start = first + second
-        return slice(start, None) if is_slice else start
+        if is_slice:
+            stop = None if first_stop is None or second_stop is None else first_stop + second_stop
+            return slice(start, stop)
+        else:
+            return start
 
     return tuple(combine_slice(*i) for i in zip(a, b))
 
