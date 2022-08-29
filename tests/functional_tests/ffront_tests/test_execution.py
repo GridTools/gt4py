@@ -825,7 +825,7 @@ def test_docstring():
 
     @program
     def test_docstring(a: Field[[IDim], float64]) -> Field[[IDim], float64]:
-        """3"""
+        """My docstring."""
         _test_docstring(a, out=a)
 
     test_docstring(a, offset_provider={})
