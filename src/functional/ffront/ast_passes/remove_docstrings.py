@@ -30,7 +30,7 @@ class RemoveDocstrings(ast.NodeTransformer):
     def apply(cls, node):
         return cls(_parent_node=node).visit(node)
 
-    def generic_visit(self, node):
+    def visit_FunctionDef(self, node):
         new_node = self._parent_node
         if hasattr(new_node, "body"):
             for obj in new_node.body:
