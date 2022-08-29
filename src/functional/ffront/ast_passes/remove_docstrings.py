@@ -12,7 +12,6 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 import ast
-import dataclasses
 
 
 class RemoveDocstrings(ast.NodeTransformer):
@@ -30,6 +29,10 @@ class RemoveDocstrings(ast.NodeTransformer):
     def visit_FunctionDef(self, node):
         if isinstance(node, ast.FunctionDef):
             for obj in node.body:
-                if isinstance(obj, ast.Expr) and isinstance(obj.value, ast.Constant) and isinstance(obj.value.value, str):
-                        node.body.remove(obj)
+                if (
+                    isinstance(obj, ast.Expr)
+                    and isinstance(obj.value, ast.Constant)
+                    and isinstance(obj.value.value, str)
+                ):
+                    node.body.remove(obj)
         return node
