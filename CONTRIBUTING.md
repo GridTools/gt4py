@@ -46,10 +46,12 @@ Ready to start contributing? Follow these steps:
 
 1. Fork the [GT4Py](https://github.com/gridtools/gt4py) repo on GitHub.
 
-2. Clone your fork locally:
+2. Clone your fork locally and check out the relevant branch:
 
    ```bash
    $ git clone git@github.com:your_name_here/gt4py.git
+   $ cd gt4py
+   $ git checkout functional
    ```
 
 3. Follow instructions in the [README.md](README.md) file to set up an environment for local development. For example:

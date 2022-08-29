@@ -73,7 +73,7 @@ You may ocassionally need to disable checks from _quality assurance_  (QA) tools
 
 Testing components is a critical part of a software development project. We follow standard practices in software development and write unit, integration and regression tests. Note that even though [doctests][doctest] are great for documentation purposes, they lack many features and are difficult to debug. Hence, they should not be used as replacement for proper unit tests except for trivial cases.
  
-TODO: add test conventions
+TODO: add missing test conventions.
 <!--
 TODO: add test conventions:
 TODO:    - to organize tests inside the `tests/` folder
@@ -82,7 +82,7 @@ TODO:    - to use pytest features (fixtures, markers, etc.)
 TODO:    - to generate mock objects and data for tests (e.g. pytest-factoryboy, pytest-cases)
 TODO:    - to use pytest plugins 
 
-Refs:
+Links with plugins:
 https://towardsdatascience.com/pytest-plugins-to-love-%EF%B8%8F-9c71635fbe22
 https://testandcode.com/116
 -->
