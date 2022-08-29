@@ -117,7 +117,7 @@ class DialectParser(ast.NodeVisitor, Generic[DialectRootT]):
             definition_ast = RemoveDocstrings.apply(definition_ast)
             definition_ast = cls._preprocess_definition_ast(
                 ast.increment_lineno(
-                    FixMissingLocations.apply(RemoveDocstrings.apply(raw_ast)), starting_line - 1
+                    FixMissingLocations.apply(RemoveDocstrings.apply(definition_ast)), starting_line - 1
                 )
             )
             output_ast = cls._postprocess_dialect_ast(

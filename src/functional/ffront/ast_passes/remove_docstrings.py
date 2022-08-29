@@ -15,7 +15,6 @@ import ast
 import dataclasses
 
 
-@dataclasses.dataclass(kw_only=True)
 class RemoveDocstrings(ast.NodeTransformer):
     """
     Description.
@@ -24,18 +23,13 @@ class RemoveDocstrings(ast.NodeTransformer):
     If such patterns is detected, this entry in the node.body list is removed.
     """
 
-    _parent_node: ast.AST
-
     @classmethod
     def apply(cls, node):
-        return cls(_parent_node=node).visit(node)
+        return cls().visit(node)
 
     def visit_FunctionDef(self, node):
-        new_node = self._parent_node
-        if hasattr(new_node, "body"):
-            for obj in new_node.body:
-                if isinstance(obj, ast.Expr):
-                    if isinstance(obj.value, ast.Constant) and isinstance(obj.value.value, str):
-                        new_node.body.remove(obj)
-
-        return new_node
+        if isinstance(node, ast.FunctionDef):
+            for obj in node.body:
+                if isinstance(obj, ast.Expr) and isinstance(obj.value, ast.Constant) and isinstance(obj.value.value, str):
+                        node.body.remove(obj)
+        return node
