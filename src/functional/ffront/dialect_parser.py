@@ -111,7 +111,10 @@ class DialectParser(ast.NodeVisitor, Generic[DialectRootT]):
 
         source, filename, starting_line = source_definition
         try:
-            raw_ast = ast.parse(textwrap.dedent(source)).body[0]
+            definition_ast = ast.parse(textwrap.dedent(source)).body[0]
+            definition_ast = FixMissingLocations.apply(definition_ast)
+            definition_ast = ast.increment_lineno(definition_ast, starting_line - 1)
+            definition_ast = RemoveDocstrings.apply(definition_ast)
             definition_ast = cls._preprocess_definition_ast(
                 ast.increment_lineno(
                     FixMissingLocations.apply(RemoveDocstrings.apply(raw_ast)), starting_line - 1
