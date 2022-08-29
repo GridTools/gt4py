@@ -20,6 +20,8 @@
 from __future__ import annotations
 
 import ast
+import copy
+import functools
 import re
 
 from . import datamodels, exceptions, extended_typing as xtyping, trees, utils
@@ -228,30 +230,22 @@ class Node(datamodels.DataModel, trees.Tree, kw_only=True):  # type: ignore[call
     walk_items = trees.walk_items
     walk_values = trees.walk_values
 
-    # TODO(egparedes): add useful hashes to base node
-    # # @property
-    # def content_id(self) -> int:
-    #     ...
-    #
-    # @property
-    # def annex_content_id(self) -> int:
-    #     ...
-    #
-    # @property
-    # def node_content_id(self) -> int:
-    #     ...
-    #
-    # @property
-    # def instance_content_id(self) -> int:
-    #     ...
-    #
-    # @property
-    # def instance_id(self) -> int:
-    #     ...
+    @property
+    def node_id(self) -> int:
+        return utils.phash(
+            *(
+                (key, getattr(child, "content_id", child))
+                for key, child in self.iter_children_items()
+            )
+        )
+
+    @property
+    def content_id(self) -> int:
+        return utils.phash((self.node_id, self.annex.content_id))
 
 
 NodeT = TypeVar("NodeT", bound="Node")
-ValueNode = Union[bool, bytes, int, float, str, IntEnum, StrEnum]
+ValueNode = Union[bool, bytes, int, float, complex, str, IntEnum, StrEnum]
 LeafNode = Union[NodeT, ValueNode]
 CollectionNode = Union[List[LeafNode], Dict[Any, LeafNode], Set[LeafNode]]
 RootNode = Union[NodeT, CollectionNode]
@@ -259,6 +253,18 @@ RootNode = Union[NodeT, CollectionNode]
 
 class FrozenNode(Node, frozen=True):  # type: ignore[call-arg]  # frozen from DataModel
     ...
+
+
+class ImmutableNode(Node, frozen="strict"):  # type: ignore[call-arg]  # frozen from DataModel
+    ...
+
+    @functools.cached_property
+    def node_id(self) -> int:
+        return super(ImmutableNode, self).node_id
+
+    @functools.cached_property
+    def content_id(self) -> int:
+        return super(ImmutableNode, self).content_id
 
 
 class GenericNode(datamodels.GenericDataModel, Node, kw_only=True):  # type: ignore[call-arg]  # kw_only from DataModel

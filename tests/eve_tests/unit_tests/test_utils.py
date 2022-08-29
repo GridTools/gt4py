@@ -17,12 +17,15 @@
 import copy
 import dataclasses
 import hashlib
+import io
 import string
 from typing import Any
 
 import pytest
+import xxhash
 
 import eve
+import eve.utils
 from eve.utils import XIterable
 
 
@@ -73,7 +76,7 @@ def test_register_subclasses():
         pass
 
     @eve.utils.register_subclasses(MyVirtualSubclassA, MyVirtualSubclassB)
-    class MyBaseClass(abc.ABC):  # noqa: B024
+    class MyBaseClass(abc.ABC):
         pass
 
     assert issubclass(MyVirtualSubclassA, MyBaseClass) and issubclass(
@@ -136,6 +139,7 @@ def unique_data_items(request):
         DataClass(data=input_data[0]),
         ModelClass(data=input_data),
         ModelClass(data=input_data[0]),
+        [DataClass(data=input_data), ModelClass(data=input_data[0])],
     ]
 
 
@@ -161,31 +165,82 @@ def test_noninstantiable_class():
     assert not eve.utils.is_noninstantiable(InstantiableSubclass)
 
 
-@pytest.fixture(
-    params=[None, hashlib.md5(), "md5", hashlib.sha1(), "sha1", hashlib.sha256(), "sha256"]
-)
-def hash_algorithm(request):
-    yield request.param
+hash_kind_options = ["int", "str"]
 
 
-def test_shash(unique_data_items, hash_algorithm):
-    from eve.utils import content_hash
+class TestHashes:
+    @pytest.mark.parametrize(
+        "hash_algorithm_maker",
+        [xxhash.xxh3_64, hashlib.md5, "md5", hashlib.sha1, "sha1", hashlib.sha256, "sha256"],
+    )
+    @pytest.mark.parametrize("hash_kind", hash_kind_options)
+    def test_get_pickle_hasher(self, unique_data_items, hash_algorithm_maker, hash_kind):
+        from eve.utils import get_pickle_hasher
 
-    # Test hash consistency
-    for item in unique_data_items:
-        if hasattr(hash_algorithm, "copy"):
-            h1 = hash_algorithm.copy()
-            h2 = hash_algorithm.copy()
-        else:
-            h1 = hash_algorithm
-            h2 = hash_algorithm
-        assert content_hash(item, hash_algorithm=h1) == content_hash(
-            copy.deepcopy(item), hash_algorithm=h2
+        ch = get_pickle_hasher(hash_algorithm_maker=hash_algorithm_maker, hash_kind=hash_kind)
+        hashes = list(ch(item) for item in unique_data_items)
+
+        assert all(type(it).__name__ == hash_kind for it in hashes)
+        assert hashes == list(ch(item) for item in unique_data_items)
+        assert len(hashes) == len(unique_data_items)
+
+    @pytest.mark.parametrize(
+        "hash_algorithm",
+        [None, hashlib.md5(), "md5", hashlib.sha1(), "sha1", hashlib.sha256(), "sha256"],
+    )
+    @pytest.mark.parametrize("hash_kind", hash_kind_options)
+    def test_stable_hash(self, unique_data_items, hash_algorithm, hash_kind):
+        from eve.utils import pickle_hash
+
+        # Test hash consistency
+        for item in unique_data_items:
+            if hasattr(hash_algorithm, "copy"):
+                h1 = hash_algorithm.copy()
+                h2 = hash_algorithm.copy()
+            else:
+                h1 = hash_algorithm
+                h2 = hash_algorithm
+            assert pickle_hash(item, hash_algorithm=h1) == pickle_hash(
+                copy.deepcopy(item), hash_algorithm=h2
+            )
+
+        # Test hash specificity
+        hashes = set(
+            pickle_hash(item, hash_algorithm=hash_algorithm, hash_kind=hash_kind)
+            for item in unique_data_items
         )
+        assert len(hashes) == len(unique_data_items)
 
-    # Test hash specificity
-    hashes = set(content_hash(item, hash_algorithm=hash_algorithm) for item in unique_data_items)
-    assert len(hashes) == len(unique_data_items)
+        # Test hash output type
+        assert all(type(it).__name__ == hash_kind for it in hashes)
+
+    def test_dhash(self, unique_data_items):
+        from eve.utils import dhash
+
+        # Test hash consistency
+        for item in unique_data_items:
+            assert dhash(item) == dhash(copy.deepcopy(item))
+
+        # Test hash specificity
+        hashes = set(dhash(item) for item in unique_data_items)
+        assert len(hashes) == len(unique_data_items)
+
+    def test_IDHashable(self, unique_data_items):
+        from eve.utils import IDHashable
+
+        for item in unique_data_items:
+            assert hash(IDHashable(item)) == id(item)
+            assert hash(IDHashable(item)) == hash(IDHashable(item))
+            assert hash(IDHashable(item_copy := copy.deepcopy(item))) == id(item_copy)
+
+
+class TestDDiffTools:
+    def test_pprint_ddiff(self):
+        d = {"key": [(1, 2), (3, 4)], "nested": {("foo", 2): [2, "str", {1, 2, 3}]}}
+        stream = io.StringIO()
+        eve.utils.pprint_ddiff(d, d | {"new": "NEW"}, pp_stream=stream)
+
+        assert "dictionary_item_added" in stream.getvalue()
 
 
 # -- CaseStyleConverter --
@@ -223,6 +278,49 @@ def test_case_style_converter(name_with_cases):
             assert [w.lower() for w in CaseStyleConverter.split(cased_string, case)] == [
                 w.lower() for w in words
             ]
+
+
+# -- Namespaces --
+class TestNamespaces:
+    @pytest.mark.parametrize(
+        "ns",
+        [
+            eve.utils.Namespace(a=1, b="2", c=[1, 2, 3], d={"F": 3.5}),
+            eve.utils.FrozenNamespace(a=1, b="2", c=[1, 2, 3], d={"F": 3.5}),
+        ],
+    )
+    def test_members(self, ns):
+        ns_dict = ns.as_dict()
+
+        assert ns.keys() == ns_dict.keys()
+        assert list(ns.values()) == list(ns_dict.values())
+        assert ns.items() == ns_dict.items()
+
+        assert all(key in ns for key in ns.keys())
+
+        assert ns.content_id == eve.utils.phash(ns)
+
+        assert type(ns)(a=()) != type(ns)()
+        assert type(ns)(a=()) != type(ns)(b=())
+        assert type(ns)(a=()) == type(ns)(a=())
+
+    def test_frozen(self):
+
+        with pytest.raises(TypeError):
+            hash(eve.utils.Namespace(a=1, b="2", c=[1, 2, 3], d={"F": 3.5}))
+
+        ns = eve.utils.FrozenNamespace(a=1, b="2", c=[1, 2, 3], d={"F": 3.5})
+
+        with pytest.raises(TypeError, match="Trying to modify immutable"):
+            ns.a = 42
+
+        with pytest.raises(TypeError, match="Trying to modify immutable"):
+            del ns.a
+
+        with pytest.raises(TypeError, match="Trying to modify immutable"):
+            ns.new_attr = 42
+
+        assert hash(ns) == ns.content_id == hash(ns)
 
 
 # -- UIDGenerator --

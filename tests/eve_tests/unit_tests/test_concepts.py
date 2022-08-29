@@ -14,6 +14,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import copy
 import re
 
 import pytest
@@ -111,12 +112,21 @@ class TestNode:
         with pytest.raises((TypeError, ValueError)):
             invalid_sample_node_maker()
 
-    def test_unique_id(self, sample_node_maker):
+    def test_ids(self, sample_node_maker):
         node_a = sample_node_maker()
         node_b = sample_node_maker()
-        node_c = sample_node_maker()
 
-        assert id(node_a) != id(node_b) != id(node_c)
+        assert (node_a == node_b) == (node_a.node_id == node_b.node_id)
+        assert (node_a == node_b) == (node_a.content_id == node_b.content_id)
+
+        node_a_copy = copy.deepcopy(node_a)
+        assert node_a == node_a_copy
+        assert node_a.node_id == node_a_copy.node_id
+        assert node_a.content_id == node_a_copy.content_id
+
+        node_a_copy.annex.foo = 42
+        assert node_a.node_id == node_a_copy.node_id
+        assert node_a.content_id != node_a_copy.content_id
 
     def test_annex(self, sample_node):
         assert isinstance(sample_node.annex, eve.utils.Namespace)
