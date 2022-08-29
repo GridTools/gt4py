@@ -106,7 +106,7 @@ Alternatively, it can be executed on demand from the command line:
 # Check only the staged changes
 pre-commit run
 
-# Check all the files in the repository (-a / --all-files)
+# Check all the files in the repository: -a / --all-files
 pre-commit run -a
 
 # Run only some of the tools (e.g. flake8)
