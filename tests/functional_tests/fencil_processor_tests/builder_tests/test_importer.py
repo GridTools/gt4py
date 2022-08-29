@@ -20,7 +20,7 @@ import textwrap
 from functional.fencil_processors.builders import importer
 
 
-def test_import_callables():
+def test_import_from_path():
     src_module = textwrap.dedent(
         """\
     def function(a, b):
@@ -30,5 +30,5 @@ def test_import_callables():
     with tempfile.TemporaryDirectory() as folder:
         file = pathlib.Path(folder) / "module.py"
         file.write_text(src_module)
-        functions = importer.import_callables(file)
-        assert "function" in functions
+        module = importer.import_from_path(file)
+        assert hasattr(module, "function")

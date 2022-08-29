@@ -19,6 +19,7 @@ from eve import codegen
 from eve.codegen import FormatTemplate as as_fmt, MakoTemplate as as_mako
 from functional import common
 from functional.fencil_processors.codegens.gtfn import gtfn_ir
+from functional.fencil_processors.codegens.gtfn.itir_to_gtfn_ir import pytype_to_cpptype
 
 
 class GTFNCodegen(codegen.TemplatedGenerator):
@@ -72,15 +73,17 @@ class GTFNCodegen(codegen.TemplatedGenerator):
         return value
 
     def visit_Literal(self, node: gtfn_ir.Literal, **kwargs: Any) -> str:
-        if node.type == "int":
-            return node.value + "_c"
-        elif node.type == "float32":
-            return f"{self.asfloat(node.value)}f"
-        elif node.type == "float" or node.type == "float64":
-            return self.asfloat(node.value)
-        elif node.type == "bool":
-            return node.value.lower()
-        return node.value
+        match pytype_to_cpptype(node.type):
+            case "int":
+                return node.value + "_c"
+            case "float":
+                return self.asfloat(node.value) + "f"
+            case "double":
+                return self.asfloat(node.value)
+            case "bool":
+                return node.value.lower()
+            case _:
+                return node.value
 
     UnaryExpr = as_fmt("{op}({expr})")
     BinaryExpr = as_fmt("({lhs}{op}{rhs})")
@@ -127,6 +130,23 @@ class GTFNCodegen(codegen.TemplatedGenerator):
         """
     )
 
+    Scan = as_fmt("assign({output}, {function}(), {init}, {', '.join(inputs)})")
+    ScanExecution = as_fmt(
+        "{backend}.vertical_executor({axis})().{'.'.join('arg(' + a + ')' for a in args)}.{'.'.join(scans)}.execute();"
+    )
+
+    ScanPassDefinition = as_mako(
+        """
+        struct ${id} : ${'fwd' if _this_node.forward else 'bwd'} {
+            static constexpr GT_FUNCTION auto body() {
+                return scan_pass([](${','.join('auto const& ' + p for p in params)}) {
+                    return ${expr};
+                }, host_device::identity());
+            }
+        };
+        """
+    )
+
     FunctionDefinition = as_mako(
         """
         struct ${id} {
@@ -164,6 +184,10 @@ class GTFNCodegen(codegen.TemplatedGenerator):
             **kwargs,
         )
 
+    TemporaryAllocation = as_fmt(
+        "auto {id} = allocate_global_tmp<{dtype}>(tmp_alloc__, {domain}.sizes());"
+    )
+
     FencilDefinition = as_mako(
         """
     #include <cmath>
@@ -180,6 +204,8 @@ class GTFNCodegen(codegen.TemplatedGenerator):
 
     inline auto ${id} = [](auto... connectivities__){
         return [connectivities__...](auto backend, ${','.join('auto&& ' + p for p in params)}){
+            auto tmp_alloc__ = tmp_allocator(backend);
+            ${'\\n'.join(temporaries)}
             ${'\\n'.join(executions)}
         };
     };

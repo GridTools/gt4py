@@ -18,27 +18,27 @@ import importlib
 import pathlib
 import subprocess
 import textwrap
-from typing import Dict, Final, Optional, Sequence
+from dataclasses import dataclass
+from typing import Callable, Sequence
 
-from eve import Node
-from eve.codegen import JinjaTemplate as as_jinja, TemplatedGenerator
-from functional.fencil_processors import source_modules
+import eve
+from eve.codegen import JinjaTemplate as as_jinja
+from functional.fencil_processors import pipeline
+from functional.fencil_processors.builders import cache, importer
+from functional.fencil_processors.source_modules import source_modules
 
 
-_BUILD_SUBDIR: Final = "build"
-
-
-class FindDependency(Node):
+class FindDependency(eve.Node):
     name: str
     version: str
 
 
-class LinkDependency(Node):
+class LinkDependency(eve.Node):
     name: str
     target: str
 
 
-class CMakeListsFile(Node):
+class CMakeListsFile(eve.Node):
     project_name: str
     find_deps: Sequence[FindDependency]
     link_deps: Sequence[LinkDependency]
@@ -46,7 +46,7 @@ class CMakeListsFile(Node):
     bin_output_suffix: str
 
 
-class CMakeListsGenerator(TemplatedGenerator):
+class CMakeListsGenerator(eve.codegen.TemplatedGenerator):
     CMakeListsFile = as_jinja(
         """
         project({{project_name}})
@@ -135,61 +135,86 @@ def _get_python_module_suffix():
     return importlib.machinery.EXTENSION_SUFFIXES[0][1:]
 
 
-class CMakeProject:
-    """Work with CMake projects on the file system."""
+@dataclass(frozen=True)
+class CMakeProject(pipeline.BuildableProject):
+    """Represent a CMake project for an externally compiled fencil."""
 
-    _folder: Optional[pathlib.Path] = None
-    _name: str
-    _extension: str
-    _cmakelists: str
-    _sources: Dict[str, str]
-
-    def __init__(
-        self,
-        name: str,
-        dependencies: Sequence[source_modules.LibraryDependency],
-        sources: Dict[str, str],
-    ):
-        self._name = name
-        self._extension = _get_python_module_suffix()
-        self._cmakelists = _render_cmakelists(name, dependencies, list(sources.keys()))
-        self._sources = sources
-
-    @classmethod
-    def get_binary_path(
-        cls, root_folder: pathlib.Path, name: str, extension: str = _get_python_module_suffix()
-    ) -> pathlib.Path:
-        return root_folder / _BUILD_SUBDIR / "bin" / (name + "." + extension)
+    source_module: source_modules.SourceModule[
+        source_modules.Cpp, source_modules.LanguageWithHeaderFilesSettings
+    ]
+    bindings_module: source_modules.BindingModule[source_modules.Cpp, source_modules.Python]
+    cache_strategy: cache.Strategy
 
     @property
-    def current_binary(self) -> Optional[pathlib.Path]:
-        if not self._folder:
-            return None
-        path = self.get_binary_path(self._folder, self._name, self._extension)
-        if not path.exists():
-            return None
-        return path
+    def name(self) -> str:
+        return self.source_module.entry_point.name
 
-    def write(self, folder: pathlib.Path):
-        (folder / "CMakeLists.txt").write_text(self._cmakelists, encoding="utf-8")
-        for file_name, file_content in self._sources.items():
-            (folder / file_name).write_text(file_content, encoding="utf-8")
-        self._folder = folder
+    @property
+    def sources(self) -> dict[str, str]:
+        header_name = f"{self.name}.{self.source_module.language_settings.header_extension}"
+        bindings_name = (
+            f"{self.name}_bindings.{self.source_module.language_settings.file_extension}"
+        )
 
-    def configure(self):
-        if not self._folder:
-            raise RuntimeError("First you have to write the project to a folder.")
+        return {
+            header_name: self.source_module.source_code,
+            bindings_name: self.bindings_module.source_code,
+        }
 
-        (self._folder / _BUILD_SUBDIR).mkdir(exist_ok=True)
+    @property
+    def files(self) -> dict[str, str]:
+        return self.sources | {
+            "CMakeLists.txt": self.cmakelists_source,
+        }
+
+    @property
+    def cmakelists_source(self) -> str:
+        return _render_cmakelists(
+            self.name,
+            [*self.source_module.library_deps, *self.bindings_module.library_deps],
+            list(self.sources.keys()),
+        )
+
+    @property
+    def src_dir(self) -> pathlib.Path:
+        # TODO(ricoh): For any real caching, the source module, bindings module, type of build system
+        #   have to be taken into account at least.
+        return cache.get_cache_folder(self.source_module, self.cache_strategy)
+
+    @property
+    def build_dir(self) -> pathlib.Path:
+        return self.src_dir / "build"
+
+    @property
+    def binary_file(self) -> pathlib.Path:
+        return self.build_dir / "bin" / (self.name + "." + _get_python_module_suffix())
+
+    def is_written(self) -> bool:
+        return self.src_dir.exists and (self.src_dir / "CMakeLists.txt").exists()
+
+    def write(self) -> None:
+        root = self.src_dir
+        for name, content in self.files.items():
+            (root / name).write_text(content, encoding="utf-8")
+
+    def is_configured(self) -> bool:
+        return self.build_dir.exists and (self.build_dir / "CMakeCache.txt").exists()
+
+    def configure(self) -> None:
+        if not self.is_written():
+            self.write()
+        src_dir = self.src_dir
+        build_dir = self.build_dir
+        build_dir.mkdir(exist_ok=True)
         result = subprocess.run(
             [
                 "cmake",
                 "-G",
                 "Ninja",
                 "-S",
-                self._folder,
+                src_dir,
                 "-B",
-                self._folder / _BUILD_SUBDIR,
+                build_dir,
                 "-DCMAKE_BUILD_TYPE=Debug",
             ],
             stdout=subprocess.PIPE,
@@ -199,15 +224,23 @@ class CMakeProject:
             error = result.stdout.decode()
             raise RuntimeError(error)
 
-    def build(self):
-        if not self._folder:
-            raise RuntimeError("First you have to write the project to a folder.")
+    def is_built(self) -> bool:
+        return self.binary_file.exists()
+
+    def build(self) -> None:
+        if not self.is_configured():
+            self.configure()
 
         result = subprocess.run(
-            ["cmake", "--build", self._folder / _BUILD_SUBDIR],
+            ["cmake", "--build", self.build_dir],
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
         )
         if result.returncode != 0:
             error = result.stdout.decode()
             raise RuntimeError(error)
+
+    def get_implementation(self) -> Callable:
+        if not self.is_built():
+            self.build()
+        return getattr(importer.import_from_path(self.binary_file), self.name)

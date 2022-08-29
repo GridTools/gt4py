@@ -13,10 +13,11 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 
-from typing import Any, Iterable, Type
+from typing import Any, Iterable, Optional, Type, Union
 
 import eve
 from eve.concepts import SymbolName
+from eve.utils import UIDs
 from functional import common
 from functional.fencil_processors.codegens.gtfn.gtfn_ir import (
     Backend,
@@ -30,17 +31,37 @@ from functional.fencil_processors.codegens.gtfn.gtfn_ir import (
     Literal,
     Node,
     OffsetLiteral,
+    Scan,
+    ScanExecution,
+    ScanPassDefinition,
     SidComposite,
     StencilExecution,
     Sym,
     SymRef,
     TagDefinition,
     TaggedValues,
+    TemporaryAllocation,
     TernaryExpr,
     UnaryExpr,
     UnstructuredDomain,
 )
 from functional.iterator import ir as itir
+
+
+def pytype_to_cpptype(t: str):
+    try:
+        return {
+            "float": "double",
+            "float32": "float",
+            "float64": "double",
+            "int": "int",
+            "int32": "std::int32_t",
+            "int64": "std::int64_t",
+            "bool": "bool",
+            "axis_literal": None,  # TODO: domain?
+        }[t]
+    except KeyError:
+        raise TypeError(f"Unsupported type '{t}'") from None
 
 
 _vertical_dimension = "unstructured::dim::vertical"
@@ -172,11 +193,47 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     def visit_Sym(self, node: itir.Sym, **kwargs: Any) -> Sym:
         return Sym(id=node.id)
 
-    def visit_SymRef(self, node: itir.SymRef, **kwargs: Any) -> SymRef:
+    def visit_SymRef(
+        self,
+        node: itir.SymRef,
+        force_function_extraction: bool = False,
+        extracted_functions: Optional[list] = None,
+        **kwargs: Any,
+    ) -> SymRef:
+        if force_function_extraction:
+            assert extracted_functions is not None
+            assert node.id == "deref"
+            fun_id = UIDs.sequential_id(prefix="_fun")
+            fun_def = FunctionDefinition(
+                id=fun_id,
+                params=[Sym(id="x")],
+                expr=FunCall(fun=SymRef(id="deref"), args=[SymRef(id="x")]),
+            )
+            extracted_functions.append(fun_def)
+            return SymRef(id=fun_id)
         return SymRef(id=node.id)
 
-    def visit_Lambda(self, node: itir.Lambda, **kwargs: Any) -> Lambda:
-        return Lambda(params=self.visit(node.params), expr=self.visit(node.expr, **kwargs))
+    def visit_Lambda(
+        self,
+        node: itir.Lambda,
+        *,
+        force_function_extraction: bool = False,
+        extracted_functions: Optional[list] = None,
+        **kwargs: Any,
+    ) -> Union[SymRef, Lambda]:
+        if force_function_extraction:
+            assert extracted_functions is not None
+            fun_id = UIDs.sequential_id(prefix="_fun")
+            fun_def = FunctionDefinition(
+                id=fun_id,
+                params=self.visit(node.params, **kwargs),
+                expr=self.visit(node.expr, **kwargs),
+            )
+            extracted_functions.append(fun_def)
+            return SymRef(id=fun_id)
+        return Lambda(
+            params=self.visit(node.params, **kwargs), expr=self.visit(node.expr, **kwargs)
+        )
 
     def visit_Literal(self, node: itir.Literal, **kwargs: Any) -> Literal:
         return Literal(value=node.value, type=node.type)
@@ -272,21 +329,25 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
                 )
             elif self._is_sparse_deref_shift(node):
                 return self._sparse_deref_shift_to_tuple_get(node)
+            elif node.fun.id == "shift":
+                raise ValueError("unapplied shift call not supported: {node}")
+            elif node.fun.id == "scan":
+                raise ValueError("scans are only supported at the top level of a stencil closure")
             elif node.fun.id == "cartesian_domain":
                 sizes, domain_offsets = self._make_domain(node)
                 return CartesianDomain(tagged_sizes=sizes, tagged_offsets=domain_offsets)
             elif node.fun.id == "unstructured_domain":
                 sizes, domain_offsets = self._make_domain(node)
-                assert "stencil" in kwargs
-                shift_offsets = self._collect_offset_or_axis_node(
-                    itir.OffsetLiteral, kwargs["stencil"]
-                )
                 connectivities = []
-                for o in shift_offsets:
-                    if o in self.offset_provider and isinstance(
-                        self.offset_provider[o], common.Connectivity
-                    ):
-                        connectivities.append(SymRef(id=o))
+                if "stencil" in kwargs:
+                    shift_offsets = self._collect_offset_or_axis_node(
+                        itir.OffsetLiteral, kwargs["stencil"]
+                    )
+                    for o in shift_offsets:
+                        if o in self.offset_provider and isinstance(
+                            self.offset_provider[o], common.Connectivity
+                        ):
+                            connectivities.append(SymRef(id=o))
                 return UnstructuredDomain(
                     tagged_sizes=sizes,
                     tagged_offsets=domain_offsets,
@@ -306,8 +367,14 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         self, node: itir.FunctionDefinition, **kwargs: Any
     ) -> FunctionDefinition:
         return FunctionDefinition(
-            id=node.id, params=self.visit(node.params), expr=self.visit(node.expr, **kwargs)
+            id=node.id,
+            params=self.visit(node.params, **kwargs),
+            expr=self.visit(node.expr, **kwargs),
         )
+
+    @staticmethod
+    def _is_scan(node: itir.Node):
+        return isinstance(node, itir.FunCall) and node.fun == itir.SymRef(id="scan")
 
     def _visit_output_argument(self, node: itir.SymRef | itir.FunCall):
         if isinstance(node, itir.SymRef):
@@ -316,27 +383,110 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             return SidComposite(values=[self._visit_output_argument(v) for v in node.args])
         raise ValueError("Expected `SymRef` or `make_tuple` in output argument.")
 
-    def visit_StencilClosure(self, node: itir.StencilClosure, **kwargs: Any) -> StencilExecution:
-        assert isinstance(node.stencil, itir.SymRef)
-        backend = Backend(
-            domain=self.visit(node.domain, stencil=kwargs["symtable"][node.stencil.id], **kwargs)
-        )
+    @staticmethod
+    def _bool_from_literal(node: itir.Node):
+        assert isinstance(node, itir.Literal)
+        assert node.type == "bool" and node.value in ("True", "False")
+        return node.value == "True"
 
+    def visit_StencilClosure(
+        self, node: itir.StencilClosure, extracted_functions: list, **kwargs: Any
+    ) -> Union[ScanExecution, StencilExecution]:
+        backend = Backend(domain=self.visit(node.domain, stencil=node.stencil, **kwargs))
+        if self._is_scan(node.stencil):
+            scan_id = UIDs.sequential_id(prefix="_scan")
+            assert isinstance(node.stencil, itir.FunCall)
+            scan_lambda = self.visit(node.stencil.args[0], **kwargs)
+            forward = self._bool_from_literal(node.stencil.args[1])
+            scan_def = ScanPassDefinition(
+                id=scan_id, params=scan_lambda.params, expr=scan_lambda.expr, forward=forward
+            )
+            extracted_functions.append(scan_def)
+            scan = Scan(
+                function=SymRef(id=scan_id),
+                output=Literal(value="0", type="int"),
+                inputs=[Literal(value=str(i + 1), type="int") for i, _ in enumerate(node.inputs)],
+                init=self.visit(node.stencil.args[2], **kwargs),
+            )
+            return ScanExecution(
+                backend=backend,
+                scans=[scan],
+                args=[self.visit(node.output, **kwargs)] + self.visit(node.inputs),
+                axis=SymRef(id=kwargs["column_axis"].value),
+            )
         return StencilExecution(
-            stencil=self.visit(node.stencil, **kwargs),
+            stencil=self.visit(
+                node.stencil,
+                force_function_extraction=True,
+                extracted_functions=extracted_functions,
+                **kwargs,
+            ),
             output=self._visit_output_argument(node.output),
-            inputs=self.visit(node.inputs),
+            inputs=self.visit(node.inputs, **kwargs),
             backend=backend,
         )
+
+    @staticmethod
+    def _merge_scans(
+        executions: list[Union[StencilExecution, ScanExecution]]
+    ) -> list[Union[StencilExecution, ScanExecution]]:
+        def merge(a: ScanExecution, b: ScanExecution) -> ScanExecution:
+            assert a.backend == b.backend
+            assert a.axis == b.axis
+
+            index_map = dict[int, int]()
+            compacted_b_args = list[SymRef]()
+            for b_idx, b_arg in enumerate(b.args):
+                try:
+                    a_idx = a.args.index(b_arg)
+                    index_map[b_idx] = a_idx
+                except ValueError:
+                    index_map[b_idx] = len(a.args) + len(compacted_b_args)
+                    compacted_b_args.append(b_arg)
+
+            def remap_args(s: Scan) -> Scan:
+                def remap_literal(x: Literal) -> Literal:
+                    return Literal(value=str(index_map[int(x.value)]), type=x.type)
+
+                return Scan(
+                    function=s.function,
+                    output=remap_literal(s.output),
+                    inputs=[remap_literal(i) for i in s.inputs],
+                    init=s.init,
+                )
+
+            return ScanExecution(
+                backend=a.backend,
+                scans=a.scans + [remap_args(s) for s in b.scans],
+                args=a.args + compacted_b_args,
+                axis=a.axis,
+            )
+
+        res = executions[:1]
+        for execution in executions[1:]:
+            if (
+                isinstance(execution, ScanExecution)
+                and isinstance(res[-1], ScanExecution)
+                and execution.backend == res[-1].backend
+            ):
+                res[-1] = merge(res[-1], execution)
+            else:
+                res.append(execution)
+        return res
 
     def visit_FencilDefinition(
         self, node: itir.FencilDefinition, **kwargs: Any
     ) -> FencilDefinition:
         self.grid_type = _get_gridtype(node.closures)
+        extracted_functions: list[Union[FunctionDefinition, ScanPassDefinition]] = []
         self.offset_provider = kwargs["offset_provider"]
-
-        executions = self.visit(node.closures, **kwargs)
-        function_definitions = self.visit(node.function_definitions)
+        executions = self.visit(
+            node.closures,
+            extracted_functions=extracted_functions,
+            column_axis=kwargs.get("column_axis"),
+        )
+        executions = self._merge_scans(executions)
+        function_definitions = self.visit(node.function_definitions) + extracted_functions
         offset_definitions = {
             **_collect_dimensions_from_domain(node.closures),
             **_collect_offset_definitions(node, self.grid_type, self.offset_provider),
@@ -348,4 +498,30 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             grid_type=self.grid_type,
             offset_definitions=list(offset_definitions.values()),
             function_definitions=function_definitions,
+            temporaries=[],
+        )
+
+    def visit_Temporary(self, node, *, params: list, **kwargs) -> TemporaryAllocation:
+        def dtype_to_cpp(x):
+            if isinstance(x, int):
+                return f"std::remove_const_t<sid::element_type<decltype({params[x]})>>"
+            if isinstance(x, tuple):
+                return "tuple<" + ", ".join(dtype_to_cpp(i) for i in x) + ">"
+            assert isinstance(x, str)
+            return pytype_to_cpptype(x)
+
+        return TemporaryAllocation(
+            id=node.id, dtype=dtype_to_cpp(node.dtype), domain=self.visit(node.domain, **kwargs)
+        )
+
+    def visit_FencilWithTemporaries(self, node, **kwargs) -> FencilDefinition:
+        fencil = self.visit(node.fencil, **kwargs)
+        return FencilDefinition(
+            id=fencil.id,
+            params=self.visit(node.params),
+            executions=fencil.executions,
+            grid_type=fencil.grid_type,
+            offset_definitions=fencil.offset_definitions,
+            function_definitions=fencil.function_definitions,
+            temporaries=self.visit(node.tmps, params=[p.id for p in node.params]),
         )

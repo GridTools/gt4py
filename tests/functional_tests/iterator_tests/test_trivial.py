@@ -34,7 +34,7 @@ def baz(baz_inp):
     return deref(lift(bar)(baz_inp))
 
 
-def test_trivial(fencil_processor, use_tmps):
+def test_trivial(fencil_processor, lift_mode):
     fencil_processor, validate = fencil_processor
 
     if fencil_processor == run_gtfn:
@@ -53,7 +53,7 @@ def test_trivial(fencil_processor, use_tmps):
         fencil_processor,
         inp_s,
         out=out_s,
-        use_tmps=use_tmps,
+        lift_mode=lift_mode,
         offset_provider={"I": IDim, "J": JDim},
     )
 
@@ -74,7 +74,7 @@ def fen_direct_deref(i_size, j_size, out, inp):
     )
 
 
-def test_direct_deref(fencil_processor, use_tmps):
+def test_direct_deref(fencil_processor, lift_mode):
     fencil_processor, validate = fencil_processor
     if fencil_processor == run_gtfn:
         pytest.xfail("extract_fundefs_from_closures() doesn't work for builtins in gtfn")
@@ -92,7 +92,7 @@ def test_direct_deref(fencil_processor, use_tmps):
         *out.shape,
         out_s,
         inp_s,
-        use_tmps=use_tmps,
+        lift_mode=lift_mode,
         offset_provider=dict(),
     )
 

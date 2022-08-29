@@ -16,13 +16,12 @@
 import math
 
 import jinja2
-import numpy
 import numpy as np
 import pytest
 
-from functional.fencil_processors import source_modules
-from functional.fencil_processors.builders.cpp import callable
-from functional.fencil_processors.source_modules import cpp_gen as cpp
+from functional.fencil_processors.builders import cache
+from functional.fencil_processors.builders.cpp import bindings, build
+from functional.fencil_processors.source_modules import cpp_gen, source_modules
 
 
 @pytest.fixture
@@ -30,11 +29,11 @@ def source_module_example():
     entry_point = source_modules.Function(
         "stencil",
         parameters=[
-            source_modules.BufferParameter("buf", ["I", "J"], numpy.dtype(numpy.float32)),
-            source_modules.ScalarParameter("sc", numpy.dtype(numpy.float32)),
+            source_modules.BufferParameter("buf", ("I", "J"), np.dtype(np.float32)),
+            source_modules.ScalarParameter("sc", np.dtype(np.float32)),
         ],
     )
-    func = cpp.render_function_declaration(
+    func = cpp_gen.render_function_declaration(
         entry_point,
         """\
         const auto xdim = gridtools::at_key<generated::I_t>(sid_get_upper_bounds(buf));
@@ -44,14 +43,14 @@ def source_module_example():
     )
     src = jinja2.Template(
         """\
-    #include <gridtools/fn/cartesian.hpp>
-    #include <gridtools/fn/unstructured.hpp>
-    namespace generated {
-    struct I_t {} constexpr inline I; 
-    struct J_t {} constexpr inline J; 
-    }
-    {{func}}\
-    """
+        #include <gridtools/fn/cartesian.hpp>
+        #include <gridtools/fn/unstructured.hpp>
+        namespace generated {
+        struct I_t {} constexpr inline I;
+        struct J_t {} constexpr inline J;
+        }
+        {{func}}\
+        """
     ).render(func=func)
 
     return source_modules.SourceModule(
@@ -60,12 +59,17 @@ def source_module_example():
         library_deps=[
             source_modules.LibraryDependency("gridtools", "master"),
         ],
-        language=cpp.LANGUAGE_ID,
+        language=source_modules.Cpp,
+        language_settings=cpp_gen.CPP_DEFAULT,
     )
 
 
-def test_callable(source_module_example):
-    wrapper = callable.create_callable(source_module_example)
+def test_gtfn_cpp_with_cmake(source_module_example):
+    wrapper = build.CMakeProject(
+        source_module=source_module_example,
+        bindings_module=bindings.create_bindings(source_module_example),
+        cache_strategy=cache.Strategy.SESSION,
+    ).get_implementation()
     buf = np.zeros(shape=(6, 5), dtype=np.float32)
     sc = np.float32(3.1415926)
     res = wrapper(buf, sc)
