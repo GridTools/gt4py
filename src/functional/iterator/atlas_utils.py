@@ -35,3 +35,7 @@ class AtlasTable:
                 return self.atlas_connectivity[primary_index, neigh_index]
             else:
                 raise AssertionError()
+
+    @property
+    def shape(self):
+        return (self.atlas_connectivity.rows, self.atlas_connectivity.maxcols)

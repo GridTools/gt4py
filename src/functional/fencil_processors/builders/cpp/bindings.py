@@ -14,18 +14,18 @@
 """Python bindings generator for C++ functions."""
 
 
+from __future__ import annotations
+
 from typing import Any, Sequence
 
-import numpy
+import numpy as np
 
-import eve.codegen
-import functional.fencil_processors.source_modules.cpp_gen as cpp
-from eve import Node
+import eve
 from eve.codegen import JinjaTemplate as as_jinja, TemplatedGenerator
-from functional.fencil_processors.source_modules import source_modules
+from functional.fencil_processors.source_modules import cpp_gen, source_modules
 
 
-class Expr(Node):
+class Expr(eve.Node):
     pass
 
 
@@ -36,7 +36,7 @@ class DimensionType(Expr):
 class SidConversion(Expr):
     buffer_name: str
     dimensions: Sequence[DimensionType]
-    scalar_type: numpy.dtype
+    scalar_type: np.dtype
     dim_config: int
 
 
@@ -45,35 +45,35 @@ class FunctionCall(Expr):
     args: Sequence[Any]
 
 
-class ReturnStmt(Node):
+class ReturnStmt(eve.Node):
     expr: Expr
 
 
-class FunctionParameter(Node):
+class FunctionParameter(eve.Node):
     name: str
     ndim: int
-    dtype: numpy.dtype
+    dtype: np.dtype
 
 
-class WrapperFunction(Node):
+class WrapperFunction(eve.Node):
     name: str
     parameters: Sequence[FunctionParameter]
     body: ReturnStmt
 
 
-class BindingFunction(Node):
+class BindingFunction(eve.Node):
     exported_name: str
     wrapper_name: str
     doc: str
 
 
-class BindingModule(Node):
+class BindingModule(eve.Node):
     name: str
     doc: str
     functions: Sequence[BindingFunction]
 
 
-class BindingFile(Node):
+class BindingFile(eve.Node):
     callee_header_file: str
     header_files: Sequence[str]
     wrapper: WrapperFunction
@@ -110,7 +110,7 @@ class BindingCodeGenerator(TemplatedGenerator):
         if param.ndim > 0:
             type_str = "pybind11::buffer"
         else:
-            type_str = cpp.render_python_type(param.dtype.type)
+            type_str = cpp_gen.render_python_type(param.dtype.type)
         return type_str + " " + param.name
 
     ReturnStmt = as_jinja("""return {{expr}};""")
@@ -128,11 +128,11 @@ class BindingCodeGenerator(TemplatedGenerator):
 
     def visit_FunctionCall(self, call: FunctionCall):
         args = [self.visit(arg) for arg in call.args]
-        return cpp.render_function_call(call.target, args)
+        return cpp_gen.render_function_call(call.target, args)
 
     def visit_SidConversion(self, sid: SidConversion):
         return self.generic_visit(
-            sid, rendered_scalar_type=cpp.render_python_type(sid.scalar_type.type)
+            sid, rendered_scalar_type=cpp_gen.render_python_type(sid.scalar_type.type)
         )
 
     SidConversion = as_jinja(
@@ -171,22 +171,26 @@ def make_argument(
 
 
 def create_bindings(
-    target: source_modules.Function, target_header: str
-) -> source_modules.BindingModule:
+    source_module: source_modules.SourceModule[
+        source_modules.Cpp, source_modules.LanguageWithHeaderFilesSettings
+    ],
+) -> source_modules.BindingModule[source_modules.Cpp, source_modules.Python]:
     """
     Generate Python bindings through which a C++ function can be called.
 
     Parameters
     ----------
-    target
-        The signature of the C++ function
-    target_header
-        The name of the C++ (header) file in which the function resides; used for includes
+    source_module
+        The source module for which the bindings are created
     """
-    wrapper_name = target.name + "_wrapper"
+    if source_module.language is not source_modules.Cpp:
+        raise ValueError(
+            f"Can only create bindings for C++ source modules, received {source_module.language}."
+        )
+    wrapper_name = source_module.entry_point.name + "_wrapper"
 
     file_binding = BindingFile(
-        callee_header_file=target_header,
+        callee_header_file=f"{source_module.entry_point.name}.{source_module.language_settings.header_extension}",
         header_files=[
             "pybind11/pybind11.h",
             "pybind11/stl.h",
@@ -199,26 +203,36 @@ def create_bindings(
         ],
         wrapper=WrapperFunction(
             name=wrapper_name,
-            parameters=[make_parameter(param) for param in target.parameters],
+            parameters=[make_parameter(param) for param in source_module.entry_point.parameters],
             body=ReturnStmt(
                 expr=FunctionCall(
-                    target=target,
+                    target=source_module.entry_point,
                     args=[
-                        make_argument(index, param) for index, param in enumerate(target.parameters)
+                        make_argument(index, param)
+                        for index, param in enumerate(source_module.entry_point.parameters)
                     ],
                 )
             ),
         ),
         binding_module=BindingModule(
-            name=target.name,
+            name=source_module.entry_point.name,
             doc="",
             functions=[
-                BindingFunction(exported_name=target.name, wrapper_name=wrapper_name, doc="")
+                BindingFunction(
+                    exported_name=source_module.entry_point.name,
+                    wrapper_name=wrapper_name,
+                    doc="",
+                )
             ],
         ),
     )
 
-    src = eve.codegen.format_source("cpp", BindingCodeGenerator.apply(file_binding), style="LLVM")
+    src = source_modules.format_source(
+        source_module.language_settings,
+        BindingCodeGenerator.apply(file_binding),
+    )
+
     return source_modules.BindingModule(
-        src, [source_modules.LibraryDependency("pybind11", "2.9.2")]
+        src,
+        (source_modules.LibraryDependency("pybind11", "2.9.2"),),
     )

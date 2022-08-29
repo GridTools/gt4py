@@ -14,7 +14,6 @@
 
 from __future__ import annotations
 
-import abc
 import enum
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -53,13 +52,6 @@ class Field(Generic[DimsT, DT]):
 class GTInfo:
     definition: Any
     ir: Any
-
-
-class FieldOperator(abc.ABC):
-    __gt_info__: GTInfo
-
-    def __call__(self, *args: Field, **kwds: Field) -> Field | Sequence[Field]:
-        ...
 
 
 @dataclass(frozen=True)
