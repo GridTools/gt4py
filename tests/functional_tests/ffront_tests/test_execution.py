@@ -830,18 +830,7 @@ def test_ternary_operator(reduction_setup):
         c = a + b if left < right else b
         return c
 
-    # TODO(tehrengruber): directly call field operator when the generated programs support `out` being a tuple
-    @program
-    def ternary_field(
-        a: Field[[Edge], float],
-        b: Field[[Edge], float],
-        left: float,
-        right: float,
-        out: Field[[Edge], float],
-    ):
-        ternary_field_op(a, b, left, right, out=out)
-
-    ternary_field(a, b, left, right, out, offset_provider={})
+    ternary_field_op(a, b, left, right, out = out, offset_provider={})
     e = np.asarray(a) + np.asarray(b) if left < right else np.asarray(b)
     np.allclose(e, out)
 
@@ -864,6 +853,7 @@ def test_ternary_operator_tuple(reduction_setup):
         c, d = (a, b) if left < right else (b, a)
         return c, d
 
+    # TODO(tehrengruber): directly call field operator when the generated programs support `out` being a tuple
     @program
     def ternary_field(
         a: Field[[Edge], float],
@@ -893,25 +883,21 @@ def test_ternary_builtin_neighbor_sum(reduction_setup):
     num_edges = rs.num_edges
 
     a = np_as_located_field(Edge)(np.ones((num_edges,)))
-    b = np_as_located_field(Vertex)(2 * np.ones((num_vertices,)))
+    b = np_as_located_field(Edge)(2 * np.ones((num_edges,)))
     out = np_as_located_field(Vertex)(np.zeros((num_vertices,)))
 
     @field_operator
-    def _ternary_reduce(
-        a: Field[[Edge], float], b: Field[[Vertex], float]
-    ) -> Field[[Vertex], float]:
-        f = b if 2 < 3 else neighbor_sum(a(V2E), axis=V2EDim)
-        return f
-
-    @program
     def ternary_reduce(
-        a: Field[[Edge], float], b: Field[[Vertex], float], out: Field[[Vertex], float]
-    ):
-        _ternary_reduce(a, b, out=out)
+        a: Field[[Edge], float], b: Field[[Edge], float]
+    ) -> Field[[Vertex], float]:
+        # line below does not work
+        #f = neighbor_sum(b(V2E) if 2 < 3 else a(V2E), axis=V2EDim)
+        out = neighbor_sum(b(V2E), axis=V2EDim) if 2 < 3 else neighbor_sum(a(V2E), axis=V2EDim)
+        return out
 
-    ternary_reduce(a, b, out, offset_provider=rs.offset_provider)
+    ternary_reduce(a, b, out = out, offset_provider=rs.offset_provider)
 
-    expected = np.asarray(b) if 2 < 3 else np.sum(np.asarray(a)[rs.v2e_table], axis=1)
+    expected = np.sum(np.asarray(b)[rs.v2e_table], axis=1) if 2 < 3 else np.sum(np.asarray(a)[rs.v2e_table], axis=1)
 
     assert np.allclose(expected, out)
 
