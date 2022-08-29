@@ -175,7 +175,12 @@ class DaCeStencilObject(StencilObject, SDFGConvertible):
             name: (kwargs[name] if name in kwargs else next(args_iter)) for name in arg_names
         }
 
-        origin = DaCeStencilObject._normalize_origins(args_as_kwargs, field_info, origin)
+        origin = {
+            str(k): v
+            for k, v in DaCeStencilObject._normalize_origins(
+                args_as_kwargs, field_info, origin
+            ).items()
+        }
         if domain is None:
             domain = DaCeStencilObject._get_max_domain(
                 args_as_kwargs, domain_info, field_info, origin
