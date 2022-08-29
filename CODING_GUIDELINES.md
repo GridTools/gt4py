@@ -30,7 +30,7 @@ We deviate from the [Google Python Style Guide][google-style-guide] only in the 
 
 ### Docstrings
 
-We generate the API documentation automatically from the docstrings using [Sphinx][sphinx] together with some extensions like [Sphinx-autodoc][sphinx-autodoc] and [Sphinx-napoleon][sphinx-napoleon], which follow the Google Python Style Guide docstring conventions to automatically format the generated documentation. Check out the [Example Google Style Python Docstrings](https://sphinxcontrib-napoleon.readthedocs.io/en/latest/example_google.html#example-google)for a complete overview.
+We generate the API documentation automatically from the docstrings using [Sphinx][sphinx] together with some extensions like [Sphinx-autodoc][sphinx-autodoc] and [Sphinx-napoleon][sphinx-napoleon], which follow the Google Python Style Guide docstring conventions to automatically format the generated documentation. Check out the [Example Google Style Python Docstrings](https://sphinxcontrib-napoleon.readthedocs.io/en/latest/example_google.html#example-google) for a complete overview.
 
 Sphinx supports the [reStructuredText][sphinx-rest] (reST) markup language to add additional formatting options to the generated docs, however section [_3.8 Comments and Docstrings_](https://google.github.io/styleguide/pyguide.html#38-comments-and-docstrings) of the Google Python Style Guide does not define how to use markups in docstrings. As a result, we decided to forbid the use of reST markup in docstrings, except for the following cases:
 
