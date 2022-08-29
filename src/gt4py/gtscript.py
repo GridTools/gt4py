@@ -84,6 +84,7 @@ builtins = {
     "interval",
     "horizontal",
     "region",
+    "print_value",
     "__gtscript__",
     "__externals__",
     "__INLINED",
@@ -91,7 +92,7 @@ builtins = {
     *MATH_BUILTINS,
 }
 
-IGNORE_WHEN_INLINING = {*MATH_BUILTINS, "compile_assert"}
+IGNORE_WHEN_INLINING = {*MATH_BUILTINS, "print_value", "compile_assert"}
 
 __all__ = list(builtins) + ["function", "stencil", "lazy_stencil"]
 
@@ -686,34 +687,6 @@ def horizontal(*args):
     pass
 
 
-def print_value(expr, *, msg: Optional[str] = None, **kwargs):
-    """Print the value of the expr at some point in the stencil.
-
-    Parameters
-    ----------
-    expr:
-        The gtscript expresssion to print. Note that expr cannot incur additional extents on fields.
-    msg:
-        An optional string to print before the expr.
-    **kwargs:
-        Print constraints: for example, `i=4` will print all `j` and `k` indices with `i=4`.
-
-    Examples
-    --------
-    with computation(PARALLEL), interval(...):
-        tmp = infield[1, 0, 0]
-        print_value(2 * tmp[0, 0, 0], msg="DEBUG", i=0, j=5)
-        outfield = tmp[0, 1, 0]
-
-    Could print
-        DEBUG `2 * tmp[0, 0, 0]` @(i=0, j=5, k=0): 1.2678564
-        DEBUG `2 * tmp[0, 0, 0]` @(i=0, j=5, k=1): 6241.5
-        DEBUG `2 * tmp[0, 0, 0]` @(i=0, j=5, k=3): 1.4
-        DEBUG `2 * tmp[0, 0, 0]` @(i=0, j=5, k=2): 1.2678564
-    """
-    pass
-
-
 class _Region:
     def __getitem__(self, *args):
         """Define a region in the parallel axes."""
@@ -867,4 +840,32 @@ def ceil(x):
 
 def trunc(x):
     """Return the Real value x truncated to an Integral (usually an integer)"""
+    pass
+
+
+def print_value(expr, *, msg: Optional[str] = None, **kwargs):
+    """Print the value of the expr at some point in the stencil.
+
+    Parameters
+    ----------
+    expr:
+        The gtscript expresssion to print. Note that expr cannot incur additional extents on fields.
+    msg:
+        An optional string to print before the expr.
+    **kwargs:
+        Print constraints: for example, `i=4` will print all `j` and `k` indices with `i=4`.
+
+    Examples
+    --------
+    with computation(PARALLEL), interval(...):
+        tmp = infield[1, 0, 0]
+        print_value(2 * tmp[0, 0, 0], msg="DEBUG", i=0, j=5)
+        outfield = tmp[0, 1, 0]
+
+    Could print
+        DEBUG `2 * tmp[0, 0, 0]` @(i=0, j=5, k=0): 1.2678564
+        DEBUG `2 * tmp[0, 0, 0]` @(i=0, j=5, k=1): 6241.5
+        DEBUG `2 * tmp[0, 0, 0]` @(i=0, j=5, k=3): 1.4
+        DEBUG `2 * tmp[0, 0, 0]` @(i=0, j=5, k=2): 1.2678564
+    """
     pass

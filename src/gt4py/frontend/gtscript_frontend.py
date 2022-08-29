@@ -33,6 +33,7 @@ from gt4py.frontend.defir_to_gtir import DefIRToGTIR
 from gt4py.utils import NOTHING
 from gt4py.utils import meta as gt_meta
 from gtc import utils as gtc_utils
+from gtc.definitions import CartesianSpace
 
 from .base import Frontend, register
 
@@ -123,6 +124,7 @@ class AssertionChecker(ast.NodeTransformer):
         self.source = source
 
     def _process_assertion(self, expr_node: ast.Expr) -> None:
+        print(expr_node)
         condition_value = gt_utils.meta.ast_eval(expr_node, self.context, default=NOTHING)
         if condition_value is not NOTHING:
             if not condition_value:
@@ -135,23 +137,24 @@ class AssertionChecker(ast.NodeTransformer):
             )
         return None
 
-    def _process_call(self, node: ast.Call) -> Optional[ast.Call]:
-        name = gt_meta.get_qualified_name_from_node(node.func)
-        if name != "compile_assert":
-            return node
-        else:
-            if len(node.args) != 1:
-                raise GTScriptSyntaxError(
-                    "Invalid assertion. Correct syntax: compile_assert(condition)"
-                )
-            return self._process_assertion(node.args[0])
+    def visit_With(self, node: ast.With) -> ast.With:
+        body = []
+        for item in node.body:
+            if isinstance(item, ast.Call):
+                # Could be an assertion or other statement-level function call.
+                name = gt_meta.get_qualified_name_from_node(item.func)
+                if name != "compile_assert":
+                    body.append(item)
+                else:
+                    if len(item.args) != 1:
+                        raise GTScriptSyntaxError(
+                            "Invalid assertion. Correct syntax: compile_assert(condition)"
+                        )
+                    self._process_assertion(item.args[0])
+            else:
+                body.append(item)
 
-    def visit_Expr(self, node: ast.Expr) -> Optional[ast.AST]:
-        if isinstance(node.value, ast.Call):
-            ret = self._process_call(node.value)
-            return ast.Expr(value=ret) if ret else None
-        else:
-            return node
+        return ast.With(items=node.items, body=body)
 
 
 class AxisIntervalParser(gt_meta.ASTPass):
@@ -625,6 +628,20 @@ class CallInliner(ast.NodeTransformer):
             return super().visit(node.value)
 
 
+class CallHoister(ast.NodeTransformer):
+    """This hoists top-level statement calls out of their ast.Expr wrappers."""
+
+    def visit_With(self, node: ast.With) -> ast.With:
+        body = []
+        for item in node.body:
+            if isinstance(item, ast.Expr) and isinstance(item.value, ast.Call):
+                body.append(item.value)
+            else:
+                body.append(item)
+
+        return ast.With(items=node.items, body=body)
+
+
 class CompiledIfInliner(ast.NodeTransformer):
     @classmethod
     def apply(cls, ast_object, context):
@@ -997,7 +1014,11 @@ class IRMaker(ast.NodeVisitor):
         self.parsing_context = ParsingContext.COMPUTATION
         stmts = []
         for stmt in node.body:
-            stmts.extend(gtc_utils.listify(self.visit(stmt)))
+            if isinstance(stmt, ast.Expr):
+                # This is a print_value() statement
+                stmts.append(self.visit(stmt.value))
+            else:
+                stmts.extend(gtc_utils.listify(self.visit(stmt)))
         self.parsing_context = ParsingContext.CONTROL_FLOW
 
         if intervals_dicts:
@@ -1311,20 +1332,50 @@ class IRMaker(ast.NodeVisitor):
         return result
 
     def visit_Call(self, node: ast.Call):
-        native_fcn = nodes.NativeFunction.PYTHON_SYMBOL_TO_IR_OP[node.func.id]
+        # The leftover calls can be either `print_value` or a math function
+        if node.func.id == "print_value":
+            if len(node.args) < 1:
+                raise GTScriptSyntaxError("print_value requires arguments")
 
-        args = [self.visit(arg) for arg in node.args]
-        if len(args) != native_fcn.arity:
-            raise GTScriptSyntaxError(
-                "Invalid native function call", loc=nodes.Location.from_ast_node(node)
+            # First argument is the expression
+            expr = self.visit(node.args[0])
+
+            # The remainder of the arguments are keywords
+            msg = ""
+            constraints: List[nodes.AxisConstraint] = []
+            for kwarg in node.keywords:
+                if kwarg.arg == "msg":
+                    assert isinstance(kwarg.value, ast.Constant)
+                    msg = kwarg.value.value
+                else:
+                    assert isinstance(kwarg.value, ast.Constant)
+                    if kwarg.arg.upper() not in set(CartesianSpace.names):
+                        axes_names = ", ".join(CartesianSpace.names)
+                        raise GTScriptSyntaxError(
+                            f"Expected one of: msg, {axes_names}, got {kwarg.arg}"
+                        )
+                    constraints.append(
+                        nodes.AxisIndexConstraint(axis=kwarg.arg.lower(), index=kwarg.value.value)
+                    )
+
+            return nodes.Print(
+                expr=expr, msg=msg, constraints=constraints, loc=nodes.Location.from_ast_node(node)
             )
+        else:
+            native_fcn = nodes.NativeFunction.PYTHON_SYMBOL_TO_IR_OP[node.func.id]
 
-        return nodes.NativeFuncCall(
-            func=native_fcn,
-            args=args,
-            data_type=nodes.DataType.AUTO,
-            loc=nodes.Location.from_ast_node(node),
-        )
+            args = [self.visit(arg) for arg in node.args]
+            if len(args) != native_fcn.arity:
+                raise GTScriptSyntaxError(
+                    "Invalid native function call", loc=nodes.Location.from_ast_node(node)
+                )
+
+            return nodes.NativeFuncCall(
+                func=native_fcn,
+                args=args,
+                data_type=nodes.DataType.AUTO,
+                loc=nodes.Location.from_ast_node(node),
+            )
 
     # -- Statement nodes --
     def _parse_assign_target(
@@ -1955,6 +2006,8 @@ class GTScriptParser(ast.NodeVisitor):
 
         # Evaluate and inline compile-time conditionals
         CompiledIfInliner.apply(main_func_node, context=local_context)
+
+        CallHoister().visit(main_func_node)
 
         AssertionChecker.apply(main_func_node, context=local_context, source=self.source)
 

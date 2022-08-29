@@ -39,6 +39,7 @@ from gt4py.gtscript import (
     horizontal,
     interval,
     isfinite,
+    print_value,
     region,
     sin,
 )
@@ -957,6 +958,21 @@ class TestDataDimensions:
             definition, name=inspect.stack()[0][3], module=self.__class__.__name__
         )
         assert isinstance(def_ir.computations[0].body.stmts[0].target.data_index[0], nodes.VarRef)
+
+
+class TestPrint:
+    def test_basic(self):
+        def definition_func(infield: gtscript.Field[float], outfield: gtscript.Field[float]):
+            with computation(PARALLEL), interval(...):
+                tmp = infield[1, 0, 0]
+                print_value(2 * tmp[0, 0, 0], msg="DEBUG", i=0, j=5)
+                outfield = tmp[0, 1, 0]
+
+        parse_definition(
+            definition_func,
+            name=inspect.stack()[0][3],
+            module=self.__class__.__name__,
+        )
 
 
 class TestImports:

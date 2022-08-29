@@ -95,6 +95,8 @@ storing a reference to the piece of source code which originated the node.
 
     AxisIndex(axis: str, endpt: LevelMarker, offset: int, data_type: DataType)
 
+    AxisIndexConstraint(axis: str, index: int)  # Used in "Print" statements
+
     Expr        = Literal | Ref | NativeFuncCall | Cast | CompositeExpr | InvalidBranch | AxisPosition | AxisIndex
 
     CompositeExpr   = UnaryOpExpr(op: UnaryOperator, arg: Expr)
@@ -113,6 +115,7 @@ storing a reference to the piece of source code which originated the node.
                 | If(condition: expr, main_body: BlockStmt, else_body: BlockStmt)
                 | HorizontalIf(intervals: Dict[str, Interval], body: BlockStmt)
                 | While(condition: expr, body: BlockStmt)
+                | Print(expr: expr, msg: str, constraints: List[AxisIndexConstraint])
                 | BlockStmt
 
     AxisBound(level: LevelMarker | VarRef, offset: int)
@@ -628,8 +631,22 @@ class VarDecl(Decl):
 
 
 @attribclass
-class BlockStmt(Statement):
-    stmts = attribute(of=ListOf[Statement])
+class AxisIndexConstraint:
+    axis = attribute(of=str)
+    index = attribute(of=int)
+
+
+@attribclass
+class Print(Statement):
+    expr = attribute(of=Expr)
+    msg = attribute(of=str)
+    constraints = attribute(of=ListOf[AxisIndexConstraint])
+    loc = attribute(of=Location, optional=True)
+
+
+@attribclass
+class BlockStmt:
+    stmts = attribute(of=ListOf[UnionOf[Statement, Decl]])
     loc = attribute(of=Location, optional=True)
 
 
