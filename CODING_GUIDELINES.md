@@ -3,7 +3,7 @@
 
 ## Code design
 
-Designing a clean architecture for a software product is a difficult task, and developers can easily overlook it under the pressure of deadlines or when they are too eager to deliver exciting new features. However, choosing the quick solution instead of the clean one will likely lead to a large amount of additional work in the future (_technical debt_).
+Designing a clean architecture for a software product is a difficult task, and developers can easily overlook it under the pressure of deadlines or when they are eager to deliver exciting new features. However, choosing the quick solution instead of the clean one will likely lead to a large amount of additional work in the future (_technical debt_).
 
 To keep technical debt at acceptable levels, follow best practices when designing and implementing new features:
 
