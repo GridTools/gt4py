@@ -250,15 +250,16 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         )
 
     def visit_TernaryExpr(self, node: foast.TernaryExpr, **kwargs) -> foast.TernaryExpr:
-        new_left = self.visit(node.true_expr, **kwargs)
-        new_right = self.visit(node.false_expr, **kwargs)
+        new_true_expr = self.visit(node.true_expr, **kwargs)
+        new_false_expr = self.visit(node.false_expr, **kwargs)
+        new_condition = self.visit(node.condition, **kwargs)
         new_type = self._deduce_ternaryexpr_type(
-            node, left=new_left, right=new_right, condition=node.condition
+            node, left=new_true_expr, right=new_false_expr, condition=new_condition
         )
         return foast.TernaryExpr(
-            condition=self.visit(node.condition, **kwargs),
-            true_expr=self.visit(node.true_expr, **kwargs),
-            false_expr=self.visit(node.false_expr, **kwargs),
+            condition=new_condition,
+            true_expr=new_true_expr,
+            false_expr=new_false_expr,
             location=node.location,
             type=new_type,
         )
@@ -272,33 +273,38 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         condition: foast.Expr,
         **kwargs,
     ) -> Optional[ct.SymbolType]:
-        if isinstance(left.type, ct.TupleType):
-            return ct.TupleType(types=[element.type for element in left.elts])
 
-        # check that left and right types are the same for condition
-        right_type = type(condition.right)
-        if not isinstance(condition.left, right_type):
+        new_type_condition = self._deduce_compare_type(
+            condition, left=condition.left, right=condition.right
+        )
+
+        if (
+            not isinstance(new_type_condition.kind, ct.ScalarKind)
+            or not new_type_condition.kind == ct.ScalarKind.BOOL
+        ):
             raise FieldOperatorTypeDeductionError.from_foast_node(
                 condition,
-                msg=f"Incompatible datatypes in operator `{condition.op}`: {type(condition.left)} and {type(condition.right)}!",
+                msg=f"Condition operator `{condition.op}` with types {type(condition.left)} and {type(condition.right)} does not return a boolean",
             )
 
-        # check that returns left and right are the same type
-        self._check_operand_dtypes_match(node, left=left, right=right)
-
-        # check that returns left and right are compatible with math operations
-        for arg in (left, right):
-            if not type_info.is_arithmetic(arg.type):
+        if isinstance(left.type, ct.TupleType) and isinstance(right.type, ct.TupleType):
+            left_tuple = ct.TupleType(types=[element.type for element in left.elts])
+            right_tuple = ct.TupleType(types=[element.type for element in right.elts])
+            if left_tuple.types == right_tuple.types:
+                return left_tuple
+            else:
                 raise FieldOperatorTypeDeductionError.from_foast_node(
-                    arg, msg=f"Type {arg.type} can not be used in ternary operator"
+                    node,
+                    msg=f"Types within left and right tuples: `{left.type.types}` and {right.type.types} are not compatible",
                 )
+
         try:
             return type_info.promote(left.type, right.type)
         except GTTypeError as ex:
             raise FieldOperatorTypeDeductionError.from_foast_node(
                 node,
                 msg=f"Could not promote `{left.type}` and `{right.type}` to common type"
-                f" for ternary return.",
+                f" for ternary operator.",
             ) from ex
 
     def visit_Compare(self, node: foast.Compare, **kwargs) -> foast.Compare:
