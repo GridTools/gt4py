@@ -116,17 +116,17 @@ class TestNode:
         node_a = sample_node_maker()
         node_b = sample_node_maker()
 
-        assert (node_a == node_b) == (node_a.node_id == node_b.node_id)
-        assert (node_a == node_b) == (node_a.content_id == node_b.content_id)
+        assert (node_a == node_b) == (node_a.content_hash() == node_b.content_hash())
+        assert (node_a == node_b) == (node_a.instance_hash() == node_b.instance_hash())
 
         node_a_copy = copy.deepcopy(node_a)
         assert node_a == node_a_copy
-        assert node_a.node_id == node_a_copy.node_id
-        assert node_a.content_id == node_a_copy.content_id
+        assert node_a.content_hash() == node_a_copy.content_hash()
+        assert node_a.instance_hash() == node_a_copy.instance_hash()
 
         node_a_copy.annex.foo = 42
-        assert node_a.node_id == node_a_copy.node_id
-        assert node_a.content_id != node_a_copy.content_id
+        assert node_a.content_hash() == node_a_copy.content_hash()
+        assert node_a.instance_hash() != node_a_copy.instance_hash()
 
     def test_annex(self, sample_node):
         assert isinstance(sample_node.annex, eve.utils.Namespace)

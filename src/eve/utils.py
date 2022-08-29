@@ -70,6 +70,7 @@ from .extended_typing import (
     Type,
     TypeVar,
     Union,
+    cast,
     overload,
 )
 from .type_definitions import NOTHING, NothingType
@@ -465,16 +466,17 @@ Check https://zepworks.com/deepdiff/current/diff.html for more info.
 def pprint_ddiff(
     old: Any,
     new: Any,
-    *,
-    pprint_opts: Optional[Dict[str, Any]] = None,
     **kwargs: Any,
 ) -> None:
-    """Pretty printing of deepdiff.DeepDiff objects.
+    """Pretty printing of :class:`deepdiff.DeepDiff` objects.
 
-    Keyword Arguments:
-        pprint_opts: kwargs dict with options for pprint.pprint.
+    Keyword arguments with ``pp_`` prefix are forwarded to :func:`pprint.pprint`
+    (after removing the prefix). Any other keyword argument is forwarded to
+    :class:`deepdiff.DeepDiff`.
+
     """
-    pprint_opts = pprint_opts or {"indent": 2}
+    pprint_opts = {key[3:]: kwargs.pop(key) for key in list(kwargs.keys()) if key.startswith("pp_")}
+    pprint_opts.setdefault("indent", 2)
     pprint.pprint(deepdiff.DeepDiff(old, new, **kwargs), **pprint_opts)
 
 
@@ -620,6 +622,8 @@ class Namespace(types.SimpleNamespace, Generic[T]):
 
     """
 
+    __slots__ = ()
+
     def __contains__(self, key: str) -> bool:
         return key in self.__dict__
 
@@ -642,8 +646,7 @@ class Namespace(types.SimpleNamespace, Generic[T]):
 
     asdict = as_dict
 
-    @property
-    def content_id(self) -> int:
+    def content_hash(self) -> int:
         return phash(self)
 
 
@@ -680,7 +683,12 @@ class FrozenNamespace(Namespace[T]):
 
     def __hash__(self) -> int:  # type: ignore[override]
         if not hasattr(self, "__cached_hash_value__"):
-            object.__setattr__(self, "__cached_hash_value__", hash(tuple(self.__dict__.items())))
+            try:
+                object.__setattr__(
+                    self, "__cached_hash_value__", hash(tuple(self.__dict__.items()))
+                )
+            except TypeError:
+                object.__setattr__(self, "__cached_hash_value__", self.content_hash())
 
         return self.__cached_hash_value__
 

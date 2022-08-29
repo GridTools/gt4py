@@ -1160,13 +1160,13 @@ class TestGenericModelValidation:
         with pytest.raises(TypeError, match="'PartialGenericModel.value'"):
             PartialGenericModel(value=[(1,)])
 
-        print(f"{PartialGenericModel.__parameters__=}")
-        print(f"{hasattr(PartialGenericModel ,'__args__')=}")
+        # print(f"{PartialGenericModel.__parameters__=}")
+        # print(f"{hasattr(PartialGenericModel ,'__args__')=}")
 
         PartiallySpecializedGenericModel = PartialGenericModel[int, U]
-        print(f"{PartiallySpecializedGenericModel.__datamodel_fields__=}")
-        print(f"{PartiallySpecializedGenericModel.__parameters__=}")
-        print(f"{PartiallySpecializedGenericModel.__args__=}")
+        # print(f"{PartiallySpecializedGenericModel.__datamodel_fields__=}")
+        # print(f"{PartiallySpecializedGenericModel.__parameters__=}")
+        # print(f"{PartiallySpecializedGenericModel.__args__=}")
 
         PartiallySpecializedGenericModel(value=[])
         PartiallySpecializedGenericModel(value=[(1, 2)])

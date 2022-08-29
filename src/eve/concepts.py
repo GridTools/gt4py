@@ -230,18 +230,25 @@ class Node(datamodels.DataModel, trees.Tree, kw_only=True):  # type: ignore[call
     walk_items = trees.walk_items
     walk_values = trees.walk_values
 
-    @property
-    def node_id(self) -> int:
+    def content_hash(self) -> int:
         return utils.phash(
             *(
-                (key, getattr(child, "content_id", child))
+                (key, child.content_hash() if hasattr(child.__class__, "content_hash") else child)
                 for key, child in self.iter_children_items()
             )
         )
 
-    @property
-    def content_id(self) -> int:
-        return utils.phash((self.node_id, self.annex.content_id))
+    def instance_hash(self) -> int:
+        return utils.phash(
+            self.annex,
+            *(
+                (
+                    key,
+                    child.content_hash() if hasattr(child.__class__, "instance_hash") else child,
+                )
+                for key, child in self.iter_children_items()
+            ),
+        )
 
 
 NodeT = TypeVar("NodeT", bound="Node")
@@ -259,12 +266,12 @@ class ImmutableNode(Node, frozen="strict"):  # type: ignore[call-arg]  # frozen 
     ...
 
     @functools.cached_property
-    def node_id(self) -> int:
-        return super(ImmutableNode, self).node_id
+    def content_hash(self) -> int:
+        return super(ImmutableNode, self).content_hash
 
     @functools.cached_property
-    def content_id(self) -> int:
-        return super(ImmutableNode, self).content_id
+    def instance_hash(self) -> int:
+        return super(ImmutableNode, self).instance_hash
 
 
 class GenericNode(datamodels.GenericDataModel, Node, kw_only=True):  # type: ignore[call-arg]  # kw_only from DataModel

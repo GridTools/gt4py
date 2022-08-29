@@ -238,7 +238,7 @@ class TestDDiffTools:
     def test_pprint_ddiff(self):
         d = {"key": [(1, 2), (3, 4)], "nested": {("foo", 2): [2, "str", {1, 2, 3}]}}
         stream = io.StringIO()
-        eve.utils.pprint_ddiff(d, d | {"new": "NEW"}, pp_stream=stream)
+        eve.utils.pprint_ddiff(d, {**d, "new": "NEW"}, pp_stream=stream)
 
         assert "dictionary_item_added" in stream.getvalue()
 
@@ -298,13 +298,17 @@ class TestNamespaces:
 
         assert all(key in ns for key in ns.keys())
 
-        assert ns.content_id == eve.utils.phash(ns)
+        assert ns.content_hash() == eve.utils.phash(ns)
 
         assert type(ns)(a=()) != type(ns)()
         assert type(ns)(a=()) != type(ns)(b=())
         assert type(ns)(a=()) == type(ns)(a=())
 
     def test_frozen(self):
+
+        # Use Python hash when possible (all values are hashable)
+        ns = eve.utils.FrozenNamespace(a=1, b="2", c=(1, 2, 3), d={"F": 3.5})
+        assert hash(ns)
 
         with pytest.raises(TypeError):
             hash(eve.utils.Namespace(a=1, b="2", c=[1, 2, 3], d={"F": 3.5}))
@@ -320,7 +324,8 @@ class TestNamespaces:
         with pytest.raises(TypeError, match="Trying to modify immutable"):
             ns.new_attr = 42
 
-        assert hash(ns) == ns.content_id == hash(ns)
+        # Fall back to content_hash
+        assert hash(ns) == ns.content_hash()
 
 
 # -- UIDGenerator --
