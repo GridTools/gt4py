@@ -35,7 +35,7 @@ We generate the API documentation automatically from the docstrings using [Sphin
 Sphinx supports [reStructuredText][sphinx-rest] (reST) markup language to add additional formatting options to the generated docs, however section [_3.8 Comments and Docstrings_](https://google.github.io/styleguide/pyguide.html#38-comments-and-docstrings) of the Google Python Style Guide does not define how to use markups in docstrings. As a result, we decided to forbid the use of reST markup in docstrings, except for the following cases:
 
    - Cross-referencing other objects using Sphinx text roles for the [Python domain](https://www.sphinx-doc.org/en/master/usage/restructuredtext/domains.html#the-python-domain) (as explained [here](https://www.sphinx-doc.org/en/master/usage/restructuredtext/domains.html#python-roles)).   
-   - Very basic formatting markup to improve _readability_ of the generated documentation without obscuring the source docstring (e.g. ``` ``literal`` ```  strings).
+   - Very basic formatting markup to improve _readability_ of the generated documentation without obscuring the source docstring (e.g. ``` ``literal`` ```  strings, bulleted lists).
    
 Regarding code examples in docstrings, we highly encourage using the [doctest][doctest] format. This way, doctest runs your code examples and makes sure they are in sync with the codebase.
 
