@@ -20,8 +20,30 @@ class RemoveDocstrings(ast.NodeTransformer):
     """
     Description.
 
-    Docstrings within a field_operator or program appear as type ast.Expr with ast.Constant value of type string.
+    Docstrings appear as type ast.Expr with ast.Constant value of type string.
     If such patterns is detected, this entry in the node.body list is removed.
+
+    Example
+    -------
+    >>> import ast, inspect
+
+    >>> def example_docstring():
+    ...     a = 1
+    ...     "This is a docstring"
+    ...     return a
+
+    This will return an ast.FunctionDef containing elements in the body of type:
+     ast.Assign, ast.Expr, and ast.Return. The docstring is the second.
+    This element in the body is then removed.
+
+    >>> print(ast.unparse(
+    ...     RemoveDocstrings.apply(
+    ...         ast.parse(inspect.getsource(example_docstring))
+    ...     )
+    ... ))
+    def example_docstring():
+        a = 1
+        return a
     """
 
     @classmethod
