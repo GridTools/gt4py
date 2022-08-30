@@ -277,11 +277,9 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         new_type_condition = self._deduce_compare_type(
             condition, left=condition.left, right=condition.right
         )
+        isinstance(new_type_condition, ct.ScalarType)
 
-        if (
-            not isinstance(new_type_condition.kind, ct.ScalarKind)
-            or not new_type_condition.kind == ct.ScalarKind.BOOL
-        ):
+        if not new_type_condition == ct.ScalarType(kind=ct.ScalarKind.BOOL):
             raise FieldOperatorTypeDeductionError.from_foast_node(
                 condition,
                 msg=f"Condition operator `{condition.op}` with types {type(condition.left)} and {type(condition.right)} does not return a boolean",
