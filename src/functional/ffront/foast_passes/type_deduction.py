@@ -510,13 +510,9 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         try:
             return_type = type_info.promote(left_type, right_type)
 
-            if isinstance(mask_type, ct.FieldType):
-                if isinstance(return_type, ct.ScalarType):
-                    tmp_type = return_type
-                elif isinstance(return_type, ct.FieldType):
-                    tmp_type = return_type.dtype
+            if isinstance(mask_type, ct.FieldType) and isinstance(return_type, ct.ScalarType):
                 return_type = type_info.promote(
-                    return_type, ct.FieldType(dims=mask_type.dims, dtype=tmp_type)
+                    return_type, ct.FieldType(dims=mask_type.dims, dtype=return_type)
                 )
 
         except GTTypeError as ex:
