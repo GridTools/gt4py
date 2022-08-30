@@ -156,7 +156,7 @@ PRINT_VALUE_FUNCTION = textwrap.dedent(
         for index in np.ndindex(arr.shape):
             if all(test[i](index) for i, index in enumerate(index) if test[i] is not None) and mask_test(index):
                 index_str = ", ".join(f"{s}={i}" for s, i in zip(axes, index))
-                print(f"{msg}({index_str}): {arr[index]}")
+                print(f"{msg}({index_str}) = {arr[index]}")
     """
 )
 
