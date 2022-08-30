@@ -274,36 +274,19 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         **kwargs,
     ) -> Optional[ct.SymbolType]:
 
-        new_type_condition = self._deduce_compare_type(
-            condition, left=condition.left, right=condition.right
-        )
-        isinstance(new_type_condition, ct.ScalarType)
-
-        if not new_type_condition == ct.ScalarType(kind=ct.ScalarKind.BOOL):
+        if condition.type != ct.ScalarType(kind=ct.ScalarKind.BOOL):
             raise FieldOperatorTypeDeductionError.from_foast_node(
                 condition,
-                msg=f"Condition operator `{condition.op}` with types {type(condition.left)} and {type(condition.right)} does not return a boolean",
+                msg=f"Condition operator is of type `{condition.type}` "
+                    f"but should be of type bool",
             )
 
-        if isinstance(left.type, ct.TupleType) and isinstance(right.type, ct.TupleType):
-            left_tuple = ct.TupleType(types=[element.type for element in left.elts])
-            right_tuple = ct.TupleType(types=[element.type for element in right.elts])
-            if left_tuple.types == right_tuple.types:
-                return left_tuple
-            else:
-                raise FieldOperatorTypeDeductionError.from_foast_node(
-                    node,
-                    msg=f"Types within left and right tuples: `{left.type.types}` and {right.type.types} are not compatible",
-                )
-
-        try:
-            return type_info.promote(left.type, right.type)
-        except GTTypeError as ex:
+        if left.type != right.type:
             raise FieldOperatorTypeDeductionError.from_foast_node(
-                node,
-                msg=f"Could not promote `{left.type}` and `{right.type}` to common type"
-                f" for ternary operator.",
-            ) from ex
+                        node,
+                        msg=f"Left and right types are not the same: `{left.type}` and {right.type}",
+                    )
+        return left.type
 
     def visit_Compare(self, node: foast.Compare, **kwargs) -> foast.Compare:
         new_left = self.visit(node.left, **kwargs)
