@@ -18,7 +18,7 @@ import dataclasses
 @dataclasses.dataclass(kw_only=True)
 class RemoveDocstrings(ast.NodeTransformer):
     """
-    Description.
+    Remove ast docstring from body of ast.FunctionDef.
 
     Docstrings appear as type ast.Expr with ast.Constant value of type string.
     If such patterns is detected, this entry in the node.body list is removed.
