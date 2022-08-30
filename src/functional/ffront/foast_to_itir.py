@@ -321,11 +321,18 @@ class FieldOperatorLowering(NodeTranslator):
         )
 
     def visit_TernaryExpr(self, node: foast.TernaryExpr, **kwargs) -> itir.FunCall:
+        true_value = to_value(node.true_expr)(self.visit(node.true_expr, **kwargs))
+        false_value = to_value(node.false_expr)(self.visit(node.false_expr, **kwargs))
+        cond_value = to_value(node.condition)(self.visit(node.condition, **kwargs))
+
+        if isinstance(node.true_expr.type, ct.ScalarType) or isinstance(node.false_expr.type, ct.ScalarType):
+            return self._lift_lambda(node)(im.call_("if_")(cond_value, true_value, false_value))
+
         return self._lift_if_field(node)(
             im.call_("if_")(
-                to_value(node.condition)(self.visit(node.condition, **kwargs)),
-                to_value(node.true_expr)(self.visit(node.true_expr, **kwargs)),
-                to_value(node.false_expr)(self.visit(node.false_expr, **kwargs)),
+                cond_value,
+                true_value,
+                false_value,
             )
         )
 
