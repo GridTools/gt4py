@@ -148,7 +148,7 @@ def make_node(o):
         return list(make_node(arg) for arg in o)
     if o is None:
         return NoneLiteral()
-    if isinstance(o, iterator.runtime.FundefDispatcher):
+    if hasattr(o, "fun"):
         return SymRef(id=o.fun.__name__)
     raise NotImplementedError(f"Cannot handle {o}")
 

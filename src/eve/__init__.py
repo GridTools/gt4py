@@ -34,8 +34,8 @@ on some of the previous ones):
 
 from __future__ import annotations  # isort:skip
 
+from .version import __version__, __version_info__  # isort:skip
 
-from .version import __version__, __versioninfo__  # isort:skip
 
 from .concepts import (
     AnnexManager,
@@ -80,7 +80,7 @@ from .visitors import NodeTranslator, NodeVisitor
 __all__ = [
     # version
     "__version__",
-    "__versioninfo__",
+    "__version_info__",
     # concepts
     "AnnexManager",
     "AnySourceLocation",

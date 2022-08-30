@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import collections.abc
 import sys
+import timeit
 import types
 import typing
 
@@ -40,6 +41,195 @@ from eve.extended_typing import (
     Type,
     TypeVar,
 )
+
+
+@pytest.fixture
+def sample_class_defs():
+    TEST_SRC = """
+from __future__ import annotations
+
+from typing import ClassVar, Protocol, runtime_checkable
+
+class NoDataProto(Protocol):
+    def method_1(self) -> int:
+        ...
+
+    def method_2(self) -> int:
+        ...
+
+    def method_3(self) -> int:
+        ...
+
+    def method_4(self) -> int:
+        ...
+
+    def method_5(self) -> int:
+        ...
+
+    def method_6(self) -> int:
+        ...
+
+    def method_7(self) -> int:
+        ...
+
+class DataProto(NoDataProto, Protocol):
+    foo: int
+    BAR: ClassVar[int]
+
+class ConcreteClass:
+    foo: int = 32
+    BAR = 32
+
+    def method_1(self) -> int:
+        return 42
+
+    def method_2(self) -> int:
+        return 42
+
+    def method_3(self) -> int:
+        return 42
+
+    def method_4(self) -> int:
+        return 42
+
+    def method_5(self) -> int:
+        return 42
+
+    def method_6(self) -> int:
+        return 42
+
+    def method_7(self) -> int:
+        return 42
+
+    def method_foo(self) -> int:
+        return 42
+
+class IncompleteClass:
+    def method_1(self) -> int:
+        return 42
+
+    def method_2(self) -> int:
+        return 42
+    """
+    DEFINITIONS = {}
+    exec(TEST_SRC, None, DEFINITIONS)
+    yield types.SimpleNamespace(**DEFINITIONS)
+
+
+class TestExtendedProtocol:
+    def test_instance_check_shortcut(self, sample_class_defs):
+        ConcreteClass = sample_class_defs.ConcreteClass
+        IncompleteClass = sample_class_defs.IncompleteClass
+        NoDataProto = sample_class_defs.NoDataProto
+        DataProto = sample_class_defs.DataProto
+
+        # Undecorated runtime protocol checks should fail
+        with pytest.raises(
+            TypeError, match="checks can only be used with @runtime_checkable protocols"
+        ):
+            assert isinstance(ConcreteClass(), NoDataProto)
+
+        # Standard runtime protocol checks
+        xtyping.runtime_checkable(NoDataProto)
+        assert isinstance(ConcreteClass(), NoDataProto)
+        assert isinstance(ConcreteClass(), DataProto)
+        assert not isinstance(IncompleteClass(), NoDataProto)
+
+        # Standard runtime protocol checks from extended decorator (behavior should be the same)
+        xtyping.extended_runtime_checkable(
+            NoDataProto, instance_check_shortcut=False, subclass_check_with_data_members=False
+        )
+        assert isinstance(ConcreteClass(), NoDataProto)
+        assert isinstance(ConcreteClass(), DataProto)
+        assert not isinstance(IncompleteClass(), NoDataProto)
+
+        # Runtime protocol checks from extended decorator with shortcuts
+        xtyping.extended_runtime_checkable(
+            instance_check_shortcut=True, subclass_check_with_data_members=False
+        )(NoDataProto)
+        assert isinstance(ConcreteClass(), NoDataProto)
+        assert isinstance(ConcreteClass(), DataProto)
+        assert not isinstance(IncompleteClass(), NoDataProto)
+
+    def test_instance_check_shortcut_performance(self, sample_class_defs):
+        PASS_STMT = "isinstance(ConcreteClass(), NoDataProto)"
+        FAIL_STMT = "isinstance(IncompleteClass(), NoDataProto)"
+        DEFINITIONS = sample_class_defs.__dict__
+        NUM_REPETITIONS = 10000
+
+        # Timings for standard runtime_checkable()
+        xtyping.runtime_checkable(sample_class_defs.NoDataProto)
+        std_pass_time = timeit.timeit(stmt=PASS_STMT, number=NUM_REPETITIONS, globals=DEFINITIONS)
+        std_fail_time = timeit.timeit(stmt=FAIL_STMT, number=NUM_REPETITIONS, globals=DEFINITIONS)
+
+        # Standard runtime protocol checks from extended decorator.
+        # Expected performance should be roughly the same.
+        xtyping.runtime_checkable(sample_class_defs.NoDataProto)
+        std_from_ext_pass_time = timeit.timeit(
+            stmt=PASS_STMT, number=NUM_REPETITIONS, globals=DEFINITIONS
+        )
+        std_from_ext_fail_time = timeit.timeit(
+            stmt=FAIL_STMT, number=NUM_REPETITIONS, globals=DEFINITIONS
+        )
+        bound_factor = 3.0
+
+        assert (1 / bound_factor) < (std_pass_time / std_from_ext_pass_time) < bound_factor
+        assert (1 / bound_factor) < (std_fail_time / std_from_ext_fail_time) < bound_factor
+
+        # Runtime protocol checks from extended decorator with shortcuts
+        # Expected performance should be much better.
+        xtyping.extended_runtime_checkable(
+            instance_check_shortcut=True, subclass_check_with_data_members=False
+        )(sample_class_defs.NoDataProto)
+        ext_pass_time = timeit.timeit(stmt=PASS_STMT, number=NUM_REPETITIONS, globals=DEFINITIONS)
+        ext_fail_time = timeit.timeit(stmt=FAIL_STMT, number=NUM_REPETITIONS, globals=DEFINITIONS)
+        bound_factor = 10.0
+
+        assert std_pass_time / ext_pass_time > bound_factor
+        assert std_pass_time / ext_fail_time > bound_factor
+
+    def test_subclass_check_with_data_members(self, sample_class_defs):
+        ConcreteClass = sample_class_defs.ConcreteClass
+        NoDataProto = sample_class_defs.NoDataProto
+        DataProto = sample_class_defs.DataProto
+
+        # Undecorated runtime protocol checks should fail
+        with pytest.raises(
+            TypeError, match="checks can only be used with @runtime_checkable protocols"
+        ):
+            assert issubclass(ConcreteClass, DataProto)
+
+        # Standard runtime protocol checks
+        xtyping.runtime_checkable(NoDataProto)
+        assert isinstance(ConcreteClass(), NoDataProto)
+        assert issubclass(ConcreteClass, NoDataProto)
+
+        with pytest.raises(
+            TypeError, match="Protocols with non-method members don't support issubclass()"
+        ):
+            assert issubclass(ConcreteClass, DataProto)
+
+        # Standard runtime protocol checks from extended decorator.
+        # Expected behavior and performance should be roughly the same.
+        xtyping.extended_runtime_checkable(
+            instance_check_shortcut=False, subclass_check_with_data_members=False
+        )(DataProto)
+        assert isinstance(ConcreteClass(), NoDataProto)
+        assert issubclass(ConcreteClass, NoDataProto)
+
+        with pytest.raises(
+            TypeError, match="Protocols with non-method members don't support issubclass()"
+        ):
+            assert issubclass(ConcreteClass, DataProto)
+
+        # Runtime protocol checks from extended decorator with shortcuts
+        xtyping.extended_runtime_checkable(
+            instance_check_shortcut=False, subclass_check_with_data_members=True
+        )(DataProto)
+        assert isinstance(ConcreteClass(), DataProto)
+        assert issubclass(ConcreteClass, DataProto)
+        assert isinstance(ConcreteClass(), NoDataProto)
+        assert issubclass(ConcreteClass, NoDataProto)
 
 
 @pytest.mark.parametrize("t", (int, float, dict, tuple, frozenset, collections.abc.Mapping))
@@ -86,44 +276,76 @@ def test_get_actual_type(instance, expected):
     assert xtyping.get_actual_type(instance) == expected
 
 
-@pytest.mark.parametrize(
-    "x", [int, float, complex, str, tuple, frozenset, 1, -2.0, "foo", (), (1, 3.0)]
-)
-def test_is_hashable(x):
-    assert xtyping.is_hashable(x)
+class TestHashableTypings:
+    @pytest.mark.parametrize(
+        "x",
+        [
+            int,
+            float,
+            complex,
+            str,
+            tuple,
+            frozenset,
+            1,
+            -2.0,
+            "foo",
+            (),
+            (1, 3.0),
+            frozenset([1, 2, 3]),
+        ],
+    )
+    def test_is_value_hashable(self, x):
+        assert xtyping.is_value_hashable(x)
 
+    @pytest.mark.parametrize("x", [list(), {1, 2, 3}, dict()])
+    def test_is_not_value_hashable(self, x):
+        assert not xtyping.is_value_hashable(x)
 
-@pytest.mark.parametrize("x", [(list, list(), (1, []), dict())])
-def test_is_not_hashable(x):
-    assert not xtyping.is_hashable(x)
+    @pytest.mark.parametrize(
+        "t",
+        [
+            int,
+            str,
+            float,
+            tuple,
+            Tuple,
+            Tuple[int],
+            Tuple[int, ...],
+            Tuple[Tuple[int, ...], ...],
+            FrozenSet,
+            Type,
+            type(None),
+            None,
+        ],
+    )
+    def test_is_value_hashable_typing(self, t):
+        assert xtyping.is_value_hashable_typing(t)
 
+    @pytest.mark.parametrize(
+        "t", [dict, Dict, Dict[str, int], Sequence[int], List[str], Any, TypeVar("T")]
+    )
+    def test_is_not_value_hashable_type(self, t):
+        assert not xtyping.is_value_hashable_typing(t)
 
-@pytest.mark.parametrize(
-    "t",
-    [
-        int,
-        str,
-        float,
-        tuple,
-        Tuple,
-        Tuple[int],
-        Tuple[int, ...],
-        Tuple[Tuple[int, ...], ...],
-        FrozenSet,
-        Type,
-        type(None),
-        None,
-    ],
-)
-def test_is_hashable_type(t):
-    assert xtyping.is_hashable_type(t)
+    def test_has_custom_hash_abc(self):
+        assert isinstance(4, xtyping.HasCustomHash)
+        assert isinstance((), xtyping.HasCustomHash)
 
+        class A:
+            def __hash__(self):
+                return 3
 
-@pytest.mark.parametrize(
-    "t", [dict, Dict, Dict[str, int], Sequence[int], List[str], Any, TypeVar("T")]
-)
-def test_is_not_hashable_type(t):
-    assert not xtyping.is_hashable_type(t)
+        assert isinstance(A(), xtyping.HasCustomHash)
+
+        class B:
+            __hash__ = None
+
+        assert not isinstance(B(), xtyping.HasCustomHash)
+
+        assert not isinstance(None, xtyping.HasCustomHash)
+        assert not isinstance(object(), xtyping.HasCustomHash)
+        assert not isinstance(tuple, xtyping.HasCustomHash)
+        assert not isinstance(type, xtyping.HasCustomHash)
 
 
 def test_is_protocol():
