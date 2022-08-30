@@ -1,8 +1,6 @@
-=======
-Authors
-=======
+# Authors
 
-.. List format (alphabetical order):  Surname, Name. Employer/Affiliation
+<!-- List format (alphabetical order): Surname, Name. Employer/Affiliation -->
 
 * Benedicic, Lucas. ETH Zurich - CSCS
 * Cruz, Felipe. ETH Zurich - CSCS
