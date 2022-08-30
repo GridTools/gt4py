@@ -645,7 +645,7 @@ class Print(Statement):
 
 
 @attribclass
-class BlockStmt:
+class BlockStmt(Node):
     stmts = attribute(of=ListOf[UnionOf[Statement, Decl]])
     loc = attribute(of=Location, optional=True)
 

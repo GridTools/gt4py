@@ -637,9 +637,18 @@ class CallHoister(ast.NodeTransformer):
             if isinstance(item, ast.Expr) and isinstance(item.value, ast.Call):
                 body.append(item.value)
             else:
-                body.append(item)
+                body.append(self.visit(item))
 
         return ast.With(items=node.items, body=body)
+
+    def visit_If(self, node: ast.If) -> ast.If:
+        body = []
+        for item in node.body:
+            if isinstance(item, ast.Expr) and isinstance(item.value, ast.Call):
+                body.append(item.value)
+            else:
+                body.append(self.visit(item))
+        return ast.If(test=node.test, body=body, orelse=[self.visit(item) for item in node.orelse])
 
 
 class CompiledIfInliner(ast.NodeTransformer):
@@ -1331,36 +1340,45 @@ class IRMaker(ast.NodeVisitor):
 
         return result
 
+    def _parse_print_value_call(self, node: ast.Call) -> nodes.Print:
+        """Parse the ast.Call into a nodes.Print object."""
+        if len(node.args) < 1:
+            raise GTScriptSyntaxError("print_value requires arguments")
+
+        # First argument is the expression
+        expr = self.visit(node.args[0])
+
+        # The remainder of the arguments are keywords
+        msg = ""
+        constraints: List[nodes.AxisConstraint] = []
+        for kwarg in node.keywords:
+            if kwarg.arg == "msg":
+                assert isinstance(kwarg.value, ast.Constant)
+                msg = kwarg.value.value
+            else:
+                assert isinstance(kwarg.value, ast.Constant)
+                if kwarg.arg.upper() not in set(CartesianSpace.names):
+                    axes_names = ", ".join(CartesianSpace.names)
+                    raise GTScriptSyntaxError(
+                        f"Expected one of: msg, {axes_names}, got {kwarg.arg}"
+                    )
+                constraints.append(
+                    nodes.AxisIndexConstraint(axis=kwarg.arg.lower(), index=kwarg.value.value)
+                )
+
+        loc = nodes.Location.from_ast_node(node)
+        if not msg:
+            raise GTScriptSyntaxError(
+                "Expected msg keyword argument in call to print_value", loc=loc
+            )
+
+        return nodes.Print(expr=expr, msg=msg, constraints=constraints, loc=loc)
+
     def visit_Call(self, node: ast.Call):
         # The leftover calls can be either `print_value` or a math function
         if node.func.id == "print_value":
-            if len(node.args) < 1:
-                raise GTScriptSyntaxError("print_value requires arguments")
+            return self._parse_print_value_call(node)
 
-            # First argument is the expression
-            expr = self.visit(node.args[0])
-
-            # The remainder of the arguments are keywords
-            msg = ""
-            constraints: List[nodes.AxisConstraint] = []
-            for kwarg in node.keywords:
-                if kwarg.arg == "msg":
-                    assert isinstance(kwarg.value, ast.Constant)
-                    msg = kwarg.value.value
-                else:
-                    assert isinstance(kwarg.value, ast.Constant)
-                    if kwarg.arg.upper() not in set(CartesianSpace.names):
-                        axes_names = ", ".join(CartesianSpace.names)
-                        raise GTScriptSyntaxError(
-                            f"Expected one of: msg, {axes_names}, got {kwarg.arg}"
-                        )
-                    constraints.append(
-                        nodes.AxisIndexConstraint(axis=kwarg.arg.lower(), index=kwarg.value.value)
-                    )
-
-            return nodes.Print(
-                expr=expr, msg=msg, constraints=constraints, loc=nodes.Location.from_ast_node(node)
-            )
         else:
             native_fcn = nodes.NativeFunction.PYTHON_SYMBOL_TO_IR_OP[node.func.id]
 

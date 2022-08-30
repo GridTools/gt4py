@@ -98,16 +98,14 @@ class AccessCollector(NodeVisitor):
             )
         )
 
-    def visit_AssignStmt(
-        self,
-        node: oir.AssignStmt,
-        **kwargs: Any,
-    ) -> None:
+    def visit_AssignStmt(self, node: oir.AssignStmt, **kwargs: Any) -> None:
         self.visit(node.right, is_write=False, **kwargs)
         self.visit(node.left, is_write=True, **kwargs)
 
-    def visit_MaskStmt(self, node: oir.MaskStmt, **kwargs: Any) -> None:
+    def visit_Print(self, node: oir.Print, **kwargs: Any) -> None:
+        self.visit(node.expr, is_write=False, **kwargs)
 
+    def visit_MaskStmt(self, node: oir.MaskStmt, **kwargs: Any) -> None:
         self.visit(node.mask, is_write=False, **kwargs)
         self.visit(node.body, **kwargs)
 

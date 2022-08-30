@@ -160,6 +160,10 @@ class While(common.While[Stmt, Expr], Stmt):
         return body
 
 
+class Print(common.Print[Expr], Stmt):
+    pass
+
+
 class UnaryOp(common.UnaryOp[Expr], Expr):
     pass
 

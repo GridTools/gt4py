@@ -13,7 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from dataclasses import dataclass, field
-from typing import Any, List, Set
+from typing import Any, List, Set, Union
 
 from eve import NodeTranslator
 from gtc import common, gtir, oir, utils
@@ -146,7 +146,9 @@ class GTIRToOIR(NodeTranslator):
 
         return oir.HorizontalRestriction(mask=node.mask, body=body_stmts)
 
-    def visit_While(self, node: gtir.While, *, mask: oir.Expr = None, **kwargs: Any):
+    def visit_While(
+        self, node: gtir.While, *, mask: oir.Expr = None, **kwargs: Any
+    ) -> Union[oir.While, oir.MaskStmt]:
         body_stmts = []
         for stmt in node.body:
             stmt_or_stmts = self.visit(stmt, **kwargs)
@@ -159,6 +161,12 @@ class GTIRToOIR(NodeTranslator):
         if mask:
             cond = oir.BinaryOp(op=common.LogicalOperator.AND, left=mask, right=cond)
         stmt = oir.While(cond=cond, body=body_stmts, loc=node.loc)
+        if mask is not None:
+            stmt = oir.MaskStmt(body=[stmt], mask=mask, loc=node.loc)
+        return stmt
+
+    def visit_Print(self, node: gtir.Print, *, mask: oir.Expr = None, **kwargs: Any) -> oir.Print:
+        stmt = oir.Print(expr=self.visit(node.expr), msg=node.msg, constraints=node.constraints)
         if mask is not None:
             stmt = oir.MaskStmt(body=[stmt], mask=mask, loc=node.loc)
         return stmt

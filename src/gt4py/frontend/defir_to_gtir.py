@@ -38,6 +38,7 @@ from gt4py.frontend.nodes import (
     LevelMarker,
     NativeFuncCall,
     NativeFunction,
+    Print,
     ScalarLiteral,
     StencilDefinition,
     TernaryOpExpr,
@@ -341,6 +342,16 @@ class DefIRToGTIR(IRNodeVisitor):
             cond=self.visit(node.condition),
             body=self.visit(node.body),
             loc=location_to_source_location(node.loc),
+        )
+
+    def visit_Print(self, node: Print) -> gtir.Print:
+        return gtir.Print(
+            expr=self.visit(node.expr),
+            msg=node.msg,
+            constraints=tuple(
+                common.AxisIndexConstraint(axis=constr.axis, index=constr.index)
+                for constr in node.constraints
+            ),
         )
 
     def visit_VarRef(self, node: VarRef, **kwargs):

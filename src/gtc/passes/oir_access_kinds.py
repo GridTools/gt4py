@@ -44,6 +44,9 @@ class AccessKindComputer(NodeVisitor):
         self.visit(node.cond, kind=AccessKind.READ, **kwargs)
         self.visit(node.body, **kwargs)
 
+    def visit_Print(self, node: oir.Print, **kwargs: Any) -> None:
+        self.visit(node.expr, kind=AccessKind.READ, **kwargs)
+
     def visit_AssignStmt(self, node: oir.AssignStmt, **kwargs: Any) -> None:
         self.visit(node.right, kind=AccessKind.READ, **kwargs)
         self.visit(node.left, kind=AccessKind.WRITE, **kwargs)

@@ -141,6 +141,25 @@ ORIGIN_CORRECTED_VIEW_CLASS = textwrap.dedent(
     """
 )
 
+PRINT_VALUE_FUNCTION = textwrap.dedent(
+    """\
+    def _print_value(arr, *, msg: str, mask: np.ndarray, offset: Tuple[int, int], **kwargs):
+        test = (
+            (lambda index: index + offset[0] == kwargs.get("i")) if kwargs.get("i") is not None else None,
+            (lambda index: index + offset[1] == kwargs.get("j")) if kwargs.get("j") is not None else None,
+            (lambda index: index + 0         == kwargs.get("k")) if kwargs.get("k") is not None else None,
+        )
+        mask_test = lambda index: mask is None or mask[index]
+
+        # Field always shapes its arrays to contain i, j, and k
+        axes = ("i", "j", "k")
+        for index in np.ndindex(arr.shape):
+            if all(test[i](index) for i, index in enumerate(index) if test[i] is not None) and mask_test(index):
+                index_str = ", ".join(f"{s}={i}" for s, i in zip(axes, index))
+                print(f"{msg}({index_str}): {arr[index]}")
+    """
+)
+
 
 class NpirCodegen(TemplatedGenerator):
     @dataclass
@@ -325,6 +344,14 @@ class NpirCodegen(TemplatedGenerator):
             body.extend(stmt.split("\n"))
         return self.While.render(cond=cond, body=body)
 
+    def visit_Print(self, node: npir.Print, **kwargs: Any) -> str:
+        constraints = [f"{constr.axis}={constr.index}" for constr in node.constraints]
+        return self.generic_visit(node, axis_constraints=", ".join(constraints), **kwargs)
+
+    Print = FormatTemplate(
+        '_print_value({expr}, msg="{msg}", mask={mask}, offset={lower}, {axis_constraints})'
+    )
+
     def visit_VerticalPass(self, node: npir.VerticalPass, **kwargs):
         is_serial = node.direction != common.LoopOrder.PARALLEL
         has_variable_k = bool(node.iter_tree().if_isinstance(npir.VarKOffset).to_list())
@@ -385,6 +412,7 @@ class NpirCodegen(TemplatedGenerator):
             signature=", ".join(signature),
             data_view_class=ORIGIN_CORRECTED_VIEW_CLASS,
             ignore_np_errstate=ignore_np_errstate,
+            print_value_def=PRINT_VALUE_FUNCTION,
             **kwargs,
         )
 
@@ -398,6 +426,8 @@ class NpirCodegen(TemplatedGenerator):
             import scipy.special
 
             {{ data_view_class }}
+
+            {{ print_value_def }}
 
             def run({{ signature }}):
 

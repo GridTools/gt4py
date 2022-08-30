@@ -190,6 +190,10 @@ class While(common.While[Stmt, Expr], Stmt):
     pass
 
 
+class Print(common.Print[Expr], Stmt):
+    mask: Optional[Expr] = None
+
+
 # --- Control Flow ---
 class HorizontalBlock(common.LocNode, eve.SymbolTableTrait):
     body: List[Stmt]

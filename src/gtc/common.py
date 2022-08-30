@@ -539,6 +539,17 @@ class Cast(GenericNode, Generic[ExprT]):
         return values
 
 
+class AxisIndexConstraint(Node):
+    axis: Str
+    index: int
+
+
+class Print(GenericNode, Generic[ExprT]):
+    expr: ExprT
+    msg: Str
+    constraints: Tuple[AxisIndexConstraint, ...]
+
+
 class NativeFuncCall(GenericNode, Generic[ExprT]):
     func: NativeFunction
     args: List[ExprT]

@@ -22,7 +22,7 @@ import collections
 import inspect
 import numbers
 import types
-from typing import Callable, Dict, Optional, Type
+from typing import Callable, Dict, Type
 
 import numpy as np
 
@@ -843,7 +843,7 @@ def trunc(x):
     pass
 
 
-def print_value(expr, *, msg: Optional[str] = None, **kwargs):
+def print_value(expr, *, msg: str, **kwargs):
     """Print the value of the expr at some point in the stencil.
 
     Parameters

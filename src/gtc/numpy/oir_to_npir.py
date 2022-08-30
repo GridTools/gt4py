@@ -192,6 +192,16 @@ class OirToNpir(NodeTranslator):
 
         return utils.flatten_list(self.visit(node.body, horizontal_mask=horizontal_mask, **kwargs))
 
+    def visit_Print(
+        self, node: oir.Print, mask: Optional[npir.Expr] = None, **kwargs: Any
+    ) -> npir.Print:
+        return npir.Print(
+            expr=self.visit(node.expr, **kwargs),
+            msg=node.msg,
+            mask=mask,
+            constraints=node.constraints,
+        )
+
     # --- Control Flow ---
     def visit_HorizontalExecution(
         self,
