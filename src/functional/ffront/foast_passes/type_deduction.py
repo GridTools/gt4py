@@ -278,14 +278,14 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             raise FieldOperatorTypeDeductionError.from_foast_node(
                 condition,
                 msg=f"Condition operator is of type `{condition.type}` "
-                    f"but should be of type bool",
+                f"but should be of type bool",
             )
 
         if left.type != right.type:
             raise FieldOperatorTypeDeductionError.from_foast_node(
-                        node,
-                        msg=f"Left and right types are not the same: `{left.type}` and {right.type}",
-                    )
+                node,
+                msg=f"Left and right types are not the same: `{left.type}` and {right.type}",
+            )
         return left.type
 
     def visit_Compare(self, node: foast.Compare, **kwargs) -> foast.Compare:
