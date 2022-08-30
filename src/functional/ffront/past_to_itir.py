@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from eve import NodeTranslator, traits
+from eve import NodeTranslator, concepts, traits
 from functional.common import DimensionKind, GridType, GTTypeError
 from functional.ffront import common_types, program_ast as past, type_info
 from functional.iterator import ir as itir
@@ -153,20 +153,22 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             raise AssertionError("Expected `None` or `past.Constant`.")
         return lowered_bound
 
-    def _construct_itir_out_arg(self, node: past.TupleExpr | past.Name) -> itir.Expr:
+    def _construct_itir_out_arg(
+        self, node: past.TupleExpr | past.Name | past.Subscript
+    ) -> itir.Expr:
         if isinstance(node, past.Name):
             return itir.SymRef(id=node.id)
+        elif isinstance(node, past.Subscript):
+            return self._construct_itir_out_arg(node.value)
         elif isinstance(node, past.TupleExpr):
-            if any(isinstance(el, past.Subscript) for el in _flatten_tuple_expr(node)):
-                raise NotImplementedError("Slicing for tuple `out` argument not supported.")
             return itir.FunCall(
                 fun=itir.SymRef(id="make_tuple"),
                 args=[self._construct_itir_out_arg(el) for el in node.elts],
             )
         else:
-            raise AssertionError()(
-                "Unexpected `out` argument. Must be a `past.Name` or nesting of "
-                "`past.TupleExpr` and `past.Name`."
+            raise AssertionError(
+                "Unexpected `out` argument. Must be a `past.Name`, `past.Subscript`"
+                " or a `past.TupleExpr` of  `past.Name`, `past.Subscript` or`past.TupleExpr` (recursively)."
             )
 
     def _construct_itir_domain_arg(
@@ -203,6 +205,26 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
 
         return itir.FunCall(fun=itir.SymRef(id=domain_builtin), args=domain_args)
 
+    @staticmethod
+    def _compute_field_slice(node: past.Subscript):
+        out_field_name: past.Name = node.value
+        if isinstance(node.slice_, past.TupleExpr) and all(
+            isinstance(el, past.Slice) for el in node.slice_.elts
+        ):
+            out_field_slice_: list[past.Slice] = node.slice_.elts
+        elif isinstance(node.slice_, past.Slice):
+            out_field_slice_: list[past.Slice] = [node.slice_]
+        else:
+            raise AssertionError(
+                "Unexpected `out` argument. Must be tuple of slices or slice expression."
+            )
+        if len(out_field_slice_) != len(node.type.dims):
+            raise GTTypeError(
+                f"Too many indices for field {out_field_name}: field is {len(node.type.dims)}"
+                f"-dimensional, but {len(out_field_slice_)} were indexed."
+            )
+        return out_field_slice_
+
     def _visit_stencil_call_out_arg(
         self, node: past.Expr, **kwargs
     ) -> tuple[itir.SymRef, itir.FunCall]:
@@ -210,25 +232,9 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             # as the ITIR does not support slicing a field we have to do a deeper
             #  inspection of the PAST to emulate the behaviour
             out_field_name: past.Name = node.value
-            if isinstance(node.slice_, past.TupleExpr) and all(
-                isinstance(el, past.Slice) for el in node.slice_.elts
-            ):
-                out_field_slice_: list[past.Slice] = node.slice_.elts
-            elif isinstance(node.slice_, past.Slice):
-                out_field_slice_: list[past.Slice] = [node.slice_]
-            else:
-                raise AssertionError(
-                    "Unexpected `out` argument. Must be tuple of slices or slice expression."
-                )
-            if len(out_field_slice_) != len(node.type.dims):
-                raise GTTypeError(
-                    f"Too many indices for field {out_field_name}: field is {len(node.type.dims)}"
-                    f"-dimensional, but {len(out_field_slice_)} were indexed."
-                )
-
             return (
                 self._construct_itir_out_arg(out_field_name),
-                self._construct_itir_domain_arg(out_field_name, out_field_slice_),
+                self._construct_itir_domain_arg(out_field_name, self._compute_field_slice(node)),
             )
         elif isinstance(node, past.Name):
             return (self._construct_itir_out_arg(node), self._construct_itir_domain_arg(node))
@@ -240,9 +246,20 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                 field.type.dims == first_field.type.dims for field in flattened
             ), "Incompatible fields in tuple: all fields must have the same dimensions."
 
+            field_slice = None
+            if isinstance(first_field, past.Subscript):
+                assert all(
+                    isinstance(field, past.Subscript) for field in flattened
+                ), "Incompatible field in tuple: either all fields or no field must be sliced."
+                assert all(
+                    concepts.eq_nonlocated(first_field.slice_, field.slice_) for field in flattened
+                ), "Incompatible field in tuple: all fields must be sliced in the same way."
+                field_slice = self._compute_field_slice(first_field)
+                first_field = first_field.value
+
             return (
                 self._construct_itir_out_arg(node),
-                self._construct_itir_domain_arg(first_field),
+                self._construct_itir_domain_arg(first_field, field_slice),
             )
         else:
             raise AssertionError(
