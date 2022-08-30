@@ -829,3 +829,25 @@ def test_docstring():
         fieldop_with_docstring(a, out=a)
 
     test_docstring(a, offset_provider={})
+
+
+def test_nested_docstring():
+    size = 10
+    a = np_as_located_field(IDim)(np.ones((size,)))
+
+    @field_operator
+    def fieldop_with_docstring(a: Field[[IDim], float64]) -> Field[[IDim], float64]:
+        # """My docstring."""
+        def nested_field_op():
+            # """Another docstring"""
+            return a
+
+        a = a
+        return a
+
+    @program
+    def nested_docstring(a: Field[[IDim], float64]) -> Field[[IDim], float64]:
+        # """My docstring."""
+        fieldop_with_docstring(a, out=a)
+
+    nested_docstring(a, offset_provider={})

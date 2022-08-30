@@ -12,8 +12,10 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 import ast
+import dataclasses
 
 
+@dataclasses.dataclass(kw_only=True)
 class RemoveDocstrings(ast.NodeTransformer):
     """
     Description.
@@ -26,13 +28,22 @@ class RemoveDocstrings(ast.NodeTransformer):
     def apply(cls, node):
         return cls().visit(node)
 
-    def visit_FunctionDef(self, node):
-        if isinstance(node, ast.FunctionDef):
-            for obj in node.body:
-                if (
-                    isinstance(obj, ast.Expr)
-                    and isinstance(obj.value, ast.Constant)
-                    and isinstance(obj.value.value, str)
-                ):
-                    node.body.remove(obj)
-        return node
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> ast.FunctionDef:
+        for obj in node.body:
+            if (
+                isinstance(obj, ast.Expr)
+                and isinstance(obj.value, ast.Constant)
+                and isinstance(obj.value.value, str)
+            ):
+                node.body.remove(obj)
+
+        return ast.FunctionDef(
+            name=node.name,
+            args=node.args,
+            body=[self.visit(obj) for obj in node.body],
+            decorator_list=node.decorator_list,
+            returns=node.returns,
+            type_comment=node.type_comment,
+            lineno=node.lineno,
+            col_offset=node.col_offset,
+        )
