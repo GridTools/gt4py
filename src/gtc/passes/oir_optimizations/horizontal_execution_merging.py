@@ -249,6 +249,9 @@ class OnTheFlyMerging(NodeTranslator):
         def first_has_horizontal_restriction() -> bool:
             return any(first.iter_tree().if_isinstance(oir.HorizontalRestriction))
 
+        def first_has_print_value() -> bool:
+            return any(first.iter_tree().if_isinstance(oir.Print))
+
         if (
             first_fields_rewritten_later()
             or first_writes_protected()
@@ -256,6 +259,7 @@ class OnTheFlyMerging(NodeTranslator):
             or first_has_expensive_function_call()
             or first_has_variable_access()
             or first_has_horizontal_restriction()
+            or first_has_print_value()
         ):
             return [first] + self._merge(others, symtable, new_symbol_name, protected_fields)
 

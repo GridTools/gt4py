@@ -143,19 +143,27 @@ ORIGIN_CORRECTED_VIEW_CLASS = textwrap.dedent(
 
 PRINT_VALUE_FUNCTION = textwrap.dedent(
     """\
-    def _print_value(arr, *, msg: str, mask: np.ndarray, offset: Tuple[int, int], **kwargs):
+    def _print_value(arr: np.ndarray, *, msg: str, mask: np.ndarray, offset: Tuple[int, int], k_: Optional[int], **kwargs):
+        if not isinstance(arr, np.ndarray):
+            raise ValueError(f"print_value is only intended to work with arrays, but received: {arr}")
+
         test = (
             (lambda index: index + offset[0] == kwargs.get("i")) if kwargs.get("i") is not None else None,
             (lambda index: index + offset[1] == kwargs.get("j")) if kwargs.get("j") is not None else None,
             (lambda index: index + 0         == kwargs.get("k")) if kwargs.get("k") is not None else None,
         )
-        mask_test = lambda index: mask is None or mask[index]
 
         # Field always shapes its arrays to contain i, j, and k
         axes = ("i", "j", "k")
         for index in np.ndindex(arr.shape):
-            if all(test[i](index) for i, index in enumerate(index) if test[i] is not None) and mask_test(index):
-                index_str = ", ".join(f"{s}={i}" for s, i in zip(axes, index))
+            if (
+                all(test[i](index) for i, index in enumerate(index) if test[i] is not None)
+                and (mask is None or mask[index])
+            ):
+                lindex = list(index)
+                if k_:
+                    lindex[2] = k_
+                index_str = ", ".join(f"{s}={i}" for s, i in zip(axes, lindex))
                 print(f"{msg}({index_str}) = {arr[index]}")
     """
 )
@@ -344,12 +352,39 @@ class NpirCodegen(TemplatedGenerator):
             body.extend(stmt.split("\n"))
         return self.While.render(cond=cond, body=body)
 
-    def visit_Print(self, node: npir.Print, **kwargs: Any) -> str:
-        constraints = [f"{constr.axis}={constr.index}" for constr in node.constraints]
-        return self.generic_visit(node, axis_constraints=", ".join(constraints), **kwargs)
+    def visit_Print(self, node: npir.Print, *, is_serial: bool, **kwargs: Any) -> str:
+        constraints: List[str] = []
+        k_index: Optional[str] = None
 
-    Print = FormatTemplate(
-        '_print_value({expr}, msg="{msg}", mask={mask}, offset={lower}, {axis_constraints})'
+        for constr in node.constraints:
+            if constr.axis == "k" and is_serial:
+                k_index = str(constr.index)
+                continue
+
+            constraints.append(f"{constr.axis}={constr.index}")
+
+        return self.generic_visit(
+            node,
+            axis_constraints=", ".join(constraints),
+            k_index=k_index,
+            k_="k_" if is_serial else None,
+            is_serial=is_serial,
+            **kwargs,
+        )
+
+    Print = JinjaTemplate(
+        textwrap.dedent(
+            """\
+            {% set body_indent = 0 %}
+            {%- if is_serial and k_index %}
+            if k_ == {{ k_index }}:
+            {%- set body_indent = 4 %}
+            {% endif -%}
+            {% filter indent(width=body_indent) %}
+            _print_value({{expr}}, msg="{{msg}}", mask={{mask}}, offset={{lower}}, k_={{k_}}, {{axis_constraints}})
+            {% endfilter %}
+            """
+        )
     )
 
     def visit_VerticalPass(self, node: npir.VerticalPass, **kwargs):
@@ -420,7 +455,7 @@ class NpirCodegen(TemplatedGenerator):
         textwrap.dedent(
             """\
             import numbers
-            from typing import Tuple
+            from typing import Tuple, Optional
 
             import numpy as np
             import scipy.special
