@@ -287,6 +287,9 @@ class OIRToGTCpp(eve.NodeTranslator):
             cond=self.visit(node.cond, **kwargs), body=self.visit(node.body, **kwargs)
         )
 
+    def visit_Print(self, node: oir.Print, **kwargs: Any) -> gtcpp.Print:
+        raise NotImplementedError("The gtcpp backend does not yet support print_value")
+
     def visit_HorizontalExecution(
         self,
         node: oir.HorizontalExecution,

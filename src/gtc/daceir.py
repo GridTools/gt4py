@@ -807,6 +807,10 @@ class While(common.While[Stmt, Expr], Stmt):
     pass
 
 
+class Print(common.Print[Expr], Stmt):
+    pass
+
+
 class ScalarDecl(Decl):
     pass
 

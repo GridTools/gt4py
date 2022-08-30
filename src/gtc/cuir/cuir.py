@@ -100,6 +100,10 @@ class While(common.While[Stmt, Expr], Stmt):
     pass
 
 
+class Print(common.Print[Expr], Stmt):
+    pass
+
+
 class UnaryOp(common.UnaryOp[Expr], Expr):
     pass
 

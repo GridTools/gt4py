@@ -377,6 +377,9 @@ class DaCeIRBuilder(NodeTranslator):
             body=self.visit(node.body, **kwargs),
         )
 
+    def visit_Print(self, node: oir.Print, **kwargs: Any) -> dcir.Print:
+        raise NotImplementedError("The dace backend does not yet support print_value")
+
     def visit_Cast(self, node: oir.Cast, **kwargs: Any) -> dcir.Cast:
         return dcir.Cast(dtype=node.dtype, expr=self.visit(node.expr, **kwargs))
 

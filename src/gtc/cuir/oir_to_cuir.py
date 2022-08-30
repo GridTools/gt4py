@@ -211,6 +211,9 @@ class OIRToCUIR(eve.NodeTranslator):
             cond=self.visit(node.cond, **kwargs), body=self.visit(node.body, **kwargs)
         )
 
+    def visit_Print(self, node: oir.Print, **kwargs: Any) -> cuir.Print:
+        raise NotImplementedError("The cuda backend does not yet support print_value")
+
     def visit_Cast(self, node: oir.Cast, **kwargs: Any) -> cuir.Cast:
         return cuir.Cast(dtype=node.dtype, expr=self.visit(node.expr, **kwargs))
 
