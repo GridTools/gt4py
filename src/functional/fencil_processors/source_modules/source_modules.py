@@ -123,3 +123,11 @@ class BindingModule(Generic[SrcL, TgtL]):
 
 def format_source(settings: LanguageSettings, source):
     return eve.codegen.format_source(settings.formatter_key, source, style=settings.formatter_style)
+
+
+@dataclass(frozen=True)
+class JITCompileModule(Generic[SrcL, SettingT, TgtL]):
+    """Encapsulate all and only the data needed to reliably and safely cache JIT / dynamically compiled fencils."""
+
+    source_module: SourceModule[SrcL, SettingT]
+    bindings_module: BindingModule[SrcL, TgtL]

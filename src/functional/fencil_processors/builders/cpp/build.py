@@ -14,6 +14,8 @@
 """Build system functionality."""
 
 
+from __future__ import annotations
+
 import dataclasses
 import importlib
 import json
@@ -21,7 +23,7 @@ import pathlib
 import subprocess
 import textwrap
 from datetime import datetime
-from typing import Callable, Sequence
+from typing import Callable, Optional, Sequence
 
 import eve
 from eve.codegen import JinjaTemplate as as_jinja
@@ -336,9 +338,9 @@ class CMakeProject(pipeline.BuildableProject):
                 "-G",
                 "Ninja",
                 "-S",
-                src_dir,
+                str(src_dir),
                 "-B",
-                build_dir,
+                str(build_dir),
                 "-DCMAKE_BUILD_TYPE=Debug",
                 *self.extra_cmake_flags,
             ],
@@ -369,3 +371,374 @@ class CMakeProject(pipeline.BuildableProject):
         if not self.is_built():
             self.build()
         return getattr(importer.import_from_path(self.binary_file), self.name)
+
+
+def cache_dir_from_jit_module(
+    jit_module: source_modules.JITCompileModule, cache_strategy: cache.Strategy
+) -> pathlib.Path:
+    # TODO: the output of this should depend also on at least the bindings module
+    return cache.get_cache_folder(jit_module.source_module, cache_strategy)
+
+
+def data_is_in_jit_path(jit_path: pathlib.Path) -> bool:
+    return (jit_path / "gt4py.json").exists()
+
+
+def data_from_jit_path(jit_path: pathlib.Path) -> dict:
+    data_file = jit_path / "gt4py.json"
+    if not data_file.exists():
+        return {"status": "unknown"}
+    return json.loads(data_file.read_text())
+
+
+def data_to_jit_path(data: dict, jit_path: pathlib.Path):
+    (jit_path / "gt4py.json").write_text(json.dumps(data))
+
+
+def compiled_fencil_from_jit_path(jit_path: pathlib.Path) -> Optional[Callable]:
+    data = data_from_jit_path(jit_path)
+    if data["status"] != "built":  # @todo turn into enum or such
+        return None
+    return importer.import_from_path(jit_path / data["extension"])
+
+
+def jit_module_to_compiled_fencil(
+    jit_module: source_modules.JITCompileModule,
+    jit_builder_generator: pipeline.JITBuilderGenerator,
+    cache_strategy: cache.Strategy,
+) -> Callable:
+    jit_dir = cache_dir_from_jit_module(jit_module, cache_strategy)
+    compiled_module = compiled_fencil_from_jit_path(jit_dir)
+    if compiled_module:
+        return getattr(compiled_module, jit_module.source_module.entry_point.name)
+    jit_builder = jit_builder_generator(jit_module, cache_strategy)
+    jit_builder.build()
+    compiled_module = compiled_fencil_from_jit_path(jit_dir)
+    if not compiled_module:
+        raise AssertionError(
+            "Build completed but no compiled python extension was found"
+        )  # @todo: make safer, improve error msg
+    return getattr(compiled_module, jit_module.source_module.entry_point.name)
+
+
+def cmake_builder_generator(
+    cmake_generator_name: str = "Ninja",
+    cmake_build_type: str = "Debug",
+    cmake_extra_flags: Optional[list[str]] = None,
+) -> pipeline.JITBuilderGenerator:
+    def generate_cmake_builder(
+        jit_module: source_modules.JITCompileModule[
+            source_modules.Cpp,
+            source_modules.LanguageWithHeaderFilesSettings,
+            source_modules.Python,
+        ],
+        cache_strategy: cache.Strategy,
+    ) -> pipeline.JITBuilder:
+        name = jit_module.source_module.entry_point.name
+        header_name = f"{name}.{jit_module.source_module.language_settings.header_extension}"
+        bindings_name = f"{name}.{jit_module.source_module.language_settings.file_extension}"
+        return CMakeJITBuilder(
+            root_path=cache_dir_from_jit_module(jit_module, cache_strategy),
+            source_files={
+                header_name: jit_module.source_module.source_code,
+                bindings_name: jit_module.bindings_module.source_code,
+                "CMakeLists.txt": _render_cmakelists(
+                    name,
+                    [
+                        *jit_module.source_module.library_deps,
+                        *jit_module.bindings_module.library_deps,
+                    ],
+                    [header_name, bindings_name],
+                ),
+            },
+            fencil_name=name,
+            generator_name=cmake_generator_name,
+            build_type=cmake_build_type,
+            extra_cmake_flags=cmake_extra_flags or [],
+        )
+
+    return generate_cmake_builder
+
+
+def compile_command_builder_generator(
+    cmake_build_type: str = "Debug",
+    cmake_extra_flags: Optional[list[str]] = None,
+    renew_compiledb: bool = False,
+) -> pipeline.JITBuilderGenerator:
+    def generate_compile_command_builder(
+        jit_module: source_modules.JITCompileModule[
+            source_modules.Cpp,
+            source_modules.LanguageWithHeaderFilesSettings,
+            source_modules.Python,
+        ],
+        cache_strategy: cache.Strategy,
+    ) -> CompileCommandsJITBuilder:
+        name = jit_module.source_module.entry_point.name
+        header_name = f"{name}.{jit_module.source_module.language_settings.header_extension}"
+        bindings_name = f"{name}.{jit_module.source_module.language_settings.file_extension}"
+
+        cc_cache_module = _cc_cache_module(
+            deps=_cc_deps_from_jit_module(jit_module),
+            build_type=cmake_build_type,
+            cmake_flags=cmake_extra_flags or [],
+        )
+
+        if renew_compiledb or not (
+            compiledb_template := _cc_get_compiledb(cc_cache_module, cache_strategy)
+        ):
+            compiledb_template = _cc_generate_compiledb(
+                cc_cache_module,
+                build_type=cmake_build_type,
+                cmake_flags=cmake_extra_flags or [],
+                cache_strategy=cache_strategy,
+            )
+
+        return CompileCommandsJITBuilder(
+            root_path=cache_dir_from_jit_module(jit_module, cache_strategy),
+            fencil_name=name,
+            source_files={
+                header_name: jit_module.source_module.source_code,
+                bindings_name: jit_module.bindings_module.source_code,
+            },
+            bindings_file_name=bindings_name,
+            compile_commands_cache=compiledb_template,
+        )
+
+    return generate_compile_command_builder
+
+
+def _cc_deps_from_jit_module(
+    jit_module: source_modules.JITCompileModule,
+) -> list[source_modules.LibraryDependency]:
+    return [
+        *jit_module.source_module.library_deps,
+        *jit_module.bindings_module.library_deps,
+    ]
+
+
+def _cc_cache_name(
+    deps: list[source_modules.LibraryDependency], build_type: str, flags: list[str]
+) -> str:
+    fencil_name = "compile_commands_cache"
+    deps_str = "_".join(f"{dep.name}-{dep.version}" for dep in deps)
+    flags_str = "_".join(flags)
+    return f"{fencil_name}_{deps_str}_{build_type}_{flags_str}"
+
+
+def _cc_cache_module(
+    deps: list[source_modules.LibraryDependency],
+    build_type: str,
+    cmake_flags: list[str],
+) -> pathlib.Path:
+    name = _cc_cache_name(deps, build_type, cmake_flags)
+    return source_modules.SourceModule(
+        entry_point=source_modules.Function(name=name, parameters=[]),
+        source_code="",
+        library_deps=deps,
+        language=source_modules.Cpp,
+        language_settings=source_modules.LanguageWithHeaderFilesSettings(
+            formatter_key="",
+            formatter_style=None,
+            file_extension="",
+            header_extension="",
+        ),
+    )
+
+
+def _cc_get_compiledb(
+    source_module: source_modules.SourceModule, cache_strategy: cache.Strategy
+) -> Optional[pathlib.Path]:
+    cache_path = cache.get_cache_folder(source_module, cache_strategy)
+    compile_db_path = cache_path / "compile_commands.json"
+    if compile_db_path.exists():
+        return compile_db_path
+    return None
+
+
+def _cc_generate_compiledb(
+    source_module: source_modules.SourceModule,
+    build_type: str,
+    cmake_flags: list[str],
+    cache_strategy: cache.Strategy,
+) -> pathlib.Path:
+    name = source_module.entry_point.name
+    cache_path = cache.get_cache_folder(source_module, cache_strategy)
+
+    jit_builder = CMakeJITBuilder(
+        generator_name="Ninja",
+        build_type=build_type,
+        extra_cmake_flags=cmake_flags,
+        root_path=cache_path,
+        source_files={
+            f"{name}.hpp": "",
+            f"{name}.cpp": "",
+            "CMakeLists.txt": _render_cmakelists(
+                name, source_module.library_deps, [f"{name}.hpp", f"{name}.cpp"]
+            ),
+        },
+        fencil_name=name,
+    )
+
+    jit_builder.write_files()
+    jit_builder.run_config()
+
+    commands = json.loads(
+        subprocess.check_output(
+            ["ninja", "-t", "compdb"],
+            cwd=cache_path / "build",
+            stderr=subprocess.STDOUT,
+        ).decode("utf-8")
+    )
+
+    compile_db = [
+        cmd for cmd in commands if name in pathlib.Path(cmd["file"]).stem and cmd["command"]
+    ]
+
+    for entry in compile_db:
+        entry["directory"] = "$PATH"
+        entry["command"] = (
+            entry["command"]
+            .replace(f"CMakeFiles/{name}.dir", "build")
+            .replace(str(cache_path / f"{name}.cpp"), "$SRC_PATH/$BINDINGS_FILE")
+        )
+        entry["file"] = (
+            entry["file"]
+            .replace(f"CMakeFiles/{name}.dir", "build")
+            .replace(str(cache_path), "$SRC_PATH")
+            .replace(f"{name}.cpp", "$BINDINGS_FILE")
+        )
+        entry["output"] = (
+            entry["output"]
+            .replace(f"CMakeFiles/{name}.dir", "build")
+            .replace(f"{name}.cpp", "$BINDINGS_FILE")
+            .replace(f"{name}", "$NAME")
+        )
+
+    compile_db_path = cache_path / "compile_commands.json"
+    compile_db_path.write_text(
+        json.dumps(
+            [cmd for cmd in commands if name in pathlib.Path(cmd["file"]).stem and cmd["command"]]
+        )
+    )
+    return compile_db_path
+
+
+@dataclasses.dataclass
+class CMakeJITBuilder(pipeline.JITBuilder):
+    root_path: pathlib.Path
+    source_files: dict[str, str]
+    fencil_name: str
+    generator_name: str = "Ninja"
+    build_type: str = "Debug"
+    extra_cmake_flags: list[str] = dataclasses.field(default_factory=list)
+
+    def build(self):
+        self.write_files()
+        self.run_config()
+        self.run_build()
+
+    def write_files(self):
+        for name, content in self.source_files.items():
+            (self.root_path / name).write_text(content, encoding="utf-8")
+
+    def run_build(self):
+        logfile = self.root_path / "log_build.txt"
+        with logfile.open(mode="w") as log_file_pointer:
+            subprocess.check_call(
+                ["cmake", "--build", self.root_path / "build"],
+                stdout=log_file_pointer,
+                stderr=log_file_pointer,
+            )
+        data = data_from_jit_path(self.root_path)
+        data["status"] = "built"
+        data["extension"] = str(
+            self.root_path / "build" / "bin" / f"{self.fencil_name}.{_get_python_module_suffix()}"
+        )
+        data_to_jit_path(data, self.root_path)
+
+    def run_config(self):
+        logfile = self.root_path / "log_config.txt"
+        with logfile.open(mode="w") as log_file_pointer:
+            subprocess.check_call(
+                [
+                    "cmake",
+                    "-G",
+                    self.generator_name,
+                    "-S",
+                    str(self.root_path),
+                    "-B",
+                    str(self.root_path / "build"),
+                    f"-DCMAKE_BUILD_TYPE={self.build_type}",
+                    *self.extra_cmake_flags,
+                ],
+                stdout=log_file_pointer,
+                stderr=log_file_pointer,
+            )
+
+        data = data_from_jit_path(self.root_path)
+        data["status"] = "configured"
+        data_to_jit_path(data, self.root_path)
+
+
+@dataclasses.dataclass
+class CompileCommandsJITBuilder(pipeline.JITBuilder):
+    root_path: pathlib.Path
+    source_files: dict[str, str]
+    fencil_name: str
+    compile_commands_cache: pathlib.Path
+    bindings_file_name: str
+
+    def build(self):
+        self.write_files()
+        if data_from_jit_path(self.root_path)["status"] not in ["configured", "built"]:
+            self.run_config()
+        if data_from_jit_path(self.root_path)["status"] == "configured":
+            self.run_build()
+
+    def write_files(self):
+        for name, content in self.source_files.items():
+            (self.root_path / name).write_text(content, encoding="utf-8")
+
+    def run_build(self):
+        logfile = self.root_path / "log_build.txt"
+        compile_db = json.loads((self.root_path / "compile_commands.json").read_text())
+        with logfile.open(mode="w") as log_file_pointer:
+            for entry in compile_db:
+                log_file_pointer.write(entry["command"] + "\n")
+                subprocess.check_call(
+                    entry["command"],
+                    cwd=self.root_path,
+                    shell=True,
+                    stdout=log_file_pointer,
+                    stderr=log_file_pointer,
+                )
+
+        data_to_jit_path(
+            data_from_jit_path(self.root_path)
+            | {
+                "status": "built",
+                "extension": str(self.root_path / pathlib.Path(entry["output"])),
+            },
+            self.root_path,
+        )
+
+    def run_config(self):
+        compile_db = json.loads(self.compile_commands_cache.read_text())
+
+        (self.root_path / "build").mkdir(exist_ok=True)
+        (self.root_path / "bin").mkdir(exist_ok=True)
+
+        for entry in compile_db:
+            for key, value in entry:
+                entry[key] = (
+                    value.replace("$NAME", self.fencil_name)
+                    .replace("$BINDINGS_FILE", self.bindings_file_name)
+                    .replace("$SRC_PATH", str(self.root_path))
+                )
+
+        (self.root_path / "compile_commands.json").write_text(json.dumps(compile_db))
+
+        data_to_jit_path(
+            data_from_jit_path(self.root_path) | {"status": "configured"},
+            self.root_path,
+        )

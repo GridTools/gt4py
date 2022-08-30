@@ -66,11 +66,15 @@ def source_module_example():
 
 
 def test_gt_cpp_with_cmake(source_module_example):
-    wrapper = build.CMakeProject(
+    jit_module = source_modules.JITCompileModule(
         source_module=source_module_example,
         bindings_module=bindings.create_bindings(source_module_example),
+    )
+    wrapper = build.jit_module_to_compiled_fencil(
+        jit_module=jit_module,
+        jit_builder_generator=build.cmake_builder_generator(),
         cache_strategy=cache.Strategy.SESSION,
-    ).get_implementation()
+    )
     buf = np.zeros(shape=(6, 5), dtype=np.float32)
     sc = np.float32(3.1415926)
     res = wrapper(buf, sc)
@@ -78,15 +82,14 @@ def test_gt_cpp_with_cmake(source_module_example):
 
 
 def test_gt_cpp_with_compile_command(source_module_example):
-    wrapper = (
-        foo := build.CompileCommandProject(
+    wrapper = build.jit_module_to_compiled_fencil(
+        jit_module=source_modules.JITCompileModule(
             source_module=source_module_example,
             bindings_module=bindings.create_bindings(source_module_example),
-            cache_strategy=cache.Strategy.SESSION,
-        )
-    ).get_implementation()
-    log = (foo.src_dir / "log.txt").read_text()
-    assert len(log.splitlines()) >= 2
+        ),
+        jit_builder_generator=build.compile_command_builder_generator(),
+        cache_strategy=cache.Strategy.SESSION,
+    )
     buf = np.zeros(shape=(6, 5), dtype=np.float32)
     sc = np.float32(3.1415926)
     res = wrapper(buf, sc)
@@ -94,15 +97,16 @@ def test_gt_cpp_with_compile_command(source_module_example):
 
 
 def test_compile_command_only_configures_once(source_module_example):
-    first_cc = build.CompileCommandProject(
+    jit_module = source_modules.JITCompileModule(
         source_module=source_module_example,
         bindings_module=bindings.create_bindings(source_module_example),
+    )
+    first_cc = build.compile_command_builder_generator(renew_compiledb=True)(
+        jit_module=jit_module,
         cache_strategy=cache.Strategy.SESSION,
     )
 
-    _, config_did_run, _ = first_cc.get_compile_command(reconfigure=True)
-
-    assert config_did_run is True
+    first_timestamp = first_cc.compile_commands_cache.lstat().st_mtime
 
     changed_source_module = dataclasses.replace(
         source_module_example,
@@ -112,10 +116,12 @@ def test_compile_command_only_configures_once(source_module_example):
         ),
     )
 
-    second_cc = build.CompileCommandProject(
-        source_module=changed_source_module,
-        bindings_module=bindings.create_bindings(changed_source_module),
+    second_cc = build.compile_command_builder_generator()(
+        jit_module=source_modules.JITCompileModule(
+            source_module=changed_source_module,
+            bindings_module=bindings.create_bindings(changed_source_module),
+        ),
         cache_strategy=cache.Strategy.SESSION,
     )
 
-    assert second_cc.get_compile_command()[1] is False
+    assert second_cc.compile_commands_cache.lstat().st_mtime == first_timestamp

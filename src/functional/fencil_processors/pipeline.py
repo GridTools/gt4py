@@ -42,3 +42,15 @@ class BuildableProjectGenerator(Protocol[SrcL, LS, TgtL]):
         cache_strategy: cache.Strategy,
     ) -> BuildableProject:
         ...
+
+
+class JITBuilderGenerator(Protocol[SrcL, LS, TgtL]):
+    def __call__(
+        self, jit_module: source_modules.JITCompileModule, cache_strategy: cache.Strategy
+    ) -> BuildableProject:
+        ...
+
+
+class JITBuilder(Protocol[SrcL, LS, TgtL]):
+    def build(self):
+        ...
