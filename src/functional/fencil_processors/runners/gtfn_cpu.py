@@ -63,6 +63,19 @@ class GTFNExecutor(fpi.FencilExecutor):
             cache_strategy=cache.Strategy.SESSION,
         ).get_implementation()(*[convert_arg(arg) for arg in args])
 
+        return build.jit_module_to_compiled_fencil(
+            jit_module=source_modules.JITCompileModule(
+                source_module=(
+                    source_module := gtfn_module.GTFNSourceModuleGenerator(self.language_settings)(
+                        fencil, *args, **kwargs
+                    )
+                ),
+                bindings_module=bindings.create_bindings(source_module),
+            ),
+            jit_builder_generator=build.compile_command_builder_generator(),
+            cache_strategy=cache.Strategy.SESSION,
+        )
+
     @property
     def __name__(self) -> str:
         return self.name or repr(self)
