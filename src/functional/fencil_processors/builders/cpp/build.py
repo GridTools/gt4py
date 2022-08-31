@@ -436,7 +436,9 @@ def cmake_builder_generator(
     ) -> pipeline.JITBuilder:
         name = jit_module.source_module.entry_point.name
         header_name = f"{name}.{jit_module.source_module.language_settings.header_extension}"
-        bindings_name = f"{name}.{jit_module.source_module.language_settings.file_extension}"
+        bindings_name = (
+            f"{name}_bindings.{jit_module.source_module.language_settings.file_extension}"
+        )
         return CMakeJITBuilder(
             root_path=cache_dir_from_jit_module(jit_module, cache_strategy),
             source_files={
@@ -475,7 +477,9 @@ def compile_command_builder_generator(
     ) -> CompileCommandsJITBuilder:
         name = jit_module.source_module.entry_point.name
         header_name = f"{name}.{jit_module.source_module.language_settings.header_extension}"
-        bindings_name = f"{name}.{jit_module.source_module.language_settings.file_extension}"
+        bindings_name = (
+            f"{name}_bindings.{jit_module.source_module.language_settings.file_extension}"
+        )
 
         cc_cache_module = _cc_cache_module(
             deps=_cc_deps_from_jit_module(jit_module),
@@ -520,9 +524,9 @@ def _cc_cache_name(
     deps: list[source_modules.LibraryDependency], build_type: str, flags: list[str]
 ) -> str:
     fencil_name = "compile_commands_cache"
-    deps_str = "_".join(f"{dep.name}-{dep.version}" for dep in deps)
+    deps_str = "_".join(f"{dep.name}_{dep.version}" for dep in deps)
     flags_str = "_".join(flags)
-    return f"{fencil_name}_{deps_str}_{build_type}_{flags_str}"
+    return "_".join([fencil_name, deps_str, build_type, flags_str]).replace(".", "_")
 
 
 def _cc_cache_module(
@@ -582,24 +586,32 @@ def _cc_generate_compiledb(
     jit_builder.write_files()
     jit_builder.run_config()
 
-    commands = json.loads(
-        subprocess.check_output(
-            ["ninja", "-t", "compdb"],
-            cwd=cache_path / "build",
-            stderr=subprocess.STDOUT,
-        ).decode("utf-8")
-    )
+    log_file = cache_path / "log_compiledb.txt"
+
+    with log_file.open("w") as log_file_pointer:
+        commands = json.loads(
+            subprocess.check_output(
+                ["ninja", "-t", "compdb"],
+                cwd=cache_path / "build",
+                stderr=log_file_pointer,
+            ).decode("utf-8")
+        )
 
     compile_db = [
         cmd for cmd in commands if name in pathlib.Path(cmd["file"]).stem and cmd["command"]
     ]
 
+    assert compile_db
+
     for entry in compile_db:
-        entry["directory"] = "$PATH"
+        entry["directory"] = "$SRC_PATH"
         entry["command"] = (
             entry["command"]
             .replace(f"CMakeFiles/{name}.dir", "build")
-            .replace(str(cache_path / f"{name}.cpp"), "$SRC_PATH/$BINDINGS_FILE")
+            .replace(str(cache_path), "$SRC_PATH")
+            .replace(f"{name}.cpp", "$BINDINGS_FILE")
+            .replace(f"{name}", "$NAME")
+            .replace("-I$SRC_PATH/build/_deps", f"-I{cache_path}/build/_deps")
         )
         entry["file"] = (
             entry["file"]
@@ -615,11 +627,7 @@ def _cc_generate_compiledb(
         )
 
     compile_db_path = cache_path / "compile_commands.json"
-    compile_db_path.write_text(
-        json.dumps(
-            [cmd for cmd in commands if name in pathlib.Path(cmd["file"]).stem and cmd["command"]]
-        )
-    )
+    compile_db_path.write_text(json.dumps(compile_db))
     return compile_db_path
 
 
@@ -702,6 +710,7 @@ class CompileCommandsJITBuilder(pipeline.JITBuilder):
     def run_build(self):
         logfile = self.root_path / "log_build.txt"
         compile_db = json.loads((self.root_path / "compile_commands.json").read_text())
+        assert compile_db
         with logfile.open(mode="w") as log_file_pointer:
             for entry in compile_db:
                 log_file_pointer.write(entry["command"] + "\n")
@@ -712,12 +721,13 @@ class CompileCommandsJITBuilder(pipeline.JITBuilder):
                     stdout=log_file_pointer,
                     stderr=log_file_pointer,
                 )
+                last_entry = entry
 
         data_to_jit_path(
             data_from_jit_path(self.root_path)
             | {
                 "status": "built",
-                "extension": str(self.root_path / pathlib.Path(entry["output"])),
+                "extension": str(self.root_path / pathlib.Path(last_entry["output"])),
             },
             self.root_path,
         )
@@ -729,7 +739,7 @@ class CompileCommandsJITBuilder(pipeline.JITBuilder):
         (self.root_path / "bin").mkdir(exist_ok=True)
 
         for entry in compile_db:
-            for key, value in entry:
+            for key, value in entry.items():
                 entry[key] = (
                     value.replace("$NAME", self.fencil_name)
                     .replace("$BINDINGS_FILE", self.bindings_file_name)

@@ -53,17 +53,7 @@ class GTFNExecutor(fpi.FencilExecutor):
         """
         # TODO(ricoh): a pipeline runner might enhance readability as well as discourage
         #  custom logic between steps.
-        return self.build_project_gen(
-            source_module=(
-                source_module := gtfn_module.GTFNSourceModuleGenerator(self.language_settings)(
-                    fencil, *args, **kwargs
-                )
-            ),
-            bindings_module=bindings.create_bindings(source_module),
-            cache_strategy=cache.Strategy.SESSION,
-        ).get_implementation()(*[convert_arg(arg) for arg in args])
-
-        return build.jit_module_to_compiled_fencil(
+        jit_fencil = build.jit_module_to_compiled_fencil(
             jit_module=source_modules.JITCompileModule(
                 source_module=(
                     source_module := gtfn_module.GTFNSourceModuleGenerator(self.language_settings)(
@@ -75,6 +65,8 @@ class GTFNExecutor(fpi.FencilExecutor):
             jit_builder_generator=build.compile_command_builder_generator(),
             cache_strategy=cache.Strategy.SESSION,
         )
+
+        jit_fencil(*[convert_arg(arg) for arg in args])
 
     @property
     def __name__(self) -> str:
