@@ -20,7 +20,7 @@ import numpy as np
 
 from functional.fencil_processors import pipeline, processor_interface as fpi
 from functional.fencil_processors.builders import cache
-from functional.fencil_processors.builders.cpp import bindings, build
+from functional.fencil_processors.builders.cpp import bindings, build, compiledb
 from functional.fencil_processors.codegens.gtfn import gtfn_module
 from functional.fencil_processors.source_modules import cpp_gen, source_modules
 from functional.iterator import ir as itir
@@ -37,7 +37,7 @@ def convert_arg(arg: Any) -> Any:
 @dataclasses.dataclass(frozen=True)
 class GTFNExecutor(fpi.FencilExecutor):
     language_settings: source_modules.LanguageWithHeaderFilesSettings = cpp_gen.CPP_DEFAULT
-    build_project_gen: pipeline.BuildableProjectGenerator = build.CompileCommandProject
+    jit_builder_generator: pipeline.JITBuilderGenerator = compiledb.compiledb_builder_generator()
 
     name: Optional[str] = None
 
@@ -62,7 +62,7 @@ class GTFNExecutor(fpi.FencilExecutor):
                 ),
                 bindings_module=bindings.create_bindings(source_module),
             ),
-            jit_builder_generator=build.compile_command_builder_generator(),
+            jit_builder_generator=self.jit_builder_generator,
             cache_strategy=cache.Strategy.SESSION,
         )
 

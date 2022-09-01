@@ -18,7 +18,7 @@ import numpy as np
 import pytest
 
 from functional.fencil_processors.builders import cache
-from functional.fencil_processors.builders.cpp import bindings, build
+from functional.fencil_processors.builders.cpp import bindings, build, cmake
 from functional.fencil_processors.source_modules import cpp_gen, source_modules
 
 
@@ -68,7 +68,7 @@ def jit_module_example():
 
 
 def test_default_builder_generator(jit_module_example):
-    jit_builder = build.cmake_builder_generator()(
+    jit_builder = cmake.cmake_builder_generator()(
         jit_module=jit_module_example, cache_strategy=cache.Strategy.SESSION
     )
     assert build.data_from_jit_path(jit_builder.root_path) == {"status": "unknown"}
