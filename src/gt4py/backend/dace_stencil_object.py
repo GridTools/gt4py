@@ -175,6 +175,9 @@ class DaCeStencilObject(StencilObject, SDFGConvertible):
             name: (kwargs[name] if name in kwargs else next(args_iter)) for name in arg_names
         }
 
+        # This is needed because the keys in origin are StringLiteral as of DaCe v0.14, and they
+        # do not implement comparison methods. Revert this once DaCe is updated.
+        # See: https://github.com/GridTools/gt4py/issues/927
         origin = {str(k): v for k, v in origin.items()}
         origin = DaCeStencilObject._normalize_origins(args_as_kwargs, field_info, origin)
 
