@@ -16,7 +16,7 @@ import copy
 import inspect
 import os
 from dataclasses import dataclass
-from typing import Any, Dict, Optional, Sequence, Set, Tuple
+from typing import Any, Dict, Iterable, Optional, Sequence, Set, Tuple
 
 import dace
 import dace.data
@@ -24,7 +24,7 @@ import dace.frontend.python.common
 from dace.frontend.python.common import SDFGClosure, SDFGConvertible
 
 from gt4py.backend.dace_backend import freeze_origin_domain_sdfg
-from gt4py.definitions import AccessKind
+from gt4py.definitions import AccessKind, DomainInfo, FieldInfo
 from gt4py.stencil_object import FrozenStencil, StencilObject
 from gt4py.utils import shash
 
@@ -168,17 +168,24 @@ class DaCeStencilObject(StencilObject, SDFGConvertible):
 
     @staticmethod
     def normalize_args(
-        *args, arg_names, domain_info, field_info, domain=None, origin=None, **kwargs
+        *args,
+        arg_names: Iterable[str],
+        domain_info: DomainInfo,
+        field_info: Dict[str, FieldInfo],
+        domain: Optional[Tuple[int, int, int]] = None,
+        origin: Optional[Dict[str, Tuple[int, ...]]] = None,
+        **kwargs,
     ):
         args_iter = iter(args)
         args_as_kwargs = {
             name: (kwargs[name] if name in kwargs else next(args_iter)) for name in arg_names
         }
 
-        # This is needed because the keys in origin are StringLiteral as of DaCe v0.14, and they
-        # do not implement comparison methods. Revert this once DaCe is updated.
-        # See: https://github.com/GridTools/gt4py/issues/927
-        origin = {str(k): v for k, v in origin.items()}
+        if origin is not None:
+            # This is needed because the keys in origin are StringLiteral as of DaCe v0.14, and they
+            # do not implement comparison methods. Revert this once DaCe is updated.
+            # See: https://github.com/GridTools/gt4py/issues/927
+            origin = {str(k): v for k, v in origin.items()}
         origin = DaCeStencilObject._normalize_origins(args_as_kwargs, field_info, origin)
 
         if domain is None:
