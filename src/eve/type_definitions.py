@@ -19,6 +19,7 @@
 
 from __future__ import annotations
 
+import abc
 import re
 import sys
 from enum import Enum as Enum, IntEnum as IntEnum  # noqa: F401  # imported but unused
@@ -26,11 +27,32 @@ from enum import Enum as Enum, IntEnum as IntEnum  # noqa: F401  # imported but 
 from boltons.typeutils import classproperty as classproperty  # noqa: F401
 from frozendict import frozendict as _frozendict  # type: ignore[attr-defined]  # noqa: F401
 
-from .extended_typing import Any, ClassVar, Generic, NoReturn, Optional, TypeAlias, TypeVar, final
+from .extended_typing import (
+    Any,
+    ClassVar,
+    Generic,
+    NoReturn,
+    Optional,
+    Tuple,
+    TypeAlias,
+    TypeVar,
+    final,
+)
 
 
-# Frozen collections
+# -- Frozen collections --
 _T = TypeVar("_T")
+_Tc = TypeVar("_Tc", covariant=True)
+
+
+class FrozenList(Tuple[_Tc, ...], metaclass=abc.ABCMeta):  # noqa: B024   # no abstract methods
+    """Tuple subtype which works as an alias of ``Tuple[_Tc, ...]``."""
+
+    __slots__ = ()
+
+    @classmethod
+    def __subclasshook__(cls, C):
+        return tuple in C.__mro__
 
 
 if sys.version_info >= (3, 9):
@@ -41,6 +63,9 @@ else:
     @final
     class frozendict(_frozendict, Generic[_KeyT, _T]):  # type: ignore[no-redef]  # mypy consider this a redefinition
         __slots__ = ()
+
+
+# -- Sentinels --
 
 
 @final
@@ -59,6 +84,7 @@ class NOTHING(metaclass=NothingType):
         raise TypeError(f"{cls.__name__} is used as a sentinel value and cannot be instantiated.")
 
 
+# -- Others --
 class StrEnum(str, Enum):
     """:class:`enum.Enum` subclass whose members are considered as real strings."""
 

@@ -269,3 +269,8 @@ class VType(datamodels.FrozenModel):
 
     # Unique name
     name: str
+
+
+def eq_nonlocated(a: Node, b: Node) -> bool:
+    """Compare two nodes, ignoring their `SourceLocation` or `SourceLocationGroup`."""
+    return len(utils.ddiff(a, b, exclude_types=[SourceLocation, SourceLocationGroup])) == 0
