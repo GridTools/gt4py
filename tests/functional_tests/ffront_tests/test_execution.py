@@ -819,8 +819,6 @@ def test_docstring():
     @field_operator
     def fieldop_with_docstring(a: Field[[IDim], float64]) -> Field[[IDim], float64]:
         """My docstring."""
-
-        a = a
         return a
 
     @program
