@@ -117,7 +117,7 @@ MaybePosition: TypeAlias = Optional[Position]
 
 
 def is_int_index(p: Any) -> TypeGuard[IntIndex]:
-    return isinstance(p, int)
+    return isinstance(p, (int, np.integer))
 
 
 @runtime_checkable
