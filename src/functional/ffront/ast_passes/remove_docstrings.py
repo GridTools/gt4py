@@ -57,13 +57,4 @@ class RemoveDocstrings(ast.NodeTransformer):
             ):
                 node.body.remove(obj)
 
-        return ast.FunctionDef(
-            name=node.name,
-            args=node.args,
-            body=[self.visit(obj) for obj in node.body],
-            decorator_list=node.decorator_list,
-            returns=node.returns,
-            type_comment=node.type_comment,
-            lineno=node.lineno,
-            col_offset=node.col_offset,
-        )
+        return self.generic_visit(node)
