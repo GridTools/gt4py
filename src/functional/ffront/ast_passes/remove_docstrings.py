@@ -20,8 +20,6 @@ class RemoveDocstrings(ast.NodeTransformer):
     """
     Remove function docstrings from an AST.
 
-    Docstrings appear as type ast.Expr with ast.Constant value of type string.
-    If such patterns is detected, this entry in the node.body list is removed.
 
     Example
     -------
