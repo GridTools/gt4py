@@ -66,7 +66,7 @@ def source_module_example():
 
 def test_gtfn_cpp_with_cmake(source_module_example):
     jit_fencil = build.jit_module_to_compiled_fencil(
-        jit_module=source_modules.JITCompileModule(
+        jit_module=source_modules.JITSourceModule(
             source_module=source_module_example,
             bindings_module=bindings.create_bindings(source_module_example),
         ),
@@ -82,7 +82,7 @@ def test_gtfn_cpp_with_cmake(source_module_example):
 
 def test_gtfn_cpp_with_compiledb(source_module_example):
     jit_fencil = build.jit_module_to_compiled_fencil(
-        jit_module=source_modules.JITCompileModule(
+        jit_module=source_modules.JITSourceModule(
             source_module=source_module_example,
             bindings_module=bindings.create_bindings(source_module_example),
         ),

@@ -82,7 +82,7 @@ def compiledb_builder_generator(
     renew_compiledb: bool = False,
 ) -> pipeline.JITBuilderGenerator:
     def generate_compiledb_builder(
-        jit_module: source_modules.JITCompileModule[
+        jit_module: source_modules.JITSourceModule[
             source_modules.Cpp,
             source_modules.LanguageWithHeaderFilesSettings,
             source_modules.Python,
@@ -96,7 +96,7 @@ def compiledb_builder_generator(
         )
 
         cc_cache_module = _cc_cache_module(
-            deps=_cc_deps_from_jit_module(jit_module),
+            deps=jit_module.library_deps,
             build_type=cmake_build_type,
             cmake_flags=cmake_extra_flags or [],
         )
@@ -123,15 +123,6 @@ def compiledb_builder_generator(
         )
 
     return generate_compiledb_builder
-
-
-def _cc_deps_from_jit_module(
-    jit_module: source_modules.JITCompileModule,
-) -> list[source_modules.LibraryDependency]:
-    return [
-        *jit_module.source_module.library_deps,
-        *jit_module.bindings_module.library_deps,
-    ]
 
 
 def _cc_cache_name(

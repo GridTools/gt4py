@@ -31,7 +31,7 @@ def python_module_suffix():
 
 
 def jit_path_from_jit_module(
-    jit_module: source_modules.JITCompileModule, cache_strategy: cache.Strategy
+    jit_module: source_modules.JITSourceModule, cache_strategy: cache.Strategy
 ) -> pathlib.Path:
     # TODO: the output of this should depend also on at least the bindings module
     return cache.get_cache_folder(jit_module.source_module, cache_strategy)
@@ -60,7 +60,7 @@ def compiled_fencil_from_jit_path(jit_path: pathlib.Path) -> Optional[Callable]:
 
 
 def jit_module_to_compiled_fencil(
-    jit_module: source_modules.JITCompileModule,
+    jit_module: source_modules.JITSourceModule,
     jit_builder_generator: pipeline.JITBuilderGenerator,
     cache_strategy: cache.Strategy,
 ) -> Callable:

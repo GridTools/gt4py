@@ -126,8 +126,12 @@ def format_source(settings: LanguageSettings, source):
 
 
 @dataclass(frozen=True)
-class JITCompileModule(Generic[SrcL, SettingT, TgtL]):
+class JITSourceModule(Generic[SrcL, SettingT, TgtL]):
     """Encapsulate all and only the data needed to reliably and safely cache JIT / dynamically compiled fencils."""
 
     source_module: SourceModule[SrcL, SettingT]
     bindings_module: BindingModule[SrcL, TgtL]
+
+    @property
+    def library_deps(self) -> tuple[LibraryDependency, ...]:
+        return tuple((*self.source_module.library_deps, *self.bindings_module.library_deps))

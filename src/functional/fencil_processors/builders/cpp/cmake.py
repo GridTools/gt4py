@@ -15,7 +15,7 @@ def cmake_builder_generator(
     cmake_extra_flags: Optional[list[str]] = None,
 ) -> pipeline.JITBuilderGenerator:
     def generate_cmake_builder(
-        jit_module: source_modules.JITCompileModule[
+        jit_module: source_modules.JITSourceModule[
             source_modules.Cpp,
             source_modules.LanguageWithHeaderFilesSettings,
             source_modules.Python,
@@ -34,10 +34,7 @@ def cmake_builder_generator(
                 bindings_name: jit_module.bindings_module.source_code,
                 "CMakeLists.txt": cmake_lists.generate_cmakelists_source(
                     name,
-                    [  # @todo: put a prop on JitCompileModule to simplify this
-                        *jit_module.source_module.library_deps,
-                        *jit_module.bindings_module.library_deps,
-                    ],
+                    jit_module.library_deps,
                     [header_name, bindings_name],
                 ),
             },

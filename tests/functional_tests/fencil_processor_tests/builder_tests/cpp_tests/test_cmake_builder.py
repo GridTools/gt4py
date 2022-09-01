@@ -61,7 +61,7 @@ def jit_module_example():
         language_settings=cpp_gen.CPP_DEFAULT,
     )
 
-    return source_modules.JITCompileModule(
+    return source_modules.JITSourceModule(
         source_module=source_module_example,
         bindings_module=bindings.create_bindings(source_module_example),
     )
