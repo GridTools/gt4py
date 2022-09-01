@@ -18,8 +18,8 @@ import dataclasses
 @dataclasses.dataclass(kw_only=True)
 class RemoveDocstrings(ast.NodeTransformer):
     """
-    Remove function docstrings from an AST.
 
+    Remove function docstrings from an AST.
 
     Example
     -------
@@ -29,10 +29,6 @@ class RemoveDocstrings(ast.NodeTransformer):
     ...     a = 1
     ...     "This is a docstring"
     ...     return a
-
-    This will return an ast.FunctionDef containing elements in the body of type:
-     ast.Assign, ast.Expr, and ast.Return. The docstring is the second.
-    This element in the body is then removed.
 
     >>> print(ast.unparse(
     ...     RemoveDocstrings.apply(
@@ -48,7 +44,7 @@ class RemoveDocstrings(ast.NodeTransformer):
     def apply(cls, node):
         return cls().visit(node)
 
-    def visit_FunctionDef(self, node: ast.FunctionDef) -> ast.FunctionDef:
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> ast.AST:
         for obj in node.body:
             if (
                 isinstance(obj, ast.Expr)
