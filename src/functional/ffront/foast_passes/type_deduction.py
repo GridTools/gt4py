@@ -507,13 +507,16 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                 f"a field with dtype bool, but got `{mask_type}`.",
             )
 
-        try:
-            return_type = type_info.promote(left_type, right_type)
-        except GTTypeError as ex:
-            raise FieldOperatorTypeDeductionError.from_foast_node(
-                node,
-                msg=f"Incompatible argument in call to `{node.func.id}`.",
-            ) from ex
+        if left_type == right_type:
+            return_type = left_type
+        else:
+            try:
+                return_type = type_info.promote(left_type, right_type)
+            except GTTypeError as ex:
+                raise FieldOperatorTypeDeductionError.from_foast_node(
+                    node,
+                    msg=f"Incompatible argument in call to `{node.func.id}`.",
+                ) from ex
 
         return foast.Call(
             func=node.func,
