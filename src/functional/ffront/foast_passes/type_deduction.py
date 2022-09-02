@@ -278,7 +278,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             raise FieldOperatorTypeDeductionError.from_foast_node(
                 condition,
                 msg=f"Condition operator is of type `{condition.type}` "
-                f"but should be of type bool",
+                f"but should be of type bool.",
             )
 
         if left.type != right.type:
