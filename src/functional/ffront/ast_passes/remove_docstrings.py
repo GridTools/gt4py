@@ -23,7 +23,6 @@ class RemoveDocstrings(ast.NodeTransformer):
     Example
     -------
     >>> import ast, inspect
-
     >>> def example_docstring():
     ...     a = 1
     ...     "This is a docstring"
