@@ -20,7 +20,15 @@ import random
 import string
 from typing import Collection, Dict, List, Mapping, Optional, Sequence, Set, Type, TypeVar
 
-from eve.concepts import FrozenNode, Node, SourceLocation, SymbolName, VType
+from eve.concepts import (
+    AnySourceLocation,
+    FrozenNode,
+    Node,
+    SourceLocation,
+    SourceLocationGroup,
+    SymbolName,
+    VType,
+)
 from eve.datamodels import Coerced
 from eve.traits import SymbolTableTrait, ValidatedSymbolTableTrait
 from eve.type_definitions import IntEnum, StrEnum
@@ -82,7 +90,7 @@ class SimpleNodeWithLoc(Node):
     int_value: int
     float_value: float
     str_value: str
-    loc: Optional[SourceLocation]
+    loc: Optional[AnySourceLocation]
 
 
 class SimpleNodeWithCollections(Node):
@@ -90,7 +98,7 @@ class SimpleNodeWithCollections(Node):
     int_list: List[int]
     str_set: Set[str]
     str_to_int_dict: Dict[str, int]
-    loc: Optional[SourceLocation]
+    loc: Optional[AnySourceLocation]
 
 
 class SimpleNodeWithAbstractCollections(Node):
@@ -98,7 +106,7 @@ class SimpleNodeWithAbstractCollections(Node):
     int_sequence: Sequence[int]
     str_set: Set[str]
     str_to_int_mapping: Mapping[str, int]
-    loc: Optional[SourceLocation] = None
+    loc: Optional[AnySourceLocation] = None
 
 
 class SimpleNodeWithSymbolName(Node):
@@ -293,6 +301,13 @@ def make_source_location(*, fixed: bool = False) -> SourceLocation:
     source = f"file_{str_value}.py"
 
     return SourceLocation(line=line, column=column, source=source)
+
+
+def make_source_location_group(*, fixed: bool = False) -> SourceLocationGroup:
+    loc1 = make_source_location(fixed=fixed)
+    loc2 = make_source_location(fixed=fixed)
+
+    return SourceLocationGroup(loc1, loc2, context=make_str_value(fixed=fixed))
 
 
 def make_empty_node(*, fixed: bool = False) -> LocationNode:
