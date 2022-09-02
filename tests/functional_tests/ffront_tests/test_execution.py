@@ -834,6 +834,14 @@ def test_ternary_operator(reduction_setup):
     e = np.asarray(a) + np.asarray(b) if left < right else np.asarray(b)
     np.allclose(e, out)
 
+    @field_operator
+    def ternary_field_op_scalars(left: float, right: float) -> Field[[Edge], float]:
+        return broadcast(3.0, (Edge,)) if left < right else broadcast(4.0, (Edge,))
+
+    ternary_field_op_scalars(left, right, out=out, offset_provider={})
+    e = np.full(e.shape, 3.0) if left < right else e
+    np.allclose(e, out)
+
 
 def test_ternary_operator_tuple(reduction_setup):
     Edge = reduction_setup.Edge
