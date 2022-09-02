@@ -254,7 +254,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         new_true_expr = self.visit(node.true_expr, **kwargs)
         new_false_expr = self.visit(node.false_expr, **kwargs)
         new_type = self._deduce_ternaryexpr_type(
-            node, left=new_true_expr, right=new_false_expr, condition=new_condition
+            node, condition=new_condition, true_expr=new_true_expr, false_expr=new_false_expr
         )
         return foast.TernaryExpr(
             condition=new_condition,
