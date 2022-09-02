@@ -28,7 +28,6 @@ class RemoveDocstrings(ast.NodeTransformer):
     ...     a = 1
     ...     "This is a docstring"
     ...     return a
-
     >>> print(ast.unparse(
     ...     RemoveDocstrings.apply(
     ...         ast.parse(inspect.getsource(example_docstring))
