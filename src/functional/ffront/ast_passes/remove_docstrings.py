@@ -18,7 +18,6 @@ import dataclasses
 @dataclasses.dataclass(kw_only=True)
 class RemoveDocstrings(ast.NodeTransformer):
     """
-
     Remove function docstrings from an AST.
 
     Example
