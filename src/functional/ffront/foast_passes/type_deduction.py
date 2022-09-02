@@ -268,10 +268,9 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         self,
         node: foast.TernaryExpr,
         *,
-        left: foast.Expr,
-        right: foast.Expr,
         condition: foast.Expr,
-        **kwargs,
+        true_expr: foast.Expr,
+        false_expr: foast.Expr,
     ) -> Optional[ct.SymbolType]:
 
         if condition.type != ct.ScalarType(kind=ct.ScalarKind.BOOL):
