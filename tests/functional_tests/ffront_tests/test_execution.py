@@ -625,6 +625,7 @@ def test_conditional_promotion1(fieldview_backend):
 
     assert np.allclose(np.where(mask, 5.0, 10), out)
 
+
 def test_conditional_promotion2(fieldview_backend):
     size = 10
     mask = np_as_located_field(IDim, JDim)(np.zeros((size, size), dtype=bool))
@@ -634,7 +635,8 @@ def test_conditional_promotion2(fieldview_backend):
 
     @field_operator(backend=fieldview_backend)
     def conditional_promotion(
-        mask: Field[[IDim, JDim], bool], a: Field[[IDim], float64],
+        mask: Field[[IDim, JDim], bool],
+        a: Field[[IDim], float64],
     ) -> Field[[IDim, JDim], float64]:
         return where(mask, a, 10.0)
 
