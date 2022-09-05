@@ -827,8 +827,7 @@ def test_ternary_operator(reduction_setup):
     def ternary_field_op(
         a: Field[[Edge], float], b: Field[[Edge], float], left: float, right: float
     ) -> Field[[Edge], float]:
-        c = a + b if left < right else b
-        return c
+        return a if left < right else b
 
     ternary_field_op(a, b, left, right, out=out, offset_provider={})
     e = np.asarray(a) + np.asarray(b) if left < right else np.asarray(b)
