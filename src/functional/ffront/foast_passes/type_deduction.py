@@ -272,7 +272,6 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         true_expr: foast.Expr,
         false_expr: foast.Expr,
     ) -> Optional[ct.SymbolType]:
-
         if condition.type != ct.ScalarType(kind=ct.ScalarKind.BOOL):
             raise FieldOperatorTypeDeductionError.from_foast_node(
                 condition,
