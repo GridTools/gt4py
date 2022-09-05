@@ -812,21 +812,20 @@ def test_solve_triag(fieldview_backend):
     np.allclose(expected, out)
 
 
-def test_ternary_operator(reduction_setup):
-    Edge = reduction_setup.Edge
-    num_edges = reduction_setup.num_edges
+def test_ternary_operator():
 
-    a = np_as_located_field(Edge)(2 * np.ones((num_edges,)))
-    b = np_as_located_field(Edge)(2 * np.ones((num_edges,)))
-    out = np_as_located_field(Edge)(np.zeros((num_edges,)))
+    num_edges = 10
+    a = np_as_located_field(IDim)(2 * np.ones((num_edges,)))
+    b = np_as_located_field(IDim)(2 * np.ones((num_edges,)))
+    out = np_as_located_field(IDim)(np.zeros((num_edges,)))
 
     left = 2.0
     right = 3.0
 
     @field_operator
     def ternary_field_op(
-        a: Field[[Edge], float], b: Field[[Edge], float], left: float, right: float
-    ) -> Field[[Edge], float]:
+        a: Field[[IDim], float], b: Field[[IDim], float], left: float, right: float
+    ) -> Field[[IDim], float]:
         return a if left < right else b
 
     ternary_field_op(a, b, left, right, out=out, offset_provider={})
@@ -834,40 +833,39 @@ def test_ternary_operator(reduction_setup):
     np.allclose(e, out)
 
     @field_operator
-    def ternary_field_op_scalars(left: float, right: float) -> Field[[Edge], float]:
-        return broadcast(3.0, (Edge,)) if left < right else broadcast(4.0, (Edge,))
+    def ternary_field_op_scalars(left: float, right: float) -> Field[[IDim], float]:
+        return broadcast(3.0, (IDim,)) if left < right else broadcast(4.0, (IDim,))
 
     ternary_field_op_scalars(left, right, out=out, offset_provider={})
     e = np.full(e.shape, 3.0) if left < right else e
     np.allclose(e, out)
 
 
-def test_ternary_operator_tuple(reduction_setup):
-    Edge = reduction_setup.Edge
-    num_edges = reduction_setup.num_edges
-    a = np_as_located_field(Edge)(np.ones((num_edges,)))
-    b = np_as_located_field(Edge)(2 * np.ones((num_edges,)))
-    out_1 = np_as_located_field(Edge)(np.zeros((num_edges,)))
-    out_2 = np_as_located_field(Edge)(np.zeros((num_edges,)))
+def test_ternary_operator_tuple():
+    num_edges = 10
+    a = np_as_located_field(IDim)(np.ones((num_edges,)))
+    b = np_as_located_field(IDim)(2 * np.ones((num_edges,)))
+    out_1 = np_as_located_field(IDim)(np.zeros((num_edges,)))
+    out_2 = np_as_located_field(IDim)(np.zeros((num_edges,)))
 
     left = 2.0
     right = 3.0
 
     @field_operator
     def ternary_field_op(
-        a: Field[[Edge], float], b: Field[[Edge], float], left: float, right: float
-    ) -> tuple[Field[[Edge], float], Field[[Edge], float]]:
+        a: Field[[IDim], float], b: Field[[IDim], float], left: float, right: float
+    ) -> tuple[Field[[IDim], float], Field[[IDim], float]]:
         return (a, b) if left < right else (b, a)
 
     # TODO(tehrengruber): directly call field operator when the generated programs support `out` being a tuple
     @program
     def ternary_field(
-        a: Field[[Edge], float],
-        b: Field[[Edge], float],
+        a: Field[[IDim], float],
+        b: Field[[IDim], float],
         left: float,
         right: float,
-        out_1: Field[[Edge], float],
-        out_2: Field[[Edge], float],
+        out_1: Field[[IDim], float],
+        out_2: Field[[IDim], float],
     ):
         ternary_field_op(a, b, left, right, out=(out_1, out_2))
 
@@ -910,14 +908,14 @@ def test_ternary_builtin_neighbor_sum(reduction_setup):
     assert np.allclose(expected, out)
 
 
-def test_ternary_scan(forward):
+def test_ternary_scan():
     KDim = Dimension("K", kind=DimensionKind.VERTICAL)
     size = 10
     init = 1.0
     out = np_as_located_field(KDim)(np.zeros((size,)))
     expected = np.arange(init + 1.0, init + 1.0 + size, 1)
 
-    @scan_operator(axis=KDim, forward=forward, init=init)
+    @scan_operator(axis=KDim, forward=True, init=init)
     def simple_scan_operator(carry: float) -> float:
         c = carry if 2 > 3 else carry + 1.0
         return c
