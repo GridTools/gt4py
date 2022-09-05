@@ -857,8 +857,7 @@ def test_ternary_operator_tuple(reduction_setup):
     def ternary_field_op(
         a: Field[[Edge], float], b: Field[[Edge], float], left: float, right: float
     ) -> tuple[Field[[Edge], float], Field[[Edge], float]]:
-        c, d = (a, b) if left < right else (b, a)
-        return c, d
+        return (a, b) if left < right else (b, a)
 
     # TODO(tehrengruber): directly call field operator when the generated programs support `out` being a tuple
     @program
