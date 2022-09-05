@@ -282,7 +282,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         if true_expr.type != false_expr.type:
             raise FieldOperatorTypeDeductionError.from_foast_node(
                 node,
-                msg=f"Left and right types are not the same: `{true_expr.type}` and {false_expr.type}",
+                msg=f"Left and right types are not the same: `{true_expr.type}` and `{false_expr.type}`",
             )
         return true_expr.type
 
