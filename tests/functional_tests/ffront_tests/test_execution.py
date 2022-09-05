@@ -910,7 +910,6 @@ def test_ternary_builtin_neighbor_sum(reduction_setup):
     assert np.allclose(expected, out)
 
 
-@pytest.mark.parametrize("forward", [True, True])
 def test_ternary_scan(forward):
     KDim = Dimension("K", kind=DimensionKind.VERTICAL)
     size = 10
