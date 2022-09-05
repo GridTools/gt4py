@@ -4,7 +4,7 @@ import subprocess
 from typing import Optional
 
 from functional.fencil_processors import pipeline
-from functional.fencil_processors.builders import cache
+from functional.fencil_processors.builders import build_data, cache
 from functional.fencil_processors.builders.cpp import build, cmake_lists
 from functional.fencil_processors.source_modules import source_modules
 
@@ -13,28 +13,28 @@ def cmake_builder_generator(
     cmake_generator_name: str = "Ninja",
     cmake_build_type: str = "Debug",
     cmake_extra_flags: Optional[list[str]] = None,
-) -> pipeline.JITBuilderGenerator:
+) -> pipeline.OTFBuilderGenerator:
     def generate_cmake_builder(
-        jit_module: source_modules.JITSourceModule[
+        otf_module: source_modules.OTFSourceModule[
             source_modules.Cpp,
             source_modules.LanguageWithHeaderFilesSettings,
             source_modules.Python,
         ],
         cache_strategy: cache.Strategy,
-    ) -> pipeline.JITBuilder:
-        name = jit_module.source_module.entry_point.name
-        header_name = f"{name}.{jit_module.source_module.language_settings.header_extension}"
+    ) -> pipeline.OTFBuilder:
+        name = otf_module.source_module.entry_point.name
+        header_name = f"{name}.{otf_module.source_module.language_settings.header_extension}"
         bindings_name = (
-            f"{name}_bindings.{jit_module.source_module.language_settings.file_extension}"
+            f"{name}_bindings.{otf_module.source_module.language_settings.file_extension}"
         )
-        return CMakeJITBuilder(
-            root_path=build.jit_path_from_jit_module(jit_module, cache_strategy),
+        return CMakeOTFBuilder(
+            root_path=build.otf_path_from_otf_module(otf_module, cache_strategy),
             source_files={
-                header_name: jit_module.source_module.source_code,
-                bindings_name: jit_module.bindings_module.source_code,
+                header_name: otf_module.source_module.source_code,
+                bindings_name: otf_module.bindings_module.source_code,
                 "CMakeLists.txt": cmake_lists.generate_cmakelists_source(
                     name,
-                    jit_module.library_deps,
+                    otf_module.library_deps,
                     [header_name, bindings_name],
                 ),
             },
@@ -48,7 +48,7 @@ def cmake_builder_generator(
 
 
 @dataclasses.dataclass
-class CMakeJITBuilder(pipeline.JITBuilder):
+class CMakeOTFBuilder(pipeline.OTFBuilder):
     root_path: pathlib.Path
     source_files: dict[str, str]
     fencil_name: str
@@ -65,6 +65,15 @@ class CMakeJITBuilder(pipeline.JITBuilder):
         for name, content in self.source_files.items():
             (self.root_path / name).write_text(content, encoding="utf-8")
 
+        build_data.write_data(
+            build_data.OTFBuildData(
+                status=build_data.OTFBuildStatus.STARTED,
+                module=pathlib.Path(f"build/bin/{self.fencil_name}.{build.python_module_suffix()}"),
+                entry_point_name=self.fencil_name,
+            ),
+            self.root_path,
+        )
+
     def run_build(self):
         logfile = self.root_path / "log_build.txt"
         with logfile.open(mode="w") as log_file_pointer:
@@ -73,12 +82,8 @@ class CMakeJITBuilder(pipeline.JITBuilder):
                 stdout=log_file_pointer,
                 stderr=log_file_pointer,
             )
-        data = build.data_from_jit_path(self.root_path)
-        data["status"] = "built"
-        data["extension"] = str(
-            self.root_path / "build" / "bin" / f"{self.fencil_name}.{build.python_module_suffix()}"
-        )
-        build.data_to_jit_path(data, self.root_path)
+
+        build_data.update_status(new_status=build_data.OTFBuildStatus.COMPILED, path=self.root_path)
 
     def run_config(self):
         logfile = self.root_path / "log_config.txt"
@@ -99,6 +104,6 @@ class CMakeJITBuilder(pipeline.JITBuilder):
                 stderr=log_file_pointer,
             )
 
-        data = build.data_from_jit_path(self.root_path)
-        data["status"] = "configured"
-        build.data_to_jit_path(data, self.root_path)
+        build_data.update_status(
+            new_status=build_data.OTFBuildStatus.CONFIGURED, path=self.root_path
+        )

@@ -126,8 +126,8 @@ def format_source(settings: LanguageSettings, source):
 
 
 @dataclass(frozen=True)
-class JITSourceModule(Generic[SrcL, SettingT, TgtL]):
-    """Encapsulate all and only the data needed to reliably and safely cache JIT / dynamically compiled fencils."""
+class OTFSourceModule(Generic[SrcL, SettingT, TgtL]):
+    """Encapsulate all and only the data needed to reliably and safely cache on-the-fly compiled fencils."""
 
     source_module: SourceModule[SrcL, SettingT]
     bindings_module: BindingModule[SrcL, TgtL]

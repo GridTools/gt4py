@@ -5,13 +5,13 @@ import subprocess
 from typing import Optional
 
 from functional.fencil_processors import pipeline
-from functional.fencil_processors.builders import cache
+from functional.fencil_processors.builders import build_data, cache
 from functional.fencil_processors.builders.cpp import build, cmake, cmake_lists
 from functional.fencil_processors.source_modules import source_modules
 
 
 @dataclasses.dataclass
-class CompiledbJITBuilder(pipeline.JITBuilder):
+class CompiledbOTFBuilder(pipeline.OTFBuilder):
     root_path: pathlib.Path
     source_files: dict[str, str]
     fencil_name: str
@@ -20,14 +20,27 @@ class CompiledbJITBuilder(pipeline.JITBuilder):
 
     def build(self):
         self.write_files()
-        if build.data_from_jit_path(self.root_path)["status"] not in ["configured", "built"]:
+        if build_data.read_data(self.root_path).status < build_data.OTFBuildStatus.CONFIGURED:
             self.run_config()
-        if build.data_from_jit_path(self.root_path)["status"] == "configured":
+        if (
+            build_data.OTFBuildStatus.CONFIGURED
+            <= build_data.read_data(self.root_path).status
+            < build_data.OTFBuildStatus.COMPILED
+        ):
             self.run_build()
 
     def write_files(self):
         for name, content in self.source_files.items():
             (self.root_path / name).write_text(content, encoding="utf-8")
+
+        build_data.write_data(
+            data=build_data.OTFBuildData(
+                status=build_data.OTFBuildStatus.STARTED,
+                module=pathlib.Path(""),
+                entry_point_name=self.fencil_name,
+            ),
+            path=self.root_path,
+        )
 
     def run_build(self):
         logfile = self.root_path / "log_build.txt"
@@ -43,16 +56,8 @@ class CompiledbJITBuilder(pipeline.JITBuilder):
                     stdout=log_file_pointer,
                     stderr=log_file_pointer,
                 )
-                last_entry = entry
 
-        build.data_to_jit_path(
-            build.data_from_jit_path(self.root_path)
-            | {
-                "status": "built",
-                "extension": str(self.root_path / pathlib.Path(last_entry["output"])),
-            },
-            self.root_path,
-        )
+        build_data.update_status(new_status=build_data.OTFBuildStatus.COMPILED, path=self.root_path)
 
     def run_config(self):
         compile_db = json.loads(self.compile_commands_cache.read_text())
@@ -70,8 +75,12 @@ class CompiledbJITBuilder(pipeline.JITBuilder):
 
         (self.root_path / "compile_commands.json").write_text(json.dumps(compile_db))
 
-        build.data_to_jit_path(
-            build.data_from_jit_path(self.root_path) | {"status": "configured"},
+        build_data.write_data(
+            build_data.OTFBuildData(
+                status=build_data.OTFBuildStatus.CONFIGURED,
+                module=pathlib.Path(compile_db[-1]["output"]),
+                entry_point_name=self.fencil_name,
+            ),
             self.root_path,
         )
 
@@ -80,23 +89,23 @@ def compiledb_builder_generator(
     cmake_build_type: str = "Debug",
     cmake_extra_flags: Optional[list[str]] = None,
     renew_compiledb: bool = False,
-) -> pipeline.JITBuilderGenerator:
+) -> pipeline.OTFBuilderGenerator:
     def generate_compiledb_builder(
-        jit_module: source_modules.JITSourceModule[
+        otf_module: source_modules.OTFSourceModule[
             source_modules.Cpp,
             source_modules.LanguageWithHeaderFilesSettings,
             source_modules.Python,
         ],
         cache_strategy: cache.Strategy,
-    ) -> CompiledbJITBuilder:
-        name = jit_module.source_module.entry_point.name
-        header_name = f"{name}.{jit_module.source_module.language_settings.header_extension}"
+    ) -> CompiledbOTFBuilder:
+        name = otf_module.source_module.entry_point.name
+        header_name = f"{name}.{otf_module.source_module.language_settings.header_extension}"
         bindings_name = (
-            f"{name}_bindings.{jit_module.source_module.language_settings.file_extension}"
+            f"{name}_bindings.{otf_module.source_module.language_settings.file_extension}"
         )
 
         cc_cache_module = _cc_cache_module(
-            deps=jit_module.library_deps,
+            deps=otf_module.library_deps,
             build_type=cmake_build_type,
             cmake_flags=cmake_extra_flags or [],
         )
@@ -111,12 +120,12 @@ def compiledb_builder_generator(
                 cache_strategy=cache_strategy,
             )
 
-        return CompiledbJITBuilder(
-            root_path=build.jit_path_from_jit_module(jit_module, cache_strategy),
+        return CompiledbOTFBuilder(
+            root_path=build.otf_path_from_otf_module(otf_module, cache_strategy),
             fencil_name=name,
             source_files={
-                header_name: jit_module.source_module.source_code,
-                bindings_name: jit_module.bindings_module.source_code,
+                header_name: otf_module.source_module.source_code,
+                bindings_name: otf_module.bindings_module.source_code,
             },
             bindings_file_name=bindings_name,
             compile_commands_cache=compiledb_template,
@@ -173,7 +182,7 @@ def _cc_generate_compiledb(
     name = source_module.entry_point.name
     cache_path = cache.get_cache_folder(source_module, cache_strategy)
 
-    jit_builder = cmake.CMakeJITBuilder(
+    otf_builder = cmake.CMakeOTFBuilder(
         generator_name="Ninja",
         build_type=build_type,
         extra_cmake_flags=cmake_flags,
@@ -188,8 +197,8 @@ def _cc_generate_compiledb(
         fencil_name=name,
     )
 
-    jit_builder.write_files()
-    jit_builder.run_config()
+    otf_builder.write_files()
+    otf_builder.run_config()
 
     log_file = cache_path / "log_compiledb.txt"
 

@@ -13,12 +13,14 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 
+import functools
 import math
 
 import jinja2
 import numpy as np
 import pytest
 
+from functional.fencil_processors import pipeline
 from functional.fencil_processors.builders import cache
 from functional.fencil_processors.builders.cpp import bindings, build, cmake, compiledb
 from functional.fencil_processors.source_modules import cpp_gen, source_modules
@@ -65,32 +67,32 @@ def source_module_example():
 
 
 def test_gtfn_cpp_with_cmake(source_module_example):
-    jit_fencil = build.jit_module_to_compiled_fencil(
-        jit_module=source_modules.JITSourceModule(
-            source_module=source_module_example,
-            bindings_module=bindings.create_bindings(source_module_example),
+    workflow = pipeline.OTFWorkflow(
+        bindings.source_module_to_otf_module,
+        functools.partial(
+            build.otf_module_to_compiled_fencil,
+            otf_builder_generator=cmake.cmake_builder_generator(),
+            cache_strategy=cache.Strategy.SESSION,
         ),
-        jit_builder_generator=cmake.cmake_builder_generator(),
-        cache_strategy=cache.Strategy.SESSION,
     )
-
+    otf_fencil = workflow(source_module_example)
     buf = np.zeros(shape=(6, 5), dtype=np.float32)
     sc = np.float32(3.1415926)
-    res = jit_fencil(buf, sc)
+    res = otf_fencil(buf, sc)
     assert math.isclose(res, 6 * 5 * 3.1415926, rel_tol=1e-4)
 
 
 def test_gtfn_cpp_with_compiledb(source_module_example):
-    jit_fencil = build.jit_module_to_compiled_fencil(
-        jit_module=source_modules.JITSourceModule(
-            source_module=source_module_example,
-            bindings_module=bindings.create_bindings(source_module_example),
+    workflow = pipeline.OTFWorkflow(
+        bindings.source_module_to_otf_module,
+        functools.partial(
+            build.otf_module_to_compiled_fencil,
+            otf_builder_generator=compiledb.compiledb_builder_generator(),
+            cache_strategy=cache.Strategy.SESSION,
         ),
-        jit_builder_generator=compiledb.compiledb_builder_generator(),
-        cache_strategy=cache.Strategy.SESSION,
     )
-
+    otf_fencil = workflow(source_module_example)
     buf = np.zeros(shape=(6, 5), dtype=np.float32)
     sc = np.float32(3.1415926)
-    res = jit_fencil(buf, sc)
+    res = otf_fencil(buf, sc)
     assert math.isclose(res, 6 * 5 * 3.1415926, rel_tol=1e-4)

@@ -236,3 +236,13 @@ def create_bindings(
         src,
         (source_modules.LibraryDependency("pybind11", "2.9.2"),),
     )
+
+
+def source_module_to_otf_module(
+    inp: source_modules.SourceModule[
+        source_modules.Cpp, source_modules.LanguageWithHeaderFilesSettings
+    ],
+) -> source_modules.OTFSourceModule[
+    source_modules.Cpp, source_modules.LanguageWithHeaderFilesSettings, source_modules.Python
+]:
+    return source_modules.OTFSourceModule(source_module=inp, bindings_module=create_bindings(inp))

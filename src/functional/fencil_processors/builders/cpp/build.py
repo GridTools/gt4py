@@ -17,12 +17,11 @@
 from __future__ import annotations
 
 import importlib
-import json
 import pathlib
 from typing import Callable, Optional
 
 from functional.fencil_processors import pipeline
-from functional.fencil_processors.builders import cache, importer
+from functional.fencil_processors.builders import build_data, cache, importer
 from functional.fencil_processors.source_modules import source_modules
 
 
@@ -30,49 +29,36 @@ def python_module_suffix():
     return importlib.machinery.EXTENSION_SUFFIXES[0][1:]
 
 
-def jit_path_from_jit_module(
-    jit_module: source_modules.JITSourceModule, cache_strategy: cache.Strategy
+def otf_path_from_otf_module(
+    otf_module: source_modules.JITSourceModule, cache_strategy: cache.Strategy
 ) -> pathlib.Path:
     # TODO: the output of this should depend also on at least the bindings module
-    return cache.get_cache_folder(jit_module.source_module, cache_strategy)
+    return cache.get_cache_folder(otf_module.source_module, cache_strategy)
 
 
-def data_is_in_jit_path(jit_path: pathlib.Path) -> bool:
-    return (jit_path / "gt4py.json").exists()
-
-
-def data_from_jit_path(jit_path: pathlib.Path) -> dict:
-    data_file = jit_path / "gt4py.json"
-    if not data_file.exists():
-        return {"status": "unknown"}
-    return json.loads(data_file.read_text())
-
-
-def data_to_jit_path(data: dict, jit_path: pathlib.Path):
-    (jit_path / "gt4py.json").write_text(json.dumps(data))
-
-
-def compiled_fencil_from_jit_path(jit_path: pathlib.Path) -> Optional[Callable]:
-    data = data_from_jit_path(jit_path)
-    if data["status"] != "built":  # @todo turn into enum or such
+def compiled_fencil_from_otf_path(otf_path: pathlib.Path) -> Optional[Callable]:
+    data = build_data.read_data(otf_path)
+    if not data or data.status < build_data.OTFBuildStatus.COMPILED:
         return None
-    return importer.import_from_path(jit_path / data["extension"])
+    return getattr(importer.import_from_path(otf_path / data.module), data.entry_point_name)
 
 
-def jit_module_to_compiled_fencil(
-    jit_module: source_modules.JITSourceModule,
-    jit_builder_generator: pipeline.JITBuilderGenerator,
+def otf_module_to_compiled_fencil(
+    inp: source_modules.JITSourceModule,
+    otf_builder_generator: pipeline.JITBuilderGenerator,
     cache_strategy: cache.Strategy,
 ) -> Callable:
-    jit_dir = jit_path_from_jit_module(jit_module, cache_strategy)
-    compiled_module = compiled_fencil_from_jit_path(jit_dir)
-    if compiled_module:
-        return getattr(compiled_module, jit_module.source_module.entry_point.name)
-    jit_builder = jit_builder_generator(jit_module, cache_strategy)
-    jit_builder.build()
-    compiled_module = compiled_fencil_from_jit_path(jit_dir)
-    if not compiled_module:
+    # @todo: move to language-agnostic module
+    otf_module = inp
+    otf_dir = otf_path_from_otf_module(otf_module, cache_strategy)
+    compiled_fencil = compiled_fencil_from_otf_path(otf_dir)
+    if compiled_fencil:
+        return compiled_fencil
+    otf_builder = otf_builder_generator(otf_module, cache_strategy)
+    otf_builder.build()
+    compiled_fencil = compiled_fencil_from_otf_path(otf_dir)
+    if not compiled_fencil:
         raise AssertionError(
             "Build completed but no compiled python extension was found"
         )  # @todo: make safer, improve error msg
-    return getattr(compiled_module, jit_module.source_module.entry_point.name)
+    return compiled_fencil

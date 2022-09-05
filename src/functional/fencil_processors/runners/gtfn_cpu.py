@@ -14,7 +14,7 @@
 
 
 import dataclasses
-from typing import Any, Final, Optional
+from typing import Any, Callable, Final, Optional
 
 import numpy as np
 
@@ -37,7 +37,7 @@ def convert_arg(arg: Any) -> Any:
 @dataclasses.dataclass(frozen=True)
 class GTFNExecutor(fpi.FencilExecutor):
     language_settings: source_modules.LanguageWithHeaderFilesSettings = cpp_gen.CPP_DEFAULT
-    jit_builder_generator: pipeline.JITBuilderGenerator = compiledb.compiledb_builder_generator()
+    otf_builder_generator: pipeline.OTFBuilderGenerator = compiledb.compiledb_builder_generator()
 
     name: Optional[str] = None
 
@@ -51,22 +51,41 @@ class GTFNExecutor(fpi.FencilExecutor):
 
         See ``FencilExecutorFunction`` for details.
         """
-        # TODO(ricoh): a pipeline runner might enhance readability as well as discourage
-        #  custom logic between steps.
-        jit_fencil = build.jit_module_to_compiled_fencil(
-            jit_module=source_modules.JITSourceModule(
-                source_module=(
-                    source_module := gtfn_module.GTFNSourceModuleGenerator(self.language_settings)(
-                        fencil, *args, **kwargs
-                    )
-                ),
-                bindings_module=bindings.create_bindings(source_module),
-            ),
-            jit_builder_generator=self.jit_builder_generator,
-            cache_strategy=cache.Strategy.SESSION,
+
+        def convert_args(fencil: Callable) -> Callable:
+            def decorated_fencil(*args):
+                return fencil(*[convert_arg(arg) for arg in args])
+
+            return decorated_fencil
+
+        def itir_to_src(inp: pipeline.OTFFencil) -> source_modules.SourceModule:
+            return gtfn_module.GTFNSourceModuleGenerator(self.language_settings)(
+                inp.fencil, *inp.args, **inp.kwargs
+            )
+
+        def src_to_otf(inp: source_modules.SourceModule) -> source_modules.OTFSourceModule:
+            return source_modules.OTFSourceModule(
+                source_module=inp, bindings_module=bindings.create_bindings(inp)
+            )
+
+        def otf_to_impl(inp: source_modules.OTFSourceModule) -> Callable:
+            return build.otf_module_to_compiled_fencil(
+                otf_module=inp,
+                otf_builder_generator=self.otf_builder_generator,
+                cache_strategy=cache.Strategy.SESSION,
+            )
+
+        otf_workflow: Final[pipeline.OTFWorkflow[pipeline.OTFFencil, Callable]] = (
+            pipeline.OTFWorkflow(itir_to_src, src_to_otf)
+            .add_step(otf_to_impl)
+            .add_step(convert_args)
         )
 
-        jit_fencil(*[convert_arg(arg) for arg in args])
+        otf_fencil = pipeline.OTFFencil(fencil, args, kwargs)
+
+        compiled_fencil = otf_workflow(otf_fencil)
+
+        compiled_fencil(*args)
 
     @property
     def __name__(self) -> str:
