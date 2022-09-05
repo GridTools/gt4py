@@ -609,6 +609,42 @@ def test_conditional_promotion(fieldview_backend):
     assert np.allclose(np.where(mask, a, 10), out)
 
 
+def test_conditional_promotion1(fieldview_backend):
+    size = 10
+    mask = np_as_located_field(IDim)(np.zeros((size,), dtype=bool))
+    mask.array()[0 : (size // 2)] = True
+    out = np_as_located_field(IDim)(np.zeros((size,)))
+
+    @field_operator(backend=fieldview_backend)
+    def conditional_promotion(
+        mask: Field[[IDim], bool],
+    ) -> Field[[IDim], float64]:
+        return where(mask, 5.0, 10.0)
+
+    conditional_promotion(mask, out=out, offset_provider={})
+
+    assert np.allclose(np.where(mask, 5.0, 10), out)
+
+
+def test_conditional_promotion2(fieldview_backend):
+    size = 10
+    mask = np_as_located_field(IDim, JDim)(np.zeros((size, size), dtype=bool))
+    mask.array()[0 : (size // 2)] = True
+    a = np_as_located_field(IDim)(np.ones((size,)))
+    out = np_as_located_field(IDim, JDim)(np.zeros((size, size)))
+
+    @field_operator(backend=fieldview_backend)
+    def conditional_promotion(
+        mask: Field[[IDim, JDim], bool],
+        a: Field[[IDim], float64],
+    ) -> Field[[IDim, JDim], float64]:
+        return where(mask, a, 10.0)
+
+    conditional_promotion(mask, a, out=out, offset_provider={})
+
+    assert np.allclose(np.where(mask, a, 10), out)
+
+
 def test_conditional_compareop(fieldview_backend):
     size = 10
     a = np_as_located_field(IDim)(np.ones((size,)))
