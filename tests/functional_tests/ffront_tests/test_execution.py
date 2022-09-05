@@ -895,8 +895,8 @@ def test_ternary_builtin_neighbor_sum(reduction_setup):
     @field_operator
     def ternary_reduce(a: Field[[Edge], float], b: Field[[Edge], float]) -> Field[[Vertex], float]:
         # line below does not work
-        # f = neighbor_sum(b(V2E) if 2 < 3 else a(V2E), axis=V2EDim)
-        out = neighbor_sum(b(V2E), axis=V2EDim) if 2 < 3 else neighbor_sum(a(V2E), axis=V2EDim)
+        out = neighbor_sum(b(V2E) if 2 < 3 else a(V2E), axis=V2EDim)
+        # out = neighbor_sum(b(V2E), axis=V2EDim) if 2 < 3 else neighbor_sum(a(V2E), axis=V2EDim)
         return out
 
     ternary_reduce(a, b, out=out, offset_provider=rs.offset_provider)
