@@ -918,9 +918,8 @@ def test_ternary_scan(forward):
     expected = np.arange(init + 1.0, init + 1.0 + size, 1)
 
     @scan_operator(axis=KDim, forward=forward, init=init)
-    def simple_scan_operator(carry: float) -> float:
-        c = carry if 2 > 3 else carry + 1.0
-        return c
+    def simple_scan_operator(carry: float, a: float) -> float:
+        return carry if carry > a else carry + 1.0
 
     simple_scan_operator(out=out, offset_provider={})
 
