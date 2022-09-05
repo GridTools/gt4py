@@ -275,8 +275,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         if condition.type != ct.ScalarType(kind=ct.ScalarKind.BOOL):
             raise FieldOperatorTypeDeductionError.from_foast_node(
                 condition,
-                msg=f"Condition is of type `{condition.type}` "
-                f"but should be of type bool.",
+                msg=f"Condition is of type `{condition.type}` " f"but should be of type bool.",
             )
 
         if true_expr.type != false_expr.type:
