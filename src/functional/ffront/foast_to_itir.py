@@ -502,7 +502,7 @@ class InsideReductionLowering(FieldOperatorLowering):
             self.visit(node.left, **kwargs), self.visit(node.right, **kwargs)
         )
 
-    def visit_IfExp(self, node: foast.TernaryExpr, **kwargs) -> itir.FunCall:
+    def visit_TernaryExp(self, node: foast.TernaryExpr, **kwargs) -> itir.FunCall:
         return im.call_("if_")(
             self.visit(node.condition, **kwargs),
             self.visit(node.true_expr, **kwargs),
