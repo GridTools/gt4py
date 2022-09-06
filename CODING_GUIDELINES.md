@@ -63,7 +63,7 @@ Consider configuration files as another type of source code and apply the same c
 
 ### Ignoring QA errors
 
-You may occasionally need to disable checks from _quality assurance_  (QA) tools (e.g. linters, type checkers, etc.) on specific lines as this tool is not able to fully understand why a certain piece of code is needed. This is usually done with special comments, e.g. `# type: ignore`. However, you should **only** ignore QA errors when you fully understand their source and rewriting code to make QA checks would make it less readable. Additionally, you should add a brief comment for future reference, e.g.:
+You may occasionally need to disable checks from _quality assurance_  (QA) tools (e.g. linters, type checkers, etc.) on specific lines as some tool might not be able to fully understand why a certain piece of code is needed. This is usually done with special comments, e.g. `# type: ignore`. However, you should **only** ignore QA errors when you fully understand their source and rewriting your code to pass QA checks would make it less readable. Additionally, you should add a brief comment for future reference, e.g.:
 
    ```python
    f = lambda: 'empty'  # noqa: E731  # assign lambda expression for testing
