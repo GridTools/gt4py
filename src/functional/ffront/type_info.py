@@ -388,6 +388,19 @@ def promote_dims(
 def promote_to_mask_type(
     mask_type: ct.FieldType, return_type: ct.FieldType | ct.ScalarType
 ) -> ct.FieldType:
+    """
+    Promote the combined left|right promoted type, in a conditional operator, with the mask type
+
+    >>> I, J = (Dimension(value=dim) for dim in ["I", "J"])
+    >>> bool_type = ct.ScalarType(kind=ct.ScalarKind.BOOL)
+    >>> dtype = ct.ScalarType(kind=ct.ScalarKind.FLOAT64)
+    >>> promote_to_mask_type(ct.FieldType(dims=[I, J], dtype=bool_type), ct.ScalarType(kind=dtype))
+    FieldType(dims=[Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)], dtype=ScalarType(kind=ScalarType(kind=<ScalarKind.FLOAT64: 1064>, shape=None), shape=None))
+    >>> promote_to_mask_type(ct.FieldType(dims=[I, J], dtype=bool_type), ct.FieldType(dims=[I], dtype=dtype))
+    FieldType(dims=[Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)], dtype=ScalarType(kind=<ScalarKind.FLOAT64: 1064>, shape=None))
+    >>> promote_to_mask_type(ct.FieldType(dims=[I], dtype=bool_type), ct.FieldType(dims=[I,J], dtype=dtype))
+    FieldType(dims=[Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)], dtype=ScalarType(kind=<ScalarKind.FLOAT64: 1064>, shape=None))
+    """
     return_dtype = return_type
     if isinstance(return_type, ct.FieldType):
         return_dtype = return_type.dtype
