@@ -59,7 +59,7 @@ __all__ = ["func_a", "CONST_B"]
 
 Try to keep sections and items logically ordered, add section separator comments to make section boundaries explicit when needed. If there is not a single evident logical order, pick the order you consider best or use alphabetical order.
 
-Consider configuration files as another type of source code and apply the same criteria, using comments when possible for more readability.
+Consider configuration files as another type of source code and apply the same criteria, using comments when possible for better readability.
 
 ### Ignoring QA errors
 
