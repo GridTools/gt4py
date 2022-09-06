@@ -389,8 +389,10 @@ def promote_to_mask_type(
     mask_type: ct.FieldType, input_type: ct.FieldType | ct.ScalarType
 ) -> ct.FieldType:
     """
-    Promotes the mask type with the input type. The input type being the result of promoting the left and right types
-    in a conditional clause.
+
+    Promote the mask type with the input type.
+
+    The input type being the result of promoting the left and right types in a conditional clause.
 
     If the input type is a scalar, the return type takes the dimensions of the mask_type, while retaining the dtype of
     the input type. The behavior is similar when the input type is a field type with fewer dimensions than the mask_type.

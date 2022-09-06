@@ -691,7 +691,7 @@ def test_conditional_shifted(fieldview_backend):
     assert np.allclose(np.where(mask, a, b)[1:], out.array()[:-1])
 
 
-def test_conditional_tuple(fieldview_backend):
+def test_conditional_tuple():
     size = 10
     mask = np_as_located_field(IDim)(np.zeros((size,), dtype=bool))
     mask.array()[0 : (size // 2)] = True
@@ -699,7 +699,7 @@ def test_conditional_tuple(fieldview_backend):
     c = np_as_located_field(IDim)(np.zeros((size,)))
     d = np_as_located_field(IDim)(np.zeros((size,)))
 
-    @field_operator(backend=fieldview_backend)
+    @field_operator
     def conditional_tuple(
         mask: Field[[IDim], bool], a: Field[[IDim], float64]
     ) -> tuple[Field[[IDim], float64], Field[[IDim], float64]]:
