@@ -69,7 +69,7 @@ Ready to start contributing? Follow these steps:
 
    Now you can make your changes locally. Make sure you follow the project code style documented in [CODING_GUIDELINES.md](CODING_GUIDELINES.md).
 
-5. When you're done making changes, use `pre-commit` to check that your code complies with the project code style and other quality assurance (QA) practices. Additionally, run `tox` to make sure that unit and regression tests pass for all supported Python versions:
+5. When you're done making changes, check that your code complies with the project code style and other quality assurance (QA) practices using `pre-commit`. Additionally, make sure that unit and regression tests pass for all supported Python versions by running `tox`:
 
    ```bash
    $ pre-commit run
@@ -93,7 +93,7 @@ Ready to start contributing? Follow these steps:
 
 ### Quality Assurance
 
-We use [pre-commit](https://pre-commit.com/) to run several auto-formatting and linting tools. You should always execute it locally before opening a PR. `pre-commit` can be installed as a _git hook_ to automatically check the staged changes before committing:
+We use [pre-commit](https://pre-commit.com/) to run several auto-formatting and linting tools. You should always execute it locally before opening a pull request. `pre-commit` can be installed as a _git hook_ to automatically check the staged changes before committing:
 
 ```bash
 # Install pre-commit as a git hook and initialized all the configured tools
@@ -159,16 +159,16 @@ tox -e py310-base
 `tox` runs the package installation script and tests reliably by using properly isolated environments. Additionally, `tox` is configured to generate HTML test coverage reports in `tests/_reports/coverage_html/` at the end.
 
 
-## Pull Request and Merge Guidelines
+## Pull Requests (PRs) and Merge Guidelines
 
-Before submitting a PR, check that it meets the following criteria:
+Before submitting a pull request, check that it meets the following criteria:
 
-1. The PR should include tests.
-2. If the PR adds functionality, it should be documented both in the code docstrings and in the official documentation.
-3. If the PR contains important design changes, it should contain a new ADR documenting the rationale behind the final decision.
-4. The PR should have a proper description of its intent and the main changes in the code. In general this description should be used as commit message if the PR is approved (check point **6.** below).
-5. Pick one reviewer and try to contact them directly to let them know about the PR. If there is no feedback in 24h/48h try to contact them again or pick another reviewer.
-6. Once the PR has been approved, it should be squash-merged as soon as possible with a meaningful description of the changes. Although it is optional, we encourage the use of the [Conventional Commits][conventional-commits] specification for writing informative and automation-friendly commit messages (_commit types: `fix`, `feat`, `build`, `ci`, `docs`, `style`, `refactor`, `perf`, `test`_).
+1. The pull request should include tests.
+2. If the pull request adds functionality, it should be documented both in the code docstrings and in the official documentation.
+3. If the pull request contains important design changes, it should contain a new ADR documenting the rationale behind the final decision.
+4. The pull request should have a proper description of its intent and the main changes in the code. In general this description should be used as commit message if the pull request is approved (check point **6.** below).
+5. Pick one reviewer and try to contact them directly to let them know about the pull request. If there is no feedback in 24h/48h try to contact them again or pick another reviewer.
+6. Once the pull request has been approved, it should be squash-merged as soon as possible with a meaningful description of the changes. Although it is optional, we encourage the use of the [Conventional Commits][conventional-commits] specification for writing informative and automation-friendly commit messages (_commit types: `fix`, `feat`, `build`, `ci`, `docs`, `style`, `refactor`, `perf`, `test`_).
 
 
 ## Releasing Process
@@ -211,7 +211,7 @@ Currently, GT4Py releases are published as commit tags in the main GitHub reposi
 
 ## Tools
 
-As mentioned above, we use several tools to help us write high-quality code. New tools could be added in the future, especially if they do not add a large overhead to our workflow and they bring extra benefits to keep our codebase in shape. The most important ones that we currently rely on are:
+As mentioned above, we use several tools to help us write high-quality code. New tools could be added in the future, especially if they do not add a large overhead to our workflow and they bring extra benefits to keep our codebase in shape. The most important ones which we currently rely on are:
 
    - [Black][black] for autoformatting source code.
    - [isort][isort] for autoformatting import statements.
