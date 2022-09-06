@@ -509,26 +509,23 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
 
         try:
             if isinstance(left_type, ct.TupleType) and isinstance(right_type, ct.TupleType):
-                if left_type == right_type and left_type == mask_type:
-                    return_type = left_type
-                else:
-                    new_type_left = [
-                        element.type for element in self.visit(node.args[1].elts, **kwargs)
-                    ]
-                    new_type_right = [
-                        element.type for element in self.visit(node.args[2].elts, **kwargs)
-                    ]
-                    return_type_ls = []
-                    for type_left, type_right in zip(new_type_left, new_type_right):
-                        return_type = type_info.promote(type_left, type_right)
-                        if (
-                            isinstance(return_type, ct.ScalarType)
-                            or not all(return_type.dims) in mask_type.dims
-                        ):
-                            return_type_ls.append(
-                                type_info.promote_to_mask_type(mask_type, return_type)
-                            )
-                    return_type = ct.TupleType(types=return_type_ls)
+                list_type_left = [
+                    element.type for element in self.visit(node.args[1].elts, **kwargs)
+                ]
+                list_type_right = [
+                    element.type for element in self.visit(node.args[2].elts, **kwargs)
+                ]
+                return_type_ls = []
+                for type_left, type_right in zip(list_type_left, list_type_right):
+                    return_type = type_info.promote(type_left, type_right)
+                    if (
+                        isinstance(return_type, ct.ScalarType)
+                        or not all(return_type.dims) in mask_type.dims
+                    ):
+                        return_type_ls.append(
+                            type_info.promote_to_mask_type(mask_type, return_type)
+                        )
+                return_type = ct.TupleType(types=return_type_ls)
             else:
                 return_type = type_info.promote(left_type, right_type)
                 if (
