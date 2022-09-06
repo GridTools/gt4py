@@ -10,7 +10,7 @@ To keep technical debt at acceptable levels, design and implementation of new fe
 1. Make sure your code is always covered by automatic testing to ensure its correctness. Where unit tests are impractical, use integration tests.
 2. Adhere to the [SOLID](https://en.wikipedia.org/wiki/SOLID) principles of software design.
 3. Do not reinvent the wheel: if someone solved your problem within the project or in a third party library, consider using their solution or extending it before writing a new component for the same purpose.
-4. _You aren't gonna need it_ ([YAGNI](https://en.wikipedia.org/wiki/You_aren%27t_gonna_need_it)): do not design solutions for problems that might come up in the future, as chances are that you will never need that code. Focus on current problems and prepare for future requirements by writing clean code.
+4. _You ain't gonna need it_ ([YAGNI](https://en.wikipedia.org/wiki/You_aren%27t_gonna_need_it)): do not design solutions for problems that might come up in the future, as chances are that you will never need that code. Focus on current problems and prepare for future requirements by writing clean code.
 5. _Do not repeat yourself_ ([DRY](https://en.wikipedia.org/wiki/Don%27t_repeat_yourself)): if you are writing the same code snippet in several places, extract it into a function.
 6. Use meaningful names: the purpose of an object should be clear from its name. Usually, class names are nouns and function names are verbs.
 
