@@ -385,6 +385,16 @@ def promote_dims(
     return topologically_sorted_list
 
 
+def promote_to_mask_type(
+    mask_type: ct.FieldType, return_type: ct.FieldType | ct.ScalarType
+) -> ct.FieldType:
+    return_dtype = return_type
+    if isinstance(return_type, ct.FieldType):
+        return_dtype = return_type.dtype
+    return_type = promote(return_type, ct.FieldType(dims=mask_type.dims, dtype=return_dtype))
+    return return_type
+
+
 @functools.singledispatch
 def return_type(
     callable_type: ct.CallableType,

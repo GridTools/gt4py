@@ -696,29 +696,29 @@ def test_conditional_tuple(fieldview_backend):
     mask = np_as_located_field(IDim)(np.zeros((size,), dtype=bool))
     mask.array()[0 : (size // 2)] = True
     a = np_as_located_field(IDim)(np.ones((size,)))
-    b = np_as_located_field(IDim)(2 * np.ones((size,)))
     c = np_as_located_field(IDim)(np.zeros((size,)))
     d = np_as_located_field(IDim)(np.zeros((size,)))
 
     @field_operator(backend=fieldview_backend)
     def conditional_tuple(
-        mask: Field[[IDim], bool], a: Field[[IDim], float64], b: Field[[IDim], float64]
+        mask: Field[[IDim], bool], a: Field[[IDim], float64]
     ) -> tuple[Field[[IDim], float64], Field[[IDim], float64]]:
-        return where(mask, (a, b), (b, a))
+        return where(mask, (a, 3.0), (2.0, 7.0))
 
     @program
     def conditional_tuple_p(
         mask: Field[[IDim], bool],
         a: Field[[IDim], float64],
-        b: Field[[IDim], float64],
         c: Field[[IDim], float64],
         d: Field[[IDim], float64],
     ):
-        conditional_tuple(mask, a, b, out=(c, d))
+        conditional_tuple(mask, a, out=(c, d))
 
-    conditional_tuple_p(mask, a, b, c, d, offset_provider={})
+    conditional_tuple_p(mask, a, c, d, offset_provider={})
 
-    assert np.allclose(np.where(mask, (a, b), (b, a)), (c, d))
+    assert np.allclose(
+        np.where(mask, (a, np.full(size, 3.0)), (np.full(size, 2.0), np.full(size, 7.0))), (c, d)
+    )
 
 
 def test_nested_tuple_return():

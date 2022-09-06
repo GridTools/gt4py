@@ -507,25 +507,41 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                 f"a field with dtype bool, but got `{mask_type}`.",
             )
 
-        if left_type == right_type:
-            return_type = left_type
-        else:
-            try:
+        try:
+            if isinstance(left_type, ct.TupleType) and isinstance(right_type, ct.TupleType):
+                if left_type == right_type and left_type == mask_type:
+                    return_type = left_type
+                else:
+                    new_type_left = [
+                        element.type for element in self.visit(node.args[1].elts, **kwargs)
+                    ]
+                    new_type_right = [
+                        element.type for element in self.visit(node.args[2].elts, **kwargs)
+                    ]
+                    return_type_ls = []
+                    for type_left, type_right in zip(new_type_left, new_type_right):
+                        return_type = type_info.promote(type_left, type_right)
+                        if (
+                            isinstance(return_type, ct.ScalarType)
+                            or not all(return_type.dims) in mask_type.dims
+                        ):
+                            return_type_ls.append(
+                                type_info.promote_to_mask_type(mask_type, return_type)
+                            )
+                    return_type = ct.TupleType(types=return_type_ls)
+            else:
                 return_type = type_info.promote(left_type, right_type)
-                if isinstance(mask_type, ct.FieldType):
-                    if isinstance(return_type, ct.ScalarType):
-                        return_dtype = return_type
-                    elif isinstance(return_type, ct.FieldType):
-                        return_dtype = return_type.dtype
-                    return_type = type_info.promote(
-                        return_type, ct.FieldType(dims=mask_type.dims, dtype=return_dtype)
-                    )
+                if (
+                    isinstance(return_type, ct.ScalarType)
+                    or not all(return_type.dims) in mask_type.dims
+                ):
+                    return_type = type_info.promote_to_mask_type(mask_type, return_type)
 
-            except GTTypeError as ex:
-                raise FieldOperatorTypeDeductionError.from_foast_node(
-                    node,
-                    msg=f"Incompatible argument in call to `{node.func.id}`.",
-                ) from ex
+        except GTTypeError as ex:
+            raise FieldOperatorTypeDeductionError.from_foast_node(
+                node,
+                msg=f"Incompatible argument in call to `{node.func.id}`.",
+            ) from ex
 
         return foast.Call(
             func=node.func,
