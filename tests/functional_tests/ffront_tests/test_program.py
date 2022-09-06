@@ -176,6 +176,36 @@ def test_tuple_program_return_constructed_inside(fieldview_backend):
     assert np.allclose(b, out_b)
 
 
+def test_tuple_program_return_constructed_inside_with_slicing(fieldview_backend):
+    size = 10
+    a = np_as_located_field(IDim)(np.ones((size,)))
+    b = np_as_located_field(IDim)(2 * np.ones((size,)))
+    out_a = np_as_located_field(IDim)(np.zeros((size,)))
+    out_b = np_as_located_field(IDim)(np.zeros((size,)))
+
+    @field_operator
+    def pack_tuple(
+        a: Field[[IDim], float64], b: Field[[IDim], float64]
+    ) -> tuple[Field[[IDim], float64], Field[[IDim], float64]]:
+        return (a, b)
+
+    @program(backend=fieldview_backend)
+    def prog(
+        a: Field[[IDim], float64],
+        b: Field[[IDim], float64],
+        out_a: Field[[IDim], float64],
+        out_b: Field[[IDim], float64],
+    ):
+        pack_tuple(a, b, out=(out_a[1:], out_b[1:]))
+
+    prog(a, b, out_a, out_b, offset_provider={})
+
+    assert np.allclose(a[1:], out_a[1:])
+    assert out_a[0] == 0.0
+    assert np.allclose(b[1:], out_b[1:])
+    assert out_b[0] == 0.0
+
+
 def test_tuple_program_return_constructed_inside_nested(fieldview_backend):
     size = 10
     a = np_as_located_field(IDim)(np.ones((size,)))
