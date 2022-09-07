@@ -409,9 +409,7 @@ def promote_to_mask_type(
     >>> promote_to_mask_type(ct.FieldType(dims=[I], dtype=bool_type), ct.FieldType(dims=[I,J], dtype=dtype))
     FieldType(dims=[Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)], dtype=ScalarType(kind=<ScalarKind.FLOAT64: 1064>, shape=None))
     """
-    return_dtype = input_type
-    if isinstance(input_type, ct.FieldType):
-        return_dtype = input_type.dtype
+    return_dtype = input_type.dtype if isinstance(input_type, ct.FieldType) else input_type
     return_type = promote(input_type, ct.FieldType(dims=mask_type.dims, dtype=return_dtype))
     return return_type
 
