@@ -390,7 +390,7 @@ def promote_to_mask_type(
 ) -> ct.FieldType:
     """
 
-    Promote the mask type with the input type.
+    Promote a mask type and input type to a common type.
 
     The input type being the result of promoting the left and right types in a conditional clause.
 
