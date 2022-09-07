@@ -871,7 +871,7 @@ def test_ternary_operator_tuple():
 
     ternary_field(a, b, left, right, out_1, out_2, offset_provider={})
 
-    e, f = (np.asarray(a), np.asarray(b)) if 2 < 3 else (np.asarray(b), np.asarray(a))
+    e, f = (np.asarray(a), np.asarray(b)) if left < right else (np.asarray(b), np.asarray(a))
     np.allclose(e, out_1)
     np.allclose(f, out_2)
 
