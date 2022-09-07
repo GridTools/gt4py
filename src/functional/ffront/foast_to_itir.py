@@ -331,7 +331,7 @@ class FieldOperatorLowering(NodeTranslator):
 
         return self._lift_if_field(node)(
             im.call_("if_")(
-                to_value(node.condition)(lowered_node_cond),
+                lowered_node_cond,
                 to_value(node.true_expr)(lowered_true_expr),
                 to_value(node.false_expr)(lowered_false_expr),
             )
