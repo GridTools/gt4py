@@ -392,7 +392,7 @@ def promote_to_mask_type(
 
     Promote a mask type and input type to a common type.
 
-    The input type being the result of promoting the left and right types in a conditional clause.
+    The input type should be the promoted type of the true and false branches in a conditional clause.
 
     If the input type is a scalar, the return type takes the dimensions of the mask_type, while retaining the dtype of
     the input type. The behavior is similar when the input type is a field type with fewer dimensions than the mask_type.
