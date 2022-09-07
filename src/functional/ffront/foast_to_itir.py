@@ -326,6 +326,7 @@ class FieldOperatorLowering(NodeTranslator):
         lowered_false_expr = self.visit(node.false_expr, **kwargs)
 
         # Needed in case of sparse or shifted fields
+        # TODO(tehrengruber): if_ should only accept values in second and third argument, but here they are iterators
         if isinstance(node.type, ct.FieldType) and is_local_kind(node.type):
             return im.call_("if_")(lowered_node_cond, lowered_true_expr, lowered_false_expr)
 

@@ -834,10 +834,10 @@ def test_ternary_operator():
 
     @field_operator
     def ternary_field_op_scalars(left: float, right: float) -> Field[[IDim], float]:
-        return broadcast(3.0, (IDim,)) if left < right else broadcast(4.0, (IDim,))
+        return broadcast(3.0, (IDim,)) if left > right else broadcast(4.0, (IDim,))
 
     ternary_field_op_scalars(left, right, out=out, offset_provider={})
-    e = np.full(e.shape, 3.0) if left < right else e
+    e = np.full(e.shape, 3.0) if left > right else e
     np.allclose(e, out)
 
 
@@ -910,9 +910,10 @@ def test_ternary_scan():
     KDim = Dimension("K", kind=DimensionKind.VERTICAL)
     size = 10
     init = 0.0
-    a = np_as_located_field(KDim)(4*np.ones((size,)))
+    a_float = 4
+    a = np_as_located_field(KDim)(a_float * np.ones((size,)))
     out = np_as_located_field(KDim)(np.zeros((size,)))
-    expected = np.full(size, 2.0)
+    expected = np.asarray([i if i <= a_float else a_float + 1 for i in range(1, size + 1)])
 
     @scan_operator(axis=KDim, forward=True, init=init)
     def simple_scan_operator(carry: float, a: float) -> float:
