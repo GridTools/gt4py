@@ -829,7 +829,7 @@ def test_ternary_operator():
         return a if left < right else b
 
     ternary_field_op(a, b, left, right, out=out, offset_provider={})
-    e = np.asarray(a) + np.asarray(b) if left < right else np.asarray(b)
+    e = np.asarray(a) if left < right else np.asarray(b)
     np.allclose(e, out)
 
     @field_operator
