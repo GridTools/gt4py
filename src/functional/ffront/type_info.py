@@ -385,34 +385,6 @@ def promote_dims(
     return topologically_sorted_list
 
 
-def promote_to_mask_type(
-    mask_type: ct.FieldType, input_type: ct.FieldType | ct.ScalarType
-) -> ct.FieldType:
-    """
-
-    Promote a mask type and input type to a common type.
-
-    The input type should be the promoted type of the true and false branches in a conditional clause.
-
-    If the input type is a scalar, the return type takes the dimensions of the mask_type, while retaining the dtype of
-    the input type. The behavior is similar when the input type is a field type with fewer dimensions than the mask_type.
-    In all other cases, the return type takes the dimensions and dtype of the input type.
-
-
-    >>> I, J = (Dimension(value=dim) for dim in ["I", "J"])
-    >>> bool_type = ct.ScalarType(kind=ct.ScalarKind.BOOL)
-    >>> dtype = ct.ScalarType(kind=ct.ScalarKind.FLOAT64)
-    >>> promote_to_mask_type(ct.FieldType(dims=[I, J], dtype=bool_type), ct.ScalarType(kind=dtype))
-    FieldType(dims=[Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)], dtype=ScalarType(kind=ScalarType(kind=<ScalarKind.FLOAT64: 1064>, shape=None), shape=None))
-    >>> promote_to_mask_type(ct.FieldType(dims=[I, J], dtype=bool_type), ct.FieldType(dims=[I], dtype=dtype))
-    FieldType(dims=[Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)], dtype=ScalarType(kind=<ScalarKind.FLOAT64: 1064>, shape=None))
-    >>> promote_to_mask_type(ct.FieldType(dims=[I], dtype=bool_type), ct.FieldType(dims=[I,J], dtype=dtype))
-    FieldType(dims=[Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)], dtype=ScalarType(kind=<ScalarKind.FLOAT64: 1064>, shape=None))
-    """
-    return_dtype = input_type.dtype if isinstance(input_type, ct.FieldType) else input_type
-    return promote(input_type, ct.FieldType(dims=mask_type.dims, dtype=return_dtype))
-
-
 @functools.singledispatch
 def return_type(
     callable_type: ct.CallableType,

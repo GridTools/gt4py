@@ -498,8 +498,8 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
 
     def _visit_where(self, node: foast.Call, **kwargs) -> foast.Call:
         mask_type = cast(ct.FieldType, node.args[0].type)
-        left_type = cast(ct.FieldType, node.args[1].type)
-        right_type = cast(ct.FieldType, node.args[2].type)
+        true_branch_type = cast(ct.FieldType, node.args[1].type)
+        false_branch_type = cast(ct.FieldType, node.args[2].type)
         if not type_info.is_logical(mask_type):
             raise FieldOperatorTypeDeductionError.from_foast_node(
                 node,
@@ -508,31 +508,31 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             )
 
         try:
-            if isinstance(left_type, ct.TupleType) and isinstance(right_type, ct.TupleType):
-                list_type_left = [
+            if isinstance(true_branch_type, ct.TupleType) and isinstance(
+                false_branch_type, ct.TupleType
+            ):
+                list_types_true = [
                     element.type for element in self.visit(node.args[1].elts, **kwargs)
                 ]
-                list_type_right = [
+                list_types_false = [
                     element.type for element in self.visit(node.args[2].elts, **kwargs)
                 ]
                 return_type_ls = []
-                for type_left, type_right in zip(list_type_left, list_type_right):
+                for type_left, type_right in zip(list_types_true, list_types_false):
                     return_type = type_info.promote(type_left, type_right)
                     if (
                         isinstance(return_type, ct.ScalarType)
                         or not all(return_type.dims) in mask_type.dims
                     ):
-                        return_type_ls.append(
-                            type_info.promote_to_mask_type(mask_type, return_type)
-                        )
+                        return_type_ls.append(self._promote_to_mask_type(mask_type, return_type))
                 return_type = ct.TupleType(types=return_type_ls)
             else:
-                return_type = type_info.promote(left_type, right_type)
+                return_type = type_info.promote(true_branch_type, false_branch_type)
                 if (
                     isinstance(return_type, ct.ScalarType)
                     or not all(return_type.dims) in mask_type.dims
                 ):
-                    return_type = type_info.promote_to_mask_type(mask_type, return_type)
+                    return_type = self._promote_to_mask_type(mask_type, return_type)
 
         except GTTypeError as ex:
             raise FieldOperatorTypeDeductionError.from_foast_node(
@@ -547,6 +547,13 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             type=return_type,
             location=node.location,
         )
+
+    def _promote_to_mask_type(
+        self, mask_type: ct.FieldType, input_type: ct.FieldType | ct.ScalarType
+    ) -> ct.FieldType:
+
+        return_dtype = input_type.dtype if isinstance(input_type, ct.FieldType) else input_type
+        return type_info.promote(input_type, ct.FieldType(dims=mask_type.dims, dtype=return_dtype))
 
     def _visit_broadcast(self, node: foast.Call, **kwargs) -> foast.Call:
         arg_type = cast(ct.FieldType | ct.ScalarType, node.args[0].type)
