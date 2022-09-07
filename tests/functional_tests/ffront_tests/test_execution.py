@@ -909,8 +909,8 @@ def test_ternary_builtin_neighbor_sum(reduction_setup):
 def test_ternary_scan():
     KDim = Dimension("K", kind=DimensionKind.VERTICAL)
     size = 10
-    init = 1.0
-    a = np_as_located_field(KDim)(np.ones((size,)))
+    init = 0.0
+    a = np_as_located_field(KDim)(4*np.ones((size,)))
     out = np_as_located_field(KDim)(np.zeros((size,)))
     expected = np.full(size, 2.0)
 
