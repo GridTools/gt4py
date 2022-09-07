@@ -842,7 +842,6 @@ def test_ternary_operator():
 
 
 def test_ternary_operator_tuple():
-
     size = 10
     a = np_as_located_field(IDim)(np.ones((size,)))
     b = np_as_located_field(IDim)(2 * np.ones((size,)))
