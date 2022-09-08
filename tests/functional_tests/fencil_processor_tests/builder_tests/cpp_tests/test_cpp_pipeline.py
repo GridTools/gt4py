@@ -13,7 +13,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 
-import functools
 import math
 
 import jinja2
@@ -21,8 +20,8 @@ import numpy as np
 import pytest
 
 from functional.fencil_processors import pipeline
-from functional.fencil_processors.builders import cache
-from functional.fencil_processors.builders.cpp import bindings, build, cmake, compiledb
+from functional.fencil_processors.builders import cache, otf_compiler
+from functional.fencil_processors.builders.cpp import bindings, cmake, compiledb
 from functional.fencil_processors.source_modules import cpp_gen, source_modules
 
 
@@ -69,10 +68,8 @@ def source_module_example():
 def test_gtfn_cpp_with_cmake(source_module_example):
     workflow = pipeline.OTFWorkflow(
         bindings.source_module_to_otf_module,
-        functools.partial(
-            build.otf_module_to_compiled_fencil,
-            otf_builder_generator=cmake.cmake_builder_generator(),
-            cache_strategy=cache.Strategy.SESSION,
+        otf_compiler.OnTheFlyCompiler(
+            cache_strategy=cache.Strategy.SESSION, builder_factory=cmake.make_cmake_factory()
         ),
     )
     otf_fencil = workflow(source_module_example)
@@ -85,10 +82,9 @@ def test_gtfn_cpp_with_cmake(source_module_example):
 def test_gtfn_cpp_with_compiledb(source_module_example):
     workflow = pipeline.OTFWorkflow(
         bindings.source_module_to_otf_module,
-        functools.partial(
-            build.otf_module_to_compiled_fencil,
-            otf_builder_generator=compiledb.compiledb_builder_generator(),
+        otf_compiler.OnTheFlyCompiler(
             cache_strategy=cache.Strategy.SESSION,
+            builder_factory=compiledb.make_compiledb_factory(),
         ),
     )
     otf_fencil = workflow(source_module_example)

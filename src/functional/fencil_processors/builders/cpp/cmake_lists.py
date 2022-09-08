@@ -3,7 +3,7 @@ from typing import Sequence
 
 import eve
 from eve.codegen import JinjaTemplate as as_jinja
-from functional.fencil_processors.builders.cpp import build
+from functional.fencil_processors.builders.cpp import common
 from functional.fencil_processors.source_modules import source_modules
 
 
@@ -105,6 +105,6 @@ def generate_cmakelists_source(
         find_deps=[FindDependency(name=d.name, version=d.version) for d in dependencies],
         link_deps=[LinkDependency(name=d.name, target=project_name) for d in dependencies],
         source_names=source_names,
-        bin_output_suffix=build.python_module_suffix(),
+        bin_output_suffix=common.python_module_suffix(),
     )
     return CMakeListsGenerator.apply(cmakelists_file)

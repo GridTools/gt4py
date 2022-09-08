@@ -6,12 +6,16 @@ from typing import Optional
 
 from functional.fencil_processors import pipeline
 from functional.fencil_processors.builders import build_data, cache
-from functional.fencil_processors.builders.cpp import build, cmake, cmake_lists
+from functional.fencil_processors.builders.cpp import cmake, cmake_lists
 from functional.fencil_processors.source_modules import source_modules
 
 
-@dataclasses.dataclass
-class CompiledbOTFBuilder(pipeline.OTFBuilder):
+@dataclasses.dataclass()
+class Compiledb(
+    pipeline.OTFBuilder[
+        source_modules.Cpp, source_modules.LanguageWithHeaderFilesSettings, source_modules.Python
+    ]
+):
     root_path: pathlib.Path
     source_files: dict[str, str]
     fencil_name: str
@@ -85,19 +89,19 @@ class CompiledbOTFBuilder(pipeline.OTFBuilder):
         )
 
 
-def compiledb_builder_generator(
+def make_compiledb_factory(
     cmake_build_type: str = "Debug",
     cmake_extra_flags: Optional[list[str]] = None,
     renew_compiledb: bool = False,
 ) -> pipeline.OTFBuilderGenerator:
-    def generate_compiledb_builder(
+    def compiledb_factory(
         otf_module: source_modules.OTFSourceModule[
             source_modules.Cpp,
             source_modules.LanguageWithHeaderFilesSettings,
             source_modules.Python,
         ],
         cache_strategy: cache.Strategy,
-    ) -> CompiledbOTFBuilder:
+    ) -> Compiledb:
         name = otf_module.source_module.entry_point.name
         header_name = f"{name}.{otf_module.source_module.language_settings.header_extension}"
         bindings_name = (
@@ -120,8 +124,8 @@ def compiledb_builder_generator(
                 cache_strategy=cache_strategy,
             )
 
-        return CompiledbOTFBuilder(
-            root_path=build.otf_path_from_otf_module(otf_module, cache_strategy),
+        return Compiledb(
+            root_path=cache.get_cache_folder(otf_module, cache_strategy),
             fencil_name=name,
             source_files={
                 header_name: otf_module.source_module.source_code,
@@ -131,7 +135,7 @@ def compiledb_builder_generator(
             compile_commands_cache=compiledb_template,
         )
 
-    return generate_compiledb_builder
+    return compiledb_factory
 
 
 def _cc_cache_name(
@@ -166,7 +170,9 @@ def _cc_cache_module(
 def _cc_get_compiledb(
     source_module: source_modules.SourceModule, cache_strategy: cache.Strategy
 ) -> Optional[pathlib.Path]:
-    cache_path = cache.get_cache_folder(source_module, cache_strategy)
+    cache_path = cache.get_cache_folder(
+        source_modules.OTFSourceModule(source_module, None), cache_strategy
+    )
     compile_db_path = cache_path / "compile_commands.json"
     if compile_db_path.exists():
         return compile_db_path
@@ -180,9 +186,11 @@ def _cc_generate_compiledb(
     cache_strategy: cache.Strategy,
 ) -> pathlib.Path:
     name = source_module.entry_point.name
-    cache_path = cache.get_cache_folder(source_module, cache_strategy)
+    cache_path = cache.get_cache_folder(
+        source_modules.OTFSourceModule(source_module, None), cache_strategy
+    )
 
-    otf_builder = cmake.CMakeOTFBuilder(
+    otf_builder = cmake.CMake(
         generator_name="Ninja",
         build_type=build_type,
         extra_cmake_flags=cmake_flags,

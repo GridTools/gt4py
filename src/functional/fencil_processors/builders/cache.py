@@ -66,13 +66,16 @@ def _cache_folder_name(module: source_modules.SourceModule) -> str:
     return module.entry_point.name + "_" + fingerprint_hex_str
 
 
-def get_cache_folder(module: source_modules.SourceModule, strategy: Strategy) -> pathlib.Path:
+def get_cache_folder(
+    module: source_modules.source_modules.OTFSourceModule, strategy: Strategy
+) -> pathlib.Path:
     """
     Construct the path to where the build system project artifact of a source module should be cached.
 
     The returned path points to an existing folder in all cases.
     """
-    folder_name = _cache_folder_name(module)
+    # @todo [2]: make depend on bindings module too or add alternative that depends on bindings
+    folder_name = _cache_folder_name(module.source_module)
 
     match strategy:
         case Strategy.SESSION:

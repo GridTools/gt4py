@@ -19,8 +19,8 @@ from typing import Any, Callable, Final, Optional
 import numpy as np
 
 from functional.fencil_processors import pipeline, processor_interface as fpi
-from functional.fencil_processors.builders import cache
-from functional.fencil_processors.builders.cpp import bindings, build, compiledb
+from functional.fencil_processors.builders import cache, otf_compiler
+from functional.fencil_processors.builders.cpp import bindings, compiledb
 from functional.fencil_processors.codegens.gtfn import gtfn_module
 from functional.fencil_processors.source_modules import cpp_gen, source_modules
 from functional.iterator import ir as itir
@@ -37,7 +37,7 @@ def convert_arg(arg: Any) -> Any:
 @dataclasses.dataclass(frozen=True)
 class GTFNExecutor(fpi.FencilExecutor):
     language_settings: source_modules.LanguageWithHeaderFilesSettings = cpp_gen.CPP_DEFAULT
-    otf_builder_generator: pipeline.OTFBuilderGenerator = compiledb.compiledb_builder_generator()
+    builder_factory: pipeline.OTFBuilderGenerator = compiledb.make_compiledb_factory()
 
     name: Optional[str] = None
 
@@ -58,9 +58,9 @@ class GTFNExecutor(fpi.FencilExecutor):
 
             return decorated_fencil
 
-        def itir_to_src(inp: pipeline.OTFFencil) -> source_modules.SourceModule:
+        def itir_to_src(inp: pipeline.OTFClosure) -> source_modules.SourceModule:
             return gtfn_module.GTFNSourceModuleGenerator(self.language_settings)(
-                inp.fencil, *inp.args, **inp.kwargs
+                inp.entry_point, *inp.args, **inp.kwargs
             )
 
         def src_to_otf(inp: source_modules.SourceModule) -> source_modules.OTFSourceModule:
@@ -68,24 +68,21 @@ class GTFNExecutor(fpi.FencilExecutor):
                 source_module=inp, bindings_module=bindings.create_bindings(inp)
             )
 
-        def otf_to_impl(inp: source_modules.OTFSourceModule) -> Callable:
-            return build.otf_module_to_compiled_fencil(
-                otf_module=inp,
-                otf_builder_generator=self.otf_builder_generator,
-                cache_strategy=cache.Strategy.SESSION,
-            )
-
-        otf_workflow: Final[pipeline.OTFWorkflow[pipeline.OTFFencil, Callable]] = (
+        otf_workflow: Final[pipeline.OTFWorkflow[pipeline.OTFClosure, Callable]] = (
             pipeline.OTFWorkflow(itir_to_src, src_to_otf)
-            .add_step(otf_to_impl)
+            .add_step(
+                otf_compiler.OnTheFlyCompiler(
+                    cache_strategy=cache.Strategy.SESSION, builder_factory=self.builder_factory
+                )
+            )
             .add_step(convert_args)
         )
 
-        otf_fencil = pipeline.OTFFencil(fencil, args, kwargs)
+        otf_closure = pipeline.OTFClosure(fencil, args, kwargs)
 
-        compiled_fencil = otf_workflow(otf_fencil)
+        compiled_runner = otf_workflow(otf_closure)
 
-        compiled_fencil(*args)
+        compiled_runner(*args)
 
     @property
     def __name__(self) -> str:

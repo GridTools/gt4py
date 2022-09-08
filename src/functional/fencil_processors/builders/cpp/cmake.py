@@ -5,30 +5,30 @@ from typing import Optional
 
 from functional.fencil_processors import pipeline
 from functional.fencil_processors.builders import build_data, cache
-from functional.fencil_processors.builders.cpp import build, cmake_lists
+from functional.fencil_processors.builders.cpp import cmake_lists, common
 from functional.fencil_processors.source_modules import source_modules
 
 
-def cmake_builder_generator(
+def make_cmake_factory(
     cmake_generator_name: str = "Ninja",
     cmake_build_type: str = "Debug",
     cmake_extra_flags: Optional[list[str]] = None,
 ) -> pipeline.OTFBuilderGenerator:
-    def generate_cmake_builder(
+    def cmake_factory(
         otf_module: source_modules.OTFSourceModule[
             source_modules.Cpp,
             source_modules.LanguageWithHeaderFilesSettings,
             source_modules.Python,
         ],
         cache_strategy: cache.Strategy,
-    ) -> pipeline.OTFBuilder:
+    ) -> CMake:
         name = otf_module.source_module.entry_point.name
         header_name = f"{name}.{otf_module.source_module.language_settings.header_extension}"
         bindings_name = (
             f"{name}_bindings.{otf_module.source_module.language_settings.file_extension}"
         )
-        return CMakeOTFBuilder(
-            root_path=build.otf_path_from_otf_module(otf_module, cache_strategy),
+        return CMake(
+            root_path=cache.get_cache_folder(otf_module, cache_strategy),
             source_files={
                 header_name: otf_module.source_module.source_code,
                 bindings_name: otf_module.bindings_module.source_code,
@@ -44,11 +44,15 @@ def cmake_builder_generator(
             extra_cmake_flags=cmake_extra_flags or [],
         )
 
-    return generate_cmake_builder
+    return cmake_factory
 
 
 @dataclasses.dataclass
-class CMakeOTFBuilder(pipeline.OTFBuilder):
+class CMake(
+    pipeline.OTFBuilder[
+        source_modules.Cpp, source_modules.LanguageWithHeaderFilesSettings, source_modules.Python
+    ]
+):
     root_path: pathlib.Path
     source_files: dict[str, str]
     fencil_name: str
@@ -68,7 +72,9 @@ class CMakeOTFBuilder(pipeline.OTFBuilder):
         build_data.write_data(
             build_data.OTFBuildData(
                 status=build_data.OTFBuildStatus.STARTED,
-                module=pathlib.Path(f"build/bin/{self.fencil_name}.{build.python_module_suffix()}"),
+                module=pathlib.Path(
+                    f"build/bin/{self.fencil_name}.{common.python_module_suffix()}"
+                ),
                 entry_point_name=self.fencil_name,
             ),
             self.root_path,

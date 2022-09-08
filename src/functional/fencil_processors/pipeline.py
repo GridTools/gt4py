@@ -34,8 +34,8 @@ IntermediateT = TypeVar("IntermediateT")
 
 
 @dataclasses.dataclass
-class OTFFencil:
-    fencil: itir.FencilDefinition
+class OTFClosure:
+    entry_point: itir.FencilDefinition
     args: list[Any]
     kwargs: dict[str, Any]
 
