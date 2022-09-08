@@ -511,12 +511,14 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             if isinstance(true_branch_type, ct.TupleType) and isinstance(
                 false_branch_type, ct.TupleType
             ):
-                node_type_ls = self.visit(node.args[1].type.types, **kwargs)
+                arg_types_1 = self.visit(node.args[1].type.types, **kwargs)
+                arg_types_2 = self.visit(node.args[2].type.types, **kwargs)
+                node_type_ls = arg_types_1 + arg_types_2
                 promoted_field_tuple = self._extract_promoted_tuple_type(
                     node_type_ls, mask_type, None
                 )
                 return_type = ct.TupleType(
-                    types=self._construct_tuple_type(node_type_ls, promoted_field_tuple, True)
+                    types=self._construct_tuple_type(arg_types_1, promoted_field_tuple, True)
                 )
             else:
                 return_type = type_info.promote(true_branch_type, false_branch_type)
