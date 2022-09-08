@@ -55,7 +55,9 @@ class OnTheFlyCompiler(Generic[SL, ST]):
                 "On-the-fly compilation unsuccessful for {inp.source_module.entry_point.name}!"
             )
 
-        return getattr(importer.import_from_path(src_dir / data.module), data.entry_point_name)
+        return getattr(
+            importer.import_from_path(src_dir / new_data.module), new_data.entry_point_name
+        )
 
 
 class CompilerError(Exception):

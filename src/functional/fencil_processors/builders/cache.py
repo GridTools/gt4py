@@ -74,7 +74,7 @@ def get_cache_folder(
 
     The returned path points to an existing folder in all cases.
     """
-    # @todo [2]: make depend on bindings module too or add alternative that depends on bindings
+    # @todo [2]: make dependent on bindings module too or add alternative that depends on bindings
     folder_name = _cache_folder_name(module.source_module)
 
     match strategy:

@@ -33,10 +33,10 @@ NewEndT = TypeVar("NewEndT")
 IntermediateT = TypeVar("IntermediateT")
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(frozen=True)
 class OTFClosure:
     entry_point: itir.FencilDefinition
-    args: list[Any]
+    args: tuple[Any, ...]
     kwargs: dict[str, Any]
 
 
@@ -45,7 +45,18 @@ class OTFStep(Protocol[StartT_contra, EndT_co]):
         ...
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(frozen=True)
+class OTFWorkflowStep(Generic[StartT, EndT]):
+    step: OTFStep[StartT, EndT]
+
+    def __call__(self, inp: StartT) -> EndT:
+        return self.step(inp)
+
+    def add_step(self, step: OTFStep[EndT, NewEndT]) -> OTFWorkflow[StartT, EndT, NewEndT]:
+        return OTFWorkflow(first=self.step, second=step)
+
+
+@dataclasses.dataclass(frozen=True)
 class OTFWorkflow(Generic[StartT, IntermediateT, EndT]):
     first: OTFStep[StartT, IntermediateT]
     second: OTFStep[IntermediateT, EndT]

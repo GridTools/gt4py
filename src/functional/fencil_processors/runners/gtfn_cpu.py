@@ -52,9 +52,9 @@ class GTFNExecutor(fpi.FencilExecutor):
         See ``FencilExecutorFunction`` for details.
         """
 
-        def convert_args(fencil: Callable) -> Callable:
+        def convert_args(inp: Callable) -> Callable:
             def decorated_fencil(*args):
-                return fencil(*[convert_arg(arg) for arg in args])
+                return inp(*[convert_arg(arg) for arg in args])
 
             return decorated_fencil
 
@@ -68,8 +68,9 @@ class GTFNExecutor(fpi.FencilExecutor):
                 source_module=inp, bindings_module=bindings.create_bindings(inp)
             )
 
-        otf_workflow: Final[pipeline.OTFWorkflow[pipeline.OTFClosure, Callable]] = (
-            pipeline.OTFWorkflow(itir_to_src, src_to_otf)
+        otf_workflow: Final[pipeline.OTFWorkflow[pipeline.OTFClosure, Any, Callable]] = (
+            pipeline.OTFWorkflowStep(itir_to_src)
+            .add_step(src_to_otf)
             .add_step(
                 otf_compiler.OnTheFlyCompiler(
                     cache_strategy=cache.Strategy.SESSION, builder_factory=self.builder_factory
