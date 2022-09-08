@@ -511,26 +511,17 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             if isinstance(true_branch_type, ct.TupleType) and isinstance(
                 false_branch_type, ct.TupleType
             ):
-                list_types_true = [
-                    element.type for element in self.visit(node.args[1].elts, **kwargs)
-                ]
-                list_types_false = [
-                    element.type for element in self.visit(node.args[2].elts, **kwargs)
-                ]
-                return_type_ls = []
-                for type_left, type_right in zip(list_types_true, list_types_false):
-                    return_type = type_info.promote(type_left, type_right)
-                    if (
-                        isinstance(return_type, ct.ScalarType)
-                        or not all(return_type.dims) in mask_type.dims
-                    ):
-                        return_type_ls.append(self._promote_to_mask_type(mask_type, return_type))
-                return_type = ct.TupleType(types=return_type_ls)
+                node_type_ls = self.visit(node.args[1].type.types, **kwargs)
+                promoted_field_tuple = self._extract_promoted_tuple_type(
+                    node_type_ls, mask_type, None
+                )
+                return_type = ct.TupleType(
+                    types=self._construct_tuple_type(node_type_ls, promoted_field_tuple, True)
+                )
             else:
                 return_type = type_info.promote(true_branch_type, false_branch_type)
-                if (
-                    isinstance(return_type, ct.ScalarType)
-                    or not all(return_type.dims) in mask_type.dims
+                if isinstance(return_type, ct.ScalarType) or not all(
+                    item in return_type.dims for item in mask_type.dims
                 ):
                     return_type = self._promote_to_mask_type(mask_type, return_type)
 
@@ -547,6 +538,39 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             type=return_type,
             location=node.location,
         )
+
+    def _extract_promoted_tuple_type(
+        self,
+        node_type_ls: list,
+        mask_type: ct.FieldType,
+        return_type: None | ct.FieldType | ct.ScalarType,
+    ) -> ct.FieldType:
+        for element in node_type_ls:
+            if isinstance(element, ct.TupleType):
+                return self._extract_promoted_tuple_type(element.types, mask_type, return_type)
+            else:
+                if return_type is None:
+                    return_type = element
+                else:
+                    return_type = type_info.promote(return_type, element)
+                    if isinstance(return_type, ct.ScalarType) or not all(
+                        item in return_type.dims for item in mask_type.dims
+                    ):
+                        return_type = self._promote_to_mask_type(mask_type, return_type)
+        return return_type
+
+    def _construct_tuple_type(
+        self,
+        node_type_ls: list,
+        promoted_field_tuple: ct.FieldType | ct.TupleType,
+        single_tuple: bool,
+    ) -> ct.TupleType:
+        for i, element in enumerate(node_type_ls):
+            if not isinstance(element, ct.TupleType):
+                node_type_ls[i] = promoted_field_tuple
+            else:
+                self._construct_tuple_type(element.types, promoted_field_tuple, single_tuple)
+        return node_type_ls
 
     def _promote_to_mask_type(
         self, mask_type: ct.FieldType, input_type: ct.FieldType | ct.ScalarType

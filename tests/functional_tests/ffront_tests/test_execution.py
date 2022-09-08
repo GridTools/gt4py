@@ -751,7 +751,7 @@ def test_conditional_tuple_2():
     assert np.allclose(np.where(mask, (a, b), (np.full(size, 2.0), np.full(size, 7.0))), (c, d))
 
 
-def test_conditional_tuple_2():
+def test_conditional_nested_tuple():
     size = 10
     mask = np_as_located_field(IDim)(np.zeros((size,), dtype=bool))
     mask.array()[0 : (size // 2)] = True
@@ -761,26 +761,34 @@ def test_conditional_tuple_2():
     d = np_as_located_field(IDim)(np.zeros((size,)))
 
     @field_operator
-    def conditional_tuple_2_field_op(
-        a: Field[[IDim], float64], b: Field[[IDim], float64]
+    def conditional_tuple_3_field_op(
+        mask: Field[[IDim], bool], a: Field[[IDim], float64], b: Field[[IDim], float64]
     ) -> tuple[
         tuple[Field[[IDim], float64], Field[[IDim], float64]],
         tuple[Field[[IDim], float64], Field[[IDim], float64]],
     ]:
-        return ((a, b), (b, a))
+        return where(mask, ((a, b), (b, a)), ((5.0, 7.0), (7.0, 5.0)))
 
     @program
-    def conditional_tuple_2_p(
+    def conditional_tuple_3_p(
+        mask: Field[[IDim], bool],
         a: Field[[IDim], float64],
         b: Field[[IDim], float64],
         c: Field[[IDim], float64],
         d: Field[[IDim], float64],
     ):
-        conditional_tuple_2_field_op(a, b, out=((c, d), (d, c)))
+        conditional_tuple_3_field_op(mask, a, b, out=((c, d), (d, c)))
 
-    conditional_tuple_2_p(a, b, c, d, offset_provider={})
+    conditional_tuple_3_p(mask, a, b, c, d, offset_provider={})
 
-    # assert np.allclose(np.where(mask, (a, b), (np.full(size, 2.0), np.full(size, 7.0))), (c, d))
+    assert np.allclose(
+        np.where(
+            mask,
+            ((a, b), (b, a)),
+            ((np.full(size, 5.0), np.full(size, 7.0)), (np.full(size, 7.0), np.full(size, 5.0))),
+        ),
+        ((c, d), (d, c)),
+    )
 
 
 def test_nested_tuple_return():
