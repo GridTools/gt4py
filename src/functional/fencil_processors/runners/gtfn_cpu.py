@@ -68,6 +68,7 @@ class GTFNExecutor(fpi.FencilExecutor):
                 source_module=inp, bindings_module=bindings.create_bindings(inp)
             )
 
+        # @todo add caching step
         otf_workflow: Final[pipeline.OTFWorkflow[pipeline.OTFClosure, Any, Callable]] = (
             pipeline.OTFWorkflowStep(itir_to_src)
             .add_step(src_to_otf)
