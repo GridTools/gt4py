@@ -733,22 +733,8 @@ def test_conditional_tuple_2():
     @field_operator
     def conditional_tuple_2_field_op(
         mask: Field[[IDim], bool], a: Field[[IDim], float64], b: Field[[IDim], float64]
-    ) -> tuple[Field[[IDim], float64], Field[[IDim], float64]]:
-        return where(mask, (a, b), (2.0, 7.0))
-
-    @program
-    def conditional_tuple_2_p(
-        mask: Field[[IDim], bool],
-        a: Field[[IDim], float64],
-        b: Field[[IDim], float64],
-        c: Field[[IDim], float64],
-        d: Field[[IDim], float64],
-    ):
-        conditional_tuple_2_field_op(mask, a, b, out=(c, d))
-
-    conditional_tuple_2_p(mask, a, b, c, d, offset_provider={})
-
-    assert np.allclose(np.where(mask, (a, b), (np.full(size, 2.0), np.full(size, 7.0))), (c, d))
+    ) -> tuple[tuple[Field[[IDim], float64], Field[[IDim], float64]], Field[[IDim], float64]]:
+        return where(mask, ((3.0, 6.0), a), ((2.0, 7.0), b))
 
 
 def test_conditional_nested_tuple():

@@ -46,6 +46,49 @@ def boolified_type(symbol_type: ct.SymbolType) -> ct.ScalarType | ct.FieldType:
     raise GTTypeError(f"Can not boolify type {symbol_type}!")
 
 
+def extract_promoted_tuple_type(
+    node_type_ls: list,
+    mask_type: ct.FieldType,
+    promoted_type: None | ct.FieldType | ct.ScalarType,
+) -> ct.FieldType:
+    for element in node_type_ls:
+        if isinstance(element, ct.TupleType):
+            promoted_type = extract_promoted_tuple_type(element.types, mask_type, promoted_type)
+        else:
+            if promoted_type is None:
+                promoted_type = element
+            else:
+                promoted_type = type_info.promote(promoted_type, element)
+                promoted_type = promote_to_mask_type(mask_type, promoted_type)
+    return promoted_type
+
+
+def construct_tuple_type(
+    node_type_ls: list,
+    promoted_field_tuple: ct.FieldType | ct.TupleType,
+) -> ct.TupleType:
+    for i, element in enumerate(node_type_ls):
+        if isinstance(element, ct.TupleType):
+            node_type_ls[i] = ct.TupleType(
+                types=construct_tuple_type(element.types, promoted_field_tuple)
+            )
+        else:
+            node_type_ls[i] = promoted_field_tuple
+    return node_type_ls
+
+
+def promote_to_mask_type(
+    mask_type: ct.FieldType, input_type: ct.FieldType | ct.ScalarType | ct.TupleType
+) -> ct.FieldType:
+    if isinstance(input_type, ct.ScalarType) or not all(
+        item in input_type.dims for item in mask_type.dims
+    ):
+        return_dtype = input_type.dtype if isinstance(input_type, ct.FieldType) else input_type
+        return type_info.promote(input_type, ct.FieldType(dims=mask_type.dims, dtype=return_dtype))
+    else:
+        return input_type
+
+
 class FieldOperatorTypeDeductionCompletnessValidator(NodeVisitor):
     """Validate an FOAST expression is fully typed."""
 
@@ -514,18 +557,13 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                 true_branch_types = self.visit(node.args[1].type.types, **kwargs)
                 false_branch_types = self.visit(node.args[2].type.types, **kwargs)
                 node_type_ls = true_branch_types + false_branch_types
-                promoted_field_tuple = self._extract_promoted_tuple_type(
-                    node_type_ls, mask_type, None
-                )
+                promoted_field_tuple = extract_promoted_tuple_type(node_type_ls, mask_type, None)
                 return_type = ct.TupleType(
-                    types=self._construct_tuple_type(true_branch_types, promoted_field_tuple, True)
+                    types=construct_tuple_type(true_branch_types, promoted_field_tuple)
                 )
             else:
-                return_type = type_info.promote(true_branch_type, false_branch_type)
-                if isinstance(return_type, ct.ScalarType) or not all(
-                    item in return_type.dims for item in mask_type.dims
-                ):
-                    return_type = self._promote_to_mask_type(mask_type, return_type)
+                promoted_type = type_info.promote(true_branch_type, false_branch_type)
+                return_type = promote_to_mask_type(mask_type, promoted_type)
 
         except GTTypeError as ex:
             raise FieldOperatorTypeDeductionError.from_foast_node(
@@ -540,46 +578,6 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             type=return_type,
             location=node.location,
         )
-
-    def _extract_promoted_tuple_type(
-        self,
-        node_type_ls: list,
-        mask_type: ct.FieldType,
-        return_type: None | ct.FieldType | ct.ScalarType,
-    ) -> ct.FieldType:
-        for element in node_type_ls:
-            if isinstance(element, ct.TupleType):
-                return self._extract_promoted_tuple_type(element.types, mask_type, return_type)
-            else:
-                if return_type is None:
-                    return_type = element
-                else:
-                    return_type = type_info.promote(return_type, element)
-                    if isinstance(return_type, ct.ScalarType) or not all(
-                        item in return_type.dims for item in mask_type.dims
-                    ):
-                        return_type = self._promote_to_mask_type(mask_type, return_type)
-        return return_type
-
-    def _construct_tuple_type(
-        self,
-        node_type_ls: list,
-        promoted_field_tuple: ct.FieldType | ct.TupleType,
-        single_tuple: bool,
-    ) -> ct.TupleType:
-        for i, element in enumerate(node_type_ls):
-            if not isinstance(element, ct.TupleType):
-                node_type_ls[i] = promoted_field_tuple
-            else:
-                self._construct_tuple_type(element.types, promoted_field_tuple, single_tuple)
-        return node_type_ls
-
-    def _promote_to_mask_type(
-        self, mask_type: ct.FieldType, input_type: ct.FieldType | ct.ScalarType
-    ) -> ct.FieldType:
-
-        return_dtype = input_type.dtype if isinstance(input_type, ct.FieldType) else input_type
-        return type_info.promote(input_type, ct.FieldType(dims=mask_type.dims, dtype=return_dtype))
 
     def _visit_broadcast(self, node: foast.Call, **kwargs) -> foast.Call:
         arg_type = cast(ct.FieldType | ct.ScalarType, node.args[0].type)
