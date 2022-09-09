@@ -22,6 +22,7 @@ from eve.concepts import SourceLocation
 from eve.extended_typing import Any, ClassVar, Generic, Optional, Type, TypeVar
 from functional import common
 from functional.ffront.ast_passes.fix_missing_locations import FixMissingLocations
+from functional.ffront.ast_passes.remove_docstrings import RemoveDocstrings
 from functional.ffront.source_utils import CapturedVars, SourceDefinition, SymbolNames
 
 
@@ -110,16 +111,16 @@ class DialectParser(ast.NodeVisitor, Generic[DialectRootT]):
 
         source, filename, starting_line = source_definition
         try:
-            raw_ast = ast.parse(textwrap.dedent(source)).body[0]
-            definition_ast = cls._preprocess_definition_ast(
-                ast.increment_lineno(FixMissingLocations.apply(raw_ast), starting_line - 1)
-            )
+            definition_ast = ast.parse(textwrap.dedent(source)).body[0]
+            definition_ast = RemoveDocstrings.apply(definition_ast)
+            definition_ast = FixMissingLocations.apply(definition_ast)
+            definition_ast = ast.increment_lineno(definition_ast, starting_line - 1)
             output_ast = cls._postprocess_dialect_ast(
                 cls(
                     source_definition=source_definition,
                     captured_vars=captured_vars,
                     externals_defs=externals or {},
-                ).visit(definition_ast)
+                ).visit(cls._preprocess_definition_ast(definition_ast))
             )
             if __debug__:
                 _assert_source_invariants(source_definition, captured_vars)

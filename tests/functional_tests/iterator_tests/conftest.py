@@ -2,28 +2,17 @@ from __future__ import annotations
 
 import pytest
 
-import functional.fencil_processors.formatters.gtfn
-from functional.fencil_processors import type_check
-from functional.fencil_processors.formatters import lisp
-from functional.fencil_processors.processor_interface import (
-    FencilExecutor,
-    FencilFormatter,
-    fencil_formatter,
-    is_processor_kind,
-)
+from functional.fencil_processors import processor_interface as fpi, type_check
+from functional.fencil_processors.formatters import gtfn, lisp
 from functional.fencil_processors.runners import double_roundtrip, gtfn_cpu, roundtrip
-from functional.iterator import ir as itir
-from functional.iterator.pretty_parser import pparse
-from functional.iterator.pretty_printer import pformat
-from functional.iterator.runtime import FendefDispatcher
-from functional.iterator.transforms import LiftMode
+from functional.iterator import ir as itir, pretty_parser, pretty_printer, runtime, transforms
 
 
 @pytest.fixture(
     params=[
-        LiftMode.FORCE_INLINE,
-        LiftMode.FORCE_TEMPORARIES,
-        LiftMode.SIMPLE_HEURISTIC,
+        transforms.LiftMode.FORCE_INLINE,
+        transforms.LiftMode.FORCE_TEMPORARIES,
+        transforms.LiftMode.SIMPLE_HEURISTIC,
     ],
     ids=lambda p: f"lift_mode={p.name}",
 )
@@ -31,12 +20,20 @@ def lift_mode(request):
     return request.param
 
 
-@fencil_formatter
+@fpi.fencil_formatter
 def pretty_format_and_check(root: itir.FencilDefinition, *args, **kwargs) -> str:
-    pretty = pformat(root)
-    parsed = pparse(pretty)
+    pretty = pretty_printer.pformat(root)
+    parsed = pretty_parser.pparse(pretty)
     assert parsed == root
     return pretty
+
+
+def get_processor_id(processor):
+    if hasattr(processor, "__module__") and hasattr(processor, "__name__"):
+        module_path = processor.__module__.split(".")[-1]
+        name = processor.__name__
+        return f"{module_path}.{name}"
+    return repr(processor)
 
 
 @pytest.fixture(
@@ -49,9 +46,9 @@ def pretty_format_and_check(root: itir.FencilDefinition, *args, **kwargs) -> str
         (type_check.check, False),
         (double_roundtrip.executor, True),
         (gtfn_cpu.run_gtfn, True),
-        (functional.fencil_processors.formatters.gtfn.format_sourcecode, False),
+        (gtfn.format_sourcecode, False),
     ],
-    ids=lambda p: f"backend={p[0].__module__.split('.')[-1] + '.' + p[0].__name__ if p[0] else p[0]}",
+    ids=lambda p: get_processor_id(p[0]),
 )
 def fencil_processor(request):
     return request.param
@@ -65,14 +62,14 @@ def fencil_processor_no_gtfn_exec(fencil_processor):
 
 
 def run_processor(
-    fencil: FendefDispatcher,
-    processor: FencilExecutor | FencilFormatter,
+    fencil: runtime.FendefDispatcher,
+    processor: fpi.FencilExecutor | fpi.FencilFormatter,
     *args,
     **kwargs,
 ) -> None:
-    if processor is None or is_processor_kind(processor, FencilExecutor):
+    if processor is None or fpi.is_processor_kind(processor, fpi.FencilExecutor):
         fencil(*args, backend=processor, **kwargs)
-    elif is_processor_kind(processor, FencilFormatter):
+    elif fpi.is_processor_kind(processor, fpi.FencilFormatter):
         print(fencil.format_itir(*args, formatter=processor, **kwargs))
     else:
         raise TypeError(f"fencil processor kind not recognized: {processor}!")

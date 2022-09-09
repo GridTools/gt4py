@@ -23,22 +23,28 @@ Writing a new ADR is simple:
 ### Frontend and Parsing #frontend 
 - [0001 - Field View Frontend Design](0001-Field_View_Frontend_Design.md)
 - [0002 - Field View Lowering](0002-Field_View_Lowering.md)
+- [0010 - Domain in Field View](0010-Domain_in_Field_View.md)
 
 ### Iterator IR #iterator
 - [0003 - Iterator View Tuple Support for Fields](0003-Iterator_View_Tuple_Support_for_Fields.md)
 - [0004 - Lifted Stencils with Tuple Return](0004-Lifted_Stencils_with_Tuple_Return.md)
 
 ### Embedded Execution
+_None_
 
 ### Transformations
 _None_
 
 ### Backends and Code Generation
 - [0006 - C++ Backend](0006-Cpp-Backend.md)
+- [0007 - Fencil Processors](0007-Fencil-Processors.md)
+- [0008 - Mapping Domain to Cpp Backend](0008-Mapping_Domain_to_Cpp-Backend.md)
+
+### Python Integration
+- [0009 - Compiled Backend Integration](0009-Compiled-Backend-Integration.md)
 
 ### Miscellanea
 _None_
-
 
 ## Other References
 

@@ -1,9 +1,13 @@
+---
+tags: [backend]
+---
+
 # Integration of compiled backends
 
 - **Status**: valid 
 - **Authors**: Peter Kardos (@petiaccja), Rico Häuselmann (@DropD)
 - **Created**: 2022-07-13
-- **Updated**: 2022-07-13
+- **Updated**: 2022-08-15
 
 Summary of the key design choices made for the live execution of generated C++ (and other compiled) code.
 
@@ -23,6 +27,40 @@ Step 1 is the core responsibility of a compiled backend. For interoperability be
 The desired pipeline architecture for these steps is made easy to achieve by the provided library, on a per-backend level. The clear separation of the steps is not yet enforced, however, and neither is it completely implemented for the `gtfn` backend yet.
 
 For reference, steps 2-4 are currently encoded in `fencil_processors.builders.callable.create_callable`, while examples for step 1 and 5 can be found at `fencil_processors.codegens.gtfn.gtfn_backend.generate` and `fencil_processors.runners.gtfn.run_gtfn` (which also encompasses all the other steps).
+
+## Design
+
+The chosen design is so that there is a clear interface for every step from ITIR to executable python extension, with the ability to proceed only as far as needed.
+
+**Step 1:**
+
+Translate IteratorIR into "backend language", for example C++ using GridTools.
+
+The `FencilSourceModuleGenerator` protocol in `fencil_processors.processor_interface` interface defines the interface for the first step, from IteratorIR to `fencil_processors.source_modules.source_modules.SourceModule`. This step can optionally make use of a `FencilFormatter` (also defined in `processor_interface.py`) to deliver the source code along with information accessible to further steps. 
+
+The output of this step is a `SourceModule` instance, which is safely hashable.
+
+This is the only step required if one is interested only in the backend language translation of the fencil (i.e. for integration into a non-python driven simulation).
+
+**Step 2:**
+
+Generate bindings to call the compiled backend language code from Python (Technically this could be for another language but then the pipeline would not lead to an executable fencil).
+
+The interface for step two is defined in the `fencil_processors.pipeline.BindingsGenerator` protocol. The first example is implemented in `fencil_processors.builders.cpp.bindings.create_bindings`.
+
+The output of this step is a `BindingsModule` instance and also safely hashable.
+
+This would could be usefeul as an endpoint to use the Python bindings as an example for handcrafted bindings to other languages or for distribution of the generated bindings in a self-contained library with it's own build system.
+
+**Step 3a:**
+
+Use an implementation of the `fencil_processors.pipeline.BuildableProjectGenerator` interface to obtain an object that fulfills the `fencil_processors.pipeline.BuildableProject` protocol.
+
+The resulting object may be used to write a self-contained folder that contains all the information to build the bindings.
+
+**Step 3b:**
+
+Use the `fencil_processors.pipeline.BuildableProject.get_fencil_impl` method to obtain a callable that can execute the fencil given the inputs. Depending on the underlying build system of the concrete implementation, this may call additional steps when needed (such as writing to file, configuring, building etc).
 
 ## Python bindings for C++ code
 
@@ -73,16 +111,9 @@ Reasons:
 
 The main goal of this project is to implement the complete pipeline from FieldView to machine code and demonstrate that it's working. To keep the scope of the project reasonable, feature completeness is not targeted.
 
-### Desired Architecture
-
-As stated above, the architectural goal that each step of the compilation process with a potentially useful output should stand alone and be accessible through a unified interface is not quite reached yet. These useful outputs are generated code, a build system project with generated code and (optionally) python bindings code, a python extension module containing the callable fencil (or the callable fencil from it).
-
-The `FencilExecutor` provided by `gtfn` should be refactored to run the necessary steps in a declarative way, so no other logic (which should really be in one of the steps) can be introduced.
-
 ### Build system project
 
 The `fencil_processors.builders.cpp.build.CMakeProject` class design should not be considered final because of the following pitfalls:
-- the state of the project (i.e. is written to file, is configured, is built) cannot be queried explicitly
 - the blocking `configure` and `build` functions may need to be converted to asynchronous operations to support parallel compilation of multiple fencils
 - support needs to be added to switch between debug and release builds, as well as to conditionally enable debug information for release builds
 - support needs to be added to enable compiler optimizations and tuning for target hardware

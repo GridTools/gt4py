@@ -73,7 +73,7 @@ def test_register_subclasses():
         pass
 
     @eve.utils.register_subclasses(MyVirtualSubclassA, MyVirtualSubclassB)
-    class MyBaseClass(abc.ABC):
+    class MyBaseClass(abc.ABC):  # noqa: B024
         pass
 
     assert issubclass(MyVirtualSubclassA, MyBaseClass) and issubclass(
