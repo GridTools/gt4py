@@ -480,7 +480,6 @@ def test_scalar_arg(fieldview_backend):
 
 
 def test_nested_scalar_arg(fieldview_backend):
-    """Test scalar argument being turned into 0-dim field."""
     if fieldview_backend == gtfn_cpu.run_gtfn:
         pytest.skip("ConstantFields are not supported yet.")
     Vertex = Dimension("Vertex")
