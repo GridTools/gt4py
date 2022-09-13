@@ -47,7 +47,7 @@ def boolified_type(symbol_type: ct.SymbolType) -> ct.ScalarType | ct.FieldType:
 
 
 def extract_promoted_tuple_type(
-    node_type_ls: list,
+    node_type_ls: list[ct.TupleType],
     mask_type: ct.FieldType,
     promoted_type: None | ct.FieldType | ct.ScalarType,
 ) -> ct.FieldType:
@@ -64,17 +64,18 @@ def extract_promoted_tuple_type(
 
 
 def construct_tuple_type(
-    node_type_ls: list,
+    element_types: list[ct.TupleType],
     promoted_field_tuple: ct.FieldType | ct.TupleType,
 ) -> ct.TupleType:
-    for i, element in enumerate(node_type_ls):
+    element_types_new = element_types
+    for i, element in enumerate(element_types):
         if isinstance(element, ct.TupleType):
-            node_type_ls[i] = ct.TupleType(
+            element_types_new[i] = ct.TupleType(
                 types=construct_tuple_type(element.types, promoted_field_tuple)
             )
         else:
-            node_type_ls[i] = promoted_field_tuple
-    return node_type_ls
+            element_types_new[i] = promoted_field_tuple
+    return element_types_new
 
 
 def promote_to_mask_type(
@@ -554,12 +555,20 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             if isinstance(true_branch_type, ct.TupleType) and isinstance(
                 false_branch_type, ct.TupleType
             ):
-                true_branch_types = self.visit(node.args[1].type.types, **kwargs)
-                false_branch_types = self.visit(node.args[2].type.types, **kwargs)
+                true_branch_types = node.args[1].type.types
+                false_branch_types = node.args[2].type.types
                 node_type_ls = true_branch_types + false_branch_types
                 promoted_field_tuple = extract_promoted_tuple_type(node_type_ls, mask_type, None)
                 return_type = ct.TupleType(
                     types=construct_tuple_type(true_branch_types, promoted_field_tuple)
+                )
+            elif isinstance(true_branch_type, ct.TupleType) or isinstance(
+                false_branch_type, ct.TupleType
+            ):
+                raise FieldOperatorTypeDeductionError.from_foast_node(
+                    node,
+                    msg=f"Return arguments need to be of same type in {node.func.id}, but got: "
+                    f"{node.args[1].type} and {node.args[2].type}",
                 )
             else:
                 promoted_type = type_info.promote(true_branch_type, false_branch_type)

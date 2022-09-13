@@ -29,6 +29,7 @@ from functional.ffront.fbuiltins import (
 )
 from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError
 from functional.ffront.func_to_foast import FieldOperatorParser
+from src.functional.ffront.fbuiltins import where
 
 
 def type_info_cases() -> list[tuple[Optional[ct.SymbolType], dict]]:
@@ -479,3 +480,69 @@ def test_broadcast_badtype():
         match=r"Expected all broadcast dimensions to be of type Dimension.",
     ):
         _ = FieldOperatorParser.apply_to_function(badtype_broadcast)
+
+
+def test_where_dim():
+    ADim = Dimension("ADim")
+    BDim = Dimension("BDim")
+
+    def simple_where(a: Field[[ADim], bool], b: Field[[ADim, BDim], float64]):
+        return where(a, b, 9.0)
+
+    parsed = FieldOperatorParser.apply_to_function(simple_where)
+
+    assert parsed.body[0].value.type == ct.FieldType(
+        dims=[ADim, BDim], dtype=ct.ScalarType(kind=ct.ScalarKind.FLOAT64)
+    )
+
+
+def test_where_broadcast_dim():
+    ADim = Dimension("ADim")
+
+    def simple_where(a: Field[[ADim], bool]):
+        return where(a, 5.0, 9.0)
+
+    parsed = FieldOperatorParser.apply_to_function(simple_where)
+
+    assert parsed.body[0].value.type == ct.FieldType(
+        dims=[ADim], dtype=ct.ScalarType(kind=ct.ScalarKind.FLOAT64)
+    )
+
+
+def test_where_tuple_dim():
+    ADim = Dimension("ADim")
+
+    def tuple_where(a: Field[[ADim], bool], b: Field[[ADim], float64]):
+        return where(a, ((5.0, 9.0), (b, 6.0)), ((8.0, b), (5.0, 9.0)))
+
+    parsed = FieldOperatorParser.apply_to_function(tuple_where)
+
+    assert parsed.body[0].value.type == ct.TupleType(
+        types=[
+            ct.TupleType(
+                types=[
+                    ct.FieldType(dims=[ADim], dtype=ct.ScalarType(kind=ct.ScalarKind.FLOAT64)),
+                    ct.FieldType(dims=[ADim], dtype=ct.ScalarType(kind=ct.ScalarKind.FLOAT64)),
+                ]
+            ),
+            ct.TupleType(
+                types=[
+                    ct.FieldType(dims=[ADim], dtype=ct.ScalarType(kind=ct.ScalarKind.FLOAT64)),
+                    ct.FieldType(dims=[ADim], dtype=ct.ScalarType(kind=ct.ScalarKind.FLOAT64)),
+                ]
+            ),
+        ]
+    )
+
+
+def test_where_bad_dim():
+    ADim = Dimension("ADim")
+
+    def bad_dim_where(a: Field[[ADim], bool], b: Field[[ADim], float64]):
+        return where(a, ((5.0, 9.0), (b, 6.0)), b)
+
+    with pytest.raises(
+        FieldOperatorTypeDeductionError,
+        match=r"Return arguments need to be of same type",
+    ):
+        _ = FieldOperatorParser.apply_to_function(bad_dim_where)
