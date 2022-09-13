@@ -76,19 +76,15 @@ class StencilBuilder:
         self._build_data: Dict[str, Any] = {}
         self._externals: Dict[str, Any] = {}
 
-        if (
-            self.options.raise_if_not_cached
-            and not self.caching.is_cache_info_available_and_consistent(validate_hash=True)
-        ):
-            raise ValueError(
-                f"The stencil {self._definition.__name__} is not up to date in the cache"
-            )
-
     def build(self) -> Type["StencilObject"]:
         """Generate, compile and/or load everything necessary to provide a usable stencil class."""
         # load or generate
         stencil_class = None if self.options.rebuild else self.backend.load()
-        if stencil_class is None:
+        if stencil_class is None and self.options.raise_if_not_cached:
+            raise ValueError(
+                f"The stencil {self._definition.__name__} is not up to date in the cache"
+            )
+        elif stencil_class is None:
             stencil_class = self.backend.generate()
         return stencil_class
 
