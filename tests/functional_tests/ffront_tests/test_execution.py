@@ -870,6 +870,36 @@ def test_solve_triag(fieldview_backend):
     np.allclose(expected, out)
 
 
+def test_scan_tuple_output(fieldview_backend):
+    if fieldview_backend == gtfn_cpu.run_gtfn:
+        pytest.xfail("gtfn does not yet support scan pass.")
+
+    KDim = Dimension("K", kind=DimensionKind.VERTICAL)
+    size = 10
+    init = (0.0, 1.0)
+    inp = np_as_located_field(KDim)(np.arange(0, size, 1.0))
+    out1 = np_as_located_field(KDim)(np.zeros((size,)))
+    out2 = np_as_located_field(KDim)(np.zeros((size,)))
+    expected = np.arange(init[1] + 1.0, init[1] + 1.0 + size, 1)
+
+    @scan_operator(axis=KDim, forward=True, init=init, backend=fieldview_backend)
+    def simple_scan_operator(carry: tuple[float, float], x: float) -> tuple[float, float]:
+        return (x, carry[1] + 1.0)
+
+    # TODO(tehrengruber): directly call scan operator when this is supported
+    #  for tuple outputs
+    @program
+    def simple_scan_operator_program(
+        x: Field[[KDim], float], out1: Field[[KDim], float], out2: Field[[KDim], float]
+    ) -> None:
+        simple_scan_operator(x, out=(out1, out2))
+
+    simple_scan_operator_program(inp, out1, out2, offset_provider={})
+
+    assert np.allclose(inp, out1)
+    assert np.allclose(expected, out2)
+
+
 def test_docstring():
     size = 10
     a = np_as_located_field(IDim)(np.ones((size,)))
