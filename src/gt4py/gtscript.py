@@ -308,7 +308,7 @@ def stencil(
             build_options=build_options,
             externals=externals or {},
         )
-        definition_func.__anntations__ = original_annotations
+        definition_func.__annotations__ = original_annotations
         return out
 
     if definition is None:
