@@ -302,7 +302,7 @@ Notice how $\text{edge_diff}_{0,1}$ is actually subtracted from the sum rather t
 
 +++
 
-In addition to the signs, there is an issue with the border edges as well for which the edge difference is undefined because they only have one cell neighbor. For the the pseudo-laplacian, the edge difference for border edges is considered zero. You can achieve this in the calculations by zeroing out the weights for the border edges in the edge weight table.
+In addition to the signs, there is an issue with the border edges as well for which the edge difference is undefined because they only have one cell neighbor. For the pseudo-laplacian, the edge difference for border edges is considered zero. You can achieve this in the calculations by zeroing out the weights for the border edges in the edge weight table.
 
 +++
 
@@ -321,11 +321,11 @@ edge_weights = np.array([
 edge_weight_field = np_as_located_field(CellDim, C2EDim)(edge_weights)
 ```
 
-Now you have everything to implement the the pseudo-laplacian. Its field operator requires the cell field and the edge weights as inputs, and outputs a cell field of the same shape as the input.
+Now you have everything to implement the pseudo-laplacian. Its field operator requires the cell field and the edge weights as inputs, and outputs a cell field of the same shape as the input.
 
 The first line of the field operator calculates the edge difference for all edges. This is done by creating a temporary field over edges with the value of the first cell neighbour and another temporary field with the value of the second, and the difference of the two fields gives the `edge_differences`.
 
-The second lines first creates a temporary field using `edge_differences(C2E)`, which contains the the three adjacent edge differences for every cell. This table is then multiplied elementwise with the `edge_weights`. The final result is a field over cells that contains the pseudo-laplacian.
+The second lines first creates a temporary field using `edge_differences(C2E)`, which contains the three adjacent edge differences for every cell. This table is then multiplied elementwise with the `edge_weights`. The final result is a field over cells that contains the pseudo-laplacian.
 
 ```{code-cell} ipython3
 @field_operator
@@ -361,4 +361,29 @@ As a closure, here is an example of chaining field operators, which is very simp
 def pseudo_laplap(cells : Field[[CellDim], float64],
                   edge_weights : Field[[CellDim, C2EDim], float64]) -> Field[[CellDim], float64]:
     return pseudo_lap(pseudo_lap(cells, edge_weights), edge_weights)
+```
+
++++
+
+#### `where` builtin
+Additionally to the `neighbor_sum` function, other builtins have been implemented. One of these is the `where`.
+This function takes 3 inputs arguments:
+ - mask: a field with dtype boolean
+ - true branch: a field or a scalar
+ - false branch: a field of a scalar
+This function loops over each entry in the mask and returns values corresponding to the same indexes of either the true or the false branch. 
+The mask can be directly a field of booleans (e.g. `Field[[CellDim], bool]`) or an expression that evaluates to this type (e.g. `Field[[CellDim], float64] > 3`). 
+The resulting output is a field including all dimensions from the mask and the branches. For example:
+
+```{code-cell} ipython3
+mask = np_as_located_field(CellDim, KDim)(np.zeros(shape=grid_shape, dtype=bool))
+result_where = np_as_located_field(CellDim, KDim)(np.zeros(shape=grid_shape))
+
+@field_operator
+def conditional(mask: Field[[CellDim, KDim], bool], a: Field[[CellDim, KDim], float64], b: Field[[CellDim, KDim], float64]
+) -> Field[[CellDim, KDim], float64]:
+    return where(mask, a, b)
+    
+conditional(mask, a, b, out=result_where, offset_provider={})
+print("where return: {}".format(np.asarray(result_where)))
 ```

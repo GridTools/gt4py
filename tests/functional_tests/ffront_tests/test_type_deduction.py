@@ -26,10 +26,10 @@ from functional.ffront.fbuiltins import (
     float64,
     int64,
     neighbor_sum,
+    where,
 )
 from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError
 from functional.ffront.func_to_foast import FieldOperatorParser
-from functional.ffront.fbuiltins import where
 
 
 def type_info_cases() -> list[tuple[Optional[ct.SymbolType], dict]]:
