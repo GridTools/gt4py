@@ -479,6 +479,28 @@ def test_scalar_arg(fieldview_backend):
     assert np.allclose(ref, out.array())
 
 
+def test_nested_scalar_arg(fieldview_backend):
+    if fieldview_backend == gtfn_cpu.run_gtfn:
+        pytest.skip("ConstantFields are not supported yet.")
+    Vertex = Dimension("Vertex")
+    size = 5
+    inp = 5.0
+    out = np_as_located_field(Vertex)(np.zeros([size]))
+
+    @field_operator(backend=fieldview_backend)
+    def scalar_arg_inner(scalar_inp: float64) -> Field[[Vertex], float64]:
+        return broadcast(scalar_inp + 1.0, (Vertex,))
+
+    @field_operator(backend=fieldview_backend)
+    def scalar_arg(scalar_inp: float64) -> Field[[Vertex], float64]:
+        return scalar_arg_inner(scalar_inp + 1.0)
+
+    scalar_arg(inp, out=out, offset_provider={})
+
+    ref = np.full([size], 7.0)
+    assert np.allclose(ref, out.array())
+
+
 def test_scalar_arg_with_field(fieldview_backend):
     if fieldview_backend == gtfn_cpu.run_gtfn:
         pytest.skip("IndexFields and ConstantFields are not supported yet.")
