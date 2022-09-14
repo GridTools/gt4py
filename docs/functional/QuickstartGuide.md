@@ -280,6 +280,91 @@ For the border edges, the results are unchanged compared to the previous example
 |:--:| :--: | :--: |
 | *Domain (edges)* |  | *Edge values* |
 
++++ 
+
+#### Using conditionals on fields
+
+Additionally to the `neighbor_sum` function, other builtins have been implemented. One of these is the `where`.
+This function takes 3 input arguments:
+ - mask: a field with dtype boolean
+ - true branch: a tuple, a field, or a scalar
+ - false branch: a tuple, a field, of a scalar
+The mask can be directly a field of booleans (e.g. `Field[[CellDim], bool]`) or an expression evaluating to this type (e.g. `Field[[CellDim], float64] > 3`).
+The `where` builtin loops over each entry of the mask and returns values corresponding to the same indexes of either the true or the false branch. 
+In the case where the true and false branches are either fields or scalars, the resulting output will be a field including all dimensions from all inputs. For example:
+
+```{code-cell} ipython3
+mask = np_as_located_field(CellDim, KDim)(np.zeros(shape=grid_shape, dtype=bool))
+result_where = np_as_located_field(CellDim, KDim)(np.zeros(shape=grid_shape))
+b = 6.0
+
+@field_operator
+def conditional(mask: Field[[CellDim, KDim], bool], a: Field[[CellDim, KDim], float64], b: float
+) -> Field[[CellDim, KDim], float64]:
+    return where(mask, a, b)
+    
+conditional(mask, a, b, out=result_where, offset_provider={})
+print("where return: {}".format(np.asarray(result_where)))
+```
+
+**Tuple implementation:**
+
+The `where` supports the return of tuples of fields. To perform promotion of dimensions and dtype of the output, all arguments are analyzed and promoted as in the above section.
+
+```{code-cell} ipython3
+result_1 = np_as_located_field(CellDim, KDim)(np.zeros(shape=grid_shape))
+result_2 = np_as_located_field(CellDim, KDim)(np.zeros(shape=grid_shape))
+
+@field_operator
+def _conditional_tuple(mask: Field[[CellDim, KDim], bool], a: Field[[CellDim, KDim], float64], b: float
+) -> tuple[Field[[CellDim, KDim], float64], Field[[CellDim, KDim], float64]]:
+    return where(mask, (a, b), (b, a))
+    
+@program
+def conditional_tuple(mask: Field[[CellDim, KDim], bool], a: Field[[CellDim, KDim], float64], b: float, 
+result_1: Field[[CellDim, KDim], float64], result_2: Field[[CellDim, KDim], float64]
+):
+     _conditional_tuple(mask, a, b, out=(result_1, result_2))
+    
+conditional_tuple(mask, a, b, result_1, result_2, offset_provider={})
+print("where tuple return: {}".format((np.asarray(result_1), np.asarray(result_2))))
+```
+
+The `where` builtin also allows for nesting of tuples. In this scenario, it will first perform an unrolling: 
+
+```where(mask, ((a, b), (b, a)), ((c, d), (d, c)))``` --> ```where(mask, (a, b), (c, d))``` and ```where(mask, (b, a), (d, c))```
+
+and then combine results to match the return type:
+
+```{code-cell} ipython3
+a = np_as_located_field(CellDim, KDim)(np.full(shape=grid_shape, fill_value=2.0, dtype=np.float64))
+b = np_as_located_field(CellDim, KDim)(np.full(shape=grid_shape, fill_value=3.0, dtype=np.float64))
+c = np_as_located_field(CellDim, KDim)(np.full(shape=grid_shape, fill_value=4.0, dtype=np.float64))
+d = np_as_located_field(CellDim, KDim)(np.full(shape=grid_shape, fill_value=5.0, dtype=np.float64))
+
+result_1 = np_as_located_field(CellDim, KDim)(np.zeros(shape=grid_shape))
+result_2 = np_as_located_field(CellDim, KDim)(np.zeros(shape=grid_shape))
+
+@field_operator
+def _conditional_tuple_nested(
+    mask: Field[[CellDim, KDim], bool], a: Field[[CellDim, KDim], float64], b: Field[[CellDim, KDim], float64], c: Field[[CellDim, KDim], float64], d: Field[[CellDim, KDim], float64]
+) -> tuple[
+    tuple[Field[[CellDim, KDim], float64], Field[[CellDim, KDim], float64]],
+    tuple[Field[[CellDim, KDim], float64], Field[[CellDim, KDim], float64]],
+]:
+    return where(mask, ((a, b), (b, a)), ((c, d), (d, c)))
+    
+@program
+def conditional_tuple_nested(
+    mask: Field[[CellDim, KDim], bool], a: Field[[CellDim, KDim], float64], b: Field[[CellDim, KDim], float64], c: Field[[CellDim, KDim], float64], d: Field[[CellDim, KDim], float64],
+    result_1: Field[[CellDim, KDim], float64], result_2: Field[[CellDim, KDim], float64]
+):
+    _conditional_tuple_nested(mask, a, b, c, d, out=((result_1, result_2), (result_2, result_1)))
+
+conditional_tuple_nested(mask, a, b, c, d, result_1, result_2, offset_provider={})
+print("where nested tuple return: {}".format(((np.asarray(result_1), np.asarray(result_2)), (np.asarray(result_2), np.asarray(result_1)))))
+```
+
 +++
 
 #### Implementing the pseudo-laplacian
@@ -361,88 +446,4 @@ As a closure, here is an example of chaining field operators, which is very simp
 def pseudo_laplap(cells : Field[[CellDim], float64],
                   edge_weights : Field[[CellDim, C2EDim], float64]) -> Field[[CellDim], float64]:
     return pseudo_lap(pseudo_lap(cells, edge_weights), edge_weights)
-```
-
-+++
-
-#### `where` builtin
-Additionally to the `neighbor_sum` function, other builtins have been implemented. One of these is the `where`.
-This function takes 3 input arguments:
- - mask: a field with dtype boolean
- - true branch: a tuple, a field, or a scalar
- - false branch: a tuple, a field, of a scalar
-The mask can be directly a field of booleans (e.g. `Field[[CellDim], bool]`) or an expression evaluating to this type (e.g. `Field[[CellDim], float64] > 3`).
-The `where` builtin loops over each entry of the mask and returns values corresponding to the same indexes of either the true or the false branch. 
-In the case where the true and false branches are either fields or scalars, the resulting output will be a field including all dimensions from all inputs. For example:
-
-```{code-cell} ipython3
-mask = np_as_located_field(CellDim, KDim)(np.zeros(shape=grid_shape, dtype=bool))
-result_where = np_as_located_field(CellDim, KDim)(np.zeros(shape=grid_shape))
-b = 6.0
-
-@field_operator
-def conditional(mask: Field[[CellDim, KDim], bool], a: Field[[CellDim, KDim], float64], b: float
-) -> Field[[CellDim, KDim], float64]:
-    return where(mask, a, b)
-    
-conditional(mask, a, b, out=result_where, offset_provider={})
-print("where return: {}".format(np.asarray(result_where)))
-```
-
-**Tuple implementation:**
-
-The `where` supports the return of tuples of fields. To perform promotion of dimensions and dtype of the output, all arguments are analyzed and promoted as in the above section.
-
-```{code-cell} ipython3
-result_1 = np_as_located_field(CellDim, KDim)(np.zeros(shape=grid_shape))
-result_2 = np_as_located_field(CellDim, KDim)(np.zeros(shape=grid_shape))
-
-@field_operator
-def _conditional_tuple(mask: Field[[CellDim, KDim], bool], a: Field[[CellDim, KDim], float64], b: float
-) -> tuple[Field[[CellDim, KDim], float64], Field[[CellDim, KDim], float64]]:
-    return where(mask, (a, b), (b, a))
-    
-@program
-def conditional_tuple(mask: Field[[CellDim, KDim], bool], a: Field[[CellDim, KDim], float64], b: float, 
-result_1: Field[[CellDim, KDim], float64], result_2: Field[[CellDim, KDim], float64]
-):
-     _conditional_tuple(mask, a, b, out=(result_1, result_2))
-    
-conditional_tuple(mask, a, b, result_1, result_2, offset_provider={})
-print("where tuple return: {}".format((np.asarray(result_1), np.asarray(result_2))))
-```
-
-The `where` builtin also allows for nesting of tuples. In this scenario, it will first perform an unrolling: 
-
-```where(mask, ((a, b), (b, a)), ((c, d), (d, c)))``` --> ```where(mask, (a, b), (c, d))``` and ```where(mask, (b, a), (d, c))```
-
-and then combine results to match the return type:
-
-```{code-cell} ipython3
-a = np_as_located_field(CellDim, KDim)(np.full(shape=grid_shape, fill_value=2.0, dtype=np.float64))
-b = np_as_located_field(CellDim, KDim)(np.full(shape=grid_shape, fill_value=3.0, dtype=np.float64))
-c = np_as_located_field(CellDim, KDim)(np.full(shape=grid_shape, fill_value=4.0, dtype=np.float64))
-d = np_as_located_field(CellDim, KDim)(np.full(shape=grid_shape, fill_value=5.0, dtype=np.float64))
-
-result_1 = np_as_located_field(CellDim, KDim)(np.zeros(shape=grid_shape))
-result_2 = np_as_located_field(CellDim, KDim)(np.zeros(shape=grid_shape))
-
-@field_operator
-def _conditional_tuple_nested(
-    mask: Field[[CellDim, KDim], bool], a: Field[[CellDim, KDim], float64], b: Field[[CellDim, KDim], float64], c: Field[[CellDim, KDim], float64], d: Field[[CellDim, KDim], float64]
-) -> tuple[
-    tuple[Field[[CellDim, KDim], float64], Field[[CellDim, KDim], float64]],
-    tuple[Field[[CellDim, KDim], float64], Field[[CellDim, KDim], float64]],
-]:
-    return where(mask, ((a, b), (b, a)), ((c, d), (d, c)))
-    
-@program
-def conditional_tuple_nested(
-    mask: Field[[CellDim, KDim], bool], a: Field[[CellDim, KDim], float64], b: Field[[CellDim, KDim], float64], c: Field[[CellDim, KDim], float64], d: Field[[CellDim, KDim], float64],
-    result_1: Field[[CellDim, KDim], float64], result_2: Field[[CellDim, KDim], float64]
-):
-    _conditional_tuple_nested(mask, a, b, c, d, out=((result_1, result_2), (result_2, result_1)))
-
-conditional_tuple_nested(mask, a, b, c, d, result_1, result_2, offset_provider={})
-print("where nested tuple return: {}".format(((np.asarray(result_1), np.asarray(result_2)), (np.asarray(result_2), np.asarray(result_1)))))
 ```
