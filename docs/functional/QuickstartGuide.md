@@ -425,7 +425,7 @@ def conditional_tuple_nested(
     tuple[Field[[IDim], float64], Field[[IDim], float64]],
     tuple[Field[[IDim], float64], Field[[IDim], float64]],
 ]:
-    return where(mask, ((a, b), (b, a)), ((c, d), (d, c))
+    return where(mask, ((a, b), (b, a)), ((c, d), (d, c)))
 
 result_1 = np_as_located_field(CellDim, KDim)(np.zeros(shape=grid_shape))
 result_2 = np_as_located_field(CellDim, KDim)(np.zeros(shape=grid_shape))
