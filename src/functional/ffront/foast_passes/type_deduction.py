@@ -51,6 +51,13 @@ def extract_promoted_tuple_type(
     mask_type: ct.FieldType,
     promoted_type: None | ct.FieldType | ct.ScalarType,
 ) -> ct.FieldType:
+    """
+    Extract argument type in tuple to which all others need to be promoted to.
+
+    If arguments types in a tuple are different (e.g. some are Fields and others Scalars), they all need to be promoted to be the same.
+    This function extract which type the promotion has to be done with respect of.
+
+    """
     for element in node_type_ls:
         if isinstance(element, ct.TupleType):
             promoted_type = extract_promoted_tuple_type(element.types, mask_type, promoted_type)
@@ -67,6 +74,17 @@ def construct_tuple_type(
     element_types: list[ct.TupleType],
     promoted_field_tuple: ct.FieldType | ct.TupleType,
 ) -> ct.TupleType:
+    """
+    Construct recursively the return types for the tuple return branch.
+
+    Examples:
+    ---------
+    >>> from functional.common import Dimension
+    >>> promoted_field_tuple = ct.FieldType(dims=[Dimension(value="I")], dtype=ct.ScalarType(kind=ct.ScalarKind))
+    >>> element_types = [ct.ScalarType(kind=ct.ScalarKind), ct.ScalarType(kind=ct.ScalarKind)]
+    >>> print(construct_tuple_type(element_types, promoted_field_tuple))
+    [FieldType(dims=[Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)], dtype=ScalarType(kind=<enum 'ScalarKind'>, shape=None)), FieldType(dims=[Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)], dtype=ScalarType(kind=<enum 'ScalarKind'>, shape=None))]
+    """
     element_types_new = element_types
     for i, element in enumerate(element_types):
         if isinstance(element, ct.TupleType):
@@ -81,6 +99,26 @@ def construct_tuple_type(
 def promote_to_mask_type(
     mask_type: ct.FieldType, input_type: ct.FieldType | ct.ScalarType | ct.TupleType
 ) -> ct.FieldType:
+    """
+    Promote mask type with the input type.
+
+    The input type being the result of promoting the left and right types in a conditional clause.
+
+    If the input type is a scalar, the return type takes the dimensions of the mask_type, while retaining the dtype of
+    the input type. The behavior is similar when the input type is a field type with fewer dimensions than the mask_type.
+    In all other cases, the return type takes the dimensions and dtype of the input type.
+
+    >>> from functional.common import Dimension
+    >>> I, J = (Dimension(value=dim) for dim in ["I", "J"])
+    >>> bool_type = ct.ScalarType(kind=ct.ScalarKind.BOOL)
+    >>> dtype = ct.ScalarType(kind=ct.ScalarKind.FLOAT64)
+    >>> promote_to_mask_type(ct.FieldType(dims=[I, J], dtype=bool_type), ct.ScalarType(kind=dtype))
+    FieldType(dims=[Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)], dtype=ScalarType(kind=ScalarType(kind=<ScalarKind.FLOAT64: 1064>, shape=None), shape=None))
+    >>> promote_to_mask_type(ct.FieldType(dims=[I, J], dtype=bool_type), ct.FieldType(dims=[I], dtype=dtype))
+    FieldType(dims=[Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)], dtype=ScalarType(kind=<ScalarKind.FLOAT64: 1064>, shape=None))
+    >>> promote_to_mask_type(ct.FieldType(dims=[I], dtype=bool_type), ct.FieldType(dims=[I,J], dtype=dtype))
+    FieldType(dims=[Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)], dtype=ScalarType(kind=<ScalarKind.FLOAT64: 1064>, shape=None))
+    """
     if isinstance(input_type, ct.ScalarType) or not all(
         item in input_type.dims for item in mask_type.dims
     ):
