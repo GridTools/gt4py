@@ -424,18 +424,25 @@ b = np_as_located_field(CellDim, KDim)(np.full(shape=grid_shape, fill_value=3.0,
 c = np_as_located_field(CellDim, KDim)(np.full(shape=grid_shape, fill_value=4.0, dtype=np.float64))
 d = np_as_located_field(CellDim, KDim)(np.full(shape=grid_shape, fill_value=5.0, dtype=np.float64))
 
+result_1 = np_as_located_field(CellDim, KDim)(np.zeros(shape=grid_shape))
+result_2 = np_as_located_field(CellDim, KDim)(np.zeros(shape=grid_shape))
+
 @field_operator
-def conditional_tuple_nested(
+def _conditional_tuple_nested(
     mask: Field[[CellDim, KDim], bool], a: Field[[CellDim, KDim], float64], b: Field[[CellDim, KDim], float64], c: Field[[CellDim, KDim], float64], d: Field[[CellDim, KDim], float64]
 ) -> tuple[
     tuple[Field[[CellDim, KDim], float64], Field[[CellDim, KDim], float64]],
     tuple[Field[[CellDim, KDim], float64], Field[[CellDim, KDim], float64]],
 ]:
     return where(mask, ((a, b), (b, a)), ((c, d), (d, c)))
+    
+@program
+def conditional_tuple_nested(
+    mask: Field[[CellDim, KDim], bool], a: Field[[CellDim, KDim], float64], b: Field[[CellDim, KDim], float64], c: Field[[CellDim, KDim], float64], d: Field[[CellDim, KDim], float64],
+    result_1: Field[[CellDim, KDim], float64], result_2: Field[[CellDim, KDim], float64]
+):
+    _conditional_tuple_nested(mask, a, b, c, d, out=((result_1, result_2), (result_2, result_1)))
 
-result_1 = np_as_located_field(CellDim, KDim)(np.zeros(shape=grid_shape))
-result_2 = np_as_located_field(CellDim, KDim)(np.zeros(shape=grid_shape))
-
-conditional_tuple_nested(mask, a, b, c, d, out=((result_1, result_2), (result_2, result_1)), offset_provider={})
+conditional_tuple_nested(mask, a, b, c, d, result_1, result_2, offset_provider={})
 print("where nested tuple return: {}".format(((np.asarray(result_1), np.asarray(result_2)), (np.asarray(result_2), np.asarray(result_1)))))
 ```
