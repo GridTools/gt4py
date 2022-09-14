@@ -426,10 +426,10 @@ d = np_as_located_field(CellDim, KDim)(np.full(shape=grid_shape, fill_value=5.0,
 
 @field_operator
 def conditional_tuple_nested(
-    mask: Field[[IDim], bool], a: Field[[IDim], float64], b: Field[[IDim], float64], c: Field[[IDim], float64], d: Field[[IDim], float64]
+    mask: Field[[CellDim, KDim], bool], a: Field[[CellDim, KDim], float64], b: Field[[CellDim, KDim], float64], c: Field[[CellDim, KDim], float64], d: Field[[CellDim, KDim], float64]
 ) -> tuple[
-    tuple[Field[[IDim], float64], Field[[IDim], float64]],
-    tuple[Field[[IDim], float64], Field[[IDim], float64]],
+    tuple[Field[[CellDim, KDim], float64], Field[[CellDim, KDim], float64]],
+    tuple[Field[[CellDim, KDim], float64], Field[[CellDim, KDim], float64]],
 ]:
     return where(mask, ((a, b), (b, a)), ((c, d), (d, c)))
 
