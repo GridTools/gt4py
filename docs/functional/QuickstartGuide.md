@@ -398,11 +398,17 @@ result_1 = np_as_located_field(CellDim, KDim)(np.zeros(shape=grid_shape))
 result_2 = np_as_located_field(CellDim, KDim)(np.zeros(shape=grid_shape))
 
 @field_operator
-def conditional_tuple(mask: Field[[CellDim, KDim], bool], a: Field[[CellDim, KDim], float64], b: float
+def _conditional_tuple(mask: Field[[CellDim, KDim], bool], a: Field[[CellDim, KDim], float64], b: float
 ) -> tuple[Field[[CellDim, KDim], float64], Field[[CellDim, KDim], float64]]:
     return where(mask, (a, b), (b, a))
     
-conditional_tuple(mask, a, b, out=(result_1, result_2), offset_provider={})
+@program
+def conditional_tuple(mask: Field[[CellDim, KDim], bool], a: Field[[CellDim, KDim], float64], b: float, 
+result_1: Field[[CellDim, KDim], float64], result_2: Field[[CellDim, KDim], float64]
+):
+     _conditional_tuple(mask, a, b, out=(result_1, result_2))
+    
+conditional_tuple(mask, a, b, result_1, result_2, offset_provider={})
 print("where tuple return: {}".format((np.asarray(result_1), np.asarray(result_2))))
 ```
 
