@@ -432,5 +432,5 @@ result_2 = np_as_located_field(CellDim, KDim)(np.zeros(shape=grid_shape))
 
     
 conditional_tuple_nested(mask, a, b, c, d, out=((result_1, result_2), (result_2, result_1)), offset_provider={})
-print("where nested tuple return: {}".format(((np.asarray(result_1), np.asarray(result_2)), (np.asarray(result_2), np.asarray(result_1))))
+print("where nested tuple return: {}".format(((np.asarray(result_1), np.asarray(result_2)), (np.asarray(result_2), np.asarray(result_1)))))
 ```
