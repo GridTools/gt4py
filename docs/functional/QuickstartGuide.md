@@ -367,13 +367,13 @@ def pseudo_laplap(cells : Field[[CellDim], float64],
 
 #### `where` builtin
 Additionally to the `neighbor_sum` function, other builtins have been implemented. One of these is the `where`.
-This function takes 3 inputs arguments:
+This function takes 3 input arguments:
  - mask: a field with dtype boolean
- - true branch: a tuple, a field or a scalar
- - false branch: a tuple, a field of a scalar
-The mask can be directly a field of booleans (e.g. `Field[[CellDim], bool]`) or an expression that evaluates to this type (e.g. `Field[[CellDim], float64] > 3`).
+ - true branch: a tuple, a field, or a scalar
+ - false branch: a tuple, a field, of a scalar
+The mask can be directly a field of booleans (e.g. `Field[[CellDim], bool]`) or an expression evaluating to this type (e.g. `Field[[CellDim], float64] > 3`).
 The `where` builtin loops over each entry of the mask and returns values corresponding to the same indexes of either the true or the false branch. 
-In the case that the true and false branches are either fields or scalars, the resulting output is a field including all dimensions from the mask and the branches. For example:
+In the case where the true and false branches are either fields or scalars, the resulting output will be a field including all dimensions from all inputs. For example:
 
 ```{code-cell} ipython3
 mask = np_as_located_field(CellDim, KDim)(np.zeros(shape=grid_shape, dtype=bool))
@@ -391,7 +391,7 @@ print("where return: {}".format(np.asarray(result_where)))
 
 **Tuple implementation:**
 
-In the case that the true and false branches are tuples, the where returns a tuple of fields with dimensions and dtype deduced as in the section above.
+The `where` supports the return of tuples of fields. To perform promotion of dimensions and dtype of the output, all arguments are analyzed and promoted as in the above section.
 
 ```{code-cell} ipython3
 result_1 = np_as_located_field(CellDim, KDim)(np.zeros(shape=grid_shape))
@@ -406,11 +406,11 @@ conditional_tuple(mask, a, b, out=(result_1, result_2), offset_provider={})
 print("where tuple return: {}".format((np.asarray(result_1), np.asarray(result_2))))
 ```
 
-The `where` builtin supports also nested tuples, in which case it will perform an unrolling: 
+The `where` builtin also allows for nesting of tuples. In this scenario, it will first perform an unrolling: 
 
 ```where(mask, ((a, b), (b, a)), ((c, d), (d, c)))``` --> ```where(mask, (a, b), (c, d))``` and ```where(mask, (b, a), (d, c))```
 
-and recombine results to match the return type:
+and then combine results to match the return type:
 
 ```{code-cell} ipython3
 a = np_as_located_field(CellDim, KDim)(np.full(shape=grid_shape, fill_value=2.0, dtype=np.float64))
@@ -430,7 +430,6 @@ def conditional_tuple_nested(
 result_1 = np_as_located_field(CellDim, KDim)(np.zeros(shape=grid_shape))
 result_2 = np_as_located_field(CellDim, KDim)(np.zeros(shape=grid_shape))
 
-    
 conditional_tuple_nested(mask, a, b, c, d, out=((result_1, result_2), (result_2, result_1)), offset_provider={})
 print("where nested tuple return: {}".format(((np.asarray(result_1), np.asarray(result_2)), (np.asarray(result_2), np.asarray(result_1)))))
 ```
