@@ -29,7 +29,7 @@ from functional.ffront.fbuiltins import (
 )
 from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError
 from functional.ffront.func_to_foast import FieldOperatorParser
-from src.functional.ffront.fbuiltins import where
+from functional.ffront.fbuiltins import where
 
 
 def type_info_cases() -> list[tuple[Optional[ct.SymbolType], dict]]:
