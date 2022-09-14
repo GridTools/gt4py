@@ -403,7 +403,7 @@ def conditional_tuple(mask: Field[[CellDim, KDim], bool], a: Field[[CellDim, KDi
     return where(mask, (a, b), (b, a))
     
 conditional_tuple(mask, a, b, out=(result_1, result_2), offset_provider={})
-print("where tuple return: {}".format((np.asarray(result_1), np.asarray(result_2)))
+print("where tuple return: {}".format((np.asarray(result_1), np.asarray(result_2))))
 ```
 
 The `where` builtin supports also nested tuples, in which case it will perform an unrolling: 
