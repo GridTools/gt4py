@@ -13,6 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import numpy
+import pytest
 
 from gt4py.gtscript import PARALLEL, Field, computation, interval
 from gt4py.stencil_builder import StencilBuilder
@@ -119,3 +120,18 @@ def test_regression_run_gtir_pipeline_twice(tmp_path):
     # property caching should not reevaluate the analysis pipeline as a side effect.
     ir = builder.gtir_pipeline.full()
     assert ir is builder.gtir_pipeline.full()
+
+
+def test_raise_if_not_cached():
+    builder = (
+        StencilBuilder(assign_bool_float)
+        .with_backend("numpy")
+        .with_externals({"a": 1.0})
+        .with_options(name="simple_stencil", module="", rebuild=True, raise_if_not_cached=True)
+    )
+
+    with pytest.raises(ValueError, match="not up to date"):
+        builder.build()
+
+    builder.options.raise_if_not_cached = False
+    builder.build()
