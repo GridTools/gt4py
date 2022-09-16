@@ -92,14 +92,16 @@ class ValTuple(Type):
     def handle_constraint(
         self, other: Type, add_constraint: abc.Callable[[Type, Type], None]
     ) -> bool:
-        if not isinstance(other, Tuple):
-            return False
-
-        dtypes = [TypeVar.fresh() for _ in other]
-        expanded = [Val(kind=self.kind, dtype=dtype, size=self.size) for dtype in dtypes]
-        add_constraint(self.dtypes, Tuple.from_elems(*dtypes))
-        add_constraint(Tuple.from_elems(*expanded), other)
-        return True
+        if isinstance(other, Tuple):
+            dtypes = [TypeVar.fresh() for _ in other]
+            expanded = [Val(kind=self.kind, dtype=dtype, size=self.size) for dtype in dtypes]
+            add_constraint(self.dtypes, Tuple.from_elems(*dtypes))
+            add_constraint(Tuple.from_elems(*expanded), other)
+            return True
+        if isinstance(other, EmptyTuple):
+            add_constraint(self.dtypes, EmptyTuple())
+            return True
+        return False
 
 
 class Column(Type):
@@ -118,6 +120,18 @@ class Primitive(Type):
     """Primitive type used in values/iterators."""
 
     name: str
+
+    def handle_constraint(
+        self, other: Type, add_constraint: abc.Callable[[Type, Type], None]
+    ) -> bool:
+        if not isinstance(other, Primitive):
+            return False
+
+        if self.name != other.name:
+            raise TypeError(
+                f"Can not satisfy constraint on primitive types: {self.name} ≡ {other.name}"
+            )
+        return True
 
 
 class Value(Type):
@@ -530,7 +544,7 @@ class PrettyPrinter(eve.NodeTranslator):
                 + ", …)"
                 + self._subscript(node.dtypes.idx)
             )
-        assert isinstance(node.dtypes, Tuple)
+        assert isinstance(node.dtypes, (Tuple, EmptyTuple))
         return (
             "("
             + ", ".join(
