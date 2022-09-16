@@ -496,6 +496,9 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
     def _visit_max_over(self, node: foast.Call, **kwargs) -> foast.Call:
         return self._visit_reduction(node, **kwargs)
 
+    def _visit_min_over(self, node: foast.Call, **kwargs) -> foast.Call:
+        return self._visit_reduction(node, **kwargs)
+
     def _visit_where(self, node: foast.Call, **kwargs) -> foast.Call:
         mask_type = cast(ct.FieldType, node.args[0].type)
         left_type = cast(ct.FieldType, node.args[1].type)

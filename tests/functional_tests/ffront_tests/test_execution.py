@@ -32,6 +32,7 @@ from functional.ffront.fbuiltins import (
     int32,
     int64,
     max_over,
+    min_over,
     neighbor_sum,
     where,
 )
@@ -342,6 +343,26 @@ def reduction_setup():
         v2e_table=v2e_arr,
         e2v_table=e2v_arr,
     )  # type: ignore
+
+
+def test_minover_execution(reduction_setup, fieldview_backend):
+    """Testing the min_over functionality"""
+    if fieldview_backend == gtfn_cpu.run_gtfn:
+        pytest.skip("not implemented yet")
+    rs = reduction_setup
+    Vertex = rs.Vertex
+    V2EDim = rs.V2EDim
+
+    in_field = np_as_located_field(Vertex, V2EDim)(rs.v2e_table)
+
+    @field_operator
+    def minover_fieldoperator(input: Field[[Vertex, V2EDim], int64]) -> Field[[Vertex], int64]:
+        return min_over(input, axis=V2EDim)
+
+    minover_fieldoperator(in_field, out=rs.out, offset_provider=rs.offset_provider)
+
+    ref = np.min(rs.v2e_table, axis=1)
+    assert np.allclose(ref, rs.out)
 
 
 def test_maxover_execution_sparse(reduction_setup, fieldview_backend):
