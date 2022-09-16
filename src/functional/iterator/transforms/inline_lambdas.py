@@ -31,7 +31,7 @@ class CountSymbolRefs(NodeVisitor):
 
 @dataclasses.dataclass
 class InlineLambdas(NodeTranslator):
-    """Inline lambda calls by substituting every arguments by its value."""
+    """Inline lambda calls by substituting every argument by its value."""
 
     opcount_preserving: bool
 
