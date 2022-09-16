@@ -68,16 +68,15 @@ class GTFNExecutor(fpi.FencilExecutor):
                 source_module=inp, bindings_module=bindings.create_bindings(inp)
             )
 
-        # @todo add caching step
         otf_workflow: Final[pipeline.OTFWorkflow[pipeline.OTFClosure, Any, Callable]] = (
             pipeline.OTFWorkflowStep(itir_to_src)
-            .add_step(src_to_otf)
-            .add_step(
+            .chain(src_to_otf)
+            .chain(
                 otf_compiler.OnTheFlyCompiler(
                     cache_strategy=cache.Strategy.SESSION, builder_factory=self.builder_factory
                 )
             )
-            .add_step(convert_args)
+            .chain(convert_args)
         )
 
         otf_closure = pipeline.OTFClosure(fencil, args, kwargs)

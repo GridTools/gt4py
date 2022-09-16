@@ -38,7 +38,6 @@ class OnTheFlyCompiler(Generic[SL, ST]):
     builder_factory: pipeline.OTFBuilderGenerator[SL, ST, source_modules.Python]
     force_recompile: bool = False
 
-    # @todo: make caching a step instead
     def __call__(
         self, inp: source_modules.OTFSourceModule[SL, ST, source_modules.Python]
     ) -> Callable:

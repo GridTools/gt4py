@@ -52,7 +52,7 @@ class OTFWorkflowStep(Generic[StartT, EndT]):
     def __call__(self, inp: StartT) -> EndT:
         return self.step(inp)
 
-    def add_step(self, step: OTFStep[EndT, NewEndT]) -> OTFWorkflow[StartT, EndT, NewEndT]:
+    def chain(self, step: OTFStep[EndT, NewEndT]) -> OTFWorkflow[StartT, EndT, NewEndT]:
         return OTFWorkflow(first=self.step, second=step)
 
 
@@ -64,7 +64,7 @@ class OTFWorkflow(Generic[StartT, IntermediateT, EndT]):
     def __call__(self, inp: StartT) -> EndT:
         return self.second(self.first(inp))
 
-    def add_step(self, step: OTFStep[EndT, NewEndT]) -> OTFWorkflow[StartT, EndT, NewEndT]:
+    def chain(self, step: OTFStep[EndT, NewEndT]) -> OTFWorkflow[StartT, EndT, NewEndT]:
         return OTFWorkflow(first=self, second=step)
 
 
@@ -72,6 +72,13 @@ class BindingsGenerator(Protocol[SrcL, LS, TgtL]):
     def __call__(
         self, source_module: source_modules.SourceModule[SrcL, LS]
     ) -> source_modules.BindingModule[SrcL, TgtL]:
+        ...
+
+
+class OTFModuleGenerator(Protocol[SrcL, LS, TgtL]):
+    def __call__(
+        self, source_module: source_modules.SourceModule[SrcL, LS]
+    ) -> source_modules.OTFSourceModule[SrcL, LS, TgtL]:
         ...
 
 

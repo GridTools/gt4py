@@ -4,12 +4,16 @@ tags: [backend]
 
 # Integration of compiled backends
 
-- **Status**: valid 
+- **Status**: superseded 
 - **Authors**: Peter Kardos (@petiaccja), Rico Häuselmann (@DropD)
 - **Created**: 2022-07-13
-- **Updated**: 2022-08-15
+- **Updated**: 2022-09-12
 
 Summary of the key design choices made for the live execution of generated C++ (and other compiled) code.
+
+**This document is superseded by**
+- [0011 - On The Fly Compilation](0011-_On_The_Fly_Compilation.md), which talks about the general architecture and design of on the fly compilation, and
+- [0012 - GridTools C++ OTF](0011-_GridTools_Cpp_OTF.md), which talks the specifics of on-the-fly compilation of the GridTools C++ backend generated code.
 
 ## Context
 

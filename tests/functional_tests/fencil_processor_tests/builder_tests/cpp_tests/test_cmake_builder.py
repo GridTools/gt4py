@@ -17,13 +17,13 @@ import jinja2
 import numpy as np
 import pytest
 
-from functional.fencil_processors.builders import cache
-from functional.fencil_processors.builders.cpp import bindings, build, cmake
+from functional.fencil_processors.builders import build_data, cache, importer
+from functional.fencil_processors.builders.cpp import bindings, cmake
 from functional.fencil_processors.source_modules import cpp_gen, source_modules
 
 
 @pytest.fixture
-def jit_module_example():
+def otf_module_example():
     entry_point = source_modules.Function(
         "stencil",
         parameters=[
@@ -61,23 +61,24 @@ def jit_module_example():
         language_settings=cpp_gen.CPP_DEFAULT,
     )
 
-    return source_modules.JITSourceModule(
+    return source_modules.OTFSourceModule(
         source_module=source_module_example,
         bindings_module=bindings.create_bindings(source_module_example),
     )
 
 
-def test_default_builder_generator(jit_module_example):
-    jit_builder = cmake.cmake_builder_generator()(
-        jit_module=jit_module_example, cache_strategy=cache.Strategy.SESSION
+def test_default_builder_generator(otf_module_example):
+    otf_builder = cmake.make_cmake_factory()(
+        otf_module=otf_module_example, cache_strategy=cache.Strategy.SESSION
     )
-    assert build.data_from_jit_path(jit_builder.root_path) == {"status": "unknown"}
+    assert not build_data.contains_data(otf_builder.root_path)
 
-    jit_builder.build()
+    otf_builder.build()
 
-    data = build.data_from_jit_path(jit_builder.root_path)
-    print(data)
-    print((jit_builder.root_path / "log_config.txt").read_text())
-    print((jit_builder.root_path / "log_build.txt").read_text())
+    data = build_data.read_data(otf_builder.root_path)
 
-    assert pathlib.Path(data["extension"]).exists()
+    assert data.status == build_data.OTFBuildStatus.COMPILED
+    assert pathlib.Path(otf_builder.root_path / data.module).exists()
+    assert hasattr(
+        importer.import_from_path(otf_builder.root_path / data.module), data.entry_point_name
+    )
