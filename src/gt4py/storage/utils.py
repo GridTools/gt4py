@@ -19,7 +19,6 @@ from typing import Any, Dict, Optional, Protocol, Tuple, Union
 import numpy as np
 
 import gt4py.utils as gt_util
-from gt4py.gtscript import Axis
 
 
 try:
@@ -67,6 +66,8 @@ def normalize_storage_spec(aligned_index, shape, dtype, dimensions):
             - backend: backend identifier string (numpy, gt:cpu_kfirst, gt:gpu, ...)
             - dimensions: a tuple of dimension identifier strings
     """
+
+    from gt4py.gtscript import Axis  # prevent circular import
 
     if dimensions is None:
         dimensions = (

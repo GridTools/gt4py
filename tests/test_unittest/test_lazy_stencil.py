@@ -69,12 +69,11 @@ def test_lazy_syntax_check(frontend, backend):
     lazy_pass = LazyStencil(
         StencilBuilder(copy_stencil_definition, frontend=frontend, backend=backend)
     )
-    lazy_fail = LazyStencil(
-        StencilBuilder(wrong_syntax_stencil_definition, frontend=frontend, backend=backend)
-    )
     lazy_pass.check_syntax()
     with pytest.raises(GTScriptDefinitionError):
-        lazy_fail.check_syntax()
+        LazyStencil(
+            StencilBuilder(wrong_syntax_stencil_definition, frontend=frontend, backend=backend)
+        )
 
 
 def test_lazy_call(frontend, backend):

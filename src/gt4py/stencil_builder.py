@@ -72,7 +72,7 @@ class StencilBuilder:
         backend = gt4py.backend.from_name(backend) if isinstance(backend, str) else backend
         self.backend: "BackendType" = backend(self)
         self.frontend: "FrontendType" = frontend or gt4py.frontend.from_name("gtscript")
-        self.caching = gt4py.caching.strategy_factory("jit", self)
+        self.caching = gt4py.caching.strategy_factory("jit", self, **self.options.cache_settings)
         self._build_data: Dict[str, Any] = {}
         self._externals: Dict[str, Any] = {}
 
@@ -215,6 +215,7 @@ class StencilBuilder:
         """
         self._build_data = {}
         self._externals = externals
+        self.with_caching(self.caching.name)
         return self
 
     @property
@@ -255,7 +256,10 @@ class StencilBuilder:
     def gtir_pipeline(self) -> GtirPipeline:
         return self._build_data.get("gtir_pipeline") or self._build_data.setdefault(
             "gtir_pipeline",
-            GtirPipeline(self.frontend.generate(self.definition, self.externals, self.options)),
+            GtirPipeline(
+                self.frontend.generate(self.definition, self.externals, self.options),
+                self.stencil_id,
+            ),
         )
 
     @property

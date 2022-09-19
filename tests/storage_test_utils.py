@@ -1,6 +1,3 @@
-import numpy as np
-
-
 try:
     import dace
 except ImportError:
@@ -23,17 +20,6 @@ class ArrayWrapper:
         return dace.data.create_datadescriptor(self.array)
 
 
-class NdarraySubclassWrapper(np.ndarray, ArrayWrapper):
-    """DaCe currently breaks for non-ndarrays at call time (works fine for compilation)."""
-
-    def __new__(cls, array, **kwargs):
-        return array.view(cls)
-
-    def __init__(self, array, **kwargs):
-        # skip ndarray init (already done.)
-        super(np.ndarray, self).__init__(array=array, **kwargs)
-
-
 class DimensionsWrapper(ArrayWrapper):
     def __init__(self, dimensions, **kwargs):
         self.__gt_dims__ = dimensions
@@ -49,7 +35,3 @@ class OriginWrapper(ArrayWrapper):
         res = super().__descriptor__()
         res.__gt_origin__ = self.__gt_origin__
         return res
-
-
-class NdarraySubclassOriginWrapper(NdarraySubclassWrapper, OriginWrapper):
-    pass

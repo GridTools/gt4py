@@ -17,7 +17,6 @@ from typing import Any, Optional, Sequence, Tuple, Union
 
 import numpy as np
 
-import gt4py.storage.utils
 from gt4py import backend as gt_backend
 
 
@@ -139,6 +138,8 @@ def from_array(
     aligned_index: Sequence[int],
     dimensions: Optional[Sequence[str]] = None,
 ) -> Union[np.ndarray, "cp.ndarray"]:
+    import gt4py.storage.utils  # prevent circular import
+
     is_cupy_array = cp is not None and isinstance(data, cp.ndarray)
     asarray = gt4py.storage.utils.as_cupy if is_cupy_array else gt4py.storage.utils.as_numpy
     shape = asarray(data).shape

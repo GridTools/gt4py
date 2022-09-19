@@ -275,7 +275,8 @@ class StencilObject(abc.ABC):
     def _make_origin_dict(origin: Any) -> Dict[str, Index]:
         try:
             if isinstance(origin, dict):
-                return dict(origin)
+                # keys can be dace StringLiteral in orchestration
+                return {str(k): v for k, v in origin.items()}
             if origin is None:
                 return {}
             if isinstance(origin, collections.abc.Iterable):
@@ -287,9 +288,11 @@ class StencilObject(abc.ABC):
 
         raise ValueError("Invalid 'origin' value ({})".format(origin))
 
+    @staticmethod
     def _get_max_domain(
-        self,
         array_infos: Dict[str, Optional[_ArgsInfo]],
+        domain_infos: DomainInfo,
+        field_infos: Dict[str, FieldInfo],
         origin: Dict[str, Tuple[int, ...]],
         *,
         squeeze: bool = True,
@@ -309,11 +312,11 @@ class StencilObject(abc.ABC):
         -------
             `Shape`: the maximum domain size.
         """
-        domain_ndim = self.domain_info.ndim
+        domain_ndim = domain_infos.ndim
         max_size = sys.maxsize
         max_domain = Shape([max_size] * domain_ndim)
 
-        for name, field_info in self.field_info.items():
+        for name, field_info in field_infos.items():
             if field_info.access != AccessKind.NONE:
                 info = array_infos.get(name, None)
                 assert info is not None, f"Invalid value for '{name}' field."
@@ -365,7 +368,11 @@ class StencilObject(abc.ABC):
         if not domain > Shape.zeros(domain_ndim):
             raise ValueError(f"Compute domain contains zero sizes '{domain}')")
 
-        if not domain <= (max_domain := self._get_max_domain(arg_infos, origin, squeeze=False)):
+        if not domain <= (
+            max_domain := self._get_max_domain(
+                arg_infos, self.domain_info, self.field_info, origin, squeeze=False
+            )
+        ):
             raise ValueError(
                 f"Compute domain too large (provided: {domain}, maximum: {max_domain})"
             )
@@ -457,16 +464,19 @@ class StencilObject(abc.ABC):
                         f"The type of parameter '{name}' is '{type(parameter)}' instead of '{parameter_info.dtype}'"
                     )
 
+    @staticmethod
     def _normalize_origins(
-        self, array_infos: Dict[str, Optional[_ArgsInfo]], origin: Optional[OriginType]
+        array_infos: Dict[str, Optional[_ArgsInfo]],
+        field_infos: Dict[str, FieldInfo],
+        origin: Optional[OriginType],
     ) -> Dict[str, Tuple[int, ...]]:
-        origin = self._make_origin_dict(origin)
+        origin = StencilObject._make_origin_dict(origin)
         all_origin = origin.get("_all_", None)
-
         # Set an appropriate origin for all fields
-        for name, field_info in self.field_info.items():
 
+        for name, field_info in field_infos.items():
             assert name in array_infos, f"Missing value for '{name}' field."
+
             field_origin = origin.get(name, None)
 
             if field_origin is not None:
@@ -482,10 +492,8 @@ class StencilObject(abc.ABC):
                     *gtc_utils.filter_mask(all_origin, field_info.domain_mask),
                     *((0,) * len(field_info.data_dims)),
                 )
-
             elif (info_origin := getattr(array_infos.get(name), "origin", None)) is not None:
                 origin[name] = info_origin  # type: ignore
-
             else:
                 origin[name] = (0,) * field_info.ndim
 
@@ -538,10 +546,12 @@ class StencilObject(abc.ABC):
 
         cache_key = _compute_cache_key(array_infos, parameter_args, domain, origin)
         if cache_key not in self._domain_origin_cache:
-            origin = self._normalize_origins(array_infos, origin)
+            origin = self._normalize_origins(array_infos, self.field_info, origin)
 
             if domain is None:
-                domain = self._get_max_domain(array_infos, origin)
+                domain = self._get_max_domain(
+                    array_infos, self.domain_info, self.field_info, origin
+                )
 
             if validate_args:
                 self._validate_args(array_infos, parameter_args, domain, origin)
@@ -599,7 +609,11 @@ class StencilObject(abc.ABC):
         """
         type(self)._domain_origin_cache.clear()
 
-    def __sdfg__(self, **kwargs):
+    def __deepcopy__(self, memodict=None):
+        # StencilObjects are singletons.
+        return self
+
+    def __sdfg__(self, *args, **kwargs):
         raise TypeError(
             f'Only dace backends are supported in DaCe-orchestrated programs. (found "{self.backend}")'
         )

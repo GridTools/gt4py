@@ -23,12 +23,17 @@ import gt4py.config
 from gt4py import gtscript
 from gt4py import storage as gt_storage
 from gt4py.gtscript import PARALLEL, computation, interval
+from gt4py.stencil_builder import StencilBuilder
 from gt4py.storage import utils as storage_utils
 
-from ..storage_test_utils import NdarraySubclassOriginWrapper, OriginWrapper
+from ..storage_test_utils import OriginWrapper
 
 
 dace = pytest.importorskip("dace")
+from gt4py.backend.dace_lazy_stencil import (  # noqa: E402 (needs to be guarded by above importorskip)
+    DaCeLazyStencil,
+)
+
 
 pytestmark = pytest.mark.usefixtures("dace_env")
 
@@ -50,19 +55,9 @@ def dace_env():
         yield
 
 
-@pytest.fixture(
-    params=[
-        "dace:cpu",
-        pytest.param("dace:gpu", marks=[pytest.mark.requires_gpu]),
-    ]
-)
-def dace_stencil(request):
-    @gtscript.stencil(backend=request.param)
-    def defn(inp: gtscript.Field[np.float64], outp: gtscript.Field[np.float64]):
-        with computation(PARALLEL), interval(...):
-            outp = inp  # noqa F841: local variable 'outp' is assigned to but never used
-
-    return defn
+@pytest.fixture(params=[gtscript.stencil, gtscript.lazy_stencil])
+def decorator(request):
+    return request.param
 
 
 def tuple_st(min_value, max_value):
@@ -77,14 +72,14 @@ def tuple_st(min_value, max_value):
     "backend",
     ["dace:cpu", pytest.param("dace:gpu", marks=[pytest.mark.requires_gpu])],
 )
-def test_basic(backend):
-    @gtscript.stencil(backend=backend)
+def test_basic(decorator, backend):
+    @decorator(backend=backend)
     def defn(outp: gtscript.Field[np.float64], par: np.float64):
         with computation(PARALLEL), interval(...):
             outp = par  # noqa F841: local variable 'outp' is assigned to but never used
 
     # DaCe in the currently tagged version of this repo (~=0.13 doesn't support non-numpy arrays)
-    wrapper_type = OriginWrapper if "gpu" in backend else NdarraySubclassOriginWrapper
+    wrapper_type = OriginWrapper if "gpu" in backend else OriginWrapper
 
     outp = wrapper_type(
         array=gt_storage.zeros(
@@ -107,16 +102,20 @@ def test_basic(backend):
 
 @pytest.mark.parametrize("domain", [(0, 2, 3), (3, 3, 3), (1, 1, 1)])
 @pytest.mark.parametrize("outp_origin", [(0, 0, 0), (7, 7, 7), (2, 2, 0)])
-def test_origin_offsetting_frozen(dace_stencil, domain, outp_origin):
-    backend = dace_stencil.backend
+def test_origin_offsetting_frozen(domain, outp_origin):
+    backend = "dace:cpu"
+
+    @gtscript.stencil(backend=backend)
+    def dace_stencil(inp: gtscript.Field[np.float64], outp: gtscript.Field[np.float64]):
+        with computation(PARALLEL), interval(...):
+            outp = inp  # noqa F841: local variable 'outp' is assigned to but never used
+
     frozen_stencil = dace_stencil.freeze(
         domain=domain, origin={"inp": (0, 0, 0), "outp": outp_origin}
     )
 
     # DaCe in the currently tagged version of this repo (~=0.13 doesn't support non-numpy arrays)
-    wrapper_type = OriginWrapper if "gpu" in backend else NdarraySubclassOriginWrapper
-
-    inp = wrapper_type(
+    inp = OriginWrapper(
         array=gt_storage.full(
             fill_value=7.0,
             shape=(10, 10, 10),
@@ -126,27 +125,23 @@ def test_origin_offsetting_frozen(dace_stencil, domain, outp_origin):
         ),
         origin=(0, 0, 0),
     )
-
-    outp = wrapper_type(
+    outp = OriginWrapper(
         array=gt_storage.zeros(
             dtype=np.float64, shape=(10, 10, 10), aligned_index=(0, 0, 0), backend=backend
         ),
         origin=(0, 0, 0),
     )
 
-    @dace.program(device=dace.DeviceType.GPU if "gpu" in backend else dace.DeviceType.CPU)
+    @dace.program
     def call_frozen_stencil():
         frozen_stencil(inp=inp, outp=outp)
 
     call_frozen_stencil()
 
-    inp = storage_utils.cpu_copy(inp)
-    outp = storage_utils.cpu_copy(outp)
-
     assert np.allclose(inp, 7.0)
 
     assert np.allclose(
-        outp[
+        np.asarray(outp)[
             outp_origin[0] : outp_origin[0] + domain[0],
             outp_origin[1] : outp_origin[1] + domain[1],
             outp_origin[2] : outp_origin[2] + domain[2],
@@ -159,17 +154,16 @@ def test_origin_offsetting_frozen(dace_stencil, domain, outp_origin):
 
 @pytest.mark.parametrize("domain", [(0, 2, 3), (3, 3, 3), (1, 1, 1)])
 @pytest.mark.parametrize("outp_origin", [(0, 0, 0), (7, 7, 7), (2, 2, 0)])
-def test_origin_offsetting_nofrozen(dace_stencil, domain, outp_origin):
+def test_origin_offsetting_nofrozen(domain, outp_origin):
+    backend = "dace:cpu"
 
-    if domain == (3, 3, 3) and outp_origin == (7, 7, 7) and dace_stencil.backend == "daint:gpu":
-        pytest.skip("Random failures on daint-ci, see github issue #848.")
-
-    backend = dace_stencil.backend
+    @gtscript.stencil(backend=backend)
+    def dace_stencil(inp: gtscript.Field[np.float64], outp: gtscript.Field[np.float64]):
+        with computation(PARALLEL), interval(...):
+            outp = inp  # noqa F841: local variable 'outp' is assigned to but never used
 
     # DaCe in the currently tagged version of this repo (~=0.13 doesn't support non-numpy arrays)
-    wrapper_type = OriginWrapper if "gpu" in backend else NdarraySubclassOriginWrapper
-
-    inp = wrapper_type(
+    inp = OriginWrapper(
         array=gt_storage.full(
             fill_value=7.0,
             shape=(10, 10, 10),
@@ -179,7 +173,7 @@ def test_origin_offsetting_nofrozen(dace_stencil, domain, outp_origin):
         ),
         origin=(0, 0, 0),
     )
-    outp = wrapper_type(
+    outp = OriginWrapper(
         array=gt_storage.zeros(
             dtype=np.float64, shape=(10, 10, 10), aligned_index=(0, 0, 0), backend=backend
         ),
@@ -188,32 +182,75 @@ def test_origin_offsetting_nofrozen(dace_stencil, domain, outp_origin):
 
     origin = {"inp": (0, 0, 0), "outp": outp_origin}
 
-    @dace.program(device=dace.DeviceType.GPU if "gpu" in backend else dace.DeviceType.CPU)
+    @dace.program
     def call_stencil_object():
         dace_stencil(inp=inp, outp=outp, domain=domain, origin=origin)
 
     call_stencil_object()
 
-    inp = storage_utils.cpu_copy(inp)
-    outp = storage_utils.cpu_copy(outp)
-
     assert np.allclose(inp, 7.0)
+
     assert np.allclose(
-        outp[
+        np.asarray(outp)[
             outp_origin[0] : outp_origin[0] + domain[0],
             outp_origin[1] : outp_origin[1] + domain[1],
             outp_origin[2] : outp_origin[2] + domain[2],
         ],
         7.0,
     )
-    assert np.sum(outp, axis=(0, 1, 2)) == np.prod(domain) * 7.0
+    assert np.sum(np.asarray(outp), axis=(0, 1, 2)) == np.prod(domain) * 7.0
 
 
-@pytest.mark.parametrize(
-    "backend",
-    ["dace:cpu", pytest.param("dace:gpu", marks=[pytest.mark.requires_gpu])],
-)
-def test_optional_arg_noprovide(backend):
+@pytest.mark.parametrize("domain", [(0, 2, 3), (3, 3, 3), (1, 1, 1)])
+@pytest.mark.parametrize("outp_origin", [(0, 0, 0), (7, 7, 7), (2, 2, 0)])
+def test_origin_offsetting_nofrozen_default_origin(domain, outp_origin):
+
+    backend = "dace:cpu"
+
+    @gtscript.stencil(backend=backend)
+    def dace_stencil(inp: gtscript.Field[np.float64], outp: gtscript.Field[np.float64]):
+        with computation(PARALLEL), interval(...):
+            outp = inp  # noqa F841: local variable 'outp' is assigned to but never used
+
+    inp = OriginWrapper(
+        array=gt_storage.full(
+            fill_value=7.0,
+            dtype=np.float64,
+            shape=(10, 10, 10),
+            aligned_index=(0, 0, 0),
+            backend=backend,
+        ),
+        origin=(0, 0, 0),
+    )
+    outp = OriginWrapper(
+        array=gt_storage.zeros(
+            dtype=np.float64, shape=(10, 10, 10), aligned_index=outp_origin, backend=backend
+        ),
+        origin=outp_origin,
+    )
+
+    @dace.program
+    def call_stencil_object(locinp, locoutp):
+        dace_stencil(inp=locinp, outp=locoutp, domain=domain)
+
+    call_stencil_object(locinp=inp, locoutp=outp)
+
+    assert np.allclose(np.asarray(inp), 7.0)
+    assert np.allclose(
+        np.asarray(outp)[
+            outp_origin[0] : outp_origin[0] + domain[0],
+            outp_origin[1] : outp_origin[1] + domain[1],
+            outp_origin[2] : outp_origin[2] + domain[2],
+        ],
+        7.0,
+    )
+    assert np.sum(np.asarray(outp), axis=(0, 1, 2)) == np.prod(domain) * 7.0
+
+
+def test_optional_arg_noprovide():
+
+    backend = "dace:cpu"
+
     @gtscript.stencil(backend=backend)
     def stencil(
         inp: gtscript.Field[np.float64],
@@ -230,9 +267,7 @@ def test_optional_arg_noprovide(backend):
     )
 
     # DaCe in the currently tagged version of this repo (~=0.13 doesn't support non-numpy arrays)
-    wrapper_type = OriginWrapper if "gpu" in backend else NdarraySubclassOriginWrapper
-
-    inp = wrapper_type(
+    inp = OriginWrapper(
         array=gt_storage.full(
             fill_value=7.0,
             shape=(10, 10, 10),
@@ -242,33 +277,28 @@ def test_optional_arg_noprovide(backend):
         ),
         origin=(0, 0, 0),
     )
-    outp = wrapper_type(
+    outp = OriginWrapper(
         array=gt_storage.zeros(
             dtype=np.float64, shape=(10, 10, 10), aligned_index=(0, 0, 0), backend=backend
         ),
         origin=(0, 0, 0),
     )
 
-    @dace.program(device=dace.DeviceType.GPU if "gpu" in backend else dace.DeviceType.CPU)
+    @dace.program
     def call_frozen_stencil():
         frozen_stencil(inp=inp, outp=outp)
 
     call_frozen_stencil()
 
-    inp = storage_utils.cpu_copy(inp)
-    outp = storage_utils.cpu_copy(outp)
-
     assert np.allclose(inp, 7.0)
     assert np.allclose(np.asarray(outp)[2:5, 2:5, :], 7.0)
     assert np.sum(np.asarray(outp), axis=(0, 1, 2)) == 90 * 7.0
 
 
-@pytest.mark.parametrize(
-    "backend",
-    ["dace:cpu", pytest.param("dace:gpu", marks=[pytest.mark.requires_gpu])],
-)
-def test_optional_arg_provide(backend):
-    @gtscript.stencil(backend=backend)
+def test_optional_arg_provide(decorator):
+    backend = "dace:cpu"
+
+    @decorator(backend=backend)
     def stencil(
         inp: gtscript.Field[np.float64],
         unused_field: gtscript.Field[np.float64],
@@ -278,15 +308,8 @@ def test_optional_arg_provide(backend):
         with computation(PARALLEL), interval(...):
             outp = inp  # noqa F841: local variable 'outp' is assigned to but never used
 
-    frozen_stencil = stencil.freeze(
-        domain=(3, 3, 10),
-        origin={"inp": (2, 2, 0), "outp": (2, 2, 0), "unused_field": (0, 0, 0)},
-    )
-
     # DaCe in the currently tagged version of this repo (~=0.13 doesn't support non-numpy arrays)
-    wrapper_type = OriginWrapper if "gpu" in backend else NdarraySubclassOriginWrapper
-
-    inp = wrapper_type(
+    inp = OriginWrapper(
         array=gt_storage.full(
             fill_value=7.0,
             shape=(10, 10, 10),
@@ -296,41 +319,41 @@ def test_optional_arg_provide(backend):
         ),
         origin=(0, 0, 0),
     )
-    outp = wrapper_type(
+    outp = OriginWrapper(
         array=gt_storage.zeros(
             dtype=np.float64, shape=(10, 10, 10), aligned_index=(0, 0, 0), backend=backend
         ),
         origin=(0, 0, 0),
     )
-    unused_field = wrapper_type(
+    unused_field = OriginWrapper(
         array=gt_storage.zeros(
             dtype=np.float64, shape=(10, 10, 10), aligned_index=(0, 0, 0), backend=backend
         ),
         origin=(0, 0, 0),
     )
 
-    @dace.program(device=dace.DeviceType.GPU if "gpu" in backend else dace.DeviceType.CPU)
-    def call_frozen_stencil():
-        frozen_stencil(inp=inp, unused_field=unused_field, outp=outp, unused_par=7.0)
+    # @dace.program
+    def call_stencil():
+        stencil(
+            inp=inp,
+            unused_field=unused_field,
+            outp=outp,
+            unused_par=7.0,
+            domain=(3, 3, 10),
+            origin={"inp": (2, 2, 0), "outp": (2, 2, 0), "unused_field": (0, 0, 0)},
+        )
 
-    call_frozen_stencil()
-
-    inp = storage_utils.cpu_copy(inp)
-    outp = storage_utils.cpu_copy(outp)
+    call_stencil()
 
     assert np.allclose(inp, 7.0)
     assert np.allclose(np.asarray(outp)[2:5, 2:5, :], 7.0)
     assert np.sum(np.asarray(outp), axis=(0, 1, 2)) == 90 * 7.0
 
 
-@pytest.mark.parametrize(
-    "backend",
-    ["dace:cpu", pytest.param("dace:gpu", marks=[pytest.mark.requires_gpu])],
-)
-def test_optional_arg_provide_aot(backend):
-    import dace.data
+def test_optional_arg_provide_aot(decorator):
+    backend = "dace:cpu"
 
-    @gtscript.stencil(backend=backend)
+    @decorator(backend=backend)
     def stencil(
         inp: gtscript.Field[np.float64],
         unused_field: gtscript.Field[np.float64],
@@ -340,15 +363,8 @@ def test_optional_arg_provide_aot(backend):
         with computation(PARALLEL), interval(...):
             outp = inp  # noqa F841: local variable 'outp' is assigned to but never used
 
-    frozen_stencil = stencil.freeze(
-        domain=(3, 3, 10),
-        origin={"inp": (2, 2, 0), "outp": (2, 2, 0), "unused_field": (0, 0, 0)},
-    )
-
     # DaCe in the currently tagged version of this repo (~=0.13 doesn't support non-numpy arrays)
-    wrapper_type = OriginWrapper if "gpu" in backend else NdarraySubclassOriginWrapper
-
-    inp = wrapper_type(
+    inp = OriginWrapper(
         array=gt_storage.full(
             fill_value=7.0,
             shape=(10, 10, 10),
@@ -358,50 +374,50 @@ def test_optional_arg_provide_aot(backend):
         ),
         origin=(0, 0, 0),
     )
-    outp = wrapper_type(
+    outp = OriginWrapper(
         array=gt_storage.zeros(
             dtype=np.float64, shape=(10, 10, 10), aligned_index=(0, 0, 0), backend=backend
         ),
         origin=(0, 0, 0),
     )
-    unused_field = wrapper_type(
+    unused_field = OriginWrapper(
         array=gt_storage.zeros(
             dtype=np.float64, shape=(10, 10, 10), aligned_index=(0, 0, 0), backend=backend
         ),
         origin=(0, 0, 0),
     )
 
-    @dace.program(device=dace.DeviceType.GPU if "gpu" in backend else dace.DeviceType.CPU)
-    def call_frozen_stencil(
+    @dace.program
+    def call_stencil(
         inp: dace.data.create_datadescriptor(inp),
         outp: dace.data.create_datadescriptor(outp),
         unused_field: dace.data.create_datadescriptor(unused_field),
         unused_par: dace.float64,  # type: ignore
     ):
-        frozen_stencil(inp=inp, unused_field=unused_field, outp=outp, unused_par=unused_par)
+        stencil(
+            inp=inp,
+            unused_field=unused_field,
+            outp=outp,
+            unused_par=unused_par,
+            domain=(3, 3, 10),
+            origin={"inp": (2, 2, 0), "outp": (2, 2, 0), "unused_field": (0, 0, 0)},
+        )
 
-    csdfg = call_frozen_stencil.compile()
+    csdfg = call_stencil.compile()
     csdfg(inp=inp, outp=outp, unused_field=unused_field, unused_par=7.0)
-
-    inp = storage_utils.cpu_copy(inp)
-    outp = storage_utils.cpu_copy(outp)
 
     assert np.allclose(inp, 7.0)
     assert np.allclose(np.asarray(outp)[2:5, 2:5, :], 7.0)
     assert np.sum(np.asarray(outp), axis=(0, 1, 2)) == 90 * 7.0
 
 
-def test_nondace_raises():
-    @gtscript.stencil(backend="numpy")
+def test_nondace_raises(decorator):
+    @decorator(backend="numpy")
     def numpy_stencil(inp: gtscript.Field[np.float64], outp: gtscript.Field[np.float64]):
         with computation(PARALLEL), interval(...):
             outp = inp  # noqa F841: local variable 'outp' is assigned to but never used
 
-    frozen_stencil = numpy_stencil.freeze(
-        domain=(3, 3, 3), origin={"inp": (0, 0, 0), "outp": (0, 0, 0)}
-    )
-
-    inp = NdarraySubclassOriginWrapper(
+    inp = OriginWrapper(
         array=gt_storage.full(
             fill_value=7.0,
             dtype=np.float64,
@@ -411,7 +427,7 @@ def test_nondace_raises():
         ),
         origin=(0, 0, 0),
     )
-    outp = NdarraySubclassOriginWrapper(
+    outp = OriginWrapper(
         array=gt_storage.zeros(
             dtype=np.float64,
             shape=(10, 10, 10),
@@ -422,8 +438,10 @@ def test_nondace_raises():
     )
 
     @dace.program
-    def call_frozen_stencil():
-        frozen_stencil(inp=inp, outp=outp)
+    def call_stencil():
+        numpy_stencil(
+            inp=inp, outp=outp, domain=(3, 3, 3), origin={"inp": (0, 0, 0), "outp": (0, 0, 0)}
+        )
 
     with pytest.raises(
         TypeError,
@@ -431,4 +449,31 @@ def test_nondace_raises():
             "Only dace backends are supported in DaCe-orchestrated programs." ' (found "numpy")'
         ),
     ):
-        call_frozen_stencil()
+        call_stencil()
+
+
+def simple_stencil_defn(outp: gtscript.Field[np.float64], par: np.float64):
+    with computation(PARALLEL), interval(...):
+        outp = par  # noqa F841: local variable 'outp' is assigned to but never used
+
+
+def test_lazy_sdfg():
+    backend = "dace:cpu"
+    builder = StencilBuilder(simple_stencil_defn, backend="dace:cpu").with_options(
+        name="simple_stencil", module=simple_stencil_defn.__module__
+    )
+    lazy_s = DaCeLazyStencil(builder)
+
+    outp = gt_storage.zeros(
+        dtype=np.float64, shape=(10, 10, 10), aligned_index=(0, 0, 0), backend=backend
+    )
+
+    inp = 7.0
+
+    @dace.program
+    def call_lazy_s(locoutp, locinp):
+        lazy_s(locoutp, par=locinp)
+
+    call_lazy_s.compile(locoutp=outp, locinp=inp)
+
+    assert "implementation" not in lazy_s.__dict__

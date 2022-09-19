@@ -27,8 +27,15 @@ from typing import Callable, Dict, Type
 import numpy as np
 
 from gt4py import definitions as gt_definitions
-from gt4py.lazy_stencil import LazyStencil
 
+
+try:
+    from gt4py.backend.dace_lazy_stencil import DaCeLazyStencil
+    from gt4py.lazy_stencil import LazyStencil
+
+
+except ImportError:
+    DaCeLazyStencil = LazyStencil
 
 # GTScript builtins
 MATH_BUILTINS = {
@@ -158,6 +165,7 @@ def stencil(
     format_source=True,
     name=None,
     rebuild=False,
+    cache_settings=None,
     **kwargs,
 ):
     """Generate an implementation of the stencil definition with the specified backend.
@@ -200,6 +208,13 @@ def stencil(
             Force rebuild of the :class:`gt4py.StencilObject` even if it is
             found in the cache. (`False` by default).
 
+        cache_settings: `dict`, optional
+            Dictionary to configure cache (directory) settings (see
+            ``gt4py.config.cache_settings``).
+            Possible key-value pairs:
+            - `root_path`: (str)
+            - `dir_name`: (str)
+
         **kwargs: `dict`, optional
             Extra backend-specific options. Check the specific backend
             documentation for further information.
@@ -222,6 +237,145 @@ def stencil(
     """
 
     from gt4py import loader as gt_loader
+
+    if build_info is not None and not isinstance(build_info, dict):
+        raise ValueError(f"Invalid 'build_info' dictionary ('{build_info}')")
+    if dtypes is not None and not isinstance(dtypes, dict):
+        raise ValueError(f"Invalid 'dtypes' dictionary ('{dtypes}')")
+    if externals is not None and not isinstance(externals, dict):
+        raise ValueError(f"Invalid 'externals' dictionary ('{externals}')")
+    if not isinstance(format_source, bool):
+        raise ValueError(f"Invalid 'format_source' bool value ('{name}')")
+    if name is not None and not isinstance(name, str):
+        raise ValueError(f"Invalid 'name' string ('{name}')")
+    if not isinstance(rebuild, bool):
+        raise ValueError(f"Invalid 'rebuild' bool value ('{rebuild}')")
+    if cache_settings is not None and not isinstance(cache_settings, dict):
+        raise ValueError(f"Invalid 'cache_settings' dictionary ('{cache_settings}')")
+
+    module = None
+    if name:
+        name_components = name.split(".")
+        name = name_components[-1]
+        module = ".".join(name_components[:-1])
+
+    name = name or ""
+    module = (
+        module or inspect.currentframe().f_back.f_globals["__name__"]
+    )  # definition_func.__globals__["__name__"] ??,
+
+    # Move hidden "_option" keys to _impl_opts
+    _impl_opts = {}
+    for key, value in kwargs.items():
+        if key.startswith("_"):
+            _impl_opts[key] = value
+    for key in _impl_opts:
+        kwargs.pop(key)
+
+    # Setup build_info timings
+    if build_info is not None:
+        time_keys = ("parse_time", "module_time", "codegen_time", "build_time", "load_time")
+        build_info.update({time_key: 0.0 for time_key in time_keys})
+
+    build_options = gt_definitions.BuildOptions(
+        name=name,
+        module=module,
+        format_source=format_source,
+        rebuild=rebuild,
+        backend_opts=kwargs,
+        build_info=build_info,
+        cache_settings=cache_settings or {},
+        impl_opts=_impl_opts,
+    )
+
+    def _decorator(definition_func):
+        if not isinstance(definition_func, types.FunctionType):
+            if hasattr(definition_func, "definition_func"):  # StencilObject
+                definition_func = definition_func.definition_func
+            elif callable(definition_func):  # General callable
+                definition_func = definition_func.__call__
+
+        original_annotations = _set_arg_dtypes(definition_func, dtypes or {})
+        out = gt_loader.gtscript_loader(
+            definition_func,
+            backend=backend,
+            build_options=build_options,
+            externals=externals or {},
+        )
+        setattr(definition_func, "__annotations__", original_annotations)
+        return out
+
+    if definition is None:
+        return _decorator
+    else:
+        return _decorator(definition)
+
+
+def lazy_stencil(
+    backend=None,
+    definition=None,
+    *,
+    build_info=None,
+    dtypes=None,
+    externals=None,
+    format_source=True,
+    name=None,
+    rebuild=False,
+    eager=False,
+    check_syntax=True,
+    **kwargs,
+):
+    """
+    Create a stencil object with deferred building and optional up-front syntax checking.
+
+    Parameters
+    ----------
+        backend : `str`
+            Name of the implementation backend.
+
+        definition : `None` when used as a decorator, otherwise a `function` or a `:class:`gt4py.StencilObject`
+            Function object defining the stencil.
+
+        build_info : `dict`, optional
+            Dictionary used to store information about the stencil generation.
+            (`None` by default).
+
+        dtypes: `dict`[`str`, dtype_definition], optional
+            Specify dtypes for string keys in the argument annotations.
+
+        externals: `dict`, optional
+            Specify values for otherwise unbound symbols.
+
+        format_source : `bool`, optional
+            Format generated sources when possible (`True` by default).
+
+        name : `str`, optional
+            The fully qualified name of the generated :class:`StencilObject`.
+            If `None`, it will be set to the qualified name of the definition function.
+            (`None` by default).
+
+        rebuild : `bool`, optional
+            Force rebuild of the :class:`gt4py.StencilObject` even if it is
+            found in the cache. (`False` by default).
+
+        eager : `bool`, optional
+            If true do not defer stencil building and instead return the fully built raw implementation object.
+
+        check_syntax: `bool`, default=True, optional
+            If true, build and cache the IR build stage already, which checks stencil definition syntax.
+
+        **kwargs: `dict`, optional
+            Extra backend-specific options. Check the specific backend
+            documentation for further information.
+
+    Returns
+    -------
+        :class:`gridtools.build.LazyStencil`
+            Wrapper around an instance of the dynamically-generated subclass of :class:`gt4py.StencilObject`.
+            Defers the generation step until the last moment and allows syntax checking independently.
+            Also gives access to a more fine grained generate / build process.
+    """
+    from gt4py.stencil_builder import StencilBuilder
 
     if build_info is not None and not isinstance(build_info, dict):
         raise ValueError(f"Invalid 'build_info' dictionary ('{build_info}')")
@@ -277,98 +431,21 @@ def stencil(
             elif callable(definition_func):  # General callable
                 definition_func = definition_func.__call__
 
-        original_annotations = _set_arg_dtypes(definition_func, dtypes or {})
-        out = gt_loader.gtscript_loader(
-            definition_func,
-            backend=backend,
-            build_options=build_options,
-            externals=externals or {},
-        )
-        setattr(definition_func, "__annotations__", original_annotations)
-        return out
+        if not build_options.name:
+            build_options.name = f"{definition_func.__name__}"
+        if backend and "dace" in backend:
+            stencil = DaCeLazyStencil(
+                StencilBuilder(
+                    definition_func, backend=backend, options=build_options
+                ).with_externals(externals or {})
+            )
 
-    if definition is None:
-        return _decorator
-    else:
-        return _decorator(definition)
-
-
-def lazy_stencil(
-    backend=None,
-    definition=None,
-    *,
-    build_info=None,
-    dtypes=None,
-    externals=None,
-    name=None,
-    rebuild=False,
-    eager=False,
-    check_syntax=True,
-    **kwargs,
-):
-    """
-    Create a stencil object with deferred building and optional up-front syntax checking.
-
-    Parameters
-    ----------
-        backend : `str`
-            Name of the implementation backend.
-
-        definition : `None` when used as a decorator, otherwise a `function` or a `:class:`gt4py.StencilObject`
-            Function object defining the stencil.
-
-        build_info : `dict`, optional
-            Dictionary used to store information about the stencil generation.
-            (`None` by default).
-
-        dtypes: `dict`[`str`, dtype_definition], optional
-            Specify dtypes for string keys in the argument annotations.
-
-        externals: `dict`, optional
-            Specify values for otherwise unbound symbols.
-
-        name : `str`, optional
-            The fully qualified name of the generated :class:`StencilObject`.
-            If `None`, it will be set to the qualified name of the definition function.
-            (`None` by default).
-
-        rebuild : `bool`, optional
-            Force rebuild of the :class:`gt4py.StencilObject` even if it is
-            found in the cache. (`False` by default).
-
-        eager : `bool`, optional
-            If true do not defer stencil building and instead return the fully built raw implementation object.
-
-        check_syntax: `bool`, default=True, optional
-            If true, build and cache the IR build stage already, which checks stencil definition syntax.
-
-        **kwargs: `dict`, optional
-            Extra backend-specific options. Check the specific backend
-            documentation for further information.
-
-    Returns
-    -------
-        :class:`gridtools.build.LazyStencil`
-            Wrapper around an instance of the dynamically-generated subclass of :class:`gt4py.StencilObject`.
-            Defers the generation step until the last moment and allows syntax checking independently.
-            Also gives access to a more fine grained generate / build process.
-    """
-    from gt4py.stencil_builder import StencilBuilder
-
-    def _decorator(func):
-        _set_arg_dtypes(func, dtypes or {})
-        options = gt_definitions.BuildOptions(
-            **{
-                **StencilBuilder.default_options_dict(func),
-                **StencilBuilder.name_to_options_args(name),
-                "rebuild": rebuild,
-                "build_info": build_info,
-                **StencilBuilder.nest_impl_options(kwargs),
-            }
-        )
-        stencil = LazyStencil(
-            StencilBuilder(func, backend=backend, options=options).with_externals(externals or {})
-        )
+        else:
+            stencil = LazyStencil(
+                StencilBuilder(
+                    definition_func, backend=backend, options=build_options
+                ).with_externals(externals or {})
+            )
         if eager:
             stencil = stencil.implementation
         elif check_syntax:
