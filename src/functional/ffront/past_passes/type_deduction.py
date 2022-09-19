@@ -57,16 +57,31 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         new_args = self.visit(node.args, **kwargs)
         new_kwargs = self.visit(node.kwargs, **kwargs)
 
-        # assert "out" not in new_func.type.kwargs
-
+        # perform type checks for "out" and "field_domain" entries
         try:
             if not isinstance(new_func.type, (ct.FieldOperatorType, ct.ScanOperatorType)):
                 raise GTTypeError(
                     f"Only calls `FieldOperator`s and `ScanOperators` "
                     f"allowed in `Program`, but got `{new_func.type}`."
                 )
+
             if "out" not in new_kwargs:
                 raise GTTypeError("Missing required keyword argument(s) `out`.")
+            elif "field_domain" not in new_kwargs:
+                raise GTTypeError("Missing required keyword argument(s) `field_domain`.")
+
+            domain_kwarg = new_kwargs["field_domain"]
+
+            if not isinstance(domain_kwarg, past.Dict):
+                raise GTTypeError(
+                    f"Only calls Dictionary allowed in field_domain, but got `{type(domain_kwarg)}`."
+                )
+
+            for domain_values in domain_kwarg.values_:
+                if not isinstance(domain_values.type, ct.TupleType):
+                    raise GTTypeError(
+                        f"Only Tuples allowed in `field_domain` dictionary values, but got `{domain_values.type}`."
+                    )
 
             arg_types = [arg.type for arg in new_args]
             kwarg_types = {name: expr.type for name, expr in new_kwargs.items() if name != "out" and name != "field_domain"}
