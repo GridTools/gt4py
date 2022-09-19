@@ -546,3 +546,29 @@ def test_where_bad_dim():
         match=r"Return arguments need to be of same type",
     ):
         _ = FieldOperatorParser.apply_to_function(bad_dim_where)
+
+def test_where_mixed_dims():
+    ADim = Dimension("ADim")
+    BDim = Dimension("BDim")
+
+    def tuple_where_mix_dims(a: Field[[ADim], bool], b: Field[[ADim], float64], c: Field[[ADim, BDim], float64]):
+        return where(a, ((c, 9.0), (b, 6.0)), ((8.0, b), (5.0, 9.0)))
+
+    parsed = FieldOperatorParser.apply_to_function(tuple_where_mix_dims)
+
+    assert parsed.body[0].value.type == ct.TupleType(
+        types=[
+            ct.TupleType(
+                types=[
+                    ct.FieldType(dims=[ADim, BDim], dtype=ct.ScalarType(kind=ct.ScalarKind.FLOAT64)),
+                    ct.FieldType(dims=[ADim, BDim], dtype=ct.ScalarType(kind=ct.ScalarKind.FLOAT64)),
+                ]
+            ),
+            ct.TupleType(
+                types=[
+                    ct.FieldType(dims=[ADim, BDim], dtype=ct.ScalarType(kind=ct.ScalarKind.FLOAT64)),
+                    ct.FieldType(dims=[ADim, BDim], dtype=ct.ScalarType(kind=ct.ScalarKind.FLOAT64)),
+                ]
+            ),
+        ]
+    )
