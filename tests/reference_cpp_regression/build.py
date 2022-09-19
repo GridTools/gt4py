@@ -27,9 +27,6 @@ GT4PY_INSTALLATION_PATH = os.path.dirname(inspect.getabsfile(gt4py))
 EXTERNAL_SRC_PATH = os.path.join(GT4PY_INSTALLATION_PATH, "_external_src")
 
 
-assert gt_src_manager.has_gt_sources() or gt_src_manager.install_gt_sources()
-
-
 def compile_reference():
     current_dir = os.path.dirname(__file__)
     build_opts = pyext_builder.get_gt_pyext_build_opts().copy()
@@ -53,4 +50,7 @@ def compile_reference():
 
 
 if __name__ == "__main__":
+    if not gt_src_manager.has_gt_sources():
+        gt_src_manager.install_gt_sources()
+
     compile_reference()

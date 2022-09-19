@@ -39,8 +39,8 @@ from .gtcpp_utils import (
 from .utils import match
 
 
-if not gt_src_manager.has_gt_sources() and not gt_src_manager.install_gt_sources():
-    raise RuntimeError("Missing GridTools sources.")
+if not gt_src_manager.has_gt_sources():
+    gt_src_manager.install_gt_sources()
 
 
 def build_gridtools_test(tmp_path: Path, code: str):

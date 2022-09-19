@@ -28,61 +28,48 @@ _GRIDTOOLS_INCLUDE_PATHS = gt_config.build_settings["gt_include_path"]
 _GRIDTOOLS_REPO_DIRNAMES = gt_config.GT_REPO_DIRNAME
 
 
-def install_gt_sources() -> bool:
-    if has_gt_sources():
-        return True
+def install_gt_sources() -> None:
+    if not has_gt_sources():
+        GIT_BRANCH = _GRIDTOOLS_GIT_BRANCH
+        GIT_REPO = _GRIDTOOLS_GIT_REPO
 
-    GIT_BRANCH = _GRIDTOOLS_GIT_BRANCH
-    GIT_REPO = _GRIDTOOLS_GIT_REPO
+        install_path = os.path.dirname(__file__)
+        external_path = os.path.abspath(os.path.join(install_path, "_external_src"))
+        target_path = os.path.join(external_path, _GRIDTOOLS_REPO_DIRNAMES)
+        lock_file = os.path.join(external_path, ".gridtools.lock")
 
-    install_path = os.path.dirname(__file__)
-    external_path = os.path.abspath(os.path.join(install_path, "_external_src"))
-    target_path = os.path.join(external_path, _GRIDTOOLS_REPO_DIRNAMES)
-    lock_file = os.path.join(external_path, ".gridtools.lock")
+        with open(lock_file, mode="w") as f:
+            fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+            if not has_gt_sources():
+                git_cmd = f"git clone --depth 1 -b {GIT_BRANCH} {GIT_REPO} {target_path}"
+                print(f"Getting GridTools C++ sources...\n$ {git_cmd}")
+                subprocess.check_call(git_cmd.split(), stderr=subprocess.STDOUT)
 
-    with open(lock_file, mode="w") as f:
-        fcntl.flock(f.fileno(), fcntl.LOCK_EX)
         if not has_gt_sources():
-            git_cmd = f"git clone --depth 1 -b {GIT_BRANCH} {GIT_REPO} {target_path}"
-            print(f"Getting GridTools C++ sources...\n$ {git_cmd}")
-            subprocess.check_call(git_cmd.split(), stderr=subprocess.STDOUT)
-
-    is_ok = has_gt_sources()
-    if is_ok:
-        print("Success!!")
-    else:
-        print(
-            f"\nOooops! GridTools sources have not been installed!\n"
-            f"Install them manually in '{install_path}/_external_src/'\n\n"
-            f"\tExample: git clone --depth 1 -b {GIT_BRANCH} {GIT_REPO} {target_path}\n"
-        )
-
-    return is_ok
+            raise RuntimeError(
+                f"\nOooops! GridTools sources have not been installed!\n"
+                f"Install them manually in '{install_path}/_external_src/'\n\n"
+                f"\tExample: git clone --depth 1 -b {GIT_BRANCH} {GIT_REPO} {target_path}\n"
+            )
 
 
-def remove_gt_sources() -> bool:
+def remove_gt_sources() -> None:
     install_path = os.path.dirname(__file__)
     target_path = os.path.abspath(
         os.path.join(install_path, "_external_src", _GRIDTOOLS_REPO_DIRNAMES)
     )
 
-    is_ok = not os.path.exists(target_path)
-    if not is_ok:
+    if os.path.exists(target_path):
         rm_cmd = f"rm -Rf {target_path}"
         print(f"Deleting sources...\n$ {rm_cmd}")
         subprocess.run(rm_cmd.split())
 
-        is_ok = not os.path.exists(target_path)
-        if is_ok:
-            print("Success!!")
-        else:
-            print(
+        if os.path.exists(target_path):
+            raise RuntimeError(
                 f"\nOooops! Something went wrong. GridTools sources may have not been removed!\n"
                 f"Remove them manually from '{install_path}/_external_src/'\n\n"
                 f"\tExample: rm -Rf {target_path}"
             )
-
-    return is_ok
 
 
 def has_gt_sources() -> bool:
