@@ -88,7 +88,6 @@ class NumpyBackend(BaseBackend, CLIBackendMixin):
     }
     languages = {"computation": "python", "bindings": ["python"]}
     MODULE_GENERATOR_CLASS = ModuleGenerator
-    GTIR_KEY = "gtc:gtir"
 
     def generate_computation(self) -> Dict[str, Union[str, Dict]]:
         computation_name = (
