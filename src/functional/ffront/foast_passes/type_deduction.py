@@ -52,10 +52,10 @@ def extract_promoted_tuple_type(
     promoted_type: None | ct.FieldType | ct.ScalarType,
 ) -> ct.FieldType:
     """
-    Extract argument type in tuple to which all others need to be promoted to.
+    Extract argument type in tuple to which all others need to be promoted.
 
     If arguments types in a tuple are different (e.g. some are Fields and others Scalars), they all need to be promoted to be the same.
-    This function extract which type the promotion has to be done with respect of.
+    This function extracts the type with respect to which the promotion has to be done.
 
     """
     for element in node_type_ls:
