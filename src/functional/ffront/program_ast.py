@@ -53,12 +53,10 @@ class Expr(LocatedNode):
 class Name(Expr):
     id: Coerced[SymbolRef]  # noqa: A003
 
-
 class Call(Expr):
     func: Name
     args: list[Expr]
     kwargs: dict[str, Expr]
-
 
 class Subscript(Expr):
     value: Name
@@ -71,6 +69,11 @@ class TupleExpr(Expr):
 
 class Constant(Expr):
     value: Any  # TODO(tehrengruber): be more restrictive
+
+
+class Dict(Expr):
+    keys_: list[Constant]
+    values_: list[Expr]
 
 
 class Slice(Expr):

@@ -1074,6 +1074,7 @@ def fendef_embedded(fun: Callable[..., None], *args: Any, **kwargs: Any):
     ) -> None:
         _validate_domain(domain_, kwargs["offset_provider"])
         domain: dict[Tag, range] = _dimension_to_tag(domain_)
+        domain = domain | kwargs.get("field_domain")
         if not (is_located_field(out) or can_be_tuple_field(out)):
             raise TypeError("Out needs to be a located field.")
 
