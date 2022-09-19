@@ -76,6 +76,9 @@ class ProgramParser(DialectParser[past.Program]):
     def visit_Name(self, node: ast.Name) -> past.Name:
         return past.Name(id=node.id, location=self._make_loc(node))
 
+    def visit_Dict(self, node: ast.Dict) -> past.Dict:
+        return past.Dict(keys_=[self.visit(param) for param in node.keys], values_=[self.visit(param) for param in node.values], location=self._make_loc(node))
+
     def visit_Call(self, node: ast.Call) -> past.Call:
         new_func = self.visit(node.func)
         if not isinstance(new_func, past.Name):
