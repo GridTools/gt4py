@@ -479,28 +479,6 @@ def test_scalar_arg(fieldview_backend):
     assert np.allclose(ref, out.array())
 
 
-def test_nested_scalar_arg(fieldview_backend):
-    if fieldview_backend == gtfn_cpu.run_gtfn:
-        pytest.skip("ConstantFields are not supported yet.")
-    Vertex = Dimension("Vertex")
-    size = 5
-    inp = 5.0
-    out = np_as_located_field(Vertex)(np.zeros([size]))
-
-    @field_operator(backend=fieldview_backend)
-    def scalar_arg_inner(scalar_inp: float64) -> Field[[Vertex], float64]:
-        return broadcast(scalar_inp + 1.0, (Vertex,))
-
-    @field_operator(backend=fieldview_backend)
-    def scalar_arg(scalar_inp: float64) -> Field[[Vertex], float64]:
-        return scalar_arg_inner(scalar_inp + 1.0)
-
-    scalar_arg(inp, out=out, offset_provider={})
-
-    ref = np.full([size], 7.0)
-    assert np.allclose(ref, out.array())
-
-
 def test_scalar_arg_with_field(fieldview_backend):
     if fieldview_backend == gtfn_cpu.run_gtfn:
         pytest.skip("IndexFields and ConstantFields are not supported yet.")
@@ -713,92 +691,6 @@ def test_conditional_shifted(fieldview_backend):
     assert np.allclose(np.where(mask, a, b)[1:], out.array()[:-1])
 
 
-def test_conditional_tuple_1():
-    size = 10
-    mask = np_as_located_field(IDim)(np.zeros((size,), dtype=bool))
-    mask.array()[0 : (size // 2)] = True
-    a = np_as_located_field(IDim)(np.ones((size,)))
-    c = np_as_located_field(IDim)(np.zeros((size,)))
-    d = np_as_located_field(IDim)(np.zeros((size,)))
-
-    @field_operator
-    def conditional_tuple(
-        mask: Field[[IDim], bool], a: Field[[IDim], float64]
-    ) -> tuple[Field[[IDim], float64], Field[[IDim], float64]]:
-        return where(mask, (a, 3.0), (2.0, 7.0))
-
-    @program
-    def conditional_tuple_p(
-        mask: Field[[IDim], bool],
-        a: Field[[IDim], float64],
-        c: Field[[IDim], float64],
-        d: Field[[IDim], float64],
-    ):
-        conditional_tuple(mask, a, out=(c, d))
-
-    conditional_tuple_p(mask, a, c, d, offset_provider={})
-
-    assert np.allclose(
-        np.where(mask, (a, np.full(size, 3.0)), (np.full(size, 2.0), np.full(size, 7.0))), (c, d)
-    )
-
-
-def test_conditional_tuple_2():
-    size = 10
-    mask = np_as_located_field(IDim)(np.zeros((size,), dtype=bool))
-    mask.array()[0 : (size // 2)] = True
-    a = np_as_located_field(IDim)(np.ones((size,)))
-    b = np_as_located_field(IDim)(np.ones((size,)))
-    c = np_as_located_field(IDim)(np.zeros((size,)))
-    d = np_as_located_field(IDim)(np.zeros((size,)))
-
-    @field_operator
-    def conditional_tuple_2_field_op(
-        mask: Field[[IDim], bool], a: Field[[IDim], float64], b: Field[[IDim], float64]
-    ) -> tuple[tuple[Field[[IDim], float64], Field[[IDim], float64]], Field[[IDim], float64]]:
-        return where(mask, ((3.0, 6.0), a), ((2.0, 7.0), b))
-
-
-def test_conditional_nested_tuple():
-    size = 10
-    mask = np_as_located_field(IDim)(np.zeros((size,), dtype=bool))
-    mask.array()[0 : (size // 2)] = True
-    a = np_as_located_field(IDim)(np.ones((size,)))
-    b = np_as_located_field(IDim)(np.ones((size,)))
-    c = np_as_located_field(IDim)(np.zeros((size,)))
-    d = np_as_located_field(IDim)(np.zeros((size,)))
-
-    @field_operator
-    def conditional_tuple_3_field_op(
-        mask: Field[[IDim], bool], a: Field[[IDim], float64], b: Field[[IDim], float64]
-    ) -> tuple[
-        tuple[Field[[IDim], float64], Field[[IDim], float64]],
-        tuple[Field[[IDim], float64], Field[[IDim], float64]],
-    ]:
-        return where(mask, ((a, b), (b, a)), ((5.0, 7.0), (7.0, 5.0)))
-
-    @program
-    def conditional_tuple_3_p(
-        mask: Field[[IDim], bool],
-        a: Field[[IDim], float64],
-        b: Field[[IDim], float64],
-        c: Field[[IDim], float64],
-        d: Field[[IDim], float64],
-    ):
-        conditional_tuple_3_field_op(mask, a, b, out=((c, d), (d, c)))
-
-    conditional_tuple_3_p(mask, a, b, c, d, offset_provider={})
-
-    assert np.allclose(
-        np.where(
-            mask,
-            ((a, b), (b, a)),
-            ((np.full(size, 5.0), np.full(size, 7.0)), (np.full(size, 7.0), np.full(size, 5.0))),
-        ),
-        ((c, d), (d, c)),
-    )
-
-
 def test_nested_tuple_return():
     size = 10
     a = np_as_located_field(IDim)(np.ones((size,)))
@@ -995,3 +887,50 @@ def test_domain():
     expected[1:9, 4:6] = 1 + 1
 
     np.allclose(expected, a)
+
+
+def test_scan_tuple_output(fieldview_backend):
+    if fieldview_backend == gtfn_cpu.run_gtfn:
+        pytest.xfail("gtfn does not yet support scan pass.")
+
+    KDim = Dimension("K", kind=DimensionKind.VERTICAL)
+    size = 10
+    init = (0.0, 1.0)
+    inp = np_as_located_field(KDim)(np.arange(0, size, 1.0))
+    out1 = np_as_located_field(KDim)(np.zeros((size,)))
+    out2 = np_as_located_field(KDim)(np.zeros((size,)))
+    expected = np.arange(init[1] + 1.0, init[1] + 1.0 + size, 1)
+
+    @scan_operator(axis=KDim, forward=True, init=init, backend=fieldview_backend)
+    def simple_scan_operator(carry: tuple[float, float], x: float) -> tuple[float, float]:
+        return (x, carry[1] + 1.0)
+
+    # TODO(tehrengruber): directly call scan operator when this is supported
+    #  for tuple outputs
+    @program
+    def simple_scan_operator_program(
+        x: Field[[KDim], float], out1: Field[[KDim], float], out2: Field[[KDim], float]
+    ) -> None:
+        simple_scan_operator(x, out=(out1, out2))
+
+    simple_scan_operator_program(inp, out1, out2, offset_provider={})
+
+    assert np.allclose(inp, out1)
+    assert np.allclose(expected, out2)
+
+
+def test_docstring():
+    size = 10
+    a = np_as_located_field(IDim)(np.ones((size,)))
+
+    @field_operator
+    def fieldop_with_docstring(a: Field[[IDim], float64]) -> Field[[IDim], float64]:
+        """My docstring."""
+        return a
+
+    @program
+    def test_docstring(a: Field[[IDim], float64]) -> Field[[IDim], float64]:
+        """My docstring."""
+        fieldop_with_docstring(a, out=a)
+
+    test_docstring(a, offset_provider={})
