@@ -123,7 +123,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
     def _visit_stencil_call(self, node: past.Call, **kwargs) -> itir.StencilClosure:
         assert type_info.is_field_type_or_tuple_of_field_type(node.kwargs["out"].type)
 
-        output, domain = self._visit_stencil_call_out_arg(node.kwargs["out"], **kwargs)
+        output, domain = self._visit_stencil_call_out_arg(node.kwargs["out"], node.kwargs["field_domain"], **kwargs)
 
         return itir.StencilClosure(
             domain=domain,
@@ -172,21 +172,25 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             )
 
     def _construct_itir_domain_arg(
-        self, out_field: past.Name, slices: Optional[list[past.Slice]] = None
+        self, out_field: past.Name, node_field_domain: past.Dict, slices: Optional[list[past.Slice]] = None
     ) -> itir.FunCall:
         domain_args = []
         for dim_i, dim in enumerate(out_field.type.dims):
             # an expression for the size of a dimension
             dim_size = itir.SymRef(id=_size_arg_from_field(out_field.id, dim_i))
             # bounds
-            lower = self._visit_slice_bound(
-                slices[dim_i].lower if slices else None,
-                itir.Literal(value="0", type="int"),
-                dim_size,
-            )
-            upper = self._visit_slice_bound(
-                slices[dim_i].upper if slices else None, dim_size, dim_size
-            )
+            if len(node_field_domain.values_) > dim_i:
+                lower = itir.Literal(value=str(node_field_domain.values_[dim_i].elts[0].value), type="int")
+                upper = itir.Literal(value=str(node_field_domain.values_[dim_i].elts[1].value), type="int")
+            else:
+                lower = self._visit_slice_bound(
+                    slices[dim_i].lower if slices else None,
+                    itir.Literal(value="0", type="int"),
+                    dim_size,
+                )
+                upper = self._visit_slice_bound(
+                    slices[dim_i].upper if slices else None, dim_size, dim_size
+                )
             if dim.kind == DimensionKind.LOCAL:
                 raise GTTypeError(f"Dimension {dim.value} must not be local.")
             domain_args.append(
@@ -226,20 +230,20 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         return out_field_slice_
 
     def _visit_stencil_call_out_arg(
-        self, node: past.Expr, **kwargs
+        self, node_out: past.Expr, node_field_domain: past.Dict, **kwargs
     ) -> tuple[itir.SymRef, itir.FunCall]:
-        if isinstance(node, past.Subscript):
+        if isinstance(node_out, past.Subscript):
             # as the ITIR does not support slicing a field we have to do a deeper
             #  inspection of the PAST to emulate the behaviour
-            out_field_name: past.Name = node.value
+            out_field_name: past.Name = node_out.value
             return (
                 self._construct_itir_out_arg(out_field_name),
-                self._construct_itir_domain_arg(out_field_name, self._compute_field_slice(node)),
+                self._construct_itir_domain_arg(out_field_name, node_field_domain, self._compute_field_slice(node_out)),
             )
-        elif isinstance(node, past.Name):
-            return (self._construct_itir_out_arg(node), self._construct_itir_domain_arg(node))
-        elif isinstance(node, past.TupleExpr):
-            flattened = _flatten_tuple_expr(node)
+        elif isinstance(node_out, past.Name):
+            return (self._construct_itir_out_arg(node_out), self._construct_itir_domain_arg(node_out, node_field_domain))
+        elif isinstance(node_out, past.TupleExpr):
+            flattened = _flatten_tuple_expr(node_out)
 
             first_field = flattened[0]
             assert all(
@@ -258,8 +262,8 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                 first_field = first_field.value
 
             return (
-                self._construct_itir_out_arg(node),
-                self._construct_itir_domain_arg(first_field, field_slice),
+                self._construct_itir_out_arg(node_out),
+                self._construct_itir_domain_arg(first_field, node_field_domain, field_slice),
             )
         else:
             raise AssertionError(

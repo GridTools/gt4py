@@ -25,15 +25,18 @@ from functional.iterator.transforms.pass_manager import apply_common_transforms
 def generate(program: itir.FencilDefinition, **kwargs: Any) -> str:
     transformed = program
     offset_provider = kwargs.get("offset_provider")
+    field_domain = kwargs.get("field_domain")
     transformed = apply_common_transforms(
         program,
         lift_mode=kwargs.get("lift_mode"),
         offset_provider=offset_provider,
+        field_domain=field_domain,
         unroll_reduce=True,
     )
     gtfn_ir = GTFN_lowering().visit(
         transformed,
         offset_provider=offset_provider,
+        field_domain=field_domain,
         column_axis=kwargs.get("column_axis"),
     )
     generated_code = GTFNCodegen.apply(gtfn_ir, **kwargs)
