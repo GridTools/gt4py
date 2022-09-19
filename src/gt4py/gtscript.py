@@ -27,13 +27,11 @@ from typing import Callable, Dict, Type
 import numpy as np
 
 from gt4py import definitions as gt_definitions
+from gt4py.lazy_stencil import LazyStencil
 
 
 try:
     from gt4py.backend.dace_lazy_stencil import DaCeLazyStencil
-    from gt4py.lazy_stencil import LazyStencil
-
-
 except ImportError:
     DaCeLazyStencil = LazyStencil
 
