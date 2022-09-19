@@ -78,10 +78,7 @@ def test_basic(decorator, backend):
         with computation(PARALLEL), interval(...):
             outp = par  # noqa F841: local variable 'outp' is assigned to but never used
 
-    # DaCe in the currently tagged version of this repo (~=0.13 doesn't support non-numpy arrays)
-    wrapper_type = OriginWrapper if "gpu" in backend else OriginWrapper
-
-    outp = wrapper_type(
+    outp = OriginWrapper(
         array=gt_storage.zeros(
             dtype=np.float64, shape=(10, 10, 10), aligned_index=(0, 0, 0), backend=backend
         ),
@@ -114,7 +111,6 @@ def test_origin_offsetting_frozen(domain, outp_origin):
         domain=domain, origin={"inp": (0, 0, 0), "outp": outp_origin}
     )
 
-    # DaCe in the currently tagged version of this repo (~=0.13 doesn't support non-numpy arrays)
     inp = OriginWrapper(
         array=gt_storage.full(
             fill_value=7.0,
@@ -162,7 +158,6 @@ def test_origin_offsetting_nofrozen(domain, outp_origin):
         with computation(PARALLEL), interval(...):
             outp = inp  # noqa F841: local variable 'outp' is assigned to but never used
 
-    # DaCe in the currently tagged version of this repo (~=0.13 doesn't support non-numpy arrays)
     inp = OriginWrapper(
         array=gt_storage.full(
             fill_value=7.0,
@@ -266,7 +261,6 @@ def test_optional_arg_noprovide():
         origin={"inp": (2, 2, 0), "outp": (2, 2, 0), "unused_field": (0, 0, 0)},
     )
 
-    # DaCe in the currently tagged version of this repo (~=0.13 doesn't support non-numpy arrays)
     inp = OriginWrapper(
         array=gt_storage.full(
             fill_value=7.0,
@@ -308,7 +302,6 @@ def test_optional_arg_provide(decorator):
         with computation(PARALLEL), interval(...):
             outp = inp  # noqa F841: local variable 'outp' is assigned to but never used
 
-    # DaCe in the currently tagged version of this repo (~=0.13 doesn't support non-numpy arrays)
     inp = OriginWrapper(
         array=gt_storage.full(
             fill_value=7.0,
@@ -363,7 +356,6 @@ def test_optional_arg_provide_aot(decorator):
         with computation(PARALLEL), interval(...):
             outp = inp  # noqa F841: local variable 'outp' is assigned to but never used
 
-    # DaCe in the currently tagged version of this repo (~=0.13 doesn't support non-numpy arrays)
     inp = OriginWrapper(
         array=gt_storage.full(
             fill_value=7.0,
