@@ -69,7 +69,7 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                 raise GTTypeError("Missing required keyword argument(s) `out`.")
 
             arg_types = [arg.type for arg in new_args]
-            kwarg_types = {name: expr.type for name, expr in new_kwargs.items() if name != "out"}
+            kwarg_types = {name: expr.type for name, expr in new_kwargs.items() if name != "out" and name != "field_domain"}
 
             type_info.accepts_args(
                 new_func.type,
