@@ -14,11 +14,14 @@
 
 from typing import Type
 
+import pytest
+
 from eve import Node
 from gtc import oir
 from gtc.gtir_to_oir import GTIRToOIR
 
 from .gtir_utils import (
+    FieldDeclFactory,
     FieldIfStmtFactory,
     HorizontalMaskFactory,
     HorizontalRestrictionFactory,
@@ -26,6 +29,7 @@ from .gtir_utils import (
     ScalarIfStmtFactory,
     StencilFactory,
     VariableKOffsetFactory,
+    VerticalLoopFactory,
 )
 
 
@@ -94,3 +98,25 @@ def test_visit_Assign_VariableKOffset():
     testee = ParAssignStmtFactory(right__offset=VariableKOffsetFactory())
     assign_stmt = GTIRToOIR().visit(testee)
     assert assign_stmt.iter_tree().if_isinstance(oir.VariableKOffset).to_list()
+
+
+def test_indirect_read_with_offset_and_write():
+    testee = StencilFactory(
+        vertical_loops=[
+            VerticalLoopFactory(
+                temporaries=[FieldDeclFactory(name="tmp")],
+                body=[
+                    ParAssignStmtFactory(left__name="tmp", right__name="foo", right__offset__i=1),
+                    ParAssignStmtFactory(right__name="tmp"),
+                ],
+            ),
+            VerticalLoopFactory(
+                body=[
+                    ParAssignStmtFactory(left__name="foo"),
+                ],
+            ),
+        ]
+    )
+
+    with pytest.raises(ValueError, match="non-zero read extent on written fields:.*foo"):
+        GTIRToOIR().visit(testee)

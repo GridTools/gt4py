@@ -173,15 +173,11 @@ def test_lower_dimensional_inputs(backend):
         field_2d: gtscript.Field[gtscript.IJ, np.float_],
         field_1d: gtscript.Field[gtscript.K, np.float_],
     ):
-        with computation(FORWARD):
-            with interval(0, 1):
-                field_2d = field_1d[1]
-
         with computation(PARALLEL):
             with interval(0, -1):
-                tmp = field_2d[0, 1] + field_1d[1]
+                tmp = field_2d + field_1d[1]
             with interval(-1, None):
-                tmp = field_2d[0, 1] + field_1d[0]
+                tmp = field_2d + field_1d[0]
 
         with computation(PARALLEL):
             with interval(0, 1):
@@ -206,12 +202,12 @@ def test_lower_dimensional_inputs(backend):
     field_1d = gt_storage.ones(
         full_shape[-1:], dtype, backend=backend, aligned_index=(aligned_index[-1],), dimensions="K"
     )
-    assert field_1d.shape == full_shape[-1:]
+    assert list(field_1d.shape) == [full_shape[-1]]
 
     stencil(field_3d, field_2d, field_1d, origin=(1, 1, 0), domain=(4, 3, 6))
     res_field_3d = storage_utils.cpu_copy(field_3d)
-    np.testing.assert_allclose(res_field_3d[1:-1, 1:-2, :1], 3)
-    np.testing.assert_allclose(res_field_3d[1:-1, 1:-2, 1:], 2)
+    np.testing.assert_allclose(res_field_3d[1:-1, 1:-2, :1], 2)
+    np.testing.assert_allclose(res_field_3d[1:-1, 1:-2, 1:], 1)
 
     stencil(field_3d, field_2d, field_1d, origin=(1, 1, 0))
 
@@ -323,8 +319,8 @@ def test_higher_dimensional_fields(backend):
                 vec_field[0, 0, 0][1] = field[0, 1, 0]
 
         with computation(PARALLEL), interval(...):
-            mat_field[0, 0, 0][0, 0] = vec_field[0, 0, 0][0] + tmp[0, 0, 0]
-            mat_field[0, 0, 0][1, 1] = vec_field[0, 0, 0][1] + tmp[1, 1, 0]
+            mat_field[0, 0, 0][0, 0] = vec_field[0, 0, 0][0] + 1.0
+            mat_field[0, 0, 0][1, 1] = vec_field[0, 0, 0][1] + 1.0
 
     full_shape = (6, 6, 6)
     aligned_index = (1, 1, 0)

@@ -166,6 +166,7 @@ def stencil(
     name=None,
     rebuild=False,
     cache_settings=None,
+    raise_if_not_cached=False,
     **kwargs,
 ):
     """Generate an implementation of the stencil definition with the specified backend.
@@ -207,6 +208,10 @@ def stencil(
         rebuild : `bool`, optional
             Force rebuild of the :class:`gt4py.StencilObject` even if it is
             found in the cache. (`False` by default).
+
+        raise_if_not_cached: `bool`, optional
+            If this is True, the call will raise an exception if the stencil does not
+            exist in the cache, or if the cache is inconsistent. (`False` by default).
 
         cache_settings: `dict`, optional
             Dictionary to configure cache (directory) settings (see
@@ -250,6 +255,8 @@ def stencil(
         raise ValueError(f"Invalid 'name' string ('{name}')")
     if not isinstance(rebuild, bool):
         raise ValueError(f"Invalid 'rebuild' bool value ('{rebuild}')")
+    if not isinstance(raise_if_not_cached, bool):
+        raise ValueError(f"Invalid 'raise_if_not_cached' bool value ('{raise_if_not_cached}')")
     if cache_settings is not None and not isinstance(cache_settings, dict):
         raise ValueError(f"Invalid 'cache_settings' dictionary ('{cache_settings}')")
 
@@ -282,6 +289,7 @@ def stencil(
         module=module,
         format_source=format_source,
         rebuild=rebuild,
+        raise_if_not_cached=raise_if_not_cached,
         backend_opts=kwargs,
         build_info=build_info,
         cache_settings=cache_settings or {},
@@ -302,7 +310,7 @@ def stencil(
             build_options=build_options,
             externals=externals or {},
         )
-        setattr(definition_func, "__annotations__", original_annotations)
+        definition_func.__annotations__ = original_annotations
         return out
 
     if definition is None:
@@ -321,6 +329,7 @@ def lazy_stencil(
     format_source=True,
     name=None,
     rebuild=False,
+    raise_if_not_cached=False,
     eager=False,
     check_syntax=True,
     **kwargs,
@@ -358,6 +367,10 @@ def lazy_stencil(
             Force rebuild of the :class:`gt4py.StencilObject` even if it is
             found in the cache. (`False` by default).
 
+        raise_if_not_cached: `bool`, optional
+            If this is True, the call will raise an exception if the stencil does not
+            exist in the cache, or if the cache is inconsistent. (`False` by default).
+
         eager : `bool`, optional
             If true do not defer stencil building and instead return the fully built raw implementation object.
 
@@ -389,6 +402,8 @@ def lazy_stencil(
         raise ValueError(f"Invalid 'name' string ('{name}')")
     if not isinstance(rebuild, bool):
         raise ValueError(f"Invalid 'rebuild' bool value ('{rebuild}')")
+    if not isinstance(raise_if_not_cached, bool):
+        raise ValueError(f"Invalid 'raise_if_not_cached' bool value ('{raise_if_not_cached}')")
 
     module = None
     if name:
@@ -419,6 +434,7 @@ def lazy_stencil(
         module=module,
         format_source=format_source,
         rebuild=rebuild,
+        raise_if_not_cached=raise_if_not_cached,
         backend_opts=kwargs,
         build_info=build_info,
         impl_opts=_impl_opts,

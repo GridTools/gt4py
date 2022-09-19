@@ -81,6 +81,10 @@ class StencilBuilder:
         # load or generate
         stencil_class = None if self.options.rebuild else self.backend.load()
         if stencil_class is None:
+            if self.options.raise_if_not_cached:
+                raise ValueError(
+                    f"The stencil {self._definition.__name__} is not up to date in the cache"
+                )
             stencil_class = self.backend.generate()
         return stencil_class
 

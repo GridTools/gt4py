@@ -13,11 +13,44 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from dataclasses import dataclass, field
-from typing import Any, List
+from typing import Any, List, Set
 
 from eve import NodeTranslator
 from gtc import common, gtir, oir, utils
 from gtc.common import CartesianOffset, DataType, LogicalOperator, UnaryOperator
+from gtc.passes.oir_optimizations.utils import compute_fields_extents
+
+
+def validate_stencil_memory_accesses(node: oir.Stencil) -> oir.Stencil:
+    """Check that no memory races occur in GridTools backends.
+
+    Since this is required for GridTools backends, it's imposed on all backends
+    at the OIR level. This is similar to the check at the gtir level for read-with-offset
+    and writes, but more complete because it involves extent analysis, so it catches
+    indirect read-with-offset through temporaries.
+
+    """
+
+    def _writes(node: oir.Stencil) -> Set[str]:
+        result = set()
+        for left in node.iter_tree().if_isinstance(oir.AssignStmt).getattr("left"):
+            result |= left.iter_tree().if_isinstance(oir.FieldAccess).getattr("name").to_set()
+        return result
+
+    field_names = {decl.name for decl in node.params if isinstance(decl, oir.FieldDecl)}
+    write_fields = _writes(node) & field_names
+
+    field_extents = compute_fields_extents(node)
+
+    names: Set[str] = set()
+    for name in write_fields:
+        if not field_extents[name].is_zero:
+            names.add(name)
+
+    if names:
+        raise ValueError(f"Found non-zero read extent on written fields: {', '.join(names)}")
+
+    return node
 
 
 class GTIRToOIR(NodeTranslator):
@@ -230,10 +263,12 @@ class GTIRToOIR(NodeTranslator):
     def visit_Stencil(self, node: gtir.Stencil) -> oir.Stencil:
         ctx = self.Context()
         vertical_loops = self.visit(node.vertical_loops, ctx=ctx)
-        return oir.Stencil(
-            name=node.name,
-            params=self.visit(node.params),
-            vertical_loops=vertical_loops,
-            declarations=ctx.temp_fields,
-            loc=node.loc,
+        return validate_stencil_memory_accesses(
+            oir.Stencil(
+                name=node.name,
+                params=self.visit(node.params),
+                vertical_loops=vertical_loops,
+                declarations=ctx.temp_fields,
+                loc=node.loc,
+            )
         )

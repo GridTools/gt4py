@@ -16,7 +16,7 @@ import copy
 import inspect
 import os
 from dataclasses import dataclass
-from typing import Any, Dict, Optional, Sequence, Set, Tuple
+from typing import Any, Dict, Iterable, Optional, Sequence, Set, Tuple
 
 import dace
 import dace.data
@@ -25,7 +25,7 @@ from dace.frontend.python.common import SDFGClosure, SDFGConvertible
 
 from gt4py import backend as gt_backend
 from gt4py.backend.dace_backend import freeze_origin_domain_sdfg
-from gt4py.definitions import AccessKind
+from gt4py.definitions import AccessKind, DomainInfo, FieldInfo
 from gt4py.stencil_object import FrozenStencil, StencilObject
 from gt4py.utils import shash
 
@@ -194,7 +194,14 @@ class DaCeStencilObject(StencilObject, SDFGConvertible):
 
     @staticmethod
     def normalize_args(
-        *args, backend, arg_names, domain_info, field_info, domain=None, origin=None, **kwargs
+        *args,
+        backend: str,
+        arg_names: Iterable[str],
+        domain_info: DomainInfo,
+        field_info: Dict[str, FieldInfo],
+        domain: Optional[Tuple[int, int, int]] = None,
+        origin: Optional[Dict[str, Tuple[int, ...]]] = None,
+        **kwargs,
     ):
         args_iter = iter(args)
         args_as_kwargs = {
@@ -206,6 +213,7 @@ class DaCeStencilObject(StencilObject, SDFGConvertible):
         )
 
         origin = DaCeStencilObject._normalize_origins(arg_infos, field_info, origin)
+
         if domain is None:
             domain = DaCeStencilObject._get_max_domain(arg_infos, domain_info, field_info, origin)
         for key, value in kwargs.items():
