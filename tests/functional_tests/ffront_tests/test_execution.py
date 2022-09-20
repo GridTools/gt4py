@@ -365,6 +365,28 @@ def test_minover_execution(reduction_setup, fieldview_backend):
     assert np.allclose(ref, rs.out)
 
 
+def test_minover_execution_float(reduction_setup, fieldview_backend):
+    """Testing the min_over functionality"""
+    if fieldview_backend == gtfn_cpu.run_gtfn:
+        pytest.skip("not implemented yet")
+    rs = reduction_setup
+    Vertex = rs.Vertex
+    V2EDim = rs.V2EDim
+
+    in_array = np.random.default_rng().uniform(low=-1, high=1, size=rs.v2e_table.shape)
+    in_field = np_as_located_field(Vertex, V2EDim)(in_array)
+    out_field = np_as_located_field(Vertex)(np.zeros(rs.num_vertices))
+
+    @field_operator
+    def minover_fieldoperator(input: Field[[Vertex, V2EDim], float64]) -> Field[[Vertex], float64]:
+        return min_over(input, axis=V2EDim)
+
+    minover_fieldoperator(in_field, out=out_field, offset_provider=rs.offset_provider)
+
+    ref = np.min(in_array, axis=1)
+    assert np.allclose(ref, out_field)
+
+
 def test_maxover_execution_sparse(reduction_setup, fieldview_backend):
     """Testing max_over functionality."""
     if fieldview_backend == gtfn_cpu.run_gtfn:
