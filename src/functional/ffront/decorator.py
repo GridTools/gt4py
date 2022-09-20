@@ -250,7 +250,6 @@ class Program:
             **kwargs,
             offset_provider=offset_provider,
             column_axis=self._column_axis,
-            field_domain={},
         )
 
     def format_itir(
