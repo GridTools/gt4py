@@ -879,8 +879,6 @@ def test_domain(fieldview_backend):
 
     program_domain(a, offset_provider={})
 
-    # fieldop_domain(a, out=a, offset_provider={})
-
     expected = np.asarray(a)
     expected[1:9, 4:6] = 1 + 1
 

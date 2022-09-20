@@ -194,7 +194,7 @@ def executor(
     debug: bool = False,
     lift_mode: LiftMode = LiftMode.FORCE_INLINE,
     dispatch_backend: Optional[str] = None,
-    field_domain: dict[str, range],
+    field_domain: dict[str, tuple],
 ) -> None:
     fencil = fencil_generator(
         ir,
