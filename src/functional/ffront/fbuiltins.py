@@ -176,8 +176,8 @@ MATH_BUILTIN_NAMES = (
 
 FUN_BUILTIN_NAMES = [
     "neighbor_sum",
-    "min_over",
     "max_over",
+    "min_over",
     "broadcast",
     "where",
 ] + MATH_BUILTIN_NAMES
