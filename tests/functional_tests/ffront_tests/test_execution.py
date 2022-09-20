@@ -865,11 +865,11 @@ def test_docstring():
     test_docstring(a, offset_provider={})
 
 
-def test_domain():
+def test_domain(fieldview_backend):
     size = 10
     a = np_as_located_field(IDim, JDim)(np.ones((size, size)))
 
-    @field_operator
+    @field_operator(backend=fieldview_backend)
     def fieldop_domain(a: Field[[IDim, JDim], float64]) -> Field[[IDim, JDim], float64]:
         return a + a
 
@@ -877,7 +877,9 @@ def test_domain():
     def program_domain(a: Field[[IDim, JDim], float64]) -> Field[[IDim, JDim], float64]:
         fieldop_domain(a, out=a, field_domain={"IDim": (1, 9), "JDim": (4, 6)})
 
-    program_domain(a, offset_provider={}, field_domain={})
+    program_domain(a, offset_provider={})
+
+    # fieldop_domain(a, out=a, offset_provider={})
 
     expected = np.asarray(a)
     expected[1:9, 4:6] = 1 + 1

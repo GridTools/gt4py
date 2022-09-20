@@ -67,21 +67,19 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
 
             if "out" not in new_kwargs:
                 raise GTTypeError("Missing required keyword argument(s) `out`.")
-            elif "field_domain" not in new_kwargs:
-                raise GTTypeError("Missing required keyword argument(s) `field_domain`.")
+            elif "field_domain" in new_kwargs:
+                domain_kwarg = new_kwargs["field_domain"]
 
-            domain_kwarg = new_kwargs["field_domain"]
-
-            if not isinstance(domain_kwarg, past.Dict):
-                raise GTTypeError(
-                    f"Only calls Dictionary allowed in field_domain, but got `{type(domain_kwarg)}`."
-                )
-
-            for domain_values in domain_kwarg.values_:
-                if not isinstance(domain_values.type, ct.TupleType):
+                if not isinstance(domain_kwarg, past.Dict):
                     raise GTTypeError(
-                        f"Only Tuples allowed in `field_domain` dictionary values, but got `{domain_values.type}`."
+                        f"Only calls Dictionary allowed in field_domain, but got `{type(domain_kwarg)}`."
                     )
+
+                for domain_values in domain_kwarg.values_:
+                    if not isinstance(domain_values.type, ct.TupleType):
+                        raise GTTypeError(
+                            f"Only Tuples allowed in `field_domain` dictionary values, but got `{domain_values.type}`."
+                        )
 
             arg_types = [arg.type for arg in new_args]
             kwarg_types = {

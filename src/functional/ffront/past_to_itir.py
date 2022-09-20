@@ -123,6 +123,8 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
     def _visit_stencil_call(self, node: past.Call, **kwargs) -> itir.StencilClosure:
         assert type_info.is_field_type_or_tuple_of_field_type(node.kwargs["out"].type)
 
+        if "field_domain" not in node.kwargs:
+            node.kwargs["field_domain"] = {}
         output, domain = self._visit_stencil_call_out_arg(
             node.kwargs["out"], node.kwargs["field_domain"], **kwargs
         )
@@ -184,7 +186,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             # an expression for the size of a dimension
             dim_size = itir.SymRef(id=_size_arg_from_field(out_field.id, dim_i))
             # bounds
-            if len(node_field_domain.values_) > dim_i:
+            if bool(node_field_domain) and len(node_field_domain.values_) > dim_i:
                 lower = itir.Literal(
                     value=str(node_field_domain.values_[dim_i].elts[0].value), type="int"
                 )
