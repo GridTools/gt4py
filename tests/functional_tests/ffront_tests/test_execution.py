@@ -478,6 +478,7 @@ def test_scalar_arg(fieldview_backend):
     ref = np.full([size], 6.0)
     assert np.allclose(ref, out.array())
 
+
 def test_nested_scalar_arg(fieldview_backend):
     if fieldview_backend == gtfn_cpu.run_gtfn:
         pytest.skip("ConstantFields are not supported yet.")
