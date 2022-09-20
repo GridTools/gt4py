@@ -834,7 +834,6 @@ def test_solve_triag(fieldview_backend):
     np.allclose(expected, out)
 
 
-
 def test_ternary_operator():
     size = 10
 
@@ -945,6 +944,7 @@ def test_ternary_scan():
     simple_scan_operator(a, out=out, offset_provider={})
 
     assert np.allclose(expected, out)
+
 
 def test_scan_tuple_output(fieldview_backend):
     if fieldview_backend == gtfn_cpu.run_gtfn:
