@@ -404,7 +404,7 @@ class FieldOperatorLowering(NodeTranslator):
             for arg in node.args:
                 lowered_arg = self.visit(arg, **kwargs)
                 if iterator_type_kind(arg.type) == ITIRTypeKind.VALUE:
-                    lowered_arg = im.call_(im.lift_(im.lambda__()(lowered_arg)))()
+                    lowered_arg = im.lift_(im.lambda__()(lowered_arg))()
                 lowered_args.append(lowered_arg)
 
             return self._lift_if_field(node)(im.call_(lowered_func)(*lowered_args))
