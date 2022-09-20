@@ -59,27 +59,7 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
 
         # perform type checks for "out" and "field_domain" entries
         try:
-            if not isinstance(new_func.type, (ct.FieldOperatorType, ct.ScanOperatorType)):
-                raise GTTypeError(
-                    f"Only calls `FieldOperator`s and `ScanOperators` "
-                    f"allowed in `Program`, but got `{new_func.type}`."
-                )
-
-            if "out" not in new_kwargs:
-                raise GTTypeError("Missing required keyword argument(s) `out`.")
-            elif "field_domain" in new_kwargs:
-                domain_kwarg = new_kwargs["field_domain"]
-
-                if not isinstance(domain_kwarg, past.Dict):
-                    raise GTTypeError(
-                        f"Only calls Dictionary allowed in field_domain, but got `{type(domain_kwarg)}`."
-                    )
-
-                for domain_values in domain_kwarg.values_:
-                    if not isinstance(domain_values.type, ct.TupleType):
-                        raise GTTypeError(
-                            f"Only Tuples allowed in `field_domain` dictionary values, but got `{domain_values.type}`."
-                        )
+            self._check_out_field_domain_values(new_func, new_kwargs)
 
             arg_types = [arg.type for arg in new_args]
             kwarg_types = {
@@ -116,6 +96,27 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             type=ct.VoidType(),
             location=node.location,
         )
+
+    def _check_out_field_domain_values(self, new_func, new_kwargs):
+        if not isinstance(new_func.type, (ct.FieldOperatorType, ct.ScanOperatorType)):
+            raise GTTypeError(
+                f"Only calls `FieldOperator`s and `ScanOperators` "
+                f"allowed in `Program`, but got `{new_func.type}`."
+            )
+
+        if "out" not in new_kwargs:
+            raise GTTypeError("Missing required keyword argument(s) `out`.")
+        elif "field_domain" in new_kwargs:
+            domain_kwarg = new_kwargs["field_domain"]
+            if not isinstance(domain_kwarg, past.Dict):
+                raise GTTypeError(
+                    f"Only calls Dictionary allowed in field_domain, but got `{type(domain_kwarg)}`."
+                )
+            for domain_values in domain_kwarg.values_:
+                if not isinstance(domain_values.type, ct.TupleType):
+                    raise GTTypeError(
+                        f"Only Tuples allowed in `field_domain` dictionary values, but got `{domain_values.type}`."
+                    )
 
     def visit_Name(self, node: past.Name, **kwargs) -> past.Name:
         symtable = kwargs["symtable"]

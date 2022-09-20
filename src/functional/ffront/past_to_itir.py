@@ -187,21 +187,21 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             dim_size = itir.SymRef(id=_size_arg_from_field(out_field.id, dim_i))
             # bounds
             if bool(node_field_domain) and len(node_field_domain.values_) > dim_i:
-                lower = itir.Literal(
-                    value=str(node_field_domain.values_[dim_i].elts[0].value), type="int"
-                )
-                upper = itir.Literal(
+                lower_value = node_field_domain.values_[dim_i].elts[0].value
+                upper_value = itir.Literal(
                     value=str(node_field_domain.values_[dim_i].elts[1].value), type="int"
                 )
             else:
-                lower = self._visit_slice_bound(
-                    slices[dim_i].lower if slices else None,
-                    itir.Literal(value="0", type="int"),
-                    dim_size,
-                )
-                upper = self._visit_slice_bound(
-                    slices[dim_i].upper if slices else None, dim_size, dim_size
-                )
+                lower_value = 0
+                upper_value = dim_size
+            lower = self._visit_slice_bound(
+                slices[dim_i].lower if slices else None,
+                itir.Literal(value=str(lower_value), type="int"),
+                dim_size,
+            )
+            upper = self._visit_slice_bound(
+                slices[dim_i].upper if slices else None, upper_value, dim_size
+            )
             if dim.kind == DimensionKind.LOCAL:
                 raise GTTypeError(f"Dimension {dim.value} must not be local.")
             domain_args.append(
