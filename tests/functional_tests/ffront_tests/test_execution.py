@@ -875,13 +875,7 @@ def test_domain():
     @program
     def program_domain(a: Field[[IDim, JDim], float64]) -> Field[[IDim, JDim], float64]:
         fieldop_domain(a, out=a, field_domain={"IDim": (1, 9), "JDim": (4, 6)})
-    program_domain(a, offset_provider={}, field_domain={})
-
-    # @program
-    # def program_domain(a: Field[[IDim, JDim], float64]) -> Field[[IDim, JDim], float64]:
-    #     fieldop_domain(a, out=a, field_domain={"IDim": (1, 9), "JDim": (4, 6)})
-    # #program_domain(a, offset_provider={}, field_domain={"IDim": range(1, 9), "JDim": range(4, 6)})
-    # fieldop_domain(a, out=a, offset_provider={}, field_domain={})
+    program_domain(a, offset_provider={})
 
     expected = np.asarray(a)
     expected[1:9, 4:6] = 1 + 1

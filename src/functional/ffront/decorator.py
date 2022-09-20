@@ -228,7 +228,7 @@ class Program:
             self.past_node, function_definitions=lowered_funcs, grid_type=grid_type
         )
 
-    def __call__(self, *args, offset_provider: dict[str, Dimension], field_domain: dict[str, range], **kwargs) -> None:
+    def __call__(self, *args, offset_provider: dict[str, Dimension], field_domain = {}, **kwargs) -> None:
         rewritten_args, size_args, kwargs = self._process_args(args, kwargs)
 
         if not self.backend:
