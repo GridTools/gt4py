@@ -228,7 +228,9 @@ class Program:
             self.past_node, function_definitions=lowered_funcs, grid_type=grid_type
         )
 
-    def __call__(self, *args, offset_provider: dict[str, Dimension], field_domain = {}, **kwargs) -> None:
+    def __call__(
+        self, *args, offset_provider: dict[str, Dimension], field_domain: dict[str, range], **kwargs
+    ) -> None:
         rewritten_args, size_args, kwargs = self._process_args(args, kwargs)
 
         if not self.backend:
@@ -250,7 +252,7 @@ class Program:
             **kwargs,
             offset_provider=offset_provider,
             column_axis=self._column_axis,
-            field_domain=field_domain
+            field_domain=field_domain,
         )
 
     def format_itir(
@@ -548,7 +550,14 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
             backend=self.backend,
         )
 
-    def __call__(self, *args, out, offset_provider: dict[str, Dimension], field_domain: dict[str, range], **kwargs) -> None:
+    def __call__(
+        self,
+        *args,
+        out,
+        offset_provider: dict[str, Dimension],
+        field_domain: dict[str, range],
+        **kwargs,
+    ) -> None:
         # TODO(tehrengruber): check all offset providers are given
         # deduce argument types
         arg_types = []

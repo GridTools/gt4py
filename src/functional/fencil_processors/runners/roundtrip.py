@@ -194,7 +194,7 @@ def executor(
     debug: bool = False,
     lift_mode: LiftMode = LiftMode.FORCE_INLINE,
     dispatch_backend: Optional[str] = None,
-    field_domain: dict[str, range]
+    field_domain: dict[str, range],
 ) -> None:
     fencil = fencil_generator(
         ir,
@@ -204,7 +204,11 @@ def executor(
         use_embedded=dispatch_backend is None,
     )
 
-    new_kwargs = {"offset_provider": offset_provider, "column_axis": column_axis, "field_domain": field_domain}
+    new_kwargs = {
+        "offset_provider": offset_provider,
+        "column_axis": column_axis,
+        "field_domain": field_domain,
+    }
     if dispatch_backend:
         new_kwargs["backend"] = dispatch_backend
 

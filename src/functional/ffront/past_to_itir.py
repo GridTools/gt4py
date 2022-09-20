@@ -123,7 +123,9 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
     def _visit_stencil_call(self, node: past.Call, **kwargs) -> itir.StencilClosure:
         assert type_info.is_field_type_or_tuple_of_field_type(node.kwargs["out"].type)
 
-        output, domain = self._visit_stencil_call_out_arg(node.kwargs["out"], node.kwargs["field_domain"], **kwargs)
+        output, domain = self._visit_stencil_call_out_arg(
+            node.kwargs["out"], node.kwargs["field_domain"], **kwargs
+        )
 
         return itir.StencilClosure(
             domain=domain,
@@ -172,7 +174,10 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             )
 
     def _construct_itir_domain_arg(
-        self, out_field: past.Name, node_field_domain: past.Dict, slices: Optional[list[past.Slice]] = None
+        self,
+        out_field: past.Name,
+        node_field_domain: past.Dict,
+        slices: Optional[list[past.Slice]] = None,
     ) -> itir.FunCall:
         domain_args = []
         for dim_i, dim in enumerate(out_field.type.dims):
@@ -180,8 +185,12 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             dim_size = itir.SymRef(id=_size_arg_from_field(out_field.id, dim_i))
             # bounds
             if len(node_field_domain.values_) > dim_i:
-                lower = itir.Literal(value=str(node_field_domain.values_[dim_i].elts[0].value), type="int")
-                upper = itir.Literal(value=str(node_field_domain.values_[dim_i].elts[1].value), type="int")
+                lower = itir.Literal(
+                    value=str(node_field_domain.values_[dim_i].elts[0].value), type="int"
+                )
+                upper = itir.Literal(
+                    value=str(node_field_domain.values_[dim_i].elts[1].value), type="int"
+                )
             else:
                 lower = self._visit_slice_bound(
                     slices[dim_i].lower if slices else None,
@@ -238,10 +247,15 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             out_field_name: past.Name = node_out.value
             return (
                 self._construct_itir_out_arg(out_field_name),
-                self._construct_itir_domain_arg(out_field_name, node_field_domain, self._compute_field_slice(node_out)),
+                self._construct_itir_domain_arg(
+                    out_field_name, node_field_domain, self._compute_field_slice(node_out)
+                ),
             )
         elif isinstance(node_out, past.Name):
-            return (self._construct_itir_out_arg(node_out), self._construct_itir_domain_arg(node_out, node_field_domain))
+            return (
+                self._construct_itir_out_arg(node_out),
+                self._construct_itir_domain_arg(node_out, node_field_domain),
+            )
         elif isinstance(node_out, past.TupleExpr):
             flattened = _flatten_tuple_expr(node_out)
 

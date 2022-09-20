@@ -53,10 +53,12 @@ class Expr(LocatedNode):
 class Name(Expr):
     id: Coerced[SymbolRef]  # noqa: A003
 
+
 class Call(Expr):
     func: Name
     args: list[Expr]
     kwargs: dict[str, Expr]
+
 
 class Subscript(Expr):
     value: Name
