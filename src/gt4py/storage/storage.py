@@ -52,6 +52,40 @@ def empty(
     aligned_index: Sequence[int],
     dimensions: Optional[Sequence[str]] = None,
 ) -> Union[np.ndarray, "cp.ndarray"]:
+    """Allocate an array of uninitialized (undefined) values with performance-optimal strides and alignment.
+
+
+    Parameters
+    ----------
+        shape : `Sequence` of `int`
+            The shape of the resulting `ndarray`
+        dtype :  DTypeLike, optional
+            The dtype of the resulting `ndarray`
+
+    Keyword Arguments
+    -----------------
+        backend : `str`
+            The target backend for which the allocation is optimized.
+        aligned_index: `Sequence` of `int`
+            Indicate the index of the resulting array that most commonly corresponds to the origin of the compute
+            domain.
+        dimensions: `Sequence` of `str`, optional
+            Indicate the semantic meaning of the dimensions in the provided array. Only used for determining optimal
+            strides, the information is not stored.
+
+    Returns
+    -------
+        NumPy or CuPy ndarray
+            With uninitialized values, padded and aligned to provide optimal performance for the given `backend` and
+            `aligned_index`
+
+    Raises
+    -------
+        TypeError
+            If arguments of an unexpected type are specified.
+        ValueError
+            If illegal or inconsistent arguments are specified.
+    """
     _error_on_invalid_backend(backend)
     if gt_backend.from_name(backend).storage_info["device"] == "gpu":
         allocate_f = storage_utils.allocate_gpu
@@ -80,6 +114,40 @@ def ones(
     aligned_index: Sequence[int],
     dimensions: Optional[Sequence[str]] = None,
 ) -> Union[np.ndarray, "cp.ndarray"]:
+    """Allocate an array with values initialized to 1.0 with performance-optimal strides and alignment.
+
+
+    Parameters
+    ----------
+        shape : `Sequence` of `int`
+            The shape of the resulting `ndarray`
+        dtype :  DTypeLike, optional
+            The dtype of the resulting `ndarray`
+
+    Keyword Arguments
+    -----------------
+        backend : `str`
+            The target backend for which the allocation is optimized.
+        aligned_index: `Sequence` of `int`
+            Indicate the index of the resulting array that most commonly corresponds to the origin of the compute
+            domain.
+        dimensions: `Sequence` of `str`, optional
+            Indicate the semantic meaning of the dimensions in the provided array. Only used for determining optimal
+            strides, the information is not stored.
+
+    Returns
+    -------
+        NumPy or CuPy ndarray
+            Initialized to 1.0, padded and aligned to provide optimal performance for the given `backend` and
+            `aligned_index`
+
+    Raises
+    -------
+        TypeError
+            If arguments of an unexpected type are specified.
+        ValueError
+            If illegal or inconsistent arguments are specified.
+    """
     storage = empty(
         shape=shape,
         dtype=dtype,
@@ -100,6 +168,42 @@ def full(
     aligned_index: Sequence[int],
     dimensions: Optional[Sequence[str]] = None,
 ) -> Union[np.ndarray, "cp.ndarray"]:
+    """Allocate an array with values initialized to `fill_value` with performance-optimal strides and alignment.
+
+
+    Parameters
+    ----------
+        shape : `Sequence` of `int`
+            The shape of the resulting `ndarray`
+        fill_value: `Number`
+            The value to which the array elements are initialized.
+        dtype :  DTypeLike, optional
+            The dtype of the resulting `ndarray`
+
+    Keyword Arguments
+    -----------------
+        backend : `str`
+            The target backend for which the allocation is optimized.
+        aligned_index: `Sequence` of `int`
+            Indicate the index of the resulting array that most commonly corresponds to the origin of the compute
+            domain.
+        dimensions: `Sequence` of `str`, optional
+            Indicate the semantic meaning of the dimensions in the provided array. Only used for determining optimal
+            strides, the information is not stored.
+
+    Returns
+    -------
+        NumPy or CuPy ndarray
+            Initialized to `fill_value`, padded and aligned to provide optimal performance for the given `backend` and
+            `aligned_index`
+
+    Raises
+    -------
+        TypeError
+            If arguments of an unexpected type are specified.
+        ValueError
+            If illegal or inconsistent arguments are specified.
+    """
     storage = empty(
         shape=shape,
         dtype=dtype,
@@ -119,6 +223,40 @@ def zeros(
     aligned_index: Sequence[int],
     dimensions: Optional[Sequence[str]] = None,
 ) -> Union[np.ndarray, "cp.ndarray"]:
+    """Allocate an array with values initialized to 0.0 with performance-optimal strides and alignment.
+
+
+    Parameters
+    ----------
+        shape : `Sequence` of `int`
+            The shape of the resulting `ndarray`
+        dtype :  DTypeLike, optional
+            The dtype of the resulting `ndarray`
+
+    Keyword Arguments
+    -----------------
+        backend : `str`
+            The target backend for which the allocation is optimized.
+        aligned_index: `Sequence` of `int`
+            Indicate the index of the resulting array that most commonly corresponds to the origin of the compute
+            domain.
+        dimensions: `Sequence` of `str`, optional
+            Indicate the semantic meaning of the dimensions in the provided array. Only used for determining optimal
+            strides, the information is not stored.
+
+    Returns
+    -------
+        NumPy or CuPy ndarray
+            Initialized to 0.0, padded and aligned to provide optimal performance for the given `backend` and
+            `aligned_index`
+
+    Raises
+    -------
+        TypeError
+            If arguments of an unexpected type are specified.
+        ValueError
+            If illegal or inconsistent arguments are specified.
+    """
     storage = empty(
         shape=shape,
         dtype=dtype,
@@ -138,6 +276,41 @@ def from_array(
     aligned_index: Sequence[int],
     dimensions: Optional[Sequence[str]] = None,
 ) -> Union[np.ndarray, "cp.ndarray"]:
+    """Allocate an array with values initialized to those of `data` with performance-optimal strides and alignment. This
+    copies the values from `data` to the resulting buffer.
+
+
+    Parameters
+    ----------
+        data : `ArrayLike`
+            Source data to be copied, from which also the `shape` of the result is derived.
+        dtype :  DTypeLike, optional
+            The dtype of the resulting `ndarray`
+
+    Keyword Arguments
+    -----------------
+        backend : `str`
+            The target backend for which the allocation is optimized.
+        aligned_index: `Sequence` of `int`
+            Indicate the index of the resulting array that most commonly corresponds to the origin of the compute
+            domain.
+        dimensions: `Sequence` of `str`, optional
+            Indicate the semantic meaning of the dimensions in the provided array. Only used for determining optimal
+            strides, the information is not stored.
+
+    Returns
+    -------
+        NumPy or CuPy ndarray
+            Copy of `data`, padded and aligned to provide optimal performance for the given `backend` and
+            `aligned_index`
+
+    Raises
+    -------
+        TypeError
+            If arguments of an unexpected type are specified.
+        ValueError
+            If illegal or inconsistent arguments are specified.
+    """
     import gt4py.storage.utils  # prevent circular import
 
     is_cupy_array = cp is not None and isinstance(data, cp.ndarray)
@@ -176,6 +349,39 @@ if dace is not None:
         aligned_index: Sequence[int],
         dimensions: Optional[Sequence[str]] = None,
     ) -> dace.data.Array:
+        """Return a DaCe data descriptor which describes performance-optimal strides and alignment.
+
+        Parameters
+        ----------
+            shape : `Sequence` of `int`
+                The shape of the resulting data descriptor.
+            dtype :  DTypeLike, optional
+                The dtype encoded in the resulting data descriptor.
+
+        Keyword Arguments
+        -----------------
+            backend : `str`
+                The target backend for which the described allocation is optimized.
+            aligned_index: `Sequence` of `int`
+                Indicate the index of the resulting array that most commonly corresponds to the origin of the compute
+                domain.
+            dimensions: `Sequence` of `str`, optional
+                Indicate the semantic meaning of the dimensions in the data descriptor. Only used for determining
+                optimal strides, the information is not stored.
+
+        Returns
+        -------
+            DaCe data descriptor
+                With strides that encode padding and aligned to provide optimal performance for the given `backend` and
+                `aligned_index`
+
+        Raises
+        -------
+            TypeError
+                If arguments of an unexpected type are specified.
+            ValueError
+                If illegal or inconsistent arguments are specified.
+        """
         aligned_index, shape, dtype, dimensions = storage_utils.normalize_storage_spec(
             aligned_index, shape, dtype, dimensions
         )
