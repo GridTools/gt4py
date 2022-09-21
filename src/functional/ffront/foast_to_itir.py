@@ -325,11 +325,6 @@ class FieldOperatorLowering(NodeTranslator):
         lowered_true_expr = self.visit(node.true_expr, **kwargs)
         lowered_false_expr = self.visit(node.false_expr, **kwargs)
 
-        # Needed in case of sparse or shifted fields
-        # TODO(tehrengruber): if_ should only accept values in second and third argument, but here they are iterators
-        if isinstance(node.type, ct.FieldType) and is_local_kind(node.type):
-            return im.call_("if_")(lowered_node_cond, lowered_true_expr, lowered_false_expr)
-
         return self._lift_if_field(node)(
             im.call_("if_")(
                 lowered_node_cond,
@@ -504,7 +499,7 @@ class InsideReductionLowering(FieldOperatorLowering):
             self.visit(node.left, **kwargs), self.visit(node.right, **kwargs)
         )
 
-    def visit_TernaryExp(self, node: foast.TernaryExpr, **kwargs) -> itir.FunCall:
+    def visit_TernaryExpr(self, node: foast.TernaryExpr, **kwargs) -> itir.FunCall:
         return im.call_("if_")(
             self.visit(node.condition, **kwargs),
             self.visit(node.true_expr, **kwargs),
