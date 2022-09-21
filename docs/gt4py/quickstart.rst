@@ -172,7 +172,7 @@ Allocation
 Since some backends require data to be in a certain layout in memory, GT4Py provides special `NumPy`-like
 allocators. They work like the familiar set of routines used in `NumPy` for allocation: ``ones``, ``zeros``,
 and ``empty``. There is also ``from_array`` that initializes the array to a provided (scalar or array) value.
-The result of these routines is either a `numpy.ndarray` (for CPU backends) or a `cupy.ndarray`
+The result of these routines is either a ``numpy.ndarray`` (for CPU backends) or a ``cupy.ndarray``
 (for GPU backends).
 
 .. code:: python
