@@ -74,7 +74,7 @@ class Constant(Expr):
 
 
 class Dict(Expr):
-    keys_: list[Constant]
+    keys_: list[Name]
     values_: list[Expr]
 
 

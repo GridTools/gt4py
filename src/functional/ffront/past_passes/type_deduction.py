@@ -112,8 +112,14 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                 raise GTTypeError(
                     f"Only calls Dictionary allowed in field_domain, but got `{type(domain_kwarg)}`."
                 )
+
+            for domain_keys in domain_kwarg.keys_:
+                if not isinstance(domain_kwarg.keys_[0].type, ct.DimensionType):
+                    raise GTTypeError(
+                        f"Only Dimension allowed in `field_domain` dictionary keys, but got `{domain_keys.type}`."
+                    )
             for domain_values in domain_kwarg.values_:
-                if not isinstance(domain_values.type, ct.TupleType):
+                if not isinstance(domain_values.type, ct.TupleType) or len(domain_values.elts) != 2:
                     raise GTTypeError(
                         f"Only Tuples allowed in `field_domain` dictionary values, but got `{domain_values.type}`."
                     )
