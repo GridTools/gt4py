@@ -28,7 +28,7 @@ on some of the previous ones):
 
 from __future__ import annotations  # isort:skip
 
-from .version import __version__, __versioninfo__  # isort:skip
+from .version import __version__, __version_info__  # isort:skip
 
 from .concepts import (
     FieldKind,
@@ -66,7 +66,7 @@ from .visitors import NodeMutator, NodeTranslator, NodeVisitor
 
 __all__ = [
     "__version__",
-    "__versioninfo__",
+    "__version_info__",
     "Bool",
     "Enum",
     "Float",

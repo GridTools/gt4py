@@ -101,6 +101,8 @@ class BuildOptions(AttributeClassLike):
     backend_opts = attribute(of=DictOf[str, Any], factory=dict)
     build_info = attribute(of=dict, optional=True)
     rebuild = attribute(of=bool, default=False)
+    raise_if_not_cached = attribute(of=bool, default=False)
+    cache_settings = attribute(of=DictOf[str, Any], factory=dict)
     _impl_opts = attribute(of=DictOf[str, Any], factory=dict)
 
     @property

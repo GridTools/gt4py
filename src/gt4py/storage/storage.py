@@ -131,7 +131,7 @@ class Storage(np.ndarray):
             supported are the floating point and integer dtypes of numpy
 
         backend: string, backend identifier
-            Currently possible: debug, numpy, gtx86, gtmc, gtcuda
+            Currently possible: numpy, gt:cpu_ifirst, gt:cpu_kfirst, gt:gpu
 
         default_origin: tuple of ints
             determines the point to which the storage memory address is aligned.

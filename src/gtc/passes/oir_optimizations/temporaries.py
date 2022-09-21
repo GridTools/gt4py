@@ -150,7 +150,9 @@ class WriteBeforeReadTemporariesToScalars(TemporariesToScalarsBase):
             offsets = accesses.offsets()
             ordered_accesses = accesses.ordered_accesses()
 
-            def write_before_read(tmp: str) -> bool:
+            def write_before_read(
+                tmp: str, offsets=offsets, ordered_accesses=ordered_accesses
+            ) -> bool:
                 if tmp not in offsets:
                     return True
                 if offsets[tmp] != {(0, 0, 0)}:

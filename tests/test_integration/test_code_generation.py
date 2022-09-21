@@ -17,7 +17,19 @@ import pytest
 
 from gt4py import gtscript
 from gt4py import storage as gt_storage
-from gt4py.gtscript import __INLINED, BACKWARD, FORWARD, PARALLEL, Field, computation, interval
+from gt4py.gtscript import (
+    __INLINED,
+    BACKWARD,
+    FORWARD,
+    PARALLEL,
+    Field,
+    I,
+    J,
+    computation,
+    horizontal,
+    interval,
+    region,
+)
 
 from ..definitions import ALL_BACKENDS, CPU_BACKENDS
 from .stencil_definitions import EXTERNALS_REGISTRY as externals_registry
@@ -160,15 +172,11 @@ def test_lower_dimensional_inputs(backend):
         field_2d: gtscript.Field[gtscript.IJ, np.float_],
         field_1d: gtscript.Field[gtscript.K, np.float_],
     ):
-        with computation(FORWARD):
-            with interval(0, 1):
-                field_2d = field_1d[1]
-
         with computation(PARALLEL):
             with interval(0, -1):
-                tmp = field_2d[0, 1] + field_1d[1]
+                tmp = field_2d + field_1d[1]
             with interval(-1, None):
-                tmp = field_2d[0, 1] + field_1d[0]
+                tmp = field_2d + field_1d[0]
 
         with computation(PARALLEL):
             with interval(0, 1):
@@ -189,14 +197,14 @@ def test_lower_dimensional_inputs(backend):
     assert field_2d.shape == full_shape[:-1]
 
     field_1d = gt_storage.ones(
-        backend, (default_origin[-1],), (full_shape[-1],), dtype, mask=[False, False, True]
+        backend, [default_origin[-1]], [full_shape[-1]], dtype, mask=[False, False, True]
     )
-    assert field_1d.shape == (full_shape[-1],)
+    assert list(field_1d.shape) == [full_shape[-1]]
 
     stencil(field_3d, field_2d, field_1d, origin=(1, 1, 0), domain=(4, 3, 6))
     field_3d.device_to_host()
-    np.testing.assert_allclose(field_3d.view(np.ndarray)[1:-1, 1:-2, :1], 3)
-    np.testing.assert_allclose(field_3d.view(np.ndarray)[1:-1, 1:-2, 1:], 2)
+    np.testing.assert_allclose(field_3d.view(np.ndarray)[1:-1, 1:-2, :1], 2)
+    np.testing.assert_allclose(field_3d.view(np.ndarray)[1:-1, 1:-2, 1:], 1)
 
     stencil(field_3d, field_2d, field_1d)
 
@@ -308,8 +316,8 @@ def test_higher_dimensional_fields(backend):
                 vec_field[0, 0, 0][1] = field[0, 1, 0]
 
         with computation(PARALLEL), interval(...):
-            mat_field[0, 0, 0][0, 0] = vec_field[0, 0, 0][0] + tmp[0, 0, 0]
-            mat_field[0, 0, 0][1, 1] = vec_field[0, 0, 0][1] + tmp[1, 1, 0]
+            mat_field[0, 0, 0][0, 0] = vec_field[0, 0, 0][0] + 1.0
+            mat_field[0, 0, 0][1, 1] = vec_field[0, 0, 0][1] + 1.0
 
     full_shape = (6, 6, 6)
     default_origin = (1, 1, 0)
@@ -539,3 +547,17 @@ def test_origin_k_fields(backend):
     )
     np.testing.assert_allclose(0.0, np.asarray(outp)[:, :, 0])
     np.testing.assert_allclose(0.0, np.asarray(outp)[:, :, -1])
+
+
+@pytest.mark.parametrize("backend", ALL_BACKENDS)
+def test_pruned_args_match(backend):
+    @gtscript.stencil(backend=backend)
+    def test(out: Field[np.float64], inp: Field[np.float64]):
+        with computation(PARALLEL), interval(...):
+            out = 0.0
+            with horizontal(region[I[0] - 1, J[0] - 1]):
+                out = inp
+
+    inp = gt_storage.zeros(backend, default_origin=(0, 0, 0), shape=(2, 2, 2), dtype=np.float64)
+    out = gt_storage.empty(backend, default_origin=(0, 0, 0), shape=(2, 2, 2), dtype=np.float64)
+    test(out, inp)

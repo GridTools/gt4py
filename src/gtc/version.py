@@ -12,9 +12,12 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+"""Version specification."""
 
-import setuptools
+import typing
+
+from packaging import version as pkg_version
 
 
-if __name__ == "__main__":
-    setuptools.setup()
+__version__: typing.Final = "0.1.0"
+__version_info__: typing.Final = pkg_version.parse(__version__)

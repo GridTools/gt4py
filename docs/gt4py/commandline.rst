@@ -69,9 +69,9 @@ Then
 
 .. code-block:: bash
 
-   $ gtpyc gen my_stencils.gt.py --backend=gtx86 --output-path=./my-stencils-out
+   $ gtpyc gen my_stencils.gt.py --backend=gt:cpu_ifirst --output-path=./my-stencils-out
 
-Will generate the C++ stencil code files using the "gtx86" backend for each
+Will generate the C++ stencil code files using the "gt:cpu_ifirst" backend for each
 stencil in the global namespace of ``gstencils.gt.py`` (also ones imported from
 other modules) and output them inside ``my-stencils-out/``. The code files for
 each stencil are put in a subfolder named after the stencil:
@@ -87,7 +87,7 @@ each stencil are put in a subfolder named after the stencil:
        ├── computation.cpp
        └── computation.hpp
 
-The line 
+The line
 
 .. code-block:: python
    :caption: my_stencils.gt.py

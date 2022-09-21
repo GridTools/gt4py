@@ -22,7 +22,7 @@ import jinja2
 import numpy
 
 from gt4py import utils as gt_utils
-from gt4py.definitions import AccessKind, DomainInfo, FieldInfo, ParameterInfo
+from gt4py.definitions import AccessKind, DomainInfo, FieldInfo, ParameterInfo, StencilID
 from gtc import gtir, gtir_to_oir
 from gtc.definitions import Boundary
 from gtc.passes.gtir_k_boundary import compute_k_boundary, compute_min_k_size
@@ -38,6 +38,7 @@ if TYPE_CHECKING:
 
 @dataclass
 class ModuleData:
+    domain_info: Optional[DomainInfo] = None
     field_info: Dict[str, FieldInfo] = field(default_factory=dict)
     parameter_info: Dict[str, ParameterInfo] = field(default_factory=dict)
     unreferenced: List[str] = field(default_factory=list)
@@ -53,12 +54,17 @@ class ModuleData:
         return set(self.parameter_info.keys())
 
 
+_args_data_cache: Dict[StencilID, ModuleData] = {}
+
+
 def make_args_data_from_gtir(pipeline: GtirPipeline) -> ModuleData:
     """
     Compute module data containing information about stencil arguments from gtir.
 
     This is no longer compatible with the legacy backends.
     """
+    if pipeline.stencil_id in _args_data_cache:
+        return _args_data_cache[pipeline.stencil_id]
     data = ModuleData()
 
     # NOTE: pipeline.gtir has not had prune_unused_parameters applied.
@@ -68,6 +74,14 @@ def make_args_data_from_gtir(pipeline: GtirPipeline) -> ModuleData:
     oir = gtir_to_oir.GTIRToOIR().visit(node)
     field_extents = compute_fields_extents(oir)
     accesses = compute_access_kinds(oir)
+
+    min_sequential_axis_size = compute_min_k_size(node)
+    data.domain_info = DomainInfo(
+        parallel_axes=("I", "J"),
+        sequential_axis="K",
+        min_sequential_axis_size=min_sequential_axis_size,
+        ndim=3,
+    )
 
     for decl in (param for param in all_params if isinstance(param, gtir.FieldDecl)):
         access = accesses[decl.name]
@@ -93,6 +107,7 @@ def make_args_data_from_gtir(pipeline: GtirPipeline) -> ModuleData:
         data.parameter_info[decl.name] = ParameterInfo(access=access, dtype=dtype)
 
     data.unreferenced = [*sorted(name for name in accesses if accesses[name] == AccessKind.NONE)]
+    _args_data_cache[pipeline.stencil_id] = data
     return data
 
 
@@ -141,7 +156,7 @@ class BaseModuleGenerator(abc.ABC):
             docstring=self.generate_docstring(),
             gt_backend=self.generate_backend_name(),
             gt_source=self.generate_sources(),
-            gt_domain_info=self.generate_domain_info(),
+            gt_domain_info=repr(self.args_data.domain_info),
             gt_field_info=repr(self.args_data.field_info),
             gt_parameter_info=repr(self.args_data.parameter_info),
             gt_constants=self.generate_constants(),
@@ -255,22 +270,6 @@ class BaseModuleGenerator(abc.ABC):
             for key, value in self.builder.options.as_dict().items()
             if key not in ["build_info"]
         }
-
-    def generate_domain_info(self) -> str:
-        """
-        Generate a ``DomainInfo`` constructor call with the correct arguments.
-
-        Requires overriding for module generators of non-cartesian backends.
-        """
-        min_sequential_axis_size = compute_min_k_size(self.builder.gtir_pipeline.full())
-        return repr(
-            DomainInfo(
-                parallel_axes=("I", "J"),
-                sequential_axis="K",
-                min_sequential_axis_size=min_sequential_axis_size,
-                ndim=3,
-            )
-        )
 
     def generate_module_members(self) -> str:
         """
