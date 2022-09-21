@@ -147,7 +147,7 @@ _ROOT_VALIDATOR_TAG: Final = "__DATAMODEL_ROOT_VALIDATOR_TAG"
 _COERCED_TYPE_TAG: Final = "__DATAMODEL_COERCED_TYPE_TAG"
 _UNCHECKED_TYPE_TAG: Final = "__DATAMODEL_UNCHECKED_TYPE_TAG"
 
-_DM_OPTS = "__dm_opts"
+_DM_OPTS_KEY: Final = "__dm_opts"
 _GENERIC_DATAMODEL_ROOT_DM_OPT: Final = "_GENERIC_DATAMODEL_ROOT_DM_OPT"
 
 MODEL_FIELD_DEFINITIONS_ATTR: Final = "__datamodel_fields__"
@@ -465,7 +465,7 @@ else:
             | Literal["inherited"] = "inherited",
             **kwargs: Any,
         ) -> None:
-            dm_opts = kwargs.pop(_DM_OPTS, [])
+            dm_opts = kwargs.pop(_DM_OPTS_KEY, [])
             super(DataModel, cls).__init_subclass__(
                 **kwargs
             )  # type: ignore[call-arg]  # is not guaranteed that superclass does not accept kwargs
@@ -984,8 +984,7 @@ def _make_data_model_class_getitem() -> classmethod:
             # in Python 3.8, xtyping.StdGenericAliasType (aka typing._GenericAlias)
             # does not copy all required `__dict__` entries, so do it manually
             for k, v in concrete_cls.__dict__.items():
-                if k not in res.__dict__:
-                    res.__dict__[k] = v
+                res.__dict__.setdefault(k, v)
         return res
 
     return classmethod(__class_getitem__)
@@ -1096,7 +1095,7 @@ def _make_datamodel(  # noqa: C901  # too complex but still readable and documen
 
         # Create type validator if validation is enabled
         if type_validation_factory is None or _UNCHECKED_TYPE_TAG in type_extras:
-            type_validator = lambda a, b, c: None  # noqa: E731
+            type_validator = None
         else:
             type_validator = type_validation_factory(type_hint, qualified_field_name)
 
@@ -1107,8 +1106,8 @@ def _make_datamodel(  # noqa: C901  # too complex but still readable and documen
             # A field() function has already been used to customize the definition of the field.
             # In this case, we need to:
             #  - prepend the type validator to the list of provided validators (if any)
-            #  - add the converter if the field needs to be converted and another custom converter
-            #      has not been defined
+            #  - add the automatic converter if the field needs to be converted and another
+            #      custom converter has not been defined
             attr_value_in_cls._validator = (
                 type_validator
                 if attr_value_in_cls._validator is None
@@ -1249,7 +1248,7 @@ def _make_datamodel(  # noqa: C901  # too complex but still readable and documen
             if is_datamodel(f_attr.type):
                 if getattr(f_attr.type, MODEL_PARAM_DEFINITIONS_ATTR).strict_frozen is True:
                     continue
-            elif xtyping.is_hashable_type(f_attr.type):
+            elif xtyping.is_value_hashable_typing(f_attr.type):
                 continue
             unhashable_fields.add(f_attr.name)
 

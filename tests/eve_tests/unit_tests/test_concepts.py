@@ -114,12 +114,21 @@ class TestNode:
         with pytest.raises((TypeError, ValueError)):
             invalid_sample_node_maker()
 
-    def test_unique_id(self, sample_node_maker):
+    def test_ids(self, sample_node_maker):
         node_a = sample_node_maker()
         node_b = sample_node_maker()
-        node_c = sample_node_maker()
 
-        assert id(node_a) != id(node_b) != id(node_c)
+        assert (node_a == node_b) == (node_a.content_hash() == node_b.content_hash())
+        assert (node_a == node_b) == (node_a.instance_hash() == node_b.instance_hash())
+
+        node_a_copy = copy.deepcopy(node_a)
+        assert node_a == node_a_copy
+        assert node_a.content_hash() == node_a_copy.content_hash()
+        assert node_a.instance_hash() == node_a_copy.instance_hash()
+
+        node_a_copy.annex.foo = 42
+        assert node_a.content_hash() == node_a_copy.content_hash()
+        assert node_a.instance_hash() != node_a_copy.instance_hash()
 
     def test_annex(self, sample_node):
         assert isinstance(sample_node.annex, eve.utils.Namespace)
