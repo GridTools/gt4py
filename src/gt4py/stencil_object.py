@@ -18,6 +18,7 @@ import sys
 import time
 import typing
 from dataclasses import dataclass
+from numbers import Number
 from pickle import dumps
 from typing import Any, Callable, ClassVar, Dict, Optional, Tuple, Union
 
@@ -39,7 +40,13 @@ FieldType = Union["cp.ndarray", np.ndarray]
 OriginType = Union[Tuple[int, int, int], Dict[str, Tuple[int, ...]]]
 
 
-def _compute_cache_key(field_args, parameter_args, domain, origin, device) -> int:
+def _compute_cache_key(
+    field_args: Dict[str, Optional[FieldType]],
+    parameter_args: Dict[str, Optional[Number]],
+    domain: Optional[Tuple[int, ...]],
+    origin: Optional[OriginType],
+    device: str,
+) -> int:
     asarray = gt4py.storage.utils.as_cupy if device == "gpu" else gt4py.storage.utils.as_numpy
     field_data = tuple(
         (name, asarray(arg).shape, getattr(arg, "__gt_origin__", (0, 0, 0)))
@@ -58,7 +65,9 @@ class _ArgsInfo:
     dimensions: Optional[Tuple[str]] = None
 
 
-def _extract_array_infos(field_args, device) -> Dict[str, Optional[_ArgsInfo]]:
+def _extract_array_infos(
+    field_args: Dict[str, Optional[FieldType]], device: str
+) -> Dict[str, Optional[_ArgsInfo]]:
     asarray = gt4py.storage.utils.as_cupy if device == "gpu" else gt4py.storage.utils.as_numpy
     array_infos: Dict[str, Optional[_ArgsInfo]] = {}
     for name, arg in field_args.items():
@@ -84,7 +93,9 @@ def _extract_array_infos(field_args, device) -> Dict[str, Optional[_ArgsInfo]]:
     return array_infos
 
 
-def _extract_stencil_arrays(array_infos: Dict[str, Optional[_ArgsInfo]]):
+def _extract_stencil_arrays(
+    array_infos: Dict[str, Optional[_ArgsInfo]]
+) -> Dict[str, Optional[FieldType]]:
     return {name: info.array if info is not None else None for name, info in array_infos.items()}
 
 
