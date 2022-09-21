@@ -78,7 +78,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
     ...     FieldOperatorParser.apply_to_function(wrong_syntax)
     ... except FieldOperatorSyntaxError as err:
     ...     print(f"Error at [{err.lineno}, {err.offset}] in {err.filename})")
-    Error at [2, 4] in ...functional.ffront.func_to_foast.FieldOperatorParser[...]>)
+    Error at [2, 5] in ...functional.ffront.func_to_foast.FieldOperatorParser[...]>)
     """
 
     syntax_error_cls = FieldOperatorSyntaxError
