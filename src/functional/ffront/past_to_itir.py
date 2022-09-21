@@ -186,10 +186,13 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             # an expression for the size of a dimension
             dim_size = itir.SymRef(id=_size_arg_from_field(out_field.id, dim_i))
             # bounds
-            if bool(node_field_domain) and len(node_field_domain.values_) > dim_i:
-                lower_value = node_field_domain.values_[dim_i].elts[0].value
+            if bool(node_field_domain.values_):
+                dim_index = dim_i
+                if node_field_domain.keys_[dim_i - 1].type.dim == dim:
+                    dim_index -= 1
+                lower_value = node_field_domain.values_[dim_index].elts[0].value
                 upper_value = itir.Literal(
-                    value=str(node_field_domain.values_[dim_i].elts[1].value), type="int"
+                    value=str(node_field_domain.values_[dim_index].elts[1].value), type="int"
                 )
             else:
                 lower_value = 0
