@@ -24,32 +24,32 @@ Stencil Calls
 Supported Buffer Interfaces
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-The user is free to choose a buffer interface (or multiple) as long as it is supported by ``numpy.asarray`` in case a
-CPU backend is chosen or ``cupy.asarray`` for a GPU backend respectively. If multiple buffer interfaces are implementedm
-the provided information needs to agree otherwise the behaviour is undefined. Similarly the backend is also free to
-choose what buffer interface to use in order to retrieve the required information (e.g. pointer, strides, etc.) In
-particular, we support the following interfaces to expose a buffer:
+The user is free to choose a buffer interface (or multiple) as long as it is supported by :code:`numpy.asarray` in case
+a CPU backend is chosen or :code:`cupy.asarray` for a GPU backend respectively. If multiple buffer interfaces are
+implemented the provided information needs to agree otherwise the behaviour is undefined. Similarly the backend is also
+free to choose what buffer interface to use in order to retrieve the required information (e.g. pointer, strides, etc.)
+In particular, we support the following interfaces to expose a buffer:
 
 * `__array_interface__ <https://omz-software.com/pythonista/numpy/reference/arrays.interface.html>`_ (CPU backends)
 * `__cuda_array_interface__ <https://numba.pydata.org/numba-doc/dev/cuda/cuda_array_interface.html>`_ (GPU backends)
 * `python buffer protocol <https://docs.python.org/3/c-api/buffer.html>`_ (CPU backends)
 
-Internally, gt4py uses the utilities `gt4py.utils.as_numpy` and `gt4py.utils.as_cupy` to retrieve the buffers. GT4Py
-developers are advised to always use those utilities as to guarantee support across gt4py as the supported interfaces
-are extended.
+Internally, gt4py uses the utilities :code:`gt4py.utils.as_numpy` and :code:`gt4py.utils.as_cupy` to retrieve the
+buffers. GT4Py developers are advised to always use those utilities as to guarantee support across gt4py as the
+supported interfaces are extended.
 
 Dimension Mapping
 ^^^^^^^^^^^^^^^^^
 
-The user can optionally implement a ``__gt_dims__`` attribute in the object implementing any of the supported buffer
+The user can optionally implement a :code:`__gt_dims__` attribute in the object implementing any of the supported buffer
 interfaces. As a fallback if neither is specified the dimensions given in the annotations (by means of
-``gtscript.Field``) are assumed. The returned object should be a tuple of strings labeling the dimensions in index
+:code:`gtscript.Field`) are assumed. The returned object should be a tuple of strings labeling the dimensions in index
 order.
 
-Valid dimension strings are ``"I"``, ``"J"``, ``"K"`` as well as decimal string representations of integer
+Valid dimension strings are :code:`"I"`, :code:`"J"`, :code:`"K"` as well as decimal string representations of integer
 numbers to denote data dimensions.
 
-Developers are advised to use the utility ``gt4py.utils.get_dims(storage, annotation)``,
+Developers are advised to use the utility :code:`gt4py.utils.get_dims(storage, annotation)`,
 which implements this lookup.
 
 Note: Support for xarray can be added manually by the user by means of the mechanism described
@@ -58,8 +58,8 @@ Note: Support for xarray can be added manually by the user by means of the mecha
 Default Origin
 ^^^^^^^^^^^^^^
 
-A buffer object can optionally implement the ``__gt_origin__`` attribute which is used as the origin value unless
-overwritten by the ``origin`` keyword argument to the stencil call.
+A buffer object can optionally implement the :code:`__gt_origin__` attribute which is used as the origin value unless
+overwritten by the :code:`origin` keyword argument to the stencil call.
 
 
 
@@ -69,7 +69,7 @@ Allocation
 For the performance-optimal allocation and initialization of arrays to be used in GT4Py, we provide the following set of
 functions which closely resemble their NumPy counterparts (meaning of the common parameters is explained below).
 
-The return type is either a ``numpy.ndarray`` or a `cupy.ndarray`, for CPU and GPU backends, respectively.
+The return type is either a :code:`numpy.ndarray` or a :code:`cupy.ndarray`, for CPU and GPU backends, respectively.
 
 :code:`empty(shape: Sequence[int], dtype: dtype_like = np.float64, **kwargs) -> ndarray`
     Allocate an array with uninitialized (undefined) values.
@@ -114,7 +114,7 @@ The return type is either a ``numpy.ndarray`` or a `cupy.ndarray`, for CPU and G
     For common keyword-only arguments, please see below.
 
 
-:code:`full(shape: Sequence[int], fill_value: Number, dtype=np.float64, **kwargs) -> ndarray`
+:code:`full(shape: Sequence[int], fill_value: Number, dtype: dtype_like = np.float64, **kwargs) -> ndarray`
     Allocate an array with values initialized to the scalar given in :code:`fill_value`.
 
     Parameters:
@@ -137,11 +137,11 @@ The return type is either a ``numpy.ndarray`` or a `cupy.ndarray`, for CPU and G
         + :code:`data: array_like`. The original array from which the storage is initialized.
 
         + :code:`device_data: array_like`. The original array in case copying to a gpu buffer is
-          desired. The same buffer could also be passed through `data` in that case, however this
+          desired. The same buffer could also be passed through :code:`data` in that case, however this
           parameter is here to provide the same interface like the :code:`as_storage` function.
 
         + :code:`sync_state: gt4py.storage.SyncState`. If `managed="gt4py"` indicates which of the
-          provided buffers, `data` or `device_data`, is up to date at the time of initialization.
+          provided buffers, :code:`data` or :code:`device_data`, is up to date at the time of initialization.
 
 
 Optional Keyword-Only Parameters
