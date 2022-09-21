@@ -28,7 +28,6 @@ import gt4py.backend as gt_backend
 import gt4py.storage as gt_store
 import gt4py.storage.utils as gt_storage_utils
 from gt4py import gtscript
-from gt4py.gtscript import PARALLEL, Field, computation, interval, stencil
 from gt4py.storage.utils import normalize_storage_spec
 
 from ..definitions import CPU_BACKENDS, GPU_BACKENDS
@@ -394,8 +393,6 @@ def test_gpu_constructor(alloc_fun, backend):
 @pytest.mark.requires_gpu
 @hyp.given(param_dict=dimensions_strategy())
 def test_masked_storage_gpu(param_dict):
-
-    import cupy as cp
 
     dimensions = param_dict["dimensions"]
     aligned_index = param_dict["aligned_index"]
