@@ -1605,9 +1605,7 @@ class GTScriptParser(ast.NodeVisitor):
 
         # resolve externals
         resolved_externals = GTScriptParser.resolve_external_symbols(
-            nonlocal_symbols,
-            imported_symbols,
-            externals
+            nonlocal_symbols, imported_symbols, externals
         )
 
         # Gather temporary
@@ -1624,7 +1622,7 @@ class GTScriptParser(ast.NodeVisitor):
             "IK": gtscript.IK,
             "JK": gtscript.JK,
             "np": np,
-            **resolved_externals
+            **resolved_externals,
         }
         ann_assigns = tuple(filter(lambda stmt: isinstance(stmt, ast.AnnAssign), ast_func_def.body))
         for ann_assign in ann_assigns:
