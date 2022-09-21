@@ -97,7 +97,7 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             location=node.location,
         )
 
-    def _check_out_and_field_domain_values(self, new_func, new_kwargs):
+    def _check_out_and_field_domain_values(self, new_func: past.Name, new_kwargs: dict):
         if not isinstance(new_func.type, (ct.FieldOperatorType, ct.ScanOperatorType)):
             raise GTTypeError(
                 f"Only calls `FieldOperator`s and `ScanOperators` "
