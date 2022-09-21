@@ -114,7 +114,7 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                 )
 
             for domain_keys in domain_kwarg.keys_:
-                if not isinstance(domain_kwarg.keys_[0].type, ct.DimensionType):
+                if not isinstance(domain_keys.type, ct.DimensionType):
                     raise GTTypeError(
                         f"Only Dimension allowed in `field_domain` dictionary keys, but got `{domain_keys.type}`."
                     )
