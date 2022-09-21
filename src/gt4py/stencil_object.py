@@ -39,11 +39,12 @@ FieldType = Union["cp.ndarray", np.ndarray]
 OriginType = Union[Tuple[int, int, int], Dict[str, Tuple[int, ...]]]
 
 
-def _compute_cache_key(array_infos, parameter_args, domain, origin) -> int:
+def _compute_cache_key(field_args, parameter_args, domain, origin, device) -> int:
+    asarray = gt4py.storage.utils.as_cupy if device == "gpu" else gt4py.storage.utils.as_numpy
     field_data = tuple(
-        (name, info.array.shape, info.origin or (0, 0, 0))
-        for name, info in array_infos.items()
-        if info is not None
+        (name, asarray(arg).shape, getattr(arg, "__gt_origin__", (0, 0, 0)))
+        for name, arg in field_args.items()
+        if arg is not None
     )
     return hash((field_data, *parameter_args.keys(), dumps(domain), dumps(origin)))
 
@@ -542,11 +543,10 @@ class StencilObject(abc.ABC):
         """
         if exec_info is not None:
             exec_info["call_run_start_time"] = time.perf_counter()
-        array_infos = _extract_array_infos(
-            field_args, gt_backend.from_name(self.backend).storage_info["device"]
-        )
+        device = gt_backend.from_name(self.backend).storage_info["device"]
+        array_infos = _extract_array_infos(field_args, device)
 
-        cache_key = _compute_cache_key(array_infos, parameter_args, domain, origin)
+        cache_key = _compute_cache_key(field_args, parameter_args, domain, origin, device)
         if cache_key not in self._domain_origin_cache:
             origin = self._normalize_origins(array_infos, self.field_info, origin)
 
