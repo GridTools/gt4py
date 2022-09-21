@@ -85,10 +85,12 @@ class DialectSyntaxError(common.GTSyntaxError):
         return cls(
             msg,
             lineno=node.lineno,
-            offset=node.col_offset,
+            offset=node.col_offset + 1,
             filename=filename,
             end_lineno=getattr(node, "end_lineno", None),
-            end_offset=getattr(node, "end_col_offset", None),
+            end_offset=(node.end_col_offset + 1)
+            if hasattr(node, "end_col_offset") and node.end_col_offset is not None
+            else None,
             text=text,
         )
 
@@ -110,11 +112,13 @@ class DialectParser(ast.NodeVisitor, Generic[DialectRootT]):
     ) -> DialectRootT:  # type: ignore[valid-type]  # used to work, now mypy is going berserk for unknown reasons
 
         source, filename, starting_line = source_definition
+        line_offset = starting_line - 1
         try:
             definition_ast = ast.parse(textwrap.dedent(source)).body[0]
             definition_ast = RemoveDocstrings.apply(definition_ast)
             definition_ast = FixMissingLocations.apply(definition_ast)
             definition_ast = ast.increment_lineno(definition_ast, starting_line - 1)
+            line_offset -= starting_line - 1
             output_ast = cls._postprocess_dialect_ast(
                 cls(
                     source_definition=source_definition,
@@ -131,8 +135,37 @@ class DialectParser(ast.NodeVisitor, Generic[DialectRootT]):
             #  does not require passing the information on every invocation.
             if not err.filename:
                 err.filename = filename
+
+            # ensure line numbers are relative to the file (respects `starting_line`)
+            if err.lineno:
+                err.lineno = err.lineno + line_offset
+            if err.end_lineno:
+                err.end_lineno = err.end_lineno + line_offset
+
+            # if offsets are provided, but not line numbers, things get weird…
+            assert err.lineno or not err.offset
+            assert err.end_lineno or not err.end_offset
+            # if the ends are provided, but not the starts, things get weird…
+            assert err.lineno or not err.end_lineno
+            assert err.offset or not err.end_offset
+
             if not err.text:
-                err.text = source
+
+                if err.lineno:
+
+                    source_lineno = err.lineno - starting_line
+                    source_end_lineno = (
+                        (err.end_lineno - starting_line) if err.end_lineno else source_lineno
+                    )
+                    err.text = "\n".join(source.split("\n")[source_lineno : source_end_lineno + 1])
+
+                else:
+                    err.text = source
+
+                    # `err.offset` determines if carrets (`^^^^`) are printed below `err.text`.
+                    # They would be misleading if we don't know on which line the error occurs!
+                    assert err.offset is err.end_offset is None
+
             raise err
 
         return output_ast
