@@ -16,7 +16,7 @@ from __future__ import annotations
 from typing import Optional
 
 from eve import NodeTranslator, concepts, traits
-from functional.common import DimensionKind, GridType, GTTypeError, Dimension
+from functional.common import Dimension, DimensionKind, GridType, GTTypeError
 from functional.ffront import common_types, program_ast as past, type_info
 from functional.iterator import ir as itir
 
@@ -176,17 +176,20 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             )
 
     def _construct_itir_domain_arg(
-            self,
-            out_field: past.Name,
-            node_field_domain: past.Dict,
-            slices: Optional[list[past.Slice]] = None,):
+        self,
+        out_field: past.Name,
+        node_field_domain: past.Dict,
+        slices: Optional[list[past.Slice]] = None,
+    ):
         domain_args = []
         for dim_i, dim in enumerate(out_field.type.dims):
             # an expression for the size of a dimension
             dim_size = itir.SymRef(id=_size_arg_from_field(out_field.id, dim_i))
             # bounds
             if bool(node_field_domain):
-                lower, upper = self._construct_itir_field_domain_arg(dim_i, dim, dim_size, node_field_domain, slices)
+                lower, upper = self._construct_itir_field_domain_arg(
+                    dim_i, dim, dim_size, node_field_domain, slices
+                )
             else:
                 lower, upper = self._construct_itir_out_domain_arg(dim_i, dim_size, slices)
 
@@ -215,13 +218,11 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         slices: Optional[list[past.Slice]] = None,
     ) -> tuple[itir.Literal, itir.Literal]:
         lower = self._visit_slice_bound(
-        slices[dim_i].lower if slices else None,
-        itir.Literal(value="0", type="int"),
-        dim_size,
+            slices[dim_i].lower if slices else None,
+            itir.Literal(value="0", type="int"),
+            dim_size,
         )
-        upper = self._visit_slice_bound(
-            slices[dim_i].upper if slices else None, dim_size, dim_size
-        )
+        upper = self._visit_slice_bound(slices[dim_i].upper if slices else None, dim_size, dim_size)
 
         return lower, upper
 
@@ -237,26 +238,29 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             if node_field_domain.keys_[dim_i].type.dim == dim:
                 lower = self._visit_slice_bound(
                     slices[dim_i].lower if slices else None,
-                    itir.Literal(value=str(node_field_domain.values_[dim_i].elts[0].value), type="int"),
+                    itir.Literal(
+                        value=str(node_field_domain.values_[dim_i].elts[0].value), type="int"
+                    ),
                     dim_size,
                 )
                 upper = self._visit_slice_bound(
-                    slices[dim_i].upper if slices else None, itir.Literal(
-                    value=str(node_field_domain.values_[dim_i].elts[1].value), type="int"
-                ), dim_size
+                    slices[dim_i].upper if slices else None,
+                    itir.Literal(
+                        value=str(node_field_domain.values_[dim_i].elts[1].value), type="int"
+                    ),
+                    dim_size,
                 )
             else:
                 raise GTTypeError(
-                    f"Dimensions in out field and field domain are not equivalent",
+                    f"Dimensions in out field and field domain are not equivalent"
                     f"Expected {dim}, but got {node_field_domain.keys_[dim_i].type.dim} "
                 )
-        except:
+        except Exception:
             raise GTTypeError(
                 f"Upper and lower bounds could not be determined for {dim_i + 1}th dimension"
             )
 
         return lower, upper
-
 
     @staticmethod
     def _compute_field_slice(node: past.Subscript):
