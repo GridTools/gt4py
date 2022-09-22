@@ -24,6 +24,7 @@ from functional.ffront.fbuiltins import (
     float64,
     int32,
     int64,
+    minimum,
     neighbor_sum,
 )
 from functional.ffront.foast_to_itir import FieldOperatorLowering
@@ -531,6 +532,17 @@ def test_reduction_lowering_expr():
     )
 
     assert lowered.expr == reference
+
+
+def test_math_builtin_with_sparse_field():
+    def reduction(e1: Field[[Edge], float64], e2: Field[[Vertex, V2EDim], float64]):
+        return neighbor_sum(minimum(e1(V2E), e2), axis=V2EDim)
+
+    parsed = FieldOperatorParser.apply_to_function(reduction)
+    lowered = FieldOperatorLowering.apply(parsed)
+
+    # TODO check lowered ir
+    # assert lowered.expr == reference
 
 
 def test_builtin_int_constructors():
