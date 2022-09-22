@@ -530,6 +530,8 @@ def test_reduction_lowering_expr():
         )
     )
 
+    assert lowered.expr == reference
+
 
 def test_sparse_field_outside_reduce():
     def reduction(e1: Field[[Edge], float64], e2: Field[[Vertex, V2EDim], float64]):
