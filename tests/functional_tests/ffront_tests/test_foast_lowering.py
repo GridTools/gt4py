@@ -530,7 +530,17 @@ def test_reduction_lowering_expr():
         )
     )
 
-    assert lowered.expr == reference
+
+def test_sparse_field_outside_reduce():
+    def reduction(e1: Field[[Edge], float64], e2: Field[[Vertex, V2EDim], float64]):
+        e1_nbh = e1(V2E)
+        tmp = 1.1 * (e1_nbh + e2)  # this fails in lowering
+        return neighbor_sum(tmp, axis=V2EDim)
+
+    parsed = FieldOperatorParser.apply_to_function(reduction)
+    lowered = FieldOperatorLowering.apply(parsed)
+
+    # TODO test lowered ir
 
 
 def test_builtin_int_constructors():
