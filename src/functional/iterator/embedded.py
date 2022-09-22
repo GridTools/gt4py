@@ -179,7 +179,12 @@ class Column(np.lib.mixins.NDArrayOperatorsMixin):
         self.data = data
 
     def __getitem__(self, i: int) -> Any:
-        return self.data[i - self.kstart]
+        result = self.data[i - self.kstart]
+        # if the element type is a tuple return a regular type instead of a
+        #  numpy type
+        if self.data.dtype.names:
+            return tuple(result)
+        return result
 
     def tuple_get(self, i: int) -> Column:
         if self.data.dtype.names:
