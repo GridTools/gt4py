@@ -182,19 +182,19 @@ The result of these routines is either a ``numpy.ndarray`` (for CPU backends) or
     backend= "numpy"
 
     field_a = gt_storage.from_array(
-        data=np.random.randn(10, 10, 10),
+        np.random.randn(10, 10, 10),
+        np.float64,
         backend=backend,
-        dtype=np.float64,
         aligned_index=(0, 0, 0),
     )
     field_b = gt_storage.ones(
-        backend=backend, shape=(10, 10, 10), dtype=np.float64, aligned_index=(0, 0, 0)
+        (10, 10, 10), np.float64, backend=backend, aligned_index=(0, 0, 0)
     )
     field_c = gt_storage.zeros(
-        backend=backend, shape=(10, 10, 10), dtype=np.float64, aligned_index=(0, 0, 0)
+        (10, 10, 10), np.float64, backend=backend, aligned_index=(0, 0, 0)
     )
     result = gt_storage.empty(
-        backend=backend, shape=(10, 10, 10), dtype=np.float64, aligned_index=(0, 0, 0)
+        (10, 10, 10), np.float64, backend=backend, aligned_index=(0, 0, 0)
     )
 
     stencil_example(field_a, field_b, field_c, result, alpha=0.5)
