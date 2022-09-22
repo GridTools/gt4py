@@ -1019,6 +1019,36 @@ def test_domain(fieldview_backend):
     np.allclose(expected, a)
 
 
+def test_domain_input_bounds(fieldview_backend):
+    size = 10
+    a = np_as_located_field(IDim, JDim)(np.ones((size, size)))
+    lower_i = 1
+    upper_i = 9
+    lower_j = 4
+    upper_j = 6
+
+    @field_operator(backend=fieldview_backend)
+    def fieldop_domain(a: Field[[IDim, JDim], float64]) -> Field[[IDim, JDim], float64]:
+        return a + a
+
+    @program
+    def program_domain(
+        a: Field[[IDim, JDim], float64],
+        lower_i: int64,
+        upper_i: int64,
+        lower_j: int64,
+        upper_j: int64,
+    ):
+        fieldop_domain(a, out=a, field_domain={IDim: (lower_i, upper_i), JDim: (lower_j, upper_j)})
+
+    program_domain(a, lower_i, upper_i, lower_j, upper_j, offset_provider={})
+
+    expected = np.asarray(a)
+    expected[1:9, 4:6] = 1 + 1
+
+    np.allclose(expected, a)
+
+
 def test_domain_tuple(fieldview_backend):
     size = 10
     a = np_as_located_field(IDim, JDim)(np.ones((size, size)))

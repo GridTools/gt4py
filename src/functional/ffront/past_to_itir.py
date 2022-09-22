@@ -187,11 +187,20 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             dim_size = itir.SymRef(id=_size_arg_from_field(out_field.id, dim_i))
             # bounds
             if bool(node_field_domain):
-                lower, upper = self._construct_itir_field_domain_arg(
-                    dim_i, dim, dim_size, node_field_domain, slices
+                lower_bound, upper_bound = self._construct_itir_field_domain_arg(
+                    dim_i, dim, node_field_domain
                 )
             else:
-                lower, upper = self._construct_itir_out_domain_arg(dim_i, dim_size, slices)
+                lower_bound, upper_bound = self._construct_itir_out_domain_arg(dim_size)
+
+            lower = self._visit_slice_bound(
+                slices[dim_i].lower if slices else None,
+                lower_bound,
+                dim_size,
+            )
+            upper = self._visit_slice_bound(
+                slices[dim_i].upper if slices else None, upper_bound, dim_size
+            )
 
             if dim.kind == DimensionKind.LOCAL:
                 raise GTTypeError(f"Dimension {dim.value} must not be local.")
@@ -213,43 +222,31 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
 
     def _construct_itir_out_domain_arg(
         self,
-        dim_i: int,
         dim_size: itir.SymRef,
-        slices: Optional[list[past.Slice]] = None,
     ) -> tuple[itir.Literal, itir.Literal]:
-        lower = self._visit_slice_bound(
-            slices[dim_i].lower if slices else None,
-            itir.Literal(value="0", type="int"),
-            dim_size,
-        )
-        upper = self._visit_slice_bound(slices[dim_i].upper if slices else None, dim_size, dim_size)
-
-        return lower, upper
+        return itir.Literal(value="0", type="int"), dim_size
 
     def _construct_itir_field_domain_arg(
         self,
         dim_i: int,
         dim: Dimension,
-        dim_size: itir.SymRef,
         node_field_domain: past.Dict,
-        slices: Optional[list[past.Slice]] = None,
     ) -> tuple[itir.Literal, itir.Literal]:
         try:
             if node_field_domain.keys_[dim_i].type.dim == dim:
-                lower = self._visit_slice_bound(
-                    slices[dim_i].lower if slices else None,
-                    itir.Literal(
-                        value=str(node_field_domain.values_[dim_i].elts[0].value), type="int"
-                    ),
-                    dim_size,
-                )
-                upper = self._visit_slice_bound(
-                    slices[dim_i].upper if slices else None,
-                    itir.Literal(
-                        value=str(node_field_domain.values_[dim_i].elts[1].value), type="int"
-                    ),
-                    dim_size,
-                )
+                domain_bounds = []
+                for domain_i, domain_input in enumerate(node_field_domain.values_[dim_i].elts):
+                    if isinstance(domain_input, past.Name):
+                        domain_bounds.append(itir.SymRef(id=domain_input.id))
+                    elif isinstance(domain_input, past.Constant):
+                        domain_bounds.append(
+                            itir.Literal(value=str(domain_input.value), type="int")
+                        )
+                    else:
+                        raise GTTypeError(
+                            f"Expected {domain_i}th domain to be of type {past.Name} or {past.Constant}"
+                            f"but got {type(node_field_domain.values_[dim_i].elts[0])} "
+                        )
             else:
                 raise GTTypeError(
                     f"Dimensions in out field and field domain are not equivalent"
@@ -260,7 +257,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                 f"Upper and lower bounds could not be determined for {dim_i + 1}th dimension"
             )
 
-        return lower, upper
+        return domain_bounds[0], domain_bounds[1]
 
     @staticmethod
     def _compute_field_slice(node: past.Subscript):
