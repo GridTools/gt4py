@@ -58,7 +58,7 @@ def _numpy_ufunc_upcasting_rule(*dtypes, ufunc: np.ufunc):
         inputs, output = t.split("->")
         assert len(inputs) == len(dtypes)
         if all(
-            np.can_cast(data_type_to_typestr(arg_dtype), cand_typestr)
+            arg_dtype <= typestr_to_data_type(np.dtype(cand_typestr).str)
             for arg_dtype, cand_typestr in zip(dtypes, inputs)
         ):
             assert typestr_to_data_type(np.dtype(output).str) != DataType.INVALID
