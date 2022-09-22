@@ -242,9 +242,6 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             flattened = _flatten_tuple_expr(node)
 
             first_field = flattened[0]
-            assert all(
-                field.type.dims == first_field.type.dims for field in flattened
-            ), "Incompatible fields in tuple: all fields must have the same dimensions."
 
             field_slice = None
             if isinstance(first_field, past.Subscript):

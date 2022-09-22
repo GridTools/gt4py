@@ -566,19 +566,13 @@ def test_where_mixed_dims():
                     ct.FieldType(
                         dims=[ADim, BDim], dtype=ct.ScalarType(kind=ct.ScalarKind.FLOAT64)
                     ),
-                    ct.FieldType(
-                        dims=[ADim, BDim], dtype=ct.ScalarType(kind=ct.ScalarKind.FLOAT64)
-                    ),
+                    ct.FieldType(dims=[ADim], dtype=ct.ScalarType(kind=ct.ScalarKind.FLOAT64)),
                 ]
             ),
             ct.TupleType(
                 types=[
-                    ct.FieldType(
-                        dims=[ADim, BDim], dtype=ct.ScalarType(kind=ct.ScalarKind.FLOAT64)
-                    ),
-                    ct.FieldType(
-                        dims=[ADim, BDim], dtype=ct.ScalarType(kind=ct.ScalarKind.FLOAT64)
-                    ),
+                    ct.FieldType(dims=[ADim], dtype=ct.ScalarType(kind=ct.ScalarKind.FLOAT64)),
+                    ct.FieldType(dims=[ADim], dtype=ct.ScalarType(kind=ct.ScalarKind.FLOAT64)),
                 ]
             ),
         ]

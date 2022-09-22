@@ -799,6 +799,41 @@ def test_conditional_nested_tuple():
     )
 
 
+def test_conditional_nested_tuple_mixed_dims():
+    size = 10
+    mask = np_as_located_field(IDim)(np.zeros((size,), dtype=bool))
+    mask.array()[0 : (size // 2)] = True
+    a = np_as_located_field(IDim, JDim)(np.ones((size, size)))
+    b = np_as_located_field(IDim)(np.ones((size,)))
+    c = np_as_located_field(IDim, JDim)(np.zeros((size, size)))
+    d = np_as_located_field(IDim)(np.zeros((size,)))
+    e = np_as_located_field(IDim)(np.zeros((size,)))
+    f = np_as_located_field(IDim)(np.zeros((size,)))
+
+    @field_operator
+    def conditional_tuple_4_field_op(
+        mask: Field[[IDim], bool], a: Field[[IDim, JDim], float64], b: Field[[IDim], float64]
+    ) -> tuple[
+        tuple[Field[[IDim, JDim], float64], Field[[IDim], float64]],
+        tuple[Field[[IDim], float64], Field[[IDim], float64]],
+    ]:
+        return where(mask, ((a, 9.0), (b, 6.0)), ((8.0, b), (5.0, 9.0)))
+
+    @program
+    def conditional_tuple_4_p(
+        mask: Field[[IDim], bool],
+        a: Field[[IDim, JDim], float64],
+        b: Field[[IDim], float64],
+        c: Field[[IDim, JDim], float64],
+        d: Field[[IDim], float64],
+        e: Field[[IDim], float64],
+        f: Field[[IDim], float64],
+    ):
+        conditional_tuple_4_field_op(mask, a, b, out=((c, d), (e, f)))
+
+    conditional_tuple_4_p(mask, a, b, c, d, e, f, offset_provider={})
+
+
 def test_nested_tuple_return():
     size = 10
     a = np_as_located_field(IDim)(np.ones((size,)))

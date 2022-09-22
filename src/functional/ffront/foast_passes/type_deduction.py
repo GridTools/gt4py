@@ -46,53 +46,33 @@ def boolified_type(symbol_type: ct.SymbolType) -> ct.ScalarType | ct.FieldType:
     raise GTTypeError(f"Can not boolify type {symbol_type}!")
 
 
-def extract_promoted_tuple_type(
-    node_type_ls: list[ct.TupleType],
-    mask_type: ct.FieldType,
-    promoted_type: None | ct.FieldType | ct.ScalarType,
-) -> ct.FieldType:
-    """
-    Extract argument type in tuple to which all others need to be promoted.
-
-    If arguments types in a tuple are different (e.g. some are Fields and others Scalars), they all need to be promoted to be the same.
-    This function extracts the type with respect to which the promotion has to be done.
-
-    """
-    for element in node_type_ls:
-        if isinstance(element, ct.TupleType):
-            promoted_type = extract_promoted_tuple_type(element.types, mask_type, promoted_type)
-        else:
-            if promoted_type is None:
-                promoted_type = element
-            else:
-                promoted_type = type_info.promote(promoted_type, element)
-                promoted_type = promote_to_mask_type(mask_type, promoted_type)
-    return promoted_type
-
-
 def construct_tuple_type(
     element_types: list[ct.TupleType],
-    promoted_field_tuple: ct.FieldType | ct.TupleType,
-) -> ct.TupleType:
+    false_branch_types: list[ct.TupleType],
+    mask_type: ct.FieldType,
+) -> list:
     """
     Construct recursively the return types for the tuple return branch.
 
     Examples:
     ---------
     >>> from functional.common import Dimension
-    >>> promoted_field_tuple = ct.FieldType(dims=[Dimension(value="I")], dtype=ct.ScalarType(kind=ct.ScalarKind))
+    >>> mask_type = ct.FieldType(dims=[Dimension(value="I")], dtype=ct.ScalarType(kind=ct.ScalarKind.BOOL))
     >>> element_types = [ct.ScalarType(kind=ct.ScalarKind), ct.ScalarType(kind=ct.ScalarKind)]
-    >>> print(construct_tuple_type(element_types, promoted_field_tuple))
+    >>> false_branch_types = [ct.FieldType(dims=[Dimension(value="I")], dtype=ct.ScalarType(kind=ct.ScalarKind)), ct.ScalarType(kind=ct.ScalarKind)]
+    >>> print(construct_tuple_type(element_types, false_branch_types, mask_type))
     [FieldType(dims=[Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)], dtype=ScalarType(kind=<enum 'ScalarKind'>, shape=None)), FieldType(dims=[Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)], dtype=ScalarType(kind=<enum 'ScalarKind'>, shape=None))]
     """
     element_types_new = element_types
     for i, element in enumerate(element_types):
         if isinstance(element, ct.TupleType):
             element_types_new[i] = ct.TupleType(
-                types=construct_tuple_type(element.types, promoted_field_tuple)
+                types=construct_tuple_type(element.types, false_branch_types[i].types, mask_type)
             )
         else:
-            element_types_new[i] = promoted_field_tuple
+            element_types_new[i] = promote_to_mask_type(
+                mask_type, type_info.promote(element_types_new[i], false_branch_types[i])
+            )
     return element_types_new
 
 
@@ -595,10 +575,8 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             ):
                 true_branch_types = node.args[1].type.types
                 false_branch_types = node.args[2].type.types
-                node_type_ls = true_branch_types + false_branch_types
-                promoted_field_tuple = extract_promoted_tuple_type(node_type_ls, mask_type, None)
                 return_type = ct.TupleType(
-                    types=construct_tuple_type(true_branch_types, promoted_field_tuple)
+                    types=construct_tuple_type(true_branch_types, false_branch_types, mask_type)
                 )
             elif isinstance(true_branch_type, ct.TupleType) or isinstance(
                 false_branch_type, ct.TupleType

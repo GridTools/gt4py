@@ -838,7 +838,7 @@ def np_as_located_field(
             offsets = None
 
         def setter(indices, value):
-            indices = tupelize(indices)
+            indices = tupelize(indices) if len(a.shape) >= 2 else (indices[0],)
             a[_tupsum(indices, offsets) if offsets else indices] = value
 
         def getter(indices):
@@ -995,8 +995,6 @@ class TupleOfFields(TupleField):
             raise TypeError("Can only be instantiated with a tuple of fields")
         self.data = data
         axeses = _get_axeses(data)
-        if not all(axes == axeses[0] for axes in axeses):
-            raise TypeError("All fields in the tuple need the same axes.")
         self.axes = axeses[0]
 
     def __getitem__(self, indices):
