@@ -50,6 +50,7 @@ _reduction_like = BuiltInFunction(
 
 neighbor_sum = _reduction_like
 max_over = _reduction_like
+min_over = _reduction_like
 
 broadcast = BuiltInFunction(
     ct.FunctionType(
@@ -173,7 +174,13 @@ MATH_BUILTIN_NAMES = (
     + BINARY_MATH_NUMBER_BUILTIN_NAMES
 )
 
-FUN_BUILTIN_NAMES = ["neighbor_sum", "max_over", "broadcast", "where"] + MATH_BUILTIN_NAMES
+FUN_BUILTIN_NAMES = [
+    "neighbor_sum",
+    "max_over",
+    "min_over",
+    "broadcast",
+    "where",
+] + MATH_BUILTIN_NAMES
 
 
 EXTERNALS_MODULE_NAME = "__externals__"

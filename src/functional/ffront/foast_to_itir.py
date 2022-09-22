@@ -366,6 +366,15 @@ class FieldOperatorLowering(NodeTranslator):
             **kwargs,
         )
 
+    def _visit_min_over(self, node: foast.Call, **kwargs) -> itir.FunCall:
+        init_expr = itir.Literal(value=str(np.finfo(np.float64).max), type="float64")
+        return self._make_reduction_expr(
+            node,
+            lambda expr: im.call_("if_")(im.less_("acc", expr), "acc", expr),
+            init_expr,
+            **kwargs,
+        )
+
     def visit_Call(self, node: foast.Call, **kwargs) -> itir.FunCall:
         if type_info.type_class(node.func.type) is ct.FieldType:
             return self._visit_shift(node, **kwargs)
