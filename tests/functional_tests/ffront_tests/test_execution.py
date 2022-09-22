@@ -695,7 +695,6 @@ def test_conditional_shifted(fieldview_backend):
     mask = np_as_located_field(IDim)(np.zeros((size,), dtype=bool))
     mask.array()[size // 2] = True
     a = np_as_located_field(IDim)(np.arange(0, size, 1, dtype=float64))
-    a = np_as_located_field(IDim)(np.arange(0, size, 1, dtype=float64))
     b = np_as_located_field(IDim)(np.zeros((size,)))
     out = np_as_located_field(IDim)(np.zeros((size,)))
 

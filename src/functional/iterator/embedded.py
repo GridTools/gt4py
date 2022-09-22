@@ -843,7 +843,7 @@ def np_as_located_field(
             offsets = None
 
         def setter(indices, value):
-            indices = tupelize(indices) if len(a.shape) >= 2 else (indices[0],)
+            indices = tupelize(indices) if len(a.shape) >= 2 or a.shape[0] <= 1 else (indices[0],)
             a[_tupsum(indices, offsets) if offsets else indices] = value
 
         def getter(indices):
