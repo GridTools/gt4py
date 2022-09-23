@@ -20,7 +20,7 @@ import numpy as np
 from eve import Node, NodeTranslator
 from eve.concepts import TreeNode
 from gtc import gtir
-from gtc.common import DataType, data_type_to_typestr, op_to_ufunc, typestr_to_data_type
+from gtc.common import DataType, op_to_ufunc, typestr_to_data_type
 from gtc.gtir import Expr
 
 
@@ -50,8 +50,9 @@ def _numpy_ufunc_upcasting_rule(*dtypes, ufunc: np.ufunc):
     Look up upcasting behavior according to NumPy universal function casting convention.
 
     NumPy specifies that it chooses ufunc implementations based on input types, where the inputs are suitably cast if
-    necessary. Mimicing this results in a behavior that can be reproduced in C++ backends but is also consistent with python in the
-    numpy backend to the extent possible. NumPy makes their casting rules available through a type promotion API.
+    necessary. Mimicking this results in a behavior that can be reproduced in C++ backends but is also consistent with
+    python in the numpy backend to the extent possible. We choose ufunc implementations according to NumPy rules while
+    implementing C/C++ type promotion rules, restricted to supported types.
     See https://numpy.org/doc/stable/user/basics.ufuncs.html?highlight=index#type-casting-rules for details.
     """
     for t in ufunc.types:
@@ -68,19 +69,11 @@ def _numpy_ufunc_upcasting_rule(*dtypes, ufunc: np.ufunc):
 
 @functools.lru_cache
 def _numpy_common_upcasting_rule(*dtypes):
-    """
-    Look up upcasting behavior according to C++ casting rules through NumPy API.
-
-    NumPy makes a simple casting rule lookup available through a type promotion API. In our case, this coincides with
-    C++ conventions. (We do not give precedence to field types over scalar types.)
-    See https://numpy.org/doc/stable/reference/generated/numpy.result_type.html for details.
-    """
-    typestrs = [data_type_to_typestr(dtype) for dtype in dtypes if dtype != DataType.DEFAULT]
-    if not typestrs:
+    """Look up upcasting behavior according to C++ casting rules."""
+    if all(dtype == DataType.DEFAULT for dtype in dtypes):
         res_type = DataType.DEFAULT
     else:
-        res_dtype: np.dtype = np.result_type(*typestrs)
-        res_type = typestr_to_data_type(res_dtype.str)
+        res_type = max(dtypes)
     return [res_type] * len(dtypes)
 
 
