@@ -24,7 +24,7 @@ import re
 import sys
 from enum import Enum as Enum, IntEnum as IntEnum  # noqa: F401  # imported but unused
 
-from boltons.typeutils import classproperty as classproperty  # noqa: F401
+from boltons.typeutils import classproperty as classproperty  # type: ignore[import]  # noqa: F401
 from frozendict import frozendict as _frozendict  # type: ignore[attr-defined]  # noqa: F401
 
 from .extended_typing import (
@@ -51,7 +51,7 @@ class FrozenList(Tuple[_Tc, ...], metaclass=abc.ABCMeta):  # noqa: B024   # no a
     __slots__ = ()
 
     @classmethod
-    def __subclasshook__(cls, C):
+    def __subclasshook__(cls, C: type) -> bool:
         return tuple in C.__mro__
 
 
@@ -61,7 +61,7 @@ else:
     _KeyT = TypeVar("_KeyT")
 
     @final
-    class frozendict(_frozendict, Generic[_KeyT, _T]):  # type: ignore[no-redef]  # mypy consider this a redefinition
+    class frozendict(_frozendict, Generic[_KeyT, _T]):
         __slots__ = ()
 
 
