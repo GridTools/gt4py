@@ -23,7 +23,7 @@ jobs:
         python -m pip install $(cat ./requirements-dev.txt | grep pre-commit)
         pre-commit install-hooks
         python -m pip install $(cat ./requirements-dev.txt | grep mypy)
-        python -m pip install -e .
+        python -m pip install $(python -c 'import configparser as cfg; c=cfg.ConfigParser(); c.read("setup.cfg"); print(c["options"]["install_requires"])')
     - name: Run checks
       run: |
         python -m pip list
