@@ -67,8 +67,7 @@ def _numpy_ufunc_upcasting_rule(*dtypes, ufunc: np.ufunc):
     raise ValueError(f"No implementation found for dtypes {dtypes} and ufunc {ufunc}")
 
 
-@functools.lru_cache
-def _numpy_common_upcasting_rule(*dtypes):
+def _common_upcasting_rule(*dtypes):
     """Look up upcasting behavior according to C++ casting rules."""
     if all(dtype == DataType.DEFAULT for dtype in dtypes):
         res_type = DataType.DEFAULT
@@ -101,7 +100,7 @@ class _GTIRUpcasting(NodeTranslator):
         true_expr, false_expr = _upcast_nodes(
             self.visit(node.true_expr),
             self.visit(node.false_expr),
-            upcasting_rule=_numpy_common_upcasting_rule,
+            upcasting_rule=_common_upcasting_rule,
         )
         return _update_node(
             node, {"true_expr": true_expr, "false_expr": false_expr, "cond": self.visit(node.cond)}
