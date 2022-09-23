@@ -1,4 +1,4 @@
-import boltons.typeutils
+import boltons.typeutils  # type: ignore[import]
 
 from eve import NodeVisitor
 from functional.iterator import ir
