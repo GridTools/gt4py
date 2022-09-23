@@ -804,6 +804,7 @@ def test_conditional_nested_tuple():
         ((c, d), (d, c)),
     )
 
+
 def test_nested_tuple_return():
     size = 10
     a = np_as_located_field(IDim)(np.ones((size,)))
