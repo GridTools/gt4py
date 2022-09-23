@@ -57,7 +57,6 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         new_args = self.visit(node.args, **kwargs)
         new_kwargs = self.visit(node.kwargs, **kwargs)
 
-        # perform type checks for "out" and "field_domain" entries
         try:
             self._check_out_and_field_domain_values(new_func, new_kwargs)
 
