@@ -123,7 +123,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
     def _visit_stencil_call(self, node: past.Call, **kwargs) -> itir.StencilClosure:
         assert type_info.is_field_type_or_tuple_of_field_type(node.kwargs["out"].type)
 
-        field_domain = node.kwargs.get("field_domain", {})
+        field_domain = node.kwargs.get("field_domain", None)
         output, domain = self._visit_stencil_call_out_arg(
             node.kwargs["out"], field_domain, **kwargs
         )
@@ -177,7 +177,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
     def _construct_itir_domain_arg(
         self,
         out_field: past.Name,
-        node_field_domain: past.Dict,
+        node_field_domain: past.Dict | None,
         slices: Optional[list[past.Slice]] = None,
     ):
         domain_args = []
@@ -279,7 +279,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         return out_field_slice_
 
     def _visit_stencil_call_out_arg(
-        self, out_arg: past.Expr, domain_arg: past.Dict, **kwargs
+        self, out_arg: past.Expr, domain_arg: past.Dict | None, **kwargs
     ) -> tuple[itir.SymRef, itir.FunCall]:
         if isinstance(out_arg, past.Subscript):
             # as the ITIR does not support slicing a field we have to do a deeper

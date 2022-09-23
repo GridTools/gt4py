@@ -118,9 +118,13 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                         f"Only Dimension allowed in `field_domain` dictionary keys, but got `{domain_keys.type}`."
                     )
             for domain_values in domain_kwarg.values_:
-                if not isinstance(domain_values.type, ct.TupleType) or len(domain_values.elts) != 2:
+                if not isinstance(domain_values.type, ct.TupleType):
                     raise GTTypeError(
-                        f"Only 2-Tuples allowed in `field_domain` dictionary values, but got `{domain_values.type}`."
+                        f"Only Tuples allowed in `field_domain` dictionary values, but got `{domain_values.type}`."
+                    )
+                if len(domain_values.elts) != 2:
+                    raise GTTypeError(
+                        f"Only 2 values allowd for domain range, but got `{len(domain_values.elts)}`."
                     )
 
     def visit_Name(self, node: past.Name, **kwargs) -> past.Name:
