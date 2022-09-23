@@ -60,7 +60,7 @@ repos:
       setup.py |
       docs/eve/conf.py |
       tests/conftest.py |
-      tests/functional_tests/\.* |
+      tests/functional_tests/.* |
       )$
 
 - repo: local
