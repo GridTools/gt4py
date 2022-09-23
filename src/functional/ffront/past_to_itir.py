@@ -123,10 +123,9 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
     def _visit_stencil_call(self, node: past.Call, **kwargs) -> itir.StencilClosure:
         assert type_info.is_field_type_or_tuple_of_field_type(node.kwargs["out"].type)
 
-        if "field_domain" not in node.kwargs:
-            node.kwargs["field_domain"] = {}
+        field_domain = node.kwargs.get("field_domain", {})
         output, domain = self._visit_stencil_call_out_arg(
-            node.kwargs["out"], node.kwargs["field_domain"], **kwargs
+            node.kwargs["out"], field_domain, **kwargs
         )
 
         return itir.StencilClosure(
