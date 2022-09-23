@@ -280,7 +280,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         return out_field_slice_
 
     def _visit_stencil_call_out_arg(
-        self, node_out: past.Expr, node_field_domain: past.Dict, **kwargs
+        self, out_arg: past.Expr, domain_arg: past.Dict, **kwargs
     ) -> tuple[itir.SymRef, itir.FunCall]:
         if isinstance(node_out, past.Subscript):
             # as the ITIR does not support slicing a field we have to do a deeper
