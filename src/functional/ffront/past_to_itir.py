@@ -282,23 +282,23 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
     def _visit_stencil_call_out_arg(
         self, out_arg: past.Expr, domain_arg: past.Dict, **kwargs
     ) -> tuple[itir.SymRef, itir.FunCall]:
-        if isinstance(node_out, past.Subscript):
+        if isinstance(out_arg, past.Subscript):
             # as the ITIR does not support slicing a field we have to do a deeper
             #  inspection of the PAST to emulate the behaviour
-            out_field_name: past.Name = node_out.value
+            out_field_name: past.Name = out_arg.value
             return (
                 self._construct_itir_out_arg(out_field_name),
                 self._construct_itir_domain_arg(
-                    out_field_name, node_field_domain, self._compute_field_slice(node_out)
+                    out_field_name, domain_arg, self._compute_field_slice(out_arg)
                 ),
             )
-        elif isinstance(node_out, past.Name):
+        elif isinstance(out_arg, past.Name):
             return (
-                self._construct_itir_out_arg(node_out),
-                self._construct_itir_domain_arg(node_out, node_field_domain),
+                self._construct_itir_out_arg(out_arg),
+                self._construct_itir_domain_arg(out_arg, domain_arg),
             )
-        elif isinstance(node_out, past.TupleExpr):
-            flattened = _flatten_tuple_expr(node_out)
+        elif isinstance(out_arg, past.TupleExpr):
+            flattened = _flatten_tuple_expr(out_arg)
 
             first_field = flattened[0]
             assert all(
@@ -317,8 +317,8 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                 first_field = first_field.value
 
             return (
-                self._construct_itir_out_arg(node_out),
-                self._construct_itir_domain_arg(first_field, node_field_domain, field_slice),
+                self._construct_itir_out_arg(out_arg),
+                self._construct_itir_domain_arg(first_field, domain_arg, field_slice),
             )
         else:
             raise AssertionError(
