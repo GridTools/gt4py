@@ -110,7 +110,7 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             domain_kwarg = new_kwargs["field_domain"]
             if not isinstance(domain_kwarg, past.Dict):
                 raise GTTypeError(
-                    f"Only calls Dictionary allowed in field_domain, but got `{type(domain_kwarg)}`."
+                    f"Only Dictionaries allowed in field_domain, but got `{type(domain_kwarg)}`."
                 )
 
             for domain_keys in domain_kwarg.keys_:
