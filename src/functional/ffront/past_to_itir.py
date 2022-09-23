@@ -123,10 +123,8 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
     def _visit_stencil_call(self, node: past.Call, **kwargs) -> itir.StencilClosure:
         assert type_info.is_field_type_or_tuple_of_field_type(node.kwargs["out"].type)
 
-        field_domain = node.kwargs.get("field_domain", None)
-        output, domain = self._visit_stencil_call_out_arg(
-            node.kwargs["out"], field_domain, **kwargs
-        )
+        domain = node.kwargs.get("domain", None)
+        output, domain = self._visit_stencil_call_out_arg(node.kwargs["out"], domain, **kwargs)
 
         return itir.StencilClosure(
             domain=domain,
@@ -177,7 +175,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
     def _construct_itir_domain_arg(
         self,
         out_field: past.Name,
-        node_field_domain: past.Dict | None,
+        node_domain: past.Dict | None,
         slices: Optional[list[past.Slice]] = None,
     ):
         domain_args = []
@@ -185,9 +183,9 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             # an expression for the size of a dimension
             dim_size = itir.SymRef(id=_size_arg_from_field(out_field.id, dim_i))
             # bounds
-            if bool(node_field_domain):
-                lower_bound, upper_bound = self._construct_itir_field_domain_arg(
-                    dim_i, dim, node_field_domain
+            if bool(node_domain):
+                lower_bound, upper_bound = self._construct_itir_initialized_domain_arg(
+                    dim_i, dim, node_domain
                 )
             else:
                 lower_bound, upper_bound = self._construct_itir_out_domain_arg(dim_size)
@@ -225,16 +223,16 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
     ) -> tuple[itir.Literal, itir.Literal]:
         return itir.Literal(value="0", type="int"), dim_size
 
-    def _construct_itir_field_domain_arg(
+    def _construct_itir_initialized_domain_arg(
         self,
         dim_i: int,
         dim: Dimension,
-        node_field_domain: past.Dict,
+        node_domain: past.Dict,
     ) -> tuple[itir.Literal, itir.Literal]:
         try:
-            if node_field_domain.keys_[dim_i].type.dim == dim:
+            if node_domain.keys_[dim_i].type.dim == dim:
                 domain_bounds = []
-                for domain_i, domain_input in enumerate(node_field_domain.values_[dim_i].elts):
+                for domain_i, domain_input in enumerate(node_domain.values_[dim_i].elts):
                     if isinstance(domain_input, past.Name):
                         domain_bounds.append(itir.SymRef(id=domain_input.id))
                     elif isinstance(domain_input, past.Constant):
@@ -244,12 +242,12 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                     else:
                         raise GTTypeError(
                             f"Expected {domain_i}th domain to be of type {past.Name} or {past.Constant}"
-                            f"but got {type(node_field_domain.values_[dim_i].elts[0])} "
+                            f"but got {type(node_domain.values_[dim_i].elts[0])} "
                         )
             else:
                 raise GTTypeError(
                     f"Dimensions in out field and field domain are not equivalent"
-                    f"Expected {dim}, but got {node_field_domain.keys_[dim_i].type.dim} "
+                    f"Expected {dim}, but got {node_domain.keys_[dim_i].type.dim} "
                 )
         except Exception:
             raise GTTypeError(

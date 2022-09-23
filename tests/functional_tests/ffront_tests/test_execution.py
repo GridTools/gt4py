@@ -1046,7 +1046,7 @@ def test_domain(fieldview_backend):
 
     @program
     def program_domain(a: Field[[IDim, JDim], float64]):
-        fieldop_domain(a, out=a, field_domain={IDim: (1, 9), JDim: (4, 6)})
+        fieldop_domain(a, out=a, domain={IDim: (1, 9), JDim: (4, 6)})
 
     program_domain(a, offset_provider={})
 
@@ -1076,7 +1076,7 @@ def test_domain_input_bounds(fieldview_backend):
         lower_j: int64,
         upper_j: int64,
     ):
-        fieldop_domain(a, out=a, field_domain={IDim: (lower_i, upper_i), JDim: (lower_j, upper_j)})
+        fieldop_domain(a, out=a, domain={IDim: (lower_i, upper_i), JDim: (lower_j, upper_j)})
 
     program_domain(a, lower_i, upper_i, lower_j, upper_j, offset_provider={})
 
@@ -1099,7 +1099,7 @@ def test_domain_tuple(fieldview_backend):
 
     @program
     def program_domain_tuple(a: Field[[IDim, JDim], float64], b: Field[[IDim, JDim], float64]):
-        fieldop_domain_tuple(a, out=(b, a), field_domain={IDim: (1, 9), JDim: (4, 6)})
+        fieldop_domain_tuple(a, out=(b, a), domain={IDim: (1, 9), JDim: (4, 6)})
 
     program_domain_tuple(a, b, offset_provider={})
 

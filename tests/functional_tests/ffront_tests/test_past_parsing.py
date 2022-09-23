@@ -152,3 +152,55 @@ def test_copy_restrict_parsing(copy_restrict_program_def):
     )
 
     pattern_node.match(past_node, raise_exception=True)
+
+
+def test_domain_exception_1(identity_def):
+    domain_format_1 = field_operator(identity_def)
+
+    def domain_format_1_program(in_field: Field[[IDim], float64]):
+        domain_format_1(in_field, out=in_field, domain=(0, 2))
+
+    with pytest.raises(
+        GTTypeError,
+        match=(r"Only Dictionaries allowed in domain"),
+    ):
+        ProgramParser.apply_to_function(domain_format_1_program)
+
+
+def test_domain_exception_2(identity_def):
+    domain_format_2 = field_operator(identity_def)
+
+    def domain_format_2_program(in_field: Field[[IDim], float64]):
+        domain_format_2(in_field, out=in_field, domain={IDim: 0})
+
+    with pytest.raises(
+        GTTypeError,
+        match=(r"Only Tuples allowed in domain"),
+    ):
+        ProgramParser.apply_to_function(domain_format_2_program)
+
+
+def test_domain_exception_3(identity_def):
+    domain_format_3 = field_operator(identity_def)
+
+    def domain_format_3_program(in_field: Field[[IDim], float64]):
+        domain_format_3(in_field, out=in_field, domain={IDim: (0, 1, 2)})
+
+    with pytest.raises(
+        GTTypeError,
+        match=(r"Only 2 values allowed for domain range"),
+    ):
+        ProgramParser.apply_to_function(domain_format_3_program)
+
+
+def test_domain_exception_4(identity_def):
+    domain_format_4 = field_operator(identity_def)
+
+    def domain_format_4_program(in_field: Field[[IDim], float64]):
+        domain_format_4(in_field, domain={IDim: (0, 2)})
+
+    with pytest.raises(
+        GTTypeError,
+        match=(r"Missing required keyword argument `out`."),
+    ):
+        ProgramParser.apply_to_function(domain_format_4_program)
