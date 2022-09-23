@@ -201,6 +201,6 @@ def test_domain_exception_4(identity_def):
 
     with pytest.raises(
         GTTypeError,
-        match=(r"Missing required keyword argument `out`."),
+        match=(r"Missing required keyword argument\(s\) `out`."),
     ):
         ProgramParser.apply_to_function(domain_format_4_program)

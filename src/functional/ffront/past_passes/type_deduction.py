@@ -103,7 +103,7 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             )
 
         if "out" not in new_kwargs:
-            raise GTTypeError("Missing required keyword argument `out`.")
+            raise GTTypeError("Missing required keyword argument(s) `out`.")
         if "domain" in new_kwargs:
             domain_kwarg = new_kwargs["domain"]
             if not isinstance(domain_kwarg, past.Dict):
