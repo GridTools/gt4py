@@ -107,27 +107,28 @@ def _pre_expand_trafos(gtir_pipeline: GtirPipeline, sdfg: dace.SDFG, layout_map)
         lambda n: isinstance(n[0], StencilComputation), sdfg.all_nodes_recursive()
     ):
         expansion_priority = []
-        if node.has_splittable_regions():
-            expansion_priority.append(
-                [
-                    "Sections",
-                    "Stages",
-                    "J",
-                    "I",
-                    "K",
-                ]
-            )
+        # expansion_priority.append(
+        #     [
+        #         "Sections",
+        #         "Stages",
+        #         "J",
+        #         "I",
+        #         "K",
+        #     ]
+        # )
         if node.oir_node.loop_order == common.LoopOrder.PARALLEL:
             expansion_priority.extend(
                 [
-                    ["Sections", "Stages", "K", "J", "I"],
+                    ["TileJ", "TileI", "Sections", "Stages", "JMap", "IMap", "KMap"],
                     ["TileJ", "TileI", "Sections", "KMap", "Stages", "JMap", "IMap"],
                 ]
             )
         else:
             expansion_priority.extend(
                 [
-                    ["J", "I", "Sections", "Stages", "K"],
+                    # ["J", "I", "Sections", "Stages", "K"],
+
+                    ["TileJ", "TileI", "Sections", "Stages", "JMap", "IMap", "KLoop"],
                     ["TileJ", "TileI", "Sections", "KLoop", "Stages", "JMap", "IMap"],
                 ]
             )
