@@ -11,13 +11,12 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-
-
-from typing import Any, Iterable, Optional, Type, Union
+import dataclasses
+from typing import Any, ClassVar, Iterable, Optional, Type, Union
 
 import eve
 from eve.concepts import SymbolName
-from eve.utils import UIDs
+from eve.utils import UIDGenerator
 from functional import common
 from functional.fencil_processors.codegens.gtfn.gtfn_ir import (
     Backend,
@@ -172,9 +171,10 @@ def _collect_offset_definitions(
     return offset_definitions
 
 
+@dataclasses.dataclass(frozen=True)
 class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
 
-    _binary_op_map = {
+    _binary_op_map: ClassVar[dict[str, str]] = {
         "plus": "+",
         "minus": "-",
         "multiplies": "*",
@@ -188,7 +188,11 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         "and_": "&&",
         "or_": "||",
     }
-    _unary_op_map = {"not_": "!"}
+    _unary_op_map: ClassVar[dict[str, str]] = {"not_": "!"}
+
+    # we use one UID generator per instance such that the generated ids are
+    #  stable across multiple runs (required for caching to properly work)
+    uids: UIDGenerator = dataclasses.field(init=False, repr=False, default_factory=UIDGenerator)
 
     def visit_Sym(self, node: itir.Sym, **kwargs: Any) -> Sym:
         return Sym(id=node.id)
@@ -203,7 +207,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         if force_function_extraction:
             assert extracted_functions is not None
             assert node.id == "deref"
-            fun_id = UIDs.sequential_id(prefix="_fun")
+            fun_id = self.uids.sequential_id(prefix="_fun")
             fun_def = FunctionDefinition(
                 id=fun_id,
                 params=[Sym(id="x")],
@@ -223,7 +227,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     ) -> Union[SymRef, Lambda]:
         if force_function_extraction:
             assert extracted_functions is not None
-            fun_id = UIDs.sequential_id(prefix="_fun")
+            fun_id = self.uids.sequential_id(prefix="_fun")
             fun_def = FunctionDefinition(
                 id=fun_id,
                 params=self.visit(node.params, **kwargs),
@@ -394,7 +398,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     ) -> Union[ScanExecution, StencilExecution]:
         backend = Backend(domain=self.visit(node.domain, stencil=node.stencil, **kwargs))
         if self._is_scan(node.stencil):
-            scan_id = UIDs.sequential_id(prefix="_scan")
+            scan_id = self.uids.sequential_id(prefix="_scan")
             assert isinstance(node.stencil, itir.FunCall)
             scan_lambda = self.visit(node.stencil.args[0], **kwargs)
             forward = self._bool_from_literal(node.stencil.args[1])
