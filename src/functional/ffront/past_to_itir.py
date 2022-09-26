@@ -235,7 +235,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                         )
                     else:
                         raise GTTypeError(
-                            f"Expected {domain_i}th domain to be of type {past.Name} or {past.Constant}"
+                            f"Expected {domain_i + 1}th domain parameter to be of type {past.Name} or {past.Constant}"
                             f"but got {type(node_domain.values_[dim_i].elts[0])} "
                         )
             else:
