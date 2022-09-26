@@ -65,23 +65,18 @@ Scalar: TypeAlias = SupportsInt | SupportsFloat | np.int32 | np.int64 | np.float
 DEFAULT_BACKEND: Callable = roundtrip.executor
 
 
-def _collect_capture_vars(captured_vars: CapturedVars) -> CapturedVars:
-    new_captured_vars = captured_vars
-    flat_captured_vars = collections.ChainMap(captured_vars.globals, captured_vars.nonlocals)
+def _get_external_vars_recurse(external_vars: dict[str, Any]) -> CapturedVars:
+    extended_external_vars = external_vars
 
-    for value in flat_captured_vars.values():
+    for value in external_vars.values():
         if isinstance(value, GTCallable):
             # if the closure ref has closure refs by itself, also add them
             if vars_of_val := value.__gt_captured_vars__():
-                vars_of_val = _collect_capture_vars(vars_of_val)
+                extended_vars_of_val = _get_external_vars_recurse(vars_of_val)
 
-                flat_vars_of_val = collections.ChainMap(vars_of_val.globals, vars_of_val.nonlocals)
                 collisions: list[str] = []
-                for potential_collision in set(flat_captured_vars) & set(flat_vars_of_val):
-                    if (
-                        flat_captured_vars[potential_collision]
-                        != flat_vars_of_val[potential_collision]
-                    ):
+                for potential_collision in set(external_vars) & set(extended_vars_of_val):
+                    if (external_vars[potential_collision] != extended_vars_of_val[potential_collision]):
                         collisions.append(potential_collision)
                 if collisions:
                     raise NotImplementedError(
@@ -90,12 +85,18 @@ def _collect_capture_vars(captured_vars: CapturedVars) -> CapturedVars:
                         f"Collisions: {'`,  `'.join(collisions)}"
                     )
 
-                new_captured_vars = dataclasses.replace(
-                    new_captured_vars,
-                    globals={**new_captured_vars.globals, **vars_of_val.globals},
-                    nonlocals={**new_captured_vars.nonlocals, **vars_of_val.nonlocals},
-                )
-    return new_captured_vars
+                extended_external_vars = collections.ChainMap(extended_external_vars, extended_vars_of_val)
+    return extended_external_vars
+
+
+def _filter_external_vars_by_type(external_vars: dict[str, Any], *types) -> dict[str, Any]:
+    return dict((name, value) for name, value in external_vars.items() if isinstance(value, *types))
+
+
+def _get_externals_vars(function: Callable) -> dict[str, Any]:
+    captured_vars = CapturedVars.from_function(function)
+    flat_captured_vars = collections.ChainMap(captured_vars.globals, captured_vars.nonlocals)
+    return flat_captured_vars
 
 
 def _deduce_grid_type(
@@ -146,16 +147,14 @@ class Program:
 
     Attributes:
         past_node: The node representing the program.
-        captured_vars: Mapping from names referenced in the program to the
-            actual values.
-        externals: Dictionary of externals.
+        external_vars: Mapping of externally defined symbols to their respective values.
+            For example, referenced global and nonlocal variables.
         backend: The backend to be used for code generation.
         definition: The Python function object corresponding to the PAST node.
     """
 
     past_node: past.Program
-    captured_vars: CapturedVars
-    externals: dict[str, Any]
+    external_vars: dict[str, Any]
     backend: Optional[FencilExecutor]
     definition: Optional[types.FunctionType] = None
     grid_type: Optional[GridType] = None
@@ -167,51 +166,37 @@ class Program:
         externals: Optional[dict] = None,
         backend: Optional[FencilExecutor] = None,
         grid_type: Optional[GridType] = None,
-    ) -> "Program":
-        captured_vars = CapturedVars.from_function(definition)
+    ) -> Program:
+        external_vars = collections.ChainMap(externals or {}, _get_externals_vars(definition))
         past_node = ProgramParser.apply_to_function(definition)
         return cls(
             past_node=past_node,
-            captured_vars=captured_vars,
-            externals={} if externals is None else externals,
+            external_vars=external_vars,
             backend=backend,
             definition=definition,
             grid_type=grid_type,
         )
 
     def __post_init__(self):
-        # validate contents of captured vars
-        for name, value in self._filter_capture_vars_by_type(GTCallable).items():
-            if value.__gt_itir__().id != name:
-                raise RuntimeError(
-                    "Name of the closure reference and the function it holds do not match."
-                )
+        external_functions = _filter_external_vars_by_type(self.external_vars, GTCallable)
+        if not all(map(lambda var: var[0] == var[1].__gt_itir__().id, external_functions.items())):
+            raise RuntimeError("Symbol name and external function's name must match.")
 
-        # validate Symbols of captured vars in PAST
-        referenced_var_names: set[str] = set()
-        for captured_var in self.past_node.captured_vars:
-            if isinstance(captured_var.type, (ct.CallableType, ct.OffsetType, ct.DimensionType)):
-                referenced_var_names.add(captured_var.id)
-            else:
-                raise NotImplementedError("Only function closure vars are allowed currently.")
-        defined_var_names = set(self.all_capture_vars.globals) | set(
-            self.all_capture_vars.nonlocals
-        )
-        if undefined := referenced_var_names - defined_var_names:
-            raise RuntimeError(f"Reference to undefined symbol(s) `{', '.join(undefined)}`.")
+        for symbol in self.past_node.external_symbols:
+            if symbol not in self.external_vars:
+                raise RuntimeError(f"Undefined symbol: {symbol.id}")
 
     def with_backend(self, backend: FencilExecutor) -> "Program":
         return Program(
             past_node=self.past_node,
-            captured_vars=self.captured_vars,
-            externals=self.externals,
+            external_vars=self.external_vars,
             backend=backend,
             definition=self.definition,  # type: ignore[arg-type]  # mypy wrongly deduces definition as method here
         )
 
     @functools.cached_property
-    def all_capture_vars(self) -> CapturedVars:
-        return _collect_capture_vars(self.captured_vars)
+    def external_vars_recursive(self) -> CapturedVars:
+        return _get_external_vars_recurse(self.external_vars)
 
     @functools.cached_property
     def itir(self) -> itir.FencilDefinition:
@@ -219,10 +204,10 @@ class Program:
             raise NotImplementedError("Externals are not supported yet.")
 
         grid_type = _deduce_grid_type(
-            self.grid_type, self._filter_capture_vars_by_type(FieldOffset, Dimension).values()
+            self.grid_type, _filter_external_vars_by_type(self.external_vars, FieldOffset, Dimension).values()
         )
 
-        gt_callables = self._filter_capture_vars_by_type(GTCallable).values()
+        gt_callables = _filter_external_vars_by_type(self.external_vars, GTCallable).values()
         lowered_funcs = [gt_callable.__gt_itir__() for gt_callable in gt_callables]
         return ProgramLowering.apply(
             self.past_node, function_definitions=lowered_funcs, grid_type=grid_type
@@ -310,17 +295,13 @@ class Program:
 
         return tuple(rewritten_args), tuple(size_args), kwargs
 
-    def _filter_capture_vars_by_type(self, *types: type) -> dict[str, Any]:
-        flat_capture_vars = self.all_capture_vars.globals | self.all_capture_vars.nonlocals
-        return {k: v for k, v in flat_capture_vars.items() if isinstance(v, types)}
-
     @functools.cached_property
     def _column_axis(self):
         # construct mapping from column axis to scan operators defined on
         #  that dimension. only one column axis is allowed, but we can use
         #  this mapping to provide good error messages.
         scanops_per_axis: dict[Dimension, str] = {}
-        for name, gt_callable in self._filter_capture_vars_by_type(GTCallable).items():
+        for name, gt_callable in _filter_external_vars_by_type(self.external_vars, GTCallable).items():
             if isinstance((type_ := gt_callable.__gt_type__()), ct.ScanOperatorType):
                 scanops_per_axis.setdefault(type_.axis, []).append(name)
 
@@ -398,16 +379,12 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
 
     Attributes:
         foast_node: The node representing the field operator.
-        captured_vars: Mapping from names referenced in the program to the
-            actual values.
-        externals: Dictionary of externals.
-        backend: The backend to be used for code generation.
-        definition: The Python function object corresponding to the PAST node.
+        external_vars: Mapping of externally defined symbols to their respective values.
+            For example, referenced global and nonlocal variables.
     """
 
     foast_node: OperatorNodeT
-    captured_vars: CapturedVars
-    externals: dict[str, Any]
+    externals_vars: dict[str, Any]
     backend: Optional[FencilExecutor]  # note: backend is only used if directly called
     definition: Optional[types.FunctionType] = None
 
@@ -423,7 +400,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
     ) -> FieldOperator[OperatorNodeT]:
         operator_attributes = operator_attributes or {}
 
-        captured_vars = CapturedVars.from_function(definition)
+        external_vars = collections.ChainMap(externals or {}, _get_externals_vars(definition))
         foast_definition_node = FieldOperatorParser.apply_to_function(definition)
         loc = foast_definition_node.location
         operator_attribute_nodes = {
@@ -441,8 +418,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         foast_node = FieldOperatorTypeDeduction.apply(untyped_foast_node)
         return cls(
             foast_node=foast_node,
-            captured_vars=captured_vars,
-            externals=externals or {},
+            externals_vars=external_vars,
             backend=backend,
             definition=definition,
         )
