@@ -14,7 +14,6 @@ flake8-mutable>=1.2.0
 flake8-rst-docstrings>=0.0.14
 isort~=5.10
 jupytext>=1.14
-#mypy>=0.971
 mypy@git+https://github.com/python/mypy@release-0.980
 pre-commit~=2.15
 psutil>=5.0
