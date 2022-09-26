@@ -75,7 +75,7 @@ class StencilClosure(Node):
     inputs: List[SymRef]
 
     @datamodels.validator("output")
-    def _output_validator(self, attribute: datamodels.Attribute, value):
+    def _output_validator(self: datamodels.DataModelTP, attribute: datamodels.Attribute, value):
         if isinstance(value, FunCall) and value.fun != SymRef(id="make_tuple"):
             raise ValueError("Only FunCall to `make_tuple` allowed.")
 
