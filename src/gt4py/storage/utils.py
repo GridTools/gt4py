@@ -146,9 +146,8 @@ def strides_from_padded_shape(padded_size, order_idx, itemsize):
 
 def allocate(aligned_index, shape, layout_map, dtype, alignment_bytes, allocate_f):
     dtype = np.dtype(dtype)
-    assert (
-        alignment_bytes % dtype.itemsize
-    ) == 0, "Alignment must be a multiple of byte-width of dtype."
+    if not (alignment_bytes % dtype.itemsize) == 0:
+        raise ValueError("Alignment must be a multiple of byte-width of dtype.")
     itemsize = dtype.itemsize
     items_per_alignment = int(alignment_bytes / itemsize)
 

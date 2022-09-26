@@ -211,7 +211,7 @@ def full(
         aligned_index=aligned_index,
         dimensions=dimensions,
     )
-    storage[...] = fill_value
+    storage[...] = storage.dtype.type(fill_value)
     return storage
 
 
@@ -264,7 +264,7 @@ def zeros(
         aligned_index=aligned_index,
         dimensions=dimensions,
     )
-    storage[...] = 0
+    storage[...] = storage.dtype.type(0)
     return storage
 
 

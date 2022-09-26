@@ -83,6 +83,11 @@ The return type is either a :code:`numpy.ndarray` or a :code:`cupy.ndarray`, for
         + :code:`dtype: dtype_like`
           The dtype of the storage (NumPy dtype or accepted by :code:`np.dtype()`). It defaults to
           :code:`np.float64`.
+    Keyword Arguments:
+        + :code:`aligned_index: Sequence[int]`
+          The index of the grid point to which the memory is aligned. Note that this only partly takes the
+          role of the deprecated :code:`default_origin` parameter, since it does not imply anything about the
+          origin or domain when passed to a stencil. (See :code:`__gt_origin__` interface instead.)
 
     For common keyword-only arguments, please see below.
 
@@ -97,6 +102,12 @@ The return type is either a :code:`numpy.ndarray` or a :code:`cupy.ndarray`, for
         + :code:`dtype: dtype_like`
           The dtype of the storage (NumPy dtype or accepted by :code:`np.dtype()`). It defaults to
           :code:`np.float64`.
+    Keyword Arguments:
+        + :code:`aligned_index: Sequence[int]`
+          The index of the grid point to which the memory is aligned. Note that this only partly takes the
+          role of the deprecated :code:`default_origin` parameter, since it does not imply anything about the
+          origin or domain when passed to a stencil. (See :code:`__gt_origin__` interface instead.)
+
 
         For common keyword-only arguments, please see below.
 
@@ -111,6 +122,12 @@ The return type is either a :code:`numpy.ndarray` or a :code:`cupy.ndarray`, for
         + :code:`dtype: dtype_like`
           The dtype of the storage (NumPy dtype or accepted by :code:`np.dtype()`). It defaults to
           :code:`np.float64`.
+    Keyword Arguments:
+        + :code:`aligned_index: Sequence[int]`
+          The index of the grid point to which the memory is aligned. Note that this only partly takes the
+          role of the deprecated :code:`default_origin` parameter, since it does not imply anything about the
+          origin or domain when passed to a stencil. (See :code:`__gt_origin__` interface instead.)
+
 
     For common keyword-only arguments, please see below.
 
@@ -128,18 +145,29 @@ The return type is either a :code:`numpy.ndarray` or a :code:`cupy.ndarray`, for
         + :code:`dtype: dtype_like`
           The dtype of the storage (NumPy dtype or accepted by :code:`np.dtype()`). It defaults to
           :code:`np.float64`.
+    Keyword Arguments:
+        + :code:`aligned_index: Sequence[int]`
+          The index of the grid point to which the memory is aligned. Note that this only partly takes the
+          role of the deprecated :code:`default_origin` parameter, since it does not imply anything about the
+          origin or domain when passed to a stencil. (See :code:`__gt_origin__` interface instead.)
+
 
     For common keyword-only arguments, please see below.
 
-:code:`from_array(data: array_like, device_data: array_like = None, *, dtype: dtype_like = np.float64, **kwargs) -> ndarray`
+:code:`from_array(data: array_like, *, dtype: dtype_like = np.float64, **kwargs) -> ndarray`
     Used to allocate an array with values initialized from the content of a given array.
 
     Parameters:
         + :code:`data: array_like`. The original array from which the storage is initialized.
 
-        + :code:`device_data: array_like`. The original array in case copying to a gpu buffer is
-          desired. The same buffer could also be passed through :code:`data` in that case, however this
-          parameter is here to provide the same interface like the :code:`as_storage` function.
+        + :code:`dtype: dtype_like`
+          The dtype of the storage (NumPy dtype or accepted by :code:`np.dtype()`). It defaults to the dtype of
+          :code:`data`.
+    Keyword Arguments:
+        + :code:`aligned_index: Sequence[int]`
+          The index of the grid point to which the memory is aligned. Note that this only partly takes the
+          role of the deprecated :code:`default_origin` parameter, since it does not imply anything about the
+          origin or domain when passed to a stencil. (See :code:`__gt_origin__` interface instead.)
 
 
 Optional Keyword-Only Parameters
@@ -147,27 +175,9 @@ Optional Keyword-Only Parameters
 
 Additionally, these **optional** keyword-only parameters are accepted:
 
-:code:`aligned_index: Sequence[int]`
-    The index of the grid point to which the memory is aligned. Note that this only partly takes the
-    role of the deprecated :code:`default_origin` parameter, since it does not imply anything about the
-    origin or domain when passed to a stencil. It defaults to the lower indices of the
-    :code:`halo` parameter. (See :code:`__gt_origin__` interface instead.)
-
 :code:`dimensions: Optional[Sequence[str]]`
     Sequence indicating the semantic meaning of the dimensions of this storage. This is used to
     determine the default layout for the storage. Currently supported will be :code:`"I"`,
     :code:`"J"`, :code:`"K"` and additional dimensions as string representations of integers,
     starting at :code:`"0"`. (This information is not retained in the resulting array, and needs to be specified instead
     with the :code:`__gt_dims__` interface. )
-
-:code:`layout: Optional[Sequence[int]]`
-    A permutation of integers in :code:`[0 .. ndim-1]`. It indicates the order of strides in
-    decreasing order. I.e. :code:`0` indicates that the stride in that dimension is the largest, while the
-    largest entry in the layout sequence corresponds to the dimension with the smallest stride, which
-    typically is contiguous in memory.
-
-    Default values as indicated by the :code:`backend` parameter depend on the dimensions. E.g.
-    if :code:`backend` is any of the compiled GridTools backends, the default value is defined
-    according to the semantic meaning of each dimension. For example for the :code:`"gt:cpu_kfirst"`
-    backend, the smallest stride is always in the K dimension, independently of which index
-    corresponds to the K dimension.
