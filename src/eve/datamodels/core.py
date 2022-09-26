@@ -124,9 +124,9 @@ class GenericDataModelTP(DataModelTP, Protocol):
 
 GenericDataModelT = TypeVar("GenericDataModelT", bound=GenericDataModelTP)
 
-AttrsValidator = Callable[[Any, Attribute[_T], _T], Any]
-FieldValidator = Callable[["DataModel", Attribute[_T], _T], None]
-BoundFieldValidator = Callable[[Attribute[_T], _T], None]
+AttrsValidator = Callable[[Any, Attribute, _T], Any]
+FieldValidator = Callable[["DataModel", Attribute, _T], None]
+BoundFieldValidator = Callable[[Attribute, _T], None]
 
 RootValidator = Callable[[Type["DataModel"], "DataModel"], None]
 BoundRootValidator = Callable[["DataModel"], None]
