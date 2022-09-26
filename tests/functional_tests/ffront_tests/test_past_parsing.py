@@ -204,18 +204,3 @@ def test_domain_exception_4(identity_def):
         match=(r"Missing required keyword argument\(s\) `out`."),
     ):
         ProgramParser.apply_to_function(domain_format_4_program)
-
-
-def test_domain_exception_5(identity_def):
-    domain_format_5 = field_operator(identity_def)
-
-    def domain_format_5_program(
-        in_field: Field[[IDim], float64], out_field: Field[[IDim], float64]
-    ):
-        domain_format_5(in_field, out=out_field[0:1], domain={IDim: (0, 1)})
-
-    with pytest.raises(
-        GTTypeError,
-        match=(r"Either domain or slicing can be applied, but got both"),
-    ):
-        ProgramParser.apply_to_function(domain_format_5_program)
