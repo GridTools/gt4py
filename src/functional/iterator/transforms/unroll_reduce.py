@@ -9,7 +9,7 @@ from functional.iterator import ir
 @dataclasses.dataclass(frozen=True)
 class UnrollReduce(NodeTranslator):
     # we use one UID generator per instance such that the generated ids are
-    #  stable across multiple runs (required for caching to properly work)
+    # stable across multiple runs (required for caching to properly work)
     uids: UIDGenerator = dataclasses.field(init=False, repr=False, default_factory=UIDGenerator)
 
     @classmethod
