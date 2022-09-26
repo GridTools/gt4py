@@ -123,7 +123,7 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                     )
                 if len(domain_values.elts) != 2:
                     raise GTTypeError(
-                        f"Only 2 values allowed for domain range, but got `{len(domain_values.elts)}`."
+                        f"Only 2 values allowed in domain range, but got `{len(domain_values.elts)}`."
                     )
 
     def visit_Name(self, node: past.Name, **kwargs) -> past.Name:

@@ -183,21 +183,21 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             # an expression for the size of a dimension
             dim_size = itir.SymRef(id=_size_arg_from_field(out_field.id, dim_i))
             # bounds
-            if bool(node_domain):
-                lower_bound, upper_bound = self._construct_itir_initialized_domain_arg(
-                    dim_i, dim, node_domain
+            if bool(node_domain) and bool(slices):
+                raise GTTypeError(
+                    f"Either only domain or slicing allowed, but got respectively {node_domain} and {slices}"
                 )
+            if bool(node_domain):
+                lower, upper = self._construct_itir_initialized_domain_arg(dim_i, dim, node_domain)
             else:
-                lower_bound, upper_bound = self._construct_itir_out_domain_arg(dim_size)
-
-            lower = self._visit_slice_bound(
-                slices[dim_i].lower if slices else None,
-                lower_bound,
-                dim_size,
-            )
-            upper = self._visit_slice_bound(
-                slices[dim_i].upper if slices else None, upper_bound, dim_size
-            )
+                lower = self._visit_slice_bound(
+                    slices[dim_i].lower if slices else None,
+                    itir.Literal(value="0", type="int"),
+                    dim_size,
+                )
+                upper = self._visit_slice_bound(
+                    slices[dim_i].upper if slices else None, dim_size, dim_size
+                )
 
             if dim.kind == DimensionKind.LOCAL:
                 raise GTTypeError(f"Dimension {dim.value} must not be local.")
@@ -216,12 +216,6 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             raise AssertionError()
 
         return itir.FunCall(fun=itir.SymRef(id=domain_builtin), args=domain_args)
-
-    def _construct_itir_out_domain_arg(
-        self,
-        dim_size: itir.SymRef,
-    ) -> tuple[itir.Literal, itir.Literal]:
-        return itir.Literal(value="0", type="int"), dim_size
 
     def _construct_itir_initialized_domain_arg(
         self,
