@@ -10,6 +10,7 @@ the stencils specify a default ordering.
 GT4Py provides utilities to allocate buffers that have optimal layout and alignment for a given backend.
 
 In this document, we describe the interfaces for
+
 * supported buffer interfaces
 * exposing dimension labels and the behavior for default values
 * performance-optimal allocation
@@ -42,9 +43,9 @@ Dimension Mapping
 ^^^^^^^^^^^^^^^^^
 
 The user can optionally implement a :code:`__gt_dims__` attribute in the object implementing any of the supported buffer
-interfaces. As a fallback if neither is specified the dimensions given in the annotations (by means of
-:code:`gtscript.Field`) are assumed. The returned object should be a tuple of strings labeling the dimensions in index
-order.
+interfaces. The returned object should be a tuple of strings labeling the dimensions in index order.
+As a fallback if the attribute is not implemented, it is assumed that the buffer contains the dimensions given in the annotations
+(by means of :code:`gtscript.Field`) exactly in the same order.
 
 Valid dimension strings are :code:`"I"`, :code:`"J"`, :code:`"K"` as well as decimal string representations of integer
 numbers to denote data dimensions.
@@ -131,7 +132,7 @@ The return type is either a :code:`numpy.ndarray` or a :code:`cupy.ndarray`, for
     For common keyword-only arguments, please see below.
 
 :code:`from_array(data: array_like, device_data: array_like = None, *, dtype: dtype_like = np.float64, **kwargs) -> ndarray`
-    Used to allocate an array with values initialized to those of a given array.
+    Used to allocate an array with values initialized from the content of a given array.
 
     Parameters:
         + :code:`data: array_like`. The original array from which the storage is initialized.
@@ -139,9 +140,6 @@ The return type is either a :code:`numpy.ndarray` or a :code:`cupy.ndarray`, for
         + :code:`device_data: array_like`. The original array in case copying to a gpu buffer is
           desired. The same buffer could also be passed through :code:`data` in that case, however this
           parameter is here to provide the same interface like the :code:`as_storage` function.
-
-        + :code:`sync_state: gt4py.storage.SyncState`. If `managed="gt4py"` indicates which of the
-          provided buffers, :code:`data` or :code:`device_data`, is up to date at the time of initialization.
 
 
 Optional Keyword-Only Parameters

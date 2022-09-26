@@ -33,7 +33,7 @@ class ArrayInterfaceType(Protocol):
 
 
 class CudaArrayInterfaceType(Protocol):
-    __array_interface__: Dict[str, Any]
+    __cuda_array_interface__: Dict[str, Any]
 
 
 class GtDimsInterface(Protocol):

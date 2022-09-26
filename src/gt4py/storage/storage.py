@@ -155,7 +155,7 @@ def ones(
         aligned_index=aligned_index,
         dimensions=dimensions,
     )
-    storage[...] = 1
+    storage[...] = storage.dtype.type(1)
     return storage
 
 
