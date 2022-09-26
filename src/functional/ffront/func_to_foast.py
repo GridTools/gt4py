@@ -133,16 +133,16 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
         return result, to_be_inserted.keys()
 
     def visit_FunctionDef(self, node: ast.FunctionDef, **kwargs) -> foast.FunctionDefinition:
-        captured_vars: Mapping[str, Any] = collections.ChainMap(
+        closure_vars: Mapping[str, Any] = collections.ChainMap(
             self.captured_vars.globals, self.captured_vars.nonlocals
         )
-        captured_symbols, skip_names = self._builtin_type_constructor_symbols(
-            captured_vars, self._make_loc(node)
+        external_symbols, skip_names = self._builtin_type_constructor_symbols(
+            closure_vars, self._make_loc(node)
         )
-        for name, val in captured_vars.items():
+        for name, val in closure_vars.items():
             if name in skip_names:
                 continue
-            captured_symbols.append(
+            external_symbols.append(
                 foast.Symbol(
                     id=name,
                     type=symbol_makers.make_symbol_type_from_value(val),
@@ -155,7 +155,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             id=node.name,
             params=self.visit(node.args, **kwargs),
             body=self.visit_stmt_list(node.body, **kwargs),
-            captured_vars=captured_symbols,
+            external_symbols=external_symbols,
             location=self._make_loc(node),
         )
 

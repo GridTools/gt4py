@@ -67,7 +67,7 @@ def make_builtin_field_operator(builtin_name: str):
     ]
     args = [foast.Name(id=k, location=loc) for k, _ in annotations.items() if k != "return"]
 
-    captured_vars_nodes = [
+    external_symbols = [
         foast.Symbol(
             id=name,
             type=symbol_makers.make_symbol_type_from_value(val),
@@ -92,7 +92,7 @@ def make_builtin_field_operator(builtin_name: str):
                     location=loc,
                 )
             ],
-            captured_vars=captured_vars_nodes,
+            external_symbols=external_symbols,
             params=params,
             location=loc,
         ),
