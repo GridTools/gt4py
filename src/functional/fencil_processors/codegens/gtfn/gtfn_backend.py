@@ -31,7 +31,7 @@ def generate(program: itir.FencilDefinition, **kwargs: Any) -> str:
         offset_provider=offset_provider,
         unroll_reduce=True,
     )
-    gtfn_ir = GTFN_lowering().visit(
+    gtfn_ir = GTFN_lowering.apply(
         transformed,
         offset_provider=offset_provider,
         column_axis=kwargs.get("column_axis"),

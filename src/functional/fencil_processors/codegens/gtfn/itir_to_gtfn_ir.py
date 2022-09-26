@@ -45,6 +45,7 @@ from functional.fencil_processors.codegens.gtfn.gtfn_ir import (
     UnstructuredDomain,
 )
 from functional.iterator import ir as itir
+from functional.iterator.transforms.global_tmps import FencilWithTemporaries
 
 
 def pytype_to_cpptype(t: str):
@@ -173,7 +174,6 @@ def _collect_offset_definitions(
 
 @dataclasses.dataclass(frozen=True)
 class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
-
     _binary_op_map: ClassVar[dict[str, str]] = {
         "plus": "+",
         "minus": "-",
@@ -190,9 +190,35 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     }
     _unary_op_map: ClassVar[dict[str, str]] = {"not_": "!"}
 
+    offset_provider: dict
+    column_axis: common.Dimension
+    grid_type: common.GridType
+
     # we use one UID generator per instance such that the generated ids are
     #  stable across multiple runs (required for caching to properly work)
     uids: UIDGenerator = dataclasses.field(init=False, repr=False, default_factory=UIDGenerator)
+
+    @classmethod
+    def apply(
+        cls,
+        node: itir.FencilDefinition | FencilWithTemporaries,
+        *,
+        offset_provider: dict,
+        column_axis: common.Dimension,
+    ):
+        if isinstance(node, FencilWithTemporaries):
+            fencil_definition = node.fencil
+        elif isinstance(node, itir.FencilDefinition):
+            fencil_definition = node
+        else:
+            raise TypeError(
+                f"Expected a `FencilDefinition` or `FencilWithTemporaries`, but got `{type(node).__name__}`."
+            )
+
+        grid_type = _get_gridtype(fencil_definition.closures)
+        return cls(
+            offset_provider=offset_provider, column_axis=column_axis, grid_type=grid_type
+        ).visit(node)
 
     def visit_Sym(self, node: itir.Sym, **kwargs: Any) -> Sym:
         return Sym(id=node.id)
@@ -416,7 +442,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
                 backend=backend,
                 scans=[scan],
                 args=[self.visit(node.output, **kwargs)] + self.visit(node.inputs),
-                axis=SymRef(id=kwargs["column_axis"].value),
+                axis=SymRef(id=self.column_axis.value),
             )
         return StencilExecution(
             stencil=self.visit(
@@ -481,13 +507,10 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     def visit_FencilDefinition(
         self, node: itir.FencilDefinition, **kwargs: Any
     ) -> FencilDefinition:
-        self.grid_type = _get_gridtype(node.closures)
         extracted_functions: list[Union[FunctionDefinition, ScanPassDefinition]] = []
-        self.offset_provider = kwargs["offset_provider"]
         executions = self.visit(
             node.closures,
             extracted_functions=extracted_functions,
-            column_axis=kwargs.get("column_axis"),
         )
         executions = self._merge_scans(executions)
         function_definitions = self.visit(node.function_definitions) + extracted_functions
