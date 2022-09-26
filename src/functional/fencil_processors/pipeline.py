@@ -30,7 +30,7 @@ class BindingsGenerator(Protocol[SrcL, LS, TgtL]):
 
 
 class BuildableProject(Protocol):
-    def get_fencil_impl(self) -> Callable:
+    def get_implementation(self) -> Callable:
         ...
 
 

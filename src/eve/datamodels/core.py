@@ -124,17 +124,12 @@ class GenericDataModelTP(DataModelTP, Protocol):
 
 GenericDataModelT = TypeVar("GenericDataModelT", bound=GenericDataModelTP)
 
-if xtyping.TYPE_CHECKING:
-    AttrsValidator = Callable[[Any, attr.Attribute[_T], _T], Any]
-    FieldValidator = Callable[[DataModelTP, attr.Attribute[_T], _T], None]
-    BoundFieldValidator = Callable[[attr.Attribute[_T], _T], None]
-else:
-    AttrsValidator = Callable[[Any, attr.Attribute, _T], Any]
-    FieldValidator = Callable[[DataModelTP, Attribute, _T], None]
-    BoundFieldValidator = Callable[[Attribute, _T], None]
+AttrsValidator = Callable[[Any, Attribute[_T], _T], Any]
+FieldValidator = Callable[["DataModel", Attribute[_T], _T], None]
+BoundFieldValidator = Callable[[Attribute[_T], _T], None]
 
-RootValidator = Callable[[Type[DataModelTP], DataModelTP], None]
-BoundRootValidator = Callable[[DataModelTP], None]
+RootValidator = Callable[[Type["DataModel"], "DataModel"], None]
+BoundRootValidator = Callable[["DataModel"], None]
 
 FieldTypeValidatorFactory = Callable[[TypeAnnotation, str], FieldValidator]
 
@@ -183,7 +178,7 @@ class ForwardRefValidator:
     validator: Union[type_val.FixedTypeValidator, None, NothingType] = NOTHING
     """Actual type validator created after resolving the forward references."""
 
-    def __call__(self, instance: DataModel, attribute: attr.Attribute, value: Any) -> None:
+    def __call__(self, instance: DataModel, attribute: Attribute, value: Any) -> None:
         if self.validator is NOTHING:
             model_cls = instance.__class__
             update_forward_refs(model_cls)
@@ -203,7 +198,7 @@ class ValidatorAdapter:
     validator: type_val.FixedTypeValidator
     description: str
 
-    def __call__(self, _instance: DataModel, _attribute: attr.Attribute, value: Any) -> None:
+    def __call__(self, _instance: DataModel, _attribute: Attribute, value: Any) -> None:
         self.validator(value)
 
     def __repr__(self) -> str:
@@ -427,7 +422,15 @@ frozen_model = frozenmodel
 
 # Typing protocols are used instead of the actual classes for type checks
 if xtyping.TYPE_CHECKING:
-    DataModel: TypeAlias = DataModelTP
+
+    class DataModel(DataModelTP):
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            ...
+
+        def __pretty__(
+            self, fmt: Callable[[Any], Any], **kwargs: Any
+        ) -> Generator[Any, None, None]:
+            ...
 
 else:
 
@@ -1373,7 +1376,8 @@ def _make_concrete_with_cache(
 
 
 if xtyping.TYPE_CHECKING:
-    FrozenModel: TypeAlias = DataModelTP
+    FrozenModel: TypeAlias = DataModel
+
 else:
 
     class FrozenModel(DataModel, frozen=True):
@@ -1381,7 +1385,14 @@ else:
 
 
 if xtyping.TYPE_CHECKING:
-    GenericDataModel: TypeAlias = GenericDataModelTP
+
+    class GenericDataModel(GenericDataModelTP):
+        @classmethod
+        def __class_getitem__(
+            cls: Type[GenericDataModelTP], args: Union[Type, Tuple[Type, ...]]
+        ) -> Union[DataModelTP, GenericDataModelTP]:
+            ...
+
 else:
 
     class GenericDataModel(DataModel, __dm_opts=[_GENERIC_DATAMODEL_ROOT_DM_OPT]):
