@@ -5,11 +5,13 @@ include:
   PYVERSION_PREFIX: py39
   PYVERSION: 3.9.1
   CSCS_REGISTRY_NEW: jfrog.svc.cscs.ch
+  IMAGE_NAME: contbuild/cscs-ci/gridtools/gt4py
 
 .py38: &py38
   PYVERSION_PREFIX: py38
   PYVERSION: 3.8.5
   CSCS_REGISTRY_NEW: jfrog.svc.cscs.ch
+  IMAGE_NAME: contbuild/cscs-ci/gridtools/gt4py
 
 .status: &status
   STATUS_IMAGE: dropd/github-status:latest
@@ -36,7 +38,7 @@ build py38:
     BUILD_IMAGE: $CSCS_REGISTRY_NEW/$IMAGE_NAME/gt4py-ci:$PYVERSION
     <<: *py38
   script:
-  - docker login -u $CSCS_REGISTRY_USER -p $CSCS_REGISTRY_PASSWORD jfrog.svc.cscs.ch
+  - docker login -u $CSCS_REGISTRY_USER -p $CSCS_REGISTRY_PASSWORD $CSCS_REGISTRY_NEW
   - docker pull $BUILD_IMAGE || echo "has not been built yet"
   - docker build --network=host --cache-from $BUILD_IMAGE --build-arg BUILDKIT_INLINE_CACHE=1 --build-arg PYVERSION=$PYVERSION --build-arg CI_PROJECT_DIR=$CI_PROJECT_DIR -t $BUILD_IMAGE .
   - docker push $BUILD_IMAGE
