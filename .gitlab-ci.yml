@@ -4,10 +4,12 @@ include:
 .py39: &py39
   PYVERSION_PREFIX: py39
   PYVERSION: 3.9.1
+  CSCS_REGISTRY_NEW: jfrog.svc.cscs.ch
 
 .py38: &py38
   PYVERSION_PREFIX: py38
   PYVERSION: 3.8.5
+  CSCS_REGISTRY_NEW: jfrog.svc.cscs.ch
 
 .status: &status
   STATUS_IMAGE: dropd/github-status:latest
