@@ -47,7 +47,7 @@ def boolified_type(symbol_type: ct.SymbolType) -> ct.ScalarType | ct.FieldType:
 
 
 def construct_tuple_type(
-    element_types: list[ct.TupleType],
+    true_branch_types: list[ct.TupleType],
     false_branch_types: list[ct.TupleType],
     mask_type: ct.FieldType,
 ) -> list:
@@ -58,13 +58,13 @@ def construct_tuple_type(
     ---------
     >>> from functional.common import Dimension
     >>> mask_type = ct.FieldType(dims=[Dimension(value="I")], dtype=ct.ScalarType(kind=ct.ScalarKind.BOOL))
-    >>> element_types = [ct.ScalarType(kind=ct.ScalarKind), ct.ScalarType(kind=ct.ScalarKind)]
+    >>> true_branch_types = [ct.ScalarType(kind=ct.ScalarKind), ct.ScalarType(kind=ct.ScalarKind)]
     >>> false_branch_types = [ct.FieldType(dims=[Dimension(value="I")], dtype=ct.ScalarType(kind=ct.ScalarKind)), ct.ScalarType(kind=ct.ScalarKind)]
-    >>> print(construct_tuple_type(element_types, false_branch_types, mask_type))
+    >>> print(construct_tuple_type(true_branch_types, false_branch_types, mask_type))
     [FieldType(dims=[Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)], dtype=ScalarType(kind=<enum 'ScalarKind'>, shape=None)), FieldType(dims=[Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)], dtype=ScalarType(kind=<enum 'ScalarKind'>, shape=None))]
     """
-    element_types_new = element_types
-    for i, element in enumerate(element_types):
+    element_types_new = true_branch_types
+    for i, element in enumerate(true_branch_types):
         if isinstance(element, ct.TupleType):
             element_types_new[i] = ct.TupleType(
                 types=construct_tuple_type(element.types, false_branch_types[i].types, mask_type)
