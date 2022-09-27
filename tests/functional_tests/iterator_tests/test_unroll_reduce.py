@@ -136,7 +136,7 @@ def test_no_skip_values(basic_reduction):
     expected = _expected(basic_reduction, "dim", 3, False)
 
     offset_provider = {"dim": SimpleNamespace(max_neighbors=3, has_skip_values=False)}
-    actual = UnrollReduce().visit(basic_reduction, offset_provider=offset_provider)
+    actual = UnrollReduce.apply(basic_reduction, offset_provider=offset_provider)
     assert actual == expected
 
 
@@ -144,7 +144,7 @@ def test_skip_values(basic_reduction):
     expected = _expected(basic_reduction, "dim", 3, True)
 
     offset_provider = {"dim": SimpleNamespace(max_neighbors=3, has_skip_values=True)}
-    actual = UnrollReduce().visit(basic_reduction, offset_provider=offset_provider)
+    actual = UnrollReduce.apply(basic_reduction, offset_provider=offset_provider)
     assert actual == expected
 
 
@@ -152,9 +152,7 @@ def test_reduction_with_shift_on_second_arg(reduction_with_shift_on_second_arg):
     expected = _expected(reduction_with_shift_on_second_arg, "dim", 3, False)
 
     offset_provider = {"dim": SimpleNamespace(max_neighbors=3, has_skip_values=False)}
-    actual = UnrollReduce().visit(
-        reduction_with_shift_on_second_arg, offset_provider=offset_provider
-    )
+    actual = UnrollReduce.apply(reduction_with_shift_on_second_arg, offset_provider=offset_provider)
     assert actual == expected
 
 
@@ -167,7 +165,7 @@ def test_reduction_with_irrelevant_full_shift(reduction_with_irrelevant_full_shi
             max_neighbors=1, has_skip_values=True
         ),  # different max_neighbors and skip value to trigger error
     }
-    actual = UnrollReduce().visit(
+    actual = UnrollReduce.apply(
         reduction_with_irrelevant_full_shift, offset_provider=offset_provider
     )
     assert actual == expected
@@ -196,4 +194,4 @@ def test_reduction_with_incompatible_shifts(reduction_with_incompatible_shifts, 
         "dim2": SimpleNamespace(max_neighbors=2, has_skip_values=False),
     }
     with pytest.raises(RuntimeError, match="incompatible"):
-        UnrollReduce().visit(reduction_with_incompatible_shifts, offset_provider=offset_provider)
+        UnrollReduce.apply(reduction_with_incompatible_shifts, offset_provider=offset_provider)

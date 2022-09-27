@@ -215,18 +215,18 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         new_type: Optional[ct.SymbolType] = None
         match new_value.type:
             case ct.TupleType(types=types):
-                new_type = types[node.index]  # type: ignore[has-type]  # used to work, now mypy is going berserk for unknown reasons
+                new_type = types[node.index]
             case ct.OffsetType(source=source, target=(target1, target2)):
-                if not target2.kind == DimensionKind.LOCAL:  # type: ignore[has-type]  # used to work, now mypy is going berserk for unknown reasons
+                if not target2.kind == DimensionKind.LOCAL:
                     raise FieldOperatorTypeDeductionError.from_foast_node(
                         new_value, msg="Second dimension in offset must be a local dimension."
                     )
-                new_type = ct.OffsetType(source=source, target=(target1,))  # type: ignore[has-type]  # used to work, now mypy is going berserk for unknown reasons
+                new_type = ct.OffsetType(source=source, target=(target1,))
             case ct.OffsetType(source=source, target=(target,)):
                 # for cartesian axes (e.g. I, J) the index of the subscript only
                 #  signifies the displacement in the respective dimension,
                 #  but does not change the target type.
-                if source != target:  # type: ignore[has-type]  # used to work, now mypy is going berserk for unknown reasons
+                if source != target:
                     raise FieldOperatorTypeDeductionError.from_foast_node(
                         new_value,
                         msg="Source and target must be equal for offsets with a single target.",
@@ -248,6 +248,42 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         return foast.BinOp(
             op=node.op, left=new_left, right=new_right, location=node.location, type=new_type
         )
+
+    def visit_TernaryExpr(self, node: foast.TernaryExpr, **kwargs) -> foast.TernaryExpr:
+        new_condition = self.visit(node.condition, **kwargs)
+        new_true_expr = self.visit(node.true_expr, **kwargs)
+        new_false_expr = self.visit(node.false_expr, **kwargs)
+        new_type = self._deduce_ternaryexpr_type(
+            node, condition=new_condition, true_expr=new_true_expr, false_expr=new_false_expr
+        )
+        return foast.TernaryExpr(
+            condition=new_condition,
+            true_expr=new_true_expr,
+            false_expr=new_false_expr,
+            location=node.location,
+            type=new_type,
+        )
+
+    def _deduce_ternaryexpr_type(
+        self,
+        node: foast.TernaryExpr,
+        *,
+        condition: foast.Expr,
+        true_expr: foast.Expr,
+        false_expr: foast.Expr,
+    ) -> Optional[ct.SymbolType]:
+        if condition.type != ct.ScalarType(kind=ct.ScalarKind.BOOL):
+            raise FieldOperatorTypeDeductionError.from_foast_node(
+                condition,
+                msg=f"Condition is of type `{condition.type}` " f"but should be of type bool.",
+            )
+
+        if true_expr.type != false_expr.type:
+            raise FieldOperatorTypeDeductionError.from_foast_node(
+                node,
+                msg=f"Left and right types are not the same: `{true_expr.type}` and `{false_expr.type}`",
+            )
+        return true_expr.type
 
     def visit_Compare(self, node: foast.Compare, **kwargs) -> foast.Compare:
         new_left = self.visit(node.left, **kwargs)
@@ -494,6 +530,9 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         return self._visit_reduction(node, **kwargs)
 
     def _visit_max_over(self, node: foast.Call, **kwargs) -> foast.Call:
+        return self._visit_reduction(node, **kwargs)
+
+    def _visit_min_over(self, node: foast.Call, **kwargs) -> foast.Call:
         return self._visit_reduction(node, **kwargs)
 
     def _visit_where(self, node: foast.Call, **kwargs) -> foast.Call:
