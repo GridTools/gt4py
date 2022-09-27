@@ -52,7 +52,7 @@ def construct_tuple_type(
     mask_type: ct.FieldType,
 ) -> list:
     """
-    Construct recursively the return types for the tuple return branch.
+    Recursively construct  the return types for the tuple return branch.
 
     Examples:
     ---------
