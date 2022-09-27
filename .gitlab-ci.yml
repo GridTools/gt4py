@@ -31,10 +31,10 @@ build py38:
   extends: .dind
   stage: image
   variables:
-    BUILD_IMAGE: $CSCS_REGISTRY_IMAGE/gt4py-ci:$PYVERSION
+    BUILD_IMAGE: $CSCS_REGISTRY_NEW/$IMAGE_NAME/gt4py-ci:$PYVERSION
     <<: *py38
   script:
-  - docker login -u $CSCS_REGISTRY_USER --password-stdin $CSCS_REGISTRY_PASSWORD $CSCS_REGISTRY
+  - docker login -u $CSCS_REGISTRY_USER -p $CSCS_REGISTRY_PASSWORD $CSCS_REGISTRY_NEW
   - docker pull $BUILD_IMAGE || echo "has not been built yet"
   - docker build --network=host --cache-from $BUILD_IMAGE --build-arg BUILDKIT_INLINE_CACHE=1 --build-arg PYVERSION=$PYVERSION --build-arg CI_PROJECT_DIR=$CI_PROJECT_DIR -t $BUILD_IMAGE .
   - docker push $BUILD_IMAGE
@@ -57,7 +57,7 @@ test py38:
   - trying
   needs: ["build py38"]
   stage: test
-  image: $CSCS_REGISTRY_IMAGE/gt4py-ci:$PYVERSION
+  image: $CSCS_REGISTRY_NEW/$IMAGE_NAME/gt4py-ci:$PYVERSION
   script:
   - python -c "import cupy"
   - pip install clang-format
