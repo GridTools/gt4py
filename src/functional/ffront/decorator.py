@@ -55,7 +55,7 @@ from functional.ffront.func_to_past import ProgramParser
 from functional.ffront.gtcallable import GTCallable
 from functional.ffront.past_passes.type_deduction import ProgramTypeDeduction, ProgramTypeError
 from functional.ffront.past_to_itir import ProgramLowering
-from functional.ffront.source_utils import CapturedVars
+from functional.ffront.source_utils import CapturedVars, SourceDefinition
 from functional.iterator import ir as itir
 from functional.iterator.embedded import constant_field
 
@@ -90,7 +90,7 @@ def _get_external_vars_recurse(external_vars: dict[str, Any]) -> CapturedVars:
 
 
 def _filter_external_vars_by_type(external_vars: dict[str, Any], *types) -> dict[str, Any]:
-    return dict((name, value) for name, value in external_vars.items() if isinstance(value, *types))
+    return dict((name, value) for name, value in external_vars.items() if any(isinstance(value, type) for type in types))
 
 
 def _get_externals_vars(function: Callable) -> dict[str, Any]:
@@ -167,8 +167,10 @@ class Program:
         backend: Optional[FencilExecutor] = None,
         grid_type: Optional[GridType] = None,
     ) -> Program:
+        source_def = SourceDefinition.from_function(definition)
         external_vars = collections.ChainMap(externals or {}, _get_externals_vars(definition))
-        past_node = ProgramParser.apply_to_function(definition)
+        annotations = typing.get_type_hints(definition)
+        past_node = ProgramParser.apply(source_def, external_vars, annotations)
         return cls(
             past_node=past_node,
             external_vars=external_vars,
@@ -183,7 +185,7 @@ class Program:
             raise RuntimeError("Symbol name and external function's name must match.")
 
         for symbol in self.past_node.external_symbols:
-            if symbol not in self.external_vars:
+            if symbol.id not in self.external_vars:
                 raise RuntimeError(f"Undefined symbol: {symbol.id}")
 
     def with_backend(self, backend: FencilExecutor) -> "Program":
@@ -200,9 +202,6 @@ class Program:
 
     @functools.cached_property
     def itir(self) -> itir.FencilDefinition:
-        if self.externals:
-            raise NotImplementedError("Externals are not supported yet.")
-
         grid_type = _deduce_grid_type(
             self.grid_type, _filter_external_vars_by_type(self.external_vars, FieldOffset, Dimension).values()
         )
@@ -400,8 +399,10 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
     ) -> FieldOperator[OperatorNodeT]:
         operator_attributes = operator_attributes or {}
 
+        source_def = SourceDefinition.from_function(definition)
         external_vars = collections.ChainMap(externals or {}, _get_externals_vars(definition))
-        foast_definition_node = FieldOperatorParser.apply_to_function(definition)
+        annotations = typing.get_type_hints(definition)
+        foast_definition_node = FieldOperatorParser.apply(source_def, external_vars, annotations)
         loc = foast_definition_node.location
         operator_attribute_nodes = {
             key: foast.Constant(
@@ -481,16 +482,10 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         )
         out_ref = past.Name(id="out", location=loc)
 
-        # inject stencil as a closure var into program. Since CapturedVars is
-        #  immutable we have to resort to this rather ugly way of doing a copy.
-        captured_vars = dataclasses.replace(
-            self.captured_vars, globals={**self.captured_vars.globals, name: self}
-        )
-        all_captured_vars = collections.ChainMap(captured_vars.globals, captured_vars.nonlocals)
-
-        captured_symbols: list[past.Symbol] = []
-        for name, val in all_captured_vars.items():  # type: ignore
-            captured_symbols.append(
+        external_vars_plus_self = {name: self, **self.externals_vars}
+        external_symbols_plus_self: list[past.Symbol] = []
+        for name, val in external_vars_plus_self.items():  # type: ignore
+            external_symbols_plus_self.append(
                 past.Symbol(
                     id=name,
                     type=symbol_makers.make_symbol_type_from_value(val),
@@ -511,15 +506,14 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
                     location=loc,
                 )
             ],
-            captured_vars=captured_symbols,
+            external_symbols=external_symbols_plus_self,
             location=loc,
         )
         past_node = ProgramTypeDeduction.apply(untyped_past_node)
 
         return Program(
             past_node=past_node,
-            captured_vars=captured_vars,
-            externals=self.externals,
+            external_vars=external_vars_plus_self,
             backend=self.backend,
         )
 

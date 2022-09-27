@@ -133,13 +133,10 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
         return result, to_be_inserted.keys()
 
     def visit_FunctionDef(self, node: ast.FunctionDef, **kwargs) -> foast.FunctionDefinition:
-        closure_vars: Mapping[str, Any] = collections.ChainMap(
-            self.captured_vars.globals, self.captured_vars.nonlocals
-        )
         external_symbols, skip_names = self._builtin_type_constructor_symbols(
-            closure_vars, self._make_loc(node)
+            self.external_vars, self._make_loc(node)
         )
-        for name, val in closure_vars.items():
+        for name, val in self.external_vars.items():
             if name in skip_names:
                 continue
             external_symbols.append(
@@ -196,7 +193,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
         return [self.visit_arg(arg) for arg in node.args]
 
     def visit_arg(self, node: ast.arg) -> foast.DataSymbol:
-        if (annotation := self.captured_vars.annotations.get(node.arg, None)) is None:
+        if (annotation := self.annotations.get(node.arg, None)) is None:
             raise FieldOperatorSyntaxError.from_AST(node, msg="Untyped parameters not allowed!")
         new_type = symbol_makers.make_symbol_type_from_typing(annotation)
         if not isinstance(new_type, ct.DataType):

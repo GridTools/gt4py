@@ -16,6 +16,7 @@ from __future__ import annotations
 import ast
 import collections
 from dataclasses import dataclass
+from typing import Any
 
 from functional.ffront import common_types, program_ast as past, symbol_makers
 from functional.ffront.dialect_parser import DialectParser, DialectSyntaxError
@@ -37,15 +38,14 @@ class ProgramParser(DialectParser[past.Program]):
         return ProgramTypeDeduction.apply(output_node)
 
     def visit_FunctionDef(self, node: ast.FunctionDef) -> past.Program:
-        vars_ = collections.ChainMap(self.captured_vars.globals, self.captured_vars.nonlocals)
-        captured_vars = [
+        external_symbols = [
             past.Symbol(
                 id=name,
                 type=symbol_makers.make_symbol_type_from_value(val),
                 namespace=common_types.Namespace.CLOSURE,
                 location=self._make_loc(node),
             )
-            for name, val in vars_.items()
+            for name, val in self.external_vars.items()
         ]
 
         return past.Program(
@@ -53,7 +53,7 @@ class ProgramParser(DialectParser[past.Program]):
             type=common_types.DeferredSymbolType(constraint=common_types.ProgramType),
             params=self.visit(node.args),
             body=[self.visit(node) for node in node.body],
-            captured_vars=captured_vars,
+            external_symbols=external_symbols,
             location=self._make_loc(node),
         )
 
@@ -61,7 +61,7 @@ class ProgramParser(DialectParser[past.Program]):
         return [self.visit_arg(arg) for arg in node.args]
 
     def visit_arg(self, node: ast.arg) -> past.DataSymbol:
-        if (annotation := self.captured_vars.annotations.get(node.arg, None)) is None:
+        if (annotation := self.annotations.get(node.arg, None)) is None:
             raise ProgramSyntaxError.from_AST(node, msg="Untyped parameters not allowed!")
         new_type = symbol_makers.make_symbol_type_from_typing(annotation)
         if not isinstance(new_type, common_types.DataType):
