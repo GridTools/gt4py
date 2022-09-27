@@ -749,22 +749,6 @@ def test_conditional_tuple_1():
     )
 
 
-def test_conditional_tuple_2():
-    size = 10
-    mask = np_as_located_field(IDim)(np.zeros((size,), dtype=bool))
-    mask.array()[0 : (size // 2)] = True
-    a = np_as_located_field(IDim)(np.ones((size,)))
-    b = np_as_located_field(IDim)(np.ones((size,)))
-    c = np_as_located_field(IDim)(np.zeros((size,)))
-    d = np_as_located_field(IDim)(np.zeros((size,)))
-
-    @field_operator
-    def conditional_tuple_2_field_op(
-        mask: Field[[IDim], bool], a: Field[[IDim], float64], b: Field[[IDim], float64]
-    ) -> tuple[tuple[Field[[IDim], float64], Field[[IDim], float64]], Field[[IDim], float64]]:
-        return where(mask, ((3.0, 6.0), a), ((2.0, 7.0), b))
-
-
 def test_conditional_nested_tuple():
     size = 10
     mask = np_as_located_field(IDim)(np.zeros((size,), dtype=bool))
