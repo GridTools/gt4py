@@ -474,7 +474,7 @@ def execute_shift(
             if p is None:
                 new_entry[i] = index
                 break
-        return pos | {tag: new_entry}  # type: ignore [dict-item] # mypy is confused
+        return pos | {tag: new_entry}
 
     assert tag in offset_provider
     offset_implementation = offset_provider[tag]
