@@ -71,7 +71,7 @@ def _get_external_vars_recurse(external_vars: dict[str, Any]) -> CapturedVars:
     for value in external_vars.values():
         if isinstance(value, GTCallable):
             # if the closure ref has closure refs by itself, also add them
-            if vars_of_val := value.__gt_captured_vars__():
+            if vars_of_val := value.__gt_external_vars__():
                 extended_vars_of_val = _get_external_vars_recurse(vars_of_val)
 
                 collisions: list[str] = []
@@ -206,7 +206,8 @@ class Program:
             self.grid_type, _filter_external_vars_by_type(self.external_vars, FieldOffset, Dimension).values()
         )
 
-        gt_callables = _filter_external_vars_by_type(self.external_vars, GTCallable).values()
+        extended_vars_recursive = _get_external_vars_recurse(self.external_vars)
+        gt_callables = _filter_external_vars_by_type(extended_vars_recursive, GTCallable).values()
         lowered_funcs = [gt_callable.__gt_itir__() for gt_callable in gt_callables]
         return ProgramLowering.apply(
             self.past_node, function_definitions=lowered_funcs, grid_type=grid_type
@@ -448,8 +449,8 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
 
         return itir_node
 
-    def __gt_captured_vars__(self) -> CapturedVars:
-        return self.captured_vars
+    def __gt_external_vars__(self) -> dict[str, Any]:
+        return self.externals_vars
 
     def as_program(
         self, arg_types: list[ct.SymbolType], kwarg_types: dict[str, ct.SymbolType]
