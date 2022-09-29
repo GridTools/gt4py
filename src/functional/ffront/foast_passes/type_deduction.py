@@ -74,15 +74,15 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
     ---------
     >>> import ast
     >>> from functional.common import Field
-    >>> from functional.ffront.source_utils import SourceDefinition, CapturedVars
+    >>> from functional.ffront.source_utils import SourceDefinition, get_external_vars
     >>> from functional.ffront.func_to_foast import FieldOperatorParser
     >>> def example(a: "Field[..., float]", b: "Field[..., float]"):
     ...     return a + b
 
     >>> source_definition = SourceDefinition.from_function(example)
-    >>> captured_vars = CapturedVars.from_function(example)
+    >>> external_vars = get_external_vars(example)
     >>> untyped_fieldop = FieldOperatorParser(
-    ...     source_definition=source_definition, captured_vars=captured_vars, externals_defs={}
+    ...     source_definition=source_definition, external_vars=external_vars, externals_defs={}
     ... ).visit(ast.parse(source_definition.source).body[0])
     >>> untyped_fieldop.body[0].value.type
     DeferredSymbolType(constraint=None)

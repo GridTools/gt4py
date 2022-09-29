@@ -55,7 +55,7 @@ from functional.ffront.func_to_past import ProgramParser
 from functional.ffront.gtcallable import GTCallable
 from functional.ffront.past_passes.type_deduction import ProgramTypeDeduction, ProgramTypeError
 from functional.ffront.past_to_itir import ProgramLowering
-from functional.ffront.source_utils import CapturedVars, SourceDefinition, get_externals_vars
+from functional.ffront.source_utils import SourceDefinition, get_external_vars
 from functional.iterator import ir as itir
 from functional.iterator.embedded import constant_field
 
@@ -65,7 +65,7 @@ Scalar: TypeAlias = SupportsInt | SupportsFloat | np.int32 | np.int64 | np.float
 DEFAULT_BACKEND: Callable = roundtrip.executor
 
 
-def _get_external_vars_recurse(external_vars: dict[str, Any]) -> CapturedVars:
+def _get_external_vars_recurse(external_vars: dict[str, Any]) -> dict[str, Any]:
     extended_external_vars = external_vars
 
     for value in external_vars.values():
@@ -162,7 +162,7 @@ class Program:
         grid_type: Optional[GridType] = None,
     ) -> Program:
         source_def = SourceDefinition.from_function(definition)
-        external_vars = collections.ChainMap(externals or {}, get_externals_vars(definition))
+        external_vars = collections.ChainMap(externals or {}, get_external_vars(definition))
         annotations = typing.get_type_hints(definition)
         past_node = ProgramParser.apply(source_def, external_vars, annotations)
         return cls(
@@ -191,17 +191,15 @@ class Program:
         )
 
     @functools.cached_property
-    def external_vars_recursive(self) -> CapturedVars:
+    def external_vars_recursive(self) -> dict[str, Any]:
         return _get_external_vars_recurse(self.external_vars)
 
     @functools.cached_property
     def itir(self) -> itir.FencilDefinition:
-        extended_vars_recursive = _get_external_vars_recurse(self.external_vars)
-
-        dimensions_used = _filter_external_vars_by_type(extended_vars_recursive, FieldOffset, Dimension)
+        dimensions_used = _filter_external_vars_by_type(self.external_vars_recursive, FieldOffset, Dimension)
         grid_type = _deduce_grid_type(self.grid_type, dimensions_used.values())
 
-        gt_callables = _filter_external_vars_by_type(extended_vars_recursive, GTCallable).values()
+        gt_callables = _filter_external_vars_by_type(self.external_vars_recursive, GTCallable).values()
         lowered_funcs = [gt_callable.__gt_itir__() for gt_callable in gt_callables]
         return ProgramLowering.apply(
             self.past_node, function_definitions=lowered_funcs, grid_type=grid_type
@@ -395,7 +393,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         operator_attributes = operator_attributes or {}
 
         source_def = SourceDefinition.from_function(definition)
-        external_vars = collections.ChainMap(externals or {}, get_externals_vars(definition))
+        external_vars = collections.ChainMap(externals or {}, get_external_vars(definition))
         annotations = typing.get_type_hints(definition)
         foast_definition_node = FieldOperatorParser.apply(source_def, external_vars, annotations)
         loc = foast_definition_node.location

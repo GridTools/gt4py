@@ -32,7 +32,7 @@ from functional.ffront import fbuiltins
 MISSING_FILENAME = "<string>"
 
 
-def get_externals_vars(function: Callable) -> dict[str, Any]:
+def get_external_vars(function: Callable) -> dict[str, Any]:
     captured_vars = CapturedVars.from_function(function)
     flat_captured_vars = collections.ChainMap(captured_vars.globals, captured_vars.nonlocals)
     return flat_captured_vars

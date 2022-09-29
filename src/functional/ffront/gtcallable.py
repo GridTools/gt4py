@@ -15,8 +15,8 @@ import abc
 import typing
 
 from functional.ffront import common_types as ct
-from functional.ffront.source_utils import CapturedVars
 from functional.iterator import ir as itir
+from typing import Any
 
 
 @typing.runtime_checkable
@@ -28,7 +28,7 @@ class GTCallable(typing.Protocol):
     from ``ffront`` programs or operators.
     """
 
-    def __gt_captured_vars__(self) -> typing.Optional[CapturedVars]:
+    def __gt_external_vars__(self) -> typing.Optional[dict[str, Any]]:
         """
         Return all external variables referenced inside the callable.
 
