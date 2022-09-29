@@ -187,7 +187,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                 raise GTTypeError(
                     f"Either only domain or slicing allowed, but got respectively {node_domain} and {slices}"
                 )
-            if bool(node_domain):
+            if node_domain is not None:
                 lower, upper = self._construct_itir_initialized_domain_arg(dim_i, dim, node_domain)
             else:
                 lower = self._visit_slice_bound(
