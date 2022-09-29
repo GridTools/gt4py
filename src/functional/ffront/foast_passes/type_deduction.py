@@ -46,6 +46,68 @@ def boolified_type(symbol_type: ct.SymbolType) -> ct.ScalarType | ct.FieldType:
     raise GTTypeError(f"Can not boolify type {symbol_type}!")
 
 
+def construct_tuple_type(
+    true_branch_types: list[ct.TupleType],
+    false_branch_types: list[ct.TupleType],
+    mask_type: ct.FieldType,
+) -> list:
+    """
+    Recursively construct  the return types for the tuple return branch.
+
+    Examples:
+    ---------
+    >>> from functional.common import Dimension
+    >>> mask_type = ct.FieldType(dims=[Dimension(value="I")], dtype=ct.ScalarType(kind=ct.ScalarKind.BOOL))
+    >>> true_branch_types = [ct.ScalarType(kind=ct.ScalarKind), ct.ScalarType(kind=ct.ScalarKind)]
+    >>> false_branch_types = [ct.FieldType(dims=[Dimension(value="I")], dtype=ct.ScalarType(kind=ct.ScalarKind)), ct.ScalarType(kind=ct.ScalarKind)]
+    >>> print(construct_tuple_type(true_branch_types, false_branch_types, mask_type))
+    [FieldType(dims=[Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)], dtype=ScalarType(kind=<enum 'ScalarKind'>, shape=None)), FieldType(dims=[Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)], dtype=ScalarType(kind=<enum 'ScalarKind'>, shape=None))]
+    """
+    element_types_new = true_branch_types
+    for i, element in enumerate(true_branch_types):
+        if isinstance(element, ct.TupleType):
+            element_types_new[i] = ct.TupleType(
+                types=construct_tuple_type(element.types, false_branch_types[i].types, mask_type)
+            )
+        else:
+            element_types_new[i] = promote_to_mask_type(
+                mask_type, type_info.promote(element_types_new[i], false_branch_types[i])
+            )
+    return element_types_new
+
+
+def promote_to_mask_type(
+    mask_type: ct.FieldType, input_type: ct.FieldType | ct.ScalarType | ct.TupleType
+) -> ct.FieldType:
+    """
+    Promote mask type with the input type.
+
+    The input type being the result of promoting the left and right types in a conditional clause.
+
+    If the input type is a scalar, the return type takes the dimensions of the mask_type, while retaining the dtype of
+    the input type. The behavior is similar when the input type is a field type with fewer dimensions than the mask_type.
+    In all other cases, the return type takes the dimensions and dtype of the input type.
+
+    >>> from functional.common import Dimension
+    >>> I, J = (Dimension(value=dim) for dim in ["I", "J"])
+    >>> bool_type = ct.ScalarType(kind=ct.ScalarKind.BOOL)
+    >>> dtype = ct.ScalarType(kind=ct.ScalarKind.FLOAT64)
+    >>> promote_to_mask_type(ct.FieldType(dims=[I, J], dtype=bool_type), ct.ScalarType(kind=dtype))
+    FieldType(dims=[Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)], dtype=ScalarType(kind=ScalarType(kind=<ScalarKind.FLOAT64: 1064>, shape=None), shape=None))
+    >>> promote_to_mask_type(ct.FieldType(dims=[I, J], dtype=bool_type), ct.FieldType(dims=[I], dtype=dtype))
+    FieldType(dims=[Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)], dtype=ScalarType(kind=<ScalarKind.FLOAT64: 1064>, shape=None))
+    >>> promote_to_mask_type(ct.FieldType(dims=[I], dtype=bool_type), ct.FieldType(dims=[I,J], dtype=dtype))
+    FieldType(dims=[Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)], dtype=ScalarType(kind=<ScalarKind.FLOAT64: 1064>, shape=None))
+    """
+    if isinstance(input_type, ct.ScalarType) or not all(
+        item in input_type.dims for item in mask_type.dims
+    ):
+        return_dtype = input_type.dtype if isinstance(input_type, ct.FieldType) else input_type
+        return type_info.promote(input_type, ct.FieldType(dims=mask_type.dims, dtype=return_dtype))
+    else:
+        return input_type
+
+
 class FieldOperatorTypeDeductionCompletnessValidator(NodeVisitor):
     """Validate an FOAST expression is fully typed."""
 
@@ -215,18 +277,18 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         new_type: Optional[ct.SymbolType] = None
         match new_value.type:
             case ct.TupleType(types=types):
-                new_type = types[node.index]  # type: ignore[has-type]  # used to work, now mypy is going berserk for unknown reasons
+                new_type = types[node.index]
             case ct.OffsetType(source=source, target=(target1, target2)):
-                if not target2.kind == DimensionKind.LOCAL:  # type: ignore[has-type]  # used to work, now mypy is going berserk for unknown reasons
+                if not target2.kind == DimensionKind.LOCAL:
                     raise FieldOperatorTypeDeductionError.from_foast_node(
                         new_value, msg="Second dimension in offset must be a local dimension."
                     )
-                new_type = ct.OffsetType(source=source, target=(target1,))  # type: ignore[has-type]  # used to work, now mypy is going berserk for unknown reasons
+                new_type = ct.OffsetType(source=source, target=(target1,))
             case ct.OffsetType(source=source, target=(target,)):
                 # for cartesian axes (e.g. I, J) the index of the subscript only
                 #  signifies the displacement in the respective dimension,
                 #  but does not change the target type.
-                if source != target:  # type: ignore[has-type]  # used to work, now mypy is going berserk for unknown reasons
+                if source != target:
                     raise FieldOperatorTypeDeductionError.from_foast_node(
                         new_value,
                         msg="Source and target must be equal for offsets with a single target.",
@@ -537,8 +599,8 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
 
     def _visit_where(self, node: foast.Call, **kwargs) -> foast.Call:
         mask_type = cast(ct.FieldType, node.args[0].type)
-        left_type = cast(ct.FieldType, node.args[1].type)
-        right_type = cast(ct.FieldType, node.args[2].type)
+        true_branch_type = cast(ct.FieldType, node.args[1].type)
+        false_branch_type = cast(ct.FieldType, node.args[2].type)
         if not type_info.is_logical(mask_type):
             raise FieldOperatorTypeDeductionError.from_foast_node(
                 node,
@@ -547,16 +609,25 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             )
 
         try:
-            return_type = type_info.promote(left_type, right_type)
-
-            if isinstance(mask_type, ct.FieldType):
-                if isinstance(return_type, ct.ScalarType):
-                    return_dtype = return_type
-                elif isinstance(return_type, ct.FieldType):
-                    return_dtype = return_type.dtype
-                return_type = type_info.promote(
-                    return_type, ct.FieldType(dims=mask_type.dims, dtype=return_dtype)
+            if isinstance(true_branch_type, ct.TupleType) and isinstance(
+                false_branch_type, ct.TupleType
+            ):
+                true_branch_types = node.args[1].type.types
+                false_branch_types = node.args[2].type.types
+                return_type = ct.TupleType(
+                    types=construct_tuple_type(true_branch_types, false_branch_types, mask_type)
                 )
+            elif isinstance(true_branch_type, ct.TupleType) or isinstance(
+                false_branch_type, ct.TupleType
+            ):
+                raise FieldOperatorTypeDeductionError.from_foast_node(
+                    node,
+                    msg=f"Return arguments need to be of same type in {node.func.id}, but got: "
+                    f"{node.args[1].type} and {node.args[2].type}",
+                )
+            else:
+                promoted_type = type_info.promote(true_branch_type, false_branch_type)
+                return_type = promote_to_mask_type(mask_type, promoted_type)
 
         except GTTypeError as ex:
             raise FieldOperatorTypeDeductionError.from_foast_node(

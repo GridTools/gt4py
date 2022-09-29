@@ -513,7 +513,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         all_captured_vars = collections.ChainMap(captured_vars.globals, captured_vars.nonlocals)
 
         captured_symbols: list[past.Symbol] = []
-        for name, val in all_captured_vars.items():  # type: ignore
+        for name, val in all_captured_vars.items():
             captured_symbols.append(
                 past.Symbol(
                     id=name,

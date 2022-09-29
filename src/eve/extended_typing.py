@@ -328,7 +328,7 @@ def extended_runtime_checkable(  # noqa: C901  # too complex but unavoidable
 
             # Define a patched version of the proto hook which ignores
             # __is_callable_members_only() result at certain points
-            def _patched_proto_hook(other):
+            def _patched_proto_hook(other):  # type: ignore[no-untyped-def]
                 if not cls.__dict__.get("_is_protocol", False):
                     return NotImplemented
 
@@ -422,7 +422,7 @@ class HasCustomHash(Hashable):
     """ABC for types defining a custom hash function."""
 
     @classmethod
-    def __subclasshook__(cls, candidate_cls) -> bool:
+    def __subclasshook__(cls, candidate_cls: type) -> bool:
         return is_type_with_custom_hash(candidate_cls)
 
 
@@ -700,7 +700,7 @@ def infer_type(  # noqa: C901  # function is complex but well organized in indep
                 elif p.kind in (_inspect.Parameter.VAR_POSITIONAL, _inspect.Parameter.VAR_KEYWORD):
                     raise TypeError("Variadic callables are not supported")
 
-            result: Any = Callable[arg_types, return_type]  # type: ignore[misc]  # explicitly build annotation at runtime
+            result: Any = Callable[arg_types, return_type]
             if annotate_callable_kwargs:
                 result = Annotated[result, CallableKwargsInfo(kwonly_arg_types)]
             return result

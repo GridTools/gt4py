@@ -479,7 +479,7 @@ def execute_shift(
             if p is None:
                 new_entry[i] = index
                 break
-        return pos | {tag: new_entry}  # type: ignore [dict-item] # mypy is confused
+        return pos | {tag: new_entry}
 
     assert tag in offset_provider
     offset_implementation = offset_provider[tag]
@@ -1005,8 +1005,6 @@ class TupleOfFields(TupleField):
             raise TypeError("Can only be instantiated with a tuple of fields")
         self.data = data
         axeses = _get_axeses(data)
-        if not all(axes == axeses[0] for axes in axeses):
-            raise TypeError("All fields in the tuple need the same axes.")
         self.axes = axeses[0]
 
     def __getitem__(self, indices):

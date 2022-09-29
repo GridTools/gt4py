@@ -107,7 +107,7 @@ class DialectParser(ast.NodeVisitor, Generic[DialectRootT]):
         source_definition: SourceDefinition,
         captured_vars: CapturedVars,
         externals: Optional[dict[str, Any]] = None,
-    ) -> DialectRootT:  # type: ignore[valid-type]  # used to work, now mypy is going berserk for unknown reasons
+    ) -> DialectRootT:
 
         source, filename, starting_line = source_definition
         try:
@@ -142,7 +142,7 @@ class DialectParser(ast.NodeVisitor, Generic[DialectRootT]):
         return definition_ast
 
     @classmethod
-    def _postprocess_dialect_ast(cls, output_ast: DialectRootT) -> DialectRootT:  # type: ignore[valid-type]  # used to work, now mypy is going berserk for unknown reasons
+    def _postprocess_dialect_ast(cls, output_ast: DialectRootT) -> DialectRootT:
         return output_ast
 
     @classmethod
@@ -150,7 +150,7 @@ class DialectParser(ast.NodeVisitor, Generic[DialectRootT]):
         cls,
         func: types.FunctionType,
         externals: Optional[dict[str, Any]] = None,
-    ) -> DialectRootT:  # type: ignore[valid-type]  # used to work, now mypy is going berserk for unknown reasons
+    ) -> DialectRootT:
         source_definition = SourceDefinition.from_function(func)
         captured_vars = CapturedVars.from_function(func)
         return cls.apply(source_definition, captured_vars, externals)
