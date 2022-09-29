@@ -166,7 +166,7 @@ def test_invalid_call_sig_program(invalid_call_sig_program_def):
     ) as exc_info:
         ProgramLowering.apply(ProgramParser.apply_to_function(invalid_call_sig_program_def))
 
-    assert exc_info.match("Missing required keyword argument")
+    assert exc_info.match("Invalid call to `identity`")
     # TODO(tehrengruber): re-enable again when call signature check doesn't return
     #  immediately after missing `out` argument
     # assert (
@@ -176,6 +176,6 @@ def test_invalid_call_sig_program(invalid_call_sig_program_def):
     #    is not None
     # )
     assert (
-        re.search("Missing required keyword argument\(s\) `out`", exc_info.value.args[0])
+        re.search("Missing required keyword argument\(s\) `out`", exc_info.value.__cause__.args[0])
         is not None
     )

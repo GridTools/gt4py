@@ -56,9 +56,9 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         new_func = self.visit(node.func, **kwargs)
         new_args = self.visit(node.args, **kwargs)
         new_kwargs = self.visit(node.kwargs, **kwargs)
-        self._check_out_and_initialized_domain_values(new_func, new_kwargs)
 
         try:
+            self._check_out_and_initialized_domain_values(new_func, new_kwargs)
             arg_types = [arg.type for arg in new_args]
             kwarg_types = {
                 name: expr.type

@@ -11,6 +11,7 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
+import re
 from typing import Tuple
 
 import pytest
@@ -162,9 +163,15 @@ def test_domain_exception_1(identity_def):
 
     with pytest.raises(
         GTTypeError,
-        match=(r"Only Dictionaries allowed in domain"),
-    ):
+    ) as exc_info:
         ProgramParser.apply_to_function(domain_format_1_program)
+
+    assert exc_info.match("Invalid call to `domain_format_1`")
+
+    assert (
+        re.search("Only Dictionaries allowed in domain", exc_info.value.__cause__.args[0])
+        is not None
+    )
 
 
 def test_domain_exception_2(identity_def):
@@ -175,9 +182,12 @@ def test_domain_exception_2(identity_def):
 
     with pytest.raises(
         GTTypeError,
-        match=(r"Only Tuples allowed in domain"),
-    ):
+    ) as exc_info:
         ProgramParser.apply_to_function(domain_format_2_program)
+
+    assert exc_info.match("Invalid call to `domain_format_2`")
+
+    assert re.search("Only Tuples allowed in domain", exc_info.value.__cause__.args[0]) is not None
 
 
 def test_domain_exception_3(identity_def):
@@ -188,9 +198,15 @@ def test_domain_exception_3(identity_def):
 
     with pytest.raises(
         GTTypeError,
-        match=(r"Only 2 values allowed in domain range"),
-    ):
+    ) as exc_info:
         ProgramParser.apply_to_function(domain_format_3_program)
+
+    assert exc_info.match("Invalid call to `domain_format_3`")
+
+    assert (
+        re.search("Only 2 values allowed in domain range", exc_info.value.__cause__.args[0])
+        is not None
+    )
 
 
 def test_domain_exception_4(identity_def):
@@ -201,6 +217,12 @@ def test_domain_exception_4(identity_def):
 
     with pytest.raises(
         GTTypeError,
-        match=(r"Missing required keyword argument\(s\) `out`."),
-    ):
+    ) as exc_info:
         ProgramParser.apply_to_function(domain_format_4_program)
+
+    assert exc_info.match("Invalid call to `domain_format_4`")
+
+    assert (
+        re.search("Missing required keyword argument\(s\) `out`.", exc_info.value.__cause__.args[0])
+        is not None
+    )
