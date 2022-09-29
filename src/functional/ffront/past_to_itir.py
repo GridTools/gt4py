@@ -124,7 +124,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         assert type_info.is_field_type_or_tuple_of_field_type(node.kwargs["out"].type)
 
         domain = node.kwargs.get("domain", None)
-        output, domain = self._visit_stencil_call_out_arg(node.kwargs["out"], domain, **kwargs)
+        output, lowered_domain = self._visit_stencil_call_out_arg(node.kwargs["out"], domain, **kwargs)
 
         return itir.StencilClosure(
             domain=domain,
