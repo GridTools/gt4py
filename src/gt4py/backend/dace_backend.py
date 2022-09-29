@@ -76,6 +76,31 @@ def _specialize_transient_strides(sdfg: dace.SDFG, layout_map):
         if k in sdfg.symbols:
             sdfg.remove_symbol(k)
 
+def _specialize_contiguous_strides(sdfg: dace.SDFG, layout_map):
+    repldict = {}
+    for array in sdfg.arrays.values():
+        if array.transient:
+            continue
+        dims = array_dimensions(array)
+        ndata_dims = len(array.shape) - sum(dims)
+        mask = dims + [True] * ndata_dims
+        layout = layout_map(mask)
+        contiguous_dim = layout.index(max(layout))
+        stride_dim = sum(mask[:contiguous_dim])
+        stride_sym = array.strides[stride_dim]
+        print('replacing', str(stride_sym), 'layout', layout, stride_dim, contiguous_dim)
+        repldict[str(stride_sym)] = "1"
+
+    sdfg.replace_dict(repldict)
+    for state in sdfg.nodes():
+        for node in state.nodes():
+            if isinstance(node, dace.nodes.NestedSDFG):
+                for k, v in repldict.items():
+                    if k in node.symbol_mapping:
+                        node.symbol_mapping[k] = v
+    for k in repldict.keys():
+        if k in sdfg.symbols:
+            sdfg.remove_symbol(k)
 
 def _to_device(sdfg: dace.SDFG, device: str) -> None:
     """Update sdfg in place."""
@@ -119,17 +144,19 @@ def _pre_expand_trafos(gtir_pipeline: GtirPipeline, sdfg: dace.SDFG, layout_map)
         if node.oir_node.loop_order == common.LoopOrder.PARALLEL:
             expansion_priority.extend(
                 [
-                    ["TileJ", "TileI", "Sections", "Stages", "JMap", "IMap", "KMap"],
-                    ["TileJ", "TileI", "Sections", "KMap", "Stages", "JMap", "IMap"],
+                    ["TileI", "TileJ", "IMap", "JMap", "Sections", "KMap", "Stages"],
+                    ["TileI", "TileJ", "IMap", "JMap", "Sections", "Stages", "KMap"],
+                    ["TileI", "TileJ", "IMap", "JMap","Stages",  "Sections",  "KMap"],
+                    ["TileI", "TileJ", "Sections", "KMap", "Stages", "JMap", "IMap"],
                 ]
             )
         else:
             expansion_priority.extend(
                 [
-                    # ["J", "I", "Sections", "Stages", "K"],
-
-                    ["TileJ", "TileI", "Sections", "Stages", "JMap", "IMap", "KLoop"],
-                    ["TileJ", "TileI", "Sections", "KLoop", "Stages", "JMap", "IMap"],
+                    ["TileI", "TileJ", "IMap", "JMap", "Sections", "KLoop", "Stages"],
+                    ["TileI", "TileJ", "IMap", "JMap", "Sections", "Stages", "KLoop"],
+                    ["TileI", "TileJ", "IMap", "JMap","Stages",  "Sections",  "KLoop"],
+                    ["TileI", "TileJ", "Sections", "KLoop", "Stages", "JMap", "IMap"],
                 ]
             )
         is_set = False
@@ -144,6 +171,7 @@ def _pre_expand_trafos(gtir_pipeline: GtirPipeline, sdfg: dace.SDFG, layout_map)
         if not is_set:
             raise ValueError("No expansion compatible")
     _specialize_transient_strides(sdfg, layout_map=layout_map)
+    _specialize_contiguous_strides(sdfg, layout_map=layout_map)
     return sdfg
 
 

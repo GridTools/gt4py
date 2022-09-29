@@ -87,7 +87,7 @@ class StencilComputation(library.LibraryNode):
     tile_sizes = PickledDictProperty(
         key_type=str,
         value_type=int,
-        default={dcir.Axis.I: 64, dcir.Axis.J: 8, dcir.Axis.K: 8},
+        default={dcir.Axis.I: 8, dcir.Axis.J: 8, dcir.Axis.K: 8},
     )
 
     symbol_mapping = dace.properties.DictProperty(
