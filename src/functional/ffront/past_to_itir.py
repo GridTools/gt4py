@@ -17,7 +17,7 @@ from typing import Optional
 
 from eve import NodeTranslator, concepts, traits
 from functional.common import Dimension, DimensionKind, GridType, GTTypeError
-from functional.ffront import common_types, program_ast as past, type_info
+from functional.ffront import common_types, common_types as ct, program_ast as past, type_info
 from functional.iterator import ir as itir
 
 
@@ -124,10 +124,12 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         assert type_info.is_field_type_or_tuple_of_field_type(node.kwargs["out"].type)
 
         domain = node.kwargs.get("domain", None)
-        output, lowered_domain = self._visit_stencil_call_out_arg(node.kwargs["out"], domain, **kwargs)
+        output, lowered_domain = self._visit_stencil_call_out_arg(
+            node.kwargs["out"], domain, **kwargs
+        )
 
         return itir.StencilClosure(
-            domain=domain,
+            domain=lowered_domain,
             stencil=itir.SymRef(id=node.func.id),
             inputs=[itir.SymRef(id=self.visit(arg, **kwargs).id) for arg in node.args],
             output=output,
@@ -183,11 +185,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             # an expression for the size of a dimension
             dim_size = itir.SymRef(id=_size_arg_from_field(out_field.id, dim_i))
             # bounds
-            if node_domain is not None and slices is not None:
-                raise GTTypeError(
-                    f"Either only domain or slicing allowed, but got respectively {node_domain} and {slices}"
-                )
-            if node_domain is not None:
+            if node_domain is not None and len(node_domain.values_) > 0:
                 lower, upper = self._construct_itir_initialized_domain_arg(dim_i, dim, node_domain)
             else:
                 lower = self._visit_slice_bound(
@@ -222,33 +220,29 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         dim_i: int,
         dim: Dimension,
         node_domain: past.Dict,
-    ) -> tuple[itir.Literal, itir.Literal]:
-        try:
-            if node_domain.keys_[dim_i].type.dim == dim:
-                domain_bounds = []
-                for domain_i, domain_input in enumerate(node_domain.values_[dim_i].elts):
-                    if isinstance(domain_input, past.Name):
-                        domain_bounds.append(itir.SymRef(id=domain_input.id))
-                    elif isinstance(domain_input, past.Constant):
-                        domain_bounds.append(
-                            itir.Literal(value=str(domain_input.value), type="int")
-                        )
-                    else:
-                        raise GTTypeError(
-                            f"Expected {domain_i + 1}th domain parameter to be of type {past.Name} or {past.Constant}"
-                            f"but got {type(node_domain.values_[dim_i].elts[0])} "
-                        )
-            else:
-                raise GTTypeError(
-                    f"Dimensions in out field and field domain are not equivalent"
-                    f"Expected {dim}, but got {node_domain.keys_[dim_i].type.dim} "
-                )
-        except Exception:
+    ) -> tuple[itir.SymRef | itir.Literal, itir.SymRef | itir.Literal]:
+        if node_domain.keys_[dim_i].type.dim == dim:
+            domain_bounds = []
+            assert len(node_domain.values_[dim_i].elts) == 2
+            start, end = node_domain.values_[dim_i].elts
+            domain_bounds.append(self._explore_domain_value(start))
+            domain_bounds.append(self._explore_domain_value(end))
+        else:
             raise GTTypeError(
-                f"Upper and lower bounds could not be determined for {dim_i + 1}th dimension"
+                f"Dimensions in out field and field domain are not equivalent"
+                f"Expected {dim}, but got {node_domain.keys_[dim_i].type.dim} "
             )
 
         return domain_bounds[0], domain_bounds[1]
+
+    def _explore_domain_value(
+        self, domain_value: past.Name | past.Constant
+    ) -> itir.SymRef | itir.Literal:
+        if isinstance(domain_value, past.Name):
+            return itir.SymRef(id=domain_value.id)
+        domain_value.value = int(float(domain_value.value))
+        domain_value.type = ct.ScalarType(kind=ct.ScalarKind.INT64)
+        return self.visit_Constant(domain_value)
 
     @staticmethod
     def _compute_field_slice(node: past.Subscript):

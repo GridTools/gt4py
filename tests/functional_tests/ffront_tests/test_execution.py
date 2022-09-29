@@ -1046,14 +1046,14 @@ def test_domain(fieldview_backend):
 
     @program
     def program_domain(a: Field[[IDim, JDim], float64]):
-        fieldop_domain(a, out=a, domain={IDim: (1, 9), JDim: (4, 6)})
+        fieldop_domain(a, out=a, domain={IDim: ("1.0", 9.0), JDim: (4, 6)})
 
     program_domain(a, offset_provider={})
 
     expected = np.asarray(a)
     expected[1:9, 4:6] = 1 + 1
 
-    np.allclose(expected, a)
+    assert np.allclose(expected, a)
 
 
 def test_domain_input_bounds(fieldview_backend):
@@ -1083,7 +1083,25 @@ def test_domain_input_bounds(fieldview_backend):
     expected = np.asarray(a)
     expected[1:9, 4:6] = 1 + 1
 
-    np.allclose(expected, a)
+    assert np.allclose(expected, a)
+
+
+def test_empty_domain():
+    size = 10
+    a = np_as_located_field(IDim)(np.ones((size,)))
+    out_field = np_as_located_field(IDim)(np.ones((size,)))
+
+    @field_operator()
+    def empty_domain_fieldop(a: Field[[IDim], float64]):
+        return a + a
+
+    @program
+    def empty_domain_program(a: Field[[IDim], float64], out_field: Field[[IDim], float64]):
+        empty_domain_fieldop(a, out=out_field, domain={})
+
+    empty_domain_program(a, out_field, offset_provider={})
+
+    assert np.allclose(np.asarray(a) + np.asarray(a), out_field)
 
 
 def test_domain_tuple(fieldview_backend):
@@ -1106,5 +1124,5 @@ def test_domain_tuple(fieldview_backend):
     expected = np.asarray(a)
     expected[1:9, 4:6] = 1 + 1
 
-    np.allclose(np.asarray(a), a)
-    np.allclose(expected, b)
+    assert np.allclose(np.asarray(a), a)
+    assert np.allclose(expected, b)

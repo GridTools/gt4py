@@ -258,41 +258,23 @@ def test_wrong_argument_type(fieldview_backend, copy_program_def):
         assert re.search(msg, exc_info.value.__cause__.args[0]) is not None
 
 
-def test_empty_domain():
+def test_dimensions_domain():
     size = 10
-    a = np_as_located_field(IDim)(np.ones((size,)))
-    out_field = np_as_located_field(IDim)(np.ones((size,)))
+    a = np_as_located_field(IDim, JDim)(np.ones((size, size)))
+    out_field = np_as_located_field(IDim, JDim)(np.ones((size, size)))
 
     @field_operator()
-    def empty_domain_fieldop(a: Field[[IDim], float64]):
+    def empty_domain_fieldop(a: Field[[IDim, JDim], float64]):
         return a
 
     @program
-    def empty_domain_program(a: Field[[IDim], float64], out_field: Field[[IDim], float64]):
-        empty_domain_fieldop(a, out=out_field, domain={})
+    def empty_domain_program(
+        a: Field[[IDim, JDim], float64], out_field: Field[[IDim, JDim], float64]
+    ):
+        empty_domain_fieldop(a, out=out_field, domain={JDim: (0, 1), IDim: (0, 1)})
 
     with pytest.raises(
         GTTypeError,
-        match=(r"Upper and lower bounds could not be determined for 1th dimension"),
+        match=(r"Dimensions in out field and field domain are not equivalent"),
     ):
         empty_domain_program(a, out_field, offset_provider={})
-
-
-def test_domain_slicing():
-    size = 10
-    a = np_as_located_field(IDim)(np.ones((size,)))
-    out_field = np_as_located_field(IDim)(np.ones((size,)))
-
-    @field_operator
-    def domain_and_slicing_fieldop(a: Field[[IDim], float64]) -> Field[[IDim], float64]:
-        return a
-
-    @program
-    def domain_and_slicing_program(a: Field[[IDim], float64], out_field: Field[[IDim], float64]):
-        domain_and_slicing_fieldop(a, out=out_field[0:1], domain={IDim: (0, 1)})
-
-    with pytest.raises(
-        GTTypeError,
-        match=(r"Either only domain or slicing allowed"),
-    ):
-        domain_and_slicing_program(a, out_field, offset_provider={})

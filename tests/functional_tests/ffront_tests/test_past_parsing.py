@@ -226,3 +226,24 @@ def test_domain_exception_4(identity_def):
         re.search("Missing required keyword argument\(s\) `out`.", exc_info.value.__cause__.args[0])
         is not None
     )
+
+
+def test_domain_exception_5(identity_def):
+    domain_format_5 = field_operator(identity_def)
+
+    def domain_format_5_program(in_field: Field[[IDim], float64]):
+        domain_format_5(
+            in_field, out=(in_field[0:1], (in_field[0:1], in_field[0:1])), domain={IDim: (0, 1)}
+        )
+
+    with pytest.raises(
+        GTTypeError,
+    ) as exc_info:
+        ProgramParser.apply_to_function(domain_format_5_program)
+
+    assert exc_info.match("Invalid call to `domain_format_5`")
+
+    assert (
+        re.search("Either only domain or slicing allowed", exc_info.value.__cause__.args[0])
+        is not None
+    )

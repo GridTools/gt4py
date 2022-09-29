@@ -16,6 +16,66 @@ from functional.common import GTTypeError
 from functional.ffront import common_types as ct, program_ast as past, type_info
 
 
+def check_tuple_args(tuple_param: past.TupleExpr):
+    """
+    Unfold tuple and check that all arguments are of type past.Name.
+
+    For example, if argument is of type past.Subscript, this function will throw an error as both slicing and domain are being applied
+    """
+    for entry in tuple_param.elts:
+        if isinstance(entry, past.TupleExpr):
+            check_tuple_args(entry)
+        elif not isinstance(entry, past.Name):
+            raise GTTypeError("Either only domain or slicing allowed")
+
+
+def validate_call_params(new_func: past.Name, new_kwargs: dict):
+    """
+    Perform checks for domain and output field types.
+
+    Keyword `out` has to be present in function call.
+
+    Domain has to be of type dictionary, including dimensions with values expressed as tuples of 2 numbers.
+    """
+    if not isinstance(new_func.type, (ct.FieldOperatorType, ct.ScanOperatorType)):
+        raise GTTypeError(
+            f"Only calls `FieldOperator`s and `ScanOperators` "
+            f"allowed in `Program`, but got `{new_func.type}`."
+        )
+
+    if "out" not in new_kwargs:
+        raise GTTypeError("Missing required keyword argument(s) `out`.")
+    if "domain" in new_kwargs:
+
+        if not isinstance(new_kwargs["out"], past.Name) and not isinstance(
+            new_kwargs["out"], past.TupleExpr
+        ):
+            raise GTTypeError("Either only domain or slicing allowed")
+        elif isinstance(new_kwargs["out"], past.TupleExpr):
+            check_tuple_args(new_kwargs["out"])
+
+        domain_kwarg = new_kwargs["domain"]
+        if not isinstance(domain_kwarg, past.Dict):
+            raise GTTypeError(
+                f"Only Dictionaries allowed in domain, but got `{type(domain_kwarg)}`."
+            )
+
+        for domain_keys in domain_kwarg.keys_:
+            if not isinstance(domain_keys.type, ct.DimensionType):
+                raise GTTypeError(
+                    f"Only Dimension allowed in domain dictionary keys, but got `{domain_keys.type}`."
+                )
+        for domain_values in domain_kwarg.values_:
+            if not isinstance(domain_values.type, ct.TupleType):
+                raise GTTypeError(
+                    f"Only Tuples allowed in domain dictionary values, but got `{domain_values.type}`."
+                )
+            if len(domain_values.elts) != 2:
+                raise GTTypeError(
+                    f"Only 2 values allowed in domain range, but got `{len(domain_values.elts)}`."
+                )
+
+
 class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
     @classmethod
     def apply(cls, node: past.Program) -> past.Program:
@@ -58,7 +118,7 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         new_kwargs = self.visit(node.kwargs, **kwargs)
 
         try:
-            self._check_out_and_initialized_domain_values(new_func, new_kwargs)
+            validate_call_params(new_func, new_kwargs)
             arg_types = [arg.type for arg in new_args]
             kwarg_types = {
                 name: expr.type
@@ -94,37 +154,6 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             type=ct.VoidType(),
             location=node.location,
         )
-
-    def _check_out_and_initialized_domain_values(self, new_func: past.Name, new_kwargs: dict):
-        if not isinstance(new_func.type, (ct.FieldOperatorType, ct.ScanOperatorType)):
-            raise GTTypeError(
-                f"Only calls `FieldOperator`s and `ScanOperators` "
-                f"allowed in `Program`, but got `{new_func.type}`."
-            )
-
-        if "out" not in new_kwargs:
-            raise GTTypeError("Missing required keyword argument(s) `out`.")
-        if "domain" in new_kwargs:
-            domain_kwarg = new_kwargs["domain"]
-            if not isinstance(domain_kwarg, past.Dict):
-                raise GTTypeError(
-                    f"Only Dictionaries allowed in domain, but got `{type(domain_kwarg)}`."
-                )
-
-            for domain_keys in domain_kwarg.keys_:
-                if not isinstance(domain_keys.type, ct.DimensionType):
-                    raise GTTypeError(
-                        f"Only Dimension allowed in domain dictionary keys, but got `{domain_keys.type}`."
-                    )
-            for domain_values in domain_kwarg.values_:
-                if not isinstance(domain_values.type, ct.TupleType):
-                    raise GTTypeError(
-                        f"Only Tuples allowed in domain dictionary values, but got `{domain_values.type}`."
-                    )
-                if len(domain_values.elts) != 2:
-                    raise GTTypeError(
-                        f"Only 2 values allowed in domain range, but got `{len(domain_values.elts)}`."
-                    )
 
     def visit_Name(self, node: past.Name, **kwargs) -> past.Name:
         symtable = kwargs["symtable"]
