@@ -196,10 +196,11 @@ class Program:
 
     @functools.cached_property
     def itir(self) -> itir.FencilDefinition:
-        dimensions_used = _filter_external_vars_by_type(self.external_vars, FieldOffset, Dimension)
-        grid_type = _deduce_grid_type(self.grid_type, dimensions.values())
-
         extended_vars_recursive = _get_external_vars_recurse(self.external_vars)
+
+        dimensions_used = _filter_external_vars_by_type(extended_vars_recursive, FieldOffset, Dimension)
+        grid_type = _deduce_grid_type(self.grid_type, dimensions_used.values())
+
         gt_callables = _filter_external_vars_by_type(extended_vars_recursive, GTCallable).values()
         lowered_funcs = [gt_callable.__gt_itir__() for gt_callable in gt_callables]
         return ProgramLowering.apply(
@@ -377,7 +378,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
     """
 
     foast_node: OperatorNodeT
-    externals_vars: dict[str, Any]
+    external_vars: dict[str, Any]
     backend: Optional[FencilExecutor]  # note: backend is only used if directly called
     definition: Optional[types.FunctionType] = None
 
@@ -413,7 +414,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         foast_node = FieldOperatorTypeDeduction.apply(untyped_foast_node)
         return cls(
             foast_node=foast_node,
-            externals_vars=external_vars,
+            external_vars=external_vars,
             backend=backend,
             definition=definition,
         )
@@ -443,7 +444,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         return itir_node
 
     def __gt_external_vars__(self) -> dict[str, Any]:
-        return self.externals_vars
+        return self.external_vars
 
     def as_program(
         self, arg_types: list[ct.SymbolType], kwarg_types: dict[str, ct.SymbolType]
@@ -475,7 +476,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         )
         out_ref = past.Name(id="out", location=loc)
 
-        external_vars_plus_self = {self.foast_node.id: self, **self.externals_vars}
+        external_vars_plus_self = {self.foast_node.id: self, **self.external_vars}
         external_symbols_plus_self: list[past.Symbol] = []
         for name, val in external_vars_plus_self.items():  # type: ignore
             external_symbols_plus_self.append(

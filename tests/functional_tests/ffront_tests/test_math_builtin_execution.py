@@ -50,13 +50,8 @@ def make_builtin_field_operator(builtin_name: str):
     else:
         raise AssertionError(f"Unknown builtin `{builtin_name}`")
 
-    captured_vars = CapturedVars(
-        nonlocals={"IDim": IDim},
-        globals={builtin_name: getattr(fbuiltins, builtin_name)},
-        annotations=annotations,
-        builtins=set(),
-        unbound=set(),
-    )
+    external_vars = {"IDim": IDim,
+                     builtin_name: getattr(fbuiltins, builtin_name)}
 
     loc = foast.SourceLocation(line=1, column=1, source="none")
 
@@ -74,7 +69,7 @@ def make_builtin_field_operator(builtin_name: str):
             namespace=ct.Namespace.CLOSURE,
             location=loc,
         )
-        for name, val in {**captured_vars.globals, **captured_vars.nonlocals}.items()
+        for name, val in external_vars.items()
     ]
 
     foast_node = foast.FieldOperator(
@@ -102,8 +97,7 @@ def make_builtin_field_operator(builtin_name: str):
 
     return FieldOperator(
         foast_node=typed_foast_node,
-        captured_vars=captured_vars,
-        externals={},
+        external_vars=external_vars,
         backend=fieldview_backend,
         definition=None,
     )
