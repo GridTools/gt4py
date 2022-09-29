@@ -183,7 +183,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             # an expression for the size of a dimension
             dim_size = itir.SymRef(id=_size_arg_from_field(out_field.id, dim_i))
             # bounds
-            if bool(node_domain) and bool(slices):
+            if node_domain is not None and slices is not None:
                 raise GTTypeError(
                     f"Either only domain or slicing allowed, but got respectively {node_domain} and {slices}"
                 )
