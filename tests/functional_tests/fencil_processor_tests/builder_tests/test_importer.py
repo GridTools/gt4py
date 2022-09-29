@@ -13,22 +13,19 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 
-import pathlib
-import tempfile
 import textwrap
 
 from functional.fencil_processors.builders import importer
 
 
-def test_import_from_path():
+def test_import_from_path(tmp_path):
     src_module = textwrap.dedent(
         """\
     def function(a, b):
         return a + b
     """
     )
-    with tempfile.TemporaryDirectory() as folder:
-        file = pathlib.Path(folder) / "module.py"
-        file.write_text(src_module)
-        module = importer.import_from_path(file)
-        assert hasattr(module, "function")
+    file = tmp_path / "module.py"
+    file.write_text(src_module, "utf-8")
+    module = importer.import_from_path(file)
+    assert hasattr(module, "function")
