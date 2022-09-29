@@ -237,11 +237,10 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             assert isinstance(
                 node.annotation, ast.Constant
             ), "Annotations should be ast.Constant(string). Use StringifyAnnotationsPass"
-            globalns = {**fbuiltins.BUILTINS, **self.captured_vars.globals}
-            localns = self.captured_vars.nonlocals
-            annotation = eval(node.annotation.value, globalns, localns)
+            globalns = {**fbuiltins.BUILTINS, **self.external_vars}
+            annotation = eval(node.annotation.value, globalns)
             target_type = symbol_makers.make_symbol_type_from_typing(
-                annotation, globalns=globalns, localns=localns
+                annotation, globalns=globalns
             )
         else:
             target_type = ct.DeferredSymbolType()

@@ -55,7 +55,7 @@ from functional.ffront.func_to_past import ProgramParser
 from functional.ffront.gtcallable import GTCallable
 from functional.ffront.past_passes.type_deduction import ProgramTypeDeduction, ProgramTypeError
 from functional.ffront.past_to_itir import ProgramLowering
-from functional.ffront.source_utils import CapturedVars, SourceDefinition
+from functional.ffront.source_utils import CapturedVars, SourceDefinition, get_externals_vars
 from functional.iterator import ir as itir
 from functional.iterator.embedded import constant_field
 
@@ -91,12 +91,6 @@ def _get_external_vars_recurse(external_vars: dict[str, Any]) -> CapturedVars:
 
 def _filter_external_vars_by_type(external_vars: dict[str, Any], *types) -> dict[str, Any]:
     return dict((name, value) for name, value in external_vars.items() if any(isinstance(value, type) for type in types))
-
-
-def _get_externals_vars(function: Callable) -> dict[str, Any]:
-    captured_vars = CapturedVars.from_function(function)
-    flat_captured_vars = collections.ChainMap(captured_vars.globals, captured_vars.nonlocals)
-    return flat_captured_vars
 
 
 def _deduce_grid_type(
@@ -168,7 +162,7 @@ class Program:
         grid_type: Optional[GridType] = None,
     ) -> Program:
         source_def = SourceDefinition.from_function(definition)
-        external_vars = collections.ChainMap(externals or {}, _get_externals_vars(definition))
+        external_vars = collections.ChainMap(externals or {}, get_externals_vars(definition))
         annotations = typing.get_type_hints(definition)
         past_node = ProgramParser.apply(source_def, external_vars, annotations)
         return cls(
@@ -202,9 +196,8 @@ class Program:
 
     @functools.cached_property
     def itir(self) -> itir.FencilDefinition:
-        grid_type = _deduce_grid_type(
-            self.grid_type, _filter_external_vars_by_type(self.external_vars, FieldOffset, Dimension).values()
-        )
+        dimensions_used = _filter_external_vars_by_type(self.external_vars, FieldOffset, Dimension)
+        grid_type = _deduce_grid_type(self.grid_type, dimensions.values())
 
         extended_vars_recursive = _get_external_vars_recurse(self.external_vars)
         gt_callables = _filter_external_vars_by_type(extended_vars_recursive, GTCallable).values()
@@ -401,7 +394,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         operator_attributes = operator_attributes or {}
 
         source_def = SourceDefinition.from_function(definition)
-        external_vars = collections.ChainMap(externals or {}, _get_externals_vars(definition))
+        external_vars = collections.ChainMap(externals or {}, get_externals_vars(definition))
         annotations = typing.get_type_hints(definition)
         foast_definition_node = FieldOperatorParser.apply(source_def, external_vars, annotations)
         loc = foast_definition_node.location
@@ -460,7 +453,6 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         # TODO(tehrengruber): check foast operator has no out argument that clashes
         #  with the out argument of the program we generate here.
 
-        name = self.foast_node.id
         loc = self.foast_node.location
         param_sym_uids = UIDGenerator()  # use a new UID generator to allow caching
 
@@ -483,7 +475,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         )
         out_ref = past.Name(id="out", location=loc)
 
-        external_vars_plus_self = {name: self, **self.externals_vars}
+        external_vars_plus_self = {self.foast_node.id: self, **self.externals_vars}
         external_symbols_plus_self: list[past.Symbol] = []
         for name, val in external_vars_plus_self.items():  # type: ignore
             external_symbols_plus_self.append(
@@ -496,12 +488,12 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
             )
 
         untyped_past_node = past.Program(
-            id=f"__field_operator_{name}",
+            id=f"__field_operator_{self.foast_node.id}",
             type=ct.DeferredSymbolType(constraint=ct.ProgramType),
             params=params_decl + [out_sym],
             body=[
                 past.Call(
-                    func=past.Name(id=name, location=loc),
+                    func=past.Name(id=self.foast_node.id, location=loc),
                     args=params_ref,
                     kwargs={"out": out_ref},
                     location=loc,

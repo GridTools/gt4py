@@ -14,6 +14,7 @@
 
 from __future__ import annotations
 
+import collections
 import functools
 import inspect
 import pathlib
@@ -29,6 +30,12 @@ from functional.ffront import fbuiltins
 
 
 MISSING_FILENAME = "<string>"
+
+
+def get_externals_vars(function: Callable) -> dict[str, Any]:
+    captured_vars = CapturedVars.from_function(function)
+    flat_captured_vars = collections.ChainMap(captured_vars.globals, captured_vars.nonlocals)
+    return flat_captured_vars
 
 
 def make_source_definition_from_function(func: Callable) -> SourceDefinition:

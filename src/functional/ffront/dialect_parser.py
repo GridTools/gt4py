@@ -13,14 +13,16 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 import ast
 import textwrap
+import typing
 from dataclasses import dataclass
+from typing import Callable
 
 from eve.concepts import SourceLocation
 from eve.extended_typing import Any, ClassVar, Generic, Optional, Type, TypeVar
 from functional import common
 from functional.ffront.ast_passes.fix_missing_locations import FixMissingLocations
 from functional.ffront.ast_passes.remove_docstrings import RemoveDocstrings
-from functional.ffront.source_utils import CapturedVars, SourceDefinition, SymbolNames
+from functional.ffront.source_utils import SourceDefinition, get_externals_vars
 
 
 DialectRootT = TypeVar("DialectRootT")
@@ -103,6 +105,13 @@ class DialectParser(ast.NodeVisitor, Generic[DialectRootT]):
             raise err
 
         return output_ast
+
+    @classmethod
+    def apply_to_function(cls, function: Callable):
+        src = SourceDefinition.from_function(function)
+        external_vars = get_externals_vars(function)
+        annotations = typing.get_type_hints(function)
+        return cls.apply(src, external_vars, annotations)
 
     @classmethod
     def _preprocess_definition_ast(cls, definition_ast: ast.AST) -> ast.AST:
