@@ -66,10 +66,6 @@ def validate_call_params(new_func: past.Name, new_kwargs: dict):
                     f"Only Dimension allowed in domain dictionary keys, but got `{domain_keys.type}`."
                 )
         for domain_values in domain_kwarg.values_:
-            if not isinstance(domain_values.type, ct.TupleType):
-                raise GTTypeError(
-                    f"Only Tuples allowed in domain dictionary values, but got `{domain_values.type}`."
-                )
             if len(domain_values.elts) != 2:
                 raise GTTypeError(
                     f"Only 2 values allowed in domain range, but got `{len(domain_values.elts)}`."
