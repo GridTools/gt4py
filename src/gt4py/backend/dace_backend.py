@@ -88,7 +88,6 @@ def _specialize_contiguous_strides(sdfg: dace.SDFG, layout_map):
         contiguous_dim = layout.index(max(layout))
         stride_dim = sum(mask[:contiguous_dim])
         stride_sym = array.strides[stride_dim]
-        print('replacing', str(stride_sym), 'layout', layout, stride_dim, contiguous_dim)
         repldict[str(stride_sym)] = "1"
 
     sdfg.replace_dict(repldict)
