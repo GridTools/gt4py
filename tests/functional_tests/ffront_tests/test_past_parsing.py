@@ -173,6 +173,7 @@ def test_domain_exception_1(identity_def):
         is not None
     )
 
+
 def test_domain_exception_2(identity_def):
     domain_format_2 = field_operator(identity_def)
 
