@@ -921,6 +921,7 @@ def test_undefined_symbols():
     from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError
 
     with pytest.raises(FieldOperatorTypeDeductionError, match=".*Undeclared symbol.*"):
+
         @field_operator
         def return_undefined():
             return undefined_symbol

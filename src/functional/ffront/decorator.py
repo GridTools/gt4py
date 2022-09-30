@@ -66,7 +66,7 @@ DEFAULT_BACKEND: Callable = roundtrip.executor
 
 
 def _get_closure_vars_recursively(closure_vars: dict[str, Any]) -> dict[str, Any]:
-    recursive_closure_vars = closure_vars
+    recursive_closure_vars = collections.ChainMap(closure_vars)
 
     for value in closure_vars.values():
         if isinstance(value, GTCallable):
@@ -88,7 +88,9 @@ def _get_closure_vars_recursively(closure_vars: dict[str, Any]) -> dict[str, Any
                         f"Collisions: {'`,  `'.join(collisions)}"
                     )
 
-                recursive_closure_vars = collections.ChainMap(recursive_closure_vars, recursive_vars_of_val)
+                recursive_closure_vars = collections.ChainMap(
+                    recursive_closure_vars, recursive_vars_of_val
+                )
     return dict(recursive_closure_vars)
 
 
@@ -179,11 +181,19 @@ class Program:
     def __post_init__(self):
         closure_var_functions = _filter_closure_vars_by_type(self.closure_vars, GTCallable)
         if not all(name == func.__gt_itir__().id for name, func in closure_var_functions.items()):
-            raise RuntimeError("The symbol name and the name of the function identified by the symbol are not equal.")
+            raise RuntimeError(
+                "The symbol name and the name of the function identified by the symbol are not equal."
+            )
 
-        for symbol in self.past_node.closure_symbols:
-            if symbol.id not in self.closure_vars:
-                raise RuntimeError(f"Undefined symbol: {symbol.id}")
+        undefined_symbols = [
+            symbol.id
+            for symbol in self.past_node.closure_symbols
+            if symbol.id not in self.closure_vars
+        ]
+        if undefined_symbols:
+            raise RuntimeError(
+                f"The following closure variables are undefined: {', '.join(undefined_symbols)}"
+            )
 
     def with_backend(self, backend: FencilExecutor) -> "Program":
         return Program(
