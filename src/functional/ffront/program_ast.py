@@ -88,4 +88,4 @@ class Program(LocatedNode, SymbolTableTrait):
     type: Union[common_types.ProgramType, common_types.DeferredSymbolType]  # noqa A003
     params: list[DataSymbol]
     body: list[Call]
-    external_symbols: list[Symbol]
+    closure_symbols: list[Symbol]

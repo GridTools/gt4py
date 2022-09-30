@@ -22,7 +22,7 @@ from eve.extended_typing import Any, ClassVar, Generic, Optional, Type, TypeVar
 from functional import common
 from functional.ffront.ast_passes.fix_missing_locations import FixMissingLocations
 from functional.ffront.ast_passes.remove_docstrings import RemoveDocstrings
-from functional.ffront.source_utils import SourceDefinition, get_external_vars
+from functional.ffront.source_utils import SourceDefinition, get_closure_vars
 
 
 DialectRootT = TypeVar("DialectRootT")
@@ -68,7 +68,7 @@ class DialectSyntaxError(common.GTSyntaxError):
 @dataclass(frozen=True, kw_only=True)
 class DialectParser(ast.NodeVisitor, Generic[DialectRootT]):
     source_definition: SourceDefinition
-    external_vars: dict[str, Any]
+    closure_vars: dict[str, Any]
     annotations: dict[str, Any]
     syntax_error_cls: ClassVar[Type[DialectSyntaxError]] = DialectSyntaxError
 
@@ -76,7 +76,7 @@ class DialectParser(ast.NodeVisitor, Generic[DialectRootT]):
     def apply(
         cls,
         source_definition: SourceDefinition,
-        external_vars: dict[str, Any],
+        closure_vars: dict[str, Any],
         annotations: dict[str, Any],
     ) -> DialectRootT:  # type: ignore[valid-type]  # used to work, now mypy is going berserk for unknown reasons
 
@@ -89,7 +89,7 @@ class DialectParser(ast.NodeVisitor, Generic[DialectRootT]):
             output_ast = cls._postprocess_dialect_ast(
                 cls(
                     source_definition=source_definition,
-                    external_vars=external_vars,
+                    closure_vars=closure_vars,
                     annotations=annotations,
                 ).visit(cls._preprocess_definition_ast(definition_ast))
             )
@@ -109,9 +109,9 @@ class DialectParser(ast.NodeVisitor, Generic[DialectRootT]):
     @classmethod
     def apply_to_function(cls, function: Callable):
         src = SourceDefinition.from_function(function)
-        external_vars = get_external_vars(function)
+        closure_vars = get_closure_vars(function)
         annotations = typing.get_type_hints(function)
-        return cls.apply(src, external_vars, annotations)
+        return cls.apply(src, closure_vars, annotations)
 
     @classmethod
     def _preprocess_definition_ast(cls, definition_ast: ast.AST) -> ast.AST:

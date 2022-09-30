@@ -132,13 +132,13 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
         return result, to_be_inserted.keys()
 
     def visit_FunctionDef(self, node: ast.FunctionDef, **kwargs) -> foast.FunctionDefinition:
-        external_symbols, skip_names = self._builtin_type_constructor_symbols(
-            self.external_vars, self._make_loc(node)
+        closure_symbols, skip_names = self._builtin_type_constructor_symbols(
+            self.closure_vars, self._make_loc(node)
         )
-        for name, val in self.external_vars.items():
+        for name, val in self.closure_vars.items():
             if name in skip_names:
                 continue
-            external_symbols.append(
+            closure_symbols.append(
                 foast.Symbol(
                     id=name,
                     type=symbol_makers.make_symbol_type_from_value(val),
@@ -151,7 +151,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             id=node.name,
             params=self.visit(node.args, **kwargs),
             body=self.visit_stmt_list(node.body, **kwargs),
-            external_symbols=external_symbols,
+            closure_symbols=closure_symbols,
             location=self._make_loc(node),
         )
 
@@ -236,7 +236,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             assert isinstance(
                 node.annotation, ast.Constant
             ), "Annotations should be ast.Constant(string). Use StringifyAnnotationsPass"
-            globalns = {**fbuiltins.BUILTINS, **self.external_vars}
+            globalns = {**fbuiltins.BUILTINS, **self.closure_vars}
             annotation = eval(node.annotation.value, globalns)
             target_type = symbol_makers.make_symbol_type_from_typing(annotation, globalns=globalns)
         else:

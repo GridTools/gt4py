@@ -28,7 +28,7 @@ class GTCallable(typing.Protocol):
     from ``ffront`` programs or operators.
     """
 
-    def __gt_external_vars__(self) -> typing.Optional[dict[str, Any]]:
+    def __gt_closure_vars__(self) -> typing.Optional[dict[str, Any]]:
         """
         Return all external variables referenced inside the callable.
 

@@ -49,7 +49,7 @@ def make_builtin_field_operator(builtin_name: str):
     else:
         raise AssertionError(f"Unknown builtin `{builtin_name}`")
 
-    external_vars = {"IDim": IDim, builtin_name: getattr(fbuiltins, builtin_name)}
+    closure_vars = {"IDim": IDim, builtin_name: getattr(fbuiltins, builtin_name)}
 
     loc = foast.SourceLocation(line=1, column=1, source="none")
 
@@ -60,14 +60,14 @@ def make_builtin_field_operator(builtin_name: str):
     ]
     args = [foast.Name(id=k, location=loc) for k, _ in annotations.items() if k != "return"]
 
-    external_symbols = [
+    closure_symbols = [
         foast.Symbol(
             id=name,
             type=symbol_makers.make_symbol_type_from_value(val),
             namespace=ct.Namespace.CLOSURE,
             location=loc,
         )
-        for name, val in external_vars.items()
+        for name, val in closure_vars.items()
     ]
 
     foast_node = foast.FieldOperator(
@@ -85,7 +85,7 @@ def make_builtin_field_operator(builtin_name: str):
                     location=loc,
                 )
             ],
-            external_symbols=external_symbols,
+            closure_symbols=closure_symbols,
             params=params,
             location=loc,
         ),
@@ -95,7 +95,7 @@ def make_builtin_field_operator(builtin_name: str):
 
     return FieldOperator(
         foast_node=typed_foast_node,
-        external_vars=external_vars,
+        closure_vars=closure_vars,
         backend=fieldview_backend,
         definition=None,
     )

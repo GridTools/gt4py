@@ -170,7 +170,7 @@ class FunctionDefinition(LocatedNode, SymbolTableTrait):
     id: Coerced[SymbolName]  # noqa: A003  # shadowing a python builtin
     params: list[DataSymbol]
     body: list[Stmt]
-    external_symbols: list[Symbol]
+    closure_symbols: list[Symbol]
     type: Optional[common_types.FunctionType] = None  # noqa A003  # shadowing a python builtin
 
 

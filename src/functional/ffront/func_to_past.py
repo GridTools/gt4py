@@ -36,14 +36,14 @@ class ProgramParser(DialectParser[past.Program]):
         return ProgramTypeDeduction.apply(output_node)
 
     def visit_FunctionDef(self, node: ast.FunctionDef) -> past.Program:
-        external_symbols = [
+        closure_symbols = [
             past.Symbol(
                 id=name,
                 type=symbol_makers.make_symbol_type_from_value(val),
                 namespace=common_types.Namespace.CLOSURE,
                 location=self._make_loc(node),
             )
-            for name, val in self.external_vars.items()
+            for name, val in self.closure_vars.items()
         ]
 
         return past.Program(
@@ -51,7 +51,7 @@ class ProgramParser(DialectParser[past.Program]):
             type=common_types.DeferredSymbolType(constraint=common_types.ProgramType),
             params=self.visit(node.args),
             body=[self.visit(node) for node in node.body],
-            external_symbols=external_symbols,
+            closure_symbols=closure_symbols,
             location=self._make_loc(node),
         )
 

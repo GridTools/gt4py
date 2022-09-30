@@ -54,7 +54,7 @@ from functional.ffront.func_to_past import ProgramParser
 from functional.ffront.gtcallable import GTCallable
 from functional.ffront.past_passes.type_deduction import ProgramTypeDeduction, ProgramTypeError
 from functional.ffront.past_to_itir import ProgramLowering
-from functional.ffront.source_utils import SourceDefinition, get_external_vars
+from functional.ffront.source_utils import SourceDefinition, get_closure_vars
 from functional.iterator import ir as itir
 from functional.iterator.embedded import constant_field
 
@@ -64,20 +64,20 @@ Scalar: TypeAlias = SupportsInt | SupportsFloat | np.int32 | np.int64 | np.float
 DEFAULT_BACKEND: Callable = roundtrip.executor
 
 
-def _get_external_vars_recurse(external_vars: dict[str, Any]) -> dict[str, Any]:
-    extended_external_vars = external_vars
+def _get_closure_vars_recursively(closure_vars: dict[str, Any]) -> dict[str, Any]:
+    recursive_closure_vars = closure_vars
 
-    for value in external_vars.values():
+    for value in closure_vars.values():
         if isinstance(value, GTCallable):
             # if the closure ref has closure refs by itself, also add them
-            if vars_of_val := value.__gt_external_vars__():
-                extended_vars_of_val = _get_external_vars_recurse(vars_of_val)
+            if vars_of_val := value.__gt_closure_vars__():
+                recursive_vars_of_val = _get_closure_vars_recursively(vars_of_val)
 
                 collisions: list[str] = []
-                for potential_collision in set(external_vars) & set(extended_vars_of_val):
+                for potential_collision in set(closure_vars) & set(recursive_vars_of_val):
                     if (
-                        external_vars[potential_collision]
-                        != extended_vars_of_val[potential_collision]
+                        closure_vars[potential_collision]
+                        != recursive_vars_of_val[potential_collision]
                     ):
                         collisions.append(potential_collision)
                 if collisions:
@@ -87,14 +87,14 @@ def _get_external_vars_recurse(external_vars: dict[str, Any]) -> dict[str, Any]:
                         f"Collisions: {'`,  `'.join(collisions)}"
                     )
 
-                extended_external_vars = {**extended_external_vars, **extended_vars_of_val}
-    return extended_external_vars
+                recursive_closure_vars = {**recursive_closure_vars, **recursive_vars_of_val}
+    return recursive_closure_vars
 
 
-def _filter_external_vars_by_type(external_vars: dict[str, Any], *types) -> dict[str, Any]:
+def _filter_closure_vars_by_type(closure_vars: dict[str, Any], *types) -> dict[str, Any]:
     return dict(
         (name, value)
-        for name, value in external_vars.items()
+        for name, value in closure_vars.items()
         if any(isinstance(value, type_) for type_ in types)
     )
 
@@ -147,14 +147,14 @@ class Program:
 
     Attributes:
         past_node: The node representing the program.
-        external_vars: Mapping of externally defined symbols to their respective values.
+        closure_vars: Mapping of externally defined symbols to their respective values.
             For example, referenced global and nonlocal variables.
         backend: The backend to be used for code generation.
         definition: The Python function object corresponding to the PAST node.
     """
 
     past_node: past.Program
-    external_vars: dict[str, Any]
+    closure_vars: dict[str, Any]
     backend: Optional[FencilExecutor]
     definition: Optional[types.FunctionType] = None
     grid_type: Optional[GridType] = None
@@ -168,47 +168,47 @@ class Program:
         grid_type: Optional[GridType] = None,
     ) -> Program:
         source_def = SourceDefinition.from_function(definition)
-        external_vars = {**(externals or {}), **get_external_vars(definition)}
+        closure_vars = {**(externals or {}), **get_closure_vars(definition)}
         annotations = typing.get_type_hints(definition)
-        past_node = ProgramParser.apply(source_def, external_vars, annotations)
+        past_node = ProgramParser.apply(source_def, closure_vars, annotations)
         return cls(
             past_node=past_node,
-            external_vars=external_vars,
+            closure_vars=closure_vars,
             backend=backend,
             definition=definition,
             grid_type=grid_type,
         )
 
     def __post_init__(self):
-        external_functions = _filter_external_vars_by_type(self.external_vars, GTCallable)
+        external_functions = _filter_closure_vars_by_type(self.closure_vars, GTCallable)
         if not all(map(lambda var: var[0] == var[1].__gt_itir__().id, external_functions.items())):
             raise RuntimeError("Symbol name and external function's name must match.")
 
-        for symbol in self.past_node.external_symbols:
-            if symbol.id not in self.external_vars:
+        for symbol in self.past_node.closure_symbols:
+            if symbol.id not in self.closure_vars:
                 raise RuntimeError(f"Undefined symbol: {symbol.id}")
 
     def with_backend(self, backend: FencilExecutor) -> "Program":
         return Program(
             past_node=self.past_node,
-            external_vars=self.external_vars,
+            closure_vars=self.closure_vars,
             backend=backend,
             definition=self.definition,  # type: ignore[arg-type]  # mypy wrongly deduces definition as method here
         )
 
     @functools.cached_property
-    def external_vars_recursive(self) -> dict[str, Any]:
-        return _get_external_vars_recurse(self.external_vars)
+    def closure_vars_recursive(self) -> dict[str, Any]:
+        return _get_closure_vars_recursively(self.closure_vars)
 
     @functools.cached_property
     def itir(self) -> itir.FencilDefinition:
-        dimensions_used = _filter_external_vars_by_type(
-            self.external_vars_recursive, FieldOffset, Dimension
+        dimensions_used = _filter_closure_vars_by_type(
+            self.closure_vars_recursive, FieldOffset, Dimension
         )
         grid_type = _deduce_grid_type(self.grid_type, dimensions_used.values())
 
-        gt_callables = _filter_external_vars_by_type(
-            self.external_vars_recursive, GTCallable
+        gt_callables = _filter_closure_vars_by_type(
+            self.closure_vars_recursive, GTCallable
         ).values()
         lowered_funcs = [gt_callable.__gt_itir__() for gt_callable in gt_callables]
         return ProgramLowering.apply(
@@ -303,8 +303,8 @@ class Program:
         #  that dimension. only one column axis is allowed, but we can use
         #  this mapping to provide good error messages.
         scanops_per_axis: dict[Dimension, str] = {}
-        for name, gt_callable in _filter_external_vars_by_type(
-            self.external_vars, GTCallable
+        for name, gt_callable in _filter_closure_vars_by_type(
+            self.closure_vars, GTCallable
         ).items():
             if isinstance((type_ := gt_callable.__gt_type__()), ct.ScanOperatorType):
                 scanops_per_axis.setdefault(type_.axis, []).append(name)
@@ -383,12 +383,12 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
 
     Attributes:
         foast_node: The node representing the field operator.
-        external_vars: Mapping of externally defined symbols to their respective values.
+        closure_vars: Mapping of externally defined symbols to their respective values.
             For example, referenced global and nonlocal variables.
     """
 
     foast_node: OperatorNodeT
-    external_vars: dict[str, Any]
+    closure_vars: dict[str, Any]
     backend: Optional[FencilExecutor]  # note: backend is only used if directly called
     definition: Optional[types.FunctionType] = None
 
@@ -405,9 +405,9 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         operator_attributes = operator_attributes or {}
 
         source_def = SourceDefinition.from_function(definition)
-        external_vars = {**(externals or {}), **get_external_vars(definition)}
+        closure_vars = {**(externals or {}), **get_closure_vars(definition)}
         annotations = typing.get_type_hints(definition)
-        foast_definition_node = FieldOperatorParser.apply(source_def, external_vars, annotations)
+        foast_definition_node = FieldOperatorParser.apply(source_def, closure_vars, annotations)
         loc = foast_definition_node.location
         operator_attribute_nodes = {
             key: foast.Constant(
@@ -424,7 +424,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         foast_node = FieldOperatorTypeDeduction.apply(untyped_foast_node)
         return cls(
             foast_node=foast_node,
-            external_vars=external_vars,
+            closure_vars=closure_vars,
             backend=backend,
             definition=definition,
         )
@@ -453,8 +453,8 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
 
         return itir_node
 
-    def __gt_external_vars__(self) -> dict[str, Any]:
-        return self.external_vars
+    def __gt_closure_vars__(self) -> dict[str, Any]:
+        return self.closure_vars
 
     def as_program(
         self, arg_types: list[ct.SymbolType], kwarg_types: dict[str, ct.SymbolType]
@@ -486,10 +486,10 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         )
         out_ref = past.Name(id="out", location=loc)
 
-        external_vars_plus_self = {self.foast_node.id: self, **self.external_vars}
-        external_symbols_plus_self: list[past.Symbol] = []
-        for name, val in external_vars_plus_self.items():  # type: ignore
-            external_symbols_plus_self.append(
+        closure_vars_plus_self = {self.foast_node.id: self, **self.closure_vars}
+        closure_symbols_plus_self: list[past.Symbol] = []
+        for name, val in closure_vars_plus_self.items():  # type: ignore
+            closure_symbols_plus_self.append(
                 past.Symbol(
                     id=name,
                     type=symbol_makers.make_symbol_type_from_value(val),
@@ -510,14 +510,14 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
                     location=loc,
                 )
             ],
-            external_symbols=external_symbols_plus_self,
+            closure_symbols=closure_symbols_plus_self,
             location=loc,
         )
         past_node = ProgramTypeDeduction.apply(untyped_past_node)
 
         return Program(
             past_node=past_node,
-            external_vars=external_vars_plus_self,
+            closure_vars=closure_vars_plus_self,
             backend=self.backend,
         )
 

@@ -29,7 +29,7 @@ from functional import common
 MISSING_FILENAME = "<string>"
 
 
-def get_external_vars(function: Callable) -> dict[str, Any]:
+def get_closure_vars(function: Callable) -> dict[str, Any]:
     (nonlocals, globals, builtins, unbound) = inspect.getclosurevars(function)  # noqa: A001
     return {**globals, **nonlocals}  # nonlocals should override globals
 
