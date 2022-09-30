@@ -915,3 +915,12 @@ def test_docstring():
         fieldop_with_docstring(a, out=a)
 
     test_docstring(a, offset_provider={})
+
+
+def test_undefined_symbols():
+    from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError
+
+    with pytest.raises(FieldOperatorTypeDeductionError, match=".*Undeclared symbol.*"):
+        @field_operator
+        def return_undefined():
+            return undefined_symbol
