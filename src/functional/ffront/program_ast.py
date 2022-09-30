@@ -75,7 +75,7 @@ class Constant(Expr):
 
 class Dict(Expr):
     keys_: list[Name]
-    values_: list[Expr]
+    values_: list[TupleExpr]
 
 
 class Slice(Expr):
