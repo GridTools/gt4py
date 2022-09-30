@@ -49,8 +49,7 @@ def make_builtin_field_operator(builtin_name: str):
     else:
         raise AssertionError(f"Unknown builtin `{builtin_name}`")
 
-    external_vars = {"IDim": IDim,
-                     builtin_name: getattr(fbuiltins, builtin_name)}
+    external_vars = {"IDim": IDim, builtin_name: getattr(fbuiltins, builtin_name)}
 
     loc = foast.SourceLocation(line=1, column=1, source="none")
 

@@ -14,9 +14,7 @@
 from __future__ import annotations
 
 import ast
-import collections
 from dataclasses import dataclass
-from typing import Any
 
 from functional.ffront import common_types, program_ast as past, symbol_makers
 from functional.ffront.dialect_parser import DialectParser, DialectSyntaxError

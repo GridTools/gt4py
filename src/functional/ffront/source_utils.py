@@ -21,11 +21,9 @@ import symtable
 import textwrap
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
-from typing import Any, Union, cast
+from typing import Any, cast
 
-from eve import extended_typing as xtyping
 from functional import common
-from functional.ffront import fbuiltins
 
 
 MISSING_FILENAME = "<string>"

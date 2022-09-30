@@ -13,10 +13,10 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 import abc
 import typing
+from typing import Any
 
 from functional.ffront import common_types as ct
 from functional.iterator import ir as itir
-from typing import Any
 
 
 @typing.runtime_checkable

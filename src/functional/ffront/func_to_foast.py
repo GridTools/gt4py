@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import ast
 import builtins
-import collections
 from typing import Any, Callable, Iterable, Mapping, Type, cast
 
 import eve
@@ -239,9 +238,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             ), "Annotations should be ast.Constant(string). Use StringifyAnnotationsPass"
             globalns = {**fbuiltins.BUILTINS, **self.external_vars}
             annotation = eval(node.annotation.value, globalns)
-            target_type = symbol_makers.make_symbol_type_from_typing(
-                annotation, globalns=globalns
-            )
+            target_type = symbol_makers.make_symbol_type_from_typing(annotation, globalns=globalns)
         else:
             target_type = ct.DeferredSymbolType()
 

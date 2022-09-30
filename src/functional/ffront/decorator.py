@@ -19,7 +19,6 @@
 
 from __future__ import annotations
 
-import collections
 import dataclasses
 import functools
 import types
@@ -76,7 +75,10 @@ def _get_external_vars_recurse(external_vars: dict[str, Any]) -> dict[str, Any]:
 
                 collisions: list[str] = []
                 for potential_collision in set(external_vars) & set(extended_vars_of_val):
-                    if (external_vars[potential_collision] != extended_vars_of_val[potential_collision]):
+                    if (
+                        external_vars[potential_collision]
+                        != extended_vars_of_val[potential_collision]
+                    ):
                         collisions.append(potential_collision)
                 if collisions:
                     raise NotImplementedError(
@@ -85,12 +87,16 @@ def _get_external_vars_recurse(external_vars: dict[str, Any]) -> dict[str, Any]:
                         f"Collisions: {'`,  `'.join(collisions)}"
                     )
 
-                extended_external_vars = collections.ChainMap(extended_external_vars, extended_vars_of_val)
+                extended_external_vars = {**extended_external_vars, **extended_vars_of_val}
     return extended_external_vars
 
 
 def _filter_external_vars_by_type(external_vars: dict[str, Any], *types) -> dict[str, Any]:
-    return dict((name, value) for name, value in external_vars.items() if any(isinstance(value, type) for type in types))
+    return dict(
+        (name, value)
+        for name, value in external_vars.items()
+        if any(isinstance(value, type_) for type_ in types)
+    )
 
 
 def _deduce_grid_type(
@@ -162,7 +168,7 @@ class Program:
         grid_type: Optional[GridType] = None,
     ) -> Program:
         source_def = SourceDefinition.from_function(definition)
-        external_vars = collections.ChainMap(externals or {}, get_external_vars(definition))
+        external_vars = {**(externals or {}), **get_external_vars(definition)}
         annotations = typing.get_type_hints(definition)
         past_node = ProgramParser.apply(source_def, external_vars, annotations)
         return cls(
@@ -196,10 +202,14 @@ class Program:
 
     @functools.cached_property
     def itir(self) -> itir.FencilDefinition:
-        dimensions_used = _filter_external_vars_by_type(self.external_vars_recursive, FieldOffset, Dimension)
+        dimensions_used = _filter_external_vars_by_type(
+            self.external_vars_recursive, FieldOffset, Dimension
+        )
         grid_type = _deduce_grid_type(self.grid_type, dimensions_used.values())
 
-        gt_callables = _filter_external_vars_by_type(self.external_vars_recursive, GTCallable).values()
+        gt_callables = _filter_external_vars_by_type(
+            self.external_vars_recursive, GTCallable
+        ).values()
         lowered_funcs = [gt_callable.__gt_itir__() for gt_callable in gt_callables]
         return ProgramLowering.apply(
             self.past_node, function_definitions=lowered_funcs, grid_type=grid_type
@@ -293,7 +303,9 @@ class Program:
         #  that dimension. only one column axis is allowed, but we can use
         #  this mapping to provide good error messages.
         scanops_per_axis: dict[Dimension, str] = {}
-        for name, gt_callable in _filter_external_vars_by_type(self.external_vars, GTCallable).items():
+        for name, gt_callable in _filter_external_vars_by_type(
+            self.external_vars, GTCallable
+        ).items():
             if isinstance((type_ := gt_callable.__gt_type__()), ct.ScanOperatorType):
                 scanops_per_axis.setdefault(type_.axis, []).append(name)
 
@@ -393,7 +405,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         operator_attributes = operator_attributes or {}
 
         source_def = SourceDefinition.from_function(definition)
-        external_vars = collections.ChainMap(externals or {}, get_external_vars(definition))
+        external_vars = {**(externals or {}), **get_external_vars(definition)}
         annotations = typing.get_type_hints(definition)
         foast_definition_node = FieldOperatorParser.apply(source_def, external_vars, annotations)
         loc = foast_definition_node.location

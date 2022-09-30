@@ -77,7 +77,7 @@ class DialectParser(ast.NodeVisitor, Generic[DialectRootT]):
         cls,
         source_definition: SourceDefinition,
         external_vars: dict[str, Any],
-        annotations: dict[str, Any]
+        annotations: dict[str, Any],
     ) -> DialectRootT:  # type: ignore[valid-type]  # used to work, now mypy is going berserk for unknown reasons
 
         source, filename, starting_line = source_definition
@@ -90,7 +90,7 @@ class DialectParser(ast.NodeVisitor, Generic[DialectRootT]):
                 cls(
                     source_definition=source_definition,
                     external_vars=external_vars,
-                    annotations=annotations
+                    annotations=annotations,
                 ).visit(cls._preprocess_definition_ast(definition_ast))
             )
         except SyntaxError as err:
