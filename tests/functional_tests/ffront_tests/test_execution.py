@@ -818,13 +818,13 @@ def test_tuple_arg(fieldview_backend):
 
     @field_operator(backend=fieldview_backend)
     def unpack_tuple(
-        inp: tuple[Field[[IDim], float64], Field[[IDim], float64]]
+        inp: tuple[tuple[Field[[IDim], float64], Field[[IDim], float64]], Field[[IDim], float64]]
     ) -> Field[[IDim], float64]:
-        return 3.0 * inp[0] + inp[1]
+        return 3.0 * inp[0][0] + inp[0][1] + inp[1]
 
-    unpack_tuple((a, b), out=out, offset_provider={})
+    unpack_tuple(((a, b), a), out=out, offset_provider={})
 
-    assert np.allclose(3 * a.array() + b.array(), out)
+    assert np.allclose(3 * a.array() + b.array() + a.array(), out)
 
 
 @pytest.mark.parametrize("forward", [True, False])
