@@ -79,7 +79,7 @@ class ProgramParser(DialectParser[past.Program]):
 
     def visit_Dict(self, node: ast.Dict) -> past.Dict:
         return past.Dict(
-            keys_=[self.visit(cast(ast.Name, param)) for param in node.keys],
+            keys_=[self.visit(cast(ast.AST, param)) for param in node.keys],
             values_=[self.visit(param) for param in node.values],
             location=self._make_loc(node),
         )
