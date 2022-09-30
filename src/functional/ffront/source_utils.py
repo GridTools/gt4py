@@ -31,7 +31,7 @@ MISSING_FILENAME = "<string>"
 
 def get_external_vars(function: Callable) -> dict[str, Any]:
     (nonlocals, globals, builtins, unbound) = inspect.getclosurevars(function)  # noqa: A001
-    return {**nonlocals, **globals}
+    return {**globals, **nonlocals}  # nonlocals should override globals
 
 
 def make_source_definition_from_function(func: Callable) -> SourceDefinition:
