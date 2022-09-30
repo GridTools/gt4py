@@ -19,6 +19,7 @@
 
 from __future__ import annotations
 
+import collections
 import dataclasses
 import functools
 import types
@@ -87,8 +88,8 @@ def _get_closure_vars_recursively(closure_vars: dict[str, Any]) -> dict[str, Any
                         f"Collisions: {'`,  `'.join(collisions)}"
                     )
 
-                recursive_closure_vars = {**recursive_closure_vars, **recursive_vars_of_val}
-    return recursive_closure_vars
+                recursive_closure_vars = collections.ChainMap(recursive_closure_vars, recursive_vars_of_val)
+    return dict(recursive_closure_vars)
 
 
 def _filter_closure_vars_by_type(closure_vars: dict[str, Any], *types) -> dict[str, Any]:
