@@ -448,7 +448,7 @@ def union_node_grid_subsets(nodes: List[eve.Node]):
     return grid_subset
 
 
-def _union_memlets(*memlets: "dcir.Memlet") -> List["dcir.Memlet"]:
+def union_memlets(*memlets: "dcir.Memlet") -> List["dcir.Memlet"]:
     res: Dict[str, dcir.Memlet] = {}
     for memlet in memlets:
         res[memlet.field] = memlet.union(res.get(memlet.field, memlet))
@@ -459,10 +459,10 @@ def union_inout_memlets(nodes: List[eve.Node]):
     read_memlets: List[dcir.Memlet] = []
     write_memlets: List[dcir.Memlet] = []
     for node in collect_toplevel_computation_nodes(nodes):
-        read_memlets = _union_memlets(*read_memlets, *node.read_memlets)
-        write_memlets = _union_memlets(*write_memlets, *node.write_memlets)
+        read_memlets = union_memlets(*read_memlets, *node.read_memlets)
+        write_memlets = union_memlets(*write_memlets, *node.write_memlets)
 
-    return (read_memlets, write_memlets, _union_memlets(*read_memlets, *write_memlets))
+    return (read_memlets, write_memlets, union_memlets(*read_memlets, *write_memlets))
 
 
 def flatten_list(list_or_node: Union[List[Any], eve.Node]):
@@ -480,6 +480,21 @@ def collect_toplevel_computation_nodes(
             collection.append(node)
 
     collection: List[dcir.ComputationNode] = []
+    ComputationNodeCollector().visit(list_or_node, collection=collection)
+    return collection
+
+
+def collect_toplevel_copy_states(
+    list_or_node: Union[List[Any], eve.Node]
+) -> List["dcir.CopyState"]:
+    class ComputationNodeCollector(eve.NodeVisitor):
+        def visit_NestedSDFG(self, node: dcir.NestedSDFG, **kwargs):
+            return
+
+        def visit_CopyState(self, node: dcir.CopyState, *, collection: List[dcir.CopyState]):
+            collection.append(node)
+
+    collection: List[dcir.CopyState] = []
     ComputationNodeCollector().visit(list_or_node, collection=collection)
     return collection
 
@@ -514,3 +529,35 @@ def layout_maker_factory(base_layout: Tuple[int, ...]) -> Callable[[List[bool]],
         return tuple(res_layout)
 
     return layout_maker
+
+
+def union_node_access_infos(nodes: List[eve.Node]):
+    from gtc import daceir as dcir
+
+    read_accesses: Dict[str, dcir.FieldAccessInfo] = dict()
+    write_accesses: Dict[str, dcir.FieldAccessInfo] = dict()
+    for node in collect_toplevel_computation_nodes(nodes):
+        for mem in node.read_memlets:
+            read_accesses[mem.field] = mem.access_info.union(
+                read_accesses.get(mem.field, mem.access_info)
+            )
+        for mem in node.write_memlets:
+            write_accesses[mem.field] = mem.access_info.union(
+                write_accesses.get(mem.field, mem.access_info)
+            )
+
+    return (
+        read_accesses,
+        write_accesses,
+        union_access_info_dicts(read_accesses, write_accesses),
+    )
+
+
+def union_access_info_dicts(
+    first_infos: Dict[str, "dcir.FieldAccessInfo"],
+    second_infos: Dict[str, "dcir.FieldAccessInfo"],
+):
+    res = dict(first_infos)
+    for key, access_info in second_infos.items():
+        res[key] = access_info.union(first_infos.get(key, access_info))
+    return res

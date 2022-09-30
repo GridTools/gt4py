@@ -14,6 +14,7 @@
 
 import copy
 from dataclasses import dataclass
+from dataclasses import field as dataclass_field
 from typing import TYPE_CHECKING, Callable, List, Optional, Set, Union
 
 import dace
@@ -62,6 +63,7 @@ class Map(ExpansionItem):
 class Loop(Iteration, ExpansionItem):
     kind: str = "contiguous"
     storage: dace.StorageType = None
+    localcache_fields: Set[str] = dataclass_field(default_factory=set)
 
     @property
     def iterations(self) -> List[Iteration]:
@@ -86,7 +88,9 @@ def _get_axis_from_pattern(item, fmt):
 
 
 def _is_domain_loop(item):
-    return _get_axis_from_pattern(item, fmt="{axis}Loop")
+    return _get_axis_from_pattern(item, fmt="{axis}Loop") or _get_axis_from_pattern(
+        item, fmt="Cached{axis}Loop"
+    )
 
 
 def _is_domain_map(item):
@@ -173,12 +177,34 @@ def _order_as_spec(computation_node, expansion_order):
                 )
             )
         elif axis := _is_domain_loop(item):
+            if item.startswith("Cached"):
+                localcache_fields = set(computation_node.field_decls.keys())
+                for acc in computation_node.oir_node.iter_tree().if_isinstance(oir.FieldAccess):
+                    if isinstance(acc.offset, oir.VariableKOffset):
+                        if acc.name in localcache_fields:
+                            localcache_fields.remove(acc.name)
+
+                for mask_stmt in computation_node.oir_node.iter_tree().if_isinstance(
+                    oir.HorizontalRestriction
+                ):
+                    for stmt in mask_stmt.body:
+                        for acc in (
+                            stmt.iter_tree()
+                            .if_isinstance(oir.AssignStmt)
+                            .getattr("left")
+                            .if_isinstance(oir.FieldAccess)
+                        ):
+                            if acc.name in localcache_fields:
+                                localcache_fields.remove(acc.name)
+            else:
+                localcache_fields = set()
             expansion_specification.append(
                 Loop(
                     axis=axis,
                     stride=-1
                     if computation_node.oir_node.loop_order == common.LoopOrder.BACKWARD
                     else 1,
+                    localcache_fields=localcache_fields,
                 )
             )
         elif item == "Sections":
@@ -234,7 +260,19 @@ def _populate_storages(self, expansion_specification):
                 if it.kind == "tiling":
                     tiled_axes.add(it.axis)
     for es in reversed(expansion_specification):
-        if isinstance(es, Map):
+        if isinstance(es, Loop) and es.localcache_fields:
+            if hasattr(self, "_device") and es.storage is None:
+                if len(innermost_axes) == 3:
+                    es.storage = dace.StorageType.Register
+                elif self.device == dace.DeviceType.GPU and len(innermost_axes | tiled_axes) == 3:
+                    es.storage = dace.StorageType.GPU_Shared
+                else:
+                    if self.device == dace.DeviceType.GPU:
+                        es.storage = dace.StorageType.GPU_Global
+                    else:
+                        es.storage = dace.StorageType.CPU_Heap
+            innermost_axes.remove(es.axis)
+        elif isinstance(es, Map):
             for it in es.iterations:
                 if it.axis in innermost_axes:
                     innermost_axes.remove(it.axis)

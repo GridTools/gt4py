@@ -15,7 +15,7 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
 import dace
 import sympy
-from pydantic import validator
+from pydantic import root_validator, validator
 
 import eve
 import gtc
@@ -121,14 +121,14 @@ class StorageType(IntEnum):
         }[self]
 
     @classmethod
-    def from_dace_storage(cls, schedule):
+    def from_dace_storage(cls, storage):
         return {
             dace.StorageType.Default: StorageType.Default,
             dace.StorageType.CPU_Heap: StorageType.CPU_Heap,
             dace.StorageType.GPU_Global: StorageType.GPU_Global,
             dace.StorageType.GPU_Shared: StorageType.GPU_Shared,
             dace.StorageType.Register: StorageType.Register,
-        }[schedule]
+        }[storage]
 
 
 class AxisBound(common.AxisBound):
@@ -673,11 +673,20 @@ class FieldAccessInfo(Node):
 class Memlet(Node):
     field: SymbolRef
     access_info: FieldAccessInfo
-    connector: SymbolRef
+    connector: Optional[SymbolRef]
     is_read: bool
     is_write: bool
+    other_grid_subset: GridSubset = None
 
-    def union(self, other):
+    @root_validator
+    def infer_other_grid_subset(cls, values: Dict[str, Any]) -> Dict[str, Any]:
+        if values.get("other_grid_subset") is None:
+            values["other_grid_subset"] = values["access_info"].grid_subset
+        # if not values["other_grid_subset"].shape == values["access_info"].grid_subset.shape:
+        #     raise ValueError("Memlet subsets don't match.")
+        return values
+
+    def union(self, other: "Memlet"):
         assert self.field == other.field
         return Memlet(
             field=self.field,
@@ -685,6 +694,7 @@ class Memlet(Node):
             connector=self.field,
             is_read=self.is_read or other.is_read,
             is_write=self.is_write or other.is_write,
+            other_grid_subset=self.other_grid_subset.union(other.other_grid_subset),
         )
 
     def remove_read(self):
@@ -694,6 +704,7 @@ class Memlet(Node):
             connector=self.connector,
             is_read=False,
             is_write=self.is_write,
+            other_grid_subset=self.other_grid_subset,
         )
 
     def remove_write(self):
@@ -703,6 +714,7 @@ class Memlet(Node):
             connector=self.connector,
             is_read=self.is_read,
             is_write=False,
+            other_grid_subset=self.other_grid_subset,
         )
 
 
@@ -863,6 +875,7 @@ class IterationNode(Node):
 class Tasklet(ComputationNode, IterationNode, eve.SymbolTableTrait):
     decls: List[LocalScalarDecl]
     stmts: List[Stmt]
+    name_map: Dict[str, str]
     grid_subset: GridSubset = GridSubset.single_gridpoint()
 
 
@@ -876,17 +889,29 @@ class ComputationState(IterationNode):
     computations: List[Union[Tasklet, DomainMap]]
 
 
+class CopyState(Node):
+    memlets: List[Memlet]
+    name_map: Dict[SymbolRef, SymbolRef]
+
+    @validator("memlets")
+    def valid_memlets(cls, v: List[Memlet]) -> List[Memlet]:
+        if not len(v) == len({memlet.field for memlet in v}):
+            raise ValueError("Only one dcir.Memlet per field is allowed.")
+        return v
+
+
 class DomainLoop(IterationNode, ComputationNode):
     axis: Axis
     index_range: Range
-    loop_states: List[Union[ComputationState, "DomainLoop"]]
+    loop_states: List[Union[ComputationState, CopyState, "DomainLoop"]]
 
 
 class NestedSDFG(ComputationNode, eve.SymbolTableTrait):
     label: SymbolRef
     field_decls: List[FieldDecl]
     symbol_decls: List[SymbolDecl]
-    states: List[Union[DomainLoop, ComputationState]]
+    name_map: Dict[str, str]
+    states: List[Union[DomainLoop, CopyState, ComputationState]]
 
 
 # There are circular type references with string placeholders. These statements let pydantic resolve those.

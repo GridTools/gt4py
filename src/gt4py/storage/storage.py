@@ -13,7 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import itertools
-from typing import Any, Dict, Tuple
+from typing import Dict, Tuple
 
 import numpy as np
 
