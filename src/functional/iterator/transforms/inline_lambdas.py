@@ -31,7 +31,7 @@ class CountSymbolRefs(NodeVisitor):
 
 @dataclasses.dataclass
 class InlineLambdas(NodeTranslator):
-    """Inline lambda calls by substituting every arguments by its value."""
+    """Inline lambda calls by substituting every argument by its value."""
 
     opcount_preserving: bool
 
@@ -69,16 +69,12 @@ class InlineLambdas(NodeTranslator):
                 if not any(eligible_params):
                     return node
 
-            refs = (
-                set.union(
-                    *(
-                        arg.pre_walk_values().if_isinstance(ir.SymRef).getattr("id").to_set()
-                        for i, arg in enumerate(node.args)
-                        if eligible_params[i]
-                    )
+            refs = set().union(
+                *(
+                    arg.pre_walk_values().if_isinstance(ir.SymRef).getattr("id").to_set()
+                    for i, arg in enumerate(node.args)
+                    if eligible_params[i]
                 )
-                if len(node.args) > 0
-                else set()
             )
             syms = node.fun.expr.pre_walk_values().if_isinstance(ir.Sym).getattr("id").to_set()
             clashes = refs & syms

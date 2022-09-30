@@ -45,7 +45,7 @@ The following snippet imports the most commonly used features that are needed to
 import numpy as np
 
 from functional.common import DimensionKind
-from functional.ffront.fbuiltins import Dimension, Field, float64, FieldOffset, neighbor_sum
+from functional.ffront.fbuiltins import Dimension, Field, float64, FieldOffset, neighbor_sum, where
 from functional.ffront.decorator import field_operator, program
 from functional.iterator.embedded import np_as_located_field, NeighborTableOffsetProvider
 ```
@@ -280,6 +280,91 @@ For the border edges, the results are unchanged compared to the previous example
 |:--:| :--: | :--: |
 | *Domain (edges)* |  | *Edge values* |
 
++++ 
+
+#### Using conditionals on fields
+
+Additionally to the `neighbor_sum` function, other builtins have been implemented. One of these is the `where`.
+This function takes 3 input arguments:
+ - mask: a field with dtype boolean
+ - true branch: a tuple, a field, or a scalar
+ - false branch: a tuple, a field, of a scalar
+The mask can be directly a field of booleans (e.g. `Field[[CellDim], bool]`) or an expression evaluating to this type (e.g. `Field[[CellDim], float64] > 3`).
+The `where` builtin loops over each entry of the mask and returns values corresponding to the same indexes of either the true or the false branch. 
+In the case where the true and false branches are either fields or scalars, the resulting output will be a field including all dimensions from all inputs. For example:
+
+```{code-cell} ipython3
+mask = np_as_located_field(CellDim, KDim)(np.zeros(shape=grid_shape, dtype=bool))
+result_where = np_as_located_field(CellDim, KDim)(np.zeros(shape=grid_shape))
+b = 6.0
+
+@field_operator
+def conditional(mask: Field[[CellDim, KDim], bool], a: Field[[CellDim, KDim], float64], b: float
+) -> Field[[CellDim, KDim], float64]:
+    return where(mask, a, b)
+    
+conditional(mask, a, b, out=result_where, offset_provider={})
+print("where return: {}".format(np.asarray(result_where)))
+```
+
+**Tuple implementation:**
+
+The `where` supports the return of tuples of fields. To perform promotion of dimensions and dtype of the output, all arguments are analyzed and promoted as in the above section.
+
+```{code-cell} ipython3
+result_1 = np_as_located_field(CellDim, KDim)(np.zeros(shape=grid_shape))
+result_2 = np_as_located_field(CellDim, KDim)(np.zeros(shape=grid_shape))
+
+@field_operator
+def _conditional_tuple(mask: Field[[CellDim, KDim], bool], a: Field[[CellDim, KDim], float64], b: float
+) -> tuple[Field[[CellDim, KDim], float64], Field[[CellDim, KDim], float64]]:
+    return where(mask, (a, b), (b, a))
+    
+@program
+def conditional_tuple(mask: Field[[CellDim, KDim], bool], a: Field[[CellDim, KDim], float64], b: float, 
+result_1: Field[[CellDim, KDim], float64], result_2: Field[[CellDim, KDim], float64]
+):
+     _conditional_tuple(mask, a, b, out=(result_1, result_2))
+    
+conditional_tuple(mask, a, b, result_1, result_2, offset_provider={})
+print("where tuple return: {}".format((np.asarray(result_1), np.asarray(result_2))))
+```
+
+The `where` builtin also allows for nesting of tuples. In this scenario, it will first perform an unrolling: 
+
+```where(mask, ((a, b), (b, a)), ((c, d), (d, c)))``` --> ```where(mask, (a, b), (c, d))``` and ```where(mask, (b, a), (d, c))```
+
+and then combine results to match the return type:
+
+```{code-cell} ipython3
+a = np_as_located_field(CellDim, KDim)(np.full(shape=grid_shape, fill_value=2.0, dtype=np.float64))
+b = np_as_located_field(CellDim, KDim)(np.full(shape=grid_shape, fill_value=3.0, dtype=np.float64))
+c = np_as_located_field(CellDim, KDim)(np.full(shape=grid_shape, fill_value=4.0, dtype=np.float64))
+d = np_as_located_field(CellDim, KDim)(np.full(shape=grid_shape, fill_value=5.0, dtype=np.float64))
+
+result_1 = np_as_located_field(CellDim, KDim)(np.zeros(shape=grid_shape))
+result_2 = np_as_located_field(CellDim, KDim)(np.zeros(shape=grid_shape))
+
+@field_operator
+def _conditional_tuple_nested(
+    mask: Field[[CellDim, KDim], bool], a: Field[[CellDim, KDim], float64], b: Field[[CellDim, KDim], float64], c: Field[[CellDim, KDim], float64], d: Field[[CellDim, KDim], float64]
+) -> tuple[
+    tuple[Field[[CellDim, KDim], float64], Field[[CellDim, KDim], float64]],
+    tuple[Field[[CellDim, KDim], float64], Field[[CellDim, KDim], float64]],
+]:
+    return where(mask, ((a, b), (b, a)), ((c, d), (d, c)))
+    
+@program
+def conditional_tuple_nested(
+    mask: Field[[CellDim, KDim], bool], a: Field[[CellDim, KDim], float64], b: Field[[CellDim, KDim], float64], c: Field[[CellDim, KDim], float64], d: Field[[CellDim, KDim], float64],
+    result_1: Field[[CellDim, KDim], float64], result_2: Field[[CellDim, KDim], float64]
+):
+    _conditional_tuple_nested(mask, a, b, c, d, out=((result_1, result_2), (result_2, result_1)))
+
+conditional_tuple_nested(mask, a, b, c, d, result_1, result_2, offset_provider={})
+print("where nested tuple return: {}".format(((np.asarray(result_1), np.asarray(result_2)), (np.asarray(result_2), np.asarray(result_1)))))
+```
+
 +++
 
 #### Implementing the pseudo-laplacian
@@ -302,7 +387,7 @@ Notice how $\text{edge_diff}_{0,1}$ is actually subtracted from the sum rather t
 
 +++
 
-In addition to the signs, there is an issue with the border edges as well for which the edge difference is undefined because they only have one cell neighbor. For the the pseudo-laplacian, the edge difference for border edges is considered zero. You can achieve this in the calculations by zeroing out the weights for the border edges in the edge weight table.
+In addition to the signs, there is an issue with the border edges as well for which the edge difference is undefined because they only have one cell neighbor. For the pseudo-laplacian, the edge difference for border edges is considered zero. You can achieve this in the calculations by zeroing out the weights for the border edges in the edge weight table.
 
 +++
 
@@ -321,11 +406,11 @@ edge_weights = np.array([
 edge_weight_field = np_as_located_field(CellDim, C2EDim)(edge_weights)
 ```
 
-Now you have everything to implement the the pseudo-laplacian. Its field operator requires the cell field and the edge weights as inputs, and outputs a cell field of the same shape as the input.
+Now you have everything to implement the pseudo-laplacian. Its field operator requires the cell field and the edge weights as inputs, and outputs a cell field of the same shape as the input.
 
 The first line of the field operator calculates the edge difference for all edges. This is done by creating a temporary field over edges with the value of the first cell neighbour and another temporary field with the value of the second, and the difference of the two fields gives the `edge_differences`.
 
-The second lines first creates a temporary field using `edge_differences(C2E)`, which contains the the three adjacent edge differences for every cell. This table is then multiplied elementwise with the `edge_weights`. The final result is a field over cells that contains the pseudo-laplacian.
+The second lines first creates a temporary field using `edge_differences(C2E)`, which contains the three adjacent edge differences for every cell. This table is then multiplied elementwise with the `edge_weights`. The final result is a field over cells that contains the pseudo-laplacian.
 
 ```{code-cell} ipython3
 @field_operator

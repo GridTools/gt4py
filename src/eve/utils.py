@@ -35,14 +35,14 @@ import typing
 import uuid
 import warnings
 
-import deepdiff
-import xxhash
-from boltons.iterutils import (  # noqa: F401
+import deepdiff  # type: ignore[import]
+import xxhash  # type: ignore[import]
+from boltons.iterutils import (  # type: ignore[import]  # noqa: F401
     flatten as flatten,
     flatten_iter as flatten_iter,
     is_collection as is_collection,
 )
-from boltons.strutils import (  # noqa: F401
+from boltons.strutils import (  # type: ignore[import]  # noqa: F401
     a10n as a10n,
     asciify as asciify,
     format_int_list as format_int_list,
@@ -77,10 +77,10 @@ from .type_definitions import NOTHING, NothingType
 
 try:
     # For perfomance reasons, try to use cytoolz when possible (using cython)
-    import cytoolz as toolz
+    import cytoolz as toolz  # type: ignore[import]
 except ModuleNotFoundError:
     # Fall back to pure Python toolz
-    import toolz  # noqa: F401  # imported but unused
+    import toolz  # type: ignore[import]  # noqa: F401
 
 
 T = TypeVar("T")

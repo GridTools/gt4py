@@ -33,11 +33,11 @@ def type_class(symbol_type: ct.SymbolType) -> Type[ct.SymbolType]:
     """
     match symbol_type:
         case ct.DeferredSymbolType(constraint):
-            if constraint is None:  # type: ignore[has-type]  # mypy can not get the type from the case expression anymore (why?)
+            if constraint is None:
                 raise GTTypeError(f"No type information available for {symbol_type}!")
-            elif isinstance(constraint, tuple):  # type: ignore[has-type]  # mypy can not get the type from the case expression anymore (why?)
+            elif isinstance(constraint, tuple):
                 raise GTTypeError(f"Not sufficient type information available for {symbol_type}!")
-            return constraint  # type: ignore[has-type]  # mypy can not get the type from the case expression anymore (why?)
+            return constraint
         case ct.SymbolType() as concrete_type:
             return concrete_type.__class__
     raise GTTypeError(
@@ -208,7 +208,7 @@ def extract_dims(symbol_type: ct.SymbolType) -> list[Dimension]:
         case ct.ScalarType():
             return []
         case ct.FieldType(dims):
-            return dims  # type: ignore[has-type]  # mypy can not get the type from the case expression anymore (why?)
+            return dims
     raise GTTypeError(f"Can not extract dimensions from {symbol_type}!")
 
 
@@ -256,7 +256,7 @@ def is_concretizable(symbol_type: ct.SymbolType, to_type: ct.SymbolType) -> bool
 
     """
     if isinstance(symbol_type, ct.DeferredSymbolType) and (
-        symbol_type.constraint is None or issubclass(type_class(to_type), symbol_type.constraint)  # type: ignore[arg-type]
+        symbol_type.constraint is None or issubclass(type_class(to_type), symbol_type.constraint)
     ):
         return True
     elif is_concrete(symbol_type):
