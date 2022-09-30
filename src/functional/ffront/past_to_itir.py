@@ -17,7 +17,7 @@ from typing import Optional
 
 from eve import NodeTranslator, concepts, traits
 from functional.common import Dimension, DimensionKind, GridType, GTTypeError
-from functional.ffront import common_types, common_types as ct, program_ast as past, type_info
+from functional.ffront import common_types, program_ast as past, type_info
 from functional.iterator import ir as itir
 
 
@@ -222,27 +222,13 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         node_domain: past.Dict,
     ) -> tuple[itir.SymRef | itir.Literal, itir.SymRef | itir.Literal]:
         if node_domain.keys_[dim_i].type.dim == dim:
-            domain_bounds = []
             assert len(node_domain.values_[dim_i].elts) == 2
-            start, end = node_domain.values_[dim_i].elts
-            domain_bounds.append(self._explore_domain_value(start))
-            domain_bounds.append(self._explore_domain_value(end))
+            return (self.visit(bound, as_ref=True) for bound in node_domain.values_[dim_i].elts)
         else:
             raise GTTypeError(
                 f"Dimensions in out field and field domain are not equivalent"
                 f"Expected {dim}, but got {node_domain.keys_[dim_i].type.dim} "
             )
-
-        return domain_bounds[0], domain_bounds[1]
-
-    def _explore_domain_value(
-        self, domain_value: past.Name | past.Constant
-    ) -> itir.SymRef | itir.Literal:
-        if isinstance(domain_value, past.Name):
-            return itir.SymRef(id=domain_value.id)
-        domain_value.value = int(float(domain_value.value))
-        domain_value.type = ct.ScalarType(kind=ct.ScalarKind.INT64)
-        return self.visit_Constant(domain_value)
 
     @staticmethod
     def _compute_field_slice(node: past.Subscript):
@@ -324,5 +310,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
 
         raise NotImplementedError("Only scalar literals supported currently.")
 
-    def visit_Name(self, node: past.Name, **kwargs) -> itir.Sym:
+    def visit_Name(self, node: past.Name, as_ref=False, **kwargs) -> itir.SymRef | itir.Sym:
+        if as_ref:
+            return itir.SymRef(id=node.id)
         return itir.Sym(id=node.id)

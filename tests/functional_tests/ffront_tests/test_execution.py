@@ -1046,7 +1046,7 @@ def test_domain(fieldview_backend):
 
     @program
     def program_domain(a: Field[[IDim, JDim], float64]):
-        fieldop_domain(a, out=a, domain={IDim: ("1.0", 9.0), JDim: (4, 6)})
+        fieldop_domain(a, out=a, domain={IDim: (1, 9), JDim: (4, 6)})
 
     program_domain(a, offset_provider={})
 
