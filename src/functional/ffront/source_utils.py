@@ -14,7 +14,6 @@
 
 from __future__ import annotations
 
-import collections
 import functools
 import inspect
 import pathlib
@@ -33,9 +32,8 @@ MISSING_FILENAME = "<string>"
 
 
 def get_external_vars(function: Callable) -> dict[str, Any]:
-    captured_vars = CapturedVars.from_function(function)
-    flat_captured_vars = collections.ChainMap(captured_vars.globals, captured_vars.nonlocals)
-    return flat_captured_vars
+    (nonlocals, globals, builtins, unbound) = inspect.getclosurevars(function)  # noqa: A001
+    return {**nonlocals, **globals}
 
 
 def make_source_definition_from_function(func: Callable) -> SourceDefinition:
@@ -53,19 +51,6 @@ def make_source_definition_from_function(func: Callable) -> SourceDefinition:
         raise ValueError(message) from err
 
     return SourceDefinition(source, filename, starting_line)
-
-
-def make_captured_vars_from_function(func: Callable) -> CapturedVars:
-    (nonlocals, globals, inspect_builtins, inspect_unbound) = inspect.getclosurevars(  # noqa: A001
-        func
-    )
-    # python builtins returned by getclosurevars() are not ffront.builtins
-    unbound = set(inspect_builtins.keys()) | inspect_unbound
-    builtins = unbound & {*fbuiltins.PYTHON_TYPE_BUILTIN_NAMES, fbuiltins.EXTERNALS_MODULE_NAME}
-    unbound -= builtins
-    annotations = xtyping.get_type_hints(func)
-
-    return CapturedVars(dict(nonlocals), dict(globals), dict(annotations), builtins, unbound)
 
 
 def make_symbol_names_from_source(source: str, filename: str = MISSING_FILENAME) -> SymbolNames:
@@ -144,35 +129,6 @@ class SourceDefinition:
         yield self.starting_line
 
     from_function = staticmethod(make_source_definition_from_function)
-
-
-@dataclass(frozen=True)
-class CapturedVars:
-    """
-    Mappings from external names used in a function to the actual values.
-
-    It can be created from an actual Python function object using
-    :meth:`from_function()`. It also supports unpacking.
-
-    .. note::
-        To avoid a name conflict with :class:`inspect.ClosureVars` we use a
-        different name here.
-    """
-
-    nonlocals: dict[str, Any]
-    globals: dict[str, Any]  # noqa: A003  # shadowing a python builtin
-    annotations: dict[str, Any]
-    builtins: set[str]
-    unbound: set[str]
-
-    def __iter__(self) -> Iterator[Union[dict[str, Any], set[str]]]:
-        yield self.nonlocals
-        yield self.globals
-        yield self.annotations
-        yield self.builtins
-        yield self.unbound
-
-    from_function = staticmethod(make_captured_vars_from_function)
 
 
 @dataclass(frozen=True)
