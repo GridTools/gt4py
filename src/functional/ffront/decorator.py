@@ -180,9 +180,9 @@ class Program:
         )
 
     def __post_init__(self):
-        external_functions = _filter_closure_vars_by_type(self.closure_vars, GTCallable)
-        if not all(map(lambda var: var[0] == var[1].__gt_itir__().id, external_functions.items())):
-            raise RuntimeError("Symbol name and external function's name must match.")
+        closure_var_functions = _filter_closure_vars_by_type(self.closure_vars, GTCallable)
+        if not all(map(lambda var: var[0] == var[1].__gt_itir__().id, closure_var_functions.items())):
+            raise RuntimeError("The symbol name and the name of the function identified by the symbol are not equal.")
 
         for symbol in self.past_node.closure_symbols:
             if symbol.id not in self.closure_vars:
