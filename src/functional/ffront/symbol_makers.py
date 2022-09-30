@@ -173,6 +173,11 @@ def make_symbol_type_from_value(value: Any) -> ct.SymbolType:
         dims = list(value.axes)
         dtype = make_symbol_type_from_typing(value.dtype.type)
         symbol_type = ct.FieldType(dims=dims, dtype=dtype)
+    elif isinstance(value, tuple):
+        # TODO(tehrengruber): remove special casing when `make_symbol_type_from_typing`
+        #  supports `Field`s (i.e. the special casing above for `LocatedField`)
+        #  disappears.
+        return ct.TupleType(types=[make_symbol_type_from_value(el) for el in value])
     else:
         type_ = xtyping.infer_type(value, annotate_callable_kwargs=True)
         symbol_type = make_symbol_type_from_typing(type_)
