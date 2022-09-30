@@ -74,7 +74,7 @@ def validate_call_params(new_func: past.Name, new_kwargs: dict):
                 domain_values.elts[1], int
             ):
                 raise GTTypeError(
-                    f"Only integer values allowed in domain range, but got {domain_values.elts[0]} and {domain_values.elts[1]}."
+                    f"Only integer values allowed in domain range, but got {domain_values.elts[0].type} and {domain_values.elts[1].type}."
                 )
 
 
