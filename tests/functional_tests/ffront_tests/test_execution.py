@@ -815,9 +815,12 @@ def test_tuple_arg(fieldview_backend):
     a = np_as_located_field(IDim)(np.ones((size,)))
     b = np_as_located_field(IDim)(2 * np.ones((size,)))
     out = np_as_located_field(IDim)(np.zeros((size,)))
+
     @field_operator(backend=fieldview_backend)
-    def unpack_tuple(inp: tuple[Field[[IDim], float64], Field[[IDim], float64]]) -> Field[[IDim], float64]:
-        return 3.*inp[0] + inp[1]
+    def unpack_tuple(
+        inp: tuple[Field[[IDim], float64], Field[[IDim], float64]]
+    ) -> Field[[IDim], float64]:
+        return 3.0 * inp[0] + inp[1]
 
     unpack_tuple((a, b), out=out, offset_provider={})
 
