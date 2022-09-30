@@ -877,6 +877,25 @@ def test_tuple_with_local_field_in_reduction_shifted(reduction_setup):
     assert np.allclose(expected, out)
 
 
+def test_tuple_arg(fieldview_backend):
+    if fieldview_backend == gtfn_cpu.run_gtfn:
+        pytest.skip("Tuple arguments are not supported in gtfn yet.")
+    size = 10
+    a = np_as_located_field(IDim)(np.ones((size,)))
+    b = np_as_located_field(IDim)(2 * np.ones((size,)))
+    out = np_as_located_field(IDim)(np.zeros((size,)))
+
+    @field_operator(backend=fieldview_backend)
+    def unpack_tuple(
+        inp: tuple[tuple[Field[[IDim], float64], Field[[IDim], float64]], Field[[IDim], float64]]
+    ) -> Field[[IDim], float64]:
+        return 3.0 * inp[0][0] + inp[0][1] + inp[1]
+
+    unpack_tuple(((a, b), a), out=out, offset_provider={})
+
+    assert np.allclose(3 * a.array() + b.array() + a.array(), out)
+
+
 @pytest.mark.parametrize("forward", [True, False])
 def test_simple_scan(fieldview_backend, forward):
     if fieldview_backend == gtfn_cpu.run_gtfn:
