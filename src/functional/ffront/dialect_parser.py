@@ -22,7 +22,7 @@ from eve.extended_typing import Any, ClassVar, Generic, Optional, Type, TypeVar
 from functional import common
 from functional.ffront.ast_passes.fix_missing_locations import FixMissingLocations
 from functional.ffront.ast_passes.remove_docstrings import RemoveDocstrings
-from functional.ffront.source_utils import SourceDefinition, get_closure_vars
+from functional.ffront.source_utils import SourceDefinition, get_closure_vars_from_function
 
 
 DialectRootT = TypeVar("DialectRootT")
@@ -109,7 +109,7 @@ class DialectParser(ast.NodeVisitor, Generic[DialectRootT]):
     @classmethod
     def apply_to_function(cls, function: Callable):
         src = SourceDefinition.from_function(function)
-        closure_vars = get_closure_vars(function)
+        closure_vars = get_closure_vars_from_function(function)
         annotations = typing.get_type_hints(function)
         return cls.apply(src, closure_vars, annotations)
 

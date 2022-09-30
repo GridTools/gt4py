@@ -74,13 +74,13 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
     ---------
     >>> import ast
     >>> from functional.common import Field
-    >>> from functional.ffront.source_utils import SourceDefinition, get_closure_vars
+    >>> from functional.ffront.source_utils import SourceDefinition, get_closure_vars_from_function
     >>> from functional.ffront.func_to_foast import FieldOperatorParser
     >>> def example(a: "Field[..., float]", b: "Field[..., float]"):
     ...     return a + b
 
     >>> source_definition = SourceDefinition.from_function(example)
-    >>> closure_vars = get_closure_vars(example)
+    >>> closure_vars = get_closure_vars_from_function(example)
     >>> untyped_fieldop = FieldOperatorParser(
     ...     source_definition=source_definition, closure_vars=closure_vars, externals_defs={}
     ... ).visit(ast.parse(source_definition.source).body[0])

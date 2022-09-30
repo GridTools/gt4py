@@ -55,7 +55,7 @@ from functional.ffront.func_to_past import ProgramParser
 from functional.ffront.gtcallable import GTCallable
 from functional.ffront.past_passes.type_deduction import ProgramTypeDeduction, ProgramTypeError
 from functional.ffront.past_to_itir import ProgramLowering
-from functional.ffront.source_utils import SourceDefinition, get_closure_vars
+from functional.ffront.source_utils import SourceDefinition, get_closure_vars_from_function
 from functional.iterator import ir as itir
 from functional.iterator.embedded import constant_field
 
@@ -165,7 +165,7 @@ class Program:
         grid_type: Optional[GridType] = None,
     ) -> Program:
         source_def = SourceDefinition.from_function(definition)
-        closure_vars = {**(externals or {}), **get_closure_vars(definition)}
+        closure_vars = {**(externals or {}), **get_closure_vars_from_function(definition)}
         annotations = typing.get_type_hints(definition)
         past_node = ProgramParser.apply(source_def, closure_vars, annotations)
         return cls(
@@ -402,7 +402,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         operator_attributes = operator_attributes or {}
 
         source_def = SourceDefinition.from_function(definition)
-        closure_vars = {**(externals or {}), **get_closure_vars(definition)}
+        closure_vars = {**(externals or {}), **get_closure_vars_from_function(definition)}
         annotations = typing.get_type_hints(definition)
         foast_definition_node = FieldOperatorParser.apply(source_def, closure_vars, annotations)
         loc = foast_definition_node.location
