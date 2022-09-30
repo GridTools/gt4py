@@ -810,7 +810,7 @@ def test_tuple_with_local_field_in_reduction_shifted(reduction_setup):
 
 def test_tuple_arg(fieldview_backend):
     if fieldview_backend == gtfn_cpu.run_gtfn:
-        pytest.skip("Tuple arguments are not supported yet.")
+        pytest.skip("Tuple arguments are not supported in gtfn yet.")
     size = 10
     a = np_as_located_field(IDim)(np.ones((size,)))
     b = np_as_located_field(IDim)(2 * np.ones((size,)))
