@@ -95,7 +95,7 @@ def _get_closure_vars_recursively(closure_vars: dict[str, Any]) -> dict[str, Any
 
 
 def _filter_closure_vars_by_type(closure_vars: dict[str, Any], *types) -> dict[str, Any]:
-    return dict((name, value) for name, value in closure_vars.items() if isinstance(value, types))
+    return {name: value for name, value in closure_vars.items() if isinstance(value, types)}
 
 
 def _deduce_grid_type(
