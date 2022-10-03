@@ -487,6 +487,13 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         param_sym_uids = UIDGenerator()  # use a new UID generator to allow caching
 
         type_ = self.__gt_type__()
+
+        return_dims = typing.get_args(self.captured_vars.annotations["return"])[0]
+        if return_dims != type_.definition.returns.dims:
+            raise GTTypeError(
+                f"Specified return field dimensions and return type do not match, expected {return_dims}, but got {type_.definition.returns.dims}"
+            )
+
         params_decl: list[past.Symbol] = [
             past.DataSymbol(
                 id=param_sym_uids.sequential_id(prefix="__sym"),
@@ -496,6 +503,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
             )
             for arg_type in arg_types
         ]
+
         params_ref = [past.Name(id=pdecl.id, location=loc) for pdecl in params_decl]
         out_sym: past.Symbol = past.DataSymbol(
             id="out",
