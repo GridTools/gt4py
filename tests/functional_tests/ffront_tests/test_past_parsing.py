@@ -250,3 +250,19 @@ def test_domain_exception_5(identity_def):
         re.search("Only integer values allowed in domain range", exc_info.value.__cause__.args[0])
         is not None
     )
+
+
+def test_domain_exception_6(identity_def):
+    domain_format_6 = field_operator(identity_def)
+
+    def domain_format_6_program(in_field: Field[[IDim], float64]):
+        domain_format_6(in_field, out=in_field, domain={})
+
+    with pytest.raises(
+        GTTypeError,
+    ) as exc_info:
+        ProgramParser.apply_to_function(domain_format_6_program)
+
+    assert exc_info.match("Invalid call to `domain_format_6`")
+
+    assert re.search("Empty domain not allowed.", exc_info.value.__cause__.args[0]) is not None
