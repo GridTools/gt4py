@@ -334,10 +334,20 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         true_expr: foast.Expr,
         false_expr: foast.Expr,
     ) -> Optional[ct.SymbolType]:
+        if not isinstance(condition.type, ct.ScalarType):
+            # TODO I think there are 2 kinds of error in this file:
+            # - cannot deduce type because of conflicts
+            # - reject code because a type is not what is expected
+            # We should give them slightly different error messages to make them more useful
+            # (E.g. currently we prefix always "Could not deduce type" which is wrong in this case here.)
+            raise FieldOperatorTypeDeductionError.from_foast_node(
+                condition,
+                msg=f"Ternary condition must be a scalar, not a field. Expected `bool` got {condition.type}",
+            )
         if condition.type != ct.ScalarType(kind=ct.ScalarKind.BOOL):
             raise FieldOperatorTypeDeductionError.from_foast_node(
                 condition,
-                msg=f"Condition is of type `{condition.type}` " f"but should be of type bool.",
+                msg=f"Condition is of type `{condition.type}` " f"but should be of type `bool`.",
             )
 
         if true_expr.type != false_expr.type:

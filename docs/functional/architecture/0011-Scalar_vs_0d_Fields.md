@@ -37,7 +37,7 @@ An explicit broadcast would be required to make this correct.
 ```python=
 @field_operator
 def foo() -> Field[[], float]
-    return broadcast(1.0, (,))
+    return broadcast(1.0, ())
 ```
 
 #### Implicit broadcast to Field

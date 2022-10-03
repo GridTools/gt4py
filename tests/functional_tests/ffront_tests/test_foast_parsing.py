@@ -27,7 +27,7 @@ import pytest
 
 from functional.common import Field
 from functional.ffront import common_types
-from functional.ffront.fbuiltins import float32, float64, int32, int64, where
+from functional.ffront.fbuiltins import broadcast, float32, float64, int32, int64, where
 from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError
 from functional.ffront.func_to_foast import FieldOperatorParser, FieldOperatorSyntaxError
 from functional.ffront.symbol_makers import TypingError
@@ -236,6 +236,70 @@ def test_conditional_wrong_arg_type():
         _ = FieldOperatorParser.apply_to_function(conditional_wrong_arg_type)
 
     assert re.search(msg, exc_info.value.__cause__.args[0]) is not None
+
+
+def test_ternary_with_field_condition():
+    def ternary_with_field_condition(cond: Field[[], bool]):
+        return 1 if cond else 2
+
+    with pytest.raises(FieldOperatorTypeDeductionError, match="Expected `bool`"):
+        _ = FieldOperatorParser.apply_to_function(ternary_with_field_condition)
+
+
+def test_correct_return_type_annotation():
+    """See ADR 11."""
+
+    def correct_return_type_annotation() -> float:
+        return 1.0
+
+    FieldOperatorParser.apply_to_function(correct_return_type_annotation)
+
+
+# TODO implement check
+def test_wrong_return_type_annotation():
+    """See ADR 11."""
+
+    def wrong_return_type_annotation() -> Field[[], float]:
+        return 1.0
+
+    with pytest.raises(FieldOperatorTypeDeductionError, match="Expected `bool`"):
+        _ = FieldOperatorParser.apply_to_function(wrong_return_type_annotation)
+
+
+# TODO consider implementing broadcast without second argument as shortcut for 0-d field
+def test_fixed_return_type_annotation():
+    """See ADR 11."""
+
+    def fixed_return_type_annotation() -> Field[[], float]:
+        return broadcast(1.0, ())
+
+    FieldOperatorParser.apply_to_function(fixed_return_type_annotation)
+
+
+def test_no_implicit_broadcast_in_field_op_call():
+    """See ADR 11."""
+
+    def no_implicit_broadcast_in_field_op_call(scalar: float) -> float:
+        return scalar
+
+    def no_implicit_broadcast_in_field_op_call_caller() -> float:
+        return no_implicit_broadcast_in_field_op_call(1.0)
+
+    FieldOperatorParser.apply_to_function(no_implicit_broadcast_in_field_op_call_caller)
+
+
+# TODO implement
+# TODO add execution test
+def test_implicit_broadcast_in_field_op_call():
+    """See ADR 11."""
+
+    def implicit_broadcast_in_field_op_call(scalar: Field[[], float]) -> Field[[], float]:
+        return scalar
+
+    def implicit_broadcast_in_field_op_call_caller() -> Field[[], float]:
+        return implicit_broadcast_in_field_op_call(1.0)
+
+    FieldOperatorParser.apply_to_function(implicit_broadcast_in_field_op_call_caller)
 
 
 # --- External symbols ---
