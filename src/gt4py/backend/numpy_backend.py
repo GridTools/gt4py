@@ -17,11 +17,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, Dict, Type, Union, cast
 
 from eve.codegen import format_source
 from gt4py.backend.base import BaseBackend, BaseModuleGenerator, CLIBackendMixin, register
-from gt4py.backend.gtc_common import (
-    debug_is_compatible_layout,
-    debug_is_compatible_type,
-    debug_layout,
-)
+from gt4py.backend.gtc_common import debug_is_compatible_layout, debug_layout
 from gtc.gtir_to_oir import GTIRToOIR
 from gtc.numpy import npir
 from gtc.numpy.npir_codegen import NpirCodegen
@@ -89,7 +85,6 @@ class NumpyBackend(BaseBackend, CLIBackendMixin):
         "device": "cpu",
         "layout_map": debug_layout,
         "is_compatible_layout": debug_is_compatible_layout,
-        "is_compatible_type": debug_is_compatible_type,
     }
     languages = {"computation": "python", "bindings": ["python"]}
     MODULE_GENERATOR_CLASS = ModuleGenerator

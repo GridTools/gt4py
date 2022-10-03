@@ -165,13 +165,15 @@ regular function call receiving the definition function:
 The generated code is written to and compiled in a local '.gt_cache' folder. Subsequent
 invocations will check whether a recent version of the stencil already exists in the cache.
 
---------
-Storages
---------
+----------
+Allocation
+----------
 
-Since some backends require data to be in a certain layout in memory, GT4Py provides a special `NumPy`-like
-multidimensional array implementation called ``storage``. Storage containers can be allocated through the same familiar
-set of routines used in `NumPy` for allocation: ``from_array``, ``ones``, ``zeros`` and ``empty``.
+Since some backends require data to be in a certain layout in memory, GT4Py provides special `NumPy`-like
+allocators. They work like the familiar set of routines used in `NumPy` for allocation: ``ones``, ``zeros``,
+``full`` and ``empty``. There is also ``from_array`` that initializes the array to a provided array value.
+The result of these routines is either a ``numpy.ndarray`` (for CPU backends) or a ``cupy.ndarray``
+(for GPU backends).
 
 .. code:: python
 
@@ -180,32 +182,46 @@ set of routines used in `NumPy` for allocation: ``from_array``, ``ones``, ``zero
     backend= "numpy"
 
     field_a = gt_storage.from_array(
-        data=np.random.randn(10, 10, 10),
+        np.random.randn(10, 10, 10),
+        np.float64,
         backend=backend,
-        dtype=np.float64,
-        default_origin=(0, 0, 0),
+        aligned_index=(0, 0, 0),
     )
     field_b = gt_storage.ones(
-        backend=backend, shape=(10, 10, 10), dtype=np.float64, default_origin=(0, 0, 0)
+        (10, 10, 10), np.float64, backend=backend, aligned_index=(0, 0, 0)
     )
     field_c = gt_storage.zeros(
-        backend=backend, shape=(10, 10, 10), dtype=np.float64, default_origin=(0, 0, 0)
+        (10, 10, 10), np.float64, backend=backend, aligned_index=(0, 0, 0)
     )
     result = gt_storage.empty(
-        backend=backend, shape=(10, 10, 10), dtype=np.float64, default_origin=(0, 0, 0)
+        (10, 10, 10), np.float64, backend=backend, aligned_index=(0, 0, 0)
     )
 
     stencil_example(field_a, field_b, field_c, result, alpha=0.5)
 
 
-The ``default_origin`` parameter plays two roles:
+The ``aligned_index`` specifies that the array is to be allocated such that memory address of the point specified in
+``aligned_index`` is `aligned` to a backend-dependent value. For optimal performance, you set the ``algined_index`` to
+a point which is the lower-left corner of the iteration domain most frequently used for this field.
 
-#. The data is allocated such that memory address of the point specified in ``default_origin`` is `aligned` to a
-   backend-dependent value. For optimal performance, you set the ``default_origin`` to a point which is the
-   lower-left corner of the iteration domain most frequently used for this storage.
+----------------
+Array Interfaces
+----------------
 
-#. If when calling the stencil, no other `origin` is specified, this value is where the `iteration domain` begins, i.e.
-   the grid point with the lowest index where a value is written.
+When passing buffers to stencils, they can be in any form that is compatible with ``np.asarray`` or ``cp.asarray``,
+respectively. Some meta information can be provided to describe the correspondence between array dimensions and
+their semantic meaning (e.g. IJK) as well as to specify the correspondence. Also, an index can be designated as the
+`origin` of the array to denote the start of the index range considered to be the `iteration domain`. Specifically, the
+behavior is as follows:
+
+#. Dimensions can be denoted by adding a ``__gt_dims__`` attribute to the buffer object. It should be a tuple of strings
+   where currently valid dimensions are ``"I", "J", "K"`` as well as string representations of integers to represent
+   data dimensions, i.e. the dimensions of vector, matrices or higher tensors per grid point. If ``__gt_dims__`` is not
+   present, the dimensions specified in the ``Field`` annotation of functions serves as a default.
+#. The origin can be specified with the ``__gt_origin__`` attribute, which is a tuple of ``int`` s. If when calling the
+   stencil, no other `origin` is specified, this value is where the `iteration domain` begins, i.e. the grid point with
+   the lowest index where a value is written. The explicit ``origin`` keyword when calling a stencil takes priority over
+   this.
 
 --------------------------
 Computations and Intervals
