@@ -24,6 +24,7 @@ Writing a new ADR is simple:
 - [0001 - Field View Frontend Design](0001-Field_View_Frontend_Design.md)
 - [0002 - Field View Lowering](0002-Field_View_Lowering.md)
 - [0010 - Domain in Field View](0010-Domain_in_Field_View.md)
+- [0011 - Scalar vs 0d-Fields](0011-Scalar_vs_0d_Fields.md)
 
 ### Iterator IR #iterator
 - [0003 - Iterator View Tuple Support for Fields](0003-Iterator_View_Tuple_Support_for_Fields.md)
