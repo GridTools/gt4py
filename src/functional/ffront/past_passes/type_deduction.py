@@ -29,7 +29,7 @@ def check_tuple_args(tuple_param: past.TupleExpr):
             raise GTTypeError("Either only domain or slicing allowed")
 
 
-def validate_call_params(new_func: past.Name, new_kwargs: dict):
+def _validate_call_params(new_func: past.Name, new_kwargs: dict):
     """
     Perform checks for domain and output field types.
 
