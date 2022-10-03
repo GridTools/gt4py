@@ -26,7 +26,7 @@ import types
 import typing
 import warnings
 from collections.abc import Callable, Iterable
-from typing import Generic, SupportsFloat, SupportsInt, TypeAlias, TypeVar
+from typing import Generic, SupportsFloat, SupportsInt, Type, TypeAlias, TypeVar
 
 import numpy as np
 from devtools import debug
@@ -88,13 +88,11 @@ def _get_closure_vars_recursively(closure_vars: dict[str, Any]) -> dict[str, Any
                         f"Collisions: {'`,  `'.join(collisions)}"
                     )
 
-                all_closure_vars = collections.ChainMap(
-                    all_closure_vars, all_child_closure_vars
-                )
+                all_closure_vars = collections.ChainMap(all_closure_vars, all_child_closure_vars)
     return dict(all_closure_vars)
 
 
-def _filter_closure_vars_by_type(closure_vars: dict[str, Any], *types) -> dict[str, Any]:
+def _filter_closure_vars_by_type(closure_vars: dict[str, Any], *types: Type) -> dict[str, Any]:
     return {name: value for name, value in closure_vars.items() if isinstance(value, types)}
 
 
