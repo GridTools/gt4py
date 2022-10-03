@@ -63,7 +63,7 @@ def _validate_call_params(new_func: past.Name, new_kwargs: dict):
         for domain_keys in domain_kwarg.keys_:
             if not isinstance(domain_keys.type, ct.DimensionType):
                 raise GTTypeError(
-                    f"Only Dimension allowed in domain dictionary keys, but got `{domain_keys.type}`."
+                    f"Only Dimension allowed in domain dictionary keys, but got `{domain_keys}` which is of type `{domain_keys.type}`."
                 )
         for domain_values in domain_kwarg.values_:
             if len(domain_values.elts) != 2:
