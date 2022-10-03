@@ -1104,6 +1104,7 @@ def test_docstring():
 
     test_docstring(a, offset_provider={})
 
+
 def test_set_values_at_call(fieldview_backend):
     size = 10
     a = np_as_located_field(IDim, JDim)(np.ones((size, size)))
@@ -1111,7 +1112,10 @@ def test_set_values_at_call(fieldview_backend):
     c = np_as_located_field(IDim, JDim)(np.ones((size, size)))
 
     @field_operator(backend=fieldview_backend)
-    def fieldop_vals(a: Field[[IDim, JDim], float64], b: Field[[IDim, JDim], float64]) -> Field[[JDim, IDim], float64]:
+    def fieldop_vals(
+        a: Field[[IDim, JDim], float64], b: Field[[IDim, JDim], float64]
+    ) -> Field[[JDim, IDim], float64]:
         d = a + b
         return d
+
     fieldop_vals(a, b, out=c, offset_provider={})

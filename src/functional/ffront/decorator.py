@@ -439,6 +439,13 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
             **operator_attribute_nodes,
         )
         foast_node = FieldOperatorTypeDeduction.apply(untyped_foast_node)
+        return_dims = symbol_makers.make_symbol_type_from_typing(
+            captured_vars.annotations["return"]
+        )
+        if return_dims != foast_node.type.definition.returns:
+            raise GTTypeError(
+                f"Specified return field dimensions and return type do not match, expected {return_dims}, but got {foast_node.type.definition.returns}"
+            )
         return cls(
             foast_node=foast_node,
             captured_vars=captured_vars,
@@ -487,12 +494,6 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         param_sym_uids = UIDGenerator()  # use a new UID generator to allow caching
 
         type_ = self.__gt_type__()
-
-        return_dims = typing.get_args(self.captured_vars.annotations["return"])[0]
-        if return_dims != type_.definition.returns.dims:
-            raise GTTypeError(
-                f"Specified return field dimensions and return type do not match, expected {return_dims}, but got {type_.definition.returns.dims}"
-            )
 
         params_decl: list[past.Symbol] = [
             past.DataSymbol(
