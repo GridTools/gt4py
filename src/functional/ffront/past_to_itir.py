@@ -177,7 +177,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
     def _construct_itir_domain_arg(
         self,
         out_field: past.Name,
-        node_domain: past.Dict | None,
+        node_domain: Optional[past.Dict],
         slices: Optional[list[past.Slice]] = None,
     ):
         domain_args = []
