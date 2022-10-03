@@ -60,7 +60,7 @@ def _validate_call_params(new_func: past.Name, new_kwargs: dict):
                 f"Only Dictionaries allowed in domain, but got `{type(domain_kwarg)}`."
             )
 
-        for domain_keys in domain_kwarg.keys_:
+        for dim in domain_kwarg.keys_:
             if not isinstance(domain_keys.type, ct.DimensionType):
                 raise GTTypeError(
                     f"Only Dimension allowed in domain dictionary keys, but got `{domain_keys}` which is of type `{domain_keys.type}`."
