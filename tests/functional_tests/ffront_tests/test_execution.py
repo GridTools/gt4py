@@ -1114,5 +1114,4 @@ def test_set_values_at_call(fieldview_backend):
     def fieldop_vals(a: Field[[IDim, JDim], float64], b: Field[[IDim, JDim], float64]) -> Field[[JDim, IDim], float64]:
         d = a + b
         return d
-    #common_types, arguments in field should not be a list anymore but also a dictionary
     fieldop_vals(a, b, out=c, offset_provider={})

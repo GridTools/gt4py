@@ -109,7 +109,7 @@ class FieldType(DataType, CallableType):
 
 @dataclass(frozen=True)
 class FunctionType(SymbolType, CallableType):
-    args: list[DataType | DeferredSymbolType] | dict[str, DataType | DeferredSymbolType]
+    args: list[DataType | DeferredSymbolType]
     kwargs: dict[str, DataType | DeferredSymbolType]
     returns: DataType | DeferredSymbolType | VoidType
 
