@@ -66,32 +66,32 @@ DEFAULT_BACKEND: Callable = roundtrip.executor
 
 
 def _get_closure_vars_recursively(closure_vars: dict[str, Any]) -> dict[str, Any]:
-    recursive_closure_vars = collections.ChainMap(closure_vars)
+    all_closure_vars = collections.ChainMap(closure_vars)
 
-    for value in closure_vars.values():
-        if isinstance(value, GTCallable):
+    for closure_var in closure_vars.values():
+        if isinstance(closure_var, GTCallable):
             # if the closure ref has closure refs by itself, also add them
-            if vars_of_val := value.__gt_closure_vars__():
-                recursive_vars_of_val = _get_closure_vars_recursively(vars_of_val)
+            if child_closure_vars := closure_var.__gt_closure_vars__():
+                all_child_closure_vars = _get_closure_vars_recursively(child_closure_vars)
 
                 collisions: list[str] = []
-                for potential_collision in set(closure_vars) & set(recursive_vars_of_val):
+                for potential_collision in set(closure_vars) & set(all_child_closure_vars):
                     if (
                         closure_vars[potential_collision]
-                        != recursive_vars_of_val[potential_collision]
+                        != all_child_closure_vars[potential_collision]
                     ):
                         collisions.append(potential_collision)
                 if collisions:
                     raise NotImplementedError(
-                        f"Using closure vars with same name, but different value "
+                        f"Using closure vars with same name but different value "
                         f"across functions is not implemented yet. \n"
                         f"Collisions: {'`,  `'.join(collisions)}"
                     )
 
-                recursive_closure_vars = collections.ChainMap(
-                    recursive_closure_vars, recursive_vars_of_val
+                all_closure_vars = collections.ChainMap(
+                    all_closure_vars, all_child_closure_vars
                 )
-    return dict(recursive_closure_vars)
+    return dict(all_closure_vars)
 
 
 def _filter_closure_vars_by_type(closure_vars: dict[str, Any], *types) -> dict[str, Any]:
