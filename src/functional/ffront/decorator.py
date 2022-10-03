@@ -180,7 +180,7 @@ class Program:
 
     def __post_init__(self):
         closure_var_functions = _filter_closure_vars_by_type(self.closure_vars, GTCallable)
-        if not all(name == func.__gt_itir__().id for name, func in closure_var_functions.items()):
+        if any(name != func.__gt_itir__().id for name, func in closure_var_functions.items()):
             raise RuntimeError(
                 "The symbol name and the name of the function identified by the symbol are not equal."
             )
