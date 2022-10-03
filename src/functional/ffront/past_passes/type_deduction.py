@@ -16,7 +16,7 @@ from functional.common import GTTypeError
 from functional.ffront import common_types as ct, program_ast as past, type_info
 
 
-def check_tuple_args(tuple_param: past.TupleExpr):
+def _check_tuple_args(tuple_param: past.TupleExpr):
     """
     Unfold tuple and check that all arguments are of type past.Name.
 
