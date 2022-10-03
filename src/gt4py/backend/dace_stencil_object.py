@@ -23,10 +23,35 @@ import dace.data
 import dace.frontend.python.common
 from dace.frontend.python.common import SDFGClosure, SDFGConvertible
 
+from gt4py import backend as gt_backend
 from gt4py.backend.dace_backend import freeze_origin_domain_sdfg
 from gt4py.definitions import AccessKind, DomainInfo, FieldInfo
 from gt4py.stencil_object import FrozenStencil, StencilObject
 from gt4py.utils import shash
+
+
+@dataclass
+class _ArgsInfo:
+    device: str
+    array: dace.data.Array
+    origin: Optional[Tuple[int]] = None
+    dimensions: Optional[Tuple[str]] = None
+
+
+def _extract_array_infos(field_args, device) -> Dict[str, _ArgsInfo]:
+    return {
+        name: _ArgsInfo(
+            array=arg,
+            dimensions=getattr(arg, "__gt_dims__", None),
+            device=device,
+            origin=getattr(arg, "__gt_origin__", None),
+        )
+        for name, arg in field_args.items()
+    }
+
+
+def _extract_stencil_arrays(array_infos: Dict[str, _ArgsInfo]):
+    return {name: info.array for name, info in array_infos.items()}
 
 
 def add_optional_fields(
@@ -143,6 +168,7 @@ class DaCeStencilObject(StencilObject, SDFGConvertible):
         arg_names, _ = self.__sdfg_signature__()
         norm_kwargs = DaCeStencilObject.normalize_args(
             *args,
+            backend=self.backend,
             arg_names=arg_names,
             domain_info=self.domain_info,
             field_info=self.field_info,
@@ -169,6 +195,7 @@ class DaCeStencilObject(StencilObject, SDFGConvertible):
     @staticmethod
     def normalize_args(
         *args,
+        backend: str,
         arg_names: Iterable[str],
         domain_info: DomainInfo,
         field_info: Dict[str, FieldInfo],
@@ -180,18 +207,15 @@ class DaCeStencilObject(StencilObject, SDFGConvertible):
         args_as_kwargs = {
             name: (kwargs[name] if name in kwargs else next(args_iter)) for name in arg_names
         }
+        arg_infos = _extract_array_infos(
+            field_args=args_as_kwargs,
+            device=gt_backend.from_name(backend).storage_info["device"],
+        )
 
-        if origin is not None:
-            # This is needed because the keys in origin are StringLiteral as of DaCe v0.14, and they
-            # do not implement comparison methods. Revert this once DaCe is updated.
-            # See: https://github.com/GridTools/gt4py/issues/927
-            origin = {str(k): v for k, v in origin.items()}
-        origin = DaCeStencilObject._normalize_origins(args_as_kwargs, field_info, origin)
+        origin = DaCeStencilObject._normalize_origins(arg_infos, field_info, origin)
 
         if domain is None:
-            domain = DaCeStencilObject._get_max_domain(
-                args_as_kwargs, domain_info, field_info, origin
-            )
+            domain = DaCeStencilObject._get_max_domain(arg_infos, domain_info, field_info, origin)
         for key, value in kwargs.items():
             args_as_kwargs.setdefault(key, value)
         args_as_kwargs["domain"] = domain

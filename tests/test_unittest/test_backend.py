@@ -17,7 +17,6 @@ from typing import Any, Dict
 import numpy as np
 import pytest
 
-import gt4py.backend as gt_backend
 from gt4py.backend import REGISTRY as backend_registry
 from gt4py.backend.module_generator import make_args_data_from_gtir
 from gt4py.definitions import AccessKind
@@ -106,43 +105,6 @@ def test_make_args_data_from_gtir(backend_name, mode):
         else:
             access = AccessKind.NONE
         assert param_info.access == access
-
-
-@pytest.mark.parametrize("backend_name", ALL_BACKENDS)
-@pytest.mark.parametrize("mode", (0, 1, 2))
-def test_generate_pre_run(backend_name, mode):
-    backend_cls = backend_registry[backend_name]
-    builder = StencilBuilder(stencil_def, backend=backend_cls).with_externals({"MODE": mode})
-    args_data = make_args_data_from_gtir(builder.gtir_pipeline)
-
-    module_generator = backend_cls.MODULE_GENERATOR_CLASS()
-    module_generator.args_data = args_data
-    source = module_generator.generate_pre_run()
-
-    if gt_backend.from_name(backend_name).storage_info["device"] == "cpu":
-        assert source == ""
-    else:
-        for key in field_info_val[mode]:
-            assert f"{key}.host_to_device()" in source
-        for key in unreferenced_val[mode]:
-            assert f"{key}.host_to_device()" not in source
-
-
-@pytest.mark.parametrize("backend_name", ALL_BACKENDS)
-@pytest.mark.parametrize("mode", (0, 1, 2))
-def test_generate_post_run(backend_name, mode):
-    backend_cls = backend_registry[backend_name]
-    builder = StencilBuilder(stencil_def, backend=backend_cls).with_externals({"MODE": mode})
-    args_data = make_args_data_from_gtir(builder.gtir_pipeline)
-
-    module_generator = backend_cls.MODULE_GENERATOR_CLASS()
-    module_generator.args_data = args_data
-    source = module_generator.generate_post_run()
-
-    if gt_backend.from_name(backend_name).storage_info["device"] == "cpu":
-        assert source == ""
-    else:
-        assert source == "out._set_device_modified()"
 
 
 @pytest.mark.parametrize("backend_name", GPU_BACKENDS)

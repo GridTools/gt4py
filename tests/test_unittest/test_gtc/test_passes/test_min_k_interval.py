@@ -172,13 +172,13 @@ def test_k_bounds_exec(definition, expected):
         compiled_stencil = stencil(backend, definition)
         field_a = gt4py.storage.zeros(
             backend=backend,
-            default_origin=(0, 0, 0),
+            aligned_index=(0, 0, 0),
             shape=(1, 1, expected_min_k_size),
             dtype=np.float64,
         )
         field_b = gt4py.storage.ones(
             backend=backend,
-            default_origin=(0, 0, 0),
+            aligned_index=(0, 0, 0),
             shape=(1, 1, required_field_size),
             dtype=np.float64,
         )
