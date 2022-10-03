@@ -275,6 +275,6 @@ def test_dimensions_domain():
 
     with pytest.raises(
         GTTypeError,
-        match=(r"Dimensions in out field and field domain are not equivalent"),
+        match=(r"Dimensions in out field and domain are not equivalent"),
     ):
         empty_domain_program(a, out_field, offset_provider={})
