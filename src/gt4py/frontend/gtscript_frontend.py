@@ -1652,10 +1652,8 @@ class GTScriptParser(ast.NodeVisitor):
             canonical_ast=canonical_ast,
             nonlocals=nonlocal_symbols,
             imported=imported_symbols,
+            externals=resolved_externals if externals else {},
         )
-
-        if externals:
-            definition._gtscript_["externals"] = resolved_externals
 
         return definition
 
