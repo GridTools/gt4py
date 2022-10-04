@@ -16,6 +16,7 @@ from __future__ import annotations
 import ast
 import collections
 from dataclasses import dataclass
+from typing import cast
 
 from functional.ffront import common_types, program_ast as past, symbol_makers
 from functional.ffront.dialect_parser import DialectParser, DialectSyntaxError
@@ -75,6 +76,13 @@ class ProgramParser(DialectParser[past.Program]):
 
     def visit_Name(self, node: ast.Name) -> past.Name:
         return past.Name(id=node.id, location=self._make_loc(node))
+
+    def visit_Dict(self, node: ast.Dict) -> past.Dict:
+        return past.Dict(
+            keys_=[self.visit(cast(ast.AST, param)) for param in node.keys],
+            values_=[self.visit(param) for param in node.values],
+            location=self._make_loc(node),
+        )
 
     def visit_Call(self, node: ast.Call) -> past.Call:
         new_func = self.visit(node.func)

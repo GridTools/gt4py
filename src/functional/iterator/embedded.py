@@ -374,6 +374,11 @@ Domain: TypeAlias = CartesianDomain | UnstructuredDomain | dict[str | Dimension,
 
 @builtins.named_range.register(EMBEDDED)
 def named_range(tag: Tag | Dimension, start: int, end: int) -> NamedRange:
+    # TODO revisit this pattern after the discussion of 0d-field vs scalar
+    if isinstance(start, ConstantField):
+        start = start.value
+    if isinstance(end, ConstantField):
+        end = end.value
     return (tag, range(start, end))
 
 
