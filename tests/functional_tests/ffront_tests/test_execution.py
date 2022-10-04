@@ -821,7 +821,7 @@ def test_tuple_return_2(reduction_setup):
     @field_operator
     def reduction_tuple(
         a: Field[[Edge], int64], b: Field[[Edge], int64]
-    ) -> tuple[Field[[Vertex], int64], Field[[Vertex], int64], int64]:
+    ) -> tuple[Field[[Vertex], int64], Field[[Vertex], int64]]:
         a = neighbor_sum(a(V2E), axis=V2EDim)
         b = neighbor_sum(b(V2E), axis=V2EDim)
         return a, b
@@ -937,7 +937,7 @@ def test_solve_triag(fieldview_backend):
         b: Field[[IDim, JDim, KDim], float],
         c: Field[[IDim, JDim, KDim], float],
         d: Field[[IDim, JDim, KDim], float],
-    ):
+    ) -> Field[[IDim, JDim, KDim], float]:
         cp, dp = tridiag_forward(a, b, c, d)
         return tridiag_backward(cp, dp)
 
