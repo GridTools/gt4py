@@ -288,7 +288,7 @@ def test_set_values_at_call():
     ADim = Dimension("ADim")
     BDim = Dimension("BDim")
 
-    def bad_dim_where(a: Field[[ADim], float64]) -> Field[[BDim], float64]:
+    def wrong_return_type_annotation(a: Field[[ADim], float64]) -> Field[[BDim], float64]:
         return a
 
     with pytest.raises(
