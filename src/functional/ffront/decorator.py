@@ -206,19 +206,17 @@ class Program:
         )
 
     @functools.cached_property
-    def closure_vars_recursive(self) -> dict[str, Any]:
+    def _all_closure_vars(self) -> dict[str, Any]:
         return _get_closure_vars_recursively(self.closure_vars)
 
     @functools.cached_property
     def itir(self) -> itir.FencilDefinition:
         dims_and_offsets_used = _filter_closure_vars_by_type(
-            self.closure_vars_recursive, FieldOffset, Dimension
+            self._all_closure_vars, FieldOffset, Dimension
         )
         grid_type = _deduce_grid_type(self.grid_type, dims_and_offsets_used.values())
 
-        gt_callables = _filter_closure_vars_by_type(
-            self.closure_vars_recursive, GTCallable
-        ).values()
+        gt_callables = _filter_closure_vars_by_type(self._all_closure_vars, GTCallable).values()
         lowered_funcs = [gt_callable.__gt_itir__() for gt_callable in gt_callables]
         return ProgramLowering.apply(
             self.past_node, function_definitions=lowered_funcs, grid_type=grid_type
@@ -313,7 +311,7 @@ class Program:
         #  this mapping to provide good error messages.
         scanops_per_axis: dict[Dimension, str] = {}
         for name, gt_callable in _filter_closure_vars_by_type(
-            self.closure_vars_recursive, GTCallable
+            self._all_closure_vars, GTCallable
         ).items():
             if isinstance((type_ := gt_callable.__gt_type__()), ct.ScanOperatorType):
                 scanops_per_axis.setdefault(type_.axis, []).append(name)
@@ -442,7 +440,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
     def with_backend(self, backend: FencilExecutor) -> FieldOperator:
         return FieldOperator(
             foast_node=self.foast_node,
-            captured_vars=self.captured_vars,
+            closure_vars=self.closure_vars,
             backend=backend,
             definition=self.definition,  # type: ignore[arg-type]  # mypy wrongly deduces definition as method here
         )
