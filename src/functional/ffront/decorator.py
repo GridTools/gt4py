@@ -439,13 +439,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
             **operator_attribute_nodes,
         )
         foast_node = FieldOperatorTypeDeduction.apply(untyped_foast_node)
-        return_dims = symbol_makers.make_symbol_type_from_typing(
-            captured_vars.annotations["return"]
-        )
-        if return_dims != foast_node.type.definition.returns:
-            raise GTTypeError(
-                f"Specified return field dimensions and return type do not match, expected {return_dims}, but got {foast_node.type.definition.returns}"
-            )
+
         return cls(
             foast_node=foast_node,
             captured_vars=captured_vars,

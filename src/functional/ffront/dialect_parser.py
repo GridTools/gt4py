@@ -120,7 +120,8 @@ class DialectParser(ast.NodeVisitor, Generic[DialectRootT]):
                     source_definition=source_definition,
                     captured_vars=captured_vars,
                     externals_defs=externals or {},
-                ).visit(cls._preprocess_definition_ast(definition_ast))
+                ).visit(cls._preprocess_definition_ast(definition_ast)),
+                captured_vars,
             )
             if __debug__:
                 _assert_source_invariants(source_definition, captured_vars)
