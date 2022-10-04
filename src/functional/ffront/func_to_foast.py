@@ -104,7 +104,6 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
         )
         # TODO(tehrengruber): use `type_info.return_type` when the type of the
         #  arguments becomes available here
-        foast_type = FieldOperatorTypeDeduction.apply(dialect_ast)
         if annotated_return_type != foast_type.type.returns:
             raise common.GTTypeError(
                 f"Annotated return type does not match deduced return type. Expected `{foast_type.type.returns}`, but got `{annotated_return_type}`."
