@@ -493,6 +493,9 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         )
         out_ref = past.Name(id="out", location=loc)
 
+        if self.foast_node.id in self.closure_vars:
+            # Can be resolved by renaming the field operator to something unique.
+            raise NotImplementedError("A closure variable has the same name as the field operator itself.")
         closure_vars = {self.foast_node.id: self, **self.closure_vars}
         closure_symbols = [
             past.Symbol(
