@@ -284,7 +284,7 @@ def test_external_symbols():
     assert "ext_unused" not in parsed.annex.symtable
 
 
-def test_set_values_at_call():
+def test_wrong_return_type_annotation():
     ADim = Dimension("ADim")
     BDim = Dimension("BDim")
 
