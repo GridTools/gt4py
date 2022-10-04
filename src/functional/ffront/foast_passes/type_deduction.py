@@ -113,7 +113,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             id=node.id,
             params=new_params,
             body=new_body,
-            closure_symbols=self.visit(node.closure_symbols, **kwargs),
+            closure_vars=self.visit(node.closure_vars, **kwargs),
             type=new_type,
             location=node.location,
         )

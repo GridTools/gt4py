@@ -26,7 +26,7 @@ import types
 import typing
 import warnings
 from collections.abc import Callable, Iterable
-from typing import Generic, SupportsFloat, SupportsInt, Type, TypeAlias, TypeVar
+from typing import Generic, SupportsFloat, SupportsInt, TypeAlias, TypeVar
 
 import numpy as np
 from devtools import debug
@@ -92,7 +92,7 @@ def _get_closure_vars_recursively(closure_vars: dict[str, Any]) -> dict[str, Any
     return dict(all_closure_vars)
 
 
-def _filter_closure_vars_by_type(closure_vars: dict[str, Any], *types: Type) -> dict[str, Any]:
+def _filter_closure_vars_by_type(closure_vars: dict[str, Any], *types: type) -> dict[str, Any]:
     return {name: value for name, value in closure_vars.items() if isinstance(value, types)}
 
 
@@ -178,9 +178,14 @@ class Program:
 
     def __post_init__(self):
         closure_var_functions = _filter_closure_vars_by_type(self.closure_vars, GTCallable)
-        if any(name != func.__gt_itir__().id for name, func in closure_var_functions.items()):
+        misnamed_functions = [
+            f"{name} vs. {func.id}"
+            for name, func in closure_var_functions.items()
+            if name != func.__gt_itir__().id
+        ]
+        if misnamed_functions:
             raise RuntimeError(
-                "The symbol name and the name of the function identified by the symbol are not equal."
+                f"The following symbols resolve to a function with a mismatching name: {','.join(misnamed_functions)}"
             )
 
         undefined_symbols = [
@@ -207,10 +212,10 @@ class Program:
 
     @functools.cached_property
     def itir(self) -> itir.FencilDefinition:
-        dimensions_used = _filter_closure_vars_by_type(
+        dims_and_offsets_used = _filter_closure_vars_by_type(
             self.closure_vars_recursive, FieldOffset, Dimension
         )
-        grid_type = _deduce_grid_type(self.grid_type, dimensions_used.values())
+        grid_type = _deduce_grid_type(self.grid_type, dims_and_offsets_used.values())
 
         gt_callables = _filter_closure_vars_by_type(
             self.closure_vars_recursive, GTCallable
@@ -309,7 +314,7 @@ class Program:
         #  this mapping to provide good error messages.
         scanops_per_axis: dict[Dimension, str] = {}
         for name, gt_callable in _filter_closure_vars_by_type(
-            self.closure_vars, GTCallable
+            self.closure_vars_recursive, GTCallable
         ).items():
             if isinstance((type_ := gt_callable.__gt_type__()), ct.ScanOperatorType):
                 scanops_per_axis.setdefault(type_.axis, []).append(name)

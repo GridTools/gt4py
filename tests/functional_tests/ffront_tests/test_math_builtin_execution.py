@@ -60,7 +60,7 @@ def make_builtin_field_operator(builtin_name: str):
     ]
     args = [foast.Name(id=k, location=loc) for k, _ in annotations.items() if k != "return"]
 
-    closure_symbols = [
+    closure_var_symbols = [
         foast.Symbol(
             id=name,
             type=symbol_makers.make_symbol_type_from_value(val),
@@ -85,7 +85,7 @@ def make_builtin_field_operator(builtin_name: str):
                     location=loc,
                 )
             ],
-            closure_symbols=closure_symbols,
+            closure_vars=closure_var_symbols,
             params=params,
             location=loc,
         ),

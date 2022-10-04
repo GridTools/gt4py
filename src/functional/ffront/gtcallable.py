@@ -13,7 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 import abc
 import typing
-from typing import Any
+from typing import Any, Optional
 
 from functional.ffront import common_types as ct
 from functional.iterator import ir as itir
@@ -28,7 +28,7 @@ class GTCallable(typing.Protocol):
     from ``ffront`` programs or operators.
     """
 
-    def __gt_closure_vars__(self) -> typing.Optional[dict[str, Any]]:
+    def __gt_closure_vars__(self) -> Optional[dict[str, Any]]:
         """
         Return all external variables referenced inside the callable.
 
