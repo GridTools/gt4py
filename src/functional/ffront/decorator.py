@@ -211,10 +211,10 @@ class Program:
 
     @functools.cached_property
     def itir(self) -> itir.FencilDefinition:
-        dims_and_offsets_used = _filter_closure_vars_by_type(
+        offsets_and_dimensions = _filter_closure_vars_by_type(
             self._all_closure_vars, FieldOffset, Dimension
         )
-        grid_type = _deduce_grid_type(self.grid_type, dims_and_offsets_used.values())
+        grid_type = _deduce_grid_type(self.grid_type, offsets_and_dimensions.values())
 
         gt_callables = _filter_closure_vars_by_type(self._all_closure_vars, GTCallable).values()
         lowered_funcs = [gt_callable.__gt_itir__() for gt_callable in gt_callables]
