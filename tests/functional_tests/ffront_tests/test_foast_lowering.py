@@ -50,7 +50,7 @@ def debug_itir(tree):
 
 
 def test_copy():
-    def copy_field(inp: Field[..., float64]):
+    def copy_field(inp: Field[..., float64]) -> Field[..., float64]:
         return inp
 
     # ast_passes
@@ -77,7 +77,9 @@ def test_scalar_arg():
 
 
 def test_multicopy():
-    def multicopy(inp1: Field[[IDim], float64], inp2: Field[[IDim], float64]):
+    def multicopy(
+        inp1: Field[[IDim], float64], inp2: Field[[IDim], float64]
+    ) -> tuple[Field[[IDim], float64], Field[[IDim], float64]]:
         return inp1, inp2
 
     parsed = FieldOperatorParser.apply_to_function(multicopy)
@@ -93,7 +95,9 @@ def test_multicopy():
 
 
 def test_arithmetic():
-    def arithmetic(inp1: Field[[IDim], float64], inp2: Field[[IDim], float64]):
+    def arithmetic(
+        inp1: Field[[IDim], float64], inp2: Field[[IDim], float64]
+    ) -> Field[[IDim], float64]:
         return inp1 + inp2
 
     # ast_passes
@@ -112,7 +116,7 @@ def test_arithmetic():
 def test_shift():
     Ioff = FieldOffset("Ioff", source=IDim, target=(IDim,))
 
-    def shift_by_one(inp: Field[[IDim], float64]):
+    def shift_by_one(inp: Field[[IDim], float64]) -> Field[[IDim], float64]:
         return inp(Ioff[1])
 
     # ast_passes
@@ -127,7 +131,7 @@ def test_shift():
 def test_negative_shift():
     Ioff = FieldOffset("Ioff", source=IDim, target=(IDim,))
 
-    def shift_by_one(inp: Field[[IDim], float64]):
+    def shift_by_one(inp: Field[[IDim], float64]) -> Field[[IDim], float64]:
         return inp(Ioff[-1])
 
     # ast_passes
@@ -140,7 +144,7 @@ def test_negative_shift():
 
 
 def test_temp_assignment():
-    def copy_field(inp: Field[..., float64]):
+    def copy_field(inp: Field[..., float64]) -> Field[..., float64]:
         tmp = inp
         inp = tmp
         tmp2 = inp
@@ -157,7 +161,7 @@ def test_temp_assignment():
 
 
 def test_unary_ops():
-    def unary(inp: Field[..., float64]):
+    def unary(inp: Field[..., float64]) -> Field[..., float64]:
         tmp = +inp
         tmp = -tmp
         return tmp
@@ -181,7 +185,7 @@ def test_unary_ops():
 def test_unpacking():
     """Unpacking assigns should get separated."""
 
-    def unpacking(inp1: Field[..., float64], inp2: Field[..., float64]):
+    def unpacking(inp1: Field[..., float64], inp2: Field[..., float64]) -> Field[..., float64]:
         tmp1, tmp2 = inp1, inp2  # noqa
         return tmp1
 
@@ -205,7 +209,7 @@ def test_unpacking():
 
 
 def test_annotated_assignment():
-    def copy_field(inp: Field[..., float64]):
+    def copy_field(inp: Field[..., float64]) -> Field[..., float64]:
         tmp: Field[..., float64] = inp
         return tmp
 
@@ -242,7 +246,9 @@ def test_call():
 def test_temp_tuple():
     """Returning a temp tuple should work."""
 
-    def temp_tuple(a: Field[..., float64], b: Field[..., int64]):
+    def temp_tuple(
+        a: Field[..., float64], b: Field[..., int64]
+    ) -> tuple[Field[..., float64], Field[..., int64]]:
         tmp = a, b
         return tmp
 
@@ -258,7 +264,7 @@ def test_temp_tuple():
 
 
 def test_unary_not():
-    def unary_not(cond: Field[..., "bool"]):
+    def unary_not(cond: Field[..., "bool"]) -> Field[..., "bool"]:
         return not cond
 
     parsed = FieldOperatorParser.apply_to_function(unary_not)
@@ -270,7 +276,7 @@ def test_unary_not():
 
 
 def test_binary_plus():
-    def plus(a: Field[..., float64], b: Field[..., float64]):
+    def plus(a: Field[..., float64], b: Field[..., float64]) -> Field[..., float64]:
         return a + b
 
     parsed = FieldOperatorParser.apply_to_function(plus)
@@ -317,7 +323,7 @@ def test_add_scalar_literals():
 
 
 def test_binary_mult():
-    def mult(a: Field[..., float64], b: Field[..., float64]):
+    def mult(a: Field[..., float64], b: Field[..., float64]) -> Field[..., float64]:
         return a * b
 
     parsed = FieldOperatorParser.apply_to_function(mult)
@@ -331,7 +337,7 @@ def test_binary_mult():
 
 
 def test_binary_minus():
-    def minus(a: Field[..., float64], b: Field[..., float64]):
+    def minus(a: Field[..., float64], b: Field[..., float64]) -> Field[..., float64]:
         return a - b
 
     parsed = FieldOperatorParser.apply_to_function(minus)
@@ -345,7 +351,7 @@ def test_binary_minus():
 
 
 def test_binary_div():
-    def division(a: Field[..., float64], b: Field[..., float64]):
+    def division(a: Field[..., float64], b: Field[..., float64]) -> Field[..., float64]:
         return a / b
 
     parsed = FieldOperatorParser.apply_to_function(division)
@@ -359,7 +365,7 @@ def test_binary_div():
 
 
 def test_binary_and():
-    def bit_and(a: Field[..., "bool"], b: Field[..., "bool"]):
+    def bit_and(a: Field[..., "bool"], b: Field[..., "bool"]) -> Field[..., "bool"]:
         return a & b
 
     parsed = FieldOperatorParser.apply_to_function(bit_and)
@@ -387,7 +393,7 @@ def test_scalar_and():
 
 
 def test_binary_or():
-    def bit_or(a: Field[..., "bool"], b: Field[..., "bool"]):
+    def bit_or(a: Field[..., "bool"], b: Field[..., "bool"]) -> Field[..., "bool"]:
         return a | b
 
     parsed = FieldOperatorParser.apply_to_function(bit_or)
@@ -413,7 +419,7 @@ def test_compare_scalars():
 
 
 def test_compare_gt():
-    def comp_gt(a: Field[..., float64], b: Field[..., float64]):
+    def comp_gt(a: Field[..., float64], b: Field[..., float64]) -> Field[..., bool]:
         return a > b
 
     parsed = FieldOperatorParser.apply_to_function(comp_gt)
@@ -427,7 +433,7 @@ def test_compare_gt():
 
 
 def test_compare_lt():
-    def comp_lt(a: Field[..., float64], b: Field[..., float64]):
+    def comp_lt(a: Field[..., float64], b: Field[..., float64]) -> Field[..., bool]:
         return a < b
 
     parsed = FieldOperatorParser.apply_to_function(comp_lt)
@@ -441,7 +447,7 @@ def test_compare_lt():
 
 
 def test_compare_eq():
-    def comp_eq(a: Field[..., "int64"], b: Field[..., "int64"]):
+    def comp_eq(a: Field[..., "int64"], b: Field[..., "int64"]) -> Field[..., bool]:
         return a == b
 
     parsed = FieldOperatorParser.apply_to_function(comp_eq)
@@ -486,7 +492,7 @@ def test_compare_chain():
 
 
 def test_reduction_lowering_simple():
-    def reduction(edge_f: Field[[Edge], float64]):
+    def reduction(edge_f: Field[[Edge], float64]) -> Field[[Vertex], float64]:
         return neighbor_sum(edge_f(V2E), axis=V2EDim)
 
     parsed = FieldOperatorParser.apply_to_function(reduction)
@@ -505,7 +511,9 @@ def test_reduction_lowering_simple():
 
 
 def test_reduction_lowering_expr():
-    def reduction(e1: Field[[Edge], float64], e2: Field[[Vertex, V2EDim], float64]):
+    def reduction(
+        e1: Field[[Edge], float64], e2: Field[[Vertex, V2EDim], float64]
+    ) -> Field[[Vertex], float64]:
         e1_nbh = e1(V2E)
         return neighbor_sum(1.1 * (e1_nbh + e2), axis=V2EDim)
 
@@ -534,7 +542,15 @@ def test_reduction_lowering_expr():
 
 
 def test_builtin_int_constructors():
-    def int_constrs() -> tuple[Field[[], int], ...]:
+    def int_constrs() -> tuple[
+        Field[[], int],
+        Field[[], int],
+        Field[[], int32],
+        Field[[], int64],
+        Field[[], int],
+        Field[[], int32],
+        Field[[], int64],
+    ]:
         return 1, int(1), int32(1), int64(1), int("1"), int32("1"), int64("1")
 
     parsed = FieldOperatorParser.apply_to_function(int_constrs)
@@ -554,7 +570,15 @@ def test_builtin_int_constructors():
 
 
 def test_builtin_float_constructors():
-    def float_constrs() -> tuple[Field[[], float], ...]:
+    def float_constrs() -> tuple[
+        Field[[], float],
+        Field[[], float],
+        Field[[], float32],
+        Field[[], float64],
+        Field[[], float],
+        Field[[], float32],
+        Field[[], float64],
+    ]:
         return (
             0.1,
             float(0.1),
@@ -582,7 +606,16 @@ def test_builtin_float_constructors():
 
 
 def test_builtin_bool_constructors():
-    def bool_constrs() -> tuple[Field[[], bool], ...]:
+    def bool_constrs() -> tuple[
+        Field[[], bool],
+        Field[[], bool],
+        Field[[], bool],
+        Field[[], bool],
+        Field[[], bool],
+        Field[[], bool],
+        Field[[], bool],
+        Field[[], bool],
+    ]:
         return True, False, bool(True), bool(False), bool(0), bool(5), bool("True"), bool("False")
 
     parsed = FieldOperatorParser.apply_to_function(bool_constrs)
