@@ -33,7 +33,7 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             type=ct.ProgramType(definition=definition_type),
             params=params,
             body=self.visit(node.body, **kwargs),
-            closure_symbols=self.visit(node.closure_symbols, **kwargs),
+            closure_vars=self.visit(node.closure_vars, **kwargs),
             location=node.location,
         )
 

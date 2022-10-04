@@ -51,7 +51,7 @@ class ProgramParser(DialectParser[past.Program]):
             type=common_types.DeferredSymbolType(constraint=common_types.ProgramType),
             params=self.visit(node.args),
             body=[self.visit(node) for node in node.body],
-            closure_symbols=closure_symbols,
+            closure_vars=closure_symbols,
             location=self._make_loc(node),
         )
 

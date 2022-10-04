@@ -189,7 +189,7 @@ class Program:
 
         undefined_symbols = [
             symbol.id
-            for symbol in self.past_node.closure_symbols
+            for symbol in self.past_node.closure_vars
             if symbol.id not in self.closure_vars
         ]
         if undefined_symbols:
@@ -511,7 +511,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
                     location=loc,
                 )
             ],
-            closure_symbols=closure_symbols,
+            closure_vars=closure_symbols,
             location=loc,
         )
         past_node = ProgramTypeDeduction.apply(untyped_past_node)
