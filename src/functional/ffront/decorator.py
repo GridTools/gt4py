@@ -392,8 +392,8 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         backend: The backend used for executing the field operator. Only used
             if the field operator is called directly, otherwise the backend
             specified for the program takes precedence.
-        definition: The original Python function from which the field operator
-            was created.
+        definition: The original Python function object the field operator
+            was created from.
     """
 
     foast_node: OperatorNodeT
