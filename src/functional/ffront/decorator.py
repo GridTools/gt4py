@@ -379,7 +379,7 @@ OperatorNodeT = TypeVar("OperatorNodeT", bound=foast.LocatedNode)
 @dataclasses.dataclass(frozen=True)
 class FieldOperator(GTCallable, Generic[OperatorNodeT]):
     """
-    Construct a field operator object from a PAST node.
+    Construct a field operator object from a FOAST node.
 
     A call to the resulting object executes the field operator as expressed
     by the FOAST node and with the signature as if it would appear inside
@@ -387,13 +387,17 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
 
     Attributes:
         foast_node: The node representing the field operator.
-        closure_vars: Mapping of externally defined symbols to their respective values.
-            For example, referenced global and nonlocal variables.
+        closure_vars: Mapping of names referenced in the field operator (i.e. globals, nonlocals)
+            to their values.
+        backend: The backend used for executing the field operator.
+            Only used if the field operator is called directly,
+            otherwise the backend specified for the program takes precedence.
+        definition: The original Python function from which the field operator was created.
     """
 
     foast_node: OperatorNodeT
     closure_vars: dict[str, Any]
-    backend: Optional[FencilExecutor]  # note: backend is only used if directly called
+    backend: Optional[FencilExecutor]
     definition: Optional[types.FunctionType] = None
 
     @classmethod
