@@ -13,6 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import ast
+import copy
 
 from functional.ffront.fbuiltins import TYPE_BUILTIN_NAMES
 
@@ -87,6 +88,27 @@ class SingleStaticAssignPass(ast.NodeTransformer):
 
     def _rename(self, node):
         return self.RhsRenamer.apply(self.name_counter, self.separator, node)
+
+    def visit_If(self, node: ast.If):
+        node = copy.copy(node)
+        prev_name_counter = self.name_counter
+
+        node.test = self.visit(node.test)
+
+        self.name_counter = {**prev_name_counter}
+        node.body = [self.visit(el) for el in node.body]
+        body_name_counter = self.name_counter
+
+        self.name_counter = {**prev_name_counter}
+        node.orelse = [self.visit(el) for el in node.orelse]
+        orelse_name_counter = self.name_counter
+
+        self.name_counter = {
+            key: max(body_name_counter.get(key, 0), orelse_name_counter.get(key, 0))
+            for key in (set(body_name_counter.keys()) | set(orelse_name_counter.keys()))
+        }
+
+        return node
 
     def visit_Assign(self, node: ast.Assign) -> ast.Assign:
         # first update rhs names to reference the latest version

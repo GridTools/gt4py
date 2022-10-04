@@ -133,3 +133,46 @@ def test_empty_annotated_assign():
     assert lines[0] == "a__0 = 0"
     assert lines[1] == "a__1: int"
     assert lines[2] == "b__0 = a__0"
+
+
+def test_if():
+    lines = ast.unparse(
+        ssaify_string(
+            """
+            if True:
+                a = 1
+            else:
+                a = 2
+            a = 3
+            """
+        )
+    ).splitlines()
+
+    assert lines[1] == "    a__0 = 1"
+    assert lines[3] == "    a__0 = 2"
+    assert lines[4] == "a__1 = 3"
+
+    blub = 1 + 1
+
+
+def test_nested_if():
+    lines = ast.unparse(
+        ssaify_string(
+            """
+            if True:
+                a = 1
+            else:
+                a = 2
+                if True:
+                    a = 3
+                a = 4
+            a = 5
+            """
+        )
+    ).splitlines()
+
+    assert lines[1] == "    a__0 = 1"
+    assert lines[3] == "    a__0 = 2"
+    assert lines[5] == "        a__1 = 3"
+    assert lines[6] == "    a__2 = 4"
+    assert lines[7] == "a__3 = 5"
