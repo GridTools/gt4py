@@ -175,10 +175,6 @@ MATH_BUILTIN_NAMES = (
 
 FUN_BUILTIN_NAMES = ["neighbor_sum", "max_over", "broadcast", "where"] + MATH_BUILTIN_NAMES
 
-
-EXTERNALS_MODULE_NAME = "__externals__"
-MODULE_BUILTIN_NAMES = [EXTERNALS_MODULE_NAME]
-
 BUILTIN_NAMES = TYPE_BUILTIN_NAMES + FUN_BUILTIN_NAMES
 
 BUILTINS = {name: globals()[name] for name in BUILTIN_NAMES}

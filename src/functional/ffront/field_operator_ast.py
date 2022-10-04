@@ -153,10 +153,6 @@ class Stmt(LocatedNode):
     ...
 
 
-class ExternalImport(Stmt):
-    symbols: list[Symbol]
-
-
 class Assign(Stmt):
     target: Union[FieldSymbol, TupleSymbol, ScalarSymbol]
     value: Expr

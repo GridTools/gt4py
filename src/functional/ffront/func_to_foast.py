@@ -155,39 +155,6 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             location=self._make_loc(node),
         )
 
-    def visit_Import(self, node: ast.Import, **kwargs) -> None:
-        raise FieldOperatorSyntaxError.from_AST(
-            node, msg=f"Only 'from' imports from {fbuiltins.MODULE_BUILTIN_NAMES} are supported"
-        )
-
-    def visit_ImportFrom(self, node: ast.ImportFrom, **kwargs) -> foast.ExternalImport:
-        if node.module not in fbuiltins.MODULE_BUILTIN_NAMES:
-            raise FieldOperatorSyntaxError.from_AST(
-                node,
-                msg=f"Only 'from' imports from {fbuiltins.MODULE_BUILTIN_NAMES} are supported",
-            )
-
-        symbols: list[foast.Symbol] = []
-
-        if node.module == fbuiltins.EXTERNALS_MODULE_NAME:
-            for alias in node.names:
-                if alias.name not in self.externals_defs:
-                    raise FieldOperatorSyntaxError.from_AST(
-                        node, msg=f"Missing symbol '{alias.name}' definition in {node.module}"
-                    )
-                symbols.append(
-                    foast.Symbol(
-                        id=alias.asname or alias.name,
-                        type=symbol_makers.make_symbol_type_from_value(
-                            self.externals_defs[alias.name]
-                        ),
-                        namespace=ct.Namespace.EXTERNAL,
-                        location=self._make_loc(node),
-                    )
-                )
-
-        return foast.ExternalImport(symbols=symbols, location=self._make_loc(node))
-
     def visit_arguments(self, node: ast.arguments) -> list[foast.DataSymbol]:
         return [self.visit_arg(arg) for arg in node.args]
 

@@ -82,7 +82,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
     >>> source_definition = SourceDefinition.from_function(example)
     >>> closure_vars = get_closure_vars_from_function(example)
     >>> untyped_fieldop = FieldOperatorParser(
-    ...     source_definition=source_definition, closure_vars=closure_vars, externals_defs={}
+    ...     source_definition=source_definition, closure_vars=closure_vars
     ... ).visit(ast.parse(source_definition.source).body[0])
     >>> untyped_fieldop.body[0].value.type
     DeferredSymbolType(constraint=None)

@@ -160,12 +160,11 @@ class Program:
     def from_function(
         cls,
         definition: types.FunctionType,
-        externals: Optional[dict] = None,
         backend: Optional[FencilExecutor] = None,
         grid_type: Optional[GridType] = None,
     ) -> Program:
         source_def = SourceDefinition.from_function(definition)
-        closure_vars = {**(externals or {}), **get_closure_vars_from_function(definition)}
+        closure_vars = get_closure_vars_from_function(definition)
         annotations = typing.get_type_hints(definition)
         past_node = ProgramParser.apply(source_def, closure_vars, annotations)
         return cls(
@@ -342,16 +341,13 @@ def program(definition: types.FunctionType) -> Program:
 
 
 @typing.overload
-def program(
-    *, externals: Optional[dict], backend: Optional[FencilExecutor]
-) -> Callable[[types.FunctionType], Program]:
+def program(*, backend: Optional[FencilExecutor]) -> Callable[[types.FunctionType], Program]:
     ...
 
 
 def program(
     definition=None,
     *,
-    externals=None,
     backend=None,
     grid_type=None,
 ) -> Program | Callable[[types.FunctionType], Program]:
@@ -374,7 +370,7 @@ def program(
     """
 
     def program_inner(definition: types.FunctionType) -> Program:
-        return Program.from_function(definition, externals, backend, grid_type)
+        return Program.from_function(definition, backend, grid_type)
 
     return program_inner if definition is None else program_inner(definition)
 
@@ -406,7 +402,6 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
     def from_function(
         cls,
         definition: types.FunctionType,
-        externals: Optional[dict] = None,
         backend: Optional[FencilExecutor] = None,
         *,
         operator_node_cls: type[OperatorNodeT] = foast.FieldOperator,
@@ -415,7 +410,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         operator_attributes = operator_attributes or {}
 
         source_def = SourceDefinition.from_function(definition)
-        closure_vars = {**(externals or {}), **get_closure_vars_from_function(definition)}
+        closure_vars = get_closure_vars_from_function(definition)
         annotations = typing.get_type_hints(definition)
         foast_definition_node = FieldOperatorParser.apply(source_def, closure_vars, annotations)
         loc = foast_definition_node.location
@@ -448,7 +443,6 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         return FieldOperator(
             foast_node=self.foast_node,
             captured_vars=self.captured_vars,
-            externals=self.externals,
             backend=backend,
             definition=self.definition,  # type: ignore[arg-type]  # mypy wrongly deduces definition as method here
         )
@@ -548,14 +542,14 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
 
 @typing.overload
 def field_operator(
-    definition: types.FunctionType, *, externals: Optional[dict], backend: Optional[FencilExecutor]
+    definition: types.FunctionType, *, backend: Optional[FencilExecutor]
 ) -> FieldOperator[foast.FieldOperator]:
     ...
 
 
 @typing.overload
 def field_operator(
-    *, externals: Optional[dict], backend: Optional[FencilExecutor]
+    *, backend: Optional[FencilExecutor]
 ) -> Callable[[types.FunctionType], FieldOperator[foast.FieldOperator]]:
     ...
 
@@ -563,7 +557,6 @@ def field_operator(
 def field_operator(
     definition=None,
     *,
-    externals=None,
     backend=None,
 ):
     """
@@ -583,7 +576,7 @@ def field_operator(
     """
 
     def field_operator_inner(definition: types.FunctionType) -> FieldOperator[foast.FieldOperator]:
-        return FieldOperator.from_function(definition, externals, backend)
+        return FieldOperator.from_function(definition, backend)
 
     return field_operator_inner if definition is None else field_operator_inner(definition)
 
@@ -595,7 +588,6 @@ def scan_operator(
     axis: Dimension,
     forward: bool,
     init: Scalar,
-    externals: Optional[dict],
     backend: Optional[str],
 ) -> FieldOperator[foast.ScanOperator]:
     ...
@@ -607,7 +599,6 @@ def scan_operator(
     axis: Dimension,
     forward: bool,
     init: Scalar,
-    externals: Optional[dict],
     backend: Optional[str],
 ) -> Callable[[types.FunctionType], FieldOperator[foast.ScanOperator]]:
     ...
@@ -619,7 +610,6 @@ def scan_operator(
     axis: Dimension,
     forward: bool = True,
     init: Scalar = 0.0,
-    externals=None,
     backend=None,
 ) -> FieldOperator[foast.ScanOperator] | Callable[
     [types.FunctionType], FieldOperator[foast.ScanOperator]
@@ -656,7 +646,6 @@ def scan_operator(
     def scan_operator_inner(definition: types.FunctionType) -> FieldOperator:
         return FieldOperator.from_function(
             definition,
-            externals,
             backend,
             operator_node_cls=foast.ScanOperator,
             operator_attributes={"axis": axis, "forward": forward, "init": init},
