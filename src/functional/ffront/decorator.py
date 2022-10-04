@@ -439,7 +439,6 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
             **operator_attribute_nodes,
         )
         foast_node = FieldOperatorTypeDeduction.apply(untyped_foast_node)
-
         return cls(
             foast_node=foast_node,
             captured_vars=captured_vars,
@@ -488,7 +487,6 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         param_sym_uids = UIDGenerator()  # use a new UID generator to allow caching
 
         type_ = self.__gt_type__()
-
         params_decl: list[past.Symbol] = [
             past.DataSymbol(
                 id=param_sym_uids.sequential_id(prefix="__sym"),
@@ -498,7 +496,6 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
             )
             for arg_type in arg_types
         ]
-
         params_ref = [past.Name(id=pdecl.id, location=loc) for pdecl in params_decl]
         out_sym: past.Symbol = past.DataSymbol(
             id="out",
