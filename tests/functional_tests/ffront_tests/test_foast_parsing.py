@@ -284,11 +284,11 @@ def test_external_symbols():
     assert "ext_unused" not in parsed.annex.symtable
 
 
-def test_set_values_at_call():
+def test_wrong_return_type_annotation():
     ADim = Dimension("ADim")
     BDim = Dimension("BDim")
 
-    def bad_dim_where(a: Field[[ADim], float64]) -> Field[[BDim], float64]:
+    def wrong_return_type_annotation(a: Field[[ADim], float64]) -> Field[[BDim], float64]:
         return a
 
     with pytest.raises(

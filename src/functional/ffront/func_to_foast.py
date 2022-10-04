@@ -37,7 +37,7 @@ from functional.ffront.ast_passes import (
 )
 from functional.ffront.dialect_parser import DialectParser, DialectSyntaxError
 from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduction
-from src.functional.ffront.source_utils import CapturedVars
+from functional.ffront.source_utils import CapturedVars
 
 
 def _check_typed_dialect_ast(annotated_return_type, typed_dialect_ast):
