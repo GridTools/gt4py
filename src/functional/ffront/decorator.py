@@ -176,10 +176,10 @@ class Program:
         )
 
     def __post_init__(self):
-        closure_var_functions = _filter_closure_vars_by_type(self.closure_vars, GTCallable)
+        function_closure_vars = _filter_closure_vars_by_type(self.closure_vars, GTCallable)
         misnamed_functions = [
             f"{name} vs. {func.id}"
-            for name, func in closure_var_functions.items()
+            for name, func in function_closure_vars.items()
             if name != func.__gt_itir__().id
         ]
         if misnamed_functions:
