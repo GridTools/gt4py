@@ -488,17 +488,16 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         )
         out_ref = past.Name(id="out", location=loc)
 
-        closure_vars_plus_self = {self.foast_node.id: self, **self.closure_vars}
-        closure_symbols_plus_self: list[past.Symbol] = []
-        for name, val in closure_vars_plus_self.items():  # type: ignore
-            closure_symbols_plus_self.append(
-                past.Symbol(
-                    id=name,
-                    type=symbol_makers.make_symbol_type_from_value(val),
-                    namespace=ct.Namespace.CLOSURE,
-                    location=loc,
-                )
+        closure_vars = {self.foast_node.id: self, **self.closure_vars}
+        closure_symbols = [
+            past.Symbol(
+                id=name,
+                type=symbol_makers.make_symbol_type_from_value(val),
+                namespace=ct.Namespace.CLOSURE,
+                location=loc,
             )
+            for name, val in closure_vars.items()
+        ]
 
         untyped_past_node = past.Program(
             id=f"__field_operator_{self.foast_node.id}",
@@ -512,14 +511,14 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
                     location=loc,
                 )
             ],
-            closure_symbols=closure_symbols_plus_self,
+            closure_symbols=closure_symbols,
             location=loc,
         )
         past_node = ProgramTypeDeduction.apply(untyped_past_node)
 
         return Program(
             past_node=past_node,
-            closure_vars=closure_vars_plus_self,
+            closure_vars=closure_vars,
             backend=self.backend,
         )
 
