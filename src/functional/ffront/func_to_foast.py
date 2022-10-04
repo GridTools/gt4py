@@ -97,6 +97,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
     def _postprocess_dialect_ast(
         cls, dialect_ast: foast.FieldOperator, captured_vars: CapturedVars
     ) -> foast.FieldOperator:
+        typed_dialact_ast = FieldOperatorTypeDeduction.apply(dialect_ast)
         # ensure annotated matches with deduced return type
         annotated_return_type = symbol_makers.make_symbol_type_from_typing(
             captured_vars.annotations["return"]
