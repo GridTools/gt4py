@@ -1103,15 +1103,3 @@ def test_docstring():
         fieldop_with_docstring(a, out=a)
 
     test_docstring(a, offset_provider={})
-
-
-def test_return_type_annotation():
-    with pytest.raises(
-        GTTypeError,
-        match="Annotated return type does not match deduced return type.",
-    ):
-        @field_operator
-        def foo(
-            a: Field[[IDim], float64]
-        ) -> Field[[JDim], float64]:
-            return a

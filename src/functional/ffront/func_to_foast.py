@@ -37,6 +37,7 @@ from functional.ffront.ast_passes import (
 )
 from functional.ffront.dialect_parser import DialectParser, DialectSyntaxError
 from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduction
+from src.functional.ffront.source_utils import CapturedVars
 
 
 class FieldOperatorSyntaxError(DialectSyntaxError):
@@ -93,8 +94,21 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
         return ucc
 
     @classmethod
-    def _postprocess_dialect_ast(cls, dialect_ast: foast.FieldOperator) -> foast.FieldOperator:
-        return FieldOperatorTypeDeduction.apply(dialect_ast)
+    def _postprocess_dialect_ast(
+        cls, dialect_ast: foast.FieldOperator, captured_vars: CapturedVars
+    ) -> foast.FieldOperator:
+        # ensure annotated matches with deduced return type
+        annotated_return_type = symbol_makers.make_symbol_type_from_typing(
+            captured_vars.annotations["return"]
+        )
+        # TODO(tehrengruber): use `type_info.return_type` when the type of the
+        #  arguments becomes available here
+        foast_type = FieldOperatorTypeDeduction.apply(dialect_ast)
+        if annotated_return_type != foast_type.type.returns:
+            raise common.GTTypeError(
+                f"Annotated return type does not match deduced return type. Expected `{foast_type.type.returns}`, but got `{annotated_return_type}`."
+            )
+        return foast_type
 
     def _builtin_type_constructor_symbols(
         self, captured_vars: Mapping[str, Any], location: eve.SourceLocation
