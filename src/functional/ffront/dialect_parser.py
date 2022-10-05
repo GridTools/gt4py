@@ -92,6 +92,7 @@ class DialectParser(ast.NodeVisitor, Generic[DialectRootT]):
                     closure_vars=closure_vars,
                     annotations=annotations,
                 ).visit(cls._preprocess_definition_ast(definition_ast))
+                captured_vars,
             )
         except SyntaxError as err:
             # The ast nodes do not contain information about the path of the
@@ -118,7 +119,9 @@ class DialectParser(ast.NodeVisitor, Generic[DialectRootT]):
         return definition_ast
 
     @classmethod
-    def _postprocess_dialect_ast(cls, output_ast: DialectRootT) -> DialectRootT:  # type: ignore[valid-type]  # used to work, now mypy is going berserk for unknown reasons
+    def _postprocess_dialect_ast(
+        cls, output_ast: DialectRootT, captured_vars: CapturedVars
+    ) -> DialectRootT:
         return output_ast
 
     def generic_visit(self, node: ast.AST) -> None:

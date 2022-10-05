@@ -529,7 +529,13 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
             backend=self.backend,
         )
 
-    def __call__(self, *args, out, offset_provider: dict[str, Dimension], **kwargs) -> None:
+    def __call__(
+        self,
+        *args,
+        out,
+        offset_provider: dict[str, Dimension],
+        **kwargs,
+    ) -> None:
         # TODO(tehrengruber): check all offset providers are given
         # deduce argument types
         arg_types = []

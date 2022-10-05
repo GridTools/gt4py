@@ -15,10 +15,12 @@ from __future__ import annotations
 
 import ast
 from dataclasses import dataclass
+from typing import cast
 
 from functional.ffront import common_types, program_ast as past, symbol_makers
 from functional.ffront.dialect_parser import DialectParser, DialectSyntaxError
 from functional.ffront.past_passes.type_deduction import ProgramTypeDeduction
+from functional.ffront.source_utils import CapturedVars
 
 
 class ProgramSyntaxError(DialectSyntaxError):
@@ -32,7 +34,9 @@ class ProgramParser(DialectParser[past.Program]):
     syntax_error_cls = ProgramSyntaxError
 
     @classmethod
-    def _postprocess_dialect_ast(cls, output_node: past.Program) -> past.Program:
+    def _postprocess_dialect_ast(
+        cls, output_node: past.Program, captured_vars: CapturedVars
+    ) -> past.Program:
         return ProgramTypeDeduction.apply(output_node)
 
     def visit_FunctionDef(self, node: ast.FunctionDef) -> past.Program:
@@ -73,6 +77,13 @@ class ProgramParser(DialectParser[past.Program]):
 
     def visit_Name(self, node: ast.Name) -> past.Name:
         return past.Name(id=node.id, location=self._make_loc(node))
+
+    def visit_Dict(self, node: ast.Dict) -> past.Dict:
+        return past.Dict(
+            keys_=[self.visit(cast(ast.AST, param)) for param in node.keys],
+            values_=[self.visit(param) for param in node.values],
+            location=self._make_loc(node),
+        )
 
     def visit_Call(self, node: ast.Call) -> past.Call:
         new_func = self.visit(node.func)

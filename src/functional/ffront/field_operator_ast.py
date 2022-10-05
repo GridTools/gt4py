@@ -143,6 +143,12 @@ class Compare(Expr):
     right: Expr
 
 
+class TernaryExpr(Expr):
+    condition: Expr
+    true_expr: Expr
+    false_expr: Expr
+
+
 class Call(Expr):
     func: Name
     args: list[Expr]
