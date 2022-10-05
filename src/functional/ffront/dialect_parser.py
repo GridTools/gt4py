@@ -78,7 +78,7 @@ class DialectParser(ast.NodeVisitor, Generic[DialectRootT]):
         source_definition: SourceDefinition,
         closure_vars: dict[str, Any],
         annotations: dict[str, Any],
-    ) -> DialectRootT:  # type: ignore[valid-type]  # used to work, now mypy is going berserk for unknown reasons
+    ) -> DialectRootT:
 
         source, filename, starting_line = source_definition
         try:
