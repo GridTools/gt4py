@@ -15,12 +15,11 @@ from __future__ import annotations
 
 import ast
 from dataclasses import dataclass
-from typing import cast
+from typing import Any, cast
 
 from functional.ffront import common_types, program_ast as past, symbol_makers
 from functional.ffront.dialect_parser import DialectParser, DialectSyntaxError
 from functional.ffront.past_passes.type_deduction import ProgramTypeDeduction
-from functional.ffront.source_utils import CapturedVars
 
 
 class ProgramSyntaxError(DialectSyntaxError):
@@ -35,12 +34,12 @@ class ProgramParser(DialectParser[past.Program]):
 
     @classmethod
     def _postprocess_dialect_ast(
-        cls, output_node: past.Program, captured_vars: CapturedVars
+        cls, output_node: past.Program, annotations: dict[str, Any]
     ) -> past.Program:
         return ProgramTypeDeduction.apply(output_node)
 
     def visit_FunctionDef(self, node: ast.FunctionDef) -> past.Program:
-        closure_symbols = [
+        closure_symbols: list[past.Symbol] = [
             past.Symbol(
                 id=name,
                 type=symbol_makers.make_symbol_type_from_value(val),

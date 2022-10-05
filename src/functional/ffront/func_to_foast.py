@@ -36,7 +36,6 @@ from functional.ffront.ast_passes import (
 )
 from functional.ffront.dialect_parser import DialectParser, DialectSyntaxError
 from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduction
-from functional.ffront.source_utils import CapturedVars
 
 
 class FieldOperatorSyntaxError(DialectSyntaxError):
@@ -94,14 +93,14 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
 
     @classmethod
     def _postprocess_dialect_ast(
-        cls, foast_node: foast.FieldOperator, captured_vars: CapturedVars
+        cls, foast_node: foast.FieldOperator, annotations: dict[str, Any]
     ) -> foast.FieldOperator:
         typed_foast_node = FieldOperatorTypeDeduction.apply(foast_node)
 
         # check deduced matches annotated return type
-        if "return" in captured_vars.annotations:
+        if "return" in annotations:
             annotated_return_type = symbol_makers.make_symbol_type_from_typing(
-                captured_vars.annotations["return"]
+                annotations["return"]
             )
             # TODO(tehrengruber): use `type_info.return_type` when the type of the
             #  arguments becomes available here

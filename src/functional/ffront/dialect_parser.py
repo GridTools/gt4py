@@ -91,8 +91,8 @@ class DialectParser(ast.NodeVisitor, Generic[DialectRootT]):
                     source_definition=source_definition,
                     closure_vars=closure_vars,
                     annotations=annotations,
-                ).visit(cls._preprocess_definition_ast(definition_ast))
-                captured_vars,
+                ).visit(cls._preprocess_definition_ast(definition_ast)),
+                annotations,
             )
         except SyntaxError as err:
             # The ast nodes do not contain information about the path of the
@@ -120,7 +120,7 @@ class DialectParser(ast.NodeVisitor, Generic[DialectRootT]):
 
     @classmethod
     def _postprocess_dialect_ast(
-        cls, output_ast: DialectRootT, captured_vars: CapturedVars
+        cls, output_ast: DialectRootT, annotations: dict[str, Any]
     ) -> DialectRootT:
         return output_ast
 
