@@ -296,3 +296,14 @@ def test_wrong_return_type_annotation():
         match=r"Annotated return type does not match deduced return type",
     ):
         _ = FieldOperatorParser.apply_to_function(wrong_return_type_annotation)
+
+
+def test_empty_dims():
+    def empty_dims() -> Field[[], float]:
+        return 1.0
+
+    with pytest.raises(
+        GTTypeError,
+        match=r"Annotated return type does not match deduced return type",
+    ):
+        _ = FieldOperatorParser.apply_to_function(empty_dims)
