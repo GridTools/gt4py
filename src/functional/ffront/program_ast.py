@@ -73,6 +73,11 @@ class Constant(Expr):
     value: Any  # TODO(tehrengruber): be more restrictive
 
 
+class Dict(Expr):
+    keys_: list[Name]
+    values_: list[TupleExpr]
+
+
 class Slice(Expr):
     lower: Optional[Constant]
     upper: Optional[Constant]

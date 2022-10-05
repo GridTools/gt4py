@@ -120,7 +120,8 @@ class DialectParser(ast.NodeVisitor, Generic[DialectRootT]):
                     source_definition=source_definition,
                     captured_vars=captured_vars,
                     externals_defs=externals or {},
-                ).visit(cls._preprocess_definition_ast(definition_ast))
+                ).visit(cls._preprocess_definition_ast(definition_ast)),
+                captured_vars,
             )
             if __debug__:
                 _assert_source_invariants(source_definition, captured_vars)
@@ -142,7 +143,9 @@ class DialectParser(ast.NodeVisitor, Generic[DialectRootT]):
         return definition_ast
 
     @classmethod
-    def _postprocess_dialect_ast(cls, output_ast: DialectRootT) -> DialectRootT:
+    def _postprocess_dialect_ast(
+        cls, output_ast: DialectRootT, captured_vars: CapturedVars
+    ) -> DialectRootT:
         return output_ast
 
     @classmethod
