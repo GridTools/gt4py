@@ -100,7 +100,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
         typed_foast_node = FieldOperatorTypeDeduction.apply(foast_node)
  
         # check deduced matches annotated return type
-        if "return" in captured_vars.annotations.keys():
+        if "return" in captured_vars.annotations:
             annotated_return_type = symbol_makers.make_symbol_type_from_typing(
                 captured_vars.annotations["return"]
             )
