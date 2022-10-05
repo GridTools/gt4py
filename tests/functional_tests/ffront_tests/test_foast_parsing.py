@@ -298,7 +298,7 @@ def test_wrong_return_type_annotation():
         _ = FieldOperatorParser.apply_to_function(wrong_return_type_annotation)
 
 
-def test_empty_dims():
+def test_empty_dims_type():
     def empty_dims() -> Field[[], float]:
         return 1.0
 
