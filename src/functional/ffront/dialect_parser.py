@@ -143,7 +143,9 @@ class DialectParser(ast.NodeVisitor, Generic[DialectRootT]):
         return definition_ast
 
     @classmethod
-    def _postprocess_dialect_ast(cls, output_ast: DialectRootT) -> DialectRootT:
+    def _postprocess_dialect_ast(
+        cls, output_ast: DialectRootT, captured_vars: CapturedVars
+    ) -> DialectRootT:
         return output_ast
 
     @classmethod

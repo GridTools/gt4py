@@ -248,7 +248,7 @@ def test_tuples(fieldview_backend):
     @program(backend=fieldview_backend)
     def fencil(
         inp1: Field[[IDim], float64], inp2: Field[[IDim], float64], out: Field[[IDim], float64]
-    ) -> None:
+    ):
         tuples(inp1, inp2, out=out)
 
     fencil(a, b, c, offset_provider={})
