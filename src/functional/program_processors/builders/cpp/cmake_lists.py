@@ -3,8 +3,8 @@ from typing import Sequence
 
 import eve
 from eve.codegen import JinjaTemplate as as_jinja
+from functional.otf import source
 from functional.program_processors.builders.cpp import common
-from functional.program_processors.source_modules import source_modules
 
 
 class FindDependency(eve.Node):
@@ -97,7 +97,7 @@ class CMakeListsGenerator(eve.codegen.TemplatedGenerator):
 
 def generate_cmakelists_source(
     project_name: str,
-    dependencies: Sequence[source_modules.LibraryDependency],
+    dependencies: tuple[source.LibraryDependency, ...],
     source_names: Sequence[str],
 ) -> str:
     cmakelists_file = CMakeListsFile(

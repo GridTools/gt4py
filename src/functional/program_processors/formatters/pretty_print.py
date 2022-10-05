@@ -15,15 +15,15 @@
 
 from typing import Any
 
-from functional.iterator import ir
+from functional.iterator import ir as itir
 from functional.iterator.pretty_parser import pparse
 from functional.iterator.pretty_printer import pformat
 from functional.program_processors.processor_interface import program_formatter
 
 
 @program_formatter
-def pretty_format_and_check(root: ir.Node, *args: Any, **kwargs: Any) -> str:
-    pretty = pformat(root)
+def pretty_format_and_check(program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> str:
+    pretty = pformat(program)
     parsed = pparse(pretty)
-    assert parsed == root
+    assert parsed == program
     return pretty

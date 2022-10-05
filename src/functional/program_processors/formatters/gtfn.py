@@ -12,6 +12,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+from typing import Any
 
 from functional.iterator import ir as itir
 from functional.program_processors.codegens.gtfn.gtfn_backend import generate
@@ -19,5 +20,5 @@ from functional.program_processors.processor_interface import program_formatter
 
 
 @program_formatter
-def format_sourcecode(fencil: itir.FencilDefinition, *arg, **kwargs) -> str:
-    return generate(fencil, **kwargs)
+def format_sourcecode(program: itir.FencilDefinition, *arg: Any, **kwargs: Any) -> str:
+    return generate(program, **kwargs)

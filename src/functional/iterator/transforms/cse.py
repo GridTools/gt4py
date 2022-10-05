@@ -1,8 +1,9 @@
+import dataclasses
 from collections import ChainMap
 from typing import Optional
 
 from eve import NodeTranslator, NodeVisitor
-from eve.utils import UIDs
+from eve.utils import UIDGenerator
 from functional.iterator import ir
 
 
@@ -56,6 +57,7 @@ class CollectSubexpressions(NodeVisitor):
             subexprs.setdefault(node, ([], parent))[0].append(id(node))
 
 
+@dataclasses.dataclass(frozen=True)
 class CommonSubexpressionElimination(NodeTranslator):
     """
     Perform common subexpression elimination.
@@ -67,6 +69,10 @@ class CommonSubexpressionElimination(NodeTranslator):
         >>> print(CommonSubexpressionElimination().visit(expr))
         (λ(_cs_1) → _cs_1 + _cs_1)(x + x)
     """
+
+    # we use one UID generator per instance such that the generated ids are
+    # stable across multiple runs (required for caching to properly work)
+    uids: UIDGenerator = dataclasses.field(init=False, repr=False, default_factory=UIDGenerator)
 
     def visit_FunCall(self, node: ir.FunCall):
         if isinstance(node.fun, ir.SymRef) and node.fun.id in [
@@ -89,7 +95,7 @@ class CommonSubexpressionElimination(NodeTranslator):
                 # ignore if parent will be eliminated anyway
                 if parent and parent in subexprs and len(subexprs[parent][0]) > 1:
                     continue
-                expr_id = UIDs.sequential_id(prefix="_cs")
+                expr_id = self.uids.sequential_id(prefix="_cs")
                 params.append(ir.Sym(id=expr_id))
                 args.append(expr)
                 expr_ref = ir.SymRef(id=expr_id)

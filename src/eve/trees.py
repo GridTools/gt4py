@@ -42,10 +42,10 @@ from .type_definitions import Enum
 
 try:
     # For perfomance reasons, try to use cytoolz when possible (using cython)
-    import cytoolz as toolz
+    import cytoolz as toolz  # type: ignore[import]
 except ModuleNotFoundError:
     # Fall back to pure Python toolz
-    import toolz  # noqa: F401  # imported but unused
+    import toolz  # type: ignore[import] # noqa: F401  # imported but unused
 
 
 TreeKey = Union[int, str]

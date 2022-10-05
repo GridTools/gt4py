@@ -13,16 +13,16 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 
-from functional.iterator import type_inference
+from functional.iterator import ir as itir, type_inference
 from functional.iterator.transforms import apply_common_transforms, global_tmps
 from functional.program_processors.processor_interface import program_formatter
 
 
 @program_formatter
-def check(root, *args, **kwargs) -> str:
-    type_inference.pprint(type_inference.infer(root))
+def check(program: itir.FencilDefinition, *args, **kwargs) -> str:
+    type_inference.pprint(type_inference.infer(program))
     transformed = apply_common_transforms(
-        root, lift_mode=kwargs.get("lift_mode"), offset_provider=kwargs["offset_provider"]
+        program, lift_mode=kwargs.get("lift_mode"), offset_provider=kwargs["offset_provider"]
     )
     if isinstance(transformed, global_tmps.FencilWithTemporaries):
         transformed = transformed.fencil

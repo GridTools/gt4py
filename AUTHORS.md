@@ -10,10 +10,12 @@
 * Farabullini, Nicoletta. ETH Zurich - C2SM
 * George, Rhea. Vulcan Inc.
 * González Paredes, Enrique. ETH Zurich - CSCS
+* Gopal, Abishek. ETH Zurich - EXCLAIM
 * Groner, Linus. ETH Zurich - CSCS
 * Häuselmann, Rico. ETH Zurich - CSCS
 * Kardos, Péter. ETH Zurich - EXCLAIM
 * Kellerhals, Samuel. ETH Zurich - EXCLAIM
+* Luz, Magdalena. ETH Zurich - EXCLAIM
 * Madonna, Alberto. ETH Zurich - CSCS
 * Mariotti, Kean. ETH Zurich - CSCS
 * Müller, Christoph. MeteoSwiss

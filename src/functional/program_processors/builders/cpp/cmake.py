@@ -3,9 +3,8 @@ import pathlib
 import subprocess
 from typing import Optional
 
-import functional.otf.stages
 from functional.otf import languages, stages, step_types
-from functional.program_processors.builders import build_data, cache
+from functional.program_processors.builders import build_data, cache, otf_compiler
 from functional.program_processors.builders.cpp import cmake_lists, common
 
 
@@ -13,7 +12,9 @@ def make_cmake_factory(
     cmake_generator_name: str = "Ninja",
     cmake_build_type: str = "Debug",
     cmake_extra_flags: Optional[list[str]] = None,
-) -> step_types.BuildSystemProjectGenerator:
+) -> step_types.BuildSystemProjectGenerator[
+    languages.Cpp, languages.LanguageWithHeaderFilesSettings, languages.Python
+]:
     def cmake_factory(
         source: stages.CompilableSource[
             languages.Cpp,
@@ -21,7 +22,13 @@ def make_cmake_factory(
             languages.Python,
         ],
         cache_strategy: cache.Strategy,
-    ) -> CMake:
+    ) -> stages.BuildSystemProject[
+        languages.Cpp, languages.LanguageWithHeaderFilesSettings, languages.Python
+    ]:
+        if not source.binding_source:
+            raise otf_compiler.CompilerError(
+                "CMake build system project requires separate bindings code file."
+            )
         name = source.program_source.entry_point.name
         header_name = f"{name}.{source.program_source.language_settings.header_extension}"
         bindings_name = f"{name}_bindings.{source.program_source.language_settings.file_extension}"
@@ -47,7 +54,7 @@ def make_cmake_factory(
 
 @dataclasses.dataclass
 class CMake(
-    functional.otf.stages.BuildSystemProject[
+    stages.BuildSystemProject[
         languages.Cpp, languages.LanguageWithHeaderFilesSettings, languages.Python
     ]
 ):

@@ -36,7 +36,7 @@ ProcessorKindT = TypeVar("ProcessorKindT", bound="ProgramProcessorProtocol", cov
 
 
 class ProgramProcessorFunction(Protocol[OutputT]):
-    def __call__(self, fencil: itir.FencilDefinition, *args, **kwargs) -> OutputT:
+    def __call__(self, program: itir.FencilDefinition, *args, **kwargs) -> OutputT:
         ...
 
 

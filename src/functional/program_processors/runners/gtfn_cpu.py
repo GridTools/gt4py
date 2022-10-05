@@ -42,11 +42,11 @@ class GTFNExecutor(fpi.ProgramExecutor):
 
     name: Optional[str] = None
 
-    def __call__(self, fencil: itir.FencilDefinition, *args: Any, **kwargs: Any) -> None:
+    def __call__(self, program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> None:
         """
-        Execute the iterator IR fencil with the provided arguments.
+        Execute the iterator IR program with the provided arguments.
 
-        The fencil is compiled to machine code with C++ as an intermediate step,
+        The program is compiled to machine code with C++ as an intermediate step,
         so the first execution is expected to have a significant overhead, while subsequent
         calls are very fast. Only scalar and buffer arguments are supported currently.
 
@@ -54,10 +54,10 @@ class GTFNExecutor(fpi.ProgramExecutor):
         """
 
         def convert_args(inp: Callable) -> Callable:
-            def decorated_fencil(*args):
+            def decorated_program(*args):
                 return inp(*[convert_arg(arg) for arg in args])
 
-            return decorated_fencil
+            return decorated_program
 
         @workflow.make_step
         def itir_to_src(inp: stages.ProgramCall) -> stages.ProgramSource:
@@ -80,7 +80,7 @@ class GTFNExecutor(fpi.ProgramExecutor):
             .chain(convert_args)
         )
 
-        otf_closure = stages.ProgramCall(fencil, args, kwargs)
+        otf_closure = stages.ProgramCall(program, args, kwargs)
 
         compiled_runner = otf_workflow(otf_closure)
 

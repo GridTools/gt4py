@@ -15,13 +15,12 @@ import dataclasses
 import pathlib
 from typing import Callable, Generic, TypeVar
 
-from functional.otf import step_types
+from functional.otf import languages, stages, step_types
 from functional.program_processors.builders import build_data, cache, importer
-from functional.program_processors.source_modules import source_modules
 
 
-SL = TypeVar("SL")
-ST = TypeVar("ST")
+SL = TypeVar("SL", bound=languages.LanguageTag)
+ST = TypeVar("ST", bound=languages.LanguageSettings)
 
 
 def is_compiled(data: build_data.OTFBuildData) -> bool:
@@ -35,12 +34,10 @@ def module_exists(data: build_data.OTFBuildData, src_dir: pathlib.Path) -> bool:
 @dataclasses.dataclass(frozen=True)
 class OnTheFlyCompiler(Generic[SL, ST]):
     cache_strategy: cache.Strategy
-    builder_factory: step_types.BuildSystemProjectGenerator[SL, ST, source_modules.Python]
+    builder_factory: step_types.BuildSystemProjectGenerator[SL, ST, languages.Python]
     force_recompile: bool = False
 
-    def __call__(
-        self, inp: source_modules.OTFSourceModule[SL, ST, source_modules.Python]
-    ) -> Callable:
+    def __call__(self, inp: stages.CompilableSource[SL, ST, languages.Python]) -> Callable:
         src_dir = cache.get_cache_folder(inp, self.cache_strategy)
 
         data = build_data.read_data(src_dir)
@@ -50,7 +47,7 @@ class OnTheFlyCompiler(Generic[SL, ST]):
 
         new_data = build_data.read_data(src_dir)
 
-        if not is_compiled(new_data) or not module_exists(new_data, src_dir):
+        if not new_data or not is_compiled(new_data) or not module_exists(new_data, src_dir):
             raise CompilerError(
                 "On-the-fly compilation unsuccessful for {inp.source_module.entry_point.name}!"
             )

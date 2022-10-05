@@ -6,7 +6,7 @@ from typing import Optional
 
 import functional.otf.stages
 from functional.otf import languages, source, stages, step_types
-from functional.program_processors.builders import build_data, cache
+from functional.program_processors.builders import build_data, cache, otf_compiler
 from functional.program_processors.builders.cpp import cmake, cmake_lists
 
 
@@ -102,6 +102,10 @@ def make_compiledb_factory(
         ],
         cache_strategy: cache.Strategy,
     ) -> Compiledb:
+        if not source.binding_source:
+            raise otf_compiler.CompilerError(
+                "CMake build system project requires separate bindings code file."
+            )
         name = source.program_source.entry_point.name
         header_name = f"{name}.{source.program_source.language_settings.header_extension}"
         bindings_name = f"{name}_bindings.{source.program_source.language_settings.file_extension}"
@@ -136,7 +140,9 @@ def make_compiledb_factory(
     return compiledb_factory
 
 
-def _cc_cache_name(deps: list[source.LibraryDependency], build_type: str, flags: list[str]) -> str:
+def _cc_cache_name(
+    deps: tuple[source.LibraryDependency, ...], build_type: str, flags: list[str]
+) -> str:
     fencil_name = "compile_commands_cache"
     deps_str = "_".join(f"{dep.name}_{dep.version}" for dep in deps)
     flags_str = "_".join(flags)
@@ -144,13 +150,13 @@ def _cc_cache_name(deps: list[source.LibraryDependency], build_type: str, flags:
 
 
 def _cc_cache_module(
-    deps: list[source.LibraryDependency],
+    deps: tuple[source.LibraryDependency, ...],
     build_type: str,
     cmake_flags: list[str],
-) -> pathlib.Path:
+) -> stages.ProgramSource:
     name = _cc_cache_name(deps, build_type, cmake_flags)
     return stages.ProgramSource(
-        entry_point=source.Function(name=name, parameters=[]),
+        entry_point=source.Function(name=name, parameters=()),
         source_code="",
         library_deps=deps,
         language=languages.Cpp,

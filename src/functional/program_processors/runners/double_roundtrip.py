@@ -12,12 +12,13 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+from typing import Any
 
-from eve.concepts import Node
+from functional.iterator import ir as itir
 from functional.program_processors.processor_interface import program_executor
 from functional.program_processors.runners import roundtrip
 
 
 @program_executor
-def executor(ir: Node, *args, **kwargs):
-    roundtrip.executor(ir, *args, dispatch_backend=roundtrip.executor, **kwargs)
+def executor(program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> None:
+    roundtrip.executor(program, *args, dispatch_backend=roundtrip.executor, **kwargs)

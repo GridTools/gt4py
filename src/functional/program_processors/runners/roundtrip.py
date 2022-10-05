@@ -18,11 +18,10 @@ import pathlib
 import tempfile
 import textwrap
 from collections.abc import Callable, Iterable
-from typing import Optional
+from typing import Any, Optional
 
 from eve import codegen
 from eve.codegen import FormatTemplate as as_fmt, MakoTemplate as as_mako
-from eve.concepts import Node
 from functional.common import Dimension
 from functional.iterator import ir as itir
 from functional.iterator.embedded import NeighborTableOffsetProvider
@@ -103,7 +102,7 @@ _FENCIL_CACHE: dict[int, Callable] = {}
 
 
 def fencil_generator(
-    ir: Node,
+    ir: itir.Node,
     debug: bool,
     lift_mode: LiftMode,
     use_embedded: bool,
@@ -185,9 +184,8 @@ def fencil_generator(
     return fencil
 
 
-@program_executor
-def executor(
-    ir: Node,
+def execute_roundtrip(
+    ir: itir.Node,
     *args,
     column_axis: Optional[Dimension] = None,
     offset_provider: dict[str, NeighborTableOffsetProvider],
@@ -203,8 +201,16 @@ def executor(
         use_embedded=dispatch_backend is None,
     )
 
-    new_kwargs = {"offset_provider": offset_provider, "column_axis": column_axis}
+    new_kwargs: dict[str, Any] = {
+        "offset_provider": offset_provider,
+        "column_axis": column_axis,
+    }
     if dispatch_backend:
         new_kwargs["backend"] = dispatch_backend
 
     return fencil(*args, **new_kwargs)
+
+
+@program_executor
+def executor(program: itir.FencilDefinition, *args, **kwargs) -> None:
+    execute_roundtrip(program, *args, **kwargs)

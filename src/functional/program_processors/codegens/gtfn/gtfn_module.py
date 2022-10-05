@@ -26,7 +26,7 @@ from functional.program_processors.source_modules import cpp_gen
 
 
 def get_param_description(name: str, obj: Any) -> source.ScalarParameter | source.BufferParameter:
-    view = np.asarray(obj)
+    view: np.ndarray = np.asarray(obj)
     if view.ndim > 0:
         return source.BufferParameter(name, tuple(dim.value for dim in obj.axes), view.dtype)
     else:
@@ -39,23 +39,23 @@ class GTFNSourceGenerator(fpi.ProgramSourceGenerator):
 
     def __call__(
         self,
-        fencil: itir.FencilDefinition,
+        program: itir.FencilDefinition,
         *args,
         **kwargs,
     ) -> stages.ProgramSource[languages.Cpp, languages.LanguageWithHeaderFilesSettings]:
         """Generate GTFN C++ code from the ITIR definition."""
         parameters = tuple(
-            get_param_description(fencil_param.id, obj)
-            for obj, fencil_param in zip(args, fencil.params)
+            get_param_description(program_param.id, obj)
+            for obj, program_param in zip(args, program.params)
         )
-        function = source.Function(fencil.id, parameters)
+        function = source.Function(program.id, parameters)
 
         rendered_params = ", ".join(
             ["gridtools::fn::backend::naive{}", *(p.name for p in parameters)]
         )
         decl_body = f"return generated::{function.name}()({rendered_params});"
         decl_src = cpp_gen.render_function_declaration(function, body=decl_body)
-        stencil_src = gtfn_backend.generate(fencil, **kwargs)
+        stencil_src = gtfn_backend.generate(program, **kwargs)
         source_code = source.format_source(
             self.language_settings,
             f"""

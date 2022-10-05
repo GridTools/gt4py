@@ -37,7 +37,7 @@ class DimensionKind(StrEnum):
 @dataclass(frozen=True)
 class Dimension:
     value: str
-    kind: DimensionKind = DimensionKind.HORIZONTAL  # type: ignore[assignment]
+    kind: DimensionKind = DimensionKind.HORIZONTAL
 
 
 class DType:

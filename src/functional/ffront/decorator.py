@@ -52,11 +52,7 @@ from functional.ffront.past_to_itir import ProgramLowering
 from functional.ffront.source_utils import CapturedVars
 from functional.iterator import ir as itir
 from functional.iterator.embedded import constant_field
-from functional.program_processors.processor_interface import (
-    ProgramExecutor,
-    ProgramFormatter,
-    ensure_processor_kind,
-)
+from functional.program_processors import processor_interface as fpi
 from functional.program_processors.runners import roundtrip
 
 
@@ -156,7 +152,7 @@ class Program:
     past_node: past.Program
     captured_vars: CapturedVars
     externals: dict[str, Any]
-    backend: Optional[ProgramExecutor]
+    backend: Optional[fpi.ProgramExecutor]
     definition: Optional[types.FunctionType] = None
     grid_type: Optional[GridType] = None
 
@@ -165,7 +161,7 @@ class Program:
         cls,
         definition: types.FunctionType,
         externals: Optional[dict] = None,
-        backend: Optional[ProgramExecutor] = None,
+        backend: Optional[fpi.ProgramExecutor] = None,
         grid_type: Optional[GridType] = None,
     ) -> "Program":
         captured_vars = CapturedVars.from_function(definition)
@@ -200,7 +196,7 @@ class Program:
         if undefined := referenced_var_names - defined_var_names:
             raise RuntimeError(f"Reference to undefined symbol(s) `{', '.join(undefined)}`.")
 
-    def with_backend(self, backend: ProgramExecutor) -> "Program":
+    def with_backend(self, backend: fpi.ProgramExecutor) -> "Program":
         return Program(
             past_node=self.past_node,
             captured_vars=self.captured_vars,
@@ -239,7 +235,7 @@ class Program:
             )
         backend = self.backend or DEFAULT_BACKEND
 
-        ensure_processor_kind(backend, ProgramExecutor)
+        fpi.ensure_processor_kind(backend, fpi.ProgramExecutor)
         if "debug" in kwargs:
             debug(self.itir)
 
@@ -253,9 +249,13 @@ class Program:
         )
 
     def format_itir(
-        self, *args, formatter: ProgramFormatter, offset_provider: dict[str, Dimension], **kwargs
+        self,
+        *args,
+        formatter: fpi.ProgramFormatter,
+        offset_provider: dict[str, Dimension],
+        **kwargs,
     ) -> str:
-        ensure_processor_kind(formatter, ProgramFormatter)
+        fpi.ensure_processor_kind(formatter, fpi.ProgramFormatter)
         rewritten_args, size_args, kwargs = self._process_args(args, kwargs)
         if "debug" in kwargs:
             debug(self.itir)
@@ -348,7 +348,7 @@ def program(definition: types.FunctionType) -> Program:
 
 @typing.overload
 def program(
-    *, externals: Optional[dict], backend: Optional[ProgramExecutor]
+    *, externals: Optional[dict], backend: Optional[fpi.ProgramExecutor]
 ) -> Callable[[types.FunctionType], Program]:
     ...
 
@@ -408,7 +408,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
     foast_node: OperatorNodeT
     captured_vars: CapturedVars
     externals: dict[str, Any]
-    backend: Optional[ProgramExecutor]  # note: backend is only used if directly called
+    backend: Optional[fpi.ProgramExecutor]  # note: backend is only used if directly called
     definition: Optional[types.FunctionType] = None
 
     @classmethod
@@ -416,7 +416,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         cls,
         definition: types.FunctionType,
         externals: Optional[dict] = None,
-        backend: Optional[ProgramExecutor] = None,
+        backend: Optional[fpi.ProgramExecutor] = None,
         *,
         operator_node_cls: type[OperatorNodeT] = foast.FieldOperator,
         operator_attributes: Optional[dict[str, Any]] = None,
@@ -452,7 +452,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         assert isinstance(type_, ct.CallableType)
         return type_
 
-    def with_backend(self, backend: ProgramExecutor) -> FieldOperator:
+    def with_backend(self, backend: fpi.ProgramExecutor) -> FieldOperator:
         return FieldOperator(
             foast_node=self.foast_node,
             captured_vars=self.captured_vars,
@@ -513,7 +513,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         all_captured_vars = collections.ChainMap(captured_vars.globals, captured_vars.nonlocals)
 
         captured_symbols: list[past.Symbol] = []
-        for name, val in all_captured_vars.items():  # type: ignore
+        for name, val in all_captured_vars.items():
             captured_symbols.append(
                 past.Symbol(
                     id=name,
@@ -547,7 +547,13 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
             backend=self.backend,
         )
 
-    def __call__(self, *args, out, offset_provider: dict[str, Dimension], **kwargs) -> None:
+    def __call__(
+        self,
+        *args,
+        out,
+        offset_provider: dict[str, Dimension],
+        **kwargs,
+    ) -> None:
         # TODO(tehrengruber): check all offset providers are given
         # deduce argument types
         arg_types = []
@@ -564,14 +570,17 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
 
 @typing.overload
 def field_operator(
-    definition: types.FunctionType, *, externals: Optional[dict], backend: Optional[ProgramExecutor]
+    definition: types.FunctionType,
+    *,
+    externals: Optional[dict],
+    backend: Optional[fpi.ProgramExecutor],
 ) -> FieldOperator[foast.FieldOperator]:
     ...
 
 
 @typing.overload
 def field_operator(
-    *, externals: Optional[dict], backend: Optional[ProgramExecutor]
+    *, externals: Optional[dict], backend: Optional[fpi.ProgramExecutor]
 ) -> Callable[[types.FunctionType], FieldOperator[foast.FieldOperator]]:
     ...
 

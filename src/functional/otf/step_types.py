@@ -19,9 +19,12 @@ from functional.otf import languages, stages
 from functional.program_processors.builders import cache
 
 
-SrcL = TypeVar("SrcL", bound=languages.LanguageTag, covariant=True)
-TgtL = TypeVar("TgtL", bound=languages.LanguageTag, covariant=True)
-LS = TypeVar("LS", bound=languages.LanguageSettings, covariant=True)
+SrcL = TypeVar("SrcL", bound=languages.LanguageTag)
+TgtL = TypeVar("TgtL", bound=languages.LanguageTag)
+LS = TypeVar("LS", bound=languages.LanguageSettings)
+SrcL_co = TypeVar("SrcL_co", bound=languages.LanguageTag, covariant=True)
+TgtL_co = TypeVar("TgtL_co", bound=languages.LanguageTag, covariant=True)
+LS_co = TypeVar("LS_co", bound=languages.LanguageSettings, covariant=True)
 
 
 class BindingsGenerator(Protocol[SrcL, LS, TgtL]):
@@ -40,6 +43,8 @@ class CompilableSourceGenerator(Protocol[SrcL, LS, TgtL]):
 
 class BuildSystemProjectGenerator(Protocol[SrcL, LS, TgtL]):
     def __call__(
-        self, jit_module: stages.CompilableSource, cache_strategy: cache.Strategy
-    ) -> stages.BuildSystemProject:
+        self,
+        source: stages.CompilableSource[SrcL, LS, TgtL],
+        cache_strategy: cache.Strategy,
+    ) -> stages.BuildSystemProject[SrcL, LS, TgtL]:
         ...

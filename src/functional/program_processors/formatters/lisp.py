@@ -63,7 +63,7 @@ class ToLispLike(TemplatedGenerator):
         )
         generated_code = super().apply(transformed, **kwargs)
         try:
-            from yasi import indent_code
+            from yasi import indent_code  # type: ignore[import]
 
             indented = indent_code(generated_code, "--dialect lisp")
             return "".join(indented["indented_code"])
@@ -72,5 +72,5 @@ class ToLispLike(TemplatedGenerator):
 
 
 @program_formatter
-def format_lisp(fencil: itir.FunctionDefinition, *args, **kwargs) -> str:
-    return ToLispLike.apply(fencil, **kwargs)
+def format_lisp(program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> str:
+    return ToLispLike.apply(program, **kwargs)
