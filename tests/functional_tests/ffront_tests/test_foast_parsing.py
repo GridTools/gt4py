@@ -295,4 +295,4 @@ def test_wrong_return_type_annotation():
         GTTypeError,
         match=r"Annotated return type does not match deduced return type",
     ):
-        _ = FieldOperatorParser.apply_to_function(bad_dim_where)
+        _ = FieldOperatorParser.apply_to_function(wrong_return_type_annotation)

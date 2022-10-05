@@ -40,35 +40,6 @@ from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduc
 from functional.ffront.source_utils import CapturedVars
 
 
-def _check_typed_dialect_ast(annotated_return_type, typed_dialect_ast):
-    # TODO(tehrengruber): use `type_info.return_type` when the type of the
-    #  arguments becomes available here
-    if (
-        len(typed_dialect_ast.type.args) > 0
-        and annotated_return_type != typed_dialect_ast.type.returns
-    ):
-        raise common.GTTypeError(
-            f"Annotated return type does not match deduced return type. Expected `{typed_dialect_ast.type.returns}`, but got `{annotated_return_type}`."
-        )
-    elif len(typed_dialect_ast.type.args) == 0 and isinstance(annotated_return_type, ct.TupleType):
-        for i, _type_entry in enumerate(annotated_return_type.types):
-            if isinstance(annotated_return_type.types[i], ct.TupleType):
-                _check_typed_dialect_ast(
-                    annotated_return_type.types[i], typed_dialect_ast.type.returns.types[i]
-                )
-            elif typed_dialect_ast.type.returns.types[i] != annotated_return_type.types[i].dtype:
-                raise common.GTTypeError(
-                    f"Annotated return type does not match deduced return type. Expected `{typed_dialect_ast.type.returns.types[i]}`, but got `{annotated_return_type.types[i].dtype}`."
-                )
-
-    elif (
-        len(typed_dialect_ast.type.args) == 0
-        and typed_dialect_ast.type.returns != annotated_return_type.dtype
-        and typed_dialect_ast.type.args != annotated_return_type.dims
-    ):
-        raise common.GTTypeError("Annotated return type does not match deduced return type.")
-
-
 class FieldOperatorSyntaxError(DialectSyntaxError):
     dialect_name = "Field Operator"
 
@@ -124,14 +95,20 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
 
     @classmethod
     def _postprocess_dialect_ast(
-        cls, dialect_ast: foast.FieldOperator, captured_vars: CapturedVars
+        cls, foast_node: foast.FieldOperator, captured_vars: CapturedVars
     ) -> foast.FieldOperator:
-        typed_dialect_ast = FieldOperatorTypeDeduction.apply(dialect_ast)
-        annotated_return_type = symbol_makers.make_symbol_type_from_typing(
-            captured_vars.annotations["return"]
-        )
-        _check_typed_dialect_ast(annotated_return_type, typed_dialect_ast)
-        return typed_dialect_ast
+        typed_foast_node = FieldOperatorTypeDeduction.apply(foast_node)
+        if "return" in captured_vars.annotations.keys():
+            annotated_return_type = symbol_makers.make_symbol_type_from_typing(
+                captured_vars.annotations["return"]
+            )
+            # TODO(tehrengruber): use `type_info.return_type` when the type of the
+            #  arguments becomes available here
+            if annotated_return_type != typed_foast_node.type.returns:
+                raise common.GTTypeError(
+                    f"Annotated return type does not match deduced return type. Expected `{typed_foast_node.type.returns}`, but got `{annotated_return_type}`."
+                )
+        return typed_foast_node
 
     def _builtin_type_constructor_symbols(
         self, captured_vars: Mapping[str, Any], location: eve.SourceLocation
