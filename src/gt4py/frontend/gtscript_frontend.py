@@ -1603,7 +1603,7 @@ class GTScriptParser(ast.NodeVisitor):
         canonical_ast = gt_meta.ast_dump(ast_func_def)
 
         # resolve externals
-        if externals:
+        if externals is not None:
             resolved_externals = GTScriptParser.resolve_external_symbols(
                 nonlocal_symbols, imported_symbols, externals
             )
@@ -1622,7 +1622,7 @@ class GTScriptParser(ast.NodeVisitor):
             "IK": gtscript.IK,
             "JK": gtscript.JK,
             "np": np,
-            **(resolved_externals if externals else nonlocal_symbols),
+            **(resolved_externals if externals is not None else nonlocal_symbols),
         }
         ann_assigns = tuple(filter(lambda stmt: isinstance(stmt, ast.AnnAssign), ast_func_def.body))
         for ann_assign in ann_assigns:
@@ -1652,7 +1652,7 @@ class GTScriptParser(ast.NodeVisitor):
             canonical_ast=canonical_ast,
             nonlocals=nonlocal_symbols,
             imported=imported_symbols,
-            externals=resolved_externals if externals else {},
+            externals=resolved_externals if externals is not None else {},
         )
 
         return definition
