@@ -40,7 +40,7 @@ The chosen design is so that there is a clear interface for every step from ITIR
 
 Translate IteratorIR into "backend language", for example C++ using GridTools.
 
-The `FencilSourceModuleGenerator` protocol in `fencil_processors.processor_interface` interface defines the interface for the first step, from IteratorIR to `fencil_processors.source_modules.source_modules.SourceModule`. This step can optionally make use of a `FencilFormatter` (also defined in `processor_interface.py`) to deliver the source code along with information accessible to further steps. 
+The `SourceModuleGenerator` protocol in `fencil_processors.processor_interface` interface defines the interface for the first step, from IteratorIR to `fencil_processors.source_modules.source_modules.SourceModule`. This step can optionally make use of a `ProgramFormatter` (also defined in `processor_interface.py`) to deliver the source code along with information accessible to further steps. 
 
 The output of this step is a `SourceModule` instance, which is safely hashable.
 

@@ -15,7 +15,7 @@
 
 import textwrap
 
-from functional.fencil_processors.builders import importer
+from functional.program_processors.builders import importer
 
 
 def test_import_from_path(tmp_path):

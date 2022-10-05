@@ -13,50 +13,50 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 import pytest
 
-from functional.fencil_processors.processor_interface import (
-    FencilExecutor,
-    FencilFormatter,
-    FencilSourceModuleGenerator,
+from functional.iterator import ir as itir
+from functional.otf import stages
+from functional.program_processors.processor_interface import (
+    ProgramExecutor,
+    ProgramFormatter,
+    ProgramSourceGenerator,
     ensure_processor_kind,
-    fencil_formatter,
+    program_formatter,
 )
-from functional.fencil_processors.source_modules.source_modules import SourceModule
-from functional.iterator.ir import FencilDefinition
 
 
 @pytest.fixture
 def dummy_formatter():
-    @fencil_formatter
-    def dummy_formatter(fencil: FencilDefinition, *args, **kwargs) -> str:
+    @program_formatter
+    def dummy_formatter(fencil: itir.FencilDefinition, *args, **kwargs) -> str:
         return ""
 
     yield dummy_formatter
 
 
 def test_decorated_formatter_function_is_recognized(dummy_formatter):
-    ensure_processor_kind(dummy_formatter, FencilFormatter)
+    ensure_processor_kind(dummy_formatter, ProgramFormatter)
 
 
 def test_custom_source_module_generator_class_is_recognized():
-    class DummyFencilSourceModuleGenerator:
+    class DummyProgramSourceGenerator:
         @property
-        def kind(self) -> type[FencilSourceModuleGenerator]:
-            return FencilSourceModuleGenerator
+        def kind(self) -> type[ProgramSourceGenerator]:
+            return ProgramSourceGenerator
 
-        def __call__(self, fencil: FencilDefinition, *args, **kwargs) -> SourceModule:
-            return SourceModule()
+        def __call__(self, fencil: itir.FencilDefinition, *args, **kwargs) -> stages.ProgramSource:
+            return stages.ProgramSource()
 
-    ensure_processor_kind(DummyFencilSourceModuleGenerator(), FencilSourceModuleGenerator)
+    ensure_processor_kind(DummyProgramSourceGenerator(), ProgramSourceGenerator)
 
 
 def test_undecorated_formatter_function_is_not_recognized():
-    def undecorated_formatter(fencil: FencilDefinition, *args, **kwargs) -> str:
+    def undecorated_formatter(fencil: itir.FencilDefinition, *args, **kwargs) -> str:
         return ""
 
-    with pytest.raises(RuntimeError, match="is not a FencilFormatter"):
-        ensure_processor_kind(undecorated_formatter, FencilFormatter)
+    with pytest.raises(RuntimeError, match="is not a ProgramFormatter"):
+        ensure_processor_kind(undecorated_formatter, ProgramFormatter)
 
 
 def test_wrong_processor_type_is_caught_at_runtime(dummy_formatter):
-    with pytest.raises(RuntimeError, match="is not a FencilExecutor"):
-        ensure_processor_kind(dummy_formatter, FencilExecutor)
+    with pytest.raises(RuntimeError, match="is not a ProgramExecutor"):
+        ensure_processor_kind(dummy_formatter, ProgramExecutor)

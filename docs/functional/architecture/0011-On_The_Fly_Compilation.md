@@ -7,7 +7,7 @@ tags: [backend,bindings,build,compile,otf]
 - **Status**: valid
 - **Authors**: Rico Häuselmann (@DropD)
 - **Created**: 2022-09-12
-- **Updated**: 2022-09-12
+- **Updated**: 2022-10-05
 
 This supersedes [0009 - Compiled Backend Integration](0009-Compiled_Backend_Integration.md) and concentrates on the API design for on-the-fly compilation of stencils and all the steps in between IR and compiled Python extension.
 
@@ -50,16 +50,16 @@ A python object that executes the GT4Py program when called with the same argume
 
 Similarly the steps to go from one of the above stages to another have names.
 
-**`FencilSourceModuleGenerator`:**
+**`ProgramSourceGenerator`:**
 `OTFClosure -> SourceModule`.
 
-**`OTFModuleGenerator`:**
+**`CompilableSourceGenerator`:**
 `SourceModule -> OTFSourceModule`.
 
 **Bindings Generator:**
-A special case of `OTFModuleGenerator` where the resulting `OTFSourceModule` contains language bindings.
+A special case of `CompilableSourceGenerator` where the resulting `OTFSourceModule` contains language bindings.
 
-**OTFBuilder:**
+**BuildSystemProject:**
 `OTFSourceModule -> Executable Program`.
 
 ## Architecture
@@ -129,7 +129,7 @@ The workflow step from the `SourceModule` stage to the `OTFSourceModule` stage, 
 The same decision should be followed for other language bindings, wherever possible.
 
 #### Consequences
-The `fencil_processors.source_modules.source_modules.SourceModule` class has been designed to carry enough information for the bindings generator to convert from the common python call interface to whatever the backend C++ code requires.
+The `program_processors.source_modules.source_modules.SourceModule` class has been designed to carry enough information for the bindings generator to convert from the common python call interface to whatever the backend C++ code requires.
 
 #### Reason
 The advantage is that compiled programs can be called with the same arguments independently of which (C++) backends were used, without forcing backend implementers to reinvent the wheel when it comes to converting to data structures their bakend's C++ side knows how to work with.
@@ -138,7 +138,7 @@ The advantage is that compiled programs can be called with the same arguments in
 Should it turn out that future backends are not sufficiently similar to warrant sharing this step, it may make sense to specialize these for each C++ backend instead. Most likely some code will still be shareable between these though.
 
 ### Shared Build Steps
-The build step goes from `fencil_processors.source_modules.source_modules.OTFSourceModule` to an executable python object. Two versions have been implemented in `fencil_processors.builders.cpp.cmake` and `fencil_processors.builders.cpp.compiledb`. 
+The build step goes from `program_processors.source_modules.source_modules.OTFSourceModule` to an executable python object. Two versions have been implemented in `program_processors.builders.cpp.cmake` and `program_processors.builders.cpp.compiledb`. 
 
 `cmake.CMake` creates a new full CMake project for each program. `compiledb.Compiledb` creates a new CMake project only if it would lead to a different CMake configuration, such as diverging dependencies or build types etc.
 

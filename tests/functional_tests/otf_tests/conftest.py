@@ -17,17 +17,18 @@ import jinja2
 import numpy as np
 import pytest
 
-from functional.fencil_processors.builders import cache
-from functional.fencil_processors.builders.cpp import bindings
-from functional.fencil_processors.source_modules import cpp_gen, source_modules
+from functional.otf import languages, source, stages
+from functional.program_processors.builders import cache
+from functional.program_processors.builders.cpp import bindings
+from functional.program_processors.source_modules import cpp_gen
 
 
-def make_source_module(name: str):
-    entry_point = source_modules.Function(
+def make_program_source(name: str) -> stages.ProgramSource:
+    entry_point = source.Function(
         name,
         parameters=[
-            source_modules.BufferParameter("buf", ("I", "J"), np.dtype(np.float32)),
-            source_modules.ScalarParameter("sc", np.dtype(np.float32)),
+            source.BufferParameter("buf", ("I", "J"), np.dtype(np.float32)),
+            source.ScalarParameter("sc", np.dtype(np.float32)),
         ],
     )
     func = cpp_gen.render_function_declaration(
@@ -50,38 +51,38 @@ def make_source_module(name: str):
         """
     ).render(func=func)
 
-    return source_modules.SourceModule(
+    return stages.ProgramSource(
         entry_point=entry_point,
         source_code=src,
         library_deps=[
-            source_modules.LibraryDependency("gridtools", "master"),
+            source.LibraryDependency("gridtools", "master"),
         ],
-        language=source_modules.Cpp,
+        language=languages.Cpp,
         language_settings=cpp_gen.CPP_DEFAULT,
     )
 
 
 @pytest.fixture
-def source_module_with_name(source_module_example):
-    yield make_source_module
+def program_source_with_name():
+    yield make_program_source
 
 
 @pytest.fixture
-def source_module_example():
-    return make_source_module("stencil")
+def program_source_example():
+    return make_program_source("stencil")
 
 
 @pytest.fixture
-def otf_module_example(source_module_example):
-    return source_modules.OTFSourceModule(
-        source_module=source_module_example,
-        bindings_module=bindings.create_bindings(source_module_example),
+def compilable_source_example(program_source_example):
+    return stages.CompilableSource(
+        program_source=program_source_example,
+        binding_source=bindings.create_bindings(program_source_example),
     )
 
 
 @pytest.fixture
-def clean_example_session_cache(otf_module_example):
-    cache_dir = cache.get_cache_folder(otf_module_example, cache.Strategy.SESSION)
+def clean_example_session_cache(compilable_source_example):
+    cache_dir = cache.get_cache_folder(compilable_source_example, cache.Strategy.SESSION)
     if cache_dir.exists():
         shutil.rmtree(cache_dir)
     yield

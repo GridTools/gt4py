@@ -13,13 +13,13 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 import pathlib
 
-from functional.fencil_processors.builders import build_data, cache, importer
-from functional.fencil_processors.builders.cpp import compiledb
+from functional.program_processors.builders import build_data, cache, importer
+from functional.program_processors.builders.cpp import compiledb
 
 
-def test_default_builder_generator(otf_module_example, clean_example_session_cache):
+def test_default_builder_generator(compilable_source_example, clean_example_session_cache):
     otf_builder = compiledb.make_compiledb_factory()(
-        otf_module_example, cache_strategy=cache.Strategy.SESSION
+        compilable_source_example, cache_strategy=cache.Strategy.SESSION
     )
 
     # make sure the example project has not been written yet

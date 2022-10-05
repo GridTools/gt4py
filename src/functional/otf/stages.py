@@ -1,0 +1,108 @@
+# GT4Py Project - GridTools Framework
+#
+# Copyright (c) 2014-2021, ETH Zurich
+# All rights reserved.
+#
+# This file is part of the GT4Py project and the GridTools framework.
+# GT4Py is free software: you can redistribute it and/or modify it under
+# the terms of the GNU General Public License as published by the
+# Free Software Foundation, either version 3 of the License, or any later
+# version. See the LICENSE.txt file at the top-level directory of this
+# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+from __future__ import annotations
+
+import dataclasses
+from typing import Any, Generic, Optional, Protocol, TypeVar
+
+from functional.iterator import ir as itir
+from functional.otf import languages, source
+
+
+SrcL = TypeVar("SrcL", bound=languages.LanguageTag)
+TgtL = TypeVar("TgtL", bound=languages.LanguageTag)
+SettingT = TypeVar("SettingT", bound=languages.LanguageSettings)
+SrcL_co = TypeVar("SrcL_co", bound=languages.LanguageTag, covariant=True)
+TgtL_co = TypeVar("TgtL_co", bound=languages.LanguageTag, covariant=True)
+SettingT_co = TypeVar("SettingT_co", bound=languages.LanguageSettings, covariant=True)
+
+
+@dataclasses.dataclass(frozen=True)
+class ProgramCall:
+    """Iterator IR representaion of a program together with arguments to be passed to it."""
+
+    program: itir.FencilDefinition
+    args: tuple[Any, ...]
+    kwargs: dict[str, Any]
+
+
+@dataclasses.dataclass(frozen=True)
+class ProgramSource(Generic[SrcL, SettingT]):
+    """
+    Standalone sourcecode translated from an IR representation along with OTF relevant information.
+
+    Contains additional information required for further OTF steps, such as
+    - implementation language and language conventions
+    - dependencies on implementation language libraries
+    - how to call the program
+    """
+
+    entry_point: source.Function
+    source_code: str
+    library_deps: tuple[source.LibraryDependency, ...]
+    language: type[SrcL]
+    language_settings: SettingT
+
+    def __post_init__(self):
+        if not isinstance(self.language_settings, self.language.settings_level):
+            raise TypeError(
+                f"Wrong language settings type for {self.language}, must be subclass of {self.language.settings_level}"
+            )
+
+
+@dataclasses.dataclass(frozen=True)
+class BindingSource(Generic[SrcL, TgtL]):
+    """
+    Companion source code for translated program source code.
+
+    This is only needed for OTF compilation if the translated program source code is
+    not directly callable from python and therefore requires bindings.
+    This can also optionally be added to compile bindings for other languages than python
+    when using GT4Py as part of the build for a non-python driver project.
+    """
+
+    source_code: str
+    library_deps: tuple[source.LibraryDependency, ...]
+
+
+@dataclasses.dataclass(frozen=True)
+class CompilableSource(Generic[SrcL, SettingT, TgtL]):
+    """
+    Encapsulate all the source code required for OTF compilation.
+
+    The bindings module is optional if and only if the program_source is directly callable.
+    This should only be the case if the source language / framework supports this out of the box.
+    If bindings are required, it is recommended to create them in a separate step to ensure reusability.
+    """
+
+    program_source: ProgramSource[SrcL, SettingT]
+    binding_source: Optional[BindingSource[SrcL, TgtL]]
+
+    @property
+    def library_deps(self) -> tuple[source.LibraryDependency, ...]:
+        if not self.binding_source:
+            return self.program_source.library_deps
+        return tuple((*self.program_source.library_deps, *self.binding_source.library_deps))
+
+
+class BuildSystemProject(Protocol[SrcL_co, SettingT_co, TgtL_co]):
+    def build(self) -> None:
+        ...
+
+
+class CompiledProgram(Protocol):
+    """Executable python representation of a program."""
+
+    def __call__(self, *args, **kwargs) -> None:
+        ...

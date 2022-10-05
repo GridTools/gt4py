@@ -27,21 +27,21 @@ The source generator part of the GTFN backend exposes two public interfaces.
 
 #### Pure Source Code
 
-`fencil_processors.formatters.gtfn.format_sourcecode` implements a `fencil_processors.processor_interface.FencilFormatter` protocol and produces C++ source code from a GT4Py program and it's inputs. The resulting source code can not be called on it's own from GT4Py (or Python in general), but could be incorporated into a n external code base.
+`program_processors.formatters.gtfn.format_sourcecode` implements a `program_processors.processor_interface.ProgramFormatter` protocol and produces C++ source code from a GT4Py program and it's inputs. The resulting source code can not be called on it's own from GT4Py (or Python in general), but could be incorporated into a n external code base.
 
 #### Source Code Module
 
-`fencil_processors.codegens.gtfn_modules.create_sourcecode` implements the `fencil_processors.processor_interface.FencilSourceModuleGenerator` protocol and produces a C++ source code module (source code packaged with additional information).
+`program_processors.codegens.gtfn_modules.create_sourcecode` implements the `program_processors.processor_interface.ProgramSourceGenerator` protocol and produces a C++ source code module (source code packaged with additional information).
 
-It is an instance of `fencil_processors.codegens.gtfn_modules.GTFNSourceModuleGenerator` with default language settings to be packaged into the source code module for later stages. These include the language used (C++), C++ dependencies, file name endings, code formatting options etc.
+It is an instance of `program_processors.codegens.gtfn_modules.GTFNSourceGenerator` with default language settings to be packaged into the source code module for later stages. These include the language used (C++), C++ dependencies, file name endings, code formatting options etc.
 
 #### Bindings Generator
 
-`fencil_processors.builders.cpp.bindings.source_module_to_otf_module` implements the `fencil_processors.processor_interface.OTFModuleGenerator` protocol and generates an OTF module from a source code module. An OTF module contains all the information required to compile the GT4Py program into a python callable. This includes bindings, in this case using `pybind11`. The bindings generator providing these is currently still tailored to the GTFN backend but should be easy to generalize.
+`program_processors.builders.cpp.bindings.program_source_to_compilable_source` implements the `program_processors.processor_interface.CompilableSourceGenerator` protocol and generates an OTF module from a source code module. An OTF module contains all the information required to compile the GT4Py program into a python callable. This includes bindings, in this case using `pybind11`. The bindings generator providing these is currently still tailored to the GTFN backend but should be easy to generalize.
 
 #### Executor
 
-`fencil_processors.runners.gtfn_cpu.run_gtfn` is the default `fencil_processors.processor_interface.FencilExecutor` implementation of the GTFN backend. It is an instance of `fencil_processors.runners.gtfn_cpu.GTFNExecutor`, with sensible defaults for the configuration options allowed by that class. These include language settings and which builder should be used. Builder configuration can be achieved through passing a fully configured builder factory.
+`program_processors.runners.gtfn_cpu.run_gtfn` is the default `program_processors.processor_interface.ProgramExecutor` implementation of the GTFN backend. It is an instance of `program_processors.runners.gtfn_cpu.GTFNExecutor`, with sensible defaults for the configuration options allowed by that class. These include language settings and which builder should be used. BuildSystemProject configuration can be achieved through passing a fully configured builder factory.
 
 When called the `GTFNExecutor` instance composes a workflow from the above steps, the configured builder, importer and an arguments conversion decorator. The composed workflow is then called just in time for execution.
 

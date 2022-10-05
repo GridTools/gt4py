@@ -11,14 +11,14 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-from functional.fencil_processors.builders.cpp import bindings
-from functional.fencil_processors.source_modules import source_modules
+from functional.otf import source
+from functional.program_processors.builders.cpp import bindings
 
 
-def test_bindings(source_module_example):
-    module = bindings.create_bindings(source_module_example)
-    expected_src = source_modules.format_source(
-        source_module_example.language_settings,
+def test_bindings(program_source_example):
+    module = bindings.create_bindings(program_source_example)
+    expected_src = source.format_source(
+        program_source_example.language_settings,
         """\
         #include "stencil.cpp.inc"
         

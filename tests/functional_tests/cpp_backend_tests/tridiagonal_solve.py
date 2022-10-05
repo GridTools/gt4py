@@ -1,10 +1,10 @@
 import sys
 
-from functional.fencil_processors.codegens.gtfn.gtfn_backend import generate
 from functional.iterator.builtins import *
 from functional.iterator.runtime import CartesianAxis, closure, fundef
 from functional.iterator.tracing import trace
 from functional.iterator.transforms import LiftMode
+from functional.program_processors.codegens.gtfn.gtfn_backend import generate
 
 
 IDim = CartesianAxis("IDim")

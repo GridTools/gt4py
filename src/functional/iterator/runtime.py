@@ -7,14 +7,14 @@ from typing import Any, Callable, Optional, Union
 from devtools import debug
 
 from functional import common
-from functional.fencil_processors.processor_interface import (
-    FencilExecutor,
-    FencilFormatter,
-    ensure_processor_kind,
-)
 from functional.iterator import builtins
 from functional.iterator.builtins import BackendNotSelectedError, builtin_dispatch
 from functional.iterator.ir import FencilDefinition
+from functional.program_processors.processor_interface import (
+    ProgramExecutor,
+    ProgramFormatter,
+    ensure_processor_kind,
+)
 
 
 __all__ = ["offset", "fundef", "fendef", "closure", "CartesianAxis"]
@@ -71,19 +71,19 @@ class FendefDispatcher:
             debug(fencil_definition)
         return fencil_definition
 
-    def __call__(self, *args, backend: Optional[FencilExecutor] = None, **kwargs):
+    def __call__(self, *args, backend: Optional[ProgramExecutor] = None, **kwargs):
         args, kwargs = self._rewrite_args(args, kwargs)
 
         if backend is not None:
-            ensure_processor_kind(backend, FencilExecutor)
+            ensure_processor_kind(backend, ProgramExecutor)
             backend(self.itir(*args, **kwargs), *args, **kwargs)
         else:
             if fendef_embedded is None:
                 raise RuntimeError("Embedded execution is not registered")
             fendef_embedded(self.function, *args, **kwargs)
 
-    def format_itir(self, *args, formatter: FencilFormatter, **kwargs) -> str:
-        ensure_processor_kind(formatter, FencilFormatter)
+    def format_itir(self, *args, formatter: ProgramFormatter, **kwargs) -> str:
+        ensure_processor_kind(formatter, ProgramFormatter)
         args, kwargs = self._rewrite_args(args, kwargs)
         return formatter(self.itir(*args, **kwargs), *args, **kwargs)
 
