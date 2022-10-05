@@ -106,7 +106,8 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             #  arguments becomes available here
             if annotated_return_type != typed_foast_node.type.returns:
                 raise common.GTTypeError(
-                    f"Annotated return type does not match deduced return type. Expected `{typed_foast_node.type.returns}`, but got `{annotated_return_type}`."
+                    f"Annotated return type does not match deduced return type. Expected `{typed_foast_node.type.returns}`"
+                    f", but got `{annotated_return_type}`."
                 )
         return typed_foast_node
 
