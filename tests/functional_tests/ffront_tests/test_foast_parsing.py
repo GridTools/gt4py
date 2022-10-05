@@ -25,9 +25,9 @@ import re
 
 import pytest
 
-from functional.common import Field
+from functional.common import Field, GTTypeError
 from functional.ffront import common_types
-from functional.ffront.fbuiltins import float32, float64, int32, int64, where
+from functional.ffront.fbuiltins import Dimension, float32, float64, int32, int64, where
 from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError
 from functional.ffront.func_to_foast import FieldOperatorParser, FieldOperatorSyntaxError
 from functional.ffront.symbol_makers import TypingError
@@ -282,3 +282,28 @@ def test_external_symbols():
         kind=common_types.ScalarKind.FLOAT32, shape=None
     )
     assert "ext_unused" not in parsed.annex.symtable
+
+
+def test_wrong_return_type_annotation():
+    ADim = Dimension("ADim")
+    BDim = Dimension("BDim")
+
+    def wrong_return_type_annotation(a: Field[[ADim], float64]) -> Field[[BDim], float64]:
+        return a
+
+    with pytest.raises(
+        GTTypeError,
+        match=r"Annotated return type does not match deduced return type",
+    ):
+        _ = FieldOperatorParser.apply_to_function(wrong_return_type_annotation)
+
+
+def test_empty_dims_type():
+    def empty_dims() -> Field[[], float]:
+        return 1.0
+
+    with pytest.raises(
+        GTTypeError,
+        match=r"Annotated return type does not match deduced return type",
+    ):
+        _ = FieldOperatorParser.apply_to_function(empty_dims)
