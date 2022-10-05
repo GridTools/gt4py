@@ -29,7 +29,7 @@ from gt4py import definitions as gt_definitions
 from gt4py import gtscript
 from gt4py import utils as gt_utils
 from gt4py.frontend import node_util, nodes
-from gt4py.frontend.defir_to_gtir import DefIRToGTIR, UnVectorisation
+from gt4py.frontend.defir_to_gtir import DefIRToGTIR, UnrollVectorAssignments
 from gt4py.utils import NOTHING
 from gt4py.utils import meta as gt_meta
 from gtc import utils as gtc_utils
@@ -1944,7 +1944,9 @@ class GTScriptParser(ast.NodeVisitor):
             loc=nodes.Location.from_ast_node(self.ast_root.body[0]),
         )
 
-        self.definition_ir = UnVectorisation.apply(self.definition_ir, fields_decls=fields_decls)
+        self.definition_ir = UnrollVectorAssignments.apply(
+            self.definition_ir, fields_decls=fields_decls
+        )
         return self.definition_ir
 
 

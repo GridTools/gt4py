@@ -985,10 +985,10 @@ class TestMatrixAssignment(gt_testing.StencilTestSuite):
     backends = ALL_BACKENDS
     symbols = {
         "field_in": gt_testing.field(
-            in_range=(-10, 10), axes="IJK", boundary=[(0, 0), (0, 0), (0, 0)], data_dims=(2, 2)
+            in_range=(-10, 10), axes="IJK", boundary=[(0, 0), (0, 0), (0, 0)], data_dims=(2, 3)
         ),
         "field_out": gt_testing.field(
-            in_range=(-10, 10), axes="IJK", boundary=[(0, 0), (0, 0), (0, 0)], data_dims=(2, 2)
+            in_range=(-10, 10), axes="IJK", boundary=[(0, 0), (0, 0), (0, 0)], data_dims=(2, 3)
         ),
     }
 
