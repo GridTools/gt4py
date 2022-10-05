@@ -13,9 +13,16 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import ast
-import copy
 
 from functional.ffront.fbuiltins import TYPE_BUILTIN_NAMES
+
+
+def _make_assign(target: str, source: str, location_node: ast.AST):
+    result = ast.Assign(
+        targets=[ast.Name(ctx=ast.Store(), id=target)], value=ast.Name(ctx=ast.Load(), id=source)
+    )
+    ast.copy_location(result, location_node)
+    return result
 
 
 class SingleStaticAssignPass(ast.NodeTransformer):
@@ -90,7 +97,6 @@ class SingleStaticAssignPass(ast.NodeTransformer):
         return self.RhsRenamer.apply(self.name_counter, self.separator, node)
 
     def visit_If(self, node: ast.If):
-        node = copy.copy(node)
         prev_name_counter = self.name_counter
 
         node.test = self.visit(node.test)
@@ -103,10 +109,29 @@ class SingleStaticAssignPass(ast.NodeTransformer):
         node.orelse = [self.visit(el) for el in node.orelse]
         orelse_name_counter = self.name_counter
 
-        self.name_counter = {
-            key: max(body_name_counter.get(key, 0), orelse_name_counter.get(key, 0))
-            for key in (set(body_name_counter.keys()) | set(orelse_name_counter.keys()))
-        }
+        all_names = set(body_name_counter.keys()) | set(orelse_name_counter.keys())
+
+        # ensure both branches conclude with the same unique names
+        for name in all_names:
+            body_count = body_name_counter.get(name, 0)
+            orelse_count = orelse_name_counter.get(name, 0)
+
+            if body_count < orelse_count:
+                new_assign = _make_assign(
+                    f"{name}{self.separator}{orelse_count}",
+                    f"{name}{self.separator}{body_count}",
+                    node,
+                )
+                node.body.append(new_assign)
+            elif body_count > orelse_count:
+                new_assign = _make_assign(
+                    f"{name}{self.separator}{body_count}",
+                    f"{name}{self.separator}{orelse_count}",
+                    node,
+                )
+                node.orelse.append(new_assign)
+
+            self.name_counter[name] = max(body_count, orelse_count)
 
         return node
 

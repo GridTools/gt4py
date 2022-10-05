@@ -152,11 +152,9 @@ def test_if():
     assert lines[3] == "    a__0 = 2"
     assert lines[4] == "a__1 = 3"
 
-    blub = 1 + 1
-
 
 def test_nested_if():
-    lines = ast.unparse(
+    result = ast.unparse(
         ssaify_string(
             """
             if True:
@@ -169,10 +167,57 @@ def test_nested_if():
             a = 5
             """
         )
-    ).splitlines()
+    )
 
-    assert lines[1] == "    a__0 = 1"
-    assert lines[3] == "    a__0 = 2"
-    assert lines[5] == "        a__1 = 3"
-    assert lines[6] == "    a__2 = 4"
-    assert lines[7] == "a__3 = 5"
+    expected = textwrap.dedent(
+        """
+        if True:
+            a__0 = 1
+            a__2 = a__0
+        else:
+            a__0 = 2
+            if True:
+                a__1 = 3
+            else:
+                a__1 = a__0
+            a__2 = 4
+        a__3 = 5
+    """
+    ).strip()
+
+    assert result == expected
+
+
+def test_nested_if_chain():
+    result = ast.unparse(
+        ssaify_string(
+            """
+            if True:
+                a = 1
+            else:
+                a = 2
+                if True:
+                    a = a+1
+                a = a+1
+            a = a+1
+            """
+        )
+    )
+
+    expected = textwrap.dedent(
+        """
+        if True:
+            a__0 = 1
+            a__2 = a__0
+        else:
+            a__0 = 2
+            if True:
+                a__1 = a__0 + 1
+            else:
+                a__1 = a__0
+            a__2 = a__1 + 1
+        a__3 = a__2 + 1
+    """
+    ).strip()
+
+    assert result == expected
