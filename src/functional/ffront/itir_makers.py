@@ -12,7 +12,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import Union
+from typing import Callable, Union
 
 from functional.iterator import ir as itir
 
@@ -251,3 +251,10 @@ def shift_(offset, value=None):
 
 def literal_(value: str, typename: str):
     return itir.Literal(value=value, type=typename)
+
+
+def map_(op: str | Callable, *its):
+    if isinstance(op, str):
+        op = call_(op)
+    args = [f"__arg{i}" for i in range(len(its))]
+    return lift_(lambda__(*args)(op(*[deref_(arg) for arg in args])))(*its)

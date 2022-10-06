@@ -9,6 +9,7 @@ import numbers
 from abc import abstractmethod
 from dataclasses import dataclass
 from types import NoneType
+from functools import cached_property
 from typing import (
     Any,
     Callable,
@@ -304,11 +305,28 @@ def lift(stencil):
                     self.stencil, self.args, offsets=[*self.offsets, *offsets], elem=self.elem
                 )
 
-            def max_neighbors(self):
+            @cached_property
+            def incomplete_offsets(self):
                 # TODO cleanup, test edge cases
-                open_offsets = get_open_offsets(*self.offsets)
-                assert open_offsets
-                return _get_connectivity(args[0].offset_provider, open_offsets[0]).max_neighbors
+                inherited_open_offsets = []
+                for arg in self.args:
+                    if arg.incomplete_offsets:
+                        assert not inherited_open_offsets or inherited_open_offsets == arg.incomplete_offsets
+                        inherited_open_offsets = arg.incomplete_offsets
+                # TODO: check order
+                return get_open_offsets(*inherited_open_offsets, *self.offsets)
+
+            @cached_property
+            def offset_provider(self):
+                offset_provider = None
+                for arg in self.args:
+                    if (new_offset_provider := arg.offset_provider):
+                        offset_provider = new_offset_provider
+                return offset_provider
+
+            def max_neighbors(self):
+                assert self.incomplete_offsets
+                return _get_connectivity(self.args[0].offset_provider, self.incomplete_offsets[0]).max_neighbors
 
             def _shifted_args(self):
                 return tuple(map(lambda arg: arg.shift(*self.offsets), self.args))

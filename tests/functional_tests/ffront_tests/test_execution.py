@@ -43,7 +43,7 @@ from functional.iterator.embedded import (
 )
 
 
-@pytest.fixture(params=[roundtrip.executor, gtfn_cpu.run_gtfn])
+@pytest.fixture(params=[roundtrip.executor])
 def fieldview_backend(request):
     yield request.param
 
@@ -215,8 +215,7 @@ def test_fold_shifts(fieldview_backend):
     def auto_lift(
         inp1: Field[[IDim], float64], inp2: Field[[IDim], float64]
     ) -> Field[[IDim], float64]:
-        tmp = inp1 + inp2(Ioff[1])
-        return tmp(Ioff[1])
+        return (inp1(Ioff[1]))(Ioff[2])
 
     @program(backend=fieldview_backend)
     def fencil(
@@ -446,7 +445,9 @@ def test_reduction_execution(reduction_setup, fieldview_backend):
 
     @field_operator
     def reduction(edge_f: Field[[Edge], int64]) -> Field[[Vertex], int64]:
-        return neighbor_sum(edge_f(V2E), axis=V2EDim)
+        return neighbor_sum(edge_f(V2E)+1, axis=V2EDim)
+
+    bla = reduction.__gt_itir__()
 
     @program(backend=fieldview_backend)
     def fencil(edge_f: Field[[Edge], int64], out: Field[[Vertex], int64]) -> None:
@@ -454,7 +455,7 @@ def test_reduction_execution(reduction_setup, fieldview_backend):
 
     fencil(rs.inp, rs.out, offset_provider=rs.offset_provider)
 
-    ref = np.sum(rs.v2e_table, axis=1)
+    ref = np.sum(rs.v2e_table + np.where(rs.v2e_table != -1, 1, 0), axis=1)
     assert np.allclose(ref, rs.out)
 
 
