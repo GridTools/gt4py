@@ -289,8 +289,6 @@ class Program:
     def _process_args(self, args: tuple, kwargs: dict) -> tuple[tuple, tuple, dict[str, Any]]:
         self._validate_args(*args, **kwargs)
 
-        # there will be an error here because of edits in past_to_itir, bypass it
-        # e.g. check if param has "__size" in the name (but hacky approach), size_args should be returned as empty
         domain_init = False
         if "domain" in self.past_node.body[0].kwargs:
             domain_init = True

@@ -114,8 +114,6 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             size_params = self._gen_size_params_from_program(node)
             params = [itir.Sym(id=inp.id) for inp in node.params] + size_params
 
-        # if all stencils calls have domain included, size params has to be ignored
-
         closures: list[itir.StencilClosure] = []
         for stmt in node.body:
             closures.append(self._visit_stencil_call(stmt, **kwargs))
