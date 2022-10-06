@@ -1218,3 +1218,13 @@ def test_where_k_offset():
     expected = np.where(np.arange(0, size, 1)[np.newaxis, :] > 0.0, a, 2.0)
 
     assert np.allclose(np.asarray(out), expected)
+
+def test_undefined_symbols():
+    from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError
+
+    with pytest.raises(FieldOperatorTypeDeductionError, match="Undeclared symbol"):
+
+        @field_operator
+        def return_undefined():
+            return undefined_symbol
+
