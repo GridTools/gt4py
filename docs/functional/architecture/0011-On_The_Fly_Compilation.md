@@ -53,11 +53,11 @@ Similarly the steps to go from one of the above stages to another have names.
 **`ProgramSourceGenerator`:**
 `OTFClosure -> SourceModule`.
 
-**`CompilableSourceGenerator`:**
+**`PackagingStep`:**
 `SourceModule -> OTFSourceModule`.
 
 **Bindings Generator:**
-A special case of `CompilableSourceGenerator` where the resulting `OTFSourceModule` contains language bindings.
+A special case of `PackagingStep` where the resulting `OTFSourceModule` contains language bindings.
 
 **BuildSystemProject:**
 `OTFSourceModule -> Executable Program`.

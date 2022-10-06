@@ -27,17 +27,27 @@ TgtL_co = TypeVar("TgtL_co", bound=languages.LanguageTag, covariant=True)
 LS_co = TypeVar("LS_co", bound=languages.LanguageSettings, covariant=True)
 
 
-class BindingsGenerator(Protocol[SrcL, LS, TgtL]):
+class TranslationStep(Protocol[SrcL, LS]):
+    def __call__(self, program_call: stages.ProgramCall) -> stages.ProgramSource[SrcL, LS]:
+        ...
+
+
+class BindingStep(Protocol[SrcL, LS, TgtL]):
     def __call__(
         self, program_source: stages.ProgramSource[SrcL, LS]
     ) -> stages.BindingSource[SrcL, TgtL]:
         ...
 
 
-class CompilableSourceGenerator(Protocol[SrcL, LS, TgtL]):
+class PackagingStep(Protocol[SrcL, LS, TgtL]):
     def __call__(
         self, program_source: stages.ProgramSource[SrcL, LS]
     ) -> stages.CompilableSource[SrcL, LS, TgtL]:
+        ...
+
+
+class CompilationStep(Protocol[SrcL, LS, TgtL]):
+    def __call__(self, source: stages.CompilableSource[SrcL, LS, TgtL]) -> stages.CompiledProgram:
         ...
 
 

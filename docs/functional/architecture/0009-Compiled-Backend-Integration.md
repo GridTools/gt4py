@@ -50,7 +50,7 @@ This is the only step required if one is interested only in the backend language
 
 Generate bindings to call the compiled backend language code from Python (Technically this could be for another language but then the pipeline would not lead to an executable fencil).
 
-The interface for step two is defined in the `fencil_processors.pipeline.BindingsGenerator` protocol. The first example is implemented in `fencil_processors.builders.cpp.bindings.create_bindings`.
+The interface for step two is defined in the `fencil_processors.pipeline.BindingStep` protocol. The first example is implemented in `fencil_processors.builders.cpp.bindings.create_bindings`.
 
 The output of this step is a `BindingsModule` instance and also safely hashable.
 

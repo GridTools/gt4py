@@ -37,7 +37,7 @@ It is an instance of `program_processors.codegens.gtfn_modules.GTFNSourceGenerat
 
 #### Bindings Generator
 
-`program_processors.builders.cpp.bindings.program_source_to_compilable_source` implements the `program_processors.processor_interface.CompilableSourceGenerator` protocol and generates an OTF module from a source code module. An OTF module contains all the information required to compile the GT4Py program into a python callable. This includes bindings, in this case using `pybind11`. The bindings generator providing these is currently still tailored to the GTFN backend but should be easy to generalize.
+`program_processors.builders.cpp.bindings.program_source_to_compilable_source` implements the `program_processors.processor_interface.PackagingStep` protocol and generates an OTF module from a source code module. An OTF module contains all the information required to compile the GT4Py program into a python callable. This includes bindings, in this case using `pybind11`. The bindings generator providing these is currently still tailored to the GTFN backend but should be easy to generalize.
 
 #### Executor
 
