@@ -1223,6 +1223,6 @@ def test_where_k_offset():
 
     program_where_k_offset(a, k_index, out, offset_provider={"Koff": KDim})
 
-    expected = np.where(np.full(size, range(size)) > 0.0, a, 2.0)
+    expected = np.where(np.arange(0, size, 1)[np.newaxis, :] > 0.0, a, 2.0)
 
     assert np.allclose(np.asarray(out), expected)
