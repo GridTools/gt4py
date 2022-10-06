@@ -314,7 +314,7 @@ def lift(stencil):
                         assert not inherited_open_offsets or inherited_open_offsets == arg.incomplete_offsets
                         inherited_open_offsets = arg.incomplete_offsets
                 # TODO: check order
-                return get_open_offsets(*inherited_open_offsets, *self.offsets)
+                return inherited_open_offsets
 
             @cached_property
             def offset_provider(self):
@@ -329,7 +329,15 @@ def lift(stencil):
                 return _get_connectivity(self.args[0].offset_provider, self.incomplete_offsets[0]).max_neighbors
 
             def _shifted_args(self):
-                return tuple(map(lambda arg: arg.shift(*self.offsets), self.args))
+                new_args = []
+                for arg in self.args:
+                    do_shift = not self.incomplete_offsets or arg.incomplete_offsets
+                    if do_shift:
+                        new_args.append(arg.shift(*self.offsets))
+                    else:
+                        new_args.append(arg)
+
+                return tuple(new_args)
 
             def can_deref(self):
                 shifted_args = self._shifted_args()

@@ -54,8 +54,6 @@ def iterator_type_kind(
     | field                              | ITERATOR               |
     | (1, 1)                             | VALUE                  |
     | (1, field)                         | ITERATOR               |
-    | (field, field)                     | ITERATOR               |
-    | (1, (1, field))                    | ITERATOR               |
     +------------------------------------+------------------------+
     """
     if any(type_info.primitive_constituents(symbol_type).if_isinstance(ct.FieldType)):
@@ -117,12 +115,11 @@ class FieldOperatorLowering(NodeTranslator):
     def visit_FunctionDefinition(
         self, node: foast.FunctionDefinition, **kwargs
     ) -> itir.FunctionDefinition:
-        symtable = node.annex.symtable
-        params = self.visit(node.params, symtable=symtable)
+        params = self.visit(node.params)
         return itir.FunctionDefinition(
             id=node.id,
             params=params,
-            expr=self._visit_body(node.body, params=params, symtable=symtable),
+            expr=self._visit_body(node.body, params=params),
         )
 
     def visit_ScanOperator(self, node: foast.ScanOperator, **kwargs) -> itir.FunctionDefinition:

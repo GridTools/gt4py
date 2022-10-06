@@ -447,8 +447,6 @@ def test_reduction_execution(reduction_setup, fieldview_backend):
     def reduction(edge_f: Field[[Edge], int64]) -> Field[[Vertex], int64]:
         return neighbor_sum(edge_f(V2E)+1, axis=V2EDim)
 
-    bla = reduction.__gt_itir__()
-
     @program(backend=fieldview_backend)
     def fencil(edge_f: Field[[Edge], int64], out: Field[[Vertex], int64]) -> None:
         reduction(edge_f, out=out)
@@ -502,6 +500,36 @@ def test_reduction_expression(reduction_setup, fieldview_backend):
 
     ref = 3 * np.sum(-(rs.v2e_table**2) * 2, axis=1)
     assert np.allclose(ref, rs.out.array())
+
+
+def test_reduction_expression2(reduction_setup, fieldview_backend):
+    """Test reduction with an expression directly inside the call."""
+    if fieldview_backend == gtfn_cpu.run_gtfn:
+        pytest.skip("IndexFields are not supported yet.")
+    rs = reduction_setup
+    Vertex = rs.Vertex
+    Edge = rs.Edge
+    V2EDim = rs.V2EDim
+    V2E = rs.V2E
+
+    vertex_field = np_as_located_field(Vertex)(np.arange(0, rs.num_vertices, 1))
+    edge_field = np_as_located_field(Edge)(np.arange(0, rs.num_edges, 1))
+    vertex_v2e_field = np_as_located_field(Vertex, V2EDim)(rs.v2e_table)
+    out = np_as_located_field(Vertex)(np.zeros(rs.num_vertices, dtype=np.int64))
+
+    @field_operator
+    def reduction(
+                  vertex_field: Field[[Vertex], int64],
+                  edge_field: Field[[Edge], int64],
+                  vertex_v2e_field: Field[[Vertex, V2EDim], int64]):
+        tmp = vertex_field + edge_field(V2E) + vertex_v2e_field
+        return neighbor_sum(tmp, axis=V2EDim)
+
+    reduction(vertex_field, edge_field, vertex_v2e_field, out=out,
+              offset_provider=rs.offset_provider)
+
+    ref = np.sum(vertex_field.array()[:, np.newaxis] + edge_field.array()[rs.v2e_table]+rs.v2e_table, axis=1)
+    assert np.allclose(ref, out.array())
 
 
 def test_scalar_arg(fieldview_backend):
