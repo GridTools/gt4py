@@ -159,10 +159,6 @@ class Stmt(LocatedNode):
     ...
 
 
-class ExternalImport(Stmt):
-    symbols: list[Symbol]
-
-
 class Assign(Stmt):
     target: Union[FieldSymbol, TupleSymbol, ScalarSymbol]
     value: Expr
@@ -176,7 +172,7 @@ class FunctionDefinition(LocatedNode, SymbolTableTrait):
     id: Coerced[SymbolName]  # noqa: A003  # shadowing a python builtin
     params: list[DataSymbol]
     body: list[Stmt]
-    captured_vars: list[Symbol]
+    closure_vars: list[Symbol]
     type: Optional[common_types.FunctionType] = None  # noqa A003  # shadowing a python builtin
 
 
