@@ -1208,7 +1208,7 @@ def test_where_k_offset(fieldview_backend):
     out = np_as_located_field(IDim, KDim)(np.zeros((size, size)))
     k_index = index_field(KDim)
 
-    @field_operator
+    @field_operator(backend=fieldview_backend)
     def fieldop_where_k_offset(
         a: Field[[IDim, KDim], float64],
         k_index: Field[[KDim], int64],
@@ -1221,6 +1221,7 @@ def test_where_k_offset(fieldview_backend):
 
     assert np.allclose(np.asarray(out), expected)
 
+
 def test_undefined_symbols():
     from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError
 
@@ -1229,4 +1230,3 @@ def test_undefined_symbols():
         @field_operator
         def return_undefined():
             return undefined_symbol
-
