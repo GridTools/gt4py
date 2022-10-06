@@ -620,7 +620,7 @@ def test_scalar_arg_with_field(fieldview_backend):
     Edge = Dimension("Edge")
     EdgeOffset = FieldOffset("EdgeOffset", source=Edge, target=(Edge,))
     size = 5
-    inp = index_field(Edge)
+    inp = index_field(Edge, dtype=float64)
     factor = 3.0
     out = np_as_located_field(Edge)(np.zeros((size), dtype=np.float64))
 
@@ -1204,24 +1204,24 @@ def test_where_k_offset():
     Koff = FieldOffset("Koff", source=KDim, target=(KDim,))
     a = np_as_located_field(IDim, KDim)(np.ones((size, size)))
     out = np_as_located_field(IDim, KDim)(np.zeros((size, size)))
-    k_index_field = index_field(KDim)
+    k_index = index_field(KDim)
 
     @field_operator
     def fieldop_where_k_offset(
         a: Field[[IDim, KDim], float64],
-        k_index_field: Field[[KDim], float64],
+        k_index: Field[[KDim], int64],
     ) -> Field[[IDim, KDim], float64]:
-        return where(k_index_field > 0.0, a(Koff[-1]), 2.0)
+        return where(k_index > 0, a(Koff[-1]), 2.0)
 
     @program
     def program_where_k_offset(
         a: Field[[IDim, KDim], float64],
-        k_index_field: Field[[KDim], float64],
+        k_index: Field[[KDim], int64],
         out: Field[[IDim, KDim], float64],
     ):
-        fieldop_where_k_offset(a, k_index_field, out=out)
+        fieldop_where_k_offset(a, k_index, out=out)
 
-    program_where_k_offset(a, k_index_field, out, offset_provider={"Koff": KDim})
+    program_where_k_offset(a, k_index, out, offset_provider={"Koff": KDim})
 
     expected = np.where(np.full(size, range(size)) > 0.0, a, 2.0)
 
