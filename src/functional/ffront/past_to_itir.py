@@ -107,7 +107,14 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         #  a workaround we add additional arguments to the fencil definition
         #  containing the size of all fields. The caller of a program is (e.g.
         #  program decorator) is required to pass these arguments.
-        size_params = self._gen_size_params_from_program(node)
+
+        if "domain" in node.body[0].kwargs:
+            params = [itir.Sym(id=inp.id) for inp in node.params]
+        else:
+            size_params = self._gen_size_params_from_program(node)
+            params = [itir.Sym(id=inp.id) for inp in node.params] + size_params
+
+        # if all stencils calls have domain included, size params has to be ignored
 
         closures: list[itir.StencilClosure] = []
         for stmt in node.body:
@@ -116,7 +123,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         return itir.FencilDefinition(
             id=node.id,
             function_definitions=function_definitions,
-            params=[itir.Sym(id=inp.id) for inp in node.params] + size_params,
+            params=params,
             closures=closures,
         )
 
