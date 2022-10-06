@@ -55,7 +55,7 @@ These computations are expressed in a domain specific language (GTScript) which 
 The DSL expresses computations on a 3-dimensional Cartesian grid.
 The horizontal axes (``I``, ``J``) are always computed in parallel, while the vertical (``K``) can be iterated in sequential, forward or backward, order. Cartesian offsets are expressed relative to a center index.
 
-In addition, GT4Py provides functions to create storages (arrays) with memory layout suited for a particular backend.
+In addition, GT4Py provides functions to allocate arrays with memory layout suited for a particular backend.
 
 The following backends are supported:
 
@@ -92,7 +92,7 @@ If GridTools or Boost are not found in the compiler's standard include
 path, or a custom version is desired, then a couple configuration
 environment variables will allow the compiler to use them:
 
-- ``GT2_INCLUDE_PATH``: Path to the GridTools installation.
+- ``GT_INCLUDE_PATH``: Path to the GridTools installation.
 - ``BOOST_ROOT``: Path to a boost installation.
 
 Other commonly used environment variables are:
