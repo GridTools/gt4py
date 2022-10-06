@@ -254,7 +254,7 @@ def literal_(value: str, typename: str):
 
 
 def map_(op: str | Callable, *its):
-    if isinstance(op, str):
+    if isinstance(op, (str, itir.SymRef)):
         op = call_(op)
     args = [f"__arg{i}" for i in range(len(its))]
     return lift_(lambda__(*args)(op(*[deref_(arg) for arg in args])))(*its)
