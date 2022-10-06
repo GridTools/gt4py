@@ -95,7 +95,7 @@ class CMakeListsGenerator(eve.codegen.TemplatedGenerator):
                     """\
                     FetchContent_Declare(GridTools
                         GIT_REPOSITORY https://github.com/GridTools/gridtools.git
-                        GIT_TAG        master
+                        GIT_TAG        <HASH>
                     )
                     FetchContent_MakeAvailable(GridTools)\
                     """

@@ -114,6 +114,9 @@ class GTFNCodegen(codegen.TemplatedGenerator):
     def visit_FunCall(self, node: gtfn_ir.FunCall, **kwargs):
         if isinstance(node.fun, gtfn_ir.SymRef) and node.fun.id in self._builtins_mapping:
             return self.generic_visit(node, fun_name=self._builtins_mapping[node.fun.id])
+        if isinstance(node.fun, gtfn_ir.SymRef) and node.fun.id in gtfn_ir.GTFN_BUILTINS:
+            qualified_fun_name = f"gridtools::fn::{node.fun.id}"
+            return self.generic_visit(node, fun_name=qualified_fun_name)
         return self.generic_visit(node, fun_name=self.visit(node.fun))
 
     FunCall = as_fmt("{fun_name}({','.join(args)})")
