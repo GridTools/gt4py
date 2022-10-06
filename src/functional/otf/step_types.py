@@ -16,7 +16,6 @@ from __future__ import annotations
 from typing import Protocol, TypeVar
 
 from functional.otf import languages, stages
-from functional.program_processors.builders import cache
 
 
 SrcL = TypeVar("SrcL", bound=languages.LanguageTag)
@@ -48,13 +47,4 @@ class PackagingStep(Protocol[SrcL, LS, TgtL]):
 
 class CompilationStep(Protocol[SrcL, LS, TgtL]):
     def __call__(self, source: stages.CompilableSource[SrcL, LS, TgtL]) -> stages.CompiledProgram:
-        ...
-
-
-class BuildSystemProjectGenerator(Protocol[SrcL, LS, TgtL]):
-    def __call__(
-        self,
-        source: stages.CompilableSource[SrcL, LS, TgtL],
-        cache_strategy: cache.Strategy,
-    ) -> stages.BuildSystemProject[SrcL, LS, TgtL]:
         ...

@@ -5,7 +5,7 @@ import pathlib
 import subprocess
 from typing import Optional
 
-from functional.otf import languages, stages, step_types
+from functional.otf import languages, stages
 from functional.otf.compile import build_data, common, compiler
 from functional.otf.compile.build_systems import cmake_lists
 from functional.program_processors.builders import cache
@@ -13,7 +13,7 @@ from functional.program_processors.builders import cache
 
 @dataclasses.dataclass
 class CMakeFactory(
-    step_types.BuildSystemProjectGenerator[
+    compiler.BuildSystemProjectGenerator[
         languages.Cpp, languages.LanguageWithHeaderFilesSettings, languages.Python
     ]
 ):

@@ -11,12 +11,15 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
+from __future__ import annotations
+
 import dataclasses
 import pathlib
-from typing import Generic, TypeVar
+from typing import Generic, Protocol, TypeVar
 
-from functional.otf import languages, stages, step_types
+from functional.otf import languages, stages
 from functional.otf.compile import build_data
+from functional.otf.step_types import LS, SrcL, TgtL
 from functional.program_processors.builders import cache, importer
 
 
@@ -32,10 +35,19 @@ def module_exists(data: build_data.BuildData, src_dir: pathlib.Path) -> bool:
     return (src_dir / data.module).exists()
 
 
+class BuildSystemProjectGenerator(Protocol[SrcL, LS, TgtL]):
+    def __call__(
+        self,
+        source: stages.CompilableSource[SrcL, LS, TgtL],
+        cache_strategy: cache.Strategy,
+    ) -> stages.BuildSystemProject[SrcL, LS, TgtL]:
+        ...
+
+
 @dataclasses.dataclass(frozen=True)
 class Compiler(Generic[SL, ST]):
     cache_strategy: cache.Strategy
-    builder_factory: step_types.BuildSystemProjectGenerator[SL, ST, languages.Python]
+    builder_factory: BuildSystemProjectGenerator[SL, ST, languages.Python]
     force_recompile: bool = False
 
     def __call__(

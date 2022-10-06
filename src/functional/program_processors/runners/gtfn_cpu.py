@@ -19,7 +19,7 @@ from typing import Any, Callable, Final, Optional
 import numpy as np
 
 from functional.iterator import ir as itir
-from functional.otf import languages, stages, step_types, workflow
+from functional.otf import languages, stages, workflow
 from functional.otf.compile import compiler
 from functional.otf.compile.build_systems import compiledb
 from functional.program_processors import processor_interface as fpi
@@ -40,7 +40,7 @@ def convert_arg(arg: Any) -> Any:
 @dataclasses.dataclass(frozen=True)
 class GTFNExecutor(fpi.ProgramExecutor):
     language_settings: languages.LanguageWithHeaderFilesSettings = cpp_gen.CPP_DEFAULT
-    builder_factory: step_types.BuildSystemProjectGenerator = compiledb.CompiledbFactory()
+    builder_factory: compiler.BuildSystemProjectGenerator = compiledb.CompiledbFactory()
 
     name: Optional[str] = None
 
