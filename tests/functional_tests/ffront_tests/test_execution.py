@@ -1196,3 +1196,32 @@ def test_domain_tuple(fieldview_backend):
 
     assert np.allclose(np.asarray(a), a)
     assert np.allclose(expected, b)
+
+
+def test_where_k_offset():
+    size = 10
+    KDim = Dimension("K", kind=DimensionKind.VERTICAL)
+    Koff = FieldOffset("Koff", source=KDim, target=(KDim,))
+    a = np_as_located_field(IDim, KDim)(np.ones((size, size)))
+    b = np_as_located_field(IDim, KDim)(np.ones((size, size)))
+    out = np_as_located_field(IDim, KDim)(np.zeros((size, size)))
+
+    @field_operator
+    def fieldop_where_k_offset(
+        a: Field[[IDim, KDim], float64],
+        b: Field[[IDim, KDim], float64],
+    ) -> Field[[IDim, KDim], float64]:
+        b_new = b(Koff[1])
+        return where(a > b, b_new, 2.0)
+
+    @program
+    def program_where_k_offset(
+        a: Field[[IDim, KDim], float64],
+        b: Field[[IDim, KDim], float64],
+        out: Field[[IDim, KDim], float64],
+    ):
+        fieldop_where_k_offset(a, b, out=out)
+
+    program_where_k_offset(a, b, out, offset_provider={"Koff": KDim})
+
+    assert np.allclose(np.asarray(out), np.full((size, size), 2.0))
