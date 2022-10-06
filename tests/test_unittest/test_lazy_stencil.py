@@ -81,10 +81,10 @@ def test_lazy_call(frontend, backend):
     import numpy
 
     a = gt4py.storage.from_array(
-        numpy.array([[[1.0]]]), default_origin=(0, 0, 0), backend=backend.name
+        numpy.array([[[1.0]]]), aligned_index=(0, 0, 0), backend=backend.name
     )
     b = gt4py.storage.from_array(
-        numpy.array([[[0.0]]]), default_origin=(0, 0, 0), backend=backend.name
+        numpy.array([[[0.0]]]), aligned_index=(0, 0, 0), backend=backend.name
     )
     lazy_s = LazyStencil(
         StencilBuilder(copy_stencil_definition, frontend=frontend, backend=backend).with_options(

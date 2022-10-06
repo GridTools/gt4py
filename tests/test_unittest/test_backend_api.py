@@ -58,7 +58,7 @@ def test_generate_computation(backend, tmp_path):
         and ("computation.cpp" in result["init_1_src"] or "computation.cu" in result["init_1_src"])
         and "bindings.cpp" not in result["init_1_src"]
     )
-    # TODO(havogt) remove once gtc:gt produces a cpp-file for computation
+    # TODO(havogt) remove once gt: produces a cpp-file for computation
     gtc_result = (
         (backend.languages["computation"] in ["c++", "cuda"])
         and "computation.hpp" in result["init_1_src"]

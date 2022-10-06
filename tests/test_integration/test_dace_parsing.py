@@ -24,10 +24,12 @@ from gt4py import gtscript
 from gt4py import storage as gt_storage
 from gt4py.gtscript import PARALLEL, computation, interval
 from gt4py.stencil_builder import StencilBuilder
+from gt4py.storage import utils as storage_utils
+
+from ..storage_test_utils import OriginWrapper
 
 
 dace = pytest.importorskip("dace")
-
 from gt4py.backend.dace_lazy_stencil import (  # noqa: E402 (needs to be guarded by above importorskip)
     DaCeLazyStencil,
 )
@@ -76,20 +78,22 @@ def test_basic(decorator, backend):
         with computation(PARALLEL), interval(...):
             outp = par  # noqa F841: local variable 'outp' is assigned to but never used
 
-    outp = gt_storage.zeros(
-        dtype=np.float64, shape=(10, 10, 10), default_origin=(0, 0, 0), backend=backend
+    outp = OriginWrapper(
+        array=gt_storage.zeros(
+            dtype=np.float64, shape=(10, 10, 10), aligned_index=(0, 0, 0), backend=backend
+        ),
+        origin=(0, 0, 0),
     )
 
     inp = 7.0
-
-    outp.host_to_device()
 
     @dace.program(device=dace.DeviceType.GPU if "gpu" in backend else dace.DeviceType.CPU)
     def call_stencil_object(locoutp, locinp):
         defn(locoutp, par=locinp)
 
     call_stencil_object(locoutp=outp, locinp=inp)
-    outp.device_to_host(force=True)
+    outp = storage_utils.cpu_copy(outp)
+
     assert np.allclose(outp, 7.0)
 
 
@@ -106,12 +110,22 @@ def test_origin_offsetting_frozen(domain, outp_origin):
     frozen_stencil = dace_stencil.freeze(
         domain=domain, origin={"inp": (0, 0, 0), "outp": outp_origin}
     )
-    inp = gt_storage.from_array(
-        data=7.0, dtype=np.float64, shape=(10, 10, 10), default_origin=(0, 0, 0), backend=backend
-    )
 
-    outp = gt_storage.zeros(
-        dtype=np.float64, shape=(10, 10, 10), default_origin=(0, 0, 0), backend=backend
+    inp = OriginWrapper(
+        array=gt_storage.full(
+            fill_value=7.0,
+            shape=(10, 10, 10),
+            dtype=np.float64,
+            aligned_index=(0, 0, 0),
+            backend=backend,
+        ),
+        origin=(0, 0, 0),
+    )
+    outp = OriginWrapper(
+        array=gt_storage.zeros(
+            dtype=np.float64, shape=(10, 10, 10), aligned_index=(0, 0, 0), backend=backend
+        ),
+        origin=(0, 0, 0),
     )
 
     @dace.program
@@ -131,7 +145,7 @@ def test_origin_offsetting_frozen(domain, outp_origin):
         7.0,
     )
 
-    assert np.sum(np.asarray(outp), axis=(0, 1, 2)) == np.prod(domain) * 7.0
+    assert np.sum(outp, axis=(0, 1, 2)) == np.prod(domain) * 7.0
 
 
 @pytest.mark.parametrize("domain", [(0, 2, 3), (3, 3, 3), (1, 1, 1)])
@@ -144,11 +158,21 @@ def test_origin_offsetting_nofrozen(domain, outp_origin):
         with computation(PARALLEL), interval(...):
             outp = inp  # noqa F841: local variable 'outp' is assigned to but never used
 
-    inp = gt_storage.from_array(
-        data=7.0, dtype=np.float64, shape=(10, 10, 10), default_origin=(0, 0, 0), backend=backend
+    inp = OriginWrapper(
+        array=gt_storage.full(
+            fill_value=7.0,
+            shape=(10, 10, 10),
+            dtype=np.float64,
+            aligned_index=(0, 0, 0),
+            backend=backend,
+        ),
+        origin=(0, 0, 0),
     )
-    outp = gt_storage.zeros(
-        dtype=np.float64, shape=(10, 10, 10), default_origin=(0, 0, 0), backend=backend
+    outp = OriginWrapper(
+        array=gt_storage.zeros(
+            dtype=np.float64, shape=(10, 10, 10), aligned_index=(0, 0, 0), backend=backend
+        ),
+        origin=(0, 0, 0),
     )
 
     origin = {"inp": (0, 0, 0), "outp": outp_origin}
@@ -183,20 +207,30 @@ def test_origin_offsetting_nofrozen_default_origin(domain, outp_origin):
         with computation(PARALLEL), interval(...):
             outp = inp  # noqa F841: local variable 'outp' is assigned to but never used
 
-    inp = gt_storage.from_array(
-        data=7.0, dtype=np.float64, shape=(10, 10, 10), default_origin=(0, 0, 0), backend=backend
+    inp = OriginWrapper(
+        array=gt_storage.full(
+            fill_value=7.0,
+            dtype=np.float64,
+            shape=(10, 10, 10),
+            aligned_index=(0, 0, 0),
+            backend=backend,
+        ),
+        origin=(0, 0, 0),
     )
-    outp = gt_storage.zeros(
-        dtype=np.float64, shape=(10, 10, 10), default_origin=outp_origin, backend=backend
+    outp = OriginWrapper(
+        array=gt_storage.zeros(
+            dtype=np.float64, shape=(10, 10, 10), aligned_index=outp_origin, backend=backend
+        ),
+        origin=outp_origin,
     )
 
     @dace.program
-    def call_stencil_object():
-        dace_stencil(inp=inp, outp=outp, domain=domain)
+    def call_stencil_object(locinp, locoutp):
+        dace_stencil(inp=locinp, outp=locoutp, domain=domain)
 
-    call_stencil_object()
+    call_stencil_object(locinp=inp, locoutp=outp)
 
-    assert np.allclose(inp, 7.0)
+    assert np.allclose(np.asarray(inp), 7.0)
     assert np.allclose(
         np.asarray(outp)[
             outp_origin[0] : outp_origin[0] + domain[0],
@@ -227,11 +261,21 @@ def test_optional_arg_noprovide():
         origin={"inp": (2, 2, 0), "outp": (2, 2, 0), "unused_field": (0, 0, 0)},
     )
 
-    inp = gt_storage.from_array(
-        data=7.0, dtype=np.float64, shape=(10, 10, 10), default_origin=(0, 0, 0), backend=backend
+    inp = OriginWrapper(
+        array=gt_storage.full(
+            fill_value=7.0,
+            shape=(10, 10, 10),
+            dtype=np.float64,
+            aligned_index=(0, 0, 0),
+            backend=backend,
+        ),
+        origin=(0, 0, 0),
     )
-    outp = gt_storage.zeros(
-        dtype=np.float64, shape=(10, 10, 10), default_origin=(0, 0, 0), backend=backend
+    outp = OriginWrapper(
+        array=gt_storage.zeros(
+            dtype=np.float64, shape=(10, 10, 10), aligned_index=(0, 0, 0), backend=backend
+        ),
+        origin=(0, 0, 0),
     )
 
     @dace.program
@@ -258,17 +302,30 @@ def test_optional_arg_provide(decorator):
         with computation(PARALLEL), interval(...):
             outp = inp  # noqa F841: local variable 'outp' is assigned to but never used
 
-    inp = gt_storage.from_array(
-        data=7.0, dtype=np.float64, shape=(10, 10, 10), default_origin=(0, 0, 0), backend=backend
+    inp = OriginWrapper(
+        array=gt_storage.full(
+            fill_value=7.0,
+            shape=(10, 10, 10),
+            dtype=np.float64,
+            aligned_index=(0, 0, 0),
+            backend=backend,
+        ),
+        origin=(0, 0, 0),
     )
-    outp = gt_storage.zeros(
-        dtype=np.float64, shape=(10, 10, 10), default_origin=(0, 0, 0), backend=backend
+    outp = OriginWrapper(
+        array=gt_storage.zeros(
+            dtype=np.float64, shape=(10, 10, 10), aligned_index=(0, 0, 0), backend=backend
+        ),
+        origin=(0, 0, 0),
     )
-    unused_field = gt_storage.zeros(
-        dtype=np.float64, shape=(10, 10, 10), default_origin=(0, 0, 0), backend=backend
+    unused_field = OriginWrapper(
+        array=gt_storage.zeros(
+            dtype=np.float64, shape=(10, 10, 10), aligned_index=(0, 0, 0), backend=backend
+        ),
+        origin=(0, 0, 0),
     )
 
-    @dace.program
+    # @dace.program
     def call_stencil():
         stencil(
             inp=inp,
@@ -299,36 +356,34 @@ def test_optional_arg_provide_aot(decorator):
         with computation(PARALLEL), interval(...):
             outp = inp  # noqa F841: local variable 'outp' is assigned to but never used
 
-    inp = gt_storage.from_array(
-        data=7.0, dtype=np.float64, shape=(10, 10, 10), default_origin=(0, 0, 0), backend=backend
+    inp = OriginWrapper(
+        array=gt_storage.full(
+            fill_value=7.0,
+            shape=(10, 10, 10),
+            dtype=np.float64,
+            aligned_index=(0, 0, 0),
+            backend=backend,
+        ),
+        origin=(0, 0, 0),
     )
-    outp = gt_storage.zeros(
-        dtype=np.float64, shape=(10, 10, 10), default_origin=(0, 0, 0), backend=backend
+    outp = OriginWrapper(
+        array=gt_storage.zeros(
+            dtype=np.float64, shape=(10, 10, 10), aligned_index=(0, 0, 0), backend=backend
+        ),
+        origin=(0, 0, 0),
     )
-    unused_field = gt_storage.zeros(
-        dtype=np.float64, shape=(10, 10, 10), default_origin=(0, 0, 0), backend=backend
+    unused_field = OriginWrapper(
+        array=gt_storage.zeros(
+            dtype=np.float64, shape=(10, 10, 10), aligned_index=(0, 0, 0), backend=backend
+        ),
+        origin=(0, 0, 0),
     )
 
     @dace.program
     def call_stencil(
-        inp: dace.data.Array(
-            shape=inp.shape,
-            strides=tuple(s // inp.itemsize for s in inp.strides),
-            dtype=dace.float64,
-            storage=dace.StorageType.CPU_Heap,
-        ),
-        outp: dace.data.Array(
-            shape=outp.shape,
-            strides=tuple(s // outp.itemsize for s in outp.strides),
-            dtype=dace.float64,
-            storage=dace.StorageType.CPU_Heap,
-        ),
-        unused_field: dace.data.Array(
-            shape=unused_field.shape,
-            strides=tuple(s // unused_field.itemsize for s in unused_field.strides),
-            dtype=dace.float64,
-            storage=dace.StorageType.CPU_Heap,
-        ),  # type: ignore
+        inp: dace.data.create_datadescriptor(inp),
+        outp: dace.data.create_datadescriptor(outp),
+        unused_field: dace.data.create_datadescriptor(unused_field),
         unused_par: dace.float64,  # type: ignore
     ):
         stencil(
@@ -354,18 +409,24 @@ def test_nondace_raises(decorator):
         with computation(PARALLEL), interval(...):
             outp = inp  # noqa F841: local variable 'outp' is assigned to but never used
 
-    inp = gt_storage.from_array(
-        data=7.0,
-        dtype=np.float64,
-        shape=(10, 10, 10),
-        default_origin=(0, 0, 0),
-        backend="numpy",
+    inp = OriginWrapper(
+        array=gt_storage.full(
+            fill_value=7.0,
+            dtype=np.float64,
+            shape=(10, 10, 10),
+            aligned_index=(0, 0, 0),
+            backend="numpy",
+        ),
+        origin=(0, 0, 0),
     )
-    outp = gt_storage.zeros(
-        dtype=np.float64,
-        shape=(10, 10, 10),
-        default_origin=(0, 0, 0),
-        backend="numpy",
+    outp = OriginWrapper(
+        array=gt_storage.zeros(
+            dtype=np.float64,
+            shape=(10, 10, 10),
+            aligned_index=(0, 0, 0),
+            backend="numpy",
+        ),
+        origin=(0, 0, 0),
     )
 
     @dace.program
@@ -396,7 +457,7 @@ def test_lazy_sdfg():
     lazy_s = DaCeLazyStencil(builder)
 
     outp = gt_storage.zeros(
-        dtype=np.float64, shape=(10, 10, 10), default_origin=(0, 0, 0), backend=backend
+        dtype=np.float64, shape=(10, 10, 10), aligned_index=(0, 0, 0), backend=backend
     )
 
     inp = 7.0
