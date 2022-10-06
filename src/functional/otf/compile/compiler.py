@@ -13,10 +13,11 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 import dataclasses
 import pathlib
-from typing import Callable, Generic, TypeVar
+from typing import Generic, TypeVar
 
 from functional.otf import languages, stages, step_types
-from functional.program_processors.builders import build_data, cache, importer
+from functional.otf.compile import build_data
+from functional.program_processors.builders import cache, importer
 
 
 SL = TypeVar("SL", bound=languages.LanguageTag)
@@ -32,12 +33,14 @@ def module_exists(data: build_data.OTFBuildData, src_dir: pathlib.Path) -> bool:
 
 
 @dataclasses.dataclass(frozen=True)
-class OnTheFlyCompiler(Generic[SL, ST]):
+class Compiler(Generic[SL, ST]):
     cache_strategy: cache.Strategy
     builder_factory: step_types.BuildSystemProjectGenerator[SL, ST, languages.Python]
     force_recompile: bool = False
 
-    def __call__(self, inp: stages.CompilableSource[SL, ST, languages.Python]) -> Callable:
+    def __call__(
+        self, inp: stages.CompilableSource[SL, ST, languages.Python]
+    ) -> stages.CompiledProgram:
         src_dir = cache.get_cache_folder(inp, self.cache_strategy)
 
         data = build_data.read_data(src_dir)

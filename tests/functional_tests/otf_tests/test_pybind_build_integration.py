@@ -16,15 +16,17 @@ import math
 import numpy as np
 
 from functional.otf import workflow
-from functional.program_processors.builders import cache, otf_compiler
-from functional.program_processors.builders.cpp import bindings, cmake, compiledb
+from functional.otf.compile import compiler
+from functional.otf.compile.build_systems import cmake, compiledb
+from functional.program_processors.builders import cache
+from functional.program_processors.builders.cpp import bindings
 
 
 def test_gtfn_cpp_with_cmake(program_source_with_name):
     source_module_example = program_source_with_name("gtfn_cpp_with_cmake")
     build_the_program = workflow.Workflow(
         bindings.program_source_to_compileable_source,
-        otf_compiler.OnTheFlyCompiler(
+        compiler.Compiler(
             cache_strategy=cache.Strategy.SESSION, builder_factory=cmake.make_cmake_factory()
         ),
     )
@@ -39,7 +41,7 @@ def test_gtfn_cpp_with_compiledb(program_source_with_name):
     source_module_example = program_source_with_name("gtfn_cpp_with_compiledb")
     build_the_program = workflow.Workflow(
         bindings.program_source_to_compileable_source,
-        otf_compiler.OnTheFlyCompiler(
+        compiler.Compiler(
             cache_strategy=cache.Strategy.SESSION,
             builder_factory=compiledb.make_compiledb_factory(),
         ),

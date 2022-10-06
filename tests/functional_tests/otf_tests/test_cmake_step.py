@@ -13,8 +13,9 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 import pathlib
 
-from functional.program_processors.builders import build_data, cache, importer
-from functional.program_processors.builders.cpp import cmake
+from functional.otf.compile import build_data
+from functional.otf.compile.build_systems import cmake
+from functional.program_processors.builders import cache, importer
 
 
 def test_default_builder_generator(compilable_source_example, clean_example_session_cache):

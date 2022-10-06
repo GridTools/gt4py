@@ -20,9 +20,11 @@ import numpy as np
 
 from functional.iterator import ir as itir
 from functional.otf import languages, stages, step_types, workflow
+from functional.otf.compile import compiler
+from functional.otf.compile.build_systems import compiledb
 from functional.program_processors import processor_interface as fpi
-from functional.program_processors.builders import cache, otf_compiler
-from functional.program_processors.builders.cpp import bindings, compiledb
+from functional.program_processors.builders import cache
+from functional.program_processors.builders.cpp import bindings
 from functional.program_processors.codegens.gtfn import gtfn_module
 from functional.program_processors.source_modules import cpp_gen
 
@@ -73,7 +75,7 @@ class GTFNExecutor(fpi.ProgramExecutor):
         otf_workflow: Final[workflow.Workflow[stages.ProgramCall, Any, stages.CompiledProgram]] = (
             itir_to_src.chain(bindings.program_source_to_compileable_source)
             .chain(
-                otf_compiler.OnTheFlyCompiler(
+                compiler.Compiler(
                     cache_strategy=cache.Strategy.SESSION, builder_factory=self.builder_factory
                 )
             )

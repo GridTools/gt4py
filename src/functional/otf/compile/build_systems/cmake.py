@@ -4,8 +4,9 @@ import subprocess
 from typing import Optional
 
 from functional.otf import languages, stages, step_types
-from functional.program_processors.builders import build_data, cache, otf_compiler
-from functional.program_processors.builders.cpp import cmake_lists, common
+from functional.otf.compile import build_data, common, compiler
+from functional.otf.compile.build_systems import cmake_lists
+from functional.program_processors.builders import cache
 
 
 def make_cmake_factory(
@@ -26,7 +27,7 @@ def make_cmake_factory(
         languages.Cpp, languages.LanguageWithHeaderFilesSettings, languages.Python
     ]:
         if not source.binding_source:
-            raise otf_compiler.CompilerError(
+            raise compiler.CompilerError(
                 "CMake build system project requires separate bindings code file."
             )
         name = source.program_source.entry_point.name
