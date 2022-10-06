@@ -25,9 +25,9 @@ import re
 
 import pytest
 
-from functional.common import Field
+from functional.common import Field, GTTypeError
 from functional.ffront import common_types
-from functional.ffront.fbuiltins import float32, float64, int32, int64, where
+from functional.ffront.fbuiltins import Dimension, float32, float64, int32, int64, where
 from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError
 from functional.ffront.func_to_foast import FieldOperatorParser, FieldOperatorSyntaxError
 from functional.ffront.symbol_makers import TypingError
@@ -261,24 +261,26 @@ def test_closure_symbols():
     assert "nonlocal_unused" not in parsed.annex.symtable
 
 
-def test_external_symbols():
-    import numpy as np
+def test_wrong_return_type_annotation():
+    ADim = Dimension("ADim")
+    BDim = Dimension("BDim")
 
-    def operator_with_externals(inp: Field[..., "float64"], inp2: Field[..., "float32"]):
-        from __externals__ import ext_float, ext_np_scalar
+    def wrong_return_type_annotation(a: Field[[ADim], float64]) -> Field[[BDim], float64]:
+        return a
 
-        a = inp + ext_float
-        b = inp2 + ext_np_scalar
-        return a, b
+    with pytest.raises(
+        GTTypeError,
+        match=r"Annotated return type does not match deduced return type",
+    ):
+        _ = FieldOperatorParser.apply_to_function(wrong_return_type_annotation)
 
-    parsed = FieldOperatorParser.apply_to_function(
-        operator_with_externals,
-        externals=dict(ext_float=2.3, ext_np_scalar=np.float32(3.4), ext_unused=0),
-    )
-    assert parsed.annex.symtable["ext_float"].type == common_types.ScalarType(
-        kind=common_types.ScalarKind.FLOAT64, shape=None
-    )
-    assert parsed.annex.symtable["ext_np_scalar"].type == common_types.ScalarType(
-        kind=common_types.ScalarKind.FLOAT32, shape=None
-    )
-    assert "ext_unused" not in parsed.annex.symtable
+
+def test_empty_dims_type():
+    def empty_dims() -> Field[[], float]:
+        return 1.0
+
+    with pytest.raises(
+        GTTypeError,
+        match=r"Annotated return type does not match deduced return type",
+    ):
+        _ = FieldOperatorParser.apply_to_function(empty_dims)

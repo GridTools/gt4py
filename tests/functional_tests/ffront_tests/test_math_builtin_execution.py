@@ -13,7 +13,6 @@ from functional.ffront import (
 from functional.ffront.decorator import FieldOperator
 from functional.ffront.fbuiltins import Dimension, Field, float64, int32, int64
 from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduction
-from functional.ffront.source_utils import CapturedVars
 from functional.iterator.embedded import np_as_located_field
 from functional.program_processors.runners import roundtrip
 
@@ -50,13 +49,7 @@ def make_builtin_field_operator(builtin_name: str):
     else:
         raise AssertionError(f"Unknown builtin `{builtin_name}`")
 
-    captured_vars = CapturedVars(
-        nonlocals={"IDim": IDim},
-        globals={builtin_name: getattr(fbuiltins, builtin_name)},
-        annotations=annotations,
-        builtins=set(),
-        unbound=set(),
-    )
+    closure_vars = {"IDim": IDim, builtin_name: getattr(fbuiltins, builtin_name)}
 
     loc = foast.SourceLocation(line=1, column=1, source="none")
 
@@ -67,14 +60,14 @@ def make_builtin_field_operator(builtin_name: str):
     ]
     args = [foast.Name(id=k, location=loc) for k, _ in annotations.items() if k != "return"]
 
-    captured_vars_nodes = [
+    closure_var_symbols = [
         foast.Symbol(
             id=name,
             type=symbol_makers.make_symbol_type_from_value(val),
             namespace=ct.Namespace.CLOSURE,
             location=loc,
         )
-        for name, val in {**captured_vars.globals, **captured_vars.nonlocals}.items()
+        for name, val in closure_vars.items()
     ]
 
     foast_node = foast.FieldOperator(
@@ -92,7 +85,7 @@ def make_builtin_field_operator(builtin_name: str):
                     location=loc,
                 )
             ],
-            captured_vars=captured_vars_nodes,
+            closure_vars=closure_var_symbols,
             params=params,
             location=loc,
         ),
@@ -102,8 +95,7 @@ def make_builtin_field_operator(builtin_name: str):
 
     return FieldOperator(
         foast_node=typed_foast_node,
-        captured_vars=captured_vars,
-        externals={},
+        closure_vars=closure_vars,
         backend=fieldview_backend,
         definition=None,
     )

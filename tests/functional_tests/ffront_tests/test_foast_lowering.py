@@ -181,7 +181,7 @@ def test_unary_ops():
 def test_unpacking():
     """Unpacking assigns should get separated."""
 
-    def unpacking(inp1: Field[..., float64], inp2: Field[..., float64]):
+    def unpacking(inp1: Field[..., float64], inp2: Field[..., float64]) -> Field[..., float64]:
         tmp1, tmp2 = inp1, inp2  # noqa
         return tmp1
 
@@ -401,7 +401,7 @@ def test_binary_or():
 
 
 def test_compare_scalars():
-    def comp_scalars() -> Field[[], bool]:
+    def comp_scalars() -> bool:
         return 3 > 4
 
     parsed = FieldOperatorParser.apply_to_function(comp_scalars)
@@ -534,7 +534,15 @@ def test_reduction_lowering_expr():
 
 
 def test_builtin_int_constructors():
-    def int_constrs() -> tuple[Field[[], int], ...]:
+    def int_constrs() -> tuple[
+        int,
+        int,
+        int32,
+        int64,
+        int,
+        int32,
+        int64,
+    ]:
         return 1, int(1), int32(1), int64(1), int("1"), int32("1"), int64("1")
 
     parsed = FieldOperatorParser.apply_to_function(int_constrs)
@@ -554,7 +562,15 @@ def test_builtin_int_constructors():
 
 
 def test_builtin_float_constructors():
-    def float_constrs() -> tuple[Field[[], float], ...]:
+    def float_constrs() -> tuple[
+        float,
+        float,
+        float32,
+        float64,
+        float,
+        float32,
+        float64,
+    ]:
         return (
             0.1,
             float(0.1),
@@ -582,7 +598,7 @@ def test_builtin_float_constructors():
 
 
 def test_builtin_bool_constructors():
-    def bool_constrs() -> tuple[Field[[], bool], ...]:
+    def bool_constrs() -> tuple[bool, bool, bool, bool, bool, bool, bool, bool]:
         return True, False, bool(True), bool(False), bool(0), bool(5), bool("True"), bool("False")
 
     parsed = FieldOperatorParser.apply_to_function(bool_constrs)
