@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import dataclasses
 import pathlib
 import subprocess
@@ -9,23 +11,25 @@ from functional.otf.compile.build_systems import cmake_lists
 from functional.program_processors.builders import cache
 
 
-def make_cmake_factory(
-    cmake_generator_name: str = "Ninja",
-    cmake_build_type: str = "Debug",
-    cmake_extra_flags: Optional[list[str]] = None,
-) -> step_types.BuildSystemProjectGenerator[
-    languages.Cpp, languages.LanguageWithHeaderFilesSettings, languages.Python
-]:
-    def cmake_factory(
+@dataclasses.dataclass
+class CMakeFactory(
+    step_types.BuildSystemProjectGenerator[
+        languages.Cpp, languages.LanguageWithHeaderFilesSettings, languages.Python
+    ]
+):
+    cmake_generator_name: str = "Ninja"
+    cmake_build_type: str = "Debug"
+    cmake_extra_flags: Optional[list[str]] = None
+
+    def __call__(
+        self,
         source: stages.CompilableSource[
             languages.Cpp,
             languages.LanguageWithHeaderFilesSettings,
             languages.Python,
         ],
         cache_strategy: cache.Strategy,
-    ) -> stages.BuildSystemProject[
-        languages.Cpp, languages.LanguageWithHeaderFilesSettings, languages.Python
-    ]:
+    ) -> CMakeProject:
         if not source.binding_source:
             raise compiler.CompilerError(
                 "CMake build system project requires separate bindings code file."
@@ -33,7 +37,7 @@ def make_cmake_factory(
         name = source.program_source.entry_point.name
         header_name = f"{name}.{source.program_source.language_settings.header_extension}"
         bindings_name = f"{name}_bindings.{source.program_source.language_settings.file_extension}"
-        return CMake(
+        return CMakeProject(
             root_path=cache.get_cache_folder(source, cache_strategy),
             source_files={
                 header_name: source.program_source.source_code,
@@ -45,16 +49,14 @@ def make_cmake_factory(
                 ),
             },
             fencil_name=name,
-            generator_name=cmake_generator_name,
-            build_type=cmake_build_type,
-            extra_cmake_flags=cmake_extra_flags or [],
+            generator_name=self.cmake_generator_name,
+            build_type=self.cmake_build_type,
+            extra_cmake_flags=self.cmake_extra_flags or [],
         )
-
-    return cmake_factory
 
 
 @dataclasses.dataclass
-class CMake(
+class CMakeProject(
     stages.BuildSystemProject[
         languages.Cpp, languages.LanguageWithHeaderFilesSettings, languages.Python
     ]

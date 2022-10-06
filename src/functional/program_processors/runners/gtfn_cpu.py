@@ -40,7 +40,7 @@ def convert_arg(arg: Any) -> Any:
 @dataclasses.dataclass(frozen=True)
 class GTFNExecutor(fpi.ProgramExecutor):
     language_settings: languages.LanguageWithHeaderFilesSettings = cpp_gen.CPP_DEFAULT
-    builder_factory: step_types.BuildSystemProjectGenerator = compiledb.make_compiledb_factory()
+    builder_factory: step_types.BuildSystemProjectGenerator = compiledb.CompiledbFactory()
 
     name: Optional[str] = None
 

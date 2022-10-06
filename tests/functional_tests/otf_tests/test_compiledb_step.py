@@ -19,7 +19,7 @@ from functional.program_processors.builders import cache, importer
 
 
 def test_default_builder_generator(compilable_source_example, clean_example_session_cache):
-    otf_builder = compiledb.make_compiledb_factory()(
+    otf_builder = compiledb.CompiledbFactory()(
         compilable_source_example, cache_strategy=cache.Strategy.SESSION
     )
 

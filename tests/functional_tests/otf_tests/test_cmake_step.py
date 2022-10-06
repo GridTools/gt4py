@@ -19,7 +19,7 @@ from functional.program_processors.builders import cache, importer
 
 
 def test_default_builder_generator(compilable_source_example, clean_example_session_cache):
-    otf_builder = cmake.make_cmake_factory()(
+    otf_builder = cmake.CMakeFactory()(
         source=compilable_source_example, cache_strategy=cache.Strategy.SESSION
     )
     assert not build_data.contains_data(otf_builder.root_path)

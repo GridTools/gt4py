@@ -27,7 +27,7 @@ def test_gtfn_cpp_with_cmake(program_source_with_name):
     build_the_program = workflow.Workflow(
         bindings.program_source_to_compileable_source,
         compiler.Compiler(
-            cache_strategy=cache.Strategy.SESSION, builder_factory=cmake.make_cmake_factory()
+            cache_strategy=cache.Strategy.SESSION, builder_factory=cmake.CMakeFactory()
         ),
     )
     otf_fencil = build_the_program(source_module_example)
@@ -43,7 +43,7 @@ def test_gtfn_cpp_with_compiledb(program_source_with_name):
         bindings.program_source_to_compileable_source,
         compiler.Compiler(
             cache_strategy=cache.Strategy.SESSION,
-            builder_factory=compiledb.make_compiledb_factory(),
+            builder_factory=compiledb.CompiledbFactory(),
         ),
     )
     otf_fencil = build_the_program(source_module_example)

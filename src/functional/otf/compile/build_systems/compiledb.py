@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import dataclasses
 import json
 import pathlib
@@ -10,8 +12,63 @@ from functional.otf.compile.build_systems import cmake, cmake_lists
 from functional.program_processors.builders import cache
 
 
+@dataclasses.dataclass
+class CompiledbFactory(
+    step_types.BuildSystemProjectGenerator[
+        languages.Cpp, languages.LanguageWithHeaderFilesSettings, languages.Python
+    ]
+):
+    cmake_build_type: str = "Debug"
+    cmake_extra_flags: Optional[list[str]] = None
+    renew_compiledb: bool = False
+
+    def __call__(
+        self,
+        source: stages.CompilableSource[
+            languages.Cpp,
+            languages.LanguageWithHeaderFilesSettings,
+            languages.Python,
+        ],
+        cache_strategy: cache.Strategy,
+    ) -> CompiledbProject:
+        if not source.binding_source:
+            raise compiler.CompilerError(
+                "CMake build system project requires separate bindings code file."
+            )
+        name = source.program_source.entry_point.name
+        header_name = f"{name}.{source.program_source.language_settings.header_extension}"
+        bindings_name = f"{name}_bindings.{source.program_source.language_settings.file_extension}"
+
+        cc_cache_module = _cc_cache_module(
+            deps=source.library_deps,
+            build_type=self.cmake_build_type,
+            cmake_flags=self.cmake_extra_flags or [],
+        )
+
+        if self.renew_compiledb or not (
+            compiledb_template := _cc_get_compiledb(cc_cache_module, cache_strategy)
+        ):
+            compiledb_template = _cc_generate_compiledb(
+                cc_cache_module,
+                build_type=self.cmake_build_type,
+                cmake_flags=self.cmake_extra_flags or [],
+                cache_strategy=cache_strategy,
+            )
+
+        return CompiledbProject(
+            root_path=cache.get_cache_folder(source, cache_strategy),
+            fencil_name=name,
+            source_files={
+                header_name: source.program_source.source_code,
+                bindings_name: source.binding_source.source_code,
+            },
+            bindings_file_name=bindings_name,
+            compile_commands_cache=compiledb_template,
+        )
+
+
 @dataclasses.dataclass()
-class Compiledb(
+class CompiledbProject(
     stages.BuildSystemProject[
         languages.Cpp, languages.LanguageWithHeaderFilesSettings, languages.Python
     ]
@@ -89,57 +146,6 @@ class Compiledb(
         )
 
 
-def make_compiledb_factory(
-    cmake_build_type: str = "Debug",
-    cmake_extra_flags: Optional[list[str]] = None,
-    renew_compiledb: bool = False,
-) -> step_types.BuildSystemProjectGenerator:
-    def compiledb_factory(
-        source: stages.CompilableSource[
-            languages.Cpp,
-            languages.LanguageWithHeaderFilesSettings,
-            languages.Python,
-        ],
-        cache_strategy: cache.Strategy,
-    ) -> Compiledb:
-        if not source.binding_source:
-            raise compiler.CompilerError(
-                "CMake build system project requires separate bindings code file."
-            )
-        name = source.program_source.entry_point.name
-        header_name = f"{name}.{source.program_source.language_settings.header_extension}"
-        bindings_name = f"{name}_bindings.{source.program_source.language_settings.file_extension}"
-
-        cc_cache_module = _cc_cache_module(
-            deps=source.library_deps,
-            build_type=cmake_build_type,
-            cmake_flags=cmake_extra_flags or [],
-        )
-
-        if renew_compiledb or not (
-            compiledb_template := _cc_get_compiledb(cc_cache_module, cache_strategy)
-        ):
-            compiledb_template = _cc_generate_compiledb(
-                cc_cache_module,
-                build_type=cmake_build_type,
-                cmake_flags=cmake_extra_flags or [],
-                cache_strategy=cache_strategy,
-            )
-
-        return Compiledb(
-            root_path=cache.get_cache_folder(source, cache_strategy),
-            fencil_name=name,
-            source_files={
-                header_name: source.program_source.source_code,
-                bindings_name: source.binding_source.source_code,
-            },
-            bindings_file_name=bindings_name,
-            compile_commands_cache=compiledb_template,
-        )
-
-    return compiledb_factory
-
-
 def _cc_cache_name(
     deps: tuple[source.LibraryDependency, ...], build_type: str, flags: list[str]
 ) -> str:
@@ -192,7 +198,7 @@ def _cc_generate_compiledb(
         stages.CompilableSource(source_module, None), cache_strategy
     )
 
-    otf_builder = cmake.CMake(
+    otf_builder = cmake.CMakeProject(
         generator_name="Ninja",
         build_type=build_type,
         extra_cmake_flags=cmake_flags,
