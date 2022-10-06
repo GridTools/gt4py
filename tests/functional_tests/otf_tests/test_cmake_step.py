@@ -28,7 +28,7 @@ def test_default_builder_generator(compilable_source_example, clean_example_sess
 
     data = build_data.read_data(otf_builder.root_path)
 
-    assert data.status == build_data.OTFBuildStatus.COMPILED
+    assert data.status == build_data.BuildStatus.COMPILED
     assert pathlib.Path(otf_builder.root_path / data.module).exists()
     assert hasattr(
         importer.import_from_path(otf_builder.root_path / data.module), data.entry_point_name

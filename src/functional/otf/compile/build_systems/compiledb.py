@@ -24,12 +24,12 @@ class Compiledb(
 
     def build(self):
         self.write_files()
-        if build_data.read_data(self.root_path).status < build_data.OTFBuildStatus.CONFIGURED:
+        if build_data.read_data(self.root_path).status < build_data.BuildStatus.CONFIGURED:
             self.run_config()
         if (
-            build_data.OTFBuildStatus.CONFIGURED
+            build_data.BuildStatus.CONFIGURED
             <= build_data.read_data(self.root_path).status
-            < build_data.OTFBuildStatus.COMPILED
+            < build_data.BuildStatus.COMPILED
         ):
             self.run_build()
 
@@ -38,8 +38,8 @@ class Compiledb(
             (self.root_path / name).write_text(content, encoding="utf-8")
 
         build_data.write_data(
-            data=build_data.OTFBuildData(
-                status=build_data.OTFBuildStatus.STARTED,
+            data=build_data.BuildData(
+                status=build_data.BuildStatus.STARTED,
                 module=pathlib.Path(""),
                 entry_point_name=self.fencil_name,
             ),
@@ -61,7 +61,7 @@ class Compiledb(
                     stderr=log_file_pointer,
                 )
 
-        build_data.update_status(new_status=build_data.OTFBuildStatus.COMPILED, path=self.root_path)
+        build_data.update_status(new_status=build_data.BuildStatus.COMPILED, path=self.root_path)
 
     def run_config(self):
         compile_db = json.loads(self.compile_commands_cache.read_text())
@@ -80,8 +80,8 @@ class Compiledb(
         (self.root_path / "compile_commands.json").write_text(json.dumps(compile_db))
 
         build_data.write_data(
-            build_data.OTFBuildData(
-                status=build_data.OTFBuildStatus.CONFIGURED,
+            build_data.BuildData(
+                status=build_data.BuildStatus.CONFIGURED,
                 module=pathlib.Path(compile_db[-1]["output"]),
                 entry_point_name=self.fencil_name,
             ),

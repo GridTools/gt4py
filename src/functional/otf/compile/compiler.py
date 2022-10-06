@@ -24,11 +24,11 @@ SL = TypeVar("SL", bound=languages.LanguageTag)
 ST = TypeVar("ST", bound=languages.LanguageSettings)
 
 
-def is_compiled(data: build_data.OTFBuildData) -> bool:
-    return data.status >= build_data.OTFBuildStatus.COMPILED
+def is_compiled(data: build_data.BuildData) -> bool:
+    return data.status >= build_data.BuildStatus.COMPILED
 
 
-def module_exists(data: build_data.OTFBuildData, src_dir: pathlib.Path) -> bool:
+def module_exists(data: build_data.BuildData, src_dir: pathlib.Path) -> bool:
     return (src_dir / data.module).exists()
 
 

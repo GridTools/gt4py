@@ -76,8 +76,8 @@ class CMake(
             (self.root_path / name).write_text(content, encoding="utf-8")
 
         build_data.write_data(
-            build_data.OTFBuildData(
-                status=build_data.OTFBuildStatus.STARTED,
+            build_data.BuildData(
+                status=build_data.BuildStatus.STARTED,
                 module=pathlib.Path(
                     f"build/bin/{self.fencil_name}.{common.python_module_suffix()}"
                 ),
@@ -95,7 +95,7 @@ class CMake(
                 stderr=log_file_pointer,
             )
 
-        build_data.update_status(new_status=build_data.OTFBuildStatus.COMPILED, path=self.root_path)
+        build_data.update_status(new_status=build_data.BuildStatus.COMPILED, path=self.root_path)
 
     def run_config(self):
         logfile = self.root_path / "log_config.txt"
@@ -116,6 +116,4 @@ class CMake(
                 stderr=log_file_pointer,
             )
 
-        build_data.update_status(
-            new_status=build_data.OTFBuildStatus.CONFIGURED, path=self.root_path
-        )
+        build_data.update_status(new_status=build_data.BuildStatus.CONFIGURED, path=self.root_path)

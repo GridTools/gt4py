@@ -22,12 +22,12 @@ from typing import Final, Optional
 
 _DATAFILE_NAME: Final = "gt4py.json"
 
-OTFBuildStatus = enum.IntEnum("OTFBuildStatus", ["STARTED", "CONFIGURED", "COMPILED"], start=0)
+BuildStatus = enum.IntEnum("BuildStatus", ["STARTED", "CONFIGURED", "COMPILED"], start=0)
 
 
 @dataclasses.dataclass(frozen=True)
-class OTFBuildData:
-    status: OTFBuildStatus
+class BuildData:
+    status: BuildStatus
     module: pathlib.Path
     entry_point_name: str
 
@@ -35,12 +35,12 @@ class OTFBuildData:
         return dataclasses.asdict(self) | {"status": self.status.name, "module": str(self.module)}
 
     @classmethod
-    def from_json(cls, data) -> OTFBuildData:
+    def from_json(cls, data) -> BuildData:
         return cls(
             **(
                 data
                 | {
-                    "status": getattr(OTFBuildStatus, data["status"]),
+                    "status": getattr(BuildStatus, data["status"]),
                     "module": pathlib.Path(data["module"]),
                 }
             )
@@ -51,21 +51,21 @@ def contains_data(path: pathlib.Path) -> bool:
     return (path / _DATAFILE_NAME).exists()
 
 
-def read_data(path) -> Optional[OTFBuildData]:
+def read_data(path) -> Optional[BuildData]:
     if contains_data(path):
-        return OTFBuildData.from_json(json.loads((path / _DATAFILE_NAME).read_text()))
+        return BuildData.from_json(json.loads((path / _DATAFILE_NAME).read_text()))
     return None
 
 
-def write_data(data: OTFBuildData, path: pathlib.Path) -> None:
+def write_data(data: BuildData, path: pathlib.Path) -> None:
     (path / _DATAFILE_NAME).write_text(json.dumps(data.to_json()))
 
 
-def update_status(new_status: OTFBuildStatus, path: pathlib.Path) -> None:
+def update_status(new_status: BuildStatus, path: pathlib.Path) -> None:
     old_data = read_data(path)
     assert old_data
     write_data(
-        OTFBuildData(
+        BuildData(
             status=new_status, module=old_data.module, entry_point_name=old_data.entry_point_name
         ),
         path,
