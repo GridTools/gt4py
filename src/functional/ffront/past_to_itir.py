@@ -108,11 +108,9 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         #  containing the size of all fields. The caller of a program is (e.g.
         #  program decorator) is required to pass these arguments.
 
-        if "domain" in node.body[0].kwargs:
-            params = [itir.Sym(id=inp.id) for inp in node.params]
-        else:
-            size_params = self._gen_size_params_from_program(node)
-            params = [itir.Sym(id=inp.id) for inp in node.params] + size_params
+        params = [itir.Sym(id=inp.id) for inp in node.params]
+        if "domain" not in node.body[0].kwargs:
+            params = params + self._gen_size_params_from_program(node)
 
         closures: list[itir.StencilClosure] = []
         for stmt in node.body:

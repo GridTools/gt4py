@@ -289,9 +289,7 @@ class Program:
     def _process_args(self, args: tuple, kwargs: dict) -> tuple[tuple, tuple, dict[str, Any]]:
         self._validate_args(*args, **kwargs)
 
-        domain_init = False
-        if "domain" in self.past_node.body[0].kwargs:
-            domain_init = True
+        domain_init = True if "domain" in self.past_node.body[0].kwargs else False
         # extract size of all field arguments
         size_args: list[Optional[tuple[int, ...]]] = []
         rewritten_args = list(args)
@@ -304,13 +302,14 @@ class Program:
                 )
             if not isinstance(param.type, ct.FieldType):
                 continue
-            if not domain_init:
-                has_shape = hasattr(args[param_idx], "shape")
-                for dim_idx in range(0, len(param.type.dims)):
-                    if has_shape:
-                        size_args.append(args[param_idx].shape[dim_idx])
-                    else:
-                        size_args.append(None)
+            if domain_init:
+                continue
+            has_shape = hasattr(args[param_idx], "shape")
+            for dim_idx in range(0, len(param.type.dims)):
+                if has_shape:
+                    size_args.append(args[param_idx].shape[dim_idx])
+                else:
+                    size_args.append(None)
         return tuple(rewritten_args), tuple(size_args), kwargs
 
     def _filter_capture_vars_by_type(self, *types: type) -> dict[str, Any]:
