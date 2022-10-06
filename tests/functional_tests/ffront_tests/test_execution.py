@@ -1198,7 +1198,9 @@ def test_domain_tuple(fieldview_backend):
     assert np.allclose(expected, b)
 
 
-def test_where_k_offset():
+def test_where_k_offset(fieldview_backend):
+    if fieldview_backend == gtfn_cpu.run_gtfn:
+        pytest.skip("IndexFields are not supported yet.")
     size = 10
     KDim = Dimension("K", kind=DimensionKind.VERTICAL)
     Koff = FieldOffset("Koff", source=KDim, target=(KDim,))
