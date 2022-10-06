@@ -40,6 +40,7 @@ from gt4py.backend.gtc_common import (
 from gt4py.backend.module_generator import make_args_data_from_gtir
 from gt4py.utils import shash
 from gtc import common, gtir
+from .gtc_common import make_x86_layout_map
 from gtc.dace.nodes import StencilComputation
 from gtc.dace.oir_to_dace import OirSDFGBuilder
 from gtc.dace.utils import array_dimensions, layout_maker_factory, replace_strides
@@ -84,10 +85,11 @@ def _specialize_contiguous_strides(sdfg: dace.SDFG, layout_map):
         dims = array_dimensions(array)
         ndata_dims = len(array.shape) - sum(dims)
         mask = dims + [True] * ndata_dims
-        layout = layout_map(mask)
+        layout = [l for l in layout_map(mask) if l is not None]
         contiguous_dim = layout.index(max(layout))
         stride_dim = sum(mask[:contiguous_dim])
         stride_sym = array.strides[stride_dim]
+        print('setting', str(stride_sym))
         repldict[str(stride_sym)] = "1"
 
     sdfg.replace_dict(repldict)
@@ -143,19 +145,23 @@ def _pre_expand_trafos(gtir_pipeline: GtirPipeline, sdfg: dace.SDFG, layout_map)
         if node.oir_node.loop_order == common.LoopOrder.PARALLEL:
             expansion_priority.extend(
                 [
-                    ["TileI", "TileJ", "IMap", "JMap", "Sections", "KMap", "Stages"],
-                    ["TileI", "TileJ", "IMap", "JMap", "Sections", "Stages", "KMap"],
-                    ["TileI", "TileJ", "IMap", "JMap","Stages",  "Sections",  "KMap"],
-                    ["TileI", "TileJ", "Sections", "KMap", "Stages", "JMap", "IMap"],
+                    ["TileJ", "TileI", "IMap", "JMap", "Sections", "KMap", "Stages"],
+                    ["TileJ", "TileI", "Sections","IMap", "JMap",  "KMap", "Stages"],
+                    ["TileJ", "TileI", "Sections","IMap", "JMap",  "Stages", "KMap"],
+                    ["TileJ", "TileI", "Sections","Stages", "IMap", "JMap", "KMap"],
+                    ["TileJ", "TileI", "IMap", "JMap", "Sections", "Stages", "KMap"],
+                    ["TileJ", "TileI", "Sections", "KMap", "Stages", "JMap", "IMap"],
                 ]
             )
         else:
             expansion_priority.extend(
                 [
-                    ["TileI", "TileJ", "IMap", "JMap", "Sections", "KLoop", "Stages"],
-                    ["TileI", "TileJ", "IMap", "JMap", "Sections", "Stages", "KLoop"],
-                    ["TileI", "TileJ", "IMap", "JMap","Stages",  "Sections",  "KLoop"],
-                    ["TileI", "TileJ", "Sections", "KLoop", "Stages", "JMap", "IMap"],
+                    ["TileJ", "TileI", "IMap", "JMap", "Sections", "KLoop", "Stages"],
+                    ["TileJ", "TileI", "Sections","IMap", "JMap",  "KLoop", "Stages"],
+                    ["TileJ", "TileI", "Sections","IMap", "JMap",  "Stages", "KLoop"],
+                    ["TileJ", "TileI", "Sections","Stages", "IMap", "JMap", "KLoop"],
+                    ["TileJ", "TileI", "IMap", "JMap", "Sections", "Stages", "KLoop"],
+                    ["TileJ", "TileI", "Sections", "KLoop", "Stages", "JMap", "IMap"],
                 ]
             )
         is_set = False
@@ -759,7 +765,8 @@ class DaceCPUBackend(BaseDaceBackend):
     storage_info = {
         "alignment": 1,
         "device": "cpu",
-        "layout_map": layout_maker_factory((1, 0, 2)),
+        #"layout_map": layout_maker_factory((1, 0, 2)),
+        "layout_map": make_x86_layout_map,
         "is_compatible_layout": lambda x: True,
         "is_compatible_type": lambda x: isinstance(x, np.ndarray),
     }
