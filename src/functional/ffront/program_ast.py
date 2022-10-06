@@ -93,4 +93,4 @@ class Program(LocatedNode, SymbolTableTrait):
     type: Union[common_types.ProgramType, common_types.DeferredSymbolType]  # noqa A003
     params: list[DataSymbol]
     body: list[Call]
-    captured_vars: list[Symbol]
+    closure_vars: list[Symbol]

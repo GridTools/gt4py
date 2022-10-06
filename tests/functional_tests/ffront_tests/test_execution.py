@@ -1196,3 +1196,13 @@ def test_domain_tuple(fieldview_backend):
 
     assert np.allclose(np.asarray(a), a)
     assert np.allclose(expected, b)
+
+
+def test_undefined_symbols():
+    from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError
+
+    with pytest.raises(FieldOperatorTypeDeductionError, match="Undeclared symbol"):
+
+        @field_operator
+        def return_undefined():
+            return undefined_symbol
