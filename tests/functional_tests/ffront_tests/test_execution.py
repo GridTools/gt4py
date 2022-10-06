@@ -1213,15 +1213,7 @@ def test_where_k_offset():
     ) -> Field[[IDim, KDim], float64]:
         return where(k_index > 0, a(Koff[-1]), 2.0)
 
-    @program
-    def program_where_k_offset(
-        a: Field[[IDim, KDim], float64],
-        k_index: Field[[KDim], int64],
-        out: Field[[IDim, KDim], float64],
-    ):
-        fieldop_where_k_offset(a, k_index, out=out)
-
-    program_where_k_offset(a, k_index, out, offset_provider={"Koff": KDim})
+    fieldop_where_k_offset(a, k_index, out=out, offset_provider={"Koff": KDim})
 
     expected = np.where(np.arange(0, size, 1)[np.newaxis, :] > 0.0, a, 2.0)
 
