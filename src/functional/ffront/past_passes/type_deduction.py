@@ -94,7 +94,7 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             type=ct.ProgramType(definition=definition_type),
             params=params,
             body=self.visit(node.body, **kwargs),
-            captured_vars=self.visit(node.captured_vars, **kwargs),
+            closure_vars=self.visit(node.closure_vars, **kwargs),
             location=node.location,
         )
 

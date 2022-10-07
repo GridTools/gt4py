@@ -620,7 +620,7 @@ def test_scalar_arg_with_field(fieldview_backend):
     Edge = Dimension("Edge")
     EdgeOffset = FieldOffset("EdgeOffset", source=Edge, target=(Edge,))
     size = 5
-    inp = index_field(Edge)
+    inp = index_field(Edge, dtype=float64)
     factor = 3.0
     out = np_as_located_field(Edge)(np.zeros((size), dtype=np.float64))
 
@@ -1196,3 +1196,37 @@ def test_domain_tuple(fieldview_backend):
 
     assert np.allclose(np.asarray(a), a)
     assert np.allclose(expected, b)
+
+
+def test_where_k_offset(fieldview_backend):
+    if fieldview_backend == gtfn_cpu.run_gtfn:
+        pytest.skip("IndexFields are not supported yet.")
+    size = 10
+    KDim = Dimension("K", kind=DimensionKind.VERTICAL)
+    Koff = FieldOffset("Koff", source=KDim, target=(KDim,))
+    a = np_as_located_field(IDim, KDim)(np.ones((size, size)))
+    out = np_as_located_field(IDim, KDim)(np.zeros((size, size)))
+    k_index = index_field(KDim)
+
+    @field_operator(backend=fieldview_backend)
+    def fieldop_where_k_offset(
+        a: Field[[IDim, KDim], float64],
+        k_index: Field[[KDim], int64],
+    ) -> Field[[IDim, KDim], float64]:
+        return where(k_index > 0, a(Koff[-1]), 2.0)
+
+    fieldop_where_k_offset(a, k_index, out=out, offset_provider={"Koff": KDim})
+
+    expected = np.where(np.arange(0, size, 1)[np.newaxis, :] > 0.0, a, 2.0)
+
+    assert np.allclose(np.asarray(out), expected)
+
+
+def test_undefined_symbols():
+    from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError
+
+    with pytest.raises(FieldOperatorTypeDeductionError, match="Undeclared symbol"):
+
+        @field_operator
+        def return_undefined():
+            return undefined_symbol

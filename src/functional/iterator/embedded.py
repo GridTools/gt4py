@@ -879,7 +879,7 @@ class IndexField(LocatedField):
         return (self.axis,)
 
 
-def index_field(axis: Dimension, dtype: npt.DTypeLike = float) -> LocatedField:
+def index_field(axis: Dimension, dtype: npt.DTypeLike = int) -> LocatedField:
     return IndexField(axis, dtype)
 
 
