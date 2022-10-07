@@ -23,6 +23,7 @@ import abc
 import collections.abc
 import dataclasses
 import functools
+import typing as _typing
 
 from . import exceptions, extended_typing as xtyping, utils
 from .extended_typing import (
@@ -218,7 +219,7 @@ class SimpleTypeValidatorFactory(TypeValidatorFactory):
                 else:
                     return self.make_is_instance_of(name, type_annotation)
 
-            if isinstance(type_annotation, TypeVar):
+            if isinstance(type_annotation, _typing.TypeVar):
                 if type_annotation.__bound__:
                     return self.make_is_instance_of(name, type_annotation.__bound__)
                 else:
@@ -229,7 +230,7 @@ class SimpleTypeValidatorFactory(TypeValidatorFactory):
                     xtyping.eval_forward_ref(type_annotation, globalns=globalns, localns=localns)
                 )
 
-            if type_annotation is Any:
+            if xtyping.is_Any(type_annotation):
                 return self._make_is_any(name)
 
             # Generic and parametrized type hints

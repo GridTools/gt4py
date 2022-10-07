@@ -35,6 +35,7 @@ import typing as _typing
 from typing import *  # noqa: F403
 from typing import overload  # Only needed to avoid false flake8 errors
 
+import typing_extensions as _typing_extensions
 from typing_extensions import *  # type: ignore[assignment]  # noqa: F403
 
 
@@ -386,13 +387,15 @@ def extended_runtime_checkable(  # noqa: C901  # too complex but unavoidable
 
 
 if _sys.version_info >= (3, 9):
+    # The `obj is Any` check is required since `Any` was converted to a class sinde
+    #  Python 3.11 or typing_extensions >= 4.4
 
     def is_actual_type(obj: Any) -> TypeGuard[Type]:
         """Check if an object is an actual type and not a GenericAlias.
 
         This is needed because since Python 3.9: ``isinstance(types.GenericAlias(),  type) is True``.
         """
-        return isinstance(obj, type) and not isinstance(obj, _types.GenericAlias)
+        return isinstance(obj, type) and not (isinstance(obj, _types.GenericAlias) or obj is Any)
 
 else:
 
@@ -401,7 +404,11 @@ else:
 
         This is only needed for Python >= 3.9, where ``isinstance(types.GenericAlias(),  type) is True``.
         """
-        return isinstance(obj, type)
+        return isinstance(obj, type) and obj is not Any
+
+
+def is_Any(obj: Any) -> bool:
+    return obj is _typing.Any or obj is _typing_extensions.Any
 
 
 def has_type_parameters(cls: Type) -> bool:
