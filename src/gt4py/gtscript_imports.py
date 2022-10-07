@@ -43,7 +43,7 @@ import sys
 import tempfile
 from contextlib import contextmanager
 from types import ModuleType
-from typing import Any, Dict, Generator, Iterator, List, Optional, Tuple, Union
+from typing import Any, Generator, Iterator, List, Optional, Union
 
 
 GTS_EXTENSIONS = [".gt.py"]
@@ -164,7 +164,7 @@ class GtsLoader(importlib.machinery.SourceFileLoader):
     def plpath(self) -> pathlib.Path:
         return pathlib.Path(str(self.path))
 
-    def get_filename(self, fullname: str) -> str:
+    def get_filename(self, fullname: Optional[str] = None) -> Union[bytes, str]:
         """
         Generate a py module if an up to date one doesn't exist yet.
 
@@ -173,7 +173,7 @@ class GtsLoader(importlib.machinery.SourceFileLoader):
 
         Parameters
         ----------
-        fullname : `str`
+        fullname : `Optional[str]`
             Dotted name corresponding to the gtscript module.
 
         Returns
@@ -185,7 +185,10 @@ class GtsLoader(importlib.machinery.SourceFileLoader):
         if not self.module_file.exists():
             self.module_file.touch()
 
-        if self.path_stats(self.path) != self.path_stats(str(self.module_file.absolute())):
+        if (
+            self.path_stats(self.path) != self.path_stats(str(self.module_file.absolute()))
+            and fullname is not None
+        ):
             self.module_file.write_text(self.get_source_code(fullname))
         return str(self.module_file)
 
@@ -231,9 +234,7 @@ def enabled(**kwargs: Any) -> Iterator:
 
         import some_other_stencil  # in the same directory as some_stencil.gt.py raises error
     """
-    backup_import_system: Tuple[
-        List[str], List[importlib.abc.MetaPathFinder], Dict[str, ModuleType]
-    ] = (
+    backup_import_system = (
         sys.path.copy(),
         sys.meta_path.copy(),
         sys.modules.copy(),

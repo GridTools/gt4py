@@ -51,7 +51,7 @@ class BackendChoice(click.Choice):
         value: str,
         param: Optional[click.Parameter],
         ctx: Optional[click.Context],
-    ) -> Type[CLIBackendMixin]:
+    ) -> Optional[Type[CLIBackendMixin]]:
         """Convert a CLI option argument to a backend."""
         name = super().convert(value, param, ctx)
         backend_cls = self.enabled_backend_cls_from_name(name)
@@ -124,9 +124,10 @@ class BackendOption(click.ParamType):
                 raise ValueError("name can not be empty")
             if not value:
                 raise ValueError("value can not be empty")
-            return name, value
         except ValueError:
             self.fail('Invalid backend option format: must be "<name>=<value>"')
+
+        return name, value
 
     def convert(
         self, value: str, param: Optional[click.Parameter], ctx: Optional[click.Context]
