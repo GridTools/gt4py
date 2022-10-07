@@ -238,7 +238,7 @@ def create_bindings(
 
 
 @workflow.make_step
-def program_source_to_compileable_source(
+def program_source_to_compilable_source(
     inp: stages.ProgramSource[languages.Cpp, languages.LanguageWithHeaderFilesSettings],
 ) -> stages.CompilableSource[
     languages.Cpp, languages.LanguageWithHeaderFilesSettings, languages.Python

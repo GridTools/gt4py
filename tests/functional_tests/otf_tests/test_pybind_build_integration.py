@@ -16,16 +16,16 @@ import math
 import numpy as np
 
 from functional.otf import workflow
+from functional.otf.binding import pybind
 from functional.otf.compilation import compiler
 from functional.otf.compilation.build_systems import cmake, compiledb
 from functional.program_processors.builders import cache
-from functional.program_processors.builders.cpp import bindings
 
 
 def test_gtfn_cpp_with_cmake(program_source_with_name):
     source_module_example = program_source_with_name("gtfn_cpp_with_cmake")
     build_the_program = workflow.Workflow(
-        bindings.program_source_to_compileable_source,
+        pybind.program_source_to_compilable_source,
         compiler.Compiler(
             cache_strategy=cache.Strategy.SESSION, builder_factory=cmake.CMakeFactory()
         ),
@@ -40,7 +40,7 @@ def test_gtfn_cpp_with_cmake(program_source_with_name):
 def test_gtfn_cpp_with_compiledb(program_source_with_name):
     source_module_example = program_source_with_name("gtfn_cpp_with_compiledb")
     build_the_program = workflow.Workflow(
-        bindings.program_source_to_compileable_source,
+        pybind.program_source_to_compilable_source,
         compiler.Compiler(
             cache_strategy=cache.Strategy.SESSION,
             builder_factory=compiledb.CompiledbFactory(),

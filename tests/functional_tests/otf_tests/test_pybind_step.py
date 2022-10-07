@@ -12,11 +12,11 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 from functional.otf import source
-from functional.program_processors.builders.cpp import bindings
+from functional.otf.binding import pybind
 
 
 def test_bindings(program_source_example):
-    module = bindings.create_bindings(program_source_example)
+    module = pybind.create_bindings(program_source_example)
     expected_src = source.format_source(
         program_source_example.language_settings,
         """\

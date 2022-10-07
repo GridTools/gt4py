@@ -18,8 +18,8 @@ import numpy as np
 import pytest
 
 from functional.otf import languages, source, stages
+from functional.otf.binding import pybind
 from functional.program_processors.builders import cache
-from functional.program_processors.builders.cpp import bindings
 from functional.program_processors.source_modules import cpp_gen
 
 
@@ -76,7 +76,7 @@ def program_source_example():
 def compilable_source_example(program_source_example):
     return stages.CompilableSource(
         program_source=program_source_example,
-        binding_source=bindings.create_bindings(program_source_example),
+        binding_source=pybind.create_bindings(program_source_example),
     )
 
 
