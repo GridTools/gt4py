@@ -16,7 +16,7 @@ import pytest
 
 import functional.otf.source.cpp_gen as cpp
 from eve.codegen import format_source
-from functional.otf import source
+from functional.otf.source import source
 
 
 def test_render_types():

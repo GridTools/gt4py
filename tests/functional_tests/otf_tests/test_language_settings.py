@@ -13,7 +13,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 import pytest
 
-from functional.otf import languages, source, stages
+from functional.otf import languages, stages
+from functional.otf.source import source
 
 
 def test_basic_settings_with_cpp_rejected():

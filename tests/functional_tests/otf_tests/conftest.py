@@ -17,10 +17,10 @@ import jinja2
 import numpy as np
 import pytest
 
-from functional.otf import languages, source, stages
+from functional.otf import languages, stages
 from functional.otf.binding import pybind
 from functional.otf.compilation import cache
-from functional.otf.source import cpp_gen
+from functional.otf.source import cpp_gen, source
 
 
 def make_program_source(name: str) -> stages.ProgramSource:
