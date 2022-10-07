@@ -19,10 +19,10 @@ from typing import Any, Final
 import numpy as np
 
 from functional.iterator import ir as itir
-from functional.otf import languages, source, stages
+from functional.otf import languages, stages
+from functional.otf.source import cpp_gen, source
 from functional.program_processors import processor_interface as fpi  # fencil processor interface
 from functional.program_processors.codegens.gtfn import gtfn_backend
-from functional.program_processors.source_modules import cpp_gen
 
 
 def get_param_description(name: str, obj: Any) -> source.ScalarParameter | source.BufferParameter:

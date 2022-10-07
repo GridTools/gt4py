@@ -20,7 +20,7 @@ import pytest
 from functional.otf import languages, source, stages
 from functional.otf.binding import pybind
 from functional.otf.compilation import cache
-from functional.program_processors.source_modules import cpp_gen
+from functional.otf.source import cpp_gen
 
 
 def make_program_source(name: str) -> stages.ProgramSource:

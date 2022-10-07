@@ -14,7 +14,7 @@
 import numpy as np
 import pytest
 
-import functional.program_processors.source_modules.cpp_gen as cpp
+import functional.otf.source.cpp_gen as cpp
 from eve.codegen import format_source
 from functional.otf import source
 

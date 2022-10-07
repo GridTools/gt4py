@@ -6,9 +6,10 @@ import pathlib
 import subprocess
 from typing import Optional
 
-from functional.otf import languages, source, stages
+from functional.otf import languages, stages
 from functional.otf.compilation import build_data, cache, compiler
 from functional.otf.compilation.build_systems import cmake, cmake_lists
+from functional.otf.source import source
 
 
 @dataclasses.dataclass

@@ -22,8 +22,8 @@ import numpy as np
 
 import eve
 from eve.codegen import JinjaTemplate as as_jinja, TemplatedGenerator
-from functional.otf import languages, source, stages, workflow
-from functional.program_processors.source_modules import cpp_gen
+from functional.otf import languages, stages, workflow
+from functional.otf.source import cpp_gen, source
 
 
 class Expr(eve.Node):

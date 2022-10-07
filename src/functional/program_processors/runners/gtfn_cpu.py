@@ -23,9 +23,9 @@ from functional.otf import languages, stages, workflow
 from functional.otf.binding import pybind
 from functional.otf.compilation import cache, compiler
 from functional.otf.compilation.build_systems import compiledb
+from functional.otf.source import cpp_gen
 from functional.program_processors import processor_interface as fpi
 from functional.program_processors.codegens.gtfn import gtfn_module
-from functional.program_processors.source_modules import cpp_gen
 
 
 # TODO(ricoh): Add support for the whole range of arguments that can be passed to a fencil.

@@ -19,7 +19,8 @@ import hashlib
 import pathlib
 import tempfile
 
-from functional.otf import source, stages
+from functional.otf import stages
+from functional.otf.source import source
 
 
 class Strategy(enum.Enum):

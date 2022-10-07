@@ -19,7 +19,8 @@ from typing import Final, Sequence, Type
 
 import numpy as np
 
-from functional.otf import languages, source
+from functional.otf import languages
+from functional.otf.source import source
 
 
 CPP_DEFAULT: Final = languages.LanguageWithHeaderFilesSettings(

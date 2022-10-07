@@ -17,7 +17,8 @@ import dataclasses
 from typing import Any, Generic, Optional, Protocol, TypeVar
 
 from functional.iterator import ir as itir
-from functional.otf import languages, source
+from functional.otf import languages
+from functional.otf.source import source
 
 
 SrcL = TypeVar("SrcL", bound=languages.LanguageTag)
