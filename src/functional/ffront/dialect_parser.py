@@ -92,6 +92,7 @@ class DialectParser(ast.NodeVisitor, Generic[DialectRootT]):
                     closure_vars=closure_vars,
                     annotations=annotations,
                 ).visit(cls._preprocess_definition_ast(definition_ast)),
+                closure_vars,
                 annotations,
             )
         except SyntaxError as err:
@@ -120,7 +121,7 @@ class DialectParser(ast.NodeVisitor, Generic[DialectRootT]):
 
     @classmethod
     def _postprocess_dialect_ast(
-        cls, output_ast: DialectRootT, annotations: dict[str, Any]
+        cls, output_ast: DialectRootT, closure_vars: dict[str, Any], annotations: dict[str, Any]
     ) -> DialectRootT:
         return output_ast
 

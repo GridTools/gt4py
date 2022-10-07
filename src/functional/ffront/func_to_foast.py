@@ -36,6 +36,7 @@ from functional.ffront.ast_passes import (
 )
 from functional.ffront.dialect_parser import DialectParser, DialectSyntaxError
 from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduction
+from functional.ffront.foast_passes.closure_var_folding import ClosureVarFolding
 
 
 class FieldOperatorSyntaxError(DialectSyntaxError):
@@ -93,8 +94,9 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
 
     @classmethod
     def _postprocess_dialect_ast(
-        cls, foast_node: foast.FieldOperator, annotations: dict[str, Any]
+        cls, foast_node: foast.FieldOperator, closure_vars: dict[str, Any], annotations: dict[str, Any]
     ) -> foast.FieldOperator:
+        foast_node = ClosureVarFolding(closure_vars=closure_vars).visit(foast_node)
         typed_foast_node = FieldOperatorTypeDeduction.apply(foast_node)
 
         # check deduced matches annotated return type
@@ -262,6 +264,11 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             value=self.visit(node.value),
             index=index,
             location=self._make_loc(node),
+        )
+
+    def visit_Attribute(self, node: ast.Attribute) -> Any:
+        return foast.Attribute(
+            value=self.visit(node.value), attr=node.attr, location=self._make_loc(node)
         )
 
     def visit_Tuple(self, node: ast.Tuple, **kwargs) -> foast.TupleExpr:
