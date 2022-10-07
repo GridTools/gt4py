@@ -148,7 +148,7 @@ GTFN_BUILTINS = [
     "can_deref",
     "cartesian_domain",
     "unstructured_domain",
-    "named_range"
+    "named_range",
 ]
 UNARY_MATH_NUMBER_BUILTINS = itir.UNARY_MATH_NUMBER_BUILTINS
 UNARY_MATH_FP_BUILTINS = itir.UNARY_MATH_FP_BUILTINS
