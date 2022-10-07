@@ -18,9 +18,8 @@ import pathlib
 from typing import Generic, Protocol, TypeVar
 
 from functional.otf import languages, stages
-from functional.otf.compilation import build_data
+from functional.otf.compilation import build_data, cache, importer
 from functional.otf.step_types import LS, SrcL, TgtL
-from functional.program_processors.builders import cache, importer
 
 
 SL = TypeVar("SL", bound=languages.LanguageTag)

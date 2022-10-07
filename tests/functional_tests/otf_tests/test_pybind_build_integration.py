@@ -17,9 +17,8 @@ import numpy as np
 
 from functional.otf import workflow
 from functional.otf.binding import pybind
-from functional.otf.compilation import compiler
+from functional.otf.compilation import cache, compiler
 from functional.otf.compilation.build_systems import cmake, compiledb
-from functional.program_processors.builders import cache
 
 
 def test_gtfn_cpp_with_cmake(program_source_with_name):

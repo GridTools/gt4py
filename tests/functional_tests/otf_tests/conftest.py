@@ -19,7 +19,7 @@ import pytest
 
 from functional.otf import languages, source, stages
 from functional.otf.binding import pybind
-from functional.program_processors.builders import cache
+from functional.otf.compilation import cache
 from functional.program_processors.source_modules import cpp_gen
 
 

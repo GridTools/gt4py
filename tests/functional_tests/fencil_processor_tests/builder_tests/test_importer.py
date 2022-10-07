@@ -15,7 +15,7 @@
 
 import textwrap
 
-from functional.program_processors.builders import importer
+from functional.otf.compilation import importer
 
 
 def test_import_from_path(tmp_path):
