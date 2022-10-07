@@ -20,8 +20,8 @@ import numpy as np
 
 from functional.iterator import ir as itir
 from functional.otf import languages, stages, workflow
-from functional.otf.compile import compiler
-from functional.otf.compile.build_systems import compiledb
+from functional.otf.compilation import compiler
+from functional.otf.compilation.build_systems import compiledb
 from functional.program_processors import processor_interface as fpi
 from functional.program_processors.builders import cache
 from functional.program_processors.builders.cpp import bindings

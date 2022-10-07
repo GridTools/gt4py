@@ -13,8 +13,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 import pathlib
 
-from functional.otf.compile import build_data
-from functional.otf.compile.build_systems import compiledb
+from functional.otf.compilation import build_data
+from functional.otf.compilation.build_systems import compiledb
 from functional.program_processors.builders import cache, importer
 
 

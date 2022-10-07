@@ -6,8 +6,8 @@ import subprocess
 from typing import Optional
 
 from functional.otf import languages, stages
-from functional.otf.compile import build_data, common, compiler
-from functional.otf.compile.build_systems import cmake_lists
+from functional.otf.compilation import build_data, common, compiler
+from functional.otf.compilation.build_systems import cmake_lists
 from functional.program_processors.builders import cache
 
 

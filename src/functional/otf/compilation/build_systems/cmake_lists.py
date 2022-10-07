@@ -4,7 +4,7 @@ from typing import Sequence
 import eve
 from eve.codegen import JinjaTemplate as as_jinja
 from functional.otf import source
-from functional.otf.compile import common
+from functional.otf.compilation import common
 
 
 class FindDependency(eve.Node):

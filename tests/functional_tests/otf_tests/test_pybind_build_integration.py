@@ -16,8 +16,8 @@ import math
 import numpy as np
 
 from functional.otf import workflow
-from functional.otf.compile import compiler
-from functional.otf.compile.build_systems import cmake, compiledb
+from functional.otf.compilation import compiler
+from functional.otf.compilation.build_systems import cmake, compiledb
 from functional.program_processors.builders import cache
 from functional.program_processors.builders.cpp import bindings
 
