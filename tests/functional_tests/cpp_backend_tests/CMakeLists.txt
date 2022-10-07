@@ -20,7 +20,7 @@ string(TOUPPER ${BACKEND} backend_upper_case)
 include(FetchContent)
 FetchContent_Declare(GridTools
     GIT_REPOSITORY https://github.com/GridTools/gridtools.git
-    GIT_TAG        <HASH>
+    GIT_TAG        e94b8f1ae34f67b0f653eae1f45e575b4a06ca2e
 )
 FetchContent_MakeAvailable(GridTools)
 
