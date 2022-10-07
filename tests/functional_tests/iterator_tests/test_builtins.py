@@ -25,12 +25,11 @@ from functional.iterator.builtins import (
 )
 from functional.iterator.embedded import NeighborTableOffsetProvider, np_as_located_field
 from functional.iterator.runtime import CartesianAxis, closure, fendef, fundef, offset
-from functional.program_processors import type_check
+from functional.program_processors.formatters import type_check
 from functional.program_processors.runners.gtfn_cpu import run_gtfn
 
 from .conftest import run_processor
 from .math_builtin_test_data import math_builtin_test_data
-from .test_hdiff import I
 
 
 def asarray(*lists):

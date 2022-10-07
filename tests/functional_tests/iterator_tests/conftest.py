@@ -3,8 +3,8 @@ from __future__ import annotations
 import pytest
 
 from functional.iterator import ir as itir, pretty_parser, pretty_printer, runtime, transforms
-from functional.program_processors import processor_interface as fpi, type_check
-from functional.program_processors.formatters import gtfn, lisp
+from functional.program_processors import processor_interface as fpi
+from functional.program_processors.formatters import gtfn, lisp, type_check
 from functional.program_processors.runners import double_roundtrip, gtfn_cpu, roundtrip
 
 
