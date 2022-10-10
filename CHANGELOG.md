@@ -5,8 +5,9 @@ Notable changes to this project will be documented in this file. The format is b
 ## [0.1.1] - (Unreleased)
 
 ### Changed
-- Move to a new strategy for memory buffer allocation in GT4Py which does note require a specific `Storage` class, as described in [docs/gt4py/arrays.rst](docs/gt4py/arrays.rst).
-
+- Remove the Storage classes and implement the new "No Storage" concept.
+- Support interfaces for calling stencils with arbitrary buffer objects.
+- For details see [docs/gt4py/arrays.rst](docs/gt4py/arrays.rst) and [PR #868](https://github.com/GridTools/gt4py/pull/868)
 
 ## [0.1.0] - 2022-29-09
 
