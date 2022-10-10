@@ -28,7 +28,6 @@ from __future__ import annotations
 from typing import Callable, Protocol, TypeGuard, TypeVar, cast
 
 from functional.iterator import ir as itir
-from functional.otf import stages
 
 
 OutputT = TypeVar("OutputT", covariant=True)
@@ -70,35 +69,6 @@ def program_formatter(func: ProgramProcessorFunction[str]) -> ProgramFormatter:
     # this operation effectively changes the type of func and that is the intention here
     func.kind = ProgramFormatter  # type: ignore[attr-defined]
     return cast(ProgramProcessorProtocol[str, ProgramFormatter], func)
-
-
-class ProgramSourceGenerator(
-    ProgramProcessorProtocol[stages.ProgramSource, "ProgramSourceGenerator"], Protocol
-):
-    @property
-    def kind(self) -> type[ProgramSourceGenerator]:
-        return ProgramSourceGenerator
-
-
-def program_source_generator(
-    func: ProgramProcessorFunction[stages.ProgramSource],
-) -> ProgramSourceGenerator:
-    """
-    Wrap a source module generator function in a ``ProgramSourceGenerator`` instance.
-
-    Examples:
-    ---------
-    >>> from functional.otf.source import Function
-    >>> @program_source_generator
-    ... def generate_foo(fencil: itir.FencilDefinition, *args, **kwargs) -> stages.ProgramSource:
-    ...     '''A very useless fencil formatter.'''
-    ...     return stages.ProgramSource(entry_point=Function(fencil.id, []), library_deps=[], source_code="foo", language="foo")
-
-    >>> ensure_processor_kind(generate_foo, ProgramSourceGenerator)
-    """
-    # this operation effectively changes the type of func and that is the intention here
-    func.kind = ProgramSourceGenerator  # type: ignore[attr-defined]
-    return cast(ProgramProcessorProtocol[stages.ProgramSource, ProgramSourceGenerator], func)
 
 
 class ProgramExecutor(ProgramProcessorProtocol[None, "ProgramExecutor"], Protocol):

@@ -14,11 +14,9 @@
 import pytest
 
 from functional.iterator import ir as itir
-from functional.otf import stages
 from functional.program_processors.processor_interface import (
     ProgramExecutor,
     ProgramFormatter,
-    ProgramSourceGenerator,
     ensure_processor_kind,
     program_formatter,
 )
@@ -35,18 +33,6 @@ def dummy_formatter():
 
 def test_decorated_formatter_function_is_recognized(dummy_formatter):
     ensure_processor_kind(dummy_formatter, ProgramFormatter)
-
-
-def test_custom_source_module_generator_class_is_recognized():
-    class DummyProgramSourceGenerator:
-        @property
-        def kind(self) -> type[ProgramSourceGenerator]:
-            return ProgramSourceGenerator
-
-        def __call__(self, fencil: itir.FencilDefinition, *args, **kwargs) -> stages.ProgramSource:
-            return stages.ProgramSource()
-
-    ensure_processor_kind(DummyProgramSourceGenerator(), ProgramSourceGenerator)
 
 
 def test_undecorated_formatter_function_is_not_recognized():
