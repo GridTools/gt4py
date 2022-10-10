@@ -12,72 +12,85 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import collections.abc
 import math
 import numbers
-from typing import Optional, Sequence
+from typing import Any, Dict, Optional, Protocol, Tuple, Union
 
 import numpy as np
 
 import gt4py.utils as gt_util
-from gtc.definitions import Index, Shape
 
 
 try:
     import cupy as cp
     from cupy.lib.stride_tricks import as_strided
 except ImportError:
-    pass
+    cp = None
+
+
+class ArrayInterfaceType(Protocol):
+    __array_interface__: Dict[str, Any]
+
+
+class CudaArrayInterfaceType(Protocol):
+    __cuda_array_interface__: Dict[str, Any]
+
+
+class GtDimsInterface(Protocol):
+    __gt_dims__: Tuple[str, ...]
+
+
+class GtOriginInterface(Protocol):
+    __gt_origin__: Tuple[int, ...]
+
+
+FieldLike = Union["cp.ndarray", np.ndarray, ArrayInterfaceType, CudaArrayInterfaceType]
 
 
 def idx_from_order(order):
     return list(np.argsort(order))
 
 
-def normalize_storage_spec(default_origin, shape, dtype, mask):
+def normalize_storage_spec(aligned_index, shape, dtype, dimensions):
     """Normalize the fields of the storage spec in a homogeneous representation.
 
     Returns
     -------
 
-    tuple(default_origin, shape, dtype, mask)
+    tuple(aligned_index, shape, dtype, mask)
         The output tuple fields verify the following semantics:
 
-            - default_origin: tuple of ints with default origin values for the non-masked dimensions
+            - aligned_index: tuple of ints with default origin values for the non-masked dimensions
             - shape: tuple of ints with shape values for the non-masked dimensions
             - dtype: scalar numpy.dtype (non-structured and without subarrays)
             - backend: backend identifier string (numpy, gt:cpu_kfirst, gt:gpu, ...)
-            - mask: a tuple of bools (at least 3d)
+            - dimensions: a tuple of dimension identifier strings
     """
 
-    if mask is None:
-        mask = tuple(True if i < len(shape) else False for i in range(max(len(shape), 3)))
-    elif not gt_util.is_iterable_of(mask, bool):
-        # User-friendly axes specification (e.g. "IJK" or gtscript.IJK)
-        str_kind = "".join(str(i) for i in mask) if isinstance(mask, (tuple, list)) else str(mask)
-        axes_set = set(str_kind)
-        if axes_set - {"I", "J", "K"}:
-            raise ValueError(f"Invalid axes names in mask specification: '{mask}'")
-        if len(axes_set) != len(str_kind):
-            raise ValueError(f"Repeated axes names in mask specification: '{mask}'")
-        mask = ("I" in axes_set, "J" in axes_set, "K" in axes_set)
-    elif len(mask) < 3 or not sum(mask):
-        raise ValueError(f"Invalid mask definition: '{mask}'")
+    from gt4py.gtscript import Axis  # prevent circular import
 
-    assert len(mask) >= 3
+    if dimensions is None:
+        dimensions = (
+            list("IJK"[: len(shape)])
+            if len(shape) <= 3
+            else list("IJK") + [str(d) for d in range(len(shape) - 3)]
+        )
 
+    if not all(
+        isinstance(d, (str, Axis)) and (str(d).isdigit() or str(d) in "IJK") for d in dimensions
+    ):
+        raise ValueError(f"Invalid dimensions definition: '{dimensions}'")
+    else:
+        dimensions = tuple(str(d) for d in dimensions)
     if shape is not None:
         if not gt_util.is_iterable_of(shape, numbers.Integral):
             raise TypeError("shape must be an iterable of ints.")
-        if len(shape) not in (sum(mask), len(mask)):
+        if len(shape) != len(dimensions):
             raise ValueError(
-                f"Mask ({mask}) and shape ({shape}) have non-matching sizes."
-                f"len(shape)(={len(shape)}) must be equal to len(mask)(={len(mask)}) "
-                f"or the number of 'True' entries in mask '{mask}'."
+                f"Dimensions ({dimensions}) and shape ({shape}) have non-matching sizes."
+                f"len(shape)(={len(shape)}) must be equal to len(dimensions)(={len(dimensions)})."
             )
 
-        if sum(mask) < len(shape):
-            shape = tuple(int(d) for i, d in enumerate(shape) if mask[i])
         else:
             shape = tuple(shape)
 
@@ -86,35 +99,31 @@ def normalize_storage_spec(default_origin, shape, dtype, mask):
     else:
         raise TypeError("shape must be an iterable of ints.")
 
-    if default_origin is not None:
-        if not gt_util.is_iterable_of(default_origin, numbers.Integral):
-            raise TypeError("default_origin must be an iterable of ints.")
-        if len(default_origin) not in (sum(mask), len(mask)):
+    if aligned_index is not None:
+        if not gt_util.is_iterable_of(aligned_index, numbers.Integral):
+            raise TypeError("aligned_index must be an iterable of ints.")
+        if len(aligned_index) != len(shape):
             raise ValueError(
-                f"Mask ({mask}) and default_origin ({default_origin}) have non-matching sizes."
-                f"len(default_origin)(={len(default_origin)}) must be equal to len(mask)(={len(mask)}) "
-                f"or the number of 'True' entries in mask '{mask}'."
+                f"Shape ({shape}) and aligned_index ({aligned_index}) have non-matching sizes."
+                f"len(aligned_index)(={len(aligned_index)}) must be equal to len(shape)(={len(shape)})."
             )
 
-        if sum(mask) < len(default_origin):
-            default_origin = tuple(d for i, d in enumerate(default_origin) if mask[i])
-        else:
-            default_origin = tuple(default_origin)
+        aligned_index = tuple(aligned_index)
 
-        if any(i < 0 for i in default_origin):
-            raise ValueError("default_origin ({}) contains negative value.".format(default_origin))
+        if any(i < 0 for i in aligned_index):
+            raise ValueError("aligned_index ({}) contains negative value.".format(aligned_index))
     else:
-        raise TypeError("default_origin must be an iterable of ints.")
+        raise TypeError("aligned_index must be an iterable of ints.")
 
     dtype = np.dtype(dtype)
     if dtype.shape:
         # Subarray dtype
-        default_origin = (*default_origin, *((0,) * dtype.ndim))
+        aligned_index = (*aligned_index, *((0,) * dtype.ndim))
         shape = (*shape, *(dtype.subdtype[1]))
-        mask = (*mask, *((True,) * dtype.ndim))
+        dimensions = (*dimensions, *(str(d) for d in range(dtype.ndim)))
         dtype = dtype.subdtype[0]
 
-    return default_origin, shape, dtype, mask
+    return aligned_index, shape, dtype, dimensions
 
 
 def compute_padded_shape(shape, items_per_alignment, order_idx):
@@ -135,11 +144,10 @@ def strides_from_padded_shape(padded_size, order_idx, itemsize):
     return list(strides)
 
 
-def allocate(default_origin, shape, layout_map, dtype, alignment_bytes, allocate_f):
+def allocate(aligned_index, shape, layout_map, dtype, alignment_bytes, allocate_f):
     dtype = np.dtype(dtype)
-    assert (
-        alignment_bytes % dtype.itemsize
-    ) == 0, "Alignment must be a multiple of byte-width of dtype."
+    if not (alignment_bytes % dtype.itemsize) == 0:
+        raise ValueError("Alignment must be a multiple of byte-width of dtype.")
     itemsize = dtype.itemsize
     items_per_alignment = int(alignment_bytes / itemsize)
 
@@ -149,9 +157,8 @@ def allocate(default_origin, shape, layout_map, dtype, alignment_bytes, allocate
     strides = strides_from_padded_shape(padded_shape, order_idx, itemsize)
     if len(order_idx) > 0:
         halo_offset = (
-            int(math.ceil(default_origin[order_idx[-1]] / items_per_alignment))
-            * items_per_alignment
-            - default_origin[order_idx[-1]]
+            int(math.ceil(aligned_index[order_idx[-1]] / items_per_alignment)) * items_per_alignment
+            - aligned_index[order_idx[-1]]
         )
     else:
         halo_offset = 0
@@ -171,7 +178,7 @@ def allocate(default_origin, shape, layout_map, dtype, alignment_bytes, allocate
     return raw_buffer, field
 
 
-def allocate_gpu_unmanaged(default_origin, shape, layout_map, dtype, alignment_bytes):
+def allocate_gpu(aligned_index, shape, layout_map, dtype, alignment_bytes):
     dtype = np.dtype(dtype)
     assert (
         alignment_bytes % dtype.itemsize
@@ -185,9 +192,8 @@ def allocate_gpu_unmanaged(default_origin, shape, layout_map, dtype, alignment_b
     strides = strides_from_padded_shape(padded_shape, order_idx, itemsize)
     if len(order_idx) > 0:
         halo_offset = (
-            int(math.ceil(default_origin[order_idx[-1]] / items_per_alignment))
-            * items_per_alignment
-            - default_origin[order_idx[-1]]
+            int(math.ceil(aligned_index[order_idx[-1]] / items_per_alignment)) * items_per_alignment
+            - aligned_index[order_idx[-1]]
         )
     else:
         halo_offset = 0
@@ -195,16 +201,7 @@ def allocate_gpu_unmanaged(default_origin, shape, layout_map, dtype, alignment_b
     padded_size = int(np.prod(padded_shape))
     buffer_size = padded_size + items_per_alignment - 1
 
-    ptr = cp.cuda.alloc_pinned_memory(buffer_size * itemsize)
-    raw_buffer = np.frombuffer(ptr, dtype, buffer_size)
     device_raw_buffer = cp.empty((buffer_size,), dtype=dtype)
-
-    allocation_mismatch = int((raw_buffer.ctypes.data % alignment_bytes) / itemsize)
-    alignment_offset = (halo_offset - allocation_mismatch) % items_per_alignment
-    field = np.reshape(raw_buffer[alignment_offset : alignment_offset + padded_size], padded_shape)
-    if field.ndim > 0:
-        field.strides = strides
-        field = field[tuple(slice(0, s, None) for s in shape)]
 
     allocation_mismatch = int((device_raw_buffer.data.ptr % alignment_bytes) / itemsize)
     alignment_offset = (halo_offset - allocation_mismatch) % items_per_alignment
@@ -217,44 +214,70 @@ def allocate_gpu_unmanaged(default_origin, shape, layout_map, dtype, alignment_b
     if device_field.ndim > 0:
         device_field = device_field[tuple(slice(0, s, None) for s in shape)]
 
-    return raw_buffer, field, device_raw_buffer, device_field
+    return device_raw_buffer, device_field
 
 
-def allocate_cpu(default_origin, shape, layout_map, dtype, alignment_bytes):
-    def allocate_f(size, dtype):
-        raw_buffer = np.empty(size, dtype)
-        return raw_buffer, raw_buffer
+def allocate_cpu(aligned_index, shape, layout_map, dtype, alignment_bytes):
+    dtype = np.dtype(dtype)
+    assert (
+        alignment_bytes % dtype.itemsize
+    ) == 0, "Alignment must be a multiple of byte-width of dtype."
+    itemsize = dtype.itemsize
+    items_per_alignment = int(alignment_bytes / itemsize)
 
-    return allocate(default_origin, shape, layout_map, dtype, alignment_bytes, allocate_f)
+    order_idx = idx_from_order([i for i in layout_map if i is not None])
+    padded_shape = compute_padded_shape(shape, items_per_alignment, order_idx)
+
+    strides = strides_from_padded_shape(padded_shape, order_idx, itemsize)
+    if len(order_idx) > 0:
+        halo_offset = (
+            int(math.ceil(aligned_index[order_idx[-1]] / items_per_alignment)) * items_per_alignment
+            - aligned_index[order_idx[-1]]
+        )
+    else:
+        halo_offset = 0
+
+    padded_size = int(np.prod(padded_shape))
+    buffer_size = padded_size + items_per_alignment - 1
+    raw_buffer = np.empty(buffer_size, dtype=dtype)
+
+    allocation_mismatch = int((raw_buffer.ctypes.data % alignment_bytes) / itemsize)
+
+    alignment_offset = (halo_offset - allocation_mismatch) % items_per_alignment
+
+    field = np.reshape(raw_buffer[alignment_offset : alignment_offset + padded_size], padded_shape)
+    if field.ndim > 0:
+        field.strides = strides
+        field = field[tuple(slice(0, s, None) for s in shape)]
+    return raw_buffer, field
 
 
-def allocate_gpu(default_origin, shape, layout_map, dtype, alignment_bytes):
-    def allocate_f(size, dtype):
-        cp.cuda.set_allocator(cp.cuda.malloc_managed)
-        device_buffer = cp.empty(size, dtype)
-        array = cpu_view(device_buffer)
-        return array, device_buffer
-
-    return allocate(default_origin, shape, layout_map, dtype, alignment_bytes, allocate_f)
-
-
-def gpu_view(cpu_array):
-    array_interface = cpu_array.__array_interface__
-    array_interface["version"] = 2
-    array_interface["strides"] = cpu_array.strides
-    array_interface.pop("offset", None)
-
-    class _cuda_array_interface:
-        __cuda_array_interface__ = array_interface
-
-    return cp.asarray(_cuda_array_interface())
+def cpu_copy(array: Union[np.ndarray, "cp.ndarray"]):
+    if cp is not None:
+        # it's not clear from the documentation if cp.asnumpy guarantees a copy.
+        # worst case, this copies twice.
+        return np.array(cp.asnumpy(array))
+    else:
+        return np.array(array)
 
 
-def cpu_view(gpu_array):
-    array_interface = gpu_array.__cuda_array_interface__
-    array_interface["version"] = 3
+def as_numpy(array: FieldLike) -> np.ndarray:
+    return np.asarray(array)
 
-    class _array_interface:
-        __array_interface__ = array_interface
 
-    return np.asarray(_array_interface())
+def as_cupy(array: FieldLike) -> "cp.ndarray":
+    return cp.asarray(array)
+
+
+def get_dims(object: GtDimsInterface) -> Optional[Tuple[str, ...]]:
+    dims = getattr(object, "__gt_dims__", None)
+    if dims is None:
+        return dims
+    return tuple(str(d) for d in dims)
+
+
+def get_origin(object: GtOriginInterface) -> Optional[Tuple[int, ...]]:
+    origin = getattr(object, "__gt_origin__", None)
+    if origin is None:
+        return origin
+    return tuple(int(o) for o in origin)

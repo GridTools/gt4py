@@ -31,6 +31,7 @@ from gt4py import utils as gt_utils
 from gt4py.definitions import AccessKind, Boundary, CartesianSpace, FieldInfo
 from gt4py.frontend.nodes import Index
 from gt4py.stencil_object import StencilObject
+from gt4py.storage import utils as storage_utils
 from gtc.definitions import Shape
 
 from .input_strategies import (
@@ -482,11 +483,15 @@ class StencilTestSuite(metaclass=SuiteMeta):
         origin = cls.origin
         max_boundary = Boundary(cls.max_boundary)
         field_params = cls.field_params
+        field_dimensions = {}
         field_masks = {}
         for name, value in input_data.items():
             if isinstance(value, np.ndarray):
                 field_masks[name] = tuple(
                     ax in field_params[name][0] for ax in CartesianSpace.names
+                )
+                field_dimensions[name] = tuple(
+                    ax for ax in CartesianSpace.names if ax in field_params[name][0]
                 )
 
         data_shape = Shape((sys.maxsize,) * 3)
@@ -522,16 +527,13 @@ class StencilTestSuite(metaclass=SuiteMeta):
                     data_dims = field_params[name][1]
                     if data_dims:
                         dtype = (data.dtype, data_dims)
-                        shape = data.shape[: -len(data_dims)]
                     else:
                         dtype = data.dtype
-                        shape = data.shape
                     test_values[name] = gt_storage.from_array(
-                        data,
+                        data=data,
                         dtype=dtype,
-                        shape=shape,
-                        mask=field_masks[name],
-                        default_origin=origin,
+                        dimensions=field_dimensions[name],
+                        aligned_index=gtc_utils.filter_mask(origin, field_masks[name]),
                         backend=implementation.backend,
                     )
                     validation_values[name] = np.array(data)
@@ -581,12 +583,7 @@ class StencilTestSuite(metaclass=SuiteMeta):
         for name, value in test_values.items():
             if isinstance(value, np.ndarray):
                 expected_value = validation_values[name]
-
-                if gt_backend.from_name(value.backend).storage_info["device"] == "gpu":
-                    value.synchronize()
-                    value = value.data.get()
-                else:
-                    value = value.data
+                value = storage_utils.cpu_copy(value)
 
                 np.testing.assert_allclose(
                     value,

@@ -20,7 +20,7 @@ import textwrap
 from typing import TYPE_CHECKING, Dict, List, Optional, Tuple, Type
 
 import dace
-import numpy as np
+import dace.data
 from dace.sdfg.utils import inline_sdfgs
 from dace.serialize import dumps
 
@@ -31,10 +31,9 @@ from gt4py.backend.base import CLIBackendMixin, register
 from gt4py.backend.gtc_common import (
     BackendCodegen,
     BaseGTBackend,
-    GTCUDAPyModuleGenerator,
+    CUDAPyExtModuleGenerator,
     PyExtModuleGenerator,
     bindings_main_template,
-    cuda_is_compatible_type,
     pybuffer_to_sid,
 )
 from gt4py.backend.module_generator import make_args_data_from_gtir
@@ -621,13 +620,17 @@ class DaCeBindingsCodegen:
 
     def generate_entry_params(self, stencil_ir: gtir.Stencil, sdfg: dace.SDFG) -> List[str]:
         res: Dict[str, str] = {}
-        import dace.data
 
         for name in sdfg.signature_arglist(with_types=False, for_call=True):
             if name in sdfg.arrays:
                 data = sdfg.arrays[name]
                 assert isinstance(data, dace.data.Array)
-                res[name] = "py::buffer {name}, std::array<gt::int_t,{ndim}> {name}_origin".format(
+                res[
+                    name
+                ] = "py::{pybind_type} {name}, std::array<gt::int_t,{ndim}> {name}_origin".format(
+                    pybind_type="object"
+                    if self.backend.storage_info["device"] == "gpu"
+                    else "buffer",
                     name=name,
                     ndim=len(data.shape),
                 )
@@ -638,22 +641,12 @@ class DaCeBindingsCodegen:
 
     def generate_sid_params(self, sdfg: dace.SDFG) -> List[str]:
         res: List[str] = []
-        import dace.data
 
         for name, array in sdfg.arrays.items():
             if array.transient:
                 continue
-            domain_dim_flags = tuple(
-                True
-                if any(
-                    dace.symbolic.pystr_to_symbolic(f"__{dim.upper()}") in s.free_symbols
-                    for s in array.shape
-                    if hasattr(s, "free_symbols")
-                )
-                else False
-                for dim in "ijk"
-            )
-            data_ndim = len(array.shape) - sum(array_dimensions(array))
+            domain_dim_flags = array_dimensions(array)
+            data_ndim = len(array.shape) - sum(domain_dim_flags)
             sid_def = pybuffer_to_sid(
                 name=name,
                 ctype=array.dtype.ctype,
@@ -712,7 +705,7 @@ class DaCePyExtModuleGenerator(PyExtModuleGenerator):
         return res
 
 
-class DaCeCUDAPyExtModuleGenerator(DaCePyExtModuleGenerator, GTCUDAPyModuleGenerator):
+class DaCeCUDAPyExtModuleGenerator(DaCePyExtModuleGenerator, CUDAPyExtModuleGenerator):
     pass
 
 
@@ -774,8 +767,7 @@ class DaceGPUBackend(BaseDaceBackend):
         "alignment": 32,
         "device": "gpu",
         "layout_map": layout_maker_factory((2, 1, 0)),
-        "is_compatible_layout": lambda x: True,
-        "is_compatible_type": cuda_is_compatible_type,
+        "is_compatible_layout": lambda *args: True,
     }
     MODULE_GENERATOR_CLASS = DaCeCUDAPyExtModuleGenerator
     options = {
