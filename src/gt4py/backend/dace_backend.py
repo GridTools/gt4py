@@ -25,7 +25,6 @@ import numpy as np
 from dace.sdfg.utils import inline_sdfgs
 from dace.serialize import dumps
 
-import gtc.daceir as dcir
 from eve import codegen
 from eve.codegen import MakoTemplate as as_mako
 from gt4py import gt_src_manager
@@ -131,6 +130,8 @@ def _set_expansion_orders(sdfg: dace.SDFG):
 
 
 def _set_tile_sizes(sdfg: dace.SDFG):
+    import gtc.daceir as dcir  # avoid circular import
+
     for node, _ in filter(
         lambda n: isinstance(n[0], StencilComputation), sdfg.all_nodes_recursive()
     ):
@@ -147,11 +148,10 @@ def _specialize_contiguous_strides(sdfg: dace.SDFG, layout_map):
             continue
         dims = array_dimensions(array)
         ndata_dims = len(array.shape) - sum(dims)
-        mask = dims + [True] * ndata_dims
-        layout = [lm for lm in layout_map(mask) if lm is not None]
+        axes = [ax for ax, m in zip("IJK", dims) if m] + [str(i) for i in range(ndata_dims)]
+        layout = layout_map(axes)
         contiguous_dim = layout.index(max(layout))
-        stride_dim = sum(mask[:contiguous_dim])
-        stride_sym = array.strides[stride_dim]
+        stride_sym = array.strides[contiguous_dim]
         print("setting", str(stride_sym))
         repldict[str(stride_sym)] = "1"
 
@@ -781,7 +781,7 @@ class DaceCPUBackend(BaseDaceBackend):
         "device": "cpu",
         # "layout_map": layout_maker_factory((1, 0, 2)),
         "layout_map": make_x86_layout_map,
-        "is_compatible_layout": lambda x: True,
+        "is_compatible_layout": lambda *args: True,
         "is_compatible_type": lambda x: isinstance(x, np.ndarray),
     }
     MODULE_GENERATOR_CLASS = DaCePyExtModuleGenerator

@@ -52,7 +52,8 @@ def replace_strides(arrays, get_layout_map):
     for array in arrays:
         dims = array_dimensions(array)
         ndata_dims = len(array.shape) - sum(dims)
-        layout = get_layout_map(dims + [True] * ndata_dims)
+        axes = [ax for ax, m in zip("IJK", dims) if m] + [str(i) for i in range(ndata_dims)]
+        layout = get_layout_map(axes)
         if array.transient:
             stride = 1
             for idx in reversed(np.argsort(layout)):
