@@ -142,28 +142,14 @@ def _pre_expand_trafos(gtir_pipeline: GtirPipeline, sdfg: dace.SDFG, layout_map)
         #         "K",
         #     ]
         # )
-        if node.oir_node.loop_order == common.LoopOrder.PARALLEL:
-            expansion_priority.extend(
-                [
-                    ["TileJ", "TileI", "IMap", "JMap", "Sections", "KMap", "Stages"],
-                    ["TileJ", "TileI", "Sections","IMap", "JMap",  "KMap", "Stages"],
-                    ["TileJ", "TileI", "Sections","IMap", "JMap",  "Stages", "KMap"],
-                    ["TileJ", "TileI", "Sections","Stages", "IMap", "JMap", "KMap"],
-                    ["TileJ", "TileI", "IMap", "JMap", "Sections", "Stages", "KMap"],
-                    ["TileJ", "TileI", "Sections", "KMap", "Stages", "JMap", "IMap"],
-                ]
-            )
-        else:
-            expansion_priority.extend(
-                [
-                    ["TileJ", "TileI", "IMap", "JMap", "Sections", "KLoop", "Stages"],
-                    ["TileJ", "TileI", "Sections","IMap", "JMap",  "KLoop", "Stages"],
-                    ["TileJ", "TileI", "Sections","IMap", "JMap",  "Stages", "KLoop"],
-                    ["TileJ", "TileI", "Sections","Stages", "IMap", "JMap", "KLoop"],
-                    ["TileJ", "TileI", "IMap", "JMap", "Sections", "Stages", "KLoop"],
-                    ["TileJ", "TileI", "Sections", "KLoop", "Stages", "JMap", "IMap"],
-                ]
-            )
+        expansion_priority.extend(
+            [
+                ["TileI", "TileJ", "IMap", "JMap", "Sections", "K", "Stages"],
+                ["TileI", "TileJ", "IMap", "JMap", "Sections","Stages", "K"],
+                ["TileI", "TileJ", "Sections","Stages", "IMap", "JMap", "K", ],
+                ["TileI", "TileJ", "Sections", "K", "Stages", "JMap", "IMap"],
+            ]
+        )
         is_set = False
         for exp in expansion_priority:
             try:

@@ -102,11 +102,12 @@ class TaskletCodegen(codegen.TemplatedGenerator):
                     decl=symtable[memlet.field],
                     access_info=memlet.access_info,
                     symtable=symtable,
+                    in_idx=True,
                     **kwargs,
                 )
             )
         index_strs.extend(
-            self.visit(idx, sdfg_ctx=sdfg_ctx, symtable=symtable, **kwargs)
+            self.visit(idx, sdfg_ctx=sdfg_ctx, symtable=symtable, in_idx=True, **kwargs)
             for idx in node.data_index
         )
         return f"{node.name}[{','.join(index_strs)}]"
@@ -129,7 +130,13 @@ class TaskletCodegen(codegen.TemplatedGenerator):
             return "False"
         raise NotImplementedError("Not implemented BuiltInLiteral encountered.")
 
-    Literal = as_fmt("{dtype}({value})")
+    def visit_Literal(self, literal: dcir.Literal, *, in_idx=False, **kwargs):
+        value = self.visit(literal.value, in_idx=in_idx, **kwargs)
+        if in_idx:
+            return str(value)
+        else:
+            return "{dtype}({value})".format(dtype=self.visit(literal.dtype, in_idx=in_idx, **kwargs),
+                                           value=value)
 
     Cast = as_fmt("{dtype}({expr})")
 
