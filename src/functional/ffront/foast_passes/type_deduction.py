@@ -17,6 +17,7 @@ import functional.ffront.field_operator_ast as foast
 from eve import NodeTranslator, NodeVisitor, traits
 from functional.common import DimensionKind, GTSyntaxError, GTTypeError
 from functional.ffront import common_types as ct, fbuiltins, type_info
+from functional.ffront.symbol_makers import make_symbol_type_from_value
 
 
 def boolified_type(symbol_type: ct.SymbolType) -> ct.ScalarType | ct.FieldType:
@@ -679,11 +680,8 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         )
 
     def visit_Constant(self, node: foast.Constant, **kwargs) -> foast.Constant:
-        if not node.type:
-            raise FieldOperatorTypeDeductionError.from_foast_node(
-                node, msg=f"Found a literal with unrecognized type {node.type}."
-            )
-        return node
+        type_ = make_symbol_type_from_value(node.value)
+        return foast.Constant(value=node.value, location=node.location, type=type_)
 
 
 class FieldOperatorTypeDeductionError(GTSyntaxError, SyntaxWarning):
