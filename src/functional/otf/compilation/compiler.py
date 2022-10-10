@@ -15,15 +15,16 @@ from __future__ import annotations
 
 import dataclasses
 import pathlib
-from typing import Generic, Protocol, TypeVar
+from typing import Protocol, TypeVar
 
-from functional.otf import languages, stages
+from functional.otf import languages, stages, step_types, workflow
 from functional.otf.compilation import build_data, cache, importer
 from functional.otf.step_types import LS, SrcL, TgtL
 
 
 SL = TypeVar("SL", bound=languages.LanguageTag)
 ST = TypeVar("ST", bound=languages.LanguageSettings)
+NT = TypeVar("NT")
 
 
 def is_compiled(data: build_data.BuildData) -> bool:
@@ -44,10 +45,11 @@ class BuildSystemProjectGenerator(Protocol[SrcL, LS, TgtL]):
 
 
 @dataclasses.dataclass(frozen=True)
-class Compiler(Generic[SL, ST]):
+class Compiler(step_types.CompilationStep[SL, ST, languages.Python]):
     cache_strategy: cache.Strategy
     builder_factory: BuildSystemProjectGenerator[SL, ST, languages.Python]
     force_recompile: bool = False
+    """Use any build system (via configured factory) to compile a GT4Py program to a ``functional.otf.stages.CompiledProgram``."""
 
     def __call__(
         self, inp: stages.CompilableSource[SL, ST, languages.Python]
@@ -69,6 +71,13 @@ class Compiler(Generic[SL, ST]):
         return getattr(
             importer.import_from_path(src_dir / new_data.module), new_data.entry_point_name
         )
+
+    def chain(
+        self, step: workflow.StepProtocol[stages.CompiledProgram, NT]
+    ) -> workflow.Workflow[
+        stages.CompilableSource[SL, ST, languages.Python], stages.CompiledProgram, NT
+    ]:
+        return workflow.Workflow(first=self, second=step)
 
 
 class CompilerError(Exception):

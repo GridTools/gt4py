@@ -1,3 +1,17 @@
+# GT4Py Project - GridTools Framework
+#
+# Copyright (c) 2014-2021, ETH Zurich
+# All rights reserved.
+#
+# This file is part of the GT4Py project and the GridTools framework.
+# GT4Py is free software: you can redistribute it and/or modify it under
+# the terms of the GNU General Public License as published by the
+# Free Software Foundation, either version 3 of the License, or any later
+# version. See the LICENSE.txt file at the top-level directory of this
+# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 from __future__ import annotations
 
 import dataclasses
@@ -16,6 +30,8 @@ class CMakeFactory(
         languages.Cpp, languages.LanguageWithHeaderFilesSettings, languages.Python
     ]
 ):
+    """Create a CMakeProject from a ``CompilableSource`` stage object with given CMake settings."""
+
     cmake_generator_name: str = "Ninja"
     cmake_build_type: str = "Debug"
     cmake_extra_flags: Optional[list[str]] = None
@@ -60,6 +76,15 @@ class CMakeProject(
         languages.Cpp, languages.LanguageWithHeaderFilesSettings, languages.Python
     ]
 ):
+    """
+    CMake build system for gt4py programs.
+
+    Write source files to disk and run cmake on them, keeping the build data updated.
+    The ``.build()`` method runs all the necessary steps to compile the code to a python extension module.
+    The location of the module can be found by accessing the ``functional.otf.compilation.build_data.BuildData``
+    on the ``.root_path`` after building.
+    """
+
     root_path: pathlib.Path
     source_files: dict[str, str]
     fencil_name: str

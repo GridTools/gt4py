@@ -27,6 +27,13 @@ BuildStatus = enum.IntEnum("BuildStatus", ["STARTED", "CONFIGURED", "COMPILED"],
 
 @dataclasses.dataclass(frozen=True)
 class BuildData:
+    """
+    Tracks build status and results of GT4Py program compilations.
+
+    Build systems projects should keep this information up to date for each build,
+    stored to a json file in the build folder at all times.
+    """
+
     status: BuildStatus
     module: pathlib.Path
     entry_point_name: str

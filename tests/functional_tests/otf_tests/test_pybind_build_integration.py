@@ -24,7 +24,7 @@ from functional.otf.compilation.build_systems import cmake, compiledb
 def test_gtfn_cpp_with_cmake(program_source_with_name):
     source_module_example = program_source_with_name("gtfn_cpp_with_cmake")
     build_the_program = workflow.Workflow(
-        pybind.program_source_to_compilable_source,
+        pybind.bind_source,
         compiler.Compiler(
             cache_strategy=cache.Strategy.SESSION, builder_factory=cmake.CMakeFactory()
         ),
@@ -39,7 +39,7 @@ def test_gtfn_cpp_with_cmake(program_source_with_name):
 def test_gtfn_cpp_with_compiledb(program_source_with_name):
     source_module_example = program_source_with_name("gtfn_cpp_with_compiledb")
     build_the_program = workflow.Workflow(
-        pybind.program_source_to_compilable_source,
+        pybind.bind_source,
         compiler.Compiler(
             cache_strategy=cache.Strategy.SESSION,
             builder_factory=compiledb.CompiledbFactory(),

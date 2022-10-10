@@ -60,19 +60,9 @@ class GTFNExecutor(fpi.ProgramExecutor):
 
             return decorated_program
 
-        @workflow.make_step
-        def itir_to_src(inp: stages.ProgramCall) -> stages.ProgramSource:
-            return gtfn_module.GTFNSourceGenerator(self.language_settings)(
-                inp.program, *inp.args, **inp.kwargs
-            )
-
-        def src_to_otf(inp: stages.ProgramSource) -> stages.CompilableSource:
-            return stages.CompilableSource(
-                program_source=inp, binding_source=pybind.create_bindings(inp)
-            )
-
         otf_workflow: Final[workflow.Workflow[stages.ProgramCall, Any, stages.CompiledProgram]] = (
-            itir_to_src.chain(pybind.program_source_to_compilable_source)
+            gtfn_module.GTFNSourceGenerator(self.language_settings)
+            .chain(pybind.bind_source)
             .chain(
                 compiler.Compiler(
                     cache_strategy=cache.Strategy.SESSION, builder_factory=self.builder_factory

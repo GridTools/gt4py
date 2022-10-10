@@ -14,15 +14,16 @@
 
 
 import dataclasses
-from typing import Any, Final
+from typing import Any, Final, TypeVar
 
 import numpy as np
 
-from functional.iterator import ir as itir
-from functional.otf import languages, stages
+from functional.otf import languages, stages, step_types, workflow
 from functional.otf.source import cpp_gen, source
-from functional.program_processors import processor_interface as fpi  # fencil processor interface
 from functional.program_processors.codegens.gtfn import gtfn_backend
+
+
+T = TypeVar("T")
 
 
 def get_param_description(name: str, obj: Any) -> source.ScalarParameter | source.BufferParameter:
@@ -34,19 +35,20 @@ def get_param_description(name: str, obj: Any) -> source.ScalarParameter | sourc
 
 
 @dataclasses.dataclass(frozen=True)
-class GTFNSourceGenerator(fpi.ProgramSourceGenerator):
+class GTFNSourceGenerator(
+    step_types.TranslationStep[languages.Cpp, languages.LanguageWithHeaderFilesSettings],
+):
     language_settings: languages.LanguageWithHeaderFilesSettings = cpp_gen.CPP_DEFAULT
 
     def __call__(
         self,
-        program: itir.FencilDefinition,
-        *args,
-        **kwargs,
+        inp: stages.ProgramCall,
     ) -> stages.ProgramSource[languages.Cpp, languages.LanguageWithHeaderFilesSettings]:
         """Generate GTFN C++ code from the ITIR definition."""
+        program = inp.program
         parameters = tuple(
             get_param_description(program_param.id, obj)
-            for obj, program_param in zip(args, program.params)
+            for obj, program_param in zip(inp.args, program.params)
         )
         function = source.Function(program.id, parameters)
 
@@ -55,7 +57,7 @@ class GTFNSourceGenerator(fpi.ProgramSourceGenerator):
         )
         decl_body = f"return generated::{function.name}()({rendered_params});"
         decl_src = cpp_gen.render_function_declaration(function, body=decl_body)
-        stencil_src = gtfn_backend.generate(program, **kwargs)
+        stencil_src = gtfn_backend.generate(program, **inp.kwargs)
         source_code = source.format_source(
             self.language_settings,
             f"""
@@ -74,10 +76,19 @@ class GTFNSourceGenerator(fpi.ProgramSourceGenerator):
         )
         return module
 
-
-create_source_module: Final[
-    fpi.ProgramProcessorProtocol[
+    def chain(
+        self,
+        step: workflow.StepProtocol[
+            stages.ProgramSource[languages.Cpp, languages.LanguageWithHeaderFilesSettings], T
+        ],
+    ) -> workflow.Workflow[
+        stages.ProgramCall,
         stages.ProgramSource[languages.Cpp, languages.LanguageWithHeaderFilesSettings],
-        fpi.ProgramSourceGenerator,
-    ]
+        T,
+    ]:
+        return workflow.Workflow(first=self, second=step)
+
+
+translate_program: Final[
+    step_types.TranslationStep[languages.Cpp, languages.LanguageWithHeaderFilesSettings]
 ] = GTFNSourceGenerator()

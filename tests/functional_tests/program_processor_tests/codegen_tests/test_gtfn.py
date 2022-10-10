@@ -18,7 +18,7 @@ import pytest
 
 from functional.common import Dimension
 from functional.iterator import embedded, ir as itir
-from functional.otf import languages
+from functional.otf import languages, stages
 from functional.program_processors.codegens.gtfn import gtfn_module
 
 
@@ -66,7 +66,9 @@ def fencil_example():
 
 def test_codegen(fencil_example):
     fencil, parameters = fencil_example
-    module = gtfn_module.create_source_module(fencil, *parameters, offset_provider={})
+    module = gtfn_module.translate_program(
+        stages.ProgramCall(fencil, parameters, {"offset_provider": {}})
+    )
     assert module.entry_point.name == fencil.id
     assert any(d.name == "gridtools" for d in module.library_deps)
     assert module.language is languages.Cpp

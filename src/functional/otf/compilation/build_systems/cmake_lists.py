@@ -1,3 +1,17 @@
+# GT4Py Project - GridTools Framework
+#
+# Copyright (c) 2014-2021, ETH Zurich
+# All rights reserved.
+#
+# This file is part of the GT4Py project and the GridTools framework.
+# GT4Py is free software: you can redistribute it and/or modify it under
+# the terms of the GNU General Public License as published by the
+# Free Software Foundation, either version 3 of the License, or any later
+# version. See the LICENSE.txt file at the top-level directory of this
+# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 import textwrap
 from typing import Sequence
 
@@ -100,6 +114,11 @@ def generate_cmakelists_source(
     dependencies: tuple[source.LibraryDependency, ...],
     source_names: Sequence[str],
 ) -> str:
+    """
+    Generate CMakeLists file contents.
+
+    Assumes the name of the gt4py program to be the same as the project name.
+    """
     cmakelists_file = CMakeListsFile(
         project_name=project_name,
         find_deps=[FindDependency(name=d.name, version=d.version) for d in dependencies],

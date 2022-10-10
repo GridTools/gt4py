@@ -1,3 +1,17 @@
+# GT4Py Project - GridTools Framework
+#
+# Copyright (c) 2014-2021, ETH Zurich
+# All rights reserved.
+#
+# This file is part of the GT4Py project and the GridTools framework.
+# GT4Py is free software: you can redistribute it and/or modify it under
+# the terms of the GNU General Public License as published by the
+# Free Software Foundation, either version 3 of the License, or any later
+# version. See the LICENSE.txt file at the top-level directory of this
+# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 from __future__ import annotations
 
 import dataclasses
@@ -18,6 +32,13 @@ class CompiledbFactory(
         languages.Cpp, languages.LanguageWithHeaderFilesSettings, languages.Python
     ]
 ):
+    """
+    Create a CompiledbProject from a ``CompilableSource`` stage object with given CMake settings.
+
+    Use CMake to generate a compiledb with the required sequence of build commands.
+    Generate a compiledb only if there isn't one for the given combination of cmake configuration and library dependencies.
+    """
+
     cmake_build_type: str = "Debug"
     cmake_extra_flags: Optional[list[str]] = None
     renew_compiledb: bool = False
@@ -73,6 +94,17 @@ class CompiledbProject(
         languages.Cpp, languages.LanguageWithHeaderFilesSettings, languages.Python
     ]
 ):
+    """
+    Compiledb build system for gt4py programs.
+
+    Rely on a pre-configured compiledb to run the right build steps in the right order.
+    The advantage is that overall build time grows linearly in number of distinct configurations
+    and not in number of GT4Py programs. In cases where many programs can reuse the same configuration,
+    this can save multiple seconds per program over rerunning CMake configuration each time.
+
+    Works independently of what is used to generate the compiledb.
+    """
+
     root_path: pathlib.Path
     source_files: dict[str, str]
     fencil_name: str

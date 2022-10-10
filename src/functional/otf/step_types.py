@@ -27,18 +27,20 @@ LS_co = TypeVar("LS_co", bound=languages.LanguageSettings, covariant=True)
 
 
 class TranslationStep(Protocol[SrcL, LS]):
+    """Translate a GT4Py program to source code (ProgramCall -> ProgramSource)."""
+
     def __call__(self, program_call: stages.ProgramCall) -> stages.ProgramSource[SrcL, LS]:
         ...
 
 
 class BindingStep(Protocol[SrcL, LS, TgtL]):
-    def __call__(
-        self, program_source: stages.ProgramSource[SrcL, LS]
-    ) -> stages.BindingSource[SrcL, TgtL]:
-        ...
+    """
+    Generate Bindings for program source and package both together (ProgramSource -> CompilableSource).
 
+    In the special cases where bindings are not required, such a step could also simply construct
+    a ``CompilableSource`` from the ``ProgramSource`` with bindings set to ``None``.
+    """
 
-class PackagingStep(Protocol[SrcL, LS, TgtL]):
     def __call__(
         self, program_source: stages.ProgramSource[SrcL, LS]
     ) -> stages.CompilableSource[SrcL, LS, TgtL]:
@@ -46,5 +48,7 @@ class PackagingStep(Protocol[SrcL, LS, TgtL]):
 
 
 class CompilationStep(Protocol[SrcL, LS, TgtL]):
+    """Compile program source code and bindings into a python callable (CompilableSource -> CompiledProgram)."""
+
     def __call__(self, source: stages.CompilableSource[SrcL, LS, TgtL]) -> stages.CompiledProgram:
         ...

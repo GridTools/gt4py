@@ -98,6 +98,13 @@ class CompilableSource(Generic[SrcL, SettingT, TgtL]):
 
 
 class BuildSystemProject(Protocol[SrcL_co, SettingT_co, TgtL_co]):
+    """
+    Use source code extracted from a ``CompilableSource`` to configure and build a GT4Py program.
+
+    Should only be considered an OTF stage if used as an endpoint, as this only runs commands on source files
+    and is not responsible for importing the results into Python.
+    """
+
     def build(self) -> None:
         ...
 
