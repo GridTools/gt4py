@@ -135,8 +135,9 @@ class TaskletCodegen(codegen.TemplatedGenerator):
         if in_idx:
             return str(value)
         else:
-            return "{dtype}({value})".format(dtype=self.visit(literal.dtype, in_idx=in_idx, **kwargs),
-                                           value=value)
+            return "{dtype}({value})".format(
+                dtype=self.visit(literal.dtype, in_idx=in_idx, **kwargs), value=value
+            )
 
     Cast = as_fmt("{dtype}({expr})")
 
@@ -247,7 +248,12 @@ class TaskletCodegen(codegen.TemplatedGenerator):
 
             min_val = get_axis_bound_str(interval.start, dom_sym)
             max_val = get_axis_bound_str(interval.end, dom_sym)
-            if min_val and max_val and interval.start.level==interval.end.level and interval.start.offset +1 == interval.end.offset:
+            if (
+                min_val
+                and max_val
+                and interval.start.level == interval.end.level
+                and interval.start.offset + 1 == interval.end.offset
+            ):
                 clauses.append(f"{it_sym} == {min_val}")
             else:
                 if min_val:

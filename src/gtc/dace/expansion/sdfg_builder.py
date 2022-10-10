@@ -82,7 +82,7 @@ class StencilComputationSDFGBuilder(NodeVisitor):
             )
             if index_range.var not in self.sdfg.symbols:
                 self.sdfg.add_symbol(index_range.var, stype=dace.int32)
-            
+
             self.state_stack.append(after_state)
             self.state = loop_state
             return self

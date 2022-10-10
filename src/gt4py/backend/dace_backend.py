@@ -39,7 +39,6 @@ from gt4py.backend.gtc_common import (
 from gt4py.backend.module_generator import make_args_data_from_gtir
 from gt4py.utils import shash
 from gtc import common, gtir
-from .gtc_common import make_x86_layout_map
 from gtc.dace.nodes import StencilComputation
 from gtc.dace.oir_to_dace import OirSDFGBuilder
 from gtc.dace.utils import array_dimensions, layout_maker_factory, replace_strides
@@ -49,6 +48,8 @@ from gtc.passes.gtir_pipeline import GtirPipeline
 from gtc.passes.oir_optimizations.inlining import MaskInlining
 from gtc.passes.oir_optimizations.utils import compute_fields_extents
 from gtc.passes.oir_pipeline import DefaultPipeline
+
+from .gtc_common import make_x86_layout_map
 
 
 if TYPE_CHECKING:
@@ -76,6 +77,7 @@ def _specialize_transient_strides(sdfg: dace.SDFG, layout_map):
         if k in sdfg.symbols:
             sdfg.remove_symbol(k)
 
+
 def _specialize_contiguous_strides(sdfg: dace.SDFG, layout_map):
     repldict = {}
     for array in sdfg.arrays.values():
@@ -88,7 +90,7 @@ def _specialize_contiguous_strides(sdfg: dace.SDFG, layout_map):
         contiguous_dim = layout.index(max(layout))
         stride_dim = sum(mask[:contiguous_dim])
         stride_sym = array.strides[stride_dim]
-        print('setting', str(stride_sym))
+        print("setting", str(stride_sym))
         repldict[str(stride_sym)] = "1"
 
     sdfg.replace_dict(repldict)
@@ -101,6 +103,7 @@ def _specialize_contiguous_strides(sdfg: dace.SDFG, layout_map):
     for k in repldict.keys():
         if k in sdfg.symbols:
             sdfg.remove_symbol(k)
+
 
 def _to_device(sdfg: dace.SDFG, device: str) -> None:
     """Update sdfg in place."""
@@ -144,8 +147,16 @@ def _pre_expand_trafos(gtir_pipeline: GtirPipeline, sdfg: dace.SDFG, layout_map)
         expansion_priority.extend(
             [
                 ["TileI", "TileJ", "IMap", "JMap", "Sections", "K", "Stages"],
-                ["TileI", "TileJ", "IMap", "JMap", "Sections","Stages", "K"],
-                ["TileI", "TileJ", "Sections","Stages", "IMap", "JMap", "K", ],
+                ["TileI", "TileJ", "IMap", "JMap", "Sections", "Stages", "K"],
+                [
+                    "TileI",
+                    "TileJ",
+                    "Sections",
+                    "Stages",
+                    "IMap",
+                    "JMap",
+                    "K",
+                ],
                 ["TileI", "TileJ", "Sections", "K", "Stages", "JMap", "IMap"],
             ]
         )
@@ -744,7 +755,7 @@ class DaceCPUBackend(BaseDaceBackend):
     storage_info = {
         "alignment": 1,
         "device": "cpu",
-        #"layout_map": layout_maker_factory((1, 0, 2)),
+        # "layout_map": layout_maker_factory((1, 0, 2)),
         "layout_map": make_x86_layout_map,
         "is_compatible_layout": lambda x: True,
         "is_compatible_type": lambda x: isinstance(x, np.ndarray),
