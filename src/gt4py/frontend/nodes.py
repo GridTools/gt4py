@@ -473,6 +473,8 @@ class UnaryOperator(enum.Enum):
     POS = 1
     NEG = 2
 
+    TRANSPOSED = 5
+
     NOT = 11
 
     @property
@@ -512,6 +514,8 @@ class BinaryOperator(enum.Enum):
     DIV = 4
     POW = 5
     MOD = 6
+
+    MATMULT = 8
 
     AND = 11
     OR = 12

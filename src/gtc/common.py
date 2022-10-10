@@ -81,6 +81,7 @@ class ArithmeticOperator(StrEnum):
     SUB = "-"
     MUL = "*"
     DIV = "/"
+    MATMULT = "@"
 
 
 @enum.unique

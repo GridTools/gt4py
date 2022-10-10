@@ -29,85 +29,20 @@ from gt4py import definitions as gt_definitions
 from gt4py import gtscript
 from gt4py import utils as gt_utils
 from gt4py.frontend import node_util, nodes
-from gt4py.frontend.defir_to_gtir import DefIRToGTIR
+from gt4py.frontend.defir_to_gtir import DefIRToGTIR, UnrollVectorAssignments
 from gt4py.utils import NOTHING
 from gt4py.utils import meta as gt_meta
 from gtc import utils as gtc_utils
 
 from .base import Frontend, register
-
-
-class GTScriptSyntaxError(gt_definitions.GTSyntaxError):
-    def __init__(self, message, *, loc=None):
-        super().__init__(message, frontend=GTScriptFrontend.name)
-        self.loc = loc
-
-
-class GTScriptSymbolError(GTScriptSyntaxError):
-    def __init__(self, name, message=None, *, loc=None):
-        if message is None:
-            if loc is None:
-                message = "Unknown symbol '{name}' symbol".format(name=name)
-            else:
-                message = (
-                    "Unknown symbol '{name}' symbol in '{scope}' (line: {line}, col: {col})".format(
-                        name=name, scope=loc.scope, line=loc.line, col=loc.column
-                    )
-                )
-        super().__init__(message, loc=loc)
-        self.name = name
-
-
-class GTScriptDefinitionError(GTScriptSyntaxError):
-    def __init__(self, name, value, message=None, *, loc=None):
-        if message is None:
-            if loc is None:
-                message = "Invalid definition for '{name}' symbol".format(name=name)
-            else:
-                message = "Invalid definition for '{name}' symbol in '{scope}' (line: {line}, col: {col})".format(
-                    name=name, scope=loc.scope, line=loc.line, col=loc.column
-                )
-        super().__init__(message, loc=loc)
-        self.name = name
-        self.value = value
-
-
-class GTScriptValueError(GTScriptDefinitionError):
-    def __init__(self, name, value, message=None, *, loc=None):
-        if message is None:
-            if loc is None:
-                message = "Invalid value for '{name}' symbol ".format(name=name)
-            else:
-                message = (
-                    "Invalid value for '{name}' in '{scope}' (line: {line}, col: {col})".format(
-                        name=name, scope=loc.scope, line=loc.line, col=loc.column
-                    )
-                )
-        super().__init__(name, value, message, loc=loc)
-
-
-class GTScriptDataTypeError(GTScriptSyntaxError):
-    def __init__(self, name, data_type, message=None, *, loc=None):
-        if message is None:
-            if loc is None:
-                message = "Invalid data type for '{name}' numeric symbol ".format(name=name)
-            else:
-                message = "Invalid data type for '{name}' numeric symbol in '{scope}' (line: {line}, col: {col})".format(
-                    name=name, scope=loc.scope, line=loc.line, col=loc.column
-                )
-        super().__init__(message, loc=loc)
-        self.name = name
-        self.data_type = data_type
-
-
-class GTScriptAssertionError(gt_definitions.GTSpecificationError):
-    def __init__(self, source, *, loc=None):
-        if loc:
-            message = f"Assertion failed at line {loc.line}, col {loc.column}:\n{source}"
-        else:
-            message = f"Assertion failed.\n{source}"
-        super().__init__(message)
-        self.loc = loc
+from .exceptions import (
+    GTScriptAssertionError,
+    GTScriptDataTypeError,
+    GTScriptDefinitionError,
+    GTScriptSymbolError,
+    GTScriptSyntaxError,
+    GTScriptValueError,
+)
 
 
 class AssertionChecker(ast.NodeTransformer):
@@ -1051,8 +986,16 @@ class IRMaker(ast.NodeVisitor):
 
     # -- Symbol nodes --
     def visit_Attribute(self, node: ast.Attribute):
-        qualified_name = gt_meta.get_qualified_name_from_node(node)
-        return self.visit(ast.Name(id=qualified_name, ctx=node.ctx))
+        # Matrix Transposed
+        if node.attr == "T":
+            return nodes.UnaryOpExpr(
+                op=nodes.UnaryOperator.TRANSPOSED,
+                arg=self.visit(node.value),
+                loc=nodes.Location.from_ast_node(node),
+            )
+        else:
+            qualified_name = gt_meta.get_qualified_name_from_node(node)
+            return self.visit(ast.Name(id=qualified_name, ctx=node.ctx))
 
     def visit_Name(self, node: ast.Name) -> nodes.Ref:
         symbol = node.id
@@ -1166,12 +1109,12 @@ class IRMaker(ast.NodeVisitor):
         return nodes.UnaryOperator.NOT
 
     def visit_BinOp(self, node: ast.BinOp) -> nodes.BinOpExpr:
-        op = self.visit(node.op)
-        rhs = self.visit(node.right)
-        lhs = self.visit(node.left)
-        result = nodes.BinOpExpr(op=op, lhs=lhs, rhs=rhs, loc=nodes.Location.from_ast_node(node))
-
-        return result
+        return nodes.BinOpExpr(
+            op=self.visit(node.op),
+            rhs=self.visit(node.right),
+            lhs=self.visit(node.left),
+            loc=nodes.Location.from_ast_node(node),
+        )
 
     def visit_Add(self, node: ast.Add) -> nodes.BinaryOperator:
         return nodes.BinaryOperator.ADD
@@ -1190,6 +1133,9 @@ class IRMaker(ast.NodeVisitor):
 
     def visit_Pow(self, node: ast.Pow) -> nodes.BinaryOperator:
         return nodes.BinaryOperator.POW
+
+    def visit_MatMult(self, node: ast.MatMult) -> nodes.BinaryOperator:
+        return nodes.BinaryOperator.MATMULT
 
     def visit_And(self, node: ast.And) -> nodes.BinaryOperator:
         return nodes.BinaryOperator.AND
@@ -1598,7 +1544,7 @@ class GTScriptParser(ast.NodeVisitor):
         return result
 
     @staticmethod
-    def annotate_definition(definition):
+    def annotate_definition(definition, externals=None):
         api_signature = []
         api_annotations = []
 
@@ -1656,6 +1602,12 @@ class GTScriptParser(ast.NodeVisitor):
         ast_func_def = gt_meta.get_ast(definition).body[0]
         canonical_ast = gt_meta.ast_dump(ast_func_def)
 
+        # resolve externals
+        if externals is not None:
+            resolved_externals = GTScriptParser.resolve_external_symbols(
+                nonlocal_symbols, imported_symbols, externals
+            )
+
         # Gather temporary
         temp_annotations: Dict[str, gtscript._FieldDescriptor] = {}
         temp_init_values: Dict[str, numbers.Number] = {}
@@ -1670,7 +1622,7 @@ class GTScriptParser(ast.NodeVisitor):
             "IK": gtscript.IK,
             "JK": gtscript.JK,
             "np": np,
-            **nonlocal_symbols,
+            **(resolved_externals if externals is not None else nonlocal_symbols),
         }
         ann_assigns = tuple(filter(lambda stmt: isinstance(stmt, ast.AnnAssign), ast_func_def.body))
         for ann_assign in ann_assigns:
@@ -1700,6 +1652,7 @@ class GTScriptParser(ast.NodeVisitor):
             canonical_ast=canonical_ast,
             nonlocals=nonlocal_symbols,
             imported=imported_symbols,
+            externals=resolved_externals if externals is not None else {},
         )
 
         return definition
@@ -1985,12 +1938,15 @@ class GTScriptParser(ast.NodeVisitor):
             parameters=[
                 parameter_decls[item.name] for item in api_signature if item.name in parameter_decls
             ],
-            computations=init_computations + computations,
+            computations=init_computations + computations if init_computations else computations,
             externals=self.resolved_externals,
             docstring=inspect.getdoc(self.definition) or "",
             loc=nodes.Location.from_ast_node(self.ast_root.body[0]),
         )
 
+        self.definition_ir = UnrollVectorAssignments.apply(
+            self.definition_ir, fields_decls=fields_decls
+        )
         return self.definition_ir
 
 
@@ -2019,12 +1975,7 @@ class GTScriptFrontend(Frontend):
 
     @classmethod
     def prepare_stencil_definition(cls, definition, externals):
-        GTScriptParser.annotate_definition(definition)
-        resolved_externals = GTScriptParser.resolve_external_symbols(
-            definition._gtscript_["nonlocals"], definition._gtscript_["imported"], externals
-        )
-        definition._gtscript_["externals"] = resolved_externals
-        return definition
+        return GTScriptParser.annotate_definition(definition, externals)
 
     @classmethod
     def generate(cls, definition, externals, options):

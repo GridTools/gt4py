@@ -19,6 +19,7 @@ Authors
 * Osuna, Carlos. MeteoSwiss
 * Röthlin, Matthias. MeteoSwiss
 * Serafini, Giacomo. MeteoSwiss
+* Szenes, Kalman. ETH Zurich - CSCS
 * Thaler, Felix. ETH Zurich - CSCS
 * Ubbiali, Stefano. ETH Zurich
 * Vogt, Hannes. ETH Zurich - CSCS

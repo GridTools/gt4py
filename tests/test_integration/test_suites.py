@@ -949,3 +949,198 @@ class TestTypedTemporary(gt_testing.StencilTestSuite):
     def validation(field_in, field_out, *, domain, origin):
         field_out[:, :, :-1] = field_in[:, :, :-1] + field_in[:, :, 1:]
         field_out[:, :, -1] = 0
+
+
+class TestVectorGenAssignment(gt_testing.StencilTestSuite):
+    dtypes = {
+        # NOTE: pydantic.error_wrappers.ValidationError: when using np.float32
+        "field_in": np.float64,
+        "field_out": np.float64,
+    }
+    domain_range = [(2, 2), (2, 2), (2, 2)]
+    backends = ALL_BACKENDS
+    symbols = {
+        "field_in": gt_testing.field(
+            in_range=(-10, 10), axes="IJK", boundary=[(0, 0), (0, 0), (0, 0)], data_dims=(2,)
+        ),
+        "field_out": gt_testing.field(
+            in_range=(-10, 10), axes="IJK", boundary=[(0, 0), (0, 0), (0, 0)], data_dims=(2,)
+        ),
+    }
+
+    def definition(field_in, field_out):
+        with computation(PARALLEL), interval(...):
+            field_out = 2 * field_in  # noqa: F841  # field_out is assigned to but never used
+
+    def validation(field_in, field_out, *, domain, origin):
+        field_out[...] = 2 * field_in
+
+
+class TestMatrixAssignment(gt_testing.StencilTestSuite):
+    dtypes = {
+        "field_in": np.float32,
+        "field_out": np.float32,
+    }
+    domain_range = [(2, 2), (2, 2), (2, 2)]
+    backends = ALL_BACKENDS
+    symbols = {
+        "field_in": gt_testing.field(
+            in_range=(-10, 10), axes="IJK", boundary=[(0, 0), (0, 0), (0, 0)], data_dims=(2, 3)
+        ),
+        "field_out": gt_testing.field(
+            in_range=(-10, 10), axes="IJK", boundary=[(0, 0), (0, 0), (0, 0)], data_dims=(2, 3)
+        ),
+    }
+
+    def definition(field_in, field_out):
+        with computation(PARALLEL), interval(...):
+            field_out = field_in  # noqa: F841  # field_out is assigned to but never used
+
+    def validation(field_in, field_out, *, domain, origin):
+        field_out[...] = field_in
+
+
+class TestVectorVectorOp(gt_testing.StencilTestSuite):
+    dtypes = {"field_1": np.float32, "field_2": np.float32, "field_out": np.float32}
+    domain_range = [(2, 2), (2, 2), (2, 2)]
+    backends = ALL_BACKENDS
+    symbols = {
+        "field_1": gt_testing.field(
+            in_range=(-10, 10), axes="IJK", boundary=[(0, 0), (0, 0), (0, 0)], data_dims=(2,)
+        ),
+        "field_2": gt_testing.field(
+            in_range=(-10, 10), axes="IJK", boundary=[(0, 0), (0, 0), (0, 0)], data_dims=(2,)
+        ),
+        "field_out": gt_testing.field(
+            in_range=(-10, 10), axes="IJK", boundary=[(0, 0), (0, 0), (0, 0)], data_dims=(2,)
+        ),
+    }
+
+    def definition(field_1, field_2, field_out):
+        with computation(PARALLEL), interval(...):
+            field_out = field_1 + field_2  # noqa: F841  # field_out is assigned to but never used
+
+    def validation(field_1, field_2, field_out, *, domain, origin):
+        field_out[...] = field_1 + field_2
+
+
+class TestCombinedVectorScalarOp(gt_testing.StencilTestSuite):
+    dtypes = {"field_1": np.float64, "field_2": np.float64, "field_out": np.float64}
+    domain_range = [(2, 2), (2, 2), (2, 2)]
+    backends = ALL_BACKENDS
+    symbols = {
+        "field_1": gt_testing.field(
+            in_range=(1, 10), axes="IJK", boundary=[(0, 0), (0, 0), (0, 0)], data_dims=(2,)
+        ),
+        "field_2": gt_testing.field(
+            in_range=(1, 10), axes="IJK", boundary=[(0, 0), (0, 0), (0, 0)], data_dims=(2,)
+        ),
+        "field_out": gt_testing.field(
+            in_range=(1, 10), axes="IJK", boundary=[(0, 0), (0, 0), (0, 0)], data_dims=(2,)
+        ),
+    }
+
+    def definition(field_1, field_2, field_out):
+        with computation(PARALLEL), interval(...):
+            field_out = 3 * (  # noqa: F841  # field_out is assigned to but never used
+                field_1 + field_2 * field_2
+            )
+
+    def validation(field_1, field_2, field_out, *, domain, origin):
+        field_out[...] = 3 * (field_1 + field_2 * field_2)
+
+
+class TestVectorizedTemporary(gt_testing.StencilTestSuite):
+    dtypes = {"field_in": np.float32, "field_out": np.float32}
+    domain_range = [(2, 2), (2, 2), (2, 2)]
+    backends = ALL_BACKENDS
+    symbols = {
+        "field_in": gt_testing.field(
+            in_range=(-10, 10), axes="IJK", boundary=[(0, 0), (0, 0), (0, 0)], data_dims=(2,)
+        ),
+        "field_out": gt_testing.field(
+            in_range=(-10, 10), axes="IJK", boundary=[(0, 0), (0, 0), (0, 0)], data_dims=(2,)
+        ),
+    }
+
+    def definition(field_in, field_out):
+        tmp: Field[(np.float32, (2,))] = 0
+        with computation(PARALLEL), interval(...):
+            tmp[0, 0, 0][0] = 2
+            tmp[0, 0, 0][1] = 3
+            field_out = tmp * field_in  # noqa: F841  # field_out is assigned to but never used
+
+    def validation(field_in, field_out, *, domain, origin):
+        field_out[:, :, :, 0] = 2 * field_in[:, :, :, 0]
+        field_out[:, :, :, 1] = 3 * field_in[:, :, :, 1]
+
+
+class TestMatmul(gt_testing.StencilTestSuite):
+    dtypes = {
+        # NOTE: Test fails with np.float32 due to different ordering of operations when compared to einsum.
+        # Potential fix: use tree style dot product for numerical stability.
+        "matrix": np.float64,
+        "field_1": np.float64,
+        "field_2": np.float64,
+    }
+    domain_range = [(2, 2), (2, 2), (2, 2)]
+    backends = ALL_BACKENDS
+    symbols = {
+        "matrix": gt_testing.field(
+            in_range=(-10, 10), axes="IJK", boundary=[(0, 0), (0, 0), (0, 0)], data_dims=(4, 6)
+        ),
+        "field_1": gt_testing.field(
+            in_range=(-10, 10), axes="IJK", boundary=[(0, 0), (0, 0), (0, 0)], data_dims=(6,)
+        ),
+        "field_2": gt_testing.field(
+            in_range=(-10, 10), axes="IJK", boundary=[(0, 0), (0, 0), (0, 0)], data_dims=(4,)
+        ),
+    }
+
+    def definition(matrix, field_1, field_2):
+        with computation(PARALLEL):
+            with interval(0, 1):
+                field_2 = matrix @ field_1
+            with interval(1, 2):
+                field_1 = matrix.T @ field_2
+
+    def validation(matrix, field_1, field_2, *, domain, origin):
+        field_2[:, :, 0] = np.einsum("ijlm,ijm->ijl", matrix[:, :, 0], field_1[:, :, 0])
+        field_1[:, :, 1] = np.einsum("ijlm,ijl->ijm", matrix[:, :, 1], field_2[:, :, 1])
+
+
+class TestMaskedMatmul(gt_testing.StencilTestSuite):
+    dtypes = {
+        # NOTE: Test fails with np.float32 due to different ordering of operations when compared to einsum.
+        # Potential fix: use tree style dot product for numerical stability.
+        "matrix": np.float64,
+        "field_1": np.float64,
+        "field_2": np.float64,
+    }
+    domain_range = [(2, 2), (2, 2), (2, 2)]
+    backends = ALL_BACKENDS
+    symbols = {
+        "matrix": gt_testing.field(
+            in_range=(-10, 10),
+            axes="K",
+            boundary=[(0, 0), (0, 0), (0, 0)],
+            data_dims=(4, 6),
+        ),
+        "field_1": gt_testing.field(
+            in_range=(-10, 10), axes="IJK", boundary=[(0, 0), (0, 0), (0, 0)], data_dims=(6,)
+        ),
+        "field_2": gt_testing.field(
+            in_range=(-10, 10), axes="IJK", boundary=[(0, 0), (0, 0), (0, 0)], data_dims=(4,)
+        ),
+    }
+
+    def definition(matrix, field_1, field_2):
+        with computation(PARALLEL):
+            with interval(0, 1):
+                field_2 = matrix @ field_1
+            with interval(1, 2):
+                field_1 = matrix.T @ field_2
+
+    def validation(matrix, field_1, field_2, *, domain, origin):
+        field_2[:, :, 0] = np.einsum("lm,ijm->ijl", matrix[0], field_1[:, :, 0])
+        field_1[:, :, 1] = np.einsum("lm,ijl->ijm", matrix[1], field_2[:, :, 1])
