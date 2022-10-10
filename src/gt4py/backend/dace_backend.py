@@ -50,8 +50,6 @@ from gtc.passes.oir_optimizations.inlining import MaskInlining
 from gtc.passes.oir_optimizations.utils import compute_fields_extents
 from gtc.passes.oir_pipeline import DefaultPipeline
 
-from .gtc_common import make_x86_layout_map
-
 
 if TYPE_CHECKING:
     from gt4py.stencil_builder import StencilBuilder
@@ -81,10 +79,10 @@ def _specialize_transient_strides(sdfg: dace.SDFG, layout_map):
 
 def _get_expansion_priority_cpu():
     return [
-        ["TileI", "TileJ", "IMap", "JMap", "Sections", "K", "Stages"],
-        ["TileI", "TileJ", "IMap", "JMap", "Sections", "Stages", "K"],
-        ["TileI", "TileJ", "Sections", "Stages", "IMap", "JMap", "K"],
-        ["TileI", "TileJ", "Sections", "K", "Stages", "JMap", "IMap"],
+        ["TileJ", "TileI", "IMap", "JMap", "Sections", "K", "Stages"],
+        ["TileJ", "TileI", "IMap", "JMap", "Sections", "Stages", "K"],
+        ["TileJ", "TileI", "Sections", "Stages", "IMap", "JMap", "K"],
+        ["TileJ", "TileI", "Sections", "K", "Stages", "JMap", "IMap"],
     ]
 
 
@@ -113,9 +111,9 @@ def _set_expansion_orders(sdfg: dace.SDFG):
         lambda n: isinstance(n[0], StencilComputation), sdfg.all_nodes_recursive()
     ):
         if node.device == dace.DeviceType.GPU:
-            expansion_priority = _get_expansion_priority_cpu()
-        else:
             expansion_priority = _get_expansion_priority_gpu(node)
+        else:
+            expansion_priority = _get_expansion_priority_cpu()
         is_set = False
         for exp in expansion_priority:
             try:
@@ -139,32 +137,6 @@ def _set_tile_sizes(sdfg: dace.SDFG):
             node.tile_sizes = {dcir.Axis.I: 64, dcir.Axis.J: 8, dcir.Axis.K: 8}
         else:
             node.tile_sizes = {dcir.Axis.I: 8, dcir.Axis.J: 8, dcir.Axis.K: 8}
-
-
-def _specialize_contiguous_strides(sdfg: dace.SDFG, layout_map):
-    repldict = {}
-    for array in sdfg.arrays.values():
-        if array.transient:
-            continue
-        dims = array_dimensions(array)
-        ndata_dims = len(array.shape) - sum(dims)
-        axes = [ax for ax, m in zip("IJK", dims) if m] + [str(i) for i in range(ndata_dims)]
-        layout = layout_map(axes)
-        contiguous_dim = layout.index(max(layout))
-        stride_sym = array.strides[contiguous_dim]
-        print("setting", str(stride_sym))
-        repldict[str(stride_sym)] = "1"
-
-    sdfg.replace_dict(repldict)
-    for state in sdfg.nodes():
-        for node in state.nodes():
-            if isinstance(node, dace.nodes.NestedSDFG):
-                for k, v in repldict.items():
-                    if k in node.symbol_mapping:
-                        node.symbol_mapping[k] = v
-    for k in repldict.keys():
-        if k in sdfg.symbols:
-            sdfg.remove_symbol(k)
 
 
 def _to_device(sdfg: dace.SDFG, device: str) -> None:
@@ -196,7 +168,6 @@ def _pre_expand_trafos(gtir_pipeline: GtirPipeline, sdfg: dace.SDFG, layout_map)
     _set_expansion_orders(sdfg)
     _set_tile_sizes(sdfg)
     _specialize_transient_strides(sdfg, layout_map=layout_map)
-    _specialize_contiguous_strides(sdfg, layout_map=layout_map)
     return sdfg
 
 
@@ -779,8 +750,7 @@ class DaceCPUBackend(BaseDaceBackend):
     storage_info = {
         "alignment": 1,
         "device": "cpu",
-        # "layout_map": layout_maker_factory((1, 0, 2)),
-        "layout_map": make_x86_layout_map,
+        "layout_map": layout_maker_factory((0, 1, 2)),
         "is_compatible_layout": lambda *args: True,
         "is_compatible_type": lambda x: isinstance(x, np.ndarray),
     }
