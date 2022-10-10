@@ -109,8 +109,11 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         #  program decorator) is required to pass these arguments.
 
         params = [itir.Sym(id=inp.id) for inp in node.params]
-        if "domain" not in node.body[0].kwargs:
-            params = params + self._gen_size_params_from_program(node)
+        for body_idx, _entry in node.body:
+            if "domain" not in node.body[body_idx].kwargs:
+                params_add = True
+
+        params = params + self._gen_size_params_from_program(node) if params_add else params
 
         closures: list[itir.StencilClosure] = []
         for stmt in node.body:
