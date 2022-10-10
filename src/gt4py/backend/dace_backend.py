@@ -21,9 +21,11 @@ from typing import TYPE_CHECKING, Dict, List, Optional, Tuple, Type
 
 import dace
 import dace.data
+import numpy as np
 from dace.sdfg.utils import inline_sdfgs
 from dace.serialize import dumps
 
+import gtc.daceir as dcir
 from eve import codegen
 from eve.codegen import MakoTemplate as as_mako
 from gt4py import gt_src_manager
@@ -78,6 +80,66 @@ def _specialize_transient_strides(sdfg: dace.SDFG, layout_map):
             sdfg.remove_symbol(k)
 
 
+def _get_expansion_priority_cpu():
+    return [
+        ["TileI", "TileJ", "IMap", "JMap", "Sections", "K", "Stages"],
+        ["TileI", "TileJ", "IMap", "JMap", "Sections", "Stages", "K"],
+        ["TileI", "TileJ", "Sections", "Stages", "IMap", "JMap", "K"],
+        ["TileI", "TileJ", "Sections", "K", "Stages", "JMap", "IMap"],
+    ]
+
+
+def _get_expansion_priority_gpu(node: StencilComputation):
+    expansion_priority = []
+    if node.has_splittable_regions():
+        expansion_priority.append(
+            [
+                "Sections",
+                "Stages",
+                "J",
+                "I",
+                "K",
+            ]
+        )
+    if node.oir_node.loop_order == common.LoopOrder.PARALLEL:
+        expansion_priority.append(["Sections", "Stages", "K", "J", "I"])
+    else:
+        expansion_priority.append(["J", "I", "Sections", "Stages", "K"])
+    expansion_priority.append(["TileJ", "TileI", "Sections", "K", "Stages", "JMap", "IMap"])
+    return expansion_priority
+
+
+def _set_expansion_orders(sdfg: dace.SDFG):
+    for node, _ in filter(
+        lambda n: isinstance(n[0], StencilComputation), sdfg.all_nodes_recursive()
+    ):
+        if node.device == dace.DeviceType.GPU:
+            expansion_priority = _get_expansion_priority_cpu()
+        else:
+            expansion_priority = _get_expansion_priority_gpu(node)
+        is_set = False
+        for exp in expansion_priority:
+            try:
+                node.expansion_specification = exp
+                is_set = True
+            except ValueError:
+                continue
+            else:
+                break
+        if not is_set:
+            raise ValueError("No expansion compatible")
+
+
+def _set_tile_sizes(sdfg: dace.SDFG):
+    for node, _ in filter(
+        lambda n: isinstance(n[0], StencilComputation), sdfg.all_nodes_recursive()
+    ):
+        if node.device == dace.DeviceType.GPU:
+            node.tile_sizes = {dcir.Axis.I: 64, dcir.Axis.J: 8, dcir.Axis.K: 8}
+        else:
+            node.tile_sizes = {dcir.Axis.I: 8, dcir.Axis.J: 8, dcir.Axis.K: 8}
+
+
 def _specialize_contiguous_strides(sdfg: dace.SDFG, layout_map):
     repldict = {}
     for array in sdfg.arrays.values():
@@ -86,7 +148,7 @@ def _specialize_contiguous_strides(sdfg: dace.SDFG, layout_map):
         dims = array_dimensions(array)
         ndata_dims = len(array.shape) - sum(dims)
         mask = dims + [True] * ndata_dims
-        layout = [l for l in layout_map(mask) if l is not None]
+        layout = [lm for lm in layout_map(mask) if lm is not None]
         contiguous_dim = layout.index(max(layout))
         stride_dim = sum(mask[:contiguous_dim])
         stride_sym = array.strides[stride_dim]
@@ -131,46 +193,8 @@ def _pre_expand_trafos(gtir_pipeline: GtirPipeline, sdfg: dace.SDFG, layout_map)
 
     sdfg.simplify(validate=False)
 
-    for node, _ in filter(
-        lambda n: isinstance(n[0], StencilComputation), sdfg.all_nodes_recursive()
-    ):
-        expansion_priority = []
-        # expansion_priority.append(
-        #     [
-        #         "Sections",
-        #         "Stages",
-        #         "J",
-        #         "I",
-        #         "K",
-        #     ]
-        # )
-        expansion_priority.extend(
-            [
-                ["TileI", "TileJ", "IMap", "JMap", "Sections", "K", "Stages"],
-                ["TileI", "TileJ", "IMap", "JMap", "Sections", "Stages", "K"],
-                [
-                    "TileI",
-                    "TileJ",
-                    "Sections",
-                    "Stages",
-                    "IMap",
-                    "JMap",
-                    "K",
-                ],
-                ["TileI", "TileJ", "Sections", "K", "Stages", "JMap", "IMap"],
-            ]
-        )
-        is_set = False
-        for exp in expansion_priority:
-            try:
-                node.expansion_specification = exp
-                is_set = True
-            except ValueError:
-                continue
-            else:
-                break
-        if not is_set:
-            raise ValueError("No expansion compatible")
+    _set_expansion_orders(sdfg)
+    _set_tile_sizes(sdfg)
     _specialize_transient_strides(sdfg, layout_map=layout_map)
     _specialize_contiguous_strides(sdfg, layout_map=layout_map)
     return sdfg
