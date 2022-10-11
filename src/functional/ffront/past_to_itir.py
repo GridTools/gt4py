@@ -101,7 +101,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         return size_params
 
     def visit_Program(
-        self, node: past.Program, *, symtable, function_definitions, **kwargs
+        self, node: past.Program, *, function_definitions, **kwargs
     ) -> itir.FencilDefinition:
         # The ITIR does not support dynamically getting the size of a field. As
         #  a workaround we add additional arguments to the fencil definition
@@ -136,7 +136,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         return itir.StencilClosure(
             domain=lowered_domain,
             stencil=itir.SymRef(id=node.func.id),
-            inputs=[itir.SymRef(id=self.visit(arg, **kwargs).id) for arg in node.args],
+            inputs=self.visit(node.args),
             output=output,
         )
 
@@ -228,7 +228,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
     ) -> tuple[itir.SymRef | itir.Literal, itir.SymRef | itir.Literal]:
         if node_domain.keys_[dim_i].type.dim == dim:
             assert len(node_domain.values_[dim_i].elts) == 2
-            return (self.visit(bound, as_ref=True) for bound in node_domain.values_[dim_i].elts)
+            return (self.visit(bound) for bound in node_domain.values_[dim_i].elts)
         else:
             raise GTTypeError(
                 f"Dimensions in out field and field domain are not equivalent"
@@ -315,7 +315,5 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
 
         raise NotImplementedError("Only scalar literals supported currently.")
 
-    def visit_Name(self, node: past.Name, as_ref=False, **kwargs) -> itir.SymRef | itir.Sym:
-        if as_ref:
-            return itir.SymRef(id=node.id)
-        return itir.Sym(id=node.id)
+    def visit_Name(self, node: past.Name, **kwargs) -> itir.SymRef:
+        return itir.SymRef(id=node.id)

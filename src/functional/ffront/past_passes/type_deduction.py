@@ -69,14 +69,13 @@ def _validate_call_params(new_func: past.Name, new_kwargs: dict):
                 raise GTTypeError(
                     f"Only 2 values allowed in domain range, but got `{len(domain_values.elts)}`."
                 )
-            scalar_types_check = [
-                ct.ScalarType(kind=ct.ScalarKind.INT64),
-                ct.ScalarType(kind=ct.ScalarKind.INT32),
-            ]
-            if (
-                domain_values.elts[0].type not in scalar_types_check
-                or domain_values.elts[1].type not in scalar_types_check
-            ):
+            domain_0_check = type(
+                domain_values.elts[0].type
+            ) == ct.ScalarType and type_info.is_integral(domain_values.elts[0].type)
+            domain_1_check = type(
+                domain_values.elts[1].type
+            ) == ct.ScalarType and type_info.is_integral(domain_values.elts[1].type)
+            if not domain_0_check or not domain_1_check:
                 raise GTTypeError(
                     f"Only integer values allowed in domain range, but got {domain_values.elts[0].type} and {domain_values.elts[1].type}."
                 )
