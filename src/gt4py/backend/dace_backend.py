@@ -89,15 +89,7 @@ def _get_expansion_priority_cpu():
 def _get_expansion_priority_gpu(node: StencilComputation):
     expansion_priority = []
     if node.has_splittable_regions():
-        expansion_priority.append(
-            [
-                "Sections",
-                "Stages",
-                "J",
-                "I",
-                "K",
-            ]
-        )
+        expansion_priority.append(["Sections", "Stages", "J", "I", "K"])
     if node.oir_node.loop_order == common.LoopOrder.PARALLEL:
         expansion_priority.append(["Sections", "Stages", "K", "J", "I"])
     else:
