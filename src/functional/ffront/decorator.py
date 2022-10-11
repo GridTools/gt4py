@@ -300,14 +300,13 @@ class Program:
                 )
             if not isinstance(param.type, ct.FieldType):
                 continue
-            if initialized_domain:
-                continue
-            has_shape = hasattr(args[param_idx], "shape")
-            for dim_idx in range(0, len(param.type.dims)):
-                if has_shape:
-                    size_args.append(args[param_idx].shape[dim_idx])
-                else:
-                    size_args.append(None)
+            if not initialized_domain:
+                has_shape = hasattr(args[param_idx], "shape")
+                for dim_idx in range(0, len(param.type.dims)):
+                    if has_shape:
+                        size_args.append(args[param_idx].shape[dim_idx])
+                    else:
+                        size_args.append(None)
         return tuple(rewritten_args), tuple(size_args), kwargs
 
     @functools.cached_property
