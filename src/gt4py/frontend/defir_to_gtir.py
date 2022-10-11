@@ -12,10 +12,13 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import copy
+import functools
+import itertools
 import numbers
 from typing import Any, Dict, List, Optional, Tuple, Union, cast
 
-from gt4py.frontend.node_util import IRNodeVisitor, location_to_source_location
+from gt4py.frontend.node_util import IRNodeMapper, IRNodeVisitor, location_to_source_location
 from gt4py.frontend.nodes import (
     ArgumentInfo,
     Assign,
@@ -28,6 +31,7 @@ from gt4py.frontend.nodes import (
     BuiltinLiteral,
     Cast,
     ComputationBlock,
+    DataType,
     Empty,
     Expr,
     FieldDecl,
@@ -38,6 +42,7 @@ from gt4py.frontend.nodes import (
     LevelMarker,
     NativeFuncCall,
     NativeFunction,
+    Node,
     ScalarLiteral,
     StencilDefinition,
     TernaryOpExpr,
@@ -80,6 +85,172 @@ def _make_literal(v: numbers.Number) -> gtir.Literal:
             dtype = common.DataType.FLOAT64
         value = str(v)
     return gtir.Literal(dtype=dtype, value=value)
+
+
+class UnrollVectorAssignments(IRNodeMapper):
+    @classmethod
+    def apply(cls, root, **kwargs):
+        return cls().visit(root, **kwargs)
+
+    def _is_vector_assignment(self, stmt: Node, fields_decls: Dict[str, FieldDecl]):
+        if not isinstance(stmt, Assign):
+            return False
+
+        # does the referenced field has data dimensions and the access is not element wise
+        return fields_decls[stmt.target.name].data_dims and not stmt.target.data_index
+
+    def visit_StencilDefinition(
+        self, node: StencilDefinition, *, fields_decls: Dict[str, FieldDecl], **kwargs
+    ) -> StencilDefinition:
+        node = copy.deepcopy(node)
+
+        for c in node.computations:
+            if c.body.stmts:
+                new_stmts = []
+                for stmt in c.body.stmts:
+                    new_stmt = self.visit(stmt, fields_decls=fields_decls, **kwargs)
+                    if isinstance(new_stmt, list):
+                        new_stmts.extend(new_stmt)
+                    else:
+                        new_stmts.append(stmt)  # take stmt as is
+
+                c.body.stmts = new_stmts
+
+        return node
+
+    # computes dimensions of nested lists
+    def _nested_list_dim(self, a: List) -> List[int]:
+        if not isinstance(a, list):
+            return []
+        return [len(a)] + self._nested_list_dim(a[0])
+
+    def visit_Assign(
+        self, node: Assign, *, fields_decls: Dict[str, FieldDecl], **kwargs
+    ) -> Union[gtir.ParAssignStmt, List[gtir.ParAssignStmt]]:
+        if self._is_vector_assignment(node, fields_decls):
+            assert isinstance(node.target, FieldRef) or isinstance(node.target, VarRef)
+            target_dims = fields_decls[node.target.name].data_dims
+
+            unrolled_rhs = UnrollVectorExpressions.apply(
+                node.value, expected_dim=target_dims, fields_decls=fields_decls
+            )
+
+            value_dims = self._nested_list_dim(unrolled_rhs)
+            if target_dims != value_dims:
+                raise Exception(
+                    f"Assignment dimension mismatch: '{node.target.name}' has dim = {target_dims}; rhs has dim {value_dims}."
+                )
+
+            assign_list = []
+            for index in itertools.product(*(range(dim) for dim in target_dims)):
+                tmp_node = copy.deepcopy(node)
+                value_node = functools.reduce(lambda arr, el: arr[el], index, unrolled_rhs)
+                data_type = DataType.INT32
+                data_index = [
+                    ScalarLiteral(value=index_el, data_type=data_type) for index_el in index
+                ]
+
+                tmp_node.target.data_index = data_index
+                tmp_node.value = value_node
+
+                assign_list.append(tmp_node)
+
+            return assign_list
+        return node
+
+
+class UnrollVectorExpressions(IRNodeMapper):
+    @classmethod
+    def apply(cls, root, *, expected_dim: Tuple[int, ...], fields_decls: Dict[str, FieldDecl]):
+        result = cls().visit(root, fields_decls=fields_decls)
+        # if the expression is just a scalar broadcast to the expected dimensions
+        if not isinstance(result, list):
+            result = functools.reduce(
+                lambda val, len: [val for _ in range(len)], reversed(expected_dim), result
+            )
+        return result
+
+    def visit_FieldRef(self, node: FieldRef, *, fields_decls: Dict[str, FieldDecl], **kwargs):
+        name = node.name
+        if fields_decls[name].data_dims:
+            field_list = []
+            # vector
+            if len(fields_decls[name].data_dims) == 1:
+                dims = fields_decls[name].data_dims[0]
+                for index in range(dims):
+                    data_type = DataType.INT32
+                    data_index = [ScalarLiteral(value=index, data_type=data_type)]
+                    element_ref = FieldRef(
+                        name=node.name, offset=node.offset, data_index=data_index, loc=node.loc
+                    )
+                    field_list.append(element_ref)
+            # matrix
+            elif len(fields_decls[name].data_dims) == 2:
+                rows, cols = fields_decls[name].data_dims
+                for row in range(rows):
+                    row_list = []
+                    for col in range(cols):
+                        data_type = DataType.INT32
+                        data_index = [
+                            ScalarLiteral(value=row, data_type=data_type),
+                            ScalarLiteral(value=col, data_type=data_type),
+                        ]
+                        element_ref = FieldRef(
+                            name=node.name, offset=node.offset, data_index=data_index, loc=node.loc
+                        )
+                        row_list.append(element_ref)
+                    field_list.append(row_list)
+            else:
+                raise Exception(
+                    "Higher dimensional fields only supported for vectors and matrices."
+                )
+            return field_list
+
+        return node
+
+    def visit_UnaryOpExpr(self, node: UnaryOpExpr, *, fields_decls: Dict[str, FieldDecl], **kwargs):
+        if node.op == UnaryOperator.TRANSPOSED:
+            node = self.visit(node.arg, fields_decls=fields_decls, **kwargs)
+            assert isinstance(node, list) and all(
+                isinstance(row, list) and len(row) == len(node[0]) for row in node
+            )
+            # transpose list
+            node = [list(x) for x in zip(*node)]
+            return node
+
+        return self.generic_visit(node, **kwargs)
+
+    def visit_BinOpExpr(self, node: BinOpExpr, *, fields_decls: Dict[str, FieldDecl], **kwargs):
+        lhs = self.visit(node.lhs, fields_decls=fields_decls, **kwargs)
+        rhs = self.visit(node.rhs, fields_decls=fields_decls, **kwargs)
+        result: Union[List[BinOpExpr], BinOpExpr] = []
+
+        if node.op == BinaryOperator.MATMULT:
+            for j in range(len(lhs)):
+                acc = BinOpExpr(op=BinaryOperator.MUL, lhs=lhs[j][0], rhs=rhs[0], loc=node.loc)
+                for i in range(1, len(lhs[0])):
+                    mul = BinOpExpr(op=BinaryOperator.MUL, lhs=lhs[j][i], rhs=rhs[i], loc=node.loc)
+                    acc = BinOpExpr(op=BinaryOperator.ADD, lhs=acc, rhs=mul, loc=node.loc)
+
+                result.append(acc)
+        else:
+            # vector and vector
+            if isinstance(lhs, list) and isinstance(rhs, list):
+                assert len(lhs) == len(rhs)
+                for lhs_el, rhs_el in zip(lhs, rhs):
+                    result.append(BinOpExpr(op=node.op, lhs=lhs_el, rhs=rhs_el, loc=node.loc))
+            # scalar and vector
+            elif isinstance(lhs, Expr) and isinstance(rhs, list):
+                for rhs_el in rhs:
+                    result.append(BinOpExpr(op=node.op, lhs=lhs, rhs=rhs_el, loc=node.loc))
+            elif isinstance(lhs, list) and isinstance(rhs, Expr):
+                for lhs_el in lhs:
+                    result.append(BinOpExpr(op=node.op, lhs=lhs_el, rhs=rhs, loc=node.loc))
+            # scalar and scalar fallback
+            else:
+                result = self.generic_visit(node, **kwargs)
+
+        return result
 
 
 class DefIRToGTIR(IRNodeVisitor):

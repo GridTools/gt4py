@@ -589,8 +589,11 @@ class _FieldDescriptor:
         else:
             try:
                 dtype = np.dtype(dtype)
-                actual_dtype = dtype.subdtype[0] if dtype.subdtype else dtype
-                if actual_dtype not in _VALID_DATA_TYPES:
+                if dtype.shape:
+                    assert not data_dims
+                    dtype = dtype.base
+                    data_dims = dtype.shape
+                if dtype not in _VALID_DATA_TYPES:
                     raise ValueError("Invalid data type descriptor")
             except:
                 raise ValueError("Invalid data type descriptor")
