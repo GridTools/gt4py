@@ -77,13 +77,19 @@ def _specialize_transient_strides(sdfg: dace.SDFG, layout_map):
             sdfg.remove_symbol(k)
 
 
-def _get_expansion_priority_cpu():
-    return [
-        ["TileJ", "TileI", "IMap", "JMap", "Sections", "K", "Stages"],
-        ["TileJ", "TileI", "IMap", "JMap", "Sections", "Stages", "K"],
-        ["TileJ", "TileI", "Sections", "Stages", "IMap", "JMap", "K"],
-        ["TileJ", "TileI", "Sections", "K", "Stages", "JMap", "IMap"],
-    ]
+def _get_expansion_priority_cpu(node: StencilComputation):
+    expansion_priority = []
+    if node.has_splittable_regions():
+        expansion_priority.append(["Sections", "Stages", "I", "J", "K"])
+    expansion_priority.extend(
+        [
+            ["TileJ", "TileI", "IMap", "JMap", "Sections", "K", "Stages"],
+            ["TileJ", "TileI", "IMap", "JMap", "Sections", "Stages", "K"],
+            ["TileJ", "TileI", "Sections", "Stages", "IMap", "JMap", "K"],
+            ["TileJ", "TileI", "Sections", "K", "Stages", "JMap", "IMap"],
+        ]
+    )
+    return expansion_priority
 
 
 def _get_expansion_priority_gpu(node: StencilComputation):
@@ -105,7 +111,7 @@ def _set_expansion_orders(sdfg: dace.SDFG):
         if node.device == dace.DeviceType.GPU:
             expansion_priority = _get_expansion_priority_gpu(node)
         else:
-            expansion_priority = _get_expansion_priority_cpu()
+            expansion_priority = _get_expansion_priority_cpu(node)
         is_set = False
         for exp in expansion_priority:
             try:
