@@ -284,7 +284,7 @@ class Program:
         self._validate_args(*args, **kwargs)
 
         initialized_domain = True
-        for _i, body_entry in enumerate(self.past_node.body):
+        for body_entry in self.past_node.body:
             if "domain" not in body_entry.kwargs:
                 initialized_domain = False
 
