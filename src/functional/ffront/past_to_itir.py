@@ -108,12 +108,9 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         #  containing the size of all fields. The caller of a program is (e.g.
         #  program decorator) is required to pass these arguments.
 
-        params = self.visit(node.params)
-        params_add = False
-        for _i, body_entry in enumerate(node.body):
-            if "domain" not in body_entry.kwargs:
-                params_add = True
+        params = [itir.Sym(id=inp.id) for inp in node.params]
 
+        params_add = any("domain" not in body_entry.kwargs for body_entry in node.body)
         if params_add:
             params = params + self._gen_size_params_from_program(node)
 
