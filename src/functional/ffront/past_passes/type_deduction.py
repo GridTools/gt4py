@@ -14,6 +14,8 @@
 from eve import NodeTranslator, traits
 from functional.common import GTTypeError
 from functional.ffront import common_types as ct, program_ast as past, type_info
+from functional.ffront.symbol_makers import make_symbol_type_from_value
+from typing import Any
 
 
 def _ensure_no_sliced_field(entry: past.Expr):
@@ -88,13 +90,12 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         definition_type = ct.FunctionType(
             args=[param.type for param in params], kwargs={}, returns=ct.VoidType()
         )
-
         return past.Program(
             id=self.visit(node.id, **kwargs),
             type=ct.ProgramType(definition=definition_type),
             params=params,
             body=self.visit(node.body, **kwargs),
-            closure_vars=self.visit(node.closure_vars, **kwargs),
+            closure_vars=node.closure_vars,
             location=node.location,
         )
 

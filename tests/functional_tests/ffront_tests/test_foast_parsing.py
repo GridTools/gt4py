@@ -31,7 +31,9 @@ from functional.ffront.fbuiltins import Dimension, float32, float64, int32, int6
 from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError
 from functional.ffront.func_to_foast import FieldOperatorParser, FieldOperatorSyntaxError
 from functional.ffront.symbol_makers import TypingError
+from functional.ffront import field_operator_ast as foast
 from functional.iterator import ir as itir
+from eve.pattern_matching import ObjectPattern as P
 from functional.iterator.builtins import (
     and_,
     deref,
@@ -252,13 +254,37 @@ def test_closure_symbols():
         return a, b
 
     parsed = FieldOperatorParser.apply_to_function(operator_with_refs)
-    assert parsed.annex.symtable["nonlocal_float"].type == common_types.ScalarType(
-        kind=common_types.ScalarKind.FLOAT64, shape=None
-    )
-    assert parsed.annex.symtable["nonlocal_np_scalar"].type == common_types.ScalarType(
-        kind=common_types.ScalarKind.FLOAT32, shape=None
-    )
+    assert "nonlocal_float" not in parsed.annex.symtable
+    assert "nonlocal_np_scalar" not in parsed.annex.symtable
     assert "nonlocal_unused" not in parsed.annex.symtable
+
+    pattern_node = P(
+        foast.FunctionDefinition,
+        body=[
+            P(
+                foast.Assign,
+                value=P(
+                    foast.BinOp,
+                    right=P(
+                        foast.Constant,
+                        value=nonlocal_float
+                    )
+                ),
+            ),
+            P(
+                foast.Assign,
+                value=P(
+                    foast.BinOp,
+                    right=P(
+                        foast.Constant,
+                        value=nonlocal_np_scalar
+                    )
+                ),
+            ),
+            P(foast.Return),
+        ],
+    )
+    assert pattern_node.match(parsed, raise_exception=True)
 
 
 def test_wrong_return_type_annotation():

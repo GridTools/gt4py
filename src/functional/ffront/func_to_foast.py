@@ -37,6 +37,8 @@ from functional.ffront.ast_passes import (
 from functional.ffront.dialect_parser import DialectParser, DialectSyntaxError
 from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduction
 from functional.ffront.foast_passes.closure_var_folding import ClosureVarFolding
+from functional.ffront.foast_passes.dead_closure_var_elimination import DeadClosureVarElimination
+from functional.ffront.foast_passes.closure_var_type_deduction import ClosureVarTypeDeduction
 
 
 class FieldOperatorSyntaxError(DialectSyntaxError):
@@ -96,7 +98,9 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
     def _postprocess_dialect_ast(
         cls, foast_node: foast.FieldOperator, closure_vars: dict[str, Any], annotations: dict[str, Any]
     ) -> foast.FieldOperator:
-        foast_node = ClosureVarFolding(closure_vars=closure_vars).visit(foast_node)
+        foast_node = ClosureVarFolding.apply(foast_node, closure_vars)
+        foast_node = DeadClosureVarElimination.apply(foast_node)
+        foast_node = ClosureVarTypeDeduction.apply(foast_node, closure_vars)
         typed_foast_node = FieldOperatorTypeDeduction.apply(foast_node)
 
         # check deduced matches annotated return type
@@ -159,7 +163,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             closure_var_symbols.append(
                 foast.Symbol(
                     id=name,
-                    type=symbol_makers.make_symbol_type_from_value(val),
+                    type=ct.DeferredSymbolType(constraint=ct.DataType),
                     namespace=ct.Namespace.CLOSURE,
                     location=self._make_loc(node),
                 )

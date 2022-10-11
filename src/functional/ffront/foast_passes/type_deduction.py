@@ -11,7 +11,7 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-from typing import Optional, cast
+from typing import Optional, cast, Any
 
 import functional.ffront.field_operator_ast as foast
 from eve import NodeTranslator, NodeVisitor, traits
@@ -173,12 +173,11 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         new_type = ct.FunctionType(
             args=[new_param.type for new_param in new_params], kwargs={}, returns=return_type
         )
-
         return foast.FunctionDefinition(
             id=node.id,
             params=new_params,
             body=new_body,
-            closure_vars=self.visit(node.closure_vars, **kwargs),
+            closure_vars=node.closure_vars,
             type=new_type,
             location=node.location,
         )
