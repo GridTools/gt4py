@@ -114,7 +114,8 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             if "domain" not in body_entry.kwargs:
                 params_add = True
 
-        params = params + self._gen_size_params_from_program(node) if params_add else params
+        if params_add:
+            params = params + self._gen_size_params_from_program(node)
 
         closures: list[itir.StencilClosure] = []
         for stmt in node.body:
