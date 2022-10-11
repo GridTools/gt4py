@@ -88,7 +88,7 @@ class TupleType(DataType):
     types: list[DataType]
 
     def __str__(self):
-        return f"tuple{self.types}"
+        return f"tuple[{','.join(map(str, self.types))}]"
 
 
 class CallableType:

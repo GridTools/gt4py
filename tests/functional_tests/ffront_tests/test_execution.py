@@ -522,6 +522,76 @@ def test_scalar_arg(fieldview_backend):
     assert np.allclose(ref, out.array())
 
 
+def test_conditional_tuple_1():
+    size = 10
+    mask = np_as_located_field(IDim)(np.zeros((size,), dtype=bool))
+    mask.array()[0 : (size // 2)] = True
+    a = np_as_located_field(IDim)(np.ones((size,)))
+    c = np_as_located_field(IDim)(np.zeros((size,)))
+    d = np_as_located_field(IDim)(np.zeros((size,)))
+
+    @field_operator
+    def conditional_tuple(
+        mask: Field[[IDim], bool], a: Field[[IDim], float64]
+    ) -> tuple[Field[[IDim], float64], Field[[IDim], float64]]:
+        return where(mask, (a, 3.0), (2.0, 7.0))
+
+    @program
+    def conditional_tuple_p(
+        mask: Field[[IDim], bool],
+        a: Field[[IDim], float64],
+        c: Field[[IDim], float64],
+        d: Field[[IDim], float64],
+    ):
+        conditional_tuple(mask, a, out=(c, d))
+
+    conditional_tuple_p(mask, a, c, d, offset_provider={})
+
+    assert np.allclose(
+        np.where(mask, (a, np.full(size, 3.0)), (np.full(size, 2.0), np.full(size, 7.0))), (c, d)
+    )
+
+
+def test_conditional_nested_tuple():
+    size = 10
+    mask = np_as_located_field(IDim)(np.zeros((size,), dtype=bool))
+    mask.array()[0 : (size // 2)] = True
+    a = np_as_located_field(IDim)(np.ones((size,)))
+    b = np_as_located_field(IDim)(np.ones((size,)))
+    c = np_as_located_field(IDim)(np.zeros((size,)))
+    d = np_as_located_field(IDim)(np.zeros((size,)))
+
+    @field_operator
+    def conditional_tuple_3_field_op(
+        mask: Field[[IDim], bool], a: Field[[IDim], float64], b: Field[[IDim], float64]
+    ) -> tuple[
+        tuple[Field[[IDim], float64], Field[[IDim], float64]],
+        tuple[Field[[IDim], float64], Field[[IDim], float64]],
+    ]:
+        return where(mask, ((a, b), (b, a)), ((5.0, 7.0), (7.0, 5.0)))
+
+    @program
+    def conditional_tuple_3_p(
+        mask: Field[[IDim], bool],
+        a: Field[[IDim], float64],
+        b: Field[[IDim], float64],
+        c: Field[[IDim], float64],
+        d: Field[[IDim], float64],
+    ):
+        conditional_tuple_3_field_op(mask, a, b, out=((c, d), (d, c)))
+
+    conditional_tuple_3_p(mask, a, b, c, d, offset_provider={})
+
+    assert np.allclose(
+        np.where(
+            mask,
+            ((a, b), (b, a)),
+            ((np.full(size, 5.0), np.full(size, 7.0)), (np.full(size, 7.0), np.full(size, 5.0))),
+        ),
+        ((c, d), (d, c)),
+    )
+
+
 def test_nested_scalar_arg(fieldview_backend):
     if fieldview_backend == gtfn_cpu.run_gtfn:
         pytest.skip("ConstantFields are not supported yet.")
@@ -550,7 +620,7 @@ def test_scalar_arg_with_field(fieldview_backend):
     Edge = Dimension("Edge")
     EdgeOffset = FieldOffset("EdgeOffset", source=Edge, target=(Edge,))
     size = 5
-    inp = index_field(Edge)
+    inp = index_field(Edge, dtype=float64)
     factor = 3.0
     out = np_as_located_field(Edge)(np.zeros((size), dtype=np.float64))
 
@@ -695,7 +765,6 @@ def test_conditional_shifted(fieldview_backend):
     mask = np_as_located_field(IDim)(np.zeros((size,), dtype=bool))
     mask.array()[size // 2] = True
     a = np_as_located_field(IDim)(np.arange(0, size, 1, dtype=float64))
-    a = np_as_located_field(IDim)(np.arange(0, size, 1, dtype=float64))
     b = np_as_located_field(IDim)(np.zeros((size,)))
     out = np_as_located_field(IDim)(np.zeros((size,)))
 
@@ -752,7 +821,7 @@ def test_tuple_return_2(reduction_setup):
     @field_operator
     def reduction_tuple(
         a: Field[[Edge], int64], b: Field[[Edge], int64]
-    ) -> tuple[Field[[Vertex], int64], Field[[Vertex], int64], int64]:
+    ) -> tuple[Field[[Vertex], int64], Field[[Vertex], int64]]:
         a = neighbor_sum(a(V2E), axis=V2EDim)
         b = neighbor_sum(b(V2E), axis=V2EDim)
         return a, b
@@ -806,6 +875,25 @@ def test_tuple_with_local_field_in_reduction_shifted(reduction_setup):
     expected = red[rs.e2v_table][:, 0]
 
     assert np.allclose(expected, out)
+
+
+def test_tuple_arg(fieldview_backend):
+    if fieldview_backend == gtfn_cpu.run_gtfn:
+        pytest.skip("Tuple arguments are not supported in gtfn yet.")
+    size = 10
+    a = np_as_located_field(IDim)(np.ones((size,)))
+    b = np_as_located_field(IDim)(2 * np.ones((size,)))
+    out = np_as_located_field(IDim)(np.zeros((size,)))
+
+    @field_operator(backend=fieldview_backend)
+    def unpack_tuple(
+        inp: tuple[tuple[Field[[IDim], float64], Field[[IDim], float64]], Field[[IDim], float64]]
+    ) -> Field[[IDim], float64]:
+        return 3.0 * inp[0][0] + inp[0][1] + inp[1]
+
+    unpack_tuple(((a, b), a), out=out, offset_provider={})
+
+    assert np.allclose(3 * a.array() + b.array() + a.array(), out)
 
 
 @pytest.mark.parametrize("forward", [True, False])
@@ -868,7 +956,7 @@ def test_solve_triag(fieldview_backend):
         b: Field[[IDim, JDim, KDim], float],
         c: Field[[IDim, JDim, KDim], float],
         d: Field[[IDim, JDim, KDim], float],
-    ):
+    ) -> Field[[IDim, JDim, KDim], float]:
         cp, dp = tridiag_forward(a, b, c, d)
         return tridiag_backward(cp, dp)
 
@@ -1034,3 +1122,111 @@ def test_docstring():
         fieldop_with_docstring(a, out=a)
 
     test_docstring(a, offset_provider={})
+
+
+def test_domain(fieldview_backend):
+    size = 10
+    a = np_as_located_field(IDim, JDim)(np.ones((size, size)))
+
+    @field_operator(backend=fieldview_backend)
+    def fieldop_domain(a: Field[[IDim, JDim], float64]) -> Field[[IDim, JDim], float64]:
+        return a + a
+
+    @program
+    def program_domain(a: Field[[IDim, JDim], float64]):
+        fieldop_domain(a, out=a, domain={IDim: (1, 9), JDim: (4, 6)})
+
+    program_domain(a, offset_provider={})
+
+    expected = np.asarray(a)
+    expected[1:9, 4:6] = 1 + 1
+
+    assert np.allclose(expected, a)
+
+
+def test_domain_input_bounds(fieldview_backend):
+    size = 10
+    a = np_as_located_field(IDim, JDim)(np.ones((size, size)))
+    lower_i = 1
+    upper_i = 9
+    lower_j = 4
+    upper_j = 6
+
+    @field_operator(backend=fieldview_backend)
+    def fieldop_domain(a: Field[[IDim, JDim], float64]) -> Field[[IDim, JDim], float64]:
+        return a + a
+
+    @program
+    def program_domain(
+        a: Field[[IDim, JDim], float64],
+        lower_i: int64,
+        upper_i: int64,
+        lower_j: int64,
+        upper_j: int64,
+    ):
+        fieldop_domain(a, out=a, domain={IDim: (lower_i, upper_i), JDim: (lower_j, upper_j)})
+
+    program_domain(a, lower_i, upper_i, lower_j, upper_j, offset_provider={})
+
+    expected = np.asarray(a)
+    expected[1:9, 4:6] = 1 + 1
+
+    assert np.allclose(expected, a)
+
+
+def test_domain_tuple(fieldview_backend):
+    size = 10
+    a = np_as_located_field(IDim, JDim)(np.ones((size, size)))
+    b = np_as_located_field(IDim, JDim)(np.ones((size, size)))
+
+    @field_operator(backend=fieldview_backend)
+    def fieldop_domain_tuple(
+        a: Field[[IDim, JDim], float64]
+    ) -> tuple[Field[[IDim, JDim], float64], Field[[IDim, JDim], float64]]:
+        return (a + a, a)
+
+    @program
+    def program_domain_tuple(a: Field[[IDim, JDim], float64], b: Field[[IDim, JDim], float64]):
+        fieldop_domain_tuple(a, out=(b, a), domain={IDim: (1, 9), JDim: (4, 6)})
+
+    program_domain_tuple(a, b, offset_provider={})
+
+    expected = np.asarray(a)
+    expected[1:9, 4:6] = 1 + 1
+
+    assert np.allclose(np.asarray(a), a)
+    assert np.allclose(expected, b)
+
+
+def test_where_k_offset(fieldview_backend):
+    if fieldview_backend == gtfn_cpu.run_gtfn:
+        pytest.skip("IndexFields are not supported yet.")
+    size = 10
+    KDim = Dimension("K", kind=DimensionKind.VERTICAL)
+    Koff = FieldOffset("Koff", source=KDim, target=(KDim,))
+    a = np_as_located_field(IDim, KDim)(np.ones((size, size)))
+    out = np_as_located_field(IDim, KDim)(np.zeros((size, size)))
+    k_index = index_field(KDim)
+
+    @field_operator(backend=fieldview_backend)
+    def fieldop_where_k_offset(
+        a: Field[[IDim, KDim], float64],
+        k_index: Field[[KDim], int64],
+    ) -> Field[[IDim, KDim], float64]:
+        return where(k_index > 0, a(Koff[-1]), 2.0)
+
+    fieldop_where_k_offset(a, k_index, out=out, offset_provider={"Koff": KDim})
+
+    expected = np.where(np.arange(0, size, 1)[np.newaxis, :] > 0.0, a, 2.0)
+
+    assert np.allclose(np.asarray(out), expected)
+
+
+def test_undefined_symbols():
+    from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError
+
+    with pytest.raises(FieldOperatorTypeDeductionError, match="Undeclared symbol"):
+
+        @field_operator
+        def return_undefined():
+            return undefined_symbol

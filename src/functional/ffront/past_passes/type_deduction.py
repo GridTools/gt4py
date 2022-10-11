@@ -16,6 +16,67 @@ from functional.common import GTTypeError
 from functional.ffront import common_types as ct, program_ast as past, type_info
 
 
+def _ensure_no_sliced_field(entry: past.Expr):
+    """
+    Check that all arguments are of type past.Name or past.TupleExpr.
+
+    In the latter case, unfold tuple.
+
+    For example, if argument is of type past.Subscript, this function will throw an error as both slicing and domain are being applied
+    """
+    if not isinstance(entry, past.Name) and not isinstance(entry, past.TupleExpr):
+        raise GTTypeError("Either only domain or slicing allowed")
+    elif isinstance(entry, past.TupleExpr):
+        for param in entry.elts:
+            _ensure_no_sliced_field(param)
+
+
+def _validate_call_params(new_func: past.Name, new_kwargs: dict):
+    """
+    Perform checks for domain and output field types.
+
+    Keyword `out` has to be present in function call.
+
+    Domain has to be of type dictionary, including dimensions with values expressed as tuples of 2 numbers.
+    """
+    if not isinstance(new_func.type, (ct.FieldOperatorType, ct.ScanOperatorType)):
+        raise GTTypeError(
+            f"Only calls `FieldOperator`s and `ScanOperators` "
+            f"allowed in `Program`, but got `{new_func.type}`."
+        )
+
+    if "out" not in new_kwargs:
+        raise GTTypeError("Missing required keyword argument(s) `out`.")
+    if "domain" in new_kwargs:
+        _ensure_no_sliced_field(new_kwargs["out"])
+
+        domain_kwarg = new_kwargs["domain"]
+        if not isinstance(domain_kwarg, past.Dict):
+            raise GTTypeError(
+                f"Only Dictionaries allowed in domain, but got `{type(domain_kwarg)}`."
+            )
+
+        if len(domain_kwarg.values_) == 0 and len(domain_kwarg.keys_) == 0:
+            raise GTTypeError("Empty domain not allowed.")
+
+        for dim in domain_kwarg.keys_:
+            if not isinstance(dim.type, ct.DimensionType):
+                raise GTTypeError(
+                    f"Only Dimension allowed in domain dictionary keys, but got `{dim}` which is of type `{dim.type}`."
+                )
+        for domain_values in domain_kwarg.values_:
+            if len(domain_values.elts) != 2:
+                raise GTTypeError(
+                    f"Only 2 values allowed in domain range, but got `{len(domain_values.elts)}`."
+                )
+            if domain_values.elts[0].type != ct.ScalarType(
+                kind=ct.ScalarKind.INT64
+            ) or domain_values.elts[1].type != ct.ScalarType(kind=ct.ScalarKind.INT64):
+                raise GTTypeError(
+                    f"Only integer values allowed in domain range, but got {domain_values.elts[0].type} and {domain_values.elts[1].type}."
+                )
+
+
 class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
     @classmethod
     def apply(cls, node: past.Program) -> past.Program:
@@ -33,7 +94,7 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             type=ct.ProgramType(definition=definition_type),
             params=params,
             body=self.visit(node.body, **kwargs),
-            captured_vars=self.visit(node.captured_vars, **kwargs),
+            closure_vars=self.visit(node.closure_vars, **kwargs),
             location=node.location,
         )
 
@@ -57,19 +118,14 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         new_args = self.visit(node.args, **kwargs)
         new_kwargs = self.visit(node.kwargs, **kwargs)
 
-        # assert "out" not in new_func.type.kwargs
-
         try:
-            if not isinstance(new_func.type, (ct.FieldOperatorType, ct.ScanOperatorType)):
-                raise GTTypeError(
-                    f"Only calls `FieldOperator`s and `ScanOperators` "
-                    f"allowed in `Program`, but got `{new_func.type}`."
-                )
-            if "out" not in new_kwargs:
-                raise GTTypeError("Missing required keyword argument(s) `out`.")
-
+            _validate_call_params(new_func, new_kwargs)
             arg_types = [arg.type for arg in new_args]
-            kwarg_types = {name: expr.type for name, expr in new_kwargs.items() if name != "out"}
+            kwarg_types = {
+                name: expr.type
+                for name, expr in new_kwargs.items()
+                if name != "out" and name != "domain"
+            }
 
             type_info.accepts_args(
                 new_func.type,

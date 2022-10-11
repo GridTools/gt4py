@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import ast
 import builtins
-import collections
 from typing import Any, Callable, Iterable, Mapping, Type, cast
 
 import eve
@@ -93,8 +92,24 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
         return ucc
 
     @classmethod
-    def _postprocess_dialect_ast(cls, dialect_ast: foast.FieldOperator) -> foast.FieldOperator:
-        return FieldOperatorTypeDeduction.apply(dialect_ast)
+    def _postprocess_dialect_ast(
+        cls, foast_node: foast.FieldOperator, annotations: dict[str, Any]
+    ) -> foast.FieldOperator:
+        typed_foast_node = FieldOperatorTypeDeduction.apply(foast_node)
+
+        # check deduced matches annotated return type
+        if "return" in annotations:
+            annotated_return_type = symbol_makers.make_symbol_type_from_typing(
+                annotations["return"]
+            )
+            # TODO(tehrengruber): use `type_info.return_type` when the type of the
+            #  arguments becomes available here
+            if annotated_return_type != typed_foast_node.type.returns:
+                raise common.GTTypeError(
+                    f"Annotated return type does not match deduced return type. Expected `{typed_foast_node.type.returns}`"
+                    f", but got `{annotated_return_type}`."
+                )
+        return typed_foast_node
 
     def _builtin_type_constructor_symbols(
         self, captured_vars: Mapping[str, Any], location: eve.SourceLocation
@@ -133,16 +148,13 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
         return result, to_be_inserted.keys()
 
     def visit_FunctionDef(self, node: ast.FunctionDef, **kwargs) -> foast.FunctionDefinition:
-        captured_vars: Mapping[str, Any] = collections.ChainMap(
-            self.captured_vars.globals, self.captured_vars.nonlocals
+        closure_var_symbols, skip_names = self._builtin_type_constructor_symbols(
+            self.closure_vars, self._make_loc(node)
         )
-        captured_symbols, skip_names = self._builtin_type_constructor_symbols(
-            captured_vars, self._make_loc(node)
-        )
-        for name, val in captured_vars.items():
+        for name, val in self.closure_vars.items():
             if name in skip_names:
                 continue
-            captured_symbols.append(
+            closure_var_symbols.append(
                 foast.Symbol(
                     id=name,
                     type=symbol_makers.make_symbol_type_from_value(val),
@@ -155,48 +167,15 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             id=node.name,
             params=self.visit(node.args, **kwargs),
             body=self.visit_stmt_list(node.body, **kwargs),
-            captured_vars=captured_symbols,
+            closure_vars=closure_var_symbols,
             location=self._make_loc(node),
         )
-
-    def visit_Import(self, node: ast.Import, **kwargs) -> None:
-        raise FieldOperatorSyntaxError.from_AST(
-            node, msg=f"Only 'from' imports from {fbuiltins.MODULE_BUILTIN_NAMES} are supported"
-        )
-
-    def visit_ImportFrom(self, node: ast.ImportFrom, **kwargs) -> foast.ExternalImport:
-        if node.module not in fbuiltins.MODULE_BUILTIN_NAMES:
-            raise FieldOperatorSyntaxError.from_AST(
-                node,
-                msg=f"Only 'from' imports from {fbuiltins.MODULE_BUILTIN_NAMES} are supported",
-            )
-
-        symbols: list[foast.Symbol] = []
-
-        if node.module == fbuiltins.EXTERNALS_MODULE_NAME:
-            for alias in node.names:
-                if alias.name not in self.externals_defs:
-                    raise FieldOperatorSyntaxError.from_AST(
-                        node, msg=f"Missing symbol '{alias.name}' definition in {node.module}"
-                    )
-                symbols.append(
-                    foast.Symbol(
-                        id=alias.asname or alias.name,
-                        type=symbol_makers.make_symbol_type_from_value(
-                            self.externals_defs[alias.name]
-                        ),
-                        namespace=ct.Namespace.EXTERNAL,
-                        location=self._make_loc(node),
-                    )
-                )
-
-        return foast.ExternalImport(symbols=symbols, location=self._make_loc(node))
 
     def visit_arguments(self, node: ast.arguments) -> list[foast.DataSymbol]:
         return [self.visit_arg(arg) for arg in node.args]
 
     def visit_arg(self, node: ast.arg) -> foast.DataSymbol:
-        if (annotation := self.captured_vars.annotations.get(node.arg, None)) is None:
+        if (annotation := self.annotations.get(node.arg, None)) is None:
             raise FieldOperatorSyntaxError.from_AST(node, msg="Untyped parameters not allowed!")
         new_type = symbol_makers.make_symbol_type_from_typing(annotation)
         if not isinstance(new_type, ct.DataType):
@@ -240,12 +219,9 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             assert isinstance(
                 node.annotation, ast.Constant
             ), "Annotations should be ast.Constant(string). Use StringifyAnnotationsPass"
-            globalns = {**fbuiltins.BUILTINS, **self.captured_vars.globals}
-            localns = self.captured_vars.nonlocals
-            annotation = eval(node.annotation.value, globalns, localns)
-            target_type = symbol_makers.make_symbol_type_from_typing(
-                annotation, globalns=globalns, localns=localns
-            )
+            context = {**fbuiltins.BUILTINS, **self.closure_vars}
+            annotation = eval(node.annotation.value, context)
+            target_type = symbol_makers.make_symbol_type_from_typing(annotation, globalns=context)
         else:
             target_type = ct.DeferredSymbolType()
 

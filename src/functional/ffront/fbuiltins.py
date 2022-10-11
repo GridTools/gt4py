@@ -67,11 +67,11 @@ where = BuiltInFunction(
     ct.FunctionType(
         args=[
             ct.DeferredSymbolType(constraint=ct.FieldType),
-            ct.DeferredSymbolType(constraint=(ct.FieldType, ct.ScalarType)),
-            ct.DeferredSymbolType(constraint=(ct.FieldType, ct.ScalarType)),
+            ct.DeferredSymbolType(constraint=(ct.FieldType, ct.ScalarType, ct.TupleType)),
+            ct.DeferredSymbolType(constraint=(ct.FieldType, ct.ScalarType, ct.TupleType)),
         ],
         kwargs={},
-        returns=ct.DeferredSymbolType(constraint=ct.FieldType),
+        returns=ct.DeferredSymbolType(constraint=(ct.FieldType, ct.TupleType)),
     )
 )
 
@@ -181,10 +181,6 @@ FUN_BUILTIN_NAMES = [
     "broadcast",
     "where",
 ] + MATH_BUILTIN_NAMES
-
-
-EXTERNALS_MODULE_NAME = "__externals__"
-MODULE_BUILTIN_NAMES = [EXTERNALS_MODULE_NAME]
 
 BUILTIN_NAMES = TYPE_BUILTIN_NAMES + FUN_BUILTIN_NAMES
 
