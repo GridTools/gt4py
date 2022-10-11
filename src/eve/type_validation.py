@@ -493,7 +493,7 @@ class SimpleTypeValidatorFactory(TypeValidatorFactory):
 
 simple_type_validator_factory: Final = cast(
     TypeValidatorFactory,
-    utils.optional_lru_cache(SimpleTypeValidatorFactory(), typed=True),  # type: ignore[arg-type]
+    utils.optional_lru_cache(SimpleTypeValidatorFactory(), typed=True),
 )
 """Public (with optional cache) entry point for :class:`SimpleTypeValidatorFactory`."""
 

@@ -13,7 +13,7 @@
 
 
 try:
-    from atlas4py import IrregularConnectivity
+    from atlas4py import IrregularConnectivity  # type: ignore[import]
 except ImportError:
     IrregularConnectivity = None
 

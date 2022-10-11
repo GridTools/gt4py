@@ -1,13 +1,15 @@
+import dataclasses
 from collections.abc import Callable
 from functools import partial
 from typing import Optional, Union, cast
 
 from eve import NodeTranslator
-from eve.utils import UIDs
+from eve.utils import UIDGenerator
 from functional.iterator import ir
 from functional.iterator.transforms.remap_symbols import RemapSymbolRefs
 
 
+@dataclasses.dataclass(frozen=True)
 class PopupTmps(NodeTranslator):
     """Transformation for “popping up” nested lifts to lambda arguments.
 
@@ -21,6 +23,10 @@ class PopupTmps(NodeTranslator):
     as we can not pop the expression to be a closure input (because closures
     just take unmodified fencil arguments as inputs).
     """
+
+    # we use one UID generator per instance such that the generated ids are
+    #  stable across multiple runs (required for caching to properly work)
+    uids: UIDGenerator = dataclasses.field(init=False, repr=False, default_factory=UIDGenerator)
 
     @staticmethod
     def _extract_lambda(
@@ -153,7 +159,7 @@ class PopupTmps(NodeTranslator):
 
             # if this is the first time we lift that expression, create a new
             # symbol for it and register it so the parent node knows about it
-            ref = ir.SymRef(id=UIDs.sequential_id(prefix="_lift"))
+            ref = ir.SymRef(id=self.uids.sequential_id(prefix="_lift"))
             lifts[call] = ref
             return ref
         return self.generic_visit(node, lifts=lifts)

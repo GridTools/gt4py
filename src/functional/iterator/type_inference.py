@@ -163,12 +163,12 @@ class LetPolymorphic(Type):
     dtype: Type
 
 
-BOOL_DTYPE = Primitive(name="bool")  # type: ignore [call-arg]
-INT_DTYPE = Primitive(name="int")  # type: ignore [call-arg]
-FLOAT_DTYPE = Primitive(name="float")  # type: ignore [call-arg]
-AXIS_DTYPE = Primitive(name="axis")  # type: ignore [call-arg]
-NAMED_RANGE_DTYPE = Primitive(name="named_range")  # type: ignore [call-arg]
-DOMAIN_DTYPE = Primitive(name="domain")  # type: ignore [call-arg]
+BOOL_DTYPE = Primitive(name="bool")
+INT_DTYPE = Primitive(name="int")
+FLOAT_DTYPE = Primitive(name="float")
+AXIS_DTYPE = Primitive(name="axis")
+NAMED_RANGE_DTYPE = Primitive(name="named_range")
+DOMAIN_DTYPE = Primitive(name="domain")
 
 # Some helpers to define the builtins’ types
 T0 = TypeVar.fresh()

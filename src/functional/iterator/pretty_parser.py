@@ -1,6 +1,6 @@
 from typing import Union
 
-import lark
+from lark import lark, lexer as lark_lexer, visitors as lark_visitors
 
 from functional.iterator import ir
 
@@ -73,23 +73,23 @@ GRAMMAR = """
 """
 
 
-@lark.v_args(inline=True)
-class ToIrTransformer(lark.Transformer):
-    def SYM(self, value: lark.Token) -> ir.Sym:
+@lark_visitors.v_args(inline=True)
+class ToIrTransformer(lark_visitors.Transformer):
+    def SYM(self, value: lark_lexer.Token) -> ir.Sym:
         return ir.Sym(id=value.value)
 
-    def SYM_REF(self, value: lark.Token) -> Union[ir.SymRef, ir.Literal]:
+    def SYM_REF(self, value: lark_lexer.Token) -> Union[ir.SymRef, ir.Literal]:
         if value.value in ("True", "False"):
             return ir.Literal(value=value.value, type="bool")
         return ir.SymRef(id=value.value)
 
-    def INT_LITERAL(self, value: lark.Token) -> ir.Literal:
+    def INT_LITERAL(self, value: lark_lexer.Token) -> ir.Literal:
         return ir.Literal(value=value.value, type="int")
 
-    def FLOAT_LITERAL(self, value: lark.Token) -> ir.Literal:
+    def FLOAT_LITERAL(self, value: lark_lexer.Token) -> ir.Literal:
         return ir.Literal(value=value.value, type="float")
 
-    def OFFSET_LITERAL(self, value: lark.Token) -> ir.OffsetLiteral:
+    def OFFSET_LITERAL(self, value: lark_lexer.Token) -> ir.OffsetLiteral:
         v: Union[int, str] = value.value[:-1]
         try:
             v = int(v)
@@ -97,10 +97,10 @@ class ToIrTransformer(lark.Transformer):
             pass
         return ir.OffsetLiteral(value=v)
 
-    def ID_NAME(self, value: lark.Token) -> str:
+    def ID_NAME(self, value: lark_lexer.Token) -> str:
         return value.value
 
-    def AXIS_NAME(self, value: lark.Token) -> ir.AxisLiteral:
+    def AXIS_NAME(self, value: lark_lexer.Token) -> ir.AxisLiteral:
         return ir.AxisLiteral(value=value.value)
 
     def lam(self, *args: ir.Node) -> ir.Lambda:

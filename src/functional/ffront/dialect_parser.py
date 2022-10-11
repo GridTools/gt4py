@@ -11,46 +11,18 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-from __future__ import annotations
-
 import ast
 import textwrap
-import types
+import typing
 from dataclasses import dataclass
+from typing import Callable
 
 from eve.concepts import SourceLocation
 from eve.extended_typing import Any, ClassVar, Generic, Optional, Type, TypeVar
 from functional import common
 from functional.ffront.ast_passes.fix_missing_locations import FixMissingLocations
 from functional.ffront.ast_passes.remove_docstrings import RemoveDocstrings
-from functional.ffront.source_utils import CapturedVars, SourceDefinition, SymbolNames
-
-
-def _assert_source_invariants(source_definition: SourceDefinition, captured_vars: CapturedVars):
-    """
-    Validate information contained in the source agrees with our expectations.
-
-    No error should ever originate from this function. This is merely double
-    checking what is already done using ast nodes in the visitor.
-    """
-    source, filename, starting_line = source_definition
-    _, _, imported_names, nonlocal_names, global_names = SymbolNames.from_source(source, filename)
-    if missing_defs := (captured_vars.unbound - imported_names):
-        raise AssertionError(f"Missing symbol definitions: {missing_defs}")
-
-    # 'SymbolNames.from_source()' uses the symtable module to analyze the isolated source
-    # code of the function, and thus all non-local symbols are classified as 'global'.
-    # However, 'captured_vars' comes from inspecting the live function object, which might
-    # have not been defined at a global scope, and therefore actual symbol values could appear
-    # in both 'captured_vars.globals' and 'self.captured_vars.nonlocals'.
-    if (
-        diff := (set(captured_vars.globals) | set(captured_vars.nonlocals))
-        - (global_names | nonlocal_names)
-        - {"__builtins__"}
-    ):
-        raise AssertionError(
-            f"CapturedVars do not agree with information from symtable module. {diff}"
-        )
+from functional.ffront.source_utils import SourceDefinition, get_closure_vars_from_function
 
 
 DialectRootT = TypeVar("DialectRootT")
@@ -96,18 +68,17 @@ class DialectSyntaxError(common.GTSyntaxError):
 @dataclass(frozen=True, kw_only=True)
 class DialectParser(ast.NodeVisitor, Generic[DialectRootT]):
     source_definition: SourceDefinition
-    captured_vars: CapturedVars
-    externals_defs: dict[str, Any]
-
+    closure_vars: dict[str, Any]
+    annotations: dict[str, Any]
     syntax_error_cls: ClassVar[Type[DialectSyntaxError]] = DialectSyntaxError
 
     @classmethod
     def apply(
         cls,
         source_definition: SourceDefinition,
-        captured_vars: CapturedVars,
-        externals: Optional[dict[str, Any]] = None,
-    ) -> DialectRootT:  # type: ignore[valid-type]  # used to work, now mypy is going berserk for unknown reasons
+        closure_vars: dict[str, Any],
+        annotations: dict[str, Any],
+    ) -> DialectRootT:
 
         source, filename, starting_line = source_definition
         try:
@@ -118,12 +89,11 @@ class DialectParser(ast.NodeVisitor, Generic[DialectRootT]):
             output_ast = cls._postprocess_dialect_ast(
                 cls(
                     source_definition=source_definition,
-                    captured_vars=captured_vars,
-                    externals_defs=externals or {},
-                ).visit(cls._preprocess_definition_ast(definition_ast))
+                    closure_vars=closure_vars,
+                    annotations=annotations,
+                ).visit(cls._preprocess_definition_ast(definition_ast)),
+                annotations,
             )
-            if __debug__:
-                _assert_source_invariants(source_definition, captured_vars)
         except SyntaxError as err:
             # The ast nodes do not contain information about the path of the
             #  source file or its contents. We add this information here so
@@ -138,22 +108,21 @@ class DialectParser(ast.NodeVisitor, Generic[DialectRootT]):
         return output_ast
 
     @classmethod
+    def apply_to_function(cls, function: Callable):
+        src = SourceDefinition.from_function(function)
+        closure_vars = get_closure_vars_from_function(function)
+        annotations = typing.get_type_hints(function)
+        return cls.apply(src, closure_vars, annotations)
+
+    @classmethod
     def _preprocess_definition_ast(cls, definition_ast: ast.AST) -> ast.AST:
         return definition_ast
 
     @classmethod
-    def _postprocess_dialect_ast(cls, output_ast: DialectRootT) -> DialectRootT:  # type: ignore[valid-type]  # used to work, now mypy is going berserk for unknown reasons
+    def _postprocess_dialect_ast(
+        cls, output_ast: DialectRootT, annotations: dict[str, Any]
+    ) -> DialectRootT:
         return output_ast
-
-    @classmethod
-    def apply_to_function(
-        cls,
-        func: types.FunctionType,
-        externals: Optional[dict[str, Any]] = None,
-    ) -> DialectRootT:  # type: ignore[valid-type]  # used to work, now mypy is going berserk for unknown reasons
-        source_definition = SourceDefinition.from_function(func)
-        captured_vars = CapturedVars.from_function(func)
-        return cls.apply(source_definition, captured_vars, externals)
 
     def generic_visit(self, node: ast.AST) -> None:
         raise self.syntax_error_cls.from_AST(

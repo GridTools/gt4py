@@ -16,7 +16,7 @@ from __future__ import annotations
 from typing import Optional
 
 from eve import NodeTranslator, concepts, traits
-from functional.common import DimensionKind, GridType, GTTypeError
+from functional.common import Dimension, DimensionKind, GridType, GTTypeError
 from functional.ffront import common_types, program_ast as past, type_info
 from functional.iterator import ir as itir
 
@@ -123,10 +123,13 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
     def _visit_stencil_call(self, node: past.Call, **kwargs) -> itir.StencilClosure:
         assert type_info.is_field_type_or_tuple_of_field_type(node.kwargs["out"].type)
 
-        output, domain = self._visit_stencil_call_out_arg(node.kwargs["out"], **kwargs)
+        domain = node.kwargs.get("domain", None)
+        output, lowered_domain = self._visit_stencil_call_out_arg(
+            node.kwargs["out"], domain, **kwargs
+        )
 
         return itir.StencilClosure(
-            domain=domain,
+            domain=lowered_domain,
             stencil=itir.SymRef(id=node.func.id),
             inputs=[itir.SymRef(id=self.visit(arg, **kwargs).id) for arg in node.args],
             output=output,
@@ -172,21 +175,28 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             )
 
     def _construct_itir_domain_arg(
-        self, out_field: past.Name, slices: Optional[list[past.Slice]] = None
-    ) -> itir.FunCall:
+        self,
+        out_field: past.Name,
+        node_domain: Optional[past.Dict],
+        slices: Optional[list[past.Slice]] = None,
+    ):
         domain_args = []
         for dim_i, dim in enumerate(out_field.type.dims):
             # an expression for the size of a dimension
             dim_size = itir.SymRef(id=_size_arg_from_field(out_field.id, dim_i))
             # bounds
-            lower = self._visit_slice_bound(
-                slices[dim_i].lower if slices else None,
-                itir.Literal(value="0", type="int"),
-                dim_size,
-            )
-            upper = self._visit_slice_bound(
-                slices[dim_i].upper if slices else None, dim_size, dim_size
-            )
+            if node_domain is not None:
+                lower, upper = self._construct_itir_initialized_domain_arg(dim_i, dim, node_domain)
+            else:
+                lower = self._visit_slice_bound(
+                    slices[dim_i].lower if slices else None,
+                    itir.Literal(value="0", type="int"),
+                    dim_size,
+                )
+                upper = self._visit_slice_bound(
+                    slices[dim_i].upper if slices else None, dim_size, dim_size
+                )
+
             if dim.kind == DimensionKind.LOCAL:
                 raise GTTypeError(f"Dimension {dim.value} must not be local.")
             domain_args.append(
@@ -204,6 +214,21 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             raise AssertionError()
 
         return itir.FunCall(fun=itir.SymRef(id=domain_builtin), args=domain_args)
+
+    def _construct_itir_initialized_domain_arg(
+        self,
+        dim_i: int,
+        dim: Dimension,
+        node_domain: past.Dict,
+    ) -> tuple[itir.SymRef | itir.Literal, itir.SymRef | itir.Literal]:
+        if node_domain.keys_[dim_i].type.dim == dim:
+            assert len(node_domain.values_[dim_i].elts) == 2
+            return (self.visit(bound, as_ref=True) for bound in node_domain.values_[dim_i].elts)
+        else:
+            raise GTTypeError(
+                f"Dimensions in out field and field domain are not equivalent"
+                f"Expected {dim}, but got {node_domain.keys_[dim_i].type.dim} "
+            )
 
     @staticmethod
     def _compute_field_slice(node: past.Subscript):
@@ -226,20 +251,25 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         return out_field_slice_
 
     def _visit_stencil_call_out_arg(
-        self, node: past.Expr, **kwargs
+        self, out_arg: past.Expr, domain_arg: past.Dict | None, **kwargs
     ) -> tuple[itir.SymRef, itir.FunCall]:
-        if isinstance(node, past.Subscript):
+        if isinstance(out_arg, past.Subscript):
             # as the ITIR does not support slicing a field we have to do a deeper
             #  inspection of the PAST to emulate the behaviour
-            out_field_name: past.Name = node.value
+            out_field_name: past.Name = out_arg.value
             return (
                 self._construct_itir_out_arg(out_field_name),
-                self._construct_itir_domain_arg(out_field_name, self._compute_field_slice(node)),
+                self._construct_itir_domain_arg(
+                    out_field_name, domain_arg, self._compute_field_slice(out_arg)
+                ),
             )
-        elif isinstance(node, past.Name):
-            return (self._construct_itir_out_arg(node), self._construct_itir_domain_arg(node))
-        elif isinstance(node, past.TupleExpr):
-            flattened = _flatten_tuple_expr(node)
+        elif isinstance(out_arg, past.Name):
+            return (
+                self._construct_itir_out_arg(out_arg),
+                self._construct_itir_domain_arg(out_arg, domain_arg),
+            )
+        elif isinstance(out_arg, past.TupleExpr):
+            flattened = _flatten_tuple_expr(out_arg)
 
             first_field = flattened[0]
             assert all(
@@ -258,8 +288,8 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                 first_field = first_field.value
 
             return (
-                self._construct_itir_out_arg(node),
-                self._construct_itir_domain_arg(first_field, field_slice),
+                self._construct_itir_out_arg(out_arg),
+                self._construct_itir_domain_arg(first_field, domain_arg, field_slice),
             )
         else:
             raise AssertionError(
@@ -280,5 +310,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
 
         raise NotImplementedError("Only scalar literals supported currently.")
 
-    def visit_Name(self, node: past.Name, **kwargs) -> itir.Sym:
+    def visit_Name(self, node: past.Name, as_ref=False, **kwargs) -> itir.SymRef | itir.Sym:
+        if as_ref:
+            return itir.SymRef(id=node.id)
         return itir.Sym(id=node.id)

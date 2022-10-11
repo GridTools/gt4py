@@ -179,7 +179,12 @@ class Column(np.lib.mixins.NDArrayOperatorsMixin):
         self.data = data
 
     def __getitem__(self, i: int) -> Any:
-        return self.data[i - self.kstart]
+        result = self.data[i - self.kstart]
+        # if the element type is a tuple return a regular type instead of a
+        #  numpy type
+        if self.data.dtype.names:
+            return tuple(result)
+        return result
 
     def tuple_get(self, i: int) -> Column:
         if self.data.dtype.names:
@@ -369,6 +374,11 @@ Domain: TypeAlias = CartesianDomain | UnstructuredDomain | dict[str | Dimension,
 
 @builtins.named_range.register(EMBEDDED)
 def named_range(tag: Tag | Dimension, start: int, end: int) -> NamedRange:
+    # TODO revisit this pattern after the discussion of 0d-field vs scalar
+    if isinstance(start, ConstantField):
+        start = start.value
+    if isinstance(end, ConstantField):
+        end = end.value
     return (tag, range(start, end))
 
 
@@ -469,7 +479,7 @@ def execute_shift(
             if p is None:
                 new_entry[i] = index
                 break
-        return pos | {tag: new_entry}  # type: ignore [dict-item] # mypy is confused
+        return pos | {tag: new_entry}
 
     assert tag in offset_provider
     offset_implementation = offset_provider[tag]
@@ -561,6 +571,12 @@ class Undefined:
             "__pow__",
             "__lshift__",
             "__rshift__",
+            "__lt__",
+            "__le__",
+            "__gt__",
+            "__ge__",
+            "__eq__",
+            "__ne__",
             "__and__",
             "__xor__",
             "__or__",
@@ -863,7 +879,7 @@ class IndexField(LocatedField):
         return (self.axis,)
 
 
-def index_field(axis: Dimension, dtype: npt.DTypeLike = float) -> LocatedField:
+def index_field(axis: Dimension, dtype: npt.DTypeLike = int) -> LocatedField:
     return IndexField(axis, dtype)
 
 
@@ -995,8 +1011,6 @@ class TupleOfFields(TupleField):
             raise TypeError("Can only be instantiated with a tuple of fields")
         self.data = data
         axeses = _get_axeses(data)
-        if not all(axes == axeses[0] for axes in axeses):
-            raise TypeError("All fields in the tuple need the same axes.")
         self.axes = axeses[0]
 
     def __getitem__(self, indices):

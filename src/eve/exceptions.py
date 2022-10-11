@@ -19,7 +19,7 @@
 
 from __future__ import annotations
 
-from .extended_typing import Any, Dict
+from .extended_typing import Any, Dict, Optional
 
 
 class EveError:
@@ -36,7 +36,7 @@ class EveError:
     message_template = "Generic Eve error [{info}]"
     info: Dict[str, Any]
 
-    def __init__(self, message: str = None, **kwargs: Any) -> None:
+    def __init__(self, message: Optional[str] = None, **kwargs: Any) -> None:
         self.info = kwargs
         super().__init__(  # type: ignore  # super() call works as expected when using multiple inheritance
             message
