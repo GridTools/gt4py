@@ -25,6 +25,7 @@ import numpy as np
 from dace.sdfg.utils import inline_sdfgs
 from dace.serialize import dumps
 from dace.transformation.dataflow import TrivialMapElimination
+from dace.transformation.interstate import InlineTransients
 
 from eve import codegen
 from eve.codegen import MakoTemplate as as_mako
@@ -134,8 +135,10 @@ def _set_tile_sizes(sdfg: dace.SDFG):
     ):
         if node.device == dace.DeviceType.GPU:
             node.tile_sizes = {dcir.Axis.I: 64, dcir.Axis.J: 8, dcir.Axis.K: 8}
+            node.tile_sizes_interpretation = "shape"
         else:
             node.tile_sizes = {dcir.Axis.I: 8, dcir.Axis.J: 8, dcir.Axis.K: 8}
+            node.tile_sizes_interpretation = "strides"
 
 
 def _to_device(sdfg: dace.SDFG, device: str) -> None:
@@ -167,13 +170,11 @@ def _pre_expand_trafos(gtir_pipeline: GtirPipeline, sdfg: dace.SDFG, layout_map)
     _set_expansion_orders(sdfg)
     _set_tile_sizes(sdfg)
     _specialize_transient_strides(sdfg, layout_map=layout_map)
+
     return sdfg
 
 
-def _post_expand_trafos(sdfg: dace.SDFG):
-    # DaCe "standard" clean-up transformations
-    sdfg.simplify(validate=False)
-
+def _eliminate_trivial_maps(sdfg: dace.SDFG):
     applied = True
     while applied:
         applied = False
@@ -195,17 +196,71 @@ def _post_expand_trafos(sdfg: dace.SDFG):
                             state.parent, map_entry=map_entry, verify=True
                         )
                         applied = True
-                        print("applied", map_entry.map.range)
                         break
                     except ValueError:
                         continue
+
+
+def _tile_local_temporaries(sdfg: dace.SDFG):
+    changed = True
+    while changed:
+        changed = False
+        for map_entry, state in filter(
+            lambda n: isinstance(n[0], dace.nodes.MapEntry), sdfg.all_nodes_recursive()
+        ):
+            nsdfg: dace.SDFG = state.parent
+            scope_subgraph = state.scope_subgraph(
+                map_entry, include_entry=False, include_exit=False
+            )
+            if len(scope_subgraph) > 1 or not isinstance(
+                scope_subgraph.nodes()[0], dace.nodes.NestedSDFG
+            ):
+                continue
+            nsdfg_node = scope_subgraph.nodes()[0]
+            inline_transients = InlineTransients()
+            inline_transients.setup_match(
+                nsdfg,
+                nsdfg.sdfg_id,
+                nsdfg.node_id(state),
+                {InlineTransients.nsdfg: state.node_id(nsdfg_node)},
+                expr_index=0,
+            )
+            if inline_transients.can_be_applied(state, expr_index=0, sdfg=nsdfg):
+                changed = True
+                toremove = InlineTransients._candidates(nsdfg, state, nsdfg_node)
+                InlineTransients.apply_to(nsdfg, nsdfg=nsdfg_node)
+                for name in toremove:
+                    array: dace.data.Array = nsdfg_node.sdfg.arrays[name]
+                    shape = [dace.symbolic.overapproximate(s) for s in array.shape]
+                    strides = [1]
+                    total_size = shape[0]
+                    for s in reversed(shape[1:]):
+                        strides = [s * strides[0], *strides]
+                        total_size *= s
+                    array.shape = shape
+                    array.strides = strides
+                    array.total_size = total_size
+                    array.storage = dace.StorageType.CPU_ThreadLocal
+                    array.lifetime = dace.AllocationLifetime.Persistent
+
+
+def _post_expand_trafos(sdfg: dace.SDFG):
+    # DaCe "standard" clean-up transformations
+    sdfg.simplify(validate=False)
+
+    _eliminate_trivial_maps(sdfg)
+
     # Only has effect if schedule is CPU_Multicore,
     # setting node.collapse causes the omp parallel statement to include collapse(n)
-    for node, _ in sdfg.all_nodes_recursive():
-        if isinstance(node, dace.nodes.MapEntry):
-            node.collapse = len(node.range)
-            if node.schedule == dace.ScheduleType.CPU_Multicore and len(node.range) <= 1:
-                node.schedule = dace.ScheduleType.Sequential
+    for node, _ in filter(
+        lambda n: isinstance(n[0], dace.nodes.MapEntry), sdfg.all_nodes_recursive()
+    ):
+        node.collapse = len(node.range)
+        if node.schedule == dace.ScheduleType.CPU_Multicore and len(node.range) <= 1:
+            node.schedule = dace.ScheduleType.Sequential
+
+    _tile_local_temporaries(sdfg)
+    sdfg.simplify()
 
 
 def _sdfg_add_arrays_and_edges(
@@ -478,16 +533,28 @@ class DaCeComputationCodegen:
     )
 
     def generate_tmp_allocs(self, sdfg):
-        fmt = "dace_handle.{name} = allocate(allocator, gt::meta::lazy::id<{dtype}>(), {size})();"
-        return [
-            fmt.format(
-                name=f"__{array_sdfg.sdfg_id}_{name}",
+        global_fmt = "dace_handle.__{sdfg_id}_{name} = allocate(allocator, gt::meta::lazy::id<{dtype}>(), {size})();"
+        threadlocal_fmt = """#pragma omp parallel
+{{
+#pragma omp single
+{{
+dace_handle.__{sdfg_id}_{name} = allocate(allocator, gt::meta::lazy::id<{dtype}>(), omp_get_num_threads() * ({size}))();
+}}
+{name} = dace_handle.__{sdfg_id}_{name} + omp_get_thread_num() * ({size});
+}}"""
+        res = [
+            (
+                global_fmt if array.storage != dace.StorageType.CPU_ThreadLocal else threadlocal_fmt
+            ).format(
+                name=name,
+                sdfg_id=array_sdfg.sdfg_id,
                 dtype=array.dtype.ctype,
                 size=array.total_size,
             )
             for array_sdfg, name, array in sdfg.arrays_recursive()
             if array.transient and array.lifetime == dace.AllocationLifetime.Persistent
         ]
+        return [line for r in res for line in r.split("\n")]
 
     @staticmethod
     def _postprocess_dace_code(code_objects, is_gpu, builder):
@@ -548,7 +615,8 @@ class DaCeComputationCodegen:
             f"""#include <gridtools/sid/sid_shift_origin.hpp>
                              #include <gridtools/sid/allocator.hpp>
                              #include <gridtools/stencil/cartesian.hpp>
-                             {"#include <gridtools/common/cuda_util.hpp>" if is_gpu else ""}
+                             {"#include <gridtools/common/cuda_util.hpp>" if is_gpu else "#include <omp.h>"}
+                             #include <iostream>
                              namespace gt = gridtools;
                              {computations}
 
