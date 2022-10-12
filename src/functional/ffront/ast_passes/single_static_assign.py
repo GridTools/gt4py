@@ -96,6 +96,20 @@ class SingleStaticAssignPass(ast.NodeTransformer):
     def _rename(self, node):
         return self.RhsRenamer.apply(self.name_counter, self.separator, node)
 
+    def visit_FunctionDef(self, node: ast.FunctionDef):
+
+        # For practical purposes, this is sufficient, but really not general at all.
+        # However, the algorithm was never intended to be general.
+
+        pre_assigns: list[ast.stmt] = [
+            _make_assign(arg.arg, arg.arg, arg) for arg in node.args.args
+        ]
+        # This forces versioning for parameters which is required for if-stmt support
+        node.body = pre_assigns + node.body
+        node.body = [self.visit(stmt) for stmt in node.body]
+
+        return node
+
     def visit_If(self, node: ast.If):
         prev_name_counter = self.name_counter
 
