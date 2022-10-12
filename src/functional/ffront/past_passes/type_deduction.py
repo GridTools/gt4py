@@ -31,7 +31,7 @@ def _ensure_no_sliced_field(entry: past.Expr):
             _ensure_no_sliced_field(param)
 
 
-def _is_integral_scalar(scalar_type: past.Expr) -> bool:
+def _is_integral_scalar(expr: past.Expr) -> bool:
     """Check that expression is an integral scalar."""
     return isinstance(scalar_type.type, ct.ScalarType) and type_info.is_integral(scalar_type.type)
 
