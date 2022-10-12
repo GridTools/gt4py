@@ -21,7 +21,8 @@ def _make_assign(target: str, source: str, location_node: ast.AST):
     result = ast.Assign(
         targets=[ast.Name(ctx=ast.Store(), id=target)], value=ast.Name(ctx=ast.Load(), id=source)
     )
-    ast.copy_location(result, location_node)
+    for node in ast.walk(result):
+        ast.copy_location(node, location_node)
     return result
 
 
