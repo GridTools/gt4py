@@ -24,6 +24,7 @@ import dace.data
 import numpy as np
 from dace.sdfg.utils import inline_sdfgs
 from dace.serialize import dumps
+from dace.transformation.dataflow import TrivialMapElimination
 
 from eve import codegen
 from eve.codegen import MakoTemplate as as_mako
@@ -173,11 +174,38 @@ def _post_expand_trafos(sdfg: dace.SDFG):
     # DaCe "standard" clean-up transformations
     sdfg.simplify(validate=False)
 
+    applied = True
+    while applied:
+        applied = False
+        for map_entry, state in sdfg.all_nodes_recursive():
+            if isinstance(map_entry, dace.nodes.MapEntry):
+                if map_entry.map.schedule in {
+                    dace.ScheduleType.Sequential,
+                    dace.ScheduleType.CPU_Multicore,
+                }:
+                    # exclude maps with empty edges as workaround for a bug in TrivialMapElimination
+                    if any(
+                        edge.data.data is None
+                        for edge in state.in_edges(map_entry)
+                        + state.out_edges(state.exit_node(map_entry))
+                    ):
+                        continue
+                    try:
+                        TrivialMapElimination.apply_to(
+                            state.parent, map_entry=map_entry, verify=True
+                        )
+                        applied = True
+                        print("applied", map_entry.map.range)
+                        break
+                    except ValueError:
+                        continue
     # Only has effect if schedule is CPU_Multicore,
     # setting node.collapse causes the omp parallel statement to include collapse(n)
     for node, _ in sdfg.all_nodes_recursive():
         if isinstance(node, dace.nodes.MapEntry):
             node.collapse = len(node.range)
+            if node.schedule == dace.ScheduleType.CPU_Multicore and len(node.range) <= 1:
+                node.schedule = dace.ScheduleType.Sequential
 
 
 def _sdfg_add_arrays_and_edges(
