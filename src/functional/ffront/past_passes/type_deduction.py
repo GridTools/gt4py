@@ -14,8 +14,6 @@
 from eve import NodeTranslator, traits
 from functional.common import GTTypeError
 from functional.ffront import common_types as ct, program_ast as past, type_info
-from functional.ffront.symbol_makers import make_symbol_type_from_value
-from typing import Any
 
 
 def _ensure_no_sliced_field(entry: past.Expr):

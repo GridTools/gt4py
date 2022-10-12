@@ -53,8 +53,10 @@ from functional.ffront.foast_to_itir import FieldOperatorLowering
 from functional.ffront.func_to_foast import FieldOperatorParser
 from functional.ffront.func_to_past import ProgramParser
 from functional.ffront.gtcallable import GTCallable
+from functional.ffront.past_passes.closure_var_type_deduction import (
+    ClosureVarTypeDeduction as PClosureVarTypeDeduction,
+)
 from functional.ffront.past_passes.type_deduction import ProgramTypeDeduction, ProgramTypeError
-from functional.ffront.past_passes.closure_var_type_deduction import ClosureVarTypeDeduction as PClosureVarTypeDeduction
 from functional.ffront.past_to_itir import ProgramLowering
 from functional.ffront.source_utils import SourceDefinition, get_closure_vars_from_function
 from functional.iterator import ir as itir
@@ -504,12 +506,12 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
                 namespace=ct.Namespace.CLOSURE,
                 location=loc,
             ),
-            *[past.Symbol(id=sym.id,
-                          type=sym.type,
-                          namespace=ct.Namespace.CLOSURE,
-                          location=sym.location)
+            *[
+                past.Symbol(
+                    id=sym.id, type=sym.type, namespace=ct.Namespace.CLOSURE, location=sym.location
+                )
                 for sym in self.foast_node.definition.closure_vars
-              ]
+            ],
         ]
 
         untyped_past_node = past.Program(

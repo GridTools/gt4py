@@ -35,10 +35,10 @@ from functional.ffront.ast_passes import (
     UnpackedAssignPass,
 )
 from functional.ffront.dialect_parser import DialectParser, DialectSyntaxError
-from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduction
 from functional.ffront.foast_passes.closure_var_folding import ClosureVarFolding
-from functional.ffront.foast_passes.dead_closure_var_elimination import DeadClosureVarElimination
 from functional.ffront.foast_passes.closure_var_type_deduction import ClosureVarTypeDeduction
+from functional.ffront.foast_passes.dead_closure_var_elimination import DeadClosureVarElimination
+from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduction
 
 
 class FieldOperatorSyntaxError(DialectSyntaxError):
@@ -96,7 +96,10 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
 
     @classmethod
     def _postprocess_dialect_ast(
-        cls, foast_node: foast.FieldOperator, closure_vars: dict[str, Any], annotations: dict[str, Any]
+        cls,
+        foast_node: foast.FieldOperator,
+        closure_vars: dict[str, Any],
+        annotations: dict[str, Any],
     ) -> foast.FieldOperator:
         foast_node = ClosureVarFolding.apply(foast_node, closure_vars)
         foast_node = DeadClosureVarElimination.apply(foast_node)
@@ -157,7 +160,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
         closure_var_symbols, skip_names = self._builtin_type_constructor_symbols(
             self.closure_vars, self._make_loc(node)
         )
-        for name, val in self.closure_vars.items():
+        for name, _ in self.closure_vars.items():
             if name in skip_names:
                 continue
             closure_var_symbols.append(

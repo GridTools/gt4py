@@ -25,15 +25,14 @@ import re
 
 import pytest
 
+from eve.pattern_matching import ObjectPattern as P
 from functional.common import Field, GTTypeError
-from functional.ffront import common_types
+from functional.ffront import common_types, field_operator_ast as foast
 from functional.ffront.fbuiltins import Dimension, float32, float64, int32, int64, where
 from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError
 from functional.ffront.func_to_foast import FieldOperatorParser, FieldOperatorSyntaxError
 from functional.ffront.symbol_makers import TypingError
-from functional.ffront import field_operator_ast as foast
 from functional.iterator import ir as itir
-from eve.pattern_matching import ObjectPattern as P
 from functional.iterator.builtins import (
     and_,
     deref,
@@ -243,6 +242,7 @@ def test_conditional_wrong_arg_type():
 # --- External symbols ---
 def test_closure_symbols():
     import numpy as np
+
     from eve.utils import ConstantNamespace
 
     nonlocal_unused = ConstantNamespace(v=0)
@@ -264,23 +264,11 @@ def test_closure_symbols():
         body=[
             P(
                 foast.Assign,
-                value=P(
-                    foast.BinOp,
-                    right=P(
-                        foast.Constant,
-                        value=nonlocal_float.v
-                    )
-                ),
+                value=P(foast.BinOp, right=P(foast.Constant, value=nonlocal_float.v)),
             ),
             P(
                 foast.Assign,
-                value=P(
-                    foast.BinOp,
-                    right=P(
-                        foast.Constant,
-                        value=nonlocal_np_scalar.v
-                    )
-                ),
+                value=P(foast.BinOp, right=P(foast.Constant, value=nonlocal_np_scalar.v)),
             ),
             P(foast.Return),
         ],

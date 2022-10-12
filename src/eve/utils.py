@@ -583,7 +583,9 @@ class ConstantNamespace(Namespace[T]):
 
     def __setattr__(self, __name: str, __value: Any) -> None:
         if hasattr(self, __name):
-            raise TypeError(f"Trying to modify immutable member '{__name}' of a '{self.__class__.__name__}'.")
+            raise TypeError(
+                f"Trying to modify immutable member '{__name}' of a '{self.__class__.__name__}'."
+            )
         if hasattr(self, "__cached_hash_value__"):
             object.__delattr__(self, "__cached_hash_value__")
         self.__dict__[__name] = __value
@@ -600,6 +602,7 @@ class ConstantNamespace(Namespace[T]):
 
 class FrozenNamespace(ConstantNamespace[T]):
     """A `ConstantNamespace` that cannot be modified by adding new constant attributes."""
+
     def __setattr__(self, __name: str, __value: Any) -> None:
         raise TypeError(f"Trying to modify immutable '{self.__class__.__name__}' instance.")
 

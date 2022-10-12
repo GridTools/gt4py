@@ -32,10 +32,11 @@ class ClosureVarTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator
         new_closure_vars: list[foast.Symbol] = []
         for sym in node.closure_vars:
             if sym.id in self.closure_vars and not isinstance(self.closure_vars[sym.id], type):
-                new_symbol = foast.Symbol(id=sym.id,
-                                          location=sym.location,
-                                          type=make_symbol_type_from_value(self.closure_vars[sym.id])
-                                          )
+                new_symbol: foast.Symbol = foast.Symbol(
+                    id=sym.id,
+                    location=sym.location,
+                    type=make_symbol_type_from_value(self.closure_vars[sym.id]),
+                )
                 new_closure_vars.append(new_symbol)
             else:
                 new_closure_vars.append(sym)

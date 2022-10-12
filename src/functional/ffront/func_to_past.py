@@ -19,8 +19,8 @@ from typing import Any, cast
 
 from functional.ffront import common_types, program_ast as past, symbol_makers
 from functional.ffront.dialect_parser import DialectParser, DialectSyntaxError
-from functional.ffront.past_passes.type_deduction import ProgramTypeDeduction
 from functional.ffront.past_passes.closure_var_type_deduction import ClosureVarTypeDeduction
+from functional.ffront.past_passes.type_deduction import ProgramTypeDeduction
 
 
 class ProgramSyntaxError(DialectSyntaxError):

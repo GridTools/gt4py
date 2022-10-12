@@ -28,7 +28,9 @@ class DeadClosureVarElimination(traits.VisitorWithSymbolTableTrait, NodeTranslat
         self.referenced_symbols.append(node.id)
         return node
 
-    def visit_FunctionDefinition(self, node: foast.FunctionDefinition, **kwargs: Any) -> foast.FunctionDefinition:
+    def visit_FunctionDefinition(
+        self, node: foast.FunctionDefinition, **kwargs: Any
+    ) -> foast.FunctionDefinition:
         self.referenced_symbols = []
         self.visit(node.body)
         referenced_closure_vars = [
@@ -36,10 +38,11 @@ class DeadClosureVarElimination(traits.VisitorWithSymbolTableTrait, NodeTranslat
             for closure_var in node.closure_vars
             if closure_var.id in self.referenced_symbols
         ]
-        return foast.FunctionDefinition(id=node.id,
-                                        params=node.params,
-                                        body=node.body,
-                                        closure_vars=referenced_closure_vars,
-                                        type=node.type,
-                                        location=node.location)
-
+        return foast.FunctionDefinition(
+            id=node.id,
+            params=node.params,
+            body=node.body,
+            closure_vars=referenced_closure_vars,
+            type=node.type,
+            location=node.location,
+        )
