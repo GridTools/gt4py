@@ -221,3 +221,335 @@ def test_nested_if_chain():
     ).strip()
 
     assert result == expected
+
+
+def test_if_branch_local():
+
+    result = ast.unparse(
+        ssaify_string(
+            """
+            if True:
+                a = 0
+                a = a + 1
+            else:
+                b = 1
+                b = b + 1
+            """
+        )
+    )
+
+    expected = textwrap.dedent(
+        """
+        if True:
+            a__0 = 0
+            a__1 = a__0 + 1
+        else:
+            b__0 = 1
+            b__1 = b__0 + 1
+        """
+    ).strip()
+
+    assert result == expected
+
+
+def test_if_only_one_branch():
+
+    result = ast.unparse(
+        ssaify_string(
+            """
+            if True:
+                a = 0
+            b = a
+            """
+        )
+    )
+
+    expected = textwrap.dedent(
+        """
+        if True:
+            a__0 = 0
+        b__0 = a
+        """
+    ).strip()
+
+    assert result == expected
+
+
+def test_if_only_one_branch_other():
+
+    result = ast.unparse(
+        ssaify_string(
+            """
+            if True:
+                a = 0
+            else:
+                c = 1
+            b = c
+            """
+        )
+    )
+
+    expected = textwrap.dedent(
+        """
+        if True:
+            a__0 = 0
+        else:
+            c__0 = 1
+        b__0 = c
+        """
+    ).strip()
+
+    assert result == expected
+
+
+def test_if_nested_all_branches_defined():
+
+    result = ast.unparse(
+        ssaify_string(
+            """
+            if True:
+                if True:
+                    a = 0
+                    a = a + 1
+                    a = a + 1
+                    a = a + 1
+                    a = a + 1
+                else:
+                    a = 0
+                    a = a + 1
+                    a = a + 1
+            else:
+                a = 0
+            """
+        )
+    )
+
+    expected = textwrap.dedent(
+        """
+        if True:
+            if True:
+                a__0 = 0
+                a__1 = a__0 + 1
+                a__2 = a__1 + 1
+                a__3 = a__2 + 1
+                a__4 = a__3 + 1
+            else:
+                a__0 = 0
+                a__1 = a__0 + 1
+                a__2 = a__1 + 1
+                a__4 = a__2
+        else:
+            a__0 = 0
+            a__4 = a__0
+        """
+    ).strip()
+
+    assert result == expected
+
+
+def test_elif_all_branches_defined():
+
+    result = ast.unparse(
+        ssaify_string(
+            """
+            if True:
+                a = 0
+                a = a + 1
+                a = a + 1
+                a = a + 1
+                a = a + 1
+            elif True:
+                a = 0
+                a = a + 1
+                a = a + 1
+            else:
+                a = 0
+            """
+        )
+    )
+
+    expected = textwrap.dedent(
+        """
+        if True:
+            a__0 = 0
+            a__1 = a__0 + 1
+            a__2 = a__1 + 1
+            a__3 = a__2 + 1
+            a__4 = a__3 + 1
+        else:
+            if True:
+                a__0 = 0
+                a__1 = a__0 + 1
+                a__2 = a__1 + 1
+            else:
+                a__0 = 0
+                a__2 = a__0
+            a__4 = a__2
+        """
+    ).strip()
+
+    assert result == expected
+
+
+def test_nested_ifs_single_change():
+
+    result = ast.unparse(
+        ssaify_string(
+            """
+            a = 0
+            if True:
+                b = 0
+            elif True:
+                if True:
+                    b = 1
+                else:
+                    if True:
+                        b = 2
+                        # because of this nested change, all branches need additions
+                        a = a + 1
+                    else:
+                        b = 3
+            else:
+                b = 4
+            """
+        )
+    )
+
+    expected = textwrap.dedent(
+        """
+        a__0 = 0
+        if True:
+            b__0 = 0
+            a__1 = a__0
+        elif True:
+            if True:
+                b__0 = 1
+                a__1 = a__0
+            elif True:
+                b__0 = 2
+                a__1 = a__0 + 1
+            else:
+                b__0 = 3
+                a__1 = a__0
+        else:
+            b__0 = 4
+            a__1 = a__0
+        """
+    ).strip()
+
+    assert result == expected
+
+
+def test_if_one_sided_inside_function():
+
+    result = ast.unparse(
+        ssaify_string(
+            """
+            def f(a):
+                if True:
+                    a = a + 1
+                return a
+            """
+        )
+    )
+
+    expected = textwrap.dedent(
+        """
+        def f(a):
+            a__0 = a
+            if True:
+                a__1 = a__0 + 1
+            else:
+                a__1 = a__0
+            return a__1
+        """
+    ).strip()
+
+    assert result == expected
+
+
+def test_if_preservers_definite_assignment_analysis1():
+
+    result = ast.unparse(
+        ssaify_string(
+            """
+            def f():
+                if True:
+                    a = 1
+                else:
+                    b = 0
+                return a, b
+            """
+        )
+    )
+
+    expected = textwrap.dedent(
+        """
+        def f():
+            if True:
+                a__0 = 1
+            else:
+                b__0 = 0
+            return (a, b)
+        """
+    ).strip()
+
+    assert result == expected
+
+
+def test_if_preservers_definite_assignment_analysis2():
+
+    result = ast.unparse(
+        ssaify_string(
+            """
+            def f():
+                if True:
+                    a = 1
+                else:
+                    a = 0
+                return a, b
+            """
+        )
+    )
+
+    expected = textwrap.dedent(
+        """
+        def f():
+            if True:
+                a__0 = 1
+            else:
+                a__0 = 0
+            return (a__0, b)
+        """
+    ).strip()
+
+    assert result == expected
+
+
+def test_if_preservers_definite_assignment_analysis3():
+
+    result = ast.unparse(
+        ssaify_string(
+            """
+            def f():
+                a = 0
+                if True:
+                    a = 1
+                return a, b
+            """
+        )
+    )
+
+    expected = textwrap.dedent(
+        """
+        def f():
+            a__0 = 0
+            if True:
+                a__1 = 1
+            else:
+                a__1 = a__0
+            return (a__1, b)
+        """
+    ).strip()
+
+    assert result == expected
