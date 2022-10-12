@@ -33,7 +33,7 @@ def _ensure_no_sliced_field(entry: past.Expr):
 
 def _is_integral_scalar(expr: past.Expr) -> bool:
     """Check that expression is an integral scalar."""
-    return isinstance(scalar_type.type, ct.ScalarType) and type_info.is_integral(scalar_type.type)
+    return isinstance(expr.type, ct.ScalarType) and type_info.is_integral(expr.type)
 
 
 def _validate_call_params(new_func: past.Name, new_kwargs: dict):
