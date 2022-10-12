@@ -110,6 +110,9 @@ class SingleStaticAssignPass(ast.NodeTransformer):
         orelse_name_counter = self.name_counter
 
         all_names = set(body_name_counter.keys()) & set(orelse_name_counter.keys())
+        # We can't continue with the name counter of the else branch,
+        # in case a variable was only defined in the else branch
+        self.name_counter = {}
 
         # ensure both branches conclude with the same unique names
         for name in all_names:
