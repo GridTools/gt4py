@@ -283,8 +283,8 @@ class Program:
     def _process_args(self, args: tuple, kwargs: dict) -> tuple[tuple, tuple, dict[str, Any]]:
         self._validate_args(*args, **kwargs)
 
-        initialized_domain = all(
-            "domain" in body_entry.kwargs for body_entry in self.past_node.body
+        initialized_domain = any(
+            "domain" not in body_entry.kwargs for body_entry in self.past_node.body
         )
 
         # extract size of all field arguments
@@ -297,7 +297,7 @@ class Program:
                     args[param_idx],
                     dtype=BUILTINS[dtype.kind.name.lower()],
                 )
-            if not initialized_domain and isinstance(param.type, ct.FieldType):
+            if initialized_domain and isinstance(param.type, ct.FieldType):
                 has_shape = hasattr(args[param_idx], "shape")
                 for dim_idx in range(0, len(param.type.dims)):
                     if has_shape:
