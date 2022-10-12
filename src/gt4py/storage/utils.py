@@ -14,12 +14,18 @@
 
 import math
 import numbers
-from typing import Any, Dict, Optional, Protocol, Tuple, Union
+from typing import Any, Dict, Iterable, Optional, Protocol, Sequence, Tuple, Union
 
 import numpy as np
 
 import gt4py.utils as gt_util
 
+
+if np.lib.NumpyVersion(np.__version__) >= "1.20.0":
+    from numpy.typing import ArrayLike, DTypeLike
+else:
+    ArrayLike = Any
+    DTypeLike = Any
 
 try:
     import cupy as cp
@@ -178,7 +184,13 @@ def allocate(aligned_index, shape, layout_map, dtype, alignment_bytes, allocate_
     return raw_buffer, field
 
 
-def allocate_gpu(aligned_index, shape, layout_map, dtype, alignment_bytes):
+def allocate_gpu(
+    shape: Sequence[int],
+    layout_map: Iterable[Optional[int]],
+    dtype: DTypeLike,
+    alignment_bytes: int,
+    aligned_index: Optional[Sequence[int]],
+) -> Tuple[cp.ndarray, cp.ndarray]:
     dtype = np.dtype(dtype)
     assert (
         alignment_bytes % dtype.itemsize
@@ -188,6 +200,9 @@ def allocate_gpu(aligned_index, shape, layout_map, dtype, alignment_bytes):
 
     order_idx = idx_from_order([i for i in layout_map if i is not None])
     padded_shape = compute_padded_shape(shape, items_per_alignment, order_idx)
+
+    if aligned_index is None:
+        aligned_index = [0] * len(shape)
 
     strides = strides_from_padded_shape(padded_shape, order_idx, itemsize)
     if len(order_idx) > 0:
@@ -217,7 +232,13 @@ def allocate_gpu(aligned_index, shape, layout_map, dtype, alignment_bytes):
     return device_raw_buffer, device_field
 
 
-def allocate_cpu(aligned_index, shape, layout_map, dtype, alignment_bytes):
+def allocate_cpu(
+    shape: Sequence[int],
+    layout_map: Iterable[Optional[int]],
+    dtype: DTypeLike,
+    alignment_bytes: int,
+    aligned_index: Optional[Sequence[int]],
+) -> Tuple[np.ndarray, np.ndarray]:
     dtype = np.dtype(dtype)
     assert (
         alignment_bytes % dtype.itemsize
@@ -227,6 +248,9 @@ def allocate_cpu(aligned_index, shape, layout_map, dtype, alignment_bytes):
 
     order_idx = idx_from_order([i for i in layout_map if i is not None])
     padded_shape = compute_padded_shape(shape, items_per_alignment, order_idx)
+
+    if aligned_index is None:
+        aligned_index = [0] * len(shape)
 
     strides = strides_from_padded_shape(padded_shape, order_idx, itemsize)
     if len(order_idx) > 0:
