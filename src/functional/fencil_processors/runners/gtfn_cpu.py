@@ -50,8 +50,6 @@ class GTFNExecutor(fpi.FencilExecutor):
 
         See ``FencilExecutorFunction`` for details.
         """
-        import pytest
-        pytest.skip()
         # TODO(ricoh): a pipeline runner might enhance readability as well as discourage
         #  custom logic between steps.
         return build.CMakeProject(

@@ -1233,15 +1233,15 @@ def test_undefined_symbols():
 
 
 def test_constant_closure_vars():
-    @dataclasses.dataclass
-    class Constants:
-        PI: np.float32 = np.float32(3.142)
-        E: np.float32 = np.float32(2.718)
-    constants = Constants()
+    from eve.utils import ConstantNamespace
+
+    constants = ConstantNamespace()
+    constants.PI = np.float32(3.142)
+    constants.E = np.float32(2.718)
 
     @field_operator
     def consume_constants(input: Field[[IDim], np.float32]) -> Field[[IDim], np.float32]:
-        return constants.PI * constants.E * input;
+        return constants.PI * constants.E * input
 
     input = np_as_located_field(IDim)(np.ones((1, ), dtype=np.float32))
     output = np_as_located_field(IDim)(np.zeros((1, ), dtype=np.float32))

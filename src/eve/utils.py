@@ -555,23 +555,24 @@ class Namespace(types.SimpleNamespace, Generic[T]):
     asdict = as_dict
 
 
-class FrozenNamespace(Namespace[T]):
-    """An immutable version of :class:`Namespace`.
+class ConstantNamespace(Namespace[T]):
+    """A version of :class:`Namespace` for collecting constant expressions.
 
     Examples:
-        >>> ns = FrozenNamespace(a=10, b="hello")
+        >>> ns = ConstantNamespace(a=10)
+        >>> ns.b = "hello"
         >>> ns.a
         10
         >>> ns.a = 20
         Traceback (most recent call last):
            ...
-        TypeError: Trying to modify immutable 'FrozenNamespace' instance.
+        TypeError: Trying to modify immutable member 'a' of a 'ConstantNamespace'.
 
-        >>> ns = FrozenNamespace(a=10, b="hello")
+        >>> ns = ConstantNamespace(a=10, b="hello")
         >>> list(ns.items())
         [('a', 10), ('b', 'hello')]
 
-        >>> ns = FrozenNamespace(a=10, b="hello")
+        >>> ns = ConstantNamespace(a=10, b="hello")
         >>> hashed = hash(ns)
         >>> assert isinstance(hashed, int)
         >>> hashed == hash(ns) == ns.__cached_hash_value__
@@ -581,7 +582,11 @@ class FrozenNamespace(Namespace[T]):
     __slots__ = "__cached_hash_value__"  # This slot is used to avoid polluting the namespace
 
     def __setattr__(self, __name: str, __value: Any) -> None:
-        raise TypeError(f"Trying to modify immutable '{self.__class__.__name__}' instance.")
+        if hasattr(self, __name):
+            raise TypeError(f"Trying to modify immutable member '{__name}' of a '{self.__class__.__name__}'.")
+        if hasattr(self, "__cached_hash_value__"):
+            object.__delattr__(self, "__cached_hash_value__")
+        self.__dict__[__name] = __value
 
     def __delattr__(self, __name: str) -> None:
         raise TypeError(f"Trying to modify immutable '{self.__class__.__name__}' instance.")
@@ -591,6 +596,12 @@ class FrozenNamespace(Namespace[T]):
             object.__setattr__(self, "__cached_hash_value__", hash(tuple(self.__dict__.items())))
 
         return self.__cached_hash_value__
+
+
+class FrozenNamespace(ConstantNamespace[T]):
+    """A `ConstantNamespace` that cannot be modified by adding new constant attributes."""
+    def __setattr__(self, __name: str, __value: Any) -> None:
+        raise TypeError(f"Trying to modify immutable '{self.__class__.__name__}' instance.")
 
 
 @dataclasses.dataclass

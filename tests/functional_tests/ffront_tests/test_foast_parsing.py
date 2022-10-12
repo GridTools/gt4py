@@ -243,14 +243,15 @@ def test_conditional_wrong_arg_type():
 # --- External symbols ---
 def test_closure_symbols():
     import numpy as np
+    from eve.utils import ConstantNamespace
 
-    nonlocal_unused = 0  # noqa: F841
-    nonlocal_float = 2.3
-    nonlocal_np_scalar = np.float32(3.4)
+    nonlocal_unused = ConstantNamespace(v=0)
+    nonlocal_float = ConstantNamespace(v=2.3)
+    nonlocal_np_scalar = ConstantNamespace(v=np.float32(3.4))
 
     def operator_with_refs(inp: Field[..., "float64"], inp2: Field[..., "float32"]):
-        a = inp + nonlocal_float
-        b = inp2 + nonlocal_np_scalar
+        a = inp + nonlocal_float.v
+        b = inp2 + nonlocal_np_scalar.v
         return a, b
 
     parsed = FieldOperatorParser.apply_to_function(operator_with_refs)
@@ -267,7 +268,7 @@ def test_closure_symbols():
                     foast.BinOp,
                     right=P(
                         foast.Constant,
-                        value=nonlocal_float
+                        value=nonlocal_float.v
                     )
                 ),
             ),
@@ -277,7 +278,7 @@ def test_closure_symbols():
                     foast.BinOp,
                     right=P(
                         foast.Constant,
-                        value=nonlocal_np_scalar
+                        value=nonlocal_np_scalar.v
                     )
                 ),
             ),

@@ -11,14 +11,11 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-from types import SimpleNamespace
 from typing import Any
 
 import functional.ffront.field_operator_ast as foast
 from eve import NodeTranslator, traits
-from functional.ffront.gtcallable import GTCallable
-from functional.ffront.fbuiltins import FieldOffset, BuiltInFunction
-from functional.common import Dimension
+from eve.utils import ConstantNamespace
 
 
 class ClosureVarFolding(traits.VisitorWithSymbolTableTrait, NodeTranslator):
@@ -34,7 +31,7 @@ class ClosureVarFolding(traits.VisitorWithSymbolTableTrait, NodeTranslator):
     def visit_Name(self, node: foast.Name, **kwargs):
         if node.id in self.closure_vars:
             value = self.closure_vars[node.id]
-            if not isinstance(value, (GTCallable, FieldOffset, BuiltInFunction, Dimension, SimpleNamespace, type)):
+            if isinstance(value, ConstantNamespace):
                 return foast.Constant(value=value, location=node.location)
         return node
 

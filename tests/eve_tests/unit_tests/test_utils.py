@@ -324,3 +324,23 @@ def test_xenumerate():
     from eve.utils import xenumerate
 
     assert list(xenumerate(string.ascii_letters[:3])) == [(0, "a"), (1, "b"), (2, "c")]
+
+
+def test_constant_namespace_add():
+    from eve.utils import ConstantNamespace
+
+    c = ConstantNamespace()
+    c.C1 = 5
+    c.C2 = 6
+    assert c.C1 == 5
+    assert c.C2 == 6
+
+
+def test_constant_namespace_modify():
+    from eve.utils import ConstantNamespace
+
+    c = ConstantNamespace()
+    c.C = 4
+    with pytest.raises(TypeError):
+        c.C = 5
+    assert c.C == 4
