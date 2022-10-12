@@ -62,17 +62,14 @@ def normalize_storage_spec(aligned_index, shape, dtype, dimensions):
 
     Returns
     -------
-
     tuple(aligned_index, shape, dtype, mask)
         The output tuple fields verify the following semantics:
-
             - aligned_index: tuple of ints with default origin values for the non-masked dimensions
             - shape: tuple of ints with shape values for the non-masked dimensions
             - dtype: scalar numpy.dtype (non-structured and without subarrays)
             - backend: backend identifier string (numpy, gt:cpu_kfirst, gt:gpu, ...)
             - dimensions: a tuple of dimension identifier strings
     """
-
     from gt4py.gtscript import Axis  # prevent circular import
 
     if dimensions is None:
@@ -190,7 +187,7 @@ def allocate_gpu(
     dtype: DTypeLike,
     alignment_bytes: int,
     aligned_index: Optional[Sequence[int]],
-) -> Tuple[cp.ndarray, cp.ndarray]:
+) -> Tuple["cp.ndarray", "cp.ndarray"]:
     dtype = np.dtype(dtype)
     assert (
         alignment_bytes % dtype.itemsize
