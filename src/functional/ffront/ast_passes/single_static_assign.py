@@ -109,12 +109,12 @@ class SingleStaticAssignPass(ast.NodeTransformer):
         node.orelse = [self.visit(el) for el in node.orelse]
         orelse_name_counter = self.name_counter
 
-        all_names = set(body_name_counter.keys()) | set(orelse_name_counter.keys())
+        all_names = set(body_name_counter.keys()) & set(orelse_name_counter.keys())
 
         # ensure both branches conclude with the same unique names
         for name in all_names:
-            body_count = body_name_counter.get(name, 0)
-            orelse_count = orelse_name_counter.get(name, 0)
+            body_count = body_name_counter[name]
+            orelse_count = orelse_name_counter[name]
 
             if body_count < orelse_count:
                 new_assign = _make_assign(
