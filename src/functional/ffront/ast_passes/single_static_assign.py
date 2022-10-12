@@ -56,11 +56,17 @@ class SingleStaticAssignPass(ast.NodeTransformer):
         a__2 = 3 + a__1
         return a__2
 
-    Note that each variable name is assigned only once and never updated / overwritten.
+    Note that each variable name is assigned only once (per branch) and never updated / overwritten.
 
     Note also that after parsing, running the pass and unparsing we get invalid but
     readable python code. This is ok because this pass is not intended for
     python-to-python translation.
+
+    WARNING: This pass is not intended as a general-purpose SSA transformation.
+    The pass does not support any general Python AST. Known limitations include:
+        * Nested functions aren't supported
+        * Returns inside if blocks aren't supported
+        * While loops aren't supported
     """
 
     class RhsRenamer(ast.NodeTransformer):
