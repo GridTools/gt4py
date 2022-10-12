@@ -290,15 +290,15 @@ def as_cupy(array: FieldLike) -> "cp.ndarray":
     return cp.asarray(array)
 
 
-def get_dims(object: GtDimsInterface) -> Optional[Tuple[str, ...]]:
-    dims = getattr(object, "__gt_dims__", None)
+def get_dims(obj: GtDimsInterface) -> Optional[Tuple[str, ...]]:
+    dims = getattr(obj, "__gt_dims__", None)
     if dims is None:
         return dims
     return tuple(str(d) for d in dims)
 
 
-def get_origin(object: GtOriginInterface) -> Optional[Tuple[int, ...]]:
-    origin = getattr(object, "__gt_origin__", None)
+def get_origin(obj: GtOriginInterface) -> Optional[Tuple[int, ...]]:
+    origin = getattr(obj, "__gt_origin__", None)
     if origin is None:
         return origin
     return tuple(int(o) for o in origin)
