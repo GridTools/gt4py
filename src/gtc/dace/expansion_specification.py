@@ -219,7 +219,7 @@ def _populate_strides(node, expansion_specification):
                         extent = extent[it.axis.to_idx()]
                     else:
                         extent = (0, 0)
-                    it.stride = node.tile_sizes.get(it.axis, 8) + extent[0] - extent[1]
+                    it.stride = node.tile_strides.get(it.axis, 8)
                 else:
                     it.stride = 1
 

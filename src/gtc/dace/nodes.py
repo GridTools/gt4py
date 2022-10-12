@@ -40,6 +40,13 @@ def _set_expansion_order(
     node._expansion_specification = res
 
 
+def _set_tile_sizes_interpretation(node: "StencilComputation", tile_sizes_interpretation: str):
+    valid_values = {"shape", "strides"}
+    if tile_sizes_interpretation not in valid_values:
+        raise ValueError(f"tile_sizes_interpretation must be one in {valid_values}.")
+    node._tile_sizes_interpretation = tile_sizes_interpretation
+
+
 class PickledProperty:
     def to_json(self, obj):
         protocol = pickle.DEFAULT_PROTOCOL
@@ -85,9 +92,13 @@ class StencilComputation(library.LibraryNode):
         setter=_set_expansion_order,
     )
     tile_sizes = PickledDictProperty(
-        key_type=str,
+        key_type=dcir.Axis,
         value_type=int,
         default={dcir.Axis.I: 8, dcir.Axis.J: 8, dcir.Axis.K: 8},
+    )
+
+    tile_sizes_interpretation = dace.properties.Property(
+        setter=_set_tile_sizes_interpretation, dtype=str, default="strides"
     )
 
     symbol_mapping = dace.properties.DictProperty(
@@ -189,3 +200,15 @@ class StencilComputation(library.LibraryNode):
             ):
                 return True
         return False
+
+    @property
+    def tile_strides(self):
+        if self.tile_sizes_interpretation == "strides":
+            return self.tile_sizes
+        else:
+            overall_extent: Extent = next(iter(self.extents.values()))
+            for extent in self.extents.values():
+                overall_extent |= extent
+            return {
+                key: value + overall_extent[key.to_idx()] for key, value in self.tile_sizes.items()
+            }
