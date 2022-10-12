@@ -136,7 +136,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         return itir.StencilClosure(
             domain=lowered_domain,
             stencil=itir.SymRef(id=node.func.id),
-            inputs=self.visit(node.args),
+            inputs=self.visit(node.args, **kwargs),
             output=output,
         )
 
