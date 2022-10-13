@@ -63,7 +63,7 @@ class GTFNCodegen(codegen.TemplatedGenerator):
 
     def visit_SymRef(self, node: gtfn_ir.SymRef, **kwargs: Any) -> str:
         if node.id == "get":
-            return "tuple_util::get"
+            return "gridtools::tuple_util::get"
         return node.id
 
     @staticmethod
@@ -94,14 +94,14 @@ class GTFNCodegen(codegen.TemplatedGenerator):
         values = self.visit(node.values)
         if self.is_cartesian:
             return (
-                f"hymap::keys<{','.join(t + '_t' for t in tags)}>::make_values({','.join(values)})"
+                f"gridtools::hymap::keys<{','.join(t + '_t' for t in tags)}>::make_values({','.join(values)})"
             )
         else:
-            return f"tuple({','.join(values)})"
+            return f"gridtools::tuple({','.join(values)})"
 
-    CartesianDomain = as_fmt("cartesian_domain({tagged_sizes}, {tagged_offsets})")
+    CartesianDomain = as_fmt("gtfn::cartesian_domain({tagged_sizes}, {tagged_offsets})")
     UnstructuredDomain = as_mako(
-        "unstructured_domain(${tagged_sizes}, ${tagged_offsets}, connectivities__...)"
+        "gtfn::unstructured_domain(${tagged_sizes}, ${tagged_offsets}, connectivities__...)"
     )
 
     def visit_OffsetLiteral(self, node: gtfn_ir.OffsetLiteral, **kwargs: Any) -> str:
@@ -125,7 +125,7 @@ class GTFNCodegen(codegen.TemplatedGenerator):
         "[=](${','.join('auto ' + p for p in params)}){return ${expr};}"
     )  # TODO capture
 
-    Backend = as_fmt("make_backend(backend, {domain})")
+    Backend = as_fmt("make_backend(backend, {domain})") # TODO: gtfn::make_backend
 
     StencilExecution = as_mako(
         """
@@ -140,11 +140,11 @@ class GTFNCodegen(codegen.TemplatedGenerator):
 
     ScanPassDefinition = as_mako(
         """
-        struct ${id} : ${'fwd' if _this_node.forward else 'bwd'} {
+        struct ${id} : ${'gtfn::fwd' if _this_node.forward else 'gtfn::bwd'} {
             static constexpr GT_FUNCTION auto body() {
-                return scan_pass([](${','.join('auto const& ' + p for p in params)}) {
+                return gtfn::scan_pass([](${','.join('auto const& ' + p for p in params)}) {
                     return ${expr};
-                }, host_device::identity());
+                }, gridtools::host_device::identity());
             }
         };
         """
@@ -188,7 +188,7 @@ class GTFNCodegen(codegen.TemplatedGenerator):
         )
 
     TemporaryAllocation = as_fmt(
-        "auto {id} = allocate_global_tmp<{dtype}>(tmp_alloc__, {domain}.sizes());"
+        "auto {id} = gtfn::allocate_global_tmp<{dtype}>(tmp_alloc__, {domain}.sizes());"
     )
 
     FencilDefinition = as_mako(
@@ -202,15 +202,14 @@ class GTFNCodegen(codegen.TemplatedGenerator):
 
     namespace{
     using namespace gridtools;
-    using namespace fn;
-    using namespace literals;
+    using namespace gridtools::literals;
 
     ${'\\n'.join(offset_definitions)}
     ${'\\n'.join(function_definitions)}
 
     inline auto ${id} = [](auto... connectivities__){
         return [connectivities__...](auto backend, ${','.join('auto&& ' + p for p in params)}){
-            auto tmp_alloc__ = tmp_allocator(backend);
+            auto tmp_alloc__ = gtfn::backend::tmp_allocator(backend);
             ${'\\n'.join(temporaries)}
             ${'\\n'.join(executions)}
         };

@@ -64,8 +64,8 @@ def pytype_to_cpptype(t: str):
         raise TypeError(f"Unsupported type '{t}'") from None
 
 
-_vertical_dimension = "unstructured::dim::vertical"
-_horizontal_dimension = "unstructured::dim::horizontal"
+_vertical_dimension = "gtfn::unstructured::dim::vertical"
+_horizontal_dimension = "gtfn::unstructured::dim::horizontal"
 
 
 def _get_domains(closures: Iterable[itir.StencilClosure]) -> Iterable[itir.FunCall]:
