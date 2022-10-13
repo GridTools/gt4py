@@ -145,6 +145,32 @@ The build step goes from `otf.stages.CompilableSource` to `otf.stages.CompiledPr
 
 These can be extended to cover more than C++ but this should be done when such use cases arise, similar to the `pybind11` bindings step.
 
+
+### Build System Classes Track Build Progress In a JSON File
+Any build system used to build GT4Py programs tracks it's progress and results via a JSON file in it's root folder. The content is a serialization of an `otf.compilation.build_data.BuildData` instance.
+
+#### Reason
+This greatly simplifies accessing already compiled and cached (across runs) GT4Py programs as well as checking whether such a cached program exists. The alternative would be to go through the following steps:
+
+1) Translation
+2) Binding
+3) Use heuristics to decide which build system was used last time
+4) Re-create the build system with the cached path as root
+5) Use the build-system's heuristics to decide if a compiled program exists or where to load it from.
+
+Whereas when using the `BuildData` one only requires to run steps 1) and 2) to get the cached project folder and the rest can be accessed from there. These steps can be skipped as well by implementing more aggressive caching (for production environments where the GT4Py source is kept constant).
+
+Looking at the build systems implemented at the time of writing, `CMakeProject` and `CompiledbProject`, one might wrongly conclude that existence of certain directories or files suffice. This is only the case because `CompiledbProject` is based on `CMakeProject` and they therefore share some implementation details, which are by no means guaranteed to be standardizeable across multiple conceptually different build systems.
+
+#### Revise If
+It can be proven that all existing and future build systems can be made to behave closely enough for one single set of heuristics to decide the following based on project directory contents.
+
+- build status 
+- extension module location
+- name of the program inside the extension module
+
+Or, it has been shown that inter-run caching of GT4Py programs is not desirable.
+
 ## Alternatives Considered
 
 ### Pipeline Architecture
