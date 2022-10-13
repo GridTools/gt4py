@@ -524,6 +524,7 @@ class DaCeComputationCodegen:
                 const int __J = domain[1];
                 const int __K = domain[2];
                 ${name}_t dace_handle;
+                ${backend_specifics}
                 auto allocator = gt::sid::cached_allocator(&${allocator}<char[]>);
                 ${"\\n".join(tmp_allocs)}
                 __program_${name}(${",".join(["&dace_handle", *dace_args])});
@@ -534,12 +535,9 @@ class DaCeComputationCodegen:
 
     def generate_tmp_allocs(self, sdfg):
         global_fmt = "dace_handle.__{sdfg_id}_{name} = allocate(allocator, gt::meta::lazy::id<{dtype}>(), {size})();"
-        threadlocal_fmt = """#pragma omp parallel
+        threadlocal_fmt = """dace_handle.__{sdfg_id}_{name} = allocate(allocator, gt::meta::lazy::id<{dtype}>(), omp_max_threads * ({size}))();
+#pragma omp parallel
 {{
-#pragma omp single
-{{
-dace_handle.__{sdfg_id}_{name} = allocate(allocator, gt::meta::lazy::id<{dtype}>(), omp_get_num_threads() * ({size}))();
-}}
 {name} = dace_handle.__{sdfg_id}_{name} + omp_get_thread_num() * ({size});
 }}"""
         res = [
@@ -606,6 +604,7 @@ dace_handle.__{sdfg_id}_{name} = allocate(allocator, gt::meta::lazy::id<{dtype}>
 
         interface = cls.template.definition.render(
             name=sdfg.name,
+            backend_specifics="" if is_gpu else "int omp_max_threads = omp_get_max_threads();",
             dace_args=self.generate_dace_args(stencil_ir, sdfg),
             functor_args=self.generate_functor_args(sdfg),
             tmp_allocs=self.generate_tmp_allocs(sdfg),
