@@ -29,15 +29,15 @@ The source generator part of the GTFN backend exposes two public interfaces.
 
 `program_processors.formatters.gtfn.format_sourcecode` implements a `program_processors.processor_interface.ProgramFormatter` protocol and produces C++ source code from a GT4Py program and it's inputs. The resulting source code can not be called on it's own from GT4Py (or Python in general), but could be incorporated into a n external code base.
 
-#### Source Code Module
+#### Translation Step
 
-`program_processors.codegens.gtfn_modules.create_sourcecode` implements the `program_processors.processor_interface.ProgramSourceGenerator` protocol and produces a C++ source code module (source code packaged with additional information).
+`program_processors.codegens.gtfn_modules.translate_program` implements the `otf.step_types.TranslationStep` protocol as well as `otf.workflow.Step` and produces a C++ source code module (source code packaged with additional information).
 
 It is an instance of `program_processors.codegens.gtfn_modules.GTFNSourceGenerator` with default language settings to be packaged into the source code module for later stages. These include the language used (C++), C++ dependencies, file name endings, code formatting options etc.
 
-#### Bindings Generator
+#### Binding Step
 
-`program_processors.builders.cpp.bindings.bind_source` implements the `program_processors.processor_interface.BindingStep` protocol and generates an CompilableSource module from a source code module. An OTF module contains all the information required to compile the GT4Py program into a python callable. This includes bindings, in this case using `pybind11`. The bindings generator providing these is currently still tailored to the GTFN backend but should be easy to generalize.
+`otf.binding.pybind.bind_source` implements the `otf.step_types.BindingStep` protocol as well as `otf.workflow.Step` and generates an CompilableSource module from a source code module. An OTF module contains all the information required to compile the GT4Py program into a python callable. This includes bindings, in this case using `pybind11`. The bindings generator providing these is currently still tailored to the GTFN backend but should be easy to generalize.
 
 #### Executor
 
@@ -49,7 +49,7 @@ When called the `GTFNExecutor` instance composes a workflow from the above steps
 
 ### Monolithic Backend
 
-In the earlier, carthesian version of GT4Py backends started out as monoliths with just IR as input and executable program for output.
+In the earlier, Cartesian version of GT4Py backends started out as monoliths with just IR as input and executable program for output.
 
 * Advantages:
   - in some cases simpler to write
