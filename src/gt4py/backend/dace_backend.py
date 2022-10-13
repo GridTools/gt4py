@@ -170,7 +170,6 @@ def _pre_expand_trafos(gtir_pipeline: GtirPipeline, sdfg: dace.SDFG, layout_map)
     _set_expansion_orders(sdfg)
     _set_tile_sizes(sdfg)
     _specialize_transient_strides(sdfg, layout_map=layout_map)
-
     return sdfg
 
 
@@ -615,7 +614,6 @@ class DaCeComputationCodegen:
                              #include <gridtools/sid/allocator.hpp>
                              #include <gridtools/stencil/cartesian.hpp>
                              {"#include <gridtools/common/cuda_util.hpp>" if is_gpu else "#include <omp.h>"}
-                             #include <iostream>
                              namespace gt = gridtools;
                              {computations}
 
