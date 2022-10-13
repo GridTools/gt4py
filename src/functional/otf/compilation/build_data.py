@@ -22,7 +22,12 @@ from typing import Final, Optional
 
 _DATAFILE_NAME: Final = "gt4py.json"
 
-BuildStatus = enum.IntEnum("BuildStatus", ["INITIALIZED", "CONFIGURED", "COMPILED"], start=0)
+
+class BuildStatus(enum.IntEnum):
+    BuildStatus = enum.auto()
+    INITIALIZED = enum.auto()
+    CONFIGURED = enum.auto()
+    COMPILED = enum.auto()
 
 
 @dataclasses.dataclass(frozen=True)
