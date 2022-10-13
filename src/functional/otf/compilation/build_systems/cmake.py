@@ -103,7 +103,7 @@ class CMakeProject(
 
         build_data.write_data(
             build_data.BuildData(
-                status=build_data.BuildStatus.STARTED,
+                status=build_data.BuildStatus.INITIALIZED,
                 module=pathlib.Path(
                     f"build/bin/{self.fencil_name}.{common.python_module_suffix()}"
                 ),

@@ -128,7 +128,7 @@ class CompiledbProject(
 
         build_data.write_data(
             data=build_data.BuildData(
-                status=build_data.BuildStatus.STARTED,
+                status=build_data.BuildStatus.INITIALIZED,
                 module=pathlib.Path(""),
                 entry_point_name=self.fencil_name,
             ),
