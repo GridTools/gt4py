@@ -27,7 +27,7 @@ except ImportError:
 import gt4py.backend as gt_backend
 import gt4py.storage
 from gt4py import gtscript
-from gt4py.storage.utils import normalize_storage_spec
+from gt4py.storage.utils import allocate_cpu, allocate_gpu, normalize_storage_spec
 
 from ..definitions import CPU_BACKENDS, GPU_BACKENDS
 
@@ -126,9 +126,7 @@ def test_allocate_cpu(param_dict):
     shape = param_dict["shape"]
     layout_map = param_dict["layout_order"]
 
-    raw_buffer, field = gt4py.storage.util.allocate_cpu(
-        aligned_index, shape, layout_map, dtype, alignment_bytes
-    )
+    raw_buffer, field = allocate_cpu(shape, layout_map, dtype, alignment_bytes, aligned_index)
 
     # check that field is a view of raw_buffer
     assert field.base is raw_buffer
@@ -189,8 +187,8 @@ def test_allocate_gpu(param_dict):
     aligned_index = param_dict["aligned_index"]
     shape = param_dict["shape"]
     layout_map = param_dict["layout_order"]
-    device_raw_buffer, device_field = gt4py.storage.utils.allocate_gpu(
-        aligned_index, shape, layout_map, dtype, alignment_bytes
+    device_raw_buffer, device_field = allocate_gpu(
+        shape, layout_map, dtype, alignment_bytes, aligned_index
     )
 
     # check that the memory of field is contained in raws buffer
