@@ -25,6 +25,7 @@ import numpy as np
 from dace.sdfg.utils import inline_sdfgs
 from dace.serialize import dumps
 from dace.transformation.dataflow import TrivialMapElimination
+from dace.transformation.helpers import nest_state_subgraph
 from dace.transformation.interstate import InlineTransients
 
 from eve import codegen
@@ -243,6 +244,32 @@ def _tile_local_temporaries(sdfg: dace.SDFG):
                     array.lifetime = dace.AllocationLifetime.Persistent
 
 
+def _nest_sequential_map_scopes(sdfg: dace.SDFG):
+    visited = set()
+
+    def _process_map(sdfg: dace.SDFG, state: dace.SDFGState, map_entry: dace.nodes.MapEntry):
+        for node in state.scope_subgraph(map_entry, include_entry=False, include_exit=False):
+            if node in visited:
+                continue
+            if isinstance(node, dace.nodes.NestedSDFG):
+                _nest_sequential_map_scopes(node.sdfg)
+            elif isinstance(node, dace.nodes.MapEntry):
+                _process_map(sdfg, state, node)
+            visited.add(node)
+        if map_entry.schedule == dace.ScheduleType.Sequential:
+            map_entrys = [map_entry]
+            for me in reversed(map_entrys):
+                subgraph = state.scope_subgraph(me, include_entry=False, include_exit=False)
+                nest_state_subgraph(sdfg, state, subgraph)
+
+    for state in sdfg.nodes():
+        for map_entry in filter(
+            lambda n: isinstance(n, dace.nodes.MapEntry) and n not in visited, state.nodes()
+        ):
+            _process_map(sdfg, state, map_entry)
+            visited.add(map_entry)
+
+
 def _post_expand_trafos(sdfg: dace.SDFG):
     # DaCe "standard" clean-up transformations
     sdfg.simplify(validate=False)
@@ -260,6 +287,7 @@ def _post_expand_trafos(sdfg: dace.SDFG):
 
     _tile_local_temporaries(sdfg)
     sdfg.simplify()
+    _nest_sequential_map_scopes(sdfg)
 
 
 def _sdfg_add_arrays_and_edges(
