@@ -26,10 +26,11 @@ from dace import library
 from gtc import common
 from gtc import daceir as dcir
 from gtc import oir
+from gtc.dace.utils import compute_dcir_access_infos
 from gtc.definitions import Extent
 from gtc.oir import Decl, FieldDecl, VerticalLoop, VerticalLoopSection
 
-from .expansion.utils import get_dace_debuginfo, mask_includes_inner_domain
+from .expansion.utils import HorizontalExecutionSplitter, get_dace_debuginfo
 from .expansion_specification import ExpansionItem, make_expansion_order
 
 
@@ -82,6 +83,9 @@ class StencilComputation(library.LibraryNode):
 
     declarations = PickledDictProperty(key_type=str, value_type=Decl, allow_none=True)
     extents = PickledDictProperty(key_type=int, value_type=Extent, allow_none=False)
+    access_infos = PickledDictProperty(
+        key_type=str, value_type=dcir.FieldAccessInfo, allow_none=True
+    )
 
     device = dace.properties.EnumProperty(
         dtype=dace.DeviceType, default=dace.DeviceType.CPU, allow_none=True
@@ -143,6 +147,13 @@ class StencilComputation(library.LibraryNode):
                     for axis in dcir.Axis.dims_horizontal()
                 }
             )
+            self.access_infos = compute_dcir_access_infos(
+                oir_node,
+                oir_decls=declarations,
+                block_extents=self.get_extents,
+                collect_read=True,
+                collect_write=True,
+            )
             if any(
                 interval.start.level == common.LevelMarker.END
                 or interval.end.level == common.LevelMarker.END
@@ -193,13 +204,9 @@ class StencilComputation(library.LibraryNode):
 
     def has_splittable_regions(self):
         for he in self.oir_node.iter_tree().if_isinstance(oir.HorizontalExecution):
-            if not he.declarations and any(
-                isinstance(stmt, oir.HorizontalRestriction)
-                and not mask_includes_inner_domain(stmt.mask)
-                for stmt in he.body
-            ):
-                return True
-        return False
+            if not HorizontalExecutionSplitter.is_horizontal_execution_splittable(he):
+                return False
+        return True
 
     @property
     def tile_strides(self):

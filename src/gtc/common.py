@@ -831,6 +831,27 @@ class HorizontalInterval(Node):
 
         return abs(self.end.offset - self.start.offset) == 1
 
+    def overlap(self, other: "HorizontalInterval") -> bool:
+        if self.start is None and other.start is None:
+            return True
+        elif self.start is None and other.start is not None:
+            left_interval = self
+            right_interval = other
+        elif other.start is None or other.start < self.start:
+            left_interval = other
+            right_interval = self
+        elif self.start < other.start:
+            left_interval = self
+            right_interval = other
+        else:
+            assert self.start == other.start
+            return True
+
+        if left_interval.end is None or right_interval.start < left_interval.end:
+            return True
+
+        return False
+
 
 class HorizontalMask(LocNode):
     """Expr to represent a convex portion of the horizontal iteration space."""
