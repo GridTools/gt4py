@@ -30,8 +30,8 @@ class BuildData:
     """
     Tracks build status and results of GT4Py program compilations.
 
-    Build systems projects should keep this information up to date for each build,
-    stored to a json file in the build folder at all times.
+    Build system projects should keep this information up to date for each build,
+    stored in a JSON file in the build folder at all times.
     """
 
     status: BuildStatus
