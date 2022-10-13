@@ -586,18 +586,10 @@ class ConstantNamespace(Namespace[T]):
             raise TypeError(
                 f"Trying to modify immutable member '{__name}' of a '{self.__class__.__name__}'."
             )
-        if hasattr(self, "__cached_hash_value__"):
-            object.__delattr__(self, "__cached_hash_value__")
         self.__dict__[__name] = __value
 
     def __delattr__(self, __name: str) -> None:
         raise TypeError(f"Trying to modify immutable '{self.__class__.__name__}' instance.")
-
-    def __hash__(self) -> int:  # type: ignore[override]
-        if not hasattr(self, "__cached_hash_value__"):
-            object.__setattr__(self, "__cached_hash_value__", hash(tuple(self.__dict__.items())))
-
-        return self.__cached_hash_value__
 
 
 class FrozenNamespace(ConstantNamespace[T]):
@@ -605,6 +597,12 @@ class FrozenNamespace(ConstantNamespace[T]):
 
     def __setattr__(self, __name: str, __value: Any) -> None:
         raise TypeError(f"Trying to modify immutable '{self.__class__.__name__}' instance.")
+
+    def __hash__(self) -> int:  # type: ignore[override]
+        if not hasattr(self, "__cached_hash_value__"):
+            object.__setattr__(self, "__cached_hash_value__", hash(tuple(self.__dict__.items())))
+
+        return self.__cached_hash_value__
 
 
 @dataclasses.dataclass
