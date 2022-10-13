@@ -571,12 +571,6 @@ class ConstantNamespace(Namespace[T]):
         >>> ns = ConstantNamespace(a=10, b="hello")
         >>> list(ns.items())
         [('a', 10), ('b', 'hello')]
-
-        >>> ns = ConstantNamespace(a=10, b="hello")
-        >>> hashed = hash(ns)
-        >>> assert isinstance(hashed, int)
-        >>> hashed == hash(ns) == ns.__cached_hash_value__
-        True
     """
 
     __slots__ = "__cached_hash_value__"  # This slot is used to avoid polluting the namespace
@@ -593,7 +587,18 @@ class ConstantNamespace(Namespace[T]):
 
 
 class FrozenNamespace(ConstantNamespace[T]):
-    """A `ConstantNamespace` that cannot be modified by adding new constant attributes."""
+    """
+    A `ConstantNamespace` that cannot be modified by adding new constant attributes.
+
+    Unlike ConstantNamespaces, FrozenNamespaces are hashable.
+
+    Examples:
+        >>> ns = ConstantNamespace(a=10, b="hello")
+        >>> hashed = hash(ns)
+        >>> assert isinstance(hashed, int)
+        >>> hashed == hash(ns) == ns.__cached_hash_value__
+        True
+    """
 
     def __setattr__(self, __name: str, __value: Any) -> None:
         raise TypeError(f"Trying to modify immutable '{self.__class__.__name__}' instance.")
