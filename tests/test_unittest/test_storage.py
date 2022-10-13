@@ -191,7 +191,9 @@ def test_allocate_gpu(param_dict):
         shape, layout_map, dtype, alignment_bytes, aligned_index
     )
 
-    # check that the memory of field is contained in raws buffer
+    # Would like to check device_field.base against device_raw_buffer but
+    # as_strided returns an ndarray where device_field.base is set to None.
+    # Instead, check that the memory of field is contained in raws buffer
     assert (
         device_field.data.ptr >= device_raw_buffer.data.ptr
         and device_field[-1:].data.ptr <= device_raw_buffer[-1:].data.ptr
