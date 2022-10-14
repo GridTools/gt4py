@@ -40,7 +40,7 @@ class CompiledbFactory(
     """
 
     cmake_build_type: str = "Debug"
-    cmake_extra_flags: Optional[list[str]] = None
+    cmake_extra_flags: list[str] = dataclasses.field(default_factory=list)
     renew_compiledb: bool = False
 
     def __call__(
@@ -54,23 +54,23 @@ class CompiledbFactory(
     ) -> CompiledbProject:
         if not source.binding_source:
             raise compiler.CompilerError(
-                "CMake build system project requires separate bindings code file."
+                "Compiledb build system project requires separate bindings code file."
             )
         name = source.program_source.entry_point.name
         header_name = f"{name}.{source.program_source.language_settings.header_extension}"
         bindings_name = f"{name}_bindings.{source.program_source.language_settings.file_extension}"
 
-        cc_cache_module = _cc_cache_module(
+        cc_prototype_program_source = _cc_prototype_program_source(
             deps=source.library_deps,
             build_type=self.cmake_build_type,
             cmake_flags=self.cmake_extra_flags or [],
         )
 
         if self.renew_compiledb or not (
-            compiledb_template := _cc_get_compiledb(cc_cache_module, cache_strategy)
+            compiledb_template := _cc_find_compiledb(cc_prototype_program_source, cache_strategy)
         ):
-            compiledb_template = _cc_generate_compiledb(
-                cc_cache_module,
+            compiledb_template = _cc_create_compiledb(
+                cc_prototype_program_source,
                 build_type=self.cmake_build_type,
                 cmake_flags=self.cmake_extra_flags or [],
                 cache_strategy=cache_strategy,
@@ -78,7 +78,7 @@ class CompiledbFactory(
 
         return CompiledbProject(
             root_path=cache.get_cache_folder(source, cache_strategy),
-            fencil_name=name,
+            program_name=name,
             source_files={
                 header_name: source.program_source.source_code,
                 bindings_name: source.binding_source.source_code,
@@ -107,7 +107,7 @@ class CompiledbProject(
 
     root_path: pathlib.Path
     source_files: dict[str, str]
-    fencil_name: str
+    program_name: str
     compile_commands_cache: pathlib.Path
     bindings_file_name: str
 
@@ -130,9 +130,34 @@ class CompiledbProject(
             data=build_data.BuildData(
                 status=build_data.BuildStatus.INITIALIZED,
                 module=pathlib.Path(""),
-                entry_point_name=self.fencil_name,
+                entry_point_name=self.program_name,
             ),
             path=self.root_path,
+        )
+
+    def run_config(self):
+        compile_db = json.loads(self.compile_commands_cache.read_text())
+
+        (self.root_path / "build").mkdir(exist_ok=True)
+        (self.root_path / "bin").mkdir(exist_ok=True)
+
+        for entry in compile_db:
+            for key, value in entry.items():
+                entry[key] = (
+                    value.replace("$NAME", self.program_name)
+                    .replace("$BINDINGS_FILE", self.bindings_file_name)
+                    .replace("$SRC_PATH", str(self.root_path))
+                )
+
+        (self.root_path / "compile_commands.json").write_text(json.dumps(compile_db))
+
+        build_data.write_data(
+            build_data.BuildData(
+                status=build_data.BuildStatus.CONFIGURED,
+                module=pathlib.Path(compile_db[-1]["output"]),
+                entry_point_name=self.program_name,
+            ),
+            self.root_path,
         )
 
     def run_build(self):
@@ -152,47 +177,22 @@ class CompiledbProject(
 
         build_data.update_status(new_status=build_data.BuildStatus.COMPILED, path=self.root_path)
 
-    def run_config(self):
-        compile_db = json.loads(self.compile_commands_cache.read_text())
 
-        (self.root_path / "build").mkdir(exist_ok=True)
-        (self.root_path / "bin").mkdir(exist_ok=True)
-
-        for entry in compile_db:
-            for key, value in entry.items():
-                entry[key] = (
-                    value.replace("$NAME", self.fencil_name)
-                    .replace("$BINDINGS_FILE", self.bindings_file_name)
-                    .replace("$SRC_PATH", str(self.root_path))
-                )
-
-        (self.root_path / "compile_commands.json").write_text(json.dumps(compile_db))
-
-        build_data.write_data(
-            build_data.BuildData(
-                status=build_data.BuildStatus.CONFIGURED,
-                module=pathlib.Path(compile_db[-1]["output"]),
-                entry_point_name=self.fencil_name,
-            ),
-            self.root_path,
-        )
-
-
-def _cc_cache_name(
+def _cc_prototype_program_name(
     deps: tuple[source.LibraryDependency, ...], build_type: str, flags: list[str]
 ) -> str:
-    fencil_name = "compile_commands_cache"
+    base_name = "compile_commands_cache"
     deps_str = "_".join(f"{dep.name}_{dep.version}" for dep in deps)
     flags_str = "_".join(flags)
-    return "_".join([fencil_name, deps_str, build_type, flags_str]).replace(".", "_")
+    return "_".join([base_name, deps_str, build_type, flags_str]).replace(".", "_")
 
 
-def _cc_cache_module(
+def _cc_prototype_program_source(
     deps: tuple[source.LibraryDependency, ...],
     build_type: str,
     cmake_flags: list[str],
 ) -> stages.ProgramSource:
-    name = _cc_cache_name(deps, build_type, cmake_flags)
+    name = _cc_prototype_program_name(deps, build_type, cmake_flags)
     return stages.ProgramSource(
         entry_point=source.Function(name=name, parameters=()),
         source_code="",
@@ -207,11 +207,11 @@ def _cc_cache_module(
     )
 
 
-def _cc_get_compiledb(
-    source_module: stages.ProgramSource, cache_strategy: cache.Strategy
+def _cc_find_compiledb(
+    prototype_program_source: stages.ProgramSource, cache_strategy: cache.Strategy
 ) -> Optional[pathlib.Path]:
     cache_path = cache.get_cache_folder(
-        stages.CompilableSource(source_module, None), cache_strategy
+        stages.CompilableSource(prototype_program_source, None), cache_strategy
     )
     compile_db_path = cache_path / "compile_commands.json"
     if compile_db_path.exists():
@@ -219,15 +219,15 @@ def _cc_get_compiledb(
     return None
 
 
-def _cc_generate_compiledb(
-    source_module: stages.ProgramSource,
+def _cc_create_compiledb(
+    prototype_program_source: stages.ProgramSource,
     build_type: str,
     cmake_flags: list[str],
     cache_strategy: cache.Strategy,
 ) -> pathlib.Path:
-    name = source_module.entry_point.name
+    name = prototype_program_source.entry_point.name
     cache_path = cache.get_cache_folder(
-        stages.CompilableSource(source_module, None), cache_strategy
+        stages.CompilableSource(prototype_program_source, None), cache_strategy
     )
 
     prototype_project = cmake.CMakeProject(
@@ -239,10 +239,10 @@ def _cc_generate_compiledb(
             f"{name}.hpp": "",
             f"{name}.cpp": "",
             "CMakeLists.txt": cmake_lists.generate_cmakelists_source(
-                name, source_module.library_deps, [f"{name}.hpp", f"{name}.cpp"]
+                name, prototype_program_source.library_deps, [f"{name}.hpp", f"{name}.cpp"]
             ),
         },
-        fencil_name=name,
+        program_name=name,
     )
 
     prototype_project.write_files()

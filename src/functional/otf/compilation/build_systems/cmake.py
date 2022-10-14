@@ -63,7 +63,7 @@ class CMakeFactory(
                     [header_name, bindings_name],
                 ),
             },
-            fencil_name=name,
+            program_name=name,
             generator_name=self.cmake_generator_name,
             build_type=self.cmake_build_type,
             extra_cmake_flags=self.cmake_extra_flags or [],
@@ -87,7 +87,7 @@ class CMakeProject(
 
     root_path: pathlib.Path
     source_files: dict[str, str]
-    fencil_name: str
+    program_name: str
     generator_name: str = "Ninja"
     build_type: str = "Debug"
     extra_cmake_flags: list[str] = dataclasses.field(default_factory=list)
@@ -105,23 +105,12 @@ class CMakeProject(
             build_data.BuildData(
                 status=build_data.BuildStatus.INITIALIZED,
                 module=pathlib.Path(
-                    f"build/bin/{self.fencil_name}.{common.python_module_suffix()}"
+                    f"build/bin/{self.program_name}.{common.python_module_suffix()}"
                 ),
-                entry_point_name=self.fencil_name,
+                entry_point_name=self.program_name,
             ),
             self.root_path,
         )
-
-    def run_build(self):
-        logfile = self.root_path / "log_build.txt"
-        with logfile.open(mode="w") as log_file_pointer:
-            subprocess.check_call(
-                ["cmake", "--build", self.root_path / "build"],
-                stdout=log_file_pointer,
-                stderr=log_file_pointer,
-            )
-
-        build_data.update_status(new_status=build_data.BuildStatus.COMPILED, path=self.root_path)
 
     def run_config(self):
         logfile = self.root_path / "log_config.txt"
@@ -143,3 +132,14 @@ class CMakeProject(
             )
 
         build_data.update_status(new_status=build_data.BuildStatus.CONFIGURED, path=self.root_path)
+
+    def run_build(self):
+        logfile = self.root_path / "log_build.txt"
+        with logfile.open(mode="w") as log_file_pointer:
+            subprocess.check_call(
+                ["cmake", "--build", self.root_path / "build"],
+                stdout=log_file_pointer,
+                stderr=log_file_pointer,
+            )
+
+        build_data.update_status(new_status=build_data.BuildStatus.COMPILED, path=self.root_path)
