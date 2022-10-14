@@ -171,7 +171,9 @@ def is_logical(symbol_type: ct.SymbolType) -> bool:
     return extract_dtype(symbol_type).kind is ct.ScalarKind.BOOL
 
 
-def is_field_type_or_tuple_of_field_type(type_: ct.DataType) -> bool:
+def is_field_type_or_tuple_of_field_type(
+    type_: ct.FieldType | ct.TupleType,
+) -> bool:
     """
      Return True if ``type_`` is FieldType or FieldType nested in TupleType.
 
@@ -435,9 +437,16 @@ def return_type_scanop(
         [callable_type.axis],
     )
     if isinstance(carry_dtype, ct.TupleType):
+        if not all(isinstance(dtype, ct.ScalarType) for dtype in carry_dtype.types):
+            raise GTTypeError("Scan operator return types must be scalar.")
         return ct.TupleType(
-            types=[ct.FieldType(dims=promoted_dims, dtype=dtype) for dtype in carry_dtype.types]
+            types=[
+                ct.FieldType(dims=promoted_dims, dtype=cast(ct.ScalarType, dtype))
+                for dtype in carry_dtype.types
+            ]
         )
+    if not isinstance(carry_dtype, ct.ScalarType):
+        raise GTTypeError("Scan operator return type must be scalar.")
     return ct.FieldType(dims=promoted_dims, dtype=carry_dtype)
 
 
@@ -453,8 +462,11 @@ def return_type_field(
     except GTTypeError as ex:
         raise GTTypeError("Could not deduce return type of invalid remap operation.") from ex
 
+    if not isinstance(with_args[0], ct.OffsetType):
+        raise GTTypeError(f"First argument must be of type {ct.OffsetType}, got {with_args[0]}.")
+
     source_dim = with_args[0].source
-    target_dims = with_args[0].target
+    target_dims = with_args[0].target or ()
     new_dims = []
     for d in field_type.dims:
         if d != source_dim:
@@ -528,11 +540,14 @@ def function_signature_incompatibilities_scanop(
         yield f"Scan operator takes {len(scanop_type.definition.args)-1} arguments, but {len(args)} were given."
         return
 
+    if not all(isinstance(arg, ct.ScalarType) for arg in scanop_type.definition.args[1:]):
+        yield "All arguments to scan operator definition except the first must be scalar."
+
     # build a function type to leverage the already existing signature checking
     #  capabilities
     function_type = ct.FunctionType(
         args=[
-            ct.FieldType(dims=dims, dtype=dtype)
+            ct.FieldType(dims=dims, dtype=cast(ct.ScalarType, dtype))
             for dims, dtype in zip(arg_dims, scanop_type.definition.args[1:])
         ],
         kwargs={},
@@ -551,7 +566,9 @@ def function_signature_incompatibilities_program(
 
 @function_signature_incompatibilities.register
 def function_signature_incompatibilities_field(
-    field_type: ct.FieldType, args: list[ct.SymbolType], kwargs: dict[str, ct.SymbolType]
+    field_type: ct.FieldType,
+    args: list[ct.SymbolType],
+    kwargs: dict[str, ct.SymbolType],
 ) -> Iterator[str]:
     if len(args) != 1:
         yield f"Function takes 1 argument(s), but {len(args)} were given."
@@ -566,8 +583,8 @@ def function_signature_incompatibilities_field(
         return
 
     source_dim = args[0].source
-    target_dims = args[0].target
-    if field_type.dims and source_dim not in field_type.dims:
+    target_dims = args[0].target or ()
+    if field_type.dims and source_dim and source_dim not in field_type.dims:
         yield f"Incompatible offset can not shift field defined on " f"{', '.join([dim.value for dim in field_type.dims])} from " f"{source_dim.value} to target dim(s): " f"{', '.join([dim.value for dim in target_dims])}"
 
 
