@@ -230,7 +230,7 @@ def _cc_generate_compiledb(
         stages.CompilableSource(source_module, None), cache_strategy
     )
 
-    otf_builder = cmake.CMakeProject(
+    prototype_project = cmake.CMakeProject(
         generator_name="Ninja",
         build_type=build_type,
         extra_cmake_flags=cmake_flags,
