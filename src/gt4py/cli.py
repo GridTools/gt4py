@@ -55,8 +55,9 @@ class BackendChoice(click.Choice):
         """Convert a CLI option argument to a backend."""
         name = super().convert(value, param, ctx)
         backend_cls = self.enabled_backend_cls_from_name(name)
-        if not backend_cls:
+        if backend_cls is None:
             self.fail("Backend is not CLI-enabled.")
+        assert backend_cls is not None
         return backend_cls
 
     @staticmethod
@@ -127,6 +128,7 @@ class BackendOption(click.ParamType):
             return name, value
         except ValueError:
             self.fail('Invalid backend option format: must be "<name>=<value>"')
+            return ("", "")
 
     def convert(
         self, value: str, param: Optional[click.Parameter], ctx: Optional[click.Context]
