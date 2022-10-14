@@ -36,7 +36,6 @@ from gtc.passes.oir_pipeline import OirPipeline
 if TYPE_CHECKING:
     from gt4py.stencil_builder import StencilBuilder
     from gt4py.stencil_object import StencilObject
-    from gt4py.storage.storage import Storage
 
 
 def _get_unit_stride_dim(backend, domain_dim_flags, data_ndim):
@@ -222,7 +221,7 @@ class BackendCodegen:
     TEMPLATE_FILES: Dict[str, str]
 
     @abc.abstractmethod
-    def __init__(self, class_name: str, module_name: str, backend: str):
+    def __init__(self, class_name: str, module_name: str, backend: Any):
         pass
 
     @abc.abstractmethod
@@ -233,7 +232,7 @@ class BackendCodegen:
 
 class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
 
-    GT_BACKEND_OPTS = {
+    GT_BACKEND_OPTS: Dict[str, Dict[str, Any]] = {
         "add_profile_info": {"versioning": True, "type": bool},
         "clean": {"versioning": False, "type": bool},
         "debug_mode": {"versioning": True, "type": bool},
@@ -289,11 +288,11 @@ class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
         gt_pyext_files: Dict[str, Any]
         if not self.builder.options._impl_opts.get("disable-code-generation", False):
             gt_pyext_files = self.make_extension_sources(stencil_ir=stencil_ir)
-            gt_pyext_sources = {**gt_pyext_files["computation"], **gt_pyext_files["bindings"]}
+            gt_pyext_sources: Dict[str, Any] = {**gt_pyext_files["computation"], **gt_pyext_files["bindings"]}
         else:
             # Pass NOTHING to the self.builder means try to reuse the source code files
             gt_pyext_files = {}
-            gt_pyext_sources = {
+            gt_pyext_sources: Dict[str, Any] = {
                 key: gt_utils.NOTHING for key in self.PYEXT_GENERATOR_CLASS.TEMPLATE_FILES.keys()
             }
 
@@ -407,7 +406,7 @@ def make_x86_layout_map(dimensions: Tuple[str, ...]) -> Tuple[Optional[int], ...
     return _permute_layout_to_dimensions([lt for lt in layout if lt is not None], dimensions)
 
 
-def x86_is_compatible_layout(field: "Storage", dimensions: Tuple[str, ...]) -> bool:
+def x86_is_compatible_layout(field: np.ndarray, dimensions: Tuple[str, ...]) -> bool:
     stride = 0
     layout_map = make_x86_layout_map(dimensions)
     flattened_layout = [index for index in layout_map if index is not None]
@@ -439,7 +438,7 @@ def make_mc_layout_map(dimensions: Tuple[str, ...]) -> Tuple[int, ...]:
     return _permute_layout_to_dimensions([lt for lt in layout if lt is not None], dimensions)
 
 
-def mc_is_compatible_layout(field: "Storage", dimensions: Tuple[str, ...]) -> bool:
+def mc_is_compatible_layout(field: np.ndarray, dimensions: Tuple[str, ...]) -> bool:
     stride = 0
     layout_map = make_mc_layout_map(dimensions)
     flattened_layout = [index for index in layout_map if index is not None]
@@ -457,7 +456,7 @@ def make_cuda_layout_map(dimensions: Tuple[str, ...]) -> Tuple[Optional[int], ..
     return _permute_layout_to_dimensions(layout, dimensions)
 
 
-def cuda_is_compatible_layout(field: "Storage", dimensions: Tuple[str, ...]) -> bool:
+def cuda_is_compatible_layout(field: np.ndarray, dimensions: Tuple[str, ...]) -> bool:
     stride = 0
     layout_map = make_cuda_layout_map(dimensions)
     flattened_layout = [index for index in layout_map if index is not None]

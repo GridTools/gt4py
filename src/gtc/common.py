@@ -251,8 +251,8 @@ class Expr(LocNode):
     - an expression `kind` (scalar or field)
     """
 
-    dtype: Optional[DataType]
     kind: ExprKind
+    dtype: DataType = DataType.AUTO
 
 
 @utils.noninstantiable
@@ -875,7 +875,7 @@ def op_to_ufunc(
         UnaryOperator, ArithmeticOperator, ComparisonOperator, LogicalOperator, NativeFunction
     ]
 ) -> np.ufunc:
-    Table: Dict[
+    table: Dict[
         Union[
             UnaryOperator, ArithmeticOperator, ComparisonOperator, LogicalOperator, NativeFunction
         ],

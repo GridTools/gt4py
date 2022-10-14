@@ -22,7 +22,7 @@ from .utils import AccessCollector, collect_symbol_names, symbol_name_creator
 
 
 class TemporariesToScalarsBase(NodeTranslator):
-    contexts = (SymbolTableTrait.symtable_merger,)
+    contexts = (SymbolTableTrait.symtable_merger,)  # type: ignore
 
     def visit_FieldAccess(
         self, node: oir.FieldAccess, *, tmps_name_map: Dict[str, str], **kwargs: Any

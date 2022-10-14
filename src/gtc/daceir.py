@@ -11,7 +11,7 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
+from typing import Any, Dict, List, Optional, Sequence, Tuple, Union, Set, Generator
 
 import dace
 import sympy
@@ -29,7 +29,7 @@ from .dace.utils import get_axis_bound_dace_symbol, get_axis_bound_diff_str, get
 
 @utils.noninstantiable
 class Expr(common.Expr):
-    dtype: Optional[common.DataType]
+    dtype: common.DataType
 
 
 @utils.noninstantiable
@@ -43,23 +43,23 @@ class Axis(StrEnum):
     K = "K"
 
     def domain_symbol(self) -> SymbolRef:
-        return "__" + self.upper()
+        return SymbolRef.from_string("__" + self.upper())
 
     def iteration_symbol(self) -> SymbolRef:
-        return "__" + self.lower()
+        return SymbolRef.from_string("__" + self.lower())
 
     def tile_symbol(self) -> SymbolRef:
-        return "__tile_" + self.lower()
+        return SymbolRef.from_string("__tile_" + self.lower())
 
     @staticmethod
-    def dims_3d():
+    def dims_3d() -> Generator["Axis", None, None]:
         yield from [Axis.I, Axis.J, Axis.K]
 
     @staticmethod
-    def dims_horizontal():
+    def dims_horizontal() -> Generator["Axis", None, None]:
         yield from [Axis.I, Axis.J]
 
-    def to_idx(self):
+    def to_idx(self) -> int:
         return [Axis.I, Axis.J, Axis.K].index(self)
 
     def domain_dace_symbol(self):
@@ -831,7 +831,7 @@ class ComputationNode(LocNode):
 
     @validator("read_memlets", "write_memlets")
     def unique_connectors(cls, node: List[Memlet]):
-        conns: Dict[SymbolRef, SymbolRef] = dict()
+        conns: Dict[SymbolRef, Set[SymbolRef]] = {}
         for memlet in node:
             conns.setdefault(memlet.field, set())
             if memlet.connector in conns[memlet.field]:

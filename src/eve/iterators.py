@@ -32,13 +32,13 @@ except ModuleNotFoundError:
     import toolz  # noqa: F401  # imported but unused
 
 
-KeyValue = Tuple[Union[int, str], Any]
-TreeIterationItem = Union[Any, Tuple[KeyValue, Any]]
+KeyValue = Tuple[Union[int, str], concepts.TreeNode]
+TreeIterationItem = Union[concepts.TreeNode, Tuple[KeyValue, concepts.TreeNode]]
 
 
 def generic_iter_children(
     node: concepts.TreeNode, *, with_keys: bool = False
-) -> Iterable[Union[Any, Tuple[KeyValue, Any]]]:
+) -> Iterable[Union[concepts.TreeNode, Tuple[KeyValue, concepts.TreeNode]]]:
     """Create an iterator to traverse values as Eve tree nodes.
 
     Args:

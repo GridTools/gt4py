@@ -150,7 +150,7 @@ class OnTheFlyMerging(NodeTranslator):
 
     max_horizontal_execution_body_size: int = 100
     allow_expensive_function_duplication: bool = False
-    contexts = (SymbolTableTrait.symtable_merger,)
+    contexts = (SymbolTableTrait.symtable_merger,)  # type: ignore
 
     def visit_CartesianOffset(
         self,
@@ -365,7 +365,7 @@ class OnTheFlyMerging(NodeTranslator):
         )
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> oir.Stencil:
-        protected_fields = set(n.name for n in node.params)
+        protected_fields = set(str(n.name) for n in node.params)
         new_symbol_name = symbol_name_creator(collect_symbol_names(node))
         vertical_loops = []
         for vl in reversed(node.vertical_loops):

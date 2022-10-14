@@ -15,7 +15,7 @@
 import functools
 import itertools
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Set, Union
+from typing import Any, Callable, Dict, List, Set, Union, cast
 
 from devtools import debug  # noqa: F401
 from typing_extensions import Protocol
@@ -148,7 +148,7 @@ class OIRToGTCpp(eve.NodeTranslator):
         def extra_decls(self) -> List[gtcpp.ComputationDecl]:
             return list(self.positionals.values()) + list(self.axis_lengths.values())
 
-    contexts = (eve.SymbolTableTrait.symtable_merger,)
+    contexts = (eve.SymbolTableTrait.symtable_merger,)  # type: ignore
 
     def visit_Literal(self, node: oir.Literal, **kwargs: Any) -> gtcpp.Literal:
         return gtcpp.Literal(value=node.value, dtype=node.dtype)
@@ -230,6 +230,7 @@ class OIRToGTCpp(eve.NodeTranslator):
         mask_expr: List[gtcpp.Expr] = []
         for axis_index, interval in enumerate(mask.intervals):
             if interval.is_single_index():
+                assert interval.start is not None
                 mask_expr.append(
                     gtcpp.BinaryOp(
                         op=common.ComparisonOperator.EQ,
@@ -369,7 +370,7 @@ class OIRToGTCpp(eve.NodeTranslator):
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> gtcpp.Program:
         prog_ctx = self.ProgramContext()
         comp_ctx = self.GTComputationContext(
-            create_symbol_name=symbol_name_creator(collect_symbol_names(node))
+            create_symbol_name=cast(SymbolNameCreator, symbol_name_creator(collect_symbol_names(node)))
         )
 
         assert all([isinstance(decl, oir.Temporary) for decl in node.declarations])

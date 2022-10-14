@@ -31,7 +31,7 @@ from gtc.dace.utils import data_type_to_dace_typeclass, make_dace_subset
 
 
 class StencilComputationSDFGBuilder(NodeVisitor):
-    contexts = (eve.SymbolTableTrait.symtable_merger,)
+    contexts = (eve.SymbolTableTrait.symtable_merger,)  # type: ignore
 
     @dataclass
     class NodeContext:
@@ -147,7 +147,7 @@ class StencilComputationSDFGBuilder(NodeVisitor):
         symtable: ChainMap[common.SymbolRef, dcir.Decl],
         **kwargs,
     ) -> None:
-        code = TaskletCodegen.apply(
+        code = TaskletCodegen.apply_codegen(
             node,
             read_memlets=node.read_memlets,
             write_memlets=node.write_memlets,

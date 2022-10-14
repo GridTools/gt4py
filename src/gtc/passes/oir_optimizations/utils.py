@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from typing import Any, Callable, Dict, Generic, List, Optional, Set, Tuple, TypeVar, cast
 
 from eve import NodeVisitor
-from eve.concepts import TreeNode
+from eve.concepts import BaseNode, TreeNode
 from eve.traits import SymbolTableTrait
 from eve.utils import XIterable, xiter
 from gtc import common, oir
@@ -91,7 +91,7 @@ class AccessCollector(NodeVisitor):
         accesses.append(
             GeneralAccess(
                 field=node.name,
-                offset=(offsets["i"], offsets["j"], offsets["k"]),
+                offset=(cast(int, offsets["i"]), cast(int, offsets["j"]), offsets["k"]),
                 data_index=node.data_index,
                 is_write=is_write,
                 horizontal_mask=horizontal_mask,
@@ -217,7 +217,7 @@ def symbol_name_creator(used_names: Set[str]) -> Callable[[str], str]:
     return new_symbol_name
 
 
-def collect_symbol_names(node: TreeNode) -> Set[str]:
+def collect_symbol_names(node: BaseNode) -> Set[str]:
     return (
         node.iter_tree()
         .if_isinstance(SymbolTableTrait)

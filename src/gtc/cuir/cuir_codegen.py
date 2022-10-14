@@ -28,7 +28,7 @@ from gtc.cuir import cuir
 
 class CUIRCodegen(codegen.TemplatedGenerator):
 
-    contexts = (traits.SymbolTableTrait.symtable_merger,)
+    contexts = (traits.SymbolTableTrait.symtable_merger,)  # type: ignore
 
     LocalScalar = as_fmt("{dtype} {name};")
 

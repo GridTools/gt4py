@@ -29,7 +29,7 @@ from . import npir
 class OirToNpir(NodeTranslator):
     """Lower from optimizable IR (OIR) to numpy IR (NPIR)."""
 
-    contexts = (SymbolTableTrait.symtable_merger,)
+    contexts = (SymbolTableTrait.symtable_merger,)  # type: ignore
 
     # --- Decls ---
     def visit_FieldDecl(
@@ -157,7 +157,7 @@ class OirToNpir(NodeTranslator):
         node: oir.AssignStmt,
         *,
         mask: Optional[npir.Expr] = None,
-        horizontal_mask: Optional[common.HorizontalMask] = None,
+        horizontal_mask: Optional[npir.HorizontalMask] = None,
         **kwargs: Any,
     ) -> npir.VectorAssign:
         left = self.visit(node.left, **kwargs)
@@ -186,9 +186,11 @@ class OirToNpir(NodeTranslator):
     def visit_HorizontalRestriction(
         self, node: oir.HorizontalRestriction, *, extent: Extent, **kwargs: Any
     ) -> Any:
-        horizontal_mask = compute_relative_mask(extent, node.mask)
-        if horizontal_mask is None:
+        mask = compute_relative_mask(extent, node.mask)
+        if mask is None:
             return NOTHING
+
+        horizontal_mask = npir.HorizontalMask(i=mask[0], j=mask[1])
 
         return utils.flatten_list(self.visit(node.body, horizontal_mask=horizontal_mask, **kwargs))
 

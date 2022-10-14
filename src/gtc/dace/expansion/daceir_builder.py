@@ -15,7 +15,7 @@
 import dataclasses
 import itertools
 from dataclasses import dataclass
-from typing import Any, Dict, Iterable, List, Optional, Set, Union
+from typing import Any, Dict, Iterable, List, Optional, Set, Union, cast
 
 import dace
 import dace.data
@@ -174,7 +174,7 @@ class DaCeIRBuilder(NodeTranslator):
             dace_array = self.arrays[field]
             for s in dace_array.strides:
                 for sym in dace.symbolic.symlist(s).values():
-                    symbol_collector.add_symbol(str(sym))
+                    symbol_collector.add_symbol(sym)
             for sym in access_info.grid_subset.free_symbols:
                 symbol_collector.add_symbol(sym)
 
@@ -244,6 +244,7 @@ class DaCeIRBuilder(NodeTranslator):
             for it in iterations:
                 axis = it.axis
                 if it.kind == "tiling":
+                    assert it.stride is not None
                     grid_subset = grid_subset.tile(tile_sizes={axis: it.stride})
                 else:
                     grid_subset = grid_subset.restricted_to_index(axis)
@@ -614,15 +615,13 @@ class DaCeIRBuilder(NodeTranslator):
                 )
             else:
                 if _all_stmts_same_region(scope_nodes, axis, interval):
+                    masks = cast(
+                        Set[common.HorizontalMask],
+                        iter_tree(scope_nodes).if_isinstance(common.HorizontalMask).to_set(),
+                    )
+
                     horizontal_mask_interval = next(
-                        iter(
-                            (
-                                mask.intervals[axis.to_idx()]
-                                for mask in iter_tree(scope_nodes).if_isinstance(
-                                    common.HorizontalMask
-                                )
-                            )
-                        )
+                        iter(mask.intervals[axis.to_idx()] for mask in masks)
                     )
                     interval = dcir.DomainInterval.intersection(
                         axis, horizontal_mask_interval, interval

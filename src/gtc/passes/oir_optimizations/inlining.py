@@ -13,7 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import copy as cp
-from typing import Any, Dict, Set
+from typing import Any, Dict, Set, Optional, cast
 
 from eve import NodeTranslator, NodeVisitor
 from eve.concepts import NOTHING
@@ -54,7 +54,7 @@ class MaskCollector(NodeVisitor):
                 masks_to_inline.pop(node.mask.name)
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> Dict[str, oir.Expr]:
-        masks_to_inline: Dict[str, oir.Expr] = {
+        masks_to_inline: Dict[str, Optional[oir.Expr]] = {
             mask_stmt.mask.name: None
             for mask_stmt in node.iter_tree()
             .if_isinstance(oir.MaskStmt)
@@ -62,7 +62,7 @@ class MaskCollector(NodeVisitor):
         }
         self.visit(node.vertical_loops, masks_to_inline=masks_to_inline, **kwargs)
         assert all(value is not None for value in masks_to_inline.values())
-        return masks_to_inline
+        return cast(Dict[str, oir.Expr], masks_to_inline)
 
 
 class MaskInlining(NodeTranslator):

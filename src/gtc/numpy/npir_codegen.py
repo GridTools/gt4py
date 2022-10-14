@@ -17,6 +17,8 @@ import textwrap
 from dataclasses import dataclass, field
 from typing import Any, Collection, List, Optional, Set, Tuple, Union, cast
 
+from devtools import debug
+
 from eve import SymbolTableTrait
 from eve.codegen import FormatTemplate, JinjaTemplate, TemplatedGenerator
 from gtc import common
@@ -54,15 +56,15 @@ def _make_slice_access(
     axes: List[str] = []
 
     if interval is None:
-        interval = common.HorizontalMask(
-            i=common.HorizontalInterval.compute_domain(),
-            j=common.HorizontalInterval.compute_domain(),
+        interval = npir.HorizontalMask(
+            i=(common.AxisBound.start(0), common.AxisBound.end(0)),
+            j=(common.AxisBound.start(0), common.AxisBound.end(0)),
         )
 
     if offset[0] is not None:
-        axes.append(_slice_string("i", offset[0], (interval.i.start, interval.i.end)))
+        axes.append(_slice_string("i", offset[0], interval.i))
     if offset[1] is not None:
-        axes.append(_slice_string("j", offset[1], (interval.j.start, interval.j.end)))
+        axes.append(_slice_string("j", offset[1], interval.j))
 
     if isinstance(offset[2], numbers.Number):
         bounds = (
@@ -150,7 +152,7 @@ class NpirCodegen(TemplatedGenerator):
         def add_declared(self, *args):
             self.locals_declared |= set(args)
 
-    contexts = (SymbolTableTrait.symtable_merger,)
+    contexts = (SymbolTableTrait.symtable_merger,)  # type: ignore
 
     FieldDecl = FormatTemplate(
         "{name} = Field({name}, _origin_['{name}'], ({', '.join(dimensions)}))"
@@ -178,14 +180,17 @@ class NpirCodegen(TemplatedGenerator):
             if isinstance(node.k_offset, npir.VarKOffset)
             else node.k_offset
         )
-        offsets = (node.i_offset, node.j_offset, k_offset)
+        offsets: Tuple[Optional[int], Optional[int], Union[str, int, None]] = (
+            node.i_offset,
+            node.j_offset,
+            k_offset,
+        )
 
         # To determine: when is the symbol name not in the symtable?
         if node.name in kwargs.get("symtable", {}):
             decl = kwargs["symtable"][node.name]
             dimensions = decl.dimensions if isinstance(decl, npir.FieldDecl) else [True] * 3
-            offsets = cast(
-                Tuple[Optional[int], Optional[int], Optional[Union[str, int]]],
+            offsets = (
                 tuple(off if has_dim else None for has_dim, off in zip(dimensions, offsets)),
             )
 
@@ -251,7 +256,9 @@ class NpirCodegen(TemplatedGenerator):
             return "np.power"
         elif node == common.NativeFunction.GAMMA:
             return "scipy.special.gamma"
-        return "np." + self.generic_visit(node, **kwargs)
+        name = self.generic_visit(node, **kwargs)
+        assert name is str
+        return f"np.{name}"
 
     def visit_NativeFuncCall(
         self, node: npir.NativeFuncCall, *, mask: Optional[str] = None, **kwargs: Any

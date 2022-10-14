@@ -14,7 +14,7 @@
 
 import functools
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Set, Union
+from typing import Any, Dict, List, Set, Union, cast
 
 from typing_extensions import Protocol
 
@@ -68,7 +68,7 @@ class OIRToCUIR(eve.NodeTranslator):
                 dtype=common.DataType.INT32,
             )
 
-    contexts = (eve.SymbolTableTrait.symtable_merger,)
+    contexts = (eve.SymbolTableTrait.symtable_merger,)  # type: ignore
 
     def visit_Literal(self, node: oir.Literal, **kwargs: Any) -> cuir.Literal:
         return cuir.Literal(value=node.value, dtype=node.dtype)
@@ -106,6 +106,7 @@ class OIRToCUIR(eve.NodeTranslator):
         mask_expr: List[cuir.Expr] = []
         for axis_index, interval in enumerate(mask.intervals):
             if interval.is_single_index():
+                assert interval.start is not None
                 mask_expr.append(
                     cuir.BinaryOp(
                         op=common.ComparisonOperator.EQ,
@@ -286,7 +287,7 @@ class OIRToCUIR(eve.NodeTranslator):
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> cuir.Program:
         block_extents = compute_horizontal_block_extents(node)
-        ctx = self.Context(new_symbol_name=symbol_name_creator(collect_symbol_names(node)))
+        ctx = self.Context(new_symbol_name=cast(SymbolNameCreator, symbol_name_creator(collect_symbol_names(node))))
         kernels = self.visit(
             node.vertical_loops,
             ctx=ctx,

@@ -87,7 +87,9 @@ def empty(
             If illegal or inconsistent arguments are specified.
     """
     _error_on_invalid_backend(backend)
-    if gt_backend.from_name(backend).storage_info["device"] == "gpu":
+    backend = gt_backend.from_name(backend)
+    assert backend is not None
+    if backend.storage_info["device"] == "gpu":
         allocate_f = storage_utils.allocate_gpu
     else:
         allocate_f = storage_utils.allocate_cpu
@@ -386,18 +388,20 @@ if dace is not None:
             aligned_index, shape, dtype, dimensions
         )
         itemsize = dtype.itemsize
-        layout_map = gt_backend.from_name(backend).storage_info["layout_map"](dimensions)
+        backend = gt_backend.from_name(backend)
+        assert backend is not None
+        layout_map = backend.storage_info["layout_map"](dimensions)
 
         order_idx = storage_utils.idx_from_order([i for i in layout_map if i is not None])
         padded_shape = storage_utils.compute_padded_shape(
-            shape, gt_backend.from_name(backend).storage_info["alignment"], order_idx
+            shape, backend.storage_info["alignment"], order_idx
         )
 
         strides = storage_utils.strides_from_padded_shape(padded_shape, order_idx, itemsize)
 
         storage = (
             dace.StorageType.GPU_Global
-            if gt_backend.from_name(backend).storage_info["device"] == "gpu"
+            if backend.storage_info["device"] == "gpu"
             else dace.StorageType.CPU_Heap
         )
         start_offset = int(np.array([aligned_index]) @ np.array([strides]).T) // itemsize
