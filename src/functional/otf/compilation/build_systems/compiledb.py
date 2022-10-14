@@ -245,8 +245,8 @@ def _cc_generate_compiledb(
         fencil_name=name,
     )
 
-    otf_builder.write_files()
-    otf_builder.run_config()
+    prototype_project.write_files()
+    prototype_project.run_config()
 
     log_file = cache_path / "log_compiledb.txt"
 

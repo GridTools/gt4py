@@ -24,7 +24,6 @@ _DATAFILE_NAME: Final = "gt4py.json"
 
 
 class BuildStatus(enum.IntEnum):
-    BuildStatus = enum.auto()
     INITIALIZED = enum.auto()
     CONFIGURED = enum.auto()
     COMPILED = enum.auto()
@@ -44,18 +43,30 @@ class BuildData:
     entry_point_name: str
 
     def to_json(self) -> dict[str, str]:
-        return dataclasses.asdict(self) | {"status": self.status.name, "module": str(self.module)}
+        return {
+            "status": self.status.name,
+            "module": str(self.module),
+            "entry_point_name": self.entry_point_name,
+        }
 
     @classmethod
-    def from_json(cls, data) -> BuildData:
+    def _status_to_json(cls, status: BuildStatus) -> str:
+        return status.name
+
+    @classmethod
+    def _status_from_json(cls, status: str) -> BuildStatus:
+        return getattr(BuildStatus, status)
+
+    @classmethod
+    def _module_from_json(cls, module: str) -> pathlib.Path:
+        return pathlib.Path(module)
+
+    @classmethod
+    def from_json(cls, json_dict: dict[str, str]) -> BuildData:
         return cls(
-            **(
-                data
-                | {
-                    "status": getattr(BuildStatus, data["status"]),
-                    "module": pathlib.Path(data["module"]),
-                }
-            )
+            status=getattr(BuildStatus, json_dict["status"]),
+            module=pathlib.Path(json_dict["module"]),
+            entry_point_name=json_dict["entry_point_name"],
         )
 
 
@@ -63,7 +74,7 @@ def contains_data(path: pathlib.Path) -> bool:
     return (path / _DATAFILE_NAME).exists()
 
 
-def read_data(path) -> Optional[BuildData]:
+def read_data(path: pathlib.Path) -> Optional[BuildData]:
     if contains_data(path):
         return BuildData.from_json(json.loads((path / _DATAFILE_NAME).read_text()))
     return None
