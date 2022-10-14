@@ -22,9 +22,9 @@ from functional.otf.compilation import build_data, cache, importer
 from functional.otf.step_types import LS, SrcL, TgtL
 
 
-SL = TypeVar("SL", bound=languages.LanguageTag)
-ST = TypeVar("ST", bound=languages.LanguageSettings)
-NT = TypeVar("NT")
+SourceLanguageType = TypeVar("SourceLanguageType", bound=languages.LanguageTag)
+LanguageSettingsType = TypeVar("LanguageSettingsType", bound=languages.LanguageSettings)
+T = TypeVar("T")
 
 
 def is_compiled(data: build_data.BuildData) -> bool:
@@ -45,14 +45,19 @@ class BuildSystemProjectGenerator(Protocol[SrcL, LS, TgtL]):
 
 
 @dataclasses.dataclass(frozen=True)
-class Compiler(step_types.CompilationStep[SL, ST, languages.Python]):
+class Compiler(
+    step_types.CompilationStep[SourceLanguageType, LanguageSettingsType, languages.Python]
+):
     cache_strategy: cache.Strategy
-    builder_factory: BuildSystemProjectGenerator[SL, ST, languages.Python]
+    builder_factory: BuildSystemProjectGenerator[
+        SourceLanguageType, LanguageSettingsType, languages.Python
+    ]
     force_recompile: bool = False
     """Use any build system (via configured factory) to compile a GT4Py program to a ``functional.otf.stages.CompiledProgram``."""
 
     def __call__(
-        self, inp: stages.CompilableSource[SL, ST, languages.Python]
+        self,
+        inp: stages.CompilableSource[SourceLanguageType, LanguageSettingsType, languages.Python],
     ) -> stages.CompiledProgram:
         src_dir = cache.get_cache_folder(inp, self.cache_strategy)
 
@@ -73,9 +78,11 @@ class Compiler(step_types.CompilationStep[SL, ST, languages.Python]):
         )
 
     def chain(
-        self, step: workflow.StepProtocol[stages.CompiledProgram, NT]
+        self, step: workflow.StepProtocol[stages.CompiledProgram, T]
     ) -> workflow.Workflow[
-        stages.CompilableSource[SL, ST, languages.Python], stages.CompiledProgram, NT
+        stages.CompilableSource[SourceLanguageType, LanguageSettingsType, languages.Python],
+        stages.CompiledProgram,
+        T,
     ]:
         return workflow.Workflow(first=self, second=step)
 
