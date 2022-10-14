@@ -158,3 +158,5 @@ repos:
       tests/test_unittest/test_gtc/gtir_utils.py |
       tests/test_unittest/test_gtc/test_gtir_to_oir.py |
       )$
+    entry: |
+      mypy --install-types --non-interactive
