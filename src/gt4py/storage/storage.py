@@ -13,11 +13,11 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from numbers import Number
-from typing import Any, Optional, Sequence, Tuple, Union
+from typing import Any, Optional, Sequence, Union
 
 import numpy as np
 
-from gt4py import backend as gt_backend
+import gt4py.backend
 
 
 try:
@@ -40,7 +40,7 @@ from . import utils as storage_utils
 
 
 def _error_on_invalid_backend(backend):
-    if backend not in gt_backend.REGISTRY:
+    if backend not in gt4py.backend.REGISTRY:
         raise RuntimeError(f"Backend '{backend}' is not registered.")
 
 
@@ -87,9 +87,9 @@ def empty(
             If illegal or inconsistent arguments are specified.
     """
     _error_on_invalid_backend(backend)
-    backend = gt_backend.from_name(backend)
-    assert backend is not None
-    if backend.storage_info["device"] == "gpu":
+    backend_cls = gt4py.backend.from_name(backend)
+    assert backend_cls is not None
+    if backend_cls.storage_info["device"] == "gpu":
         allocate_f = storage_utils.allocate_gpu
     else:
         allocate_f = storage_utils.allocate_cpu
@@ -100,8 +100,8 @@ def empty(
 
     _error_on_invalid_backend(backend)
 
-    alignment = gt_backend.from_name(backend).storage_info["alignment"]
-    layout_map = gt_backend.from_name(backend).storage_info["layout_map"](dimensions)
+    alignment = backend_cls.storage_info["alignment"]
+    layout_map = backend_cls.storage_info["layout_map"](dimensions)
 
     dtype = np.dtype(dtype)
     _, res = allocate_f(aligned_index, shape, layout_map, dtype, alignment * dtype.itemsize)
@@ -388,27 +388,27 @@ if dace is not None:
             aligned_index, shape, dtype, dimensions
         )
         itemsize = dtype.itemsize
-        backend = gt_backend.from_name(backend)
-        assert backend is not None
-        layout_map = backend.storage_info["layout_map"](dimensions)
+        backend_cls = gt4py.backend.from_name(backend)
+        assert backend_cls is not None
+        layout_map = backend_cls.storage_info["layout_map"](dimensions)
 
         order_idx = storage_utils.idx_from_order([i for i in layout_map if i is not None])
         padded_shape = storage_utils.compute_padded_shape(
-            shape, backend.storage_info["alignment"], order_idx
+            shape, backend_cls.storage_info["alignment"], order_idx
         )
 
         strides = storage_utils.strides_from_padded_shape(padded_shape, order_idx, itemsize)
 
         storage = (
             dace.StorageType.GPU_Global
-            if backend.storage_info["device"] == "gpu"
+            if backend_cls.storage_info["device"] == "gpu"
             else dace.StorageType.CPU_Heap
         )
         start_offset = int(np.array([aligned_index]) @ np.array([strides]).T) // itemsize
 
         total_size = int(int(np.array([shape]) @ np.array([strides]).T) // itemsize)
 
-        start_offset = start_offset % gt_backend.from_name(backend).storage_info["alignment"]
+        start_offset = start_offset % backend_cls.storage_info["alignment"]
         return dace.data.Array(
             shape=shape,
             strides=[s // itemsize for s in strides],

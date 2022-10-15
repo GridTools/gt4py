@@ -16,7 +16,7 @@ import abc
 import numbers
 import os
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set
+from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional, Set, cast
 
 import jinja2
 import numpy
@@ -102,9 +102,9 @@ def make_args_data_from_gtir(pipeline: GtirPipeline) -> ModuleData:
         )
 
     for decl in (param for param in all_params if isinstance(param, gtir.ScalarDecl)):
-        access = accesses[decl.name]
-        dtype = numpy.dtype(decl.dtype.name.lower())
+        access = cast(Literal[AccessKind.NONE, AccessKind.READ], accesses[decl.name])
         assert access in {AccessKind.NONE, AccessKind.READ}
+        dtype = numpy.dtype(decl.dtype.name.lower())
         data.parameter_info[decl.name] = ParameterInfo(access=access, dtype=dtype)
 
     data.unreferenced = [*sorted(name for name in accesses if accesses[name] == AccessKind.NONE)]

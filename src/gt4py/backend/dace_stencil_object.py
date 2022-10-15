@@ -23,24 +23,16 @@ import dace.data
 import dace.frontend.python.common
 from dace.frontend.python.common import SDFGClosure, SDFGConvertible
 
-from gt4py import backend as gt_backend
+import gt4py.backend
 from gt4py.backend.dace_backend import freeze_origin_domain_sdfg
 from gt4py.definitions import AccessKind, DomainInfo, FieldInfo
-from gt4py.stencil_object import FrozenStencil, StencilObject
+from gt4py.stencil_object import ArgsInfo, FrozenStencil, StencilObject
 from gt4py.utils import shash
 
 
-@dataclass
-class _ArgsInfo:
-    device: str
-    array: dace.data.Array
-    origin: Optional[Tuple[int]] = None
-    dimensions: Optional[Tuple[str]] = None
-
-
-def _extract_array_infos(field_args, device) -> Dict[str, _ArgsInfo]:
+def _extract_array_infos(field_args, device) -> Dict[str, Optional[ArgsInfo]]:
     return {
-        name: _ArgsInfo(
+        name: ArgsInfo(
             array=arg,
             dimensions=getattr(arg, "__gt_dims__", None),
             device=device,
@@ -48,10 +40,6 @@ def _extract_array_infos(field_args, device) -> Dict[str, _ArgsInfo]:
         )
         for name, arg in field_args.items()
     }
-
-
-def _extract_stencil_arrays(array_infos: Dict[str, _ArgsInfo]):
-    return {name: info.array for name, info in array_infos.items()}
 
 
 def add_optional_fields(
@@ -199,17 +187,19 @@ class DaCeStencilObject(StencilObject, SDFGConvertible):
         arg_names: Iterable[str],
         domain_info: DomainInfo,
         field_info: Dict[str, FieldInfo],
-        domain: Optional[Tuple[int, int, int]] = None,
+        domain: Optional[Tuple[int, ...]] = None,
         origin: Optional[Dict[str, Tuple[int, ...]]] = None,
         **kwargs,
     ):
+        backend_cls = gt4py.backend.from_name(backend)
+        assert backend_cls is not None
         args_iter = iter(args)
         args_as_kwargs = {
             name: (kwargs[name] if name in kwargs else next(args_iter)) for name in arg_names
         }
         arg_infos = _extract_array_infos(
             field_args=args_as_kwargs,
-            device=gt_backend.from_name(backend).storage_info["device"],
+            device=backend_cls.storage_info["device"],
         )
 
         origin = DaCeStencilObject._normalize_origins(arg_infos, field_info, origin)

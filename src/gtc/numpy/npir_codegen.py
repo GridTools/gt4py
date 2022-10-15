@@ -17,8 +17,6 @@ import textwrap
 from dataclasses import dataclass, field
 from typing import Any, Collection, List, Optional, Set, Tuple, Union, cast
 
-from devtools import debug
-
 from eve import SymbolTableTrait
 from eve.codegen import FormatTemplate, JinjaTemplate, TemplatedGenerator
 from gtc import common
@@ -190,7 +188,8 @@ class NpirCodegen(TemplatedGenerator):
         if node.name in kwargs.get("symtable", {}):
             decl = kwargs["symtable"][node.name]
             dimensions = decl.dimensions if isinstance(decl, npir.FieldDecl) else [True] * 3
-            offsets = (
+            offsets = cast(
+                Tuple[Optional[int], Optional[int], Union[str, int, None]],
                 tuple(off if has_dim else None for has_dim, off in zip(dimensions, offsets)),
             )
 

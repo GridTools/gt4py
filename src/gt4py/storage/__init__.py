@@ -11,14 +11,15 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
+# flake8: noqa: F401
 
 """GridTools storages classes."""
 
 
-from .storage import empty, from_array, full, ones, zeros  # noqa: F401
+from .storage import empty, from_array, full, ones, zeros
 
 
 try:
-    from .storage import dace_descriptor  # noqa: F401
+    from .storage import dace_descriptor
 except ImportError:
     pass

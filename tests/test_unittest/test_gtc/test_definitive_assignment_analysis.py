@@ -11,8 +11,9 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-
 # flake8: noqa: F841
+
+import typing
 from typing import Callable, List, Tuple, TypedDict
 
 import pytest
@@ -47,6 +48,7 @@ def clear_gtir_caches():
 
 
 # test cases
+@typing.no_type_check
 @register_test_case(valid=False)
 def daa_0(in_field: Field[float], mask: Field[bool], out_field: Field[float]):
     """Invalid stencil with `tmp` undefined in one branch if a conditional on a boolean mask field"""
@@ -57,6 +59,7 @@ def daa_0(in_field: Field[float], mask: Field[bool], out_field: Field[float]):
             out_field = tmp
 
 
+@typing.no_type_check
 @register_test_case(valid=False)
 def daa_1(in_field: Field[float], mask: bool, out_field: Field[float]):
     """Invalid stencil with `tmp` undefined in one branch if a conditional on a boolean mask parameter"""
@@ -67,6 +70,7 @@ def daa_1(in_field: Field[float], mask: bool, out_field: Field[float]):
             out_field = tmp
 
 
+@typing.no_type_check
 @register_test_case(valid=True)
 def daa_2(in_field: Field[float], mask: Field[bool], out_field: Field[float]):
     """Valid stencil with `tmp` defined in one branch and only used inside of that branch."""
@@ -77,6 +81,7 @@ def daa_2(in_field: Field[float], mask: Field[bool], out_field: Field[float]):
                 out_field = tmp
 
 
+@typing.no_type_check
 @register_test_case(valid=True)
 def daa_3(in_field: Field[float], mask: Field[bool], out_field: Field[float]):
     """Valid stencil with `tmp` defined in both branches of a conditional on a boolean field and used outside."""
@@ -89,6 +94,7 @@ def daa_3(in_field: Field[float], mask: Field[bool], out_field: Field[float]):
             out_field = tmp
 
 
+@typing.no_type_check
 @register_test_case(valid=False)
 def daa_4(in_field: Field[float], mask: bool, out_field: Field[float]):
     """Valid stencil with `tmp` defined in both branches of a conditional on a boolean parameter and used outside."""
@@ -101,6 +107,7 @@ def daa_4(in_field: Field[float], mask: bool, out_field: Field[float]):
             out_field = tmp
 
 
+@typing.no_type_check
 @register_test_case(valid=True)
 def daa_5(in_field: Field[float], mask: Field[bool], out_field: Field[float]):
     """Valid stencil with `tmp` defined in every branch of a nested if-statement and used outside."""
@@ -116,6 +123,7 @@ def daa_5(in_field: Field[float], mask: Field[bool], out_field: Field[float]):
             out_field = tmp
 
 
+@typing.no_type_check
 @register_test_case(valid=True)
 def daa_6(in_field: Field[float], mask: Field[bool], out_field: Field[float]):
     """Valid stencil with `tmp` defined in one branch only, but unconditionally overwritten outside before use."""
@@ -127,6 +135,7 @@ def daa_6(in_field: Field[float], mask: Field[bool], out_field: Field[float]):
             out_field = tmp
 
 
+@typing.no_type_check
 @register_test_case(valid=True)
 def daa_7(in_field: Field[float], out_field: Field[float]):
     """Valid stencil with `tmp` defined in both branches with a condition on a float field"""
@@ -139,6 +148,7 @@ def daa_7(in_field: Field[float], out_field: Field[float]):
             out_field = tmp
 
 
+@typing.no_type_check
 @register_test_case(valid=True)
 def daa_8(in_field: Field[float], out_field: Field[float]):
     """Valid stencil with `tmp` defined in all three branches of if-elif-else statement"""
@@ -153,6 +163,7 @@ def daa_8(in_field: Field[float], out_field: Field[float]):
             out_field = tmp
 
 
+@typing.no_type_check
 @register_test_case(valid=True)
 def daa_9(in_field: Field[float], cond_field: Field[float], mask: bool, out_field: Field[float]):
     """Valid stencil with `tmp` defined in all branches of a nested if-elif-else statement"""
@@ -170,6 +181,7 @@ def daa_9(in_field: Field[float], cond_field: Field[float], mask: bool, out_fiel
             out_field = tmp
 
 
+@typing.no_type_check
 @register_test_case(valid=False)
 def daa_10(in_field: Field[float], cond_field: Field[float], mask: bool, out_field: Field[float]):
     """Invalid stencil with `tmp` defined in all, but one branches of a nested if-elif-else statement"""

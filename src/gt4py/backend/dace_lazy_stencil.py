@@ -40,6 +40,7 @@ class DaCeLazyStencil(LazyStencil, SDFGConvertible):
         sdfg_manager = SDFGManager(self.builder)
         args_data = make_args_data_from_gtir(self.builder.gtir_pipeline)
         arg_names = [arg.name for arg in self.builder.gtir.api_signature]
+        assert args_data.domain_info is not None
         norm_kwargs = DaCeStencilObject.normalize_args(
             *args,
             backend=self.backend.name,

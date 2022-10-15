@@ -12,7 +12,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import Any, Dict
+from typing import Any, Dict, cast
 
 import numpy as np
 import pytest
@@ -22,6 +22,7 @@ from gt4py.backend.module_generator import make_args_data_from_gtir
 from gt4py.definitions import AccessKind
 from gt4py.gtscript import __INLINED, PARALLEL, Field, computation, interval
 from gt4py.stencil_builder import StencilBuilder
+from gt4py.type_hints import StencilFunc
 from gtc import gtir, utils
 
 from ..definitions import ALL_BACKENDS, CPU_BACKENDS, GPU_BACKENDS
@@ -145,7 +146,7 @@ def test_device_sync_option_registered(backend_name):
 def test_toolchain_profiling(backend_name: str, mode: int, rebuild: bool):
     build_info: Dict[str, Any] = {}
     builder = (
-        StencilBuilder(stencil_def)
+        StencilBuilder(cast(StencilFunc, stencil_def))
         .with_backend(backend_name)
         .with_externals({"MODE": mode})
         .with_options(

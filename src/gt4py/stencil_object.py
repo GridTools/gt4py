@@ -20,11 +20,10 @@ import typing
 from dataclasses import dataclass
 from numbers import Number
 from pickle import dumps
-from typing import Any, Callable, ClassVar, Dict, Optional, Tuple, Union
+from typing import Any, Callable, ClassVar, Dict, Optional, Tuple, Union, cast
 
 import numpy as np
 
-import gt4py.backend as gt_backend
 import gt4py.storage.utils
 import gtc.utils as gtc_utils
 from gt4py.definitions import AccessKind, DomainInfo, FieldInfo, ParameterInfo
@@ -57,19 +56,19 @@ def _compute_cache_key(
 
 
 @dataclass
-class _ArgsInfo:
+class ArgsInfo:
     device: str
     array: FieldType
-    original_object: Any
-    origin: Optional[Tuple[int]] = None
-    dimensions: Optional[Tuple[str]] = None
+    original_object: Optional[Any] = None
+    origin: Optional[Tuple[int, ...]] = None
+    dimensions: Optional[Tuple[str, ...]] = None
 
 
 def _extract_array_infos(
     field_args: Dict[str, Optional[FieldType]], device: str
-) -> Dict[str, Optional[_ArgsInfo]]:
+) -> Dict[str, Optional[ArgsInfo]]:
     asarray = gt4py.storage.utils.as_cupy if device == "gpu" else gt4py.storage.utils.as_numpy
-    array_infos: Dict[str, Optional[_ArgsInfo]] = {}
+    array_infos: Dict[str, Optional[ArgsInfo]] = {}
     for name, arg in field_args.items():
         if arg is None:
             array_infos[name] = None
@@ -83,7 +82,7 @@ def _extract_array_infos(
                 dimension_indices = [dimensions.index(sd) for sd in sorted_dimensions]
                 array = array.transpose(dimension_indices)
                 dimensions = tuple(sorted_dimensions)
-            array_infos[name] = _ArgsInfo(
+            array_infos[name] = ArgsInfo(
                 array=array,
                 original_object=arg,
                 dimensions=dimensions,
@@ -94,7 +93,7 @@ def _extract_array_infos(
 
 
 def _extract_stencil_arrays(
-    array_infos: Dict[str, Optional[_ArgsInfo]]
+    array_infos: Dict[str, Optional[ArgsInfo]]
 ) -> Dict[str, Optional[FieldType]]:
     return {name: info.array if info is not None else None for name, info in array_infos.items()}
 
@@ -284,19 +283,16 @@ class StencilObject(abc.ABC):
         pass
 
     @staticmethod
-    def _make_origin_dict(origin: Any) -> Dict[str, Index]:
+    def _make_origin_dict(origin: Any) -> Dict[str, Tuple[int, ...]]:
         try:
             if isinstance(origin, dict):
-                # This is needed because the keys in origin are StringLiteral as of DaCe v0.14, and they
-                # do not implement comparison methods. Revert this once DaCe is updated.
-                # See: https://github.com/GridTools/gt4py/issues/927
-                return {str(k): v for k, v in origin.items()}
+                return origin
             if origin is None:
                 return {}
             if isinstance(origin, collections.abc.Iterable):
-                return {"_all_": Index.from_value(origin)}
+                return {"_all_": cast(Tuple[int, ...], Index.from_value(origin))}
             if isinstance(origin, int):
-                return {"_all_": Index.from_k(origin)}
+                return {"_all_": cast(Tuple[int, ...], Index.from_k(origin))}
         except Exception:
             pass
 
@@ -304,7 +300,7 @@ class StencilObject(abc.ABC):
 
     @staticmethod
     def _get_max_domain(
-        array_infos: Dict[str, Optional[_ArgsInfo]],
+        array_infos: Dict[str, Optional[ArgsInfo]],
         domain_infos: DomainInfo,
         field_infos: Dict[str, FieldInfo],
         origin: Dict[str, Tuple[int, ...]],
@@ -351,7 +347,7 @@ class StencilObject(abc.ABC):
 
     def _validate_args(  # noqa: C901  # Function is too complex
         self,
-        arg_infos: Dict[str, Optional[_ArgsInfo]],
+        arg_infos: Dict[str, Optional[ArgsInfo]],
         param_args: Dict[str, Any],
         domain: Tuple[int, ...],
         origin: Dict[str, Tuple[int, ...]],
@@ -404,7 +400,9 @@ class StencilObject(abc.ABC):
                 arg_info = arg_infos[name]
                 assert arg_info is not None
 
-                if not gt_backend.from_name(self.backend).storage_info["is_compatible_layout"](
+                backend_cls = gt4py.backend.from_name(name)
+                assert backend_cls is not None
+                if not backend_cls.storage_info["is_compatible_layout"](
                     arg_info.array,
                     list(field_info.axes) + [str(d) for d in range(len(field_info.data_dims))],
                 ):
@@ -480,7 +478,7 @@ class StencilObject(abc.ABC):
 
     @staticmethod
     def _normalize_origins(
-        array_infos: Dict[str, Optional[_ArgsInfo]],
+        array_infos: Dict[str, Optional[ArgsInfo]],
         field_infos: Dict[str, FieldInfo],
         origin: Optional[OriginType],
     ) -> Dict[str, Tuple[int, ...]]:
@@ -554,7 +552,9 @@ class StencilObject(abc.ABC):
         """
         if exec_info is not None:
             exec_info["call_run_start_time"] = time.perf_counter()
-        device = gt_backend.from_name(self.backend).storage_info["device"]
+        backend_cls = gt4py.backend.from_name(self.backend)
+        assert backend_cls is not None
+        device = backend_cls.storage_info["device"]
         array_infos = _extract_array_infos(field_args, device)
 
         cache_key = _compute_cache_key(field_args, parameter_args, domain, origin, device)

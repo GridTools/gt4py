@@ -43,11 +43,11 @@ def load_stencil(
     # Load components
     backend_cls = gt_backend.from_name(backend_name)
     if backend_cls is None:
-        raise ValueError("Unknown backend name ({name})".format(name=backend_name))
+        raise ValueError(f"Unknown backend name ({backend_name})")
 
     frontend = gt_frontend.from_name(frontend_name)
     if frontend is None:
-        raise ValueError("Invalid frontend specification ({name})".format(name=frontend_name))
+        raise ValueError(f"Invalid frontend name ({frontend_name})")
 
     builder = StencilBuilder(
         definition_func, options=build_options, backend=backend_name, frontend=frontend

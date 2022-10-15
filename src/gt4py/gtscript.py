@@ -33,7 +33,7 @@ from gt4py.lazy_stencil import LazyStencil
 try:
     from gt4py.backend.dace_lazy_stencil import DaCeLazyStencil
 except ImportError:
-    DaCeLazyStencil = LazyStencil
+    DaCeLazyStencil = LazyStencil  # type: ignore
 
 # GTScript builtins
 MATH_BUILTINS = {
