@@ -77,6 +77,7 @@ class BindingSource(Generic[SrcL, TgtL]):
     library_deps: tuple[source.LibraryDependency, ...]
 
 
+# TODO(ricoh): reconsider name in view of future backends producing standalone compilable ProgramSource code
 @dataclasses.dataclass(frozen=True)
 class CompilableSource(Generic[SrcL, SettingT, TgtL]):
     """
