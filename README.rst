@@ -36,7 +36,7 @@ IPython notebooks on Jupyter.
 
 .. code-block:: bash
 
-   $ pip install jupyterlab
+   $ pip install jupyterlab matplotlib
    $ jupyter-lab
 
 There are two options to run the unit and integration tests in ``tests/``:
