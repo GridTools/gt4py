@@ -22,22 +22,22 @@ from functional.otf.compilation.build_systems import cmake, compiledb
 
 
 def test_gtfn_cpp_with_cmake(program_source_with_name):
-    source_module_example = program_source_with_name("gtfn_cpp_with_cmake")
+    example_program_source = program_source_with_name("gtfn_cpp_with_cmake")
     build_the_program = workflow.Workflow(
         pybind.bind_source,
         compiler.Compiler(
             cache_strategy=cache.Strategy.SESSION, builder_factory=cmake.CMakeFactory()
         ),
     )
-    otf_fencil = build_the_program(source_module_example)
+    compiled_program = build_the_program(example_program_source)
     buf = np.zeros(shape=(6, 5), dtype=np.float32)
     sc = np.float32(3.1415926)
-    res = otf_fencil(buf, sc)
+    res = compiled_program(buf, sc)
     assert math.isclose(res, 6 * 5 * 3.1415926, rel_tol=1e-4)
 
 
 def test_gtfn_cpp_with_compiledb(program_source_with_name):
-    source_module_example = program_source_with_name("gtfn_cpp_with_compiledb")
+    example_program_source = program_source_with_name("gtfn_cpp_with_compiledb")
     build_the_program = workflow.Workflow(
         pybind.bind_source,
         compiler.Compiler(
@@ -45,8 +45,8 @@ def test_gtfn_cpp_with_compiledb(program_source_with_name):
             builder_factory=compiledb.CompiledbFactory(),
         ),
     )
-    otf_fencil = build_the_program(source_module_example)
+    compiled_program = build_the_program(example_program_source)
     buf = np.zeros(shape=(6, 5), dtype=np.float32)
     sc = np.float32(3.1415926)
-    res = otf_fencil(buf, sc)
+    res = compiled_program(buf, sc)
     assert math.isclose(res, 6 * 5 * 3.1415926, rel_tol=1e-4)
