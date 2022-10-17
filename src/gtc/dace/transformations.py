@@ -24,7 +24,7 @@ def eliminate_trivial_maps(sdfg: dace.SDFG):
                         continue
                     try:
                         TrivialMapElimination.apply_to(
-                            state.parent, map_entry=map_entry, verify=True
+                            state.parent, map_entry=map_entry, verify=True, save=False
                         )
                         applied = True
                         break
@@ -59,17 +59,19 @@ class InlineThreadLocalTransients(dace.transformation.SingleStateTransformation)
         ):
             return False
 
-        toremove = InlineTransients._candidates(sdfg, graph, scope_subgraph.nodes()[0])
-        return len(toremove) > 0
+        candidates = InlineTransients._candidates(sdfg, graph, scope_subgraph.nodes()[0])
+        return len(candidates) > 0
 
     def apply(self, graph, sdfg):
         map_entry = self.map_entry
 
         scope_subgraph = graph.scope_subgraph(map_entry, include_entry=False, include_exit=False)
         nsdfg_node = scope_subgraph.nodes()[0]
-        toremove = InlineTransients._candidates(sdfg, graph, nsdfg_node)
-        InlineTransients.apply_to(sdfg, nsdfg=nsdfg_node)
-        for name in toremove:
+        candidates = InlineTransients._candidates(sdfg, graph, nsdfg_node)
+        InlineTransients.apply_to(sdfg, nsdfg=nsdfg_node, save=False)
+        for name in candidates:
+            if name in sdfg.arrays:
+                continue
             array: dace.data.Array = nsdfg_node.sdfg.arrays[name]
             shape = [dace.symbolic.overapproximate(s) for s in array.shape]
             strides = [1]
