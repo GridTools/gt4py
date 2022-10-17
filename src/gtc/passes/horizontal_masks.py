@@ -103,7 +103,9 @@ def _compute_relative_interval(
 
 def compute_relative_mask(
     extent: Extent, mask: common.HorizontalMask
-) -> Optional[Tuple[Tuple[common.AxisBound, common.AxisBound], Tuple[common.AxisBound, common.AxisBound]]]:
+) -> Optional[
+    Tuple[Tuple[common.AxisBound, common.AxisBound], Tuple[common.AxisBound, common.AxisBound]]
+]:
     """
     Output a HorizontalMask that is relative to and always inside the extent instead of the compute domain.
 

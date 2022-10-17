@@ -13,7 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import copy as cp
-from typing import Any, Dict, Set, Optional, cast
+from typing import Any, Dict, Optional, Set, cast
 
 from eve import NodeTranslator, NodeVisitor
 from eve.concepts import NOTHING

@@ -11,7 +11,7 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-from typing import Any, Dict, List, Optional, Sequence, Tuple, Union, Set, Generator
+from typing import Any, Dict, Generator, List, Optional, Sequence, Set, Tuple, Union
 
 import dace
 import sympy

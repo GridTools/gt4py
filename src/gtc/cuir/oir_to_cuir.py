@@ -287,7 +287,9 @@ class OIRToCUIR(eve.NodeTranslator):
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> cuir.Program:
         block_extents = compute_horizontal_block_extents(node)
-        ctx = self.Context(new_symbol_name=cast(SymbolNameCreator, symbol_name_creator(collect_symbol_names(node))))
+        ctx = self.Context(
+            new_symbol_name=cast(SymbolNameCreator, symbol_name_creator(collect_symbol_names(node)))
+        )
         kernels = self.visit(
             node.vertical_loops,
             ctx=ctx,

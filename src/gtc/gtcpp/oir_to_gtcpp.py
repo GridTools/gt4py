@@ -370,7 +370,9 @@ class OIRToGTCpp(eve.NodeTranslator):
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> gtcpp.Program:
         prog_ctx = self.ProgramContext()
         comp_ctx = self.GTComputationContext(
-            create_symbol_name=cast(SymbolNameCreator, symbol_name_creator(collect_symbol_names(node)))
+            create_symbol_name=cast(
+                SymbolNameCreator, symbol_name_creator(collect_symbol_names(node))
+            )
         )
 
         assert all([isinstance(decl, oir.Temporary) for decl in node.declarations])

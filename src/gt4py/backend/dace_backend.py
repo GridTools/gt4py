@@ -17,7 +17,7 @@ import os
 import pathlib
 import re
 import textwrap
-from typing import TYPE_CHECKING, Dict, List, Optional, Tuple, Type, Any
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Type
 
 import dace
 import dace.data

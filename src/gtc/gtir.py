@@ -151,9 +151,7 @@ class While(common.While[Stmt, Expr], Stmt):
     """While loop with a field or scalar expression as condition."""
 
     @validator("body")
-    def _no_write_and_read_with_horizontal_offset_all(
-        cls, body: List[Stmt]
-    ) -> List[Stmt]:
+    def _no_write_and_read_with_horizontal_offset_all(cls, body: List[Stmt]) -> List[Stmt]:
         """In a while loop all variables must not be written and read with a horizontal offset."""
         if names := _written_and_read_with_offset(body):
             raise ValueError(f"Illegal write and read with horizontal offset detected for {names}.")
