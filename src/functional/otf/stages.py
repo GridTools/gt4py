@@ -94,7 +94,7 @@ class CompilableSource(Generic[SrcL, SettingT, TgtL]):
     def library_deps(self) -> tuple[source.LibraryDependency, ...]:
         if not self.binding_source:
             return self.program_source.library_deps
-        return tuple((*self.program_source.library_deps, *self.binding_source.library_deps))
+        return _unique_libs(*self.program_source.library_deps, *self.binding_source.library_deps)
 
 
 class BuildSystemProject(Protocol[SrcL_co, SettingT_co, TgtL_co]):
@@ -114,3 +114,21 @@ class CompiledProgram(Protocol):
 
     def __call__(self, *args, **kwargs) -> None:
         ...
+
+
+def _unique_libs(*args: tuple[source.LibraryDependency, ...]) -> tuple[source.LibraryDependency]:
+    """
+    Filter out multiple occurrences of the same ``source.LibraryDependency``.
+
+    Examples:
+    ---------
+    >>> libs_a = (source.LibraryDependency("foo", "1.2.3"), source.LibraryDependency("common", "1.0.0"))
+    >>> libs_b = (source.LibraryDependency("common", "1.0.0"), source.LibraryDependency("bar", "1.2.3"))
+    >>> _unique_libs(*libs_a, *libs_b)
+    (LibraryDependency(name='foo', version='1.2.3'), LibraryDependency(name='common', version='1.0.0'), LibraryDependency(name='bar', version='1.2.3'))
+    """
+    unique: list[source.LibraryDependency] = []
+    for lib in args:
+        if lib not in unique:
+            unique.append(lib)
+    return tuple(unique)
