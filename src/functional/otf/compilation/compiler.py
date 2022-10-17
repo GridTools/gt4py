@@ -48,12 +48,13 @@ class BuildSystemProjectGenerator(Protocol[SrcL, LS, TgtL]):
 class Compiler(
     step_types.CompilationStep[SourceLanguageType, LanguageSettingsType, languages.Python]
 ):
+    """Use any build system (via configured factory) to compile a GT4Py program to a ``functional.otf.stages.CompiledProgram``."""
+
     cache_strategy: cache.Strategy
     builder_factory: BuildSystemProjectGenerator[
         SourceLanguageType, LanguageSettingsType, languages.Python
     ]
     force_recompile: bool = False
-    """Use any build system (via configured factory) to compile a GT4Py program to a ``functional.otf.stages.CompiledProgram``."""
 
     def __call__(
         self,
