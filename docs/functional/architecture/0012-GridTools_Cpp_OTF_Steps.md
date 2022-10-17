@@ -33,7 +33,7 @@ The source generator part of the GTFN backend exposes two public interfaces.
 
 `program_processors.codegens.gtfn_modules.translate_program` implements the `otf.step_types.TranslationStep` protocol as well as `otf.workflow.Step` and produces a C++ source code module (source code packaged with additional information).
 
-It is an instance of `program_processors.codegens.gtfn_modules.GTFNSourceGenerator` with default language settings to be packaged into the source code module for later stages. These include the language used (C++), C++ dependencies, file name endings, code formatting options etc.
+It is an instance of `program_processors.codegens.gtfn_modules.GTFNTranslationStep` with default language settings to be packaged into the source code module for later stages. These include the language used (C++), C++ dependencies, file name endings, code formatting options etc.
 
 #### Binding Step
 

@@ -35,7 +35,7 @@ def get_param_description(name: str, obj: Any) -> source.ScalarParameter | sourc
 
 
 @dataclasses.dataclass(frozen=True)
-class GTFNSourceGenerator(
+class GTFNTranslationStep(
     step_types.TranslationStep[languages.Cpp, languages.LanguageWithHeaderFilesSettings],
 ):
     language_settings: languages.LanguageWithHeaderFilesSettings = cpp_gen.CPP_DEFAULT
@@ -91,4 +91,4 @@ class GTFNSourceGenerator(
 
 translate_program: Final[
     step_types.TranslationStep[languages.Cpp, languages.LanguageWithHeaderFilesSettings]
-] = GTFNSourceGenerator()
+] = GTFNTranslationStep()

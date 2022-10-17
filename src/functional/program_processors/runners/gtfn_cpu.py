@@ -61,7 +61,7 @@ class GTFNExecutor(fpi.ProgramExecutor):
             return decorated_program
 
         otf_workflow: Final[workflow.Workflow[stages.ProgramCall, Any, stages.CompiledProgram]] = (
-            gtfn_module.GTFNSourceGenerator(self.language_settings)
+            gtfn_module.GTFNTranslationStep(self.language_settings)
             .chain(pybind.bind_source)
             .chain(
                 compiler.Compiler(
