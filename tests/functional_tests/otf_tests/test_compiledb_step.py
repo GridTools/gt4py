@@ -1,6 +1,6 @@
 # GT4Py Project - GridTools Framework
 #
-# Copyright (c) 2014-2021, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -17,7 +17,7 @@ from functional.otf.compilation import build_data, cache, importer
 from functional.otf.compilation.build_systems import compiledb
 
 
-def test_default_builder_generator(compilable_source_example, clean_example_session_cache):
+def test_default_compiledb_factory(compilable_source_example, clean_example_session_cache):
     otf_builder = compiledb.CompiledbFactory()(
         compilable_source_example, cache_strategy=cache.Strategy.SESSION
     )
