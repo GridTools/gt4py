@@ -1230,3 +1230,27 @@ def test_undefined_symbols():
         @field_operator
         def return_undefined():
             return undefined_symbol
+
+
+def test_input_kwargs(fieldview_backend):
+    size = 10
+    a = np_as_located_field(IDim, JDim)(np.ones((size, size)))
+    b = np_as_located_field(IDim, JDim)(np.ones((size, size)))
+
+    @field_operator(backend=fieldview_backend)
+    def fieldop_input_kwargs(
+        a: Field[[IDim, JDim], float64]
+    ) -> tuple[Field[[IDim, JDim], float64], Field[[IDim, JDim], float64]]:
+        return (a + a, a)
+
+    @program
+    def program_input_kwargs(a: Field[[IDim, JDim], float64], b: Field[[IDim, JDim], float64]):
+        fieldop_input_kwargs(a, out=(b, a), domain={IDim: (1, 9), JDim: (4, 6)})
+
+    program_input_kwargs(a=a, b=b, offset_provider={})
+
+    expected = np.asarray(a)
+    expected[1:9, 4:6] = 1 + 1
+
+    assert np.allclose(np.asarray(a), a)
+    assert np.allclose(expected, b)

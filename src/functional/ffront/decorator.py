@@ -57,7 +57,7 @@ from functional.ffront.past_passes.type_deduction import ProgramTypeDeduction, P
 from functional.ffront.past_to_itir import ProgramLowering
 from functional.ffront.source_utils import SourceDefinition, get_closure_vars_from_function
 from functional.iterator import ir as itir
-from functional.iterator.embedded import constant_field
+from functional.iterator.embedded import LocatedFieldImpl, constant_field
 
 
 Scalar: TypeAlias = SupportsInt | SupportsFloat | np.int32 | np.int64 | np.float32 | np.float64
@@ -237,6 +237,16 @@ class Program:
         if "debug" in kwargs:
             debug(self.itir)
 
+        ls = []
+        for i in kwargs.values():
+            if isinstance(i, LocatedFieldImpl):
+                ls.append(i)
+
+        if len(kwargs) > 0:
+            args = args + tuple(ls)
+            rewritten_args = tuple(ls)
+            kwargs = {}
+
         backend(
             self.itir,
             *rewritten_args,
@@ -262,11 +272,13 @@ class Program:
         )
 
     def _validate_args(self, *args, **kwargs) -> None:
-        if kwargs:
-            raise NotImplementedError("Keyword arguments are not supported yet.")
 
         arg_types = [symbol_makers.make_symbol_type_from_value(arg) for arg in args]
         kwarg_types = {k: symbol_makers.make_symbol_type_from_value(v) for k, v in kwargs.items()}
+
+        for i in kwarg_types.values():
+            arg_types.append(i)
+            kwarg_types = {}
 
         try:
             type_info.accepts_args(
