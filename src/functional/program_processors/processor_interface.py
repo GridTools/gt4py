@@ -12,7 +12,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 """
-Interface for fencil processors.
+Interface for program processors.
 
 Program processors are functions which take an ``iterator.ir.itir.FencilDefinition``
 along with input values for the fencil. Those which execute the fencil with
