@@ -1,3 +1,4 @@
+from typing import Callable
 import dataclasses
 
 from eve import NodeTranslator, NodeVisitor
@@ -28,15 +29,16 @@ class CountSymbolRefs(NodeVisitor):
 
         self.generic_visit(node, active_refs=active_refs)
 
-
 @dataclasses.dataclass
 class InlineLambdas(NodeTranslator):
     """Inline lambda calls by substituting every argument by its value."""
 
     opcount_preserving: bool
 
+    force_inline_lift: bool
+
     @classmethod
-    def apply(cls, node: ir.Node, opcount_preserving=False):
+    def apply(cls, node: ir.Node, opcount_preserving=False, force_inline_lift=False):
         """
         Inline lambda calls by substituting every arguments by its value.
 
@@ -51,7 +53,9 @@ class InlineLambdas(NodeTranslator):
             inline lambda call if the resulting call has the same number of
             operations.
         """
-        return cls(opcount_preserving=opcount_preserving).visit(node)
+        return cls(opcount_preserving=opcount_preserving,
+                   force_inline_lift=force_inline_lift).visit(
+            node)
 
     def visit_FunCall(self, node: ir.FunCall):
         node = self.generic_visit(node)
@@ -63,11 +67,19 @@ class InlineLambdas(NodeTranslator):
                 ref_counts = CountSymbolRefs.apply(node.fun.expr, [p.id for p in node.fun.params])
 
                 for i, param in enumerate(node.fun.params):
+                    # TODO(tehrengruber): allow inlining more complicated zero-op expressions like ignore_shift(...)(it_sym)
                     if ref_counts[param.id] != 1 and not isinstance(node.args[i], ir.SymRef):
                         eligible_params[i] = False
 
-                if not any(eligible_params):
-                    return node
+            if self.force_inline_lift:
+                for i, arg in enumerate(node.args):
+                    if isinstance(arg, ir.FunCall) and isinstance(arg.fun, ir.FunCall) \
+                            and isinstance(arg.fun.fun, ir.SymRef) \
+                            and arg.fun.fun.id in ["lift", "translate_shift", "ignore_shift"]:  # TODO(tehrengruber): fix
+                        eligible_params[i] = True
+
+            if len(eligible_params) != 0 and not any(eligible_params):
+                return node
 
             refs = set().union(
                 *(

@@ -25,6 +25,7 @@ from functional.ffront import (
     itir_makers as im,
     type_info,
 )
+from functional.common import DimensionKind
 from functional.ffront.fbuiltins import FUN_BUILTIN_NAMES, MATH_BUILTIN_NAMES, TYPE_BUILTIN_NAMES
 from functional.iterator import ir as itir
 
@@ -32,6 +33,13 @@ from functional.iterator import ir as itir
 class ITIRTypeKind(enum.Enum):
     VALUE = 0
     ITERATOR = 1
+
+
+def is_local_kind(symbol_type: ct.FieldType) -> bool:
+    assert isinstance(symbol_type, ct.FieldType)
+    if symbol_type.dims == ...:
+        return False
+    return any(dim.kind == DimensionKind.LOCAL for dim in symbol_type.dims)
 
 
 def iterator_type_kind(
@@ -168,10 +176,16 @@ class FieldOperatorLowering(NodeTranslator):
         return im.ref(node.id)
 
     def visit_Subscript(self, node: foast.Subscript, **kwargs) -> itir.FunCall:
-        return self._map(lambda val: im.tuple_get_(node.index, val), node.value)
+        if iterator_type_kind(node.type) is ITIRTypeKind.ITERATOR:
+            return im.map_(lambda tuple_: im.tuple_get_(node.index, tuple_),
+                    self.visit(node.value, **kwargs))
+        return im.tuple_get_(node.index, self.visit(node.value, **kwargs))
 
     def visit_TupleExpr(self, node: foast.TupleExpr, **kwargs) -> itir.FunCall:
-        return self._map(lambda *elts: im.make_tuple_(*elts), *node.elts)
+        if iterator_type_kind(node.type) is ITIRTypeKind.ITERATOR:
+            return im.map_(lambda *elts: im.make_tuple_(*elts),
+                    *self.visit(node.elts, **kwargs))
+        return im.make_tuple_(*self.visit(node.elts, **kwargs))
 
     def visit_UnaryOp(self, node: foast.UnaryOp, **kwargs) -> itir.FunCall:
         # TODO(tehrengruber): extend iterator ir to support unary operators
@@ -198,7 +212,7 @@ class FieldOperatorLowering(NodeTranslator):
                         im.deref_(im.shift_(offset_name, offset_index)("it"))))(
                     self.visit(node.func, **kwargs))
             case foast.Name(id=offset_name):
-                return im.shift_(offset_name)(self.visit(node.func, **kwargs))
+                return im.call_(im.call_("translate_shift")(im.ensure_offset(str(offset_name+"Dim")), im.ensure_offset(str(offset_name))))(self.visit(node.func, **kwargs))
         raise FieldOperatorLoweringError("Unexpected shift arguments!")
 
     def visit_Call(self, node: foast.Call, **kwargs) -> itir.FunCall:
@@ -242,17 +256,32 @@ class FieldOperatorLowering(NodeTranslator):
         **kwargs,
     ):
         it = self.visit(node.args[0], **kwargs)
-        val = im.call_(im.call_("reduce")(op, init_expr))("it")
-        return im.lift_(im.lambda__("it")(val))(it)
+        reduction_axis = im.ensure_offset(str(node.kwargs["axis"].type.dim.value)+"Dim")
+        val = im.call_(im.call_("reduce")(op, init_expr, reduction_axis))("it")
+        return im.call_(im.call_("ignore_shift")(reduction_axis))(im.lift_(im.lambda__("it")(val))(it))
 
     def _visit_neighbor_sum(self, node: foast.Call, **kwargs) -> itir.FunCall:
         return self._make_reduction_expr(node, "plus", 0, **kwargs)
     def _visit_max_over(self, node: foast.Call, **kwargs) -> itir.FunCall:
-        init_expr = itir.Literal(value=str(np.finfo(np.float64).min), type="float64")
+        np_type = getattr(np, node.type.dtype.kind.name.lower())
+        if type_info.is_integral(node.type):
+            min_value = np.iinfo(np.int32).min  # not sure why int64 min is converted into an int128
+        elif type_info.is_floating_point(node.type):
+            min_value = np.finfo(np_type).min
+        else:
+            assert False
+        init_expr = self._make_literal(min_value, node.type.dtype)
         return self._make_reduction_expr(node, "maximum", init_expr, **kwargs)
 
     def _visit_min_over(self, node: foast.Call, **kwargs) -> itir.FunCall:
-        init_expr = itir.Literal(value=str(np.finfo(np.float64).max), type="float64")
+        np_type = getattr(np, node.type.dtype.kind.name.lower())
+        if type_info.is_integral(node.type):
+            max_value = np.iinfo(np.int32).max
+        elif type_info.is_floating_point(node.type):
+            max_value = np.finfo(np_type).max
+        else:
+            assert False
+        init_expr = self._make_literal(max_value, node.type.dtype)
         return self._make_reduction_expr(node, "minimum", init_expr, **kwargs)
 
     def _visit_type_constr(self, node: foast.Call, **kwargs) -> itir.Literal:
@@ -283,10 +312,31 @@ class FieldOperatorLowering(NodeTranslator):
         if isinstance(op, str):
             op = im.call_(op)
 
+        def is_local_type_kind(type_):
+            return any(isinstance(t, ct.FieldType) and is_local_kind(t) for t in type_info.primitive_constituents(type_))
+
         lowered_args = [self.visit(arg, **kwargs) for arg in args]
         if any(iterator_type_kind(arg.type) is ITIRTypeKind.ITERATOR for arg in args):
             lowered_args = [to_iterator(arg)(larg) for arg, larg in zip(args, lowered_args)]
-            return im.map_(op, *lowered_args)
+
+            if any(is_local_type_kind(arg.type) for arg in args):
+                # TODO: multiple different nb dims?
+                def local_dim(field_type):
+                    for dim in field_type.dims:
+                        if dim.kind == DimensionKind.LOCAL:
+                            return dim
+                    assert False
+                nb_dims = [local_dim(arg.type) for arg in args if is_local_type_kind(arg.type)]
+                assert all(nb_dim == nb_dims[0] for nb_dim in nb_dims)
+                nb_dim = im.ensure_offset(str(nb_dims[0].value)+"Dim")
+                for i, (arg, lowered_arg) in enumerate(zip(args, lowered_args)):
+                    if not is_local_type_kind(arg.type):
+                        lowered_args[i] = im.call_(im.call_("ignore_shift")(nb_dim))(lowered_args[i])
+
+                result = im.map_(op, *lowered_args)
+                return result
+            else:
+                return im.map_(op, *lowered_args)
         elif all(iterator_type_kind(arg.type) is ITIRTypeKind.VALUE for arg in args):
             return op(*lowered_args)
         raise AssertionError()

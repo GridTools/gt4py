@@ -117,6 +117,8 @@ BUILTINS = {
     "deref",
     "can_deref",
     "shift",
+    "ignore_shift",
+    "translate_shift",
     "scan",
     "plus",
     "minus",

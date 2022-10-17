@@ -44,7 +44,7 @@ from functional.iterator.embedded import (
 )
 
 
-@pytest.fixture(params=[roundtrip.executor])
+@pytest.fixture(params=[roundtrip.executor, gtfn_cpu.run_gtfn])
 def fieldview_backend(request):
     yield request.param
 
@@ -118,9 +118,6 @@ def test_arithmetic(fieldview_backend):
 
 
 def test_power(fieldview_backend):
-    if fieldview_backend == gtfn_cpu.run_gtfn:
-        pytest.xfail("gtfn does not yet support math builtins")
-
     size = 10
     a = np_as_located_field(IDim)(np.random.randn((size)))
     b = np_as_located_field(IDim)(np.zeros((size)))
@@ -135,9 +132,6 @@ def test_power(fieldview_backend):
 
 
 def test_power_arithmetic(fieldview_backend):
-    if fieldview_backend == gtfn_cpu.run_gtfn:
-        pytest.xfail("gtfn does not yet support math builtins")
-
     size = 10
     a = np_as_located_field(IDim)(np.random.randn((size)))
     b = np_as_located_field(IDim)(np.zeros((size)))
@@ -216,7 +210,7 @@ def test_fold_shifts(fieldview_backend):
     def auto_lift(
         inp1: Field[[IDim], float64], inp2: Field[[IDim], float64]
     ) -> Field[[IDim], float64]:
-        return (inp1(Ioff[1]))(Ioff[2])
+        return (inp1 + inp2(Ioff[1]))(Ioff[2])
 
     @program(backend=fieldview_backend)
     def fencil(
@@ -308,6 +302,9 @@ def reduction_setup():
     assert all(len(row) == 2 for row in e2v_arr)
     e2v_arr = np.asarray(e2v_arr)
 
+    inp = index_field(edge, dtype=np.int64)
+    inp = np_as_located_field(edge)(np.array([inp[i] for i in range(num_edges)]))
+
     yield namedtuple(
         "ReductionSetup",
         [
@@ -334,11 +331,13 @@ def reduction_setup():
         E2VDim=e2vdim,
         V2E=FieldOffset("V2E", source=edge, target=(vertex, v2edim)),
         E2V=FieldOffset("E2V", source=vertex, target=(edge, e2vdim)),
-        inp=index_field(edge, dtype=np.int64),
+        inp=inp,
         out=np_as_located_field(vertex)(np.zeros([num_vertices], dtype=np.int64)),
         offset_provider={
             "V2E": NeighborTableOffsetProvider(v2e_arr, vertex, edge, 4),
             "E2V": NeighborTableOffsetProvider(e2v_arr, edge, vertex, 2, has_skip_values=False),
+            "V2EDim": v2edim,
+            "E2VDim": e2vdim
         },
         v2e_table=v2e_arr,
         e2v_table=e2v_arr,
@@ -347,8 +346,6 @@ def reduction_setup():
 
 def test_maxover_execution_sparse(reduction_setup, fieldview_backend):
     """Testing max_over functionality."""
-    if fieldview_backend == gtfn_cpu.run_gtfn:
-        pytest.skip("not yet supported.")
     rs = reduction_setup
     Vertex = rs.Vertex
     V2EDim = rs.V2EDim
@@ -367,8 +364,6 @@ def test_maxover_execution_sparse(reduction_setup, fieldview_backend):
 
 def test_maxover_execution_negatives(reduction_setup, fieldview_backend):
     """Testing max_over functionality for negative values in array."""
-    if fieldview_backend == gtfn_cpu.run_gtfn:
-        pytest.skip("not yet supported.")
     rs = reduction_setup
     Edge = rs.Edge
     Vertex = rs.Vertex
@@ -394,8 +389,6 @@ def test_maxover_execution_negatives(reduction_setup, fieldview_backend):
 
 def test_minover_execution(reduction_setup, fieldview_backend):
     """Testing the min_over functionality"""
-    if fieldview_backend == gtfn_cpu.run_gtfn:
-        pytest.skip("not implemented yet")
     rs = reduction_setup
     Vertex = rs.Vertex
     V2EDim = rs.V2EDim
@@ -414,8 +407,6 @@ def test_minover_execution(reduction_setup, fieldview_backend):
 
 def test_minover_execution_float(reduction_setup, fieldview_backend):
     """Testing the min_over functionality"""
-    if fieldview_backend == gtfn_cpu.run_gtfn:
-        pytest.skip("not implemented yet")
     rs = reduction_setup
     Vertex = rs.Vertex
     V2EDim = rs.V2EDim
@@ -436,8 +427,8 @@ def test_minover_execution_float(reduction_setup, fieldview_backend):
 
 def test_reduction_execution(reduction_setup, fieldview_backend):
     """Testing a trivial neighbor sum."""
-    if fieldview_backend == gtfn_cpu.run_gtfn:
-        pytest.skip("IndexFields are not supported yet.")
+    #if fieldview_backend == gtfn_cpu.run_gtfn:
+    #    pytest.skip("IndexFields are not supported yet.")
     rs = reduction_setup
     Edge = rs.Edge
     Vertex = rs.Vertex
@@ -460,8 +451,8 @@ def test_reduction_execution(reduction_setup, fieldview_backend):
 
 def test_reduction_execution_nb(reduction_setup, fieldview_backend):
     """Testing a neighbor sum on a neighbor field."""
-    if fieldview_backend == gtfn_cpu.run_gtfn:
-        pytest.skip("not yet supported.")
+    #if fieldview_backend == gtfn_cpu.run_gtfn:
+    #    pytest.skip("not yet supported.")
     rs = reduction_setup
     V2EDim = rs.V2EDim
 
@@ -479,8 +470,8 @@ def test_reduction_execution_nb(reduction_setup, fieldview_backend):
 
 def test_reduction_expression(reduction_setup, fieldview_backend):
     """Test reduction with an expression directly inside the call."""
-    if fieldview_backend == gtfn_cpu.run_gtfn:
-        pytest.skip("IndexFields are not supported yet.")
+    #if fieldview_backend == gtfn_cpu.run_gtfn:
+    #    pytest.skip("IndexFields are not supported yet.")
     rs = reduction_setup
     Vertex = rs.Vertex
     Edge = rs.Edge
@@ -504,8 +495,8 @@ def test_reduction_expression(reduction_setup, fieldview_backend):
 
 
 def test_reduction_expression2(reduction_setup, fieldview_backend):
-    if fieldview_backend == gtfn_cpu.run_gtfn:
-        pytest.skip("IndexFields are not supported yet.")
+    #if fieldview_backend == gtfn_cpu.run_gtfn:
+    #    pytest.skip("IndexFields are not supported yet.")
     rs = reduction_setup
     Vertex = rs.Vertex
     Edge = rs.Edge
@@ -533,8 +524,8 @@ def test_reduction_expression2(reduction_setup, fieldview_backend):
 
 
 def test_math_builtin_with_sparse_field(reduction_setup, fieldview_backend):
-    if fieldview_backend == gtfn_cpu.run_gtfn:
-        pytest.skip("IndexFields are not supported yet.")
+    #if fieldview_backend == gtfn_cpu.run_gtfn:
+    #    pytest.skip("IndexFields are not supported yet.")
     rs = reduction_setup
     Vertex = rs.Vertex
     Edge = rs.Edge
@@ -897,6 +888,7 @@ def test_tuple_with_local_field_in_reduction_shifted(reduction_setup):
     Edge = rs.Edge
     Vertex = rs.Vertex
     V2EDim = rs.V2EDim
+    E2VDim = rs.E2VDim
     V2E = rs.V2E
     E2V = rs.E2V
 
@@ -905,8 +897,8 @@ def test_tuple_with_local_field_in_reduction_shifted(reduction_setup):
 
     size = 10
     # TODO(tehrengruber): use different values per location
-    a = np_as_located_field(Edge)(np.ones((num_edges,)))
-    b = np_as_located_field(Vertex)(2 * np.ones((num_vertices,)))
+    a = np_as_located_field(Edge)(np.random.randn(num_edges))
+    b = np_as_located_field(Vertex)(np.random.randn(num_vertices))
     out = np_as_located_field(Edge)(np.zeros((num_edges,)))
 
     @field_operator
@@ -914,19 +906,13 @@ def test_tuple_with_local_field_in_reduction_shifted(reduction_setup):
         edge_field: Field[[Edge], float64], vertex_field: Field[[Vertex], float64]
     ) -> Field[[Edge], float64]:
         tup = edge_field(V2E), vertex_field
-        # the shift inside the reduction fails as tup is a tuple of iterators
-        #  (as it contains a local field) which can not be shifted
         red = neighbor_sum(tup[0] + vertex_field, axis=V2EDim)
-        # even if the above is fixed we need to be careful with a subsequent
-        #  shift as the lifted lambda will contain tup as an argument which -
-        #  again - can not be shifted.
-        return red(E2V[0])
+        return neighbor_sum(red(E2V), axis=E2VDim)
 
     reduce_tuple_element(a, b, out=out, offset_provider=rs.offset_provider)
 
-    # conn table used is inverted here on purpose
     red = np.sum(np.asarray(a)[rs.v2e_table] + np.asarray(b)[:, np.newaxis], axis=1)
-    expected = red[rs.e2v_table][:, 0]
+    expected = np.sum(red[rs.e2v_table], axis=1)
 
     assert np.allclose(expected, out)
 
@@ -1019,7 +1005,7 @@ def test_solve_triag(fieldview_backend):
     np.allclose(expected, out)
 
 
-def test_ternary_operator():
+def test_ternary_operator(fieldview_backend):
     size = 10
 
     a = np_as_located_field(IDim)(2 * np.ones((size,)))
@@ -1029,7 +1015,7 @@ def test_ternary_operator():
     left = 2.0
     right = 3.0
 
-    @field_operator
+    @field_operator(backend=fieldview_backend)
     def ternary_field_op(
         a: Field[[IDim], float], b: Field[[IDim], float], left: float, right: float
     ) -> Field[[IDim], float]:
@@ -1039,7 +1025,7 @@ def test_ternary_operator():
     e = np.asarray(a) if left < right else np.asarray(b)
     np.allclose(e, out)
 
-    @field_operator
+    @field_operator(backend=fieldview_backend)
     def ternary_field_op_scalars(left: float, right: float) -> Field[[IDim], float]:
         return broadcast(3.0, (IDim,)) if left > right else broadcast(4.0, (IDim,))
 
@@ -1048,7 +1034,7 @@ def test_ternary_operator():
     np.allclose(e, out)
 
 
-def test_ternary_operator_tuple():
+def test_ternary_operator_tuple(fieldview_backend):
     size = 10
     a = np_as_located_field(IDim)(np.ones((size,)))
     b = np_as_located_field(IDim)(2 * np.ones((size,)))
@@ -1058,14 +1044,14 @@ def test_ternary_operator_tuple():
     left = 2.0
     right = 3.0
 
-    @field_operator
+    @field_operator(backend=fieldview_backend)
     def ternary_field_op(
         a: Field[[IDim], float], b: Field[[IDim], float], left: float, right: float
     ) -> tuple[Field[[IDim], float], Field[[IDim], float]]:
         return (a, b) if left < right else (b, a)
 
     # TODO(tehrengruber): directly call field operator when the generated programs support `out` being a tuple
-    @program
+    @program(backend=fieldview_backend)
     def ternary_field(
         a: Field[[IDim], float],
         b: Field[[IDim], float],
@@ -1083,7 +1069,7 @@ def test_ternary_operator_tuple():
     np.allclose(f, out_2)
 
 
-def test_ternary_builtin_neighbor_sum(reduction_setup):
+def test_ternary_builtin_neighbor_sum(fieldview_backend, reduction_setup):
     rs = reduction_setup
     Edge = rs.Edge
     Vertex = rs.Vertex
@@ -1097,7 +1083,7 @@ def test_ternary_builtin_neighbor_sum(reduction_setup):
     b = np_as_located_field(Edge)(2 * np.ones((num_edges,)))
     out = np_as_located_field(Vertex)(np.zeros((num_vertices,)))
 
-    @field_operator
+    @field_operator(backend=fieldview_backend)
     def ternary_reduce(a: Field[[Edge], float], b: Field[[Edge], float]) -> Field[[Vertex], float]:
         out = neighbor_sum(b(V2E) if 2 < 3 else a(V2E), axis=V2EDim)
         return out
@@ -1113,7 +1099,7 @@ def test_ternary_builtin_neighbor_sum(reduction_setup):
     assert np.allclose(expected, out)
 
 
-def test_ternary_scan():
+def test_ternary_scan(fieldview_backend):
     KDim = Dimension("K", kind=DimensionKind.VERTICAL)
     size = 10
     init = 0.0
@@ -1122,7 +1108,7 @@ def test_ternary_scan():
     out = np_as_located_field(KDim)(np.zeros((size,)))
     expected = np.asarray([i if i <= a_float else a_float + 1 for i in range(1, size + 1)])
 
-    @scan_operator(axis=KDim, forward=True, init=init)
+    @scan_operator(backend=fieldview_backend, axis=KDim, forward=True, init=init)
     def simple_scan_operator(carry: float, a: float) -> float:
         return carry if carry > a else carry + 1.0
 
@@ -1143,7 +1129,7 @@ def test_scan_tuple_output(fieldview_backend):
     out2 = np_as_located_field(KDim)(np.zeros((size,)))
     expected = np.arange(init[1] + 1.0, init[1] + 1.0 + size, 1)
 
-    @scan_operator(axis=KDim, forward=True, init=init, backend=fieldview_backend)
+    @scan_operator(backend=fieldview_backend, axis=KDim, forward=True, init=init)
     def simple_scan_operator(carry: tuple[float, float], x: float) -> tuple[float, float]:
         return (x, carry[1] + 1.0)
 
@@ -1253,8 +1239,6 @@ def test_domain_tuple(fieldview_backend):
 
 
 def test_where_k_offset(fieldview_backend):
-    if fieldview_backend == gtfn_cpu.run_gtfn:
-        pytest.skip("IndexFields are not supported yet.")
     size = 10
     KDim = Dimension("K", kind=DimensionKind.VERTICAL)
     Koff = FieldOffset("Koff", source=KDim, target=(KDim,))

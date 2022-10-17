@@ -159,13 +159,20 @@ def _collect_offset_definitions(
             else:
                 assert grid_type == common.GridType.UNSTRUCTURED
                 if not dim.kind == common.DimensionKind.VERTICAL:
-                    raise ValueError(
-                        "Mapping an offset to a horizontal dimension in unstructured is not allowed."
+                    #raise ValueError(
+                    #    "Mapping an offset to a horizontal dimension in unstructured is not allowed."
+                    #)
+                    offset_definitions[dim.value] = TagDefinition(
+                        name=Sym(id=dim.value))
+                    if offset_name != dim.value:
+                        offset_definitions[offset_name] = TagDefinition(
+                            name=Sym(id=offset_name), alias=SymRef(id=dim.value)
+                        )
+                else:
+                    # create alias from vertical offset to vertical dimension
+                    offset_definitions[offset_name] = TagDefinition(
+                        name=Sym(id=offset_name), alias=_vertical_dimension
                     )
-                # create alias from vertical offset to vertical dimension
-                offset_definitions[offset_name] = TagDefinition(
-                    name=Sym(id=offset_name), alias=_vertical_dimension
-                )
         else:
             assert isinstance(offset_provider[o.value], common.Connectivity)
             offset_definitions[offset_name] = TagDefinition(name=Sym(id=offset_name))

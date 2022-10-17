@@ -132,6 +132,7 @@ class ItIterator(Protocol):
     def shift(self, *offsets: OffsetPart) -> ItIterator:
         ...
 
+    # TODO(tehrengruber): remove, not needed anymore
     def max_neighbors(self) -> int:
         ...
 
@@ -288,7 +289,9 @@ def lift(stencil):
     def impl(*args):
         class _WrappedIterator:
             def __init__(
-                self, stencil, args, *, offsets: list[OffsetPart] = None, elem=None
+                self, stencil, args, *,
+                offsets: list[OffsetPart] = None,
+                elem=None
             ) -> None:
                 assert not offsets or all(isinstance(o, (int, str)) for o in offsets)
                 self.stencil = stencil
@@ -314,7 +317,8 @@ def lift(stencil):
                         assert not inherited_open_offsets or inherited_open_offsets == arg.incomplete_offsets
                         inherited_open_offsets = arg.incomplete_offsets
                 # TODO: check order
-                return inherited_open_offsets
+                _, incomplete_offets = group_offsets(*inherited_open_offsets, *self.offsets)
+                return incomplete_offets
 
             @cached_property
             def offset_provider(self):
@@ -325,19 +329,15 @@ def lift(stencil):
                 return offset_provider
 
             def max_neighbors(self):
+                if not self.incomplete_offsets:
+                    breakpoint()
                 assert self.incomplete_offsets
                 return _get_connectivity(self.args[0].offset_provider, self.incomplete_offsets[0]).max_neighbors
 
             def _shifted_args(self):
-                new_args = []
-                for arg in self.args:
-                    do_shift = not self.incomplete_offsets or arg.incomplete_offsets
-                    if do_shift:
-                        new_args.append(arg.shift(*self.offsets))
-                    else:
-                        new_args.append(arg)
-
-                return tuple(new_args)
+                if not self.offsets:
+                    return self.args
+                return tuple(arg.shift(*self.offsets) for arg in self.args)
 
             def can_deref(self):
                 shifted_args = self._shifted_args()
@@ -362,21 +362,20 @@ def lift(stencil):
 
 
 @builtins.reduce.register(EMBEDDED)
-def reduce(fun, init):
+def reduce(fun, init, axis):
     def sten(*iters):
         # TODO: assert check_that_all_iterators_are_compatible(*iters)
         first_it = iters[0]
-        n = first_it.max_neighbors()
         res = init
-        for i in range(n):
-            # we can check a single argument
-            # because all arguments share the same pattern
-            if not builtins.can_deref(builtins.shift(i)(first_it)):
-                break
+        i = 0
+        # we can check a single argument
+        # because all arguments share the same pattern
+        while builtins.can_deref(builtins.shift(axis, i)(first_it)):
             res = fun(
                 res,
-                *(builtins.deref(builtins.shift(i)(it)) for it in iters),
+                *(builtins.deref(builtins.shift(axis, i)(it)) for it in iters),
             )
+            i+=1
         return res
 
     return sten
@@ -511,16 +510,23 @@ def execute_shift(
     offset_implementation = offset_provider[tag]
     if isinstance(offset_implementation, Dimension):
         new_pos = copy.copy(pos)
+        if offset_implementation.value not in new_pos:
+            new_pos[offset_implementation.value] = 0
+
         if is_int_index(value := new_pos[offset_implementation.value]):
             new_pos[offset_implementation.value] = value + index
         else:
             raise AssertionError()
+        if offset_implementation.kind == DimensionKind.LOCAL and new_pos[offset_implementation.value] >= offset_provider[offset_implementation.value].max_neighbors:
+            return None
         return new_pos
     else:
         assert isinstance(offset_implementation, Connectivity)
         assert offset_implementation.origin_axis.value in pos
         new_pos = pos.copy()
         new_pos.pop(offset_implementation.origin_axis.value)
+        if index >= offset_implementation.max_neighbors:
+            return None
         if offset_implementation.tbl[pos[offset_implementation.origin_axis.value], index] in [
             None,
             -1,
@@ -738,27 +744,14 @@ def make_in_iterator(
     *,
     column_axis: Optional[Tag],
 ) -> MDIterator:
-    axes = _get_axes(inp)
-    sparse_dimensions: list[Tag] = []
-    for axis in axes:
-        if isinstance(axis, Offset):
-            assert isinstance(axis.value, str)
-            sparse_dimensions.append(axis.value)
-        elif isinstance(axis, Dimension) and axis.kind == DimensionKind.LOCAL:
-            # we just use the name of the axis to match the offset literal for now
-            sparse_dimensions.append(axis.value)
-
     new_pos: Position = pos.copy()
-    for sparse_dim in set(sparse_dimensions):
-        init = [None] * sparse_dimensions.count(sparse_dim)
-        new_pos[sparse_dim] = init  # type: ignore[assignment] # looks like mypy is confused
     if column_axis is not None:
         # if we deal with column stencil the column position is just an offset by which the whole column needs to be shifted
         new_pos[column_axis] = 0
     return MDIterator(
         inp,
         new_pos,
-        incomplete_offsets=[SparseTag(x) for x in sparse_dimensions],
+        incomplete_offsets=[],
         offset_provider=offset_provider,
         column_axis=column_axis,
     )
@@ -933,6 +926,50 @@ def shift(*offsets: Union[Offset, int]) -> Callable[[ItIterator], ItIterator]:
 
     return impl
 
+
+@builtins.ignore_shift.register(EMBEDDED)
+def ignore_shift(tag: Tag) -> ItIterator:
+    class IgnoreShiftIt:
+        def __init__(self, tag: Offset, it):
+            self.tag = tag
+            self.it = it
+
+        def shift(self, tag: Offset, index: int, *tail):
+            if tag == self.tag.value:
+                return self
+
+            result = IgnoreShiftIt(self.tag, shift(tag, index)(self.it))
+            if tail:
+                return shift(*tail)(result)
+            return result
+
+        def __getattr__(self, item):
+            return getattr(self.it, item)
+
+    return lambda it: IgnoreShiftIt(tag, it)
+
+
+@builtins.translate_shift.register(EMBEDDED)
+def translate_shift(tag: Tag, new_tag: Tag) -> ItIterator:
+    class TranslateShiftIt:
+        def __init__(self, tag: Offset, new_tag: Tag, it):
+            self.tag = tag
+            self.new_tag = new_tag
+            self.it = it
+
+        def shift(self, tag: Tag, index: int, *tail):
+            if tag == self.tag.value:
+                tag = self.new_tag.value
+
+            result = TranslateShiftIt(self.tag, self.new_tag, shift(tag, index)(self.it))
+            if tail:
+                return shift(*tail)(result)
+            return result
+
+        def __getattr__(self, item):
+            return getattr(self.it, item)
+
+    return lambda it: TranslateShiftIt(tag, new_tag, it)
 
 @dataclass
 class ColumnDescriptor:

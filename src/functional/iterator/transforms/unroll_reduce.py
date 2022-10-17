@@ -17,26 +17,6 @@ class UnrollReduce(NodeTranslator):
         return cls().visit(node, **kwargs)
 
     @staticmethod
-    def _find_connectivity(reduce_args: Iterable[ir.Expr], offset_provider):
-        connectivities = []
-        for arg in reduce_args:
-            if (
-                isinstance(arg, ir.FunCall)
-                and isinstance(arg.fun, ir.FunCall)
-                and arg.fun.fun == ir.SymRef(id="shift")
-            ):
-                assert isinstance(arg.fun.args[-1], ir.OffsetLiteral), f"{arg.fun.args}"
-                connectivities.append(offset_provider[arg.fun.args[-1].value])
-
-        if not connectivities:
-            raise RuntimeError("Couldn't detect partial shift in any arguments of reduce.")
-
-        if len({(c.max_neighbors, c.has_skip_values) for c in connectivities}) != 1:
-            # The condition for this check is required but not sufficient: the actual neighbor tables could still be incompatible.
-            raise RuntimeError("Arguments to reduce have incompatible partial shifts.")
-        return connectivities[0]
-
-    @staticmethod
     def _is_reduce(node: ir.FunCall):
         return isinstance(node.fun, ir.FunCall) and node.fun.fun == ir.SymRef(id="reduce")
 
@@ -66,24 +46,25 @@ class UnrollReduce(NodeTranslator):
 
         offset_provider = kwargs["offset_provider"]
         assert offset_provider is not None
-        connectivity = self._find_connectivity(node.args, offset_provider)
+        connectivity = offset_provider[node.fun.args[2].value[:-3]] # TODO(tehrengruber): find a better way to remove Dim
         max_neighbors = connectivity.max_neighbors
         has_skip_values = connectivity.has_skip_values
 
         acc = ir.SymRef(id=self.uids.sequential_id(prefix="_acc"))
         offset = ir.SymRef(id=self.uids.sequential_id(prefix="_i"))
         step = ir.SymRef(id=self.uids.sequential_id(prefix="_step"))
+        shifted_args = [ir.SymRef(id=self.uids.sequential_id(prefix="_shifted_arg")) for _ in node.args]
 
         assert isinstance(node.fun, ir.FunCall)
-        fun, init = node.fun.args
+        fun, init, axis = node.fun.args
 
-        derefed_shifted_args = [
-            self._make_deref(self._make_shift([offset], arg)) for arg in node.args
-        ]
+        shifted_args_expr = [self._make_shift([axis, offset], arg) for arg in node.args]
+        derefed_shifted_args = [self._make_deref(shifted_arg) for shifted_arg in shifted_args]
         step_fun: ir.Expr = ir.FunCall(fun=fun, args=[acc] + derefed_shifted_args)
         if has_skip_values:
-            can_deref = self._make_can_deref(self._make_shift([offset], node.args[0]))
+            can_deref = self._make_can_deref(shifted_args[0])
             step_fun = self._make_if(can_deref, step_fun, acc)
+        step_fun = ir.FunCall(fun=ir.Lambda(params=[ir.Sym(id=shifted_arg.id) for shifted_arg in shifted_args], expr=step_fun), args=shifted_args_expr)
         step_fun = ir.Lambda(params=[ir.Sym(id=acc.id), ir.Sym(id=offset.id)], expr=step_fun)
         expr = init
         for i in range(max_neighbors):
