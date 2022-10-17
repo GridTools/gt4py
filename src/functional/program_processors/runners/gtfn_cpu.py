@@ -51,7 +51,7 @@ class GTFNExecutor(fpi.ProgramExecutor):
         so the first execution is expected to have a significant overhead, while subsequent
         calls are very fast. Only scalar and buffer arguments are supported currently.
 
-        See ``FencilExecutorFunction`` for details.
+        See ``ProgramExecutorFunction`` for details.
         """
 
         def convert_args(inp: Callable) -> Callable:
