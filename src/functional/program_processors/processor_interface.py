@@ -55,7 +55,7 @@ class ProgramFormatter(ProgramProcessor[str, "ProgramFormatter"], Protocol):
 
 def program_formatter(func: ProgramProcessorFunction[str]) -> ProgramFormatter:
     """
-    Turn a formatter function into a ProgramFormatter.
+    Turn a function that formats a program as a string into a ProgramFormatter.
 
     Examples:
     ---------
@@ -79,7 +79,7 @@ class ProgramExecutor(ProgramProcessor[None, "ProgramExecutor"], Protocol):
 
 def program_executor(func: ProgramProcessorFunction[None]) -> ProgramExecutor:
     """
-    Wrap an executor function in a ``ProgramFormatter`` instance.
+    Turn a function that executes a program into a ``ProgramExecutor``.
 
     Examples:
     ---------
