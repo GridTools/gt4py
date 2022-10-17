@@ -39,9 +39,7 @@ class ProgramProcessorFunction(Protocol[OutputT]):
         ...
 
 
-class ProgramProcessor(
-    ProgramProcessorFunction[OutputT], Protocol[OutputT, ProcessorKindT]
-):
+class ProgramProcessor(ProgramProcessorFunction[OutputT], Protocol[OutputT, ProcessorKindT]):
     @property
     def kind(self) -> type[ProcessorKindT]:
         ...
