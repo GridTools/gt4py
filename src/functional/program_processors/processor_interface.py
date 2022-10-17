@@ -14,11 +14,11 @@
 """
 Interface for program processors.
 
-Program processors are functions which take an ``iterator.ir.itir.FencilDefinition``
-along with input values for the fencil. Those which execute the fencil with
-the given arguments (possibly by generating code along the way) are fencil
-executors. Those which generate any kind of string based on the fencil
-and (optionally) input values are fencil formatters.
+Program processors are functions which operate on a program paired with the input
+arguments for the program. Programs are represented by an ``iterator.ir.itir.FencilDefinition``
+node. Program processors that execute the program with the given arguments (possibly by generating
+code along the way) are program executors. Those that generate any kind of string based
+on the program and (optionally) input values are program formatters.
 
 For more information refer to
 ``gt4py/docs/functional/architecture/007-Program-Processors.md``
