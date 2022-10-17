@@ -1,6 +1,13 @@
-from typing import Tuple, Union
+from typing import TYPE_CHECKING, Tuple, Union
 
 import numpy as np
+
+
+if TYPE_CHECKING:
+    try:
+        import cupy as cp
+    except ImportError:
+        cp = None
 
 
 def dimensions_to_mask(dimensions: Tuple[str, ...]) -> Tuple[bool, ...]:

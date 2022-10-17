@@ -19,8 +19,6 @@ import textwrap
 import time
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Sequence, Tuple, Type, Union
 
-import numpy as np
-
 import gtc.utils
 import gtc.utils as gtc_utils
 from eve.codegen import MakoTemplate as as_mako
@@ -36,7 +34,6 @@ from gtc.passes.oir_pipeline import OirPipeline
 if TYPE_CHECKING:
     from gt4py.stencil_builder import StencilBuilder
     from gt4py.stencil_object import StencilObject
-    from gt4py.storage.storage import ArrayLike
 
 
 def _get_unit_stride_dim(backend, domain_dim_flags, data_ndim):
@@ -374,27 +371,10 @@ def _permute_layout_to_dimensions(
 
 
 def make_gtcpu_kfirst_layout_map(dimensions: Tuple[str, ...]) -> Tuple[int, ...]:
-    # if all(dim in dimensions for dim in "IJK"):
-    #     layout: List[Optional[int]] = [i for i in range(len(dimensions))]
-    # else:
     layout = [i for i in range(len(dimensions))]
     naxes = sum(dim in dimensions for dim in "IJK")
     layout = [*layout[-naxes:], *layout[:-naxes]]
     return _permute_layout_to_dimensions([lt for lt in layout if lt is not None], dimensions)
-
-
-#
-# def x86_is_optimal_layout(field: "Storage", dimensions: Tuple[str, ...]) -> bool:
-#     stride = 0
-#     layout_map = make_x86_layout_map(dimensions)
-#     flattened_layout = [index for index in layout_map if index is not None]
-#     if len(field.strides) < len(flattened_layout):
-#         return False
-#     for dim in reversed(np.argsort(flattened_layout)):
-#         if field.strides[dim] < stride:
-#             return False
-#         stride = field.strides[dim]
-#     return True
 
 
 def make_gtcpu_ifirst_layout_map(dimensions: Tuple[str, ...]) -> Tuple[int, ...]:
@@ -406,20 +386,6 @@ def make_gtcpu_ifirst_layout_map(dimensions: Tuple[str, ...]) -> Tuple[int, ...]
         else:
             layout = [layout[1], layout[0], *layout[2:]]
     return _permute_layout_to_dimensions(layout, dimensions)
-
-
-#
-# def mc_is_optimal_layout(field: "Storage", dimensions: Tuple[str, ...]) -> bool:
-#     stride = 0
-#     layout_map = make_mc_layout_map(dimensions)
-#     flattened_layout = [index for index in layout_map if index is not None]
-#     if len(field.strides) < len(flattened_layout):
-#         return False
-#     for dim in reversed(np.argsort(flattened_layout)):
-#         if field.strides[dim] < stride:
-#             return False
-#         stride = field.strides[dim]
-#     return True
 
 
 def make_cuda_layout_map(dimensions: Tuple[str, ...]) -> Tuple[Optional[int], ...]:

@@ -41,7 +41,7 @@ def test_bad_layout_warns(backend):
 
     with pytest.warns(
         UserWarning,
-        match=f"The layout of the field 'field_a' is not recommended for this backend."
+        match="The layout of the field 'field_a' is not recommended for this backend."
         "This may lead to performance degradation. Please consider using the"
         "provided allocators in `gt4py.storage`.",
     ):
