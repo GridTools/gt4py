@@ -150,6 +150,10 @@ class BindingCodeGenerator(TemplatedGenerator):
 def make_parameter(
     parameter: source_modules.ScalarParameter | source_modules.BufferParameter,
 ) -> FunctionParameter:
+    if isinstance(parameter, source_modules.ConnectivityParameter):
+        return FunctionParameter(
+            name=parameter.name, ndim=2, dtype=np.dtype("int32")
+        )  # TODO check if we use ndim and dtype
     name = parameter.name
     ndim = 0 if isinstance(parameter, source_modules.ScalarParameter) else len(parameter.dimensions)
     scalar_type = parameter.scalar_type
@@ -161,6 +165,13 @@ def make_argument(
 ) -> str | SidConversion:
     if isinstance(param, source_modules.ScalarParameter):
         return param.name
+    elif isinstance(param, source_modules.ConnectivityParameter):
+        return SidConversion(
+            buffer_name=param.name,
+            dimensions=[DimensionType(name=param.origin_axis), DimensionType(name=param.offset_tag)],
+            scalar_type=np.dtype("int32"),
+            dim_config=index,
+        )
     else:
         return SidConversion(
             buffer_name=param.name,

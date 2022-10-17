@@ -34,12 +34,14 @@ _persistent_cache_dir_path = pathlib.Path(tempfile.gettempdir()) / "gt4py_cache"
 
 
 def _serialize_param(
-    parameter: source_modules.ScalarParameter | source_modules.BufferParameter,
+    parameter: source_modules.ScalarParameter | source_modules.BufferParameter | source_modules.ConnectivityParameter,
 ) -> str:
     if isinstance(parameter, source_modules.ScalarParameter):
         return f"{parameter.name}: {str(parameter.scalar_type)}"
     elif isinstance(parameter, source_modules.BufferParameter):
         return f"{parameter.name}: {str(parameter.scalar_type)}<{', '.join(parameter.dimensions)}>"
+    elif isinstance(parameter, source_modules.ConnectivityParameter):
+        return f"{parameter.name}: {parameter.offset_tag}"
     raise ValueError("Invalid parameter type. This is a bug.")
 
 

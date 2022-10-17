@@ -234,6 +234,8 @@ class FieldOperatorLowering(NodeTranslator):
             lowered_args = [to_iterator(arg)(self.visit(arg, **kwargs)) for arg in node.args]
             args = [f"__arg{i}" for i in range(len(lowered_args))]
             return im.lift_(im.lambda__(*args)(im.call_(lowered_func)(*args)))(*lowered_args)
+        elif isinstance(node.func.type, ct.FunctionType):
+            return im.call_(self.visit(node.func, **kwargs))(*self.visit(node.args, **kwargs))
 
         raise AssertionError(
             f"Call to object of type {type(node.func.type).__name__} not understood."

@@ -291,7 +291,7 @@ class Program:
                 dtype = type_info.extract_dtype(param.type)
                 rewritten_args[param_idx] = constant_field(
                     args[param_idx],
-                    dtype=BUILTINS[dtype.kind.name.lower()],
+                    dtype=np.dtype(BUILTINS[dtype.kind.name.lower()]),
                 )
             if not isinstance(param.type, ct.FieldType):
                 continue

@@ -905,10 +905,13 @@ def index_field(axis: Dimension, dtype: npt.DTypeLike = int) -> LocatedField:
 class ConstantField(LocatedField):
     def __init__(self, value: Any, dtype: npt.DTypeLike):
         self.value = value
-        self.dtype = np.dtype(dtype).type
+        self.dtype = np.dtype(dtype)
 
     def __getitem__(self, _: FieldIndexOrIndices) -> Any:
-        return self.dtype(self.value)
+        return self.dtype.type(self.value)
+
+    def __array__(self) -> np.ndarray:
+        return np.array(self.value)
 
     @property
     def axes(self) -> tuple[()]:

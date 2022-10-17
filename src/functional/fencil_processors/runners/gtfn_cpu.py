@@ -14,7 +14,7 @@
 
 
 import dataclasses
-from typing import Any, Final, Optional
+from typing import Any, Final, Optional, Callable
 
 import numpy as np
 
@@ -24,6 +24,7 @@ from functional.fencil_processors.builders.cpp import bindings, build
 from functional.fencil_processors.codegens.gtfn import gtfn_module
 from functional.fencil_processors.source_modules import cpp_gen, source_modules
 from functional.iterator import ir as itir
+from functional import common
 
 
 # TODO(ricoh): Add support for the whole range of arguments that can be passed to a fencil.
@@ -34,13 +35,19 @@ def convert_arg(arg: Any) -> Any:
         return arg
 
 
+from functional.ffront.symbol_makers import make_symbol_type_from_value
+
+from eve.utils import content_hash
+
 @dataclasses.dataclass(frozen=True)
 class GTFNExecutor(fpi.FencilExecutor):
     language_settings: source_modules.LanguageWithHeaderFilesSettings = cpp_gen.CPP_DEFAULT
 
     name: Optional[str] = None
 
-    def __call__(self, fencil: itir.FencilDefinition, *args: Any, **kwargs: Any) -> None:
+    _cache: dict[int, Callable] = dataclasses.field(repr=False, init=False, default_factory=dict)
+
+    def __call__(self, fencil: itir.FencilDefinition, *args: Any, offset_provider, lift_mode: Optional[str] = None, column_axis: Optional = None) -> None:
         """
         Execute the iterator IR fencil with the provided arguments.
 
@@ -50,17 +57,36 @@ class GTFNExecutor(fpi.FencilExecutor):
 
         See ``FencilExecutorFunction`` for details.
         """
-        # TODO(ricoh): a pipeline runner might enhance readability as well as discourage
-        #  custom logic between steps.
-        return build.CMakeProject(
-            source_module=(
-                source_module := gtfn_module.GTFNSourceModuleGenerator(self.language_settings)(
-                    fencil, *args, **kwargs
-                )
-            ),
-            bindings_module=bindings.create_bindings(source_module),
-            cache_strategy=cache.Strategy.SESSION,
-        ).get_implementation()(*[convert_arg(arg) for arg in args])
+        # TODO(tehrengruber): poor mans cache, until we have a better solution.
+        cache_key = hash((
+            fencil,
+            # TODO(tehrengruber): as the resulting frontend types contain lists they are
+            #  not hashable. As a workaround we just use content_hash here.
+            content_hash(tuple(make_symbol_type_from_value(arg) for arg in args)),
+            id(offset_provider),
+            lift_mode,
+            column_axis))
+
+        if not cache_key in self._cache:
+            # TODO(ricoh): a pipeline runner might enhance readability as well as discourage
+            #  custom logic between steps.
+            impl = self._cache[cache_key] = build.CMakeProject(
+                source_module=(
+                    source_module := gtfn_module.GTFNSourceModuleGenerator(self.language_settings)(
+                        fencil, *args,
+                        offset_provider=offset_provider,
+                        lift_mode=lift_mode,
+                        column_axis=column_axis
+                    )
+                ),
+                bindings_module=bindings.create_bindings(source_module),
+                #cache_strategy=cache.Strategy.SESSION,
+                cache_strategy=cache.Strategy.PERSISTENT,
+            ).get_implementation()
+        else:
+            impl = self._cache[cache_key]
+
+        return impl(*[convert_arg(arg) for arg in args], *[op.tbl for op in offset_provider.values() if isinstance(op, common.Connectivity)])
 
     @property
     def __name__(self) -> str:

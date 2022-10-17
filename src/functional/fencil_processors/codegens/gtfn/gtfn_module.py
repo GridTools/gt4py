@@ -18,6 +18,7 @@ from typing import Any, Final
 
 import numpy as np
 
+from functional import common
 from functional.fencil_processors import processor_interface as fpi  # fencil processor interface
 from functional.fencil_processors.codegens.gtfn import gtfn_backend
 from functional.fencil_processors.source_modules import cpp_gen, source_modules
@@ -49,23 +50,59 @@ class GTFNSourceModuleGenerator(fpi.FencilSourceModuleGenerator):
         source_modules.Cpp, source_modules.LanguageWithHeaderFilesSettings
     ]:
         """Generate GTFN C++ code from the ITIR definition."""
-        parameters = tuple(
+        parameters = [
             get_param_description(fencil_param.id, obj)
             for obj, fencil_param in zip(args, fencil.params)
-        )
-        function = source_modules.Function(fencil.id, parameters)
+        ]
+        for name, connectivity in kwargs["offset_provider"].items():
+            if isinstance(connectivity, common.Connectivity):
+                parameters.append(source_modules.ConnectivityParameter("__conn_"+name.lower(), connectivity.origin_axis.value, name))
+            elif isinstance(connectivity, common.Dimension):
+                pass
+            else:
+                raise ValueError(f"Expected offset provider `{name}` to be a "
+                                 f"`Connectivity` or `Dimension`, but got "
+                                 f"{type(connectivity).__name__}")
+        function = source_modules.Function(fencil.id, tuple(parameters))
 
-        rendered_params = ", ".join(
-            ["gridtools::fn::backend::naive{}", *(p.name for p in parameters)]
-        )
-        decl_body = f"return generated::{function.name}()({rendered_params});"
+        connectivity_args = []
+        for name, connectivity in kwargs["offset_provider"].items():
+            if isinstance(connectivity, common.Connectivity):
+                nbtbl = f"as_neighbor_table<generated::{connectivity.origin_axis.value}_t, " \
+                        f"generated::{name}_t, {connectivity.max_neighbors}>(__conn_{name.lower()})"
+                connectivity_args.append(f"gridtools::hymap::keys<generated::{name}_t>::make_values({nbtbl})")  # TODO std::forward, type and max_neighbors)
+            elif isinstance(connectivity, common.Dimension):
+                pass
+            else:
+                raise ValueError(f"Expected offset provider `{name}` to be a "
+                                 f"`Connectivity` or `Dimension`, but got "
+                                 f"{type(connectivity).__name__}")
+        rendered_connectivity_args = ", ".join(connectivity_args)
+
+        import eve.trees
+        import eve.utils
+        scalar_parameters = eve.trees.pre_walk_values(eve.utils.XIterable(fencil.closures).getattr("inputs").to_list()).if_isinstance(itir.SymRef).getattr("id").map(str).to_list()
+
+        parameter_args = ["gridtools::fn::backend::naive{}"]
+        for p in parameters:
+            if isinstance(p, (source_modules.ScalarParameter, source_modules.BufferParameter)):
+                if isinstance(p, source_modules.ScalarParameter) and p.name in scalar_parameters:
+                    parameter_args.append(f"gridtools::stencil::global_parameter({p.name})")
+                else:
+                    parameter_args.append(p.name)
+
+        rendered_parameter_args = ", ".join(parameter_args)
+        #decl_body = f"double* bla=&__sym_2; return generated::{function.name}()({rendered_params});"
+        decl_body = f"return generated::{function.name}({rendered_connectivity_args})({rendered_parameter_args});"
         decl_src = cpp_gen.render_function_declaration(function, body=decl_body)
         stencil_src = gtfn_backend.generate(fencil, **kwargs)
         source_code = source_modules.format_source(
             self.language_settings,
             f"""
             #include <gridtools/fn/backend/naive.hpp>
+            #include <gridtools/stencil/global_parameter.hpp>
             {stencil_src}
+            using gridtools::fn::sid_neighbor_table::as_neighbor_table;
             {decl_src}
             """.strip(),
         )

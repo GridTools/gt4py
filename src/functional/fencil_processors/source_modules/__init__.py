@@ -1,6 +1,7 @@
 from .source_modules import (
     BindingModule,
     BufferParameter,
+    ConnectivityParameter,
     Function,
     LibraryDependency,
     ScalarParameter,
@@ -11,6 +12,7 @@ from .source_modules import (
 __all__ = [
     "SourceModule",
     "BindingModule",
+    "ConnectivityParameter",
     "Function",
     "ScalarParameter",
     "BufferParameter",

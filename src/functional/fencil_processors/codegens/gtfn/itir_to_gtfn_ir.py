@@ -130,26 +130,63 @@ def _collect_dimensions_from_domain(
             )
     return offset_definitions
 
+def _collect_dimensions_from_offsets(
+    node: itir.Node,
+    grid_type: common.GridType,
+    offset_provider: dict[str, common.Dimension | common.Connectivity],
+) -> dict[str, TagDefinition]:
+    used_offset_tags: Iterable[itir.OffsetLiteral] = (
+        node.walk_values()
+        .if_isinstance(itir.OffsetLiteral)
+        .filter(lambda offset_literal: isinstance(offset_literal.value, str))
+        .getattr("value")
+    ).to_set()
+    if not used_offset_tags.issubset(set(offset_provider.keys())):
+        raise ValueError()
+    offset_definitions = {}
+    for offset_name in set(offset_provider.keys()):
+        if offset_name not in offset_provider:
+            raise ValueError(f"Missing offset_provider entry for {offset_name}")
+        if isinstance(offset_provider[offset_name], common.Dimension):
+            dim = offset_provider[offset_name]
+            offset_definitions[dim.value] = TagDefinition(name=Sym(id=dim.value))
+        elif isinstance(offset_provider[offset_name], common.Connectivity):
+            for dim in [offset_provider[offset_name].origin_axis, offset_provider[offset_name].neighbor_axis]:
+                if grid_type == common.GridType.CARTESIAN:
+                    offset_definitions[dim.value] = TagDefinition(name=Sym(id=dim.value))
+                else:
+                    assert grid_type == common.GridType.UNSTRUCTURED
+                    if not dim.kind == common.DimensionKind.HORIZONTAL:
+                        raise NotImplementedError()
+                    offset_definitions[dim.value] = TagDefinition(
+                        name=Sym(id=dim.value), alias=_horizontal_dimension
+                    )
+        else:
+            raise AssertionError()
+    return offset_definitions
+
 
 def _collect_offset_definitions(
     node: itir.Node,
     grid_type: common.GridType,
     offset_provider: dict[str, common.Dimension | common.Connectivity],
 ):
-    offset_tags: Iterable[itir.OffsetLiteral] = (
+    used_offset_tags: Iterable[itir.OffsetLiteral] = (
         node.walk_values()
         .if_isinstance(itir.OffsetLiteral)
         .filter(lambda offset_literal: isinstance(offset_literal.value, str))
-    )
+        .getattr("value")
+    ).to_set()
+    if not used_offset_tags.issubset(set(offset_provider.keys())):
+        raise ValueError()
     offset_definitions = {}
 
-    for o in offset_tags:
-        if o.value not in offset_provider:
-            raise ValueError(f"Missing offset_provider entry for {o.value}")
+    for offset_name in set(offset_provider.keys()):
+        if offset_name not in offset_provider:
+            raise ValueError(f"Missing offset_provider entry for {offset_name}")
 
-        offset_name = o.value
-        if isinstance(offset_provider[o.value], common.Dimension):
-            dim = offset_provider[o.value]
+        if isinstance(offset_provider[offset_name], common.Dimension):
+            dim = offset_provider[offset_name]
             if grid_type == common.GridType.CARTESIAN:
                 # create alias from offset to dimension
                 offset_definitions[dim.value] = TagDefinition(name=Sym(id=dim.value))
@@ -174,7 +211,7 @@ def _collect_offset_definitions(
                         name=Sym(id=offset_name), alias=_vertical_dimension
                     )
         else:
-            assert isinstance(offset_provider[o.value], common.Connectivity)
+            assert isinstance(offset_provider[offset_name], common.Connectivity)
             offset_definitions[offset_name] = TagDefinition(name=Sym(id=offset_name))
     return offset_definitions
 
@@ -523,6 +560,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         function_definitions = self.visit(node.function_definitions) + extracted_functions
         offset_definitions = {
             **_collect_dimensions_from_domain(node.closures),
+            **_collect_dimensions_from_offsets(node, self.grid_type, self.offset_provider),
             **_collect_offset_definitions(node, self.grid_type, self.offset_provider),
         }
         return FencilDefinition(

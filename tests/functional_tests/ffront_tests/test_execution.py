@@ -179,7 +179,7 @@ def test_unary_neg(fieldview_backend):
     assert np.allclose(b, np.full((size), -1, dtype=int32))
 
 
-def test_shift(fieldview_backend):
+def test_cartesian_shift(fieldview_backend):
     size = 10
     Ioff = FieldOffset("Ioff", source=IDim, target=(IDim,))
     a = np_as_located_field(IDim)(np.arange(size + 1, dtype=np.float64))
@@ -196,6 +196,25 @@ def test_shift(fieldview_backend):
     fencil(a, b, offset_provider={"Ioff": IDim})
 
     assert np.allclose(b.array(), np.arange(1, 11))
+
+
+def test_unstructured_shift(reduction_setup, fieldview_backend):
+    Vertex = reduction_setup.Vertex
+    Edge = reduction_setup.Edge
+    E2V = reduction_setup.E2V
+
+    a = np_as_located_field(Vertex)(np.zeros(reduction_setup.num_vertices))
+    b = np_as_located_field(Edge)(np.zeros(reduction_setup.num_edges))
+
+    @field_operator(backend=fieldview_backend)
+    def shift_by_one(inp: Field[[Vertex], float64]) -> Field[[Edge], float64]:
+        return inp(E2V[0])
+
+    shift_by_one(a, out=b, offset_provider={"E2V": reduction_setup.offset_provider["E2V"]})
+
+    ref = np.asarray(a)[reduction_setup.offset_provider["E2V"].tbl[:, 0]]
+
+    assert np.allclose(b, ref)
 
 
 def test_fold_shifts(fieldview_backend):
@@ -290,7 +309,8 @@ def reduction_setup():
             [6, 12, 8, 15],  # 6
             [7, 13, 6, 16],
             [8, 14, 7, 17],
-        ]
+        ],
+        dtype=np.int32
     )
 
     # create e2v connectivity by inverting v2e
@@ -300,7 +320,7 @@ def reduction_setup():
         for e in v2e_arr[v]:
             e2v_arr[e].append(v)
     assert all(len(row) == 2 for row in e2v_arr)
-    e2v_arr = np.asarray(e2v_arr)
+    e2v_arr = np.asarray(e2v_arr, dtype=np.int32)
 
     inp = index_field(edge, dtype=np.int64)
     inp = np_as_located_field(edge)(np.array([inp[i] for i in range(num_edges)]))
@@ -350,7 +370,7 @@ def test_maxover_execution_sparse(reduction_setup, fieldview_backend):
     Vertex = rs.Vertex
     V2EDim = rs.V2EDim
 
-    inp_field = np_as_located_field(Vertex, V2EDim)(rs.v2e_table)
+    inp_field = np_as_located_field(Vertex, V2EDim)(rs.v2e_table.astype(np.int64))
 
     @field_operator(backend=fieldview_backend)
     def maxover_fieldoperator(inp_field: Field[[Vertex, V2EDim], int64]) -> Field[[Vertex], int64]:
@@ -550,8 +570,6 @@ def test_math_builtin_with_sparse_field(reduction_setup, fieldview_backend):
 
 def test_scalar_arg(fieldview_backend):
     """Test scalar argument being turned into 0-dim field."""
-    if fieldview_backend == gtfn_cpu.run_gtfn:
-        pytest.skip("ConstantFields are not supported yet.")
     Vertex = Dimension("Vertex")
     size = 5
     inp = 5.0
@@ -638,8 +656,6 @@ def test_conditional_nested_tuple():
 
 
 def test_nested_scalar_arg(fieldview_backend):
-    if fieldview_backend == gtfn_cpu.run_gtfn:
-        pytest.skip("ConstantFields are not supported yet.")
     Vertex = Dimension("Vertex")
     size = 5
     inp = 5.0
@@ -660,8 +676,6 @@ def test_nested_scalar_arg(fieldview_backend):
 
 
 def test_scalar_arg_with_field(fieldview_backend):
-    if fieldview_backend == gtfn_cpu.run_gtfn:
-        pytest.skip("IndexFields and ConstantFields are not supported yet.")
     Edge = Dimension("Edge")
     EdgeOffset = FieldOffset("EdgeOffset", source=Edge, target=(Edge,))
     size = 5

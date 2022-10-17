@@ -64,6 +64,9 @@ class GTFNCodegen(codegen.TemplatedGenerator):
     def visit_SymRef(self, node: gtfn_ir.SymRef, **kwargs: Any) -> str:
         if node.id == "get":
             return "tuple_util::get"
+        # TODO(tehrengruber): fix broken ADL lookup for shift
+        elif node.id == "shift":
+            return "gridtools::fn::unstructured_impl_::shift"
         return node.id
 
     @staticmethod
@@ -97,11 +100,11 @@ class GTFNCodegen(codegen.TemplatedGenerator):
                 f"hymap::keys<{','.join(t + '_t' for t in tags)}>::make_values({','.join(values)})"
             )
         else:
-            return f"tuple({','.join(values)})"
+            return "{"+f"{','.join(values)}"+"}"
 
     CartesianDomain = as_fmt("cartesian_domain({tagged_sizes}, {tagged_offsets})")
     UnstructuredDomain = as_mako(
-        "unstructured_domain(${tagged_sizes}, ${tagged_offsets}, connectivities__...)"
+        "unstructured_domain<std::tuple<int>, std::tuple<int>>(${tagged_sizes}, ${tagged_offsets}, connectivities__...)"
     )
 
     def visit_OffsetLiteral(self, node: gtfn_ir.OffsetLiteral, **kwargs: Any) -> str:
@@ -192,6 +195,7 @@ class GTFNCodegen(codegen.TemplatedGenerator):
         """
     #include <cmath>
     #include <gridtools/fn/${grid_type_str}.hpp>
+    #include <gridtools/fn/sid_neighbor_table.hpp>
 
     namespace generated{
     namespace{

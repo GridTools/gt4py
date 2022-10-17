@@ -97,7 +97,7 @@ def render_function_declaration(function: source_modules.Function, body: str) ->
     template_params = [
         f"class BufferT{index}"
         for index, param in enumerate(function.parameters)
-        if isinstance(param, source_modules.BufferParameter)
+        if isinstance(param, (source_modules.BufferParameter, source_modules.ConnectivityParameter))
     ]
     if template_params:
         return f"""

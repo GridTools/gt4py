@@ -88,10 +88,17 @@ class BufferParameter:
     scalar_type: np.dtype
 
 
+@dataclass
+class ConnectivityParameter:
+    name: str
+    origin_axis: str
+    offset_tag: str
+
+
 @dataclass(frozen=True)
 class Function:
     name: str
-    parameters: tuple[ScalarParameter | BufferParameter, ...]
+    parameters: tuple[ScalarParameter | BufferParameter | ConnectivityParameter, ...]
 
 
 @dataclass(frozen=True)
