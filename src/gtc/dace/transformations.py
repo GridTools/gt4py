@@ -93,26 +93,20 @@ def nest_sequential_map_scopes(sdfg: dace.SDFG):
     avoid more complex pointer arithmetic on each Tasklet's invocation.
     This is performed in an inner-map-first order to avoid revisiting the graph after changes.
     """
-    visited = set()
 
     def _process_map(sdfg: dace.SDFG, state: dace.SDFGState, map_entry: dace.nodes.MapEntry):
-        for node in state.scope_subgraph(map_entry, include_entry=False, include_exit=False):
-            if node in visited:
-                continue
+        for node in state.scope_children()[map_entry]:
             if isinstance(node, dace.nodes.NestedSDFG):
                 nest_sequential_map_scopes(node.sdfg)
             elif isinstance(node, dace.nodes.MapEntry):
                 _process_map(sdfg, state, node)
-            visited.add(node)
         if map_entry.schedule == dace.ScheduleType.Sequential:
-            map_entrys = [map_entry]
-            for me in reversed(map_entrys):
-                subgraph = state.scope_subgraph(me, include_entry=False, include_exit=False)
-                nest_state_subgraph(sdfg, state, subgraph)
+            subgraph = state.scope_subgraph(map_entry, include_entry=False, include_exit=False)
+            nest_state_subgraph(sdfg, state, subgraph)
 
+    state: dace.SDFGState
     for state in sdfg.nodes():
         for map_entry in filter(
-            lambda n: isinstance(n, dace.nodes.MapEntry) and n not in visited, state.nodes()
+            lambda n: isinstance(n, dace.nodes.MapEntry), state.scope_children()[None]
         ):
             _process_map(sdfg, state, map_entry)
-            visited.add(map_entry)
