@@ -101,7 +101,6 @@ def test_gtcpu_ifirst_layout(dimensions, layout):
     assert make_layout_map(dimensions) == layout
 
 
-@pytest.mark.parametrize("backend", ["cuda", "gt:gpu", "dace:gpu"])
 @pytest.mark.parametrize(
     ["dimensions", "layout"],
     [
@@ -139,6 +138,6 @@ def test_gtcpu_ifirst_layout(dimensions, layout):
         (("I", "J", "K", "1"), (3, 2, 1, 0)),
     ],
 )
-def test_gpu_layout(backend, dimensions, layout):
-    make_layout_map = gt_backend.from_name(backend).storage_info["layout_map"]
+def test_gpu_layout(dimensions, layout):
+    make_layout_map = gt_backend.from_name("gt:gpu").storage_info["layout_map"]
     assert make_layout_map(dimensions) == layout

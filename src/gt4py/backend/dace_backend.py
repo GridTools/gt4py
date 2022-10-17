@@ -750,7 +750,7 @@ class DaceCPUBackend(BaseDaceBackend):
         "alignment": 1,
         "device": "cpu",
         "layout_map": layout_maker_factory((0, 1, 2)),
-        "is_optimal_layout": layout_checker_factory((0, 1, 2)),
+        "is_optimal_layout": layout_checker_factory(layout_maker_factory((0, 1, 2))),
     }
     MODULE_GENERATOR_CLASS = DaCePyExtModuleGenerator
 
@@ -770,7 +770,7 @@ class DaceGPUBackend(BaseDaceBackend):
         "alignment": 32,
         "device": "gpu",
         "layout_map": layout_maker_factory((2, 1, 0)),
-        "is_optimal_layout": layout_checker_factory((2, 1, 0)),
+        "is_optimal_layout": layout_checker_factory(layout_maker_factory((2, 1, 0))),
     }
     MODULE_GENERATOR_CLASS = DaCeCUDAPyExtModuleGenerator
     options = {
