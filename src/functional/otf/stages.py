@@ -41,7 +41,7 @@ class ProgramCall:
 @dataclasses.dataclass(frozen=True)
 class ProgramSource(Generic[SrcL, SettingT]):
     """
-    Standalone sourcecode translated from an IR representation along with OTF relevant information.
+    Standalone source code translated from an IR along with information relevant for OTF compilation.
 
     Contains additional information required for further OTF steps, such as
     - implementation language and language conventions
