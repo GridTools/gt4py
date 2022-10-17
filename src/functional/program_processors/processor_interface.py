@@ -31,7 +31,7 @@ from functional.iterator import ir as itir
 
 
 OutputT = TypeVar("OutputT", covariant=True)
-ProcessorKindT = TypeVar("ProcessorKindT", bound="ProgramProcessorProtocol", covariant=True)
+ProcessorKindT = TypeVar("ProcessorKindT", bound="ProgramProcessor", covariant=True)
 
 
 class ProgramProcessorFunction(Protocol[OutputT]):
@@ -39,7 +39,7 @@ class ProgramProcessorFunction(Protocol[OutputT]):
         ...
 
 
-class ProgramProcessorProtocol(
+class ProgramProcessor(
     ProgramProcessorFunction[OutputT], Protocol[OutputT, ProcessorKindT]
 ):
     @property
@@ -47,7 +47,7 @@ class ProgramProcessorProtocol(
         ...
 
 
-class ProgramFormatter(ProgramProcessorProtocol[str, "ProgramFormatter"], Protocol):
+class ProgramFormatter(ProgramProcessor[str, "ProgramFormatter"], Protocol):
     @property
     def kind(self) -> type[ProgramFormatter]:
         return ProgramFormatter
@@ -68,10 +68,10 @@ def program_formatter(func: ProgramProcessorFunction[str]) -> ProgramFormatter:
     """
     # this operation effectively changes the type of func and that is the intention here
     func.kind = ProgramFormatter  # type: ignore[attr-defined]
-    return cast(ProgramProcessorProtocol[str, ProgramFormatter], func)
+    return cast(ProgramProcessor[str, ProgramFormatter], func)
 
 
-class ProgramExecutor(ProgramProcessorProtocol[None, "ProgramExecutor"], Protocol):
+class ProgramExecutor(ProgramProcessor[None, "ProgramExecutor"], Protocol):
     @property
     def kind(self) -> type[ProgramExecutor]:
         return ProgramExecutor
@@ -97,12 +97,12 @@ def program_executor(func: ProgramProcessorFunction[None]) -> ProgramExecutor:
 
 def is_processor_kind(
     obj: Callable[..., OutputT], kind: type[ProcessorKindT]
-) -> TypeGuard[ProgramProcessorProtocol[OutputT, ProcessorKindT]]:
+) -> TypeGuard[ProgramProcessor[OutputT, ProcessorKindT]]:
     return callable(obj) and getattr(obj, "kind", None) is kind
 
 
 def ensure_processor_kind(
-    obj: ProgramProcessorProtocol[OutputT, ProcessorKindT], kind: type[ProcessorKindT]
+    obj: ProgramProcessor[OutputT, ProcessorKindT], kind: type[ProcessorKindT]
 ) -> None:
     if not is_processor_kind(obj, kind):
         raise RuntimeError(f"{obj} is not a {kind.__name__}!")

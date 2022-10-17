@@ -82,6 +82,6 @@ class GTFNExecutor(fpi.ProgramExecutor):
         return self.name or repr(self)
 
 
-run_gtfn: Final[fpi.ProgramProcessorProtocol[None, fpi.ProgramExecutor]] = GTFNExecutor(
+run_gtfn: Final[fpi.ProgramProcessor[None, fpi.ProgramExecutor]] = GTFNExecutor(
     name="run_gtfn"
 )
