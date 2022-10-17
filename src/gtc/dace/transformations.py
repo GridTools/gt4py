@@ -17,7 +17,7 @@ def eliminate_trivial_maps(sdfg: dace.SDFG):
                 }:
                     # exclude maps with empty edges as workaround for a bug in TrivialMapElimination
                     if any(
-                        edge.data.data is None
+                        edge.data.is_empty()
                         for edge in state.in_edges(map_entry)
                         + state.out_edges(state.exit_node(map_entry))
                     ):
