@@ -189,13 +189,16 @@ def _collect_offset_definitions(
             dim = offset_provider[offset_name]
             if grid_type == common.GridType.CARTESIAN:
                 # create alias from offset to dimension
+                assert dim.value != offset_name
                 offset_definitions[dim.value] = TagDefinition(name=Sym(id=dim.value))
                 offset_definitions[offset_name] = TagDefinition(
                     name=Sym(id=offset_name), alias=SymRef(id=dim.value)
                 )
             else:
                 assert grid_type == common.GridType.UNSTRUCTURED
-                if not dim.kind == common.DimensionKind.VERTICAL:
+                if dim.kind == common.DimensionKind.LOCAL:
+                    offset_definitions[dim.value+"Dim"] = TagDefinition(name=Sym(id=dim.value+"Dim"))
+                elif not dim.kind == common.DimensionKind.VERTICAL:
                     #raise ValueError(
                     #    "Mapping an offset to a horizontal dimension in unstructured is not allowed."
                     #)

@@ -413,7 +413,7 @@ def test_minover_execution(reduction_setup, fieldview_backend):
     Vertex = rs.Vertex
     V2EDim = rs.V2EDim
 
-    in_field = np_as_located_field(Vertex, V2EDim)(rs.v2e_table)
+    in_field = np_as_located_field(Vertex, V2EDim)(rs.v2e_table.astype(np.int32))
 
     @field_operator
     def minover_fieldoperator(input: Field[[Vertex, V2EDim], int64]) -> Field[[Vertex], int64]:
@@ -476,7 +476,7 @@ def test_reduction_execution_nb(reduction_setup, fieldview_backend):
     rs = reduction_setup
     V2EDim = rs.V2EDim
 
-    nb_field = np_as_located_field(rs.Vertex, rs.V2EDim)(rs.v2e_table)
+    nb_field = np_as_located_field(rs.Vertex, rs.V2EDim)(rs.v2e_table.astype(np.int64))
 
     @field_operator(backend=fieldview_backend)
     def reduction(nb_field: Field[[rs.Vertex, rs.V2EDim], int64]) -> Field[[rs.Vertex], int64]:  # type: ignore
@@ -525,7 +525,7 @@ def test_reduction_expression2(reduction_setup, fieldview_backend):
 
     vertex_field = np_as_located_field(Vertex)(np.arange(0, rs.num_vertices, 1))
     edge_field = np_as_located_field(Edge)(np.arange(0, rs.num_edges, 1))
-    vertex_v2e_field = np_as_located_field(Vertex, V2EDim)(rs.v2e_table)
+    vertex_v2e_field = np_as_located_field(Vertex, V2EDim)(rs.v2e_table.astype(np.int32))
     out = np_as_located_field(Vertex)(np.zeros(rs.num_vertices, dtype=np.int64))
 
     @field_operator
@@ -553,7 +553,7 @@ def test_math_builtin_with_sparse_field(reduction_setup, fieldview_backend):
     V2E = rs.V2E
 
     edge_field = np_as_located_field(Edge)(np.arange(0, rs.num_edges, 1))
-    vertex_v2e_field = np_as_located_field(Vertex, V2EDim)(rs.v2e_table)
+    vertex_v2e_field = np_as_located_field(Vertex, V2EDim)(rs.v2e_table.astype(np.int32))
     out = np_as_located_field(Vertex)(np.zeros(rs.num_vertices, dtype=np.int64))
 
     @field_operator

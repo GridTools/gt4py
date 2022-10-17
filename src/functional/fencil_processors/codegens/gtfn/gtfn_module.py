@@ -23,7 +23,7 @@ from functional.fencil_processors import processor_interface as fpi  # fencil pr
 from functional.fencil_processors.codegens.gtfn import gtfn_backend
 from functional.fencil_processors.source_modules import cpp_gen, source_modules
 from functional.iterator import ir as itir
-
+from functional.common import DimensionKind
 
 def get_param_description(
     name: str, obj: Any
@@ -31,7 +31,7 @@ def get_param_description(
     view = np.asarray(obj)
     if view.ndim > 0:
         return source_modules.BufferParameter(
-            name, tuple(dim.value for dim in obj.axes), view.dtype
+            name, tuple(dim.value if dim.kind != DimensionKind.LOCAL else dim.value+"Dim" for dim in obj.axes), view.dtype
         )
     else:
         return source_modules.ScalarParameter(name, view.dtype)
