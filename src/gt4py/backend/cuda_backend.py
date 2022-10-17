@@ -18,6 +18,7 @@ from eve import codegen
 from gt4py import gt_src_manager
 from gt4py.backend.base import CLIBackendMixin, register
 from gt4py.backend.gtc_common import BackendCodegen, bindings_main_template, pybuffer_to_sid
+from gt4py.utils.layout import layout_checker_factory
 from gtc import gtir
 from gtc.common import DataType
 from gtc.cuir import cuir, cuir_codegen, extent_analysis, kernel_fusion
@@ -28,12 +29,7 @@ from gtc.passes.oir_optimizations.caches import FillFlushToLocalKCaches
 from gtc.passes.oir_optimizations.pruning import NoFieldAccessPruning
 from gtc.passes.oir_pipeline import DefaultPipeline
 
-from .gtc_common import (
-    BaseGTBackend,
-    CUDAPyExtModuleGenerator,
-    cuda_is_compatible_layout,
-    make_cuda_layout_map,
-)
+from .gtc_common import BaseGTBackend, CUDAPyExtModuleGenerator, make_cuda_layout_map
 
 
 if TYPE_CHECKING:
@@ -143,7 +139,7 @@ class CudaBackend(BaseGTBackend, CLIBackendMixin):
         "alignment": 32,
         "device": "gpu",
         "layout_map": make_cuda_layout_map,
-        "is_compatible_layout": cuda_is_compatible_layout,
+        "is_optimal_layout": layout_checker_factory(make_cuda_layout_map),
     }
     PYEXT_GENERATOR_CLASS = CudaExtGenerator  # type: ignore
     MODULE_GENERATOR_CLASS = CUDAPyExtModuleGenerator

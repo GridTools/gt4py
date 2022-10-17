@@ -12,109 +12,133 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from gt4py.backend.gtc_common import make_cuda_layout_map, make_mc_layout_map, make_x86_layout_map
+import pytest
+
+from gt4py import backend as gt_backend
 
 
-def test_x86_layout():
-    assert make_x86_layout_map(()) == ()
-    assert make_x86_layout_map(("I",)) == (0,)
-    assert make_x86_layout_map(("J",)) == (0,)
-    assert make_x86_layout_map(("I", "J")) == (0, 1)
-    assert make_x86_layout_map(("K",)) == (0,)
-    assert make_x86_layout_map(("I", "K")) == (0, 1)
-    assert make_x86_layout_map(("J", "K")) == (0, 1)
-    assert make_x86_layout_map(("I", "J", "K")) == (0, 1, 2)
-    assert make_x86_layout_map(("0", "1")) == (0, 1)
-    assert make_x86_layout_map(("I", "0", "1")) == (2, 0, 1)
-    assert make_x86_layout_map(("J", "0", "1")) == (2, 0, 1)
-    assert make_x86_layout_map(("K", "0", "1")) == (2, 0, 1)
-    assert make_x86_layout_map(("I", "J", "0", "1")) == (2, 3, 0, 1)
-    assert make_x86_layout_map(("I", "K", "0", "1")) == (2, 3, 0, 1)
-    assert make_x86_layout_map(("J", "K", "0", "1")) == (2, 3, 0, 1)
-    assert make_x86_layout_map(("I", "J", "K", "0", "1")) == (2, 3, 4, 0, 1)
-    assert make_x86_layout_map(("0",)) == (0,)
-    assert make_x86_layout_map(("I", "0")) == (1, 0)
-    assert make_x86_layout_map(("J", "0")) == (1, 0)
-    assert make_x86_layout_map(("K", "0")) == (1, 0)
-    assert make_x86_layout_map(("I", "J", "0")) == (1, 2, 0)
-    assert make_x86_layout_map(("I", "K", "0")) == (1, 2, 0)
-    assert make_x86_layout_map(("J", "K", "0")) == (1, 2, 0)
-    assert make_x86_layout_map(("I", "J", "K", "0")) == (1, 2, 3, 0)
-    assert make_x86_layout_map(("1",)) == (0,)
-    assert make_x86_layout_map(("I", "1")) == (1, 0)
-    assert make_x86_layout_map(("J", "1")) == (1, 0)
-    assert make_x86_layout_map(("K", "1")) == (1, 0)
-    assert make_x86_layout_map(("I", "J", "1")) == (1, 2, 0)
-    assert make_x86_layout_map(("I", "K", "1")) == (1, 2, 0)
-    assert make_x86_layout_map(("J", "K", "1")) == (1, 2, 0)
-    assert make_x86_layout_map(("I", "J", "K", "1")) == (1, 2, 3, 0)
+@pytest.mark.parametrize(
+    ["dimensions", "layout"],
+    [
+        ((), ()),
+        (("I",), (0,)),
+        (("J",), (0,)),
+        (("I", "J"), (0, 1)),
+        (("K",), (0,)),
+        (("I", "K"), (0, 1)),
+        (("J", "K"), (0, 1)),
+        (("I", "J", "K"), (0, 1, 2)),
+        (("0", "1"), (0, 1)),
+        (("I", "0", "1"), (2, 0, 1)),
+        (("J", "0", "1"), (2, 0, 1)),
+        (("K", "0", "1"), (2, 0, 1)),
+        (("I", "J", "0", "1"), (2, 3, 0, 1)),
+        (("I", "K", "0", "1"), (2, 3, 0, 1)),
+        (("J", "K", "0", "1"), (2, 3, 0, 1)),
+        (("I", "J", "K", "0", "1"), (2, 3, 4, 0, 1)),
+        (("0",), (0,)),
+        (("I", "0"), (1, 0)),
+        (("J", "0"), (1, 0)),
+        (("K", "0"), (1, 0)),
+        (("I", "J", "0"), (1, 2, 0)),
+        (("I", "K", "0"), (1, 2, 0)),
+        (("J", "K", "0"), (1, 2, 0)),
+        (("I", "J", "K", "0"), (1, 2, 3, 0)),
+        (("1",), (0,)),
+        (("I", "1"), (1, 0)),
+        (("J", "1"), (1, 0)),
+        (("K", "1"), (1, 0)),
+        (("I", "J", "1"), (1, 2, 0)),
+        (("I", "K", "1"), (1, 2, 0)),
+        (("J", "K", "1"), (1, 2, 0)),
+        (("I", "J", "K", "1"), (1, 2, 3, 0)),
+    ],
+)
+def test_gtcpu_kfirst_layout(dimensions, layout):
+    make_layout_map = gt_backend.from_name("gt:cpu_kfirst").storage_info["layout_map"]
+    assert make_layout_map(dimensions) == layout
 
 
-def test_mc_layout():
-    assert make_mc_layout_map(()) == ()
-    assert make_mc_layout_map(("I",)) == (0,)
-    assert make_mc_layout_map(("J",)) == (0,)
-    assert make_mc_layout_map(("I", "J")) == (1, 0)
-    assert make_mc_layout_map(("K",)) == (0,)
-    assert make_mc_layout_map(("I", "K")) == (1, 0)
-    assert make_mc_layout_map(("J", "K")) == (0, 1)
-    assert make_mc_layout_map(("I", "J", "K")) == (2, 0, 1)
-    assert make_mc_layout_map(("0", "1")) == (1, 0)
-    assert make_mc_layout_map(("I", "0", "1")) == (2, 1, 0)
-    assert make_mc_layout_map(("J", "0", "1")) == (2, 1, 0)
-    assert make_mc_layout_map(("K", "0", "1")) == (2, 1, 0)
-    assert make_mc_layout_map(("I", "J", "0", "1")) == (3, 2, 1, 0)
-    assert make_mc_layout_map(("I", "K", "0", "1")) == (3, 2, 1, 0)
-    assert make_mc_layout_map(("J", "K", "0", "1")) == (2, 3, 1, 0)
-    assert make_mc_layout_map(("I", "J", "K", "0", "1")) == (4, 2, 3, 1, 0)
-    assert make_mc_layout_map(("0",)) == (0,)
-    assert make_mc_layout_map(("I", "0")) == (1, 0)
-    assert make_mc_layout_map(("J", "0")) == (1, 0)
-    assert make_mc_layout_map(("K", "0")) == (1, 0)
-    assert make_mc_layout_map(("I", "J", "0")) == (2, 1, 0)
-    assert make_mc_layout_map(("I", "K", "0")) == (2, 1, 0)
-    assert make_mc_layout_map(("J", "K", "0")) == (1, 2, 0)
-    assert make_mc_layout_map(("I", "J", "K", "0")) == (3, 1, 2, 0)
-    assert make_mc_layout_map(("1",)) == (0,)
-    assert make_mc_layout_map(("I", "1")) == (1, 0)
-    assert make_mc_layout_map(("J", "1")) == (1, 0)
-    assert make_mc_layout_map(("K", "1")) == (1, 0)
-    assert make_mc_layout_map(("I", "J", "1")) == (2, 1, 0)
-    assert make_mc_layout_map(("I", "K", "1")) == (2, 1, 0)
-    assert make_mc_layout_map(("J", "K", "1")) == (1, 2, 0)
-    assert make_mc_layout_map(("I", "J", "K", "1")) == (3, 1, 2, 0)
+@pytest.mark.parametrize(
+    ["dimensions", "layout"],
+    [
+        ((), ()),
+        (("I",), (0,)),
+        (("J",), (0,)),
+        (("I", "J"), (1, 0)),
+        (("K",), (0,)),
+        (("I", "K"), (1, 0)),
+        (("J", "K"), (0, 1)),
+        (("I", "J", "K"), (2, 0, 1)),
+        (("0", "1"), (1, 0)),
+        (("I", "0", "1"), (2, 1, 0)),
+        (("J", "0", "1"), (2, 1, 0)),
+        (("K", "0", "1"), (2, 1, 0)),
+        (("I", "J", "0", "1"), (3, 2, 1, 0)),
+        (("I", "K", "0", "1"), (3, 2, 1, 0)),
+        (("J", "K", "0", "1"), (2, 3, 1, 0)),
+        (("I", "J", "K", "0", "1"), (4, 2, 3, 1, 0)),
+        (("0",), (0,)),
+        (("I", "0"), (1, 0)),
+        (("J", "0"), (1, 0)),
+        (("K", "0"), (1, 0)),
+        (("I", "J", "0"), (2, 1, 0)),
+        (("I", "K", "0"), (2, 1, 0)),
+        (("J", "K", "0"), (1, 2, 0)),
+        (("I", "J", "K", "0"), (3, 1, 2, 0)),
+        (("1",), (0,)),
+        (("I", "1"), (1, 0)),
+        (("J", "1"), (1, 0)),
+        (("K", "1"), (1, 0)),
+        (("I", "J", "1"), (2, 1, 0)),
+        (("I", "K", "1"), (2, 1, 0)),
+        (("J", "K", "1"), (1, 2, 0)),
+        (("I", "J", "K", "1"), (3, 1, 2, 0)),
+    ],
+)
+def test_gtcpu_ifirst_layout(dimensions, layout):
+    make_layout_map = gt_backend.from_name("gt:cpu_ifirst").storage_info["layout_map"]
+    assert make_layout_map(dimensions) == layout
 
 
-def test_cuda_layout():
-    assert make_cuda_layout_map(()) == ()
-    assert make_cuda_layout_map(("I",)) == (0,)
-    assert make_cuda_layout_map(("J",)) == (0,)
-    assert make_cuda_layout_map(("I", "J")) == (1, 0)
-    assert make_cuda_layout_map(("K",)) == (0,)
-    assert make_cuda_layout_map(("I", "K")) == (1, 0)
-    assert make_cuda_layout_map(("J", "K")) == (1, 0)
-    assert make_cuda_layout_map(("I", "J", "K")) == (2, 1, 0)
-    assert make_cuda_layout_map(("0", "1")) == (1, 0)
-    assert make_cuda_layout_map(("I", "0", "1")) == (2, 1, 0)
-    assert make_cuda_layout_map(("J", "0", "1")) == (2, 1, 0)
-    assert make_cuda_layout_map(("K", "0", "1")) == (2, 1, 0)
-    assert make_cuda_layout_map(("I", "J", "0", "1")) == (3, 2, 1, 0)
-    assert make_cuda_layout_map(("I", "K", "0", "1")) == (3, 2, 1, 0)
-    assert make_cuda_layout_map(("J", "K", "0", "1")) == (3, 2, 1, 0)
-    assert make_cuda_layout_map(("I", "J", "K", "0", "1")) == (4, 3, 2, 1, 0)
-    assert make_cuda_layout_map(("0",)) == (0,)
-    assert make_cuda_layout_map(("I", "0")) == (1, 0)
-    assert make_cuda_layout_map(("J", "0")) == (1, 0)
-    assert make_cuda_layout_map(("K", "0")) == (1, 0)
-    assert make_cuda_layout_map(("I", "J", "0")) == (2, 1, 0)
-    assert make_cuda_layout_map(("I", "K", "0")) == (2, 1, 0)
-    assert make_cuda_layout_map(("J", "K", "0")) == (2, 1, 0)
-    assert make_cuda_layout_map(("I", "J", "K", "0")) == (3, 2, 1, 0)
-    assert make_cuda_layout_map(("1",)) == (0,)
-    assert make_cuda_layout_map(("I", "1")) == (1, 0)
-    assert make_cuda_layout_map(("J", "1")) == (1, 0)
-    assert make_cuda_layout_map(("K", "1")) == (1, 0)
-    assert make_cuda_layout_map(("I", "J", "1")) == (2, 1, 0)
-    assert make_cuda_layout_map(("I", "K", "1")) == (2, 1, 0)
-    assert make_cuda_layout_map(("J", "K", "1")) == (2, 1, 0)
-    assert make_cuda_layout_map(("I", "J", "K", "1")) == (3, 2, 1, 0)
+@pytest.mark.parametrize("backend", ["cuda", "gt:gpu", "dace:gpu"])
+@pytest.mark.parametrize(
+    ["dimensions", "layout"],
+    [
+        ((), ()),
+        (("I",), (0,)),
+        (("J",), (0,)),
+        (("I", "J"), (1, 0)),
+        (("K",), (0,)),
+        (("I", "K"), (1, 0)),
+        (("J", "K"), (1, 0)),
+        (("I", "J", "K"), (2, 1, 0)),
+        (("0", "1"), (1, 0)),
+        (("I", "0", "1"), (2, 1, 0)),
+        (("J", "0", "1"), (2, 1, 0)),
+        (("K", "0", "1"), (2, 1, 0)),
+        (("I", "J", "0", "1"), (3, 2, 1, 0)),
+        (("I", "K", "0", "1"), (3, 2, 1, 0)),
+        (("J", "K", "0", "1"), (3, 2, 1, 0)),
+        (("I", "J", "K", "0", "1"), (4, 3, 2, 1, 0)),
+        (("0",), (0,)),
+        (("I", "0"), (1, 0)),
+        (("J", "0"), (1, 0)),
+        (("K", "0"), (1, 0)),
+        (("I", "J", "0"), (2, 1, 0)),
+        (("I", "K", "0"), (2, 1, 0)),
+        (("J", "K", "0"), (2, 1, 0)),
+        (("I", "J", "K", "0"), (3, 2, 1, 0)),
+        (("1",), (0,)),
+        (("I", "1"), (1, 0)),
+        (("J", "1"), (1, 0)),
+        (("K", "1"), (1, 0)),
+        (("I", "J", "1"), (2, 1, 0)),
+        (("I", "K", "1"), (2, 1, 0)),
+        (("J", "K", "1"), (2, 1, 0)),
+        (("I", "J", "K", "1"), (3, 2, 1, 0)),
+    ],
+)
+def test_gpu_layout(backend, dimensions, layout):
+    make_layout_map = gt_backend.from_name(backend).storage_info["layout_map"]
+    assert make_layout_map(dimensions) == layout
