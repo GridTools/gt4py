@@ -116,7 +116,7 @@ class CompiledProgram(Protocol):
         ...
 
 
-def _unique_libs(*args: tuple[source.LibraryDependency, ...]) -> tuple[source.LibraryDependency]:
+def _unique_libs(*args: source.LibraryDependency) -> tuple[source.LibraryDependency, ...]:
     """
     Filter out multiple occurrences of the same ``source.LibraryDependency``.
 
