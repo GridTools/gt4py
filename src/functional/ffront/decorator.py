@@ -279,8 +279,9 @@ class Program:
 
     def _process_args(self, args: tuple, kwargs: dict) -> tuple[tuple, tuple, dict[str, Any]]:
         # if parameter is in signature but not in args, move it from kwargs to args
-        new_args_ls = []
+
         if len(kwargs) > 0:
+            new_args_ls = []
             for param in self.itir.params:
                 if param.id in kwargs:
                     new_args_ls.append(kwargs[param.id])
