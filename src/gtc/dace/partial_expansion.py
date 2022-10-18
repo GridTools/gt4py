@@ -1,3 +1,4 @@
+import copy
 from typing import Dict, List, Tuple
 
 import dace.sdfg.graph
@@ -9,14 +10,14 @@ from gtc import common
 from gtc import daceir as dcir
 from gtc.dace.nodes import StencilComputation
 from gtc.dace.utils import make_dace_subset
-
+import sympy
 
 SymbolicOriginType = Tuple[dace.symbolic.SymbolicType, ...]
 SymbolicDomainType = Tuple[dace.symbolic.SymbolicType, ...]
 
 
 def _set_skips(node, expansion_items):
-    raise NotImplementedError
+    node.expansion_specification = ["SkipJ", "SkipI", *node.expansion_specification[1:]]
 
 
 def _get_field_access_infos(
@@ -27,19 +28,74 @@ def _get_field_access_infos(
     """
     returns a dictionary mapping field names to access infos for the argument node with the set expansion_specification
     """
+    skip_spec = node
+    from gtc.dace.utils import compute_dcir_access_infos
+    access_infos = compute_dcir_access_infos(node)
+    for name, info in access_infos.items():
+
+        grid_subset = info.grid_subset.tile()
+        access_infos[name] = dcir.FieldAccessInfo(grid_subset=)
+
     raise NotImplementedError
 
 
 def _get_symbolic_origin_and_domain(
-    node: StencilComputation, access_infos: Dict[dcir.SymbolName, dcir.FieldAccessInfo]
-) -> Dict[dcir.SymbolName, Tuple[SymbolicOriginType, SymbolicDomainType]]:
+    state: dace.SDFGState, node: StencilComputation, access_infos: Dict[dcir.SymbolName, dcir.FieldAccessInfo]
+) -> Tuple[Dict[dcir.SymbolName, SymbolicOriginType], SymbolicDomainType]:
     """
     match `node`'s in/out memlet subsets with the dcir.GridSubset in `access_infos` to determine which part of the
     memlet subset corresponds to halo and domain. returns a dict mapping the field names to a 2-tuple with
     * the origin of the field in the node as absolute index in the parent sdfg's array
     * the shape of the domain as tuple of symbolic values
     """
-    raise NotImplementedError
+    # union input and output subsets
+    outer_subsets = {}
+    for edge in state.in_edges(node):
+        outer_subsets[edge.dst_conn] = edge.data.subset
+    for edge in state.out_edges(node):
+        outer_subsets[edge.src_conn] = dace.subsets.union(
+            edge.data.subset, outer_subsets.get(edge.src_conn, edge.data.subset)
+        )
+    # ensure single-use of input and output subset instances
+    for edge in state.in_edges(node):
+        edge.data.subset = copy.deepcopy(outer_subsets[edge.dst_conn])
+    for edge in state.out_edges(node):
+        edge.data.subset = copy.deepcopy(outer_subsets[edge.src_conn])
+
+
+    equations = []
+    symbols = set()
+    origins = dict()
+    for field, info in access_infos.items():
+        outer_subset: dace.subsets.Range = outer_subsets[field]
+        inner_origin = [info.grid_subset.intervals[axis] for axis in dcir.Axis.dims_3d() if axis in info.grid_subset.intervals]
+        origins[field] = tuple(dace.symbolic.pystr_to_symbolic(r[0]+ o) for r, o in zip(outer_subset.ranges, inner_origin))
+
+    # Collect equations and symbols from arguments and shapes
+    for field, info in access_infos.items():
+        inner_shape = [dace.symbolic.pystr_to_symbolic(s) for s in info.shape]
+        outer_shape = [
+            dace.symbolic.pystr_to_symbolic(s) for s in outer_subsets[field].bounding_box_size()
+        ]
+
+        for inner_dim, outer_dim in zip(inner_shape, outer_shape):
+            repldict = {}
+            for sym in dace.symbolic.symlist(inner_dim).values():
+                newsym = dace.symbolic.symbol("__SOLVE_" + str(sym))
+                symbols.add(newsym)
+                repldict[sym] = newsym
+
+            # Replace symbols with __SOLVE_ symbols so as to allow
+            # the same symbol in the called SDFG
+            if repldict:
+                inner_dim = inner_dim.subs(repldict)
+
+            equations.append(inner_dim - outer_dim)
+    # Solve for all at once
+    results = sympy.solve(equations, *symbols, dict=True)
+    result = results[0]
+    result = {str(k)[len("__SOLVE_"):]: v for k, v in result.items()}
+    return origins, tuple(result[axis.domain_symbol()] for axis in dcir.Axis.dims_3d())
 
 
 def _union_symbolic_origin_and_domain(
@@ -133,12 +189,7 @@ def partially_expand(sdfg, expansion_items):
 
     original_item = stencil_computations[0][0].expansion_specification[0]
     tiling_schedule = original_item.schedule
-    # for iteration in original_item.iterations:
-    #     axis: dcir.Axis = iteration.axis
-    #     stride = iteration.stride
-    #     start, end = ...
-    #      {axis.tile_dace_symbol(): str(dace.subsets.Range([(start, end - 1, stride)]))}
-    #     limits = ...
+    tiling_ranges = {it.axis.tile_dace_symbol(): str(dace.subsets.Range([(0,it.axis.domain_dace_symbol()-1, it.stride)])) for it in original_item.iterations}
 
     parent_symbolic_split = _get_symbolic_split(stencil_computations)
 
