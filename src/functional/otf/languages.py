@@ -23,11 +23,11 @@ class LanguageTag:
     """
     Represent a programming language.
 
-    ``.settings_level`` should be set to the ``LanguageSettings`` subclass
+    ``.settings_class`` should be set to the ``LanguageSettings`` subclass
     with the minimum amount of settings required for the language.
     """
 
-    settings_level: ClassVar[type[LanguageSettings]]
+    settings_class: ClassVar[type[LanguageSettings]]
     ...
 
 
@@ -54,10 +54,10 @@ class LanguageWithHeaderFilesSettings(LanguageSettings):
 
 
 class Python(LanguageTag):
-    settings_level = LanguageSettings
+    settings_class = LanguageSettings
     ...
 
 
 class Cpp(LanguageTag):
-    settings_level = LanguageWithHeaderFilesSettings
+    settings_class = LanguageWithHeaderFilesSettings
     ...
