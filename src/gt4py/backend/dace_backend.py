@@ -42,6 +42,7 @@ from gt4py.utils import shash
 from gtc import common, gtir
 from gtc.dace.nodes import StencilComputation
 from gtc.dace.oir_to_dace import OirSDFGBuilder
+from gtc.dace.partial_expansion import partially_expand
 from gtc.dace.transformations import (
     InlineThreadLocalTransients,
     eliminate_trivial_maps,
@@ -171,8 +172,10 @@ def _pre_expand_trafos(gtir_pipeline: GtirPipeline, sdfg: dace.SDFG, layout_map)
     sdfg.simplify(validate=False)
 
     _set_expansion_orders(sdfg)
-    _set_tile_sizes(sdfg)
-    _specialize_transient_strides(sdfg, layout_map=layout_map)
+    partially_expand(sdfg, ["TileI", "TileJ"])
+
+    # _set_tile_sizes(sdfg)
+    # _specialize_transient_strides(sdfg, layout_map=layout_map)
     return sdfg
 
 
