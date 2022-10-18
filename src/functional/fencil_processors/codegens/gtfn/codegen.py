@@ -93,9 +93,7 @@ class GTFNCodegen(codegen.TemplatedGenerator):
         tags = self.visit(node.tags)
         values = self.visit(node.values)
         if self.is_cartesian:
-            return (
-                f"::gridtools::hymap::keys<{','.join(t + '_t' for t in tags)}>::make_values({','.join(values)})"
-            )
+            return f"::gridtools::hymap::keys<{','.join(t + '_t' for t in tags)}>::make_values({','.join(values)})"
         else:
             return f"::gridtools::tuple({','.join(values)})"
 
@@ -125,7 +123,7 @@ class GTFNCodegen(codegen.TemplatedGenerator):
         "[=](${','.join('auto ' + p for p in params)}){return ${expr};}"
     )  # TODO capture
 
-    Backend = as_fmt("make_backend(backend, {domain})") # TODO: gtfn::make_backend
+    Backend = as_fmt("make_backend(backend, {domain})")  # TODO: gtfn::make_backend
 
     StencilExecution = as_mako(
         """
