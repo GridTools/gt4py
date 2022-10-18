@@ -1134,11 +1134,13 @@ def _dimension_to_tag(domain: Domain) -> dict[Tag, range]:
 
 
 def _validate_domain(domain: Domain, offset_provider: OffsetProvider) -> None:
-    if isinstance(domain, CartesianDomain):
-        if any(isinstance(o, Connectivity) for o in offset_provider.values()):
-            raise RuntimeError(
-                "Got a `CartesianDomain`, but found a `Connectivity` in `offset_provider`, expected `UnstructuredDomain`."
-            )
+    pass
+    # TODO(tehrengruber): instead of this check for shifts
+    #if isinstance(domain, CartesianDomain):
+    #    if any(isinstance(o, Connectivity) for o in offset_provider.values()):
+    #        raise RuntimeError(
+    #            "Got a `CartesianDomain`, but found a `Connectivity` in `offset_provider`, expected `UnstructuredDomain`."
+    #        )
 
 
 def fendef_embedded(fun: Callable[..., None], *args: Any, **kwargs: Any):

@@ -264,6 +264,7 @@ class FieldOperatorLowering(NodeTranslator):
 
     def _visit_neighbor_sum(self, node: foast.Call, **kwargs) -> itir.FunCall:
         return self._make_reduction_expr(node, "plus", 0, **kwargs)
+
     def _visit_max_over(self, node: foast.Call, **kwargs) -> itir.FunCall:
         np_type = getattr(np, node.type.dtype.kind.name.lower())
         if type_info.is_integral(node.type):
@@ -311,7 +312,7 @@ class FieldOperatorLowering(NodeTranslator):
         raise FieldOperatorLoweringError(f"Unsupported scalar type: {node.type}")
 
     def _map(self, op, *args, **kwargs):
-        if isinstance(op, str):
+        if isinstance(op, (str, itir.SymRef)):
             op = im.call_(op)
 
         def is_local_type_kind(type_):
