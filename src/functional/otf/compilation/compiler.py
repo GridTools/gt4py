@@ -70,7 +70,7 @@ class Compiler(
         new_data = build_data.read_data(src_dir)
 
         if not new_data or not is_compiled(new_data) or not module_exists(new_data, src_dir):
-            raise CompilerError(
+            raise CompilationError(
                 "On-the-fly compilation unsuccessful for {inp.source_module.entry_point.name}!"
             )
 
@@ -88,5 +88,9 @@ class Compiler(
         return workflow.Workflow(first=self, second=step)
 
 
-class CompilerError(Exception):
+class CompilationError(RuntimeError):
+    ...
+
+
+class CompilerInputError(ValueError):
     ...

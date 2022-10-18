@@ -53,7 +53,7 @@ class CompiledbFactory(
         cache_strategy: cache.Strategy,
     ) -> CompiledbProject:
         if not source.binding_source:
-            raise compiler.CompilerError(
+            raise compiler.CompilerInputError(
                 "Compiledb build system project requires separate bindings code file."
             )
         name = source.program_source.entry_point.name
