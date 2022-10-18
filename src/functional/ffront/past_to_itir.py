@@ -13,11 +13,17 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 from __future__ import annotations
 
-from typing import Optional
+from typing import Callable, Optional
 
 from eve import NodeTranslator, concepts, traits
 from functional.common import Dimension, DimensionKind, GridType, GTTypeError
-from functional.ffront import common_types, program_ast as past, type_info
+from functional.ffront import common_types, itir_makers as im, program_ast as past, type_info
+from functional.ffront.foast_to_itir import (
+    ITIRTypeKind,
+    is_expr_with_iterator_type_kind,
+    iterator_type_kind,
+    to_value,
+)
 from functional.iterator import ir as itir
 
 
@@ -75,6 +81,39 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
     >>> lowered.params  # doctest: +SKIP
     [Sym(id=SymbolName('inp')), Sym(id=SymbolName('out')), Sym(id=SymbolName('__inp_size_0')), Sym(id=SymbolName('__out_size_0'))]
     """
+
+    class lifted_lambda:
+        def __init__(self, *params):
+            self.params = params
+
+        def __call__(self, expr):
+            return im.lift_(im.lambda__(*self.params)(expr))(*self.params)
+
+    def _lift_lambda(self, node: past.LocatedNode):
+        if any(
+            node.pre_walk_values()
+            .if_isinstance(past.Name)
+            .filter(is_expr_with_iterator_type_kind(ITIRTypeKind.ENCAPSULATED_ITERATOR))
+        ):
+            raise NotImplementedError(
+                "Using composite types (e.g. tuples) containing local fields not supported."
+            )
+        param_names = (
+            node.pre_walk_values()
+            .if_isinstance(past.Name)
+            .filter(is_expr_with_iterator_type_kind(ITIRTypeKind.ITERATOR))
+            .getattr("id")
+            .unique()
+            .to_list()
+        )
+        return self.lifted_lambda(*param_names)
+
+    def _lift_if_field(self, node: past.LocatedNode) -> Callable[[itir.Expr], itir.Expr]:
+        if iterator_type_kind(node.type) is ITIRTypeKind.VALUE:
+            return lambda x: x
+        elif iterator_type_kind(node.type) is ITIRTypeKind.ITERATOR:
+            return self._lift_lambda(node)
+        raise AssertionError("Unexpected `IteratorTypeKind`.")
 
     # TODO(tehrengruber): enable doctests again. For unknown / obscure reasons
     #  the above doctest fails when executed using `pytest --doctest-modules`.
@@ -319,3 +358,11 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
 
     def visit_Symbol(self, node: past.Symbol, **kwargs) -> itir.Sym:
         return itir.Sym(id=node.id)
+
+    def visit_BinOp(self, node: past.BinOp, **kwargs) -> itir.FunCall:
+        return self._lift_if_field(node)(
+            im.call_(node.op.value)(
+                to_value(node.left)(self.visit(node.left, **kwargs)),
+                to_value(node.right)(self.visit(node.right, **kwargs)),
+            )
+        )

@@ -43,7 +43,7 @@ from functional.iterator.embedded import (
 )
 
 
-@pytest.fixture(params=[roundtrip.executor, gtfn_cpu.run_gtfn])
+@pytest.fixture(params=[roundtrip.executor])
 def fieldview_backend(request):
     yield request.param
 
@@ -1164,7 +1164,7 @@ def test_domain_input_bounds(fieldview_backend):
         lower_j: int64,
         upper_j: int64,
     ):
-        fieldop_domain(a, out=a, domain={IDim: (lower_i, upper_i), JDim: (lower_j, upper_j)})
+        fieldop_domain(a, out=a, domain={IDim: (lower_i - 1, upper_i), JDim: (lower_j, upper_j)})
 
     program_domain(a, lower_i, upper_i, lower_j, upper_j, offset_provider={})
 

@@ -1103,6 +1103,9 @@ def fendef_embedded(fun: Callable[..., None], *args: Any, **kwargs: Any):
         out = as_tuple_field(out) if can_be_tuple_field(out) else out
 
         for pos in _domain_iterator(domain):
+            ins = [
+                (constant_field(inp) if isinstance(inp, numbers.Number) else inp) for inp in ins
+            ]  # todo: dtype
             ins_iters = list(
                 make_in_iterator(
                     inp,
@@ -1110,8 +1113,6 @@ def fendef_embedded(fun: Callable[..., None], *args: Any, **kwargs: Any):
                     kwargs["offset_provider"],
                     column_axis=column.axis if column else None,
                 )
-                if not isinstance(inp, numbers.Number)
-                else inp
                 for inp in ins
             )
             res = sten(*ins_iters)

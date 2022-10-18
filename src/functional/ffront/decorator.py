@@ -47,7 +47,7 @@ from functional.ffront import (
     symbol_makers,
     type_info,
 )
-from functional.ffront.fbuiltins import BUILTINS, Dimension, FieldOffset
+from functional.ffront.fbuiltins import Dimension, FieldOffset
 from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduction
 from functional.ffront.foast_to_itir import FieldOperatorLowering
 from functional.ffront.func_to_foast import FieldOperatorParser
@@ -57,7 +57,6 @@ from functional.ffront.past_passes.type_deduction import ProgramTypeDeduction, P
 from functional.ffront.past_to_itir import ProgramLowering
 from functional.ffront.source_utils import SourceDefinition, get_closure_vars_from_function
 from functional.iterator import ir as itir
-from functional.iterator.embedded import constant_field
 
 
 Scalar: TypeAlias = SupportsInt | SupportsFloat | np.int32 | np.int64 | np.float32 | np.float64
@@ -292,12 +291,6 @@ class Program:
         size_args: list[Optional[tuple[int, ...]]] = []
         rewritten_args = list(args)
         for param_idx, param in enumerate(self.past_node.params):
-            if isinstance(param.type, ct.ScalarType):
-                dtype = type_info.extract_dtype(param.type)
-                rewritten_args[param_idx] = constant_field(
-                    args[param_idx],
-                    dtype=BUILTINS[dtype.kind.name.lower()],
-                )
             if implicit_domain and isinstance(param.type, ct.FieldType):
                 has_shape = hasattr(args[param_idx], "shape")
                 for dim_idx in range(0, len(param.type.dims)):
