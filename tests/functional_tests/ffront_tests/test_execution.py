@@ -1234,8 +1234,8 @@ def test_undefined_symbols():
 
 def test_input_kwargs(fieldview_backend):
     size = 10
-    a = np_as_located_field(IDim, JDim)(np.ones((size, size)))
-    b = np_as_located_field(IDim, JDim)(np.ones((size, size)))
+    input_1 = np_as_located_field(IDim, JDim)(np.ones((size, size)))
+    input_2 = np_as_located_field(IDim, JDim)(np.ones((size, size)))
 
     @field_operator(backend=fieldview_backend)
     def fieldop_input_kwargs(
@@ -1247,10 +1247,14 @@ def test_input_kwargs(fieldview_backend):
     def program_input_kwargs(a: Field[[IDim, JDim], float64], b: Field[[IDim, JDim], float64]):
         fieldop_input_kwargs(a, out=(b, a), domain={IDim: (1, 9), JDim: (4, 6)})
 
-    program_input_kwargs(a=a, b=b, offset_provider={})
+    program_input_kwargs(b=input_2, a=input_1, offset_provider={})
+    # a = input_1, b = input_2
+    # b=input_2, a=input_1
+    # a, b = input_2
+    #
 
-    expected = np.asarray(a)
+    expected = np.asarray(input_1)
     expected[1:9, 4:6] = 1 + 1
 
-    assert np.allclose(np.asarray(a), a)
-    assert np.allclose(expected, b)
+    assert np.allclose(np.asarray(input_1), input_1)
+    assert np.allclose(expected, input_2)
