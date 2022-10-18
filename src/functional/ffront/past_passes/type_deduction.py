@@ -31,6 +31,11 @@ def _ensure_no_sliced_field(entry: past.Expr):
             _ensure_no_sliced_field(param)
 
 
+def _is_integral_scalar(expr: past.Expr) -> bool:
+    """Check that expression is an integral scalar."""
+    return isinstance(expr.type, ct.ScalarType) and type_info.is_integral(expr.type)
+
+
 def _validate_call_params(new_func: past.Name, new_kwargs: dict):
     """
     Perform checks for domain and output field types.
@@ -69,9 +74,9 @@ def _validate_call_params(new_func: past.Name, new_kwargs: dict):
                 raise GTTypeError(
                     f"Only 2 values allowed in domain range, but got `{len(domain_values.elts)}`."
                 )
-            if domain_values.elts[0].type != ct.ScalarType(
-                kind=ct.ScalarKind.INT64
-            ) or domain_values.elts[1].type != ct.ScalarType(kind=ct.ScalarKind.INT64):
+            if not _is_integral_scalar(domain_values.elts[0]) or not _is_integral_scalar(
+                domain_values.elts[1]
+            ):
                 raise GTTypeError(
                     f"Only integer values allowed in domain range, but got {domain_values.elts[0].type} and {domain_values.elts[1].type}."
                 )
