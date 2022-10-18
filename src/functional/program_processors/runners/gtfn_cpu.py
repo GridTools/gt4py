@@ -24,7 +24,7 @@ from functional.otf.binding import pybind
 from functional.otf.compilation import cache, compiler
 from functional.otf.compilation.build_systems import compiledb
 from functional.otf.source import cpp_gen
-from functional.program_processors import processor_interface as fpi
+from functional.program_processors import processor_interface as ppi
 from functional.program_processors.codegens.gtfn import gtfn_module
 
 
@@ -37,7 +37,7 @@ def convert_arg(arg: Any) -> Any:
 
 
 @dataclasses.dataclass(frozen=True)
-class GTFNExecutor(fpi.ProgramExecutor):
+class GTFNExecutor(ppi.ProgramExecutor):
     language_settings: languages.LanguageWithHeaderFilesSettings = cpp_gen.CPP_DEFAULT
     builder_factory: compiler.BuildSystemProjectGenerator = compiledb.CompiledbFactory()
 
@@ -82,4 +82,4 @@ class GTFNExecutor(fpi.ProgramExecutor):
         return self.name or repr(self)
 
 
-run_gtfn: Final[fpi.ProgramProcessor[None, fpi.ProgramExecutor]] = GTFNExecutor(name="run_gtfn")
+run_gtfn: Final[ppi.ProgramProcessor[None, ppi.ProgramExecutor]] = GTFNExecutor(name="run_gtfn")

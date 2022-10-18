@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 from functional.iterator import ir as itir, pretty_parser, pretty_printer, runtime, transforms
-from functional.program_processors import processor_interface as fpi
+from functional.program_processors import processor_interface as ppi
 from functional.program_processors.formatters import gtfn, lisp, type_check
 from functional.program_processors.runners import double_roundtrip, gtfn_cpu, roundtrip
 
@@ -20,7 +20,7 @@ def lift_mode(request):
     return request.param
 
 
-@fpi.program_formatter
+@ppi.program_formatter
 def pretty_format_and_check(root: itir.FencilDefinition, *args, **kwargs) -> str:
     pretty = pretty_printer.pformat(root)
     parsed = pretty_parser.pparse(pretty)
@@ -63,13 +63,13 @@ def program_processor_no_gtfn_exec(program_processor):
 
 def run_processor(
     program: runtime.FendefDispatcher,
-    processor: fpi.ProgramExecutor | fpi.ProgramFormatter,
+    processor: ppi.ProgramExecutor | ppi.ProgramFormatter,
     *args,
     **kwargs,
 ) -> None:
-    if processor is None or fpi.is_processor_kind(processor, fpi.ProgramExecutor):
+    if processor is None or ppi.is_processor_kind(processor, ppi.ProgramExecutor):
         program(*args, backend=processor, **kwargs)
-    elif fpi.is_processor_kind(processor, fpi.ProgramFormatter):
+    elif ppi.is_processor_kind(processor, ppi.ProgramFormatter):
         print(program.format_itir(*args, formatter=processor, **kwargs))
     else:
         raise TypeError(f"program processor kind not recognized: {processor}!")

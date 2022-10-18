@@ -52,7 +52,7 @@ from functional.ffront.past_to_itir import ProgramLowering
 from functional.ffront.source_utils import SourceDefinition, get_closure_vars_from_function
 from functional.iterator import ir as itir
 from functional.iterator.embedded import constant_field
-from functional.program_processors import processor_interface as fpi
+from functional.program_processors import processor_interface as ppi
 from functional.program_processors.runners import roundtrip
 
 
@@ -148,7 +148,7 @@ class Program:
 
     past_node: past.Program
     closure_vars: dict[str, Any]
-    backend: Optional[fpi.ProgramExecutor]
+    backend: Optional[ppi.ProgramExecutor]
     definition: Optional[types.FunctionType] = None
     grid_type: Optional[GridType] = None
 
@@ -156,7 +156,7 @@ class Program:
     def from_function(
         cls,
         definition: types.FunctionType,
-        backend: Optional[fpi.ProgramExecutor] = None,
+        backend: Optional[ppi.ProgramExecutor] = None,
         grid_type: Optional[GridType] = None,
     ) -> Program:
         source_def = SourceDefinition.from_function(definition)
@@ -193,7 +193,7 @@ class Program:
                 f"The following closure variables are undefined: {', '.join(undefined_symbols)}"
             )
 
-    def with_backend(self, backend: fpi.ProgramExecutor) -> "Program":
+    def with_backend(self, backend: ppi.ProgramExecutor) -> "Program":
         return Program(
             past_node=self.past_node,
             closure_vars=self.closure_vars,
@@ -229,7 +229,7 @@ class Program:
             )
         backend = self.backend or DEFAULT_BACKEND
 
-        fpi.ensure_processor_kind(backend, fpi.ProgramExecutor)
+        ppi.ensure_processor_kind(backend, ppi.ProgramExecutor)
         if "debug" in kwargs:
             debug(self.itir)
 
@@ -245,11 +245,11 @@ class Program:
     def format_itir(
         self,
         *args,
-        formatter: fpi.ProgramFormatter,
+        formatter: ppi.ProgramFormatter,
         offset_provider: dict[str, Dimension],
         **kwargs,
     ) -> str:
-        fpi.ensure_processor_kind(formatter, fpi.ProgramFormatter)
+        ppi.ensure_processor_kind(formatter, ppi.ProgramFormatter)
         rewritten_args, size_args, kwargs = self._process_args(args, kwargs)
         if "debug" in kwargs:
             debug(self.itir)
@@ -342,7 +342,7 @@ def program(definition: types.FunctionType) -> Program:
 
 
 @typing.overload
-def program(*, backend: Optional[fpi.ProgramExecutor]) -> Callable[[types.FunctionType], Program]:
+def program(*, backend: Optional[ppi.ProgramExecutor]) -> Callable[[types.FunctionType], Program]:
     ...
 
 
@@ -401,14 +401,14 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
 
     foast_node: OperatorNodeT
     closure_vars: dict[str, Any]
-    backend: Optional[fpi.ProgramExecutor]
+    backend: Optional[ppi.ProgramExecutor]
     definition: Optional[types.FunctionType] = None
 
     @classmethod
     def from_function(
         cls,
         definition: types.FunctionType,
-        backend: Optional[fpi.ProgramExecutor] = None,
+        backend: Optional[ppi.ProgramExecutor] = None,
         *,
         operator_node_cls: type[OperatorNodeT] = foast.FieldOperator,
         operator_attributes: Optional[dict[str, Any]] = None,
@@ -445,7 +445,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         assert isinstance(type_, ct.CallableType)
         return type_
 
-    def with_backend(self, backend: fpi.ProgramExecutor) -> FieldOperator:
+    def with_backend(self, backend: ppi.ProgramExecutor) -> FieldOperator:
         return FieldOperator(
             foast_node=self.foast_node,
             closure_vars=self.closure_vars,
@@ -555,14 +555,14 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
 
 @typing.overload
 def field_operator(
-    definition: types.FunctionType, *, backend: Optional[fpi.ProgramExecutor]
+    definition: types.FunctionType, *, backend: Optional[ppi.ProgramExecutor]
 ) -> FieldOperator[foast.FieldOperator]:
     ...
 
 
 @typing.overload
 def field_operator(
-    *, backend: Optional[fpi.ProgramExecutor]
+    *, backend: Optional[ppi.ProgramExecutor]
 ) -> Callable[[types.FunctionType], FieldOperator[foast.FieldOperator]]:
     ...
 
