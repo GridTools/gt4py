@@ -590,7 +590,7 @@ class FrozenNamespace(ConstantNamespace[T]):
     FrozenNamespaces are fully immutable and therefore hashable.
 
     Examples:
-        >>> ns = ConstantNamespace(a=10, b="hello")
+        >>> ns = FrozenNamespace(a=10, b="hello")
         >>> hashed = hash(ns)
         >>> assert isinstance(hashed, int)
         >>> hashed == hash(ns) == ns.__cached_hash_value__
