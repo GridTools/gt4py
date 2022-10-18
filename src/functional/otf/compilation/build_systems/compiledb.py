@@ -112,17 +112,17 @@ class CompiledbProject(
     bindings_file_name: str
 
     def build(self):
-        self.write_files()
+        self._write_files()
         if build_data.read_data(self.root_path).status < build_data.BuildStatus.CONFIGURED:
-            self.run_config()
+            self._run_config()
         if (
             build_data.BuildStatus.CONFIGURED
             <= build_data.read_data(self.root_path).status
             < build_data.BuildStatus.COMPILED
         ):
-            self.run_build()
+            self._run_build()
 
-    def write_files(self):
+    def _write_files(self):
         for name, content in self.source_files.items():
             (self.root_path / name).write_text(content, encoding="utf-8")
 
@@ -135,7 +135,7 @@ class CompiledbProject(
             path=self.root_path,
         )
 
-    def run_config(self):
+    def _run_config(self):
         compile_db = json.loads(self.compile_commands_cache.read_text())
 
         (self.root_path / "build").mkdir(exist_ok=True)
@@ -160,7 +160,7 @@ class CompiledbProject(
             self.root_path,
         )
 
-    def run_build(self):
+    def _run_build(self):
         logfile = self.root_path / "log_build.txt"
         compile_db = json.loads((self.root_path / "compile_commands.json").read_text())
         assert compile_db
@@ -245,8 +245,8 @@ def _cc_create_compiledb(
         program_name=name,
     )
 
-    prototype_project.write_files()
-    prototype_project.run_config()
+    prototype_project._write_files()
+    prototype_project._run_config()
 
     log_file = cache_path / "log_compiledb.txt"
 
