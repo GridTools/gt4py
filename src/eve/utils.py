@@ -572,9 +572,6 @@ class ConstantNamespace(Namespace[T]):
         >>> list(ns.items())
         [('a', 10), ('b', 'hello')]
     """
-
-    __slots__ = "__cached_hash_value__"  # This slot is used to avoid polluting the namespace
-
     def __setattr__(self, __name: str, __value: Any) -> None:
         if hasattr(self, __name):
             raise TypeError(
@@ -599,6 +596,7 @@ class FrozenNamespace(ConstantNamespace[T]):
         >>> hashed == hash(ns) == ns.__cached_hash_value__
         True
     """
+    __slots__ = "__cached_hash_value__"  # This slot is used to avoid polluting the namespace
 
     def __setattr__(self, __name: str, __value: Any) -> None:
         raise TypeError(f"Trying to modify immutable '{self.__class__.__name__}' instance.")
