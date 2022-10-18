@@ -279,10 +279,15 @@ class Program:
 
     def _process_args(self, args: tuple, kwargs: dict) -> tuple[tuple, tuple, dict[str, Any]]:
         # if parameter is in signature but not in args, move it from kwargs to args
-        for param in self.itir.params:
-            if param.id in kwargs:
-                args += tuple([kwargs[param.id]])
-                kwargs.pop(param.id)
+        new_args_ls = []
+        if len(kwargs) > 0:
+            for param in self.itir.params:
+                if param.id in kwargs:
+                    new_args_ls.append(kwargs[param.id])
+                    kwargs.pop(param.id)
+                else:
+                    new_args_ls.append(next(iter(args)))
+            args = tuple(new_args_ls)
 
         self._validate_args(*args, **kwargs)
 
