@@ -57,7 +57,7 @@ class CMakeFactory(
         cache_strategy: cache.Strategy,
     ) -> CMakeProject:
         if not source.binding_source:
-            raise compiler.CompilerInputError(
+            raise NotImplementedError(
                 "CMake build system project requires separate bindings code file."
             )
         name = source.program_source.entry_point.name

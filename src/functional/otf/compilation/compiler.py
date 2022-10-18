@@ -90,7 +90,3 @@ class Compiler(
 
 class CompilationError(RuntimeError):
     ...
-
-
-class CompilerInputError(ValueError):
-    ...
