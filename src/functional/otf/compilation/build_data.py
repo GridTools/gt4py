@@ -36,6 +36,10 @@ class BuildData:
 
     Build system projects should keep this information up to date for each build,
     stored in a JSON file in the build folder at all times.
+
+    The `module` property should only ever be used for compilation results which can
+    directly be imported from python and contain a callable attribute named
+    `entry_point_name` that represents a GT4Py program.
     """
 
     status: BuildStatus
