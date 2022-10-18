@@ -63,7 +63,7 @@ class GTFNCodegen(codegen.TemplatedGenerator):
 
     def visit_SymRef(self, node: gtfn_ir.SymRef, **kwargs: Any) -> str:
         if node.id == "get":
-            return "gridtools::tuple_util::get"
+            return "::gridtools::tuple_util::get"
         return node.id
 
     @staticmethod
@@ -94,10 +94,10 @@ class GTFNCodegen(codegen.TemplatedGenerator):
         values = self.visit(node.values)
         if self.is_cartesian:
             return (
-                f"gridtools::hymap::keys<{','.join(t + '_t' for t in tags)}>::make_values({','.join(values)})"
+                f"::gridtools::hymap::keys<{','.join(t + '_t' for t in tags)}>::make_values({','.join(values)})"
             )
         else:
-            return f"gridtools::tuple({','.join(values)})"
+            return f"::gridtools::tuple({','.join(values)})"
 
     CartesianDomain = as_fmt("gtfn::cartesian_domain({tagged_sizes}, {tagged_offsets})")
     UnstructuredDomain = as_mako(
@@ -108,7 +108,7 @@ class GTFNCodegen(codegen.TemplatedGenerator):
         return node.value if isinstance(node.value, str) else f"{node.value}_c"
 
     SidComposite = as_mako(
-        "sid::composite::keys<${','.join(f'gridtools::integral_constant<int,{i}>' for i in range(len(values)))}>::make_values(${','.join(values)})"
+        "::gridtools::sid::composite::keys<${','.join(f'::gridtools::integral_constant<int,{i}>' for i in range(len(values)))}>::make_values(${','.join(values)})"
     )
 
     def visit_FunCall(self, node: gtfn_ir.FunCall, **kwargs):
@@ -144,7 +144,7 @@ class GTFNCodegen(codegen.TemplatedGenerator):
             static constexpr GT_FUNCTION auto body() {
                 return gtfn::scan_pass([](${','.join('auto const& ' + p for p in params)}) {
                     return ${expr};
-                }, gridtools::host_device::identity());
+                }, ::gridtools::host_device::identity());
             }
         };
         """
@@ -195,14 +195,14 @@ class GTFNCodegen(codegen.TemplatedGenerator):
         """
     #include <cmath>
     #include <gridtools/fn/${grid_type_str}.hpp>
+    #include <gridtools/fn/backend/naive.hpp>
 
     namespace generated{
 
     namespace gtfn = ::gridtools::fn;
 
     namespace{
-    using namespace gridtools;
-    using namespace gridtools::literals;
+    using namespace ::gridtools::literals;
 
     ${'\\n'.join(offset_definitions)}
     ${'\\n'.join(function_definitions)}

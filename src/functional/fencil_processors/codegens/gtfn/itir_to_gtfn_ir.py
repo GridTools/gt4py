@@ -531,9 +531,9 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     def visit_Temporary(self, node, *, params: list, **kwargs) -> TemporaryAllocation:
         def dtype_to_cpp(x):
             if isinstance(x, int):
-                return f"std::remove_const_t<sid::element_type<decltype({params[x]})>>"
+                return f"std::remove_const_t<::gridtools::sid::element_type<decltype({params[x]})>>"
             if isinstance(x, tuple):
-                return "tuple<" + ", ".join(dtype_to_cpp(i) for i in x) + ">"
+                return "::gridtools::tuple<" + ", ".join(dtype_to_cpp(i) for i in x) + ">"
             assert isinstance(x, str)
             return pytype_to_cpptype(x)
 
