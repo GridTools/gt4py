@@ -590,7 +590,7 @@ class FrozenNamespace(ConstantNamespace[T]):
     """
     A `ConstantNamespace` that cannot be modified by adding new constant attributes.
 
-    Unlike ConstantNamespaces, FrozenNamespaces are hashable.
+    FrozenNamespaces are fully immutable and therefore hashable.
 
     Examples:
         >>> ns = ConstantNamespace(a=10, b="hello")
