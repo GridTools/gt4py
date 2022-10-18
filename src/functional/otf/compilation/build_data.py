@@ -79,9 +79,10 @@ def contains_data(path: pathlib.Path) -> bool:
 
 
 def read_data(path: pathlib.Path) -> Optional[BuildData]:
-    if contains_data(path):
+    try:
         return BuildData.from_json(json.loads((path / _DATAFILE_NAME).read_text()))
-    return None
+    except FileNotFoundError:
+        return None
 
 
 def write_data(data: BuildData, path: pathlib.Path) -> None:

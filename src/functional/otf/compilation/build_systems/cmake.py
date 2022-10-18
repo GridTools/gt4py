@@ -26,13 +26,13 @@ from functional.otf.compilation.build_systems import cmake_lists
 
 
 class BuildType(enum.Enum):
+    def _generate_next_value_(name, start, count, last_values):
+        return "".join(part.capitalize() for part in name.split("_"))
+
     DEBUG = enum.auto()
     RELEASE = enum.auto()
     REL_WITH_DEB_INFO = enum.auto()
     MIN_SIZE_REL = enum.auto()
-
-    def _generate_next_value(name, start, count, last_values):
-        return "".join(part.capitalize() for part in name.split("_"))
 
 
 @dataclasses.dataclass

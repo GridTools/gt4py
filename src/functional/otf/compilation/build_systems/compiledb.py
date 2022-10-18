@@ -184,7 +184,7 @@ def _cc_prototype_program_name(
     base_name = "compile_commands_cache"
     deps_str = "_".join(f"{dep.name}_{dep.version}" for dep in deps)
     flags_str = "_".join(flags)
-    return "_".join([base_name, deps_str, build_type.value, flags_str]).replace(".", "_")
+    return "_".join([base_name, deps_str, build_type.name, flags_str]).replace(".", "_")
 
 
 def _cc_prototype_program_source(
