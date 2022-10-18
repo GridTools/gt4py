@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 import dataclasses
+import enum
 import pathlib
 import subprocess
 from typing import Optional
@@ -22,6 +23,16 @@ from typing import Optional
 from functional.otf import languages, stages
 from functional.otf.compilation import build_data, cache, common, compiler
 from functional.otf.compilation.build_systems import cmake_lists
+
+
+class BuildType(enum.Enum):
+    DEBUG = enum.auto()
+    RELEASE = enum.auto()
+    REL_WITH_DEB_INFO = enum.auto()
+    MIN_SIZE_REL = enum.auto()
+
+    def _generate_next_value(name, start, count, last_values):
+        return "".join(part.capitalize() for part in name.split("_"))
 
 
 @dataclasses.dataclass
@@ -33,7 +44,7 @@ class CMakeFactory(
     """Create a CMakeProject from a ``CompilableSource`` stage object with given CMake settings."""
 
     cmake_generator_name: str = "Ninja"
-    cmake_build_type: str = "Debug"
+    cmake_build_type: BuildType = BuildType.DEBUG
     cmake_extra_flags: Optional[list[str]] = None
 
     def __call__(
@@ -89,7 +100,7 @@ class CMakeProject(
     source_files: dict[str, str]
     program_name: str
     generator_name: str = "Ninja"
-    build_type: str = "Debug"
+    build_type: BuildType = BuildType.DEBUG
     extra_cmake_flags: list[str] = dataclasses.field(default_factory=list)
 
     def build(self):
@@ -124,7 +135,7 @@ class CMakeProject(
                     str(self.root_path),
                     "-B",
                     str(self.root_path / "build"),
-                    f"-DCMAKE_BUILD_TYPE={self.build_type}",
+                    f"-DCMAKE_BUILD_TYPE={self.build_type.value}",
                     *self.extra_cmake_flags,
                 ],
                 stdout=log_file_pointer,

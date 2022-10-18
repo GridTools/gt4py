@@ -39,7 +39,7 @@ class CompiledbFactory(
     Generate a compiledb only if there isn't one for the given combination of cmake configuration and library dependencies.
     """
 
-    cmake_build_type: str = "Debug"
+    cmake_build_type: cmake.BuildType = cmake.BuildType.DEBUG
     cmake_extra_flags: list[str] = dataclasses.field(default_factory=list)
     renew_compiledb: bool = False
 
@@ -184,12 +184,12 @@ def _cc_prototype_program_name(
     base_name = "compile_commands_cache"
     deps_str = "_".join(f"{dep.name}_{dep.version}" for dep in deps)
     flags_str = "_".join(flags)
-    return "_".join([base_name, deps_str, build_type, flags_str]).replace(".", "_")
+    return "_".join([base_name, deps_str, build_type.value, flags_str]).replace(".", "_")
 
 
 def _cc_prototype_program_source(
     deps: tuple[source.LibraryDependency, ...],
-    build_type: str,
+    build_type: cmake.BuildType,
     cmake_flags: list[str],
 ) -> stages.ProgramSource:
     name = _cc_prototype_program_name(deps, build_type, cmake_flags)
@@ -221,7 +221,7 @@ def _cc_find_compiledb(
 
 def _cc_create_compiledb(
     prototype_program_source: stages.ProgramSource,
-    build_type: str,
+    build_type: cmake.BuildType,
     cmake_flags: list[str],
     cache_strategy: cache.Strategy,
 ) -> pathlib.Path:
