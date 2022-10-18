@@ -57,7 +57,7 @@ from functional.ffront.past_passes.type_deduction import ProgramTypeDeduction, P
 from functional.ffront.past_to_itir import ProgramLowering
 from functional.ffront.source_utils import SourceDefinition, get_closure_vars_from_function
 from functional.iterator import ir as itir
-from functional.iterator.embedded import LocatedFieldImpl, constant_field
+from functional.iterator.embedded import constant_field
 
 
 Scalar: TypeAlias = SupportsInt | SupportsFloat | np.int32 | np.int64 | np.float32 | np.float64
@@ -237,19 +237,6 @@ class Program:
         if "debug" in kwargs:
             debug(self.itir)
 
-        # ls = []
-        # # ls should contain all fields that are contained in kwargs but should be positional args
-        # # check signature of function and identify if a certain field is a positional argument
-        # # get names and pass these positional args in the args and
-        # for i in kwargs.values():
-        #     if isinstance(i, LocatedFieldImpl):
-        #         ls.append(i)
-        #
-        # if len(kwargs) > 0:
-        #     args = args + tuple(ls)
-        #     rewritten_args = tuple(ls)
-        #     kwargs = {}
-
         backend(
             self.itir,
             *rewritten_args,
@@ -275,13 +262,8 @@ class Program:
         )
 
     def _validate_args(self, *args, **kwargs) -> None:
-
         arg_types = [symbol_makers.make_symbol_type_from_value(arg) for arg in args]
         kwarg_types = {k: symbol_makers.make_symbol_type_from_value(v) for k, v in kwargs.items()}
-
-        # for i in kwarg_types.values():
-        #     arg_types.append(i)
-        #     kwarg_types = {}
 
         try:
             type_info.accepts_args(
@@ -296,19 +278,11 @@ class Program:
             ) from err
 
     def _process_args(self, args: tuple, kwargs: dict) -> tuple[tuple, tuple, dict[str, Any]]:
-        # write logic from __call__ here
-        # check that order of inputs matches function def
-        # # ls should contain all fields that are contained in kwargs but should be positional args
-        # # check signature of function and identify if a certain field is a positional argument
-        # # get names and pass these positional args in the args and
-
-        args_params = []
+        # if parameter is in signature but not in args, move it from kwargs to args
         for param in self.itir.params:
             if param.id in kwargs:
-                args_params.append(kwargs[param.id])
+                args += tuple([kwargs[param.id]])
                 kwargs.pop(param.id)
-
-        args = args + tuple(args_params)
 
         self._validate_args(*args, **kwargs)
 
