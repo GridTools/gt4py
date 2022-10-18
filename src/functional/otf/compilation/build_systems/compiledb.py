@@ -184,7 +184,7 @@ def _cc_prototype_program_name(
     base_name = "compile_commands_cache"
     deps_str = "_".join(f"{dep.name}_{dep.version}" for dep in deps)
     flags_str = "_".join(flags)
-    return "_".join([base_name, deps_str, build_type.name, flags_str]).replace(".", "_")
+    return "_".join([base_name, deps_str, build_type, flags_str]).replace(".", "_")
 
 
 def _cc_prototype_program_source(
@@ -192,7 +192,7 @@ def _cc_prototype_program_source(
     build_type: cmake.BuildType,
     cmake_flags: list[str],
 ) -> stages.ProgramSource:
-    name = _cc_prototype_program_name(deps, build_type, cmake_flags)
+    name = _cc_prototype_program_name(deps, build_type.value, cmake_flags)
     return stages.ProgramSource(
         entry_point=source.Function(name=name, parameters=()),
         source_code="",
