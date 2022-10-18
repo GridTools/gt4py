@@ -74,6 +74,27 @@ class ProgramParser(DialectParser[past.Program]):
     def visit_Expr(self, node: ast.Expr) -> past.LocatedNode:
         return self.visit(node.value)
 
+    def visit_Add(self, node: ast.Add, **kwargs) -> past.BinaryOperator:
+        return past.BinaryOperator.ADD
+
+    def visit_Sub(self, node: ast.Sub, **kwargs) -> past.BinaryOperator:
+        return past.BinaryOperator.SUB
+
+    def visit_Mult(self, node: ast.Mult, **kwargs) -> past.BinaryOperator:
+        return past.BinaryOperator.MULT
+
+    def visit_Div(self, node: ast.Div, **kwargs) -> past.BinaryOperator:
+        return past.BinaryOperator.DIV
+
+    def visit_Pow(self, node: ast.Pow, **kwargs) -> past.BinaryOperator:
+        return past.BinaryOperator.POW
+
+    def visit_BitAnd(self, node: ast.BitAnd, **kwargs) -> past.BinaryOperator:
+        return past.BinaryOperator.BIT_AND
+
+    def visit_BitOr(self, node: ast.BitOr, **kwargs) -> past.BinaryOperator:
+        return past.BinaryOperator.BIT_OR
+
     def visit_BinOp(self, node: ast.BinOp, **kwargs) -> past.BinOp:
         new_op = self.visit(node.op)
         return past.BinOp(
