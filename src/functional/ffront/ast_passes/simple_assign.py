@@ -14,6 +14,7 @@
 
 import ast
 import copy
+import inspect
 from collections.abc import Iterator
 
 
@@ -134,6 +135,77 @@ class UnpackedAssignPass(NodeYielder):
                 ctx=ast.Load(),  # <- ctx is mandatory for ast.Subscript, Load() for rhs.
                 value=node.value,
                 slice=ast.Constant(value=index),
+            )
+            ast.copy_location(new_assign.value, node.value)
+            ast.copy_location(new_assign.value.slice, node.value)
+            yield from self.visit_Assign(new_assign)
+
+
+class UnpackedIterablePass(NodeYielder):
+    """
+        Transforms variable assignment targets when unpacking iterables using a starred expression.
+
+        Example
+        -------
+        Function ``unpack()`` in the following example unpacks a tuple using a starred expression.
+
+        >>> import ast, inspect
+
+        >>> def unpack():
+        ...     a, *b, c = (1, 2, 3, 4, 5)
+        ...     return a, c
+
+        >>> print(ast.unparse(
+        ...     UnpackedIterablePass.apply(
+        ...         ast.parse(inspect.getsource(unpack))
+        ...     )
+        ... ))
+        def unpack():
+            a = (1, 2, 3, 4, 5)[0]
+            b = (1, 2, 3, 4, 5)[1:3]
+            c = (1, 2, 3, 4, 5)[4]
+            return a, c
+    """
+
+    def visit_Assign(self, node: ast.Assign) -> Iterator[ast.Assign]:
+        if len(node.targets) != 1:
+            raise ValueError(
+                "AST contains multi target assigns. Please run `SingleAssignTargetPass` first."
+            )
+        if isinstance(target := node.targets[0], (ast.Tuple, ast.List)):
+            yield from self._unpack_assignment(node, targets=target.elts)
+        else:
+            yield node
+
+    def _unpack_assignment(
+        self, node: ast.Assign, *, targets: list[ast.expr]
+    ) -> Iterator[ast.Assign]:
+        starred_op = ([isinstance(elt, ast.Starred) for elt in targets])
+        if starred_op.count(True) > 1:
+            raise (
+                ValueError("Only one starred operator is allowed per assignment.")
+            )
+        for index, subtarget in enumerate(targets):
+            new_assign = copy.copy(node)
+            new_assign.targets = [subtarget]
+
+            if isinstance(subtarget, ast.Starred):
+                # todo: compute slice indexes
+                num_values = len(node.value.elts)
+                rem_targets = len(targets) - index - 1
+                proc_targets = len(targets) - rem_targets - 1
+                upper = num_values - (proc_targets + rem_targets)
+                slice = ast.Slice(lower=ast.Constant(value=index), upper=ast.Constant(value=upper))
+            else:
+                if index == len(targets) - 1:
+                    index = -1
+
+                slice = ast.Constant(value=index)
+
+            new_assign.value = ast.Subscript(
+                ctx=ast.Load(),  # <- ctx is mandatory for ast.Subscript, Load() for rhs.
+                value=node.value,
+                slice=slice,
             )
             ast.copy_location(new_assign.value, node.value)
             ast.copy_location(new_assign.value.slice, node.value)

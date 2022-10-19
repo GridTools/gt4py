@@ -216,8 +216,8 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
         if isinstance(target, ast.Starred):
             target = self.visit(target)
 
-        if not isinstance(target, ast.Name):
-            raise FieldOperatorSyntaxError.from_AST(node, msg="Can only assign to names!")
+        # if not isinstance(target, ast.Name):
+        #     raise FieldOperatorSyntaxError.from_AST(node, msg="Can only assign to names!")
         new_value = self.visit(node.value)
         constraint_type: Type[ct.DataType] = ct.DataType
         if isinstance(new_value, foast.TupleExpr):
@@ -239,6 +239,7 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
 
     def visit_Starred(self, node: ast.Starred, **kwargs):
         # todo
+        x = 0
         pass
 
     def visit_AnnAssign(self, node: ast.AnnAssign, **kwargs) -> foast.Assign:
