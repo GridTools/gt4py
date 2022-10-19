@@ -77,6 +77,7 @@ class Stages(ExpansionItem):
 class Sections(ExpansionItem):
     pass
 
+
 @dataclass
 class Skip(ExpansionItem):
     item: ExpansionItem
@@ -154,40 +155,41 @@ def _order_as_spec(computation_node, expansion_order):
             expansion_specification.append(item)
         else:
             if item.startswith("Skip"):
-                expansion_specification.append(Skip(item=_item_from_string(item[len("Skip"):], computation_node)))
+                expansion_specification.append(
+                    Skip(item=_item_from_string(item[len("Skip") :], computation_node))
+                )
             else:
                 expansion_specification.append(_item_from_string(item, computation_node))
 
     return expansion_specification
 
+
 def _item_from_string(item: str, computation_node: "StencilComputation"):
     if axis := _is_tiling(item):
         return Map(
-                iterations=[
-                    Iteration(
-                        axis=axis,
-                        kind="tiling",
-                        stride=None,
-                    )
-                ]
-            )
+            iterations=[
+                Iteration(
+                    axis=axis,
+                    kind="tiling",
+                    stride=None,
+                )
+            ]
+        )
     elif axis := _is_domain_map(item):
         return Map(
-                iterations=[
-                    Iteration(
-                        axis=axis,
-                        kind="contiguous",
-                        stride=1,
-                    )
-                ]
-            )
+            iterations=[
+                Iteration(
+                    axis=axis,
+                    kind="contiguous",
+                    stride=1,
+                )
+            ]
+        )
     elif axis := _is_domain_loop(item):
         return Loop(
-                axis=axis,
-                stride=-1
-                if computation_node.oir_node.loop_order == common.LoopOrder.BACKWARD
-                else 1,
-            )
+            axis=axis,
+            stride=-1 if computation_node.oir_node.loop_order == common.LoopOrder.BACKWARD else 1,
+        )
     elif item == "Sections":
         return Sections()
     else:

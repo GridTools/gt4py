@@ -3,15 +3,16 @@ from typing import Dict, List, Tuple
 
 import dace.sdfg.graph
 import dace.symbolic
+import sympy
 from dace.sdfg.propagation import propagate_memlets_sdfg
 from dace.transformation.helpers import nest_sdfg_subgraph
 
 from gtc import common
 from gtc import daceir as dcir
+from gtc.dace.expansion_specification import Skip
 from gtc.dace.nodes import StencilComputation
 from gtc.dace.utils import make_dace_subset
-import sympy
-from gtc.dace.expansion_specification import Skip
+
 
 SymbolicOriginType = Tuple[dace.symbolic.SymbolicType, ...]
 SymbolicDomainType = Tuple[dace.symbolic.SymbolicType, ...]
