@@ -11,13 +11,18 @@ from gtc import daceir as dcir
 from gtc.dace.nodes import StencilComputation
 from gtc.dace.utils import make_dace_subset
 import sympy
+from gtc.dace.expansion_specification import Skip
 
 SymbolicOriginType = Tuple[dace.symbolic.SymbolicType, ...]
 SymbolicDomainType = Tuple[dace.symbolic.SymbolicType, ...]
 
 
-def _set_skips(node, expansion_items):
-    node.expansion_specification = ["SkipJ", "SkipI", *node.expansion_specification[1:]]
+def _set_skips(node, expansion_item):
+    assert expansion_item == node.expansion_specification[0]
+    expansion_specification = list(node.expansion_specification)
+    expansion_specification[0] = Skip(item=expansion_specification[0])
+    node.expansion_specification = expansion_specification
+
 
 
 def _get_field_access_infos(
