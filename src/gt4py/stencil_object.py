@@ -283,7 +283,9 @@ class StencilObject(abc.ABC):
         pass
 
     @staticmethod
-    def _make_origin_dict(origin: Any) -> Dict[str, Tuple[int, ...]]:
+    def _make_origin_dict(
+        origin: Union[Dict[str, Tuple[int, ...]], Tuple[int, ...], int, None]
+    ) -> Dict[str, Tuple[int, ...]]:
         try:
             if isinstance(origin, dict):
                 return origin

@@ -70,10 +70,12 @@ class StencilBuilder:
         )
         backend = backend or "numpy"
         backend = gt4py.backend.from_name(backend) if isinstance(backend, str) else backend
-        assert backend is not None
+        if backend is None:
+            raise RuntimeError(f"Unknown backend: {backend}")
 
         frontend = frontend or gt4py.frontend.from_name("gtscript")
-        assert frontend is not None
+        if frontend is None:
+            raise RuntimeError(f"Unknown frontend: {frontend}")
 
         self.backend: "BackendType" = backend(self)
         self.frontend: Type["FrontendType"] = frontend
