@@ -262,6 +262,9 @@ class Program:
         )
 
     def _validate_args(self, *args, **kwargs) -> None:
+        if kwargs:
+            raise NotImplementedError("Keyword arguments are not supported yet.")
+
         arg_types = [symbol_makers.make_symbol_type_from_value(arg) for arg in args]
         kwarg_types = {k: symbol_makers.make_symbol_type_from_value(v) for k, v in kwargs.items()}
 
@@ -279,7 +282,6 @@ class Program:
 
     def _process_args(self, args: tuple, kwargs: dict) -> tuple[tuple, tuple, dict[str, Any]]:
         # if parameter is in signature but not in args, move it from kwargs to args
-
         if len(kwargs) > 0:
             new_args_ls = []
             for param in self.itir.params:
