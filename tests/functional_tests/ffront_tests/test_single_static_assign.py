@@ -573,3 +573,73 @@ def test_if_preservers_definite_assignment_analysis3():
     ).strip()
 
     assert result == expected
+
+
+def test_broken_collisions():
+    # Known bug of the current SSA implementation
+
+    result = ast.unparse(
+        ssaify_string(
+            """
+            a = a__0 + 1
+            return a, a__0
+            """
+        )
+    )
+
+    expected = textwrap.dedent(
+        """
+        a__0 = a__0 + 1
+        return (a__0, a__0)
+        """
+    ).strip()
+
+    assert result == expected
+
+
+def test_broken_collisions_function_parameters():
+    # Known bug of the current SSA implementation
+
+    result = ast.unparse(
+        ssaify_string(
+            """
+            def f(a, a__0):
+                return a__0
+            """
+        )
+    )
+
+    expected = textwrap.dedent(
+        """
+        def f(a, a__0):
+            a__0 = a
+            a__0__0 = a__0
+            return a__0__0
+        """
+    ).strip()
+
+    assert result == expected
+
+
+def test_broken_if():
+    # Known bug of the current SSA implementation
+
+    result = ast.unparse(
+        ssaify_string(
+            """
+            if True:
+                a = a + 1
+            return a
+            """
+        )
+    )
+
+    expected = textwrap.dedent(
+        """
+        if True:
+            a__0 = a + 1
+        return a
+        """
+    ).strip()
+
+    assert result == expected
