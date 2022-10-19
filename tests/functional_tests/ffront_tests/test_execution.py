@@ -452,3 +452,24 @@ def test_broadcast_shifted():
     simple_broadcast(a, out=out, offset_provider={"Joff": JDim})
 
     assert np.allclose(a.array()[:, np.newaxis], out)
+
+
+def test_tuple_unpacking():
+
+    size = 10
+    a = np_as_located_field(IDim)(np.ones((size)))
+    b = np_as_located_field(IDim)(np.ones((size)))
+    c = np_as_located_field(IDim)(np.ones((size)))
+    d = np_as_located_field(IDim)(np.ones((size)))
+
+    @field_operator(backend="roundtrip")
+    def unpack(
+            inp1: Field[[IDim], float64], inp2: Field[[IDim], float64], inp3: Field[[IDim], float64], inp4: Field[[IDim], float64]
+    ) -> tuple[Field[[IDim], float64], Field[[IDim], float64]]:
+        first, *_, last = (inp1, inp2, inp3, inp4)
+        return first, last
+
+    unpack(a, b, c, d, out=(b, c), offset_provider={})
+
+    assert np.allclose(a, b)
+    assert np.allclose(c, d)

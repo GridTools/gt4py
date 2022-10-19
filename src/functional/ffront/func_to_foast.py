@@ -212,6 +212,10 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
             raise FieldOperatorSyntaxError.from_AST(
                 node, msg="Unpacking not allowed, run a preprocessing pass!"
             )
+
+        if isinstance(target, ast.Starred):
+            target = self.visit(target)
+
         if not isinstance(target, ast.Name):
             raise FieldOperatorSyntaxError.from_AST(node, msg="Can only assign to names!")
         new_value = self.visit(node.value)
@@ -232,6 +236,10 @@ class FieldOperatorParser(DialectParser[foast.FieldOperator]):
             value=new_value,
             location=self._make_loc(node),
         )
+
+    def visit_Starred(self, node: ast.Starred, **kwargs):
+        # todo
+        pass
 
     def visit_AnnAssign(self, node: ast.AnnAssign, **kwargs) -> foast.Assign:
         if not isinstance(node.target, ast.Name):
