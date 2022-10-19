@@ -153,6 +153,26 @@ def test_if():
     assert lines[4] == "a__1 = 3"
 
 
+def test_if_variable_condition():
+    result = ast.unparse(
+        ssaify_string(
+            """
+            if b:
+                a = 1
+            """
+        )
+    )
+
+    expected = textwrap.dedent(
+        """
+        if b:
+            a__0 = 1
+        """
+    ).strip()
+
+    assert result == expected
+
+
 def test_nested_if():
     result = ast.unparse(
         ssaify_string(
