@@ -40,10 +40,15 @@ IntIndex: TypeAlias = int
 FieldIndex: TypeAlias = int | slice
 FieldIndexOrIndices: TypeAlias = FieldIndex | tuple[FieldIndex, ...]
 
+
+class TupleAxis:
+    ...
+
+
 FieldAxis: TypeAlias = (
     common.Dimension | runtime.Offset
 )  # TODO Offset should be removed, is sometimes used for sparse dimensions
-Axis: TypeAlias = Optional[FieldAxis]
+Axis: TypeAlias = FieldAxis | TupleAxis
 
 
 class SparseTag(Tag):
@@ -96,12 +101,7 @@ class StridedNeighborOffsetProvider:
 # Offsets
 OffsetPart: TypeAlias = Tag | IntIndex
 CompleteOffset: TypeAlias = tuple[Tag, IntIndex]
-OffsetProviderElem: TypeAlias = (
-    common.Dimension
-    | common.Connectivity
-    | NeighborTableOffsetProvider
-    | StridedNeighborOffsetProvider
-)
+OffsetProviderElem: TypeAlias = common.Dimension | common.Connectivity
 OffsetProvider: TypeAlias = dict[Tag, OffsetProviderElem]
 
 # Positions
@@ -498,9 +498,7 @@ def execute_shift(
             raise AssertionError()
         return new_pos
     else:
-        assert isinstance(
-            offset_implementation, (NeighborTableOffsetProvider, StridedNeighborOffsetProvider)
-        )
+        assert isinstance(offset_implementation, common.Connectivity)
         assert offset_implementation.origin_axis.value in pos
         new_pos = pos.copy()
         new_pos.pop(offset_implementation.origin_axis.value)
@@ -784,6 +782,10 @@ def _is_field_axis(axis: Axis) -> TypeGuard[FieldAxis]:
     return isinstance(axis, FieldAxis)  # type: ignore[misc,arg-type] # see https://github.com/python/mypy/issues/11673
 
 
+def _is_tuple_axis(axis: Axis) -> TypeGuard[TupleAxis]:
+    return not axis or isinstance(axis, TupleAxis)
+
+
 def _is_sparse_position_entry(
     pos: FieldIndex | SparsePositionEntry,
 ) -> TypeGuard[SparsePositionEntry]:
@@ -794,14 +796,14 @@ def get_ordered_indices(
     axes: Iterable[Axis], pos: Mapping[Tag, FieldIndex | SparsePositionEntry]
 ) -> tuple[FieldIndex, ...]:
     res: list[FieldIndex] = []
-    sparse_position_tracker: dict[Tag | int, int] = {}
+    sparse_position_tracker: dict[Tag, int] = {}
     for axis in axes:
-        if axis is None:
+        if _is_tuple_axis(axis):
             res.append(slice(None))
         else:
             assert _is_field_axis(axis)
             assert axis.value in pos
-            assert isinstance(axis.value, Tag)
+            assert isinstance(axis.value, str)
             elem = pos[axis.value]
             if _is_sparse_position_entry(elem):
                 sparse_position_tracker.setdefault(axis.value, 0)

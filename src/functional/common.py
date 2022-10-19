@@ -14,6 +14,8 @@
 
 from __future__ import annotations
 
+import numpy.typing as npt
+
 import enum
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -68,6 +70,8 @@ class Backend:
 class Connectivity(Protocol):
     max_neighbors: int
     has_skip_values: bool
+    origin_axis: Dimension
+    tbl: npt.NDArray  # TODO(havogt): define neighbor table concept
 
 
 @enum.unique
