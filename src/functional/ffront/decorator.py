@@ -284,12 +284,13 @@ class Program:
         # if parameter is in signature but not in args, move it from kwargs to args
         if len(kwargs) > 0:
             new_args_ls = []
+            iter_args = iter(args)
             for param in self.itir.params:
                 if param.id in kwargs:
                     new_args_ls.append(kwargs[param.id])
                     kwargs.pop(param.id)
                 else:
-                    new_args_ls.append(next(iter(args)))
+                    new_args_ls.append(next(iter_args))
             args = tuple(new_args_ls)
 
         self._validate_args(*args, **kwargs)
