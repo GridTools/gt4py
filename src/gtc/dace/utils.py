@@ -368,7 +368,7 @@ def compute_dcir_access_infos(
     collect_write=True,
     include_full_domain=False,
     **kwargs,
-) -> Dict[str, "dcir.FieldAccessInfo"]:
+) -> Dict["dcir.SymbolName", "dcir.FieldAccessInfo"]:
     if block_extents is None:
         assert isinstance(oir_node, oir.Stencil)
         block_extents = compute_horizontal_block_extents(oir_node)

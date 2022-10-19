@@ -29,7 +29,7 @@ import gtc.oir as oir
 from eve import NodeTranslator, SymbolRef
 from eve.iterators import iter_tree
 from gtc import daceir as dcir
-from gtc.dace.expansion_specification import Loop, Map, Sections, Stages
+from gtc.dace.expansion_specification import Loop, Map, Sections, Skip, Stages
 from gtc.dace.nodes import StencilComputation
 from gtc.dace.utils import (
     compute_dcir_access_infos,
@@ -231,10 +231,11 @@ class DaCeIRBuilder(NodeTranslator):
             )
 
         def push_expansion_item(self, item: Union[Map, Loop]) -> "DaCeIRBuilder.IterationContext":
-
-            if not isinstance(item, (Map, Loop)):
+            if not isinstance(item, (Map, Loop, Skip)):
                 raise ValueError
 
+            if isinstance(item, Skip):
+                item = item.item
             if isinstance(item, Map):
                 iterations = item.iterations
             else:
@@ -757,6 +758,8 @@ class DaCeIRBuilder(NodeTranslator):
             return self._process_map_item(scope, item, **kwargs)
         elif isinstance(item, Loop):
             return self._process_loop_item(scope, item, **kwargs)
+        elif isinstance(item, Skip):
+            return scope
         else:
             raise ValueError("Invalid expansion specification set.")
 

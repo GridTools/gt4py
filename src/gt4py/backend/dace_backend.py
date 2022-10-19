@@ -40,6 +40,7 @@ from gt4py.backend.gtc_common import (
 from gt4py.backend.module_generator import make_args_data_from_gtir
 from gt4py.utils import shash
 from gtc import common, gtir
+from gtc.dace.expansion_specification import Map
 from gtc.dace.nodes import StencilComputation
 from gtc.dace.oir_to_dace import OirSDFGBuilder
 from gtc.dace.partial_expansion import partially_expand
@@ -172,31 +173,32 @@ def _pre_expand_trafos(gtir_pipeline: GtirPipeline, sdfg: dace.SDFG, layout_map)
     sdfg.simplify(validate=False)
 
     _set_expansion_orders(sdfg)
-    partially_expand(sdfg, ["TileI", "TileJ"])
+    _set_tile_sizes(sdfg)
+    _specialize_transient_strides(sdfg, layout_map=layout_map)
+    partially_expand(sdfg)
 
-    # _set_tile_sizes(sdfg)
-    # _specialize_transient_strides(sdfg, layout_map=layout_map)
     return sdfg
 
 
 def _post_expand_trafos(sdfg: dace.SDFG):
+    pass
     # DaCe "standard" clean-up transformations
     sdfg.simplify(validate=False)
-
-    eliminate_trivial_maps(sdfg)
-
-    # Control the `#pragma omp parallel` statements: Fully collapse parallel loops,
-    # but set 1D maps to be sequential. (Typical domains are too small to benefit from parallelism)
-    for node, _ in filter(
-        lambda n: isinstance(n[0], dace.nodes.MapEntry), sdfg.all_nodes_recursive()
-    ):
-        node.collapse = len(node.range)
-        if node.schedule == dace.ScheduleType.CPU_Multicore and len(node.range) <= 1:
-            node.schedule = dace.ScheduleType.Sequential
-
-    sdfg.apply_transformations_repeated(InlineThreadLocalTransients)
-    sdfg.simplify()
-    nest_sequential_map_scopes(sdfg)
+    #
+    # eliminate_trivial_maps(sdfg)
+    #
+    # # Control the `#pragma omp parallel` statements: Fully collapse parallel loops,
+    # # but set 1D maps to be sequential. (Typical domains are too small to benefit from parallelism)
+    # for node, _ in filter(
+    #     lambda n: isinstance(n[0], dace.nodes.MapEntry), sdfg.all_nodes_recursive()
+    # ):
+    #     node.collapse = len(node.range)
+    #     if node.schedule == dace.ScheduleType.CPU_Multicore and len(node.range) <= 1:
+    #         node.schedule = dace.ScheduleType.Sequential
+    #
+    # sdfg.apply_transformations_repeated(InlineThreadLocalTransients)
+    # sdfg.simplify()
+    # nest_sequential_map_scopes(sdfg)
 
 
 def _sdfg_add_arrays_and_edges(
@@ -533,6 +535,7 @@ class DaCeComputationCodegen:
         with dace.config.temporary_config():
             dace.config.Config.set("compiler", "cuda", "max_concurrent_streams", value=-1)
             dace.config.Config.set("compiler", "cpu", "openmp_sections", value=False)
+            sdfg.view()
             code_objects = sdfg.generate_code()
         is_gpu = "CUDA" in {co.title for co in code_objects}
 
