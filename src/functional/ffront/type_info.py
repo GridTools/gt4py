@@ -1,6 +1,7 @@
 import functools
+from functools import reduce
 from types import EllipsisType
-from typing import Iterator, Type, TypeGuard, cast
+from typing import Callable, Iterator, Type, TypeGuard, cast
 
 from eve.utils import XIterable, xiter
 from functional.common import Dimension, GTTypeError
@@ -75,7 +76,9 @@ def primitive_constituents(
     return xiter(constituents_yielder(symbol_type))
 
 
-def apply_to_primitive_constituents(symbol_type: ct.SymbolType, f):
+def apply_to_primitive_constituents(
+    symbol_type: ct.SymbolType, f: Callable, with_path_arg=False, _path=()
+):
     """
     Apply function to all primitive constituents of a type.
 
@@ -86,9 +89,17 @@ def apply_to_primitive_constituents(symbol_type: ct.SymbolType, f):
     """
     if isinstance(symbol_type, ct.TupleType):
         return ct.TupleType(
-            types=[apply_to_primitive_constituents(el, f) for el in symbol_type.types]
+            types=[
+                apply_to_primitive_constituents(
+                    el, f, _path=(*_path, i), with_path_arg=with_path_arg
+                )
+                for i, el in enumerate(symbol_type.types)
+            ]
         )
-    return f(symbol_type)
+    if with_path_arg:
+        return f(symbol_type, _path)
+    else:
+        return f(symbol_type)
 
 
 def extract_dtype(symbol_type: ct.SymbolType) -> ct.ScalarType:
@@ -533,11 +544,11 @@ def function_signature_incompatibilities_fieldop(
 def function_signature_incompatibilities_scanop(
     scanop_type: ct.ScanOperatorType, args: list[ct.SymbolType], kwargs: dict[str, ct.SymbolType]
 ) -> Iterator[str]:
-    if not all(isinstance(arg, ct.FieldType) for arg in args):
-        yield "Arguments to scan operator must be fields."
+    if not all(is_field_type_or_tuple_of_field_type(arg) for arg in args):
+        yield "Arguments to scan operator must be fields or tuples thereof."
         return
 
-    arg_dims = [extract_dims(arg) for arg in args]
+    arg_dims = [extract_dims(el) for arg in args for el in primitive_constituents(arg)]
     try:
         promote_dims(*arg_dims)
     except GTTypeError as e:
@@ -547,16 +558,32 @@ def function_signature_incompatibilities_scanop(
         yield f"Scan operator takes {len(scanop_type.definition.args)-1} arguments, but {len(args)} were given."
         return
 
-    if not all(isinstance(arg, ct.ScalarType) for arg in scanop_type.definition.args[1:]):
-        yield "All arguments to scan operator definition except the first must be scalar."
+    promoted_args = []
+    for i, scan_pass_arg in enumerate(scanop_type.definition.args[1:]):
+
+        def _as_field(dtype: ct.ScalarType, path: tuple[int, ...]):
+            """
+            Given a scalar type in the signature of the scan pass return a
+            field type with that dtype and the dimensions of the corresponding
+            field type in the requested `args` type.
+            """
+            try:
+                el_type = reduce(lambda type_, idx: type_.types[idx], path, args[i])
+                return ct.FieldType(dims=extract_dims(el_type), dtype=cast(ct.ScalarType, dtype))
+            except IndexError:
+                # The structure of the scan passes argument and the requested
+                # argument type differ. As such we can not extract the dimensions
+                # and just return a generic field shown in the error later on.
+                return ct.FieldType(dims=..., dtype=cast(ct.ScalarType, dtype))
+
+        promoted_args.append(
+            apply_to_primitive_constituents(scan_pass_arg, _as_field, with_path_arg=True)
+        )
 
     # build a function type to leverage the already existing signature checking
     #  capabilities
     function_type = ct.FunctionType(
-        args=[
-            ct.FieldType(dims=dims, dtype=cast(ct.ScalarType, dtype))
-            for dims, dtype in zip(arg_dims, scanop_type.definition.args[1:])
-        ],
+        args=promoted_args,
         kwargs={},
         returns=ct.DeferredSymbolType(constraint=None),
     )

@@ -43,7 +43,7 @@ from functional.iterator.embedded import (
 )
 
 
-@pytest.fixture(params=[roundtrip.executor, gtfn_cpu.run_gtfn])
+@pytest.fixture(params=[roundtrip.executor])
 def fieldview_backend(request):
     yield request.param
 
@@ -1073,9 +1073,7 @@ def test_scan_nested_tuple_output(fieldview_backend, forward):
     KDim = Dimension("K", kind=DimensionKind.VERTICAL)
     size = 10
     init = (1.0, (2.0, 3.0))
-    out1 = np_as_located_field(KDim)(np.zeros((size,)))
-    out2 = np_as_located_field(KDim)(np.zeros((size,)))
-    out3 = np_as_located_field(KDim)(np.zeros((size,)))
+    out1, out2, out3 = (np_as_located_field(KDim)(np.zeros((size,))) for _ in range(3))
     expected = np.arange(1.0, 1.0 + size, 1)
     if not forward:
         expected = np.flip(expected)
@@ -1091,6 +1089,33 @@ def test_scan_nested_tuple_output(fieldview_backend, forward):
     assert np.allclose(expected + 1.0, out1)
     assert np.allclose(expected + 2.0, out2)
     assert np.allclose(expected + 3.0, out3)
+
+
+@pytest.mark.parametrize("forward", [True, False])
+def test_scan_nested_tuple_input(fieldview_backend, forward):
+    if fieldview_backend == gtfn_cpu.run_gtfn:
+        pytest.xfail("gtfn does not yet support scan pass or tuple arguments.")
+
+    KDim = Dimension("K", kind=DimensionKind.VERTICAL)
+    size = 10
+    init = 1.0
+    inp1 = np_as_located_field(KDim)(np.ones(size))
+    inp2 = np_as_located_field(KDim)(np.arange(0.0, size, 1))
+    out = np_as_located_field(KDim)(np.zeros((size,)))
+    from functools import reduce
+    from operator import add
+
+    expected = np.asarray([reduce(add, range(i + 2), init) for i in range(size)])
+    if not forward:
+        expected = np.flip(expected)
+
+    @scan_operator(axis=KDim, forward=forward, init=init, backend=fieldview_backend)
+    def simple_scan_operator(carry: float, a: tuple[float, float]) -> float:
+        return carry + a[0] + a[1]
+
+    simple_scan_operator((inp1, inp2), out=out, offset_provider={})
+
+    assert np.allclose(expected, out)
 
 
 def test_docstring():
