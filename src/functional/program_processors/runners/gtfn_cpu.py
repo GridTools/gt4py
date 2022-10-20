@@ -20,10 +20,9 @@ import numpy as np
 
 from functional.iterator import ir as itir
 from functional.otf import languages, stages, workflow
-from functional.otf.binding import pybind
+from functional.otf.binding import cpp_interface, pybind
 from functional.otf.compilation import cache, compiler
 from functional.otf.compilation.build_systems import compiledb
-from functional.otf.source import cpp_gen
 from functional.program_processors import processor_interface as ppi
 from functional.program_processors.codegens.gtfn import gtfn_module
 
@@ -38,7 +37,7 @@ def convert_arg(arg: Any) -> Any:
 
 @dataclasses.dataclass(frozen=True)
 class GTFNExecutor(ppi.ProgramExecutor):
-    language_settings: languages.LanguageWithHeaderFilesSettings = cpp_gen.CPP_DEFAULT
+    language_settings: languages.LanguageWithHeaderFilesSettings = cpp_interface.CPP_DEFAULT
     builder_factory: compiler.BuildSystemProjectGenerator = compiledb.CompiledbFactory()
 
     name: Optional[str] = None

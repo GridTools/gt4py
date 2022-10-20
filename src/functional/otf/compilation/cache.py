@@ -20,7 +20,7 @@ import pathlib
 import tempfile
 
 from functional.otf import stages
-from functional.otf.source import source
+from functional.otf.binding import interface
 
 
 class Strategy(enum.Enum):
@@ -35,16 +35,16 @@ _persistent_cache_dir_path = pathlib.Path(tempfile.gettempdir()) / "gt4py_cache"
 
 
 def _serialize_param(
-    parameter: source.ScalarParameter | source.BufferParameter,
+    parameter: interface.ScalarParameter | interface.BufferParameter,
 ) -> str:
-    if isinstance(parameter, source.ScalarParameter):
+    if isinstance(parameter, interface.ScalarParameter):
         return f"{parameter.name}: {str(parameter.scalar_type)}"
-    elif isinstance(parameter, source.BufferParameter):
+    elif isinstance(parameter, interface.BufferParameter):
         return f"{parameter.name}: {str(parameter.scalar_type)}<{', '.join(parameter.dimensions)}>"
     raise ValueError("Invalid parameter type. This is a bug.")
 
 
-def _serialize_library_dependency(dependency: source.LibraryDependency) -> str:
+def _serialize_library_dependency(dependency: interface.LibraryDependency) -> str:
     return f"{dependency.name}/{dependency.version}"
 
 

@@ -18,16 +18,15 @@ import numpy as np
 import pytest
 
 from functional.otf import languages, stages
-from functional.otf.binding import pybind
+from functional.otf.binding import cpp_interface, interface, pybind
 from functional.otf.compilation import cache
-from functional.otf.source import cpp_gen, source
 
 
 def make_program_source(name: str) -> stages.ProgramSource:
-    entry_point = source.Function(
+    entry_point = interface.Function(
         name,
         parameters=[
-            source.BufferParameter("buf", ("I", "J"), np.dtype(np.float32)),
+            interface.BufferParameter("buf", ("I", "J"), np.dtype(np.float32)),
             source.ScalarParameter("sc", np.dtype(np.float32)),
         ],
     )

@@ -21,9 +21,9 @@ import subprocess
 from typing import Optional
 
 from functional.otf import languages, stages
+from functional.otf.binding import interface
 from functional.otf.compilation import build_data, cache, compiler
 from functional.otf.compilation.build_systems import cmake, cmake_lists
-from functional.otf.source import source
 
 
 @dataclasses.dataclass
@@ -179,7 +179,7 @@ class CompiledbProject(
 
 
 def _cc_prototype_program_name(
-    deps: tuple[source.LibraryDependency, ...], build_type: str, flags: list[str]
+    deps: tuple[interface.LibraryDependency, ...], build_type: str, flags: list[str]
 ) -> str:
     base_name = "compile_commands_cache"
     deps_str = "_".join(f"{dep.name}_{dep.version}" for dep in deps)
@@ -188,13 +188,13 @@ def _cc_prototype_program_name(
 
 
 def _cc_prototype_program_source(
-    deps: tuple[source.LibraryDependency, ...],
+    deps: tuple[interface.LibraryDependency, ...],
     build_type: cmake.BuildType,
     cmake_flags: list[str],
 ) -> stages.ProgramSource:
     name = _cc_prototype_program_name(deps, build_type.value, cmake_flags)
     return stages.ProgramSource(
-        entry_point=source.Function(name=name, parameters=()),
+        entry_point=interface.Function(name=name, parameters=()),
         source_code="",
         library_deps=deps,
         language=languages.Cpp,

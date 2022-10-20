@@ -19,26 +19,28 @@ from typing import Any, Final, TypeVar
 import numpy as np
 
 from functional.otf import languages, stages, step_types, workflow
-from functional.otf.source import cpp_gen, source
+from functional.otf.binding import cpp_interface, interface
 from functional.program_processors.codegens.gtfn import gtfn_backend
 
 
 T = TypeVar("T")
 
 
-def get_param_description(name: str, obj: Any) -> source.ScalarParameter | source.BufferParameter:
+def get_param_description(
+    name: str, obj: Any
+) -> interface.ScalarParameter | interface.BufferParameter:
     view: np.ndarray = np.asarray(obj)
     if view.ndim > 0:
-        return source.BufferParameter(name, tuple(dim.value for dim in obj.axes), view.dtype)
+        return interface.BufferParameter(name, tuple(dim.value for dim in obj.axes), view.dtype)
     else:
-        return source.ScalarParameter(name, view.dtype)
+        return interface.ScalarParameter(name, view.dtype)
 
 
 @dataclasses.dataclass(frozen=True)
 class GTFNTranslationStep(
     step_types.TranslationStep[languages.Cpp, languages.LanguageWithHeaderFilesSettings],
 ):
-    language_settings: languages.LanguageWithHeaderFilesSettings = cpp_gen.CPP_DEFAULT
+    language_settings: languages.LanguageWithHeaderFilesSettings = cpp_interface.CPP_DEFAULT
 
     def __call__(
         self,
@@ -50,15 +52,15 @@ class GTFNTranslationStep(
             get_param_description(program_param.id, obj)
             for obj, program_param in zip(inp.args, program.params)
         )
-        function = source.Function(program.id, parameters)
+        function = interface.Function(program.id, parameters)
 
         rendered_params = ", ".join(
             ["gridtools::fn::backend::naive{}", *(p.name for p in parameters)]
         )
         decl_body = f"return generated::{function.name}()({rendered_params});"
-        decl_src = cpp_gen.render_function_declaration(function, body=decl_body)
+        decl_src = cpp_interface.render_function_declaration(function, body=decl_body)
         stencil_src = gtfn_backend.generate(program, **inp.kwargs)
-        source_code = source.format_source(
+        source_code = interface.format_source(
             self.language_settings,
             f"""
             #include <gridtools/fn/backend/naive.hpp>
@@ -69,7 +71,7 @@ class GTFNTranslationStep(
 
         module = stages.ProgramSource(
             entry_point=function,
-            library_deps=(source.LibraryDependency("gridtools", "master"),),
+            library_deps=(interface.LibraryDependency("gridtools", "master"),),
             source_code=source_code,
             language=languages.Cpp,
             language_settings=self.language_settings,

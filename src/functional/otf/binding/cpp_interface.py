@@ -20,7 +20,7 @@ from typing import Final, Sequence, Type
 import numpy as np
 
 from functional.otf import languages
-from functional.otf.source import source
+from functional.otf.binding import interface
 
 
 CPP_DEFAULT: Final = languages.LanguageWithHeaderFilesSettings(
@@ -80,15 +80,15 @@ def render_python_type(python_type: Type) -> str:
 
 
 def _render_function_param(
-    param: source.ScalarParameter | source.BufferParameter, index: int
+    param: interface.ScalarParameter | interface.BufferParameter, index: int
 ) -> str:
-    if isinstance(param, source.ScalarParameter):
+    if isinstance(param, interface.ScalarParameter):
         return f"{render_python_type(param.scalar_type.type)} {param.name}"
     else:
         return f"BufferT{index}&& {param.name}"
 
 
-def render_function_declaration(function: source.Function, body: str) -> str:
+def render_function_declaration(function: interface.Function, body: str) -> str:
     rendered_params = [
         _render_function_param(param, index) for index, param in enumerate(function.parameters)
     ]
@@ -98,7 +98,7 @@ def render_function_declaration(function: source.Function, body: str) -> str:
     template_params = [
         f"class BufferT{index}"
         for index, param in enumerate(function.parameters)
-        if isinstance(param, source.BufferParameter)
+        if isinstance(param, interface.BufferParameter)
     ]
     if template_params:
         return f"""
@@ -108,5 +108,5 @@ def render_function_declaration(function: source.Function, body: str) -> str:
     return rendered_decl
 
 
-def render_function_call(function: source.Function, args: Sequence[str]) -> str:
+def render_function_call(function: interface.Function, args: Sequence[str]) -> str:
     return f"{function.name}({', '.join(args)})"

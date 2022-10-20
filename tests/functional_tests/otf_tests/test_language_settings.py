@@ -14,13 +14,13 @@
 import pytest
 
 from functional.otf import languages, stages
-from functional.otf.source import source
+from functional.otf.binding import interface
 
 
 def test_basic_settings_with_cpp_rejected():
     with pytest.raises(TypeError, match="Wrong language settings type"):
         stages.ProgramSource(
-            entry_point=source.Function(name="basic_settings_with_cpp", parameters=[]),
+            entry_point=interface.Function(name="basic_settings_with_cpp", parameters=[]),
             source_code="",
             library_deps=(),
             language=languages.Cpp,

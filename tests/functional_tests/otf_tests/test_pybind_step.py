@@ -11,8 +11,7 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-from functional.otf.binding import pybind
-from functional.otf.source import source
+from functional.otf.binding import interface, pybind
 
 
 def test_bindings(program_source_example):

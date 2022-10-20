@@ -17,8 +17,8 @@ from typing import Sequence
 
 import eve
 from eve.codegen import JinjaTemplate as as_jinja
+from functional.otf.binding import interface
 from functional.otf.compilation import common
-from functional.otf.source import source
 
 
 class FindDependency(eve.Node):
@@ -111,7 +111,7 @@ class CMakeListsGenerator(eve.codegen.TemplatedGenerator):
 
 def generate_cmakelists_source(
     project_name: str,
-    dependencies: tuple[source.LibraryDependency, ...],
+    dependencies: tuple[interface.LibraryDependency, ...],
     source_names: Sequence[str],
 ) -> str:
     """

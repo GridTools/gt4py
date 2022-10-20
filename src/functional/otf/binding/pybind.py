@@ -23,7 +23,7 @@ import numpy as np
 import eve
 from eve.codegen import JinjaTemplate as as_jinja, TemplatedGenerator
 from functional.otf import languages, stages, workflow
-from functional.otf.source import cpp_gen, source
+from functional.otf.binding import cpp_interface, interface
 
 
 class Expr(eve.Node):
@@ -42,7 +42,7 @@ class SidConversion(Expr):
 
 
 class FunctionCall(Expr):
-    target: source.Function
+    target: interface.Function
     args: Sequence[Any]
 
 
@@ -111,7 +111,7 @@ class BindingCodeGenerator(TemplatedGenerator):
         if param.ndim > 0:
             type_str = "pybind11::buffer"
         else:
-            type_str = cpp_gen.render_python_type(param.dtype.type)
+            type_str = cpp_interface.render_python_type(param.dtype.type)
         return type_str + " " + param.name
 
     ReturnStmt = as_jinja("""return {{expr}};""")
@@ -129,11 +129,11 @@ class BindingCodeGenerator(TemplatedGenerator):
 
     def visit_FunctionCall(self, call: FunctionCall):
         args = [self.visit(arg) for arg in call.args]
-        return cpp_gen.render_function_call(call.target, args)
+        return cpp_interface.render_function_call(call.target, args)
 
     def visit_SidConversion(self, sid: SidConversion):
         return self.generic_visit(
-            sid, rendered_scalar_type=cpp_gen.render_python_type(sid.scalar_type.type)
+            sid, rendered_scalar_type=cpp_interface.render_python_type(sid.scalar_type.type)
         )
 
     SidConversion = as_jinja(
@@ -149,18 +149,18 @@ class BindingCodeGenerator(TemplatedGenerator):
 
 
 def make_parameter(
-    parameter: source.ScalarParameter | source.BufferParameter,
+    parameter: interface.ScalarParameter | interface.BufferParameter,
 ) -> FunctionParameter:
     name = parameter.name
-    ndim = 0 if isinstance(parameter, source.ScalarParameter) else len(parameter.dimensions)
+    ndim = 0 if isinstance(parameter, interface.ScalarParameter) else len(parameter.dimensions)
     scalar_type = parameter.scalar_type
     return FunctionParameter(name=name, ndim=ndim, dtype=scalar_type)
 
 
 def make_argument(
-    index: int, param: source.ScalarParameter | source.BufferParameter
+    index: int, param: interface.ScalarParameter | interface.BufferParameter
 ) -> str | SidConversion:
-    if isinstance(param, source.ScalarParameter):
+    if isinstance(param, interface.ScalarParameter):
         return param.name
     else:
         return SidConversion(
@@ -226,14 +226,14 @@ def create_bindings(
         ),
     )
 
-    src = source.format_source(
+    src = interface.format_source(
         program_source.language_settings,
         BindingCodeGenerator.apply(file_binding),
     )
 
     return stages.BindingSource(
         src,
-        (source.LibraryDependency("pybind11", "2.9.2"),),
+        (interface.LibraryDependency("pybind11", "2.9.2"),),
     )
 
 

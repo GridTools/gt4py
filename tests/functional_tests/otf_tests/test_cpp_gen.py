@@ -14,9 +14,9 @@
 import numpy as np
 import pytest
 
-import functional.otf.source.cpp_gen as cpp
+import functional.otf.binding.cpp_interface as cpp
 from eve.codegen import format_source
-from functional.otf.source import source
+from functional.otf.binding import interface
 
 
 def test_render_types():
@@ -30,7 +30,7 @@ def function_scalar_example():
         name="example",
         parameters=[
             source.ScalarParameter("a", np.dtype(float)),
-            source.ScalarParameter("b", np.dtype(int)),
+            interface.ScalarParameter("b", np.dtype(int)),
         ],
     )
 
@@ -63,7 +63,7 @@ def test_render_function_call_scalar(function_scalar_example):
 
 @pytest.fixture
 def function_buffer_example():
-    return source.Function(
+    return interface.Function(
         name="example",
         parameters=[
             source.BufferParameter("a_buf", 2, float),

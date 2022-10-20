@@ -18,7 +18,7 @@ from typing import Any, Generic, Optional, Protocol, TypeVar
 
 from functional.iterator import ir as itir
 from functional.otf import languages
-from functional.otf.source import source
+from functional.otf.binding import interface
 
 
 SrcL = TypeVar("SrcL", bound=languages.LanguageTag)
@@ -49,9 +49,9 @@ class ProgramSource(Generic[SrcL, SettingT]):
     - how to call the program
     """
 
-    entry_point: source.Function
+    entry_point: interface.Function
     source_code: str
-    library_deps: tuple[source.LibraryDependency, ...]
+    library_deps: tuple[interface.LibraryDependency, ...]
     language: type[SrcL]
     language_settings: SettingT
 
@@ -74,7 +74,7 @@ class BindingSource(Generic[SrcL, TgtL]):
     """
 
     source_code: str
-    library_deps: tuple[source.LibraryDependency, ...]
+    library_deps: tuple[interface.LibraryDependency, ...]
 
 
 # TODO(ricoh): reconsider name in view of future backends producing standalone compilable ProgramSource code
@@ -92,7 +92,7 @@ class CompilableSource(Generic[SrcL, SettingT, TgtL]):
     binding_source: Optional[BindingSource[SrcL, TgtL]]
 
     @property
-    def library_deps(self) -> tuple[source.LibraryDependency, ...]:
+    def library_deps(self) -> tuple[interface.LibraryDependency, ...]:
         if not self.binding_source:
             return self.program_source.library_deps
         return _unique_libs(*self.program_source.library_deps, *self.binding_source.library_deps)
@@ -117,18 +117,18 @@ class CompiledProgram(Protocol):
         ...
 
 
-def _unique_libs(*args: source.LibraryDependency) -> tuple[source.LibraryDependency, ...]:
+def _unique_libs(*args: interface.LibraryDependency) -> tuple[interface.LibraryDependency, ...]:
     """
-    Filter out multiple occurrences of the same ``source.LibraryDependency``.
+    Filter out multiple occurrences of the same ``interface.LibraryDependency``.
 
     Examples:
     ---------
-    >>> libs_a = (source.LibraryDependency("foo", "1.2.3"), source.LibraryDependency("common", "1.0.0"))
-    >>> libs_b = (source.LibraryDependency("common", "1.0.0"), source.LibraryDependency("bar", "1.2.3"))
+    >>> libs_a = (interface.LibraryDependency("foo", "1.2.3"), interface.LibraryDependency("common", "1.0.0"))
+    >>> libs_b = (interface.LibraryDependency("common", "1.0.0"), interface.LibraryDependency("bar", "1.2.3"))
     >>> _unique_libs(*libs_a, *libs_b)
     (LibraryDependency(name='foo', version='1.2.3'), LibraryDependency(name='common', version='1.0.0'), LibraryDependency(name='bar', version='1.2.3'))
     """
-    unique: list[source.LibraryDependency] = []
+    unique: list[interface.LibraryDependency] = []
     for lib in args:
         if lib not in unique:
             unique.append(lib)
