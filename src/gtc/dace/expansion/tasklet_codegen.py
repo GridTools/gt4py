@@ -102,11 +102,12 @@ class TaskletCodegen(codegen.TemplatedGenerator):
                     decl=symtable[memlet.field],
                     access_info=memlet.access_info,
                     symtable=symtable,
+                    in_idx=True,
                     **kwargs,
                 )
             )
         index_strs.extend(
-            self.visit(idx, sdfg_ctx=sdfg_ctx, symtable=symtable, **kwargs)
+            self.visit(idx, sdfg_ctx=sdfg_ctx, symtable=symtable, in_idx=True, **kwargs)
             for idx in node.data_index
         )
         return f"{node.name}[{','.join(index_strs)}]"
@@ -129,7 +130,14 @@ class TaskletCodegen(codegen.TemplatedGenerator):
             return "False"
         raise NotImplementedError("Not implemented BuiltInLiteral encountered.")
 
-    Literal = as_fmt("{value}")
+    def visit_Literal(self, literal: dcir.Literal, *, in_idx=False, **kwargs):
+        value = self.visit(literal.value, in_idx=in_idx, **kwargs)
+        if in_idx:
+            return str(value)
+        else:
+            return "{dtype}({value})".format(
+                dtype=self.visit(literal.dtype, in_idx=in_idx, **kwargs), value=value
+            )
 
     Cast = as_fmt("{dtype}({expr})")
 
@@ -242,11 +250,18 @@ class TaskletCodegen(codegen.TemplatedGenerator):
 
             min_val = get_axis_bound_str(interval.start, dom_sym)
             max_val = get_axis_bound_str(interval.end, dom_sym)
-
-            if min_val:
-                clauses.append(f"{it_sym} >= {min_val}")
-            if max_val:
-                clauses.append(f"{it_sym} < {max_val}")
+            if (
+                min_val
+                and max_val
+                and interval.start.level == interval.end.level
+                and interval.start.offset + 1 == interval.end.offset
+            ):
+                clauses.append(f"{it_sym} == {min_val}")
+            else:
+                if min_val:
+                    clauses.append(f"{it_sym} >= {min_val}")
+                if max_val:
+                    clauses.append(f"{it_sym} < {max_val}")
 
         return " and ".join(clauses)
 
