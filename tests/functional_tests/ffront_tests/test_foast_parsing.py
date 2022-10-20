@@ -27,7 +27,7 @@ import pytest
 
 from functional.common import Field, GTTypeError
 from functional.ffront import common_types
-from functional.ffront.fbuiltins import broadcast, Dimension, float32, float64, int32, int64, where
+from functional.ffront.fbuiltins import Dimension, broadcast, float32, float64, int32, int64, where
 from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError
 from functional.ffront.func_to_foast import FieldOperatorParser, FieldOperatorSyntaxError
 from functional.ffront.symbol_makers import TypingError
@@ -255,7 +255,6 @@ def test_correct_return_type_annotation():
     FieldOperatorParser.apply_to_function(correct_return_type_annotation)
 
 
-# TODO implement check
 def test_wrong_return_type_annotation():
     """See ADR 11."""
 
@@ -266,7 +265,6 @@ def test_wrong_return_type_annotation():
         _ = FieldOperatorParser.apply_to_function(wrong_return_type_annotation)
 
 
-# TODO consider implementing broadcast without second argument as shortcut for 0-d field
 def test_fixed_return_type_annotation():
     """See ADR 11."""
 
