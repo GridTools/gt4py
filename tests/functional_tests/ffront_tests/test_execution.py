@@ -1235,25 +1235,31 @@ def test_undefined_symbols():
 def test_input_kwargs_1(fieldview_backend):
     size = 10
     input_1 = np_as_located_field(IDim, JDim)(np.ones((size, size)))
-    input_2 = np_as_located_field(IDim, JDim)(np.ones((size, size)))
+    input_2 = np_as_located_field(IDim, JDim)(np.ones((size, size)) * 2)
+    input_3 = np_as_located_field(IDim, JDim)(np.ones((size, size)) * 3)
+
+    expected = (
+        np.asarray(input_3) + np.asarray(input_3),
+        np.asarray(input_3) + np.asarray(input_1),
+    )
 
     @field_operator(backend=fieldview_backend)
     def fieldop_input_kwargs(
-        a: Field[[IDim, JDim], float64]
+        a: Field[[IDim, JDim], float64], c: Field[[IDim, JDim], float64]
     ) -> tuple[Field[[IDim, JDim], float64], Field[[IDim, JDim], float64]]:
-        return (a + a, a)
+        return (c + c, a + c)
 
     @program
-    def program_input_kwargs(a: Field[[IDim, JDim], float64], b: Field[[IDim, JDim], float64]):
-        fieldop_input_kwargs(a, out=(b, a), domain={IDim: (1, 9), JDim: (4, 6)})
+    def program_input_kwargs(
+        a: Field[[IDim, JDim], float64],
+        b: Field[[IDim, JDim], float64],
+        c: Field[[IDim, JDim], float64],
+    ):
+        fieldop_input_kwargs(c, a, out=(b, a))
 
-    program_input_kwargs(b=input_2, a=input_1, offset_provider={})
+    program_input_kwargs(input_3, b=input_2, a=input_1, offset_provider={})
 
-    expected = np.asarray(input_1)
-    expected[1:9, 4:6] = 1 + 1
-
-    assert np.allclose(np.asarray(input_1), input_1)
-    assert np.allclose(expected, input_2)
+    assert np.allclose(expected, (input_2, input_1))
 
 
 def test_input_kwargs_2(fieldview_backend):
@@ -1293,12 +1299,11 @@ def test_input_kwargs_3(fieldview_backend):
 
     @program
     def program_input_kwargs(a: Field[[IDim, JDim], float64], b: Field[[IDim, JDim], float64]):
-        fieldop_input_kwargs(a, out=(b, a), domain={IDim: (1, 9), JDim: (4, 6)})
+        fieldop_input_kwargs(a, out=(b, a))
 
     program_input_kwargs(a, b=input_2, offset_provider={})
 
-    expected = np.asarray(a)
-    expected[1:9, 4:6] = 1 + 1
+    expected = np.asarray(a) + np.asarray(a)
 
     assert np.allclose(np.asarray(a), a)
     assert np.allclose(expected, input_2)
@@ -1317,12 +1322,11 @@ def test_input_kwargs_4(fieldview_backend):
 
     @program
     def program_input_kwargs(a: Field[[IDim, JDim], float64], b: Field[[IDim, JDim], float64]):
-        fieldop_input_kwargs(a, out=(b, a), domain={IDim: (1, 9), JDim: (4, 6)})
+        fieldop_input_kwargs(a, out=(b, a))
 
     program_input_kwargs(b, a=input_1, offset_provider={})
 
-    expected = np.asarray(input_1)
-    expected[1:9, 4:6] = 1 + 1
+    expected = np.asarray(input_1) + np.asarray(input_1)
 
     assert np.allclose(np.asarray(input_1), input_1)
     assert np.allclose(expected, b)

@@ -284,13 +284,14 @@ class Program:
         # if parameter is in signature but not in args, move it from kwargs to args
         if len(kwargs) > 0:
             new_args_ls = []
-            iter_args = iter(args)
-            for param in self.itir.params:
+            kwargs_count = 0
+            for param_i, param in enumerate(self.itir.params):
                 if param.id in kwargs:
                     new_args_ls.append(kwargs[param.id])
                     kwargs.pop(param.id)
-                else:
-                    new_args_ls.append(next(iter_args))
+                    kwargs_count += 1
+                elif param_i < len(self.past_node.params):
+                    new_args_ls.append(args[param_i - kwargs_count])
             args = tuple(new_args_ls)
 
         self._validate_args(*args, **kwargs)

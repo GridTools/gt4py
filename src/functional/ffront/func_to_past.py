@@ -37,16 +37,20 @@ class ProgramParser(DialectParser[past.Program]):
         cls, output_node: past.Program, annotations: dict[str, Any]
     ) -> past.Program:
         new_args_ls = []
-        for param in annotations.keys():
-            if param in output_node.body[0].kwargs.keys():
-                new_args_ls.append(output_node.body[0].kwargs[param])
-                output_node.body[0].kwargs.pop(param)
-            else:
-                for arg_i in output_node.body[0].args:
-                    if isinstance(arg_i, past.Name) and arg_i.id == param:
-                        new_args_ls.append(arg_i)
+        for body_i in range(len(output_node.body)):
+            for param in annotations.keys():
+                if param in output_node.body[body_i].kwargs.keys() and param not in [
+                    "out",
+                    "return",
+                ]:
+                    new_args_ls.append(output_node.body[body_i].kwargs[param])
+                    output_node.body[body_i].kwargs.pop(param)
+                elif param not in ["out", "return", "domain"]:
+                    for arg_i in output_node.body[body_i].args:
+                        if isinstance(arg_i, past.Name) and arg_i.id == param:
+                            new_args_ls.append(arg_i)
 
-        output_node.body[0].args = new_args_ls
+            output_node.body[body_i].args = new_args_ls
 
         return ProgramTypeDeduction.apply(output_node)
 
