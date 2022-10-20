@@ -501,7 +501,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
 
         if self.foast_node.id in self.closure_vars:
             raise RuntimeError("A closure variable has the same name as the field operator itself.")
-        closure_vars = {self.foast_node.id: self, **self.closure_vars}
+        closure_vars = {self.foast_node.id: self}
         closure_symbols = [
             past.Symbol(
                 id=self.foast_node.id,
@@ -509,12 +509,6 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
                 namespace=ct.Namespace.CLOSURE,
                 location=loc,
             ),
-            *[
-                past.Symbol(
-                    id=sym.id, type=sym.type, namespace=ct.Namespace.CLOSURE, location=sym.location
-                )
-                for sym in self.foast_node.definition.closure_vars
-            ],
         ]
 
         untyped_past_node = past.Program(
