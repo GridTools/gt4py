@@ -142,7 +142,7 @@ def _field_constituents_shape_and_dims(
         else:
             yield (None, dims)
     else:
-        raise ValueError("Expected a field or tuple thereof.")
+        raise ValueError("Expected a `FieldType` or `TupleType` thereof.")
 
 
 # TODO(tehrengruber): Decide if and how programs can call other programs. As a
