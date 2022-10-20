@@ -81,38 +81,6 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
     [Sym(id=SymbolName('inp')), Sym(id=SymbolName('out')), Sym(id=SymbolName('__inp_size_0')), Sym(id=SymbolName('__out_size_0'))]
     """
 
-    class lifted_lambda:
-        def __init__(self, *params):
-            self.params = params
-
-        def __call__(self, expr):
-            return im.lift_(im.lambda__(*self.params)(expr))(*self.params)
-
-    def _lift_lambda(self, node: past.LocatedNode):
-        if any(
-            node.pre_walk_values()
-            .if_isinstance(past.Name)
-            .filter(is_expr_with_iterator_type_kind(ITIRTypeKind.ENCAPSULATED_ITERATOR))
-        ):
-            raise NotImplementedError(
-                "Using composite types (e.g. tuples) containing local fields not supported."
-            )
-        param_names = (
-            node.pre_walk_values()
-            .if_isinstance(past.Name)
-            .filter(is_expr_with_iterator_type_kind(ITIRTypeKind.ITERATOR))
-            .getattr("id")
-            .unique()
-            .to_list()
-        )
-        return self.lifted_lambda(*param_names)
-
-    def _lift_if_field(self, node: past.LocatedNode) -> Callable[[itir.Expr], itir.Expr]:
-        if iterator_type_kind(node.type) is ITIRTypeKind.VALUE:
-            return lambda x: x
-        elif iterator_type_kind(node.type) is ITIRTypeKind.ITERATOR:
-            return self._lift_lambda(node)
-        raise AssertionError("Unexpected `IteratorTypeKind`.")
 
     # TODO(tehrengruber): enable doctests again. For unknown / obscure reasons
     #  the above doctest fails when executed using `pytest --doctest-modules`.
