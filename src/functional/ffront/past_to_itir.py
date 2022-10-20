@@ -95,12 +95,12 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         """Generate symbols for each field param and dimension."""
         size_params = []
         for param in node.params:
-            if isinstance(param.type, common_types.FieldType):
-                for dim_idx in range(0, len(param.type.dims)):
-                    size_params.append(itir.Sym(id=_size_arg_from_field(param.id, dim_idx)))
-            if isinstance(param.type, common_types.TupleType):
-                dims = param.type.types[0].dims
-                for dim_idx in range(0, len(dims)):
+            if type_info.is_field_type_or_tuple_of_field_type(param.type):
+                fields_dims: list[list[Dimension]] = (
+                    type_info.primitive_constituents(param.type).getattr("dims").to_list()
+                )
+                assert all(field_dims == fields_dims[0] for field_dims in fields_dims)
+                for dim_idx in range(0, len(fields_dims[0])):
                     size_params.append(itir.Sym(id=_size_arg_from_field(param.id, dim_idx)))
 
         return size_params

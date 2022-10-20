@@ -1010,18 +1010,6 @@ def test_ternary_operator_tuple():
     ) -> tuple[Field[[IDim], float], Field[[IDim], float]]:
         return (a, b) if left < right else (b, a)
 
-    # TODO(tehrengruber): directly call field operator when the generated programs support `out` being a tuple
-    @program
-    def ternary_field(
-        a: Field[[IDim], float],
-        b: Field[[IDim], float],
-        left: float,
-        right: float,
-        out_1: Field[[IDim], float],
-        out_2: Field[[IDim], float],
-    ):
-        ternary_field_op(a, b, left, right, out=(out_1, out_2))
-
     ternary_field_op(a, b, left, right, out=(out_1, out_2), offset_provider={})
 
     e, f = (np.asarray(a), np.asarray(b)) if left < right else (np.asarray(b), np.asarray(a))
