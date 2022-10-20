@@ -131,7 +131,7 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         left_type = cast(ct.FieldType | ct.ScalarType, left.type)
         right_type = cast(ct.FieldType | ct.ScalarType, right.type)
 
-        if node.op == past.BinaryOperator.POW:
+        if node.op == ct.BinaryOperator.POW:
             return left_type
 
         try:

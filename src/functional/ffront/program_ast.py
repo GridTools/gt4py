@@ -15,9 +15,10 @@
 from typing import Any, Generic, Literal, Optional, TypeVar, Union
 
 import eve
-from eve import Coerced, Node, SourceLocation, StrEnum, SymbolName, SymbolRef
+from eve import Coerced, Node, SourceLocation, SymbolName, SymbolRef
 from eve.traits import SymbolTableTrait
 from functional.ffront import common_types
+from functional.ffront.common_types import BinaryOperator
 
 
 class LocatedNode(Node):
@@ -48,33 +49,6 @@ TupleSymbol = Symbol[TupleTypeT]
 
 class Expr(LocatedNode):
     type: Optional[common_types.SymbolType] = None  # noqa A003
-
-
-class BinaryOperator(StrEnum):
-    ADD = "plus"
-    SUB = "minus"
-    MULT = "multiplies"
-    DIV = "divides"
-    BIT_AND = "and_"
-    BIT_OR = "or_"
-    POW = "power"
-
-    def __str__(self) -> str:
-        if self is self.ADD:
-            return "+"
-        elif self is self.SUB:
-            return "-"
-        elif self is self.MULT:
-            return "*"
-        elif self is self.DIV:
-            return "/"
-        elif self is self.BIT_AND:
-            return "&"
-        elif self is self.BIT_OR:
-            return "|"
-        elif self is self.POW:
-            return "**"
-        return "Unknown BinaryOperator"
 
 
 class BinOp(Expr):

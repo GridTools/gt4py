@@ -22,7 +22,6 @@ from functional.ffront.foast_to_itir import (
     ITIRTypeKind,
     is_expr_with_iterator_type_kind,
     iterator_type_kind,
-    to_value,
 )
 from functional.iterator import ir as itir
 
@@ -360,4 +359,6 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         return itir.Sym(id=node.id)
 
     def visit_BinOp(self, node: past.BinOp, **kwargs) -> itir.FunCall:
-        return im.call_(node.op.value)(self.visit(node.left, **kwargs), self.visit(node.right, **kwargs))
+        return im.call_(node.op.value)(
+            self.visit(node.left, **kwargs), self.visit(node.right, **kwargs)
+        )

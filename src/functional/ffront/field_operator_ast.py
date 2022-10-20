@@ -19,6 +19,7 @@ from eve import Coerced, Node, SourceLocation, SymbolName, SymbolRef
 from eve.traits import SymbolTableTrait
 from eve.type_definitions import StrEnum
 from functional.ffront import common_types as common_types
+from functional.ffront.common_types import BinaryOperator
 
 
 class LocatedNode(Node):
@@ -93,33 +94,6 @@ class UnaryOperator(StrEnum):
 class UnaryOp(Expr):
     op: UnaryOperator
     operand: Expr
-
-
-class BinaryOperator(StrEnum):
-    ADD = "plus"
-    SUB = "minus"
-    MULT = "multiplies"
-    DIV = "divides"
-    BIT_AND = "and_"
-    BIT_OR = "or_"
-    POW = "power"
-
-    def __str__(self) -> str:
-        if self is self.ADD:
-            return "+"
-        elif self is self.SUB:
-            return "-"
-        elif self is self.MULT:
-            return "*"
-        elif self is self.DIV:
-            return "/"
-        elif self is self.BIT_AND:
-            return "&"
-        elif self is self.BIT_OR:
-            return "|"
-        elif self is self.POW:
-            return "**"
-        return "Unknown BinaryOperator"
 
 
 class BinOp(Expr):
