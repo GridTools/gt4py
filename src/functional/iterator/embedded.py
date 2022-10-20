@@ -1103,9 +1103,16 @@ def fendef_embedded(fun: Callable[..., None], *args: Any, **kwargs: Any):
         out = as_tuple_field(out) if can_be_tuple_field(out) else out
 
         for pos in _domain_iterator(domain):
-            ins = [
-                (constant_field(inp) if isinstance(inp, numbers.Number) else inp) for inp in ins
-            ]  # todo: dtype
+            promoted_ins = []
+            for inp in ins:
+              if isinstance(inp, LocatedField):
+                promoted_ins.append(inp)
+              else:
+                type = xtyping.infer_type(inp)
+                if isinstance(type, np.number):
+                  promoted_ins.append(constant_field(inp))
+               else:
+                 raise ValueError("Expected a `Field` or a number (`float`, `np.int64`, ...).")
             ins_iters = list(
                 make_in_iterator(
                     inp,
