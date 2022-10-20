@@ -73,6 +73,11 @@ class Constant(Expr):
     value: Any  # TODO(tehrengruber): be more restrictive
 
 
+class Dict(Expr):
+    keys_: list[Name]
+    values_: list[TupleExpr]
+
+
 class Slice(Expr):
     lower: Optional[Constant]
     upper: Optional[Constant]
@@ -88,4 +93,4 @@ class Program(LocatedNode, SymbolTableTrait):
     type: Union[common_types.ProgramType, common_types.DeferredSymbolType]  # noqa A003
     params: list[DataSymbol]
     body: list[Call]
-    captured_vars: list[Symbol]
+    closure_vars: list[Symbol]

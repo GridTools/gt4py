@@ -142,6 +142,19 @@ def test_lift():
     assert ti.pformat(inferred) == "((It[T¹], …)₀ → T₂¹) → (It[T¹], …)₀ → It[T₂¹]"
 
 
+def test_lift_lambda_without_args():
+    testee = ir.FunCall(
+        fun=ir.SymRef(id="lift"), args=[ir.Lambda(params=[], expr=ir.SymRef(id="x"))]
+    )
+    expected = ti.FunctionType(
+        args=ti.ValTuple(kind=ti.Iterator(), dtypes=ti.EmptyTuple(), size=ti.TypeVar(idx=0)),
+        ret=ti.Val(kind=ti.Iterator(), dtype=ti.TypeVar(idx=1), size=ti.TypeVar(idx=0)),
+    )
+    inferred = ti.infer(testee)
+    assert inferred == expected
+    assert ti.pformat(inferred) == "() → It[T₁⁰]"
+
+
 def test_lift_application():
     testee = ir.FunCall(fun=ir.SymRef(id="lift"), args=[ir.SymRef(id="deref")])
     expected = ti.FunctionType(

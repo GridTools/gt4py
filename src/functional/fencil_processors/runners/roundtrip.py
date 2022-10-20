@@ -203,7 +203,10 @@ def executor(
         use_embedded=dispatch_backend is None,
     )
 
-    new_kwargs = {"offset_provider": offset_provider, "column_axis": column_axis}
+    new_kwargs = {
+        "offset_provider": offset_provider,
+        "column_axis": column_axis,
+    }
     if dispatch_backend:
         new_kwargs["backend"] = dispatch_backend
 
