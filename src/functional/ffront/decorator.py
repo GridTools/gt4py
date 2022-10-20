@@ -54,7 +54,7 @@ from functional.ffront.func_to_foast import FieldOperatorParser
 from functional.ffront.func_to_past import ProgramParser
 from functional.ffront.gtcallable import GTCallable
 from functional.ffront.past_passes.closure_var_type_deduction import (
-    ClosureVarTypeDeduction as PClosureVarTypeDeduction,
+    ClosureVarTypeDeduction as ProgramClosureVarTypeDeduction,
 )
 from functional.ffront.past_passes.type_deduction import ProgramTypeDeduction, ProgramTypeError
 from functional.ffront.past_to_itir import ProgramLowering
@@ -526,7 +526,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
             closure_vars=closure_symbols,
             location=loc,
         )
-        untyped_past_node = PClosureVarTypeDeduction.apply(untyped_past_node, closure_vars)
+        untyped_past_node = ProgramClosureVarTypeDeduction.apply(untyped_past_node, closure_vars)
         past_node = ProgramTypeDeduction.apply(untyped_past_node)
 
         return Program(
