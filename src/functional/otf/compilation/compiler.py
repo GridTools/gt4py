@@ -79,13 +79,13 @@ class Compiler(
         )
 
     def chain(
-        self, step: workflow.StepProtocol[stages.CompiledProgram, T]
-    ) -> workflow.Workflow[
+        self, step: workflow.Workflow[stages.CompiledProgram, T]
+    ) -> workflow.CombinedStep[
         stages.CompilableSource[SourceLanguageType, LanguageSettingsType, languages.Python],
         stages.CompiledProgram,
         T,
     ]:
-        return workflow.Workflow(first=self, second=step)
+        return workflow.CombinedStep(first=self, second=step)
 
 
 class CompilationError(RuntimeError):

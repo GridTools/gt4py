@@ -78,15 +78,15 @@ class GTFNTranslationStep(
 
     def chain(
         self,
-        step: workflow.StepProtocol[
+        step: workflow.Workflow[
             stages.ProgramSource[languages.Cpp, languages.LanguageWithHeaderFilesSettings], T
         ],
-    ) -> workflow.Workflow[
+    ) -> workflow.CombinedStep[
         stages.ProgramCall,
         stages.ProgramSource[languages.Cpp, languages.LanguageWithHeaderFilesSettings],
         T,
     ]:
-        return workflow.Workflow(first=self, second=step)
+        return workflow.CombinedStep(first=self, second=step)
 
 
 translate_program: Final[

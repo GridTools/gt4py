@@ -25,7 +25,7 @@ NewEndT = TypeVar("NewEndT")
 IntermediateT = TypeVar("IntermediateT")
 
 
-def make_step(function: StepProtocol[StartT, EndT]) -> Step[StartT, EndT]:
+def make_step(function: Workflow[StartT, EndT]) -> Step[StartT, EndT]:
     """
     Wrap a function in the workflow step convenience wrapper.
 
@@ -45,11 +45,11 @@ def make_step(function: StepProtocol[StartT, EndT]) -> Step[StartT, EndT]:
     return Step(function)
 
 
-class StepProtocol(Protocol[StartT_contra, EndT_co]):
+class Workflow(Protocol[StartT_contra, EndT_co]):
     """
-    Workflow step protocol.
+    Workflow protocol.
 
-    Anything that implements this interface can be a workflow step.
+    Anything that implements this interface can be a workflow of one or more steps.
     - callable
     - take a single input argument
     """
@@ -79,17 +79,17 @@ class Step(Generic[StartT, EndT]):
     '6'
     """
 
-    step: StepProtocol[StartT, EndT]
+    step: Workflow[StartT, EndT]
 
     def __call__(self, inp: StartT) -> EndT:
         return self.step(inp)
 
-    def chain(self, step: StepProtocol[EndT, NewEndT]) -> Workflow[StartT, EndT, NewEndT]:
-        return Workflow(first=self.step, second=step)
+    def chain(self, step: Workflow[EndT, NewEndT]) -> CombinedStep[StartT, EndT, NewEndT]:
+        return CombinedStep(first=self.step, second=step)
 
 
 @dataclasses.dataclass(frozen=True)
-class Workflow(Generic[StartT, IntermediateT, EndT]):
+class CombinedStep(Generic[StartT, IntermediateT, EndT]):
     """
     Composable workflow of single input callables.
 
@@ -104,8 +104,8 @@ class Workflow(Generic[StartT, IntermediateT, EndT]):
     >>> def stringify(x: float) -> str:
     ...    return str(x)
 
-    >>> Workflow(  # workflow (int -> float -> str)
-    ...    first=Workflow(  # workflow (int -> int -> float)
+    >>> CombinedStep(  # workflow (int -> float -> str)
+    ...    first=CombinedStep(  # workflow (int -> int -> float)
     ...        first=plus_one,
     ...        second=plus_half
     ...    ),
@@ -114,16 +114,16 @@ class Workflow(Generic[StartT, IntermediateT, EndT]):
     '74.5'
 
     >>> # is exactly equivalent to
-    >>> Workflow(first=plus_one, second=plus_half).chain(stringify)(73)
+    >>> CombinedStep(first=plus_one, second=plus_half).chain(stringify)(73)
     '74.5'
 
     """
 
-    first: StepProtocol[StartT, IntermediateT]
-    second: StepProtocol[IntermediateT, EndT]
+    first: Workflow[StartT, IntermediateT]
+    second: Workflow[IntermediateT, EndT]
 
     def __call__(self, inp: StartT) -> EndT:
         return self.second(self.first(inp))
 
-    def chain(self, step: StepProtocol[EndT, NewEndT]) -> Workflow[StartT, EndT, NewEndT]:
-        return Workflow(first=self, second=step)
+    def chain(self, step: Workflow[EndT, NewEndT]) -> CombinedStep[StartT, EndT, NewEndT]:
+        return CombinedStep(first=self, second=step)

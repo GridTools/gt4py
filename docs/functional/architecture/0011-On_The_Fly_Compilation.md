@@ -7,7 +7,7 @@ tags: [backend,bindings,build,compile,otf]
 - **Status**: valid
 - **Authors**: Rico Häuselmann (@DropD)
 - **Created**: 2022-09-12
-- **Updated**: 2022-10-05
+- **Updated**: 2022-10-20
 
 This supersedes [0009 - Compiled Backend Integration](0009-Compiled_Backend_Integration.md) and concentrates on the API design for on-the-fly compilation of GT4Py programs and all the steps in between IR and compiled Python extension.
 
@@ -72,7 +72,7 @@ The goals of the on-the-fly compilation (OTFC) architecture and design are:
 - keep components (including future ones) intercompatible as much as reasonably possible
 - allow per-use-case flexible composition of components
 
-The chosen architecture is composable workflows. Such workflows can be composed of workflow steps, which implement the workflow step protocol (`otf.workflow.StepProtocol`), provided each step's input argument type(s) matches the preceding step's return type(s). Any step customization should happen during workflow composition and *not* by passing options and flags along the workflow.
+The chosen architecture is composable workflows. Such workflows can be composed of workflows and workflow steps, which implement the workflow protocol (`otf.workflow.Workflow`), provided each step's input argument type(s) matches the preceding step's return type(s). Any step customization should happen during workflow composition and *not* by passing options and flags along the workflow.
 
 The completed workflow can then be called with the input argument(s) of the first workflow step and it's return type will be the same as the last step's.
 
@@ -106,9 +106,9 @@ To allow building workflows in a linear-looking way in code, the first step can 
 ```
 workflow = <@todo put class name here too>(step1).chain(step2).chain(step3).chain(step4)
 # results in
-Workflow(
-  first=Workflow(
-    first=Workflow(
+CombinedStep(
+  first=CombinedStep(
+    first=CombinedStep(
       first=<@todo class name>(step1),
       second=step2
     ),
@@ -209,7 +209,7 @@ It looks enticing to be able to create a linear workflow by passing a (non-finit
 ```python=
 workflow = Workflow(step1, step2, step3, ...)
 # or
-workflow = workflow_from_list([step1, step2, step3, ...])
+workflow = Workflow([step1, step2, step3, ...])
 ```
 
 However this disables static type checking, as there are no variadic generics in python (yet?).

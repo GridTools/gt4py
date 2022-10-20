@@ -60,7 +60,7 @@ class GTFNExecutor(ppi.ProgramExecutor):
 
             return decorated_program
 
-        otf_workflow: Final[workflow.Workflow[stages.ProgramCall, Any, stages.CompiledProgram]] = (
+        otf_workflow: Final[workflow.Workflow[stages.ProgramCall, stages.CompiledProgram]] = (
             gtfn_module.GTFNTranslationStep(self.language_settings)
             .chain(pybind.bind_source)
             .chain(

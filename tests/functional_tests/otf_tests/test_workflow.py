@@ -40,19 +40,17 @@ def step_two(inp: StageTwo) -> str:
 
 
 def test_single_step():
-    step1: workflow.StepProtocol[StageOne, StageTwo] = workflow.Step(step_one)
+    step1: workflow.Workflow[StageOne, StageTwo] = workflow.Step(step_one)
     assert step1(StageOne(3)) == step_one(StageOne(3))
 
 
 def test_chain_step_step():
-    wf: workflow.Workflow[StageOne, StageTwo, str] = workflow.Step(step_one).chain(step_two)
+    wf: workflow.Workflow[StageOne, str] = workflow.Step(step_one).chain(step_two)
     inp = StageOne(5)
     assert wf(inp) == step_two(step_one(inp))
 
 
-def test_chain_wf_step():
-    initial_workflow: workflow.Workflow[int, StageOne, StageTwo] = workflow.Workflow(
-        step_zero, step_one
-    )
-    full_workflow: workflow.Workflow[int, StageTwo, str] = initial_workflow.chain(step_two)
+def test_chain_combinedstep_step():
+    initial_workflow: workflow.Workflow[int, StageTwo] = workflow.ChainedStep(step_zero, step_one)
+    full_workflow: workflow.Workflow[int, str] = initial_workflow.chain(step_two)
     assert full_workflow(42) == "42"
