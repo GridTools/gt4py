@@ -51,6 +51,6 @@ def test_chain_step_step():
 
 
 def test_chain_combinedstep_step():
-    initial_workflow: workflow.Workflow[int, StageTwo] = workflow.ChainedStep(step_zero, step_one)
+    initial_workflow: workflow.Workflow[int, StageTwo] = workflow.CombinedStep(step_zero, step_one)
     full_workflow: workflow.Workflow[int, str] = initial_workflow.chain(step_two)
     assert full_workflow(42) == "42"
