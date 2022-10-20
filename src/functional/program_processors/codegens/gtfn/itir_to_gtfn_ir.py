@@ -64,8 +64,8 @@ def pytype_to_cpptype(t: str):
         raise TypeError(f"Unsupported type '{t}'") from None
 
 
-_vertical_dimension = "unstructured::dim::vertical"
-_horizontal_dimension = "unstructured::dim::horizontal"
+_vertical_dimension = "gtfn::unstructured::dim::vertical"
+_horizontal_dimension = "gtfn::unstructured::dim::horizontal"
 
 
 def _get_domains(closures: Iterable[itir.StencilClosure]) -> Iterable[itir.FunCall]:
@@ -531,9 +531,9 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     def visit_Temporary(self, node, *, params: list, **kwargs) -> TemporaryAllocation:
         def dtype_to_cpp(x):
             if isinstance(x, int):
-                return f"std::remove_const_t<sid::element_type<decltype({params[x]})>>"
+                return f"std::remove_const_t<::gridtools::sid::element_type<decltype({params[x]})>>"
             if isinstance(x, tuple):
-                return "tuple<" + ", ".join(dtype_to_cpp(i) for i in x) + ">"
+                return "::gridtools::tuple<" + ", ".join(dtype_to_cpp(i) for i in x) + ">"
             assert isinstance(x, str)
             return pytype_to_cpptype(x)
 
