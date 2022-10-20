@@ -41,9 +41,14 @@ class StencilComputationExpansion(dace.library.ExpandTransformation):
 
         # Collect equations and symbols from arguments and shapes
         for field, decl in field_decls.items():
-            inner_shape = [dace.symbolic.pystr_to_symbolic(s) for s in decl.access_info.overapproximated_shape]
+            info = decl.access_info
+            for axis in info.axes():
+                if axis in info.variable_offset_axes:
+                    info = info.clamp_full_axis(axis)
+            inner_shape = [dace.symbolic.pystr_to_symbolic(s) for s in info.overapproximated_shape]
             outer_shape = [
-                dace.symbolic.overapproximate(dace.symbolic.pystr_to_symbolic(s)) for s in outer_subsets[field].bounding_box_size()
+                dace.symbolic.overapproximate(dace.symbolic.pystr_to_symbolic(s))
+                for s in outer_subsets[field].bounding_box_size()
             ]
 
             for inner_dim, outer_dim in zip(inner_shape, outer_shape):
