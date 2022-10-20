@@ -246,10 +246,7 @@ def test_closure_symbols():
     from eve.utils import ConstantNamespace
 
     nonlocals_unreferenced = ConstantNamespace()
-    nonlocals = ConstantNamespace(
-        float_value=2.3,
-        np_value=np.float32(3.4)
-    )
+    nonlocals = ConstantNamespace(float_value=2.3, np_value=np.float32(3.4))
 
     def operator_with_refs(inp: Field[..., "float64"], inp2: Field[..., "float32"]):
         a = inp + nonlocals.float_value
