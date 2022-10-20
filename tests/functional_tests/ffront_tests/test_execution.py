@@ -1022,7 +1022,7 @@ def test_ternary_operator_tuple():
     ):
         ternary_field_op(a, b, left, right, out=(out_1, out_2))
 
-    ternary_field(a, b, left, right, out_1, out_2, offset_provider={})
+    ternary_field_op(a, b, left, right, out=(out_1, out_2), offset_provider={})
 
     e, f = (np.asarray(a), np.asarray(b)) if left < right else (np.asarray(b), np.asarray(a))
     np.allclose(e, out_1)
@@ -1077,34 +1077,32 @@ def test_ternary_scan():
     assert np.allclose(expected, out)
 
 
-def test_scan_tuple_output(fieldview_backend):
+@pytest.mark.parametrize("forward", [True, False])
+def test_scan_nested_tuple_output(fieldview_backend, forward):
     if fieldview_backend == gtfn_cpu.run_gtfn:
-        pytest.xfail("gtfn does not yet support scan pass.")
+        pytest.xfail("gtfn does not yet support scan pass or tuple out arguments.")
 
     KDim = Dimension("K", kind=DimensionKind.VERTICAL)
     size = 10
-    init = (0.0, 1.0)
-    inp = np_as_located_field(KDim)(np.arange(0, size, 1.0))
+    init = (1.0, (2.0, 3.0))
     out1 = np_as_located_field(KDim)(np.zeros((size,)))
     out2 = np_as_located_field(KDim)(np.zeros((size,)))
-    expected = np.arange(init[1] + 1.0, init[1] + 1.0 + size, 1)
+    out3 = np_as_located_field(KDim)(np.zeros((size,)))
+    expected = np.arange(1.0, 1.0 + size, 1)
+    if not forward:
+        expected = np.flip(expected)
 
-    @scan_operator(axis=KDim, forward=True, init=init, backend=fieldview_backend)
-    def simple_scan_operator(carry: tuple[float, float], x: float) -> tuple[float, float]:
-        return (x, carry[1] + 1.0)
+    @scan_operator(axis=KDim, forward=forward, init=init, backend=fieldview_backend)
+    def simple_scan_operator(
+        carry: tuple[float, tuple[float, float]]
+    ) -> tuple[float, tuple[float, float]]:
+        return (carry[0] + 1.0, (carry[1][0] + 1.0, carry[1][1] + 1.0))
 
-    # TODO(tehrengruber): directly call scan operator when this is supported
-    #  for tuple outputs
-    @program
-    def simple_scan_operator_program(
-        x: Field[[KDim], float], out1: Field[[KDim], float], out2: Field[[KDim], float]
-    ) -> None:
-        simple_scan_operator(x, out=(out1, out2))
+    simple_scan_operator(out=(out1, (out2, out3)), offset_provider={})
 
-    simple_scan_operator_program(inp, out1, out2, offset_provider={})
-
-    assert np.allclose(inp, out1)
-    assert np.allclose(expected, out2)
+    assert np.allclose(expected + 1.0, out1)
+    assert np.allclose(expected + 2.0, out2)
+    assert np.allclose(expected + 3.0, out3)
 
 
 def test_docstring():

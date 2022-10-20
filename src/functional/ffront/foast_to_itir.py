@@ -467,19 +467,18 @@ class FieldOperatorLowering(NodeTranslator):
         raise FieldOperatorLoweringError(f"Encountered a type cast, which is not supported: {node}")
 
     def _make_literal(self, val: Any, type_: ct.ScalarType) -> itir.Literal:
-        typename = type_.kind.name.lower()
-        return im.literal_(str(val), typename)
+        # TODO(tehrengruber): check constant of this type is supported in iterator ir
+        if isinstance(type_, ct.TupleType):
+            return im.make_tuple_(
+                *(self._make_literal(val, type_) for val, type_ in zip(val, type_.types))
+            )
+        elif isinstance(type_, ct.ScalarType):
+            typename = type_.kind.name.lower()
+            return im.literal_(str(val), typename)
+        raise ValueError(f"Unsupported literal type {type_}.")
 
     def visit_Constant(self, node: foast.Constant, **kwargs) -> itir.Literal:
-        # TODO: check constant is supported in iterator ir
-        if isinstance(node.type, ct.ScalarType) and not node.type.shape:
-            return self._make_literal(node.value, node.type)
-        elif isinstance(node.type, ct.TupleType):
-            assert all(isinstance(type_, ct.ScalarType) for type_ in node.type.types)
-            return im.make_tuple_(
-                *(self._make_literal(val, type_) for val, type_ in zip(node.value, node.type.types))
-            )
-        raise FieldOperatorLoweringError(f"Unsupported scalar type: {node.type}")
+        return self._make_literal(node.value, node.type)
 
 
 @dataclass

@@ -59,8 +59,8 @@ class DimensionType(SymbolType):
 
 @dataclass(frozen=True)
 class OffsetType(SymbolType):
-    source: Optional[func_common.Dimension] = None
-    target: Optional[tuple[func_common.Dimension, ...]] = None
+    source: func_common.Dimension
+    target: tuple[func_common.Dimension] | tuple[func_common.Dimension, func_common.Dimension]
 
     def __str__(self):
         return f"Offset[{self.source}, {self.target}]"

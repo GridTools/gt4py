@@ -46,8 +46,8 @@ def type_class(symbol_type: ct.SymbolType) -> Type[ct.SymbolType]:
 
 
 def primitive_constituents(
-    symbol_type: ct.ScalarType | ct.FieldType | ct.TupleType,
-) -> XIterable[ct.ScalarType | ct.FieldType]:
+    symbol_type: ct.SymbolType,
+) -> XIterable[ct.SymbolType]:
     """
     Return the primitive types contained in a composite type.
 
@@ -73,6 +73,23 @@ def primitive_constituents(
             yield symbol_type
 
     return xiter(constituents_yielder(symbol_type))
+
+
+def apply_to_primitive_constituents(symbol_type: ct.SymbolType, f):
+    """
+    Apply function to all primitive constituents of a type.
+
+    >>> int_type = ct.ScalarType(kind=ct.ScalarKind.INT)
+    >>> tuple_type = ct.TupleType(types=[int_type, int_type])
+    >>> def make_field(scalar_type: ct.ScalarType):
+    ...    return ct.FieldType()
+    >>> apply_to_primitive_constituents(tuple_type, lambda primitive_type: ct.FieldType(dims=[], dtype=primitive_type))
+    """
+    if isinstance(symbol_type, ct.TupleType):
+        return ct.TupleType(
+            types=[apply_to_primitive_constituents(el, f) for el in symbol_type.types]
+        )
+    return f(symbol_type)
 
 
 def extract_dtype(symbol_type: ct.SymbolType) -> ct.ScalarType:
@@ -172,7 +189,7 @@ def is_logical(symbol_type: ct.SymbolType) -> bool:
 
 
 def is_field_type_or_tuple_of_field_type(
-    type_: ct.FieldType | ct.TupleType,
+    type_: ct.DataType,
 ) -> bool:
     """
      Return True if ``type_`` is FieldType or FieldType nested in TupleType.
@@ -431,23 +448,14 @@ def return_type_scanop(
 ):
     carry_dtype = callable_type.definition.returns
     promoted_dims = promote_dims(
-        *(extract_dims(arg) for arg in with_args),
+        *(extract_dims(el) for arg in with_args for el in primitive_constituents(arg)),
         # the vertical axis is always added to the dimension of the returned
         #  field
         [callable_type.axis],
     )
-    if isinstance(carry_dtype, ct.TupleType):
-        if not all(isinstance(dtype, ct.ScalarType) for dtype in carry_dtype.types):
-            raise GTTypeError("Scan operator return types must be scalar.")
-        return ct.TupleType(
-            types=[
-                ct.FieldType(dims=promoted_dims, dtype=cast(ct.ScalarType, dtype))
-                for dtype in carry_dtype.types
-            ]
-        )
-    if not isinstance(carry_dtype, ct.ScalarType):
-        raise GTTypeError("Scan operator return type must be scalar.")
-    return ct.FieldType(dims=promoted_dims, dtype=carry_dtype)
+    return apply_to_primitive_constituents(
+        carry_dtype, lambda arg: ct.FieldType(dims=promoted_dims, dtype=cast(ct.ScalarType, arg))
+    )
 
 
 @return_type.register
@@ -583,8 +591,8 @@ def function_signature_incompatibilities_field(
         return
 
     source_dim = args[0].source
-    target_dims = args[0].target or ()
-    if field_type.dims and source_dim and source_dim not in field_type.dims:
+    target_dims = args[0].target
+    if field_type.dims and source_dim not in field_type.dims:
         yield f"Incompatible offset can not shift field defined on " f"{', '.join([dim.value for dim in field_type.dims])} from " f"{source_dim.value} to target dim(s): " f"{', '.join([dim.value for dim in target_dims])}"
 
 
