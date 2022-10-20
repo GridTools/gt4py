@@ -99,14 +99,13 @@ class StencilComputationSDFGBuilder(NodeVisitor):
         sdfg_ctx: "StencilComputationSDFGBuilder.SDFGContext",
         node_ctx: "StencilComputationSDFGBuilder.NodeContext",
         connector_prefix="",
-        use_tile_expr=False,
         symtable: ChainMap[common.SymbolRef, dcir.Decl],
     ) -> None:
         field_decl = symtable[node.field]
         assert isinstance(field_decl, dcir.FieldDecl)
         memlet = dace.Memlet(
             node.field,
-            subset=make_dace_subset(field_decl.access_info, node.access_info, field_decl.data_dims, use_tile_expr=use_tile_expr),
+            subset=make_dace_subset(field_decl.access_info, node.access_info, field_decl.data_dims),
             dynamic=field_decl.is_dynamic,
         )
         if node.is_read:

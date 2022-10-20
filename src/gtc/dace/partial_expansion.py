@@ -157,11 +157,8 @@ def _get_symbolic_split(
 
     symbolic_split = dict(), None
     for node, state in nodes:
-        in_node_access_infos, out_node_access_infos = _get_field_access_infos(node)
-        node_symbolic_split = _union_symbolic_origin_and_domain(
-            _get_symbolic_origin_and_domain(state, node, in_node_access_infos),
-            _get_symbolic_origin_and_domain(state, node, out_node_access_infos),
-        )
+        access_infos = _union_access_infos(*_get_field_access_infos(node))
+        node_symbolic_split = _get_symbolic_origin_and_domain(state, node, access_infos)
         symbolic_split = _union_symbolic_origin_and_domain(symbolic_split, node_symbolic_split)
     return symbolic_split
 
@@ -354,3 +351,7 @@ def partially_expand(sdfg):
         )
         nsdfg_state.add_edge(map_exit, "OUT_" + name, edge.dst, edge.dst_conn, memlet=edge.data)
         nsdfg_state.remove_edge(edge)
+    if not nsdfg_state.edges_between(map_entry, nsdfg_node):
+        nsdfg_state.add_edge(map_entry, None, nsdfg_node, None, dace.Memlet())
+    if not nsdfg_state.edges_between(nsdfg_node, map_exit):
+        nsdfg_state.add_edge(nsdfg_node, None, map_exit, None, dace.Memlet())

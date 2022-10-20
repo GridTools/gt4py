@@ -612,7 +612,6 @@ class DaCeIRBuilder(NodeTranslator):
                         end=dcir.AxisBound.from_common(axis, oir.AxisBound.end()),
                     )
                 symbol_collector.remove_symbol(axis.tile_symbol())
-                symbol_coll
                 ranges.append(
                     dcir.Range(
                         var=axis.tile_symbol(),
@@ -676,7 +675,7 @@ class DaCeIRBuilder(NodeTranslator):
                 symbol_collector.remove_symbol(index_range.var)
                 ranges.append(index_range)
 
-        res = [
+        return [
             dcir.DomainMap(
                 computations=scope_nodes,
                 index_ranges=ranges,
@@ -686,10 +685,6 @@ class DaCeIRBuilder(NodeTranslator):
                 grid_subset=grid_subset,
             )
         ]
-        if any(it.kind=="tiling" for it in item.iterations):
-            # to map the tile size symbol to the min() expression
-            res = self.to_dataflow(self.to_state(res))
-        return res
 
     def _process_loop_item(
         self,
