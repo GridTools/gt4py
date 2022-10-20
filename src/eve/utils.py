@@ -586,7 +586,7 @@ class ConstantNamespace(Namespace[T]):
 
 class FrozenNamespace(ConstantNamespace[T]):
     """
-    A `ConstantNamespace` that cannot be modified by adding new constant attributes.
+    A subclass of `ConstantNamespace` that cannot be modified by adding new constant attributes.
 
     FrozenNamespaces are fully immutable and therefore hashable.
 
