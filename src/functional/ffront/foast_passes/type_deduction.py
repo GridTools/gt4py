@@ -168,6 +168,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
     def visit_FunctionDefinition(self, node: foast.FunctionDefinition, **kwargs):
         new_params = self.visit(node.params, **kwargs)
         new_body = self.visit(node.body, **kwargs)
+        new_closure_vars = self.visit(node.closure_vars, **kwargs)
         assert isinstance(new_body[-1], foast.Return)
         return_type = new_body[-1].value.type
         new_type = ct.FunctionType(
@@ -177,7 +178,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             id=node.id,
             params=new_params,
             body=new_body,
-            closure_vars=node.closure_vars,
+            closure_vars=new_closure_vars,
             type=new_type,
             location=node.location,
         )
