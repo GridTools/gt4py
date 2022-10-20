@@ -174,7 +174,7 @@ class DaCeIRBuilder(NodeTranslator):
             dace_array = self.arrays[field]
             for s in dace_array.strides:
                 for sym in dace.symbolic.symlist(s).values():
-                    symbol_collector.add_symbol(sym)
+                    symbol_collector.add_symbol(str(sym))
             for sym in access_info.grid_subset.free_symbols:
                 symbol_collector.add_symbol(sym)
 
@@ -264,9 +264,9 @@ class DaCeIRBuilder(NodeTranslator):
 
     @dataclass
     class SymbolCollector:
-        symbol_decls: Dict[SymbolRef, dcir.SymbolDecl] = dataclasses.field(default_factory=dict)
+        symbol_decls: Dict[str, dcir.SymbolDecl] = dataclasses.field(default_factory=dict)
 
-        def add_symbol(self, name: SymbolRef, dtype: common.DataType = common.DataType.INT32):
+        def add_symbol(self, name: str, dtype: common.DataType = common.DataType.INT32):
             if name not in self.symbol_decls:
                 self.symbol_decls[name] = dcir.SymbolDecl(name=name, dtype=dtype)
             else:

@@ -30,7 +30,7 @@ from gtc.common import AxisBound, LocNode
 
 @utils.noninstantiable
 class Expr(common.Expr):
-    dtype: common.DataType
+    pass
 
 
 @utils.noninstantiable

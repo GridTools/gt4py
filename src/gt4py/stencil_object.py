@@ -402,7 +402,7 @@ class StencilObject(abc.ABC):
                 arg_info = arg_infos[name]
                 assert arg_info is not None
 
-                backend_cls = gt4py.backend.from_name(name)
+                backend_cls = gt4py.backend.from_name(self.backend)
                 assert backend_cls is not None
                 if not backend_cls.storage_info["is_compatible_layout"](
                     arg_info.array,
