@@ -13,7 +13,7 @@ Do we distinguish scalars (e.g. `float`) and fields with 0 dimensions (e.g. `Fie
 
 ## Context
 
-In the context of multi-dimensional fields, the question arises if we need scalars **and** 0-d fields, only one of them or even make them the same thing. Similar discussions happened within the Numpy community, see e.g. 
+In the context of multi-dimensional fields, the question arises if we need scalars **and** 0-d fields, only one of them or even make them the same thing. Similar discussions happened within the Numpy community, see e.g. https://mail.python.org/pipermail/numpy-discussion/2006-February/006384.html.
 
 ## Decision
 
@@ -47,7 +47,7 @@ In the following call an implicit broadcast to Field is performed in the decorat
 ```python=
 @field_operator
 def foo(scalar: Field[[], float]):
-    return cond
+    return scalar
 
 foo(1.0)
 ```
