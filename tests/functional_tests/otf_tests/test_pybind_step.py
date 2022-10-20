@@ -16,11 +16,11 @@ from functional.otf.binding import interface, pybind
 
 def test_bindings(program_source_example):
     module = pybind.create_bindings(program_source_example)
-    expected_src = source.format_source(
+    expected_src = interface.format_source(
         program_source_example.language_settings,
         """\
         #include "stencil.cpp.inc"
-        
+
         #include <gridtools/common/defs.hpp>
         #include <gridtools/fn/backend/naive.hpp>
         #include <gridtools/fn/cartesian.hpp>
@@ -29,7 +29,7 @@ def test_bindings(program_source_example):
         #include <gridtools/storage/adapter/python_sid_adapter.hpp>
         #include <pybind11/pybind11.h>
         #include <pybind11/stl.h>
-        
+
         decltype(auto) stencil_wrapper(pybind11::buffer buf, float sc) {
           return stencil(
               gridtools::sid::rename_numbered_dimensions<generated::I_t,
@@ -38,7 +38,7 @@ def test_bindings(program_source_example):
                                     999'999'999>(buf)),
               sc);
         }
-        
+
         PYBIND11_MODULE(stencil, module) {
           module.doc() = "";
           module.def("stencil", &stencil_wrapper, "");

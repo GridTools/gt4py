@@ -26,10 +26,10 @@ def test_render_types():
 
 @pytest.fixture
 def function_scalar_example():
-    return source.Function(
+    return interface.Function(
         name="example",
         parameters=[
-            source.ScalarParameter("a", np.dtype(float)),
+            interface.ScalarParameter("a", np.dtype(float)),
             interface.ScalarParameter("b", np.dtype(int)),
         ],
     )
@@ -66,8 +66,8 @@ def function_buffer_example():
     return interface.Function(
         name="example",
         parameters=[
-            source.BufferParameter("a_buf", 2, float),
-            source.BufferParameter("b_buf", 1, int),
+            interface.BufferParameter("a_buf", 2, float),
+            interface.BufferParameter("b_buf", 1, int),
         ],
     )
 

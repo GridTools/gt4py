@@ -27,10 +27,10 @@ def make_program_source(name: str) -> stages.ProgramSource:
         name,
         parameters=[
             interface.BufferParameter("buf", ("I", "J"), np.dtype(np.float32)),
-            source.ScalarParameter("sc", np.dtype(np.float32)),
+            interface.ScalarParameter("sc", np.dtype(np.float32)),
         ],
     )
-    func = cpp_gen.render_function_declaration(
+    func = cpp_interface.render_function_declaration(
         entry_point,
         """\
         const auto xdim = gridtools::at_key<generated::I_t>(sid_get_upper_bounds(buf));
@@ -54,10 +54,10 @@ def make_program_source(name: str) -> stages.ProgramSource:
         entry_point=entry_point,
         source_code=src,
         library_deps=[
-            source.LibraryDependency("gridtools", "master"),
+            interface.LibraryDependency("gridtools", "master"),
         ],
         language=languages.Cpp,
-        language_settings=cpp_gen.CPP_DEFAULT,
+        language_settings=cpp_interface.CPP_DEFAULT,
     )
 
 

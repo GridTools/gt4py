@@ -32,7 +32,7 @@ def test_basic_settings_with_cpp_rejected():
 
 def test_header_files_settings_with_cpp_accepted():
     stages.ProgramSource(
-        entry_point=source.Function(name="basic_settings_with_cpp", parameters=[]),
+        entry_point=interface.Function(name="basic_settings_with_cpp", parameters=[]),
         source_code="",
         library_deps=(),
         language=languages.Cpp,
