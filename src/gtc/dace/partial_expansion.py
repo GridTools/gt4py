@@ -246,6 +246,8 @@ def partially_expand(sdfg):
         return
 
     original_item = stencil_computations[0][0].expansion_specification[0]
+    if not isinstance(original_item, Map) or not all(it.kind=="tiling" for it in original_item.iterations):
+        return
     tiling_schedule = original_item.schedule
     tiling_ranges = {
         it.axis.tile_symbol(): str(
