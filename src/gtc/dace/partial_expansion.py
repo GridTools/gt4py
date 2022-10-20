@@ -215,7 +215,9 @@ def _update_shapes(sdfg: dace.SDFG, access_infos: Dict[dcir.SymbolName, dcir.Fie
     for name, access_info in access_infos.items():
         array = sdfg.arrays[name]
         if array.transient:
-            shape = access_info.overapproximated_shape
+            shape = list(access_info.overapproximated_shape) 
+            ndim = len(shape)
+            shape += list(array.shape[ndim:])
             shape = [dace.symbolic.pystr_to_symbolic(s) for s in shape]
             strides = [1]
             total_size = shape[0]
@@ -231,6 +233,8 @@ def _update_shapes(sdfg: dace.SDFG, access_infos: Dict[dcir.SymbolName, dcir.Fie
         else:
             shape = access_info.shape
             shape = [dace.symbolic.pystr_to_symbolic(s) for s in shape]
+            ndim = len(shape)
+            shape += list(array.shape[ndim:])
             array.shape = shape
 
 
