@@ -81,9 +81,8 @@ def apply_to_primitive_constituents(symbol_type: ct.SymbolType, f):
 
     >>> int_type = ct.ScalarType(kind=ct.ScalarKind.INT)
     >>> tuple_type = ct.TupleType(types=[int_type, int_type])
-    >>> def make_field(scalar_type: ct.ScalarType):
-    ...    return ct.FieldType()
-    >>> apply_to_primitive_constituents(tuple_type, lambda primitive_type: ct.FieldType(dims=[], dtype=primitive_type))
+    >>> print(apply_to_primitive_constituents(tuple_type, lambda primitive_type: ct.FieldType(dims=[], dtype=primitive_type)))
+    tuple[Field[[], dtype=int64],Field[[], dtype=int64]]
     """
     if isinstance(symbol_type, ct.TupleType):
         return ct.TupleType(
