@@ -26,6 +26,7 @@ from typing import (
 import numpy as np
 import numpy.typing as npt
 
+from eve import extended_typing as xtyping
 from functional import iterator
 from functional.common import Connectivity, Dimension, DimensionKind
 from functional.iterator import builtins
@@ -896,7 +897,9 @@ class ConstantField(LocatedField):
         return ()
 
 
-def constant_field(value: Any, dtype: npt.DTypeLike = float) -> LocatedField:
+def constant_field(value: Any, dtype: npt.DTypeLike = None) -> LocatedField:
+    if dtype is None:
+        dtype = xtyping.infer_type(value)
     return ConstantField(value, dtype)
 
 
@@ -1105,14 +1108,16 @@ def fendef_embedded(fun: Callable[..., None], *args: Any, **kwargs: Any):
         for pos in _domain_iterator(domain):
             promoted_ins = []
             for inp in ins:
-              if isinstance(inp, LocatedField):
-                promoted_ins.append(inp)
-              else:
-                type = xtyping.infer_type(inp)
-                if isinstance(type, np.number):
-                  promoted_ins.append(constant_field(inp))
-               else:
-                 raise ValueError("Expected a `Field` or a number (`float`, `np.int64`, ...).")
+                if isinstance(inp, LocatedField) or isinstance(inp, tuple):
+                    promoted_ins.append(inp)
+                else:
+                    inp_type = xtyping.infer_type(inp)
+                    if np.issubdtype(inp_type, np.number):
+                        promoted_ins.append(constant_field(inp))
+                    else:
+                        raise ValueError(
+                            "Expected a `Field` or a number (`float`, `np.int64`, ...)."
+                        )
             ins_iters = list(
                 make_in_iterator(
                     inp,
@@ -1120,7 +1125,7 @@ def fendef_embedded(fun: Callable[..., None], *args: Any, **kwargs: Any):
                     kwargs["offset_provider"],
                     column_axis=column.axis if column else None,
                 )
-                for inp in ins
+                for inp in promoted_ins
             )
             res = sten(*ins_iters)
 
