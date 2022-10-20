@@ -86,6 +86,9 @@ class ProgramParser(DialectParser[past.Program]):
     def visit_Div(self, node: ast.Div, **kwargs) -> ct.BinaryOperator:
         return ct.BinaryOperator.DIV
 
+    def visit_FloorDiv(self, node: ast.FloorDiv, **kwargs) -> ct.BinaryOperator:
+        return ct.BinaryOperator.FloorDiv
+
     def visit_Pow(self, node: ast.Pow, **kwargs) -> ct.BinaryOperator:
         return ct.BinaryOperator.POW
 

@@ -1167,7 +1167,7 @@ def test_domain_input_bounds(fieldview_backend):
         fieldop_domain(
             a,
             out=a,
-            domain={IDim: (0 + 1 * lower_i - 0, upper_i), JDim: (lower_j, upper_j)},
+            domain={IDim: (0 + 1 * lower_i - 0, upper_i // 1), JDim: (lower_j, upper_j)},
         )
 
     program_domain(a, lower_i, upper_i, lower_j, upper_j, offset_provider={})

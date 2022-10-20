@@ -151,6 +151,11 @@ def divides_(left, right):
     return call_("divides")(left, right)
 
 
+def floordiv_(left, right):
+    """Create a floor division FunCall, shorthand for ``call("floordiv")(left, right)``."""
+    return call_("floordiv")(left, right)
+
+
 def and__(left, right):
     """Create an and_ FunCall, shorthand for ``call("and_")(left, right)``."""
     return call_("and_")(left, right)
