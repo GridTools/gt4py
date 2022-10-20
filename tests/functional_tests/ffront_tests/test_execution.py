@@ -43,7 +43,7 @@ from functional.iterator.embedded import (
 )
 
 
-@pytest.fixture(params=[roundtrip.executor, gtfn_cpu.run_gtfn])
+@pytest.fixture(params=[roundtrip.executor])
 def fieldview_backend(request):
     yield request.param
 
@@ -1237,29 +1237,30 @@ def test_input_kwargs_1(fieldview_backend):
     input_1 = np_as_located_field(IDim, JDim)(np.ones((size, size)))
     input_2 = np_as_located_field(IDim, JDim)(np.ones((size, size)) * 2)
     input_3 = np_as_located_field(IDim, JDim)(np.ones((size, size)) * 3)
+    out = np_as_located_field(IDim, JDim)(np.zeros((size, size)))
 
-    expected = (
-        np.asarray(input_3) + np.asarray(input_3),
-        np.asarray(input_3) + np.asarray(input_1),
-    )
+    expected = np.asarray(input_3) * np.asarray(input_2) - np.asarray(input_1)
 
     @field_operator(backend=fieldview_backend)
     def fieldop_input_kwargs(
-        a: Field[[IDim, JDim], float64], c: Field[[IDim, JDim], float64]
-    ) -> tuple[Field[[IDim, JDim], float64], Field[[IDim, JDim], float64]]:
-        return (c + c, a + c)
+        a: Field[[IDim, JDim], float64],
+        b: Field[[IDim, JDim], float64],
+        c: Field[[IDim, JDim], float64],
+    ) -> Field[[IDim, JDim], float64]:
+        return c * a - b
 
     @program
     def program_input_kwargs(
         a: Field[[IDim, JDim], float64],
         b: Field[[IDim, JDim], float64],
         c: Field[[IDim, JDim], float64],
+        out: Field[[IDim, JDim], float64],
     ):
-        fieldop_input_kwargs(c, a, out=(b, a))
+        fieldop_input_kwargs(c, a, b, out=out)
 
-    program_input_kwargs(input_3, b=input_2, a=input_1, offset_provider={})
+    program_input_kwargs(input_3, b=input_2, a=input_1, out=out, offset_provider={})
 
-    assert np.allclose(expected, (input_2, input_1))
+    assert np.allclose(expected, out)
 
 
 def test_input_kwargs_2(fieldview_backend):
@@ -1330,34 +1331,3 @@ def test_input_kwargs_4(fieldview_backend):
 
     assert np.allclose(np.asarray(input_1), input_1)
     assert np.allclose(expected, b)
-
-
-def test_input_kwargs_5(fieldview_backend):
-    size = 10
-    input_1 = np_as_located_field(IDim, JDim)(np.ones((size, size)) * 2)
-    input_2 = np_as_located_field(IDim, JDim)(np.ones((size, size)) * 3)
-    input_3 = np_as_located_field(IDim, JDim)(np.ones((size, size)) * 4)
-    input_4 = np_as_located_field(IDim, JDim)(np.zeros((size, size)))
-
-    @field_operator(backend=fieldview_backend)
-    def fieldop_input_kwargs(
-        a: Field[[IDim, JDim], float64],
-        b: Field[[IDim, JDim], float64],
-        c: Field[[IDim, JDim], float64],
-    ) -> Field[[IDim, JDim], float64]:
-        return a + b + c * 2.0
-
-    @program
-    def program_input_kwargs(
-        a: Field[[IDim, JDim], float64],
-        b: Field[[IDim, JDim], float64],
-        c: Field[[IDim, JDim], float64],
-        d: Field[[IDim, JDim], float64],
-    ):
-        fieldop_input_kwargs(b, c=a, a=c, out=d)
-
-    program_input_kwargs(input_1, input_2, input_3, input_4, offset_provider={})
-
-    expected = np.asarray(input_2) + np.asarray(input_3) + np.asarray(input_1) * 2
-
-    assert np.allclose(np.asarray(input_4), expected)

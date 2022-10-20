@@ -36,20 +36,6 @@ class ProgramParser(DialectParser[past.Program]):
     def _postprocess_dialect_ast(
         cls, output_node: past.Program, annotations: dict[str, Any]
     ) -> past.Program:
-        new_args_ls = []
-        ignore_outputs = ["out", "return"]
-        for body_i in range(len(output_node.body)):
-            for param in annotations.keys():
-                if param in output_node.body[body_i].kwargs.keys() and param not in ignore_outputs:
-                    new_args_ls.append(output_node.body[body_i].kwargs[param])
-                    output_node.body[body_i].kwargs.pop(param)
-                elif param not in ignore_outputs:
-                    for arg_i in output_node.body[body_i].args:
-                        if isinstance(arg_i, past.Name) and arg_i.id == param:
-                            new_args_ls.append(arg_i)
-
-            output_node.body[body_i].args = new_args_ls
-
         return ProgramTypeDeduction.apply(output_node)
 
     def visit_FunctionDef(self, node: ast.FunctionDef) -> past.Program:

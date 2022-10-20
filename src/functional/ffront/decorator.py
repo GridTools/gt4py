@@ -285,13 +285,12 @@ class Program:
         if len(kwargs) > 0:
             new_args_ls = []
             kwargs_count = 0
-            # use self.past_node.params instead of self.itir.params
-            for param_i, param in enumerate(self.itir.params):
+            for param_i, param in enumerate(self.past_node.params):
                 if param.id in kwargs:
                     new_args_ls.append(kwargs[param.id])
                     kwargs.pop(param.id)
                     kwargs_count += 1
-                elif param_i < len(self.past_node.params):
+                else:
                     new_args_ls.append(args[param_i - kwargs_count])
             args = tuple(new_args_ls)
 
