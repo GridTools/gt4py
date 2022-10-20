@@ -143,6 +143,12 @@ class Compare(Expr):
     right: Expr
 
 
+class TernaryExpr(Expr):
+    condition: Expr
+    true_expr: Expr
+    false_expr: Expr
+
+
 class Call(Expr):
     func: Name
     args: list[Expr]
@@ -151,10 +157,6 @@ class Call(Expr):
 
 class Stmt(LocatedNode):
     ...
-
-
-class ExternalImport(Stmt):
-    symbols: list[Symbol]
 
 
 class Assign(Stmt):
@@ -170,7 +172,7 @@ class FunctionDefinition(LocatedNode, SymbolTableTrait):
     id: Coerced[SymbolName]  # noqa: A003  # shadowing a python builtin
     params: list[DataSymbol]
     body: list[Stmt]
-    captured_vars: list[Symbol]
+    closure_vars: list[Symbol]
     type: Optional[common_types.FunctionType] = None  # noqa A003  # shadowing a python builtin
 
 

@@ -320,6 +320,19 @@ class FieldOperatorLowering(NodeTranslator):
             )
         )
 
+    def visit_TernaryExpr(self, node: foast.TernaryExpr, **kwargs) -> itir.FunCall:
+        lowered_node_cond = self.visit(node.condition, **kwargs)
+        lowered_true_expr = self.visit(node.true_expr, **kwargs)
+        lowered_false_expr = self.visit(node.false_expr, **kwargs)
+
+        return self._lift_if_field(node)(
+            im.call_("if_")(
+                lowered_node_cond,
+                to_value(node.true_expr)(lowered_true_expr),
+                to_value(node.false_expr)(lowered_false_expr),
+            )
+        )
+
     def visit_Compare(self, node: foast.Compare, **kwargs) -> itir.FunCall:
         return self._lift_if_field(node)(
             im.call_(node.op.value)(
@@ -366,6 +379,15 @@ class FieldOperatorLowering(NodeTranslator):
             **kwargs,
         )
 
+    def _visit_min_over(self, node: foast.Call, **kwargs) -> itir.FunCall:
+        init_expr = itir.Literal(value=str(np.finfo(np.float64).max), type="float64")
+        return self._make_reduction_expr(
+            node,
+            lambda expr: im.call_("if_")(im.less_("acc", expr), "acc", expr),
+            init_expr,
+            **kwargs,
+        )
+
     def visit_Call(self, node: foast.Call, **kwargs) -> itir.FunCall:
         if type_info.type_class(node.func.type) is ct.FieldType:
             return self._visit_shift(node, **kwargs)
@@ -386,7 +408,7 @@ class FieldOperatorLowering(NodeTranslator):
             for arg in node.args:
                 lowered_arg = self.visit(arg, **kwargs)
                 if iterator_type_kind(arg.type) == ITIRTypeKind.VALUE:
-                    lowered_arg = im.call_(im.lift_(im.lambda__()(lowered_arg)))()
+                    lowered_arg = im.lift_(im.lambda__()(lowered_arg))()
                 lowered_args.append(lowered_arg)
 
             return self._lift_if_field(node)(im.call_(lowered_func)(*lowered_args))
@@ -484,6 +506,13 @@ class InsideReductionLowering(FieldOperatorLowering):
     def visit_Compare(self, node: foast.Compare, **kwargs) -> itir.FunCall:
         return im.call_(node.op.value)(
             self.visit(node.left, **kwargs), self.visit(node.right, **kwargs)
+        )
+
+    def visit_TernaryExpr(self, node: foast.TernaryExpr, **kwargs) -> itir.FunCall:
+        return im.call_("if_")(
+            self.visit(node.condition, **kwargs),
+            self.visit(node.true_expr, **kwargs),
+            self.visit(node.false_expr, **kwargs),
         )
 
     def visit_UnaryOp(self, node: foast.UnaryOp, **kwargs) -> itir.FunCall:

@@ -13,7 +13,7 @@ class RemapSymbolRefs(NodeTranslator):
         new_symbol_map = {k: v for k, v in symbol_map.items() if k not in params}
         return ir.Lambda(
             params=node.params,
-            expr=self.generic_visit(node.expr, symbol_map=new_symbol_map),
+            expr=self.visit(node.expr, symbol_map=new_symbol_map),
         )
 
     def generic_visit(self, node: ir.Node, **kwargs: Any):  # type: ignore[override]

@@ -173,6 +173,12 @@ def make_symbol_type_from_value(value: Any) -> ct.SymbolType:
         dims = list(value.axes)
         dtype = make_symbol_type_from_typing(value.dtype.type)
         symbol_type = ct.FieldType(dims=dims, dtype=dtype)
+    elif isinstance(value, tuple):
+        # Since the elements of the tuple might be one of the special cases
+        # above, we can not resort to generic `infer_type` but need to do it
+        # manually here. If we get rid of all the special cases this is
+        # not needed anymore.
+        return ct.TupleType(types=[make_symbol_type_from_value(el) for el in value])
     else:
         type_ = xtyping.infer_type(value, annotate_callable_kwargs=True)
         symbol_type = make_symbol_type_from_typing(type_)
