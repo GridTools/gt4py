@@ -51,6 +51,9 @@ class Axis(StrEnum):
     def tile_symbol(self) -> SymbolRef:
         return "__tile_" + self.lower()
 
+    def tile_size_symbol(self) -> SymbolRef:
+        return "__tile_" + self.lower()+"_size"
+
     @staticmethod
     def dims_3d():
         yield from [Axis.I, Axis.J, Axis.K]
@@ -70,7 +73,9 @@ class Axis(StrEnum):
 
     def tile_dace_symbol(self):
         return get_dace_symbol(self.tile_symbol())
-
+    
+    def tile_size_dace_symbol(self) -> SymbolRef:
+        return get_dace_symbol(self.tile_size_symbol(self.tile_size_symbol()))
 
 class MapSchedule(IntEnum):
     Default = 0
@@ -299,13 +304,20 @@ class TileInterval(Node):
 
     @property
     def free_symbols(self):
-        res = {self.axis.tile_symbol()}
+        res = {self.axis.tile_size_symbol()}
         if self.domain_limit.level == common.LevelMarker.END:
             res.add(self.axis.domain_symbol())
         return res
 
     @property
     def size(self):
+        return "{tile_size}{halo_size:+d}".format(
+            tile_size=self.axis.tile_size_symbol(),
+            halo_size=self.end_offset - self.start_offset,
+        )
+    
+    @property
+    def compute_size(self):
         return "min({tile_size}, {domain_limit} - {tile_symbol}){halo_size:+d}".format(
             tile_size=self.tile_size,
             domain_limit=self.domain_limit,
@@ -352,6 +364,10 @@ class TileInterval(Node):
 
         start = self.axis.tile_dace_symbol() + self.start_offset
         end = start + self.dace_symbolic_size()
+        return start, end
+    def compute_dace_symbolic_size(self):
+        start = self.axis.tile_size_dace_symbol() + self.start_offset
+        end = start + self.tile_size_dace_symbol()
         return start, end
 
 

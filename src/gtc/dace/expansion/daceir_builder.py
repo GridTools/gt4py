@@ -236,6 +236,10 @@ class DaCeIRBuilder(NodeTranslator):
 
             if isinstance(item, Skip):
                 item = item.item
+                parent=self.parent
+            else:
+                parent = self
+
             if isinstance(item, Map):
                 iterations = item.iterations
             else:
@@ -248,7 +252,7 @@ class DaCeIRBuilder(NodeTranslator):
                     grid_subset = grid_subset.tile(tile_sizes={axis: it.stride})
                 else:
                     grid_subset = grid_subset.restricted_to_index(axis)
-            return DaCeIRBuilder.IterationContext(grid_subset=grid_subset, parent=self)
+            return DaCeIRBuilder.IterationContext(grid_subset=grid_subset, parent=parent)
 
         def push_expansion_items(
             self, items: Iterable[Union[Map, Loop]]
@@ -259,7 +263,9 @@ class DaCeIRBuilder(NodeTranslator):
             return res
 
         def pop(self) -> "DaCeIRBuilder.IterationContext":
-            assert self.parent is not None
+            if self.parent is None:
+                #original item was Skip
+                return self
             return self.parent
 
     @dataclass
@@ -606,6 +612,7 @@ class DaCeIRBuilder(NodeTranslator):
                         end=dcir.AxisBound.from_common(axis, oir.AxisBound.end()),
                     )
                 symbol_collector.remove_symbol(axis.tile_symbol())
+                symbol_coll
                 ranges.append(
                     dcir.Range(
                         var=axis.tile_symbol(),
@@ -669,7 +676,7 @@ class DaCeIRBuilder(NodeTranslator):
                 symbol_collector.remove_symbol(index_range.var)
                 ranges.append(index_range)
 
-        return [
+        res = [
             dcir.DomainMap(
                 computations=scope_nodes,
                 index_ranges=ranges,
@@ -679,6 +686,10 @@ class DaCeIRBuilder(NodeTranslator):
                 grid_subset=grid_subset,
             )
         ]
+        if any(it.kind=="tiling" for it in item.iterations):
+            # to map the tile size symbol to the min() expression
+            res = self.to_dataflow(self.to_state(res))
+        return res
 
     def _process_loop_item(
         self,

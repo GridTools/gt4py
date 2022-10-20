@@ -401,6 +401,7 @@ def make_dace_subset(
     context_info: "dcir.FieldAccessInfo",
     access_info: "dcir.FieldAccessInfo",
     data_dims: Tuple[int, ...],
+    use_tile_expr=False,
 ) -> dace.subsets.Range:
     clamped_access_info = access_info
     clamped_context_info = context_info
@@ -413,9 +414,13 @@ def make_dace_subset(
 
     for axis in clamped_access_info.axes():
         context_start, _ = clamped_context_info.grid_subset.intervals[axis].to_dace_symbolic()
-        subset_start, subset_end = clamped_access_info.grid_subset.intervals[
+        interval = clamped_access_info.grid_subset.intervals[
             axis
-        ].to_dace_symbolic()
+        ]
+        if isinstance(interval, dcir.TileInterval) and use_tile_expr:
+            subset_start, subset_end = interval.compute_dace_symbolic_size()
+        else:
+            subset_start, subset_end = interval.to_dace_symbolic()
         res_ranges.append((subset_start - context_start, subset_end - context_start - 1, 1))
     res_ranges.extend((0, dim - 1, 1) for dim in data_dims)
     return dace.subsets.Range(res_ranges)

@@ -22,7 +22,6 @@ def _set_skips(node):
     expansion_specification = list(node.expansion_specification)
     expansion_specification[0] = Skip(item=expansion_specification[0])
     node.expansion_specification = expansion_specification
-    print(node.expansion_specification[0])
 
 
 def _get_field_access_infos(
@@ -278,6 +277,7 @@ def partially_expand(sdfg):
     for state in nsdfg_node.sdfg.states():
         for node in filter(lambda n: isinstance(n, StencilComputation), state.nodes()):
             in_access_infos, out_access_infos = _get_field_access_infos(node)
+            node.access_infos = _union_access_infos(in_access_infos, out_access_infos)
             for memlet in state.in_edges(node):
                 name = memlet.data.data
                 access_info = in_access_infos[name]
