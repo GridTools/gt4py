@@ -678,6 +678,7 @@ class MDIterator:
         return self.pos is not None
 
     def deref(self) -> Any:
+        assert not self.incomplete_offsets
         if not self.can_deref():
             # this can legally happen in cases like `if_(can_deref(inp), deref(inp), 42.)`
             # because both branches will be eagerly executed
