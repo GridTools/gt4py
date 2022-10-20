@@ -103,4 +103,4 @@ def ensure_processor_kind(
     obj: ProgramProcessor[OutputT, ProcessorKindT], kind: type[ProcessorKindT]
 ) -> None:
     if not is_processor_kind(obj, kind):
-        raise RuntimeError(f"{obj} is not a {kind.__name__}!")
+        raise TypeError(f"{obj} is not a {kind.__name__}!")
