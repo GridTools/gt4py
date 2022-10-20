@@ -285,6 +285,7 @@ class Program:
         if len(kwargs) > 0:
             new_args_ls = []
             kwargs_count = 0
+            # use self.past_node.params instead of self.itir.params
             for param_i, param in enumerate(self.itir.params):
                 if param.id in kwargs:
                     new_args_ls.append(kwargs[param.id])
