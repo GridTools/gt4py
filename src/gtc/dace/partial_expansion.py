@@ -238,6 +238,8 @@ def partially_expand(sdfg):
     stencil_computations: List[StencilComputation, dace.SDFGState] = list(
         filter(lambda n: isinstance(n[0], StencilComputation), sdfg.all_nodes_recursive())
     )
+    if not stencil_computations:
+        return
 
     original_item = stencil_computations[0][0].expansion_specification[0]
     tiling_schedule = original_item.schedule
