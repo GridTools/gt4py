@@ -360,9 +360,4 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         return itir.Sym(id=node.id)
 
     def visit_BinOp(self, node: past.BinOp, **kwargs) -> itir.FunCall:
-        return self._lift_if_field(node)(
-            im.call_(node.op.value)(
-                to_value(node.left)(self.visit(node.left, **kwargs)),
-                to_value(node.right)(self.visit(node.right, **kwargs)),
-            )
-        )
+        return im.call_(node.op.value)(self.visit(node.left, **kwargs), self.visit(node.right, **kwargs))
