@@ -13,16 +13,11 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 from __future__ import annotations
 
-from typing import Callable, Optional
+from typing import Optional
 
 from eve import NodeTranslator, concepts, traits
 from functional.common import Dimension, DimensionKind, GridType, GTTypeError
 from functional.ffront import common_types, itir_makers as im, program_ast as past, type_info
-from functional.ffront.foast_to_itir import (
-    ITIRTypeKind,
-    is_expr_with_iterator_type_kind,
-    iterator_type_kind,
-)
 from functional.iterator import ir as itir
 
 
@@ -80,7 +75,6 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
     >>> lowered.params  # doctest: +SKIP
     [Sym(id=SymbolName('inp')), Sym(id=SymbolName('out')), Sym(id=SymbolName('__inp_size_0')), Sym(id=SymbolName('__out_size_0'))]
     """
-
 
     # TODO(tehrengruber): enable doctests again. For unknown / obscure reasons
     #  the above doctest fails when executed using `pytest --doctest-modules`.
