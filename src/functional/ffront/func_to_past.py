@@ -96,9 +96,8 @@ class ProgramParser(DialectParser[past.Program]):
         return past.BinaryOperator.BIT_OR
 
     def visit_BinOp(self, node: ast.BinOp, **kwargs) -> past.BinOp:
-        new_op = self.visit(node.op)
         return past.BinOp(
-            op=new_op,
+            op=self.visit(node.op),
             left=self.visit(node.left),
             right=self.visit(node.right),
             location=self._make_loc(node),
