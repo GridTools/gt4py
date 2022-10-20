@@ -159,5 +159,3 @@ class ProgramParser(DialectParser[past.Program]):
         symbol_type = symbol_makers.make_symbol_type_from_value(node.value)
         return past.Constant(value=node.value, type=symbol_type, location=self._make_loc(node))
 
-    def visit_Sub(self, node: ast.Sub, **kwargs) -> past.BinaryOperator:
-        return past.BinaryOperator.SUB
