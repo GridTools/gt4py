@@ -87,9 +87,8 @@ def _get_symbolic_origin_and_domain(
     for edge in state.out_edges(node):
         edge.data.subset = copy.deepcopy(outer_subsets[edge.src_conn[len("__out_") :]])
 
-    equations = []
-    symbols = set()
     origins = dict()
+    domain = dict()
     for field, info in access_infos.items():
         outer_subset: dace.subsets.Range = outer_subsets[field]
         inner_origin = [
@@ -101,8 +100,18 @@ def _get_symbolic_origin_and_domain(
             dace.symbolic.pystr_to_symbolic(r[0] - o)
             for r, o in zip(outer_subset.ranges, inner_origin)
         )
+        for ax_idx, axis in enumerate(info.axes()):
+            interval_end = info.grid_subset.intervals[axis].end
+            if interval_end.level == common.LevelMarker.END:
+                domain[axis] = (outer_subset.ranges[ax_idx][1] + 1 - interval_end.offset) - origins[
+                    field
+                ][ax_idx]
+    for axis in dcir.Axis.dims_3d():
+        domain.setdefault(axis, 0)
 
     # Collect equations and symbols from arguments and shapes
+    equations = []
+    symbols = set()
     for field, info in access_infos.items():
         for axis in info.axes():
             if axis in info.variable_offset_axes:
@@ -130,7 +139,13 @@ def _get_symbolic_origin_and_domain(
     results = sympy.solve(equations, *symbols, dict=True)
     result = results[0]
     result = {str(k)[len("__SOLVE_") :]: v for k, v in result.items()}
-    return origins, {axis: result.get(axis.domain_symbol(), 0) for axis in dcir.Axis.dims_3d()}
+    solved_domain = {
+        axis: result[axis.domain_symbol()]
+        for axis in dcir.Axis.dims_3d()
+        if axis.domain_symbol() in result
+    }
+    domain.update(**solved_domain)
+    return origins, domain
 
 
 def _union_symbolic_origin_and_domain(
