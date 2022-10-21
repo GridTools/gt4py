@@ -547,10 +547,18 @@ class DaCeComputationCodegen:
         is_gpu = "CUDA" in {co.title for co in code_objects}
 
         computations = cls._postprocess_dace_code(code_objects, is_gpu, builder)
-
+        if not is_gpu and any(
+            array.transient and array.lifetime == dace.AllocationLifetime.Persistent
+            for array in sdfg.arrays_recursive()
+        ):
+            omp_threads = "int omp_max_threads = omp_get_max_threads();"
+            omp_header = "#include <omp.h>"
+        else:
+            omp_threads = ""
+            omp_header = ""
         interface = cls.template.definition.render(
             name=sdfg.name,
-            backend_specifics="" if is_gpu else "int omp_max_threads = omp_get_max_threads();",
+            backend_specifics=omp_threads,
             dace_args=self.generate_dace_args(stencil_ir, sdfg),
             functor_args=self.generate_functor_args(sdfg),
             tmp_allocs=self.generate_tmp_allocs(sdfg),
@@ -560,7 +568,7 @@ class DaCeComputationCodegen:
             f"""#include <gridtools/sid/sid_shift_origin.hpp>
                              #include <gridtools/sid/allocator.hpp>
                              #include <gridtools/stencil/cartesian.hpp>
-                             {"#include <gridtools/common/cuda_util.hpp>" if is_gpu else "#include <omp.h>"}
+                             {"#include <gridtools/common/cuda_util.hpp>" if is_gpu else omp_header}
                              namespace gt = gridtools;
                              {computations}
 
