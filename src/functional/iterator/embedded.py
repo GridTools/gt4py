@@ -17,6 +17,8 @@ from typing import (
     Optional,
     Protocol,
     Sequence,
+    SupportsFloat,
+    SupportsInt,
     TypeAlias,
     TypeGuard,
     Union,
@@ -49,6 +51,7 @@ FieldAxis: TypeAlias = (
 )  # TODO Offset should be removed, is sometimes used for sparse dimensions
 TupleAxis: TypeAlias = NoneType
 Axis: TypeAlias = FieldAxis | TupleAxis
+Scalar: TypeAlias = SupportsInt | SupportsFloat | np.int32 | np.int64 | np.float32 | np.float64
 
 
 class SparseTag(Tag):
@@ -436,6 +439,24 @@ def greater_equal(first, second):
 @builtins.not_eq.register(EMBEDDED)
 def not_eq(first, second):
     return first != second
+
+
+CompositeOfScalarOrField: TypeAlias = Scalar | LocatedField | tuple["CompositeOfScalarOrField", ...]
+
+
+def promote_scalars(val: CompositeOfScalarOrField):
+    """Given a scalar, field or composite thereof promote all (contained) scalars to fields."""
+    if isinstance(val, tuple):
+        return tuple(promote_scalars(el) for el in val)
+    val_type = xtyping.infer_type(val)
+    if np.issubdtype(val_type, np.number):
+        return constant_field(val)
+    elif np.issubdtype(val_type, LocatedField):
+        return val
+    else:
+        raise ValueError(
+            f"Expected a `Field` or a number (`float`, `np.int64`, ...), but got {val_type}."
+        )
 
 
 for math_builtin_name in builtins.MATH_BUILTINS:
@@ -1111,18 +1132,7 @@ def fendef_embedded(fun: Callable[..., None], *args: Any, **kwargs: Any):
         out = as_tuple_field(out) if can_be_tuple_field(out) else out
 
         for pos in _domain_iterator(domain):
-            promoted_ins = []
-            for inp in ins:
-                if isinstance(inp, LocatedField) or isinstance(inp, tuple):
-                    promoted_ins.append(inp)
-                else:
-                    inp_type = xtyping.infer_type(inp)
-                    if np.issubdtype(inp_type, np.number):
-                        promoted_ins.append(constant_field(inp))
-                    else:
-                        raise ValueError(
-                            "Expected a `Field` or a number (`float`, `np.int64`, ...)."
-                        )
+            promoted_ins = [promote_scalars(inp) for inp in ins]
             ins_iters = list(
                 make_in_iterator(
                     inp,
