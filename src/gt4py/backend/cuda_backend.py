@@ -50,10 +50,10 @@ class CudaExtGenerator(BackendCodegen):
         stencil_ir = GtirPipeline(stencil_ir, self.backend.builder.stencil_id).full()
         base_oir = GTIRToOIR().visit(stencil_ir)
         oir_pipeline = self.backend.builder.options.backend_opts.get(
-            "oir_pipeline", DefaultPipeline(skip=[NoFieldAccessPruning])
+            "oir_pipeline",
+            DefaultPipeline(skip=[NoFieldAccessPruning], add_steps=[FillFlushToLocalKCaches]),
         )
         oir_node = oir_pipeline.run(base_oir)
-        oir_node = FillFlushToLocalKCaches().visit(oir_node)
         cuir_node = OIRToCUIR().visit(oir_node)
         cuir_node = kernel_fusion.FuseKernels().visit(cuir_node)
         cuir_node = extent_analysis.CacheExtents().visit(cuir_node)
