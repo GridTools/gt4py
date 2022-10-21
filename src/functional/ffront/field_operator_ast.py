@@ -18,7 +18,7 @@ from typing import Any, Generic, Optional, TypeVar, Union
 from eve import Coerced, Node, SourceLocation, SymbolName, SymbolRef
 from eve.traits import SymbolTableTrait
 from eve.type_definitions import StrEnum
-from functional.ffront import common_types as common_types
+from functional.ffront import common_types as ct
 from functional.ffront.common_types import BinaryOperator
 
 
