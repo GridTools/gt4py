@@ -34,7 +34,7 @@ class BinaryOperator(StrEnum):
     BIT_AND = "and_"
     BIT_OR = "or_"
     POW = "power"
-    FloorDiv = "floordiv"
+    FLOOR_DIV = "floordiv"
 
     def __str__(self) -> str:
         if self is self.ADD:
