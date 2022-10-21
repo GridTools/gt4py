@@ -9,13 +9,27 @@ from ..definitions import ALL_BACKENDS, PERFORMANCE_BACKENDS
 from .stencil_definitions import copy_stencil
 
 
+try:
+    import cupy as cp
+except ImportError:
+    cp = None
+
+
+def _get_array_library(backend: str):
+    if gt_backend.from_name(backend).storage_info["device"] == "gpu":
+        assert cp is not None
+        return cp
+    else:
+        return np
+
+
 @pytest.mark.parametrize("backend", ALL_BACKENDS)
 @pytest.mark.parametrize("order", ["C", "F"])
 def test_numpy_allocators(backend, order):
+    xp = _get_array_library(backend)
     shape = (20, 10, 5)
-
-    inp = np.array(np.random.randn(*shape), order=order, dtype=np.float_)
-    outp = np.zeros(shape=shape, order=order, dtype=np.float_)
+    inp = xp.array(np.random.randn(*shape), order=order, dtype=np.float_)
+    outp = xp.zeros(shape=shape, order=order, dtype=np.float_)
 
     stencil = gtscript.stencil(definition=copy_stencil, backend=backend)
     stencil(field_a=inp, field_b=outp)
@@ -25,17 +39,18 @@ def test_numpy_allocators(backend, order):
 
 @pytest.mark.parametrize("backend", PERFORMANCE_BACKENDS)
 def test_bad_layout_warns(backend):
+    xp = _get_array_library(backend)
     backend_type = gt_backend.from_name(backend)
 
     shape = (10, 10, 10)
 
-    inp = np.array(np.random.randn(*shape), dtype=np.float_)
+    inp = xp.array(xp.random.randn(*shape), dtype=np.float_)
     outp = gt_storage.zeros(backend=backend, shape=shape, dtype=np.float_, aligned_index=(0, 0, 0))
 
     # set up non-optimal storage layout:
     if backend_type.storage_info["is_optimal_layout"](inp, "IJK"):
         # permute in a circular manner
-        inp = np.transpose(inp, axes=(1, 2, 0))
+        inp = xp.transpose(inp, axes=(1, 2, 0))
 
     stencil = gtscript.stencil(definition=copy_stencil, backend=backend)
 
