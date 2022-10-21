@@ -484,7 +484,7 @@ def return_type_field(
         raise GTTypeError(f"First argument must be of type {ct.OffsetType}, got {with_args[0]}.")
 
     source_dim = with_args[0].source
-    target_dims = with_args[0].target or ()
+    target_dims = with_args[0].target
     new_dims = []
     for d in field_type.dims:
         if d != source_dim:
