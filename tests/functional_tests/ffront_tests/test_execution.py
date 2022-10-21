@@ -13,9 +13,9 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-
 from collections import namedtuple
 from typing import TypeVar
+from functools import reduce
 
 import numpy as np
 import pytest
@@ -1102,12 +1102,9 @@ def test_scan_nested_tuple_input(fieldview_backend, forward):
     inp1 = np_as_located_field(KDim)(np.ones(size))
     inp2 = np_as_located_field(KDim)(np.arange(0.0, size, 1))
     out = np_as_located_field(KDim)(np.zeros((size,)))
-    from functools import reduce
-    from operator import add
 
-    expected = np.asarray([reduce(add, range(i + 2), init) for i in range(size)])
-    if not forward:
-        expected = np.flip(expected)
+    prev_levels_iterator = lambda i: range(i+1) if forward else range(size-1, i-1, -1)
+    expected = np.asarray([reduce(lambda prev, i: prev+inp1[i]+inp2[i], prev_levels_iterator(i), init) for i in range(size)])
 
     @scan_operator(axis=KDim, forward=forward, init=init, backend=fieldview_backend)
     def simple_scan_operator(carry: float, a: tuple[float, float]) -> float:
