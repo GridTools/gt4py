@@ -4,37 +4,25 @@ from dace.transformation.helpers import nest_state_subgraph
 from dace.transformation.interstate import InlineTransients
 
 
-def eliminate_trivial_maps(sdfg: dace.SDFG):
-    """Remove maps and map ranges where the iteration is over a single index."""
+class NoEmptyEdgeTrivialMapElimination(TrivialMapElimination):
+    """Eliminate trivial maps like TrivialMapElimination, with additional conditions in can_be_applied."""
 
-    def _filter_map_entries(args):
-        candidate, state = args
-        if not isinstance(candidate, dace.nodes.MapEntry):
+    def can_be_applied(self, graph, expr_index, sdfg, permissive=False):
+
+        if not super().can_be_applied(graph, expr_index, sdfg, permissive=permissive):
             return False
-        if candidate.map.schedule not in {
+
+        map_entry = self.map_entry
+        map_exit = graph.exit_node(map_entry)
+        if map_entry.map.schedule not in {
             dace.ScheduleType.Sequential,
             dace.ScheduleType.CPU_Multicore,
         }:
             return False
         if any(
-            edge.data.is_empty()
-            for edge in state.in_edges(candidate) + state.out_edges(state.exit_node(candidate))
+            edge.data.is_empty() for edge in graph.in_edges(map_entry) + graph.out_edges(map_exit)
         ):
             return False
-        return True
-
-    applied = True
-    while applied:
-        applied = False
-        for map_entry, state in filter(_filter_map_entries, sdfg.all_nodes_recursive()):
-            try:
-                TrivialMapElimination.apply_to(
-                    state.parent, map_entry=map_entry, verify=True, save=False
-                )
-                applied = True
-                break
-            except ValueError:
-                continue
 
 
 class InlineThreadLocalTransients(dace.transformation.SingleStateTransformation):

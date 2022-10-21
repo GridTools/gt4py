@@ -44,7 +44,7 @@ from gtc.dace.nodes import StencilComputation
 from gtc.dace.oir_to_dace import OirSDFGBuilder
 from gtc.dace.transformations import (
     InlineThreadLocalTransients,
-    eliminate_trivial_maps,
+    NoEmptyEdgeTrivialMapElimination,
     nest_sequential_map_scopes,
 )
 from gtc.dace.utils import array_dimensions, layout_maker_factory, replace_strides
@@ -180,7 +180,7 @@ def _post_expand_trafos(sdfg: dace.SDFG):
     # DaCe "standard" clean-up transformations
     sdfg.simplify(validate=False)
 
-    eliminate_trivial_maps(sdfg)
+    sdfg.apply_transformations_repeated(NoEmptyEdgeTrivialMapElimination, validate=False)
 
     # Control the `#pragma omp parallel` statements: Fully collapse parallel loops,
     # but set 1D maps to be sequential. (Typical domains are too small to benefit from parallelism)
@@ -191,8 +191,8 @@ def _post_expand_trafos(sdfg: dace.SDFG):
         if node.schedule == dace.ScheduleType.CPU_Multicore and len(node.range) <= 1:
             node.schedule = dace.ScheduleType.Sequential
 
-    sdfg.apply_transformations_repeated(InlineThreadLocalTransients)
-    sdfg.simplify()
+    sdfg.apply_transformations_repeated(InlineThreadLocalTransients, validate=False)
+    sdfg.simplify(validate=False)
     nest_sequential_map_scopes(sdfg)
 
 
