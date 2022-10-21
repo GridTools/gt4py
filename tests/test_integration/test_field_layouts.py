@@ -28,13 +28,13 @@ def _get_array_library(backend: str):
 def test_numpy_allocators(backend, order):
     xp = _get_array_library(backend)
     shape = (20, 10, 5)
-    inp = xp.array(np.random.randn(*shape), order=order, dtype=np.float_)
-    outp = xp.zeros(shape=shape, order=order, dtype=np.float_)
+    inp = xp.array(xp.random.randn(*shape), order=order, dtype=xp.float_)
+    outp = xp.zeros(shape=shape, order=order, dtype=xp.float_)
 
     stencil = gtscript.stencil(definition=copy_stencil, backend=backend)
     stencil(field_a=inp, field_b=outp)
 
-    np.testing.assert_array_equal(outp, inp)
+    cp.testing.assert_array_equal(outp, inp)
 
 
 @pytest.mark.parametrize("backend", PERFORMANCE_BACKENDS)
@@ -44,8 +44,8 @@ def test_bad_layout_warns(backend):
 
     shape = (10, 10, 10)
 
-    inp = xp.array(xp.random.randn(*shape), dtype=np.float_)
-    outp = gt_storage.zeros(backend=backend, shape=shape, dtype=np.float_, aligned_index=(0, 0, 0))
+    inp = xp.array(xp.random.randn(*shape), dtype=xp.float_)
+    outp = gt_storage.zeros(backend=backend, shape=shape, dtype=xp.float_, aligned_index=(0, 0, 0))
 
     # set up non-optimal storage layout:
     if backend_type.storage_info["is_optimal_layout"](inp, "IJK"):
