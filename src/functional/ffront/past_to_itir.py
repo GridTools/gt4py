@@ -17,7 +17,7 @@ from typing import Optional
 
 from eve import NodeTranslator, concepts, traits
 from functional.common import Dimension, DimensionKind, GridType, GTTypeError
-from functional.ffront import common_types, itir_makers as im, program_ast as past, type_info
+from functional.ffront import common_types, program_ast as past, type_info
 from functional.iterator import ir as itir
 
 
@@ -321,6 +321,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         return itir.Sym(id=node.id)
 
     def visit_BinOp(self, node: past.BinOp, **kwargs) -> itir.FunCall:
-        return im.call_(node.op.value)(
-            self.visit(node.left, **kwargs), self.visit(node.right, **kwargs)
+        return itir.FunCall(
+            fun=itir.SymRef(id=node.op.value),
+            args=[self.visit(node.left, **kwargs), self.visit(node.right, **kwargs)],
         )
