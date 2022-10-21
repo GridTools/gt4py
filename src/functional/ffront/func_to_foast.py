@@ -319,7 +319,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
         return ct.BinaryOperator.DIV
 
     def visit_FloorDiv(self, node: ast.FloorDiv, **kwargs) -> ct.BinaryOperator:
-        return ct.BinaryOperator.FloorDiv
+        return ct.BinaryOperator.FLOOR_DIV
 
     def visit_Pow(self, node: ast.Pow, **kwargs) -> ct.BinaryOperator:
         return ct.BinaryOperator.POW

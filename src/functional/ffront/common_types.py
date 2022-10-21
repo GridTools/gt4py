@@ -31,10 +31,10 @@ class BinaryOperator(StrEnum):
     SUB = "minus"
     MULT = "multiplies"
     DIV = "divides"
+    FLOOR_DIV = "floordiv"
     BIT_AND = "and_"
     BIT_OR = "or_"
     POW = "power"
-    FLOOR_DIV = "floordiv"
 
     def __str__(self) -> str:
         if self is self.ADD:
@@ -45,7 +45,7 @@ class BinaryOperator(StrEnum):
             return "*"
         elif self is self.DIV:
             return "/"
-        elif self is self.FloorDiv:
+        elif self is self.FLOOR_DIV:
             return "//"
         elif self is self.BIT_AND:
             return "&"
