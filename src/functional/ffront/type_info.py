@@ -199,7 +199,7 @@ def is_logical(symbol_type: ct.SymbolType) -> bool:
 
 
 def is_field_type_or_tuple_of_field_type(
-    type_: ct.DataType,
+    type_: ct.SymbolType,
 ) -> bool:
     """
      Return True if ``type_`` is FieldType or FieldType nested in TupleType.
@@ -566,7 +566,7 @@ def function_signature_incompatibilities_scanop(
         # as we capture `i`.
         def _as_field(dtype: ct.ScalarType, path: tuple[int, ...]):
             try:
-                el_type = reduce(lambda type_, idx: type_.types[idx], path, args[i])  # type: ignore[attr-defined]
+                el_type = reduce(lambda type_, idx: type_.types[idx], path, args[i])  # type: ignore[attr-defined] # noqa: B023
                 return ct.FieldType(dims=extract_dims(el_type), dtype=dtype)
             except (IndexError, AttributeError):
                 # The structure of the scan passes argument and the requested
