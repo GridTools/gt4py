@@ -15,10 +15,10 @@
 """GridTools storages classes."""
 
 
-from .storage import empty, from_array, full, ones, zeros
+from .storage import empty, from_array, full, ones, zeros  # noqa: F401
 
 
 try:
-    from .storage import dace_descriptor
+    from .storage import dace_descriptor  # noqa: F401
 except ImportError:
     pass

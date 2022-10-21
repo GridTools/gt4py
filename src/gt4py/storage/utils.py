@@ -14,12 +14,18 @@
 
 import math
 import numbers
-from typing import Any, Dict, Optional, Protocol, Tuple, Union
+from typing import Any, Dict, Iterable, Optional, Protocol, Sequence, Tuple, Union
 
 import numpy as np
 
 import gt4py.utils as gt_util
 
+
+if np.lib.NumpyVersion(np.__version__) >= "1.20.0":
+    from numpy.typing import ArrayLike, DTypeLike
+else:
+    ArrayLike = Any
+    DTypeLike = Any
 
 try:
     import cupy as cp
@@ -56,17 +62,14 @@ def normalize_storage_spec(aligned_index, shape, dtype, dimensions):
 
     Returns
     -------
-
     tuple(aligned_index, shape, dtype, mask)
         The output tuple fields verify the following semantics:
-
             - aligned_index: tuple of ints with default origin values for the non-masked dimensions
             - shape: tuple of ints with shape values for the non-masked dimensions
             - dtype: scalar numpy.dtype (non-structured and without subarrays)
             - backend: backend identifier string (numpy, gt:cpu_kfirst, gt:gpu, ...)
             - dimensions: a tuple of dimension identifier strings
     """
-
     from gt4py.gtscript import Axis  # prevent circular import
 
     if dimensions is None:
@@ -178,7 +181,13 @@ def allocate(aligned_index, shape, layout_map, dtype, alignment_bytes, allocate_
     return raw_buffer, field
 
 
-def allocate_gpu(aligned_index, shape, layout_map, dtype, alignment_bytes):
+def allocate_gpu(
+    shape: Sequence[int],
+    layout_map: Iterable[Optional[int]],
+    dtype: DTypeLike,
+    alignment_bytes: int,
+    aligned_index: Optional[Sequence[int]],
+) -> Tuple["cp.ndarray", "cp.ndarray"]:
     dtype = np.dtype(dtype)
     assert (
         alignment_bytes % dtype.itemsize
@@ -188,6 +197,9 @@ def allocate_gpu(aligned_index, shape, layout_map, dtype, alignment_bytes):
 
     order_idx = idx_from_order([i for i in layout_map if i is not None])
     padded_shape = compute_padded_shape(shape, items_per_alignment, order_idx)
+
+    if aligned_index is None:
+        aligned_index = [0] * len(shape)
 
     strides = strides_from_padded_shape(padded_shape, order_idx, itemsize)
     if len(order_idx) > 0:
@@ -217,7 +229,13 @@ def allocate_gpu(aligned_index, shape, layout_map, dtype, alignment_bytes):
     return device_raw_buffer, device_field
 
 
-def allocate_cpu(aligned_index, shape, layout_map, dtype, alignment_bytes):
+def allocate_cpu(
+    shape: Sequence[int],
+    layout_map: Iterable[Optional[int]],
+    dtype: DTypeLike,
+    alignment_bytes: int,
+    aligned_index: Optional[Sequence[int]],
+) -> Tuple[np.ndarray, np.ndarray]:
     dtype = np.dtype(dtype)
     assert (
         alignment_bytes % dtype.itemsize
@@ -227,6 +245,9 @@ def allocate_cpu(aligned_index, shape, layout_map, dtype, alignment_bytes):
 
     order_idx = idx_from_order([i for i in layout_map if i is not None])
     padded_shape = compute_padded_shape(shape, items_per_alignment, order_idx)
+
+    if aligned_index is None:
+        aligned_index = [0] * len(shape)
 
     strides = strides_from_padded_shape(padded_shape, order_idx, itemsize)
     if len(order_idx) > 0:
@@ -269,15 +290,15 @@ def as_cupy(array: FieldLike) -> "cp.ndarray":
     return cp.asarray(array)
 
 
-def get_dims(object: GtDimsInterface) -> Optional[Tuple[str, ...]]:
-    dims = getattr(object, "__gt_dims__", None)
+def get_dims(obj: GtDimsInterface) -> Optional[Tuple[str, ...]]:
+    dims = getattr(obj, "__gt_dims__", None)
     if dims is None:
         return dims
     return tuple(str(d) for d in dims)
 
 
-def get_origin(object: GtOriginInterface) -> Optional[Tuple[int, ...]]:
-    origin = getattr(object, "__gt_origin__", None)
+def get_origin(obj: GtOriginInterface) -> Optional[Tuple[int, ...]]:
+    origin = getattr(obj, "__gt_origin__", None)
     if origin is None:
         return origin
     return tuple(int(o) for o in origin)
