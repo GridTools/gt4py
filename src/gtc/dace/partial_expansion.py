@@ -191,8 +191,10 @@ def _make_dace_subset_symbolic_context(
 ) -> dace.subsets.Range:
     context_origin, context_domain = context_info
     clamped_access_info = access_info
-    for axis in access_info.axes():
+    context_origin = list(context_origin)
+    for ax_idx, axis in enumerate(access_info.axes()):
         if axis in access_info.variable_offset_axes:
+            context_origin[ax_idx] = max(context_origin[ax_idx], 0)
             clamped_access_info = clamped_access_info.clamp_full_axis(axis)
     res_ranges = []
 
@@ -219,6 +221,9 @@ def _make_dace_subset_symbolic_context(
 
 def _update_shapes(sdfg: dace.SDFG, access_infos: Dict[dcir.SymbolName, dcir.FieldAccessInfo]):
     for name, access_info in access_infos.items():
+        for axis in access_info.axes():
+            if axis in access_info.variable_offset_axes:
+                access_info = access_info.clamp_full_axis(axis)
         array = sdfg.arrays[name]
         if array.transient:
             shape = list(access_info.overapproximated_shape)
@@ -252,10 +257,12 @@ def partially_expand(sdfg):
         return
 
     original_item = stencil_computations[0][0].expansion_specification[0]
-    if not isinstance(original_item, Map) or not all(
-        it.kind == "tiling" for it in original_item.iterations
-    ):
-        return
+    for node, _ in stencil_computations:
+        if not isinstance(node.expansion_specification[0], Map) or not all(
+            it.kind == "tiling" for it in node.expansion_specification[0].iterations
+        ):
+            return
+
     tiling_schedule = original_item.schedule
     tiling_ranges = {
         it.axis.tile_symbol(): str(
