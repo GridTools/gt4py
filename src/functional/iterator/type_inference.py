@@ -92,14 +92,16 @@ class ValTuple(Type):
     def handle_constraint(
         self, other: Type, add_constraint: abc.Callable[[Type, Type], None]
     ) -> bool:
-        if not isinstance(other, Tuple):
-            return False
-
-        dtypes = [TypeVar.fresh() for _ in other]
-        expanded = [Val(kind=self.kind, dtype=dtype, size=self.size) for dtype in dtypes]
-        add_constraint(self.dtypes, Tuple.from_elems(*dtypes))
-        add_constraint(Tuple.from_elems(*expanded), other)
-        return True
+        if isinstance(other, Tuple):
+            dtypes = [TypeVar.fresh() for _ in other]
+            expanded = [Val(kind=self.kind, dtype=dtype, size=self.size) for dtype in dtypes]
+            add_constraint(self.dtypes, Tuple.from_elems(*dtypes))
+            add_constraint(Tuple.from_elems(*expanded), other)
+            return True
+        if isinstance(other, EmptyTuple):
+            add_constraint(self.dtypes, EmptyTuple())
+            return True
+        return False
 
 
 class Column(Type):
@@ -118,6 +120,18 @@ class Primitive(Type):
     """Primitive type used in values/iterators."""
 
     name: str
+
+    def handle_constraint(
+        self, other: Type, add_constraint: abc.Callable[[Type, Type], None]
+    ) -> bool:
+        if not isinstance(other, Primitive):
+            return False
+
+        if self.name != other.name:
+            raise TypeError(
+                f"Can not satisfy constraint on primitive types: {self.name} ≡ {other.name}"
+            )
+        return True
 
 
 class Value(Type):
@@ -163,12 +177,12 @@ class LetPolymorphic(Type):
     dtype: Type
 
 
-BOOL_DTYPE = Primitive(name="bool")  # type: ignore [call-arg]
-INT_DTYPE = Primitive(name="int")  # type: ignore [call-arg]
-FLOAT_DTYPE = Primitive(name="float")  # type: ignore [call-arg]
-AXIS_DTYPE = Primitive(name="axis")  # type: ignore [call-arg]
-NAMED_RANGE_DTYPE = Primitive(name="named_range")  # type: ignore [call-arg]
-DOMAIN_DTYPE = Primitive(name="domain")  # type: ignore [call-arg]
+BOOL_DTYPE = Primitive(name="bool")
+INT_DTYPE = Primitive(name="int")
+FLOAT_DTYPE = Primitive(name="float")
+AXIS_DTYPE = Primitive(name="axis")
+NAMED_RANGE_DTYPE = Primitive(name="named_range")
+DOMAIN_DTYPE = Primitive(name="domain")
 
 # Some helpers to define the builtins’ types
 T0 = TypeVar.fresh()
@@ -530,7 +544,7 @@ class PrettyPrinter(eve.NodeTranslator):
                 + ", …)"
                 + self._subscript(node.dtypes.idx)
             )
-        assert isinstance(node.dtypes, Tuple)
+        assert isinstance(node.dtypes, (Tuple, EmptyTuple))
         return (
             "("
             + ", ".join(

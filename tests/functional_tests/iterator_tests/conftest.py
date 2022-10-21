@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import pytest
 
-from functional.fencil_processors import processor_interface as fpi, type_check
-from functional.fencil_processors.formatters import gtfn, lisp
-from functional.fencil_processors.runners import double_roundtrip, gtfn_cpu, roundtrip
 from functional.iterator import ir as itir, pretty_parser, pretty_printer, runtime, transforms
+from functional.program_processors import processor_interface as ppi
+from functional.program_processors.formatters import gtfn, lisp, type_check
+from functional.program_processors.runners import double_roundtrip, gtfn_cpu, roundtrip
 
 
 @pytest.fixture(
@@ -20,7 +20,7 @@ def lift_mode(request):
     return request.param
 
 
-@fpi.fencil_formatter
+@ppi.program_formatter
 def pretty_format_and_check(root: itir.FencilDefinition, *args, **kwargs) -> str:
     pretty = pretty_printer.pformat(root)
     parsed = pretty_parser.pparse(pretty)
@@ -50,26 +50,26 @@ def get_processor_id(processor):
     ],
     ids=lambda p: get_processor_id(p[0]),
 )
-def fencil_processor(request):
+def program_processor(request):
     return request.param
 
 
 @pytest.fixture
-def fencil_processor_no_gtfn_exec(fencil_processor):
-    if fencil_processor[0] == gtfn_cpu.run_gtfn:
+def program_processor_no_gtfn_exec(program_processor):
+    if program_processor[0] == gtfn_cpu.run_gtfn:
         pytest.xfail("gtfn backend not yet supported.")
-    return fencil_processor
+    return program_processor
 
 
 def run_processor(
-    fencil: runtime.FendefDispatcher,
-    processor: fpi.FencilExecutor | fpi.FencilFormatter,
+    program: runtime.FendefDispatcher,
+    processor: ppi.ProgramExecutor | ppi.ProgramFormatter,
     *args,
     **kwargs,
 ) -> None:
-    if processor is None or fpi.is_processor_kind(processor, fpi.FencilExecutor):
-        fencil(*args, backend=processor, **kwargs)
-    elif fpi.is_processor_kind(processor, fpi.FencilFormatter):
-        print(fencil.format_itir(*args, formatter=processor, **kwargs))
+    if processor is None or ppi.is_processor_kind(processor, ppi.ProgramExecutor):
+        program(*args, backend=processor, **kwargs)
+    elif ppi.is_processor_kind(processor, ppi.ProgramFormatter):
+        print(program.format_itir(*args, formatter=processor, **kwargs))
     else:
-        raise TypeError(f"fencil processor kind not recognized: {processor}!")
+        raise TypeError(f"program processor kind not recognized: {processor}!")

@@ -18,11 +18,11 @@ If you are reporting a bug, please include:
 
 ### Fix Bugs
 
-Look through the [GitHub issues](https://github.com/gridtools/gt4py/issues) for bugs. Anything tagged with `bug` and `help wanted` is open to whoever wants to implement it.
+Look through the [GitHub issues](https://github.com/gridtools/gt4py/issues) for bugs. Anything tagged with `bug` and `help wanted` is open to whomever wants to implement it.
 
 ### Implement Features
 
-Look through the [GitHub issues](https://github.com/gridtools/gt4py/issues) for features. Anything tagged with `enhancement` and `help wanted` is open to whoever wants to implement it.
+Look through the [GitHub issues](https://github.com/gridtools/gt4py/issues) for features. Anything tagged with `enhancement` and `help wanted` is open to whomever wants to implement it.
 
 ### Write Documentation
 
@@ -36,7 +36,7 @@ If you are proposing a feature:
 
 - Explain in detail how it would work.
 - Keep the scope as narrow as possible, to make it easier to implement.
-- Remember that this is an open-source project, and that contributions
+- Remember that this is an open-source project and that contributions
   are welcome :)
 
 
@@ -93,7 +93,7 @@ Ready to start contributing? Follow these steps:
 
 ### Quality Assurance
 
-We use [pre-commit](https://pre-commit.com/) to run several auto-formatting and linting tools. You should always execute it locally before opening a pull request. `pre-commit` can be installed as a _git hook_ to automatically check the staged changes before commiting:
+We use [pre-commit](https://pre-commit.com/) to run several auto-formatting and linting tools. You should always execute it locally before opening a pull request. `pre-commit` can be installed as a _git hook_ to automatically check the staged changes before committing:
 
 ```bash
 # Install pre-commit as a git hook and initialized all the configured tools
@@ -159,21 +159,21 @@ tox -e py310-base
 `tox` runs the package installation script and tests reliably by using properly isolated environments. Additionally, `tox` is configured to generate HTML test coverage reports in `tests/_reports/coverage_html/` at the end.
 
 
-## Pull Request and Merge Guidelines
+## Pull Requests (PRs) and Merge Guidelines
 
 Before submitting a pull request, check that it meets the following criteria:
 
 1. The pull request should include tests.
 2. If the pull request adds functionality, it should be documented both in the code docstrings and in the official documentation.
 3. If the pull request contains important design changes, it should contain a new ADR documenting the rationale behind the final decision.
-4. The pull request should have a proper description of its intent and the main changes in the code. In general this description should be used as commit message if the PR is approved (check point **6.** below).
-5. Pick one reviewer and try to contact him directly to let him know about the PR. If there is no feedback in 24h/48h try to contact him again or pick another reviewer.
-6. Once the PR has been approved, it should be squash-merged as soon as possible with a meaningful description of the changes. Although it is optional, we encourage the use of the [Conventional Commits][conventional-commits] specification for writing informative and automation-friendly commit messages (_commit types: `fix`, `feat`, `build`, `ci`, `docs`, `style`, `refactor`, `perf`, `test`_).
+4. The pull request should have a proper description of its intent and the main changes in the code. In general this description should be used as commit message if the pull request is approved (check point **6.** below).
+5. Pick one reviewer and try to contact them directly to let them know about the pull request. If there is no feedback in 24h/48h try to contact them again or pick another reviewer.
+6. Once the pull request has been approved, it should be squash-merged as soon as possible with a meaningful description of the changes. Although it is optional, we encourage the use of the [Conventional Commits][conventional-commits] specification for writing informative and automation-friendly commit messages (_commit types: `fix`, `feat`, `build`, `ci`, `docs`, `style`, `refactor`, `perf`, `test`_).
 
 
 ## Releasing Process
 
-This section documents the process of releasing new versions of GT4Py and it's only useful to core members of the development team.
+This section documents the process of releasing new versions of GT4Py and it is only useful to core members of the development team.
 
 Currently, GT4Py releases are published as commit tags in the main GitHub repository (although they will be soon available in TestPyPi and PyPI). To create a new release you should:
 
@@ -211,7 +211,7 @@ Currently, GT4Py releases are published as commit tags in the main GitHub reposi
 
 ## Tools
 
-As mentioned above, we use several tools that help us write high-quality code. New tools could be added in the future, especially if they do not add a large overhead to our workflow and we think they bring extra benefits to keep our codebase in shape. The most important ones we currently rely on are:
+As mentioned above, we use several tools to help us write high-quality code. New tools could be added in the future, especially if they do not add a large overhead to our workflow and they bring extra benefits to keep our codebase in shape. The most important ones which we currently rely on are:
 
    - [Black][black] for autoformatting source code.
    - [isort][isort] for autoformatting import statements.

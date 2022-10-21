@@ -2,12 +2,12 @@ import numpy as np
 import pytest
 
 from functional.common import Dimension
-from functional.fencil_processors.runners import double_roundtrip, roundtrip
-from functional.fencil_processors.runners.gtfn_cpu import run_gtfn
+from functional.program_processors.runners import double_roundtrip, roundtrip
 from functional.iterator import transforms
 from functional.iterator.builtins import *
 from functional.iterator.embedded import np_as_located_field
 from functional.iterator.runtime import closure, fendef, fundef, offset
+from functional.program_processors.runners.gtfn_cpu import run_gtfn
 
 from .conftest import run_processor
 from .hdiff_reference import hdiff_reference
@@ -60,11 +60,11 @@ def hdiff(inp, coeff, out, x, y):
     )
 
 
-def test_hdiff(hdiff_reference, fencil_processor, lift_mode):
-    fencil_processor, validate = fencil_processor
-    if fencil_processor == run_gtfn:
+def test_hdiff(hdiff_reference, program_processor, lift_mode):
+    program_processor, validate = program_processor
+    if program_processor == run_gtfn:
         pytest.xfail("origin not yet supported in gtfn")
-    if lift_mode == transforms.LiftMode.FORCE_TEMPORARIES and fencil_processor in (
+    if lift_mode == transforms.LiftMode.FORCE_TEMPORARIES and program_processor in (
         roundtrip.executor,
         double_roundtrip.executor,
     ):
@@ -78,7 +78,7 @@ def test_hdiff(hdiff_reference, fencil_processor, lift_mode):
     out_s = np_as_located_field(IDim, JDim)(np.zeros_like(coeff[:, :, 0]))
 
     run_processor(
-        hdiff, fencil_processor, inp_s, coeff_s, out_s, shape[0], shape[1], lift_mode=lift_mode
+        hdiff, program_processor, inp_s, coeff_s, out_s, shape[0], shape[1], lift_mode=lift_mode
     )
 
     if validate:

@@ -1,10 +1,10 @@
 import numpy as np
 import pytest
 
-from functional.fencil_processors.runners.gtfn_cpu import run_gtfn
 from functional.iterator.builtins import cartesian_domain, deref, lift, named_range, shift
 from functional.iterator.embedded import np_as_located_field
 from functional.iterator.runtime import CartesianAxis, closure, fendef, fundef, offset
+from functional.program_processors.runners.gtfn_cpu import run_gtfn
 
 from .conftest import run_processor
 
@@ -60,10 +60,10 @@ def naive_lap(inp):
     return out
 
 
-def test_anton_toy(fencil_processor, lift_mode):
-    fencil_processor, validate = fencil_processor
+def test_anton_toy(program_processor, lift_mode):
+    program_processor, validate = program_processor
 
-    if fencil_processor == run_gtfn:
+    if program_processor == run_gtfn:
         pytest.xfail("TODO: this test does not validate")
 
     shape = [5, 7, 9]
@@ -75,7 +75,7 @@ def test_anton_toy(fencil_processor, lift_mode):
     ref = naive_lap(inp)
 
     run_processor(
-        fencil, fencil_processor, shape[0], shape[1], shape[2], out, inp, lift_mode=lift_mode
+        fencil, program_processor, shape[0], shape[1], shape[2], out, inp, lift_mode=lift_mode
     )
 
     if validate:

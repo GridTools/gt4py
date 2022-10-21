@@ -22,7 +22,6 @@ import pytest
 import eve
 from eve.pattern_matching import ObjectPattern as P
 from functional.common import Field, GridType, GTTypeError
-from functional.fencil_processors.runners import gtfn_cpu, roundtrip
 from functional.ffront import common_types, program_ast as past
 from functional.ffront.decorator import field_operator, program
 from functional.ffront.func_to_past import ProgramParser
@@ -30,6 +29,7 @@ from functional.ffront.past_passes.type_deduction import ProgramTypeError
 from functional.ffront.past_to_itir import ProgramLowering
 from functional.iterator import ir as itir
 from functional.iterator.embedded import np_as_located_field
+from functional.program_processors.runners import gtfn_cpu, roundtrip
 
 from .past_common_fixtures import (
     IDim,
@@ -256,3 +256,25 @@ def test_wrong_argument_type(fieldview_backend, copy_program_def):
     ]
     for msg in msgs:
         assert re.search(msg, exc_info.value.__cause__.args[0]) is not None
+
+
+def test_dimensions_domain():
+    size = 10
+    a = np_as_located_field(IDim, JDim)(np.ones((size, size)))
+    out_field = np_as_located_field(IDim, JDim)(np.ones((size, size)))
+
+    @field_operator()
+    def empty_domain_fieldop(a: Field[[IDim, JDim], float64]):
+        return a
+
+    @program
+    def empty_domain_program(
+        a: Field[[IDim, JDim], float64], out_field: Field[[IDim, JDim], float64]
+    ):
+        empty_domain_fieldop(a, out=out_field, domain={JDim: (0, 1), IDim: (0, 1)})
+
+    with pytest.raises(
+        GTTypeError,
+        match=(r"Dimensions in out field and field domain are not equivalent"),
+    ):
+        empty_domain_program(a, out_field, offset_provider={})
