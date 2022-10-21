@@ -128,9 +128,6 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         right: past.Expr,
         **kwargs,
     ) -> Optional[ct.SymbolType]:
-        left_type = cast(ct.ScalarType, left.type)
-        right_type = cast(ct.ScalarType, left.type)
-
         logical_ops = {ct.BinaryOperator.BIT_AND, ct.BinaryOperator.BIT_OR}
         is_compatible = type_info.is_logical if node.op in logical_ops else type_info.is_arithmetic
 
@@ -140,6 +137,9 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                 raise ProgramTypeError.from_past_node(
                     arg, msg=f"Type {arg.type} can not be used in operator `{node.op}`!"
                 )
+
+        left_type = cast(ct.FieldType | ct.ScalarType, left.type)
+        right_type = cast(ct.FieldType | ct.ScalarType, right.type)
 
         if node.op == ct.BinaryOperator.POW:
             return left_type
