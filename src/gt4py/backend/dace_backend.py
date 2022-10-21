@@ -194,6 +194,8 @@ def _post_expand_trafos(sdfg: dace.SDFG):
     sdfg.apply_transformations_repeated(InlineThreadLocalTransients, validate=False)
     sdfg.simplify(validate=False)
     nest_sequential_map_scopes(sdfg)
+    for sd in sdfg.all_sdfgs_recursive():
+        sd.openmp_sections = False
 
 
 def _sdfg_add_arrays_and_edges(
@@ -540,8 +542,6 @@ class DaCeComputationCodegen:
     @classmethod
     def apply(cls, stencil_ir: gtir.Stencil, builder: "StencilBuilder", sdfg: dace.SDFG):
         self = cls()
-        for sd in sdfg.all_sdfgs_recursive():
-            sd.openmp_sections = False
         with dace.config.temporary_config():
             dace.config.Config.set("compiler", "cuda", "max_concurrent_streams", value=-1)
             dace.config.Config.set("compiler", "cpu", "openmp_sections", value=False)
