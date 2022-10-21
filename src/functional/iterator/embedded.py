@@ -226,7 +226,7 @@ class Column(np.lib.mixins.NDArrayOperatorsMixin):
         )
 
 
-def _make_column(column_range: range, dtype=np.dtype):
+def _make_column(column_range: range, dtype: np.dtype):
     return Column(column_range.start, np.zeros(len(column_range), dtype=dtype))
 
 
@@ -1024,7 +1024,7 @@ class TupleOfFields(TupleField):
 
     def __setitem__(self, indices, value):
         if not isinstance(value, tuple):
-            raise RuntimeError("Value needs to be tuple.")
+            raise RuntimeError(f"Value needs to be tuple, got {value}.")
 
         _tuple_assign(self.data, value, indices)
 
