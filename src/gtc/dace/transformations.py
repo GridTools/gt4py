@@ -6,30 +6,35 @@ from dace.transformation.interstate import InlineTransients
 
 def eliminate_trivial_maps(sdfg: dace.SDFG):
     """Remove maps and map ranges where the iteration is over a single index."""
+
+    def _filter_map_entries(args):
+        candidate, state = args
+        if not isinstance(candidate, dace.nodes.MapEntry):
+            return False
+        if candidate.map.schedule not in {
+            dace.ScheduleType.Sequential,
+            dace.ScheduleType.CPU_Multicore,
+        }:
+            return False
+        if any(
+            edge.data.is_empty()
+            for edge in state.in_edges(candidate) + state.out_edges(state.exit_node(candidate))
+        ):
+            return False
+        return True
+
     applied = True
     while applied:
         applied = False
-        for map_entry, state in sdfg.all_nodes_recursive():
-            if isinstance(map_entry, dace.nodes.MapEntry):
-                if map_entry.map.schedule in {
-                    dace.ScheduleType.Sequential,
-                    dace.ScheduleType.CPU_Multicore,
-                }:
-                    # exclude maps with empty edges as workaround for a bug in TrivialMapElimination
-                    if any(
-                        edge.data.is_empty()
-                        for edge in state.in_edges(map_entry)
-                        + state.out_edges(state.exit_node(map_entry))
-                    ):
-                        continue
-                    try:
-                        TrivialMapElimination.apply_to(
-                            state.parent, map_entry=map_entry, verify=True, save=False
-                        )
-                        applied = True
-                        break
-                    except ValueError:
-                        continue
+        for map_entry, state in filter(_filter_map_entries, sdfg.all_nodes_recursive()):
+            try:
+                TrivialMapElimination.apply_to(
+                    state.parent, map_entry=map_entry, verify=True, save=False
+                )
+                applied = True
+                break
+            except ValueError:
+                continue
 
 
 class InlineThreadLocalTransients(dace.transformation.SingleStateTransformation):

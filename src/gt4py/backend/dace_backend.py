@@ -549,7 +549,7 @@ class DaCeComputationCodegen:
         computations = cls._postprocess_dace_code(code_objects, is_gpu, builder)
         if not is_gpu and any(
             array.transient and array.lifetime == dace.AllocationLifetime.Persistent
-            for array in sdfg.arrays_recursive()
+            for *_, array in sdfg.arrays_recursive()
         ):
             omp_threads = "int omp_max_threads = omp_get_max_threads();"
             omp_header = "#include <omp.h>"
