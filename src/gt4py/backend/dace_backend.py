@@ -21,7 +21,6 @@ from typing import TYPE_CHECKING, Dict, List, Optional, Tuple, Type
 
 import dace
 import dace.data
-import numpy as np
 from dace.sdfg.utils import inline_sdfgs
 from dace.serialize import dumps
 
@@ -39,6 +38,7 @@ from gt4py.backend.gtc_common import (
 )
 from gt4py.backend.module_generator import make_args_data_from_gtir
 from gt4py.utils import shash
+from gt4py.utils.layout import layout_checker_factory
 from gtc import common, gtir
 from gtc.dace.nodes import StencilComputation
 from gtc.dace.oir_to_dace import OirSDFGBuilder
@@ -659,7 +659,6 @@ class DaCeBindingsCodegen:
                 domain_dim_flags=domain_dim_flags,
                 data_ndim=data_ndim,
                 stride_kind_index=self.unique_index(),
-                check_layout=False,
                 backend=self.backend,
             )
 
@@ -751,8 +750,7 @@ class DaceCPUBackend(BaseDaceBackend):
         "alignment": 1,
         "device": "cpu",
         "layout_map": layout_maker_factory((0, 1, 2)),
-        "is_compatible_layout": lambda *args: True,
-        "is_compatible_type": lambda x: isinstance(x, np.ndarray),
+        "is_optimal_layout": layout_checker_factory(layout_maker_factory((0, 1, 2))),
     }
     MODULE_GENERATOR_CLASS = DaCePyExtModuleGenerator
 
@@ -772,7 +770,7 @@ class DaceGPUBackend(BaseDaceBackend):
         "alignment": 32,
         "device": "gpu",
         "layout_map": layout_maker_factory((2, 1, 0)),
-        "is_compatible_layout": lambda *args: True,
+        "is_optimal_layout": layout_checker_factory(layout_maker_factory((2, 1, 0))),
     }
     MODULE_GENERATOR_CLASS = DaCeCUDAPyExtModuleGenerator
     options = {

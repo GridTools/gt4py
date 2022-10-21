@@ -404,12 +404,16 @@ class StencilObject(abc.ABC):
                 arg_info = arg_infos[name]
                 assert arg_info is not None
 
-                if not gt_backend.from_name(self.backend).storage_info["is_compatible_layout"](
+                if not gt_backend.from_name(self.backend).storage_info["is_optimal_layout"](
                     arg_info.array,
                     list(field_info.axes) + [str(d) for d in range(len(field_info.data_dims))],
                 ):
-                    raise ValueError(
-                        f"The layout of the field {name} is not compatible with the backend."
+                    import warnings
+
+                    warnings.warn(
+                        f"The layout of the field '{name}' is not recommended for this backend."
+                        f"This may lead to performance degradation. Please consider using the"
+                        f"provided allocators in `gt4py.storage`."
                     )
 
                 field_dtype = self.field_info[name].dtype
