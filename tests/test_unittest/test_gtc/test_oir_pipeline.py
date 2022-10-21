@@ -36,4 +36,4 @@ def test_add_steps():
     add_steps = [FillFlushToLocalKCaches]
     pipeline = DefaultPipeline(add_steps=add_steps)
     pipeline.run(StencilFactory())
-    assert all(s in pipeline.steps for s in add_steps)
+    assert all(s in pipeline.add_steps for s in add_steps)

@@ -12,7 +12,6 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import itertools
 from abc import abstractmethod
 from typing import Callable, Optional, Protocol, Sequence, Type, Union
 
@@ -65,8 +64,8 @@ class DefaultPipeline(OirPipeline):
     def __init__(
         self, *, skip: Optional[Sequence[PassT]] = None, add_steps: Optional[Sequence[PassT]] = None
     ):
-        self.skip = skip or []
-        self.add_steps = add_steps or []
+        self.skip = list(skip or [])
+        self.add_steps = list(add_steps or [])
 
     @staticmethod
     def all_steps() -> Sequence[PassT]:
@@ -88,7 +87,7 @@ class DefaultPipeline(OirPipeline):
 
     @property
     def steps(self) -> Sequence[PassT]:
-        return [step for step in self.all_steps() if step not in self.skip]
+        return [step for step in self.all_steps() if step not in self.skip] + self.add_steps
 
     def __hash__(self) -> int:
         return hash(repr(self))
@@ -100,7 +99,7 @@ class DefaultPipeline(OirPipeline):
         return isinstance(other, DefaultPipeline) and self.skip == other.skip
 
     def run(self, oir: oir.Stencil) -> oir.Stencil:
-        for step in itertools.chain(self.steps, self.add_steps):
+        for step in self.steps:
             if isinstance(step, type) and issubclass(step, NodeVisitor):
                 oir = step().visit(oir)
             else:
