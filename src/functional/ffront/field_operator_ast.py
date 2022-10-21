@@ -97,7 +97,7 @@ class UnaryOp(Expr):
 
 
 class BinOp(Expr):
-    op: BinaryOperator
+    op: ct.BinaryOperator
     left: Expr
     right: Expr
 
