@@ -540,6 +540,8 @@ class DaCeComputationCodegen:
     @classmethod
     def apply(cls, stencil_ir: gtir.Stencil, builder: "StencilBuilder", sdfg: dace.SDFG):
         self = cls()
+        for sd in sdfg.all_sdfgs_recursive():
+            sd.openmp_sections = False
         with dace.config.temporary_config():
             dace.config.Config.set("compiler", "cuda", "max_concurrent_streams", value=-1)
             dace.config.Config.set("compiler", "cpu", "openmp_sections", value=False)
