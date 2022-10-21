@@ -23,6 +23,7 @@ class NoEmptyEdgeTrivialMapElimination(TrivialMapElimination):
             edge.data.is_empty() for edge in graph.in_edges(map_entry) + graph.out_edges(map_exit)
         ):
             return False
+        return True
 
 
 class InlineThreadLocalTransients(dace.transformation.SingleStateTransformation):

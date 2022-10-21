@@ -114,8 +114,6 @@ class HorizontalExecutionSplitter(eve.NodeTranslator):
                 stmt.mask
             ):
                 continue
-            elif isinstance(stmt, oir.LocalScalar):
-                continue
             elif isinstance(stmt, oir.AssignStmt) and isinstance(stmt.left, oir.ScalarAccess):
                 continue
             return False
