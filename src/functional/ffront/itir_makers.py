@@ -153,6 +153,8 @@ def divides_(left, right):
 
 def floordiv_(left, right):
     """Create a floor division FunCall, shorthand for ``call("floordiv")(left, right)``."""
+    # TODO(tehrengruber): Use int(floor(left/right)) as soon as we support integer casting
+    #  and remove the `floordiv` builtin again.
     return call_("floordiv")(left, right)
 
 
