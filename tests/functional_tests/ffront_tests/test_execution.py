@@ -14,8 +14,8 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 from collections import namedtuple
-from typing import TypeVar
 from functools import reduce
+from typing import TypeVar
 
 import numpy as np
 import pytest
@@ -570,17 +570,7 @@ def test_conditional_nested_tuple():
     ]:
         return where(mask, ((a, b), (b, a)), ((5.0, 7.0), (7.0, 5.0)))
 
-    @program
-    def conditional_tuple_3_p(
-        mask: Field[[IDim], bool],
-        a: Field[[IDim], float64],
-        b: Field[[IDim], float64],
-        c: Field[[IDim], float64],
-        d: Field[[IDim], float64],
-    ):
-        conditional_tuple_3_field_op(mask, a, b, out=((c, d), (d, c)))
-
-    conditional_tuple_3_p(mask, a, b, c, d, offset_provider={})
+    conditional_tuple_3_field_op(mask, a, b, out=((c, d), (d, c)), offset_provider={})
 
     assert np.allclose(
         np.where(
@@ -1103,8 +1093,13 @@ def test_scan_nested_tuple_input(fieldview_backend, forward):
     inp2 = np_as_located_field(KDim)(np.arange(0.0, size, 1))
     out = np_as_located_field(KDim)(np.zeros((size,)))
 
-    prev_levels_iterator = lambda i: range(i+1) if forward else range(size-1, i-1, -1)
-    expected = np.asarray([reduce(lambda prev, i: prev+inp1[i]+inp2[i], prev_levels_iterator(i), init) for i in range(size)])
+    prev_levels_iterator = lambda i: range(i + 1) if forward else range(size - 1, i - 1, -1)
+    expected = np.asarray(
+        [
+            reduce(lambda prev, i: prev + inp1[i] + inp2[i], prev_levels_iterator(i), init)
+            for i in range(size)
+        ]
+    )
 
     @scan_operator(axis=KDim, forward=forward, init=init, backend=fieldview_backend)
     def simple_scan_operator(carry: float, a: tuple[float, float]) -> float:

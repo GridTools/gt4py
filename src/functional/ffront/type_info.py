@@ -560,21 +560,19 @@ def function_signature_incompatibilities_scanop(
 
     promoted_args = []
     for i, scan_pass_arg in enumerate(scanop_type.definition.args[1:]):
-
+        # Helper function that given a scalar type in the signature of the scan
+        # pass return a field type with that dtype and the dimensions of the
+        # corresponding field type in the requested `args` type. Defined here
+        # as we capture `i`.
         def _as_field(dtype: ct.ScalarType, path: tuple[int, ...]):
-            """
-            Given a scalar type in the signature of the scan pass return a
-            field type with that dtype and the dimensions of the corresponding
-            field type in the requested `args` type.
-            """
             try:
-                el_type = reduce(lambda type_, idx: type_.types[idx], path, args[i])
-                return ct.FieldType(dims=extract_dims(el_type), dtype=cast(ct.ScalarType, dtype))
-            except IndexError:
+                el_type = reduce(lambda type_, idx: type_.types[idx], path, args[i])  # type: ignore[attr-defined]
+                return ct.FieldType(dims=extract_dims(el_type), dtype=dtype)
+            except (IndexError, AttributeError):
                 # The structure of the scan passes argument and the requested
                 # argument type differ. As such we can not extract the dimensions
                 # and just return a generic field shown in the error later on.
-                return ct.FieldType(dims=..., dtype=cast(ct.ScalarType, dtype))
+                return ct.FieldType(dims=..., dtype=dtype)
 
         promoted_args.append(
             apply_to_primitive_constituents(scan_pass_arg, _as_field, with_path_arg=True)
