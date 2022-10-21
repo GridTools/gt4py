@@ -51,8 +51,6 @@ from functional.ffront.past_passes.type_deduction import ProgramTypeDeduction, P
 from functional.ffront.past_to_itir import ProgramLowering
 from functional.ffront.source_utils import SourceDefinition, get_closure_vars_from_function
 from functional.iterator import ir as itir
-
-from functional.iterator.embedded import constant_field
 from functional.program_processors import processor_interface as ppi
 from functional.program_processors.runners import roundtrip
 

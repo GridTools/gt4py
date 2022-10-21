@@ -19,14 +19,13 @@ from eve import Coerced, Node, SourceLocation, SymbolName, SymbolRef
 from eve.traits import SymbolTableTrait
 from eve.type_definitions import StrEnum
 from functional.ffront import common_types as ct
-from functional.ffront.common_types import BinaryOperator
 
 
 class LocatedNode(Node):
     location: SourceLocation
 
 
-SymbolT = TypeVar("SymbolT", bound=common_types.SymbolType)
+SymbolT = TypeVar("SymbolT", bound=ct.SymbolType)
 
 
 # TODO(egparedes): this should be an actual generic datamodel but it is not fully working
@@ -35,28 +34,28 @@ SymbolT = TypeVar("SymbolT", bound=common_types.SymbolType)
 #
 class Symbol(LocatedNode, Generic[SymbolT]):
     id: Coerced[SymbolName]  # noqa: A003  # shadowing a python builtin
-    type: Union[SymbolT, common_types.DeferredSymbolType]  # noqa A003
-    namespace: common_types.Namespace = common_types.Namespace(common_types.Namespace.LOCAL)
+    type: Union[SymbolT, ct.DeferredSymbolType]  # noqa A003
+    namespace: ct.Namespace = ct.Namespace(ct.Namespace.LOCAL)
 
 
-DataTypeT = TypeVar("DataTypeT", bound=common_types.DataType)
+DataTypeT = TypeVar("DataTypeT", bound=ct.DataType)
 DataSymbol = Symbol[DataTypeT]
 
-FieldTypeT = TypeVar("FieldTypeT", bound=common_types.FieldType)
+FieldTypeT = TypeVar("FieldTypeT", bound=ct.FieldType)
 FieldSymbol = DataSymbol[FieldTypeT]
 
-ScalarTypeT = TypeVar("ScalarTypeT", bound=common_types.ScalarType)
+ScalarTypeT = TypeVar("ScalarTypeT", bound=ct.ScalarType)
 ScalarSymbol = DataSymbol[ScalarTypeT]
 
-TupleTypeT = TypeVar("TupleTypeT", bound=common_types.TupleType)
+TupleTypeT = TypeVar("TupleTypeT", bound=ct.TupleType)
 TupleSymbol = DataSymbol[TupleTypeT]
 
-DimensionTypeT = TypeVar("DimensionTypeT", bound=common_types.DimensionType)
+DimensionTypeT = TypeVar("DimensionTypeT", bound=ct.DimensionType)
 DimensionSymbol = DataSymbol[DimensionTypeT]
 
 
 class Expr(LocatedNode):
-    type: common_types.SymbolType = common_types.DeferredSymbolType(constraint=None)  # noqa A003
+    type: ct.SymbolType = ct.DeferredSymbolType(constraint=None)  # noqa A003
 
 
 class Name(Expr):
@@ -147,13 +146,13 @@ class FunctionDefinition(LocatedNode, SymbolTableTrait):
     params: list[DataSymbol]
     body: list[Stmt]
     closure_vars: list[Symbol]
-    type: Optional[common_types.FunctionType] = None  # noqa A003  # shadowing a python builtin
+    type: Optional[ct.FunctionType] = None  # noqa A003  # shadowing a python builtin
 
 
 class FieldOperator(LocatedNode, SymbolTableTrait):
     id: Coerced[SymbolName]  # noqa: A003  # shadowing a python builtin
     definition: FunctionDefinition
-    type: Optional[common_types.FieldOperatorType] = None  # noqa A003  # shadowing a python builtin
+    type: Optional[ct.FieldOperatorType] = None  # noqa A003  # shadowing a python builtin
 
 
 class ScanOperator(LocatedNode, SymbolTableTrait):
@@ -162,4 +161,4 @@ class ScanOperator(LocatedNode, SymbolTableTrait):
     forward: Constant
     init: Constant
     definition: FunctionDefinition  # scan pass
-    type: Optional[common_types.ScanOperatorType] = None  # noqa A003 # shadowing a python builtin
+    type: Optional[ct.ScanOperatorType] = None  # noqa A003 # shadowing a python builtin
