@@ -79,7 +79,7 @@ def _get_symbolic_origin_and_domain(
         outer_subsets[edge.dst_conn[len("__in_") :]] = edge.data.subset
     for edge in state.out_edges(node):
         outer_subsets[edge.src_conn[len("__out_") :]] = dace.subsets.union(
-            edge.data.subset, outer_subsets.get(edge.src_conn, edge.data.subset)
+            edge.data.subset, outer_subsets.get(edge.src_conn[len("__out_") :], edge.data.subset)
         )
     # ensure single-use of input and output subset instances
     for edge in state.in_edges(node):
