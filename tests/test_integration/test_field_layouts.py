@@ -34,7 +34,7 @@ def test_numpy_allocators(backend, order):
     stencil = gtscript.stencil(definition=copy_stencil, backend=backend)
     stencil(field_a=inp, field_b=outp)
 
-    cp.testing.assert_array_equal(outp, inp)
+    np.testing.assert_array_equal(outp, inp)
 
 
 @pytest.mark.parametrize("backend", PERFORMANCE_BACKENDS)
