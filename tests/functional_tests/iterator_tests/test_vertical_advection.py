@@ -2,12 +2,14 @@ import numpy as np
 import pytest
 
 from functional.common import Dimension
-from functional.fencil_processors.formatters.gtfn import format_sourcecode as gtfn_format_sourcecode
-from functional.fencil_processors.runners.gtfn_cpu import run_gtfn
 from functional.iterator.builtins import *
 from functional.iterator.embedded import np_as_located_field
 from functional.iterator.runtime import closure, fendef, fundef
 from functional.iterator.transforms import LiftMode
+from functional.program_processors.formatters.gtfn import (
+    format_sourcecode as gtfn_format_sourcecode,
+)
+from functional.program_processors.runners.gtfn_cpu import run_gtfn
 
 from .conftest import run_processor
 
@@ -104,10 +106,10 @@ def fen_solve_tridiag2(i_size, j_size, k_size, a, b, c, d, x):
 
 
 @pytest.fixture
-def tridiag_test(tridiag_reference, fencil_processor, lift_mode):
-    fencil_processor, validate = fencil_processor
+def tridiag_test(tridiag_reference, program_processor, lift_mode):
+    program_processor, validate = program_processor
     if (
-        fencil_processor == run_gtfn or fencil_processor == gtfn_format_sourcecode
+        program_processor == run_gtfn or program_processor == gtfn_format_sourcecode
     ) and lift_mode == LiftMode.FORCE_INLINE:
         pytest.xfail("gtfn does only support lifted scans when using temporaries")
     a, b, c, d, x = tridiag_reference
@@ -122,7 +124,7 @@ def tridiag_test(tridiag_reference, fencil_processor, lift_mode):
     def run(fencil):
         run_processor(
             fencil,
-            fencil_processor,
+            program_processor,
             shape[0],
             shape[1],
             shape[2],

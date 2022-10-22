@@ -168,6 +168,8 @@ if _CLANG_FORMAT_EXECUTABLE is not None:
         if sort_includes:
             args.append("--sort-includes")
 
+        return source  # TODO
+
         try:
             # use a timeout as clang-format used to deadlock on some sources
             formatted_source = subprocess.run(

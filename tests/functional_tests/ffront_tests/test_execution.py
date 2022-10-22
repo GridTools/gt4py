@@ -21,7 +21,6 @@ import numpy as np
 import pytest
 
 from functional.common import DimensionKind
-from functional.fencil_processors.runners import gtfn_cpu, roundtrip
 from functional.ffront.decorator import field_operator, program, scan_operator
 from functional.ffront.fbuiltins import (
     Dimension,
@@ -42,6 +41,7 @@ from functional.iterator.embedded import (
     index_field,
     np_as_located_field,
 )
+from functional.program_processors.runners import gtfn_cpu, roundtrip
 
 
 @pytest.fixture(params=[roundtrip.executor, gtfn_cpu.run_gtfn])
@@ -54,7 +54,7 @@ def debug_itir(tree):
     from devtools import debug
 
     from eve.codegen import format_python_source
-    from functional.fencil_processors import EmbeddedDSL
+    from functional.program_processors import EmbeddedDSL
 
     debug(format_python_source(EmbeddedDSL.apply(tree)))
 
