@@ -32,13 +32,14 @@ class CountSymbolRefs(NodeVisitor):
 @dataclasses.dataclass
 class InlineLambdas(NodeTranslator):
     """Inline lambda calls by substituting every argument by its value."""
+    recurse: bool
 
     opcount_preserving: bool
 
     force_inline_lift: bool
 
     @classmethod
-    def apply(cls, node: ir.Node, opcount_preserving=False, force_inline_lift=False):
+    def apply(cls, node: ir.Node, opcount_preserving=False, force_inline_lift=False, recurse=True):
         """
         Inline lambda calls by substituting every arguments by its value.
 
@@ -54,11 +55,12 @@ class InlineLambdas(NodeTranslator):
             operations.
         """
         return cls(opcount_preserving=opcount_preserving,
-                   force_inline_lift=force_inline_lift).visit(
+                   force_inline_lift=force_inline_lift,
+                   recurse=recurse).visit(
             node)
 
     def visit_FunCall(self, node: ir.FunCall):
-        node = self.generic_visit(node)
+        node = self.generic_visit(node) if self.recurse else node
         if isinstance(node.fun, ir.Lambda):
             assert len(node.fun.params) == len(node.args)
 
@@ -92,7 +94,6 @@ class InlineLambdas(NodeTranslator):
             clashes = refs & syms
             expr = node.fun.expr
             if clashes:
-
                 def new_name(name):
                     while name in refs or name in syms:
                         name += "_"

@@ -123,7 +123,7 @@ def apply_common_transforms(
     ir = PruneUnreferencedFundefs().visit(ir)
     ir = NormalizeShifts().visit(ir)
     if lift_mode != LiftMode.FORCE_TEMPORARIES:
-        for _ in range(30):
+        for _ in range(10):
             inlined = _inline_lifts(ir, lift_mode)
             inlined = InlineLambdas.apply(inlined)
             inlined = InlineTupleAccess().visit(inlined)
