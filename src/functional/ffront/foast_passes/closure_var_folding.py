@@ -46,7 +46,7 @@ class ClosureVarFolding(NodeTranslator, traits.VisitorWithSymbolTableTrait):
         # TODO: fix import form parent module by restructuring exception classis
         from functional.ffront.func_to_foast import FieldOperatorSyntaxError
 
-        value = self.visit(node.value)
+        value = self.visit(node.value, **kwargs)
         if isinstance(value, foast.Constant):
             if hasattr(value.value, node.attr):
                 return foast.Constant(value=getattr(value.value, node.attr), location=node.location)
