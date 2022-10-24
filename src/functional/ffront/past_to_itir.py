@@ -100,7 +100,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                     type_info.primitive_constituents(param.type).getattr("dims").to_list()
                 )
                 assert all(field_dims == fields_dims[0] for field_dims in fields_dims)
-                for dim_idx in range(0, len(fields_dims[0])):
+                for dim_idx in range(len(fields_dims[0])):
                     size_params.append(itir.Sym(id=_size_arg_from_field(param.id, dim_idx)))
 
         return size_params
@@ -200,7 +200,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             raise AssertionError(
                 f"Expected constituents of `{out_field.id}` argument to be"
                 f" fields defined on the same dimensions. This error should be "
-                f" catched in type deduction already."
+                f" caught in type deduction already."
             )
         dims = out_field_types[0].dims
 

@@ -129,7 +129,7 @@ def _deduce_grid_type(
 
 
 def _field_constituents_shape_and_dims(
-    arg, arg_type: ct.FieldType | ct.ScalarType
+    arg, arg_type: ct.FieldType | ct.ScalarType | ct.TupleType
 ) -> Generator[tuple[tuple[int, ...], list[Dimension]]]:
     if isinstance(arg_type, ct.TupleType):
         for el, el_type in zip(arg, arg_type.types):
@@ -142,7 +142,7 @@ def _field_constituents_shape_and_dims(
         else:
             yield (None, dims)
     else:
-        raise ValueError("Expected a `FieldType` or `TupleType` thereof.")
+        raise ValueError("Expected `FieldType` or `TupleType` thereof.")
 
 
 # TODO(tehrengruber): Decide if and how programs can call other programs. As a

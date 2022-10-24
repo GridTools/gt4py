@@ -77,7 +77,7 @@ def primitive_constituents(
 
 
 def apply_to_primitive_constituents(
-    symbol_type: ct.SymbolType, f: Callable, with_path_arg=False, _path=()
+    symbol_type: ct.SymbolType, fun: Callable[[ct.SymbolType], ct.SymbolType], with_path_arg=False, _path=()
 ):
     """
     Apply function to all primitive constituents of a type.
@@ -91,20 +91,20 @@ def apply_to_primitive_constituents(
         return ct.TupleType(
             types=[
                 apply_to_primitive_constituents(
-                    el, f, _path=(*_path, i), with_path_arg=with_path_arg
+                    el, fun, _path=(*_path, i), with_path_arg=with_path_arg
                 )
                 for i, el in enumerate(symbol_type.types)
             ]
         )
     if with_path_arg:
-        return f(symbol_type, _path)
+        return fun(symbol_type, _path)
     else:
-        return f(symbol_type)
+        return fun(symbol_type)
 
 
 def extract_dtype(symbol_type: ct.SymbolType) -> ct.ScalarType:
     """
-    Extract the data type from ``symbol_type`` if it is one of FieldType or ScalarType.
+    Extract the data type from ``symbol_type`` if it is either `FieldType` or `ScalarType`.
 
     Raise an error if no dtype can be found or the result would be ambiguous.
 

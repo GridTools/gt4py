@@ -466,7 +466,7 @@ class FieldOperatorLowering(NodeTranslator):
             return im.literal_(str(node.args[0].value), node.type.kind.name.lower())
         raise FieldOperatorLoweringError(f"Encountered a type cast, which is not supported: {node}")
 
-    def _make_literal(self, val: Any, type_: ct.ScalarType) -> itir.Literal:
+    def _make_literal(self, val: Any, type_: ct.ScalarType | ct.TupleType) -> itir.Literal:
         # TODO(tehrengruber): check constant of this type is supported in iterator ir
         if isinstance(type_, ct.TupleType):
             return im.make_tuple_(
