@@ -4,7 +4,6 @@ from typing import Callable
 import numpy as np
 import pytest
 
-from functional.fencil_processors.runners import roundtrip
 from functional.ffront import (
     common_types as ct,
     fbuiltins,
@@ -15,6 +14,7 @@ from functional.ffront.decorator import FieldOperator
 from functional.ffront.fbuiltins import Dimension, Field, float64, int32, int64
 from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduction
 from functional.iterator.embedded import np_as_located_field
+from functional.program_processors.runners import roundtrip
 
 from ..iterator_tests.math_builtin_test_data import math_builtin_test_data
 
