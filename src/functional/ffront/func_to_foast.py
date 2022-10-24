@@ -189,16 +189,16 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
 
     def visit_Assign(self, node: ast.Assign, **kwargs) -> foast.Assign:
         target = node.targets[0]  # there is only one element after assignment passes
-
         if isinstance(target, ast.Tuple):
 
+            constraint_type = ct.DataType
             ts = []
 
             for elt in target.elts:
                 if isinstance(elt, ast.Starred):
-                    ts.append(self.visit(elt))
+                    ts.append(foast.DataSymbol(id=elt.value.id, location=self._make_loc(elt), type=ct.DeferredSymbolType(constraint=constraint_type)))
                 else:
-                    ts.append(foast.DataSymbol(id=elt.id, location=self._make_loc(elt), type=ct.DeferredSymbolType(constraint=None)))
+                    ts.append(foast.DataSymbol(id=elt.id, location=self._make_loc(elt), type=ct.DeferredSymbolType(constraint=constraint_type)))
 
             mta = foast.MultiTargetAssign(target=ts, value=self.visit(node.value), location=self._make_loc(node))
             return mta

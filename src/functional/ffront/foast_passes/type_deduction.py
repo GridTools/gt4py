@@ -251,6 +251,26 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         new_target = self.visit(node.target, refine_type=new_value.type, **kwargs)
         return foast.Assign(target=new_target, value=new_value, location=node.location)
 
+    def visit_MultiTargetAssign(self, node: foast.MultiTargetAssign, **kwargs) -> foast.MultiTargetAssign:
+        targets = []
+        values = []
+
+        for _, elt in enumerate(node.value.elts):
+            if not type_info.is_concrete(elt.type):
+                new_value = self.visit(elt, **kwargs)
+                values.append(new_value)
+
+        for _, elt in enumerate(node.target):
+            if not type_info.is_concrete(elt.type):
+                new_target = self.visit(elt, refine_type=new_value.type, **kwargs)
+                targets.append(new_target)
+
+        # todo: right now all targets and values are assumed to have the same type
+
+        mta = foast.MultiTargetAssign(target=targets, value=node.value, location=node.location)
+        return mta
+
+
     def visit_Symbol(
         self,
         node: foast.Symbol,
