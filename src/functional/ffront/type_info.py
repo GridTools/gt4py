@@ -78,7 +78,8 @@ def primitive_constituents(
 
 def apply_to_primitive_constituents(
     symbol_type: ct.SymbolType,
-    fun: Callable[[ct.SymbolType], ct.SymbolType],
+    fun: Callable[[ct.SymbolType], ct.SymbolType]
+    | Callable[[ct.SymbolType | tuple[int, ...]], ct.SymbolType],
     with_path_arg=False,
     _path=(),
 ):
