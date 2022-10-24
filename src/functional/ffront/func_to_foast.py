@@ -189,11 +189,20 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
 
     def visit_Assign(self, node: ast.Assign, **kwargs) -> foast.Assign:
         target = node.targets[0]  # there is only one element after assignment passes
+
         if isinstance(target, ast.Tuple):
-            t = [self.visit(elt) for elt in target.elts]
-            v = [self.visit(elt) for elt in node.value.elts]
-            mta = foast.MultiTargetAssign(target=t, value=v, location=self._make_loc(node))
+
+            ts = []
+
+            for elt in target.elts:
+                if isinstance(elt, ast.Starred):
+                    ts.append(self.visit(elt))
+                else:
+                    ts.append(foast.DataSymbol(id=elt.id, location=self._make_loc(elt), type=ct.DeferredSymbolType(constraint=None)))
+
+            mta = foast.MultiTargetAssign(target=ts, value=self.visit(node.value), location=self._make_loc(node))
             return mta
+
         if not isinstance(target, ast.Name):
             raise FieldOperatorSyntaxError.from_AST(node, msg="Can only assign to names!")
         new_value = self.visit(node.value)

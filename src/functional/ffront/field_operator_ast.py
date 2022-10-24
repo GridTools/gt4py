@@ -142,8 +142,8 @@ class Assign(Stmt):
 
 
 class MultiTargetAssign(Stmt):
-    target: list[FieldSymbol | TupleSymbol | ScalarSymbol | Star | Name]
-    value: Any
+    target: list[FieldSymbol | TupleSymbol | ScalarSymbol | Star]
+    value: Expr
 
 
 class Return(Stmt):
