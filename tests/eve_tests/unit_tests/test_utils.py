@@ -225,27 +225,6 @@ def test_case_style_converter(name_with_cases):
             ]
 
 
-# -- ConstantNamespace --
-def test_constant_namespace_add():
-    from eve.utils import ConstantNamespace
-
-    c = ConstantNamespace()
-    c.C1 = 5
-    c.C2 = 6
-    assert c.C1 == 5
-    assert c.C2 == 6
-
-
-def test_constant_namespace_modify():
-    from eve.utils import ConstantNamespace
-
-    c = ConstantNamespace()
-    c.C = 4
-    with pytest.raises(TypeError):
-        c.C = 5
-    assert c.C == 4
-
-
 # -- UIDGenerator --
 class TestUIDGenerator:
     def test_random_id(self):
