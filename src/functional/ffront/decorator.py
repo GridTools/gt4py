@@ -281,11 +281,13 @@ class Program:
             ) from err
 
     def _process_args(self, args: tuple, kwargs: dict) -> tuple[tuple, tuple, dict[str, Any]]:
+        past_params = self.past_node.params
         # if parameter is in signature but not in args, move it from kwargs to args
         if len(kwargs) > 0:
             new_args_ls = []
             kwargs_count = 0
-            for param_i, param in enumerate(self.past_node.params):
+            assert len(past_params) == len(kwargs) + len(args)
+            for param_i, param in enumerate(past_params):
                 if param.id in kwargs:
                     new_args_ls.append(kwargs[param.id])
                     kwargs.pop(param.id)
@@ -304,7 +306,7 @@ class Program:
         # extract size of all field arguments
         size_args: list[Optional[tuple[int, ...]]] = []
         rewritten_args = list(args)
-        for param_idx, param in enumerate(self.past_node.params):
+        for param_idx, param in enumerate(past_params):
             if isinstance(param.type, ct.ScalarType):
                 dtype = type_info.extract_dtype(param.type)
                 rewritten_args[param_idx] = constant_field(
