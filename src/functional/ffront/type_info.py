@@ -77,7 +77,10 @@ def primitive_constituents(
 
 
 def apply_to_primitive_constituents(
-    symbol_type: ct.SymbolType, fun: Callable[[ct.SymbolType], ct.SymbolType], with_path_arg=False, _path=()
+    symbol_type: ct.SymbolType,
+    fun: Callable[[ct.SymbolType], ct.SymbolType],
+    with_path_arg=False,
+    _path=(),
 ):
     """
     Apply function to all primitive constituents of a type.
