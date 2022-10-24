@@ -278,3 +278,35 @@ def test_dimensions_domain():
         match=(r"Dimensions in out field and field domain are not equivalent"),
     ):
         empty_domain_program(a, out_field, offset_provider={})
+
+
+def test_wrong_input_kwargs():
+    size = 10
+    a = np_as_located_field(IDim, JDim)(np.ones((size, size)) * 3)
+    b = np_as_located_field(IDim, JDim)(np.ones((size, size)))
+    out = np_as_located_field(IDim, JDim)(np.zeros((size, size)))
+
+    @field_operator
+    def fieldop_input_kwargs(
+        a: Field[[IDim, JDim], float64],
+        b: Field[[IDim, JDim], float64],
+    ) -> Field[[IDim, JDim], float64]:
+        return a * b + a
+
+    @program
+    def program_input_kwargs_1(
+        a: Field[[IDim, JDim], float64],
+        b: Field[[IDim, JDim], float64],
+    ) -> Field[[IDim, JDim], float64]:
+        fieldop_input_kwargs(a, b, out=out)
+
+    with pytest.raises(
+        GTTypeError,
+        match="Number of parameters in function call exceeds number in function definition",
+    ):
+        program_input_kwargs_1(a, b, a=b, offset_provider={})
+
+    with pytest.raises(ProgramTypeError) as exc_info:
+        program_input_kwargs_1(b, offset_provider={})
+
+    assert exc_info.match("Invalid argument types in call to `program_input_kwargs_1`")

@@ -260,6 +260,36 @@ class Program:
             offset_provider=offset_provider,
         )
 
+    def _refactor_args_kwargs(self, *args, **kwargs) -> tuple[tuple, dict]:
+        past_params = self.past_node.params
+
+        new_args_ls = [None] * len(past_params)
+        wrong_args = [False] * len(past_params)
+        kwargs_count = 0
+        if len(past_params) < len(args) + len(kwargs):
+            raise GTTypeError(
+                "Number of parameters in function call exceeds number in function definition."
+            )
+        for param_i, param in enumerate(past_params):
+            if param.id in kwargs:
+                new_args_ls[param_i] = kwargs[param.id]
+                kwargs.pop(param.id)
+                kwargs_count += 1
+            elif len(args) > param_i - kwargs_count:
+                new_args_ls[param_i] = args[param_i - kwargs_count]
+            else:
+                wrong_args[param_i] = True
+        if any(wrong_args):
+            past_false = [
+                wrong_arg_i for wrong_arg_i, wrong_arg in enumerate(wrong_args) if wrong_arg
+            ]
+            for i in past_false:
+                raise ProgramTypeError(
+                    past_params, f"{past_params[i].id} argument not in function call."
+                )
+        args = tuple(new_args_ls)
+        return args, kwargs
+
     def _validate_args(self, *args, **kwargs) -> None:
         if kwargs:
             raise NotImplementedError("Keyword arguments are not supported yet.")
@@ -280,20 +310,9 @@ class Program:
             ) from err
 
     def _process_args(self, args: tuple, kwargs: dict) -> tuple[tuple, tuple, dict[str, Any]]:
-        past_params = self.past_node.params
         # if parameter is in signature but not in args, move it from kwargs to args
         if len(kwargs) > 0:
-            new_args_ls = []
-            kwargs_count = 0
-            assert len(past_params) == len(kwargs) + len(args)
-            for param_i, param in enumerate(past_params):
-                if param.id in kwargs:
-                    new_args_ls.append(kwargs[param.id])
-                    kwargs.pop(param.id)
-                    kwargs_count += 1
-                else:
-                    new_args_ls.append(args[param_i - kwargs_count])
-            args = tuple(new_args_ls)
+            args, kwargs = self._refactor_args_kwargs(*args, **kwargs)
 
         self._validate_args(*args, **kwargs)
 

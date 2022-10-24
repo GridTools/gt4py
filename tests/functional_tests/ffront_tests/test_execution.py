@@ -1378,20 +1378,3 @@ def test_input_kwargs_4(fieldview_backend):
     program_input_kwargs(c, b, out=out, a=b, offset_provider={})
 
     assert np.allclose(np.asarray(out), expected)
-
-
-def test_input_kwargs_5(fieldview_backend):
-    size = 10
-    a = np_as_located_field(IDim, JDim)(np.ones((size, size)) * 3)
-    b = np_as_located_field(IDim, JDim)(np.ones((size, size)))
-    out = np_as_located_field(IDim, JDim)(np.zeros((size, size)))
-
-    @field_operator(backend=fieldview_backend)
-    def fieldop_input_kwargs(
-        a: Field[[IDim, JDim], float64],
-        b: Field[[IDim, JDim], float64],
-    ) -> Field[[IDim, JDim], float64]:
-        return a * b + a
-
-    with pytest.raises(AssertionError):
-        fieldop_input_kwargs(a, b, a=b, out=out, offset_provider={})
