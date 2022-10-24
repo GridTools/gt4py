@@ -17,37 +17,43 @@ from typing import Any, Generic, Literal, Optional, TypeVar, Union
 import eve
 from eve import Coerced, Node, SourceLocation, SymbolName, SymbolRef
 from eve.traits import SymbolTableTrait
-from functional.ffront import common_types
+from functional.ffront import common_types as ct
 
 
 class LocatedNode(Node):
     location: SourceLocation
 
 
-SymbolT = TypeVar("SymbolT", bound=common_types.SymbolType)
+SymbolT = TypeVar("SymbolT", bound=ct.SymbolType)
 
 
 class Symbol(eve.GenericNode, LocatedNode, Generic[SymbolT]):
     id: Coerced[SymbolName]  # noqa: A003
-    type: Union[SymbolT, common_types.DeferredSymbolType]  # noqa A003
-    namespace: common_types.Namespace = common_types.Namespace(common_types.Namespace.LOCAL)
+    type: Union[SymbolT, ct.DeferredSymbolType]  # noqa A003
+    namespace: ct.Namespace = ct.Namespace(ct.Namespace.LOCAL)
 
 
-DataTypeT = TypeVar("DataTypeT", bound=common_types.DataType)
+DataTypeT = TypeVar("DataTypeT", bound=ct.DataType)
 DataSymbol = Symbol[DataTypeT]
 
-FieldTypeT = TypeVar("FieldTypeT", bound=common_types.FieldType)
+FieldTypeT = TypeVar("FieldTypeT", bound=ct.FieldType)
 FieldSymbol = Symbol[FieldTypeT]
 
-ScalarTypeT = TypeVar("ScalarTypeT", bound=common_types.ScalarType)
+ScalarTypeT = TypeVar("ScalarTypeT", bound=ct.ScalarType)
 ScalarSymbol = Symbol[ScalarTypeT]
 
-TupleTypeT = TypeVar("TupleTypeT", bound=common_types.TupleType)
+TupleTypeT = TypeVar("TupleTypeT", bound=ct.TupleType)
 TupleSymbol = Symbol[TupleTypeT]
 
 
 class Expr(LocatedNode):
-    type: Optional[common_types.SymbolType] = None  # noqa A003
+    type: Optional[ct.SymbolType] = None  # noqa A003
+
+
+class BinOp(Expr):
+    op: ct.BinaryOperator
+    left: Expr
+    right: Expr
 
 
 class Name(Expr):
@@ -90,7 +96,7 @@ class Stmt(LocatedNode):
 
 class Program(LocatedNode, SymbolTableTrait):
     id: Coerced[SymbolName]  # noqa: A003
-    type: Union[common_types.ProgramType, common_types.DeferredSymbolType]  # noqa A003
+    type: Union[ct.ProgramType, ct.DeferredSymbolType]  # noqa A003
     params: list[DataSymbol]
     body: list[Call]
     closure_vars: list[Symbol]

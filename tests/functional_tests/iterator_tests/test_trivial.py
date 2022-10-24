@@ -2,10 +2,10 @@ import numpy as np
 import pytest
 
 from functional.common import Dimension, DimensionKind
-from functional.fencil_processors.runners.gtfn_cpu import run_gtfn
 from functional.iterator.builtins import *
 from functional.iterator.embedded import np_as_located_field
 from functional.iterator.runtime import closure, fendef, fundef, offset
+from functional.program_processors.runners.gtfn_cpu import run_gtfn
 
 from .conftest import run_processor
 
@@ -34,10 +34,10 @@ def baz(baz_inp):
     return deref(lift(bar)(baz_inp))
 
 
-def test_trivial(fencil_processor, lift_mode):
-    fencil_processor, validate = fencil_processor
+def test_trivial(program_processor, lift_mode):
+    program_processor, validate = program_processor
 
-    if fencil_processor == run_gtfn:
+    if program_processor == run_gtfn:
         pytest.xfail("origin not yet supported in gtfn")
 
     rng = np.random.default_rng()
@@ -50,7 +50,7 @@ def test_trivial(fencil_processor, lift_mode):
 
     run_processor(
         baz[cartesian_domain(named_range(IDim, 0, shape[0]), named_range(JDim, 0, shape[1]))],
-        fencil_processor,
+        program_processor,
         inp_s,
         out=out_s,
         lift_mode=lift_mode,
@@ -74,9 +74,9 @@ def fen_direct_deref(i_size, j_size, out, inp):
     )
 
 
-def test_direct_deref(fencil_processor, lift_mode):
-    fencil_processor, validate = fencil_processor
-    if fencil_processor == run_gtfn:
+def test_direct_deref(program_processor, lift_mode):
+    program_processor, validate = program_processor
+    if program_processor == run_gtfn:
         pytest.xfail("extract_fundefs_from_closures() doesn't work for builtins in gtfn")
 
     rng = np.random.default_rng()
@@ -88,7 +88,7 @@ def test_direct_deref(fencil_processor, lift_mode):
 
     run_processor(
         fen_direct_deref,
-        fencil_processor,
+        program_processor,
         *out.shape,
         out_s,
         inp_s,
@@ -105,8 +105,8 @@ def vertical_shift(inp):
     return deref(shift(K, 1)(inp))
 
 
-def test_vertical_shift_unstructured(fencil_processor):
-    fencil_processor, validate = fencil_processor
+def test_vertical_shift_unstructured(program_processor):
+    program_processor, validate = program_processor
 
     k_size = 7
 
@@ -120,7 +120,7 @@ def test_vertical_shift_unstructured(fencil_processor):
         vertical_shift[
             unstructured_domain(named_range(IDim, 0, 1), named_range(KDim, 0, k_size - 1))
         ],
-        fencil_processor,
+        program_processor,
         inp_s,
         out=out_s,
         offset_provider={"K": KDim},
