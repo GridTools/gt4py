@@ -15,6 +15,7 @@
 
 from . import utils
 from .concepts import (
+    TraversalOrder,
     TreeIterationItem,
     generic_iter_children,
     iter_tree,

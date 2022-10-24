@@ -12,7 +12,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import TYPE_CHECKING, List, Set, cast
+from typing import TYPE_CHECKING, List
 
 import dace
 import dace.data
@@ -142,10 +142,9 @@ class HorizontalExecutionSplitter(eve.NodeTranslator):
 
         res_hes = []
         for stmts in res_he_stmts:
-            scalar_accesses = cast(
-                Set[oir.ScalarAccess], iter_tree(stmts).if_isinstance(oir.ScalarAccess).to_set()
+            accessed_scalars = (
+                iter_tree(stmts).if_isinstance(oir.ScalarAccess).getattr("name").to_set()
             )
-            accessed_scalars = set(acc.name for acc in scalar_accesses)
             declarations = [decl for decl in node.declarations if decl.name in accessed_scalars]
             res_he = oir.HorizontalExecution(declarations=declarations, body=stmts)
             res_hes.append(res_he)
