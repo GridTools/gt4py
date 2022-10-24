@@ -19,6 +19,14 @@ from eve.utils import ConstantNamespace
 
 
 class ClosureVarFolding(traits.VisitorWithSymbolTableTrait, NodeTranslator):
+    """
+    Replace `Name` nodes that refer to closure variable by `Constant` nodes.
+
+    `Attribute` nodes are also replaced by a `Constant` nodes with the value of the
+     closure variable's corresponding attribute. This is executed recursively for
+     attributes of attributes.
+    """
+
     closure_vars: dict[str, Any]
 
     def __init__(self, closure_vars: dict[str, Any]):

@@ -19,6 +19,16 @@ from functional.ffront.symbol_makers import make_symbol_type_from_value
 
 
 class ClosureVarTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
+    """
+    Deduce the type of `Symbol` nodes that introduce closure variables.
+
+    The types are deduced by looking at the values inside the list of
+    closure variables. The types are inferred from the Python value.
+
+    For the general type deduction pass, all Symbol nodes must already be typed,
+    this pass must run before.
+    """
+
     closure_vars: dict[str, Any]
 
     def __init__(self, closure_vars: dict[str, Any]):
