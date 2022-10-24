@@ -11,7 +11,6 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-from dataclasses import dataclass
 from typing import Any
 
 import functional.ffront.field_operator_ast as foast
@@ -19,7 +18,6 @@ from eve import NodeTranslator, traits
 from eve.utils import FrozenNamespace
 
 
-@dataclass(frozen=True)
 class ClosureVarFolding(NodeTranslator, traits.VisitorWithSymbolTableTrait):
     """
     Replace `Name` nodes that refer to closure variable by `Constant` nodes.
@@ -30,16 +28,23 @@ class ClosureVarFolding(NodeTranslator, traits.VisitorWithSymbolTableTrait):
     """
 
     closure_vars: dict[str, Any]
+    _current_closure_vars: list[foast.Symbol]
+
+    def __init__(self, closure_vars: dict[str, Any]):
+        self.closure_vars = closure_vars
 
     @classmethod
     def apply(cls, node: foast.FieldOperator, closure_vars: dict[str, Any]):
         return cls(closure_vars=closure_vars).visit(node)
 
     def visit_Name(self, node: foast.Name, **kwargs):
-        if node.id in self.closure_vars:
-            value = self.closure_vars[node.id]
-            if isinstance(value, FrozenNamespace):
-                return foast.Constant(value=value, location=node.location)
+        symtable = kwargs["symtable"]
+        if node.id in symtable:
+            definition = symtable[node.id]
+            if definition in self._current_closure_vars:
+                value = self.closure_vars[node.id]
+                if isinstance(value, FrozenNamespace):
+                    return foast.Constant(value=value, location=node.location)
         return node
 
     def visit_Attribute(self, node: foast.Attribute, **kwargs):
@@ -68,3 +73,7 @@ class ClosureVarFolding(NodeTranslator, traits.VisitorWithSymbolTableTrait):
             end_lineno=node.location.end_line,
             end_offset=node.location.end_column,
         )
+
+    def visit_FunctionDefinition(self, node: foast.FunctionDefinition, **kwargs):
+        self._current_closure_vars = node.closure_vars
+        return self.generic_visit(node, **kwargs)
