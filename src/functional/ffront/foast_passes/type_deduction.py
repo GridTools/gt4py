@@ -362,7 +362,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
     ) -> Optional[ct.SymbolType]:
         # check both types compatible
         for arg in (left, right):
-            if not type_info.is_arithmetic(arg.type):
+            if not type_info.is_number(arg.type):
                 raise FieldOperatorTypeDeductionError.from_foast_node(
                     arg, msg=f"Type {arg.type} can not be used in operator '{node.op}'!"
                 )
@@ -389,7 +389,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         **kwargs,
     ) -> Optional[ct.SymbolType]:
         logical_ops = {ct.BinaryOperator.BIT_AND, ct.BinaryOperator.BIT_OR}
-        is_compatible = type_info.is_logical if node.op in logical_ops else type_info.is_arithmetic
+        is_compatible = type_info.is_logical if node.op in logical_ops else type_info.is_number
 
         # check both types compatible
         for arg in (left, right):
@@ -426,7 +426,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
     def visit_UnaryOp(self, node: foast.UnaryOp, **kwargs) -> foast.UnaryOp:
         new_operand = self.visit(node.operand, **kwargs)
         is_compatible = (
-            type_info.is_logical if node.op is foast.UnaryOperator.NOT else type_info.is_arithmetic
+            type_info.is_logical if node.op is foast.UnaryOperator.NOT else type_info.is_number
         )
         if not is_compatible(new_operand.type):
             raise FieldOperatorTypeDeductionError.from_foast_node(
