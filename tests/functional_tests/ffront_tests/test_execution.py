@@ -1289,29 +1289,6 @@ def test_input_kwargs_2(fieldview_backend):
 
 def test_input_kwargs_3(fieldview_backend):
     size = 10
-    a = np_as_located_field(IDim, JDim)(np.ones((size, size)))
-    input_2 = np_as_located_field(IDim, JDim)(np.ones((size, size)))
-
-    @field_operator(backend=fieldview_backend)
-    def fieldop_input_kwargs(
-        a: Field[[IDim, JDim], float64]
-    ) -> tuple[Field[[IDim, JDim], float64], Field[[IDim, JDim], float64]]:
-        return (a + a, a)
-
-    @program
-    def program_input_kwargs(a: Field[[IDim, JDim], float64], b: Field[[IDim, JDim], float64]):
-        fieldop_input_kwargs(a, out=(b, a))
-
-    program_input_kwargs(a, b=input_2, offset_provider={})
-
-    expected = np.asarray(a) + np.asarray(a)
-
-    assert np.allclose(np.asarray(a), a)
-    assert np.allclose(expected, input_2)
-
-
-def test_input_kwargs_4(fieldview_backend):
-    size = 10
     input_1 = np_as_located_field(IDim, JDim)(np.ones((size, size)))
     b = np_as_located_field(IDim, JDim)(np.ones((size, size)))
 
@@ -1333,7 +1310,7 @@ def test_input_kwargs_4(fieldview_backend):
     assert np.allclose(expected, b)
 
 
-def test_input_kwargs_5(fieldview_backend):
+def test_input_kwargs_4(fieldview_backend):
     size = 10
     b = np_as_located_field(IDim, JDim)(np.ones((size, size)) * 3)
     c = np_as_located_field(IDim, JDim)(np.ones((size, size)))
@@ -1357,6 +1334,23 @@ def test_input_kwargs_5(fieldview_backend):
     ):
         fieldop_input_kwargs(a, b, c, out=out)
 
-    program_input_kwargs(c, b, out, a=b, offset_provider={})
+    program_input_kwargs(c, b, out=out, a=b, offset_provider={})
 
     assert np.allclose(np.asarray(out), expected)
+
+
+def test_input_kwargs_5(fieldview_backend):
+    size = 10
+    a = np_as_located_field(IDim, JDim)(np.ones((size, size)) * 3)
+    b = np_as_located_field(IDim, JDim)(np.ones((size, size)))
+    out = np_as_located_field(IDim, JDim)(np.zeros((size, size)))
+
+    @field_operator(backend=fieldview_backend)
+    def fieldop_input_kwargs(
+        a: Field[[IDim, JDim], float64],
+        b: Field[[IDim, JDim], float64],
+    ) -> Field[[IDim, JDim], float64]:
+        return a * b + a
+
+    with pytest.raises(AssertionError):
+        fieldop_input_kwargs(a, b, a=b, out=out, offset_provider={})
