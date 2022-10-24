@@ -37,7 +37,8 @@ class AccessKindComputer(NodeVisitor):
         self._visit_Access(node.name, **kwargs)
 
     def visit_FieldAccess(self, node: oir.FieldAccess, **kwargs: Any) -> None:
-        self.generic_visit(node, **kwargs)
+        self.visit(node.offset, **{**kwargs, "kind": AccessKind.READ})
+        self.visit(node.data_index, **{**kwargs, "kind": AccessKind.READ})
         self._visit_Access(node.name, **kwargs)
 
     def visit_While(self, node: oir.While, **kwargs: Any) -> None:

@@ -256,7 +256,7 @@ class NpirCodegen(TemplatedGenerator):
         elif node == common.NativeFunction.GAMMA:
             return "scipy.special.gamma"
         name = self.generic_visit(node, **kwargs)
-        assert name is str
+        assert isinstance(name, str)
         return f"np.{name}"
 
     def visit_NativeFuncCall(
