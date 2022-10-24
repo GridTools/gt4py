@@ -49,11 +49,10 @@ def empty(
     dtype: DTypeLike = np.float64,
     *,
     backend: str,
-    aligned_index: Sequence[int],
+    aligned_index: Optional[Sequence[int]] = None,
     dimensions: Optional[Sequence[str]] = None,
 ) -> Union[np.ndarray, "cp.ndarray"]:
     """Allocate an array of uninitialized (undefined) values with performance-optimal strides and alignment.
-
 
     Parameters
     ----------
@@ -66,9 +65,9 @@ def empty(
     -----------------
         backend : `str`
             The target backend for which the allocation is optimized.
-        aligned_index: `Sequence` of `int`
+        aligned_index: `Sequence` of `int`, optional
             Indicate the index of the resulting array that most commonly corresponds to the origin of the compute
-            domain.
+            domain. If not passed, it is aligned at the data origin.
         dimensions: `Sequence` of `str`, optional
             Indicate the semantic meaning of the dimensions in the provided array. Only used for determining optimal
             strides, the information is not stored.
@@ -104,7 +103,7 @@ def empty(
     layout_map = backend_cls.storage_info["layout_map"](dimensions)
 
     dtype = np.dtype(dtype)
-    _, res = allocate_f(aligned_index, shape, layout_map, dtype, alignment * dtype.itemsize)
+    _, res = allocate_f(shape, layout_map, dtype, alignment * dtype.itemsize, aligned_index)
     return res
 
 
@@ -113,11 +112,10 @@ def ones(
     dtype: DTypeLike = np.float64,
     *,
     backend: str,
-    aligned_index: Sequence[int],
+    aligned_index: Optional[Sequence[int]] = None,
     dimensions: Optional[Sequence[str]] = None,
 ) -> Union[np.ndarray, "cp.ndarray"]:
     """Allocate an array with values initialized to 1.0 with performance-optimal strides and alignment.
-
 
     Parameters
     ----------
@@ -130,9 +128,9 @@ def ones(
     -----------------
         backend : `str`
             The target backend for which the allocation is optimized.
-        aligned_index: `Sequence` of `int`
+        aligned_index: `Sequence` of `int`, optional
             Indicate the index of the resulting array that most commonly corresponds to the origin of the compute
-            domain.
+            domain. If not passed, it is aligned at the data origin.
         dimensions: `Sequence` of `str`, optional
             Indicate the semantic meaning of the dimensions in the provided array. Only used for determining optimal
             strides, the information is not stored.
@@ -167,11 +165,10 @@ def full(
     dtype: DTypeLike = np.float64,
     *,
     backend: str,
-    aligned_index: Sequence[int],
+    aligned_index: Optional[Sequence[int]] = None,
     dimensions: Optional[Sequence[str]] = None,
 ) -> Union[np.ndarray, "cp.ndarray"]:
     """Allocate an array with values initialized to `fill_value` with performance-optimal strides and alignment.
-
 
     Parameters
     ----------
@@ -186,9 +183,9 @@ def full(
     -----------------
         backend : `str`
             The target backend for which the allocation is optimized.
-        aligned_index: `Sequence` of `int`
+        aligned_index: `Sequence` of `int`, optional
             Indicate the index of the resulting array that most commonly corresponds to the origin of the compute
-            domain.
+            domain. If not passed, it is aligned at the data origin.
         dimensions: `Sequence` of `str`, optional
             Indicate the semantic meaning of the dimensions in the provided array. Only used for determining optimal
             strides, the information is not stored.
@@ -222,11 +219,10 @@ def zeros(
     dtype: DTypeLike = np.float64,
     *,
     backend: str,
-    aligned_index: Sequence[int],
+    aligned_index: Optional[Sequence[int]] = None,
     dimensions: Optional[Sequence[str]] = None,
 ) -> Union[np.ndarray, "cp.ndarray"]:
     """Allocate an array with values initialized to 0.0 with performance-optimal strides and alignment.
-
 
     Parameters
     ----------
@@ -239,9 +235,9 @@ def zeros(
     -----------------
         backend : `str`
             The target backend for which the allocation is optimized.
-        aligned_index: `Sequence` of `int`
+        aligned_index: `Sequence` of `int`, optional
             Indicate the index of the resulting array that most commonly corresponds to the origin of the compute
-            domain.
+            domain. If not passed, it is aligned at the data origin.
         dimensions: `Sequence` of `str`, optional
             Indicate the semantic meaning of the dimensions in the provided array. Only used for determining optimal
             strides, the information is not stored.
@@ -275,12 +271,12 @@ def from_array(
     dtype: DTypeLike = np.float64,
     *,
     backend: str,
-    aligned_index: Sequence[int],
+    aligned_index: Optional[Sequence[int]] = None,
     dimensions: Optional[Sequence[str]] = None,
 ) -> Union[np.ndarray, "cp.ndarray"]:
-    """Allocate an array with values initialized to those of `data` with performance-optimal strides and alignment. This
-    copies the values from `data` to the resulting buffer.
+    """Allocate an array with values initialized to those of `data` with performance-optimal strides and alignment.
 
+    This copies the values from `data` to the resulting buffer.
 
     Parameters
     ----------
@@ -293,9 +289,9 @@ def from_array(
     -----------------
         backend : `str`
             The target backend for which the allocation is optimized.
-        aligned_index: `Sequence` of `int`
+        aligned_index: `Sequence` of `int`, optional
             Indicate the index of the resulting array that most commonly corresponds to the origin of the compute
-            domain.
+            domain. If not passed, it is aligned at the data origin.
         dimensions: `Sequence` of `str`, optional
             Indicate the semantic meaning of the dimensions in the provided array. Only used for determining optimal
             strides, the information is not stored.
@@ -348,7 +344,7 @@ if dace is not None:
         dtype: DTypeLike = np.float64,
         *,
         backend: str,
-        aligned_index: Sequence[int],
+        aligned_index: Optional[Sequence[int]] = None,
         dimensions: Optional[Sequence[str]] = None,
     ) -> dace.data.Array:
         """Return a DaCe data descriptor which describes performance-optimal strides and alignment.
@@ -364,9 +360,9 @@ if dace is not None:
         -----------------
             backend : `str`
                 The target backend for which the described allocation is optimized.
-            aligned_index: `Sequence` of `int`
+            aligned_index: `Sequence` of `int`, optional
                 Indicate the index of the resulting array that most commonly corresponds to the origin of the compute
-                domain.
+                domain. If not passed, it is aligned at the data origin.
             dimensions: `Sequence` of `str`, optional
                 Indicate the semantic meaning of the dimensions in the data descriptor. Only used for determining
                 optimal strides, the information is not stored.

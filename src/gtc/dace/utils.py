@@ -498,7 +498,9 @@ def collect_toplevel_iteration_nodes(
 
 
 def layout_maker_factory(base_layout: Tuple[int, ...]) -> Callable[[List[bool]], Tuple[int, ...]]:
-    def layout_maker(mask: List[bool]) -> Tuple[int, ...]:
+    def layout_maker(dimensions: List[bool]) -> Tuple[int, ...]:
+        mask = [dim in dimensions for dim in "IJK"]
+        mask += [True] * (len(dimensions) - sum(mask))
         ranks = []
         for m, l in zip(mask, base_layout):
             if m:

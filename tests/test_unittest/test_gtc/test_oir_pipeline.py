@@ -12,6 +12,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+from gtc.passes.oir_optimizations.caches import FillFlushToLocalKCaches
 from gtc.passes.oir_optimizations.vertical_loop_merging import AdjacentLoopMerging
 from gtc.passes.oir_pipeline import DefaultPipeline
 
@@ -29,3 +30,10 @@ def test_skip():
     pipeline = DefaultPipeline(skip=skip)
     pipeline.run(StencilFactory())
     assert all(s not in pipeline.steps for s in skip)
+
+
+def test_add_steps():
+    add_steps = [FillFlushToLocalKCaches]
+    pipeline = DefaultPipeline(add_steps=add_steps)
+    pipeline.run(StencilFactory())
+    assert all(s in pipeline.add_steps for s in add_steps)

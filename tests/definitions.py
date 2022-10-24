@@ -51,6 +51,9 @@ GPU_BACKENDS = [
 ]
 ALL_BACKENDS = CPU_BACKENDS + GPU_BACKENDS
 
+_PERFORMANCE_BACKEND_NAMES = [name for name in _ALL_BACKEND_NAMES if name != "numpy"]
+PERFORMANCE_BACKENDS = [_backend_name_as_param(name) for name in _PERFORMANCE_BACKEND_NAMES]
+
 
 @pytest.fixture()
 def id_version():

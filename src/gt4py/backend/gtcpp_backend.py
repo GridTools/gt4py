@@ -18,6 +18,7 @@ from eve import codegen
 from gt4py import gt_src_manager
 from gt4py.backend.base import CLIBackendMixin, register
 from gt4py.backend.gtc_common import BackendCodegen, bindings_main_template, pybuffer_to_sid
+from gt4py.utils.layout import layout_checker_factory
 from gtc import gtir
 from gtc.common import DataType
 from gtc.gtcpp import gtcpp, gtcpp_codegen
@@ -29,12 +30,9 @@ from gtc.passes.oir_pipeline import DefaultPipeline
 from .gtc_common import (
     BaseGTBackend,
     CUDAPyExtModuleGenerator,
-    cuda_is_compatible_layout,
     make_cuda_layout_map,
-    make_mc_layout_map,
-    make_x86_layout_map,
-    mc_is_compatible_layout,
-    x86_is_compatible_layout,
+    make_gtcpu_ifirst_layout_map,
+    make_gtcpu_kfirst_layout_map,
 )
 
 
@@ -175,8 +173,8 @@ class GTCpuIfirstBackend(GTBaseBackend):
     storage_info = {
         "alignment": 8,
         "device": "cpu",
-        "layout_map": make_mc_layout_map,
-        "is_compatible_layout": mc_is_compatible_layout,
+        "layout_map": make_gtcpu_ifirst_layout_map,
+        "is_optimal_layout": layout_checker_factory(make_gtcpu_ifirst_layout_map),
     }
 
     def generate_extension(self, **kwargs: Any) -> Tuple[str, str]:
@@ -193,8 +191,8 @@ class GTCpuKfirstBackend(GTBaseBackend):
     storage_info = {
         "alignment": 1,
         "device": "cpu",
-        "layout_map": make_x86_layout_map,
-        "is_compatible_layout": x86_is_compatible_layout,
+        "layout_map": make_gtcpu_kfirst_layout_map,
+        "is_optimal_layout": layout_checker_factory(make_gtcpu_kfirst_layout_map),
     }
 
     def generate_extension(self, **kwargs: Any) -> Tuple[str, str]:
@@ -214,7 +212,7 @@ class GTGpuBackend(GTBaseBackend):
         "alignment": 32,
         "device": "gpu",
         "layout_map": make_cuda_layout_map,
-        "is_compatible_layout": cuda_is_compatible_layout,
+        "is_optimal_layout": layout_checker_factory(make_cuda_layout_map),
     }
 
     def generate_extension(self, **kwargs: Any) -> Tuple[str, str]:

@@ -61,8 +61,11 @@ class DefaultPipeline(OirPipeline):
     May only call existing passes and may not contain any pass logic itself.
     """
 
-    def __init__(self, *, skip: Optional[Sequence[PassT]] = None):
-        self.skip = skip or []
+    def __init__(
+        self, *, skip: Optional[Sequence[PassT]] = None, add_steps: Optional[Sequence[PassT]] = None
+    ):
+        self.skip = list(skip or [])
+        self.add_steps = list(add_steps or [])
 
     @staticmethod
     def all_steps() -> Sequence[PassT]:
@@ -84,7 +87,7 @@ class DefaultPipeline(OirPipeline):
 
     @property
     def steps(self) -> Sequence[PassT]:
-        return [step for step in self.all_steps() if step not in self.skip]
+        return [step for step in self.all_steps() if step not in self.skip] + self.add_steps
 
     def __hash__(self) -> int:
         return hash(repr(self))

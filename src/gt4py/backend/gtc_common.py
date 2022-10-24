@@ -19,8 +19,6 @@ import textwrap
 import time
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Sequence, Tuple, Type, Union
 
-import numpy as np
-
 import gtc.utils
 import gtc.utils as gtc_utils
 from eve.codegen import MakoTemplate as as_mako
@@ -55,7 +53,6 @@ def pybuffer_to_sid(
     data_ndim: int,
     stride_kind_index: int,
     backend: Backend,
-    check_layout: bool = True,
 ):
     domain_ndim = domain_dim_flags.count(True)
     sid_ndim = domain_ndim + data_ndim
@@ -63,15 +60,12 @@ def pybuffer_to_sid(
     as_sid = "as_cuda_sid" if backend.storage_info["device"] == "gpu" else "as_sid"
 
     sid_def = """gt::{as_sid}<{ctype}, {sid_ndim},
-        gt::integral_constant<int, {unique_index}>{unit_stride_dim}>({name})""".format(
+        gt::integral_constant<int, {unique_index}>>({name})""".format(
         name=name,
         ctype=ctype,
         unique_index=stride_kind_index,
         sid_ndim=sid_ndim,
         as_sid=as_sid,
-        unit_stride_dim=f", {_get_unit_stride_dim(backend, domain_dim_flags, data_ndim)}"
-        if check_layout
-        else "",
     )
     sid_def = "gt::sid::shift_sid_origin({sid_def}, {name}_origin)".format(
         sid_def=sid_def,
@@ -364,12 +358,6 @@ class CUDAPyExtModuleGenerator(PyExtModuleGenerator):
         return source
 
 
-def _dimensions_to_mask(dimensions: Tuple[str, ...]) -> Tuple[bool, ...]:
-    ndata_dims = sum(d.isdigit() for d in dimensions)
-    mask = [(d in dimensions) for d in "IJK"] + [True for _ in range(ndata_dims)]
-    return tuple(mask)
-
-
 def _permute_layout_to_dimensions(
     layout: Sequence[int], dimensions: Tuple[str, ...]
 ) -> Tuple[int, ...]:
@@ -383,88 +371,24 @@ def _permute_layout_to_dimensions(
     return tuple(res_layout)
 
 
-def debug_layout(dimensions: Tuple[str, ...]) -> Tuple[Optional[int], ...]:
-    mask = _dimensions_to_mask(dimensions)
-    ctr = iter(range(sum(mask)))
-    layout = [next(ctr) for m in mask if m]
-    return _permute_layout_to_dimensions(layout, dimensions)
-
-
-def debug_is_compatible_layout(field, dimensions: Tuple[str, ...]):
-    return sum(field.shape) > 0
-
-
-def make_x86_layout_map(dimensions: Tuple[str, ...]) -> Tuple[Optional[int], ...]:
-    mask = _dimensions_to_mask(dimensions)
-    ctr = iter(range(sum(mask)))
-    if len(mask) < 3:
-        layout: List[Optional[int]] = [next(ctr) for m in mask if m]
-    else:
-        swapped_mask: List[Optional[int]] = [*mask[3:], *mask[:3]]
-        layout = [next(ctr) if m else None for m in swapped_mask]
-
-        layout = [*layout[-3:], *layout[:-3]]
+def make_gtcpu_kfirst_layout_map(dimensions: Tuple[str, ...]) -> Tuple[int, ...]:
+    layout = [i for i in range(len(dimensions))]
+    naxes = sum(dim in dimensions for dim in "IJK")
+    layout = [*layout[-naxes:], *layout[:-naxes]]
     return _permute_layout_to_dimensions([lt for lt in layout if lt is not None], dimensions)
 
 
-def x86_is_compatible_layout(field: np.ndarray, dimensions: Tuple[str, ...]) -> bool:
-    stride = 0
-    layout_map = make_x86_layout_map(dimensions)
-    flattened_layout = [index for index in layout_map if index is not None]
-    if len(field.strides) < len(flattened_layout):
-        return False
-    for dim in reversed(np.argsort(flattened_layout)):
-        if field.strides[dim] < stride:
-            return False
-        stride = field.strides[dim]
-    return True
-
-
-def make_mc_layout_map(dimensions: Tuple[str, ...]) -> Tuple[int, ...]:
-    mask = _dimensions_to_mask(dimensions)
+def make_gtcpu_ifirst_layout_map(dimensions: Tuple[str, ...]) -> Tuple[int, ...]:
     ctr = reversed(range(len(dimensions)))
-    if len(mask) < 3:
-        layout: List[Optional[int]] = [next(ctr) for m in mask if m]
-    else:
-        swapped_mask: List[Optional[int]] = list(mask)
-        tmp = swapped_mask[1]
-        swapped_mask[1] = swapped_mask[2]
-        swapped_mask[2] = tmp
-
-        layout = [next(ctr) if m else None for m in swapped_mask]
-
-        tmp = layout[1]
-        layout[1] = layout[2]
-        layout[2] = tmp
-    return _permute_layout_to_dimensions([lt for lt in layout if lt is not None], dimensions)
-
-
-def mc_is_compatible_layout(field: np.ndarray, dimensions: Tuple[str, ...]) -> bool:
-    stride = 0
-    layout_map = make_mc_layout_map(dimensions)
-    flattened_layout = [index for index in layout_map if index is not None]
-    if len(field.strides) < len(flattened_layout):
-        return False
-    for dim in reversed(np.argsort(flattened_layout)):
-        if field.strides[dim] < stride:
-            return False
-        stride = field.strides[dim]
-    return True
+    layout = [next(ctr) for dim in "IJK" if dim in dimensions] + list(ctr)
+    if "K" in dimensions and "J" in dimensions:
+        if "I" in dimensions:
+            layout = [layout[0], layout[2], layout[1], *layout[3:]]
+        else:
+            layout = [layout[1], layout[0], *layout[2:]]
+    return _permute_layout_to_dimensions(layout, dimensions)
 
 
 def make_cuda_layout_map(dimensions: Tuple[str, ...]) -> Tuple[Optional[int], ...]:
     layout = tuple(reversed(range(len(dimensions))))
     return _permute_layout_to_dimensions(layout, dimensions)
-
-
-def cuda_is_compatible_layout(field: np.ndarray, dimensions: Tuple[str, ...]) -> bool:
-    stride = 0
-    layout_map = make_cuda_layout_map(dimensions)
-    flattened_layout = [index for index in layout_map if index is not None]
-    if len(field.strides) < len(flattened_layout):
-        return False
-    for dim in reversed(np.argsort(flattened_layout)):
-        if field.strides[dim] < stride:
-            return False
-        stride = field.strides[dim]
-    return True

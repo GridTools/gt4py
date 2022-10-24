@@ -25,10 +25,9 @@ except ImportError:
     cp = None
 
 import gt4py.backend as gt_backend
-import gt4py.storage as gt_store
-import gt4py.storage.utils as gt_storage_utils
+import gt4py.storage
 from gt4py import gtscript
-from gt4py.storage.utils import normalize_storage_spec
+from gt4py.storage.utils import allocate_cpu, allocate_gpu, normalize_storage_spec
 
 from ..definitions import CPU_BACKENDS, GPU_BACKENDS
 
@@ -37,6 +36,7 @@ try:
     import dace
 except ImportError:
     dace = None
+
 
 # ---- Hypothesis strategies ----
 @hyp_st.composite
@@ -69,7 +69,7 @@ def allocation_strategy(draw):
     shape_strats = []
     aligned_index_strats = []
 
-    for i in range(dimension):
+    for _i in range(dimension):
         shape_strats = shape_strats + [hyp_st.integers(min_value=1, max_value=64)]
     shape = draw(hyp_st.tuples(*shape_strats))
     for i in range(dimension):
@@ -126,9 +126,7 @@ def test_allocate_cpu(param_dict):
     shape = param_dict["shape"]
     layout_map = param_dict["layout_order"]
 
-    raw_buffer, field = gt_storage_utils.allocate_cpu(
-        aligned_index, shape, layout_map, dtype, alignment_bytes
-    )
+    raw_buffer, field = allocate_cpu(shape, layout_map, dtype, alignment_bytes, aligned_index)
 
     # check that field is a view of raw_buffer
     assert field.base is raw_buffer
@@ -142,7 +140,7 @@ def test_allocate_cpu(param_dict):
     # check if the first compute-domain point in the last dimension is aligned for 100 random "columns"
     import random
 
-    for i in range(100):
+    for _i in range(100):
         slices = []
         for hidx in range(len(shape)):
             if hidx == np.argmax(layout_map):
@@ -153,7 +151,7 @@ def test_allocate_cpu(param_dict):
 
     # check that writing does not give errors, e.g. because of going out of bounds
     slices = []
-    for hidx in range(len(shape)):
+    for _hidx in range(len(shape)):
         slices = slices + [0]
     field[tuple(slices)] = 1
 
@@ -175,7 +173,7 @@ def test_allocate_cpu(param_dict):
     except IndexError:
         pass
     else:
-        assert False
+        raise AssertionError()
 
     # check if shape is properly set
     assert field.shape == shape
@@ -189,12 +187,13 @@ def test_allocate_gpu(param_dict):
     aligned_index = param_dict["aligned_index"]
     shape = param_dict["shape"]
     layout_map = param_dict["layout_order"]
-    device_raw_buffer, device_field = gt_storage_utils.allocate_gpu(
-        aligned_index, shape, layout_map, dtype, alignment_bytes
+    device_raw_buffer, device_field = allocate_gpu(
+        shape, layout_map, dtype, alignment_bytes, aligned_index
     )
 
-    # assert (device_field.base is device_raw_buffer) # as_strided actually returns an ndarray where base=None??
-    # instead check that the memory of field is contained in raws buffer:
+    # Would like to check device_field.base against device_raw_buffer but
+    # as_strided returns an ndarray where device_field.base is set to None.
+    # Instead, check that the memory of field is contained in raws buffer
     assert (
         device_field.data.ptr >= device_raw_buffer.data.ptr
         and device_field[-1:].data.ptr <= device_raw_buffer[-1:].data.ptr
@@ -203,7 +202,7 @@ def test_allocate_gpu(param_dict):
     # check if the first compute-domain point in the last dimension is aligned for 100 random "columns"
     import random
 
-    for i in range(100):
+    for _i in range(100):
         slices = []
         for hidx in range(len(shape)):
             if hidx == np.argmax(layout_map):
@@ -214,7 +213,7 @@ def test_allocate_gpu(param_dict):
 
     # check that writing does not give errors, e.g. because of going out of bounds
     slices = []
-    for hidx in range(len(shape)):
+    for _hidx in range(len(shape)):
         slices = slices + [0]
     device_field[tuple(slices)] = 1
 
@@ -348,11 +347,11 @@ class TestNormalizeStorageSpec:
 @pytest.mark.parametrize(
     "alloc_fun",
     [
-        gt_store.empty,
-        gt_store.ones,
-        gt_store.zeros,
-        lambda *args, **kwargs: gt_store.full(*args, fill_value=7, **kwargs),
-        lambda shape, dtype, **kwargs: gt_store.from_array(
+        gt4py.storage.empty,
+        gt4py.storage.ones,
+        gt4py.storage.zeros,
+        lambda *args, **kwargs: gt4py.storage.full(*args, fill_value=7, **kwargs),
+        lambda shape, dtype, **kwargs: gt4py.storage.from_array(
             np.empty(shape, dtype=dtype),
             dtype=dtype,
             **kwargs,
@@ -369,11 +368,11 @@ def test_cpu_constructor(alloc_fun, backend):
 @pytest.mark.parametrize(
     "alloc_fun",
     [
-        gt_store.empty,
-        gt_store.ones,
-        gt_store.zeros,
-        lambda *args, **kwargs: gt_store.full(*args, fill_value=7, **kwargs),
-        lambda shape, dtype, **kwargs: gt_store.from_array(
+        gt4py.storage.empty,
+        gt4py.storage.ones,
+        gt4py.storage.zeros,
+        lambda *args, **kwargs: gt4py.storage.full(*args, fill_value=7, **kwargs),
+        lambda shape, dtype, **kwargs: gt4py.storage.from_array(
             np.empty(shape, dtype=dtype),
             dtype=dtype,
             **kwargs,
@@ -399,7 +398,7 @@ def test_masked_storage_gpu(param_dict):
     shape = param_dict["shape"]
 
     # no assert when all is defined in descriptor, no grid_group
-    array = gt_store.empty(
+    array = gt4py.storage.empty(
         dtype=np.float64,
         aligned_index=aligned_index,
         shape=shape,
@@ -422,7 +421,7 @@ def test_masked_storage_asserts():
     backend = "gt:cpu_kfirst"
 
     with pytest.raises(ValueError):
-        gt_store.empty(
+        gt4py.storage.empty(
             dtype=np.float64,
             aligned_index=aligned_index,
             shape=shape,
@@ -433,7 +432,7 @@ def test_masked_storage_asserts():
 
 def test_non_existing_backend():
     with pytest.raises(RuntimeError, match="backend"):
-        gt_store.empty(
+        gt4py.storage.empty(
             shape=[10, 10, 10],
             backend="non_existing_backend",
             aligned_index=[0, 0, 0],
@@ -473,7 +472,7 @@ class TestDescriptor:
     )
     def test_device(self, backend):
         backend_cls = gt_backend.from_name(backend)
-        descriptor: dace.data.Array = gt_store.dace_descriptor(
+        descriptor: dace.data.Array = gt4py.storage.dace_descriptor(
             backend=backend,
             shape=(3, 7, 13),
             aligned_index=(1, 2, 3),
@@ -494,13 +493,13 @@ class TestDescriptor:
     def test_start_offset(self, backend):
         backend_cls = gt_backend.from_name(backend)
         aligned_index = (1, 2, 3)
-        stor = gt_store.ones(
+        stor = gt4py.storage.ones(
             backend=backend,
             shape=(3, 7, 13),
             aligned_index=aligned_index,
             dtype=np.float64,
         )
-        descriptor: dace.data.Array = gt_store.dace_descriptor(
+        descriptor: dace.data.Array = gt4py.storage.dace_descriptor(
             backend=backend,
             shape=(3, 7, 13),
             aligned_index=(1, 2, 3),
