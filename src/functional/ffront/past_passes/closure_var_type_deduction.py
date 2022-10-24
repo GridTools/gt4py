@@ -31,7 +31,7 @@ class ClosureVarTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator
     def visit_Program(self, node: past.Program, **kwargs):
         new_closure_vars: list[past.Symbol] = []
         for sym in node.closure_vars:
-            if sym.id in self.closure_vars and not isinstance(self.closure_vars[sym.id], type):
+            if not isinstance(self.closure_vars[sym.id], type):
                 new_symbol: past.Symbol = past.Symbol(
                     id=sym.id,
                     location=sym.location,
