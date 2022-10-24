@@ -162,6 +162,24 @@ def is_arithmetic(symbol_type: ct.SymbolType) -> bool:
     return is_floating_point(symbol_type) or is_integral(symbol_type) or is_logical(symbol_type)
 
 
+def is_number(symbol_type: ct.SymbolType) -> bool:
+    """
+    Check if ``symbol_type`` is a number operations.
+
+    Examples:
+    ---------
+    >>> is_number(ct.ScalarType(kind=ct.ScalarKind.FLOAT64))
+    True
+    >>> is_number(ct.ScalarType(kind=ct.ScalarKind.BOOL))
+    False
+    >>> is_number(ct.ScalarType(kind=ct.ScalarKind.STRING))
+    False
+    >>> is_number(ct.FieldType(dims=[], dtype=ct.ScalarType(kind=ct.ScalarKind.INT32)))
+    True
+    """
+    return is_floating_point(symbol_type) or is_integral(symbol_type)
+
+
 def is_field_type_or_tuple_of_field_type(type_: ct.DataType) -> bool:
     """
      Return True if ``type_`` is FieldType or FieldType nested in TupleType.
