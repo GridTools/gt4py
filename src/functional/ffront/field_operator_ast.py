@@ -133,7 +133,7 @@ class Stmt(LocatedNode):
 
 
 class Star(Expr):
-   ...
+    ...
 
 
 class Assign(Stmt):
