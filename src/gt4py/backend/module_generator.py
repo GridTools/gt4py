@@ -103,7 +103,6 @@ def make_args_data_from_gtir(pipeline: GtirPipeline) -> ModuleData:
 
     for decl in (param for param in all_params if isinstance(param, gtir.ScalarDecl)):
         access = cast(Literal[AccessKind.NONE, AccessKind.READ], accesses[decl.name])
-        print(access)
         assert access in {AccessKind.NONE, AccessKind.READ}
         dtype = numpy.dtype(decl.dtype.name.lower())
         data.parameter_info[decl.name] = ParameterInfo(access=access, dtype=dtype)
