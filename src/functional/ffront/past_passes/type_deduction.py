@@ -138,8 +138,8 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                     arg, msg=f"Type {arg.type} can not be used in operator `{node.op}`!"
                 )
 
-        left_type = cast(ct.FieldType | ct.ScalarType, left.type)
-        right_type = cast(ct.FieldType | ct.ScalarType, right.type)
+        left_type = cast(ct.ScalarType, left.type)
+        right_type = cast(ct.ScalarType, right.type)
 
         if node.op == ct.BinaryOperator.POW:
             return left_type
