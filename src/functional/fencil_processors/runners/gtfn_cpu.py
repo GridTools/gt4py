@@ -52,8 +52,6 @@ class GTFNExecutor(fpi.FencilExecutor):
         """
         # TODO(ricoh): a pipeline runner might enhance readability as well as discourage
         #  custom logic between steps.
-        import pytest
-        pytest.skip()
         return build.CMakeProject(
             source_module=(
                 source_module := gtfn_module.GTFNSourceModuleGenerator(self.language_settings)(
