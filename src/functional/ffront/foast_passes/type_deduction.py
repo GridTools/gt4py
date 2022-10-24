@@ -211,7 +211,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             )
         new_init = self.visit(node.init, **kwargs)
         if not all(
-            type_info.is_arithmetic(type_) or type_info.is_logical(type_)
+            type_info.is_arithmetic(type_)
             for type_ in type_info.primitive_constituents(new_init.type)
         ):
             raise FieldOperatorTypeDeductionError.from_foast_node(

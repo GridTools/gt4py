@@ -68,7 +68,7 @@ def type_info_cases() -> list[tuple[Optional[ct.SymbolType], dict]]:
             {
                 "is_concrete": True,
                 "type_class": ct.FieldType,
-                "is_arithmetic": False,
+                "is_arithmetic": True,
                 "is_logical": True,
             },
         ),
