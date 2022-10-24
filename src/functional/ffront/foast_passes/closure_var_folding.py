@@ -19,7 +19,7 @@ from eve import NodeTranslator, traits
 from eve.utils import FrozenNamespace
 
 
-@dataclass
+@dataclass(frozen=True)
 class ClosureVarFolding(NodeTranslator, traits.VisitorWithSymbolTableTrait):
     """
     Replace `Name` nodes that refer to closure variable by `Constant` nodes.
@@ -30,9 +30,6 @@ class ClosureVarFolding(NodeTranslator, traits.VisitorWithSymbolTableTrait):
     """
 
     closure_vars: dict[str, Any]
-
-    def __init__(self, closure_vars: dict[str, Any]):
-        self.closure_vars = closure_vars
 
     @classmethod
     def apply(cls, node: foast.FieldOperator, closure_vars: dict[str, Any]):

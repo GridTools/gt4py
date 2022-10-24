@@ -19,7 +19,7 @@ from eve import NodeTranslator, traits
 from functional.ffront.symbol_makers import make_symbol_type_from_value
 
 
-@dataclass
+@dataclass(frozen=True)
 class ClosureVarTypeDeduction(NodeTranslator, traits.VisitorWithSymbolTableTrait):
     """
     Deduce the type of `Symbol` nodes that introduce closure variables.
