@@ -24,6 +24,7 @@ from typing import Any, Callable, ClassVar, Dict, Optional, Tuple, Union, cast
 
 import numpy as np
 
+import gt4py.backend
 import gt4py.storage.utils
 import gtc.utils as gtc_utils
 from gt4py.definitions import AccessKind, DomainInfo, FieldInfo, ParameterInfo
@@ -394,6 +395,8 @@ class StencilObject(abc.ABC):
                 f"Compute domain too small. Sequential axis is {domain[2]}, but must be at least {self.domain_info.min_sequential_axis_size}."
             )
 
+        gt_backend = gt4py.backend.from_name(self.backend)
+
         # assert compatibility of fields with stencil
         for name, field_info in self.field_info.items():
             if field_info.access != AccessKind.NONE:
@@ -402,7 +405,10 @@ class StencilObject(abc.ABC):
                 arg_info = arg_infos[name]
                 assert arg_info is not None
 
-                if not gt_backend.from_name(self.backend).storage_info["is_optimal_layout"](
+                gt_backend = gt4py.backend.from_name(self.backend)
+                assert gt_backend is not None
+
+                if not gt_backend.storage_info["is_optimal_layout"](
                     arg_info.array,
                     list(field_info.axes) + [str(d) for d in range(len(field_info.data_dims))],
                 ):

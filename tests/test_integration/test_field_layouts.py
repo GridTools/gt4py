@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from gt4py import backend as gt_backend
+import gt4py.backend
 from gt4py import gtscript
 from gt4py import storage as gt_storage
 
@@ -16,7 +16,9 @@ except ImportError:
 
 
 def _get_array_library(backend: str):
-    if gt_backend.from_name(backend).storage_info["device"] == "gpu":
+    gt_backend = gt4py.backend.from_name(backend)
+    assert gt_backend is not None
+    if gt_backend.storage_info["device"] == "gpu":
         assert cp is not None
         return cp
     else:
@@ -40,7 +42,8 @@ def test_numpy_allocators(backend, order):
 @pytest.mark.parametrize("backend", PERFORMANCE_BACKENDS)
 def test_bad_layout_warns(backend):
     xp = _get_array_library(backend)
-    backend_type = gt_backend.from_name(backend)
+    backend_type = gt4py.backend.from_name(backend)
+    assert backend_type is not None
 
     shape = (10, 10, 10)
 

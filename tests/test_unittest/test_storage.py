@@ -344,18 +344,24 @@ class TestNormalizeStorageSpec:
         assert dimensions_out == tuple([*dimensions, "0"])
 
 
+def _create_ndarray_for_test_fill(*, dtype, aligned_index, shape, backend):
+    return gt4py.storage.full(shape, 7, dtype, backend=backend, aligned_index=aligned_index)
+
+
+def _create_ndarray_for_test_from_array(*, dtype, aligned_index, shape, backend):
+    return gt4py.storage.from_array(
+        np.ones(shape, dtype=dtype) * 7, dtype, backend=backend, aligned_index=aligned_index
+    )
+
+
 @pytest.mark.parametrize(
     "alloc_fun",
     [
         gt4py.storage.empty,
         gt4py.storage.ones,
         gt4py.storage.zeros,
-        lambda *args, **kwargs: gt4py.storage.full(*args, fill_value=7, **kwargs),
-        lambda shape, dtype, **kwargs: gt4py.storage.from_array(
-            np.empty(shape, dtype=dtype),
-            dtype=dtype,
-            **kwargs,
-        ),
+        _create_ndarray_for_test_fill,
+        _create_ndarray_for_test_from_array,
     ],
 )
 @pytest.mark.parametrize("backend", CPU_BACKENDS)
@@ -371,12 +377,8 @@ def test_cpu_constructor(alloc_fun, backend):
         gt4py.storage.empty,
         gt4py.storage.ones,
         gt4py.storage.zeros,
-        lambda *args, **kwargs: gt4py.storage.full(*args, fill_value=7, **kwargs),
-        lambda shape, dtype, **kwargs: gt4py.storage.from_array(
-            np.empty(shape, dtype=dtype),
-            dtype=dtype,
-            **kwargs,
-        ),
+        _create_ndarray_for_test_fill,
+        _create_ndarray_for_test_from_array,
     ],
 )
 @pytest.mark.parametrize(
