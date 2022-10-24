@@ -104,7 +104,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
         foast_node = ClosureVarFolding.apply(foast_node, closure_vars)
         foast_node = DeadClosureVarElimination.apply(foast_node)
         foast_node = ClosureVarTypeDeduction.apply(foast_node, closure_vars)
-        typed_foast_node = FieldOperatorTypeDeduction.apply(foast_node)
+        foast_node = FieldOperatorTypeDeduction.apply(foast_node)
 
         # check deduced matches annotated return type
         if "return" in annotations:
@@ -113,12 +113,12 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             )
             # TODO(tehrengruber): use `type_info.return_type` when the type of the
             #  arguments becomes available here
-            if annotated_return_type != typed_foast_node.type.returns:
+            if annotated_return_type != foast_node.type.returns:
                 raise common.GTTypeError(
-                    f"Annotated return type does not match deduced return type. Expected `{typed_foast_node.type.returns}`"
+                    f"Annotated return type does not match deduced return type. Expected `{foast_node.type.returns}`"
                     f", but got `{annotated_return_type}`."
                 )
-        return typed_foast_node
+        return foast_node
 
     def _builtin_type_constructor_symbols(
         self, captured_vars: Mapping[str, Any], location: eve.SourceLocation
