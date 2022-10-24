@@ -34,8 +34,8 @@ def fencil(size, out, inp):
     )
 
 
-def test_strided_offset_provider(fencil_processor_no_gtfn_exec):
-    fencil_processor, validate = fencil_processor_no_gtfn_exec
+def test_strided_offset_provider(program_processor_no_gtfn_exec):
+    program_processor, validate = program_processor_no_gtfn_exec
 
     LocA_size = 2
     max_neighbors = LocA2LocAB_offset_provider.max_neighbors
@@ -50,7 +50,7 @@ def test_strided_offset_provider(fencil_processor_no_gtfn_exec):
     out = np_as_located_field(LocA)(np.zeros((LocA_size,)))
     ref = np.sum(np.asarray(inp).reshape(LocA_size, max_neighbors), axis=-1)
 
-    run_processor(fencil, fencil_processor, LocA_size, out, inp)
+    run_processor(fencil, program_processor, LocA_size, out, inp)
 
     if validate:
         assert np.allclose(out, ref)
