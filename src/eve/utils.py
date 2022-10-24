@@ -555,42 +555,22 @@ class Namespace(types.SimpleNamespace, Generic[T]):
     asdict = as_dict
 
 
-class ConstantNamespace(Namespace[T]):
-    """A version of :class:`Namespace` for collecting constant expressions.
+class FrozenNamespace(Namespace[T]):
+    """An immutable version of :class:`Namespace`.
 
     Examples:
-        >>> ns = ConstantNamespace(a=10)
-        >>> ns.b = "hello"
+        >>> ns = FrozenNamespace(a=10, b="hello")
         >>> ns.a
         10
         >>> ns.a = 20
         Traceback (most recent call last):
            ...
-        TypeError: Trying to modify immutable member 'a' of a 'ConstantNamespace'.
+        TypeError: Trying to modify immutable 'FrozenNamespace' instance.
 
-        >>> ns = ConstantNamespace(a=10, b="hello")
+        >>> ns = FrozenNamespace(a=10, b="hello")
         >>> list(ns.items())
         [('a', 10), ('b', 'hello')]
-    """
 
-    def __setattr__(self, __name: str, __value: Any) -> None:
-        if hasattr(self, __name):
-            raise TypeError(
-                f"Trying to modify immutable member '{__name}' of a '{self.__class__.__name__}'."
-            )
-        self.__dict__[__name] = __value
-
-    def __delattr__(self, __name: str) -> None:
-        raise TypeError(f"Trying to modify immutable '{self.__class__.__name__}' instance.")
-
-
-class FrozenNamespace(ConstantNamespace[T]):
-    """
-    A subclass of `ConstantNamespace` that cannot be modified by adding new constant attributes.
-
-    FrozenNamespaces are fully immutable and therefore hashable.
-
-    Examples:
         >>> ns = FrozenNamespace(a=10, b="hello")
         >>> hashed = hash(ns)
         >>> assert isinstance(hashed, int)
@@ -598,9 +578,12 @@ class FrozenNamespace(ConstantNamespace[T]):
         True
     """
 
-    __slots__ = ("__cached_hash_value__",)  # This slot is used to avoid polluting the namespace
+    __slots__ = "__cached_hash_value__"  # This slot is used to avoid polluting the namespace
 
     def __setattr__(self, __name: str, __value: Any) -> None:
+        raise TypeError(f"Trying to modify immutable '{self.__class__.__name__}' instance.")
+
+    def __delattr__(self, __name: str) -> None:
         raise TypeError(f"Trying to modify immutable '{self.__class__.__name__}' instance.")
 
     def __hash__(self) -> int:  # type: ignore[override]
