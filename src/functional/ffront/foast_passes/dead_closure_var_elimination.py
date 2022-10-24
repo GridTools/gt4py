@@ -17,26 +17,26 @@ import functional.ffront.field_operator_ast as foast
 from eve import NodeTranslator, traits
 
 
-class DeadClosureVarElimination(traits.VisitorWithSymbolTableTrait, NodeTranslator):
-    referenced_symbols: list[str]
+class DeadClosureVarElimination(NodeTranslator, traits.VisitorWithSymbolTableTrait):
+    _referenced_symbols: list[str]
 
     @classmethod
     def apply(cls, node: foast.FieldOperator):
         return cls().visit(node)
 
     def visit_Name(self, node: foast.Name, **kwargs: Any) -> foast.Name:
-        self.referenced_symbols.append(node.id)
+        self._referenced_symbols.append(node.id)
         return node
 
     def visit_FunctionDefinition(
         self, node: foast.FunctionDefinition, **kwargs: Any
     ) -> foast.FunctionDefinition:
-        self.referenced_symbols = []
+        self._referenced_symbols = []
         self.visit(node.body, **kwargs)
         referenced_closure_vars = [
             closure_var
             for closure_var in node.closure_vars
-            if closure_var.id in self.referenced_symbols
+            if closure_var.id in self._referenced_symbols
         ]
         return foast.FunctionDefinition(
             id=node.id,

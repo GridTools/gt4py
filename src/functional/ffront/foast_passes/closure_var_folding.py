@@ -11,6 +11,7 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
+from dataclasses import dataclass
 from typing import Any
 
 import functional.ffront.field_operator_ast as foast
@@ -18,7 +19,8 @@ from eve import NodeTranslator, traits
 from eve.utils import ConstantNamespace
 
 
-class ClosureVarFolding(traits.VisitorWithSymbolTableTrait, NodeTranslator):
+@dataclass
+class ClosureVarFolding(NodeTranslator, traits.VisitorWithSymbolTableTrait):
     """
     Replace `Name` nodes that refer to closure variable by `Constant` nodes.
 

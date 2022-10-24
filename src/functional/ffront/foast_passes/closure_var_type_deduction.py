@@ -11,6 +11,7 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
+from dataclasses import dataclass
 from typing import Any
 
 import functional.ffront.field_operator_ast as foast
@@ -18,7 +19,8 @@ from eve import NodeTranslator, traits
 from functional.ffront.symbol_makers import make_symbol_type_from_value
 
 
-class ClosureVarTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
+@dataclass
+class ClosureVarTypeDeduction(NodeTranslator, traits.VisitorWithSymbolTableTrait):
     """
     Deduce the type of `Symbol` nodes that introduce closure variables.
 
@@ -30,9 +32,6 @@ class ClosureVarTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator
     """
 
     closure_vars: dict[str, Any]
-
-    def __init__(self, closure_vars: dict[str, Any]):
-        self.closure_vars = closure_vars
 
     @classmethod
     def apply(cls, node: foast.FieldOperator, closure_vars: dict[str, Any]):
