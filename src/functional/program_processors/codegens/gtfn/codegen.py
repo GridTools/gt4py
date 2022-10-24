@@ -193,7 +193,6 @@ class GTFNCodegen(codegen.TemplatedGenerator):
         """
     #include <cmath>
     #include <gridtools/fn/${grid_type_str}.hpp>
-    #include <gridtools/fn/backend/naive.hpp>
 
     namespace generated{
 
