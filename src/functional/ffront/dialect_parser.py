@@ -38,8 +38,8 @@ class DialectSyntaxError(common.GTSyntaxError):
         lineno: int = 0,
         offset: int = 0,
         filename: Optional[str] = None,
-        end_lineno: int = None,
-        end_offset: int = None,
+        end_lineno: Optional[int] = None,
+        end_offset: Optional[int] = None,
         text: Optional[str] = None,
     ):
         msg = f"Invalid {self.dialect_name} Syntax: {msg}"
