@@ -319,3 +319,9 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
 
     def visit_Symbol(self, node: past.Symbol, **kwargs) -> itir.Sym:
         return itir.Sym(id=node.id)
+
+    def visit_BinOp(self, node: past.BinOp, **kwargs) -> itir.FunCall:
+        return itir.FunCall(
+            fun=itir.SymRef(id=node.op.value),
+            args=[self.visit(node.left, **kwargs), self.visit(node.right, **kwargs)],
+        )

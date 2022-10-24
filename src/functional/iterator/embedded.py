@@ -17,6 +17,8 @@ from typing import (
     Optional,
     Protocol,
     Sequence,
+    SupportsFloat,
+    SupportsInt,
     TypeAlias,
     TypeGuard,
     Union,
@@ -26,6 +28,7 @@ from typing import (
 import numpy as np
 import numpy.typing as npt
 
+from eve import extended_typing as xtyping
 from functional import iterator
 from functional.common import Connectivity, Dimension, DimensionKind
 from functional.iterator import builtins
@@ -48,6 +51,7 @@ FieldAxis: TypeAlias = (
 )  # TODO Offset should be removed, is sometimes used for sparse dimensions
 TupleAxis: TypeAlias = NoneType
 Axis: TypeAlias = FieldAxis | TupleAxis
+Scalar: TypeAlias = SupportsInt | SupportsFloat | np.int32 | np.int64 | np.float32 | np.float64
 
 
 class SparseTag(Tag):
@@ -402,6 +406,11 @@ def divides(first, second):
     return first / second
 
 
+@builtins.floordiv.register(EMBEDDED)
+def floordiv(first, second):
+    return first // second
+
+
 @builtins.eq.register(EMBEDDED)
 def eq(first, second):
     return first == second
@@ -430,6 +439,24 @@ def greater_equal(first, second):
 @builtins.not_eq.register(EMBEDDED)
 def not_eq(first, second):
     return first != second
+
+
+CompositeOfScalarOrField: TypeAlias = Scalar | LocatedField | tuple["CompositeOfScalarOrField", ...]
+
+
+def promote_scalars(val: CompositeOfScalarOrField):
+    """Given a scalar, field or composite thereof promote all (contained) scalars to fields."""
+    if isinstance(val, tuple):
+        return tuple(promote_scalars(el) for el in val)
+    val_type = xtyping.infer_type(val)
+    if np.issubdtype(val_type, np.number):
+        return constant_field(val)
+    elif np.issubdtype(val_type, LocatedField):
+        return val
+    else:
+        raise ValueError(
+            f"Expected a `Field` or a number (`float`, `np.int64`, ...), but got {val_type}."
+        )
 
 
 for math_builtin_name in builtins.MATH_BUILTINS:
@@ -896,7 +923,9 @@ class ConstantField(LocatedField):
         return ()
 
 
-def constant_field(value: Any, dtype: npt.DTypeLike = float) -> LocatedField:
+def constant_field(value: Any, dtype: npt.DTypeLike = None) -> LocatedField:
+    if dtype is None:
+        dtype = xtyping.infer_type(value)
     return ConstantField(value, dtype)
 
 
@@ -1103,6 +1132,7 @@ def fendef_embedded(fun: Callable[..., None], *args: Any, **kwargs: Any):
         out = as_tuple_field(out) if can_be_tuple_field(out) else out
 
         for pos in _domain_iterator(domain):
+            promoted_ins = [promote_scalars(inp) for inp in ins]
             ins_iters = list(
                 make_in_iterator(
                     inp,
@@ -1110,9 +1140,7 @@ def fendef_embedded(fun: Callable[..., None], *args: Any, **kwargs: Any):
                     kwargs["offset_provider"],
                     column_axis=column.axis if column else None,
                 )
-                if not isinstance(inp, numbers.Number)
-                else inp
-                for inp in ins
+                for inp in promoted_ins
             )
             res = sten(*ins_iters)
 

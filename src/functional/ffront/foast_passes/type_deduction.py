@@ -388,7 +388,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         right: foast.Expr,
         **kwargs,
     ) -> Optional[ct.SymbolType]:
-        logical_ops = {foast.BinaryOperator.BIT_AND, foast.BinaryOperator.BIT_OR}
+        logical_ops = {ct.BinaryOperator.BIT_AND, ct.BinaryOperator.BIT_OR}
         is_compatible = type_info.is_logical if node.op in logical_ops else type_info.is_arithmetic
 
         # check both types compatible
@@ -401,7 +401,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         left_type = cast(ct.FieldType | ct.ScalarType, left.type)
         right_type = cast(ct.FieldType | ct.ScalarType, right.type)
 
-        if node.op == foast.BinaryOperator.POW:
+        if node.op == ct.BinaryOperator.POW:
             return left_type
 
         try:
