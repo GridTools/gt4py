@@ -87,8 +87,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
         sta = StringifyAnnotationsPass.apply(definition_ast)
         ssa = SingleStaticAssignPass.apply(sta)
         sat = SingleAssignTargetPass.apply(ssa)
-        las = UnpackedAssignPass.apply(sat)
-        ucc = UnchainComparesPass.apply(las)
+        ucc = UnchainComparesPass.apply(sat)
         return ucc
 
     @classmethod
@@ -96,6 +95,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
         cls, foast_node: foast.FieldOperator, annotations: dict[str, Any]
     ) -> foast.FieldOperator:
         typed_foast_node = FieldOperatorTypeDeduction.apply(foast_node)
+        typed_foast_node = UnpackedAssignPass.apply(typed_foast_node)
 
         # check deduced matches annotated return type
         if "return" in annotations:
@@ -184,12 +184,16 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             )
         return foast.DataSymbol(id=node.arg, location=self._make_loc(node), type=new_type)
 
+    def visit_Starred(self, node: ast.Starred) -> foast.Star:
+        return foast.Star(location=self._make_loc(node))
+
     def visit_Assign(self, node: ast.Assign, **kwargs) -> foast.Assign:
         target = node.targets[0]  # there is only one element after assignment passes
         if isinstance(target, ast.Tuple):
-            raise FieldOperatorSyntaxError.from_AST(
-                node, msg="Unpacking not allowed, run a preprocessing pass!"
-            )
+            t = [self.visit(elt) for elt in target.elts]
+            v = [self.visit(elt) for elt in node.value.elts]
+            mta = foast.MultiTargetAssign(target=t, value=v, location=self._make_loc(node))
+            return mta
         if not isinstance(target, ast.Name):
             raise FieldOperatorSyntaxError.from_AST(node, msg="Can only assign to names!")
         new_value = self.visit(node.value)

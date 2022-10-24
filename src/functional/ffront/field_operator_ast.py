@@ -132,9 +132,18 @@ class Stmt(LocatedNode):
     ...
 
 
+class Star(Expr):
+   ...
+
+
 class Assign(Stmt):
     target: Union[FieldSymbol, TupleSymbol, ScalarSymbol]
     value: Expr
+
+
+class MultiTargetAssign(Stmt):
+    target: list[FieldSymbol | TupleSymbol | ScalarSymbol | Star | Name]
+    value: Any
 
 
 class Return(Stmt):
