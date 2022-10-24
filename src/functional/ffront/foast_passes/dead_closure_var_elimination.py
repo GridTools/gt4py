@@ -18,14 +18,16 @@ from eve import NodeTranslator, traits
 
 
 class DeadClosureVarElimination(NodeTranslator, traits.VisitorWithSymbolTableTrait):
-    _referenced_symbols: list[str]
+    _referenced_symbols: list[foast.Symbol]
 
     @classmethod
     def apply(cls, node: foast.FieldOperator):
         return cls().visit(node)
 
     def visit_Name(self, node: foast.Name, **kwargs: Any) -> foast.Name:
-        self._referenced_symbols.append(node.id)
+        symtable = kwargs["symtable"]
+        if node.id in symtable:
+            self._referenced_symbols.append(symtable[node.id])
         return node
 
     def visit_FunctionDefinition(
@@ -36,7 +38,7 @@ class DeadClosureVarElimination(NodeTranslator, traits.VisitorWithSymbolTableTra
         referenced_closure_vars = [
             closure_var
             for closure_var in node.closure_vars
-            if closure_var.id in self._referenced_symbols
+            if closure_var in self._referenced_symbols
         ]
         return foast.FunctionDefinition(
             id=node.id,
