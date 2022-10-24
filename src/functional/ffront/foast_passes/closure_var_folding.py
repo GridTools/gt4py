@@ -16,7 +16,7 @@ from typing import Any
 
 import functional.ffront.field_operator_ast as foast
 from eve import NodeTranslator, traits
-from eve.utils import ConstantNamespace
+from eve.utils import FrozenNamespace
 
 
 @dataclass
@@ -41,7 +41,7 @@ class ClosureVarFolding(NodeTranslator, traits.VisitorWithSymbolTableTrait):
     def visit_Name(self, node: foast.Name, **kwargs):
         if node.id in self.closure_vars:
             value = self.closure_vars[node.id]
-            if isinstance(value, ConstantNamespace):
+            if isinstance(value, FrozenNamespace):
                 return foast.Constant(value=value, location=node.location)
         return node
 

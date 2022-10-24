@@ -243,10 +243,10 @@ def test_conditional_wrong_arg_type():
 def test_closure_symbols():
     import numpy as np
 
-    from eve.utils import ConstantNamespace
+    from eve.utils import FrozenNamespace
 
-    nonlocals_unreferenced = ConstantNamespace()
-    nonlocals = ConstantNamespace(float_value=2.3, np_value=np.float32(3.4))
+    nonlocals_unreferenced = FrozenNamespace()
+    nonlocals = FrozenNamespace(float_value=2.3, np_value=np.float32(3.4))
 
     def operator_with_refs(inp: Field[..., "float64"], inp2: Field[..., "float32"]):
         a = inp + nonlocals.float_value

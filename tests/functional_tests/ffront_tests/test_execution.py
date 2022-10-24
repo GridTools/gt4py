@@ -1233,11 +1233,12 @@ def test_undefined_symbols():
 
 
 def test_constant_closure_vars():
-    from eve.utils import ConstantNamespace
+    from eve.utils import FrozenNamespace
 
-    constants = ConstantNamespace()
-    constants.PI = np.float32(3.142)
-    constants.E = np.float32(2.718)
+    constants = FrozenNamespace(
+        PI=np.float32(3.142),
+        E=np.float32(2.718),
+    )
 
     @field_operator
     def consume_constants(input: Field[[IDim], np.float32]) -> Field[[IDim], np.float32]:
