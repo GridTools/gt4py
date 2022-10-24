@@ -32,7 +32,7 @@ class DeadClosureVarElimination(traits.VisitorWithSymbolTableTrait, NodeTranslat
         self, node: foast.FunctionDefinition, **kwargs: Any
     ) -> foast.FunctionDefinition:
         self.referenced_symbols = []
-        self.visit(node.body)
+        self.visit(node.body, **kwargs)
         referenced_closure_vars = [
             closure_var
             for closure_var in node.closure_vars
