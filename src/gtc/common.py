@@ -270,7 +270,7 @@ def verify_and_get_common_dtype(
     node_cls: Type[Node], values: List[Expr], *, strict: bool = True
 ) -> Optional[DataType]:
     assert len(values) > 0
-    if all(v.dtype is not None for v in values):
+    if all(v.dtype is not DataType.AUTO for v in values):
         dtypes: List[DataType] = [v.dtype for v in values]  # type: ignore # guaranteed to be not None
         dtype = dtypes[0]
         if strict:
@@ -330,7 +330,7 @@ class VariableKOffset(GenericNode, Generic[ExprT]):
 
     @validator("k")
     def offset_expr_is_int(cls, k: Expr) -> List[Expr]:
-        if k.dtype is not None and not k.dtype.isinteger():
+        if k.dtype is not DataType.AUTO and not k.dtype.isinteger():
             raise ValueError("Variable vertical index must be an integer expression")
         return k
 
@@ -353,7 +353,7 @@ class FieldAccess(GenericNode, Generic[ExprT, VariableKOffsetT]):
     @validator("data_index")
     def data_index_exprs_are_int(cls, data_index: List[Expr]) -> List[Expr]:
         if data_index and any(
-            index.dtype is not None and not index.dtype.isinteger() for index in data_index
+            index.dtype is not DataType.AUTO and not index.dtype.isinteger() for index in data_index
         ):
             raise ValueError("Data indices must be integer expressions")
         return data_index

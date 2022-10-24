@@ -181,7 +181,10 @@ class UnrollVectorExpressions(IRNodeMapper):
                     data_type = DataType.INT32
                     data_index = [ScalarLiteral(value=index, data_type=data_type)]
                     element_ref = FieldRef(
-                        name=node.name, offset=node.offset, data_index=data_index, loc=node.loc
+                        name=node.name,
+                        offset=DefIRToGTIR().transform_offset(node.offset),
+                        data_index=data_index,
+                        loc=node.loc,
                     )
                     field_list.append(element_ref)
             # matrix
@@ -196,7 +199,11 @@ class UnrollVectorExpressions(IRNodeMapper):
                             ScalarLiteral(value=col, data_type=data_type),
                         ]
                         element_ref = FieldRef(
-                            name=node.name, offset=node.offset, data_index=data_index, loc=node.loc
+                            name=node.name,
+                            offset=DefIRToGTIR().transform_offset(node.offset),
+                            **kwargs,
+                            data_index=data_index,
+                            loc=node.loc,
                         )
                         row_list.append(element_ref)
                     field_list.append(row_list)

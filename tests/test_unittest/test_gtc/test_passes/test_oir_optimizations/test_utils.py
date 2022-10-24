@@ -12,6 +12,8 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+from typing import Tuple
+
 import pytest
 
 from gtc import common
@@ -234,6 +236,14 @@ def test_stencil_extents_region(mask, offset, access_extent):
         assert input_access.to_extent(Extent(block_extent)) is None
 
 
+def convert_horizontal_interval_to_relative_mask(
+    interval: common.HorizontalInterval,
+) -> Tuple[common.AxisBound, common.AxisBound]:
+    assert interval.start is not None
+    assert interval.end is not None
+    return (interval.start, interval.end)
+
+
 def test_compute_relative_mask():
     relative_mask = compute_relative_mask(
         Extent.zeros(ndims=2),
@@ -243,8 +253,12 @@ def test_compute_relative_mask():
         ),
     )
 
-    assert relative_mask.i == common.HorizontalInterval.compute_domain()
-    assert relative_mask.j == common.HorizontalInterval.compute_domain()
+    assert relative_mask[0] == convert_horizontal_interval_to_relative_mask(
+        common.HorizontalInterval.compute_domain()
+    )
+    assert relative_mask[1] == convert_horizontal_interval_to_relative_mask(
+        common.HorizontalInterval.compute_domain()
+    )
 
     relative_mask = compute_relative_mask(
         Extent.zeros(ndims=2),
@@ -256,7 +270,11 @@ def test_compute_relative_mask():
         ),
     )
 
-    assert relative_mask.i == common.HorizontalInterval.at_endpt(
-        level=common.LevelMarker.START, start_offset=0, end_offset=3
+    assert relative_mask[0] == convert_horizontal_interval_to_relative_mask(
+        common.HorizontalInterval.at_endpt(
+            level=common.LevelMarker.START, start_offset=0, end_offset=3
+        )
     )
-    assert relative_mask.j == common.HorizontalInterval.compute_domain()
+    assert relative_mask[1] == convert_horizontal_interval_to_relative_mask(
+        common.HorizontalInterval.compute_domain()
+    )
