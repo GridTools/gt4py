@@ -1,12 +1,10 @@
-#include GENERATED_FILE
-
-#include <iostream>
-
 #include <gtest/gtest.h>
 
 #include <fn_select.hpp>
-#include <gridtools/sid/rename_dimensions.hpp>
 #include <test_environment.hpp>
+#include GENERATED_FILE
+
+#include <gridtools/sid/rename_dimensions.hpp>
 
 namespace {
 using namespace gridtools;
