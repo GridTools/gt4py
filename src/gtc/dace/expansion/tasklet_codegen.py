@@ -246,13 +246,13 @@ class TaskletCodegen(codegen.TemplatedGenerator):
         for axis, interval in zip(dcir.Axis.dims_horizontal(), node.intervals):
             it_sym, dom_sym = axis.iteration_symbol(), axis.domain_symbol()
 
-            assert interval.start is not None and interval.end is not None
-
             min_val = get_axis_bound_str(interval.start, dom_sym)
             max_val = get_axis_bound_str(interval.end, dom_sym)
             if (
                 min_val
                 and max_val
+                and interval.start is not None
+                and interval.end is not None
                 and interval.start.level == interval.end.level
                 and interval.start.offset + 1 == interval.end.offset
             ):

@@ -289,7 +289,10 @@ class StencilObject(abc.ABC):
     ) -> Dict[str, Tuple[int, ...]]:
         try:
             if isinstance(origin, dict):
-                return origin
+                # This is needed because the keys in origin are StringLiteral as of DaCe v0.14, and they
+                # do not implement comparison methods. Revert this once DaCe is updated.
+                # See: https://github.com/GridTools/gt4py/issues/927
+                return {str(k): v for k, v in origin.items()}
             if origin is None:
                 return {}
             if isinstance(origin, collections.abc.Iterable):

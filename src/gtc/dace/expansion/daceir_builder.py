@@ -616,12 +616,11 @@ class DaCeIRBuilder(NodeTranslator):
             else:
                 if _all_stmts_same_region(scope_nodes, axis, interval):
                     masks = cast(
-                        Set[common.HorizontalMask],
-                        iter_tree(scope_nodes).if_isinstance(common.HorizontalMask).to_set(),
+                        List[common.HorizontalMask],
+                        iter_tree(scope_nodes).if_isinstance(common.HorizontalMask).to_list(),
                     )
-
                     horizontal_mask_interval = next(
-                        iter(mask.intervals[axis.to_idx()] for mask in masks)
+                        iter((mask.intervals[axis.to_idx()] for mask in masks))
                     )
                     interval = dcir.DomainInterval.intersection(
                         axis, horizontal_mask_interval, interval
