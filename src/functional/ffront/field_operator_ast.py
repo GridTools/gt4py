@@ -133,7 +133,7 @@ class Stmt(LocatedNode):
 
 
 class Star(Expr):
-    ...
+    id: Coerced[SymbolRef]  # noqa: A003  # shadowing a python builtin
 
 
 class Assign(Stmt):
@@ -142,6 +142,7 @@ class Assign(Stmt):
 
 
 class MultiTargetAssign(Stmt):
+    # todo: rename
     target: list[FieldSymbol | TupleSymbol | ScalarSymbol | Star]
     value: Expr
 

@@ -194,9 +194,11 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             constraint_type = ct.DataType
             ts = []
 
+            # todo: correctly pass a Starred node (we need this later for reassigning types and values)
+
             for elt in target.elts:
                 if isinstance(elt, ast.Starred):
-                    ts.append(foast.DataSymbol(id=elt.value.id, location=self._make_loc(elt), type=ct.DeferredSymbolType(constraint=constraint_type)))
+                    ts.append(foast.Star(id=elt.value.id, location=self._make_loc(elt), type=ct.DeferredSymbolType(constraint=constraint_type)))
                 else:
                     ts.append(foast.DataSymbol(id=elt.id, location=self._make_loc(elt), type=ct.DeferredSymbolType(constraint=constraint_type)))
 

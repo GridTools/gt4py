@@ -1287,10 +1287,12 @@ def test_tuple_unpacking():
         inp3: Field[[IDim], float64],
         inp4: Field[[IDim], float64],
     ) -> tuple[Field[[IDim], float64], Field[[IDim], float64]]:
-        first, *_, foo, last = (inp1, inp2, inp3, inp4)
-        return first, last
+        a, b, c, d = (inp1, inp2, inp3, inp4)
+        return d, c, b, a
 
-    unpack(a, b, c, d, out=(b, c), offset_provider={})
+    unpack(a, b, c, d, out=(a, b, c, d), offset_provider={})
 
-    assert np.allclose(a, b)
-    assert np.allclose(c, d)
+    assert np.allclose(a, d)
+    assert np.allclose(b, c)
+    assert np.allclose(c, b)
+    assert np.allclose(d, a)
