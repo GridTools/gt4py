@@ -32,7 +32,7 @@ class ClosureVarFolding(NodeTranslator, traits.VisitorWithSymbolTableTrait):
     closure_vars: dict[str, Any]
 
     @classmethod
-    def apply(cls, node: foast.FieldOperator, closure_vars: dict[str, Any]) -> foast.FieldOperator:
+    def apply(cls, node: foast.LocatedNode, closure_vars: dict[str, Any]) -> foast.LocatedNode:
         return cls(closure_vars=closure_vars).visit(node)
 
     def visit_Name(
