@@ -89,7 +89,6 @@ class OIRToCUIR(eve.NodeTranslator):
             op=node.op,
             left=self.visit(node.left, **kwargs),
             right=self.visit(node.right, **kwargs),
-            dtype=node.dtype,
         )
 
     def visit_Temporary(self, node: oir.Temporary, **kwargs: Any) -> cuir.Temporary:
@@ -225,7 +224,6 @@ class OIRToCUIR(eve.NodeTranslator):
             cond=self.visit(node.cond, **kwargs),
             true_expr=self.visit(node.true_expr, **kwargs),
             false_expr=self.visit(node.false_expr, **kwargs),
-            dtype=node.dtype,
         )
 
     def visit_HorizontalExecution(

@@ -23,7 +23,7 @@ from gtc.common import AxisBound, CartesianOffset, DataType, LocNode, LoopOrder
 
 @utils.noninstantiable
 class Expr(common.Expr):
-    dtype: common.DataType
+    pass
 
 
 @utils.noninstantiable
