@@ -160,7 +160,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
         closure_var_symbols, skip_names = self._builtin_type_constructor_symbols(
             self.closure_vars, self._make_loc(node)
         )
-        for name, _ in self.closure_vars.items():
+        for name in self.closure_vars.keys():
             if name in skip_names:
                 continue
             closure_var_symbols.append(
