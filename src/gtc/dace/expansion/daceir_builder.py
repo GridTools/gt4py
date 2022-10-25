@@ -824,7 +824,7 @@ class DaCeIRBuilder(NodeTranslator):
         read_memlets, write_memlets, field_memlets = union_inout_memlets(computations)
 
         field_decls = global_ctx.get_dcir_decls(
-            {memlet.field: memlet.access_info for memlet in field_memlets},
+            global_ctx.library_node.access_infos,
             symbol_collector=symbol_collector,
         )
 
