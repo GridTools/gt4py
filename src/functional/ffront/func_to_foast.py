@@ -411,7 +411,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
         return node.func.id  # type: ignore[attr-defined]  # We want this to fail if the attribute does not exist unexpectedly.
 
     def visit_Call(self, node: ast.Call, **kwargs) -> foast.Call:
-        #if not isinstance(node.func, ast.Name):
+        # if not isinstance(node.func, ast.Name):
         #    raise FieldOperatorSyntaxError.from_AST(
         #        node, msg="Functions can only be called directly!"
         #    )

@@ -186,7 +186,9 @@ def make_symbol_type_from_value(value: Any) -> ct.SymbolType:
         type_ = xtyping.infer_type(value, annotate_callable_kwargs=True)
         symbol_type = make_symbol_type_from_typing(type_)
 
-    if isinstance(symbol_type, (ct.DataType, ct.CallableType, ct.OffsetType, ct.DimensionType, ct.NoneType)):
+    if isinstance(
+        symbol_type, (ct.DataType, ct.CallableType, ct.OffsetType, ct.DimensionType, ct.NoneType)
+    ):
         return symbol_type
     else:
         raise common.GTTypeError(f"Impossible to map '{value}' value to a Symbol")

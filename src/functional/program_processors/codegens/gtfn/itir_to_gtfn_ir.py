@@ -130,6 +130,7 @@ def _collect_dimensions_from_domain(
             )
     return offset_definitions
 
+
 def _collect_dimensions_from_offsets(
     node: itir.Node,
     grid_type: common.GridType,
@@ -151,7 +152,10 @@ def _collect_dimensions_from_offsets(
             dim = offset_provider[offset_name]
             offset_definitions[dim.value] = TagDefinition(name=Sym(id=dim.value))
         elif isinstance(offset_provider[offset_name], common.Connectivity):
-            for dim in [offset_provider[offset_name].origin_axis, offset_provider[offset_name].neighbor_axis]:
+            for dim in [
+                offset_provider[offset_name].origin_axis,
+                offset_provider[offset_name].neighbor_axis,
+            ]:
                 if grid_type == common.GridType.CARTESIAN:
                     offset_definitions[dim.value] = TagDefinition(name=Sym(id=dim.value))
                 else:
@@ -197,13 +201,14 @@ def _collect_offset_definitions(
             else:
                 assert grid_type == common.GridType.UNSTRUCTURED
                 if dim.kind == common.DimensionKind.LOCAL:
-                    offset_definitions[dim.value+"Dim"] = TagDefinition(name=Sym(id=dim.value+"Dim"))
+                    offset_definitions[dim.value + "Dim"] = TagDefinition(
+                        name=Sym(id=dim.value + "Dim")
+                    )
                 elif not dim.kind == common.DimensionKind.VERTICAL:
-                    #raise ValueError(
+                    # raise ValueError(
                     #    "Mapping an offset to a horizontal dimension in unstructured is not allowed."
-                    #)
-                    offset_definitions[dim.value] = TagDefinition(
-                        name=Sym(id=dim.value))
+                    # )
+                    offset_definitions[dim.value] = TagDefinition(name=Sym(id=dim.value))
                     if offset_name != dim.value:
                         offset_definitions[offset_name] = TagDefinition(
                             name=Sym(id=offset_name), alias=SymRef(id=dim.value)

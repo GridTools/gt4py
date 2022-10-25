@@ -18,11 +18,12 @@ from typing import Any, Final, TypeVar
 
 import numpy as np
 
+from functional.common import Connectivity, Dimension, DimensionKind
 from functional.iterator import ir as itir
 from functional.otf import languages, stages, step_types, workflow
 from functional.otf.binding import cpp_interface, interface
 from functional.program_processors.codegens.gtfn import gtfn_backend
-from functional.common import DimensionKind, Connectivity, Dimension
+
 
 T = TypeVar("T")
 
@@ -33,9 +34,12 @@ def get_param_description(
     view: np.ndarray = np.asarray(obj)
     if view.ndim > 0:
         return interface.BufferParameter(
-            name, tuple(
+            name,
+            tuple(
                 dim.value if dim.kind != DimensionKind.LOCAL else dim.value + "Dim"
-                for dim in obj.axes), view.dtype
+                for dim in obj.axes
+            ),
+            view.dtype,
         )
     else:
         return interface.ScalarParameter(name, view.dtype)
@@ -59,44 +63,59 @@ class GTFNTranslationStep(
         ]
         for name, connectivity in inp.kwargs["offset_provider"].items():
             if isinstance(connectivity, Connectivity):
-                parameters.append(interface.ConnectivityParameter("__conn_"+name.lower(), connectivity.origin_axis.value, name))
+                parameters.append(
+                    interface.ConnectivityParameter(
+                        "__conn_" + name.lower(), connectivity.origin_axis.value, name
+                    )
+                )
             elif isinstance(connectivity, Dimension):
                 pass
             else:
-                raise ValueError(f"Expected offset provider `{name}` to be a "
-                                 f"`Connectivity` or `Dimension`, but got "
-                                 f"{type(connectivity).__name__}")
+                raise ValueError(
+                    f"Expected offset provider `{name}` to be a "
+                    f"`Connectivity` or `Dimension`, but got "
+                    f"{type(connectivity).__name__}"
+                )
         function = interface.Function(program.id, tuple(parameters))
 
         connectivity_args = []
         for name, connectivity in inp.kwargs["offset_provider"].items():
             if isinstance(connectivity, Connectivity):
-                nbtbl = f"as_neighbor_table<generated::{connectivity.origin_axis.value}_t, " \
-                        f"generated::{name}_t, {connectivity.max_neighbors}>(__conn_{name.lower()})"
+                nbtbl = (
+                    f"as_neighbor_table<generated::{connectivity.origin_axis.value}_t, "
+                    f"generated::{name}_t, {connectivity.max_neighbors}>(__conn_{name.lower()})"
+                )
                 connectivity_args.append(
-                    f"gridtools::hymap::keys<generated::{name}_t>::make_values({nbtbl})")  # TODO std::forward, type and max_neighbors)
+                    f"gridtools::hymap::keys<generated::{name}_t>::make_values({nbtbl})"
+                )  # TODO std::forward, type and max_neighbors)
             elif isinstance(connectivity, Dimension):
                 pass
             else:
-                raise ValueError(f"Expected offset provider `{name}` to be a "
-                                 f"`Connectivity` or `Dimension`, but got "
-                                 f"{type(connectivity).__name__}")
+                raise ValueError(
+                    f"Expected offset provider `{name}` to be a "
+                    f"`Connectivity` or `Dimension`, but got "
+                    f"{type(connectivity).__name__}"
+                )
         rendered_connectivity_args = ", ".join(connectivity_args)
 
         import eve.trees
         import eve.utils
-        scalar_parameters = eve.trees.pre_walk_values(
-            eve.utils.XIterable(program.closures).getattr(
-                "inputs").to_list()).if_isinstance(itir.SymRef).getattr(
-            "id").map(str).to_list()
+
+        scalar_parameters = (
+            eve.trees.pre_walk_values(
+                eve.utils.XIterable(program.closures).getattr("inputs").to_list()
+            )
+            .if_isinstance(itir.SymRef)
+            .getattr("id")
+            .map(str)
+            .to_list()
+        )
 
         parameter_args = ["gridtools::fn::backend::naive{}"]
         for p in parameters:
-            if isinstance(p, (
-            interface.ScalarParameter, interface.BufferParameter)):
+            if isinstance(p, (interface.ScalarParameter, interface.BufferParameter)):
                 if isinstance(p, interface.ScalarParameter) and p.name in scalar_parameters:
-                    parameter_args.append(
-                        f"gridtools::stencil::global_parameter({p.name})")
+                    parameter_args.append(f"gridtools::stencil::global_parameter({p.name})")
                 else:
                     parameter_args.append(p.name)
 

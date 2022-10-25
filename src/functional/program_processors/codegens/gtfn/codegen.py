@@ -95,7 +95,7 @@ class GTFNCodegen(codegen.TemplatedGenerator):
         if self.is_cartesian:
             return f"::gridtools::hymap::keys<{','.join(t + '_t' for t in tags)}>::make_values({','.join(values)})"
         else:
-            return "{"+f"{','.join(values)}"+"}"
+            return "{" + f"{','.join(values)}" + "}"
 
     CartesianDomain = as_fmt("gtfn::cartesian_domain({tagged_sizes}, {tagged_offsets})")
     UnstructuredDomain = as_mako(

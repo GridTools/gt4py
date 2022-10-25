@@ -8,8 +8,8 @@ import math
 import numbers
 from abc import abstractmethod
 from dataclasses import dataclass
-from types import NoneType
 from functools import cached_property
+from types import NoneType
 from typing import (
     Any,
     Callable,
@@ -293,9 +293,7 @@ def lift(stencil):
     def impl(*args):
         class _WrappedIterator:
             def __init__(
-                self, stencil, args, *,
-                offsets: list[OffsetPart] = None,
-                elem=None
+                self, stencil, args, *, offsets: list[OffsetPart] = None, elem=None
             ) -> None:
                 assert not offsets or all(isinstance(o, (int, str)) for o in offsets)
                 self.stencil = stencil
@@ -318,7 +316,10 @@ def lift(stencil):
                 inherited_open_offsets = []
                 for arg in self.args:
                     if arg.incomplete_offsets:
-                        assert not inherited_open_offsets or inherited_open_offsets == arg.incomplete_offsets
+                        assert (
+                            not inherited_open_offsets
+                            or inherited_open_offsets == arg.incomplete_offsets
+                        )
                         inherited_open_offsets = arg.incomplete_offsets
                 # TODO: check order
                 _, incomplete_offets = group_offsets(*inherited_open_offsets, *self.offsets)
@@ -328,7 +329,7 @@ def lift(stencil):
             def offset_provider(self):
                 offset_provider = None
                 for arg in self.args:
-                    if (new_offset_provider := arg.offset_provider):
+                    if new_offset_provider := arg.offset_provider:
                         offset_provider = new_offset_provider
                 return offset_provider
 
@@ -336,7 +337,9 @@ def lift(stencil):
                 if not self.incomplete_offsets:
                     breakpoint()
                 assert self.incomplete_offsets
-                return _get_connectivity(self.args[0].offset_provider, self.incomplete_offsets[0]).max_neighbors
+                return _get_connectivity(
+                    self.args[0].offset_provider, self.incomplete_offsets[0]
+                ).max_neighbors
 
             def _shifted_args(self):
                 if not self.offsets:
@@ -379,7 +382,7 @@ def reduce(fun, init, axis):
                 res,
                 *(builtins.deref(builtins.shift(axis, i)(it)) for it in iters),
             )
-            i+=1
+            i += 1
         return res
 
     return sten
@@ -544,7 +547,11 @@ def execute_shift(
             new_pos[offset_implementation.value] = value + index
         else:
             raise AssertionError()
-        if offset_implementation.kind == DimensionKind.LOCAL and new_pos[offset_implementation.value] >= offset_provider[offset_implementation.value].max_neighbors:
+        if (
+            offset_implementation.kind == DimensionKind.LOCAL
+            and new_pos[offset_implementation.value]
+            >= offset_provider[offset_implementation.value].max_neighbors
+        ):
             return None
         return new_pos
     else:
@@ -1003,6 +1010,7 @@ def translate_shift(tag: Tag, new_tag: Tag) -> ItIterator:
 
     return lambda it: TranslateShiftIt(tag, new_tag, it)
 
+
 @dataclass
 class ColumnDescriptor:
     axis: str
@@ -1165,7 +1173,7 @@ def _dimension_to_tag(domain: Domain) -> dict[Tag, range]:
 def _validate_domain(domain: Domain, offset_provider: OffsetProvider) -> None:
     pass
     # TODO(tehrengruber): instead of this check for shifts
-    #if isinstance(domain, CartesianDomain):
+    # if isinstance(domain, CartesianDomain):
     #    if any(isinstance(o, Connectivity) for o in offset_provider.values()):
     #        raise RuntimeError(
     #            "Got a `CartesianDomain`, but found a `Connectivity` in `offset_provider`, expected `UnstructuredDomain`."

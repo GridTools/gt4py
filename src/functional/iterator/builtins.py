@@ -23,13 +23,16 @@ def can_deref(*args):
 def shift(*args):
     raise BackendNotSelectedError()
 
+
 @builtin_dispatch
 def ignore_shift(*args):
     raise BackendNotSelectedError()
 
+
 @builtin_dispatch
 def translate_shift(*args):
     raise BackendNotSelectedError()
+
 
 @builtin_dispatch
 def lift(*args):

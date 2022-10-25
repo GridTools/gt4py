@@ -46,14 +46,18 @@ class UnrollReduce(NodeTranslator):
 
         offset_provider = kwargs["offset_provider"]
         assert offset_provider is not None
-        connectivity = offset_provider[node.fun.args[2].value[:-3]] # TODO(tehrengruber): find a better way to remove Dim
+        connectivity = offset_provider[
+            node.fun.args[2].value[:-3]
+        ]  # TODO(tehrengruber): find a better way to remove Dim
         max_neighbors = connectivity.max_neighbors
         has_skip_values = connectivity.has_skip_values
 
         acc = ir.SymRef(id=self.uids.sequential_id(prefix="_acc"))
         offset = ir.SymRef(id=self.uids.sequential_id(prefix="_i"))
         step = ir.SymRef(id=self.uids.sequential_id(prefix="_step"))
-        shifted_args = [ir.SymRef(id=self.uids.sequential_id(prefix="_shifted_arg")) for _ in node.args]
+        shifted_args = [
+            ir.SymRef(id=self.uids.sequential_id(prefix="_shifted_arg")) for _ in node.args
+        ]
 
         assert isinstance(node.fun, ir.FunCall)
         fun, init, axis = node.fun.args
@@ -64,7 +68,12 @@ class UnrollReduce(NodeTranslator):
         if has_skip_values:
             can_deref = self._make_can_deref(shifted_args[0])
             step_fun = self._make_if(can_deref, step_fun, acc)
-        step_fun = ir.FunCall(fun=ir.Lambda(params=[ir.Sym(id=shifted_arg.id) for shifted_arg in shifted_args], expr=step_fun), args=shifted_args_expr)
+        step_fun = ir.FunCall(
+            fun=ir.Lambda(
+                params=[ir.Sym(id=shifted_arg.id) for shifted_arg in shifted_args], expr=step_fun
+            ),
+            args=shifted_args_expr,
+        )
         step_fun = ir.Lambda(params=[ir.Sym(id=acc.id), ir.Sym(id=offset.id)], expr=step_fun)
         expr = init
         for i in range(max_neighbors):

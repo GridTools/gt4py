@@ -35,7 +35,9 @@ _persistent_cache_dir_path = pathlib.Path(tempfile.gettempdir()) / "gt4py_cache"
 
 
 def _serialize_param(
-    parameter: interface.ScalarParameter | interface.BufferParameter | interface.ConnectivityParameter,
+    parameter: interface.ScalarParameter
+    | interface.BufferParameter
+    | interface.ConnectivityParameter,
 ) -> str:
     if isinstance(parameter, interface.ScalarParameter):
         return f"{parameter.name}: {str(parameter.scalar_type)}"

@@ -169,7 +169,10 @@ def make_argument(
     elif isinstance(param, interface.ConnectivityParameter):
         return SidConversion(
             buffer_name=param.name,
-            dimensions=[DimensionType(name=param.origin_axis), DimensionType(name=param.offset_tag)],
+            dimensions=[
+                DimensionType(name=param.origin_axis),
+                DimensionType(name=param.offset_tag),
+            ],
             scalar_type=np.dtype("int32"),
             dim_config=index,
         )

@@ -1,5 +1,5 @@
-from typing import Callable
 import dataclasses
+from typing import Callable
 
 from eve import NodeTranslator, NodeVisitor
 from functional.iterator import ir
@@ -29,9 +29,11 @@ class CountSymbolRefs(NodeVisitor):
 
         self.generic_visit(node, active_refs=active_refs)
 
+
 @dataclasses.dataclass
 class InlineLambdas(NodeTranslator):
     """Inline lambda calls by substituting every argument by its value."""
+
     recurse: bool
 
     opcount_preserving: bool
@@ -54,10 +56,11 @@ class InlineLambdas(NodeTranslator):
             inline lambda call if the resulting call has the same number of
             operations.
         """
-        return cls(opcount_preserving=opcount_preserving,
-                   force_inline_lift=force_inline_lift,
-                   recurse=recurse).visit(
-            node)
+        return cls(
+            opcount_preserving=opcount_preserving,
+            force_inline_lift=force_inline_lift,
+            recurse=recurse,
+        ).visit(node)
 
     def visit_FunCall(self, node: ir.FunCall):
         node = self.generic_visit(node) if self.recurse else node
@@ -75,9 +78,12 @@ class InlineLambdas(NodeTranslator):
 
             if self.force_inline_lift:
                 for i, arg in enumerate(node.args):
-                    if isinstance(arg, ir.FunCall) and isinstance(arg.fun, ir.FunCall) \
-                            and isinstance(arg.fun.fun, ir.SymRef) \
-                            and arg.fun.fun.id in ["lift", "translate_shift", "ignore_shift"]:  # TODO(tehrengruber): fix
+                    if (
+                        isinstance(arg, ir.FunCall)
+                        and isinstance(arg.fun, ir.FunCall)
+                        and isinstance(arg.fun.fun, ir.SymRef)
+                        and arg.fun.fun.id in ["lift", "translate_shift", "ignore_shift"]
+                    ):  # TODO(tehrengruber): fix
                         eligible_params[i] = True
 
             if len(eligible_params) != 0 and not any(eligible_params):
@@ -94,6 +100,7 @@ class InlineLambdas(NodeTranslator):
             clashes = refs & syms
             expr = node.fun.expr
             if clashes:
+
                 def new_name(name):
                     while name in refs or name in syms:
                         name += "_"

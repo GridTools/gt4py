@@ -308,7 +308,7 @@ def reduction_setup():
             [7, 13, 6, 16],
             [8, 14, 7, 17],
         ],
-        dtype=np.int32
+        dtype=np.int32,
     )
 
     # create e2v connectivity by inverting v2e
@@ -355,7 +355,7 @@ def reduction_setup():
             "V2E": NeighborTableOffsetProvider(v2e_arr, vertex, edge, 4),
             "E2V": NeighborTableOffsetProvider(e2v_arr, edge, vertex, 2, has_skip_values=False),
             "V2EDim": v2edim,
-            "E2VDim": e2vdim
+            "E2VDim": e2vdim,
         },
         v2e_table=v2e_arr,
         e2v_table=e2v_arr,
@@ -414,7 +414,6 @@ def test_minover_execution(reduction_setup, fieldview_backend):
     in_field = np_as_located_field(Vertex, V2EDim)(rs.v2e_table.astype(np.int32))
     out_field = np_as_located_field(Vertex)(np.zeros(rs.num_vertices, dtype=np.int32))
 
-
     @field_operator
     def minover_fieldoperator(input: Field[[Vertex, V2EDim], int32]) -> Field[[Vertex], int32]:
         return min_over(input, axis=V2EDim)
@@ -447,7 +446,7 @@ def test_minover_execution_float(reduction_setup, fieldview_backend):
 
 def test_reduction_execution(reduction_setup, fieldview_backend):
     """Testing a trivial neighbor sum."""
-    #if fieldview_backend == gtfn_cpu.run_gtfn:
+    # if fieldview_backend == gtfn_cpu.run_gtfn:
     #    pytest.skip("IndexFields are not supported yet.")
     rs = reduction_setup
     Edge = rs.Edge
@@ -457,7 +456,7 @@ def test_reduction_execution(reduction_setup, fieldview_backend):
 
     @field_operator
     def reduction(edge_f: Field[[Edge], int64]) -> Field[[Vertex], int64]:
-        return neighbor_sum(edge_f(V2E)+1, axis=V2EDim)
+        return neighbor_sum(edge_f(V2E) + 1, axis=V2EDim)
 
     @program(backend=fieldview_backend)
     def fencil(edge_f: Field[[Edge], int64], out: Field[[Vertex], int64]) -> None:
@@ -471,7 +470,7 @@ def test_reduction_execution(reduction_setup, fieldview_backend):
 
 def test_reduction_execution_nb(reduction_setup, fieldview_backend):
     """Testing a neighbor sum on a neighbor field."""
-    #if fieldview_backend == gtfn_cpu.run_gtfn:
+    # if fieldview_backend == gtfn_cpu.run_gtfn:
     #    pytest.skip("not yet supported.")
     rs = reduction_setup
     V2EDim = rs.V2EDim
@@ -490,7 +489,7 @@ def test_reduction_execution_nb(reduction_setup, fieldview_backend):
 
 def test_reduction_expression(reduction_setup, fieldview_backend):
     """Test reduction with an expression directly inside the call."""
-    #if fieldview_backend == gtfn_cpu.run_gtfn:
+    # if fieldview_backend == gtfn_cpu.run_gtfn:
     #    pytest.skip("IndexFields are not supported yet.")
     rs = reduction_setup
     Vertex = rs.Vertex
@@ -515,7 +514,7 @@ def test_reduction_expression(reduction_setup, fieldview_backend):
 
 
 def test_reduction_expression2(reduction_setup, fieldview_backend):
-    #if fieldview_backend == gtfn_cpu.run_gtfn:
+    # if fieldview_backend == gtfn_cpu.run_gtfn:
     #    pytest.skip("IndexFields are not supported yet.")
     rs = reduction_setup
     Vertex = rs.Vertex
@@ -530,21 +529,26 @@ def test_reduction_expression2(reduction_setup, fieldview_backend):
 
     @field_operator
     def reduction(
-                  vertex_field: Field[[Vertex], int64],
-                  edge_field: Field[[Edge], int64],
-                  vertex_v2e_field: Field[[Vertex, V2EDim], int64]):
+        vertex_field: Field[[Vertex], int64],
+        edge_field: Field[[Edge], int64],
+        vertex_v2e_field: Field[[Vertex, V2EDim], int64],
+    ):
         tmp = vertex_field + edge_field(V2E) + vertex_v2e_field
         return neighbor_sum(tmp, axis=V2EDim)
 
-    reduction(vertex_field, edge_field, vertex_v2e_field, out=out,
-              offset_provider=rs.offset_provider)
+    reduction(
+        vertex_field, edge_field, vertex_v2e_field, out=out, offset_provider=rs.offset_provider
+    )
 
-    ref = np.sum(vertex_field.array()[:, np.newaxis] + edge_field.array()[rs.v2e_table]+rs.v2e_table, axis=1)
+    ref = np.sum(
+        vertex_field.array()[:, np.newaxis] + edge_field.array()[rs.v2e_table] + rs.v2e_table,
+        axis=1,
+    )
     assert np.allclose(ref, out.array())
 
 
 def test_math_builtin_with_sparse_field(reduction_setup, fieldview_backend):
-    #if fieldview_backend == gtfn_cpu.run_gtfn:
+    # if fieldview_backend == gtfn_cpu.run_gtfn:
     #    pytest.skip("IndexFields are not supported yet.")
     rs = reduction_setup
     Vertex = rs.Vertex
@@ -558,15 +562,15 @@ def test_math_builtin_with_sparse_field(reduction_setup, fieldview_backend):
 
     @field_operator
     def reduction(
-                  edge_field: Field[[Edge], int32],
-                  vertex_v2e_field: Field[[Vertex, V2EDim], int32]):
+        edge_field: Field[[Edge], int32], vertex_v2e_field: Field[[Vertex, V2EDim], int32]
+    ):
         return neighbor_sum(minimum(edge_field(V2E), vertex_v2e_field), axis=V2EDim)
 
-    reduction(edge_field, vertex_v2e_field, out=out,
-              offset_provider=rs.offset_provider)
+    reduction(edge_field, vertex_v2e_field, out=out, offset_provider=rs.offset_provider)
 
     ref = np.sum(np.minimum(edge_field.array()[rs.v2e_table], rs.v2e_table), axis=1)
     assert np.allclose(ref, out.array())
+
 
 def test_scalar_arg(fieldview_backend):
     """Test scalar argument being turned into 0-dim field."""
@@ -681,11 +685,13 @@ def test_scalar_arg_with_field(fieldview_backend):
     size = 5
     inp = index_field(Edge, dtype=float64)
     if fieldview_backend == gtfn_cpu.run_gtfn:
-        warnings.warn("IndexFields not supported in gtfn backend. Using a memory backed field instead.")
+        warnings.warn(
+            "IndexFields not supported in gtfn backend. Using a memory backed field instead."
+        )
         # TODO(tehrengruber): if we choose the wrong size here the gtfn backend
         #  will happily executy, but give wrong results. we should implement
         #  checks for such cases at some point.
-        inp = np_as_located_field(Edge)(np.array([inp[i] for i in range(size+1)]))
+        inp = np_as_located_field(Edge)(np.array([inp[i] for i in range(size + 1)]))
     factor = 3.0
     out = np_as_located_field(Edge)(np.zeros((size), dtype=np.float64))
 
@@ -1307,7 +1313,9 @@ def test_where_k_offset(fieldview_backend):
     out = np_as_located_field(IDim, KDim)(np.zeros((size, size)))
     k_index = index_field(KDim)
     if fieldview_backend == gtfn_cpu.run_gtfn:
-        warnings.warn("IndexFields not supported in gtfn backend. Using a memory backed field instead.")
+        warnings.warn(
+            "IndexFields not supported in gtfn backend. Using a memory backed field instead."
+        )
         # TODO(tehrengruber): if we choose the wrong size here the gtfn backend
         #  will happily executy, but give wrong results. we should implement
         #  checks for such cases at some point.

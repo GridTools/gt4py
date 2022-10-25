@@ -30,49 +30,60 @@ def _inline_lifts(ir, lift_mode):
 
 
 from eve import NOTHING, NodeTranslator
-from functional.iterator import ir
 from eve.pattern_matching import ObjectPattern as P
+from functional.iterator import ir
+
+
 class RemoveShiftsTransformer(NodeTranslator):
     def visit_FunCall(self, node: ir.FunCall):
         # deref(ignore_shift(...)(it)) -> deref(it)
-        if P(ir.FunCall,
+        if P(
+            ir.FunCall,
             fun=ir.SymRef(id="deref"),
-            args=[P(ir.FunCall, fun=P(ir.FunCall, fun=ir.SymRef(id="ignore_shift")))]
-          ).match(node):
+            args=[P(ir.FunCall, fun=P(ir.FunCall, fun=ir.SymRef(id="ignore_shift")))],
+        ).match(node):
             return self.visit(ir.FunCall(fun=ir.SymRef(id="deref"), args=[node.args[0].args[0]]))
 
         # deref(translate_shift(...)(it)) -> deref(it)
-        if P(ir.FunCall,
-             fun=ir.SymRef(id="deref"),
-             args=[P(ir.FunCall,
-                     fun=P(ir.FunCall, fun=ir.SymRef(id="translate_shift")))]
-             ).match(node):
-            return self.visit(ir.FunCall(fun=ir.SymRef(id="deref"),
-                                         args=[node.args[0].args[0]]))
+        if P(
+            ir.FunCall,
+            fun=ir.SymRef(id="deref"),
+            args=[P(ir.FunCall, fun=P(ir.FunCall, fun=ir.SymRef(id="translate_shift")))],
+        ).match(node):
+            return self.visit(ir.FunCall(fun=ir.SymRef(id="deref"), args=[node.args[0].args[0]]))
 
         # can_deref(ignore_shift(...)(it)) -> deref(it)
-        if P(ir.FunCall,
+        if P(
+            ir.FunCall,
             fun=ir.SymRef(id="can_deref"),
-            args=[P(ir.FunCall, fun=P(ir.FunCall, fun=ir.SymRef(id="ignore_shift")))]
-          ).match(node):
-            return self.visit(ir.FunCall(fun=ir.SymRef(id="can_deref"), args=[node.args[0].args[0]]))
+            args=[P(ir.FunCall, fun=P(ir.FunCall, fun=ir.SymRef(id="ignore_shift")))],
+        ).match(node):
+            return self.visit(
+                ir.FunCall(fun=ir.SymRef(id="can_deref"), args=[node.args[0].args[0]])
+            )
 
         # can_deref(translate_shift(...)(it)) -> deref(it)
-        if P(ir.FunCall,
-             fun=ir.SymRef(id="can_deref"),
-             args=[P(ir.FunCall,
-                     fun=P(ir.FunCall, fun=ir.SymRef(id="translate_shift")))]
-             ).match(node):
-            return self.visit(ir.FunCall(fun=ir.SymRef(id="can_deref"),
-                                         args=[node.args[0].args[0]]))
+        if P(
+            ir.FunCall,
+            fun=ir.SymRef(id="can_deref"),
+            args=[P(ir.FunCall, fun=P(ir.FunCall, fun=ir.SymRef(id="translate_shift")))],
+        ).match(node):
+            return self.visit(
+                ir.FunCall(fun=ir.SymRef(id="can_deref"), args=[node.args[0].args[0]])
+            )
 
         return self.generic_visit(node)
+
 
 class PropagateShiftTransformer(NodeTranslator):
     def visit_FunCall(self, node: ir.FunCall):
         node = self.generic_visit(node)
         # shift(...)(translate_shift(...)(it)) -> translate_shift(...)(shift(...)(it))
-        if P(ir.FunCall, fun=P(ir.FunCall, fun=ir.SymRef(id="shift")), args=[P(ir.FunCall, fun=P(ir.FunCall, fun=ir.SymRef(id="translate_shift")))]).match(node):
+        if P(
+            ir.FunCall,
+            fun=P(ir.FunCall, fun=ir.SymRef(id="shift")),
+            args=[P(ir.FunCall, fun=P(ir.FunCall, fun=ir.SymRef(id="translate_shift")))],
+        ).match(node):
             assert len(node.fun.args) == 2
             shift_tag, shift_index = node.fun.args
             old_tag, new_tag = node.args[0].fun.args
@@ -83,9 +94,15 @@ class PropagateShiftTransformer(NodeTranslator):
             translate_shift = node.args[0].fun
             it = node.args[0].args
 
-            return ir.FunCall(fun=translate_shift, args=[self.visit(ir.FunCall(fun=new_shift, args=it))])
+            return ir.FunCall(
+                fun=translate_shift, args=[self.visit(ir.FunCall(fun=new_shift, args=it))]
+            )
         # shift(...)(ignore_shift(...)(it)) -> ignore_shift(...)(shift(...)(it))
-        elif P(ir.FunCall, fun=P(ir.FunCall, fun=ir.SymRef(id="shift")), args=[P(ir.FunCall, fun=P(ir.FunCall, fun=ir.SymRef(id="ignore_shift")))]).match(node):
+        elif P(
+            ir.FunCall,
+            fun=P(ir.FunCall, fun=ir.SymRef(id="shift")),
+            args=[P(ir.FunCall, fun=P(ir.FunCall, fun=ir.SymRef(id="ignore_shift")))],
+        ).match(node):
             assert len(node.fun.args) == 2
             shift_tag, shift_index = node.fun.args
             ignored_tag = node.args[0].fun.args[0]
@@ -99,6 +116,7 @@ class PropagateShiftTransformer(NodeTranslator):
             return ir.FunCall(fun=ignore_shift, args=[self.visit(ir.FunCall(fun=shift, args=it))])
         return node
 
+
 class InlineTupleAccess(NodeTranslator):
     def visit_FunCall(self, node: ir.FunCall):
         if P(ir.FunCall, fun=ir.SymRef(id="tuple_get")).match(node):
@@ -107,6 +125,7 @@ class InlineTupleAccess(NodeTranslator):
                 assert isinstance(index, ir.Literal) and index.type == "int"
                 return self.generic_visit(tuple_.args[int(index.value)])
         return self.generic_visit(node)
+
 
 def apply_common_transforms(
     ir: ir.Node,

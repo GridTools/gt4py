@@ -5,6 +5,7 @@ from eve import NodeTranslator
 from functional.iterator import ir
 from functional.iterator.transforms.inline_lambdas import InlineLambdas
 
+
 class InlineLifts(NodeTranslator):
     """Inline lifted function calls.
 
@@ -57,7 +58,11 @@ class InlineLifts(NodeTranslator):
                 assert len(node.args[0].fun.args) == 1
                 f = node.args[0].fun.args[0]
                 args = node.args[0].args
-                return self.visit(InlineLambdas.apply(ir.FunCall(fun=f, args=args), recurse=False, opcount_preserving=True))
+                return self.visit(
+                    InlineLambdas.apply(
+                        ir.FunCall(fun=f, args=args), recurse=False, opcount_preserving=True
+                    )
+                )
         elif node.fun == ir.SymRef(id="can_deref"):
             # TODO(havogt): this `can_deref` transformation doesn't look into lifted functions, this need to be changed to be 100% compliant
             assert len(node.args) == 1

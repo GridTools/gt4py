@@ -18,7 +18,9 @@ from typing import Any, Callable, Final, Optional
 
 import numpy as np
 
+from eve.utils import content_hash
 from functional.common import Connectivity
+from functional.ffront.symbol_makers import make_symbol_type_from_value
 from functional.iterator import ir as itir
 from functional.otf import languages, stages, workflow
 from functional.otf.binding import cpp_interface, pybind
@@ -26,9 +28,7 @@ from functional.otf.compilation import cache, compiler
 from functional.otf.compilation.build_systems import compiledb
 from functional.program_processors import processor_interface as ppi
 from functional.program_processors.codegens.gtfn import gtfn_module
-from functional.ffront.symbol_makers import make_symbol_type_from_value
 
-from eve.utils import content_hash
 
 # TODO(ricoh): Add support for the whole range of arguments that can be passed to a fencil.
 def convert_arg(arg: Any) -> Any:
@@ -45,8 +45,7 @@ class GTFNExecutor(ppi.ProgramExecutor):
 
     name: Optional[str] = None
 
-    _cache: dict[int, Callable] = dataclasses.field(repr=False, init=False,
-                                                    default_factory=dict)
+    _cache: dict[int, Callable] = dataclasses.field(repr=False, init=False, default_factory=dict)
 
     def __call__(self, program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> None:
         """
@@ -58,29 +57,38 @@ class GTFNExecutor(ppi.ProgramExecutor):
 
         See ``ProgramExecutorFunction`` for details.
         """
-        cache_key = hash((
-            program,
-            # TODO(tehrengruber): as the resulting frontend types contain lists they are
-            #  not hashable. As a workaround we just use content_hash here.
-            content_hash(tuple(make_symbol_type_from_value(arg) for arg in args)),
-            id(kwargs["offset_provider"]),
-            kwargs["column_axis"]))
+        cache_key = hash(
+            (
+                program,
+                # TODO(tehrengruber): as the resulting frontend types contain lists they are
+                #  not hashable. As a workaround we just use content_hash here.
+                content_hash(tuple(make_symbol_type_from_value(arg) for arg in args)),
+                id(kwargs["offset_provider"]),
+                kwargs["column_axis"],
+            )
+        )
 
         def convert_args(inp: Callable) -> Callable:
             def decorated_program(*args):
-                return inp(*[convert_arg(arg) for arg in args], *[op.tbl for op in kwargs["offset_provider"].values() if isinstance(op, Connectivity)])
+                return inp(
+                    *[convert_arg(arg) for arg in args],
+                    *[
+                        op.tbl
+                        for op in kwargs["offset_provider"].values()
+                        if isinstance(op, Connectivity)
+                    ],
+                )
 
             return decorated_program
 
         if not cache_key in self._cache:
-            otf_workflow: Final[workflow.Workflow[
-                stages.ProgramCall, stages.CompiledProgram]] = (
+            otf_workflow: Final[workflow.Workflow[stages.ProgramCall, stages.CompiledProgram]] = (
                 gtfn_module.GTFNTranslationStep(self.language_settings)
                 .chain(pybind.bind_source)
                 .chain(
                     compiler.Compiler(
                         cache_strategy=cache.Strategy.PERSISTENT,
-                        builder_factory=self.builder_factory
+                        builder_factory=self.builder_factory,
                     )
                 )
                 .chain(convert_args)
