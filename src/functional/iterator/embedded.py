@@ -843,36 +843,23 @@ def get_ordered_indices(
     return tuple(res)
 
 
-def _shift_slice(slice_or_index: slice | numbers.Integral, offset: numbers.Integral):
-    is_slice = False
+def _shift_slice(
+    slice_or_index: slice | numbers.Integral, offset: numbers.Integral
+) -> slice | numbers.Integral():
     if isinstance(slice_or_index, slice):
-        is_slice = True
-        first = 0 if slice_or_index.start is None else slice_or_index.start
-        first_stop = slice_or_index.stop
         assert slice_or_index.step is None
+        return slice(
+            slice_or_index.start + offset, None
+        )  # TODO stop == None unconditionally looks wrong
     else:
         assert isinstance(slice_or_index, numbers.Integral)
-        first = slice_or_index
-        first_stop = None
-    if isinstance(offset, slice):
-        is_slice = True
-        second = 0 if offset.start is None else offset.start
-        second_stop = offset.stop
-        assert offset.step is None
-    else:
-        assert isinstance(offset, numbers.Integral)
-        second = offset
-        second_stop = None
-    start = first + second
-    if is_slice:
-        stop = None if first_stop is None or second_stop is None else first_stop + second_stop
-        return slice(start, stop)
-    else:
-        return start
+        return slice_or_index + offset
 
 
-def _shift_slices(a, b):
-    return tuple(_shift_slice(*i) for i in zip(a, b))
+def _shift_slices(
+    slices_or_indices: tuple[slice | numbers.Integral], offsets: tuple[numbers.Integral]
+) -> tuple[slice | numbers.Integral]:
+    return tuple(_shift_slice(*i) for i in zip(slices_or_indices, offsets))
 
 
 def np_as_located_field(
