@@ -29,8 +29,8 @@ from functional.iterator.embedded import (
     np_as_located_field,
 )
 from functional.iterator.runtime import closure, fendef, fundef, offset
-from functional.program_processors.runners.gtfn_cpu import run_gtfn
 from functional.iterator.transforms.pass_manager import LiftMode
+from functional.program_processors.runners.gtfn_cpu import run_gtfn
 
 from .fvm_nabla_setup import assert_close, nabla_setup
 
