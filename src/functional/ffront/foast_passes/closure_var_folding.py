@@ -55,7 +55,7 @@ class ClosureVarFolding(NodeTranslator, traits.VisitorWithSymbolTableTrait):
         if isinstance(value, foast.Constant):
             if hasattr(value.value, node.attr):
                 return foast.Constant(value=getattr(value.value, node.attr), location=node.location)
-            # TODO: fix this by restructuring exception classis
+            # TODO: use proper exception type (requires refactoring `FieldOperatorSyntaxError`)
             raise FieldOperatorSyntaxError(
                 msg="Constant does not have the attribute specified by the AST.",
                 filename=node.location.source,
