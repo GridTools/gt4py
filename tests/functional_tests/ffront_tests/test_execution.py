@@ -1273,20 +1273,20 @@ def test_undefined_symbols():
             return undefined_symbol
 
 
-def test_tuple_unpacking():
+def test_tuple_unpacking(fieldview_backend):
     size = 10
     a = np_as_located_field(IDim)(np.ones((size)))
     b = np_as_located_field(IDim)(np.ones((size)))
     c = np_as_located_field(IDim)(np.ones((size)))
     d = np_as_located_field(IDim)(np.ones((size)))
 
-    @field_operator(backend="roundtrip")
+    @field_operator(backend=fieldview_backend)
     def unpack(
         inp1: Field[[IDim], float64],
         inp2: Field[[IDim], float64],
         inp3: Field[[IDim], float64],
         inp4: Field[[IDim], float64],
-    ) -> tuple[Field[[IDim], float64], Field[[IDim], float64]]:
+    ) -> tuple[Field[[IDim], float64], Field[[IDim], float64], Field[[IDim], float64], Field[[IDim], float64]]:
         a, b, c, d = (inp1, inp2, inp3, inp4)
         return d, c, b, a
 
