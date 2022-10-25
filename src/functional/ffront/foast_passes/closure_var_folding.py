@@ -37,8 +37,7 @@ class ClosureVarFolding(NodeTranslator, traits.VisitorWithSymbolTableTrait):
     def apply(cls, node: foast.FieldOperator, closure_vars: dict[str, Any]):
         return cls(closure_vars=closure_vars).visit(node)
 
-    def visit_Name(self, node: foast.Name, **kwargs):
-        symtable = kwargs["symtable"]
+    def visit_Name(self, node: foast.Name, symtable, **kwargs):
         if node.id in symtable:
             definition = symtable[node.id]
             if definition in self._current_closure_vars:
