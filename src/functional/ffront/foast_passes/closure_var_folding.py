@@ -64,7 +64,7 @@ class ClosureVarFolding(NodeTranslator, traits.VisitorWithSymbolTableTrait):
                 end_lineno=node.location.end_line,
                 end_offset=node.location.end_column,
             )
-        # TODO: fix this by restructuring exception classis
+        # TODO: use proper exception type (requires refactoring `FieldOperatorSyntaxError`)
         raise FieldOperatorSyntaxError(
             msg="Attribute can only be used on constants.",
             filename=node.location.source,
