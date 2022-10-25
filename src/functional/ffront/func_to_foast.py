@@ -299,37 +299,39 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
         return foast.UnaryOperator.NOT
 
     def visit_BinOp(self, node: ast.BinOp, **kwargs) -> foast.BinOp:
-        new_op = self.visit(node.op)
         return foast.BinOp(
-            op=new_op,
+            op=self.visit(node.op),
             left=self.visit(node.left),
             right=self.visit(node.right),
             location=self._make_loc(node),
         )
 
-    def visit_Add(self, node: ast.Add, **kwargs) -> foast.BinaryOperator:
-        return foast.BinaryOperator.ADD
+    def visit_Add(self, node: ast.Add, **kwargs) -> ct.BinaryOperator:
+        return ct.BinaryOperator.ADD
 
-    def visit_Sub(self, node: ast.Sub, **kwargs) -> foast.BinaryOperator:
-        return foast.BinaryOperator.SUB
+    def visit_Sub(self, node: ast.Sub, **kwargs) -> ct.BinaryOperator:
+        return ct.BinaryOperator.SUB
 
-    def visit_Mult(self, node: ast.Mult, **kwargs) -> foast.BinaryOperator:
-        return foast.BinaryOperator.MULT
+    def visit_Mult(self, node: ast.Mult, **kwargs) -> ct.BinaryOperator:
+        return ct.BinaryOperator.MULT
 
-    def visit_Div(self, node: ast.Div, **kwargs) -> foast.BinaryOperator:
-        return foast.BinaryOperator.DIV
+    def visit_Div(self, node: ast.Div, **kwargs) -> ct.BinaryOperator:
+        return ct.BinaryOperator.DIV
 
-    def visit_Pow(self, node: ast.Pow, **kwargs) -> foast.BinaryOperator:
-        return foast.BinaryOperator.POW
+    def visit_FloorDiv(self, node: ast.FloorDiv, **kwargs) -> ct.BinaryOperator:
+        return ct.BinaryOperator.FLOOR_DIV
+
+    def visit_Pow(self, node: ast.Pow, **kwargs) -> ct.BinaryOperator:
+        return ct.BinaryOperator.POW
 
     def visit_Mod(self, node: ast.Mod, **kwargs) -> None:
         raise FieldOperatorSyntaxError.from_AST(node, msg="`%` operator not supported!")
 
-    def visit_BitAnd(self, node: ast.BitAnd, **kwargs) -> foast.BinaryOperator:
-        return foast.BinaryOperator.BIT_AND
+    def visit_BitAnd(self, node: ast.BitAnd, **kwargs) -> ct.BinaryOperator:
+        return ct.BinaryOperator.BIT_AND
 
-    def visit_BitOr(self, node: ast.BitOr, **kwargs) -> foast.BinaryOperator:
-        return foast.BinaryOperator.BIT_OR
+    def visit_BitOr(self, node: ast.BitOr, **kwargs) -> ct.BinaryOperator:
+        return ct.BinaryOperator.BIT_OR
 
     def visit_BoolOp(self, node: ast.BoolOp, **kwargs) -> None:
         raise FieldOperatorSyntaxError.from_AST(node, msg="`and`/`or` operator not allowed!")

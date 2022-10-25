@@ -98,6 +98,9 @@ def make_symbol_type_from_typing(
         case type() as t if issubclass(t, (bool, int, float, np.generic, str)):
             return ct.ScalarType(kind=make_scalar_kind(type_hint))
 
+        case type() as t if t is type(None):
+            return ct.NoneType()
+
         case builtins.tuple:
             if not args:
                 raise TypingError(f"Tuple annotation ({type_hint}) requires at least one argument!")
@@ -183,7 +186,7 @@ def make_symbol_type_from_value(value: Any) -> ct.SymbolType:
         type_ = xtyping.infer_type(value, annotate_callable_kwargs=True)
         symbol_type = make_symbol_type_from_typing(type_)
 
-    if isinstance(symbol_type, (ct.DataType, ct.CallableType, ct.OffsetType, ct.DimensionType)):
+    if isinstance(symbol_type, (ct.DataType, ct.CallableType, ct.OffsetType, ct.DimensionType, ct.NoneType)):
         return symbol_type
     else:
         raise common.GTTypeError(f"Impossible to map '{value}' value to a Symbol")

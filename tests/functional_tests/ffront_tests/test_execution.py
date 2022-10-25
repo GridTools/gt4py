@@ -13,7 +13,7 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-
+import warnings
 from collections import namedtuple
 from typing import TypeVar
 
@@ -243,8 +243,6 @@ def test_fold_shifts(fieldview_backend):
 
 
 def test_tuples(fieldview_backend):
-    if fieldview_backend == gtfn_cpu.run_gtfn:
-        pytest.skip("Tuples are not supported yet.")
     size = 10
     a = np_as_located_field(IDim)(np.ones((size)))
     b = np_as_located_field(IDim)(np.ones((size)) * 2)
@@ -414,15 +412,17 @@ def test_minover_execution(reduction_setup, fieldview_backend):
     V2EDim = rs.V2EDim
 
     in_field = np_as_located_field(Vertex, V2EDim)(rs.v2e_table.astype(np.int32))
+    out_field = np_as_located_field(Vertex)(np.zeros(rs.num_vertices, dtype=np.int32))
+
 
     @field_operator
-    def minover_fieldoperator(input: Field[[Vertex, V2EDim], int64]) -> Field[[Vertex], int64]:
+    def minover_fieldoperator(input: Field[[Vertex, V2EDim], int32]) -> Field[[Vertex], int32]:
         return min_over(input, axis=V2EDim)
 
-    minover_fieldoperator(in_field, out=rs.out, offset_provider=rs.offset_provider)
+    minover_fieldoperator(in_field, out=out_field, offset_provider=rs.offset_provider)
 
     ref = np.min(rs.v2e_table, axis=1)
-    assert np.allclose(ref, rs.out)
+    assert np.allclose(ref, out_field)
 
 
 def test_minover_execution_float(reduction_setup, fieldview_backend):
@@ -525,7 +525,7 @@ def test_reduction_expression2(reduction_setup, fieldview_backend):
 
     vertex_field = np_as_located_field(Vertex)(np.arange(0, rs.num_vertices, 1))
     edge_field = np_as_located_field(Edge)(np.arange(0, rs.num_edges, 1))
-    vertex_v2e_field = np_as_located_field(Vertex, V2EDim)(rs.v2e_table.astype(np.int32))
+    vertex_v2e_field = np_as_located_field(Vertex, V2EDim)(rs.v2e_table.astype(np.int64))
     out = np_as_located_field(Vertex)(np.zeros(rs.num_vertices, dtype=np.int64))
 
     @field_operator
@@ -552,14 +552,14 @@ def test_math_builtin_with_sparse_field(reduction_setup, fieldview_backend):
     V2EDim = rs.V2EDim
     V2E = rs.V2E
 
-    edge_field = np_as_located_field(Edge)(np.arange(0, rs.num_edges, 1))
+    edge_field = np_as_located_field(Edge)(np.arange(0, rs.num_edges, 1, dtype=np.int32))
     vertex_v2e_field = np_as_located_field(Vertex, V2EDim)(rs.v2e_table.astype(np.int32))
-    out = np_as_located_field(Vertex)(np.zeros(rs.num_vertices, dtype=np.int64))
+    out = np_as_located_field(Vertex)(np.zeros(rs.num_vertices, dtype=np.int32))
 
     @field_operator
     def reduction(
-                  edge_field: Field[[Edge], int64],
-                  vertex_v2e_field: Field[[Vertex, V2EDim], int64]):
+                  edge_field: Field[[Edge], int32],
+                  vertex_v2e_field: Field[[Vertex, V2EDim], int32]):
         return neighbor_sum(minimum(edge_field(V2E), vertex_v2e_field), axis=V2EDim)
 
     reduction(edge_field, vertex_v2e_field, out=out,
@@ -680,6 +680,12 @@ def test_scalar_arg_with_field(fieldview_backend):
     EdgeOffset = FieldOffset("EdgeOffset", source=Edge, target=(Edge,))
     size = 5
     inp = index_field(Edge, dtype=float64)
+    if fieldview_backend == gtfn_cpu.run_gtfn:
+        warnings.warn("IndexFields not supported in gtfn backend. Using a memory backed field instead.")
+        # TODO(tehrengruber): if we choose the wrong size here the gtfn backend
+        #  will happily executy, but give wrong results. we should implement
+        #  checks for such cases at some point.
+        inp = np_as_located_field(Edge)(np.array([inp[i] for i in range(size+1)]))
     factor = 3.0
     out = np_as_located_field(Edge)(np.zeros((size), dtype=np.float64))
 
@@ -1199,6 +1205,9 @@ def test_domain(fieldview_backend):
 
 
 def test_domain_input_bounds(fieldview_backend):
+    if fieldview_backend == gtfn_cpu.run_gtfn:
+        pytest.skip("FloorDiv and Power not fully supported in gtfn.")
+
     size = 10
     a = np_as_located_field(IDim, JDim)(np.ones((size, size)))
     lower_i = 1
@@ -1218,12 +1227,50 @@ def test_domain_input_bounds(fieldview_backend):
         lower_j: int64,
         upper_j: int64,
     ):
-        fieldop_domain(a, out=a, domain={IDim: (lower_i, upper_i), JDim: (lower_j, upper_j)})
+        fieldop_domain(
+            a,
+            out=a,
+            domain={IDim: (lower_i, upper_i // 1), JDim: (lower_j**1, upper_j)},
+        )
 
     program_domain(a, lower_i, upper_i, lower_j, upper_j, offset_provider={})
 
     expected = np.asarray(a)
     expected[1:9, 4:6] = 1 + 1
+
+    assert np.allclose(expected, a)
+
+
+def test_domain_input_bounds_1(fieldview_backend):
+    size = 10
+    a = np_as_located_field(IDim, JDim)(np.ones((size, size)) * 2)
+    lower_i = 1
+    upper_i = 9
+    lower_j = 4
+    upper_j = 6
+
+    @field_operator(backend=fieldview_backend)
+    def fieldop_domain(a: Field[[IDim, JDim], float64]) -> Field[[IDim, JDim], float64]:
+        return a * a
+
+    @program
+    def program_domain(
+        a: Field[[IDim, JDim], float64],
+        lower_i: int64,
+        upper_i: int64,
+        lower_j: int64,
+        upper_j: int64,
+    ):
+        fieldop_domain(
+            a,
+            out=a,
+            domain={IDim: (1 * lower_i, upper_i + 0), JDim: (lower_j - 0, upper_j)},
+        )
+
+    program_domain(a, lower_i, upper_i, lower_j, upper_j, offset_provider={})
+
+    expected = np.asarray(a)
+    expected[1:9, 4:6] = 2 * 2
 
     assert np.allclose(expected, a)
 
@@ -1259,6 +1306,12 @@ def test_where_k_offset(fieldview_backend):
     a = np_as_located_field(IDim, KDim)(np.ones((size, size)))
     out = np_as_located_field(IDim, KDim)(np.zeros((size, size)))
     k_index = index_field(KDim)
+    if fieldview_backend == gtfn_cpu.run_gtfn:
+        warnings.warn("IndexFields not supported in gtfn backend. Using a memory backed field instead.")
+        # TODO(tehrengruber): if we choose the wrong size here the gtfn backend
+        #  will happily executy, but give wrong results. we should implement
+        #  checks for such cases at some point.
+        k_index = np_as_located_field(KDim)(np.array([k_index[i] for i in range(size)]))
 
     @field_operator(backend=fieldview_backend)
     def fieldop_where_k_offset(

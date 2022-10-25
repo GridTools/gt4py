@@ -184,7 +184,7 @@ class FieldOperatorLowering(NodeTranslator):
     def visit_TupleExpr(self, node: foast.TupleExpr, **kwargs) -> itir.FunCall:
         if iterator_type_kind(node.type) is ITIRTypeKind.ITERATOR:
             return im.map_(lambda *elts: im.make_tuple_(*elts),
-                    *self.visit(node.elts, **kwargs))
+                    *[to_iterator(el)(self.visit(el, **kwargs)) for el in node.elts])
         return im.make_tuple_(*self.visit(node.elts, **kwargs))
 
     def visit_UnaryOp(self, node: foast.UnaryOp, **kwargs) -> itir.FunCall:

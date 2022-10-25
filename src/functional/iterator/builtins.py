@@ -102,6 +102,11 @@ def divides(*args):
 
 
 @builtin_dispatch
+def floordiv(*args):
+    raise BackendNotSelectedError()
+
+
+@builtin_dispatch
 def eq(*args):
     raise BackendNotSelectedError()
 
