@@ -1,4 +1,5 @@
 from functional.iterator import ir, type_inference as ti
+from functional.iterator.runtime import CartesianAxis
 
 
 def test_sym_ref():
@@ -379,7 +380,7 @@ def test_scan():
 
 def test_shift():
     testee = ir.FunCall(
-        fun=ir.SymRef(id="shift"), args=[ir.SymRef(id="i"), ir.Literal(value="1", type="int")]
+        fun=ir.SymRef(id="shift"), args=[ir.OffsetLiteral(value="i"), ir.OffsetLiteral(value=1)]
     )
     expected = ti.FunctionType(
         args=ti.Tuple.from_elems(
@@ -402,6 +403,34 @@ def test_shift():
     inferred = ti.infer(testee)
     assert inferred == expected
     assert ti.pformat(inferred) == "(It[T₂, T₃, T₀¹]) → It[T₄, T₃, T₀¹]"
+
+
+def test_shift_with_cartesian_offset_provider():
+    testee = ir.FunCall(
+        fun=ir.SymRef(id="shift"), args=[ir.OffsetLiteral(value="i"), ir.OffsetLiteral(value=1)]
+    )
+    expected = ti.FunctionType(
+        args=ti.Tuple.from_elems(
+            ti.Val(
+                kind=ti.Iterator(),
+                dtype=ti.TypeVar(idx=0),
+                size=ti.TypeVar(idx=1),
+                current_loc=ti.TypeVar(idx=2),
+                defined_loc=ti.TypeVar(idx=3),
+            ),
+        ),
+        ret=ti.Val(
+            kind=ti.Iterator(),
+            dtype=ti.TypeVar(idx=0),
+            size=ti.TypeVar(idx=1),
+            current_loc=ti.TypeVar(idx=2),
+            defined_loc=ti.TypeVar(idx=3),
+        ),
+    )
+    offset_provider = {"i": CartesianAxis("IDim")}
+    inferred = ti.infer(testee, offset_provider=offset_provider)
+    assert inferred == expected
+    assert ti.pformat(inferred) == "(It[T₂, T₃, T₀¹]) → It[T₂, T₃, T₀¹]"
 
 
 def test_function_definition():

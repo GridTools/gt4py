@@ -3,6 +3,7 @@ from collections import abc
 
 import eve
 from functional.iterator import ir
+from functional.iterator.runtime import CartesianAxis
 from functional.type_inference import Type, TypeVar, freshen, reindex_vars, unify
 
 
@@ -324,6 +325,9 @@ del T0, T1, T2, T3, T4, T5, Val_T0_T1, Val_T0_Scalar, Val_BOOL_T1
 class _TypeInferrer(eve.NodeTranslator):
     """Visit the full iterator IR tree, convert nodes to respective types and generate constraints."""
 
+    def __init__(self, offset_provider):
+        self.offset_provider = offset_provider
+
     def visit_SymRef(
         self, node: ir.SymRef, constraints: set[tuple[Type, Type]], symtypes: dict[str, Type]
     ) -> Type:
@@ -417,26 +421,45 @@ class _TypeInferrer(eve.NodeTranslator):
                 return Val(kind=kind, dtype=elem, size=size)
             if node.fun.id == "shift":
                 # Calls to shift are handled as being part of the grammar, not
-                # as function calls; that is, the offsets are completely
-                # ignored by the type inference algorithm
+                # as function calls, as the type depends on the offset provider
+                current_loc_in = TypeVar.fresh()
+                if self.offset_provider:
+                    current_loc_out = current_loc_in
+                    assert all(isinstance(o, ir.OffsetLiteral) for o in node.args)
+                    offset_stack = [
+                        typing.cast(ir.OffsetLiteral, o).value for o in reversed(node.args)
+                    ]
+                    while offset_stack:
+                        offset = offset_stack.pop()
+                        if isinstance(offset, str):
+                            axis = self.offset_provider[offset]
+                            if isinstance(axis, CartesianAxis):
+                                assert isinstance(offset_stack[-1], int)
+                                offset_stack.pop()
+                            else:
+                                raise NotImplementedError()
+                        else:
+                            raise NotImplementedError()
+                else:
+                    current_loc_out = TypeVar.fresh()
                 defined_loc = TypeVar.fresh()
-                dtype = TypeVar.fresh()
+                dtype_ = TypeVar.fresh()
                 size = TypeVar.fresh()
                 return FunctionType(
                     args=Tuple.from_elems(
                         Val(
                             kind=Iterator(),
-                            dtype=dtype,
+                            dtype=dtype_,
                             size=size,
-                            current_loc=TypeVar.fresh(),
+                            current_loc=current_loc_in,
                             defined_loc=defined_loc,
                         ),
                     ),
                     ret=Val(
                         kind=Iterator(),
-                        dtype=dtype,
+                        dtype=dtype_,
                         size=size,
-                        current_loc=TypeVar.fresh(),
+                        current_loc=current_loc_out,
                         defined_loc=defined_loc,
                     ),
                 )
@@ -535,14 +558,20 @@ class _TypeInferrer(eve.NodeTranslator):
         )
 
 
-def infer(expr: ir.Node, symtypes: typing.Optional[dict[str, Type]] = None) -> Type:
+def infer(
+    expr: ir.Node,
+    symtypes: typing.Optional[dict[str, Type]] = None,
+    offset_provider: typing.Optional[dict[str, typing.Any]] = None,
+) -> Type:
     """Infer the type of the given iterator IR expression."""
     if symtypes is None:
         symtypes = dict()
 
     # Collect constraints
     constraints = set[tuple[Type, Type]]()
-    dtype = _TypeInferrer().visit(expr, constraints=constraints, symtypes=symtypes)
+    dtype = _TypeInferrer(offset_provider=offset_provider).visit(
+        expr, constraints=constraints, symtypes=symtypes
+    )
     # Compute the most general type that satisfies all constraints
     unified = unify(dtype, constraints)
     return reindex_vars(unified)
