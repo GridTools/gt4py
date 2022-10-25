@@ -849,7 +849,7 @@ def _shift_slice(
     if isinstance(slice_or_index, slice):
         assert slice_or_index.step is None
         return slice(
-            slice_or_index.start + offset, None
+            0 if slice_or_index.start is None else slice_or_index.start + offset, None
         )  # TODO stop == None unconditionally looks wrong
     else:
         assert isinstance(slice_or_index, numbers.Integral)
@@ -881,7 +881,16 @@ def np_as_located_field(
         def getter(indices):
             return a[_shift_slices(indices, offsets) if offsets else indices]
 
-        return LocatedFieldImpl(getter, axes, dtype=a.dtype, setter=setter, array=a.__array__)
+        def sliced_array():
+            return a[_shift_slices((slice(None),) * len(axes), offsets)]
+
+        return LocatedFieldImpl(
+            getter,
+            axes,
+            dtype=a.dtype,
+            setter=setter,
+            array=sliced_array if offsets else a.__array__,
+        )
 
     return _maker
 
