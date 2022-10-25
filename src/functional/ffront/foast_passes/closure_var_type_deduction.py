@@ -34,10 +34,12 @@ class ClosureVarTypeDeduction(NodeTranslator, traits.VisitorWithSymbolTableTrait
     closure_vars: dict[str, Any]
 
     @classmethod
-    def apply(cls, node: foast.FieldOperator, closure_vars: dict[str, Any]):
+    def apply(cls, node: foast.FieldOperator, closure_vars: dict[str, Any]) -> foast.FieldOperator:
         return cls(closure_vars=closure_vars).visit(node)
 
-    def visit_FunctionDefinition(self, node: foast.FunctionDefinition, **kwargs):
+    def visit_FunctionDefinition(
+        self, node: foast.FunctionDefinition, **kwargs
+    ) -> foast.FunctionDefinition:
         new_closure_vars: list[foast.Symbol] = []
         for sym in node.closure_vars:
             if not isinstance(self.closure_vars[sym.id], type):

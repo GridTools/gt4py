@@ -11,9 +11,9 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
+from dataclasses import dataclass
 from typing import Any
 
-from dataclasses import dataclass
 import functional.ffront.field_operator_ast as foast
 from eve import NodeTranslator, traits
 from eve.utils import FrozenNamespace
@@ -32,10 +32,12 @@ class ClosureVarFolding(NodeTranslator, traits.VisitorWithSymbolTableTrait):
     closure_vars: dict[str, Any]
 
     @classmethod
-    def apply(cls, node: foast.FieldOperator, closure_vars: dict[str, Any]):
+    def apply(cls, node: foast.FieldOperator, closure_vars: dict[str, Any]) -> foast.FieldOperator:
         return cls(closure_vars=closure_vars).visit(node)
 
-    def visit_Name(self, node: foast.Name, current_closure_vars, symtable, **kwargs):
+    def visit_Name(
+        self, node: foast.Name, current_closure_vars, symtable, **kwargs
+    ) -> foast.Name | foast.Constant:
         if node.id in symtable:
             definition = symtable[node.id]
             if definition in current_closure_vars:
@@ -44,7 +46,7 @@ class ClosureVarFolding(NodeTranslator, traits.VisitorWithSymbolTableTrait):
                     return foast.Constant(value=value, location=node.location)
         return node
 
-    def visit_Attribute(self, node: foast.Attribute, **kwargs):
+    def visit_Attribute(self, node: foast.Attribute, **kwargs) -> foast.Constant:
         # TODO: fix import form parent module by restructuring exception classis
         from functional.ffront.func_to_foast import FieldOperatorSyntaxError
 
@@ -71,5 +73,7 @@ class ClosureVarFolding(NodeTranslator, traits.VisitorWithSymbolTableTrait):
             end_offset=node.location.end_column,
         )
 
-    def visit_FunctionDefinition(self, node: foast.FunctionDefinition, **kwargs):
+    def visit_FunctionDefinition(
+        self, node: foast.FunctionDefinition, **kwargs
+    ) -> foast.FunctionDefinition:
         return self.generic_visit(node, current_closure_vars=node.closure_vars, **kwargs)
