@@ -211,13 +211,13 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             )
         new_init = self.visit(node.init, **kwargs)
         if not all(
-            type_info.is_arithmetic(type_)
+            type_info.is_arithmetic(type_) or type_info.is_logical(type_)
             for type_ in type_info.primitive_constituents(new_init.type)
         ):
             raise FieldOperatorTypeDeductionError.from_foast_node(
                 node,
                 msg=f"Argument `init` to scan operator `{node.id}` must "
-                f"be an arithmetic type or a composite of arithmetic types.",
+                f"be an arithmetic type or a logical type or a composite of arithmetic and logical types.",
             )
         new_definition = self.visit(node.definition, **kwargs)
         new_type = ct.ScanOperatorType(
@@ -362,7 +362,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
     ) -> Optional[ct.SymbolType]:
         # check both types compatible
         for arg in (left, right):
-            if not type_info.is_number(arg.type):
+            if not type_info.is_arithmetic(arg.type):
                 raise FieldOperatorTypeDeductionError.from_foast_node(
                     arg, msg=f"Type {arg.type} can not be used in operator '{node.op}'!"
                 )
@@ -389,7 +389,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         **kwargs,
     ) -> Optional[ct.SymbolType]:
         logical_ops = {ct.BinaryOperator.BIT_AND, ct.BinaryOperator.BIT_OR}
-        is_compatible = type_info.is_logical if node.op in logical_ops else type_info.is_number
+        is_compatible = type_info.is_logical if node.op in logical_ops else type_info.is_arithmetic
 
         # check both types compatible
         for arg in (left, right):
@@ -426,7 +426,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
     def visit_UnaryOp(self, node: foast.UnaryOp, **kwargs) -> foast.UnaryOp:
         new_operand = self.visit(node.operand, **kwargs)
         is_compatible = (
-            type_info.is_logical if node.op is foast.UnaryOperator.NOT else type_info.is_number
+            type_info.is_logical if node.op is foast.UnaryOperator.NOT else type_info.is_arithmetic
         )
         if not is_compatible(new_operand.type):
             raise FieldOperatorTypeDeductionError.from_foast_node(
