@@ -20,11 +20,11 @@ from eve.utils import FrozenNamespace
 
 class ClosureVarFolding(NodeTranslator, traits.VisitorWithSymbolTableTrait):
     """
-    Replace `Name` nodes that refer to closure variable by `Constant` nodes.
+    Replace references to closure variables or their attributes with constants.
 
-    `Attribute` nodes are also replaced by a `Constant` nodes with the value of the
-     closure variable's corresponding attribute. This is executed recursively for
-     attributes of attributes.
+    `Name` nodes that refer to closure variables are replaced by `Constant`
+     nodes. `Attribute` nodes that refer to attributes of closure variables
+     are recursively replaced by `Constant` nodes.
     """
 
     closure_vars: dict[str, Any]
