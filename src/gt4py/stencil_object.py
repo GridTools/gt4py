@@ -395,7 +395,7 @@ class StencilObject(abc.ABC):
                 f"Compute domain too small. Sequential axis is {domain[2]}, but must be at least {self.domain_info.min_sequential_axis_size}."
             )
 
-        gt_backend = gt4py.backend.from_name(self.backend)
+        backend_cls = gt4py.backend.from_name(self.backend)
 
         # assert compatibility of fields with stencil
         for name, field_info in self.field_info.items():
@@ -405,10 +405,10 @@ class StencilObject(abc.ABC):
                 arg_info = arg_infos[name]
                 assert arg_info is not None
 
-                gt_backend = gt4py.backend.from_name(self.backend)
-                assert gt_backend is not None
+                backend_cls = gt4py.backend.from_name(self.backend)
+                assert backend_cls is not None
 
-                if not gt_backend.storage_info["is_optimal_layout"](
+                if not backend_cls.storage_info["is_optimal_layout"](
                     arg_info.array,
                     list(field_info.axes) + [str(d) for d in range(len(field_info.data_dims))],
                 ):

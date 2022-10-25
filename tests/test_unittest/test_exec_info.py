@@ -20,7 +20,7 @@ from hypothesis import given
 from hypothesis import strategies as hyp_st
 from hypothesis.extra.numpy import arrays as st_arrays
 
-from gt4py import backend as gt_backend
+import gt4py.backend
 from gt4py import gtscript
 from gt4py import storage as gt_storage
 
@@ -122,7 +122,7 @@ class TestExecInfo:
         assert exec_info["run_end_time"] > exec_info["run_start_time"]
         assert exec_info["call_end_time"] > exec_info["run_end_time"]
 
-        if gt_backend.from_name(self.backend).languages["computation"] == "c++":
+        if gt4py.backend.from_name(self.backend).languages["computation"] == "c++":
             assert "run_cpp_start_time" in exec_info
             assert "run_cpp_end_time" in exec_info
             # note: do not compare the outputs of python and c++ stopwatches
@@ -172,7 +172,7 @@ class TestExecInfo:
         else:
             assert stencil_info["total_run_time"] > stencil_info["run_time"]
 
-        if gt_backend.from_name(self.backend).languages["computation"] == "c++":
+        if gt4py.backend.from_name(self.backend).languages["computation"] == "c++":
             assert "run_cpp_time" in stencil_info
             if last_called_stencil:
                 assert np.isclose(

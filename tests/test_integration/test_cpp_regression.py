@@ -20,7 +20,7 @@ import hypothesis.strategies as hyp_st
 import numpy as np
 import pytest
 
-import gt4py.backend as gt_backend
+import gt4py.backend
 import gt4py.storage as gt_store
 from gt4py.storage.utils import cpu_copy
 
@@ -243,4 +243,4 @@ def run_large_k_interval(backend, id_version, domain):
 @pytest.mark.parametrize("backend", ALL_BACKENDS)
 @pytest.mark.parametrize("function", REGISTRY)
 def test_cpp_regression(backend, id_version, function):
-    function(gt_backend.from_name(backend), id_version)
+    function(gt4py.backend.from_name(backend), id_version)

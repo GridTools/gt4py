@@ -17,7 +17,6 @@ import copy
 import numpy as np
 import pytest
 
-import gt4py.backend as gt_backend
 import gt4py.gtscript as gtscript
 import gt4py.storage as gt_storage
 from gt4py.gtscript import Field, K

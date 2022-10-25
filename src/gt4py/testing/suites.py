@@ -23,8 +23,8 @@ import numpy as np
 import pytest
 
 import gt4py as gt
+import gt4py.backend
 import gtc.utils as gtc_utils
-from gt4py import backend as gt_backend
 from gt4py import gtscript
 from gt4py import storage as gt_storage
 from gt4py import utils as gt_utils
@@ -210,7 +210,7 @@ class SuiteMeta(type):
         for test in cls_dict["tests"]:
             if test["suite"] == cls_name:
                 marks = test["marks"]
-                if gt_backend.from_name(test["backend"]).storage_info["device"] == "gpu":
+                if gt4py.backend.from_name(test["backend"]).storage_info["device"] == "gpu":
                     marks.append(pytest.mark.requires_gpu)
                 name = test["backend"]
                 name += "".join(f"_{key}_{value}" for key, value in test["constants"].items())
@@ -239,7 +239,7 @@ class SuiteMeta(type):
         for test in cls_dict["tests"]:
             if test["suite"] == cls_name:
                 marks = test["marks"]
-                if gt_backend.from_name(test["backend"]).storage_info["device"] == "gpu":
+                if gt4py.backend.from_name(test["backend"]).storage_info["device"] == "gpu":
                     marks.append(pytest.mark.requires_gpu)
                 name = test["backend"]
                 name += "".join(f"_{key}_{value}" for key, value in test["constants"].items())
@@ -333,7 +333,7 @@ class SuiteMeta(type):
         cls_dict["backends"] = [
             backend
             for backend in cls_dict["backends"]
-            if gt_backend.from_name(backend if isinstance(backend, str) else backend.values[0])
+            if gt4py.backend.from_name(backend if isinstance(backend, str) else backend.values[0])
             is not None
         ]
 
