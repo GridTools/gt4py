@@ -26,10 +26,11 @@ from dace import library
 from gtc import common
 from gtc import daceir as dcir
 from gtc import oir
+from gtc.dace.utils import compute_dcir_access_infos
 from gtc.definitions import Extent
 from gtc.oir import Decl, FieldDecl, VerticalLoop, VerticalLoopSection
 
-from .expansion.utils import get_dace_debuginfo, mask_includes_inner_domain
+from .expansion.utils import HorizontalExecutionSplitter, get_dace_debuginfo
 from .expansion_specification import ExpansionItem, make_expansion_order
 
 
@@ -38,6 +39,13 @@ def _set_expansion_order(
 ):
     res = make_expansion_order(node, expansion_order)
     node._expansion_specification = res
+
+
+def _set_tile_sizes_interpretation(node: "StencilComputation", tile_sizes_interpretation: str):
+    valid_values = {"shape", "strides"}
+    if tile_sizes_interpretation not in valid_values:
+        raise ValueError(f"tile_sizes_interpretation must be one in {valid_values}.")
+    node._tile_sizes_interpretation = tile_sizes_interpretation
 
 
 class PickledProperty:
@@ -75,6 +83,9 @@ class StencilComputation(library.LibraryNode):
 
     declarations = PickledDictProperty(key_type=str, value_type=Decl, allow_none=True)
     extents = PickledDictProperty(key_type=int, value_type=Extent, allow_none=False)
+    access_infos = PickledDictProperty(
+        key_type=str, value_type=dcir.FieldAccessInfo, allow_none=True
+    )
 
     device = dace.properties.EnumProperty(
         dtype=dace.DeviceType, default=dace.DeviceType.CPU, allow_none=True
@@ -85,9 +96,13 @@ class StencilComputation(library.LibraryNode):
         setter=_set_expansion_order,
     )
     tile_sizes = PickledDictProperty(
-        key_type=str,
+        key_type=dcir.Axis,
         value_type=int,
         default={dcir.Axis.I: 8, dcir.Axis.J: 8, dcir.Axis.K: 8},
+    )
+
+    tile_sizes_interpretation = dace.properties.Property(
+        setter=_set_tile_sizes_interpretation, dtype=str, default="strides"
     )
 
     symbol_mapping = dace.properties.DictProperty(
@@ -131,6 +146,13 @@ class StencilComputation(library.LibraryNode):
                     axis.domain_symbol(): dace.symbol(axis.domain_symbol(), dtype=dace.int32)
                     for axis in dcir.Axis.dims_horizontal()
                 }
+            )
+            self.access_infos = compute_dcir_access_infos(
+                oir_node,
+                oir_decls=declarations,
+                block_extents=self.get_extents,
+                collect_read=True,
+                collect_write=True,
             )
             if any(
                 interval.start.level == common.LevelMarker.END
@@ -182,10 +204,18 @@ class StencilComputation(library.LibraryNode):
 
     def has_splittable_regions(self):
         for he in self.oir_node.iter_tree().if_isinstance(oir.HorizontalExecution):
-            if not he.declarations and any(
-                isinstance(stmt, oir.HorizontalRestriction)
-                and not mask_includes_inner_domain(stmt.mask)
-                for stmt in he.body
-            ):
-                return True
-        return False
+            if not HorizontalExecutionSplitter.is_horizontal_execution_splittable(he):
+                return False
+        return True
+
+    @property
+    def tile_strides(self):
+        if self.tile_sizes_interpretation == "strides":
+            return self.tile_sizes
+        else:
+            overall_extent: Extent = next(iter(self.extents.values()))
+            for extent in self.extents.values():
+                overall_extent |= extent
+            return {
+                key: value + overall_extent[key.to_idx()] for key, value in self.tile_sizes.items()
+            }

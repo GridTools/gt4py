@@ -42,6 +42,11 @@ from gt4py.utils.layout import layout_checker_factory
 from gtc import common, gtir
 from gtc.dace.nodes import StencilComputation
 from gtc.dace.oir_to_dace import OirSDFGBuilder
+from gtc.dace.transformations import (
+    InlineThreadLocalTransients,
+    NoEmptyEdgeTrivialMapElimination,
+    nest_sequential_map_scopes,
+)
 from gtc.dace.utils import array_dimensions, layout_maker_factory, replace_strides
 from gtc.gtir_to_oir import GTIRToOIR
 from gtc.passes.gtir_k_boundary import compute_k_boundary
@@ -77,27 +82,25 @@ def _specialize_transient_strides(sdfg: dace.SDFG, layout_map):
             sdfg.remove_symbol(k)
 
 
-def _get_expansion_priority_cpu():
-    return [
-        ["TileJ", "TileI", "IMap", "JMap", "Sections", "K", "Stages"],
-        ["TileJ", "TileI", "IMap", "JMap", "Sections", "Stages", "K"],
-        ["TileJ", "TileI", "Sections", "Stages", "IMap", "JMap", "K"],
-        ["TileJ", "TileI", "Sections", "K", "Stages", "JMap", "IMap"],
-    ]
+def _get_expansion_priority_cpu(node: StencilComputation):
+    expansion_priority = []
+    if node.has_splittable_regions():
+        expansion_priority.append(["Sections", "Stages", "I", "J", "K"])
+    expansion_priority.extend(
+        [
+            ["TileJ", "TileI", "IMap", "JMap", "Sections", "K", "Stages"],
+            ["TileJ", "TileI", "IMap", "JMap", "Sections", "Stages", "K"],
+            ["TileJ", "TileI", "Sections", "Stages", "IMap", "JMap", "K"],
+            ["TileJ", "TileI", "Sections", "K", "Stages", "JMap", "IMap"],
+        ]
+    )
+    return expansion_priority
 
 
 def _get_expansion_priority_gpu(node: StencilComputation):
     expansion_priority = []
     if node.has_splittable_regions():
-        expansion_priority.append(
-            [
-                "Sections",
-                "Stages",
-                "J",
-                "I",
-                "K",
-            ]
-        )
+        expansion_priority.append(["Sections", "Stages", "J", "I", "K"])
     if node.oir_node.loop_order == common.LoopOrder.PARALLEL:
         expansion_priority.append(["Sections", "Stages", "K", "J", "I"])
     else:
@@ -113,7 +116,7 @@ def _set_expansion_orders(sdfg: dace.SDFG):
         if node.device == dace.DeviceType.GPU:
             expansion_priority = _get_expansion_priority_gpu(node)
         else:
-            expansion_priority = _get_expansion_priority_cpu()
+            expansion_priority = _get_expansion_priority_cpu(node)
         is_set = False
         for exp in expansion_priority:
             try:
@@ -135,8 +138,10 @@ def _set_tile_sizes(sdfg: dace.SDFG):
     ):
         if node.device == dace.DeviceType.GPU:
             node.tile_sizes = {dcir.Axis.I: 64, dcir.Axis.J: 8, dcir.Axis.K: 8}
+            node.tile_sizes_interpretation = "shape"
         else:
             node.tile_sizes = {dcir.Axis.I: 8, dcir.Axis.J: 8, dcir.Axis.K: 8}
+            node.tile_sizes_interpretation = "strides"
 
 
 def _to_device(sdfg: dace.SDFG, device: str) -> None:
@@ -175,11 +180,22 @@ def _post_expand_trafos(sdfg: dace.SDFG):
     # DaCe "standard" clean-up transformations
     sdfg.simplify(validate=False)
 
-    # Only has effect if schedule is CPU_Multicore,
-    # setting node.collapse causes the omp parallel statement to include collapse(n)
-    for node, _ in sdfg.all_nodes_recursive():
-        if isinstance(node, dace.nodes.MapEntry):
-            node.collapse = len(node.range)
+    sdfg.apply_transformations_repeated(NoEmptyEdgeTrivialMapElimination, validate=False)
+
+    # Control the `#pragma omp parallel` statements: Fully collapse parallel loops,
+    # but set 1D maps to be sequential. (Typical domains are too small to benefit from parallelism)
+    for node, _ in filter(
+        lambda n: isinstance(n[0], dace.nodes.MapEntry), sdfg.all_nodes_recursive()
+    ):
+        node.collapse = len(node.range)
+        if node.schedule == dace.ScheduleType.CPU_Multicore and len(node.range) <= 1:
+            node.schedule = dace.ScheduleType.Sequential
+
+    sdfg.apply_transformations_repeated(InlineThreadLocalTransients, validate=False)
+    sdfg.simplify(validate=False)
+    nest_sequential_map_scopes(sdfg)
+    for sd in sdfg.all_sdfgs_recursive():
+        sd.openmp_sections = False
 
 
 def _sdfg_add_arrays_and_edges(
@@ -443,6 +459,7 @@ class DaCeComputationCodegen:
                 const int __J = domain[1];
                 const int __K = domain[2];
                 ${name}_t dace_handle;
+                ${backend_specifics}
                 auto allocator = gt::sid::cached_allocator(&${allocator}<char[]>);
                 ${"\\n".join(tmp_allocs)}
                 __program_${name}(${",".join(["&dace_handle", *dace_args])});
@@ -452,16 +469,38 @@ class DaCeComputationCodegen:
     )
 
     def generate_tmp_allocs(self, sdfg):
-        fmt = "dace_handle.{name} = allocate(allocator, gt::meta::lazy::id<{dtype}>(), {size})();"
-        return [
-            fmt.format(
-                name=f"__{array_sdfg.sdfg_id}_{name}",
-                dtype=array.dtype.ctype,
-                size=array.total_size,
-            )
-            for array_sdfg, name, array in sdfg.arrays_recursive()
-            if array.transient and array.lifetime == dace.AllocationLifetime.Persistent
-        ]
+
+        global_fmt = "dace_handle.__{sdfg_id}_{name} = allocate(allocator, gt::meta::lazy::id<{dtype}>(), {size})();"
+        threadlocal_fmt = (
+            "{name} = dace_handle.__{sdfg_id}_{name} + omp_get_thread_num() * ({local_size});"
+        )
+        res = []
+        for array_sdfg, name, array in sdfg.arrays_recursive():
+            if array.transient and array.lifetime == dace.AllocationLifetime.Persistent:
+                if array.storage != dace.StorageType.CPU_ThreadLocal:
+                    res.append(
+                        global_fmt.format(
+                            name=name,
+                            sdfg_id=array_sdfg.sdfg_id,
+                            dtype=array.dtype.ctype,
+                            size=array.total_size,
+                        )
+                    )
+                else:
+                    fmts = [global_fmt, "#pragma omp parallel", "{{", threadlocal_fmt, "}}"]
+                    res.extend(
+                        [
+                            fmt.format(
+                                name=name,
+                                sdfg_id=array_sdfg.sdfg_id,
+                                dtype=array.dtype.ctype,
+                                size=f"omp_max_threads * ({array.total_size})",
+                                local_size=array.total_size,
+                            )
+                            for fmt in fmts
+                        ]
+                    )
+        return res
 
     @staticmethod
     def _postprocess_dace_code(code_objects, is_gpu, builder):
@@ -510,9 +549,18 @@ class DaCeComputationCodegen:
         is_gpu = "CUDA" in {co.title for co in code_objects}
 
         computations = cls._postprocess_dace_code(code_objects, is_gpu, builder)
-
+        if not is_gpu and any(
+            array.transient and array.lifetime == dace.AllocationLifetime.Persistent
+            for *_, array in sdfg.arrays_recursive()
+        ):
+            omp_threads = "int omp_max_threads = omp_get_max_threads();"
+            omp_header = "#include <omp.h>"
+        else:
+            omp_threads = ""
+            omp_header = ""
         interface = cls.template.definition.render(
             name=sdfg.name,
+            backend_specifics=omp_threads,
             dace_args=self.generate_dace_args(stencil_ir, sdfg),
             functor_args=self.generate_functor_args(sdfg),
             tmp_allocs=self.generate_tmp_allocs(sdfg),
@@ -522,7 +570,7 @@ class DaCeComputationCodegen:
             f"""#include <gridtools/sid/sid_shift_origin.hpp>
                              #include <gridtools/sid/allocator.hpp>
                              #include <gridtools/stencil/cartesian.hpp>
-                             {"#include <gridtools/common/cuda_util.hpp>" if is_gpu else ""}
+                             {"#include <gridtools/common/cuda_util.hpp>" if is_gpu else omp_header}
                              namespace gt = gridtools;
                              {computations}
 

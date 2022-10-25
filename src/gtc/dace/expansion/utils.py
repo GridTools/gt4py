@@ -115,30 +115,40 @@ def mask_includes_inner_domain(mask: common.HorizontalMask):
 
 
 class HorizontalExecutionSplitter(eve.NodeTranslator):
+    @staticmethod
+    def is_horizontal_execution_splittable(he: oir.HorizontalExecution):
+        for stmt in he.body:
+            if isinstance(stmt, oir.HorizontalRestriction) and not mask_includes_inner_domain(
+                stmt.mask
+            ):
+                continue
+            elif isinstance(stmt, oir.AssignStmt) and isinstance(stmt.left, oir.ScalarAccess):
+                continue
+            return False
+        regions: List[common.HorizontalMask] = list()
+        for stmt in he.iter_tree().if_isinstance(oir.HorizontalRestriction):
+            for region in regions:
+                if region.i.overlaps(stmt.mask.i) and region.j.overlaps(stmt.mask.j):
+                    return False
+            regions.append(stmt.mask)
+        return True
+
     def visit_HorizontalExecution(self, node: oir.HorizontalExecution, *, extents, library_node):
-        if any(node.iter_tree().if_isinstance(oir.LocalScalar)):
+        if not HorizontalExecutionSplitter.is_horizontal_execution_splittable(node):
             extents.append(library_node.get_extents(node))
             return node
 
-        last_stmts: List[common.Stmt] = []
-        res_he_stmts = [last_stmts]
+        res_he_stmts = []
+        scalar_writes = []
         for stmt in node.body:
-            if last_stmts and (
-                (
-                    isinstance(stmt, oir.HorizontalRestriction)
-                    and not mask_includes_inner_domain(stmt.mask)
-                )
-                or (
-                    (
-                        isinstance(last_stmts[0], oir.HorizontalRestriction)
-                        and not mask_includes_inner_domain(last_stmts[0].mask)
-                    )
-                )
-            ):
-                last_stmts = [stmt]
-                res_he_stmts.append(last_stmts)
+            if isinstance(stmt, oir.AssignStmt):
+                scalar_writes.append(stmt)
             else:
-                last_stmts.append(stmt)
+                assert isinstance(stmt, oir.HorizontalRestriction)
+                new_he = oir.HorizontalRestriction(
+                    mask=stmt.mask, body=[*scalar_writes, *stmt.body]
+                )
+                res_he_stmts.append([new_he])
 
         res_hes = []
         for stmts in res_he_stmts:
