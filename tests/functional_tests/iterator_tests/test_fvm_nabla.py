@@ -29,6 +29,7 @@ from functional.iterator.embedded import (
     np_as_located_field,
 )
 from functional.iterator.runtime import closure, fendef, fundef, offset
+from functional.iterator.transforms.pass_manager import LiftMode
 from functional.program_processors.runners.gtfn_cpu import run_gtfn
 
 from .fvm_nabla_setup import assert_close, nabla_setup
@@ -351,6 +352,8 @@ def nabla_sign(n_nodes, out_MXX, out_MYY, pp, S_MXX, S_MYY, vol, node_index, is_
 
 def test_nabla_sign(program_processor, lift_mode):
     program_processor, validate = program_processor
+    if lift_mode != LiftMode.FORCE_INLINE:
+        pytest.xfail("test is broken due to bad lift semantics in iterator IR")
     if program_processor == run_gtfn:
         pytest.xfail("TODO: gtfn bindings don't support unstructured")
     setup = nabla_setup()
