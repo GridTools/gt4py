@@ -153,13 +153,13 @@ def is_arithmetic(symbol_type: ct.SymbolType) -> bool:
     >>> is_arithmetic(ct.ScalarType(kind=ct.ScalarKind.FLOAT64))
     True
     >>> is_arithmetic(ct.ScalarType(kind=ct.ScalarKind.BOOL))
-    True
+    False
     >>> is_arithmetic(ct.ScalarType(kind=ct.ScalarKind.STRING))
     False
     >>> is_arithmetic(ct.FieldType(dims=[], dtype=ct.ScalarType(kind=ct.ScalarKind.INT32)))
     True
     """
-    return is_floating_point(symbol_type) or is_integral(symbol_type) or is_logical(symbol_type)
+    return is_floating_point(symbol_type) or is_integral(symbol_type)
 
 
 def is_field_type_or_tuple_of_field_type(type_: ct.DataType) -> bool:
