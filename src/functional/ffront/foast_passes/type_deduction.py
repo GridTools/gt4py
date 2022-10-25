@@ -255,17 +255,22 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         targets = []
         values = []
 
-        for _, elt in enumerate(node.value.elts):
+        for idx, elt in enumerate(node.value.elts):
             if not type_info.is_concrete(elt.type):
                 new_value = self.visit(elt, **kwargs)
+                new_value_type = new_value.type
+
+                try:
+                    target = node.target[idx]
+                except IndexError:
+                    raise Exception("Only same length tuple unpacking supported.")
+
+                new_target = self.visit(target, refine_type=new_value_type, location=node.location)
+                targets.append(new_target)
                 values.append(new_value)
 
-        for _, elt in enumerate(node.target):
-            if not type_info.is_concrete(elt.type):
-                new_target = self.visit(elt, refine_type=new_value.type, **kwargs)
-                targets.append(new_target)
 
-        # todo: right now all targets and values are assumed to have the same type
+        # todo: tuple unpacking using unequal length tuples using asterisk
 
         mta = foast.MultiTargetAssign(target=targets, value=node.value, location=node.location)
         return mta

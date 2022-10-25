@@ -1287,7 +1287,7 @@ def test_tuple_unpacking():
         inp3: Field[[IDim], float64],
         inp4: Field[[IDim], float64],
     ) -> tuple[Field[[IDim], float64], Field[[IDim], float64]]:
-        first, *_, last = (inp1, inp2, inp3, inp4)
+        first, *_, foo, last = (inp1, inp2, inp3, inp4)
         return first, last
 
     unpack(a, b, c, d, out=(b, c), offset_provider={})
