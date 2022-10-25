@@ -383,13 +383,25 @@ def test_shift():
     )
     expected = ti.FunctionType(
         args=ti.Tuple.from_elems(
-            ti.Val(kind=ti.Iterator(), dtype=ti.TypeVar(idx=0), size=ti.TypeVar(idx=1)),
+            ti.Val(
+                kind=ti.Iterator(),
+                dtype=ti.TypeVar(idx=0),
+                size=ti.TypeVar(idx=1),
+                current_loc=ti.TypeVar(idx=2),
+                defined_loc=ti.TypeVar(idx=3),
+            ),
         ),
-        ret=ti.Val(kind=ti.Iterator(), dtype=ti.TypeVar(idx=0), size=ti.TypeVar(idx=1)),
+        ret=ti.Val(
+            kind=ti.Iterator(),
+            dtype=ti.TypeVar(idx=0),
+            size=ti.TypeVar(idx=1),
+            current_loc=ti.TypeVar(idx=4),
+            defined_loc=ti.TypeVar(idx=3),
+        ),
     )
     inferred = ti.infer(testee)
     assert inferred == expected
-    assert ti.pformat(inferred) == "(It[T₀¹]) → It[T₀¹]"
+    assert ti.pformat(inferred) == "(It[T₂, T₃, T₀¹]) → It[T₄, T₃, T₀¹]"
 
 
 def test_function_definition():

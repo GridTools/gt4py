@@ -419,12 +419,26 @@ class _TypeInferrer(eve.NodeTranslator):
                 # Calls to shift are handled as being part of the grammar, not
                 # as function calls; that is, the offsets are completely
                 # ignored by the type inference algorithm
-                it = Val(kind=Iterator())
+                defined_loc = TypeVar.fresh()
+                dtype = TypeVar.fresh()
+                size = TypeVar.fresh()
                 return FunctionType(
                     args=Tuple.from_elems(
-                        it,
+                        Val(
+                            kind=Iterator(),
+                            dtype=dtype,
+                            size=size,
+                            current_loc=TypeVar.fresh(),
+                            defined_loc=defined_loc,
+                        ),
                     ),
-                    ret=it,
+                    ret=Val(
+                        kind=Iterator(),
+                        dtype=dtype,
+                        size=size,
+                        current_loc=TypeVar.fresh(),
+                        defined_loc=defined_loc,
+                    ),
                 )
             if node.fun.id.endswith("domain"):
                 for arg in node.args:
