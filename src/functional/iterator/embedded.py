@@ -843,35 +843,36 @@ def get_ordered_indices(
     return tuple(res)
 
 
-def _tupsum(a, b):
-    def combine_slice(s, t):
-        is_slice = False
-        if isinstance(s, slice):
-            is_slice = True
-            first = 0 if s.start is None else s.start
-            first_stop = s.stop
-            assert s.step is None
-        else:
-            assert isinstance(s, numbers.Integral)
-            first = s
-            first_stop = None
-        if isinstance(t, slice):
-            is_slice = True
-            second = 0 if t.start is None else t.start
-            second_stop = t.stop
-            assert t.step is None
-        else:
-            assert isinstance(t, numbers.Integral)
-            second = t
-            second_stop = None
-        start = first + second
-        if is_slice:
-            stop = None if first_stop is None or second_stop is None else first_stop + second_stop
-            return slice(start, stop)
-        else:
-            return start
+def _shift_slice(slice_or_index: slice | numbers.Integral, offset: numbers.Integral):
+    is_slice = False
+    if isinstance(slice_or_index, slice):
+        is_slice = True
+        first = 0 if slice_or_index.start is None else slice_or_index.start
+        first_stop = slice_or_index.stop
+        assert slice_or_index.step is None
+    else:
+        assert isinstance(slice_or_index, numbers.Integral)
+        first = slice_or_index
+        first_stop = None
+    if isinstance(offset, slice):
+        is_slice = True
+        second = 0 if offset.start is None else offset.start
+        second_stop = offset.stop
+        assert offset.step is None
+    else:
+        assert isinstance(offset, numbers.Integral)
+        second = offset
+        second_stop = None
+    start = first + second
+    if is_slice:
+        stop = None if first_stop is None or second_stop is None else first_stop + second_stop
+        return slice(start, stop)
+    else:
+        return start
 
-    return tuple(combine_slice(*i) for i in zip(a, b))
+
+def _shift_slices(a, b):
+    return tuple(_shift_slice(*i) for i in zip(a, b))
 
 
 def np_as_located_field(
@@ -888,10 +889,10 @@ def np_as_located_field(
 
         def setter(indices, value):
             indices = tupelize(indices)
-            a[_tupsum(indices, offsets) if offsets else indices] = value
+            a[_shift_slices(indices, offsets) if offsets else indices] = value
 
         def getter(indices):
-            return a[_tupsum(indices, offsets) if offsets else indices]
+            return a[_shift_slices(indices, offsets) if offsets else indices]
 
         return LocatedFieldImpl(getter, axes, dtype=a.dtype, setter=setter, array=a.__array__)
 
