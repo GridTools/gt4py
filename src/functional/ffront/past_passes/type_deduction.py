@@ -11,6 +11,8 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
+from typing import Optional, cast
+
 from eve import NodeTranslator, traits
 from functional.common import GTTypeError
 from functional.ffront import common_types as ct, program_ast as past, type_info
@@ -29,6 +31,11 @@ def _ensure_no_sliced_field(entry: past.Expr):
     elif isinstance(entry, past.TupleExpr):
         for param in entry.elts:
             _ensure_no_sliced_field(param)
+
+
+def _is_integral_scalar(expr: past.Expr) -> bool:
+    """Check that expression is an integral scalar."""
+    return isinstance(expr.type, ct.ScalarType) and type_info.is_integral(expr.type)
 
 
 def _validate_call_params(new_func: past.Name, new_kwargs: dict):
@@ -69,9 +76,9 @@ def _validate_call_params(new_func: past.Name, new_kwargs: dict):
                 raise GTTypeError(
                     f"Only 2 values allowed in domain range, but got `{len(domain_values.elts)}`."
                 )
-            if domain_values.elts[0].type != ct.ScalarType(
-                kind=ct.ScalarKind.INT64
-            ) or domain_values.elts[1].type != ct.ScalarType(kind=ct.ScalarKind.INT64):
+            if not _is_integral_scalar(domain_values.elts[0]) or not _is_integral_scalar(
+                domain_values.elts[1]
+            ):
                 raise GTTypeError(
                     f"Only integer values allowed in domain range, but got {domain_values.elts[0].type} and {domain_values.elts[1].type}."
                 )
@@ -111,6 +118,47 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         elts = self.visit(node.elts, **kwargs)
         return past.TupleExpr(
             elts=elts, type=ct.TupleType(types=[el.type for el in elts]), location=node.location
+        )
+
+    def _deduce_binop_type(
+        self,
+        node: past.BinOp,
+        *,
+        left: past.Expr,
+        right: past.Expr,
+        **kwargs,
+    ) -> Optional[ct.SymbolType]:
+        logical_ops = {ct.BinaryOperator.BIT_AND, ct.BinaryOperator.BIT_OR}
+        is_compatible = type_info.is_logical if node.op in logical_ops else type_info.is_arithmetic
+
+        # check both types compatible
+        for arg in (left, right):
+            if not isinstance(arg.type, ct.ScalarType) or not is_compatible(arg.type):
+                raise ProgramTypeError.from_past_node(
+                    arg, msg=f"Type {arg.type} can not be used in operator `{node.op}`!"
+                )
+
+        left_type = cast(ct.ScalarType, left.type)
+        right_type = cast(ct.ScalarType, right.type)
+
+        if node.op == ct.BinaryOperator.POW:
+            return left_type
+
+        try:
+            return type_info.promote(left_type, right_type)
+        except GTTypeError as ex:
+            raise ProgramTypeError.from_past_node(
+                node,
+                msg=f"Could not promote `{left_type}` and `{right_type}` to common type"
+                f" in call to `{node.op}`.",
+            ) from ex
+
+    def visit_BinOp(self, node: past.BinOp, **kwargs) -> past.BinOp:
+        new_left = self.visit(node.left, **kwargs)
+        new_right = self.visit(node.right, **kwargs)
+        new_type = self._deduce_binop_type(node, left=new_left, right=new_right)
+        return past.BinOp(
+            op=node.op, left=new_left, right=new_right, location=node.location, type=new_type
         )
 
     def visit_Call(self, node: past.Call, **kwargs):
