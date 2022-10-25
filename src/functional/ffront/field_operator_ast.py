@@ -142,7 +142,7 @@ class Assign(Stmt):
 
 
 class MultiTargetAssign(Stmt):
-    # todo: rename
+    # todo: rename target to targets
     target: list[FieldSymbol | TupleSymbol | ScalarSymbol | Star]
     value: Expr
 

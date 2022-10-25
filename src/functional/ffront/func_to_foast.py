@@ -32,8 +32,8 @@ from functional.ffront.ast_passes import (
     SingleStaticAssignPass,
     StringifyAnnotationsPass,
     UnchainComparesPass,
-    UnpackedAssignPass,
 )
+from functional.ffront.foast_passes.iterable_unpack import UnpackedAssignPass
 from functional.ffront.dialect_parser import DialectParser, DialectSyntaxError
 from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduction
 
