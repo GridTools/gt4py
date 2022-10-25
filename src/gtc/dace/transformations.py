@@ -20,7 +20,7 @@ class NoEmptyEdgeTrivialMapElimination(TrivialMapElimination):
         }:
             return False
         if any(
-            edge.data.is_empty() for edge in graph.in_edges(map_entry) + graph.out_edges(map_exit)
+            edge.data.is_empty() for edge in (graph.in_edges(map_entry) + graph.out_edges(map_exit))
         ):
             return False
         return True

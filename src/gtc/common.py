@@ -831,7 +831,7 @@ class HorizontalInterval(Node):
 
         return abs(self.end.offset - self.start.offset) == 1
 
-    def overlap(self, other: "HorizontalInterval") -> bool:
+    def overlaps(self, other: "HorizontalInterval") -> bool:
         if self.start is None and other.start is None:
             return True
         elif self.start is None and other.start is not None:

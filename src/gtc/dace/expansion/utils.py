@@ -120,7 +120,7 @@ class HorizontalExecutionSplitter(eve.NodeTranslator):
         regions: List[common.HorizontalMask] = list()
         for stmt in he.iter_tree().if_isinstance(oir.HorizontalRestriction):
             for region in regions:
-                if region.i.overlap(stmt.mask.i) and region.j.overlap(stmt.mask.j):
+                if region.i.overlaps(stmt.mask.i) and region.j.overlaps(stmt.mask.j):
                     return False
             regions.append(stmt.mask)
         return True
@@ -131,19 +131,16 @@ class HorizontalExecutionSplitter(eve.NodeTranslator):
             return node
 
         res_he_stmts = []
-        local_scalars = []
         scalar_writes = []
         for stmt in node.body:
-            if isinstance(stmt, oir.LocalScalar):
-                local_scalars.append(stmt)
-            elif isinstance(stmt, oir.AssignStmt):
+            if isinstance(stmt, oir.AssignStmt):
                 scalar_writes.append(stmt)
             else:
                 assert isinstance(stmt, oir.HorizontalRestriction)
                 new_he = oir.HorizontalRestriction(
                     mask=stmt.mask, body=[*scalar_writes, *stmt.body]
                 )
-                res_he_stmts.append([*local_scalars, new_he])
+                res_he_stmts.append([new_he])
 
         res_hes = []
         for stmts in res_he_stmts:
