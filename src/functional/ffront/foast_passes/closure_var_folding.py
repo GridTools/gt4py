@@ -55,22 +55,13 @@ class ClosureVarFolding(NodeTranslator, traits.VisitorWithSymbolTableTrait):
             if hasattr(value.value, node.attr):
                 return foast.Constant(value=getattr(value.value, node.attr), location=node.location)
             # TODO: use proper exception type (requires refactoring `FieldOperatorSyntaxError`)
-            raise FieldOperatorSyntaxError(
+            raise FieldOperatorSyntaxError.from_location(
                 msg="Constant does not have the attribute specified by the AST.",
-                filename=node.location.source,
-                lineno=node.location.line,
-                offset=node.location.column,
-                end_lineno=node.location.end_line,
-                end_offset=node.location.end_column,
+                location=node.location,
             )
         # TODO: use proper exception type (requires refactoring `FieldOperatorSyntaxError`)
-        raise FieldOperatorSyntaxError(
-            msg="Attribute can only be used on constants.",
-            filename=node.location.source,
-            lineno=node.location.line,
-            offset=node.location.column,
-            end_lineno=node.location.end_line,
-            end_offset=node.location.end_column,
+        raise FieldOperatorSyntaxError.from_location(
+            msg="Attribute can only be used on constants.", location=node.location
         )
 
     def visit_FunctionDefinition(

@@ -64,6 +64,18 @@ class DialectSyntaxError(common.GTSyntaxError):
             text=text,
         )
 
+    @classmethod
+    def from_location(cls, msg="", *, location: SourceLocation):
+        return cls(
+            msg,
+            lineno=location.line,
+            offset=location.column,
+            filename=location.source,
+            end_lineno=location.end_line,
+            end_offset=location.end_column,
+            text=None,
+        )
+
 
 @dataclass(frozen=True, kw_only=True)
 class DialectParser(ast.NodeVisitor, Generic[DialectRootT]):

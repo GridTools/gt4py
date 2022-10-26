@@ -18,9 +18,8 @@ from eve import NodeTranslator, traits
 
 
 class DeadClosureVarElimination(NodeTranslator, traits.VisitorWithSymbolTableTrait):
-    """
-    Remove closure variable symbols that are not referenced in the AST.
-    """
+    """Remove closure variable symbols that are not referenced in the AST."""
+
     _referenced_symbols: list[foast.Symbol]
 
     @classmethod
