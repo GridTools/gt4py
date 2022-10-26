@@ -1280,8 +1280,8 @@ def test_tuple_unpacking(fieldview_backend):
     c = np_as_located_field(IDim)(np.ones((size)))
     d = np_as_located_field(IDim)(np.ones((size)))
 
-    @field_operator(backend=fieldview_backend)
-    def unpack(
+    @field_operator
+    def _unpack(
         inp1: Field[[IDim], float64],
         inp2: Field[[IDim], float64],
         inp3: Field[[IDim], float64],
@@ -1290,7 +1290,16 @@ def test_tuple_unpacking(fieldview_backend):
         a, b, c, d = (inp1, inp2, inp3, inp4)
         return d, c, b, a
 
-    unpack(a, b, c, d, out=(a, b, c, d), offset_provider={})
+    @program(backend=fieldview_backend)
+    def unpack(
+            inp1: Field[[IDim], float64],
+            inp2: Field[[IDim], float64],
+            inp3: Field[[IDim], float64],
+            inp4: Field[[IDim], float64],
+    ):
+        _unpack(inp1, inp2, inp3, inp4, out=(inp1, inp2, inp3, inp4))
+
+    unpack(a, b, c, d, offset_provider={})
 
     assert np.allclose(a, d)
     assert np.allclose(b, c)
