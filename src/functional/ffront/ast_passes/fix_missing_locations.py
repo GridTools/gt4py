@@ -12,6 +12,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 import ast
+import copy
 import dataclasses
 
 
@@ -29,23 +30,30 @@ class FixMissingLocations(ast.NodeTransformer):
     some ast nodes and is hence not a replacement for this pass.
     """
 
-    _parent_node: ast.AST
+    _parent_node: list[ast.AST]
 
     @classmethod
     def apply(cls, node: ast.AST) -> ast.AST:
-        return cls(_parent_node=node).visit(node)
+        return cls(_parent_node=[]).visit(node)
 
     def generic_visit(self, node: ast.AST) -> ast.AST:
-        if getattr(node, "lineno", None):
-            self._parent_node = node
+        has_location = hasattr(node, "lineno")
+        if has_location:
+            self._parent_node.append(node)
         else:
-            node.lineno = self._parent_node.lineno
-            node.col_offset = self._parent_node.col_offset
+            node = copy.deepcopy(node)
+            node.lineno = self._parent_node[-1].lineno
+            node.col_offset = self._parent_node[-1].col_offset
             # the end positions are optional according to
             #  https://docs.python.org/3/library/ast.html#ast.AST.end_col_offset
-            if hasattr(node, "end_lineno"):
-                node.end_lineno = self._parent_node.end_lineno
-            if hasattr(node, "end_col_offset"):
-                node.end_col_offset = self._parent_node.end_col_offset
+            if hasattr(self._parent_node[-1], "end_lineno"):
+                node.end_lineno = self._parent_node[-1].end_lineno
+            if hasattr(self._parent_node[-1], "end_col_offset"):
+                node.end_col_offset = self._parent_node[-1].end_col_offset
 
-        return super().generic_visit(node)
+        result = super().generic_visit(node)
+
+        if has_location:
+            self._parent_node.pop()
+
+        return result
