@@ -35,12 +35,12 @@ import typing as _typing
 from typing import *  # noqa: F403
 from typing import overload  # Only needed to avoid false flake8 errors
 
-from typing_extensions import *  # type: ignore[misc]  # noqa: F403
+from typing_extensions import *  # type: ignore[assignment]  # noqa: F403
 
 
 if _sys.version_info >= (3, 9):
     # Standard library already supports PEP 585 (Type Hinting Generics In Standard Collections)
-    from builtins import (  # type: ignore[misc]  # isort:skip
+    from builtins import (  # type: ignore[assignment]  # isort:skip
         tuple as Tuple,
         list as List,
         dict as Dict,
