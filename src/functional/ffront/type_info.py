@@ -79,7 +79,7 @@ def primitive_constituents(
 def apply_to_primitive_constituents(
     symbol_type: ct.SymbolType,
     fun: Callable[[ct.SymbolType], ct.SymbolType]
-    | Callable[[ct.SymbolType | tuple[int, ...]], ct.SymbolType],
+    | Callable[[ct.SymbolType, tuple[int, ...]], ct.SymbolType],
     with_path_arg=False,
     _path=(),
 ):
@@ -101,9 +101,9 @@ def apply_to_primitive_constituents(
             ]
         )
     if with_path_arg:
-        return fun(symbol_type, _path)
+        return fun(symbol_type, _path)  # type: ignore[call-arg] # mypy not aware of `with_path_arg`
     else:
-        return fun(symbol_type)
+        return fun(symbol_type)  # type: ignore[call-arg] # mypy not aware of `with_path_arg`
 
 
 def extract_dtype(symbol_type: ct.SymbolType) -> ct.ScalarType:
@@ -568,7 +568,7 @@ def function_signature_incompatibilities_scanop(
         # pass return a field type with that dtype and the dimensions of the
         # corresponding field type in the requested `args` type. Defined here
         # as we capture `i`.
-        def _as_field(dtype: ct.ScalarType, path: tuple[int, ...]):
+        def _as_field(dtype: ct.ScalarType, path: tuple[int, ...]) -> ct.FieldType:
             try:
                 el_type = reduce(lambda type_, idx: type_.types[idx], path, args[i])  # type: ignore[attr-defined] # noqa: B023
                 return ct.FieldType(dims=extract_dims(el_type), dtype=dtype)
@@ -579,7 +579,7 @@ def function_signature_incompatibilities_scanop(
                 return ct.FieldType(dims=..., dtype=dtype)
 
         promoted_args.append(
-            apply_to_primitive_constituents(scan_pass_arg, _as_field, with_path_arg=True)
+            apply_to_primitive_constituents(scan_pass_arg, _as_field, with_path_arg=True)  # type: ignore[arg-type]
         )
 
     # build a function type to leverage the already existing signature checking
