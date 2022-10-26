@@ -97,29 +97,6 @@ def extract_dtype(symbol_type: ct.SymbolType) -> ct.ScalarType:
     raise GTTypeError(f"Can not unambiguosly extract data type from {symbol_type}!")
 
 
-def is_arithmetic(symbol_type: ct.SymbolType) -> bool:
-    """
-    Check if ``symbol_type`` is compatible with arithmetic operations.
-
-    Examples:
-    ---------
-    >>> is_arithmetic(ct.ScalarType(kind=ct.ScalarKind.FLOAT64))
-    True
-    >>> is_arithmetic(ct.ScalarType(kind=ct.ScalarKind.BOOL))
-    False
-    >>> is_arithmetic(ct.FieldType(dims=[], dtype=ct.ScalarType(kind=ct.ScalarKind.INT32)))
-    True
-    """
-    if extract_dtype(symbol_type).kind in [
-        ct.ScalarKind.INT32,
-        ct.ScalarKind.INT64,
-        ct.ScalarKind.FLOAT32,
-        ct.ScalarKind.FLOAT64,
-    ]:
-        return True
-    return False
-
-
 def is_floating_point(symbol_type: ct.SymbolType) -> bool:
     """
     Check if the dtype of ``symbol_type`` is a floating point type.
@@ -135,12 +112,10 @@ def is_floating_point(symbol_type: ct.SymbolType) -> bool:
     >>> is_floating_point(ct.FieldType(dims=[], dtype=ct.ScalarType(kind=ct.ScalarKind.FLOAT32)))
     True
     """
-    if extract_dtype(symbol_type).kind in [
+    return extract_dtype(symbol_type).kind in [
         ct.ScalarKind.FLOAT32,
         ct.ScalarKind.FLOAT64,
-    ]:
-        return True
-    return False
+    ]
 
 
 def is_integral(symbol_type: ct.SymbolType) -> bool:
@@ -158,17 +133,33 @@ def is_integral(symbol_type: ct.SymbolType) -> bool:
     >>> is_integral(ct.FieldType(dims=[], dtype=ct.ScalarType(kind=ct.ScalarKind.INT)))
     True
     """
-    if extract_dtype(symbol_type).kind in [
+    return extract_dtype(symbol_type).kind in [
         ct.ScalarKind.INT,
         ct.ScalarKind.INT32,
         ct.ScalarKind.INT64,
-    ]:
-        return True
-    return False
+    ]
 
 
 def is_logical(symbol_type: ct.SymbolType) -> bool:
     return extract_dtype(symbol_type).kind is ct.ScalarKind.BOOL
+
+
+def is_arithmetic(symbol_type: ct.SymbolType) -> bool:
+    """
+    Check if ``symbol_type`` is compatible with arithmetic operations.
+
+    Examples:
+    ---------
+    >>> is_arithmetic(ct.ScalarType(kind=ct.ScalarKind.FLOAT64))
+    True
+    >>> is_arithmetic(ct.ScalarType(kind=ct.ScalarKind.BOOL))
+    False
+    >>> is_arithmetic(ct.ScalarType(kind=ct.ScalarKind.STRING))
+    False
+    >>> is_arithmetic(ct.FieldType(dims=[], dtype=ct.ScalarType(kind=ct.ScalarKind.INT32)))
+    True
+    """
+    return is_floating_point(symbol_type) or is_integral(symbol_type)
 
 
 def is_field_type_or_tuple_of_field_type(type_: ct.DataType) -> bool:
