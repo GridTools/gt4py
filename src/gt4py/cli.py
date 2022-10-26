@@ -18,7 +18,7 @@ import importlib
 import pathlib
 import sys
 from types import ModuleType
-from typing import Any, Callable, Dict, Generator, KeysView, Optional, Tuple, Type, Union, cast
+from typing import Any, Callable, Dict, Generator, KeysView, Optional, Tuple, Type, Union
 
 import click
 import tabulate
@@ -68,10 +68,9 @@ class BackendChoice(click.Choice):
     def enabled_backend_cls_from_name(backend_name: str) -> Optional[Type[CLIBackendMixin]]:
         """Check if a given backend is enabled for CLI."""
         backend_cls = gt4py.backend.from_name(backend_name)
-        assert backend_cls is not None
-        if not issubclass(backend_cls, CLIBackendMixin):
+        if backend_cls is None or not issubclass(backend_cls, CLIBackendMixin):
             return None
-        return cast(Optional[Type[CLIBackendMixin]], backend_cls)
+        return backend_cls
 
     @classmethod
     def backend_table(cls) -> str:
