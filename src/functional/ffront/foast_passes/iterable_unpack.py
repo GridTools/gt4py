@@ -56,7 +56,7 @@ class UnpackedAssignPass(NodeTranslator, traits.VisitorWithSymbolTableTrait):
                 tuple_assign = foast.Assign(target=tuple_symbol, value=node.value, location=node.location)
                 body.insert(pos, tuple_assign)
 
-                for index, subtarget in enumerate(node.target):
+                for index, subtarget in enumerate(node.targets):
                     tuple_name = foast.Name(id=tuple_symbol.id, location=tuple_symbol.location)
                     new_assign = foast.Assign(target=subtarget, value=foast.Subscript(value=tuple_name, index=index, location=node.location), location=node.location)
                     body.insert(pos + index + 1, new_assign)

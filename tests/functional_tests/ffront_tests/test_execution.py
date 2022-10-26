@@ -72,7 +72,10 @@ def test_copy(fieldview_backend):
 
     @field_operator(backend=fieldview_backend)
     def copy(inp: Field[[IDim], float64]) -> Field[[IDim], float64]:
-        return inp
+        field_tuple = (inp, inp)
+        field_0 = field_tuple[0]
+        field_1 = field_tuple[1]
+        return field_0
 
     copy(a, out=b, offset_provider={})
 

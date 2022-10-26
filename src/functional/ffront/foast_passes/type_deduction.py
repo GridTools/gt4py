@@ -255,13 +255,13 @@ class FieldOperatorTypeDeduction(NodeTranslator, traits.VisitorWithSymbolTableTr
         targets = []
         new_value = self.visit(node.value, **kwargs)
 
-        for target, new_type in zip(node.target, new_value.type.types):
+        for target, new_type in zip(node.targets, new_value.type.types):
                 new_target = self.visit(target, refine_type=new_type, location=node.location, **kwargs)
                 targets.append(new_target)
 
         # todo: tuple unpacking using unequal length tuples using asterisk
 
-        mta = foast.MultiTargetAssign(target=targets, value=new_value, location=node.location)
+        mta = foast.MultiTargetAssign(targets=targets, value=new_value, location=node.location)
         return mta
 
 

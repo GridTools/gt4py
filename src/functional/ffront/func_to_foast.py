@@ -201,7 +201,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
                 else:
                     ts.append(foast.DataSymbol(id=elt.id, location=self._make_loc(elt), type=ct.DeferredSymbolType(constraint=constraint_type)))
 
-            mta = foast.MultiTargetAssign(target=ts, value=self.visit(node.value), location=self._make_loc(node))
+            mta = foast.MultiTargetAssign(targets=ts, value=self.visit(node.value), location=self._make_loc(node))
             return mta
 
         if not isinstance(target, ast.Name):
