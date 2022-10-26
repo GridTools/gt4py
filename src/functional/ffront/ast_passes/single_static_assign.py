@@ -33,8 +33,6 @@ class SingleStaticAssignPass(ast.NodeTransformer):
     Mutates the python AST, variable names will not be valid python names anymore.
     This pass must be run before any passes that linearize unpacking assignments.
 
-    Requires AST to have no missing location info (see ``FixMissingLocations``).
-
     Example
     -------
     Function ``foo()`` in the following example keeps overwriting local variable ``a``
