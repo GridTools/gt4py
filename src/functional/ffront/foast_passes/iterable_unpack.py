@@ -16,6 +16,9 @@ class UnpackedAssignPass(NodeTranslator, traits.VisitorWithSymbolTableTrait):
         b1 = __tuple_tmp_0[1]
         return (a1, b1)
     """
+
+    unique_tuple_symbol_id: int = 0
+
     @classmethod
     def apply(cls, node: foast.FieldOperator) -> foast.FieldOperator:
         typed_foast_node = cls().visit(node)
@@ -24,14 +27,7 @@ class UnpackedAssignPass(NodeTranslator, traits.VisitorWithSymbolTableTrait):
     def visit_FunctionDefinition(self, node: foast.FunctionDefinition, **kwargs):
         new_params = self.visit(node.params, **kwargs)
         new_body = self.visit(node.body, **kwargs)
-
-        for i, elt in enumerate(new_body):
-            if any([isinstance(elt, list)]):
-                del new_body[i]
-                for assign in elt:
-                    new_body.insert(i, assign)
-
-
+        self._unroll_multi_target_assign(new_body)
         assert isinstance(new_body[-1], foast.Return)
         return_type = new_body[-1].value.type
         new_type = ct.FunctionType(
@@ -47,13 +43,22 @@ class UnpackedAssignPass(NodeTranslator, traits.VisitorWithSymbolTableTrait):
             location=node.location,
         )
 
-    def visit_MultiTargetAssign(self, node: foast.MultiTargetAssign, **kwargs) -> list[foast.Assign]:
-        assigns = []
-        values = node.value.elts
-        if isinstance(targets := node.target, (tuple, list)):
-            if len(values) != len(targets):
-                raise Exception("Left and right side of MultiTargetAssign must contain same number of elements.")
+    def _unique_tuple_symbol(self, node: foast.MultiTargetAssign) -> foast.Name:
+        sym = foast.Symbol(id=f"__tuple_tmp_{self.unique_tuple_symbol_id}", type=node.value.type, location=node.location)
+        self.unique_tuple_symbol_id += 1
+        return sym
 
-            for t, v in zip(targets, values):
-                assigns.append(foast.Assign(target=t, value=v, location=node.location))
-        return assigns
+    def _unroll_multi_target_assign(self, body: list[foast.LocatedNode]) -> list[foast.LocatedNode]:
+        for pos, node in enumerate(body):
+            if isinstance(node, foast.MultiTargetAssign):
+                del body[pos]
+                tuple_symbol = self._unique_tuple_symbol(node)
+                tuple_assign = foast.Assign(target=tuple_symbol, value=node.value, location=node.location)
+                body.insert(pos, tuple_assign)
+
+                for index, subtarget in enumerate(node.target):
+                    tuple_name = foast.Name(id=tuple_symbol.id, location=tuple_symbol.location)
+                    new_assign = foast.Assign(target=subtarget, value=foast.Subscript(value=tuple_name, index=index, location=node.location), location=node.location)
+                    body.insert(pos + index + 1, new_assign)
+
+        return body
