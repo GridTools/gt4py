@@ -236,7 +236,7 @@ class DaCeIRBuilder(NodeTranslator):
 
             if isinstance(item, Skip):
                 item = item.item
-                parent=self.parent
+                parent = self.parent
             else:
                 parent = self
 
@@ -264,7 +264,7 @@ class DaCeIRBuilder(NodeTranslator):
 
         def pop(self) -> "DaCeIRBuilder.IterationContext":
             if self.parent is None:
-                #original item was Skip
+                # original item was Skip
                 return self
             return self.parent
 

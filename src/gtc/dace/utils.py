@@ -236,10 +236,16 @@ class AccessInfoCollector(NodeVisitor):
         self.visit(node.left, is_write=True, **kwargs)
 
     def visit_HorizontalRestriction(
-        self, node: oir.HorizontalRestriction, *, is_conditional=False, **kwargs
+        self,
+        node: oir.HorizontalRestriction,
+        *,
+        ignore_regions=False,
+        is_conditional=False,
+        **kwargs,
     ):
+        region = None if ignore_regions else node.mask
         self.visit(node.mask, is_conditional=is_conditional, **kwargs)
-        self.visit(node.body, is_conditional=True, region=node.mask, **kwargs)
+        self.visit(node.body, is_conditional=True, region=region, **kwargs)
 
     def visit_MaskStmt(self, node: oir.MaskStmt, *, is_conditional=False, **kwargs):
 
@@ -367,6 +373,7 @@ def compute_dcir_access_infos(
     collect_read=True,
     collect_write=True,
     include_full_domain=False,
+    ignore_regions=False,
     **kwargs,
 ) -> Dict["dcir.SymbolName", "dcir.FieldAccessInfo"]:
     if block_extents is None:
@@ -380,7 +387,7 @@ def compute_dcir_access_infos(
     }
     ctx = AccessInfoCollector.Context(axes=axes, access_infos=dict())
     AccessInfoCollector(collect_read=collect_read, collect_write=collect_write).visit(
-        oir_node, block_extents=block_extents, ctx=ctx, **kwargs
+        oir_node, block_extents=block_extents, ctx=ctx, ignore_regions=ignore_regions, **kwargs
     )
     if include_full_domain:
         res = dict()

@@ -9,9 +9,10 @@ from dace.transformation.helpers import nest_sdfg_subgraph
 
 from gtc import common
 from gtc import daceir as dcir
+from gtc.dace.expansion.daceir_builder import DaCeIRBuilder
 from gtc.dace.expansion_specification import Map, Skip
 from gtc.dace.nodes import StencilComputation
-from gtc.dace.utils import compute_dcir_access_infos, make_dace_subset
+from gtc.dace.utils import compute_dcir_access_infos, make_dace_subset, union_inout_memlets
 
 
 SymbolicOriginType = Tuple[dace.symbolic.SymbolicType, ...]
@@ -25,6 +26,7 @@ def _set_skips(node):
 
 
 def _get_field_access_infos(
+    state: dace.SDFGState,
     node: StencilComputation,
 ) -> Tuple[
     Dict[dcir.SymbolName, dcir.FieldAccessInfo], Dict[dcir.SymbolName, dcir.FieldAccessInfo]
@@ -33,33 +35,21 @@ def _get_field_access_infos(
     returns a dictionary mapping field names to access infos for the argument node with the set expansion_specification
     """
 
-    in_access_infos = compute_dcir_access_infos(
+    parent_arrays: Dict[str, dace.data.Data] = {}
+    for edge in (e for e in state.in_edges(node) if e.dst_conn is not None):
+        parent_arrays[edge.dst_conn[len("__in_") :]] = state.parent.arrays[edge.data.data]
+    for edge in (e for e in state.out_edges(node) if e.src_conn is not None):
+        parent_arrays[edge.src_conn[len("__out_") :]] = state.parent.arrays[edge.data.data]
+
+    daceir: dcir.NestedSDFG = DaCeIRBuilder().visit(
         node.oir_node,
-        block_extents=node.get_extents,
-        oir_decls=node.declarations,
-        collect_read=True,
-        collect_write=False,
+        global_ctx=DaCeIRBuilder.GlobalContext(library_node=node, arrays=parent_arrays),
     )
-    out_access_infos = compute_dcir_access_infos(
-        node.oir_node,
-        block_extents=node.get_extents,
-        oir_decls=node.declarations,
-        collect_read=False,
-        collect_write=True,
-    )
-    if isinstance(node.expansion_specification[0], Skip):
-        skip_item: Map = node.expansion_specification[0].item
-        tile_sizes = {it.axis: it.stride for it in skip_item.iterations}
-        for access_infos in in_access_infos, out_access_infos:
-            for name, info in access_infos.items():
-                grid_subset = info.grid_subset.tile(tile_sizes=tile_sizes)
-                access_infos[name] = dcir.FieldAccessInfo(
-                    grid_subset=grid_subset,
-                    global_grid_subset=info.global_grid_subset,
-                    dynamic_access=info.dynamic_access,
-                    variable_offset_axes=info.variable_offset_axes,
-                )
-    return in_access_infos, out_access_infos
+
+    read_memlets, write_memlets, _ = union_inout_memlets(daceir.states)
+    return {mem.field: mem.access_info for mem in read_memlets}, {
+        mem.field: mem.access_info for mem in write_memlets
+    }
 
 
 def _get_symbolic_origin_and_domain(
@@ -178,7 +168,7 @@ def _get_symbolic_split(
 
     symbolic_split = dict(), dict()
     for node, state in nodes:
-        access_infos = _union_access_infos(*_get_field_access_infos(node))
+        access_infos = _union_access_infos(*_get_field_access_infos(state, node))
         node_symbolic_split = _get_symbolic_origin_and_domain(state, node, access_infos)
         symbolic_split = _union_symbolic_origin_and_domain(symbolic_split, node_symbolic_split)
     return symbolic_split
@@ -191,8 +181,8 @@ def _get_access_infos(
 ]:
     in_access_infos = dict()
     out_access_infos = dict()
-    for node, _ in nodes:
-        in_node_access_infos, out_node_access_infos = _get_field_access_infos(node)
+    for node, state in nodes:
+        in_node_access_infos, out_node_access_infos = _get_field_access_infos(state, node)
         in_access_infos = _union_access_infos(in_access_infos, in_node_access_infos)
         out_access_infos = _union_access_infos(out_access_infos, out_node_access_infos)
     return in_access_infos, out_access_infos
@@ -311,7 +301,7 @@ def partially_expand(sdfg):
     _update_shapes(nsdfg_node.sdfg, nsdfg_access_infos)
     for state in nsdfg_node.sdfg.states():
         for node in filter(lambda n: isinstance(n, StencilComputation), state.nodes()):
-            in_access_infos, out_access_infos = _get_field_access_infos(node)
+            in_access_infos, out_access_infos = _get_field_access_infos(state, node)
             node.access_infos = _union_access_infos(in_access_infos, out_access_infos)
             for memlet in state.in_edges(node):
                 name = memlet.data.data
