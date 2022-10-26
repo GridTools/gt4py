@@ -30,7 +30,7 @@ from gtc.common import AxisBound, LocNode
 
 @utils.noninstantiable
 class Expr(common.Expr):
-    dtype: Optional[common.DataType]
+    pass
 
 
 @utils.noninstantiable
@@ -166,7 +166,7 @@ class Interval(LocNode):
     def intersects(self, other: "Interval") -> bool:
         return not (other.start >= self.end or self.start >= other.end)
 
-    def shifted(self, offset: Optional[int]) -> "Interval":
+    def shifted(self, offset: Optional[int]) -> Union["Interval", "UnboundedInterval"]:
         if offset is None:
             return UnboundedInterval()
         start = AxisBound(level=self.start.level, offset=self.start.offset + offset)
@@ -178,7 +178,7 @@ class Interval(LocNode):
         return cls(start=AxisBound.start(), end=AxisBound.end())
 
 
-class UnboundedInterval(Interval):
+class UnboundedInterval:
     start: Optional[AxisBound] = None
     end: Optional[AxisBound] = None
 
@@ -186,9 +186,9 @@ class UnboundedInterval(Interval):
     def check(cls, values: Dict[str, Any]) -> Dict[str, Any]:
         values.setdefault("start", None)
         values.setdefault("end", None)
-        return super().check(values)
+        return Interval.check(values)
 
-    def covers(self, other: "Interval") -> bool:
+    def covers(self, other: Union[Interval, "UnboundedInterval"]) -> bool:
         if self.start is None and self.end is None:
             return True
         if self.end is None and other.start is not None and other.start >= self.start:
@@ -198,9 +198,11 @@ class UnboundedInterval(Interval):
         # at this point, we know self is actually bounded, so can't cover unbounded intervals
         if other.start is None or other.end is None:
             return False
-        return super().covers(other)
 
-    def intersects(self, other: "Interval") -> bool:
+        assert isinstance(other, Interval)
+        return Interval(start=self.start, end=self.end).covers(other)
+
+    def intersects(self, other: Union[Interval, "UnboundedInterval"]) -> bool:
         no_overlap_high = (
             self.end is not None and other.start is not None and other.start >= self.end
         )
@@ -209,9 +211,10 @@ class UnboundedInterval(Interval):
         )
         return not (no_overlap_low or no_overlap_high)
 
-    def shifted(self, offset: Optional[int]) -> "Interval":
+    def shifted(self, offset: Optional[int]) -> "UnboundedInterval":
         if offset is None:
             return UnboundedInterval()
+
         start = (
             None
             if self.start is None
@@ -222,7 +225,7 @@ class UnboundedInterval(Interval):
             if self.end is None
             else AxisBound(level=self.end.level, offset=self.end.offset + offset)
         )
-        return UnboundedInterval(start=start, end=end)
+        return UnboundedInterval(start=start, end=end)  # type: ignore
 
     @classmethod
     def full(cls):

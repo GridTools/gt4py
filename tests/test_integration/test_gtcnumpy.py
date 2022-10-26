@@ -11,6 +11,10 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
+#
+
+import typing
+
 import numpy as np
 
 
@@ -22,8 +26,8 @@ def test_masked_vector_assignment():
     dtype = np.float64
 
     @stencil(BACKEND)
+    @typing.no_type_check
     def masked_vector_assignment(fld2D: Field[IJ, dtype]):
-
         with computation(FORWARD), interval(0, None):
             fld2D += fld2D
             if fld2D >= 1.0:

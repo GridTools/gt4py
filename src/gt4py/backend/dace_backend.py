@@ -17,7 +17,7 @@ import os
 import pathlib
 import re
 import textwrap
-from typing import TYPE_CHECKING, Dict, List, Optional, Tuple, Type
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Type
 
 import dace
 import dace.data
@@ -767,8 +767,6 @@ class BaseDaceBackend(BaseGTBackend, CLIBackendMixin):
     GT_BACKEND_T = "dace"
     PYEXT_GENERATOR_CLASS = DaCeExtGenerator  # type: ignore
 
-    options = BaseGTBackend.GT_BACKEND_OPTS
-
     def generate(self) -> Type["StencilObject"]:
         self.check_options(self.builder.options)
 
@@ -804,7 +802,7 @@ class DaceCPUBackend(BaseDaceBackend):
 
     options = BaseGTBackend.GT_BACKEND_OPTS
 
-    def generate_extension(self) -> Tuple[str, str]:
+    def generate_extension(self, **kwargs: Any) -> Tuple[str, str]:
         return self.make_extension(stencil_ir=self.builder.gtir, uses_cuda=False)
 
 
@@ -826,5 +824,5 @@ class DaceGPUBackend(BaseDaceBackend):
         "device_sync": {"versioning": True, "type": bool},
     }
 
-    def generate_extension(self) -> Tuple[str, str]:
+    def generate_extension(self, **kwargs: Any) -> Tuple[str, str]:
         return self.make_extension(stencil_ir=self.builder.gtir, uses_cuda=True)

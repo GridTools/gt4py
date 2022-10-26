@@ -151,9 +151,7 @@ class While(common.While[Stmt, Expr], Stmt):
     """While loop with a field or scalar expression as condition."""
 
     @validator("body")
-    def _no_write_and_read_with_horizontal_offset_all(
-        cls, body: List[Stmt]
-    ) -> RootValidatorValuesType:
+    def _no_write_and_read_with_horizontal_offset_all(cls, body: List[Stmt]) -> List[Stmt]:
         """In a while loop all variables must not be written and read with a horizontal offset."""
         if names := _written_and_read_with_offset(body):
             raise ValueError(f"Illegal write and read with horizontal offset detected for {names}.")
@@ -265,7 +263,7 @@ def _variablek_fieldaccess(node) -> bool:
 
 def _written_and_read_with_offset(
     stmts: List[Stmt],
-) -> RootValidatorValuesType:
+) -> Set[str]:
     """Return a list of names that are written to and read with offset."""
     # TODO(havogt): either move to eve or will be removed in the attr-based eve if a List[Node] is represented as a CollectionNode
     @utils.as_xiter

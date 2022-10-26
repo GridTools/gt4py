@@ -55,7 +55,7 @@ class CudaExtGenerator(BackendCodegen):
         cuir_node = extent_analysis.CacheExtents().visit(cuir_node)
         format_source = self.backend.builder.options.format_source
         implementation = cuir_codegen.CUIRCodegen.apply(cuir_node, format_source=format_source)
-        bindings = CudaBindingsCodegen.apply(
+        bindings = CudaBindingsCodegen.apply_codegen(
             cuir_node,
             module_name=self.module_name,
             backend=self.backend,
@@ -120,7 +120,7 @@ class CudaBindingsCodegen(codegen.TemplatedGenerator):
     Program = bindings_main_template()
 
     @classmethod
-    def apply(cls, root, *, module_name="stencil", backend, **kwargs) -> str:
+    def apply_codegen(cls, root, *, module_name="stencil", backend, **kwargs) -> str:
         generated_code = cls(backend).visit(root, module_name=module_name, **kwargs)
         if kwargs.get("format_source", True):
             generated_code = codegen.format_source("cpp", generated_code, style="LLVM")

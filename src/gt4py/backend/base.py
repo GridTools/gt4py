@@ -19,7 +19,7 @@ import os
 import pathlib
 import time
 import warnings
-from typing import TYPE_CHECKING, Any, Callable, ClassVar, Dict, List, Optional, Tuple, Type, Union
+from typing import TYPE_CHECKING, Any, ClassVar, Dict, List, Optional, Protocol, Tuple, Type, Union
 
 from gt4py import definitions as gt_definitions
 from gt4py import utils as gt_utils
@@ -305,6 +305,11 @@ class BaseBackend(Backend):
         return source
 
 
+class MakeModuleSourceCallable(Protocol):
+    def __call__(self, *, args_data: Optional[ModuleData] = None, **kwargs: Any) -> str:
+        ...
+
+
 class PurePythonBackendCLIMixin(CLIBackendMixin):
     """Mixin for CLI support for backends deriving from BaseBackend."""
 
@@ -314,11 +319,11 @@ class PurePythonBackendCLIMixin(CLIBackendMixin):
     #:  In order to use this mixin, the backend class must implement
     #:  a :py:meth:`make_module_source` method or derive from
     #:  :py:meth:`BaseBackend`.
-    make_module_source: Callable
+    make_module_source: MakeModuleSourceCallable
 
     def generate_computation(self) -> Dict[str, Union[str, Dict]]:
         file_name = self.builder.module_path.name
-        source = self.make_module_source(implementation_ir=self.builder.implementation_ir)
+        source = self.make_module_source(ir=self.builder.gtir)
         return {str(file_name): source}
 
     def generate_bindings(self, language_name: str) -> Dict[str, Union[str, Dict]]:

@@ -215,7 +215,7 @@ class BackendCodegen:
     TEMPLATE_FILES: Dict[str, str]
 
     @abc.abstractmethod
-    def __init__(self, class_name: str, module_name: str, backend: str):
+    def __init__(self, class_name: str, module_name: str, backend: Any):
         pass
 
     @abc.abstractmethod
@@ -226,7 +226,7 @@ class BackendCodegen:
 
 class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
 
-    GT_BACKEND_OPTS = {
+    GT_BACKEND_OPTS: Dict[str, Dict[str, Any]] = {
         "add_profile_info": {"versioning": True, "type": bool},
         "clean": {"versioning": False, "type": bool},
         "debug_mode": {"versioning": True, "type": bool},
@@ -280,6 +280,7 @@ class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
             stencil_ir = self.builder.gtir
         # Generate source
         gt_pyext_files: Dict[str, Any]
+        gt_pyext_sources: Dict[str, Any]
         if not self.builder.options._impl_opts.get("disable-code-generation", False):
             gt_pyext_files = self.make_extension_sources(stencil_ir=stencil_ir)
             gt_pyext_sources = {**gt_pyext_files["computation"], **gt_pyext_files["bindings"]}

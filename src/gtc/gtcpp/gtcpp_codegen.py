@@ -37,7 +37,7 @@ def _offset_limit(root: Node) -> int:
 
 class GTCppCodegen(codegen.TemplatedGenerator):
 
-    contexts = (SymbolTableTrait.symtable_merger,)
+    contexts = (SymbolTableTrait.symtable_merger,)  # type: ignore
 
     GTExtent = as_fmt("extent<{i[0]},{i[1]},{j[0]},{j[1]},{k[0]},{k[1]}>")
 

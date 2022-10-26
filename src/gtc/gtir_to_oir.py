@@ -84,7 +84,7 @@ class GTIRToOIR(NodeTranslator):
         )
 
     def visit_UnaryOp(self, node: gtir.UnaryOp) -> oir.UnaryOp:
-        return oir.UnaryOp(op=node.op, expr=self.visit(node.expr), loc=node.loc)
+        return oir.UnaryOp(op=node.op, expr=self.visit(node.expr), dtype=node.dtype, loc=node.loc)
 
     def visit_BinaryOp(self, node: gtir.BinaryOp) -> oir.BinaryOp:
         return oir.BinaryOp(

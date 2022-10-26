@@ -93,9 +93,17 @@ def mask_includes_inner_domain(mask: common.HorizontalMask):
     for interval in mask.intervals:
         if interval.start is None and interval.end is None:
             return True
-        elif interval.start is None and interval.end.level == common.LevelMarker.END:
+        elif (
+            interval.start is None
+            and interval.end is not None
+            and interval.end.level == common.LevelMarker.END
+        ):
             return True
-        elif interval.end is None and interval.start.level == common.LevelMarker.START:
+        elif (
+            interval.end is None
+            and interval.start is not None
+            and interval.start.level == common.LevelMarker.START
+        ):
             return True
         elif (
             interval.start is not None
@@ -144,8 +152,8 @@ class HorizontalExecutionSplitter(eve.NodeTranslator):
 
         res_hes = []
         for stmts in res_he_stmts:
-            accessed_scalars = set(
-                acc.name for acc in iter_tree(stmts).if_isinstance(oir.ScalarAccess)
+            accessed_scalars = (
+                iter_tree(stmts).if_isinstance(oir.ScalarAccess).getattr("name").to_set()
             )
             declarations = [decl for decl in node.declarations if decl.name in accessed_scalars]
             res_he = oir.HorizontalExecution(declarations=declarations, body=stmts)

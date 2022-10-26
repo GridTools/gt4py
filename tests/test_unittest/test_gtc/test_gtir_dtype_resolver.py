@@ -62,7 +62,7 @@ def resolve_dtype_and_validate(testee: Stencil, expected_dtypes: Dict[str, commo
     for name, _dtype in expected_dtypes.items():
         nodes = get_nodes_with_name_and_dtype(testee, name)
         assert len(nodes) > 0
-        assert any([node.dtype is None for node in nodes])
+        assert any([node.dtype is DataType.AUTO for node in nodes])
 
     result: Stencil = resolve_dtype(testee)
 
@@ -76,7 +76,10 @@ def test_resolve_dtype_to_FieldAccess():
     testee = StencilFactory(
         params=[FieldDeclFactory(name="field", dtype=A_ARITHMETIC_TYPE)],
         vertical_loops__0__body__0=ParAssignStmtFactory(
-            left__name="field", left__dtype=None, right__name="field", right__dtype=None
+            left__name="field",
+            left__dtype=DataType.AUTO,
+            right__name="field",
+            right__dtype=DataType.AUTO,
         ),
     )
     resolve_dtype_and_validate(
@@ -94,10 +97,10 @@ def test_resolve_dtype_to_FieldAccess_variable():
         ],
         vertical_loops__0__body__0=ParAssignStmtFactory(
             left__name="field_out",
-            left__dtype=None,
+            left__dtype=DataType.AUTO,
             right__name="field_in",
-            right__dtype=None,
-            right__offset=VariableKOffsetFactory(k__name="index", k__dtype=None),
+            right__dtype=DataType.AUTO,
+            right__offset=VariableKOffsetFactory(k__name="index", k__dtype=DataType.AUTO),
         ),
     )
     resolve_dtype_and_validate(
@@ -117,7 +120,7 @@ def test_resolve_AUTO_from_literal_to_temporary():
             body=[
                 ParAssignStmtFactory(
                     left__name="tmp",
-                    left__dtype=None,
+                    left__dtype=DataType.AUTO,
                     right=LiteralFactory(value="0", dtype=A_ARITHMETIC_TYPE),
                 )
             ],
@@ -133,7 +136,10 @@ def test_resolve_AUTO_from_FieldDecl_to_FieldAccess_to_temporary():
             temporaries=[FieldDeclFactory(name="tmp", dtype=DataType.AUTO)],
             body=[
                 ParAssignStmtFactory(
-                    left__name="tmp", left__dtype=None, right__name="field", right__dtype=None
+                    left__name="tmp",
+                    left__dtype=DataType.AUTO,
+                    right__name="field",
+                    right__dtype=DataType.AUTO,
                 )
             ],
         ),
@@ -151,10 +157,16 @@ def test_resolve_AUTO_from_FieldDecl_to_FieldAccess_to_temporary_to_FieldAccess_
             ],
             body=[
                 ParAssignStmtFactory(
-                    left__name="tmp1", left__dtype=None, right__name="field", right__dtype=None
+                    left__name="tmp1",
+                    left__dtype=DataType.AUTO,
+                    right__name="field",
+                    right__dtype=DataType.AUTO,
                 ),
                 ParAssignStmtFactory(
-                    left__name="tmp2", left__dtype=None, right__name="tmp1", right__dtype=None
+                    left__name="tmp2",
+                    left__dtype=DataType.AUTO,
+                    right__name="tmp1",
+                    right__dtype=DataType.AUTO,
                 ),
             ],
         ),

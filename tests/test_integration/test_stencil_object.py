@@ -14,6 +14,7 @@
 
 """Integration tests for StencilObjects."""
 
+import typing
 from typing import Any, Dict
 
 import pytest
@@ -29,6 +30,7 @@ from ..storage_test_utils import OriginWrapper
 @pytest.mark.parametrize("backend", ["numpy"])
 def test_stencil_object_cache(backend: str):
     @gtscript.stencil(backend=backend)
+    @typing.no_type_check
     def stencil(in_field: Field[float], out_field: Field[float], *, offset: float):
         with computation(PARALLEL), interval(...):
             out_field = (  # noqa: F841 # local variable 'out_field' is assigned to but never used

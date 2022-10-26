@@ -140,6 +140,7 @@ repos:
       src/gt4py/frontend/nodes.py |
       src/gt4py/frontend/node_util.py |
       src/gt4py/frontend/gtscript_frontend.py |
+      src/gt4py/frontend/defir_to_gtir.py |
       src/gt4py/utils/meta.py |
       tests/definitions.py |
       tests/definition_setup.py |

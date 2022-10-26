@@ -66,10 +66,10 @@ def mask_overlap_with_extent(
 
 def _compute_relative_interval(
     extent: Tuple[int, int], interval: common.HorizontalInterval
-) -> Optional[common.HorizontalInterval]:
+) -> Optional[Tuple[common.AxisBound, common.AxisBound]]:
     def _offset(
         extent: Tuple[int, int], bound: Optional[common.AxisBound], start: bool = True
-    ) -> Tuple[common.LevelMarker, int]:
+    ) -> int:
         if bound:
             if start:
                 if bound.level == common.LevelMarker.START:
@@ -86,12 +86,12 @@ def _compute_relative_interval(
         return offset
 
     return (
-        common.HorizontalInterval(
-            start=common.AxisBound(
+        (
+            common.AxisBound(
                 level=interval.start.level if interval.start else common.LevelMarker.START,
                 offset=_offset(extent, interval.start, start=True),
             ),
-            end=common.AxisBound(
+            common.AxisBound(
                 level=interval.end.level if interval.end else common.LevelMarker.END,
                 offset=_offset(extent, interval.end, start=False),
             ),
@@ -103,7 +103,9 @@ def _compute_relative_interval(
 
 def compute_relative_mask(
     extent: Extent, mask: common.HorizontalMask
-) -> Optional[common.HorizontalMask]:
+) -> Optional[
+    Tuple[Tuple[common.AxisBound, common.AxisBound], Tuple[common.AxisBound, common.AxisBound]]
+]:
     """
     Output a HorizontalMask that is relative to and always inside the extent instead of the compute domain.
 
@@ -114,4 +116,4 @@ def compute_relative_mask(
     i_interval = _compute_relative_interval(extent[0], mask.i)
     j_interval = _compute_relative_interval(extent[1], mask.j)
 
-    return common.HorizontalMask(i=i_interval, j=j_interval) if i_interval and j_interval else None
+    return (i_interval, j_interval) if i_interval and j_interval else None

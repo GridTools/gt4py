@@ -61,7 +61,7 @@ class StencilBuilder:
         *,
         backend: Optional[Union[str, Type["BackendType"]]] = None,
         options: Optional[BuildOptions] = None,
-        frontend: Optional["FrontendType"] = None,
+        frontend: Optional[Type["FrontendType"]] = None,
     ):
         self._definition = definition_func
         # type ignore explanation: Attribclass generated init not recognized by mypy
@@ -70,9 +70,17 @@ class StencilBuilder:
         )
         backend = backend or "numpy"
         backend = gt4py.backend.from_name(backend) if isinstance(backend, str) else backend
+        if backend is None:
+            raise RuntimeError(f"Unknown backend: {backend}")
+
+        frontend = frontend or gt4py.frontend.from_name("gtscript")
+        if frontend is None:
+            raise RuntimeError(f"Unknown frontend: {frontend}")
+
         self.backend: "BackendType" = backend(self)
-        self.frontend: "FrontendType" = frontend or gt4py.frontend.from_name("gtscript")
+        self.frontend: Type["FrontendType"] = frontend
         self.caching = gt4py.caching.strategy_factory("jit", self, **self.options.cache_settings)
+
         self._build_data: Dict[str, Any] = {}
         self._externals: Dict[str, Any] = {}
 
@@ -167,7 +175,9 @@ class StencilBuilder:
 
         """
         self._build_data = {}
-        self.backend = gt4py.backend.from_name(backend_name)(self)
+        backend = gt4py.backend.from_name(backend_name)
+        assert backend is not None
+        self.backend = backend(self)
         return self
 
     @classmethod

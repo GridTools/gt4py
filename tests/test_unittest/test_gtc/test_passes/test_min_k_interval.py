@@ -11,8 +11,9 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-
 # flake8: noqa: F841
+
+import typing
 from typing import Any, Callable, List, Tuple, TypedDict
 
 import numpy as np
@@ -47,24 +48,28 @@ def register_test_case(*, k_bounds, min_k_size):
 
 # stencils with no extent
 @register_test_case(k_bounds=(0, 0), min_k_size=0)
+@typing.no_type_check
 def stencil_no_extent_0(field_a: gs.Field[float], field_b: gs.Field[float]):
     with computation(PARALLEL), interval(...):
         field_a = field_b[0, 0, 0]
 
 
 @register_test_case(k_bounds=(max(0, -2), 0), min_k_size=2)
+@typing.no_type_check
 def stencil_no_extent_1(field_a: gs.Field[float], field_b: gs.Field[float]):
     with computation(PARALLEL), interval(0, 2):
         field_a = field_b[0, 0, 0]
 
 
 @register_test_case(k_bounds=(max(-1, -2), 0), min_k_size=2)
+@typing.no_type_check
 def stencil_no_extent_2(field_a: gs.Field[float], field_b: gs.Field[float]):
     with computation(PARALLEL), interval(1, 2):
         field_a = field_b[0, 0, 0]
 
 
 @register_test_case(k_bounds=(max(max(0, -2), max(-2, -2)), 0), min_k_size=3)
+@typing.no_type_check
 def stencil_no_extent_3(field_a: gs.Field[float], field_b: gs.Field[float]):
     with computation(PARALLEL), interval(0, 2):
         field_a = field_b[0, 0, 0]
@@ -75,12 +80,14 @@ def stencil_no_extent_3(field_a: gs.Field[float], field_b: gs.Field[float]):
 
 
 @register_test_case(k_bounds=(0, max(-1, 0)), min_k_size=1)
+@typing.no_type_check
 def stencil_no_extent_4(field_a: gs.Field[float], field_b: gs.Field[float]):
     with computation(PARALLEL), interval(-1, None):
         field_a = field_b[0, 0, 0]
 
 
 @register_test_case(k_bounds=(max(0, -1), max(-2, 0)), min_k_size=3)
+@typing.no_type_check
 def stencil_no_extent_5(field_a: gs.Field[float], field_b: gs.Field[float]):
     with computation(PARALLEL), interval(0, 1):
         field_a = field_b[0, 0, 0]
@@ -90,24 +97,28 @@ def stencil_no_extent_5(field_a: gs.Field[float], field_b: gs.Field[float]):
 
 # stencils with extent
 @register_test_case(k_bounds=(5, -5), min_k_size=0)
+@typing.no_type_check
 def stencil_with_extent_0(field_a: gs.Field[float], field_b: gs.Field[float]):
     with computation(PARALLEL), interval(...):
         field_a = field_b[0, 0, -5]
 
 
 @register_test_case(k_bounds=(4, 0), min_k_size=2)
+@typing.no_type_check
 def stencil_with_extent_1(field_a: gs.Field[float], field_b: gs.Field[float]):
     with computation(PARALLEL), interval(1, 2):
         field_a = field_b[0, 0, -5]
 
 
 @register_test_case(k_bounds=(-6, 0), min_k_size=2)
+@typing.no_type_check
 def stencil_with_extent_2(field_a: gs.Field[float], field_b: gs.Field[float]):
     with computation(PARALLEL), interval(1, 2):
         field_a = field_b[0, 0, 5]
 
 
 @register_test_case(k_bounds=(3, -3), min_k_size=3)
+@typing.no_type_check
 def stencil_with_extent_3(field_a: gs.Field[float], field_b: gs.Field[float]):
     with computation(PARALLEL), interval(0, 2):
         field_a = field_b[0, 0, -1]
@@ -118,6 +129,7 @@ def stencil_with_extent_3(field_a: gs.Field[float], field_b: gs.Field[float]):
 
 
 @register_test_case(k_bounds=(-5, 5), min_k_size=1)
+@typing.no_type_check
 def stencil_with_extent_4(field_a: gs.Field[float], field_b: gs.Field[float]):
     with computation(PARALLEL), interval(0, -1):
         field_a = field_b[0, 0, 5]
@@ -126,6 +138,7 @@ def stencil_with_extent_4(field_a: gs.Field[float], field_b: gs.Field[float]):
 
 
 @register_test_case(k_bounds=(5, -5), min_k_size=3)
+@typing.no_type_check
 def stencil_with_extent_5(field_a: gs.Field[float], field_b: gs.Field[float]):
     with computation(PARALLEL), interval(0, 1):
         field_a = field_b[0, 0, -5]
@@ -134,6 +147,7 @@ def stencil_with_extent_5(field_a: gs.Field[float], field_b: gs.Field[float]):
 
 
 @register_test_case(k_bounds=(5, 3), min_k_size=2)
+@typing.no_type_check
 def stencil_with_extent_6(field_a: gs.Field[float], field_b: gs.Field[float]):
     with computation(PARALLEL), interval(0, 1):
         field_a = field_b[0, 0, -5] + field_b[0, 0, 3]
@@ -210,12 +224,14 @@ def test_k_bounds_exec(definition, expected):
             )
 
 
+@typing.no_type_check
 def stencil_with_invalid_temporary_access_start(field_a: gs.Field[float], field_b: gs.Field[float]):
     with computation(PARALLEL), interval(...):
         tmp = field_b[0, 0, 0]
         field_a = tmp[0, 0, -1]
 
 
+@typing.no_type_check
 def stencil_with_invalid_temporary_access_end(field_a: gs.Field[float], field_b: gs.Field[float]):
     with computation(PARALLEL), interval(...):
         tmp = field_b[0, 0, 0]

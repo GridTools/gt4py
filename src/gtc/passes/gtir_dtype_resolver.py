@@ -29,7 +29,7 @@ class _GTIRResolveAuto(NodeTranslator):
     Postcondition: All dtypes are concrete (no AUTO)
     """
 
-    contexts = (SymbolTableTrait.symtable_merger,)
+    contexts = (SymbolTableTrait.symtable_merger,)  # type: ignore
 
     class _GTIRUpdateAutoDecl(NodeTranslator):
         """Updates FieldDecls with resolved types."""
@@ -87,7 +87,7 @@ class _GTIRPropagateDtypeToAccess(NodeTranslator):
     Postcondition: All dtypes of Access are not None
     """
 
-    contexts = (SymbolTableTrait.symtable_merger,)
+    contexts = (SymbolTableTrait.symtable_merger,)  # type: ignore
 
     def visit_FieldAccess(self, node: gtir.FieldAccess, **kwargs: Any) -> gtir.FieldAccess:
         return gtir.FieldAccess(

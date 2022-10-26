@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from gt4py import backend as gt_backend
+import gt4py.backend
 from gt4py import gtscript
 from gt4py import storage as gt_storage
 
@@ -16,7 +16,9 @@ except ImportError:
 
 
 def _get_array_library(backend: str):
-    if gt_backend.from_name(backend).storage_info["device"] == "gpu":
+    backend_cls = gt4py.backend.from_name(backend)
+    assert backend_cls is not None
+    if backend_cls.storage_info["device"] == "gpu":
         assert cp is not None
         return cp
     else:
@@ -40,7 +42,8 @@ def test_numpy_allocators(backend, order):
 @pytest.mark.parametrize("backend", PERFORMANCE_BACKENDS)
 def test_bad_layout_warns(backend):
     xp = _get_array_library(backend)
-    backend_type = gt_backend.from_name(backend)
+    backend_cls = gt4py.backend.from_name(backend)
+    assert backend_cls is not None
 
     shape = (10, 10, 10)
 
@@ -48,7 +51,7 @@ def test_bad_layout_warns(backend):
     outp = gt_storage.zeros(backend=backend, shape=shape, dtype=xp.float_, aligned_index=(0, 0, 0))
 
     # set up non-optimal storage layout:
-    if backend_type.storage_info["is_optimal_layout"](inp, "IJK"):
+    if backend_cls.storage_info["is_optimal_layout"](inp, "IJK"):
         # permute in a circular manner
         inp = xp.transpose(inp, axes=(1, 2, 0))
 

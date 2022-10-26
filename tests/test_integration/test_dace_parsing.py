@@ -14,6 +14,7 @@
 
 import pathlib
 import re
+import typing
 
 import hypothesis.strategies as hyp_st
 import numpy as np
@@ -444,6 +445,7 @@ def test_nondace_raises(decorator):
         call_stencil()
 
 
+@typing.no_type_check
 def simple_stencil_defn(outp: gtscript.Field[np.float64], par: np.float64):
     with computation(PARALLEL), interval(...):
         outp = par  # noqa F841: local variable 'outp' is assigned to but never used

@@ -28,7 +28,7 @@ from gtc.dace.utils import get_axis_bound_str, make_dace_subset
 
 
 class TaskletCodegen(codegen.TemplatedGenerator):
-    contexts = (eve.SymbolTableTrait.symtable_merger,)
+    contexts = (eve.SymbolTableTrait.symtable_merger,)  # type: ignore
 
     ScalarAccess = as_fmt("{name}")
 
@@ -251,6 +251,8 @@ class TaskletCodegen(codegen.TemplatedGenerator):
             if (
                 min_val
                 and max_val
+                and interval.start is not None
+                and interval.end is not None
                 and interval.start.level == interval.end.level
                 and interval.start.offset + 1 == interval.end.offset
             ):
@@ -264,7 +266,9 @@ class TaskletCodegen(codegen.TemplatedGenerator):
         return " and ".join(clauses)
 
     @classmethod
-    def apply(cls, node: dcir.Tasklet, **kwargs: Any) -> str:
+    def apply_codegen(cls, node: dcir.Tasklet, **kwargs: Any) -> str:
+        # NOTE This is not named 'apply' b/c the base class has a method with
+        # that name and a different type signature.
         if not isinstance(node, dcir.Tasklet):
             raise ValueError("apply() requires dcir.Tasklet node")
         return super().apply(node, **kwargs)

@@ -28,6 +28,14 @@ class AxisName(eve.StrEnum):
     K = "K"
 
 
+# NOTE HorizontalMask in npir differs from common.HorizontalMask:
+# - They are expressed relative to the iteration domain of the statement
+# - Each axis is a tuple of two common.AxisBound instead of common.HorizontalInterval
+class HorizontalMask(eve.Node):
+    i: Tuple[common.AxisBound, common.AxisBound]
+    j: Tuple[common.AxisBound, common.AxisBound]
+
+
 # --- Decls ---
 @eve.utils.noninstantiable
 class Decl(eve.Node):
@@ -175,7 +183,8 @@ class Stmt(eve.Node):
 class VectorAssign(common.AssignStmt[VectorLValue, Expr], Stmt):
     left: VectorLValue
     right: Expr
-    horizontal_mask: Optional[common.HorizontalMask] = None
+    # NOTE HorizontalMask in npir differs from common.HorizontalMask (see above)
+    horizontal_mask: Optional[HorizontalMask] = None
 
     @validator("right")
     def right_is_field_kind(cls, right: Expr) -> Expr:

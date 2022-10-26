@@ -23,31 +23,31 @@ import datetime
 
 import pytest
 
-from gt4py import backend as gt_backend
+import gt4py.backend
 from gt4py import utils as gt_utils
 
 
 def _backend_name_as_param(name):
     marks = []
-    if gt_backend.from_name(name).storage_info["device"] == "gpu":
+    if gt4py.backend.from_name(name).storage_info["device"] == "gpu":
         marks.append(pytest.mark.requires_gpu)
     if "dace" in name:
         marks.append(pytest.mark.requires_dace)
     return pytest.param(name, marks=marks)
 
 
-_ALL_BACKEND_NAMES = list(gt_backend.REGISTRY.keys())
+_ALL_BACKEND_NAMES = list(gt4py.backend.REGISTRY.keys())
 
 
 CPU_BACKENDS = [
     _backend_name_as_param(name)
     for name in _ALL_BACKEND_NAMES
-    if gt_backend.from_name(name).storage_info["device"] == "cpu"
+    if gt4py.backend.from_name(name).storage_info["device"] == "cpu"
 ]
 GPU_BACKENDS = [
     _backend_name_as_param(name)
     for name in _ALL_BACKEND_NAMES
-    if gt_backend.from_name(name).storage_info["device"] == "gpu"
+    if gt4py.backend.from_name(name).storage_info["device"] == "gpu"
 ]
 ALL_BACKENDS = CPU_BACKENDS + GPU_BACKENDS
 
