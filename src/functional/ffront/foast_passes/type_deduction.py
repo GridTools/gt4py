@@ -255,40 +255,56 @@ class FieldOperatorTypeDeduction(NodeTranslator, traits.VisitorWithSymbolTableTr
     def visit_MultiTargetAssign(
         self, node: foast.MultiTargetAssign, **kwargs
     ) -> foast.MultiTargetAssign:
-        targets = []
-        new_value = self.visit(node.value, **kwargs)
-        traversed_values = []
+        targets = node.targets
+        values = self.visit(node.value, **kwargs)
+        indices = list(range(len(targets)))
 
-        for idx, elt in enumerate(node.targets):
+        for idx, elt in enumerate(targets):
             if isinstance(elt, foast.Star):
                 break
-            new_type = new_value.elts[idx].type
-            new_target = self.visit(elt, refine_type=new_type, location=node.location, **kwargs)
-            traversed_values.append(idx)
-            targets.append(new_target)
+            indices[idx] = idx
 
-        for idx, elt in reversed(list(enumerate(node.targets))):
-            idx_rel_to_val = idx - len(node.targets)
-
-            # todo: make sure order is correct
+        for idx, elt in reversed(list(enumerate(targets))):
+            rel_idx = idx - len(node.targets)
             if isinstance(elt, foast.Star):
-                accessed = set([idx % len(new_value.elts) for idx in traversed_values])
-                remaining = set(range(len(new_value.elts))).difference(accessed)
-                rem_elts = []
-                for i in remaining:
-                    rem_elts.append(self.visit(new_value.elts[i], **kwargs).type)
-
-                new_type = TupleType(types=rem_elts)
-                new_target = foast.Star(id=foast.DataSymbol(id=elt.id.id, location=elt.location, type=new_type), type=new_type, location=elt.location)
-                new_target = self.visit(new_target, refine_type=new_type, location=node.location, **kwargs)
-                targets.append(new_target)
+                star_lower, star_upper = max(indices), min(indices)
+                indices[idx] = (star_lower, star_upper)
                 break
-            new_type = new_value.elts[idx_rel_to_val].type
-            new_target = self.visit(elt, refine_type=new_type, location=node.location, **kwargs)
-            traversed_values.append(idx_rel_to_val)
-            targets.append(new_target)
+            indices[idx] = rel_idx
 
-        mta = foast.MultiTargetAssign(targets=targets, value=new_value, location=node.location)
+        if not any(isinstance(i, tuple) for i in indices) and len(indices) != len(values.elts):
+            raise ValueError(f"Too many values to unpack (expected {len(indices)}).")
+
+        new_target_list = []
+        for i, index in enumerate(indices):
+
+            old_target = targets[i]
+
+            if isinstance(index, tuple):
+                lower, upper = index[0], index[1]
+                new_type = TupleType(
+                    types=[t.type for t in self.visit(values.elts[lower:upper], **kwargs)]
+                )
+                new_target = foast.Star(
+                    id=foast.DataSymbol(
+                        id=old_target.id.id, location=old_target.location, type=new_type
+                    ),
+                    type=new_type,
+                    location=old_target.location,
+                )
+            else:
+                # we reassign normally
+                new_type = values.elts[index].type
+                new_target = self.visit(
+                    old_target, refine_type=new_type, location=old_target.location, **kwargs
+                )
+
+            new_target = self.visit(
+                new_target, refine_type=new_type, location=old_target.location, **kwargs
+            )
+            new_target_list.append(new_target)
+
+        mta = foast.MultiTargetAssign(targets=new_target_list, value=values, location=node.location)
         return mta
 
     def visit_Symbol(
