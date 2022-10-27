@@ -64,11 +64,6 @@ def test_hdiff(hdiff_reference, program_processor, lift_mode):
     program_processor, validate = program_processor
     if program_processor == run_gtfn:
         pytest.xfail("origin not yet supported in gtfn")
-    if lift_mode == transforms.LiftMode.FORCE_TEMPORARIES and program_processor in (
-        roundtrip.executor,
-        double_roundtrip.executor,
-    ):
-        pytest.xfail("there is a bug")
 
     inp, coeff, out = hdiff_reference
     shape = (out.shape[0], out.shape[1])
