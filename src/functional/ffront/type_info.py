@@ -269,21 +269,24 @@ def is_not_empty_field_compatible(
     ...     ct.FieldType(dims=[], dtype=ct.ScalarType(ct.ScalarKind.FLOAT64)),
     ...     ct.FieldType(dims=[Dimension(value="I")], dtype=ct.ScalarType(ct.ScalarKind.FLOAT64))
     ... )
-    False
+    True
 
     >>> is_not_empty_field_compatible(
     ...     ct.FieldType(dims=[], dtype=ct.ScalarType(ct.ScalarKind.INT64)),
     ...     ct.ScalarType(kind=ct.ScalarKind.FLOAT64)
     ... )
-    False
+    True
 
     """
-    if isinstance(a_type, ct.FieldType) and len(a_type.dims) == 0:
-        if extract_dtype(a_type) != extract_dtype(b_type) and (
-            (isinstance(b_type, ct.FieldType) and len(b_type.dims) != 0)
-            or not is_arithmetic(b_type)
-        ):
-            return False
+    if not (isinstance(a_type, ct.FieldType) and len(a_type.dims) == 0):
+        return True
+    elif not (
+        (isinstance(b_type, ct.FieldType) and (len(b_type.dims) == 0)) or is_arithmetic(b_type)
+    ):
+        return True
+    elif extract_dtype(a_type) != extract_dtype(b_type):
+        return True
+    return False
 
 
 def promote(*types: ct.FieldType | ct.ScalarType) -> ct.FieldType | ct.ScalarType:
