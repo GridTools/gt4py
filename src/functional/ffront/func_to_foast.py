@@ -166,7 +166,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             closure_var_symbols.append(
                 foast.Symbol(
                     id=name,
-                    type=ct.DeferredSymbolType(constraint=ct.SymbolType),
+                    type=ct.DeferredSymbolType(constraint=None),
                     namespace=ct.Namespace.CLOSURE,
                     location=self._make_loc(node),
                 )
