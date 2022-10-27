@@ -17,6 +17,8 @@ from typing import (
     Optional,
     Protocol,
     Sequence,
+    SupportsFloat,
+    SupportsInt,
     TypeAlias,
     TypeGuard,
     Union,
@@ -26,6 +28,7 @@ from typing import (
 import numpy as np
 import numpy.typing as npt
 
+from eve import extended_typing as xtyping
 from functional import iterator
 from functional.common import Connectivity, Dimension, DimensionKind
 from functional.iterator import builtins
@@ -48,6 +51,7 @@ FieldAxis: TypeAlias = (
 )  # TODO Offset should be removed, is sometimes used for sparse dimensions
 TupleAxis: TypeAlias = NoneType
 Axis: TypeAlias = FieldAxis | TupleAxis
+Scalar: TypeAlias = SupportsInt | SupportsFloat | np.int32 | np.int64 | np.float32 | np.float64
 
 
 class SparseTag(Tag):
@@ -430,6 +434,24 @@ def greater_equal(first, second):
 @builtins.not_eq.register(EMBEDDED)
 def not_eq(first, second):
     return first != second
+
+
+CompositeOfScalarOrField: TypeAlias = Scalar | LocatedField | tuple["CompositeOfScalarOrField", ...]
+
+
+def promote_scalars(val: CompositeOfScalarOrField):
+    """Given a scalar, field or composite thereof promote all (contained) scalars to fields."""
+    if isinstance(val, tuple):
+        return tuple(promote_scalars(el) for el in val)
+    val_type = xtyping.infer_type(val)
+    if np.issubdtype(val_type, np.number):
+        return constant_field(val)
+    elif np.issubdtype(val_type, LocatedField):
+        return val
+    else:
+        raise ValueError(
+            f"Expected a `Field` or a number (`float`, `np.int64`, ...), but got {val_type}."
+        )
 
 
 for math_builtin_name in builtins.MATH_BUILTINS:
@@ -896,7 +918,9 @@ class ConstantField(LocatedField):
         return ()
 
 
-def constant_field(value: Any, dtype: npt.DTypeLike = float) -> LocatedField:
+def constant_field(value: Any, dtype: npt.DTypeLike = None) -> LocatedField:
+    if dtype is None:
+        dtype = xtyping.infer_type(value)
     return ConstantField(value, dtype)
 
 
@@ -945,6 +969,10 @@ def is_located_field(field: Any) -> bool:
     return isinstance(field, LocatedField)  # TODO(havogt): avoid isinstance on Protocol
 
 
+def is_constant_field(field: Any) -> bool:
+    return field.value is not None and field.dtype is not None
+
+
 def has_uniform_tuple_element(field) -> bool:
     return field.dtype.fields is not None and all(
         next(iter(field.dtype.fields))[0] == f[0] for f in iter(field.dtype.fields)
@@ -958,7 +986,11 @@ def is_tuple_of_field(field) -> bool:
 
 
 def is_field_of_tuple(field) -> bool:
-    return is_located_field(field) and has_uniform_tuple_element(field)
+    return (
+        is_located_field(field) and is_constant_field(field)
+        if isinstance(field, ConstantField)
+        else has_uniform_tuple_element(field)
+    )
 
 
 def can_be_tuple_field(field) -> bool:
@@ -1103,6 +1135,7 @@ def fendef_embedded(fun: Callable[..., None], *args: Any, **kwargs: Any):
         out = as_tuple_field(out) if can_be_tuple_field(out) else out
 
         for pos in _domain_iterator(domain):
+            promoted_ins = [promote_scalars(inp) for inp in ins]
             ins_iters = list(
                 make_in_iterator(
                     inp,
@@ -1110,16 +1143,17 @@ def fendef_embedded(fun: Callable[..., None], *args: Any, **kwargs: Any):
                     kwargs["offset_provider"],
                     column_axis=column.axis if column else None,
                 )
-                if not isinstance(inp, numbers.Number)
-                else inp
-                for inp in ins
+                for inp in promoted_ins
             )
             res = sten(*ins_iters)
 
             if column is None:
                 assert _is_concrete_position(pos)
-                ordered_indices = get_ordered_indices(out.axes, pos)
-                out[ordered_indices] = res
+                if isinstance(out, ConstantField):
+                    out.value = res
+                else:
+                    ordered_indices = get_ordered_indices(out.axes, pos)
+                    out[ordered_indices] = res
             else:
                 col_pos = pos.copy()
                 for k in column.col_range:

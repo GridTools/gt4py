@@ -286,8 +286,6 @@ def test_no_implicit_broadcast_in_field_op_call():
     FieldOperatorParser.apply_to_function(no_implicit_broadcast_in_field_op_call_caller)
 
 
-# TODO implement
-# TODO add execution test
 def test_implicit_broadcast_in_field_op_call():
     """See ADR 11."""
 

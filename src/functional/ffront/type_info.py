@@ -485,7 +485,12 @@ def function_signature_incompatibilities_func(
     if len(func_type.args) != len(args):
         yield f"Function takes {len(func_type.args)} argument(s), but {len(args)} were given."
     for i, (a_arg, b_arg) in enumerate(zip(func_type.args, args)):
-        if a_arg != b_arg and not is_concretizable(a_arg, to_type=b_arg):
+        if (
+            not isinstance(a_arg, ct.ScalarType)
+            and not isinstance(b_arg, ct.ScalarType)
+            and a_arg != b_arg
+            and not is_concretizable(a_arg, to_type=b_arg)
+        ):
             yield f"Expected {i}-th argument to be of type {a_arg}, but got {b_arg}."
 
     # check for missing or extra keyword arguments
@@ -507,6 +512,11 @@ def function_signature_incompatibilities_func(
 def function_signature_incompatibilities_fieldop(
     fieldop_type: ct.FieldOperatorType, args: list[ct.SymbolType], kwargs: dict[str, ct.SymbolType]
 ) -> Iterator[str]:
+    # this should pass in case of scalar and field expectation
+    # paste code from function_signature_incompatibilities_func and edit it accordingly
+    # ugly solution, but make it work first
+    # check deref in lowering and distinguish between field and scalar, in the latter use lift lambda
+
     yield from function_signature_incompatibilities_func(fieldop_type.definition, args, kwargs)
 
 

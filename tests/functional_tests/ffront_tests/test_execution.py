@@ -1230,3 +1230,27 @@ def test_undefined_symbols():
         @field_operator
         def return_undefined():
             return undefined_symbol
+
+
+def test_implicit_broadcast():
+    out = np_as_located_field()(np.array(0.0))
+    inp_val = 1.0
+
+    @field_operator
+    def fieldop_implicit_broadcast(scalar: Field[[], float]) -> Field[[], float]:
+        return scalar
+
+    fieldop_implicit_broadcast(inp_val, out=out, offset_provider={})
+    assert out == np.asarray(inp_val)
+
+    inp_val = 2.0
+
+    @program
+    def program_implicit_broadcast(
+        scalar: Field[[], float], out: Field[[], float]
+    ) -> Field[[], float]:
+        fieldop_implicit_broadcast(scalar, out=out)
+
+    program_implicit_broadcast(inp_val, out, offset_provider={})
+
+    assert out == np.asarray(inp_val)
