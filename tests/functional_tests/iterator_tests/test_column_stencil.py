@@ -276,7 +276,7 @@ def test_different_vertical_sizes(program_processor):
     inp0 = np_as_located_field(KDim)(np.asarray(list(range(k_size))))
     inp1 = np_as_located_field(KDim)(np.asarray(list(range(k_size + 1))))
     out = np_as_located_field(KDim)(np.zeros(k_size))
-    ref = inp0 + inp1
+    ref = inp0 + inp1[1:]
 
     run_processor(
         sum_shifted_fencil,

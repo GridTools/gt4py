@@ -881,15 +881,12 @@ def np_as_located_field(
         def getter(indices):
             return a[_shift_slices(indices, offsets) if offsets else indices]
 
-        def sliced_array():
-            return a[_shift_slices((slice(None),) * len(axes), offsets)]
-
         return LocatedFieldImpl(
             getter,
             axes,
             dtype=a.dtype,
             setter=setter,
-            array=sliced_array if offsets else a.__array__,
+            array=a.__array__,
         )
 
     return _maker
