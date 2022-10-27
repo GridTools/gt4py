@@ -1154,11 +1154,8 @@ def fendef_embedded(fun: Callable[..., None], *args: Any, **kwargs: Any):
 
             if column is None:
                 assert _is_concrete_position(pos)
-                if isinstance(out, ConstantField):
-                    out.value = res
-                else:
-                    ordered_indices = get_ordered_indices(out.axes, pos)
-                    out[ordered_indices] = res
+                ordered_indices = get_ordered_indices(out.axes, pos)
+                out[ordered_indices] = res
             else:
                 col_pos = pos.copy()
                 for k in column.col_range:
