@@ -2,11 +2,9 @@ import numpy as np
 import pytest
 
 from functional.common import Dimension
-from functional.iterator import transforms
 from functional.iterator.builtins import *
 from functional.iterator.embedded import np_as_located_field
 from functional.iterator.runtime import closure, fendef, fundef, offset
-from functional.program_processors.runners import double_roundtrip, roundtrip
 from functional.program_processors.runners.gtfn_cpu import run_gtfn
 
 from .conftest import run_processor
