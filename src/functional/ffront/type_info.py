@@ -255,6 +255,37 @@ def is_concretizable(symbol_type: ct.SymbolType, to_type: ct.SymbolType) -> bool
     return False
 
 
+def is_not_empty_field_compatible(
+    a_type: ct.FieldType, b_type: ct.FieldType | ct.ScalarType
+) -> bool:
+    """
+    Check if first argument is an empty field and whether second is either another emtpy field or a scalar.
+
+    In both cases, arguments dtypes have to be the same
+
+    Examples:
+    ---------
+    >>> is_not_empty_field_compatible(
+    ...     ct.FieldType(dims=[], dtype=ct.ScalarType(ct.ScalarKind.FLOAT64)),
+    ...     ct.FieldType(dims=[Dimension(value="I")], dtype=ct.ScalarType(ct.ScalarKind.FLOAT64))
+    ... )
+    False
+
+    >>> is_not_empty_field_compatible(
+    ...     ct.FieldType(dims=[], dtype=ct.ScalarType(ct.ScalarKind.INT64)),
+    ...     ct.ScalarType(kind=ct.ScalarKind.FLOAT64)
+    ... )
+    False
+
+    """
+    if isinstance(a_type, ct.FieldType) and len(a_type.dims) == 0:
+        if extract_dtype(a_type) != extract_dtype(b_type) and (
+            (isinstance(b_type, ct.FieldType) and len(b_type.dims) != 0)
+            or not is_arithmetic(b_type)
+        ):
+            return False
+
+
 def promote(*types: ct.FieldType | ct.ScalarType) -> ct.FieldType | ct.ScalarType:
     """
     Promote a set of field or scalar types to a common type.
@@ -477,9 +508,8 @@ def function_signature_incompatibilities_func(
         yield f"Function takes {len(func_type.args)} argument(s), but {len(args)} were given."
     for i, (a_arg, b_arg) in enumerate(zip(func_type.args, args)):
         if (
-            not isinstance(a_arg, ct.ScalarType)
-            and not isinstance(b_arg, ct.ScalarType)
-            and a_arg != b_arg
+            a_arg != b_arg
+            and is_not_empty_field_compatible(a_arg, b_arg)
             and not is_concretizable(a_arg, to_type=b_arg)
         ):
             yield f"Expected {i}-th argument to be of type {a_arg}, but got {b_arg}."
