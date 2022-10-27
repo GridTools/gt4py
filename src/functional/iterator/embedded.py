@@ -844,22 +844,25 @@ def get_ordered_indices(
 
 
 def _shift_slice(
-    slice_or_index: slice | numbers.Integral, offset: numbers.Integral
+    slice_or_index: slice | numbers.Integral, offset: numbers.Integral, size: numbers.Integral
 ) -> slice | numbers.Integral:
     if isinstance(slice_or_index, slice):
         assert slice_or_index.step is None
         return slice(
-            0 if slice_or_index.start is None else slice_or_index.start + offset, None
-        )  # TODO stop == None unconditionally looks wrong
+            0 if slice_or_index.start is None else slice_or_index.start + offset,
+            None if slice_or_index.stop is None else min(slice_or_index.stop + offset, size),
+        )
     else:
         assert isinstance(slice_or_index, numbers.Integral)
         return slice_or_index + offset
 
 
 def _shift_slices(
-    slices_or_indices: tuple[slice | numbers.Integral], offsets: tuple[numbers.Integral]
+    slices_or_indices: tuple[slice | numbers.Integral],
+    offsets: tuple[numbers.Integral],
+    shape: tuple[numbers.Integral],
 ) -> tuple[slice | numbers.Integral]:
-    return tuple(_shift_slice(*i) for i in zip(slices_or_indices, offsets))
+    return tuple(_shift_slice(*i) for i in zip(slices_or_indices, offsets, shape))
 
 
 def np_as_located_field(
@@ -876,10 +879,10 @@ def np_as_located_field(
 
         def setter(indices, value):
             indices = tupelize(indices)
-            a[_shift_slices(indices, offsets) if offsets else indices] = value
+            a[_shift_slices(indices, offsets, a.shape) if offsets else indices] = value
 
         def getter(indices):
-            return a[_shift_slices(indices, offsets) if offsets else indices]
+            return a[_shift_slices(indices, offsets, a.shape) if offsets else indices]
 
         return LocatedFieldImpl(
             getter,

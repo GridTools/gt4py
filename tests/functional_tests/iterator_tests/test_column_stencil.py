@@ -294,7 +294,7 @@ def test_different_vertical_sizes(program_processor):
 
 @fundef
 def sum(inp0, inp1):
-    return deref(inp0) + deref(inp1)
+    return deref(inp0) + deref(shift(K, -1)(inp1))
 
 
 @fendef(column_axis=KDim)
@@ -316,7 +316,7 @@ def test_different_vertical_sizes_with_origin(program_processor):
     inp0 = np_as_located_field(KDim)(np.asarray(list(range(k_size))))
     inp1 = np_as_located_field(KDim, origin={KDim: 1})(np.asarray(list(range(k_size + 1))))
     out = np_as_located_field(KDim)(np.zeros(k_size))
-    ref = inp0 + inp1[0:10]
+    ref = inp0 + np.asarray(inp1)[:-1]
 
     run_processor(
         sum_fencil,
