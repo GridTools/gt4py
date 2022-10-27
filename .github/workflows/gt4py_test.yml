@@ -22,12 +22,12 @@ jobs:
     steps:
     - uses: actions/checkout@v2
     - name: Install C++ libraries
-      if: ${{ matrix.os }} == "macos-latest"
+      if: matrix.os == "macos-latest"
       shell: bash
       run: |
         brew install boost
     - name: Install C++ libraries
-      if: ${{ matrix.os }} == "ubuntu-latest"
+      if: matrix.os == "ubuntu-latest"
       shell: bash
       run: |
         sudo apt install libboost-dev
