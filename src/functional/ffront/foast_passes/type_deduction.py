@@ -211,13 +211,13 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             )
         new_init = self.visit(node.init, **kwargs)
         if not all(
-            type_info.is_arithmetic(type_)
+            type_info.is_arithmetic(type_) or type_info.is_logical(type_)
             for type_ in type_info.primitive_constituents(new_init.type)
         ):
             raise FieldOperatorTypeDeductionError.from_foast_node(
                 node,
                 msg=f"Argument `init` to scan operator `{node.id}` must "
-                f"be an arithmetic type or a composite of arithmetic types.",
+                f"be an arithmetic type or a logical type or a composite of arithmetic and logical types.",
             )
         new_definition = self.visit(node.definition, **kwargs)
         new_type = ct.ScanOperatorType(
@@ -398,7 +398,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         right: foast.Expr,
         **kwargs,
     ) -> Optional[ct.SymbolType]:
-        logical_ops = {foast.BinaryOperator.BIT_AND, foast.BinaryOperator.BIT_OR}
+        logical_ops = {ct.BinaryOperator.BIT_AND, ct.BinaryOperator.BIT_OR}
         is_compatible = type_info.is_logical if node.op in logical_ops else type_info.is_arithmetic
 
         # check both types compatible
@@ -411,7 +411,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         left_type = cast(ct.FieldType | ct.ScalarType, left.type)
         right_type = cast(ct.FieldType | ct.ScalarType, right.type)
 
-        if node.op == foast.BinaryOperator.POW:
+        if node.op == ct.BinaryOperator.POW:
             return left_type
 
         try:
