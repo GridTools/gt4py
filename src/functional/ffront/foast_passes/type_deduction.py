@@ -245,9 +245,6 @@ class FieldOperatorTypeDeduction(NodeTranslator, traits.VisitorWithSymbolTableTr
         symbol = symtable[node.id]
         return foast.Name(id=node.id, type=symbol.type, location=node.location)
 
-    # def visit_Star(self, node: foast.Star, refine_type: Optional[ct.FieldType] = None, **kwargs) -> foast.Star:
-    #     return foast.Star(id=node.id, type=refine_type, location=node.location)
-
     def visit_Assign(self, node: foast.Assign, **kwargs) -> foast.Assign:
         new_value = node.value
         if not type_info.is_concrete(node.value.type):
@@ -272,6 +269,8 @@ class FieldOperatorTypeDeduction(NodeTranslator, traits.VisitorWithSymbolTableTr
 
         for idx, elt in reversed(list(enumerate(node.targets))):
             idx_rel_to_val = idx - len(node.targets)
+
+            # todo: make sure order is correct
             if isinstance(elt, foast.Star):
                 accessed = set([idx % len(new_value.elts) for idx in traversed_values])
                 remaining = set(range(len(new_value.elts))).difference(accessed)
@@ -280,7 +279,8 @@ class FieldOperatorTypeDeduction(NodeTranslator, traits.VisitorWithSymbolTableTr
                     rem_elts.append(self.visit(new_value.elts[i], **kwargs).type)
 
                 new_type = TupleType(types=rem_elts)
-                new_target = foast.Star(id=elt.id, type=new_type, location=elt.location)
+                new_target = foast.Star(id=foast.DataSymbol(id=elt.id.id, location=elt.location, type=new_type), type=new_type, location=elt.location)
+                new_target = self.visit(new_target, refine_type=new_type, location=node.location, **kwargs)
                 targets.append(new_target)
                 break
             new_type = new_value.elts[idx_rel_to_val].type

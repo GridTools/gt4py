@@ -199,7 +199,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
                 if isinstance(elt, ast.Starred):
                     ts.append(
                         foast.Star(
-                            id=elt.value.id,
+                            id=foast.DataSymbol(id=elt.value.id, location=self._make_loc(elt), type=ct.DeferredSymbolType(constraint=constraint_type)),
                             location=self._make_loc(elt),
                             type=ct.DeferredSymbolType(constraint=constraint_type),
                         )

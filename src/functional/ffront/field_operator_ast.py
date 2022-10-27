@@ -133,7 +133,7 @@ class Stmt(LocatedNode):
 
 
 class Star(Expr):
-    id: Coerced[SymbolRef]  # noqa: A003  # shadowing a python builtin
+    id: Union[FieldSymbol, TupleSymbol, ScalarSymbol]  # noqa: A003  # shadowing a python builtin
 
 
 class Assign(Stmt):

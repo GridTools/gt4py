@@ -1322,8 +1322,8 @@ def test_tuple_unpacking_star(fieldview_backend):
 
     @field_operator
     def _star_unpack() -> tuple[Field[[IDim], float64], Field[[IDim], float64]]:
-        *a, b, c = (1, 2, 3, 4, 5)
-        return *a, b
+        a, *b, c = (1, 2.0, 3, 4, 5)
+        return a, b
 
     @program(backend=fieldview_backend)
     def star_unpack(
@@ -1335,4 +1335,4 @@ def test_tuple_unpacking_star(fieldview_backend):
     star_unpack(a, b, offset_provider={})
 
     assert np.allclose(a, 1)
-    assert np.allclose(b, (2, 3, 4))
+    assert np.allclose(b, (2.0, 3, 4))
