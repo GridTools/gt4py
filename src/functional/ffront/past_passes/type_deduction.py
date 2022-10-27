@@ -95,7 +95,6 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         definition_type = ct.FunctionType(
             args=[param.type for param in params], kwargs={}, returns=ct.VoidType()
         )
-
         return past.Program(
             id=self.visit(node.id, **kwargs),
             type=ct.ProgramType(definition=definition_type),
