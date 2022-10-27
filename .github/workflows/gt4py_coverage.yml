@@ -32,7 +32,7 @@ jobs:
     - name: Install C++ libraries
       shell: bash
       run: |
-        brew install boost
+        sudo apt install libboost-dev
 
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v2
