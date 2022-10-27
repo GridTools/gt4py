@@ -21,11 +21,13 @@ from functional.ffront.symbol_makers import make_symbol_type_from_value
 
 @dataclass(frozen=True)
 class ClosureVarTypeDeduction(NodeTranslator, traits.VisitorWithSymbolTableTrait):
+    """
     Deduce the type of all closure variable declarations.
-    
-    After this pass all closure var declarations, i.e. the `Symbol`s contained in 
+
+    After this pass all closure var declarations, i.e. the `Symbol`s contained in
     `foast.FunctionDefinition.closure_vars`, have the type as specified by their
     actual values (given by `closure_vars` to `apply`).
+    """
 
     closure_vars: dict[str, Any]
 
