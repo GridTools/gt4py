@@ -845,7 +845,7 @@ def get_ordered_indices(
 
 def _shift_slice(
     slice_or_index: slice | numbers.Integral, offset: numbers.Integral
-) -> slice | numbers.Integral():
+) -> slice | numbers.Integral:
     if isinstance(slice_or_index, slice):
         assert slice_or_index.step is None
         return slice(
