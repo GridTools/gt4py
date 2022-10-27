@@ -44,7 +44,11 @@ class UnpackedAssignPass(NodeTranslator, traits.VisitorWithSymbolTableTrait):
         )
 
     def _unique_tuple_symbol(self, node: foast.MultiTargetAssign) -> foast.Name:
-        sym = foast.Symbol(id=f"__tuple_tmp_{self.unique_tuple_symbol_id}", type=node.value.type, location=node.location)
+        sym = foast.Symbol(
+            id=f"__tuple_tmp_{self.unique_tuple_symbol_id}",
+            type=node.value.type,
+            location=node.location,
+        )
         self.unique_tuple_symbol_id += 1
         return sym
 
@@ -53,13 +57,23 @@ class UnpackedAssignPass(NodeTranslator, traits.VisitorWithSymbolTableTrait):
             if isinstance(node, foast.MultiTargetAssign):
                 del body[pos]
                 tuple_symbol = self._unique_tuple_symbol(node)
-                tuple_assign = foast.Assign(target=tuple_symbol, value=node.value, location=node.location)
+                tuple_assign = foast.Assign(
+                    target=tuple_symbol, value=node.value, location=node.location
+                )
                 body.insert(pos, tuple_assign)
 
                 for index, subtarget in enumerate(node.targets):
                     el_type = node.value.type.types[index]
-                    tuple_name = foast.Name(id=tuple_symbol.id, type=el_type, location=tuple_symbol.location)
-                    new_assign = foast.Assign(target=subtarget, value=foast.Subscript(value=tuple_name, index=index, type=el_type, location=node.location), location=node.location)
+                    tuple_name = foast.Name(
+                        id=tuple_symbol.id, type=el_type, location=tuple_symbol.location
+                    )
+                    new_assign = foast.Assign(
+                        target=subtarget,
+                        value=foast.Subscript(
+                            value=tuple_name, index=index, type=el_type, location=node.location
+                        ),
+                        location=node.location,
+                    )
                     body.insert(pos + index + 1, new_assign)
 
         return body

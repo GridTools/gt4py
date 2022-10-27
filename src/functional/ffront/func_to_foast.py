@@ -33,8 +33,8 @@ from functional.ffront.ast_passes import (
     StringifyAnnotationsPass,
     UnchainComparesPass,
 )
-from functional.ffront.foast_passes.iterable_unpack import UnpackedAssignPass
 from functional.ffront.dialect_parser import DialectParser, DialectSyntaxError
+from functional.ffront.foast_passes.iterable_unpack import UnpackedAssignPass
 from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduction
 
 
@@ -197,11 +197,25 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             # todo: correctly pass a Starred node (we need this later for reassigning types and values)
             for elt in target.elts:
                 if isinstance(elt, ast.Starred):
-                    ts.append(foast.Star(id=elt.value.id, location=self._make_loc(elt), type=ct.DeferredSymbolType(constraint=constraint_type)))
+                    ts.append(
+                        foast.Star(
+                            id=elt.value.id,
+                            location=self._make_loc(elt),
+                            type=ct.DeferredSymbolType(constraint=constraint_type),
+                        )
+                    )
                 else:
-                    ts.append(foast.DataSymbol(id=elt.id, location=self._make_loc(elt), type=ct.DeferredSymbolType(constraint=constraint_type)))
+                    ts.append(
+                        foast.DataSymbol(
+                            id=elt.id,
+                            location=self._make_loc(elt),
+                            type=ct.DeferredSymbolType(constraint=constraint_type),
+                        )
+                    )
 
-            mta = foast.MultiTargetAssign(targets=ts, value=self.visit(node.value), location=self._make_loc(node))
+            mta = foast.MultiTargetAssign(
+                targets=ts, value=self.visit(node.value), location=self._make_loc(node)
+            )
             return mta
 
         if not isinstance(target, ast.Name):
