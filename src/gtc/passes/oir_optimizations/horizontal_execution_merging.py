@@ -15,7 +15,7 @@
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 
-from eve import NodeTranslator, SourceLocation, SymbolTableTrait
+import eve
 from gtc import common, oir
 from gtc.definitions import Extent
 
@@ -27,7 +27,7 @@ from .utils import (
 )
 
 
-class HorizontalExecutionMerging(NodeTranslator):
+class HorizontalExecutionMerging(eve.NodeTranslator):
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> oir.Stencil:
         all_names = collect_symbol_names(node)
         return self.generic_visit(
@@ -51,7 +51,7 @@ class HorizontalExecutionMerging(NodeTranslator):
             # required to reach reasonable run times for large node counts
             body: List[oir.Stmt]
             declarations: List[oir.LocalScalar]
-            loc: Optional[SourceLocation]
+            loc: Optional[eve.SourceLocation]
 
             assert set(oir.HorizontalExecution.__fields__) == {
                 "loc",
@@ -140,7 +140,7 @@ class HorizontalExecutionMerging(NodeTranslator):
 
 
 @dataclass
-class OnTheFlyMerging(NodeTranslator):
+class OnTheFlyMerging(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     """Merges consecutive horizontal executions inside parallel vertical loops by introducing redundant computations.
 
     Limitations:
@@ -150,7 +150,6 @@ class OnTheFlyMerging(NodeTranslator):
 
     max_horizontal_execution_body_size: int = 100
     allow_expensive_function_duplication: bool = False
-    contexts = (SymbolTableTrait.symtable_merger,)  # type: ignore
 
     def visit_CartesianOffset(
         self,

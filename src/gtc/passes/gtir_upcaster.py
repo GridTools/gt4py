@@ -17,8 +17,7 @@ from typing import Any, Callable, Dict, Iterator, List
 
 import numpy as np
 
-from eve import Node, NodeTranslator
-from eve.concepts import TreeNode
+import eve
 from gtc import gtir
 from gtc.common import DataType, op_to_ufunc, typestr_to_data_type
 from gtc.gtir import Expr
@@ -35,7 +34,7 @@ def _upcast_nodes(*exprs: Expr, upcasting_rule: Callable) -> Iterator[Expr]:
     return iter(_upcast_node(target_dtype, arg) for target_dtype, arg in zip(target_dtypes, exprs))
 
 
-def _update_node(node: gtir.Expr, updated_children: Dict[str, TreeNode]) -> Node:
+def _update_node(node: gtir.Expr, updated_children: Dict[str, eve.RootNode]) -> eve.Node:
     # create new node only if children changed
     old_children = node.dict(include={*updated_children.keys()})
     if any([old_children[k] != updated_children[k] for k in updated_children.keys()]):
@@ -76,7 +75,7 @@ def _common_upcasting_rule(*dtypes):
     return [res_type] * len(dtypes)
 
 
-class _GTIRUpcasting(NodeTranslator):
+class _GTIRUpcasting(eve.NodeTranslator):
     """
     Introduces Cast nodes (upcasting) for expr involving different datatypes.
 

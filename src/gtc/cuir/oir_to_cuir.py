@@ -47,7 +47,7 @@ def _make_axis_offset_expr(bound: common.AxisBound, axis_index: int) -> cuir.Exp
         return cuir.Literal(value=str(bound.offset), dtype=common.DataType.INT32)
 
 
-class OIRToCUIR(eve.NodeTranslator):
+class OIRToCUIR(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     @dataclass
     class Context:
         new_symbol_name: SymbolNameCreator
@@ -67,8 +67,6 @@ class OIRToCUIR(eve.NodeTranslator):
                 offset=common.CartesianOffset.zero(),
                 dtype=common.DataType.INT32,
             )
-
-    contexts = (eve.SymbolTableTrait.symtable_merger,)  # type: ignore
 
     def visit_Literal(self, node: oir.Literal, **kwargs: Any) -> cuir.Literal:
         return cuir.Literal(value=node.value, dtype=node.dtype)

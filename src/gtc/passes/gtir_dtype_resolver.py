@@ -14,12 +14,12 @@
 
 from typing import Any, Dict
 
-from eve import NodeTranslator, SymbolTableTrait
+import eve
 from gtc import gtir
 from gtc.common import DataType, GTCPostconditionError
 
 
-class _GTIRResolveAuto(NodeTranslator):
+class _GTIRResolveAuto(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     """
     Replaces AUTO dtype by a concrete dtype.
 
@@ -29,9 +29,7 @@ class _GTIRResolveAuto(NodeTranslator):
     Postcondition: All dtypes are concrete (no AUTO)
     """
 
-    contexts = (SymbolTableTrait.symtable_merger,)  # type: ignore
-
-    class _GTIRUpdateAutoDecl(NodeTranslator):
+    class _GTIRUpdateAutoDecl(eve.NodeTranslator):
         """Updates FieldDecls with resolved types."""
 
         def visit_FieldDecl(
@@ -79,15 +77,13 @@ class _GTIRResolveAuto(NodeTranslator):
         return result
 
 
-class _GTIRPropagateDtypeToAccess(NodeTranslator):
+class _GTIRPropagateDtypeToAccess(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     """
     Propagates dtype from Decl to Access.
 
     Precondition: Decls have dtype (not None), can be AUTO or DEFAULT
     Postcondition: All dtypes of Access are not None
     """
-
-    contexts = (SymbolTableTrait.symtable_merger,)  # type: ignore
 
     def visit_FieldAccess(self, node: gtir.FieldAccess, **kwargs: Any) -> gtir.FieldAccess:
         return gtir.FieldAccess(

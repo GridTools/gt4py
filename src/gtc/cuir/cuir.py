@@ -16,17 +16,17 @@ from typing import Any, List, Optional, Tuple, Union
 
 from pydantic import validator
 
-from eve import Str, SymbolName, SymbolTableTrait, field, utils
+import eve
 from gtc import common
 from gtc.common import AxisBound, CartesianOffset, DataType, LocNode, LoopOrder
 
 
-@utils.noninstantiable
+@eve.utils.noninstantiable
 class Expr(common.Expr):
     pass
 
 
-@utils.noninstantiable
+@eve.utils.noninstantiable
 class Stmt(common.Stmt):
     pass
 
@@ -121,7 +121,7 @@ class NativeFuncCall(common.NativeFuncCall[Expr], Expr):
 
 
 class Decl(LocNode):
-    name: SymbolName
+    name: eve.SymbolName
     dtype: DataType
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
@@ -132,7 +132,7 @@ class Decl(LocNode):
 
 class FieldDecl(Decl):
     dimensions: Tuple[bool, bool, bool]
-    data_dims: Tuple[int, ...] = field(default_factory=tuple)
+    data_dims: Tuple[int, ...] = eve.field(default_factory=tuple)
 
 
 class ScalarDecl(Decl):
@@ -144,7 +144,7 @@ class LocalScalar(Decl):
 
 
 class Temporary(Decl):
-    data_dims: Tuple[int, ...] = field(default_factory=tuple)
+    data_dims: Tuple[int, ...] = eve.field(default_factory=tuple)
 
 
 class Positional(Decl):
@@ -205,7 +205,7 @@ class KCacheDecl(Decl):
     extent: Optional[KExtent]
 
 
-class HorizontalExecution(LocNode, SymbolTableTrait):
+class HorizontalExecution(LocNode, eve.SymbolTableTrait):
     body: List[Stmt]
     declarations: List[LocalScalar]
     extent: Optional[IJExtent]
@@ -239,14 +239,14 @@ class Kernel(LocNode):
 
 def axis_size_decls() -> List[ScalarDecl]:
     return [
-        ScalarDecl(name="i_size", dtype=common.DataType.INT32),
-        ScalarDecl(name="j_size", dtype=common.DataType.INT32),
-        ScalarDecl(name="k_size", dtype=common.DataType.INT32),
+        ScalarDecl(name=eve.SymbolName("i_size"), dtype=common.DataType.INT32),
+        ScalarDecl(name=eve.SymbolName("j_size"), dtype=common.DataType.INT32),
+        ScalarDecl(name=eve.SymbolName("k_size"), dtype=common.DataType.INT32),
     ]
 
 
-class Program(LocNode, SymbolTableTrait):
-    name: Str
+class Program(LocNode, eve.SymbolTableTrait):
+    name: str
     params: List[Decl]
     positionals: List[Positional]
     temporaries: List[Temporary]

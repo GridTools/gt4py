@@ -15,15 +15,13 @@
 import collections
 from typing import Any, Callable, Dict, Set, Union
 
-from eve import NodeTranslator, SymbolTableTrait
+import eve
 from gtc import oir
 
 from .utils import AccessCollector, collect_symbol_names, symbol_name_creator
 
 
-class TemporariesToScalarsBase(NodeTranslator):
-    contexts = (SymbolTableTrait.symtable_merger,)  # type: ignore
-
+class TemporariesToScalarsBase(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     def visit_FieldAccess(
         self, node: oir.FieldAccess, *, tmps_name_map: Dict[str, str], **kwargs: Any
     ) -> Union[oir.FieldAccess, oir.ScalarAccess]:

@@ -95,7 +95,7 @@ class SymbolNameCreator(Protocol):
         ...
 
 
-class OIRToGTCpp(eve.NodeTranslator):
+class OIRToGTCpp(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     @dataclass
     class ProgramContext:
         functors: List[gtcpp.GTFunctor] = field(default_factory=list)
@@ -147,8 +147,6 @@ class OIRToGTCpp(eve.NodeTranslator):
         @property
         def extra_decls(self) -> List[gtcpp.ComputationDecl]:
             return list(self.positionals.values()) + list(self.axis_lengths.values())
-
-    contexts = (eve.SymbolTableTrait.symtable_merger,)  # type: ignore
 
     def visit_Literal(self, node: oir.Literal, **kwargs: Any) -> gtcpp.Literal:
         return gtcpp.Literal(value=node.value, dtype=node.dtype)

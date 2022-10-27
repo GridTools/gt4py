@@ -19,18 +19,16 @@ from typing import Any, List, Tuple, Union
 from pydantic.class_validators import validator
 
 import eve
-from eve import Str, StrEnum, SymbolName, SymbolTableTrait, field, utils
-from eve.type_definitions import SymbolRef
 from gtc import common
 from gtc.common import LocNode
 
 
-@utils.noninstantiable
+@eve.utils.noninstantiable
 class Expr(common.Expr):
     pass
 
 
-@utils.noninstantiable
+@eve.utils.noninstantiable
 class Stmt(common.Stmt):
     pass
 
@@ -100,9 +98,9 @@ class Cast(common.Cast[Expr], Expr):  # type: ignore
 
 
 class Temporary(LocNode):
-    name: SymbolName
+    name: eve.SymbolName
     dtype: common.DataType
-    data_dims: Tuple[int, ...] = field(default_factory=tuple)
+    data_dims: Tuple[int, ...] = eve.field(default_factory=tuple)
 
 
 class GTLevel(LocNode):
@@ -122,7 +120,7 @@ class GTInterval(LocNode):
 
 
 class LocalVarDecl(LocNode):
-    name: SymbolName
+    name: eve.SymbolName
     dtype: common.DataType
 
 
@@ -133,7 +131,7 @@ class GTApplyMethod(LocNode):
 
 
 @enum.unique
-class Intent(StrEnum):
+class Intent(eve.StrEnum):
     IN = "in"
     INOUT = "inout"
 
@@ -162,7 +160,7 @@ class GTExtent(LocNode):
 
 
 class GTAccessor(LocNode):
-    name: SymbolName
+    name: eve.SymbolName
     id: int  # noqa: A003  # shadowing python builtin
     intent: Intent
     extent: GTExtent
@@ -173,19 +171,18 @@ class GTParamList(LocNode):
     accessors: List[GTAccessor]
 
 
-class GTFunctor(LocNode, SymbolTableTrait):
-    name: SymbolName
+class GTFunctor(LocNode, eve.SymbolTableTrait):
+    name: eve.SymbolName
     applies: List[GTApplyMethod]
     param_list: GTParamList
 
 
 class Arg(LocNode):
-    name: SymbolRef
+    name: eve.SymbolRef
 
-    class Config(eve.concepts.FrozenModel.Config):
-        pass
+    # class Config(eve.concepts.FrozenModel.Config):
+    #     pass
 
-    # TODO see https://github.com/eth-cscs/eve_toolchain/issues/40
     def __hash__(self) -> int:
         return hash(self.name)
 
@@ -196,7 +193,7 @@ class Arg(LocNode):
 
 
 class ApiParamDecl(LocNode):
-    name: SymbolName
+    name: eve.SymbolName
     dtype: common.DataType
 
     def __init__(self, *args: Any, **kwargs: Any):
@@ -207,7 +204,7 @@ class ApiParamDecl(LocNode):
 
 class FieldDecl(ApiParamDecl):
     dimensions: Tuple[bool, bool, bool]
-    data_dims: Tuple[int, ...] = field(default_factory=tuple)
+    data_dims: Tuple[int, ...] = eve.field(default_factory=tuple)
 
 
 class GlobalParamDecl(ApiParamDecl):
@@ -215,13 +212,13 @@ class GlobalParamDecl(ApiParamDecl):
 
 
 class ComputationDecl(LocNode):
-    name: SymbolName
+    name: eve.SymbolName
     dtype = common.DataType.INT32
     kind = common.ExprKind.SCALAR
 
 
 class Positional(ComputationDecl):
-    axis_name: Str
+    axis_name: str
 
 
 class AxisLength(ComputationDecl):
@@ -229,7 +226,7 @@ class AxisLength(ComputationDecl):
 
 
 class GTStage(LocNode):
-    functor: SymbolRef
+    functor: eve.SymbolRef
     # `args` are SymbolRefs to GTComputation `arguments` (interpreted as parameters)
     # or `temporaries`
     args: List[Arg]
@@ -242,7 +239,7 @@ class GTStage(LocNode):
 
 
 class Cache(LocNode):
-    name: SymbolRef  # symbol ref to GTComputation params or temporaries
+    name: eve.SymbolRef  # symbol ref to GTComputation params or temporaries
 
 
 class IJCache(Cache):
@@ -260,7 +257,7 @@ class GTMultiStage(LocNode):
     caches: List[Cache]
 
 
-class GTComputationCall(LocNode, SymbolTableTrait):
+class GTComputationCall(LocNode, eve.SymbolTableTrait):
     # In the generated C++ code `arguments` represent both the arguments in the call to `run`
     # and the parameters of the function object.
     # We could represent this closer to the C++ code by splitting call and definition of the
@@ -271,8 +268,8 @@ class GTComputationCall(LocNode, SymbolTableTrait):
     multi_stages: List[GTMultiStage]
 
 
-class Program(LocNode, SymbolTableTrait):
-    name: Str
+class Program(LocNode, eve.SymbolTableTrait):
+    name: str
     parameters: List[
         ApiParamDecl
     ]  # in the current implementation these symbols can be accessed by the functor body

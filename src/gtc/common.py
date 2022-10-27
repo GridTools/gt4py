@@ -224,7 +224,7 @@ class ExprKind(eve.IntEnum):
 
 
 class LocNode(eve.Node):
-    loc: Optional[eve.SourceLocation]
+    loc: Optional[eve.SourceLocation] = None
 
 
 @eve.utils.noninstantiable
@@ -681,9 +681,7 @@ def validate_lvalue_dims(
         `Tuple[bool, bool, bool]` in an attribute named `dimensions`.
     """
 
-    def _impl(
-        cls: Type[datamodels.DataModel], instance: datamodels.DataModel
-    ) -> None:
+    def _impl(cls: Type[datamodels.DataModel], instance: datamodels.DataModel) -> None:
         for _, children in instance.items():
             _LvalueDimsValidator(vertical_loop_type, decl_type).visit(
                 children, symtable=instance.symtable_
@@ -771,7 +769,9 @@ class HorizontalInterval(eve.Node):
         )
 
     @datamodels.root_validator
-    def check_start_before_end(cls: Type["HorizontalInterval"], instance: "HorizontalInterval") -> None:
+    def check_start_before_end(
+        cls: Type["HorizontalInterval"], instance: "HorizontalInterval"
+    ) -> None:
         if instance.start and instance.end and not (instance.start <= instance.end):
             raise ValueError(
                 f"End ({instance.end}) is not after or equal to start ({instance.start})"

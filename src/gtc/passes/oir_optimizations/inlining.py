@@ -15,12 +15,11 @@
 import copy as cp
 from typing import Any, Dict, Optional, Set, cast
 
-from eve import NodeTranslator, NodeVisitor
-from eve.concepts import NOTHING
+import eve
 from gtc import oir
 
 
-class MaskCollector(NodeVisitor):
+class MaskCollector(eve.NodeVisitor):
     """Collects the boolean expressions defining mask statements that are boolean fields."""
 
     def visit_AssignStmt(
@@ -65,7 +64,7 @@ class MaskCollector(NodeVisitor):
         return cast(Dict[str, oir.Expr], masks_to_inline)
 
 
-class MaskInlining(NodeTranslator):
+class MaskInlining(eve.NodeTranslator):
     """Inlines mask statements that are boolean mask fields with the expression that generates the field.
 
     Preconditions: Mask statements exist as boolean temporary field accesses.
@@ -91,14 +90,14 @@ class MaskInlining(NodeTranslator):
         **kwargs: Any,
     ) -> oir.AssignStmt:
         if node.left.name in masks_to_inline:
-            return NOTHING
+            return eve.NOTHING
         return self.generic_visit(node, masks_to_inline=masks_to_inline, **kwargs)
 
     def visit_Temporary(self, node: oir.Temporary, *, masks_to_inline, **kwargs):
-        return node if node.name not in masks_to_inline else NOTHING
+        return node if node.name not in masks_to_inline else eve.NOTHING
 
     def visit_CacheDesc(self, node: oir.CacheDesc, *, masks_to_inline, **kwargs):
-        return node if node.name not in masks_to_inline else NOTHING
+        return node if node.name not in masks_to_inline else eve.NOTHING
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs):
         return self.generic_visit(node, masks_to_inline=MaskCollector().visit(node), **kwargs)

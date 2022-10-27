@@ -18,7 +18,8 @@ from typing import Any, Collection, Dict, List, Set, Union
 
 import numpy as np
 
-from eve import codegen, traits
+import eve
+from eve import codegen
 from eve.codegen import FormatTemplate as as_fmt
 from eve.codegen import MakoTemplate as as_mako
 from eve.concepts import LeafNode
@@ -26,9 +27,7 @@ from gtc.common import BuiltInLiteral, DataType, LevelMarker, NativeFunction, Un
 from gtc.cuir import cuir
 
 
-class CUIRCodegen(codegen.TemplatedGenerator):
-
-    contexts = (traits.SymbolTableTrait.symtable_merger,)  # type: ignore
+class CUIRCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
 
     LocalScalar = as_fmt("{dtype} {name};")
 
