@@ -680,7 +680,12 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         )
 
     def visit_Constant(self, node: foast.Constant, **kwargs) -> foast.Constant:
-        type_ = make_symbol_type_from_value(node.value)
+        try:
+            type_ = make_symbol_type_from_value(node.value)
+        except GTTypeError as e:
+            raise FieldOperatorTypeDeductionError.from_foast_node(
+                node, msg="Could not deduce type of constant."
+            ) from e
         return foast.Constant(value=node.value, location=node.location, type=type_)
 
 
