@@ -279,8 +279,8 @@ class Program:
                 new_args_ls[param_i] = kwargs[param.id]
                 kwargs.pop(param.id)
                 kwargs_count += 1
-            elif len(args) > param_i - kwargs_count:
-                new_args_ls[param_i] = args[param_i - kwargs_count]
+            elif param_i+1 >= len(args):
+                new_args_ls[param_i] = args[param_i]
             else:
                 wrong_args[param_i] = True
         if any(wrong_args):
