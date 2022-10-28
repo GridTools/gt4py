@@ -260,7 +260,7 @@ class Program:
             offset_provider=offset_provider,
         )
 
-    def _refactor_args_kwargs(self, *args, **kwargs) -> tuple[tuple, dict]:
+    def _cannonicalize_args(self, *args, **kwargs) -> tuple[tuple, dict]:
         past_params = self.past_node.params
 
         new_args_ls = [None] * len(past_params)
