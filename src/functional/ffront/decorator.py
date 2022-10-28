@@ -260,7 +260,7 @@ class Program:
             offset_provider=offset_provider,
         )
 
-    def _cannonicalize_args(self, *args, **kwargs) -> tuple[tuple, dict]:
+    def _canonicalize_args(self, *args, **kwargs) -> tuple[tuple, dict]:
         past_params = self.past_node.params
 
         new_args_ls = [None] * len(past_params)
@@ -312,7 +312,7 @@ class Program:
     def _process_args(self, args: tuple, kwargs: dict) -> tuple[tuple, tuple, dict[str, Any]]:
         # if parameter is in signature but not in args, move it from kwargs to args
         if len(kwargs) > 0:
-            args, kwargs = self._refactor_args_kwargs(*args, **kwargs)
+            args, kwargs = self._canonicalize_args(*args, **kwargs)
 
         self._validate_args(*args, **kwargs)
 
