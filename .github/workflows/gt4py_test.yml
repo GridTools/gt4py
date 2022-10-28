@@ -6,10 +6,12 @@ on:
     branches:
     - functional
     - ci-test-branch
+    # Run on any file change.
   pull_request:
     branches:
     - functional
     - ci-test-branch
+    # Run on any file change.
 
 jobs:
   tox:
