@@ -272,22 +272,22 @@ class Program:
             )
         for param_i, param in enumerate(past_params):
             if param.id in kwargs:
-                new_args_ls[param_i] = kwargs[param.id]
+                new_args[param_i] = kwargs[param.id]
                 kwargs.pop(param.id)
                 kwargs_count += 1
             elif len(args) > param_i - kwargs_count:
-                new_args_ls[param_i] = args[param_i - kwargs_count]
+                new_args[param_i] = args[param_i - kwargs_count]
             else:
-                wrong_args[param_i] = True
-        if any(wrong_args):
+                valid_args[param_i] = False
+        if not all(valid_args):
             past_false = [
-                wrong_arg_i for wrong_arg_i, wrong_arg in enumerate(wrong_args) if wrong_arg
+                valid_arg_i for valid_arg_i, valid_arg in enumerate(valid_args) if valid_arg
             ]
             for i in past_false:
                 raise ProgramTypeError(
                     past_params, f"{past_params[i].id} argument not in function call."
                 )
-        args = tuple(new_args_ls)
+        args = tuple(new_args)
         return args, kwargs
 
     def _validate_args(self, *args, **kwargs) -> None:
