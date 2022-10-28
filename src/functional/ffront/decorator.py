@@ -272,6 +272,10 @@ class Program:
             )
         for param_i, param in enumerate(past_params):
             if param.id in kwargs:
+                if param_i+1 >= len(args):
+                  raise ProgramTypeError.from_past_node(
+                      self.past_node, f"got multiple values for argument 'param.id''"
+                  )
                 new_args_ls[param_i] = kwargs[param.id]
                 kwargs.pop(param.id)
                 kwargs_count += 1
