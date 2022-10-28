@@ -1273,7 +1273,6 @@ def test_undefined_symbols():
             return undefined_symbol
 
 
-
 def test_implicit_broadcast():
     out = np_as_located_field()(np.array(0.0))
     inp_val = 1.0
@@ -1297,6 +1296,7 @@ def test_implicit_broadcast():
 
     assert out == np.asarray(inp_val)
 
+
 def test_constant_closure_vars():
     from eve.utils import FrozenNamespace
 
@@ -1313,4 +1313,3 @@ def test_constant_closure_vars():
     output = np_as_located_field(IDim)(np.zeros((1,), dtype=np.float32))
     consume_constants(input, out=output, offset_provider={})
     assert np.allclose(np.asarray(output), constants.PI * constants.E)
-

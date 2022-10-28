@@ -29,7 +29,6 @@ from eve.pattern_matching import ObjectPattern as P
 from functional.common import Field, GTTypeError
 from functional.ffront import common_types, field_operator_ast as foast
 from functional.ffront.fbuiltins import Dimension, broadcast, float32, float64, int32, int64, where
-
 from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError
 from functional.ffront.func_to_foast import FieldOperatorParser, FieldOperatorSyntaxError
 from functional.ffront.symbol_makers import TypingError
