@@ -264,7 +264,7 @@ class Program:
         past_params = self.past_node.params
 
         new_args = [None] * len(past_params)
-        wrong_args = [False] * len(past_params)
+        valid_args = [True] * len(past_params)
         kwargs_count = 0
         if len(past_params) < len(args) + len(kwargs):
             raise GTTypeError(
