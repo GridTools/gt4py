@@ -5,9 +5,11 @@ on:
   push:
     branches:
     - functional
+    - ci-test-branch
   pull_request:
     branches:
     - functional
+    - ci-test-branch
 
 jobs:
   tox:

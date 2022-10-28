@@ -4,6 +4,7 @@ on:
   push:
     branches:
     - functional
+    - ci-test-branch
     paths:
     - "**"
     - "!src/**"
@@ -13,6 +14,7 @@ on:
   pull_request:
     branches:
     - functional
+    - ci-test-branch
     paths:
     - "**"
     - "!src/**"
