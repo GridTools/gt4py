@@ -17,6 +17,7 @@ import functional.ffront.field_operator_ast as foast
 from eve import NodeTranslator, NodeVisitor, traits
 from functional.common import DimensionKind, GTSyntaxError, GTTypeError
 from functional.ffront import common_types as ct, fbuiltins, type_info
+from functional.ffront.symbol_makers import make_symbol_type_from_value
 
 
 def boolified_type(symbol_type: ct.SymbolType) -> ct.ScalarType | ct.FieldType:
@@ -167,17 +168,17 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
     def visit_FunctionDefinition(self, node: foast.FunctionDefinition, **kwargs):
         new_params = self.visit(node.params, **kwargs)
         new_body = self.visit(node.body, **kwargs)
+        new_closure_vars = self.visit(node.closure_vars, **kwargs)
         assert isinstance(new_body[-1], foast.Return)
         return_type = new_body[-1].value.type
         new_type = ct.FunctionType(
             args=[new_param.type for new_param in new_params], kwargs={}, returns=return_type
         )
-
         return foast.FunctionDefinition(
             id=node.id,
             params=new_params,
             body=new_body,
-            closure_vars=self.visit(node.closure_vars, **kwargs),
+            closure_vars=new_closure_vars,
             type=new_type,
             location=node.location,
         )
@@ -689,11 +690,13 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         )
 
     def visit_Constant(self, node: foast.Constant, **kwargs) -> foast.Constant:
-        if not node.type:
+        try:
+            type_ = make_symbol_type_from_value(node.value)
+        except GTTypeError as e:
             raise FieldOperatorTypeDeductionError.from_foast_node(
-                node, msg=f"Found a literal with unrecognized type {node.type}."
-            )
-        return node
+                node, msg="Could not deduce type of constant."
+            ) from e
+        return foast.Constant(value=node.value, location=node.location, type=type_)
 
 
 class FieldOperatorTypeDeductionError(GTSyntaxError, SyntaxWarning):
