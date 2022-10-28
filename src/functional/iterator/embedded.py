@@ -720,10 +720,9 @@ class MDIterator:
         slice_column = dict[Tag, FieldIndex]()
         if self.column_axis is not None:
             assert _column_range is not None
-            k_pos = shifted_pos[self.column_axis]
+            k_pos = shifted_pos.pop(self.column_axis)
             assert isinstance(k_pos, int)
             slice_column[self.column_axis] = slice(k_pos, k_pos + len(_column_range))
-            shifted_pos.pop(self.column_axis)
 
         assert _is_concrete_position(shifted_pos)
         ordered_indices = get_ordered_indices(
@@ -860,10 +859,10 @@ def _shift_slice(
 
 
 def _shift_slices(
-    slices_or_indices: tuple[slice | numbers.Integral],
-    offsets: tuple[numbers.Integral],
-    shape: tuple[numbers.Integral],
-) -> tuple[slice | numbers.Integral]:
+    slices_or_indices: tuple[slice | numbers.Integral, ...],
+    offsets: tuple[numbers.Integral, ...],
+    shape: tuple[numbers.Integral, ...],
+) -> tuple[slice | numbers.Integral, ...]:
     return tuple(_shift_slice(*i) for i in zip(slices_or_indices, offsets, shape))
 
 
@@ -1052,7 +1051,7 @@ class TupleOfFields(TupleField):
 
     def __setitem__(self, indices, value):
         if not isinstance(value, tuple):
-            raise RuntimeError(f"Value needs to be tuple, got {value}.")
+            raise RuntimeError(f"Value needs to be tuple, got `{value}`.")
 
         _tuple_assign(self.data, value, indices)
 
