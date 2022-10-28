@@ -269,24 +269,21 @@ class Program:
 
         for param_i, param in enumerate(past_params):
             if param.id in kwargs:
-                # if param_i + 1 >= len(args):
-                #     raise ProgramTypeError.from_past_node(
-                #         self.past_node, msg=f"Got multiple values for argument {self.past_node.params[param_i].id}"
-                #     )
                 new_args[param_i] = kwargs[param.id]
                 kwargs.pop(param.id)
                 kwargs_count += 1
             elif len(args) > param_i - kwargs_count:
                 new_args[param_i] = args[param_i - kwargs_count]
-            else:
+            elif param.id:
                 valid_args[param_i] = False
         if not all(valid_args):
             past_false = [
-                valid_arg_i for valid_arg_i, valid_arg in enumerate(valid_args) if valid_arg
+                valid_arg_i for valid_arg_i, valid_arg in enumerate(valid_args) if not valid_arg
             ]
             for i in past_false:
                 raise ProgramTypeError(
-                    self.past_node, msg=f"{self.past_node.params[i].id} argument not in function call."
+                    self.past_node,
+                    msg=f"{self.past_node.params[i].id} argument not in function call.",
                 )
         args = tuple(new_args)
         return args, kwargs
