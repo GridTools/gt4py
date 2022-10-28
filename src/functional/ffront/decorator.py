@@ -266,12 +266,13 @@ class Program:
         new_args = [None] * len(past_params)
         valid_args = [True] * len(past_params)
         kwargs_count = 0
-        if len(past_params) < len(args) + len(kwargs):
-            raise GTTypeError(
-                "Number of parameters in function call exceeds number in function definition."
-            )
+
         for param_i, param in enumerate(past_params):
             if param.id in kwargs:
+                # if param_i + 1 >= len(args):
+                #     raise ProgramTypeError.from_past_node(
+                #         self.past_node, msg=f"Got multiple values for argument {self.past_node.params[param_i].id}"
+                #     )
                 new_args[param_i] = kwargs[param.id]
                 kwargs.pop(param.id)
                 kwargs_count += 1
@@ -285,7 +286,7 @@ class Program:
             ]
             for i in past_false:
                 raise ProgramTypeError(
-                    past_params, f"{past_params[i].id} argument not in function call."
+                    self.past_node, msg=f"{self.past_node.params[i].id} argument not in function call."
                 )
         args = tuple(new_args)
         return args, kwargs
