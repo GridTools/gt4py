@@ -1117,7 +1117,7 @@ def test_docstring():
         return a
 
     @program
-    def test_docstring(a: Field[[IDim], float64]) -> Field[[IDim], float64]:
+    def test_docstring(a: Field[[IDim], float64]):
         """My docstring."""
         fieldop_with_docstring(a, out=a)
 
@@ -1287,9 +1287,7 @@ def test_implicit_broadcast():
     inp_val = 2.0
 
     @program
-    def program_implicit_broadcast(
-        scalar: Field[[], float], out: Field[[], float]
-    ) -> Field[[], float]:
+    def program_implicit_broadcast(scalar: Field[[], float], out: Field[[], float]):
         fieldop_implicit_broadcast(scalar, out=out)
 
     program_implicit_broadcast(inp_val, out, offset_provider={})
