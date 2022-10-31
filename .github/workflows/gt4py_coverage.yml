@@ -65,6 +65,5 @@ jobs:
       uses: codecov/codecov-action@v2
       with:
         files: coverage.xml
-        name: gt4py-functional
         fail_ci_if_error: true
         flags: gt4py-all
