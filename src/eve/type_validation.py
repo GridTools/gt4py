@@ -37,7 +37,6 @@ from .extended_typing import (
     Sequence,
     Type,
     TypeAnnotation,
-    TypeVar,
     Union,
     cast,
     overload,

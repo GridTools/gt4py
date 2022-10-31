@@ -387,8 +387,8 @@ def extended_runtime_checkable(  # noqa: C901  # too complex but unavoidable
 
 
 if _sys.version_info >= (3, 9):
-    # The `obj is Any` check is required since `Any` was converted to a class sinde
-    #  Python 3.11 or typing_extensions >= 4.4
+    # The `obj is Any` check is required since `Any` was converted to a class since
+    # Python 3.11 or typing_extensions >= 4.4
 
     def is_actual_type(obj: Any) -> TypeGuard[Type]:
         """Check if an object is an actual type and not a GenericAlias.
