@@ -253,12 +253,10 @@ class VerticalLoopSection(LocNode):
 class VerticalLoop(LocNode):
     loop_order: common.LoopOrder
     sections: List[VerticalLoopSection]
-    caches: List[CacheDesc] = []
+    caches: List[CacheDesc] = eve.field(default_factory=list)
 
     @datamodels.validator("sections")
-    def nonempty_loop(
-        cls: Type["VerticalLoop"], attribute: datamodels.Attribute, v: List[VerticalLoopSection]
-    ) -> None:
+    def nonempty_loop(self, attribute: datamodels.Attribute, v: List[VerticalLoopSection]) -> None:
         if not v:
             raise ValueError("Empty vertical loop is not allowed")
 
@@ -277,7 +275,7 @@ class VerticalLoop(LocNode):
             raise ValueError("Loop intervals not contiguous or in wrong order")
 
 
-class Stencil(LocNode, eve.SymbolTableTrait):
+class Stencil(LocNode, eve.ValidatedSymbolTableTrait):
     name: str
     # TODO: fix to be List[Union[ScalarDecl, FieldDecl]]
     params: List[Decl]
@@ -285,5 +283,4 @@ class Stencil(LocNode, eve.SymbolTableTrait):
     declarations: List[Temporary]
 
     _validate_dtype_is_set = common.validate_dtype_is_set()
-    _validate_symbol_refs = common.validate_symbol_refs()
     _validate_lvalue_dims = common.validate_lvalue_dims(VerticalLoop, FieldDecl)

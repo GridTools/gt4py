@@ -93,7 +93,7 @@ def make_args_data_from_gtir(pipeline: GtirPipeline) -> ModuleData:
         else:
             boundary = Boundary.zeros(ndims=3)
 
-        data.field_info[decl.name] = FieldInfo(
+        data.field_info[str(decl.name)] = FieldInfo(
             access=access,
             boundary=boundary,
             axes=tuple(dimension_flags_to_names(decl.dimensions).upper()),
@@ -105,7 +105,7 @@ def make_args_data_from_gtir(pipeline: GtirPipeline) -> ModuleData:
         access = cast(Literal[AccessKind.NONE, AccessKind.READ], accesses[decl.name])
         assert access in {AccessKind.NONE, AccessKind.READ}
         dtype = numpy.dtype(decl.dtype.name.lower())
-        data.parameter_info[decl.name] = ParameterInfo(access=access, dtype=dtype)
+        data.parameter_info[str(decl.name)] = ParameterInfo(access=access, dtype=dtype)
 
     data.unreferenced = [*sorted(name for name in accesses if accesses[name] == AccessKind.NONE)]
     _args_data_cache[pipeline.stencil_id] = data

@@ -216,9 +216,10 @@ def symbol_name_creator(used_names: Set[str]) -> Callable[[str], str]:
 
 def collect_symbol_names(node: eve.RootNode) -> Set[str]:
     return (
-        node.iter_tree()
+        eve.walk_values(node)
         .if_isinstance(eve.SymbolTableTrait)
-        .getattr("symtable_")
+        .getattr("annex")
+        .getattr("symtable")
         .reduce(lambda names, symtable: names.union(symtable.keys()), init=set())
     )
 

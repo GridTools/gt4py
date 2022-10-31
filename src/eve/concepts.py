@@ -19,6 +19,7 @@
 
 from __future__ import annotations
 
+import copy
 import ast
 import re
 
@@ -218,6 +219,8 @@ class Node(datamodels.DataModel, trees.Tree, kw_only=True):  # type: ignore[call
         for name in self.__datamodel_fields__.keys():
             yield name, getattr(self, name)
 
+    iter_tree = utils.as_xiter(iter_children_values)
+
     pre_walk_items = trees.pre_walk_items
     pre_walk_values = trees.pre_walk_values
 
@@ -229,6 +232,12 @@ class Node(datamodels.DataModel, trees.Tree, kw_only=True):  # type: ignore[call
 
     walk_items = trees.walk_items
     walk_values = trees.walk_values
+
+    def copy(self, update: Dict[str, Any]) -> "Node":
+        new_node = copy.deepcopy(self)
+        for k, v in update.items():
+            setattr(new_node, k, v)
+        return new_node
 
     # TODO(egparedes): add useful hashes to base node
     # # @property

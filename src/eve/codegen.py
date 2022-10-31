@@ -735,14 +735,12 @@ class TemplatedGenerator(NodeVisitor):
     ) -> str:
         """Render a template using node instance data (see class documentation)."""
         return template.render(
-            **transformed_children,
-            **transformed_annexed_items,
+            **{**transformed_children, **transformed_annexed_items, **kwargs},
             _children=transformed_children,
             _impl=transformed_annexed_items,
             _this_node=node,
             _this_generator=self,
             _this_module=sys.modules[type(self).__module__],
-            **kwargs,
         )
 
     def transform_children(self, node: Node, **kwargs: Any) -> Dict[str, Any]:

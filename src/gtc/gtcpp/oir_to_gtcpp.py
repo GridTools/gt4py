@@ -108,9 +108,9 @@ class OIRToGTCpp(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     class GTComputationContext:
         create_symbol_name: SymbolNameCreator
         temporaries: List[gtcpp.Temporary] = field(default_factory=list)
-        arguments: Set[gtcpp.Arg] = field(default_factory=set)
         positionals: Dict[int, gtcpp.Positional] = field(default_factory=dict)
         axis_lengths: Dict[int, gtcpp.AxisLength] = field(default_factory=dict)
+        _arguments: Set[str] = field(default_factory=set)
 
         def add_temporaries(
             self, temporaries: List[gtcpp.Temporary]
@@ -118,8 +118,12 @@ class OIRToGTCpp(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             self.temporaries.extend(temporaries)
             return self
 
-        def add_arguments(self, arguments: Set[gtcpp.Arg]) -> "OIRToGTCpp.GTComputationContext":
-            self.arguments.update(arguments)
+        @property
+        def arguments(self) -> List[gtcpp.Arg]:
+            return [gtcpp.Arg(name) for name in self._arguments]
+
+        def add_arguments(self, arguments: Set[str]) -> "OIRToGTCpp.GTComputationContext":
+            self._arguments.update(arguments)
             return self
 
         @staticmethod
@@ -304,13 +308,12 @@ class OIRToGTCpp(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         accessors = _extract_accessors(apply_method, {decl.name for decl in comp_ctx.temporaries})
         stage_args = [gtcpp.Arg(name=acc.name) for acc in accessors]
 
-        comp_ctx.add_arguments(
-            {
-                param_arg
-                for param_arg in stage_args
-                if param_arg.name not in [tmp.name for tmp in comp_ctx.temporaries]
-            }
-        )
+        tmp_names = {tmp.name for tmp in comp_ctx.temporaries}
+        param_names_not_tmps = {
+            str(param_arg.name) for param_arg in stage_args if param_arg.name not in tmp_names
+        }
+
+        comp_ctx.add_arguments(param_names_not_tmps)
 
         functor_name = type(node).__name__ + str(id(node))
         prog_ctx.add_functor(

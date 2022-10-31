@@ -321,15 +321,15 @@ class VariableKOffset(eve.GenericNode, Generic[ExprT]):
 
 
 class ScalarAccess(LocNode):
-    name: eve.SymbolRef
-    kind = ExprKind.SCALAR
+    name: eve.Coerced[eve.SymbolRef]
+    kind: ExprKind = ExprKind.SCALAR
 
 
 class FieldAccess(eve.GenericNode, Generic[ExprT, VariableKOffsetT]):
-    name: eve.SymbolRef
+    name: eve.Coerced[eve.SymbolRef]
     offset: Union[CartesianOffset, VariableKOffsetT]
-    data_index: List[ExprT] = []
-    kind = ExprKind.FIELD
+    data_index: List[ExprT] = eve.field(default_factory=list)
+    kind: ExprKind = ExprKind.FIELD
 
     @classmethod
     def centered(cls, *, name: str, loc: eve.SourceLocation = None) -> "FieldAccess":
@@ -435,9 +435,12 @@ class BinaryOp(eve.GenericNode, Generic[ExprT]):
     left: ExprT
     right: ExprT
 
+    # NOTE This needs to be set to a default, but will be overwritten by the root_validator after
+    kind: ExprKind = ExprKind.FIELD
+
     @datamodels.root_validator
     def kind_propagation(cls, instance: "BinaryOp") -> None:
-        instance.kind = compute_kind(instance.left, instance.right)
+        instance.kind = compute_kind([instance.left, instance.right])
 
 
 def binary_op_dtype_propagation(*, strict: bool) -> datamodels.RootValidator:
@@ -477,6 +480,9 @@ class TernaryOp(eve.GenericNode, Generic[ExprT]):
     cond: ExprT
     true_expr: ExprT
     false_expr: ExprT
+
+    # NOTE This needs to be set to a default, but will be overwritten by the root_validator after
+    kind: ExprKind = ExprKind.FIELD
 
     @datamodels.validator("cond")
     def condition_is_boolean(self, attribute: datamodels.Attribute, value: Expr) -> None:
@@ -539,7 +545,7 @@ def native_func_call_dtype_propagation(*, strict: bool = True) -> datamodels.Roo
 def validate_dtype_is_set() -> datamodels.RootValidator:
     def _impl(cls: Type[datamodels.DataModel], instance: datamodels.DataModel) -> None:
         dtype_nodes: List[eve.Node] = []
-        for v in flatten_list(instance.values()):
+        for v in flatten_list(datamodels.astuple(instance)):
             if isinstance(v, eve.Node):
                 dtype_nodes.extend(v.iter_tree().if_hasattr("dtype"))
 
@@ -550,44 +556,6 @@ def validate_dtype_is_set() -> datamodels.RootValidator:
 
         if len(nodes_without_dtype) > 0:
             raise ValueError("Nodes without dtype detected {}".format(nodes_without_dtype))
-
-    return datamodels.root_validator(_impl)
-
-
-def validate_symbol_refs() -> datamodels.RootValidator:
-    """Validate that symbol refs are found in a symbol table valid at the current scope."""
-
-    def _impl(cls: Type[datamodels.DataModel], instance: datamodels.DataModel) -> None:
-        class SymtableValidator(eve.NodeVisitor):
-            def __init__(self) -> None:
-                self.missing_symbols: List[str] = []
-
-            def visit_Node(
-                self, node: eve.Node, *, symtable: Dict[str, Any], **kwargs: Any
-            ) -> None:
-                for name, metadata in node.__node_children__.items():
-                    if isinstance(metadata["definition"].type_, type) and issubclass(
-                        metadata["definition"].type_, eve.SymbolRef
-                    ):
-                        if getattr(node, name) and getattr(node, name) not in symtable:
-                            self.missing_symbols.append(getattr(node, name))
-
-                if isinstance(node, eve.SymbolTableTrait):
-                    symtable = {**symtable, **node.symtable_}
-                self.generic_visit(node, symtable=symtable, **kwargs)
-
-            @classmethod
-            def apply(cls, node: eve.Node, *, symtable: Dict[str, Any]) -> List[str]:
-                visitor = cls()
-                visitor.visit(node, symtable=symtable)
-                return visitor.missing_symbols
-
-        missing_symbols = []
-        for v in instance.values():
-            missing_symbols.extend(SymtableValidator.apply(v, symtable=instance.symtable_))
-
-        if len(missing_symbols) > 0:
-            raise ValueError("Symbols {} not found.".format(missing_symbols))
 
     return datamodels.root_validator(_impl)
 
@@ -682,9 +650,9 @@ def validate_lvalue_dims(
     """
 
     def _impl(cls: Type[datamodels.DataModel], instance: datamodels.DataModel) -> None:
-        for _, children in instance.items():
+        for _, children in datamodels.asdict(instance).items():
             _LvalueDimsValidator(vertical_loop_type, decl_type).visit(
-                children, symtable=instance.symtable_
+                children, symtable=instance.annex.symtable
             )
 
     return datamodels.root_validator(_impl)

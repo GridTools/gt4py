@@ -14,10 +14,10 @@
 
 import functools
 from typing import Any, Callable, Dict, Iterator, List
-
 import numpy as np
 
 import eve
+from eve import datamodels
 from gtc import gtir
 from gtc.common import DataType, op_to_ufunc, typestr_to_data_type
 from gtc.gtir import Expr
@@ -34,9 +34,9 @@ def _upcast_nodes(*exprs: Expr, upcasting_rule: Callable) -> Iterator[Expr]:
     return iter(_upcast_node(target_dtype, arg) for target_dtype, arg in zip(target_dtypes, exprs))
 
 
-def _update_node(node: gtir.Expr, updated_children: Dict[str, eve.RootNode]) -> eve.Node:
+def _update_node(node: eve.Node, updated_children: Dict[str, eve.RootNode]) -> eve.Node:
     # create new node only if children changed
-    old_children = node.dict(include={*updated_children.keys()})
+    old_children = datamodels.asdict(node)
     if any([old_children[k] != updated_children[k] for k in updated_children.keys()]):
         return node.copy(update=updated_children)
     else:

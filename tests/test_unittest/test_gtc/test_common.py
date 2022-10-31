@@ -56,31 +56,37 @@ class DummyExpr(Expr):
 
 
 class UnaryOp(Expr, common.UnaryOp[Expr]):
-    pass
+    kind: ExprKind = ExprKind.FIELD
 
 
 class BinaryOp(Expr, common.BinaryOp[Expr]):
     dtype_propagation = common.binary_op_dtype_propagation(strict=True)
+    kind: ExprKind = ExprKind.FIELD
 
 
 class TernaryOp(Expr, common.TernaryOp[Expr]):
     _dtype_propagation = common.ternary_op_dtype_propagation(strict=True)
+    kind: ExprKind = ExprKind.FIELD
 
 
 class BinaryOpUpcasting(Expr, common.BinaryOp[Expr]):
     dtype_propagation = common.binary_op_dtype_propagation(strict=False)
+    kind: ExprKind = ExprKind.FIELD
 
 
 class TernaryOpUpcasting(Expr, common.TernaryOp[Expr]):
     _dtype_propagation = common.ternary_op_dtype_propagation(strict=False)
+    kind: ExprKind = ExprKind.FIELD
 
 
 class NativeFuncCall(Expr, common.NativeFuncCall[Expr]):
     _dtype_propagation = common.native_func_call_dtype_propagation(strict=True)
+    kind: ExprKind = ExprKind.FIELD
 
 
 class AssignStmt(Stmt, common.AssignStmt[DummyExpr, Expr]):
     _dtype_validation = common.assign_stmt_dtype_validation(strict=True)
+    kind: ExprKind = ExprKind.FIELD
 
 
 @pytest.mark.parametrize(
@@ -269,10 +275,8 @@ class AnotherSymbolTable(eve.Node, eve.SymbolTableTrait):
     nodes: List[Union[SymbolRefChildNode, SymbolChildNode]]
 
 
-class SymbolTableRootNode(eve.Node, eve.SymbolTableTrait):
+class SymbolTableRootNode(eve.Node, eve.ValidatedSymbolTableTrait):
     nodes: List[Union[SymbolRefChildNode, SymbolChildNode, AnotherSymbolTable]]
-
-    _validate_symbol_refs = common.validate_symbol_refs()
 
 
 @pytest.mark.parametrize(

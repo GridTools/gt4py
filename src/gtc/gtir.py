@@ -25,11 +25,10 @@ Analysis is required to generate valid code (complying with the parallel model)
 - `FieldIfStmt` expansion to comply with the parallel model
 """
 
-from typing import Any, Dict, List, Optional, Set, Tuple, Type
+from typing import Any, Dict, List, Set, Tuple, Type
 
 import eve
 from eve import datamodels
-from eve.traits import SymbolTableTrait
 from gtc import common
 from gtc.common import AxisBound, LocNode
 
@@ -212,7 +211,7 @@ class VerticalLoop(LocNode):
         """
         In the same VerticalLoop a field must not be written and read with a horizontal offset.
 
-        Temporaries don't have this contraint. Backends are required to implement
+        Temporaries don't have this constraint. Backends are required to implement
         them using block-private halos.
         """
         intersec = _written_and_read_with_offset(instance.body)
@@ -231,20 +230,19 @@ class Argument(eve.Node):
     default: str
 
 
-class Stencil(LocNode, SymbolTableTrait):
+class Stencil(LocNode, eve.ValidatedSymbolTableTrait):
     name: str
     api_signature: List[Argument]
     params: List[Decl]
     vertical_loops: List[VerticalLoop]
     externals: Dict[str, Literal]
-    sources: Optional[Dict[str, str]]
-    docstring: Optional[str]
+    sources: Dict[str, str]
+    docstring: str
 
     @property
     def param_names(self) -> List[str]:
         return [p.name for p in self.params]
 
-    _validate_symbol_refs = common.validate_symbol_refs()
     _validate_lvalue_dims = common.validate_lvalue_dims(VerticalLoop, FieldDecl)
 
 
@@ -264,7 +262,7 @@ def _written_and_read_with_offset(
     def _writes(stmts: List[Stmt]) -> Set[str]:
         result = set()
         for left in eve.walk_values(stmts).if_isinstance(ParAssignStmt).getattr("left"):
-            result |= left.iter_tree().if_isinstance(FieldAccess).getattr("name").to_set()
+            result |= eve.walk_values(left).if_isinstance(FieldAccess).getattr("name").to_set()
         return result
 
     def _reads_with_offset(stmts: List[Stmt]) -> Set[str]:

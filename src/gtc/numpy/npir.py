@@ -127,7 +127,7 @@ class VarKOffset(common.VariableKOffset[Expr]):
 
 
 class FieldSlice(Expr, VectorLValue):
-    name: eve.SymbolRef
+    name: eve.Coerced[eve.SymbolRef]
     i_offset: int
     j_offset: int
     k_offset: Union[int, VarKOffset]

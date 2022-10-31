@@ -53,9 +53,8 @@ class HorizontalExecutionMerging(eve.NodeTranslator):
             declarations: List[oir.LocalScalar]
             loc: Optional[eve.SourceLocation]
 
-            assert set(oir.HorizontalExecution.__fields__) == {
+            assert set(oir.HorizontalExecution.__datamodel_fields__.keys()) == {
                 "loc",
-                "symtable_",
                 "body",
                 "declarations",
             }, (
@@ -239,14 +238,14 @@ class OnTheFlyMerging(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
                 nf.GAMMA,
                 nf.CBRT,
             }
-            calls = first.iter_tree().if_isinstance(oir.NativeFuncCall).getattr("func")
+            calls = eve.walk_values(first).if_isinstance(oir.NativeFuncCall).getattr("func")
             return any(call in expensive_calls for call in calls)
 
         def first_has_variable_access() -> bool:
             return first_accesses.has_variable_access()
 
         def first_has_horizontal_restriction() -> bool:
-            return any(first.iter_tree().if_isinstance(oir.HorizontalRestriction))
+            return any(eve.walk_values(first).if_isinstance(oir.HorizontalRestriction))
 
         if (
             first_fields_rewritten_later()
