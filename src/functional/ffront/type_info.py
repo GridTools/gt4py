@@ -255,6 +255,10 @@ def is_concretizable(symbol_type: ct.SymbolType, to_type: ct.SymbolType) -> bool
     return False
 
 
+def _is_empty_field(field: ct.FieldType) -> bool:
+    return isinstance(field, ct.FieldType) and len(field.dims) == 0
+
+
 def is_not_empty_field_compatible(a_arg: ct.FieldType, b_arg: ct.FieldType | ct.ScalarType) -> bool:
     """
     Check if first argument is an empty field and whether second is either another emtpy field or a scalar.
@@ -276,11 +280,11 @@ def is_not_empty_field_compatible(a_arg: ct.FieldType, b_arg: ct.FieldType | ct.
     True
 
     """
-    if not (isinstance(a_arg, ct.FieldType) and len(a_arg.dims) == 0):
-        return True
-    elif (isinstance(b_arg, ct.FieldType) and (len(b_arg.dims) != 0)) or not is_arithmetic(b_arg):
-        return True
-    elif extract_dtype(a_arg) != extract_dtype(b_arg):
+    if (
+        not _is_empty_field(a_arg)
+        or not (_is_empty_field(b_arg) or is_arithmetic(b_arg))
+        or (extract_dtype(a_arg) != extract_dtype(b_arg))
+    ):
         return True
     return False
 
