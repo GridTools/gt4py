@@ -14,7 +14,7 @@ flake8-mutable>=1.2.0
 flake8-rst-docstrings>=0.0.14
 isort~=5.10
 jupytext>=1.14
-mypy@https://github.com/mypyc/mypy_mypyc-wheels/releases/download/v0.990%2Bdev.758f43c5d27eda339fd340a7b68bce59b3684254/mypy-0.990+dev.758f43c5d27eda339fd340a7b68bce59b3684254-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
+mypy@https://github.com/mypyc/mypy_mypyc-wheels/releases/download/v0.990%2Bdev.758f43c5d27eda339fd340a7b68bce59b3684254/mypy-0.990+dev-py3-none-any.whl
 pre-commit~=2.15
 psutil>=5.0
 pygments>=2.7
