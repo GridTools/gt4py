@@ -42,9 +42,9 @@ EMBEDDED = "embedded"
 
 # Atoms
 Tag: TypeAlias = str
-IntIndex: TypeAlias = int
+IntIndex: TypeAlias = int | np.integer
 
-FieldIndex: TypeAlias = int | slice
+FieldIndex: TypeAlias = slice | IntIndex
 FieldIndexOrIndices: TypeAlias = FieldIndex | tuple[FieldIndex, ...]
 
 FieldAxis: TypeAlias = (
@@ -111,8 +111,8 @@ OffsetProvider: TypeAlias = dict[Tag, OffsetProviderElem]
 # Positions
 SparsePositionEntry = list[int]
 IncompleteSparsePositionEntry: TypeAlias = list[Optional[int]]
-PositionEntry: TypeAlias = IntIndex | SparsePositionEntry
-IncompletePositionEntry: TypeAlias = IntIndex | IncompleteSparsePositionEntry
+PositionEntry: TypeAlias = SparsePositionEntry | IntIndex
+IncompletePositionEntry: TypeAlias = IncompleteSparsePositionEntry | IntIndex
 ConcretePosition: TypeAlias = dict[Tag, PositionEntry]
 IncompletePosition: TypeAlias = dict[Tag, IncompletePositionEntry]
 
@@ -122,7 +122,7 @@ MaybePosition: TypeAlias = Optional[Position]
 
 
 def is_int_index(p: Any) -> TypeGuard[IntIndex]:
-    return isinstance(p, int)
+    return isinstance(p, (int, np.integer))
 
 
 @runtime_checkable
@@ -590,7 +590,7 @@ def group_offsets(*offsets: OffsetPart) -> tuple[list[CompleteOffset], list[Tag]
     tag_stack = []
     complete_offsets = []
     for offset in offsets:
-        if not isinstance(offset, int):
+        if not isinstance(offset, (int, np.integer)):
             tag_stack.append(offset)
         else:
             assert tag_stack
@@ -676,7 +676,8 @@ _UNDEFINED = Undefined()
 
 def _is_concrete_position(pos: Position) -> TypeGuard[ConcretePosition]:
     return all(
-        isinstance(v, int) or (isinstance(v, list) and all(isinstance(e, int) for e in v))
+        isinstance(v, (int, np.integer))
+        or (isinstance(v, list) and all(isinstance(e, (int, np.integer)) for e in v))
         for v in pos.values()
     )
 
@@ -743,6 +744,7 @@ class MDIterator:
         return self.pos is not None
 
     def deref(self) -> Any:
+        assert not self.incomplete_offsets
         if not self.can_deref():
             # this can legally happen in cases like `if_(can_deref(inp), deref(inp), 42.)`
             # because both branches will be eagerly executed
@@ -864,7 +866,7 @@ def get_ordered_indices(
                 res.append(elem[sparse_position_tracker[axis.value]])
                 sparse_position_tracker[axis.value] += 1
             else:
-                assert isinstance(elem, (int, slice))
+                assert isinstance(elem, (int, np.integer, slice))
                 res.append(elem)
     return tuple(res)
 
