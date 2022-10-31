@@ -283,7 +283,7 @@ class Program:
 
     def _validate_args(self, *args, **kwargs) -> None:
         arg_types = [symbol_makers.make_symbol_type_from_value(arg) for arg in args]
-        kwarg_types = {k: symbol_makers.make_symbol_type_from_value(v) for k, v in kwargs.items()}
+        kwarg_types = {}
 
         try:
             type_info.accepts_args(
