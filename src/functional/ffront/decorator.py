@@ -266,6 +266,7 @@ class Program:
         new_args = [None] * len(past_params)
         valid_args = [True] * len(past_params)
         kwargs_count = 0
+        args_count = len(args)
 
         for param_i, param in enumerate(past_params):
             if param.id in kwargs:
@@ -274,8 +275,11 @@ class Program:
                 kwargs_count += 1
             elif len(args) > param_i - kwargs_count:
                 new_args[param_i] = args[param_i - kwargs_count]
+                args_count -= 1
             elif param.id:
                 valid_args[param_i] = False
+        if args_count > 0:
+            raise GTTypeError("One argument expressed both as input and keyword")
         if not all(valid_args):
             past_false = [
                 valid_arg_i for valid_arg_i, valid_arg in enumerate(valid_args) if not valid_arg
