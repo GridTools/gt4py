@@ -71,6 +71,11 @@ class Subscript(Expr):
     index: int
 
 
+class Attribute(Expr):
+    value: Expr
+    attr: str
+
+
 class TupleExpr(Expr):
     elts: list[Expr]
 

@@ -1274,3 +1274,21 @@ def test_undefined_symbols():
         @field_operator
         def return_undefined():
             return undefined_symbol
+
+
+def test_constant_closure_vars():
+    from eve.utils import FrozenNamespace
+
+    constants = FrozenNamespace(
+        PI=np.float32(3.142),
+        E=np.float32(2.718),
+    )
+
+    @field_operator
+    def consume_constants(input: Field[[IDim], np.float32]) -> Field[[IDim], np.float32]:
+        return constants.PI * constants.E * input
+
+    input = np_as_located_field(IDim)(np.ones((1,), dtype=np.float32))
+    output = np_as_located_field(IDim)(np.zeros((1,), dtype=np.float32))
+    consume_constants(input, out=output, offset_provider={})
+    assert np.allclose(np.asarray(output), constants.PI * constants.E)
