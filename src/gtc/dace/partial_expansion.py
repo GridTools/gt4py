@@ -243,8 +243,8 @@ def _update_shapes(sdfg: dace.SDFG, access_infos: Dict[dcir.SymbolName, dcir.Fie
             array.shape = shape
             array.strides = strides
             array.total_size = total_size
-            array.storage = dace.StorageType.CPU_ThreadLocal
-            array.lifetime = dace.AllocationLifetime.Persistent
+            # array.storage = dace.StorageType.CPU_ThreadLocal
+            # array.lifetime = dace.AllocationLifetime.Persistent
             sdfg.parent_nsdfg_node.no_inline = True
         else:
             shape = access_info.shape
