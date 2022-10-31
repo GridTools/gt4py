@@ -55,6 +55,12 @@ jobs:
         pip install tox clang-format
         tox -r -e gt4py-py${pyversion_no_dot}-${tox_env_factor}
 
+    - name: Upload coverage.xml artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: coverage
+        path: coverage.xml
+
     - name: Upload to codecov.io
       uses: codecov/codecov-action@v2
       with:

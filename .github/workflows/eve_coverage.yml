@@ -46,6 +46,12 @@ jobs:
         pip install tox
         tox -r -e eve-py${pyversion_no_dot}
 
+    - name: Upload coverage.xml artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: coverage
+        path: coverage.xml
+
     - name: Upload to codecov.io
       uses: codecov/codecov-action@v2
       with:
