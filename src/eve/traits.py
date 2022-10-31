@@ -18,7 +18,6 @@
 
 
 from __future__ import annotations
-
 import collections
 
 from . import concepts, datamodels, exceptions, visitors
@@ -100,8 +99,6 @@ class SymbolRefsValidatorTrait:
         symtable = instance.annex.symtable
         for child_node in instance.iter_children_values():
             validator.visit(child_node, symtable=symtable)
-
-        print(symtable)
 
         if validator.missing_symbols:
             raise exceptions.EveValueError(

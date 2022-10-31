@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from typing import Any, Callable, Dict, Generic, List, Optional, Set, Tuple, TypeVar, cast
 
 import eve
+import eve.utils
 from gtc import common, oir
 from gtc.definitions import Extent
 from gtc.passes.horizontal_masks import mask_overlap_with_extent
@@ -127,11 +128,13 @@ class AccessCollector(eve.NodeVisitor):
 
         def offsets(self) -> Dict[str, Set[OffsetT]]:
             """Get a dictionary, mapping all accessed fields' names to sets of offset tuples."""
-            return self._offset_dict(eve.xiter(self._ordered_accesses))
+            return self._offset_dict(eve.utils.XIterable(self._ordered_accesses))
 
         def read_offsets(self) -> Dict[str, Set[OffsetT]]:
             """Get a dictionary, mapping read fields' names to sets of offset tuples."""
-            return self._offset_dict(eve.xiter(self._ordered_accesses).filter(lambda x: x.is_read))
+            return self._offset_dict(
+                eve.utils.XIterable(self._ordered_accesses).filter(lambda x: x.is_read)
+            )
 
         def read_accesses(self) -> List[AccessT]:
             """Get the sub-list of read accesses."""
@@ -139,11 +142,13 @@ class AccessCollector(eve.NodeVisitor):
 
         def write_offsets(self) -> Dict[str, Set[OffsetT]]:
             """Get a dictionary, mapping written fields' names to sets of offset tuples."""
-            return self._offset_dict(eve.xiter(self._ordered_accesses).filter(lambda x: x.is_write))
+            return self._offset_dict(
+                eve.utils.XIterable(self._ordered_accesses).filter(lambda x: x.is_write)
+            )
 
         def write_accesses(self) -> List[AccessT]:
             """Get the sub-list of write accesses."""
-            return list(eve.xiter(self._ordered_accesses).filter(lambda x: x.is_write))
+            return list(eve.utils.XIterable(self._ordered_accesses).filter(lambda x: x.is_write))
 
         def fields(self) -> Set[str]:
             """Get a set of all accessed fields' names."""

@@ -120,7 +120,7 @@ class OIRToGTCpp(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
 
         @property
         def arguments(self) -> List[gtcpp.Arg]:
-            return [gtcpp.Arg(name) for name in self._arguments]
+            return [gtcpp.Arg(name=name) for name in self._arguments]
 
         def add_arguments(self, arguments: Set[str]) -> "OIRToGTCpp.GTComputationContext":
             self._arguments.update(arguments)

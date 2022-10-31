@@ -106,9 +106,9 @@ class _GTIRPropagateDtypeToAccess(eve.NodeTranslator, eve.VisitorWithSymbolTable
             result.iter_tree()
             .if_isinstance(gtir.ScalarAccess, gtir.FieldAccess)
             .getattr("dtype")
-            .map(lambda x: x is not None)
+            .map(lambda x: x is not DataType.AUTO)
         ):
-            raise GTCPostconditionError(expected="No None dtype in FieldAccess or ScalarAccess.")
+            raise GTCPostconditionError(expected="No AUTO dtype in FieldAccess or ScalarAccess.")
         return result
 
 
