@@ -262,33 +262,22 @@ class Program:
 
     def _canonicalize_args(self, *args, **kwargs) -> tuple[tuple, dict]:
         past_params = self.past_node.params
-
-        new_args = [None] * len(past_params)
-        valid_args = [True] * len(past_params)
-        kwargs_count = 0
-        args_count = len(args)
+        new_args = []
 
         for param_i, param in enumerate(past_params):
-            if param.id in kwargs:
-                new_args[param_i] = kwargs[param.id]
+            if param_i < len(args):
+                new_args.append(args[param_i])
+            elif param.id in kwargs:
+                new_args.append(kwargs[param.id])
                 kwargs.pop(param.id)
-                kwargs_count += 1
-            elif len(args) > param_i - kwargs_count:
-                new_args[param_i] = args[param_i - kwargs_count]
-                args_count -= 1
-            elif param.id:
-                valid_args[param_i] = False
-        if args_count > 0:
-            raise GTTypeError("One argument expressed both as input and keyword")
-        if not all(valid_args):
-            past_false = [
-                valid_arg_i for valid_arg_i, valid_arg in enumerate(valid_args) if not valid_arg
-            ]
-            for i in past_false:
-                raise ProgramTypeError(
-                    self.past_node,
-                    msg=f"{self.past_node.params[i].id} argument not in function call.",
-                )
+
+        extra_args = set(list(kwargs.keys())) - set(["out"])
+        if len(extra_args) > 0:
+            raise GTTypeError(
+                f"Invalid argument(s) {extra_args} in function call."
+                f" Either argument(s) not in function definition or already a positional argument."
+            )
+
         args = tuple(new_args)
         return args, kwargs
 
