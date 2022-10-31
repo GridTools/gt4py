@@ -166,9 +166,9 @@ def _pre_expand_trafos(gtir_pipeline: GtirPipeline, sdfg: dace.SDFG, layout_map)
         sdfg.add_state(gtir_pipeline.gtir.name)
         return sdfg
 
-    # for array in sdfg.arrays.values():
-    #     if array.transient:
-    #         array.lifetime = dace.AllocationLifetime.Persistent
+    for array in sdfg.arrays.values():
+        if array.transient:
+            array.lifetime = dace.AllocationLifetime.Persistent
 
     sdfg.simplify(validate=False)
 
