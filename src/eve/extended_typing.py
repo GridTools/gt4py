@@ -407,7 +407,7 @@ else:
         return isinstance(obj, type) and obj is not Any
 
 
-if hasattr(_typing_extensions, "Any"):
+if hasattr(_typing_extensions, "Any") and _typing.Any is not _typing_extensions.Any:
 
     def is_Any(obj: Any) -> bool:
         return obj is _typing.Any or obj is _typing_extensions.Any
