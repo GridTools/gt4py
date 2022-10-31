@@ -407,8 +407,15 @@ else:
         return isinstance(obj, type) and obj is not Any
 
 
-def is_Any(obj: Any) -> bool:
-    return obj is _typing.Any or obj is _typing_extensions.Any
+if hasattr(_typing_extensions, "Any"):
+
+    def is_Any(obj: Any) -> bool:
+        return obj is _typing.Any or obj is _typing_extensions.Any
+
+else:
+
+    def is_Any(obj: Any) -> bool:
+        return obj is _typing.Any
 
 
 def has_type_parameters(cls: Type) -> bool:
