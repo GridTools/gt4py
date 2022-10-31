@@ -585,7 +585,7 @@ class _LvalueDimsValidator(eve.NodeVisitor):
         if isinstance(node, self.vertical_loop_type):
             loop_order = node.loop_order
         if isinstance(node, eve.SymbolTableTrait):
-            symtable = {**symtable, **node.symtable_}
+            symtable = {**symtable, **node.annex.symtable}
         self.generic_visit(node, symtable=symtable, loop_order=loop_order, **kwargs)
 
     def visit_AssignStmt(

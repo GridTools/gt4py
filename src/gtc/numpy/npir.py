@@ -132,7 +132,7 @@ class FieldSlice(Expr, VectorLValue):
     j_offset: int
     k_offset: Union[int, VarKOffset]
     data_index: List[Expr] = []
-    kind = common.ExprKind.FIELD
+    kind: common.ExprKind = common.ExprKind.FIELD
 
     @validator("data_index")
     def data_indices_are_scalar(cls, data_index: List[Expr]) -> List[Expr]:
@@ -143,13 +143,13 @@ class FieldSlice(Expr, VectorLValue):
 
 
 class ParamAccess(Expr):
-    name: eve.SymbolRef
+    name: eve.Coerced[eve.SymbolRef]
     kind = common.ExprKind.SCALAR
 
 
 class LocalScalarAccess(Expr, VectorLValue):
-    name: eve.SymbolRef
-    kind = common.ExprKind.FIELD
+    name: eve.Coerced[eve.SymbolRef]
+    kind: common.ExprKind = common.ExprKind.FIELD
 
 
 class VectorArithmetic(common.BinaryOp[Expr], Expr):

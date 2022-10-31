@@ -174,7 +174,7 @@ class NativeFuncCall(common.NativeFuncCall[Expr], Expr):
 
 
 class Decl(LocNode):  # TODO probably Stmt
-    name: eve.SymbolName
+    name: eve.Coerced[eve.SymbolName]
     dtype: common.DataType
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
@@ -254,9 +254,7 @@ def _variablek_fieldaccess(node) -> bool:
     return isinstance(node, FieldAccess) and isinstance(node.offset, VariableKOffset)
 
 
-def _written_and_read_with_offset(
-    stmts: List[Stmt],
-) -> Set[str]:
+def _written_and_read_with_offset(stmts: List[Stmt]) -> Set[str]:
     """Return a list of names that are written to and read with offset."""
     # TODO(havogt): either move to eve or will be removed in the attr-based eve if a List[Node] is represented as a CollectionNode
     def _writes(stmts: List[Stmt]) -> Set[str]:

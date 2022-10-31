@@ -33,8 +33,8 @@ def validate_stencil_memory_accesses(node: oir.Stencil) -> oir.Stencil:
 
     def _writes(node: oir.Stencil) -> Set[str]:
         result = set()
-        for left in eve.walk_values(node).if_isinstance(oir.AssignStmt).getattr("left"):
-            result |= eve.walk_values(left).if_isinstance(oir.FieldAccess).getattr("name").to_set()
+        for left in node.iter_tree().if_isinstance(oir.AssignStmt).getattr("left"):
+            result |= left.iter_tree().if_isinstance(oir.FieldAccess).getattr("name").to_set()
         return result
 
     field_names = {decl.name for decl in node.params if isinstance(decl, oir.FieldDecl)}

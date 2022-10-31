@@ -463,7 +463,7 @@ class DefIRToGTIR(IRNodeVisitor):
 
     def visit_FieldRef(self, node: FieldRef) -> gtir.FieldAccess:
         return gtir.FieldAccess(
-            name=eve.SymbolRef(node.name),
+            name=node.name,
             offset=self.transform_offset(node.offset),
             data_index=[self.visit(index) for index in node.data_index],
             loc=location_to_source_location(node.loc),
@@ -523,9 +523,7 @@ class DefIRToGTIR(IRNodeVisitor):
         )
 
     def visit_VarRef(self, node: VarRef, **kwargs):
-        return gtir.ScalarAccess(
-            name=eve.SymbolRef(node.name), loc=location_to_source_location(node.loc)
-        )
+        return gtir.ScalarAccess(name=node.name, loc=location_to_source_location(node.loc))
 
     def visit_AxisInterval(self, node: AxisInterval) -> Tuple[gtir.AxisBound, gtir.AxisBound]:
         return self.visit(node.start), self.visit(node.end)
@@ -541,7 +539,7 @@ class DefIRToGTIR(IRNodeVisitor):
         dimensions = tuple(dim in node.axes for dim in dimension_names)
         # datatype conversion works via same ID
         return gtir.FieldDecl(
-            name=eve.SymbolName(node.name),
+            name=node.name,
             dtype=_convert_dtype(node.data_type.value),
             dimensions=dimensions,
             data_dims=tuple(node.data_dims),
@@ -551,7 +549,7 @@ class DefIRToGTIR(IRNodeVisitor):
     def visit_VarDecl(self, node: VarDecl) -> gtir.ScalarDecl:
         # datatype conversion works via same ID
         return gtir.ScalarDecl(
-            name=eve.SymbolName(node.name),
+            name=node.name,
             dtype=_convert_dtype(node.data_type.value),
             loc=location_to_source_location(node.loc),
         )

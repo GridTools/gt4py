@@ -122,7 +122,7 @@ class ProgramFactory(factory.Factory):
 
     name = identifier(cuir.Program)
     params = undefined_symbol_list(
-        lambda name: FieldDeclFactory(name=eve.SymbolName(name)), "kernels", "temporaries"
+        lambda name: FieldDeclFactory(name=name), "kernels", "temporaries"
     )
     positionals: List[cuir.Positional] = []
     temporaries = factory.List([])

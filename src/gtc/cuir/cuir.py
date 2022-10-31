@@ -121,7 +121,7 @@ class NativeFuncCall(common.NativeFuncCall[Expr], Expr):
 
 
 class Decl(LocNode):
-    name: eve.SymbolName
+    name: eve.Coerced[eve.SymbolName]
     dtype: DataType
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
@@ -238,9 +238,9 @@ class Kernel(LocNode):
 
 def axis_size_decls() -> List[ScalarDecl]:
     return [
-        ScalarDecl(name=eve.SymbolName("i_size"), dtype=common.DataType.INT32),
-        ScalarDecl(name=eve.SymbolName("j_size"), dtype=common.DataType.INT32),
-        ScalarDecl(name=eve.SymbolName("k_size"), dtype=common.DataType.INT32),
+        ScalarDecl(name="i_size", dtype=common.DataType.INT32),
+        ScalarDecl(name="j_size", dtype=common.DataType.INT32),
+        ScalarDecl(name="k_size", dtype=common.DataType.INT32),
     ]
 
 
