@@ -341,45 +341,20 @@ def test_input_kwargs_3(fieldview_backend):
     b = np_as_located_field(IDim, JDim)(np.ones((size, size)))
 
     @field_operator(backend=fieldview_backend)
-    def fieldop_input_kwargs(
+    def fieldop_wrong_kwargs(
         a: Field[[IDim, JDim], float64]
     ) -> tuple[Field[[IDim, JDim], float64], Field[[IDim, JDim], float64]]:
         return (a + a, a)
 
     @program
-    def program_input_kwargs(a: Field[[IDim, JDim], float64], b: Field[[IDim, JDim], float64]):
-        fieldop_input_kwargs(a, out=(b, a))
+    def program_wrong_kwargs(a: Field[[IDim, JDim], float64], b: Field[[IDim, JDim], float64]):
+        fieldop_wrong_kwargs(a, out=(b, a))
 
-    with pytest.raises(GTTypeError) as exc_info:
-        program_input_kwargs(b, a=input_1, offset_provider={})
+    with pytest.raises(GTTypeError) as exc_info_1:
+        program_wrong_kwargs(b, a=input_1, offset_provider={})
 
-    assert "Invalid argument(s)" in exc_info.value.args[0]
+    with pytest.raises(GTTypeError) as exc_info_2:
+        program_wrong_kwargs(b, c=input_1, offset_provider={})
 
-
-def test_input_kwargs_4(fieldview_backend):
-    size = 10
-    b = np_as_located_field(IDim, JDim)(np.ones((size, size)) * 3)
-    c = np_as_located_field(IDim, JDim)(np.ones((size, size)))
-    out = np_as_located_field(IDim, JDim)(np.zeros((size, size)))
-
-    @field_operator(backend=fieldview_backend)
-    def fieldop_input_kwargs(
-        a: Field[[IDim, JDim], float64],
-        b: Field[[IDim, JDim], float64],
-        c: Field[[IDim, JDim], float64],
-    ) -> Field[[IDim, JDim], float64]:
-        return a * b + a * c
-
-    @program
-    def program_input_kwargs(
-        a: Field[[IDim, JDim], float64],
-        b: Field[[IDim, JDim], float64],
-        c: Field[[IDim, JDim], float64],
-        out: Field[[IDim, JDim], float64],
-    ):
-        fieldop_input_kwargs(a, b, c, out=out)
-
-    with pytest.raises(GTTypeError) as exc_info:
-        program_input_kwargs(c, b, d=b, out=out, offset_provider={})
-
-    assert "Invalid argument(s)" in exc_info.value.args[0]
+    assert "Invalid argument(s)" in exc_info_1.value.args[0]
+    assert "Invalid argument(s)" in exc_info_2.value.args[0]
