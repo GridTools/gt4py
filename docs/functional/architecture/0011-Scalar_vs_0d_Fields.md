@@ -129,7 +129,7 @@ if a_0d_field > 0.5:
 
 This is essentially the same approach used in the [Python array API standard](https://data-apis.org/array-api/latest/API_specification/array_object.html) where all methods dealing with arrays return arrays, and 0-d arrays support the conversion to scalars using standard _dunder_ methods. Additionally, this alternative is fully compatible with the implementation of our own custom scalar types, although it doesn't require it.
 
-In the long-term, this alternative seems to combine the best features from other options, but it requires a bit more discussion and a slightly larger implementation effort, so it has been adopted for now.
+In the long-term, this alternative seems to combine the best features from other options, but it requires a bit more discussion and a slightly larger implementation effort, so it has been postponed for now.
 
 ## References <!-- optional -->
 
