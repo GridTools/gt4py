@@ -166,9 +166,9 @@ def _pre_expand_trafos(gtir_pipeline: GtirPipeline, sdfg: dace.SDFG, layout_map)
         sdfg.add_state(gtir_pipeline.gtir.name)
         return sdfg
 
-    for array in sdfg.arrays.values():
-        if array.transient:
-            array.lifetime = dace.AllocationLifetime.Persistent
+    # for array in sdfg.arrays.values():
+    #     if array.transient:
+    #         array.lifetime = dace.AllocationLifetime.Persistent
 
     sdfg.simplify(validate=False)
 
@@ -183,9 +183,9 @@ def _pre_expand_trafos(gtir_pipeline: GtirPipeline, sdfg: dace.SDFG, layout_map)
 def _post_expand_trafos(sdfg: dace.SDFG):
     # DaCe "standard" clean-up transformations
     sdfg.simplify(validate=False)
-    
+
     eliminate_trivial_maps(sdfg)
-    
+
     # Control the `#pragma omp parallel` statements: Fully collapse parallel loops,
     # but set 1D maps to be sequential. (Typical domains are too small to benefit from parallelism)
     for node, _ in filter(
@@ -194,8 +194,8 @@ def _post_expand_trafos(sdfg: dace.SDFG):
         node.collapse = len(node.range)
         if node.schedule == dace.ScheduleType.CPU_Multicore and len(node.range) <= 1:
             node.schedule = dace.ScheduleType.Sequential
-    
-    sdfg.apply_transformations_repeated(InlineThreadLocalTransients)
+
+    # sdfg.apply_transformations_repeated(InlineThreadLocalTransients)
     sdfg.simplify()
     nest_sequential_map_scopes(sdfg)
 
