@@ -632,14 +632,14 @@ def infer_type(  # noqa: C901  # function is complex but well organized in indep
         dict[str, int]
 
         >>> infer_type({'a': 0, 'b': 'B'})
-        dict[str, typing.Any]
+        dict[str, ...Any]
 
         >>> print("Result:", infer_type(lambda a, b: a + b))
-        Result: ...Callable[[typing.Any, typing.Any], typing.Any]
+        Result: ...Callable[[...Any, ...Any], ...Any]
 
         >>> def f(a: int, b) -> int: ...
         >>> print("Result:", infer_type(f))
-        Result: ...Callable[[int, typing.Any], int]
+        Result: ...Callable[[int, ...Any], int]
 
         >>> def f(a: int, b) -> int: ...
         >>> print("Result:", infer_type(f))
