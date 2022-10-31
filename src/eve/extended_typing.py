@@ -408,6 +408,8 @@ else:
 
 
 if hasattr(_typing_extensions, "Any") and _typing.Any is not _typing_extensions.Any:
+    # When using Python < 3.11 and typing_extensions >= 4.4 there are
+    # two different implementations of `Any`
 
     def is_Any(obj: Any) -> bool:
         return obj is _typing.Any or obj is _typing_extensions.Any
