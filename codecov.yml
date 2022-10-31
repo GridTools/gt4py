@@ -1,29 +1,34 @@
 codecov:
   require_ci_to_pass: no
 
-coverage:
-  precision: 2
-  round: down
-  range: "85...100"
-  status:
-    project:
-      default: false
-      gt4py:
-        target: 85%
-        threshold: 0%
-        paths:
-        - "src/functional"
-        flags:
-        - gt4py-all
-        if_ci_failed: success
-      eve:
-        target: 85%
-        threshold: 0%
-        paths:
-        - "src/eve"
-        flags:
-        - eve-all
-        if_ci_failed: success
+flag_management:
+  default_rules:
+    carryforward: true
+    statuses:
+    - type: project
+      target: auto
+      threshold: 0%
+    - type: patch
+      target: 85%
+  individual_flags:
+  - name: gt4py-all
+    paths:
+    - src/functional
+    carryforward: true
+    statuses:
+    - type: project
+      target: 20%
+    - type: patch
+      target: 85%
+  - name: eve-all
+    paths:
+    - src/eve
+    carryforward: true
+    statuses:
+    - type: project
+      target: 20%
+    - type: patch
+      target: 85%
 
 comment:
   layout: "reach,diff,flags,files,footer"
