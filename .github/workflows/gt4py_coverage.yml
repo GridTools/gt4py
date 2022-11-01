@@ -59,7 +59,7 @@ jobs:
       uses: actions/upload-artifact@v3
       with:
         name: coverage
-        path: coverage.xml
+        path: coverage.json
 
     - name: Upload to codecov.io
       uses: codecov/codecov-action@v2
