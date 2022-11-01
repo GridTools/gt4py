@@ -111,6 +111,8 @@ def is_floating_point(symbol_type: ct.SymbolType) -> bool:
     False
     >>> is_floating_point(ct.FieldType(dims=[], dtype=ct.ScalarType(kind=ct.ScalarKind.FLOAT32)))
     True
+    >>> is_floating_point(ct.FieldType(dims=[Dimension(value="I")], dtype=ct.ScalarType(kind=ct.ScalarKind.FLOAT64)))
+    True
     """
     return extract_dtype(symbol_type).kind in [
         ct.ScalarKind.FLOAT32,
@@ -131,6 +133,8 @@ def is_integral(symbol_type: ct.SymbolType) -> bool:
     >>> is_integral(ct.ScalarType(kind=ct.ScalarKind.FLOAT32))
     False
     >>> is_integral(ct.FieldType(dims=[], dtype=ct.ScalarType(kind=ct.ScalarKind.INT)))
+    True
+    >>> is_integral(ct.FieldType(dims=[Dimension(value="I")], dtype=ct.ScalarType(kind=ct.ScalarKind.INT)))
     True
     """
     return extract_dtype(symbol_type).kind in [
