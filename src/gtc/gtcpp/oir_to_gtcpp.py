@@ -33,7 +33,7 @@ from gtc.passes.oir_optimizations.utils import collect_symbol_names, symbol_name
 
 def _extract_accessors(node: eve.Node, temp_names: Set[str]) -> List[gtcpp.GTAccessor]:
     extents = (
-        node.iter_tree()
+        node.walk_values()
         .if_isinstance(gtcpp.AccessorRef)
         .reduceby(
             (lambda extent, accessor_ref: extent + accessor_ref.offset),
@@ -44,7 +44,7 @@ def _extract_accessors(node: eve.Node, temp_names: Set[str]) -> List[gtcpp.GTAcc
     )
 
     inout_fields: Set[str] = (
-        node.iter_tree()
+        node.walk_values()
         .if_isinstance(gtcpp.AssignStmt)
         .getattr("left")
         .if_isinstance(gtcpp.AccessorRef)
@@ -52,7 +52,7 @@ def _extract_accessors(node: eve.Node, temp_names: Set[str]) -> List[gtcpp.GTAcc
         .to_set()
     )
     ndims = dict(
-        node.iter_tree()
+        node.walk_values()
         .if_isinstance(gtcpp.AccessorRef)
         .map(
             lambda accessor: (

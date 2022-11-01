@@ -24,7 +24,7 @@ from gtc.common import LevelMarker
 def _iter_field_names(
     node: Union[gtir.Stencil, gtir.ParAssignStmt]
 ) -> eve.utils.XIterable[gtir.FieldAccess]:
-    return node.iter_tree().if_isinstance(gtir.FieldDecl).getattr("name").unique()
+    return node.walk_values().if_isinstance(gtir.FieldDecl).getattr("name").unique()
 
 
 class KBoundaryVisitor(eve.NodeVisitor):

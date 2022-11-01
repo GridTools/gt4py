@@ -157,7 +157,7 @@ class StencilComputation(library.LibraryNode):
             if any(
                 interval.start.level == common.LevelMarker.END
                 or interval.end.level == common.LevelMarker.END
-                for interval in oir_node.iter_tree()
+                for interval in oir_node.walk_values()
                 .if_isinstance(VerticalLoopSection)
                 .getattr("interval")
             ) or any(
@@ -203,7 +203,7 @@ class StencilComputation(library.LibraryNode):
         return result
 
     def has_splittable_regions(self):
-        for he in self.oir_node.iter_tree().if_isinstance(oir.HorizontalExecution):
+        for he in self.oir_node.walk_values().if_isinstance(oir.HorizontalExecution):
             if not HorizontalExecutionSplitter.is_horizontal_execution_splittable(he):
                 return False
         return True

@@ -274,7 +274,7 @@ def verify_and_get_common_dtype(
         return None
 
 
-def compute_kind(values: List[Expr]) -> ExprKind:
+def compute_kind(*values) -> ExprKind:
     if any(v.kind == ExprKind.FIELD for v in values):
         return ExprKind.FIELD
     else:
@@ -440,7 +440,7 @@ class BinaryOp(eve.GenericNode, Generic[ExprT]):
 
     @datamodels.root_validator
     def kind_propagation(cls, instance: "BinaryOp") -> None:
-        instance.kind = compute_kind([instance.left, instance.right])
+        instance.kind = compute_kind(instance.left, instance.right)
 
 
 def binary_op_dtype_propagation(*, strict: bool) -> datamodels.RootValidator:
@@ -490,7 +490,7 @@ class TernaryOp(eve.GenericNode, Generic[ExprT]):
 
     @datamodels.root_validator
     def kind_propagation(cls, instance: "TernaryOp") -> None:
-        instance.kind = compute_kind([instance.true_expr, instance.false_expr])
+        instance.kind = compute_kind(instance.true_expr, instance.false_expr)
 
 
 def ternary_op_dtype_propagation(*, strict: bool) -> datamodels.RootValidator:
@@ -508,9 +508,16 @@ class Cast(eve.GenericNode, Generic[ExprT]):
     dtype: DataType
     expr: ExprT
 
+    # NOTE This needs to be set to a default, but will be overwritten by the root_validator after
+    kind: ExprKind = ExprKind.FIELD
+
     @datamodels.root_validator
     def kind_propagation(cls, instance: "Cast") -> None:
         instance.kind = instance.expr
+
+    @datamodels.root_validator
+    def kind_propagation(cls, instance: "TernaryOp") -> None:
+        instance.kind = compute_kind(instance.expr)
 
 
 class NativeFuncCall(eve.GenericNode, Generic[ExprT]):
@@ -526,7 +533,7 @@ class NativeFuncCall(eve.GenericNode, Generic[ExprT]):
 
     @datamodels.root_validator
     def kind_propagation(cls, instance: "NativeFuncCall") -> None:
-        instance.kind = compute_kind(instance.args)
+        instance.kind = compute_kind(*instance.args)
 
 
 def native_func_call_dtype_propagation(*, strict: bool = True) -> datamodels.RootValidator:
@@ -547,7 +554,7 @@ def validate_dtype_is_set() -> datamodels.RootValidator:
         dtype_nodes: List[eve.Node] = []
         for v in flatten_list(datamodels.astuple(instance)):
             if isinstance(v, eve.Node):
-                dtype_nodes.extend(v.iter_tree().if_hasattr("dtype"))
+                dtype_nodes.extend(v.walk_values().if_hasattr("dtype"))
 
         nodes_without_dtype = []
         for node in dtype_nodes:

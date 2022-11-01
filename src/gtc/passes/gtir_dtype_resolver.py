@@ -67,7 +67,7 @@ class _GTIRResolveAuto(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         result = self._GTIRUpdateAutoDecl().visit(result, new_symbols=kwargs["symtable"])
 
         if not all(
-            result.iter_tree()
+            result.walk_values()
             .if_hasattr("dtype")
             .getattr("dtype")
             .map(lambda x: x not in [None, DataType.AUTO, DataType.INVALID, DataType.DEFAULT])
@@ -103,7 +103,7 @@ class _GTIRPropagateDtypeToAccess(eve.NodeTranslator, eve.VisitorWithSymbolTable
         result: gtir.Stencil = self.generic_visit(node, **kwargs)
 
         if not all(
-            result.iter_tree()
+            result.walk_values()
             .if_isinstance(gtir.ScalarAccess, gtir.FieldAccess)
             .getattr("dtype")
             .map(lambda x: x is not DataType.AUTO)

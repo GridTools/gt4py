@@ -97,7 +97,7 @@ def test_visit_HorizontalRestriction_HorizontalMask():
 def test_visit_Assign_VariableKOffset():
     testee = ParAssignStmtFactory(right__offset=VariableKOffsetFactory())
     assign_stmt = GTIRToOIR().visit(testee)
-    assert assign_stmt.iter_tree().if_isinstance(oir.VariableKOffset).to_list()
+    assert assign_stmt.walk_values().if_isinstance(oir.VariableKOffset).to_list()
 
 
 def test_indirect_read_with_offset_and_write():

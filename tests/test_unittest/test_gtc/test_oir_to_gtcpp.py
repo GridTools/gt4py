@@ -67,10 +67,10 @@ def test_horizontal_mask():
     )
     gtcpp_program = OIRToGTCpp().visit(testee)
     positional_axis_names = (
-        gtcpp_program.iter_tree().if_isinstance(gtcpp.Positional).getattr("axis_name").to_set()
+        gtcpp_program.walk_values().if_isinstance(gtcpp.Positional).getattr("axis_name").to_set()
     )
     axis_lengths = (
-        gtcpp_program.iter_tree().if_isinstance(gtcpp.AxisLength).getattr("axis").to_set()
+        gtcpp_program.walk_values().if_isinstance(gtcpp.AxisLength).getattr("axis").to_set()
     )
 
     assert positional_axis_names == {"i", "j"}

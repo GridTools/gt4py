@@ -299,7 +299,7 @@ class CUIRCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
 
         fields = {
             name: data_dims
-            for name, data_dims in node.iter_tree()
+            for name, data_dims in node.walk_values()
             .if_isinstance(cuir.FieldAccess)
             .getattr("name", "data_index")
             .map(lambda x: (x[0], len(x[1])))
@@ -426,7 +426,7 @@ class CUIRCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
 
         def loop_fields(vertical_loop: cuir.VerticalLoop) -> Set[str]:
             return (
-                vertical_loop.iter_tree().if_isinstance(cuir.FieldAccess).getattr("name").to_set()
+                vertical_loop.walk_values().if_isinstance(cuir.FieldAccess).getattr("name").to_set()
             )
 
         def ctype(symbol: str) -> str:
@@ -440,7 +440,8 @@ class CUIRCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
         return self.generic_visit(
             node,
             max_extent=self.visit(
-                cuir.IJExtent.zero().union(*node.iter_tree().if_isinstance(cuir.IJExtent)), **kwargs
+                cuir.IJExtent.zero().union(*node.walk_values().if_isinstance(cuir.IJExtent)),
+                **kwargs,
             ),
             loop_start=loop_start,
             loop_fields=loop_fields,

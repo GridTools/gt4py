@@ -39,7 +39,7 @@ class MaskCollector(eve.NodeVisitor):
             # Find all reads in condition
             condition_reads: Set[str] = (
                 masks_to_inline[node.mask.name]
-                .iter_tree()
+                .walk_values()
                 .if_isinstance(oir.FieldAccess, oir.ScalarAccess)
                 .getattr("name")
                 .to_set()
@@ -55,7 +55,7 @@ class MaskCollector(eve.NodeVisitor):
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> Dict[str, oir.Expr]:
         masks_to_inline: Dict[str, Optional[oir.Expr]] = {
             mask_stmt.mask.name: None
-            for mask_stmt in node.iter_tree()
+            for mask_stmt in node.walk_values()
             .if_isinstance(oir.MaskStmt)
             .filter(lambda stmt: isinstance(stmt.mask, oir.FieldAccess))
         }

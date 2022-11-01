@@ -331,7 +331,7 @@ class NpirCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
 
     def visit_VerticalPass(self, node: npir.VerticalPass, **kwargs):
         is_serial = node.direction != common.LoopOrder.PARALLEL
-        has_variable_k = bool(node.iter_tree().if_isinstance(npir.VarKOffset).to_list())
+        has_variable_k = bool(node.walk_values().if_isinstance(npir.VarKOffset).to_list())
         return self.generic_visit(
             node,
             is_serial=is_serial,

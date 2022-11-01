@@ -28,7 +28,7 @@ from gtc.gtcpp import gtcpp
 
 def _offset_limit(root: eve.Node) -> int:
     return (
-        root.iter_tree()
+        root.walk_values()
         .if_isinstance(gtcpp.GTLevel)
         .getattr("offset")
         .reduce(lambda state, cur: max(state, abs(cur)), init=0)
@@ -118,7 +118,7 @@ class GTCppCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
     Positional = as_fmt("auto {name} = positional<dim::{axis_name}>();")
 
     AxisLength = as_fmt(
-        "auto {name} = make_global_parameter(static_cast<gridtools::int_t>(domain[{axis}]));"
+        "auto {name} = global_parameter(static_cast<gridtools::int_t>(domain[{axis}]));"
     )
 
     BinaryOp = as_fmt("({left} {op} {right})")

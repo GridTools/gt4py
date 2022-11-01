@@ -89,7 +89,9 @@ class NOTHING(metaclass=NothingType):
 class StrEnum(str, Enum):
     """:class:`enum.Enum` subclass whose members are considered as real strings."""
 
-    pass
+    def __str__(self) -> str:
+        assert isinstance(self.value, str)
+        return self.value
 
 
 class ConstrainedStr(str):

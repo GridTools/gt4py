@@ -119,7 +119,7 @@ class VectorCast(common.Cast[Expr], Expr):
 
 class Broadcast(Expr):
     expr: Expr
-    kind = common.ExprKind.FIELD
+    kind: common.ExprKind = common.ExprKind.FIELD
 
 
 class VarKOffset(common.VariableKOffset[Expr]):
@@ -144,7 +144,7 @@ class FieldSlice(Expr, VectorLValue):
 
 class ParamAccess(Expr):
     name: eve.Coerced[eve.SymbolRef]
-    kind = common.ExprKind.SCALAR
+    kind: common.ExprKind = common.ExprKind.SCALAR
 
 
 class LocalScalarAccess(Expr, VectorLValue):

@@ -126,7 +126,7 @@ class HorizontalExecutionSplitter(eve.NodeTranslator):
                 continue
             return False
         regions: List[common.HorizontalMask] = list()
-        for stmt in he.iter_tree().if_isinstance(oir.HorizontalRestriction):
+        for stmt in he.walk_values().if_isinstance(oir.HorizontalRestriction):
             for region in regions:
                 if region.i.overlaps(stmt.mask.i) and region.j.overlaps(stmt.mask.j):
                     return False

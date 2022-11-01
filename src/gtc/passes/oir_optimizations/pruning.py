@@ -27,8 +27,8 @@ class NoFieldAccessPruning(eve.NodeTranslator):
             next(
                 iter(
                     acc
-                    for left in node.iter_tree().if_isinstance(oir.AssignStmt).getattr("left")
-                    for acc in left.iter_tree().if_isinstance(oir.FieldAccess)
+                    for left in node.walk_values().if_isinstance(oir.AssignStmt).getattr("left")
+                    for acc in left.walk_values().if_isinstance(oir.FieldAccess)
                 )
             )
         except StopIteration:

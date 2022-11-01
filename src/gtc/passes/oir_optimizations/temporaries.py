@@ -41,7 +41,7 @@ class TemporariesToScalarsBase(eve.NodeTranslator, eve.VisitorWithSymbolTableTra
         **kwargs: Any,
     ) -> oir.HorizontalExecution:
         local_tmps_to_replace = (
-            node.iter_tree()
+            node.walk_values()
             .if_isinstance(oir.FieldAccess)
             .getattr("name")
             .if_in(tmps_to_replace)
@@ -104,14 +104,14 @@ class LocalTemporariesToScalars(TemporariesToScalarsBase):
     """
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> oir.Stencil:
-        horizontal_executions = node.iter_tree().if_isinstance(oir.HorizontalExecution)
+        horizontal_executions = node.walk_values().if_isinstance(oir.HorizontalExecution)
         temps_without_data_dims = set(
             [decl.name for decl in node.declarations if not decl.data_dims]
         )
         counts: collections.Counter = sum(
             (
                 collections.Counter(
-                    horizontal_execution.iter_tree()
+                    horizontal_execution.walk_values()
                     .if_isinstance(oir.FieldAccess)
                     .getattr("name")
                     .if_in(temps_without_data_dims)
@@ -141,7 +141,7 @@ class WriteBeforeReadTemporariesToScalars(TemporariesToScalarsBase):
             for symbol, value in kwargs["symtable"].items()
             if isinstance(value, oir.Temporary) and not value.data_dims
         }
-        horizontal_executions = node.iter_tree().if_isinstance(oir.HorizontalExecution)
+        horizontal_executions = node.walk_values().if_isinstance(oir.HorizontalExecution)
 
         for horizontal_execution in horizontal_executions:
             accesses = AccessCollector.apply(horizontal_execution)

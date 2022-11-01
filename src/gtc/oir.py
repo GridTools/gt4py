@@ -104,7 +104,7 @@ class While(common.While[Stmt, Expr], Stmt):
 
 
 class Decl(LocNode):
-    name: eve.SymbolName
+    name: eve.Coerced[eve.SymbolName]
     dtype: common.DataType
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:

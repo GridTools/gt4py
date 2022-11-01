@@ -81,11 +81,11 @@ class IJCacheDetection(eve.NodeTranslator):
         )
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> oir.Stencil:
-        vertical_loops = node.iter_tree().if_isinstance(oir.VerticalLoop)
+        vertical_loops = node.walk_values().if_isinstance(oir.VerticalLoop)
         counts: collections.Counter = sum(
             (
                 collections.Counter(
-                    vertical_loop.iter_tree()
+                    vertical_loop.walk_values()
                     .if_isinstance(oir.FieldAccess)
                     .getattr("name")
                     .if_in({tmp.name for tmp in node.declarations})
@@ -376,7 +376,7 @@ class FillFlushToLocalKCaches(eve.NodeTranslator, eve.VisitorWithSymbolTableTrai
             )
             entry_interval = oir.Interval(start=bound, end=section.interval.end)
             rest_interval = oir.Interval(start=section.interval.start, end=bound)
-        decls = list(section.iter_tree().if_isinstance(oir.Decl))
+        decls = list(section.walk_values().if_isinstance(oir.Decl))
         decls_map = {decl.name: new_symbol_name(decl.name) for decl in decls}
 
         class FixSymbolNameClashes(eve.NodeTranslator):
