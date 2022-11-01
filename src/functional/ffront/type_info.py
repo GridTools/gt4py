@@ -109,8 +109,6 @@ def is_floating_point(symbol_type: ct.SymbolType) -> bool:
     True
     >>> is_floating_point(ct.ScalarType(kind=ct.ScalarKind.INT32))
     False
-    >>> is_floating_point(ct.FieldType(dims=[], dtype=ct.ScalarType(kind=ct.ScalarKind.FLOAT32)))
-    True
     >>> is_floating_point(ct.FieldType(dims=[Dimension(value="I")], dtype=ct.ScalarType(kind=ct.ScalarKind.FLOAT64)))
     True
     """
