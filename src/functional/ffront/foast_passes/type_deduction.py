@@ -260,8 +260,9 @@ class FieldOperatorTypeDeduction(NodeTranslator, traits.VisitorWithSymbolTableTr
         values = self.visit(node.value, **kwargs)
         indices = compute_assign_indices(targets)
 
-        if not any(isinstance(i, tuple) for i in indices) and len(indices) != len(values.elts):
-            raise ValueError(f"Too many values to unpack (expected {len(indices)}).")
+        if isinstance(values, foast.TupleExpr):
+            if not any(isinstance(i, tuple) for i in indices) and len(indices) != len(values.elts):
+                raise ValueError(f"Too many values to unpack (expected {len(indices)}).")
 
         new_target_list = []
         for i, index in enumerate(indices):
@@ -281,8 +282,11 @@ class FieldOperatorTypeDeduction(NodeTranslator, traits.VisitorWithSymbolTableTr
                     location=old_target.location,
                 )
             else:
-                # we reassign normally
-                new_type = values.elts[index].type
+                if isinstance(values, foast.Call):
+                    new_type = values.type.types[index]
+                else:
+                    # we reassign normally
+                    new_type = values.elts[index].type
                 new_target = self.visit(
                     old_target, refine_type=new_type, location=old_target.location, **kwargs
                 )
@@ -292,8 +296,8 @@ class FieldOperatorTypeDeduction(NodeTranslator, traits.VisitorWithSymbolTableTr
             )
             new_target_list.append(new_target)
 
-        mta = foast.TupleTargetAssign(targets=new_target_list, value=values, location=node.location)
-        return mta
+        tta = foast.TupleTargetAssign(targets=new_target_list, value=values, location=node.location)
+        return tta
 
     def visit_Symbol(
         self,

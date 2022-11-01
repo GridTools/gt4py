@@ -1353,6 +1353,6 @@ def test_tuple_unpacking_star(fieldview_backend):
 def test_tuple_unpacking_too_many_values(fieldview_backend):
     with pytest.raises(ValueError):
         @field_operator
-        def _star_unpack() -> tuple[Field[[IDim], float64]]:
+        def _star_unpack() -> tuple[int, float64, int]:
             a, b, c = (1, 2.0, 3, 4, 5, 6, 7.0)
             return a, b, c

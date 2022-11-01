@@ -75,10 +75,6 @@ class UnpackedAssignPass(NodeTranslator, traits.VisitorWithSymbolTableTrait):
                     )
                     if isinstance(index, tuple):
                         lower, upper = index[0], index[1]
-
-                        # declare new tuple symbol with corresponding elements
-                        # create tuple assign and assign it to corresponding elements
-                        # create tuple name for later reference
                         new_tuple = foast.TupleExpr(
                             elts=values.elts[lower:upper], type=subtarget.type, location=node.location
                         )
