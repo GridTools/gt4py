@@ -4,32 +4,22 @@ from dace.transformation.helpers import nest_state_subgraph
 from dace.transformation.interstate import InlineTransients
 
 
-def eliminate_trivial_maps(sdfg: dace.SDFG):
-    """Remove maps and map ranges where the iteration is over a single index."""
-    applied = True
-    while applied:
-        applied = False
-        for map_entry, state in sdfg.all_nodes_recursive():
-            if isinstance(map_entry, dace.nodes.MapEntry):
-                if map_entry.map.schedule in {
-                    dace.ScheduleType.Sequential,
-                    dace.ScheduleType.CPU_Multicore,
-                }:
-                    # exclude maps with empty edges as workaround for a bug in TrivialMapElimination
-                    if any(
-                        edge.data.is_empty()
-                        for edge in state.in_edges(map_entry)
-                        + state.out_edges(state.exit_node(map_entry))
-                    ):
-                        continue
-                    try:
-                        TrivialMapElimination.apply_to(
-                            state.parent, map_entry=map_entry, verify=True, save=False
-                        )
-                        applied = True
-                        break
-                    except ValueError:
-                        continue
+class NoEmptyEdgeTrivialMapElimination(TrivialMapElimination):
+    """Eliminate trivial maps like TrivialMapElimination, with additional conditions in can_be_applied."""
+
+    def can_be_applied(self, graph, expr_index, sdfg, permissive=False):
+
+        if not super().can_be_applied(graph, expr_index, sdfg, permissive=permissive):
+            return False
+
+        map_entry = self.map_entry
+        map_exit = graph.exit_node(map_entry)
+
+        if any(
+            edge.data.is_empty() for edge in graph.in_edges(map_entry) + graph.out_edges(map_exit)
+        ):
+            return False
+        return True
 
 
 class InlineThreadLocalTransients(dace.transformation.SingleStateTransformation):

@@ -327,7 +327,7 @@ def freeze_origin_domain_sdfg(inner_sdfg, arg_names, field_info, *, origin, doma
     _sdfg_specialize_symbols(wrapper_sdfg, domain)
 
     for _, _, array in wrapper_sdfg.arrays_recursive():
-        if array.transient:
+        if array.transient and array.lifetime != dace.AllocationLifetime.Persistent:
             array.lifetime = dace.dtypes.AllocationLifetime.SDFG
 
     wrapper_sdfg.arg_names = arg_names
