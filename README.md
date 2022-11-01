@@ -1,4 +1,7 @@
-![tox-badge](https://github.com/GridTools/gt4py/actions/workflows/tox.yml/badge.svg?branch=functional) ![qa-badge](https://github.com/GridTools/gt4py/actions/workflows/qa.yml/badge.svg?branch=functional)![license-badge](https://img.shields.io/github/license/GridTools/gt4py)
+[![Eve / Test](https://github.com/GridTools/gt4py/actions/workflows/eve_test.yml/badge.svg?branch=functional)](https://github.com/GridTools/gt4py/actions/workflows/eve_test.yml)
+[![Gt4py / Test](https://github.com/GridTools/gt4py/actions/workflows/gt4py_test.yml/badge.svg?branch=functional)](https://github.com/GridTools/gt4py/actions/workflows/gt4py_test.yml)
+[![Code Quality](https://github.com/GridTools/gt4py/actions/workflows/code_quality.yml/badge.svg?branch=functional)](https://github.com/GridTools/gt4py/actions/workflows/code_quality.yml)
+![license-badge](https://img.shields.io/github/license/GridTools/gt4py)
 
 
 # GT4Py: GridTools for Python
