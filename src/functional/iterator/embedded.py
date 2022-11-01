@@ -155,10 +155,6 @@ class LocatedField(Protocol):
         ...
 
     @abstractmethod
-    def __getitem__(self, indices: FieldIndexOrIndices) -> Any:
-        ...
-
-    @abstractmethod
     def field_getitem(self, indices: FieldIndexOrIndices) -> Any:
         ...
 
@@ -167,15 +163,7 @@ class MutableLocatedField(LocatedField, Protocol):
     """A LocatedField with write access."""
 
     @abstractmethod
-    def __setitem__(self, indices: FieldIndexOrIndices, value: Any) -> None:
-        ...
-
-    @abstractmethod
     def field_setitem(self, indices: FieldIndexOrIndices, value: Any) -> None:
-        ...
-
-    @abstractmethod
-    def __array__(self) -> np.ndarray:
         ...
 
 
@@ -726,6 +714,9 @@ class MDIterator:
             assert _column_range is not None
             k_pos = shifted_pos.pop(self.column_axis)
             assert isinstance(k_pos, int)
+            # the following slice describes a range in the field
+            # (negative values are relative to the origin, not relative to the size)
+            # TODO(havogt) consider introducing a special range class to highlight the semantics
             slice_column[self.column_axis] = slice(k_pos, k_pos + len(_column_range))
 
         assert _is_concrete_position(shifted_pos)
@@ -854,10 +845,11 @@ def get_ordered_indices(
     return tuple(res)
 
 
-def _shift_slice(
+def _shift_range(
     slice_or_index: slice | numbers.Integral, offset: numbers.Integral
 ) -> slice | numbers.Integral:
     if isinstance(slice_or_index, slice):
+        # slice_or_index describes a range in the field
         assert slice_or_index.step is None
         assert slice_or_index.start is not None
         assert slice_or_index.stop is not None
@@ -867,11 +859,11 @@ def _shift_slice(
         return slice_or_index + offset
 
 
-def _shift_slices(
+def _shift_ranges(
     slices_or_indices: tuple[slice | numbers.Integral, ...],
     offsets: tuple[numbers.Integral, ...],
 ) -> tuple[slice | numbers.Integral, ...]:
-    return tuple(_shift_slice(*i) for i in zip(slices_or_indices, offsets))
+    return tuple(_shift_range(*i) for i in zip(slices_or_indices, offsets))
 
 
 def np_as_located_field(
@@ -888,10 +880,10 @@ def np_as_located_field(
 
         def setter(indices, value):
             indices = tupelize(indices)
-            a[_shift_slices(indices, offsets) if offsets else indices] = value
+            a[_shift_ranges(indices, offsets) if offsets else indices] = value
 
         def getter(indices):
-            return a[_shift_slices(indices, offsets) if offsets else indices]
+            return a[_shift_ranges(indices, offsets) if offsets else indices]
 
         return LocatedFieldImpl(
             getter,
@@ -909,12 +901,9 @@ class IndexField(LocatedField):
         self.axis = axis
         self.dtype = np.dtype(dtype)
 
-    def __getitem__(self, index: FieldIndexOrIndices) -> Any:
+    def field_getitem(self, index: FieldIndexOrIndices) -> Any:
         assert isinstance(index, int) or (isinstance(index, tuple) and len(index) == 1)
         return self.dtype.type(index if isinstance(index, int) else index[0])
-
-    def field_getitem(self, index: FieldIndexOrIndices) -> Any:
-        return self[index]
 
     @property
     def axes(self) -> tuple[Dimension]:
@@ -930,11 +919,8 @@ class ConstantField(LocatedField):
         self.value = value
         self.dtype = np.dtype(dtype).type
 
-    def __getitem__(self, _: FieldIndexOrIndices) -> Any:
+    def field_getitem(self, _: FieldIndexOrIndices) -> Any:
         return self.dtype(self.value)
-
-    def field_getitem(self, index: FieldIndexOrIndices) -> Any:
-        return self[index]
 
     @property
     def axes(self) -> tuple[()]:
