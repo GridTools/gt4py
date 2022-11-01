@@ -306,11 +306,11 @@ def is_not_empty_field_compatible(a_arg: ct.FieldType, b_arg: ct.FieldType | ct.
     True
 
     """
-    if not _is_empty_field(a_arg):
-        return True
-    elif not (_is_empty_field(b_arg) or is_number(b_arg)):
-        return True
-    elif extract_dtype(a_arg) != extract_dtype(b_arg):
+    if (
+        not _is_empty_field(a_arg)
+        or not (_is_empty_field(b_arg) or is_number(b_arg))
+        or extract_dtype(a_arg) != extract_dtype(b_arg)
+    ):
         return True
     return False
 
