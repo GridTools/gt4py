@@ -9,7 +9,7 @@ flag_management:
       target: auto
       threshold: 0%
     - type: patch
-      target: 85%
+      target: 0%
   individual_flags:
   - name: gt4py-all
     paths:
@@ -17,18 +17,18 @@ flag_management:
     carryforward: true
     statuses:
     - type: project
-      target: 20%
-    - type: patch
       target: 85%
+    - type: patch
+      target: 0%
   - name: eve-all
     paths:
     - src/eve
     carryforward: true
     statuses:
     - type: project
-      target: 20%
-    - type: patch
       target: 85%
+    - type: patch
+      target: 0%
 
 comment:
   layout: "reach,diff,flags,files,footer"
