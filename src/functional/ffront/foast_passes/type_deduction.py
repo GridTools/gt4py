@@ -253,7 +253,7 @@ class FieldOperatorTypeDeduction(NodeTranslator, traits.VisitorWithSymbolTableTr
         new_target = self.visit(node.target, refine_type=new_value.type, **kwargs)
         return foast.Assign(target=new_target, value=new_value, location=node.location)
 
-    def visit_MultiTargetAssign(
+    def visit_TupleTargetAssign(
         self, node: foast.TupleTargetAssign, **kwargs
     ) -> foast.TupleTargetAssign:
         targets = node.targets

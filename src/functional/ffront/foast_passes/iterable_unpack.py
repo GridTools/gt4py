@@ -28,7 +28,7 @@ class UnpackedAssignPass(NodeTranslator, traits.VisitorWithSymbolTableTrait):
     def visit_FunctionDefinition(self, node: foast.FunctionDefinition, **kwargs):
         new_params = self.visit(node.params, **kwargs)
         new_body = self.visit(node.body, **kwargs)
-        self._unroll_multi_target_assign(new_body)
+        self._unroll_tuple_target_assign(new_body)
         assert isinstance(new_body[-1], foast.Return)
         return_type = new_body[-1].value.type
         new_type = ct.FunctionType(
@@ -53,7 +53,7 @@ class UnpackedAssignPass(NodeTranslator, traits.VisitorWithSymbolTableTrait):
         self.unique_tuple_symbol_id += 1
         return sym
 
-    def _unroll_multi_target_assign(self, body: list[foast.LocatedNode]) -> list[foast.LocatedNode]:
+    def _unroll_tuple_target_assign(self, body: list[foast.LocatedNode]) -> list[foast.LocatedNode]:
         for pos, node in enumerate(body):
             if isinstance(node, foast.TupleTargetAssign):
                 values = node.value
