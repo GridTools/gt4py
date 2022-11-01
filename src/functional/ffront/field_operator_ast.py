@@ -141,7 +141,7 @@ class Assign(Stmt):
     value: Expr
 
 
-class MultiTargetAssign(Stmt):
+class TupleTargetAssign(Stmt):
     targets: list[FieldSymbol | TupleSymbol | ScalarSymbol | Star]
     value: Expr
 

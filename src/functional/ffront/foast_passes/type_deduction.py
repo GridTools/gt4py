@@ -254,8 +254,8 @@ class FieldOperatorTypeDeduction(NodeTranslator, traits.VisitorWithSymbolTableTr
         return foast.Assign(target=new_target, value=new_value, location=node.location)
 
     def visit_MultiTargetAssign(
-        self, node: foast.MultiTargetAssign, **kwargs
-    ) -> foast.MultiTargetAssign:
+        self, node: foast.TupleTargetAssign, **kwargs
+    ) -> foast.TupleTargetAssign:
         targets = node.targets
         values = self.visit(node.value, **kwargs)
         indices = compute_assign_indices(targets)
@@ -292,7 +292,7 @@ class FieldOperatorTypeDeduction(NodeTranslator, traits.VisitorWithSymbolTableTr
             )
             new_target_list.append(new_target)
 
-        mta = foast.MultiTargetAssign(targets=new_target_list, value=values, location=node.location)
+        mta = foast.TupleTargetAssign(targets=new_target_list, value=values, location=node.location)
         return mta
 
     def visit_Symbol(

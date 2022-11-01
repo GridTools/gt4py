@@ -44,7 +44,7 @@ class UnpackedAssignPass(NodeTranslator, traits.VisitorWithSymbolTableTrait):
             location=node.location,
         )
 
-    def _unique_tuple_symbol(self, node: foast.MultiTargetAssign) -> foast.Name:
+    def _unique_tuple_symbol(self, node: foast.TupleTargetAssign) -> foast.Name:
         sym = foast.Symbol(
             id=f"__tuple_tmp_{self.unique_tuple_symbol_id}",
             type=node.value.type,
@@ -55,7 +55,7 @@ class UnpackedAssignPass(NodeTranslator, traits.VisitorWithSymbolTableTrait):
 
     def _unroll_multi_target_assign(self, body: list[foast.LocatedNode]) -> list[foast.LocatedNode]:
         for pos, node in enumerate(body):
-            if isinstance(node, foast.MultiTargetAssign):
+            if isinstance(node, foast.TupleTargetAssign):
                 values = node.value
                 targets = node.targets
                 indices = compute_assign_indices(targets)

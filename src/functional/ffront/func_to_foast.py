@@ -217,7 +217,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
                         )
                     )
 
-            mta = foast.MultiTargetAssign(
+            mta = foast.TupleTargetAssign(
                 targets=ts, value=self.visit(node.value), location=self._make_loc(node)
             )
             return mta
