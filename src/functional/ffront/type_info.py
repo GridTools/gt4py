@@ -140,6 +140,32 @@ def is_integral(symbol_type: ct.SymbolType) -> bool:
     ]
 
 
+def is_number(symbol_type: ct.ScalarType) -> bool:
+    """
+    Check if ``symbol_type`` is either intergral or float.
+
+    Examples:
+    ---------
+    >>> is_number(ct.ScalarType(kind=ct.ScalarKind.FLOAT64))
+    True
+    >>> is_number(ct.ScalarType(kind=ct.ScalarKind.INT32))
+    True
+    >>> is_number(ct.ScalarType(kind=ct.ScalarKind.BOOL))
+    False
+    >>> is_number(ct.FieldType(dims=[], dtype=ct.ScalarType(kind=ct.ScalarKind.INT)))
+    False
+    """
+    if not isinstance(symbol_type, ct.ScalarType):
+        return False
+    return symbol_type.kind in [
+        ct.ScalarKind.INT,
+        ct.ScalarKind.INT32,
+        ct.ScalarKind.INT64,
+        ct.ScalarKind.FLOAT32,
+        ct.ScalarKind.FLOAT64,
+    ]
+
+
 def is_logical(symbol_type: ct.SymbolType) -> bool:
     return extract_dtype(symbol_type).kind is ct.ScalarKind.BOOL
 
@@ -280,11 +306,11 @@ def is_not_empty_field_compatible(a_arg: ct.FieldType, b_arg: ct.FieldType | ct.
     True
 
     """
-    if (
-        not _is_empty_field(a_arg)
-        or not (_is_empty_field(b_arg) or is_arithmetic(b_arg))
-        or (extract_dtype(a_arg) != extract_dtype(b_arg))
-    ):
+    if not _is_empty_field(a_arg):
+        return True
+    elif not (_is_empty_field(b_arg) or is_number(b_arg)):
+        return True
+    elif extract_dtype(a_arg) != extract_dtype(b_arg):
         return True
     return False
 
