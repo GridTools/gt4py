@@ -18,6 +18,7 @@ from eve import NodeTranslator, NodeVisitor, traits
 from functional.common import DimensionKind, GTSyntaxError, GTTypeError
 from functional.ffront import common_types as ct, fbuiltins, type_info
 from functional.ffront.common_types import TupleType
+from functional.ffront.foast_passes.utils import compute_assign_indices
 
 
 def boolified_type(symbol_type: ct.SymbolType) -> ct.ScalarType | ct.FieldType:
@@ -257,20 +258,7 @@ class FieldOperatorTypeDeduction(NodeTranslator, traits.VisitorWithSymbolTableTr
     ) -> foast.MultiTargetAssign:
         targets = node.targets
         values = self.visit(node.value, **kwargs)
-        indices = list(range(len(targets)))
-
-        for idx, elt in enumerate(targets):
-            if isinstance(elt, foast.Star):
-                break
-            indices[idx] = idx
-
-        for idx, elt in reversed(list(enumerate(targets))):
-            rel_idx = idx - len(node.targets)
-            if isinstance(elt, foast.Star):
-                star_lower, star_upper = max(indices), min(indices)
-                indices[idx] = (star_lower, star_upper)
-                break
-            indices[idx] = rel_idx
+        indices = compute_assign_indices(targets)
 
         if not any(isinstance(i, tuple) for i in indices) and len(indices) != len(values.elts):
             raise ValueError(f"Too many values to unpack (expected {len(indices)}).")

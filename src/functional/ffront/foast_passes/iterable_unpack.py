@@ -1,6 +1,7 @@
 import functional.ffront.field_operator_ast as foast
 from eve import NodeTranslator, traits
 from functional.ffront import common_types as ct
+from functional.ffront.foast_passes.utils import compute_assign_indices
 
 
 class UnpackedAssignPass(NodeTranslator, traits.VisitorWithSymbolTableTrait):
@@ -55,25 +56,46 @@ class UnpackedAssignPass(NodeTranslator, traits.VisitorWithSymbolTableTrait):
     def _unroll_multi_target_assign(self, body: list[foast.LocatedNode]) -> list[foast.LocatedNode]:
         for pos, node in enumerate(body):
             if isinstance(node, foast.MultiTargetAssign):
-                del body[pos]
+                values = node.value
+                targets = node.targets
+                indices = compute_assign_indices(targets)
+
                 tuple_symbol = self._unique_tuple_symbol(node)
                 tuple_assign = foast.Assign(
                     target=tuple_symbol, value=node.value, location=node.location
                 )
+                del body[pos]
                 body.insert(pos, tuple_assign)
 
-                for index, subtarget in enumerate(node.targets):
-                    el_type = node.value.type.types[index]
+                for i, index in enumerate(indices):
+                    subtarget = targets[i]
+                    el_type = subtarget.type
                     tuple_name = foast.Name(
                         id=tuple_symbol.id, type=el_type, location=tuple_symbol.location
                     )
-                    new_assign = foast.Assign(
-                        target=subtarget,
-                        value=foast.Subscript(
-                            value=tuple_name, index=index, type=el_type, location=node.location
-                        ),
-                        location=node.location,
-                    )
-                    body.insert(pos + index + 1, new_assign)
+                    if isinstance(index, tuple):
+                        lower, upper = index[0], index[1]
+
+                        # declare new tuple symbol with corresponding elements
+                        # create tuple assign and assign it to corresponding elements
+                        # create tuple name for later reference
+                        new_tuple = foast.TupleExpr(
+                            elts=values.elts[lower:upper], type=subtarget.type, location=node.location
+                        )
+                        new_assign = foast.Assign(
+                            target=subtarget.id,
+                            value=new_tuple,
+                            location=node.location,
+                        )
+                    else:
+                        new_assign = foast.Assign(
+                                target=subtarget,
+                                value=foast.Subscript(
+                                value=tuple_name, index=index, type=el_type, location=node.location
+                                ),
+                                location=node.location,
+                            )
+
+                    body.insert(pos + i + 1, new_assign)
 
         return body
