@@ -40,15 +40,10 @@ from gt4py.backend.gtc_common import (
 from gt4py.backend.module_generator import make_args_data_from_gtir
 from gt4py.utils import shash
 from gtc import common, gtir
-from gtc.dace.expansion_specification import Map
 from gtc.dace.nodes import StencilComputation
 from gtc.dace.oir_to_dace import OirSDFGBuilder
 from gtc.dace.partial_expansion import partially_expand
-from gtc.dace.transformations import (
-    InlineThreadLocalTransients,
-    eliminate_trivial_maps,
-    nest_sequential_map_scopes,
-)
+from gtc.dace.transformations import nest_sequential_map_scopes, NoEmptyEdgeTrivialMapElimination
 from gtc.dace.utils import array_dimensions, layout_maker_factory, replace_strides
 from gtc.gtir_to_oir import GTIRToOIR
 from gtc.passes.gtir_k_boundary import compute_k_boundary
@@ -184,7 +179,7 @@ def _post_expand_trafos(sdfg: dace.SDFG):
     # DaCe "standard" clean-up transformations
     sdfg.simplify(validate=False)
 
-    eliminate_trivial_maps(sdfg)
+    sdfg.apply_transformations_repeated(NoEmptyEdgeTrivialMapElimination, validate=False)
 
     # Control the `#pragma omp parallel` statements: Fully collapse parallel loops,
     # but set 1D maps to be sequential. (Typical domains are too small to benefit from parallelism)
