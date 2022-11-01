@@ -54,8 +54,11 @@ def naive_lap(inp):
     for i in range(shape[0]):
         for j in range(shape[1]):
             for k in range(0, shape[2]):
-                out[i, j, k] = -4 * inp[i, j, k] + (
-                    inp[i + 1, j, k] + inp[i - 1, j, k] + inp[i, j + 1, k] + inp[i, j - 1, k]
+                out[i, j, k] = -4 * inp[i + 1, j + 1, k] + (
+                    inp[i + 1 + 1, j + 1, k]
+                    + inp[i + 1 - 1, j + 1, k]
+                    + inp[i + 1, j + 1 + 1, k]
+                    + inp[i + 1, j + 1 - 1, k]
                 )
     return out
 

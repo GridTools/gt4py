@@ -262,7 +262,7 @@ def sum_shifted(inp0, inp1):
 @fendef(column_axis=KDim)
 def sum_shifted_fencil(out, inp0, inp1, k_size):
     closure(
-        cartesian_domain(named_range(KDim, 0, k_size)),
+        cartesian_domain(named_range(KDim, 1, k_size)),
         sum_shifted,
         out,
         [inp0, inp1],
@@ -289,7 +289,7 @@ def test_different_vertical_sizes(program_processor):
     )
 
     if validate:
-        assert np.allclose(ref, out)
+        assert np.allclose(ref[1:], out[1:])
 
 
 @fundef

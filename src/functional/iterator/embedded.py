@@ -158,12 +158,20 @@ class LocatedField(Protocol):
     def __getitem__(self, indices: FieldIndexOrIndices) -> Any:
         ...
 
+    @abstractmethod
+    def field_getitem(self, indices: FieldIndexOrIndices) -> Any:
+        ...
+
 
 class MutableLocatedField(LocatedField, Protocol):
     """A LocatedField with write access."""
 
     @abstractmethod
     def __setitem__(self, indices: FieldIndexOrIndices, value: Any) -> None:
+        ...
+
+    @abstractmethod
+    def field_setitem(self, indices: FieldIndexOrIndices, value: Any) -> None:
         ...
 
     @abstractmethod
@@ -228,10 +236,6 @@ class Column(np.lib.mixins.NDArrayOperatorsMixin):
             self.kstart,
             func(*(arg.data if isinstance(arg, Column) else arg for arg in args), **kwargs),
         )
-
-
-def _make_column(column_range: range, dtype: np.dtype):
-    return Column(column_range.start, np.zeros(len(column_range), dtype=dtype))
 
 
 @builtins.deref.register(EMBEDDED)
@@ -660,7 +664,7 @@ def _make_tuple(
     if isinstance(field_or_tuple, tuple):
         return tuple(_make_tuple(f, indices) for f in field_or_tuple)
     else:
-        data = field_or_tuple[indices]
+        data = field_or_tuple.field_getitem(indices)
         if as_column:
             # wraps a vertical slice of an input field into a `Column`
             assert _column_range is not None
@@ -792,10 +796,16 @@ class LocatedFieldImpl(MutableLocatedField):
         self.dtype = dtype
 
     def __getitem__(self, indices: FieldIndexOrIndices) -> Any:
+        return self.array()[indices]
+
+    def field_getitem(self, indices: FieldIndexOrIndices) -> Any:
         indices = tupelize(indices)
         return self.getter(indices)
 
     def __setitem__(self, indices: FieldIndexOrIndices, value: Any):
+        self.array()[indices] = value
+
+    def field_setitem(self, indices: FieldIndexOrIndices, value: Any):
         self.setter(indices, value)
 
     def __array__(self) -> np.ndarray:
@@ -845,14 +855,13 @@ def get_ordered_indices(
 
 
 def _shift_slice(
-    slice_or_index: slice | numbers.Integral, offset: numbers.Integral, size: numbers.Integral
+    slice_or_index: slice | numbers.Integral, offset: numbers.Integral
 ) -> slice | numbers.Integral:
     if isinstance(slice_or_index, slice):
         assert slice_or_index.step is None
-        return slice(
-            0 if slice_or_index.start is None else slice_or_index.start + offset,
-            None if slice_or_index.stop is None else min(slice_or_index.stop + offset, size),
-        )
+        assert slice_or_index.start is not None
+        assert slice_or_index.stop is not None
+        return slice(slice_or_index.start + offset, slice_or_index.stop + offset)
     else:
         assert isinstance(slice_or_index, numbers.Integral)
         return slice_or_index + offset
@@ -861,9 +870,8 @@ def _shift_slice(
 def _shift_slices(
     slices_or_indices: tuple[slice | numbers.Integral, ...],
     offsets: tuple[numbers.Integral, ...],
-    shape: tuple[numbers.Integral, ...],
 ) -> tuple[slice | numbers.Integral, ...]:
-    return tuple(_shift_slice(*i) for i in zip(slices_or_indices, offsets, shape))
+    return tuple(_shift_slice(*i) for i in zip(slices_or_indices, offsets))
 
 
 def np_as_located_field(
@@ -880,10 +888,10 @@ def np_as_located_field(
 
         def setter(indices, value):
             indices = tupelize(indices)
-            a[_shift_slices(indices, offsets, a.shape) if offsets else indices] = value
+            a[_shift_slices(indices, offsets) if offsets else indices] = value
 
         def getter(indices):
-            return a[_shift_slices(indices, offsets, a.shape) if offsets else indices]
+            return a[_shift_slices(indices, offsets) if offsets else indices]
 
         return LocatedFieldImpl(
             getter,
@@ -905,6 +913,9 @@ class IndexField(LocatedField):
         assert isinstance(index, int) or (isinstance(index, tuple) and len(index) == 1)
         return self.dtype.type(index if isinstance(index, int) else index[0])
 
+    def field_getitem(self, index: FieldIndexOrIndices) -> Any:
+        return self[index]
+
     @property
     def axes(self) -> tuple[Dimension]:
         return (self.axis,)
@@ -921,6 +932,9 @@ class ConstantField(LocatedField):
 
     def __getitem__(self, _: FieldIndexOrIndices) -> Any:
         return self.dtype(self.value)
+
+    def field_getitem(self, index: FieldIndexOrIndices) -> Any:
+        return self[index]
 
     @property
     def axes(self) -> tuple[()]:
@@ -1046,10 +1060,10 @@ class TupleOfFields(TupleField):
         axeses = _get_axeses(data)
         self.axes = axeses[0]
 
-    def __getitem__(self, indices):
+    def field_getitem(self, indices):
         return _build_tuple_result(self.data, indices)
 
-    def __setitem__(self, indices, value):
+    def field_setitem(self, indices, value):
         if not isinstance(value, tuple):
             raise RuntimeError(f"Value needs to be tuple, got `{value}`.")
 
@@ -1086,7 +1100,7 @@ def scan(scan_pass, is_forward: bool, init):
 
         column_range = _column_range if is_forward else reversed(_column_range)
         state = init
-        col = _make_column(_column_range, _column_dtype(init))
+        col = Column(_column_range.start, np.zeros(len(_column_range), dtype=_column_dtype(init)))
         for i in column_range:
             state = scan_pass(state, *map(shifted_scan_arg(i), iters))
             col[i] = state
@@ -1151,14 +1165,14 @@ def fendef_embedded(fun: Callable[..., None], *args: Any, **kwargs: Any):
             if column is None:
                 assert _is_concrete_position(pos)
                 ordered_indices = get_ordered_indices(out.axes, pos)
-                out[ordered_indices] = res
+                out.field_setitem(ordered_indices, res)
             else:
                 col_pos = pos.copy()
                 for k in column.col_range:
                     col_pos[column.axis] = k
                     assert _is_concrete_position(col_pos)
                     ordered_indices = get_ordered_indices(out.axes, col_pos)
-                    out[ordered_indices] = res[k]
+                    out.field_setitem(ordered_indices, res[k])
 
         _column_range = None
 

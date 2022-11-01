@@ -58,7 +58,7 @@ def test_simple_indirection(program_processor):
 
     ref = np.zeros(shape)
     for i in range(shape[0]):
-        ref[i] = inp[i - 1] if cond[i] < 0 else inp[i + 1]
+        ref[i] = inp[i + 1 - 1] if cond[i] < 0 else inp[i + 1 + 1]
 
     run_processor(
         conditional_indirection[cartesian_domain(named_range(IDim, 0, shape[0]))],
