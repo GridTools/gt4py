@@ -132,8 +132,6 @@ def is_integral(symbol_type: ct.SymbolType) -> bool:
     True
     >>> is_integral(ct.ScalarType(kind=ct.ScalarKind.FLOAT32))
     False
-    >>> is_integral(ct.FieldType(dims=[], dtype=ct.ScalarType(kind=ct.ScalarKind.INT)))
-    True
     >>> is_integral(ct.FieldType(dims=[Dimension(value="I")], dtype=ct.ScalarType(kind=ct.ScalarKind.INT)))
     True
     """
@@ -144,7 +142,7 @@ def is_integral(symbol_type: ct.SymbolType) -> bool:
     ]
 
 
-def is_number(symbol_type: ct.ScalarType) -> bool:
+def is_number(symbol_type: ct.SymbolType) -> bool:
     """
     Check if ``symbol_type`` is either intergral or float.
 
