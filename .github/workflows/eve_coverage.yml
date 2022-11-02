@@ -58,3 +58,4 @@ jobs:
         files: coverage.json
         fail_ci_if_error: true
         flags: eve-all
+        token: ${{ secrets.CODECOV_TOKEN }}

@@ -67,3 +67,4 @@ jobs:
         files: coverage.json
         fail_ci_if_error: true
         flags: gt4py-all
+        token: ${{ secrets.CODECOV_TOKEN }}
