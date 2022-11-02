@@ -192,10 +192,10 @@ def test_unpacking():
         im.lambda__("inp1", "inp2")(im.make_tuple_(im.deref_("inp1"), im.deref_("inp2")))
     )("inp1", "inp2")
     tuple_access_0 = im.lift_(
-        im.lambda__("__tuple_tmp_0")(im.tuple_get_(0, im.deref_("__tuple_tmp_0")))
+        im.lambda__("__tuple_tmp_0")(im.tuple_get_(-2, im.deref_("__tuple_tmp_0")))
     )("__tuple_tmp_0")
     tuple_access_1 = im.lift_(
-        im.lambda__("__tuple_tmp_0")(im.tuple_get_(1, im.deref_("__tuple_tmp_0")))
+        im.lambda__("__tuple_tmp_0")(im.tuple_get_(-1, im.deref_("__tuple_tmp_0")))
     )("__tuple_tmp_0")
 
     reference = im.let("__tuple_tmp_0", tuple_expr)(
