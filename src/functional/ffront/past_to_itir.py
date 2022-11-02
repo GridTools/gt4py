@@ -95,9 +95,14 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         """Generate symbols for each field param and dimension."""
         size_params = []
         for param in node.params:
-            if isinstance(param.type, common_types.FieldType):
-                for dim_idx in range(0, len(param.type.dims)):
+            if type_info.is_field_type_or_tuple_of_field_type(param.type):
+                fields_dims: list[list[Dimension]] = (
+                    type_info.primitive_constituents(param.type).getattr("dims").to_list()
+                )
+                assert all(field_dims == fields_dims[0] for field_dims in fields_dims)
+                for dim_idx in range(len(fields_dims[0])):
                     size_params.append(itir.Sym(id=_size_arg_from_field(param.id, dim_idx)))
+
         return size_params
 
     def visit_Program(
@@ -185,7 +190,21 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         slices: Optional[list[past.Slice]] = None,
     ):
         domain_args = []
-        for dim_i, dim in enumerate(out_field.type.dims):
+
+        out_field_types = type_info.primitive_constituents(out_field.type).to_list()
+        if any(
+            not isinstance(out_field_type, common_types.FieldType)
+            or out_field_type.dims != out_field_types[0].dims
+            for out_field_type in out_field_types
+        ):
+            raise AssertionError(
+                f"Expected constituents of `{out_field.id}` argument to be"
+                f" fields defined on the same dimensions. This error should be "
+                f" caught in type deduction already."
+            )
+        dims = out_field_types[0].dims
+
+        for dim_i, dim in enumerate(dims):
             # an expression for the size of a dimension
             dim_size = itir.SymRef(id=_size_arg_from_field(out_field.id, dim_i))
             # bounds
