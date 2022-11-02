@@ -437,8 +437,6 @@ def return_type_fieldop(
     with_kwargs: dict[str, ct.SymbolType],
 ):
     ret_type = return_type(fieldop_type.definition, with_args=with_args, with_kwargs=with_kwargs)
-    if isinstance(ret_type, ct.ScalarType):
-        return ct.FieldType(dims=[], dtype=ret_type)
     return ret_type
 
 
