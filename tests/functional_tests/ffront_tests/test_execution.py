@@ -13,7 +13,7 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-
+import dataclasses
 from collections import namedtuple
 from typing import TypeVar
 
@@ -21,7 +21,6 @@ import numpy as np
 import pytest
 
 from functional.common import DimensionKind
-from functional.fencil_processors.runners import gtfn_cpu, roundtrip
 from functional.ffront.decorator import field_operator, program, scan_operator
 from functional.ffront.fbuiltins import (
     Dimension,
@@ -41,6 +40,7 @@ from functional.iterator.embedded import (
     index_field,
     np_as_located_field,
 )
+from functional.program_processors.runners import gtfn_cpu, roundtrip
 
 
 @pytest.fixture(params=[roundtrip.executor, gtfn_cpu.run_gtfn])
@@ -53,7 +53,7 @@ def debug_itir(tree):
     from devtools import debug
 
     from eve.codegen import format_python_source
-    from functional.fencil_processors import EmbeddedDSL
+    from functional.program_processors import EmbeddedDSL
 
     debug(format_python_source(EmbeddedDSL.apply(tree)))
 
@@ -620,7 +620,7 @@ def test_scalar_arg_with_field(fieldview_backend):
     Edge = Dimension("Edge")
     EdgeOffset = FieldOffset("EdgeOffset", source=Edge, target=(Edge,))
     size = 5
-    inp = index_field(Edge)
+    inp = index_field(Edge, dtype=float64)
     factor = 3.0
     out = np_as_located_field(Edge)(np.zeros((size), dtype=np.float64))
 
@@ -821,7 +821,7 @@ def test_tuple_return_2(reduction_setup):
     @field_operator
     def reduction_tuple(
         a: Field[[Edge], int64], b: Field[[Edge], int64]
-    ) -> tuple[Field[[Vertex], int64], Field[[Vertex], int64], int64]:
+    ) -> tuple[Field[[Vertex], int64], Field[[Vertex], int64]]:
         a = neighbor_sum(a(V2E), axis=V2EDim)
         b = neighbor_sum(b(V2E), axis=V2EDim)
         return a, b
@@ -956,7 +956,7 @@ def test_solve_triag(fieldview_backend):
         b: Field[[IDim, JDim, KDim], float],
         c: Field[[IDim, JDim, KDim], float],
         d: Field[[IDim, JDim, KDim], float],
-    ):
+    ) -> Field[[IDim, JDim, KDim], float]:
         cp, dp = tridiag_forward(a, b, c, d)
         return tridiag_backward(cp, dp)
 
@@ -1145,6 +1145,9 @@ def test_domain(fieldview_backend):
 
 
 def test_domain_input_bounds(fieldview_backend):
+    if fieldview_backend == gtfn_cpu.run_gtfn:
+        pytest.skip("FloorDiv and Power not fully supported in gtfn.")
+
     size = 10
     a = np_as_located_field(IDim, JDim)(np.ones((size, size)))
     lower_i = 1
@@ -1164,12 +1167,50 @@ def test_domain_input_bounds(fieldview_backend):
         lower_j: int64,
         upper_j: int64,
     ):
-        fieldop_domain(a, out=a, domain={IDim: (lower_i, upper_i), JDim: (lower_j, upper_j)})
+        fieldop_domain(
+            a,
+            out=a,
+            domain={IDim: (lower_i, upper_i // 1), JDim: (lower_j**1, upper_j)},
+        )
 
     program_domain(a, lower_i, upper_i, lower_j, upper_j, offset_provider={})
 
     expected = np.asarray(a)
     expected[1:9, 4:6] = 1 + 1
+
+    assert np.allclose(expected, a)
+
+
+def test_domain_input_bounds_1(fieldview_backend):
+    size = 10
+    a = np_as_located_field(IDim, JDim)(np.ones((size, size)) * 2)
+    lower_i = 1
+    upper_i = 9
+    lower_j = 4
+    upper_j = 6
+
+    @field_operator(backend=fieldview_backend)
+    def fieldop_domain(a: Field[[IDim, JDim], float64]) -> Field[[IDim, JDim], float64]:
+        return a * a
+
+    @program
+    def program_domain(
+        a: Field[[IDim, JDim], float64],
+        lower_i: int64,
+        upper_i: int64,
+        lower_j: int64,
+        upper_j: int64,
+    ):
+        fieldop_domain(
+            a,
+            out=a,
+            domain={IDim: (1 * lower_i, upper_i + 0), JDim: (lower_j - 0, upper_j)},
+        )
+
+    program_domain(a, lower_i, upper_i, lower_j, upper_j, offset_provider={})
+
+    expected = np.asarray(a)
+    expected[1:9, 4:6] = 2 * 2
 
     assert np.allclose(expected, a)
 
@@ -1196,3 +1237,55 @@ def test_domain_tuple(fieldview_backend):
 
     assert np.allclose(np.asarray(a), a)
     assert np.allclose(expected, b)
+
+
+def test_where_k_offset(fieldview_backend):
+    if fieldview_backend == gtfn_cpu.run_gtfn:
+        pytest.skip("IndexFields are not supported yet.")
+    size = 10
+    KDim = Dimension("K", kind=DimensionKind.VERTICAL)
+    Koff = FieldOffset("Koff", source=KDim, target=(KDim,))
+    a = np_as_located_field(IDim, KDim)(np.ones((size, size)))
+    out = np_as_located_field(IDim, KDim)(np.zeros((size, size)))
+    k_index = index_field(KDim)
+
+    @field_operator(backend=fieldview_backend)
+    def fieldop_where_k_offset(
+        a: Field[[IDim, KDim], float64],
+        k_index: Field[[KDim], int64],
+    ) -> Field[[IDim, KDim], float64]:
+        return where(k_index > 0, a(Koff[-1]), 2.0)
+
+    fieldop_where_k_offset(a, k_index, out=out, offset_provider={"Koff": KDim})
+
+    expected = np.where(np.arange(0, size, 1)[np.newaxis, :] > 0.0, a, 2.0)
+
+    assert np.allclose(np.asarray(out), expected)
+
+
+def test_undefined_symbols():
+    from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError
+
+    with pytest.raises(FieldOperatorTypeDeductionError, match="Undeclared symbol"):
+
+        @field_operator
+        def return_undefined():
+            return undefined_symbol
+
+
+def test_constant_closure_vars():
+    from eve.utils import FrozenNamespace
+
+    constants = FrozenNamespace(
+        PI=np.float32(3.142),
+        E=np.float32(2.718),
+    )
+
+    @field_operator
+    def consume_constants(input: Field[[IDim], np.float32]) -> Field[[IDim], np.float32]:
+        return constants.PI * constants.E * input
+
+    input = np_as_located_field(IDim)(np.ones((1,), dtype=np.float32))
+    output = np_as_located_field(IDim)(np.zeros((1,), dtype=np.float32))
+    consume_constants(input, out=output, offset_provider={})
+    assert np.allclose(np.asarray(output), constants.PI * constants.E)

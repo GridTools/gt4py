@@ -14,12 +14,12 @@
 from __future__ import annotations
 
 import ast
-import collections
 from dataclasses import dataclass
-from typing import cast
+from typing import Any, cast
 
-from functional.ffront import common_types, program_ast as past, symbol_makers
+from functional.ffront import common_types as ct, program_ast as past, symbol_makers
 from functional.ffront.dialect_parser import DialectParser, DialectSyntaxError
+from functional.ffront.past_passes.closure_var_type_deduction import ClosureVarTypeDeduction
 from functional.ffront.past_passes.type_deduction import ProgramTypeDeduction
 
 
@@ -34,27 +34,29 @@ class ProgramParser(DialectParser[past.Program]):
     syntax_error_cls = ProgramSyntaxError
 
     @classmethod
-    def _postprocess_dialect_ast(cls, output_node: past.Program) -> past.Program:
+    def _postprocess_dialect_ast(
+        cls, output_node: past.Program, closure_vars: dict[str, Any], annotations: dict[str, Any]
+    ) -> past.Program:
+        output_node = ClosureVarTypeDeduction.apply(output_node, closure_vars)
         return ProgramTypeDeduction.apply(output_node)
 
     def visit_FunctionDef(self, node: ast.FunctionDef) -> past.Program:
-        vars_ = collections.ChainMap(self.captured_vars.globals, self.captured_vars.nonlocals)
-        captured_vars: list[past.Symbol] = [
+        closure_symbols: list[past.Symbol] = [
             past.Symbol(
                 id=name,
                 type=symbol_makers.make_symbol_type_from_value(val),
-                namespace=common_types.Namespace.CLOSURE,
+                namespace=ct.Namespace.CLOSURE,
                 location=self._make_loc(node),
             )
-            for name, val in vars_.items()
+            for name, val in self.closure_vars.items()
         ]
 
         return past.Program(
             id=node.name,
-            type=common_types.DeferredSymbolType(constraint=common_types.ProgramType),
+            type=ct.DeferredSymbolType(constraint=ct.ProgramType),
             params=self.visit(node.args),
             body=[self.visit(node) for node in node.body],
-            captured_vars=captured_vars,
+            closure_vars=closure_symbols,
             location=self._make_loc(node),
         )
 
@@ -62,10 +64,10 @@ class ProgramParser(DialectParser[past.Program]):
         return [self.visit_arg(arg) for arg in node.args]
 
     def visit_arg(self, node: ast.arg) -> past.DataSymbol:
-        if (annotation := self.captured_vars.annotations.get(node.arg, None)) is None:
+        if (annotation := self.annotations.get(node.arg, None)) is None:
             raise ProgramSyntaxError.from_AST(node, msg="Untyped parameters not allowed!")
         new_type = symbol_makers.make_symbol_type_from_typing(annotation)
-        if not isinstance(new_type, common_types.DataType):
+        if not isinstance(new_type, ct.DataType):
             raise ProgramSyntaxError.from_AST(
                 node, msg="Only arguments of type DataType are allowed."
             )
@@ -73,6 +75,38 @@ class ProgramParser(DialectParser[past.Program]):
 
     def visit_Expr(self, node: ast.Expr) -> past.LocatedNode:
         return self.visit(node.value)
+
+    def visit_Add(self, node: ast.Add, **kwargs) -> ct.BinaryOperator:
+        return ct.BinaryOperator.ADD
+
+    def visit_Sub(self, node: ast.Sub, **kwargs) -> ct.BinaryOperator:
+        return ct.BinaryOperator.SUB
+
+    def visit_Mult(self, node: ast.Mult, **kwargs) -> ct.BinaryOperator:
+        return ct.BinaryOperator.MULT
+
+    def visit_Div(self, node: ast.Div, **kwargs) -> ct.BinaryOperator:
+        return ct.BinaryOperator.DIV
+
+    def visit_FloorDiv(self, node: ast.FloorDiv, **kwargs) -> ct.BinaryOperator:
+        return ct.BinaryOperator.FLOOR_DIV
+
+    def visit_Pow(self, node: ast.Pow, **kwargs) -> ct.BinaryOperator:
+        return ct.BinaryOperator.POW
+
+    def visit_BitAnd(self, node: ast.BitAnd, **kwargs) -> ct.BinaryOperator:
+        return ct.BinaryOperator.BIT_AND
+
+    def visit_BitOr(self, node: ast.BitOr, **kwargs) -> ct.BinaryOperator:
+        return ct.BinaryOperator.BIT_OR
+
+    def visit_BinOp(self, node: ast.BinOp, **kwargs) -> past.BinOp:
+        return past.BinOp(
+            op=self.visit(node.op),
+            left=self.visit(node.left),
+            right=self.visit(node.right),
+            location=self._make_loc(node),
+        )
 
     def visit_Name(self, node: ast.Name) -> past.Name:
         return past.Name(id=node.id, location=self._make_loc(node))
@@ -107,7 +141,7 @@ class ProgramParser(DialectParser[past.Program]):
         return past.TupleExpr(
             elts=[self.visit(item) for item in node.elts],
             location=self._make_loc(node),
-            type=common_types.DeferredSymbolType(constraint=common_types.TupleType),
+            type=ct.DeferredSymbolType(constraint=ct.TupleType),
         )
 
     def visit_Slice(self, node: ast.Slice) -> past.Slice:
