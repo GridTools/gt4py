@@ -164,5 +164,5 @@ class StencilFactory(factory.Factory):
         lambda x: [gtir.Argument(name=p.name, is_keyword=False, default="") for p in x.params]
     )
     externals: Dict[str, Any] = {}
-    sources: Optional[Dict[str, str]] = None
+    sources: Dict[str, str] = {}
     docstring: str = ""

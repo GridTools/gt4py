@@ -237,7 +237,8 @@ class Expr(LocNode):
     - an expression `kind` (scalar or field)
     """
 
-    kind: ExprKind
+    # Both kind and dtype are set to default here and root validators propagate the correct value after the __init__ is called.
+    kind: ExprKind = ExprKind.FIELD
     dtype: DataType = DataType.AUTO
 
 
@@ -248,7 +249,7 @@ class Stmt(LocNode):
 
 def verify_condition_is_boolean(parent_node_cls: eve.Node, cond: Expr) -> Expr:
     if cond.dtype and cond.dtype is not DataType.BOOL:
-        raise ValueError("Condition in `{}` must be boolean.".format(parent_node_cls.__name__))
+        raise ValueError("Condition in `{}` must be boolean.".format(type(parent_node_cls)))
     return cond
 
 
@@ -356,7 +357,7 @@ class IfStmt(eve.GenericNode, Generic[StmtT, ExprT]):
 
     cond: ExprT
     true_branch: StmtT
-    false_branch: Optional[StmtT]
+    false_branch: Optional[StmtT] = None
 
     @datamodels.validator("cond")
     def condition_is_boolean(self, attribute: datamodels.Attribute, value: Expr) -> None:
@@ -435,9 +436,6 @@ class BinaryOp(eve.GenericNode, Generic[ExprT]):
     left: ExprT
     right: ExprT
 
-    # NOTE This needs to be set to a default, but will be overwritten by the root_validator after
-    kind: ExprKind = ExprKind.FIELD
-
     @datamodels.root_validator
     def kind_propagation(cls, instance: "BinaryOp") -> None:
         instance.kind = compute_kind(instance.left, instance.right)
@@ -481,9 +479,6 @@ class TernaryOp(eve.GenericNode, Generic[ExprT]):
     true_expr: ExprT
     false_expr: ExprT
 
-    # NOTE This needs to be set to a default, but will be overwritten by the root_validator after
-    kind: ExprKind = ExprKind.FIELD
-
     @datamodels.validator("cond")
     def condition_is_boolean(self, attribute: datamodels.Attribute, value: Expr) -> None:
         return verify_condition_is_boolean(self, value)
@@ -507,9 +502,6 @@ def ternary_op_dtype_propagation(*, strict: bool) -> datamodels.RootValidator:
 class Cast(eve.GenericNode, Generic[ExprT]):
     dtype: DataType
     expr: ExprT
-
-    # NOTE This needs to be set to a default, but will be overwritten by the root_validator after
-    kind: ExprKind = ExprKind.FIELD
 
     @datamodels.root_validator
     def kind_propagation(cls, instance: "Cast") -> None:
@@ -567,7 +559,7 @@ def validate_dtype_is_set() -> datamodels.RootValidator:
     return datamodels.root_validator(_impl)
 
 
-class _LvalueDimsValidator(eve.NodeVisitor):
+class _LvalueDimsValidator(eve.VisitorWithSymbolTableTrait):
     def __init__(self, vertical_loop_type: Type[eve.Node], decl_type: Type[eve.Node]) -> None:
         if not vertical_loop_type.__annotations__.get("loop_order") is LoopOrder:
             raise ValueError(
@@ -582,26 +574,14 @@ class _LvalueDimsValidator(eve.NodeVisitor):
         self.decl_type = decl_type
 
     def visit_Node(
-        self,
-        node: eve.Node,
-        *,
-        symtable: Dict[str, Any],
-        loop_order: Optional[LoopOrder] = None,
-        **kwargs: Any,
+        self, node: eve.Node, *, loop_order: Optional[LoopOrder] = None, **kwargs: Any
     ) -> None:
         if isinstance(node, self.vertical_loop_type):
             loop_order = node.loop_order
-        if isinstance(node, eve.SymbolTableTrait):
-            symtable = {**symtable, **node.annex.symtable}
-        self.generic_visit(node, symtable=symtable, loop_order=loop_order, **kwargs)
+        self.generic_visit(node, loop_order=loop_order, **kwargs)
 
     def visit_AssignStmt(
-        self,
-        node: AssignStmt,
-        *,
-        loop_order: LoopOrder,
-        symtable: Dict[str, Any],
-        **kwargs: Any,
+        self, node: AssignStmt, *, loop_order: LoopOrder, symtable: Dict[str, Any], **kwargs: Any
     ) -> None:
         decl = symtable.get(node.left.name, None)
         if decl is None:
@@ -657,10 +637,7 @@ def validate_lvalue_dims(
     """
 
     def _impl(cls: Type[datamodels.DataModel], instance: datamodels.DataModel) -> None:
-        for _, children in datamodels.asdict(instance).items():
-            _LvalueDimsValidator(vertical_loop_type, decl_type).visit(
-                children, symtable=instance.annex.symtable
-            )
+        _LvalueDimsValidator(vertical_loop_type, decl_type).visit(instance)
 
     return datamodels.root_validator(_impl)
 

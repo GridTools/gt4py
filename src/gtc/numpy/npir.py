@@ -39,7 +39,7 @@ class HorizontalMask(eve.Node):
 # --- Decls ---
 @eve.utils.noninstantiable
 class Decl(eve.Node):
-    name: eve.SymbolName
+    name: eve.Coerced[eve.SymbolName]
     dtype: common.DataType
 
 
@@ -131,7 +131,7 @@ class FieldSlice(Expr, VectorLValue):
     i_offset: int
     j_offset: int
     k_offset: Union[int, VarKOffset]
-    data_index: List[Expr] = []
+    data_index: List[Expr] = eve.field(default_factory=list)
     kind: common.ExprKind = common.ExprKind.FIELD
 
     @validator("data_index")

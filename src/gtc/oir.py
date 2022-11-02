@@ -233,7 +233,7 @@ class HorizontalExecution(LocNode, eve.SymbolTableTrait):
 
 
 class CacheDesc(LocNode):
-    name: eve.SymbolRef
+    name: eve.Coerced[eve.SymbolRef]
 
 
 class IJCache(CacheDesc):

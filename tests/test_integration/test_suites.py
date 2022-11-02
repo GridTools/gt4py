@@ -952,11 +952,7 @@ class TestTypedTemporary(gt_testing.StencilTestSuite):
 
 
 class TestVectorGenAssignment(gt_testing.StencilTestSuite):
-    dtypes = {
-        # NOTE: pydantic.error_wrappers.ValidationError: when using np.float32
-        "field_in": np.float64,
-        "field_out": np.float64,
-    }
+    dtypes = {"field_in": np.float64, "field_out": np.float64}
     domain_range = [(2, 2), (2, 2), (2, 2)]
     backends = ALL_BACKENDS
     symbols = {

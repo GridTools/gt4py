@@ -109,7 +109,7 @@ class HorizontalExecutionMerging(eve.NodeTranslator):
                     decl for decl in this_hexec.declarations if decl.name not in duplicated_locals
                 ]
                 this_mapped = [
-                    oir.ScalarDecl(name=scalar_map[name], dtype=locals_symtable[name].dtype)
+                    oir.LocalScalar(name=scalar_map[name], dtype=locals_symtable[name].dtype)
                     for name in duplicated_locals
                 ]
 
@@ -287,7 +287,7 @@ class OnTheFlyMerging(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             }
 
             # 4 contributions to the new declarations list
-            combined_symtable = {**symtable, **first.symtable_}
+            combined_symtable = {**symtable, **first.annex.symtable}
             decls_from_later = [
                 d for d in horizontal_execution.declarations if d.name not in duplicated_locals
             ]

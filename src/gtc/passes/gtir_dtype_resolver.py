@@ -25,7 +25,7 @@ class _GTIRResolveAuto(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
 
     Note that currently only temporaries (FieldDecl/FieldAccess) can have AUTO type.
 
-    Precondition: All dtype are set (not None)
+    Precondition: All dtype are set, but some can be set to AUTO
     Postcondition: All dtypes are concrete (no AUTO)
     """
 
@@ -70,7 +70,7 @@ class _GTIRResolveAuto(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             result.walk_values()
             .if_hasattr("dtype")
             .getattr("dtype")
-            .map(lambda x: x not in [None, DataType.AUTO, DataType.INVALID, DataType.DEFAULT])
+            .map(lambda x: x not in {DataType.AUTO, DataType.INVALID, DataType.DEFAULT})
         ):
             raise GTCPostconditionError(expected="No AUTO, INVALID or DEFAULT dtype in tree.")
 
@@ -98,18 +98,6 @@ class _GTIRPropagateDtypeToAccess(eve.NodeTranslator, eve.VisitorWithSymbolTable
         self, node: gtir.ScalarAccess, *, symtable: Dict[str, Any], **kwargs: Any
     ) -> gtir.ScalarAccess:
         return gtir.ScalarAccess(name=node.name, dtype=symtable[node.name].dtype, loc=node.loc)
-
-    def visit_Stencil(self, node: gtir.Stencil, **kwargs: Any) -> gtir.Stencil:
-        result: gtir.Stencil = self.generic_visit(node, **kwargs)
-
-        if not all(
-            result.walk_values()
-            .if_isinstance(gtir.ScalarAccess, gtir.FieldAccess)
-            .getattr("dtype")
-            .map(lambda x: x is not DataType.AUTO)
-        ):
-            raise GTCPostconditionError(expected="No AUTO dtype in FieldAccess or ScalarAccess.")
-        return result
 
 
 def resolve_dtype(node: gtir.Stencil) -> gtir.Stencil:
