@@ -13,6 +13,7 @@ tasks:
     cp ~/.pyenv/versions/${PYENV_PYTHON_VERSION}/lib/python${PYENV_PYTHON_VERSION:0:3}/site-packages/easy-install.pth /workspace/.pip-modules/lib/python${PYENV_PYTHON_VERSION:0:3}/site-packages/
     cp ~/.pyenv/versions/${PYENV_PYTHON_VERSION}/lib/python${PYENV_PYTHON_VERSION:0:3}/site-packages/*.egg-link /workspace/.pip-modules/lib/python${PYENV_PYTHON_VERSION:0:3}/site-packages/
     pre-commit install --install-hooks
+    ln -s /workspace/gt4py/.gitpod/.vscode /workspace/gt4py/.vscode
 
 github:
   prebuilds:
