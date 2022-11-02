@@ -22,7 +22,6 @@ from functional.ffront.foast_passes.utils import compute_assign_indices
 from functional.ffront.symbol_makers import make_symbol_type_from_value
 
 
-
 def boolified_type(symbol_type: ct.SymbolType) -> ct.ScalarType | ct.FieldType:
     """
     Create a new symbol type from a symbol type, replacing the data type with ``bool``.

@@ -34,13 +34,10 @@ from functional.ffront.ast_passes import (
     UnchainComparesPass,
 )
 from functional.ffront.dialect_parser import DialectParser, DialectSyntaxError
-
-from functional.ffront.foast_passes.iterable_unpack import UnpackedAssignPass
-
 from functional.ffront.foast_passes.closure_var_folding import ClosureVarFolding
 from functional.ffront.foast_passes.closure_var_type_deduction import ClosureVarTypeDeduction
 from functional.ffront.foast_passes.dead_closure_var_elimination import DeadClosureVarElimination
-
+from functional.ffront.foast_passes.iterable_unpack import UnpackedAssignPass
 from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduction
 
 
@@ -108,7 +105,6 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
         foast_node = ClosureVarTypeDeduction.apply(foast_node, closure_vars)
         foast_node = FieldOperatorTypeDeduction.apply(foast_node)
         foast_node = UnpackedAssignPass.apply(foast_node)
-
 
         # check deduced matches annotated return type
         if "return" in annotations:

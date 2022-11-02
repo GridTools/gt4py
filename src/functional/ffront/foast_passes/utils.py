@@ -1,7 +1,9 @@
 from functional.ffront import field_operator_ast as foast
 
 
-def compute_assign_indices(targets: list[foast.FieldSymbol | foast.TupleSymbol | foast.ScalarSymbol | foast.Star]) -> list[int | tuple]:
+def compute_assign_indices(
+    targets: list[foast.FieldSymbol | foast.TupleSymbol | foast.ScalarSymbol | foast.Star],
+) -> list[int | tuple]:
     indices = list(range(len(targets)))
     for idx, elt in enumerate(targets):
         if isinstance(elt, foast.Star):

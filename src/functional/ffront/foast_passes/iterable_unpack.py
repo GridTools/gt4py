@@ -76,7 +76,9 @@ class UnpackedAssignPass(NodeTranslator, traits.VisitorWithSymbolTableTrait):
                     if isinstance(index, tuple):
                         lower, upper = index[0], index[1]
                         new_tuple = foast.TupleExpr(
-                            elts=values.elts[lower:upper], type=subtarget.type, location=node.location
+                            elts=values.elts[lower:upper],
+                            type=subtarget.type,
+                            location=node.location,
                         )
                         new_assign = foast.Assign(
                             target=subtarget.id,
@@ -85,12 +87,12 @@ class UnpackedAssignPass(NodeTranslator, traits.VisitorWithSymbolTableTrait):
                         )
                     else:
                         new_assign = foast.Assign(
-                                target=subtarget,
-                                value=foast.Subscript(
+                            target=subtarget,
+                            value=foast.Subscript(
                                 value=tuple_name, index=index, type=el_type, location=node.location
-                                ),
-                                location=node.location,
-                            )
+                            ),
+                            location=node.location,
+                        )
 
                     body.insert(pos + i + 1, new_assign)
 
