@@ -20,7 +20,6 @@ from .conftest import run_processor
 pytest.importorskip("atlas4py")
 
 from functional.common import Dimension
-from functional.fencil_processors.runners.gtfn_cpu import run_gtfn
 from functional.iterator import library
 from functional.iterator.atlas_utils import AtlasTable
 from functional.iterator.builtins import *
@@ -30,6 +29,8 @@ from functional.iterator.embedded import (
     np_as_located_field,
 )
 from functional.iterator.runtime import closure, fendef, fundef, offset
+from functional.iterator.transforms.pass_manager import LiftMode
+from functional.program_processors.runners.gtfn_cpu import run_gtfn
 
 from .fvm_nabla_setup import assert_close, nabla_setup
 
@@ -123,9 +124,9 @@ def nabla(
     )
 
 
-def test_compute_zavgS(fencil_processor, lift_mode):
-    fencil_processor, validate = fencil_processor
-    if fencil_processor == run_gtfn:
+def test_compute_zavgS(program_processor, lift_mode):
+    program_processor, validate = program_processor
+    if program_processor == run_gtfn:
         pytest.xfail("TODO: gtfn bindings don't support unstructured")
     setup = nabla_setup()
 
@@ -138,7 +139,7 @@ def test_compute_zavgS(fencil_processor, lift_mode):
 
     run_processor(
         compute_zavgS_fencil,
-        fencil_processor,
+        program_processor,
         setup.edges_size,
         zavgS,
         pp,
@@ -153,7 +154,7 @@ def test_compute_zavgS(fencil_processor, lift_mode):
 
     run_processor(
         compute_zavgS_fencil,
-        fencil_processor,
+        program_processor,
         setup.edges_size,
         zavgS,
         pp,
@@ -181,9 +182,9 @@ def compute_zavgS2_fencil(
     )
 
 
-def test_compute_zavgS2(fencil_processor, lift_mode):
-    fencil_processor, validate = fencil_processor
-    if fencil_processor == run_gtfn:
+def test_compute_zavgS2(program_processor, lift_mode):
+    program_processor, validate = program_processor
+    if program_processor == run_gtfn:
         pytest.xfail("TODO: gtfn bindings don't support unstructured")
     setup = nabla_setup()
 
@@ -202,7 +203,7 @@ def test_compute_zavgS2(fencil_processor, lift_mode):
 
     run_processor(
         compute_zavgS2_fencil,
-        fencil_processor,
+        program_processor,
         setup.edges_size,
         zavgS,
         pp,
@@ -219,9 +220,9 @@ def test_compute_zavgS2(fencil_processor, lift_mode):
         assert_close(1000788897.3202186, max(zavgS[1]))
 
 
-def test_nabla(fencil_processor, lift_mode):
-    fencil_processor, validate = fencil_processor
-    if fencil_processor == run_gtfn:
+def test_nabla(program_processor, lift_mode):
+    program_processor, validate = program_processor
+    if program_processor == run_gtfn:
         pytest.xfail("TODO: gtfn bindings don't support unstructured")
     setup = nabla_setup()
 
@@ -238,7 +239,7 @@ def test_nabla(fencil_processor, lift_mode):
 
     run_processor(
         nabla,
-        fencil_processor,
+        program_processor,
         setup.nodes_size,
         (pnabla_MXX, pnabla_MYY),
         pp,
@@ -274,10 +275,10 @@ def nabla2(
     )
 
 
-def test_nabla2(fencil_processor, lift_mode):
-    if fencil_processor == run_gtfn:
+def test_nabla2(program_processor, lift_mode):
+    if program_processor == run_gtfn:
         pytest.xfail("TODO: gtfn bindings don't support unstructured")
-    fencil_processor, validate = fencil_processor
+    program_processor, validate = program_processor
     setup = nabla_setup()
 
     sign = np_as_located_field(Vertex, V2E)(setup.sign_field)
@@ -301,7 +302,7 @@ def test_nabla2(fencil_processor, lift_mode):
         sign,
         vol,
         offset_provider={"E2V": e2v, "V2E": v2e},
-        fencil_processor=fencil_processor,
+        program_processor=program_processor,
         lift_mode=lift_mode,
     )
 
@@ -349,9 +350,11 @@ def nabla_sign(n_nodes, out_MXX, out_MYY, pp, S_MXX, S_MYY, vol, node_index, is_
     )
 
 
-def test_nabla_sign(fencil_processor, lift_mode):
-    fencil_processor, validate = fencil_processor
-    if fencil_processor == run_gtfn:
+def test_nabla_sign(program_processor, lift_mode):
+    program_processor, validate = program_processor
+    if lift_mode != LiftMode.FORCE_INLINE:
+        pytest.xfail("test is broken due to bad lift semantics in iterator IR")
+    if program_processor == run_gtfn:
         pytest.xfail("TODO: gtfn bindings don't support unstructured")
     setup = nabla_setup()
 
@@ -369,7 +372,7 @@ def test_nabla_sign(fencil_processor, lift_mode):
 
     run_processor(
         nabla_sign,
-        fencil_processor,
+        program_processor,
         setup.nodes_size,
         pnabla_MXX,
         pnabla_MYY,

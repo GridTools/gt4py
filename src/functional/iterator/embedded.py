@@ -17,6 +17,8 @@ from typing import (
     Optional,
     Protocol,
     Sequence,
+    SupportsFloat,
+    SupportsInt,
     TypeAlias,
     TypeGuard,
     Union,
@@ -26,6 +28,7 @@ from typing import (
 import numpy as np
 import numpy.typing as npt
 
+from eve import extended_typing as xtyping
 from functional import iterator
 from functional.common import Connectivity, Dimension, DimensionKind
 from functional.iterator import builtins
@@ -38,9 +41,9 @@ EMBEDDED = "embedded"
 
 # Atoms
 Tag: TypeAlias = str
-IntIndex: TypeAlias = int
+IntIndex: TypeAlias = int | np.integer
 
-FieldIndex: TypeAlias = int | slice
+FieldIndex: TypeAlias = slice | IntIndex
 FieldIndexOrIndices: TypeAlias = FieldIndex | tuple[FieldIndex, ...]
 
 FieldAxis: TypeAlias = (
@@ -48,6 +51,7 @@ FieldAxis: TypeAlias = (
 )  # TODO Offset should be removed, is sometimes used for sparse dimensions
 TupleAxis: TypeAlias = NoneType
 Axis: TypeAlias = FieldAxis | TupleAxis
+Scalar: TypeAlias = SupportsInt | SupportsFloat | np.int32 | np.int64 | np.float32 | np.float64
 
 
 class SparseTag(Tag):
@@ -106,8 +110,8 @@ OffsetProvider: TypeAlias = dict[Tag, OffsetProviderElem]
 # Positions
 SparsePositionEntry = list[int]
 IncompleteSparsePositionEntry: TypeAlias = list[Optional[int]]
-PositionEntry: TypeAlias = IntIndex | SparsePositionEntry
-IncompletePositionEntry: TypeAlias = IntIndex | IncompleteSparsePositionEntry
+PositionEntry: TypeAlias = SparsePositionEntry | IntIndex
+IncompletePositionEntry: TypeAlias = IncompleteSparsePositionEntry | IntIndex
 ConcretePosition: TypeAlias = dict[Tag, PositionEntry]
 IncompletePosition: TypeAlias = dict[Tag, IncompletePositionEntry]
 
@@ -117,7 +121,7 @@ MaybePosition: TypeAlias = Optional[Position]
 
 
 def is_int_index(p: Any) -> TypeGuard[IntIndex]:
-    return isinstance(p, int)
+    return isinstance(p, (int, np.integer))
 
 
 @runtime_checkable
@@ -402,6 +406,11 @@ def divides(first, second):
     return first / second
 
 
+@builtins.floordiv.register(EMBEDDED)
+def floordiv(first, second):
+    return first // second
+
+
 @builtins.eq.register(EMBEDDED)
 def eq(first, second):
     return first == second
@@ -430,6 +439,24 @@ def greater_equal(first, second):
 @builtins.not_eq.register(EMBEDDED)
 def not_eq(first, second):
     return first != second
+
+
+CompositeOfScalarOrField: TypeAlias = Scalar | LocatedField | tuple["CompositeOfScalarOrField", ...]
+
+
+def promote_scalars(val: CompositeOfScalarOrField):
+    """Given a scalar, field or composite thereof promote all (contained) scalars to fields."""
+    if isinstance(val, tuple):
+        return tuple(promote_scalars(el) for el in val)
+    val_type = xtyping.infer_type(val)
+    if np.issubdtype(val_type, np.number):
+        return constant_field(val)
+    elif np.issubdtype(val_type, LocatedField):
+        return val
+    else:
+        raise ValueError(
+            f"Expected a `Field` or a number (`float`, `np.int64`, ...), but got {val_type}."
+        )
 
 
 for math_builtin_name in builtins.MATH_BUILTINS:
@@ -524,7 +551,7 @@ def group_offsets(*offsets: OffsetPart) -> tuple[list[CompleteOffset], list[Tag]
     tag_stack = []
     complete_offsets = []
     for offset in offsets:
-        if not isinstance(offset, int):
+        if not isinstance(offset, (int, np.integer)):
             tag_stack.append(offset)
         else:
             assert tag_stack
@@ -610,7 +637,8 @@ _UNDEFINED = Undefined()
 
 def _is_concrete_position(pos: Position) -> TypeGuard[ConcretePosition]:
     return all(
-        isinstance(v, int) or (isinstance(v, list) and all(isinstance(e, int) for e in v))
+        isinstance(v, (int, np.integer))
+        or (isinstance(v, list) and all(isinstance(e, (int, np.integer)) for e in v))
         for v in pos.values()
     )
 
@@ -677,6 +705,7 @@ class MDIterator:
         return self.pos is not None
 
     def deref(self) -> Any:
+        assert not self.incomplete_offsets
         if not self.can_deref():
             # this can legally happen in cases like `if_(can_deref(inp), deref(inp), 42.)`
             # because both branches will be eagerly executed
@@ -811,7 +840,7 @@ def get_ordered_indices(
                 res.append(elem[sparse_position_tracker[axis.value]])
                 sparse_position_tracker[axis.value] += 1
             else:
-                assert isinstance(elem, (int, slice))
+                assert isinstance(elem, (int, np.integer, slice))
                 res.append(elem)
     return tuple(res)
 
@@ -896,7 +925,9 @@ class ConstantField(LocatedField):
         return ()
 
 
-def constant_field(value: Any, dtype: npt.DTypeLike = float) -> LocatedField:
+def constant_field(value: Any, dtype: npt.DTypeLike = None) -> LocatedField:
+    if dtype is None:
+        dtype = xtyping.infer_type(value)
     return ConstantField(value, dtype)
 
 
@@ -1103,6 +1134,7 @@ def fendef_embedded(fun: Callable[..., None], *args: Any, **kwargs: Any):
         out = as_tuple_field(out) if can_be_tuple_field(out) else out
 
         for pos in _domain_iterator(domain):
+            promoted_ins = [promote_scalars(inp) for inp in ins]
             ins_iters = list(
                 make_in_iterator(
                     inp,
@@ -1110,9 +1142,7 @@ def fendef_embedded(fun: Callable[..., None], *args: Any, **kwargs: Any):
                     kwargs["offset_provider"],
                     column_axis=column.axis if column else None,
                 )
-                if not isinstance(inp, numbers.Number)
-                else inp
-                for inp in ins
+                for inp in promoted_ins
             )
             res = sten(*ins_iters)
 

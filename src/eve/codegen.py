@@ -508,7 +508,7 @@ class JinjaTemplate(BaseTemplate):
                 message += f" created at {self.definition_loc[0]}:{self.definition_loc[1]}"
                 try:
                     if hasattr(e, "lineno"):
-                        message += f" (error likely around line: {e.lineno})"  # type: ignore  # assume Jinja exception
+                        message += f" (error likely around line: {e.lineno})"
                 except Exception:
                     message = f"{message}:\n---\n{definition}\n---\n"
 

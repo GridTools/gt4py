@@ -1,10 +1,10 @@
 import numpy as np
 
 from functional.common import Dimension
-from functional.fencil_processors.runners import double_roundtrip, roundtrip
 from functional.iterator.builtins import *
 from functional.iterator.embedded import np_as_located_field
 from functional.iterator.runtime import closure, fendef, fundef, offset
+from functional.program_processors.runners import double_roundtrip, roundtrip
 
 
 I = offset("I")
