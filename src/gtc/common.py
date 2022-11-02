@@ -18,7 +18,6 @@ import typing
 from typing import Any, ClassVar, Dict, Generic, List, Optional, Tuple, Type, TypeVar, Union
 
 import numpy as np
-import pydantic
 import scipy.special
 
 import eve
@@ -316,7 +315,10 @@ class VariableKOffset(eve.GenericNode, Generic[ExprT]):
         return {"i": 0, "j": 0, "k": None}
 
     @datamodels.validator("k")
-    def offset_expr_is_int(self, attribute: datamodels.Attribute, value: Expr) -> None:
+    def offset_expr_is_int(
+        self: datamodels.DataModel, attribute: datamodels.Attribute, value: Any
+    ) -> None:
+        value = typing.cast(Expr, value)
         if value.dtype is not DataType.AUTO and not value.dtype.isinteger():
             raise ValueError("Variable vertical index must be an integer expression")
 
@@ -337,7 +339,8 @@ class FieldAccess(eve.GenericNode, Generic[ExprT, VariableKOffsetT]):
         return cls(name=name, loc=loc, offset=CartesianOffset.zero())
 
     @datamodels.validator("data_index")
-    def data_index_exprs_are_int(self, attribute: datamodels.Attribute, value: List[Expr]) -> None:
+    def data_index_exprs_are_int(self, attribute: datamodels.Attribute, value: Any) -> None:
+        value = typing.cast(List[Expr], value)
         if value and any(
             index.dtype is not DataType.AUTO and not index.dtype.isinteger() for index in value
         ):
@@ -489,7 +492,7 @@ class TernaryOp(eve.GenericNode, Generic[ExprT]):
 
 
 def ternary_op_dtype_propagation(*, strict: bool) -> datamodels.RootValidator:
-    def _impl(cls: Type[pydantic.BaseModel], instance: TernaryOp) -> None:
+    def _impl(cls: Type[TernaryOp], instance: TernaryOp) -> None:
         common_dtype = verify_and_get_common_dtype(
             cls, [instance.true_expr, instance.false_expr], strict=strict
         )
@@ -505,10 +508,6 @@ class Cast(eve.GenericNode, Generic[ExprT]):
 
     @datamodels.root_validator
     def kind_propagation(cls, instance: "Cast") -> None:
-        instance.kind = instance.expr
-
-    @datamodels.root_validator
-    def kind_propagation(cls, instance: "TernaryOp") -> None:
         instance.kind = compute_kind(instance.expr)
 
 

@@ -267,7 +267,6 @@ class SymbolRefChildNode(eve.Node):
 
 class SymbolChildNode(eve.Node):
     name: eve.Coerced[eve.SymbolName]
-    clearly_a_symbol = ""  # prevent pydantic conversion
 
 
 class AnotherSymbolTable(eve.Node, eve.SymbolTableTrait):
@@ -384,9 +383,6 @@ def test_lvalue_dims_validation():
         )
 
 
-# For pydantic, nodes are the same (convertible to each other) if all fields are same.
-# For checking, we need to make the Expr categories clearly different.
-# This behavior will most likely change in Eve in the future
 class ExprA(Expr):
     dtype: DataType = DataType.FLOAT32
     kind: ExprKind = ExprKind.FIELD

@@ -23,7 +23,7 @@ import abc
 import re
 import sys
 from enum import Enum as Enum  # noqa: F401  # imported but unused
-from enum import IntEnum as IntEnum
+from enum import IntEnum as IntEnum  # noqa: F401  # imported but unused
 
 from boltons.typeutils import classproperty as classproperty  # type: ignore[import]  # noqa: F401
 from frozendict import frozendict as _frozendict  # type: ignore[attr-defined]  # noqa: F401

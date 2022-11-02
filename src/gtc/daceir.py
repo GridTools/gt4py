@@ -15,11 +15,10 @@ from typing import Any, Dict, Generator, List, Optional, Sequence, Set, Tuple, U
 
 import dace
 import sympy
-from pydantic import validator
 
 import eve
 import gtc
-from eve import Int, IntEnum, Node, Str, StrEnum, SymbolName, SymbolRef, utils
+from eve import Int, IntEnum, Node, Str, StrEnum, SymbolName, SymbolRef, datamodels, utils
 from gtc import common, oir
 from gtc.common import LocNode
 from gtc.dace.utils import get_dace_symbol
@@ -772,11 +771,10 @@ class MaskStmt(Stmt):
     mask: Expr
     body: List[Stmt]
 
-    @validator("mask")
-    def mask_is_boolean_field_expr(cls, v: Expr) -> Expr:
+    @datamodels.validator("mask")
+    def mask_is_boolean_field_expr(self, attribute: datamodels.Attribute, v: Expr) -> None:
         if v.dtype != common.DataType.BOOL:
             raise ValueError("Mask must be a boolean expression.")
-        return v
 
 
 class HorizontalRestriction(common.HorizontalRestriction[Stmt], Stmt):
@@ -829,15 +827,19 @@ class ComputationNode(LocNode):
     read_memlets: List[Memlet]
     write_memlets: List[Memlet]
 
-    @validator("read_memlets", "write_memlets")
-    def unique_connectors(cls, node: List[Memlet]):
-        conns: Dict[SymbolRef, Set[SymbolRef]] = {}
-        for memlet in node:
-            conns.setdefault(memlet.field, set())
-            if memlet.connector in conns[memlet.field]:
-                raise ValueError(f"Found multiple Memlets for connector '{memlet.connector}'")
-            conns[memlet.field].add(memlet.connector)
-        return node
+    def unique_connectors(*, field: str) -> datamodels.FieldValidator:
+        def _validator(self, attribute: datamodels.Attribute, node: List[Memlet]) -> None:
+            conns: Dict[SymbolRef, Set[SymbolRef]] = {}
+            for memlet in node:
+                conns.setdefault(memlet.field, set())
+                if memlet.connector in conns[memlet.field]:
+                    raise ValueError(f"Found multiple Memlets for connector '{memlet.connector}'")
+                conns[memlet.field].add(memlet.connector)
+
+        return datamodels.root_validator(field)(_validator)
+
+    unique_write_connectors = unique_connectors("write_memlets")
+    unique_read_connectors = unique_connectors("write_memlets")
 
     @property
     def read_fields(self):
@@ -887,8 +889,3 @@ class NestedSDFG(ComputationNode, eve.SymbolTableTrait):
     field_decls: List[FieldDecl]
     symbol_decls: List[SymbolDecl]
     states: List[Union[DomainLoop, ComputationState]]
-
-
-# There are circular type references with string placeholders. These statements let pydantic resolve those.
-DomainMap.update_forward_refs()
-DomainLoop.update_forward_refs()

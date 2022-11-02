@@ -18,7 +18,6 @@ import itertools
 import numbers
 from typing import Any, Dict, List, Optional, Tuple, Union, cast
 
-import eve
 from gt4py.frontend.node_util import IRNodeMapper, IRNodeVisitor, location_to_source_location
 from gt4py.frontend.nodes import (
     ArgumentInfo,

@@ -12,11 +12,10 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import factory
 
-import eve
 from gtc import common, gtir
 
 from .common_utils import (

@@ -38,15 +38,19 @@ import warnings
 import deepdiff  # type: ignore[import]
 import xxhash  # type: ignore[import]
 from boltons.iterutils import flatten as flatten  # type: ignore[import]  # noqa: F401
-from boltons.iterutils import flatten_iter as flatten_iter
-from boltons.iterutils import is_collection as is_collection
+from boltons.iterutils import flatten_iter as flatten_iter  # type: ignore[import]  # noqa: F401
+from boltons.iterutils import is_collection as is_collection  # type: ignore[import]  # noqa: F401
 from boltons.strutils import a10n as a10n  # type: ignore[import]  # noqa: F401
-from boltons.strutils import asciify as asciify
-from boltons.strutils import format_int_list as format_int_list
-from boltons.strutils import iter_splitlines as iter_splitlines
-from boltons.strutils import parse_int_list as parse_int_list
-from boltons.strutils import slugify as slugify
-from boltons.strutils import unwrap_text as unwrap_text
+from boltons.strutils import asciify as asciify  # type: ignore[import]  # noqa: F401
+from boltons.strutils import (  # type: ignore[import]  # noqa: F401
+    format_int_list as format_int_list,
+)
+from boltons.strutils import (  # type: ignore[import]  # noqa: F401
+    iter_splitlines as iter_splitlines,
+)
+from boltons.strutils import parse_int_list as parse_int_list  # type: ignore[import]  # noqa: F401
+from boltons.strutils import slugify as slugify  # type: ignore[import]  # noqa: F401
+from boltons.strutils import unwrap_text as unwrap_text  # type: ignore[import]  # noqa: F401
 
 from . import extended_typing as xtyping
 from .extended_typing import (
