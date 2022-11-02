@@ -178,7 +178,7 @@ class Column(np.lib.mixins.NDArrayOperatorsMixin):
     and simplify dispatching in iterator ir builtins.
     """
 
-    def __init__(self, kstart: int, data: np.ndarray) -> None:
+    def __init__(self, kstart: int, data: np.ndarray | np.number) -> None:
         self.kstart = kstart
         self.data = data
 
