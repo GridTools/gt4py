@@ -208,7 +208,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         new_forward = self.visit(node.forward, **kwargs)
         if not new_forward.type.kind == ct.ScalarKind.BOOL:
             raise FieldOperatorTypeDeductionError.from_foast_node(
-                node, msg=f"Argument `forward` to scan operator `{node.id}` must" f"be a boolean."
+                node, msg=f"Argument `forward` to scan operator `{node.id}` must be a boolean."
             )
         new_init = self.visit(node.init, **kwargs)
         if not all(

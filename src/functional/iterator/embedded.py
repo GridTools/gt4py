@@ -183,7 +183,7 @@ class Column(np.lib.mixins.NDArrayOperatorsMixin):
         self.data = data
 
     def __getitem__(self, i: int) -> Any:
-        result = self.data[i - self.kstart]
+        result = self.data[i - self.kstart] if isinstance(self.data, np.ndarray) else self.data
         # if the element type is a tuple return a regular type instead of a
         #  numpy type
         if self.data.dtype.names:
@@ -951,7 +951,10 @@ class ScanArgIterator:
     ) -> None:
         self.wrapped_iter = wrapped_iter
         self.offsets = offsets or []
-        self.k_pos = k_pos
+        if isinstance(self.wrapped_iter, ConstantField):
+            self.k_pos = 0
+        else:
+            self.k_pos = k_pos
 
     def deref(self) -> Any:
         if not self.can_deref():
@@ -1085,6 +1088,7 @@ def scan(scan_pass, is_forward: bool, init):
         column_range = _column_range if is_forward else reversed(_column_range)
         state = init
         col = _make_column(_column_range, _column_dtype(init))
+
         for i in column_range:
             state = scan_pass(state, *map(shifted_scan_arg(i), iters))
             col[i] = state
