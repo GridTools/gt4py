@@ -26,7 +26,7 @@ import types
 import typing
 import warnings
 from collections.abc import Callable, Iterable
-from typing import Generic, SupportsFloat, SupportsInt, TypeAlias, TypeVar
+from typing import Generator, Generic, SupportsFloat, SupportsInt, TypeAlias, TypeVar
 
 import numpy as np
 from devtools import debug
@@ -124,6 +124,23 @@ def _deduce_grid_type(
         )
 
     return deduced_grid_type if requested_grid_type is None else requested_grid_type
+
+
+def _field_constituents_shape_and_dims(
+    arg, arg_type: ct.FieldType | ct.ScalarType | ct.TupleType
+) -> Generator[tuple[tuple[int, ...], list[Dimension]]]:
+    if isinstance(arg_type, ct.TupleType):
+        for el, el_type in zip(arg, arg_type.types):
+            yield from _field_constituents_shape_and_dims(el, el_type)
+    elif isinstance(arg_type, ct.FieldType):
+        dims = type_info.extract_dims(arg_type)
+        if hasattr(arg, "shape"):
+            assert len(arg.shape) == len(dims)
+            yield (arg.shape, dims)
+        else:
+            yield (None, dims)
+    else:
+        raise ValueError("Expected `FieldType` or `TupleType` thereof.")
 
 
 # TODO(tehrengruber): Decide if and how programs can call other programs. As a
@@ -294,13 +311,17 @@ class Program:
         size_args: list[Optional[tuple[int, ...]]] = []
         rewritten_args = list(args)
         for param_idx, param in enumerate(self.past_node.params):
-            if implicit_domain and isinstance(param.type, ct.FieldType):
-                has_shape = hasattr(args[param_idx], "shape")
-                for dim_idx in range(0, len(param.type.dims)):
-                    if has_shape:
-                        size_args.append(args[param_idx].shape[dim_idx])
-                    else:
-                        size_args.append(None)
+            if implicit_domain and isinstance(param.type, (ct.FieldType, ct.TupleType)):
+                shapes_and_dims = [*_field_constituents_shape_and_dims(args[param_idx], param.type)]
+                shape, dims = shapes_and_dims[0]
+                if not all(
+                    el_shape == shape and el_dims == dims for (el_shape, el_dims) in shapes_and_dims
+                ):
+                    raise ValueError(
+                        "Constituents of composite arguments (e.g. the elements of a"
+                        " tuple) need to have the same shape and dimensions."
+                    )
+                size_args.extend(shape if shape else [None] * len(dims))
         return tuple(rewritten_args), tuple(size_args), kwargs
 
     @functools.cached_property
