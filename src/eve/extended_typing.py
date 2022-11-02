@@ -14,7 +14,10 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Typing definitions working across different Python versions (via `typing_extensions`)."""
+"""Typing definitions working across different Python versions (via `typing_extensions`).
+
+Definitions in 'typing_extensions' take priority over those in 'typing'.
+"""
 
 from __future__ import annotations
 
@@ -30,7 +33,6 @@ import pickle as _pickle
 import sys as _sys
 import types as _types
 import typing as _typing
-# Definitions in 'typing_extensions' take priority over those in 'typing'
 from typing import *  # noqa: F403
 from typing import overload  # Only needed to avoid false flake8 errors
 
