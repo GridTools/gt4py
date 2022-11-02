@@ -19,8 +19,8 @@
 
 from __future__ import annotations
 
-import copy
 import ast
+import copy
 import re
 
 from . import datamodels, exceptions

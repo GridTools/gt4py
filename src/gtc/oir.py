@@ -19,7 +19,7 @@ OIR represents a computation at the level of GridTools stages and multistages,
 e.g. stage merging, staged computations to compute-on-the-fly, cache annotations, etc.
 """
 
-from typing import Any, List, Optional, Tuple, Union, Type
+from typing import Any, List, Optional, Tuple, Type, Union
 
 import eve
 from eve import datamodels

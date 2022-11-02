@@ -18,6 +18,7 @@
 
 
 from __future__ import annotations
+
 import collections
 
 from . import concepts, datamodels, exceptions, visitors
