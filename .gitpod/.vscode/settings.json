@@ -1,0 +1,4 @@
+{
+    "python.defaultInterpreterPath": "~/.pyenv/shims/python",
+    "python.terminal.activateEnvironment": false,
+}
