@@ -42,6 +42,7 @@ class PopupTmps(NodeTranslator):
         So The behavior is the following:
         - For `lift(f)(args...)` it returns `(f, True, wrap)`.
         - For `lift(scan(f, dir, init))(args...)` it returns `(f, True, wrap)`.
+        - For `lift(reduce(f, init))(args...)` it returns `(None, True, wrap)`.
         - For `f(args...)` it returns `(f, False, wrap)`.
         - For any other expression, it returns `None`.
 
@@ -54,8 +55,12 @@ class PopupTmps(NodeTranslator):
             fun = node.fun.args[0]
 
             is_scan = isinstance(fun, ir.FunCall) and fun.fun == ir.SymRef(id="scan")
+            is_reduce = isinstance(fun, ir.FunCall) and fun.fun == ir.SymRef(id="reduce")
             if is_scan:
                 assert isinstance(fun, ir.FunCall)  # just for mypy
+                fun = fun.args[0]
+                params = fun.params[1:]
+            elif is_reduce:
                 fun = fun.args[0]
                 params = fun.params[1:]
             else:
@@ -70,6 +75,9 @@ class PopupTmps(NodeTranslator):
                     f: Union[ir.Lambda, ir.FunCall] = ir.FunCall(
                         fun=ir.SymRef(id="scan"), args=scan_args
                     )
+                elif is_reduce:
+                    assert fun == node.fun.args[0].args[0], "Unexpected lift in reduction function."
+                    f = node.fun.args[0]
                 else:
                     f = fun
                 return ir.FunCall(fun=ir.FunCall(fun=ir.SymRef(id="lift"), args=[f]), args=args)

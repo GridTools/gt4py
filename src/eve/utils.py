@@ -36,7 +36,7 @@ import uuid
 import warnings
 
 import deepdiff  # type: ignore[import]
-import xxhash  # type: ignore[import]
+import xxhash
 from boltons.iterutils import (  # type: ignore[import]  # noqa: F401
     flatten as flatten,
     flatten_iter as flatten_iter,
@@ -362,7 +362,7 @@ def content_hash(*args: Any, hash_algorithm: str | xtyping.HashlibAlgorithm | No
 
     """
     if hash_algorithm is None:
-        hash_algorithm = xxhash.xxh64()
+        hash_algorithm = xxhash.xxh64()  # type: ignore[assignment]
     elif isinstance(hash_algorithm, str):
         hash_algorithm = hashlib.new(hash_algorithm)  # type: ignore[assignment]
 

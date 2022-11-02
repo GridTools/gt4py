@@ -34,7 +34,13 @@ from functional.ffront.ast_passes import (
     UnchainComparesPass,
 )
 from functional.ffront.dialect_parser import DialectParser, DialectSyntaxError
+
 from functional.ffront.foast_passes.iterable_unpack import UnpackedAssignPass
+
+from functional.ffront.foast_passes.closure_var_folding import ClosureVarFolding
+from functional.ffront.foast_passes.closure_var_type_deduction import ClosureVarTypeDeduction
+from functional.ffront.foast_passes.dead_closure_var_elimination import DeadClosureVarElimination
+
 from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduction
 
 
@@ -92,10 +98,17 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
 
     @classmethod
     def _postprocess_dialect_ast(
-        cls, foast_node: foast.FieldOperator, annotations: dict[str, Any]
+        cls,
+        foast_node: foast.FieldOperator,
+        closure_vars: dict[str, Any],
+        annotations: dict[str, Any],
     ) -> foast.FieldOperator:
-        typed_foast_node = FieldOperatorTypeDeduction.apply(foast_node)
-        typed_foast_node = UnpackedAssignPass.apply(typed_foast_node)
+        foast_node = ClosureVarFolding.apply(foast_node, closure_vars)
+        foast_node = DeadClosureVarElimination.apply(foast_node)
+        foast_node = ClosureVarTypeDeduction.apply(foast_node, closure_vars)
+        foast_node = FieldOperatorTypeDeduction.apply(foast_node)
+        foast_node = UnpackedAssignPass.apply(foast_node)
+
 
         # check deduced matches annotated return type
         if "return" in annotations:
@@ -104,12 +117,12 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             )
             # TODO(tehrengruber): use `type_info.return_type` when the type of the
             #  arguments becomes available here
-            if annotated_return_type != typed_foast_node.type.returns:
+            if annotated_return_type != foast_node.type.returns:
                 raise common.GTTypeError(
-                    f"Annotated return type does not match deduced return type. Expected `{typed_foast_node.type.returns}`"
+                    f"Annotated return type does not match deduced return type. Expected `{foast_node.type.returns}`"
                     f", but got `{annotated_return_type}`."
                 )
-        return typed_foast_node
+        return foast_node
 
     def _builtin_type_constructor_symbols(
         self, captured_vars: Mapping[str, Any], location: eve.SourceLocation
@@ -151,13 +164,13 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
         closure_var_symbols, skip_names = self._builtin_type_constructor_symbols(
             self.closure_vars, self._make_loc(node)
         )
-        for name, val in self.closure_vars.items():
+        for name in self.closure_vars.keys():
             if name in skip_names:
                 continue
             closure_var_symbols.append(
                 foast.Symbol(
                     id=name,
-                    type=symbol_makers.make_symbol_type_from_value(val),
+                    type=ct.DeferredSymbolType(constraint=None),
                     namespace=ct.Namespace.CLOSURE,
                     location=self._make_loc(node),
                 )
@@ -294,6 +307,11 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             value=self.visit(node.value),
             index=index,
             location=self._make_loc(node),
+        )
+
+    def visit_Attribute(self, node: ast.Attribute) -> Any:
+        return foast.Attribute(
+            value=self.visit(node.value), attr=node.attr, location=self._make_loc(node)
         )
 
     def visit_Tuple(self, node: ast.Tuple, **kwargs) -> foast.TupleExpr:

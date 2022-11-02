@@ -19,6 +19,7 @@ from typing import Any, cast
 
 from functional.ffront import common_types as ct, program_ast as past, symbol_makers
 from functional.ffront.dialect_parser import DialectParser, DialectSyntaxError
+from functional.ffront.past_passes.closure_var_type_deduction import ClosureVarTypeDeduction
 from functional.ffront.past_passes.type_deduction import ProgramTypeDeduction
 
 
@@ -34,8 +35,9 @@ class ProgramParser(DialectParser[past.Program]):
 
     @classmethod
     def _postprocess_dialect_ast(
-        cls, output_node: past.Program, annotations: dict[str, Any]
+        cls, output_node: past.Program, closure_vars: dict[str, Any], annotations: dict[str, Any]
     ) -> past.Program:
+        output_node = ClosureVarTypeDeduction.apply(output_node, closure_vars)
         return ProgramTypeDeduction.apply(output_node)
 
     def visit_FunctionDef(self, node: ast.FunctionDef) -> past.Program:

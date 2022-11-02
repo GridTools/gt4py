@@ -13,7 +13,7 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-
+import dataclasses
 from collections import namedtuple
 from typing import TypeVar
 
@@ -1275,6 +1275,7 @@ def test_undefined_symbols():
             return undefined_symbol
 
 
+
 def test_tuple_unpacking(fieldview_backend):
     size = 10
     a = np_as_located_field(IDim)(np.ones((size)))
@@ -1356,3 +1357,20 @@ def test_tuple_unpacking_too_many_values(fieldview_backend):
         def _star_unpack() -> tuple[int, float64, int]:
             a, b, c = (1, 2.0, 3, 4, 5, 6, 7.0)
             return a, b, c
+
+def test_constant_closure_vars():
+    from eve.utils import FrozenNamespace
+
+    constants = FrozenNamespace(
+        PI=np.float32(3.142),
+        E=np.float32(2.718),
+    )
+
+    @field_operator
+    def consume_constants(input: Field[[IDim], np.float32]) -> Field[[IDim], np.float32]:
+        return constants.PI * constants.E * input
+
+    input = np_as_located_field(IDim)(np.ones((1,), dtype=np.float32))
+    output = np_as_located_field(IDim)(np.zeros((1,), dtype=np.float32))
+    consume_constants(input, out=output, offset_provider={})
+    assert np.allclose(np.asarray(output), constants.PI * constants.E)
