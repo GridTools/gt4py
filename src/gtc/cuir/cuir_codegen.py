@@ -18,7 +18,8 @@ from typing import Any, Collection, Dict, List, Set, Union
 
 import numpy as np
 
-from eve import codegen, traits
+import eve
+from eve import codegen
 from eve.codegen import FormatTemplate as as_fmt
 from eve.codegen import MakoTemplate as as_mako
 from eve.concepts import LeafNode
@@ -26,9 +27,7 @@ from gtc.common import BuiltInLiteral, DataType, LevelMarker, NativeFunction, Un
 from gtc.cuir import cuir
 
 
-class CUIRCodegen(codegen.TemplatedGenerator):
-
-    contexts = (traits.SymbolTableTrait.symtable_merger,)  # type: ignore
+class CUIRCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
 
     LocalScalar = as_fmt("{dtype} {name};")
 
@@ -300,7 +299,7 @@ class CUIRCodegen(codegen.TemplatedGenerator):
 
         fields = {
             name: data_dims
-            for name, data_dims in node.iter_tree()
+            for name, data_dims in node.walk_values()
             .if_isinstance(cuir.FieldAccess)
             .getattr("name", "data_index")
             .map(lambda x: (x[0], len(x[1])))
@@ -427,7 +426,7 @@ class CUIRCodegen(codegen.TemplatedGenerator):
 
         def loop_fields(vertical_loop: cuir.VerticalLoop) -> Set[str]:
             return (
-                vertical_loop.iter_tree().if_isinstance(cuir.FieldAccess).getattr("name").to_set()
+                vertical_loop.walk_values().if_isinstance(cuir.FieldAccess).getattr("name").to_set()
             )
 
         def ctype(symbol: str) -> str:
@@ -441,7 +440,8 @@ class CUIRCodegen(codegen.TemplatedGenerator):
         return self.generic_visit(
             node,
             max_extent=self.visit(
-                cuir.IJExtent.zero().union(*node.iter_tree().if_isinstance(cuir.IJExtent)), **kwargs
+                cuir.IJExtent.zero().union(*node.walk_values().if_isinstance(cuir.IJExtent)),
+                **kwargs,
             ),
             loop_start=loop_start,
             loop_fields=loop_fields,

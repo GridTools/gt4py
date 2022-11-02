@@ -37,9 +37,9 @@ class CacheExtents(NodeTranslator):
 
     def visit_VerticalLoop(self, node: cuir.VerticalLoop) -> cuir.VerticalLoop:
         ij_extents: Dict[str, cuir.IJExtent] = defaultdict(cuir.IJExtent.zero)
-        for horizontal_execution in node.iter_tree().if_isinstance(cuir.HorizontalExecution):
+        for horizontal_execution in node.walk_values().if_isinstance(cuir.HorizontalExecution):
             ij_access_extents = (
-                horizontal_execution.iter_tree()
+                horizontal_execution.walk_values()
                 .if_isinstance(cuir.IJCacheAccess)
                 .reduceby(
                     lambda acc, x: acc.union(cuir.IJExtent.from_offset(x.offset)),
@@ -53,7 +53,7 @@ class CacheExtents(NodeTranslator):
                 )
 
         k_extents: Dict[str, cuir.KCacheAccess] = (
-            node.iter_tree()
+            node.walk_values()
             .if_isinstance(cuir.KCacheAccess)
             .reduceby(
                 lambda acc, x: acc.union(cuir.KExtent.from_offset(x.offset)),

@@ -16,6 +16,7 @@ from typing import List
 
 import factory
 
+import eve
 from gtc.cuir import cuir
 
 from .common_utils import CartesianOffsetFactory, identifier, undefined_symbol_list

@@ -16,7 +16,7 @@ from typing import Any, Dict, List, Optional
 
 import factory
 
-from eve import Str
+import eve
 from gtc import common, gtir
 
 from .common_utils import (
@@ -164,5 +164,5 @@ class StencilFactory(factory.Factory):
         lambda x: [gtir.Argument(name=p.name, is_keyword=False, default="") for p in x.params]
     )
     externals: Dict[str, Any] = {}
-    sources: Optional[Dict[str, str]] = None
-    docstring: Str = ""
+    sources: Dict[str, str] = {}
+    docstring: str = ""

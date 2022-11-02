@@ -201,7 +201,7 @@ def test_on_the_fly_merging_with_offsets():
     assert len(hexecs[0].declarations) == 2
     assert all(isinstance(d, oir.LocalScalar) for d in hexecs[0].declarations)
     assert not transformed.declarations
-    assert transformed.iter_tree().if_isinstance(oir.FieldAccess).filter(
+    assert transformed.walk_values().if_isinstance(oir.FieldAccess).filter(
         lambda x: x.name == "foo"
     ).getattr("offset").map(lambda o: (o.i, o.j, o.k)).to_set() == {(1, 0, 0), (0, 1, 0)}
 

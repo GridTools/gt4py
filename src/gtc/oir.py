@@ -19,21 +19,20 @@ OIR represents a computation at the level of GridTools stages and multistages,
 e.g. stage merging, staged computations to compute-on-the-fly, cache annotations, etc.
 """
 
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, List, Optional, Tuple, Type, Union
 
-from pydantic import root_validator, validator
-
-from eve import Str, SymbolName, SymbolRef, SymbolTableTrait, field, utils
+import eve
+from eve import datamodels
 from gtc import common
 from gtc.common import AxisBound, LocNode
 
 
-@utils.noninstantiable
+@eve.utils.noninstantiable
 class Expr(common.Expr):
     pass
 
 
-@utils.noninstantiable
+@eve.utils.noninstantiable
 class Stmt(common.Stmt):
     pass
 
@@ -55,13 +54,12 @@ class FieldAccess(common.FieldAccess[Expr, VariableKOffset], Expr):  # type: ign
 
 
 class AssignStmt(common.AssignStmt[Union[ScalarAccess, FieldAccess], Expr], Stmt):
-    @validator("left")
+    @datamodels.validator("left")
     def no_horizontal_offset_in_assignment(
-        cls, v: Union[ScalarAccess, FieldAccess]
-    ) -> Union[ScalarAccess, FieldAccess]:
+        self, attribute: datamodels.Attribute, v: Union[ScalarAccess, FieldAccess]
+    ) -> None:
         if isinstance(v, FieldAccess) and (v.offset.i != 0 or v.offset.j != 0):
             raise ValueError("Lhs of assignment must not have a horizontal offset.")
-        return v
 
     _dtype_validation = common.assign_stmt_dtype_validation(strict=True)
 
@@ -70,8 +68,8 @@ class MaskStmt(Stmt):
     mask: Expr
     body: List[Stmt]
 
-    @validator("mask")
-    def mask_is_boolean_field_expr(cls, v: Expr) -> Expr:
+    @datamodels.validator("mask")
+    def mask_is_boolean_field_expr(self, attribute: datamodels.Attribute, v: Expr) -> None:
         if v.dtype != common.DataType.BOOL:
             raise ValueError("Mask must be a boolean expression.")
         return v
@@ -106,7 +104,7 @@ class While(common.While[Stmt, Expr], Stmt):
 
 
 class Decl(LocNode):
-    name: SymbolName
+    name: eve.Coerced[eve.SymbolName]
     dtype: common.DataType
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
@@ -117,7 +115,7 @@ class Decl(LocNode):
 
 class FieldDecl(Decl):
     dimensions: Tuple[bool, bool, bool]
-    data_dims: Tuple[int, ...] = field(default_factory=tuple)
+    data_dims: Tuple[int, ...] = eve.field(default_factory=tuple)
 
 
 class ScalarDecl(Decl):
@@ -136,9 +134,9 @@ class Interval(LocNode):
     start: AxisBound
     end: AxisBound
 
-    @root_validator
-    def check(cls, values: Dict[str, Any]) -> Dict[str, Any]:
-        start, end = values["start"], values["end"]
+    @datamodels.root_validator
+    def check(cls: Type["Interval"], instance: "Interval") -> None:
+        start, end = instance.start, instance.end
         if (
             start is not None
             and start.level == common.LevelMarker.END
@@ -156,7 +154,6 @@ class Interval(LocNode):
             raise ValueError(
                 "Start offset must be smaller than end offset if start and end levels are equal"
             )
-        return values
 
     def covers(self, other: "Interval") -> bool:
         outer_starts_lower = self.start < other.start or self.start == other.start
@@ -182,11 +179,9 @@ class UnboundedInterval:
     start: Optional[AxisBound] = None
     end: Optional[AxisBound] = None
 
-    @root_validator
-    def check(cls, values: Dict[str, Any]) -> Dict[str, Any]:
-        values.setdefault("start", None)
-        values.setdefault("end", None)
-        return Interval.check(values)
+    @datamodels.root_validator
+    def check(cls: Type["UnboundedInterval"], instance: "UnboundedInterval") -> None:
+        Interval.check(instance)
 
     def covers(self, other: Union[Interval, "UnboundedInterval"]) -> bool:
         if self.start is None and self.end is None:
@@ -232,13 +227,13 @@ class UnboundedInterval:
         return cls()
 
 
-class HorizontalExecution(LocNode, SymbolTableTrait):
+class HorizontalExecution(LocNode, eve.SymbolTableTrait):
     body: List[Stmt]
     declarations: List[LocalScalar]
 
 
 class CacheDesc(LocNode):
-    name: SymbolRef
+    name: eve.Coerced[eve.SymbolRef]
 
 
 class IJCache(CacheDesc):
@@ -258,19 +253,17 @@ class VerticalLoopSection(LocNode):
 class VerticalLoop(LocNode):
     loop_order: common.LoopOrder
     sections: List[VerticalLoopSection]
-    caches: List[CacheDesc] = []
+    caches: List[CacheDesc] = eve.field(default_factory=list)
 
-    @validator("sections")
-    def nonempty_loop(cls, v: List[VerticalLoopSection]) -> List[VerticalLoopSection]:
+    @datamodels.validator("sections")
+    def nonempty_loop(self, attribute: datamodels.Attribute, v: List[VerticalLoopSection]) -> None:
         if not v:
             raise ValueError("Empty vertical loop is not allowed")
-        return v
 
-    @root_validator
-    def valid_section_intervals(cls, values: Dict[str, Any]) -> Dict[str, Any]:
-        loop_order, sections = values["loop_order"], values["sections"]
-        starts, ends = zip(*((s.interval.start, s.interval.end) for s in sections))
-        if loop_order == common.LoopOrder.BACKWARD:
+    @datamodels.root_validator
+    def valid_section_intervals(cls: Type["VerticalLoop"], instance: "VerticalLoop") -> None:
+        starts, ends = zip(*((s.interval.start, s.interval.end) for s in instance.sections))
+        if instance.loop_order == common.LoopOrder.BACKWARD:
             starts, ends = starts[:-1], ends[1:]
         else:
             starts, ends = starts[1:], ends[:-1]
@@ -280,16 +273,14 @@ class VerticalLoop(LocNode):
             for start, end in zip(starts, ends)
         ):
             raise ValueError("Loop intervals not contiguous or in wrong order")
-        return values
 
 
-class Stencil(LocNode, SymbolTableTrait):
-    name: Str
+class Stencil(LocNode, eve.ValidatedSymbolTableTrait):
+    name: str
     # TODO: fix to be List[Union[ScalarDecl, FieldDecl]]
     params: List[Decl]
     vertical_loops: List[VerticalLoop]
     declarations: List[Temporary]
 
     _validate_dtype_is_set = common.validate_dtype_is_set()
-    _validate_symbol_refs = common.validate_symbol_refs()
     _validate_lvalue_dims = common.validate_lvalue_dims(VerticalLoop, FieldDecl)

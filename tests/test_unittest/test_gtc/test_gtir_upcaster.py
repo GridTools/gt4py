@@ -39,7 +39,7 @@ def contains_cast_node(cast_node, expr):
     # we skip equality check of `expr` and `cast_node.expr`
     return (
         len(
-            expr.iter_tree()
+            expr.walk_values()
             .if_isinstance(Cast)
             .filter(
                 lambda node: node.dtype == cast_node.dtype

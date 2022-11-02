@@ -39,7 +39,7 @@ class HorizontalMask(eve.Node):
 # --- Decls ---
 @eve.utils.noninstantiable
 class Decl(eve.Node):
-    name: eve.SymbolName
+    name: eve.Coerced[eve.SymbolName]
     dtype: common.DataType
 
 
@@ -119,7 +119,7 @@ class VectorCast(common.Cast[Expr], Expr):
 
 class Broadcast(Expr):
     expr: Expr
-    kind = common.ExprKind.FIELD
+    kind: common.ExprKind = common.ExprKind.FIELD
 
 
 class VarKOffset(common.VariableKOffset[Expr]):
@@ -127,12 +127,12 @@ class VarKOffset(common.VariableKOffset[Expr]):
 
 
 class FieldSlice(Expr, VectorLValue):
-    name: eve.SymbolRef
+    name: eve.Coerced[eve.SymbolRef]
     i_offset: int
     j_offset: int
     k_offset: Union[int, VarKOffset]
-    data_index: List[Expr] = []
-    kind = common.ExprKind.FIELD
+    data_index: List[Expr] = eve.field(default_factory=list)
+    kind: common.ExprKind = common.ExprKind.FIELD
 
     @validator("data_index")
     def data_indices_are_scalar(cls, data_index: List[Expr]) -> List[Expr]:
@@ -143,13 +143,13 @@ class FieldSlice(Expr, VectorLValue):
 
 
 class ParamAccess(Expr):
-    name: eve.SymbolRef
-    kind = common.ExprKind.SCALAR
+    name: eve.Coerced[eve.SymbolRef]
+    kind: common.ExprKind = common.ExprKind.SCALAR
 
 
 class LocalScalarAccess(Expr, VectorLValue):
-    name: eve.SymbolRef
-    kind = common.ExprKind.FIELD
+    name: eve.Coerced[eve.SymbolRef]
+    kind: common.ExprKind = common.ExprKind.FIELD
 
 
 class VectorArithmetic(common.BinaryOp[Expr], Expr):

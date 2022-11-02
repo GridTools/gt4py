@@ -16,17 +16,18 @@ import math
 import typing
 from typing import Any, Dict, Tuple, Union
 
-from eve import NodeVisitor
-from eve.utils import XIterable
+import eve
 from gtc import gtir
 from gtc.common import LevelMarker
 
 
-def _iter_field_names(node: Union[gtir.Stencil, gtir.ParAssignStmt]) -> XIterable[gtir.FieldAccess]:
-    return node.iter_tree().if_isinstance(gtir.FieldDecl).getattr("name").unique()
+def _iter_field_names(
+    node: Union[gtir.Stencil, gtir.ParAssignStmt]
+) -> eve.utils.XIterable[gtir.FieldAccess]:
+    return node.walk_values().if_isinstance(gtir.FieldDecl).getattr("name").unique()
 
 
-class KBoundaryVisitor(NodeVisitor):
+class KBoundaryVisitor(eve.NodeVisitor):
     """For every field compute the boundary in k, e.g. (2, -1) if [k_origin-2, k_origin+k_domain-1] is accessed."""
 
     def visit_Stencil(self, node: gtir.Stencil, **kwargs: Any) -> Dict[str, Tuple[int, int]]:

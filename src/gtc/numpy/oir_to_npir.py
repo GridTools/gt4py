@@ -14,10 +14,7 @@
 
 from typing import Any, Dict, List, Optional, Tuple, Union
 
-from eve.concepts import BaseNode
-from eve.traits import SymbolTableTrait
-from eve.type_definitions import NOTHING
-from eve.visitors import NodeTranslator
+import eve
 from gtc import common, oir, utils
 from gtc.definitions import Extent
 from gtc.passes.horizontal_masks import compute_relative_mask
@@ -26,10 +23,8 @@ from gtc.passes.oir_optimizations.utils import compute_extents
 from . import npir
 
 
-class OirToNpir(NodeTranslator):
+class OirToNpir(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     """Lower from optimizable IR (OIR) to numpy IR (NPIR)."""
-
-    contexts = (SymbolTableTrait.symtable_merger,)  # type: ignore
 
     # --- Decls ---
     def visit_FieldDecl(
@@ -86,7 +81,7 @@ class OirToNpir(NodeTranslator):
 
     def visit_VariableKOffset(
         self, node: oir.VariableKOffset, **kwargs: Any
-    ) -> Tuple[int, int, BaseNode]:
+    ) -> Tuple[int, int, eve.Node]:
         return 0, 0, npir.VarKOffset(k=self.visit(node.k, **kwargs))
 
     def visit_FieldAccess(self, node: oir.FieldAccess, **kwargs: Any) -> npir.FieldSlice:
@@ -188,7 +183,7 @@ class OirToNpir(NodeTranslator):
     ) -> Any:
         mask = compute_relative_mask(extent, node.mask)
         if mask is None:
-            return NOTHING
+            return eve.NOTHING
 
         horizontal_mask = npir.HorizontalMask(i=mask[0], j=mask[1])
 

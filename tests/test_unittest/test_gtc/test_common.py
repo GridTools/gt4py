@@ -15,7 +15,6 @@
 from typing import List, Optional, Tuple, Union
 
 import pytest
-from pydantic import ValidationError
 
 import eve
 from gtc import common
@@ -56,31 +55,37 @@ class DummyExpr(Expr):
 
 
 class UnaryOp(Expr, common.UnaryOp[Expr]):
-    pass
+    kind: ExprKind = ExprKind.FIELD
 
 
 class BinaryOp(Expr, common.BinaryOp[Expr]):
     dtype_propagation = common.binary_op_dtype_propagation(strict=True)
+    kind: ExprKind = ExprKind.FIELD
 
 
 class TernaryOp(Expr, common.TernaryOp[Expr]):
     _dtype_propagation = common.ternary_op_dtype_propagation(strict=True)
+    kind: ExprKind = ExprKind.FIELD
 
 
 class BinaryOpUpcasting(Expr, common.BinaryOp[Expr]):
     dtype_propagation = common.binary_op_dtype_propagation(strict=False)
+    kind: ExprKind = ExprKind.FIELD
 
 
 class TernaryOpUpcasting(Expr, common.TernaryOp[Expr]):
     _dtype_propagation = common.ternary_op_dtype_propagation(strict=False)
+    kind: ExprKind = ExprKind.FIELD
 
 
 class NativeFuncCall(Expr, common.NativeFuncCall[Expr]):
     _dtype_propagation = common.native_func_call_dtype_propagation(strict=True)
+    kind: ExprKind = ExprKind.FIELD
 
 
 class AssignStmt(Stmt, common.AssignStmt[DummyExpr, Expr]):
     _dtype_validation = common.assign_stmt_dtype_validation(strict=True)
+    kind: ExprKind = ExprKind.FIELD
 
 
 @pytest.mark.parametrize(
@@ -172,7 +177,7 @@ def test_dtype_propagation(node, expected):
         ),
         (
             lambda: Literal(value="foo"),
-            r".*dtype\n.*field required",
+            r"required keyword-only argument: 'dtype'",
         ),
         (
             lambda: BinaryOp(
@@ -220,7 +225,7 @@ def test_dtype_propagation(node, expected):
     ],
 )
 def test_invalid_nodes(invalid_node, expected_regex):
-    with pytest.raises(ValidationError, match=expected_regex):
+    with pytest.raises(ValueError, match=expected_regex):
         invalid_node()
 
 
@@ -245,7 +250,7 @@ class DtypeRootNode(eve.Node):
     ],
 )
 def test_dtype_validator_for_invalid_tree(tree_with_missing_dtype):
-    with pytest.raises(ValidationError, match=r"Nodes without dtype"):
+    with pytest.raises(TypeError, match=r"required keyword-only argument: 'dtype'"):
         tree_with_missing_dtype()
 
 
@@ -257,11 +262,11 @@ def test_dtype_validator_for_valid_tree():
 
 
 class SymbolRefChildNode(eve.Node):
-    name: eve.SymbolRef
+    name: eve.Coerced[eve.SymbolRef]
 
 
 class SymbolChildNode(eve.Node):
-    name: eve.SymbolName
+    name: eve.Coerced[eve.SymbolName]
     clearly_a_symbol = ""  # prevent pydantic conversion
 
 
@@ -269,10 +274,8 @@ class AnotherSymbolTable(eve.Node, eve.SymbolTableTrait):
     nodes: List[Union[SymbolRefChildNode, SymbolChildNode]]
 
 
-class SymbolTableRootNode(eve.Node, eve.SymbolTableTrait):
+class SymbolTableRootNode(eve.Node, eve.ValidatedSymbolTableTrait):
     nodes: List[Union[SymbolRefChildNode, SymbolChildNode, AnotherSymbolTable]]
-
-    _validate_symbol_refs = common.validate_symbol_refs()
 
 
 @pytest.mark.parametrize(
@@ -295,7 +298,7 @@ class SymbolTableRootNode(eve.Node, eve.SymbolTableTrait):
     ],
 )
 def test_symbolref_validation_for_invalid_tree(tree_with_missing_symbol):
-    with pytest.raises(ValidationError, match=r"Symbols.*not found"):
+    with pytest.raises(ValueError, match=r"Symbols.*not found"):
         tree_with_missing_symbol()
 
 
@@ -366,7 +369,7 @@ def construct_dims_assignment(dimensions: Tuple[bool, bool, bool], direction: co
 
 def test_lvalue_dims_validation():
     # assigning to ik in forward direction not allowed
-    with pytest.raises(ValidationError, match=r"Not allowed to assign to ik-field"):
+    with pytest.raises(ValueError, match=r"Not allowed to assign to ik-field"):
         construct_dims_assignment(
             dimensions=(True, False, True), direction=common.LoopOrder.FORWARD
         )
@@ -375,9 +378,7 @@ def test_lvalue_dims_validation():
     construct_dims_assignment(dimensions=(True, True, False), direction=common.LoopOrder.FORWARD)
 
     # assigning to ij in parallel direction not allowed
-    with pytest.raises(
-        ValidationError, match=r"Not allowed to assign to ij-field `out` in PARALLEL"
-    ):
+    with pytest.raises(ValueError, match=r"Not allowed to assign to ij-field `out` in PARALLEL"):
         construct_dims_assignment(
             dimensions=(True, True, False), direction=common.LoopOrder.PARALLEL
         )
@@ -416,7 +417,7 @@ def test_AssignSmt_category():
     Testee = common.AssignStmt[ExprA, ExprA]
 
     Testee(left=ExprA(), right=ExprA())
-    with pytest.raises(ValidationError):
+    with pytest.raises(TypeError):
         Testee(left=ExprB(), right=ExprA())
         Testee(left=ExprA(), right=ExprB())
 
@@ -425,7 +426,7 @@ def test_IfStmt_category():
     Testee = common.IfStmt[StmtA, ExprA]
 
     Testee(cond=ExprA(dtype=DataType.BOOL), true_branch=StmtA(), false_branch=StmtA())
-    with pytest.raises(ValidationError):
+    with pytest.raises(TypeError):
         Testee(cond=ExprA(dtype=DataType.BOOL), true_branch=StmtB(), false_branch=StmtA())
         Testee(cond=ExprA(dtype=DataType.BOOL), true_branch=StmtA(), false_branch=StmtB())
         Testee(cond=ExprB(dtype=DataType.BOOL), true_branch=StmtA(), false_branch=StmtA())
@@ -436,7 +437,7 @@ def test_UnaryOp_category():
         pass
 
     Testee(op=A_ARITHMETIC_UNARY_OPERATOR, expr=ExprA())
-    with pytest.raises(ValidationError):
+    with pytest.raises(TypeError):
         Testee(op=A_ARITHMETIC_UNARY_OPERATOR, expr=ExprB())
 
 
@@ -445,7 +446,7 @@ def test_BinaryOp_category():
         pass
 
     Testee(op=A_ARITHMETIC_OPERATOR, left=ExprA(), right=ExprA())
-    with pytest.raises(ValidationError):
+    with pytest.raises(TypeError):
         Testee(op=A_ARITHMETIC_OPERATOR, left=ExprB(), right=ExprA())
         Testee(op=A_ARITHMETIC_OPERATOR, left=ExprA(), right=ExprB())
 
@@ -455,7 +456,7 @@ def test_TernaryOp_category():
         pass
 
     Testee(cond=ExprA(dtype=DataType.BOOL), true_expr=ExprA(), false_expr=ExprA())
-    with pytest.raises(ValidationError):
+    with pytest.raises(TypeError):
         Testee(cond=ExprB(dtype=DataType.BOOL), true_expr=ExprB(), false_expr=ExprA())
         Testee(cond=ExprA(dtype=DataType.BOOL), true_expr=ExprA(), false_expr=ExprB())
 
@@ -465,7 +466,7 @@ def test_Cast_category():
         pass
 
     Testee(dtype=ARITHMETIC_TYPE, expr=ExprA())
-    with pytest.raises(ValidationError):
+    with pytest.raises(TypeError):
         Testee(dtype=ARITHMETIC_TYPE, expr=ExprB())
 
 
@@ -474,7 +475,7 @@ def test_NativeFuncCall_category():
         pass
 
     Testee(func=NativeFunction.SIN, args=[ExprA()])
-    with pytest.raises(ValidationError):
+    with pytest.raises(TypeError):
         Testee(func=NativeFunction.SIN, args=[ExprB()])
 
 
@@ -483,7 +484,7 @@ def test_VariableKOffset_category():
         pass
 
     Testee(k=ExprC())
-    with pytest.raises(ValidationError):
+    with pytest.raises(TypeError):
         Testee(k=ExprA())
 
 
@@ -492,7 +493,7 @@ def test_HorizontalInterval():
         start=common.AxisBound(level=common.LevelMarker.START, offset=-1),
         end=common.AxisBound(level=common.LevelMarker.START, offset=0),
     )
-    with pytest.raises(ValidationError):
+    with pytest.raises(ValueError):
         common.HorizontalInterval(
             start=common.AxisBound(level=common.LevelMarker.END, offset=0),
             end=common.AxisBound(level=common.LevelMarker.START, offset=-1),

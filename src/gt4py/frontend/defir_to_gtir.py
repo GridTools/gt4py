@@ -18,6 +18,7 @@ import itertools
 import numbers
 from typing import Any, Dict, List, Optional, Tuple, Union, cast
 
+import eve
 from gt4py.frontend.node_util import IRNodeMapper, IRNodeVisitor, location_to_source_location
 from gt4py.frontend.nodes import (
     ArgumentInfo,
@@ -364,7 +365,7 @@ class DefIRToGTIR(IRNodeVisitor):
             ],
             vertical_loops=vertical_loops,
             externals=externals,
-            sources=node.sources or "",
+            sources=node.sources or {},
             docstring=node.docstring,
             loc=location_to_source_location(node.loc),
         )
@@ -535,13 +536,13 @@ class DefIRToGTIR(IRNodeVisitor):
 
     def visit_FieldDecl(self, node: FieldDecl) -> gtir.FieldDecl:
         dimension_names = ["I", "J", "K"]
-        dimensions = [dim in node.axes for dim in dimension_names]
+        dimensions = tuple(dim in node.axes for dim in dimension_names)
         # datatype conversion works via same ID
         return gtir.FieldDecl(
             name=node.name,
             dtype=_convert_dtype(node.data_type.value),
             dimensions=dimensions,
-            data_dims=node.data_dims,
+            data_dims=tuple(node.data_dims),
             loc=location_to_source_location(node.loc),
         )
 

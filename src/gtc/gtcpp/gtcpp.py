@@ -16,21 +16,18 @@
 import enum
 from typing import Any, List, Tuple, Union
 
-from pydantic.class_validators import validator
-
 import eve
-from eve import Str, StrEnum, SymbolName, SymbolTableTrait, field, utils
-from eve.type_definitions import SymbolRef
+from eve import datamodels
 from gtc import common
 from gtc.common import LocNode
 
 
-@utils.noninstantiable
+@eve.utils.noninstantiable
 class Expr(common.Expr):
     pass
 
 
-@utils.noninstantiable
+@eve.utils.noninstantiable
 class Stmt(common.Stmt):
     pass
 
@@ -60,13 +57,14 @@ class BlockStmt(common.BlockStmt[Stmt], Stmt):
 
 
 class AssignStmt(common.AssignStmt[Union[LocalAccess, AccessorRef], Expr], Stmt):
-    @validator("left")
+    @datamodels.validator("left")
     def no_horizontal_offset_in_assignment(
-        cls, v: Union[LocalAccess, AccessorRef]
-    ) -> Union[LocalAccess, AccessorRef]:
-        if isinstance(v, AccessorRef) and (v.offset.i != 0 or v.offset.j != 0):
-            raise ValueError("Lhs of assignment must not have a horizontal offset.")
-        return v
+        self, attribute: datamodels.Attribute, value: Union[LocalAccess, AccessorRef]
+    ) -> None:
+        if isinstance(value, AccessorRef):
+            offsets = value.offset.to_dict()
+            if offsets["i"] != 0 or offsets["j"] != 0:
+                raise ValueError("Lhs of assignment must not have a horizontal offset.")
 
     _dtype_validation = common.assign_stmt_dtype_validation(strict=True)
 
@@ -100,20 +98,19 @@ class Cast(common.Cast[Expr], Expr):  # type: ignore
 
 
 class Temporary(LocNode):
-    name: SymbolName
+    name: eve.Coerced[eve.SymbolName]
     dtype: common.DataType
-    data_dims: Tuple[int, ...] = field(default_factory=tuple)
+    data_dims: Tuple[int, ...] = eve.field(default_factory=tuple)
 
 
 class GTLevel(LocNode):
     splitter: int
     offset: int
 
-    @validator("offset")
-    def offset_must_not_be_zero(cls, v: int) -> int:
-        if v == 0:
+    @datamodels.validator("offset")
+    def offset_must_not_be_zero(self, attribute: datamodels.Attribute, value: int) -> None:
+        if value == 0:
             raise ValueError("GridTools level offset must be != 0")
-        return v
 
 
 class GTInterval(LocNode):
@@ -122,7 +119,7 @@ class GTInterval(LocNode):
 
 
 class LocalVarDecl(LocNode):
-    name: SymbolName
+    name: eve.SymbolName
     dtype: common.DataType
 
 
@@ -133,7 +130,7 @@ class GTApplyMethod(LocNode):
 
 
 @enum.unique
-class Intent(StrEnum):
+class Intent(eve.StrEnum):
     IN = "in"
     INOUT = "inout"
 
@@ -162,7 +159,7 @@ class GTExtent(LocNode):
 
 
 class GTAccessor(LocNode):
-    name: SymbolName
+    name: eve.Coerced[eve.SymbolName]
     id: int  # noqa: A003  # shadowing python builtin
     intent: Intent
     extent: GTExtent
@@ -173,19 +170,18 @@ class GTParamList(LocNode):
     accessors: List[GTAccessor]
 
 
-class GTFunctor(LocNode, SymbolTableTrait):
-    name: SymbolName
+class GTFunctor(LocNode, eve.SymbolTableTrait):
+    name: eve.Coerced[eve.SymbolName]
     applies: List[GTApplyMethod]
     param_list: GTParamList
 
 
 class Arg(LocNode):
-    name: SymbolRef
+    name: eve.Coerced[eve.SymbolRef]
 
-    class Config(eve.concepts.FrozenModel.Config):
-        pass
+    # class Config(eve.concepts.FrozenModel.Config):
+    #     pass
 
-    # TODO see https://github.com/eth-cscs/eve_toolchain/issues/40
     def __hash__(self) -> int:
         return hash(self.name)
 
@@ -196,7 +192,7 @@ class Arg(LocNode):
 
 
 class ApiParamDecl(LocNode):
-    name: SymbolName
+    name: eve.Coerced[eve.SymbolName]
     dtype: common.DataType
 
     def __init__(self, *args: Any, **kwargs: Any):
@@ -207,7 +203,7 @@ class ApiParamDecl(LocNode):
 
 class FieldDecl(ApiParamDecl):
     dimensions: Tuple[bool, bool, bool]
-    data_dims: Tuple[int, ...] = field(default_factory=tuple)
+    data_dims: Tuple[int, ...] = eve.field(default_factory=tuple)
 
 
 class GlobalParamDecl(ApiParamDecl):
@@ -215,13 +211,13 @@ class GlobalParamDecl(ApiParamDecl):
 
 
 class ComputationDecl(LocNode):
-    name: SymbolName
+    name: eve.Coerced[eve.SymbolName]
     dtype = common.DataType.INT32
     kind = common.ExprKind.SCALAR
 
 
 class Positional(ComputationDecl):
-    axis_name: Str
+    axis_name: str
 
 
 class AxisLength(ComputationDecl):
@@ -229,20 +225,19 @@ class AxisLength(ComputationDecl):
 
 
 class GTStage(LocNode):
-    functor: SymbolRef
+    functor: eve.Coerced[eve.SymbolRef]
     # `args` are SymbolRefs to GTComputation `arguments` (interpreted as parameters)
     # or `temporaries`
     args: List[Arg]
 
-    @validator("args")
-    def has_args(cls, v: List[Arg]) -> List[Arg]:
-        if not v:
+    @datamodels.validator("args")
+    def has_args(self, attribute: datamodels.Attribute, value: List[Arg]) -> None:
+        if not value:
             raise ValueError("At least one argument required")
-        return v
 
 
 class Cache(LocNode):
-    name: SymbolRef  # symbol ref to GTComputation params or temporaries
+    name: eve.Coerced[eve.SymbolRef]  # symbol ref to GTComputation params or temporaries
 
 
 class IJCache(Cache):
@@ -260,7 +255,7 @@ class GTMultiStage(LocNode):
     caches: List[Cache]
 
 
-class GTComputationCall(LocNode, SymbolTableTrait):
+class GTComputationCall(LocNode, eve.SymbolTableTrait):
     # In the generated C++ code `arguments` represent both the arguments in the call to `run`
     # and the parameters of the function object.
     # We could represent this closer to the C++ code by splitting call and definition of the
@@ -271,8 +266,8 @@ class GTComputationCall(LocNode, SymbolTableTrait):
     multi_stages: List[GTMultiStage]
 
 
-class Program(LocNode, SymbolTableTrait):
-    name: Str
+class Program(LocNode, eve.ValidatedSymbolTableTrait):
+    name: str
     parameters: List[
         ApiParamDecl
     ]  # in the current implementation these symbols can be accessed by the functor body
@@ -280,4 +275,3 @@ class Program(LocNode, SymbolTableTrait):
     gt_computation: GTComputationCall  # here could be the CtrlFlow region
 
     _validate_dtype_is_set = common.validate_dtype_is_set()
-    _validate_symbol_refs = common.validate_symbol_refs()

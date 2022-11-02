@@ -48,19 +48,19 @@ def _access_iter(node: oir.HorizontalExecution, get_outputs: bool):
     if get_outputs:
         iterator = eve.utils.xiter(
             itertools.chain(
-                *node.iter_tree().if_isinstance(oir.AssignStmt).getattr("left").map(iter_tree)
+                *node.walk_values().if_isinstance(oir.AssignStmt).getattr("left").map(iter_tree)
             )
         ).if_isinstance(oir.FieldAccess)
     else:
 
         def _iterator():
-            for n in node.iter_tree():
+            for n in node.walk_values():
                 if isinstance(n, oir.AssignStmt):
-                    yield from n.right.iter_tree().if_isinstance(oir.FieldAccess)
+                    yield from n.right.walk_values().if_isinstance(oir.FieldAccess)
                 elif isinstance(n, oir.While):
-                    yield from n.cond.iter_tree().if_isinstance(oir.FieldAccess)
+                    yield from n.cond.walk_values().if_isinstance(oir.FieldAccess)
                 elif isinstance(n, oir.MaskStmt):
-                    yield from n.mask.iter_tree().if_isinstance(oir.FieldAccess)
+                    yield from n.mask.walk_values().if_isinstance(oir.FieldAccess)
 
         iterator = _iterator()
 
@@ -772,7 +772,7 @@ class DaCeIRBuilder(NodeTranslator):
             end=dcir.AxisBound(axis=dcir.Axis.K, level=end.level, offset=end.offset),
         )
         overall_extent = Extent.zeros(2)
-        for he in node.iter_tree().if_isinstance(oir.HorizontalExecution):
+        for he in node.walk_values().if_isinstance(oir.HorizontalExecution):
             overall_extent = overall_extent.union(global_ctx.library_node.get_extents(he))
 
         iteration_ctx = DaCeIRBuilder.IterationContext.init(
@@ -783,7 +783,7 @@ class DaCeIRBuilder(NodeTranslator):
 
         var_offset_fields = {
             acc.name
-            for acc in node.iter_tree().if_isinstance(oir.FieldAccess)
+            for acc in node.walk_values().if_isinstance(oir.FieldAccess)
             if isinstance(acc.offset, oir.VariableKOffset)
         }
         sections_idx = next(

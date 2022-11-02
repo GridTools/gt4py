@@ -15,7 +15,7 @@
 from dataclasses import dataclass, field
 from typing import Any, List, Set
 
-from eve import NodeTranslator
+import eve
 from gtc import common, gtir, oir, utils
 from gtc.common import CartesianOffset, DataType, LogicalOperator, UnaryOperator
 from gtc.passes.oir_optimizations.utils import compute_fields_extents
@@ -33,8 +33,8 @@ def validate_stencil_memory_accesses(node: oir.Stencil) -> oir.Stencil:
 
     def _writes(node: oir.Stencil) -> Set[str]:
         result = set()
-        for left in node.iter_tree().if_isinstance(oir.AssignStmt).getattr("left"):
-            result |= left.iter_tree().if_isinstance(oir.FieldAccess).getattr("name").to_set()
+        for left in node.walk_values().if_isinstance(oir.AssignStmt).getattr("left"):
+            result |= left.walk_values().if_isinstance(oir.FieldAccess).getattr("name").to_set()
         return result
 
     field_names = {decl.name for decl in node.params if isinstance(decl, oir.FieldDecl)}
@@ -53,7 +53,7 @@ def validate_stencil_memory_accesses(node: oir.Stencil) -> oir.Stencil:
     return node
 
 
-class GTIRToOIR(NodeTranslator):
+class GTIRToOIR(eve.NodeTranslator):
     @dataclass
     class Context:
         local_scalars: List[oir.ScalarDecl] = field(default_factory=list)
