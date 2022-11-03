@@ -307,54 +307,16 @@ def test_input_kwargs_1(fieldview_backend):
         fieldop_input_kwargs(c, a, b, out=out)
 
     program_input_kwargs(input_1, b=input_2, c=input_3, out=out, offset_provider={})
-
     assert np.allclose(expected, out)
 
-
-def test_input_kwargs_2(fieldview_backend):
-    size = 10
-    input_1 = np_as_located_field(IDim, JDim)(np.ones((size, size)))
-    input_2 = np_as_located_field(IDim, JDim)(np.ones((size, size)))
-
-    @field_operator(backend=fieldview_backend)
-    def fieldop_input_kwargs(
-        a: Field[[IDim, JDim], float64]
-    ) -> tuple[Field[[IDim, JDim], float64], Field[[IDim, JDim], float64]]:
-        return (a + a, a)
-
-    @program
-    def program_input_kwargs(a: Field[[IDim, JDim], float64], b: Field[[IDim, JDim], float64]):
-        fieldop_input_kwargs(a, out=(b, a), domain={IDim: (1, 9), JDim: (4, 6)})
-
-    program_input_kwargs(a=input_1, b=input_2, offset_provider={})
-
-    expected = np.asarray(input_1)
-    expected[1:9, 4:6] = 1 + 1
-
-    assert np.allclose(np.asarray(input_1), input_1)
-    assert np.allclose(expected, input_2)
-
-
-def test_input_kwargs_3(fieldview_backend):
-    size = 10
-    input_1 = np_as_located_field(IDim, JDim)(np.ones((size, size)))
-    b = np_as_located_field(IDim, JDim)(np.ones((size, size)))
-
-    @field_operator(backend=fieldview_backend)
-    def fieldop_wrong_kwargs(
-        a: Field[[IDim, JDim], float64]
-    ) -> tuple[Field[[IDim, JDim], float64], Field[[IDim, JDim], float64]]:
-        return (a + a, a)
-
-    @program
-    def program_wrong_kwargs(a: Field[[IDim, JDim], float64], b: Field[[IDim, JDim], float64]):
-        fieldop_wrong_kwargs(a, out=(b, a))
+    program_input_kwargs(a=input_1, b=input_2, c=input_3, out=out, offset_provider={})
+    assert np.allclose(expected, out)
 
     with pytest.raises(GTTypeError) as exc_info_1:
-        program_wrong_kwargs(b, a=input_1, offset_provider={})
+        program_input_kwargs(input_2, input_3, a=input_1, offset_provider={})
 
     with pytest.raises(GTTypeError) as exc_info_2:
-        program_wrong_kwargs(b, c=input_1, offset_provider={})
+        program_input_kwargs(input_2, input_1, c=input_1, offset_provider={})
 
-    assert "Invalid argument(s)" in exc_info_1.value.args[0]
-    assert "Invalid argument(s)" in exc_info_2.value.args[0]
+    assert "Invalid argument" in exc_info_1.value.args[0]
+    assert "Invalid argument" in exc_info_2.value.args[0]
