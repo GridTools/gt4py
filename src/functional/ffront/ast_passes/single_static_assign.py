@@ -117,6 +117,7 @@ class SingleStaticAssignPass(ast.NodeTransformer):
     Mutates the python AST, variable names will not be valid python names anymore.
     This pass must be run before any passes that linearize unpacking assignments.
 
+
     Example
     -------
     Function ``foo()`` in the following example keeps overwriting local variable ``a``
@@ -149,7 +150,6 @@ class SingleStaticAssignPass(ast.NodeTransformer):
     WARNING: This pass is not intended as a general-purpose SSA transformation.
     The pass does not support any general Python AST. Known limitations include:
         * Nested functions aren't supported
-        * Returns inside if blocks aren't supported
         * While loops aren't supported
     """
 
