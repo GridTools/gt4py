@@ -951,10 +951,7 @@ class ScanArgIterator:
     ) -> None:
         self.wrapped_iter = wrapped_iter
         self.offsets = offsets or []
-        if isinstance(self.wrapped_iter, ConstantField):
-            self.k_pos = 0
-        else:
-            self.k_pos = k_pos
+        self.k_pos = k_pos
 
     def deref(self) -> Any:
         if not self.can_deref():
@@ -971,7 +968,7 @@ class ScanArgIterator:
 
 def shifted_scan_arg(k_pos: int) -> Callable[[ItIterator], ScanArgIterator]:
     def impl(it: ItIterator) -> ScanArgIterator:
-        return ScanArgIterator(it, k_pos=k_pos)
+        return ScanArgIterator(it, k_pos=0 if isinstance(it.field, ConstantField) else k_pos)
 
     return impl
 
