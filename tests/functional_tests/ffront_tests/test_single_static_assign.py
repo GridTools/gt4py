@@ -476,12 +476,11 @@ def test_if_one_sided_inside_function():
     expected = textwrap.dedent(
         """
         def f(a):
-            a__0 = a
             if True:
-                a__1 = a__0 + 1
+                a__0 = a + 1
             else:
-                a__1 = a__0
-            return a__1
+                a__0 = a
+            return a__0
         """
     ).strip()
 
@@ -597,8 +596,8 @@ def test_broken_collisions():
     assert result == expected
 
 
-def test_broken_collisions_function_parameters():
-    # Known bug of the current SSA implementation
+def test_collision_function_parameters():
+    # An earlier version couldn't handle this case correctly
 
     result = ast.unparse(
         ssaify_string(
@@ -612,9 +611,7 @@ def test_broken_collisions_function_parameters():
     expected = textwrap.dedent(
         """
         def f(a, a__0):
-            a__0 = a
-            a__0__0 = a__0
-            return a__0__0
+            return a__0
         """
     ).strip()
 
