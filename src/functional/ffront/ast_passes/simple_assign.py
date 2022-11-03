@@ -82,20 +82,22 @@ class SingleAssignTargetPass(NodeYielder):
         return name
 
     def visit_Assign(self, node: ast.Assign) -> Iterator[ast.Assign]:
-        if len(node.targets) > 1:
-            synthetic_target = self._unique_symbol_name()
-            ast.copy_location(synthetic_target, node)
-            synthetic_assign = copy.copy(node)
-            synthetic_assign.targets = [synthetic_target]
-            yield synthetic_assign
-
-            for target in node.targets:
-                new_assign = copy.copy(node)
-                new_assign.targets = [target]
-                new_assign.value = ast.Name(id=synthetic_target.id, ctx=ast.Load())
-                yield new_assign
-        else:
+        # ignore regular assignments
+        if len(node.targets) == 1:
             yield node
+            return
+
+        synthetic_target = self._unique_symbol_name()
+        ast.copy_location(synthetic_target, node)
+        synthetic_assign = copy.copy(node)
+        synthetic_assign.targets = [synthetic_target]
+        yield synthetic_assign
+
+        for target in node.targets:
+            new_assign = copy.copy(node)
+            new_assign.targets = [target]
+            new_assign.value = ast.Name(id=synthetic_target.id, ctx=ast.Load())
+            yield new_assign
 
 
 class UnpackedAssignPass(NodeYielder):
