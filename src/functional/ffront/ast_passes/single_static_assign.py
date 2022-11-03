@@ -86,6 +86,20 @@ class Versioning:
         return max(a, b)
 
 
+class NameEncoder:
+    """Helper class to encode names of versioned variables."""
+
+    _separator: str
+
+    def __init__(self, separator: str):
+        self._separator = separator
+
+    def encode_name(self, name: str, versions: Versioning) -> str:
+        if versions.is_versioned(name):
+            return f"{name}{self._separator}{versions[name]}"
+        return name
+
+
 class SingleStaticAssignPass(ast.NodeTransformer):
     """
     Rename variables in assignments to avoid overwriting.
