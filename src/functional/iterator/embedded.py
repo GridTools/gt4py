@@ -714,10 +714,9 @@ class MDIterator:
             assert _column_range is not None
             k_pos = shifted_pos.pop(self.column_axis)
             assert isinstance(k_pos, int)
-            # the following slice describes a range in the field
+            # the following range describes a range in the field
             # (negative values are relative to the origin, not relative to the size)
-            # TODO(havogt) consider introducing a special range class to highlight the semantics
-            slice_column[self.column_axis] = slice(k_pos, k_pos + len(_column_range))
+            slice_column[self.column_axis] = range(k_pos, k_pos + len(_column_range))
 
         assert _is_concrete_position(shifted_pos)
         ordered_indices = get_ordered_indices(
@@ -840,30 +839,28 @@ def get_ordered_indices(
                 res.append(elem[sparse_position_tracker[axis.value]])
                 sparse_position_tracker[axis.value] += 1
             else:
-                assert isinstance(elem, (int, np.integer, slice))
+                assert isinstance(elem, (int, np.integer, slice, range))
                 res.append(elem)
     return tuple(res)
 
 
 def _shift_range(
-    slice_or_index: slice | numbers.Integral, offset: numbers.Integral
+    range_or_index: range | numbers.Integral, offset: numbers.Integral
 ) -> slice | numbers.Integral:
-    if isinstance(slice_or_index, slice):
-        # slice_or_index describes a range in the field
-        assert slice_or_index.step is None
-        assert slice_or_index.start is not None
-        assert slice_or_index.stop is not None
-        return slice(slice_or_index.start + offset, slice_or_index.stop + offset)
+    if isinstance(range_or_index, range):
+        # range_or_index describes a range in the field
+        assert range_or_index.step == 1
+        return slice(range_or_index.start + offset, range_or_index.stop + offset)
     else:
-        assert isinstance(slice_or_index, numbers.Integral)
-        return slice_or_index + offset
+        assert isinstance(range_or_index, numbers.Integral)
+        return range_or_index + offset
 
 
 def _shift_ranges(
-    slices_or_indices: tuple[slice | numbers.Integral, ...],
+    ranges_or_indices: tuple[range | numbers.Integral, ...],
     offsets: tuple[numbers.Integral, ...],
 ) -> tuple[slice | numbers.Integral, ...]:
-    return tuple(_shift_range(*i) for i in zip(slices_or_indices, offsets))
+    return tuple(r if o == 0 else _shift_range(r, o) for r, o in zip(ranges_or_indices, offsets))
 
 
 def np_as_located_field(
