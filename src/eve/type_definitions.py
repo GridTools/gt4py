@@ -80,7 +80,7 @@ class NothingType(type):
 class NOTHING(metaclass=NothingType):
     """Marker to avoid confusion with `None` in contexts where `None` could be a valid value."""
 
-    def __new__(cls: type) -> NoReturn:  # type: ignore[misc]  # should return an instance
+    def __new__(cls: type) -> NoReturn:
         raise TypeError(f"{cls.__name__} is used as a sentinel value and cannot be instantiated.")
 
 

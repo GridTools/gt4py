@@ -38,8 +38,8 @@ class DialectSyntaxError(common.GTSyntaxError):
         lineno: int = 0,
         offset: int = 0,
         filename: Optional[str] = None,
-        end_lineno: int = None,
-        end_offset: int = None,
+        end_lineno: Optional[int] = None,
+        end_offset: Optional[int] = None,
         text: Optional[str] = None,
     ):
         msg = f"Invalid {self.dialect_name} Syntax: {msg}"
@@ -62,6 +62,18 @@ class DialectSyntaxError(common.GTSyntaxError):
             end_lineno=getattr(node, "end_lineno", None),
             end_offset=getattr(node, "end_col_offset", None),
             text=text,
+        )
+
+    @classmethod
+    def from_location(cls, msg="", *, location: SourceLocation):
+        return cls(
+            msg,
+            lineno=location.line,
+            offset=location.column,
+            filename=location.source,
+            end_lineno=location.end_line,
+            end_offset=location.end_column,
+            text=None,
         )
 
 
@@ -92,6 +104,7 @@ class DialectParser(ast.NodeVisitor, Generic[DialectRootT]):
                     closure_vars=closure_vars,
                     annotations=annotations,
                 ).visit(cls._preprocess_definition_ast(definition_ast)),
+                closure_vars,
                 annotations,
             )
         except SyntaxError as err:
@@ -120,7 +133,7 @@ class DialectParser(ast.NodeVisitor, Generic[DialectRootT]):
 
     @classmethod
     def _postprocess_dialect_ast(
-        cls, output_ast: DialectRootT, annotations: dict[str, Any]
+        cls, output_ast: DialectRootT, closure_vars: dict[str, Any], annotations: dict[str, Any]
     ) -> DialectRootT:
         return output_ast
 

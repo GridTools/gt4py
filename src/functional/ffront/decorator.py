@@ -47,6 +47,9 @@ from functional.ffront.foast_to_itir import FieldOperatorLowering
 from functional.ffront.func_to_foast import FieldOperatorParser
 from functional.ffront.func_to_past import ProgramParser
 from functional.ffront.gtcallable import GTCallable
+from functional.ffront.past_passes.closure_var_type_deduction import (
+    ClosureVarTypeDeduction as ProgramClosureVarTypeDeduction,
+)
 from functional.ffront.past_passes.type_deduction import ProgramTypeDeduction, ProgramTypeError
 from functional.ffront.past_to_itir import ProgramLowering
 from functional.ffront.source_utils import SourceDefinition, get_closure_vars_from_function
@@ -491,15 +494,14 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
 
         if self.foast_node.id in self.closure_vars:
             raise RuntimeError("A closure variable has the same name as the field operator itself.")
-        closure_vars = {self.foast_node.id: self, **self.closure_vars}
+        closure_vars = {self.foast_node.id: self}
         closure_symbols = [
             past.Symbol(
-                id=name,
-                type=symbol_makers.make_symbol_type_from_value(val),
+                id=self.foast_node.id,
+                type=ct.DeferredSymbolType(constraint=None),
                 namespace=ct.Namespace.CLOSURE,
                 location=loc,
-            )
-            for name, val in closure_vars.items()
+            ),
         ]
 
         untyped_past_node = past.Program(
@@ -517,6 +519,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
             closure_vars=closure_symbols,
             location=loc,
         )
+        untyped_past_node = ProgramClosureVarTypeDeduction.apply(untyped_past_node, closure_vars)
         past_node = ProgramTypeDeduction.apply(untyped_past_node)
 
         return Program(
