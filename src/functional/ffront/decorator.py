@@ -108,7 +108,7 @@ def _canonicalize_args(node_params, args, kwargs) -> tuple[tuple, dict]:
 
     extra_args = set(list(kwargs.keys())) - set(["out", "domain"])
     if len(extra_args) > 0:
-        raise GTTypeError(
+        raise ProgramTypeError(
             f"Invalid argument(s) {extra_args} in function call."
             f" Argument(s) not in function definition."
         )
