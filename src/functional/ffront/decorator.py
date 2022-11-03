@@ -103,12 +103,14 @@ def _canonicalize_args(node_params, args, kwargs) -> tuple[tuple, dict]:
         elif param.id in kwargs:
             new_args.append(kwargs[param.id])
             kwargs.pop(param.id)
+        elif param.id not in ["out", "domain"]:
+            raise GTTypeError(f"Argument {param} in function definition but not in function call.")
 
     extra_args = set(list(kwargs.keys())) - set(["out", "domain"])
     if len(extra_args) > 0:
         raise GTTypeError(
             f"Invalid argument(s) {extra_args} in function call."
-            f" Either argument(s) not in function definition or already a positional argument."
+            f" Argument(s) already a positional argument."
         )
 
     args = tuple(new_args)

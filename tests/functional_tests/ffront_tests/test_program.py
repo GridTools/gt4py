@@ -320,5 +320,5 @@ def test_input_kwargs(fieldview_backend):
     with pytest.raises(GTTypeError) as exc_info_2:
         program_input_kwargs(input_2, input_1, c=input_1, offset_provider={})
 
-    assert "Invalid argument" in exc_info_1.value.args[0]
+    assert "in function definition but not in function call" in exc_info_1.value.args[0]
     assert "Invalid argument" in exc_info_2.value.args[0]
