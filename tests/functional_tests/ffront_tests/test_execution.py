@@ -135,7 +135,7 @@ def test_power(fieldview_backend):
 
 def test_mod(fieldview_backend):
     if fieldview_backend == gtfn_cpu.run_gtfn:
-        pytest.xfail("gtfn does not yet support math builtins")
+        pytest.xfail("gtfn does not yet support `%` operator.")
 
     size = 10
     a = np_as_located_field(IDim)(np.random.randn((size)))
