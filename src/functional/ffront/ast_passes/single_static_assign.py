@@ -161,17 +161,16 @@ class SingleStaticAssignPass(ast.NodeTransformer):
         """
 
         @classmethod
-        def apply(cls, name_counter, separator, node):
-            return cls(name_counter, separator).visit(node)
+        def apply(cls, versioning: Versioning, name_encoder: NameEncoder, node: ast.AST):
+            return cls(versioning, name_encoder).visit(node)
 
-        def __init__(self, name_counter, separator):
+        def __init__(self, versioning: Versioning, name_encoder: NameEncoder):
             super().__init__()
-            self.name_counter: dict[str, int] = name_counter
-            self.separator: str = separator
+            self.versioning: Versioning = versioning
+            self.name_encoder: NameEncoder = name_encoder
 
         def visit_Name(self, node: ast.Name) -> ast.Name:
-            if node.id in self.name_counter:
-                node.id = f"{node.id}{self.separator}{self.name_counter[node.id]}"
+            node.id = self.name_encoder.encode_name(node.id, self.versioning)
             return node
 
     @classmethod
@@ -180,65 +179,78 @@ class SingleStaticAssignPass(ast.NodeTransformer):
 
     def __init__(self, separator="__"):
         super().__init__()
-        self.name_counter: dict[str, int] = {}
-        self.separator: str = separator
+        self.versioning: Versioning = Versioning()
+        self.name_encoder: NameEncoder = NameEncoder(separator)
 
-    def _rename(self, node):
-        return self.RhsRenamer.apply(self.name_counter, self.separator, node)
+    def _rename(self, node: ast.AST):
+        return self.RhsRenamer.apply(self.versioning, self.name_encoder, node)
 
     def visit_FunctionDef(self, node: ast.FunctionDef):
 
         # For practical purposes, this is sufficient, but really not general at all.
         # However, the algorithm was never intended to be general.
 
-        pre_assigns: list[ast.stmt] = [
-            _make_assign(arg.arg, arg.arg, arg) for arg in node.args.args
-        ]
-        # This forces versioning for parameters which is required for if-stmt support
-        node.body = pre_assigns + node.body
+        old_versioning = self.versioning.copy()
+
+        for arg in node.args.args:
+            self.versioning.define(arg.arg)
+
         node.body = [self.visit(stmt) for stmt in node.body]
 
+        self.versioning = old_versioning
         return node
 
-    def visit_If(self, node: ast.If):
-        prev_name_counter = self.name_counter
+    def visit_If(self, node: ast.If) -> ast.If:
+        old_versioning = self.versioning
 
         node.test = self._rename(node.test)
 
-        self.name_counter = {**prev_name_counter}
+        self.versioning = old_versioning.copy()
         node.body = [self.visit(el) for el in node.body]
-        body_name_counter = self.name_counter
+        body_versioning = self.versioning
+        body_returns = is_guaranteed_to_return(node.body)
 
-        self.name_counter = {**prev_name_counter}
+        self.versioning = old_versioning.copy()
         node.orelse = [self.visit(el) for el in node.orelse]
-        orelse_name_counter = self.name_counter
+        orelse_versioning = self.versioning
+        orelse_returns = is_guaranteed_to_return(node.orelse)
 
-        all_names = set(body_name_counter.keys()) & set(orelse_name_counter.keys())
-        # We can't continue with the name counter of the else branch,
-        # in case a variable was only defined in the else branch
-        self.name_counter = {}
+        if body_returns and not orelse_returns:
+            self.versioning = orelse_versioning
+            return node
+
+        if orelse_returns and not body_returns:
+            self.versioning = body_versioning
+            return node
+
+        if body_returns and orelse_returns:
+            self.versioning = Versioning()
+            return node
+
+        assert not body_returns and not orelse_returns
+
+        self.versioning = Versioning.merge(body_versioning, orelse_versioning)
 
         # ensure both branches conclude with the same unique names
-        for name in all_names:
-            body_count = body_name_counter[name]
-            orelse_count = orelse_name_counter[name]
+        for name, merged_version in self.versioning:
 
-            if body_count < orelse_count:
+            body_version = body_versioning[name]
+            orelse_version = orelse_versioning[name]
+
+            if body_version != merged_version:
                 new_assign = _make_assign(
-                    f"{name}{self.separator}{orelse_count}",
-                    f"{name}{self.separator}{body_count}",
+                    self.name_encoder.encode_name(name, self.versioning),
+                    self.name_encoder.encode_name(name, body_versioning),
                     node,
                 )
                 node.body.append(new_assign)
-            elif body_count > orelse_count:
+            elif orelse_version != merged_version:
                 new_assign = _make_assign(
-                    f"{name}{self.separator}{body_count}",
-                    f"{name}{self.separator}{orelse_count}",
+                    self.name_encoder.encode_name(name, self.versioning),
+                    self.name_encoder.encode_name(name, orelse_versioning),
                     node,
                 )
                 node.orelse.append(new_assign)
-
-            self.name_counter[name] = max(body_count, orelse_count)
 
         return node
 
@@ -258,18 +270,19 @@ class SingleStaticAssignPass(ast.NodeTransformer):
             node.value = self._rename(node.value)
             node.target = self.visit(node.target)
         elif isinstance(node.target, ast.Name):
-            target_id = node.target.id
+            # An empty annotation always applies to the next assignment.
+            # So we need to use the correct versioning, but also ensure
+            # we restore the old versioning afterwards, because no assignment
+            # actually happens.
+            old_versioning = self.versioning.copy()
             node.target = self.visit(node.target)
-            self.name_counter[target_id] -= 1
+            self.versioning = old_versioning
         return node
 
     def visit_Name(self, node: ast.Name) -> ast.Name:
         if node.id in TYPE_BUILTIN_NAMES:
             return node
-        elif node.id in self.name_counter:
-            self.name_counter[node.id] += 1
-            node.id = f"{node.id}{self.separator}{self.name_counter[node.id]}"
-        else:
-            self.name_counter[node.id] = 0
-            node.id = f"{node.id}{self.separator}0"
+
+        self.versioning.assign(node.id)
+        node.id = self.name_encoder.encode_name(node.id, self.versioning)
         return node
