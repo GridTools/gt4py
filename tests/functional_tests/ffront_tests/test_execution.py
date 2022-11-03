@@ -1310,7 +1310,11 @@ def test_simple_if():
             result2 = b+1.
         return result
 
+    simple_if(a, b, True, out=out, offset_provider={})
+    assert np.allclose(out, a)
+
     simple_if(a, b, False, out=out, offset_provider={})
+    assert np.allclose(out, b)
 
     # @field_operator
     # def simple_if(a: Field[[IDim, JDim], float64],

@@ -449,7 +449,7 @@ def promote_scalars(val: CompositeOfScalarOrField):
     if isinstance(val, tuple):
         return tuple(promote_scalars(el) for el in val)
     val_type = xtyping.infer_type(val)
-    if np.issubdtype(val_type, np.number):
+    if np.issubdtype(val_type, np.number) or issubclass(val_type, bool):
         return constant_field(val)
     elif np.issubdtype(val_type, LocatedField):
         return val

@@ -226,19 +226,41 @@ class FieldOperatorLowering(NodeTranslator):
         current_expr = self.visit(return_stmt, **kwargs)
 
         for assign in reversed(assigns):
-            current_expr = im.let(*self._visit_stmt(cast(foast.Assign, assign), **kwargs))(
-                current_expr
-            )
+            result = self._visit_stmt(assign, **kwargs)
+            for sym, expr in reversed(result):
+                current_expr = im.let(sym, expr)(current_expr)
 
+        return current_expr
+
+    def _visit_block_stmt(self, node: foast.BlockStmt, inner_expr: itir.Expr, **kwargs):
+        current_expr = inner_expr
+        for assign in reversed(node.stmts):
+            result = self._visit_stmt(assign, **kwargs)
+            for sym, expr in reversed(result):
+                current_expr = im.let(sym, expr)(current_expr)
         return current_expr
 
     def _visit_stmt(self, node: foast.Assign | foast.IfStmt, **kwargs) -> tuple[itir.Sym, itir.Expr]:
         if isinstance(node, foast.Assign):
             sym = self.visit(node.target, **kwargs)
             expr = self.visit(node.value, **kwargs)
+            return [(sym, expr)]
         elif isinstance(node, foast.IfStmt):
-            breakpoint()
-        return sym, expr
+            common_symbols: dict[foast.SymbolName, foast.Symbol] = node.annex._common_symbols
+            inner_expr = im.make_tuple_(*(itir.SymRef(id=sym) for sym in common_symbols.keys()))
+            cond = self.visit(node.condition, **kwargs)
+            true_branch = self._visit_block_stmt(node.true_branch, inner_expr, **kwargs)
+            false_branch = self._visit_block_stmt(node.false_branch, inner_expr, **kwargs)
+            combined_expr = im.let("__false_branch", false_branch)(
+                   im.let("__true_branch", true_branch)(
+                          im.if__(cond, im.ref("__true_branch"), im.ref("__false_branch"))))
+            result = [
+                (im.sym("__if_stmt_result"), combined_expr)
+            ]
+            for i, sym in enumerate(common_symbols.keys()):
+                result.append((im.sym(sym), im.tuple_get_(i, im.ref("__if_stmt_result"))))
+            return result
+        assert False
 
     def visit_Return(self, node: foast.Return, **kwargs) -> itir.Expr:
         return to_value(node.value)(self.visit(node.value, **kwargs))
@@ -329,7 +351,7 @@ class FieldOperatorLowering(NodeTranslator):
         lowered_false_expr = self.visit(node.false_expr, **kwargs)
 
         return self._lift_if_field(node)(
-            im.call_("if_")(
+            im.if__(
                 lowered_node_cond,
                 to_value(node.true_expr)(lowered_true_expr),
                 to_value(node.false_expr)(lowered_false_expr),
