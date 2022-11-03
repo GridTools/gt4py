@@ -98,15 +98,15 @@ def _canonicalize_args(node_params, args, kwargs) -> tuple[tuple, dict]:
     new_args = []
 
     for param_i, param in enumerate(node_params):
-        if param_i < len(args):
-            new_args.append(args[param_i])
-        elif param.id in kwargs:
+        if param.id in kwargs:
+            if param.id not in ["out", "domain"] and param_i <= len(args):
+                raise GTTypeError(
+                    f"Argument {param.id} in function definition but not in function call."
+                )
             new_args.append(kwargs[param.id])
             kwargs.pop(param.id)
-        elif param.id not in ["out", "domain"]:
-            raise GTTypeError(
-                f"Argument {param.id} in function definition but not in function call."
-            )
+        elif param_i < len(args):
+            new_args.append(args[param_i])
 
     extra_args = set(list(kwargs.keys())) - set(["out", "domain"])
     if len(extra_args) > 0:
