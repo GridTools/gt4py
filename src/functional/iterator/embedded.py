@@ -647,18 +647,38 @@ def _make_tuple(
     field_or_tuple: LocatedField | tuple,  # arbitrary nesting of tuples of LocatedField
     indices: int | slice | tuple[int | slice, ...],
     *,
-    as_column: bool = False,
+    column_axis_idx: int = None,
 ) -> tuple:  # arbitrary nesting of tuples of field values or `Column`s
     if isinstance(field_or_tuple, tuple):
-        return tuple(_make_tuple(f, indices, as_column=as_column) for f in field_or_tuple)
+        if column_axis_idx is not None:
+            indices_cpy = list(indices)
+            indices_cpy[column_axis_idx] = _column_range.start
+            first = tuple(_make_tuple(f, indices_cpy) for f in field_or_tuple)
+            col = Column(
+                _column_range.start, np.zeros(len(_column_range), dtype=_column_dtype(first))
+            )
+            col[0] = first
+            for i in _column_range[1:]:
+                indices_cpy[column_axis_idx] = i
+                col[i] = tuple(_make_tuple(f, indices_cpy) for f in field_or_tuple)
+            return col
+        else:
+            return tuple(_make_tuple(f, indices) for f in field_or_tuple)
     else:
         data = field_or_tuple.field_getitem(indices)
-        if as_column:
+        if column_axis_idx is not None:
             # wraps a vertical slice of an input field into a `Column`
             assert _column_range is not None
             return Column(_column_range.start, data)
         else:
             return data
+
+
+def _axis_idx(axes: Sequence[Dimension], axis: Tag) -> int:
+    for i, a in enumerate(axes):
+        if a.value == axis:
+            return i
+    raise AssertionError()
 
 
 # TODO(havogt) frozen dataclass
@@ -723,7 +743,13 @@ class MDIterator:
             axes,
             {**shifted_pos, **slice_column},
         )
-        return _make_tuple(self.field, ordered_indices, as_column=self.column_axis is not None)
+        return _make_tuple(
+            self.field,
+            ordered_indices,
+            column_axis_idx=_axis_idx(axes, self.column_axis)
+            if self.column_axis is not None
+            else None,
+        )
 
 
 def make_in_iterator(
@@ -955,8 +981,7 @@ class ScanArgIterator:
     def deref(self) -> Any:
         if not self.can_deref():
             return _UNDEFINED
-        # TODO(tehrengruber): _make_tuple is for fields
-        return _make_tuple(self.wrapped_iter.deref(), self.k_pos)
+        return self.wrapped_iter.deref()[self.k_pos]
 
     def can_deref(self) -> bool:
         return self.wrapped_iter.can_deref()
