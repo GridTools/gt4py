@@ -1,10 +1,13 @@
 import copy
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Union
 
+import dace
 import dace.sdfg.graph
 import dace.symbolic
 import sympy
+from dace.properties import DictProperty, make_properties
 from dace.sdfg.propagation import propagate_memlets_sdfg
+from dace.transformation import transformation
 from dace.transformation.helpers import nest_sdfg_subgraph
 
 from gtc import common
@@ -12,7 +15,7 @@ from gtc import daceir as dcir
 from gtc.dace.expansion.daceir_builder import DaCeIRBuilder
 from gtc.dace.expansion_specification import Map, Skip
 from gtc.dace.nodes import StencilComputation
-from gtc.dace.utils import compute_dcir_access_infos, make_dace_subset, union_inout_memlets
+from gtc.dace.utils import make_dace_subset, union_inout_memlets
 
 
 SymbolicOriginType = Tuple[dace.symbolic.SymbolicType, ...]
@@ -127,6 +130,8 @@ def _get_symbolic_origin_and_domain(
             equations.append(inner_expr - outer_expr)
     # Solve for all at once
     results = sympy.solve(equations, *symbols, dict=True)
+    if not results:
+        raise ValueError("Symbolic split inconsistent.")
     result = results[0]
     result = {str(k)[len("__SOLVE_") :]: v for k, v in result.items()}
     solved_domain = {
@@ -160,18 +165,6 @@ def _union_access_infos(
     for key, value in second.items():
         res[key] = value.union(res.get(key, value))
     return res
-
-
-def _get_symbolic_split(
-    nodes: List[Tuple[StencilComputation, dace.SDFGState]],
-) -> Tuple[Dict[dcir.SymbolName, SymbolicOriginType], Dict[dcir.Axis, SymbolicDomainType]]:
-
-    symbolic_split = dict(), dict()
-    for node, state in nodes:
-        access_infos = _union_access_infos(*_get_field_access_infos(state, node))
-        node_symbolic_split = _get_symbolic_origin_and_domain(state, node, access_infos)
-        symbolic_split = _union_symbolic_origin_and_domain(symbolic_split, node_symbolic_split)
-    return symbolic_split
 
 
 def _get_access_infos(
@@ -254,132 +247,244 @@ def _update_shapes(sdfg: dace.SDFG, access_infos: Dict[dcir.SymbolName, dcir.Fie
             array.shape = shape
 
 
-def partially_expand(sdfg):
-    stencil_computations: List[StencilComputation, dace.SDFGState] = list(
-        filter(lambda n: isinstance(n[0], StencilComputation), sdfg.all_nodes_recursive())
-    )
-    if not stencil_computations:
-        return
+@make_properties
+class PartialExpansion(transformation.SubgraphTransformation):
 
-    original_item = stencil_computations[0][0].expansion_specification[0]
-    for node, _ in stencil_computations:
-        if not isinstance(node.expansion_specification[0], Map) or not all(
-            it.kind == "tiling" for it in node.expansion_specification[0].iterations
+    strides = DictProperty(
+        key_type=dcir.Axis,
+        value_type=int,
+        default={dcir.Axis.I: 8, dcir.Axis.J: 8},
+        desc="Map dimensions to partially expand to the corresponding map stride.",
+    )
+
+    @staticmethod
+    def subgraph_all_nodes_recursive(subgraph: Union[dace.sdfg.graph.SubgraphView, dace.SDFG]):
+        for state in subgraph.nodes():
+            for node in state.nodes():
+                if isinstance(node, dace.nodes.NestedSDFG):
+                    PartialExpansion.subgraph_all_nodes_recursive(node.sdfg)
+                yield node, state
+            yield state, state.parent
+
+    def can_be_applied(self, sdfg: dace.SDFG, subgraph: dace.sdfg.graph.SubgraphView) -> bool:
+
+        if not subgraph.nodes():
+            return False
+
+        if not all(
+            isinstance(n, (dace.nodes.AccessNode, dace.SDFGState, StencilComputation))
+            for n, _ in PartialExpansion.subgraph_all_nodes_recursive(subgraph)
         ):
-            return
+            return False
 
-    tiling_schedule = original_item.schedule
-    tiling_ranges = {
-        it.axis.tile_symbol(): str(
-            dace.subsets.Range([(0, it.axis.domain_dace_symbol() - 1, it.stride)])
+        stencil_computations = list(
+            filter(
+                lambda n: isinstance(n[0], StencilComputation),
+                PartialExpansion.subgraph_all_nodes_recursive(subgraph),
+            )
         )
-        for it in original_item.iterations
-    }
 
-    parent_symbolic_split = _get_symbolic_split(stencil_computations)
+        if not stencil_computations:
+            return False
 
-    states = list(sdfg.states())
-    sdfg: dace.SDFG
-    if len(states) == 1:
-        new_state = sdfg.add_state_before(states[0])
-        sdfg.validate()
-        states = [new_state, *states]
-    nsdfg_state: dace.SDFGState = nest_sdfg_subgraph(
-        sdfg, dace.sdfg.graph.SubgraphView(sdfg, states)
-    )
-    nsdfg_node: dace.nodes.NestedSDFG = next(
-        iter(node for node in nsdfg_state.nodes() if isinstance(node, dace.nodes.NestedSDFG))
-    )
+        for node, _ in stencil_computations:
+            if not isinstance(node.expansion_specification[0], Map) or not all(
+                it.kind == "tiling" for it in node.expansion_specification[0].iterations
+            ):
+                return False
 
-    for node, _ in stencil_computations:
-        _set_skips(node)
+        return PartialExpansion._test_symbolic_split(stencil_computations)
 
-    in_nsdfg_access_infos, out_nsdfg_access_infos = _get_access_infos(stencil_computations)
-    nsdfg_access_infos = _union_access_infos(in_nsdfg_access_infos, out_nsdfg_access_infos)
+    @staticmethod
+    def _test_symbolic_split(
+        nodes: List[Tuple[StencilComputation, dace.SDFGState]],
+    ) -> bool:
 
-    # update shapes and subsets of new nested SDFG
-    _update_shapes(nsdfg_node.sdfg, nsdfg_access_infos)
-    for state in nsdfg_node.sdfg.states():
-        for node in filter(lambda n: isinstance(n, StencilComputation), state.nodes()):
-            in_access_infos, out_access_infos = _get_field_access_infos(state, node)
-            node.access_infos = _union_access_infos(in_access_infos, out_access_infos)
-            for memlet in state.in_edges(node):
-                name = memlet.data.data
-                access_info = in_access_infos[name]
-                naxes = len(access_info.grid_subset.intervals)
-                data_dims = nsdfg_node.sdfg.arrays[name].shape[naxes:]
-                memlet.data.subset = make_dace_subset(
-                    nsdfg_access_infos[name], access_info, data_dims=data_dims
-                )
-            for memlet in state.out_edges(node):
-                name = memlet.data.data
-                access_info = out_access_infos[name]
-                naxes = len(access_info.grid_subset.intervals)
-                data_dims = nsdfg_node.sdfg.arrays[name].shape[naxes:]
-                memlet.data.subset = make_dace_subset(
-                    nsdfg_access_infos[name], access_info, data_dims=data_dims
-                )
-    propagate_memlets_sdfg(nsdfg_node.sdfg)
+        symbolic_split_origin, symbolic_split_domain = dict(), dict()
+        for node, state in nodes:
+            access_infos = _union_access_infos(*_get_field_access_infos(state, node))
+            node_symbolic_origin, node_symbolic_domain = _get_symbolic_origin_and_domain(
+                state, node, access_infos
+            )
 
-    map_entry, map_exit = nsdfg_state.add_map(
-        stencil_computations[0][0].label + "_tiling_map",
-        ndrange=tiling_ranges,
-        schedule=tiling_schedule,
-        debuginfo=nsdfg_node.debuginfo,
-    )
-    nsdfg_node.symbol_mapping.update(
-        {it.axis.tile_symbol(): it.axis.tile_dace_symbol() for it in original_item.iterations}
-    )
-    for it in original_item.iterations:
-        if it.axis.tile_symbol() not in nsdfg_node.sdfg.symbols:
-            nsdfg_node.sdfg.add_symbol(it.axis.tile_symbol(), stype=dace.int32)
-    for edge in nsdfg_state.in_edges(nsdfg_node):
-        memlet = edge.data
-        name = memlet.data
-        access_info = nsdfg_access_infos[name]
-        naxes = len(access_info.grid_subset.intervals)
-        data_dims = nsdfg_node.sdfg.arrays[name].shape[naxes:]
-        map_entry.add_in_connector("IN_" + name)
-        map_entry.add_out_connector("OUT_" + name)
-        new_subset = _make_dace_subset_symbolic_context(
-            (parent_symbolic_split[0][name], parent_symbolic_split[1]),
-            access_info,
-            data_dims=data_dims,
-            tile_sizes={it.axis: it.stride for it in original_item.iterations},
+            # test domain consistency
+            if not set(symbolic_split_domain.keys()) == set(symbolic_split_domain.keys()):
+                raise ValueError
+
+            if symbolic_split_domain and not all(
+                (node_ax_size == symbolic_split_domain[ax]) == True
+                for ax, node_ax_size in node_symbolic_domain.items()
+            ):
+                return False
+
+            # test origin consistency
+            common_names = {
+                name for name in node_symbolic_origin.keys() if name in symbolic_split_origin
+            }
+
+            for name in common_names:
+                assert len(node_symbolic_origin[name]) == len(symbolic_split_origin[name])
+                if not all(
+                    (node_orig == res_orig) == True
+                    for node_orig, res_orig in zip(
+                        node_symbolic_origin[name], symbolic_split_origin[name]
+                    )
+                ):
+                    return False
+
+            symbolic_split_origin, symbolic_split_domain = _union_symbolic_origin_and_domain(
+                (symbolic_split_origin, symbolic_split_domain),
+                (node_symbolic_origin, node_symbolic_domain),
+            )
+        return True
+
+    @staticmethod
+    def _get_symbolic_split(
+        nodes: List[Tuple[StencilComputation, dace.SDFGState]],
+    ) -> Tuple[Dict[dcir.SymbolName, SymbolicOriginType], Dict[dcir.Axis, SymbolicDomainType]]:
+
+        symbolic_split = dict(), dict()
+        for node, state in nodes:
+            access_infos = _union_access_infos(*_get_field_access_infos(state, node))
+            node_symbolic_split = _get_symbolic_origin_and_domain(state, node, access_infos)
+            symbolic_split = _union_symbolic_origin_and_domain(symbolic_split, node_symbolic_split)
+        return symbolic_split
+
+    def apply(self, sdfg: dace.SDFG):
+        subgraph = self.subgraph_view(sdfg)
+
+        stencil_computations: List[StencilComputation, dace.SDFGState] = list(
+            filter(
+                lambda n: isinstance(n[0], StencilComputation),
+                PartialExpansion.subgraph_all_nodes_recursive(subgraph),
+            )
         )
-        nsdfg_state.add_edge(edge.src, edge.src_conn, map_entry, "IN_" + name, memlet=edge.data)
-        nsdfg_state.add_edge(
-            map_entry,
-            "OUT_" + name,
-            nsdfg_node,
-            edge.dst_conn,
-            memlet=dace.Memlet(data=name, subset=new_subset),
+
+        first_expansion_specification = stencil_computations[0][0].expansion_specification
+
+        original_item = first_expansion_specification[0]
+
+        tiling_schedule = original_item.schedule
+        tiling_ranges = {
+            it.axis.tile_symbol(): str(
+                dace.subsets.Range([(0, it.axis.domain_dace_symbol() - 1, it.stride)])
+            )
+            for it in original_item.iterations
+        }
+
+        parent_symbolic_split = PartialExpansion._get_symbolic_split(stencil_computations)
+
+        if len(subgraph.nodes()) == 1:
+            # nest_sdfg_subgraph does not apply on single-state subgraphs, so we add an empty state before to trigger
+            # nesting.
+            new_state = sdfg.add_state_before(subgraph.source_nodes()[0])
+            subgraph = dace.sdfg.graph.SubgraphView(sdfg, [new_state, *subgraph.nodes()])
+        nsdfg_state: dace.SDFGState = nest_sdfg_subgraph(sdfg, subgraph)
+        nsdfg_node: dace.nodes.NestedSDFG = next(
+            iter(node for node in nsdfg_state.nodes() if isinstance(node, dace.nodes.NestedSDFG))
         )
-        nsdfg_state.remove_edge(edge)
-    for edge in nsdfg_state.out_edges(nsdfg_node):
-        memlet = edge.data
-        name = memlet.data
-        access_info = nsdfg_access_infos[name]
-        naxes = len(access_info.grid_subset.intervals)
-        data_dims = nsdfg_node.sdfg.arrays[name].shape[naxes:]
-        map_exit.add_in_connector("IN_" + name)
-        map_exit.add_out_connector("OUT_" + name)
-        new_subset = _make_dace_subset_symbolic_context(
-            (parent_symbolic_split[0][name], parent_symbolic_split[1]),
-            access_info,
-            data_dims=data_dims,
-            tile_sizes={it.axis: it.stride for it in original_item.iterations},
+
+        for node, _ in stencil_computations:
+            _set_skips(node)
+
+        in_nsdfg_access_infos, out_nsdfg_access_infos = _get_access_infos(stencil_computations)
+        nsdfg_access_infos = _union_access_infos(in_nsdfg_access_infos, out_nsdfg_access_infos)
+
+        # update shapes and subsets of new nested SDFG
+        _update_shapes(nsdfg_node.sdfg, nsdfg_access_infos)
+        for state in nsdfg_node.sdfg.states():
+            for node in filter(lambda n: isinstance(n, StencilComputation), state.nodes()):
+                in_access_infos, out_access_infos = _get_field_access_infos(state, node)
+                node.access_infos = _union_access_infos(in_access_infos, out_access_infos)
+                for memlet in state.in_edges(node):
+                    name = memlet.data.data
+                    access_info = in_access_infos[name]
+                    naxes = len(access_info.grid_subset.intervals)
+                    data_dims = nsdfg_node.sdfg.arrays[name].shape[naxes:]
+                    memlet.data.subset = make_dace_subset(
+                        nsdfg_access_infos[name], access_info, data_dims=data_dims
+                    )
+                for memlet in state.out_edges(node):
+                    name = memlet.data.data
+                    access_info = out_access_infos[name]
+                    naxes = len(access_info.grid_subset.intervals)
+                    data_dims = nsdfg_node.sdfg.arrays[name].shape[naxes:]
+                    memlet.data.subset = make_dace_subset(
+                        nsdfg_access_infos[name], access_info, data_dims=data_dims
+                    )
+        propagate_memlets_sdfg(nsdfg_node.sdfg)
+
+        map_entry, map_exit = nsdfg_state.add_map(
+            stencil_computations[0][0].label + "_tiling_map",
+            ndrange=tiling_ranges,
+            schedule=tiling_schedule,
+            debuginfo=nsdfg_node.debuginfo,
         )
-        nsdfg_state.add_edge(
-            edge.src,
-            edge.src_conn,
-            map_exit,
-            "IN_" + name,
-            memlet=dace.Memlet(data=name, subset=new_subset),
+        nsdfg_node.symbol_mapping.update(
+            {it.axis.tile_symbol(): it.axis.tile_dace_symbol() for it in original_item.iterations}
         )
-        nsdfg_state.add_edge(map_exit, "OUT_" + name, edge.dst, edge.dst_conn, memlet=edge.data)
-        nsdfg_state.remove_edge(edge)
-    if not nsdfg_state.edges_between(map_entry, nsdfg_node):
-        nsdfg_state.add_edge(map_entry, None, nsdfg_node, None, dace.Memlet())
-    if not nsdfg_state.edges_between(nsdfg_node, map_exit):
-        nsdfg_state.add_edge(nsdfg_node, None, map_exit, None, dace.Memlet())
+        for it in original_item.iterations:
+            if it.axis.tile_symbol() not in nsdfg_node.sdfg.symbols:
+                nsdfg_node.sdfg.add_symbol(it.axis.tile_symbol(), stype=dace.int32)
+        for edge in nsdfg_state.in_edges(nsdfg_node):
+            memlet = edge.data
+            name = memlet.data
+            access_info = nsdfg_access_infos[name]
+            naxes = len(access_info.grid_subset.intervals)
+            data_dims = nsdfg_node.sdfg.arrays[name].shape[naxes:]
+            map_entry.add_in_connector("IN_" + name)
+            map_entry.add_out_connector("OUT_" + name)
+            new_subset = _make_dace_subset_symbolic_context(
+                (parent_symbolic_split[0][name], parent_symbolic_split[1]),
+                access_info,
+                data_dims=data_dims,
+                tile_sizes={it.axis: it.stride for it in original_item.iterations},
+            )
+            nsdfg_state.add_edge(edge.src, edge.src_conn, map_entry, "IN_" + name, memlet=edge.data)
+            nsdfg_state.add_edge(
+                map_entry,
+                "OUT_" + name,
+                nsdfg_node,
+                edge.dst_conn,
+                memlet=dace.Memlet(data=name, subset=new_subset),
+            )
+            nsdfg_state.remove_edge(edge)
+        for edge in nsdfg_state.out_edges(nsdfg_node):
+            memlet = edge.data
+            name = memlet.data
+            access_info = nsdfg_access_infos[name]
+            naxes = len(access_info.grid_subset.intervals)
+            data_dims = nsdfg_node.sdfg.arrays[name].shape[naxes:]
+            map_exit.add_in_connector("IN_" + name)
+            map_exit.add_out_connector("OUT_" + name)
+            new_subset = _make_dace_subset_symbolic_context(
+                (parent_symbolic_split[0][name], parent_symbolic_split[1]),
+                access_info,
+                data_dims=data_dims,
+                tile_sizes={it.axis: it.stride for it in original_item.iterations},
+            )
+            nsdfg_state.add_edge(
+                edge.src,
+                edge.src_conn,
+                map_exit,
+                "IN_" + name,
+                memlet=dace.Memlet(data=name, subset=new_subset),
+            )
+            nsdfg_state.add_edge(map_exit, "OUT_" + name, edge.dst, edge.dst_conn, memlet=edge.data)
+            nsdfg_state.remove_edge(edge)
+        if not nsdfg_state.edges_between(map_entry, nsdfg_node):
+            nsdfg_state.add_edge(map_entry, None, nsdfg_node, None, dace.Memlet())
+        if not nsdfg_state.edges_between(nsdfg_node, map_exit):
+            nsdfg_state.add_edge(nsdfg_node, None, map_exit, None, dace.Memlet())
+
+
+def partially_expand(sdfg):
+    partial_expansion = PartialExpansion()
+    subgraph = dace.sdfg.graph.SubgraphView(sdfg, sdfg.states())
+    partial_expansion.setup_match(subgraph)
+    partial_expansion.strides = {dcir.Axis.I: 8, dcir.Axis.J: 8}
+
+    if partial_expansion.can_be_applied(sdfg, subgraph):
+        partial_expansion.apply(sdfg)
+
+    return sdfg

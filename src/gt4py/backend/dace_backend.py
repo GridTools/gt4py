@@ -43,7 +43,7 @@ from gtc import common, gtir
 from gtc.dace.nodes import StencilComputation
 from gtc.dace.oir_to_dace import OirSDFGBuilder
 from gtc.dace.partial_expansion import partially_expand
-from gtc.dace.transformations import nest_sequential_map_scopes, NoEmptyEdgeTrivialMapElimination
+from gtc.dace.transformations import NoEmptyEdgeTrivialMapElimination, nest_sequential_map_scopes
 from gtc.dace.utils import array_dimensions, layout_maker_factory, replace_strides
 from gtc.gtir_to_oir import GTIRToOIR
 from gtc.passes.gtir_k_boundary import compute_k_boundary
