@@ -66,7 +66,7 @@ class SymbolTableTrait:
 
         def visit(self, node: concepts.RootNode, **kwargs: Any) -> Any:
             if hasattr(node.__class__, "_NODE_SYMBOLS_"):
-                self.visit(node.__class__._NODE_SYMBOLS_)  # type: ignore[union-attr]  # _NODE_SYMBOLS_ is optional
+                self.visit(node.__class__._NODE_SYMBOLS_)
             return super().visit(node, **kwargs)
 
         @classmethod
@@ -77,7 +77,7 @@ class SymbolTableTrait:
             # traversal here calling `generic_visit()` to directly inspect the children (after
             # adding any extra node symbols defined in the node class).
             if hasattr(node.__class__, "_NODE_SYMBOLS_"):
-                collector.visit(node.__class__._NODE_SYMBOLS_)  # type: ignore[attr-defined]  # _NODE_SYMBOLS_ is optional
+                collector.visit(node.__class__._NODE_SYMBOLS_)
             collector.generic_visit(node)
             return collector.collected_symbols
 

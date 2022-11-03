@@ -17,6 +17,7 @@ import functional.ffront.field_operator_ast as foast
 from eve import NodeTranslator, NodeVisitor, traits
 from functional.common import DimensionKind, GTSyntaxError, GTTypeError
 from functional.ffront import common_types as ct, fbuiltins, type_info
+from functional.ffront.symbol_makers import make_symbol_type_from_value
 
 
 def boolified_type(symbol_type: ct.SymbolType) -> ct.ScalarType | ct.FieldType:
@@ -167,17 +168,17 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
     def visit_FunctionDefinition(self, node: foast.FunctionDefinition, **kwargs):
         new_params = self.visit(node.params, **kwargs)
         new_body = self.visit(node.body, **kwargs)
+        new_closure_vars = self.visit(node.closure_vars, **kwargs)
         assert isinstance(new_body[-1], foast.Return)
         return_type = new_body[-1].value.type
         new_type = ct.FunctionType(
             args=[new_param.type for new_param in new_params], kwargs={}, returns=return_type
         )
-
         return foast.FunctionDefinition(
             id=node.id,
             params=new_params,
             body=new_body,
-            closure_vars=self.visit(node.closure_vars, **kwargs),
+            closure_vars=new_closure_vars,
             type=new_type,
             location=node.location,
         )
@@ -211,13 +212,13 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             )
         new_init = self.visit(node.init, **kwargs)
         if not all(
-            type_info.is_arithmetic(type_)
+            type_info.is_arithmetic(type_) or type_info.is_logical(type_)
             for type_ in type_info.primitive_constituents(new_init.type)
         ):
             raise FieldOperatorTypeDeductionError.from_foast_node(
                 node,
                 msg=f"Argument `init` to scan operator `{node.id}` must "
-                f"be an arithmetic type or a composite of arithmetic types.",
+                f"be an arithmetic type or a logical type or a composite of arithmetic and logical types.",
             )
         new_definition = self.visit(node.definition, **kwargs)
         new_type = ct.ScanOperatorType(
@@ -388,7 +389,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         right: foast.Expr,
         **kwargs,
     ) -> Optional[ct.SymbolType]:
-        logical_ops = {foast.BinaryOperator.BIT_AND, foast.BinaryOperator.BIT_OR}
+        logical_ops = {ct.BinaryOperator.BIT_AND, ct.BinaryOperator.BIT_OR}
         is_compatible = type_info.is_logical if node.op in logical_ops else type_info.is_arithmetic
 
         # check both types compatible
@@ -401,7 +402,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         left_type = cast(ct.FieldType | ct.ScalarType, left.type)
         right_type = cast(ct.FieldType | ct.ScalarType, right.type)
 
-        if node.op == foast.BinaryOperator.POW:
+        if node.op == ct.BinaryOperator.POW:
             return left_type
 
         try:
@@ -679,11 +680,13 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         )
 
     def visit_Constant(self, node: foast.Constant, **kwargs) -> foast.Constant:
-        if not node.type:
+        try:
+            type_ = make_symbol_type_from_value(node.value)
+        except GTTypeError as e:
             raise FieldOperatorTypeDeductionError.from_foast_node(
-                node, msg=f"Found a literal with unrecognized type {node.type}."
-            )
-        return node
+                node, msg="Could not deduce type of constant."
+            ) from e
+        return foast.Constant(value=node.value, location=node.location, type=type_)
 
 
 class FieldOperatorTypeDeductionError(GTSyntaxError, SyntaxWarning):
