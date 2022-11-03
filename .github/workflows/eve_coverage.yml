@@ -44,7 +44,7 @@ jobs:
             });
             fs.writeFileSync('${{github.workspace}}/' + artifact.name + '.zip', Buffer.from(download.data));
           });
-          
+
           var infoArtifact = artifacts.data.artifacts.filter((artifact) => {
             return artifact.name.startsWith("info")
           })[0];          

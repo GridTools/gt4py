@@ -153,7 +153,7 @@ class TestExtendedProtocol:
 
     def test_instance_check_shortcut_performance(self, sample_class_defs):
         pytest.skip()
-        
+
         PASS_STMT = "isinstance(ConcreteClass(), NoDataProto)"
         FAIL_STMT = "isinstance(IncompleteClass(), NoDataProto)"
         DEFINITIONS = sample_class_defs.__dict__
