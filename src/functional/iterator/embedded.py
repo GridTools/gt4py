@@ -41,9 +41,9 @@ EMBEDDED = "embedded"
 
 # Atoms
 Tag: TypeAlias = str
-IntIndex: TypeAlias = int
+IntIndex: TypeAlias = int | np.integer
 
-FieldIndex: TypeAlias = int | slice
+FieldIndex: TypeAlias = slice | IntIndex
 FieldIndexOrIndices: TypeAlias = FieldIndex | tuple[FieldIndex, ...]
 
 FieldAxis: TypeAlias = (
@@ -110,8 +110,8 @@ OffsetProvider: TypeAlias = dict[Tag, OffsetProviderElem]
 # Positions
 SparsePositionEntry = list[int]
 IncompleteSparsePositionEntry: TypeAlias = list[Optional[int]]
-PositionEntry: TypeAlias = IntIndex | SparsePositionEntry
-IncompletePositionEntry: TypeAlias = IntIndex | IncompleteSparsePositionEntry
+PositionEntry: TypeAlias = SparsePositionEntry | IntIndex
+IncompletePositionEntry: TypeAlias = IncompleteSparsePositionEntry | IntIndex
 ConcretePosition: TypeAlias = dict[Tag, PositionEntry]
 IncompletePosition: TypeAlias = dict[Tag, IncompletePositionEntry]
 
@@ -121,7 +121,7 @@ MaybePosition: TypeAlias = Optional[Position]
 
 
 def is_int_index(p: Any) -> TypeGuard[IntIndex]:
-    return isinstance(p, int)
+    return isinstance(p, (int, np.integer))
 
 
 @runtime_checkable
@@ -551,7 +551,7 @@ def group_offsets(*offsets: OffsetPart) -> tuple[list[CompleteOffset], list[Tag]
     tag_stack = []
     complete_offsets = []
     for offset in offsets:
-        if not isinstance(offset, int):
+        if not isinstance(offset, (int, np.integer)):
             tag_stack.append(offset)
         else:
             assert tag_stack
@@ -637,7 +637,8 @@ _UNDEFINED = Undefined()
 
 def _is_concrete_position(pos: Position) -> TypeGuard[ConcretePosition]:
     return all(
-        isinstance(v, int) or (isinstance(v, list) and all(isinstance(e, int) for e in v))
+        isinstance(v, (int, np.integer))
+        or (isinstance(v, list) and all(isinstance(e, (int, np.integer)) for e in v))
         for v in pos.values()
     )
 
@@ -657,7 +658,7 @@ def _make_tuple(
     as_column: bool = False,
 ) -> tuple:  # arbitrary nesting of tuples of field values or `Column`s
     if isinstance(field_or_tuple, tuple):
-        return tuple(_make_tuple(f, indices) for f in field_or_tuple)
+        return tuple(_make_tuple(f, indices, as_column=as_column) for f in field_or_tuple)
     else:
         data = field_or_tuple[indices]
         if as_column:
@@ -704,6 +705,7 @@ class MDIterator:
         return self.pos is not None
 
     def deref(self) -> Any:
+        assert not self.incomplete_offsets
         if not self.can_deref():
             # this can legally happen in cases like `if_(can_deref(inp), deref(inp), 42.)`
             # because both branches will be eagerly executed
@@ -838,7 +840,7 @@ def get_ordered_indices(
                 res.append(elem[sparse_position_tracker[axis.value]])
                 sparse_position_tracker[axis.value] += 1
             else:
-                assert isinstance(elem, (int, slice))
+                assert isinstance(elem, (int, np.integer, slice))
                 res.append(elem)
     return tuple(res)
 
@@ -954,7 +956,8 @@ class ScanArgIterator:
     def deref(self) -> Any:
         if not self.can_deref():
             return _UNDEFINED
-        return self.wrapped_iter.deref()[self.k_pos]
+        # TODO(tehrengruber): _make_tuple is for fields
+        return _make_tuple(self.wrapped_iter.deref(), self.k_pos)
 
     def can_deref(self) -> bool:
         return self.wrapped_iter.can_deref()
