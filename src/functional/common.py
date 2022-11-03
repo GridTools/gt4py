@@ -17,7 +17,18 @@ from __future__ import annotations
 import enum
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any, Generic, Protocol, TypeVar, runtime_checkable
+from typing import (
+    Any,
+    Generic,
+    Protocol,
+    SupportsFloat,
+    SupportsInt,
+    TypeAlias,
+    TypeVar,
+    runtime_checkable,
+)
+
+import numpy as np
 
 from eve.type_definitions import StrEnum
 
@@ -25,6 +36,8 @@ from eve.type_definitions import StrEnum
 DimT = TypeVar("DimT", bound="Dimension")
 DimsT = TypeVar("DimsT", bound=Sequence["Dimension"])
 DT = TypeVar("DT", bound="DType")
+
+Scalar: TypeAlias = SupportsInt | SupportsFloat | np.int32 | np.int64 | np.float32 | np.float64
 
 
 @enum.unique

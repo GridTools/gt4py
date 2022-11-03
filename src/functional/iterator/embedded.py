@@ -178,7 +178,7 @@ class Column(np.lib.mixins.NDArrayOperatorsMixin):
     and simplify dispatching in iterator ir builtins.
     """
 
-    def __init__(self, kstart: int, data: np.ndarray | np.number) -> None:
+    def __init__(self, kstart: int, data: np.ndarray | Scalar) -> None:
         self.kstart = kstart
         self.data = data
 
@@ -968,7 +968,7 @@ class ScanArgIterator:
 
 def shifted_scan_arg(k_pos: int) -> Callable[[ItIterator], ScanArgIterator]:
     def impl(it: ItIterator) -> ScanArgIterator:
-        return ScanArgIterator(it, k_pos=0 if isinstance(it.field, ConstantField) else k_pos)
+        return ScanArgIterator(it, k_pos=k_pos)
 
     return impl
 

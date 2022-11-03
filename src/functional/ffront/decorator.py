@@ -26,14 +26,13 @@ import types
 import typing
 import warnings
 from collections.abc import Callable, Iterable
-from typing import Generator, Generic, SupportsFloat, SupportsInt, TypeAlias, TypeVar
+from typing import Generator, Generic, TypeVar
 
-import numpy as np
 from devtools import debug
 
 from eve.extended_typing import Any, Optional
 from eve.utils import UIDGenerator
-from functional.common import DimensionKind, GridType, GTTypeError
+from functional.common import DimensionKind, GridType, GTTypeError, Scalar
 from functional.ffront import (
     common_types as ct,
     field_operator_ast as foast,
@@ -57,8 +56,6 @@ from functional.iterator import ir as itir
 from functional.program_processors import processor_interface as ppi
 from functional.program_processors.runners import roundtrip
 
-
-Scalar: TypeAlias = SupportsInt | SupportsFloat | np.int32 | np.int64 | np.float32 | np.float64
 
 DEFAULT_BACKEND: Callable = roundtrip.executor
 
