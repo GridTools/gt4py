@@ -1,4 +1,4 @@
-name: Eve / Test
+name: "Eve / Test"
 
 on:
   push:

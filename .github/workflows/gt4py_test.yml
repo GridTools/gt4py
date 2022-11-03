@@ -1,4 +1,4 @@
-name: Gt4py / Test
+name: "Gt4py / Test"
 
 # gt4py tests must run even if only eve is changed and gt4py is unchanged.
 on:
