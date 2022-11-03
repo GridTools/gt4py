@@ -46,9 +46,9 @@ class FixMissingLocations(ast.NodeTransformer):
 
             # the end positions are optional according to
             #  https://docs.python.org/3/library/ast.html#ast.AST.end_col_offset
-            if hasattr(self.parent_node, "end_lineno"):
+            if hasattr(parent_node, "end_lineno"):
                 node.end_lineno = parent_node.end_lineno
-            if hasattr(self.parent_node, "end_col_offset"):
+            if hasattr(parent_node, "end_col_offset"):
                 node.end_col_offset = parent_node.end_col_offset
 
         self._parent_nodes.append(node)
