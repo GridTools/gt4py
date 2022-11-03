@@ -30,30 +30,29 @@ class FixMissingLocations(ast.NodeTransformer):
     some ast nodes and is hence not a replacement for this pass.
     """
 
-    _parent_node: list[ast.AST]
+    _parent_nodes: list[ast.AST]
 
     @classmethod
     def apply(cls, node: ast.AST) -> ast.AST:
-        return cls(_parent_node=[]).visit(node)
+        return cls(_parent_nodes=[]).visit(node)
 
     def generic_visit(self, node: ast.AST) -> ast.AST:
-        has_location = hasattr(node, "lineno")
-        if has_location:
-            self._parent_node.append(node)
-        else:
-            node = copy.deepcopy(node)
-            node.lineno = self._parent_node[-1].lineno
-            node.col_offset = self._parent_node[-1].col_offset
+        if not hasattr(node, "lineno"):
+            node = copy.copy(node)
+            parent_node = self._parent_nodes[-1]
+
+            node.lineno = parent_node.lineno
+            node.col_offset = parent_node.col_offset
+
             # the end positions are optional according to
             #  https://docs.python.org/3/library/ast.html#ast.AST.end_col_offset
-            if hasattr(self._parent_node[-1], "end_lineno"):
-                node.end_lineno = self._parent_node[-1].end_lineno
-            if hasattr(self._parent_node[-1], "end_col_offset"):
-                node.end_col_offset = self._parent_node[-1].end_col_offset
+            if hasattr(self.parent_node, "end_lineno"):
+                node.end_lineno = parent_node.end_lineno
+            if hasattr(self.parent_node, "end_col_offset"):
+                node.end_col_offset = parent_node.end_col_offset
 
+        self._parent_nodes.append(node)
         result = super().generic_visit(node)
-
-        if has_location:
-            self._parent_node.pop()
+        self._parent_nodes.pop()
 
         return result
