@@ -183,6 +183,7 @@ class Column(np.lib.mixins.NDArrayOperatorsMixin):
         self.data = data
 
     def __getitem__(self, i: int) -> Any:
+        assert isinstance(self.data, (np.ndarray, Scalar))
         result = self.data[i - self.kstart] if isinstance(self.data, np.ndarray) else self.data
         # if the element type is a tuple return a regular type instead of a
         #  numpy type

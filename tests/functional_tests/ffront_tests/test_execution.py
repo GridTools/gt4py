@@ -1317,7 +1317,6 @@ def test_scalar_scan_2d():
     KDim = Dimension("K", kind=DimensionKind.VERTICAL)
     qc = np_as_located_field(IDim, JDim, KDim)(np.zeros((size, size, size)))
     scalar = np_as_located_field(IDim, JDim)(np.zeros((size, size)))
-    # scalar = 1.0
 
     @scan_operator(axis=KDim, forward=True, init=(0.0))
     def _graupel_scan_scalar(carry: float, qc_in: float, scalar: float):
