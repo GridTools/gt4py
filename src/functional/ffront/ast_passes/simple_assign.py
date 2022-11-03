@@ -84,10 +84,8 @@ class UnpackedAssignPass(NodeYielder):
     """
     Explicitly unpack assignments.
 
-    Requires AST in SSA form and assumes only single target assigns, check the following passes.
-
-     * ``SingleStaticAssignPass``
-     * ``SingleAssignTargetPass``
+    Requires an AST with only single target assigns (see
+    ``SingleAssignTargetPass``).
 
     Example
     -------
