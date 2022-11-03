@@ -46,3 +46,19 @@ jobs:
         pyversion_no_dot="${pyversion_no_dot/./}"
         pip install tox
         tox -r -e eve-py${pyversion_no_dot}
+    - name: Upload coverage.json artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: coverage-py${pyversion_no_dot}-${tox_env_factor}
+        path: coverage-py${pyversion_no_dot}-${tox_env_factor}.json
+    - name: Gather info
+      env:
+        PR_NUMBER: ${{ github.event.number }}
+      run: |
+        echo ${{ env.PR_NUMBER }} >> info-py${pyversion_no_dot}-${tox_env_factor}.txt
+    - name: Upload info artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: info-py${pyversion_no_dot}-${tox_env_factor}
+        path: info-py${pyversion_no_dot}-${tox_env_factor}.txt
+

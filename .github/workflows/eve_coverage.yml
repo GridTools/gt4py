@@ -1,61 +1,71 @@
 name: Eve / Coverage
 
 on:
-  push:
-    branches:
-    - functional
-    - ci-test-branch
-    paths: # Run only when eve sources or tests have changed.
-    - "**"
-    - "!src/**"
-    - "!tests/**"
-    - "src/eve"
-    - "tests/eve_tests"
-  pull_request:
-    branches:
-    - functional
-    - ci-test-branch
-    paths: # Run only when eve sources or tests have changed.
-    - "**"
-    - "!src/**"
-    - "!tests/**"
-    - "src/eve"
-    - "tests/eve_tests"
+  workflow_run:
+    workflows: ["Eve / Test"]
+    types: completed
 
 jobs:
-  collect:
+  upload:
     runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     env:
       PY_VERSION: "3.10"
     steps:
-    - uses: actions/checkout@v2
-
-    - name: Set up Python ${{ env.PY_VERSION }}
+    - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v2
       with:
         python-version: ${{ env.PY_VERSION }}
 
     - name: Install python dependencies
+      shell: bash
       run: |
-        python -m pip install --upgrade pip setuptools wheel
+        python -m pip install --upgrade pip coverage
 
-    - name: Gather coverage
-      run: |
-        pyversion_no_dot="${{ env.PY_VERSION }}"
-        pyversion_no_dot="${pyversion_no_dot/./}"
-        pip install tox
-        tox -r -e eve-py${pyversion_no_dot}
-
-    - name: Upload coverage.xml artifact
-      uses: actions/upload-artifact@v3
+    - name: Download coverage artifacts
+      uses: actions/github-script@v3.1.0
       with:
-        name: coverage
-        path: coverage.json
+        script: |
+          var artifacts = await github.actions.listWorkflowRunArtifacts({
+             owner: context.repo.owner,
+             repo: context.repo.repo,
+             run_id: ${{ github.event.workflow_run.id }},
+          });
+          var coverageArtifacts = artifacts.data.artifacts.filter((artifact) => {
+            return artifact.name.startsWith("coverage")
+          });
+          var fs = require('fs');
+          coverageArtifacts.forEach((artifact) => {
+            var download = await github.actions.downloadArtifact({
+               owner: context.repo.owner,
+               repo: context.repo.repo,
+               artifact_id: artifact.id,
+               archive_format: 'zip',
+            });
+            fs.writeFileSync('${{github.workspace}}/' + artifact.name + '.zip', Buffer.from(download.data));
+          });
+          
+          var infoArtifact = artifacts.data.artifacts.filter((artifact) => {
+            return artifact.name.startsWith("info")
+          })[0];          
+          var download = await github.actions.downloadArtifact({
+             owner: context.repo.owner,
+             repo: context.repo.repo,
+             artifact_id: infoArtifact.id,
+             archive_format: 'zip',
+          });
+            fs.writeFileSync('${{github.workspace}}/info.zip', Buffer.from(download.data));
+          });
+    - run: unzip coverage*.zip
+    - run: unzip info.zip
 
     - name: Upload to codecov.io
+      env:
+        PR_NUMBER: $(<info.txt)
       uses: codecov/codecov-action@v3
       with:
-        files: coverage.json
+        files: coverage*.json
         fail_ci_if_error: true
         flags: eve-all
         token: ${{ secrets.CODECOV_TOKEN }}
+        override_pr: PR_NUMBER
