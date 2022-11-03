@@ -26,6 +26,36 @@ class Namespace(StrEnum):
     EXTERNAL = "external"
 
 
+class BinaryOperator(StrEnum):
+    ADD = "plus"
+    SUB = "minus"
+    MULT = "multiplies"
+    DIV = "divides"
+    FLOOR_DIV = "floordiv"
+    BIT_AND = "and_"
+    BIT_OR = "or_"
+    POW = "power"
+
+    def __str__(self) -> str:
+        if self is self.ADD:
+            return "+"
+        elif self is self.SUB:
+            return "-"
+        elif self is self.MULT:
+            return "*"
+        elif self is self.DIV:
+            return "/"
+        elif self is self.FLOOR_DIV:
+            return "//"
+        elif self is self.BIT_AND:
+            return "&"
+        elif self is self.BIT_OR:
+            return "|"
+        elif self is self.POW:
+            return "**"
+        return "Unknown BinaryOperator"
+
+
 class SymbolType:
     pass
 
@@ -59,8 +89,8 @@ class DimensionType(SymbolType):
 
 @dataclass(frozen=True)
 class OffsetType(SymbolType):
-    source: Optional[func_common.Dimension] = None
-    target: Optional[tuple[func_common.Dimension, ...]] = None
+    source: func_common.Dimension
+    target: tuple[func_common.Dimension] | tuple[func_common.Dimension, func_common.Dimension]
 
     def __str__(self):
         return f"Offset[{self.source}, {self.target}]"
@@ -88,7 +118,7 @@ class TupleType(DataType):
     types: list[DataType]
 
     def __str__(self):
-        return f"tuple[{','.join(map(str, self.types))}]"
+        return f"tuple[{', '.join(map(str, self.types))}]"
 
 
 class CallableType:
