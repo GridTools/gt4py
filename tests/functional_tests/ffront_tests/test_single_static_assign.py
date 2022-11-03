@@ -661,3 +661,153 @@ def test_annotated_assign():
     ).strip()
 
     assert result == expected
+
+
+def test_if_true_branch_returns():
+
+    result = ast.unparse(
+        ssaify_string(
+            """
+            def f(a, b):
+                if True:
+                    a = a + 1
+                    d = 5
+                    return a
+                else:
+                    b = b + 1
+                    e = 6
+                return a, b, d, e
+            """
+        )
+    )
+
+    expected = textwrap.dedent(
+        """
+        def f(a, b):
+            if True:
+                a__0 = a + 1
+                d__0 = 5
+                return a__0
+            else:
+                b__0 = b + 1
+                e__0 = 6
+            return (a, b__0, d, e__0)
+        """
+    ).strip()
+
+    assert result == expected
+
+
+def test_if_false_branch_returns():
+
+    result = ast.unparse(
+        ssaify_string(
+            """
+            def f(a, b):
+                b = a + 3
+                if True:
+                    b = b + 1
+                    e = 6
+                else:
+                    a = a + 1
+                    d = 5
+                    return a
+                return a, b, d, e
+            """
+        )
+    )
+
+    expected = textwrap.dedent(
+        """
+        def f(a, b):
+            b__0 = a + 3
+            if True:
+                b__1 = b__0 + 1
+                e__0 = 6
+            else:
+                a__0 = a + 1
+                d__0 = 5
+                return a__0
+            return (a, b__1, d, e__0)
+        """
+    ).strip()
+
+    assert result == expected
+
+
+def test_if_both_branches_return():
+
+    result = ast.unparse(
+        ssaify_string(
+            """
+            def f(a, b):
+                if True:
+                    b = b + 1
+                    e = 6
+                    return e
+                else:
+                    a = a + 1
+                    d = 5
+                    return a
+                return a, b, d, e # this is dead-code
+            """
+        )
+    )
+
+    expected = textwrap.dedent(
+        """
+        def f(a, b):
+            if True:
+                b__0 = b + 1
+                e__0 = 6
+                return e__0
+            else:
+                a__0 = a + 1
+                d__0 = 5
+                return a__0
+            return (a, b, d, e)
+        """
+    ).strip()
+
+    assert result == expected
+
+
+def test_if_nested_returns():
+
+    result = ast.unparse(
+        ssaify_string(
+            """
+            def f(a, b):
+                if True:
+                    b = b + 1
+                    e = 6
+                    if e == b:
+                        return e
+                    else:
+                        return b
+                else:
+                    a = a + 1
+                    d = 5
+                return a, b, d, e
+            """
+        )
+    )
+
+    expected = textwrap.dedent(
+        """
+            def f(a, b):
+                if True:
+                    b__0 = b + 1
+                    e__0 = 6
+                    if e__0 == b__0:
+                        return e__0
+                    else:
+                        return b__0
+                else:
+                    a__0 = a + 1
+                    d__0 = 5
+                return (a__0, b, d__0, e)
+        """
+    ).strip()
+
+    assert result == expected
