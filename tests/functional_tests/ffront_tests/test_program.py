@@ -315,10 +315,10 @@ def test_input_kwargs(fieldview_backend):
     assert np.allclose(expected, out)
 
     with pytest.raises(GTTypeError) as exc_info_1:
-        program_input_kwargs(input_2, input_3, a=input_1, offset_provider={})
+        program_input_kwargs(input_2, input_3, a=input_1, out=out, offset_provider={})
 
     with pytest.raises(GTTypeError) as exc_info_2:
-        program_input_kwargs(input_2, input_1, c=input_1, offset_provider={})
+        program_input_kwargs(input_2, input_1, d=input_1, out=out, offset_provider={})
 
-    assert "in function definition but not in function call" in exc_info_1.value.args[0]
-    assert "Invalid argument" in exc_info_2.value.args[0]
+    assert "got multiple values for argument" in exc_info_1.value.args[0]
+    assert "Argument(s) not in function definition." in exc_info_2.value.args[0]

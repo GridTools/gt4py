@@ -99,10 +99,8 @@ def _canonicalize_args(node_params, args, kwargs) -> tuple[tuple, dict]:
 
     for param_i, param in enumerate(node_params):
         if param.id in kwargs:
-            if param.id not in ["out", "domain"] and param_i <= len(args):
-                raise GTTypeError(
-                    f"Argument {param.id} in function definition but not in function call."
-                )
+            if param.id not in ["out", "domain"] and param_i < len(args):
+                raise ProgramTypeError(f"got multiple values for argument {param.id}.")
             new_args.append(kwargs[param.id])
             kwargs.pop(param.id)
         elif param_i < len(args):
@@ -112,7 +110,7 @@ def _canonicalize_args(node_params, args, kwargs) -> tuple[tuple, dict]:
     if len(extra_args) > 0:
         raise GTTypeError(
             f"Invalid argument(s) {extra_args} in function call."
-            f" Argument(s) already a positional argument."
+            f" Argument(s) not in function definition."
         )
 
     args = tuple(new_args)
