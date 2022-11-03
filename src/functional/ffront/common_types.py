@@ -134,7 +134,7 @@ class FieldType(DataType, CallableType):
 
     def __str__(self):
         dims = "..." if self.dims is Ellipsis else f"[{', '.join(dim.value for dim in self.dims)}]"
-        return f"Field[{dims}, dtype={self.dtype}]"
+        return f"Field[{dims}, {self.dtype}]"
 
 
 @dataclass(frozen=True)

@@ -2,15 +2,18 @@ from __future__ import annotations
 
 import enum
 import textwrap
-from typing import Final
+from typing import Final, TypeAlias, Union
 
 import functional.ffront.field_operator_ast as foast
 from eve import codegen
 from eve.codegen import FormatTemplate as as_fmt, MakoTemplate as as_mako
+from functional.ffront import common_types
 
+
+PropertyIdentifier: TypeAlias = Union[type[foast.LocatedNode], tuple[type[foast.LocatedNode], str]]
 
 # see https://docs.python.org/3/reference/expressions.html#operator-precedence
-PRECEDENCE: Final = {
+PRECEDENCE: Final[dict[PropertyIdentifier, int]] = {
     # Binding or parenthesized expression, list display, dictionary display, set display
     foast.TupleExpr: 18,
     # Subscription, slicing, call, attribute reference
@@ -70,7 +73,7 @@ class Group(enum.IntEnum):
     RIGHT = 1
 
 
-def _property_identifier(node: foast.LocatedNode):
+def _property_identifier(node: foast.LocatedNode) -> PropertyIdentifier:
     if isinstance(node, foast.BinOp):
         return (foast.BinOp, node.op)
     elif isinstance(node, foast.UnaryOp):
@@ -94,7 +97,7 @@ class PrettyPrinter(codegen.TemplatedGenerator):
 
     TupleExpr = as_fmt("({', '.join(elts)}{',' if len(elts)==1 else ''})")
 
-    UnaryOperator = as_fmt("{op}{operand}")
+    UnaryOp = as_fmt("{op}{operand}")
 
     def visit_BinOp(self, node: foast.BinOp) -> str:
         left = self._parenthesize(node.left, node, Group.LEFT)
@@ -121,11 +124,27 @@ class PrettyPrinter(codegen.TemplatedGenerator):
     FunctionDefinition = as_mako(
         textwrap.dedent(
             """
-            def ${id}(${', '.join(params)}):
+            def ${id}(${', '.join(params_annotated)})${return_type}:
               ${'\\n  '.join(body)}
             """
         ).strip()
     )
+
+    def visit_FunctionDefinition(self, node: foast.FunctionDefinition):
+        params = self.visit(node.params)
+        types = [
+            str(param.type) if not isinstance(param.type, common_types.DeferredSymbolType) else None
+            for param in node.params
+        ]
+        params_annotated = [
+            f"{param}: {type_}" if type_ else param for param, type_ in zip(params, types)
+        ]
+        return_type = (
+            f" -> {node.type.returns}"
+            if not isinstance(node.type, common_types.DeferredSymbolType)
+            else ""
+        )
+        return self.generic_visit(node, params_annotated=params_annotated, return_type=return_type)
 
     FieldOperator = as_fmt("@field_operator\n{definition}")
 
@@ -133,18 +152,22 @@ class PrettyPrinter(codegen.TemplatedGenerator):
         "@scan_operator(axis={axis}, forward={forward}, init={init})\n{definition}"
     )
 
-    def _precedence(self, node) -> int:
+    def _precedence(self, node: foast.LocatedNode) -> int:
         prop_id = _property_identifier(node)
         if prop_id in PRECEDENCE:
             return PRECEDENCE[prop_id]
         return max(PRECEDENCE.values()) + 1
 
-    def _grouping(self, node) -> Group:
+    def _grouping(self, node: foast.LocatedNode) -> Group:
         prop_id = _property_identifier(node)
         return Group.RIGHT if prop_id in RIGHT_GROUPING else Group.LEFT
 
-    def _parenthesize(self, inner_node, outer_node, group=None) -> str:
-        result = self.visit(inner_node)
+    def _parenthesize(
+        self,
+        inner_node: foast.LocatedNode,
+        outer_node: foast.LocatedNode,
+        group: Group | None = None,
+    ) -> str:
         inner_precedence = self._precedence(inner_node)
         outer_precedence = self._precedence(outer_node)
         parenthesize = False
@@ -152,4 +175,22 @@ class PrettyPrinter(codegen.TemplatedGenerator):
             parenthesize = True
         elif group is not None and inner_precedence == outer_precedence:
             parenthesize = group != self._grouping(inner_node)
-        return f"({result})" if parenthesize else result
+        inner_node_str = self.visit(inner_node)
+        return f"({inner_node_str})" if parenthesize else inner_node_str
+
+
+def pretty_format(node: foast.LocatedNode) -> str:
+    """
+    Pretty print (to string) an `foast.LocatedNode`.
+
+    >>> from functional.common import Field
+    >>> from functional.ffront.decorator import field_operator
+    >>> @field_operator
+    ... def field_op(a: Field[..., int]):
+    ...     return a+1
+    >>> print(pretty_format(field_op.foast_node))
+    @field_operator
+    def field_op(a):
+      return a + 1
+    """
+    return PrettyPrinter().visit(node)

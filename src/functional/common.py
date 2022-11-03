@@ -42,6 +42,9 @@ class Dimension:
     value: str
     kind: DimensionKind = DimensionKind.HORIZONTAL
 
+    def __str__(self):
+        return f'Dimension(value="{self.value}", kind={self.kind})'
+
 
 class DType:
     ...

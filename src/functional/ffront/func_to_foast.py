@@ -295,6 +295,9 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             )
         return [self.visit(node, **kwargs) for node in nodes]
 
+    def visit_Expr(self, node: ast.Expr) -> foast.Expr:
+        return self.visit(node.value)
+
     def visit_Name(self, node: ast.Name, **kwargs) -> foast.Name:
         return foast.Name(id=node.id, location=self._make_loc(node))
 

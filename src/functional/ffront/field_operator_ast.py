@@ -12,7 +12,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 import warnings
-from typing import Any, Generic, Optional, TypeVar, Union
+from typing import Any, Generic, TypeVar, Union
 
 from eve import Coerced, Node, SourceLocation, SymbolName, SymbolRef
 from eve.traits import SymbolTableTrait
@@ -178,13 +178,17 @@ class FunctionDefinition(LocatedNode, SymbolTableTrait):
     params: list[DataSymbol]
     body: list[Stmt]
     closure_vars: list[Symbol]
-    type: Optional[ct.FunctionType] = None  # noqa A003  # shadowing a python builtin
+    type: Union[ct.FunctionType, ct.DeferredSymbolType] = ct.DeferredSymbolType(  # noqa: A003
+        constraint=ct.FunctionType
+    )
 
 
 class FieldOperator(LocatedNode, SymbolTableTrait):
     id: Coerced[SymbolName]  # noqa: A003  # shadowing a python builtin
     definition: FunctionDefinition
-    type: Optional[ct.FieldOperatorType] = None  # noqa A003  # shadowing a python builtin
+    type: Union[ct.FieldOperatorType, ct.DeferredSymbolType] = ct.DeferredSymbolType(  # noqa: A003
+        constraint=ct.FieldOperatorType
+    )
 
 
 class ScanOperator(LocatedNode, SymbolTableTrait):
@@ -193,4 +197,6 @@ class ScanOperator(LocatedNode, SymbolTableTrait):
     forward: Constant
     init: Constant
     definition: FunctionDefinition  # scan pass
-    type: Optional[ct.ScanOperatorType] = None  # noqa A003 # shadowing a python builtin
+    type: Union[ct.ScanOperatorType, ct.DeferredSymbolType] = ct.DeferredSymbolType(  # noqa: A003
+        constraint=ct.ScanOperatorType
+    )
