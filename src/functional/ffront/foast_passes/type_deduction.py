@@ -402,7 +402,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         left_type = cast(ct.FieldType | ct.ScalarType, left.type)
         right_type = cast(ct.FieldType | ct.ScalarType, right.type)
 
-        if node.op in [ct.BinaryOperator.POW, ct.BinaryOperator.MOD]:
+        if node.op in ct.BinaryOperator.POW:
             return left_type
 
         try:

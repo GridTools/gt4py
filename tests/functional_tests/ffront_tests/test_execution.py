@@ -143,7 +143,7 @@ def test_mod(fieldview_backend):
 
     @field_operator(backend=fieldview_backend)
     def mod_fieldop(inp1: Field[[IDim], float64]) -> Field[[IDim], float64]:
-        return inp1 % 2
+        return inp1 % 2.0
 
     mod_fieldop(a, out=b, offset_provider={})
 
