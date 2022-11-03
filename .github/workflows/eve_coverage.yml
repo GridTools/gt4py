@@ -13,7 +13,7 @@ jobs:
       PY_VERSION: "3.10"
     steps:
     - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v2
+      uses: actions/setup-python@v4
       with:
         python-version: ${{ env.PY_VERSION }}
 
