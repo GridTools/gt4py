@@ -96,17 +96,17 @@ class PrettyPrinter(codegen.TemplatedGenerator):
 
     UnaryOperator = as_fmt("{op}{operand}")
 
-    def visit_BinOp(self, node: foast.BinOp):
+    def visit_BinOp(self, node: foast.BinOp) -> str:
         left = self._parenthesize(node.left, node, Group.LEFT)
         right = self._parenthesize(node.right, node, Group.RIGHT)
         return f"{left} {node.op} {right}"
 
-    def visit_Compare(self, node: foast.Compare):
+    def visit_Compare(self, node: foast.Compare) -> str:
         left = self._parenthesize(node.left, node, Group.LEFT)
         right = self._parenthesize(node.right, node, Group.RIGHT)
         return f"{left} {node.op} {right}"
 
-    def visit_TernaryExpr(self, node: foast.TernaryExpr):
+    def visit_TernaryExpr(self, node: foast.TernaryExpr) -> str:
         cond = self.visit(node.condition)
         true_expr = self._parenthesize(node.true_expr, node, Group.LEFT)
         false_expr = self._parenthesize(node.false_expr, node, Group.RIGHT)
@@ -133,17 +133,17 @@ class PrettyPrinter(codegen.TemplatedGenerator):
         "@scan_operator(axis={axis}, forward={forward}, init={init})\n{definition}"
     )
 
-    def _precedence(self, node):
+    def _precedence(self, node) -> int:
         prop_id = _property_identifier(node)
         if prop_id in PRECEDENCE:
             return PRECEDENCE[prop_id]
         return max(PRECEDENCE.values()) + 1
 
-    def _grouping(self, node):
+    def _grouping(self, node) -> Group:
         prop_id = _property_identifier(node)
         return Group.RIGHT if prop_id in RIGHT_GROUPING else Group.LEFT
 
-    def _parenthesize(self, inner_node, outer_node, group=None):
+    def _parenthesize(self, inner_node, outer_node, group=None) -> str:
         result = self.visit(inner_node)
         inner_precedence = self._precedence(inner_node)
         outer_precedence = self._precedence(outer_node)
