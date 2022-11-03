@@ -121,9 +121,9 @@ class PrettyPrinter(codegen.TemplatedGenerator):
     FunctionDefinition = as_mako(
         textwrap.dedent(
             """
-        def ${id}(${', '.join(params)}):
-          ${'\\n  '.join(body)}
-    """
+            def ${id}(${', '.join(params)}):
+              ${'\\n  '.join(body)}
+            """
         ).strip()
     )
 
