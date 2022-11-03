@@ -280,7 +280,7 @@ def test_dimensions_domain():
         empty_domain_program(a, out_field, offset_provider={})
 
 
-def test_input_kwargs_1(fieldview_backend):
+def test_input_kwargs(fieldview_backend):
     size = 10
     input_1 = np_as_located_field(IDim, JDim)(np.ones((size, size)))
     input_2 = np_as_located_field(IDim, JDim)(np.ones((size, size)) * 2)
@@ -305,6 +305,8 @@ def test_input_kwargs_1(fieldview_backend):
         out: Field[[IDim, JDim], float64],
     ):
         fieldop_input_kwargs(c, a, b, out=out)
+
+    fieldop_input_kwargs(input_1, b=input_2, c=input_3, out=out, offset_provider={})
 
     program_input_kwargs(input_1, b=input_2, c=input_3, out=out, offset_provider={})
     assert np.allclose(expected, out)

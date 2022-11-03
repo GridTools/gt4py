@@ -94,6 +94,27 @@ def _filter_closure_vars_by_type(closure_vars: dict[str, Any], *types: type) -> 
     return {name: value for name, value in closure_vars.items() if isinstance(value, types)}
 
 
+def _canonicalize_args(node_params, args, kwargs) -> tuple[tuple, dict]:
+    new_args = []
+
+    for param_i, param in enumerate(node_params):
+        if param_i < len(args):
+            new_args.append(args[param_i])
+        elif param.id in kwargs:
+            new_args.append(kwargs[param.id])
+            kwargs.pop(param.id)
+
+    extra_args = set(list(kwargs.keys())) - set(["out", "domain"])
+    if len(extra_args) > 0:
+        raise GTTypeError(
+            f"Invalid argument(s) {extra_args} in function call."
+            f" Either argument(s) not in function definition or already a positional argument."
+        )
+
+    args = tuple(new_args)
+    return args, kwargs
+
+
 def _deduce_grid_type(
     requested_grid_type: Optional[GridType],
     offsets_and_dimensions: Iterable[FieldOffset | Dimension],
@@ -280,27 +301,6 @@ class Program:
             offset_provider=offset_provider,
         )
 
-    def _canonicalize_args(self, *args, **kwargs) -> tuple[tuple, dict]:
-        past_params = self.past_node.params
-        new_args = []
-
-        for param_i, param in enumerate(past_params):
-            if param_i < len(args):
-                new_args.append(args[param_i])
-            elif param.id in kwargs:
-                new_args.append(kwargs[param.id])
-                kwargs.pop(param.id)
-
-        extra_args = set(list(kwargs.keys())) - set(["out"])
-        if len(extra_args) > 0:
-            raise GTTypeError(
-                f"Invalid argument(s) {extra_args} in function call."
-                f" Either argument(s) not in function definition or already a positional argument."
-            )
-
-        args = tuple(new_args)
-        return args, kwargs
-
     def _validate_args(self, *args, **kwargs) -> None:
         arg_types = [symbol_makers.make_symbol_type_from_value(arg) for arg in args]
         kwarg_types = {}
@@ -320,7 +320,7 @@ class Program:
     def _process_args(self, args: tuple, kwargs: dict) -> tuple[tuple, tuple, dict[str, Any]]:
         # if parameter is in signature but not in args, move it from kwargs to args
         if len(kwargs) > 0:
-            args, kwargs = self._canonicalize_args(*args, **kwargs)
+            args, kwargs = _canonicalize_args(self.past_node.params, args, kwargs)
 
         self._validate_args(*args, **kwargs)
 
@@ -578,6 +578,8 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         offset_provider: dict[str, Dimension],
         **kwargs,
     ) -> None:
+
+        args, kwargs = _canonicalize_args(self.foast_node.definition.params, args, kwargs)
         # TODO(tehrengruber): check all offset providers are given
         # deduce argument types
         arg_types = []
