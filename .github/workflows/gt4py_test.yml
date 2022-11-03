@@ -55,14 +55,14 @@ jobs:
       uses: actions/upload-artifact@v3
       with:
         name: coverage-py${{ matrix.python-version }}-${{ matrix.os }}-{{ matrix.tox_env_factor }}
-        path: coverage-py${{ matrix.python-version }}-${{ matrix.os }}-{{ matrix.tox_env_factor }}.json
+        path: coverage.json
     - name: Gather info
       env:
         PR_NUMBER: ${{ github.event.number }}
       run: |
-        echo ${{ env.PR_NUMBER }} >> info-py${{ matrix.python-version }}-${{ matrix.os }}-{{ matrix.tox_env_factor }}.txt
+        echo ${{ env.PR_NUMBER }} >> info.txt
     - name: Upload info artifact
       uses: actions/upload-artifact@v3
       with:
         name: info-py${{ matrix.python-version }}-${{ matrix.os }}-{{ matrix.tox_env_factor }}
-        path: info-py${{ matrix.python-version }}-${{ matrix.os }}-{{ matrix.tox_env_factor }}.txt
+        path: info.txt

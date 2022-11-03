@@ -50,15 +50,15 @@ jobs:
       uses: actions/upload-artifact@v3
       with:
         name: coverage-py${{ matrix.python-version }}-${{ matrix.os }}
-        path: coverage-py${{ matrix.python-version }}-${{ matrix.os }}.json
+        path: coverage.json
     - name: Gather info
       env:
         PR_NUMBER: ${{ github.event.number }}
       run: |
-        echo ${{ env.PR_NUMBER }} >> info-py${{ matrix.python-version }}-${{ matrix.os }}.txt
+        echo ${{ env.PR_NUMBER }} >> info.txt
     - name: Upload info artifact
       uses: actions/upload-artifact@v3
       with:
         name: info-py${{ matrix.python-version }}-${{ matrix.os }}
-        path: info-py${{ matrix.python-version }}-${{ matrix.os }}.txt
+        path: info.txt
 
