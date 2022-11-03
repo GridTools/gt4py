@@ -640,3 +640,24 @@ def test_broken_if():
     ).strip()
 
     assert result == expected
+
+
+def test_annotated_assign():
+
+    result = ast.unparse(
+        ssaify_string(
+            """
+            a: int # annotations always apply to the next assignment
+            a = a + 1
+            """
+        )
+    )
+
+    expected = textwrap.dedent(
+        """
+        a__0: int
+        a__0 = a + 1
+        """
+    ).strip()
+
+    assert result == expected
