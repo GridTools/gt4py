@@ -43,7 +43,7 @@ from functional.iterator.embedded import (
 from functional.program_processors.runners import gtfn_cpu, roundtrip
 
 
-@pytest.fixture(params=[roundtrip.executor, gtfn_cpu.run_gtfn])
+@pytest.fixture(params=[roundtrip.executor])
 def fieldview_backend(request):
     yield request.param
 
@@ -1292,3 +1292,55 @@ def test_constant_closure_vars():
     output = np_as_located_field(IDim)(np.zeros((1,), dtype=np.float32))
     consume_constants(input, out=output, offset_provider={})
     assert np.allclose(np.asarray(output), constants.PI * constants.E)
+
+
+def test_simple_if():
+    size = 10
+    a = np_as_located_field(IDim, JDim)(np.ones((size, size)))
+    b = np_as_located_field(IDim, JDim)(2*np.ones((size, size)))
+    out = np_as_located_field(IDim, JDim)(np.zeros((size, size)))
+
+    @field_operator
+    def simple_if(a: Field[[IDim, JDim], float64], b: Field[[IDim, JDim], float64], condition: bool):
+        if condition:
+            result = a
+            result2 = a+1.
+        else:
+            result = b
+            result2 = b+1.
+        return result
+
+    simple_if(a, b, False, out=out, offset_provider={})
+
+    # @field_operator
+    # def simple_if(a: Field[[IDim, JDim], float64],
+    #               b: Field[[IDim, JDim], float64], condition: bool):
+    #     if condition:
+    #         if not condition:
+    #             inner = a
+    #         else:
+    #             inner = a+1
+    #         result = a
+    #     else:
+    #         inner = 1 # TODO: remove
+    #         result = b
+    #     return result
+    #
+    # @field_operator()
+    # def simple_if(inp: Field[[IDim, JDim], float64], condition: bool):
+    #     if condition:
+    #         tmp = a
+    #         result = tmp
+    #     else:
+    #         tmp = b
+    #         result = tmp
+    #     return result
+    #
+    # @field_operator()
+    # def simple_if(inp: Field[[IDim, JDim], float64], condition: bool):
+    #     if condition:
+    #         tmp = a
+    #         result = tmp
+    #     else:
+    #         result = b
+    #     return result

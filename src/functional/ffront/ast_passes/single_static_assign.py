@@ -99,7 +99,7 @@ class SingleStaticAssignPass(ast.NodeTransformer):
     def visit_If(self, node: ast.If):
         prev_name_counter = self.name_counter
 
-        node.test = self.visit(node.test)
+        node.test = self._rename(node.test)
 
         self.name_counter = {**prev_name_counter}
         node.body = [self.visit(el) for el in node.body]

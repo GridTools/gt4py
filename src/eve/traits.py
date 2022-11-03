@@ -60,7 +60,11 @@ class SymbolTableTrait:
                         )
                     self.collected_symbols[symbol_name] = node
 
-            if not isinstance(node, SymbolTableTrait):
+            if hasattr(node.annex, "_common_symbols"):
+                # ensure we have no collisions
+                assert not set(self.collected_symbols.keys()) & set(node.annex._common_symbols.keys())
+                self.collected_symbols = {**self.collected_symbols, **node.annex._common_symbols}
+            elif not isinstance(node, SymbolTableTrait):
                 # Stop recursion if the node opens a new scope (i.e. node with SymbolTableTrait)
                 self.generic_visit(node)
 

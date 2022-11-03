@@ -226,15 +226,18 @@ class FieldOperatorLowering(NodeTranslator):
         current_expr = self.visit(return_stmt, **kwargs)
 
         for assign in reversed(assigns):
-            current_expr = im.let(*self._visit_assign(cast(foast.Assign, assign), **kwargs))(
+            current_expr = im.let(*self._visit_stmt(cast(foast.Assign, assign), **kwargs))(
                 current_expr
             )
 
         return current_expr
 
-    def _visit_assign(self, node: foast.Assign, **kwargs) -> tuple[itir.Sym, itir.Expr]:
-        sym = self.visit(node.target, **kwargs)
-        expr = self.visit(node.value, **kwargs)
+    def _visit_stmt(self, node: foast.Assign | foast.IfStmt, **kwargs) -> tuple[itir.Sym, itir.Expr]:
+        if isinstance(node, foast.Assign):
+            sym = self.visit(node.target, **kwargs)
+            expr = self.visit(node.value, **kwargs)
+        elif isinstance(node, foast.IfStmt):
+            breakpoint()
         return sym, expr
 
     def visit_Return(self, node: foast.Return, **kwargs) -> itir.Expr:

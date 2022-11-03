@@ -359,6 +359,15 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             type=ct.DeferredSymbolType(constraint=ct.DataType),
         )
 
+    def visit_If(self, node: ast.If) -> foast.IfStmt:
+        loc = self._make_loc(node)
+        return foast.IfStmt(
+            condition=self.visit(node.test),
+            true_branch=foast.BlockStmt(stmts=[self.visit(el) for el in node.body], location=loc),
+            false_branch=foast.BlockStmt(stmts=[self.visit(el) for el in node.orelse], location=loc),
+            location=loc
+        )
+
     def visit_Compare(self, node: ast.Compare, **kwargs) -> foast.Compare:
         if len(node.ops) != 1 or len(node.comparators) != 1:
             raise FieldOperatorSyntaxError.from_AST(

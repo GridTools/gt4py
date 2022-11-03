@@ -146,6 +146,24 @@ class Return(Stmt):
     value: Expr
 
 
+class BlockStmt(Stmt, SymbolTableTrait):
+    stmts: list[Stmt]
+
+
+from eve import datamodels
+
+class IfStmt(Stmt):
+    condition: Expr
+    true_branch: BlockStmt
+    false_branch: BlockStmt
+
+    # TODO: use future annotations
+    @datamodels.root_validator
+    def _collect_common_symbols(cls: type["IfStmt"], instance: "IfStmt") -> None:
+        common_symbol_names = set(instance.true_branch.annex.symtable.keys()) & set(instance.false_branch.annex.symtable.keys())
+        instance.annex._common_symbols = {sym_name: Symbol(id=sym_name, type=ct.DeferredSymbolType(constraint=None), location=instance.location) for sym_name in common_symbol_names}
+
+
 class FunctionDefinition(LocatedNode, SymbolTableTrait):
     id: Coerced[SymbolName]  # noqa: A003  # shadowing a python builtin
     params: list[DataSymbol]
