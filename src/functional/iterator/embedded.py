@@ -275,6 +275,14 @@ def tuple_get(i, tup):
 
 @builtins.make_tuple.register(EMBEDDED)
 def make_tuple(*args):
+    if isinstance(args[0], Column):
+        assert all(isinstance(arg, Column) for arg in args)
+        first = tuple(arg[0] for arg in args)
+        col = Column(args[0].kstart, np.zeros(len(_column_range), dtype=_column_dtype(first)))
+        col[0] = first
+        for i in _column_range[1:]:
+            col[i] = tuple(arg[i] for arg in args)
+        return col
     return (*args,)
 
 
@@ -652,15 +660,15 @@ def _make_tuple(
     if isinstance(field_or_tuple, tuple):
         if column_axis_idx is not None:
             indices_cpy = list(indices)
-            indices_cpy[column_axis_idx] = _column_range.start
-            first = tuple(_make_tuple(f, indices_cpy) for f in field_or_tuple)
+            indices_cpy[column_axis_idx] = indices_cpy[column_axis_idx][0]
+            first = tuple(_make_tuple(f, tuple(indices_cpy)) for f in field_or_tuple)
             col = Column(
                 _column_range.start, np.zeros(len(_column_range), dtype=_column_dtype(first))
             )
             col[0] = first
-            for i in _column_range[1:]:
-                indices_cpy[column_axis_idx] = i
-                col[i] = tuple(_make_tuple(f, indices_cpy) for f in field_or_tuple)
+            for i, idx in enumerate(indices[column_axis_idx]):
+                indices_cpy[column_axis_idx] = idx
+                col[i] = tuple(_make_tuple(f, tuple(indices_cpy)) for f in field_or_tuple)
             return col
         else:
             return tuple(_make_tuple(f, indices) for f in field_or_tuple)
@@ -1162,6 +1170,7 @@ def fendef_embedded(fun: Callable[..., None], *args: Any, **kwargs: Any):
             promoted_ins = [promote_scalars(inp) for inp in ins]
             ins_iters = list(
                 make_in_iterator(
+                    # TODO(havogt) wrap inp in TupleField?
                     inp,
                     pos,
                     kwargs["offset_provider"],
