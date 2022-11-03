@@ -11,8 +11,10 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
+from __future__ import annotations
 
 import ast
+import typing
 
 from functional.ffront.fbuiltins import TYPE_BUILTIN_NAMES
 
@@ -24,6 +26,64 @@ def _make_assign(target: str, source: str, location_node: ast.AST):
     for node in ast.walk(result):
         ast.copy_location(node, location_node)
     return result
+
+
+class Versioning:
+    """Helper class to keep track of whether versioning (definedness)."""
+
+    # invariant: if a version is an `int`, it's not negative
+    _versions: dict[str, None | int]
+
+    def __init__(self):
+        self._versions = {}
+
+    def define(self, name: str) -> None:
+        if name not in self._versions:
+            self._versions[name] = None
+
+    def assign(self, name: str) -> None:
+        if self.is_versioned(name):
+            self._versions[name] = typing.cast(int, self._versions[name]) + 1
+        else:
+            self._versions[name] = 0
+
+    def is_defined(self, name: str) -> bool:
+        return name in self._versions
+
+    def is_versioned(self, name: str) -> bool:
+        return self.is_defined(name) and self._versions[name] is not None
+
+    def __getitem__(self, name: str) -> None | int:
+        return self._versions[name]
+
+    def __iter__(self) -> typing.Iterator[tuple[str, None | int]]:
+        return iter(self._versions.items())
+
+    def copy(self) -> Versioning:
+        copy = Versioning()
+        copy._versions = {**self._versions}
+        return copy
+
+    @staticmethod
+    def merge(a: Versioning, b: Versioning) -> Versioning:
+        versions_a, version_b = a._versions, b._versions
+        names = set(versions_a.keys()) & set(version_b.keys())
+
+        merged_versioning = Versioning()
+        merged_versions = merged_versioning._versions
+
+        for name in names:
+            merged_versions[name] = Versioning._merge_versions(versions_a[name], version_b[name])
+
+        return merged_versioning
+
+    @staticmethod
+    def _merge_versions(a: None | int, b: None | int) -> None | int:
+        if a is None:
+            return b
+        elif b is None:
+            return a
+        return max(a, b)
 
 
 class SingleStaticAssignPass(ast.NodeTransformer):
