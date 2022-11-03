@@ -28,6 +28,16 @@ def _make_assign(target: str, source: str, location_node: ast.AST):
     return result
 
 
+def is_guaranteed_to_return(node: ast.stmt | list[ast.stmt]) -> bool:
+    if isinstance(node, list):
+        return any(is_guaranteed_to_return(child) for child in node)
+    if isinstance(node, ast.Return):
+        return True
+    if isinstance(node, ast.If):
+        return is_guaranteed_to_return(node.body) and is_guaranteed_to_return(node.orelse)
+    return False
+
+
 class Versioning:
     """Helper class to keep track of whether versioning (definedness)."""
 
