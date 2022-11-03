@@ -158,6 +158,11 @@ def floordiv_(left, right):
     return call_("floordiv")(left, right)
 
 
+def mod_(left, right):
+    """Create a modulo FunCall, shorthand for ``call("mod")(left, right)``."""
+    return call_("mod")(left, right)
+
+
 def and__(left, right):
     """Create an and_ FunCall, shorthand for ``call("and_")(left, right)``."""
     return call_("and_")(left, right)

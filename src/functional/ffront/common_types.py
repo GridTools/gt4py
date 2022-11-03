@@ -35,6 +35,7 @@ class BinaryOperator(StrEnum):
     BIT_AND = "and_"
     BIT_OR = "or_"
     POW = "power"
+    MOD = "mod"
 
     def __str__(self) -> str:
         if self is self.ADD:
@@ -53,6 +54,8 @@ class BinaryOperator(StrEnum):
             return "|"
         elif self is self.POW:
             return "**"
+        elif self is self.MOD:
+            return "%"
         return "Unknown BinaryOperator"
 
 
