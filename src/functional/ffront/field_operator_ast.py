@@ -11,8 +11,7 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-
-
+import warnings
 from typing import Any, Generic, Optional, TypeVar, Union
 
 from eve import Coerced, Node, SourceLocation, SymbolName, SymbolRef
@@ -23,6 +22,19 @@ from functional.ffront import common_types as ct
 
 class LocatedNode(Node):
     location: SourceLocation
+
+    def __str__(self):
+        from functional.ffront.foast_pretty_printer import PrettyPrinter
+
+        name = type(self).__name__
+        if hasattr(PrettyPrinter, name) or hasattr(PrettyPrinter, f"visit_{name}"):
+            try:
+                return PrettyPrinter().visit(self)
+            except Exception as e:
+                warnings.warn(
+                    f"Pretty printing failed for node `{super().__str__()}` with error message {e.__repr__()}."
+                )
+        return super().__str__()
 
 
 SymbolT = TypeVar("SymbolT", bound=ct.SymbolType)
@@ -113,6 +125,21 @@ class CompareOperator(StrEnum):
     LTE = "less_equal"
     GT = "greater"
     GTE = "greater_equal"
+
+    def __str__(self) -> str:
+        if self is self.EQ:
+            return "=="
+        elif self is self.NOTEQ:
+            return "!="
+        elif self is self.LT:
+            return "<"
+        elif self is self.LTE:
+            return "<="
+        elif self is self.GT:
+            return ">"
+        elif self is self.GTE:
+            return ">="
+        return "Unknown CompareOperator"
 
 
 class Compare(Expr):
