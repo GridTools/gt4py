@@ -650,7 +650,7 @@ class FieldAccessInfo(eve.Node):
         )
 
     def untile(self, tile_axes: Sequence[Axis]) -> "FieldAccessInfo":
-        res_intervals = dict()
+        res_intervals = {}
         for axis, interval in self.grid_subset.intervals.items():
             if isinstance(interval, TileInterval) and axis in tile_axes:
                 res_intervals[axis] = self.global_grid_subset.intervals[axis]

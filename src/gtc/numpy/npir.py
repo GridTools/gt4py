@@ -175,7 +175,7 @@ class NativeFuncCall(common.NativeFuncCall[Expr], Expr):
 
 # --- Statements ---
 @eve.utils.noninstantiable
-class Stmt(eve.Node):
+class Stmt(common.Stmt):
     pass
 
 

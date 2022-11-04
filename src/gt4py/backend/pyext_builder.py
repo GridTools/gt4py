@@ -219,7 +219,6 @@ def build_pybind_ext(
     if build_ext_class is not None:
         setuptools_args["cmdclass"] = {"build_ext": build_ext_class}
 
-    verbose=True
     if verbose:
         setuptools_args["script_args"].append("-v")
         setuptools.setup(**setuptools_args)

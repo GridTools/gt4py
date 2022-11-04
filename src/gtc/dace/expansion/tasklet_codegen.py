@@ -36,7 +36,7 @@ class TaskletCodegen(eve.codegen.TemplatedGenerator, eve.VisitorWithSymbolTableT
         access_info: dcir.FieldAccessInfo,
         decl: dcir.FieldDecl,
         **kwargs,
-    ):
+    ) -> str:
         int_sizes: List[Optional[int]] = []
         for i, axis in enumerate(access_info.axes()):
             memlet_shape = access_info.shape
