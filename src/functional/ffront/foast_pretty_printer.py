@@ -99,17 +99,17 @@ class PrettyPrinter(codegen.TemplatedGenerator):
 
     UnaryOp = as_fmt("{op}{operand}")
 
-    def visit_BinOp(self, node: foast.BinOp) -> str:
+    def visit_BinOp(self, node: foast.BinOp, **kwargs) -> str:
         left = self._parenthesize(node.left, node, Group.LEFT)
         right = self._parenthesize(node.right, node, Group.RIGHT)
         return f"{left} {node.op} {right}"
 
-    def visit_Compare(self, node: foast.Compare) -> str:
+    def visit_Compare(self, node: foast.Compare, **kwargs) -> str:
         left = self._parenthesize(node.left, node, Group.LEFT)
         right = self._parenthesize(node.right, node, Group.RIGHT)
         return f"{left} {node.op} {right}"
 
-    def visit_TernaryExpr(self, node: foast.TernaryExpr) -> str:
+    def visit_TernaryExpr(self, node: foast.TernaryExpr, **kwargs) -> str:
         cond = self.visit(node.condition)
         true_expr = self._parenthesize(node.true_expr, node, Group.LEFT)
         false_expr = self._parenthesize(node.false_expr, node, Group.RIGHT)
@@ -130,7 +130,7 @@ class PrettyPrinter(codegen.TemplatedGenerator):
         ).strip()
     )
 
-    def visit_FunctionDefinition(self, node: foast.FunctionDefinition):
+    def visit_FunctionDefinition(self, node: foast.FunctionDefinition, **kwargs):
         params = self.visit(node.params)
         types = [
             str(param.type) if not isinstance(param.type, common_types.DeferredSymbolType) else None
@@ -182,15 +182,14 @@ class PrettyPrinter(codegen.TemplatedGenerator):
 def pretty_format(node: foast.LocatedNode) -> str:
     """
     Pretty print (to string) an `foast.LocatedNode`.
-
     >>> from functional.common import Field
     >>> from functional.ffront.decorator import field_operator
     >>> @field_operator
-    ... def field_op(a: Field[..., int]):
+    ... def field_op(a: Field[..., int]) -> Field[..., int]:
     ...     return a+1
     >>> print(pretty_format(field_op.foast_node))
     @field_operator
-    def field_op(a):
+    def field_op(a: Field[..., int64]) -> Field[..., int64]:
       return a + 1
     """
     return PrettyPrinter().visit(node)
