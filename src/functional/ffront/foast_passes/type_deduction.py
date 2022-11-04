@@ -33,7 +33,7 @@ def boolified_type(symbol_type: ct.SymbolType) -> ct.ScalarType | ct.FieldType:
 
     >>> field_t = ct.FieldType(dims=[Dimension(value="I")], dtype=ct.ScalarType(kind=ct.ScalarKind))
     >>> print(boolified_type(field_t))
-    Field[[I], dtype=bool]
+    Field[[I], bool]
     """
     shape = None
     if type_info.is_concrete(symbol_type):
