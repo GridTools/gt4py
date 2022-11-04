@@ -21,15 +21,12 @@ import dace.subsets
 
 import eve
 import gtc.common as common
-from eve import codegen
 from eve.codegen import FormatTemplate as as_fmt
 from gtc import daceir as dcir
 from gtc.dace.utils import get_axis_bound_str, make_dace_subset
 
 
-class TaskletCodegen(codegen.TemplatedGenerator):
-    contexts = (eve.SymbolTableTrait.symtable_merger,)  # type: ignore
-
+class TaskletCodegen(eve.codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
     ScalarAccess = as_fmt("{name}")
 
     def _visit_offset(
@@ -82,7 +79,7 @@ class TaskletCodegen(codegen.TemplatedGenerator):
         *,
         is_target,
         sdfg_ctx,
-        symtable: ChainMap[common.SymbolRef, dcir.Decl],
+        symtable: ChainMap[eve.SymbolRef, dcir.Decl],
         **kwargs,
     ):
 

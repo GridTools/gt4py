@@ -20,10 +20,8 @@ import dace.library
 import dace.subsets
 
 import eve
-from eve.iterators import iter_tree
-from gtc import common
+from gtc import common, oir
 from gtc import daceir as dcir
-from gtc import oir
 from gtc.definitions import Extent
 
 
@@ -45,7 +43,7 @@ def get_dace_debuginfo(node: common.LocNode):
         return dace.dtypes.DebugInfo(0)
 
 
-class HorizontalIntervalRemover(eve.NodeMutator):
+class HorizontalIntervalRemover(eve.NodeTranslator):
     def visit_HorizontalMask(self, node: common.HorizontalMask, *, axis: "dcir.Axis"):
         mask_attrs = dict(i=node.i, j=node.j)
         mask_attrs[axis.lower()] = self.visit(getattr(node, axis.lower()))
@@ -55,7 +53,7 @@ class HorizontalIntervalRemover(eve.NodeMutator):
         return common.HorizontalInterval(start=None, end=None)
 
 
-class HorizontalMaskRemover(eve.NodeMutator):
+class HorizontalMaskRemover(eve.NodeTranslator):
     def visit_Tasklet(self, node: "dcir.Tasklet"):
 
         res_body = []
@@ -153,7 +151,7 @@ class HorizontalExecutionSplitter(eve.NodeTranslator):
         res_hes = []
         for stmts in res_he_stmts:
             accessed_scalars = (
-                iter_tree(stmts).if_isinstance(oir.ScalarAccess).getattr("name").to_set()
+                eve.walk_values(stmts).if_isinstance(oir.ScalarAccess).getattr("name").to_set()
             )
             declarations = [decl for decl in node.declarations if decl.name in accessed_scalars]
             res_he = oir.HorizontalExecution(declarations=declarations, body=stmts)

@@ -153,7 +153,7 @@ def test_dtype_propagation(node, expected):
 
 
 @pytest.mark.parametrize(
-    "invalid_node,expected_regex",
+    "invalid_node,expected_regex,error",
     [
         (
             lambda: TernaryOp(
@@ -162,6 +162,7 @@ def test_dtype_propagation(node, expected):
                 false_expr=DummyExpr(),
             ),
             r"Condition.*must be bool.*",
+            ValueError,
         ),
         (
             lambda: TernaryOp(
@@ -170,15 +171,14 @@ def test_dtype_propagation(node, expected):
                 false_expr=DummyExpr(dtype=ANOTHER_ARITHMETIC_TYPE),
             ),
             r"Type mismatch",
+            ValueError,
         ),
         (
             lambda: IfStmt(cond=DummyExpr(dtype=ARITHMETIC_TYPE), true_branch=[], false_branch=[]),
             r"Condition.*must be bool.*",
+            ValueError,
         ),
-        (
-            lambda: Literal(value="foo"),
-            r"required keyword-only argument: 'dtype'",
-        ),
+        (lambda: Literal(value="foo"), r"required keyword-only argument: 'dtype'", TypeError),
         (
             lambda: BinaryOp(
                 left=DummyExpr(dtype=ARITHMETIC_TYPE),
@@ -186,6 +186,7 @@ def test_dtype_propagation(node, expected):
                 op=A_ARITHMETIC_OPERATOR,
             ),
             r"Type mismatch",
+            ValueError,
         ),
         (
             lambda: BinaryOp(
@@ -194,6 +195,7 @@ def test_dtype_propagation(node, expected):
                 op=A_ARITHMETIC_OPERATOR,
             ),
             r"Bool.* expr.* not allowed with arithmetic op.*",
+            ValueError,
         ),
         (
             lambda: BinaryOp(
@@ -202,18 +204,22 @@ def test_dtype_propagation(node, expected):
                 op=LogicalOperator.AND,
             ),
             r"Arithmetic expr.* not allowed in bool.* op.*",
+            ValueError,
         ),
         (
             lambda: UnaryOp(op=A_LOGICAL_UNARY_OPERATOR, expr=DummyExpr(dtype=ARITHMETIC_TYPE)),
             r"Unary op.*only .* with bool.*",
+            ValueError,
         ),
         (
             lambda: UnaryOp(op=A_ARITHMETIC_UNARY_OPERATOR, expr=DummyExpr(dtype=DataType.BOOL)),
             r"Unary op.* not allowed with bool.*",
+            ValueError,
         ),
         (
             lambda: NativeFuncCall(func=NativeFunction.SIN, args=[DummyExpr(), DummyExpr()]),
             r"accepts 1 arg.* 2.*passed",
+            ValueError,
         ),
         (
             lambda: AssignStmt(
@@ -221,11 +227,12 @@ def test_dtype_propagation(node, expected):
                 right=DummyExpr(dtype=ANOTHER_ARITHMETIC_TYPE),
             ),
             r"Type mismatch",
+            ValueError,
         ),
     ],
 )
-def test_invalid_nodes(invalid_node, expected_regex):
-    with pytest.raises(ValueError, match=expected_regex):
+def test_invalid_nodes(invalid_node, expected_regex, error):
+    with pytest.raises(error, match=expected_regex):
         invalid_node()
 
 

@@ -22,10 +22,10 @@ import dace.data
 import numpy as np
 
 import eve
-import gtc.oir as oir
-from eve import NodeVisitor
-from gtc import common
+from gtc import oir, common
+
 from gtc import daceir as dcir
+
 from gtc.common import CartesianOffset, data_type_to_typestr
 from gtc.passes.oir_optimizations.utils import compute_horizontal_block_extents
 
@@ -124,7 +124,7 @@ def axes_list_from_flags(flags):
 
 
 @lru_cache(maxsize=None)
-def get_dace_symbol(name: common.SymbolRef, dtype: common.DataType = common.DataType.INT32):
+def get_dace_symbol(name: eve.SymbolRef, dtype: common.DataType = common.DataType.INT32):
     return dace.symbol(name, dtype=data_type_to_dace_typeclass(dtype))
 
 
@@ -133,7 +133,7 @@ def data_type_to_dace_typeclass(data_type):
     return dace.dtypes.typeclass(dtype.type)
 
 
-class AccessInfoCollector(NodeVisitor):
+class AccessInfoCollector(eve.NodeVisitor):
     def __init__(self, collect_read: bool, collect_write: bool, include_full_domain: bool = False):
         self.collect_read: bool = collect_read
         self.collect_write: bool = collect_write
@@ -310,7 +310,7 @@ class AccessInfoCollector(NodeVisitor):
                 intervals[axis] = dcir.IndexWithExtent(
                     axis=axis,
                     value=axis.iteration_symbol(),
-                    extent=[offset[axis.to_idx()], offset[axis.to_idx()]],
+                    extent=(offset[axis.to_idx()], offset[axis.to_idx()]),
                 )
         grid_subset = dcir.GridSubset(intervals=intervals)
         return dcir.FieldAccessInfo(

@@ -23,11 +23,8 @@ import dace.library
 import dace.subsets
 
 import eve
-import eve.utils
-import gtc.common as common
-import gtc.oir as oir
-from eve import NodeTranslator, SymbolRef
-from eve.iterators import iter_tree
+from gtc import common, oir
+
 from gtc import daceir as dcir
 from gtc.dace.expansion_specification import Loop, Map, Sections, Stages
 from gtc.dace.nodes import StencilComputation
@@ -46,11 +43,10 @@ from .utils import remove_horizontal_region
 
 def _access_iter(node: oir.HorizontalExecution, get_outputs: bool):
     if get_outputs:
-        iterator = eve.utils.xiter(
-            itertools.chain(
-                *node.walk_values().if_isinstance(oir.AssignStmt).getattr("left").map(iter_tree)
-            )
-        ).if_isinstance(oir.FieldAccess)
+        iterator = filter(
+            lambda node: isinstance(node, oir.FieldAccess),
+            node.walk_values().if_isinstance(oir.AssignStmt).getattr("left"),
+        )
     else:
 
         def _iterator():
@@ -111,7 +107,7 @@ def _all_stmts_same_region(scope_nodes, axis: dcir.Axis, interval):
     def all_statements_in_region(scope_nodes):
         return all(
             isinstance(stmt, dcir.HorizontalRestriction)
-            for tasklet in iter_tree(scope_nodes).if_isinstance(dcir.Tasklet)
+            for tasklet in eve.walk_values(scope_nodes).if_isinstance(dcir.Tasklet)
             for stmt in tasklet.stmts
         )
 
@@ -133,7 +129,7 @@ def _all_stmts_same_region(scope_nodes, axis: dcir.Axis, interval):
                         if mask.intervals[axis.to_idx()].end is None
                         else mask.intervals[axis.to_idx()].end.offset,
                     )
-                    for mask in iter_tree(scope_nodes).if_isinstance(common.HorizontalMask)
+                    for mask in eve.walk_values(scope_nodes).if_isinstance(common.HorizontalMask)
                 )
             )
             == 1
@@ -147,7 +143,7 @@ def _all_stmts_same_region(scope_nodes, axis: dcir.Axis, interval):
     )
 
 
-class DaCeIRBuilder(NodeTranslator):
+class DaCeIRBuilder(eve.NodeTranslator):
     @dataclass
     class GlobalContext:
         library_node: StencilComputation
@@ -155,7 +151,7 @@ class DaCeIRBuilder(NodeTranslator):
 
         def get_dcir_decls(
             self,
-            access_infos: Dict[SymbolRef, dcir.FieldAccessInfo],
+            access_infos: Dict[eve.SymbolRef, dcir.FieldAccessInfo],
             symbol_collector: "DaCeIRBuilder.SymbolCollector",
         ) -> List[dcir.FieldDecl]:
             return [
@@ -165,7 +161,7 @@ class DaCeIRBuilder(NodeTranslator):
 
         def _get_dcir_decl(
             self,
-            field: SymbolRef,
+            field: eve.SymbolRef,
             access_info: dcir.FieldAccessInfo,
             symbol_collector: "DaCeIRBuilder.SymbolCollector",
         ) -> dcir.FieldDecl:
@@ -181,7 +177,7 @@ class DaCeIRBuilder(NodeTranslator):
             return dcir.FieldDecl(
                 name=field,
                 dtype=oir_decl.dtype,
-                strides=[str(s) for s in dace_array.strides],
+                strides=tuple(str(s) for s in dace_array.strides),
                 data_dims=oir_decl.data_dims,
                 access_info=access_info,
                 storage=dcir.StorageType.from_dace_storage(dace.StorageType.Default),
@@ -272,7 +268,7 @@ class DaCeIRBuilder(NodeTranslator):
             else:
                 assert self.symbol_decls[name].dtype == dtype
 
-        def remove_symbol(self, name: SymbolRef):
+        def remove_symbol(self, name: eve.SymbolRef):
             if name in self.symbol_decls:
                 del self.symbol_decls[name]
 
@@ -311,13 +307,16 @@ class DaCeIRBuilder(NodeTranslator):
     def visit_VariableKOffset(self, node: oir.VariableKOffset, **kwargs):
         return dcir.VariableKOffset(k=self.visit(node.k, **kwargs))
 
+    def visit_LocalScalar(self, node: oir.LocalScalar, **kwargs: Any) -> dcir.LocalScalarDecl:
+        return dcir.LocalScalarDecl(name=node.name, dtype=node.dtype)
+
     def visit_FieldAccess(
         self,
         node: oir.FieldAccess,
         *,
         is_target: bool,
-        targets: Set[SymbolRef],
-        var_offset_fields: Set[SymbolRef],
+        targets: Set[eve.SymbolRef],
+        var_offset_fields: Set[eve.SymbolRef],
         **kwargs: Any,
     ) -> Union[dcir.IndexAccess, dcir.ScalarAccess]:
         if node.name in var_offset_fields:
@@ -617,7 +616,7 @@ class DaCeIRBuilder(NodeTranslator):
                 if _all_stmts_same_region(scope_nodes, axis, interval):
                     masks = cast(
                         List[common.HorizontalMask],
-                        iter_tree(scope_nodes).if_isinstance(common.HorizontalMask).to_list(),
+                        eve.walk_values(scope_nodes).if_isinstance(common.HorizontalMask).to_list(),
                     )
                     horizontal_mask_interval = next(
                         iter((mask.intervals[axis.to_idx()] for mask in masks))

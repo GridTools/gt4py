@@ -49,9 +49,9 @@ class OirToNpir(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         self, node: oir.Temporary, *, field_extents: Dict[str, Extent], **kwargs: Any
     ) -> npir.TemporaryDecl:
         temp_extent = field_extents[node.name]
-        offset = [-ext[0] for ext in temp_extent]
+        offset = tuple(-ext[0] for ext in temp_extent)
         assert all(off >= 0 for off in offset)
-        padding = [ext[1] - ext[0] for ext in temp_extent]
+        padding = tuple(ext[1] - ext[0] for ext in temp_extent)
         return npir.TemporaryDecl(
             name=node.name,
             dtype=node.dtype,

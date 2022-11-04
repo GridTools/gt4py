@@ -180,8 +180,6 @@ class Stmt(eve.Node):
 
 
 class VectorAssign(common.AssignStmt[VectorLValue, Expr], Stmt):
-    left: VectorLValue
-    right: Expr
     # NOTE HorizontalMask in npir differs from common.HorizontalMask (see above)
     horizontal_mask: Optional[HorizontalMask] = None
 
