@@ -338,8 +338,8 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
     def visit_Pow(self, node: ast.Pow, **kwargs) -> ct.BinaryOperator:
         return ct.BinaryOperator.POW
 
-    def visit_Mod(self, node: ast.Mod, **kwargs) -> None:
-        raise FieldOperatorSyntaxError.from_AST(node, msg="`%` operator not supported!")
+    def visit_Mod(self, node: ast.Mod, **kwargs) -> ct.BinaryOperator:
+        return ct.BinaryOperator.MOD
 
     def visit_BitAnd(self, node: ast.BitAnd, **kwargs) -> ct.BinaryOperator:
         return ct.BinaryOperator.BIT_AND

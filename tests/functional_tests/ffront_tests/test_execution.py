@@ -133,6 +133,23 @@ def test_power(fieldview_backend):
     assert np.allclose(a.array() ** 2, b)
 
 
+def test_mod(fieldview_backend):
+    if fieldview_backend == gtfn_cpu.run_gtfn:
+        pytest.xfail("gtfn does not yet support `%` operator.")
+
+    size = 10
+    a = np_as_located_field(IDim)(np.random.randn((size)))
+    b = np_as_located_field(IDim)(np.zeros((size)))
+
+    @field_operator(backend=fieldview_backend)
+    def mod_fieldop(inp1: Field[[IDim], float64]) -> Field[[IDim], float64]:
+        return inp1 % 2.0
+
+    mod_fieldop(a, out=b, offset_provider={})
+
+    assert np.allclose(a.array() % 2, b)
+
+
 def test_power_arithmetic(fieldview_backend):
     if fieldview_backend == gtfn_cpu.run_gtfn:
         pytest.xfail("gtfn does not yet support math builtins")

@@ -411,6 +411,11 @@ def floordiv(first, second):
     return first // second
 
 
+@builtins.mod.register(EMBEDDED)
+def mod(first, second):
+    return first % second
+
+
 @builtins.eq.register(EMBEDDED)
 def eq(first, second):
     return first == second

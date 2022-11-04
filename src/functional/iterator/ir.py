@@ -122,6 +122,7 @@ BUILTINS = {
     "minus",
     "multiplies",
     "divides",
+    "mod",
     "floordiv",
     "eq",
     "less",
