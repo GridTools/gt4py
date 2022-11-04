@@ -13,6 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from typing import Any, ChainMap, List, Optional, Union
+import copy
 
 import dace
 import dace.data
@@ -53,15 +54,10 @@ class TaskletCodegen(eve.codegen.TemplatedGenerator, eve.VisitorWithSymbolTableT
         ]
         for axis in access_info.variable_offset_axes:
             access_info = access_info.restricted_to_index(axis)
+        context_info = copy.deepcopy(access_info)
+        context_info.variable_offset_axes = []
         ranges = make_dace_subset(
-            access_info,
-            dcir.FieldAccessInfo(
-                grid_subset=access_info.grid_subset,
-                global_grid_subset=access_info.global_grid_subset,
-                dynamic_access=access_info.dynamic_access,
-                variable_offset_axes=[],
-            ),
-            data_dims=(),  # data_index added in visit_IndexAccess
+            access_info, context_info, data_dims=()  # data_index added in visit_IndexAccess
         )
         ranges.offset(sym_offsets, negative=False)
         res = dace.subsets.Range([r for i, r in enumerate(ranges.ranges) if int_sizes[i] != 1])
