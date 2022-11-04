@@ -643,24 +643,35 @@ def _get_axes(
     )
 
 
+def _single_vertical_idx(indices, column_axis_idx, column_index):
+    transformed = tuple(
+        index if i != column_axis_idx else column_index for i, index in enumerate(indices)
+    )
+    return transformed
+
+
 def _make_tuple(
     field_or_tuple: LocatedField | tuple,  # arbitrary nesting of tuples of LocatedField
     indices: int | slice | tuple[int | slice, ...],
     *,
     column_axis_idx: int = None,
-) -> tuple:  # arbitrary nesting of tuples of field values or `Column`s
+) -> npt.DTypeLike | Column | tuple:  # arbitrary nesting of tuples of field values or `Column`s
     if isinstance(field_or_tuple, tuple):
         if column_axis_idx is not None:
-            indices_cpy = list(indices)
-            indices_cpy[column_axis_idx] = _column_range.start
-            first = tuple(_make_tuple(f, indices_cpy) for f in field_or_tuple)
+            # construct a Column of tuples
+            first = tuple(
+                _make_tuple(f, _single_vertical_idx(indices, column_axis_idx, _column_range.start))
+                for f in field_or_tuple
+            )
             col = Column(
                 _column_range.start, np.zeros(len(_column_range), dtype=_column_dtype(first))
             )
             col[0] = first
             for i in _column_range[1:]:
-                indices_cpy[column_axis_idx] = i
-                col[i] = tuple(_make_tuple(f, indices_cpy) for f in field_or_tuple)
+                col[i] = tuple(
+                    _make_tuple(f, _single_vertical_idx(indices, column_axis_idx, i))
+                    for f in field_or_tuple
+                )
             return col
         else:
             return tuple(_make_tuple(f, indices) for f in field_or_tuple)
