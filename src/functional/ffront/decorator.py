@@ -105,13 +105,10 @@ def _canonicalize_args(node_params, args, kwargs) -> tuple[tuple, dict]:
             kwargs.pop(param.id)
         elif param_i < len(args):
             new_args.append(args[param_i])
-
-    extra_args = set(list(kwargs.keys())) - set(["out", "domain"])
-    if len(extra_args) > 0:
-        raise ProgramTypeError(
-            f"Invalid argument(s) {extra_args} in function call."
-            f" Argument(s) not in function definition."
-        )
+        else:
+            # case when parameter is in function definition but not in function call
+            # e.g. function definition includes 3 parameters, but only 2 were given as inputs
+            pass
 
     args = tuple(new_args)
     return args, kwargs
