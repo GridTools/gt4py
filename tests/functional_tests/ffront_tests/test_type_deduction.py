@@ -173,8 +173,8 @@ def callable_type_info_cases():
             ],
             {},
             [
-                r"Expected 0-th argument to be of type Field\[\[K\], dtype=int64\], but got Field\[\[K\], dtype=float64\]",
-                r"Expected 1-th argument to be of type Field\[\[K\], dtype=int64\], but got Field\[\[K\], dtype=float64\]",
+                r"Expected 0-th argument to be of type Field\[\[K\], int64\], but got Field\[\[K\], float64\]",
+                r"Expected 1-th argument to be of type Field\[\[K\], int64\], but got Field\[\[K\], float64\]",
             ],
             ct.FieldType(dims=[KDim], dtype=float_type),
         ),
@@ -236,8 +236,8 @@ def callable_type_info_cases():
             ],
             {},
             [
-                r"Expected 0-th argument to be of type tuple\[Field\[\[I, J, K\], dtype=int64\], "
-                r"Field\[..., dtype=int64\]\], but got tuple\[Field\[\[I, J, K\], dtype=int64\]\]."
+                r"Expected 0-th argument to be of type tuple\[Field\[\[I, J, K\], int64\], "
+                r"Field\[..., int64\]\], but got tuple\[Field\[\[I, J, K\], int64\]\]."
             ],
             ct.FieldType(dims=[IDim, JDim, KDim], dtype=float_type),
         ),
