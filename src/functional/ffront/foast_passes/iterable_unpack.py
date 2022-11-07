@@ -73,7 +73,7 @@ class UnpackedAssignPass(NodeTranslator, traits.VisitorWithSymbolTableTrait):
                     tuple_name = foast.Name(
                         id=tuple_symbol.id, type=el_type, location=tuple_symbol.location
                     )
-                    if isinstance(index, tuple):
+                    if isinstance(index, tuple):  # handle starred target
                         lower, upper = index[0], index[1]
                         new_tuple = foast.TupleExpr(
                             elts=values.elts[lower:upper],
