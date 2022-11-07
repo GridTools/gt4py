@@ -59,8 +59,8 @@ def primitive_constituents(
 
     >>> tuple_type = ct.TupleType(types=[int_type, field_type])
     >>> primitive_constituents(tuple_type).to_list()  # doctest: +ELLIPSIS
-
     [ScalarType(...), FieldType(...)]
+
     >>> nested_tuple = ct.TupleType(types=[field_type, tuple_type])
     >>> primitive_constituents(nested_tuple).to_list()  # doctest: +ELLIPSIS
     [FieldType(...), ScalarType(...), FieldType(...)]
