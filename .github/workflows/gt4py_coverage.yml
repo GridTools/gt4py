@@ -13,6 +13,7 @@ jobs:
     env:
       PY_VERSION: "3.10"
     steps:
+    - uses: actions/checkout@v3
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v4
       with:
@@ -36,7 +37,7 @@ jobs:
             return artifact.name.startsWith("coverage")
           });
           var fs = require('fs');
-          coverageArtifacts.forEach((artifact) => {
+          for (const artifact of coverageArtifacts) {
             var download = await github.actions.downloadArtifact({
                owner: context.repo.owner,
                repo: context.repo.repo,
@@ -44,7 +45,7 @@ jobs:
                archive_format: 'zip',
             });
             fs.writeFileSync('${{github.workspace}}/' + artifact.name + '.zip', Buffer.from(download.data));
-          });
+          }
 
           var infoArtifact = artifacts.data.artifacts.filter((artifact) => {
             return artifact.name.startsWith("info")
@@ -55,18 +56,21 @@ jobs:
              artifact_id: infoArtifact.id,
              archive_format: 'zip',
           });
-            fs.writeFileSync('${{github.workspace}}/info.zip', Buffer.from(download.data));
-          });
-    - run: unzip coverage*.zip
-    - run: unzip info.zip
+          fs.writeFileSync('${{github.workspace}}/info.zip', Buffer.from(download.data));
+    - run: unzip 'coverage*.zip'
+    - run: |
+        unzip info.zip
+        python ci/coverage_info_to_env.py
 
     - name: Upload to codecov.io
-      env:
-        PR_NUMBER: $(<info.txt)
       uses: codecov/codecov-action@v3
       with:
         files: coverage*.json
         fail_ci_if_error: true
         flags: gt4py-all
         token: ${{ secrets.CODECOV_TOKEN }}
-        override_pr: PR_NUMBER
+        override_build: ${{ env.CODECOV_OVERRIDE_BUILD }}
+        override_branch: ${{ env.CODECOV_OVERRIDE_BRANCH }}
+        override_commit: ${{ env.CODECOV_OVERRIDE_COMMIT }}
+        override_pr: ${{ env.CODECOV_OVERRIDE_PR }}
+        override_tag: ${{ env.CODECOV_OVERRIDE_TAG }}

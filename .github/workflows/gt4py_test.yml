@@ -5,12 +5,10 @@ on:
   push:
     branches:
     - functional
-    - ci-test-branch
     # Run on any file change.
   pull_request:
     branches:
     - functional
-    - ci-test-branch
     # Run on any file change.
 
 jobs:
@@ -18,7 +16,7 @@ jobs:
     strategy:
       matrix:
         python-version: ["3.10"]
-        tox-env-factors: ["base", "atlas"]
+        tox-env-factor: ["base", "atlas"]
         os: ["ubuntu-latest"]
       fail-fast: false
 
@@ -48,21 +46,25 @@ jobs:
       run: |
         pyversion_no_dot="${{ matrix.python-version }}"
         pyversion_no_dot="${pyversion_no_dot/./}"
-        tox_env_factor="${{ matrix.tox-env-factors }}"
         pip install tox clang-format
-        tox -r -e gt4py-py${pyversion_no_dot}-${tox_env_factor}
+        tox -r -e gt4py-py${pyversion_no_dot}-${{ matrix.tox-env-factor }}
+        mv coverage.json coverage-py${{ matrix.python-version }}-${{ matrix.os }}-${{ matrix.tox-env-factor }}.json
     - name: Upload coverage.json artifact
       uses: actions/upload-artifact@v3
       with:
-        name: coverage-py${{ matrix.python-version }}-${{ matrix.os }}-{{ matrix.tox_env_factor }}
-        path: coverage.json
+        name: coverage-py${{ matrix.python-version }}-${{ matrix.os }}-${{ matrix.tox-env-factor }}
+        path: coverage-py${{ matrix.python-version }}-${{ matrix.os }}-${{ matrix.tox-env-factor }}.json
     - name: Gather info
-      env:
-        PR_NUMBER: ${{ github.event.number }}
       run: |
-        echo ${{ env.PR_NUMBER }} >> info.txt
+        echo ${{ github.ref_type }} >> info.txt
+        echo ${{ github.ref }} >> info.txt
+        echo ${{ github.sha }} >> info.txt
+        echo ${{ github.event.number }} >> info.txt
+        echo ${{ github.event.pull_request.head.ref }} >> info.txt
+        echo ${{ github.event.pull_request.head.sha }} >> info.txt
+        echo ${{ github.run_id }} >> info.txt
     - name: Upload info artifact
       uses: actions/upload-artifact@v3
       with:
-        name: info-py${{ matrix.python-version }}-${{ matrix.os }}-{{ matrix.tox_env_factor }}
+        name: info-py${{ matrix.python-version }}-${{ matrix.os }}-${{ matrix.tox-env-factor }}
         path: info.txt
