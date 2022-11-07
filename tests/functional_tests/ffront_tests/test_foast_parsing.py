@@ -172,14 +172,15 @@ def test_binary_pow():
 
 
 def test_binary_mod():
-    def power(inp: Field[..., "int64"]):
+    def modulo(inp: Field[..., "int64"]):
         return inp % 3
 
-    with pytest.raises(
-        FieldOperatorSyntaxError,
-        match=(r"`%` operator not supported!"),
-    ):
-        _ = FieldOperatorParser.apply_to_function(power)
+    parsed = FieldOperatorParser.apply_to_function(modulo)
+
+    assert parsed.body[-1].value.type == common_types.FieldType(
+        dims=Ellipsis,
+        dtype=common_types.ScalarType(kind=common_types.ScalarKind.INT64, shape=None),
+    )
 
 
 def test_bool_and():

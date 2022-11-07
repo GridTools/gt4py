@@ -42,10 +42,11 @@ def test_separate():
             """
         )
     )
-    assert len(lines) == 3
-    assert lines[0] == "a = foo"
-    assert lines[1] == "b = foo"
-    assert lines[2] == "c = foo"
+    assert len(lines) == 4
+    assert lines[0] == "__sat_tmp0 = foo"
+    assert lines[1] == "a = __sat_tmp0"
+    assert lines[2] == "b = __sat_tmp0"
+    assert lines[3] == "c = __sat_tmp0"
 
 
 def test_separate_unpacking():
@@ -57,9 +58,10 @@ def test_separate_unpacking():
             """
         )
     )
-    assert len(lines) == 2
-    assert lines[0] == "a = [d, e]"
-    assert lines[1] == "[b, c] = [d, e]"
+    assert len(lines) == 3
+    assert lines[0] == "__sat_tmp0 = [d, e]"
+    assert lines[1] == "a = __sat_tmp0"
+    assert lines[2] == "[b, c] = __sat_tmp0"
 
 
 def test_unpack():
@@ -106,8 +108,9 @@ def test_nested_multi_target_unpack():
             )
         )
     )
-    assert len(lines) == 4
-    assert lines[0] == "a = [d, e]"
-    assert lines[1] == "__tuple_tmp_0 = [d, e]"
-    assert lines[2] == "b = __tuple_tmp_0[0]"
-    assert lines[3] == "c = __tuple_tmp_0[1]"
+    assert len(lines) == 5
+    assert lines[0] == "__sat_tmp0 = [d, e]"
+    assert lines[1] == "a = __sat_tmp0"
+    assert lines[2] == "__tuple_tmp_0 = __sat_tmp0"
+    assert lines[3] == "b = __tuple_tmp_0[0]"
+    assert lines[4] == "c = __tuple_tmp_0[1]"

@@ -275,6 +275,11 @@ def fmod(*args):
 
 
 @builtin_dispatch
+def mod(*args):
+    raise BackendNotSelectedError()
+
+
+@builtin_dispatch
 def power(*args):
     raise BackendNotSelectedError()
 
@@ -320,6 +325,8 @@ BUILTINS = {
     "minus",
     "multiplies",
     "divides",
+    "floordiv",
+    "mod",
     "make_tuple",
     "tuple_get",
     "if_",
