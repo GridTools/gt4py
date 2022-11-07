@@ -76,7 +76,7 @@ class OIRToCUIR(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             name=node.name, dtype=node.dtype, dimensions=node.dimensions, data_dims=node.data_dims
         )
 
-    def visit_ScalarDecl(self, node: oir.ScalarDecl, **kwargs: Any) -> cuir.FieldDecl:
+    def visit_ScalarDecl(self, node: oir.ScalarDecl, **kwargs: Any) -> cuir.ScalarDecl:
         return cuir.ScalarDecl(name=node.name, dtype=node.dtype)
 
     def visit_UnaryOp(self, node: oir.UnaryOp, **kwargs: Any) -> cuir.UnaryOp:
@@ -187,7 +187,7 @@ class OIRToCUIR(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
 
     def visit_ScalarAccess(
         self, node: oir.ScalarAccess, *, symtable: Dict[str, Any], **kwargs: Any
-    ) -> cuir.ScalarAccess:
+    ) -> Union[cuir.ScalarAccess, cuir.FieldAccess]:
         if isinstance(symtable.get(node.name, None), oir.ScalarDecl):
             return cuir.FieldAccess(
                 name=node.name, offset=common.CartesianOffset.zero(), dtype=node.dtype

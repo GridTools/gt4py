@@ -231,7 +231,7 @@ class Node(datamodels.DataModel, trees.Tree, kw_only=True):  # type: ignore[call
     walk_items = trees.walk_items
     walk_values = trees.walk_values
 
-    def copy(self, update: Dict[str, Any]) -> "Node":
+    def copy(self: _T, update: Dict[str, Any]) -> _T:
         new_node = copy.deepcopy(self)
         for k, v in update.items():
             setattr(new_node, k, v)

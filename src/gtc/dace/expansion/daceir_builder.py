@@ -195,7 +195,8 @@ class DaCeIRBuilder(eve.NodeTranslator):
         def push_axes_extents(self, axes_extents) -> "DaCeIRBuilder.IterationContext":
             res = self.grid_subset
             for axis, extent in axes_extents.items():
-                if isinstance(res.intervals[axis], dcir.DomainInterval):
+                axis_interval = res.intervals[axis]
+                if isinstance(axis_interval, dcir.DomainInterval):
                     res__interval = dcir.DomainInterval(
                         start=dcir.AxisBound(
                             level=common.LevelMarker.START, offset=extent[0], axis=axis
@@ -205,13 +206,13 @@ class DaCeIRBuilder(eve.NodeTranslator):
                         ),
                     )
                     res = res.set_interval(axis, res__interval)
-                elif isinstance(res.intervals[axis], dcir.TileInterval):
+                elif isinstance(axis_interval, dcir.TileInterval):
                     tile_interval = dcir.TileInterval(
                         axis=axis,
                         start_offset=extent[0],
                         end_offset=extent[1],
-                        tile_size=res.intervals[axis].tile_size,
-                        domain_limit=res.intervals[axis].domain_limit,
+                        tile_size=axis_interval.tile_size,
+                        domain_limit=axis_interval.domain_limit,
                     )
                     res = res.set_interval(axis, tile_interval)
                 # if is IndexWithExtent, do nothing.
@@ -318,6 +319,7 @@ class DaCeIRBuilder(eve.NodeTranslator):
         var_offset_fields: Set[eve.SymbolRef],
         **kwargs: Any,
     ) -> Union[dcir.IndexAccess, dcir.ScalarAccess]:
+        res: Union[dcir.IndexAccess, dcir.ScalarAccess]
         if node.name in var_offset_fields:
             res = dcir.IndexAccess(
                 name=node.name + "__",
@@ -660,6 +662,7 @@ class DaCeIRBuilder(eve.NodeTranslator):
                 read_memlets = res_read_memlets
                 write_memlets = res_write_memlets
 
+                assert not isinstance(interval, dcir.IndexWithExtent)
                 index_range = dcir.Range.from_axis_and_interval(axis, interval)
                 symbol_collector.remove_symbol(index_range.var)
                 ranges.append(index_range)

@@ -56,10 +56,12 @@ class FieldAccess(common.FieldAccess[Expr, VariableKOffset], Expr):  # type: ign
 class AssignStmt(common.AssignStmt[Union[ScalarAccess, FieldAccess], Expr], Stmt):
     @datamodels.validator("left")
     def no_horizontal_offset_in_assignment(
-        self, attribute: datamodels.Attribute, v: Union[ScalarAccess, FieldAccess]
+        self, attribute: datamodels.Attribute, value: Union[ScalarAccess, FieldAccess]
     ) -> None:
-        if isinstance(v, FieldAccess) and (v.offset.i != 0 or v.offset.j != 0):
-            raise ValueError("Lhs of assignment must not have a horizontal offset.")
+        if isinstance(value, FieldAccess):
+            offsets = value.offset.to_dict()
+            if offsets["i"] != 0 or offsets["j"] != 0:
+                raise ValueError("Lhs of assignment must not have a horizontal offset.")
 
     _dtype_validation = common.assign_stmt_dtype_validation(strict=True)
 
@@ -72,7 +74,6 @@ class MaskStmt(Stmt):
     def mask_is_boolean_field_expr(self, attribute: datamodels.Attribute, v: Expr) -> None:
         if v.dtype != common.DataType.BOOL:
             raise ValueError("Mask must be a boolean expression.")
-        return v
 
 
 class HorizontalRestriction(common.HorizontalRestriction[Stmt], Stmt):
@@ -130,30 +131,35 @@ class Temporary(FieldDecl):
     pass
 
 
+def _check_interval(instance: Union["Interval", "UnboundedInterval"]) -> None:
+    start, end = instance.start, instance.end
+    if (
+        start is not None
+        and start.level == common.LevelMarker.END
+        and end is not None
+        and end.level == common.LevelMarker.START
+    ):
+        raise ValueError("Start level must be smaller or equal end level")
+
+    if (
+        start is not None
+        and end is not None
+        and start.level == end.level
+        and not start.offset < end.offset
+    ):
+        raise ValueError(
+            "Start offset must be smaller than end offset if start and end levels are equal"
+        )
+
+
 class Interval(LocNode):
     start: AxisBound
     end: AxisBound
 
+    @classmethod
     @datamodels.root_validator
     def check(cls: Type["Interval"], instance: "Interval") -> None:
-        start, end = instance.start, instance.end
-        if (
-            start is not None
-            and start.level == common.LevelMarker.END
-            and end is not None
-            and end.level == common.LevelMarker.START
-        ):
-            raise ValueError("Start level must be smaller or equal end level")
-
-        if (
-            start is not None
-            and end is not None
-            and start.level == end.level
-            and not start.offset < end.offset
-        ):
-            raise ValueError(
-                "Start offset must be smaller than end offset if start and end levels are equal"
-            )
+        _check_interval(instance)
 
     def covers(self, other: "Interval") -> bool:
         outer_starts_lower = self.start < other.start or self.start == other.start
@@ -179,17 +185,29 @@ class UnboundedInterval:
     start: Optional[AxisBound] = None
     end: Optional[AxisBound] = None
 
+    @classmethod
     @datamodels.root_validator
     def check(cls: Type["UnboundedInterval"], instance: "UnboundedInterval") -> None:
-        Interval.check(instance)
+        _check_interval(instance)
 
     def covers(self, other: Union[Interval, "UnboundedInterval"]) -> bool:
         if self.start is None and self.end is None:
             return True
-        if self.end is None and other.start is not None and other.start >= self.start:
+        if (
+            self.end is None
+            and other.start is not None
+            and self.start is not None
+            and other.start >= self.start
+        ):
             return True
-        if self.start is None and other.end is not None and other.end <= self.end:
+        if (
+            self.start is None
+            and other.end is not None
+            and self.end is not None
+            and other.end <= self.end
+        ):
             return True
+
         # at this point, we know self is actually bounded, so can't cover unbounded intervals
         if other.start is None or other.end is None:
             return False
@@ -260,6 +278,7 @@ class VerticalLoop(LocNode):
         if not v:
             raise ValueError("Empty vertical loop is not allowed")
 
+    @classmethod
     @datamodels.root_validator
     def valid_section_intervals(cls: Type["VerticalLoop"], instance: "VerticalLoop") -> None:
         starts, ends = zip(*((s.interval.start, s.interval.end) for s in instance.sections))

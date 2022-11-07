@@ -59,6 +59,8 @@ class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
                     edge.dst,
                     edge.data,
                 )
+
+            assert isinstance(index_range.interval, dcir.DomainInterval)
             if index_range.stride < 0:
                 initialize_expr = f"{index_range.interval.end} - 1"
                 end_expr = f"{index_range.interval.start} - 1"

@@ -52,7 +52,7 @@ class CacheExtents(NodeTranslator):
                     ij_access_extent + horizontal_execution.extent
                 )
 
-        k_extents: Dict[str, cuir.KCacheAccess] = (
+        k_extents = (
             node.walk_values()
             .if_isinstance(cuir.KCacheAccess)
             .reduceby(

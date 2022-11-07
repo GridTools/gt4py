@@ -138,7 +138,7 @@ class AccessCollector(eve.NodeVisitor):
 
         def read_accesses(self) -> List[AccessT]:
             """Get the sub-list of read accesses."""
-            return list(eve.xiter(self._ordered_accesses).filter(lambda x: x.is_read))
+            return list(eve.utils.XIterable(self._ordered_accesses).filter(lambda x: x.is_read))
 
         def write_offsets(self) -> Dict[str, Set[OffsetT]]:
             """Get a dictionary, mapping written fields' names to sets of offset tuples."""

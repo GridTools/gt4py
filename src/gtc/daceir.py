@@ -452,8 +452,11 @@ class GridSubset(eve.Node):
 
     @classmethod
     def from_interval(
-        cls, interval: Union[oir.Interval, DomainInterval, IndexWithExtent], axis: Axis
+        cls,
+        interval: Union[oir.Interval, TileInterval, DomainInterval, IndexWithExtent],
+        axis: Axis,
     ):
+        res_interval: Union[IndexWithExtent, TileInterval, DomainInterval]
         if isinstance(interval, (DomainInterval, oir.Interval)):
             res_interval = DomainInterval(
                 start=AxisBound(
@@ -487,7 +490,7 @@ class GridSubset(eve.Node):
         return GridSubset(intervals=res_subsets)
 
     def tile(self, tile_sizes: Dict[Axis, int]):
-        res_intervals = dict()
+        res_intervals: Dict[Axis, Union[DomainInterval, TileInterval, IndexWithExtent]] = {}
         for axis, interval in self.intervals.items():
             if isinstance(interval, DomainInterval) and axis in tile_sizes:
                 if axis == Axis.K:
@@ -830,7 +833,8 @@ class ComputationNode(LocNode):
     read_memlets: List[Memlet]
     write_memlets: List[Memlet]
 
-    def unique_connectors(*, field: str) -> datamodels.FieldValidator:
+    @staticmethod
+    def _unique_connectors(*, field: str) -> datamodels.FieldValidator:
         def _validator(self, attribute: datamodels.Attribute, node: List[Memlet]) -> None:
             conns: Dict[eve.SymbolRef, Set[eve.SymbolRef]] = {}
             for memlet in node:
@@ -841,8 +845,8 @@ class ComputationNode(LocNode):
 
         return datamodels.validator(field)(_validator)
 
-    unique_write_connectors = unique_connectors(field="write_memlets")
-    unique_read_connectors = unique_connectors(field="write_memlets")
+    unique_write_connectors = _unique_connectors(field="write_memlets")
+    unique_read_connectors = _unique_connectors(field="write_memlets")
 
     @property
     def read_fields(self):

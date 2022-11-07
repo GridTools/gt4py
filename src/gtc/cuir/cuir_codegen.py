@@ -86,18 +86,19 @@ class CUIRCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
         self, node: cuir.IJCacheAccess, symtable: Dict[str, Any], **kwargs: Any
     ) -> str:
         extent = symtable[node.name].extent
+        offsets = node.offset.to_dict()
         if extent.i == extent.j == (0, 0):
             # cache is scalar
-            assert node.offset.i == node.offset.j == 0
+            assert offsets["i"] == offsets["j"] == 0
             return node.name
-        if node.offset.i == node.offset.j == 0:
+        if offsets["i"] == offsets["j"] == 0:
             return "*" + node.name
-        offsets = (
+        off = (
             f"{o} * {d}_stride_{node.name}"
-            for o, d in zip([node.offset.i, node.offset.j], "ij")
+            for o, d in zip((offsets["i"], offsets["j"]), "ij")
             if o != 0
         )
-        return node.name + "[" + " + ".join(offsets) + "]"
+        return node.name + "[" + " + ".join(off) + "]"
 
     KCacheAccess = as_mako("${_this_generator.k_cache_var(name, _this_node.offset.k)}")
 

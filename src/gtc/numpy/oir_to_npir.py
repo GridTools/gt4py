@@ -42,7 +42,7 @@ class OirToNpir(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     def visit_ScalarDecl(self, node: oir.ScalarDecl, **kwargs: Any) -> npir.ScalarDecl:
         return npir.ScalarDecl(name=node.name, dtype=node.dtype)
 
-    def visit_LocalScalar(self, node: oir.LocalScalar, **kwargs: Any) -> npir.ScalarDecl:
+    def visit_LocalScalar(self, node: oir.LocalScalar, **kwargs: Any) -> npir.LocalScalarDecl:
         return npir.LocalScalarDecl(name=node.name, dtype=node.dtype)
 
     def visit_Temporary(

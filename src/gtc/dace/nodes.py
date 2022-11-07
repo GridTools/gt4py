@@ -15,6 +15,7 @@
 import base64
 import pickle
 from typing import Dict, List, Set, Union
+import typing
 
 import dace.data
 import dace.dtypes
@@ -130,7 +131,8 @@ class StencilComputation(library.LibraryNode):
                 for j, he in enumerate(section.horizontal_executions):
                     extents_dict[j * len(oir_node.sections) + i] = extents[id(he)]
 
-            self.oir_node = oir_node
+            # TODO: Why is this conversion required?
+            self.oir_node = typing.cast(PickledDataclassProperty, oir_node)
             self.extents = extents_dict  # type: ignore
             self.declarations = declarations  # type: ignore
             self.symbol_mapping = {

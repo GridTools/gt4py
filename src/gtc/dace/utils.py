@@ -258,16 +258,12 @@ class AccessInfoCollector(eve.NodeVisitor):
         ] = {}
         if region is not None:
             for axis, oir_interval in zip(dcir.Axis.dims_horizontal(), region.intervals):
+                he_grid_interval = he_grid.intervals[axis]
+                assert isinstance(he_grid_interval, dcir.DomainInterval)
                 start = (
-                    oir_interval.start
-                    if oir_interval.start is not None
-                    else he_grid.intervals[axis].start
+                    oir_interval.start if oir_interval.start is not None else he_grid_interval.start
                 )
-                end = (
-                    oir_interval.end
-                    if oir_interval.end is not None
-                    else he_grid.intervals[axis].end
-                )
+                end = oir_interval.end if oir_interval.end is not None else he_grid_interval.end
                 dcir_interval = dcir.DomainInterval(
                     start=dcir.AxisBound.from_common(axis, start),
                     end=dcir.AxisBound.from_common(axis, end),
@@ -275,7 +271,9 @@ class AccessInfoCollector(eve.NodeVisitor):
                 res[axis] = dcir.DomainInterval.union(dcir_interval, res.get(axis, dcir_interval))
         if dcir.Axis.K in he_grid.intervals:
             off = offset[dcir.Axis.K.to_idx()] or 0
-            res[dcir.Axis.K] = he_grid.intervals[dcir.Axis.K].shifted(off)
+            he_grid_k_interval = he_grid.intervals[dcir.Axis.K]
+            assert not isinstance(he_grid_k_interval, dcir.TileInterval)
+            res[dcir.Axis.K] = he_grid_k_interval.shifted(off)
         for axis in dcir.Axis.dims_horizontal():
             iteration_interval = he_grid.intervals[axis]
             mask_interval = res.get(axis, iteration_interval)

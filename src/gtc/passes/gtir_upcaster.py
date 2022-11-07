@@ -13,7 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import functools
-from typing import Any, Callable, Dict, Iterator, List
+from typing import Any, Callable, Dict, Iterator, List, TypeVar
 
 import numpy as np
 
@@ -35,7 +35,10 @@ def _upcast_nodes(*exprs: Expr, upcasting_rule: Callable) -> Iterator[Expr]:
     return iter(_upcast_node(target_dtype, arg) for target_dtype, arg in zip(target_dtypes, exprs))
 
 
-def _update_node(node: eve.Node, updated_children: Dict[str, eve.RootNode]) -> eve.Node:
+_T = TypeVar("_T", bound=eve.Node)
+
+
+def _update_node(node: _T, updated_children: Dict[str, eve.RootNode]) -> _T:
     # create new node only if children changed
     old_children = datamodels.asdict(node)
     if any([old_children[k] != updated_children[k] for k in updated_children.keys()]):

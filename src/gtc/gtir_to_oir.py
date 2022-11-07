@@ -13,7 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from dataclasses import dataclass, field
-from typing import Any, List, Set
+from typing import Any, List, Set, Union
 
 import eve
 from gtc import common, gtir, oir, utils
@@ -126,8 +126,10 @@ class GTIRToOIR(eve.NodeTranslator):
     # --- Stmts ---
     def visit_ParAssignStmt(
         self, node: gtir.ParAssignStmt, *, mask: oir.Expr = None, **kwargs: Any
-    ) -> oir.AssignStmt:
-        stmt = oir.AssignStmt(left=self.visit(node.left), right=self.visit(node.right))
+    ) -> Union[oir.AssignStmt, oir.MaskStmt]:
+        stmt: Union[oir.AssignStmt, oir.MaskStmt] = oir.AssignStmt(
+            left=self.visit(node.left), right=self.visit(node.right)
+        )
         if mask is not None:
             # Wrap inside MaskStmt
             stmt = oir.MaskStmt(body=[stmt], mask=mask, loc=node.loc)
@@ -146,19 +148,19 @@ class GTIRToOIR(eve.NodeTranslator):
 
         return oir.HorizontalRestriction(mask=node.mask, body=body_stmts)
 
-    def visit_While(self, node: gtir.While, *, mask: oir.Expr = None, **kwargs: Any):
-        body_stmts = []
-        for stmt in node.body:
-            stmt_or_stmts = self.visit(stmt, **kwargs)
-            stmts = utils.flatten_list(
-                [stmt_or_stmts] if isinstance(stmt_or_stmts, oir.Stmt) else stmt_or_stmts
-            )
-            body_stmts.extend(stmts)
+    def visit_While(
+        self, node: gtir.While, *, mask: oir.Expr = None, **kwargs: Any
+    ) -> Union[oir.While, oir.MaskStmt]:
+        body_stmts: List[oir.Stmt] = []
+        for st in node.body:
+            st_or_sts = self.visit(st, **kwargs)
+            sts = utils.flatten_list([st_or_sts] if isinstance(st_or_sts, oir.Stmt) else st_or_sts)
+            body_stmts.extend(sts)
 
-        cond = self.visit(node.cond)
+        cond: oir.Expr = self.visit(node.cond)
         if mask:
             cond = oir.BinaryOp(op=common.LogicalOperator.AND, left=mask, right=cond)
-        stmt = oir.While(cond=cond, body=body_stmts, loc=node.loc)
+        stmt: Union[oir.While, oir.MaskStmt] = oir.While(cond=cond, body=body_stmts, loc=node.loc)
         if mask is not None:
             stmt = oir.MaskStmt(body=[stmt], mask=mask, loc=node.loc)
         return stmt
@@ -170,7 +172,7 @@ class GTIRToOIR(eve.NodeTranslator):
             name=f"mask_{id(node)}", dtype=DataType.BOOL, dimensions=(True, True, True)
         )
         ctx.temp_fields.append(mask_field_decl)
-        stmts = [
+        stmts: List[oir.Stmt] = [
             oir.AssignStmt(
                 left=oir.FieldAccess(
                     name=mask_field_decl.name,
@@ -188,7 +190,8 @@ class GTIRToOIR(eve.NodeTranslator):
             dtype=mask_field_decl.dtype,
             loc=node.loc,
         )
-        combined_mask = current_mask
+
+        combined_mask: oir.Expr = current_mask
         if mask:
             combined_mask = oir.BinaryOp(
                 op=LogicalOperator.AND, left=mask, right=combined_mask, loc=node.loc
@@ -196,12 +199,14 @@ class GTIRToOIR(eve.NodeTranslator):
         stmts.extend(self.visit(node.true_branch.body, mask=combined_mask, ctx=ctx, **kwargs))
 
         if node.false_branch:
-            combined_mask = oir.UnaryOp(op=UnaryOperator.NOT, expr=current_mask)
+            combined_mask_not: oir.Expr = oir.UnaryOp(op=UnaryOperator.NOT, expr=current_mask)
             if mask:
-                combined_mask = oir.BinaryOp(
-                    op=LogicalOperator.AND, left=mask, right=combined_mask, loc=node.loc
+                combined_mask_not = oir.BinaryOp(
+                    op=LogicalOperator.AND, left=mask, right=combined_mask_not, loc=node.loc
                 )
-            stmts.extend(self.visit(node.false_branch.body, mask=combined_mask, ctx=ctx, **kwargs))
+            stmts.extend(
+                self.visit(node.false_branch.body, mask=combined_mask_not, ctx=ctx, **kwargs)
+            )
 
         return stmts
 

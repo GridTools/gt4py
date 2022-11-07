@@ -51,7 +51,7 @@ def _slice_string(ch: str, offset: int, interval: Tuple[common.AxisBound, common
 def _make_slice_access(
     offset: Tuple[Optional[int], Optional[int], Union[str, Optional[int]]],
     is_serial: bool,
-    interval: Optional[common.HorizontalMask] = None,
+    interval: Optional[npir.HorizontalMask] = None,
 ) -> List[str]:
     axes: List[str] = []
 
@@ -203,7 +203,7 @@ class NpirCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
         node: npir.LocalScalarAccess,
         *,
         is_serial: bool,
-        horizontal_mask: Optional[common.HorizontalMask] = None,
+        horizontal_mask: Optional[npir.HorizontalMask] = None,
         **kwargs: Any,
     ) -> Union[str, Collection[str]]:
         args = _make_slice_access((0, 0, 0), is_serial, horizontal_mask)

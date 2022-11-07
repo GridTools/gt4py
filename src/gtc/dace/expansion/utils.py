@@ -123,12 +123,16 @@ class HorizontalExecutionSplitter(eve.NodeTranslator):
             elif isinstance(stmt, oir.AssignStmt) and isinstance(stmt.left, oir.ScalarAccess):
                 continue
             return False
-        regions: List[common.HorizontalMask] = list()
+
+        # If the regions are not disjoint, then the horizontal executions are not splittable.
+        regions: List[common.HorizontalMask] = []
         for stmt in he.walk_values().if_isinstance(oir.HorizontalRestriction):
+            assert isinstance(stmt, oir.HorizontalRestriction)
             for region in regions:
                 if region.i.overlaps(stmt.mask.i) and region.j.overlaps(stmt.mask.j):
                     return False
             regions.append(stmt.mask)
+
         return True
 
     def visit_HorizontalExecution(self, node: oir.HorizontalExecution, *, extents, library_node):

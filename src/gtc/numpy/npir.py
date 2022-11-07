@@ -93,7 +93,7 @@ class Expr(common.Expr):
 
 
 @eve.utils.noninstantiable
-class VectorLValue(common.LocNode):
+class VectorLValue(Expr):
     pass
 
 
@@ -124,7 +124,7 @@ class VarKOffset(common.VariableKOffset[Expr]):
     pass
 
 
-class FieldSlice(Expr, VectorLValue):
+class FieldSlice(VectorLValue):
     name: eve.Coerced[eve.SymbolRef]
     i_offset: int
     j_offset: int
@@ -146,7 +146,7 @@ class ParamAccess(Expr):
     kind: common.ExprKind = common.ExprKind.SCALAR
 
 
-class LocalScalarAccess(Expr, VectorLValue):
+class LocalScalarAccess(VectorLValue):
     name: eve.Coerced[eve.SymbolRef]
     kind: common.ExprKind = common.ExprKind.FIELD
 
