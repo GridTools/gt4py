@@ -193,8 +193,8 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             )
         return foast.DataSymbol(id=node.arg, location=self._make_loc(node), type=new_type)
 
-    def visit_Starred(self, node: ast.Starred) -> foast.Star:
-        return foast.Star(id=node.value.id, location=self._make_loc(node))
+    def visit_Starred(self, node: ast.Starred) -> foast.Starred:
+        return foast.Starred(id=node.value.id, location=self._make_loc(node))
 
     def visit_Assign(self, node: ast.Assign, **kwargs) -> foast.Assign:
         target = node.targets[0]  # there is only one element after assignment passes
@@ -207,7 +207,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             for elt in target.elts:
                 if isinstance(elt, ast.Starred):
                     ts.append(
-                        foast.Star(
+                        foast.Starred(
                             id=foast.DataSymbol(
                                 id=elt.value.id,
                                 location=self._make_loc(elt),
