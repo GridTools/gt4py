@@ -7,15 +7,18 @@ import dace.symbolic
 import sympy
 from dace.properties import DictProperty, make_properties
 from dace.sdfg.propagation import propagate_memlets_sdfg
+from dace.sdfg.utils import dfs_topological_sort
 from dace.transformation import transformation
 from dace.transformation.helpers import nest_sdfg_subgraph
 
 from gtc import common
 from gtc import daceir as dcir
+from gtc import oir
 from gtc.dace.expansion.daceir_builder import DaCeIRBuilder
 from gtc.dace.expansion_specification import Map, Skip
 from gtc.dace.nodes import StencilComputation
 from gtc.dace.utils import make_dace_subset, union_inout_memlets
+from gtc.passes.oir_optimizations.utils import compute_horizontal_block_extents
 
 
 SymbolicOriginType = Tuple[dace.symbolic.SymbolicType, ...]
@@ -258,33 +261,37 @@ class PartialExpansion(transformation.SubgraphTransformation):
     )
 
     @staticmethod
-    def subgraph_all_nodes_recursive(subgraph: Union[dace.sdfg.graph.SubgraphView, dace.SDFG]):
-        for state in subgraph.nodes():
-            for node in state.nodes():
+    def subgraph_all_nodes_recursive_topological(
+        subgraph: Union[dace.sdfg.graph.SubgraphView, dace.SDFG]
+    ):
+        for state in dfs_topological_sort(subgraph):
+            for node in dfs_topological_sort(state):
                 if isinstance(node, dace.nodes.NestedSDFG):
-                    PartialExpansion.subgraph_all_nodes_recursive(node.sdfg)
+                    yield from PartialExpansion.subgraph_all_nodes_recursive(node.sdfg)
                 yield node, state
             yield state, state.parent
 
     def can_be_applied(self, sdfg: dace.SDFG, subgraph: dace.sdfg.graph.SubgraphView) -> bool:
 
-        if not subgraph.nodes():
-            return False
-
-        if not all(
-            isinstance(n, (dace.nodes.AccessNode, dace.SDFGState, StencilComputation))
-            for n, _ in PartialExpansion.subgraph_all_nodes_recursive(subgraph)
-        ):
-            return False
-
         stencil_computations = list(
             filter(
                 lambda n: isinstance(n[0], StencilComputation),
-                PartialExpansion.subgraph_all_nodes_recursive(subgraph),
+                PartialExpansion.subgraph_all_nodes_recursive_topological(subgraph),
             )
         )
 
+        # test if any computations in the graph
+        if not subgraph.nodes():
+            return False
+
         if not stencil_computations:
+            return False
+
+        # NestedSDFGs are not supported.
+        if not all(
+            isinstance(n, (dace.nodes.AccessNode, dace.SDFGState, StencilComputation))
+            for n, _ in PartialExpansion.subgraph_all_nodes_recursive_topological(subgraph)
+        ):
             return False
 
         for node, _ in stencil_computations:
@@ -293,7 +300,14 @@ class PartialExpansion(transformation.SubgraphTransformation):
             ):
                 return False
 
-        return PartialExpansion._test_symbolic_split(stencil_computations)
+        if not PartialExpansion._test_symbolic_split(stencil_computations):
+            return False
+
+        if not PartialExpansion._test_extents_compatible(stencil_computations):
+            assert False
+            return False
+
+        return True
 
     @staticmethod
     def _test_symbolic_split(
@@ -339,6 +353,39 @@ class PartialExpansion(transformation.SubgraphTransformation):
         return True
 
     @staticmethod
+    def _test_extents_compatible(
+        nodes: List[Tuple[StencilComputation, dace.SDFGState]],
+    ) -> bool:
+        vertical_loops = [n.oir_node for n, _ in nodes]
+        declarations = {
+            name: decl
+            for n, _ in nodes
+            for name, decl in n.declarations.items()
+            if isinstance(decl, oir.FieldDecl)
+        }
+        params = {
+            name: decl
+            for n, _ in nodes
+            for name, decl in n.declarations.items()
+            if isinstance(decl, oir.ScalarDecl)
+        }
+
+        oir_stencil = oir.Stencil(
+            name="__adhoc",
+            vertical_loops=vertical_loops,
+            params=list(params.values()),
+            declarations=list(declarations.values()),
+        )
+        oir_extents = compute_horizontal_block_extents(oir_stencil)
+
+        for node, _ in nodes:
+            for section in node.oir_node.sections:
+                for he in section.horizontal_executions:
+                    if not oir_extents[id(he)] == node.get_extents(he):
+                        return False
+        return True
+
+    @staticmethod
     def _get_symbolic_split(
         nodes: List[Tuple[StencilComputation, dace.SDFGState]],
     ) -> Tuple[Dict[dcir.SymbolName, SymbolicOriginType], Dict[dcir.Axis, SymbolicDomainType]]:
@@ -356,7 +403,7 @@ class PartialExpansion(transformation.SubgraphTransformation):
         stencil_computations: List[StencilComputation, dace.SDFGState] = list(
             filter(
                 lambda n: isinstance(n[0], StencilComputation),
-                PartialExpansion.subgraph_all_nodes_recursive(subgraph),
+                PartialExpansion.subgraph_all_nodes_recursive_topological(subgraph),
             )
         )
 
@@ -478,13 +525,45 @@ class PartialExpansion(transformation.SubgraphTransformation):
             nsdfg_state.add_edge(nsdfg_node, None, map_exit, None, dace.Memlet())
 
 
-def partially_expand(sdfg):
+# def partially_expand(sdfg):
+#     partial_expansion = PartialExpansion()
+#     subgraph = dace.sdfg.graph.SubgraphView(sdfg, sdfg.states())
+#     partial_expansion.setup_match(subgraph)
+#     partial_expansion.strides = {dcir.Axis.I: 8, dcir.Axis.J: 8}
+#
+#     if partial_expansion.can_be_applied(sdfg, subgraph):
+#         partial_expansion.apply(sdfg)
+#
+#     return sdfg
+
+
+def _setup_match(sdfg, nodes):
+    subgraph = dace.sdfg.graph.SubgraphView(sdfg, nodes)
     partial_expansion = PartialExpansion()
-    subgraph = dace.sdfg.graph.SubgraphView(sdfg, sdfg.states())
     partial_expansion.setup_match(subgraph)
     partial_expansion.strides = {dcir.Axis.I: 8, dcir.Axis.J: 8}
+    return partial_expansion, subgraph
 
-    if partial_expansion.can_be_applied(sdfg, subgraph):
-        partial_expansion.apply(sdfg)
+
+def partially_expand(sdfg: dace.SDFG):
+    for sdfg in reversed(list(sdfg.all_sdfgs_recursive())):
+        states = dfs_topological_sort(sdfg)
+        last_applicable_states = []
+
+        partial_expansion, subgraph = _setup_match(sdfg, last_applicable_states)
+        for state in states:
+            candidate_expansion, candidate_subgraph = _setup_match(
+                sdfg, [*last_applicable_states, state]
+            )
+            if not candidate_expansion.can_be_applied(sdfg, candidate_subgraph):
+                partial_expansion.apply(sdfg)
+                last_states = [state]
+                partial_expansion, subgraph = _setup_match(sdfg, last_states)
+            else:
+                partial_expansion = candidate_expansion
+                last_states.append(state)
+
+        if partial_expansion.can_be_applied():
+            partial_expansion.apply(sdfg)
 
     return sdfg
