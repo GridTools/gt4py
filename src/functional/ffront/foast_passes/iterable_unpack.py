@@ -1,3 +1,5 @@
+import copy
+
 import functional.ffront.field_operator_ast as foast
 from eve import NodeTranslator, traits
 from functional.ffront import common_types as ct
@@ -22,25 +24,21 @@ class UnpackedAssignPass(NodeTranslator, traits.VisitorWithSymbolTableTrait):
 
     @classmethod
     def apply(cls, node: foast.FieldOperator) -> foast.FieldOperator:
-        typed_foast_node = cls().visit(node)
-        return typed_foast_node
+        node = cls().visit(node)
+        return node
 
     def visit_FunctionDefinition(self, node: foast.FunctionDefinition, **kwargs):
         new_params = self.visit(node.params, **kwargs)
         new_body = self.visit(node.body, **kwargs)
-        self._unroll_tuple_target_assign(new_body)
-        assert isinstance(new_body[-1], foast.Return)
-        return_type = new_body[-1].value.type
-        new_type = ct.FunctionType(
-            args=[new_param.type for new_param in new_params], kwargs={}, returns=return_type
-        )
+        unrolled_body = self._unroll_tuple_target_assign(new_body)
+        assert isinstance(unrolled_body[-1], foast.Return)
 
         return foast.FunctionDefinition(
             id=node.id,
             params=new_params,
-            body=new_body,
+            body=unrolled_body,
             closure_vars=self.visit(node.closure_vars, **kwargs),
-            type=new_type,
+            type=node.type,
             location=node.location,
         )
 
@@ -54,7 +52,9 @@ class UnpackedAssignPass(NodeTranslator, traits.VisitorWithSymbolTableTrait):
         return sym
 
     def _unroll_tuple_target_assign(self, body: list[foast.LocatedNode]) -> list[foast.LocatedNode]:
-        for pos, node in enumerate(body):
+        unrolled = copy.deepcopy(body)
+
+        for pos, node in enumerate(unrolled):
             if isinstance(node, foast.TupleTargetAssign):
                 values = node.value
                 targets = node.targets
@@ -64,8 +64,8 @@ class UnpackedAssignPass(NodeTranslator, traits.VisitorWithSymbolTableTrait):
                 tuple_assign = foast.Assign(
                     target=tuple_symbol, value=node.value, location=node.location
                 )
-                del body[pos]
-                body.insert(pos, tuple_assign)
+                del unrolled[pos]
+                unrolled.insert(pos, tuple_assign)
 
                 for i, index in enumerate(indices):
                     subtarget = targets[i]
@@ -94,6 +94,6 @@ class UnpackedAssignPass(NodeTranslator, traits.VisitorWithSymbolTableTrait):
                             location=node.location,
                         )
 
-                    body.insert(pos + i + 1, new_assign)
+                    unrolled.insert(pos + i + 1, new_assign)
 
-        return body
+        return unrolled
