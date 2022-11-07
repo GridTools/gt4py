@@ -1297,17 +1297,19 @@ def test_constant_closure_vars():
 def test_simple_if():
     size = 10
     a = np_as_located_field(IDim, JDim)(np.ones((size, size)))
-    b = np_as_located_field(IDim, JDim)(2*np.ones((size, size)))
+    b = np_as_located_field(IDim, JDim)(2 * np.ones((size, size)))
     out = np_as_located_field(IDim, JDim)(np.zeros((size, size)))
 
     @field_operator
-    def simple_if(a: Field[[IDim, JDim], float64], b: Field[[IDim, JDim], float64], condition: bool):
+    def simple_if(
+        a: Field[[IDim, JDim], float64], b: Field[[IDim, JDim], float64], condition: bool
+    ):
         if condition:
             result = a
-            result2 = a+1.
+            result2 = a + 1.0
         else:
             result = b
-            result2 = b+1.
+            result2 = b + 1.0
         return result
 
     simple_if(a, b, True, out=out, offset_provider={})
@@ -1316,35 +1318,83 @@ def test_simple_if():
     simple_if(a, b, False, out=out, offset_provider={})
     assert np.allclose(out, b)
 
-    # @field_operator
-    # def simple_if(a: Field[[IDim, JDim], float64],
-    #               b: Field[[IDim, JDim], float64], condition: bool):
-    #     if condition:
-    #         if not condition:
-    #             inner = a
-    #         else:
-    #             inner = a+1
-    #         result = a
-    #     else:
-    #         inner = 1 # TODO: remove
-    #         result = b
-    #     return result
-    #
-    # @field_operator()
-    # def simple_if(inp: Field[[IDim, JDim], float64], condition: bool):
-    #     if condition:
-    #         tmp = a
-    #         result = tmp
-    #     else:
-    #         tmp = b
-    #         result = tmp
-    #     return result
-    #
-    # @field_operator()
-    # def simple_if(inp: Field[[IDim, JDim], float64], condition: bool):
-    #     if condition:
-    #         tmp = a
-    #         result = tmp
-    #     else:
-    #         result = b
-    #     return result
+
+def test_local_if():
+    size = 10
+    a = np_as_located_field(IDim, JDim)(np.ones((size, size)))
+    b = np_as_located_field(IDim, JDim)(2 * np.ones((size, size)))
+    out = np_as_located_field(IDim, JDim)(np.zeros((size, size)))
+
+    @field_operator()
+    def local_if(a: Field[[IDim, JDim], float64], b: Field[[IDim, JDim], float64], condition: bool):
+        if condition:
+            tmp = a
+            result = tmp
+        else:
+            result = b
+        return result
+
+    local_if(a, b, True, out=out, offset_provider={})
+    assert np.allclose(out, a)
+
+    local_if(a, b, False, out=out, offset_provider={})
+    assert np.allclose(out, b)
+
+
+def test_temporary_if():
+    size = 10
+    a = np_as_located_field(IDim, JDim)(np.ones((size, size)))
+    b = np_as_located_field(IDim, JDim)(2 * np.ones((size, size)))
+    out = np_as_located_field(IDim, JDim)(np.zeros((size, size)))
+
+    @field_operator()
+    def temporary_if(
+        a: Field[[IDim, JDim], float64], b: Field[[IDim, JDim], float64], condition: bool
+    ):
+        if condition:
+            tmp1 = a
+            result = tmp1
+        else:
+            tmp2 = b
+            result = tmp2
+        return result
+
+    temporary_if(a, b, True, out=out, offset_provider={})
+    assert np.allclose(out, a)
+
+    temporary_if(a, b, False, out=out, offset_provider={})
+    assert np.allclose(out, b)
+
+
+def test_nested_if():
+    size = 10
+    a = np_as_located_field(IDim, JDim)(np.ones((size, size)))
+    b = np_as_located_field(IDim, JDim)(2 * np.ones((size, size)))
+    out = np_as_located_field(IDim, JDim)(np.zeros((size, size)))
+    ref_true = np_as_located_field(IDim, JDim)(np.ones((size, size)) + 1)
+    ref_false = np_as_located_field(IDim, JDim)(2 * np.ones((size, size)) + 5)
+
+    @field_operator
+    def nested_if(
+        a: Field[[IDim, JDim], float64], b: Field[[IDim, JDim], float64], condition: bool
+    ):
+        if condition:
+            if not condition:
+                inner = a
+            else:
+                inner = a + 1.0
+            result = inner
+        else:
+            result = b
+            if condition:
+                another_inner = 3.0
+            else:
+                another_inner = 5.0
+            result = result + another_inner
+        return result
+
+    nested_if(a, b, True, out=out, offset_provider={})
+    assert np.allclose(out, ref_true)
+
+    nested_if(a, b, False, out=out, offset_provider={})
+    assert np.allclose(out, ref_false)
