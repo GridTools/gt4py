@@ -25,8 +25,10 @@ def type_class(symbol_type: ct.SymbolType) -> Type[ct.SymbolType]:
     ---------
     >>> type_class(ct.DeferredSymbolType(constraint=ct.ScalarType)).__name__
     'ScalarType'
+
     >>> type_class(ct.FieldType(dims=[], dtype=ct.ScalarType(kind=ct.ScalarKind.BOOL))).__name__
     'FieldType'
+
     >>> type_class(ct.TupleType(types=[])).__name__
     'TupleType'
     """
@@ -54,8 +56,10 @@ def primitive_constituents(
     >>> I = Dimension(value="I")
     >>> int_type = ct.ScalarType(kind=ct.ScalarKind.INT)
     >>> field_type = ct.FieldType(dims=[I], dtype=int_type)
+
     >>> tuple_type = ct.TupleType(types=[int_type, field_type])
     >>> primitive_constituents(tuple_type).to_list()  # doctest: +ELLIPSIS
+
     [ScalarType(...), FieldType(...)]
     >>> nested_tuple = ct.TupleType(types=[field_type, tuple_type])
     >>> primitive_constituents(nested_tuple).to_list()  # doctest: +ELLIPSIS
@@ -107,10 +111,12 @@ def extract_dtype(symbol_type: ct.SymbolType) -> ct.ScalarType:
     Extract the data type from ``symbol_type`` if it is either `FieldType` or `ScalarType`.
 
     Raise an error if no dtype can be found or the result would be ambiguous.
+
     Examples:
     ---------
     >>> print(extract_dtype(ct.ScalarType(kind=ct.ScalarKind.FLOAT64)))
     float64
+
     >>> print(extract_dtype(ct.FieldType(dims=[], dtype=ct.ScalarType(kind=ct.ScalarKind.BOOL))))
     bool
     """
@@ -236,6 +242,7 @@ def extract_dims(symbol_type: ct.SymbolType) -> list[Dimension]:
     Try to extract field dimensions if possible.
 
     Scalars are treated as zero-dimensional
+
     Examples:
     ---------
     >>> extract_dims(ct.ScalarType(kind=ct.ScalarKind.INT64, shape=[3, 4]))
@@ -264,31 +271,37 @@ def is_concretizable(symbol_type: ct.SymbolType, to_type: ct.SymbolType) -> bool
     ...     to_type=ct.ScalarType(kind=ct.ScalarKind.INT64)
     ... )
     True
+
     >>> is_concretizable(
     ...     ct.ScalarType(kind=ct.ScalarKind.INT64),
     ...     to_type=ct.ScalarType(kind=ct.ScalarKind.FLOAT64)
     ... )
     False
+
     >>> is_concretizable(
     ...     ct.DeferredSymbolType(constraint=None),
     ...     to_type=ct.FieldType(dtype=ct.ScalarType(kind=ct.ScalarKind.BOOL), dims=[])
     ... )
     True
+
     >>> is_concretizable(
     ...     ct.DeferredSymbolType(constraint=ct.DataType),
     ...     to_type=ct.FieldType(dtype=ct.ScalarType(kind=ct.ScalarKind.BOOL), dims=[])
     ... )
     True
+
     >>> is_concretizable(
     ...     ct.DeferredSymbolType(constraint=ct.OffsetType),
     ...     to_type=ct.FieldType(dtype=ct.ScalarType(kind=ct.ScalarKind.BOOL), dims=[])
     ... )
     False
+
     >>> is_concretizable(
     ...     ct.DeferredSymbolType(constraint=ct.SymbolType),
     ...     to_type=ct.DeferredSymbolType(constraint=ct.ScalarType)
     ... )
     True
+
     """
     if isinstance(symbol_type, ct.DeferredSymbolType) and (
         symbol_type.constraint is None or issubclass(type_class(to_type), symbol_type.constraint)
@@ -337,6 +350,7 @@ def promote(*types: ct.FieldType | ct.ScalarType) -> ct.FieldType | ct.ScalarTyp
     The resulting type is defined on all dimensions of the arguments, respecting
     the individual order of the dimensions of each argument (see
     :func:`promote_dims` for more details).
+
     >>> dtype = ct.ScalarType(kind=ct.ScalarKind.INT64)
     >>> I, J, K = (Dimension(value=dim) for dim in ["I", "J", "K"])
     >>> promoted: ct.FieldType = promote(
@@ -346,6 +360,7 @@ def promote(*types: ct.FieldType | ct.ScalarType) -> ct.FieldType | ct.ScalarTyp
     ... )
     >>> promoted.dims == [I, J, K] and promoted.dtype == dtype
     True
+
     >>> promote(
     ...     ct.FieldType(dims=[I, J], dtype=dtype),
     ...     ct.FieldType(dims=[K], dtype=dtype)
@@ -377,9 +392,11 @@ def promote_dims(
     The resulting list of dimensions contains all dimensions of the arguments
     in the order they originally appear. If no unique order exists or a
     contradicting order is found an exception is raised.
+
     A modified version (ensuring uniqueness of the order) of
     `Kahn's algorithm <https://en.wikipedia.org/wiki/Topological_sorting#Kahn's_algorithm>`_
     is used to topologically sort the arguments.
+
     >>> I, J, K = (Dimension(value=dim) for dim in ["I", "J", "K"])
     >>> promote_dims([I, J], [I, J, K]) == [I, J, K]
     True
@@ -669,7 +686,9 @@ def accepts_args(
 
     If ``raise_exception`` is given a :class:`GTTypeError` is raised with a
     detailed description of why the function is not callable.
+
     Note that all types must be concrete/complete.
+
     Examples:
         >>> bool_type = ct.ScalarType(kind=ct.ScalarKind.BOOL)
         >>> func_type = ct.FunctionType(
