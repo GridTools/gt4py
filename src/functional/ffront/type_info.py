@@ -158,6 +158,7 @@ def is_integral(symbol_type: ct.SymbolType) -> bool:
         ct.ScalarKind.INT64,
     ]
 
+
 def is_number(symbol_type: ct.SymbolType) -> bool:
     """
     Check if ``symbol_type`` is either intergral or float.
@@ -182,6 +183,7 @@ def is_number(symbol_type: ct.SymbolType) -> bool:
         ct.ScalarKind.FLOAT32,
         ct.ScalarKind.FLOAT64,
     ]
+
 
 def is_logical(symbol_type: ct.SymbolType) -> bool:
     return extract_dtype(symbol_type).kind is ct.ScalarKind.BOOL
@@ -285,6 +287,7 @@ def is_concretizable(symbol_type: ct.SymbolType, to_type: ct.SymbolType) -> bool
     elif is_concrete(symbol_type):
         return symbol_type == to_type
     return False
+
 
 def _is_empty_field(field: ct.FieldType) -> bool:
     return isinstance(field, ct.FieldType) and len(field.dims) == 0
@@ -532,7 +535,11 @@ def function_signature_incompatibilities_func(
     if len(func_type.args) != len(args):
         yield f"Function takes {len(func_type.args)} argument(s), but {len(args)} were given."
     for i, (a_arg, b_arg) in enumerate(zip(func_type.args, args)):
-        if (a_arg != b_arg and is_not_empty_field_compatible(a_arg, b_arg) and not is_concretizable(a_arg, to_type=b_arg)):
+        if (
+            a_arg != b_arg
+            and is_not_empty_field_compatible(a_arg, b_arg)
+            and not is_concretizable(a_arg, to_type=b_arg)
+        ):
             yield f"Expected {i}-th argument to be of type {a_arg}, but got {b_arg}."
 
     # check for missing or extra keyword arguments
