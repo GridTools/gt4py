@@ -20,6 +20,7 @@ def is_concrete(symbol_type: ct.SymbolType) -> TypeGuard[ct.SymbolType]:
 def type_class(symbol_type: ct.SymbolType) -> Type[ct.SymbolType]:
     """
     Determine which class should be used to create a compatible concrete type.
+
     Examples:
     ---------
     >>> type_class(ct.DeferredSymbolType(constraint=ct.ScalarType)).__name__
@@ -48,6 +49,7 @@ def primitive_constituents(
 ) -> XIterable[ct.SymbolType]:
     """
     Return the primitive types contained in a composite type.
+
     >>> from functional.common import Dimension
     >>> I = Dimension(value="I")
     >>> int_type = ct.ScalarType(kind=ct.ScalarKind.INT)
@@ -79,6 +81,7 @@ def apply_to_primitive_constituents(
 ):
     """
     Apply function to all primitive constituents of a type.
+
     >>> int_type = ct.ScalarType(kind=ct.ScalarKind.INT)
     >>> tuple_type = ct.TupleType(types=[int_type, int_type])
     >>> print(apply_to_primitive_constituents(tuple_type, lambda primitive_type: ct.FieldType(dims=[], dtype=primitive_type)))
@@ -102,6 +105,7 @@ def apply_to_primitive_constituents(
 def extract_dtype(symbol_type: ct.SymbolType) -> ct.ScalarType:
     """
     Extract the data type from ``symbol_type`` if it is either `FieldType` or `ScalarType`.
+
     Raise an error if no dtype can be found or the result would be ambiguous.
     Examples:
     ---------
@@ -121,6 +125,7 @@ def extract_dtype(symbol_type: ct.SymbolType) -> ct.ScalarType:
 def is_floating_point(symbol_type: ct.SymbolType) -> bool:
     """
     Check if the dtype of ``symbol_type`` is a floating point type.
+
     Examples:
     ---------
     >>> is_floating_point(ct.ScalarType(kind=ct.ScalarKind.FLOAT64))
@@ -141,6 +146,7 @@ def is_floating_point(symbol_type: ct.SymbolType) -> bool:
 def is_integral(symbol_type: ct.SymbolType) -> bool:
     """
     Check if the dtype of ``symbol_type`` is an integral type.
+
     Examples:
     ---------
     >>> is_integral(ct.ScalarType(kind=ct.ScalarKind.INT))
@@ -192,6 +198,7 @@ def is_logical(symbol_type: ct.SymbolType) -> bool:
 def is_arithmetic(symbol_type: ct.SymbolType) -> bool:
     """
     Check if ``symbol_type`` is compatible with arithmetic operations.
+
     Examples:
     ---------
     >>> is_arithmetic(ct.ScalarType(kind=ct.ScalarKind.FLOAT64))
@@ -209,6 +216,7 @@ def is_arithmetic(symbol_type: ct.SymbolType) -> bool:
 def is_field_type_or_tuple_of_field_type(type_: ct.SymbolType) -> bool:
     """
      Return True if ``type_`` is FieldType or FieldType nested in TupleType.
+
      Examples:
      ---------
     >>> scalar_type = ct.ScalarType(kind=ct.ScalarKind.INT)
@@ -226,6 +234,7 @@ def is_field_type_or_tuple_of_field_type(type_: ct.SymbolType) -> bool:
 def extract_dims(symbol_type: ct.SymbolType) -> list[Dimension]:
     """
     Try to extract field dimensions if possible.
+
     Scalars are treated as zero-dimensional
     Examples:
     ---------
@@ -247,6 +256,7 @@ def extract_dims(symbol_type: ct.SymbolType) -> list[Dimension]:
 def is_concretizable(symbol_type: ct.SymbolType, to_type: ct.SymbolType) -> bool:
     """
     Check if ``symbol_type`` can be concretized to ``to_type``.
+
     Examples:
     ---------
     >>> is_concretizable(
@@ -323,6 +333,7 @@ def is_not_empty_field_compatible(a_arg: ct.FieldType, b_arg: ct.FieldType | ct.
 def promote(*types: ct.FieldType | ct.ScalarType) -> ct.FieldType | ct.ScalarType:
     """
     Promote a set of field or scalar types to a common type.
+
     The resulting type is defined on all dimensions of the arguments, respecting
     the individual order of the dimensions of each argument (see
     :func:`promote_dims` for more details).
@@ -362,6 +373,7 @@ def promote_dims(
 ) -> list[Dimension] | EllipsisType:
     """
     Find a unique ordering of multiple (individually ordered) lists of dimensions.
+
     The resulting list of dimensions contains all dimensions of the arguments
     in the order they originally appear. If no unique order exists or a
     contradicting order is found an exception is raised.
@@ -521,6 +533,7 @@ def function_signature_incompatibilities(
 ) -> Iterator[str]:
     """
     Return incompatibilities for a call to ``func_type`` with given arguments.
+
     Note that all types must be concrete/complete.
     """
     raise NotImplementedError(f"Not implemented for type {type(func_type).__name__}.")
@@ -653,6 +666,7 @@ def accepts_args(
 ) -> bool:
     """
     Check if a function can be called for given arguments.
+
     If ``raise_exception`` is given a :class:`GTTypeError` is raised with a
     detailed description of why the function is not callable.
     Note that all types must be concrete/complete.
