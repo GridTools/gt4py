@@ -501,6 +501,7 @@ def function_signature_incompatibilities(
 ) -> Iterator[str]:
     """
     Return incompatibilities for a call to ``func_type`` with given arguments.
+
     Note that all types must be concrete/complete.
     """
     raise NotImplementedError(f"Not implemented for type {type(func_type).__name__}.")
@@ -619,6 +620,7 @@ def accepts_args(
 ) -> bool:
     """
     Check if a function can be called for given arguments.
+
     If ``raise_exception`` is given a :class:`GTTypeError` is raised with a
     detailed description of why the function is not callable.
     Note that all types must be concrete/complete.
