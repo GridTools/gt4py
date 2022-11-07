@@ -42,6 +42,14 @@ def identity_def():
 
 
 @pytest.fixture
+def empty_identity_def():
+    def empty_identity(empty_field: Field[[], "float64"]) -> Field[[], "float64"]:
+        return empty_field
+
+    return empty_identity
+
+
+@pytest.fixture
 def make_tuple_op():
     @field_operator()
     def make_tuple_op_impl(

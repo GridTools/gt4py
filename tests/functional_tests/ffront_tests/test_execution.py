@@ -13,8 +13,8 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
+import dataclasses
 from collections import namedtuple
-from functools import reduce
 from typing import TypeVar
 
 import numpy as np
@@ -131,23 +131,6 @@ def test_power(fieldview_backend):
     pow(a, out=b, offset_provider={})
 
     assert np.allclose(a.array() ** 2, b)
-
-
-def test_mod(fieldview_backend):
-    if fieldview_backend == gtfn_cpu.run_gtfn:
-        pytest.xfail("gtfn does not yet support `%` operator.")
-
-    size = 10
-    a = np_as_located_field(IDim)(np.random.randn((size)))
-    b = np_as_located_field(IDim)(np.zeros((size)))
-
-    @field_operator(backend=fieldview_backend)
-    def mod_fieldop(inp1: Field[[IDim], float64]) -> Field[[IDim], float64]:
-        return inp1 % 2.0
-
-    mod_fieldop(a, out=b, offset_provider={})
-
-    assert np.allclose(a.array() % 2, b)
 
 
 def test_power_arithmetic(fieldview_backend):
@@ -587,7 +570,17 @@ def test_conditional_nested_tuple():
     ]:
         return where(mask, ((a, b), (b, a)), ((5.0, 7.0), (7.0, 5.0)))
 
-    conditional_tuple_3_field_op(mask, a, b, out=((c, d), (d, c)), offset_provider={})
+    @program
+    def conditional_tuple_3_p(
+        mask: Field[[IDim], bool],
+        a: Field[[IDim], float64],
+        b: Field[[IDim], float64],
+        c: Field[[IDim], float64],
+        d: Field[[IDim], float64],
+    ):
+        conditional_tuple_3_field_op(mask, a, b, out=((c, d), (d, c)))
+
+    conditional_tuple_3_p(mask, a, b, c, d, offset_provider={})
 
     assert np.allclose(
         np.where(
@@ -1017,7 +1010,19 @@ def test_ternary_operator_tuple():
     ) -> tuple[Field[[IDim], float], Field[[IDim], float]]:
         return (a, b) if left < right else (b, a)
 
-    ternary_field_op(a, b, left, right, out=(out_1, out_2), offset_provider={})
+    # TODO(tehrengruber): directly call field operator when the generated programs support `out` being a tuple
+    @program
+    def ternary_field(
+        a: Field[[IDim], float],
+        b: Field[[IDim], float],
+        left: float,
+        right: float,
+        out_1: Field[[IDim], float],
+        out_2: Field[[IDim], float],
+    ):
+        ternary_field_op(a, b, left, right, out=(out_1, out_2))
+
+    ternary_field(a, b, left, right, out_1, out_2, offset_provider={})
 
     e, f = (np.asarray(a), np.asarray(b)) if left < right else (np.asarray(b), np.asarray(a))
     np.allclose(e, out_1)
@@ -1072,59 +1077,34 @@ def test_ternary_scan():
     assert np.allclose(expected, out)
 
 
-@pytest.mark.parametrize("forward", [True, False])
-def test_scan_nested_tuple_output(fieldview_backend, forward):
+def test_scan_tuple_output(fieldview_backend):
     if fieldview_backend == gtfn_cpu.run_gtfn:
-        pytest.xfail("gtfn does not yet support scan pass or tuple out arguments.")
+        pytest.xfail("gtfn does not yet support scan pass.")
 
     KDim = Dimension("K", kind=DimensionKind.VERTICAL)
     size = 10
-    init = (1.0, (2.0, 3.0))
-    out1, out2, out3 = (np_as_located_field(KDim)(np.zeros((size,))) for _ in range(3))
-    expected = np.arange(1.0, 1.0 + size, 1)
-    if not forward:
-        expected = np.flip(expected)
+    init = (0.0, 1.0)
+    inp = np_as_located_field(KDim)(np.arange(0, size, 1.0))
+    out1 = np_as_located_field(KDim)(np.zeros((size,)))
+    out2 = np_as_located_field(KDim)(np.zeros((size,)))
+    expected = np.arange(init[1] + 1.0, init[1] + 1.0 + size, 1)
 
-    @scan_operator(axis=KDim, forward=forward, init=init, backend=fieldview_backend)
-    def simple_scan_operator(
-        carry: tuple[float, tuple[float, float]]
-    ) -> tuple[float, tuple[float, float]]:
-        return (carry[0] + 1.0, (carry[1][0] + 1.0, carry[1][1] + 1.0))
+    @scan_operator(axis=KDim, forward=True, init=init, backend=fieldview_backend)
+    def simple_scan_operator(carry: tuple[float, float], x: float) -> tuple[float, float]:
+        return (x, carry[1] + 1.0)
 
-    simple_scan_operator(out=(out1, (out2, out3)), offset_provider={})
+    # TODO(tehrengruber): directly call scan operator when this is supported
+    #  for tuple outputs
+    @program
+    def simple_scan_operator_program(
+        x: Field[[KDim], float], out1: Field[[KDim], float], out2: Field[[KDim], float]
+    ) -> None:
+        simple_scan_operator(x, out=(out1, out2))
 
-    assert np.allclose(expected + 1.0, out1)
-    assert np.allclose(expected + 2.0, out2)
-    assert np.allclose(expected + 3.0, out3)
+    simple_scan_operator_program(inp, out1, out2, offset_provider={})
 
-
-@pytest.mark.parametrize("forward", [True, False])
-def test_scan_nested_tuple_input(fieldview_backend, forward):
-    if fieldview_backend == gtfn_cpu.run_gtfn:
-        pytest.xfail("gtfn does not yet support scan pass or tuple arguments.")
-
-    KDim = Dimension("K", kind=DimensionKind.VERTICAL)
-    size = 10
-    init = 1.0
-    inp1 = np_as_located_field(KDim)(np.ones(size))
-    inp2 = np_as_located_field(KDim)(np.arange(0.0, size, 1))
-    out = np_as_located_field(KDim)(np.zeros((size,)))
-
-    prev_levels_iterator = lambda i: range(i + 1) if forward else range(size - 1, i - 1, -1)
-    expected = np.asarray(
-        [
-            reduce(lambda prev, i: prev + inp1[i] + inp2[i], prev_levels_iterator(i), init)
-            for i in range(size)
-        ]
-    )
-
-    @scan_operator(axis=KDim, forward=forward, init=init, backend=fieldview_backend)
-    def simple_scan_operator(carry: float, a: tuple[float, float]) -> float:
-        return carry + a[0] + a[1]
-
-    simple_scan_operator((inp1, inp2), out=out, offset_provider={})
-
-    assert np.allclose(expected, out)
+    assert np.allclose(inp, out1)
+    assert np.allclose(expected, out2)
 
 
 def test_docstring():
@@ -1137,7 +1117,7 @@ def test_docstring():
         return a
 
     @program
-    def test_docstring(a: Field[[IDim], float64]) -> Field[[IDim], float64]:
+    def test_docstring(a: Field[[IDim], float64]):
         """My docstring."""
         fieldop_with_docstring(a, out=a)
 
@@ -1291,6 +1271,28 @@ def test_undefined_symbols():
         @field_operator
         def return_undefined():
             return undefined_symbol
+
+
+def test_implicit_broadcast():
+    out = np_as_located_field()(np.array(0.0))
+    inp_val = 1.0
+
+    @field_operator
+    def fieldop_implicit_broadcast(scalar: Field[[], float]) -> Field[[], float]:
+        return scalar
+
+    fieldop_implicit_broadcast(inp_val, out=out, offset_provider={})
+    assert out == np.asarray(inp_val)
+
+    inp_val = 2.0
+
+    @program
+    def program_implicit_broadcast(scalar: Field[[], float], out: Field[[], float]):
+        fieldop_implicit_broadcast(scalar, out=out)
+
+    program_implicit_broadcast(inp_val, out, offset_provider={})
+
+    assert out == np.asarray(inp_val)
 
 
 def test_constant_closure_vars():
