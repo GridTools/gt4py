@@ -2,7 +2,6 @@ import copy
 
 import functional.ffront.field_operator_ast as foast
 from eve import NodeTranslator, traits
-from functional.ffront import common_types as ct
 from functional.ffront.foast_passes.utils import compute_assign_indices
 
 
@@ -58,7 +57,7 @@ class UnpackedAssignPass(NodeTranslator, traits.VisitorWithSymbolTableTrait):
             if isinstance(node, foast.TupleTargetAssign):
                 values = node.value
                 targets = node.targets
-                indices = compute_assign_indices(targets)
+                indices = compute_assign_indices(targets, values)
 
                 tuple_symbol = self._unique_tuple_symbol(node)
                 tuple_assign = foast.Assign(
