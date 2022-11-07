@@ -229,6 +229,7 @@ class StencilBuilder:
         """
         self._build_data = {}
         self._externals = externals
+        self.with_caching(self.caching.name, **self.options.cache_settings)
         return self
 
     @property
