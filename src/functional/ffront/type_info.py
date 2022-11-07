@@ -312,11 +312,11 @@ def is_concretizable(symbol_type: ct.SymbolType, to_type: ct.SymbolType) -> bool
     return False
 
 
-def _is_empty_field(field: ct.FieldType) -> bool:
+def _is_empty_field(field: ct.SymbolType) -> bool:
     return isinstance(field, ct.FieldType) and len(field.dims) == 0
 
 
-def is_not_empty_field_compatible(a_arg: ct.FieldType, b_arg: ct.FieldType | ct.ScalarType) -> bool:
+def is_not_empty_field_compatible(a_arg: ct.SymbolType, b_arg: ct.SymbolType) -> bool:
     """
     Check if first argument is an empty field and whether second is either another emtpy field or a scalar.
 
@@ -558,7 +558,9 @@ def function_signature_incompatibilities(
 
 @function_signature_incompatibilities.register
 def function_signature_incompatibilities_func(
-    func_type: ct.FunctionType, args: list[ct.SymbolType], kwargs: dict[str, ct.SymbolType]
+    func_type: ct.FunctionType,
+    args: list[ct.SymbolType],
+    kwargs: dict[str, ct.SymbolType],
 ) -> Iterator[str]:
 
     # check positional arguments
