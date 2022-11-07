@@ -15,7 +15,18 @@
 import enum
 import functools
 import typing
-from typing import Any, ClassVar, Dict, Generic, List, Optional, Tuple, Type, TypeVar, Union
+from typing import (
+    Any,
+    ClassVar,
+    Dict,
+    Generic,
+    List,
+    Optional,
+    Tuple,
+    Type,
+    TypeVar,
+    Union,
+)
 
 import numpy as np
 import scipy.special
@@ -246,14 +257,13 @@ class Stmt(LocNode):
     pass
 
 
-def verify_condition_is_boolean(parent_node_cls: eve.Node, cond: Expr) -> Expr:
+def verify_condition_is_boolean(parent_node_cls: datamodels.DataModel, cond: Expr) -> None:
     if cond.dtype and cond.dtype is not DataType.BOOL:
         raise ValueError("Condition in `{}` must be boolean.".format(type(parent_node_cls)))
-    return cond
 
 
 def verify_and_get_common_dtype(
-    node_cls: Type[eve.Node], exprs: List[Expr], *, strict: bool = True
+    node_cls: Type[datamodels.DataModel], exprs: List[Expr], *, strict: bool = True
 ) -> Optional[DataType]:
     assert len(exprs) > 0
     if all(e.dtype is not DataType.AUTO for e in exprs):
@@ -339,7 +349,9 @@ class FieldAccess(eve.GenericNode, Generic[ExprT, VariableKOffsetT]):
         return cls(name=name, loc=loc, offset=CartesianOffset.zero())
 
     @datamodels.validator("data_index")
-    def data_index_exprs_are_int(self, attribute: datamodels.Attribute, value: Any) -> None:
+    def data_index_exprs_are_int(
+        self: datamodels.DataModel, attribute: datamodels.Attribute, value: Any
+    ) -> None:
         value = typing.cast(List[Expr], value)
         if value and any(
             index.dtype is not DataType.AUTO and not index.dtype.isinteger() for index in value
@@ -363,8 +375,10 @@ class IfStmt(eve.GenericNode, Generic[StmtT, ExprT]):
     false_branch: Optional[StmtT] = None
 
     @datamodels.validator("cond")
-    def condition_is_boolean(self, attribute: datamodels.Attribute, value: Expr) -> None:
-        return verify_condition_is_boolean(self, value)
+    def condition_is_boolean(
+        self: datamodels.DataModel, attribute: datamodels.Attribute, value: Expr
+    ) -> None:
+        verify_condition_is_boolean(self, value)
 
 
 class While(eve.GenericNode, Generic[StmtT, ExprT]):
@@ -378,8 +392,10 @@ class While(eve.GenericNode, Generic[StmtT, ExprT]):
     body: List[StmtT]
 
     @datamodels.validator("cond")
-    def condition_is_boolean(self, attribute: datamodels.Attribute, value: Expr) -> None:
-        return verify_condition_is_boolean(self, value)
+    def condition_is_boolean(
+        self: datamodels.DataModel, attribute: datamodels.Attribute, value: Expr
+    ) -> None:
+        verify_condition_is_boolean(self, value)
 
 
 class AssignStmt(eve.GenericNode, Generic[TargetT, ExprT]):
@@ -387,9 +403,12 @@ class AssignStmt(eve.GenericNode, Generic[TargetT, ExprT]):
     right: ExprT
 
 
-def assign_stmt_dtype_validation(*, strict: bool) -> datamodels.RootValidator:
-    def _impl(cls: Type[datamodels.DataModel], instance: datamodels.DataModel) -> None:
-        assert hasattr(instance, "left") and hasattr(instance, "right")
+def assign_stmt_dtype_validation(*, strict: bool) -> classmethod:
+    def _impl(
+        cls: Type[datamodels.DataModel],
+        instance: datamodels.DataModel,
+    ) -> None:
+        assert isinstance(instance, AssignStmt)
         verify_and_get_common_dtype(cls, [instance.left, instance.right], strict=strict)
 
     return datamodels.root_validator(_impl)
@@ -406,15 +425,15 @@ class UnaryOp(eve.GenericNode, Generic[ExprT]):
     expr: ExprT
 
     @datamodels.root_validator
-    def dtype_propagation(cls: Type["UnaryOp"], instance: "UnaryOp") -> None:
+    def dtype_propagation(cls: Type[datamodels.DataModel], instance: datamodels.DataModel) -> None:
         instance.dtype = instance.expr.dtype
 
     @datamodels.root_validator
-    def kind_propagation(cls: Type["UnaryOp"], instance: "UnaryOp") -> None:
+    def kind_propagation(cls: Type[datamodels.DataModel], instance: datamodels.DataModel) -> None:
         instance.kind = instance.expr.kind
 
     @datamodels.root_validator
-    def op_to_dtype_check(cls: Type["UnaryOp"], instance: "UnaryOp") -> None:
+    def op_to_dtype_check(cls: Type[datamodels.DataModel], instance: datamodels.DataModel) -> None:
         if instance.expr.dtype:
             if instance.op == UnaryOperator.NOT:
                 if not instance.expr.dtype == DataType.BOOL:

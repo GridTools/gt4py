@@ -13,7 +13,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import dataclasses
-import itertools
 from dataclasses import dataclass
 from typing import Any, Dict, Iterable, List, Optional, Set, Union, cast
 
@@ -23,9 +22,9 @@ import dace.library
 import dace.subsets
 
 import eve
-from gtc import common, oir
-
+from gtc import common
 from gtc import daceir as dcir
+from gtc import oir
 from gtc.dace.expansion_specification import Loop, Map, Sections, Stages
 from gtc.dace.nodes import StencilComputation
 from gtc.dace.utils import (

@@ -1,24 +1,24 @@
 default_language_version:
-  python: python3.8
+  python: python3.9
 repos:
-# - repo: meta
-#   hooks:
-#   - id: check-hooks-apply
-#   - id: check-useless-excludes
+  # - repo: meta
+  #   hooks:
+  #   - id: check-hooks-apply
+  #   - id: check-useless-excludes
 
 - repo: https://github.com/pre-commit/pre-commit-hooks
   rev: v4.1.0
   hooks:
   - id: check-case-conflict
-#  - id: check-json
+      #  - id: check-json
   - id: check-merge-conflict
     exclude_types: [rst]
   - id: check-toml
   - id: check-yaml
   - id: debug-statements
-  # - id: fix-encoding-pragma
-  #   args: [--remove]
-#  - id: pretty-format-json
+    # - id: fix-encoding-pragma
+    #   args: [--remove]
+  #  - id: pretty-format-json
 
 - repo: https://github.com/macisamuele/language-formatters-pre-commit-hooks
   rev: v2.2.0
@@ -28,52 +28,52 @@ repos:
   - id: pretty-format-toml
     args: [--autofix]
   - id: pretty-format-yaml
-    args: [--autofix, --preserve-quotes, --indent, '2']
+    args: [--autofix, --preserve-quotes, --indent, "2"]
 
-# - repo: https://github.com/Lucas-C/pre-commit-hooks
-#   rev: v1.1.9
-#   hooks:
-#   - id: insert-license
-#     name: Add license for all GT4Py Python source files
-#     exclude: (^\..*$)|(^.*/gtc(_.*)?/.*$)|(^.*/eve(_.*)?/.*$)
-#     types: [python]
-#     args: [--comment-style, "|#|", --license-filepath, .license_headers/gt4py_license_header.txt, --fuzzy-match-generates-todo]
+  # - repo: https://github.com/Lucas-C/pre-commit-hooks
+  #   rev: v1.1.9
+  #   hooks:
+  #   - id: insert-license
+  #     name: Add license for all GT4Py Python source files
+  #     exclude: (^\..*$)|(^.*/gtc(_.*)?/.*$)|(^.*/eve(_.*)?/.*$)
+  #     types: [python]
+  #     args: [--comment-style, "|#|", --license-filepath, .license_headers/gt4py_license_header.txt, --fuzzy-match-generates-todo]
 
-# - repo: https://github.com/Lucas-C/pre-commit-hooks
-#   rev: v1.1.9
-#   hooks:
-#   - id: insert-license
-#     name: Add license for all GTC Python source files
-#     exclude: ^\..*$
-#     files: ^.*/gtc(_.*)?/.*$
-#     types: [python]
-#     args: [--comment-style, "|#|", --license-filepath, .license_headers/gtc_license_header.txt, --fuzzy-match-generates-todo]
+  # - repo: https://github.com/Lucas-C/pre-commit-hooks
+  #   rev: v1.1.9
+  #   hooks:
+  #   - id: insert-license
+  #     name: Add license for all GTC Python source files
+  #     exclude: ^\..*$
+  #     files: ^.*/gtc(_.*)?/.*$
+  #     types: [python]
+  #     args: [--comment-style, "|#|", --license-filepath, .license_headers/gtc_license_header.txt, --fuzzy-match-generates-todo]
 
-# - repo: https://github.com/Lucas-C/pre-commit-hooks
-#   rev: v1.1.9
-#   hooks:
-#   - id: insert-license
-#     name: Add license for all Eve Python source files
-#     exclude: ^\..*$
-#     files: ^.*/eve(_.*)?/.*$
-#     types: [python]
-#     args: [--comment-style, "|#|", --license-filepath, .license_headers/eve_license_header.txt, --fuzzy-match-generates-todo]
+  # - repo: https://github.com/Lucas-C/pre-commit-hooks
+  #   rev: v1.1.9
+  #   hooks:
+  #   - id: insert-license
+  #     name: Add license for all Eve Python source files
+  #     exclude: ^\..*$
+  #     files: ^.*/eve(_.*)?/.*$
+  #     types: [python]
+  #     args: [--comment-style, "|#|", --license-filepath, .license_headers/eve_license_header.txt, --fuzzy-match-generates-todo]
 
-# - repo: https://github.com/asottile/yesqa
-#   rev: v1.2.2
-#   hooks:
-#   - id: yesqa
-#     additional_dependencies:
-#     - flake8==3.8.4
-#     - darglint
-#     - flake8-bugbear
-#     - flake8-builtins
-#     - flake8-debugger
-#     - flake8-docstrings
-#     - flake8-eradicate
-#     - flake8-mutable
-#     - flake8-rst-docstrings
-#     - pygments
+  # - repo: https://github.com/asottile/yesqa
+  #   rev: v1.2.2
+  #   hooks:
+  #   - id: yesqa
+  #     additional_dependencies:
+  #     - flake8==3.8.4
+  #     - darglint
+  #     - flake8-bugbear
+  #     - flake8-builtins
+  #     - flake8-debugger
+  #     - flake8-docstrings
+  #     - flake8-eradicate
+  #     - flake8-mutable
+  #     - flake8-rst-docstrings
+  #     - pygments
 
 - repo: https://github.com/psf/black
   rev: 22.3.0
@@ -97,8 +97,8 @@ repos:
     - flake8-docstrings
     - flake8-eradicate
     - flake8-mutable
-  # Disabled for now due to random false positives
-  # - flake8-rst-docstrings
+          # Disabled for now due to random false positives
+          # - flake8-rst-docstrings
     - pygments
     exclude: |
       (?x)^(
