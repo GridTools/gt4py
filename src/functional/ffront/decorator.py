@@ -319,8 +319,7 @@ class Program:
 
     def _process_args(self, args: tuple, kwargs: dict) -> tuple[tuple, tuple, dict[str, Any]]:
         # if parameter is in signature but not in args, move it from kwargs to args
-        if len(kwargs) > 0:
-            args, kwargs = _canonicalize_args(self.past_node.params, args, kwargs)
+        args, kwargs = _canonicalize_args(self.past_node.params, args, kwargs)
 
         self._validate_args(*args, **kwargs)
 
