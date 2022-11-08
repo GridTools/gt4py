@@ -95,7 +95,9 @@ def _filter_closure_vars_by_type(closure_vars: dict[str, Any], *types: type) -> 
 
 
 def _canonicalize_args(
-    node_params: list[ct.SymbolType], args: tuple[ct.SymbolType], kwargs: dict[str, ct.SymbolType]
+    node_params: list[ct.FieldType | ct.ScalarType],
+    args: tuple[ct.SymbolType],
+    kwargs: dict[str, ct.SymbolType],
 ) -> tuple[tuple, dict]:
     new_args = []
     new_kwargs = {**kwargs}
@@ -109,9 +111,9 @@ def _canonicalize_args(
         elif param_i < len(args):
             new_args.append(args[param_i])
         else:
-            # case when parameter is in function definition but not in function call
-            # e.g. function expects 3 parameters, but only 2 were given. To avoid duplication of
-            # error handling this is covered later in `accept_args`.
+            # case when param in function definition but not in function call
+            # e.g. function expects 3 parameters, but only 2 were given.
+            # Error covered later in `accept_args`.
             pass
 
     args = tuple(new_args)
