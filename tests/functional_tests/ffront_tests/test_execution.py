@@ -1398,3 +1398,32 @@ def test_nested_if(fieldview_backend):
 
     nested_if(a, b, False, out=out, offset_provider={})
     assert np.allclose(out, ref_false)
+
+
+def test_if_without_else(fieldview_backend):
+    size = 10
+    a = np_as_located_field(IDim, JDim)(np.ones((size, size)))
+    b = np_as_located_field(IDim, JDim)(2 * np.ones((size, size)))
+    out = np_as_located_field(IDim, JDim)(np.zeros((size, size)))
+    ref_true = np_as_located_field(IDim, JDim)(np.ones((size, size)) + 1)
+    ref_false = np_as_located_field(IDim, JDim)(2 * np.ones((size, size)) + 5)
+
+    @field_operator(backend=fieldview_backend)
+    def if_without_else(
+        a: Field[[IDim, JDim], float64], b: Field[[IDim, JDim], float64], condition: bool
+    ):
+        result = b + 5.0
+
+        if condition:
+            if not condition:
+                inner = a
+            else:
+                inner = a + 1.0
+            result = inner
+        return result
+
+    if_without_else(a, b, True, out=out, offset_provider={})
+    assert np.allclose(out, ref_true)
+
+    if_without_else(a, b, False, out=out, offset_provider={})
+    assert np.allclose(out, ref_false)
