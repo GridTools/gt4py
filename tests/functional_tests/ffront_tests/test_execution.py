@@ -143,10 +143,10 @@ def test_xor(fieldview_backend):
     c = np_as_located_field(IDim)(np.zeros((size,), dtype=bool))
 
     @field_operator(backend=fieldview_backend)
-    def tilde_xor(inp1: Field[[IDim], bool], inp2: Field[[IDim], bool]) -> Field[[IDim], bool]:
+    def binary_xor(inp1: Field[[IDim], bool], inp2: Field[[IDim], bool]) -> Field[[IDim], bool]:
         return inp1 ^ inp2
 
-    tilde_xor(a, b, out=c, offset_provider={})
+    binary_xor(a, b, out=c, offset_provider={})
 
     assert np.allclose(a.array() ^ b.array(), c)
 
