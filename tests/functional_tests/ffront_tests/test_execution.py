@@ -35,6 +35,7 @@ from functional.ffront.fbuiltins import (
     neighbor_sum,
     where,
 )
+from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError
 from functional.iterator.embedded import (
     NeighborTableOffsetProvider,
     index_field,
@@ -1267,8 +1268,6 @@ def test_where_k_offset(fieldview_backend):
 
 
 def test_undefined_symbols():
-    from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError
-
     with pytest.raises(FieldOperatorTypeDeductionError, match="Undeclared symbol"):
 
         @field_operator
@@ -1427,3 +1426,50 @@ def test_if_without_else(fieldview_backend):
 
     if_without_else(a, b, False, out=out, offset_provider={})
     assert np.allclose(out, ref_false)
+
+
+def test_if_non_scalar_condition():
+    with pytest.raises(FieldOperatorTypeDeductionError, match="Condition for `if` must be scalar."):
+
+        @field_operator
+        def if_non_scalar_condition(
+            a: Field[[IDim, JDim], float64], b: Field[[IDim, JDim], float64], condition: bool
+        ):
+            result = a
+            if a == b:
+                result = b
+            return result
+
+
+def test_if_non_boolean_condition():
+
+    with pytest.raises(
+        FieldOperatorTypeDeductionError, match="Condition for `if` must be of boolean type."
+    ):
+
+        @field_operator
+        def if_non_boolean_condition(
+            a: Field[[IDim, JDim], float64], b: Field[[IDim, JDim], float64], condition: float64
+        ):
+            if condition:
+                result = b
+            else:
+                result = a
+            return result
+
+
+def test_if_inconsistent_types():
+    with pytest.raises(
+        FieldOperatorTypeDeductionError,
+        match="Inconsistent types between two branches for variable",
+    ):
+
+        @field_operator
+        def if_inconsistent_types(
+            a: Field[[IDim, JDim], float64], b: Field[[IDim, JDim], float64], condition: bool
+        ):
+            if condition:
+                result = 1
+            else:
+                result = 2.0
+            return result
