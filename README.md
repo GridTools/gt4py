@@ -36,9 +36,9 @@ cd gt4py
 
 # Create the development environment in any location (usually `.venv`)
 # selecting one of the following templates:
-#     py310-base  -> base environment
-#     py310-atlas -> base environment + atlas4py bindings
-tox --devenv .venv -e py310-base
+#     gt4py-py310-base  -> base environment
+#     gt4py-py310-atlas -> base environment + atlas4py bindings
+tox --devenv .venv -e gt4py-py310-base
 
 # Finally, activate the environment and check that everything works
 source .venv/bin/activate
