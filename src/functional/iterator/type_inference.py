@@ -3,7 +3,11 @@ from collections import abc
 
 import eve
 from functional.iterator import ir
-from functional.iterator.embedded import DimensionKind, NeighborTableOffsetProvider
+from functional.iterator.embedded import (
+    DimensionKind,
+    NeighborTableOffsetProvider,
+    StridedNeighborOffsetProvider,
+)
 from functional.iterator.runtime import CartesianAxis
 from functional.type_inference import Type, TypeVar, freshen, reindex_vars, unify
 
@@ -439,7 +443,9 @@ class _TypeInferrer(eve.NodeTranslator):
                             axis = self.offset_provider[offset]
                             if isinstance(axis, CartesianAxis):
                                 continue  # Cartesian shifts don’t change the location type
-                            elif isinstance(axis, NeighborTableOffsetProvider):
+                            elif isinstance(
+                                axis, (NeighborTableOffsetProvider, StridedNeighborOffsetProvider)
+                            ):
                                 assert (
                                     axis.origin_axis.kind
                                     == axis.neighbor_axis.kind
