@@ -301,7 +301,7 @@ def test_input_kwargs(fieldview_backend):
     fieldop_input_kwargs(input_1, b=input_2, c=input_3, out=out, offset_provider={})
     assert np.allclose(expected, out)
 
-    @program
+    @program(backend=fieldview_backend)
     def program_input_kwargs(
         a: Field[[IDim, JDim], float64],
         b: Field[[IDim, JDim], float64],
