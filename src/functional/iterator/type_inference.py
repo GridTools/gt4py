@@ -327,6 +327,36 @@ BUILTIN_TYPES: typing.Final[dict[str, Type]] = {
 del T0, T1, T2, T3, T4, T5, Val_T0_T1, Val_T0_Scalar, Val_BOOL_T1
 
 
+def _infer_shift_location_types(shift_args, offset_provider, constraints):
+    current_loc_in = TypeVar.fresh()
+    if offset_provider:
+        current_loc_out = current_loc_in
+        for arg in shift_args:
+            if not isinstance(arg, ir.OffsetLiteral):
+                continue  # probably some dynamically computed offset, thus we assume it’s a number not an axis and just ignore it (see comment below)
+            offset = arg.value
+            if isinstance(offset, int):
+                continue  # ignore ‘application’ of (partial) shifts
+            else:
+                assert isinstance(offset, str)
+                axis = offset_provider[offset]
+                if isinstance(axis, CartesianAxis):
+                    continue  # Cartesian shifts don’t change the location type
+                elif isinstance(axis, (NeighborTableOffsetProvider, StridedNeighborOffsetProvider)):
+                    assert (
+                        axis.origin_axis.kind == axis.neighbor_axis.kind == DimensionKind.HORIZONTAL
+                    )
+                    constraints.add((current_loc_out, Location(name=axis.origin_axis.value)))
+                    current_loc_out = Location(name=axis.neighbor_axis.value)
+                else:
+                    raise NotImplementedError()
+    elif not shift_args:
+        current_loc_out = current_loc_in
+    else:
+        current_loc_out = TypeVar.fresh()
+    return current_loc_in, current_loc_out
+
+
 class _TypeInferrer(eve.NodeTranslator):
     """Visit the full iterator IR tree, convert nodes to respective types and generate constraints."""
 
@@ -427,38 +457,9 @@ class _TypeInferrer(eve.NodeTranslator):
             if node.fun.id == "shift":
                 # Calls to shift are handled as being part of the grammar, not
                 # as function calls, as the type depends on the offset provider
-                current_loc_in = TypeVar.fresh()
-                if self.offset_provider:
-                    current_loc_out = current_loc_in
-                    for arg in node.args:
-                        if not isinstance(arg, ir.OffsetLiteral):
-                            continue  # probably some dynamically computed offset, thus we assume it’s a number not an axis and just ignore it (see comment below)
-                        offset = arg.value
-                        if isinstance(offset, int):
-                            continue  # ignore ‘application’ of (partial) shifts
-                        else:
-                            assert isinstance(offset, str)
-                            axis = self.offset_provider[offset]
-                            if isinstance(axis, CartesianAxis):
-                                continue  # Cartesian shifts don’t change the location type
-                            elif isinstance(
-                                axis, (NeighborTableOffsetProvider, StridedNeighborOffsetProvider)
-                            ):
-                                assert (
-                                    axis.origin_axis.kind
-                                    == axis.neighbor_axis.kind
-                                    == DimensionKind.HORIZONTAL
-                                )
-                                constraints.add(
-                                    (current_loc_out, Location(name=axis.origin_axis.value))
-                                )
-                                current_loc_out = Location(name=axis.neighbor_axis.value)
-                            else:
-                                raise NotImplementedError()
-                elif not node.args:
-                    current_loc_out = current_loc_in
-                else:
-                    current_loc_out = TypeVar.fresh()
+                current_loc_in, current_loc_out = _infer_shift_location_types(
+                    node.args, self.offset_provider, constraints
+                )
                 defined_loc = TypeVar.fresh()
                 dtype_ = TypeVar.fresh()
                 size = TypeVar.fresh()
