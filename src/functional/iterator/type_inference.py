@@ -2,12 +2,9 @@ import typing
 from collections import abc
 
 import eve
+from functional.common import DimensionKind
 from functional.iterator import ir
-from functional.iterator.embedded import (
-    DimensionKind,
-    NeighborTableOffsetProvider,
-    StridedNeighborOffsetProvider,
-)
+from functional.iterator.embedded import NeighborTableOffsetProvider, StridedNeighborOffsetProvider
 from functional.iterator.runtime import CartesianAxis
 from functional.type_inference import Type, TypeVar, freshen, reindex_vars, unify
 
