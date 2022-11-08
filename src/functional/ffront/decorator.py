@@ -577,7 +577,6 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         offset_provider: dict[str, Dimension],
         **kwargs,
     ) -> None:
-
         args, kwargs = _canonicalize_args(self.foast_node.definition.params, args, kwargs)
         # TODO(tehrengruber): check all offset providers are given
         # deduce argument types
