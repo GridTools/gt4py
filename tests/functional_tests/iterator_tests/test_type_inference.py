@@ -1,4 +1,6 @@
+from functional.common import Dimension
 from functional.iterator import ir, type_inference as ti
+from functional.iterator.embedded import NeighborTableOffsetProvider
 from functional.iterator.runtime import CartesianAxis
 
 
@@ -431,6 +433,98 @@ def test_shift_with_cartesian_offset_provider():
     inferred = ti.infer(testee, offset_provider=offset_provider)
     assert inferred == expected
     assert ti.pformat(inferred) == "(It[T₂, T₃, T₀¹]) → It[T₂, T₃, T₀¹]"
+
+
+def test_partial_shift_with_cartesian_offset_provider():
+    testee = ir.FunCall(fun=ir.SymRef(id="shift"), args=[ir.OffsetLiteral(value="i")])
+    expected = ti.FunctionType(
+        args=ti.Tuple.from_elems(
+            ti.Val(
+                kind=ti.Iterator(),
+                dtype=ti.TypeVar(idx=0),
+                size=ti.TypeVar(idx=1),
+                current_loc=ti.TypeVar(idx=2),
+                defined_loc=ti.TypeVar(idx=3),
+            ),
+        ),
+        ret=ti.Val(
+            kind=ti.Iterator(),
+            dtype=ti.TypeVar(idx=0),
+            size=ti.TypeVar(idx=1),
+            current_loc=ti.TypeVar(idx=2),
+            defined_loc=ti.TypeVar(idx=3),
+        ),
+    )
+    offset_provider = {"i": CartesianAxis("IDim")}
+    inferred = ti.infer(testee, offset_provider=offset_provider)
+    assert inferred == expected
+    assert ti.pformat(inferred) == "(It[T₂, T₃, T₀¹]) → It[T₂, T₃, T₀¹]"
+
+
+def test_shift_with_unstructured_offset_provider():
+    testee = ir.FunCall(
+        fun=ir.SymRef(id="shift"), args=[ir.OffsetLiteral(value="V2E"), ir.OffsetLiteral(value=0)]
+    )
+    expected = ti.FunctionType(
+        args=ti.Tuple.from_elems(
+            ti.Val(
+                kind=ti.Iterator(),
+                dtype=ti.TypeVar(idx=0),
+                size=ti.TypeVar(idx=1),
+                current_loc=ti.Location(name="Vertex"),
+                defined_loc=ti.TypeVar(idx=2),
+            ),
+        ),
+        ret=ti.Val(
+            kind=ti.Iterator(),
+            dtype=ti.TypeVar(idx=0),
+            size=ti.TypeVar(idx=1),
+            current_loc=ti.Location(name="Edge"),
+            defined_loc=ti.TypeVar(idx=2),
+        ),
+    )
+    offset_provider = {
+        "V2E": NeighborTableOffsetProvider(None, Dimension("Vertex"), Dimension("Edge"), 1)
+    }
+    inferred = ti.infer(testee, offset_provider=offset_provider)
+    assert inferred == expected
+    assert ti.pformat(inferred) == "(It[Vertex, T₂, T₀¹]) → It[Edge, T₂, T₀¹]"
+
+
+def test_partial_shift_with_unstructured_offset_provider():
+    testee = ir.FunCall(
+        fun=ir.SymRef(id="shift"),
+        args=[
+            ir.OffsetLiteral(value="V2E"),
+            ir.OffsetLiteral(value=0),
+            ir.OffsetLiteral(value="E2C"),
+        ],
+    )
+    expected = ti.FunctionType(
+        args=ti.Tuple.from_elems(
+            ti.Val(
+                kind=ti.Iterator(),
+                dtype=ti.TypeVar(idx=0),
+                size=ti.TypeVar(idx=1),
+                current_loc=ti.Location(name="Vertex"),
+                defined_loc=ti.TypeVar(idx=2),
+            ),
+        ),
+        ret=ti.Val(
+            kind=ti.Iterator(),
+            dtype=ti.TypeVar(idx=0),
+            size=ti.TypeVar(idx=1),
+            current_loc=ti.Location(name="Cell"),
+            defined_loc=ti.TypeVar(idx=2),
+        ),
+    )
+    offset_provider = {
+        "V2E": NeighborTableOffsetProvider(None, Dimension("Vertex"), Dimension("Edge"), 1),
+        "E2C": NeighborTableOffsetProvider(None, Dimension("Edge"), Dimension("Cell"), 1),
+    }
+    inferred = ti.infer(testee, offset_provider=offset_provider)
+    assert inferred == expected
+    assert ti.pformat(inferred) == "(It[Vertex, T₂, T₀¹]) → It[Cell, T₂, T₀¹]"
 
 
 def test_function_definition():

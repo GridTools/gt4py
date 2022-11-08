@@ -3,6 +3,7 @@ from collections import abc
 
 import eve
 from functional.iterator import ir
+from functional.iterator.embedded import DimensionKind, NeighborTableOffsetProvider
 from functional.iterator.runtime import CartesianAxis
 from functional.type_inference import Type, TypeVar, freshen, reindex_vars, unify
 
@@ -431,15 +432,25 @@ class _TypeInferrer(eve.NodeTranslator):
                     ]
                     while offset_stack:
                         offset = offset_stack.pop()
-                        if isinstance(offset, str):
+                        if isinstance(offset, int):
+                            continue  # ignore ‘application’ of (partial) shifts
+                        else:
+                            assert isinstance(offset, str)
                             axis = self.offset_provider[offset]
                             if isinstance(axis, CartesianAxis):
-                                assert isinstance(offset_stack[-1], int)
-                                offset_stack.pop()
+                                continue  # Cartesian shifts don’t change the location type
+                            elif isinstance(axis, NeighborTableOffsetProvider):
+                                assert (
+                                    axis.origin_axis.kind
+                                    == axis.neighbor_axis.kind
+                                    == DimensionKind.HORIZONTAL
+                                )
+                                constraints.add(
+                                    (current_loc_out, Location(name=axis.origin_axis.value))
+                                )
+                                current_loc_out = Location(name=axis.neighbor_axis.value)
                             else:
                                 raise NotImplementedError()
-                        else:
-                            raise NotImplementedError()
                 else:
                     current_loc_out = TypeVar.fresh()
                 defined_loc = TypeVar.fresh()
