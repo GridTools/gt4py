@@ -298,6 +298,7 @@ def test_input_kwargs(fieldview_backend):
     ) -> Field[[IDim, JDim], float64]:
         return c * a - b
 
+    out = np_as_located_field(IDim, JDim)(np.zeros((size, size)))
     fieldop_input_kwargs(input_1, b=input_2, c=input_3, out=out, offset_provider={})
     assert np.allclose(expected, out)
 
