@@ -24,6 +24,7 @@ from eve.pattern_matching import ObjectPattern as P
 from functional.common import Field, GridType, GTTypeError
 from functional.ffront import common_types, program_ast as past
 from functional.ffront.decorator import field_operator, program
+from functional.ffront.fbuiltins import broadcast
 from functional.ffront.func_to_past import ProgramParser
 from functional.ffront.past_passes.type_deduction import ProgramTypeError
 from functional.ffront.past_to_itir import ProgramLowering
@@ -287,8 +288,7 @@ def test_input_kwargs(fieldview_backend):
     input_3 = np_as_located_field(IDim, JDim)(np.ones((size, size)) * 3)
     out = np_as_located_field(IDim, JDim)(np.zeros((size, size)))
 
-    expected_fieldop = np.asarray(input_3) * np.asarray(input_1) - np.asarray(input_2)
-    expected_program = np.asarray(input_3) * np.asarray(input_2) - np.asarray(input_1)
+    expected = np.asarray(input_3) * np.asarray(input_1) - np.asarray(input_2)
 
     @field_operator(backend=fieldview_backend)
     def fieldop_input_kwargs(
@@ -299,7 +299,7 @@ def test_input_kwargs(fieldview_backend):
         return c * a - b
 
     fieldop_input_kwargs(input_1, b=input_2, c=input_3, out=out, offset_provider={})
-    assert np.allclose(expected_fieldop, out)
+    assert np.allclose(expected, out)
 
     @program
     def program_input_kwargs(
@@ -311,15 +311,12 @@ def test_input_kwargs(fieldview_backend):
         fieldop_input_kwargs(a, b, c, out=out)
 
     out = np_as_located_field(IDim, JDim)(np.zeros((size, size)))
-
     program_input_kwargs(input_1, b=input_2, c=input_3, out=out, offset_provider={})
-    assert np.allclose(expected_program, out)
+    assert np.allclose(expected, out)
+
     out = np_as_located_field(IDim, JDim)(np.zeros((size, size)))
-
     program_input_kwargs(a=input_1, b=input_2, c=input_3, out=out, offset_provider={})
-    assert np.allclose(expected_program, out)
+    assert np.allclose(expected, out)
 
-    with pytest.raises(GTTypeError) as exc_info_1:
+    with pytest.raises(GTTypeError, match="got multiple values for argument"):
         program_input_kwargs(input_2, input_3, a=input_1, out=out, offset_provider={})
-
-    assert "got multiple values for argument" in exc_info_1.value.args[0]

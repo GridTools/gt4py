@@ -98,13 +98,14 @@ def _canonicalize_args(
     node_params: list[ct.SymbolType], args: tuple[ct.SymbolType], kwargs: dict[str, ct.SymbolType]
 ) -> tuple[tuple, dict]:
     new_args = []
+    new_kwargs = {**kwargs}
 
     for param_i, param in enumerate(node_params):
-        if param.id in kwargs:
-            if param.id not in ["out", "domain"] and param_i < len(args):
+        if param.id in new_kwargs:
+            if param_i < len(args):
                 raise ProgramTypeError(f"got multiple values for argument {param.id}.")
             new_args.append(kwargs[param.id])
-            kwargs.pop(param.id)
+            new_kwargs.pop(param.id)
         elif param_i < len(args):
             new_args.append(args[param_i])
         else:
@@ -114,7 +115,7 @@ def _canonicalize_args(
             pass
 
     args = tuple(new_args)
-    return args, kwargs
+    return args, new_kwargs
 
 
 def _deduce_grid_type(
