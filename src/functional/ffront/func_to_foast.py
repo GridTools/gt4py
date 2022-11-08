@@ -200,12 +200,12 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
         target = node.targets[0]  # there is only one element after assignment passes
         if isinstance(target, ast.Tuple):
 
-            constraint_type = ct.DataType
-            ts = []
+            constraint_type = foast.DataType
+            new_targets: list[foast.FieldSymbol | foast.TupleSymbol | foast.ScalarSymbol | foast.Starred] = []
 
             for elt in target.elts:
                 if isinstance(elt, ast.Starred):
-                    ts.append(
+                    new_targets.append(
                         foast.Starred(
                             id=foast.DataSymbol(
                                 id=elt.value.id,
@@ -217,7 +217,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
                         )
                     )
                 else:
-                    ts.append(
+                    new_targets.append(
                         foast.DataSymbol(
                             id=elt.id,
                             location=self._make_loc(elt),
@@ -226,7 +226,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
                     )
 
             tta = foast.TupleTargetAssign(
-                targets=ts, value=self.visit(node.value), location=self._make_loc(node)
+                targets=new_targets, value=self.visit(node.value), location=self._make_loc(node)
             )
             return tta
 

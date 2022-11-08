@@ -26,15 +26,16 @@ def compute_assign_indices(
         [0, 1, (2, 5)]
     """
     indices = list(range(len(targets)))
+    star_lower, star_upper = max(indices), min(indices)
 
     for idx, elt in enumerate(targets):
         if isinstance(elt, foast.Starred):
             break
         indices[idx] = idx
+
     for idx, elt in reversed(list(enumerate(targets))):
         rel_idx = idx - len(targets)
         if isinstance(elt, foast.Starred):
-            star_lower, star_upper = max(indices), min(indices)
             if star_upper == 0:
                 star_upper = num_elts
             indices[idx] = (star_lower, star_upper)
