@@ -308,7 +308,7 @@ def test_input_kwargs(fieldview_backend):
         c: Field[[IDim, JDim], float64],
         out: Field[[IDim, JDim], float64],
     ):
-        fieldop_input_kwargs(c, a, b, out=out)
+        fieldop_input_kwargs(a, b, c, out=out)
 
     out = np_as_located_field(IDim, JDim)(np.zeros((size, size)))
 
