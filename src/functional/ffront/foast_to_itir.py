@@ -221,7 +221,8 @@ class FieldOperatorLowering(NodeTranslator):
 
     def _visit_body(self, body: list[foast.Stmt], **kwargs) -> itir.Expr:
         *stmts, return_stmt = body
-        return self.visit_stmts(stmts, inner_expr=self.visit(return_stmt), **kwargs)
+        assert isinstance(return_stmt, foast.Return)
+        return self.visit_stmts(stmts, inner_expr=self.visit(return_stmt, **kwargs), **kwargs)
 
     def visit_stmts(self, stmts: list[foast.Stmt], inner_expr: itir.Expr, **kwargs) -> itir.Expr:
         for stmt in reversed(stmts):
