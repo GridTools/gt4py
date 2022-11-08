@@ -80,8 +80,8 @@ class ParAssignStmt(common.AssignStmt[FieldAccess, Expr], Stmt):
         if offsets["i"] != 0 or offsets["j"] != 0:
             raise ValueError("Lhs of assignment must not have a horizontal offset.")
 
-    @classmethod
     @datamodels.root_validator
+    @classmethod
     def no_write_and_read_with_offset_of_same_field(
         cls: Type["ParAssignStmt"], instance: "ParAssignStmt"
     ) -> None:
@@ -206,8 +206,8 @@ class VerticalLoop(LocNode):
     temporaries: List[FieldDecl]
     body: List[Stmt]
 
-    @classmethod
     @datamodels.root_validator
+    @classmethod
     def _no_write_and_read_with_horizontal_offset(
         cls: Type["VerticalLoop"], instance: "VerticalLoop"
     ) -> None:

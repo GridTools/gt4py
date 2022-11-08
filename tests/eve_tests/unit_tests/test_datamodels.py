@@ -895,16 +895,16 @@ class ModelWithRootValidators(datamodels.DataModel):
 
     class_counter: ClassVar[int] = 0
 
-    @classmethod
     @datamodels.root_validator
+    @classmethod
     def _root_validator(cls: Type[datamodels.DataModel], instance: datamodels.DataModel) -> None:
         assert cls is type(instance)
         assert issubclass(cls, ModelWithRootValidators)
         assert isinstance(instance, ModelWithRootValidators)
         cls.class_counter = 0
 
-    @classmethod
     @datamodels.root_validator
+    @classmethod
     def _another_root_validator(
         cls: Type[datamodels.DataModel], instance: datamodels.DataModel
     ) -> None:
@@ -913,8 +913,8 @@ class ModelWithRootValidators(datamodels.DataModel):
         assert cls.class_counter == 0
         cls.class_counter += 1
 
-    @classmethod
     @datamodels.root_validator
+    @classmethod
     def _final_root_validator(
         cls: Type[datamodels.DataModel], instance: datamodels.DataModel
     ) -> None:
@@ -941,16 +941,19 @@ def test_root_validators(model_class: Type[datamodels.DataModel]):
 def test_root_validators_in_subclasses():
     class Model(ModelWithRootValidators):
         @datamodels.root_validator
+        @classmethod
         def _root_validator(cls, instance):
             assert cls.class_counter == 2
             cls.class_counter += 10
 
         @datamodels.root_validator
+        @classmethod
         def _another_root_validator(cls, instance):
             assert cls.class_counter == 12
             cls.class_counter += 10
 
         @datamodels.root_validator
+        @classmethod
         def _final_root_validator(cls, instance):
             assert cls.class_counter == 22
             if str(instance.int_value) == instance.str_value:

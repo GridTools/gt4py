@@ -156,8 +156,8 @@ class Interval(LocNode):
     start: AxisBound
     end: AxisBound
 
-    @classmethod
     @datamodels.root_validator
+    @classmethod
     def check(cls: Type["Interval"], instance: "Interval") -> None:
         _check_interval(instance)
 
@@ -185,8 +185,8 @@ class UnboundedInterval:
     start: Optional[AxisBound] = None
     end: Optional[AxisBound] = None
 
-    @classmethod
     @datamodels.root_validator
+    @classmethod
     def check(cls: Type["UnboundedInterval"], instance: "UnboundedInterval") -> None:
         _check_interval(instance)
 
@@ -278,8 +278,8 @@ class VerticalLoop(LocNode):
         if not v:
             raise ValueError("Empty vertical loop is not allowed")
 
-    @classmethod
     @datamodels.root_validator
+    @classmethod
     def valid_section_intervals(cls: Type["VerticalLoop"], instance: "VerticalLoop") -> None:
         starts, ends = zip(*((s.interval.start, s.interval.end) for s in instance.sections))
         if instance.loop_order == common.LoopOrder.BACKWARD:

@@ -384,7 +384,11 @@ class AssignStmt(eve.GenericNode, Generic[TargetT, ExprT]):
     right: ExprT
 
 
-def assign_stmt_dtype_validation(*, strict: bool) -> classmethod:
+def _make_root_validator(impl: datamodels.RootValidator) -> datamodels.RootValidator:
+    return datamodels.root_validator(typing.cast(datamodels.RootValidator, classmethod(impl)))
+
+
+def assign_stmt_dtype_validation(*, strict: bool) -> datamodels.RootValidator:
     def _impl(
         cls: Type[datamodels.DataModel],
         instance: datamodels.DataModel,
@@ -392,10 +396,10 @@ def assign_stmt_dtype_validation(*, strict: bool) -> classmethod:
         assert isinstance(instance, AssignStmt)
         verify_and_get_common_dtype(cls, [instance.left, instance.right], strict=strict)
 
-    return classmethod(datamodels.root_validator(_impl))
+    return _make_root_validator(_impl)
 
 
-class UnaryOp(eve.GenericNode, Generic[ExprT], Expr):
+class UnaryOp(eve.GenericNode, Generic[ExprT]):
     """
     Generic unary operation with type propagation.
 
@@ -405,18 +409,18 @@ class UnaryOp(eve.GenericNode, Generic[ExprT], Expr):
     op: UnaryOperator
     expr: ExprT
 
-    @classmethod
     @datamodels.root_validator
+    @classmethod
     def dtype_propagation(cls: Type["UnaryOp"], instance: "UnaryOp") -> None:
-        instance.dtype = instance.expr.dtype
+        instance.dtype = instance.expr.dtype  # type: ignore[attr-defined]
 
-    @classmethod
     @datamodels.root_validator
+    @classmethod
     def kind_propagation(cls: Type["UnaryOp"], instance: "UnaryOp") -> None:
-        instance.kind = instance.expr.kind
+        instance.kind = instance.expr.kind  # type: ignore[attr-defined]
 
-    @classmethod
     @datamodels.root_validator
+    @classmethod
     def op_to_dtype_check(cls: Type["UnaryOp"], instance: "UnaryOp") -> None:
         if instance.expr.dtype:
             if instance.op == UnaryOperator.NOT:
@@ -429,7 +433,7 @@ class UnaryOp(eve.GenericNode, Generic[ExprT], Expr):
                     )
 
 
-class BinaryOp(eve.GenericNode, Generic[ExprT], Expr):
+class BinaryOp(eve.GenericNode, Generic[ExprT]):
     """Generic binary operation with type propagation.
 
     The generic BinaryOp already contains logic for
@@ -442,13 +446,13 @@ class BinaryOp(eve.GenericNode, Generic[ExprT], Expr):
     left: ExprT
     right: ExprT
 
-    @classmethod
     @datamodels.root_validator
+    @classmethod
     def kind_propagation(cls: Type["BinaryOp"], instance: "BinaryOp") -> None:
-        instance.kind = compute_kind(instance.left, instance.right)
+        instance.kind = compute_kind(instance.left, instance.right)  # type: ignore[attr-defined]
 
 
-def binary_op_dtype_propagation(*, strict: bool) -> classmethod:
+def binary_op_dtype_propagation(*, strict: bool) -> datamodels.RootValidator:
     def _impl(cls: Type[BinaryOp], instance: BinaryOp) -> None:
         common_dtype = verify_and_get_common_dtype(
             cls, [instance.left, instance.right], strict=strict
@@ -457,21 +461,21 @@ def binary_op_dtype_propagation(*, strict: bool) -> classmethod:
         if common_dtype:
             if isinstance(instance.op, ArithmeticOperator):
                 if common_dtype is not DataType.BOOL:
-                    instance.dtype = common_dtype
+                    instance.dtype = common_dtype  # type: ignore[attr-defined]
                 else:
                     raise ValueError("Boolean expression is not allowed with arithmetic operation.")
             elif isinstance(instance.op, LogicalOperator):
                 if common_dtype is DataType.BOOL:
-                    instance.dtype = DataType.BOOL
+                    instance.dtype = DataType.BOOL  # type: ignore[attr-defined]
                 else:
                     raise ValueError("Arithmetic expression is not allowed in boolean operation.")
             elif isinstance(instance.op, ComparisonOperator):
-                instance.dtype = DataType.BOOL
+                instance.dtype = DataType.BOOL  # type: ignore[attr-defined]
 
-    return classmethod(datamodels.root_validator(_impl))
+    return _make_root_validator(_impl)
 
 
-class TernaryOp(eve.GenericNode, Generic[ExprT], Expr):
+class TernaryOp(eve.GenericNode, Generic[ExprT]):
     """
     Generic ternary operation with type propagation.
 
@@ -490,65 +494,65 @@ class TernaryOp(eve.GenericNode, Generic[ExprT], Expr):
     def condition_is_boolean(self, attribute: datamodels.Attribute, value: Expr) -> None:
         return verify_condition_is_boolean(self, value)
 
-    @classmethod
     @datamodels.root_validator
+    @classmethod
     def kind_propagation(cls: Type["TernaryOp"], instance: "TernaryOp") -> None:
-        instance.kind = compute_kind(instance.true_expr, instance.false_expr)
+        instance.kind = compute_kind(instance.true_expr, instance.false_expr)  # type: ignore[attr-defined]
 
 
-def ternary_op_dtype_propagation(*, strict: bool) -> classmethod:
+def ternary_op_dtype_propagation(*, strict: bool) -> datamodels.RootValidator:
     def _impl(cls: Type[TernaryOp], instance: TernaryOp) -> None:
         common_dtype = verify_and_get_common_dtype(
             cls, [instance.true_expr, instance.false_expr], strict=strict
         )
         if common_dtype:
-            instance.dtype = common_dtype
+            instance.dtype = common_dtype  # type: ignore[attr-defined]
 
-    return classmethod(datamodels.root_validator(_impl))
+    return _make_root_validator(_impl)
 
 
-class Cast(eve.GenericNode, Generic[ExprT], Expr):
+class Cast(eve.GenericNode, Generic[ExprT]):
     dtype: DataType
     expr: ExprT
 
-    @classmethod
     @datamodels.root_validator
+    @classmethod
     def kind_propagation(cls: Type["Cast"], instance: "Cast") -> None:
-        instance.kind = compute_kind(instance.expr)
+        instance.kind = compute_kind(instance.expr)  # type: ignore[attr-defined]
 
 
-class NativeFuncCall(eve.GenericNode, Generic[ExprT], Expr):
+class NativeFuncCall(eve.GenericNode, Generic[ExprT]):
     func: NativeFunction
     args: List[ExprT]
 
-    @classmethod
     @datamodels.root_validator
+    @classmethod
     def arity_check(cls: Type["NativeFuncCall"], instance: "NativeFuncCall") -> None:
         if instance.func.arity != len(instance.args):
             raise ValueError(
                 f"{instance.func} accepts {instance.func.arity} arguments, {len(instance.args)} where passed."
             )
 
-    @classmethod
     @datamodels.root_validator
+    @classmethod
     def kind_propagation(cls: Type["NativeFuncCall"], instance: "NativeFuncCall") -> None:
-        instance.kind = compute_kind(*instance.args)
+        instance.kind = compute_kind(*instance.args)  # type: ignore[attr-defined]
 
 
-def native_func_call_dtype_propagation(*, strict: bool = True) -> classmethod:
+def native_func_call_dtype_propagation(*, strict: bool = True) -> datamodels.RootValidator:
     def _impl(cls: Type[NativeFuncCall], instance: NativeFuncCall) -> None:
         if instance.func in (NativeFunction.ISFINITE, NativeFunction.ISINF, NativeFunction.ISNAN):
-            instance.dtype = DataType.BOOL
+            instance.dtype = DataType.BOOL  # type: ignore[attr-defined]
         else:
             # assumes all NativeFunction args have a common dtype
             common_dtype = verify_and_get_common_dtype(cls, instance.args, strict=strict)
             if common_dtype:
-                instance.dtype = common_dtype
+                instance.dtype = common_dtype  # type: ignore[attr-defined]
 
-    return classmethod(datamodels.root_validator(_impl))
+    return _make_root_validator(_impl)
 
 
-def validate_dtype_is_set() -> classmethod:
+def validate_dtype_is_set() -> datamodels.RootValidator:
     def _impl(cls: Type[ExprT], instance: ExprT) -> None:
         dtype_nodes: List[ExprT] = []
         for v in flatten_list(datamodels.astuple(instance)):
@@ -563,7 +567,7 @@ def validate_dtype_is_set() -> classmethod:
         if len(nodes_without_dtype) > 0:
             raise ValueError("Nodes without dtype detected {}".format(nodes_without_dtype))
 
-    return classmethod(datamodels.root_validator(_impl))
+    return _make_root_validator(_impl)
 
 
 class _LvalueDimsValidator(eve.VisitorWithSymbolTableTrait):
@@ -646,7 +650,7 @@ def validate_lvalue_dims(
     def _impl(cls: Type[datamodels.DataModel], instance: datamodels.DataModel) -> None:
         _LvalueDimsValidator(vertical_loop_type, decl_type).visit(instance)
 
-    return datamodels.root_validator(_impl)
+    return _make_root_validator(_impl)
 
 
 class AxisBound(eve.Node):
@@ -727,8 +731,8 @@ class HorizontalInterval(eve.Node):
             end=AxisBound(level=level, offset=end_offset),
         )
 
-    @classmethod
     @datamodels.root_validator
+    @classmethod
     def check_start_before_end(
         cls: Type["HorizontalInterval"], instance: "HorizontalInterval"
     ) -> None:

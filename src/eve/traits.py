@@ -40,6 +40,7 @@ class SymbolTableTrait:
 
     @no_type_check
     @datamodels.root_validator
+    @classmethod
     def _collect_symbol_names(cls: Type[SymbolTableTrait], instance: concepts.Node) -> None:
         collected_symbols = cls.SymbolsCollector.apply(instance)
         instance.annex.symtable = collected_symbols
@@ -95,6 +96,7 @@ class SymbolRefsValidatorTrait:
 
     @no_type_check
     @datamodels.root_validator
+    @classmethod
     def _validate_symbol_refs(cls: Type[SymbolRefsValidatorTrait], instance: concepts.Node) -> None:
         validator = cls.SymbolRefsValidator()
         symtable = instance.annex.symtable
