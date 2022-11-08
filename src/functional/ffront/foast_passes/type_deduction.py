@@ -258,12 +258,12 @@ class FieldOperatorTypeDeduction(NodeTranslator, traits.VisitorWithSymbolTableTr
         self, node: foast.TupleTargetAssign, **kwargs
     ) -> foast.TupleTargetAssign:
         values = self.visit(node.value, **kwargs)
-        num_values = len(values.type.types)
+        num_elts = len(values.type.types)
         targets = node.targets
-        indices = compute_assign_indices(targets, num_values)
+        indices = compute_assign_indices(targets, num_elts)
 
         if isinstance(values, foast.TupleExpr):
-            if not any(isinstance(i, tuple) for i in indices) and len(indices) != num_values:
+            if not any(isinstance(i, tuple) for i in indices) and len(indices) != num_elts:
                 raise FieldOperatorTypeDeductionError(f"Too many values to unpack (expected {len(indices)}).")
 
         new_target_list = []

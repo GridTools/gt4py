@@ -203,7 +203,6 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             constraint_type = ct.DataType
             ts = []
 
-            # todo: correctly pass a Starred node (we need this later for reassigning types and values)
             for elt in target.elts:
                 if isinstance(elt, ast.Starred):
                     ts.append(
@@ -226,10 +225,10 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
                         )
                     )
 
-            mta = foast.TupleTargetAssign(
+            tta = foast.TupleTargetAssign(
                 targets=ts, value=self.visit(node.value), location=self._make_loc(node)
             )
-            return mta
+            return tta
 
         if not isinstance(target, ast.Name):
             raise FieldOperatorSyntaxError.from_AST(node, msg="Can only assign to names!")
