@@ -305,7 +305,7 @@ class Program:
 
     def _validate_args(self, *args, **kwargs) -> None:
         if kwargs:
-            raise NotImplementedError("Keyword arguments are not supported yet.")
+            raise NotImplementedError("Keyword-only arguments are not supported yet.")
 
         arg_types = [symbol_makers.make_symbol_type_from_value(arg) for arg in args]
         kwarg_types = {k: symbol_makers.make_symbol_type_from_value(v) for k, v in kwargs.items()}
