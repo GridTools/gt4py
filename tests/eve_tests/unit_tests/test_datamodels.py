@@ -38,7 +38,6 @@ from typing import (
     TypeVar,
     Union,
     cast,
-    no_type_check,
 )
 
 import devtools
@@ -171,14 +170,12 @@ class TestInitialization:
         assert model.list_value == [1, 2, 3]
 
     def test_custom_init(self):
-        @no_type_check
-        @datamodels.datamodel
-        class ModelWithCustomInit:
+        class ModelWithCustomInit(datamodels.DataModel):
             value: float
             enum_value: SampleEnum
             list_value: List[float]
 
-            def __init__(self: datamodels.DataModel, single_value: float) -> None:
+            def __init__(self, single_value: float) -> None:
                 self.__auto_init__(single_value, SampleEnum.BLA, [1.0] * int(single_value))
 
         model = ModelWithCustomInit(3.5)
@@ -204,18 +201,17 @@ class TestInitialization:
         assert model.value == 3.5 * 10
 
     def test_custom_init_and_hooks(self):
-        @datamodels.datamodel
-        class ModelWithCustomInitAndHooks:
+        class ModelWithCustomInitAndHooks(datamodels.DataModel):
             value: float
             STATIC_INT: ClassVar[int] = 0
 
-            def __init__(self: datamodels.DataModel, str_value: str) -> None:
+            def __init__(self, str_value: str) -> None:
                 self.__auto_init__(float(str_value))
 
-            def __pre_init__(self) -> None:
+            def __pre_init__(self) -> None:  # type: ignore[override]
                 self.__class__.STATIC_INT += 1
 
-            def __post_init__(self) -> None:
+            def __post_init__(self) -> None:  # type: ignore[override]
                 self.value *= 10
 
         assert ModelWithCustomInitAndHooks.STATIC_INT == 0
@@ -899,22 +895,29 @@ class ModelWithRootValidators(datamodels.DataModel):
 
     class_counter: ClassVar[int] = 0
 
+    @classmethod
     @datamodels.root_validator
-    def _root_validator(cls: Type[datamodels.DataModel], instance: datamodels.DataModel):
+    def _root_validator(cls: Type[datamodels.DataModel], instance: datamodels.DataModel) -> None:
         assert cls is type(instance)
         assert issubclass(cls, ModelWithRootValidators)
         assert isinstance(instance, ModelWithRootValidators)
         cls.class_counter = 0
 
+    @classmethod
     @datamodels.root_validator
-    def _another_root_validator(cls: Type[datamodels.DataModel], instance: datamodels.DataModel):
+    def _another_root_validator(
+        cls: Type[datamodels.DataModel], instance: datamodels.DataModel
+    ) -> None:
         cls = cast(Type[ModelWithRootValidators], cls)
         instance = cast(ModelWithRootValidators, instance)
         assert cls.class_counter == 0
         cls.class_counter += 1
 
+    @classmethod
     @datamodels.root_validator
-    def _final_root_validator(cls: Type[datamodels.DataModel], instance: datamodels.DataModel):
+    def _final_root_validator(
+        cls: Type[datamodels.DataModel], instance: datamodels.DataModel
+    ) -> None:
         cls = cast(Type[ModelWithRootValidators], cls)
         instance = cast(ModelWithRootValidators, instance)
         assert cls.class_counter == 1
@@ -1210,7 +1213,7 @@ class TestGenericModelValidation:
         self, type_hint: str, valid_values: Sequence[Any], wrong_values: Sequence[Any]
     ):
         concrete_type: Type = eval(type_hint)
-        Model: Type[datamodels.DataModel] = GenericModel[concrete_type]  # type: ignore[valid-type,misc]  # concrete_type
+        Model: Type[datamodels.DataModel] = GenericModel[concrete_type]  # type: ignore[valid-type,misc,assignment]  # concrete_type
 
         for value in valid_values:
             Model(value=value)

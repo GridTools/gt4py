@@ -86,7 +86,7 @@ SAMPLE_TYPE_DEFINITIONS: List[
     (typing.Set[int], ({1, 2, 3}, set()), (1, [1], (1,), {1: None}), None, None),
     (typing.Dict[int, str], ({}, {3: "three"}), ([(3, "three")], 3, "three", []), None, None),
     (
-        type_def.frozendict[int, str],
+        type_def.frozendict[int, str],  # type: ignore[misc]
         (
             type_def.frozendict(),
             type_def.frozendict({3: "three"}),

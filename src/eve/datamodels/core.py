@@ -99,7 +99,7 @@ class DataModelTP(_AttrsClassTP, xtyping.DevToolsPrettyPrintable, Protocol):
         utils.FrozenNamespace[Attribute], None
     )
     __datamodel_root_validators__: ClassVar[
-        Tuple[xtyping.NonDataDescriptor[DataModelTP, BoundRootValidator], ...]
+        Tuple[xtyping.NonDataDescriptor["DataModelTP", "BoundRootValidator"], ...]
     ] = ()
     # Optional
     __auto_init__: ClassVar[Callable[..., None]] = cast(Callable[..., None], None)
@@ -164,9 +164,9 @@ Unchecked = xtyping.Annotated[_T, _UNCHECKED_TYPE_TAG]
 
 
 if sys.version_info >= (3, 10):
-    _dataclass_opts: Final = {"slots": True}
+    _dataclass_opts: Final[dict[str, Any]] = {"slots": True}
 else:
-    _dataclass_opts: Final = {}
+    _dataclass_opts: Final[Dict[str, Any]] = {}
 
 
 @dataclasses.dataclass(**_dataclass_opts)
