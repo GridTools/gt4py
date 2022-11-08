@@ -107,7 +107,8 @@ def _canonicalize_args(node_params, args, kwargs) -> tuple[tuple, dict]:
             new_args.append(args[param_i])
         else:
             # case when parameter is in function definition but not in function call
-            # e.g. function definition includes 3 parameters, but only 2 were given as inputs
+            # e.g. function expects 3 parameters, but only 2 were given. To avoid duplication of
+            # error handling this is covered later in `accept_args`.
             pass
 
     args = tuple(new_args)
