@@ -133,6 +133,41 @@ def test_power(fieldview_backend):
     assert np.allclose(a.array() ** 2, b)
 
 
+def test_tilde(fieldview_backend):
+    if fieldview_backend == gtfn_cpu.run_gtfn:
+        pytest.xfail("gtfn does not yet support math builtins")
+
+    size = 10
+    a = np_as_located_field(IDim)(np.zeros((size,), dtype=bool))
+    b = np_as_located_field(IDim)(np.zeros((size,), dtype=bool))
+
+    @field_operator(backend=fieldview_backend)
+    def tilde_fieldop(inp1: Field[[IDim], bool]) -> Field[[IDim], bool]:
+        return ~inp1
+
+    tilde_fieldop(a, out=b, offset_provider={})
+
+    assert np.allclose(~a.array(), b)
+
+
+def test_xor(fieldview_backend):
+    if fieldview_backend == gtfn_cpu.run_gtfn:
+        pytest.xfail("gtfn does not yet support math builtins")
+
+    size = 10
+    a = np_as_located_field(IDim)(np.zeros((size,), dtype=bool))
+    b = np_as_located_field(IDim)(np.zeros((size,), dtype=bool))
+    c = np_as_located_field(IDim)(np.zeros((size,), dtype=bool))
+
+    @field_operator(backend=fieldview_backend)
+    def tilde_xor(inp1: Field[[IDim], bool], inp2: Field[[IDim], bool]) -> Field[[IDim], bool]:
+        return inp1 ^ inp2
+
+    tilde_xor(a, b, out=c, offset_provider={})
+
+    assert np.allclose(a.array() ^ b.array(), c)
+
+
 def test_mod(fieldview_backend):
     if fieldview_backend == gtfn_cpu.run_gtfn:
         pytest.xfail("gtfn does not yet support `%` operator.")

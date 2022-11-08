@@ -34,6 +34,7 @@ class BinaryOperator(StrEnum):
     FLOOR_DIV = "floordiv"
     BIT_AND = "and_"
     BIT_OR = "or_"
+    BIT_XOR = "xor_"
     POW = "power"
     MOD = "mod"
 
@@ -50,6 +51,8 @@ class BinaryOperator(StrEnum):
             return "//"
         elif self is self.BIT_AND:
             return "&"
+        elif self is self.BIT_XOR:
+            return "^"
         elif self is self.BIT_OR:
             return "|"
         elif self is self.POW:
