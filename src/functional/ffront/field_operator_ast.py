@@ -12,10 +12,11 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+from __future__ import annotations
 
 from typing import Any, Generic, Optional, TypeVar, Union
 
-from eve import Coerced, Node, SourceLocation, SymbolName, SymbolRef
+from eve import Coerced, Node, SourceLocation, SymbolName, SymbolRef, datamodels
 from eve.traits import SymbolTableTrait
 from eve.type_definitions import StrEnum
 from functional.ffront import common_types as ct
@@ -150,18 +151,22 @@ class BlockStmt(Stmt, SymbolTableTrait):
     stmts: list[Stmt]
 
 
-from eve import datamodels
-
 class IfStmt(Stmt):
     condition: Expr
     true_branch: BlockStmt
     false_branch: BlockStmt
 
-    # TODO: use future annotations
     @datamodels.root_validator
-    def _collect_common_symbols(cls: type["IfStmt"], instance: "IfStmt") -> None:
-        common_symbol_names = set(instance.true_branch.annex.symtable.keys()) & set(instance.false_branch.annex.symtable.keys())
-        instance.annex._common_symbols = {sym_name: Symbol(id=sym_name, type=ct.DeferredSymbolType(constraint=None), location=instance.location) for sym_name in common_symbol_names}
+    def _collect_common_symbols(cls: type[IfStmt], instance: IfStmt) -> None:
+        common_symbol_names = set(instance.true_branch.annex.symtable.keys()) & set(
+            instance.false_branch.annex.symtable.keys()
+        )
+        instance.annex._common_symbols = {
+            sym_name: Symbol(
+                id=sym_name, type=ct.DeferredSymbolType(constraint=None), location=instance.location
+            )
+            for sym_name in common_symbol_names
+        }
 
 
 class FunctionDefinition(LocatedNode, SymbolTableTrait):
