@@ -1294,13 +1294,13 @@ def test_constant_closure_vars():
     assert np.allclose(np.asarray(output), constants.PI * constants.E)
 
 
-def test_simple_if():
+def test_simple_if(fieldview_backend):
     size = 10
     a = np_as_located_field(IDim, JDim)(np.ones((size, size)))
     b = np_as_located_field(IDim, JDim)(2 * np.ones((size, size)))
     out = np_as_located_field(IDim, JDim)(np.zeros((size, size)))
 
-    @field_operator
+    @field_operator(backend=fieldview_backend)
     def simple_if(
         a: Field[[IDim, JDim], float64], b: Field[[IDim, JDim], float64], condition: bool
     ):
@@ -1319,13 +1319,13 @@ def test_simple_if():
     assert np.allclose(out, b)
 
 
-def test_local_if():
+def test_local_if(fieldview_backend):
     size = 10
     a = np_as_located_field(IDim, JDim)(np.ones((size, size)))
     b = np_as_located_field(IDim, JDim)(2 * np.ones((size, size)))
     out = np_as_located_field(IDim, JDim)(np.zeros((size, size)))
 
-    @field_operator()
+    @field_operator(backend=fieldview_backend)
     def local_if(a: Field[[IDim, JDim], float64], b: Field[[IDim, JDim], float64], condition: bool):
         if condition:
             tmp = a
@@ -1341,13 +1341,13 @@ def test_local_if():
     assert np.allclose(out, b)
 
 
-def test_temporary_if():
+def test_temporary_if(fieldview_backend):
     size = 10
     a = np_as_located_field(IDim, JDim)(np.ones((size, size)))
     b = np_as_located_field(IDim, JDim)(2 * np.ones((size, size)))
     out = np_as_located_field(IDim, JDim)(np.zeros((size, size)))
 
-    @field_operator()
+    @field_operator(backend=fieldview_backend)
     def temporary_if(
         a: Field[[IDim, JDim], float64], b: Field[[IDim, JDim], float64], condition: bool
     ):
@@ -1366,7 +1366,7 @@ def test_temporary_if():
     assert np.allclose(out, b)
 
 
-def test_nested_if():
+def test_nested_if(fieldview_backend):
     size = 10
     a = np_as_located_field(IDim, JDim)(np.ones((size, size)))
     b = np_as_located_field(IDim, JDim)(2 * np.ones((size, size)))
@@ -1374,7 +1374,7 @@ def test_nested_if():
     ref_true = np_as_located_field(IDim, JDim)(np.ones((size, size)) + 1)
     ref_false = np_as_located_field(IDim, JDim)(2 * np.ones((size, size)) + 5)
 
-    @field_operator
+    @field_operator(backend=fieldview_backend)
     def nested_if(
         a: Field[[IDim, JDim], float64], b: Field[[IDim, JDim], float64], condition: bool
     ):
