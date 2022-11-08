@@ -124,9 +124,8 @@ class StencilBuilder:
         Resets all cached build data.
         """
         self._build_data: Dict[str, Any] = {}
-        self.caching = gt4py.caching.strategy_factory(
-            caching_strategy_name, self, *args, **self.options.cache_settings, **kwargs
-        )
+        kwargs = {**self.options.cache_settings, **kwargs}
+        self.caching = gt4py.caching.strategy_factory(caching_strategy_name, self, *args, **kwargs)
         return self
 
     def with_options(
