@@ -286,7 +286,6 @@ def test_input_kwargs(fieldview_backend):
     input_1 = np_as_located_field(IDim, JDim)(np.ones((size, size)))
     input_2 = np_as_located_field(IDim, JDim)(np.ones((size, size)) * 2)
     input_3 = np_as_located_field(IDim, JDim)(np.ones((size, size)) * 3)
-    out = np_as_located_field(IDim, JDim)(np.zeros((size, size)))
 
     expected = np.asarray(input_3) * np.asarray(input_1) - np.asarray(input_2)
 
