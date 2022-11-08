@@ -239,7 +239,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         symtable = kwargs["symtable"]
         if node.id not in symtable or symtable[node.id].type is None:
             raise FieldOperatorTypeDeductionError.from_foast_node(
-                node, msg=f"Undeclared symbol `{node.id}`"
+                node, msg=f"Undeclared symbol `{node.id}`."
             )
 
         symbol = symtable[node.id]
@@ -253,25 +253,45 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         return foast.Assign(target=new_target, value=new_value, location=node.location)
 
     def visit_IfStmt(self, node: foast.IfStmt, **kwargs):
+        symtable = kwargs["symtable"]
+
         new_true_branch = self.visit(node.true_branch, **kwargs)
         new_false_branch = self.visit(node.false_branch, **kwargs)
         new_node = foast.IfStmt(
             condition=self.visit(node.condition, **kwargs),
             true_branch=new_true_branch,
             false_branch=new_false_branch,
-            location=node.location
+            location=node.location,
         )
+
+        if not isinstance(new_node.condition.type, ct.ScalarType):
+            raise FieldOperatorTypeDeductionError.from_foast_node(
+                node,
+                msg="Condition for `if` must be scalar. "
+                f"But got `{new_node.condition.type}` instead.",
+            )
+
+        if new_node.condition.type.kind != ct.ScalarKind.BOOL:
+            raise FieldOperatorTypeDeductionError.from_foast_node(
+                node,
+                msg="Condition for `if` must be of boolean type. "
+                f"But got `{new_node.condition.type}` instead.",
+            )
+
         for sym in node.annex._common_symbols.keys():
-            if new_true_branch.annex.symtable[sym].type != new_false_branch.annex.symtable[sym].type:
+            if (true_type := new_true_branch.annex.symtable[sym].type) != (
+                false_type := new_false_branch.annex.symtable[sym].type
+            ):
                 raise FieldOperatorTypeDeductionError.from_foast_node(
-                    node, msg=f"Inconsistent types between two branches."
+                    node,
+                    msg=f"Inconsistent types between two branches for variable `{sym}`. "
+                    f"Got types `{true_type}` and `{false_type}.",
                 )
             # TODO: properly patch symtable (new node?)
-            kwargs["symtable"][sym].type = new_node.annex._common_symbols[sym].type = new_true_branch.annex.symtable[sym].type
-        if not isinstance(new_node.condition.type, ct.ScalarType) or new_node.condition.type.kind != ct.ScalarKind.BOOL:
-            raise FieldOperatorTypeDeductionError.from_foast_node(
-                node, msg=f"Condition must be a boolean."
-            )
+            symtable[sym].type = new_node.annex._common_symbols[
+                sym
+            ].type = new_true_branch.annex.symtable[sym].type
+
         return new_node
 
     def visit_Symbol(
