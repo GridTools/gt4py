@@ -14,6 +14,7 @@
 
 
 from typing import Type
+
 import pytest
 
 from gtc import common, oir

@@ -22,10 +22,9 @@ import dace.data
 import numpy as np
 
 import eve
-from gtc import oir, common
-
+from gtc import common
 from gtc import daceir as dcir
-
+from gtc import oir
 from gtc.common import CartesianOffset, data_type_to_typestr
 from gtc.passes.oir_optimizations.utils import compute_horizontal_block_extents
 

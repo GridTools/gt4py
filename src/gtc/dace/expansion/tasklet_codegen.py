@@ -12,8 +12,8 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import Any, ChainMap, List, Optional, Union
 import copy
+from typing import Any, ChainMap, List, Optional, Union
 
 import dace
 import dace.data

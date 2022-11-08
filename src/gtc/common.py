@@ -15,18 +15,7 @@
 import enum
 import functools
 import typing
-from typing import (
-    Any,
-    ClassVar,
-    Dict,
-    Generic,
-    List,
-    Optional,
-    Tuple,
-    Type,
-    TypeVar,
-    Union,
-)
+from typing import Any, ClassVar, Dict, Generic, List, Optional, Tuple, Type, TypeVar, Union
 
 import numpy as np
 import scipy.special
@@ -595,7 +584,7 @@ class _LvalueDimsValidator(eve.VisitorWithSymbolTableTrait):
         self, node: eve.Node, *, loop_order: Optional[LoopOrder] = None, **kwargs: Any
     ) -> None:
         if isinstance(node, self.vertical_loop_type):
-            loop_order = getattr(node, "loop_order")
+            loop_order = getattr(node, "loop_order")  # noqa: B009
         self.generic_visit(node, loop_order=loop_order, **kwargs)
 
     def visit_AssignStmt(
@@ -608,7 +597,7 @@ class _LvalueDimsValidator(eve.VisitorWithSymbolTableTrait):
             return None
 
         allowed_flags = self._allowed_flags(loop_order)
-        flags = getattr(decl, "dimensions")
+        flags = getattr(decl, "dimensions")  # noqa: B009
         if flags not in allowed_flags:
             dims = dimension_flags_to_names(flags)
             raise ValueError(

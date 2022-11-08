@@ -21,8 +21,6 @@ Check :mod:`eve.datamodels` for additional information.
 
 from __future__ import annotations
 
-from typing import TypeVar
-
 import dataclasses
 import functools
 import sys

@@ -14,8 +14,8 @@
 
 import base64
 import pickle
-from typing import Dict, List, Set, Union
 import typing
+from typing import Dict, List, Set, Union
 
 import dace.data
 import dace.dtypes

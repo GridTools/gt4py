@@ -13,15 +13,15 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from __future__ import annotations
+
 from typing import Any, Dict, Generator, List, Optional, Sequence, Set, Tuple, Union
 
 import dace
 import sympy
 
-import gtc
 import eve
+import gtc
 from eve import datamodels
-
 from gtc import common, oir
 from gtc.common import LocNode
 from gtc.dace.utils import get_dace_symbol

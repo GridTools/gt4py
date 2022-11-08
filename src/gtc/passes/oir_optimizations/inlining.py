@@ -13,7 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import copy as cp
-from typing import Any, Dict, Optional, Set, cast, Union, Type
+from typing import Any, Dict, Optional, Set, Type, Union, cast
 
 import eve
 from gtc import oir

@@ -20,8 +20,9 @@ import dace.library
 import dace.subsets
 
 import eve
-from gtc import common, oir
+from gtc import common
 from gtc import daceir as dcir
+from gtc import oir
 from gtc.definitions import Extent
 
 
