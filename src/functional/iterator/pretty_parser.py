@@ -128,6 +128,12 @@ class ToIrTransformer(lark_visitors.Transformer):
     def divides(self, lhs: ir.Expr, rhs: ir.Expr) -> ir.FunCall:
         return ir.FunCall(fun=ir.SymRef(id="divides"), args=[lhs, rhs])
 
+    def floordiv(self, lhs: ir.Expr, rhs: ir.Expr) -> ir.FunCall:
+        return ir.FunCall(fun=ir.SymRef(id="floordiv"), args=[lhs, rhs])
+
+    def mod(self, lhs: ir.Expr, rhs: ir.Expr) -> ir.FunCall:
+        return ir.FunCall(fun=ir.SymRef(id="mod"), args=[lhs, rhs])
+
     def eq(self, lhs: ir.Expr, rhs: ir.Expr) -> ir.FunCall:
         return ir.FunCall(fun=ir.SymRef(id="eq"), args=[lhs, rhs])
 

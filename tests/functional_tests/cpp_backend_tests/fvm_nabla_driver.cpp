@@ -1,9 +1,8 @@
 #include <gtest/gtest.h>
 
-#include GENERATED_FILE
-
 #include <fn_select.hpp>
 #include <test_environment.hpp>
+#include GENERATED_FILE
 
 namespace {
 using namespace gridtools;

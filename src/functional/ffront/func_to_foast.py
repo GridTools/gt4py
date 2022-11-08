@@ -35,6 +35,9 @@ from functional.ffront.ast_passes import (
     UnpackedAssignPass,
 )
 from functional.ffront.dialect_parser import DialectParser, DialectSyntaxError
+from functional.ffront.foast_passes.closure_var_folding import ClosureVarFolding
+from functional.ffront.foast_passes.closure_var_type_deduction import ClosureVarTypeDeduction
+from functional.ffront.foast_passes.dead_closure_var_elimination import DeadClosureVarElimination
 from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduction
 
 
@@ -93,9 +96,15 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
 
     @classmethod
     def _postprocess_dialect_ast(
-        cls, foast_node: foast.FieldOperator, annotations: dict[str, Any]
+        cls,
+        foast_node: foast.FieldOperator,
+        closure_vars: dict[str, Any],
+        annotations: dict[str, Any],
     ) -> foast.FieldOperator:
-        typed_foast_node = FieldOperatorTypeDeduction.apply(foast_node)
+        foast_node = ClosureVarFolding.apply(foast_node, closure_vars)
+        foast_node = DeadClosureVarElimination.apply(foast_node)
+        foast_node = ClosureVarTypeDeduction.apply(foast_node, closure_vars)
+        foast_node = FieldOperatorTypeDeduction.apply(foast_node)
 
         # check deduced matches annotated return type
         if "return" in annotations:
@@ -104,12 +113,12 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             )
             # TODO(tehrengruber): use `type_info.return_type` when the type of the
             #  arguments becomes available here
-            if annotated_return_type != typed_foast_node.type.returns:
+            if annotated_return_type != foast_node.type.returns:
                 raise common.GTTypeError(
-                    f"Annotated return type does not match deduced return type. Expected `{typed_foast_node.type.returns}`"
+                    f"Annotated return type does not match deduced return type. Expected `{foast_node.type.returns}`"
                     f", but got `{annotated_return_type}`."
                 )
-        return typed_foast_node
+        return foast_node
 
     def _builtin_type_constructor_symbols(
         self, captured_vars: Mapping[str, Any], location: eve.SourceLocation
@@ -151,13 +160,13 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
         closure_var_symbols, skip_names = self._builtin_type_constructor_symbols(
             self.closure_vars, self._make_loc(node)
         )
-        for name, val in self.closure_vars.items():
+        for name in self.closure_vars.keys():
             if name in skip_names:
                 continue
             closure_var_symbols.append(
                 foast.Symbol(
                     id=name,
-                    type=symbol_makers.make_symbol_type_from_value(val),
+                    type=ct.DeferredSymbolType(constraint=None),
                     namespace=ct.Namespace.CLOSURE,
                     location=self._make_loc(node),
                 )
@@ -264,6 +273,11 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             location=self._make_loc(node),
         )
 
+    def visit_Attribute(self, node: ast.Attribute) -> Any:
+        return foast.Attribute(
+            value=self.visit(node.value), attr=node.attr, location=self._make_loc(node)
+        )
+
     def visit_Tuple(self, node: ast.Tuple, **kwargs) -> foast.TupleExpr:
         return foast.TupleExpr(
             elts=[self.visit(item) for item in node.elts], location=self._make_loc(node)
@@ -299,37 +313,39 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
         return foast.UnaryOperator.NOT
 
     def visit_BinOp(self, node: ast.BinOp, **kwargs) -> foast.BinOp:
-        new_op = self.visit(node.op)
         return foast.BinOp(
-            op=new_op,
+            op=self.visit(node.op),
             left=self.visit(node.left),
             right=self.visit(node.right),
             location=self._make_loc(node),
         )
 
-    def visit_Add(self, node: ast.Add, **kwargs) -> foast.BinaryOperator:
-        return foast.BinaryOperator.ADD
+    def visit_Add(self, node: ast.Add, **kwargs) -> ct.BinaryOperator:
+        return ct.BinaryOperator.ADD
 
-    def visit_Sub(self, node: ast.Sub, **kwargs) -> foast.BinaryOperator:
-        return foast.BinaryOperator.SUB
+    def visit_Sub(self, node: ast.Sub, **kwargs) -> ct.BinaryOperator:
+        return ct.BinaryOperator.SUB
 
-    def visit_Mult(self, node: ast.Mult, **kwargs) -> foast.BinaryOperator:
-        return foast.BinaryOperator.MULT
+    def visit_Mult(self, node: ast.Mult, **kwargs) -> ct.BinaryOperator:
+        return ct.BinaryOperator.MULT
 
-    def visit_Div(self, node: ast.Div, **kwargs) -> foast.BinaryOperator:
-        return foast.BinaryOperator.DIV
+    def visit_Div(self, node: ast.Div, **kwargs) -> ct.BinaryOperator:
+        return ct.BinaryOperator.DIV
 
-    def visit_Pow(self, node: ast.Pow, **kwargs) -> foast.BinaryOperator:
-        return foast.BinaryOperator.POW
+    def visit_FloorDiv(self, node: ast.FloorDiv, **kwargs) -> ct.BinaryOperator:
+        return ct.BinaryOperator.FLOOR_DIV
 
-    def visit_Mod(self, node: ast.Mod, **kwargs) -> None:
-        raise FieldOperatorSyntaxError.from_AST(node, msg="`%` operator not supported!")
+    def visit_Pow(self, node: ast.Pow, **kwargs) -> ct.BinaryOperator:
+        return ct.BinaryOperator.POW
 
-    def visit_BitAnd(self, node: ast.BitAnd, **kwargs) -> foast.BinaryOperator:
-        return foast.BinaryOperator.BIT_AND
+    def visit_Mod(self, node: ast.Mod, **kwargs) -> ct.BinaryOperator:
+        return ct.BinaryOperator.MOD
 
-    def visit_BitOr(self, node: ast.BitOr, **kwargs) -> foast.BinaryOperator:
-        return foast.BinaryOperator.BIT_OR
+    def visit_BitAnd(self, node: ast.BitAnd, **kwargs) -> ct.BinaryOperator:
+        return ct.BinaryOperator.BIT_AND
+
+    def visit_BitOr(self, node: ast.BitOr, **kwargs) -> ct.BinaryOperator:
+        return ct.BinaryOperator.BIT_OR
 
     def visit_BoolOp(self, node: ast.BoolOp, **kwargs) -> None:
         raise FieldOperatorSyntaxError.from_AST(node, msg="`and`/`or` operator not allowed!")
