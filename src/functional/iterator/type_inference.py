@@ -455,6 +455,8 @@ class _TypeInferrer(eve.NodeTranslator):
                                 current_loc_out = Location(name=axis.neighbor_axis.value)
                             else:
                                 raise NotImplementedError()
+                elif not node.args:
+                    current_loc_out = current_loc_in
                 else:
                     current_loc_out = TypeVar.fresh()
                 defined_loc = TypeVar.fresh()
