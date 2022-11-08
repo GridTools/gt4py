@@ -430,12 +430,10 @@ class _TypeInferrer(eve.NodeTranslator):
                 current_loc_in = TypeVar.fresh()
                 if self.offset_provider:
                     current_loc_out = current_loc_in
-                    assert all(isinstance(o, ir.OffsetLiteral) for o in node.args)
-                    offset_stack = [
-                        typing.cast(ir.OffsetLiteral, o).value for o in reversed(node.args)
-                    ]
-                    while offset_stack:
-                        offset = offset_stack.pop()
+                    for arg in node.args:
+                        if not isinstance(arg, ir.OffsetLiteral):
+                            continue  # probably some dynamically computed offset, thus we assume it’s a number not an axis and just ignore it (see comment below)
+                        offset = arg.value
                         if isinstance(offset, int):
                             continue  # ignore ‘application’ of (partial) shifts
                         else:
